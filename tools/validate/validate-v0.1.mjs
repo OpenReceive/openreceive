@@ -2,6 +2,7 @@
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { parse as parseYaml } from "yaml";
 
 const root = process.cwd();
 
@@ -9,6 +10,15 @@ function readJson(relativePath) {
   const filePath = path.join(root, relativePath);
   try {
     return JSON.parse(readFileSync(filePath, "utf8"));
+  } catch (error) {
+    throw new Error(`${relativePath}: ${error.message}`);
+  }
+}
+
+function readYaml(relativePath) {
+  const filePath = path.join(root, relativePath);
+  try {
+    return parseYaml(readFileSync(filePath, "utf8"));
   } catch (error) {
     throw new Error(`${relativePath}: ${error.message}`);
   }
@@ -258,6 +268,55 @@ function validateData() {
   assert(rates.sources.some((source) => source.id === "static_mock"), "missing static_mock price source");
 }
 
+function validateOpenApi() {
+  const openapi = readYaml("spec/openapi/openreceive-http.v1.yaml");
+  assert(openapi.openapi === "3.1.0", "OpenAPI version must be 3.1.0");
+  assert(openapi.info?.version === "0.1.0", "OpenAPI info.version mismatch");
+
+  const paths = openapi.paths || {};
+  const requiredOperations = [
+    ["post", "/invoices"],
+    ["get", "/invoices/{invoice_id}"],
+    ["post", "/invoices/lookup"],
+    ["get", "/invoices/{invoice_id}/events"],
+    ["get", "/health"],
+    ["get", "/capabilities"]
+  ];
+
+  for (const [method, pathName] of requiredOperations) {
+    assert(paths[pathName]?.[method], `OpenAPI missing ${method.toUpperCase()} ${pathName}`);
+  }
+
+  const amountMsats =
+    openapi.components?.schemas?.CreateInvoiceRequest?.properties?.amount_msats;
+  assert(amountMsats?.minimum === 1000, "OpenAPI amount_msats minimum mismatch");
+  assert(amountMsats?.maximum === 9007199254740991, "OpenAPI amount_msats maximum mismatch");
+}
+
+function validateAsyncApi() {
+  const asyncapi = readYaml("spec/asyncapi/openreceive-events.v1.yaml");
+  assert(asyncapi.asyncapi === "3.0.0", "AsyncAPI version must be 3.0.0");
+  assert(asyncapi.info?.version === "0.1.0", "AsyncAPI info.version mismatch");
+
+  const messages = asyncapi.channels?.invoiceEvents?.messages || {};
+  for (const message of [
+    "invoiceCreated",
+    "invoiceVerifying",
+    "invoiceSettled",
+    "invoiceExpired",
+    "invoiceFailed",
+    "invoiceFulfilled",
+    "invoiceCancelled"
+  ]) {
+    assert(messages[message], `AsyncAPI missing ${message}`);
+  }
+
+  assert(
+    asyncapi.components?.schemas?.InvoiceEventPayload?.properties?.amount_msats?.minimum === 1000,
+    "AsyncAPI amount_msats minimum mismatch"
+  );
+}
+
 function main() {
   validateJsonParsing();
   validateSchemas();
@@ -270,6 +329,8 @@ function main() {
   validateNwcVectors();
   validateProviderRegistryReferences();
   validateData();
+  validateOpenApi();
+  validateAsyncApi();
   console.log("v0.1 validation passed.");
 }
 

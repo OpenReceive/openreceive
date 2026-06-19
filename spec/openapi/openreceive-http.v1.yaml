@@ -1,0 +1,344 @@
+openapi: 3.1.0
+info:
+  title: OpenReceive HTTP API
+  version: 0.1.0
+  summary: Application-facing receive-checkout routes mounted by framework adapters.
+  description: >
+    OpenReceive does not ship a required HTTP daemon. Framework adapters mount
+    these routes inside the merchant application. NWC secrets remain server-side.
+servers:
+  - url: /openreceive/v1
+paths:
+  /invoices:
+    post:
+      operationId: createInvoice
+      summary: Create a receive invoice.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInvoiceRequest"
+      responses:
+        "201":
+          description: Invoice created.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: Always no-store for invoice responses.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+        "200":
+          description: Idempotent replay of an existing invoice.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+  /invoices/{invoice_id}:
+    get:
+      operationId: getInvoice
+      summary: Read one invoice by application-scoped invoice id.
+      parameters:
+        - $ref: "#/components/parameters/InvoiceId"
+      responses:
+        "200":
+          description: Invoice status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /invoices/lookup:
+    post:
+      operationId: lookupInvoice
+      summary: Strongly authorized lookup by payment hash or BOLT11 invoice.
+      description: >
+        This endpoint must not be exposed as a public payment status oracle.
+        Framework adapters must authorize access to the matching invoice.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LookupInvoiceRequest"
+      responses:
+        "200":
+          description: Lookup status after backend wallet verification.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Invoice"
+                  - type: object
+                    properties:
+                      preimage_present:
+                        type: boolean
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /invoices/{invoice_id}/events:
+    get:
+      operationId: invoiceEvents
+      summary: Subscribe to passive invoice events over SSE.
+      parameters:
+        - $ref: "#/components/parameters/InvoiceId"
+        - name: Last-Event-ID
+          in: header
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: Server-sent event stream.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: Always no-store.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /health:
+    get:
+      operationId: health
+      summary: Adapter health.
+      responses:
+        "200":
+          description: Adapter health response.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - ok
+                properties:
+                  ok:
+                    type: boolean
+  /capabilities:
+    get:
+      operationId: capabilities
+      summary: Adapter capability summary.
+      responses:
+        "200":
+          description: Capability summary.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+components:
+  parameters:
+    InvoiceId:
+      name: invoice_id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^or_inv_[a-z0-9_]+$"
+  responses:
+    Error:
+      description: OpenReceive error.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    CreateInvoiceRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        amount_msats:
+          type: integer
+          minimum: 1000
+          maximum: 9007199254740991
+        fiat:
+          $ref: "#/components/schemas/FiatAmount"
+        description:
+          type: string
+          maxLength: 1024
+        description_hash:
+          type: string
+          pattern: "^[0-9a-fA-F]{64}$"
+        expiry:
+          type: integer
+          minimum: 1
+        metadata:
+          type: object
+          additionalProperties: true
+      oneOf:
+        - required:
+            - amount_msats
+          not:
+            required:
+              - fiat
+        - required:
+            - fiat
+          not:
+            required:
+              - amount_msats
+    LookupInvoiceRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        payment_hash:
+          type: string
+          pattern: "^[0-9a-fA-F]{64}$"
+        invoice:
+          type: string
+          minLength: 1
+      oneOf:
+        - required:
+            - payment_hash
+        - required:
+            - invoice
+    Invoice:
+      type: object
+      additionalProperties: true
+      required:
+        - invoice_id
+        - type
+        - transaction_state
+        - workflow_state
+        - invoice
+        - payment_hash
+        - amount_msats
+        - created_at
+        - expires_at
+      properties:
+        invoice_id:
+          type: string
+          pattern: "^or_inv_[a-z0-9_]+$"
+        type:
+          const: incoming
+        transaction_state:
+          $ref: "#/components/schemas/TransactionState"
+        workflow_state:
+          $ref: "#/components/schemas/WorkflowState"
+        invoice:
+          type: string
+        payment_hash:
+          type: string
+          pattern: "^[0-9a-fA-F]{64}$"
+        amount_msats:
+          type: integer
+          minimum: 1000
+          maximum: 9007199254740991
+        created_at:
+          type: integer
+          minimum: 0
+        expires_at:
+          type: integer
+          minimum: 0
+        settled_at:
+          type: integer
+          minimum: 0
+        metadata:
+          type: object
+          additionalProperties: true
+        fiat_quote:
+          oneOf:
+            - $ref: "#/components/schemas/RateQuote"
+            - type: "null"
+        checkout:
+          type: object
+          additionalProperties: false
+          properties:
+            events_url:
+              type: string
+            routes_url:
+              type: string
+        fulfillment:
+          type: object
+          additionalProperties: true
+    FiatAmount:
+      type: object
+      additionalProperties: false
+      required:
+        - currency
+        - value
+      properties:
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        value:
+          type: string
+          pattern: "^[0-9]+(\\.[0-9]+)?$"
+    RateQuote:
+      type: object
+      additionalProperties: true
+      required:
+        - fiat
+        - btc_fiat_price
+        - amount_sats
+        - amount_msats
+        - source
+        - as_of
+        - expires_at
+    TransactionState:
+      type: string
+      enum:
+        - pending
+        - settled
+        - expired
+        - failed
+        - accepted
+    WorkflowState:
+      type: string
+      enum:
+        - draft
+        - invoice_created
+        - verifying
+        - awaiting_fulfillment
+        - fulfilled
+        - expiry_pending_verification
+        - expired_closed
+        - failed_closed
+        - cancelled
+    Error:
+      type: object
+      additionalProperties: true
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+        message:
+          type: string

@@ -1,0 +1,113 @@
+asyncapi: 3.0.0
+info:
+  title: OpenReceive Invoice Events
+  version: 0.1.0
+  summary: Passive invoice event payloads for SSE and framework realtime adapters.
+  description: >
+    Events are UI hints and replayable status updates. They do not fulfill
+    products by themselves. Backend lookup remains the settlement authority.
+channels:
+  invoiceEvents:
+    address: /openreceive/v1/invoices/{invoice_id}/events
+    parameters:
+      invoice_id:
+        description: Application-scoped OpenReceive invoice id.
+    messages:
+      invoiceCreated:
+        $ref: "#/components/messages/invoiceCreated"
+      invoiceVerifying:
+        $ref: "#/components/messages/invoiceVerifying"
+      invoiceSettled:
+        $ref: "#/components/messages/invoiceSettled"
+      invoiceExpired:
+        $ref: "#/components/messages/invoiceExpired"
+      invoiceFailed:
+        $ref: "#/components/messages/invoiceFailed"
+      invoiceFulfilled:
+        $ref: "#/components/messages/invoiceFulfilled"
+      invoiceCancelled:
+        $ref: "#/components/messages/invoiceCancelled"
+operations:
+  subscribeInvoiceEvents:
+    action: receive
+    channel:
+      $ref: "#/channels/invoiceEvents"
+components:
+  messages:
+    invoiceCreated:
+      name: invoice.created
+      payload:
+        $ref: "#/components/schemas/InvoiceEventPayload"
+    invoiceVerifying:
+      name: invoice.verifying
+      payload:
+        $ref: "#/components/schemas/InvoiceEventPayload"
+    invoiceSettled:
+      name: invoice.settled
+      payload:
+        allOf:
+          - $ref: "#/components/schemas/InvoiceEventPayload"
+          - type: object
+            required:
+              - settled_at
+    invoiceExpired:
+      name: invoice.expired
+      payload:
+        $ref: "#/components/schemas/InvoiceEventPayload"
+    invoiceFailed:
+      name: invoice.failed
+      payload:
+        $ref: "#/components/schemas/InvoiceEventPayload"
+    invoiceFulfilled:
+      name: invoice.fulfilled
+      payload:
+        $ref: "#/components/schemas/InvoiceEventPayload"
+    invoiceCancelled:
+      name: invoice.cancelled
+      payload:
+        $ref: "#/components/schemas/InvoiceEventPayload"
+  schemas:
+    InvoiceEventPayload:
+      type: object
+      additionalProperties: true
+      required:
+        - invoice_id
+        - type
+        - transaction_state
+        - workflow_state
+      properties:
+        invoice_id:
+          type: string
+          pattern: "^or_inv_[a-z0-9_]+$"
+        type:
+          const: incoming
+        transaction_state:
+          type: string
+          enum:
+            - pending
+            - settled
+            - expired
+            - failed
+            - accepted
+        workflow_state:
+          type: string
+          enum:
+            - draft
+            - invoice_created
+            - verifying
+            - awaiting_fulfillment
+            - fulfilled
+            - expiry_pending_verification
+            - expired_closed
+            - failed_closed
+            - cancelled
+        payment_hash:
+          type: string
+          pattern: "^[0-9a-fA-F]{64}$"
+        amount_msats:
+          type: integer
+          minimum: 1000
+          maximum: 9007199254740991
+        settled_at:
+          type: integer
+          minimum: 0
