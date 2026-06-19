@@ -1,0 +1,3487 @@
+OpenReceive Master Plan
+=======================
+
+Purpose
+-------
+
+OpenReceive is an open source receive-payments kit for websites, server apps,
+mobile apps, and native clients. Its job is intentionally narrow:
+
+1. Let a merchant create one Bitcoin Lightning BOLT11 invoice.
+2. Let the customer pay that invoice from Lightning, on-chain BTC, crypto,
+   fiat rails, wallets, exchanges, or swap services.
+3. Let the merchant backend verify settlement.
+4. Let the app unlock content, credits, files, memberships, stickers, or
+   other products only after verified settlement.
+
+OpenReceive is not a bank, exchange, payment processor, or wallet backend.
+The merchant brings a wallet they control through Nostr Wallet Connect (NWC /
+NIP-47), such as Rizful, Alby Hub, LNbits, Zeus, or a self-hosted wallet that
+follows the spec. OpenReceive libraries create and track receive-only invoices
+inside the merchant's own server-side app, job system, or API backend.
+
+The main architecture:
+
+  spec/                  = the truth
+  packages/nwc-*         = standalone neutral NWC protocol clients where needed
+  packages/*             = idiomatic SDKs, framework adapters, and UI kits
+  examples/*             = proof it works in real stacks
+  demos/*                = hosted public deployments
+  tools/*                = codegen, conformance, data validation, release
+
+The strongest rule is that the hard behavior must exist once and be tested
+everywhere. Provider data, schemas, price conversion rules, polling cadence,
+payment-state semantics, and demo assets must not be copied by hand into each
+language. They live in specs, shared data, generated types, and test vectors.
+
+
+Inputs Reviewed
+---------------
+
+
+  building/my-original-docs.txt
+    Original docs and code examples for the customer-facing PayInvoiceWizard,
+    LightningInvoiceModal, backend invoice contract, ActionCable payment
+    updates, Node/Rizful backend guide, NWC polling, NWC notifications, and
+    Rails/nwc-ruby integration.
+
+  building/providers-demo.json
+    Provider registry draft, schema version 2.0.0, generated 2026-06-18.
+    It contains 18 asset entries, 36 included providers, 15 crypto routes,
+    2 fiat rails, 39 countries, and 7 disqualified providers with reasons.
+
+
+Brand And Naming
+----------------
+
+Use the product name OpenReceive.
+
+
+The product, packages, docs, org, domains, and public assets should use the
+correct spelling: OpenReceive / openreceive.
+
+Recommended public names:
+
+  GitHub org:        openreceive
+  Main repo:         openreceive/openreceive
+  Apex/private app:  openreceive.org, private Rails/Kamal app, out of scope
+  Docs:              docs.openreceive.org
+  Hosted demos:      demos.openreceive.org
+  Playground:        play.openreceive.org
+  Registry CDN:      registry.openreceive.org
+  Demo subdomains:   django-demo.openreceive.org, express-demo.openreceive.org
+  Runtime model:     no required OpenReceive daemon; run inside the app backend
+
+If the misspelled domain was purchased, keep it only as a redirect.
+
+Existing openreceive.org app:
+
+  openreceive.org is already a private Rails app deployed with Kamal behind an
+  existing Hetzner Load Balancer. That app lives in a private repo and must stay
+  completely outside this open source project.
+
+  Hard boundary:
+
+    - Do not put open source demo code in the private Rails app.
+    - Do not put demo deployment config in the private Rails repo.
+    - Do not require the private Rails app to route, proxy, or host demos.
+    - Do not attach demo containers to the private app's Kamal deployment.
+    - Do not put private landing pages, SEO pages, product pages, admin code,
+      analytics code, or app-specific business logic in the public repo.
+    - Do not require the public repo to contain the private site's renderer,
+      CMS, routes, or import job implementation.
+
+  The open source project may use subdomains such as docs.openreceive.org,
+  demos.openreceive.org, and django-demo.openreceive.org, but those should be
+  deployed as separate services with separate DNS records and separate
+  infrastructure from the private apex Rails app. The private app can link to
+  them manually if desired, but it is not part of their deployment path.
+
+  Documentation is the one intentional bridge: canonical technical docs live
+  in the public GitHub repo as markdown/data, and the private openreceive.org
+  app may import or render those docs. The import job, SEO presentation,
+  landing pages, and private site code stay in the private repo.
+
+
+Product Definition
+------------------
+
+OpenReceive should make this promise:
+
+  "Add Bitcoin Lightning receive payments to any app with a tiny backend
+  integration and a polished frontend checkout."
+
+The core product must support:
+
+  - Creating a BOLT11 invoice.
+  - Looking up invoice settlement.
+  - Safely polling until paid or expired.
+  - Listening to NWC notifications as an accelerator.
+  - Converting fiat amounts to millisatoshis.
+  - Locking a quote at invoice creation.
+  - Showing the customer QR/copy/open-wallet UI.
+  - Showing route suggestions for paying from other assets.
+  - Pushing passive settlement updates to the frontend.
+  - Unlocking fulfillment only after backend verification.
+
+The reference flow:
+
+1. Merchant creates or obtains a receive-only NWC connection string.
+2. Backend stores that NWC string server-side only.
+3. Backend SDK calls make_invoice through a native NWC client.
+4. Backend stores invoice_id, payment_hash, bolt11, amount, expiry, quote,
+   metadata, and status.
+5. Frontend receives only non-secret invoice display data.
+6. Frontend renders QR, copy button, lightning URI, countdown, payment routes,
+   and status.
+7. Backend listens for notifications where practical and also polls
+   lookup_invoice through a background job, queue worker, scheduled task, or
+   long-running framework worker.
+8. Backend confirms paid status by lookup_invoice result with settled_at,
+   preimage, settled true, paid true, or known wallet equivalent.
+9. Backend emits invoice.paid / payment-update to the matching browser session.
+10. Backend fulfills the product.
+
+There is no pure-frontend OpenReceive checkout mode. A browser app, mobile app,
+static site, or desktop shell can render the checkout UI, but invoice creation,
+NWC access, settlement lookup, polling, notification handling, and fulfillment
+must always happen in a server-side component controlled by the merchant.
+
+
+Non-Negotiable Rules
+--------------------
+
+Security and correctness:
+
+  - NWC secrets never go in browser code.
+  - NWC secrets never go in mobile apps shipped to users.
+  - Pure frontend apps are not supported for live checkout.
+  - Static sites must call a serverless function, small API, CMS/plugin
+    backend, or merchant server before showing an invoice.
+  - Receive-only NWC is the default and recommended mode.
+  - NO read/write NWC anywhere, no send payments!
+  - The frontend never unlocks a product by itself.
+  - Notifications are never final proof by themselves.
+  - Settlement truth comes from lookup_invoice but also nwc notifications can provide the same data faster.
+  - Store payment_hash for every invoice.
+  - Store preimage when available.
+  - Use idempotency keys for invoice creation.
+  - Use exact decimal/fixed-point money math, not floating point.
+  - Stop polling when invoice expiry is reached.
+  - Redact wallet secrets from logs, errors, telemetry, and screenshots.
+  - Public demos use rate limits and low invoice amounts.
+
+Architecture:
+
+  - One canonical product contract.
+  - One canonical provider registry.
+  - One canonical price conversion algorithm.
+  - One canonical payment state machine.
+  - One canonical mock wallet.
+  - One canonical fruit-sticker demo product.
+  - One conformance suite used by every SDK.
+  - No required OpenReceive daemon, sidecar, gateway, or extra service.
+  - Every backend SDK owns native NWC integration directly or through a
+    recently maintained NWC client dependency.
+  - Generated types are allowed; duplicated business rules are not.
+
+Release strategy:
+
+  - Build one excellent end-to-end flow before broad package expansion.
+  - Start with native SDK mode for real framework developer experience.
+  - Build or adopt NWC clients per language, but only adopt third-party clients
+    that are recently maintained, permissively licensed, and pass conformance.
+  - Do not publish 20 half-working libraries before the spec is stable.
+
+
+SDK-First Implementation Model
+------------------------------
+
+OpenReceive has one primary implementation model:
+
+  The app backend talks directly to NWC through a language-native OpenReceive
+  SDK, which either wraps a vetted NWC library or depends on a standalone
+  neutral NWC client maintained by this project.
+
+    Rails app          -> openreceive-ruby      -> nwc-ruby / NWC wallet
+    Laravel app        -> openreceive-php       -> nwc-client-php -> NWC wallet
+    FastAPI app        -> openreceive-py        -> nwc-client-py  -> NWC wallet
+    Node app           -> @openreceive/node     -> @getalby/sdk       -> NWC wallet
+    Go app             -> openreceive-go        -> audited go-nwc or nwc-client-go -> NWC wallet
+    Swift Vapor API    -> OpenReceiveVapor      -> NostrKit or NWCClient -> NWC wallet
+    iOS app            -> merchant API backend  -> OpenReceive SDK    -> NWC wallet
+
+The important product decision: OpenReceive should feel like installing a gem,
+Composer package, npm package, PyPI package, SwiftPM package, crate, module, or
+NuGet package into the app the developer already deploys. It should not ask a
+Rails, PHP, Python, Go, Swift, or .NET developer to operate an extra daemon.
+
+Frontend and mobile packages are UI clients only:
+
+    Browser UI      -> merchant backend endpoint -> OpenReceive SDK -> NWC wallet
+    iOS/Android app -> merchant backend endpoint -> OpenReceive SDK -> NWC wallet
+    Static site     -> serverless/API endpoint   -> OpenReceive SDK -> NWC wallet
+
+Default build strategy:
+
+  - Build the spec, mock wallet, conformance suite, and one excellent native
+    Node/React stack first.
+  - Build Ruby/Rails next using nwc-ruby as the model for in-app background
+    workers and notification listeners.
+  - Add neutral standalone NWC clients where the target language lacks a fresh,
+    dependable client.
+  - Keep conformance identical across all backend SDKs and NWC clients.
+
+
+Canonical HTTP Contract
+-----------------------
+
+The HTTP API is the application-facing contract exposed by framework adapters,
+demos, and merchant backends. OpenReceive does not ship a required HTTP daemon;
+instead, adapters mount these routes inside Rails, Express, FastAPI, Django,
+Laravel, Spring, ASP.NET Core, Phoenix, Vapor, and similar apps.
+
+This contract is still valuable because it keeps frontend checkout components,
+mobile apps, demos, docs, tests, and server adapters aligned. A React checkout,
+SwiftUI checkout, static-site widget, or mobile app should be able to talk to
+the merchant's backend using the same invoice/status/event shapes no matter
+which server framework created the invoice.
+
+Base path:
+
+  /openreceive/v1
+
+Core endpoints:
+
+  POST   /openreceive/v1/invoices
+  GET    /openreceive/v1/invoices/{invoice_id}
+  GET    /openreceive/v1/invoices/{invoice_id}/events
+  POST   /openreceive/v1/invoices/{invoice_id}/refresh
+  GET    /openreceive/v1/invoices/{invoice_id}/qr.svg
+  GET    /openreceive/v1/invoices/{invoice_id}/qr.png
+  GET    /openreceive/v1/rates
+  POST   /openreceive/v1/rates/quote
+  GET    /openreceive/v1/routes
+  GET    /openreceive/v1/providers
+  GET    /openreceive/v1/health
+  GET    /openreceive/v1/capabilities
+
+Create invoice request:
+
+  POST /openreceive/v1/invoices
+  Content-Type: application/json
+  Idempotency-Key: fruit-demo-user-123-order-456
+
+  {
+    "amount": {
+      "currency": "USD",
+      "value": "0.10"
+    },
+    "product": {
+      "id": "fruit-sticker-pack",
+      "name": "Fruit Sticker",
+      "metadata": {
+        "fruit": "banana"
+      }
+    },
+    "expires_in_seconds": 600,
+    "description": "Fruit sticker from OpenReceive demo"
+  }
+
+Create invoice response:
+
+  {
+    "invoice_id": "or_inv_01jz...",
+    "status": "awaiting_payment",
+    "payment_hash": "abc123...",
+    "bolt11": "lnbc...",
+    "amount_msat": "200000",
+    "amount_sat": "200",
+    "fiat_quote": {
+      "currency": "USD",
+      "value": "0.10",
+      "btc_usd": "50000.00",
+      "source": "static_mock",
+      "as_of": "2026-06-18T00:00:00Z",
+      "expires_at": "2026-06-18T00:10:00Z"
+    },
+    "expires_at": "2026-06-18T00:10:00Z",
+    "checkout": {
+      "qr_svg_url": "/openreceive/v1/invoices/or_inv_01jz.../qr.svg",
+      "events_url": "/openreceive/v1/invoices/or_inv_01jz.../events",
+      "routes_url": "/openreceive/v1/routes?invoice_id=or_inv_01jz..."
+    }
+  }
+
+Original-docs demo compatibility response:
+
+  The canonical OpenReceive response above is richer than the original
+  LightningInvoiceModal example. Framework demos may expose a local
+  application endpoint such as POST /api/checkout or /lightning/create_invoice
+  that maps the canonical invoice into the simpler shape from
+  my-original-docs.txt:
+
+    {
+      "payment_hash": "hex-or-provider-payment-hash",
+      "bolt11": "lnbc...",
+      "amount_sats": 12345,
+      "amount_cents": 500,
+      "btc_usd_rate": 40500.12,
+      "expires_at": "2026-05-06T12:00:00Z",
+      "status": "pending"
+    }
+
+  Mapping:
+
+    invoice.payment_hash       -> payment_hash
+    invoice.bolt11             -> bolt11
+    invoice.amount_sat         -> amount_sats
+    invoice.amount.value       -> amount_cents for USD-cent demos
+    invoice.fiat_quote.btc_usd -> btc_usd_rate
+    invoice.expires_at         -> expires_at
+    awaiting_payment           -> pending
+    paid                       -> succeeded
+
+  This compatibility shape is for examples and app-specific controllers. The
+  public OpenReceive HTTP API should still use the canonical invoice schema.
+
+Lookup invoice response:
+
+  {
+    "invoice_id": "or_inv_01jz...",
+    "status": "paid",
+    "payment_hash": "abc123...",
+    "settled_at": "2026-06-18T00:03:10Z",
+    "preimage_present": true,
+    "fulfillment": {
+      "type": "digital_file",
+      "status": "ready",
+      "url": "/demo/fruit-stickers/banana.svg"
+    }
+  }
+
+Events endpoint:
+
+  GET /openreceive/v1/invoices/or_inv_01jz.../events
+  Accept: text/event-stream
+
+Use SSE first because it is simple, portable, proxy-friendly, and works in
+almost every stack. Framework adapters can bridge the same events into
+ActionCable, Phoenix Channels, Socket.IO, SignalR, WebSockets, mobile push, or
+managed realtime services.
+
+Event names:
+
+  invoice.created
+  invoice.awaiting_payment
+  invoice.payment_seen
+  invoice.checking
+  invoice.paid
+  invoice.expired
+  invoice.failed
+  invoice.fulfilled
+  invoice.cancelled
+
+Example SSE:
+
+  event: invoice.created
+  data: {"invoice_id":"or_inv_01jz...","status":"awaiting_payment"}
+
+  event: invoice.payment_seen
+  data: {"invoice_id":"or_inv_01jz...","status":"checking"}
+
+  event: invoice.paid
+  data: {"invoice_id":"or_inv_01jz...","status":"paid","settled_at":"2026-06-18T00:03:10Z"}
+
+  event: invoice.expired
+  data: {"invoice_id":"or_inv_01jz...","status":"expired"}
+
+Original-docs payment-update compatibility:
+
+  The original Rails/ActionCable frontend listens for a message wrapper named
+  payment-update and marks the open invoice paid only when payment_hash matches.
+  Framework adapters should be able to emit this compatibility message:
+
+    {
+      "message": "payment-update",
+      "data": {
+        "payment_hash": "same-payment-hash-as-open-invoice",
+        "status": "succeeded",
+        "settled_at": "2026-05-06T12:03:00Z",
+        "product_type": "credit_pack"
+      }
+    }
+
+  Mapping:
+
+    invoice.paid event         -> message: "payment-update"
+    event.payment_hash         -> data.payment_hash
+    status paid                -> data.status: "succeeded"
+    event.settled_at           -> data.settled_at
+    fulfillment/product type   -> data.product_type, optional app metadata
+
+  ActionCable, Socket.IO, SSE, WebSocket, SignalR, Phoenix Channels, and
+  Laravel Reverb adapters can all carry this same logical payload.
+
+
+Payment State Machine
+---------------------
+
+All SDKs, examples, database rows, UI components, and event payloads should use
+the same state model.
+
+States:
+
+  draft
+    App has requested a payment intent, but no BOLT11 exists yet.
+
+  invoice_created
+    Wallet returned a BOLT11 invoice and payment hash.
+
+  awaiting_payment
+    Customer has not paid yet.
+
+  checking
+    A notification or poll suggests activity; server is verifying by lookup.
+
+  paid
+    Wallet lookup proves settlement.
+
+  fulfilled
+    App delivered the product, file, credit, pass, or entitlement.
+
+  expired
+    Invoice expired before settlement.
+
+  failed
+    Wallet, provider, network, validation, or internal error occurred.
+
+  cancelled
+    Merchant/app intentionally cancelled the payment flow.
+
+Allowed transitions:
+
+  draft -> invoice_created
+  invoice_created -> awaiting_payment
+  awaiting_payment -> checking
+  awaiting_payment -> expired
+  awaiting_payment -> cancelled
+  checking -> paid
+  checking -> awaiting_payment
+  checking -> expired
+  checking -> failed
+  paid -> fulfilled
+
+Invariant:
+
+  Product fulfillment is never triggered by frontend state alone. Fulfillment
+  happens only after backend verification of settled_at, preimage, settled true,
+  paid true, or wallet-specific equivalent through lookup_invoice.
+
+
+NWC Protocol Foundation
+-----------------------
+
+NWC URI shape:
+
+  nostr+walletconnect://<wallet-pubkey>?relay=<wss-url>&secret=<client-secret>
+
+Core NIP-47 methods for v0.1:
+
+  get_info
+  make_invoice
+  lookup_invoice
+  list_transactions, optional
+  get_balance, optional diagnostic only
+
+Send methods are out of scope for initial receive checkout:
+
+  pay_invoice
+  multi_pay_invoice
+  pay_keysend
+  multi_pay_keysend
+
+Receive-only expectation:
+
+  A receive-only code should support creating invoices and checking status, but
+  should not support spending funds. SDKs should expose checkCapabilities() and
+  warn loudly or refuse by default when a checkout app is configured with a
+  read/write NWC connection string.
+
+Notifications:
+
+  - NWC notification event kinds: 23196 and 23197.
+  - Subscribe to notifications from the wallet pubkey on the relay in the NWC
+    URI.
+  - Notifications can wake invoice lookup immediately.
+  - Notifications do not replace polling.
+  - Notification handlers must be idempotent.
+  - Duplicate notifications must not double-credit payments.
+
+Long-running listener requirements:
+
+  These come directly from the Rails/nwc-ruby guidance in my-original-docs.txt
+  and should influence every native listener implementation:
+
+    - Dedupe notifications by payment_hash.
+    - Persist the last processed event timestamp or cursor where the wallet
+      library supports resuming with since.
+    - Reconnect with bounded exponential backoff.
+    - Keep WebSocket connections alive with ping/heartbeat behavior.
+    - Treat notification delivery as at-least-once, not exactly-once.
+    - Make the database transition idempotent with a unique payment_hash or an
+      update guard such as pending -> paid only.
+    - Run notification listeners as long-running worker processes, not inside
+      request handlers.
+    - Still verify settlement with lookup_invoice before fulfillment.
+
+Settlement detection:
+
+  Treat invoice as paid when lookup_invoice returns one of:
+
+    settled_at present
+    preimage present
+    settled == true
+    paid == true
+    state == "SETTLED"
+
+  Store the strongest available proof. Prefer preimage when present.
+
+Common wallet/service errors to normalize:
+
+  NOT_IMPLEMENTED
+  UNAUTHORIZED
+  QUOTA_EXCEEDED
+  RATE_LIMITED
+  INTERNAL
+  TIMEOUT
+  NOT_FOUND
+  INVALID_REQUEST
+  WALLET_UNAVAILABLE
+  INVOICE_EXPIRED
+  INSUFFICIENT_BALANCE
+  PAYMENT_FAILED
+  UNSUPPORTED_METHOD
+
+For receive-only checkout, send-payment errors such as INSUFFICIENT_BALANCE and
+PAYMENT_FAILED should normally appear only in diagnostics or if a developer
+accidentally configures read/write features. Normalize them anyway so SDKs
+match the underlying NWC libraries.
+
+
+Safe Polling
+------------
+
+Polling is reliable and should be the default. Notifications make checkout feel
+instant, but polling is the recovery path when notification delivery is delayed
+or missed.
+
+Canonical polling cadence:
+
+  immediate first lookup
+  0-30 seconds:       poll every 1 second
+  30-120 seconds:     poll every 3 seconds
+  120-300 seconds:    poll every 6 seconds
+  300s-expiry:        poll every 12 seconds
+  after expiry:       stop and mark expired
+
+Pseudo-code:
+
+  while now < invoice.expires_at:
+    result = lookup_invoice(payment_hash)
+
+    if isSettled(result):
+      mark_paid()
+      publish_invoice_paid()
+      fulfill()
+      return
+
+    sleep(min(nextDelay(invoice.created_at, now), invoice.expires_at - now))
+
+  mark_expired()
+  publish_invoice_expired()
+
+This cadence must live in test vectors so every language agrees.
+
+
+Fiat Pricing And Quotes
+-----------------------
+
+OpenReceive must have first-class fiat to msat quoting. Most merchants think in
+USD, EUR, GBP, or local currency, not msats.
+
+Core API:
+
+  quoteFiatToMsats({
+    amount: "0.10",
+    currency: "USD"
+  })
+
+Response:
+
+  {
+    "amount_fiat": "0.10",
+    "currency": "USD",
+    "btc_fiat_price": "50000.00",
+    "amount_msat": "200000",
+    "amount_sat": "200",
+    "source": "static_mock",
+    "as_of": "2026-06-18T00:00:00Z",
+    "expires_at": "2026-06-18T00:10:00Z"
+  }
+
+Rules:
+
+  - Use decimal math.
+  - Do not use binary floats for money.
+  - Lock the fiat quote at invoice creation.
+  - Store price source, rate, as_of, expires_at, fiat amount, fiat currency,
+    amount_sat, and amount_msat.
+  - Enforce a minimum of 1 sat.
+  - Round up to a whole sat when wallet/UI behavior needs sat-level display.
+  - Amount to NWC make_invoice is in millisatoshis.
+
+Formula:
+
+  amount_btc  = fiat_amount / btc_fiat_price
+  amount_sat  = amount_btc * 100_000_000
+  amount_msat = amount_sat * 1000
+
+Default price source architecture:
+
+  PriceProvider
+    getBtcFiatRates(currencies: string[]): RateMap
+
+Initial providers:
+
+  - CoinGecko Simple Price compatible endpoint.
+  - OpenReceive exchange-rate mirror endpoint.
+  - Megalithic exchange-rate fallback endpoint.
+  - CoinGecko direct fallback endpoint.
+  - Static deterministic provider for tests and screenshots.
+
+Rate endpoint contract:
+
+  The canonical live response shape is CoinGecko Simple Price compatible:
+
+    {
+      "bitcoin": {
+        "usd": 62599,
+        "eur": 54792,
+        "gbp": 47539
+      }
+    }
+
+  The adapter must accept integer or decimal JSON numbers and convert them to
+  Decimal/string internally. Do not rely on JavaScript floating point for final
+  money math.
+
+  Official OpenReceive mirror, planned:
+
+    https://openreceive.org/exchange_rates
+
+  Existing compatible fallback:
+
+    https://megalithic.me/exchange_rates
+
+  CoinGecko direct fallback:
+
+    https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,aed,ars,aud,bdt,bhd,bmd,brl,cad,chf,clp,cny,czk,dkk,eur,gbp,gel,hkd,huf,idr,ils,inr,jpy,krw,kwd,lkr,mmk,mxn,myr,ngn,nok,nzd,php,pkr,pln,rub,sar,sek,sgd,thb,try,twd,uah,vef,vnd,zar
+
+  The open source repo should treat https://openreceive.org/exchange_rates as
+  an external public rate mirror. Its implementation may live in the private
+  Rails/Kamal app, but the open source code depends only on the JSON contract,
+  not on that private app's source or deployment.
+
+Supported fiat/quote currencies for v0.1:
+
+  usd, aed, ars, aud, bdt, bhd, bmd, brl, cad, chf, clp, cny, czk,
+  dkk, eur, gbp, gel, hkd, huf, idr, ils, inr, jpy, krw, kwd, lkr,
+  mmk, mxn, myr, ngn, nok, nzd, php, pkr, pln, rub, sar, sek, sgd,
+  thb, try, twd, uah, vef, vnd, zar
+
+Rate source order:
+
+  1. static_mock in tests, docs screenshots, and deterministic demo mode.
+  2. openreceive_mirror in production/demo live mode once available.
+  3. megalithic_mirror as a compatible fallback.
+  4. coingecko_direct as the final upstream fallback.
+
+Staleness handling:
+
+  The exchange-rate response does not need to contain timestamps. The
+  OpenReceive service records fetch time as as_of, applies cache_seconds, and
+  locks the quote at invoice creation with invoice_quote_ttl_seconds.
+
+Recommended config file:
+
+  spec/data/rates/price-sources.json
+
+Recommended default:
+
+  cache_seconds: 30
+  invoice_quote_ttl_seconds: 600
+  primary: https://openreceive.org/exchange_rates
+  secondary: https://megalithic.me/exchange_rates
+  tertiary: CoinGecko Simple Price direct URL
+  test/dev: static mock price, e.g. BTC/USD = 50000.00
+
+The static mock is mandatory. It keeps docs, tests, screenshots, and demos
+stable.
+
+
+Provider Registry
+-----------------
+
+The provider registry is a product asset. It powers the PayInvoiceWizard and
+lets customers choose how to pay one Lightning invoice from whatever they
+already hold.
+
+Canonical location:
+
+  spec/data/providers/openreceive-providers.v2.json
+
+Current source:
+
+  building/providers-demo.json
+
+Current stats:
+
+  schema_version:        2.0.0
+  generated:             2026-06-18
+  assets_index:          18 entries
+  providers:             36 included providers
+  crypto_routes:         15 routes
+  fiat_rails:            2 rails, bank and card
+  countries:             39 countries
+  disqualified:          7 providers
+
+Current asset entries:
+
+  Crypto:
+    btc Lightning
+    btc Bitcoin on-chain
+    usdt Tether
+    usdc USD Coin
+    eth Ethereum
+    xmr Monero
+    ltc Litecoin
+    doge Dogecoin
+    trx Tron
+    sol Solana
+    bch Bitcoin Cash
+    xrp XRP
+    bnb BNB
+    ada Cardano
+    dash Dash
+
+  Fiat:
+    usd US Dollars
+    eur Euro
+    gbp British Pound
+
+Current registry shape:
+
+  included providers:        36
+  crypto routes:             15
+  fiat rails:                2
+  countries:                 39
+  disqualified providers:    7
+
+The registry should graduate from draft data to stricter product data.
+
+Recommended provider object:
+
+  {
+    "id": "rizful",
+    "name": "Rizful",
+    "url": "https://rizful.com",
+    "availability": {
+      "us": null,
+      "countries": [],
+      "unknown": true
+    },
+    "capabilities": {
+      "pays_arbitrary_bolt11": true,
+      "receive_lightning": true,
+      "onchain_to_lightning": true,
+      "fiat_to_lightning": false
+    },
+    "mechanisms": ["pay_invoice"],
+    "official_docs": [
+      {
+        "title": "Provider docs",
+        "url": "https://example.com/docs"
+      }
+    ],
+    "fees": {
+      "summary": "Provider-specific; verify before payment.",
+      "structured": null
+    },
+    "blurb": "Short user-facing route description.",
+    "caveat": "Short user-facing warning when needed.",
+    "last_verified": "2026-06-18"
+  }
+
+Validation rules:
+
+  - Every provider has a stable id.
+  - Every provider has name and url.
+  - Every provider has mechanism fields.
+  - Every provider claim has evidence_urls or official_docs.
+  - Every route references existing providers only.
+  - Every route has deterministic ranking.
+  - Every country is ISO 3166-1 alpha-2.
+  - Every currency is ISO 4217.
+  - No route references a disqualified provider.
+  - No provider blurb contradicts its caveat.
+    - No "US available" claim unless explicitly verified.
+  - Every disqualified provider has a reason.
+  - Registry changes run through CI and produce generated package updates.
+
+Generated provider-data packages:
+
+  npm:          @openreceive/provider-data
+  PyPI:         openreceive-provider-data
+  RubyGems:     openreceive-provider-data
+  Packagist:    openreceive/provider-data
+  crates.io:    openreceive-provider-data
+  Go:           github.com/openreceive/providerdata
+  SwiftPM:      OpenReceiveProviderData
+  Maven:        org.openreceive:provider-data
+  pub.dev:      openreceive_provider_data
+  NuGet:        OpenReceive.ProviderData
+  Hex:          open_receive_provider_data
+
+Provider-data APIs:
+
+  getAssets()
+  getProviders()
+  getCryptoRoutes()
+  getFiatRails()
+  getCountries()
+  getCountryRoutes(countryCode)
+  getPaymentWizardRoutes({ asset, country, rail })
+  getProvider(id)
+  getDisqualifiedProviders()
+  validateRegistry()
+
+
+Shared Specs
+------------
+
+Use three canonical spec families.
+
+1. JSON Schema
+
+Use JSON Schema for:
+
+  - provider registry
+  - invoice object
+  - payment event
+  - rate quote
+  - checkout route
+  - error object
+  - NWC capability summary
+  - test vectors
+  - mock wallet fixtures
+
+2. OpenAPI
+
+Use OpenAPI for:
+
+  spec/openapi/openreceive-http.v1.yaml
+
+Generate:
+
+  - TypeScript types and lightweight HTTP client.
+  - Python Pydantic models.
+  - Ruby RBS/Sorbet-friendly DTOs where practical.
+  - PHP DTOs.
+  - Rust serde structs.
+  - Go structs.
+  - Kotlin data classes.
+  - Swift Codable structs.
+  - Dart models.
+  - C# records.
+  - Elixir structs.
+
+Do not expose raw generated clients as the main SDK. Wrap them in idiomatic
+package APIs.
+
+3. AsyncAPI
+
+Use AsyncAPI for:
+
+  spec/asyncapi/openreceive-events.v1.yaml
+
+Document the event contract once, then adapt it to:
+
+  - SSE
+  - WebSockets
+  - ActionCable
+  - Phoenix Channels
+  - Socket.IO
+  - SignalR
+  - Laravel Reverb/Echo
+  - mobile push bridges
+
+
+Monorepo Layout
+---------------
+
+Recommended repository structure:
+
+  openreceive/
+    README.md
+    LICENSE
+    SECURITY.md
+    CONTRIBUTING.md
+    CODE_OF_CONDUCT.md
+    GOVERNANCE.md
+    CHANGELOG.md
+
+    .github/
+      workflows/
+        ci.yml
+        conformance.yml
+        release.yml
+        publish.yml
+        demos.yml
+        provider-registry.yml
+        security.yml
+
+    docs/
+      00-what-is-openreceive.md
+      01-quickstart-node.md
+      02-quickstart-rails.md
+      03-quickstart-python.md
+      04-quickstart-php.md
+      05-frontend-checkout.md
+      06-mobile-apps.md
+      07-nwc-client-strategy.md
+      08-price-feeds.md
+      09-provider-registry.md
+      10-security.md
+      11-conformance.md
+      12-release-process.md
+      api-reference.md
+      sdk-status.md
+
+    apps/
+      docs/
+      playground/
+      demo-gallery/
+
+    spec/
+      openapi/
+        openreceive-http.v1.yaml
+      asyncapi/
+        openreceive-events.v1.yaml
+      schemas/
+        invoice.schema.json
+        payment-event.schema.json
+        rate-quote.schema.json
+        provider-registry.schema.json
+        checkout-route.schema.json
+        error.schema.json
+        nwc-capabilities.schema.json
+      data/
+        providers/
+          openreceive-providers.v2.json
+        assets/
+          assets.json
+        countries/
+          countries.json
+        fiat/
+          supported-currencies.json
+        rates/
+          price-sources.json
+        demo/
+          fruits.json
+      fixtures/
+        invoices/
+        rates/
+        providers/
+        mock-nwc-responses/
+      test-vectors/
+        fiat-to-msats.usd.json
+        settlement-detection.json
+        polling.backoff.json
+        provider-route.crypto-usdt.json
+        provider-route.fiat-us-card.json
+        nwc-uri-parse.json
+        idempotency.json
+
+    packages/
+      nwc/
+        nwc-client-php/
+        nwc-client-py/
+        nwc-client-go/
+        nwc-client-rs/
+        nwc-client-swift/
+        nwc-client-jvm/
+        nwc-client-dotnet/
+        nwc-client-elixir/
+        nwc-client-dart/
+      js/
+        core/
+        browser/
+        react/
+        vue/
+        svelte/
+        angular/
+        node/
+        next/
+        express/
+        fastify/
+        provider-data/
+        testkit/
+      python/
+        openreceive/
+        openreceive-fastapi/
+        openreceive-django/
+        openreceive-flask/
+        openreceive-provider-data/
+        openreceive-testkit/
+      ruby/
+        openreceive/
+        openreceive-rails/
+        openreceive-provider-data/
+        openreceive-testkit/
+      php/
+        openreceive/
+        openreceive-laravel/
+        openreceive-symfony/
+        openreceive-provider-data/
+      rust/
+        openreceive/
+        openreceive-axum/
+        openreceive-actix/
+        openreceive-provider-data/
+        openreceive-testkit/
+      go/
+        openreceive/
+        adapters/
+          gin/
+          echo/
+          fiber/
+        providerdata/
+      jvm/
+        core/
+        ktor/
+        spring/
+        android/
+        provider-data/
+      swift/
+        OpenReceive/
+        OpenReceiveUI/
+        OpenReceiveVapor/
+        OpenReceiveProviderData/
+      dart/
+        openreceive/
+        openreceive_flutter/
+        openreceive_provider_data/
+      dotnet/
+        OpenReceive/
+        OpenReceive.AspNetCore/
+        OpenReceive.ProviderData/
+      elixir/
+        open_receive/
+        open_receive_phoenix/
+        open_receive_provider_data/
+
+    examples/
+      hello-fruit/
+        shared/
+          product.json
+          fruits.json
+          stickers/
+            apple.svg
+            banana.svg
+            orange.svg
+            pear.svg
+          mock-wallet/
+          test-data/
+        web/
+          static-html-with-api/
+          vanilla-js/
+          react-vite/
+          vue-vite/
+          sveltekit/
+          angular/
+          nextjs/
+          recipes/
+            react-mantine/
+            react-material-ui/
+            react-tailwind-radix/
+            vue-vuetify/
+            vue-headless/
+            svelte-headless/
+            angular-material/
+            angular-headless/
+            web-component-bootstrap/
+        server/
+          node-express-react/
+          node-fastify-vanilla/
+          nextjs-fullstack/
+          rails-hotwire/
+          rails-react/
+          django-htmx/
+          django-react/
+          fastapi-react/
+          flask-alpine/
+          laravel-blade/
+          laravel-vue/
+          symfony-twig/
+          go-nethttp-htmx/
+          go-gin-react/
+          rust-axum-leptos/
+          rust-axum-react/
+          dotnet-blazor/
+          dotnet-react/
+          spring-boot-thymeleaf/
+          spring-boot-react/
+          ktor-kotlin-react/
+          phoenix-liveview/
+          phoenix-react/
+        mobile/
+          ios-swiftui-node-api/
+          ios-swiftui-vapor-api/
+          android-compose-ktor-api/
+          android-compose-node-api/
+          flutter-fastapi-api/
+          react-native-expo-node-api/
+        edge/
+          cloudflare-worker/
+          vercel-next/
+          docker-compose/
+
+    demos/
+      deploy/
+      smoke/
+      screenshots/
+
+    tools/
+      codegen/
+      conformance/
+      mock-wallet/
+      validate-data/
+      scaffold-example/
+      release/
+      dev/
+
+
+Anti-Duplication Strategy
+-------------------------
+
+This is the core engineering discipline for the whole project.
+
+Never duplicate:
+
+  - provider lists
+  - supported currencies
+  - route rankings
+  - fiat-to-msat behavior
+  - polling cadence
+  - settlement detection rules
+  - invoice schemas
+  - event schemas
+  - demo product data
+  - mock wallet behavior
+  - package README structure
+
+Use these mechanisms:
+
+  - JSON Schema validates canonical data.
+  - OpenAPI generates shared HTTP models.
+  - AsyncAPI documents shared event models.
+  - Codegen emits provider-data packages.
+  - Test vectors enforce behavior across languages.
+  - The mock wallet gives every SDK identical wallet behavior in tests.
+  - Scaffolding tools create examples from templates.
+  - Docs use shared snippets where possible.
+  - CI fails when generated files are stale.
+
+Where duplication is acceptable:
+
+  - Thin idiomatic wrappers in each ecosystem.
+  - Framework-specific adapters.
+  - UI components written in each target UI framework.
+  - Small example glue code that teaches local conventions.
+
+Rule of thumb:
+
+  The same business rule in two languages is acceptable only if both load the
+  same vector and prove identical output.
+
+
+NWC Client Libraries
+--------------------
+
+The shared implementation burden moves into NWC client libraries and
+conformance, not into a daemon. Each serious server-side SDK must either wrap a
+recently maintained NWC client or ship a standalone neutral NWC client that can
+be used without OpenReceive.
+
+These NWC clients are standalone protocol clients, not OpenReceive-only
+packages. They may live under the openreceive GitHub organization for
+stewardship, CI, release automation, and security response, but their names,
+READMEs, examples, and public APIs should make sense to any NWC developer.
+
+Canonical standalone naming:
+
+  Repositories:
+    nwc-client-js, if the project ever needs its own JS client
+    nwc-client-ruby, if nwc-ruby is mirrored or superseded
+    nwc-client-php
+    nwc-client-py
+    nwc-client-go
+    nwc-client-rs
+    nwc-client-swift
+    nwc-client-jvm
+    nwc-client-dotnet
+    nwc-client-elixir
+    nwc-client-dart
+
+  Public package names:
+    npm:        @nwc-client/core, only if a standalone JS client is needed
+    RubyGems:   nwc-client-ruby, only if nwc-ruby is not the long-term package
+    Packagist:  nwc-client/php
+    PyPI:       nwc-client-py, import name nwc_client
+    Go:         github.com/openreceive/nwc-client-go
+    crates.io:  nwc-client-rs
+    SwiftPM:    repo nwc-client-swift, product NWCClient
+    Maven:      org.nwcclient:nwc-client-jvm, subject to namespace setup
+    NuGet:      Nwc.Client
+    Hex:        nwc_client
+    pub.dev:    nwc_client, only for server-side Dart if needed
+
+If a neutral GitHub or package namespace is created later, prefer that for raw
+NWC clients. If they stay under the openreceive organization, avoid
+OpenReceive-branded repository names and keep the package APIs neutral.
+
+OpenReceive backend SDKs consume these packages. They should not be required
+for an application that only wants a raw NWC protocol client.
+
+Each standalone NWC client README must start with raw NWC usage, not
+OpenReceive usage. OpenReceive integration belongs in a later section so users
+understand the protocol client is useful on its own.
+
+Standalone NWC clients must not depend on OpenReceive SDKs, provider data,
+checkout UI packages, demos, or product-specific state machines. Dependency
+direction is one-way: OpenReceive depends on NWC clients, never the reverse.
+
+Maintenance gate for third-party NWC clients:
+
+  - Repository pushed within the last 12 months at the time we adopt it.
+  - MIT, Apache-2.0, BSD, or similarly permissive license.
+  - Supports NIP-47 receive checkout methods: get_info, make_invoice, and
+    lookup_invoice.
+  - Supports or can be extended to support payment_received notifications.
+  - Handles NIP-04 and, where practical, NIP-44 v2 encrypted wallet messages.
+  - Has tests or can pass OpenReceive's mock-wallet conformance suite.
+  - Does not force browser/mobile exposure of NWC secrets.
+  - Can run in ordinary server framework jobs, queue workers, cron tasks,
+    serverless functions, or long-running worker roles.
+
+Candidate maintenance snapshot checked on 2026-06-19:
+
+  Ruby:
+    Use MegalithicBTC/nwc-ruby initially. It was pushed 2026-06-13 and already
+    targets Rails/server-side receive checkout. The OpenReceive Ruby SDK should
+    wrap it first. If desired later, move, mirror, or supersede it as
+    nwc-client-ruby while preserving package identity, compatibility, and author
+    credit.
+
+  JavaScript / TypeScript:
+    Use getAlby/js-sdk for NWC initially. It was pushed 2026-05-23 and is the
+    mature JS option for Nostr Wallet Connect. @openreceive/node should wrap the
+    receive-side subset and hide send-payment methods from checkout APIs.
+
+  Go:
+    Audit rolznz/go-nwc first. It was pushed 2025-06-30, which satisfies the
+    current recency gate but is close enough that it must be rechecked before
+    adoption. If it lacks notification resilience, NIP-44 support, redaction,
+    or conformance coverage, create github.com/openreceive/nwc-client-go and use
+    rolznz/go-nwc only as a reference.
+
+  Rust:
+    Use rust-nostr/nostr initially. It was pushed 2026-06-15, has substantial
+    adoption, and explicitly includes Nostr Wallet Connect support. The
+    OpenReceive Rust crate should wrap the receive-checkout subset and provide
+    Axum/Actix-friendly workers.
+
+  Swift:
+    Audit SparrowTek/NostrKit. It was pushed 2026-04-29 and has NWC support,
+    but OpenReceive needs server-side Vapor suitability, Linux compatibility,
+    notification behavior, and secret-redaction checks. If those do not pass,
+    create nwc-client-swift with SwiftPM product NWCClient.
+
+  PHP:
+    Audit dsbaars/nostr-php-nwc. It was pushed 2025-07-07, so it currently
+    passes the recency gate, but it is small and must prove receive checkout,
+    notifications, PHP 8.2+/8.3+ compatibility, Laravel queue friendliness, and
+    Symfony Messenger friendliness. Plan to write nwc-client-php unless the
+    audit shows it is ready to adopt or collaborate on.
+
+  Python:
+    Write nwc-client-py. The known Python NWC candidate checked from the
+    awesome-nwc list was pushed 2024-07-24, which is too stale for a primary
+    dependency. The Python client should support asyncio first, with sync
+    wrappers for Django/Flask where practical.
+
+  Kotlin / JVM:
+    Write nwc-client-jvm. There is no currently vetted Kotlin/JVM NWC
+    client for server-side Ktor and Spring Boot. The package should expose
+    coroutine APIs, Java-friendly facades, and worker examples for Spring
+    scheduling and Ktor background jobs.
+
+  .NET / C#:
+    Write Nwc.Client. There is no currently vetted .NET NWC client for
+    ASP.NET Core. The package should expose async Task APIs, hosted-service
+    notification listeners, dependency injection, and SignalR-friendly events.
+
+  Elixir:
+    Write nwc_client. There is no currently vetted Elixir NWC client for
+    Phoenix. The package should use OTP supervision for relay connections,
+    GenServer/Broadway/Oban-friendly polling, and Phoenix PubSub events.
+
+  Dart:
+    Do not use Dart/Flutter as a live wallet-secret runtime for consumer apps.
+    Flutter packages are checkout UI only. If a server-side Dart ecosystem
+    becomes important, write nwc_client; currently observed Dart NWC packages
+    were pushed in 2024 and should be treated as references only.
+
+Minimum NWC client responsibilities:
+
+  - Parse nostr+walletconnect URIs.
+  - Validate and redact wallet pubkey, relay URLs, and client secret.
+  - Connect to one or more Nostr relays over WebSocket.
+  - Sign Nostr events correctly.
+  - Encrypt/decrypt NWC request and response payloads.
+  - Support NIP-04 and track NIP-44 v2 support.
+  - Implement get_info.
+  - Implement make_invoice.
+  - Implement lookup_invoice.
+  - Optionally implement list_transactions for diagnostics.
+  - Never expose pay_invoice, keysend, or send-money helpers through the
+    OpenReceive checkout surface.
+  - Subscribe to payment_received notifications where the language runtime and
+    wallet support it.
+  - Dedupe notifications by payment_hash.
+  - Reconnect with bounded exponential backoff.
+  - Support heartbeat/ping or equivalent dead-connection detection.
+  - Persist or expose the last processed event timestamp/cursor where possible.
+  - Treat notifications as hints that trigger lookup_invoice, not final proof.
+  - Normalize settlement detection into the canonical OpenReceive state model.
+  - Normalize wallet/service errors into canonical OpenReceive errors.
+  - Provide safe polling helpers with the canonical cadence.
+  - Provide idempotency guidance and helper APIs for framework adapters.
+  - Provide deterministic mock-wallet tests and shared conformance vectors.
+
+Framework storage and workers:
+
+  OpenReceive libraries should not own an external database service. Each
+  framework adapter stores payment state in the host application's normal
+  database and runs background work in the host application's normal job system.
+
+  Rails:
+    ActiveRecord tables, ActiveJob/Solid Queue/Sidekiq/GoodJob workers,
+    ActionCable/Hotwire events, optional Kamal worker role for notification
+    listening.
+
+  Laravel:
+    Eloquent models, Laravel queues, scheduler, events, broadcasting, Reverb or
+    Echo for passive frontend updates.
+
+  Symfony:
+    Doctrine entities, Messenger workers, Scheduler, Mercure or SSE.
+
+  Django:
+    Django models, management commands, Celery/RQ/Huey, Channels/SSE.
+
+  FastAPI:
+    SQLAlchemy/SQLModel examples, asyncio tasks, Celery/Arq/RQ, SSE/WebSockets.
+
+  Flask:
+    SQLAlchemy examples, Celery/RQ workers, SSE/WebSocket extension examples.
+
+  Node:
+    Plain storage interfaces first, with Prisma/Drizzle examples, BullMQ/Bree
+    workers, SSE, Socket.IO, and Next.js route handlers.
+
+  Go:
+    database/sql interfaces, background goroutines, context cancellation,
+    net/http/Gin/Echo/Fiber adapters, SSE.
+
+  Rust:
+    sqlx/diesel examples, Tokio tasks, Axum/Actix extractors, SSE.
+
+  ASP.NET Core:
+    EF Core examples, IHostedService workers, SignalR/SSE, DI registration.
+
+  Spring / Ktor:
+    Spring Data/JPA or Exposed examples, scheduled jobs, coroutine workers,
+    Reactor/SSE where appropriate.
+
+  Phoenix:
+    Ecto schemas, Oban workers, Phoenix PubSub, LiveView updates.
+
+
+Backend SDK API
+---------------
+
+Every backend SDK should expose the same conceptual API with ecosystem-native
+syntax.
+
+TypeScript shape:
+
+  const openreceive = new OpenReceive({
+    wallet: {
+      type: "nwc",
+      connectionString: process.env.OPENRECEIVE_NWC
+    },
+    pricing: {
+      source: "coingecko",
+      quoteTtlSeconds: 600
+    }
+  })
+
+  const invoice = await openreceive.invoices.create({
+    amount: { currency: "USD", value: "0.10" },
+    description: "Fruit sticker",
+    metadata: {
+      fruit: "banana",
+      userId: "user_123"
+    },
+    idempotencyKey: "fruit-demo-user-123"
+  })
+
+  const status = await openreceive.invoices.lookup(invoice.id)
+
+  await openreceive.invoices.waitForPayment(invoice.id, {
+    timeoutSeconds: 600
+  })
+
+  openreceive.events.on("invoice.paid", async (event) => {
+    await unlockFruitSticker(event.invoice_id)
+  })
+
+Equivalent naming:
+
+  JS/TS:   openreceive.invoices.create()
+  Python:  client.invoices.create()
+  Ruby:    client.invoices.create
+  PHP:     $client->invoices()->create()
+  Rust:    client.invoices().create(...)
+  Go:      client.Invoices.Create(...)
+  Swift:   client.invoices.create(...)
+  Kotlin:  client.invoices.create(...)
+  Dart:    client.invoices.create(...)
+  C#:      client.Invoices.CreateAsync(...)
+  Elixir:  OpenReceive.Invoices.create(...)
+
+Backend SDK responsibilities:
+
+  - Native NWC client or wrapper around a vetted recent NWC dependency.
+  - Invoice create/lookup/wait APIs.
+  - Price quote helper.
+  - Provider route helper.
+  - Event subscription helper.
+  - Capability check.
+  - Secret redaction.
+  - Error normalization.
+  - Settlement-state normalization.
+  - Safe polling helper.
+  - Notification listener helper where practical.
+  - Idempotency-key helper.
+  - Framework storage hooks.
+  - Framework job/worker hooks.
+  - Testkit integration.
+
+
+Frontend SDK API
+----------------
+
+Frontend packages must never require wallet secrets.
+
+Frontend packages do not create live invoices by themselves. They call the
+merchant backend's OpenReceive routes, receive display-safe invoice data, and
+listen for passive settlement updates from that backend.
+
+They receive:
+
+  invoice_id
+  bolt11
+  amount
+  expires_at
+  routes_url
+  events_url
+
+They expose a checkout view model:
+
+  data:
+    invoice
+    bolt11
+    amount
+    expiresAt
+    expiresIn
+    status
+    paymentHash
+    routes
+    assets
+    selectedAsset
+    selectedCountry
+    providers
+    activeProvider
+    error
+
+  actions:
+    copyInvoice()
+    openWallet()
+    refreshStatus()
+    selectAsset(asset)
+    selectCountry(country)
+    selectProvider(provider)
+    retry()
+    cancel()
+
+  events:
+    created
+    payment_seen
+    paid
+    expired
+    failed
+    copied
+    route_selected
+
+The view model is the real frontend API. Default components, headless
+components, web components, and design-system recipes all consume the same view
+model.
+
+Headless browser package:
+
+  @openreceive/browser
+
+Responsibilities:
+
+  - Parse invoice object.
+  - Connect to SSE events.
+  - Track countdown.
+  - Copy BOLT11.
+  - Open lightning: URI.
+  - Load provider routes.
+  - Emit paid/expired/error events.
+  - Expose a framework-neutral checkout state machine.
+  - Expose framework-neutral actions for copy, open-wallet, refresh, select
+    route, dismiss, retry, and cancel.
+
+Frontend package philosophy:
+
+  OpenReceive frontend packages should make it easy to build a polished payment
+  wizard without forcing a design system. Teams must be able to use Mantine,
+  Material UI, Chakra, Radix, Tailwind, Bootstrap, DaisyUI, shadcn-style
+  components, Angular Material, PrimeNG, Vuetify, Svelte component libraries,
+  or their own design system.
+
+  The strategy is layered:
+
+    1. @openreceive/browser
+       Framework-neutral state machine, event handling, provider-route loading,
+       countdowns, copy/open-wallet actions, and typed data. No DOM ownership
+       beyond optional helpers.
+
+    2. Framework headless adapters
+       React hooks/context, Vue composables, Svelte stores/actions, Angular
+       services/signals/directives, and Solid signals. These expose state and
+       actions but do not dictate markup.
+
+    3. Accessible unstyled primitives
+       Small components such as Root, Modal, QRCode, CopyButton,
+       RouteWizard, ProviderList, Status, Countdown, and Success. They own
+       behavior, ARIA, focus management, keyboard handling, and slot structure,
+       but use minimal reset styles and accept class/style/slot/component
+       overrides.
+
+    4. Optional default UI
+       A pleasant default checkout for demos, quickstarts, and teams without a
+       design system. This is not the main customization surface.
+
+    5. Design-system recipes
+       Example integrations for Mantine, Material UI, Chakra, Tailwind/Radix,
+       Bootstrap, Angular Material, Vuetify, and common Svelte UI libraries.
+       These should usually be docs/examples, not hard dependencies or required
+       packages.
+
+React headless example:
+
+  import { useOpenReceiveCheckout } from "@openreceive/react"
+
+  function Checkout({ invoice }) {
+    const checkout = useOpenReceiveCheckout({
+      invoice,
+      paymentRoutes: true,
+      onPaid: (event) => unlockSticker(event)
+    })
+
+    return (
+      <MyModal open={checkout.isOpen} onClose={checkout.cancel}>
+        <MyQRCode value={checkout.bolt11} />
+        <MyButton onClick={checkout.copyInvoice}>
+          Copy invoice
+        </MyButton>
+        <MyButton onClick={checkout.openWallet}>
+          Open wallet
+        </MyButton>
+        <MyRoutePicker
+          routes={checkout.routes}
+          selectedAsset={checkout.selectedAsset}
+          onSelectAsset={checkout.selectAsset}
+        />
+        <MyStatus status={checkout.status} expiresIn={checkout.expiresIn} />
+      </MyModal>
+    )
+  }
+
+React default UI example:
+
+  import { OpenReceiveCheckout } from "@openreceive/react"
+
+  <OpenReceiveCheckout
+    invoice={invoice}
+    onPaid={(event) => unlockSticker(event)}
+    paymentRoutes={true}
+  />
+
+React slot/component override example:
+
+  <OpenReceiveCheckout
+    invoice={invoice}
+    components={{
+      Modal: MantineModal,
+      Button: MantineButton,
+      Card: MantineCard,
+      Select: MantineSelect,
+      Alert: MantineAlert
+    }}
+    classNames={{
+      root: "or-checkout",
+      providerCard: "rounded border p-3"
+    }}
+  />
+
+Lower-level browser API:
+
+  const checkout = new OpenReceiveBrowser({
+    invoice,
+    eventsUrl: invoice.checkout.events_url
+  })
+
+  checkout.on("paid", () => {
+    showDownloadButton()
+  })
+
+  checkout.mount("#checkout")
+
+Framework adapter API surface:
+
+  React:
+    useOpenReceiveCheckout()
+    OpenReceiveProvider
+    OpenReceiveCheckout, default UI
+    Headless primitives with slots/component overrides
+
+  Vue:
+    useOpenReceiveCheckout()
+    provideOpenReceiveCheckout()
+    OpenReceiveCheckout, default UI
+    Scoped-slot/headless components
+
+  Svelte:
+    createOpenReceiveCheckout()
+    readable/writable stores for state
+    actions for copy/open-wallet/focus behavior
+    default UI components and slots
+
+  Angular:
+    OpenReceiveCheckoutService
+    signals or RxJS observables for state
+    directives for QR/copy/open-wallet/status
+    Angular Material recipe
+
+  Solid:
+    createOpenReceiveCheckout()
+    signals and optional default UI
+
+UI primitives:
+
+  OpenReceiveCheckout
+  InvoiceModal
+  InvoiceSummary
+  QRCode
+  CopyInvoiceButton
+  OpenWalletButton
+  CountdownTimer
+  PaymentStatus
+  PaymentRouteWizard
+  AssetSelector
+  FiatRailSelector
+  CountrySelector
+  ProviderList
+  ProviderCard
+  ProviderInstructions
+  PaidSuccess
+  ExpiredInvoice
+
+Frontend contract from the original docs:
+
+  - The modal shows amount, QR code, copy button, cancel button, waiting state,
+    and payment wizard.
+  - Provider cards put Copy Invoice before external provider links because
+    mobile clipboard writes are more reliable before navigating away.
+  - The browser receives a passive settlement message containing the matching
+    payment_hash and a paid/succeeded status.
+  - The browser updates only the currently open invoice when payment_hash
+    matches.
+
+
+Package Matrix
+--------------
+
+JavaScript / TypeScript:
+
+  Package                    Purpose
+  @openreceive/core          Types, validation, shared client, events
+  @openreceive/browser       Headless checkout state/actions, no framework
+  @openreceive/elements      Web components for no-framework checkout UI
+  @openreceive/react         React hooks, primitives, slots, default UI
+  @openreceive/vue           Vue composables, scoped slots, default UI
+  @openreceive/svelte        Svelte stores/actions, slots, default UI
+  @openreceive/angular       Angular service/signals/directives, default UI
+  @openreceive/solid         Solid signals/primitives, default UI, later
+  @openreceive/ui-recipes    Design-system examples, docs, and snippets
+  @openreceive/node          Backend NWC/OpenReceive client
+  @openreceive/express       Express routes/middleware
+  @openreceive/fastify       Fastify plugin
+  @openreceive/next          Next.js route handlers/server helpers
+  @openreceive/provider-data Generated provider registry
+  @openreceive/testkit       Mock wallet and conformance helpers
+
+Python:
+
+  Package                    Purpose
+  nwc-client-py              Standalone Python NWC client, import nwc_client
+  openreceive                Core SDK wrapping nwc-client-py
+  openreceive-fastapi        Router, dependencies, SSE
+  openreceive-django         Views, models, Channels integration
+  openreceive-flask          Blueprints
+  openreceive-provider-data  Generated provider registry
+  openreceive-testkit        Mock wallet/test helpers
+
+Ruby:
+
+  Package                    Purpose
+  nwc-client-ruby            Standalone Ruby NWC gem, only if nwc-ruby is superseded
+  openreceive                Ruby SDK wrapping nwc-ruby or nwc-client-ruby
+  openreceive-rails          Engine, routes, ActionCable, ActiveJob
+  openreceive-provider-data  Generated provider registry
+  openreceive-testkit        RSpec helpers
+
+PHP:
+
+  Package                    Purpose
+  nwc-client/php             Standalone PHP NWC client
+  openreceive/openreceive    PHP client
+  openreceive/laravel        Service provider, jobs, events
+  openreceive/symfony        Symfony bundle
+  openreceive/wordpress      WordPress plugin, later
+  openreceive/woocommerce    WooCommerce gateway, later
+  openreceive/provider-data  Generated provider registry
+
+Rust:
+
+  Crate                      Purpose
+  nwc-client-rs              Standalone Rust NWC client/wrapper
+  openreceive                Core client, types, NWC
+  openreceive-axum           Axum routes/extractors
+  openreceive-actix          Actix integration
+  openreceive-provider-data  Generated provider registry
+  openreceive-testkit        Mock wallet/test utilities
+
+Go:
+
+  Module                                      Purpose
+  github.com/openreceive/nwc-client-go        Standalone/audited Go NWC module
+  github.com/openreceive/openreceive-go       Core client
+  github.com/openreceive/openreceive-go/gin   Gin adapter
+  github.com/openreceive/openreceive-go/echo  Echo adapter
+  github.com/openreceive/openreceive-go/fiber Fiber adapter
+  github.com/openreceive/openreceive-go/providerdata Provider data
+
+Swift / Apple:
+
+  Package                    Purpose
+  NWCClient                  Standalone Swift NWC client or NostrKit wrapper
+  OpenReceive                Core client
+  OpenReceiveUI              SwiftUI checkout components
+  OpenReceiveVapor           Vapor server adapter
+  OpenReceiveProviderData    Generated provider registry
+
+Kotlin / JVM / Android:
+
+  Artifact                                  Purpose
+  org.nwcclient:nwc-client-jvm              Standalone JVM NWC client
+  org.openreceive:openreceive-core          Kotlin/JVM client
+  org.openreceive:openreceive-android       Android Compose UI
+  org.openreceive:openreceive-ktor          Ktor server adapter
+  org.openreceive:openreceive-spring        Spring Boot adapter
+  org.openreceive:openreceive-provider-data Provider registry
+
+Dart / Flutter:
+
+  Package                    Purpose
+  nwc_client                 Server-side Dart NWC client, later only if needed
+  openreceive                Dart client
+  openreceive_flutter        Flutter checkout widgets
+  openreceive_provider_data  Generated provider registry
+
+.NET:
+
+  Package                    Purpose
+  Nwc.Client                 Standalone C# NWC client
+  OpenReceive                Core C# client
+  OpenReceive.AspNetCore     ASP.NET Core integration
+  OpenReceive.ProviderData   Generated provider registry
+
+Elixir / Phoenix:
+
+  Package                    Purpose
+  nwc_client                 Standalone Elixir NWC client
+  open_receive               Core Elixir client
+  open_receive_phoenix       Phoenix controller/LiveView integration
+  open_receive_provider_data Generated provider registry
+
+Highest leverage frontend package:
+
+  @openreceive/browser first, then @openreceive/elements.
+
+Ship @openreceive/browser early because every framework package should reuse
+the same state machine, route loading, event handling, countdown, and actions.
+Then ship the web component because it gives any website a no-build checkout
+path through a script tag and a custom element. It still talks to a server-side
+invoice endpoint; it never receives an NWC connection string and never calls
+NWC directly.
+
+Frontend design-system rule:
+
+  Framework packages must be headless-first and design-system friendly. Default
+  UI exists for demos and quickstarts, but production apps should be able to
+  replace every visible surface without forking payment logic.
+
+
+Backend Framework Adapters
+--------------------------
+
+Each backend adapter should provide:
+
+  - Route helper.
+  - Invoice creation helper.
+  - Event stream helper.
+  - Payment model/table migration or documented storage interface.
+  - Polling job/worker integration.
+  - Notification listener integration where practical.
+  - Fulfillment hook.
+  - Middleware/security defaults.
+  - Test helpers.
+  - Demo-ready defaults.
+
+Express:
+
+  app.use("/openreceive", openreceiveExpress({
+    client,
+    fulfill: async ({ invoice, metadata }) => {
+      await unlockSticker(metadata.userId, metadata.fruit)
+    }
+  }))
+
+Rails:
+
+  mount OpenReceive::Rails::Engine => "/openreceive"
+
+  OpenReceive.configure do |config|
+    config.wallet = :nwc
+    config.nwc = ENV.fetch("OPENRECEIVE_NWC")
+    config.fulfill = ->(invoice) {
+      FruitStickerUnlock.create!(invoice_id: invoice.id)
+    }
+  end
+
+Rails adapter requirements from my-original-docs.txt:
+
+  - The Rails package should make the receive-only/read-write distinction
+    visible with helpers equivalent to read_only?, read_write?, and
+    capabilities.
+  - It should warn or refuse for normal checkout flows if pay_invoice or
+    pay_keysend capabilities are present.
+  - If the implementation uses nwc-ruby or rbsecp256k1, document native build
+    dependencies for macOS, Debian/Ubuntu, Alpine, and Docker/Kamal images.
+  - The NWC notification listener should deploy as a Kamal role using the same
+    app image with a different command, not as a Kamal accessory.
+  - Listener handlers must be idempotent at the database level because deploys,
+    reconnects, restarts, and multiple listener hosts can replay the same
+    payment_received event.
+  - Rails examples should show an AppState or equivalent cursor for resuming
+    notifications with since after restart.
+  - Rails examples should broadcast the original-docs payment-update payload to
+    the browser through ActionCable or a documented equivalent.
+
+FastAPI:
+
+  router = openreceive_fastapi.router(
+      client=client,
+      fulfill=unlock_fruit_sticker,
+  )
+
+  app.include_router(router, prefix="/openreceive")
+
+Laravel:
+
+  Route::openreceive('/openreceive');
+
+  OpenReceive::onPaid(function ($invoice) {
+      FruitSticker::unlock($invoice->metadata['fruit']);
+  });
+
+Rust Axum:
+
+  let routes = openreceive_axum::routes(client)
+      .on_paid(unlock_fruit_sticker);
+
+  let app = Router::new().nest("/openreceive", routes);
+
+
+Canonical Hello Fruit Demo
+--------------------------
+
+Every demo sells the same tiny product:
+
+  Pay $0.10, unlock a fruit sticker.
+
+Shared product:
+
+  examples/hello-fruit/shared/product.json
+
+  {
+    "id": "fruit-sticker-pack",
+    "name": "Fruit Sticker",
+    "price": {
+      "currency": "USD",
+      "value": "0.10"
+    },
+    "fulfillment": {
+      "type": "digital_download",
+      "items": [
+        "apple.svg",
+        "banana.svg",
+        "orange.svg",
+        "pear.svg"
+      ]
+    }
+  }
+
+Shared assets:
+
+  examples/hello-fruit/shared/fruits.json
+  examples/hello-fruit/shared/stickers/apple.svg
+  examples/hello-fruit/shared/stickers/banana.svg
+  examples/hello-fruit/shared/stickers/orange.svg
+  examples/hello-fruit/shared/stickers/pear.svg
+
+User flow:
+
+  1. User opens demo.
+  2. User picks fruit, or receives deterministic random fruit.
+  3. Frontend calls backend: POST /api/checkout.
+  4. Backend calls OpenReceive to create invoice for USD 0.10.
+  5. Backend stores invoice_id, payment_hash, quote, product metadata.
+  6. Frontend displays QR code, copy button, lightning wallet button,
+     countdown, status, and payment route wizard.
+  7. Customer pays.
+  8. Backend confirms with lookup_invoice.
+  9. Backend emits invoice.paid event.
+  10. Frontend flips to paid state.
+  11. Backend serves signed one-time sticker URL.
+
+Optional deterministic fruit:
+
+  fruitIndex = parseInt(preimage.slice(0, 8), 16) % fruits.length
+
+Demo modes:
+
+  Mock mode:
+
+    OPENRECEIVE_WALLET=mock
+    OPENRECEIVE_MOCK_AUTO_SETTLE_SECONDS=5
+    OPENRECEIVE_PRICE_SOURCE=static
+
+  Live mode:
+
+    OPENRECEIVE_WALLET=nwc
+    OPENRECEIVE_NWC=nostr+walletconnect://...
+    OPENRECEIVE_PRICE_SOURCE=coingecko
+
+Every demo must support mock mode. Live mode is optional for local users and
+the hosted gallery.
+
+
+Demo Matrix
+-----------
+
+Do not build every Cartesian backend/frontend combination. Build one or two
+good examples per ecosystem, all using the same Hello Fruit product.
+
+Tier 1 demos:
+
+  Demo                         Backend               Frontend
+  nextjs-fullstack             Next.js routes        React
+  node-express-react           Express               React/Vite
+  static-html-serverless-api   Serverless/API route  Web component
+  rails-hotwire                Rails                 Hotwire/Stimulus
+  rails-react                  Rails                 React
+  fastapi-react                FastAPI               React
+  django-htmx                  Django                HTMX
+  laravel-blade                Laravel               Blade/Alpine
+  go-nethttp-htmx              Go net/http           HTMX
+  rust-axum-react              Axum                  React
+  ios-swiftui-node-api         Node API              SwiftUI
+  android-compose-ktor-api     Ktor API              Android Compose
+
+Tier 2 demos:
+
+  Demo                         Backend               Frontend
+  flask-alpine                 Flask                 Alpine
+  symfony-twig                 Symfony               Twig/Stimulus
+  go-gin-react                 Gin                   React
+  rust-axum-leptos             Axum                  Leptos
+  dotnet-blazor                ASP.NET Core          Blazor
+  dotnet-react                 ASP.NET Core          React
+  spring-boot-react            Spring Boot           React
+  ktor-kotlin-react            Ktor                  React
+  phoenix-liveview             Phoenix               LiveView
+  phoenix-react                Phoenix               React
+  flutter-fastapi-api          FastAPI               Flutter
+  react-native-expo-node-api   Node                  React Native
+  cloudflare-worker            Worker                Vanilla/React
+
+Tier 3 demos:
+
+  WordPress plugin             Blog/paywall/content unlock
+  WooCommerce gateway          Store checkout
+  Shopify-style app            Merchant receive checkout inspired by BLFS
+  Ghost plugin                 Paid blog post demo
+  Static-site checkout         Astro/Hugo/Jekyll plus serverless/API backend
+  Electron demo                Desktop app unlock/download
+  Tauri demo                   Rust desktop app payment unlock
+
+Frontend recipe demos:
+
+  These are not separate backend integrations. They prove that the same invoice
+  contract and headless checkout state can drive different design systems:
+
+    react-mantine
+    react-material-ui
+    react-tailwind-radix
+    vue-vuetify
+    vue-headless
+    svelte-headless
+    angular-material
+    angular-headless
+    web-component-bootstrap
+
+  Recipe demos should import the relevant framework adapter's hook/composable/
+  service/store, render with the design system's own Modal, Button, Card,
+  Select, Tabs, Alert, and Toast components, and avoid custom payment logic.
+
+Demo standards:
+
+  - README.md
+  - .env.example
+  - Dockerfile for every server-side demo
+  - compose.yml for every server-side demo
+  - compose.override.yml.example for local development when needed
+  - Makefile with standard commands
+  - mock mode
+  - live mode
+  - tests
+  - screenshots
+  - source link from hosted demo gallery
+  - /healthz endpoint
+  - /robots.txt
+  - /sitemap.xml when the demo has more than one public page
+  - canonical URL metadata for the production demo hostname
+
+Standard commands:
+
+  make setup
+  make dev
+  make test
+  make demo-mock
+  make demo-live
+  make docker-build
+  make docker-run
+  make docker-smoke
+
+
+Demo Deployment Architecture
+----------------------------
+
+The hosted demos should be Docker-first and subdomain-first.
+
+The private Rails app already lives at:
+
+  openreceive.org
+
+It is out of scope for the open source repo and demo infrastructure. It is a
+private Kamal app behind an existing Hetzner Load Balancer. Do not deploy demos
+through it, do not reuse its repo, and do not require it for open source demos.
+
+The demo fleet should live on SEO-friendly subdomains:
+
+  express-demo.openreceive.org
+  nextjs-demo.openreceive.org
+  django-demo.openreceive.org
+  fastapi-demo.openreceive.org
+  rails-hotwire-demo.openreceive.org
+  rails-react-demo.openreceive.org
+  laravel-demo.openreceive.org
+  go-demo.openreceive.org
+  rust-demo.openreceive.org
+  dotnet-demo.openreceive.org
+  spring-demo.openreceive.org
+  phoenix-demo.openreceive.org
+  static-demo.openreceive.org
+
+Use the same naming in source directories, image tags, docs pages, and DNS
+labels whenever possible. Avoid opaque ports or paths as the public identity of
+a demo. A URL like django-demo.openreceive.org is better for users, search
+engines, docs, screenshots, and support than openreceive.org:8047 or
+openreceive.org/demo/django/checkout.
+
+Canonical hosted URL pattern:
+
+  https://{demo-slug}.openreceive.org/
+
+Recommended slugs:
+
+  express-demo
+  nextjs-demo
+  static-demo
+  rails-hotwire-demo
+  rails-react-demo
+  fastapi-demo
+  django-demo
+  laravel-demo
+  go-demo
+  rust-demo
+  dotnet-demo
+  spring-demo
+  phoenix-demo
+  flutter-demo
+  react-native-demo
+
+Every hosted demo should expose:
+
+  /                 demo landing/checkout page
+  /hello-fruit      canonical product flow, if root has intro content
+  /healthz          health check for reverse proxy and deployment
+  /source           redirects to the exact examples/ folder on GitHub
+  /docs             redirects to the relevant OpenReceive quickstart
+  /robots.txt       allow indexing for stable demos; disallow throwaway previews
+  /sitemap.xml      list stable demo pages
+
+SEO rules:
+
+  - Page title format: "OpenReceive {Stack} Demo - Lightning Checkout".
+  - H1 format: "OpenReceive {Stack} Demo".
+  - The canonical URL must be the production subdomain.
+  - Each demo page should link to source, docs, and the demo gallery.
+  - demos.openreceive.org should link to every stable demo subdomain.
+  - Preview deployments should use noindex.
+  - Stable demos should not depend on random ports in public docs.
+  - Keep demo content useful, not thin duplicate pages: each stack page should
+    include the exact backend/frontend stack, deploy command, package names,
+    and source link.
+
+Docker requirements:
+
+  - Each server-side demo has a production Dockerfile.
+  - Each server-side demo has a compose.yml that can run mock mode.
+  - Static frontend demos include or point at a server-side API function.
+  - Each server-side demo exposes exactly one internal HTTP port.
+  - Each demo has a health check.
+  - Each demo reads config from environment variables.
+  - Each demo can run without a real wallet by using mock mode.
+  - Each live demo uses a receive-only NWC secret supplied at deploy time.
+  - No demo image bakes in secrets.
+  - Every image is tagged with the git SHA and pushed to GHCR.
+
+Image naming:
+
+  ghcr.io/openreceive/demo-express
+  ghcr.io/openreceive/demo-nextjs
+  ghcr.io/openreceive/demo-static
+  ghcr.io/openreceive/demo-rails-hotwire
+  ghcr.io/openreceive/demo-rails-react
+  ghcr.io/openreceive/demo-fastapi
+  ghcr.io/openreceive/demo-django
+  ghcr.io/openreceive/demo-laravel
+  ghcr.io/openreceive/demo-go
+  ghcr.io/openreceive/demo-rust
+
+Single-node Hetzner deployment:
+
+  Start with one separate Hetzner Cloud server or dedicated server as a demo
+  host. This is not the private Rails/Kamal app host. Install Docker Engine and
+  the Docker Compose plugin. Run one shared reverse proxy container plus one
+  compose project per demo.
+
+  Public internet
+        |
+        v
+  DNS: explicit demo subdomains
+        |
+        v
+  demo host, separate from openreceive.org private app
+    reverse proxy: Traefik or Caddy
+      Host(express-demo.openreceive.org) -> demo-express
+      Host(django-demo.openreceive.org)  -> demo-django
+      Host(rails-react-demo...)          -> demo-rails-react
+    demo containers on private docker networks
+
+Recommended reverse proxy:
+
+  Use Traefik if you want Docker label based routing and many demos coming and
+  going. Use Caddy if you want the simplest automatic HTTPS config. Either is
+  acceptable; standardize on one in the repo so every demo uses the same deploy
+  labels and health checks.
+
+Recommended starting choice:
+
+  Traefik for the demo fleet, because each compose project can declare its
+  hostname and internal port through labels and the proxy can discover it.
+
+Example compose labels:
+
+  labels:
+    - traefik.enable=true
+    - traefik.http.routers.django-demo.rule=Host(`django-demo.openreceive.org`)
+    - traefik.http.routers.django-demo.entrypoints=websecure
+    - traefik.http.routers.django-demo.tls.certresolver=letsencrypt
+    - traefik.http.services.django-demo.loadbalancer.server.port=8000
+
+DNS plan:
+
+  Use explicit records for stable demos:
+
+    django-demo.openreceive.org       -> demo edge IP
+    express-demo.openreceive.org      -> demo edge IP
+    fastapi-demo.openreceive.org      -> demo edge IP
+    rails-react-demo.openreceive.org  -> demo edge IP
+
+  Do not create a broad *.openreceive.org wildcard for the demo fleet. The apex
+  openreceive.org app is private and separate, and broad wildcard routing makes
+  it too easy for docs, previews, app subdomains, or future private services to
+  land on the wrong infrastructure.
+
+  If preview deployments need wildcard DNS, scope it under a dedicated preview
+  zone:
+
+    *.preview.openreceive.org -> preview/demo edge IP
+
+  Keep these DNS targets separate:
+
+    openreceive.org                 -> existing private Rails Load Balancer
+    www.openreceive.org             -> existing private Rails Load Balancer, if used
+    django-demo.openreceive.org     -> demo edge
+    express-demo.openreceive.org    -> demo edge
+    demos.openreceive.org           -> demo gallery edge
+    docs.openreceive.org            -> docs host/edge
+
+TLS plan:
+
+  If using Hetzner Load Balancer HTTPS termination, Hetzner-managed Let's
+  Encrypt certificates require Hetzner DNS or delegated ACME challenge handling.
+  If keeping TLS on the reverse proxy, Traefik or Caddy can issue Let's Encrypt
+  certificates directly. Wildcard certificates require DNS challenge support;
+  individual subdomain certificates can use HTTP challenge.
+
+  Recommendation:
+
+    For the first single-node deployment, terminate TLS at Traefik/Caddy using
+    individual certificates for each stable demo subdomain. Later, decide
+    whether to move TLS termination to a Hetzner Load Balancer.
+
+Scalable Hetzner deployment:
+
+  When one demo box is not enough, add a separate Hetzner Load Balancer in
+  front of multiple demo nodes. Do not reuse the existing openreceive.org Load
+  Balancer unless you intentionally decide to collapse the boundary later.
+  Hetzner Load Balancers distribute traffic across target servers and support
+  public and private target IPs. Put demo nodes on a Hetzner private Network so
+  the demo load balancer can reach them without exposing every internal service
+  publicly.
+
+  Public internet
+        |
+        v
+  Hetzner demo Load Balancer
+        |
+        v
+  Hetzner demo private Network
+        |
+        +-- demo-node-1: Traefik/Caddy + demo containers
+        +-- demo-node-2: Traefik/Caddy + demo containers
+        +-- demo-node-3: Traefik/Caddy + demo containers
+
+  Keep host ports limited to 80/443 publicly. Use Hetzner Firewalls to restrict
+  inbound traffic and apply rules by labels where useful. Use private networks
+  for node-to-node or load-balancer-to-node traffic.
+
+Scaling stages:
+
+  Stage 1: one node
+    One Hetzner server, one reverse proxy, Tier 1 demos only, mock mode by
+    default. Deploy with Docker Compose over SSH.
+
+  Stage 2: one node plus external managed services
+    Keep demos on one node but move shared data that matters to managed
+    Postgres/Redis or a dedicated database container if any demo needs durable
+    state. Most mock demos should stay stateless.
+
+  Stage 3: multiple nodes behind load balancer
+    Add a separate Hetzner demo Load Balancer, private Network, Firewalls, and
+    two or more demo nodes. Run stateless demos on any node. Pin live-wallet
+    demos to one node unless their state is externalized.
+
+  Stage 4: orchestrator if needed
+    Only move to Nomad, Kubernetes, or Docker Swarm after Docker Compose
+    deployment becomes operationally painful. Do not start there.
+
+Deployment workflow:
+
+  - GitHub Actions builds demo images.
+  - Images are tagged with git SHA and optionally latest for stable branch.
+  - Images are pushed to GHCR.
+  - A deploy job SSHes to the Hetzner host.
+  - The host pulls updated compose files or receives a generated deploy bundle.
+  - The host runs docker compose pull and docker compose up -d for changed demos.
+  - A smoke test hits /healthz and the public checkout URL.
+  - Failed smoke tests roll back to the previous image tag.
+
+Recommended deploy repo layout:
+
+  demos/deploy/
+    README.md
+    inventory/
+      production.env.example
+      staging.env.example
+      hosts.yml
+    secrets/
+      production.env        # gitignored, never committed
+      staging.env           # gitignored, never committed
+      live-wallet.env       # gitignored, never committed
+    proxy/
+      compose.yml
+      traefik.yml
+      dynamic/
+    stacks/
+      express-demo.compose.yml
+      nextjs-demo.compose.yml
+      django-demo.compose.yml
+      fastapi-demo.compose.yml
+      rails-react-demo.compose.yml
+    scripts/
+      deploy-demo
+      deploy-all
+      smoke-demo
+      rollback-demo
+
+Environment variable convention:
+
+  OPENRECEIVE_MODE=mock
+  OPENRECEIVE_PUBLIC_URL=https://django-demo.openreceive.org
+  OPENRECEIVE_WALLET=mock
+  OPENRECEIVE_PRICE_SOURCE=static
+  OPENRECEIVE_DEMO_NAME=django-demo
+  OPENRECEIVE_DEMO_STACK="Django + HTMX"
+
+Secret variable convention:
+
+  OPENRECEIVE_NWC=nostr+walletconnect://...
+  OPENRECEIVE_API_KEY=...
+  OPENRECEIVE_WEBHOOK_SECRET=...
+  OPENRECEIVE_TRAEFIK_ACME_EMAIL=...
+  HETZNER_API_TOKEN=...
+  GHCR_READ_TOKEN=...
+
+Secrets management:
+
+  The understandable default is committed templates plus gitignored secret
+  files. The scalable upgrade path is an encrypted secret store later, without
+  changing app code.
+
+  Commit:
+
+    demos/deploy/inventory/production.env.example
+    demos/deploy/inventory/staging.env.example
+    examples/**/.env.example
+    docs showing required variable names
+
+  Never commit:
+
+    demos/deploy/secrets/production.env
+    demos/deploy/secrets/staging.env
+    demos/deploy/secrets/live-wallet.env
+    any file containing OPENRECEIVE_NWC
+    any file containing a Hetzner API token
+    any file containing deploy SSH keys
+
+  Local developer machine:
+
+    Keep private deployment values in demos/deploy/secrets/*.env. These files
+    are gitignored. They are for the project owner/operator, not for package
+    users and not for contributors.
+
+  Hetzner host:
+
+    Store runtime secrets outside the repo, for example:
+
+      /opt/openreceive/secrets/production.env
+      /opt/openreceive/secrets/live-wallet.env
+      /opt/openreceive/secrets/ghcr.env
+
+    File ownership and mode:
+
+      owner: root or openreceive deploy user
+      group: docker/openreceive only if needed
+      mode: 600
+
+    Docker Compose should load secrets through env_file or Docker secrets, not
+    by baking them into images.
+
+  Example compose secret loading:
+
+    services:
+      django-demo:
+        image: ghcr.io/openreceive/demo-django:${OPENRECEIVE_IMAGE_TAG}
+        env_file:
+          - /opt/openreceive/secrets/production.env
+          - /opt/openreceive/secrets/live-wallet.env
+        environment:
+          OPENRECEIVE_PUBLIC_URL: https://django-demo.openreceive.org
+          OPENRECEIVE_DEMO_NAME: django-demo
+
+  Deployment script behavior:
+
+    - Refuse to run live mode unless OPENRECEIVE_NWC exists on the host.
+    - Print variable names, never secret values.
+    - Never pass secrets as command-line arguments where they can appear in
+      shell history or process listings.
+    - Use scp/rsync/ssh only over trusted operator sessions.
+    - Set remote secret files to chmod 600 after upload.
+    - Smoke tests must not echo response bodies that can contain configuration.
+
+  GitHub Actions:
+
+    Prefer not to store the live NWC code in GitHub Actions. Let the Hetzner
+    host keep runtime wallet secrets. CI can build images and trigger deploys;
+    the host injects secrets at container start.
+
+    GitHub Actions may need:
+
+      DEPLOY_SSH_KEY
+      DEPLOY_HOST
+      GHCR token or package permissions
+
+    GitHub Actions should not need:
+
+      OPENRECEIVE_NWC
+
+  Upgrade path:
+
+    Stage 1: gitignored env files plus host env files.
+    Stage 2: 1Password, Bitwarden Secrets Manager, Doppler, Infisical, or SOPS
+      with age encryption for operator-managed secrets.
+    Stage 3: orchestrator-native secrets if the demo fleet later moves to
+      Nomad, Kubernetes, or another scheduler.
+
+Receive-only NWC secrecy:
+
+  A receive-only NWC code cannot spend funds, but it is still a credential. It
+  can create invoices, inspect invoice/payment metadata, and potentially spam
+  your wallet or leak business activity. Treat it like an API key.
+
+  Rules for OpenReceive itself:
+
+    - Never commit OPENRECEIVE_NWC.
+    - Never include OPENRECEIVE_NWC in frontend bundles.
+    - Never expose OPENRECEIVE_NWC in HTML, JS, source maps, screenshots, logs,
+      telemetry, error pages, or health endpoints.
+    - Always redact nostr+walletconnect:// URIs in logs.
+    - Always provide .env.example files with placeholder values.
+    - Every framework demo should include an automated check that the built
+      frontend assets do not contain nostr+walletconnect:// or OPENRECEIVE_NWC.
+
+  Rules for OpenReceive users:
+
+    - Put receive-only NWC in a server-side environment variable.
+    - Do not put it in React/Vue/Svelte/Angular public env vars.
+    - Do not put it in mobile apps.
+    - Do not paste it into support tickets, GitHub issues, screenshots, or
+      analytics tools.
+    - Rotate it if it was committed, logged, or shared.
+    - Use a separate receive-only NWC code per app or environment when possible.
+
+Staging and preview:
+
+  Stable production:
+
+    django-demo.openreceive.org
+
+  Staging:
+
+    django-demo.staging.openreceive.org
+
+  Pull request preview, optional:
+
+    pr-123-django-demo.preview.openreceive.org
+
+  Preview deployments must set noindex headers and robots disallow.
+
+Live wallet policy:
+
+  - Default hosted demos run in mock mode.
+  - At most one or two public demos use live mode at first.
+  - Live demos use a separate receive-only demo wallet.
+  - Live demos have low invoice amounts, daily caps, and rate limits.
+  - Live demos should be clearly labeled.
+  - Never share one production merchant wallet across all demo stacks.
+
+Observability:
+
+  - Reverse proxy access logs.
+  - Per-demo container logs.
+  - Uptime checks for /healthz.
+  - Basic resource monitoring for CPU, RAM, disk, and container restarts.
+  - Log rotation.
+  - Secret redaction in application logs.
+
+Backup and recovery:
+
+  - Mock demos should be stateless and redeployable from GHCR.
+  - Persist only reverse proxy certificate storage, if terminating TLS on host.
+  - Persist live-demo invoice database if live mode is enabled.
+  - Keep deployment config in git.
+  - Document host rebuild from scratch.
+
+
+Test Strategy
+-------------
+
+Testing has to be more serious than the number of libraries. The tests are the
+thing that keep the project from becoming a pile of similar but incompatible
+SDKs.
+
+Test layers:
+
+1. Schema validation
+
+  - Validate every JSON Schema.
+  - Validate provider registry.
+  - Validate supported currencies.
+  - Validate demo product data.
+  - Validate OpenAPI.
+  - Validate AsyncAPI.
+
+2. Unit tests
+
+  - fiat-to-msat conversion
+  - decimal rounding
+  - invoice status transitions
+  - NWC URI parsing
+  - secret redaction
+  - provider route selection
+  - event parsing
+  - idempotency key handling
+  - webhook retry state
+
+3. Shared test vectors
+
+  - fiat-to-msats
+  - settlement detection
+  - polling backoff
+  - provider routing
+  - NWC URI parsing
+  - error normalization
+  - idempotency behavior
+
+4. Mock NWC wallet
+
+  Location:
+
+    tools/mock-wallet
+
+  Capabilities:
+
+    make_invoice
+    lookup_invoice
+    auto_settle_after_seconds
+    force_expire
+    force_error
+    emit_notification
+    drop_notification
+    delay_lookup
+    duplicate_notification
+    capability profiles
+
+  Required scenarios:
+
+    paid by polling
+    paid by notification plus lookup
+    notification lost
+    duplicate notification
+    expired invoice
+    duplicate idempotency key
+    wallet timeout
+    rate source failure
+    read/write NWC warning
+    receive-only NWC success
+
+5. Conformance tests
+
+  Every backend SDK and every standalone NWC client must pass the same
+  conformance suite against the mock wallet. Third-party NWC dependencies must
+  be wrapped by an OpenReceive adapter that passes the same suite.
+
+6. Demo E2E tests
+
+  Use Playwright for web demos:
+
+    open demo
+    create invoice
+    see QR and copy button
+    see provider wizard
+    mock wallet settles invoice
+    UI changes to paid
+    sticker download appears
+
+  Mobile demos need platform-specific smoke tests once they exist.
+
+7. Security tests
+
+  - Secret scanning.
+  - Ensure NWC strings are redacted in logs.
+  - Ensure frontend bundles do not contain OPENRECEIVE_NWC.
+  - Ensure frontend bundles do not contain nostr+walletconnect://.
+  - Ensure source maps do not contain OPENRECEIVE_NWC.
+  - Ensure mounted framework APIs reject missing/invalid auth when auth is
+    configured.
+  - Ensure fulfillment cannot be triggered by client-only status changes.
+
+8. Package smoke tests
+
+  For every publishable package:
+
+    install from local build artifact
+    import package
+    run minimal create/lookup against mock wallet
+    run provider data import if applicable
+
+
+CI Plan
+-------
+
+Every PR should run:
+
+  1. Validate JSON Schema files.
+  2. Validate provider registry.
+  3. Validate OpenAPI.
+  4. Validate AsyncAPI.
+  5. Regenerate generated types and provider data.
+  6. Fail if generated files are stale.
+  7. Run JS tests.
+  8. Run Python tests.
+  9. Run Ruby tests.
+  10. Run PHP tests.
+  11. Run Rust tests.
+  12. Run Go tests.
+  13. Run Swift tests.
+  14. Run Kotlin/JVM tests.
+  15. Run Dart tests.
+  16. Run .NET tests.
+  17. Run Elixir tests.
+  18. Run conformance vectors against every SDK.
+  19. Build every Tier 1 demo.
+  20. Run demo smoke tests in mock mode.
+  21. Run secret scanning.
+  22. Build docs.
+
+In early milestones, jobs can be conditional on packages that exist. The
+workflow should still reserve the full matrix shape so expansion is obvious.
+
+
+Docs Plan
+---------
+
+Docs should be organized by user intent, not package internals.
+
+Docs ownership split:
+
+  Public open source repo:
+
+    - Owns canonical technical docs.
+    - Owns SDK quickstarts, API reference, architecture notes, security notes,
+      demo deployment docs, provider registry docs, and conformance docs.
+    - Stores docs as markdown plus structured metadata in docs/.
+    - Exposes docs content through git, GitHub raw URLs, a generated JSON index,
+      or a versioned docs artifact.
+    - Does not contain private landing pages, SEO experiments, marketing
+      funnels, analytics wiring, account flows, admin UI, or private Rails code.
+
+  Private openreceive.org Rails/Kamal app:
+
+    - Owns the public website presentation.
+    - Owns landing pages, SEO pages, product pages, custom navigation,
+      analytics, newsletter/signup flows, admin tools, and any private business
+      logic.
+    - May run a scheduled or manual import job that pulls public docs from the
+      GitHub repo.
+    - May render imported docs at openreceive.org paths or link to
+      docs.openreceive.org.
+    - Must not require the public repo to contain private site code.
+
+Recommended docs import contract:
+
+  docs/
+    manifest.json
+    00-what-is-openreceive.md
+    01-quickstart-node.md
+    ...
+
+  docs/manifest.json should include:
+
+    {
+      "version": "0.1.0",
+      "generated_at": "2026-06-18T00:00:00Z",
+      "docs": [
+        {
+          "slug": "quickstart-node",
+          "title": "Node Quickstart",
+          "source_path": "docs/01-quickstart-node.md",
+          "category": "quickstart",
+          "public": true
+        }
+      ]
+    }
+
+Import job behavior in the private app:
+
+  - Pull docs from a pinned git commit, tag, GitHub release artifact, or raw
+    GitHub URL.
+  - Store imported commit SHA and import timestamp.
+  - Sanitize markdown before rendering.
+  - Rewrite relative links and code references safely.
+  - Preserve canonical source links back to GitHub.
+  - Fail closed if docs manifest is invalid.
+  - Keep private SEO metadata in the private app, not in the open source repo,
+    unless the metadata is generally useful to all docs consumers.
+
+Recommended public docs artifact:
+
+  tools/docs/build-index should produce:
+
+    dist/docs/manifest.json
+    dist/docs/search-index.json
+    dist/docs/html/*.html, optional
+
+  The private app can import either the markdown sources or the built artifact.
+  Start with markdown plus manifest because it keeps the public repo simple.
+
+Top-level docs:
+
+  00-what-is-openreceive.md
+  01-quickstart-node.md
+  02-quickstart-rails.md
+  03-quickstart-python.md
+  04-quickstart-php.md
+  05-frontend-checkout.md
+  06-mobile-apps.md
+  07-nwc-client-strategy.md
+  08-price-feeds.md
+  09-provider-registry.md
+  10-security.md
+  11-conformance.md
+  12-release-process.md
+  13-demo-deployment.md
+  14-secret-management.md
+  api-reference.md
+  sdk-status.md
+
+Every SDK doc should have the same shape:
+
+  - Install
+  - Configure
+  - Create invoice
+  - Show checkout
+  - Listen for paid event
+  - Fulfill product
+  - Run the fruit sticker demo
+  - Deploy
+  - Security notes
+
+Docs must make these points loud:
+
+  - Browser never sees NWC.
+  - OpenReceive has no required daemon; install it into the server app.
+  - Pure frontend live checkouts are not supported.
+  - Use receive-only NWC for checkout.
+  - Receive-only NWC is safer than read/write NWC, but it is still secret.
+  - Backend confirms settlement.
+  - OpenReceive is provider-neutral.
+  - Mock mode exists for local development.
+  - Provider routes are suggestions, not guarantees.
+  - Every example uses .env.example for documentation and gitignored env files
+    or host secrets for real credentials.
+
+
+Security Model
+--------------
+
+Threats:
+
+  - Merchant accidentally exposes NWC secret to browser.
+  - Merchant commits a receive-only NWC code to git.
+  - Merchant stores live NWC secrets in GitHub Actions unnecessarily.
+  - Read/write NWC leaks and can spend funds.
+  - Duplicate notification double-credits a customer.
+  - Client forges "paid" state.
+  - Old invoices keep polling forever and hit rate limits.
+  - Provider registry makes stale or overconfident claims.
+  - Public demo is abused for spam or invoice generation.
+  - Logs, errors, screenshots, or telemetry leak wallet details.
+
+Controls:
+
+  - Receive-only NWC default.
+  - checkCapabilities on init.
+  - .env.example templates committed; real env files ignored.
+  - Host-side secret files stored outside the repo with chmod 600.
+  - Secret redaction utility in every SDK.
+  - Build-time frontend bundle scan for OPENRECEIVE_NWC and
+    nostr+walletconnect://.
+  - Backend-only settlement verification.
+  - Idempotent fulfillment.
+  - Unique payment_hash constraints.
+  - Bounded polling.
+  - Provider registry linter.
+  - Demo rate limits.
+  - Secret scanning CI.
+  - Security docs from day one.
+
+Public demo safety:
+
+  - Low invoice amount.
+  - Rate limit by IP/session.
+  - Optional captcha only if abused.
+  - No user-uploaded fulfillment.
+  - No dynamic file paths.
+  - Daily receive cap.
+  - Clear "test payment" disclosure.
+  - Separate demo wallet.
+  - Logs without secrets.
+
+
+Release And Publishing
+----------------------
+
+Start with lockstep versions:
+
+  OpenReceive 0.1.0
+  @openreceive/core 0.1.0
+  @openreceive/node 0.1.0
+  @openreceive/browser 0.1.0
+  @openreceive/elements 0.1.0
+  @openreceive/react 0.1.0
+  @openreceive/ui-recipes 0.1.0, docs/examples package if useful
+  @openreceive/provider-data 0.1.0
+
+Use independent package versions later after the spec is stable.
+
+Suggested tags:
+
+  v0.1.0
+  js-core-v0.1.0
+  js-node-v0.1.0
+  js-browser-v0.1.0
+  js-elements-v0.1.0
+  react-v0.1.0
+  ui-recipes-v0.1.0
+  provider-data-v0.1.0
+
+Future publish jobs:
+
+  publish:npm
+  publish:pypi
+  publish:rubygems
+  publish:packagist
+  publish:crates
+  publish:go-tag
+  publish:maven
+  publish:swift-tag
+  publish:pubdev
+  publish:nuget
+  publish:hex
+  publish:docker
+
+Release requirements:
+
+  - Changelog generated.
+  - Version bumped.
+  - CI green.
+  - Conformance green.
+  - Demo smoke green.
+  - Generated files current.
+  - Package smoke tests pass.
+  - Security scan passes.
+
+
+Milestones
+----------
+
+Milestone 0: repo foundation
+
+Goal:
+
+  Establish the source-of-truth structure and stop data drift before code
+  multiplies.
+
+Deliverables:
+
+  - Correct repo/org naming plan.
+  - LICENSE, SECURITY, CONTRIBUTING, CODE_OF_CONDUCT, GOVERNANCE.
+  - Monorepo tooling.
+  - spec/ skeleton.
+  - OpenAPI skeleton.
+  - AsyncAPI skeleton.
+  - JSON Schemas for invoice, payment event, rate quote, provider registry.
+  - Move provider registry draft into spec/data/providers.
+  - Provider registry linter.
+  - Static mock price data.
+  - First test vectors.
+  - tools/mock-wallet skeleton.
+  - CI skeleton.
+
+Definition of done:
+
+  The repo can validate specs and provider data, and CI fails on broken shared
+  data.
+
+Milestone 1: native reference engine
+
+Goal:
+
+  Build the working receive-payment engine once inside a normal server app,
+  with no daemon or sidecar.
+
+Deliverables:
+
+  - NWC client interface.
+  - @openreceive/node wrapping getAlby/js-sdk for receive checkout.
+  - NWC URI parse/redaction tests.
+  - NWC make_invoice wrapper.
+  - NWC lookup_invoice wrapper.
+  - Capability check.
+  - Safe poller.
+  - Notification listener helper where practical in Node.
+  - Host-app storage interface.
+  - In-memory/mock storage for demos.
+  - SSE events.
+  - CoinGecko price adapter.
+  - Static mock price adapter.
+  - Idempotency key support.
+  - QR SVG/PNG helper or mounted endpoint.
+  - Mock wallet integration.
+  - Express route adapter.
+  - Next.js route handler adapter.
+
+Definition of done:
+
+  A plain Node/Express app can create a mock invoice, settle it, emit SSE, and
+  pass the initial conformance suite. Live NWC mode can be tested manually with
+  a receive-only wallet without deploying any extra OpenReceive service.
+
+Milestone 2: first usable JS stack
+
+Goal:
+
+  Ship one polished end-to-end developer path.
+
+Deliverables:
+
+  - @openreceive/core.
+  - @openreceive/node.
+  - @openreceive/browser.
+  - @openreceive/elements.
+  - @openreceive/react with hooks, primitives, slots, and default UI.
+  - At least one design-system recipe, preferably React + Mantine or React +
+    Material UI.
+  - @openreceive/provider-data.
+  - @openreceive/testkit.
+  - Next.js fruit demo.
+  - Express + React fruit demo.
+  - Static HTML + serverless/API fruit demo.
+  - Demo smoke tests.
+
+Definition of done:
+
+  A developer can install JS packages, run mock mode locally, create an invoice,
+  see the checkout UI, see mock settlement, and unlock a fruit sticker.
+
+Milestone 3: Rails/Ruby proof
+
+Goal:
+
+  Prove that OpenReceive fits an opinionated full-stack framework without a
+  daemon.
+
+Deliverables:
+
+  - Ruby core client.
+  - Ruby wrapper around MegalithicBTC/nwc-ruby where useful.
+  - Rails adapter.
+  - ActiveRecord migration/model examples.
+  - ActiveJob/Solid Queue/Sidekiq/GoodJob polling examples.
+  - ActionCable and Hotwire payment update examples.
+  - Rails Hotwire demo.
+  - Rails React demo.
+
+Definition of done:
+
+  Rails can create, poll, receive notifications, verify settlement, and fulfill
+  the Hello Fruit flow using nwc-ruby/OpenReceive inside the Rails app and its
+  worker roles.
+
+Milestone 4: PHP and Python ecosystem expansion
+
+Goal:
+
+  Build or steward the standalone NWC clients needed by two high-demand web
+  ecosystems.
+
+Deliverables:
+
+  - nwc-client-py.
+  - Python core client.
+  - FastAPI adapter.
+  - Django adapter.
+  - Flask adapter.
+  - nwc-client-php package.
+  - PHP core client.
+  - Laravel adapter.
+  - Symfony adapter.
+  - FastAPI React demo.
+  - Django HTMX demo.
+  - Flask Alpine demo.
+  - Laravel Blade demo.
+  - Symfony Twig demo.
+
+Definition of done:
+
+  Each Python and PHP package passes mock-wallet conformance, each framework
+  adapter uses its native job system, and each demo passes the Hello Fruit smoke
+  test in mock mode.
+
+Milestone 5: systems and enterprise stacks
+
+Goal:
+
+  Cover the major backend ecosystems that users expect from a serious open
+  source payments kit.
+
+Deliverables:
+
+  - Go core and adapters, after auditing or writing nwc-client-go.
+  - Rust core and Axum/Actix adapters, wrapping rust-nostr.
+  - .NET core and ASP.NET adapter, backed by Nwc.Client.
+  - Kotlin/JVM core, Ktor adapter, Spring adapter, backed by nwc-client-jvm.
+  - Elixir core and Phoenix adapter, backed by nwc_client.
+  - Corresponding demos.
+
+Definition of done:
+
+  Each core package passes shared vectors, mock-wallet conformance, and package
+  smoke tests.
+
+Milestone 6: mobile
+
+Goal:
+
+  Make OpenReceive usable in native and cross-platform mobile apps while
+  keeping wallet secrets server-side.
+
+Deliverables:
+
+  - Swift OpenReceive client and NostrKit/NWCClient audit.
+  - SwiftUI checkout UI.
+  - Vapor server adapter.
+  - Android Kotlin client.
+  - Android Compose checkout UI.
+  - Flutter client/widgets.
+  - React Native package.
+  - iOS SwiftUI demo.
+  - Android Compose demo.
+  - Flutter demo.
+  - React Native demo.
+
+Definition of done:
+
+  Mobile apps can render checkout and receive passive payment updates from a
+  server. They never embed merchant NWC secrets.
+
+Milestone 7: ecommerce and production polish
+
+Goal:
+
+  Move from developer demos to merchant-ready integrations.
+
+Deliverables:
+
+  - WooCommerce gateway.
+  - WordPress plugin.
+  - Shopify-style app inspired by BLFS.
+  - Merchant dashboard.
+  - Provider registry CDN.
+  - Signed registry releases.
+  - Hosted demo gallery.
+  - Public playground.
+  - Package provenance/SBOM where practical.
+
+Definition of done:
+
+  Real merchants can evaluate OpenReceive through hosted demos, run a local
+  mock checkout, connect a receive-only NWC wallet, and deploy a production
+  integration with clear security docs.
+
+
+v0.1.0 Scope
+------------
+
+Ship only enough to prove the architecture cleanly:
+
+  - spec/ with OpenAPI, AsyncAPI, JSON schemas.
+  - provider registry v2 normalized from providers-demo.json.
+  - provider registry linter.
+  - fiat-to-msat test vectors.
+  - settlement detection test vectors.
+  - polling backoff test vectors.
+  - mock wallet.
+  - NWC client adapter interface.
+  - @openreceive/node wrapper around getAlby/js-sdk.
+  - CoinGecko price adapter.
+  - static mock price adapter.
+  - @openreceive/core.
+  - @openreceive/node.
+  - @openreceive/browser.
+  - @openreceive/elements.
+  - @openreceive/react with headless hook, primitives, slots, and default UI.
+  - First design-system recipe, preferably React + Mantine or React + Material
+    UI.
+  - @openreceive/provider-data.
+  - Next.js fruit demo.
+  - Express + React fruit demo.
+  - Static HTML + serverless/API demo.
+  - Docs quickstart for Node/React.
+  - Docs page for headless frontend integration and design-system recipes.
+  - Docs page for NWC client strategy.
+  - Security doc.
+  - CI and conformance for existing packages.
+
+Do not include in v0.1.0:
+
+  - Every language SDK.
+  - Every standalone NWC client.
+  - Ecommerce plugins.
+  - Native mobile UI kits.
+  - Complex merchant dashboard.
+  - Read/write payment features.
+  - Provider claims that have not been validated.
+
+
+First GitHub Issues
+-------------------
+
+Foundation:
+
+  1. repo: initialize monorepo structure
+  2. docs: write OpenReceive architecture overview
+  3. docs: write security model
+  4. docs: define docs manifest format for private app import
+  5. docs: add docs build-index tool for manifest/search index
+  6. docs: document public repo/private site content boundary
+  7. spec: define invoice object JSON schema
+  8. spec: define payment event JSON schema
+  9. spec: define rate quote JSON schema
+  10. spec: define error JSON schema
+  11. spec: define provider registry v2 schema
+  12. spec: define OpenAPI v1 skeleton
+  13. spec: define AsyncAPI event skeleton
+
+Data and codegen:
+
+  14. data: normalize provider registry JSON
+  15. data: add provider registry linter
+  16. data: add supported currencies list
+  17. data: add price source config
+  18. codegen: generate TypeScript provider data
+  19. codegen: add generated-stale CI check
+
+Mock and conformance:
+
+  20. testkit: create mock NWC wallet
+  21. vectors: add fiat-to-msat cases
+  22. vectors: add settlement detection cases
+  23. vectors: add polling cadence cases
+  24. conformance: create runner skeleton
+
+NWC and native backend core:
+
+  25. nwc: define OpenReceive NWC client interface
+  26. nwc: add third-party NWC client maintenance audit template
+  27. nwc: implement NWC connection parser/redactor tests
+  28. nwc: add getAlby/js-sdk receive-checkout adapter for Node
+  29. nwc: implement mock wallet adapter for SDK tests
+  30. nwc: implement make_invoice wrapper
+  31. nwc: implement lookup_invoice wrapper
+  32. core: implement safe invoice poller
+  33. core: implement notification-to-lookup handler
+  34. core: implement SSE invoice events for mounted app routes
+  35. core: implement QR helper/endpoint adapter
+  36. core: implement idempotency key helper
+
+Pricing:
+
+  37. pricing: implement static mock adapter
+  38. pricing: implement CoinGecko-compatible exchange_rates adapter
+  39. pricing: implement quote locking
+  40. pricing: add decimal math tests
+  41. pricing: add supported-currencies data file for v0.1 list
+  42. pricing: add openreceive.org/exchange_rates mirror config
+  43. pricing: add megalithic.me/exchange_rates fallback config
+  44. pricing: add CoinGecko direct fallback config
+
+JavaScript:
+
+  45. js: create @openreceive/core
+  46. js: create @openreceive/node
+  47. js: create @openreceive/browser
+  48. js: create @openreceive/elements web component package
+  49. react: create @openreceive/react hooks, primitives, slots, and default UI
+  50. js: create @openreceive/provider-data
+  51. js: create @openreceive/testkit
+  52. js: add Express route adapter
+  53. js: add Next.js route handler adapter
+
+Demos:
+
+  54. demo: create shared fruit sticker assets
+  55. demo: create Next.js fruit demo
+  56. demo: create Express React fruit demo
+  57. demo: create static HTML + serverless/API demo
+  58. demo: add React design-system recipe and Playwright smoke flow
+
+CI and release:
+
+  59. ci: validate schemas and provider registry
+  60. ci: run conformance vectors
+  61. ci: build demos in mock mode
+  62. ci: add secret scanning
+  63. release: configure release automation
+
+Demo deployment:
+
+  64. deploy: choose Traefik or Caddy for demo host routing
+  65. deploy: create demos/deploy/proxy compose stack
+  66. deploy: create explicit demo subdomain naming registry
+  67. deploy: create compose template for server-side demos
+  68. deploy: add GHCR image build for each Tier 1 demo
+  69. deploy: add SSH-based Hetzner deploy script
+  70. deploy: add smoke-demo script for /healthz and checkout page
+  71. deploy: document DNS records for demo subdomains
+  72. deploy: document TLS certificate strategy
+  73. deploy: add noindex preview deployment config
+  74. deploy: document private openreceive.org boundary
+  75. deploy: ensure demo DNS does not use broad *.openreceive.org wildcard
+  76. deploy: create separate Hetzner demo edge plan from private Rails LB
+
+Secrets:
+
+  77. secrets: add .env.example templates for every demo
+  78. secrets: add demos/deploy/secrets README explaining ignored files
+  79. secrets: add host secret file layout under /opt/openreceive/secrets
+  80. secrets: make deploy scripts refuse live mode without OPENRECEIVE_NWC
+  81. secrets: add redaction utility for nostr+walletconnect URIs
+  82. secrets: add frontend bundle scan for OPENRECEIVE_NWC and NWC URI strings
+  83. secrets: document receive-only NWC rotation procedure
+  84. secrets: add secret-management docs page
+
+Original-docs conformance:
+
+  85. compat: add simple invoice response adapter for original modal shape
+  86. compat: add payment-update event adapter and tests
+  87. compat: add status mapping pending/succeeded to canonical states
+  88. rails: add Kamal listener role example, not accessory
+  89. rails: document rbsecp256k1/native build dependencies if needed
+  90. rails: add read_only/capabilities checkout guard
+  91. rails: add idempotent notification handler and since cursor example
+
+
+Important Design Decisions To Make Early
+----------------------------------------
+
+1. First NWC client adoption decisions
+
+  Good candidates:
+
+    Ruby:
+      Use MegalithicBTC/nwc-ruby first. It is current, server-side, and already
+      models the Rails worker/listener shape OpenReceive wants.
+
+    JavaScript/TypeScript:
+      Use getAlby/js-sdk first. It is current, mature, and close to the first
+      Node/React reference stack.
+
+    Go:
+      Audit rolznz/go-nwc before depending on it. If it falls short on
+      notifications, NIP-44, tests, or maintenance, write nwc-client-go.
+
+    Rust:
+      Use rust-nostr/nostr first and wrap only the receive-checkout surface.
+
+    PHP, Python, JVM, .NET, Elixir:
+      Plan to write standalone NWC clients unless a fresh, audited,
+      permissively licensed client passes the full conformance suite.
+
+  Recommendation:
+
+    Start the native reference stack in TypeScript/Node for v0.1.0 because the
+    first frontend and backend demo material is closest to that ecosystem. Use
+    Ruby/Rails immediately after to prove the non-JS story with nwc-ruby. Build
+    Python and PHP NWC clients next because those ecosystems are important and
+    cannot depend on a stale or uncertain NWC layer.
+
+2. First source of truth for NWC
+
+  Recommendation:
+
+    Use proven NWC libraries where possible for early delivery, wrap them behind
+    OpenReceive interfaces, and keep protocol behavior covered by mock-wallet
+    conformance. Do not hand-roll Nostr encryption unless the existing library
+    path blocks the project.
+
+3. Hosted live demo policy
+
+  Recommendation:
+
+    Hosted public demos default to mock mode. Provide one clearly labeled live
+    mainnet demo using a separate receive-only wallet and a tiny amount only if
+    you are comfortable receiving real payments.
+
+4. Provider registry claims
+
+  Recommendation:
+
+    Treat the provider registry as maintained data with evidence, verification
+    dates, and conservative wording. The wizard should help users route a
+    payment, not promise availability.
+
+5. Package naming
+
+  Recommendation:
+
+    Reserve names early, but publish only the v0.1 packages that are actually
+    tested.
+
+
+Working Sequence From Here
+--------------------------
+
+The next implementation work should happen in this order:
+
+1. Create the repo skeleton from the monorepo layout.
+2. Move providers-demo.json into spec/data/providers/openreceive-providers.v2.json.
+3. Add provider-registry.schema.json and a validation command.
+4. Add invoice, payment-event, rate-quote, and error schemas.
+5. Add the first OpenAPI paths for invoices, rates, routes, providers, and SSE.
+6. Add test vectors for fiat-to-msats, settlement detection, and polling.
+7. Build the mock wallet.
+8. Define the NWC client interface and Node adapter around getAlby/js-sdk.
+9. Add @openreceive/core, @openreceive/node, and @openreceive/browser.
+10. Add @openreceive/elements and @openreceive/react headless/default UI.
+11. Build the Express + React fruit demo.
+12. Build the Next.js fruit demo.
+13. Build one React design-system recipe, preferably Mantine or Material UI.
+14. Build the static HTML + serverless/API fruit demo.
+15. Add CI conformance.
+16. Build Ruby/Rails around nwc-ruby.
+17. Build nwc-client-py and nwc-client-php.
+18. Then expand to Go, Rust, .NET, JVM, Elixir, Swift/Vapor, and mobile UI.
+
+
+Acceptance Checklist
+--------------------
+
+This plan is complete enough when these statements are true:
+
+  - There is one product contract, not one per language.
+  - Provider data is canonical and validated.
+  - Price conversion is canonical and tested.
+  - Polling behavior is canonical and tested.
+  - Settlement detection is canonical and tested.
+  - A normal server app can run the whole flow without an extra OpenReceive
+    daemon.
+  - JS packages prove the SDK shape.
+  - Rails proves the framework-native worker/listener shape.
+  - Hello Fruit proves the UX.
+  - Mock mode makes demos and tests deterministic.
+  - Live NWC mode is possible without changing app code.
+  - The frontend never sees wallet secrets.
+  - Pure frontend live checkout is rejected by docs, examples, and tests.
+  - Frontend packages are headless-first and proven with at least one external
+    design-system recipe.
+  - Every new SDK has a conformance gate.
+  - Every standalone NWC client has a conformance gate.
+  - Every new demo uses the same shared product data.
+  - CI prevents generated/data drift.
+
+
+Final Mental Model
+------------------
+
+OpenReceive should not become a loose pile of payment SDKs.
+
+It should be:
+
+  one spec,
+  one mock wallet,
+  one provider registry,
+  one price model,
+  one test suite,
+  one fruit-sticker demo,
+  many idiomatic backend SDKs,
+  many UI packages,
+  enough standalone NWC clients to make the major server frameworks work
+  without extra infrastructure.
+
+That gives the project broad ecosystem coverage without drowning in duplicated
+logic.

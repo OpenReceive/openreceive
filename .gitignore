@@ -1,1 +1,13 @@
 /building/*
+
+# Local environment and deployment secrets.
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# OpenReceive demo deployment secrets. Commit *.example files only.
+demos/deploy/secrets/
+demos/deploy/**/*.secret.env
+demos/deploy/**/*.secrets.env
+demos/deploy/**/*.local.env
