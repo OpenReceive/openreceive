@@ -6,7 +6,8 @@
   "license": "MIT",
   "type": "module",
   "workspaces": [
-    "packages/js/*"
+    "packages/js/*",
+    "examples/hello-fruit/server/*"
   ],
   "scripts": {
     "validate": "node tools/validate/validate-v0.1.mjs",

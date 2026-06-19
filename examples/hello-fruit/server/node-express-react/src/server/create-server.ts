@@ -20,6 +20,20 @@ export function createHelloFruitServer() {
 
   const connectionString = process.env.OPENRECEIVE_NWC;
   if (connectionString === undefined || connectionString.length === 0) {
+    app.get("/openreceive/v1/health", (_req, res) => {
+      res.status(200).json({
+        ok: true,
+        wallet_configured: false
+      });
+    });
+    app.get("/openreceive/v1/capabilities", (_req, res) => {
+      res.status(200).json({
+        base_path: "/openreceive/v1",
+        wallet_configured: false,
+        transports: ["sse"],
+        methods: ["make_invoice", "lookup_invoice"]
+      });
+    });
     app.use("/openreceive", (_req, res) => {
       res.status(503).json({
         code: "WALLET_UNAVAILABLE",

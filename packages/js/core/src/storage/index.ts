@@ -1,7 +1,7 @@
 import type {
   OpenReceiveTransactionState,
   OpenReceiveWorkflowState
-} from "../nwc/client.js";
+} from "../nwc/client.ts";
 
 export type OpenReceiveIdempotencyOperation =
   | "invoice.create"

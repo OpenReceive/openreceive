@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@openreceive/core": "workspace:*"
+    "@openreceive/core": "0.1.0"
   },
   "peerDependencies": {
     "@getalby/sdk": "*"

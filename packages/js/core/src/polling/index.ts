@@ -1,8 +1,8 @@
 import type {
   LookupInvoiceResult,
   OpenReceiveWorkflowState
-} from "../nwc/client.js";
-import { classifyLookupInvoiceSettlement } from "../settlement/index.js";
+} from "../nwc/client.ts";
+import { classifyLookupInvoiceSettlement } from "../settlement/index.ts";
 
 export interface PollingCadenceBand {
   elapsed_seconds_min: number;

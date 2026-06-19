@@ -1,6 +1,6 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
-import { createHelloFruitServer } from "./src/server/create-server.js";
+import { createHelloFruitServer } from "./src/server/create-server.ts";
 
 export default defineConfig({
   server: {

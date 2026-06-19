@@ -2,7 +2,7 @@ import {
   isLookupSettled,
   type LookupInvoiceResult,
   type OpenReceiveTransactionState
-} from "../nwc/client.js";
+} from "../nwc/client.ts";
 
 export type SettlementFinalitySignal =
   | "settled_at"
