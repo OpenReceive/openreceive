@@ -72,6 +72,9 @@ const checkout = useOpenReceiveCheckout({ invoice: "lnbc..." });
 React components follow the same boundary: they render invoice display data and
 browser actions, while the backend remains the settlement authority.
 
+The Material UI recipe in `docs/recipes/react-material-ui.md` shows how to
+compose the React primitives inside an app-owned design system.
+
 ## Static Demo
 
 `examples/hello-fruit/server/static-html-small-api` shows the same flow without

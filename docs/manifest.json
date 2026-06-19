@@ -92,6 +92,13 @@
       "source_path": "docs/sdk-status.md",
       "category": "reference",
       "public": true
+    },
+    {
+      "slug": "react-material-ui-recipe",
+      "title": "React Material UI Recipe",
+      "source_path": "docs/recipes/react-material-ui.md",
+      "category": "recipe",
+      "public": true
     }
   ]
 }
