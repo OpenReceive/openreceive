@@ -176,7 +176,7 @@ Architecture:
   - One canonical provider registry.
   - One canonical price conversion algorithm.
   - One canonical payment state machine.
-  - One canonical mock wallet.
+  - One canonical Rizful receive-only test wallet policy.
   - One canonical fruit-sticker demo product.
   - One conformance suite used by every SDK.
   - No required OpenReceive daemon, sidecar, gateway, or extra service.
@@ -247,8 +247,8 @@ Default iOS demo choice:
 
 Default build strategy:
 
-  - Build the spec, mock wallet, conformance suite, and one excellent native
-    Node/React stack first.
+  - Build the spec, Rizful-backed NWC test harness, conformance smoke suite,
+    and one excellent native Node/React stack first.
   - Build Ruby/Rails next using nwc-ruby as the model for in-app background
     workers and notification listeners.
   - Add neutral standalone NWC clients where the target language lacks a fresh,
@@ -636,9 +636,10 @@ multi_pay_invoice can be considered later, but is not required for v0.1.
 Receive-only expectation:
 
   A receive-only code should support creating invoices and checking settlement,
-  but should not support spending funds. SDKs should expose checkCapabilities() and
-  warn loudly or refuse by default when a checkout app is configured with a
-  read/write NWC connection string.
+  but should not support spending funds. OpenReceive checkout APIs never expose
+  send-payment methods, so v0.1 does not need a separate wallet-compatibility
+  confirmation step before using an NWC code. Use the shared Rizful
+  receive-only/no-spend NWC code for project testing.
 
 Notifications:
 
@@ -882,7 +883,7 @@ Supported fiat/quote currencies for v0.1:
 Rate source order:
 
   1. static_mock in tests, docs screenshots, and deterministic demo mode.
-  2. openreceive_mirror in production/demo live mode once available.
+  2. openreceive_mirror for production demos once available.
   3. megalithic_mirror as a compatible fallback.
   4. coingecko_direct as the final upstream fallback.
 
@@ -1064,9 +1065,9 @@ Use JSON Schema for:
   - rate quote
   - checkout route
   - error object
-  - NWC capability summary
+  - NWC info-event summary
   - test vectors
-  - mock wallet fixtures
+  - Rizful NWC test fixtures
 
 2. OpenAPI
 
@@ -1167,7 +1168,7 @@ Recommended repository structure:
         provider-registry.schema.json
         checkout-route.schema.json
         error.schema.json
-        nwc-capabilities.schema.json
+        nwc-info-event.schema.json
       data/
         providers/
           openreceive-providers.v2.json
@@ -1185,7 +1186,6 @@ Recommended repository structure:
         invoices/
         rates/
         providers/
-        mock-nwc-responses/
       test-vectors/
         fiat-to-msats.usd.json
         settlement-detection.json
@@ -1283,7 +1283,6 @@ Recommended repository structure:
             banana.svg
             orange.svg
             pear.svg
-          mock-wallet/
           test-data/
         web/
           static-html-with-api/
@@ -1347,7 +1346,7 @@ Recommended repository structure:
     tools/
       codegen/
       conformance/
-      mock-wallet/
+      live-nwc-test/
       validate-data/
       scaffold-example/
       release/
@@ -1370,7 +1369,7 @@ Never duplicate:
   - invoice schemas
   - event schemas
   - demo product data
-  - mock wallet behavior
+  - Rizful test wallet behavior
   - package README structure
 
 Use these mechanisms:
@@ -1380,7 +1379,8 @@ Use these mechanisms:
   - AsyncAPI documents shared event models.
   - Codegen emits provider-data packages.
   - Test vectors enforce behavior across languages.
-  - The mock wallet gives every SDK identical wallet behavior in tests.
+  - The shared Rizful receive-only NWC code gives every SDK the same real
+    wallet behavior in integration tests.
   - Scaffolding tools create examples from templates.
   - Docs use shared snippets where possible.
   - CI fails when generated files are stale.
@@ -1465,7 +1465,8 @@ Maintenance gate for third-party NWC clients:
   - Supports or can be extended to support payment_received notifications.
   - Handles NIP-04 encrypted wallet messages.
   - Supports or can be extended to support NIP-44 v2 negotiation.
-  - Has tests or can pass OpenReceive's mock-wallet conformance suite.
+  - Has tests or can pass OpenReceive's Rizful-backed NWC conformance smoke
+    suite.
   - Does not force browser/mobile exposure of NWC secrets.
   - Can run in ordinary server framework jobs, queue workers, cron tasks,
     serverless functions, or long-running worker roles.
@@ -1574,7 +1575,7 @@ Minimum NWC client responsibilities:
   - Enforce NWC metadata below 3900 serialized characters.
   - Provide safe polling helpers with the canonical cadence.
   - Provide idempotency guidance and helper APIs for framework adapters.
-  - Provide deterministic mock-wallet tests and shared conformance vectors.
+  - Provide shared conformance vectors and Rizful-backed NWC smoke tests.
 
 Framework storage and workers:
 
@@ -1690,7 +1691,7 @@ Backend SDK responsibilities:
   - Price quote helper.
   - Provider route helper.
   - Event subscription helper.
-  - Capability check.
+  - Receive-checkout surface that never exposes spend methods.
   - Secret redaction.
   - Error normalization.
   - Settlement-state normalization.
@@ -1973,7 +1974,7 @@ JavaScript / TypeScript:
   @openreceive/fastify       Fastify plugin
   @openreceive/next          Next.js route handlers/server helpers
   @openreceive/provider-data Generated provider registry
-  @openreceive/testkit       Mock wallet and conformance helpers
+  @openreceive/testkit       Shared vectors and Rizful NWC smoke helpers
 
 Python:
 
@@ -1984,7 +1985,7 @@ Python:
   openreceive-django         Views, models, Channels integration
   openreceive-flask          Blueprints
   openreceive-provider-data  Generated provider registry
-  openreceive-testkit        Mock wallet/test helpers
+  openreceive-testkit        Shared vector/Rizful NWC test helpers
 
 Ruby:
 
@@ -1993,7 +1994,7 @@ Ruby:
   openreceive                Ruby SDK wrapping nwc-ruby or nwc-client-ruby
   openreceive-rails          Engine, routes, ActionCable, ActiveJob
   openreceive-provider-data  Generated provider registry
-  openreceive-testkit        RSpec helpers
+  openreceive-testkit        RSpec vector/Rizful NWC helpers
 
 PHP:
 
@@ -2014,7 +2015,7 @@ Rust:
   openreceive-axum           Axum routes/extractors
   openreceive-actix          Actix integration
   openreceive-provider-data  Generated provider registry
-  openreceive-testkit        Mock wallet/test utilities
+  openreceive-testkit        Shared vector/Rizful NWC test utilities
 
 Go:
 
@@ -2174,12 +2175,9 @@ Rails:
 
 Rails adapter requirements:
 
-  - The Rails package should make the receive-only/read-write distinction
-    visible with helpers equivalent to read_only?, read_write?, and
-    capabilities.
-  - It should warn or require an explicit receive-only checkout mode when
-    pay_invoice capability is present, and refuse pay_keysend for checkout
-    flows.
+  - The Rails package should keep checkout APIs receive-only by construction:
+    no pay_invoice, pay_keysend, or other spend methods on the OpenReceive
+    checkout surface.
   - If the implementation uses nwc-ruby or rbsecp256k1, document native build
     dependencies for macOS, Debian/Ubuntu, Alpine, and Docker/Kamal images.
   - The NWC notification listener should deploy as a Kamal role using the same
@@ -2272,20 +2270,24 @@ Optional deterministic fruit:
 
 Demo modes:
 
-  Mock mode:
+  Rizful test NWC mode:
 
-    OPENRECEIVE_WALLET=mock
-    OPENRECEIVE_MOCK_AUTO_SETTLE_SECONDS=5
+    OPENRECEIVE_MODE=test_nwc
+    OPENRECEIVE_WALLET=nwc
+    OPENRECEIVE_NWC=nostr+walletconnect://...
     OPENRECEIVE_PRICE_SOURCE=static
 
-  Live mode:
+  Production NWC mode:
 
+    OPENRECEIVE_MODE=production
     OPENRECEIVE_WALLET=nwc
     OPENRECEIVE_NWC=nostr+walletconnect://...
     OPENRECEIVE_PRICE_SOURCE=coingecko
 
-Every demo must support mock mode. Live mode is optional for local users and
-the hosted gallery.
+Every demo must support Rizful test NWC mode. Tests create real low-value
+invoices and settlement is confirmed by paying the fruit-sticker checkout.
+That is acceptable for this project because the test wallet is receive-only,
+the amounts are tiny, and the owner is paying themselves.
 
 
 Demo Matrix
@@ -2364,8 +2366,8 @@ Demo standards:
   - compose.yml for every server-side demo
   - compose.override.yml.example for local development when needed
   - Makefile with standard commands
-  - mock mode
-  - live mode
+  - Rizful test NWC mode
+  - production NWC mode
   - tests
   - screenshots
   - source link from hosted demo gallery
@@ -2379,8 +2381,8 @@ Standard commands:
   make setup
   make dev
   make test
-  make demo-mock
-  make demo-live
+  make demo-test-nwc
+  make demo-production
   make docker-build
   make docker-run
   make docker-smoke
@@ -2470,13 +2472,15 @@ SEO rules:
 Docker requirements:
 
   - Each server-side demo has a production Dockerfile.
-  - Each server-side demo has a compose.yml that can run mock mode.
+  - Each server-side demo has a compose.yml that can run Rizful test NWC mode.
   - Static frontend demos include or point at a server-side API function.
   - Each server-side demo exposes exactly one internal HTTP port.
   - Each demo has a health check.
   - Each demo reads config from environment variables.
-  - Each demo can run without a real wallet by using mock mode.
-  - Each live demo uses a receive-only NWC secret supplied at deploy time.
+  - Each test/staging demo uses the shared Rizful receive-only NWC secret
+    supplied at deploy time.
+  - Each production demo uses a receive-only NWC secret supplied at deploy
+    time.
   - No demo image bakes in secrets.
   - Every image is tagged with the git SHA and pushed to GHCR.
 
@@ -2809,11 +2813,12 @@ Deployment workflow:
   Minimal GitHub Actions mental model:
 
     on pull request:
-      run tests, build changed demos in mock mode, do not deploy stable demos
+      run tests and build changed demos. Run Rizful NWC smoke tests only where
+      the trusted test secret is available; do not deploy stable demos
 
     on merge to main:
-      run tests, build changed demos, push GHCR images, optionally deploy mock
-      demos after smoke tests pass
+      run tests, build changed demos, push GHCR images, optionally deploy
+      Rizful test demos after smoke tests pass
 
     on tagged release:
       publish packages, rebuild affected demos, promote tested image digests to
@@ -2828,16 +2833,19 @@ Deployment churn policy:
   Use two deployment lanes:
 
     preview lane:
-      Every pull request or branch may build changed demos with mock mode,
-      noindex, and short-lived preview URLs. Preview deploys can use local
-      tunnels, VPN-only access, or preview.openreceive.org. They do not imply
-      that a stack is ready for the stable public demo list.
+      Every pull request or branch may build changed demos with noindex and
+      short-lived preview URLs. Trusted previews may use the Rizful test NWC
+      secret; untrusted previews build without NWC smoke tests. Preview
+      deploys can use local tunnels, VPN-only access, or
+      preview.openreceive.org. They do not imply that a stack is ready for the
+      stable public demo list.
 
     stable lane:
       Merges to main build immutable demo images tagged by git SHA and image
       digest. Stable public demo subdomains are promoted to a tested image
-      digest after smoke tests pass. Mock-mode demos may auto-promote once the
-      pipeline is reliable; live-wallet demos require explicit manual approval.
+      digest after smoke tests pass. Rizful test demos may auto-promote once
+      the pipeline is reliable; production-wallet demos require explicit
+      manual approval.
 
   Package update rules:
 
@@ -2882,7 +2890,8 @@ Recommended deploy repo layout:
     secrets/
       production.env        # gitignored, never committed
       staging.env           # gitignored, never committed
-      live-wallet.env       # gitignored, never committed
+      rizful-test-wallet.env # gitignored, never committed
+      production-wallet.env  # gitignored, never committed
     proxy/
       compose.yml
       Caddyfile
@@ -2902,9 +2911,9 @@ Recommended deploy repo layout:
 
 Environment variable convention:
 
-  OPENRECEIVE_MODE=mock
+  OPENRECEIVE_MODE=test_nwc
   OPENRECEIVE_PUBLIC_URL=https://django-demo.openreceive.org
-  OPENRECEIVE_WALLET=mock
+  OPENRECEIVE_WALLET=nwc
   OPENRECEIVE_PRICE_SOURCE=static
   OPENRECEIVE_DEMO_NAME=django-demo
   OPENRECEIVE_DEMO_STACK="Django + HTMX"
@@ -2933,7 +2942,8 @@ Secrets management:
 
     demos/deploy/secrets/production.env
     demos/deploy/secrets/staging.env
-    demos/deploy/secrets/live-wallet.env
+    demos/deploy/secrets/rizful-test-wallet.env
+    demos/deploy/secrets/production-wallet.env
     demos/deploy/certs/*
     demos/deploy/wireguard/*
     demos/deploy/.ssh/*
@@ -2969,7 +2979,8 @@ Secrets management:
     Store runtime secrets outside the repo, for example:
 
       /opt/openreceive/secrets/production.env
-      /opt/openreceive/secrets/live-wallet.env
+      /opt/openreceive/secrets/rizful-test-wallet.env
+      /opt/openreceive/secrets/production-wallet.env
       /opt/openreceive/secrets/ghcr.env
 
     File ownership and mode:
@@ -2988,14 +2999,15 @@ Secrets management:
         image: ghcr.io/openreceive/demo-django:${OPENRECEIVE_IMAGE_TAG}
         env_file:
           - /opt/openreceive/secrets/production.env
-          - /opt/openreceive/secrets/live-wallet.env
+          - /opt/openreceive/secrets/rizful-test-wallet.env
         environment:
           OPENRECEIVE_PUBLIC_URL: https://django-demo.openreceive.org
           OPENRECEIVE_DEMO_NAME: django-demo
 
   Deployment script behavior:
 
-    - Refuse to run live mode unless OPENRECEIVE_NWC exists on the host.
+    - Refuse to run test_nwc or production mode unless OPENRECEIVE_NWC exists
+      on the host.
     - Print variable names, never secret values.
     - Never pass secrets as command-line arguments where they can appear in
       shell history or process listings.
@@ -3005,9 +3017,9 @@ Secrets management:
 
   GitHub Actions:
 
-    Prefer not to store the live NWC code in GitHub Actions. Let the demo host
-    keep runtime wallet secrets. CI can build images and prepare promotion; the
-    host injects secrets at container start.
+    Prefer not to store NWC codes in GitHub Actions. Let the demo host keep
+    runtime wallet secrets. CI can build images and prepare promotion; the host
+    injects secrets at container start.
 
     GitHub Actions may need:
 
@@ -3069,13 +3081,13 @@ Staging and preview:
 
   Preview deployments must set noindex headers and robots disallow.
 
-Live wallet policy:
+Test and production wallet policy:
 
-  - Default hosted demos run in mock mode.
-  - At most one or two public demos use live mode at first.
-  - Live demos use a separate receive-only demo wallet.
-  - Live demos have low invoice amounts, daily caps, and rate limits.
-  - Live demos should be clearly labeled.
+  - Default hosted demos use the shared Rizful receive-only test NWC code.
+  - Test demos have low invoice amounts, daily caps, and rate limits.
+  - Test demos should be clearly labeled as real Lightning test purchases.
+  - Production demos use a separate receive-only production NWC code only when
+    explicitly promoted.
   - Never share one production merchant wallet across all demo stacks.
 
 Observability:
@@ -3089,9 +3101,10 @@ Observability:
 
 Backup and recovery:
 
-  - Mock demos should be stateless and redeployable from GHCR.
+  - Test demos should be stateless except for minimal invoice/order records and
+    redeployable from GHCR.
   - Persist only reverse proxy certificate storage, if terminating TLS on host.
-  - Persist live-demo invoice database if live mode is enabled.
+  - Persist production-demo invoice database if production mode is enabled.
   - Keep deployment config in git.
   - Document host rebuild from scratch.
 
@@ -3141,51 +3154,49 @@ Test layers:
   - idempotency behavior
   - metadata size limit
 
-4. Mock NWC wallet
+4. Rizful receive-only NWC test harness
 
   Location:
 
-    tools/mock-wallet
+    tools/live-nwc-test
 
-  Capabilities:
+  Required behavior:
 
-    info_event
-    make_invoice
-    lookup_invoice
-    pay_invoice
-    auto_settle_after_seconds
-    force_expire
-    force_error
-    emit_notification
-    drop_notification
-    delay_lookup
-    duplicate_notification
-    capability profiles
+    parse OPENRECEIVE_NWC from a gitignored env file
+    create a low-value fruit-sticker invoice
+    look up the invoice before payment
+    poll with the canonical cadence
+    subscribe to notifications where the client supports it
+    confirm settlement only through lookup_invoice
+    redact the NWC string in every log and error path
+    skip Rizful NWC smoke tests clearly when OPENRECEIVE_NWC is not present
 
-  Required scenarios:
+  Required live scenarios:
 
-    settled by polling
-    settled by notification plus lookup
-    notification lost
-    duplicate notification
-    expired invoice
+    invoice created through Rizful
+    settled by polling after the owner pays the invoice
+    settled by notification plus lookup when notifications are available
     duplicate idempotency key
-    wallet timeout
-    rate source failure
-    read/write NWC warning
+    rate source failure using the static price provider
     receive-only NWC success
-    multiple relay URI
+    multiple relay URI parsing
     missing encryption tag falls back to NIP-04
-    NIP-44 advertised and selected
-    unsupported encryption error
-    duplicate NIP-04/NIP-44 notifications
-    metadata over 3900 serialized characters
+    NIP-44 advertised and selected when Rizful advertises it
+    metadata over 3900 serialized characters rejected before NWC request
+
+  Intentionally not required:
+
+    A local fake wallet, fake auto-settlement, forced wallet timeouts, forced
+    notification loss, or provider-specific compatibility confirmation. NWC
+    codes are treated as compatible; the project proves its own adapters by
+    using the Rizful receive-only test code.
 
 5. Conformance tests
 
-  Every backend SDK and every standalone NWC client must pass the same
-  conformance suite against the mock wallet. Third-party NWC dependencies must
-  be wrapped by an OpenReceive adapter that passes the same suite.
+  Every backend SDK and every standalone NWC client must pass the same shared
+  vectors plus the same Rizful-backed NWC smoke flow when OPENRECEIVE_NWC is
+  available. Third-party NWC dependencies must be wrapped by an OpenReceive
+  adapter that passes that same suite.
 
 6. Demo E2E tests
 
@@ -3195,7 +3206,7 @@ Test layers:
     create invoice
     see QR with white quiet zone and copy button
     see provider wizard
-    mock wallet settles invoice
+    owner pays the Rizful-backed invoice
     UI changes to settled
     sticker download appears
 
@@ -3222,7 +3233,8 @@ Test layers:
 
     install from local build artifact
     import package
-    run minimal create/lookup against mock wallet
+    run minimal create/lookup against Rizful NWC when OPENRECEIVE_NWC is
+    available
     run provider data import if applicable
 
 
@@ -3250,7 +3262,8 @@ Every PR should run:
   17. Run Elixir tests.
   18. Run conformance vectors against every SDK.
   19. Build every Tier 1 demo.
-  20. Run demo smoke tests in mock mode.
+  20. Run demo smoke tests in Rizful test NWC mode where the trusted NWC secret
+      is available.
   21. Run secret scanning.
   22. Build docs.
 
@@ -3376,7 +3389,7 @@ Docs must make these points loud:
   - Receive-only NWC is safer than read/write NWC, but it is still secret.
   - Backend confirms settlement.
   - OpenReceive is provider-neutral.
-  - Mock mode exists for local development.
+  - Rizful test NWC mode exists for local development and hosted demo testing.
   - Provider routes are suggestions, not guarantees.
   - Every example uses .env.example for documentation and gitignored env files
     or host secrets for real credentials.
@@ -3389,7 +3402,7 @@ Threats:
 
   - Merchant accidentally exposes NWC secret to browser.
   - Merchant commits a receive-only NWC code to git.
-  - Merchant stores live NWC secrets in GitHub Actions unnecessarily.
+  - Merchant stores NWC secrets in GitHub Actions unnecessarily.
   - Read/write NWC leaks and can spend funds.
   - Duplicate notification double-credits a customer.
   - Client forges "settled" state.
@@ -3401,7 +3414,8 @@ Threats:
 Controls:
 
   - Receive-only NWC default.
-  - checkCapabilities on init.
+  - No wallet compatibility registry or preflight ceremony; NWC codes are
+    treated as compatible, and checkout APIs never expose send-payment methods.
   - .env.example templates committed; real env files ignored.
   - Host-side secret files stored outside the repo with chmod 600.
   - Secret redaction utility in every SDK.
@@ -3515,7 +3529,7 @@ Deliverables:
   - Provider registry linter.
   - Static mock price data.
   - First test vectors.
-  - tools/mock-wallet skeleton.
+  - tools/live-nwc-test skeleton for Rizful receive-only NWC smoke tests.
   - CI skeleton.
 
 Definition of done:
@@ -3541,7 +3555,7 @@ Deliverables:
   - NWC make_invoice wrapper.
   - NWC lookup_invoice wrapper.
   - NWC metadata size guard under 3900 serialized characters.
-  - Capability check.
+  - Receive-checkout guard that never exposes spend methods.
   - Safe poller.
   - Notification listener helper where practical in Node.
   - Host-app storage interface.
@@ -3552,15 +3566,16 @@ Deliverables:
   - Idempotency key support.
   - QR helpers/components that expose invoice/lightning URI plus safe SVG/PNG
     rendering with opaque white quiet zone.
-  - Mock wallet integration.
+  - Rizful NWC test harness integration.
   - Express route adapter.
   - Next.js route handler adapter.
 
 Definition of done:
 
-  A plain Node/Express app can create a mock invoice, settle it, emit SSE, and
-  pass the initial conformance suite. Live NWC mode can be tested manually with
-  a receive-only wallet without deploying any extra OpenReceive service.
+  A plain Node/Express app can create a low-value invoice through the Rizful
+  receive-only test NWC code, emit SSE, confirm settlement after payment, and
+  pass the initial conformance smoke suite without deploying any extra
+  OpenReceive service.
 
 Milestone 2: first usable JS stack
 
@@ -3586,8 +3601,9 @@ Deliverables:
 
 Definition of done:
 
-  A developer can install JS packages, run mock mode locally, create an invoice,
-  see the checkout UI, see mock settlement, and unlock a fruit sticker.
+  A developer can install JS packages, run Rizful test NWC mode locally with a
+  server-side env secret, create an invoice, see the checkout UI, pay it, and
+  unlock a fruit sticker.
 
 Milestone 3: Rails/Ruby proof
 
@@ -3639,9 +3655,9 @@ Deliverables:
 
 Definition of done:
 
-  Each Python and PHP package passes mock-wallet conformance, each framework
-  adapter uses its native job system, and each demo passes the Hello Fruit smoke
-  test in mock mode.
+  Each Python and PHP package passes shared-vector conformance plus the
+  Rizful-backed smoke flow, each framework adapter uses its native job system,
+  and each demo passes the Hello Fruit smoke test in test NWC mode.
 
 Milestone 5: systems and enterprise stacks
 
@@ -3661,8 +3677,8 @@ Deliverables:
 
 Definition of done:
 
-  Each core package passes shared vectors, mock-wallet conformance, and package
-  smoke tests.
+  Each core package passes shared vectors, Rizful-backed NWC smoke tests,
+  and package smoke tests.
 
 Milestone 6: mobile
 
@@ -3712,8 +3728,8 @@ Deliverables:
 Definition of done:
 
   Real merchants can evaluate OpenReceive through hosted demos, run a local
-  mock checkout, connect a receive-only NWC wallet, and deploy a production
-  integration with clear security docs.
+  Rizful-backed test checkout, connect their own receive-only NWC wallet, and
+  deploy a production integration with clear security docs.
 
 
 v0.1.0 Scope
@@ -3729,7 +3745,7 @@ Ship only enough to prove the architecture cleanly:
   - polling backoff test vectors.
   - NWC URI/info-event/encryption/event-shape test vectors.
   - NWC metadata guard under 3900 serialized characters.
-  - mock wallet.
+  - Rizful receive-only NWC test harness.
   - NWC client adapter interface.
   - @openreceive/node wrapper around getAlby/js-sdk.
   - Standalone pay_invoice support in the NWC adapter, hidden from
@@ -3793,9 +3809,9 @@ Data and codegen:
   18. codegen: generate TypeScript provider data
   19. codegen: add generated-stale CI check
 
-Mock and conformance:
+Live NWC testing and conformance:
 
-  20. testkit: create mock NWC wallet
+  20. testkit: create Rizful receive-only NWC smoke harness
   21. vectors: add fiat-to-msat cases
   22. vectors: add settlement detection cases
   23. vectors: add polling cadence cases
@@ -3813,7 +3829,7 @@ NWC and native backend core:
   28. nwc: add getAlby/js-sdk receive-checkout adapter for Node
       Include standalone pay_invoice support but keep it hidden from
       OpenReceive receive-checkout APIs.
-  29. nwc: implement mock wallet adapter for SDK tests
+  29. nwc: implement Rizful NWC smoke adapter for SDK tests
   30. nwc: implement make_invoice wrapper
   31. nwc: implement lookup_invoice wrapper
   32. core: implement safe invoice poller
@@ -3860,7 +3876,7 @@ CI and release:
 
   60. ci: validate schemas and provider registry
   61. ci: run conformance vectors
-  62. ci: build demos in mock mode
+  62. ci: build demos in Rizful test NWC mode where secrets are available
   63. ci: add secret scanning
   64. release: configure release automation and demo rebuild triggers
 
@@ -3887,7 +3903,7 @@ Secrets:
   79. secrets: add .env.example templates for every demo
   80. secrets: add demos/deploy/secrets README and .gitignore protections
   81. secrets: add host secret file layout under /opt/openreceive/secrets
-  82. secrets: make deploy scripts refuse live mode without OPENRECEIVE_NWC
+  82. secrets: make deploy scripts refuse test_nwc/production mode without OPENRECEIVE_NWC
   83. secrets: add redaction utility for nostr+walletconnect URIs
   84. secrets: add frontend bundle scan for OPENRECEIVE_NWC and NWC URI strings
   85. secrets: document receive-only NWC rotation procedure
@@ -3897,7 +3913,7 @@ Rails:
 
   87. rails: add Kamal listener role example, not accessory
   88. rails: document rbsecp256k1/native build dependencies if needed
-  89. rails: add read_only/capabilities checkout guard
+  89. rails: keep spend methods out of checkout APIs
   90. rails: add idempotent notification handler and since cursor example
 
 
@@ -3940,17 +3956,18 @@ Important Design Decisions To Make Early
   Recommendation:
 
     Use proven NWC libraries where possible for early delivery, wrap them behind
-    OpenReceive interfaces, and keep protocol behavior covered by mock-wallet
-    conformance. Do not hand-roll Nostr encryption unless the existing library
-    path blocks the project.
+    OpenReceive interfaces, and keep protocol behavior covered by shared
+    vectors plus Rizful-backed NWC smoke tests. Do not hand-roll Nostr
+    encryption unless the existing library path blocks the project.
 
-3. Hosted live demo policy
+3. Hosted test demo policy
 
   Recommendation:
 
-    Hosted public demos default to mock mode. Provide one clearly labeled live
-    mainnet demo using a separate receive-only wallet and a tiny amount only if
-    you are comfortable receiving real payments.
+    Hosted public demos default to the shared Rizful receive-only test NWC
+    code. These are real mainnet test purchases for tiny sticker amounts, which
+    is acceptable because the owner is paying themselves. No separate wallet
+    compatibility confirmation is required beyond using the NWC code.
 
 4. Provider registry claims
 
@@ -3979,7 +3996,7 @@ The next implementation work should happen in this order:
 4. Add invoice, payment-event, rate-quote, and error schemas.
 5. Add the first OpenAPI paths for invoices, rates, routes, providers, and SSE.
 6. Add test vectors for fiat-to-msats, settlement detection, and polling.
-7. Build the mock wallet.
+7. Build the Rizful receive-only NWC smoke harness.
 8. Define the NWC client interface and Node adapter around getAlby/js-sdk.
 9. Add @openreceive/core, @openreceive/node, and @openreceive/browser.
 10. Add @openreceive/elements and @openreceive/react headless/default UI.
@@ -4008,8 +4025,8 @@ This plan is complete enough when these statements are true:
   - JS packages prove the SDK shape.
   - Rails proves the framework-native worker/listener shape.
   - Hello Fruit proves the UX.
-  - Mock mode makes demos and tests deterministic.
-  - Live NWC mode is possible without changing app code.
+  - Rizful test NWC mode exercises the real wallet path for demos and tests.
+  - Production NWC mode is possible without changing app code.
   - The frontend never sees wallet secrets.
   - Pure frontend live checkout is rejected by docs, examples, and tests.
   - Frontend packages are headless-first and proven with at least one external
@@ -4030,7 +4047,7 @@ OpenReceive should not become a loose pile of payment SDKs.
 It should be:
 
   one spec,
-  one mock wallet,
+  one Rizful test wallet policy,
   one provider registry,
   one price model,
   one test suite,
