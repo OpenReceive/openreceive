@@ -23,9 +23,14 @@ Run:
 npm run test:ci
 ```
 
-That command validates schemas and vectors, scans for secrets, typechecks the
-TypeScript packages, runs JS tests, builds the Express + React demo, builds the
-docs index, and runs the live NWC smoke script when `OPENRECEIVE_NWC` is set.
+That command validates schemas and vectors, scans for secrets, checks generated
+contract models for staleness, typechecks the TypeScript packages, runs JS
+tests, builds the Express + React demo, builds the docs index, and runs the live
+NWC smoke script when `OPENRECEIVE_NWC` is set.
+
+Run `npm run generate:models` after changing OpenAPI or AsyncAPI contracts.
+`npm run check:generated` fails if the checked-in generated model constants no
+longer match the source contracts.
 
 ## Settlement Rules
 
