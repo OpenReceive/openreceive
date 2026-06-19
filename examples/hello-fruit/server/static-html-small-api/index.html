@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenReceive Hello Fruit Static</title>
+  </head>
+  <body>
+    <main class="page">
+      <section class="checkout" aria-labelledby="product-title">
+        <div class="product">
+          <img id="product-sticker" alt="" />
+          <div>
+            <h1 id="product-title"></h1>
+            <p id="product-description"></p>
+          </div>
+        </div>
+
+        <div class="fruit-grid" id="fruit-grid"></div>
+
+        <button class="primary" id="create-invoice" type="button">
+          Create invoice
+        </button>
+
+        <div id="invoice-panel"></div>
+        <p class="error" id="error" role="status"></p>
+      </section>
+    </main>
+    <script type="module" src="/src/client/main.ts"></script>
+  </body>
+</html>

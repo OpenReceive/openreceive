@@ -16,8 +16,8 @@
   },
   "include": [
     "packages/js/**/*.ts",
-    "examples/hello-fruit/server/node-express-react/src/**/*.ts",
-    "examples/hello-fruit/server/node-express-react/src/**/*.tsx",
-    "examples/hello-fruit/server/node-express-react/vite.config.ts"
+    "examples/hello-fruit/server/*/src/**/*.ts",
+    "examples/hello-fruit/server/*/src/**/*.tsx",
+    "examples/hello-fruit/server/*/vite.config.ts"
   ]
 }

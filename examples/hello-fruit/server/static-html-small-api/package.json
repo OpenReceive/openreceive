@@ -1,0 +1,24 @@
+{
+  "name": "@openreceive/example-static-html-small-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "@getalby/sdk": "*",
+    "@openreceive/core": "0.1.0",
+    "@openreceive/elements": "0.1.0",
+    "@openreceive/express": "0.1.0",
+    "@openreceive/node": "0.1.0",
+    "express": "*",
+    "qrcode": "*",
+    "vite": "*"
+  },
+  "devDependencies": {
+    "typescript": "*"
+  }
+}

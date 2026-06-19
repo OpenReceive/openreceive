@@ -71,3 +71,10 @@ const checkout = useOpenReceiveCheckout({ invoice: "lnbc..." });
 
 React components follow the same boundary: they render invoice display data and
 browser actions, while the backend remains the settlement authority.
+
+## Static Demo
+
+`examples/hello-fruit/server/static-html-small-api` shows the same flow without
+React. It uses shared fruit assets, mounts the Express API inside Vite during
+local development, and renders `<openreceive-checkout>` from display-safe
+invoice JSON.

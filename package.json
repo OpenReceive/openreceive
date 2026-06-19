@@ -11,7 +11,7 @@
   ],
   "scripts": {
     "build:docs": "node tools/docs/build-index.mjs",
-    "build:demo": "npm run build -w @openreceive/example-node-express-react",
+    "build:demo": "npm run build -w @openreceive/example-node-express-react && npm run build -w @openreceive/example-static-html-small-api",
     "generate:models": "node tools/codegen/generate-js-models.mjs",
     "check:generated": "node tools/codegen/generate-js-models.mjs --check",
     "typecheck": "tsc --noEmit",
