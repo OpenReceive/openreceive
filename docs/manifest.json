@@ -43,6 +43,41 @@
       "source_path": "docs/15-framework-auth.md",
       "category": "security",
       "public": true
+    },
+    {
+      "slug": "conformance",
+      "title": "Conformance",
+      "source_path": "docs/11-conformance.md",
+      "category": "reference",
+      "public": true
+    },
+    {
+      "slug": "release-process",
+      "title": "Release Process",
+      "source_path": "docs/12-release-process.md",
+      "category": "reference",
+      "public": true
+    },
+    {
+      "slug": "secret-management",
+      "title": "Secret Management",
+      "source_path": "docs/14-secret-management.md",
+      "category": "security",
+      "public": true
+    },
+    {
+      "slug": "api-reference",
+      "title": "API Reference",
+      "source_path": "docs/api-reference.md",
+      "category": "reference",
+      "public": true
+    },
+    {
+      "slug": "sdk-status",
+      "title": "SDK Status",
+      "source_path": "docs/sdk-status.md",
+      "category": "reference",
+      "public": true
     }
   ]
 }

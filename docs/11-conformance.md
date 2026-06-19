@@ -1,0 +1,60 @@
+# Conformance
+
+OpenReceive conformance starts with shared source-of-truth files. SDKs and
+adapters should not redefine invoice lifecycle, settlement, polling, idempotency,
+or amount rules.
+
+## Required Sources
+
+- `spec/schemas/*.schema.json` define invoice, storage, payment event, rate
+  quote, error, and provider-registry shapes.
+- `spec/test-vectors/*.json` define amount boundaries, fiat conversion,
+  idempotency, invoice lifecycle, NWC URI parsing, polling cadence, and
+  settlement detection.
+- `spec/openapi/openreceive-http.v1.yaml` defines mounted HTTP routes.
+- `spec/asyncapi/openreceive-events.v1.yaml` defines invoice event names and
+  payloads.
+
+## Local Gate
+
+Run:
+
+```sh
+npm run test:ci
+```
+
+That command validates schemas and vectors, scans for secrets, typechecks the
+TypeScript packages, runs JS tests, builds the Express + React demo, builds the
+docs index, and runs the live NWC smoke script when `OPENRECEIVE_NWC` is set.
+
+## Settlement Rules
+
+SDKs and adapters must treat an incoming invoice as settled only when
+`lookup_invoice` returns `settled_at` or `state == "settled"` /
+`transaction_state == "settled"`. A preimage is corroborating data, not final
+settlement proof.
+
+## Idempotency Rules
+
+Create-invoice idempotency is scoped to:
+
+```text
+merchant_scope + operation + idempotency_key
+```
+
+Replaying the same request returns the same invoice. Reusing the same key with a
+different request body is a conflict.
+
+## Live Wallet Smoke
+
+`npm run test:live:nwc` uses `OPENRECEIVE_NWC` when present and skips clearly
+when absent. Live runs must use a low-value receive-only NWC secret and must
+redact the connection string in all output.
+
+Do not run live wallet tests on untrusted pull requests with secrets available.
+
+## Future SDKs
+
+New SDKs should live in one package directory, consume the shared vectors, and
+provide one conformance command. They must not add send-payment methods or
+frontend NWC behavior to OpenReceive receive-checkout APIs.

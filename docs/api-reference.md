@@ -1,0 +1,95 @@
+# API Reference
+
+OpenReceive does not require a daemon. Framework adapters mount these routes
+inside the merchant application, usually at `/openreceive/v1`. The authoritative
+HTTP contract is `spec/openapi/openreceive-http.v1.yaml`.
+
+All invoice, lookup, and event responses should be returned with
+`Cache-Control: no-store`. Browser responses must never contain an NWC
+connection string or client secret.
+
+## Create Invoice
+
+`POST /openreceive/v1/invoices`
+
+Required header:
+
+- `Idempotency-Key`: stable per merchant scope and create-invoice operation.
+
+Request body uses exactly one amount input:
+
+- `amount_msats`: integer from `1000` through `9007199254740991`.
+- `fiat`: `{ "currency": "USD", "value": "0.10" }` style decimal string.
+
+Optional fields include `description`, `description_hash`, `expiry`, and
+`metadata`. Metadata must fit the NWC payload guard.
+
+Responses:
+
+- `201`: new invoice.
+- `200`: idempotent replay of the same request.
+- `409`: same idempotency scope with a different request body.
+
+## Read Invoice
+
+`GET /openreceive/v1/invoices/{invoice_id}`
+
+The invoice id is application-scoped and matches `or_inv_[a-z0-9_]+`.
+Adapters must authorize this route against the owning order, cart, checkout
+session, or user.
+
+## Lookup Invoice
+
+`POST /openreceive/v1/invoices/lookup`
+
+Body contains either `payment_hash` or `invoice`. This route performs backend
+wallet verification and must not be exposed as a public status oracle. Access
+must be strongly authorized to the matching invoice.
+
+The lookup response may include `preimage_present`, but fulfillment still
+requires settled state from backend wallet verification. A preimage alone is not
+settlement proof.
+
+## Invoice Events
+
+`GET /openreceive/v1/invoices/{invoice_id}/events`
+
+The v0.1 reference adapter uses Server-Sent Events. Clients may send
+`Last-Event-ID` for replay. Event streams are passive UI hints; they do not
+fulfill products.
+
+The authoritative event contract is
+`spec/asyncapi/openreceive-events.v1.yaml`.
+
+Event names:
+
+- `invoice.created`
+- `invoice.verifying`
+- `invoice.settled`
+- `invoice.expired`
+- `invoice.failed`
+- `invoice.fulfilled`
+- `invoice.cancelled`
+
+## Health And Capabilities
+
+`GET /openreceive/v1/health` returns `{ "ok": true }` when the adapter is
+mounted.
+
+`GET /openreceive/v1/capabilities` returns a non-secret capability summary.
+Wallet-specific secrets and raw NWC connection strings must not appear in this
+response.
+
+## Error Shape
+
+Errors use the shared error schema:
+
+```json
+{
+  "code": "invalid_request",
+  "message": "Human-readable error"
+}
+```
+
+Codes are stable enough for tests, but applications should still render
+defensive fallback messages.
