@@ -31,6 +31,13 @@
       "public": true
     },
     {
+      "slug": "provider-registry",
+      "title": "Provider Registry",
+      "source_path": "docs/09-provider-registry.md",
+      "category": "reference",
+      "public": true
+    },
+    {
       "slug": "framework-auth",
       "title": "Framework Auth And Browser Security",
       "source_path": "docs/15-framework-auth.md",
