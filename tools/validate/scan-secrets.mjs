@@ -82,7 +82,7 @@ function isAllowedEnvExample(relativePath) {
 
 function isEnvFile(relativePath) {
   const fileName = path.basename(relativePath);
-  return fileName === ".env" || fileName.startsWith(".env.") || fileName.endsWith(".env");
+  return fileName === ".env" || fileName.startsWith(".env.") || fileName.endsWith(".env") || fileName.includes(".env.");
 }
 
 function filesToScan() {

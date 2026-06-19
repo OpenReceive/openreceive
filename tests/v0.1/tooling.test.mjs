@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -35,6 +35,23 @@ test("secret scanner rejects force-added non-example env files", () => {
       () => runSecretScanner(dir),
       (error) => {
         assert.match(String(error.stderr), /\.env\.local: tracked env file is forbidden/);
+        return true;
+      }
+    );
+  });
+});
+
+test("secret scanner rejects tracked env-like deployment filenames", () => {
+  withGitRepo((dir) => {
+    const deployDir = path.join(dir, "demos", "deploy");
+    mkdirSync(deployDir, { recursive: true });
+    writeFileSync(path.join(deployDir, "prod.env.local"), "OPENRECEIVE_NWC=replace-me\n");
+    execFileSync("git", ["add", "demos/deploy/prod.env.local"], { cwd: dir, stdio: "ignore" });
+
+    assert.throws(
+      () => runSecretScanner(dir),
+      (error) => {
+        assert.match(String(error.stderr), /demos\/deploy\/prod\.env\.local: tracked env file is forbidden/);
         return true;
       }
     );
