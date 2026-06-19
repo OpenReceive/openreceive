@@ -70,6 +70,14 @@ Recommended public names:
 
 If the misspelled domain was purchased, keep it only as a redirect.
 
+License
+-------
+
+Use the MIT License for the OpenReceive repository and first-party packages
+unless a specific package has a documented compatibility reason to use another
+permissive license. Third-party NWC, crypto, framework, and UI dependencies
+must be compatible with MIT distribution.
+
 Existing openreceive.org app:
 
   openreceive.org is already a private Rails app deployed separately. Its
@@ -3685,12 +3693,10 @@ Test layers:
 
 1. Schema validation
 
-  - Validate every JSON Schema.
-  - Validate provider registry.
-  - Validate supported currencies.
-  - Validate demo product data.
-  - Validate OpenAPI.
-  - Validate AsyncAPI.
+  - v0.1: validate invoice, invoice storage lifecycle, payment event, rate
+    quote, and error JSON Schemas.
+  - Later: validate provider registry, supported currencies, demo product data,
+    OpenAPI, and AsyncAPI.
 
 2. Unit tests
 
@@ -3699,7 +3705,7 @@ Test layers:
   - invoice state transitions
   - NWC URI parsing
   - secret redaction
-  - provider route selection
+  - provider route selection, later
   - event parsing
   - QR payload, quiet-zone, and contrast helpers
   - idempotency key handling
@@ -3713,7 +3719,7 @@ Test layers:
   - settlement detection
   - polling backoff
   - refresh creates a linked replacement invoice
-  - provider routing
+  - provider routing, later
   - NWC URI parsing
   - NWC info event parsing
   - NWC encryption negotiation
@@ -3725,6 +3731,8 @@ Test layers:
 
 4. Deterministic mock wallet
 
+  Post-v0.1. Do not block the first Express payment path on this service.
+
   Location:
 
     tools/mock-wallet
@@ -3733,8 +3741,8 @@ Test layers:
 
     Provide a deterministic NWC-compatible wallet/service for conformance tests
     before any SDK talks to a real wallet. The mock wallet does not replace
-    Rizful live tests; it makes schema, vector, error, duplicate-event, replay,
-    expiration, idempotency, and notification behavior reproducible.
+    live wallet profile tests; it makes schema, vector, error, duplicate-event,
+    replay, expiration, idempotency, and notification behavior reproducible.
 
     The mock wallet does not generate payable Lightning invoices. It may return
     invoice fixtures: fake or syntactically valid-but-unpayable BOLT11-like
@@ -3760,7 +3768,7 @@ Test layers:
     real wallets accept the NWC connection
     real BOLT11 invoice creation works
     payment actually routes over Lightning
-    Rizful, Alby, or other wallet notification behavior works
+    Rizful, Alby, Zeus, or other wallet notification behavior works
     NIP-04/NIP-44 compatibility with real wallets
     the human payment flow works
 
@@ -3778,7 +3786,7 @@ Test layers:
     provide deterministic errors and timing controls
     never require real wallet funds
 
-5. Rizful receive-only NWC test harness
+5. Live wallet NWC test harness
 
   Location:
 
@@ -3787,6 +3795,9 @@ Test layers:
   Required behavior:
 
     parse OPENRECEIVE_NWC from a gitignored env file
+    parse OPENRECEIVE_WALLET_PROFILE=rizful|alby|zeus|custom
+    load expected_capabilities.json when present
+    run automatic preflight before invoice creation
     create a low-value fruit-sticker invoice
     print QR/copyable invoice for a human operator to pay
     look up the invoice before payment
@@ -3794,11 +3805,12 @@ Test layers:
     subscribe to notifications where the client supports it
     confirm settlement only through lookup_invoice
     redact the NWC string in every log and error path
-    skip Rizful NWC smoke tests clearly when OPENRECEIVE_NWC is not present
+    skip live NWC smoke tests clearly when OPENRECEIVE_NWC is not present
 
   Required live scenarios:
 
-    invoice created through Rizful
+    invoice created through the configured wallet profile
+    preflight capability summary recorded without secrets
     settled by polling after the owner manually pays the invoice
     settled by notification plus lookup after the owner manually pays the
     invoice when notifications are available
@@ -3807,18 +3819,18 @@ Test layers:
     receive-only NWC success
     multiple relay URI parsing
     missing encryption tag falls back to NIP-04
-    NIP-44 advertised and selected when Rizful advertises it
+    NIP-44 advertised and selected when the wallet profile advertises it
     metadata over 3900 serialized characters rejected before NWC request
 
   The deterministic mock wallet covers forced timeouts, forced notification
-  loss, duplicate notifications, and scripted settlement. Rizful live tests
-  prove real payable invoice creation, real wallet compatibility, notification
-  behavior, Lightning settlement, and the human payment path.
+  loss, duplicate notifications, and scripted settlement. Live wallet profile
+  tests prove real payable invoice creation, real wallet compatibility,
+  notification behavior, Lightning settlement, and the human payment path.
 
 6. Conformance tests
 
   Every backend SDK and every standalone NWC client must pass the same shared
-  vectors plus the same Rizful-backed NWC smoke flow when OPENRECEIVE_NWC is
+  vectors plus the same wallet-profile NWC smoke flow when OPENRECEIVE_NWC is
   available. Third-party NWC dependencies must be wrapped by an OpenReceive
   adapter that passes that same suite.
 
@@ -3829,8 +3841,8 @@ Test layers:
     open demo
     create invoice
     see QR with white quiet zone and copy button
-    see provider wizard
-    owner pays the Rizful-backed invoice
+    see provider wizard, later
+    owner pays the live-wallet-profile invoice
     UI changes to settled
     sticker download appears
 
@@ -3857,39 +3869,36 @@ Test layers:
 
     install from local build artifact
     import package
-    run minimal create/lookup against Rizful NWC when OPENRECEIVE_NWC is
+    run minimal create/lookup against the configured NWC profile when
+    OPENRECEIVE_NWC is
     available
-    run provider data import if applicable
+    run provider data import after provider-data packages exist
 
 
 CI Plan
 -------
 
-Every PR should run:
+v0.1 PRs should run:
 
-  1. Validate JSON Schema files.
-  2. Validate provider registry.
-  3. Validate OpenAPI.
-  4. Validate AsyncAPI.
-  5. Regenerate generated types and provider data.
-  6. Fail if generated files are stale.
-  7. Run JS tests.
-  8. Run Python tests.
-  9. Run Ruby tests.
-  10. Run PHP tests.
-  11. Run Rust tests.
-  12. Run Go tests.
-  13. Run Swift tests.
-  14. Run Kotlin/JVM tests.
-  15. Run Dart tests.
-  16. Run .NET tests.
-  17. Run Elixir tests.
-  18. Run conformance vectors against every SDK.
-  19. Build every Tier 1 demo.
-  20. Run demo smoke tests in Rizful test NWC mode where the trusted NWC secret
-      is available.
-  21. Run secret scanning.
-  22. Build docs.
+  1. Validate v0.1 JSON Schema files.
+  2. Validate v0.1 test vectors.
+  3. Run JS tests for @openreceive/node, Express adapter, and
+     @openreceive/browser helpers where those packages exist.
+  4. Build the Express + React demo.
+  5. Run the manual/live smoke script only where trusted OPENRECEIVE_NWC is
+     available; skip clearly otherwise.
+  6. Run secret scanning.
+  7. Build the v0.1 docs.
+
+Later full-matrix PRs should add:
+
+  - Provider registry validation.
+  - OpenAPI and AsyncAPI validation.
+  - Generated-stale checks for models and provider data.
+  - Python, Ruby, PHP, Rust, Go, Swift, JVM, Dart, .NET, and Elixir tests as
+    those packages exist.
+  - Conformance vectors against every SDK.
+  - Tier 1 demo builds and smoke tests.
 
 In early milestones, jobs can be conditional on packages that exist. The
 workflow should still reserve the full matrix shape so expansion is obvious.
@@ -4015,7 +4024,8 @@ Docs must make these points loud:
   - Receive-only NWC is safer than read/write NWC, but it is still secret.
   - Backend confirms settlement.
   - OpenReceive is provider-neutral.
-  - Rizful test NWC mode exists for local development and hosted demo testing.
+  - Live wallet test mode exists for local development and hosted demo testing,
+    with Rizful as the first supported profile.
   - Provider routes are suggestions, not guarantees.
   - Every example uses .env.example for documentation and gitignored env files
     or host secrets for real credentials.
@@ -4074,16 +4084,12 @@ Public demo safety:
 Release And Publishing
 ----------------------
 
-Start with lockstep versions:
+Start with a tiny v0.1 release surface:
 
   OpenReceive 0.1.0
-  @openreceive/core 0.1.0
   @openreceive/node 0.1.0
   @openreceive/browser 0.1.0
-  @openreceive/elements 0.1.0
-  @openreceive/react 0.1.0
-  @openreceive/ui-recipes 0.1.0, docs/examples package if useful
-  @openreceive/provider-data 0.1.0
+  @openreceive/express 0.1.0, if split from node
 
 Use independent package versions later after the spec is stable.
 
@@ -4099,13 +4105,9 @@ Package releases should feed the demo pipeline:
 Suggested tags:
 
   v0.1.0
-  js-core-v0.1.0
   js-node-v0.1.0
   js-browser-v0.1.0
-  js-elements-v0.1.0
-  react-v0.1.0
-  ui-recipes-v0.1.0
-  provider-data-v0.1.0
+  js-express-v0.1.0, if split from node
 
 Future publish jobs:
 
@@ -4127,9 +4129,8 @@ Release requirements:
   - Changelog generated.
   - Version bumped.
   - CI green.
-  - Conformance green.
+  - v0.1 vectors and live smoke green.
   - Demo smoke green.
-  - Generated files current.
   - Package smoke tests pass.
   - Security scan passes.
 
@@ -4137,12 +4138,12 @@ Release requirements:
 Milestones
 ----------
 
-Milestone 0: repo foundation
+Milestone 0: v0.1 foundation
 
 Goal:
 
-  Establish the source-of-truth structure and stop data drift before code
-  multiplies.
+  Establish just enough source-of-truth structure to build one receive-payment
+  path without letting package scope explode.
 
 Deliverables:
 
@@ -4161,36 +4162,33 @@ Deliverables:
   - Forbidden-without-approval file list.
   - Monorepo tooling.
   - spec/ skeleton.
-  - OpenAPI skeleton.
-  - AsyncAPI skeleton.
   - JSON Schemas for invoice, invoice storage lifecycle, payment event, rate
-    quote, provider registry.
-  - Move provider registry draft into spec/data/providers.
-  - Provider registry linter.
+    quote, and error.
   - Static mock price data.
   - First test vectors for lifecycle, idempotency, fiat-to-msats, settlement,
     and polling.
-  - tools/mock-wallet deterministic conformance wallet skeleton.
-  - tools/live-nwc-test skeleton for Rizful receive-only NWC smoke tests.
+  - NWC URI parse/redaction vectors.
+  - tools/live-nwc-test manual smoke script skeleton with wallet profiles.
   - CI skeleton.
 
 Definition of done:
 
-  The repo can validate specs and provider data, and CI fails on broken shared
-  data.
+  The repo can validate the v0.1 schemas and vectors, and CI fails on broken
+  invoice/payment/rate/error contracts.
 
-Milestone 1: native reference engine
+Milestone 1: v0.1 reference payment path
 
 Goal:
 
-  Build the working receive-payment engine once inside a normal server app,
-  with no daemon or sidecar.
+  Build the working receive-payment engine once inside a normal Express app,
+  with no daemon, sidecar, provider wizard, broad codegen, or extra demos.
 
 Deliverables:
 
   - NWC client interface.
   - @openreceive/node wrapping getAlby/js-sdk for receive checkout.
   - NWC URI parse/redaction tests.
+  - Automatic wallet preflight with capability summary.
   - NWC info event bootstrap.
   - NIP-04/NIP-44 encryption negotiation.
   - NIP-47 request/response event shape tests.
@@ -4199,55 +4197,52 @@ Deliverables:
   - NWC metadata size guard under 3900 serialized characters.
   - Receive-checkout guard that never exposes spend methods.
   - Safe poller.
-  - Notification listener helper where practical in Node.
-  - Host-app storage interface.
-  - In-memory/mock storage for demos.
-  - SSE events.
-  - CoinGecko price adapter.
+  - Settlement detection with preimage as corroborating only.
+  - Minimal in-memory/demo storage.
+  - SSE invoice events.
   - Static mock price adapter.
   - Idempotency key support.
-  - QR helpers/components that expose invoice/lightning URI plus safe SVG/PNG
-    rendering with opaque white quiet zone.
-  - Deterministic mock wallet conformance integration.
-  - Rizful NWC test harness integration.
   - Express route adapter.
-  - Next.js route handler adapter.
+  - @openreceive/browser QR/copy/open-wallet helpers.
+  - Express + React Hello Fruit demo.
+  - Manual live-wallet smoke script with Rizful profile first.
+  - Basic CI for schemas, vectors, JS tests, secret scan, and demo smoke.
 
 Definition of done:
 
-  A plain Node/Express app can create a low-value invoice through the Rizful
-  receive-only test NWC code, emit SSE, confirm settlement after payment, and
-  pass the initial conformance smoke suite without deploying any extra
-  OpenReceive service.
+  A plain Node/Express app can create a low-value invoice through the configured
+  receive-only NWC profile, show QR/copy/open-wallet controls, confirm
+  settlement after manual payment, emit invoice.settled, and unlock the Hello
+  Fruit sticker without deploying any extra OpenReceive service.
 
-Milestone 2: first usable JS stack
+Milestone 2: post-v0.1 contract and JS polish
 
 Goal:
 
-  Ship one polished end-to-end developer path.
+  Add product breadth only after the reference payment path is green.
 
 Deliverables:
 
-  - @openreceive/core.
-  - @openreceive/node.
-  - @openreceive/browser.
+  - Deterministic mock wallet.
+  - Provider registry normalization and linter.
+  - @openreceive/provider-data.
+  - OpenAPI and AsyncAPI contracts.
+  - Codegen for generated models.
+  - @openreceive/core, if separated from @openreceive/node/browser.
   - @openreceive/elements.
   - @openreceive/react with hooks, primitives, slots, and default UI.
   - At least one design-system recipe, preferably React + Mantine or React +
     Material UI.
-  - @openreceive/provider-data.
-  - @openreceive/testkit.
   - Next.js fruit demo.
-  - Express + React fruit demo.
-  - Static HTML + small API fruit demo; serverless/edge variant only after the
-    polling and crypto constraints are proven.
-  - Demo smoke tests.
+  - Static HTML + small API fruit demo.
+  - CoinGecko-compatible price adapter.
+  - Notification listener helper where practical in Node.
+  - @openreceive/testkit.
 
 Definition of done:
 
-  A developer can install JS packages, run Rizful test NWC mode locally with a
-  server-side env secret, create an invoice, see the checkout UI, pay it, and
-  unlock a fruit sticker.
+  The v0.1 payment path remains green while provider data, generated contracts,
+  default UI, and additional demos are added.
 
 Milestone 3: Rails/Ruby proof
 
@@ -4384,47 +4379,49 @@ Ship only enough to prove the architecture cleanly:
   - AGENTS.md, CONTRIBUTING.md, issue template, ADR folder, v0.1 scope lock,
     package ownership map, test command map, and forbidden-without-approval
     file list.
-  - spec/ with OpenAPI, AsyncAPI, JSON schemas.
-  - invoice/idempotency/storage invariants.
-  - provider registry v2 normalized from providers-demo.json.
-  - provider registry linter.
-  - invoice lifecycle test vectors.
-  - idempotency test vectors.
-  - fiat-to-msat test vectors.
-  - settlement detection test vectors.
-  - polling backoff test vectors.
-  - NWC URI/info-event/encryption/event-shape test vectors.
+  - MIT LICENSE, SECURITY, CONTRIBUTING, CODE_OF_CONDUCT, and GOVERNANCE.
+  - spec/ with JSON schemas for invoice, invoice storage lifecycle, payment
+    event, rate quote, and error.
+  - invoice/idempotency/storage invariants, including canonical idempotency
+    scope and amount_msats minimum 1000.
+  - invoice lifecycle, idempotency, fiat-to-msat, settlement detection, and
+    polling backoff test vectors.
+  - NWC URI parsing and redaction vectors.
   - NWC metadata guard under 3900 serialized characters.
-  - Deterministic mock wallet for conformance.
-  - Rizful receive-only NWC test harness.
+  - Manual live-wallet smoke script using OPENRECEIVE_NWC,
+    OPENRECEIVE_WALLET_PROFILE, and expected_capabilities.json.
   - NWC client adapter interface.
   - @openreceive/node wrapper around getAlby/js-sdk.
-  - Standalone pay_invoice support in the NWC adapter, hidden from
-    OpenReceive receive-checkout APIs.
-  - CoinGecko price adapter.
+  - Automatic wallet preflight.
+  - make_invoice and lookup_invoice receive-checkout wrappers.
+  - Safe poller with final expiry lookup and grace verification.
+  - Settlement detection requiring settled_at or state == "settled".
   - static mock price adapter.
-  - @openreceive/core.
   - @openreceive/node.
-  - @openreceive/browser.
-  - @openreceive/elements.
-  - @openreceive/react with headless hook, primitives, slots, and default UI.
-  - First design-system recipe, preferably React + Mantine or React + Material
-    UI.
-  - @openreceive/provider-data.
-  - Next.js fruit demo.
+  - Express route adapter.
+  - @openreceive/browser QR/copy/open-wallet helpers.
   - Express + React fruit demo.
-  - Static HTML + small API demo.
-  - Docs quickstart for Node/React.
-  - Docs page for headless frontend integration and design-system recipes.
-  - Docs page for framework auth integration and signed event URLs.
-  - Docs page for NWC client strategy.
+  - Docs quickstart for Express + React.
+  - Docs page for framework auth integration, CSRF/CORS, signed event URLs, and
+    lookup authorization.
+  - Docs page for NWC client strategy and crypto dependency risk.
   - Security doc.
-  - CI and conformance for existing packages.
+  - Basic CI for schemas, vectors, JS tests, secret scanning, and demo smoke.
 
 Do not include in v0.1.0:
 
   - Every language SDK.
   - Every standalone NWC client.
+  - Deterministic mock wallet service.
+  - Provider wizard.
+  - @openreceive/elements.
+  - @openreceive/react default UI package.
+  - @openreceive/provider-data.
+  - Next.js demo.
+  - Static HTML + small API demo.
+  - Design-system recipes.
+  - OpenAPI/AsyncAPI codegen for many ecosystems.
+  - Broad provider-data packaging.
   - Ecommerce plugins.
   - Native mobile UI kits.
   - Complex merchant dashboard.
@@ -4437,149 +4434,61 @@ Do not include in v0.1.0:
 First GitHub Issues
 -------------------
 
-Foundation:
+v0.1 issue stack:
 
-  1. repo: initialize monorepo structure, AGENTS.md, CONTRIBUTING.md, issue
-     template, ADR folder, v0.1 scope lock, package ownership map, test command
-     map, and forbidden-without-approval file list
+  1. repo: initialize monorepo structure, MIT LICENSE, AGENTS.md,
+     CONTRIBUTING.md, SECURITY.md, issue template, ADR folder, v0.1 scope lock,
+     package ownership map, test command map, and forbidden-without-approval
+     file list.
   2. docs: write OpenReceive architecture overview with conservative product
-     boundary wording
-  3. docs: write security model
-  4. docs: define docs manifest format for private app import
-  5. docs: add docs build-index tool for manifest/search index
-  6. docs: document public repo/private site content boundary
-  7. adr: add ADR-0001 product boundary
-  8. adr: add ADR-0002 no frontend NWC
-  9. adr: add ADR-0003 invoice/idempotency/storage invariants
-  10. adr: add ADR-0004 amount_msats vs fiat quote contract
-  11. spec: define invoice object and invoice storage lifecycle JSON schemas
-  12. spec: define payment event, rate quote, error, and provider registry v2
-      JSON schemas
-  13. spec: define OpenAPI v1 and AsyncAPI event skeletons
+     boundary wording and no private infrastructure inventory.
+  3. docs: write security model covering no frontend NWC, receive-only NWC
+     secrecy, auth hooks, CSRF/CORS, signed event URLs, lookup authorization,
+     and get_balance server-only use.
+  4. adr: add ADR-0001 product boundary.
+  5. adr: add ADR-0002 no frontend NWC.
+  6. adr: add ADR-0003 invoice/idempotency/storage invariants.
+  7. adr: add ADR-0004 amount_msats vs fiat quote contract.
+  8. spec: define invoice, invoice storage lifecycle, payment event, rate
+     quote, and error JSON schemas.
+  9. vectors: add fiat-to-msat cases, safe-integer boundaries, and
+     amount_msats minimum 1000.
+  10. vectors: add settlement detection cases requiring settled_at or
+      state == "settled", with preimage as corroborating only.
+  11. vectors: add polling cadence, final expiry lookup, grace verification,
+      invoice lifecycle, and idempotency cases.
+  12. nwc: define OpenReceive NWC client interface.
+  13. nwc: implement NWC URI parser/redactor with multiple relays and optional
+      lud16.
+  14. nwc: add getAlby/js-sdk receive-checkout adapter for Node.
+  15. nwc: implement automatic wallet preflight with capability summary.
+  16. nwc: implement make_invoice and lookup_invoice wrappers.
+  17. core: implement static price provider and quote locking.
+  18. core: implement safe poller and settlement detection.
+  19. core: implement minimal storage/idempotency helper.
+  20. express: add route adapter with auth hooks, CSRF/CORS defaults, lookup
+      authorization, SSE invoice events, and signed event URL support.
+  21. browser: add QR, copy invoice, and open-wallet helpers.
+  22. demo: create shared Hello Fruit assets.
+  23. demo: create Express + React Hello Fruit demo.
+  24. test: create manual live-wallet smoke script using OPENRECEIVE_NWC,
+      OPENRECEIVE_WALLET_PROFILE, and expected_capabilities.json.
+  25. ci: validate schemas and vectors, run JS tests, run secret scanning, and
+      smoke the Express demo.
+  26. deploy-docs: document separate demo edge, Caddy DNS-01 via Cloudflare,
+      and self-hosted runner isolation.
 
-Data and codegen:
+Deferred until the reference payment path is green:
 
-  14. data: normalize provider registry JSON
-  15. data: add provider registry linter
-  16. data: add supported currencies list
-  17. data: add price source config
-  18. codegen: generate TypeScript provider data
-  19. codegen: add generated-stale CI check
-
-Live NWC testing and conformance:
-
-  20. testkit: create deterministic mock wallet and Rizful receive-only NWC
-      smoke harness
-  21. vectors: add fiat-to-msat cases and safe-integer boundaries
-  22. vectors: add settlement detection cases
-  23. vectors: add polling cadence, invoice lifecycle, idempotency,
-      description validation, and refresh-replacement cases
-  24. conformance: create runner skeleton
-
-NWC and native backend core:
-
-  25. nwc: define OpenReceive NWC client interface
-  26. nwc: add third-party NWC client maintenance audit template
-  27. nwc: implement NWC connection parser/redactor tests
-      Include multiple relays, optional lud16, info-event bootstrap,
-      NIP-04/NIP-44 negotiation, NIP-47 request/response event shape,
-      expiration tag handling, NIP-47/OpenReceive field mapping, and the
-      metadata size guard.
-  28. nwc: add getAlby/js-sdk receive-checkout adapter for Node
-      Include standalone pay_invoice support but keep it hidden from
-      OpenReceive receive-checkout APIs.
-  29. nwc: implement Rizful NWC smoke adapter for SDK tests
-  30. nwc: implement make_invoice wrapper
-  31. nwc: implement lookup_invoice wrapper
-  32. core: implement safe invoice poller
-  33. core: implement notification-to-lookup handler
-  34. core: implement SSE invoice events for mounted app routes
-      Include monotonic event ids, Last-Event-ID resume, heartbeat comments,
-      Cache-Control: no-store, signed event URL scope/expiry, and browser
-      invoice_id/payment_hash verification.
-  35. core: implement auth/authorization hook interfaces
-  36. core: implement idempotency key helper and refresh replacement behavior
-      Include scoped uniqueness and 409 when the same key is reused with a
-      different request body. Implement refresh as a linked replacement invoice,
-      never in-place.
-
-Pricing:
-
-  37. pricing: implement static mock adapter
-  38. pricing: implement CoinGecko-compatible exchange_rates adapter
-  39. pricing: implement quote locking
-  40. pricing: add decimal math tests
-  41. pricing: add supported-currencies data file for v0.1 list
-  42. pricing: add openreceive.org/exchange_rates mirror config
-  43. pricing: add megalithic.me/exchange_rates fallback config
-  44. pricing: add CoinGecko direct fallback config
-
-JavaScript:
-
-  45. js: create @openreceive/core
-  46. js: create @openreceive/node
-  47. js: create @openreceive/browser
-  48. js: add safe QR generation from invoice/lightning URI
-      Include OpenReceiveQRCode, createLightningUri, createQrSvg, createQrPng,
-      opaque white background, high contrast, 4-module quiet zone, and tests.
-  49. js: create @openreceive/elements web component package
-  50. react: create @openreceive/react hooks, primitives, slots, and default UI
-  51. js: create @openreceive/provider-data
-  52. js: create @openreceive/testkit
-  53. js: add Express route adapter with auth hooks
-  54. js: add Next.js route handler adapter with auth hooks
-
-Demos:
-
-  55. demo: create shared fruit sticker assets
-  56. demo: create Next.js fruit demo
-  57. demo: create Express React fruit demo
-  58. demo: create static HTML + small API demo
-  59. demo: add React design-system recipe and Playwright smoke flow
-
-CI and release:
-
-  60. ci: validate schemas and provider registry
-  61. ci: run conformance vectors
-  62. ci: build demos in Rizful test NWC mode where secrets are available
-  63. ci: add secret scanning
-  64. release: configure release automation and demo rebuild triggers
-
-Demo deployment:
-
-  65. deploy: document Cloudflare -> separate demo node architecture
-      Use one office Ubuntu demo node behind a WireGuard public-IP gateway.
-  66. deploy: create Caddy demo-node routing plan
-  67. deploy: create explicit Cloudflare demo subdomain registry
-  68. deploy: create compose template for server-side demos
-  69. deploy: add GHCR image build for each Tier 1 demo
-  70. deploy: add demo-node deploy script with per-demo locks
-  71. deploy: add smoke-demo script for /healthz and checkout page
-  72. deploy: document Cloudflare DNS records and cache bypass rules
-  73. deploy: document Cloudflare edge TLS and Caddy Let's Encrypt origin TLS
-  74. deploy: add noindex preview deployment config
-  75. deploy: document private openreceive.org boundary
-  76. deploy: ensure demo DNS does not use broad *.openreceive.org wildcard
-  77. deploy: document local/Cloudflare Tunnel preview workflow
-  78. deploy: add deployment manifests, promote-demo, and rollback-by-digest
-
-Secrets:
-
-  79. secrets: add .env.example templates for every demo
-  80. secrets: add demos/deploy/secrets README and .gitignore protections
-  81. secrets: add host secret file layout under /opt/openreceive/secrets
-  82. secrets: make deploy scripts refuse test_nwc/production mode without OPENRECEIVE_NWC
-  83. secrets: add redaction utility for nostr+walletconnect URIs
-  84. secrets: add frontend bundle scan for OPENRECEIVE_NWC and NWC URI strings
-  85. secrets: document receive-only NWC rotation procedure
-  86. secrets: add secret-management docs page
-
-Rails:
-
-  87. rails: add Kamal listener role example, not accessory
-  88. rails: document rbsecp256k1/native build dependencies if needed
-  89. rails: keep spend methods out of checkout APIs
-  90. rails: add idempotent notification handler and since cursor example
+  - Provider registry normalization, linter, wizard, and generated provider
+    packages.
+  - OpenAPI and AsyncAPI contracts/codegen.
+  - Deterministic mock wallet service.
+  - @openreceive/elements, @openreceive/react default UI, design-system
+    recipes, Next.js demo, and static HTML + small API demo.
+  - CoinGecko/live price adapters beyond the static provider.
+  - Rails, Python, PHP, Go, Rust, .NET, JVM, Elixir, Swift/Vapor, and mobile
+    implementation work.
 
 
 Important Design Decisions To Make Early
@@ -4656,36 +4565,32 @@ Working Sequence From Here
 The next implementation work should happen in this order:
 
 1. Create the repo skeleton from the monorepo layout.
-2. Add AGENTS.md.
-3. Add CONTRIBUTING.md, issue template, ADR folder, package ownership map,
-   test command map, and forbidden-without-approval file list.
-4. Add ADR-0001: product boundary.
-5. Add ADR-0002: no frontend NWC.
-6. Add ADR-0003: invoice/idempotency/storage invariants.
-7. Add ADR-0004: amount_msats vs fiat quote contract.
-8. Add the v0.1 scope lock.
-9. Add spec/schemas skeleton.
-10. Move providers-demo.json into spec/data/providers/openreceive-providers.v2.json.
-11. Add provider-registry.schema.json and a validation command.
-12. Add invoice, invoice-storage, payment-event, rate-quote, and error schemas.
-13. Add the first OpenAPI paths for invoices, rates, routes, providers, events,
-    and refresh replacement.
-14. Add test vectors for fiat-to-msats, safe integer limits, description
-    validation, invoice lifecycle, idempotency, refresh replacement, settlement
-    detection, and polling.
-15. Build the deterministic mock wallet.
-16. Build the Rizful receive-only NWC smoke harness.
-17. Define the NWC client interface and Node adapter around getAlby/js-sdk.
-18. Add @openreceive/core, @openreceive/node, and @openreceive/browser.
-19. Add @openreceive/elements and @openreceive/react headless/default UI.
-20. Build the Express + React fruit demo.
-21. Build the Next.js fruit demo.
-22. Build one React design-system recipe, preferably Mantine or Material UI.
-23. Build the static HTML + small API fruit demo.
-24. Add CI conformance.
-25. Build Ruby/Rails around nwc-ruby.
-26. Build nwc-client-py and nwc-client-php.
-27. Then expand to Go, Rust, .NET, JVM, Elixir, Swift/Vapor, and mobile UI.
+2. Add MIT LICENSE, AGENTS.md, CONTRIBUTING.md, SECURITY.md, issue template,
+   ADR folder, package ownership map, test command map, and
+   forbidden-without-approval file list.
+3. Add ADR-0001: product boundary.
+4. Add ADR-0002: no frontend NWC.
+5. Add ADR-0003: invoice/idempotency/storage invariants.
+6. Add ADR-0004: amount_msats vs fiat quote contract.
+7. Add the v0.1 scope lock.
+8. Add invoice, invoice-storage, payment-event, rate-quote, and error schemas.
+9. Add test vectors for fiat-to-msats, amount_msats minimum 1000, safe integer
+    limits, invoice lifecycle, idempotency, settlement detection, and polling.
+10. Add NWC URI parsing and redaction vectors.
+11. Define the NWC client interface.
+12. Add the Node receive-checkout adapter around getAlby/js-sdk.
+13. Add automatic wallet preflight and capability summary.
+14. Implement make_invoice and lookup_invoice wrappers.
+15. Implement the static price provider.
+16. Implement safe polling, expiry verification, and settlement detection.
+17. Add the Express route adapter with auth/CSRF/CORS/lookup authorization.
+18. Add @openreceive/browser QR/copy/open-wallet helpers.
+19. Build the Express + React Hello Fruit demo.
+20. Build the manual live-wallet smoke script with Rizful as the first profile.
+21. Add basic CI: schemas, vectors, JS tests, secret scan, and demo smoke.
+22. Only after the Express path is green, start provider registry, OpenAPI,
+    AsyncAPI, deterministic mock wallet, @openreceive/elements, @openreceive/react,
+    Next.js, static demo, design-system recipes, and non-JS ecosystem work.
 
 
 Acceptance Checklist
@@ -4694,21 +4599,22 @@ Acceptance Checklist
 This plan is complete enough when these statements are true:
 
   - There is one product contract, not one per language.
-  - Provider data is canonical and validated.
+  - Provider data is canonical and validated after the post-v0.1 data phase.
   - Price conversion is canonical and tested.
   - Polling behavior is canonical and tested.
   - Settlement detection is canonical and tested.
   - A normal server app can run the whole flow without an extra OpenReceive
     daemon.
-  - JS packages prove the SDK shape.
+  - The first JS packages prove the SDK shape.
   - Rails proves the framework-native worker/listener shape.
   - Hello Fruit proves the UX.
-  - Rizful test NWC mode exercises the real wallet path for demos and tests.
+  - Live wallet profile mode exercises the real wallet path for demos and
+    tests, with Rizful as the first profile.
   - Production NWC mode is possible without changing app code.
   - The frontend never sees wallet secrets.
   - Pure frontend live checkout is rejected by docs, examples, and tests.
-  - Frontend packages are headless-first and proven with at least one external
-    design-system recipe.
+  - Frontend packages are headless-first; design-system recipes come after the
+    first Express path is green.
   - Framework adapters integrate with app-owned auth and fail closed when
     invoice access authorization is missing in production.
   - Every new SDK has a conformance gate.
@@ -4725,8 +4631,8 @@ OpenReceive should not become a loose pile of payment SDKs.
 It should be:
 
   one spec,
-  one deterministic mock wallet,
-  one Rizful test wallet policy,
+  one live-wallet profile harness,
+  one deterministic mock wallet after the first payment path is green,
   one provider registry,
   one price model,
   one test suite,
@@ -4755,14 +4661,14 @@ Hard rule for v0.1:
     AGENTS.md / CONTRIBUTING.md / ADRs / scope lock
     schemas
     vectors
-    deterministic mock wallet
     NWC interface
-    JS core
     @openreceive/node
+    safe poller
+    Express adapter
     @openreceive/browser
-    @openreceive/react
-    Express/Next demos
-    conformance
+    Express + React demo
+    manual live-wallet smoke
+    basic CI
 
   Through v0.1, use one lead/orchestrator and one coding worker at most. Add
   read-only research/review workers when useful, but do not let multiple
@@ -4798,14 +4704,15 @@ AGENTS.md must include rules like:
   Do not expose NWC secrets to browser, mobile, logs, tests, screenshots, or
   docs.
 
-  Do not add a new SDK or framework adapter unless the spec, vectors, mock
-  wallet, and JS reference implementation already cover the behavior.
+  Do not add a new SDK or framework adapter unless the v0.1 spec, vectors, and
+  Express reference implementation already cover the behavior. After the
+  deterministic mock wallet exists, new SDKs must pass it too.
 
   Do not duplicate provider data, currencies, polling cadence, settlement
   rules, or demo product data.
 
-  If changing a schema, update OpenAPI/test vectors/conformance fixtures in the
-  same PR.
+  If changing a schema, update the relevant test vectors in the same PR. After
+  OpenAPI/AsyncAPI exist, update those contracts too.
 
   If adding invoice creation behavior, include idempotency tests.
 
@@ -4824,7 +4731,7 @@ Early worker model:
     1 coding worker
     2 read-only research/review workers
 
-  After schemas, vectors, mock wallet, and JS reference path are committed:
+  After schemas, vectors, and the Express reference path are committed:
 
     1 lead/orchestrator
     3 implementation workers max
@@ -4846,15 +4753,9 @@ Worker rules:
   - No broad "build OpenReceive" prompts.
   - Contract files need lead ownership until v0.1 is frozen.
 
-Safe parallel work after foundation:
+Safe parallel work after foundation is limited:
 
-  Worker 1: provider registry schema and linter
-  Allowed files:
-    spec/schemas/provider-registry.schema.json
-    spec/data/providers/*
-    tools/validate-data/*
-
-  Worker 2: invoice/payment/rate/error schemas
+  Worker 1: invoice/payment/rate/error schemas
   Allowed files:
     spec/schemas/invoice.schema.json
     spec/schemas/invoice-storage.schema.json
@@ -4862,16 +4763,16 @@ Safe parallel work after foundation:
     spec/schemas/rate-quote.schema.json
     spec/schemas/error.schema.json
 
-  Worker 3: fiat/polling/settlement/idempotency vectors
+  Worker 2: fiat/polling/settlement/idempotency vectors
   Allowed files:
     spec/test-vectors/*
     spec/fixtures/*
 
-  Worker 4: docs/security/architecture draft
+  Worker 3: docs/security/architecture draft
   Allowed files:
     docs/00-what-is-openreceive.md
     docs/10-security.md
-    docs/11-conformance.md
+    docs/11-conformance.md, if created after v0.1
 
 Bad early parallel work:
 
@@ -4888,29 +4789,28 @@ Implementation parallelism starts after the contract is frozen:
 
   Phase C1:
 
-    Worker 1: deterministic mock wallet
-    Worker 2: @openreceive/core types/validation
-    Worker 3: pricing module
-    Worker 4: safe poller and settlement detection
-    Worker 5: reviewer running conformance/checking drift
+    Worker 1: static pricing module
+    Worker 2: safe poller and settlement detection
+    Worker 3: NWC URI parser/redactor
+    Worker 4: reviewer checking drift
 
   Phase C2:
 
     Worker 1: @openreceive/node NWC adapter
     Worker 2: Express routes
-    Worker 3: @openreceive/browser
-    Worker 4: QR helpers
-    Worker 5: docs quickstart
+    Worker 3: @openreceive/browser QR/copy/open-wallet helpers
+    Worker 4: docs quickstart
 
   Phase C3:
 
     Worker 1: Express + React fruit demo
-    Worker 2: Next.js fruit demo
-    Worker 3: static HTML + small API demo
-    Worker 4: Playwright smoke tests
+    Worker 2: manual live-wallet smoke script
+    Worker 3: basic CI and secret scanning
+    Worker 4: Playwright smoke tests, if browser automation is added in v0.1
 
-Do not start Rails, Python, PHP, Go, Rust, mobile, or deployment fleet workers
-until the JS reference path is green.
+Do not start provider registry packaging, OpenAPI/AsyncAPI codegen, React
+default UI, Next.js, Rails, Python, PHP, Go, Rust, mobile, or deployment fleet
+workers until the Express reference path is green.
 
 Language-SDK parallelism:
 
@@ -4947,10 +4847,9 @@ Plan/goal mode:
   Use plan mode for bounded milestones:
 
     Plan Milestone 0 repo foundation.
-    Plan provider registry schema and linter.
     Plan idempotency behavior for invoice creation.
-    Plan the mock wallet conformance API.
-    Plan @openreceive/browser state machine.
+    Plan the safe poller and expiry grace behavior.
+    Plan the Express adapter auth/CORS/CSRF contract.
 
   Do not use plan mode for:
 
@@ -4970,17 +4869,17 @@ Plan/goal mode:
 First work to actually start:
 
   1. Create repo skeleton.
-  2. Add AGENTS.md.
+  2. Add MIT LICENSE, AGENTS.md, CONTRIBUTING.md, SECURITY.md.
   3. Add ADR-0001: product boundary.
   4. Add ADR-0002: no frontend NWC.
   5. Add ADR-0003: invoice/idempotency/storage invariants.
   6. Add ADR-0004: amount_msats vs fiat quote contract.
-  7. Add spec/schemas skeleton.
-  8. Move provider registry into spec/data/providers.
-  9. Add provider registry validation.
-  10. Add fiat-to-msats vectors.
-  11. Add polling vectors.
-  12. Add settlement detection vectors.
+  7. Add invoice/payment/rate/error schemas.
+  8. Add fiat-to-msats vectors.
+  9. Add polling vectors.
+  10. Add settlement detection vectors.
+  11. Add NWC URI redaction vectors.
+  12. Define the NWC client interface.
 
 Only after that should multiple coding workers be allowed, and even then only
 on isolated directories with strict ownership.
