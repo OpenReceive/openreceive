@@ -1,0 +1,29 @@
+{
+  "schema_version": "0.1.0",
+  "product_id": "fruit-sticker-pack",
+  "name": "Hello Fruit Sticker",
+  "amount_msats": 200000,
+  "fiat": {
+    "currency": "USD",
+    "value": "0.10"
+  },
+  "description_template": "Fruit sticker from OpenReceive demo: {fruit}",
+  "fruits": [
+    {
+      "id": "apple",
+      "name": "Apple"
+    },
+    {
+      "id": "banana",
+      "name": "Banana"
+    },
+    {
+      "id": "orange",
+      "name": "Orange"
+    },
+    {
+      "id": "pear",
+      "name": "Pear"
+    }
+  ]
+}

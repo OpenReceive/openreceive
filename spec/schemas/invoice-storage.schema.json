@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spec.openreceive.org/schemas/invoice-storage.v1.json",
+  "title": "OpenReceive Invoice Storage Row",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "invoice_id",
+    "merchant_scope",
+    "idempotency_key",
+    "idempotency_request_hash",
+    "payment_hash",
+    "invoice",
+    "amount_msats",
+    "transaction_state",
+    "workflow_state",
+    "fulfillment_state",
+    "created_at",
+    "expires_at",
+    "metadata"
+  ],
+  "properties": {
+    "invoice_id": {
+      "type": "string",
+      "pattern": "^or_inv_[a-z0-9_]+$"
+    },
+    "merchant_scope": {
+      "type": "string",
+      "minLength": 1
+    },
+    "operation": {
+      "type": "string",
+      "enum": [
+        "invoice.create",
+        "invoice.refresh"
+      ]
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "idempotency_request_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "payment_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "invoice": {
+      "type": "string",
+      "minLength": 1
+    },
+    "amount_msats": {
+      "type": "integer",
+      "minimum": 1000,
+      "maximum": 9007199254740991
+    },
+    "transaction_state": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "settled",
+        "expired",
+        "failed",
+        "accepted"
+      ]
+    },
+    "workflow_state": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "invoice_created",
+        "verifying",
+        "awaiting_fulfillment",
+        "fulfilled",
+        "expiry_pending_verification",
+        "expired_closed",
+        "failed_closed",
+        "cancelled"
+      ]
+    },
+    "fulfillment_state": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "ready",
+        "delivered",
+        "delivery_failed"
+      ]
+    },
+    "created_at": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "expires_at": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "settled_at": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "fulfilled_at": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "refreshed_from_invoice_id": {
+      "type": "string",
+      "pattern": "^or_inv_[a-z0-9_]+$"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "fiat_quote": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
+    }
+  },
+  "x-openreceive-invariants": [
+    "invoice_id is unique",
+    "payment_hash is unique where present",
+    "idempotency_key is unique within merchant_scope + operation + idempotency_key",
+    "same idempotency request hash returns original response",
+    "different idempotency request hash returns 409",
+    "fulfilled_at can be set once",
+    "refresh creates a new invoice row"
+  ]
+}

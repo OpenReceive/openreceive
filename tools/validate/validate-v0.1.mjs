@@ -1,0 +1,223 @@
+#!/usr/bin/env node
+
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import path from "node:path";
+
+const root = process.cwd();
+
+function readJson(relativePath) {
+  const filePath = path.join(root, relativePath);
+  try {
+    return JSON.parse(readFileSync(filePath, "utf8"));
+  } catch (error) {
+    throw new Error(`${relativePath}: ${error.message}`);
+  }
+}
+
+function walkJson(dir) {
+  const files = [];
+  for (const entry of readdirSync(path.join(root, dir))) {
+    const full = path.join(root, dir, entry);
+    const rel = path.relative(root, full);
+    const stat = statSync(full);
+    if (stat.isDirectory()) files.push(...walkJson(rel));
+    if (stat.isFile() && entry.endsWith(".json")) files.push(rel);
+  }
+  return files;
+}
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+function parseDecimal(value) {
+  assert(/^[0-9]+(\.[0-9]+)?$/.test(value), `invalid decimal: ${value}`);
+  const [whole, fraction = ""] = value.split(".");
+  return {
+    integer: BigInt(`${whole}${fraction}`),
+    scale: BigInt(10) ** BigInt(fraction.length)
+  };
+}
+
+function ceilDiv(numerator, denominator) {
+  return (numerator + denominator - BigInt(1)) / denominator;
+}
+
+function quoteFiatToSats(fiatValue, btcFiatPrice) {
+  const fiat = parseDecimal(fiatValue);
+  const price = parseDecimal(btcFiatPrice);
+  const numerator = fiat.integer * price.scale * BigInt(100_000_000);
+  const denominator = price.integer * fiat.scale;
+  return ceilDiv(numerator, denominator);
+}
+
+function validateJsonParsing() {
+  for (const file of [...walkJson("spec"), "docs/manifest.json"]) {
+    readJson(file);
+  }
+}
+
+function validateSchemas() {
+  const schemaFiles = walkJson("spec/schemas");
+  const required = new Set([
+    "spec/schemas/invoice.schema.json",
+    "spec/schemas/invoice-storage.schema.json",
+    "spec/schemas/payment-event.schema.json",
+    "spec/schemas/rate-quote.schema.json",
+    "spec/schemas/error.schema.json"
+  ]);
+
+  for (const file of required) {
+    assert(schemaFiles.includes(file), `missing schema ${file}`);
+  }
+
+  for (const file of schemaFiles) {
+    const schema = readJson(file);
+    assert(schema.$schema, `${file}: missing $schema`);
+    assert(schema.$id, `${file}: missing $id`);
+    assert(schema.type === "object", `${file}: root schema must be object`);
+    assert(schema.additionalProperties === false, `${file}: root must be strict`);
+  }
+
+  const invoice = readJson("spec/schemas/invoice.schema.json");
+  assert(invoice.properties.amount_msats.minimum === 1000, "invoice amount_msats minimum must be 1000");
+  assert(invoice.properties.amount_msats.maximum === 9007199254740991, "invoice amount_msats maximum mismatch");
+
+  const quote = readJson("spec/schemas/rate-quote.schema.json");
+  assert(quote.properties.amount_sats.maximum === 9007199254740, "amount_sats maximum mismatch");
+}
+
+function validateFiatVectors() {
+  const vector = readJson("spec/test-vectors/fiat-to-msats.usd.json");
+  for (const item of vector.cases) {
+    const sats = quoteFiatToSats(item.fiat.value, vector.btc_fiat_price);
+    const msats = sats * BigInt(1000);
+    assert(sats === BigInt(item.expected.amount_sats), `${item.name}: amount_sats mismatch`);
+    assert(msats === BigInt(item.expected.amount_msats), `${item.name}: amount_msats mismatch`);
+    assert(msats >= BigInt(1000), `${item.name}: amount_msats below minimum`);
+  }
+}
+
+function validateAmountBoundaries() {
+  const boundaries = readJson("spec/test-vectors/amount-boundaries.json");
+  assert(boundaries.amount_msats.minimum === 1000, "boundary minimum mismatch");
+  assert(boundaries.amount_msats.maximum === 9007199254740991, "boundary maximum mismatch");
+
+  for (const item of boundaries.cases) {
+    const valid = item.amount_msats >= boundaries.amount_msats.minimum && item.amount_msats <= boundaries.amount_msats.maximum;
+    assert(valid === item.valid, `${item.name}: validity mismatch`);
+  }
+}
+
+function isSettled(result) {
+  return result.settled_at !== undefined || result.state === "settled" || result.transaction_state === "settled";
+}
+
+function validateSettlementVectors() {
+  const vector = readJson("spec/test-vectors/settlement-detection.json");
+  for (const item of vector.cases) {
+    assert(isSettled(item.lookup_invoice) === item.expected.settled, `${item.name}: settlement mismatch`);
+  }
+}
+
+function validateLifecycleVectors() {
+  const vector = readJson("spec/test-vectors/invoice-lifecycle.json");
+  const transactionStates = new Set(vector.transaction_states);
+  const workflowStates = new Set(vector.workflow_states);
+  for (const state of workflowStates) {
+    assert(!transactionStates.has(state), `workflow state overlaps transaction state: ${state}`);
+  }
+  for (const [from, to] of vector.allowed_transitions) {
+    assert(workflowStates.has(from), `unknown workflow state: ${from}`);
+    assert(workflowStates.has(to), `unknown workflow state: ${to}`);
+  }
+}
+
+function validatePollingVectors() {
+  const vector = readJson("spec/test-vectors/polling.backoff.json");
+  let previousMax = -1;
+  for (const band of vector.cadence) {
+    assert(band.elapsed_seconds_min === previousMax + 1, "polling cadence has a gap");
+    assert(band.elapsed_seconds_max >= band.elapsed_seconds_min, "polling cadence band is invalid");
+    assert(band.delay_seconds > 0, "polling delay must be positive");
+    previousMax = band.elapsed_seconds_max;
+  }
+  assert(vector.required_behaviors.includes("perform one final lookup at local expiry"), "missing final expiry lookup behavior");
+}
+
+function validateIdempotencyVectors() {
+  const vector = readJson("spec/test-vectors/idempotency.json");
+  assert(vector.canonical_scope.join("+") === "merchant_scope+operation+idempotency_key", "idempotency scope mismatch");
+  for (const item of vector.cases) {
+    const sameHash = item.first_request_hash === item.second_request_hash;
+    assert((sameHash && item.expected.status === 200) || (!sameHash && item.expected.status === 409), `${item.name}: expected status mismatch`);
+  }
+}
+
+function validateNwcVectors() {
+  const vector = readJson("spec/test-vectors/nwc-uri-parse.json");
+  for (const item of vector.cases) {
+    if (item.expected_error) continue;
+    assert(item.expected.secret_present === true, `${item.name}: expected secret_present`);
+    assert(item.expected.redacted.includes("secret=[REDACTED]"), `${item.name}: redacted secret missing`);
+    assert(!/[?&]secret=[0-9a-fA-F]{64}/.test(item.expected.redacted), `${item.name}: redacted output leaks secret`);
+    assert(item.expected.relays.every((relay) => relay.startsWith("wss://")), `${item.name}: relay must be wss`);
+  }
+}
+
+function validateProviderRegistryReferences() {
+  const registry = readJson("spec/data/providers/openreceive-providers.v2.json");
+  assert(registry.schema_version === "2.0.0", "provider registry schema version mismatch");
+  const providerIds = new Set(Object.keys(registry.providers || {}));
+
+  for (const route of registry.crypto_routes || []) {
+    for (const ref of route.providers || []) {
+      assert(providerIds.has(ref.provider), `crypto route ${route.id} references missing provider ${ref.provider}`);
+    }
+  }
+
+  for (const [railId, rail] of Object.entries(registry.fiat_rails || {})) {
+    for (const [countryCode, refs] of Object.entries(rail.countries || {})) {
+      assert(/^[A-Z]{2}$/.test(countryCode), `fiat rail ${railId} has invalid country code ${countryCode}`);
+      for (const ref of refs) {
+        assert(providerIds.has(ref.provider), `fiat rail ${railId}/${countryCode} references missing provider ${ref.provider}`);
+      }
+    }
+  }
+
+  for (const provider of registry.disqualified_providers || []) {
+    assert(provider.reason, `disqualified provider ${provider.id} missing reason`);
+  }
+}
+
+function validateData() {
+  const currencies = readJson("spec/data/fiat/supported-currencies.json");
+  assert(currencies.currencies.includes("usd"), "supported currencies must include usd");
+  assert(currencies.currencies.includes("eur"), "supported currencies must include eur");
+  assert(currencies.currencies.includes("gbp"), "supported currencies must include gbp");
+
+  const rates = readJson("spec/data/rates/price-sources.json");
+  assert(rates.sources.some((source) => source.id === "static_mock"), "missing static_mock price source");
+}
+
+function main() {
+  validateJsonParsing();
+  validateSchemas();
+  validateFiatVectors();
+  validateAmountBoundaries();
+  validateSettlementVectors();
+  validateLifecycleVectors();
+  validatePollingVectors();
+  validateIdempotencyVectors();
+  validateNwcVectors();
+  validateProviderRegistryReferences();
+  validateData();
+  console.log("v0.1 validation passed.");
+}
+
+try {
+  main();
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
+}

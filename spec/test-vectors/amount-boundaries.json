@@ -1,0 +1,35 @@
+{
+  "schema_version": "0.1.0",
+  "amount_sats": {
+    "minimum": 1,
+    "maximum": 9007199254740
+  },
+  "amount_msats": {
+    "minimum": 1000,
+    "maximum": 9007199254740991
+  },
+  "cases": [
+    {
+      "name": "minimum accepted invoice amount",
+      "amount_msats": 1000,
+      "valid": true
+    },
+    {
+      "name": "sub-sat invoice amount rejected",
+      "amount_msats": 999,
+      "valid": false,
+      "error": "amount_msats must be at least 1000"
+    },
+    {
+      "name": "safe integer ceiling accepted",
+      "amount_msats": 9007199254740991,
+      "valid": true
+    },
+    {
+      "name": "above safe integer ceiling rejected",
+      "amount_msats": 9007199254740992,
+      "valid": false,
+      "error": "amount_msats exceeds JSON safe integer boundary"
+    }
+  ]
+}

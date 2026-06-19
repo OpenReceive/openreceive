@@ -1,0 +1,37 @@
+{
+  "schema_version": "0.1.0",
+  "cases": [
+    {
+      "name": "single relay",
+      "uri": "nostr+walletconnect://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?relay=wss%3A%2F%2Frelay.example.com&secret=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "expected": {
+        "wallet_pubkey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "relays": [
+          "wss://relay.example.com"
+        ],
+        "secret_present": true,
+        "lud16": null,
+        "redacted": "nostr+walletconnect://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?relay=wss%3A%2F%2Frelay.example.com&secret=[REDACTED]"
+      }
+    },
+    {
+      "name": "multiple relays and lud16",
+      "uri": "nostr+walletconnect://cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc?relay=wss%3A%2F%2Fone.example.com&relay=wss%3A%2F%2Ftwo.example.com&secret=dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd&lud16=demo%40example.com",
+      "expected": {
+        "wallet_pubkey": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "relays": [
+          "wss://one.example.com",
+          "wss://two.example.com"
+        ],
+        "secret_present": true,
+        "lud16": "demo@example.com",
+        "redacted": "nostr+walletconnect://cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc?relay=wss%3A%2F%2Fone.example.com&relay=wss%3A%2F%2Ftwo.example.com&secret=[REDACTED]&lud16=demo%40example.com"
+      }
+    },
+    {
+      "name": "missing secret rejected",
+      "uri": "nostr+walletconnect://eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee?relay=wss%3A%2F%2Frelay.example.com",
+      "expected_error": "missing_secret"
+    }
+  ]
+}

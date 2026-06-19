@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spec.openreceive.org/schemas/invoice.v1.json",
+  "title": "OpenReceive Invoice",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "invoice_id",
+    "type",
+    "transaction_state",
+    "workflow_state",
+    "invoice",
+    "payment_hash",
+    "amount_msats",
+    "created_at",
+    "expires_at"
+  ],
+  "properties": {
+    "invoice_id": {
+      "type": "string",
+      "pattern": "^or_inv_[a-z0-9_]+$"
+    },
+    "type": {
+      "const": "incoming"
+    },
+    "transaction_state": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "settled",
+        "expired",
+        "failed",
+        "accepted"
+      ]
+    },
+    "workflow_state": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "invoice_created",
+        "verifying",
+        "awaiting_fulfillment",
+        "fulfilled",
+        "expiry_pending_verification",
+        "expired_closed",
+        "failed_closed",
+        "cancelled"
+      ]
+    },
+    "invoice": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 1024
+    },
+    "description_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "payment_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "amount_msats": {
+      "type": "integer",
+      "minimum": 1000,
+      "maximum": 9007199254740991
+    },
+    "created_at": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "expires_at": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "settled_at": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "preimage_present": {
+      "type": "boolean"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "fiat_quote": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "currency",
+        "value",
+        "btc_fiat_price",
+        "source",
+        "as_of",
+        "expires_at"
+      ],
+      "properties": {
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "value": {
+          "type": "string",
+          "pattern": "^[0-9]+(\\.[0-9]+)?$"
+        },
+        "btc_fiat_price": {
+          "type": "string",
+          "pattern": "^[0-9]+(\\.[0-9]+)?$"
+        },
+        "source": {
+          "type": "string"
+        },
+        "as_of": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expires_at": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "checkout": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "events_url": {
+          "type": "string",
+          "minLength": 1
+        },
+        "routes_url": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "fulfillment": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "state"
+      ],
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "ready",
+            "delivered",
+            "delivery_failed"
+          ]
+        },
+        "url": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "required": [
+        "description"
+      ],
+      "not": {
+        "required": [
+          "description_hash"
+        ]
+      }
+    },
+    {
+      "required": [
+        "description_hash"
+      ],
+      "not": {
+        "required": [
+          "description"
+        ]
+      }
+    },
+    {
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "description"
+            ]
+          },
+          {
+            "required": [
+              "description_hash"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

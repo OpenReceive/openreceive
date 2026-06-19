@@ -36,3 +36,12 @@ demos/deploy/**/wg*.conf
 /private/*
 !/private/.keep
 private_private_infra_details.txt
+
+# Tooling output.
+node_modules/
+coverage/
+dist/
+.turbo/
+.vite/
+.cache/
+*.tsbuildinfo

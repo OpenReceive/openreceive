@@ -1,0 +1,77 @@
+{
+  "schema_version": "0.1.0",
+  "transaction_states": [
+    "pending",
+    "settled",
+    "expired",
+    "failed",
+    "accepted"
+  ],
+  "workflow_states": [
+    "draft",
+    "invoice_created",
+    "verifying",
+    "awaiting_fulfillment",
+    "fulfilled",
+    "expiry_pending_verification",
+    "expired_closed",
+    "failed_closed",
+    "cancelled"
+  ],
+  "allowed_transitions": [
+    [
+      "draft",
+      "invoice_created"
+    ],
+    [
+      "invoice_created",
+      "verifying"
+    ],
+    [
+      "verifying",
+      "invoice_created"
+    ],
+    [
+      "verifying",
+      "awaiting_fulfillment"
+    ],
+    [
+      "awaiting_fulfillment",
+      "fulfilled"
+    ],
+    [
+      "invoice_created",
+      "expiry_pending_verification"
+    ],
+    [
+      "verifying",
+      "expiry_pending_verification"
+    ],
+    [
+      "expiry_pending_verification",
+      "awaiting_fulfillment"
+    ],
+    [
+      "expiry_pending_verification",
+      "expired_closed"
+    ],
+    [
+      "invoice_created",
+      "failed_closed"
+    ],
+    [
+      "verifying",
+      "failed_closed"
+    ],
+    [
+      "invoice_created",
+      "cancelled"
+    ]
+  ],
+  "invariants": [
+    "workflow_state never stores pending, settled, expired, failed, or accepted",
+    "transaction_state never stores invoice_created, verifying, awaiting_fulfillment, fulfilled, expiry_pending_verification, expired_closed, failed_closed, or cancelled",
+    "frontend state never fulfills a product",
+    "invoice.settled events replay safely"
+  ]
+}

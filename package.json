@@ -1,0 +1,21 @@
+{
+  "name": "openreceive",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenReceive v0.1 monorepo foundation",
+  "license": "MIT",
+  "type": "module",
+  "workspaces": [
+    "packages/js/*"
+  ],
+  "scripts": {
+    "validate": "node tools/validate/validate-v0.1.mjs",
+    "scan:secrets": "node tools/validate/scan-secrets.mjs",
+    "test": "npm run validate && npm run scan:secrets",
+    "test:vectors": "node tools/validate/validate-v0.1.mjs --vectors",
+    "test:live:nwc": "node tools/live-nwc-test/index.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

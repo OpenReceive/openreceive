@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spec.openreceive.org/schemas/rate-quote.v1.json",
+  "title": "OpenReceive Rate Quote",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fiat",
+    "btc_fiat_price",
+    "amount_sats",
+    "amount_msats",
+    "source",
+    "as_of",
+    "expires_at"
+  ],
+  "properties": {
+    "fiat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "currency",
+        "value"
+      ],
+      "properties": {
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "value": {
+          "type": "string",
+          "pattern": "^[0-9]+(\\.[0-9]+)?$"
+        }
+      }
+    },
+    "btc_fiat_price": {
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)?$"
+    },
+    "amount_sats": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740
+    },
+    "amount_msats": {
+      "type": "integer",
+      "minimum": 1000,
+      "maximum": 9007199254740991
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "static_mock",
+        "openreceive_mirror",
+        "megalithic_mirror",
+        "coingecko_direct"
+      ]
+    },
+    "as_of": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "expires_at": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

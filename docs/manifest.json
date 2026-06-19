@@ -1,0 +1,27 @@
+{
+  "version": "0.1.0",
+  "generated_at": "2026-06-19T00:00:00Z",
+  "docs": [
+    {
+      "slug": "what-is-openreceive",
+      "title": "What Is OpenReceive",
+      "source_path": "docs/00-what-is-openreceive.md",
+      "category": "architecture",
+      "public": true
+    },
+    {
+      "slug": "security",
+      "title": "Security",
+      "source_path": "docs/10-security.md",
+      "category": "security",
+      "public": true
+    },
+    {
+      "slug": "nwc-client-strategy",
+      "title": "NWC Client Strategy",
+      "source_path": "docs/07-nwc-client-strategy.md",
+      "category": "architecture",
+      "public": true
+    }
+  ]
+}

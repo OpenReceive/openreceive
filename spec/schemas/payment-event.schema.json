@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spec.openreceive.org/schemas/payment-event.v1.json",
+  "title": "OpenReceive Payment Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "event",
+    "data"
+  ],
+  "properties": {
+    "id": {
+      "type": [
+        "string",
+        "integer"
+      ]
+    },
+    "event": {
+      "type": "string",
+      "enum": [
+        "invoice.created",
+        "invoice.verifying",
+        "invoice.settled",
+        "invoice.expired",
+        "invoice.failed",
+        "invoice.fulfilled",
+        "invoice.cancelled"
+      ]
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "invoice_id",
+        "type",
+        "transaction_state",
+        "workflow_state"
+      ],
+      "properties": {
+        "invoice_id": {
+          "type": "string",
+          "pattern": "^or_inv_[a-z0-9_]+$"
+        },
+        "type": {
+          "const": "incoming"
+        },
+        "transaction_state": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "settled",
+            "expired",
+            "failed",
+            "accepted"
+          ]
+        },
+        "workflow_state": {
+          "type": "string",
+          "enum": [
+            "draft",
+            "invoice_created",
+            "verifying",
+            "awaiting_fulfillment",
+            "fulfilled",
+            "expiry_pending_verification",
+            "expired_closed",
+            "failed_closed",
+            "cancelled"
+          ]
+        },
+        "payment_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$"
+        },
+        "amount_msats": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 9007199254740991
+        },
+        "settled_at": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

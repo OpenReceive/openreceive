@@ -1,0 +1,48 @@
+{
+  "schema_version": "0.1.0",
+  "rule": "settled_at present or state == settled; preimage alone is not final proof",
+  "cases": [
+    {
+      "name": "settled by state",
+      "lookup_invoice": {
+        "state": "settled",
+        "payment_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "settled": true
+      }
+    },
+    {
+      "name": "settled by settled_at",
+      "lookup_invoice": {
+        "state": "pending",
+        "settled_at": 1781740990,
+        "payment_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "expected": {
+        "settled": true
+      }
+    },
+    {
+      "name": "preimage alone is not settled",
+      "lookup_invoice": {
+        "state": "pending",
+        "preimage": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "payment_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      },
+      "expected": {
+        "settled": false
+      }
+    },
+    {
+      "name": "expired is not settled",
+      "lookup_invoice": {
+        "state": "expired",
+        "payment_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "expected": {
+        "settled": false
+      }
+    }
+  ]
+}

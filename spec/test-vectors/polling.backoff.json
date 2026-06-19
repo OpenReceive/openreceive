@@ -1,0 +1,56 @@
+{
+  "schema_version": "0.1.0",
+  "created_at": 1000,
+  "expires_at": 1600,
+  "cadence": [
+    {
+      "elapsed_seconds_min": 0,
+      "elapsed_seconds_max": 14,
+      "delay_seconds": 2
+    },
+    {
+      "elapsed_seconds_min": 15,
+      "elapsed_seconds_max": 59,
+      "delay_seconds": 5
+    },
+    {
+      "elapsed_seconds_min": 60,
+      "elapsed_seconds_max": 179,
+      "delay_seconds": 10
+    },
+    {
+      "elapsed_seconds_min": 180,
+      "elapsed_seconds_max": 599,
+      "delay_seconds": 20
+    }
+  ],
+  "required_behaviors": [
+    "no immediate post-create lookup unless a notification arrives",
+    "perform one final lookup at local expiry",
+    "mark expiry_pending_verification when wallet truth is inconclusive",
+    "perform bounded grace lookups after local expiry",
+    "publish invoice.expired only after wallet expiry or exhausted grace policy"
+  ],
+  "examples": [
+    {
+      "now": 1000,
+      "next_lookup_at": 1002
+    },
+    {
+      "now": 1015,
+      "next_delay_seconds": 5
+    },
+    {
+      "now": 1060,
+      "next_delay_seconds": 10
+    },
+    {
+      "now": 1180,
+      "next_delay_seconds": 20
+    },
+    {
+      "now": 1600,
+      "behavior": "final_lookup"
+    }
+  ]
+}

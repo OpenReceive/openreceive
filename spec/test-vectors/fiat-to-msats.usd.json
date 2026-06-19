@@ -1,0 +1,52 @@
+{
+  "schema_version": "0.1.0",
+  "algorithm": "ceil_to_whole_sat",
+  "source": "static_mock",
+  "btc_fiat_price": "50000.00",
+  "cases": [
+    {
+      "name": "ten cents usd",
+      "fiat": {
+        "currency": "USD",
+        "value": "0.10"
+      },
+      "expected": {
+        "amount_sats": 200,
+        "amount_msats": 200000
+      }
+    },
+    {
+      "name": "one cent usd",
+      "fiat": {
+        "currency": "USD",
+        "value": "0.01"
+      },
+      "expected": {
+        "amount_sats": 20,
+        "amount_msats": 20000
+      }
+    },
+    {
+      "name": "round up to minimum sat",
+      "fiat": {
+        "currency": "USD",
+        "value": "0.000001"
+      },
+      "expected": {
+        "amount_sats": 1,
+        "amount_msats": 1000
+      }
+    },
+    {
+      "name": "decimal exactness without binary float",
+      "fiat": {
+        "currency": "USD",
+        "value": "1.23"
+      },
+      "expected": {
+        "amount_sats": 2460,
+        "amount_msats": 2460000
+      }
+    }
+  ]
+}
