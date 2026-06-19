@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "peerDependencies": {
+    "qrcode": "*"
+  },
+  "peerDependenciesMeta": {
+    "qrcode": {
+      "optional": true
+    }
+  },
   "exports": {
     ".": "./src/index.ts"
   }
