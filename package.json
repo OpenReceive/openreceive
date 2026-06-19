@@ -10,13 +10,14 @@
     "examples/hello-fruit/server/*"
   ],
   "scripts": {
+    "build:docs": "node tools/docs/build-index.mjs",
     "build:demo": "npm run build -w @openreceive/example-node-express-react",
     "typecheck": "tsc --noEmit",
     "test:js": "node --test tests/v0.1/*.test.mjs",
     "validate": "node tools/validate/validate-v0.1.mjs",
     "scan:secrets": "node tools/validate/scan-secrets.mjs",
     "test": "npm run validate && npm run scan:secrets",
-    "test:ci": "npm test && npm run typecheck && npm run test:js && npm run build:demo && npm run test:live:nwc",
+    "test:ci": "npm test && npm run typecheck && npm run test:js && npm run build:demo && npm run build:docs && npm run test:live:nwc",
     "test:vectors": "node tools/validate/validate-v0.1.mjs --vectors",
     "test:live:nwc": "node tools/live-nwc-test/index.mjs"
   },
