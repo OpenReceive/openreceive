@@ -10,6 +10,13 @@
       "public": true
     },
     {
+      "slug": "quickstart-node",
+      "title": "Node And Express Quickstart",
+      "source_path": "docs/01-quickstart-node.md",
+      "category": "quickstart",
+      "public": true
+    },
+    {
       "slug": "security",
       "title": "Security",
       "source_path": "docs/10-security.md",
@@ -21,6 +28,13 @@
       "title": "NWC Client Strategy",
       "source_path": "docs/07-nwc-client-strategy.md",
       "category": "architecture",
+      "public": true
+    },
+    {
+      "slug": "framework-auth",
+      "title": "Framework Auth And Browser Security",
+      "source_path": "docs/15-framework-auth.md",
+      "category": "security",
       "public": true
     }
   ]
