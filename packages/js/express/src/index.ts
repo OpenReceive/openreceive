@@ -544,7 +544,7 @@ function wrapHandler(
   handler: (req: ExpressLikeRequest, res: ExpressLikeResponse) => Promise<unknown>
 ): ExpressLikeHandler {
   return (req, res, next) => {
-    handler(req, res).catch((error: unknown) => {
+    return handler(req, res).catch((error: unknown) => {
       if (isHttpError(error)) {
         res.status(error.status).json({
           code: error.code,
