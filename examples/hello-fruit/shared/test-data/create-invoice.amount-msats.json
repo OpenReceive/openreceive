@@ -1,0 +1,10 @@
+{
+  "amount_msats": 200000,
+  "description": "Fruit sticker from OpenReceive demo: banana",
+  "expiry": 600,
+  "metadata": {
+    "order_id": "order_456",
+    "product_id": "fruit-sticker-pack",
+    "fruit": "banana"
+  }
+}

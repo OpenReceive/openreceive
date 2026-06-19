@@ -1,0 +1,26 @@
+{
+  "schema_version": "0.1.0",
+  "product_id": "fruit-sticker-pack",
+  "fruits": [
+    {
+      "id": "apple",
+      "name": "Apple",
+      "sticker": "stickers/apple.svg"
+    },
+    {
+      "id": "banana",
+      "name": "Banana",
+      "sticker": "stickers/banana.svg"
+    },
+    {
+      "id": "orange",
+      "name": "Orange",
+      "sticker": "stickers/orange.svg"
+    },
+    {
+      "id": "pear",
+      "name": "Pear",
+      "sticker": "stickers/pear.svg"
+    }
+  ]
+}

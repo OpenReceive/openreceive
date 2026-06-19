@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Banana sticker</title>
+  <desc id="desc">A yellow banana sticker for the OpenReceive Hello Fruit demo.</desc>
+  <rect width="256" height="256" rx="32" fill="#f8fafc"/>
+  <path d="M41 100c29 69 109 94 176 26-31 66-116 98-184 9-7-10-1-31 8-35Z" fill="#facc15"/>
+  <path d="M49 112c50 52 111 56 162 15-33 54-109 75-169 3-4-5 1-14 7-18Z" fill="#fde047"/>
+  <path d="M37 97c11-9 18-7 25 6-10 3-17 10-22 20-8-8-10-17-3-26Z" fill="#854d0e"/>
+  <path d="M211 126c10-8 15-9 24-4-3 14-12 22-27 26 4-8 5-15 3-22Z" fill="#854d0e"/>
+</svg>

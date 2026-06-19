@@ -1,0 +1,16 @@
+{
+  "schema_version": "0.1.0",
+  "product_id": "fruit-sticker-pack",
+  "name": "Hello Fruit Sticker",
+  "description": "A tiny digital fruit sticker unlocked after backend-verified Lightning settlement.",
+  "amount_msats": 200000,
+  "fiat": {
+    "currency": "USD",
+    "value": "0.10"
+  },
+  "invoice_expiry_seconds": 600,
+  "fulfillment": {
+    "type": "digital_file",
+    "asset_path_template": "stickers/{fruit}.svg"
+  }
+}

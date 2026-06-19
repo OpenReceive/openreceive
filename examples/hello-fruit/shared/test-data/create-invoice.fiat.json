@@ -1,0 +1,13 @@
+{
+  "fiat": {
+    "currency": "USD",
+    "value": "0.10"
+  },
+  "description": "Fruit sticker from OpenReceive demo: banana",
+  "expiry": 600,
+  "metadata": {
+    "order_id": "order_456",
+    "product_id": "fruit-sticker-pack",
+    "fruit": "banana"
+  }
+}

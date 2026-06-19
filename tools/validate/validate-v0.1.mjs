@@ -52,7 +52,7 @@ function quoteFiatToSats(fiatValue, btcFiatPrice) {
 }
 
 function validateJsonParsing() {
-  for (const file of [...walkJson("spec"), "docs/manifest.json"]) {
+  for (const file of [...walkJson("spec"), ...walkJson("examples"), "docs/manifest.json"]) {
     readJson(file);
   }
 }
