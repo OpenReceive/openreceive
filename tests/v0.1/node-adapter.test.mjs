@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   ReceiveCheckoutValidationError,
-  createAlbyNwcReceiveClient
+  createAlbyNwcReceiveClient,
+  startPaymentNotificationListener
 } from "../../packages/js/node/src/index.ts";
 
 const NWC_URI =
@@ -129,3 +130,97 @@ test("receive checkout wrapper does not expose payInvoice", () => {
 
   assert.equal("payInvoice" in client, false);
 });
+
+test("payment notification listener dedupes and verifies settlement with lookup", async () => {
+  const client = new FakeNotificationClient();
+  const settled = [];
+  const listener = await startPaymentNotificationListener({
+    client,
+    onSettledInvoice: (event) => settled.push(event)
+  });
+
+  await client.emit({
+    payment_hash: "d".repeat(64),
+    amount_msats: 200000n,
+    settled_at: 1300
+  });
+  await client.emit({
+    payment_hash: "d".repeat(64),
+    amount_msats: 200000n,
+    settled_at: 1300
+  });
+
+  assert.equal(client.lookupCalls, 1);
+  assert.equal(settled.length, 1);
+  assert.equal(settled[0].lookup.state, "settled");
+  assert.equal(listener.seenPaymentHashes.has("d".repeat(64)), true);
+
+  await listener.stop();
+  assert.equal(client.unsubscribed, true);
+});
+
+test("payment notification listener does not fulfill unsettled lookup results", async () => {
+  const client = new FakeNotificationClient();
+  client.lookupState = "pending";
+  const settled = [];
+  const unsettled = [];
+  await startPaymentNotificationListener({
+    client,
+    onSettledInvoice: (event) => settled.push(event),
+    onUnsettledNotification: (event) => unsettled.push(event)
+  });
+
+  await client.emit({
+    payment_hash: "c".repeat(64)
+  });
+
+  assert.equal(settled.length, 0);
+  assert.equal(unsettled.length, 1);
+  assert.equal(unsettled[0].lookup.state, "pending");
+});
+
+class FakeNotificationClient {
+  handler = undefined;
+  lookupCalls = 0;
+  lookupState = "settled";
+  unsubscribed = false;
+
+  async preflight() {
+    return {
+      walletPubkey: "f".repeat(64),
+      relays: ["wss://relay.example.com"],
+      methods: ["make_invoice", "lookup_invoice"],
+      notifications: ["payment_received"],
+      encryption: "nip04",
+      spendCapabilityAdvertised: false,
+      receiveCheckoutReady: true,
+      warnings: []
+    };
+  }
+
+  async makeInvoice() {
+    throw new Error("not needed");
+  }
+
+  async lookupInvoice(request) {
+    this.lookupCalls += 1;
+    return {
+      invoice: "lnbc-fake",
+      payment_hash: request.payment_hash,
+      amount_msats: 200000n,
+      state: this.lookupState,
+      settled_at: this.lookupState === "settled" ? 1300 : undefined
+    };
+  }
+
+  async subscribeToPaymentReceived(handler) {
+    this.handler = handler;
+    return () => {
+      this.unsubscribed = true;
+    };
+  }
+
+  async emit(notification) {
+    await this.handler(notification);
+  }
+}

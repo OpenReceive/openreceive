@@ -73,3 +73,13 @@ or payment hash, and explicitly mark them settled, expired, or failed.
 The testkit is not a daemon and does not emulate Nostr relay behavior. It is a
 local conformance helper for code paths that already depend on the
 `OpenReceiveReceiveNwcClient` interface.
+
+## Notification Listeners
+
+`startPaymentNotificationListener` in `@openreceive/node` is a small helper for
+long-running backend workers. It subscribes to `payment_received`, dedupes by
+`payment_hash`, performs `lookupInvoice`, and calls the settled handler only
+when backend lookup confirms settlement.
+
+Notifications are at-least-once hints. They wake lookup quickly, but they do
+not replace polling and do not fulfill products by themselves.
