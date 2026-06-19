@@ -107,7 +107,29 @@ export class InvoiceNotFoundError extends Error {
 export class InMemoryInvoiceStore {
   #byInvoiceId = new Map<string, InvoiceStorageRow>();
   #byPaymentHash = new Map<string, string>();
+  #byBolt11Invoice = new Map<string, string>();
   #byIdempotencyScope = new Map<string, string>();
+
+  checkIdempotency(input: {
+    scope: OpenReceiveIdempotencyScope;
+    idempotency_request_hash: string;
+  }): InvoiceCreateStorageResult | undefined {
+    const existingInvoiceId = this.#byIdempotencyScope.get(
+      idempotencyScopeKey(input.scope)
+    );
+
+    if (existingInvoiceId === undefined) return undefined;
+
+    const existing = this.requireStoredInvoice(existingInvoiceId);
+    if (existing.idempotency_request_hash !== input.idempotency_request_hash) {
+      throw new IdempotencyConflictError(input.scope);
+    }
+
+    return {
+      status: "replayed",
+      row: cloneInvoiceStorageRow(existing)
+    };
+  }
 
   createInvoice(row: InvoiceStorageRow): InvoiceCreateStorageResult {
     validateInvoiceStorageRow(row);
@@ -135,9 +157,14 @@ export class InMemoryInvoiceStore {
       throw new InvoiceStorageConflictError("payment_hash must be unique");
     }
 
+    if (this.#byBolt11Invoice.has(row.invoice)) {
+      throw new InvoiceStorageConflictError("invoice must be unique");
+    }
+
     const stored = cloneInvoiceStorageRow(row);
     this.#byInvoiceId.set(stored.invoice_id, stored);
     this.#byPaymentHash.set(stored.payment_hash, stored.invoice_id);
+    this.#byBolt11Invoice.set(stored.invoice, stored.invoice_id);
     this.#byIdempotencyScope.set(scopeKey, stored.invoice_id);
 
     return {
@@ -153,6 +180,11 @@ export class InMemoryInvoiceStore {
 
   getInvoiceByPaymentHash(paymentHash: string): InvoiceStorageRow | undefined {
     const invoiceId = this.#byPaymentHash.get(paymentHash);
+    return invoiceId === undefined ? undefined : this.getInvoice(invoiceId);
+  }
+
+  getInvoiceByBolt11Invoice(invoice: string): InvoiceStorageRow | undefined {
+    const invoiceId = this.#byBolt11Invoice.get(invoice);
     return invoiceId === undefined ? undefined : this.getInvoice(invoiceId);
   }
 

@@ -1,0 +1,21 @@
+{
+  "name": "@openreceive/express",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@openreceive/core": "workspace:*",
+    "@openreceive/node": "workspace:*"
+  },
+  "peerDependencies": {
+    "express": "*"
+  },
+  "peerDependenciesMeta": {
+    "express": {
+      "optional": true
+    }
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}
