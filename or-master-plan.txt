@@ -2456,7 +2456,7 @@ Every hosted demo should expose:
 
 SEO rules:
 
-  - Page title format: "OpenReceive {Stack} Demo - Lightning Checkout".
+  - Page title format: "OpenReceive {Stack} Demo".
   - H1 format: "OpenReceive {Stack} Demo".
   - The canonical URL must be the production subdomain.
   - Each demo page should link to source, docs, and the demo gallery.
@@ -2523,10 +2523,10 @@ Current production edge:
 Preferred starting choice:
 
   Start with one high-RAM office Ubuntu demo node behind a stable WireGuard
-  public-IP gateway. Do not add a demo Load Balancer yet. Put Cloudflare in
-  front, point explicit demo subdomains at the WireGuard gateway IP or CNAME,
-  forward only HTTP/HTTPS to the office demo node, and run one Caddy reverse
-  proxy plus only the stable demo containers worth keeping online.
+  public-IP gateway. Put Cloudflare in front, point explicit demo subdomains at
+  the WireGuard gateway IP or CNAME, forward only HTTP/HTTPS to the office demo
+  node, and run one Caddy reverse proxy plus only the stable demo containers
+  worth keeping online.
 
   Public internet
         |
@@ -2575,8 +2575,7 @@ Office Ubuntu demo node:
   route arbitrary inbound traffic into the office LAN.
 
   If the office node loses power, internet, or the WireGuard path, public demos
-  may go down. That is acceptable for demos, but the demo gallery should fail
-  gracefully and avoid promising production-grade uptime.
+  may go down. unlikiely becuase we have UPSs and bakcup power and multipl einternet connectsion.
 
 Caddy ownership and routing:
 
@@ -2589,7 +2588,6 @@ Caddy ownership and routing:
   does not require assigning and tracking host ports.
 
     demo-nodejs-whatever.openreceive.org {
-      tls /opt/openreceive/certs/origin.pem /opt/openreceive/certs/origin-key.pem
       reverse_proxy demo-nodejs-whatever:3000
     }
 
@@ -2644,7 +2642,6 @@ Example Caddy compose:
         volumes:
           - ./Caddyfile:/etc/caddy/Caddyfile:ro
           - ./sites:/etc/caddy/sites:ro
-          - /opt/openreceive/certs:/opt/openreceive/certs:ro
           - caddy_data:/data
           - caddy_config:/config
         restart: unless-stopped
@@ -2730,17 +2727,16 @@ TLS plan:
   enabled for stable public demo subdomains unless a specific demo needs DNS
   only for debugging.
 
-  Origin TLS for demos belongs on Caddy on the office Ubuntu demo node. If
-  Cloudflare SSL mode is Full Strict, Caddy must present a certificate that
-  covers each demo hostname, or a scoped wildcard such as *.demo.openreceive.org
-  if that namespace is introduced. Prefer a Cloudflare Origin Certificate on
-  Caddy for the office-node setup; do not route demos through the private
-  production edge just to reuse certificates.
+  Origin TLS for demos belongs on Caddy on the office Ubuntu demo node. Use
+  Caddy-managed Let's Encrypt certificates for demo hostnames by default. This
+  works with Cloudflare Full Strict because Full Strict accepts a valid public
+  CA certificate such as Let's Encrypt; a Cloudflare Origin Certificate is not
+  required for the default demo setup.
 
-  Do not make Hetzner-managed Let's Encrypt the default demo TLS plan while
-  Cloudflare already owns public DNS/proxying. Caddy ACME remains useful only
-  for DNS-only origins, local lab environments, or a future demo edge not
-  fronted by Cloudflare.
+  Keep the Cloudflare demo records proxied so browsers see Cloudflare's public
+  edge certificate and Cloudflare connects onward to Caddy. Caddy's certificate
+  is for the Cloudflare-to-origin leg. Manage Cloudflare DNS records manually in
+  the Cloudflare dashboard for v0.1.
 
   Cloudflare cache and realtime rules:
 
@@ -2753,90 +2749,7 @@ TLS plan:
 
     Keep Cloudflare for public DNS/TLS edge, but run public demos on a separate
     demo node from the start. Add explicit Cloudflare demo subdomain records and
-    demo-node origin routes. Revisit a demo Load Balancer only if the single
-    demo node becomes insufficient.
-
-Scaling beyond one demo node:
-
-  When one demo box is not enough, either resize the office/cloud demo node,
-  add a second demo node, or add a separate Hetzner Load Balancer in front of
-  multiple demo nodes. Do not use the current private-app Load Balancer as the
-  demo edge. Demo deploy churn must not disturb the private app.
-
-  If using Hetzner for multi-node scale, Hetzner Load Balancers distribute
-  traffic across target servers and support public and private target IPs. Put
-  demo nodes on a Hetzner private Network so the demo load balancer can reach
-  them without exposing every internal service publicly.
-
-  Public internet
-        |
-        v
-  Hetzner demo Load Balancer
-        |
-        v
-  Hetzner demo private Network
-        |
-        +-- demo-node-1: Caddy + demo containers
-        +-- demo-node-2: Caddy + demo containers
-        +-- demo-node-3: Caddy + demo containers
-
-  Keep host ports limited to 80/443 publicly. Use Hetzner Firewalls to restrict
-  inbound traffic and apply rules by labels where useful. Use private networks
-  for node-to-node or load-balancer-to-node traffic.
-
-Scaling stages:
-
-  Stage 0: local and tunnel previews
-    Run the full demo matrix on a local workstation when exploring heavy stacks
-    or taking screenshots. Use mock mode, noindex, and Cloudflare Tunnel or
-    VPN-only access under preview.openreceive.org. This is cheap and useful for
-    development, but it is not the canonical public demo host.
-
-  Stage 1: separate demo node
-    Use one separate low-cost demo node for stable Tier 1 public demos behind
-    Cloudflare. This can be the isolated office Ubuntu server or a small cloud
-    VPS. Run Caddy on that node, deploy demo containers with Docker Compose over
-    SSH, and keep mock mode as the default. Live mode is opt-in for one or two
-    carefully monitored demos.
-
-  Stage 2: one node plus external managed services
-    Keep demos on the demo node but move shared data that matters to managed
-    Postgres/Redis or a dedicated database container if any demo needs durable
-    state. Most mock demos should stay stateless.
-
-  Stage 2b: larger or second demo node
-    Resize the demo node or add a second demo node if memory pressure, deploy
-    churn, tunnel reliability, or container count becomes annoying. This is
-    cheaper and simpler than adding a new load balancer.
-
-  Stage 3: multiple nodes behind load balancer
-    Add a separate Hetzner demo Load Balancer only after one demo node is not
-    enough. Use a private Network, Firewalls, and two or more demo nodes. Run
-    stateless demos on any node. Pin live-wallet demos to one node unless their
-    state is externalized.
-
-  Stage 4: orchestrator if needed
-    Only move to Nomad, Kubernetes, or Docker Swarm after Docker Compose
-    deployment becomes operationally painful. Do not start there.
-
-Resource policy:
-
-  Many demos are intentionally low traffic but can be memory-hungry because they
-  exercise different language runtimes. Do not run every Tier 1, Tier 2, mobile,
-  and recipe demo permanently on the demo node.
-
-  - Always run demos.openreceive.org, express-demo, nextjs-demo, and static-demo.
-  - Add Rails/FastAPI/Django/Laravel demos as stable public demos when they are
-    polished and measured.
-  - Keep Java, .NET, Phoenix, mobile API, and long-tail framework demos stopped,
-    local-only, or preview-only until they are worth a stable subdomain.
-  - Set per-container memory limits and health checks in every compose file.
-  - Prefer mock mode for public demos; live-wallet mode should be rare.
-  - Review demo node memory before enabling each additional stable demo.
-  - Keep app-virginia out of the normal demo path because it hosts critical
-    production apps.
-  - Never let demos compete with the private app for proxy routing, memory, CPU,
-    deploy locks, or operator attention.
+    demo-node origin routes.
 
 Deployment workflow:
 
@@ -2876,7 +2789,7 @@ Deployment workflow:
       Caddy, run smoke tests, and roll back if needed.
 
   Do not give untrusted pull requests access to the office self-hosted runner,
-  WireGuard keys, deploy SSH keys, NWC secrets, or Cloudflare write tokens.
+  WireGuard keys, deploy SSH keys, or NWC secrets.
   Deployment workflows must be restricted to protected branches, tags,
   workflow_dispatch, or a protected GitHub environment.
 
@@ -3001,16 +2914,12 @@ Secret variable convention:
   OPENRECEIVE_NWC=nostr+walletconnect://...
   OPENRECEIVE_API_KEY=...
   OPENRECEIVE_WEBHOOK_SECRET=...
-  CLOUDFLARE_API_TOKEN=...
-  CLOUDFLARE_ORIGIN_CERT_PATH=/opt/openreceive/certs/origin.pem
-  CLOUDFLARE_ORIGIN_KEY_PATH=/opt/openreceive/certs/origin-key.pem
-  HETZNER_API_TOKEN=...       # only if provisioning Hetzner infra from CI
   GHCR_READ_TOKEN=...
 
 Secrets management:
 
   The understandable default is committed templates plus gitignored secret
-  files. The scalable upgrade path is an encrypted secret store later, without
+  files. The upgrade path is an encrypted secret store later, without
   changing app code.
 
   Commit:
@@ -3032,14 +2941,14 @@ Secrets management:
     demos/deploy/.runtime/*
     demos/deploy/.state/*
     any file containing OPENRECEIVE_NWC
-    any file containing a Cloudflare, Hetzner, or GHCR token
+    any file containing a GHCR token
     any file containing deploy SSH keys
 
   Required .gitignore protections:
 
     - Ignore demos/deploy/secrets/.
     - Ignore all demos/deploy/**/*.env except *.env.example.
-    - Ignore local Cloudflare origin cert/key copies under demos/deploy/certs/.
+    - Ignore optional local TLS cert/key copies under demos/deploy/certs/.
     - Ignore WireGuard configs under demos/deploy/wireguard/.
     - Ignore deploy SSH keys under demos/deploy/.ssh/.
     - Ignore generated deploy bundles, runtime state, cache files, and locks.
@@ -3103,7 +3012,6 @@ Secrets management:
     GitHub Actions may need:
 
       GHCR token or package permissions
-      Cloudflare token only for DNS inventory automation
       DEPLOY_SSH_KEY and DEPLOY_HOST only if using an SSH deploy path
 
     GitHub Actions should not need:
@@ -3117,8 +3025,6 @@ Secrets management:
     Stage 1: gitignored env files plus host env files.
     Stage 2: 1Password, Bitwarden Secrets Manager, Doppler, Infisical, or SOPS
       with age encryption for operator-managed secrets.
-    Stage 3: orchestrator-native secrets if the demo fleet later moves to
-      Nomad, Kubernetes, or another scheduler.
 
 Receive-only NWC secrecy:
 
@@ -3961,7 +3867,7 @@ CI and release:
 Demo deployment:
 
   65. deploy: document Cloudflare -> separate demo node architecture
-      Include both cloud VPS and office Ubuntu/WireGuard demo-node options.
+      Use one office Ubuntu demo node behind a WireGuard public-IP gateway.
   66. deploy: create Caddy demo-node routing plan
   67. deploy: create explicit Cloudflare demo subdomain registry
   68. deploy: create compose template for server-side demos
@@ -3969,32 +3875,30 @@ Demo deployment:
   70. deploy: add demo-node deploy script with per-demo locks
   71. deploy: add smoke-demo script for /healthz and checkout page
   72. deploy: document Cloudflare DNS records and cache bypass rules
-  73. deploy: document Cloudflare edge TLS and origin certificate strategy
+  73. deploy: document Cloudflare edge TLS and Caddy Let's Encrypt origin TLS
   74. deploy: add noindex preview deployment config
   75. deploy: document private openreceive.org boundary
   76. deploy: ensure demo DNS does not use broad *.openreceive.org wildcard
   77. deploy: document local/Cloudflare Tunnel preview workflow
-  78. deploy: create demo-node scaling plan
-      Include office node resize, second demo node, and Hetzner demo LB options.
-  79. deploy: add deployment manifests, promote-demo, and rollback-by-digest
+  78. deploy: add deployment manifests, promote-demo, and rollback-by-digest
 
 Secrets:
 
-  80. secrets: add .env.example templates for every demo
-  81. secrets: add demos/deploy/secrets README and .gitignore protections
-  82. secrets: add host secret file layout under /opt/openreceive/secrets
-  83. secrets: make deploy scripts refuse live mode without OPENRECEIVE_NWC
-  84. secrets: add redaction utility for nostr+walletconnect URIs
-  85. secrets: add frontend bundle scan for OPENRECEIVE_NWC and NWC URI strings
-  86. secrets: document receive-only NWC rotation procedure
-  87. secrets: add secret-management docs page
+  79. secrets: add .env.example templates for every demo
+  80. secrets: add demos/deploy/secrets README and .gitignore protections
+  81. secrets: add host secret file layout under /opt/openreceive/secrets
+  82. secrets: make deploy scripts refuse live mode without OPENRECEIVE_NWC
+  83. secrets: add redaction utility for nostr+walletconnect URIs
+  84. secrets: add frontend bundle scan for OPENRECEIVE_NWC and NWC URI strings
+  85. secrets: document receive-only NWC rotation procedure
+  86. secrets: add secret-management docs page
 
 Rails:
 
-  88. rails: add Kamal listener role example, not accessory
-  89. rails: document rbsecp256k1/native build dependencies if needed
-  90. rails: add read_only/capabilities checkout guard
-  91. rails: add idempotent notification handler and since cursor example
+  87. rails: add Kamal listener role example, not accessory
+  88. rails: document rbsecp256k1/native build dependencies if needed
+  89. rails: add read_only/capabilities checkout guard
+  90. rails: add idempotent notification handler and since cursor example
 
 
 Important Design Decisions To Make Early
