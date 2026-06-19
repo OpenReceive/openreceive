@@ -1,6 +1,34 @@
 export const OPENRECEIVE_NWC_METADATA_MAX_BYTES = 3900 as const;
+export const NWC_URI_PROTOCOL = "nostr+walletconnect:" as const;
+export const NWC_REDACTED_SECRET = "[REDACTED]" as const;
+
+const HEX_64 = /^[0-9a-fA-F]{64}$/;
 
 export type NwcEncryptionMode = "nip04" | "nip44_v2";
+
+export type NwcUriParseErrorCode =
+  | "invalid_uri"
+  | "invalid_scheme"
+  | "missing_wallet_pubkey"
+  | "invalid_wallet_pubkey"
+  | "missing_relay"
+  | "invalid_relay"
+  | "missing_secret"
+  | "invalid_secret";
+
+export class NwcUriParseError extends Error {
+  readonly code: NwcUriParseErrorCode;
+  readonly description: string;
+  readonly redacted?: string;
+
+  constructor(code: NwcUriParseErrorCode, description: string, uri?: string) {
+    super(code);
+    this.name = "NwcUriParseError";
+    this.code = code;
+    this.description = description;
+    this.redacted = uri === undefined ? undefined : redactNwcUri(uri);
+  }
+}
 
 export type OpenReceiveTransactionState =
   | "pending"
@@ -95,4 +123,105 @@ export interface StandaloneNwcClient extends OpenReceiveReceiveNwcClient {
 
 export function isLookupSettled(result: LookupInvoiceResult): boolean {
   return result.settled_at !== undefined || result.transaction_state === "settled" || result.state === "settled";
+}
+
+export function parseNwcUri(uri: string): ParsedNwcConnection {
+  let parsed: URL;
+  try {
+    parsed = new URL(uri);
+  } catch {
+    throw new NwcUriParseError("invalid_uri", "Invalid NWC URI.", uri);
+  }
+
+  if (parsed.protocol !== NWC_URI_PROTOCOL) {
+    throw new NwcUriParseError("invalid_scheme", "NWC URI must use nostr+walletconnect.", uri);
+  }
+
+  const walletPubkey = parsed.hostname || parsed.pathname.replace(/^\/+/, "");
+  if (!walletPubkey) {
+    throw new NwcUriParseError("missing_wallet_pubkey", "NWC URI is missing the wallet public key.", uri);
+  }
+  if (!HEX_64.test(walletPubkey)) {
+    throw new NwcUriParseError("invalid_wallet_pubkey", "NWC wallet public key must be 64 hex characters.", uri);
+  }
+
+  const relays = parsed.searchParams.getAll("relay");
+  if (relays.length === 0) {
+    throw new NwcUriParseError("missing_relay", "NWC URI must include at least one relay.", uri);
+  }
+  for (const relay of relays) {
+    if (!isValidRelayUrl(relay)) {
+      throw new NwcUriParseError("invalid_relay", "NWC relay URLs must be valid wss URLs.", uri);
+    }
+  }
+
+  const secrets = parsed.searchParams.getAll("secret");
+  if (secrets.length === 0 || secrets[0] === "") {
+    throw new NwcUriParseError("missing_secret", "NWC URI is missing the client secret.", uri);
+  }
+  if (secrets.length !== 1 || !HEX_64.test(secrets[0])) {
+    throw new NwcUriParseError("invalid_secret", "NWC client secret must be 64 hex characters.", uri);
+  }
+
+  const lud16 = parsed.searchParams.get("lud16") || undefined;
+
+  return {
+    walletPubkey,
+    relays,
+    clientSecret: secrets[0],
+    lud16,
+    redacted: redactNwcUri(uri)
+  };
+}
+
+export const parseNwcConnectionUri = parseNwcUri;
+
+export function redactNwcUri(uri: string): string {
+  const queryStart = uri.indexOf("?");
+  if (queryStart === -1) return uri;
+
+  const fragmentStart = uri.indexOf("#", queryStart + 1);
+  const queryEnd = fragmentStart === -1 ? uri.length : fragmentStart;
+  const beforeQuery = uri.slice(0, queryStart + 1);
+  const query = uri.slice(queryStart + 1, queryEnd);
+  const afterQuery = uri.slice(queryEnd);
+
+  return `${beforeQuery}${redactNwcQuery(query)}${afterQuery}`;
+}
+
+export const redactNwcConnectionUri = redactNwcUri;
+
+function redactNwcQuery(query: string): string {
+  return query
+    .split("&")
+    .map((part) => {
+      const separator = part.indexOf("=");
+      const key = separator === -1 ? part : part.slice(0, separator);
+      if (!isSecretQueryKey(key)) return part;
+      return `${key}=${NWC_REDACTED_SECRET}`;
+    })
+    .join("&");
+}
+
+function isSecretQueryKey(key: string): boolean {
+  return decodeQueryComponent(key).toLowerCase() === "secret";
+}
+
+function decodeQueryComponent(value: string): string {
+  try {
+    return decodeURIComponent(value.replace(/\+/g, " "));
+  } catch {
+    return value;
+  }
+}
+
+function isValidRelayUrl(relay: string): boolean {
+  if (!relay) return false;
+
+  try {
+    const parsed = new URL(relay);
+    return parsed.protocol === "wss:" && parsed.hostname.length > 0;
+  } catch {
+    return false;
+  }
 }
