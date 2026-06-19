@@ -17,6 +17,13 @@
       "public": true
     },
     {
+      "slug": "frontend-checkout",
+      "title": "Frontend Checkout",
+      "source_path": "docs/05-frontend-checkout.md",
+      "category": "quickstart",
+      "public": true
+    },
+    {
       "slug": "security",
       "title": "Security",
       "source_path": "docs/10-security.md",

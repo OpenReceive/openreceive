@@ -11,7 +11,7 @@ package registry.
 | `@openreceive/browser` | Implemented | Display-safe QR, copy, and open-wallet helpers. |
 | `@openreceive/provider-data` | Implemented | Read-only helpers around the canonical provider registry. |
 | `@openreceive/testkit` | Implemented | Deterministic receive-client fixtures and conformance helpers. |
-| `@openreceive/elements` | Planned | Not started. |
+| `@openreceive/elements` | Implemented | No-framework checkout web component for display-safe invoice data. |
 | `@openreceive/react` | Planned | Not started. |
 
 Non-JS SDKs are planned only after the JS reference path and conformance gate
