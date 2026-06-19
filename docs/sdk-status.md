@@ -10,7 +10,7 @@ package registry.
 | `@openreceive/express` | Implemented | Mounted HTTP routes, auth hooks, idempotency, lookup, and SSE events. |
 | `@openreceive/browser` | Implemented | Display-safe QR, copy, and open-wallet helpers. |
 | `@openreceive/provider-data` | Implemented | Read-only helpers around the canonical provider registry. |
-| `@openreceive/testkit` | Planned | Deterministic fixtures and conformance helpers. |
+| `@openreceive/testkit` | Implemented | Deterministic receive-client fixtures and conformance helpers. |
 | `@openreceive/elements` | Planned | Not started. |
 | `@openreceive/react` | Planned | Not started. |
 

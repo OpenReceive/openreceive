@@ -58,3 +58,13 @@ Do not run live wallet tests on untrusted pull requests with secrets available.
 New SDKs should live in one package directory, consume the shared vectors, and
 provide one conformance command. They must not add send-payment methods or
 frontend NWC behavior to OpenReceive receive-checkout APIs.
+
+## Testkit
+
+`@openreceive/testkit` provides deterministic receive-client fixtures for SDK
+and adapter tests. It can create predictable invoices, look them up by invoice
+or payment hash, and explicitly mark them settled, expired, or failed.
+
+The testkit is not a daemon and does not emulate Nostr relay behavior. It is a
+local conformance helper for code paths that already depend on the
+`OpenReceiveReceiveNwcClient` interface.
