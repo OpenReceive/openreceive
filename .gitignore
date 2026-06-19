@@ -33,3 +33,5 @@ demos/deploy/**/id_*
 demos/deploy/**/wg*.conf
 
 .DS_Store
+!./private/.keep
+./private/
