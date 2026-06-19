@@ -4,7 +4,7 @@
 | --- | --- | --- |
 | `npm test` | Validate v0.1 JSON, schemas, vectors, provider references, and secret patterns. | No |
 | `npm run validate` | Run contract/vector validation only. | No |
-| `npm run scan:secrets` | Scan public repo files for likely committed NWC secrets. | No |
+| `npm run scan:secrets` | Scan public repo files for likely committed NWC secrets and reject tracked non-example env files. | No |
 | `npm run test:vectors` | Run vector validation. | No |
 | `npm run test:live:nwc` | Live wallet smoke skeleton. Skips without `OPENRECEIVE_NWC`. | Optional |
 

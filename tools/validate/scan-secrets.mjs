@@ -71,6 +71,20 @@ function trackedFiles() {
   }
 }
 
+function isAllowedEnvExample(relativePath) {
+  const fileName = path.basename(relativePath);
+  return (
+    fileName === ".env.example" ||
+    fileName.endsWith(".env.example") ||
+    (fileName.startsWith(".env.") && fileName.endsWith(".example"))
+  );
+}
+
+function isEnvFile(relativePath) {
+  const fileName = path.basename(relativePath);
+  return fileName === ".env" || fileName.startsWith(".env.") || fileName.endsWith(".env");
+}
+
 function filesToScan() {
   const files = new Map();
 
@@ -89,6 +103,13 @@ function filesToScan() {
 }
 
 const findings = [];
+
+for (const file of trackedFiles()) {
+  const relativePath = path.relative(root, file);
+  if (isEnvFile(relativePath) && !isAllowedEnvExample(relativePath)) {
+    findings.push(`${relativePath}: tracked env file is forbidden`);
+  }
+}
 
 for (const file of filesToScan()) {
   let text;
