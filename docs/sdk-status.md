@@ -12,7 +12,7 @@ package registry.
 | `@openreceive/provider-data` | Implemented | Read-only helpers around the canonical provider registry. |
 | `@openreceive/testkit` | Implemented | Deterministic receive-client fixtures and conformance helpers. |
 | `@openreceive/elements` | Implemented | No-framework checkout web component for display-safe invoice data. |
-| `@openreceive/react` | Planned | Not started. |
+| `@openreceive/react` | Implemented | Hook, primitives, and default checkout UI for display-safe invoice data. |
 
 Non-JS SDKs are planned only after the JS reference path and conformance gate
 are stable. Future SDKs must consume shared vectors and must not expose NWC

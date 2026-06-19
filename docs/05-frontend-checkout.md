@@ -44,3 +44,30 @@ data. It dispatches:
 
 Settlement and fulfillment still belong to backend-verified invoice state.
 Frontend events are UI hints, not payment authority.
+
+## React
+
+`@openreceive/react` provides a headless hook, small primitives, and a default
+checkout component:
+
+```tsx
+import {
+  OpenReceiveCheckout,
+  OpenReceiveQRCode,
+  useOpenReceiveCheckout
+} from "@openreceive/react";
+
+const checkout = useOpenReceiveCheckout({ invoice: "lnbc..." });
+```
+
+```tsx
+<OpenReceiveCheckout
+  invoice="lnbc..."
+  payment_hash="..."
+  amount_msats={200000}
+  transaction_state="pending"
+/>
+```
+
+React components follow the same boundary: they render invoice display data and
+browser actions, while the backend remains the settlement authority.
