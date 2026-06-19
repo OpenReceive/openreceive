@@ -38,13 +38,6 @@ language. They live in specs, shared data, generated types, and test vectors.
 Inputs Reviewed
 ---------------
 
-
-  building/my-original-docs.txt
-    Original docs and code examples for the customer-facing PayInvoiceWizard,
-    LightningInvoiceModal, backend invoice contract, ActionCable payment
-    updates, Node/Rizful backend guide, NWC polling, NWC notifications, and
-    Rails/nwc-ruby integration.
-
   building/providers-demo.json
     Provider registry draft, schema version 2.0.0, generated 2026-06-18.
     It contains 18 asset entries, 36 included providers, 15 crypto routes,
@@ -129,7 +122,7 @@ The reference flow:
 1. Merchant creates or obtains a receive-only NWC connection string.
 2. Backend stores that NWC string server-side only.
 3. Backend SDK calls make_invoice through a native NWC client.
-4. Backend stores invoice_id, payment_hash, invoice, amount_msat, expiry,
+4. Backend stores invoice_id, payment_hash, invoice, amount_msats, expiry,
    quote, metadata, and NIP-47 state.
 5. Frontend receives only non-secret invoice display data.
 6. Frontend renders QR, copy button, lightning URI, countdown, payment routes,
@@ -139,8 +132,7 @@ The reference flow:
    long-running framework worker.
 8. Backend confirms settlement by lookup_invoice result with settled_at,
    preimage, or state == "settled".
-9. Backend emits payment_received / payment-update to the matching browser
-   session.
+9. Backend emits payment_received to the matching browser session.
 10. Backend fulfills the product.
 
 There is no pure-frontend OpenReceive checkout mode. A browser app, mobile app,
@@ -283,11 +275,15 @@ NWC naming policy:
   payment_hash, description, description_hash, metadata, created_at,
   expires_at, and settled_at exactly as NIP-47 names them.
 
-  Intentional naming exception: OpenReceive uses amount_msat instead of NIP-47
+  Intentional naming exception: OpenReceive uses amount_msats instead of NIP-47
   amount in its public HTTP and SDK payloads. In NIP-47, amount means
   millisatoshis, but in merchant APIs amount is too easy to confuse with fiat,
-  sats, or display money. NWC adapters map amount_msat to NIP-47 amount when
-  sending requests and map NIP-47 result.amount back to amount_msat.
+  sats, or display money. NWC adapters map amount_msats to NIP-47 amount when
+  sending requests and map NIP-47 result.amount back to amount_msats.
+
+  Any OpenReceive payload that carries satoshi or millisatoshi data must use
+  explicit unit names: amount_sats or amount_msats. Do not use amount,
+  amount_sat, or amount_msat outside raw NIP-47 request/response handling.
 
   OpenReceive-specific fields are allowed only where they describe app-layer
   behavior that NIP-47 does not model: invoice_id, fiat, fiat_quote, checkout,
@@ -352,12 +348,12 @@ Create invoice request:
   Idempotency-Key: fruit-demo-user-123-order-456
 
   The request body mirrors NIP-47 make_invoice params except that OpenReceive
-  uses amount_msat instead of amount for clarity. If a merchant wants
+  uses amount_msats instead of amount for clarity. If a merchant wants
   OpenReceive to convert fiat, use the OpenReceive-specific fiat extension and
   the adapter still calls NWC make_invoice with amount set to the msat value.
 
   {
-    "amount_msat": 200000,
+    "amount_msats": 200000,
     "description": "Fruit sticker from OpenReceive demo",
     "description_hash": null,
     "expiry": 600,
@@ -382,7 +378,7 @@ Create invoice response:
     "description": "Fruit sticker from OpenReceive demo",
     "description_hash": null,
     "payment_hash": "abc123...",
-    "amount_msat": 200000,
+    "amount_msats": 200000,
     "created_at": 1781740800,
     "expires_at": 1781741400,
     "metadata": {
@@ -417,38 +413,6 @@ QR codes:
   those helpers are not required OpenReceive endpoints and should not be
   included in the canonical invoice response.
 
-Original-docs demo compatibility response:
-
-  The canonical OpenReceive response above is richer than the original
-  LightningInvoiceModal example. Framework demos may expose a local
-  application endpoint such as POST /api/checkout or /lightning/create_invoice
-  that maps the canonical invoice into the simpler shape from
-  my-original-docs.txt:
-
-    {
-      "payment_hash": "hex-or-provider-payment-hash",
-      "bolt11": "lnbc...",
-      "amount_sats": 12345,
-      "amount_cents": 500,
-      "btc_usd_rate": 40500.12,
-      "expires_at": "2026-05-06T12:00:00Z",
-      "status": "pending"
-    }
-
-  Mapping:
-
-    invoice.payment_hash       -> payment_hash
-    invoice.invoice            -> bolt11
-    invoice.amount_msat / 1000 -> amount_sats
-    invoice.fiat_quote.value   -> amount_cents for USD-cent demos
-    invoice.fiat_quote.btc_usd -> btc_usd_rate
-    invoice.expires_at         -> expires_at, converted to ISO-8601 if needed
-    state pending              -> status pending
-    state settled              -> status succeeded
-
-  This compatibility shape is for examples and app-specific controllers. The
-  public OpenReceive HTTP API should still use the canonical invoice schema.
-
 Lookup invoice request:
 
   Frontend checkout flows normally use invoice_id because it is scoped to the
@@ -476,7 +440,7 @@ Lookup invoice response:
     "state": "settled",
     "invoice": "lnbc...",
     "payment_hash": "abc123...",
-    "amount_msat": 200000,
+    "amount_msats": 200000,
     "created_at": 1781740800,
     "expires_at": 1781741400,
     "settled_at": 1781740990,
@@ -517,38 +481,14 @@ Example SSE:
   data: {"invoice_id":"or_inv_01jz...","type":"incoming","state":"pending"}
 
   event: payment_received
-  data: {"invoice_id":"or_inv_01jz...","type":"incoming","state":"settled","payment_hash":"abc123...","amount_msat":200000,"settled_at":1781740990}
+  data: {"invoice_id":"or_inv_01jz...","type":"incoming","state":"settled","payment_hash":"abc123...","amount_msats":200000,"settled_at":1781740990}
 
   event: invoice.expired
   data: {"invoice_id":"or_inv_01jz...","type":"incoming","state":"expired"}
 
-Original-docs payment-update compatibility:
-
-  The original Rails/ActionCable frontend listens for a message wrapper named
-  payment-update and marks the open invoice settled only when payment_hash
-  matches.
-  Framework adapters should be able to emit this compatibility message:
-
-    {
-      "message": "payment-update",
-      "data": {
-        "payment_hash": "same-payment-hash-as-open-invoice",
-        "status": "succeeded",
-        "settled_at": "2026-05-06T12:03:00Z",
-        "product_type": "credit_pack"
-      }
-    }
-
-  Mapping:
-
-    payment_received event     -> message: "payment-update"
-    event.payment_hash         -> data.payment_hash
-    state settled              -> data.status: "succeeded"
-    event.settled_at           -> data.settled_at
-    fulfillment/product type   -> data.product_type, optional app metadata
-
   ActionCable, Socket.IO, SSE, WebSocket, SignalR, Phoenix Channels, and
-  Laravel Reverb adapters can all carry this same logical payload.
+  Laravel Reverb adapters can all carry the canonical payment_received event
+  payload.
 
 
 Payment State Machine
@@ -704,7 +644,7 @@ NIP-47 event shape:
 NIP-47 to OpenReceive field mapping:
 
   - result.invoice -> invoice
-  - result.amount -> amount_msat
+  - result.amount -> amount_msats
   - result.payment_hash -> payment_hash
   - result.created_at / expires_at / settled_at stay unix timestamps in
     canonical HTTP responses.
@@ -715,8 +655,7 @@ NIP-47 to OpenReceive field mapping:
 
 Long-running listener requirements:
 
-  These come directly from the Rails/nwc-ruby guidance in my-original-docs.txt
-  and should influence every native listener implementation:
+  Every native listener implementation should satisfy these requirements:
 
     - Dedupe notifications by payment_hash.
     - Persist the last processed event timestamp or cursor where the wallet
@@ -839,7 +778,8 @@ Response:
       "value": "0.10"
     },
     "btc_fiat_price": "50000.00",
-    "amount_msat": 200000,
+    "amount_sats": 200,
+    "amount_msats": 200000,
     "source": "static_mock",
     "as_of": 1781740800,
     "expires_at": 1781741400
@@ -851,17 +791,17 @@ Rules:
   - Do not use binary floats for money.
   - Lock the fiat quote at invoice creation.
   - Store price source, rate, as_of, expires_at, fiat amount, fiat currency,
-    and amount_msat.
+    and amount_msats.
   - Enforce a minimum of 1 sat.
   - Round up to a whole sat when wallet/UI behavior needs sat-level display.
   - Amount to NWC make_invoice is in millisatoshis. OpenReceive calls this
-    amount_msat and maps it to NIP-47 amount at the adapter boundary.
+    amount_msats and maps it to NIP-47 amount at the adapter boundary.
 
 Formula:
 
-  amount_btc  = fiat_amount / btc_fiat_price
-  amount_sat  = amount_btc * 100_000_000
-  amount_msat = amount_sat * 1000
+  amount_btc   = fiat_amount / btc_fiat_price
+  amount_sats  = amount_btc * 100_000_000
+  amount_msats = amount_sats * 1000
 
 Default price source architecture:
 
@@ -1019,7 +959,6 @@ Recommended provider object:
     },
     "capabilities": {
       "pays_arbitrary_bolt11": true,
-      "receive_lightning": true,
       "onchain_to_lightning": true,
       "fiat_to_lightning": false
     },
@@ -1044,6 +983,10 @@ Validation rules:
   - Every provider has a stable id.
   - Every provider has name and url.
   - Every provider has mechanism fields.
+  - Provider capabilities describe payer-side route behavior only: can this
+    service help a customer pay a BOLT11 invoice?
+  - Do not track receive-side wallet capabilities such as receive_lightning in
+    the provider registry.
   - Every provider claim has evidence_urls or official_docs.
   - Every route references existing providers only.
   - Every route has deterministic ranking.
@@ -1679,7 +1622,7 @@ TypeScript shape:
   })
 
   const invoice = await openreceive.invoices.create({
-    amount_msat: 200000,
+    amount_msats: 200000,
     description: "Fruit sticker",
     expiry: 600,
     metadata: {
@@ -1750,7 +1693,7 @@ They receive:
   invoice_id
   invoice
   payment_hash
-  amount_msat
+  amount_msats
   state
   expires_at
   checkout.events_url
@@ -1761,7 +1704,7 @@ They expose a checkout view model:
   data:
     transaction
     invoice
-    amountMsat
+    amountMsats
     expiresAt
     expiresIn
     state
@@ -1945,7 +1888,7 @@ Framework adapter API surface:
   Angular:
     OpenReceiveCheckoutService
     signals or RxJS observables for state
-    directives for QR/copy/open-wallet/status
+    directives for QR/copy/open-wallet/state
     Angular Material recipe
 
   Solid:
@@ -1961,7 +1904,7 @@ UI primitives:
   CopyInvoiceButton
   OpenWalletButton
   CountdownTimer
-  PaymentStatus
+  PaymentState
   PaymentRouteWizard
   AssetSelector
   FiatRailSelector
@@ -1972,14 +1915,14 @@ UI primitives:
   PaidSuccess
   ExpiredInvoice
 
-Frontend contract from the original docs:
+Frontend contract:
 
   - The modal shows amount, QR code, copy button, cancel button, waiting state,
     and payment wizard.
   - Provider cards put Copy Invoice before external provider links because
     mobile clipboard writes are more reliable before navigating away.
   - The browser receives a passive settlement message containing the matching
-    payment_hash and state settled, or a compatibility paid/succeeded status.
+    payment_hash and state settled.
   - The browser updates only the currently open invoice when payment_hash
     matches.
 
@@ -2203,7 +2146,7 @@ Rails:
 
   mount OpenReceive::Rails::Engine => "/openreceive"
 
-Rails adapter requirements from my-original-docs.txt:
+Rails adapter requirements:
 
   - The Rails package should make the receive-only/read-write distinction
     visible with helpers equivalent to read_only?, read_write?, and
@@ -2220,9 +2163,6 @@ Rails adapter requirements from my-original-docs.txt:
     payment_received event.
   - Rails examples should show an AppState or equivalent cursor for resuming
     notifications with since after restart.
-  - Rails examples should broadcast the original-docs payment-update payload to
-    the browser through ActionCable or a documented equivalent.
-
 FastAPI:
 
   router = openreceive_fastapi.router(
@@ -3655,15 +3595,12 @@ Secrets:
   84. secrets: document receive-only NWC rotation procedure
   85. secrets: add secret-management docs page
 
-Original-docs conformance:
+Rails:
 
-  86. compat: add simple invoice response adapter for original modal shape
-  87. compat: add payment-update event adapter and tests
-  88. compat: add status mapping pending/succeeded to canonical NIP states
-  89. rails: add Kamal listener role example, not accessory
-  90. rails: document rbsecp256k1/native build dependencies if needed
-  91. rails: add read_only/capabilities checkout guard
-  92. rails: add idempotent notification handler and since cursor example
+  86. rails: add Kamal listener role example, not accessory
+  87. rails: document rbsecp256k1/native build dependencies if needed
+  88. rails: add read_only/capabilities checkout guard
+  89. rails: add idempotent notification handler and since cursor example
 
 
 Important Design Decisions To Make Early
