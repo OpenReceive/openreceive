@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 
 const root = process.cwd();
@@ -15,6 +16,9 @@ const ignoredDirs = new Set([
 const ignoredFiles = new Set([
   ".env",
   ".DS_Store",
+  "spec/test-vectors/nwc-uri-parse.json"
+]);
+const allowedSecretFixtures = new Set([
   "spec/test-vectors/nwc-uri-parse.json"
 ]);
 
@@ -51,9 +55,42 @@ function walk(dir) {
   return files;
 }
 
+function trackedFiles() {
+  try {
+    const output = execFileSync("git", ["ls-files", "-z"], {
+      cwd: root,
+      encoding: "utf8"
+    });
+
+    return output
+      .split("\0")
+      .filter(Boolean)
+      .map((file) => path.join(root, file));
+  } catch {
+    return [];
+  }
+}
+
+function filesToScan() {
+  const files = new Map();
+
+  for (const file of walk(root)) {
+    files.set(path.relative(root, file), file);
+  }
+
+  for (const file of trackedFiles()) {
+    const relativePath = path.relative(root, file);
+    if (!allowedSecretFixtures.has(relativePath)) {
+      files.set(relativePath, file);
+    }
+  }
+
+  return [...files.values()];
+}
+
 const findings = [];
 
-for (const file of walk(root)) {
+for (const file of filesToScan()) {
   let text;
   try {
     text = readFileSync(file, "utf8");
