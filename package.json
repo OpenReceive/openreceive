@@ -11,14 +11,21 @@
   ],
   "scripts": {
     "build:demo": "npm run build -w @openreceive/example-node-express-react",
+    "typecheck": "tsc --noEmit",
     "validate": "node tools/validate/validate-v0.1.mjs",
     "scan:secrets": "node tools/validate/scan-secrets.mjs",
     "test": "npm run validate && npm run scan:secrets",
-    "test:ci": "npm test && npm run build:demo && npm run test:live:nwc",
+    "test:ci": "npm test && npm run typecheck && npm run build:demo && npm run test:live:nwc",
     "test:vectors": "node tools/validate/validate-v0.1.mjs --vectors",
     "test:live:nwc": "node tools/live-nwc-test/index.mjs"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.0.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3"
   }
 }

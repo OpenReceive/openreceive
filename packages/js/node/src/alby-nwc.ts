@@ -375,9 +375,9 @@ async function callRequiredMethod(
   request: Record<string, unknown>
 ): Promise<unknown> {
   for (const name of names) {
-    const method = client[name];
+    const method = client[name] as unknown;
     if (typeof method === "function") {
-      return await method.call(client, request);
+      return await (method as (request: Record<string, unknown>) => Promise<unknown>).call(client, request);
     }
   }
 
@@ -395,7 +395,7 @@ async function createDefaultAlbyNwcClient(
     "return import(specifier)"
   ) as (specifier: string) => Promise<unknown>;
   const namespace = asRecord(await dynamicImport("@getalby/sdk/nwc"));
-  const Constructor = namespace.NWCClient;
+  const Constructor = namespace.NWCClient as unknown;
 
   if (typeof Constructor !== "function") {
     throw new WalletPreflightError(
@@ -404,9 +404,13 @@ async function createDefaultAlbyNwcClient(
     );
   }
 
-  return new Constructor({
+  const NWCClientConstructor = Constructor as new (options: {
+    nostrWalletConnectUrl: string;
+  }) => AlbyNwcCompatibleClient;
+
+  return new NWCClientConstructor({
     nostrWalletConnectUrl: connectionString
-  }) as AlbyNwcCompatibleClient;
+  });
 }
 
 function chooseEncryptionMode(encryptionModes: string[]): NwcEncryptionMode {

@@ -245,10 +245,12 @@ export function createOpenReceiveExpressHandlers(
         created_at: createdAt,
         expires_at: expiresAt,
         metadata: parseOptionalRecord(body.metadata, "metadata") ?? {},
-        fiat_quote: body.fiat === undefined ? null : quoteFiatToMsats({
-          fiat: parseFiatAmount(body.fiat),
-          as_of: createdAt
-        })
+        fiat_quote: body.fiat === undefined ? null : {
+          ...quoteFiatToMsats({
+            fiat: parseFiatAmount(body.fiat),
+            as_of: createdAt
+          })
+        }
       });
       eventBus.publish(
         createResult.row.invoice_id,

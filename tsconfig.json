@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "jsx": "react-jsx",
+    "lib": [
+      "ES2023",
+      "DOM"
+    ],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2023"
+  },
+  "include": [
+    "packages/js/**/*.ts",
+    "examples/hello-fruit/server/node-express-react/src/**/*.ts",
+    "examples/hello-fruit/server/node-express-react/src/**/*.tsx",
+    "examples/hello-fruit/server/node-express-react/vite.config.ts"
+  ]
+}
