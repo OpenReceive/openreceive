@@ -31,6 +31,13 @@
       "public": true
     },
     {
+      "slug": "price-feeds",
+      "title": "Price Feeds",
+      "source_path": "docs/08-price-feeds.md",
+      "category": "reference",
+      "public": true
+    },
+    {
       "slug": "provider-registry",
       "title": "Provider Registry",
       "source_path": "docs/09-provider-registry.md",
