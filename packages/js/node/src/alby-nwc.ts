@@ -9,6 +9,7 @@ import {
   type NwcEncryptionMode,
   type OpenReceiveReceiveNwcClient,
   type OpenReceiveTransactionState,
+  type PaymentReceivedNotification,
   type ParsedNwcConnection,
   type WalletCapabilitySummary,
   parseNwcUri
@@ -25,10 +26,15 @@ const SPEND_METHODS = [
 export interface AlbyNwcCompatibleClient {
   getInfo?: () => Promise<unknown>;
   get_info?: () => Promise<unknown>;
+  getWalletServiceInfo?: () => Promise<unknown>;
   makeInvoice?: (request: Record<string, unknown>) => Promise<unknown>;
   make_invoice?: (request: Record<string, unknown>) => Promise<unknown>;
   lookupInvoice?: (request: Record<string, unknown>) => Promise<unknown>;
   lookup_invoice?: (request: Record<string, unknown>) => Promise<unknown>;
+  subscribeNotifications?: (
+    handler: (notification: unknown) => void,
+    notificationTypes?: string[]
+  ) => Promise<() => void> | (() => void);
   close?: () => Promise<void> | void;
 }
 
@@ -90,7 +96,10 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
 
   async preflight(): Promise<WalletCapabilitySummary> {
     const client = await this.getClient();
-    const rawInfo = await callRequiredMethod(client, ["getInfo", "get_info"], {});
+    const rawInfo =
+      typeof client.getWalletServiceInfo === "function"
+        ? await client.getWalletServiceInfo()
+        : await callRequiredMethod(client, ["getInfo", "get_info"], {});
     const summary = summarizeWalletCapabilities(this.connection, rawInfo);
 
     this.#preflightSummary = summary;
@@ -142,6 +151,27 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
 
   async close(): Promise<void> {
     await this.#client?.close?.();
+  }
+
+  async subscribeToPaymentReceived(
+    handler: (notification: PaymentReceivedNotification) => Promise<void> | void
+  ): Promise<() => Promise<void> | void> {
+    await this.ensurePreflight();
+    const client = await this.getClient();
+
+    if (typeof client.subscribeNotifications !== "function") {
+      throw new WalletPreflightError(
+        "wallet_unavailable",
+        "NWC client does not expose payment_received notification subscription."
+      );
+    }
+
+    const unsubscribe = await client.subscribeNotifications((rawNotification) => {
+      const notification = normalizePaymentReceivedNotification(rawNotification);
+      if (notification !== undefined) void handler(notification);
+    }, ["payment_received"]);
+
+    return unsubscribe;
   }
 
   private async ensurePreflight(): Promise<void> {
@@ -364,14 +394,13 @@ async function createDefaultAlbyNwcClient(
     "specifier",
     "return import(specifier)"
   ) as (specifier: string) => Promise<unknown>;
-  const sdk = asRecord(await dynamicImport("@getalby/sdk"));
-  const namespace = asRecord(sdk.nwc ?? sdk);
+  const namespace = asRecord(await dynamicImport("@getalby/sdk/nwc"));
   const Constructor = namespace.NWCClient;
 
   if (typeof Constructor !== "function") {
     throw new WalletPreflightError(
       "wallet_unavailable",
-      "@getalby/sdk did not expose nwc.NWCClient."
+      "@getalby/sdk/nwc did not expose NWCClient."
     );
   }
 
@@ -439,6 +468,45 @@ function normalizeTransactionState(
   }
 
   return undefined;
+}
+
+function normalizePaymentReceivedNotification(
+  rawNotification: unknown
+): PaymentReceivedNotification | undefined {
+  const notification = asRecord(unwrapNwcResult(rawNotification));
+  const type = notification.notification_type ?? notification.notificationType;
+  if (type !== "payment_received") return undefined;
+
+  const transaction = asRecord(notification.notification);
+  const paymentHash = transaction.payment_hash ?? transaction.paymentHash;
+  if (typeof paymentHash !== "string" || paymentHash.length === 0) {
+    return undefined;
+  }
+
+  const normalized: PaymentReceivedNotification = {
+    payment_hash: paymentHash,
+    raw: rawNotification
+  };
+
+  if (typeof transaction.invoice === "string") {
+    normalized.invoice = transaction.invoice;
+  }
+
+  if (transaction.amount !== undefined || transaction.amount_msats !== undefined) {
+    normalized.amount_msats = toBigInt(
+      transaction.amount_msats ?? transaction.amount,
+      "amount_msats"
+    );
+  }
+
+  if (
+    typeof transaction.settled_at === "number" &&
+    Number.isSafeInteger(transaction.settled_at)
+  ) {
+    normalized.settled_at = transaction.settled_at;
+  }
+
+  return normalized;
 }
 
 function optionalNumberField(
