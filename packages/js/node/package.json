@@ -6,6 +6,14 @@
   "dependencies": {
     "@openreceive/core": "workspace:*"
   },
+  "peerDependencies": {
+    "@getalby/sdk": "*"
+  },
+  "peerDependenciesMeta": {
+    "@getalby/sdk": {
+      "optional": true
+    }
+  },
   "exports": {
     ".": "./src/index.ts"
   }
