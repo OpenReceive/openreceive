@@ -41,7 +41,8 @@ Inputs Reviewed
   building/providers-demo.json
     Provider registry draft, schema version 2.0.0, generated 2026-06-18.
     It contains 18 asset entries, 36 included providers, 15 crypto routes,
-    2 fiat rails, 39 countries, and 7 disqualified providers with reasons.
+    2 fiat rails, 39 countries, and 7 disqualified providers with reasons... .. ushould copy this data into the right
+    place and keep it in git.
 
 
 Brand And Naming
@@ -402,16 +403,36 @@ Create invoice response:
 
 QR codes:
 
-  QR rendering is not part of the canonical backend HTTP API. The backend
-  returns the BOLT11 invoice string in invoice, and frontend/mobile packages
-  generate QR codes locally from that string. This is how React, Vue, Svelte,
-  Angular, SwiftUI, Android Compose, Flutter, and web-component checkouts
-  should work.
+  QR rendering is not part of the canonical backend invoice response. The
+  backend returns the BOLT11 invoice string in invoice, and OpenReceive
+  frontend/mobile packages generate safe QR codes from that string. This is how
+  React, Vue, Svelte, Angular, SwiftUI, Android Compose, Flutter, and
+  web-component checkouts should work.
+
+  OpenReceive must not rely on application developers to remember QR scanning
+  details. Every official QR helper, primitive, component, and downloadable PNG
+  renderer must use safe defaults:
+
+    payload: lightning:<invoice>
+    background: opaque white
+    foreground: black or another tested high-contrast color
+    quiet zone: at least 4 modules, white, included inside the rendered image
+    error correction: conservative default suitable for Lightning invoices
+    exported PNG/SVG: includes the same quiet zone and opaque background
+
+  Frontend packages should expose both:
+
+    OpenReceiveQRCode / equivalent framework component
+    createQrSvg(), createQrPng(), and createLightningUri() helpers
+
+  Developers may wrap, size, place, brand, or download the QR output, but the
+  OpenReceive renderer owns the payload, quiet zone, and contrast defaults.
 
   Framework adapters may offer optional QR helpers for no-JavaScript fallback
   pages, server-rendered emails, PDFs, or unusual CMS/plugin environments, but
-  those helpers are not required OpenReceive endpoints and should not be
-  included in the canonical invoice response.
+  those helpers are not required OpenReceive endpoints, should not be included
+  in the canonical invoice response, and must share the same QR safety defaults
+  and tests as the frontend helpers.
 
 Lookup invoice request:
 
@@ -1720,7 +1741,7 @@ They expose a checkout view model:
   actions:
     copyInvoice()
     openWallet()
-    refreshStatus()
+    refreshState()
     selectAsset(asset)
     selectCountry(country)
     selectProvider(provider)
@@ -1749,7 +1770,9 @@ Responsibilities:
   - Parse invoice object.
   - Connect to SSE events.
   - Track countdown.
-  - Generate QR payloads/images from invoice or lightning: URI.
+  - Generate lightning: invoice URI payloads.
+  - Generate safe QR SVG/PNG output with opaque background, high contrast, and
+    at least a 4-module white quiet zone.
   - Copy invoice.
   - Open lightning: URI.
   - Load provider routes.
@@ -1770,8 +1793,8 @@ Frontend package philosophy:
 
     1. @openreceive/browser
        Framework-neutral state machine, event handling, provider-route loading,
-       countdowns, copy/open-wallet actions, and typed data. No DOM ownership
-       beyond optional helpers.
+       countdowns, QR helpers, copy/open-wallet actions, and typed data. No DOM
+       ownership beyond optional helpers.
 
     2. Framework headless adapters
        React hooks/context, Vue composables, Svelte stores/actions, Angular
@@ -1779,11 +1802,12 @@ Frontend package philosophy:
        actions but do not dictate markup.
 
     3. Accessible unstyled primitives
-       Small components such as Root, Modal, QRCode, CopyButton,
-       RouteWizard, ProviderList, Status, Countdown, and Success. They own
+       Small components such as Root, Modal, OpenReceiveQRCode, CopyButton,
+       RouteWizard, ProviderList, PaymentState, Countdown, and Success. They own
        behavior, ARIA, focus management, keyboard handling, and slot structure,
        but use minimal reset styles and accept class/style/slot/component
-       overrides.
+       overrides. The QR primitive owns the QR quiet zone and contrast defaults
+       even when the surrounding UI is fully customized.
 
     4. Optional default UI
        A pleasant default checkout for demos, quickstarts, and teams without a
@@ -1797,18 +1821,18 @@ Frontend package philosophy:
 
 React headless example:
 
-  import { useOpenReceiveCheckout } from "@openreceive/react"
+  import { OpenReceiveQRCode, useOpenReceiveCheckout } from "@openreceive/react"
 
   function Checkout({ invoice }) {
     const checkout = useOpenReceiveCheckout({
       invoice,
       paymentRoutes: true,
-      onPaid: (event) => unlockSticker(event)
+      onPaymentReceived: (event) => unlockSticker(event)
     })
 
     return (
       <MyModal open={checkout.isOpen} onClose={checkout.cancel}>
-        <MyQRCode value={checkout.invoice} />
+        <OpenReceiveQRCode invoice={checkout.invoice} />
         <MyButton onClick={checkout.copyInvoice}>
           Copy invoice
         </MyButton>
@@ -1820,7 +1844,7 @@ React headless example:
           selectedAsset={checkout.selectedAsset}
           onSelectAsset={checkout.selectAsset}
         />
-        <MyStatus state={checkout.state} expiresIn={checkout.expiresIn} />
+        <MyPaymentState state={checkout.state} expiresIn={checkout.expiresIn} />
       </MyModal>
     )
   }
@@ -1831,7 +1855,7 @@ React default UI example:
 
   <OpenReceiveCheckout
     invoice={invoice}
-    onPaid={(event) => unlockSticker(event)}
+    onPaymentReceived={(event) => unlockSticker(event)}
     paymentRoutes={true}
   />
 
@@ -1900,7 +1924,7 @@ UI primitives:
   OpenReceiveCheckout
   InvoiceModal
   InvoiceSummary
-  QRCode
+  OpenReceiveQRCode
   CopyInvoiceButton
   OpenWalletButton
   CountdownTimer
@@ -2176,7 +2200,7 @@ Laravel:
 
   Route::openreceive('/openreceive');
 
-  OpenReceive::onPaid(function ($invoice) {
+  OpenReceive::onPaymentReceived(function ($invoice) {
       FruitSticker::unlock($invoice->metadata['fruit']);
   });
 
@@ -2840,6 +2864,7 @@ Test layers:
   - secret redaction
   - provider route selection
   - event parsing
+  - QR payload, quiet-zone, and contrast helpers
   - idempotency key handling
   - webhook retry state
 
@@ -2909,7 +2934,7 @@ Test layers:
 
     open demo
     create invoice
-    see QR and copy button
+    see QR with white quiet zone and copy button
     see provider wizard
     mock wallet settles invoice
     UI changes to settled
@@ -3257,7 +3282,8 @@ Deliverables:
   - CoinGecko price adapter.
   - Static mock price adapter.
   - Idempotency key support.
-  - QR data helper that exposes invoice/lightning URI for UI packages.
+  - QR helpers/components that expose invoice/lightning URI plus safe SVG/PNG
+    rendering with opaque white quiet zone.
   - Mock wallet integration.
   - Express route adapter.
   - Next.js route handler adapter.
@@ -3544,7 +3570,9 @@ JavaScript:
   45. js: create @openreceive/core
   46. js: create @openreceive/node
   47. js: create @openreceive/browser
-  48. js: add client-side QR generation from invoice/lightning URI
+  48. js: add safe QR generation from invoice/lightning URI
+      Include OpenReceiveQRCode, createLightningUri, createQrSvg, createQrPng,
+      opaque white background, high contrast, 4-module quiet zone, and tests.
   49. js: create @openreceive/elements web component package
   50. react: create @openreceive/react hooks, primitives, slots, and default UI
   51. js: create @openreceive/provider-data
