@@ -72,9 +72,11 @@ If the misspelled domain was purchased, keep it only as a redirect.
 
 Existing openreceive.org app:
 
-  openreceive.org is already a private Rails app deployed with Kamal behind
-  Cloudflare and an existing Hetzner Load Balancer. That app lives in a private
-  repo and must stay completely outside this open source project.
+  openreceive.org is already a private Rails app deployed separately. Its
+  production edge, host inventory, capacity notes, IPs, load balancer details,
+  and deployment topology belong in private ops notes, not in the public master
+  plan. That app lives in a private repo and must stay completely outside this
+  open source project.
 
   Hard boundary:
 
@@ -91,8 +93,8 @@ Existing openreceive.org app:
   demos.openreceive.org, and django-demo.openreceive.org, but those should be
   deployed as separate services with separate DNS records, compose projects,
   environment files, and source control from the private apex Rails app. They
-  must not share app-virginia for stable public demos because that host runs
-  critical production apps. The private app can link to demos manually if
+  must not share the private apex app infrastructure for stable public demos.
+  Use a separate demo edge/node. The private app can link to demos manually if
   desired, but it is not part of their deployment path.
 
   Documentation is the one intentional bridge: canonical technical docs live
@@ -128,16 +130,17 @@ The reference flow:
 2. Backend stores that NWC string server-side only.
 3. Backend SDK calls make_invoice through a native NWC client.
 4. Backend stores invoice_id, payment_hash, invoice, amount_msats, expiry,
-   quote, metadata, and NIP-47 state.
+   quote, metadata, transaction_state, and workflow_state.
 5. Frontend receives only non-secret invoice display data.
 6. Frontend renders QR, copy button, lightning URI, countdown, payment routes,
-   and state.
+   and transaction/workflow state.
 7. Backend listens for notifications where practical and also polls
    lookup_invoice through a background job, queue worker, scheduled task, or
    long-running framework worker.
-8. Backend confirms settlement by lookup_invoice result with settled_at,
-   preimage, or state == "settled".
-9. Backend emits payment_received to the matching browser session.
+8. Backend confirms settlement by lookup_invoice result with settled_at or
+   transaction_state/state == "settled". A preimage is corroborating proof, not
+   a sufficient settlement signal by itself.
+9. Backend emits invoice.settled to the matching browser session.
 10. Backend fulfills the product.
 
 There is no pure-frontend OpenReceive checkout mode. A browser app, mobile app,
@@ -192,10 +195,13 @@ Security and correctness:
   - Settlement truth comes from lookup_invoice; NWC notifications can provide
     the same data faster but cannot fulfill by themselves.
   - Store payment_hash for every invoice.
-  - Store preimage when available.
+  - Store preimage when available, but never treat preimage alone as final
+    settlement proof for incoming invoices.
   - Use idempotency keys for invoice creation.
   - Use exact decimal/fixed-point money math, not floating point.
-  - Stop polling when invoice expiry is reached.
+  - When local expiry is reached, perform a final lookup and only close the
+    invoice as expired when wallet truth confirms expiry or the grace policy is
+    exhausted.
   - Redact wallet secrets from logs, errors, telemetry, and screenshots.
   - Public demos use rate limits and low invoice amounts.
 
@@ -205,7 +211,8 @@ Architecture:
   - One canonical provider registry.
   - One canonical price conversion algorithm.
   - One canonical payment state machine.
-  - One canonical Rizful receive-only test wallet policy.
+  - One canonical live-wallet harness with wallet profiles, using Rizful as the
+    first fixture rather than the protocol center of gravity.
   - One canonical fruit-sticker demo product.
   - One conformance suite used by every SDK.
   - No required OpenReceive daemon, sidecar, gateway, or extra service.
@@ -238,8 +245,9 @@ Required invoice row fields:
   payment_hash
   invoice
   amount_msats
-  state
+  transaction_state
   workflow_state
+  fulfillment_state
   created_at
   expires_at
   settled_at
@@ -252,33 +260,51 @@ Required uniqueness and transition invariants:
 
   - invoice_id is unique.
   - payment_hash is unique where present.
-  - idempotency_key is unique within the merchant/app/user/order scope chosen
-    by the adapter.
+  - idempotency_key is unique within the canonical idempotency scope:
+    merchant_scope + operation + idempotency_key. For v0.1, merchant_scope is
+    the app/tenant/merchant boundary supplied by the adapter, operation is
+    invoice.create or invoice.refresh, and user/order/cart identifiers belong
+    in metadata or in the idempotency_key value itself. Adapters may add a
+    stricter custom namespace, but they must pass the canonical default
+    conformance vectors.
   - Reusing an idempotency_key with the same request body returns the original
     invoice response.
   - Reusing an idempotency_key with a different request body returns 409.
   - Settlement transitions are idempotent.
   - Fulfillment transitions are idempotent.
   - fulfilled_at can be set once.
-  - payment_received events can replay safely.
+  - invoice.settled events can replay safely.
   - Notifications never directly fulfill.
   - Expired invoices cannot be refreshed in-place; refresh creates a new
     invoice linked to the old one.
 
-Exact row lifecycle:
+Exact storage model:
 
-  draft -> invoice_created/pending -> checking -> settled -> fulfilled
-  draft -> invoice_created/pending -> expired
-  draft -> invoice_created/pending -> failed
+  {
+    "transaction_state": "pending | settled | expired | failed | accepted",
+    "workflow_state": "draft | invoice_created | verifying | awaiting_fulfillment | fulfilled | expiry_pending_verification | expired_closed | failed_closed | cancelled",
+    "fulfillment": {
+      "state": "pending | ready | delivered | delivery_failed"
+    }
+  }
+
+Exact workflow lifecycle:
+
+  draft -> invoice_created -> verifying -> awaiting_fulfillment -> fulfilled
+  draft -> invoice_created -> expiry_pending_verification -> expired_closed
+  draft -> invoice_created -> failed_closed
+  draft -> invoice_created -> cancelled
 
 Notes:
 
   - workflow_state is OpenReceive's app-layer lifecycle.
-  - state preserves the NIP-47 transaction state where available.
-  - checking means the backend is verifying activity through lookup_invoice.
+  - transaction_state preserves the NIP-47 transaction state where available.
+  - verifying means the backend is checking activity through lookup_invoice.
+  - awaiting_fulfillment means backend lookup has proven settlement, but
+    delivery may still be pending or retrying.
   - fulfilled is an application outcome, not wallet settlement.
-  - A settled invoice may stay settled without becoming fulfilled if the
-    merchant fulfillment hook fails and needs retry.
+  - checking, awaiting_fulfillment, fulfilled, and other workflow labels must
+    never be written to transaction_state.
   - Every schema, storage adapter, framework migration, and conformance vector
     must use this lifecycle.
 
@@ -337,8 +363,8 @@ Default iOS demo choice:
 
 Default build strategy:
 
-  - Build the spec, Rizful-backed NWC test harness, conformance smoke suite,
-    and one excellent native Node/React stack first.
+  - Build the spec, wallet-profile live NWC test harness, conformance smoke
+    suite, and one excellent native Node/React stack first.
   - Build Ruby/Rails next using nwc-ruby as the model for in-app background
     workers and notification listeners.
   - Add neutral standalone NWC clients where the target language lacks a fresh,
@@ -401,16 +427,19 @@ Laravel, Spring, ASP.NET Core, Phoenix, Vapor, and similar apps.
 This contract is still valuable because it keeps frontend checkout components,
 mobile apps, demos, docs, tests, and server adapters aligned. A React checkout,
 SwiftUI checkout, static-site widget, or mobile app should be able to talk to
-the merchant's backend using the same invoice/state/event shapes no matter
-which server framework created the invoice.
+the merchant's backend using the same invoice and event shapes no matter which
+server framework created the invoice.
 
 NWC naming policy:
 
   The canonical OpenReceive HTTP payload should mirror NIP-47 field names as
-  closely as practical. Use invoice for the BOLT11 string, expiry for seconds
-  from invoice creation, state for the NIP-47 transaction state, and
-  payment_hash, description, description_hash, metadata, created_at,
-  expires_at, and settled_at exactly as NIP-47 names them.
+  closely as practical, except where a NIP-47 name collides with OpenReceive
+  app-layer state. Use invoice for the BOLT11 string, expiry for seconds from
+  invoice creation, and payment_hash, description, description_hash, metadata,
+  created_at, expires_at, and settled_at exactly as NIP-47 names them.
+  Map NIP-47 result.state to transaction_state in OpenReceive storage, events,
+  and public HTTP payloads so logs and app events cannot confuse wallet truth
+  with workflow state.
 
   Intentional naming exception: OpenReceive uses amount_msats instead of NIP-47
   amount in its public HTTP and SDK payloads. In NIP-47, amount means
@@ -430,6 +459,9 @@ Money JSON representation:
   - amount_msats is a JSON integer within the safe integer range.
   - JSON Schema must set explicit minimum and maximum limits for amount_sats
     and amount_msats.
+  - amount_msats minimum for v0.1: 1000. OpenReceive does not accept sub-sat
+    invoice amounts.
+  - amount_sats minimum for v0.1: 1.
   - amount_msats maximum for v0.1: 9007199254740991.
   - amount_sats maximum for v0.1: 9007199254740, so converting to msats stays
     within the same safe integer boundary.
@@ -465,17 +497,37 @@ Authentication and authorization:
 
     POST /openreceive/v1/invoices
       Protected by app auth, cart/session token, or guest checkout token.
+      Cookie-authenticated POSTs must use CSRF protection.
 
     GET /openreceive/v1/invoices/{invoice_id}
       Allowed only when the invoice belongs to the current user, cart, order,
       or checkout session.
 
+    POST /openreceive/v1/invoices/lookup
+      Server-side or strongly authorized use only. Do not expose payment_hash
+      lookup as a public status oracle. The adapter must verify the current
+      user, cart, order, checkout session, or backend service principal is
+      allowed to inspect the invoice before returning status.
+
     GET /openreceive/v1/invoices/{invoice_id}/events
       Uses same-site session cookies, a short-lived signed event URL, or a
       polling fallback when EventSource auth is awkward on the platform.
+      Signed event URLs must be scoped to one invoice, use a short TTL, avoid
+      sensitive query names, and be protected from log/referrer leakage as far
+      as the framework allows.
 
     GET /openreceive/v1/routes, /providers, /rates
       Usually public/cacheable but still rate-limited.
+
+  CORS and browser security defaults:
+
+    - Deny cross-origin credentialed access by default.
+    - Allow only configured origins.
+    - Never use wildcard CORS together with credentials.
+    - Set Referrer-Policy on pages that use signed event URLs.
+    - Avoid logging full signed event URLs.
+    - Rate-limit invoice creation, invoice reads, and lookup endpoints.
+    - Return no-store on invoice, lookup, and event responses.
 
 Base path:
 
@@ -558,7 +610,8 @@ Create invoice response:
   {
     "invoice_id": "or_inv_01jz...",
     "type": "incoming",
-    "state": "pending",
+    "transaction_state": "pending",
+    "workflow_state": "invoice_created",
     "invoice": "lnbc...",
     "description": "Fruit sticker from OpenReceive demo",
     "payment_hash": "abc123...",
@@ -641,7 +694,8 @@ Lookup invoice response:
   {
     "invoice_id": "or_inv_01jz...",
     "type": "incoming",
-    "state": "settled",
+    "transaction_state": "settled",
+    "workflow_state": "awaiting_fulfillment",
     "invoice": "lnbc...",
     "payment_hash": "abc123...",
     "amount_msats": 200000,
@@ -684,7 +738,8 @@ Refresh invoice:
     "invoice": {
       "invoice_id": "or_inv_new",
       "type": "incoming",
-      "state": "pending",
+      "transaction_state": "pending",
+      "workflow_state": "invoice_created",
       "invoice": "lnbc...",
       "payment_hash": "def456...",
       "amount_msats": 200000,
@@ -695,8 +750,8 @@ Refresh invoice:
 
   Storage rules:
 
-    - old_invoice_id keeps its original payment_hash, invoice, state, and
-      fulfillment records.
+    - old_invoice_id keeps its original payment_hash, invoice,
+      transaction_state, workflow_state, and fulfillment records.
     - new_invoice_id has a new payment_hash and new BOLT11 invoice.
     - refreshed_from_invoice_id on the new row points to old_invoice_id.
     - The idempotency key for refresh is scoped separately from initial create.
@@ -723,7 +778,10 @@ Required SSE headers:
 
   Content-Type: text/event-stream
   Cache-Control: no-store
-  Connection: keep-alive
+
+Connection: keep-alive is optional and only meaningful for HTTP/1.1. Do not
+require it in the contract because Cloudflare and many modern deployments use
+HTTP/2, where that header is a no-op or invalid.
 
 Required SSE behavior:
 
@@ -743,8 +801,8 @@ Required SSE behavior:
 Event names:
 
   invoice.created
-  invoice.checking
-  payment_received
+  invoice.verifying
+  invoice.settled
   invoice.expired
   invoice.failed
   invoice.fulfilled
@@ -754,25 +812,26 @@ Example SSE:
 
   id: 1
   event: invoice.created
-  data: {"invoice_id":"or_inv_01jz...","type":"incoming","state":"pending"}
+  data: {"invoice_id":"or_inv_01jz...","type":"incoming","transaction_state":"pending","workflow_state":"invoice_created"}
 
   : heartbeat
 
   id: 2
-  event: invoice.checking
-  data: {"invoice_id":"or_inv_01jz...","type":"incoming","state":"pending"}
+  event: invoice.verifying
+  data: {"invoice_id":"or_inv_01jz...","type":"incoming","transaction_state":"pending","workflow_state":"verifying"}
 
   id: 3
-  event: payment_received
-  data: {"invoice_id":"or_inv_01jz...","type":"incoming","state":"settled","payment_hash":"abc123...","amount_msats":200000,"settled_at":1781740990}
+  event: invoice.settled
+  data: {"invoice_id":"or_inv_01jz...","type":"incoming","transaction_state":"settled","workflow_state":"awaiting_fulfillment","payment_hash":"abc123...","amount_msats":200000,"settled_at":1781740990}
 
   id: 4
   event: invoice.expired
-  data: {"invoice_id":"or_inv_01jz...","type":"incoming","state":"expired"}
+  data: {"invoice_id":"or_inv_01jz...","type":"incoming","transaction_state":"expired","workflow_state":"expired_closed"}
 
   ActionCable, Socket.IO, SSE, WebSocket, SignalR, Phoenix Channels, and
-  Laravel Reverb adapters can all carry the canonical payment_received event
-  payload.
+  Laravel Reverb adapters can all carry the canonical invoice.settled event
+  payload. NIP-47 payment_received remains the wallet notification name, not
+  the OpenReceive browser event name.
 
 
 Payment State Machine
@@ -803,7 +862,8 @@ Canonical transaction states:
 OpenReceive workflow states:
 
   These are app-layer states, not replacements for NIP-47 state. Use them only
-  in local storage, UI state machines, or nested objects such as fulfillment.
+  in local storage, UI state machines, or event payloads. They deliberately do
+  not reuse pending, settled, expired, failed, or accepted.
 
   draft
     App has requested a payment intent, but no BOLT11 invoice exists yet.
@@ -811,44 +871,55 @@ OpenReceive workflow states:
   invoice_created
     Wallet returned an invoice and payment_hash.
 
-  checking
-    A notification or poll suggests activity; server is verifying by lookup.
+  verifying
+    A notification, poll, or user action suggests activity; server is verifying
+    by lookup_invoice.
 
-  settled
+  awaiting_fulfillment
     Backend lookup has proven settlement, but fulfillment may still be pending
     or retrying.
 
   fulfilled
     App delivered the product, file, credit, pass, or entitlement.
 
-  expired
-    Invoice expired before verified settlement.
+  expiry_pending_verification
+    Local expiry time has passed, but wallet truth has not yet conclusively
+    returned settled or expired.
 
-  failed
-    Wallet, provider, network, validation, or internal error occurred.
+  expired_closed
+    Wallet lookup confirmed expiry, or the grace verification policy completed
+    without settlement.
+
+  failed_closed
+    Wallet, provider, network, validation, or internal error occurred and the
+    app has closed the invoice workflow as failed.
 
   cancelled
     Merchant/app intentionally cancelled the payment flow.
 
 Typical workflow transitions:
 
-  draft -> invoice_created/pending
-  invoice_created/pending -> checking
-  checking -> settled
-  settled -> fulfilled
-  invoice_created/pending -> expired
-  invoice_created/pending -> failed
-  invoice_created/pending -> cancelled
-  checking -> invoice_created/pending
-  checking -> expired
-  checking -> failed
+  draft -> invoice_created
+  invoice_created -> verifying
+  verifying -> invoice_created
+  verifying -> awaiting_fulfillment
+  awaiting_fulfillment -> fulfilled
+  invoice_created -> expiry_pending_verification
+  verifying -> expiry_pending_verification
+  expiry_pending_verification -> awaiting_fulfillment
+  expiry_pending_verification -> expired_closed
+  invoice_created -> failed_closed
+  verifying -> failed_closed
+  invoice_created -> cancelled
 
 Invariant:
 
   Product fulfillment is never triggered by frontend state alone. Fulfillment
   happens only after backend verification through lookup_invoice. For NIP-47,
-  prefer settled_at, preimage, or state == "settled"; normalize older
-  library-specific variants at adapter boundaries only.
+  require settled_at or transaction_state/state == "settled". Treat preimage
+  as corroborating proof only because a receiver can already know the preimage
+  when it creates the invoice. Normalize older library-specific variants at
+  adapter boundaries only.
 
 
 NWC Protocol Foundation
@@ -893,8 +964,8 @@ Crypto portability policy:
 
   Requirements:
 
-    - Every NWC client must document its secp256k1/Schnorr, ECDH, ChaCha20,
-      HKDF, and random-source dependencies.
+    - Every NWC client must document its secp256k1/Schnorr, ECDH,
+      AES-256-CBC for NIP-04, ChaCha20, HKDF, and random-source dependencies.
     - Every backend SDK README must say whether the NWC dependency is pure
       language, JS/WASM, or native.
     - If native dependencies are required, provide install notes for macOS,
@@ -906,6 +977,25 @@ Crypto portability policy:
       package is published.
     - Edge/runtime support must be proven separately from ordinary server
       support.
+
+  Crypto soundness challenge:
+
+    The real implementation risk is not only NWC method coverage. Writing
+    standalone clients in Python, PHP, JVM, .NET, Elixir, Go, Swift, Dart, or
+    other ecosystems means choosing and composing secp256k1/Schnorr, ECDH,
+    NIP-04 AES-CBC, NIP-44 ChaCha20/HKDF, randomness, and serialization
+    libraries correctly. Deterministic test vectors are mandatory, and the
+    nwc-ruby experience shows the right vectors can make a client dependable,
+    but vectors only prove input-to-output equivalence. They do not prove nonce
+    freshness, constant-time comparisons, entropy quality, or safe key
+    lifecycle behavior.
+
+    Before a new standalone NWC client becomes an OpenReceive dependency, it
+    must use well-maintained cryptographic primitives, run official NIP-04 and
+    NIP-44 vectors where available, include negative/tamper tests, document RNG
+    and nonce behavior, pass install tests on target platforms, and receive a
+    security review focused on cryptographic misuse. If a maintained audited
+    library exists, prefer wrapping it over hand-assembling crypto.
 
   Practical starting assumptions:
 
@@ -926,6 +1016,12 @@ OpenReceive receive-checkout methods for v0.1:
   list_transactions, optional
   get_balance, optional diagnostic only
 
+get_balance is server-side diagnostic/admin data. It must never be returned to
+the public checkout frontend, included in public invoice responses, exposed
+through browser/mobile SDKs, or logged in user-visible responses. If a merchant
+dashboard uses get_balance, it must do so on the server with app-owned admin
+authorization.
+
 Standalone nwc-client-* protocol libraries should also support:
 
   pay_invoice
@@ -945,9 +1041,29 @@ Receive-only expectation:
 
   A receive-only code should support creating invoices and checking settlement,
   but should not support spending funds. OpenReceive checkout APIs never expose
-  send-payment methods, so v0.1 does not need a separate wallet-compatibility
-  confirmation step before using an NWC code. Use the shared Rizful
-  receive-only/no-spend NWC code for project testing.
+  send-payment methods.
+
+Automatic wallet preflight:
+
+  v0.1 does not require a manual wallet-compatibility ceremony, but every live
+  backend SDK must run an automatic preflight before accepting an NWC code for
+  checkout:
+
+    1. Parse and redact the NWC URI.
+    2. Fetch the wallet service info event.
+    3. Confirm make_invoice and lookup_invoice are advertised or proven usable.
+    4. Negotiate NIP-04 or NIP-44 encryption.
+    5. Warn if the connection appears to have spend capability.
+    6. Fail closed if required methods or encryption are unavailable.
+    7. Record a non-secret wallet/service capability summary for diagnostics.
+
+  Live test configuration should use:
+
+    OPENRECEIVE_NWC
+    OPENRECEIVE_WALLET_PROFILE=rizful|alby|zeus|custom
+    expected_capabilities.json
+
+  Rizful is the first supported live fixture, not a hard-coded policy center.
 
 Notifications:
 
@@ -980,8 +1096,8 @@ NIP-47 to OpenReceive field mapping:
   - result.payment_hash -> payment_hash
   - result.created_at / expires_at / settled_at stay unix timestamps in
     canonical HTTP responses.
-  - result.state -> state, preserving lowercase NIP-47 values such as pending,
-    settled, accepted, expired, and failed.
+  - result.state -> transaction_state, preserving lowercase NIP-47 values such
+    as pending, settled, accepted, expired, and failed.
   - OpenReceive-specific invoice_id, fiat_quote, checkout, routes, and
     fulfillment fields may be added around the NIP-47 transaction object.
 
@@ -1003,16 +1119,23 @@ Long-running listener requirements:
 
 Settlement detection:
 
-  For NIP-47 incoming invoices, treat invoice as settled when lookup_invoice
-  returns one of:
+  For NIP-47 incoming invoices, treat invoice as settled only when
+  lookup_invoice returns one of:
 
     settled_at present
-    preimage present
     state == "settled"
 
+  Treat preimage as corroborating proof only. In Lightning, the receiver
+  generated the preimage and derived the payment_hash when the invoice was
+  created, so a wallet can know the preimage before payment. NIP-47 says
+  preimage should be present if paid, but real wallet behavior may vary; any
+  wallet that returns preimage at creation would create a false-positive if
+  OpenReceive treated preimage alone as settlement.
+
   Normalize legacy/library-specific variants such as settled true, paid true,
-  or uppercase SETTLED only at adapter boundaries. Store the strongest
-  available proof. Prefer preimage when present.
+  or uppercase SETTLED only at adapter boundaries. Store all available proof,
+  including preimage when present, but make settled_at or state == "settled"
+  the required settlement signal.
 
 Metadata:
 
@@ -1061,27 +1184,67 @@ or missed.
 
 Canonical polling cadence:
 
-  immediate first lookup
-  0-30 seconds:       poll every 1 second
-  30-120 seconds:     poll every 3 seconds
-  120-300 seconds:    poll every 6 seconds
-  300s-expiry:        poll every 12 seconds
-  after expiry:       stop and mark expired
+  no immediate post-create lookup unless a notification arrives
+  0-15 seconds:       poll every 2 seconds
+  15-60 seconds:      poll every 5 seconds
+  60-180 seconds:     poll every 10 seconds
+  180s-expiry:        poll every 20 seconds
+  at local expiry:    perform one final lookup
+  after expiry:       short grace window when wallet truth is inconclusive
 
 Pseudo-code:
 
+  now = clock.now()
+  next_lookup_at = invoice.created_at + 2
+
   while now < invoice.expires_at:
+    sleep_until(min(next_lookup_at, invoice.expires_at))
+    now = clock.now()
+
+    if now >= invoice.expires_at:
+      break
+
     result = lookup_invoice(payment_hash)
 
     if isSettled(result):
       mark_settled()
-      publish_payment_received()
+      publish_invoice_settled()
       fulfill()
       return
 
-    sleep(min(nextDelay(invoice.created_at, now), invoice.expires_at - now))
+    next_lookup_at = now + nextDelay(invoice.created_at, now)
 
-  mark_expired()
+  final = lookup_invoice(payment_hash)
+
+  if isSettled(final):
+    mark_settled()
+    publish_invoice_settled()
+    fulfill()
+    return
+
+  if isWalletExpired(final):
+    mark_expired_closed()
+    publish_invoice_expired()
+    return
+
+  mark_expiry_pending_verification()
+
+  for attempt in graceLookups(invoice.expires_at, clock.now()):
+    sleep(attempt.delay)
+    result = lookup_invoice(payment_hash)
+
+    if isSettled(result):
+      mark_settled()
+      publish_invoice_settled()
+      fulfill()
+      return
+
+    if isWalletExpired(result):
+      mark_expired_closed()
+      publish_invoice_expired()
+      return
+
+  mark_expired_closed()
   publish_invoice_expired()
 
 This cadence must live in test vectors so every language agrees.
@@ -1382,7 +1545,7 @@ Use JSON Schema for:
   - error object
   - NWC info-event summary
   - test vectors
-  - Rizful NWC test fixtures
+  - live wallet profile fixtures
 
 2. OpenAPI
 
@@ -1686,7 +1849,7 @@ Never duplicate:
   - invoice schemas
   - event schemas
   - demo product data
-  - Rizful test wallet behavior
+  - live wallet profile behavior
   - package README structure
 
 Use these mechanisms:
@@ -1696,8 +1859,8 @@ Use these mechanisms:
   - AsyncAPI documents shared event models.
   - Codegen emits provider-data packages.
   - Test vectors enforce behavior across languages.
-  - The shared Rizful receive-only NWC code gives every SDK the same real
-    wallet behavior in integration tests.
+  - The shared live-wallet harness gives every SDK the same real-wallet
+    behavior in integration tests, with Rizful as the first profile.
   - Scaffolding tools create examples from templates.
   - Docs use shared snippets where possible.
   - CI fails when generated files are stale.
@@ -1722,6 +1885,14 @@ The shared implementation burden moves into NWC client libraries and
 conformance, not into a daemon. Each serious server-side SDK must either wrap a
 recently maintained NWC client or ship a standalone neutral NWC client that can
 be used without OpenReceive.
+
+That is an architectural tradeoff, not a free lunch. The cost/risk center for
+many-language support is cryptographic correctness inside the NWC clients.
+OpenReceive should not write fresh crypto glue in eleven ecosystems merely to
+claim coverage. Each new client needs vetted primitives, official vectors,
+negative tests, live wallet smoke tests, install tests, and explicit review of
+RNG, nonce, constant-time, and key-handling behavior before it becomes a
+supported dependency.
 
 These NWC clients are standalone protocol clients, not OpenReceive-only
 packages. They may live under the openreceive GitHub organization for
@@ -1782,7 +1953,7 @@ Maintenance gate for third-party NWC clients:
   - Supports or can be extended to support payment_received notifications.
   - Handles NIP-04 encrypted wallet messages.
   - Supports or can be extended to support NIP-44 v2 negotiation.
-  - Has tests or can pass OpenReceive's Rizful-backed NWC conformance smoke
+  - Has tests or can pass OpenReceive's wallet-profile NWC conformance smoke
     suite.
   - Does not force browser/mobile exposure of NWC secrets.
   - Can run in ordinary server framework jobs, queue workers, cron tasks,
@@ -1893,7 +2064,7 @@ Minimum NWC client responsibilities:
   - Enforce NWC metadata below 3900 serialized characters.
   - Provide safe polling helpers with the canonical cadence.
   - Provide idempotency guidance and helper APIs for framework adapters.
-  - Provide shared conformance vectors and Rizful-backed NWC smoke tests.
+  - Provide shared conformance vectors and wallet-profile NWC smoke tests.
 
 Standalone NWC client test scripts:
 
@@ -2019,7 +2190,7 @@ TypeScript shape:
     timeoutSeconds: 600
   })
 
-  openreceive.events.on("payment_received", async (event) => {
+  openreceive.events.on("invoice.settled", async (event) => {
     await unlockFruitSticker(event.invoice_id)
   })
 
@@ -2071,7 +2242,8 @@ They receive:
   invoice
   payment_hash
   amount_msats
-  state
+  transaction_state
+  workflow_state
   expires_at
   checkout.events_url
   checkout.routes_url
@@ -2084,7 +2256,8 @@ They expose a checkout view model:
     amountMsats
     expiresAt
     expiresIn
-    state
+    transactionState
+    workflowState
     paymentHash
     routes
     assets
@@ -2107,8 +2280,8 @@ They expose a checkout view model:
 
   events:
     created
-    checking
-    payment_received
+    verifying
+    invoice.settled
     expired
     failed
     copied
@@ -2133,7 +2306,7 @@ Responsibilities:
   - Copy invoice.
   - Open lightning: URI.
   - Load provider routes.
-  - Emit payment_received/expired/error events.
+  - Emit invoice.settled/invoice.expired/error events.
   - Expose a framework-neutral checkout state machine.
   - Expose framework-neutral actions for copy, open-wallet, reload state,
     refresh expired invoice, select route, dismiss, retry, and cancel.
@@ -2201,7 +2374,7 @@ React headless example:
           selectedAsset={checkout.selectedAsset}
           onSelectAsset={checkout.selectAsset}
         />
-        <MyPaymentState state={checkout.state} expiresIn={checkout.expiresIn} />
+        <MyPaymentState state={checkout.workflowState} expiresIn={checkout.expiresIn} />
       </MyModal>
     )
   }
@@ -2240,7 +2413,7 @@ Lower-level browser API:
     eventsUrl: invoice.checkout.events_url
   })
 
-  checkout.on("payment_received", () => {
+  checkout.on("invoice.settled", () => {
     showDownloadButton()
   })
 
@@ -2303,7 +2476,7 @@ Frontend contract:
   - Provider cards put Copy Invoice before external provider links because
     mobile clipboard writes are more reliable before navigating away.
   - The browser receives a passive settlement message containing the matching
-    payment_hash and state settled.
+    payment_hash and transaction_state settled.
   - The browser updates only the currently open invoice when invoice_id and
     payment_hash match.
 
@@ -2328,7 +2501,7 @@ JavaScript / TypeScript:
   @openreceive/fastify       Fastify plugin
   @openreceive/next          Next.js route handlers/server helpers
   @openreceive/provider-data Generated provider registry
-  @openreceive/testkit       Shared vectors and Rizful NWC smoke helpers
+  @openreceive/testkit       Shared vectors and live-wallet smoke helpers
 
 Python:
 
@@ -2339,7 +2512,7 @@ Python:
   openreceive-django         Views, models, Channels integration
   openreceive-flask          Blueprints
   openreceive-provider-data  Generated provider registry
-  openreceive-testkit        Shared vector/Rizful NWC test helpers
+  openreceive-testkit        Shared vector/live-wallet test helpers
 
 Ruby:
 
@@ -2348,7 +2521,7 @@ Ruby:
   openreceive                Ruby SDK wrapping nwc-ruby or nwc-client-ruby
   openreceive-rails          Engine, routes, ActionCable, ActiveJob
   openreceive-provider-data  Generated provider registry
-  openreceive-testkit        RSpec vector/Rizful NWC helpers
+  openreceive-testkit        RSpec vector/live-wallet helpers
 
 PHP:
 
@@ -2369,7 +2542,7 @@ Rust:
   openreceive-axum           Axum routes/extractors
   openreceive-actix          Actix integration
   openreceive-provider-data  Generated provider registry
-  openreceive-testkit        Shared vector/Rizful NWC test utilities
+  openreceive-testkit        Shared vector/live-wallet test utilities
 
 Go:
 
@@ -2538,7 +2711,7 @@ Rails adapter requirements:
     app image with a different command, not as a Kamal accessory.
   - Listener handlers must be idempotent at the database level because deploys,
     reconnects, restarts, and multiple listener hosts can replay the same
-    payment_received event.
+    wallet payment_received notification.
   - Rails examples should show an AppState or equivalent cursor for resuming
     notifications with since after restart.
 FastAPI:
@@ -2611,10 +2784,10 @@ User flow:
   4. Backend calls OpenReceive to create invoice for USD 0.10.
   5. Backend stores invoice_id, payment_hash, quote, product metadata.
   6. Frontend displays QR code, copy button, lightning wallet button,
-     countdown, state, and payment route wizard.
+     countdown, transaction/workflow state, and payment route wizard.
   7. Customer pays.
   8. Backend confirms with lookup_invoice.
-  9. Backend emits payment_received event.
+  9. Backend emits invoice.settled event.
   10. Frontend flips to settled/success state.
   11. Backend serves signed one-time sticker URL.
 
@@ -2624,11 +2797,13 @@ Optional deterministic fruit:
 
 Demo modes:
 
-  Rizful test NWC mode:
+  Live wallet test mode, Rizful profile:
 
     OPENRECEIVE_MODE=test_nwc
     OPENRECEIVE_WALLET=nwc
+    OPENRECEIVE_WALLET_PROFILE=rizful
     OPENRECEIVE_NWC=nostr+walletconnect://...
+    OPENRECEIVE_EXPECTED_CAPABILITIES=./expected_capabilities.json
     OPENRECEIVE_PRICE_SOURCE=static
 
   Production NWC mode:
@@ -2638,10 +2813,13 @@ Demo modes:
     OPENRECEIVE_NWC=nostr+walletconnect://...
     OPENRECEIVE_PRICE_SOURCE=coingecko
 
-Every demo must support Rizful test NWC mode. Tests create real low-value
-invoices and settlement is confirmed by paying the fruit-sticker checkout.
-That is acceptable for this project because the test wallet is receive-only,
-the amounts are tiny, and the owner is paying themselves.
+Every demo must support live wallet test mode with at least the Rizful profile.
+Tests create real low-value invoices and settlement is confirmed by paying the
+fruit-sticker checkout. That is acceptable for this project because the test
+wallet is receive-only, the amounts are tiny, and the owner is paying
+themselves. Rizful is the first required profile; the harness must allow
+additional profiles such as Alby, Zeus, and custom self-hosted wallets without
+changing the OpenReceive protocol contract.
 
 
 Demo Matrix
@@ -2721,7 +2899,7 @@ Demo standards:
   - compose.yml for every server-side demo
   - compose.override.yml.example for local development when needed
   - Makefile with standard commands
-  - Rizful test NWC mode
+  - Live wallet test mode with the Rizful profile
   - production NWC mode
   - tests
   - screenshots
@@ -2753,9 +2931,11 @@ The private Rails app already lives at:
   openreceive.org
 
 It is out of scope for the open source repo and demo infrastructure. It is a
-  private Kamal app behind Cloudflare DNS/proxy and an existing Hetzner Load
-  Balancer. Do not deploy demos through the private Rails repo, and do not
-  require the private Rails app for open source demos.
+  private app on private production infrastructure. Hostnames, IPs, capacity
+  notes, load balancer details, and current production inventory belong in
+  private ops notes, not this public plan. Do not deploy demos through the
+  private Rails repo, and do not require the private Rails app for open source
+  demos.
 
 The demo fleet should live on SEO-friendly subdomains:
 
@@ -2827,13 +3007,13 @@ SEO rules:
 Docker requirements:
 
   - Each server-side demo has a production Dockerfile.
-  - Each server-side demo has a compose.yml that can run Rizful test NWC mode.
+  - Each server-side demo has a compose.yml that can run live wallet test mode.
   - Static frontend demos include or point at a server-side API function.
   - Each server-side demo exposes exactly one internal HTTP port.
   - Each demo has a health check.
   - Each demo reads config from environment variables.
-  - Each test/staging demo uses the shared Rizful receive-only NWC secret
-    supplied at deploy time.
+  - Each test/staging demo uses a receive-only NWC secret supplied at deploy
+    time, with OPENRECEIVE_WALLET_PROFILE describing the wallet fixture.
   - Each production demo uses a receive-only NWC secret supplied at deploy
     time.
   - No demo image bakes in secrets.
@@ -2852,32 +3032,17 @@ Image naming:
   ghcr.io/openreceive/demo-go
   ghcr.io/openreceive/demo-rust
 
-Current production edge:
+Private production edge boundary:
 
-  Continue using Cloudflare for openreceive.org DNS/proxying. The current
-  production edge for the private app is:
+  Stable public demos must not run on the private apex app infrastructure. Use
+  a separate demo edge/node. Demo containers are low traffic but operationally
+  noisy: many runtimes, frequent deploys, routing changes, screenshot/debug
+  sessions, and occasional memory spikes. Production isolation matters more
+  than saving one small VPS bill.
 
-    Cloudflare proxied DNS
-      -> Hetzner Load Balancer 5.161.32.166
-      -> app-virginia-1 87.99.151.222
-
-  app-virginia runs critical production apps. Do not treat spare CPU/RAM as a
-  reason to host public OpenReceive demos there. Demo containers are low
-  traffic but operationally noisy: many runtimes, frequent deploys, routing
-  changes, screenshot/debug sessions, and occasional memory spikes. Production
-  isolation matters more than saving one small VPS bill.
-
-  Observed 2026-06-19: app-virginia had 4 vCPU, about 15.2 GB RAM, roughly
-  3.9 GB used, 6 Docker containers, low load, and kamal-proxy bound to public
-  ports 80 and 443. That confirms capacity exists, but it does not change the
-  isolation decision.
-
-  app-virginia rule:
-
-    Do not deploy stable public demos to app-virginia.
-    Do not bind another public Caddy/Traefik to app-virginia ports 80/443.
-    Do not route demo traffic through the private app's kamal-proxy.
-    Do not use app-virginia as part of the normal demo architecture.
+  Private edge details, IPs, hostnames, capacity notes, load balancer details,
+  and current production inventory belong in private_private_infra_details.txt,
+  not in the public open source master plan.
 
 Preferred starting choice:
 
@@ -2904,7 +3069,7 @@ Preferred starting choice:
       express-demo.openreceive.org     -> demo-express
       django-demo.openreceive.org      -> demo-django
       rails-react-demo.openreceive.org -> demo-rails-react
-    demo containers on private Docker networks
+    demo containers on demo Docker networks
 
 Office Ubuntu demo node:
 
@@ -2921,7 +3086,9 @@ Office Ubuntu demo node:
     - Firewall allows only required inbound traffic to the demo proxy.
     - Public gateway forwards only 80/443 to the office node and, where
       practical, accepts those ports only from Cloudflare.
-    - Demo containers run on isolated Docker networks.
+    - Demo containers do not get access to private office LAN services. For
+      v0.1, a shared demo proxy network is acceptable for low-value demos; do
+      not describe that as isolation between demo containers.
     - No access to private office LAN services except explicitly allowed
       outbound updates/monitoring.
     - Unattended security updates or a documented patch routine.
@@ -2939,8 +3106,8 @@ Office Ubuntu demo node:
 Caddy ownership and routing:
 
   The demo node owns its own proxy. Caddy may bind 80/443 there because the
-  node is not app-virginia and does not host the critical private apps. Keep the
-  private app's kamal-proxy out of the normal demo path.
+  node is not the private apex app host and does not host the critical private
+  apps. Keep the private app's proxy out of the normal demo path.
 
   Prefer Caddy for the first office-node deployment because the route map is
   easy to read. Use Docker service-name routing from day one so adding demos
@@ -2954,6 +3121,16 @@ Caddy ownership and routing:
   openreceive_demo_proxy. Each demo compose project joins that network and
   exposes its internal HTTP port only to the Docker network. Do not publish
   per-demo host ports for stable public demos.
+
+  This shared proxy network lets demo containers reach each other by service
+  name. That is acceptable for the first low-value demos because containers
+  should hold only receive-only NWC credentials, static product data, and
+  minimal invoice records, and they still must not reach the private LAN. Do
+  not claim container-to-container isolation for this mode.
+
+  If a demo later handles higher-value production mode, user uploads, private
+  integrations, or sensitive merchant data, give that demo its own private
+  network plus the proxy network, and restrict egress explicitly.
 
   Canonical routing rules:
 
@@ -2992,10 +3169,12 @@ Example Caddy compose:
 
     services:
       caddy:
-        image: caddy:latest
+        image: ghcr.io/openreceive/caddy-cloudflare-dns:latest
         ports:
           - "80:80"
           - "443:443"
+        env_file:
+          - /opt/openreceive/secrets/cloudflare-dns.env
         networks:
           - demo_proxy
         volumes:
@@ -3028,7 +3207,7 @@ Example Caddy compose:
         restart: unless-stopped
 
   The demo proxy may publish 80:80 and 443:443 on the separate demo node. It
-  must not publish those ports on app-virginia.
+  must not publish those ports on the private apex app host.
 
 DNS plan:
 
@@ -3040,7 +3219,7 @@ DNS plan:
     rails-react-demo.openreceive.org  -> WireGuard gateway IP or CNAME target
 
   For stable public demos, point records at the separate demo edge, not the
-  private production Load Balancer and not app-virginia. With the office-node
+  private production edge. With the office-node
   plan, Cloudflare records point at the public WireGuard gateway IP or a stable
   CNAME that reaches that gateway; the gateway forwards only HTTP/HTTPS over
   WireGuard to Caddy on the office demo node. Choose one DNS convention and keep
@@ -3051,8 +3230,8 @@ DNS plan:
   enabled for public demos, and keep the WireGuard/tunnel details out of public
   docs.
 
-  Do not point stable demo records at 5.161.32.166 or 87.99.151.222. Those are
-  part of the private production path, not the demo architecture.
+  Do not point stable demo records at the private production edge. That path is
+  for the private apex app, not the demo architecture.
 
   Do not create a broad *.openreceive.org wildcard for the demo fleet. The apex
   openreceive.org app is private and separate, and broad wildcard routing makes
@@ -3086,11 +3265,26 @@ TLS plan:
   enabled for stable public demo subdomains unless a specific demo needs DNS
   only for debugging.
 
-  Origin TLS for demos belongs on Caddy on the office Ubuntu demo node. Use
-  Caddy-managed Let's Encrypt certificates for demo hostnames by default. This
-  works with Cloudflare Full Strict because Full Strict accepts a valid public
-  CA certificate such as Let's Encrypt; a Cloudflare Origin Certificate is not
-  required for the default demo setup.
+  Origin TLS for demos belongs on Caddy on the office Ubuntu demo node.
+  Cloudflare Full Strict accepts valid public CA certificates such as Let's
+  Encrypt, but proxied Cloudflare DNS breaks the default Caddy ACME paths:
+  TLS-ALPN-01 cannot reach Caddy because Cloudflare terminates TLS, and HTTP-01
+  is fragile behind redirects, proxying, and Cloudflare-only origin firewalls.
+
+  Canonical path:
+
+    Use Caddy with the Cloudflare DNS module and issue/renew certificates via
+    ACME DNS-01. Store a narrowly scoped Cloudflare DNS API token on the demo
+    host, limited to the demo hostnames/zone permissions needed for TXT
+    challenges.
+
+  Acceptable alternatives:
+
+    - Use a Cloudflare Origin CA certificate on Caddy for proxied-only demo
+      origins.
+    - Temporarily set a hostname to DNS-only for manual bootstrap, issue the
+      certificate, then return it to proxied + Full Strict. This is a manual
+      fallback, not the normal renewal plan.
 
   Keep the Cloudflare demo records proxied so browsers see Cloudflare's public
   edge certificate and Cloudflare connects onward to Caddy. Caddy's certificate
@@ -3152,6 +3346,18 @@ Deployment workflow:
   Deployment workflows must be restricted to protected branches, tags,
   workflow_dispatch, or a protected GitHub environment.
 
+  Self-hosted runner hard rules:
+
+    - Never mount the host Docker socket into an untrusted or broad CI runner.
+      Docker socket access is effectively root on the host.
+    - Run any deploy runner in a locked-down VM, container boundary, or separate
+      deploy user with minimal SSH/deploy rights.
+    - Keep build/test runners separate from deploy runners.
+    - Do not store NWC secrets in the same environment that builds untrusted
+      code.
+    - Do not let pull_request workflows from forks or untrusted branches reach
+      deploy credentials, WireGuard keys, GHCR write tokens, or host secrets.
+
   - GitHub Actions builds demo images.
   - Images are tagged with git SHA and optionally latest for stable branch.
   - Images are pushed to GHCR.
@@ -3168,12 +3374,12 @@ Deployment workflow:
   Minimal GitHub Actions mental model:
 
     on pull request:
-      run tests and build changed demos. Run Rizful NWC smoke tests only where
+      run tests and build changed demos. Run live-wallet smoke tests only where
       the trusted test secret is available; do not deploy stable demos
 
     on merge to main:
       run tests, build changed demos, push GHCR images, optionally deploy
-      Rizful test demos after smoke tests pass
+      live-wallet test demos after smoke tests pass
 
     on tagged release:
       publish packages, rebuild affected demos, promote tested image digests to
@@ -3189,8 +3395,8 @@ Deployment churn policy:
 
     preview lane:
       Every pull request or branch may build changed demos with noindex and
-      short-lived preview URLs. Trusted previews may use the Rizful test NWC
-      secret; untrusted previews build without NWC smoke tests. Preview
+      short-lived preview URLs. Trusted previews may use the live-wallet test
+      NWC secret; untrusted previews build without NWC smoke tests. Preview
       deploys can use local tunnels, VPN-only access, or
       preview.openreceive.org. They do not imply that a stack is ready for the
       stable public demo list.
@@ -3198,7 +3404,7 @@ Deployment churn policy:
     stable lane:
       Merges to main build immutable demo images tagged by git SHA and image
       digest. Stable public demo subdomains are promoted to a tested image
-      digest after smoke tests pass. Rizful test demos may auto-promote once
+      digest after smoke tests pass. Live-wallet test demos may auto-promote once
       the pipeline is reliable; production-wallet demos require explicit
       manual approval.
 
@@ -3247,6 +3453,7 @@ Recommended deploy repo layout:
       staging.env           # gitignored, never committed
       rizful-test-wallet.env # gitignored, never committed
       production-wallet.env  # gitignored, never committed
+      cloudflare-dns.env     # gitignored, never committed
     proxy/
       compose.yml
       Caddyfile
@@ -3269,6 +3476,7 @@ Environment variable convention:
   OPENRECEIVE_MODE=test_nwc
   OPENRECEIVE_PUBLIC_URL=https://django-demo.openreceive.org
   OPENRECEIVE_WALLET=nwc
+  OPENRECEIVE_WALLET_PROFILE=rizful
   OPENRECEIVE_PRICE_SOURCE=static
   OPENRECEIVE_DEMO_NAME=django-demo
   OPENRECEIVE_DEMO_STACK="Django + HTMX"
@@ -3276,9 +3484,9 @@ Environment variable convention:
 Secret variable convention:
 
   OPENRECEIVE_NWC=nostr+walletconnect://...
-  OPENRECEIVE_API_KEY=...
-  OPENRECEIVE_WEBHOOK_SECRET=...
+  OPENRECEIVE_EXPECTED_CAPABILITIES=/opt/openreceive/secrets/expected_capabilities.json
   GHCR_READ_TOKEN=...
+  CLOUDFLARE_API_TOKEN=...   # DNS-01 only, narrowly scoped
 
 Secrets management:
 
@@ -3299,6 +3507,7 @@ Secrets management:
     demos/deploy/secrets/staging.env
     demos/deploy/secrets/rizful-test-wallet.env
     demos/deploy/secrets/production-wallet.env
+    demos/deploy/secrets/cloudflare-dns.env
     demos/deploy/certs/*
     demos/deploy/wireguard/*
     demos/deploy/.ssh/*
@@ -3335,6 +3544,7 @@ Secrets management:
 
       /opt/openreceive/secrets/production.env
       /opt/openreceive/secrets/rizful-test-wallet.env
+      /opt/openreceive/secrets/expected_capabilities.json
       /opt/openreceive/secrets/production-wallet.env
       /opt/openreceive/secrets/ghcr.env
 
@@ -3438,7 +3648,7 @@ Staging and preview:
 
 Test and production wallet policy:
 
-  - Default hosted demos use the shared Rizful receive-only test NWC code.
+  - Default hosted demos use live wallet test mode with the Rizful profile.
   - Test demos have low invoice amounts, daily caps, and rate limits.
   - Test demos should be clearly labeled as real Lightning test purchases.
   - Production demos use a separate receive-only production NWC code only when
@@ -3493,7 +3703,6 @@ Test layers:
   - event parsing
   - QR payload, quiet-zone, and contrast helpers
   - idempotency key handling
-  - webhook retry state
 
 3. Shared test vectors
 
@@ -3789,7 +3998,7 @@ Every SDK doc should have the same shape:
   - Configure
   - Create invoice
   - Show checkout
-  - Listen for payment_received event
+  - Listen for invoice.settled event
   - Fulfill product
   - Run the fruit sticker demo
   - Deploy
