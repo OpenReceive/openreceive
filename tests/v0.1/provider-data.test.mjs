@@ -2,8 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   getAsset,
+  getAssets,
   getCountry,
+  getCountries,
+  getCountryRoutes,
+  getCryptoRoutes,
+  getDisqualifiedProviders,
+  getFiatRails,
+  getPaymentWizardRoutes,
   getProvider,
+  getProviders,
   getProviderRegistryMetadata,
   listAssets,
   listCountries,
@@ -14,7 +22,8 @@ import {
   listFiatRailCountries,
   listFiatRails,
   listProviders,
-  providerRegistry
+  providerRegistry,
+  validateRegistry
 } from "@openreceive/provider-data";
 
 test("provider-data exposes canonical registry metadata and counts", () => {
@@ -30,6 +39,15 @@ test("provider-data exposes canonical registry metadata and counts", () => {
   assert.equal(listCryptoRoutes().length, 15);
   assert.equal(listCountries().length, 39);
   assert.equal(listDisqualifiedProviders().length, 7);
+});
+
+test("provider-data exposes master-plan getter aliases", () => {
+  assert.equal(getAssets(), listAssets());
+  assert.deepEqual(getProviders(), listProviders());
+  assert.equal(getCryptoRoutes(), listCryptoRoutes());
+  assert.deepEqual(getFiatRails(), listFiatRails());
+  assert.deepEqual(getCountries(), listCountries());
+  assert.equal(getDisqualifiedProviders(), listDisqualifiedProviders());
 });
 
 test("provider-data resolves crypto route providers without changing route order", () => {
@@ -63,6 +81,36 @@ test("provider-data resolves ranked fiat rail providers for a country", () => {
   );
 });
 
+test("provider-data resolves country routes for payment wizard selection", () => {
+  const usRoutes = getCountryRoutes("us");
+
+  assert.deepEqual(
+    usRoutes.map((route) => route.rail.id),
+    ["bank", "card"]
+  );
+  assert.equal(usRoutes[0].country.code, "US");
+  assert.equal(usRoutes[0].providers[0].provider.id, "strike");
+  assert.equal(usRoutes[0].providers[0].rank, 1);
+});
+
+test("provider-data resolves payment wizard routes from asset and fiat inputs", () => {
+  const cryptoRoutes = getPaymentWizardRoutes({ asset: "BTC" });
+  const fiatRoutes = getPaymentWizardRoutes({ rail: "bank", country: "us" });
+
+  assert.equal(cryptoRoutes.length, 1);
+  assert.equal(cryptoRoutes[0].kind, "crypto");
+  assert.equal(cryptoRoutes[0].route.id, "btc-lightning");
+  assert.equal(cryptoRoutes[0].asset.symbol, "btc");
+  assert.equal(cryptoRoutes[0].providers[0].provider.id, "rizful");
+  assert.equal(cryptoRoutes[0].providers[0].flagship, true);
+
+  assert.equal(fiatRoutes.length, 1);
+  assert.equal(fiatRoutes[0].kind, "fiat");
+  assert.equal(fiatRoutes[0].rail.id, "bank");
+  assert.equal(fiatRoutes[0].country.code, "US");
+  assert.equal(fiatRoutes[0].providers[0].provider.id, "strike");
+});
+
 test("provider-data filters providers and countries conservatively", () => {
   assert.equal(getProvider("strike")?.us, true);
   assert.equal(getProvider("sideshift")?.us, false);
@@ -80,4 +128,23 @@ test("provider-data exports immutable registry objects", () => {
   assert.throws(() => {
     providerRegistry.providers.strike.us = false;
   }, TypeError);
+});
+
+test("provider-data validates registry references without exiting", () => {
+  assert.deepEqual(validateRegistry(), { valid: true, errors: [] });
+
+  const brokenRegistry = {
+    ...providerRegistry,
+    crypto_routes: [
+      {
+        ...providerRegistry.crypto_routes[0],
+        providers: [{ provider: "missing-provider" }]
+      },
+      ...providerRegistry.crypto_routes.slice(1)
+    ]
+  };
+  const result = validateRegistry(brokenRegistry);
+
+  assert.equal(result.valid, false);
+  assert.equal(result.errors.some((error) => error.includes("references missing provider missing-provider")), true);
 });
