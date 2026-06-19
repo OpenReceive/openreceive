@@ -64,7 +64,8 @@ function validateSchemas() {
     "spec/schemas/invoice-storage.schema.json",
     "spec/schemas/payment-event.schema.json",
     "spec/schemas/rate-quote.schema.json",
-    "spec/schemas/error.schema.json"
+    "spec/schemas/error.schema.json",
+    "spec/schemas/provider-registry.schema.json"
   ]);
 
   for (const file of required) {
@@ -168,24 +169,81 @@ function validateNwcVectors() {
 function validateProviderRegistryReferences() {
   const registry = readJson("spec/data/providers/openreceive-providers.v2.json");
   assert(registry.schema_version === "2.0.0", "provider registry schema version mismatch");
+  assert(registry.generated === "2026-06-18", "provider registry generated date changed unexpectedly");
+  assert(registry.assets_index.length === 18, "provider registry asset count mismatch");
+  assert(Object.keys(registry.providers).length === 36, "provider registry provider count mismatch");
+  assert(registry.crypto_routes.length === 15, "provider registry crypto route count mismatch");
+  assert(Object.keys(registry.fiat_rails).length === 2, "provider registry fiat rail count mismatch");
+  assert(registry.countries.length === 39, "provider registry country count mismatch");
+  assert(registry.disqualified_providers.length === 7, "provider registry disqualified count mismatch");
+
   const providerIds = new Set(Object.keys(registry.providers || {}));
+  const disqualifiedIds = new Set((registry.disqualified_providers || []).map((provider) => provider.id));
+  const countryCodes = new Set((registry.countries || []).map((country) => country.code));
+  const routeIds = new Set((registry.crypto_routes || []).map((route) => route.id));
+  const assetRouteIds = new Set(
+    (registry.assets_index || [])
+      .map((asset) => asset.route)
+      .filter((route) => route !== undefined)
+  );
+
+  for (const [id, provider] of Object.entries(registry.providers || {})) {
+    assert(id === provider.id, `provider key/id mismatch for ${id}`);
+    assert(/^[a-z0-9-]+$/.test(id), `provider ${id} has invalid id`);
+    assert(provider.name && provider.url, `provider ${id} missing name or url`);
+    assert(provider.url.startsWith("https://"), `provider ${id} url must be https`);
+    assert(provider.pays_arbitrary_invoice === true, `provider ${id} must pay arbitrary invoice`);
+    assert(["pay_invoice", "withdraw_to_invoice"].includes(provider.mechanism), `provider ${id} has invalid mechanism`);
+    assert(!disqualifiedIds.has(id), `provider ${id} appears in disqualified providers`);
+
+    const claimText = `${provider.blurb || ""} ${provider.caveat || ""}`.toLowerCase();
+    if (provider.us === true) {
+      assert(!claimText.includes("not available to us users"), `provider ${id} has contradictory US availability`);
+      assert(!claimText.includes("us persons cannot"), `provider ${id} has contradictory US availability`);
+      assert(!claimText.includes("blocked in us"), `provider ${id} has contradictory US availability`);
+      assert(!claimText.includes("tos prohibits us users"), `provider ${id} has contradictory US availability`);
+    }
+  }
+
+  for (const routeId of assetRouteIds) {
+    assert(routeIds.has(routeId), `asset references missing route ${routeId}`);
+  }
 
   for (const route of registry.crypto_routes || []) {
+    assert(route.id && route.symbol && route.label, `crypto route ${route.id} missing id/symbol/label`);
+    assert(Array.isArray(route.providers) && route.providers.length > 0, `crypto route ${route.id} needs providers`);
+    let flagshipCount = 0;
     for (const ref of route.providers || []) {
       assert(providerIds.has(ref.provider), `crypto route ${route.id} references missing provider ${ref.provider}`);
+      assert(!disqualifiedIds.has(ref.provider), `crypto route ${route.id} references disqualified provider ${ref.provider}`);
+      if (ref.flagship === true) flagshipCount += 1;
     }
+    assert(flagshipCount <= 1, `crypto route ${route.id} has more than one flagship provider`);
+  }
+
+  for (const country of registry.countries || []) {
+    assert(/^[A-Z]{2}$/.test(country.code), `country ${country.code} is not ISO alpha-2 shaped`);
+    assert(/^[A-Z]{3}$/.test(country.currency), `country ${country.code} currency is not ISO 4217 shaped`);
+    assert(["deep", "thin", "sparse"].includes(country.coverage), `country ${country.code} coverage invalid`);
   }
 
   for (const [railId, rail] of Object.entries(registry.fiat_rails || {})) {
     for (const [countryCode, refs] of Object.entries(rail.countries || {})) {
       assert(/^[A-Z]{2}$/.test(countryCode), `fiat rail ${railId} has invalid country code ${countryCode}`);
+      assert(countryCodes.has(countryCode), `fiat rail ${railId} references unknown country ${countryCode}`);
+      assert(Array.isArray(refs) && refs.length > 0, `fiat rail ${railId}/${countryCode} needs providers`);
+      let expectedRank = 1;
       for (const ref of refs) {
         assert(providerIds.has(ref.provider), `fiat rail ${railId}/${countryCode} references missing provider ${ref.provider}`);
+        assert(!disqualifiedIds.has(ref.provider), `fiat rail ${railId}/${countryCode} references disqualified provider ${ref.provider}`);
+        assert(ref.rank === expectedRank, `fiat rail ${railId}/${countryCode} ranks must be sequential`);
+        expectedRank += 1;
       }
     }
   }
 
   for (const provider of registry.disqualified_providers || []) {
+    assert(!providerIds.has(provider.id), `disqualified provider ${provider.id} also appears as included`);
     assert(provider.reason, `disqualified provider ${provider.id} missing reason`);
   }
 }

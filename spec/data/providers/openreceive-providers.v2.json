@@ -323,7 +323,7 @@
       "id": "sideshift",
       "name": "SideShift.ai",
       "url": "https://sideshift.ai",
-      "us": true,
+      "us": false,
       "pays_arbitrary_invoice": true,
       "mechanism": "withdraw_to_invoice",
       "lightning_docs_url": null,
@@ -1462,7 +1462,6 @@
             "rank": 2
           }
         ],
-        "KR": [],
         "SG": [
           {
             "provider": "binance",
@@ -1888,7 +1887,6 @@
             "rank": 1
           }
         ],
-        "KR": [],
         "SG": [
           {
             "provider": "binance",

@@ -1,0 +1,281 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spec.openreceive.org/schemas/provider-registry.v2.json",
+  "title": "OpenReceive Provider Registry v2 Draft",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated",
+    "description",
+    "filter",
+    "_meta",
+    "assets_index",
+    "providers",
+    "crypto_routes",
+    "countries",
+    "fiat_rails",
+    "disqualified_providers"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "2.0.0"
+    },
+    "generated": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "filter": {
+      "type": "string",
+      "minLength": 1
+    },
+    "_meta": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "assets_index": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "symbol",
+          "label"
+        ],
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "route": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "providers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "url",
+          "us",
+          "pays_arbitrary_invoice",
+          "mechanism",
+          "lightning_docs_url",
+          "blurb"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "url": {
+            "type": "string",
+            "pattern": "^https://"
+          },
+          "us": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "pays_arbitrary_invoice": {
+            "const": true
+          },
+          "mechanism": {
+            "type": "string",
+            "enum": [
+              "pay_invoice",
+              "withdraw_to_invoice"
+            ]
+          },
+          "lightning_docs_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "blurb": {
+            "type": "string",
+            "minLength": 1
+          },
+          "caveat": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "crypto_routes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "symbol",
+          "label",
+          "summary",
+          "providers"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "symbol": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1
+          },
+          "providers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/provider_ref"
+            }
+          }
+        }
+      }
+    },
+    "countries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "name",
+          "currency",
+          "coverage"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "coverage": {
+            "type": "string",
+            "enum": [
+              "deep",
+              "thin",
+              "sparse"
+            ]
+          }
+        }
+      }
+    },
+    "fiat_rails": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "label",
+          "countries"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "countries": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/provider_ref"
+              }
+            }
+          }
+        }
+      }
+    },
+    "disqualified_providers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "url",
+          "reason"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "url": {
+            "type": "string",
+            "pattern": "^https://"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "provider_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$"
+        },
+        "flagship": {
+          "type": "boolean"
+        },
+        "blurb_override": {
+          "type": "string"
+        },
+        "rank": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}
