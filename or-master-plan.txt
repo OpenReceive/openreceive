@@ -3303,7 +3303,7 @@ TLS plan:
 
     - Bypass cache for /openreceive/*, /api/*, /events, and text/event-stream.
     - Keep polling fallback even when SSE is enabled.
-    - Send no-store on invoice/state/event responses.
+    - Send no-store on invoice/lookup/event responses.
     - Cache only static demo assets, docs, and screenshots.
 
   Recommendation:
@@ -4050,8 +4050,9 @@ Threats:
 Controls:
 
   - Receive-only NWC default.
-  - No wallet compatibility registry or preflight ceremony; NWC codes are
-    treated as compatible, and checkout APIs never expose send-payment methods.
+  - Automatic wallet preflight before live checkout; no manual compatibility
+    ceremony or central wallet registry required.
+  - Checkout APIs never expose send-payment methods.
   - .env.example templates committed; real env files ignored.
   - Host-side secret files stored outside the repo with chmod 600.
   - Secret redaction utility in every SDK.
@@ -4295,8 +4296,8 @@ Deliverables:
 Definition of done:
 
   Each Python and PHP package passes shared-vector conformance plus the
-  Rizful-backed smoke flow, each framework adapter uses its native job system,
-  and each demo passes the Hello Fruit smoke test in test NWC mode.
+  live-wallet-profile smoke flow, each framework adapter uses its native job
+  system, and each demo passes the Hello Fruit smoke test in test NWC mode.
 
 Milestone 5: systems and enterprise stacks
 
@@ -4316,7 +4317,7 @@ Deliverables:
 
 Definition of done:
 
-  Each core package passes shared vectors, Rizful-backed NWC smoke tests,
+  Each core package passes shared vectors, live-wallet-profile NWC smoke tests,
   and package smoke tests.
 
 Milestone 6: mobile
@@ -4367,8 +4368,8 @@ Deliverables:
 Definition of done:
 
   Real merchants can evaluate OpenReceive through hosted demos, run a local
-  Rizful-backed test checkout, connect their own receive-only NWC wallet, and
-  deploy a production integration with clear security docs.
+  live-wallet-profile test checkout, connect their own receive-only NWC wallet,
+  and deploy a production integration with clear security docs.
 
 
 v0.1.0 Scope
@@ -4531,17 +4532,19 @@ Important Design Decisions To Make Early
 
     Use proven NWC libraries where possible for early delivery, wrap them behind
     OpenReceive interfaces, and keep protocol behavior covered by shared
-    vectors plus Rizful-backed NWC smoke tests. Do not hand-roll Nostr
+    vectors plus live-wallet-profile NWC smoke tests. Do not hand-roll Nostr
     encryption unless the existing library path blocks the project.
 
 3. Hosted test demo policy
 
   Recommendation:
 
-    Hosted public demos default to the shared Rizful receive-only test NWC
-    code. These are real mainnet test purchases for tiny sticker amounts, which
-    is acceptable because the owner is paying themselves. No separate wallet
-    compatibility confirmation is required beyond using the NWC code.
+    Hosted public demos default to live wallet test mode with the Rizful profile
+    first. These are real mainnet test purchases for tiny sticker amounts,
+    which is acceptable because the owner is paying themselves. There is no
+    manual compatibility ceremony, but every SDK must run automatic preflight,
+    fail if make_invoice or lookup_invoice are unavailable, warn on spend
+    capability, and record a non-secret capability summary.
 
 4. Provider registry claims
 

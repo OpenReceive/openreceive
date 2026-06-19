@@ -35,3 +35,4 @@ demos/deploy/**/wg*.conf
 .DS_Store
 /private/*
 !/private/.keep
+private_private_infra_details.txt
