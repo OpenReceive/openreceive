@@ -115,7 +115,7 @@ The core product must support:
 
   - Creating a BOLT11 invoice.
   - Looking up invoice settlement.
-  - Safely polling until paid or expired.
+  - Safely polling until settled or expired.
   - Listening to NWC notifications as an accelerator.
   - Converting fiat amounts to millisatoshis.
   - Locking a quote at invoice creation.
@@ -129,17 +129,18 @@ The reference flow:
 1. Merchant creates or obtains a receive-only NWC connection string.
 2. Backend stores that NWC string server-side only.
 3. Backend SDK calls make_invoice through a native NWC client.
-4. Backend stores invoice_id, payment_hash, bolt11, amount, expiry, quote,
-   metadata, and status.
+4. Backend stores invoice_id, payment_hash, invoice, amount_msat, expiry,
+   quote, metadata, and NIP-47 state.
 5. Frontend receives only non-secret invoice display data.
 6. Frontend renders QR, copy button, lightning URI, countdown, payment routes,
-   and status.
+   and state.
 7. Backend listens for notifications where practical and also polls
    lookup_invoice through a background job, queue worker, scheduled task, or
    long-running framework worker.
-8. Backend confirms paid status by lookup_invoice result with settled_at,
-   preimage, settled true, paid true, or known wallet equivalent.
-9. Backend emits invoice.paid / payment-update to the matching browser session.
+8. Backend confirms settlement by lookup_invoice result with settled_at,
+   preimage, or state == "settled".
+9. Backend emits payment_received / payment-update to the matching browser
+   session.
 10. Backend fulfills the product.
 
 There is no pure-frontend OpenReceive checkout mode. A browser app, mobile app,
@@ -159,7 +160,10 @@ Security and correctness:
   - Static sites must call a serverless function, small API, CMS/plugin
     backend, or merchant server before showing an invoice.
   - Receive-only NWC is the default and recommended mode.
-  - NO read/write NWC anywhere, no send payments!
+  - OpenReceive receive-checkout APIs never send payments.
+  - Standalone nwc-client-* protocol libraries may support pay_invoice for
+    general NWC users, but OpenReceive checkout adapters hide or refuse send
+    methods by default.
   - The frontend never unlocks a product by itself.
   - Notifications are never final proof by themselves.
   - Settlement truth comes from lookup_invoice but also nwc notifications can provide the same data faster.
@@ -209,7 +213,7 @@ OpenReceive has one primary implementation model:
     Node app           -> @openreceive/node     -> @getalby/sdk       -> NWC wallet
     Go app             -> openreceive-go        -> audited go-nwc or nwc-client-go -> NWC wallet
     Swift Vapor API    -> OpenReceiveVapor      -> NostrKit or NWCClient -> NWC wallet
-    iOS app            -> merchant API backend  -> OpenReceive SDK    -> NWC wallet
+    iOS app            -> Node/Express payment API -> NWC wallet
 
 The important product decision: OpenReceive should feel like installing a gem,
 Composer package, npm package, PyPI package, SwiftPM package, crate, module, or
@@ -218,9 +222,33 @@ Rails, PHP, Python, Go, Swift, or .NET developer to operate an extra daemon.
 
 Frontend and mobile packages are UI clients only:
 
-    Browser UI      -> merchant backend endpoint -> OpenReceive SDK -> NWC wallet
-    iOS/Android app -> merchant backend endpoint -> OpenReceive SDK -> NWC wallet
-    Static site     -> serverless/API endpoint   -> OpenReceive SDK -> NWC wallet
+    Browser UI      -> merchant payment backend -> NWC wallet
+    iOS/Android app -> merchant payment backend -> NWC wallet
+    Static site     -> serverless/API backend   -> NWC wallet
+
+The frontend/mobile decision is only: which backend endpoint do I call? The
+server-side implementation is a separate choice owned by the merchant backend.
+
+Inside that backend, the developer may use:
+
+  Node/Express API    -> @openreceive/node     -> @getalby/sdk
+  Rails app           -> openreceive-rails     -> nwc-ruby
+  FastAPI app         -> openreceive-fastapi   -> nwc-client-py
+  Laravel app         -> openreceive-laravel   -> nwc-client-php
+  Vapor API           -> OpenReceiveVapor      -> NWCClient
+
+Those implementation details never cross into browser, iOS, Android, Flutter,
+or React Native apps. Client apps only receive invoice display data and passive
+settlement state updates.
+
+Default iOS demo choice:
+
+  Build the first iOS demo as SwiftUI app -> Node/Express payment API -> NWC
+  wallet. Internally, that API uses @openreceive/node and @getalby/sdk.
+  Node/Express is common for mobile API backends, aligns with the v0.1
+  OpenReceive stack, and avoids blocking the iOS UI demo on the Swift/Vapor
+  server adapter. Keep ios-swiftui-vapor-api as the later Swift-native backend
+  proof.
 
 Default build strategy:
 
@@ -244,8 +272,60 @@ Laravel, Spring, ASP.NET Core, Phoenix, Vapor, and similar apps.
 This contract is still valuable because it keeps frontend checkout components,
 mobile apps, demos, docs, tests, and server adapters aligned. A React checkout,
 SwiftUI checkout, static-site widget, or mobile app should be able to talk to
-the merchant's backend using the same invoice/status/event shapes no matter
+the merchant's backend using the same invoice/state/event shapes no matter
 which server framework created the invoice.
+
+NWC naming policy:
+
+  The canonical OpenReceive HTTP payload should mirror NIP-47 field names as
+  closely as practical. Use invoice for the BOLT11 string, expiry for seconds
+  from invoice creation, state for the NIP-47 transaction state, and
+  payment_hash, description, description_hash, metadata, created_at,
+  expires_at, and settled_at exactly as NIP-47 names them.
+
+  Intentional naming exception: OpenReceive uses amount_msat instead of NIP-47
+  amount in its public HTTP and SDK payloads. In NIP-47, amount means
+  millisatoshis, but in merchant APIs amount is too easy to confuse with fiat,
+  sats, or display money. NWC adapters map amount_msat to NIP-47 amount when
+  sending requests and map NIP-47 result.amount back to amount_msat.
+
+  OpenReceive-specific fields are allowed only where they describe app-layer
+  behavior that NIP-47 does not model: invoice_id, fiat, fiat_quote, checkout,
+  fulfillment, routes, auth, and idempotency. Public frontend responses may
+  hide sensitive fields such as preimage and expose preimage_present instead.
+
+  Do not copy the encrypted NWC event envelope into HTTP responses. HTTP routes
+  already name the operation, so method, params, and result_type are not needed
+  unless a package is implementing a raw NWC proxy/debug tool.
+
+Authentication and authorization:
+
+  OpenReceive does not define a standalone user-auth system. Framework adapters
+  mount into the merchant's app and must integrate with the app's existing auth
+  model: Rails sessions/Devise, Laravel auth middleware, NextAuth/Auth.js,
+  Express middleware, Django auth, Phoenix plugs, ASP.NET policies, or a
+  custom guest-checkout/session-token system.
+
+  The app decides who can create an invoice, who can read an invoice, who can
+  subscribe to events, and who receives fulfillment. OpenReceive provides
+  hooks, helpers, and safe defaults; it does not decide what "logged in",
+  "owns this order", "guest checkout", or "admin" means.
+
+  Typical endpoint policy:
+
+    POST /openreceive/v1/invoices
+      Protected by app auth, cart/session token, or guest checkout token.
+
+    GET /openreceive/v1/invoices/{invoice_id}
+      Allowed only when the invoice belongs to the current user, cart, order,
+      or checkout session.
+
+    GET /openreceive/v1/invoices/{invoice_id}/events
+      Uses same-site session cookies, a short-lived signed event URL, or a
+      polling fallback when EventSource auth is awkward on the platform.
+
+    GET /openreceive/v1/routes, /providers, /rates
+      Usually public/cacheable but still rate-limited.
 
 Base path:
 
@@ -255,10 +335,9 @@ Core endpoints:
 
   POST   /openreceive/v1/invoices
   GET    /openreceive/v1/invoices/{invoice_id}
+  POST   /openreceive/v1/invoices/lookup
   GET    /openreceive/v1/invoices/{invoice_id}/events
   POST   /openreceive/v1/invoices/{invoice_id}/refresh
-  GET    /openreceive/v1/invoices/{invoice_id}/qr.svg
-  GET    /openreceive/v1/invoices/{invoice_id}/qr.png
   GET    /openreceive/v1/rates
   POST   /openreceive/v1/rates/quote
   GET    /openreceive/v1/routes
@@ -272,46 +351,71 @@ Create invoice request:
   Content-Type: application/json
   Idempotency-Key: fruit-demo-user-123-order-456
 
+  The request body mirrors NIP-47 make_invoice params except that OpenReceive
+  uses amount_msat instead of amount for clarity. If a merchant wants
+  OpenReceive to convert fiat, use the OpenReceive-specific fiat extension and
+  the adapter still calls NWC make_invoice with amount set to the msat value.
+
   {
-    "amount": {
+    "amount_msat": 200000,
+    "description": "Fruit sticker from OpenReceive demo",
+    "description_hash": null,
+    "expiry": 600,
+    "metadata": {
+      "order_id": "order_456",
+      "product_id": "fruit-sticker-pack",
+      "fruit": "banana"
+    },
+    "fiat": {
       "currency": "USD",
       "value": "0.10"
-    },
-    "product": {
-      "id": "fruit-sticker-pack",
-      "name": "Fruit Sticker",
-      "metadata": {
-        "fruit": "banana"
-      }
-    },
-    "expires_in_seconds": 600,
-    "description": "Fruit sticker from OpenReceive demo"
+    }
   }
 
 Create invoice response:
 
   {
     "invoice_id": "or_inv_01jz...",
-    "status": "awaiting_payment",
+    "type": "incoming",
+    "state": "pending",
+    "invoice": "lnbc...",
+    "description": "Fruit sticker from OpenReceive demo",
+    "description_hash": null,
     "payment_hash": "abc123...",
-    "bolt11": "lnbc...",
-    "amount_msat": "200000",
-    "amount_sat": "200",
+    "amount_msat": 200000,
+    "created_at": 1781740800,
+    "expires_at": 1781741400,
+    "metadata": {
+      "order_id": "order_456",
+      "product_id": "fruit-sticker-pack",
+      "fruit": "banana"
+    },
     "fiat_quote": {
       "currency": "USD",
       "value": "0.10",
       "btc_usd": "50000.00",
       "source": "static_mock",
-      "as_of": "2026-06-18T00:00:00Z",
-      "expires_at": "2026-06-18T00:10:00Z"
+      "as_of": 1781740800,
+      "expires_at": 1781741400
     },
-    "expires_at": "2026-06-18T00:10:00Z",
     "checkout": {
-      "qr_svg_url": "/openreceive/v1/invoices/or_inv_01jz.../qr.svg",
       "events_url": "/openreceive/v1/invoices/or_inv_01jz.../events",
       "routes_url": "/openreceive/v1/routes?invoice_id=or_inv_01jz..."
     }
   }
+
+QR codes:
+
+  QR rendering is not part of the canonical backend HTTP API. The backend
+  returns the BOLT11 invoice string in invoice, and frontend/mobile packages
+  generate QR codes locally from that string. This is how React, Vue, Svelte,
+  Angular, SwiftUI, Android Compose, Flutter, and web-component checkouts
+  should work.
+
+  Framework adapters may offer optional QR helpers for no-JavaScript fallback
+  pages, server-rendered emails, PDFs, or unusual CMS/plugin environments, but
+  those helpers are not required OpenReceive endpoints and should not be
+  included in the canonical invoice response.
 
 Original-docs demo compatibility response:
 
@@ -334,28 +438,52 @@ Original-docs demo compatibility response:
   Mapping:
 
     invoice.payment_hash       -> payment_hash
-    invoice.bolt11             -> bolt11
-    invoice.amount_sat         -> amount_sats
-    invoice.amount.value       -> amount_cents for USD-cent demos
+    invoice.invoice            -> bolt11
+    invoice.amount_msat / 1000 -> amount_sats
+    invoice.fiat_quote.value   -> amount_cents for USD-cent demos
     invoice.fiat_quote.btc_usd -> btc_usd_rate
-    invoice.expires_at         -> expires_at
-    awaiting_payment           -> pending
-    paid                       -> succeeded
+    invoice.expires_at         -> expires_at, converted to ISO-8601 if needed
+    state pending              -> status pending
+    state settled              -> status succeeded
 
   This compatibility shape is for examples and app-specific controllers. The
   public OpenReceive HTTP API should still use the canonical invoice schema.
+
+Lookup invoice request:
+
+  Frontend checkout flows normally use invoice_id because it is scoped to the
+  merchant app's order/session/auth model:
+
+    GET /openreceive/v1/invoices/or_inv_01jz...
+
+  Backend SDKs and server-to-server code may also use a NIP-47-shaped lookup
+  request where the framework auth policy allows it:
+
+    POST /openreceive/v1/invoices/lookup
+
+    {
+      "payment_hash": "abc123..."
+    }
+
+  The lookup request may use payment_hash or invoice, matching NIP-47
+  lookup_invoice params. One of payment_hash or invoice is required.
 
 Lookup invoice response:
 
   {
     "invoice_id": "or_inv_01jz...",
-    "status": "paid",
+    "type": "incoming",
+    "state": "settled",
+    "invoice": "lnbc...",
     "payment_hash": "abc123...",
-    "settled_at": "2026-06-18T00:03:10Z",
+    "amount_msat": 200000,
+    "created_at": 1781740800,
+    "expires_at": 1781741400,
+    "settled_at": 1781740990,
     "preimage_present": true,
     "fulfillment": {
       "type": "digital_file",
-      "status": "ready",
+      "state": "ready",
       "url": "/demo/fruit-stickers/banana.svg"
     }
   }
@@ -373,10 +501,8 @@ managed realtime services.
 Event names:
 
   invoice.created
-  invoice.awaiting_payment
-  invoice.payment_seen
   invoice.checking
-  invoice.paid
+  payment_received
   invoice.expired
   invoice.failed
   invoice.fulfilled
@@ -385,21 +511,22 @@ Event names:
 Example SSE:
 
   event: invoice.created
-  data: {"invoice_id":"or_inv_01jz...","status":"awaiting_payment"}
+  data: {"invoice_id":"or_inv_01jz...","type":"incoming","state":"pending"}
 
-  event: invoice.payment_seen
-  data: {"invoice_id":"or_inv_01jz...","status":"checking"}
+  event: invoice.checking
+  data: {"invoice_id":"or_inv_01jz...","type":"incoming","state":"pending"}
 
-  event: invoice.paid
-  data: {"invoice_id":"or_inv_01jz...","status":"paid","settled_at":"2026-06-18T00:03:10Z"}
+  event: payment_received
+  data: {"invoice_id":"or_inv_01jz...","type":"incoming","state":"settled","payment_hash":"abc123...","amount_msat":200000,"settled_at":1781740990}
 
   event: invoice.expired
-  data: {"invoice_id":"or_inv_01jz...","status":"expired"}
+  data: {"invoice_id":"or_inv_01jz...","type":"incoming","state":"expired"}
 
 Original-docs payment-update compatibility:
 
   The original Rails/ActionCable frontend listens for a message wrapper named
-  payment-update and marks the open invoice paid only when payment_hash matches.
+  payment-update and marks the open invoice settled only when payment_hash
+  matches.
   Framework adapters should be able to emit this compatibility message:
 
     {
@@ -414,9 +541,9 @@ Original-docs payment-update compatibility:
 
   Mapping:
 
-    invoice.paid event         -> message: "payment-update"
+    payment_received event     -> message: "payment-update"
     event.payment_hash         -> data.payment_hash
-    status paid                -> data.status: "succeeded"
+    state settled              -> data.status: "succeeded"
     event.settled_at           -> data.settled_at
     fulfillment/product type   -> data.product_type, optional app metadata
 
@@ -427,28 +554,17 @@ Original-docs payment-update compatibility:
 Payment State Machine
 ---------------------
 
-All SDKs, examples, database rows, UI components, and event payloads should use
-the same state model.
+All SDKs, examples, database rows, UI components, and event payloads should
+preserve NIP-47 transaction state names wherever they describe the invoice
+itself.
 
-States:
+Canonical transaction states:
 
-  draft
-    App has requested a payment intent, but no BOLT11 exists yet.
-
-  invoice_created
-    Wallet returned a BOLT11 invoice and payment hash.
-
-  awaiting_payment
+  pending
     Customer has not paid yet.
 
-  checking
-    A notification or poll suggests activity; server is verifying by lookup.
-
-  paid
+  settled
     Wallet lookup proves settlement.
-
-  fulfilled
-    App delivered the product, file, credit, pass, or entitlement.
 
   expired
     Invoice expired before settlement.
@@ -456,27 +572,46 @@ States:
   failed
     Wallet, provider, network, validation, or internal error occurred.
 
+  accepted
+    Reserved for hold-invoice semantics. OpenReceive v0.1 does not create hold
+    invoices, but clients should not choke on this NIP-47 state.
+
+OpenReceive workflow states:
+
+  These are app-layer states, not replacements for NIP-47 state. Use them only
+  in local storage, UI state machines, or nested objects such as fulfillment.
+
+  draft
+    App has requested a payment intent, but no BOLT11 invoice exists yet.
+
+  invoice_created
+    Wallet returned an invoice and payment_hash.
+
+  checking
+    A notification or poll suggests activity; server is verifying by lookup.
+
+  fulfilled
+    App delivered the product, file, credit, pass, or entitlement.
+
   cancelled
     Merchant/app intentionally cancelled the payment flow.
 
-Allowed transitions:
+Typical workflow transitions:
 
   draft -> invoice_created
-  invoice_created -> awaiting_payment
-  awaiting_payment -> checking
-  awaiting_payment -> expired
-  awaiting_payment -> cancelled
-  checking -> paid
-  checking -> awaiting_payment
+  invoice_created -> checking
+  invoice_created -> cancelled
+  checking -> invoice_created
   checking -> expired
   checking -> failed
-  paid -> fulfilled
+  transaction state settled -> fulfillment state fulfilled
 
 Invariant:
 
   Product fulfillment is never triggered by frontend state alone. Fulfillment
-  happens only after backend verification of settled_at, preimage, settled true,
-  paid true, or wallet-specific equivalent through lookup_invoice.
+  happens only after backend verification through lookup_invoice. For NIP-47,
+  prefer settled_at, preimage, or state == "settled"; normalize older
+  library-specific variants at adapter boundaries only.
 
 
 NWC Protocol Foundation
@@ -486,7 +621,33 @@ NWC URI shape:
 
   nostr+walletconnect://<wallet-pubkey>?relay=<wss-url>&secret=<client-secret>
 
-Core NIP-47 methods for v0.1:
+The URI parser must support:
+
+  - Wallet service pubkey in the URI path.
+  - One or more relay query parameters.
+  - Required 32-byte hex client secret.
+  - Optional lud16 query parameter.
+  - Percent-encoded relay URLs and parameters.
+
+NWC connection bootstrap:
+
+  1. Parse the NWC URI.
+  2. Connect to the relay or relays from the URI.
+  3. Fetch the wallet service replaceable info event, kind 13194.
+  4. Parse the plaintext capabilities in content.
+  5. Parse the notifications tag, if present.
+  6. Parse the encryption tag, if present.
+  7. Choose an encryption mode for requests and notification subscription.
+
+Encryption policy:
+
+  NIP-04 is still widely deployed and must work for initial compatibility.
+  NIP-44 v2 should be supported where practical and preferred when the wallet
+  service advertises it in the info event. If the info event has no encryption
+  tag, assume NIP-04. Requests should include an encryption tag when using
+  NIP-44 v2. Unsupported encryption errors must normalize cleanly.
+
+OpenReceive receive-checkout methods for v0.1:
 
   get_info
   make_invoice
@@ -494,29 +655,63 @@ Core NIP-47 methods for v0.1:
   list_transactions, optional
   get_balance, optional diagnostic only
 
-Send methods are out of scope for initial receive checkout:
+Standalone nwc-client-* protocol libraries should also support:
 
   pay_invoice
-  multi_pay_invoice
+
+Out of scope for v0.1 standalone clients and for OpenReceive checkout:
+
   pay_keysend
   multi_pay_keysend
+  make_hold_invoice
+  cancel_hold_invoice
+  settle_hold_invoice
+  hold_invoice_accepted
+
+multi_pay_invoice can be considered later, but is not required for v0.1.
 
 Receive-only expectation:
 
-  A receive-only code should support creating invoices and checking status, but
-  should not support spending funds. SDKs should expose checkCapabilities() and
+  A receive-only code should support creating invoices and checking settlement,
+  but should not support spending funds. SDKs should expose checkCapabilities() and
   warn loudly or refuse by default when a checkout app is configured with a
   read/write NWC connection string.
 
 Notifications:
 
-  - NWC notification event kinds: 23196 and 23197.
-  - Subscribe to notifications from the wallet pubkey on the relay in the NWC
-    URI.
+  - NWC notification event kind 23197 is used for NIP-44.
+  - NWC notification event kind 23196 is used for NIP-04 compatibility.
+  - Subscribe according to the negotiated/advertised encryption mode.
+  - Filter notifications by wallet service pubkey and the client pubkey p tag.
   - Notifications can wake invoice lookup immediately.
   - Notifications do not replace polling.
   - Notification handlers must be idempotent.
-  - Duplicate notifications must not double-credit payments.
+  - Duplicate notifications, including duplicate NIP-04/NIP-44 notifications
+    from wallets that publish both, must not double-credit payments.
+
+NIP-47 event shape:
+
+  - Info event: kind 13194, plaintext capability list in content, optional
+    notifications tag, optional encryption tag.
+  - Request event: kind 23194, encrypted JSON object with method and params,
+    p tag set to the wallet service pubkey, optional expiration tag as unix
+    timestamp seconds, encryption tag when using NIP-44 v2.
+  - Response event: kind 23195, encrypted JSON object with result_type, error,
+    and result; p tag set to client pubkey; e tag should reference the request.
+  - Successful responses have error null.
+  - Failed responses have error.code and error.message and result null.
+
+NIP-47 to OpenReceive field mapping:
+
+  - result.invoice -> invoice
+  - result.amount -> amount_msat
+  - result.payment_hash -> payment_hash
+  - result.created_at / expires_at / settled_at stay unix timestamps in
+    canonical HTTP responses.
+  - result.state -> state, preserving lowercase NIP-47 values such as pending,
+    settled, accepted, expired, and failed.
+  - OpenReceive-specific invoice_id, fiat_quote, checkout, routes, and
+    fulfillment fields may be added around the NIP-47 transaction object.
 
 Long-running listener requirements:
 
@@ -530,37 +725,54 @@ Long-running listener requirements:
     - Keep WebSocket connections alive with ping/heartbeat behavior.
     - Treat notification delivery as at-least-once, not exactly-once.
     - Make the database transition idempotent with a unique payment_hash or an
-      update guard such as pending -> paid only.
+      update guard such as pending -> settled only.
     - Run notification listeners as long-running worker processes, not inside
       request handlers.
     - Still verify settlement with lookup_invoice before fulfillment.
 
 Settlement detection:
 
-  Treat invoice as paid when lookup_invoice returns one of:
+  For NIP-47 incoming invoices, treat invoice as settled when lookup_invoice
+  returns one of:
 
     settled_at present
     preimage present
-    settled == true
-    paid == true
-    state == "SETTLED"
+    state == "settled"
 
-  Store the strongest available proof. Prefer preimage when present.
+  Normalize legacy/library-specific variants such as settled true, paid true,
+  or uppercase SETTLED only at adapter boundaries. Store the strongest
+  available proof. Prefer preimage when present.
+
+Metadata:
+
+  NIP-47 metadata must fit in wallet/relay payload constraints. OpenReceive
+  should keep NWC metadata below 3900 characters after JSON serialization,
+  leaving margin under the NIP-47 4096-character limit. Larger application
+  metadata stays in the merchant database and is referenced by ids such as
+  order_id, cart_id, user_id, or checkout_session_id.
 
 Common wallet/service errors to normalize:
 
+  NIP-47 native:
+
   NOT_IMPLEMENTED
+  RESTRICTED
   UNAUTHORIZED
-  QUOTA_EXCEEDED
   RATE_LIMITED
+  QUOTA_EXCEEDED
   INTERNAL
-  TIMEOUT
+  UNSUPPORTED_ENCRYPTION
+  INSUFFICIENT_BALANCE
+  PAYMENT_FAILED
+  OTHER
+
+  OpenReceive normalized/internal:
+
   NOT_FOUND
+  TIMEOUT
   INVALID_REQUEST
   WALLET_UNAVAILABLE
   INVOICE_EXPIRED
-  INSUFFICIENT_BALANCE
-  PAYMENT_FAILED
   UNSUPPORTED_METHOD
 
 For receive-only checkout, send-payment errors such as INSUFFICIENT_BALANCE and
@@ -591,8 +803,8 @@ Pseudo-code:
     result = lookup_invoice(payment_hash)
 
     if isSettled(result):
-      mark_paid()
-      publish_invoice_paid()
+      mark_settled()
+      publish_payment_received()
       fulfill()
       return
 
@@ -613,21 +825,24 @@ USD, EUR, GBP, or local currency, not msats.
 Core API:
 
   quoteFiatToMsats({
-    amount: "0.10",
-    currency: "USD"
+    fiat: {
+      currency: "USD",
+      value: "0.10"
+    }
   })
 
 Response:
 
   {
-    "amount_fiat": "0.10",
-    "currency": "USD",
+    "fiat": {
+      "currency": "USD",
+      "value": "0.10"
+    },
     "btc_fiat_price": "50000.00",
-    "amount_msat": "200000",
-    "amount_sat": "200",
+    "amount_msat": 200000,
     "source": "static_mock",
-    "as_of": "2026-06-18T00:00:00Z",
-    "expires_at": "2026-06-18T00:10:00Z"
+    "as_of": 1781740800,
+    "expires_at": 1781741400
   }
 
 Rules:
@@ -636,10 +851,11 @@ Rules:
   - Do not use binary floats for money.
   - Lock the fiat quote at invoice creation.
   - Store price source, rate, as_of, expires_at, fiat amount, fiat currency,
-    amount_sat, and amount_msat.
+    and amount_msat.
   - Enforce a minimum of 1 sat.
   - Round up to a whole sat when wallet/UI behavior needs sat-level display.
-  - Amount to NWC make_invoice is in millisatoshis.
+  - Amount to NWC make_invoice is in millisatoshis. OpenReceive calls this
+    amount_msat and maps it to NIP-47 amount at the adapter boundary.
 
 Formula:
 
@@ -1276,10 +1492,13 @@ Maintenance gate for third-party NWC clients:
 
   - Repository pushed within the last 12 months at the time we adopt it.
   - MIT, Apache-2.0, BSD, or similarly permissive license.
+  - Supports NIP-47 info-event bootstrap or can be wrapped to support it.
   - Supports NIP-47 receive checkout methods: get_info, make_invoice, and
     lookup_invoice.
+  - Supports pay_invoice for general standalone NWC client use.
   - Supports or can be extended to support payment_received notifications.
-  - Handles NIP-04 and, where practical, NIP-44 v2 encrypted wallet messages.
+  - Handles NIP-04 encrypted wallet messages.
+  - Supports or can be extended to support NIP-44 v2 negotiation.
   - Has tests or can pass OpenReceive's mock-wallet conformance suite.
   - Does not force browser/mobile exposure of NWC secrets.
   - Can run in ordinary server framework jobs, queue workers, cron tasks,
@@ -1356,26 +1575,37 @@ Candidate maintenance snapshot checked on 2026-06-19:
 Minimum NWC client responsibilities:
 
   - Parse nostr+walletconnect URIs.
+  - Support multiple relay parameters and optional lud16.
   - Validate and redact wallet pubkey, relay URLs, and client secret.
   - Connect to one or more Nostr relays over WebSocket.
+  - Fetch and parse the wallet service kind 13194 info event.
+  - Parse content capabilities, notifications tag, and encryption tag.
+  - Choose NIP-04 or NIP-44 v2 according to wallet support.
   - Sign Nostr events correctly.
+  - Construct request events as kind 23194 with p tag, optional expiration tag,
+    and encryption tag when using NIP-44 v2.
+  - Parse response events as kind 23195 with p tag, e tag, result_type, error,
+    and result.
   - Encrypt/decrypt NWC request and response payloads.
   - Support NIP-04 and track NIP-44 v2 support.
   - Implement get_info.
   - Implement make_invoice.
   - Implement lookup_invoice.
+  - Implement pay_invoice for standalone NWC users.
   - Optionally implement list_transactions for diagnostics.
-  - Never expose pay_invoice, keysend, or send-money helpers through the
-    OpenReceive checkout surface.
+  - Never expose pay_invoice through the OpenReceive receive-checkout surface.
+  - Do not implement pay_keysend or hold-invoice methods for v0.1.
   - Subscribe to payment_received notifications where the language runtime and
     wallet support it.
   - Dedupe notifications by payment_hash.
+  - Dedupe duplicate NIP-04/NIP-44 notifications.
   - Reconnect with bounded exponential backoff.
   - Support heartbeat/ping or equivalent dead-connection detection.
   - Persist or expose the last processed event timestamp/cursor where possible.
   - Treat notifications as hints that trigger lookup_invoice, not final proof.
   - Normalize settlement detection into the canonical OpenReceive state model.
   - Normalize wallet/service errors into canonical OpenReceive errors.
+  - Enforce NWC metadata below 3900 serialized characters.
   - Provide safe polling helpers with the canonical cadence.
   - Provide idempotency guidance and helper APIs for framework adapters.
   - Provide deterministic mock-wallet tests and shared conformance vectors.
@@ -1449,22 +1679,27 @@ TypeScript shape:
   })
 
   const invoice = await openreceive.invoices.create({
-    amount: { currency: "USD", value: "0.10" },
+    amount_msat: 200000,
     description: "Fruit sticker",
+    expiry: 600,
     metadata: {
       fruit: "banana",
       userId: "user_123"
     },
+    fiat: {
+      currency: "USD",
+      value: "0.10"
+    },
     idempotencyKey: "fruit-demo-user-123"
   })
 
-  const status = await openreceive.invoices.lookup(invoice.id)
+  const current = await openreceive.invoices.lookup(invoice.invoice_id)
 
-  await openreceive.invoices.waitForPayment(invoice.id, {
+  await openreceive.invoices.waitForSettlement(invoice.invoice_id, {
     timeoutSeconds: 600
   })
 
-  openreceive.events.on("invoice.paid", async (event) => {
+  openreceive.events.on("payment_received", async (event) => {
     await unlockFruitSticker(event.invoice_id)
   })
 
@@ -1513,21 +1748,23 @@ listen for passive settlement updates from that backend.
 They receive:
 
   invoice_id
-  bolt11
-  amount
+  invoice
+  payment_hash
+  amount_msat
+  state
   expires_at
-  routes_url
-  events_url
+  checkout.events_url
+  checkout.routes_url
 
 They expose a checkout view model:
 
   data:
+    transaction
     invoice
-    bolt11
-    amount
+    amountMsat
     expiresAt
     expiresIn
-    status
+    state
     paymentHash
     routes
     assets
@@ -1549,8 +1786,8 @@ They expose a checkout view model:
 
   events:
     created
-    payment_seen
-    paid
+    checking
+    payment_received
     expired
     failed
     copied
@@ -1569,10 +1806,11 @@ Responsibilities:
   - Parse invoice object.
   - Connect to SSE events.
   - Track countdown.
-  - Copy BOLT11.
+  - Generate QR payloads/images from invoice or lightning: URI.
+  - Copy invoice.
   - Open lightning: URI.
   - Load provider routes.
-  - Emit paid/expired/error events.
+  - Emit payment_received/expired/error events.
   - Expose a framework-neutral checkout state machine.
   - Expose framework-neutral actions for copy, open-wallet, refresh, select
     route, dismiss, retry, and cancel.
@@ -1627,7 +1865,7 @@ React headless example:
 
     return (
       <MyModal open={checkout.isOpen} onClose={checkout.cancel}>
-        <MyQRCode value={checkout.bolt11} />
+        <MyQRCode value={checkout.invoice} />
         <MyButton onClick={checkout.copyInvoice}>
           Copy invoice
         </MyButton>
@@ -1639,7 +1877,7 @@ React headless example:
           selectedAsset={checkout.selectedAsset}
           onSelectAsset={checkout.selectAsset}
         />
-        <MyStatus status={checkout.status} expiresIn={checkout.expiresIn} />
+        <MyStatus state={checkout.state} expiresIn={checkout.expiresIn} />
       </MyModal>
     )
   }
@@ -1678,7 +1916,7 @@ Lower-level browser API:
     eventsUrl: invoice.checkout.events_url
   })
 
-  checkout.on("paid", () => {
+  checkout.on("payment_received", () => {
     showDownloadButton()
   })
 
@@ -1741,7 +1979,7 @@ Frontend contract from the original docs:
   - Provider cards put Copy Invoice before external provider links because
     mobile clipboard writes are more reliable before navigating away.
   - The browser receives a passive settlement message containing the matching
-    payment_hash and a paid/succeeded status.
+    payment_hash and state settled, or a compatibility paid/succeeded status.
   - The browser updates only the currently open invoice when payment_hash
     matches.
 
@@ -1888,6 +2126,9 @@ Each backend adapter should provide:
   - Route helper.
   - Invoice creation helper.
   - Event stream helper.
+  - Auth middleware integration point.
+  - Invoice access authorization hook.
+  - Guest checkout/session-token support where idiomatic.
   - Payment model/table migration or documented storage interface.
   - Polling job/worker integration.
   - Notification listener integration where practical.
@@ -1896,10 +2137,43 @@ Each backend adapter should provide:
   - Test helpers.
   - Demo-ready defaults.
 
+Required adapter auth hooks:
+
+  currentUser(request)
+    Return the app's current user/account/customer object, or null for a guest
+    checkout flow.
+
+  authorizeInvoiceCreate(request, user, input)
+    Decide whether this request may create an invoice.
+
+  authorizeInvoiceAccess(request, user, invoice)
+    Decide whether this request may read, refresh, poll, or subscribe to events
+    for this invoice.
+
+  buildInvoiceMetadata(request, user, input)
+    Attach user_id, order_id, cart_id, tenant_id, checkout_session_id, or other
+    app-owned identifiers needed for fulfillment and authorization.
+
+  eventAuthStrategy(request, invoice)
+    Choose same-site session cookies, signed event URL, polling fallback, or a
+    framework realtime bridge.
+
+Adapters should fail closed when authorization hooks are missing in production
+mode. Demos may use a simple signed guest checkout session so the flow works
+without user accounts.
+
 Express:
 
   app.use("/openreceive", openreceiveExpress({
+    requireUser: requireUser,
     client,
+    buildMetadata: (req) => ({
+      userId: req.user.id,
+      cartId: req.session.cartId
+    }),
+    authorizeInvoiceAccess: async (req, invoice) => {
+      return invoice.metadata.userId === req.user.id
+    },
     fulfill: async ({ invoice, metadata }) => {
       await unlockSticker(metadata.userId, metadata.fruit)
     }
@@ -1907,23 +2181,36 @@ Express:
 
 Rails:
 
-  mount OpenReceive::Rails::Engine => "/openreceive"
-
   OpenReceive.configure do |config|
     config.wallet = :nwc
     config.nwc = ENV.fetch("OPENRECEIVE_NWC")
+    config.authenticate = ->(controller) {
+      controller.authenticate_user!
+    }
+    config.authorize_invoice = ->(controller, invoice) {
+      invoice.user_id == controller.current_user.id
+    }
+    config.metadata = ->(controller, params) {
+      {
+        user_id: controller.current_user.id,
+        order_id: params[:order_id]
+      }
+    }
     config.fulfill = ->(invoice) {
       FruitStickerUnlock.create!(invoice_id: invoice.id)
     }
   end
+
+  mount OpenReceive::Rails::Engine => "/openreceive"
 
 Rails adapter requirements from my-original-docs.txt:
 
   - The Rails package should make the receive-only/read-write distinction
     visible with helpers equivalent to read_only?, read_write?, and
     capabilities.
-  - It should warn or refuse for normal checkout flows if pay_invoice or
-    pay_keysend capabilities are present.
+  - It should warn or require an explicit receive-only checkout mode when
+    pay_invoice capability is present, and refuse pay_keysend for checkout
+    flows.
   - If the implementation uses nwc-ruby or rbsecp256k1, document native build
     dependencies for macOS, Debian/Ubuntu, Alpine, and Docker/Kamal images.
   - The NWC notification listener should deploy as a Kamal role using the same
@@ -2006,11 +2293,11 @@ User flow:
   4. Backend calls OpenReceive to create invoice for USD 0.10.
   5. Backend stores invoice_id, payment_hash, quote, product metadata.
   6. Frontend displays QR code, copy button, lightning wallet button,
-     countdown, status, and payment route wizard.
+     countdown, state, and payment route wizard.
   7. Customer pays.
   8. Backend confirms with lookup_invoice.
-  9. Backend emits invoice.paid event.
-  10. Frontend flips to paid state.
+  9. Backend emits payment_received event.
+  10. Frontend flips to settled/success state.
   11. Backend serves signed one-time sticker URL.
 
 Optional deterministic fruit:
@@ -2054,7 +2341,7 @@ Tier 1 demos:
   laravel-blade                Laravel               Blade/Alpine
   go-nethttp-htmx              Go net/http           HTMX
   rust-axum-react              Axum                  React
-  ios-swiftui-node-api         Node API              SwiftUI
+  ios-swiftui-node-api         Node/Express API      SwiftUI
   android-compose-ktor-api     Ktor API              Android Compose
 
 Tier 2 demos:
@@ -2608,7 +2895,7 @@ Test layers:
 
   - fiat-to-msat conversion
   - decimal rounding
-  - invoice status transitions
+  - invoice state transitions
   - NWC URI parsing
   - secret redaction
   - provider route selection
@@ -2623,8 +2910,12 @@ Test layers:
   - polling backoff
   - provider routing
   - NWC URI parsing
+  - NWC info event parsing
+  - NWC encryption negotiation
+  - NWC request/response event shape
   - error normalization
   - idempotency behavior
+  - metadata size limit
 
 4. Mock NWC wallet
 
@@ -2634,8 +2925,10 @@ Test layers:
 
   Capabilities:
 
+    info_event
     make_invoice
     lookup_invoice
+    pay_invoice
     auto_settle_after_seconds
     force_expire
     force_error
@@ -2647,8 +2940,8 @@ Test layers:
 
   Required scenarios:
 
-    paid by polling
-    paid by notification plus lookup
+    settled by polling
+    settled by notification plus lookup
     notification lost
     duplicate notification
     expired invoice
@@ -2657,6 +2950,12 @@ Test layers:
     rate source failure
     read/write NWC warning
     receive-only NWC success
+    multiple relay URI
+    missing encryption tag falls back to NIP-04
+    NIP-44 advertised and selected
+    unsupported encryption error
+    duplicate NIP-04/NIP-44 notifications
+    metadata over 3900 serialized characters
 
 5. Conformance tests
 
@@ -2673,7 +2972,7 @@ Test layers:
     see QR and copy button
     see provider wizard
     mock wallet settles invoice
-    UI changes to paid
+    UI changes to settled
     sticker download appears
 
   Mobile demos need platform-specific smoke tests once they exist.
@@ -2687,7 +2986,11 @@ Test layers:
   - Ensure source maps do not contain OPENRECEIVE_NWC.
   - Ensure mounted framework APIs reject missing/invalid auth when auth is
     configured.
-  - Ensure fulfillment cannot be triggered by client-only status changes.
+  - Ensure one user/session cannot read or subscribe to another user's invoice.
+  - Ensure signed event URLs expire and are scoped to one invoice.
+  - Ensure guest checkout tokens are unguessable and scoped to the checkout
+    session.
+  - Ensure fulfillment cannot be triggered by client-only state changes.
 
 8. Package smoke tests
 
@@ -2834,7 +3137,7 @@ Every SDK doc should have the same shape:
   - Configure
   - Create invoice
   - Show checkout
-  - Listen for paid event
+  - Listen for payment_received event
   - Fulfill product
   - Run the fruit sticker demo
   - Deploy
@@ -2865,7 +3168,7 @@ Threats:
   - Merchant stores live NWC secrets in GitHub Actions unnecessarily.
   - Read/write NWC leaks and can spend funds.
   - Duplicate notification double-credits a customer.
-  - Client forges "paid" state.
+  - Client forges "settled" state.
   - Old invoices keep polling forever and hit rate limits.
   - Provider registry makes stale or overconfident claims.
   - Public demo is abused for spam or invoice generation.
@@ -2999,8 +3302,12 @@ Deliverables:
   - NWC client interface.
   - @openreceive/node wrapping getAlby/js-sdk for receive checkout.
   - NWC URI parse/redaction tests.
+  - NWC info event bootstrap.
+  - NIP-04/NIP-44 encryption negotiation.
+  - NIP-47 request/response event shape tests.
   - NWC make_invoice wrapper.
   - NWC lookup_invoice wrapper.
+  - NWC metadata size guard under 3900 serialized characters.
   - Capability check.
   - Safe poller.
   - Notification listener helper where practical in Node.
@@ -3010,7 +3317,7 @@ Deliverables:
   - CoinGecko price adapter.
   - Static mock price adapter.
   - Idempotency key support.
-  - QR SVG/PNG helper or mounted endpoint.
+  - QR data helper that exposes invoice/lightning URI for UI packages.
   - Mock wallet integration.
   - Express route adapter.
   - Next.js route handler adapter.
@@ -3132,14 +3439,15 @@ Goal:
 
 Deliverables:
 
-  - Swift OpenReceive client and NostrKit/NWCClient audit.
   - SwiftUI checkout UI.
-  - Vapor server adapter.
+  - Primary iOS SwiftUI demo backed by Node/Express API and @openreceive/node.
+  - Swift OpenReceive client and NostrKit/NWCClient audit.
+  - Vapor server adapter and ios-swiftui-vapor-api demo, later Swift-native
+    backend proof.
   - Android Kotlin client.
   - Android Compose checkout UI.
   - Flutter client/widgets.
   - React Native package.
-  - iOS SwiftUI demo.
   - Android Compose demo.
   - Flutter demo.
   - React Native demo.
@@ -3185,9 +3493,13 @@ Ship only enough to prove the architecture cleanly:
   - fiat-to-msat test vectors.
   - settlement detection test vectors.
   - polling backoff test vectors.
+  - NWC URI/info-event/encryption/event-shape test vectors.
+  - NWC metadata guard under 3900 serialized characters.
   - mock wallet.
   - NWC client adapter interface.
   - @openreceive/node wrapper around getAlby/js-sdk.
+  - Standalone pay_invoice support in the NWC adapter, hidden from
+    OpenReceive receive-checkout APIs.
   - CoinGecko price adapter.
   - static mock price adapter.
   - @openreceive/core.
@@ -3203,6 +3515,7 @@ Ship only enough to prove the architecture cleanly:
   - Static HTML + serverless/API demo.
   - Docs quickstart for Node/React.
   - Docs page for headless frontend integration and design-system recipes.
+  - Docs page for framework auth integration and signed event URLs.
   - Docs page for NWC client strategy.
   - Security doc.
   - CI and conformance for existing packages.
@@ -3214,7 +3527,7 @@ Do not include in v0.1.0:
   - Ecommerce plugins.
   - Native mobile UI kits.
   - Complex merchant dashboard.
-  - Read/write payment features.
+  - Send-payment features in OpenReceive receive-checkout APIs.
   - Provider claims that have not been validated.
 
 
@@ -3259,14 +3572,20 @@ NWC and native backend core:
   25. nwc: define OpenReceive NWC client interface
   26. nwc: add third-party NWC client maintenance audit template
   27. nwc: implement NWC connection parser/redactor tests
+      Include multiple relays, optional lud16, info-event bootstrap,
+      NIP-04/NIP-44 negotiation, NIP-47 request/response event shape,
+      expiration tag handling, NIP-47/OpenReceive field mapping, and the
+      metadata size guard.
   28. nwc: add getAlby/js-sdk receive-checkout adapter for Node
+      Include standalone pay_invoice support but keep it hidden from
+      OpenReceive receive-checkout APIs.
   29. nwc: implement mock wallet adapter for SDK tests
   30. nwc: implement make_invoice wrapper
   31. nwc: implement lookup_invoice wrapper
   32. core: implement safe invoice poller
   33. core: implement notification-to-lookup handler
   34. core: implement SSE invoice events for mounted app routes
-  35. core: implement QR helper/endpoint adapter
+  35. core: implement auth/authorization hook interfaces
   36. core: implement idempotency key helper
 
 Pricing:
@@ -3285,65 +3604,66 @@ JavaScript:
   45. js: create @openreceive/core
   46. js: create @openreceive/node
   47. js: create @openreceive/browser
-  48. js: create @openreceive/elements web component package
-  49. react: create @openreceive/react hooks, primitives, slots, and default UI
-  50. js: create @openreceive/provider-data
-  51. js: create @openreceive/testkit
-  52. js: add Express route adapter
-  53. js: add Next.js route handler adapter
+  48. js: add client-side QR generation from invoice/lightning URI
+  49. js: create @openreceive/elements web component package
+  50. react: create @openreceive/react hooks, primitives, slots, and default UI
+  51. js: create @openreceive/provider-data
+  52. js: create @openreceive/testkit
+  53. js: add Express route adapter with auth hooks
+  54. js: add Next.js route handler adapter with auth hooks
 
 Demos:
 
-  54. demo: create shared fruit sticker assets
-  55. demo: create Next.js fruit demo
-  56. demo: create Express React fruit demo
-  57. demo: create static HTML + serverless/API demo
-  58. demo: add React design-system recipe and Playwright smoke flow
+  55. demo: create shared fruit sticker assets
+  56. demo: create Next.js fruit demo
+  57. demo: create Express React fruit demo
+  58. demo: create static HTML + serverless/API demo
+  59. demo: add React design-system recipe and Playwright smoke flow
 
 CI and release:
 
-  59. ci: validate schemas and provider registry
-  60. ci: run conformance vectors
-  61. ci: build demos in mock mode
-  62. ci: add secret scanning
-  63. release: configure release automation
+  60. ci: validate schemas and provider registry
+  61. ci: run conformance vectors
+  62. ci: build demos in mock mode
+  63. ci: add secret scanning
+  64. release: configure release automation
 
 Demo deployment:
 
-  64. deploy: choose Traefik or Caddy for demo host routing
-  65. deploy: create demos/deploy/proxy compose stack
-  66. deploy: create explicit demo subdomain naming registry
-  67. deploy: create compose template for server-side demos
-  68. deploy: add GHCR image build for each Tier 1 demo
-  69. deploy: add SSH-based Hetzner deploy script
-  70. deploy: add smoke-demo script for /healthz and checkout page
-  71. deploy: document DNS records for demo subdomains
-  72. deploy: document TLS certificate strategy
-  73. deploy: add noindex preview deployment config
-  74. deploy: document private openreceive.org boundary
-  75. deploy: ensure demo DNS does not use broad *.openreceive.org wildcard
-  76. deploy: create separate Hetzner demo edge plan from private Rails LB
+  65. deploy: choose Traefik or Caddy for demo host routing
+  66. deploy: create demos/deploy/proxy compose stack
+  67. deploy: create explicit demo subdomain naming registry
+  68. deploy: create compose template for server-side demos
+  69. deploy: add GHCR image build for each Tier 1 demo
+  70. deploy: add SSH-based Hetzner deploy script
+  71. deploy: add smoke-demo script for /healthz and checkout page
+  72. deploy: document DNS records for demo subdomains
+  73. deploy: document TLS certificate strategy
+  74. deploy: add noindex preview deployment config
+  75. deploy: document private openreceive.org boundary
+  76. deploy: ensure demo DNS does not use broad *.openreceive.org wildcard
+  77. deploy: create separate Hetzner demo edge plan from private Rails LB
 
 Secrets:
 
-  77. secrets: add .env.example templates for every demo
-  78. secrets: add demos/deploy/secrets README explaining ignored files
-  79. secrets: add host secret file layout under /opt/openreceive/secrets
-  80. secrets: make deploy scripts refuse live mode without OPENRECEIVE_NWC
-  81. secrets: add redaction utility for nostr+walletconnect URIs
-  82. secrets: add frontend bundle scan for OPENRECEIVE_NWC and NWC URI strings
-  83. secrets: document receive-only NWC rotation procedure
-  84. secrets: add secret-management docs page
+  78. secrets: add .env.example templates for every demo
+  79. secrets: add demos/deploy/secrets README explaining ignored files
+  80. secrets: add host secret file layout under /opt/openreceive/secrets
+  81. secrets: make deploy scripts refuse live mode without OPENRECEIVE_NWC
+  82. secrets: add redaction utility for nostr+walletconnect URIs
+  83. secrets: add frontend bundle scan for OPENRECEIVE_NWC and NWC URI strings
+  84. secrets: document receive-only NWC rotation procedure
+  85. secrets: add secret-management docs page
 
 Original-docs conformance:
 
-  85. compat: add simple invoice response adapter for original modal shape
-  86. compat: add payment-update event adapter and tests
-  87. compat: add status mapping pending/succeeded to canonical states
-  88. rails: add Kamal listener role example, not accessory
-  89. rails: document rbsecp256k1/native build dependencies if needed
-  90. rails: add read_only/capabilities checkout guard
-  91. rails: add idempotent notification handler and since cursor example
+  86. compat: add simple invoice response adapter for original modal shape
+  87. compat: add payment-update event adapter and tests
+  88. compat: add status mapping pending/succeeded to canonical NIP states
+  89. rails: add Kamal listener role example, not accessory
+  90. rails: document rbsecp256k1/native build dependencies if needed
+  91. rails: add read_only/capabilities checkout guard
+  92. rails: add idempotent notification handler and since cursor example
 
 
 Important Design Decisions To Make Early
@@ -3459,6 +3779,8 @@ This plan is complete enough when these statements are true:
   - Pure frontend live checkout is rejected by docs, examples, and tests.
   - Frontend packages are headless-first and proven with at least one external
     design-system recipe.
+  - Framework adapters integrate with app-owned auth and fail closed when
+    invoice access authorization is missing in production.
   - Every new SDK has a conformance gate.
   - Every standalone NWC client has a conformance gate.
   - Every new demo uses the same shared product data.
