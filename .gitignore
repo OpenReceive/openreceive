@@ -8,6 +8,26 @@
 
 # OpenReceive demo deployment secrets. Commit *.example files only.
 demos/deploy/secrets/
-demos/deploy/**/*.secret.env
-demos/deploy/**/*.secrets.env
-demos/deploy/**/*.local.env
+demos/deploy/certs/
+demos/deploy/wireguard/
+demos/deploy/.ssh/
+demos/deploy/.runtime/
+demos/deploy/.state/
+demos/deploy/.cache/
+demos/deploy/.locks/
+demos/deploy/bundles/
+demos/deploy/**/*.env
+!demos/deploy/**/*.env.example
+demos/deploy/**/*.local.yml
+demos/deploy/**/*.local.yaml
+demos/deploy/**/*.debug.yml
+demos/deploy/**/*.debug.yaml
+demos/deploy/**/*.secret
+demos/deploy/**/*.secrets
+demos/deploy/**/*.key
+demos/deploy/**/*.pem
+demos/deploy/**/*.crt
+demos/deploy/**/*.p12
+demos/deploy/**/*.pfx
+demos/deploy/**/id_*
+demos/deploy/**/wg*.conf

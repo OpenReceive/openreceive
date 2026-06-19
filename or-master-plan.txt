@@ -70,9 +70,9 @@ If the misspelled domain was purchased, keep it only as a redirect.
 
 Existing openreceive.org app:
 
-  openreceive.org is already a private Rails app deployed with Kamal behind an
-  existing Hetzner Load Balancer. That app lives in a private repo and must stay
-  completely outside this open source project.
+  openreceive.org is already a private Rails app deployed with Kamal behind
+  Cloudflare and an existing Hetzner Load Balancer. That app lives in a private
+  repo and must stay completely outside this open source project.
 
   Hard boundary:
 
@@ -87,9 +87,11 @@ Existing openreceive.org app:
 
   The open source project may use subdomains such as docs.openreceive.org,
   demos.openreceive.org, and django-demo.openreceive.org, but those should be
-  deployed as separate services with separate DNS records and separate
-  infrastructure from the private apex Rails app. The private app can link to
-  them manually if desired, but it is not part of their deployment path.
+  deployed as separate services with separate DNS records, compose projects,
+  environment files, and source control from the private apex Rails app. They
+  must not share app-virginia for stable public demos because that host runs
+  critical production apps. The private app can link to demos manually if
+  desired, but it is not part of their deployment path.
 
   Documentation is the one intentional bridge: canonical technical docs live
   in the public GitHub repo as markdown/data, and the private openreceive.org
@@ -1412,8 +1414,8 @@ READMEs, examples, and public APIs should make sense to any NWC developer.
 Canonical standalone naming:
 
   Repositories:
-    nwc-client-js, if the project ever needs its own JS client
-    nwc-client-ruby, if nwc-ruby is mirrored or superseded
+    nwc-client-js, if the project ever needs its own JS client - FOR NOW WE USE ALBY SDK
+    nwc-client-ruby, if nwc-ruby is mirrored or superseded - FOR NOW WE USE NWC-RUBY
     nwc-client-php
     nwc-client-py
     nwc-client-go
@@ -2252,7 +2254,7 @@ Shared assets:
 User flow:
 
   1. User opens demo.
-  2. User picks fruit, or receives deterministic random fruit.
+  2. User picks fruit if he wants or clicks the suggested fruit which is random
   3. Frontend calls backend: POST /api/checkout.
   4. Backend calls OpenReceive to create invoice for USD 0.10.
   5. Backend stores invoice_id, payment_hash, quote, product metadata.
@@ -2387,15 +2389,16 @@ Standard commands:
 Demo Deployment Architecture
 ----------------------------
 
-The hosted demos should be Docker-first and subdomain-first.
+The hosted demos should be Docker-first, subdomain-first, and Cloudflare-fronted.
 
 The private Rails app already lives at:
 
   openreceive.org
 
 It is out of scope for the open source repo and demo infrastructure. It is a
-private Kamal app behind an existing Hetzner Load Balancer. Do not deploy demos
-through it, do not reuse its repo, and do not require it for open source demos.
+  private Kamal app behind Cloudflare DNS/proxy and an existing Hetzner Load
+  Balancer. Do not deploy demos through the private Rails repo, and do not
+  require the private Rails app for open source demos.
 
 The demo fleet should live on SEO-friendly subdomains:
 
@@ -2490,55 +2493,210 @@ Image naming:
   ghcr.io/openreceive/demo-go
   ghcr.io/openreceive/demo-rust
 
-Single-node Hetzner deployment:
+Current production edge:
 
-  Start with one separate Hetzner Cloud server or dedicated server as a demo
-  host. This is not the private Rails/Kamal app host. Install Docker Engine and
-  the Docker Compose plugin. Run one shared reverse proxy container plus one
-  compose project per demo.
+  Continue using Cloudflare for openreceive.org DNS/proxying. The current
+  production edge for the private app is:
+
+    Cloudflare proxied DNS
+      -> Hetzner Load Balancer 5.161.32.166
+      -> app-virginia-1 87.99.151.222
+
+  app-virginia runs critical production apps. Do not treat spare CPU/RAM as a
+  reason to host public OpenReceive demos there. Demo containers are low
+  traffic but operationally noisy: many runtimes, frequent deploys, routing
+  changes, screenshot/debug sessions, and occasional memory spikes. Production
+  isolation matters more than saving one small VPS bill.
+
+  Observed 2026-06-19: app-virginia had 4 vCPU, about 15.2 GB RAM, roughly
+  3.9 GB used, 6 Docker containers, low load, and kamal-proxy bound to public
+  ports 80 and 443. That confirms capacity exists, but it does not change the
+  isolation decision.
+
+  app-virginia rule:
+
+    Do not deploy stable public demos to app-virginia.
+    Do not bind another public Caddy/Traefik to app-virginia ports 80/443.
+    Do not route demo traffic through the private app's kamal-proxy.
+    Do not use app-virginia as part of the normal demo architecture.
+
+Preferred starting choice:
+
+  Start with one high-RAM office Ubuntu demo node behind a stable WireGuard
+  public-IP gateway. Do not add a demo Load Balancer yet. Put Cloudflare in
+  front, point explicit demo subdomains at the WireGuard gateway IP or CNAME,
+  forward only HTTP/HTTPS to the office demo node, and run one Caddy reverse
+  proxy plus only the stable demo containers worth keeping online.
 
   Public internet
         |
         v
-  DNS: explicit demo subdomains
+  Cloudflare DNS/proxy, explicit demo subdomains
         |
         v
-  demo host, separate from openreceive.org private app
-    reverse proxy: Traefik or Caddy
-      Host(express-demo.openreceive.org) -> demo-express
-      Host(django-demo.openreceive.org)  -> demo-django
-      Host(rails-react-demo...)          -> demo-rails-react
-    demo containers on private docker networks
+  stable public-IP gateway
+        |
+        v
+  WireGuard tunnel
+        |
+        v
+  office Ubuntu demo node
+    Caddy owns 80/443 on the demo node
+      express-demo.openreceive.org     -> demo-express
+      django-demo.openreceive.org      -> demo-django
+      rails-react-demo.openreceive.org -> demo-rails-react
+    demo containers on private Docker networks
 
-Recommended reverse proxy:
+Office Ubuntu demo node:
 
-  Use Traefik if you want Docker label based routing and many demos coming and
-  going. Use Caddy if you want the simplest automatic HTTPS config. Either is
-  acceptable; standardize on one in the repo so every demo uses the same deploy
-  labels and health checks.
+  An office-hosted Ubuntu server is the preferred first stable demo host if it
+  is treated as a real edge host, not as a casual development machine.
 
-Recommended starting choice:
+  Requirements:
 
-  Traefik for the demo fleet, because each compose project can declare its
-  hostname and internal port through labels and the proxy can discover it.
+    - Dedicated Ubuntu server or VM, not a daily workstation.
+    - Stable office internet and backup power.
+    - Public reachability through WireGuard to a stable public-IP gateway,
+      static public IP, or a controlled tunnel endpoint.
+    - Cloudflare proxied DNS in front of all public demo hostnames.
+    - Firewall allows only required inbound traffic to the demo proxy.
+    - Public gateway forwards only 80/443 to the office node and, where
+      practical, accepts those ports only from Cloudflare.
+    - Demo containers run on isolated Docker networks.
+    - No access to private office LAN services except explicitly allowed
+      outbound updates/monitoring.
+    - Unattended security updates or a documented patch routine.
+    - Basic monitoring for uptime, disk, memory, container restarts, and tunnel
+      health.
+    - A clear rebuild path from git, GHCR, and host secret files.
 
-Example compose labels:
+  If using a WireGuard public-IP gateway, Cloudflare points at the gateway and
+  the gateway forwards only HTTP/HTTPS traffic to the office demo proxy. Do not
+  route arbitrary inbound traffic into the office LAN.
 
-  labels:
-    - traefik.enable=true
-    - traefik.http.routers.django-demo.rule=Host(`django-demo.openreceive.org`)
-    - traefik.http.routers.django-demo.entrypoints=websecure
-    - traefik.http.routers.django-demo.tls.certresolver=letsencrypt
-    - traefik.http.services.django-demo.loadbalancer.server.port=8000
+  If the office node loses power, internet, or the WireGuard path, public demos
+  may go down. That is acceptable for demos, but the demo gallery should fail
+  gracefully and avoid promising production-grade uptime.
+
+Caddy ownership and routing:
+
+  The demo node owns its own proxy. Caddy may bind 80/443 there because the
+  node is not app-virginia and does not host the critical private apps. Keep the
+  private app's kamal-proxy out of the normal demo path.
+
+  Prefer Caddy for the first office-node deployment because the route map is
+  easy to read. Use Docker service-name routing from day one so adding demos
+  does not require assigning and tracking host ports.
+
+    demo-nodejs-whatever.openreceive.org {
+      tls /opt/openreceive/certs/origin.pem /opt/openreceive/certs/origin-key.pem
+      reverse_proxy demo-nodejs-whatever:3000
+    }
+
+  Put Caddy and demo containers on a shared external Docker network such as
+  openreceive_demo_proxy. Each demo compose project joins that network and
+  exposes its internal HTTP port only to the Docker network. Do not publish
+  per-demo host ports for stable public demos.
+
+  Canonical routing rules:
+
+    - Caddy is the only public container that publishes host ports 80 and 443.
+    - Demo containers use expose, not ports, for their HTTP listener.
+    - Demo service names are stable and match the demo slug where practical.
+    - Caddy routes to Docker service names, not 127.0.0.1 host ports.
+    - Do not use network_mode: "host" for the canonical demo fleet.
+    - Do not assign per-demo host ports except in a gitignored local debug
+      override.
+
+  Keep one generated Caddyfile, or one generated imported Caddyfile fragment per
+  demo, so deployment can add/update routes without hand-editing production
+  config.
+
+  Create the proxy network once on the demo node:
+
+    docker network create openreceive_demo_proxy
+
+  Keep the root Caddyfile small and import generated site fragments:
+
+    import /etc/caddy/sites/*.caddy
+
+  Local or preview demos can use Cloudflare Tunnel or VPN-only access. They are
+  not stable public demos unless promoted to the dedicated office demo node with
+  the requirements above.
+
+Example Caddy compose:
+
+  Docker-network Caddy avoids host port allocation and is the default:
+
+    networks:
+      demo_proxy:
+        external: true
+        name: openreceive_demo_proxy
+
+    services:
+      caddy:
+        image: caddy:latest
+        ports:
+          - "80:80"
+          - "443:443"
+        networks:
+          - demo_proxy
+        volumes:
+          - ./Caddyfile:/etc/caddy/Caddyfile:ro
+          - ./sites:/etc/caddy/sites:ro
+          - /opt/openreceive/certs:/opt/openreceive/certs:ro
+          - caddy_data:/data
+          - caddy_config:/config
+        restart: unless-stopped
+
+    volumes:
+      caddy_data:
+      caddy_config:
+
+  Example demo compose network shape:
+
+    networks:
+      demo_proxy:
+        external: true
+        name: openreceive_demo_proxy
+
+    services:
+      demo-nodejs-whatever:
+        image: ghcr.io/openreceive/demo-nodejs-whatever:${IMAGE_TAG}
+        expose:
+          - "3000"
+        networks:
+          - demo_proxy
+        env_file:
+          - /opt/openreceive/secrets/production.env
+        restart: unless-stopped
+
+  The demo proxy may publish 80:80 and 443:443 on the separate demo node. It
+  must not publish those ports on app-virginia.
 
 DNS plan:
 
-  Use explicit records for stable demos:
+  Use Cloudflare DNS. Add explicit proxied records for stable demos:
 
-    django-demo.openreceive.org       -> demo edge IP
-    express-demo.openreceive.org      -> demo edge IP
-    fastapi-demo.openreceive.org      -> demo edge IP
-    rails-react-demo.openreceive.org  -> demo edge IP
+    django-demo.openreceive.org       -> WireGuard gateway IP or CNAME target
+    express-demo.openreceive.org      -> WireGuard gateway IP or CNAME target
+    fastapi-demo.openreceive.org      -> WireGuard gateway IP or CNAME target
+    rails-react-demo.openreceive.org  -> WireGuard gateway IP or CNAME target
+
+  For stable public demos, point records at the separate demo edge, not the
+  private production Load Balancer and not app-virginia. With the office-node
+  plan, Cloudflare records point at the public WireGuard gateway IP or a stable
+  CNAME that reaches that gateway; the gateway forwards only HTTP/HTTPS over
+  WireGuard to Caddy on the office demo node. Choose one DNS convention and keep
+  the inventory file as the source of truth.
+
+  If using the office Ubuntu demo node, point Cloudflare records at the public
+  IP or stable tunnel endpoint that reaches that node. Keep Cloudflare proxy
+  enabled for public demos, and keep the WireGuard/tunnel details out of public
+  docs.
+
+  Do not point stable demo records at 5.161.32.166 or 87.99.151.222. Those are
+  part of the private production path, not the demo architecture.
 
   Do not create a broad *.openreceive.org wildcard for the demo fleet. The apex
   openreceive.org app is private and separate, and broad wildcard routing makes
@@ -2550,38 +2708,65 @@ DNS plan:
 
     *.preview.openreceive.org -> preview/demo edge IP
 
+  For local-machine previews, prefer Cloudflare Tunnel or another explicit
+  tunnel endpoint under preview.openreceive.org. Do not point public DNS
+  directly at an ordinary home/dev machine. An isolated office Ubuntu demo node
+  with stable internet, backup power, and WireGuard/public-IP routing is allowed
+  as the separate demo node when it satisfies the office-node requirements.
+  VPN-only demos are fine for private QA, but they are not public hosted demos.
+
   Keep these DNS targets separate:
 
-    openreceive.org                 -> existing private Rails Load Balancer
-    www.openreceive.org             -> existing private Rails Load Balancer, if used
-    django-demo.openreceive.org     -> demo edge
-    express-demo.openreceive.org    -> demo edge
-    demos.openreceive.org           -> demo gallery edge
+    openreceive.org                 -> existing private app edge
+    www.openreceive.org             -> existing private app edge, if used
+    django-demo.openreceive.org     -> WireGuard demo edge
+    express-demo.openreceive.org    -> WireGuard demo edge
+    demos.openreceive.org           -> demo gallery route
     docs.openreceive.org            -> docs host/edge
 
 TLS plan:
 
-  If using Hetzner Load Balancer HTTPS termination, Hetzner-managed Let's
-  Encrypt certificates require Hetzner DNS or delegated ACME challenge handling.
-  If keeping TLS on the reverse proxy, Traefik or Caddy can issue Let's Encrypt
-  certificates directly. Wildcard certificates require DNS challenge support;
-  individual subdomain certificates can use HTTP challenge.
+  Cloudflare is the public TLS edge for the current setup. Keep Cloudflare proxy
+  enabled for stable public demo subdomains unless a specific demo needs DNS
+  only for debugging.
+
+  Origin TLS for demos belongs on Caddy on the office Ubuntu demo node. If
+  Cloudflare SSL mode is Full Strict, Caddy must present a certificate that
+  covers each demo hostname, or a scoped wildcard such as *.demo.openreceive.org
+  if that namespace is introduced. Prefer a Cloudflare Origin Certificate on
+  Caddy for the office-node setup; do not route demos through the private
+  production edge just to reuse certificates.
+
+  Do not make Hetzner-managed Let's Encrypt the default demo TLS plan while
+  Cloudflare already owns public DNS/proxying. Caddy ACME remains useful only
+  for DNS-only origins, local lab environments, or a future demo edge not
+  fronted by Cloudflare.
+
+  Cloudflare cache and realtime rules:
+
+    - Bypass cache for /openreceive/*, /api/*, /events, and text/event-stream.
+    - Keep polling fallback even when SSE is enabled.
+    - Send no-store on invoice/state/event responses.
+    - Cache only static demo assets, docs, and screenshots.
 
   Recommendation:
 
-    For the first single-node deployment, terminate TLS at Traefik/Caddy using
-    individual certificates for each stable demo subdomain. Later, decide
-    whether to move TLS termination to a Hetzner Load Balancer.
+    Keep Cloudflare for public DNS/TLS edge, but run public demos on a separate
+    demo node from the start. Add explicit Cloudflare demo subdomain records and
+    demo-node origin routes. Revisit a demo Load Balancer only if the single
+    demo node becomes insufficient.
 
-Scalable Hetzner deployment:
+Scaling beyond one demo node:
 
-  When one demo box is not enough, add a separate Hetzner Load Balancer in
-  front of multiple demo nodes. Do not reuse the existing openreceive.org Load
-  Balancer unless you intentionally decide to collapse the boundary later.
-  Hetzner Load Balancers distribute traffic across target servers and support
-  public and private target IPs. Put demo nodes on a Hetzner private Network so
-  the demo load balancer can reach them without exposing every internal service
-  publicly.
+  When one demo box is not enough, either resize the office/cloud demo node,
+  add a second demo node, or add a separate Hetzner Load Balancer in front of
+  multiple demo nodes. Do not use the current private-app Load Balancer as the
+  demo edge. Demo deploy churn must not disturb the private app.
+
+  If using Hetzner for multi-node scale, Hetzner Load Balancers distribute
+  traffic across target servers and support public and private target IPs. Put
+  demo nodes on a Hetzner private Network so the demo load balancer can reach
+  them without exposing every internal service publicly.
 
   Public internet
         |
@@ -2591,9 +2776,9 @@ Scalable Hetzner deployment:
         v
   Hetzner demo private Network
         |
-        +-- demo-node-1: Traefik/Caddy + demo containers
-        +-- demo-node-2: Traefik/Caddy + demo containers
-        +-- demo-node-3: Traefik/Caddy + demo containers
+        +-- demo-node-1: Caddy + demo containers
+        +-- demo-node-2: Caddy + demo containers
+        +-- demo-node-3: Caddy + demo containers
 
   Keep host ports limited to 80/443 publicly. Use Hetzner Firewalls to restrict
   inbound traffic and apply rules by labels where useful. Use private networks
@@ -2601,34 +2786,174 @@ Scalable Hetzner deployment:
 
 Scaling stages:
 
-  Stage 1: one node
-    One Hetzner server, one reverse proxy, Tier 1 demos only, mock mode by
-    default. Deploy with Docker Compose over SSH.
+  Stage 0: local and tunnel previews
+    Run the full demo matrix on a local workstation when exploring heavy stacks
+    or taking screenshots. Use mock mode, noindex, and Cloudflare Tunnel or
+    VPN-only access under preview.openreceive.org. This is cheap and useful for
+    development, but it is not the canonical public demo host.
+
+  Stage 1: separate demo node
+    Use one separate low-cost demo node for stable Tier 1 public demos behind
+    Cloudflare. This can be the isolated office Ubuntu server or a small cloud
+    VPS. Run Caddy on that node, deploy demo containers with Docker Compose over
+    SSH, and keep mock mode as the default. Live mode is opt-in for one or two
+    carefully monitored demos.
 
   Stage 2: one node plus external managed services
-    Keep demos on one node but move shared data that matters to managed
+    Keep demos on the demo node but move shared data that matters to managed
     Postgres/Redis or a dedicated database container if any demo needs durable
     state. Most mock demos should stay stateless.
 
+  Stage 2b: larger or second demo node
+    Resize the demo node or add a second demo node if memory pressure, deploy
+    churn, tunnel reliability, or container count becomes annoying. This is
+    cheaper and simpler than adding a new load balancer.
+
   Stage 3: multiple nodes behind load balancer
-    Add a separate Hetzner demo Load Balancer, private Network, Firewalls, and
-    two or more demo nodes. Run stateless demos on any node. Pin live-wallet
-    demos to one node unless their state is externalized.
+    Add a separate Hetzner demo Load Balancer only after one demo node is not
+    enough. Use a private Network, Firewalls, and two or more demo nodes. Run
+    stateless demos on any node. Pin live-wallet demos to one node unless their
+    state is externalized.
 
   Stage 4: orchestrator if needed
     Only move to Nomad, Kubernetes, or Docker Swarm after Docker Compose
     deployment becomes operationally painful. Do not start there.
 
+Resource policy:
+
+  Many demos are intentionally low traffic but can be memory-hungry because they
+  exercise different language runtimes. Do not run every Tier 1, Tier 2, mobile,
+  and recipe demo permanently on the demo node.
+
+  - Always run demos.openreceive.org, express-demo, nextjs-demo, and static-demo.
+  - Add Rails/FastAPI/Django/Laravel demos as stable public demos when they are
+    polished and measured.
+  - Keep Java, .NET, Phoenix, mobile API, and long-tail framework demos stopped,
+    local-only, or preview-only until they are worth a stable subdomain.
+  - Set per-container memory limits and health checks in every compose file.
+  - Prefer mock mode for public demos; live-wallet mode should be rare.
+  - Review demo node memory before enabling each additional stable demo.
+  - Keep app-virginia out of the normal demo path because it hosts critical
+    production apps.
+  - Never let demos compete with the private app for proxy routing, memory, CPU,
+    deploy locks, or operator attention.
+
 Deployment workflow:
+
+  CI means a hosted automation runner, such as GitHub Actions, does the boring
+  repeatable work after each push or release. For OpenReceive demos, CI should
+  build and test images; the office demo node should only pull already-built
+  images and restart containers.
+
+  Start with the same deploy path both locally and in CI:
+
+    local first:
+      Run ./demos/deploy/scripts/deploy-demo express-demo from a trusted
+      operator machine. The script SSHes to the office demo node, pulls the
+      selected image, updates compose/Caddy config, reloads Caddy, and runs the
+      smoke test.
+
+    CI later:
+      GitHub Actions runs tests, builds images, and pushes them to GHCR. A
+      protected deploy step then runs the same deploy-demo or promote-demo
+      script, either from an operator machine over SSH or from a self-hosted
+      runner on the office demo node.
+
+  Because the preferred demo node lives behind WireGuard, do not assume a
+  GitHub-hosted runner can SSH directly to it. Start with manual promotion, or
+  run a protected self-hosted GitHub Actions runner on the office demo node for
+  deploy jobs only. GitHub-hosted runners can still do tests, package builds,
+  image builds, and GHCR pushes.
+
+  Safe CI/deploy split:
+
+    GitHub-hosted runner:
+      Validate code, run tests, build demo images, push immutable GHCR images.
+      This runner does not need office network access.
+
+    Office self-hosted runner or manual operator command:
+      Pull tested GHCR image digests, update compose/Caddy config, reload
+      Caddy, run smoke tests, and roll back if needed.
+
+  Do not give untrusted pull requests access to the office self-hosted runner,
+  WireGuard keys, deploy SSH keys, NWC secrets, or Cloudflare write tokens.
+  Deployment workflows must be restricted to protected branches, tags,
+  workflow_dispatch, or a protected GitHub environment.
 
   - GitHub Actions builds demo images.
   - Images are tagged with git SHA and optionally latest for stable branch.
   - Images are pushed to GHCR.
-  - A deploy job SSHes to the Hetzner host.
+  - A deploy job or operator command runs on the office demo node, or reaches it
+    through a trusted SSH path.
   - The host pulls updated compose files or receives a generated deploy bundle.
   - The host runs docker compose pull and docker compose up -d for changed demos.
+  - Caddy config is generated or updated from the demo registry.
+  - Caddy is reloaded after config validation succeeds.
+  - The Cloudflare DNS inventory is checked against the demo subdomain registry.
   - A smoke test hits /healthz and the public checkout URL.
   - Failed smoke tests roll back to the previous image tag.
+
+  Minimal GitHub Actions mental model:
+
+    on pull request:
+      run tests, build changed demos in mock mode, do not deploy stable demos
+
+    on merge to main:
+      run tests, build changed demos, push GHCR images, optionally deploy mock
+      demos after smoke tests pass
+
+    on tagged release:
+      publish packages, rebuild affected demos, promote tested image digests to
+      stable demo subdomains
+
+Deployment churn policy:
+
+  Expect SDK packages and demos to change often. The demo platform must make
+  frequent updates cheap without turning the demo node into a hand-managed build
+  machine.
+
+  Use two deployment lanes:
+
+    preview lane:
+      Every pull request or branch may build changed demos with mock mode,
+      noindex, and short-lived preview URLs. Preview deploys can use local
+      tunnels, VPN-only access, or preview.openreceive.org. They do not imply
+      that a stack is ready for the stable public demo list.
+
+    stable lane:
+      Merges to main build immutable demo images tagged by git SHA and image
+      digest. Stable public demo subdomains are promoted to a tested image
+      digest after smoke tests pass. Mock-mode demos may auto-promote once the
+      pipeline is reliable; live-wallet demos require explicit manual approval.
+
+  Package update rules:
+
+    - A package release or SDK change should trigger rebuilds for every demo
+      that consumes that package.
+    - Demos should pin package versions or workspace references explicitly, so
+      a public demo always reports the OpenReceive/NWC client versions it is
+      running.
+    - Each demo should expose a non-secret build metadata endpoint or footer
+      containing demo git SHA, image digest, SDK package versions, mode, and
+      deployed_at.
+    - Dependabot/Renovate-style package update PRs are acceptable, but they must
+      run the same demo smoke tests as human-authored package changes.
+    - Do not install or compile packages interactively on the demo node. Build
+      images in CI, push to GHCR, then pull immutable images on the demo node.
+
+  Deploy safety rules:
+
+    - Deploy one demo independently without redeploying the whole fleet.
+    - Use a per-demo deploy lock so two CI jobs cannot update the same compose
+      project at the same time.
+    - Write a deployment manifest with demo slug, image digest, package
+      versions, git SHA, config mode, deployed_at, and previous image digest.
+    - Run smoke tests after each deploy and automatically roll back to the
+      previous image digest on failure.
+    - Keep the proxy config stable; adding or updating a demo should usually be
+      a compose-label change plus a Cloudflare DNS registry change.
+    - Batch large demo-matrix updates during a maintenance window if they touch
+      many language runtimes at once.
 
 Recommended deploy repo layout:
 
@@ -2638,14 +2963,17 @@ Recommended deploy repo layout:
       production.env.example
       staging.env.example
       hosts.yml
+    manifests/
+      production.json
+      staging.json
     secrets/
       production.env        # gitignored, never committed
       staging.env           # gitignored, never committed
       live-wallet.env       # gitignored, never committed
     proxy/
       compose.yml
-      traefik.yml
-      dynamic/
+      Caddyfile
+      sites/
     stacks/
       express-demo.compose.yml
       nextjs-demo.compose.yml
@@ -2657,6 +2985,7 @@ Recommended deploy repo layout:
       deploy-all
       smoke-demo
       rollback-demo
+      promote-demo
 
 Environment variable convention:
 
@@ -2672,8 +3001,10 @@ Secret variable convention:
   OPENRECEIVE_NWC=nostr+walletconnect://...
   OPENRECEIVE_API_KEY=...
   OPENRECEIVE_WEBHOOK_SECRET=...
-  OPENRECEIVE_TRAEFIK_ACME_EMAIL=...
-  HETZNER_API_TOKEN=...
+  CLOUDFLARE_API_TOKEN=...
+  CLOUDFLARE_ORIGIN_CERT_PATH=/opt/openreceive/certs/origin.pem
+  CLOUDFLARE_ORIGIN_KEY_PATH=/opt/openreceive/certs/origin-key.pem
+  HETZNER_API_TOKEN=...       # only if provisioning Hetzner infra from CI
   GHCR_READ_TOKEN=...
 
 Secrets management:
@@ -2694,9 +3025,29 @@ Secrets management:
     demos/deploy/secrets/production.env
     demos/deploy/secrets/staging.env
     demos/deploy/secrets/live-wallet.env
+    demos/deploy/certs/*
+    demos/deploy/wireguard/*
+    demos/deploy/.ssh/*
+    demos/deploy/bundles/*
+    demos/deploy/.runtime/*
+    demos/deploy/.state/*
     any file containing OPENRECEIVE_NWC
-    any file containing a Hetzner API token
+    any file containing a Cloudflare, Hetzner, or GHCR token
     any file containing deploy SSH keys
+
+  Required .gitignore protections:
+
+    - Ignore demos/deploy/secrets/.
+    - Ignore all demos/deploy/**/*.env except *.env.example.
+    - Ignore local Cloudflare origin cert/key copies under demos/deploy/certs/.
+    - Ignore WireGuard configs under demos/deploy/wireguard/.
+    - Ignore deploy SSH keys under demos/deploy/.ssh/.
+    - Ignore generated deploy bundles, runtime state, cache files, and locks.
+    - Ignore local/debug compose overrides such as *.local.yml and *.debug.yml.
+    - Ignore *.key, *.pem, *.crt, *.p12, *.pfx, id_*, and wg*.conf under
+      demos/deploy/.
+    - Commit only examples, templates, Caddyfile/config templates, compose
+      templates, scripts, registries, and non-secret deployment manifests.
 
   Local developer machine:
 
@@ -2704,7 +3055,7 @@ Secrets management:
     are gitignored. They are for the project owner/operator, not for package
     users and not for contributors.
 
-  Hetzner host:
+  Demo host:
 
     Store runtime secrets outside the repo, for example:
 
@@ -2745,19 +3096,21 @@ Secrets management:
 
   GitHub Actions:
 
-    Prefer not to store the live NWC code in GitHub Actions. Let the Hetzner
-    host keep runtime wallet secrets. CI can build images and trigger deploys;
-    the host injects secrets at container start.
+    Prefer not to store the live NWC code in GitHub Actions. Let the demo host
+    keep runtime wallet secrets. CI can build images and prepare promotion; the
+    host injects secrets at container start.
 
     GitHub Actions may need:
 
-      DEPLOY_SSH_KEY
-      DEPLOY_HOST
       GHCR token or package permissions
+      Cloudflare token only for DNS inventory automation
+      DEPLOY_SSH_KEY and DEPLOY_HOST only if using an SSH deploy path
 
     GitHub Actions should not need:
 
       OPENRECEIVE_NWC
+      WireGuard private keys
+      office LAN credentials
 
   Upgrade path:
 
@@ -3186,6 +3539,15 @@ Start with lockstep versions:
 
 Use independent package versions later after the spec is stable.
 
+Package releases should feed the demo pipeline:
+
+  - Releasing an SDK or NWC client should open or trigger demo rebuilds for the
+    affected frameworks.
+  - Public stable demos should promote already-built images by digest, not build
+    from source on the demo node.
+  - Release notes should mention which demos were rebuilt and which package
+    versions those demos now run.
+
 Suggested tags:
 
   v0.1.0
@@ -3594,41 +3956,45 @@ CI and release:
   61. ci: run conformance vectors
   62. ci: build demos in mock mode
   63. ci: add secret scanning
-  64. release: configure release automation
+  64. release: configure release automation and demo rebuild triggers
 
 Demo deployment:
 
-  65. deploy: choose Traefik or Caddy for demo host routing
-  66. deploy: create demos/deploy/proxy compose stack
-  67. deploy: create explicit demo subdomain naming registry
+  65. deploy: document Cloudflare -> separate demo node architecture
+      Include both cloud VPS and office Ubuntu/WireGuard demo-node options.
+  66. deploy: create Caddy demo-node routing plan
+  67. deploy: create explicit Cloudflare demo subdomain registry
   68. deploy: create compose template for server-side demos
   69. deploy: add GHCR image build for each Tier 1 demo
-  70. deploy: add SSH-based Hetzner deploy script
+  70. deploy: add demo-node deploy script with per-demo locks
   71. deploy: add smoke-demo script for /healthz and checkout page
-  72. deploy: document DNS records for demo subdomains
-  73. deploy: document TLS certificate strategy
+  72. deploy: document Cloudflare DNS records and cache bypass rules
+  73. deploy: document Cloudflare edge TLS and origin certificate strategy
   74. deploy: add noindex preview deployment config
   75. deploy: document private openreceive.org boundary
   76. deploy: ensure demo DNS does not use broad *.openreceive.org wildcard
-  77. deploy: create separate Hetzner demo edge plan from private Rails LB
+  77. deploy: document local/Cloudflare Tunnel preview workflow
+  78. deploy: create demo-node scaling plan
+      Include office node resize, second demo node, and Hetzner demo LB options.
+  79. deploy: add deployment manifests, promote-demo, and rollback-by-digest
 
 Secrets:
 
-  78. secrets: add .env.example templates for every demo
-  79. secrets: add demos/deploy/secrets README explaining ignored files
-  80. secrets: add host secret file layout under /opt/openreceive/secrets
-  81. secrets: make deploy scripts refuse live mode without OPENRECEIVE_NWC
-  82. secrets: add redaction utility for nostr+walletconnect URIs
-  83. secrets: add frontend bundle scan for OPENRECEIVE_NWC and NWC URI strings
-  84. secrets: document receive-only NWC rotation procedure
-  85. secrets: add secret-management docs page
+  80. secrets: add .env.example templates for every demo
+  81. secrets: add demos/deploy/secrets README and .gitignore protections
+  82. secrets: add host secret file layout under /opt/openreceive/secrets
+  83. secrets: make deploy scripts refuse live mode without OPENRECEIVE_NWC
+  84. secrets: add redaction utility for nostr+walletconnect URIs
+  85. secrets: add frontend bundle scan for OPENRECEIVE_NWC and NWC URI strings
+  86. secrets: document receive-only NWC rotation procedure
+  87. secrets: add secret-management docs page
 
 Rails:
 
-  86. rails: add Kamal listener role example, not accessory
-  87. rails: document rbsecp256k1/native build dependencies if needed
-  88. rails: add read_only/capabilities checkout guard
-  89. rails: add idempotent notification handler and since cursor example
+  88. rails: add Kamal listener role example, not accessory
+  89. rails: document rbsecp256k1/native build dependencies if needed
+  90. rails: add read_only/capabilities checkout guard
+  91. rails: add idempotent notification handler and since cursor example
 
 
 Important Design Decisions To Make Early
