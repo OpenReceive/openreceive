@@ -21,6 +21,7 @@ export interface ExpressLikeRequest {
   headers?: Record<string, string | string[] | undefined>;
   body?: unknown;
   get?: (header: string) => string | undefined;
+  on?: (event: "close", listener: () => void) => unknown;
   user?: unknown;
 }
 
@@ -68,6 +69,7 @@ export interface OpenReceiveExpressCors {
 export interface OpenReceiveExpressOptions {
   client: OpenReceiveReceiveNwcClient;
   store?: InMemoryInvoiceStore;
+  eventBus?: InMemoryInvoiceEventBus;
   basePath?: string;
   merchantScope: (req: ExpressLikeRequest) => string;
   auth?: OpenReceiveExpressAuthorization;
@@ -75,6 +77,7 @@ export interface OpenReceiveExpressOptions {
   cors?: OpenReceiveExpressCors;
   unsafeAllowUnauthenticatedDemoMode?: boolean;
   clock?: () => number;
+  heartbeatSeconds?: number;
 }
 
 export interface OpenReceiveExpressHandlers {
@@ -87,6 +90,76 @@ export interface OpenReceiveExpressHandlers {
 }
 
 const DEFAULT_BASE_PATH = "/openreceive/v1";
+const DEFAULT_HEARTBEAT_SECONDS = 20;
+
+export type OpenReceiveInvoiceEventName =
+  | "invoice.created"
+  | "invoice.verifying"
+  | "invoice.settled"
+  | "invoice.expired"
+  | "invoice.failed"
+  | "invoice.fulfilled"
+  | "invoice.cancelled";
+
+export interface OpenReceiveInvoiceEvent {
+  id: number;
+  invoice_id: string;
+  event: OpenReceiveInvoiceEventName;
+  data: Record<string, unknown>;
+}
+
+export class InMemoryInvoiceEventBus {
+  #events = new Map<string, OpenReceiveInvoiceEvent[]>();
+  #subscribers = new Map<
+    string,
+    Set<(event: OpenReceiveInvoiceEvent) => void>
+  >();
+
+  publish(
+    invoiceId: string,
+    event: OpenReceiveInvoiceEventName,
+    data: Record<string, unknown>
+  ): OpenReceiveInvoiceEvent {
+    const invoiceEvents = this.#events.get(invoiceId) ?? [];
+    const nextEvent: OpenReceiveInvoiceEvent = {
+      id: invoiceEvents.length + 1,
+      invoice_id: invoiceId,
+      event,
+      data
+    };
+
+    invoiceEvents.push(nextEvent);
+    this.#events.set(invoiceId, invoiceEvents);
+
+    for (const subscriber of this.#subscribers.get(invoiceId) ?? []) {
+      subscriber(nextEvent);
+    }
+
+    return nextEvent;
+  }
+
+  replay(invoiceId: string, afterEventId = 0): OpenReceiveInvoiceEvent[] {
+    return (this.#events.get(invoiceId) ?? []).filter(
+      (event) => event.id > afterEventId
+    );
+  }
+
+  subscribe(
+    invoiceId: string,
+    subscriber: (event: OpenReceiveInvoiceEvent) => void
+  ): () => void {
+    const subscribers = this.#subscribers.get(invoiceId) ?? new Set();
+    subscribers.add(subscriber);
+    this.#subscribers.set(invoiceId, subscribers);
+
+    return () => {
+      subscribers.delete(subscriber);
+      if (subscribers.size === 0) {
+        this.#subscribers.delete(invoiceId);
+      }
+    };
+  }
+}
 
 export function mountOpenReceiveExpressRoutes(
   app: ExpressLikeApp,
@@ -109,8 +182,11 @@ export function createOpenReceiveExpressHandlers(
   options: OpenReceiveExpressOptions
 ): OpenReceiveExpressHandlers {
   const store = options.store ?? new InMemoryInvoiceStore();
+  const eventBus = options.eventBus ?? new InMemoryInvoiceEventBus();
   const clock = options.clock ?? currentUnixSeconds;
   const basePath = normalizeBasePath(options.basePath);
+  const heartbeatMs =
+    (options.heartbeatSeconds ?? DEFAULT_HEARTBEAT_SECONDS) * 1000;
 
   return {
     createInvoice: wrapHandler(async (req, res) => {
@@ -174,6 +250,11 @@ export function createOpenReceiveExpressHandlers(
           as_of: createdAt
         })
       });
+      eventBus.publish(
+        createResult.row.invoice_id,
+        "invoice.created",
+        serializeEventData(createResult.row)
+      );
 
       return res.status(201).json(serializeInvoice(createResult.row, basePath));
     }),
@@ -202,6 +283,31 @@ export function createOpenReceiveExpressHandlers(
           invoice_id: invoice.invoice_id,
           settled_at: lookup.settled_at
         });
+        if (invoice.transaction_state !== "settled") {
+          eventBus.publish(
+            current.invoice_id,
+            "invoice.settled",
+            serializeEventData(current)
+          );
+        }
+      } else if (lookup.state === "expired" || lookup.transaction_state === "expired") {
+        current = store.markExpiredClosed(invoice.invoice_id);
+        if (invoice.transaction_state !== "expired") {
+          eventBus.publish(
+            current.invoice_id,
+            "invoice.expired",
+            serializeEventData(current)
+          );
+        }
+      } else if (lookup.state === "failed" || lookup.transaction_state === "failed") {
+        current = store.markFailedClosed(invoice.invoice_id);
+        if (invoice.transaction_state !== "failed") {
+          eventBus.publish(
+            current.invoice_id,
+            "invoice.failed",
+            serializeEventData(current)
+          );
+        }
       }
 
       return res.status(200).json({
@@ -219,9 +325,25 @@ export function createOpenReceiveExpressHandlers(
       res.set("Content-Type", "text/event-stream");
       res.set("Cache-Control", "no-store");
       res.flushHeaders?.();
-      res.write?.(formatSseEvent(1, "invoice.created", serializeEventData(invoice)));
-      res.write?.(": heartbeat\n\n");
-      res.end?.();
+      for (const event of eventBus.replay(invoice.invoice_id, getLastEventId(req))) {
+        res.write?.(formatSseEvent(event.id, event.event, event.data));
+      }
+
+      const unsubscribe = eventBus.subscribe(invoice.invoice_id, (event) => {
+        res.write?.(formatSseEvent(event.id, event.event, event.data));
+      });
+      if (req.on !== undefined) {
+        const heartbeat = setInterval(() => {
+          res.write?.(": heartbeat\n\n");
+        }, heartbeatMs);
+        req.on("close", () => {
+          clearInterval(heartbeat);
+          unsubscribe();
+        });
+      } else {
+        res.write?.(": heartbeat\n\n");
+        unsubscribe();
+      }
     }),
 
     health: wrapHandler(async (req, res) => {
@@ -440,6 +562,14 @@ function formatSseEvent(
   data: Record<string, unknown>
 ): string {
   return `id: ${id}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
+function getLastEventId(req: ExpressLikeRequest): number {
+  const value = getHeader(req, "last-event-id");
+  if (value === undefined) return 0;
+
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
 }
 
 function requireStoredInvoice(

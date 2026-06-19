@@ -37,6 +37,7 @@ function App() {
 
   useEffect(() => {
     if (invoice === null) return;
+    let stopped = false;
 
     createQrSvg(invoice.invoice)
       .then(setQrSvg)
@@ -46,10 +47,12 @@ function App() {
 
     const events = new EventSource(invoice.checkout.events_url);
     events.addEventListener("invoice.settled", () => {
+      stopped = true;
       setStatus("settled");
       events.close();
     });
     events.addEventListener("invoice.expired", () => {
+      stopped = true;
       setStatus("expired");
       events.close();
     });
@@ -57,7 +60,43 @@ function App() {
       events.close();
     };
 
-    return () => events.close();
+    const lookupInterval = window.setInterval(async () => {
+      if (stopped) return;
+
+      try {
+        const response = await fetch("/openreceive/v1/invoices/lookup", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            payment_hash: invoice.payment_hash
+          })
+        });
+        const body = await response.json();
+
+        if (!response.ok) {
+          setError(body.message ?? "Could not look up invoice.");
+          return;
+        }
+
+        setStatus(body.workflow_state ?? body.transaction_state ?? "checking");
+        if (body.transaction_state === "settled") {
+          stopped = true;
+          setStatus("settled");
+          events.close();
+          window.clearInterval(lookupInterval);
+        }
+      } catch (cause: unknown) {
+        setError(cause instanceof Error ? cause.message : String(cause));
+      }
+    }, 3000);
+
+    return () => {
+      stopped = true;
+      window.clearInterval(lookupInterval);
+      events.close();
+    };
   }, [invoice]);
 
   async function createInvoice() {
