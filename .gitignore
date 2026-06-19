@@ -31,3 +31,5 @@ demos/deploy/**/*.p12
 demos/deploy/**/*.pfx
 demos/deploy/**/id_*
 demos/deploy/**/wg*.conf
+
+.DS_Store
