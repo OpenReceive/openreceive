@@ -399,6 +399,18 @@
   justify-content: space-between;
 }
 
+.or-provider-heading img {
+  border-radius: 6px;
+  flex: 0 0 auto;
+  height: 28px;
+  width: 28px;
+}
+
+.or-provider-heading h4 {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .or-provider-heading span,
 .or-provider-badges span {
   border-radius: 999px;

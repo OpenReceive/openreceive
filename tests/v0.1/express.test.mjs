@@ -669,8 +669,10 @@ test("read-only helper routes expose static rates, providers, and route suggesti
     raiseNext
   );
   assert.equal(providersRes.statusCode, 200);
-  assert.equal(providersRes.body.metadata.schema_version, "2.0.0");
+  assert.equal(providersRes.body.metadata.schema_version, "4.0.0");
   assert.equal(providersRes.body.providers.every((provider) => provider.us === true), true);
+  assert.equal(providersRes.body.providers.every((provider) => typeof provider.icon_path === "string"), true);
+  assert.equal(providersRes.body.providers.some((provider) => "pays_arbitrary_invoice" in provider), false);
 
   const catalogRes = createResponse();
   await handlers.listRoutes(createRequest(), catalogRes, raiseNext);

@@ -245,7 +245,7 @@ paths:
   /providers:
     get:
       operationId: listProviders
-      summary: Return canonical provider registry entries.
+      summary: Return runtime payment-wizard provider registry entries.
       parameters:
         - name: mechanism
           in: query

@@ -134,9 +134,9 @@ route suggestions.
 
 `GET /openreceive/v1/providers`
 
-Returns canonical provider registry entries and metadata. Optional query
-filters include `mechanism=pay_invoice|withdraw_to_invoice` and
-`us=true|false|unknown|null`.
+Returns runtime provider registry entries and metadata for the payment wizard,
+including local `icon_path` values. Optional query filters include
+`mechanism=pay_invoice|withdraw_to_invoice` and `us=true|false|unknown|null`.
 
 Provider routes are suggestions, not settlement proof or availability
 guarantees. The payer chooses a third-party provider, and backend wallet lookup

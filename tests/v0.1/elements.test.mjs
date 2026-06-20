@@ -76,8 +76,10 @@ test("elements render payment wizard route choices and providers from browser st
   });
   assert.match(cryptoStep, /Tether/);
   assert.match(cryptoStep, /assets\/icons\/usdt\.svg/);
+  assert.match(cryptoStep, /assets\/provider-icons\/boltz\.png/);
   assert.match(cryptoStep, /Copy BOLT11/);
-  assert.match(cryptoStep, /Open /);
+  assert.match(cryptoStep, /How To Pay/);
+  assert.doesNotMatch(cryptoStep, /Pays invoices/);
 
   const cardStep = renderOpenReceivePaymentWizardHtml({
     selectedMethod: "card",

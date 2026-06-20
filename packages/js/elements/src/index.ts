@@ -285,13 +285,12 @@ export function renderOpenReceivePaymentWizardHtml(
               <div part="provider-grid">
                 ${route.providers.map((provider) => `
                   <article part="provider${provider.recommended ? " selected" : ""}">
-                    <div>
+                    <div part="provider-heading">
+                      <img alt="" src="${escapeHtml(provider.icon)}">
                       <h4>${escapeHtml(provider.name)}</h4>
                       ${provider.recommendedLabel === null ? "" : `<span part="recommended">${escapeHtml(provider.recommendedLabel)}</span>`}
                     </div>
-                    <p>${escapeHtml(provider.blurb)}</p>
                     <div part="provider-badges">
-                      <span>${escapeHtml(provider.mechanismLabel)}</span>
                       ${provider.usBadge === null ? "" : `<span>${escapeHtml(provider.usBadge)}</span>`}
                     </div>
                     <div part="provider-actions">

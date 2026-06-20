@@ -7,9 +7,11 @@ import {
   type Country,
   type FiatRailId,
   type PaymentWizardRoute,
+  type Provider,
   type ResolvedProviderRef,
   type ProviderMechanism
 } from "@openreceive/provider-data";
+import { openReceiveProviderIconUrls } from "./provider-icons.ts";
 
 export const OPENRECEIVE_QR_QUIET_ZONE_MODULES = 4 as const;
 export const OPENRECEIVE_QR_DARK_COLOR = "#000000" as const;
@@ -853,10 +855,9 @@ export interface OpenReceiveWizardProviderDisplay {
   readonly id: string;
   readonly name: string;
   readonly url: string;
-  readonly blurb: string;
+  readonly icon: string;
   readonly recommended: boolean;
   readonly recommendedLabel: string | null;
-  readonly mechanismLabel: string;
   readonly usBadge: string | null;
   readonly copyLabel: string;
   readonly copiedLabel: string;
@@ -890,9 +891,9 @@ export const openReceiveCheckoutLabels = {
   emptyCrypto: "Choose an altcoin.",
   emptyFiat: "No providers found for this country yet.",
   recommended: "Recommended",
-  paysInvoices: "Pays invoices",
-  withdrawToInvoice: "Withdraw to invoice",
-  openProvider: "Open",
+  paysInvoices: "Lightning send",
+  withdrawToInvoice: "Lightning withdrawal",
+  openProvider: "How To Pay",
   lightningNetwork: "Lightning Network",
   chooseCountry: "Choose a country",
   notUs: "Not US",
@@ -1162,6 +1163,25 @@ export const openReceiveCheckoutElementStyles = `
     gap: 6px;
   }
 
+  [part="provider-heading"] {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+  }
+
+  [part="provider-heading"] img {
+    border-radius: 6px;
+    flex: 0 0 auto;
+    height: 28px;
+    width: 28px;
+  }
+
+  [part="provider-heading"] h4 {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
   [part="provider-badges"] span,
   [part="recommended"] {
     background: var(--or-bg-soft);
@@ -1250,7 +1270,7 @@ export const openReceivePaymentMethods: readonly OpenReceivePaymentMethodOption[
   {
     id: "crypto",
     title: "Crypto",
-    detail: "Use stablecoins or altcoins through invoice-paying services."
+    detail: "Use stablecoins or altcoins through Lightning-capable services."
   }
 ];
 
@@ -1511,7 +1531,14 @@ export function getOpenReceiveProviderUsBadge(
 }
 
 export function getOpenReceiveProviderOpenLabel(providerName: string): string {
-  return `${openReceiveCheckoutLabels.openProvider} ${providerName}`;
+  void providerName;
+  return openReceiveCheckoutLabels.openProvider;
+}
+
+export function getOpenReceiveProviderIcon(
+  provider: Pick<Provider, "icon_path">
+): string {
+  return openReceiveProviderIconUrls[provider.icon_path] ?? openReceivePaymentIconUrls.crypto;
 }
 
 export function getOpenReceiveRouteNetworkLabel(routeId: string): string {
@@ -1569,7 +1596,7 @@ function getOpenReceiveWizardRouteDisplayTitle(route: PaymentWizardRoute): strin
 }
 
 function getOpenReceiveWizardRouteDisplaySubtitle(route: PaymentWizardRoute): string {
-  return route.kind === "crypto" ? route.route.summary : route.country.currency;
+  return route.kind === "crypto" ? route.route.symbol.toUpperCase() : route.country.currency;
 }
 
 function createOpenReceiveWizardProviderDisplay(
@@ -1578,11 +1605,10 @@ function createOpenReceiveWizardProviderDisplay(
   return {
     id: entry.provider.id,
     name: entry.provider.name,
-    url: entry.provider.url,
-    blurb: entry.blurb,
+    url: entry.provider.lightning_docs_url ?? entry.provider.url,
+    icon: getOpenReceiveProviderIcon(entry.provider),
     recommended: entry.flagship,
     recommendedLabel: entry.flagship ? openReceiveCheckoutLabels.recommended : null,
-    mechanismLabel: getOpenReceiveProviderMechanismLabel(entry.provider.mechanism),
     usBadge: getOpenReceiveProviderUsBadge(entry.provider.us),
     copyLabel: openReceiveCheckoutLabels.copyInvoice,
     copiedLabel: openReceiveCheckoutLabels.copied,

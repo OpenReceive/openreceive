@@ -1042,18 +1042,20 @@ export function OpenReceivePaymentWizard(
                       {
                         className: "or-provider-heading"
                       },
+                      React.createElement("img", {
+                        alt: "",
+                        src: provider.icon
+                      }),
                       React.createElement("h4", null, provider.name),
                       provider.recommendedLabel === null
                         ? null
                         : React.createElement("span", null, provider.recommendedLabel)
                     ),
-                    React.createElement("p", null, provider.blurb),
                     React.createElement(
                       "div",
                       {
                         className: "or-provider-badges"
                       },
-                      React.createElement("span", null, provider.mechanismLabel),
                       provider.usBadge === null
                         ? null
                         : React.createElement("span", null, provider.usBadge)

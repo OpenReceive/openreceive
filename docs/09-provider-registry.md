@@ -1,9 +1,11 @@
 # Provider Registry
 
 OpenReceive keeps provider suggestions separate from invoice creation.
-The canonical provider registry lives in
-`spec/data/providers/openreceive-providers.v2.json` and lists services that can
-pay a third-party BOLT11 invoice.
+The v0.1 scope-lock registry snapshot lives in
+`spec/data/providers/openreceive-providers.v2.json`. The JavaScript runtime
+package consumes `packages/js/provider-data/src/data/openreceive-providers.v4.json`,
+which removes wizard-only summaries, adds repo-local provider icon paths, and
+keeps the same route/provider ids for payment-wizard suggestions.
 
 The registry is static data. It does not prove that a provider will complete a
 payment, quote a particular fee, support a user in a specific jurisdiction, or
@@ -12,7 +14,7 @@ let the payer choose the third-party service.
 
 ## JavaScript Package
 
-`@openreceive/provider-data` wraps the canonical registry with read-only
+`@openreceive/provider-data` wraps the runtime wizard registry with read-only
 helpers:
 
 ```ts
@@ -33,9 +35,10 @@ const btcWizardRoutes = getPaymentWizardRoutes({ asset: "btc" });
 const validation = validateRegistry();
 ```
 
-The package does not change provider claims or normalize private copies of the
-data. It imports the canonical registry and exposes immutable objects so route
-helpers cannot accidentally mutate the source.
+The package exposes immutable objects so route helpers cannot accidentally
+mutate the source. Provider entries include `icon_path` values that resolve to
+local assets bundled by `@openreceive/browser`; they do not point browser code
+at remote favicon URLs.
 
 The Express adapter exposes the same static data through display-safe helper
 routes at `GET /openreceive/v1/providers` and `GET /openreceive/v1/routes`.

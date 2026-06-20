@@ -25,6 +25,7 @@ import {
   getOpenReceiveAltcoinAssets,
   getOpenReceivePaymentMethodIcon,
   getOpenReceivePaymentStatusText,
+  getOpenReceiveProviderIcon,
   getOpenReceiveProviderMechanismLabel,
   getOpenReceiveProviderOpenLabel,
   getOpenReceiveProviderUsBadge,
@@ -43,6 +44,9 @@ import {
   writeOpenReceiveStoredCountryCode,
   writeOpenReceiveThemePreference
 } from "@openreceive/browser";
+import {
+  getProvider,
+} from "@openreceive/provider-data";
 import {
   CopyInvoiceButton,
   InvoiceSummary,
@@ -214,10 +218,13 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   assert.equal(openReceiveCheckoutLabels.copyInvoice, "Copy BOLT11");
   assert.equal(getOpenReceivePaymentStatusText("settled").title, "Payment received");
   assert.equal(getOpenReceiveWizardEmptyMessage("bitcoin"), "Choose Lightning or on-chain Bitcoin.");
-  assert.equal(getOpenReceiveProviderMechanismLabel("pay_invoice"), "Pays invoices");
-  assert.equal(getOpenReceiveProviderOpenLabel("Boltz"), "Open Boltz");
+  assert.equal(getOpenReceiveProviderMechanismLabel("pay_invoice"), "Lightning send");
+  assert.equal(getOpenReceiveProviderOpenLabel("Boltz"), "How To Pay");
   assert.equal(getOpenReceiveProviderUsBadge(true), "US supported");
   assert.equal(getOpenReceiveProviderUsBadge(null), null);
+  const strike = getProvider("strike");
+  assert.ok(strike);
+  assert.match(getOpenReceiveProviderIcon(strike), /assets\/provider-icons\/strike\.png/);
   assert.equal(getOpenReceiveRouteNetworkLabel("btc-lightning"), "Lightning Network");
   assert.equal(getOpenReceiveRouteNetworkLabel("usdt-tron"), "usdt-tron");
   assert.match(getOpenReceivePaymentMethodIcon("card"), /assets\/icons\/card\.svg/);
@@ -402,7 +409,9 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   assert.equal(cardRouteDisplays[0].providers.length <= OPENRECEIVE_PROVIDER_PREVIEW_LIMIT, true);
   assert.equal(cardRouteDisplays[0].providers[0].copyLabel, openReceiveCheckoutLabels.copyInvoice);
   assert.equal(cardRouteDisplays[0].providers[0].copiedLabel, openReceiveCheckoutLabels.copied);
-  assert.match(cardRouteDisplays[0].providers[0].openLabel, /^Open /);
+  assert.equal(cardRouteDisplays[0].providers[0].openLabel, "How To Pay");
+  assert.match(cardRouteDisplays[0].providers[0].url, /^https:\/\/docs\.strike\.me/);
+  assert.match(cardRouteDisplays[0].providers[0].icon, /assets\/provider-icons\/strike\.png/);
 
   const firstCrypto = getOpenReceiveAltcoinAssets().find((asset) => asset.route !== undefined);
   assert.ok(firstCrypto?.route);

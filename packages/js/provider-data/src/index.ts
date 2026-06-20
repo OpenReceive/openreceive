@@ -1,4 +1,4 @@
-import providerRegistryJson from "./data/openreceive-providers.v2.json" with { type: "json" };
+import providerRegistryJson from "./data/openreceive-providers.v4.json" with { type: "json" };
 
 export type ProviderMechanism = "pay_invoice" | "withdraw_to_invoice";
 export type CountryCoverage = "deep" | "thin" | "sparse";
@@ -12,17 +12,14 @@ export interface Provider {
   readonly name: string;
   readonly url: string;
   readonly us: boolean | null;
-  readonly pays_arbitrary_invoice: true;
   readonly mechanism: ProviderMechanism;
   readonly lightning_docs_url: string | null;
-  readonly blurb: string;
-  readonly caveat?: string;
+  readonly icon_path: string;
 }
 
 export interface ProviderRef {
   readonly provider: ProviderId;
   readonly flagship?: boolean;
-  readonly blurb_override?: string;
   readonly rank?: number;
 }
 
@@ -36,7 +33,6 @@ export interface CryptoRoute {
   readonly id: CryptoRouteId;
   readonly symbol: string;
   readonly label: string;
-  readonly summary: string;
   readonly providers: readonly ProviderRef[];
 }
 
@@ -62,7 +58,7 @@ export interface DisqualifiedProvider {
 }
 
 export interface ProviderRegistry {
-  readonly schema_version: "2.0.0";
+  readonly schema_version: "4.0.0";
   readonly generated: string;
   readonly description: string;
   readonly filter: string;
@@ -78,7 +74,6 @@ export interface ProviderRegistry {
 export interface ResolvedProviderRef {
   readonly provider: Provider;
   readonly flagship: boolean;
-  readonly blurb: string;
   readonly rank?: number;
 }
 
@@ -152,7 +147,6 @@ function resolveProviderRef(ref: ProviderRef): ResolvedProviderRef {
   return {
     provider,
     flagship: ref.flagship === true,
-    blurb: ref.blurb_override ?? provider.blurb,
     ...(ref.rank === undefined ? {} : { rank: ref.rank })
   };
 }
@@ -348,7 +342,7 @@ export function validateRegistry(input: ProviderRegistry = registry): ProviderRe
   const routeIds = new Set(cryptoRoutes.map((route) => route.id));
   const countryCodes = new Set(countries.map((country) => country.code));
 
-  check(input.schema_version === "2.0.0", "provider registry schema version mismatch");
+  check(input.schema_version === "4.0.0", "provider registry schema version mismatch");
   check(typeof input.generated === "string" && input.generated.length > 0, "provider registry missing generated date");
 
   for (const duplicate of findDuplicates(cryptoRoutes.map((route) => route.id))) {
@@ -368,20 +362,14 @@ export function validateRegistry(input: ProviderRegistry = registry): ProviderRe
     check(/^[a-z0-9-]+$/.test(id), `provider ${id} has invalid id`);
     check(Boolean(provider.name && provider.url), `provider ${id} missing name or url`);
     check(typeof provider.url === "string" && provider.url.startsWith("https://"), `provider ${id} url must be https`);
-    check(provider.pays_arbitrary_invoice === true, `provider ${id} must pay arbitrary invoice`);
+    check(typeof provider.icon_path === "string" && provider.icon_path.length > 0, `provider ${id} missing icon path`);
     check(
       provider.mechanism === "pay_invoice" || provider.mechanism === "withdraw_to_invoice",
       `provider ${id} has invalid mechanism`
     );
     check(!disqualifiedIds.has(id), `provider ${id} appears in disqualified providers`);
 
-    const claimText = `${provider.blurb || ""} ${provider.caveat || ""}`.toLowerCase();
-    if (provider.us === true) {
-      check(!claimText.includes("not available to us users"), `provider ${id} has contradictory US availability`);
-      check(!claimText.includes("us persons cannot"), `provider ${id} has contradictory US availability`);
-      check(!claimText.includes("blocked in us"), `provider ${id} has contradictory US availability`);
-      check(!claimText.includes("tos prohibits us users"), `provider ${id} has contradictory US availability`);
-    }
+    check(provider.lightning_docs_url === null || typeof provider.lightning_docs_url === "string", `provider ${id} has invalid docs url`);
   }
 
   for (const asset of input.assets_index ?? []) {

@@ -36,8 +36,8 @@ function readVector(name) {
 
 test("provider-data exposes canonical registry metadata and counts", () => {
   assert.deepEqual(getProviderRegistryMetadata(), {
-    schema_version: "2.0.0",
-    generated: "2026-06-18",
+    schema_version: "4.0.0",
+    generated: "2026-06-20",
     description: providerRegistry.description,
     filter: providerRegistry.filter
   });
@@ -56,6 +56,20 @@ test("provider-data exposes master-plan getter aliases", () => {
   assert.deepEqual(getFiatRails(), listFiatRails());
   assert.deepEqual(getCountries(), listCountries());
   assert.equal(getDisqualifiedProviders(), listDisqualifiedProviders());
+});
+
+test("provider-data v4 keeps wizard copy and icons local", () => {
+  assert.equal("summary" in providerRegistry.crypto_routes[0], false);
+  assert.equal("pays_arbitrary_invoice" in providerRegistry.providers.strike, false);
+  assert.equal("blurb" in providerRegistry.providers.strike, false);
+  assert.equal("caveat" in providerRegistry.providers.strike, false);
+  assert.equal(
+    providerRegistry.crypto_routes.some((route) =>
+      route.providers.some((provider) => "blurb_override" in provider)
+    ),
+    false
+  );
+  assert.equal(providerRegistry.providers.strike.icon_path, "assets/provider-icons/strike.png");
 });
 
 test("provider-data resolves crypto route providers without changing route order", () => {
