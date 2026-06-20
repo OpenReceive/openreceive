@@ -3,10 +3,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import {
-  OPENRECEIVE_COUNTRY_MAP_VIEW_BOX,
   openReceiveCheckoutElementStyles,
-  openReceiveThemeToggleElementStyles,
-  openReceiveCountryMapRegions
+  openReceiveThemeToggleElementStyles
 } from "@openreceive/browser";
 import {
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
@@ -38,15 +36,16 @@ test("elements render display-safe checkout HTML", () => {
     theme: "dark"
   });
 
-  assert.match(html, /lightning:lnbc-test/);
+  assert.doesNotMatch(html, /lightning:lnbc-test/);
   assert.match(html, /data-theme="dark"/);
   assert.match(html, /Waiting for payment/);
   assert.match(html, />\$0\.05</);
   assert.match(html, /Invoice expires in/);
   assert.match(html, /200 sats/);
   assert.match(html, /pending/);
-  assert.match(html, /aaaaaaaa\.\.\.aaaaaaaa/);
-  assert.match(html, />Copy BOLT11</);
+  assert.doesNotMatch(html, /aaaaaaaa\.\.\.aaaaaaaa/);
+  assert.match(html, />Copy invoice</);
+  assert.doesNotMatch(html, />Open Wallet</);
   assert.match(html, /data-openreceive-wizard/);
   assert.match(html, /Credit Card/);
   assert.match(html, /Bank Transfer/);
@@ -84,7 +83,7 @@ test("elements render payment wizard route choices and providers from browser st
   assert.match(cryptoStep, /Tether/);
   assert.match(cryptoStep, /assets\/icons\/usdt\.svg/);
   assert.match(cryptoStep, /assets\/provider-icons\/boltz\.png/);
-  assert.match(cryptoStep, /Copy BOLT11/);
+  assert.match(cryptoStep, /Copy invoice/);
   assert.match(cryptoStep, /How To Pay/);
   assert.doesNotMatch(cryptoStep, /Pays invoices/);
 
@@ -92,20 +91,13 @@ test("elements render payment wizard route choices and providers from browser st
     selectedMethod: "card",
     selectedCountryCode: "US"
   });
-  assert.match(cardStep, /Credit \/ debit card in United States/);
-  assert.match(cardStep, /Switch country/);
-
-  const countryStep = renderOpenReceivePaymentWizardHtml({
-    selectedMethod: "card",
-    selectedCountryCode: "US",
-    countryPickerOpen: true
-  });
-  assert.match(countryStep, /part="country-map"/);
-  assert.match(countryStep, /aria-label="Country map"/);
-  assert.match(countryStep, new RegExp(`viewBox="${OPENRECEIVE_COUNTRY_MAP_VIEW_BOX}"`));
-  assert.match(countryStep, new RegExp(`data-or-region-shape="${openReceiveCountryMapRegions[0].id}"`));
-  assert.match(countryStep, /data-or-country="US"/);
-  assert.match(countryStep, /part="map-readout"/);
+  assert.match(cardStep, /Credit \/ debit card/);
+  assert.match(cardStep, /part="country-select"/);
+  assert.match(cardStep, /<select data-or-country="US">/);
+  assert.match(cardStep, />United States<\/option>/);
+  assert.doesNotMatch(cardStep, /Switch country/);
+  assert.doesNotMatch(cardStep, /part="country-map"/);
+  assert.doesNotMatch(cardStep, /US supported|Not US/);
 });
 
 test("elements render package-owned theme toggle HTML", () => {

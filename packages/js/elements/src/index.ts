@@ -2,7 +2,6 @@ import {
   OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
   OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES,
   OPENRECEIVE_CHECKOUT_DATA_SELECTORS,
-  OPENRECEIVE_COUNTRY_MAP_VIEW_BOX,
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_COUNTRY_STORAGE_KEY,
   OPENRECEIVE_CHECKOUT_ELEMENT_PARTS,
@@ -42,7 +41,6 @@ import {
   getOpenReceiveWizardEmptyMessage,
   openReceiveCheckoutLabels,
   openReceiveCheckoutElementStyles,
-  openReceiveCountryMapRegions,
   openWallet,
   openReceivePaymentMethods,
   openReceiveThemeToggleElementStyles,
@@ -125,10 +123,6 @@ export function renderOpenReceiveCheckoutHtml(view: OpenReceiveCheckoutView): st
     transactionStateLabel === undefined
       ? ""
       : `<span part="state" data-state="${escapeHtml(transactionStateLabel)}">${escapeHtml(transactionStateLabel)}</span>`;
-  const paymentHash =
-    display.paymentHashLabel === undefined
-      ? ""
-      : `<code part="payment-hash">${escapeHtml(display.paymentHashLabel)}</code>`;
   const status = checkoutState === undefined
     ? ""
     : renderElementPaymentStatusHtml(checkoutState);
@@ -140,11 +134,10 @@ export function renderOpenReceiveCheckoutHtml(view: OpenReceiveCheckoutView): st
     <section part="root"${view.theme === undefined ? "" : ` data-theme="${escapeHtml(view.theme)}"`}>
       <div part="qr" ${OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.qr}></div>
       ${status}
-      <div part="meta">${amountLabel}${fiatLabel}${stateLabel}${paymentHash}</div>
+      <div part="meta">${amountLabel}${fiatLabel}${stateLabel}</div>
       <textarea part="invoice" readonly>${escapeHtml(view.invoice)}</textarea>
       <div part="actions">
         <button part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.copy}" type="button">${escapeHtml(openReceiveCheckoutLabels.copyInvoice)}</button>
-        <a part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.open}" href="${escapeHtml(display.lightningUri)}">${escapeHtml(openReceiveCheckoutLabels.openWallet)}</a>
       </div>
       ${wizard}
     </section>
@@ -203,76 +196,6 @@ export function renderOpenReceivePaymentWizardHtml(
           </button>
         `).join("")}
       </div>
-      ${wizard.selectedRail !== null && selection.countryPickerOpen ? `
-        <div part="region-tabs">
-          ${model.countryPicker.regions.map((region) => `
-              <button
-                part="region${region.selected ? " selected" : ""}"
-                ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.region}="${escapeHtml(region.id)}"
-                ${region.enabled ? "" : "disabled"}
-                type="button"
-              >
-                ${escapeHtml(region.label)}
-                <small>${region.count}</small>
-              </button>
-            `).join("")}
-        </div>
-        <div part="country-map">
-          <svg aria-label="Country map" role="img" viewBox="${escapeHtml(OPENRECEIVE_COUNTRY_MAP_VIEW_BOX)}">
-            ${openReceiveCountryMapRegions.map((region) => `
-              <ellipse
-                part="map-region"
-                ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.regionShape}="${escapeHtml(region.id)}"
-                cx="${region.cx}"
-                cy="${region.cy}"
-                rx="${region.rx}"
-                ry="${region.ry}"
-              ></ellipse>
-            `).join("")}
-            ${model.countryPicker.mapCountries.map((entry) => `
-              <circle
-                aria-label="${escapeHtml(entry.label)}"
-                part="map-pin${entry.selected ? " selected" : ""}"
-                ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.country}="${escapeHtml(entry.country.code)}"
-                cx="${entry.point[0].toFixed(1)}"
-                cy="${entry.point[1].toFixed(1)}"
-                r="${entry.selected ? "9" : "6"}"
-                role="button"
-                tabindex="0"
-              >
-                <title>${escapeHtml(entry.label)}</title>
-              </circle>
-            `).join("")}
-          </svg>
-          <div part="map-readout">
-            <strong>${escapeHtml(model.countryPicker.readoutLabel)}</strong>
-            ${model.countryPicker.readoutMetaLabel === undefined ? "" : `
-              <small>${escapeHtml(model.countryPicker.readoutMetaLabel)}</small>
-            `}
-          </div>
-        </div>
-        <div part="country-grid">
-          ${model.visibleRegionCountryDisplays.map((country) => `
-            <button
-              part="country${country.selected ? " selected" : ""}"
-              ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.country}="${escapeHtml(country.code)}"
-              type="button"
-            >
-              <strong>${escapeHtml(country.label)}</strong>
-              <small>${escapeHtml(country.metaLabel)}</small>
-            </button>
-          `).join("")}
-        </div>
-      ` : ""}
-      ${wizard.selectedRail !== null && !selection.countryPickerOpen && model.selectedCountryDisplay !== undefined ? `
-        <div part="country-summary">
-          <div>
-            <strong>${escapeHtml(model.selectedCountryDisplay.label)}</strong>
-            <small>${escapeHtml(model.selectedCountryDisplay.metaLabel)}</small>
-          </div>
-          <button ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.switchCountry} type="button">${escapeHtml(openReceiveCheckoutLabels.switchCountry)}</button>
-        </div>
-      ` : ""}
       ${routeAssetDisplays.length === 0 ? "" : `
         <div part="route-picker">
           ${routeAssetDisplays.map((asset) => `
@@ -288,16 +211,22 @@ export function renderOpenReceivePaymentWizardHtml(
             `).join("")}
         </div>
       `}
-      ${selection.selectedMethod === null || (wizard.selectedRail !== null && selection.countryPickerOpen) ? "" : `
+      ${selection.selectedMethod === null ? "" : `
         <div part="wizard-results">
           ${routeDisplays.length === 0 ? `
             <p part="wizard-empty">${
               escapeHtml(getOpenReceiveWizardEmptyMessage(selection.selectedMethod))
             }</p>
-          ` : routeDisplays.map((route) => `
-            <section part="wizard-route">
-              <h3>${escapeHtml(route.title)}</h3>
-              <p>${escapeHtml(route.subtitle)}</p>
+	          ` : routeDisplays.map((route) => `
+	            <section part="wizard-route">
+	              <h3>
+                  ${escapeHtml(route.title)}
+                  ${wizard.selectedRail === null ? "" : renderCountrySelectHtml({
+                    countries: model.countryDisplays,
+                    selectedCountryCode: selection.selectedCountryCode
+                  })}
+                </h3>
+	              <p>${escapeHtml(route.subtitle)}</p>
               <div part="provider-grid">
                 ${route.providers.map((provider) => `
                   <article part="provider${provider.recommended ? " selected" : ""}">
@@ -305,11 +234,8 @@ export function renderOpenReceivePaymentWizardHtml(
                       <img alt="" src="${escapeHtml(provider.icon)}">
                       <h4>${escapeHtml(provider.name)}</h4>
                       ${provider.recommendedLabel === null ? "" : `<span part="recommended">${escapeHtml(provider.recommendedLabel)}</span>`}
-                    </div>
-                    <div part="provider-badges">
-                      ${provider.usBadge === null ? "" : `<span>${escapeHtml(provider.usBadge)}</span>`}
-                    </div>
-                    <div part="provider-actions">
+	                    </div>
+	                    <div part="provider-actions">
                       <button ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerCopy}="${escapeHtml(provider.id)}" type="button">${escapeHtml(provider.copyLabel)}</button>
                       <a href="${escapeHtml(provider.url)}" rel="noreferrer" target="_blank">${escapeHtml(provider.openLabel)}</a>
                     </div>
@@ -321,6 +247,25 @@ export function renderOpenReceivePaymentWizardHtml(
         </div>
       `}
     </section>
+  `;
+}
+
+function renderCountrySelectHtml(options: {
+  readonly countries: ReturnType<typeof createOpenReceivePaymentWizardModel>["countryDisplays"];
+  readonly selectedCountryCode: string;
+}): string {
+  return `
+    <label part="country-select">
+      <span>${escapeHtml(openReceiveCheckoutLabels.chooseCountry)}</span>
+      <select ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.country}="${escapeHtml(options.selectedCountryCode)}">
+        ${options.countries.map((country) => `
+          <option
+            value="${escapeHtml(country.code)}"
+            ${country.code === options.selectedCountryCode ? "selected" : ""}
+          >${escapeHtml(country.label)}</option>
+        `).join("")}
+      </select>
+    </label>
   `;
 }
 
@@ -613,7 +558,9 @@ export function defineOpenReceiveElements(
 
       root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.country).forEach((button) => {
         const selectCountry = (): void => {
-          const countryCode = button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.country);
+          const countryCode = button instanceof HTMLSelectElement
+            ? button.value
+            : button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.country);
           if (countryCode === null) return;
           this.selection = updateOpenReceivePaymentWizardSelection(this.selection, {
             type: "select_country",
@@ -624,6 +571,10 @@ export function defineOpenReceiveElements(
           });
           this.render();
         };
+        if (button instanceof HTMLSelectElement) {
+          button.addEventListener("change", selectCountry);
+          return;
+        }
         button.addEventListener("click", selectCountry);
         button.addEventListener("keydown", (event) => {
           if (!(event instanceof KeyboardEvent)) return;

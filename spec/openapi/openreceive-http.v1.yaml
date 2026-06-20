@@ -247,14 +247,6 @@ paths:
       operationId: listProviders
       summary: Return runtime payment-wizard provider registry entries.
       parameters:
-        - name: mechanism
-          in: query
-          required: false
-          schema:
-            type: string
-            enum:
-              - pay_invoice
-              - withdraw_to_invoice
         - name: us
           in: query
           required: false

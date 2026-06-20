@@ -398,7 +398,7 @@ test("browser owns transient copy feedback timing", () => {
   const timers = new Map();
   let nextTimerId = 1;
   const controller = createOpenReceiveTransientFeedbackController({
-    resetValue: "Copy BOLT11",
+    resetValue: "Copy invoice",
     delayMs: 20,
     setTimeout: (callback, delay) => {
       const id = nextTimerId++;
@@ -427,7 +427,7 @@ test("browser owns transient copy feedback timing", () => {
   assert.equal(timers.size, 1);
 
   [...timers.values()][0].callback();
-  assert.deepEqual(values, ["Copied!", "Copied again!", "Copy BOLT11"]);
+  assert.deepEqual(values, ["Copied!", "Copied again!", "Copy invoice"]);
 
   controller.show("Copied!");
   controller.clear();
@@ -461,14 +461,14 @@ test("browser owns shared country map geometry", () => {
     selectedRegion: "north-america",
     hoveredCountryCode: "GB"
   });
-  assert.equal(formatOpenReceiveCountryMetaLabel(countries[0]), "USD · strong coverage");
+  assert.equal(formatOpenReceiveCountryMetaLabel(countries[0]), "USD");
   assert.equal(picker.selectedCountryDisplay?.label, "United States");
-  assert.equal(picker.selectedCountryDisplay?.metaLabel, "USD · strong coverage");
-  assert.equal(picker.hoveredCountryDisplay?.metaLabel, "GBP · some coverage");
+  assert.equal(picker.selectedCountryDisplay?.metaLabel, "USD");
+  assert.equal(picker.hoveredCountryDisplay?.metaLabel, "GBP");
   assert.equal(picker.readoutLabel, "United Kingdom");
-  assert.equal(picker.readoutMetaLabel, "GBP · some coverage");
+  assert.equal(picker.readoutMetaLabel, "GBP");
   assert.equal(picker.visibleRegionCountryDisplays[0].selected, true);
-  assert.equal(picker.visibleRegionCountryDisplays[0].metaLabel, "USD · strong coverage");
+  assert.equal(picker.visibleRegionCountryDisplays[0].metaLabel, "USD");
 });
 
 test("browser owns web-component shadow styles", () => {

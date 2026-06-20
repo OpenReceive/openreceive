@@ -26,7 +26,6 @@ import {
   getOpenReceivePaymentMethodIcon,
   getOpenReceivePaymentStatusText,
   getOpenReceiveProviderIcon,
-  getOpenReceiveProviderMechanismLabel,
   getOpenReceiveProviderOpenLabel,
   getOpenReceiveProviderUsBadge,
   getOpenReceiveRouteIcon,
@@ -110,9 +109,9 @@ test("React checkout default UI server-renders display-safe invoice data", () =>
   assert.match(html, /data-openreceive-theme="light"/);
   assert.match(html, /1 sat/);
   assert.match(html, /pending/);
-  assert.match(html, /bbbbbbbb\.\.\.bbbbbbbb/);
-  assert.match(html, /Copy BOLT11/);
-  assert.match(html, /Open Wallet/);
+  assert.doesNotMatch(html, /bbbbbbbb\.\.\.bbbbbbbb/);
+  assert.match(html, /Copy invoice/);
+  assert.doesNotMatch(html, /Open Wallet/);
   assert.doesNotMatch(html, /nostr\+walletconnect/);
 });
 
@@ -222,12 +221,11 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
     "invoice.failed",
     "invoice.settlement_action_completed"
   ]);
-  assert.equal(openReceiveCheckoutLabels.copyInvoice, "Copy BOLT11");
+  assert.equal(openReceiveCheckoutLabels.copyInvoice, "Copy invoice");
   assert.equal(getOpenReceivePaymentStatusText("settled").title, "Payment received");
   assert.equal(getOpenReceiveWizardEmptyMessage("bitcoin"), "Choose Lightning or on-chain Bitcoin.");
-  assert.equal(getOpenReceiveProviderMechanismLabel("pay_invoice"), "Lightning send");
   assert.equal(getOpenReceiveProviderOpenLabel("Boltz"), "How To Pay");
-  assert.equal(getOpenReceiveProviderUsBadge(true), "US supported");
+  assert.equal(getOpenReceiveProviderUsBadge(true), null);
   assert.equal(getOpenReceiveProviderUsBadge(null), null);
   const strike = getProvider("strike");
   assert.ok(strike);
@@ -339,7 +337,7 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
     storedCountryCode: null
   });
   assert.equal(bankSelection.selectedMethod, "bank");
-  assert.equal(bankSelection.countryPickerOpen, true);
+  assert.equal(bankSelection.countryPickerOpen, false);
 
   const europeSelection = updateOpenReceivePaymentWizardSelection(bankSelection, {
     type: "select_region",
@@ -411,7 +409,7 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   assert.equal(cardState.selectedCountry?.code, "US");
   assert.ok(cardState.routes.length > 0);
   const cardRouteDisplays = createOpenReceiveWizardRouteDisplays(cardState.routes);
-  assert.equal(cardRouteDisplays[0].title, "Credit / debit card in United States");
+  assert.equal(cardRouteDisplays[0].title, "Credit / debit card");
   assert.equal(cardRouteDisplays[0].subtitle, "USD");
   assert.equal(cardRouteDisplays[0].providers.length <= OPENRECEIVE_PROVIDER_PREVIEW_LIMIT, true);
   assert.equal(cardRouteDisplays[0].providers[0].copyLabel, openReceiveCheckoutLabels.copyInvoice);
@@ -473,12 +471,11 @@ test("React checkout supports design-system component and class slots", () => {
         "data-slot-summary": ""
       },
       props.amountLabel,
-      React.createElement(props.PaymentStateComponent, {
-        state: props.transactionStateLabel,
-        className: props.classNames.paymentState
-      }),
-      props.paymentHashLabel
-    );
+	      React.createElement(props.PaymentStateComponent, {
+	        state: props.transactionStateLabel,
+	        className: props.classNames.paymentState
+	      })
+	    );
   }
 
   function CustomButton(props) {
@@ -525,9 +522,9 @@ test("React checkout supports design-system component and class slots", () => {
   assert.match(html, /class="app-state"/);
   assert.match(html, /data-slot-button=""/);
   assert.match(html, /class="app-copy"/);
-  assert.match(html, />Copy BOLT11</);
-  assert.match(html, /class="app-open"/);
-  assert.match(html, />Open Wallet</);
+  assert.match(html, />Copy invoice</);
+  assert.doesNotMatch(html, /class="app-open"/);
+  assert.doesNotMatch(html, />Open Wallet</);
   assert.doesNotMatch(html, /nostr\+walletconnect/);
 });
 
@@ -686,7 +683,7 @@ test("React default checkout passes controller actions into default buttons", ()
   );
 
   assert.match(source, /copyInvoice: checkoutModel\.copyInvoice/);
-  assert.match(source, /openWallet: checkoutModel\.openWallet/);
+  assert.doesNotMatch(source, /openWallet: checkoutModel\.openWallet/);
   assert.match(source, /copyInvoice === undefined/);
   assert.match(source, /openWallet === undefined/);
 });

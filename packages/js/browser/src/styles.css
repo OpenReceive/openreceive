@@ -71,7 +71,6 @@
 
 [data-openreceive-actions] {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -254,6 +253,13 @@
   margin: 0;
 }
 
+.or-wizard-route h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
 .or-wizard-header p,
 .or-wizard-route p,
 .or-provider-card p {
@@ -270,7 +276,6 @@
 
 .or-method-grid button,
 .or-route-picker button,
-.or-region-tabs button,
 .or-country-grid button {
   min-width: 0;
   border: 1px solid var(--or-border);
@@ -292,11 +297,9 @@
 
 .or-method-grid button:hover,
 .or-route-picker button:hover,
-.or-region-tabs button:hover,
 .or-country-grid button:hover,
 .or-method-grid button.selected,
 .or-route-picker button.selected,
-.or-region-tabs button.selected,
 .or-country-grid button.selected {
   border-color: var(--or-accent);
   box-shadow: 0 0 0 2px var(--or-accent-soft);
@@ -316,7 +319,6 @@
 
 .or-method-grid small,
 .or-route-picker small,
-.or-region-tabs small,
 .or-country-grid small,
 .or-country-summary small {
   color: var(--or-muted);
@@ -326,83 +328,6 @@
 .or-country-step {
   display: grid;
   gap: 12px;
-}
-
-.or-region-tabs {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.or-region-tabs button {
-  display: grid;
-  gap: 2px;
-  min-height: 54px;
-  padding: 8px 10px;
-}
-
-.or-region-tabs button:disabled {
-  cursor: not-allowed;
-  opacity: 0.42;
-}
-
-.or-map-shell {
-  position: relative;
-  overflow: hidden;
-  border: 1px solid var(--or-border);
-  border-radius: 8px;
-  background: linear-gradient(180deg, #dbeafe, #ecfdf5);
-}
-
-[data-openreceive-theme="dark"] .or-map-shell {
-  background: linear-gradient(180deg, #1d3558, #18322d);
-}
-
-.or-map-shell svg {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-.or-map-land path {
-  fill: rgba(255, 255, 255, 0.8);
-  stroke: rgba(23, 32, 51, 0.16);
-  stroke-width: 0.6;
-}
-
-[data-openreceive-theme="dark"] .or-map-land path {
-  fill: rgba(255, 255, 255, 0.18);
-  stroke: rgba(255, 255, 255, 0.2);
-}
-
-.or-map-pins circle {
-  fill: var(--or-warm);
-  stroke: #ffffff;
-  stroke-width: 2;
-  cursor: pointer;
-}
-
-.or-map-pins circle.selected,
-.or-map-pins circle:focus {
-  fill: var(--or-accent);
-  outline: none;
-}
-
-.or-map-readout {
-  position: absolute;
-  right: 12px;
-  bottom: 12px;
-  display: grid;
-  gap: 2px;
-  min-width: min(230px, calc(100% - 24px));
-  padding: 10px 12px;
-  border: 1px solid var(--or-border);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--or-bg-raised) 92%, transparent);
-}
-
-.or-map-readout span {
-  color: var(--or-muted);
 }
 
 .or-country-grid {
@@ -439,6 +364,34 @@
 
 .or-country-summary button {
   padding: 0 12px;
+}
+
+.or-country-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.72em;
+  font-weight: 700;
+}
+
+.or-country-select span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.or-country-select select {
+  min-height: 38px;
+  max-width: min(280px, 100%);
+  border: 1px solid var(--or-border);
+  border-radius: 8px;
+  background: var(--or-bg-raised);
+  color: var(--or-text);
+  font: inherit;
+  padding: 0 34px 0 12px;
 }
 
 .or-wizard-results {
@@ -520,7 +473,6 @@
   [data-openreceive-actions],
   .or-method-grid,
   .or-route-picker,
-  .or-region-tabs,
   .or-country-grid,
   .or-provider-grid,
   .or-provider-actions {

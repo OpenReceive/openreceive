@@ -12,7 +12,10 @@
       "boltz",
       "fixedfloat",
       "simpleswap",
-      "changenow"
+      "changenow",
+      "trocador",
+      "cakewallet",
+      "bitget"
     ],
     "flagship_provider_ids": [
       "boltz"

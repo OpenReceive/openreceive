@@ -178,5 +178,40 @@
     "url": "https://muun.com",
     "icon_path": "assets/provider-icons/muun.png",
     "favicon_url": "https://www.google.com/s2/favicons?domain=muun.com&sz=128"
+  },
+  "bitget": {
+    "url": "https://www.bitget.com",
+    "icon_path": "assets/provider-icons/bitget.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=www.bitget.com&sz=128"
+  },
+  "okcoin": {
+    "url": "https://www.okcoin.com",
+    "icon_path": "assets/provider-icons/okcoin.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=www.okcoin.com&sz=128"
+  },
+  "trocador": {
+    "url": "https://trocador.app",
+    "icon_path": "assets/provider-icons/trocador.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=trocador.app&sz=128"
+  },
+  "kryptex": {
+    "url": "https://kryptex.com",
+    "icon_path": "assets/provider-icons/kryptex.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=kryptex.com&sz=128"
+  },
+  "cakewallet": {
+    "url": "https://cakewallet.com",
+    "icon_path": "assets/provider-icons/cakewallet.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=cakewallet.com&sz=128"
+  },
+  "bluewallet": {
+    "url": "https://bluewallet.io",
+    "icon_path": "assets/provider-icons/bluewallet.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=bluewallet.io&sz=128"
+  },
+  "getalby": {
+    "url": "https://getalby.com",
+    "icon_path": "assets/provider-icons/getalby.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=getalby.com&sz=128"
   }
 }

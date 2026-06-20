@@ -43,7 +43,7 @@ test("provider-data exposes canonical registry metadata and counts", () => {
   });
 
   assert.equal(listAssets().length, 18);
-  assert.equal(listProviders().length, 36);
+  assert.equal(listProviders().length, 43);
   assert.equal(listCryptoRoutes().length, 15);
   assert.equal(listCountries().length, 39);
   assert.equal(listDisqualifiedProviders().length, 7);
@@ -98,7 +98,8 @@ test("provider-data resolves ranked fiat rail providers for a country", () => {
       ["river", 2],
       ["cashapp", 3],
       ["kraken", 4],
-      ["coinbase", 5]
+      ["coinbase", 5],
+      ["okcoin", 6]
     ]
   );
 });
@@ -168,7 +169,7 @@ test("provider-data filters providers and countries conservatively", () => {
   assert.equal(getProvider("sideshift")?.us, false);
   assert.equal(listProviders({ us: true }).every((provider) => provider.us === true), true);
   assert.equal(
-    listProviders({ mechanism: "withdraw_to_invoice" }).every((provider) => provider.mechanism === "withdraw_to_invoice"),
+    Object.values(providerRegistry.providers).every((provider) => !("mechanism" in provider)),
     true
   );
   assert.equal(listCountries({ currency: "USD" }).every((country) => country.currency === "USD"), true);

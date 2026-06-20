@@ -420,7 +420,7 @@ function validateProviderRegistryReferences() {
 }
 
 function validateProviderRouteVectors() {
-  const registry = readJson("spec/data/providers/openreceive-providers.v2.json");
+  const registry = readJson("packages/js/provider-data/src/data/openreceive-providers.v4.json");
   const providerIds = new Set(Object.keys(registry.providers || {}));
   const routeIds = new Set((registry.crypto_routes || []).map((route) => route.id));
   const assetSymbols = new Set((registry.assets_index || []).map((asset) => asset.symbol));

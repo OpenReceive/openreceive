@@ -1,8 +1,5 @@
 import * as React from "react";
 import {
-  OPENRECEIVE_COUNTRY_MAP_HEIGHT,
-  OPENRECEIVE_COUNTRY_MAP_VIEW_BOX,
-  OPENRECEIVE_COUNTRY_MAP_WIDTH,
   OPENRECEIVE_COPY_FEEDBACK_MS,
   OPENRECEIVE_COUNTRY_STORAGE_KEY,
   OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES,
@@ -20,7 +17,6 @@ import {
   createOpenReceiveWizardRouteAssetDisplays,
   createOpenReceiveWizardRouteDisplays,
   createQrSvg,
-  createOpenReceiveCountryPickerModel,
   createOpenReceiveThemeModel,
   createOpenReceiveTransientFeedbackController,
   getOpenReceiveDefaultCountryCode,
@@ -42,8 +38,8 @@ import {
   type OpenReceiveCheckoutStatusModel,
   type OpenReceivePaymentMethod,
   type OpenReceivePaymentWizardController,
+  type OpenReceivePaymentWizardModel,
   type OpenReceivePaymentWizardSelection,
-  type OpenReceiveRegionId,
   type OpenReceiveRefreshInvoiceResult,
   type OpenReceiveResolvedTheme,
   type OpenReceiveWizardRouteAssetDisplay,
@@ -51,7 +47,6 @@ import {
   type OpenReceiveThemeModel,
   type OpenReceiveThemePreference
 } from "@openreceive/browser";
-import { openReceiveCountryMapLandPaths } from "@openreceive/browser/country-map";
 
 export interface OpenReceiveCheckoutData
   extends OpenReceiveCheckoutDisplayData {}
@@ -251,13 +246,6 @@ export interface OpenReceivePaymentWizardProps {
   readonly countryStorageKey?: string;
   readonly onError?: (error: unknown) => void;
 }
-
-type WizardCountry = {
-  readonly code: string;
-  readonly name: string;
-  readonly currency: string;
-  readonly coverage: "deep" | "thin" | "sparse";
-};
 
 function useOpenReceiveTransientValue<T>(
   resetValue: T,
@@ -862,7 +850,6 @@ export function OpenReceivePaymentWizard(
       defaultCountryCode: getOpenReceiveDefaultCountryCode()
     }).getSelection()
   );
-  const [hoveredCountryCode, setHoveredCountryCode] = React.useState<string | null>(null);
   const [copiedProviderId, showCopiedProviderId] =
     useOpenReceiveTransientValue<string | null>(null);
   const updateWizardSelection = React.useCallback(
@@ -942,51 +929,6 @@ export function OpenReceivePaymentWizard(
         )
       )
     ),
-    wizard.selectedRail !== null && selection.countryPickerOpen
-      ? renderCountryPicker({
-        countries: wizard.railCountries,
-        selectedCountryCode: selection.selectedCountryCode,
-        selectedRegion: selection.selectedRegion,
-        hoveredCountryCode,
-        onHoverCountry: setHoveredCountryCode,
-        onSelectRegion: (region) => {
-          updateWizardSelection((controller) =>
-            controller.selectRegion(region)
-          );
-        },
-        onSelectCountry: (countryCode) => {
-          updateWizardSelection((controller) =>
-            controller.selectCountry(countryCode)
-          );
-        }
-      })
-      : null,
-    wizard.selectedRail !== null && !selection.countryPickerOpen && model.selectedCountryDisplay !== undefined
-      ? React.createElement(
-        "div",
-        {
-          className: "or-country-summary"
-        },
-        React.createElement(
-          "div",
-          null,
-          React.createElement("span", null, model.selectedCountryDisplay.label),
-          React.createElement("small", null, model.selectedCountryDisplay.metaLabel)
-        ),
-        React.createElement(
-          "button",
-          {
-            onClick: () => {
-              updateWizardSelection((controller) =>
-                controller.openCountryPicker()
-              );
-            },
-            type: "button"
-          },
-          openReceiveCheckoutLabels.switchCountry
-        )
-      )
-      : null,
     selection.selectedMethod === "bitcoin"
       ? renderRoutePicker({
         assets: routeAssetDisplays,
@@ -1009,8 +951,7 @@ export function OpenReceivePaymentWizard(
         }
       })
       : null,
-    selection.selectedMethod === null ||
-      (wizard.selectedRail !== null && selection.countryPickerOpen)
+    selection.selectedMethod === null
       ? null
       : React.createElement(
         "div",
@@ -1037,15 +978,26 @@ export function OpenReceivePaymentWizard(
                 {
                   className: "or-wizard-route-heading"
                 },
-                React.createElement(
-                  "div",
-                  null,
-                  React.createElement(
-                    "h3",
-                    null,
-                    route.title
-                  ),
-                  React.createElement(
+	                React.createElement(
+	                  "div",
+	                  null,
+	                  React.createElement(
+	                    "h3",
+	                    null,
+	                    route.title,
+	                    wizard.selectedRail === null
+	                      ? null
+	                      : renderCountrySelect({
+	                        countries: model.countryDisplays,
+	                        selectedCountryCode: selection.selectedCountryCode,
+	                        onSelectCountry: (countryCode) => {
+	                          updateWizardSelection((controller) =>
+	                            controller.selectCountry(countryCode)
+	                          );
+	                        }
+	                      })
+	                  ),
+	                    React.createElement(
                     "p",
                     null,
                     route.subtitle
@@ -1080,16 +1032,7 @@ export function OpenReceivePaymentWizard(
                         ? null
                         : React.createElement("span", null, provider.recommendedLabel)
                     ),
-                    React.createElement(
-                      "div",
-                      {
-                        className: "or-provider-badges"
-                      },
-                      provider.usBadge === null
-                        ? null
-                        : React.createElement("span", null, provider.usBadge)
-                    ),
-                    React.createElement(
+	                    React.createElement(
                       "div",
                       {
                         className: "or-provider-actions"
@@ -1126,11 +1069,10 @@ export function OpenReceivePaymentWizard(
 export function OpenReceiveInvoiceSummary(
   props: OpenReceiveInvoiceSummaryProps
 ): React.ReactElement {
-  const {
-    amountLabel,
-    fiatLabel,
-    paymentHashLabel,
-    transactionStateLabel,
+	  const {
+	    amountLabel,
+	    fiatLabel,
+	    transactionStateLabel,
     PaymentStateComponent = OpenReceivePaymentState,
     classNames,
     className,
@@ -1167,16 +1109,7 @@ export function OpenReceiveInvoiceSummary(
       : React.createElement(PaymentStateComponent, {
         state: transactionStateLabel,
         className: classNames?.paymentState
-      }),
-    paymentHashLabel === undefined
-      ? null
-      : React.createElement(
-        "code",
-        {
-          className: classNames?.paymentHash
-        },
-        paymentHashLabel
-      )
+      })
   );
 }
 
@@ -1233,8 +1166,6 @@ export function OpenReceiveCheckout(
   const QRCode = components?.QRCode ?? OpenReceiveQRCode;
   const InvoiceSummary = components?.InvoiceSummary ?? OpenReceiveInvoiceSummary;
   const CopyButton = components?.CopyButton ?? OpenReceiveCopyButton;
-  const OpenWalletButton =
-    components?.OpenWalletButton ?? OpenReceiveOpenWalletButton;
   const ButtonComponent = components?.Button;
   const PaymentStateComponent = components?.PaymentState ?? OpenReceivePaymentState;
   const customChildren =
@@ -1288,13 +1219,12 @@ export function OpenReceiveCheckout(
             " ",
             React.createElement("strong", null, checkoutModel.countdownLabel)
           ),
-        React.createElement(InvoiceSummary, {
-          key: "summary",
-          amountLabel: checkoutModel.amountLabel,
-          fiatLabel: checkoutModel.fiatLabel,
-          paymentHashLabel: checkoutModel.paymentHashLabel,
-          transactionStateLabel:
-            checkoutModel.state?.transaction_state ??
+	        React.createElement(InvoiceSummary, {
+	          key: "summary",
+	          amountLabel: checkoutModel.amountLabel,
+	          fiatLabel: checkoutModel.fiatLabel,
+	          transactionStateLabel:
+	            checkoutModel.state?.transaction_state ??
             checkoutModel.transactionStateLabel,
           PaymentStateComponent,
           className: classNames?.summary,
@@ -1321,14 +1251,6 @@ export function OpenReceiveCheckout(
             logger,
             ButtonComponent,
             className: classNames?.copyButton
-          }),
-          React.createElement(OpenWalletButton, {
-            invoice,
-            openWallet: checkoutModel.openWallet,
-            onError,
-            logger,
-            ButtonComponent,
-            className: classNames?.openWalletButton
           })
         ),
         paymentWizard
@@ -1374,6 +1296,42 @@ function getCheckoutLogContext(
   };
 }
 
+function renderCountrySelect(options: {
+  readonly countries: OpenReceivePaymentWizardModel["countryDisplays"];
+  readonly selectedCountryCode: string;
+  readonly onSelectCountry: (countryCode: string) => void;
+}): React.ReactElement {
+  return React.createElement(
+    "label",
+    {
+      className: "or-country-select"
+    },
+    React.createElement(
+      "span",
+      null,
+      openReceiveCheckoutLabels.chooseCountry
+    ),
+    React.createElement(
+      "select",
+      {
+        value: options.selectedCountryCode,
+        onChange: (event: React.ChangeEvent<HTMLSelectElement>) => {
+          options.onSelectCountry(event.currentTarget.value);
+        }
+      },
+      options.countries.map((country) =>
+        React.createElement(
+          "option",
+          {
+            key: country.code,
+            value: country.code
+          },
+          country.label
+        )
+      )
+    )
+  );
+}
 
 function renderRoutePicker(options: {
   readonly assets: readonly OpenReceiveWizardRouteAssetDisplay[];
@@ -1406,147 +1364,6 @@ function renderRoutePicker(options: {
         )
       );
     })
-  );
-}
-
-function renderCountryPicker(options: {
-  readonly countries: readonly WizardCountry[];
-  readonly selectedCountryCode: string;
-  readonly selectedRegion: OpenReceiveRegionId;
-  readonly hoveredCountryCode: string | null;
-  readonly onHoverCountry: (countryCode: string | null) => void;
-  readonly onSelectRegion: (region: OpenReceiveRegionId) => void;
-  readonly onSelectCountry: (countryCode: string) => void;
-}): React.ReactElement {
-  const picker = createOpenReceiveCountryPickerModel({
-    countries: options.countries,
-    selectedCountryCode: options.selectedCountryCode,
-    selectedRegion: options.selectedRegion,
-    hoveredCountryCode: options.hoveredCountryCode
-  });
-
-  return React.createElement(
-    "div",
-    {
-      className: "or-country-step"
-    },
-    React.createElement(
-      "div",
-      {
-        className: "or-region-tabs"
-      },
-      picker.regions.map((entry) =>
-        React.createElement(
-          "button",
-          {
-            className: entry.selected ? "selected" : "",
-            disabled: !entry.enabled,
-            key: entry.id,
-            onClick: () => options.onSelectRegion(entry.id),
-            type: "button"
-          },
-          React.createElement("span", null, entry.label),
-          React.createElement("small", null, `${entry.count} options`)
-        )
-      )
-    ),
-    React.createElement(
-      "div",
-      {
-        className: "or-map-shell"
-      },
-      React.createElement(
-        "svg",
-        {
-          "aria-label": "Country map",
-          role: "img",
-          viewBox: OPENRECEIVE_COUNTRY_MAP_VIEW_BOX
-        },
-        React.createElement(
-          "g",
-          {
-            className: "or-map-land"
-          },
-          openReceiveCountryMapLandPaths.map((path) =>
-            React.createElement("path", {
-              d: path.d,
-              key: path.id
-            })
-          )
-        ),
-        React.createElement(
-          "g",
-          {
-            className: "or-map-pins"
-          },
-          picker.mapCountries.map((entry) => {
-            const active = entry.selected || entry.hovered;
-            return React.createElement(
-              "circle",
-              {
-                "aria-label": entry.label,
-                className: active ? "selected" : "",
-                cx: entry.point[0],
-                cy: entry.point[1],
-                key: entry.country.code,
-                onBlur: () => options.onHoverCountry(null),
-                onClick: () => options.onSelectCountry(entry.country.code),
-                onFocus: () => options.onHoverCountry(entry.country.code),
-                onKeyDown: (event: React.KeyboardEvent<SVGCircleElement>) => {
-                  if (event.key !== "Enter" && event.key !== " ") return;
-                  event.preventDefault();
-                  options.onSelectCountry(entry.country.code);
-                },
-                onMouseEnter: () => options.onHoverCountry(entry.country.code),
-                onMouseLeave: () => options.onHoverCountry(null),
-                r: active ? 8 : 5,
-                role: "button",
-                tabIndex: 0
-              }
-            );
-          })
-        )
-      ),
-      React.createElement(
-        "div",
-        {
-          className: "or-map-readout"
-        },
-        React.createElement(
-          "strong",
-          null,
-          picker.readoutLabel
-        ),
-        picker.readoutMetaLabel === undefined
-          ? null
-          : React.createElement(
-            "span",
-            null,
-            picker.readoutMetaLabel
-          )
-      )
-    ),
-    React.createElement(
-      "div",
-      {
-        className: "or-country-grid"
-      },
-      picker.visibleRegionCountryDisplays.map((country) =>
-        React.createElement(
-          "button",
-          {
-            className: country.selected ? "selected" : "",
-            key: country.code,
-            onClick: () => options.onSelectCountry(country.code),
-            onMouseEnter: () => options.onHoverCountry(country.code),
-            onMouseLeave: () => options.onHoverCountry(null),
-            type: "button"
-          },
-          React.createElement("span", null, country.label),
-          React.createElement("small", null, country.metaLabel)
-        )
-      )
-    )
   );
 }
 

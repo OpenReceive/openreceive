@@ -1,6 +1,5 @@
 import providerRegistryJson from "./data/openreceive-providers.v4.json" with { type: "json" };
 
-export type ProviderMechanism = "pay_invoice" | "withdraw_to_invoice";
 export type CountryCoverage = "deep" | "thin" | "sparse";
 export type ProviderId = string;
 export type CryptoRouteId = string;
@@ -12,7 +11,6 @@ export interface Provider {
   readonly name: string;
   readonly url: string;
   readonly us: boolean | null;
-  readonly mechanism: ProviderMechanism;
   readonly lightning_docs_url: string | null;
   readonly icon_path: string;
 }
@@ -78,7 +76,6 @@ export interface ResolvedProviderRef {
 }
 
 export interface ProviderFilter {
-  readonly mechanism?: ProviderMechanism;
   readonly us?: boolean | null;
 }
 
@@ -193,7 +190,6 @@ export function getProviderRegistryMetadata() {
 
 export function listProviders(filter: ProviderFilter = {}): readonly Provider[] {
   return Object.values(registry.providers)
-    .filter((provider) => filter.mechanism === undefined || provider.mechanism === filter.mechanism)
     .filter((provider) => filter.us === undefined || provider.us === filter.us)
     .sort(sortByProviderName);
 }
@@ -363,10 +359,6 @@ export function validateRegistry(input: ProviderRegistry = registry): ProviderRe
     check(Boolean(provider.name && provider.url), `provider ${id} missing name or url`);
     check(typeof provider.url === "string" && provider.url.startsWith("https://"), `provider ${id} url must be https`);
     check(typeof provider.icon_path === "string" && provider.icon_path.length > 0, `provider ${id} missing icon path`);
-    check(
-      provider.mechanism === "pay_invoice" || provider.mechanism === "withdraw_to_invoice",
-      `provider ${id} has invalid mechanism`
-    );
     check(!disqualifiedIds.has(id), `provider ${id} appears in disqualified providers`);
 
     check(provider.lightning_docs_url === null || typeof provider.lightning_docs_url === "string", `provider ${id} has invalid docs url`);

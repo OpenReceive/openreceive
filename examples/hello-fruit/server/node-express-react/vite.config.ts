@@ -5,7 +5,7 @@ import { createHelloFruitServer } from "./src/server/create-server.ts";
 export default defineConfig({
   server: {
     fs: {
-      allow: ["../.."]
+      allow: ["../../../.."]
     }
   },
   plugins: [

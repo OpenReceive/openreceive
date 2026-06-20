@@ -672,16 +672,7 @@ export function createOpenReceiveExpressHandlers(
 
 function getProviderFilter(req: ExpressLikeRequest): ProviderFilter {
   const filter: ProviderFilter = {};
-  const mechanism = getQueryString(req, "mechanism");
   const us = getQueryString(req, "us");
-
-  if (mechanism === "pay_invoice" || mechanism === "withdraw_to_invoice") {
-    return {
-      ...filter,
-      mechanism,
-      ...(us === undefined ? {} : { us: parseUsFilter(us) })
-    };
-  }
 
   return {
     ...filter,

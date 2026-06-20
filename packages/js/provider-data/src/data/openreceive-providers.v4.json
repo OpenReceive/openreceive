@@ -9,7 +9,6 @@
       "name": "display name",
       "url": "homepage",
       "us": "true=US-available, false=US-excluded, null=unknown",
-      "mechanism": "pay_invoice | withdraw_to_invoice",
       "lightning_docs_url": "official how-to-pay/send Lightning invoice page, or null",
       "icon_path": "repo-local icon path used by browser UI"
     },
@@ -120,7 +119,6 @@
       "name": "Rizful.com",
       "url": "https://rizful.com",
       "us": null,
-      "mechanism": "pay_invoice",
       "lightning_docs_url": "https://docs.megalithic.me/the-lightning-network/send_and_receive_lightning_with_rizful/",
       "icon_path": "assets/provider-icons/rizful.png"
     },
@@ -129,7 +127,6 @@
       "name": "Boltz",
       "url": "https://boltz.exchange",
       "us": null,
-      "mechanism": "withdraw_to_invoice",
       "lightning_docs_url": "https://api.docs.boltz.exchange/lifecycle.html",
       "icon_path": "assets/provider-icons/boltz.png"
     },
@@ -138,7 +135,6 @@
       "name": "Strike",
       "url": "https://strike.me",
       "us": true,
-      "mechanism": "pay_invoice",
       "lightning_docs_url": "https://docs.strike.me/walkthrough/sending-payments/",
       "icon_path": "assets/provider-icons/strike.png"
     },
@@ -147,7 +143,6 @@
       "name": "Aqua Wallet",
       "url": "https://aqua.net",
       "us": null,
-      "mechanism": "pay_invoice",
       "lightning_docs_url": "https://jan3.zendesk.com/hc/en-us/articles/21952862266779-How-does-Lightning-work-in-AQUA",
       "icon_path": "assets/provider-icons/aqua.png"
     },
@@ -156,7 +151,6 @@
       "name": "Phoenix",
       "url": "https://phoenix.acinq.co",
       "us": null,
-      "mechanism": "pay_invoice",
       "lightning_docs_url": null,
       "icon_path": "assets/provider-icons/phoenix.png"
     },
@@ -165,7 +159,6 @@
       "name": "Zeus (+ ZEUS Swaps)",
       "url": "https://zeusln.com",
       "us": true,
-      "mechanism": "pay_invoice",
       "lightning_docs_url": "https://docs.zeusln.app/",
       "icon_path": "assets/provider-icons/zeus.png"
     },
@@ -174,7 +167,6 @@
       "name": "Coinbase (Lightspark)",
       "url": "https://coinbase.com",
       "us": true,
-      "mechanism": "withdraw_to_invoice",
       "lightning_docs_url": "https://help.coinbase.com/en/coinbase/trading-and-funding/sending-or-receiving-cryptocurrency/lightning",
       "icon_path": "assets/provider-icons/coinbase.png"
     },
@@ -183,7 +175,6 @@
       "name": "Kraken",
       "url": "https://kraken.com",
       "us": true,
-      "mechanism": "withdraw_to_invoice",
       "lightning_docs_url": "https://support.kraken.com/articles/5068216131988-how-do-i-send-bitcoin-on-the-lightning-network-",
       "icon_path": "assets/provider-icons/kraken.png"
     },
@@ -192,7 +183,6 @@
       "name": "Binance",
       "url": "https://binance.com",
       "us": false,
-      "mechanism": "withdraw_to_invoice",
       "lightning_docs_url": "https://www.binance.com/en/support/faq/how-to-use-the-bitcoin-lightning-network-to-deposit-and-withdraw-btc-on-binance-7a4eb2d9ccaf4433908b448aa3a93493",
       "icon_path": "assets/provider-icons/binance.png"
     },
@@ -201,7 +191,6 @@
       "name": "OKX",
       "url": "https://okx.com",
       "us": false,
-      "mechanism": "withdraw_to_invoice",
       "lightning_docs_url": "https://www.okx.com/en-us/help/how-do-i-withdraw-bitcoin-btc-with-okx-lightning-network",
       "icon_path": "assets/provider-icons/okx.png"
     },
@@ -210,7 +199,6 @@
       "name": "Bitfinex",
       "url": "https://bitfinex.com",
       "us": false,
-      "mechanism": "withdraw_to_invoice",
       "lightning_docs_url": "https://support.bitfinex.com/hc/en-us/articles/360039801053-Lightning-Network-BTC-LN-BTC-Deposits-Withdrawals",
       "icon_path": "assets/provider-icons/bitfinex.png"
     },
@@ -219,7 +207,6 @@
       "name": "KuCoin",
       "url": "https://kucoin.com",
       "us": false,
-      "mechanism": "withdraw_to_invoice",
       "lightning_docs_url": null,
       "icon_path": "assets/provider-icons/kucoin.png"
     },
@@ -228,7 +215,6 @@
       "name": "Cash App",
       "url": "https://cash.app",
       "us": true,
-      "mechanism": "pay_invoice",
       "lightning_docs_url": "https://cash.app/help/us/en-US/6506-lightning",
       "icon_path": "assets/provider-icons/cashapp.png"
     },
@@ -237,7 +223,6 @@
       "name": "River Financial",
       "url": "https://river.com",
       "us": true,
-      "mechanism": "pay_invoice",
       "lightning_docs_url": "https://support.river.com/hc/en-us/articles/45489800672915-How-do-I-send-bitcoin",
       "icon_path": "assets/provider-icons/river.png"
     },
@@ -246,7 +231,6 @@
       "name": "CoinCorner",
       "url": "https://coincorner.com",
       "us": false,
-      "mechanism": "pay_invoice",
       "lightning_docs_url": "https://support.coincorner.com/hc/en-us/articles/360020667299-Sending-and-receiving-via-Lightning",
       "icon_path": "assets/provider-icons/coincorner.png"
     },
@@ -255,7 +239,6 @@
       "name": "Bull Bitcoin",
       "url": "https://bullbitcoin.com",
       "us": false,
-      "mechanism": "pay_invoice",
       "lightning_docs_url": "https://guides.bitcoinsupport.com/guides/bullwallet-guide/how-to-use-bull-wallet/steps-for-sending-lightning",
       "icon_path": "assets/provider-icons/bullbitcoin.png"
     },
@@ -264,7 +247,6 @@
       "name": "SimpleSwap",
       "url": "https://simpleswap.io",
       "us": null,
-      "mechanism": "withdraw_to_invoice",
       "lightning_docs_url": null,
       "icon_path": "assets/provider-icons/simpleswap.png"
     },
@@ -273,7 +255,6 @@
       "name": "ChangeNOW",
       "url": "https://changenow.io",
       "us": null,
-      "mechanism": "withdraw_to_invoice",
       "lightning_docs_url": null,
       "icon_path": "assets/provider-icons/changenow.png"
     },
@@ -282,7 +263,6 @@
       "name": "FixedFloat",
       "url": "https://fixedfloat.com",
       "us": false,
-      "mechanism": "withdraw_to_invoice",
       "lightning_docs_url": "https://medium.com/fixedfloat/how-to-start-using-the-lightning-network-92d5c695b085",
       "icon_path": "assets/provider-icons/fixedfloat.png"
     },
@@ -291,7 +271,6 @@
       "name": "SideShift.ai",
       "url": "https://sideshift.ai",
       "us": false,
-      "mechanism": "withdraw_to_invoice",
       "lightning_docs_url": null,
       "icon_path": "assets/provider-icons/sideshift.png"
     },
@@ -300,7 +279,6 @@
       "name": "Blink",
       "url": "https://blink.sv",
       "us": false,
-      "mechanism": "pay_invoice",
       "lightning_docs_url": "https://faq.blink.sv/blink-payment-methods/lightning/how-do-i-send-bitcoin-payments-using-the-lightning-network-with-blink",
       "icon_path": "assets/provider-icons/blink.png"
     },
@@ -309,7 +287,6 @@
       "name": "Pouch",
       "url": "https://pouch.ph",
       "us": false,
-      "mechanism": "pay_invoice",
       "lightning_docs_url": null,
       "icon_path": "assets/provider-icons/pouch.png"
     },
@@ -318,7 +295,6 @@
       "name": "Bitnob",
       "url": "https://bitnob.com",
       "us": false,
-      "mechanism": "pay_invoice",
       "lightning_docs_url": "https://intercom.help/Bitnob-help-center/en/articles/6073721",
       "icon_path": "assets/provider-icons/bitnob.png"
     },
@@ -327,7 +303,6 @@
       "name": "Amber (AmberApp)",
       "url": "https://amber.app",
       "us": false,
-      "mechanism": "pay_invoice",
       "lightning_docs_url": "https://help.amber.app/en/articles/9205794-how-do-i-send-bitcoin",
       "icon_path": "assets/provider-icons/amber.png"
     },
@@ -336,7 +311,6 @@
       "name": "Bringin",
       "url": "https://bringin.xyz",
       "us": false,
-      "mechanism": "pay_invoice",
       "lightning_docs_url": null,
       "icon_path": "assets/provider-icons/bringin.png"
     },
@@ -345,7 +319,6 @@
       "name": "Mt Pelerin",
       "url": "https://mtpelerin.com",
       "us": false,
-      "mechanism": "pay_invoice",
       "lightning_docs_url": "https://www.mtpelerin.com/lightning-wallet",
       "icon_path": "assets/provider-icons/mtpelerin.png"
     },
@@ -354,7 +327,6 @@
       "name": "Bipa",
       "url": "https://bipa.app",
       "us": false,
-      "mechanism": "pay_invoice",
       "lightning_docs_url": "https://suporte.bipa.app/hc/pt-br/articles/4415356329371-Como-enviar-Bitcoin-pela-rede-Lightning-na-Bipa",
       "icon_path": "assets/provider-icons/bipa.png"
     },
@@ -363,7 +335,6 @@
       "name": "Bitso",
       "url": "https://bitso.com",
       "us": false,
-      "mechanism": "pay_invoice",
       "lightning_docs_url": "https://support.bitso.com/hc/en-us/articles/32048877697172-Bitso-Help-Center-Lightning-Network-for-Bitcoin",
       "icon_path": "assets/provider-icons/bitso.png"
     },
@@ -372,7 +343,6 @@
       "name": "Ripio",
       "url": "https://ripio.com",
       "us": false,
-      "mechanism": "pay_invoice",
       "lightning_docs_url": "https://help-ar.ripio.com/space/HC/119865345",
       "icon_path": "assets/provider-icons/ripio.png"
     },
@@ -381,7 +351,6 @@
       "name": "Belo",
       "url": "https://belo.app",
       "us": false,
-      "mechanism": "withdraw_to_invoice",
       "lightning_docs_url": "https://help.belo.app/en/articles/5899323-how-to-withdraw-btc-from-belo-via-the-lightning-network",
       "icon_path": "assets/provider-icons/belo.png"
     },
@@ -390,7 +359,6 @@
       "name": "Shakepay",
       "url": "https://shakepay.com",
       "us": false,
-      "mechanism": "pay_invoice",
       "lightning_docs_url": "https://help.shakepay.com/en/articles/12334301-how-to-receive-or-withdraw-bitcoin-on-the-lightning-network",
       "icon_path": "assets/provider-icons/shakepay.png"
     },
@@ -399,7 +367,6 @@
       "name": "Bity / Bitybank",
       "url": "https://bity.com.br",
       "us": false,
-      "mechanism": "withdraw_to_invoice",
       "lightning_docs_url": "https://suporte.bity.com.br/pt-BR/articles/6260675-lightning-network",
       "icon_path": "assets/provider-icons/bity.png"
     },
@@ -408,7 +375,6 @@
       "name": "Chivo",
       "url": "https://chivowallet.com",
       "us": false,
-      "mechanism": "pay_invoice",
       "lightning_docs_url": null,
       "icon_path": "assets/provider-icons/chivo.png"
     },
@@ -417,7 +383,6 @@
       "name": "Speed",
       "url": "https://tryspeed.com",
       "us": false,
-      "mechanism": "pay_invoice",
       "lightning_docs_url": "https://www.tryspeed.com/blog/how-do-i-send-and-receive-bitcoin",
       "icon_path": "assets/provider-icons/speed.png"
     },
@@ -426,7 +391,6 @@
       "name": "Wallet of Satoshi",
       "url": "https://www.walletofsatoshi.com",
       "us": null,
-      "mechanism": "pay_invoice",
       "lightning_docs_url": "https://support.walletofsatoshi.com/",
       "icon_path": "assets/provider-icons/walletofsatoshi.png"
     },
@@ -435,9 +399,64 @@
       "name": "Muun",
       "url": "https://muun.com",
       "us": null,
-      "mechanism": "pay_invoice",
       "lightning_docs_url": "https://blog.muun.com/lightning-payments-easier-than-ever/",
       "icon_path": "assets/provider-icons/muun.png"
+    },
+    "bitget": {
+      "id": "bitget",
+      "name": "Bitget",
+      "url": "https://www.bitget.com",
+      "us": false,
+      "lightning_docs_url": null,
+      "icon_path": "assets/provider-icons/bitget.png"
+    },
+    "okcoin": {
+      "id": "okcoin",
+      "name": "Okcoin",
+      "url": "https://www.okcoin.com",
+      "us": true,
+      "lightning_docs_url": "https://support.okcoin.com/hc/en-us/articles/360057853471",
+      "icon_path": "assets/provider-icons/okcoin.png"
+    },
+    "trocador": {
+      "id": "trocador",
+      "name": "Trocador",
+      "url": "https://trocador.app",
+      "us": true,
+      "lightning_docs_url": null,
+      "icon_path": "assets/provider-icons/trocador.png"
+    },
+    "kryptex": {
+      "id": "kryptex",
+      "name": "Kryptex",
+      "url": "https://kryptex.com",
+      "us": true,
+      "lightning_docs_url": "https://www.kryptex.com/en/articles/bitcoin-lightning-network",
+      "icon_path": "assets/provider-icons/kryptex.png"
+    },
+    "cakewallet": {
+      "id": "cakewallet",
+      "name": "Cake Wallet",
+      "url": "https://cakewallet.com",
+      "us": true,
+      "lightning_docs_url": "https://docs.cakewallet.com/features/basic/send-funds",
+      "icon_path": "assets/provider-icons/cakewallet.png"
+    },
+    "bluewallet": {
+      "id": "bluewallet",
+      "name": "BlueWallet",
+      "url": "https://bluewallet.io",
+      "us": true,
+      "lightning_docs_url": "https://bluewallet.io/docs/",
+      "icon_path": "assets/provider-icons/bluewallet.png"
+    },
+    "getalby": {
+      "id": "getalby",
+      "name": "Alby",
+      "url": "https://getalby.com",
+      "us": true,
+      "lightning_docs_url": "https://guides.getalby.com/user-guide/alby-hub/wallet",
+      "icon_path": "assets/provider-icons/getalby.png"
     }
   },
   "crypto_routes": [
@@ -488,6 +507,27 @@
         },
         {
           "provider": "river"
+        },
+        {
+          "provider": "getalby"
+        },
+        {
+          "provider": "bluewallet"
+        },
+        {
+          "provider": "cakewallet"
+        },
+        {
+          "provider": "okcoin"
+        },
+        {
+          "provider": "bitget"
+        },
+        {
+          "provider": "trocador"
+        },
+        {
+          "provider": "kryptex"
         }
       ]
     },
@@ -535,6 +575,27 @@
         },
         {
           "provider": "river"
+        },
+        {
+          "provider": "getalby"
+        },
+        {
+          "provider": "bluewallet"
+        },
+        {
+          "provider": "cakewallet"
+        },
+        {
+          "provider": "okcoin"
+        },
+        {
+          "provider": "bitget"
+        },
+        {
+          "provider": "trocador"
+        },
+        {
+          "provider": "kryptex"
         }
       ]
     },
@@ -555,6 +616,15 @@
         },
         {
           "provider": "changenow"
+        },
+        {
+          "provider": "trocador"
+        },
+        {
+          "provider": "cakewallet"
+        },
+        {
+          "provider": "bitget"
         }
       ]
     },
@@ -578,6 +648,18 @@
         },
         {
           "provider": "kraken"
+        },
+        {
+          "provider": "trocador"
+        },
+        {
+          "provider": "cakewallet"
+        },
+        {
+          "provider": "bitget"
+        },
+        {
+          "provider": "okcoin"
         }
       ]
     },
@@ -604,6 +686,18 @@
         },
         {
           "provider": "kraken"
+        },
+        {
+          "provider": "trocador"
+        },
+        {
+          "provider": "cakewallet"
+        },
+        {
+          "provider": "bitget"
+        },
+        {
+          "provider": "okcoin"
         }
       ]
     },
@@ -618,6 +712,12 @@
         },
         {
           "provider": "sideshift"
+        },
+        {
+          "provider": "trocador"
+        },
+        {
+          "provider": "cakewallet"
         }
       ]
     },
@@ -644,6 +744,18 @@
         },
         {
           "provider": "coinbase"
+        },
+        {
+          "provider": "trocador"
+        },
+        {
+          "provider": "cakewallet"
+        },
+        {
+          "provider": "bitget"
+        },
+        {
+          "provider": "okcoin"
         }
       ]
     },
@@ -667,6 +779,9 @@
         },
         {
           "provider": "kraken"
+        },
+        {
+          "provider": "bitget"
         }
       ]
     },
@@ -684,6 +799,12 @@
         },
         {
           "provider": "changenow"
+        },
+        {
+          "provider": "cakewallet"
+        },
+        {
+          "provider": "bitget"
         }
       ]
     },
@@ -710,6 +831,12 @@
         },
         {
           "provider": "kraken"
+        },
+        {
+          "provider": "cakewallet"
+        },
+        {
+          "provider": "bitget"
         }
       ]
     },
@@ -736,6 +863,12 @@
         },
         {
           "provider": "coinbase"
+        },
+        {
+          "provider": "cakewallet"
+        },
+        {
+          "provider": "bitget"
         }
       ]
     },
@@ -759,6 +892,9 @@
         },
         {
           "provider": "kraken"
+        },
+        {
+          "provider": "bitget"
         }
       ]
     },
@@ -779,6 +915,9 @@
         },
         {
           "provider": "binance"
+        },
+        {
+          "provider": "bitget"
         }
       ]
     },
@@ -802,6 +941,9 @@
         },
         {
           "provider": "kraken"
+        },
+        {
+          "provider": "bitget"
         }
       ]
     },
@@ -819,6 +961,9 @@
         },
         {
           "provider": "changenow"
+        },
+        {
+          "provider": "bitget"
         }
       ]
     }
@@ -1083,6 +1228,10 @@
           {
             "provider": "coinbase",
             "rank": 5
+          },
+          {
+            "provider": "okcoin",
+            "rank": 6
           }
         ],
         "CA": [
@@ -1097,6 +1246,10 @@
           {
             "provider": "kraken",
             "rank": 3
+          },
+          {
+            "provider": "bitget",
+            "rank": 4
           }
         ],
         "GB": [
@@ -1115,6 +1268,10 @@
           {
             "provider": "coinbase",
             "rank": 4
+          },
+          {
+            "provider": "bitget",
+            "rank": 5
           }
         ],
         "CH": [
@@ -1129,6 +1286,10 @@
           {
             "provider": "kraken",
             "rank": 3
+          },
+          {
+            "provider": "bitget",
+            "rank": 4
           }
         ],
         "NG": [
@@ -1143,6 +1304,10 @@
           {
             "provider": "strike",
             "rank": 3
+          },
+          {
+            "provider": "bitget",
+            "rank": 4
           }
         ],
         "GH": [
@@ -1157,6 +1322,10 @@
           {
             "provider": "strike",
             "rank": 3
+          },
+          {
+            "provider": "bitget",
+            "rank": 4
           }
         ],
         "KE": [
@@ -1171,6 +1340,10 @@
           {
             "provider": "strike",
             "rank": 3
+          },
+          {
+            "provider": "bitget",
+            "rank": 4
           }
         ],
         "ZA": [
@@ -1181,6 +1354,10 @@
           {
             "provider": "kraken",
             "rank": 2
+          },
+          {
+            "provider": "bitget",
+            "rank": 3
           }
         ],
         "EG": [
@@ -1191,6 +1368,10 @@
           {
             "provider": "kraken",
             "rank": 2
+          },
+          {
+            "provider": "bitget",
+            "rank": 3
           }
         ],
         "IN": [
@@ -1201,6 +1382,10 @@
           {
             "provider": "speed",
             "rank": 2
+          },
+          {
+            "provider": "bitget",
+            "rank": 3
           }
         ],
         "ID": [
@@ -1211,6 +1396,10 @@
           {
             "provider": "kraken",
             "rank": 2
+          },
+          {
+            "provider": "bitget",
+            "rank": 3
           }
         ],
         "VN": [
@@ -1225,6 +1414,10 @@
           {
             "provider": "strike",
             "rank": 3
+          },
+          {
+            "provider": "bitget",
+            "rank": 4
           }
         ],
         "TH": [
@@ -1235,6 +1428,10 @@
           {
             "provider": "kraken",
             "rank": 2
+          },
+          {
+            "provider": "bitget",
+            "rank": 3
           }
         ],
         "PH": [
@@ -1245,18 +1442,30 @@
           {
             "provider": "binance",
             "rank": 2
+          },
+          {
+            "provider": "bitget",
+            "rank": 3
           }
         ],
         "PK": [
           {
             "provider": "binance",
             "rank": 1
+          },
+          {
+            "provider": "bitget",
+            "rank": 2
           }
         ],
         "BD": [
           {
             "provider": "binance",
             "rank": 1
+          },
+          {
+            "provider": "bitget",
+            "rank": 2
           }
         ],
         "TR": [
@@ -1267,6 +1476,10 @@
           {
             "provider": "kraken",
             "rank": 2
+          },
+          {
+            "provider": "bitget",
+            "rank": 3
           }
         ],
         "AE": [
@@ -1277,12 +1490,20 @@
           {
             "provider": "binance",
             "rank": 2
+          },
+          {
+            "provider": "bitget",
+            "rank": 3
           }
         ],
         "SA": [
           {
             "provider": "binance",
             "rank": 1
+          },
+          {
+            "provider": "bitget",
+            "rank": 2
           }
         ],
         "BR": [
@@ -1305,6 +1526,10 @@
           {
             "provider": "binance",
             "rank": 5
+          },
+          {
+            "provider": "bitget",
+            "rank": 6
           }
         ],
         "AR": [
@@ -1323,6 +1548,10 @@
           {
             "provider": "binance",
             "rank": 4
+          },
+          {
+            "provider": "bitget",
+            "rank": 5
           }
         ],
         "MX": [
@@ -1337,6 +1566,10 @@
           {
             "provider": "binance",
             "rank": 3
+          },
+          {
+            "provider": "bitget",
+            "rank": 4
           }
         ],
         "CO": [
@@ -1347,12 +1580,20 @@
           {
             "provider": "binance",
             "rank": 2
+          },
+          {
+            "provider": "bitget",
+            "rank": 3
           }
         ],
         "VE": [
           {
             "provider": "binance",
             "rank": 1
+          },
+          {
+            "provider": "bitget",
+            "rank": 2
           }
         ],
         "CL": [
@@ -1363,6 +1604,10 @@
           {
             "provider": "kraken",
             "rank": 2
+          },
+          {
+            "provider": "bitget",
+            "rank": 3
           }
         ],
         "AU": [
@@ -1377,6 +1622,10 @@
           {
             "provider": "binance",
             "rank": 3
+          },
+          {
+            "provider": "bitget",
+            "rank": 4
           }
         ],
         "JP": [
@@ -1387,12 +1636,20 @@
           {
             "provider": "binance",
             "rank": 2
+          },
+          {
+            "provider": "bitget",
+            "rank": 3
           }
         ],
         "SG": [
           {
             "provider": "binance",
             "rank": 1
+          },
+          {
+            "provider": "bitget",
+            "rank": 2
           }
         ],
         "UA": [
@@ -1403,6 +1660,10 @@
           {
             "provider": "kraken",
             "rank": 2
+          },
+          {
+            "provider": "bitget",
+            "rank": 3
           }
         ],
         "SV": [
@@ -1417,6 +1678,10 @@
           {
             "provider": "chivo",
             "rank": 3
+          },
+          {
+            "provider": "bitget",
+            "rank": 4
           }
         ],
         "DE": [
@@ -1435,6 +1700,10 @@
           {
             "provider": "binance",
             "rank": 4
+          },
+          {
+            "provider": "bitget",
+            "rank": 5
           }
         ],
         "FR": [
@@ -1453,6 +1722,10 @@
           {
             "provider": "binance",
             "rank": 4
+          },
+          {
+            "provider": "bitget",
+            "rank": 5
           }
         ],
         "ES": [
@@ -1471,6 +1744,10 @@
           {
             "provider": "binance",
             "rank": 4
+          },
+          {
+            "provider": "bitget",
+            "rank": 5
           }
         ],
         "IT": [
@@ -1489,6 +1766,10 @@
           {
             "provider": "binance",
             "rank": 4
+          },
+          {
+            "provider": "bitget",
+            "rank": 5
           }
         ],
         "NL": [
@@ -1507,6 +1788,10 @@
           {
             "provider": "binance",
             "rank": 4
+          },
+          {
+            "provider": "bitget",
+            "rank": 5
           }
         ],
         "IE": [
@@ -1525,6 +1810,10 @@
           {
             "provider": "binance",
             "rank": 4
+          },
+          {
+            "provider": "bitget",
+            "rank": 5
           }
         ],
         "PT": [
@@ -1543,6 +1832,10 @@
           {
             "provider": "binance",
             "rank": 4
+          },
+          {
+            "provider": "bitget",
+            "rank": 5
           }
         ],
         "PL": [
@@ -1561,6 +1854,10 @@
           {
             "provider": "binance",
             "rank": 4
+          },
+          {
+            "provider": "bitget",
+            "rank": 5
           }
         ]
       }
@@ -1584,12 +1881,36 @@
           {
             "provider": "kraken",
             "rank": 4
+          },
+          {
+            "provider": "okcoin",
+            "rank": 5
+          },
+          {
+            "provider": "cakewallet",
+            "rank": 6
+          },
+          {
+            "provider": "getalby",
+            "rank": 7
           }
         ],
         "CA": [
           {
             "provider": "kraken",
             "rank": 1
+          },
+          {
+            "provider": "bitget",
+            "rank": 2
+          },
+          {
+            "provider": "cakewallet",
+            "rank": 3
+          },
+          {
+            "provider": "getalby",
+            "rank": 4
           }
         ],
         "GB": [
@@ -1608,6 +1929,18 @@
           {
             "provider": "kraken",
             "rank": 4
+          },
+          {
+            "provider": "bitget",
+            "rank": 5
+          },
+          {
+            "provider": "cakewallet",
+            "rank": 6
+          },
+          {
+            "provider": "getalby",
+            "rank": 7
           }
         ],
         "CH": [
@@ -1618,6 +1951,10 @@
           {
             "provider": "kraken",
             "rank": 2
+          },
+          {
+            "provider": "bitget",
+            "rank": 3
           }
         ],
         "NG": [
@@ -1628,6 +1965,10 @@
           {
             "provider": "binance",
             "rank": 2
+          },
+          {
+            "provider": "bitget",
+            "rank": 3
           }
         ],
         "GH": [
@@ -1638,6 +1979,10 @@
           {
             "provider": "binance",
             "rank": 2
+          },
+          {
+            "provider": "bitget",
+            "rank": 3
           }
         ],
         "KE": [
@@ -1648,18 +1993,30 @@
           {
             "provider": "binance",
             "rank": 2
+          },
+          {
+            "provider": "bitget",
+            "rank": 3
           }
         ],
         "ZA": [
           {
             "provider": "binance",
             "rank": 1
+          },
+          {
+            "provider": "bitget",
+            "rank": 2
           }
         ],
         "EG": [
           {
             "provider": "binance",
             "rank": 1
+          },
+          {
+            "provider": "bitget",
+            "rank": 2
           }
         ],
         "IN": [
@@ -1670,6 +2027,10 @@
           {
             "provider": "binance",
             "rank": 2
+          },
+          {
+            "provider": "bitget",
+            "rank": 3
           }
         ],
         "ID": [
@@ -1680,6 +2041,10 @@
           {
             "provider": "kraken",
             "rank": 2
+          },
+          {
+            "provider": "bitget",
+            "rank": 3
           }
         ],
         "VN": [
@@ -1690,6 +2055,10 @@
           {
             "provider": "kraken",
             "rank": 2
+          },
+          {
+            "provider": "bitget",
+            "rank": 3
           }
         ],
         "TH": [
@@ -1700,6 +2069,10 @@
           {
             "provider": "kraken",
             "rank": 2
+          },
+          {
+            "provider": "bitget",
+            "rank": 3
           }
         ],
         "PH": [
@@ -1710,24 +2083,40 @@
           {
             "provider": "binance",
             "rank": 2
+          },
+          {
+            "provider": "bitget",
+            "rank": 3
           }
         ],
         "PK": [
           {
             "provider": "binance",
             "rank": 1
+          },
+          {
+            "provider": "bitget",
+            "rank": 2
           }
         ],
         "BD": [
           {
             "provider": "binance",
             "rank": 1
+          },
+          {
+            "provider": "bitget",
+            "rank": 2
           }
         ],
         "TR": [
           {
             "provider": "binance",
             "rank": 1
+          },
+          {
+            "provider": "bitget",
+            "rank": 2
           }
         ],
         "AE": [
@@ -1738,12 +2127,20 @@
           {
             "provider": "kraken",
             "rank": 2
+          },
+          {
+            "provider": "bitget",
+            "rank": 3
           }
         ],
         "SA": [
           {
             "provider": "binance",
             "rank": 1
+          },
+          {
+            "provider": "bitget",
+            "rank": 2
           }
         ],
         "BR": [
@@ -1758,6 +2155,10 @@
           {
             "provider": "binance",
             "rank": 3
+          },
+          {
+            "provider": "bitget",
+            "rank": 4
           }
         ],
         "AR": [
@@ -1768,6 +2169,10 @@
           {
             "provider": "ripio",
             "rank": 2
+          },
+          {
+            "provider": "bitget",
+            "rank": 3
           }
         ],
         "MX": [
@@ -1778,24 +2183,40 @@
           {
             "provider": "binance",
             "rank": 2
+          },
+          {
+            "provider": "bitget",
+            "rank": 3
           }
         ],
         "CO": [
           {
             "provider": "bitso",
             "rank": 1
+          },
+          {
+            "provider": "bitget",
+            "rank": 2
           }
         ],
         "VE": [
           {
             "provider": "binance",
             "rank": 1
+          },
+          {
+            "provider": "bitget",
+            "rank": 2
           }
         ],
         "CL": [
           {
             "provider": "binance",
             "rank": 1
+          },
+          {
+            "provider": "bitget",
+            "rank": 2
           }
         ],
         "AU": [
@@ -1806,24 +2227,48 @@
           {
             "provider": "kraken",
             "rank": 2
+          },
+          {
+            "provider": "bitget",
+            "rank": 3
+          },
+          {
+            "provider": "cakewallet",
+            "rank": 4
+          },
+          {
+            "provider": "getalby",
+            "rank": 5
           }
         ],
         "JP": [
           {
             "provider": "kraken",
             "rank": 1
+          },
+          {
+            "provider": "bitget",
+            "rank": 2
           }
         ],
         "SG": [
           {
             "provider": "binance",
             "rank": 1
+          },
+          {
+            "provider": "bitget",
+            "rank": 2
           }
         ],
         "UA": [
           {
             "provider": "binance",
             "rank": 1
+          },
+          {
+            "provider": "bitget",
+            "rank": 2
           }
         ],
         "SV": [
@@ -1834,6 +2279,10 @@
           {
             "provider": "blink",
             "rank": 2
+          },
+          {
+            "provider": "bitget",
+            "rank": 3
           }
         ],
         "DE": [
@@ -1852,6 +2301,18 @@
           {
             "provider": "coinbase",
             "rank": 4
+          },
+          {
+            "provider": "bitget",
+            "rank": 5
+          },
+          {
+            "provider": "cakewallet",
+            "rank": 6
+          },
+          {
+            "provider": "getalby",
+            "rank": 7
           }
         ],
         "FR": [
@@ -1870,6 +2331,18 @@
           {
             "provider": "coinbase",
             "rank": 4
+          },
+          {
+            "provider": "bitget",
+            "rank": 5
+          },
+          {
+            "provider": "cakewallet",
+            "rank": 6
+          },
+          {
+            "provider": "getalby",
+            "rank": 7
           }
         ],
         "ES": [
@@ -1888,6 +2361,18 @@
           {
             "provider": "coinbase",
             "rank": 4
+          },
+          {
+            "provider": "bitget",
+            "rank": 5
+          },
+          {
+            "provider": "cakewallet",
+            "rank": 6
+          },
+          {
+            "provider": "getalby",
+            "rank": 7
           }
         ],
         "IT": [
@@ -1906,6 +2391,18 @@
           {
             "provider": "coinbase",
             "rank": 4
+          },
+          {
+            "provider": "bitget",
+            "rank": 5
+          },
+          {
+            "provider": "cakewallet",
+            "rank": 6
+          },
+          {
+            "provider": "getalby",
+            "rank": 7
           }
         ],
         "NL": [
@@ -1924,6 +2421,18 @@
           {
             "provider": "coinbase",
             "rank": 4
+          },
+          {
+            "provider": "bitget",
+            "rank": 5
+          },
+          {
+            "provider": "cakewallet",
+            "rank": 6
+          },
+          {
+            "provider": "getalby",
+            "rank": 7
           }
         ],
         "IE": [
@@ -1942,6 +2451,18 @@
           {
             "provider": "coinbase",
             "rank": 4
+          },
+          {
+            "provider": "bitget",
+            "rank": 5
+          },
+          {
+            "provider": "cakewallet",
+            "rank": 6
+          },
+          {
+            "provider": "getalby",
+            "rank": 7
           }
         ],
         "PT": [
@@ -1960,6 +2481,18 @@
           {
             "provider": "coinbase",
             "rank": 4
+          },
+          {
+            "provider": "bitget",
+            "rank": 5
+          },
+          {
+            "provider": "cakewallet",
+            "rank": 6
+          },
+          {
+            "provider": "getalby",
+            "rank": 7
           }
         ],
         "PL": [
@@ -1978,6 +2511,18 @@
           {
             "provider": "coinbase",
             "rank": 4
+          },
+          {
+            "provider": "bitget",
+            "rank": 5
+          },
+          {
+            "provider": "cakewallet",
+            "rank": 6
+          },
+          {
+            "provider": "getalby",
+            "rank": 7
           }
         ]
       }

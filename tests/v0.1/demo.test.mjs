@@ -623,7 +623,7 @@ test("Frontend UI packages consume shared wizard selection model", () => {
     "elements: must not hard-code wizard attribute reads");
 });
 
-test("Frontend UI packages consume shared country picker model", () => {
+test("Frontend UI packages consume shared country dropdown model", () => {
   const reactSource = readFileSync(
     path.join(process.cwd(), "packages/js/react/src/index.ts"),
     "utf8"
@@ -633,20 +633,10 @@ test("Frontend UI packages consume shared country picker model", () => {
     "utf8"
   );
 
-  assert.match(reactSource, /createOpenReceiveCountryPickerModel/,
-    "react: builds country picker view from browser helper");
-  assert.match(reactSource, /visibleRegionCountryDisplays/,
-    "react: renders country rows from browser display model");
-  assert.match(reactSource, /readoutLabel/,
-    "react: renders map readout from browser display model");
-  assert.match(reactSource, /selectedCountryDisplay/,
-    "react: renders selected country summary from browser display model");
-  assert.match(reactSource, /OPENRECEIVE_COUNTRY_MAP_VIEW_BOX/,
-    "react: uses browser-owned country map viewBox");
-  assert.match(reactSource, /openReceiveCountryMapLandPaths/,
-    "react: renders browser-owned country map land paths");
-  assert.match(reactSource, /entry\.point/,
-    "react: uses browser-projected country map pins");
+  assert.match(reactSource, /model\.countryDisplays/,
+    "react: renders countries from browser display model");
+  assert.match(reactSource, /renderCountrySelect/,
+    "react: renders a package-owned country dropdown");
   assert.doesNotMatch(reactSource, /projectMapPoint/,
     "react: must not re-project country map pins");
   assert.doesNotMatch(reactSource, /geoNaturalEarth1/,
@@ -655,20 +645,12 @@ test("Frontend UI packages consume shared country picker model", () => {
     "react: must not own country map atlas data");
   assert.doesNotMatch(reactSource, /topojson-client/,
     "react: must not own country map feature extraction");
-  assert.match(elementsSource, /model\.countryPicker/,
-    "elements: builds country picker view from browser helper");
-  assert.match(elementsSource, /visibleRegionCountryDisplays/,
-    "elements: renders country rows from browser display model");
-  assert.match(elementsSource, /readoutLabel/,
-    "elements: renders map readout from browser display model");
-  assert.match(elementsSource, /selectedCountryDisplay/,
-    "elements: renders selected country summary from browser display model");
-  assert.match(elementsSource, /openReceiveCountryMapRegions/,
-    "elements: renders browser-owned country map region shapes");
-  assert.match(elementsSource, /OPENRECEIVE_COUNTRY_MAP_VIEW_BOX/,
-    "elements: uses browser-owned country map viewBox");
-  assert.doesNotMatch(elementsSource, /<ellipse part="map-region" cx="180"/,
-    "elements: must not hard-code country map region shapes");
+  assert.match(elementsSource, /model\.countryDisplays/,
+    "elements: renders countries from browser display model");
+  assert.match(elementsSource, /renderCountrySelectHtml/,
+    "elements: renders a package-owned country dropdown");
+  assert.doesNotMatch(elementsSource, /part="country-map"/,
+    "elements: must not render the old country map");
   for (const [name, source] of [
     ["react", reactSource],
     ["elements", elementsSource]

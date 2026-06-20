@@ -22,7 +22,6 @@ registry._meta = {
     name: "display name",
     url: "homepage",
     us: "true=US-available, false=US-excluded, null=unknown",
-    mechanism: "pay_invoice | withdraw_to_invoice",
     lightning_docs_url: "official how-to-pay/send Lightning invoice page, or null",
     icon_path: "repo-local icon path used by browser UI"
   },
@@ -43,6 +42,7 @@ for (const provider of Object.values(registry.providers)) {
   delete provider.pays_arbitrary_invoice;
   delete provider.blurb;
   delete provider.caveat;
+  delete provider.mechanism;
   provider.icon_path = `assets/provider-icons/${provider.id}.png`;
 }
 

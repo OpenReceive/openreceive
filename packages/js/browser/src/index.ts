@@ -8,8 +8,7 @@ import {
   type FiatRailId,
   type PaymentWizardRoute,
   type Provider,
-  type ResolvedProviderRef,
-  type ProviderMechanism
+  type ResolvedProviderRef
 } from "@openreceive/provider-data";
 import { openReceiveProviderIconUrls } from "./provider-icons.ts";
 
@@ -830,6 +829,7 @@ export interface OpenReceivePaymentWizardModel {
   readonly selection: OpenReceivePaymentWizardSelection;
   readonly wizard: OpenReceivePaymentWizardState;
   readonly countryPicker: OpenReceiveCountryPickerModel;
+  readonly countryDisplays: readonly OpenReceiveCountryDisplay[];
   readonly visibleRegionCountries: readonly Country[];
   readonly visibleRegionCountryDisplays: readonly OpenReceiveCountryDisplay[];
   readonly selectedCountryDisplay?: OpenReceiveCountryDisplay;
@@ -888,7 +888,7 @@ export interface OpenReceiveWizardRouteDisplay {
 }
 
 export const openReceiveCheckoutLabels = {
-  copyInvoice: "Copy BOLT11",
+  copyInvoice: "Copy invoice",
   copied: "Copied!",
   openWallet: "Open Wallet",
   paymentStatus: {
@@ -902,18 +902,13 @@ export const openReceiveCheckoutLabels = {
   countdownPrefix: "Invoice expires in",
   wizardTitle: "Pay this invoice",
   wizardSubtitle: "Choose how you want to pay.",
-  switchCountry: "Switch country",
   emptyBitcoin: "Choose Lightning or on-chain Bitcoin.",
   emptyCrypto: "Choose an altcoin.",
   emptyFiat: "No providers found for this country yet.",
   recommended: "Recommended",
-  paysInvoices: "Lightning send",
-  withdrawToInvoice: "Lightning withdrawal",
   openProvider: "How To Pay",
   lightningNetwork: "Lightning Network",
-  chooseCountry: "Choose a country",
-  notUs: "Not US",
-  usSupported: "US supported"
+  chooseCountry: "Choose a country"
 } as const;
 
 export const openReceiveCheckoutElementStyles = `
@@ -1033,7 +1028,6 @@ export const openReceiveCheckoutElementStyles = `
   [part="actions"] {
     display: grid;
     gap: 8px;
-    grid-template-columns: 1fr 1fr;
   }
 
   [part="wizard"] {
@@ -1055,13 +1049,11 @@ export const openReceiveCheckoutElementStyles = `
     color: var(--or-muted);
   }
 
-  [part="method-grid"],
-  [part="route-picker"],
-  [part="region-tabs"],
-  [part="country-map"],
-  [part="country-grid"],
-  [part="provider-grid"],
-  [part="provider-actions"] {
+	  [part="method-grid"],
+	  [part="route-picker"],
+	  [part="country-grid"],
+	  [part="provider-grid"],
+	  [part="provider-actions"] {
     display: grid;
     gap: 8px;
   }
@@ -1074,56 +1066,9 @@ export const openReceiveCheckoutElementStyles = `
     grid-template-columns: 1fr 1fr;
   }
 
-  [part="region-tabs"] {
-    grid-template-columns: 1fr 1fr 1fr;
-  }
-
-  [part="country-map"] {
-    background:
-      radial-gradient(circle at 18% 25%, rgba(37, 99, 235, 0.12), transparent 28%),
-      radial-gradient(circle at 77% 34%, rgba(20, 184, 166, 0.14), transparent 30%),
-      var(--or-bg-soft);
-    border: 1px solid var(--or-border);
-    border-radius: 6px;
-    overflow: hidden;
-    padding: 8px;
-  }
-
-  [part="country-map"] svg {
-    display: block;
-    height: auto;
-    width: 100%;
-  }
-
-  [part~="map-region"] {
-    fill: color-mix(in srgb, var(--or-muted) 20%, transparent);
-    stroke: color-mix(in srgb, var(--or-muted) 30%, transparent);
-    stroke-width: 1;
-  }
-
-  [part~="map-pin"] {
-    fill: var(--or-text);
-    outline: none;
-    stroke: var(--or-bg);
-    stroke-width: 3;
-  }
-
-  [part~="map-pin"]:hover,
-  [part~="map-pin"]:focus,
-  [part~="map-pin"][part~="selected"] {
-    fill: #2563eb;
-  }
-
-  [part="map-readout"] {
-    display: flex;
-    gap: 8px;
-    justify-content: space-between;
-  }
-
-  [part="method"],
-  [part="route"],
-  [part="region"],
-  [part="country"],
+	  [part="method"],
+	  [part="route"],
+	  [part="country"],
   [part="provider"] {
     background: var(--or-bg);
     border: 1px solid var(--or-border);
@@ -1164,14 +1109,47 @@ export const openReceiveCheckoutElementStyles = `
     padding: 8px;
   }
 
-  [part="wizard-results"] {
-    display: grid;
-    gap: 12px;
+	  [part="wizard-results"] {
+	    display: grid;
+	    gap: 12px;
+	  }
+
+  [part="wizard-route"] h3 {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
-  [part="provider"] {
-    min-height: 0;
+  [part="country-select"] {
+    align-items: center;
+    display: inline-flex;
+    font-size: 0.78em;
+    gap: 6px;
   }
+
+  [part="country-select"] span {
+    clip: rect(0 0 0 0);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+
+  [part="country-select"] select {
+    background: var(--or-bg);
+    border: 1px solid var(--or-border);
+    border-radius: 6px;
+    color: var(--or-text);
+    font: inherit;
+    min-height: 34px;
+    padding: 0 8px;
+  }
+
+	  [part="provider"] {
+	    min-height: 0;
+	  }
 
   [part="provider-badges"] {
     display: flex;
@@ -1232,11 +1210,10 @@ export const openReceiveCheckoutElementStyles = `
     color: var(--or-bg);
   }
 
-  @media (max-width: 420px) {
-    [part="method-grid"],
-    [part="route-picker"],
-    [part="region-tabs"],
-    [part="country-grid"],
+	  @media (max-width: 420px) {
+	    [part="method-grid"],
+	    [part="route-picker"],
+	    [part="country-grid"],
     [part="provider-grid"],
     [part="provider-actions"] {
       grid-template-columns: 1fr;
@@ -1561,13 +1538,12 @@ export function getOpenReceiveRegionForCountry(countryCode: string): OpenReceive
 }
 
 export function getOpenReceiveCoverageLabel(coverage: Country["coverage"]): string {
-  if (coverage === "deep") return "strong coverage";
-  if (coverage === "thin") return "some coverage";
-  return "limited coverage";
+  void coverage;
+  return "";
 }
 
 export function formatOpenReceiveCountryMetaLabel(country: Country): string {
-  return `${country.currency} · ${getOpenReceiveCoverageLabel(country.coverage)}`;
+  return country.currency;
 }
 
 export function createOpenReceiveCountryDisplay(
@@ -1612,19 +1588,10 @@ export function getOpenReceiveWizardEmptyMessage(
   return openReceiveCheckoutLabels.emptyFiat;
 }
 
-export function getOpenReceiveProviderMechanismLabel(
-  mechanism: ProviderMechanism
-): string {
-  return mechanism === "pay_invoice"
-    ? openReceiveCheckoutLabels.paysInvoices
-    : openReceiveCheckoutLabels.withdrawToInvoice;
-}
-
 export function getOpenReceiveProviderUsBadge(
   us: boolean | null
 ): string | null {
-  if (us === false) return openReceiveCheckoutLabels.notUs;
-  if (us === true) return openReceiveCheckoutLabels.usSupported;
+  void us;
   return null;
 }
 
@@ -1690,7 +1657,7 @@ function getOpenReceiveWizardRouteDisplayKey(route: PaymentWizardRoute): string 
 function getOpenReceiveWizardRouteDisplayTitle(route: PaymentWizardRoute): string {
   return route.kind === "crypto"
     ? route.route.label
-    : `${route.rail.label} in ${route.country.name}`;
+    : route.rail.label;
 }
 
 function getOpenReceiveWizardRouteDisplaySubtitle(route: PaymentWizardRoute): string {
@@ -1707,7 +1674,7 @@ function createOpenReceiveWizardProviderDisplay(
     icon: getOpenReceiveProviderIcon(entry.provider),
     recommended: entry.flagship,
     recommendedLabel: entry.flagship ? openReceiveCheckoutLabels.recommended : null,
-    usBadge: getOpenReceiveProviderUsBadge(entry.provider.us),
+    usBadge: null,
     copyLabel: openReceiveCheckoutLabels.copyInvoice,
     copiedLabel: openReceiveCheckoutLabels.copied,
     openLabel: getOpenReceiveProviderOpenLabel(entry.provider.name)
@@ -1917,11 +1884,17 @@ export function createOpenReceivePaymentWizardModel(
     selectedCountryCode: selection.selectedCountryCode,
     selectedRegion: selection.selectedRegion
   });
+  const countryDisplays = wizard.railCountries.map((country) =>
+    createOpenReceiveCountryDisplay(country, {
+      selectedCountryCode: selection.selectedCountryCode
+    })
+  );
 
   return {
     selection,
     wizard,
     countryPicker,
+    countryDisplays,
     visibleRegionCountries: countryPicker.visibleRegionCountries,
     visibleRegionCountryDisplays: countryPicker.visibleRegionCountryDisplays,
     ...(countryPicker.selectedCountryDisplay === undefined
@@ -1953,7 +1926,7 @@ export function updateOpenReceivePaymentWizardSelection(
         selectedMethod: action.method,
         selectedCountryCode,
         selectedRegion: getOpenReceiveRegionForCountry(selectedCountryCode),
-        countryPickerOpen: action.storedCountryCode === null
+        countryPickerOpen: false
       };
     }
     case "select_region": {
