@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   TESTKIT_PREIMAGE,
   createTestkitReceiveClient
 } from "@openreceive/testkit";
+
+const MAKE_INVOICE_VALIDATION_VECTORS = JSON.parse(
+  readFileSync("spec/test-vectors/make-invoice-validation.json", "utf8")
+);
 
 test("testkit receive client creates deterministic invoices", async () => {
   const wallet = createTestkitReceiveClient({ now: () => 2000 });
@@ -96,6 +101,25 @@ test("testkit receive client supports seeded fixtures and terminal states", asyn
   assert.equal(wallet.listInvoices().length, 1);
 });
 
+test("testkit receive client enforces make invoice validation vectors", async () => {
+  for (const vector of MAKE_INVOICE_VALIDATION_VECTORS.cases) {
+    const wallet = createTestkitReceiveClient();
+    const request = makeInvoiceRequestFromVector(vector.request);
+
+    if (vector.expected.valid) {
+      const invoice = await wallet.makeInvoice(request);
+      assert.equal(invoice.amount_msats, request.amount_msats, vector.name);
+    } else {
+      await assert.rejects(
+        () => wallet.makeInvoice(request),
+        Error,
+        vector.name
+      );
+      assert.equal(wallet.listInvoices().length, 0, vector.name);
+    }
+  }
+});
+
 test("testkit receive client enforces amount and metadata boundaries", async () => {
   const wallet = createTestkitReceiveClient();
 
@@ -114,3 +138,19 @@ test("testkit receive client enforces amount and metadata boundaries", async () 
     /metadata must serialize below 3900 bytes/
   );
 });
+
+function makeInvoiceRequestFromVector(input) {
+  const request = {
+    amount_msats: BigInt(input.amount_msats)
+  };
+  if (input.description !== undefined) request.description = input.description;
+  if (input.description_hash !== undefined) {
+    request.description_hash = input.description_hash;
+  }
+  if (input.metadata_note_length !== undefined) {
+    request.metadata = {
+      note: "x".repeat(input.metadata_note_length)
+    };
+  }
+  return request;
+}

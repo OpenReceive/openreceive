@@ -145,6 +145,33 @@ function validateAmountBoundaries() {
   }
 }
 
+function validateMakeInvoiceValidationVectors() {
+  const vector = readJson("spec/test-vectors/make-invoice-validation.json");
+  assert(Array.isArray(vector.cases), "make invoice validation vectors must include cases");
+
+  const names = new Set(vector.cases.map((item) => item.name));
+  assert(names.has("description and description hash conflict"), "missing description conflict vector");
+  assert(names.has("description hash must be 64 hex"), "missing invalid description_hash vector");
+  assert(names.has("metadata over NWC guard is invalid"), "missing metadata guard vector");
+
+  for (const item of vector.cases) {
+    const request = item.request || {};
+    assert(Number.isSafeInteger(request.amount_msats), `${item.name}: amount_msats is required`);
+    if (request.description_hash !== undefined) {
+      const validHash = /^[0-9a-fA-F]{64}$/.test(request.description_hash);
+      assert(validHash === item.expected.valid || item.expected.error === "description_conflict", `${item.name}: description_hash expectation mismatch`);
+    }
+    if (request.metadata_note_length !== undefined) {
+      const bytes = Buffer.byteLength(
+        JSON.stringify({ note: "x".repeat(request.metadata_note_length) }),
+        "utf8"
+      );
+      assert(bytes > 3900, `${item.name}: metadata guard vector must exceed 3900 bytes`);
+      assert(item.expected.error === "metadata_too_large", `${item.name}: metadata guard error mismatch`);
+    }
+  }
+}
+
 function isSettled(result) {
   return result.settled_at !== undefined || result.state === "settled" || result.transaction_state === "settled";
 }
@@ -423,6 +450,7 @@ function main() {
   validateSchemas();
   validateFiatVectors();
   validateAmountBoundaries();
+  validateMakeInvoiceValidationVectors();
   validateSettlementVectors();
   validateErrorNormalizationVectors();
   validateLifecycleVectors();

@@ -16,6 +16,8 @@ export const TESTKIT_WALLET_PUBKEY = "f".repeat(64);
 export const TESTKIT_RELAY = "wss://relay.test.openreceive.local";
 export const TESTKIT_PREIMAGE = "1".repeat(64);
 
+const HEX_64 = /^[0-9a-fA-F]{64}$/;
+
 export interface TestkitInvoiceFixture extends MakeInvoiceResult {
   readonly state?: OpenReceiveTransactionState;
   readonly settled_at?: number;
@@ -233,6 +235,15 @@ function validateMakeInvoiceRequest(request: MakeInvoiceRequest): void {
   }
   if (request.amount_msats > OPENRECEIVE_MAX_AMOUNT_MSATS) {
     throw new Error("amount_msats exceeds JSON safe integer boundary");
+  }
+  if (
+    request.description !== undefined &&
+    request.description_hash !== undefined
+  ) {
+    throw new Error("Exactly one of description or description_hash may be present");
+  }
+  if (request.description_hash !== undefined && !HEX_64.test(request.description_hash)) {
+    throw new Error("description_hash must be 64 hex characters");
   }
   if (request.metadata !== undefined) {
     const bytes = Buffer.byteLength(JSON.stringify(request.metadata), "utf8");

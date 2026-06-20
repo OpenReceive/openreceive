@@ -18,6 +18,9 @@ const NWC_URI =
 const ERROR_NORMALIZATION_VECTORS = JSON.parse(
   readFileSync("spec/test-vectors/error-normalization.json", "utf8")
 );
+const MAKE_INVOICE_VALIDATION_VECTORS = JSON.parse(
+  readFileSync("spec/test-vectors/make-invoice-validation.json", "utf8")
+);
 const NWC_INFO_VECTORS = JSON.parse(
   readFileSync("spec/test-vectors/nwc-info.json", "utf8")
 );
@@ -150,6 +153,29 @@ test("receive client maps amount_msats to NIP-47 amount and normalizes results",
   assert.equal(lookup.amount_msats, 200000n);
   assert.equal(lookup.state, "settled");
   assert.equal(lookup.settled_at, 1200);
+});
+
+test("receive client enforces make invoice validation vectors", async () => {
+  for (const vector of MAKE_INVOICE_VALIDATION_VECTORS.cases) {
+    const fake = new FakeAlbyClient();
+    const client = createAlbyNwcReceiveClient({
+      connectionString: NWC_URI,
+      client: fake
+    });
+    const request = makeInvoiceRequestFromVector(vector.request);
+
+    if (vector.expected.valid) {
+      await client.makeInvoice(request);
+      assert.equal(fake.makeInvoiceParams.length, 1, vector.name);
+    } else {
+      await assert.rejects(
+        () => client.makeInvoice(request),
+        ReceiveCheckoutValidationError,
+        vector.name
+      );
+      assert.equal(fake.makeInvoiceParams.length, 0, vector.name);
+    }
+  }
 });
 
 test("normalizes NWC wallet errors into canonical OpenReceive codes", async () => {
@@ -314,4 +340,20 @@ class FakeNotificationClient {
   async emit(notification) {
     await this.handler(notification);
   }
+}
+
+function makeInvoiceRequestFromVector(input) {
+  const request = {
+    amount_msats: BigInt(input.amount_msats)
+  };
+  if (input.description !== undefined) request.description = input.description;
+  if (input.description_hash !== undefined) {
+    request.description_hash = input.description_hash;
+  }
+  if (input.metadata_note_length !== undefined) {
+    request.metadata = {
+      note: "x".repeat(input.metadata_note_length)
+    };
+  }
+  return request;
 }

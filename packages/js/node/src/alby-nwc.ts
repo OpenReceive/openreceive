@@ -21,6 +21,7 @@ import {
 } from "@openreceive/core";
 
 const REQUIRED_RECEIVE_METHODS = ["make_invoice", "lookup_invoice"] as const;
+const HEX_64 = /^[0-9a-fA-F]{64}$/;
 const SPEND_METHODS = [
   "pay_invoice",
   "multi_pay_invoice",
@@ -335,6 +336,12 @@ function validateMakeInvoiceRequest(request: MakeInvoiceRequest): void {
   ) {
     throw new ReceiveCheckoutValidationError(
       "Exactly one of description or description_hash may be present"
+    );
+  }
+
+  if (request.description_hash !== undefined && !HEX_64.test(request.description_hash)) {
+    throw new ReceiveCheckoutValidationError(
+      "description_hash must be 64 hex characters"
     );
   }
 
