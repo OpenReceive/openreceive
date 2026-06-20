@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "start": "node src/server/production.ts"
+    "start": "node --experimental-strip-types src/server/production.ts"
   },
   "dependencies": {
     "@getalby/sdk": "*",

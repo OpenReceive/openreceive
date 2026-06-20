@@ -23,6 +23,13 @@ npm run build
 npm start
 ```
 
+To run the container template locally:
+
+```sh
+cp .env.example .env
+docker compose up --build
+```
+
 The server also exposes `/demo-metadata.json` with non-secret package, mode,
 git SHA, and image digest metadata for hosted-demo smoke checks.
 

@@ -1,0 +1,15 @@
+services:
+  hello-fruit-static-html-small-api:
+    build:
+      context: ../../../..
+      dockerfile: examples/hello-fruit/server/static-html-small-api/Dockerfile
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      OPENRECEIVE_DEMO_MODE: ${OPENRECEIVE_DEMO_MODE:-test_nwc}
+      OPENRECEIVE_GIT_SHA: ${OPENRECEIVE_GIT_SHA:-}
+      OPENRECEIVE_IMAGE_DIGEST: ${OPENRECEIVE_IMAGE_DIGEST:-}
+      PORT: "3001"
+    ports:
+      - "3001:3001"

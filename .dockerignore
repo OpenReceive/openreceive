@@ -1,0 +1,32 @@
+.git
+.gitignore
+.dockerignore
+node_modules
+**/node_modules
+dist
+**/dist
+coverage
+.turbo
+.vite
+.cache
+*.tsbuildinfo
+
+# Local-only secrets and notes.
+.env
+.env.*
+!.env.example
+!**/.env.example
+private
+building
+private_private_infra_details.txt
+
+# Demo deployment runtime-only material.
+demos/deploy/secrets
+demos/deploy/certs
+demos/deploy/wireguard
+demos/deploy/.ssh
+demos/deploy/.runtime
+demos/deploy/.state
+demos/deploy/.cache
+demos/deploy/.locks
+demos/deploy/bundles
