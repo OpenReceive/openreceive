@@ -4,7 +4,9 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import test from "node:test";
 import { createHelloFruitServer } from "../../examples/hello-fruit/server/node-express-react/src/server/create-server.ts";
+import { createHelloFruitProductionServer } from "../../examples/hello-fruit/server/node-express-react/src/server/production.ts";
 import { createHelloFruitStaticServer } from "../../examples/hello-fruit/server/static-html-small-api/src/server/create-server.ts";
+import { createHelloFruitStaticProductionServer } from "../../examples/hello-fruit/server/static-html-small-api/src/server/production.ts";
 
 const productPath = path.join(
   process.cwd(),
@@ -42,6 +44,33 @@ test("Hello Fruit server demos keep secret-safe local setup docs", () => {
     assert.match(readme, /The browser never receives `OPENRECEIVE_NWC`\./);
     assert.match(readme, /\/demo-metadata\.json/);
   }
+});
+
+test("Hello Fruit production servers expose non-secret metadata without a wallet", async () => {
+  await withEnv({ OPENRECEIVE_NWC: undefined }, async () => {
+    for (const demo of [
+      {
+        name: "node-express-react-production",
+        metadataId: "node-express-react",
+        createApp: createHelloFruitProductionServer
+      },
+      {
+        name: "static-html-small-api-production",
+        metadataId: "static-html-small-api",
+        createApp: createHelloFruitStaticProductionServer
+      }
+    ]) {
+      const app = demo.createApp();
+      const metadata = await getJson(app, "/demo-metadata.json");
+      assert.equal(metadata.status, 200, `${demo.name}: metadata status`);
+      assert.equal(metadata.body.demo.id, demo.metadataId);
+      assert.equal(metadata.body.mode, "unconfigured");
+
+      const health = await getJson(app, "/openreceive/v1/health");
+      assert.equal(health.status, 200, `${demo.name}: health status`);
+      assert.equal(health.body.wallet_configured, false);
+    }
+  });
 });
 
 test("Hello Fruit demos fail closed without OPENRECEIVE_NWC", async () => {

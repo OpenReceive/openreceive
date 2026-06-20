@@ -16,6 +16,13 @@ npm run dev
 
 Open the Vite URL and create a tiny fruit-sticker invoice.
 
+For a production-style local run, build the client and start the Express server:
+
+```sh
+npm run build
+npm start
+```
+
 The server also exposes `/demo-metadata.json` with non-secret package, mode,
 git SHA, and image digest metadata for hosted-demo smoke checks.
 
