@@ -110,6 +110,7 @@ function validateCompose(demo) {
   expect(service.build?.dockerfile === `${demo.dir}/Dockerfile`, `${relativePath}: dockerfile path must target the demo Dockerfile`);
   expect(envFile?.path === "./.env" && envFile?.required === false, `${relativePath}: .env must be optional runtime env_file`);
   expect(service.environment?.OPENRECEIVE_DEMO_MODE === "${OPENRECEIVE_DEMO_MODE:-test_nwc}", `${relativePath}: demo mode must default to test_nwc`);
+  expect(service.environment?.OPENRECEIVE_DEPLOYED_AT === "${OPENRECEIVE_DEPLOYED_AT:-}", `${relativePath}: deployed_at metadata env must be pass-through`);
   expect(service.environment?.PORT === demo.port, `${relativePath}: PORT must be ${demo.port}`);
   expect(ports.length === 1 && ports[0] === `${demo.port}:${demo.port}`, `${relativePath}: must publish only ${demo.port}:${demo.port}`);
   expect(service.network_mode === undefined, `${relativePath}: must not use host networking`);

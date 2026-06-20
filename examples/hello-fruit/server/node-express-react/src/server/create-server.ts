@@ -42,6 +42,7 @@ export function createHelloFruitServer() {
       requestedMode: process.env.OPENRECEIVE_DEMO_MODE,
       gitSha: process.env.OPENRECEIVE_GIT_SHA,
       imageDigest: process.env.OPENRECEIVE_IMAGE_DIGEST,
+      deployedAt: process.env.OPENRECEIVE_DEPLOYED_AT,
       packages: {
         "@openreceive/browser": "0.1.0",
         "@openreceive/react": "0.1.0"

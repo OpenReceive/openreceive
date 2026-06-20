@@ -16,6 +16,7 @@ export interface HelloFruitDemoMetadata {
   readonly build: {
     readonly git_sha: string | null;
     readonly image_digest: string | null;
+    readonly deployed_at: string | null;
   };
   readonly packages: Readonly<Record<string, string>>;
 }
@@ -26,6 +27,7 @@ export interface HelloFruitDemoMetadataInput {
   readonly requestedMode?: string | undefined;
   readonly gitSha?: string | undefined;
   readonly imageDigest?: string | undefined;
+  readonly deployedAt?: string | undefined;
   readonly packages?: Readonly<Record<string, string>> | undefined;
 }
 
@@ -40,7 +42,8 @@ export function createHelloFruitDemoMetadata(
     mode: getDemoMode(input.walletConfigured, input.requestedMode),
     build: {
       git_sha: safeGitSha(input.gitSha),
-      image_digest: safeImageDigest(input.imageDigest)
+      image_digest: safeImageDigest(input.imageDigest),
+      deployed_at: safeIsoTimestamp(input.deployedAt)
     },
     packages: {
       "@openreceive/core": "0.1.0",
@@ -70,4 +73,12 @@ function safeGitSha(value: string | undefined): string | null {
 function safeImageDigest(value: string | undefined): string | null {
   if (value === undefined) return null;
   return /^sha256:[0-9a-f]{64}$/i.test(value) ? value : null;
+}
+
+function safeIsoTimestamp(value: string | undefined): string | null {
+  if (value === undefined) return null;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value)) return null;
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return null;
+  return new Date(parsed).toISOString().replace(".000Z", "Z") === value ? value : null;
 }

@@ -35,7 +35,7 @@ The Makefile exposes the standard demo commands: `make setup`, `make dev`,
 `make docker-build`, `make docker-run`, and `make docker-smoke`.
 
 The server also exposes `/demo-metadata.json` with non-secret package, mode,
-git SHA, and image digest metadata for hosted-demo smoke checks.
+git SHA, image digest, and `deployed_at` metadata for hosted-demo smoke checks.
 
 Hosted-demo helpers expose `/healthz`, `/source`, `/docs`, `/robots.txt`, and
 `/sitemap.xml`.

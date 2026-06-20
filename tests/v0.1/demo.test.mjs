@@ -84,6 +84,42 @@ test("Hello Fruit production servers expose non-secret metadata without a wallet
   });
 });
 
+test("Hello Fruit metadata exposes only allowlisted build fields", async () => {
+  const nwc =
+    `nostr+walletconnect://${"a".repeat(64)}` +
+    `?relay=${encodeURIComponent("wss://relay.example.com")}` +
+    `&secret=${"b".repeat(64)}`;
+
+  await withEnv({
+    OPENRECEIVE_NWC: nwc,
+    OPENRECEIVE_DEMO_MODE: "production",
+    OPENRECEIVE_GIT_SHA: "0123456789abcdef",
+    OPENRECEIVE_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
+    OPENRECEIVE_DEPLOYED_AT: "2026-06-20T12:34:56Z"
+  }, async () => {
+    for (const demo of [
+      {
+        name: "node-express-react",
+        createApp: createHelloFruitServer
+      },
+      {
+        name: "static-html-small-api",
+        createApp: createHelloFruitStaticServer
+      }
+    ]) {
+      const metadata = await getJson(demo.createApp(), "/demo-metadata.json");
+      assert.equal(metadata.status, 200, `${demo.name}: metadata status`);
+      assert.equal(metadata.body.mode, "production");
+      assert.equal(metadata.body.build.git_sha, "0123456789abcdef");
+      assert.equal(metadata.body.build.image_digest, `sha256:${"c".repeat(64)}`);
+      assert.equal(metadata.body.build.deployed_at, "2026-06-20T12:34:56Z");
+      assert.equal(JSON.stringify(metadata.body).includes("OPENRECEIVE_NWC"), false);
+      assert.equal(JSON.stringify(metadata.body).includes("nostr+walletconnect://"), false);
+      assert.equal(JSON.stringify(metadata.body).includes("secret="), false);
+    }
+  });
+});
+
 test("Hello Fruit hosted demo routes expose health, source, docs, robots, and sitemap", async () => {
   await withEnv({
     OPENRECEIVE_NWC: undefined,
@@ -163,7 +199,8 @@ test("Hello Fruit demos fail closed without OPENRECEIVE_NWC", async () => {
     OPENRECEIVE_NWC: undefined,
     OPENRECEIVE_DEMO_MODE: "production",
     OPENRECEIVE_GIT_SHA: "nostr+walletconnect://not-a-sha",
-    OPENRECEIVE_IMAGE_DIGEST: `secret=${"b".repeat(64)}`
+    OPENRECEIVE_IMAGE_DIGEST: `secret=${"b".repeat(64)}`,
+    OPENRECEIVE_DEPLOYED_AT: `secret=${"b".repeat(64)}`
   }, async () => {
     for (const demo of [
       {
@@ -183,6 +220,7 @@ test("Hello Fruit demos fail closed without OPENRECEIVE_NWC", async () => {
       assert.equal(metadata.body.mode, "unconfigured");
       assert.equal(metadata.body.build.git_sha, null);
       assert.equal(metadata.body.build.image_digest, null);
+      assert.equal(metadata.body.build.deployed_at, null);
       assert.equal(metadata.body.packages["@openreceive/core"], "0.1.0");
       assert.equal(metadata.body.packages["@openreceive/express"], "0.1.0");
       assert.equal(metadata.body.packages["@openreceive/node"], "0.1.0");
