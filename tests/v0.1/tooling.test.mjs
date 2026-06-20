@@ -128,6 +128,35 @@ test("client bundle scanner rejects NWC markers in generated bundles", () => {
   }
 });
 
+test("client bundle scanner rejects NWC markers in generated source maps", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "openreceive-bundle-scan-"));
+
+  try {
+    const assetsDir = path.join(dir, "examples", "demo", "dist", "assets");
+    mkdirSync(assetsDir, { recursive: true });
+    writeFileSync(path.join(assetsDir, "app.js"), "console.log('safe');\n");
+    writeFileSync(
+      path.join(assetsDir, "app.js.map"),
+      JSON.stringify({
+        version: 3,
+        sources: ["src/app.ts"],
+        sourcesContent: ["const leaked = 'OPENRECEIVE_NWC';"],
+        mappings: ""
+      })
+    );
+
+    assert.throws(
+      () => runClientBundleScanner(dir),
+      (error) => {
+        assert.match(String(error.stderr), /examples\/demo\/dist\/assets\/app\.js\.map: OPENRECEIVE_NWC marker/);
+        return true;
+      }
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("client bundle scanner rejects real-looking NWC URIs in generated bundles", () => {
   const dir = mkdtempSync(path.join(tmpdir(), "openreceive-bundle-scan-"));
 
