@@ -5,3 +5,10 @@
 - Initialized the v0.1 contract-first repository foundation.
 - Added governance, security, contribution, and agent operating rules.
 - Added initial schemas, data files, validation tools, and test vectors.
+- Added JS core, Node NWC receive adapter, Express route adapter, browser
+  helpers, provider-data, testkit, elements, and React packages.
+- Added Hello Fruit Express + React and static HTML + small API demos.
+- Added OpenAPI, AsyncAPI, generated contract constants, package artifact smoke,
+  demo build, docs build, client-bundle secret scan, and live NWC smoke gates.
+- Added Express auth, CSRF, idempotency, signed event URL, fulfillment, rate,
+  provider-route, and security regression coverage.

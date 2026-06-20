@@ -10,34 +10,43 @@ their own server-side Nostr Wallet Connect (NWC / NIP-47) connection to a wallet
 they control, and OpenReceive helps the merchant backend create and verify
 receive-only invoices.
 
-The v0.1 work starts with the contract before the demo:
+The v0.1 reference path is contract-first and server-owned:
 
 - `spec/` is the source of truth for schemas, shared data, and test vectors.
-- `packages/js/` will hold the first Node and browser packages.
-- `examples/` and `demos/` will prove the flow in real stacks after the
-  contracts are green.
-- `tools/` holds validation, conformance, and live-wallet smoke helpers.
+- `packages/js/` contains the core contracts, Node NWC adapter, Express routes,
+  browser helpers, provider data, testkit, elements, and React packages.
+- `examples/hello-fruit/server/` contains the Express + React and static HTML
+  + small API Hello Fruit demos.
+- `tools/` holds validation, conformance, package-smoke, docs, and live-wallet
+  smoke helpers.
 
 ## Current Status
 
-This repository is at the v0.1 foundation stage. The first safe goal is to
-freeze the shared contracts enough that package work can happen without each
-SDK inventing payment semantics independently.
+This repository has the v0.1 JS reference path in place. The current gate keeps
+schemas, vectors, generated contracts, package artifacts, demos, secret scans,
+and docs aligned before broader SDK work proceeds.
 
-Run the current local checks:
+Run the full local gate:
+
+```sh
+npm run test:ci
+```
+
+Run only the contract and secret checks when iterating quickly:
 
 ```sh
 npm test
 ```
 
-Run the live-wallet smoke skeleton:
+Run the live-wallet smoke harness:
 
 ```sh
 npm run test:live:nwc
 ```
 
-The live smoke command skips when `OPENRECEIVE_NWC` is absent. Real live wallet
-behavior will be wired in once the Node receive-checkout adapter exists.
+The live smoke command skips when `OPENRECEIVE_NWC` is absent. For a trusted
+local wallet profile, pass `OPENRECEIVE_ENV_FILE` pointing at a gitignored env
+file.
 
 ## Product Boundary
 
