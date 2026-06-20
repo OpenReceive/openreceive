@@ -9,6 +9,9 @@ import {
 import {
   mountOpenReceiveExpressRoutes
 } from "@openreceive/express";
+import {
+  createHelloFruitDemoMetadata
+} from "../../../../shared/demo-metadata.ts";
 
 export function createHelloFruitStaticServer() {
   const app = express();
@@ -19,7 +22,22 @@ export function createHelloFruitStaticServer() {
   );
 
   const connectionString = process.env.OPENRECEIVE_NWC;
-  if (connectionString === undefined || connectionString.length === 0) {
+  const walletConfigured = connectionString !== undefined && connectionString.length > 0;
+
+  app.get("/demo-metadata.json", (_req, res) => {
+    res.status(200).json(createHelloFruitDemoMetadata({
+      id: "static-html-small-api",
+      walletConfigured,
+      requestedMode: process.env.OPENRECEIVE_DEMO_MODE,
+      gitSha: process.env.OPENRECEIVE_GIT_SHA,
+      imageDigest: process.env.OPENRECEIVE_IMAGE_DIGEST,
+      packages: {
+        "@openreceive/elements": "0.1.0"
+      }
+    }));
+  });
+
+  if (!walletConfigured) {
     app.get("/openreceive/v1/health", (_req, res) => {
       res.status(200).json({
         ok: true,

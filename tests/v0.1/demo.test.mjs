@@ -23,7 +23,12 @@ test("Hello Fruit shared product keeps demo invoices low-value", () => {
 });
 
 test("Hello Fruit demos fail closed without OPENRECEIVE_NWC", async () => {
-  await withEnv({ OPENRECEIVE_NWC: undefined }, async () => {
+  await withEnv({
+    OPENRECEIVE_NWC: undefined,
+    OPENRECEIVE_DEMO_MODE: "production",
+    OPENRECEIVE_GIT_SHA: "nostr+walletconnect://not-a-sha",
+    OPENRECEIVE_IMAGE_DIGEST: `secret=${"b".repeat(64)}`
+  }, async () => {
     for (const demo of [
       {
         name: "node-express-react",
@@ -35,6 +40,31 @@ test("Hello Fruit demos fail closed without OPENRECEIVE_NWC", async () => {
       }
     ]) {
       const app = demo.createApp();
+      const metadata = await getJson(app, "/demo-metadata.json");
+      assert.equal(metadata.status, 200, `${demo.name}: metadata status`);
+      assert.equal(metadata.body.demo.id, demo.name);
+      assert.equal(metadata.body.demo.product, "hello-fruit");
+      assert.equal(metadata.body.mode, "unconfigured");
+      assert.equal(metadata.body.build.git_sha, null);
+      assert.equal(metadata.body.build.image_digest, null);
+      assert.equal(metadata.body.packages["@openreceive/core"], "0.1.0");
+      assert.equal(metadata.body.packages["@openreceive/express"], "0.1.0");
+      assert.equal(metadata.body.packages["@openreceive/node"], "0.1.0");
+      assert.equal(
+        JSON.stringify(metadata.body).includes("OPENRECEIVE_NWC"),
+        false
+      );
+      assert.equal(
+        JSON.stringify(metadata.body).includes("nostr+walletconnect://"),
+        false
+      );
+      if (demo.name === "node-express-react") {
+        assert.equal(metadata.body.packages["@openreceive/browser"], "0.1.0");
+        assert.equal(metadata.body.packages["@openreceive/react"], "0.1.0");
+      } else {
+        assert.equal(metadata.body.packages["@openreceive/elements"], "0.1.0");
+      }
+
       const health = await getJson(app, "/openreceive/v1/health");
       assert.equal(health.status, 200, `${demo.name}: health status`);
       assert.deepEqual(health.body, {

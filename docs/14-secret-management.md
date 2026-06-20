@@ -51,6 +51,11 @@ Inject wallet secrets at runtime from the host, platform secret store, or
 operator-managed secret files. Do not bake secrets into build artifacts or demo
 images.
 
+Hosted demos may expose public build metadata such as package versions, git
+SHA, image digest, and demo mode. Treat those as allowlisted fields, not a
+generic environment dump. The Hello Fruit demos filter git SHAs and image
+digests to public-safe shapes before returning `/demo-metadata.json`.
+
 Production integrations should use separate credentials from demos and staging.
 Rotate credentials after accidental exposure, after staff changes, and before
 moving from public demos to production payment flows.

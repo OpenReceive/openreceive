@@ -16,5 +16,8 @@ npm run dev
 
 Open the Vite URL and create a tiny fruit-sticker invoice.
 
+The server also exposes `/demo-metadata.json` with non-secret package, mode,
+git SHA, and image digest metadata for hosted-demo smoke checks.
+
 This demo uses `unsafeAllowUnauthenticatedDemoMode` because it is a local
 single-user example. Production apps should use app auth and CSRF hooks.
