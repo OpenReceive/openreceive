@@ -34,26 +34,33 @@ test("Hello Fruit server demos keep secret-safe local setup docs", () => {
     const readmePath = path.join(process.cwd(), demoDir, "README.md");
     const dockerfilePath = path.join(process.cwd(), demoDir, "Dockerfile");
     const composePath = path.join(process.cwd(), demoDir, "compose.yml");
+    const composeOverridePath = path.join(process.cwd(), demoDir, "compose.override.yml.example");
 
     assert.equal(existsSync(envExamplePath), true, `${demoDir}: .env.example`);
     assert.equal(existsSync(readmePath), true, `${demoDir}: README.md`);
     assert.equal(existsSync(dockerfilePath), true, `${demoDir}: Dockerfile`);
     assert.equal(existsSync(composePath), true, `${demoDir}: compose.yml`);
+    assert.equal(existsSync(composeOverridePath), true, `${demoDir}: compose.override.yml.example`);
 
     const envExample = readFileSync(envExamplePath, "utf8");
     const readme = readFileSync(readmePath, "utf8");
     const dockerfile = readFileSync(dockerfilePath, "utf8");
     const compose = readFileSync(composePath, "utf8");
+    const composeOverride = readFileSync(composeOverridePath, "utf8");
 
     assert.match(envExample, /^OPENRECEIVE_NWC=$/m, `${demoDir}: placeholder NWC`);
     assert.doesNotMatch(envExample, /nostr\+walletconnect:\/\//);
     assert.match(readme, /The browser never receives `OPENRECEIVE_NWC`\./);
     assert.match(readme, /\/demo-metadata\.json/);
-    assert.match(readme, /docker compose up --build/);
+    assert.match(readme, /compose\.override\.yml\.example up --build/);
     assert.match(dockerfile, /CMD \["npm", "start"\]/);
     assert.match(compose, /env_file:/);
+    assert.match(compose, /expose:/);
+    assert.doesNotMatch(compose, /ports:/);
+    assert.match(composeOverride, /ports:/);
     assert.doesNotMatch(dockerfile, /OPENRECEIVE_NWC=/);
     assert.doesNotMatch(compose, /nostr\+walletconnect:\/\//);
+    assert.doesNotMatch(composeOverride, /nostr\+walletconnect:\/\//);
   }
 });
 

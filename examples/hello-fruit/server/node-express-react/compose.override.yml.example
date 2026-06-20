@@ -1,0 +1,4 @@
+services:
+  hello-fruit-node-express-react:
+    ports:
+      - "3000:3000"

@@ -12,5 +12,5 @@ services:
       OPENRECEIVE_GIT_SHA: ${OPENRECEIVE_GIT_SHA:-}
       OPENRECEIVE_IMAGE_DIGEST: ${OPENRECEIVE_IMAGE_DIGEST:-}
       PORT: "3000"
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"

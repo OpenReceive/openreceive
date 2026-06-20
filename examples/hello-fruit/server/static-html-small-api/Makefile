@@ -1,5 +1,6 @@
 IMAGE ?= ghcr.io/openreceive/demo-static:local
 HEALTH_URL ?= http://127.0.0.1:3001/healthz
+COMPOSE ?= docker compose -f compose.yml -f compose.override.yml.example
 
 .PHONY: setup dev test demo-test-nwc demo-production docker-build docker-run docker-smoke
 
@@ -13,16 +14,16 @@ test:
 	npm run build
 
 demo-test-nwc:
-	OPENRECEIVE_DEMO_MODE=test_nwc docker compose up --build
+	OPENRECEIVE_DEMO_MODE=test_nwc $(COMPOSE) up --build
 
 demo-production:
-	OPENRECEIVE_DEMO_MODE=production docker compose up --build
+	OPENRECEIVE_DEMO_MODE=production $(COMPOSE) up --build
 
 docker-build:
 	docker build -f Dockerfile -t $(IMAGE) ../../../..
 
 docker-run:
-	docker compose up
+	$(COMPOSE) up
 
 docker-smoke:
 	curl -fsS $(HEALTH_URL)

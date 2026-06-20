@@ -112,7 +112,21 @@ function validateCompose(demo) {
   expect(service.environment?.OPENRECEIVE_DEMO_MODE === "${OPENRECEIVE_DEMO_MODE:-test_nwc}", `${relativePath}: demo mode must default to test_nwc`);
   expect(service.environment?.OPENRECEIVE_DEPLOYED_AT === "${OPENRECEIVE_DEPLOYED_AT:-}", `${relativePath}: deployed_at metadata env must be pass-through`);
   expect(service.environment?.PORT === demo.port, `${relativePath}: PORT must be ${demo.port}`);
-  expect(ports.length === 1 && ports[0] === `${demo.port}:${demo.port}`, `${relativePath}: must publish only ${demo.port}:${demo.port}`);
+  expect((service.expose ?? []).length === 1 && service.expose[0] === demo.port, `${relativePath}: must expose only ${demo.port}`);
+  expect(ports.length === 0, `${relativePath}: stable compose must not publish host ports`);
+  expect(service.network_mode === undefined, `${relativePath}: must not use host networking`);
+  expect(JSON.stringify(service.volumes ?? []).includes("/var/run/docker.sock") === false, `${relativePath}: must not mount the Docker socket`);
+}
+
+function validateComposeOverride(demo) {
+  const relativePath = `${demo.dir}/compose.override.yml.example`;
+  const text = read(relativePath);
+  const compose = readYaml(relativePath);
+  const service = compose.services?.[demo.service] ?? {};
+  const ports = service.ports ?? [];
+
+  forbidSecrets(relativePath, text);
+  expect(ports.length === 1 && ports[0] === `${demo.port}:${demo.port}`, `${relativePath}: local override must publish ${demo.port}:${demo.port}`);
   expect(service.network_mode === undefined, `${relativePath}: must not use host networking`);
   expect(JSON.stringify(service.volumes ?? []).includes("/var/run/docker.sock") === false, `${relativePath}: must not mount the Docker socket`);
 }
@@ -141,7 +155,7 @@ function validateReadme(demo) {
   const text = read(relativePath);
 
   expect(text.includes("The browser never receives `OPENRECEIVE_NWC`."), `${relativePath}: must state browser NWC boundary`);
-  expect(text.includes("docker compose up --build"), `${relativePath}: must document compose startup`);
+  expect(text.includes("docker compose -f compose.yml -f compose.override.yml.example up --build"), `${relativePath}: must document compose startup with local override`);
   expect(text.includes("/demo-metadata.json"), `${relativePath}: must document demo metadata`);
 }
 
@@ -166,9 +180,10 @@ function validateMakefile(demo) {
   forbidSecrets(relativePath, text);
   expect(text.includes(`IMAGE ?= ${demo.image}`), `${relativePath}: image must default to ${demo.image}`);
   expect(text.includes(`HEALTH_URL ?= http://127.0.0.1:${demo.port}/healthz`), `${relativePath}: smoke URL must target /healthz on ${demo.port}`);
-  expect(text.includes("OPENRECEIVE_DEMO_MODE=test_nwc docker compose up --build"), `${relativePath}: demo-test-nwc must use compose test_nwc mode`);
-  expect(text.includes("OPENRECEIVE_DEMO_MODE=production docker compose up --build"), `${relativePath}: demo-production must use compose production mode`);
-  expect(text.includes("docker compose up"), `${relativePath}: docker-run must use docker compose`);
+  expect(text.includes("COMPOSE ?= docker compose -f compose.yml -f compose.override.yml.example"), `${relativePath}: local compose command must include override example`);
+  expect(text.includes("OPENRECEIVE_DEMO_MODE=test_nwc $(COMPOSE) up --build"), `${relativePath}: demo-test-nwc must use compose test_nwc mode`);
+  expect(text.includes("OPENRECEIVE_DEMO_MODE=production $(COMPOSE) up --build"), `${relativePath}: demo-production must use compose production mode`);
+  expect(text.includes("$(COMPOSE) up"), `${relativePath}: docker-run must use compose command`);
   expect(text.includes("curl -fsS $(HEALTH_URL)"), `${relativePath}: docker-smoke must curl HEALTH_URL`);
 }
 
@@ -195,6 +210,7 @@ for (const demo of demoContainers) {
   validateMakefile(demo);
   validateDockerfile(demo);
   validateCompose(demo);
+  validateComposeOverride(demo);
 }
 validateDockerignore();
 

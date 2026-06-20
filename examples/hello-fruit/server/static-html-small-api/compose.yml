@@ -12,5 +12,5 @@ services:
       OPENRECEIVE_GIT_SHA: ${OPENRECEIVE_GIT_SHA:-}
       OPENRECEIVE_IMAGE_DIGEST: ${OPENRECEIVE_IMAGE_DIGEST:-}
       PORT: "3001"
-    ports:
-      - "3001:3001"
+    expose:
+      - "3001"

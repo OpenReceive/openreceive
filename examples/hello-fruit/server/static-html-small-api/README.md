@@ -27,7 +27,7 @@ To run the container template locally:
 
 ```sh
 cp .env.example .env
-docker compose up --build
+docker compose -f compose.yml -f compose.override.yml.example up --build
 ```
 
 The Makefile exposes the standard demo commands: `make setup`, `make dev`,
