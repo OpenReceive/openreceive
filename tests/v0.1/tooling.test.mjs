@@ -7,6 +7,7 @@ import test from "node:test";
 
 const secretScanner = path.join(process.cwd(), "tools/validate/scan-secrets.mjs");
 const clientBundleScanner = path.join(process.cwd(), "tools/validate/scan-client-bundles.mjs");
+const demoContainerValidator = path.join(process.cwd(), "tools/validate/check-demo-containers.mjs");
 const liveNwcSmoke = path.join(process.cwd(), "tools/live-nwc-test/index.mjs");
 
 function withGitRepo(callback) {
@@ -36,6 +37,14 @@ function runClientBundleScanner(cwd) {
   });
 }
 
+function runDemoContainerValidator() {
+  return execFileSync(process.execPath, [demoContainerValidator], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+}
+
 function runLiveNwcSmoke(env) {
   const childEnv = {
     ...process.env,
@@ -52,6 +61,10 @@ function runLiveNwcSmoke(env) {
     stdio: ["ignore", "pipe", "pipe"]
   });
 }
+
+test("demo container validator accepts current Hello Fruit templates", () => {
+  assert.match(runDemoContainerValidator(), /Demo container validation passed for 2 demo\(s\)\./);
+});
 
 test("secret scanner rejects force-added non-example env files", () => {
   withGitRepo((dir) => {
