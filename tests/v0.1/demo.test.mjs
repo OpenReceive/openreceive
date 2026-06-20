@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { Readable } from "node:stream";
 import test from "node:test";
@@ -10,6 +10,10 @@ const productPath = path.join(
   process.cwd(),
   "examples/hello-fruit/shared/product.json"
 );
+const demoServerDirs = [
+  "examples/hello-fruit/server/node-express-react",
+  "examples/hello-fruit/server/static-html-small-api"
+];
 
 test("Hello Fruit shared product keeps demo invoices low-value", () => {
   const product = JSON.parse(readFileSync(productPath, "utf8"));
@@ -20,6 +24,24 @@ test("Hello Fruit shared product keeps demo invoices low-value", () => {
   assert.equal(product.amount_msats, 200000);
   assert.ok(product.amount_msats <= 1000000);
   assert.equal(product.invoice_expiry_seconds, 600);
+});
+
+test("Hello Fruit server demos keep secret-safe local setup docs", () => {
+  for (const demoDir of demoServerDirs) {
+    const envExamplePath = path.join(process.cwd(), demoDir, ".env.example");
+    const readmePath = path.join(process.cwd(), demoDir, "README.md");
+
+    assert.equal(existsSync(envExamplePath), true, `${demoDir}: .env.example`);
+    assert.equal(existsSync(readmePath), true, `${demoDir}: README.md`);
+
+    const envExample = readFileSync(envExamplePath, "utf8");
+    const readme = readFileSync(readmePath, "utf8");
+
+    assert.match(envExample, /^OPENRECEIVE_NWC=$/m, `${demoDir}: placeholder NWC`);
+    assert.doesNotMatch(envExample, /nostr\+walletconnect:\/\//);
+    assert.match(readme, /The browser never receives `OPENRECEIVE_NWC`\./);
+    assert.match(readme, /\/demo-metadata\.json/);
+  }
 });
 
 test("Hello Fruit demos fail closed without OPENRECEIVE_NWC", async () => {
