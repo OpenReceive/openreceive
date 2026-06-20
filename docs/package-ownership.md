@@ -1,18 +1,30 @@
 # Package Ownership Map
 
-This map reserves package areas without approving broad implementation before
-the v0.1 reference path is green.
+This map records current package ownership and which areas are safe for
+parallel work. Shared contract files still need lead coordination.
 
-| Area | Package or Path | v0.1 Status | Owner |
+| Area | Package or Path | Status | Owner |
 | --- | --- | --- | --- |
 | Contract schemas | `spec/schemas/**` | Active | Lead |
 | Test vectors | `spec/test-vectors/**` | Active | Lead |
-| JS core contracts | `packages/js/core` | Active | Lead |
-| Node receive SDK | `packages/js/node` | Next | JS worker |
-| Browser helpers | `packages/js/browser` | Next | Browser worker |
-| Express adapter | `packages/js/express` | Later in v0.1 | JS worker |
-| Provider data package | `packages/js/provider-data` | Deferred | Data worker |
+| JS core contracts | `packages/js/core` | Implemented, lead-owned | Lead |
+| Node receive SDK | `packages/js/node` | Implemented | JS worker |
+| Express adapter | `packages/js/express` | Implemented | JS worker |
+| Browser helpers | `packages/js/browser` | Implemented | Browser worker |
+| Elements package | `packages/js/elements` | Implemented | Browser worker |
+| React package | `packages/js/react` | Implemented | Frontend worker |
+| Provider data package | `packages/js/provider-data` | Implemented | Data worker |
+| Testkit package | `packages/js/testkit` | Implemented | Conformance worker |
+| Hello Fruit demos | `examples/hello-fruit/**` | Implemented | Demo worker |
 | Non-JS SDKs | `packages/python`, `packages/ruby`, etc. | Deferred | Ecosystem workers |
 
-Shared contract files stay lead-owned until the Express reference path proves
-invoice creation, polling, settlement verification, and fulfillment.
+Safe post-reference parallel lanes:
+
+- Provider-data API/test/doc polish that does not edit canonical provider data.
+- Testkit conformance helpers that do not change production package behavior.
+- API and security docs that use specs as source of truth.
+- Read-only conformance/security review.
+
+Do not let parallel workers independently edit shared schemas, vectors,
+settlement semantics, idempotency rules, or OpenAPI/AsyncAPI behavior without
+lead coordination.
