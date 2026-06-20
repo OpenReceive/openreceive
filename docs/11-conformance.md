@@ -9,8 +9,8 @@ or amount rules.
 - `spec/schemas/*.schema.json` define invoice, storage, payment event, rate
   quote, error, and provider-registry shapes.
 - `spec/test-vectors/*.json` define amount boundaries, error normalization,
-  fiat conversion, idempotency, invoice lifecycle, NWC URI parsing, polling
-  cadence, and settlement detection.
+  fiat conversion, idempotency, invoice lifecycle, NWC info/encryption parsing,
+  NWC URI parsing, polling cadence, and settlement detection.
 - `spec/openapi/openreceive-http.v1.yaml` defines mounted HTTP routes.
 - `spec/asyncapi/openreceive-events.v1.yaml` defines invoice event names and
   payloads.

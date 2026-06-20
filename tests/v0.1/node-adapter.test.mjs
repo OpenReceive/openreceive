@@ -6,6 +6,7 @@ import {
   ReceiveCheckoutValidationError,
   createAlbyNwcReceiveClient,
   normalizeNwcWalletError,
+  summarizeWalletCapabilities,
   startPaymentNotificationListener
 } from "../../packages/js/node/src/index.ts";
 
@@ -16,6 +17,9 @@ const NWC_URI =
   "2".repeat(64);
 const ERROR_NORMALIZATION_VECTORS = JSON.parse(
   readFileSync("spec/test-vectors/error-normalization.json", "utf8")
+);
+const NWC_INFO_VECTORS = JSON.parse(
+  readFileSync("spec/test-vectors/nwc-info.json", "utf8")
 );
 
 class FakeAlbyClient {
@@ -69,6 +73,45 @@ test("preflight summarizes receive readiness and warns on spend capability", asy
   assert.equal(summary.encryption, "nip44_v2");
   assert.equal(summary.spendCapabilityAdvertised, true);
   assert.match(summary.warnings[0], /pay_invoice/);
+});
+
+test("summarizes NWC info vectors for readiness and encryption", () => {
+  const connection = createAlbyNwcReceiveClient({
+    connectionString: NWC_URI,
+    client: new FakeAlbyClient(),
+    requirePreflight: false
+  }).connection;
+
+  for (const vector of NWC_INFO_VECTORS.cases) {
+    const summary = summarizeWalletCapabilities(connection, vector.raw_info);
+    assert.deepEqual(summary.methods, vector.expected.methods, vector.name);
+    assert.deepEqual(
+      summary.notifications,
+      vector.expected.notifications,
+      vector.name
+    );
+    assert.equal(summary.encryption, vector.expected.encryption, vector.name);
+    assert.equal(
+      summary.spendCapabilityAdvertised,
+      vector.expected.spend_capability_advertised,
+      vector.name
+    );
+    assert.equal(
+      summary.receiveCheckoutReady,
+      vector.expected.receive_checkout_ready,
+      vector.name
+    );
+    for (const method of vector.expected.warning_methods) {
+      assert.equal(
+        summary.warnings.some((warning) => warning.includes(method)),
+        true,
+        vector.name
+      );
+    }
+    if (vector.expected.warning_methods.length === 0) {
+      assert.equal(summary.warnings.length, 0, vector.name);
+    }
+  }
 });
 
 test("receive client maps amount_msats to NIP-47 amount and normalizes results", async () => {

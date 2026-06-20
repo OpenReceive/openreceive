@@ -218,6 +218,24 @@ function validateNwcVectors() {
   }
 }
 
+function validateNwcInfoVectors() {
+  const vector = readJson("spec/test-vectors/nwc-info.json");
+  assert(Array.isArray(vector.cases), "NWC info vectors must include cases");
+
+  const names = new Set(vector.cases.map((item) => item.name));
+  assert(names.has("advertised NIP-44 is preferred over NIP-04"), "missing NIP-44 preference vector");
+  assert(names.has("missing encryption falls back to NIP-04"), "missing NIP-04 fallback vector");
+
+  for (const item of vector.cases) {
+    const expected = item.expected || {};
+    assert(item.raw_info && typeof item.raw_info === "object", `${item.name}: raw_info must be an object`);
+    assert(Array.isArray(expected.methods), `${item.name}: expected methods are required`);
+    assert(expected.methods.includes("make_invoice"), `${item.name}: make_invoice expectation missing`);
+    assert(["nip04", "nip44_v2"].includes(expected.encryption), `${item.name}: expected encryption invalid`);
+    assert(typeof expected.receive_checkout_ready === "boolean", `${item.name}: receive readiness is required`);
+  }
+}
+
 function validateProviderRegistryReferences() {
   const registry = readJson("spec/data/providers/openreceive-providers.v2.json");
   assert(registry.schema_version === "2.0.0", "provider registry schema version mismatch");
@@ -411,6 +429,7 @@ function main() {
   validatePollingVectors();
   validateIdempotencyVectors();
   validateNwcVectors();
+  validateNwcInfoVectors();
   validateProviderRegistryReferences();
   validateData();
   validateOpenApi();

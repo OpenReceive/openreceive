@@ -1,0 +1,86 @@
+{
+  "schema_version": "0.1.0",
+  "rule": "wallet service info normalizes receive capabilities and encryption mode",
+  "cases": [
+    {
+      "name": "advertised NIP-44 is preferred over NIP-04",
+      "raw_info": {
+        "capabilities": [
+          "getInfo",
+          "make_invoice",
+          "lookupInvoice",
+          "pay_invoice"
+        ],
+        "notifications": [
+          "payment_received"
+        ],
+        "encryptions": [
+          "nip44_v2",
+          "nip04"
+        ]
+      },
+      "expected": {
+        "methods": [
+          "get_info",
+          "make_invoice",
+          "lookup_invoice",
+          "pay_invoice"
+        ],
+        "notifications": [
+          "payment_received"
+        ],
+        "encryption": "nip44_v2",
+        "spend_capability_advertised": true,
+        "receive_checkout_ready": true,
+        "warning_methods": [
+          "pay_invoice"
+        ]
+      }
+    },
+    {
+      "name": "missing encryption falls back to NIP-04",
+      "raw_info": {
+        "methods": "get_info make_invoice lookup_invoice",
+        "notifications": "payment_received"
+      },
+      "expected": {
+        "methods": [
+          "get_info",
+          "make_invoice",
+          "lookup_invoice"
+        ],
+        "notifications": [
+          "payment_received"
+        ],
+        "encryption": "nip04",
+        "spend_capability_advertised": false,
+        "receive_checkout_ready": true,
+        "warning_methods": []
+      }
+    },
+    {
+      "name": "missing lookup invoice is not receive checkout ready",
+      "raw_info": {
+        "methods": [
+          "get_info",
+          "make_invoice"
+        ],
+        "notifications": [],
+        "encryption": [
+          "nip04"
+        ]
+      },
+      "expected": {
+        "methods": [
+          "get_info",
+          "make_invoice"
+        ],
+        "notifications": [],
+        "encryption": "nip04",
+        "spend_capability_advertised": false,
+        "receive_checkout_ready": false,
+        "warning_methods": []
+      }
+    }
+  ]
+}
