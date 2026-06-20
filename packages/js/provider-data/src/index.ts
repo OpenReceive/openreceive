@@ -13,6 +13,13 @@ export interface Provider {
   readonly us: boolean | null;
   readonly lightning_docs_url: string | null;
   readonly icon_path: string;
+  readonly tutorials?: readonly ProviderTutorial[];
+}
+
+export interface ProviderTutorial {
+  readonly index: number;
+  readonly path: string;
+  readonly caption: string;
 }
 
 export interface ProviderRef {
@@ -362,6 +369,16 @@ export function validateRegistry(input: ProviderRegistry = registry): ProviderRe
     check(!disqualifiedIds.has(id), `provider ${id} appears in disqualified providers`);
 
     check(provider.lightning_docs_url === null || typeof provider.lightning_docs_url === "string", `provider ${id} has invalid docs url`);
+    if (provider.tutorials !== undefined) {
+      check(Array.isArray(provider.tutorials), `provider ${id} tutorials must be an array`);
+      let expectedIndex = 1;
+      for (const tutorial of provider.tutorials ?? []) {
+        check(tutorial.index === expectedIndex, `provider ${id} tutorials must be sequential`);
+        check(typeof tutorial.path === "string" && tutorial.path.startsWith("assets/pay_tutorials/"), `provider ${id} tutorial ${tutorial.index} has invalid path`);
+        check(typeof tutorial.caption === "string" && tutorial.caption.length > 0, `provider ${id} tutorial ${tutorial.index} missing caption`);
+        expectedIndex += 1;
+      }
+    }
   }
 
   for (const asset of input.assets_index ?? []) {

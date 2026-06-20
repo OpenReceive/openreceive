@@ -58,7 +58,9 @@ import {
   type OpenReceiveCheckoutController,
   type OpenReceiveCheckoutSnapshot,
   type OpenReceiveCheckoutState,
-  type OpenReceivePaymentWizardSelection
+  type OpenReceivePaymentWizardSelection,
+  type OpenReceiveWizardProviderDisplay,
+  type OpenReceiveWizardRouteDisplay
 } from "@openreceive/browser";
 
 export { parseOpenReceiveInvoiceEvent } from "@openreceive/browser";
@@ -93,6 +95,8 @@ export interface OpenReceiveElementsWizardView {
   readonly selectedCryptoRoute?: string | null;
   readonly selectedRegion?: OpenReceiveRegionId;
   readonly countryPickerOpen?: boolean;
+  readonly activeTutorialProviderId?: string | null;
+  readonly activeTutorialIndex?: number;
 }
 
 export interface DefineOpenReceiveElementsOptions {
@@ -237,7 +241,7 @@ export function renderOpenReceivePaymentWizardHtml(
 	                    </div>
 	                    <div part="provider-actions">
                       <button ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerCopy}="${escapeHtml(provider.id)}" type="button">${escapeHtml(provider.copyLabel)}</button>
-                      <a href="${escapeHtml(provider.url)}" rel="noreferrer" target="_blank">${escapeHtml(provider.openLabel)}</a>
+                      ${renderProviderOpenActionHtml(provider)}
                     </div>
                   </article>
                 `).join("")}
@@ -246,7 +250,83 @@ export function renderOpenReceivePaymentWizardHtml(
           `).join("")}
         </div>
       `}
+      ${renderTutorialModalHtml(routeDisplays, view.activeTutorialProviderId ?? null, view.activeTutorialIndex ?? 1)}
     </section>
+  `;
+}
+
+function renderProviderOpenActionHtml(provider: OpenReceiveWizardProviderDisplay): string {
+  if (provider.tutorials.length === 0) {
+    return `<a href="${escapeHtml(provider.url)}" rel="noreferrer" target="_blank">${escapeHtml(provider.openLabel)}</a>`;
+  }
+
+  return `
+    <button
+      part="provider-open"
+      ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}="${escapeHtml(provider.id)}"
+      ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex}="1"
+      type="button"
+    >${escapeHtml(provider.openLabel)}</button>
+  `;
+}
+
+function renderTutorialModalHtml(
+  routes: readonly OpenReceiveWizardRouteDisplay[],
+  activeProviderId: string | null,
+  activeTutorialIndex: number
+): string {
+  if (activeProviderId === null) return "";
+  const provider = routes
+    .flatMap((route) => route.providers)
+    .find((candidate) => candidate.id === activeProviderId);
+  if (provider === undefined || provider.tutorials.length === 0) return "";
+
+  const stepIndex = Math.max(1, Math.min(provider.tutorials.length, activeTutorialIndex));
+  const tutorial = provider.tutorials[stepIndex - 1];
+  if (tutorial === undefined) return "";
+  const previousIndex = Math.max(1, stepIndex - 1);
+  const nextIndex = Math.min(provider.tutorials.length, stepIndex + 1);
+
+  return `
+    <div part="tutorial" role="dialog" aria-modal="true" aria-label="${escapeHtml(openReceiveCheckoutLabels.tutorialTitlePrefix)} ${escapeHtml(provider.name)}" tabindex="-1">
+      <div part="tutorial-dialog">
+        <div part="tutorial-header">
+          <h3>${escapeHtml(openReceiveCheckoutLabels.tutorialTitlePrefix)} ${escapeHtml(provider.name)}</h3>
+          <button
+            part="tutorial-close"
+            ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}=""
+            type="button"
+            aria-label="Close"
+          >Close</button>
+        </div>
+        <div part="tutorial-frame">
+          <img part="tutorial-image" alt="${escapeHtml(tutorial.caption)}" src="${escapeHtml(tutorial.image)}">
+        </div>
+        <p part="tutorial-caption">${escapeHtml(tutorial.caption)}</p>
+        <div part="tutorial-steps" aria-hidden="true">
+          ${provider.tutorials.map((step) => `
+            <span part="${step.index === stepIndex ? "tutorial-step-active" : "tutorial-step"}"></span>
+          `).join("")}
+        </div>
+        <p part="tutorial-progress">Step ${stepIndex} of ${provider.tutorials.length}</p>
+        <div part="tutorial-controls">
+          <button
+            part="tutorial-nav"
+            ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}="${escapeHtml(provider.id)}"
+            ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex}="${previousIndex}"
+            type="button"
+            ${stepIndex === 1 ? "disabled" : ""}
+          >Back</button>
+          <button
+            part="tutorial-nav"
+            ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}="${escapeHtml(provider.id)}"
+            ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex}="${nextIndex}"
+            type="button"
+            ${stepIndex === provider.tutorials.length ? "disabled" : ""}
+          >Next</button>
+        </div>
+      </div>
+    </div>
   `;
 }
 
@@ -313,6 +393,8 @@ export function defineOpenReceiveElements(
       storedCountryCode: readOpenReceiveStoredCountryCode(),
       defaultCountryCode: getOpenReceiveDefaultCountryCode()
     });
+    private activeTutorialProviderId: string | null = null;
+    private activeTutorialIndex = 1;
     private controller: OpenReceiveCheckoutController | undefined;
     private announcedSettledPaymentHash: string | undefined;
 
@@ -385,7 +467,9 @@ export function defineOpenReceiveElements(
           selectedBitcoinRoute: this.selection.selectedBitcoinRoute,
           selectedCryptoRoute: this.selection.selectedCryptoRoute,
           selectedRegion: this.selection.selectedRegion,
-          countryPickerOpen: this.selection.countryPickerOpen
+          countryPickerOpen: this.selection.countryPickerOpen,
+          activeTutorialProviderId: this.activeTutorialProviderId,
+          activeTutorialIndex: this.activeTutorialIndex
         }
       });
 
@@ -618,6 +702,41 @@ export function defineOpenReceiveElements(
             .catch((error) => this.dispatchError(error));
         });
       });
+
+      root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.providerTutorial).forEach((button) => {
+        button.addEventListener("click", () => {
+          const providerId = button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial);
+          if (providerId === null) return;
+          if (providerId === "") {
+            this.activeTutorialProviderId = null;
+            this.activeTutorialIndex = 1;
+            this.render();
+            return;
+          }
+          const index = Number(
+            button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex) ?? "1"
+          );
+          this.activeTutorialProviderId = providerId;
+          this.activeTutorialIndex = Number.isSafeInteger(index) && index > 0 ? index : 1;
+          this.render();
+        });
+      });
+
+      const tutorial = root.querySelector('[part="tutorial"]');
+      tutorial?.addEventListener("click", (event) => {
+        if (event.target !== event.currentTarget) return;
+        this.activeTutorialProviderId = null;
+        this.activeTutorialIndex = 1;
+        this.render();
+      });
+      tutorial?.addEventListener("keydown", (event) => {
+        if (!(event instanceof KeyboardEvent)) return;
+        if (event.key !== "Escape" || this.activeTutorialProviderId === null) return;
+        this.activeTutorialProviderId = null;
+        this.activeTutorialIndex = 1;
+        this.render();
+      });
+      if (tutorial instanceof HTMLElement) tutorial.focus();
     }
 
     private dispatchError(error: unknown): void {

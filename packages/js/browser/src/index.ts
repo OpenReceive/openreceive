@@ -10,6 +10,7 @@ import {
   type Provider,
   type ResolvedProviderRef
 } from "@openreceive/provider-data";
+import { openReceivePayTutorialUrls } from "./pay-tutorials.ts";
 import { openReceiveProviderIconUrls } from "./provider-icons.ts";
 
 export const OPENRECEIVE_QR_QUIET_ZONE_MODULES = 4 as const;
@@ -48,7 +49,9 @@ export const OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES = {
   country: "data-or-country",
   switchCountry: "data-or-switch-country",
   route: "data-or-route",
-  providerCopy: "data-or-provider-copy"
+  providerCopy: "data-or-provider-copy",
+  providerTutorial: "data-or-provider-tutorial",
+  providerTutorialIndex: "data-or-provider-tutorial-index"
 } as const;
 export const OPENRECEIVE_PAYMENT_WIZARD_SELECTORS = {
   root: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.root}]`,
@@ -58,7 +61,9 @@ export const OPENRECEIVE_PAYMENT_WIZARD_SELECTORS = {
   country: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.country}]`,
   switchCountry: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.switchCountry}]`,
   route: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.route}]`,
-  providerCopy: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerCopy}]`
+  providerCopy: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerCopy}]`,
+  providerTutorial: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}]`,
+  providerTutorialIndex: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex}]`
 } as const;
 export const OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES = {
   root: "data-openreceive-checkout",
@@ -867,11 +872,19 @@ export interface OpenReceiveWizardRouteAssetDisplay {
   readonly selected: boolean;
 }
 
+export interface OpenReceiveWizardProviderTutorialDisplay {
+  readonly index: number;
+  readonly path: string;
+  readonly image: string;
+  readonly caption: string;
+}
+
 export interface OpenReceiveWizardProviderDisplay {
   readonly id: string;
   readonly name: string;
   readonly url: string;
   readonly icon: string;
+  readonly tutorials: readonly OpenReceiveWizardProviderTutorialDisplay[];
   readonly recommended: boolean;
   readonly recommendedLabel: string | null;
   readonly usBadge: string | null;
@@ -907,6 +920,7 @@ export const openReceiveCheckoutLabels = {
   emptyFiat: "No providers found for this country yet.",
   recommended: "Recommended",
   openProvider: "How To Pay",
+  tutorialTitlePrefix: "Pay a Lightning invoice with",
   lightningNetwork: "Lightning Network",
   chooseCountry: "Choose a country"
 } as const;
@@ -1186,7 +1200,8 @@ export const openReceiveCheckoutElementStyles = `
   }
 
   button,
-  a[part="open"] {
+  a[part="open"],
+  button[part="provider-open"] {
     align-items: center;
     border: 1px solid var(--or-text);
     border-radius: 6px;
@@ -1205,9 +1220,116 @@ export const openReceiveCheckoutElementStyles = `
     background: var(--or-bg);
   }
 
-  a[part="open"] {
+  a[part="open"],
+  button[part="provider-open"] {
     background: var(--or-text);
     color: var(--or-bg);
+  }
+
+  [part="tutorial"] {
+    align-items: center;
+    background: rgb(0 0 0 / 0.6);
+    display: flex;
+    inset: 0;
+    justify-content: center;
+    padding: 16px;
+    position: fixed;
+    z-index: 10;
+  }
+
+  [part="tutorial"][hidden] {
+    display: none;
+  }
+
+  [part="tutorial-dialog"] {
+    background: var(--or-bg);
+    border: 1px solid var(--or-border);
+    border-radius: 8px;
+    box-shadow: 0 20px 70px rgb(0 0 0 / 0.32);
+    box-sizing: border-box;
+    display: grid;
+    gap: 12px;
+    max-height: min(92vh, 900px);
+    max-width: min(440px, 100%);
+    min-width: 0;
+    overflow: hidden;
+    padding: 12px;
+    width: 100%;
+  }
+
+  [part="tutorial-header"],
+  [part="tutorial-controls"] {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+  }
+
+  [part="tutorial-header"] h3 {
+    font-size: 16px;
+    line-height: 1.25;
+    min-width: 0;
+  }
+
+  [part="tutorial-close"] {
+    flex: 0 0 auto;
+    min-height: 36px;
+    padding: 6px 10px;
+  }
+
+  [part="tutorial-frame"] {
+    align-items: center;
+    background: var(--or-bg-soft);
+    border: 1px solid var(--or-border);
+    border-radius: 8px;
+    display: flex;
+    justify-content: center;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  [part="tutorial-image"] {
+    display: block;
+    height: auto;
+    max-height: min(66vh, 720px);
+    max-width: 100%;
+    object-fit: contain;
+    width: auto;
+  }
+
+  [part="tutorial-caption"] {
+    color: var(--or-text);
+    font-size: 16px;
+    font-weight: 700;
+    text-align: center;
+  }
+
+  [part="tutorial-progress"] {
+    color: var(--or-muted);
+    font-size: 12px;
+    text-align: center;
+  }
+
+  [part="tutorial-steps"] {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+  }
+
+  [part="tutorial-step"],
+  [part="tutorial-step-active"] {
+    background: var(--or-border);
+    border-radius: 999px;
+    height: 7px;
+    width: 7px;
+  }
+
+  [part="tutorial-step-active"] {
+    background: var(--or-text);
+  }
+
+  [part="tutorial-nav"] {
+    flex: 1 1 0;
   }
 
 	  @media (max-width: 420px) {
@@ -1217,6 +1339,20 @@ export const openReceiveCheckoutElementStyles = `
     [part="provider-grid"],
     [part="provider-actions"] {
       grid-template-columns: 1fr;
+    }
+
+    [part="tutorial"] {
+      align-items: stretch;
+      padding: 8px;
+    }
+
+    [part="tutorial-dialog"] {
+      max-height: calc(100vh - 16px);
+    }
+
+    [part="tutorial-controls"] {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
     }
   }
 
@@ -1606,6 +1742,17 @@ export function getOpenReceiveProviderIcon(
   return openReceiveProviderIconUrls[provider.icon_path] ?? openReceivePaymentIconUrls.crypto;
 }
 
+export function getOpenReceiveProviderTutorials(
+  provider: Pick<Provider, "tutorials">
+): readonly OpenReceiveWizardProviderTutorialDisplay[] {
+  return (provider.tutorials ?? []).map((tutorial) => ({
+    index: tutorial.index,
+    path: tutorial.path,
+    image: openReceivePayTutorialUrls[tutorial.path] ?? tutorial.path,
+    caption: tutorial.caption
+  }));
+}
+
 export function getOpenReceiveRouteNetworkLabel(routeId: string): string {
   return routeId === "lightning" || routeId === "btc-lightning"
     ? openReceiveCheckoutLabels.lightningNetwork
@@ -1672,6 +1819,7 @@ function createOpenReceiveWizardProviderDisplay(
     name: entry.provider.name,
     url: entry.provider.lightning_docs_url ?? entry.provider.url,
     icon: getOpenReceiveProviderIcon(entry.provider),
+    tutorials: getOpenReceiveProviderTutorials(entry.provider),
     recommended: entry.flagship,
     recommendedLabel: entry.flagship ? openReceiveCheckoutLabels.recommended : null,
     usBadge: null,

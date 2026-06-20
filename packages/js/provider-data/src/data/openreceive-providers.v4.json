@@ -10,7 +10,8 @@
       "url": "homepage",
       "us": "true=US-available, false=US-excluded, null=unknown",
       "lightning_docs_url": "official how-to-pay/send Lightning invoice page, or null",
-      "icon_path": "repo-local icon path used by browser UI"
+      "icon_path": "repo-local icon path used by browser UI",
+      "tutorials": "optional ordered app-specific payment tutorial screenshots"
     },
     "route_ref_fields": {
       "provider": "provider id",
@@ -136,7 +137,29 @@
       "url": "https://strike.me",
       "us": true,
       "lightning_docs_url": "https://docs.strike.me/walkthrough/sending-payments/",
-      "icon_path": "assets/provider-icons/strike.png"
+      "icon_path": "assets/provider-icons/strike.png",
+      "tutorials": [
+        {
+          "index": 1,
+          "path": "assets/pay_tutorials/strike-1.webp",
+          "caption": "Tap Send"
+        },
+        {
+          "index": 2,
+          "path": "assets/pay_tutorials/strike-2.webp",
+          "caption": "Choose Bitcoin wallet"
+        },
+        {
+          "index": 3,
+          "path": "assets/pay_tutorials/strike-3.webp",
+          "caption": "Tap Paste"
+        },
+        {
+          "index": 4,
+          "path": "assets/pay_tutorials/strike-4.webp",
+          "caption": "Confirm the payment"
+        }
+      ]
     },
     "aqua": {
       "id": "aqua",
@@ -216,7 +239,39 @@
       "url": "https://cash.app",
       "us": true,
       "lightning_docs_url": "https://cash.app/help/us/en-US/6506-lightning",
-      "icon_path": "assets/provider-icons/cashapp.png"
+      "icon_path": "assets/provider-icons/cashapp.png",
+      "tutorials": [
+        {
+          "index": 1,
+          "path": "assets/pay_tutorials/cashapp-1.webp",
+          "caption": "Tap your Bitcoin balance"
+        },
+        {
+          "index": 2,
+          "path": "assets/pay_tutorials/cashapp-2.webp",
+          "caption": "Tap the transfer button"
+        },
+        {
+          "index": 3,
+          "path": "assets/pay_tutorials/cashapp-3.webp",
+          "caption": "Choose Send"
+        },
+        {
+          "index": 4,
+          "path": "assets/pay_tutorials/cashapp-4.webp",
+          "caption": "Tap the QR scanner"
+        },
+        {
+          "index": 5,
+          "path": "assets/pay_tutorials/cashapp-5.webp",
+          "caption": "Paste the invoice"
+        },
+        {
+          "index": 6,
+          "path": "assets/pay_tutorials/cashapp-6.webp",
+          "caption": "Confirm and pay"
+        }
+      ]
     },
     "river": {
       "id": "river",

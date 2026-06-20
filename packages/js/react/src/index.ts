@@ -43,6 +43,7 @@ import {
   type OpenReceiveRefreshInvoiceResult,
   type OpenReceiveResolvedTheme,
   type OpenReceiveWizardRouteAssetDisplay,
+  type OpenReceiveWizardProviderDisplay,
   type OpenReceiveTransientFeedbackController,
   type OpenReceiveThemeModel,
   type OpenReceiveThemePreference
@@ -852,6 +853,10 @@ export function OpenReceivePaymentWizard(
   );
   const [copiedProviderId, showCopiedProviderId] =
     useOpenReceiveTransientValue<string | null>(null);
+  const [activeTutorial, setActiveTutorial] = React.useState<{
+    readonly providerId: string;
+    readonly index: number;
+  } | null>(null);
   const updateWizardSelection = React.useCallback(
     (
       apply: (
@@ -873,6 +878,11 @@ export function OpenReceivePaymentWizard(
     selectedRoute: model.selectedRoute
   });
   const routeDisplays = createOpenReceiveWizardRouteDisplays(wizard.routes);
+  const activeTutorialProvider = activeTutorial === null
+    ? undefined
+    : routeDisplays
+      .flatMap((route) => route.providers)
+      .find((provider) => provider.id === activeTutorial.providerId);
 
   const copyForProvider = async (providerId: string) => {
     try {
@@ -1049,12 +1059,8 @@ export function OpenReceivePaymentWizard(
                       ),
                       React.createElement(
                         "a",
-                        {
-                          href: provider.url,
-                          rel: "noreferrer",
-                          target: "_blank"
-                        },
-                        provider.openLabel
+                        {},
+                        ""
                       )
                     )
                   )
@@ -1062,7 +1068,18 @@ export function OpenReceivePaymentWizard(
               )
             )
           )
-      )
+      ),
+    activeTutorialProvider === undefined || activeTutorial === null
+      ? null
+      : renderProviderTutorialModal({
+        provider: activeTutorialProvider,
+        index: activeTutorial.index,
+        onClose: () => setActiveTutorial(null),
+        onStep: (index) => setActiveTutorial({
+          providerId: activeTutorialProvider.id,
+          index
+        })
+      })
   );
 }
 
