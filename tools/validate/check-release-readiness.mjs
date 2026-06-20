@@ -66,7 +66,8 @@ expect(/^## 0\.1\.0 - Unreleased$/m.test(changelog), "CHANGELOG.md: missing 0.1.
 for (const phrase of [
   "demo deployment templates",
   "public demo deployment docs",
-  "deterministic mock wallet"
+  "deterministic mock wallet",
+  "workflow safety validation"
 ]) {
   expect(changelog.includes(phrase), `CHANGELOG.md: missing ${phrase} entry`);
 }
@@ -81,6 +82,9 @@ for (const phrase of [
   "npm run test:ci",
   "Changelog updated.",
   "Package versions match the intended tag.",
+  "Workflow safety validation passes through `npm run check:workflows`.",
+  ".github/workflows/release.yml",
+  ".github/workflows/publish.yml",
   "Live wallet smoke passes when a trusted `OPENRECEIVE_NWC` is available.",
   "Do not publish"
 ]) {

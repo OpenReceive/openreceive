@@ -12,6 +12,8 @@
   metadata/smoke checks.
 - Added OpenAPI, AsyncAPI, generated contract constants, package artifact smoke,
   demo build, docs build, client-bundle secret scan, and live NWC smoke gates.
+- Added read-only GitHub workflow skeletons, disabled publish workflow, and
+  workflow safety validation.
 - Added Express auth, CSRF, idempotency, signed event URL, fulfillment, rate,
   provider-route, and security regression coverage.
 - Added deterministic mock wallet tooling for non-payable conformance fixtures.

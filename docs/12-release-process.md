@@ -30,9 +30,30 @@ The release owner also checks:
 - JSON schemas and test vectors pass.
 - OpenAPI and AsyncAPI validation passes through `npm run validate`.
 - Secret scan passes.
+- Workflow safety validation passes through `npm run check:workflows`.
 - Local package artifact smoke passes.
 - Demo build passes.
 - Live wallet smoke passes when a trusted `OPENRECEIVE_NWC` is available.
+
+## GitHub Workflows
+
+The repository reserves these public workflow skeletons before publishing is
+enabled:
+
+- `.github/workflows/ci.yml` runs the full local gate.
+- `.github/workflows/conformance.yml` runs contract, generated-model, JS, and
+  mock-wallet checks.
+- `.github/workflows/demos.yml` validates and builds demo artifacts without
+  injecting wallet secrets.
+- `.github/workflows/provider-registry.yml` validates canonical provider data.
+- `.github/workflows/security.yml` runs secret and client-bundle boundary
+  checks.
+- `.github/workflows/release.yml` is a release dry run only.
+- `.github/workflows/publish.yml` keeps publishing disabled until explicit
+  maintainer approval.
+
+`npm run check:workflows` requires read-only workflow permissions, expected
+commands, concurrency groups, and the disabled publish path.
 
 ## Suggested Tags
 

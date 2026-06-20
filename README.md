@@ -52,6 +52,12 @@ Validate release-readiness metadata:
 npm run check:release
 ```
 
+Validate public workflow skeletons:
+
+```sh
+npm run check:workflows
+```
+
 Start the deterministic, non-payable mock wallet for conformance testing:
 
 ```sh
