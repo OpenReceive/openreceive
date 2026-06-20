@@ -8,13 +8,13 @@ The browser never receives `OPENRECEIVE_NWC`.
 ## Run
 
 ```sh
-cp .env.example .env
-# Set OPENRECEIVE_NWC to a receive-capable NWC connection string.
 npm install
 npm run dev
 ```
 
 Open the Vite URL and create a tiny fruit-sticker invoice.
+For live invoices without Docker, run the dev server with `OPENRECEIVE_NWC`
+already present in the process environment.
 
 For a production-style local run, build the client and start the Express server:
 
@@ -26,9 +26,14 @@ npm start
 To run the container template locally:
 
 ```sh
-cp .env.example .env
+cp ../../../../.env.example ../../../../.env
+# Set OPENRECEIVE_NWC in the repository root .env file.
 docker compose -f compose.yml -f compose.override.yml.example up --build
 ```
+
+Docker loads the repository root `.env` file, so the same
+`OPENRECEIVE_NWC` value can be shared across all local Hello Fruit demos
+without demo-local env files.
 
 The Makefile exposes the standard demo commands: `make setup`, `make dev`,
 `make test`, `make demo-test-nwc`, `make demo-production`,

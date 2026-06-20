@@ -100,6 +100,7 @@ test("Hello Fruit server demos keep secret-safe local setup docs", () => {
     assert.match(readme, /compose\.override\.yml\.example up --build/);
     assert.match(dockerfile, /CMD \["npm", "start"\]/);
     assert.match(compose, /env_file:/);
+    assert.match(compose, /path:\s+\.\.\/\.\.\/\.\.\/\.\.\/\.env/);
     assert.match(compose, /expose:/);
     assert.doesNotMatch(compose, /ports:/);
     assert.match(composeOverride, /ports:/);

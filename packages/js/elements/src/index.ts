@@ -6,6 +6,9 @@ import {
   openWallet
 } from "@openreceive/browser";
 
+export { parseOpenReceiveInvoiceEvent } from "@openreceive/browser";
+export type { OpenReceiveInvoiceEventPayload } from "@openreceive/browser";
+
 export interface OpenReceiveCheckoutView {
   readonly invoice: string;
   readonly payment_hash?: string;

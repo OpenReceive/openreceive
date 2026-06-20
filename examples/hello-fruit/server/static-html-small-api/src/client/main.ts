@@ -1,4 +1,7 @@
-import { defineOpenReceiveElements } from "@openreceive/elements";
+import {
+  defineOpenReceiveElements,
+  parseOpenReceiveInvoiceEvent
+} from "@openreceive/elements";
 import fruitsData from "../../../../shared/fruits.json";
 import product from "../../../../shared/product.json";
 import "./styles.css";
@@ -130,10 +133,34 @@ function renderInvoice(nextInvoice: InvoiceResponse): void {
 }
 
 function watchInvoice(nextInvoice: InvoiceResponse): void {
+  // Passive SSE hints must match the current invoice (invoice_id and
+  // payment_hash) before they may touch the UI; events never fulfill.
+  const matchesCurrentInvoice = (data: unknown): boolean => {
+    try {
+      const parsed = parseOpenReceiveInvoiceEvent(data as string);
+      if (parsed.invoice_id !== nextInvoice.invoice_id) return false;
+      if (
+        parsed.payment_hash !== undefined &&
+        parsed.payment_hash !== nextInvoice.payment_hash
+      ) {
+        return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   if (nextInvoice.checkout?.events_url !== undefined) {
     events = new EventSource(nextInvoice.checkout.events_url);
-    events.addEventListener("invoice.settled", () => updateInvoiceState("settled"));
-    events.addEventListener("invoice.expired", () => updateInvoiceState("expired"));
+    events.addEventListener("invoice.settled", (event) => {
+      if (!matchesCurrentInvoice((event as MessageEvent).data)) return;
+      updateInvoiceState("settled");
+    });
+    events.addEventListener("invoice.expired", (event) => {
+      if (!matchesCurrentInvoice((event as MessageEvent).data)) return;
+      updateInvoiceState("expired");
+    });
     events.onerror = () => events?.close();
   }
 

@@ -233,6 +233,8 @@ export function mountOpenReceiveExpressRoutes(
 export function createOpenReceiveExpressHandlers(
   options: OpenReceiveExpressOptions
 ): OpenReceiveExpressHandlers {
+  assertSafeDemoModeConfiguration(options);
+
   const store = options.store ?? new InMemoryInvoiceStore();
   const eventBus = options.eventBus ?? new InMemoryInvoiceEventBus();
   const clock = options.clock ?? currentUnixSeconds;
@@ -339,12 +341,21 @@ export function createOpenReceiveExpressHandlers(
       await requireAuthorization(options, "lookup", req, invoice);
       await requireCsrf(options, req);
 
+      let current = invoice;
+      if (invoice.workflow_state === "invoice_created") {
+        current = store.markVerifying(invoice.invoice_id);
+        eventBus.publish(
+          current.invoice_id,
+          "invoice.verifying",
+          serializeEventData(current)
+        );
+      }
+
       const lookup = await options.client.lookupInvoice({
         payment_hash: optionalString(body.payment_hash),
         invoice: optionalString(body.invoice)
       });
 
-      let current = invoice;
       if (lookup.settled_at !== undefined || lookup.state === "settled" || lookup.transaction_state === "settled") {
         current = store.markSettled({
           invoice_id: invoice.invoice_id,
@@ -1031,6 +1042,22 @@ async function requireCsrf(
   const verified = await options.csrf.verify(req);
   if (!verified) {
     throw httpError(403, "UNAUTHORIZED", "CSRF verification failed.");
+  }
+}
+
+function assertSafeDemoModeConfiguration(
+  options: OpenReceiveExpressOptions
+): void {
+  if (options.unsafeAllowUnauthenticatedDemoMode !== true) return;
+
+  const env = globalThis.process?.env ?? {};
+  const mode = (env.OPENRECEIVE_MODE ?? env.NODE_ENV ?? "").toLowerCase();
+  if (mode === "production") {
+    throw new Error(
+      "OpenReceive refuses unsafeAllowUnauthenticatedDemoMode when " +
+        "OPENRECEIVE_MODE or NODE_ENV is production. Configure auth hooks " +
+        "and fail closed instead of disabling authorization."
+    );
   }
 }
 

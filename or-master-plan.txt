@@ -4982,3 +4982,7 @@ First work to actually start:
 
 Only after that should multiple coding workers be allowed, and even then only
 on isolated directories with strict ownership.
+
+---- more notes i added
+i wanto see sufficient logging on both client and server side so I can see things in action
+espeically on the serfver... 

@@ -4,7 +4,7 @@ services:
       context: ../../../..
       dockerfile: examples/hello-fruit/server/static-html-small-api/Dockerfile
     env_file:
-      - path: ./.env
+      - path: ../../../../.env
         required: false
     environment:
       OPENRECEIVE_DEMO_MODE: ${OPENRECEIVE_DEMO_MODE:-test_nwc}

@@ -311,7 +311,7 @@ function normalizeBtcFiatRate(value: unknown, fieldName: string): string {
     if (!Number.isFinite(value) || value <= 0) {
       throw new RangeError(`${fieldName} must be a positive number`);
     }
-    const normalized = value.toString();
+    const normalized = numberToPlainDecimalString(value);
     assertPositiveDecimal(normalized, fieldName);
     return normalized;
   }
@@ -330,4 +330,33 @@ function asRecord(value: unknown): Record<string, unknown> {
   }
 
   return value as Record<string, unknown>;
+}
+
+// Expand a positive finite JS number to plain decimal notation so any integer
+// or decimal JSON number an upstream price source returns is accepted, even
+// when Number.toString() would emit exponential form (>= 1e21 or < 1e-6).
+function numberToPlainDecimalString(value: number): string {
+  const text = value.toString();
+  if (!/[eE]/.test(text)) return text;
+
+  const [mantissa, exponentText] = text.split(/[eE]/);
+  const exponent = Number(exponentText);
+  const [intPart, fractionPart = ""] = mantissa.split(".");
+  const digits = `${intPart}${fractionPart}`;
+  const pointIndex = intPart.length + exponent;
+
+  let result: string;
+  if (pointIndex <= 0) {
+    result = `0.${"0".repeat(-pointIndex)}${digits}`;
+  } else if (pointIndex >= digits.length) {
+    result = `${digits}${"0".repeat(pointIndex - digits.length)}`;
+  } else {
+    result = `${digits.slice(0, pointIndex)}.${digits.slice(pointIndex)}`;
+  }
+
+  if (result.includes(".")) {
+    result = result.replace(/0+$/, "").replace(/\.$/, "");
+  }
+
+  return result;
 }

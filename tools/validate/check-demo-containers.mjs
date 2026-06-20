@@ -122,7 +122,7 @@ function validateCompose(demo) {
   expect(serviceNames[0] === demo.service, `${relativePath}: service name must be ${demo.service}`);
   expect(service.build?.context === "../../../..", `${relativePath}: build context must be the repo root`);
   expect(service.build?.dockerfile === `${demo.dir}/Dockerfile`, `${relativePath}: dockerfile path must target the demo Dockerfile`);
-  expect(envFile?.path === "./.env" && envFile?.required === false, `${relativePath}: .env must be optional runtime env_file`);
+  expect(envFile?.path === "../../../../.env" && envFile?.required === false, `${relativePath}: root .env must be optional runtime env_file`);
   expect(service.environment?.OPENRECEIVE_DEMO_MODE === "${OPENRECEIVE_DEMO_MODE:-test_nwc}", `${relativePath}: demo mode must default to test_nwc`);
   expect(service.environment?.OPENRECEIVE_DEPLOYED_AT === "${OPENRECEIVE_DEPLOYED_AT:-}", `${relativePath}: deployed_at metadata env must be pass-through`);
   expect(service.environment?.PORT === demo.port, `${relativePath}: PORT must be ${demo.port}`);

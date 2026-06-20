@@ -188,6 +188,16 @@ export class InMemoryInvoiceStore {
     return invoiceId === undefined ? undefined : this.getInvoice(invoiceId);
   }
 
+  markVerifying(invoiceId: string): InvoiceStorageRow {
+    const row = this.requireStoredInvoice(invoiceId);
+
+    if (row.workflow_state === "invoice_created") {
+      row.workflow_state = "verifying";
+    }
+
+    return cloneInvoiceStorageRow(row);
+  }
+
   markSettled(input: {
     invoice_id: string;
     settled_at?: number;

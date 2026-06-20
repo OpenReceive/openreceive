@@ -8,19 +8,24 @@ look up invoices through server-side OpenReceive helpers.
 
 ```sh
 npm install
-cp .env.example .env
 npm run dev
 ```
 
-Leave `OPENRECEIVE_NWC` empty to inspect the UI and fail-closed API behavior.
-Set it only in a gitignored local env file or host secret before creating live
-invoices.
+Leave `OPENRECEIVE_NWC` unset to inspect the UI and fail-closed API behavior.
+For live invoices without Docker, run the dev server with `OPENRECEIVE_NWC`
+already present in the process environment.
 
 ## Container
 
 ```sh
+cp ../../../../.env.example ../../../../.env
+# Set OPENRECEIVE_NWC in the repository root .env file.
 docker compose -f compose.yml -f compose.override.yml.example up --build
 ```
+
+Docker loads the repository root `.env` file, so the same
+`OPENRECEIVE_NWC` value can be shared across all local Hello Fruit demos
+without demo-local env files.
 
 The production container exposes only port `3002` to the Docker network unless
 the local override is used.

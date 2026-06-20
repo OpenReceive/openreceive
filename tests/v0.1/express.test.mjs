@@ -424,7 +424,11 @@ test("client-supplied settlement fields cannot trigger fulfillment", async () =>
   const stored = store.getInvoice(createRes.body.invoice_id);
   assert.equal(lookupRes.statusCode, 200);
   assert.equal(lookupRes.body.transaction_state, "pending");
-  assert.equal(lookupRes.body.workflow_state, "invoice_created");
+  // A lookup is the server verifying via lookup_invoice, so the workflow moves
+  // invoice_created -> verifying. Crucially, the unverified (still pending)
+  // wallet result keeps transaction_state pending and never fulfills, even
+  // though the client put settlement fields in the request body.
+  assert.equal(lookupRes.body.workflow_state, "verifying");
   assert.equal(stored.transaction_state, "pending");
   assert.equal(stored.fulfillment_state, "pending");
   assert.equal(fulfillCalls, 0);

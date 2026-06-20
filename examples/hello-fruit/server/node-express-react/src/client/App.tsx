@@ -3,7 +3,8 @@ import { createRoot } from "react-dom/client";
 import {
   copyInvoice,
   createQrSvg,
-  openWallet
+  openWallet,
+  parseOpenReceiveInvoiceEvent
 } from "@openreceive/browser";
 import fruitsData from "../../../../shared/fruits.json";
 import product from "../../../../shared/product.json";
@@ -45,13 +46,34 @@ function App() {
         setError(cause instanceof Error ? cause.message : String(cause));
       });
 
+    // Events are passive UI hints; verify they belong to the current invoice
+    // (invoice_id and payment_hash) before changing UI state, and never let the
+    // frontend treat an event as proof of fulfillment.
+    const matchesCurrentInvoice = (data: unknown): boolean => {
+      try {
+        const parsed = parseOpenReceiveInvoiceEvent(data as string);
+        if (parsed.invoice_id !== invoice.invoice_id) return false;
+        if (
+          parsed.payment_hash !== undefined &&
+          parsed.payment_hash !== invoice.payment_hash
+        ) {
+          return false;
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
     const events = new EventSource(invoice.checkout.events_url);
-    events.addEventListener("invoice.settled", () => {
+    events.addEventListener("invoice.settled", (event) => {
+      if (!matchesCurrentInvoice((event as MessageEvent).data)) return;
       stopped = true;
       setStatus("settled");
       events.close();
     });
-    events.addEventListener("invoice.expired", () => {
+    events.addEventListener("invoice.expired", (event) => {
+      if (!matchesCurrentInvoice((event as MessageEvent).data)) return;
       stopped = true;
       setStatus("expired");
       events.close();

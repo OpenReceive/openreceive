@@ -232,6 +232,11 @@ export async function createQrPngDataUrl(
   return String(png);
 }
 
+// Spec-named alias for the canonical QR helper trio
+// (createQrSvg / createQrPng / createLightningUri). createQrPng returns a
+// PNG data URL using the same safe quiet-zone, contrast, and payload defaults.
+export const createQrPng = createQrPngDataUrl;
+
 export async function copyInvoice(options: CopyInvoiceOptions): Promise<void> {
   assertInvoice(options.invoice);
   const clipboard = options.clipboard ?? globalThis.navigator?.clipboard;

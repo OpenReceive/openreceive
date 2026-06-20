@@ -83,7 +83,7 @@
         "invoice": "lnbc-lookup",
         "payment_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
         "amount_msats": 200000,
-        "state": "settled",
+        "transaction_state": "settled",
         "settled_at": 1200,
         "preimage": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
       }

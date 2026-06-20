@@ -304,6 +304,76 @@ test("payment notification listener does not fulfill unsettled lookup results", 
   assert.equal(unsettled[0].lookup.state, "pending");
 });
 
+test("payment notification listener re-verifies a redelivered notification after a transient lookup error", async () => {
+  const settled = [];
+  const errors = [];
+  let lookupCalls = 0;
+  const client = {
+    handler: undefined,
+    async subscribeToPaymentReceived(handler) {
+      this.handler = handler;
+      return () => {};
+    },
+    async lookupInvoice({ payment_hash }) {
+      lookupCalls += 1;
+      if (lookupCalls === 1) {
+        throw new Error("transient relay timeout");
+      }
+      return { payment_hash, state: "settled", settled_at: 1300 };
+    }
+  };
+
+  const listener = await startPaymentNotificationListener({
+    client,
+    onSettledInvoice: (event) => settled.push(event),
+    onError: (error) => errors.push(error)
+  });
+
+  const notification = { payment_hash: "a".repeat(64), amount_msats: 200000n };
+  // At-least-once: the first delivery fails verification (transient error) and
+  // must NOT mark the hash seen, so the redelivery re-triggers lookup + credit.
+  await client.handler(notification);
+  await client.handler(notification);
+
+  assert.equal(lookupCalls, 2);
+  assert.equal(errors.length, 1);
+  assert.equal(settled.length, 1);
+  assert.equal(listener.seenPaymentHashes.has("a".repeat(64)), true);
+
+  // A third delivery after a credited settlement is now deduped.
+  await client.handler(notification);
+  assert.equal(lookupCalls, 2);
+  assert.equal(settled.length, 1);
+});
+
+test("receive client normalizes legacy boolean settled/paid lookup variants", async () => {
+  const fake = new FakeAlbyClient();
+  const client = createAlbyNwcReceiveClient({
+    connectionString: NWC_URI,
+    client: fake
+  });
+
+  fake.nextResponse = {
+    invoice: "lnbc-bool",
+    payment_hash: "a".repeat(64),
+    amount_msats: 200000,
+    settled: true
+  };
+  const settledLookup = await client.lookupInvoice({ payment_hash: "a".repeat(64) });
+  assert.equal(settledLookup.transaction_state, "settled");
+  assert.equal(settledLookup.state, undefined);
+
+  fake.nextResponse = {
+    invoice: "lnbc-paid",
+    payment_hash: "b".repeat(64),
+    amount_msats: 200000,
+    paid: true
+  };
+  const paidLookup = await client.lookupInvoice({ payment_hash: "b".repeat(64) });
+  assert.equal(paidLookup.transaction_state, "settled");
+  assert.equal(paidLookup.state, undefined);
+});
+
 class FakeNotificationClient {
   handler = undefined;
   lookupCalls = 0;

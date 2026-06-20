@@ -404,11 +404,14 @@ function normalizeLookupInvoiceResult(rawResult: unknown): LookupInvoiceResult {
     );
   }
 
-  const state = normalizeTransactionState(result.state);
-  const transactionState = normalizeTransactionState(
-    result.transaction_state ?? result.transactionState
-  );
-  if (state !== undefined) normalized.state = state;
+  // Map NIP-47 result.state (and camelCase variants) to OpenReceive
+  // transaction_state at the adapter boundary so OpenReceive payloads never
+  // carry a bare NIP-47 `state` field. Also normalize legacy boolean variants
+  // such as settled === true / paid === true that some wallet libraries emit.
+  const transactionState =
+    normalizeTransactionState(
+      result.transaction_state ?? result.transactionState ?? result.state
+    ) ?? (result.settled === true || result.paid === true ? "settled" : undefined);
   if (transactionState !== undefined) {
     normalized.transaction_state = transactionState;
   }
