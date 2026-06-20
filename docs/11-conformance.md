@@ -94,6 +94,12 @@ and adapter tests. It can create predictable invoices, look them up by invoice
 or payment hash, explicitly mark them settled, expired, or failed, and replay
 duplicate `payment_received` notifications.
 
+Use `scriptLookupSequence` when a test needs deterministic lookup behavior over
+time. A sequence can return pending or terminal wallet states, throw a specific
+wallet error, or return a hand-authored lookup result before falling back to the
+stored invoice state. This is useful for polling, retry, and listener tests that
+need to prove lookup remains the settlement authority.
+
 The testkit is not a daemon and does not emulate Nostr relay behavior. It is a
 local conformance helper for code paths that already depend on the
 `OpenReceiveReceiveNwcClient` interface.

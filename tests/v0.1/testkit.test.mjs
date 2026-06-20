@@ -82,6 +82,53 @@ test("testkit receive client replays duplicate payment notifications", async () 
   assert.equal(notifications.every((notification) => notification.settled_at === 4000), true);
 });
 
+test("testkit receive client scripts deterministic lookup sequences", async () => {
+  const wallet = createTestkitReceiveClient({ now: () => 5000 });
+  const invoice = await wallet.makeInvoice({ amount_msats: 200000n });
+
+  wallet.scriptLookupSequence(
+    { payment_hash: invoice.payment_hash },
+    [
+      { state: "pending" },
+      { error: "wallet lookup timeout" },
+      {
+        state: "settled",
+        settled_at: 5010,
+        preimage: "2".repeat(64)
+      }
+    ]
+  );
+
+  assert.equal(
+    (await wallet.lookupInvoice({ payment_hash: invoice.payment_hash })).state,
+    "pending"
+  );
+  await assert.rejects(
+    () => wallet.lookupInvoice({ invoice: invoice.invoice }),
+    /wallet lookup timeout/
+  );
+
+  const settled = await wallet.lookupInvoice({
+    payment_hash: invoice.payment_hash
+  });
+  assert.equal(settled.state, "settled");
+  assert.equal(settled.transaction_state, "settled");
+  assert.equal(settled.settled_at, 5010);
+  assert.equal(settled.preimage, "2".repeat(64));
+
+  assert.equal(
+    (await wallet.lookupInvoice({ payment_hash: invoice.payment_hash })).state,
+    "settled"
+  );
+
+  wallet.clearLookupSequence({ payment_hash: invoice.payment_hash });
+  assert.equal(wallet.failInvoice({ payment_hash: invoice.payment_hash }).state, "failed");
+  assert.equal(
+    (await wallet.lookupInvoice({ payment_hash: invoice.payment_hash })).state,
+    "failed"
+  );
+});
+
 test("testkit receive client supports seeded fixtures and terminal states", async () => {
   const wallet = createTestkitReceiveClient({
     initialInvoices: [

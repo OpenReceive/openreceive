@@ -31,6 +31,19 @@ export interface TestkitReceiveClientOptions {
   readonly capabilitySummary?: Partial<WalletCapabilitySummary>;
 }
 
+export type TestkitLookupScriptStep =
+  | {
+      readonly state: OpenReceiveTransactionState;
+      readonly settled_at?: number;
+      readonly preimage?: string;
+    }
+  | {
+      readonly result: LookupInvoiceResult;
+    }
+  | {
+      readonly error: Error | string;
+    };
+
 interface TestkitStoredInvoice {
   invoice: string;
   payment_hash: string;
@@ -40,6 +53,11 @@ interface TestkitStoredInvoice {
   state: OpenReceiveTransactionState;
   settled_at?: number;
   preimage?: string;
+}
+
+interface TestkitLookupScript {
+  readonly steps: TestkitLookupScriptStep[];
+  next: number;
 }
 
 type PaymentReceivedHandler = (
@@ -54,6 +72,7 @@ export class TestkitReceiveClient implements OpenReceiveReceiveNwcClient {
   #counter = 0;
   #byPaymentHash = new Map<string, TestkitStoredInvoice>();
   #byInvoice = new Map<string, TestkitStoredInvoice>();
+  #lookupScripts = new Map<TestkitStoredInvoice, TestkitLookupScript>();
   #subscribers = new Set<PaymentReceivedHandler>();
 
   constructor(options: TestkitReceiveClientOptions = {}) {
@@ -117,7 +136,29 @@ export class TestkitReceiveClient implements OpenReceiveReceiveNwcClient {
       throw new Error("testkit invoice not found");
     }
 
+    const scripted = this.#nextScriptedLookup(stored);
+    if (scripted !== undefined) return scripted;
+
     return serializeLookupInvoice(stored);
+  }
+
+  scriptLookupSequence(
+    selector: LookupInvoiceRequest,
+    steps: readonly TestkitLookupScriptStep[]
+  ): void {
+    if (steps.length === 0) {
+      throw new RangeError("lookup script must include at least one step");
+    }
+
+    const stored = this.#require(selector);
+    this.#lookupScripts.set(stored, {
+      steps: [...steps],
+      next: 0
+    });
+  }
+
+  clearLookupSequence(selector: LookupInvoiceRequest): void {
+    this.#lookupScripts.delete(this.#require(selector));
   }
 
   settleInvoice(
@@ -207,6 +248,38 @@ export class TestkitReceiveClient implements OpenReceiveReceiveNwcClient {
     for (const subscriber of this.#subscribers) {
       void subscriber(notification);
     }
+  }
+
+  #nextScriptedLookup(
+    stored: TestkitStoredInvoice
+  ): LookupInvoiceResult | undefined {
+    const script = this.#lookupScripts.get(stored);
+    if (script === undefined || script.next >= script.steps.length) {
+      return undefined;
+    }
+
+    const step = script.steps[script.next];
+    script.next += 1;
+
+    if (step === undefined) return undefined;
+    if ("error" in step) {
+      throw step.error instanceof Error ? step.error : new Error(step.error);
+    }
+    if ("result" in step) return step.result;
+
+    stored.state = step.state;
+    if (step.settled_at === undefined) {
+      delete stored.settled_at;
+    } else {
+      stored.settled_at = step.settled_at;
+    }
+    if (step.preimage === undefined) {
+      delete stored.preimage;
+    } else {
+      stored.preimage = step.preimage;
+    }
+
+    return serializeLookupInvoice(stored);
   }
 
   #notificationFor(
