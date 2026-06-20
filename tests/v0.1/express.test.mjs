@@ -686,6 +686,100 @@ test("secure Express handlers reject denied create authorization", async () => {
   assert.equal(wallet.makeInvoiceCalls, 0);
 });
 
+test("secure Express handlers reject cross-session invoice access", async () => {
+  const ownsInvoice = (req, invoice) => invoice.metadata.owner_id === req.user?.id;
+  const { wallet, store, handlers } = createSecureHarness({
+    auth: {
+      read: ownsInvoice,
+      lookup: ownsInvoice,
+      events: ownsInvoice,
+      refresh: ownsInvoice
+    }
+  });
+  seedInvoice(store, {
+    metadata: {
+      owner_id: "alice"
+    }
+  });
+
+  const readRes = createResponse();
+  await handlers.getInvoice(
+    createRequest({
+      params: {
+        invoice_id: "or_inv_seed"
+      },
+      user: {
+        id: "bob"
+      }
+    }),
+    readRes,
+    raiseNext
+  );
+
+  assert.equal(readRes.statusCode, 403);
+  assert.equal(readRes.body.message, "OpenReceive request is not authorized.");
+
+  const lookupRes = createResponse();
+  await handlers.lookupInvoice(
+    createRequest({
+      body: {
+        payment_hash: PAYMENT_HASH
+      },
+      user: {
+        id: "bob"
+      }
+    }),
+    lookupRes,
+    raiseNext
+  );
+
+  assert.equal(lookupRes.statusCode, 403);
+  assert.equal(lookupRes.body.message, "OpenReceive request is not authorized.");
+  assert.equal(wallet.lookupInvoiceCalls, 0);
+
+  const eventsRes = createResponse();
+  await handlers.invoiceEvents(
+    createRequest({
+      params: {
+        invoice_id: "or_inv_seed"
+      },
+      user: {
+        id: "bob"
+      }
+    }),
+    eventsRes,
+    raiseNext
+  );
+
+  assert.equal(eventsRes.statusCode, 403);
+  assert.equal(eventsRes.body.message, "OpenReceive request is not authorized.");
+  assert.deepEqual(eventsRes.writes, []);
+
+  const refreshRes = createResponse();
+  await handlers.refreshInvoice(
+    createRequest({
+      params: {
+        invoice_id: "or_inv_seed"
+      },
+      headers: {
+        "idempotency-key": "refresh-cross-session"
+      },
+      body: {
+        reason: "expired"
+      },
+      user: {
+        id: "bob"
+      }
+    }),
+    refreshRes,
+    raiseNext
+  );
+
+  assert.equal(refreshRes.statusCode, 403);
+  assert.equal(refreshRes.body.message, "OpenReceive request is not authorized.");
+  assert.equal(wallet.makeInvoiceCalls, 0);
+});
+
 test("lookup invoice requires csrf when configured", async () => {
   const { wallet, store, handlers } = createSecureHarness({
     auth: {
