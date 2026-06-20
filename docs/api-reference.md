@@ -145,8 +145,8 @@ remains the payment authority.
 mounted.
 
 `GET /openreceive/v1/capabilities` returns a non-secret capability summary.
-Wallet-specific secrets and raw NWC connection strings must not appear in this
-response.
+Wallet-specific secrets, raw NWC connection strings, and wallet diagnostics such
+as `get_balance` must not appear in this response.
 
 ## Error Shape
 

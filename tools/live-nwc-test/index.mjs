@@ -192,7 +192,7 @@ try {
   process.exit(1);
 }
 
-console.log(`Live NWC smoke skeleton for profile '${profile}'.`);
+console.log(`Live NWC smoke for profile '${profile}'.`);
 if (loadedEnvPath) {
   console.log(`Loaded local env file: ${path.relative(repoRoot, loadedEnvPath)}`);
 }

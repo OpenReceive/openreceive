@@ -522,6 +522,12 @@ test("read-only helper routes expose static rates, providers, and route suggesti
   assert.equal(wizardRes.statusCode, 200);
   assert.equal(wizardRes.body.routes[0].kind, "crypto");
   assert.equal(wizardRes.body.routes[0].route.id, "btc-lightning");
+
+  const capabilitiesRes = createResponse();
+  await handlers.capabilities(createRequest(), capabilitiesRes, raiseNext);
+  assert.equal(capabilitiesRes.statusCode, 200);
+  assert.deepEqual(capabilitiesRes.body.methods, ["make_invoice", "lookup_invoice"]);
+  assert.equal(capabilitiesRes.body.methods.includes("get_balance"), false);
 });
 
 test("provider route rejects invalid us filter", async () => {

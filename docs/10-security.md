@@ -38,6 +38,8 @@ Default route policy:
 - Use CSRF protection for cookie-authenticated POST routes.
 - Return `Cache-Control: no-store` for invoice, lookup, and event responses.
 - Avoid logging signed event URLs.
+- Keep wallet diagnostics such as `get_balance` out of public checkout
+  responses and capability summaries.
 
 ## Demos
 
