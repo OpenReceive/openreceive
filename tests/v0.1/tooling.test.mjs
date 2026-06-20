@@ -6,6 +6,7 @@ import path from "node:path";
 import test from "node:test";
 
 const secretScanner = path.join(process.cwd(), "tools/validate/scan-secrets.mjs");
+const clientBundleScanner = path.join(process.cwd(), "tools/validate/scan-client-bundles.mjs");
 
 function withGitRepo(callback) {
   const dir = mkdtempSync(path.join(tmpdir(), "openreceive-secret-scan-"));
@@ -20,6 +21,14 @@ function withGitRepo(callback) {
 
 function runSecretScanner(cwd) {
   return execFileSync(process.execPath, [secretScanner], {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+}
+
+function runClientBundleScanner(cwd) {
+  return execFileSync(process.execPath, [clientBundleScanner], {
     cwd,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"]
@@ -65,4 +74,60 @@ test("secret scanner allows tracked env examples", () => {
 
     assert.match(runSecretScanner(dir), /Secret scan passed\./);
   });
+});
+
+test("client bundle scanner allows safe generated bundles", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "openreceive-bundle-scan-"));
+
+  try {
+    const assetsDir = path.join(dir, "examples", "demo", "dist", "assets");
+    mkdirSync(assetsDir, { recursive: true });
+    writeFileSync(path.join(assetsDir, "app.js"), "console.log('openreceive checkout');\n");
+
+    assert.match(runClientBundleScanner(dir), /Client bundle secret scan passed/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("client bundle scanner rejects NWC markers in generated bundles", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "openreceive-bundle-scan-"));
+
+  try {
+    const assetsDir = path.join(dir, "examples", "demo", "dist", "assets");
+    mkdirSync(assetsDir, { recursive: true });
+    writeFileSync(path.join(assetsDir, "app.js"), "const leaked = 'OPENRECEIVE_NWC';\n");
+
+    assert.throws(
+      () => runClientBundleScanner(dir),
+      (error) => {
+        assert.match(String(error.stderr), /examples\/demo\/dist\/assets\/app\.js: OPENRECEIVE_NWC marker/);
+        return true;
+      }
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("client bundle scanner rejects real-looking NWC URIs in generated bundles", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "openreceive-bundle-scan-"));
+
+  try {
+    const assetsDir = path.join(dir, "examples", "demo", "dist", "assets");
+    const uri = `nostr+walletconnect://${"a".repeat(64)}?secret=${"b".repeat(64)}`;
+    mkdirSync(assetsDir, { recursive: true });
+    writeFileSync(path.join(assetsDir, "app.js"), `const leaked = '${uri}';\n`);
+
+    assert.throws(
+      () => runClientBundleScanner(dir),
+      (error) => {
+        assert.match(String(error.stderr), /examples\/demo\/dist\/assets\/app\.js: NWC connection URI/);
+        assert.match(String(error.stderr), /examples\/demo\/dist\/assets\/app\.js: NWC secret query value/);
+        return true;
+      }
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

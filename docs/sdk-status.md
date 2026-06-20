@@ -26,6 +26,6 @@ Run:
 npm run test:ci
 ```
 
-The current gate covers schemas, vectors, secret scanning, TypeScript
-typecheck, JavaScript tests, demo build, docs build, and optional live NWC
-smoke.
+The current gate covers schemas, vectors, source secret scanning, TypeScript
+typecheck, JavaScript tests, demo builds, generated client-bundle scanning, docs
+build, and optional live NWC smoke.

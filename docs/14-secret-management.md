@@ -13,7 +13,9 @@ wallet metadata.
 - Keep `private/` for local-only launcher scripts and notes.
 
 `npm run scan:secrets` rejects likely NWC strings and tracked non-example env
-files.
+files. `npm run scan:client-bundles` scans generated demo bundles after
+`npm run build:demo` so browser artifacts do not contain `OPENRECEIVE_NWC` or
+NWC connection URIs.
 
 ## Local Development
 
