@@ -17,9 +17,37 @@
       "public": true
     },
     {
+      "slug": "quickstart-rails",
+      "title": "Rails Quickstart Status",
+      "source_path": "docs/02-quickstart-rails.md",
+      "category": "quickstart",
+      "public": true
+    },
+    {
+      "slug": "quickstart-python",
+      "title": "Python Quickstart Status",
+      "source_path": "docs/03-quickstart-python.md",
+      "category": "quickstart",
+      "public": true
+    },
+    {
+      "slug": "quickstart-php",
+      "title": "PHP Quickstart Status",
+      "source_path": "docs/04-quickstart-php.md",
+      "category": "quickstart",
+      "public": true
+    },
+    {
       "slug": "frontend-checkout",
       "title": "Frontend Checkout",
       "source_path": "docs/05-frontend-checkout.md",
+      "category": "quickstart",
+      "public": true
+    },
+    {
+      "slug": "mobile-apps",
+      "title": "Mobile Apps",
+      "source_path": "docs/06-mobile-apps.md",
       "category": "quickstart",
       "public": true
     },
