@@ -115,6 +115,49 @@ test("create invoice uses idempotency replay without a second wallet call", asyn
   assert.equal(wallet.makeInvoiceCalls, 1);
 });
 
+test("create invoice rejects idempotency key reuse with a different body", async () => {
+  const { wallet, handlers } = createHarness();
+
+  const first = createResponse();
+  await handlers.createInvoice(
+    createRequest({
+      headers: {
+        "idempotency-key": "order-create-conflict"
+      },
+      body: {
+        amount_msats: 200000,
+        description: "Fruit sticker"
+      }
+    }),
+    first,
+    raiseNext
+  );
+  assert.equal(first.statusCode, 201);
+
+  const conflict = createResponse();
+  await handlers.createInvoice(
+    createRequest({
+      headers: {
+        "idempotency-key": "order-create-conflict"
+      },
+      body: {
+        amount_msats: 300000,
+        description: "Fruit sticker"
+      }
+    }),
+    conflict,
+    raiseNext
+  );
+
+  assert.equal(conflict.statusCode, 409);
+  assert.equal(conflict.body.code, "CONFLICT");
+  assert.equal(
+    conflict.body.message,
+    "Idempotency key was reused with a different request body."
+  );
+  assert.equal(wallet.makeInvoiceCalls, 1);
+});
+
 test("lookup settles invoice and publishes replayable SSE event", async () => {
   const { wallet, handlers } = createHarness();
   const createRes = createResponse();
@@ -554,6 +597,60 @@ test("refresh invoice creates a linked replacement and replays idempotently", as
   assert.equal(storedNew.operation, "invoice.refresh");
   assert.equal(storedNew.refreshed_from_invoice_id, oldInvoice.invoice_id);
   assert.deepEqual(storedNew.metadata, { order_id: "order-1" });
+});
+
+test("refresh invoice rejects idempotency key reuse with a different body", async () => {
+  const { wallet, store, handlers } = createHarness();
+  const oldInvoice = seedInvoice(store, {
+    invoice_id: "or_inv_refresh_conflict",
+    payment_hash: "c".repeat(64),
+    invoice: "lnbc-refresh-conflict",
+    transaction_state: "expired",
+    workflow_state: "expired_closed"
+  });
+
+  const first = createResponse();
+  await handlers.refreshInvoice(
+    createRequest({
+      params: {
+        invoice_id: oldInvoice.invoice_id
+      },
+      headers: {
+        "idempotency-key": "refresh-conflict"
+      },
+      body: {
+        reason: "expired"
+      }
+    }),
+    first,
+    raiseNext
+  );
+  assert.equal(first.statusCode, 201);
+
+  const conflict = createResponse();
+  await handlers.refreshInvoice(
+    createRequest({
+      params: {
+        invoice_id: oldInvoice.invoice_id
+      },
+      headers: {
+        "idempotency-key": "refresh-conflict"
+      },
+      body: {
+        reason: "failed"
+      }
+    }),
+    conflict,
+    raiseNext
+  );
+
+  assert.equal(conflict.statusCode, 409);
+  assert.equal(conflict.body.code, "CONFLICT");
+  assert.equal(
+    conflict.body.message,
+    "Idempotency key was reused with a different request body."
+  );
+  assert.equal(wallet.makeInvoiceCalls, 1);
 });
 
 test("refresh invoice rejects settled invoices before wallet call", async () => {
