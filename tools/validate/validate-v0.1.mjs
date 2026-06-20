@@ -263,6 +263,40 @@ function validateNwcInfoVectors() {
   }
 }
 
+function validateNwcRequestResponseVectors() {
+  const vector = readJson("spec/test-vectors/nwc-request-response.json");
+  assert(Array.isArray(vector.cases), "NWC request/response vectors must include cases");
+
+  const methods = new Set(vector.cases.map((item) => item.method));
+  assert(methods.has("make_invoice"), "missing make_invoice request/response vector");
+  assert(methods.has("lookup_invoice"), "missing lookup_invoice request/response vector");
+
+  for (const item of vector.cases) {
+    assert(["make_invoice", "lookup_invoice"].includes(item.method), `${item.name}: unknown method`);
+    assert(item.openreceive_request && typeof item.openreceive_request === "object", `${item.name}: openreceive_request required`);
+    assert(item.expected_nip47_request && typeof item.expected_nip47_request === "object", `${item.name}: expected_nip47_request required`);
+    assert(item.raw_response && typeof item.raw_response === "object", `${item.name}: raw_response required`);
+    assert(item.expected_openreceive_response && typeof item.expected_openreceive_response === "object", `${item.name}: expected response required`);
+
+    if (item.method === "make_invoice") {
+      assert(
+        item.expected_nip47_request.amount === item.openreceive_request.amount_msats,
+        `${item.name}: make_invoice must map amount_msats to NIP-47 amount`
+      );
+      assert(
+        item.expected_openreceive_response.amount_msats === item.expected_nip47_request.amount,
+        `${item.name}: make_invoice response amount mismatch`
+      );
+    }
+
+    if (item.method === "lookup_invoice") {
+      const hasPaymentHash = item.openreceive_request.payment_hash !== undefined;
+      const hasInvoice = item.openreceive_request.invoice !== undefined;
+      assert(hasPaymentHash !== hasInvoice, `${item.name}: lookup vector must use exactly one selector`);
+    }
+  }
+}
+
 function validateProviderRegistryReferences() {
   const registry = readJson("spec/data/providers/openreceive-providers.v2.json");
   assert(registry.schema_version === "2.0.0", "provider registry schema version mismatch");
@@ -458,6 +492,7 @@ function main() {
   validateIdempotencyVectors();
   validateNwcVectors();
   validateNwcInfoVectors();
+  validateNwcRequestResponseVectors();
   validateProviderRegistryReferences();
   validateData();
   validateOpenApi();

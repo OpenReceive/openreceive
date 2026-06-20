@@ -24,10 +24,14 @@ const MAKE_INVOICE_VALIDATION_VECTORS = JSON.parse(
 const NWC_INFO_VECTORS = JSON.parse(
   readFileSync("spec/test-vectors/nwc-info.json", "utf8")
 );
+const NWC_REQUEST_RESPONSE_VECTORS = JSON.parse(
+  readFileSync("spec/test-vectors/nwc-request-response.json", "utf8")
+);
 
 class FakeAlbyClient {
   makeInvoiceParams = [];
   lookupInvoiceParams = [];
+  nextResponse = undefined;
   info = {
     capabilities: ["get_info", "make_invoice", "lookup_invoice", "pay_invoice"],
     notifications: ["payment_received"],
@@ -40,6 +44,7 @@ class FakeAlbyClient {
 
   async makeInvoice(params) {
     this.makeInvoiceParams.push(params);
+    if (this.nextResponse !== undefined) return this.nextResponse;
     return {
       invoice: "lnbc-fake",
       payment_hash: "a".repeat(64),
@@ -52,6 +57,7 @@ class FakeAlbyClient {
 
   async lookupInvoice(params) {
     this.lookupInvoiceParams.push(params);
+    if (this.nextResponse !== undefined) return this.nextResponse;
     return {
       invoice: "lnbc-fake",
       payment_hash: "a".repeat(64),
@@ -118,41 +124,43 @@ test("summarizes NWC info vectors for readiness and encryption", () => {
 });
 
 test("receive client maps amount_msats to NIP-47 amount and normalizes results", async () => {
-  const fake = new FakeAlbyClient();
-  const client = createAlbyNwcReceiveClient({
-    connectionString: NWC_URI,
-    client: fake
-  });
+  for (const vector of NWC_REQUEST_RESPONSE_VECTORS.cases) {
+    const fake = new FakeAlbyClient();
+    fake.nextResponse = vector.raw_response;
+    const client = createAlbyNwcReceiveClient({
+      connectionString: NWC_URI,
+      client: fake
+    });
+    const request = makeRequestResponseVectorRequest(vector.openreceive_request);
 
-  const invoice = await client.makeInvoice({
-    amount_msats: 200000n,
-    description: "Fruit sticker",
-    expiry: 600,
-    metadata: {
-      fruit: "banana"
+    if (vector.method === "make_invoice") {
+      const invoice = await client.makeInvoice(request);
+      assert.deepEqual(
+        fake.makeInvoiceParams[0],
+        vector.expected_nip47_request,
+        vector.name
+      );
+      assert.deepEqual(
+        makeComparableResult(invoice),
+        vector.expected_openreceive_response,
+        vector.name
+      );
+    } else if (vector.method === "lookup_invoice") {
+      const lookup = await client.lookupInvoice(request);
+      assert.deepEqual(
+        fake.lookupInvoiceParams[0],
+        vector.expected_nip47_request,
+        vector.name
+      );
+      assert.deepEqual(
+        makeComparableResult(lookup),
+        vector.expected_openreceive_response,
+        vector.name
+      );
+    } else {
+      throw new Error(`Unknown vector method: ${vector.method}`);
     }
-  });
-
-  assert.deepEqual(fake.makeInvoiceParams[0], {
-    amount: 200000,
-    description: "Fruit sticker",
-    expiry: 600,
-    metadata: {
-      fruit: "banana"
-    }
-  });
-  assert.equal(invoice.amount_msats, 200000n);
-
-  const lookup = await client.lookupInvoice({
-    payment_hash: invoice.payment_hash
-  });
-
-  assert.deepEqual(fake.lookupInvoiceParams[0], {
-    payment_hash: invoice.payment_hash
-  });
-  assert.equal(lookup.amount_msats, 200000n);
-  assert.equal(lookup.state, "settled");
-  assert.equal(lookup.settled_at, 1200);
+  }
 });
 
 test("receive client enforces make invoice validation vectors", async () => {
@@ -356,4 +364,20 @@ function makeInvoiceRequestFromVector(input) {
     };
   }
   return request;
+}
+
+function makeRequestResponseVectorRequest(input) {
+  const request = { ...input };
+  if (input.amount_msats !== undefined) {
+    request.amount_msats = BigInt(input.amount_msats);
+  }
+  return request;
+}
+
+function makeComparableResult(result) {
+  const comparable = { ...result };
+  if (typeof comparable.amount_msats === "bigint") {
+    comparable.amount_msats = Number(comparable.amount_msats);
+  }
+  return comparable;
 }

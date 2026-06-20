@@ -10,8 +10,8 @@ or amount rules.
   quote, error, and provider-registry shapes.
 - `spec/test-vectors/*.json` define amount boundaries, error normalization,
   fiat conversion, idempotency, invoice lifecycle, make-invoice validation, NWC
-  info/encryption parsing, NWC URI parsing, polling cadence, and settlement
-  detection.
+  info/encryption parsing, NWC request/response mapping, NWC URI parsing,
+  polling cadence, and settlement detection.
 - `spec/openapi/openreceive-http.v1.yaml` defines mounted HTTP routes.
 - `spec/asyncapi/openreceive-events.v1.yaml` defines invoice event names and
   payloads.

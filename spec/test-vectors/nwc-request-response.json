@@ -1,0 +1,116 @@
+{
+  "schema_version": "0.1.0",
+  "rule": "OpenReceive receive-checkout calls map to NIP-47 request and response shapes",
+  "cases": [
+    {
+      "name": "make invoice request maps amount_msats to NIP-47 amount",
+      "method": "make_invoice",
+      "openreceive_request": {
+        "amount_msats": 200000,
+        "description": "Fruit sticker",
+        "expiry": 600,
+        "metadata": {
+          "fruit": "banana"
+        }
+      },
+      "expected_nip47_request": {
+        "amount": 200000,
+        "description": "Fruit sticker",
+        "expiry": 600,
+        "metadata": {
+          "fruit": "banana"
+        }
+      },
+      "raw_response": {
+        "invoice": "lnbc-fake",
+        "payment_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "amount": 200000,
+        "created_at": 1000,
+        "expires_at": 1600
+      },
+      "expected_openreceive_response": {
+        "invoice": "lnbc-fake",
+        "payment_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "amount_msats": 200000,
+        "created_at": 1000,
+        "expires_at": 1600
+      }
+    },
+    {
+      "name": "make invoice response accepts camelCase payment hash",
+      "method": "make_invoice",
+      "openreceive_request": {
+        "amount_msats": 300000,
+        "description_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "expected_nip47_request": {
+        "amount": 300000,
+        "description_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "raw_response": {
+        "invoice": "lnbc-camel",
+        "paymentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "amount_msats": "300000",
+        "createdAt": 1100,
+        "expiresAt": 1700
+      },
+      "expected_openreceive_response": {
+        "invoice": "lnbc-camel",
+        "payment_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "amount_msats": 300000,
+        "created_at": 1100,
+        "expires_at": 1700
+      }
+    },
+    {
+      "name": "lookup invoice by payment hash maps to NIP-47 payment_hash",
+      "method": "lookup_invoice",
+      "openreceive_request": {
+        "payment_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      },
+      "expected_nip47_request": {
+        "payment_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      },
+      "raw_response": {
+        "invoice": "lnbc-lookup",
+        "payment_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "amount": 200000,
+        "state": "SETTLED",
+        "settled_at": 1200,
+        "preimage": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "expected_openreceive_response": {
+        "invoice": "lnbc-lookup",
+        "payment_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "amount_msats": 200000,
+        "state": "settled",
+        "settled_at": 1200,
+        "preimage": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      }
+    },
+    {
+      "name": "lookup invoice by BOLT11 maps invoice only",
+      "method": "lookup_invoice",
+      "openreceive_request": {
+        "invoice": "lnbc-lookup-by-invoice"
+      },
+      "expected_nip47_request": {
+        "invoice": "lnbc-lookup-by-invoice"
+      },
+      "raw_response": {
+        "invoice": "lnbc-lookup-by-invoice",
+        "paymentHash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "amount_msats": 400000,
+        "transactionState": "expired",
+        "expiresAt": 1600
+      },
+      "expected_openreceive_response": {
+        "invoice": "lnbc-lookup-by-invoice",
+        "payment_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "amount_msats": 400000,
+        "transaction_state": "expired",
+        "expires_at": 1600
+      }
+    }
+  ]
+}
