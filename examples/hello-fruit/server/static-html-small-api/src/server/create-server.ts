@@ -12,6 +12,9 @@ import {
 import {
   createHelloFruitDemoMetadata
 } from "../../../../shared/demo-metadata.ts";
+import {
+  mountHelloFruitHostedDemoRoutes
+} from "../../../../shared/hosted-demo-routes.ts";
 
 export function createHelloFruitStaticServer() {
   const app = express();
@@ -23,6 +26,14 @@ export function createHelloFruitStaticServer() {
 
   const connectionString = process.env.OPENRECEIVE_NWC;
   const walletConfigured = connectionString !== undefined && connectionString.length > 0;
+
+  mountHelloFruitHostedDemoRoutes(app, {
+    id: "static-html-small-api",
+    sourcePath: "examples/hello-fruit/server/static-html-small-api",
+    docsPath: "docs/01-quickstart-node.md",
+    walletConfigured,
+    defaultPort: "3001"
+  });
 
   app.get("/demo-metadata.json", (_req, res) => {
     res.status(200).json(createHelloFruitDemoMetadata({

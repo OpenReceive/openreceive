@@ -33,5 +33,8 @@ docker compose up --build
 The server also exposes `/demo-metadata.json` with non-secret package, mode,
 git SHA, and image digest metadata for hosted-demo smoke checks.
 
+Hosted-demo helpers expose `/healthz`, `/source`, `/docs`, `/robots.txt`, and
+`/sitemap.xml`.
+
 This demo uses `unsafeAllowUnauthenticatedDemoMode` because it is a local
 single-user example. Production apps should use app auth and CSRF hooks.

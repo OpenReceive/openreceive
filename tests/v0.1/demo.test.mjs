@@ -84,6 +84,80 @@ test("Hello Fruit production servers expose non-secret metadata without a wallet
   });
 });
 
+test("Hello Fruit hosted demo routes expose health, source, docs, robots, and sitemap", async () => {
+  await withEnv({
+    OPENRECEIVE_NWC: undefined,
+    OPENRECEIVE_PUBLIC_URL: "https://demo.example.test",
+    OPENRECEIVE_DEMO_NOINDEX: undefined
+  }, async () => {
+    for (const demo of [
+      {
+        name: "node-express-react",
+        sourcePath: "examples/hello-fruit/server/node-express-react",
+        createApp: createHelloFruitServer
+      },
+      {
+        name: "static-html-small-api",
+        sourcePath: "examples/hello-fruit/server/static-html-small-api",
+        createApp: createHelloFruitStaticServer
+      }
+    ]) {
+      const app = demo.createApp();
+      const healthz = await getJson(app, "/healthz");
+      assert.equal(healthz.status, 200, `${demo.name}: healthz status`);
+      assert.deepEqual(healthz.body, {
+        ok: true,
+        demo: demo.name,
+        wallet_configured: false
+      });
+
+      const source = await dispatch(app, {
+        method: "GET",
+        url: "/source",
+        headers: {}
+      });
+      assert.equal(source.status, 302, `${demo.name}: source status`);
+      assert.equal(
+        source.headers.get("location"),
+        `https://github.com/openreceive/openreceive/tree/main/${demo.sourcePath}`
+      );
+
+      const docs = await dispatch(app, {
+        method: "GET",
+        url: "/docs",
+        headers: {}
+      });
+      assert.equal(docs.status, 302, `${demo.name}: docs status`);
+      assert.equal(
+        docs.headers.get("location"),
+        "https://github.com/openreceive/openreceive/blob/main/docs/01-quickstart-node.md"
+      );
+
+      const robots = await dispatch(app, {
+        method: "GET",
+        url: "/robots.txt",
+        headers: {}
+      });
+      assert.equal(robots.status, 200, `${demo.name}: robots status`);
+      assert.match(robots.text, /Allow: \//);
+      assert.match(robots.text, /Sitemap: https:\/\/demo\.example\.test\/sitemap\.xml/);
+
+      const sitemap = await dispatch(app, {
+        method: "GET",
+        url: "/sitemap.xml",
+        headers: {}
+      });
+      assert.equal(sitemap.status, 200, `${demo.name}: sitemap status`);
+      assert.match(sitemap.text, /<loc>https:\/\/demo\.example\.test\/<\/loc>/);
+
+      for (const response of [healthz.body, source.text, docs.text, robots.text, sitemap.text]) {
+        assert.equal(JSON.stringify(response).includes("OPENRECEIVE_NWC"), false);
+        assert.equal(JSON.stringify(response).includes("nostr+walletconnect://"), false);
+      }
+    }
+  });
+});
+
 test("Hello Fruit demos fail closed without OPENRECEIVE_NWC", async () => {
   await withEnv({
     OPENRECEIVE_NWC: undefined,
