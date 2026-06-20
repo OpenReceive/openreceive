@@ -12,9 +12,31 @@ NWC connection string, wallet secret, or server-side wallet client.
 - `createQrPngDataUrl(invoice)`
 - `copyInvoice({ invoice })`
 - `openWallet({ invoice })`
+- `createOpenReceiveCheckoutState(invoiceResponse)`
+- `applyOpenReceiveInvoiceEvent(state, event)`
+- `parseOpenReceiveInvoiceEvent(event.data)`
 
 These helpers reject NWC connection strings and only work with BOLT11 invoice
 strings.
+
+The checkout state helpers are pure browser-side reducers for display state.
+They update only matching `invoice_id` and `payment_hash` events, track
+countdown/phase fields, and keep settlement as a UI hint. Fulfillment still
+requires backend lookup and app-owned authorization.
+
+```ts
+let checkout = createOpenReceiveCheckoutState(invoiceResponse, {
+  now: Math.floor(Date.now() / 1000)
+});
+
+events.addEventListener("invoice.settled", (event) => {
+  checkout = applyOpenReceiveInvoiceEvent(
+    checkout,
+    parseOpenReceiveInvoiceEvent(event.data),
+    { eventName: "invoice.settled" }
+  );
+});
+```
 
 ## Web Components
 

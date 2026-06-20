@@ -15,10 +15,13 @@ import {
   redactNwcUri
 } from "../../packages/js/core/src/index.ts";
 import {
+  applyOpenReceiveInvoiceEvent,
   copyInvoice,
+  createOpenReceiveCheckoutState,
   createLightningUri,
   createQrSvg,
-  openWallet
+  openWallet,
+  parseOpenReceiveInvoiceEvent
 } from "../../packages/js/browser/src/index.ts";
 
 const PAYMENT_HASH =
@@ -200,4 +203,121 @@ test("browser helpers create lightning URI, copy, open, and QR payloads", async 
     "lightning:lnbc-test"
   );
   assert.deepEqual(opens, ["lightning:lnbc-test"]);
+});
+
+test("browser checkout state applies only matching passive invoice events", () => {
+  const state = createOpenReceiveCheckoutState(
+    {
+      invoice_id: "or_inv_browser",
+      invoice: "lnbc-browser",
+      payment_hash: PAYMENT_HASH,
+      amount_msats: 200000,
+      transaction_state: "pending",
+      workflow_state: "invoice_created",
+      expires_at: 1030,
+      checkout: {
+        events_url: "/openreceive/v1/invoices/or_inv_browser/events",
+        routes_url: "/openreceive/v1/routes"
+      }
+    },
+    { now: 1000 }
+  );
+
+  assert.equal(state.lightningUri, "lightning:lnbc-browser");
+  assert.equal(state.phase, "invoice_created");
+  assert.equal(state.expiresInSeconds, 30);
+  assert.equal(state.terminal, false);
+  assert.equal(state.events_url, "/openreceive/v1/invoices/or_inv_browser/events");
+
+  assert.equal(
+    applyOpenReceiveInvoiceEvent(state, {
+      invoice_id: "or_inv_other",
+      transaction_state: "settled"
+    }),
+    state
+  );
+  assert.equal(
+    applyOpenReceiveInvoiceEvent(state, {
+      invoice_id: "or_inv_browser",
+      payment_hash: "b".repeat(64),
+      transaction_state: "settled"
+    }),
+    state
+  );
+
+  const verifying = applyOpenReceiveInvoiceEvent(
+    state,
+    {
+      invoice_id: "or_inv_browser",
+      payment_hash: PAYMENT_HASH,
+      transaction_state: "pending",
+      workflow_state: "verifying"
+    },
+    { eventName: "invoice.verifying", now: 1005 }
+  );
+
+  assert.equal(verifying.phase, "verifying");
+  assert.equal(verifying.last_event, "invoice.verifying");
+  assert.equal(verifying.expiresInSeconds, 25);
+  assert.equal(verifying.terminal, false);
+
+  const settled = applyOpenReceiveInvoiceEvent(
+    verifying,
+    {
+      invoice_id: "or_inv_browser",
+      payment_hash: PAYMENT_HASH,
+      amount_msats: 200000,
+      transaction_state: "settled",
+      workflow_state: "awaiting_fulfillment",
+      settled_at: 1010
+    },
+    { eventName: "invoice.settled" }
+  );
+
+  assert.equal(settled.phase, "settled");
+  assert.equal(settled.settled, true);
+  assert.equal(settled.terminal, false);
+  assert.equal(settled.settled_at, 1010);
+  assert.equal(settled.last_event, "invoice.settled");
+  assert.equal(settled.expiresInSeconds, undefined);
+
+  const expired = applyOpenReceiveInvoiceEvent(settled, {
+    invoice_id: "or_inv_browser",
+    payment_hash: PAYMENT_HASH,
+    transaction_state: "expired",
+    workflow_state: "expired_closed"
+  });
+
+  assert.equal(expired.phase, "expired");
+  assert.equal(expired.terminal, true);
+});
+
+test("browser invoice event parser accepts canonical SSE JSON payloads", () => {
+  assert.deepEqual(
+    parseOpenReceiveInvoiceEvent(
+      JSON.stringify({
+        invoice_id: "or_inv_browser",
+        type: "incoming",
+        transaction_state: "settled",
+        workflow_state: "awaiting_fulfillment",
+        payment_hash: PAYMENT_HASH,
+        amount_msats: 200000,
+        settled_at: 1010
+      })
+    ),
+    {
+      invoice_id: "or_inv_browser",
+      type: "incoming",
+      transaction_state: "settled",
+      workflow_state: "awaiting_fulfillment",
+      payment_hash: PAYMENT_HASH,
+      amount_msats: 200000,
+      settled_at: 1010
+    }
+  );
+
+  assert.throws(
+    () => parseOpenReceiveInvoiceEvent(JSON.stringify({ transaction_state: "settled" })),
+    /invoice_id/
+  );
 });
