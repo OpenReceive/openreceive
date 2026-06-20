@@ -69,8 +69,14 @@ Refresh idempotency uses the same scope shape with `operation =
 ## Live Wallet Smoke
 
 `npm run test:live:nwc` uses `OPENRECEIVE_NWC` when present and skips clearly
-when absent. Live runs must use a low-value receive-only NWC secret and must
-redact the connection string in all output.
+when absent. It may load secrets from a local ignored env file when
+`OPENRECEIVE_ENV_FILE` points at one. Live runs must use a low-value
+receive-only NWC secret and must redact the connection string in all output.
+
+The live harness verifies preflight, the metadata-size guard, invoice creation,
+initial lookup, and optional notification-plus-lookup confirmation when manual
+payment waiting is enabled. Notification delivery is never settlement proof by
+itself.
 
 Do not run live wallet tests on untrusted pull requests with secrets available.
 

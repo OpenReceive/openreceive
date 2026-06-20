@@ -26,14 +26,24 @@ OPENRECEIVE_NWC=nostr+walletconnect://...
 OPENRECEIVE_WALLET_PROFILE=rizful
 ```
 
+To read those values from an ignored local file instead of exported shell
+variables, set:
+
+```sh
+OPENRECEIVE_ENV_FILE=private/rizful-test-wallet.env
+```
+
 Run live tests only with low-value receive-only credentials:
 
 ```sh
 npm run test:live:nwc
 ```
 
-The script skips when `OPENRECEIVE_NWC` is unset and redacts the connection
-string when it is present.
+The script skips when `OPENRECEIVE_NWC` is unset. It only reads an env file when
+`OPENRECEIVE_ENV_FILE` is set, so normal test runs do not accidentally use a
+developer's local wallet secret. When a wallet is configured, it redacts the
+connection string, checks the metadata-size guard before wallet invoice
+creation, and uses backend lookup as the settlement authority.
 
 ## Deployment
 

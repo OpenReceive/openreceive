@@ -477,10 +477,13 @@ const NWC_ERROR_CODE_ALIASES: Readonly<Record<string, OpenReceiveErrorCode>> = {
   INVALID_PARAMS: "INVALID_REQUEST",
   METHOD_NOT_FOUND: "UNSUPPORTED_METHOD",
   NETWORK_ERROR: "WALLET_UNAVAILABLE",
+  NIP47_NETWORK_ERROR: "WALLET_UNAVAILABLE",
+  NOSTR_NETWORK_ERROR: "WALLET_UNAVAILABLE",
   NOT_AUTHORIZED: "UNAUTHORIZED",
   NOT_SUPPORTED: "UNSUPPORTED_METHOD",
   NOTFOUND: "NOT_FOUND",
   PERMISSION_DENIED: "RESTRICTED",
+  RELAY_CONNECTION_ERROR: "WALLET_UNAVAILABLE",
   REQUEST_TIMEOUT: "TIMEOUT",
   SERVICE_UNAVAILABLE: "WALLET_UNAVAILABLE",
   TIMED_OUT: "TIMEOUT",
@@ -532,13 +535,16 @@ function errorCodeFromRecords(
   records: readonly Record<string, unknown>[]
 ): OpenReceiveErrorCode | undefined {
   for (const record of records) {
-    const code =
+    const directCode =
       normalizeNwcErrorCode(record.code) ??
       normalizeNwcErrorCode(record.error_code) ??
       normalizeNwcErrorCode(record.errorCode) ??
-      normalizeNwcErrorCode(record.type) ??
-      normalizeNwcErrorCode(record.name);
-    if (code !== undefined) return code;
+      normalizeNwcErrorCode(record.type);
+    if (directCode !== undefined && directCode !== "OTHER") return directCode;
+
+    const nameCode = normalizeNwcErrorCode(record.name);
+    if (nameCode !== undefined && nameCode !== "OTHER") return nameCode;
+    if (directCode !== undefined) return directCode;
   }
 
   return undefined;

@@ -37,13 +37,18 @@ function runClientBundleScanner(cwd) {
 }
 
 function runLiveNwcSmoke(env) {
+  const childEnv = {
+    ...process.env,
+    ...env
+  };
+  for (const [key, value] of Object.entries(childEnv)) {
+    if (value === undefined) delete childEnv[key];
+  }
+
   return execFileSync(process.execPath, [liveNwcSmoke], {
     cwd: process.cwd(),
     encoding: "utf8",
-    env: {
-      ...process.env,
-      ...env
-    },
+    env: childEnv,
     stdio: ["ignore", "pipe", "pipe"]
   });
 }
@@ -159,4 +164,36 @@ test("live NWC smoke reports canonical URI parse errors before wallet calls", ()
       return true;
     }
   );
+});
+
+test("live NWC smoke loads gitignored env file without leaking parse secrets", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "openreceive-live-env-"));
+  const envPath = path.join(dir, "wallet.env");
+  const badNwc =
+    "nostr+walletconnect://" +
+    "a".repeat(64) +
+    "?relay=wss%3A%2F%2Frelay.example.com&secret=not-secret";
+
+  try {
+    writeFileSync(
+      envPath,
+      `OPENRECEIVE_NWC=${badNwc}\nOPENRECEIVE_WALLET_PROFILE=alby\n`
+    );
+
+    assert.throws(
+      () =>
+        runLiveNwcSmoke({
+          OPENRECEIVE_ENV_FILE: envPath,
+          OPENRECEIVE_NWC: undefined,
+          OPENRECEIVE_WALLET_PROFILE: undefined
+        }),
+      (error) => {
+        assert.match(String(error.stderr), /NWC client secret must be 64 hex characters\./);
+        assert.doesNotMatch(String(error.stderr), /not-secret/);
+        return true;
+      }
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

@@ -135,6 +135,15 @@ test("normalizes NWC wallet errors into canonical OpenReceive codes", async () =
   });
   assert.equal(nativeSendError.code, "PAYMENT_FAILED");
   assert.equal(nativeSendError.retryable, false);
+
+  const networkError = normalizeNwcWalletError(
+    Object.assign(new Error("Failed to connect to relay"), {
+      name: "Nip47NetworkError",
+      code: "OTHER"
+    })
+  );
+  assert.equal(networkError.code, "WALLET_UNAVAILABLE");
+  assert.equal(networkError.retryable, true);
 });
 
 test("receive client throws normalized wallet errors from make_invoice", async () => {

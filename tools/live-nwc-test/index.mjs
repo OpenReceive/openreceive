@@ -5,23 +5,81 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createLightningUri } from "@openreceive/browser";
 import {
+  OPENRECEIVE_NWC_METADATA_MAX_BYTES,
+  classifyLookupInvoiceSettlement,
   parseNwcConnectionUri,
-  pollInvoiceUntilFinalState
+  pollInvoiceUntilFinalState,
+  redactNwcConnectionUri
 } from "@openreceive/core";
 import {
+  ReceiveCheckoutValidationError,
   createAlbyNwcReceiveClient
 } from "@openreceive/node";
 
-const nwc = process.env.OPENRECEIVE_NWC;
-const profile = process.env.OPENRECEIVE_WALLET_PROFILE || "rizful";
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(currentDir, "../..");
+
+process.on("uncaughtException", handleFatalError);
+process.on("unhandledRejection", handleFatalError);
+
+const loadedEnvPath = loadLocalEnvFile();
+const nwc = process.env.OPENRECEIVE_NWC;
+const profile = process.env.OPENRECEIVE_WALLET_PROFILE || "rizful";
 const expectedCapabilitiesPath =
   process.env.OPENRECEIVE_EXPECTED_CAPABILITIES ??
   path.join(currentDir, "expected_capabilities.json");
 const productPath = path.join(repoRoot, "examples/hello-fruit/shared/product.json");
 const createInvoice = process.env.OPENRECEIVE_LIVE_CREATE_INVOICE !== "0";
 const waitForPayment = process.env.OPENRECEIVE_LIVE_WAIT_FOR_PAYMENT === "1";
+const supportedProfiles = new Set(["rizful", "alby", "zeus", "custom"]);
+
+function loadLocalEnvFile() {
+  const explicitPath = process.env.OPENRECEIVE_ENV_FILE;
+  if (!explicitPath) return null;
+
+  const envPath = path.resolve(explicitPath);
+  if (!existsSync(envPath)) {
+    throw new Error(`OPENRECEIVE_ENV_FILE does not exist: ${envPath}`);
+  }
+
+  const entries = parseEnvFile(readFileSync(envPath, "utf8"));
+  for (const [key, value] of Object.entries(entries)) {
+    if (process.env[key] === undefined) process.env[key] = value;
+  }
+
+  return envPath;
+}
+
+function parseEnvFile(contents) {
+  const entries = {};
+  for (const line of contents.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed.length === 0 || trimmed.startsWith("#")) continue;
+
+    const match = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(trimmed);
+    if (!match) continue;
+    entries[match[1]] = parseEnvValue(match[2]);
+  }
+
+  return entries;
+}
+
+function parseEnvValue(value) {
+  const withoutComment = value.replace(/\s+#.*$/, "").trim();
+  if (
+    (withoutComment.startsWith("\"") && withoutComment.endsWith("\"")) ||
+    (withoutComment.startsWith("'") && withoutComment.endsWith("'"))
+  ) {
+    return withoutComment.slice(1, -1);
+  }
+
+  return withoutComment;
+}
+
+function handleFatalError(error) {
+  console.error(formatErrorMessage(error));
+  process.exit(1);
+}
 
 function loadExpectedCapabilities(filePath) {
   if (!existsSync(filePath)) return null;
@@ -29,15 +87,39 @@ function loadExpectedCapabilities(filePath) {
 }
 
 function formatErrorMessage(error) {
+  let message;
   if (error && typeof error === "object" && typeof error.description === "string") {
-    return error.description;
+    message = error.description;
+  } else {
+    message = error instanceof Error ? error.message : String(error);
   }
 
-  return error instanceof Error ? error.message : String(error);
+  return redactPotentialSecrets(message);
 }
 
-function assertCapabilities(summary, expected) {
+function redactPotentialSecrets(message) {
+  return message
+    .replace(/nostr\+walletconnect:\/\/[^\s"'`<>]+/g, (uri) => {
+      try {
+        return redactNwcConnectionUri(uri);
+      } catch {
+        return uri.replace(/([?&]secret=)[^&\s"'`<>]+/g, "$1[REDACTED]");
+      }
+    })
+    .replace(/([?&]secret=)[^&\s"'`<>]+/g, "$1[REDACTED]");
+}
+
+function assertCapabilities(summary, expected, walletProfile) {
   if (!expected) return;
+
+  if (
+    expected.wallet_profile &&
+    expected.wallet_profile !== walletProfile
+  ) {
+    throw new Error(
+      `Expected capabilities are for '${expected.wallet_profile}', but OPENRECEIVE_WALLET_PROFILE is '${walletProfile}'.`
+    );
+  }
 
   const methods = new Set(summary.methods ?? []);
   const missing = (expected.required_methods ?? []).filter(
@@ -46,6 +128,30 @@ function assertCapabilities(summary, expected) {
 
   if (missing.length > 0) {
     throw new Error(`Wallet is missing required methods: ${missing.join(", ")}`);
+  }
+
+  const notifications = new Set(summary.notifications ?? []);
+  const missingNotifications = (expected.required_notifications ?? []).filter(
+    (notification) => !notifications.has(notification)
+  );
+
+  if (missingNotifications.length > 0) {
+    throw new Error(
+      `Wallet is missing required notifications: ${missingNotifications.join(", ")}`
+    );
+  }
+
+  const allowedEncryption = [
+    expected.preferred_encryption,
+    expected.fallback_encryption
+  ].filter(Boolean);
+  if (
+    allowedEncryption.length > 0 &&
+    !allowedEncryption.includes(summary.encryption)
+  ) {
+    throw new Error(
+      `Wallet encryption '${summary.encryption}' does not match expected ${allowedEncryption.join(" or ")}.`
+    );
   }
 }
 
@@ -68,6 +174,13 @@ if (!nwc) {
   process.exit(0);
 }
 
+if (!supportedProfiles.has(profile)) {
+  console.error(
+    "OPENRECEIVE_WALLET_PROFILE must be rizful, alby, zeus, or custom."
+  );
+  process.exit(1);
+}
+
 let parsedNwc;
 let expectedCapabilities;
 
@@ -80,6 +193,9 @@ try {
 }
 
 console.log(`Live NWC smoke skeleton for profile '${profile}'.`);
+if (loadedEnvPath) {
+  console.log(`Loaded local env file: ${path.relative(repoRoot, loadedEnvPath)}`);
+}
 console.log(`Configured NWC: ${parsedNwc.redacted}`);
 console.log(`Wallet pubkey: ${parsedNwc.walletPubkey}`);
 console.log(`Relay count: ${parsedNwc.relays.length}`);
@@ -98,7 +214,7 @@ const client = createAlbyNwcReceiveClient({
 
 console.log("Running wallet preflight...");
 const summary = await client.preflight();
-assertCapabilities(summary, expectedCapabilities);
+assertCapabilities(summary, expectedCapabilities, profile);
 console.log(`Receive checkout ready: ${summary.receiveCheckoutReady}`);
 console.log(`Encryption: ${summary.encryption}`);
 if (summary.spendCapabilityAdvertised) {
@@ -111,6 +227,9 @@ if (!createInvoice) {
 }
 
 const product = JSON.parse(readFileSync(productPath, "utf8"));
+console.log("Checking local NWC metadata size guard...");
+await assertMetadataGuard(client, product);
+
 console.log("Creating low-value Hello Fruit invoice...");
 const invoice = await client.makeInvoice({
   amount_msats: BigInt(product.amount_msats),
@@ -140,19 +259,92 @@ if (!waitForPayment) {
   process.exit(0);
 }
 
+const notificationState = await subscribeForPaymentNotifications(client, invoice.payment_hash);
 console.log("Waiting for manual payment. Settlement must be proven by lookup_invoice.");
 const createdAt = invoice.created_at ?? Math.floor(Date.now() / 1000);
 const expiresAt = invoice.expires_at ?? createdAt + product.invoice_expiry_seconds;
-const outcome = await pollInvoiceUntilFinalState({
-  created_at: createdAt,
-  expires_at: expiresAt,
-  lookup_invoice: () => client.lookupInvoice({ payment_hash: invoice.payment_hash }),
-  on_transition: (transition) => {
-    console.log(`Workflow transition: ${transition.workflow_state} (${transition.reason})`);
-  }
-});
+let outcome;
+try {
+  outcome = await pollInvoiceUntilFinalState({
+    created_at: createdAt,
+    expires_at: expiresAt,
+    lookup_invoice: () => client.lookupInvoice({ payment_hash: invoice.payment_hash }),
+    on_transition: (transition) => {
+      console.log(`Workflow transition: ${transition.workflow_state} (${transition.reason})`);
+    }
+  });
+} finally {
+  await notificationState.stop();
+}
 
 console.log(`Final outcome: ${outcome.status} (${outcome.reason})`);
+if (notificationState.settledByNotification) {
+  console.log("Notification plus lookup confirmed settlement.");
+}
 if (outcome.status !== "settled") {
   process.exit(1);
+}
+
+async function assertMetadataGuard(client, product) {
+  try {
+    await client.makeInvoice({
+      amount_msats: BigInt(product.amount_msats),
+      description: "OpenReceive metadata guard probe",
+      metadata: {
+        probe: "x".repeat(OPENRECEIVE_NWC_METADATA_MAX_BYTES + 1)
+      }
+    });
+  } catch (error) {
+    if (
+      error instanceof ReceiveCheckoutValidationError ||
+      /metadata must serialize below/.test(formatErrorMessage(error))
+    ) {
+      console.log("Metadata guard rejected oversized payload before wallet request.");
+      return;
+    }
+
+    throw error;
+  }
+
+  throw new Error("Metadata guard did not reject oversized payload.");
+}
+
+async function subscribeForPaymentNotifications(client, paymentHash) {
+  const state = {
+    settledByNotification: false,
+    stop: async () => {}
+  };
+
+  if (typeof client.subscribeToPaymentReceived !== "function") {
+    console.log("Notification subscription unavailable; relying on polling.");
+    return state;
+  }
+
+  try {
+    const unsubscribe = await client.subscribeToPaymentReceived((notification) => {
+      if (notification.payment_hash !== paymentHash) return;
+
+      void confirmNotificationSettlement(client, paymentHash, state).catch(
+        (error) => {
+          console.log(`Notification lookup failed: ${formatErrorMessage(error)}`);
+        }
+      );
+    });
+    state.stop = async () => {
+      await unsubscribe();
+    };
+    console.log("Subscribed to payment_received notifications.");
+  } catch (error) {
+    console.log(`Notification subscription unavailable: ${formatErrorMessage(error)}`);
+  }
+
+  return state;
+}
+
+async function confirmNotificationSettlement(client, paymentHash, state) {
+  console.log("Received payment_received notification; confirming with lookup_invoice.");
+  const lookup = await client.lookupInvoice({ payment_hash: paymentHash });
+  const settlement = classifyLookupInvoiceSettlement(lookup);
+  console.log(`Notification lookup state: ${settlement.status}`);
+  if (settlement.settled) state.settledByNotification = true;
 }
