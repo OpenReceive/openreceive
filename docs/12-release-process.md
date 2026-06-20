@@ -8,6 +8,9 @@ OpenReceive starts with a small v0.1 release surface:
 - `@openreceive/express`
 - `@openreceive/browser`
 - `@openreceive/provider-data`
+- `@openreceive/testkit`
+- `@openreceive/elements`
+- `@openreceive/react`
 
 Packages remain private in this repository until publishing is explicitly
 approved.
@@ -39,6 +42,9 @@ The release owner also checks:
 - `js-express-v0.1.0`
 - `js-browser-v0.1.0`
 - `js-provider-data-v0.1.0`
+- `js-testkit-v0.1.0`
+- `js-elements-v0.1.0`
+- `js-react-v0.1.0`
 
 Use independent package versions later, after the contract is stable enough to
 avoid confusing SDK consumers.
