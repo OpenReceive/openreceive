@@ -191,7 +191,19 @@
       "url": "https://coinbase.com",
       "us": true,
       "lightning_docs_url": "https://help.coinbase.com/en/coinbase/trading-and-funding/sending-or-receiving-cryptocurrency/lightning",
-      "icon_path": "assets/provider-icons/coinbase.png"
+      "icon_path": "assets/provider-icons/coinbase.png",
+      "tutorials": [
+        {
+          "index": 1,
+          "path": "assets/pay_tutorials/coinbase-1.webp",
+          "caption": "Tap Pay"
+        },
+        {
+          "index": 2,
+          "path": "assets/pay_tutorials/coinbase-2.webp",
+          "caption": "Tap the QR scanner"
+        }
+      ]
     },
     "kraken": {
       "id": "kraken",
@@ -199,7 +211,29 @@
       "url": "https://kraken.com",
       "us": true,
       "lightning_docs_url": "https://support.kraken.com/articles/5068216131988-how-do-i-send-bitcoin-on-the-lightning-network-",
-      "icon_path": "assets/provider-icons/kraken.png"
+      "icon_path": "assets/provider-icons/kraken.png",
+      "tutorials": [
+        {
+          "index": 1,
+          "path": "assets/pay_tutorials/kraken-1.webp",
+          "caption": "Tap Bitcoin"
+        },
+        {
+          "index": 2,
+          "path": "assets/pay_tutorials/kraken-2.webp",
+          "caption": "Tap Withdraw"
+        },
+        {
+          "index": 3,
+          "path": "assets/pay_tutorials/kraken-3.webp",
+          "caption": "Choose Lightning"
+        },
+        {
+          "index": 4,
+          "path": "assets/pay_tutorials/kraken-4.webp",
+          "caption": "Paste or scan the invoice"
+        }
+      ]
     },
     "binance": {
       "id": "binance",

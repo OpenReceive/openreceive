@@ -173,6 +173,17 @@ test("provider-data filters providers and countries conservatively", () => {
     true
   );
   assert.equal(listCountries({ currency: "USD" }).every((country) => country.currency === "USD"), true);
+  assert.equal(providerRegistry.providers.coinbase.tutorials.length, 2);
+  assert.equal(providerRegistry.providers.kraken.tutorials.length, 4);
+  assert.deepEqual(
+    providerRegistry.providers.kraken.tutorials.map((tutorial) => tutorial.caption),
+    [
+      "Tap Bitcoin",
+      "Tap Withdraw",
+      "Choose Lightning",
+      "Paste or scan the invoice"
+    ]
+  );
   assert.equal(providerRegistry.providers.strike.tutorials.length, 4);
   assert.deepEqual(
     providerRegistry.providers.cashapp.tutorials.map((tutorial) => tutorial.path),

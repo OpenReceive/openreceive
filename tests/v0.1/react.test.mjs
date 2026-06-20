@@ -262,6 +262,12 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
       "Confirm the payment"
     ]
   );
+  const coinbase = getProvider("coinbase");
+  const kraken = getProvider("kraken");
+  assert.ok(coinbase);
+  assert.ok(kraken);
+  assert.match(getOpenReceiveProviderTutorials(coinbase)[0].image, /assets\/pay_tutorials\/coinbase-1\.webp/);
+  assert.match(getOpenReceiveProviderTutorials(kraken)[3].image, /assets\/pay_tutorials\/kraken-4\.webp/);
   assert.equal(getOpenReceiveRouteNetworkLabel("btc-lightning"), "Lightning Network");
   assert.equal(getOpenReceiveRouteNetworkLabel("usdt-tron"), "usdt-tron");
   assert.match(getOpenReceivePaymentMethodIcon("card"), /assets\/icons\/card\.svg/);
