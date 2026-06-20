@@ -1,173 +1,81 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
-import * as QRCode from "qrcode";
-import {
-  copyInvoice,
-  createQrSvg,
-  openWallet,
-  parseOpenReceiveInvoiceEvent
+import type {
+  OpenReceiveCheckoutSnapshot
 } from "@openreceive/browser";
+import {
+  OpenReceiveCheckout,
+  OpenReceiveThemeScope
+} from "@openreceive/react";
+import "@openreceive/react/styles.css";
 import {
   createHelloFruitBrowserLogger
 } from "../../../../shared/demo-browser-logging.ts";
+import {
+  createHelloFruitInvoiceDescription,
+  formatHelloFruitFiat,
+  helloFruitDemoLabels
+} from "../../../../shared/demo-formatting.ts";
 import fruitsData from "../../../../shared/fruits.json";
 import product from "../../../../shared/product.json";
 import "./styles.css";
 
 const logOpenReceive = createHelloFruitBrowserLogger("node-express-react");
+const fruits = fruitsData.fruits;
 
-interface InvoiceResponse {
-  invoice_id: string;
-  invoice: string;
-  payment_hash: string;
-  amount_msats: number;
-  transaction_state: string;
-  workflow_state: string;
-  expires_at: number;
-  checkout: {
-    events_url: string;
-  };
-}
-
-function formatFiat(fiat: { currency: string; value: string }): string {
-  return fiat.currency === "USD" ? `$${fiat.value}` : `${fiat.value} ${fiat.currency}`;
-}
-
-function App() {
-  const fruits = fruitsData.fruits;
-  const [fruitId, setFruitId] = useState(fruits[1]?.id ?? fruits[0]?.id);
-  const [invoice, setInvoice] = useState<InvoiceResponse | null>(null);
-  const [qrSvg, setQrSvg] = useState("");
-  const [status, setStatus] = useState("idle");
+function App(): React.ReactElement {
+  const [fruitId, setFruitId] = useState(fruits[1]?.id ?? fruits[0]?.id ?? "");
+  const [invoice, setInvoice] = useState<OpenReceiveCheckoutSnapshot | null>(null);
+  const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
-
-  const selectedFruit = useMemo(
-    () => fruits.find((fruit) => fruit.id === fruitId) ?? fruits[0],
-    [fruitId, fruits]
-  );
-
-  useEffect(() => {
-    if (invoice === null) return;
-    let stopped = false;
-
-    createQrSvg(invoice.invoice, { encoder: QRCode })
-      .then(setQrSvg)
-      .catch((cause: unknown) => {
-        setError(cause instanceof Error ? cause.message : String(cause));
-      });
-
-    // Events are passive UI hints; verify they belong to the current invoice
-    // (invoice_id and payment_hash) before changing UI state, and never let the
-    // frontend treat an event as proof of fulfillment.
-    const matchesCurrentInvoice = (data: unknown): boolean => {
-      try {
-        const parsed = parseOpenReceiveInvoiceEvent(data as string);
-        if (parsed.invoice_id !== invoice.invoice_id) return false;
-        if (
-          parsed.payment_hash !== undefined &&
-          parsed.payment_hash !== invoice.payment_hash
-        ) {
-          return false;
-        }
-        return true;
-      } catch {
-        return false;
-      }
-    };
-
-    const events = new EventSource(invoice.checkout.events_url);
-    events.addEventListener("invoice.settled", (event) => {
-      if (!matchesCurrentInvoice((event as MessageEvent).data)) return;
-      stopped = true;
-      setStatus("settled");
-      events.close();
-    });
-    events.addEventListener("invoice.expired", (event) => {
-      if (!matchesCurrentInvoice((event as MessageEvent).data)) return;
-      stopped = true;
-      setStatus("expired");
-      events.close();
-    });
-    events.onerror = () => {
-      events.close();
-    };
-
-    const lookupInterval = window.setInterval(async () => {
-      if (stopped) return;
-
-      try {
-        const response = await fetch("/openreceive/v1/invoices/lookup", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            payment_hash: invoice.payment_hash
-          })
-        });
-        const body = await response.json();
-
-        if (!response.ok) {
-          setError(body.message ?? "Could not look up invoice.");
-          return;
-        }
-
-        setStatus(body.workflow_state ?? body.transaction_state ?? "checking");
-        if (body.transaction_state === "settled") {
-          stopped = true;
-          setStatus("settled");
-          events.close();
-          window.clearInterval(lookupInterval);
-        }
-      } catch (cause: unknown) {
-        setError(cause instanceof Error ? cause.message : String(cause));
-      }
-    }, 3000);
-
-    return () => {
-      stopped = true;
-      window.clearInterval(lookupInterval);
-      events.close();
-    };
-  }, [invoice]);
+  const selectedFruit = fruits.find((fruit) => fruit.id === fruitId) ?? fruits[0];
 
   async function createInvoice() {
     if (selectedFruit === undefined) return;
 
-    setStatus("creating");
+    setCreating(true);
     setError("");
 
-    const response = await fetch("/openreceive/v1/invoices", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Idempotency-Key": `hello-fruit-${selectedFruit.id}`
-      },
-      body: JSON.stringify({
-        fiat: selectedFruit.fiat,
-        description: `Fruit sticker from OpenReceive demo: ${selectedFruit.name}`,
-        expiry: product.invoice_expiry_seconds,
-        metadata: {
-          product_id: product.product_id,
-          fruit: selectedFruit.id,
-          fiat: selectedFruit.fiat
-        }
-      })
-    });
+    try {
+      const response = await fetch("/openreceive/v1/invoices", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": `hello-fruit-${selectedFruit.id}`
+        },
+        body: JSON.stringify({
+          fiat: selectedFruit.fiat,
+          description: createHelloFruitInvoiceDescription(selectedFruit.name),
+          expiry: product.invoice_expiry_seconds,
+          metadata: {
+            product_id: product.product_id,
+            fruit: selectedFruit.id,
+            fiat: selectedFruit.fiat
+          }
+        })
+      });
+      const body = await response.json();
 
-    const body = await response.json();
-    if (!response.ok) {
-      setStatus("failed");
-      setError(body.message ?? "Could not create invoice.");
-      return;
+      if (!response.ok) {
+        setError(body.message ?? helloFruitDemoLabels.createInvoiceError);
+        return;
+      }
+
+      setInvoice(body);
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setCreating(false);
     }
-
-    setInvoice(body);
-    setStatus("invoice_created");
   }
 
   return (
-    <main className="page">
+    <OpenReceiveThemeScope
+      as="main"
+      className="page"
+      themeToggle
+      topbarClassName="topbar"
+    >
       <section className="checkout">
         <div className="product">
           <img src={`/${selectedFruit?.sticker}`} alt="" />
@@ -187,71 +95,42 @@ function App() {
             >
               <img src={`/${fruit.sticker}`} alt="" />
               <span>{fruit.name}</span>
-              <small>{formatFiat(fruit.fiat)}</small>
+              <small>{formatHelloFruitFiat(fruit.fiat)}</small>
             </button>
           ))}
         </div>
 
-        <button className="primary" onClick={createInvoice} type="button">
-          Create invoice
+        <button
+          className="primary"
+          disabled={creating}
+          onClick={createInvoice}
+          type="button"
+        >
+          {creating ? helloFruitDemoLabels.creatingInvoice : helloFruitDemoLabels.createInvoice}
         </button>
 
-        {invoice && (
-          <div className="invoice">
-            <div
-              className="qr"
-              dangerouslySetInnerHTML={{ __html: qrSvg }}
-            />
-            <dl>
-              <div>
-                <dt>Invoice</dt>
-                <dd>{invoice.invoice_id}</dd>
-              </div>
-              <div>
-                <dt>Status</dt>
-                <dd>{status}</dd>
-              </div>
-            </dl>
-            <div className="actions">
-              <button
-                onClick={() => copyInvoice({
-                  invoice: invoice.invoice,
-                  logger: logOpenReceive,
-                  logContext: {
-                    invoice_id: invoice.invoice_id,
-                    payment_hash: invoice.payment_hash,
-                    amount_msats: invoice.amount_msats,
-                    transaction_state: invoice.transaction_state,
-                    workflow_state: invoice.workflow_state
-                  }
-                })}
-                type="button"
-              >
-                Copy invoice
-              </button>
-              <button
-                onClick={() => openWallet({
-                  invoice: invoice.invoice,
-                  logger: logOpenReceive,
-                  logContext: {
-                    invoice_id: invoice.invoice_id,
-                    payment_hash: invoice.payment_hash,
-                    amount_msats: invoice.amount_msats,
-                    transaction_state: invoice.transaction_state,
-                    workflow_state: invoice.workflow_state
-                  }
-                })}
-                type="button"
-              >
-                Open wallet
-              </button>
-            </div>
-          </div>
+        {invoice === null ? null : (
+          <OpenReceiveCheckout
+            amount_msats={invoice.amount_msats}
+            checkout={invoice.checkout}
+            className="demo-checkout"
+            invoice={invoice.invoice}
+            invoice_id={invoice.invoice_id}
+            logger={logOpenReceive}
+            lookupUrl="/openreceive/v1/invoices/lookup"
+            onError={(cause) => {
+              setError(cause instanceof Error ? cause.message : String(cause));
+            }}
+            payment_hash={invoice.payment_hash}
+            transaction_state={invoice.transaction_state}
+            workflow_state={invoice.workflow_state}
+            expires_at={invoice.expires_at}
+          />
         )}
 
-        {error && <p className="error">{error}</p>}
+        {error === "" ? null : <p className="error">{error}</p>}
       </section>
-    </main>
+    </OpenReceiveThemeScope>
   );
 }
 

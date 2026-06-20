@@ -1,0 +1,23 @@
+{
+  "name": "@openreceive/vue",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@openreceive/browser": "0.1.0",
+    "@openreceive/elements": "0.1.0"
+  },
+  "peerDependencies": {
+    "vue": ">=3.4.0"
+  },
+  "peerDependenciesMeta": {
+    "vue": {
+      "optional": true
+    }
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./checkout.vue": "./src/OpenReceiveCheckout.vue",
+    "./styles.css": "./src/styles.css"
+  }
+}

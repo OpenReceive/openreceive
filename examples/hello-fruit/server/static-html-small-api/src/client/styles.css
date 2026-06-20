@@ -18,16 +18,50 @@ button {
 }
 
 .page {
+  --page-bg: #f7f8fb;
+  --panel-bg: #ffffff;
+  --text: #171717;
+  --muted: #4a5568;
+  --border: #d8dee9;
+  --primary: #171717;
+  --primary-text: #ffffff;
   display: grid;
   min-height: 100vh;
   padding: 28px;
   place-items: center;
+  background: var(--page-bg);
+  color: var(--text);
+}
+
+.page[data-theme="dark"] {
+  --page-bg: #121620;
+  --panel-bg: #1c2230;
+  --text: #f7f8fb;
+  --muted: #b7c0cf;
+  --border: #333c4d;
+  --primary: #f7f8fb;
+  --primary-text: #121620;
 }
 
 .checkout {
   display: grid;
   gap: 18px;
-  width: min(720px, 100%);
+  width: min(960px, 100%);
+}
+
+.topbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.topbar openreceive-theme-toggle::part(button) {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  color: var(--text);
+  cursor: pointer;
 }
 
 .product {
@@ -50,7 +84,7 @@ h1 {
 }
 
 p {
-  color: #4a5568;
+  color: var(--muted);
   margin: 0;
 }
 
@@ -61,9 +95,10 @@ p {
 }
 
 .fruit-grid button {
-  background: #ffffff;
-  border: 1px solid #d8dee9;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
   border-radius: 8px;
+  color: var(--text);
   cursor: pointer;
   display: grid;
   gap: 8px;
@@ -77,14 +112,14 @@ p {
 }
 
 .fruit-grid small {
-  color: #667085;
+  color: var(--muted);
 }
 
 .primary {
-  background: #171717;
+  background: var(--primary);
   border: 0;
   border-radius: 8px;
-  color: #ffffff;
+  color: var(--primary-text);
   cursor: pointer;
   min-height: 44px;
 }
@@ -99,7 +134,8 @@ p {
 }
 
 openreceive-checkout {
-  max-width: 340px;
+  display: block;
+  width: 100%;
 }
 
 .error {

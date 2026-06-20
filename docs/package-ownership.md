@@ -13,6 +13,9 @@ parallel work. Shared contract files still need lead coordination.
 | Browser helpers | `packages/js/browser` | Implemented | Browser worker |
 | Elements package | `packages/js/elements` | Implemented | Browser worker |
 | React package | `packages/js/react` | Implemented | Frontend worker |
+| Vue binding package | `packages/js/vue` | Initial web-component bindings | Frontend worker |
+| Svelte binding package | `packages/js/svelte` | Initial web-component bindings | Frontend worker |
+| Angular binding package | `packages/js/angular` | Initial web-component bindings | Frontend worker |
 | Provider data package | `packages/js/provider-data` | Implemented | Data worker |
 | Testkit package | `packages/js/testkit` | Implemented | Conformance worker |
 | Ruby core package | `packages/ruby/openreceive` | Initial vector-backed helpers | Ecosystem worker |

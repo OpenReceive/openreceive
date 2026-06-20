@@ -1,3 +1,4 @@
+import "@openreceive/react/styles.css";
 import "./globals.css";
 
 export const metadata = {

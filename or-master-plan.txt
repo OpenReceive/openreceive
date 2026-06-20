@@ -2331,8 +2331,12 @@ Frontend package philosophy:
 
     1. @openreceive/browser
        Framework-neutral state machine, event handling, provider-route loading,
-       countdowns, QR helpers, copy/open-wallet actions, and typed data. No DOM
-       ownership beyond optional helpers.
+       route/wizard selection, country storage, theme preference helpers,
+       countdowns, QR helpers, copy/open-wallet actions, watcher lifecycle for
+       SSE/polling/countdown, shared backend lookup fetcher, shared checkout
+       labels, wizard selection reducer/model helpers, country picker/map model
+       helpers, shared theme model helpers, shared checkout icon assets/helpers,
+       and typed data. No DOM ownership beyond optional helpers.
 
     2. Framework headless adapters
        React hooks/context, Vue composables, Svelte stores/actions, Angular
@@ -2349,7 +2353,10 @@ Frontend package philosophy:
 
     4. Optional default UI
        A pleasant default checkout for demos, quickstarts, and teams without a
-       design system. This is not the main customization surface.
+       design system. This is not the main customization surface, but it must
+       be complete enough to show the real payment wizard, waiting state,
+       countdown, copy/open-wallet actions, route/provider suggestions, and
+       light/dark theme behavior without demo-local business logic.
 
     5. Design-system recipes
        Example integrations for Mantine, Material UI, Chakra, Tailwind/Radix,
@@ -2499,9 +2506,9 @@ JavaScript / TypeScript:
   @openreceive/browser       Headless checkout state/actions, no framework
   @openreceive/elements      Web components for no-framework checkout UI
   @openreceive/react         React hooks, primitives, slots, default UI
-  @openreceive/vue           Vue composables, scoped slots, default UI
-  @openreceive/svelte        Svelte stores/actions, slots, default UI
-  @openreceive/angular       Angular service/signals/directives, default UI
+  @openreceive/vue           Vue bindings for shared checkout element; native UI later
+  @openreceive/svelte        Svelte bindings for shared checkout element; native UI later
+  @openreceive/angular       Angular bindings for shared checkout element; native UI later
   @openreceive/solid         Solid signals/primitives, default UI, later
   @openreceive/ui-recipes    Design-system examples, docs, and snippets
   @openreceive/node          Backend NWC/OpenReceive client
@@ -2616,11 +2623,22 @@ path through a script tag and a custom element. It still talks to a server-side
 invoice endpoint; it never receives an NWC connection string and never calls
 NWC directly.
 
-Frontend design-system rule:
+  Frontend design-system rule:
 
   Framework packages must be headless-first and design-system friendly. Default
   UI exists for demos and quickstarts, but production apps should be able to
   replace every visible surface without forking payment logic.
+
+  Demo-thinness rule:
+
+    Demos may own product selection, invoice creation requests, and backend
+    lookup wiring. They must not own duplicated provider registry transforms,
+    route selection rules, country-map data, browser storage keys, countdown
+    formatting, copy/open-wallet behavior, or payment wizard state. Those live
+    in @openreceive/browser and are surfaced through @openreceive/react,
+    @openreceive/elements, and later Vue/Svelte/Angular packages. Every demo
+    that renders checkout UI must expose a light/dark switcher so theme support
+    stays visible and tested.
 
 
 Backend Framework Adapters
@@ -4199,6 +4217,185 @@ Current repository position:
     expected-capabilities fixture aligned with the documented Rizful example,
     so these newer plan artifacts are protected by npm test instead of only
     package-specific tests.
+  - This review also begins the package-first checkout wizard extraction that
+    the demos had started to duplicate. @openreceive/browser now owns
+    payment-method choices, country/region map metadata, provider-route
+    wizard state, persisted country preference, theme preference helpers,
+    countdown formatting, msat display formatting, shared polling/copy/provider
+    preview defaults, the canonical passive invoice event set, and a
+    framework-neutral checkout watcher that owns SSE subscription, backend
+    lookup polling, countdown refresh, lookup POST shape, and lookup-response
+    merging. It now also owns a framework-neutral checkout controller that
+    bundles that watcher lifecycle with package-owned lookupUrl fetcher
+    creation, copy, open-wallet, manual reload, retry, backend-owned
+    refresh-expired-invoice, and cancel actions for headless framework adapters.
+    The refresh action requires app-provided refresh configuration and an
+    idempotency key, then replaces browser state from the backend's linked
+    replacement invoice response. Lookup-response merging and display-data state
+    conversion now preserve `settled_at`, so browser adapters do not drop
+    backend settlement timestamps while rendering display state. It
+    also
+    owns shared checkout labels/status text/provider badge text/provider action
+    labels/route subtitles/country prompts, plus shared checkout icon assets
+    and helpers, plus a transient feedback controller for copy/copy-provider
+    states, so React, web components, demos, and future adapters do not
+    drift on user-visible checkout language or visual payment symbols. The
+    browser package now also owns checkout display-model helpers for Lightning
+    URI, msat amount label, shortened payment-hash label, transaction-state
+    label, display-safe invoice validation, and display-data-to-snapshot/state
+    conversion, so React and web components do not carry their own
+    hash-shortening, invoice-safety, or checkout snapshot mapping helpers. It
+    also owns display HTML escaping for string-rendered adapters, so web
+    components and future adapters do not copy escape rules locally. The
+    browser package also owns the waiting-spinner decision and countdown
+    seconds through checkout state, so React and web components derive those
+    displays instead of rechecking expiry and settlement fields locally; state
+    creation now computes countdown seconds with the browser package's default
+    clock when `expires_at` is present, so adapters do not carry local clock
+    helpers for initial countdown rendering. It now also owns a checkout status
+    display model for spinner visibility, status
+    title/detail text, countdown prefix, and countdown label, so adapters do not
+    recombine the lower-level waiting, label, and countdown helpers locally. The
+    browser package now also owns the wizard selection
+    reducer/model for method, country, region, and route transitions, plus the
+    shared country picker/map model for region tabs, selected/hovered country
+    state, visible country lists, country display labels/readouts, country map
+    viewport/region geometry, optional world-map land paths, route/provider
+    display rows, route asset button display rows, and projected map pins. React and the web component consume
+    the same derived country/route model even when their visual map rendering
+    differs, and React no longer owns D3/topojson/world-atlas projection setup;
+    rich renderers opt into @openreceive/browser/country-map so the default
+    browser helper entry stays lighter.
+    The
+    browser package now also owns wizard DOM attribute names, selectors, and
+    interaction parsers for methods, regions, countries, routes, and
+    provider-copy buttons, so web components and future native adapters do not
+    hand-code the same data-or-* binding contract. It also owns default
+    checkout data attribute names and selectors for QR, state, actions, theme,
+    and theme-toggle hooks, so React, web components, shared CSS, and future
+    adapters share one checkout DOM contract. The
+    browser package also owns checkout and theme-toggle custom-element
+    attribute-name maps, so @openreceive/elements, Vue/Svelte/Angular bindings,
+    and no-framework helpers share the same invoice-id, lookup-url,
+    payment-wizard, root-selector, and storage-key contract. It also owns
+    reusable checkout/theme attribute parsers for non-negative integer fields,
+    boolean attributes, resolved theme attributes, and theme preference
+    attributes, so adapters do not reimplement those edge cases locally. The
+    browser package also owns web-component shadow action part names and
+    selectors for copy, open-wallet, and theme-toggle buttons, so
+    @openreceive/elements and future wrappers do not hand-code those hooks.
+    The
+    browser package also owns checkout custom event construction for copy,
+    open-wallet, state, settled, payment-received, error, and provider-copy
+    events so React, web components, and future adapters share the same event
+    names and detail payloads. It now also owns theme-toggle change event
+    construction so web components and future adapters share the same
+    theme-change event name and detail payload.
+    @openreceive/react now
+    exposes the richer default checkout UI with QR, BOLT11 copy feedback,
+    open-wallet action, waiting state, countdown, first-choice payment wizard
+    (Credit Card, Bank Transfer, Bitcoin, Crypto), country-aware map picker,
+    route/provider suggestions, shared browser-owned icons/assets, a
+    package-owned provider/context layer and package-owned theme scope/toggle
+    for app shells. Default light/dark checkout CSS now lives at
+    @openreceive/browser/styles.css, with @openreceive/react/styles.css
+    retained as a framework-local wrapper. It consumes the browser-owned
+    checkout controller for hook lifecycle/lookup/copy/open-wallet behavior,
+    passes those controller-backed hook actions into the default checkout
+    copy/open-wallet buttons,
+    and the browser-owned transient feedback controller across the headless hook,
+    default copy button, and payment wizard provider copy buttons.
+    @openreceive/elements now accepts a theme attribute, shares the copy
+    feedback behavior through the browser-owned transient feedback controller,
+    and renders a package-owned no-framework payment wizard, country map
+    viewport/region geometry, provider display rows, route asset button rows,
+    and route/method icons from the same browser helpers. It consumes the
+    browser-owned checkout controller for live checkout lookupUrl polling/SSE
+    and primary copy/open-wallet actions. It also
+    registers a package-owned <openreceive-theme-toggle> element for stored
+    light/dark preference, toggle labels, and theme attribute syncing. It now
+    also exposes a styles.css wrapper around the browser-owned default checkout
+    light/dark stylesheet for no-framework apps, while consuming browser-owned
+    checkout and theme-toggle shadow style constants instead of carrying a
+    parallel inline stylesheet. The Node
+    Express React demo is
+    intentionally thin again: it
+    owns fruit selection, invoice creation, and backend lookup, then renders the
+    package checkout. Next.js now follows the same thin frontend pattern by
+    delegating checkout polling, SSE handling, countdown, waiting state, and
+    wizard UI to @openreceive/react. Static HTML now delegates checkout
+    polling, SSE handling, countdown, waiting state, and wizard UI to the
+    @openreceive/elements web component and imports
+    @openreceive/elements/styles.css before demo-local page CSS. Static HTML
+    plus Next.js demos expose light/dark switchers as well. The frontend
+    checkout and SDK status docs now describe the package-owned wizard, theme,
+    countdown, polling/SSE, styles, and demo-thinness boundaries for developers
+    installing these packages.
+    This review now also adds initial @openreceive/vue, @openreceive/svelte,
+    and @openreceive/angular packages as thin typed bindings around the shared
+    <openreceive-checkout> web component. @openreceive/browser owns the
+    checkout element attribute/listener factories plus a no-framework checkout
+    element creator, so these framework packages and demos do not duplicate
+    invoice attribute names, custom event names, or display-safe checkout
+    wiring. @openreceive/browser also now owns a shared
+    theme model for resolved light/dark state, next toggle target, toggle
+    label, package-owned container attributes (`data-openreceive-theme` and
+    `data-theme`), and checkout-element theme attributes; React, Static HTML,
+    Vue, Svelte, and Angular bindings consume that model instead of open-coding
+    theme behavior. @openreceive/browser now also exposes a storage-backed theme
+    model factory, and the Vue/Svelte/Angular packages re-export framework-named
+    stored-theme binding helpers so apps do not copy localStorage keys or theme
+    read/write behavior. @openreceive/browser also owns stored-theme toggling and
+    theme attribute application helpers, re-exported through the framework
+    adapter packages, so no-framework demos and future adapters do not hand-roll
+    theme transitions, toggle labels, or DOM attribute names. @openreceive/browser
+    now also owns stored-theme control helpers that apply root, checkout, and
+    toggle-button state together. The static demo now also uses the package-owned
+    theme-toggle element creator before invoice creation and the full checkout
+    shell creator once an invoice exists instead of hand-applying custom element
+    attributes, hard-coding custom-element markup, event listeners, theme labels,
+    or theme target updates. @openreceive/browser
+    now owns the theme-toggle element tag/attribute factory, DOM creator, and
+    full checkout-shell element creator, and the Vue/Svelte/Angular packages expose
+    framework-named theme-toggle binding helpers so framework adapters do not
+    copy `root-selector`, `checkout-selector`, `default-theme`, or `storage-key`
+    attribute names. @openreceive/browser now also owns a full checkout-shell
+    binding model that combines stored theme resolution, root theme attributes,
+    checkout element attributes/listeners, and theme-toggle attributes. The
+    Vue/Svelte/Angular packages expose framework-named shell bindings so apps
+    can render the full wizard/countdown/theme checkout without composing those
+    pieces by hand. They also expose framework-named shell element creators
+    that delegate to the browser-owned DOM creator for imperative mounting
+    without copying checkout/theme element wiring. They now also expose
+    framework-named checkout component models that bundle the shell binding
+    with the shared custom-element registration hook, and they ship thin
+    Vue/Svelte/Angular component entry files that wrap the shared checkout and
+    theme-toggle custom elements instead of forking checkout behavior. They now
+    also expose framework-named checkout controller helpers that delegate to
+    the browser-owned watcher/copy/open-wallet action controller, plus
+    framework-local styles.css wrappers around the browser-owned default
+    checkout light/dark stylesheet; @openreceive/elements exposes the same
+    wrapper for no-framework apps. The browser
+    demos now keep their existing CSS hooks through
+    package-owned theme attributes so theme semantics stay testable across
+    frameworks, and the React demos now use @openreceive/react's
+    OpenReceiveThemeScope instead of local useOpenReceiveTheme/
+    OpenReceiveThemeToggle wiring, and they pass `lookupUrl` to
+    OpenReceiveCheckout instead of constructing the lookup fetcher locally.
+    @openreceive/elements also passes lookupUrl into the browser-owned checkout
+    controller instead of hand-writing lookup POST requests or lookup fetcher
+    construction inside the web component.
+    React hook/provider consumers now receive controller-backed
+    `reloadState()`, `retry()`, `refreshExpiredInvoice()`, and `cancel()`
+    actions in addition to copy and open-wallet actions, and Vue/Svelte/Angular
+    controller helpers expose the same shared browser controller surface for
+    custom app UIs.
+    Static HTML also consumes the browser-owned custom-element
+    listener map, so demos do not copy `openreceive-*` event names. The Hello
+    Fruit demos also share product display helpers for fiat labels, invoice
+    descriptions, invoice creation button labels, and fallback invoice creation
+    error copy so demo copy and prices do not drift between frontend stacks.
+    Full native Vue/Svelte/Angular component sets remain future work.
   - This review also starts Milestone 3 with a minimal Ruby core-helper
     package at packages/ruby/openreceive. It consumes shared vectors for exact
     fiat-to-msats math, settlement detection, NWC URI parse/redaction, and
@@ -4249,24 +4446,34 @@ Current repository position:
     The root npm run demo launcher includes the rails target, and the demo
     container validator now checks it as the fourth Hello Fruit demo, but full
     bundle/build smoke remains pending.
-  - Verification after the client logging work:
+  - Verification after the package-first checkout extraction:
 
       node --test tests/v0.1/core.test.mjs tests/v0.1/react.test.mjs tests/v0.1/elements.test.mjs tests/v0.1/express.test.mjs
       node --test tests/v0.1/rates.test.mjs
       node --test tests/v0.1/provider-data.test.mjs
       node --test tests/v0.1/tooling.test.mjs
       node --test tests/v0.1/express.test.mjs
+      node --test tests/v0.1/demo.test.mjs
+      node --test tests/v0.1/framework-adapters.test.mjs
       npm run typecheck
       npm run validate
+      npm run test:js
       npm test
-      OPENRECEIVE_ENV_FILE=.env OPENRECEIVE_LIVE_CREATE_INVOICE=0 npm run test:live:nwc
+      npm run test:package-smoke
+      npm run build:demo
+      npm run scan:client-bundles
+      npm run build:docs
       npm run test:ci
 
     Result:
 
-      Passing. The live NWC check was a preflight-only run and did not create
-      an invoice; the final test:ci run skipped live NWC because the CI command
-      did not load the local .env.
+      Passing. Package smoke imported 11 local OpenReceive package tarballs,
+      including the browser country-map subpath, shared checkout styles,
+      package-owned icon assets, and Vue/Svelte/Angular component entry files.
+      No new .env values were required for this checkout-package work; the
+      existing read-only NWC value remains only for optional live smoke checks.
+      The final test:ci run skipped live NWC because OPENRECEIVE_NWC was not
+      present in that command environment.
 
 Already completed:
 
@@ -4284,14 +4491,43 @@ Already completed:
   - Express adapter with auth hooks, CSRF/CORS behavior, lookup authorization,
     signed event URLs, SSE invoice events, rates/providers/routes endpoints,
     refresh support, and secure fail-closed defaults.
-  - @openreceive/browser helpers and checkout state reducer.
+  - @openreceive/browser helpers, checkout state reducer, payment wizard
+    state helpers, country/theme storage helpers, countdown formatting, and
+    provider-route selection helpers, plus shared frontend defaults for
+    polling cadence, copy feedback duration, provider preview count, and
+    passive invoice event names, plus shared checkout display-model helpers,
+    shared checkout labels, wizard selection
+    reducer/model helpers, shared country picker/map helpers, shared
+    route/provider and route-asset display helpers, shared theme model helpers,
+    shared country map viewport/region geometry, a transient feedback
+    controller, a checkout watcher, a checkout action controller used by
+    framework adapters with reload/retry/refresh/cancel actions, browser-owned wizard DOM attributes/selectors/parsers,
+    browser-owned checkout data attributes/selectors, browser-owned
+    checkout/theme-toggle custom-element attribute maps, browser-owned
+    web-component shadow part/action selector maps, browser-owned
+    checkout/provider-copy and theme-change event construction, browser-owned default checkout light/dark CSS, and
+    browser-owned web-component shadow styles consumed by @openreceive/elements.
   - @openreceive/elements, @openreceive/react default checkout UI, hooks/
-    primitives/slots, aliases, and the React Material UI recipe.
+    provider/context, primitives/slots, aliases, copy feedback, light/dark theme surfaces,
+    React and web-component default payment wizards with shared country map
+    model, React hook and web-component lifecycle/lookup/copy/open-wallet
+    behavior through the shared browser checkout controller, React hook
+    reload/retry/refresh/cancel actions through the same controller, browser-owned
+    waiting/countdown display decisions, web-component shadow styles from
+    @openreceive/browser, React default action buttons wired through
+    controller-backed hook actions, and the React Material UI recipe.
+  - Initial @openreceive/vue, @openreceive/svelte, and @openreceive/angular
+    packages with thin typed bindings for the shared checkout web component and
+    shared theme model, plus framework-named checkout-shell and component-model
+    creators, framework-named checkout controller helpers, browser-owned CSS
+    wrapper exports, plus packaged thin component entry files.
   - @openreceive/provider-data and provider registry validation.
   - @openreceive/testkit and deterministic mock wallet tooling.
-  - Express + React Hello Fruit demo.
-  - Static HTML + small API Hello Fruit demo.
-  - Next.js fullstack Hello Fruit demo, including runtime-hosted metadata,
+  - Express + React Hello Fruit demo, now consuming the package checkout
+    wizard/theme UI instead of duplicating provider-data logic locally.
+  - Static HTML + small API Hello Fruit demo with a stored light/dark switcher.
+  - Next.js fullstack Hello Fruit demo with a stored light/dark switcher,
+    including runtime-hosted metadata,
     robots, sitemap, health, source, and docs routes.
   - Demo deployment inventory/templates for express-demo, static-demo, and
     nextjs-demo.

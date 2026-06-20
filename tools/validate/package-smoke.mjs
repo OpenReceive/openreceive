@@ -18,16 +18,20 @@ import ts from "typescript";
 
 const root = process.cwd();
 const packageRoot = path.join(root, "packages/js");
+const localSmokeDependencies = new Set(["react"]);
 
 const importChecks = {
-  "@openreceive/browser": "typeof mod.createLightningUri === 'function'",
+  "@openreceive/angular": "typeof mod.createOpenReceiveAngularCheckoutBinding === 'function' && typeof mod.createOpenReceiveAngularCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveAngularCheckoutComponentModel === 'function' && typeof mod.createOpenReceiveAngularCheckoutController === 'function' && typeof mod.createOpenReceiveAngularThemeBinding === 'function' && typeof mod.createOpenReceiveAngularStoredThemeBinding === 'function' && typeof mod.createOpenReceiveAngularThemeToggleBinding === 'function' && typeof mod.createOpenReceiveCheckoutElement === 'function' && typeof mod.createOpenReceiveThemeToggleElement === 'function' && typeof mod.createOpenReceiveCheckoutShell === 'function' && typeof mod.toggleOpenReceiveStoredThemeControls === 'function'",
+  "@openreceive/browser": "typeof mod.createLightningUri === 'function' && typeof mod.OpenReceiveCheckoutWatcher === 'function' && typeof mod.OpenReceiveBrowserCheckoutController === 'function' && typeof mod.createOpenReceiveCheckoutController === 'function' && typeof mod.updateOpenReceivePaymentWizardSelection === 'function' && typeof mod.createOpenReceiveCountryPickerModel === 'function' && typeof mod.createOpenReceiveThemeModel === 'function' && typeof mod.createOpenReceiveStoredThemeModel === 'function' && typeof mod.createOpenReceiveCheckoutElement === 'function' && typeof mod.createOpenReceiveThemeToggleElement === 'function' && typeof mod.createOpenReceiveCheckoutShell === 'function' && typeof mod.createOpenReceiveCheckoutShellModel === 'function' && typeof mod.createOpenReceiveThemeToggleElementAttributes === 'function' && typeof mod.syncOpenReceiveStoredThemeControls === 'function' && typeof mod.toggleOpenReceiveStoredThemeControls === 'function' && typeof mod.applyOpenReceiveThemeAttributes === 'function' && typeof mod.getOpenReceiveRouteIcon === 'function' && typeof mod.createOpenReceiveLookupInvoiceFetcher === 'function' && typeof mod.createOpenReceiveRefreshInvoiceFetcher === 'function' && typeof mod.createOpenReceiveProviderCopyEvent === 'function' && typeof mod.openReceiveCheckoutElementStyles === 'string' && typeof mod.openReceiveThemeToggleElementStyles === 'string'",
   "@openreceive/core": "typeof mod.createIdempotencyRequestHash === 'function'",
-  "@openreceive/elements": "typeof mod.renderOpenReceiveCheckoutHtml === 'function'",
+  "@openreceive/elements": "typeof mod.renderOpenReceiveCheckoutHtml === 'function' && typeof mod.renderOpenReceiveThemeToggleHtml === 'function' && mod.OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME === 'openreceive-theme-toggle'",
   "@openreceive/express": "typeof mod.createOpenReceiveExpressHandlers === 'function'",
   "@openreceive/node": "typeof mod.createAlbyNwcReceiveClient === 'function'",
   "@openreceive/provider-data": "typeof mod.getProviderRegistryMetadata === 'function'",
-  "@openreceive/react": "typeof mod.createOpenReceiveCheckoutViewModel === 'function'",
-  "@openreceive/testkit": "typeof mod.createTestkitReceiveClient === 'function'"
+  "@openreceive/react": "typeof mod.createOpenReceiveCheckoutViewModel === 'function' && typeof mod.OpenReceiveThemeScope === 'function' && typeof mod.OpenReceiveProvider === 'function' && typeof mod.useOpenReceiveCheckoutContext === 'function'",
+  "@openreceive/svelte": "typeof mod.createOpenReceiveSvelteCheckoutBinding === 'function' && typeof mod.createOpenReceiveSvelteCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveSvelteCheckoutComponentModel === 'function' && typeof mod.createOpenReceiveSvelteCheckoutController === 'function' && typeof mod.createOpenReceiveSvelteThemeBinding === 'function' && typeof mod.createOpenReceiveSvelteStoredThemeBinding === 'function' && typeof mod.createOpenReceiveSvelteThemeToggleBinding === 'function' && typeof mod.createOpenReceiveCheckoutElement === 'function' && typeof mod.createOpenReceiveThemeToggleElement === 'function' && typeof mod.createOpenReceiveCheckoutShell === 'function' && typeof mod.syncOpenReceiveStoredThemeControls === 'function' && typeof mod.applyOpenReceiveCheckoutThemeAttributes === 'function'",
+  "@openreceive/testkit": "typeof mod.createTestkitReceiveClient === 'function'",
+  "@openreceive/vue": "typeof mod.createOpenReceiveVueCheckoutBinding === 'function' && typeof mod.createOpenReceiveVueCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveVueCheckoutComponentModel === 'function' && typeof mod.createOpenReceiveVueCheckoutController === 'function' && typeof mod.createOpenReceiveVueThemeBinding === 'function' && typeof mod.createOpenReceiveVueStoredThemeBinding === 'function' && typeof mod.createOpenReceiveVueThemeToggleBinding === 'function' && typeof mod.createOpenReceiveCheckoutElement === 'function' && typeof mod.createOpenReceiveThemeToggleElement === 'function' && typeof mod.createOpenReceiveCheckoutShell === 'function' && typeof mod.syncOpenReceiveStoredThemeControls === 'function' && typeof mod.applyOpenReceiveThemeAttributes === 'function'"
 };
 
 function readJson(filePath) {
@@ -111,6 +115,31 @@ function transpileTypeScript(source, fileName) {
   return result.outputText;
 }
 
+function rewriteExportTarget(target) {
+  if (typeof target !== "string") return target;
+  if (target.startsWith("./src/") && target.endsWith(".ts")) {
+    return `./dist/${target.slice("./src/".length, -".ts".length)}.js`;
+  }
+  if (target.startsWith("./src/")) {
+    return `./dist/${target.slice("./src/".length)}`;
+  }
+  return target;
+}
+
+function rewriteExports(exports) {
+  if (typeof exports === "string") return rewriteExportTarget(exports);
+  if (exports === null || typeof exports !== "object" || Array.isArray(exports)) {
+    return exports;
+  }
+
+  return Object.fromEntries(
+    Object.entries(exports).map(([key, value]) => [
+      key,
+      typeof value === "string" ? rewriteExportTarget(value) : rewriteExports(value)
+    ])
+  );
+}
+
 function buildPackageArtifact(pkg, artifactRoot) {
   const packageDirName = path.basename(pkg.dir);
   const artifactDir = path.join(artifactRoot, packageDirName);
@@ -120,9 +149,7 @@ function buildPackageArtifact(pkg, artifactRoot) {
 
   const manifest = {
     ...pkg.manifest,
-    exports: {
-      ".": "./dist/index.js"
-    },
+    exports: rewriteExports(pkg.manifest.exports),
     files: ["dist"]
   };
   writeFileSync(
@@ -132,13 +159,17 @@ function buildPackageArtifact(pkg, artifactRoot) {
 
   for (const file of walkFiles(sourceDir)) {
     const relativePath = path.relative(sourceDir, file);
-    const outputRelativePath = relativePath.endsWith(".ts")
+    const outputRelativePath = relativePath.endsWith(".d.ts")
+      ? relativePath
+      : relativePath.endsWith(".ts")
       ? relativePath.replace(/\.ts$/, ".js")
       : relativePath;
     const outputPath = path.join(distDir, outputRelativePath);
     mkdirSync(path.dirname(outputPath), { recursive: true });
 
-    if (relativePath.endsWith(".ts")) {
+    if (relativePath.endsWith(".d.ts")) {
+      copyFileSync(file, outputPath);
+    } else if (relativePath.endsWith(".ts")) {
       writeFileSync(
         outputPath,
         transpileTypeScript(readFileSync(file, "utf8"), file)
@@ -173,12 +204,14 @@ function localPackageDependency(packageName) {
   return `file:${path.join(root, "node_modules", packageName)}`;
 }
 
-function writeInstallProject(installDir, tarballs) {
+function writeInstallProject(installDir, packages, tarballs) {
   const dependencies = Object.fromEntries(
     tarballs.map(({ name, tarball }) => [name, `file:${tarball}`])
   );
 
-  dependencies.react = localPackageDependency("react");
+  for (const dependency of localSmokeDependencies) {
+    dependencies[dependency] ??= localPackageDependency(dependency);
+  }
 
   writeFileSync(
     path.join(installDir, "package.json"),
@@ -208,8 +241,15 @@ function writeImportSmoke(installDir, packages) {
   writeFileSync(
     path.join(installDir, "smoke.mjs"),
     `import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import { openReceiveCountryMapLandPaths } from "@openreceive/browser/country-map";
 
 const checks = ${JSON.stringify(checks, null, 2)};
+
+assert(
+  openReceiveCountryMapLandPaths.length > 0,
+  "@openreceive/browser/country-map: land paths must be importable"
+);
 
 for (const item of checks) {
   const mod = await import(item.name);
@@ -218,6 +258,41 @@ for (const item of checks) {
     \`\${item.name}: import check failed\`
   );
 }
+
+const browserStylesPath = "node_modules/@openreceive/browser/dist/styles.css";
+assert(existsSync(browserStylesPath), "@openreceive/browser: styles.css export must be packaged");
+assert(
+  readFileSync(browserStylesPath, "utf8").includes("[data-openreceive-checkout]"),
+  "@openreceive/browser: styles.css must contain checkout styles"
+);
+for (const packageName of ["elements", "react", "vue", "svelte", "angular"]) {
+  const stylesPath = \`node_modules/@openreceive/\${packageName}/dist/styles.css\`;
+  assert(existsSync(stylesPath), \`@openreceive/\${packageName}: styles.css export must be packaged\`);
+  assert(
+    readFileSync(stylesPath, "utf8").includes("@openreceive/browser/styles.css"),
+    \`@openreceive/\${packageName}: styles.css must import the shared browser styles\`
+  );
+}
+assert(
+  existsSync("node_modules/@openreceive/browser/dist/assets/icons/btc.svg"),
+  "@openreceive/browser: checkout icon assets must be packaged"
+);
+assert(
+  existsSync("node_modules/@openreceive/browser/dist/assets/icons/card.svg"),
+  "@openreceive/browser: fiat method icon assets must be packaged"
+);
+assert(
+  existsSync("node_modules/@openreceive/vue/dist/OpenReceiveCheckout.vue"),
+  "@openreceive/vue: checkout Vue component must be packaged"
+);
+assert(
+  existsSync("node_modules/@openreceive/svelte/dist/OpenReceiveCheckout.svelte"),
+  "@openreceive/svelte: checkout Svelte component must be packaged"
+);
+assert(
+  existsSync("node_modules/@openreceive/angular/dist/openreceive-checkout.component.mjs"),
+  "@openreceive/angular: checkout Angular component must be packaged"
+);
 
 console.log(\`Imported \${checks.length} OpenReceive package tarballs.\`);
 `
@@ -263,7 +338,7 @@ function main() {
       tarball: packPackageArtifact(pkg, artifactRoot, tarballDir, cacheDir)
     }));
 
-    writeInstallProject(installDir, tarballs);
+    writeInstallProject(installDir, packages, tarballs);
     runNpm(
       [
         "install",

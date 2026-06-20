@@ -29,9 +29,31 @@ textarea {
 }
 
 .checkout {
+  --page-bg: #f6f8f4;
+  --panel-bg: #ffffff;
+  --text: #17201b;
+  --muted: #5d6f64;
+  --border: #d8ded2;
+  --primary: #236a4b;
+  --primary-text: #ffffff;
   width: min(100%, 640px);
   display: grid;
   gap: 20px;
+  color: var(--text);
+}
+
+.checkout[data-theme="dark"] {
+  --page-bg: #121711;
+  --panel-bg: #1d241c;
+  --text: #f6f8f4;
+  --muted: #b8c5b4;
+  --border: #384333;
+  --primary: #8fd6ae;
+  --primary-text: #121711;
+}
+
+body:has(.checkout[data-theme="dark"]) {
+  background: #121711;
 }
 
 .product,
@@ -39,9 +61,9 @@ textarea {
   display: grid;
   gap: 16px;
   padding: 20px;
-  border: 1px solid #d8ded2;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--panel-bg);
 }
 
 .product {
@@ -53,6 +75,21 @@ textarea {
 .fruit-grid img {
   width: 100%;
   aspect-ratio: 1;
+}
+
+.topbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.topbar button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  color: var(--text);
+  cursor: pointer;
 }
 
 h1,
@@ -70,10 +107,10 @@ p {
 .primary,
 .actions button {
   min-height: 44px;
-  border: 1px solid #aeb8a6;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #ffffff;
-  color: #17201b;
+  background: var(--panel-bg);
+  color: var(--text);
   cursor: pointer;
 }
 
@@ -84,7 +121,7 @@ p {
 }
 
 .fruit-grid small {
-  color: #5d6f64;
+  color: var(--muted);
 }
 
 .fruit-grid .selected small {
@@ -93,13 +130,18 @@ p {
 
 .fruit-grid .selected,
 .primary {
-  border-color: #236a4b;
-  background: #236a4b;
-  color: #ffffff;
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-text);
 }
 
 .primary {
   padding: 12px 16px;
+}
+
+.primary:disabled {
+  cursor: wait;
+  opacity: 0.72;
 }
 
 .react-checkout {
@@ -115,7 +157,7 @@ p {
   width: 100%;
   min-height: 86px;
   resize: vertical;
-  border: 1px solid #c8d0c0;
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px;
 }
@@ -130,7 +172,6 @@ p {
   padding: 10px 14px;
 }
 
-.status,
 .error {
   font-size: 0.95rem;
 }

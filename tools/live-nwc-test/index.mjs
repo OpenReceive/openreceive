@@ -9,6 +9,7 @@ import {
   classifyLookupInvoiceSettlement,
   parseNwcConnectionUri,
   pollInvoiceUntilFinalState,
+  quoteFiatToMsats,
   redactNwcConnectionUri
 } from "@openreceive/core";
 import {
@@ -32,6 +33,7 @@ const productPath = path.join(repoRoot, "examples/hello-fruit/shared/product.jso
 const createInvoice = process.env.OPENRECEIVE_LIVE_CREATE_INVOICE !== "0";
 const waitForPayment = process.env.OPENRECEIVE_LIVE_WAIT_FOR_PAYMENT === "1";
 const supportedProfiles = new Set(["rizful", "alby", "zeus", "custom"]);
+const fruitsPath = path.join(repoRoot, "examples/hello-fruit/shared/fruits.json");
 
 function loadLocalEnvFile() {
   const explicitPath = process.env.OPENRECEIVE_ENV_FILE;
@@ -227,16 +229,24 @@ if (!createInvoice) {
 }
 
 const product = JSON.parse(readFileSync(productPath, "utf8"));
+const fruits = JSON.parse(readFileSync(fruitsPath, "utf8"));
+const liveFruit = fruits.fruits.find((fruit) => fruit.id === "banana") ?? fruits.fruits[0];
+if (!liveFruit) {
+  throw new Error("Hello Fruit live smoke needs at least one fruit.");
+}
+const liveAmountMsats = BigInt(quoteFiatToMsats({ fiat: liveFruit.fiat }).amount_msats);
 console.log("Checking local NWC metadata size guard...");
-await assertMetadataGuard(client, product);
+await assertMetadataGuard(client, liveAmountMsats);
 
 console.log("Creating low-value Hello Fruit invoice...");
 const invoice = await client.makeInvoice({
-  amount_msats: BigInt(product.amount_msats),
+  amount_msats: liveAmountMsats,
   description: "Fruit sticker from OpenReceive live smoke test",
   expiry: product.invoice_expiry_seconds,
   metadata: {
     product_id: product.product_id,
+    fruit: liveFruit.id,
+    fiat: liveFruit.fiat,
     smoke_test: true,
     wallet_profile: profile
   }
@@ -285,10 +295,10 @@ if (outcome.status !== "settled") {
   process.exit(1);
 }
 
-async function assertMetadataGuard(client, product) {
+async function assertMetadataGuard(client, amountMsats) {
   try {
     await client.makeInvoice({
-      amount_msats: BigInt(product.amount_msats),
+      amount_msats: amountMsats,
       description: "OpenReceive metadata guard probe",
       metadata: {
         probe: "x".repeat(OPENRECEIVE_NWC_METADATA_MAX_BYTES + 1)

@@ -7,6 +7,11 @@ import { createHelloFruitServer } from "../../examples/hello-fruit/server/node-e
 import { createHelloFruitProductionServer } from "../../examples/hello-fruit/server/node-express-react/src/server/production.ts";
 import { createHelloFruitStaticServer } from "../../examples/hello-fruit/server/static-html-small-api/src/server/create-server.ts";
 import { createHelloFruitStaticProductionServer } from "../../examples/hello-fruit/server/static-html-small-api/src/server/production.ts";
+import {
+  createHelloFruitInvoiceDescription,
+  formatHelloFruitFiat,
+  helloFruitDemoLabels
+} from "../../examples/hello-fruit/shared/demo-formatting.ts";
 import { quoteFiatToMsats } from "../../packages/js/core/src/index.ts";
 import { GET as getNextCapabilities } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/openreceive/v1/capabilities/route.ts";
 import { POST as postNextInvoice } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/openreceive/v1/invoices/route.ts";
@@ -86,6 +91,625 @@ test("Hello Fruit shared data stays aligned with canonical demo data", () => {
       true,
       `${fruit.id}: sticker exists`
     );
+  }
+});
+
+test("Hello Fruit demos share product display formatting", () => {
+  assert.equal(formatHelloFruitFiat({ currency: "USD", value: "0.10" }), "$0.10");
+  assert.equal(formatHelloFruitFiat({ currency: "EUR", value: "0.10" }), "0.10 EUR");
+  assert.equal(helloFruitDemoLabels.createInvoice, "Create invoice");
+  assert.equal(helloFruitDemoLabels.creatingInvoice, "Creating invoice...");
+  assert.equal(helloFruitDemoLabels.createInvoiceError, "Could not create invoice.");
+  assert.equal(
+    createHelloFruitInvoiceDescription("Banana"),
+    "Fruit sticker from OpenReceive demo: Banana"
+  );
+  assert.equal(
+    createHelloFruitInvoiceDescription("Banana", { demoName: "Next.js" }),
+    "Fruit sticker from OpenReceive Next.js demo: Banana"
+  );
+});
+
+test("Hello Fruit React demos delegate checkout state to the React package", () => {
+  const nodeClient = readFileSync(
+    path.join(
+      process.cwd(),
+      "examples/hello-fruit/server/node-express-react/src/client/App.tsx"
+    ),
+    "utf8"
+  );
+  const nextClient = readFileSync(
+    path.join(
+      process.cwd(),
+      "examples/hello-fruit/server/nextjs-fullstack/src/app/checkout-client.tsx"
+    ),
+    "utf8"
+  );
+
+  for (const [name, source] of [
+    ["node-express-react", nodeClient],
+    ["nextjs-fullstack", nextClient]
+  ]) {
+    assert.match(source, /<OpenReceiveCheckout/);
+    assert.match(source, /lookupUrl="\/openreceive\/v1\/invoices\/lookup"/);
+    assert.doesNotMatch(source, /createOpenReceiveLookupInvoiceFetcher/);
+    assert.doesNotMatch(source, /lookupInvoice=\{lookupInvoice\}/);
+    assert.doesNotMatch(source, /fetch\("\/openreceive\/v1\/invoices\/lookup"/);
+    assert.doesNotMatch(source, /payment_hash: state\.payment_hash/);
+    assert.doesNotMatch(source, /new EventSource/);
+    assert.doesNotMatch(source, /applyOpenReceiveInvoiceEvent/);
+    assert.doesNotMatch(source, /parseOpenReceiveInvoiceEvent/);
+    assert.doesNotMatch(source, /createOpenReceiveCheckoutState/);
+  }
+});
+
+test("Hello Fruit browser demos consume shared product display helpers", () => {
+  const sources = [
+    "examples/hello-fruit/server/node-express-react/src/client/App.tsx",
+    "examples/hello-fruit/server/nextjs-fullstack/src/app/checkout-client.tsx",
+    "examples/hello-fruit/server/static-html-small-api/src/client/main.ts"
+  ].map((relativePath) => [
+    relativePath,
+    readFileSync(path.join(process.cwd(), relativePath), "utf8")
+  ]);
+
+  for (const [relativePath, source] of sources) {
+    assert.match(source, /formatHelloFruitFiat/,
+      `${relativePath}: uses shared fiat display helper`);
+    assert.match(source, /createHelloFruitInvoiceDescription/,
+      `${relativePath}: uses shared invoice description helper`);
+    assert.match(source, /helloFruitDemoLabels/,
+      `${relativePath}: uses shared demo invoice labels`);
+    assert.doesNotMatch(source, /function formatFiat/,
+      `${relativePath}: must not duplicate fiat display formatting`);
+    assert.doesNotMatch(source, /Fruit sticker from OpenReceive .*demo: \$\{/,
+      `${relativePath}: must not duplicate invoice description templates`);
+    assert.doesNotMatch(source, /"Could not create invoice\."/,
+      `${relativePath}: must not duplicate invoice error fallback`);
+    assert.doesNotMatch(source, /"Creating invoice\.\.\."/,
+      `${relativePath}: must not duplicate invoice creation label`);
+  }
+});
+
+test("Hello Fruit static demo delegates checkout state to the web component", () => {
+  const source = readFileSync(
+    path.join(
+      process.cwd(),
+      "examples/hello-fruit/server/static-html-small-api/src/client/main.ts"
+    ),
+    "utf8"
+  );
+  const html = readFileSync(
+    path.join(
+      process.cwd(),
+      "examples/hello-fruit/server/static-html-small-api/index.html"
+    ),
+    "utf8"
+  );
+
+  assert.match(source, /defineOpenReceiveElements/);
+  assert.match(source, /createOpenReceiveCheckoutShell/);
+  assert.match(source, /createOpenReceiveThemeToggleElement/);
+  assert.match(source, /@openreceive\/elements\/styles\.css/);
+  assert.match(source, /rootSelector: "\.page"/);
+  assert.match(source, /checkoutSelector: "openreceive-checkout"/);
+  assert.doesNotMatch(html, /<openreceive-theme-toggle/);
+  assert.doesNotMatch(html, /root-selector="\.page"/);
+  assert.doesNotMatch(html, /checkout-selector="openreceive-checkout"/);
+  assert.doesNotMatch(source, /syncOpenReceiveStoredThemeControls/);
+  assert.doesNotMatch(source, /toggleOpenReceiveStoredThemeControls/);
+  assert.doesNotMatch(source, /theme-toggle/);
+  assert.doesNotMatch(source, /createOpenReceiveCheckoutElement\(/);
+  assert.doesNotMatch(source, /document\.createElement\("openreceive-checkout"\)/);
+  assert.doesNotMatch(source, /document\.createElement\("openreceive-theme-toggle"\)/);
+  assert.doesNotMatch(source, /createOpenReceiveCheckoutElementAttributes/);
+  assert.doesNotMatch(source, /createOpenReceiveCheckoutElementListeners/);
+  assert.doesNotMatch(source, /createOpenReceiveThemeToggleElementAttributes/);
+  assert.doesNotMatch(source, /addEventListener\(name/);
+  assert.doesNotMatch(source, /setAttribute\(name/);
+  assert.doesNotMatch(source, /addEventListener\("openreceive-/);
+  assert.doesNotMatch(source, /new EventSource/);
+  assert.doesNotMatch(source, /parseOpenReceiveInvoiceEvent/);
+  assert.doesNotMatch(source, /setInterval/);
+  assert.doesNotMatch(source, /localStorage/);
+});
+
+test("Hello Fruit browser demos consume shared theme model", () => {
+  const nodeClient = readFileSync(
+    path.join(
+      process.cwd(),
+      "examples/hello-fruit/server/node-express-react/src/client/App.tsx"
+    ),
+    "utf8"
+  );
+  const nextClient = readFileSync(
+    path.join(
+      process.cwd(),
+      "examples/hello-fruit/server/nextjs-fullstack/src/app/checkout-client.tsx"
+    ),
+    "utf8"
+  );
+  const staticClient = readFileSync(
+    path.join(
+      process.cwd(),
+      "examples/hello-fruit/server/static-html-small-api/src/client/main.ts"
+    ),
+    "utf8"
+  );
+
+  for (const [name, source] of [
+    ["node-express-react", nodeClient],
+    ["nextjs-fullstack", nextClient]
+  ]) {
+    assert.match(source, /OpenReceiveThemeScope/, `${name}: uses package theme scope`);
+    assert.match(source, /themeToggle/, `${name}: enables package theme toggle`);
+    assert.match(source, /topbarClassName="topbar"/, `${name}: styles package theme toggle shell`);
+    assert.doesNotMatch(source, /useOpenReceiveTheme/, `${name}: must not wire theme hook locally`);
+    assert.doesNotMatch(source, /OpenReceiveThemeToggle/, `${name}: must not wire theme button locally`);
+    assert.doesNotMatch(source, /\.\.\.theme\.attributes/, `${name}: must not apply theme attrs locally`);
+    assert.doesNotMatch(source, /"Light mode"/, `${name}: must not own theme toggle label`);
+    assert.doesNotMatch(source, /"Dark mode"/, `${name}: must not own theme toggle label`);
+  }
+
+  assert.doesNotMatch(staticClient, /syncOpenReceiveStoredThemeControls/);
+  assert.doesNotMatch(staticClient, /toggleOpenReceiveStoredThemeControls/);
+  assert.doesNotMatch(staticClient, /toggleOpenReceiveStoredThemePreference/);
+  assert.doesNotMatch(staticClient, /applyOpenReceiveThemeAttributes/);
+  assert.doesNotMatch(staticClient, /applyOpenReceiveCheckoutThemeAttributes/);
+  assert.doesNotMatch(staticClient, /theme\.toggleLabel/);
+  assert.doesNotMatch(staticClient, /Object\.entries\(theme\.attributes\)/);
+  assert.doesNotMatch(staticClient, /setAttribute\("data-theme"/);
+  assert.doesNotMatch(staticClient, /setAttribute\("data-openreceive-theme"/);
+  assert.doesNotMatch(staticClient, /"Light mode"/);
+  assert.doesNotMatch(staticClient, /"Dark mode"/);
+});
+
+test("Frontend UI packages delegate checkout lifecycle to browser helpers", () => {
+  const reactSource = readFileSync(
+    path.join(process.cwd(), "packages/js/react/src/index.ts"),
+    "utf8"
+  );
+  const elementsSource = readFileSync(
+    path.join(process.cwd(), "packages/js/elements/src/index.ts"),
+    "utf8"
+  );
+
+  for (const [name, source] of [
+    ["react", reactSource],
+    ["elements", elementsSource]
+  ]) {
+    assert.match(source, /createOpenReceiveCheckoutController/,
+      `${name}: uses browser checkout controller`);
+    assert.match(source, /createOpenReceiveCheckoutStatusModel/,
+      `${name}: uses browser checkout status display model`);
+    assert.doesNotMatch(source, /new OpenReceiveCheckoutWatcher/,
+      `${name}: must not construct checkout watcher locally`);
+    assert.doesNotMatch(source, /createOpenReceiveLookupInvoiceFetcher/,
+      `${name}: must not construct lookup fetcher locally`);
+    assert.doesNotMatch(source, /new EventSource/, `${name}: must not own SSE wiring`);
+    assert.doesNotMatch(source, /setInterval\(/, `${name}: must not own polling or countdown intervals`);
+    assert.doesNotMatch(source, /fetch\(lookupUrl/,
+      `${name}: must not own lookup POST wiring`);
+    assert.doesNotMatch(source, /state\.expires_at - currentUnixSeconds/,
+      `${name}: must not recompute checkout countdown locally`);
+    assert.doesNotMatch(source, /transaction_state !== "settled"/,
+      `${name}: must not own waiting-state settlement rule`);
+    assert.doesNotMatch(source, /formatOpenReceiveCountdown/,
+      `${name}: must not format checkout countdown labels locally`);
+    assert.doesNotMatch(source, /getOpenReceivePaymentStatusText/,
+      `${name}: must not compose checkout status text locally`);
+    assert.doesNotMatch(source, /shouldOpenReceiveCheckoutShowWaiting/,
+      `${name}: must not compose checkout waiting state locally`);
+    assert.doesNotMatch(source, /"Invoice expires in"/,
+      `${name}: must not own countdown prefix text`);
+  }
+});
+
+test("Frontend UI packages consume shared transient feedback timing", () => {
+  const reactSource = readFileSync(
+    path.join(process.cwd(), "packages/js/react/src/index.ts"),
+    "utf8"
+  );
+  const elementsSource = readFileSync(
+    path.join(process.cwd(), "packages/js/elements/src/index.ts"),
+    "utf8"
+  );
+
+  for (const [name, source] of [
+    ["react", reactSource],
+    ["elements", elementsSource]
+  ]) {
+    assert.match(source, /createOpenReceiveTransientFeedbackController/,
+      `${name}: uses browser transient feedback controller`);
+    assert.doesNotMatch(source, /globalThis\.setTimeout/,
+      `${name}: must not own copy-feedback timers`);
+    assert.doesNotMatch(source, /setCopied\(false\)/,
+      `${name}: must not locally reset copied state`);
+    assert.doesNotMatch(source, /setCopiedProviderId\(null\)/,
+      `${name}: must not locally reset provider copied state`);
+  }
+});
+
+test("Frontend UI packages consume shared checkout labels", () => {
+  const reactSource = readFileSync(
+    path.join(process.cwd(), "packages/js/react/src/index.ts"),
+    "utf8"
+  );
+  const elementsSource = readFileSync(
+    path.join(process.cwd(), "packages/js/elements/src/index.ts"),
+    "utf8"
+  );
+
+  for (const [name, source] of [
+    ["react", reactSource],
+    ["elements", elementsSource]
+  ]) {
+    assert.match(source, /openReceiveCheckoutLabels/, `${name}: uses shared labels`);
+    assert.match(source, /createOpenReceiveProviderCopyEvent/,
+      `${name}: uses shared provider-copy event helper`);
+    assert.doesNotMatch(source, /"Pay this invoice"/, `${name}: wizard title is package-shared`);
+    assert.doesNotMatch(source, /"Copy BOLT11"/, `${name}: copy label is package-shared`);
+    assert.doesNotMatch(source, /"Waiting for payment"/, `${name}: status label is package-shared`);
+    assert.doesNotMatch(source, /"openreceive-provider-copy"/,
+      `${name}: provider-copy event name is browser-shared`);
+    assert.doesNotMatch(source, /detail: \{ providerId \}/,
+      `${name}: provider-copy event detail is browser-shared`);
+    assert.doesNotMatch(source, /`Open \$\{/, `${name}: provider action label is package-shared`);
+    assert.doesNotMatch(source, /"Lightning Network"/, `${name}: route network label is package-shared`);
+    assert.doesNotMatch(source, /"Choose a country"/, `${name}: country prompt is package-shared`);
+    assert.doesNotMatch(source, /"No providers found for this country yet\\."/,
+      `${name}: empty state label is package-shared`);
+  }
+});
+
+test("Frontend UI packages consume shared checkout data attributes", () => {
+  const reactSource = readFileSync(
+    path.join(process.cwd(), "packages/js/react/src/index.ts"),
+    "utf8"
+  );
+  const elementsSource = readFileSync(
+    path.join(process.cwd(), "packages/js/elements/src/index.ts"),
+    "utf8"
+  );
+
+  for (const [name, source] of [
+    ["react", reactSource],
+    ["elements", elementsSource]
+  ]) {
+    assert.match(source, /OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES/,
+      `${name}: uses browser-owned checkout data attributes`);
+    assert.doesNotMatch(source, /"data-openreceive-qr"/,
+      `${name}: must not spell QR data attribute locally`);
+    assert.doesNotMatch(source, /"data-openreceive-theme-toggle"/,
+      `${name}: must not spell theme-toggle data attribute locally`);
+  }
+  assert.match(elementsSource, /OPENRECEIVE_CHECKOUT_DATA_SELECTORS/,
+    "elements: uses browser-owned checkout data selectors");
+  assert.doesNotMatch(reactSource, /"data-openreceive-checkout"/,
+    "react: must not spell checkout root data attribute locally");
+  assert.doesNotMatch(reactSource, /"data-openreceive-actions"/,
+    "react: must not spell checkout actions data attribute locally");
+  assert.doesNotMatch(reactSource, /"data-openreceive-state"/,
+    "react: must not spell checkout state data attribute locally");
+  assert.doesNotMatch(elementsSource, /querySelector\("\[data-openreceive-qr\]"\)/,
+    "elements: must not hard-code checkout QR selector");
+});
+
+test("Elements consume shared custom-element attribute contracts", () => {
+  const elementsSource = readFileSync(
+    path.join(process.cwd(), "packages/js/elements/src/index.ts"),
+    "utf8"
+  );
+
+  assert.match(elementsSource, /OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES/,
+    "elements: uses browser-owned checkout element attributes");
+  assert.match(elementsSource, /OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES/,
+    "elements: uses browser-owned theme-toggle element attributes");
+  assert.match(elementsSource, /parseOpenReceiveOptionalInteger/,
+    "elements: parses numeric attributes through browser helpers");
+  assert.match(elementsSource, /parseOpenReceiveBooleanAttribute/,
+    "elements: parses boolean attributes through browser helpers");
+  assert.match(elementsSource, /parseOpenReceiveResolvedTheme/,
+    "elements: parses checkout theme attributes through browser helpers");
+  assert.match(elementsSource, /parseOpenReceiveThemePreference/,
+    "elements: parses theme preference attributes through browser helpers");
+  assert.doesNotMatch(elementsSource, /getAttribute\("invoice-id"\)/,
+    "elements: must not hard-code invoice-id reads");
+  assert.doesNotMatch(elementsSource, /getAttribute\("lookup-url"\)/,
+    "elements: must not hard-code lookup-url reads");
+  assert.doesNotMatch(elementsSource, /getAttribute\("root-selector"\)/,
+    "elements: must not hard-code theme root selector reads");
+  assert.doesNotMatch(elementsSource, /setAttributeIfChanged\("transaction-state"/,
+    "elements: must not hard-code transaction-state writes");
+  assert.doesNotMatch(elementsSource, /setAttributeIfChanged\("theme"/,
+    "elements: must not hard-code theme writes");
+  assert.doesNotMatch(elementsSource, /function parseOptionalInteger/,
+    "elements: must not own numeric attribute parsing");
+  assert.doesNotMatch(elementsSource, /function parseTheme/,
+    "elements: must not own theme attribute parsing");
+  assert.doesNotMatch(elementsSource, /function parseBooleanAttribute/,
+    "elements: must not own boolean attribute parsing");
+});
+
+test("Elements consume shared theme-toggle event contract", () => {
+  const elementsSource = readFileSync(
+    path.join(process.cwd(), "packages/js/elements/src/index.ts"),
+    "utf8"
+  );
+
+  assert.match(elementsSource, /createOpenReceiveThemeChangeEvent/,
+    "elements: dispatches theme changes through browser event helper");
+  assert.doesNotMatch(elementsSource, /"openreceive-theme-change"/,
+    "elements: must not hard-code theme-change event names");
+  assert.doesNotMatch(elementsSource, /resolvedTheme: nextTheme\.resolvedTheme/,
+    "elements: must not compose theme-change event details locally");
+});
+
+test("Elements consume shared checkout event constructors", () => {
+  const elementsSource = readFileSync(
+    path.join(process.cwd(), "packages/js/elements/src/index.ts"),
+    "utf8"
+  );
+
+  assert.match(elementsSource, /createOpenReceiveCheckoutActionEvent/,
+    "elements: dispatches copy/open events through browser helpers");
+  assert.match(elementsSource, /createOpenReceiveCheckoutStateEvent/,
+    "elements: dispatches state events through browser helpers");
+  assert.match(elementsSource, /createOpenReceiveCheckoutErrorEvent/,
+    "elements: dispatches error events through browser helpers");
+  assert.doesNotMatch(elementsSource, /new CustomEvent\(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS/,
+    "elements: must not construct checkout custom events locally");
+  assert.doesNotMatch(elementsSource, /detail: \{ state \}/,
+    "elements: must not compose checkout state event details locally");
+});
+
+test("Elements consume shared web-component shadow part contracts", () => {
+  const elementsSource = readFileSync(
+    path.join(process.cwd(), "packages/js/elements/src/index.ts"),
+    "utf8"
+  );
+
+  assert.match(elementsSource, /OPENRECEIVE_CHECKOUT_ELEMENT_PARTS/,
+    "elements: renders checkout shadow parts from browser constants");
+  assert.match(elementsSource, /OPENRECEIVE_CHECKOUT_ELEMENT_PART_SELECTORS/,
+    "elements: binds checkout shadow actions through browser selectors");
+  assert.match(elementsSource, /OPENRECEIVE_THEME_TOGGLE_ELEMENT_PARTS/,
+    "elements: renders theme-toggle shadow parts from browser constants");
+  assert.match(elementsSource, /OPENRECEIVE_THEME_TOGGLE_ELEMENT_PART_SELECTORS/,
+    "elements: binds theme-toggle actions through browser selectors");
+  assert.doesNotMatch(elementsSource, /querySelector\('\[part="copy"\]'\)/,
+    "elements: must not hard-code copy part selectors");
+  assert.doesNotMatch(elementsSource, /querySelector\("button"\)/,
+    "elements: must not hard-code theme-toggle button selectors");
+});
+
+test("Frontend UI packages consume shared checkout display model", () => {
+  const reactSource = readFileSync(
+    path.join(process.cwd(), "packages/js/react/src/index.ts"),
+    "utf8"
+  );
+  const elementsSource = readFileSync(
+    path.join(process.cwd(), "packages/js/elements/src/index.ts"),
+    "utf8"
+  );
+
+  for (const [name, source] of [
+    ["react", reactSource],
+    ["elements", elementsSource]
+  ]) {
+    assert.match(source, /createOpenReceiveCheckoutDisplayModel/,
+      `${name}: uses browser-owned checkout display labels`);
+    assert.doesNotMatch(source, /function shortHash/,
+      `${name}: must not own payment hash shortening`);
+    assert.doesNotMatch(source, /assertDisplaySafeInvoice/,
+      `${name}: must not own display invoice safety checks`);
+    assert.doesNotMatch(source, /paymentHashLabel: shortHash/,
+      `${name}: must not build hash labels locally`);
+  }
+});
+
+test("Frontend UI packages consume shared checkout display state conversion", () => {
+  const reactSource = readFileSync(
+    path.join(process.cwd(), "packages/js/react/src/index.ts"),
+    "utf8"
+  );
+  const elementsSource = readFileSync(
+    path.join(process.cwd(), "packages/js/elements/src/index.ts"),
+    "utf8"
+  );
+
+  for (const [name, source] of [
+    ["react", reactSource],
+    ["elements", elementsSource]
+  ]) {
+    assert.match(source, /createOpenReceiveCheckoutStateFromDisplayData/,
+      `${name}: creates checkout state from browser-owned display conversion`);
+    assert.match(source, /createOpenReceiveCheckoutSnapshotFromDisplayData/,
+      `${name}: creates live snapshots from browser-owned display conversion`);
+    assert.doesNotMatch(source, /function toCheckoutSnapshot/,
+      `${name}: must not own display-to-snapshot mapping`);
+    assert.doesNotMatch(source, /invoice_id is required for checkout state/,
+      `${name}: must not own checkout-state invoice id validation`);
+    assert.doesNotMatch(source, /invoice_id: options\.invoice_id/,
+      `${name}: must not build React-style checkout snapshots locally`);
+    assert.doesNotMatch(source, /function currentUnixSeconds/,
+      `${name}: must not own checkout countdown clock helpers`);
+  }
+});
+
+test("Elements consumes shared display HTML escaping", () => {
+  const elementsSource = readFileSync(
+    path.join(process.cwd(), "packages/js/elements/src/index.ts"),
+    "utf8"
+  );
+
+  assert.match(elementsSource, /escapeOpenReceiveHtml/,
+    "elements: escapes rendered HTML through browser helper");
+  assert.doesNotMatch(elementsSource, /function escapeHtml/,
+    "elements: must not own HTML escaping implementation");
+  assert.doesNotMatch(elementsSource, /replaceAll\("&", "&amp;"\)/,
+    "elements: must not duplicate HTML escape rules");
+});
+
+test("Frontend UI packages consume shared wizard route display model", () => {
+  const reactSource = readFileSync(
+    path.join(process.cwd(), "packages/js/react/src/index.ts"),
+    "utf8"
+  );
+  const elementsSource = readFileSync(
+    path.join(process.cwd(), "packages/js/elements/src/index.ts"),
+    "utf8"
+  );
+
+  for (const [name, source] of [
+    ["react", reactSource],
+    ["elements", elementsSource]
+  ]) {
+    assert.match(source, /createOpenReceiveWizardRouteDisplays/,
+      `${name}: uses shared wizard route display model`);
+    assert.doesNotMatch(source, /OPENRECEIVE_PROVIDER_PREVIEW_LIMIT/,
+      `${name}: must not own provider preview slicing`);
+    assert.doesNotMatch(source, /route\.kind/,
+      `${name}: must not own route heading decisions`);
+    assert.doesNotMatch(source, /route\.providers\.slice/,
+      `${name}: must not slice provider previews locally`);
+    assert.doesNotMatch(source, /entry\.flagship/,
+      `${name}: must not own recommended provider labels`);
+    assert.doesNotMatch(source, /entry\.provider/,
+      `${name}: must not own raw provider display fields`);
+    assert.doesNotMatch(source, /getOpenReceiveProviderMechanismLabel/,
+      `${name}: must not compose provider badges locally`);
+    assert.doesNotMatch(source, /getOpenReceiveProviderOpenLabel/,
+      `${name}: must not compose provider links locally`);
+    assert.doesNotMatch(source, /getOpenReceiveProviderUsBadge/,
+      `${name}: must not compose provider US badges locally`);
+  }
+});
+
+test("Frontend UI packages consume shared wizard selection model", () => {
+  const reactSource = readFileSync(
+    path.join(process.cwd(), "packages/js/react/src/index.ts"),
+    "utf8"
+  );
+  const elementsSource = readFileSync(
+    path.join(process.cwd(), "packages/js/elements/src/index.ts"),
+    "utf8"
+  );
+
+  for (const [name, source] of [
+    ["react", reactSource],
+    ["elements", elementsSource]
+  ]) {
+    assert.match(source, /createOpenReceivePaymentWizardModel/,
+      `${name}: derives wizard view model from browser helper`);
+    assert.match(source, /updateOpenReceivePaymentWizardSelection/,
+      `${name}: updates wizard selection through browser reducer`);
+    assert.doesNotMatch(source, /setSelectedMethod/,
+      `${name}: must not own method selection transitions`);
+    assert.doesNotMatch(source, /setSelectedCountryCode/,
+      `${name}: must not own country selection transitions`);
+  }
+  assert.match(elementsSource, /OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES/,
+    "elements: renders wizard DOM attributes from browser constants");
+  assert.match(elementsSource, /OPENRECEIVE_PAYMENT_WIZARD_SELECTORS/,
+    "elements: binds wizard DOM events through browser selectors");
+  assert.match(elementsSource, /parseOpenReceivePaymentMethod/,
+    "elements: parses wizard methods through browser helper");
+  assert.match(elementsSource, /parseOpenReceiveRegion/,
+    "elements: parses wizard regions through browser helper");
+  assert.doesNotMatch(elementsSource, /querySelectorAll\("\[data-or-/,
+    "elements: must not hard-code wizard query selectors");
+  assert.doesNotMatch(elementsSource, /getAttribute\("data-or-/,
+    "elements: must not hard-code wizard attribute reads");
+});
+
+test("Frontend UI packages consume shared country picker model", () => {
+  const reactSource = readFileSync(
+    path.join(process.cwd(), "packages/js/react/src/index.ts"),
+    "utf8"
+  );
+  const elementsSource = readFileSync(
+    path.join(process.cwd(), "packages/js/elements/src/index.ts"),
+    "utf8"
+  );
+
+  assert.match(reactSource, /createOpenReceiveCountryPickerModel/,
+    "react: builds country picker view from browser helper");
+  assert.match(reactSource, /visibleRegionCountryDisplays/,
+    "react: renders country rows from browser display model");
+  assert.match(reactSource, /readoutLabel/,
+    "react: renders map readout from browser display model");
+  assert.match(reactSource, /selectedCountryDisplay/,
+    "react: renders selected country summary from browser display model");
+  assert.match(reactSource, /OPENRECEIVE_COUNTRY_MAP_VIEW_BOX/,
+    "react: uses browser-owned country map viewBox");
+  assert.match(reactSource, /openReceiveCountryMapLandPaths/,
+    "react: renders browser-owned country map land paths");
+  assert.match(reactSource, /entry\.point/,
+    "react: uses browser-projected country map pins");
+  assert.doesNotMatch(reactSource, /projectMapPoint/,
+    "react: must not re-project country map pins");
+  assert.doesNotMatch(reactSource, /geoNaturalEarth1/,
+    "react: must not own country map projection");
+  assert.doesNotMatch(reactSource, /world-atlas/,
+    "react: must not own country map atlas data");
+  assert.doesNotMatch(reactSource, /topojson-client/,
+    "react: must not own country map feature extraction");
+  assert.match(elementsSource, /model\.countryPicker/,
+    "elements: builds country picker view from browser helper");
+  assert.match(elementsSource, /visibleRegionCountryDisplays/,
+    "elements: renders country rows from browser display model");
+  assert.match(elementsSource, /readoutLabel/,
+    "elements: renders map readout from browser display model");
+  assert.match(elementsSource, /selectedCountryDisplay/,
+    "elements: renders selected country summary from browser display model");
+  assert.match(elementsSource, /openReceiveCountryMapRegions/,
+    "elements: renders browser-owned country map region shapes");
+  assert.match(elementsSource, /OPENRECEIVE_COUNTRY_MAP_VIEW_BOX/,
+    "elements: uses browser-owned country map viewBox");
+  assert.doesNotMatch(elementsSource, /<ellipse part="map-region" cx="180"/,
+    "elements: must not hard-code country map region shapes");
+  for (const [name, source] of [
+    ["react", reactSource],
+    ["elements", elementsSource]
+  ]) {
+    assert.doesNotMatch(source, /openReceiveCountryPins/,
+      `${name}: must not own country map pin data`);
+    assert.doesNotMatch(source, /openReceiveRegionLabels/,
+      `${name}: must not own region display labels`);
+    assert.doesNotMatch(source, /getOpenReceiveCoverageLabel/,
+      `${name}: must not compose country coverage labels locally`);
+    assert.doesNotMatch(source, /country\.currency.*country\.coverage/s,
+      `${name}: must not compose country meta labels locally`);
+  }
+});
+
+test("Frontend UI packages consume shared payment icon helpers", () => {
+  const reactSource = readFileSync(
+    path.join(process.cwd(), "packages/js/react/src/index.ts"),
+    "utf8"
+  );
+  const elementsSource = readFileSync(
+    path.join(process.cwd(), "packages/js/elements/src/index.ts"),
+    "utf8"
+  );
+
+  for (const [name, source] of [
+    ["react", reactSource],
+    ["elements", elementsSource]
+  ]) {
+    assert.match(source, /getOpenReceivePaymentMethodIcon/,
+      `${name}: method icons come from the browser package`);
+    assert.match(source, /createOpenReceiveWizardRouteAssetDisplays/,
+      `${name}: route asset rows come from the browser package`);
+    assert.doesNotMatch(source, /getOpenReceiveRouteIcon/,
+      `${name}: must not build route icon rows locally`);
+    assert.doesNotMatch(source, /getOpenReceiveRouteNetworkLabel/,
+      `${name}: must not build route subtitles locally`);
+    assert.doesNotMatch(source, /asset\.route \?\? asset\.symbol/,
+      `${name}: must not resolve route ids locally`);
+    assert.doesNotMatch(source, /new URL\("\.\/assets\/icons/,
+      `${name}: must not own checkout icon asset URLs`);
   }
 });
 

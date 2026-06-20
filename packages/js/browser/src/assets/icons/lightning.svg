@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Lightning">
+  <defs>
+    <linearGradient id="ln-g" x1="18" x2="46" y1="8" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FDE047"/>
+      <stop offset=".55" stop-color="#F59E0B"/>
+      <stop offset="1" stop-color="#EA580C"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="#FFFBEB"/>
+  <path fill="url(#ln-g)" d="M37.6 7 17 36h13.6L26.4 57 47 28H33.3L37.6 7Z"/>
+</svg>

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Credit card">
+  <defs>
+    <linearGradient id="card-g" x1="10" x2="54" y1="16" y2="50" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FB7185"/>
+      <stop offset=".52" stop-color="#F97316"/>
+      <stop offset="1" stop-color="#FACC15"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="#FFF7ED"/>
+  <rect x="9" y="17" width="46" height="32" rx="8" fill="url(#card-g)"/>
+  <path fill="#172033" fill-opacity=".86" d="M9 25h46v6H9z"/>
+  <rect x="16" y="38" width="15" height="4" rx="2" fill="#FFFFFF"/>
+  <rect x="36" y="38" width="10" height="4" rx="2" fill="#FFFFFF" fill-opacity=".7"/>
+</svg>

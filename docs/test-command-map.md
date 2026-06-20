@@ -2,11 +2,14 @@
 
 | Command | Purpose | Requires Secrets |
 | --- | --- | --- |
-| `npm test` | Validate v0.1 JSON, schemas, vectors, provider references, and secret patterns. | No |
+| `npm test` | Run the fast local gate: v0.1 JSON/schema/vector/provider validation plus source secret scanning. | No |
+| `npm run test:ci` | Run the full repository gate: fast local gate, generated-model freshness, typecheck, JS tests, package smoke, Ruby tests, demo/container/deploy/release/workflow checks, demo builds, client-bundle scan, docs build, and optional live NWC smoke. | Optional |
 | `npm run validate` | Run contract/vector validation only. | No |
 | `npm run scan:secrets` | Scan public repo files for likely committed NWC secrets and reject tracked non-example env files. | No |
 | `npm run scan:client-bundles` | Scan generated demo `dist` bundles for browser-side NWC markers after `build:demo`. | No |
 | `npm run generate:models` | Regenerate TypeScript contract constants from OpenAPI and AsyncAPI. | No |
+| `npm run typecheck` | Typecheck all JS/TS packages and Hello Fruit server/demo TypeScript. | No |
+| `npm run test:js` | Run the v0.1 Node test suite, including browser/react/elements/framework adapter contract tests. | No |
 | `npm run test:ruby` | Run the Ruby core-helper and Rails adapter tests against shared vectors and receive-only adapter behavior. | No |
 | `npm run test:live:ruby:nwc` | Optional Ruby live-wallet smoke. Reads `OPENRECEIVE_NWC` from the environment or `OPENRECEIVE_ENV_FILE`, redacts the connection string, runs `get_info` when `nwc-ruby` is installed, and creates an invoice only with `OPENRECEIVE_LIVE_CREATE_INVOICE=1`. | Optional |
 | `npm run check:generated` | Fail when generated TypeScript contract constants are stale. | No |

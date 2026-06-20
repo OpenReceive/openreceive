@@ -1,0 +1,23 @@
+{
+  "name": "@openreceive/angular",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@openreceive/browser": "0.1.0",
+    "@openreceive/elements": "0.1.0"
+  },
+  "peerDependencies": {
+    "@angular/core": ">=17.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@angular/core": {
+      "optional": true
+    }
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./checkout-component": "./src/openreceive-checkout.component.mjs",
+    "./styles.css": "./src/styles.css"
+  }
+}

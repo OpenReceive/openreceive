@@ -1,0 +1,23 @@
+{
+  "name": "@openreceive/svelte",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@openreceive/browser": "0.1.0",
+    "@openreceive/elements": "0.1.0"
+  },
+  "peerDependencies": {
+    "svelte": ">=4.0.0 || >=5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "svelte": {
+      "optional": true
+    }
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./checkout.svelte": "./src/OpenReceiveCheckout.svelte",
+    "./styles.css": "./src/styles.css"
+  }
+}

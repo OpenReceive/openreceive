@@ -11,6 +11,9 @@ OpenReceive starts with a small v0.1 release surface:
 - `@openreceive/testkit`
 - `@openreceive/elements`
 - `@openreceive/react`
+- `@openreceive/vue`
+- `@openreceive/svelte`
+- `@openreceive/angular`
 
 Packages remain private in this repository until publishing is explicitly
 approved.
@@ -66,6 +69,9 @@ commands, concurrency groups, and the disabled publish path.
 - `js-testkit-v0.1.0`
 - `js-elements-v0.1.0`
 - `js-react-v0.1.0`
+- `js-vue-v0.1.0`
+- `js-svelte-v0.1.0`
+- `js-angular-v0.1.0`
 
 Use independent package versions later, after the contract is stable enough to
 avoid confusing SDK consumers.

@@ -499,8 +499,7 @@ function validateData() {
   assert(demoProduct.product_id === demoSpec.product_id, "Hello Fruit product id drift");
   assert(demoFruits.product_id === demoSpec.product_id, "Hello Fruit fruit product id drift");
   assert(demoProduct.name === demoSpec.name, "Hello Fruit product name drift");
-  assert(demoProduct.amount_msats === demoSpec.amount_msats, "Hello Fruit amount_msats drift");
-  assert(JSON.stringify(demoProduct.fiat) === JSON.stringify(demoSpec.fiat), "Hello Fruit fiat price drift");
+  assert(demoProduct.description === demoSpec.description, "Hello Fruit product description drift");
   assert(Array.isArray(demoSpec.fruits) && demoSpec.fruits.length > 0, "canonical demo fruits missing");
   assert(demoFruits.fruits.length === demoSpec.fruits.length, "Hello Fruit fruit count drift");
 
@@ -508,6 +507,10 @@ function validateData() {
     const sharedFruit = demoFruits.fruits[index];
     assert(sharedFruit?.id === fruit.id, `Hello Fruit id drift at index ${index}`);
     assert(sharedFruit?.name === fruit.name, `Hello Fruit name drift for ${fruit.id}`);
+    assert(JSON.stringify(sharedFruit?.fiat) === JSON.stringify(fruit.fiat), `Hello Fruit fiat price drift for ${fruit.id}`);
+    assert(sharedFruit.fiat.currency === "USD", `Hello Fruit fiat currency drift for ${fruit.id}`);
+    assert(/^[0-9]+\.[0-9]{2}$/.test(sharedFruit.fiat.value), `Hello Fruit fiat value shape drift for ${fruit.id}`);
+    assert(quoteFiatToSats(sharedFruit.fiat.value, "50000.00") <= BigInt(400), `Hello Fruit fiat price too high for ${fruit.id}`);
     assert(sharedFruit?.sticker === `stickers/${fruit.id}.svg`, `Hello Fruit sticker path drift for ${fruit.id}`);
     assertFile(`examples/hello-fruit/shared/${sharedFruit.sticker}`);
   }
