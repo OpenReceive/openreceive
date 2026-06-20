@@ -97,6 +97,7 @@ export interface OpenReceiveElementsWizardView {
   readonly countryPickerOpen?: boolean;
   readonly activeTutorialProviderId?: string | null;
   readonly activeTutorialIndex?: number;
+  readonly activeTutorialCopied?: boolean;
 }
 
 export interface DefineOpenReceiveElementsOptions {
@@ -258,7 +259,12 @@ export function renderOpenReceivePaymentWizardHtml(
           `).join("")}
         </div>
       `}
-      ${renderTutorialModalHtml(routeDisplays, view.activeTutorialProviderId ?? null, view.activeTutorialIndex ?? 1)}
+      ${renderTutorialModalHtml(
+        routeDisplays,
+        view.activeTutorialProviderId ?? null,
+        view.activeTutorialIndex ?? 0,
+        view.activeTutorialCopied ?? false
+      )}
     </section>
   `;
 }
@@ -272,7 +278,7 @@ function renderProviderOpenActionHtml(provider: OpenReceiveWizardProviderDisplay
     <button
       part="provider-open"
       ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}="${escapeHtml(provider.id)}"
-      ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex}="1"
+      ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex}="0"
       type="button"
     >${escapeHtml(provider.openLabel)}</button>
   `;
@@ -281,7 +287,8 @@ function renderProviderOpenActionHtml(provider: OpenReceiveWizardProviderDisplay
 function renderTutorialModalHtml(
   routes: readonly OpenReceiveWizardRouteDisplay[],
   activeProviderId: string | null,
-  activeTutorialIndex: number
+  activeTutorialIndex: number,
+  copied: boolean
 ): string {
   if (activeProviderId === null) return "";
   const provider = routes
@@ -289,11 +296,28 @@ function renderTutorialModalHtml(
     .find((candidate) => candidate.id === activeProviderId);
   if (provider === undefined || provider.tutorials.length === 0) return "";
 
-  const stepIndex = Math.max(1, Math.min(provider.tutorials.length, activeTutorialIndex));
-  const tutorial = provider.tutorials[stepIndex - 1];
-  if (tutorial === undefined) return "";
-  const previousIndex = Math.max(1, stepIndex - 1);
+  const totalSteps = provider.tutorials.length + 1;
+  const stepIndex = Math.max(0, Math.min(provider.tutorials.length, activeTutorialIndex));
+  const tutorial = stepIndex === 0 ? undefined : provider.tutorials[stepIndex - 1];
+  const previousIndex = Math.max(0, stepIndex - 1);
   const nextIndex = Math.min(provider.tutorials.length, stepIndex + 1);
+  const body = stepIndex === 0
+    ? `
+        <div part="tutorial-intro">
+          <p>${escapeHtml(openReceiveCheckoutLabels.tutorialIntroPrefix)} ${escapeHtml(provider.name)}.</p>
+          <p>${escapeHtml(openReceiveCheckoutLabels.tutorialIntroCopy)}</p>
+          <button part="tutorial-copy" type="button">${escapeHtml(openReceiveCheckoutLabels.copyInvoice)}</button>
+          ${copied
+            ? `<p part="tutorial-copy-message">${escapeHtml(openReceiveCheckoutLabels.tutorialCopiedContinue)}</p>`
+            : ""}
+        </div>
+      `
+    : `
+        <div part="tutorial-frame">
+          <img part="tutorial-image" alt="${escapeHtml(tutorial?.caption ?? "")}" src="${escapeHtml(tutorial?.image ?? "")}">
+        </div>
+        <p part="tutorial-caption">${escapeHtml(tutorial?.caption ?? "")}</p>
+      `;
 
   return `
     <div part="tutorial" role="dialog" aria-modal="true" aria-label="${escapeHtml(openReceiveCheckoutLabels.tutorialTitlePrefix)} ${escapeHtml(provider.name)}" tabindex="-1">
@@ -307,23 +331,20 @@ function renderTutorialModalHtml(
             aria-label="Close"
           >Close</button>
         </div>
-        <div part="tutorial-frame">
-          <img part="tutorial-image" alt="${escapeHtml(tutorial.caption)}" src="${escapeHtml(tutorial.image)}">
-        </div>
-        <p part="tutorial-caption">${escapeHtml(tutorial.caption)}</p>
+        ${body}
         <div part="tutorial-steps" aria-hidden="true">
-          ${provider.tutorials.map((step) => `
-            <span part="${step.index === stepIndex ? "tutorial-step-active" : "tutorial-step"}"></span>
+          ${Array.from({ length: totalSteps }, (_, index) => `
+            <span part="${index === stepIndex ? "tutorial-step-active" : "tutorial-step"}"></span>
           `).join("")}
         </div>
-        <p part="tutorial-progress">Step ${stepIndex} of ${provider.tutorials.length}</p>
+        <p part="tutorial-progress">Step ${stepIndex + 1} of ${totalSteps}</p>
         <div part="tutorial-controls">
           <button
             part="tutorial-nav"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}="${escapeHtml(provider.id)}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex}="${previousIndex}"
             type="button"
-            ${stepIndex === 1 ? "disabled" : ""}
+            ${stepIndex === 0 ? "disabled" : ""}
           >Back</button>
           <button
             part="tutorial-nav"

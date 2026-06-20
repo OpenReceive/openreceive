@@ -11,6 +11,7 @@ import {
 } from "../../../../shared/demo-browser-logging.ts";
 import {
   createHelloFruitInvoiceDescription,
+  formatHelloFruitBuyNowLabel,
   formatHelloFruitFiat,
   helloFruitDemoLabels
 } from "../../../../shared/demo-formatting.ts";
@@ -73,6 +74,7 @@ defineOpenReceiveElements({
 renderThemeToggle();
 renderProduct();
 renderFruitGrid();
+renderCreateInvoiceButton();
 
 document.getElementById("create-invoice")?.addEventListener("click", () => {
   void createInvoice();
@@ -110,6 +112,7 @@ function renderFruitGrid(): void {
       selectedFruit = fruit;
       renderProduct();
       renderFruitGrid();
+      renderCreateInvoiceButton();
     });
 
     const image = document.createElement("img");
@@ -125,6 +128,11 @@ function renderFruitGrid(): void {
     button.append(image, label, price);
     grid.append(button);
   }
+}
+
+function renderCreateInvoiceButton(): void {
+  const button = requireElement<HTMLButtonElement>("create-invoice");
+  button.textContent = formatHelloFruitBuyNowLabel(selectedFruit.fiat);
 }
 
 async function createInvoice(): Promise<void> {
@@ -204,7 +212,7 @@ function setButtonState(state: "idle" | "creating"): void {
   button.disabled = state === "creating";
   button.textContent = state === "creating"
     ? helloFruitDemoLabels.creatingInvoice
-    : helloFruitDemoLabels.createInvoice;
+    : formatHelloFruitBuyNowLabel(selectedFruit.fiat);
 }
 
 function setError(message: string): void {

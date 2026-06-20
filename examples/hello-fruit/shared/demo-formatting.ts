@@ -13,6 +13,10 @@ export function formatHelloFruitFiat(fiat: HelloFruitFiatAmount): string {
   return fiat.currency === "USD" ? `$${fiat.value}` : `${fiat.value} ${fiat.currency}`;
 }
 
+export function formatHelloFruitBuyNowLabel(fiat: HelloFruitFiatAmount): string {
+  return `Buy Now (${formatHelloFruitFiat(fiat)})`;
+}
+
 export function createHelloFruitInvoiceDescription(
   fruitName: string,
   input: {

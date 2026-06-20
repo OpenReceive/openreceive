@@ -187,7 +187,7 @@
     },
     "coinbase": {
       "id": "coinbase",
-      "name": "Coinbase (Lightspark)",
+      "name": "Coinbase",
       "url": "https://coinbase.com",
       "us": true,
       "lightning_docs_url": "https://help.coinbase.com/en/coinbase/trading-and-funding/sending-or-receiving-cryptocurrency/lightning",

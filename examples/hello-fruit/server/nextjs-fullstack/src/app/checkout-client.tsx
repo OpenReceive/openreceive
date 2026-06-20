@@ -24,6 +24,7 @@ import {
 } from "../../../../shared/demo-browser-logging.ts";
 import {
   createHelloFruitInvoiceDescription,
+  formatHelloFruitBuyNowLabel,
   formatHelloFruitFiat,
   helloFruitDemoLabels
 } from "../../../../shared/demo-formatting.ts";
@@ -51,6 +52,10 @@ export default function CheckoutClient({
     () => fruits.find((fruit) => fruit.id === fruitId) ?? fruits[0],
     [fruitId, fruits]
   );
+  const createInvoiceLabel =
+    selectedFruit === undefined
+      ? helloFruitDemoLabels.createInvoice
+      : formatHelloFruitBuyNowLabel(selectedFruit.fiat);
 
   const onCheckoutState = useCallback((state: OpenReceiveCheckoutState) => {
     if (
@@ -146,7 +151,7 @@ export default function CheckoutClient({
         onClick={createInvoice}
         type="button"
       >
-        {status === "creating" ? helloFruitDemoLabels.creatingInvoice : helloFruitDemoLabels.createInvoice}
+        {status === "creating" ? helloFruitDemoLabels.creatingInvoice : createInvoiceLabel}
       </button>
 
       {checkout === undefined ? null : (

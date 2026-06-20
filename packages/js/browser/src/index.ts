@@ -927,6 +927,9 @@ export const openReceiveCheckoutLabels = {
   recommended: "Recommended",
   openProvider: "How To Pay",
   tutorialTitlePrefix: "Pay a Lightning invoice with",
+  tutorialIntroPrefix: "It's easy to make this payment using",
+  tutorialIntroCopy: "The first step is to copy the invoice to your clipboard.",
+  tutorialCopiedContinue: "Copied! Click next below to continue with tutorial.",
   lightningNetwork: "Lightning Network",
   chooseCountry: "Choose a country"
 } as const;
@@ -1310,6 +1313,28 @@ export const openReceiveCheckoutElementStyles = `
     text-align: center;
   }
 
+  [part="tutorial-intro"] {
+    display: grid;
+    gap: 12px;
+    padding: 16px 8px;
+    text-align: center;
+  }
+
+  [part="tutorial-intro"] p {
+    color: var(--or-text);
+    font-size: 15px;
+  }
+
+  [part="tutorial-copy"] {
+    justify-self: center;
+    min-width: min(240px, 100%);
+  }
+
+  [part="tutorial-copy-message"] {
+    color: var(--or-good);
+    font-weight: 700;
+  }
+
   [part="tutorial-progress"] {
     color: var(--or-muted);
     font-size: 12px;
@@ -1336,6 +1361,13 @@ export const openReceiveCheckoutElementStyles = `
 
   [part="tutorial-nav"] {
     flex: 1 1 0;
+  }
+
+  [part="tutorial-nav"]:disabled {
+    background: var(--or-bg-soft);
+    border-color: var(--or-border);
+    color: var(--or-muted);
+    cursor: not-allowed;
   }
 
 	  @media (max-width: 420px) {

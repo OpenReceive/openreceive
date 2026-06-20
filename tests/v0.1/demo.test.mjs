@@ -9,6 +9,7 @@ import { createHelloFruitStaticServer } from "../../examples/hello-fruit/server/
 import { createHelloFruitStaticProductionServer } from "../../examples/hello-fruit/server/static-html-small-api/src/server/production.ts";
 import {
   createHelloFruitInvoiceDescription,
+  formatHelloFruitBuyNowLabel,
   formatHelloFruitFiat,
   helloFruitDemoLabels
 } from "../../examples/hello-fruit/shared/demo-formatting.ts";
@@ -97,6 +98,8 @@ test("Hello Fruit shared data stays aligned with canonical demo data", () => {
 test("Hello Fruit demos share product display formatting", () => {
   assert.equal(formatHelloFruitFiat({ currency: "USD", value: "0.10" }), "$0.10");
   assert.equal(formatHelloFruitFiat({ currency: "EUR", value: "0.10" }), "0.10 EUR");
+  assert.equal(formatHelloFruitBuyNowLabel({ currency: "USD", value: "0.10" }), "Buy Now ($0.10)");
+  assert.equal(formatHelloFruitBuyNowLabel({ currency: "EUR", value: "0.10" }), "Buy Now (0.10 EUR)");
   assert.equal(helloFruitDemoLabels.createInvoice, "Create invoice");
   assert.equal(helloFruitDemoLabels.creatingInvoice, "Creating invoice...");
   assert.equal(helloFruitDemoLabels.createInvoiceError, "Could not create invoice.");
@@ -156,6 +159,8 @@ test("Hello Fruit browser demos consume shared product display helpers", () => {
   for (const [relativePath, source] of sources) {
     assert.match(source, /formatHelloFruitFiat/,
       `${relativePath}: uses shared fiat display helper`);
+    assert.match(source, /formatHelloFruitBuyNowLabel/,
+      `${relativePath}: uses shared buy-now label helper`);
     assert.match(source, /createHelloFruitInvoiceDescription/,
       `${relativePath}: uses shared invoice description helper`);
     assert.match(source, /helloFruitDemoLabels/,

@@ -15,6 +15,7 @@ import {
 } from "../../../../shared/demo-browser-logging.ts";
 import {
   createHelloFruitInvoiceDescription,
+  formatHelloFruitBuyNowLabel,
   formatHelloFruitFiat,
   helloFruitDemoLabels
 } from "../../../../shared/demo-formatting.ts";
@@ -35,6 +36,10 @@ function App(): React.ReactElement {
   const [error, setError] = useState("");
   const completedInvoiceRef = useRef("");
   const selectedFruit = fruits.find((fruit) => fruit.id === fruitId) ?? fruits[0];
+  const createInvoiceLabel =
+    selectedFruit === undefined
+      ? helloFruitDemoLabels.createInvoice
+      : formatHelloFruitBuyNowLabel(selectedFruit.fiat);
 
   const onCheckoutState = useCallback((state: OpenReceiveCheckoutState) => {
     if (
@@ -125,7 +130,7 @@ function App(): React.ReactElement {
           onClick={createInvoice}
           type="button"
         >
-          {creating ? helloFruitDemoLabels.creatingInvoice : helloFruitDemoLabels.createInvoice}
+          {creating ? helloFruitDemoLabels.creatingInvoice : createInvoiceLabel}
         </button>
 
         {invoice === null ? null : (
