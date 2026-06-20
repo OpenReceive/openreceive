@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createLightningUri } from "@openreceive/browser";
 import {
+  parseNwcConnectionUri,
   pollInvoiceUntilFinalState
 } from "@openreceive/core";
 import {
@@ -22,56 +23,17 @@ const productPath = path.join(repoRoot, "examples/hello-fruit/shared/product.jso
 const createInvoice = process.env.OPENRECEIVE_LIVE_CREATE_INVOICE !== "0";
 const waitForPayment = process.env.OPENRECEIVE_LIVE_WAIT_FOR_PAYMENT === "1";
 
-function redactNwc(value) {
-  if (!value) return value;
-  return value.replace(/([?&]secret=)[^&]+/gi, "$1[REDACTED]");
-}
-
-function parseNwc(value) {
-  let parsed;
-  try {
-    parsed = new URL(value);
-  } catch {
-    throw new Error("OPENRECEIVE_NWC is not a valid URL");
-  }
-
-  if (parsed.protocol !== "nostr+walletconnect:") {
-    throw new Error("OPENRECEIVE_NWC must use nostr+walletconnect://");
-  }
-
-  const walletPubkey = parsed.hostname || parsed.pathname.replace(/^\/+/, "");
-  if (!/^[0-9a-fA-F]{64}$/.test(walletPubkey)) {
-    throw new Error("NWC wallet pubkey must be 64 hex characters");
-  }
-
-  const relays = parsed.searchParams.getAll("relay");
-  if (relays.length === 0) {
-    throw new Error("NWC URI must contain at least one relay");
-  }
-
-  for (const relay of relays) {
-    const relayUrl = new URL(relay);
-    if (relayUrl.protocol !== "wss:") {
-      throw new Error("NWC relays must use wss:// URLs");
-    }
-  }
-
-  const secrets = parsed.searchParams.getAll("secret");
-  if (secrets.length !== 1 || !/^[0-9a-fA-F]{64}$/.test(secrets[0])) {
-    throw new Error("NWC URI must contain exactly one 64-hex secret");
-  }
-
-  return {
-    walletPubkey,
-    relays,
-    lud16: parsed.searchParams.get("lud16"),
-    redacted: redactNwc(value)
-  };
-}
-
 function loadExpectedCapabilities(filePath) {
   if (!existsSync(filePath)) return null;
   return JSON.parse(readFileSync(filePath, "utf8"));
+}
+
+function formatErrorMessage(error) {
+  if (error && typeof error === "object" && typeof error.description === "string") {
+    return error.description;
+  }
+
+  return error instanceof Error ? error.message : String(error);
 }
 
 function assertCapabilities(summary, expected) {
@@ -110,10 +72,10 @@ let parsedNwc;
 let expectedCapabilities;
 
 try {
-  parsedNwc = parseNwc(nwc);
+  parsedNwc = parseNwcConnectionUri(nwc);
   expectedCapabilities = loadExpectedCapabilities(expectedCapabilitiesPath);
 } catch (error) {
-  console.error(error instanceof Error ? error.message : String(error));
+  console.error(formatErrorMessage(error));
   process.exit(1);
 }
 

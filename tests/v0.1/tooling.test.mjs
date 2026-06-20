@@ -7,6 +7,7 @@ import test from "node:test";
 
 const secretScanner = path.join(process.cwd(), "tools/validate/scan-secrets.mjs");
 const clientBundleScanner = path.join(process.cwd(), "tools/validate/scan-client-bundles.mjs");
+const liveNwcSmoke = path.join(process.cwd(), "tools/live-nwc-test/index.mjs");
 
 function withGitRepo(callback) {
   const dir = mkdtempSync(path.join(tmpdir(), "openreceive-secret-scan-"));
@@ -31,6 +32,18 @@ function runClientBundleScanner(cwd) {
   return execFileSync(process.execPath, [clientBundleScanner], {
     cwd,
     encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+}
+
+function runLiveNwcSmoke(env) {
+  return execFileSync(process.execPath, [liveNwcSmoke], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      ...env
+    },
     stdio: ["ignore", "pipe", "pipe"]
   });
 }
@@ -130,4 +143,20 @@ test("client bundle scanner rejects real-looking NWC URIs in generated bundles",
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("live NWC smoke reports canonical URI parse errors before wallet calls", () => {
+  const badNwc =
+    "nostr+walletconnect://" +
+    "a".repeat(64) +
+    "?relay=wss%3A%2F%2Frelay.example.com&secret=not-secret";
+
+  assert.throws(
+    () => runLiveNwcSmoke({ OPENRECEIVE_NWC: badNwc }),
+    (error) => {
+      assert.match(String(error.stderr), /NWC client secret must be 64 hex characters\./);
+      assert.doesNotMatch(String(error.stderr), /not-secret/);
+      return true;
+    }
+  );
 });
