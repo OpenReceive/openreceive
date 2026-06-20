@@ -17,14 +17,16 @@ The v0.1 reference path is contract-first and server-owned:
   browser helpers, provider data, testkit, elements, and React packages.
 - `examples/hello-fruit/server/` contains the Express + React and static HTML
   + small API Hello Fruit demos.
-- `tools/` holds validation, conformance, package-smoke, docs, and live-wallet
-  smoke helpers.
+- `demos/deploy/` contains public-safe hosted demo deployment templates.
+- `tools/` holds validation, conformance, package-smoke, docs, mock-wallet, and
+  live-wallet smoke helpers.
 
 ## Current Status
 
 This repository has the v0.1 JS reference path in place. The current gate keeps
 schemas, vectors, generated contracts, package artifacts, demos, secret scans,
-and docs aligned before broader SDK work proceeds.
+release metadata, deployment templates, and docs aligned before broader SDK
+work proceeds.
 
 Run the full local gate:
 
@@ -36,6 +38,24 @@ Run only the contract and secret checks when iterating quickly:
 
 ```sh
 npm test
+```
+
+Validate hosted-demo deployment templates:
+
+```sh
+npm run check:demo-deploy
+```
+
+Validate release-readiness metadata:
+
+```sh
+npm run check:release
+```
+
+Start the deterministic, non-payable mock wallet for conformance testing:
+
+```sh
+npm run mock-wallet
 ```
 
 Run the live-wallet smoke harness:
@@ -58,3 +78,14 @@ OpenReceive.
 
 Browser, mobile, and static frontend code never receive NWC secrets. Live
 checkout always needs a merchant-controlled backend component.
+
+## Docs
+
+Public docs live in `docs/` and are indexed by `docs/manifest.json`.
+
+- `docs/01-quickstart-node.md` is the current working backend quickstart.
+- `docs/11-conformance.md` covers shared vectors, mock wallet, and live wallet
+  smoke expectations.
+- `docs/13-demo-deployment.md` covers the separate demo edge and deployment
+  boundary.
+- `docs/sdk-status.md` tracks implemented packages versus planned SDKs.
