@@ -29,3 +29,9 @@ npm run test:ci
 The current gate covers schemas, vectors, source secret scanning, TypeScript
 typecheck, JavaScript tests, local package artifact imports, demo builds,
 generated client-bundle scanning, docs build, and optional live NWC smoke.
+
+## Tooling
+
+`tools/mock-wallet` is implemented as a deterministic, non-payable local wallet
+service for conformance tests. Start it with `npm run mock-wallet`; use live
+wallet profile tests when proving real wallet compatibility.

@@ -16,6 +16,7 @@
     "check:generated": "node tools/codegen/generate-js-models.mjs --check",
     "check:demo-containers": "node tools/validate/check-demo-containers.mjs",
     "check:demo-deploy": "node tools/validate/check-demo-deploy.mjs",
+    "mock-wallet": "node tools/mock-wallet/server.mjs",
     "scan:client-bundles": "node tools/validate/scan-client-bundles.mjs",
     "test:package-smoke": "node tools/validate/package-smoke.mjs",
     "typecheck": "tsc --noEmit",

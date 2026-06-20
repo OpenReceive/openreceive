@@ -104,6 +104,18 @@ The testkit is not a daemon and does not emulate Nostr relay behavior. It is a
 local conformance helper for code paths that already depend on the
 `OpenReceiveReceiveNwcClient` interface.
 
+## Mock Wallet
+
+`npm run mock-wallet` starts `tools/mock-wallet`, a deterministic local HTTP
+service backed by `@openreceive/testkit`. It exposes `get_info`, `make_invoice`,
+`lookup_invoice`, scripted terminal states, duplicate notification replay, and
+an SSE `payment_received` stream for conformance tests.
+
+The mock wallet returns non-payable invoice fixtures. It does not replace live
+wallet profile tests, does not prove real BOLT11 routing, and does not emulate a
+Nostr relay. Use it for reproducible contract behavior before testing a real
+receive-only NWC wallet with `npm run test:live:nwc`.
+
 ## Notification Listeners
 
 `startPaymentNotificationListener` in `@openreceive/node` is a small helper for
