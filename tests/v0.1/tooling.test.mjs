@@ -11,6 +11,7 @@ const demoContainerValidator = path.join(process.cwd(), "tools/validate/check-de
 const demoDeployValidator = path.join(process.cwd(), "tools/validate/check-demo-deploy.mjs");
 const demoDeploymentDocs = path.join(process.cwd(), "docs/13-demo-deployment.md");
 const releaseReadinessValidator = path.join(process.cwd(), "tools/validate/check-release-readiness.mjs");
+const workflowValidator = path.join(process.cwd(), "tools/validate/check-workflows.mjs");
 const liveNwcSmoke = path.join(process.cwd(), "tools/live-nwc-test/index.mjs");
 
 function withGitRepo(callback) {
@@ -64,6 +65,14 @@ function runReleaseReadinessValidator() {
   });
 }
 
+function runWorkflowValidator() {
+  return execFileSync(process.execPath, [workflowValidator], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+}
+
 function runLiveNwcSmoke(env) {
   const childEnv = {
     ...process.env,
@@ -102,6 +111,10 @@ test("demo deployment docs preserve public edge and runner boundaries", () => {
 
 test("release readiness validator accepts current v0.1 metadata", () => {
   assert.match(runReleaseReadinessValidator(), /Release readiness validation passed for 8 package\(s\)\./);
+});
+
+test("workflow validator accepts safe public workflow skeletons", () => {
+  assert.match(runWorkflowValidator(), /Workflow validation passed for 7 workflow\(s\)\./);
 });
 
 test("secret scanner rejects force-added non-example env files", () => {

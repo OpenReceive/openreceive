@@ -1,0 +1,44 @@
+name: Demos
+
+on:
+  pull_request:
+    paths:
+      - "examples/hello-fruit/**"
+      - "demos/deploy/**"
+      - "tools/validate/check-demo-*.mjs"
+      - "package*.json"
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - "examples/hello-fruit/**"
+      - "demos/deploy/**"
+      - "tools/validate/check-demo-*.mjs"
+      - "package*.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: demos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hello-fruit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      OPENRECEIVE_NWC: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check:demo-containers
+      - run: npm run check:demo-deploy
+      - run: npm run build:demo
+      - run: npm run scan:client-bundles

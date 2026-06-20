@@ -1,0 +1,34 @@
+name: Security
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  public-secret-boundaries:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      OPENRECEIVE_NWC: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run scan:secrets
+      - run: npm run check:workflows
+      - run: npm run build:demo
+      - run: npm run scan:client-bundles

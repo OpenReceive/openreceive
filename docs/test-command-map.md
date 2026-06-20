@@ -11,6 +11,7 @@
 | `npm run check:demo-containers` | Validate Hello Fruit Dockerfiles, compose templates, optional env-file wiring, ports, and secret boundaries. | No |
 | `npm run check:demo-deploy` | Validate public hosted-demo deploy templates, manifests, scripts, proxy wiring, and secret boundaries. | No |
 | `npm run check:release` | Validate v0.1 release-readiness metadata, package versions, private package status, and changelog coverage. | No |
+| `npm run check:workflows` | Validate GitHub workflow shape, read-only permissions, safe commands, and disabled publish path. | No |
 | `npm run mock-wallet` | Start the deterministic local mock wallet service for conformance testing. | No |
 | `npm run build:docs` | Validate the docs manifest and build the docs import/search artifact under `dist/docs`. | No |
 | `npm run build:demo` | Build the Hello Fruit demos. | No |

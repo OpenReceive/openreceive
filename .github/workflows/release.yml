@@ -1,0 +1,33 @@
+name: Release Dry Run
+
+on:
+  push:
+    tags:
+      - "v*"
+      - "js-*-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      OPENRECEIVE_NWC: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check:release
+      - run: npm run test:package-smoke
+      - run: npm run build:docs
+      - run: echo "Release dry run complete. Publishing requires explicit maintainer approval."

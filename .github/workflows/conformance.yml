@@ -1,0 +1,48 @@
+name: Conformance
+
+on:
+  pull_request:
+    paths:
+      - "spec/**"
+      - "packages/js/**"
+      - "tools/mock-wallet/**"
+      - "tests/v0.1/**"
+      - "docs/11-conformance.md"
+      - "package*.json"
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - "spec/**"
+      - "packages/js/**"
+      - "tools/mock-wallet/**"
+      - "tests/v0.1/**"
+      - "docs/11-conformance.md"
+      - "package*.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: conformance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  js-conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      OPENRECEIVE_NWC: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run validate
+      - run: npm run check:generated
+      - run: npm run test:js
+      - run: node --test tests/v0.1/mock-wallet.test.mjs
