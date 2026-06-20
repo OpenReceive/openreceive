@@ -45,6 +45,23 @@ cors: {
 Some browser EventSource flows cannot send custom auth headers. In those cases,
 an app may issue a short-lived signed event URL.
 
+The Express adapter can generate and verify those URLs when configured:
+
+```ts
+mountOpenReceiveExpressRoutes(app, {
+  // other options...
+  signedEvents: {
+    secret: process.env.OPENRECEIVE_EVENT_URL_SECRET,
+    ttlSeconds: 300
+  }
+});
+```
+
+When enabled, `checkout.events_url` includes an `_or_evt` query value scoped to
+that invoice. If the query value is missing, the adapter falls back to the
+normal `auth.events` hook. If it is present but expired or scoped to another
+invoice, the route fails closed.
+
 Signed event URLs must:
 
 - Be scoped to one invoice.

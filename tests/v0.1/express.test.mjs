@@ -167,6 +167,104 @@ test("lookup settles invoice and publishes replayable SSE event", async () => {
   assert.match(stream, /: heartbeat/);
 });
 
+test("signed event URLs authorize one invoice and expire", async () => {
+  let now = 1000;
+  const { handlers, store } = createSecureHarness({
+    clock: () => now,
+    auth: {
+      create: () => true
+    },
+    signedEvents: {
+      secret: "s".repeat(32),
+      ttlSeconds: 60
+    }
+  });
+
+  const createRes = createResponse();
+  await handlers.createInvoice(
+    createRequest({
+      headers: {
+        "idempotency-key": "order-signed-events"
+      },
+      body: {
+        amount_msats: 200000,
+        description: "Fruit sticker"
+      }
+    }),
+    createRes,
+    raiseNext
+  );
+
+  assert.equal(createRes.statusCode, 201);
+  assert.match(createRes.body.checkout.events_url, /_or_evt=/);
+  assert.doesNotMatch(createRes.body.checkout.events_url, /secret|token/i);
+  assert.doesNotMatch(createRes.body.checkout.events_url, /s{32}/);
+
+  const eventUrl = new URL(
+    createRes.body.checkout.events_url,
+    "https://shop.example"
+  );
+  const eventToken = eventUrl.searchParams.get("_or_evt");
+  assert.equal(typeof eventToken, "string");
+
+  const eventRes = createResponse();
+  await handlers.invoiceEvents(
+    createRequest({
+      params: {
+        invoice_id: createRes.body.invoice_id
+      },
+      query: {
+        _or_evt: eventToken
+      }
+    }),
+    eventRes,
+    raiseNext
+  );
+
+  assert.equal(eventRes.statusCode, 200);
+  assert.match(eventRes.writes.join(""), /event: invoice\.created/);
+
+  seedInvoice(store, {
+    invoice_id: "or_inv_other",
+    payment_hash: "f".repeat(64),
+    invoice: "lnbc-other"
+  });
+  const wrongInvoiceRes = createResponse();
+  await handlers.invoiceEvents(
+    createRequest({
+      params: {
+        invoice_id: "or_inv_other"
+      },
+      query: {
+        _or_evt: eventToken
+      }
+    }),
+    wrongInvoiceRes,
+    raiseNext
+  );
+
+  assert.equal(wrongInvoiceRes.statusCode, 403);
+  assert.equal(wrongInvoiceRes.body.message, "Signed event URL is invalid or expired.");
+
+  now = 1061;
+  const expiredRes = createResponse();
+  await handlers.invoiceEvents(
+    createRequest({
+      params: {
+        invoice_id: createRes.body.invoice_id
+      },
+      query: {
+        _or_evt: eventToken
+      }
+    }),
+    expiredRes,
+    raiseNext
+  );
+
+  assert.equal(expiredRes.statusCode, 403);
+  assert.equal(expiredRes.body.message, "Signed event URL is invalid or expired.");
+});
+
 test("lookup can run an idempotent backend fulfillment hook after settlement", async () => {
   let fulfillCalls = 0;
   const { wallet, handlers } = createHarness({
@@ -498,6 +596,20 @@ test("secure Express handlers fail closed when auth hooks are missing", async ()
 
   assert.equal(readRes.statusCode, 401);
   assert.equal(readRes.body.message, "OpenReceive read authorization hook is required.");
+
+  const eventsRes = createResponse();
+  await handlers.invoiceEvents(
+    createRequest({
+      params: {
+        invoice_id: "or_inv_seed"
+      }
+    }),
+    eventsRes,
+    raiseNext
+  );
+
+  assert.equal(eventsRes.statusCode, 401);
+  assert.equal(eventsRes.body.message, "OpenReceive events authorization hook is required.");
 
   const refreshRes = createResponse();
   await handlers.refreshInvoice(

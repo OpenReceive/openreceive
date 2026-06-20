@@ -1,4 +1,8 @@
 import {
+  createHmac,
+  timingSafeEqual
+} from "node:crypto";
+import {
   InMemoryInvoiceStore,
   InvoiceNotFoundError,
   OPENRECEIVE_STATIC_BTC_FIAT_RATES,
@@ -83,6 +87,12 @@ export interface OpenReceiveExpressCors {
   credentials?: boolean;
 }
 
+export interface OpenReceiveExpressSignedEvents {
+  secret: string | Uint8Array;
+  ttlSeconds?: number;
+  queryParam?: string;
+}
+
 export interface OpenReceiveExpressFulfillmentInput {
   req: ExpressLikeRequest;
   invoice: InvoiceStorageRow;
@@ -102,6 +112,7 @@ export interface OpenReceiveExpressOptions {
   auth?: OpenReceiveExpressAuthorization;
   csrf?: OpenReceiveExpressCsrf;
   cors?: OpenReceiveExpressCors;
+  signedEvents?: OpenReceiveExpressSignedEvents;
   fulfill?: OpenReceiveExpressFulfillHook;
   unsafeAllowUnauthenticatedDemoMode?: boolean;
   clock?: () => number;
@@ -124,6 +135,8 @@ export interface OpenReceiveExpressHandlers {
 
 const DEFAULT_BASE_PATH = "/openreceive/v1";
 const DEFAULT_HEARTBEAT_SECONDS = 20;
+const DEFAULT_SIGNED_EVENT_TTL_SECONDS = 300;
+const DEFAULT_SIGNED_EVENT_QUERY_PARAM = "_or_evt";
 const HEX_64 = /^[0-9a-fA-F]{64}$/;
 
 export type OpenReceiveInvoiceEventName =
@@ -253,7 +266,11 @@ export function createOpenReceiveExpressHandlers(
       });
 
       if (existing !== undefined) {
-        return res.status(200).json(serializeInvoice(existing.row, basePath));
+        return res.status(200).json(serializeInvoice(existing.row, {
+          basePath,
+          options,
+          clock
+        }));
       }
 
       const amountMsats = getCreateAmountMsats(body, clock());
@@ -297,14 +314,22 @@ export function createOpenReceiveExpressHandlers(
         serializeEventData(createResult.row)
       );
 
-      return res.status(201).json(serializeInvoice(createResult.row, basePath));
+      return res.status(201).json(serializeInvoice(createResult.row, {
+        basePath,
+        options,
+        clock
+      }));
     }),
 
     getInvoice: wrapHandler(async (req, res) => {
       applyDefaultHeaders(req, res, options);
       const invoice = requireStoredInvoice(store, req.params?.invoice_id);
       await requireAuthorization(options, "read", req, invoice);
-      return res.status(200).json(serializeInvoice(invoice, basePath));
+      return res.status(200).json(serializeInvoice(invoice, {
+        basePath,
+        options,
+        clock
+      }));
     }),
 
     lookupInvoice: wrapHandler(async (req, res) => {
@@ -361,7 +386,11 @@ export function createOpenReceiveExpressHandlers(
       }
 
       return res.status(200).json({
-        ...serializeInvoice(current, basePath),
+        ...serializeInvoice(current, {
+          basePath,
+          options,
+          clock
+        }),
         preimage_present: lookup.preimage !== undefined
       });
     }),
@@ -404,7 +433,9 @@ export function createOpenReceiveExpressHandlers(
           oldInvoice,
           newInvoice: existing.row,
           reason,
-          basePath
+          basePath,
+          options,
+          clock
         }));
       }
 
@@ -441,14 +472,16 @@ export function createOpenReceiveExpressHandlers(
         oldInvoice,
         newInvoice: createResult.row,
         reason,
-        basePath
+        basePath,
+        options,
+        clock
       }));
     }),
 
     invoiceEvents: wrapHandler(async (req, res) => {
       applyDefaultHeaders(req, res, options);
       const invoice = requireStoredInvoice(store, req.params?.invoice_id);
-      await requireAuthorization(options, "events", req, invoice);
+      await requireEventAuthorization(options, req, invoice, clock());
 
       res.status(200);
       res.set("Content-Type", "text/event-stream");
@@ -582,16 +615,31 @@ function serializeRefreshResult(input: {
   newInvoice: InvoiceStorageRow;
   reason: string;
   basePath: string;
+  options: OpenReceiveExpressOptions;
+  clock: () => number;
 }): Record<string, unknown> {
   return {
     old_invoice_id: input.oldInvoice.invoice_id,
     new_invoice_id: input.newInvoice.invoice_id,
     reason: input.reason,
-    invoice: serializeInvoice(input.newInvoice, input.basePath)
+    invoice: serializeInvoice(input.newInvoice, {
+      basePath: input.basePath,
+      options: input.options,
+      clock: input.clock
+    })
   };
 }
 
-function serializeInvoice(row: InvoiceStorageRow, basePath: string): Record<string, unknown> {
+interface SerializeInvoiceContext {
+  basePath: string;
+  options: OpenReceiveExpressOptions;
+  clock: () => number;
+}
+
+function serializeInvoice(
+  row: InvoiceStorageRow,
+  context: SerializeInvoiceContext
+): Record<string, unknown> {
   return {
     invoice_id: row.invoice_id,
     type: "incoming",
@@ -610,13 +658,175 @@ function serializeInvoice(row: InvoiceStorageRow, basePath: string): Record<stri
     metadata: row.metadata,
     fiat_quote: row.fiat_quote ?? null,
     checkout: {
-      events_url: `${basePath}/invoices/${row.invoice_id}/events`,
-      routes_url: `${basePath}/routes?invoice_id=${row.invoice_id}`
+      events_url: createEventUrl(row, context),
+      routes_url: `${context.basePath}/routes?invoice_id=${row.invoice_id}`
     },
     fulfillment: {
       state: row.fulfillment_state
     }
   };
+}
+
+interface SignedEventTokenPayload {
+  v: 1;
+  invoice_id: string;
+  exp: number;
+}
+
+function createEventUrl(
+  row: InvoiceStorageRow,
+  context: SerializeInvoiceContext
+): string {
+  const baseUrl = `${context.basePath}/invoices/${row.invoice_id}/events`;
+  const signedEvents = context.options.signedEvents;
+  if (signedEvents === undefined) return baseUrl;
+
+  const queryParam = getSignedEventQueryParam(signedEvents);
+  const token = createSignedEventToken(row.invoice_id, context.clock(), signedEvents);
+  return `${baseUrl}?${queryParam}=${encodeURIComponent(token)}`;
+}
+
+async function requireEventAuthorization(
+  options: OpenReceiveExpressOptions,
+  req: ExpressLikeRequest,
+  invoice: InvoiceStorageRow,
+  now: number
+): Promise<void> {
+  const signedEvents = options.signedEvents;
+  if (signedEvents !== undefined) {
+    const token = getQueryString(req, getSignedEventQueryParam(signedEvents));
+
+    if (token !== undefined) {
+      if (!verifySignedEventToken(token, invoice.invoice_id, now, signedEvents)) {
+        throw httpError(
+          403,
+          "UNAUTHORIZED",
+          "Signed event URL is invalid or expired."
+        );
+      }
+      return;
+    }
+  }
+
+  await requireAuthorization(options, "events", req, invoice);
+}
+
+function createSignedEventToken(
+  invoiceId: string,
+  now: number,
+  signedEvents: OpenReceiveExpressSignedEvents
+): string {
+  const payload: SignedEventTokenPayload = {
+    v: 1,
+    invoice_id: invoiceId,
+    exp: now + getSignedEventTtlSeconds(signedEvents)
+  };
+  const encodedPayload = base64UrlEncode(JSON.stringify(payload));
+  const signature = signSignedEventPayload(encodedPayload, signedEvents);
+  return `${encodedPayload}.${signature}`;
+}
+
+function verifySignedEventToken(
+  token: string,
+  invoiceId: string,
+  now: number,
+  signedEvents: OpenReceiveExpressSignedEvents
+): boolean {
+  const parts = token.split(".");
+  if (parts.length !== 2) return false;
+
+  const [encodedPayload, signature] = parts;
+  if (encodedPayload === undefined || signature === undefined) return false;
+
+  const expectedSignature = signSignedEventPayload(encodedPayload, signedEvents);
+  if (!timingSafeStringEqual(signature, expectedSignature)) return false;
+
+  const payload = parseSignedEventPayload(encodedPayload);
+  return (
+    payload !== undefined &&
+    payload.v === 1 &&
+    payload.invoice_id === invoiceId &&
+    Number.isSafeInteger(payload.exp) &&
+    payload.exp >= now
+  );
+}
+
+function parseSignedEventPayload(
+  encodedPayload: string
+): SignedEventTokenPayload | undefined {
+  try {
+    return JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
+  } catch {
+    return undefined;
+  }
+}
+
+function signSignedEventPayload(
+  encodedPayload: string,
+  signedEvents: OpenReceiveExpressSignedEvents
+): string {
+  assertSignedEventSecret(signedEvents);
+  return createHmac("sha256", signedEvents.secret)
+    .update(encodedPayload)
+    .digest("base64url");
+}
+
+function timingSafeStringEqual(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return (
+    leftBuffer.length === rightBuffer.length &&
+    timingSafeEqual(leftBuffer, rightBuffer)
+  );
+}
+
+function base64UrlEncode(value: string): string {
+  return Buffer.from(value, "utf8").toString("base64url");
+}
+
+function getSignedEventTtlSeconds(
+  signedEvents: OpenReceiveExpressSignedEvents
+): number {
+  const ttl = signedEvents.ttlSeconds ?? DEFAULT_SIGNED_EVENT_TTL_SECONDS;
+  if (!Number.isSafeInteger(ttl) || ttl <= 0) {
+    throw httpError(
+      500,
+      "INTERNAL",
+      "signedEvents.ttlSeconds must be a positive safe integer."
+    );
+  }
+  return ttl;
+}
+
+function getSignedEventQueryParam(
+  signedEvents: OpenReceiveExpressSignedEvents
+): string {
+  const queryParam = signedEvents.queryParam ?? DEFAULT_SIGNED_EVENT_QUERY_PARAM;
+  if (!/^[A-Za-z0-9_.~-]+$/.test(queryParam)) {
+    throw httpError(
+      500,
+      "INTERNAL",
+      "signedEvents.queryParam must be URL query-name safe."
+    );
+  }
+  return queryParam;
+}
+
+function assertSignedEventSecret(
+  signedEvents: OpenReceiveExpressSignedEvents
+): void {
+  const byteLength =
+    typeof signedEvents.secret === "string"
+      ? Buffer.byteLength(signedEvents.secret, "utf8")
+      : signedEvents.secret.byteLength;
+
+  if (byteLength < 32) {
+    throw httpError(
+      500,
+      "INTERNAL",
+      "signedEvents.secret must be at least 32 bytes."
+    );
+  }
 }
 
 function serializeEventData(row: InvoiceStorageRow): Record<string, unknown> {

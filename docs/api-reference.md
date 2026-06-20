@@ -79,6 +79,10 @@ The v0.1 reference adapter uses Server-Sent Events. Clients may send
 `Last-Event-ID` for replay. Event streams are passive UI hints; they do not
 fulfill products.
 
+When the Express adapter is configured with signed event URLs,
+`checkout.events_url` includes a short-lived `_or_evt` query value scoped to the
+invoice. Do not log or persist the full URL.
+
 The authoritative event contract is
 `spec/asyncapi/openreceive-events.v1.yaml`.
 
