@@ -14,6 +14,7 @@ class FakeWallet {
   makeInvoiceCalls = 0;
   lookupInvoiceCalls = 0;
   lookupState = "pending";
+  makeInvoiceError = undefined;
 
   async preflight() {
     return {
@@ -30,6 +31,9 @@ class FakeWallet {
 
   async makeInvoice(request) {
     this.makeInvoiceCalls += 1;
+    if (this.makeInvoiceError !== undefined) {
+      throw this.makeInvoiceError;
+    }
     return {
       invoice: "lnbc-demo",
       payment_hash: PAYMENT_HASH,
@@ -206,8 +210,122 @@ test("lookup settles invoice and publishes replayable SSE event", async () => {
 
   const stream = eventRes.writes.join("");
   assert.match(stream, /event: invoice\.created/);
+  assert.match(stream, /event: invoice\.verifying/);
   assert.match(stream, /event: invoice\.settled/);
   assert.match(stream, /: heartbeat/);
+});
+
+test("logger records invoice transitions without secrets or signed event tokens", async () => {
+  const logs = [];
+  const { wallet, handlers } = createHarness({
+    logger: (entry) => {
+      logs.push(entry);
+    },
+    signedEvents: {
+      secret: "s".repeat(32)
+    }
+  });
+  const createRes = createResponse();
+  await handlers.createInvoice(
+    createRequest({
+      headers: {
+        "idempotency-key": "order-logged"
+      },
+      body: {
+        amount_msats: 200000,
+        description: "Fruit sticker"
+      }
+    }),
+    createRes,
+    raiseNext
+  );
+
+  wallet.lookupState = "settled";
+  const lookupRes = createResponse();
+  await handlers.lookupInvoice(
+    createRequest({
+      body: {
+        payment_hash: PAYMENT_HASH
+      }
+    }),
+    lookupRes,
+    raiseNext
+  );
+
+  const eventUrl = new URL(
+    createRes.body.checkout.events_url,
+    "https://shop.example"
+  );
+  const eventToken = eventUrl.searchParams.get("_or_evt");
+  const eventRes = createResponse();
+  await handlers.invoiceEvents(
+    createRequest({
+      params: {
+        invoice_id: createRes.body.invoice_id
+      },
+      query: {
+        _or_evt: eventToken
+      }
+    }),
+    eventRes,
+    raiseNext
+  );
+
+  assert.deepEqual(
+    logs.map((entry) => entry.event),
+    [
+      "invoice.create.requested",
+      "invoice.created",
+      "invoice.lookup.requested",
+      "invoice.verifying",
+      "invoice.settled",
+      "invoice.events.opened",
+      "invoice.events.closed"
+    ]
+  );
+  assert.equal(logs[1].invoice_id, createRes.body.invoice_id);
+  assert.equal(logs[1].payment_hash, PAYMENT_HASH);
+  assert.equal(logs[4].transaction_state, "settled");
+  assert.equal(logs[5].replayed_events, 3);
+
+  const serializedLogs = JSON.stringify(logs);
+  assert.doesNotMatch(serializedLogs, /nostr\+walletconnect:\/\//);
+  assert.doesNotMatch(serializedLogs, /_or_evt=/);
+  assert.doesNotMatch(serializedLogs, /s{32}/);
+});
+
+test("logger redacts wallet errors before emitting unhandled failures", async () => {
+  const logs = [];
+  const fakeNwc = `nostr+walletconnect://${"f".repeat(64)}?relay=wss%3A%2F%2Frelay.example.com&secret=${"a".repeat(64)}`;
+  const { wallet, handlers } = createHarness({
+    logger: (entry) => {
+      logs.push(entry);
+    }
+  });
+  wallet.makeInvoiceError = new Error(`wallet rejected ${fakeNwc}`);
+
+  await assert.rejects(
+    () => handlers.createInvoice(
+      createRequest({
+        headers: {
+          "idempotency-key": "order-wallet-error"
+        },
+        body: {
+          amount_msats: 200000,
+          description: "Fruit sticker"
+        }
+      }),
+      createResponse(),
+      raiseNext
+    ),
+    /wallet rejected/
+  );
+
+  const errorLog = logs.find((entry) => entry.event === "handler.error");
+  assert.equal(errorLog.level, "error");
+  assert.equal(errorLog.error_message, "wallet rejected [REDACTED_NWC]");
+  assert.doesNotMatch(JSON.stringify(logs), /nostr\+walletconnect:\/\//);
+  assert.doesNotMatch(JSON.stringify(logs), /a{64}/);
 });
 
 test("signed event URLs authorize one invoice and expire", async () => {

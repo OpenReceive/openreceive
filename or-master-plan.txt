@@ -4146,46 +4146,54 @@ Last updated: 2026-06-20.
 
 Current repository position:
 
-  - HEAD is 1a8181b ("lots of progress").
-  - Milestone 0 is implemented.
-  - Milestone 1 is implemented and should remain the v0.1 release boundary.
-  - Milestone 2 is implemented through the committed Next.js Hello Fruit demo,
-    with one uncommitted finalization step still open.
-  - The current uncommitted step is:
+  - HEAD is 9f96db2 ("close to first manual test").
+  - Baseline verification run during this review:
 
-      Finalize Next.js hosted metadata route behavior.
+      npm test
 
-    Files currently in that step:
+    Result:
 
-      examples/hello-fruit/server/nextjs-fullstack/src/app/robots.ts
-      examples/hello-fruit/server/nextjs-fullstack/src/app/sitemap.ts
-      tests/v0.1/demo.test.mjs
+      Passing. v0.1 validation and secret scan are green.
+
+  - The only dirty files at the start of this review were:
+
+      packages/js/express/src/index.ts
+      tests/v0.1/express.test.mjs
 
     Purpose:
 
-      Make Next.js robots.txt and sitemap.xml runtime-dynamic when they depend
-      on OPENRECEIVE_PUBLIC_URL or OPENRECEIVE_DEMO_NOINDEX, and cover that
-      with tests.
+      Keep unsafe unauthenticated demo mode fail-closed in production unless a
+      public test demo explicitly acknowledges the risk with
+      OPENRECEIVE_ALLOW_UNAUTHENTICATED_DEMO=true, and assert that lookup emits
+      the canonical invoice.verifying event before invoice.settled.
 
-    Verification already run before this pause:
+  - Milestone 0 is implemented.
+  - Milestone 1 is implemented and remains the v0.1 release boundary.
+  - Milestone 2 is implemented for the current JS reference surface: generated
+    contracts, provider data, deterministic mock wallet tooling,
+    @openreceive/elements, @openreceive/react, React Material UI recipe, static
+    HTML small API demo, Next.js fullstack demo, deployment checks, and package
+    smoke tooling are present.
+  - The repo has moved past the original sequential v0.1 path. New work should
+    still avoid shared-contract drift, but isolated post-v0.1 lanes may proceed
+    after the JS/Express tests stay green.
+  - The current uncommitted implementation from this review adds
+    developer/operator visibility: an opt-in redacted Express logger,
+    demo-server console wiring, quickstart documentation, and tests proving
+    invoice transition logs do not expose OPENRECEIVE_NWC, signed event tokens,
+    or raw wallet secrets.
+  - Verification after the logging work:
 
+      node --test tests/v0.1/express.test.mjs
       npm run typecheck
-      node --test tests/v0.1/demo.test.mjs
-      npm run build -w @openreceive/example-nextjs-fullstack
+      npm test
+      OPENRECEIVE_ENV_FILE=.env OPENRECEIVE_LIVE_CREATE_INVOICE=0 npm run test:live:nwc
       npm run test:ci
 
     Result:
 
-      Passing. The final Next build showed /robots.txt and /sitemap.xml as
-      dynamic routes. OPENRECEIVE_NWC was unset, so the live NWC smoke test
-      skipped as designed.
-
-    Resume instruction:
-
-      Do not start a new feature until this three-file cleanup is either
-      committed or intentionally reverted. If it is kept, run at least
-      node --test tests/v0.1/demo.test.mjs and npm run test:ci before the
-      commit closeout.
+      Passing. The live NWC check was a preflight-only run and did not create
+      an invoice.
 
 Already completed:
 
@@ -4986,3 +4994,6 @@ on isolated directories with strict ownership.
 ---- more notes i added
 i wanto see sufficient logging on both client and server side so I can see things in action
 espeically on the serfver... 
+
+i will want to run all the demos in docker, using the nwc strin gand other env vars from 
+the .env in root

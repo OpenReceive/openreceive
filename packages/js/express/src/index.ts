@@ -58,6 +58,17 @@ export type ExpressLikeHandler = (
   next: ExpressLikeNext
 ) => unknown;
 
+export type OpenReceiveLogLevel = "debug" | "info" | "warn" | "error";
+
+export interface OpenReceiveLogEntry {
+  readonly level: OpenReceiveLogLevel;
+  readonly event: string;
+  readonly message: string;
+  readonly [key: string]: unknown;
+}
+
+export type OpenReceiveLogger = (entry: OpenReceiveLogEntry) => void;
+
 export interface OpenReceiveExpressAuthorization {
   create?: (req: ExpressLikeRequest) => Promise<boolean> | boolean;
   read?: (
@@ -115,6 +126,7 @@ export interface OpenReceiveExpressOptions {
   signedEvents?: OpenReceiveExpressSignedEvents;
   fulfill?: OpenReceiveExpressFulfillHook;
   unsafeAllowUnauthenticatedDemoMode?: boolean;
+  logger?: OpenReceiveLogger;
   clock?: () => number;
   heartbeatSeconds?: number;
 }
@@ -241,9 +253,12 @@ export function createOpenReceiveExpressHandlers(
   const basePath = normalizeBasePath(options.basePath);
   const heartbeatMs =
     (options.heartbeatSeconds ?? DEFAULT_HEARTBEAT_SECONDS) * 1000;
+  const handle = (
+    handler: (req: ExpressLikeRequest, res: ExpressLikeResponse) => Promise<unknown>
+  ): ExpressLikeHandler => wrapHandler(options, handler);
 
   return {
-    createInvoice: wrapHandler(async (req, res) => {
+    createInvoice: handle(async (req, res) => {
       applyDefaultHeaders(req, res, options);
       await requireAuthorization(options, "create", req);
       await requireCsrf(options, req);
@@ -268,6 +283,7 @@ export function createOpenReceiveExpressHandlers(
       });
 
       if (existing !== undefined) {
+        emitLog(options, "info", "invoice.create.replayed", "Replayed existing invoice for idempotent create request.", invoiceLogFields(existing.row));
         return res.status(200).json(serializeInvoice(existing.row, {
           basePath,
           options,
@@ -277,6 +293,10 @@ export function createOpenReceiveExpressHandlers(
 
       const amountMsats = getCreateAmountMsats(body, clock());
       const descriptionFields = getCreateDescriptionFields(body);
+      emitLog(options, "info", "invoice.create.requested", "Creating Lightning invoice through receive wallet.", {
+        amount_msats: amountMsats,
+        amount_source: body.fiat === undefined ? "amount_msats" : "fiat"
+      });
       const invoice = await options.client.makeInvoice({
         amount_msats: BigInt(amountMsats),
         ...descriptionFields,
@@ -315,6 +335,7 @@ export function createOpenReceiveExpressHandlers(
         "invoice.created",
         serializeEventData(createResult.row)
       );
+      emitLog(options, "info", "invoice.created", "Created Lightning invoice.", invoiceLogFields(createResult.row));
 
       return res.status(201).json(serializeInvoice(createResult.row, {
         basePath,
@@ -323,10 +344,11 @@ export function createOpenReceiveExpressHandlers(
       }));
     }),
 
-    getInvoice: wrapHandler(async (req, res) => {
+    getInvoice: handle(async (req, res) => {
       applyDefaultHeaders(req, res, options);
       const invoice = requireStoredInvoice(store, req.params?.invoice_id);
       await requireAuthorization(options, "read", req, invoice);
+      emitLog(options, "debug", "invoice.read", "Read invoice state.", invoiceLogFields(invoice));
       return res.status(200).json(serializeInvoice(invoice, {
         basePath,
         options,
@@ -334,12 +356,13 @@ export function createOpenReceiveExpressHandlers(
       }));
     }),
 
-    lookupInvoice: wrapHandler(async (req, res) => {
+    lookupInvoice: handle(async (req, res) => {
       applyDefaultHeaders(req, res, options);
       const body = asRecord(req.body);
       const invoice = findLookupInvoice(store, body);
       await requireAuthorization(options, "lookup", req, invoice);
       await requireCsrf(options, req);
+      emitLog(options, "info", "invoice.lookup.requested", "Looking up invoice settlement through receive wallet.", invoiceLogFields(invoice));
 
       let current = invoice;
       if (invoice.workflow_state === "invoice_created") {
@@ -349,6 +372,7 @@ export function createOpenReceiveExpressHandlers(
           "invoice.verifying",
           serializeEventData(current)
         );
+        emitLog(options, "info", "invoice.verifying", "Invoice entered backend verification.", invoiceLogFields(current));
       }
 
       const lookup = await options.client.lookupInvoice({
@@ -367,6 +391,7 @@ export function createOpenReceiveExpressHandlers(
             "invoice.settled",
             serializeEventData(current)
           );
+          emitLog(options, "info", "invoice.settled", "Invoice settlement was verified by wallet lookup.", invoiceLogFields(current));
         }
         current = await maybeFulfillInvoice({
           options,
@@ -384,6 +409,7 @@ export function createOpenReceiveExpressHandlers(
             "invoice.expired",
             serializeEventData(current)
           );
+          emitLog(options, "info", "invoice.expired", "Invoice was closed as expired by wallet lookup.", invoiceLogFields(current));
         }
       } else if (lookup.state === "failed" || lookup.transaction_state === "failed") {
         current = store.markFailedClosed(invoice.invoice_id);
@@ -393,7 +419,10 @@ export function createOpenReceiveExpressHandlers(
             "invoice.failed",
             serializeEventData(current)
           );
+          emitLog(options, "warn", "invoice.failed", "Invoice was closed as failed by wallet lookup.", invoiceLogFields(current));
         }
+      } else {
+        emitLog(options, "debug", "invoice.lookup.pending", "Wallet lookup did not prove a terminal invoice state.", invoiceLogFields(current));
       }
 
       return res.status(200).json({
@@ -406,11 +435,12 @@ export function createOpenReceiveExpressHandlers(
       });
     }),
 
-    refreshInvoice: wrapHandler(async (req, res) => {
+    refreshInvoice: handle(async (req, res) => {
       applyDefaultHeaders(req, res, options);
       const oldInvoice = requireStoredInvoice(store, req.params?.invoice_id);
       await requireAuthorization(options, "refresh", req, oldInvoice);
       await requireCsrf(options, req);
+      emitLog(options, "info", "invoice.refresh.requested", "Refreshing invoice by creating a linked replacement.", invoiceLogFields(oldInvoice));
 
       if (!isRefreshableInvoice(oldInvoice)) {
         throw httpError(
@@ -440,6 +470,7 @@ export function createOpenReceiveExpressHandlers(
       });
 
       if (existing !== undefined) {
+        emitLog(options, "info", "invoice.refresh.replayed", "Replayed existing refreshed invoice for idempotent request.", invoiceLogFields(existing.row));
         return res.status(200).json(serializeRefreshResult({
           oldInvoice,
           newInvoice: existing.row,
@@ -478,6 +509,10 @@ export function createOpenReceiveExpressHandlers(
         "invoice.created",
         serializeEventData(createResult.row)
       );
+      emitLog(options, "info", "invoice.refresh.created", "Created linked replacement invoice.", {
+        ...invoiceLogFields(createResult.row),
+        old_invoice_id: oldInvoice.invoice_id
+      });
 
       return res.status(201).json(serializeRefreshResult({
         oldInvoice,
@@ -489,7 +524,7 @@ export function createOpenReceiveExpressHandlers(
       }));
     }),
 
-    invoiceEvents: wrapHandler(async (req, res) => {
+    invoiceEvents: handle(async (req, res) => {
       applyDefaultHeaders(req, res, options);
       const invoice = requireStoredInvoice(store, req.params?.invoice_id);
       await requireEventAuthorization(options, req, invoice, clock());
@@ -498,7 +533,14 @@ export function createOpenReceiveExpressHandlers(
       res.set("Content-Type", "text/event-stream");
       res.set("Cache-Control", "no-store");
       res.flushHeaders?.();
-      for (const event of eventBus.replay(invoice.invoice_id, getLastEventId(req))) {
+      const lastEventId = getLastEventId(req);
+      const replayedEvents = eventBus.replay(invoice.invoice_id, lastEventId);
+      emitLog(options, "info", "invoice.events.opened", "Opened invoice event stream.", {
+        ...invoiceLogFields(invoice),
+        last_event_id: lastEventId,
+        replayed_events: replayedEvents.length
+      });
+      for (const event of replayedEvents) {
         res.write?.(formatSseEvent(event.id, event.event, event.data));
       }
 
@@ -512,19 +554,21 @@ export function createOpenReceiveExpressHandlers(
         req.on("close", () => {
           clearInterval(heartbeat);
           unsubscribe();
+          emitLog(options, "debug", "invoice.events.closed", "Closed invoice event stream.", invoiceLogFields(invoice));
         });
       } else {
         res.write?.(": heartbeat\n\n");
         unsubscribe();
+        emitLog(options, "debug", "invoice.events.closed", "Closed invoice event stream.", invoiceLogFields(invoice));
       }
     }),
 
-    listRates: wrapHandler(async (req, res) => {
+    listRates: handle(async (req, res) => {
       applyDefaultHeaders(req, res, options);
       return res.status(200).json(OPENRECEIVE_STATIC_BTC_FIAT_RATES);
     }),
 
-    quoteRates: wrapHandler(async (req, res) => {
+    quoteRates: handle(async (req, res) => {
       applyDefaultHeaders(req, res, options);
       const body = asRecord(req.body);
 
@@ -541,7 +585,7 @@ export function createOpenReceiveExpressHandlers(
       }
     }),
 
-    listRoutes: wrapHandler(async (req, res) => {
+    listRoutes: handle(async (req, res) => {
       applyDefaultHeaders(req, res, options);
       const asset = getQueryString(req, "asset");
       const route = getQueryString(req, "route");
@@ -567,7 +611,7 @@ export function createOpenReceiveExpressHandlers(
       });
     }),
 
-    listProviders: wrapHandler(async (req, res) => {
+    listProviders: handle(async (req, res) => {
       applyDefaultHeaders(req, res, options);
       return res.status(200).json({
         metadata: getProviderRegistryMetadata(),
@@ -576,12 +620,12 @@ export function createOpenReceiveExpressHandlers(
       });
     }),
 
-    health: wrapHandler(async (req, res) => {
+    health: handle(async (req, res) => {
       applyDefaultHeaders(req, res, options);
       return res.status(200).json({ ok: true });
     }),
 
-    capabilities: wrapHandler(async (req, res) => {
+    capabilities: handle(async (req, res) => {
       applyDefaultHeaders(req, res, options);
       return res.status(200).json({
         base_path: basePath,
@@ -887,7 +931,79 @@ async function maybeFulfillInvoice(input: {
     "invoice.fulfilled",
     serializeEventData(fulfilled)
   );
+  emitLog(input.options, "info", "invoice.fulfilled", "Fulfillment hook completed for settled invoice.", invoiceLogFields(fulfilled));
   return fulfilled;
+}
+
+function invoiceLogFields(row: InvoiceStorageRow): Record<string, unknown> {
+  return {
+    invoice_id: row.invoice_id,
+    payment_hash: row.payment_hash,
+    amount_msats: row.amount_msats,
+    transaction_state: row.transaction_state,
+    workflow_state: row.workflow_state,
+    fulfillment_state: row.fulfillment_state,
+    ...(row.settled_at === undefined ? {} : { settled_at: row.settled_at }),
+    ...(row.fulfilled_at === undefined ? {} : { fulfilled_at: row.fulfilled_at }),
+    ...(row.refreshed_from_invoice_id === undefined
+      ? {}
+      : { refreshed_from_invoice_id: row.refreshed_from_invoice_id })
+  };
+}
+
+function emitLog(
+  options: OpenReceiveExpressOptions,
+  level: OpenReceiveLogLevel,
+  event: string,
+  message: string,
+  fields: Record<string, unknown> = {}
+): void {
+  if (options.logger === undefined) return;
+
+  try {
+    options.logger(sanitizeLogEntry({
+      level,
+      event,
+      message,
+      ...fields
+    }));
+  } catch {
+    // Logging must never change payment, settlement, or fulfillment behavior.
+  }
+}
+
+function sanitizeLogEntry(entry: OpenReceiveLogEntry): OpenReceiveLogEntry {
+  const clean: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(entry)) {
+    clean[key] = sanitizeLogValue(value);
+  }
+  return clean as OpenReceiveLogEntry;
+}
+
+function sanitizeLogValue(value: unknown): unknown {
+  if (typeof value === "string") return redactSecrets(value);
+  if (Array.isArray(value)) return value.map(sanitizeLogValue);
+  if (typeof value !== "object" || value === null) return value;
+
+  const clean: Record<string, unknown> = {};
+  for (const [key, nested] of Object.entries(value)) {
+    if (isSensitiveLogKey(key)) {
+      clean[key] = "[REDACTED]";
+    } else {
+      clean[key] = sanitizeLogValue(nested);
+    }
+  }
+  return clean;
+}
+
+function isSensitiveLogKey(key: string): boolean {
+  return /secret|token|authorization|cookie|nwc/i.test(key);
+}
+
+function redactSecrets(value: string): string {
+  return value
+    .replace(/nostr\+walletconnect:\/\/[^\s"'`<>]+/g, "[REDACTED_NWC]")
+    .replace(/([?&](?:_or_evt|token|secret)=)[^&\s"'`<>]+/gi, "$1[REDACTED]");
 }
 
 function getCreateAmountMsats(
@@ -1052,11 +1168,19 @@ function assertSafeDemoModeConfiguration(
 
   const env = globalThis.process?.env ?? {};
   const mode = (env.OPENRECEIVE_MODE ?? env.NODE_ENV ?? "").toLowerCase();
-  if (mode === "production") {
+  const acknowledged =
+    env.OPENRECEIVE_ALLOW_UNAUTHENTICATED_DEMO === "true";
+
+  // Fail closed by default: an adapter mounted in a real production app must
+  // not silently disable auth + CSRF. A genuinely public test demo (tiny
+  // amounts, owner pays self) may opt in explicitly with
+  // OPENRECEIVE_ALLOW_UNAUTHENTICATED_DEMO=true.
+  if (mode === "production" && !acknowledged) {
     throw new Error(
       "OpenReceive refuses unsafeAllowUnauthenticatedDemoMode when " +
         "OPENRECEIVE_MODE or NODE_ENV is production. Configure auth hooks " +
-        "and fail closed instead of disabling authorization."
+        "to fail closed, or set OPENRECEIVE_ALLOW_UNAUTHENTICATED_DEMO=true " +
+        "to explicitly accept the risk for a public test demo."
     );
   }
 }
@@ -1089,11 +1213,19 @@ function applyDefaultHeaders(
 }
 
 function wrapHandler(
+  options: OpenReceiveExpressOptions,
   handler: (req: ExpressLikeRequest, res: ExpressLikeResponse) => Promise<unknown>
 ): ExpressLikeHandler {
   return (req, res, next) => {
     return handler(req, res).catch((error: unknown) => {
       if (isHttpError(error)) {
+        emitLog(options, error.status >= 500 ? "error" : "warn", "http.error", "OpenReceive request returned an HTTP error.", {
+          status: error.status,
+          code: error.code,
+          message: error.message,
+          method: req.method,
+          path: req.path
+        });
         res.status(error.status).json({
           code: error.code,
           message: error.message
@@ -1101,6 +1233,12 @@ function wrapHandler(
         return;
       }
 
+      emitLog(options, "error", "handler.error", "OpenReceive request handler failed.", {
+        error_name: error instanceof Error ? error.name : typeof error,
+        error_message: error instanceof Error ? error.message : String(error),
+        method: req.method,
+        path: req.path
+      });
       next(error);
     });
   };

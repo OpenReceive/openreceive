@@ -17,6 +17,9 @@ import {
 import {
   createHelloFruitDemoMetadata
 } from "../../../../shared/demo-metadata.ts";
+import {
+  createHelloFruitOpenReceiveLogger
+} from "../../../../shared/demo-logging.ts";
 
 const DEMO_ID = "nextjs-fullstack";
 const DEFAULT_PORT = "3002";
@@ -205,7 +208,8 @@ function getRuntime(connectionString: string): NextDemoRuntime {
       store,
       eventBus,
       merchantScope: () => "demo:hello-fruit-nextjs",
-      unsafeAllowUnauthenticatedDemoMode: true
+      unsafeAllowUnauthenticatedDemoMode: true,
+      logger: createHelloFruitOpenReceiveLogger(DEMO_ID)
     })
   };
 

@@ -13,6 +13,9 @@ import {
   createHelloFruitDemoMetadata
 } from "../../../../shared/demo-metadata.ts";
 import {
+  createHelloFruitOpenReceiveLogger
+} from "../../../../shared/demo-logging.ts";
+import {
   mountHelloFruitHostedDemoRoutes
 } from "../../../../shared/hosted-demo-routes.ts";
 
@@ -82,7 +85,8 @@ export function createHelloFruitServer() {
     client: wallet,
     store: new InMemoryInvoiceStore(),
     merchantScope: () => "demo:hello-fruit",
-    unsafeAllowUnauthenticatedDemoMode: true
+    unsafeAllowUnauthenticatedDemoMode: true,
+    logger: createHelloFruitOpenReceiveLogger("node-express-react")
   });
 
   return app;

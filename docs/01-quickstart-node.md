@@ -60,6 +60,9 @@ mountOpenReceiveExpressRoutes(app, {
   cors: {
     allowed_origins: ["https://example.com"],
     credentials: true
+  },
+  logger: (entry) => {
+    console[entry.level]("[openreceive]", entry);
   }
 });
 
@@ -68,6 +71,17 @@ app.listen(3000);
 
 For a local demo only, `unsafeAllowUnauthenticatedDemoMode: true` can be used
 while building the UI. Do not use it in production.
+
+## Server Logs
+
+The Express adapter accepts an optional `logger(entry)` hook. It emits
+redacted state transitions such as `invoice.create.requested`,
+`invoice.created`, `invoice.verifying`, `invoice.settled`, and
+`invoice.events.opened`.
+
+Log entries include invoice ids, payment hashes, amounts, and state names. They
+do not include request bodies, NWC connection strings, signed event URL tokens,
+authorization headers, cookies, or idempotency keys.
 
 ## Create An Invoice
 
