@@ -1,0 +1,59 @@
+{
+  "schema_version": "0.1.0",
+  "rule": "wallet and library errors normalize to canonical OpenReceive error codes",
+  "cases": [
+    {
+      "name": "nested wallet insufficient balance",
+      "raw_error": {
+        "error": {
+          "code": "insufficient-balance",
+          "message": "Wallet lacks spendable sats",
+          "request_id": "req_balance"
+        }
+      },
+      "expected": {
+        "code": "INSUFFICIENT_BALANCE",
+        "message": "Wallet lacks spendable sats",
+        "retryable": false,
+        "request_id": "req_balance"
+      }
+    },
+    {
+      "name": "library timeout error name",
+      "raw_error": {
+        "name": "TimeoutError",
+        "message": "Relay request timed out"
+      },
+      "expected": {
+        "code": "TIMEOUT",
+        "message": "Relay request timed out",
+        "retryable": true
+      }
+    },
+    {
+      "name": "receive-only path still normalizes send payment failure",
+      "raw_error": {
+        "code": "PAYMENT_FAILED",
+        "message": "Payment route failed"
+      },
+      "expected": {
+        "code": "PAYMENT_FAILED",
+        "message": "Payment route failed",
+        "retryable": false
+      }
+    },
+    {
+      "name": "network error name beats generic OTHER code",
+      "raw_error": {
+        "name": "Nip47NetworkError",
+        "code": "OTHER",
+        "message": "Failed to connect to relay"
+      },
+      "expected": {
+        "code": "WALLET_UNAVAILABLE",
+        "message": "Failed to connect to relay",
+        "retryable": true
+      }
+    }
+  ]
+}

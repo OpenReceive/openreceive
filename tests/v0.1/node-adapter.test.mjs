@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   OpenReceiveError,
@@ -13,6 +14,9 @@ const NWC_URI =
   "1".repeat(64) +
   "?relay=wss%3A%2F%2Frelay.example.com&secret=" +
   "2".repeat(64);
+const ERROR_NORMALIZATION_VECTORS = JSON.parse(
+  readFileSync("spec/test-vectors/error-normalization.json", "utf8")
+);
 
 class FakeAlbyClient {
   makeInvoiceParams = [];
@@ -106,44 +110,11 @@ test("receive client maps amount_msats to NIP-47 amount and normalizes results",
 });
 
 test("normalizes NWC wallet errors into canonical OpenReceive codes", async () => {
-  const insufficient = normalizeNwcWalletError({
-    error: {
-      code: "insufficient-balance",
-      message: "Wallet lacks spendable sats",
-      request_id: "req_balance"
-    }
-  });
-  assert.equal(insufficient instanceof OpenReceiveError, true);
-  assert.deepEqual(insufficient.toJSON(), {
-    code: "INSUFFICIENT_BALANCE",
-    message: "Wallet lacks spendable sats",
-    retryable: false,
-    request_id: "req_balance"
-  });
-
-  const timeout = normalizeNwcWalletError(
-    Object.assign(new Error("Relay request timed out"), {
-      name: "TimeoutError"
-    })
-  );
-  assert.equal(timeout.code, "TIMEOUT");
-  assert.equal(timeout.retryable, true);
-
-  const nativeSendError = normalizeNwcWalletError({
-    code: "PAYMENT_FAILED",
-    message: "Payment route failed"
-  });
-  assert.equal(nativeSendError.code, "PAYMENT_FAILED");
-  assert.equal(nativeSendError.retryable, false);
-
-  const networkError = normalizeNwcWalletError(
-    Object.assign(new Error("Failed to connect to relay"), {
-      name: "Nip47NetworkError",
-      code: "OTHER"
-    })
-  );
-  assert.equal(networkError.code, "WALLET_UNAVAILABLE");
-  assert.equal(networkError.retryable, true);
+  for (const vector of ERROR_NORMALIZATION_VECTORS.cases) {
+    const normalized = normalizeNwcWalletError(vector.raw_error);
+    assert.equal(normalized instanceof OpenReceiveError, true, vector.name);
+    assert.deepEqual(normalized.toJSON(), vector.expected, vector.name);
+  }
 });
 
 test("receive client throws normalized wallet errors from make_invoice", async () => {

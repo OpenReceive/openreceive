@@ -156,6 +156,23 @@ function validateSettlementVectors() {
   }
 }
 
+function validateErrorNormalizationVectors() {
+  const vector = readJson("spec/test-vectors/error-normalization.json");
+  const errorCodes = new Set(readJson("spec/schemas/error.schema.json").properties.code.enum);
+  assert(Array.isArray(vector.cases), "error normalization vectors must include cases");
+
+  const names = new Set(vector.cases.map((item) => item.name));
+  assert(names.has("receive-only path still normalizes send payment failure"), "missing send-payment error normalization vector");
+  assert(names.has("network error name beats generic OTHER code"), "missing network error normalization vector");
+
+  for (const item of vector.cases) {
+    assert(item.raw_error && typeof item.raw_error === "object", `${item.name}: raw_error must be an object`);
+    assert(errorCodes.has(item.expected?.code), `${item.name}: expected error code is not canonical`);
+    assert(typeof item.expected?.message === "string" && item.expected.message.length > 0, `${item.name}: expected message is required`);
+    assert(typeof item.expected?.retryable === "boolean", `${item.name}: expected retryable is required`);
+  }
+}
+
 function validateLifecycleVectors() {
   const vector = readJson("spec/test-vectors/invoice-lifecycle.json");
   const transactionStates = new Set(vector.transaction_states);
@@ -389,6 +406,7 @@ function main() {
   validateFiatVectors();
   validateAmountBoundaries();
   validateSettlementVectors();
+  validateErrorNormalizationVectors();
   validateLifecycleVectors();
   validatePollingVectors();
   validateIdempotencyVectors();
