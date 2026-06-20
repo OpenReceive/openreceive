@@ -1,0 +1,16 @@
+services:
+  hello-fruit-rails-hotwire:
+    build:
+      context: ../../../..
+      dockerfile: examples/hello-fruit/server/rails-hotwire/Dockerfile
+    image: ghcr.io/openreceive/demo-rails-hotwire:local
+    env_file:
+      - path: ../../../../.env
+        required: false
+    environment:
+      OPENRECEIVE_DEMO_MODE: ${OPENRECEIVE_DEMO_MODE:-test_nwc}
+      OPENRECEIVE_DEPLOYED_AT: ${OPENRECEIVE_DEPLOYED_AT:-}
+      PORT: "3003"
+      RAILS_ENV: ${RAILS_ENV:-production}
+    expose:
+      - "3003"

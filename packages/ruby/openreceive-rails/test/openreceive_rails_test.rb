@@ -173,6 +173,8 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_includes source, "OpenReceive::Rails::Routes.draw(self)"
     assert_includes source, "create_invoice"
     assert_includes source, "lookup_invoice"
+    assert_includes source, "rescue_from OpenReceive::WalletUnavailableError"
+    assert_includes source, "render_openreceive_error"
     refute_includes source, "pay_invoice"
     refute_includes source, "OPENRECEIVE_NWC"
     refute_includes source, "nostr+walletconnect://"

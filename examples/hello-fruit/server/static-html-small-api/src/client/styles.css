@@ -76,6 +76,10 @@ p {
   box-shadow: 0 0 0 2px #99f6e4;
 }
 
+.fruit-grid small {
+  color: #667085;
+}
+
 .primary {
   background: #171717;
   border: 0;

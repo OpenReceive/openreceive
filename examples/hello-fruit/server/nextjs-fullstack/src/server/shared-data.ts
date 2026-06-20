@@ -7,18 +7,17 @@ export interface HelloFruitProduct {
   readonly product_id: string;
   readonly name: string;
   readonly description: string;
-  readonly amount_msats: number;
   readonly invoice_expiry_seconds: number;
-  readonly fiat: {
-    readonly currency: string;
-    readonly value: string;
-  };
 }
 
 export interface HelloFruit {
   readonly id: string;
   readonly name: string;
   readonly sticker: string;
+  readonly fiat: {
+    readonly currency: string;
+    readonly value: string;
+  };
 }
 
 export interface HelloFruitList {

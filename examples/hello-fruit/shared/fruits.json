@@ -5,22 +5,38 @@
     {
       "id": "apple",
       "name": "Apple",
-      "sticker": "stickers/apple.svg"
+      "sticker": "stickers/apple.svg",
+      "fiat": {
+        "currency": "USD",
+        "value": "0.05"
+      }
     },
     {
       "id": "banana",
       "name": "Banana",
-      "sticker": "stickers/banana.svg"
+      "sticker": "stickers/banana.svg",
+      "fiat": {
+        "currency": "USD",
+        "value": "0.10"
+      }
     },
     {
       "id": "orange",
       "name": "Orange",
-      "sticker": "stickers/orange.svg"
+      "sticker": "stickers/orange.svg",
+      "fiat": {
+        "currency": "USD",
+        "value": "0.15"
+      }
     },
     {
       "id": "pear",
       "name": "Pear",
-      "sticker": "stickers/pear.svg"
+      "sticker": "stickers/pear.svg",
+      "fiat": {
+        "currency": "USD",
+        "value": "0.20"
+      }
     }
   ]
 }

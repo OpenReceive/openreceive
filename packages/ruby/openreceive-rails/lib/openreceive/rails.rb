@@ -224,6 +224,7 @@ module OpenReceive
     if defined?(::ActionController::Base)
       class InvoicesController < ::ActionController::Base
         protect_from_forgery with: :exception if respond_to?(:protect_from_forgery)
+        rescue_from OpenReceive::WalletUnavailableError, with: :render_openreceive_error if respond_to?(:rescue_from)
 
         def create
           result = OpenReceive::Rails.adapter.create_invoice(
@@ -249,6 +250,13 @@ module OpenReceive
           return params.to_h if params.respond_to?(:to_h)
 
           params
+        end
+
+        def render_openreceive_error(error)
+          render json: {
+            code: error.code,
+            message: error.message
+          }, status: error.status
         end
       end
     end

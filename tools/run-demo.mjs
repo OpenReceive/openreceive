@@ -5,12 +5,13 @@
 //   npm run demo node      -> Express + React        (http://localhost:3000)
 //   npm run demo static    -> Static HTML + small API (http://localhost:3001)
 //   npm run demo nextjs    -> Next.js fullstack       (http://localhost:3002)
+//   npm run demo rails     -> Rails + Hotwire         (http://localhost:3003)
 //
 // It ensures the repo-root .env exists, warns when no wallet is configured,
 // and runs the compose stack with the local port-publishing override.
 
 import { spawn } from "node:child_process";
-import { copyFileSync, existsSync, readFileSync } from "node:fs";
+import { appendFileSync, copyFileSync, existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -21,19 +22,29 @@ const DEMOS = [
     keys: ["node", "node-express-react", "express"],
     dir: "examples/hello-fruit/server/node-express-react",
     port: 3000,
-    label: "Express + React"
+    label: "Express + React",
+    requiresUnauthenticatedDemoAck: true
   },
   {
     keys: ["static", "static-html-small-api", "html"],
     dir: "examples/hello-fruit/server/static-html-small-api",
     port: 3001,
-    label: "Static HTML + small API"
+    label: "Static HTML + small API",
+    requiresUnauthenticatedDemoAck: true
   },
   {
     keys: ["nextjs", "next", "nextjs-fullstack"],
     dir: "examples/hello-fruit/server/nextjs-fullstack",
     port: 3002,
-    label: "Next.js fullstack"
+    label: "Next.js fullstack",
+    requiresUnauthenticatedDemoAck: true
+  },
+  {
+    keys: ["rails", "rails-hotwire", "hotwire"],
+    dir: "examples/hello-fruit/server/rails-hotwire",
+    port: 3003,
+    label: "Rails + Hotwire",
+    requiresUnauthenticatedDemoAck: false
   }
 ];
 
@@ -71,9 +82,25 @@ if (!existsSync(envPath)) {
   console.log("Created .env from .env.example.");
 }
 
+let envText = readFileSync(envPath, "utf8");
+
+// The JS demo images run with NODE_ENV=production and an unauthenticated
+// single-user checkout, so their Express guard refuses to start without an
+// explicit opt-in. Ensure it is present for those local runs, but never override
+// a deliberate OPENRECEIVE_ALLOW_UNAUTHENTICATED_DEMO=false.
+const ackKey = "OPENRECEIVE_ALLOW_UNAUTHENTICATED_DEMO";
+if (demo.requiresUnauthenticatedDemoAck && !new RegExp(`^\\s*${ackKey}\\s*=`, "m").test(envText)) {
+  const ackBlock =
+    `\n# Added by \`npm run demo\`: the demo image runs NODE_ENV=production with an\n` +
+    `# unauthenticated single-user checkout, which the server otherwise refuses.\n` +
+    `${ackKey}=true\n`;
+  appendFileSync(envPath, ackBlock);
+  envText += ackBlock;
+  console.log(`Added ${ackKey}=true to .env (required by the production-mode demo image).`);
+}
+
 // The demo serves the checkout UI even with no wallet, but every invoice call
 // returns 503 WALLET_UNAVAILABLE until a receive-only NWC string is set.
-const envText = readFileSync(envPath, "utf8");
 const nwcMatch = envText.match(/^\s*OPENRECEIVE_NWC\s*=\s*(.*)$/m);
 const nwcConfigured = nwcMatch !== null && nwcMatch[1].trim().length > 0;
 if (!nwcConfigured) {

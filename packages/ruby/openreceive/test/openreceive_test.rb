@@ -277,6 +277,26 @@ class OpenReceiveTest < Minitest::Test
     assert_equal [{ payment_hash: "d" * 64 }], raw_client.lookup_invoice_calls
   end
 
+  def test_unavailable_receive_client_fails_closed_without_wallet_methods
+    client = OpenReceive::UnavailableReceiveClient.new(
+      message: "Set OPENRECEIVE_NWC before creating live invoices."
+    )
+
+    error = assert_raises(OpenReceive::WalletUnavailableError) do
+      client.make_invoice("amount_msats" => 200_000)
+    end
+    lookup_error = assert_raises(OpenReceive::WalletUnavailableError) do
+      client.lookup_invoice("payment_hash" => "a" * 64)
+    end
+
+    assert_equal 503, error.status
+    assert_equal "WALLET_UNAVAILABLE", error.code
+    assert_equal "Set OPENRECEIVE_NWC before creating live invoices.", error.message
+    assert_equal "WALLET_UNAVAILABLE", lookup_error.code
+    assert_equal({ "wallet_configured" => false }, client.get_info)
+    refute client.respond_to?(:pay_invoice)
+  end
+
   def test_polling_schedule_vectors
     vector = read_vector("spec/test-vectors/polling.backoff.json")
     created_at = vector.fetch("created_at")

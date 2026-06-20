@@ -83,6 +83,14 @@ p {
   padding: 10px;
 }
 
+.fruit-grid small {
+  color: #5d6f64;
+}
+
+.fruit-grid .selected small {
+  color: inherit;
+}
+
 .fruit-grid .selected,
 .primary {
   border-color: #236a4b;

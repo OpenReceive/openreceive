@@ -70,6 +70,10 @@ p {
   cursor: pointer;
 }
 
+.fruit-grid small {
+  color: #667085;
+}
+
 .fruit-grid button.selected {
   border-color: #2563eb;
   box-shadow: 0 0 0 2px #bfdbfe;

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import * as QRCode from "qrcode";
 import {
   copyInvoice,
   createQrSvg,
@@ -28,6 +29,10 @@ interface InvoiceResponse {
   };
 }
 
+function formatFiat(fiat: { currency: string; value: string }): string {
+  return fiat.currency === "USD" ? `$${fiat.value}` : `${fiat.value} ${fiat.currency}`;
+}
+
 function App() {
   const fruits = fruitsData.fruits;
   const [fruitId, setFruitId] = useState(fruits[1]?.id ?? fruits[0]?.id);
@@ -45,7 +50,7 @@ function App() {
     if (invoice === null) return;
     let stopped = false;
 
-    createQrSvg(invoice.invoice)
+    createQrSvg(invoice.invoice, { encoder: QRCode })
       .then(setQrSvg)
       .catch((cause: unknown) => {
         setError(cause instanceof Error ? cause.message : String(cause));
@@ -139,12 +144,13 @@ function App() {
         "Idempotency-Key": `hello-fruit-${selectedFruit.id}`
       },
       body: JSON.stringify({
-        amount_msats: product.amount_msats,
+        fiat: selectedFruit.fiat,
         description: `Fruit sticker from OpenReceive demo: ${selectedFruit.name}`,
         expiry: product.invoice_expiry_seconds,
         metadata: {
           product_id: product.product_id,
-          fruit: selectedFruit.id
+          fruit: selectedFruit.id,
+          fiat: selectedFruit.fiat
         }
       })
     });
@@ -181,6 +187,7 @@ function App() {
             >
               <img src={`/${fruit.sticker}`} alt="" />
               <span>{fruit.name}</span>
+              <small>{formatFiat(fruit.fiat)}</small>
             </button>
           ))}
         </div>

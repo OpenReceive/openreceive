@@ -13,8 +13,8 @@ package registry.
 | `@openreceive/testkit` | Implemented | Deterministic receive-client fixtures and conformance helpers. |
 | `@openreceive/elements` | Implemented | No-framework checkout web component for display-safe invoice data, with optional redacted browser action logging. |
 | `@openreceive/react` | Implemented | Hook, primitives, slot/component overrides, default checkout UI, and optional redacted browser action logging for display-safe invoice data. |
-| `openreceive` Ruby | Initial core helpers | Vector-backed exact fiat quoting, settlement detection, NWC URI parse/redaction, receive-only NIP-47 request mapping, polling/idempotency helpers, an in-memory test store, a receive-only `nwc-ruby` wrapper, and an optional Ruby live smoke with opt-in invoice creation. CI skips wallet calls when `nwc-ruby` is unavailable. |
-| `openreceive-rails` Ruby | Initial adapter helpers | Production fail-closed configuration, idempotent invoice creation, authorized lookup, worker/listener verification, backend settlement checks, passive notification handling, duplicate-safe fulfillment, ActiveRecord storage templates, controller/job/channel templates, Hotwire partial, install generator skeleton, and optional mounted engine routes around an injected receive-only client. Real-wallet Ruby smoke and demos are not implemented yet. |
+| `openreceive` Ruby | Initial core helpers | Vector-backed exact fiat quoting, settlement detection, NWC URI parse/redaction, receive-only NIP-47 request mapping, polling/idempotency helpers, an in-memory test store, a fail-closed unavailable-wallet client, a receive-only `nwc-ruby` wrapper, and an optional Ruby live smoke with opt-in invoice creation. CI skips wallet calls when `nwc-ruby` is unavailable. |
+| `openreceive-rails` Ruby | Initial adapter helpers | Production fail-closed configuration, idempotent invoice creation, authorized lookup, worker/listener verification, backend settlement checks, passive notification handling, duplicate-safe fulfillment, ActiveRecord storage templates, controller/job/channel templates, Hotwire partial, install generator skeleton, and optional mounted engine routes around an injected receive-only client with `503 WALLET_UNAVAILABLE` handling. Full Rails demo smoke is still pending. |
 
 ## Demos
 
@@ -23,6 +23,7 @@ package registry.
 | Express + React Hello Fruit | Implemented | Express route adapter with React client UI. |
 | Static HTML + Small API Hello Fruit | Implemented | Web component checkout with a small Express API. |
 | Next.js Fullstack Hello Fruit | Implemented | App Router route handlers and React checkout UI in one server app. |
+| Rails Hotwire Hello Fruit | Initial skeleton | Rails app skeleton with OpenReceive engine mount, Hotwire partial, jobs, Docker/compose templates, fail-closed no-wallet boot behavior, root demo launcher target, and container-validator coverage. Bundle/build smoke is still pending. |
 
 Non-JS SDK work has started with the Ruby core-helper package after the JS
 reference path and conformance gate. Future SDKs must consume shared vectors

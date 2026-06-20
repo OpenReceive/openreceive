@@ -21,6 +21,27 @@ The v0.1 reference path is contract-first and server-owned:
 - `tools/` holds validation, conformance, package-smoke, docs, mock-wallet, and
   live-wallet smoke helpers.
 
+## Run A Demo
+
+The dockerized Hello Fruit demos serve a checkout UI where you can buy a fruit
+sticker. Pick a stack:
+
+```sh
+npm run demo node      # Express + React          http://localhost:3000
+npm run demo static    # Static HTML + small API   http://localhost:3001
+npm run demo nextjs    # Next.js fullstack         http://localhost:3002
+npm run demo rails     # Rails + Hotwire           http://localhost:3003
+```
+
+Each command creates a root `.env` if missing and runs that demo's Docker
+Compose stack with local port publishing. Buying fruit creates a live Lightning
+invoice through your own wallet, so set a receive-only `OPENRECEIVE_NWC` string
+(for example from Rizful or Alby Hub) in `.env` first. Without it the UI loads
+but invoice creation returns `503 WALLET_UNAVAILABLE`.
+
+Extra arguments after `--` are forwarded to `docker compose up`, for example to
+run detached: `npm run demo node -- -d`.
+
 ## Current Status
 
 This repository has the v0.1 JS reference path in place. The current gate keeps

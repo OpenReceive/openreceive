@@ -4206,16 +4206,17 @@ Current repository position:
     idempotency classification, plus an in-memory invoice store for local
     parity tests. The separate openreceive-rails package now builds on it; the
     Ruby package also includes a receive-only wrapper for nwc-ruby clients using
-    the documented NwcRuby::Client.from_uri and keyword request methods. The
-    remaining Ruby-side gap is proving the live path against an installed
-    nwc-ruby gem and wallet in trusted environments.
+    the documented NwcRuby::Client.from_uri and keyword request methods, plus a
+    fail-closed UnavailableReceiveClient that returns WALLET_UNAVAILABLE
+    behavior without exposing wallet methods. The remaining Ruby-side gap is
+    proving the live path against an installed nwc-ruby gem and wallet in
+    trusted environments.
   - This review also starts the Rails adapter package at
     packages/ruby/openreceive-rails. The first adapter slice is server-side and
     dependency-light: production fail-closed authentication, idempotent invoice
     creation around an injected receive-only client, authorized lookup, backend
     settlement verification, polling-worker verification, passive notification
-    handling, and duplicate-safe fulfillment. It does not yet include
-    real-wallet Ruby smoke or Rails demos.
+    handling, and duplicate-safe fulfillment.
   - The Rails package also now includes initial ActiveRecord migration and
     model templates for the invoice storage shape, including idempotency scope,
     amount_msats bounds, state checks, fulfillment timestamps, and uniqueness
@@ -4224,20 +4225,30 @@ Current repository position:
   - The Rails package now includes public app templates for controller routes,
     polling jobs, payment notification jobs, ActionCable/Turbo stream updates,
     and an install generator skeleton that copies those templates and prints a
-    route snippet. It does not yet include real-wallet Ruby smoke or Rails
-    demos.
+    route snippet.
   - The Rails package now also exposes an optional mounted engine route and
     controller surface for /v1/invoices when Rails/ActionController are
-    available.
+    available, including JSON 503 WALLET_UNAVAILABLE handling for an injected
+    unavailable-wallet client.
   - The Rails package now includes a packaged Hotwire/Turbo invoice partial for
-    passive status updates. The remaining Rails proof gaps are real-wallet Ruby
-    smoke and the Rails Hotwire/React demos.
+    passive status updates. The remaining Rails proof gaps are a full Rails
+    Hotwire bundle/build smoke and the Rails React demo.
   - The Ruby live-wallet path now has an optional preflight command,
     npm run test:live:ruby:nwc, that loads OPENRECEIVE_NWC/OPENRECEIVE_ENV_FILE,
     parses and redacts the connection URI, checks the default expected
     capabilities fixture, instantiates NwcRuby::Client.from_uri when nwc-ruby is
     installed, runs get_info preflight, and creates an invoice only when
     OPENRECEIVE_LIVE_CREATE_INVOICE=1.
+  - This review also starts the Rails Hotwire Hello Fruit demo at
+    examples/hello-fruit/server/rails-hotwire. It includes a Rails app skeleton
+    with OpenReceive engine mount, Hotwire invoice partial, polling and
+    notification jobs, fulfillment model, Dockerfile, compose templates,
+    Makefile, env example, and README. It now boots without OPENRECEIVE_NWC by
+    injecting OpenReceive::UnavailableReceiveClient and failing invoice creation
+    closed with WALLET_UNAVAILABLE until a receive-only NWC URI is configured.
+    The root npm run demo launcher includes the rails target, and the demo
+    container validator now checks it as the fourth Hello Fruit demo, but full
+    bundle/build smoke remains pending.
   - Verification after the client logging work:
 
       node --test tests/v0.1/core.test.mjs tests/v0.1/react.test.mjs tests/v0.1/elements.test.mjs tests/v0.1/express.test.mjs
@@ -4288,7 +4299,7 @@ Already completed:
     detection, NWC URI parse/redaction, and receive-only NIP-47 request/
     response mapping, polling cadence, idempotency classification, and
     in-memory storage behavior against shared vectors, plus a receive-only
-    nwc-ruby wrapper.
+    nwc-ruby wrapper and fail-closed unavailable-wallet client.
   - Initial Rails adapter-helper package for receive-only idempotent invoice
     creation, authorized lookup, backend settlement verification, and
     duplicate-safe fulfillment using an injected Ruby receive client, plus
@@ -4298,12 +4309,15 @@ Already completed:
   - Initial Rails controller, job, channel, route, and install-generator
     templates for framework-native integration.
   - Initial optional mounted Rails engine routes and controller surface for
-    `/v1/invoices`.
+    `/v1/invoices`, including WALLET_UNAVAILABLE JSON handling.
   - Initial packaged Rails Hotwire/Turbo invoice partial for passive checkout
     status updates.
   - Optional Ruby live NWC smoke command with redacted output, get_info
     preflight through nwc-ruby when available, opt-in invoice creation, and
     clear skip behavior when nwc-ruby is unavailable.
+  - Initial Rails Hotwire Hello Fruit demo skeleton with Docker/compose
+    templates, root `npm run demo rails` launcher support, fail-closed
+    no-wallet boot behavior, and validator coverage.
   - Full CI gate has passed after the Next demo work:
 
       npm run test:ci

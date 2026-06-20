@@ -54,6 +54,36 @@ module OpenReceive
     end
   end
 
+  class WalletUnavailableError < StandardError
+    attr_reader :status, :code
+
+    def initialize(message = "NWC wallet service is unavailable.")
+      super(message)
+      @status = 503
+      @code = "WALLET_UNAVAILABLE"
+    end
+  end
+
+  class UnavailableReceiveClient
+    def initialize(message: "NWC wallet service is unavailable.")
+      @message = message
+    end
+
+    def make_invoice(_request)
+      raise WalletUnavailableError.new(@message)
+    end
+
+    def lookup_invoice(_request)
+      raise WalletUnavailableError.new(@message)
+    end
+
+    def get_info
+      {
+        "wallet_configured" => false
+      }
+    end
+  end
+
   module Money
     module_function
 

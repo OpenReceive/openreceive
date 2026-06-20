@@ -2,6 +2,7 @@ import {
   defineOpenReceiveElements,
   parseOpenReceiveInvoiceEvent
 } from "@openreceive/elements";
+import * as QRCode from "qrcode";
 import {
   createHelloFruitBrowserLogger
 } from "../../../../shared/demo-browser-logging.ts";
@@ -13,6 +14,10 @@ interface Fruit {
   id: string;
   name: string;
   sticker: string;
+  fiat: {
+    currency: string;
+    value: string;
+  };
 }
 
 interface InvoiceResponse {
@@ -40,6 +45,7 @@ let events: EventSource | undefined;
 const logOpenReceive = createHelloFruitBrowserLogger("static-html-small-api");
 
 defineOpenReceiveElements({
+  qrEncoder: QRCode,
   logger: logOpenReceive
 });
 renderProduct();
@@ -80,7 +86,10 @@ function renderFruitGrid(): void {
     const label = document.createElement("span");
     label.textContent = fruit.name;
 
-    button.append(image, label);
+    const price = document.createElement("small");
+    price.textContent = formatFiat(fruit.fiat);
+
+    button.append(image, label, price);
     grid.append(button);
   }
 }
@@ -98,12 +107,13 @@ async function createInvoice(): Promise<void> {
         "Idempotency-Key": `hello-fruit-static-${selectedFruit.id}`
       },
       body: JSON.stringify({
-        amount_msats: product.amount_msats,
+        fiat: selectedFruit.fiat,
         description: `Fruit sticker from OpenReceive static demo: ${selectedFruit.name}`,
         expiry: product.invoice_expiry_seconds,
         metadata: {
           product_id: product.product_id,
-          fruit: selectedFruit.id
+          fruit: selectedFruit.id,
+          fiat: selectedFruit.fiat
         }
       })
     });
@@ -227,6 +237,10 @@ function setButtonState(state: "idle" | "creating"): void {
 
 function setError(message: string): void {
   requireElement("error").textContent = message;
+}
+
+function formatFiat(fiat: Fruit["fiat"]): string {
+  return fiat.currency === "USD" ? `$${fiat.value}` : `${fiat.value} ${fiat.currency}`;
 }
 
 function requireElement<T extends HTMLElement = HTMLElement>(id: string): T {

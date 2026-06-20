@@ -7,14 +7,22 @@ verification, polling-worker verification, passive notification handling, and
 duplicate-safe fulfillment. It also includes initial ActiveRecord migration and
 model templates for the invoice storage shape, plus controller, job, channel,
 route, install-generator templates, an invoice Hotwire partial, and optional
-mounted engine routes. Real-wallet Ruby smoke and demos are still pending.
+mounted engine routes with `503 WALLET_UNAVAILABLE` handling for an injected
+unavailable-wallet client. Complete Rails demo smoke is still pending.
+An initial Rails Hotwire Hello Fruit demo skeleton exists at
+`examples/hello-fruit/server/rails-hotwire`; it is covered by the demo
+container validator, has a root `npm run demo rails` launcher target, and boots
+without `OPENRECEIVE_NWC`; invoice creation fails closed until the receive-only
+NWC string is configured. Full bundle/build smoke is still pending.
 
 The Ruby core-helper package at `packages/ruby/openreceive` provides
 vector-backed exact money and settlement helpers, NWC URI parse/redaction,
 receive-only NIP-47 request mapping, polling/idempotency helpers, and an
 in-memory test store. It also includes a receive-only wrapper for
 `nwc-ruby` clients using `NwcRuby::Client.from_uri` and the documented
-`make_invoice` / `lookup_invoice` methods.
+`make_invoice` / `lookup_invoice` methods, plus a fail-closed
+`UnavailableReceiveClient` for demo and development boot paths without wallet
+configuration.
 Run `OPENRECEIVE_ENV_FILE=.env npm run test:live:ruby:nwc` for the current Ruby
 preflight; it parses and redacts the configured NWC URI, runs `get_info` when
 `nwc-ruby` is installed, and creates an invoice only when

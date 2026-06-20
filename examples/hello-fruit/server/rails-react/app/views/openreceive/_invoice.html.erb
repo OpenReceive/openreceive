@@ -1,0 +1,12 @@
+<%= turbo_frame_tag "openreceive_invoice_#{invoice.fetch("invoice_id")}" do %>
+  <section
+    id="openreceive_invoice_<%= invoice.fetch("invoice_id") %>"
+    data-openreceive-transaction-state="<%= invoice.fetch("transaction_state") %>"
+    data-openreceive-workflow-state="<%= invoice.fetch("workflow_state") %>"
+  >
+    <p><strong>Invoice</strong></p>
+    <p><code><%= invoice.fetch("invoice") %></code></p>
+    <p><%= invoice.fetch("amount_msats") %> msats</p>
+    <p><%= invoice.fetch("transaction_state") %></p>
+  </section>
+<% end %>

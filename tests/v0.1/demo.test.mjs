@@ -7,6 +7,7 @@ import { createHelloFruitServer } from "../../examples/hello-fruit/server/node-e
 import { createHelloFruitProductionServer } from "../../examples/hello-fruit/server/node-express-react/src/server/production.ts";
 import { createHelloFruitStaticServer } from "../../examples/hello-fruit/server/static-html-small-api/src/server/create-server.ts";
 import { createHelloFruitStaticProductionServer } from "../../examples/hello-fruit/server/static-html-small-api/src/server/production.ts";
+import { quoteFiatToMsats } from "../../packages/js/core/src/index.ts";
 import { GET as getNextCapabilities } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/openreceive/v1/capabilities/route.ts";
 import { POST as postNextInvoice } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/openreceive/v1/invoices/route.ts";
 import { GET as getNextOpenReceiveHealth } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/openreceive/v1/health/route.ts";
@@ -37,13 +38,29 @@ const demoServerDirs = [
 
 test("Hello Fruit shared product keeps demo invoices low-value", () => {
   const product = JSON.parse(readFileSync(productPath, "utf8"));
+  const fruits = JSON.parse(readFileSync(fruitsPath, "utf8"));
 
   assert.equal(product.schema_version, "0.1.0");
-  assert.equal(product.fiat.currency, "USD");
-  assert.equal(product.fiat.value, "0.10");
-  assert.equal(product.amount_msats, 200000);
-  assert.ok(product.amount_msats <= 1000000);
+  assert.equal(product.name, "OpenReceive Demo: Buy A Fruit Sticker");
+  assert.equal(product.description, "get a fruit sticker");
   assert.equal(product.invoice_expiry_seconds, 600);
+
+  assert.deepEqual(
+    fruits.fruits.map((fruit) => [fruit.id, fruit.fiat.currency, fruit.fiat.value]),
+    [
+      ["apple", "USD", "0.05"],
+      ["banana", "USD", "0.10"],
+      ["orange", "USD", "0.15"],
+      ["pear", "USD", "0.20"]
+    ]
+  );
+  assert.deepEqual(
+    fruits.fruits.map((fruit) => quoteFiatToMsats({ fiat: fruit.fiat }).amount_msats),
+    [100000, 200000, 300000, 400000]
+  );
+  for (const fruit of fruits.fruits) {
+    assert.ok(quoteFiatToMsats({ fiat: fruit.fiat }).amount_msats <= 1000000);
+  }
 });
 
 test("Hello Fruit shared data stays aligned with canonical demo data", () => {
@@ -56,10 +73,9 @@ test("Hello Fruit shared data stays aligned with canonical demo data", () => {
   assert.equal(product.product_id, canonical.product_id);
   assert.equal(fruits.product_id, canonical.product_id);
   assert.equal(product.name, canonical.name);
-  assert.equal(product.amount_msats, canonical.amount_msats);
-  assert.deepEqual(product.fiat, canonical.fiat);
+  assert.equal(product.description, canonical.description);
   assert.deepEqual(
-    fruits.fruits.map(({ id, name }) => ({ id, name })),
+    fruits.fruits.map(({ id, name, fiat }) => ({ id, name, fiat })),
     canonical.fruits
   );
 
@@ -364,7 +380,10 @@ test("Hello Fruit demos fail closed without OPENRECEIVE_NWC", async () => {
       assert.equal(JSON.stringify(capabilities.body).includes("nostr+walletconnect://"), false);
 
       const invoice = await postJson(app, "/openreceive/v1/invoices", {
-        amount_msats: 200000,
+        fiat: {
+          currency: "USD",
+          value: "0.10"
+        },
         description: `Fruit sticker from ${demo.name} smoke test`,
         expiry: 600,
         metadata: {
@@ -416,7 +435,10 @@ test("Hello Fruit demos fail closed without OPENRECEIVE_NWC", async () => {
           "idempotency-key": "next-demo-smoke"
         },
         body: JSON.stringify({
-          amount_msats: 200000,
+          fiat: {
+            currency: "USD",
+            value: "0.10"
+          },
           description: "Fruit sticker from nextjs-fullstack smoke test",
           expiry: 600,
           metadata: {

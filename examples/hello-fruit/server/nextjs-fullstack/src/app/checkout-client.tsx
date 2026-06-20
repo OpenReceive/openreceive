@@ -29,6 +29,10 @@ interface CheckoutClientProps {
   readonly fruits: readonly HelloFruit[];
 }
 
+function formatFiat(fiat: HelloFruit["fiat"]): string {
+  return fiat.currency === "USD" ? `$${fiat.value}` : `${fiat.value} ${fiat.currency}`;
+}
+
 export default function CheckoutClient({
   product,
   fruits
@@ -131,12 +135,13 @@ export default function CheckoutClient({
           "Idempotency-Key": `hello-fruit-nextjs-${selectedFruit.id}`
         },
         body: JSON.stringify({
-          amount_msats: product.amount_msats,
+          fiat: selectedFruit.fiat,
           description: `Fruit sticker from OpenReceive Next.js demo: ${selectedFruit.name}`,
           expiry: product.invoice_expiry_seconds,
           metadata: {
             product_id: product.product_id,
             fruit: selectedFruit.id,
+            fiat: selectedFruit.fiat,
             framework: "nextjs"
           }
         })
@@ -184,6 +189,7 @@ export default function CheckoutClient({
           >
             <img src={`/stickers/${fruit.id}.svg`} alt="" />
             <span>{fruit.name}</span>
+            <small>{formatFiat(fruit.fiat)}</small>
           </button>
         ))}
       </div>

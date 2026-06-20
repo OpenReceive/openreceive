@@ -1,0 +1,4 @@
+services:
+  hello-fruit-rails-hotwire:
+    ports:
+      - "3003:3003"

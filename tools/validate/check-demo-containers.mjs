@@ -39,6 +39,16 @@ const demoContainers = [
   }
 ];
 
+const railsDemoContainers = [
+  {
+    id: "rails-hotwire",
+    dir: "examples/hello-fruit/server/rails-hotwire",
+    service: "hello-fruit-rails-hotwire",
+    image: "ghcr.io/openreceive/demo-rails-hotwire:local",
+    port: "3003"
+  }
+];
+
 const findings = [];
 
 function fail(message) {
@@ -217,6 +227,79 @@ function validateDockerignore() {
   }
 }
 
+function validateRailsDemo(demo) {
+  const gemfilePath = `${demo.dir}/Gemfile`;
+  const dockerfilePath = `${demo.dir}/Dockerfile`;
+  const composePath = `${demo.dir}/compose.yml`;
+  const overridePath = `${demo.dir}/compose.override.yml.example`;
+  const envPath = `${demo.dir}/.env.example`;
+  const readmePath = `${demo.dir}/README.md`;
+  const makefilePath = `${demo.dir}/Makefile`;
+
+  const gemfile = read(gemfilePath);
+  const dockerfile = read(dockerfilePath);
+  const composeText = read(composePath);
+  const compose = readYaml(composePath);
+  const overrideText = read(overridePath);
+  const override = readYaml(overridePath);
+  const envExample = read(envPath);
+  const readme = read(readmePath);
+  const makefile = read(makefilePath);
+  const routes = read(`${demo.dir}/config/routes.rb`);
+  const initializer = read(`${demo.dir}/config/initializers/openreceive.rb`);
+  const controller = read(`${demo.dir}/app/controllers/hello_fruit_controller.rb`);
+  const partial = read(`${demo.dir}/app/views/openreceive/_invoice.html.erb`);
+
+  forbidSecrets(gemfilePath, gemfile);
+  forbidSecrets(dockerfilePath, dockerfile);
+  forbidSecrets(composePath, composeText);
+  forbidSecrets(overridePath, overrideText);
+  forbidSecrets(readmePath, readme);
+  forbidSecrets(makefilePath, makefile);
+  forbidSecrets(`${demo.dir}/config/routes.rb`, routes);
+  forbidSecrets(`${demo.dir}/app/controllers/hello_fruit_controller.rb`, controller);
+  forbidSecrets(`${demo.dir}/app/views/openreceive/_invoice.html.erb`, partial);
+
+  expect(gemfile.includes('gem "rails"'), `${gemfilePath}: must depend on Rails`);
+  expect(gemfile.includes('gem "openreceive", path:'), `${gemfilePath}: must use local openreceive gem`);
+  expect(gemfile.includes('gem "openreceive-rails", path:'), `${gemfilePath}: must use local openreceive-rails gem`);
+  expect(/^FROM ruby:3\.3-bookworm$/m.test(dockerfile), `${dockerfilePath}: must use pinned Ruby 3.3 bookworm image`);
+  expect(dockerfile.includes("COPY packages/ruby ./packages/ruby"), `${dockerfilePath}: must copy Ruby packages`);
+  expect(dockerfile.includes("RUN bundle install"), `${dockerfilePath}: must bundle install`);
+  expect(dockerfile.includes(`EXPOSE ${demo.port}`), `${dockerfilePath}: must expose ${demo.port}`);
+  expect(dockerfile.includes('CMD ["bundle", "exec", "rails", "server"'), `${dockerfilePath}: must start Rails server`);
+
+  const services = compose.services ?? {};
+  const serviceNames = Object.keys(services);
+  const service = services[demo.service] ?? {};
+  expect(serviceNames.length === 1 && serviceNames[0] === demo.service, `${composePath}: service name must be ${demo.service}`);
+  expect(service.build?.context === "../../../..", `${composePath}: build context must be repo root`);
+  expect(service.build?.dockerfile === `${demo.dir}/Dockerfile`, `${composePath}: dockerfile path must target Rails demo Dockerfile`);
+  expect(service.image === demo.image, `${composePath}: image must be ${demo.image}`);
+  expect(service.env_file?.[0]?.path === "../../../../.env" && service.env_file?.[0]?.required === false, `${composePath}: root .env must be optional runtime env_file`);
+  expect(service.environment?.OPENRECEIVE_DEMO_MODE === "${OPENRECEIVE_DEMO_MODE:-test_nwc}", `${composePath}: demo mode must default to test_nwc`);
+  expect(service.environment?.PORT === demo.port, `${composePath}: PORT must be ${demo.port}`);
+  expect((service.expose ?? []).length === 1 && service.expose[0] === demo.port, `${composePath}: must expose only ${demo.port}`);
+  expect((service.ports ?? []).length === 0, `${composePath}: stable compose must not publish host ports`);
+
+  const overrideService = override.services?.[demo.service] ?? {};
+  expect(overrideService.ports?.[0] === `${demo.port}:${demo.port}`, `${overridePath}: local override must publish ${demo.port}:${demo.port}`);
+  expect(/^OPENRECEIVE_NWC=$/m.test(envExample), `${envPath}: OPENRECEIVE_NWC must be empty placeholder`);
+  expect(new RegExp(`^PORT=${demo.port}$`, "m").test(envExample), `${envPath}: PORT must default to ${demo.port}`);
+  expect(readme.includes("The browser never receives `OPENRECEIVE_NWC`."), `${readmePath}: must state browser NWC boundary`);
+  expect(readme.includes("docker compose -f compose.yml -f compose.override.yml.example up --build"), `${readmePath}: must document compose startup`);
+  expect(makefile.includes(`IMAGE ?= ${demo.image}`), `${makefilePath}: image must default to ${demo.image}`);
+  expect(makefile.includes(`HEALTH_URL ?= http://127.0.0.1:${demo.port}/healthz`), `${makefilePath}: smoke URL must target healthz`);
+  expect(routes.includes('mount OpenReceive::Rails::Engine => "/openreceive"'), `${demo.dir}/config/routes.rb: must mount OpenReceive engine`);
+  expect(initializer.includes("NwcRuby::Client.from_uri"), `${demo.dir}/config/initializers/openreceive.rb: must wire nwc-ruby client`);
+  expect(initializer.includes("OpenReceive::UnavailableReceiveClient"), `${demo.dir}/config/initializers/openreceive.rb: must fail closed without a wallet URI`);
+  expect(initializer.includes('ENV["OPENRECEIVE_NWC"].to_s'), `${demo.dir}/config/initializers/openreceive.rb: must not require OPENRECEIVE_NWC at boot`);
+  expect(!initializer.includes('ENV.fetch("OPENRECEIVE_NWC")'), `${demo.dir}/config/initializers/openreceive.rb: must not fetch OPENRECEIVE_NWC at boot`);
+  expect(initializer.includes("config.fulfill"), `${demo.dir}/config/initializers/openreceive.rb: must configure fulfillment`);
+  expect(controller.includes("nwc_secret_exposed: false"), `${demo.dir}/app/controllers/hello_fruit_controller.rb: metadata must explicitly avoid NWC exposure`);
+  expect(partial.includes("turbo_frame_tag"), `${demo.dir}/app/views/openreceive/_invoice.html.erb: must render Turbo frame`);
+}
+
 for (const demo of demoContainers) {
   validatePackage(demo);
   validateEnvExample(demo);
@@ -226,6 +309,9 @@ for (const demo of demoContainers) {
   validateCompose(demo);
   validateComposeOverride(demo);
 }
+for (const demo of railsDemoContainers) {
+  validateRailsDemo(demo);
+}
 validateDockerignore();
 
 if (findings.length > 0) {
@@ -234,4 +320,4 @@ if (findings.length > 0) {
   process.exit(1);
 }
 
-console.log(`Demo container validation passed for ${demoContainers.length} demo(s).`);
+console.log(`Demo container validation passed for ${demoContainers.length + railsDemoContainers.length} demo(s).`);

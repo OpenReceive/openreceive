@@ -121,7 +121,7 @@ function runRubyLiveNwcSmoke(env) {
 }
 
 test("demo container validator accepts current Hello Fruit templates", () => {
-  assert.match(runDemoContainerValidator(), /Demo container validation passed for 3 demo\(s\)\./);
+  assert.match(runDemoContainerValidator(), /Demo container validation passed for 4 demo\(s\)\./);
 });
 
 test("demo deployment validator accepts public deploy templates", () => {
