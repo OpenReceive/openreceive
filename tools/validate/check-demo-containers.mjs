@@ -12,6 +12,7 @@ const demoContainers = [
     packageName: "@openreceive/example-node-express-react",
     dir: "examples/hello-fruit/server/node-express-react",
     service: "hello-fruit-node-express-react",
+    image: "ghcr.io/openreceive/demo-express:local",
     port: "3000"
   },
   {
@@ -19,6 +20,7 @@ const demoContainers = [
     packageName: "@openreceive/example-static-html-small-api",
     dir: "examples/hello-fruit/server/static-html-small-api",
     service: "hello-fruit-static-html-small-api",
+    image: "ghcr.io/openreceive/demo-static:local",
     port: "3001"
   }
 ];
@@ -142,6 +144,33 @@ function validateReadme(demo) {
   expect(text.includes("/demo-metadata.json"), `${relativePath}: must document demo metadata`);
 }
 
+function validateMakefile(demo) {
+  const relativePath = `${demo.dir}/Makefile`;
+  const text = read(relativePath);
+  const targets = [...text.matchAll(/^([a-z][a-z0-9-]*):$/gm)].map((match) => match[1]);
+
+  for (const target of [
+    "setup",
+    "dev",
+    "test",
+    "demo-test-nwc",
+    "demo-production",
+    "docker-build",
+    "docker-run",
+    "docker-smoke"
+  ]) {
+    expect(targets.includes(target), `${relativePath}: missing ${target} target`);
+  }
+
+  forbidSecrets(relativePath, text);
+  expect(text.includes(`IMAGE ?= ${demo.image}`), `${relativePath}: image must default to ${demo.image}`);
+  expect(text.includes(`HEALTH_URL ?= http://127.0.0.1:${demo.port}/healthz`), `${relativePath}: smoke URL must target /healthz on ${demo.port}`);
+  expect(text.includes("OPENRECEIVE_DEMO_MODE=test_nwc docker compose up --build"), `${relativePath}: demo-test-nwc must use compose test_nwc mode`);
+  expect(text.includes("OPENRECEIVE_DEMO_MODE=production docker compose up --build"), `${relativePath}: demo-production must use compose production mode`);
+  expect(text.includes("docker compose up"), `${relativePath}: docker-run must use docker compose`);
+  expect(text.includes("curl -fsS $(HEALTH_URL)"), `${relativePath}: docker-smoke must curl HEALTH_URL`);
+}
+
 function validateDockerignore() {
   const relativePath = ".dockerignore";
   const text = read(relativePath);
@@ -162,6 +191,7 @@ for (const demo of demoContainers) {
   validatePackage(demo);
   validateEnvExample(demo);
   validateReadme(demo);
+  validateMakefile(demo);
   validateDockerfile(demo);
   validateCompose(demo);
 }

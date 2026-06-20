@@ -30,6 +30,10 @@ cp .env.example .env
 docker compose up --build
 ```
 
+The Makefile exposes the standard demo commands: `make setup`, `make dev`,
+`make test`, `make demo-test-nwc`, `make demo-production`,
+`make docker-build`, `make docker-run`, and `make docker-smoke`.
+
 The server also exposes `/demo-metadata.json` with non-secret package, mode,
 git SHA, and image digest metadata for hosted-demo smoke checks.
 
