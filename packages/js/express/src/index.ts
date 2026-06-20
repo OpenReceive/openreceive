@@ -323,9 +323,11 @@ export function createOpenReceiveExpressHandlers(
         metadata: parseOptionalRecord(body.metadata, "metadata")
       });
       const createdAt = invoice.created_at ?? clock();
+      const requestedExpirySeconds = optionalSafeInteger(body.expiry) ?? 600;
       const expiresAt =
         invoice.expires_at ??
-        createdAt + (optionalSafeInteger(body.expiry) ?? 600);
+        createdAt + requestedExpirySeconds;
+      const normalizedExpiresAt = Math.min(expiresAt, createdAt + requestedExpirySeconds);
 
       const createResult = store.createInvoice({
         invoice_id: createInvoiceId(),
@@ -340,7 +342,7 @@ export function createOpenReceiveExpressHandlers(
         workflow_state: "invoice_created",
         settlement_action_state: "pending",
         created_at: createdAt,
-        expires_at: expiresAt,
+        expires_at: normalizedExpiresAt,
         metadata: parseOptionalRecord(body.metadata, "metadata") ?? {},
         fiat_quote: resolvedAmount.fiat_quote === null
           ? null
@@ -501,7 +503,7 @@ export function createOpenReceiveExpressHandlers(
         amount_msats: BigInt(oldInvoice.amount_msats)
       });
       const createdAt = invoice.created_at ?? clock();
-      const expiresAt = invoice.expires_at ?? createdAt + 600;
+      const expiresAt = Math.min(invoice.expires_at ?? createdAt + 600, createdAt + 600);
       const createResult = store.createInvoice({
         invoice_id: createInvoiceId(),
         merchant_scope: oldInvoice.merchant_scope,

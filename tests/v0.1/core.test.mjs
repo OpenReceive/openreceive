@@ -256,11 +256,18 @@ test("browser owns checkout display-safe labels", () => {
     invoice: "lnbc-display",
     payment_hash: "a".repeat(64),
     amount_msats: 200000,
+    fiat_quote: {
+      fiat: {
+        currency: "USD",
+        value: "0.05"
+      }
+    },
     transaction_state: "pending"
   });
 
   assert.equal(model.lightningUri, "lightning:lnbc-display");
   assert.equal(model.amountLabel, "200 sats");
+  assert.equal(model.fiatLabel, "$0.05");
   assert.equal(model.paymentHashLabel, "aaaaaaaa...aaaaaaaa");
   assert.equal(model.transactionStateLabel, "pending");
   assert.equal(formatOpenReceivePaymentHashLabel("short-hash"), "short-hash");
@@ -1130,6 +1137,8 @@ test("browser owns custom-element attribute contracts", () => {
     invoice: "invoice",
     paymentHash: "payment-hash",
     amountMsats: "amount-msats",
+    fiatCurrency: "fiat-currency",
+    fiatValue: "fiat-value",
     transactionState: "transaction-state",
     workflowState: "workflow-state",
     expiresAt: "expires-at",

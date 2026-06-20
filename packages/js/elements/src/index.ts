@@ -71,6 +71,12 @@ export interface OpenReceiveCheckoutView {
   readonly invoice: string;
   readonly payment_hash?: string;
   readonly amount_msats?: number;
+  readonly fiat_quote?: {
+    readonly fiat?: {
+      readonly currency?: string;
+      readonly value?: string;
+    };
+  } | null;
   readonly transaction_state?: string;
   readonly workflow_state?: string;
   readonly expires_at?: number;
@@ -109,6 +115,10 @@ export function renderOpenReceiveCheckoutHtml(view: OpenReceiveCheckoutView): st
     display.amountLabel === undefined
       ? ""
       : `<span part="amount">${escapeHtml(display.amountLabel)}</span>`;
+  const fiatLabel =
+    display.fiatLabel === undefined
+      ? ""
+      : `<span part="amount">${escapeHtml(display.fiatLabel)}</span>`;
   const transactionStateLabel =
     checkoutState?.transaction_state ?? display.transactionStateLabel;
   const stateLabel =
@@ -130,7 +140,7 @@ export function renderOpenReceiveCheckoutHtml(view: OpenReceiveCheckoutView): st
     <section part="root"${view.theme === undefined ? "" : ` data-theme="${escapeHtml(view.theme)}"`}>
       <div part="qr" ${OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.qr}></div>
       ${status}
-      <div part="meta">${amountLabel}${stateLabel}${paymentHash}</div>
+      <div part="meta">${amountLabel}${fiatLabel}${stateLabel}${paymentHash}</div>
       <textarea part="invoice" readonly>${escapeHtml(view.invoice)}</textarea>
       <div part="actions">
         <button part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.copy}" type="button">${escapeHtml(openReceiveCheckoutLabels.copyInvoice)}</button>
@@ -144,7 +154,13 @@ export function renderOpenReceiveCheckoutHtml(view: OpenReceiveCheckoutView): st
 export function renderOpenReceiveThemeToggleHtml(label: string): string {
   return `
     <style>${openReceiveThemeToggleElementStyles}</style>
-    <button part="${OPENRECEIVE_THEME_TOGGLE_ELEMENT_PARTS.button}" type="button" ${OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.themeToggle}>${escapeHtml(label)}</button>
+    <button part="${OPENRECEIVE_THEME_TOGGLE_ELEMENT_PARTS.button}" type="button" ${OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.themeToggle}>
+      <span class="or-theme-toggle-track" aria-hidden="true">
+        <span class="or-theme-toggle-icon or-theme-toggle-icon-light"></span>
+        <span class="or-theme-toggle-icon or-theme-toggle-icon-dark"></span>
+      </span>
+      <span class="or-theme-toggle-label">${escapeHtml(label)}</span>
+    </button>
   `;
 }
 
@@ -361,6 +377,8 @@ export function defineOpenReceiveElements(
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentHash,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.amountMsats,
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.fiatCurrency,
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.fiatValue,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.transactionState,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.workflowState,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.expiresAt,
@@ -402,6 +420,7 @@ export function defineOpenReceiveElements(
           this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.amountMsats),
           { label: "amount-msats" }
         ),
+        fiat_quote: readElementFiatQuote(this),
         transaction_state: this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.transactionState) ?? undefined,
         workflow_state: this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.workflowState) ?? undefined,
         expires_at: parseOpenReceiveOptionalInteger(
@@ -507,6 +526,7 @@ export function defineOpenReceiveElements(
           ? {}
           : { payment_hash: this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentHash) ?? undefined }),
         ...(amountMsats === undefined ? {} : { amount_msats: amountMsats }),
+        ...(readElementFiatQuote(this) === undefined ? {} : { fiat_quote: readElementFiatQuote(this) }),
         transaction_state: this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.transactionState) ?? "pending",
         workflow_state: this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.workflowState) ?? "invoice_created",
         ...(expiresAt === undefined ? {} : { expires_at: expiresAt }),
@@ -767,6 +787,18 @@ export const formatMsats = formatOpenReceiveMsats;
 const elementCopyFeedbackControllers =
   new WeakMap<Element, ReturnType<typeof createOpenReceiveTransientFeedbackController<string>>>();
 const escapeHtml = escapeOpenReceiveHtml;
+
+function readElementFiatQuote(element: Element) {
+  const currency = element.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.fiatCurrency);
+  const value = element.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.fiatValue);
+  if (currency === null || value === null) return undefined;
+  return {
+    fiat: {
+      currency,
+      value
+    }
+  };
+}
 
 function showElementCopyFeedback(button: Element | null): void {
   if (button === null) return;

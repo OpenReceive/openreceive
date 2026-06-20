@@ -23,6 +23,12 @@ test("elements render display-safe checkout HTML", () => {
     invoice: "lnbc-test",
     payment_hash: "a".repeat(64),
     amount_msats: 200000,
+    fiat_quote: {
+      fiat: {
+        currency: "USD",
+        value: "0.05"
+      }
+    },
     transaction_state: "pending",
     workflow_state: "invoice_created",
     expires_at: Math.floor(Date.now() / 1000) + 600,
@@ -35,6 +41,7 @@ test("elements render display-safe checkout HTML", () => {
   assert.match(html, /lightning:lnbc-test/);
   assert.match(html, /data-theme="dark"/);
   assert.match(html, /Waiting for payment/);
+  assert.match(html, />\$0\.05</);
   assert.match(html, /Invoice expires in/);
   assert.match(html, /200 sats/);
   assert.match(html, /pending/);

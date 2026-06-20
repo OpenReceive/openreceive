@@ -137,6 +137,7 @@ export interface OpenReceivePaymentStateProps
 
 export interface OpenReceiveInvoiceSummaryClassNames {
   readonly amount?: string;
+  readonly fiat?: string;
   readonly paymentHash?: string;
   readonly paymentState?: string;
 }
@@ -144,6 +145,7 @@ export interface OpenReceiveInvoiceSummaryClassNames {
 export interface OpenReceiveInvoiceSummaryProps
   extends React.HTMLAttributes<HTMLDivElement> {
   readonly amountLabel?: string;
+  readonly fiatLabel?: string;
   readonly paymentHashLabel?: string;
   readonly transactionStateLabel?: string;
   readonly PaymentStateComponent?: React.ComponentType<OpenReceivePaymentStateProps>;
@@ -301,6 +303,7 @@ export function useOpenReceiveCheckout(
       options.invoice,
       options.payment_hash,
       options.amount_msats,
+      options.fiat_quote,
       options.transaction_state
     ]
   );
@@ -313,6 +316,7 @@ export function useOpenReceiveCheckout(
       options.invoice,
       options.payment_hash,
       options.amount_msats,
+      options.fiat_quote,
       options.transaction_state,
       options.workflow_state,
       options.expires_at,
@@ -731,10 +735,35 @@ export function OpenReceiveThemeToggle(
     }
   };
 
+  const defaultChildren = React.createElement(
+    React.Fragment,
+    null,
+    React.createElement(
+      "span",
+      {
+        "aria-hidden": true,
+        className: "or-theme-toggle-track"
+      },
+      React.createElement("span", {
+        className: "or-theme-toggle-icon or-theme-toggle-icon-light"
+      }),
+      React.createElement("span", {
+        className: "or-theme-toggle-icon or-theme-toggle-icon-dark"
+      })
+    ),
+    React.createElement(
+      "span",
+      {
+        className: "or-theme-toggle-label"
+      },
+      themeModel.toggleLabel
+    )
+  );
+
   return React.createElement(
     ButtonComponent,
     componentProps,
-    children ?? themeModel.toggleLabel
+    children ?? defaultChildren
   );
 }
 
@@ -1099,6 +1128,7 @@ export function OpenReceiveInvoiceSummary(
 ): React.ReactElement {
   const {
     amountLabel,
+    fiatLabel,
     paymentHashLabel,
     transactionStateLabel,
     PaymentStateComponent = OpenReceivePaymentState,
@@ -1122,6 +1152,15 @@ export function OpenReceiveInvoiceSummary(
           className: classNames?.amount
         },
         amountLabel
+      ),
+    fiatLabel === undefined
+      ? null
+      : React.createElement(
+        "span",
+        {
+          className: classNames?.fiat
+        },
+        fiatLabel
       ),
     transactionStateLabel === undefined
       ? null
@@ -1149,6 +1188,7 @@ export function OpenReceiveCheckout(
     invoice,
     payment_hash,
     amount_msats,
+    fiat_quote,
     transaction_state,
     workflow_state,
     expires_at,
@@ -1175,6 +1215,7 @@ export function OpenReceiveCheckout(
     invoice,
     payment_hash,
     amount_msats,
+    fiat_quote,
     transaction_state,
     workflow_state,
     expires_at,
@@ -1250,6 +1291,7 @@ export function OpenReceiveCheckout(
         React.createElement(InvoiceSummary, {
           key: "summary",
           amountLabel: checkoutModel.amountLabel,
+          fiatLabel: checkoutModel.fiatLabel,
           paymentHashLabel: checkoutModel.paymentHashLabel,
           transactionStateLabel:
             checkoutModel.state?.transaction_state ??

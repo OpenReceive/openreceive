@@ -57,6 +57,12 @@ const snapshot = {
   invoice: "lnbc-test",
   payment_hash: "a".repeat(64),
   amount_msats: 200000,
+  fiat_quote: {
+    fiat: {
+      currency: "USD",
+      value: "0.05"
+    }
+  },
   transaction_state: "pending",
   workflow_state: "invoice_created",
   expires_at: 1781943000,
@@ -98,6 +104,8 @@ test("browser owns custom-element checkout attributes and listeners", () => {
     invoice: "lnbc-test",
     "payment-hash": "a".repeat(64),
     "amount-msats": "200000",
+    "fiat-currency": "USD",
+    "fiat-value": "0.05",
     "transaction-state": "pending",
     "workflow-state": "invoice_created",
     "expires-at": "1781943000",

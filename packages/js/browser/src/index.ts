@@ -348,6 +348,12 @@ export interface OpenReceiveCheckoutSnapshot {
   readonly invoice: string;
   readonly payment_hash?: string;
   readonly amount_msats?: number;
+  readonly fiat_quote?: {
+    readonly fiat?: {
+      readonly currency?: string;
+      readonly value?: string;
+    };
+  } | null;
   readonly transaction_state?: string;
   readonly workflow_state?: string;
   readonly expires_at?: number;
@@ -363,6 +369,12 @@ export interface OpenReceiveCheckoutDisplayData {
   readonly invoice: string;
   readonly payment_hash?: string;
   readonly amount_msats?: number;
+  readonly fiat_quote?: {
+    readonly fiat?: {
+      readonly currency?: string;
+      readonly value?: string;
+    };
+  } | null;
   readonly transaction_state?: string;
   readonly workflow_state?: string;
   readonly expires_at?: number;
@@ -376,6 +388,7 @@ export interface OpenReceiveCheckoutDisplayModel
   extends OpenReceiveCheckoutDisplayData {
   readonly lightningUri: string;
   readonly amountLabel?: string;
+  readonly fiatLabel?: string;
   readonly paymentHashLabel?: string;
   readonly transactionStateLabel?: string;
 }
@@ -385,6 +398,8 @@ export const OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES = {
   invoice: "invoice",
   paymentHash: "payment-hash",
   amountMsats: "amount-msats",
+  fiatCurrency: "fiat-currency",
+  fiatValue: "fiat-value",
   transactionState: "transaction-state",
   workflowState: "workflow-state",
   expiresAt: "expires-at",
@@ -511,6 +526,7 @@ export interface OpenReceiveCheckoutState {
   readonly lightningUri: string;
   readonly payment_hash?: string;
   readonly amount_msats?: number;
+  readonly fiat_quote?: OpenReceiveCheckoutSnapshot["fiat_quote"];
   readonly transaction_state: string;
   readonly workflow_state: string;
   readonly expires_at?: number;
@@ -1240,14 +1256,96 @@ export const openReceiveThemeToggleElementStyles = `
   }
 
   button {
+    align-items: center;
     background: var(--or-theme-toggle-bg, transparent);
     border: var(--or-theme-toggle-border, 1px solid currentColor);
-    border-radius: var(--or-theme-toggle-radius, 8px);
+    border-radius: var(--or-theme-toggle-radius, 999px);
     color: inherit;
     cursor: pointer;
+    display: inline-flex;
+    gap: 8px;
     font: inherit;
     min-height: var(--or-theme-toggle-min-height, 36px);
-    padding: var(--or-theme-toggle-padding, 0 12px);
+    padding: var(--or-theme-toggle-padding, 4px 12px 4px 4px);
+  }
+
+  .or-theme-toggle-track {
+    align-items: center;
+    background: color-mix(in srgb, currentColor 8%, transparent);
+    border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+    border-radius: 999px;
+    display: inline-grid;
+    flex: 0 0 auto;
+    gap: 2px;
+    grid-template-columns: 1fr 1fr;
+    padding: 2px;
+  }
+
+  .or-theme-toggle-icon {
+    border-radius: 999px;
+    display: block;
+    height: 22px;
+    position: relative;
+    width: 22px;
+  }
+
+  .or-theme-toggle-icon-light {
+    background: #facc15;
+    box-shadow: 0 0 0 2px rgb(250 204 21 / 0.2);
+  }
+
+  .or-theme-toggle-icon-light::before,
+  .or-theme-toggle-icon-light::after {
+    content: "";
+    position: absolute;
+  }
+
+  .or-theme-toggle-icon-light::before {
+    border: 2px solid rgb(255 255 255 / 0.72);
+    border-radius: 999px;
+    inset: 5px;
+  }
+
+  .or-theme-toggle-icon-light::after {
+    background:
+      radial-gradient(circle, transparent 50%, #facc15 52%),
+      conic-gradient(
+        from 0deg,
+        transparent 0 8deg,
+        rgb(255 255 255 / 0.75) 8deg 14deg,
+        transparent 14deg 45deg,
+        rgb(255 255 255 / 0.75) 45deg 51deg,
+        transparent 51deg 82deg,
+        rgb(255 255 255 / 0.75) 82deg 88deg,
+        transparent 88deg 127deg,
+        rgb(255 255 255 / 0.75) 127deg 133deg,
+        transparent 133deg 172deg,
+        rgb(255 255 255 / 0.75) 172deg 178deg,
+        transparent 178deg 217deg,
+        rgb(255 255 255 / 0.75) 217deg 223deg,
+        transparent 223deg 262deg,
+        rgb(255 255 255 / 0.75) 262deg 268deg,
+        transparent 268deg 307deg,
+        rgb(255 255 255 / 0.75) 307deg 313deg,
+        transparent 313deg 360deg
+      );
+    border-radius: 999px;
+    inset: 3px;
+  }
+
+  .or-theme-toggle-icon-dark {
+    background: #172033;
+  }
+
+  .or-theme-toggle-icon-dark::after {
+    background: var(--or-theme-toggle-bg, #ffffff);
+    border-radius: 999px;
+    content: "";
+    height: 18px;
+    position: absolute;
+    right: -3px;
+    top: 1px;
+    width: 18px;
   }
 `;
 
@@ -2228,6 +2326,14 @@ export function formatOpenReceiveMsats(amountMsats: number): string {
   return `${amountMsats} msats`;
 }
 
+export function formatOpenReceiveFiatAmount(fiat: {
+  readonly currency?: string;
+  readonly value?: string;
+} | null | undefined): string | undefined {
+  if (fiat?.currency === undefined || fiat.value === undefined) return undefined;
+  return fiat.currency === "USD" ? `$${fiat.value}` : `${fiat.value} ${fiat.currency}`;
+}
+
 export function formatOpenReceivePaymentHashLabel(hash: string): string {
   return hash.length <= 16 ? hash : `${hash.slice(0, 8)}...${hash.slice(-8)}`;
 }
@@ -2245,6 +2351,9 @@ export function createOpenReceiveCheckoutDisplayModel(
     ...(data.amount_msats === undefined
       ? {}
       : { amountLabel: formatOpenReceiveMsats(data.amount_msats) }),
+    ...(formatOpenReceiveFiatAmount(data.fiat_quote?.fiat) === undefined
+      ? {}
+      : { fiatLabel: formatOpenReceiveFiatAmount(data.fiat_quote?.fiat) }),
     ...(data.payment_hash === undefined
       ? {}
       : { paymentHashLabel: formatOpenReceivePaymentHashLabel(data.payment_hash) }),
@@ -2274,6 +2383,13 @@ export function createOpenReceiveCheckoutElementAttributes(
   }
   if (snapshot.amount_msats !== undefined) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.amountMsats] = String(snapshot.amount_msats);
+  }
+  const fiat = snapshot.fiat_quote?.fiat;
+  if (fiat?.currency !== undefined) {
+    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.fiatCurrency] = fiat.currency;
+  }
+  if (fiat?.value !== undefined) {
+    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.fiatValue] = fiat.value;
   }
   if (snapshot.transaction_state !== undefined) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.transactionState] = snapshot.transaction_state;
@@ -2571,6 +2687,7 @@ export function createOpenReceiveCheckoutState(
     ...(snapshot.amount_msats === undefined
       ? {}
       : { amount_msats: snapshot.amount_msats }),
+    ...(snapshot.fiat_quote === undefined ? {} : { fiat_quote: snapshot.fiat_quote }),
     transaction_state: transactionState,
     workflow_state: workflowState,
     ...(snapshot.expires_at === undefined
@@ -2602,6 +2719,7 @@ export function createOpenReceiveCheckoutSnapshotFromDisplayData(
     invoice: data.invoice,
     ...(data.payment_hash === undefined ? {} : { payment_hash: data.payment_hash }),
     ...(data.amount_msats === undefined ? {} : { amount_msats: data.amount_msats }),
+    ...(data.fiat_quote === undefined ? {} : { fiat_quote: data.fiat_quote }),
     ...(data.transaction_state === undefined
       ? {}
       : { transaction_state: data.transaction_state }),
@@ -2642,6 +2760,9 @@ export function mergeOpenReceiveCheckoutSnapshot(
     ...((next.amount_msats ?? current.amount_msats) === undefined
       ? {}
       : { amount_msats: next.amount_msats ?? current.amount_msats }),
+    ...((next.fiat_quote ?? current.fiat_quote) === undefined
+      ? {}
+      : { fiat_quote: next.fiat_quote ?? current.fiat_quote }),
     transaction_state: next.transaction_state ?? current.transaction_state,
     workflow_state: next.workflow_state ?? current.workflow_state,
     ...((next.expires_at ?? current.expires_at) === undefined
@@ -3289,6 +3410,7 @@ function snapshotFromCheckoutState(
     invoice: state.invoice,
     ...(state.payment_hash === undefined ? {} : { payment_hash: state.payment_hash }),
     ...(state.amount_msats === undefined ? {} : { amount_msats: state.amount_msats }),
+    ...(state.fiat_quote === undefined ? {} : { fiat_quote: state.fiat_quote }),
     transaction_state: state.transaction_state,
     workflow_state: state.workflow_state,
     ...(state.expires_at === undefined ? {} : { expires_at: state.expires_at }),

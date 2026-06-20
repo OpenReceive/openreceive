@@ -157,6 +157,85 @@
   color: var(--or-text);
 }
 
+.or-theme-toggle-track {
+  align-items: center;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 999px;
+  display: inline-grid;
+  flex: 0 0 auto;
+  gap: 2px;
+  grid-template-columns: 1fr 1fr;
+  padding: 2px;
+}
+
+.or-theme-toggle-icon {
+  border-radius: 999px;
+  display: block;
+  height: 22px;
+  position: relative;
+  width: 22px;
+}
+
+.or-theme-toggle-icon-light {
+  background: #facc15;
+  box-shadow: 0 0 0 2px rgb(250 204 21 / 0.2);
+}
+
+.or-theme-toggle-icon-light::before,
+.or-theme-toggle-icon-light::after {
+  content: "";
+  position: absolute;
+}
+
+.or-theme-toggle-icon-light::before {
+  border: 2px solid rgb(255 255 255 / 0.72);
+  border-radius: 999px;
+  inset: 5px;
+}
+
+.or-theme-toggle-icon-light::after {
+  background:
+    radial-gradient(circle, transparent 50%, #facc15 52%),
+    conic-gradient(
+      from 0deg,
+      transparent 0 8deg,
+      rgb(255 255 255 / 0.75) 8deg 14deg,
+      transparent 14deg 45deg,
+      rgb(255 255 255 / 0.75) 45deg 51deg,
+      transparent 51deg 82deg,
+      rgb(255 255 255 / 0.75) 82deg 88deg,
+      transparent 88deg 127deg,
+      rgb(255 255 255 / 0.75) 127deg 133deg,
+      transparent 133deg 172deg,
+      rgb(255 255 255 / 0.75) 172deg 178deg,
+      transparent 178deg 217deg,
+      rgb(255 255 255 / 0.75) 217deg 223deg,
+      transparent 223deg 262deg,
+      rgb(255 255 255 / 0.75) 262deg 268deg,
+      transparent 268deg 307deg,
+      rgb(255 255 255 / 0.75) 307deg 313deg,
+      transparent 313deg 360deg
+    );
+  border-radius: 999px;
+  inset: 3px;
+}
+
+.or-theme-toggle-icon-dark {
+  background: #172033;
+}
+
+.or-theme-toggle-icon-dark::after {
+  background: var(--page-bg, #f5f7fb);
+  border-radius: 999px;
+  content: "";
+  height: 18px;
+  position: absolute;
+  right: -3px;
+  top: 1px;
+  width: 18px;
+}
+
 .or-wizard {
   display: grid;
   gap: 18px;

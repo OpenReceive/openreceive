@@ -34,6 +34,12 @@ interface InvoiceResponse {
   invoice: string;
   payment_hash: string;
   amount_msats: number;
+  fiat_quote?: {
+    fiat?: {
+      currency?: string;
+      value?: string;
+    };
+  } | null;
   transaction_state: string;
   workflow_state: string;
   expires_at?: number;

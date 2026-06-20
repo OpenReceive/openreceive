@@ -26,9 +26,10 @@ button {
   --primary: #171717;
   --primary-text: #ffffff;
   display: grid;
+  align-content: start;
+  justify-items: center;
   min-height: 100vh;
-  padding: 28px;
-  place-items: center;
+  padding: clamp(18px, 5vh, 56px) clamp(16px, 4vw, 40px);
   background: var(--page-bg);
   color: var(--text);
 }
@@ -46,22 +47,25 @@ button {
 .checkout {
   display: grid;
   gap: 18px;
-  width: min(960px, 100%);
+  width: min(1120px, 100%);
 }
 
 .topbar {
   display: flex;
+  width: min(1120px, 100%);
   justify-content: flex-end;
+  margin-bottom: 14px;
 }
 
 .topbar openreceive-theme-toggle::part(button) {
-  min-height: 36px;
-  padding: 0 12px;
+  min-height: 40px;
+  padding: 4px 12px 4px 4px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 999px;
   background: var(--panel-bg);
   color: var(--text);
   cursor: pointer;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 0.08);
 }
 
 .product {
@@ -91,7 +95,7 @@ p {
 .fruit-grid {
   display: grid;
   gap: 10px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
 .fruit-grid button {
@@ -202,11 +206,11 @@ openreceive-checkout {
 
 @media (max-width: 640px) {
   .page {
-    padding: 20px;
+    padding: 16px;
   }
 
   .product {
-    grid-template-columns: 1fr;
+    grid-template-columns: 72px 1fr;
   }
 
   .fruit-grid {

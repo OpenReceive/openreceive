@@ -131,6 +131,7 @@ function App(): React.ReactElement {
         {invoice === null ? null : (
           <OpenReceiveCheckout
             amount_msats={invoice.amount_msats}
+            fiat_quote={invoice.fiat_quote}
             checkout={invoice.checkout}
             className="demo-checkout"
             invoice={invoice.invoice}

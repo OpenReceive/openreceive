@@ -70,11 +70,18 @@ test("React checkout view model exposes display-safe actions", () => {
     invoice: "lnbc-test",
     payment_hash: "a".repeat(64),
     amount_msats: 200000,
+    fiat_quote: {
+      fiat: {
+        currency: "USD",
+        value: "0.05"
+      }
+    },
     transaction_state: "pending"
   });
 
   assert.equal(model.lightningUri, "lightning:lnbc-test");
   assert.equal(model.amountLabel, "200 sats");
+  assert.equal(model.fiatLabel, "$0.05");
   assert.equal(model.paymentHashLabel, "aaaaaaaa...aaaaaaaa");
   assert.equal(model.transactionStateLabel, "pending");
 });

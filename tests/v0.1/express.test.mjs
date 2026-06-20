@@ -15,6 +15,7 @@ class FakeWallet {
   lookupInvoiceCalls = 0;
   lookupState = "pending";
   makeInvoiceError = undefined;
+  expiresAt = 1600;
 
   async preflight() {
     return {
@@ -39,7 +40,7 @@ class FakeWallet {
       payment_hash: PAYMENT_HASH,
       amount_msats: BigInt(request.amount_msats ?? request.amount),
       created_at: 1000,
-      expires_at: 1600
+      expires_at: this.expiresAt
     };
   }
 
@@ -117,6 +118,31 @@ test("create invoice uses idempotency replay without a second wallet call", asyn
   assert.equal(second.statusCode, 200);
   assert.equal(second.body.invoice_id, first.body.invoice_id);
   assert.equal(wallet.makeInvoiceCalls, 1);
+});
+
+test("create invoice does not expose a wallet expiry longer than requested", async () => {
+  const { wallet, handlers } = createHarness();
+  wallet.expiresAt = 4600;
+
+  const res = createResponse();
+  await handlers.createInvoice(
+    createRequest({
+      headers: {
+        "idempotency-key": "order-short-expiry"
+      },
+      body: {
+        amount_msats: 200000,
+        description: "Fruit sticker",
+        expiry: 600
+      }
+    }),
+    res,
+    raiseNext
+  );
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.body.created_at, 1000);
+  assert.equal(res.body.expires_at, 1600);
 });
 
 test("create invoice rejects idempotency key reuse with a different body", async () => {

@@ -156,6 +156,7 @@ export default function CheckoutClient({
             invoice={checkout.invoice}
             payment_hash={checkout.payment_hash}
             amount_msats={checkout.amount_msats}
+            fiat_quote={checkout.fiat_quote}
             transaction_state={checkout.transaction_state}
             workflow_state={checkout.workflow_state}
             expires_at={checkout.expires_at}
