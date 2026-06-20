@@ -114,3 +114,74 @@ test("mock wallet supports expired and failed control states", async () => {
     "failed"
   );
 });
+
+test("mock wallet scripts deterministic lookup states and errors", async () => {
+  const service = createMockWalletService({ now: () => 7000 });
+  const invoice = await service.makeInvoice({ amount_msats: "3000" });
+
+  const script = service.scriptLookupSequence({
+    payment_hash: invoice.payment_hash,
+    steps: [
+      { state: "pending" },
+      { error: "forced mock wallet timeout" },
+      {
+        state: "settled",
+        settled_at: 7015,
+        preimage: "2".repeat(64)
+      }
+    ]
+  });
+  assert.deepEqual(script, {
+    ok: true,
+    step_count: 3
+  });
+
+  assert.equal(
+    (await service.lookupInvoice({ payment_hash: invoice.payment_hash })).state,
+    "pending"
+  );
+  await assert.rejects(
+    () => service.lookupInvoice({ invoice: invoice.invoice }),
+    /forced mock wallet timeout/
+  );
+
+  const settled = await service.lookupInvoice({ payment_hash: invoice.payment_hash });
+  assert.equal(settled.state, "settled");
+  assert.equal(settled.settled_at, 7015);
+  assert.equal(settled.preimage, "2".repeat(64));
+
+  assert.deepEqual(service.clearLookupSequence({ invoice: invoice.invoice }), {
+    ok: true
+  });
+  assert.equal(
+    (await service.lookupInvoice({ payment_hash: invoice.payment_hash })).state,
+    "settled"
+  );
+});
+
+test("mock wallet rejects invalid lookup scripts without changing invoices", async () => {
+  const service = createMockWalletService();
+  const invoice = await service.makeInvoice({ amount_msats: "4000" });
+
+  assert.throws(
+    () =>
+      service.scriptLookupSequence({
+        payment_hash: invoice.payment_hash,
+        steps: [{ state: "paid" }]
+      }),
+    /steps\[0\]\.state must be pending, settled, expired, failed, or accepted/
+  );
+  assert.throws(
+    () =>
+      service.scriptLookupSequence({
+        payment_hash: invoice.payment_hash,
+        steps: []
+      }),
+    /steps must include at least one lookup script step/
+  );
+
+  assert.equal(
+    (await service.lookupInvoice({ payment_hash: invoice.payment_hash })).state,
+    "pending"
+  );
+});

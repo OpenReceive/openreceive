@@ -33,6 +33,8 @@ the redacted URI and never needs real wallet funds.
 - `POST /control/expire`
 - `POST /control/fail`
 - `POST /control/replay-notification`
+- `POST /control/script-lookup-sequence`
+- `POST /control/clear-lookup-sequence`
 
 `/notifications` is an SSE stream that emits `payment_received` events after
 `/control/settle` or `/control/replay-notification`.
@@ -44,6 +46,25 @@ curl -sS -X POST http://127.0.0.1:3798/nwc/make_invoice \
   -H 'content-type: application/json' \
   -d '{"amount_msats":"200000","description":"Fruit sticker"}'
 ```
+
+Script deterministic lookup behavior:
+
+```sh
+curl -sS -X POST http://127.0.0.1:3798/control/script-lookup-sequence \
+  -H 'content-type: application/json' \
+  -d '{
+    "payment_hash": "0000000000000000000000000000000000000000000000000000000000000001",
+    "steps": [
+      { "state": "pending" },
+      { "error": "forced mock wallet timeout" },
+      { "state": "settled", "settled_at": 7015 }
+    ]
+  }'
+```
+
+Scripted lookup sequences are useful for polling and retry tests. They let a
+test prove that OpenReceive keeps backend `lookup_invoice` as the settlement
+authority even when notifications are missing, duplicated, or delayed.
 
 This tool is intentionally not a Nostr relay and does not prove real BOLT11
 invoice creation, NIP-04/NIP-44 compatibility with a real wallet, Lightning

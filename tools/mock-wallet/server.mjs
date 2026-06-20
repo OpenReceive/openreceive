@@ -77,6 +77,20 @@ export function createMockWalletService(options = {}) {
         )
       });
     },
+    scriptLookupSequence(body) {
+      const steps = scriptStepsFromJson(body.steps);
+      wallet.scriptLookupSequence(lookupSelector(body), steps);
+      return {
+        ok: true,
+        step_count: steps.length
+      };
+    },
+    clearLookupSequence(body) {
+      wallet.clearLookupSequence(lookupSelector(body));
+      return {
+        ok: true
+      };
+    },
     subscribeNotification(handler) {
       notificationSubscribers.add(handler);
       return () => {
@@ -165,6 +179,16 @@ async function handleRequest(request, response, context) {
     return jsonResponse(response, 200, context.service.replayNotification(body));
   }
 
+  if (request.method === "POST" && url.pathname === "/control/script-lookup-sequence") {
+    const body = await readJsonBody(request);
+    return jsonResponse(response, 200, context.service.scriptLookupSequence(body));
+  }
+
+  if (request.method === "POST" && url.pathname === "/control/clear-lookup-sequence") {
+    const body = await readJsonBody(request);
+    return jsonResponse(response, 200, context.service.clearLookupSequence(body));
+  }
+
   if (request.method === "GET" && url.pathname === "/notifications") {
     response.writeHead(200, {
       "cache-control": "no-store",
@@ -203,6 +227,71 @@ function lookupSelector(body) {
     throw new Error("lookup selector requires payment_hash or invoice");
   }
   return selector;
+}
+
+function scriptStepsFromJson(steps) {
+  if (!Array.isArray(steps) || steps.length === 0) {
+    throw new Error("steps must include at least one lookup script step");
+  }
+
+  return steps.map((step, index) => {
+    if (!step || typeof step !== "object" || Array.isArray(step)) {
+      throw new Error(`steps[${index}] must be an object`);
+    }
+
+    if ("error" in step) {
+      return {
+        error: stringFromJson(step.error, `steps[${index}].error`)
+      };
+    }
+
+    if ("result" in step) {
+      return {
+        result: lookupResultFromJson(step.result, `steps[${index}].result`)
+      };
+    }
+
+    if ("state" in step) {
+      return lookupStateStepFromJson(step, `steps[${index}]`);
+    }
+
+    throw new Error(`steps[${index}] must contain state, result, or error`);
+  });
+}
+
+function lookupStateStepFromJson(step, field) {
+  const state = transactionStateFromJson(step.state, `${field}.state`);
+  return {
+    state,
+    ...(step.settled_at === undefined ? {} : { settled_at: numberFromJson(step.settled_at, `${field}.settled_at`) }),
+    ...(step.preimage === undefined ? {} : { preimage: stringFromJson(step.preimage, `${field}.preimage`) })
+  };
+}
+
+function lookupResultFromJson(value, field) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${field} must be an object`);
+  }
+
+  return {
+    ...(value.invoice === undefined ? {} : { invoice: stringFromJson(value.invoice, `${field}.invoice`) }),
+    ...(value.payment_hash === undefined ? {} : { payment_hash: stringFromJson(value.payment_hash, `${field}.payment_hash`) }),
+    ...(value.amount_msats === undefined ? {} : { amount_msats: bigintFromJson(value.amount_msats, `${field}.amount_msats`) }),
+    ...(value.transaction_state === undefined ? {} : { transaction_state: transactionStateFromJson(value.transaction_state, `${field}.transaction_state`) }),
+    ...(value.state === undefined ? {} : { state: transactionStateFromJson(value.state, `${field}.state`) }),
+    ...(value.created_at === undefined ? {} : { created_at: numberFromJson(value.created_at, `${field}.created_at`) }),
+    ...(value.expires_at === undefined ? {} : { expires_at: numberFromJson(value.expires_at, `${field}.expires_at`) }),
+    ...(value.settled_at === undefined ? {} : { settled_at: numberFromJson(value.settled_at, `${field}.settled_at`) }),
+    ...(value.preimage === undefined ? {} : { preimage: stringFromJson(value.preimage, `${field}.preimage`) })
+  };
+}
+
+function transactionStateFromJson(value, field) {
+  const state = stringFromJson(value, field);
+  if (["pending", "settled", "expired", "failed", "accepted"].includes(state)) {
+    return state;
+  }
+  throw new Error(`${field} must be pending, settled, expired, failed, or accepted`);
 }
 
 function bigintFromJson(value, field) {
