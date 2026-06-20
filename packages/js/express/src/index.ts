@@ -91,6 +91,7 @@ export interface OpenReceiveExpressHandlers {
 
 const DEFAULT_BASE_PATH = "/openreceive/v1";
 const DEFAULT_HEARTBEAT_SECONDS = 20;
+const HEX_64 = /^[0-9a-fA-F]{64}$/;
 
 export type OpenReceiveInvoiceEventName =
   | "invoice.created"
@@ -218,10 +219,10 @@ export function createOpenReceiveExpressHandlers(
       }
 
       const amountMsats = getCreateAmountMsats(body, clock());
+      const descriptionFields = getCreateDescriptionFields(body);
       const invoice = await options.client.makeInvoice({
         amount_msats: BigInt(amountMsats),
-        description: optionalString(body.description),
-        description_hash: optionalString(body.description_hash),
+        ...descriptionFields,
         expiry: optionalSafeInteger(body.expiry),
         metadata: parseOptionalRecord(body.metadata, "metadata")
       });
@@ -431,6 +432,35 @@ function getCreateAmountMsats(
     fiat: parseFiatAmount(body.fiat),
     as_of: now
   }).amount_msats;
+}
+
+function getCreateDescriptionFields(body: Record<string, unknown>): {
+  readonly description?: string;
+  readonly description_hash?: string;
+} {
+  const description = optionalString(body.description);
+  const descriptionHash = optionalString(body.description_hash);
+
+  if (description !== undefined && descriptionHash !== undefined) {
+    throw httpError(
+      400,
+      "INVALID_REQUEST",
+      "Create invoice request accepts only one of description or description_hash."
+    );
+  }
+
+  if (descriptionHash !== undefined && !HEX_64.test(descriptionHash)) {
+    throw httpError(
+      400,
+      "INVALID_REQUEST",
+      "description_hash must be 64 hex characters."
+    );
+  }
+
+  return {
+    ...(description === undefined ? {} : { description }),
+    ...(descriptionHash === undefined ? {} : { description_hash: descriptionHash })
+  };
 }
 
 function findLookupInvoice(

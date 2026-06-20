@@ -183,6 +183,53 @@ test("lookup rejects public status oracle requests for unknown payment hashes", 
   assert.equal(res.body.code, "NOT_FOUND");
 });
 
+test("create invoice rejects description and description_hash together", async () => {
+  const { wallet, handlers } = createHarness();
+  const res = createResponse();
+
+  await handlers.createInvoice(
+    createRequest({
+      headers: {
+        "idempotency-key": "order-description-conflict"
+      },
+      body: {
+        amount_msats: 200000,
+        description: "Fruit sticker",
+        description_hash: "a".repeat(64)
+      }
+    }),
+    res,
+    raiseNext
+  );
+
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.message, "Create invoice request accepts only one of description or description_hash.");
+  assert.equal(wallet.makeInvoiceCalls, 0);
+});
+
+test("create invoice rejects invalid description_hash before wallet call", async () => {
+  const { wallet, handlers } = createHarness();
+  const res = createResponse();
+
+  await handlers.createInvoice(
+    createRequest({
+      headers: {
+        "idempotency-key": "order-description-hash"
+      },
+      body: {
+        amount_msats: 200000,
+        description_hash: "not-hex"
+      }
+    }),
+    res,
+    raiseNext
+  );
+
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.message, "description_hash must be 64 hex characters.");
+  assert.equal(wallet.makeInvoiceCalls, 0);
+});
+
 test("secure Express handlers fail closed when auth hooks are missing", async () => {
   const { wallet, store, handlers } = createSecureHarness();
   seedInvoice(store);

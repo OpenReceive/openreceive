@@ -213,6 +213,10 @@ components:
           not:
             required:
               - amount_msats
+      not:
+        required:
+          - description
+          - description_hash
     LookupInvoiceRequest:
       type: object
       additionalProperties: false

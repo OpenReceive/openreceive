@@ -289,8 +289,15 @@ function validateOpenApi() {
 
   const amountMsats =
     openapi.components?.schemas?.CreateInvoiceRequest?.properties?.amount_msats;
+  const createInvoiceRequest =
+    openapi.components?.schemas?.CreateInvoiceRequest;
   assert(amountMsats?.minimum === 1000, "OpenAPI amount_msats minimum mismatch");
   assert(amountMsats?.maximum === 9007199254740991, "OpenAPI amount_msats maximum mismatch");
+  assert(
+    createInvoiceRequest?.not?.required?.includes("description") &&
+      createInvoiceRequest?.not?.required?.includes("description_hash"),
+    "OpenAPI create request must reject description with description_hash"
+  );
 }
 
 function validateAsyncApi() {
