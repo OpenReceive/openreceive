@@ -1,7 +1,24 @@
 # Rails Quickstart Status
 
-OpenReceive does not have a Rails package yet. This page records the intended
-Rails shape so future work stays aligned with the v0.1 contract.
+OpenReceive now has an initial Rails adapter helper package at
+`packages/ruby/openreceive-rails`. It can wrap an injected receive-only client
+for idempotent invoice creation, authorized lookup, backend settlement
+verification, polling-worker verification, passive notification handling, and
+duplicate-safe fulfillment. It also includes initial ActiveRecord migration and
+model templates for the invoice storage shape, plus controller, job, channel,
+route, install-generator templates, an invoice Hotwire partial, and optional
+mounted engine routes. Real-wallet Ruby smoke and demos are still pending.
+
+The Ruby core-helper package at `packages/ruby/openreceive` provides
+vector-backed exact money and settlement helpers, NWC URI parse/redaction,
+receive-only NIP-47 request mapping, polling/idempotency helpers, and an
+in-memory test store. It also includes a receive-only wrapper for
+`nwc-ruby` clients using `NwcRuby::Client.from_uri` and the documented
+`make_invoice` / `lookup_invoice` methods.
+Run `OPENRECEIVE_ENV_FILE=.env npm run test:live:ruby:nwc` for the current Ruby
+preflight; it parses and redacts the configured NWC URI, runs `get_info` when
+`nwc-ruby` is installed, and creates an invoice only when
+`OPENRECEIVE_LIVE_CREATE_INVOICE=1`.
 
 Use the Node and Express quickstart for the current working reference path:
 
@@ -17,11 +34,14 @@ fulfillment, and worker deployment.
 
 Expected Rails pieces:
 
+- Ruby core helpers from `openreceive`
+- Rails adapter helpers from `openreceive-rails`
 - Rails engine or route helpers mounted under `/openreceive/v1`
 - server-side receive-only NWC configuration
-- ActiveRecord invoice storage
+- ActiveRecord invoice storage using the provided templates as the starting point
 - ActiveJob, Solid Queue, Sidekiq, or GoodJob polling workers
-- ActionCable, Turbo Streams, or Hotwire updates for browser state
+- ActionCable, Turbo Streams, or Hotwire updates for browser state using the
+  provided channel/job templates as the starting point
 - idempotent fulfillment hooks after backend settlement verification
 
 ## Security Boundary
@@ -46,3 +66,4 @@ deterministic mock wallet before live wallet profile tests. It must preserve:
 - duplicate notification replay safety
 
 Do not publish a Rails package until it passes the shared conformance gate.
+Do not use the Ruby in-memory store as production Rails persistence.

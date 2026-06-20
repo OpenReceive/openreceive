@@ -15,8 +15,10 @@ parallel work. Shared contract files still need lead coordination.
 | React package | `packages/js/react` | Implemented | Frontend worker |
 | Provider data package | `packages/js/provider-data` | Implemented | Data worker |
 | Testkit package | `packages/js/testkit` | Implemented | Conformance worker |
+| Ruby core package | `packages/ruby/openreceive` | Initial vector-backed helpers | Ecosystem worker |
+| Rails adapter package | `packages/ruby/openreceive-rails` | Initial server-side adapter helpers | Ecosystem worker |
 | Hello Fruit demos | `examples/hello-fruit/**` | Implemented | Demo worker |
-| Non-JS SDKs | `packages/python`, `packages/ruby`, etc. | Deferred | Ecosystem workers |
+| Other non-JS SDKs | `packages/python`, `packages/php`, etc. | Deferred | Ecosystem workers |
 
 Safe post-reference parallel lanes:
 

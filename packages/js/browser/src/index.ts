@@ -22,11 +22,37 @@ export interface OpenReceiveQrOptions {
 export interface CopyInvoiceOptions {
   invoice: string;
   clipboard?: Pick<Clipboard, "writeText">;
+  logger?: OpenReceiveBrowserLogger;
+  logContext?: OpenReceiveBrowserLogContext;
 }
 
 export interface OpenWalletOptions {
   invoice: string;
   open?: (uri: string) => void;
+  logger?: OpenReceiveBrowserLogger;
+  logContext?: OpenReceiveBrowserLogContext;
+}
+
+export type OpenReceiveBrowserLogLevel = "debug" | "info" | "warn" | "error";
+
+export interface OpenReceiveBrowserLogEntry {
+  readonly level: OpenReceiveBrowserLogLevel;
+  readonly event: string;
+  readonly message: string;
+  readonly [key: string]: unknown;
+}
+
+export type OpenReceiveBrowserLogger = (
+  entry: OpenReceiveBrowserLogEntry
+) => void;
+
+export interface OpenReceiveBrowserLogContext {
+  readonly invoice_id?: string;
+  readonly payment_hash?: string;
+  readonly amount_msats?: number;
+  readonly transaction_state?: string;
+  readonly workflow_state?: string;
+  readonly [key: string]: unknown;
 }
 
 export type OpenReceiveCheckoutPhase =
@@ -83,11 +109,13 @@ export interface OpenReceiveInvoiceEventPayload {
 
 export interface CreateOpenReceiveCheckoutStateOptions {
   readonly now?: number;
+  readonly logger?: OpenReceiveBrowserLogger;
 }
 
 export interface ApplyOpenReceiveInvoiceEventOptions {
   readonly eventName?: string;
   readonly now?: number;
+  readonly logger?: OpenReceiveBrowserLogger;
 }
 
 export function createLightningUri(invoice: string): string {
@@ -102,7 +130,7 @@ export function createOpenReceiveCheckoutState(
   const transactionState = snapshot.transaction_state ?? "pending";
   const workflowState = snapshot.workflow_state ?? "invoice_created";
 
-  return normalizeCheckoutState({
+  const state = normalizeCheckoutState({
     invoice_id: snapshot.invoice_id,
     invoice: snapshot.invoice,
     lightningUri: createLightningUri(snapshot.invoice),
@@ -124,6 +152,8 @@ export function createOpenReceiveCheckoutState(
       ? {}
       : { routes_url: snapshot.checkout.routes_url })
   }, options.now);
+  emitBrowserLog(options.logger, "info", "checkout.state.created", "Created checkout state from invoice snapshot.", checkoutLogFields(state));
+  return state;
 }
 
 export function applyOpenReceiveInvoiceEvent(
@@ -131,16 +161,27 @@ export function applyOpenReceiveInvoiceEvent(
   event: OpenReceiveInvoiceEventPayload,
   options: ApplyOpenReceiveInvoiceEventOptions = {}
 ): OpenReceiveCheckoutState {
-  if (event.invoice_id !== state.invoice_id) return state;
+  if (event.invoice_id !== state.invoice_id) {
+    emitBrowserLog(options.logger, "debug", "checkout.event.ignored", "Ignored passive invoice event for a different invoice.", {
+      current_invoice_id: state.invoice_id,
+      event_invoice_id: event.invoice_id,
+      event_name: options.eventName
+    });
+    return state;
+  }
   if (
     event.payment_hash !== undefined &&
     state.payment_hash !== undefined &&
     event.payment_hash !== state.payment_hash
   ) {
+    emitBrowserLog(options.logger, "debug", "checkout.event.ignored", "Ignored passive invoice event with a mismatched payment hash.", {
+      ...checkoutLogFields(state),
+      event_name: options.eventName
+    });
     return state;
   }
 
-  return normalizeCheckoutState({
+  const nextState = normalizeCheckoutState({
     ...state,
     ...(event.payment_hash === undefined
       ? {}
@@ -157,6 +198,11 @@ export function applyOpenReceiveInvoiceEvent(
       ? {}
       : { last_event: options.eventName })
   }, options.now);
+  emitBrowserLog(options.logger, "info", "checkout.event.applied", "Applied passive invoice event to checkout state.", {
+    ...checkoutLogFields(nextState),
+    event_name: options.eventName
+  });
+  return nextState;
 }
 
 export function parseOpenReceiveInvoiceEvent(
@@ -246,6 +292,7 @@ export async function copyInvoice(options: CopyInvoiceOptions): Promise<void> {
   }
 
   await clipboard.writeText(options.invoice);
+  emitBrowserLog(options.logger, "info", "checkout.invoice.copied", "Copied Lightning invoice to clipboard.", options.logContext);
 }
 
 export function openWallet(options: OpenWalletOptions): string {
@@ -253,6 +300,7 @@ export function openWallet(options: OpenWalletOptions): string {
 
   if (options.open !== undefined) {
     options.open(uri);
+    emitBrowserLog(options.logger, "info", "checkout.wallet.opened", "Opened Lightning invoice URI.", options.logContext);
     return uri;
   }
 
@@ -262,6 +310,7 @@ export function openWallet(options: OpenWalletOptions): string {
   }
 
   location.assign(uri);
+  emitBrowserLog(options.logger, "info", "checkout.wallet.opened", "Opened Lightning invoice URI.", options.logContext);
   return uri;
 }
 
@@ -359,6 +408,91 @@ function isTerminalPhase(phase: OpenReceiveCheckoutPhase): boolean {
     phase === "failed" ||
     phase === "cancelled"
   );
+}
+
+function checkoutLogFields(
+  state: {
+    readonly invoice_id?: string;
+    readonly payment_hash?: string;
+    readonly amount_msats?: number;
+    readonly transaction_state?: string;
+    readonly workflow_state?: string;
+    readonly phase?: string;
+    readonly expiresInSeconds?: number;
+  }
+): Record<string, unknown> {
+  return {
+    ...(state.invoice_id === undefined ? {} : { invoice_id: state.invoice_id }),
+    ...(state.payment_hash === undefined ? {} : { payment_hash: state.payment_hash }),
+    ...(state.amount_msats === undefined ? {} : { amount_msats: state.amount_msats }),
+    ...(state.transaction_state === undefined
+      ? {}
+      : { transaction_state: state.transaction_state }),
+    ...(state.workflow_state === undefined
+      ? {}
+      : { workflow_state: state.workflow_state }),
+    ...(state.phase === undefined ? {} : { phase: state.phase }),
+    ...(state.expiresInSeconds === undefined
+      ? {}
+      : { expires_in_seconds: state.expiresInSeconds })
+  };
+}
+
+function emitBrowserLog(
+  logger: OpenReceiveBrowserLogger | undefined,
+  level: OpenReceiveBrowserLogLevel,
+  event: string,
+  message: string,
+  fields: Record<string, unknown> = {}
+): void {
+  if (logger === undefined) return;
+
+  try {
+    logger(sanitizeBrowserLogEntry({
+      level,
+      event,
+      message,
+      ...fields
+    }));
+  } catch {
+    // Checkout logs are diagnostic only and must not affect user actions.
+  }
+}
+
+function sanitizeBrowserLogEntry(
+  entry: OpenReceiveBrowserLogEntry
+): OpenReceiveBrowserLogEntry {
+  const clean: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(entry)) {
+    if (/secret|token|authorization|cookie|nwc/i.test(key)) {
+      clean[key] = "[REDACTED]";
+    } else {
+      clean[key] = sanitizeBrowserLogValue(value);
+    }
+  }
+  return clean as OpenReceiveBrowserLogEntry;
+}
+
+function sanitizeBrowserLogValue(value: unknown): unknown {
+  if (typeof value === "string") return redactBrowserSecrets(value);
+  if (Array.isArray(value)) return value.map(sanitizeBrowserLogValue);
+  if (typeof value !== "object" || value === null) return value;
+
+  const clean: Record<string, unknown> = {};
+  for (const [key, nested] of Object.entries(value)) {
+    if (/secret|token|authorization|cookie|nwc/i.test(key)) {
+      clean[key] = "[REDACTED]";
+    } else {
+      clean[key] = sanitizeBrowserLogValue(nested);
+    }
+  }
+  return clean;
+}
+
+function redactBrowserSecrets(value: string): string {
+  return value
+    .replace(/nostr\+walletconnect:\/\/[^\s"'`<>]+/g, "[REDACTED_NWC]")
+    .replace(/([?&](?:_or_evt|token|secret)=)[^&\s"'`<>]+/gi, "$1[REDACTED]");
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

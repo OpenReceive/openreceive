@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
 import {
   getAsset,
@@ -25,6 +27,12 @@ import {
   providerRegistry,
   validateRegistry
 } from "@openreceive/provider-data";
+
+function readVector(name) {
+  return JSON.parse(
+    readFileSync(path.join(process.cwd(), "spec/test-vectors", name), "utf8")
+  );
+}
 
 test("provider-data exposes canonical registry metadata and counts", () => {
   assert.deepEqual(getProviderRegistryMetadata(), {
@@ -109,6 +117,36 @@ test("provider-data resolves payment wizard routes from asset and fiat inputs", 
   assert.equal(fiatRoutes[0].rail.id, "bank");
   assert.equal(fiatRoutes[0].country.code, "US");
   assert.equal(fiatRoutes[0].providers[0].provider.id, "strike");
+});
+
+test("provider-data satisfies canonical provider-route vectors", () => {
+  const cryptoVector = readVector("provider-route.crypto-usdt.json");
+  const cryptoRoutes = getPaymentWizardRoutes(cryptoVector.request);
+  assert.equal(cryptoRoutes.length, cryptoVector.expected.length);
+  assert.equal(cryptoRoutes[0].kind, cryptoVector.expected.kind);
+  assert.equal(cryptoRoutes[0].asset.symbol, cryptoVector.expected.asset_symbol);
+  assert.equal(cryptoRoutes[0].route.id, cryptoVector.expected.route_id);
+  assert.deepEqual(
+    cryptoRoutes[0].providers.map((entry) => entry.provider.id),
+    cryptoVector.expected.provider_ids
+  );
+  assert.deepEqual(
+    cryptoRoutes[0].providers
+      .filter((entry) => entry.flagship)
+      .map((entry) => entry.provider.id),
+    cryptoVector.expected.flagship_provider_ids
+  );
+
+  const fiatVector = readVector("provider-route.fiat-us-card.json");
+  const fiatRoutes = getPaymentWizardRoutes(fiatVector.request);
+  assert.equal(fiatRoutes.length, fiatVector.expected.length);
+  assert.equal(fiatRoutes[0].kind, fiatVector.expected.kind);
+  assert.equal(fiatRoutes[0].rail.id, fiatVector.expected.rail_id);
+  assert.equal(fiatRoutes[0].country.code, fiatVector.expected.country_code);
+  assert.deepEqual(
+    fiatRoutes[0].providers.map((entry) => [entry.provider.id, entry.rank]),
+    fiatVector.expected.provider_ranks
+  );
 });
 
 test("provider-data filters providers and countries conservatively", () => {

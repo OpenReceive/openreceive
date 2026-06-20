@@ -1,4 +1,5 @@
 import {
+  type OpenReceiveBrowserLogger,
   type OpenReceiveQrEncoder,
   copyInvoice,
   createLightningUri,
@@ -20,6 +21,7 @@ export interface DefineOpenReceiveElementsOptions {
   readonly tagName?: string;
   readonly registry?: CustomElementRegistry;
   readonly qrEncoder?: OpenReceiveQrEncoder;
+  readonly logger?: OpenReceiveBrowserLogger;
 }
 
 const DEFAULT_TAG_NAME = "openreceive-checkout";
@@ -193,7 +195,7 @@ export function defineOpenReceiveElements(
       });
 
       root.querySelector('[part="copy"]')?.addEventListener("click", () => {
-        void copyInvoice({ invoice })
+        void copyInvoice({ invoice, logger: options.logger })
           .then(() => this.dispatchEvent(new CustomEvent("openreceive-copy")))
           .catch((error) => this.dispatchError(error));
       });
@@ -201,7 +203,7 @@ export function defineOpenReceiveElements(
       root.querySelector('[part="open"]')?.addEventListener("click", (event) => {
         event.preventDefault();
         try {
-          openWallet({ invoice });
+          openWallet({ invoice, logger: options.logger });
           this.dispatchEvent(new CustomEvent("openreceive-open-wallet"));
         } catch (error) {
           this.dispatchError(error);

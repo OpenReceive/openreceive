@@ -4,7 +4,9 @@ import {
   copyInvoice as copyInvoiceHelper,
   createLightningUri,
   createQrSvg,
-  openWallet as openWalletHelper
+  openWallet as openWalletHelper,
+  type OpenReceiveBrowserLogContext,
+  type OpenReceiveBrowserLogger
 } from "@openreceive/browser";
 
 export interface OpenReceiveCheckoutData {
@@ -24,6 +26,7 @@ export interface OpenReceiveCheckoutViewModel extends OpenReceiveCheckoutData {
 export interface UseOpenReceiveCheckoutOptions extends OpenReceiveCheckoutData {
   readonly clipboard?: Pick<Clipboard, "writeText">;
   readonly open?: (uri: string) => void;
+  readonly logger?: OpenReceiveBrowserLogger;
   readonly onError?: (error: unknown) => void;
 }
 
@@ -48,6 +51,7 @@ export interface OpenReceiveCopyButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   readonly invoice: string;
   readonly clipboard?: Pick<Clipboard, "writeText">;
+  readonly logger?: OpenReceiveBrowserLogger;
   readonly onCopied?: () => void;
   readonly onError?: (error: unknown) => void;
   readonly ButtonComponent?: OpenReceiveButtonComponent;
@@ -57,6 +61,7 @@ export interface OpenReceiveOpenWalletButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   readonly invoice: string;
   readonly open?: (uri: string) => void;
+  readonly logger?: OpenReceiveBrowserLogger;
   readonly onOpened?: (uri: string) => void;
   readonly onError?: (error: unknown) => void;
   readonly ButtonComponent?: OpenReceiveButtonComponent;
@@ -110,6 +115,7 @@ export interface OpenReceiveCheckoutProps
   extends OpenReceiveCheckoutData,
     Omit<React.HTMLAttributes<HTMLElement>, "children"> {
   readonly qrEncoder?: OpenReceiveQrEncoder;
+  readonly logger?: OpenReceiveBrowserLogger;
   readonly onError?: (error: unknown) => void;
   readonly components?: OpenReceiveCheckoutComponents;
   readonly classNames?: OpenReceiveCheckoutClassNames;
@@ -149,31 +155,43 @@ export function useOpenReceiveCheckout(
       options.transaction_state
     ]
   );
+  const logContext = React.useMemo(
+    () => getCheckoutLogContext(options),
+    [
+      options.payment_hash,
+      options.amount_msats,
+      options.transaction_state
+    ]
+  );
 
   const copyInvoice = React.useCallback(async () => {
     try {
       await copyInvoiceHelper({
         invoice: options.invoice,
-        clipboard: options.clipboard
+        clipboard: options.clipboard,
+        logger: options.logger,
+        logContext
       });
       setCopied(true);
     } catch (error) {
       options.onError?.(error);
       throw error;
     }
-  }, [options.invoice, options.clipboard, options.onError]);
+  }, [logContext, options.invoice, options.clipboard, options.logger, options.onError]);
 
   const openWallet = React.useCallback(() => {
     try {
       return openWalletHelper({
         invoice: options.invoice,
-        open: options.open
+        open: options.open,
+        logger: options.logger,
+        logContext
       });
     } catch (error) {
       options.onError?.(error);
       throw error;
     }
-  }, [options.invoice, options.open, options.onError]);
+  }, [logContext, options.invoice, options.open, options.logger, options.onError]);
 
   return {
     ...model,
@@ -223,6 +241,7 @@ export function OpenReceiveCopyButton(
   const {
     invoice,
     clipboard,
+    logger,
     onCopied,
     onError,
     onClick,
@@ -242,7 +261,7 @@ export function OpenReceiveCopyButton(
         if (event.defaultPrevented) return;
 
         try {
-          await copyInvoiceHelper({ invoice, clipboard });
+          await copyInvoiceHelper({ invoice, clipboard, logger });
           onCopied?.();
         } catch (error) {
           onError?.(error);
@@ -259,6 +278,7 @@ export function OpenReceiveOpenWalletButton(
   const {
     invoice,
     open,
+    logger,
     onOpened,
     onError,
     onClick,
@@ -278,7 +298,7 @@ export function OpenReceiveOpenWalletButton(
         if (event.defaultPrevented) return;
 
         try {
-          const uri = openWalletHelper({ invoice, open });
+          const uri = openWalletHelper({ invoice, open, logger });
           onOpened?.(uri);
         } catch (error) {
           onError?.(error);
@@ -363,6 +383,7 @@ export function OpenReceiveCheckout(
     amount_msats,
     transaction_state,
     qrEncoder,
+    logger,
     onError,
     components,
     classNames,
@@ -432,12 +453,14 @@ export function OpenReceiveCheckout(
           React.createElement(CopyButton, {
             invoice,
             onError,
+            logger,
             ButtonComponent,
             className: classNames?.copyButton
           }),
           React.createElement(OpenWalletButton, {
             invoice,
             onError,
+            logger,
             ButtonComponent,
             className: classNames?.openWalletButton
           })
@@ -451,6 +474,18 @@ export const InvoiceSummary = OpenReceiveInvoiceSummary;
 export const CopyInvoiceButton = OpenReceiveCopyButton;
 export const OpenWalletButton = OpenReceiveOpenWalletButton;
 export const PaymentState = OpenReceivePaymentState;
+
+function getCheckoutLogContext(
+  data: OpenReceiveCheckoutData
+): OpenReceiveBrowserLogContext {
+  return {
+    ...(data.payment_hash === undefined ? {} : { payment_hash: data.payment_hash }),
+    ...(data.amount_msats === undefined ? {} : { amount_msats: data.amount_msats }),
+    ...(data.transaction_state === undefined
+      ? {}
+      : { transaction_state: data.transaction_state })
+  };
+}
 
 function formatMsats(amountMsats: number): string {
   if (!Number.isSafeInteger(amountMsats) || amountMsats < 0) {

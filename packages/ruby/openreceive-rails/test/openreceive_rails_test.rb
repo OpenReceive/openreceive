@@ -1,0 +1,327 @@
+# frozen_string_literal: true
+
+require "minitest/autorun"
+require "openreceive/rails"
+
+class FakeReceiveClient
+  attr_reader :make_invoice_calls, :lookup_invoice_calls
+  attr_accessor :lookup_state
+
+  def initialize
+    @make_invoice_calls = []
+    @lookup_invoice_calls = []
+    @lookup_state = "pending"
+  end
+
+  def make_invoice(request)
+    @make_invoice_calls << request
+    {
+      "invoice" => "lnbc-rails",
+      "payment_hash" => "a" * 64,
+      "amount_msats" => request.fetch("amount_msats"),
+      "created_at" => 1000,
+      "expires_at" => 1600
+    }
+  end
+
+  def lookup_invoice(request)
+    @lookup_invoice_calls << request
+    {
+      "invoice" => "lnbc-rails",
+      "payment_hash" => "a" * 64,
+      "amount" => 200_000,
+      "state" => @lookup_state,
+      "settled_at" => (@lookup_state == "settled" ? 1200 : nil)
+    }
+  end
+end
+
+class OpenReceiveRailsTest < Minitest::Test
+  Controller = Struct.new(:current_user_id)
+  ROOT = File.expand_path("../../../..", __dir__)
+
+  def build_adapter(client: FakeReceiveClient.new, fulfilled: [])
+    config = OpenReceive::Rails::Configuration.new
+    config.client = client
+    config.merchant_scope = "rails:test"
+    config.production = true
+    config.authenticate = ->(controller) { raise "missing user" if controller.current_user_id.nil? }
+    config.authorize_invoice = lambda do |controller, invoice|
+      invoice.fetch("metadata").fetch("user_id") == controller.current_user_id
+    end
+    config.metadata = ->(controller, params) { { "user_id" => controller.current_user_id, "fruit" => params["fruit"] } }
+    config.fulfill = ->(invoice) { fulfilled << invoice.fetch("invoice_id") }
+    [OpenReceive::Rails::Adapter.new(config), client, fulfilled]
+  end
+
+  def read_template(name)
+    File.read(
+      File.join(
+        ROOT,
+        "packages/ruby/openreceive-rails/lib/openreceive/rails/generators/templates",
+        name
+      )
+    )
+  end
+
+  def read_generator_template(relative_path)
+    File.read(
+      File.join(
+        ROOT,
+        "packages/ruby/openreceive-rails/lib/openreceive/rails/generators/templates",
+        relative_path
+      )
+    )
+  end
+
+  def test_active_record_templates_preserve_storage_invariants
+    migration = read_template("create_openreceive_tables.rb")
+    model = read_template("openreceive_invoice.rb")
+
+    assert_includes migration, "create_table :openreceive_invoices"
+    assert_includes migration, "[:merchant_scope, :operation, :idempotency_key]"
+    assert_includes migration, "unique: true"
+    assert_includes migration, "payment_hash"
+    assert_includes migration, "amount_msats >= 1000"
+    assert_includes migration, "9007199254740991"
+    assert_includes migration, "settled_at_seconds"
+    assert_includes migration, "fulfilled_at_seconds"
+    assert_includes migration, "fulfillment_state IN"
+    refute_includes migration, "OPENRECEIVE_NWC"
+    refute_includes migration, "nostr+walletconnect://"
+
+    assert_includes model, "self.table_name = \"openreceive_invoices\""
+    assert_includes model, "idempotency_request_hash"
+    assert_includes model, "transaction_state"
+    assert_includes model, "workflow_state"
+    assert_includes model, "fulfillment_state"
+  end
+
+  def test_rails_route_job_and_channel_templates_preserve_receive_only_boundary
+    controller = read_generator_template("app/controllers/openreceive_controller.rb")
+    poll_job = read_generator_template("app/jobs/openreceive_poll_invoice_job.rb")
+    notification_job = read_generator_template("app/jobs/openreceive_payment_received_job.rb")
+    channel = read_generator_template("app/channels/openreceive_invoice_channel.rb")
+    partial = read_generator_template("app/views/openreceive/_invoice.html.erb")
+    routes = read_generator_template("config/openreceive_routes.rb")
+    combined = [controller, poll_job, notification_job, channel, partial, routes].join("\n")
+
+    assert_includes controller, "create_invoice"
+    assert_includes controller, "lookup_invoice"
+    assert_includes controller, "protect_from_forgery"
+    assert_includes poll_job, "verify_invoice"
+    assert_includes notification_job, "handle_payment_received"
+    assert_includes channel, "authorize_invoice"
+    assert_includes partial, "turbo_frame_tag"
+    assert_includes partial, "transaction_state"
+    assert_includes partial, "workflow_state"
+    assert_includes partial, "amount_msats"
+    assert_includes routes, "post \"/openreceive/v1/invoices\""
+    assert_includes routes, "get \"/openreceive/v1/invoices/:invoice_id\""
+    refute_includes combined, "pay_invoice"
+    refute_includes combined, "OPENRECEIVE_NWC"
+    refute_includes combined, "nostr+walletconnect://"
+  end
+
+  def test_install_generator_copies_public_templates_without_secrets
+    generator = File.read(
+      File.join(
+        ROOT,
+        "packages/ruby/openreceive-rails/lib/generators/openreceive/install/install_generator.rb"
+      )
+    )
+
+    assert_includes generator, "Rails::Generators::Base"
+    assert_includes generator, "create_openreceive_tables.rb"
+    assert_includes generator, "openreceive_controller.rb"
+    assert_includes generator, "openreceive_poll_invoice_job.rb"
+    assert_includes generator, "openreceive_payment_received_job.rb"
+    assert_includes generator, "openreceive_invoice_channel.rb"
+    assert_includes generator, "_invoice.html.erb"
+    assert_includes generator, "openreceive_routes.rb"
+    refute_includes generator, "OPENRECEIVE_NWC"
+    refute_includes generator, "nostr+walletconnect://"
+  end
+
+  def test_mounted_engine_route_surface_is_available_without_loading_rails
+    calls = []
+    router = Object.new
+    router.define_singleton_method(:post) { |path, options| calls << [:post, path, options] }
+    router.define_singleton_method(:get) { |path, options| calls << [:get, path, options] }
+
+    OpenReceive::Rails::Routes.draw(router)
+
+    assert_equal(
+      [
+        [:post, "/v1/invoices", { to: "invoices#create" }],
+        [:get, "/v1/invoices/:invoice_id", { to: "invoices#show" }]
+      ],
+      calls
+    )
+  end
+
+  def test_mounted_engine_controller_definitions_preserve_boundaries
+    source = File.read(
+      File.join(
+        ROOT,
+        "packages/ruby/openreceive-rails/lib/openreceive/rails.rb"
+      )
+    )
+
+    assert_includes source, "class InvoicesController"
+    assert_includes source, "routes.draw"
+    assert_includes source, "OpenReceive::Rails::Routes.draw(self)"
+    assert_includes source, "create_invoice"
+    assert_includes source, "lookup_invoice"
+    refute_includes source, "pay_invoice"
+    refute_includes source, "OPENRECEIVE_NWC"
+    refute_includes source, "nostr+walletconnect://"
+  end
+
+  def test_production_configuration_fails_closed_without_authenticate
+    config = OpenReceive::Rails::Configuration.new
+    config.client = FakeReceiveClient.new
+    config.production = true
+
+    assert_raises(SecurityError) { OpenReceive::Rails::Adapter.new(config) }
+  end
+
+  def test_create_invoice_is_idempotent_and_receive_only
+    adapter, client = build_adapter
+    controller = Controller.new(7)
+    params = {
+      "amount_msats" => 200_000,
+      "description" => "Fruit sticker",
+      "fruit" => "banana"
+    }
+    headers = { "idempotency-key" => "order-123" }
+
+    first = adapter.create_invoice(controller: controller, params: params, headers: headers)
+    second = adapter.create_invoice(controller: controller, params: params, headers: headers)
+
+    assert_equal 201, first.fetch("status")
+    assert_equal 200, second.fetch("status")
+    assert_equal first.fetch("body"), second.fetch("body")
+    assert_equal 1, client.make_invoice_calls.length
+    refute client.respond_to?(:pay_invoice)
+    refute_includes first.fetch("body").to_s, "OPENRECEIVE_NWC"
+    refute_includes first.fetch("body").to_s, "nostr+walletconnect://"
+  end
+
+  def test_create_invoice_rejects_idempotency_drift_before_wallet_call
+    adapter, client = build_adapter
+    controller = Controller.new(7)
+    headers = { "idempotency-key" => "order-123" }
+
+    adapter.create_invoice(
+      controller: controller,
+      params: { "amount_msats" => 200_000, "fruit" => "banana" },
+      headers: headers
+    )
+
+    assert_raises(OpenReceive::IdempotencyConflictError) do
+      adapter.create_invoice(
+        controller: controller,
+        params: { "amount_msats" => 300_000, "fruit" => "banana" },
+        headers: headers
+      )
+    end
+    assert_equal 1, client.make_invoice_calls.length
+  end
+
+  def test_create_invoice_rejects_invalid_amount_before_wallet_call
+    adapter, client = build_adapter
+
+    assert_raises(ArgumentError) do
+      adapter.create_invoice(
+        controller: Controller.new(7),
+        params: { "amount_msats" => 999, "fruit" => "banana" },
+        headers: { "idempotency-key" => "order-123" }
+      )
+    end
+
+    assert_empty client.make_invoice_calls
+  end
+
+  def test_lookup_verifies_backend_settlement_before_fulfillment
+    adapter, client, fulfilled = build_adapter
+    controller = Controller.new(7)
+    created = adapter.create_invoice(
+      controller: controller,
+      params: { "amount_msats" => 200_000, "fruit" => "banana" },
+      headers: { "idempotency-key" => "order-123" }
+    )
+    invoice_id = created.fetch("body").fetch("invoice_id")
+
+    pending = adapter.lookup_invoice(controller: controller, invoice_id: invoice_id)
+    assert_equal "pending", pending.fetch("body").fetch("transaction_state")
+    assert_empty fulfilled
+
+    client.lookup_state = "settled"
+    settled = adapter.lookup_invoice(controller: controller, invoice_id: invoice_id)
+    replayed = adapter.lookup_invoice(controller: controller, invoice_id: invoice_id)
+
+    assert_equal "settled", settled.fetch("body").fetch("transaction_state")
+    assert_equal "fulfilled", settled.fetch("body").fetch("workflow_state")
+    assert_equal [invoice_id], fulfilled
+    assert_equal "fulfilled", replayed.fetch("body").fetch("workflow_state")
+    assert_equal [invoice_id], fulfilled
+    assert_equal [{ "payment_hash" => "a" * 64 }] * 3, client.lookup_invoice_calls
+  end
+
+  def test_internal_verify_can_be_used_by_polling_workers
+    adapter, client, fulfilled = build_adapter
+    created = adapter.create_invoice(
+      controller: Controller.new(7),
+      params: { "amount_msats" => 200_000, "fruit" => "banana" },
+      headers: { "idempotency-key" => "order-123" }
+    )
+    invoice_id = created.fetch("body").fetch("invoice_id")
+
+    pending = adapter.verify_invoice(invoice_id: invoice_id)
+    client.lookup_state = "settled"
+    settled = adapter.verify_invoice(invoice_id: invoice_id)
+
+    assert_equal "pending", pending.fetch("transaction_state")
+    assert_equal "fulfilled", settled.fetch("workflow_state")
+    assert_equal [invoice_id], fulfilled
+  end
+
+  def test_payment_received_notification_is_only_a_hint
+    adapter, client, fulfilled = build_adapter
+    created = adapter.create_invoice(
+      controller: Controller.new(7),
+      params: { "amount_msats" => 200_000, "fruit" => "banana" },
+      headers: { "idempotency-key" => "order-123" }
+    )
+    invoice_id = created.fetch("body").fetch("invoice_id")
+
+    pending = adapter.handle_payment_received(notification: { "payment_hash" => "a" * 64 })
+    assert_equal "pending", pending.fetch("transaction_state")
+    assert_empty fulfilled
+
+    client.lookup_state = "settled"
+    settled = adapter.handle_payment_received(notification: { "payment_hash" => "a" * 64 })
+    replayed = adapter.handle_payment_received(notification: { "payment_hash" => "a" * 64 })
+
+    assert_equal "fulfilled", settled.fetch("workflow_state")
+    assert_equal "fulfilled", replayed.fetch("workflow_state")
+    assert_equal [invoice_id], fulfilled
+  end
+
+  def test_lookup_denies_cross_user_invoice_access
+    adapter = build_adapter.first
+    created = adapter.create_invoice(
+      controller: Controller.new(7),
+      params: { "amount_msats" => 200_000, "fruit" => "banana" },
+      headers: { "idempotency-key" => "order-123" }
+    )
+
+    assert_raises(SecurityError) do
+      adapter.lookup_invoice(
+        controller: Controller.new(8),
+        invoice_id: created.fetch("body").fetch("invoice_id")
+      )
+    end
+  end
+end

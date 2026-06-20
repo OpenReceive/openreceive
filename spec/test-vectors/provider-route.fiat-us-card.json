@@ -1,0 +1,31 @@
+{
+  "description": "US card fiat rail resolves to the canonical card route and ranked provider suggestions.",
+  "request": {
+    "rail": "card",
+    "country": "US"
+  },
+  "expected": {
+    "length": 1,
+    "kind": "fiat",
+    "rail_id": "card",
+    "country_code": "US",
+    "provider_ranks": [
+      [
+        "strike",
+        1
+      ],
+      [
+        "cashapp",
+        2
+      ],
+      [
+        "coinbase",
+        3
+      ],
+      [
+        "kraken",
+        4
+      ]
+    ]
+  }
+}

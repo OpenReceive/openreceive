@@ -13,6 +13,15 @@ const demoDeploymentDocs = path.join(process.cwd(), "docs/13-demo-deployment.md"
 const releaseReadinessValidator = path.join(process.cwd(), "tools/validate/check-release-readiness.mjs");
 const workflowValidator = path.join(process.cwd(), "tools/validate/check-workflows.mjs");
 const liveNwcSmoke = path.join(process.cwd(), "tools/live-nwc-test/index.mjs");
+const rubyLiveNwcSmoke = path.join(process.cwd(), "tools/live-nwc-test/ruby-smoke.rb");
+const liveExpectedCapabilities = path.join(
+  process.cwd(),
+  "tools/live-nwc-test/expected_capabilities.json"
+);
+const liveExpectedCapabilitiesExample = path.join(
+  process.cwd(),
+  "tools/live-nwc-test/expected_capabilities.example.json"
+);
 
 function withGitRepo(callback) {
   const dir = mkdtempSync(path.join(tmpdir(), "openreceive-secret-scan-"));
@@ -90,6 +99,27 @@ function runLiveNwcSmoke(env) {
   });
 }
 
+function runRubyLiveNwcSmoke(env) {
+  const childEnv = {
+    ...process.env,
+    ...env
+  };
+  for (const [key, value] of Object.entries(childEnv)) {
+    if (value === undefined) delete childEnv[key];
+  }
+
+  return execFileSync(
+    "ruby",
+    ["-Ipackages/ruby/openreceive/lib", rubyLiveNwcSmoke],
+    {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: childEnv,
+      stdio: ["ignore", "pipe", "pipe"]
+    }
+  );
+}
+
 test("demo container validator accepts current Hello Fruit templates", () => {
   assert.match(runDemoContainerValidator(), /Demo container validation passed for 3 demo\(s\)\./);
 });
@@ -115,6 +145,21 @@ test("release readiness validator accepts current v0.1 metadata", () => {
 
 test("workflow validator accepts safe public workflow skeletons", () => {
   assert.match(runWorkflowValidator(), /Workflow validation passed for 7 workflow\(s\)\./);
+});
+
+test("live NWC expected capabilities fixture matches the documented Rizful default", () => {
+  const fixture = JSON.parse(readFileSync(liveExpectedCapabilities, "utf8"));
+  const example = JSON.parse(readFileSync(liveExpectedCapabilitiesExample, "utf8"));
+
+  assert.deepEqual(fixture, example);
+  assert.equal(fixture.wallet_profile, "rizful");
+  assert.deepEqual(fixture.required_methods, [
+    "get_info",
+    "make_invoice",
+    "lookup_invoice"
+  ]);
+  assert.equal(fixture.required_notifications.includes("payment_received"), true);
+  assert.equal(fixture.fallback_encryption, "nip04");
 });
 
 test("secret scanner rejects force-added non-example env files", () => {
@@ -327,4 +372,28 @@ test("live NWC smoke loads gitignored env file without leaking parse secrets", (
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("Ruby live NWC smoke skips clearly when unset", () => {
+  assert.match(
+    runRubyLiveNwcSmoke({
+      OPENRECEIVE_NWC: undefined,
+      OPENRECEIVE_ENV_FILE: undefined
+    }),
+    /OPENRECEIVE_NWC is not set; skipping Ruby live NWC smoke test\./
+  );
+});
+
+test("Ruby live NWC smoke redacts fake URI before skipping wallet calls", () => {
+  const uri = `nostr+walletconnect://${"a".repeat(64)}?relay=wss%3A%2F%2Frelay.example.com&secret=${"b".repeat(64)}`;
+  const output = runRubyLiveNwcSmoke({
+    OPENRECEIVE_NWC: uri,
+    OPENRECEIVE_RUBY_NWC_DISABLE_GEM: "1"
+  });
+
+  assert.match(output, /Ruby NWC URI parsed for wallet profile: rizful/);
+  assert.match(output, /Wallet pubkey prefix: aaaaaaaa\.\.\./);
+  assert.match(output, /secret=\[REDACTED\]/);
+  assert.match(output, /nwc-ruby gem is not installed; skipping live Ruby wallet calls/);
+  assert.doesNotMatch(output, new RegExp("b".repeat(64)));
 });

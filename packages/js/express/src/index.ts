@@ -975,7 +975,11 @@ function emitLog(
 function sanitizeLogEntry(entry: OpenReceiveLogEntry): OpenReceiveLogEntry {
   const clean: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(entry)) {
-    clean[key] = sanitizeLogValue(value);
+    if (isSensitiveLogKey(key)) {
+      clean[key] = "[REDACTED]";
+    } else {
+      clean[key] = sanitizeLogValue(value);
+    }
   }
   return clean as OpenReceiveLogEntry;
 }

@@ -20,6 +20,10 @@ export const OPENRECEIVE_STATIC_BTC_FIAT_RATES = {
 
 export const OPENRECEIVE_COINGECKO_DIRECT_BASE_URL =
   "https://api.coingecko.com/api/v3/simple/price" as const;
+export const OPENRECEIVE_RATE_MIRROR_URL =
+  "https://openreceive.org/exchange_rates" as const;
+export const OPENRECEIVE_MEGALITHIC_RATE_MIRROR_URL =
+  "https://megalithic.me/exchange_rates" as const;
 
 export const OPENRECEIVE_SATS_PER_BTC = 100_000_000n;
 export const OPENRECEIVE_MSATS_PER_SAT = 1000n;
@@ -60,6 +64,15 @@ export interface OpenReceiveBtcFiatRateMap {
 
 export interface OpenReceivePriceProvider {
   getBtcFiatRates(currencies: readonly string[]): Promise<OpenReceiveBtcFiatRateMap>;
+}
+
+export interface OpenReceiveSourcedPriceProvider extends OpenReceivePriceProvider {
+  readonly source: OpenReceivePriceSourceId;
+}
+
+export interface OpenReceiveBtcFiatRateMapWithSource {
+  readonly source: OpenReceivePriceSourceId;
+  readonly rates: OpenReceiveBtcFiatRateMap;
 }
 
 export interface CoinGeckoSimplePriceResponse {
@@ -233,6 +246,25 @@ export function quoteFiatToMsats(request: QuoteFiatToMsatsRequest): OpenReceiveR
   });
 }
 
+export class StaticPriceProvider implements OpenReceiveSourcedPriceProvider {
+  readonly source = OPENRECEIVE_STATIC_PRICE_SOURCE_ID;
+
+  async getBtcFiatRates(
+    currencies: readonly string[]
+  ): Promise<OpenReceiveBtcFiatRateMap> {
+    const rates: Record<string, string> = {};
+
+    for (const currency of currencies) {
+      const rateKey = normalizeFiatCurrency(currency);
+      rates[rateKey] = getStaticBtcFiatPrice(currency);
+    }
+
+    return {
+      bitcoin: rates
+    };
+  }
+}
+
 export function createCoinGeckoSimplePriceUrl(
   currencies: readonly string[],
   baseUrl = OPENRECEIVE_COINGECKO_DIRECT_BASE_URL
@@ -269,7 +301,7 @@ export function parseCoinGeckoSimplePriceResponse(
   };
 }
 
-export class CoinGeckoSimplePriceProvider implements OpenReceivePriceProvider {
+export class CoinGeckoSimplePriceProvider implements OpenReceiveSourcedPriceProvider {
   readonly url: string;
   readonly source: Exclude<OpenReceivePriceSourceId, "static_mock">;
   #fetch: CoinGeckoSimplePriceFetch;
@@ -303,6 +335,99 @@ export function createCoinGeckoDirectPriceProvider(options: {
     url: createCoinGeckoSimplePriceUrl(options.currencies),
     source: "coingecko_direct",
     fetch: options.fetch
+  });
+}
+
+export function createOpenReceiveMirrorPriceProvider(options: {
+  fetch?: CoinGeckoSimplePriceFetch;
+} = {}): CoinGeckoSimplePriceProvider {
+  return new CoinGeckoSimplePriceProvider({
+    url: OPENRECEIVE_RATE_MIRROR_URL,
+    source: "openreceive_mirror",
+    fetch: options.fetch
+  });
+}
+
+export function createMegalithicMirrorPriceProvider(options: {
+  fetch?: CoinGeckoSimplePriceFetch;
+} = {}): CoinGeckoSimplePriceProvider {
+  return new CoinGeckoSimplePriceProvider({
+    url: OPENRECEIVE_MEGALITHIC_RATE_MIRROR_URL,
+    source: "megalithic_mirror",
+    fetch: options.fetch
+  });
+}
+
+export function createDefaultLivePriceProviders(options: {
+  currencies: readonly string[];
+  fetch?: CoinGeckoSimplePriceFetch;
+}): readonly OpenReceiveSourcedPriceProvider[] {
+  return [
+    createOpenReceiveMirrorPriceProvider({ fetch: options.fetch }),
+    createMegalithicMirrorPriceProvider({ fetch: options.fetch }),
+    createCoinGeckoDirectPriceProvider({
+      currencies: options.currencies,
+      fetch: options.fetch
+    })
+  ];
+}
+
+export function createDefaultPriceProviders(options: {
+  currencies: readonly string[];
+  fetch?: CoinGeckoSimplePriceFetch;
+  includeStatic?: boolean;
+}): readonly OpenReceiveSourcedPriceProvider[] {
+  return [
+    ...(options.includeStatic === false ? [] : [new StaticPriceProvider()]),
+    ...createDefaultLivePriceProviders({
+      currencies: options.currencies,
+      fetch: options.fetch
+    })
+  ];
+}
+
+export async function getBtcFiatRatesWithFallback(input: {
+  currencies: readonly string[];
+  providers: readonly OpenReceiveSourcedPriceProvider[];
+}): Promise<OpenReceiveBtcFiatRateMapWithSource> {
+  if (input.providers.length === 0) {
+    throw new Error("at least one price provider is required");
+  }
+
+  const failures: string[] = [];
+  for (const provider of input.providers) {
+    try {
+      return {
+        source: provider.source,
+        rates: await provider.getBtcFiatRates(input.currencies)
+      };
+    } catch (error) {
+      failures.push(`${provider.source}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  throw new Error(`all price providers failed: ${failures.join("; ")}`);
+}
+
+export async function quoteFiatToMsatsWithProvider(input: {
+  fiat: OpenReceiveFiatAmount;
+  provider: OpenReceiveSourcedPriceProvider;
+  as_of?: number;
+  ttl_seconds?: number;
+}): Promise<OpenReceiveRateQuote> {
+  const rates = await input.provider.getBtcFiatRates([input.fiat.currency]);
+  const rateKey = normalizeFiatCurrency(input.fiat.currency);
+  const btcFiatPrice = rates.bitcoin[rateKey];
+  if (btcFiatPrice === undefined) {
+    throw new RangeError(`price provider ${input.provider.source} did not return ${input.fiat.currency}`);
+  }
+
+  return quoteFiatToMsatsWithPrice({
+    fiat: input.fiat,
+    btc_fiat_price: btcFiatPrice,
+    source: input.provider.source,
+    as_of: input.as_of,
+    ttl_seconds: input.ttl_seconds
   });
 }
 

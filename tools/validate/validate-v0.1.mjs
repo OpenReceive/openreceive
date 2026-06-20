@@ -271,6 +271,33 @@ function validateNwcInfoVectors() {
   }
 }
 
+function validateLiveNwcExpectedCapabilities() {
+  const expected = readJson("tools/live-nwc-test/expected_capabilities.json");
+  const example = readJson("tools/live-nwc-test/expected_capabilities.example.json");
+
+  assert(
+    JSON.stringify(expected) === JSON.stringify(example),
+    "default live NWC expected capabilities must match the documented example"
+  );
+  assert(expected.wallet_profile === "rizful", "default live NWC wallet profile must be rizful");
+  assert(
+    JSON.stringify(expected.required_methods) ===
+      JSON.stringify(["get_info", "make_invoice", "lookup_invoice"]),
+    "default live NWC required methods mismatch"
+  );
+  assert(
+    expected.optional_methods.includes("list_transactions") &&
+      expected.optional_methods.includes("get_balance"),
+    "default live NWC optional methods mismatch"
+  );
+  assert(
+    JSON.stringify(expected.required_notifications) === JSON.stringify(["payment_received"]),
+    "default live NWC required notifications mismatch"
+  );
+  assert(expected.preferred_encryption === "nip44_v2", "default live NWC preferred encryption mismatch");
+  assert(expected.fallback_encryption === "nip04", "default live NWC fallback encryption mismatch");
+}
+
 function validateNwcRequestResponseVectors() {
   const vector = readJson("spec/test-vectors/nwc-request-response.json");
   assert(Array.isArray(vector.cases), "NWC request/response vectors must include cases");
@@ -392,6 +419,47 @@ function validateProviderRegistryReferences() {
   }
 }
 
+function validateProviderRouteVectors() {
+  const registry = readJson("spec/data/providers/openreceive-providers.v2.json");
+  const providerIds = new Set(Object.keys(registry.providers || {}));
+  const routeIds = new Set((registry.crypto_routes || []).map((route) => route.id));
+  const assetSymbols = new Set((registry.assets_index || []).map((asset) => asset.symbol));
+  const railIds = new Set(Object.keys(registry.fiat_rails || {}));
+  const countryCodes = new Set((registry.countries || []).map((country) => country.code));
+
+  const crypto = readJson("spec/test-vectors/provider-route.crypto-usdt.json");
+  assert(crypto.request?.asset === "USDT", "crypto provider-route vector must request USDT");
+  assert(crypto.expected?.kind === "crypto", "crypto provider-route vector kind mismatch");
+  assert(assetSymbols.has(crypto.expected.asset_symbol), "crypto provider-route asset missing from registry");
+  assert(routeIds.has(crypto.expected.route_id), "crypto provider-route route missing from registry");
+  assert(crypto.expected.length === 1, "crypto provider-route vector must resolve one route");
+  assert(Array.isArray(crypto.expected.provider_ids), "crypto provider-route provider_ids required");
+  for (const providerId of crypto.expected.provider_ids) {
+    assert(providerIds.has(providerId), `crypto provider-route references missing provider ${providerId}`);
+  }
+  for (const providerId of crypto.expected.flagship_provider_ids || []) {
+    assert(
+      crypto.expected.provider_ids.includes(providerId),
+      `crypto provider-route flagship provider ${providerId} must be in provider_ids`
+    );
+  }
+
+  const fiat = readJson("spec/test-vectors/provider-route.fiat-us-card.json");
+  assert(fiat.request?.rail === "card", "fiat provider-route vector must request card rail");
+  assert(fiat.request?.country === "US", "fiat provider-route vector must request US");
+  assert(fiat.expected?.kind === "fiat", "fiat provider-route vector kind mismatch");
+  assert(railIds.has(fiat.expected.rail_id), "fiat provider-route rail missing from registry");
+  assert(countryCodes.has(fiat.expected.country_code), "fiat provider-route country missing from registry");
+  assert(fiat.expected.length === 1, "fiat provider-route vector must resolve one route");
+  assert(Array.isArray(fiat.expected.provider_ranks), "fiat provider-route provider_ranks required");
+  let expectedRank = 1;
+  for (const [providerId, rank] of fiat.expected.provider_ranks) {
+    assert(providerIds.has(providerId), `fiat provider-route references missing provider ${providerId}`);
+    assert(rank === expectedRank, "fiat provider-route ranks must be sequential");
+    expectedRank += 1;
+  }
+}
+
 function validateData() {
   const currencies = readJson("spec/data/fiat/supported-currencies.json");
   assert(currencies.currencies.includes("usd"), "supported currencies must include usd");
@@ -400,6 +468,26 @@ function validateData() {
 
   const rates = readJson("spec/data/rates/price-sources.json");
   assert(rates.sources.some((source) => source.id === "static_mock"), "missing static_mock price source");
+  assert(
+    JSON.stringify(rates.sources.map((source) => source.id)) ===
+      JSON.stringify([
+        "static_mock",
+        "openreceive_mirror",
+        "megalithic_mirror",
+        "coingecko_direct"
+      ]),
+    "price source order mismatch"
+  );
+  assert(
+    rates.sources.find((source) => source.id === "openreceive_mirror")?.url ===
+      "https://openreceive.org/exchange_rates",
+    "OpenReceive mirror URL mismatch"
+  );
+  assert(
+    rates.sources.find((source) => source.id === "megalithic_mirror")?.url ===
+      "https://megalithic.me/exchange_rates",
+    "Megalithic mirror URL mismatch"
+  );
 
   const demoSpec = readJson("spec/data/demo/fruits.json");
   const demoProduct = readJson("examples/hello-fruit/shared/product.json");
@@ -528,8 +616,10 @@ function main() {
   validateIdempotencyVectors();
   validateNwcVectors();
   validateNwcInfoVectors();
+  validateLiveNwcExpectedCapabilities();
   validateNwcRequestResponseVectors();
   validateProviderRegistryReferences();
+  validateProviderRouteVectors();
   validateData();
   validateOpenApi();
   validateAsyncApi();

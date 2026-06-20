@@ -1,0 +1,21 @@
+{
+  "description": "USDT asset resolves to the canonical USDT crypto route and ranked provider suggestions.",
+  "request": {
+    "asset": "USDT"
+  },
+  "expected": {
+    "length": 1,
+    "kind": "crypto",
+    "asset_symbol": "usdt",
+    "route_id": "usdt",
+    "provider_ids": [
+      "boltz",
+      "fixedfloat",
+      "simpleswap",
+      "changenow"
+    ],
+    "flagship_provider_ids": [
+      "boltz"
+    ]
+  }
+}

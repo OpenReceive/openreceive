@@ -11,7 +11,7 @@ or amount rules.
 - `spec/test-vectors/*.json` define amount boundaries, error normalization,
   fiat conversion, idempotency, invoice lifecycle, make-invoice validation, NWC
   info/encryption parsing, NWC request/response mapping, NWC URI parsing,
-  polling cadence, and settlement detection.
+  polling cadence, provider route selection, and settlement detection.
 - `spec/openapi/openreceive-http.v1.yaml` defines mounted HTTP routes.
 - `spec/asyncapi/openreceive-events.v1.yaml` defines invoice event names and
   payloads.
@@ -33,6 +33,12 @@ smoke script when `OPENRECEIVE_NWC` is set.
 Run `npm run generate:models` after changing OpenAPI or AsyncAPI contracts.
 `npm run check:generated` fails if the checked-in generated model constants no
 longer match the source contracts.
+
+`npm run validate` also checks that provider-route vectors are well formed and
+that the canonical price-source order remains `static_mock`,
+`openreceive_mirror`, `megalithic_mirror`, then `coingecko_direct`.
+It also keeps the default live-wallet expected-capabilities fixture aligned
+with the documented Rizful example.
 
 ## Error Codes
 
@@ -73,6 +79,11 @@ Refresh idempotency uses the same scope shape with `operation =
 when absent. It may load secrets from a local ignored env file when
 `OPENRECEIVE_ENV_FILE` points at one. Live runs must use a low-value
 receive-only NWC secret and must redact the connection string in all output.
+
+The default wallet capability fixture is
+`tools/live-nwc-test/expected_capabilities.json`, currently set for the Rizful
+profile. Use `OPENRECEIVE_EXPECTED_CAPABILITIES=/path/to/file.json` to test a
+different wallet profile without editing the committed default.
 
 The live harness verifies preflight, the metadata-size guard, invoice creation,
 initial lookup, and optional notification-plus-lookup confirmation when manual

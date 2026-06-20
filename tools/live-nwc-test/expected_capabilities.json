@@ -1,0 +1,17 @@
+{
+  "wallet_profile": "rizful",
+  "required_methods": [
+    "get_info",
+    "make_invoice",
+    "lookup_invoice"
+  ],
+  "optional_methods": [
+    "list_transactions",
+    "get_balance"
+  ],
+  "required_notifications": [
+    "payment_received"
+  ],
+  "preferred_encryption": "nip44_v2",
+  "fallback_encryption": "nip04"
+}

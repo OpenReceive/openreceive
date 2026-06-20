@@ -206,6 +206,8 @@ test("browser helpers create lightning URI, copy, open, and QR payloads", async 
 });
 
 test("browser checkout state applies only matching passive invoice events", () => {
+  const logs = [];
+  const logger = (entry) => logs.push(entry);
   const state = createOpenReceiveCheckoutState(
     {
       invoice_id: "or_inv_browser",
@@ -220,7 +222,7 @@ test("browser checkout state applies only matching passive invoice events", () =
         routes_url: "/openreceive/v1/routes"
       }
     },
-    { now: 1000 }
+    { logger, now: 1000 }
   );
 
   assert.equal(state.lightningUri, "lightning:lnbc-browser");
@@ -233,6 +235,9 @@ test("browser checkout state applies only matching passive invoice events", () =
     applyOpenReceiveInvoiceEvent(state, {
       invoice_id: "or_inv_other",
       transaction_state: "settled"
+    }, {
+      eventName: "invoice.settled",
+      logger
     }),
     state
   );
@@ -241,6 +246,9 @@ test("browser checkout state applies only matching passive invoice events", () =
       invoice_id: "or_inv_browser",
       payment_hash: "b".repeat(64),
       transaction_state: "settled"
+    }, {
+      eventName: "invoice.settled",
+      logger
     }),
     state
   );
@@ -253,7 +261,7 @@ test("browser checkout state applies only matching passive invoice events", () =
       transaction_state: "pending",
       workflow_state: "verifying"
     },
-    { eventName: "invoice.verifying", now: 1005 }
+    { eventName: "invoice.verifying", logger, now: 1005 }
   );
 
   assert.equal(verifying.phase, "verifying");
@@ -271,7 +279,7 @@ test("browser checkout state applies only matching passive invoice events", () =
       workflow_state: "awaiting_fulfillment",
       settled_at: 1010
     },
-    { eventName: "invoice.settled" }
+    { eventName: "invoice.settled", logger }
   );
 
   assert.equal(settled.phase, "settled");
@@ -290,6 +298,59 @@ test("browser checkout state applies only matching passive invoice events", () =
 
   assert.equal(expired.phase, "expired");
   assert.equal(expired.terminal, true);
+  assert.deepEqual(
+    logs.map((entry) => entry.event),
+    [
+      "checkout.state.created",
+      "checkout.event.ignored",
+      "checkout.event.ignored",
+      "checkout.event.applied",
+      "checkout.event.applied"
+    ]
+  );
+  assert.equal(logs[0].invoice_id, "or_inv_browser");
+  assert.equal(logs[3].phase, "verifying");
+  assert.equal(logs[4].phase, "settled");
+  assert.doesNotMatch(JSON.stringify(logs), /nostr\+walletconnect:\/\//);
+});
+
+test("browser action logs are display-safe and redact accidental secrets", async () => {
+  const logs = [];
+  const logger = (entry) => logs.push(entry);
+  const writes = [];
+  const opens = [];
+
+  await copyInvoice({
+    invoice: "lnbc-action",
+    clipboard: {
+      writeText: async (value) => writes.push(value)
+    },
+    logger,
+    logContext: {
+      invoice_id: "or_inv_action",
+      payment_hash: PAYMENT_HASH
+    }
+  });
+  openWallet({
+    invoice: "lnbc-action",
+    open: (uri) => opens.push(uri),
+    logger,
+    logContext: {
+      invoice_id: "or_inv_action",
+      nwc_secret: `nostr+walletconnect://${"d".repeat(64)}?secret=${"e".repeat(64)}`
+    }
+  });
+
+  assert.deepEqual(writes, ["lnbc-action"]);
+  assert.deepEqual(opens, ["lightning:lnbc-action"]);
+  assert.deepEqual(
+    logs.map((entry) => entry.event),
+    ["checkout.invoice.copied", "checkout.wallet.opened"]
+  );
+  assert.equal(logs[0].invoice_id, "or_inv_action");
+  assert.equal(logs[1].nwc_secret, "[REDACTED]");
+  assert.doesNotMatch(JSON.stringify(logs), /nostr\+walletconnect:\/\//);
+  assert.doesNotMatch(JSON.stringify(logs), /e{64}/);
 });
 
 test("browser invoice event parser accepts canonical SSE JSON payloads", () => {

@@ -12,6 +12,7 @@
   "scripts": {
     "build:docs": "node tools/docs/build-index.mjs",
     "build:demo": "npm run build -w @openreceive/example-node-express-react && npm run build -w @openreceive/example-static-html-small-api && npm run build -w @openreceive/example-nextjs-fullstack",
+    "demo": "node tools/run-demo.mjs",
     "generate:models": "node tools/codegen/generate-js-models.mjs",
     "check:generated": "node tools/codegen/generate-js-models.mjs --check",
     "check:demo-containers": "node tools/validate/check-demo-containers.mjs",
@@ -23,10 +24,12 @@
     "test:package-smoke": "node tools/validate/package-smoke.mjs",
     "typecheck": "tsc --noEmit",
     "test:js": "node --test tests/v0.1/*.test.mjs",
+    "test:ruby": "ruby -Ipackages/ruby/openreceive/lib -Ipackages/ruby/openreceive-rails/lib -e 'load \"packages/ruby/openreceive/test/openreceive_test.rb\"; load \"packages/ruby/openreceive-rails/test/openreceive_rails_test.rb\"'",
+    "test:live:ruby:nwc": "ruby -Ipackages/ruby/openreceive/lib tools/live-nwc-test/ruby-smoke.rb",
     "validate": "node tools/validate/validate-v0.1.mjs",
     "scan:secrets": "node tools/validate/scan-secrets.mjs",
     "test": "npm run validate && npm run scan:secrets",
-    "test:ci": "npm test && npm run check:generated && npm run typecheck && npm run test:js && npm run test:package-smoke && npm run check:demo-containers && npm run check:demo-deploy && npm run check:release && npm run check:workflows && npm run build:demo && npm run scan:client-bundles && npm run build:docs && npm run test:live:nwc",
+    "test:ci": "npm test && npm run check:generated && npm run typecheck && npm run test:js && npm run test:package-smoke && npm run test:ruby && npm run check:demo-containers && npm run check:demo-deploy && npm run check:release && npm run check:workflows && npm run build:demo && npm run scan:client-bundles && npm run build:docs && npm run test:live:nwc",
     "test:vectors": "node tools/validate/validate-v0.1.mjs --vectors",
     "test:live:nwc": "node tools/live-nwc-test/index.mjs"
   },

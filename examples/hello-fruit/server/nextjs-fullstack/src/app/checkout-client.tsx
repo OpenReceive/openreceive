@@ -18,6 +18,11 @@ import type {
   HelloFruit,
   HelloFruitProduct
 } from "../server/shared-data.ts";
+import {
+  createHelloFruitBrowserLogger
+} from "../../../../shared/demo-browser-logging.ts";
+
+const logOpenReceive = createHelloFruitBrowserLogger("nextjs-fullstack");
 
 interface CheckoutClientProps {
   readonly product: HelloFruitProduct;
@@ -59,7 +64,7 @@ export default function CheckoutClient({
               : applyOpenReceiveInvoiceEvent(
                 current,
                 parseOpenReceiveInvoiceEvent((event as MessageEvent).data),
-                { eventName }
+                { eventName, logger: logOpenReceive }
               )
           );
         });
@@ -88,6 +93,7 @@ export default function CheckoutClient({
         }
 
         setCheckout(createOpenReceiveCheckoutState(body, {
+          logger: logOpenReceive,
           now: Math.floor(Date.now() / 1000)
         }));
         if (
@@ -144,6 +150,7 @@ export default function CheckoutClient({
       }
 
       setCheckout(createOpenReceiveCheckoutState(body, {
+        logger: logOpenReceive,
         now: Math.floor(Date.now() / 1000)
       }));
       setStatus("invoice_created");
@@ -192,6 +199,7 @@ export default function CheckoutClient({
             payment_hash={checkout.payment_hash}
             amount_msats={checkout.amount_msats}
             transaction_state={checkout.transaction_state}
+            logger={logOpenReceive}
             classNames={{
               root: "react-checkout",
               actions: "actions",

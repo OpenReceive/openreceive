@@ -4146,7 +4146,7 @@ Last updated: 2026-06-20.
 
 Current repository position:
 
-  - HEAD is 9f96db2 ("close to first manual test").
+  - HEAD is 6a4fee0 ("m").
   - Baseline verification run during this review:
 
       npm test
@@ -4177,15 +4177,76 @@ Current repository position:
   - The repo has moved past the original sequential v0.1 path. New work should
     still avoid shared-contract drift, but isolated post-v0.1 lanes may proceed
     after the JS/Express tests stay green.
-  - The current uncommitted implementation from this review adds
-    developer/operator visibility: an opt-in redacted Express logger,
-    demo-server console wiring, quickstart documentation, and tests proving
-    invoice transition logs do not expose OPENRECEIVE_NWC, signed event tokens,
-    or raw wallet secrets.
-  - Verification after the logging work:
+  - The current uncommitted implementation from this review extends
+    developer/operator visibility to the browser/client side: @openreceive/browser
+    has an opt-in redacted logger for checkout state, passive events, copy, and
+    open-wallet actions; @openreceive/react and @openreceive/elements thread it
+    through; the Hello Fruit browser clients wire console logging; and frontend
+    docs/tests cover the display-safe logging boundary.
+  - This review also adds the default non-secret live-wallet capability
+    fixture at tools/live-nwc-test/expected_capabilities.json so the Rizful
+    preflight checks the expected receive methods, notification, and encryption
+    fallback without requiring every operator to copy the example file first.
+  - This review also implements the canonical price-source helper chain in
+    @openreceive/core: static_mock, openreceive_mirror, megalithic_mirror, and
+    coingecko_direct providers can now be created in the documented order, with
+    fallback lookup and source-tagged fiat quotes.
+  - This review also adds the first provider-route conformance vectors for
+    crypto and fiat route selection, covering USDT swap routes and US card rail
+    provider ranking through @openreceive/provider-data.
+  - The v0.1 validator now checks provider-route vector shape plus canonical
+    price-source order and mirror URLs, and it keeps the default live NWC
+    expected-capabilities fixture aligned with the documented Rizful example,
+    so these newer plan artifacts are protected by npm test instead of only
+    package-specific tests.
+  - This review also starts Milestone 3 with a minimal Ruby core-helper
+    package at packages/ruby/openreceive. It consumes shared vectors for exact
+    fiat-to-msats math, settlement detection, NWC URI parse/redaction, and
+    receive-only NIP-47 request/response mapping, polling cadence, and
+    idempotency classification, plus an in-memory invoice store for local
+    parity tests. The separate openreceive-rails package now builds on it; the
+    Ruby package also includes a receive-only wrapper for nwc-ruby clients using
+    the documented NwcRuby::Client.from_uri and keyword request methods. The
+    remaining Ruby-side gap is proving the live path against an installed
+    nwc-ruby gem and wallet in trusted environments.
+  - This review also starts the Rails adapter package at
+    packages/ruby/openreceive-rails. The first adapter slice is server-side and
+    dependency-light: production fail-closed authentication, idempotent invoice
+    creation around an injected receive-only client, authorized lookup, backend
+    settlement verification, polling-worker verification, passive notification
+    handling, and duplicate-safe fulfillment. It does not yet include
+    real-wallet Ruby smoke or Rails demos.
+  - The Rails package also now includes initial ActiveRecord migration and
+    model templates for the invoice storage shape, including idempotency scope,
+    amount_msats bounds, state checks, fulfillment timestamps, and uniqueness
+    indexes. These are examples/templates copied by the install generator
+    skeleton.
+  - The Rails package now includes public app templates for controller routes,
+    polling jobs, payment notification jobs, ActionCable/Turbo stream updates,
+    and an install generator skeleton that copies those templates and prints a
+    route snippet. It does not yet include real-wallet Ruby smoke or Rails
+    demos.
+  - The Rails package now also exposes an optional mounted engine route and
+    controller surface for /v1/invoices when Rails/ActionController are
+    available.
+  - The Rails package now includes a packaged Hotwire/Turbo invoice partial for
+    passive status updates. The remaining Rails proof gaps are real-wallet Ruby
+    smoke and the Rails Hotwire/React demos.
+  - The Ruby live-wallet path now has an optional preflight command,
+    npm run test:live:ruby:nwc, that loads OPENRECEIVE_NWC/OPENRECEIVE_ENV_FILE,
+    parses and redacts the connection URI, checks the default expected
+    capabilities fixture, instantiates NwcRuby::Client.from_uri when nwc-ruby is
+    installed, runs get_info preflight, and creates an invoice only when
+    OPENRECEIVE_LIVE_CREATE_INVOICE=1.
+  - Verification after the client logging work:
 
+      node --test tests/v0.1/core.test.mjs tests/v0.1/react.test.mjs tests/v0.1/elements.test.mjs tests/v0.1/express.test.mjs
+      node --test tests/v0.1/rates.test.mjs
+      node --test tests/v0.1/provider-data.test.mjs
+      node --test tests/v0.1/tooling.test.mjs
       node --test tests/v0.1/express.test.mjs
       npm run typecheck
+      npm run validate
       npm test
       OPENRECEIVE_ENV_FILE=.env OPENRECEIVE_LIVE_CREATE_INVOICE=0 npm run test:live:nwc
       npm run test:ci
@@ -4193,7 +4254,8 @@ Current repository position:
     Result:
 
       Passing. The live NWC check was a preflight-only run and did not create
-      an invoice.
+      an invoice; the final test:ci run skipped live NWC because the CI command
+      did not load the local .env.
 
 Already completed:
 
@@ -4218,10 +4280,30 @@ Already completed:
   - @openreceive/testkit and deterministic mock wallet tooling.
   - Express + React Hello Fruit demo.
   - Static HTML + small API Hello Fruit demo.
-  - Next.js fullstack Hello Fruit demo, committed in 1a8181b, except for the
-    uncommitted hosted-metadata cleanup named above.
+  - Next.js fullstack Hello Fruit demo, including runtime-hosted metadata,
+    robots, sitemap, health, source, and docs routes.
   - Demo deployment inventory/templates for express-demo, static-demo, and
     nextjs-demo.
+  - Initial Ruby core-helper package for exact fiat quoting, settlement
+    detection, NWC URI parse/redaction, and receive-only NIP-47 request/
+    response mapping, polling cadence, idempotency classification, and
+    in-memory storage behavior against shared vectors, plus a receive-only
+    nwc-ruby wrapper.
+  - Initial Rails adapter-helper package for receive-only idempotent invoice
+    creation, authorized lookup, backend settlement verification, and
+    duplicate-safe fulfillment using an injected Ruby receive client, plus
+    worker/listener verification where notifications remain passive hints.
+  - Initial Rails ActiveRecord migration/model templates for invoice storage
+    invariants.
+  - Initial Rails controller, job, channel, route, and install-generator
+    templates for framework-native integration.
+  - Initial optional mounted Rails engine routes and controller surface for
+    `/v1/invoices`.
+  - Initial packaged Rails Hotwire/Turbo invoice partial for passive checkout
+    status updates.
+  - Optional Ruby live NWC smoke command with redacted output, get_info
+    preflight through nwc-ruby when available, opt-in invoice creation, and
+    clear skip behavior when nwc-ruby is unavailable.
   - Full CI gate has passed after the Next demo work:
 
       npm run test:ci

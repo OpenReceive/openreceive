@@ -6,9 +6,14 @@ import {
   openWallet,
   parseOpenReceiveInvoiceEvent
 } from "@openreceive/browser";
+import {
+  createHelloFruitBrowserLogger
+} from "../../../../shared/demo-browser-logging.ts";
 import fruitsData from "../../../../shared/fruits.json";
 import product from "../../../../shared/product.json";
 import "./styles.css";
+
+const logOpenReceive = createHelloFruitBrowserLogger("node-express-react");
 
 interface InvoiceResponse {
   invoice_id: string;
@@ -202,13 +207,33 @@ function App() {
             </dl>
             <div className="actions">
               <button
-                onClick={() => copyInvoice({ invoice: invoice.invoice })}
+                onClick={() => copyInvoice({
+                  invoice: invoice.invoice,
+                  logger: logOpenReceive,
+                  logContext: {
+                    invoice_id: invoice.invoice_id,
+                    payment_hash: invoice.payment_hash,
+                    amount_msats: invoice.amount_msats,
+                    transaction_state: invoice.transaction_state,
+                    workflow_state: invoice.workflow_state
+                  }
+                })}
                 type="button"
               >
                 Copy invoice
               </button>
               <button
-                onClick={() => openWallet({ invoice: invoice.invoice })}
+                onClick={() => openWallet({
+                  invoice: invoice.invoice,
+                  logger: logOpenReceive,
+                  logContext: {
+                    invoice_id: invoice.invoice_id,
+                    payment_hash: invoice.payment_hash,
+                    amount_msats: invoice.amount_msats,
+                    transaction_state: invoice.transaction_state,
+                    workflow_state: invoice.workflow_state
+                  }
+                })}
                 type="button"
               >
                 Open wallet

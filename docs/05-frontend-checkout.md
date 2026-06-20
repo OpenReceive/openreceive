@@ -38,6 +38,30 @@ events.addEventListener("invoice.settled", (event) => {
 });
 ```
 
+## Browser Logs
+
+The browser helpers accept an optional `logger(entry)` callback on checkout
+state, event, copy, and open-wallet operations:
+
+```ts
+const logger = (entry) => console[entry.level]("[openreceive]", entry);
+
+let checkout = createOpenReceiveCheckoutState(invoiceResponse, {
+  logger,
+  now: Math.floor(Date.now() / 1000)
+});
+
+checkout = applyOpenReceiveInvoiceEvent(checkout, eventPayload, {
+  eventName: "invoice.settled",
+  logger
+});
+```
+
+Client log entries use display-safe fields such as `invoice_id`,
+`payment_hash`, amount, transaction state, workflow state, and phase. They do
+not log BOLT11 invoice strings, NWC connection strings, signed event URL
+tokens, cookies, authorization headers, or request bodies.
+
 ## Web Components
 
 `@openreceive/elements` provides a small no-framework checkout element:
@@ -45,7 +69,7 @@ events.addEventListener("invoice.settled", (event) => {
 ```ts
 import { defineOpenReceiveElements } from "@openreceive/elements";
 
-defineOpenReceiveElements();
+defineOpenReceiveElements({ logger });
 ```
 
 ```html
@@ -96,6 +120,7 @@ const checkout = useOpenReceiveCheckout({ invoice: "lnbc..." });
   payment_hash="..."
   amount_msats={200000}
   transaction_state="pending"
+  logger={logger}
 />
 ```
 

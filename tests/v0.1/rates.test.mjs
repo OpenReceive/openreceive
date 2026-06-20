@@ -2,10 +2,19 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   CoinGeckoSimplePriceProvider,
+  OPENRECEIVE_MEGALITHIC_RATE_MIRROR_URL,
+  OPENRECEIVE_RATE_MIRROR_URL,
+  StaticPriceProvider,
   createCoinGeckoDirectPriceProvider,
   createCoinGeckoSimplePriceUrl,
+  createDefaultLivePriceProviders,
+  createDefaultPriceProviders,
+  createMegalithicMirrorPriceProvider,
+  createOpenReceiveMirrorPriceProvider,
+  getBtcFiatRatesWithFallback,
   parseCoinGeckoSimplePriceResponse,
-  quoteFiatToMsatsWithPrice
+  quoteFiatToMsatsWithPrice,
+  quoteFiatToMsatsWithProvider
 } from "@openreceive/core";
 
 test("parses CoinGecko-compatible BTC fiat rates as decimal strings", () => {
@@ -100,4 +109,111 @@ test("creates CoinGecko direct provider from currencies", () => {
     provider.url,
     "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd%2Cgbp"
   );
+});
+
+test("creates canonical mirror providers from source registry URLs", () => {
+  const openreceive = createOpenReceiveMirrorPriceProvider();
+  const megalithic = createMegalithicMirrorPriceProvider();
+
+  assert.equal(openreceive.source, "openreceive_mirror");
+  assert.equal(openreceive.url, OPENRECEIVE_RATE_MIRROR_URL);
+  assert.equal(megalithic.source, "megalithic_mirror");
+  assert.equal(megalithic.url, OPENRECEIVE_MEGALITHIC_RATE_MIRROR_URL);
+});
+
+test("default price providers follow static, mirror, fallback, direct order", () => {
+  const providers = createDefaultPriceProviders({
+    currencies: ["USD"]
+  });
+
+  assert.deepEqual(
+    providers.map((provider) => provider.source),
+    [
+      "static_mock",
+      "openreceive_mirror",
+      "megalithic_mirror",
+      "coingecko_direct"
+    ]
+  );
+
+  assert.deepEqual(
+    createDefaultLivePriceProviders({ currencies: ["USD"] }).map((provider) => provider.source),
+    ["openreceive_mirror", "megalithic_mirror", "coingecko_direct"]
+  );
+});
+
+test("fallback price lookup returns first successful source", async () => {
+  const calls = [];
+  const providers = [
+    {
+      source: "openreceive_mirror",
+      async getBtcFiatRates() {
+        calls.push("openreceive_mirror");
+        throw new Error("mirror unavailable");
+      }
+    },
+    {
+      source: "megalithic_mirror",
+      async getBtcFiatRates(currencies) {
+        calls.push(`megalithic_mirror:${currencies.join(",")}`);
+        return {
+          bitcoin: {
+            usd: "50001"
+          }
+        };
+      }
+    },
+    {
+      source: "coingecko_direct",
+      async getBtcFiatRates() {
+        calls.push("coingecko_direct");
+        return {
+          bitcoin: {
+            usd: "50002"
+          }
+        };
+      }
+    }
+  ];
+
+  assert.deepEqual(
+    await getBtcFiatRatesWithFallback({
+      currencies: ["USD"],
+      providers
+    }),
+    {
+      source: "megalithic_mirror",
+      rates: {
+        bitcoin: {
+          usd: "50001"
+        }
+      }
+    }
+  );
+  assert.deepEqual(calls, [
+    "openreceive_mirror",
+    "megalithic_mirror:USD"
+  ]);
+});
+
+test("static provider and provider-backed quote expose source ids", async () => {
+  const staticProvider = new StaticPriceProvider();
+  const rates = await staticProvider.getBtcFiatRates(["USD"]);
+  assert.deepEqual(rates, {
+    bitcoin: {
+      usd: "50000.00"
+    }
+  });
+
+  const quote = await quoteFiatToMsatsWithProvider({
+    fiat: {
+      currency: "USD",
+      value: "0.10"
+    },
+    provider: staticProvider,
+    as_of: 1781740800
+  });
+
+  assert.equal(quote.source, "static_mock");
+  assert.equal(quote.amount_msats, 200000);
 });

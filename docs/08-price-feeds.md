@@ -37,6 +37,11 @@ The planned source order is:
 `spec/data/rates/price-sources.json` records the canonical source ids, cache
 seconds, quote TTL, and endpoint URLs.
 
+`@openreceive/core` exposes the same order through
+`createDefaultPriceProviders()`. Use `createDefaultLivePriceProviders()` when a
+runtime should skip the deterministic static mock and try the OpenReceive
+mirror, Megalithic mirror, then CoinGecko direct.
+
 The Express adapter exposes deterministic v0.1 helper routes at
 `GET /openreceive/v1/rates` and `POST /openreceive/v1/rates/quote`. These routes
 use the static mock source unless the host app wires a later live provider.
@@ -52,3 +57,5 @@ use the static mock source unless the host app wires a later live provider.
 
 Use `quoteFiatToMsatsWithPrice` when a live adapter supplied the BTC fiat price.
 Use `quoteFiatToMsats` for the deterministic static mock.
+Use `quoteFiatToMsatsWithProvider` when a backend adapter wants the quote to
+carry the source id from the provider that supplied the rate.

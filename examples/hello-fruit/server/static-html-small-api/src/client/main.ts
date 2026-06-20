@@ -2,6 +2,9 @@ import {
   defineOpenReceiveElements,
   parseOpenReceiveInvoiceEvent
 } from "@openreceive/elements";
+import {
+  createHelloFruitBrowserLogger
+} from "../../../../shared/demo-browser-logging.ts";
 import fruitsData from "../../../../shared/fruits.json";
 import product from "../../../../shared/product.json";
 import "./styles.css";
@@ -34,8 +37,11 @@ let selectedFruit: Fruit = fruits[1] ?? firstFruit;
 let invoice: InvoiceResponse | undefined;
 let pollTimer: number | undefined;
 let events: EventSource | undefined;
+const logOpenReceive = createHelloFruitBrowserLogger("static-html-small-api");
 
-defineOpenReceiveElements();
+defineOpenReceiveElements({
+  logger: logOpenReceive
+});
 renderProduct();
 renderFruitGrid();
 
