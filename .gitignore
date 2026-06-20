@@ -46,3 +46,4 @@ dist/
 .next/
 .cache/
 *.tsbuildinfo
+tmp/*
