@@ -11,7 +11,7 @@
   ],
   "scripts": {
     "build:docs": "node tools/docs/build-index.mjs",
-    "build:demo": "npm run build -w @openreceive/example-node-express-react && npm run build -w @openreceive/example-static-html-small-api",
+    "build:demo": "npm run build -w @openreceive/example-node-express-react && npm run build -w @openreceive/example-static-html-small-api && npm run build -w @openreceive/example-nextjs-fullstack",
     "generate:models": "node tools/codegen/generate-js-models.mjs",
     "check:generated": "node tools/codegen/generate-js-models.mjs --check",
     "check:demo-containers": "node tools/validate/check-demo-containers.mjs",

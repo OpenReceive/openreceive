@@ -22,7 +22,7 @@ const forbiddenPatterns = [
   }
 ];
 
-function collectDistDirs(dir) {
+function collectClientBundleDirs(dir) {
   if (!existsSync(dir)) return [];
 
   const dirs = [];
@@ -38,7 +38,15 @@ function collectDistDirs(dir) {
       continue;
     }
 
-    dirs.push(...collectDistDirs(fullPath));
+    if (entry === ".next") {
+      const nextStatic = path.join(fullPath, "static");
+      if (existsSync(nextStatic) && statSync(nextStatic).isDirectory()) {
+        dirs.push(nextStatic);
+      }
+      continue;
+    }
+
+    dirs.push(...collectClientBundleDirs(fullPath));
   }
 
   return dirs;
@@ -63,10 +71,10 @@ function walkFiles(dir) {
 }
 
 const findings = [];
-const distDirs = collectDistDirs(examplesRoot);
+const bundleDirs = collectClientBundleDirs(examplesRoot);
 
-for (const distDir of distDirs) {
-  for (const file of walkFiles(distDir)) {
+for (const bundleDir of bundleDirs) {
+  for (const file of walkFiles(bundleDir)) {
     let text;
     try {
       text = readFileSync(file, "utf8");
@@ -88,8 +96,8 @@ if (findings.length > 0) {
   process.exit(1);
 }
 
-if (distDirs.length === 0) {
+if (bundleDirs.length === 0) {
   console.log("No client bundles found; skipping client bundle secret scan.");
 } else {
-  console.log(`Client bundle secret scan passed for ${distDirs.length} dist directory/directories.`);
+  console.log(`Client bundle secret scan passed for ${bundleDirs.length} generated client bundle director${bundleDirs.length === 1 ? "y" : "ies"}.`);
 }

@@ -26,6 +26,16 @@ const demos = [
     compose: "demos/deploy/stacks/static-demo.compose.yml",
     caddy: "demos/deploy/proxy/sites/static-demo.caddy",
     port: "3001"
+  },
+  {
+    slug: "nextjs-demo",
+    hostname: "nextjs-demo.openreceive.org",
+    stagingHostname: "nextjs-demo.staging.openreceive.org",
+    stack: "Next.js Fullstack",
+    image: "ghcr.io/openreceive/demo-nextjs",
+    compose: "demos/deploy/stacks/nextjs-demo.compose.yml",
+    caddy: "demos/deploy/proxy/sites/nextjs-demo.caddy",
+    port: "3002"
   }
 ];
 
@@ -299,22 +309,23 @@ function validateScript(relativePath, requiredSnippets) {
 
 function validateScripts() {
   validateScript("demos/deploy/scripts/deploy-demo", [
-    "express-demo|static-demo",
+    "express-demo|static-demo|nextjs-demo",
     "OPENRECEIVE_DEPLOY_HOST:?",
     "OPENRECEIVE_IMAGE_TAG:?",
     "Run the private operator wrapper"
   ]);
   validateScript("demos/deploy/scripts/deploy-all", [
     "deploy-demo\" express-demo",
-    "deploy-demo\" static-demo"
+    "deploy-demo\" static-demo",
+    "deploy-demo\" nextjs-demo"
   ]);
   validateScript("demos/deploy/scripts/promote-demo", [
-    "express-demo|static-demo",
+    "express-demo|static-demo|nextjs-demo",
     "sha256:*",
     "Record this digest in demos/deploy/manifests/"
   ]);
   validateScript("demos/deploy/scripts/rollback-demo", [
-    "express-demo|static-demo",
+    "express-demo|static-demo|nextjs-demo",
     "previous_image_digest"
   ]);
   validateScript("demos/deploy/scripts/smoke-demo", [

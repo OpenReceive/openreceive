@@ -1,0 +1,4 @@
+services:
+  hello-fruit-nextjs-fullstack:
+    ports:
+      - "3002:3002"

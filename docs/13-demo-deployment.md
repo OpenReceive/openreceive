@@ -10,6 +10,7 @@ Stable demos use explicit subdomains:
 
 - `https://express-demo.openreceive.org/`
 - `https://static-demo.openreceive.org/`
+- `https://nextjs-demo.openreceive.org/`
 
 Do not route stable demos through the private apex app, private Kamal deploy, or
 private app reverse proxy. The private app may link to demos, but it is not in
@@ -43,6 +44,7 @@ ports `80` and `443` on the separate demo node. Demo containers should use
 ```text
 express-demo.openreceive.org -> express-demo:3000
 static-demo.openreceive.org  -> static-demo:3001
+nextjs-demo.openreceive.org  -> nextjs-demo:3002
 ```
 
 Create the proxy network once on the demo node:

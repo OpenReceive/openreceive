@@ -7,7 +7,8 @@
 - Added initial schemas, data files, validation tools, and test vectors.
 - Added JS core, Node NWC receive adapter, Express route adapter, browser
   helpers, provider-data, testkit, elements, and React packages.
-- Added Hello Fruit Express + React and static HTML + small API demos.
+- Added Hello Fruit Express + React, static HTML + small API, and Next.js
+  fullstack demos.
 - Added demo deployment templates, public demo deployment docs, and hosted-demo
   metadata/smoke checks.
 - Added OpenAPI, AsyncAPI, generated contract constants, package artifact smoke,

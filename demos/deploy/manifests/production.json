@@ -19,6 +19,15 @@
       "image_digest": null,
       "deployed_at": null,
       "previous_image_digest": null
+    },
+    {
+      "slug": "nextjs-demo",
+      "public_url": "https://nextjs-demo.openreceive.org",
+      "image": "ghcr.io/openreceive/demo-nextjs",
+      "git_sha": null,
+      "image_digest": null,
+      "deployed_at": null,
+      "previous_image_digest": null
     }
   ]
 }

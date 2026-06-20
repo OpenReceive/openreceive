@@ -52,3 +52,9 @@ Run a smoke check against an already-running demo:
 ```sh
 ./demos/deploy/scripts/smoke-demo https://express-demo.openreceive.org
 ```
+
+The public demo set currently reserves:
+
+- `express-demo.openreceive.org`
+- `static-demo.openreceive.org`
+- `nextjs-demo.openreceive.org`

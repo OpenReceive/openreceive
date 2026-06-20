@@ -13,7 +13,9 @@ const demoContainers = [
     dir: "examples/hello-fruit/server/node-express-react",
     service: "hello-fruit-node-express-react",
     image: "ghcr.io/openreceive/demo-express:local",
-    port: "3000"
+    port: "3000",
+    buildScript: "vite build",
+    startScript: "node --experimental-strip-types src/server/production.ts"
   },
   {
     id: "static-html-small-api",
@@ -21,7 +23,19 @@ const demoContainers = [
     dir: "examples/hello-fruit/server/static-html-small-api",
     service: "hello-fruit-static-html-small-api",
     image: "ghcr.io/openreceive/demo-static:local",
-    port: "3001"
+    port: "3001",
+    buildScript: "vite build",
+    startScript: "node --experimental-strip-types src/server/production.ts"
+  },
+  {
+    id: "nextjs-fullstack",
+    packageName: "@openreceive/example-nextjs-fullstack",
+    dir: "examples/hello-fruit/server/nextjs-fullstack",
+    service: "hello-fruit-nextjs-fullstack",
+    image: "ghcr.io/openreceive/demo-nextjs:local",
+    port: "3002",
+    buildScript: "next build",
+    startScript: "next start -H 0.0.0.0 -p ${PORT:-3002}"
   }
 ];
 
@@ -146,8 +160,8 @@ function validatePackage(demo) {
   const pkg = readJson(relativePath);
 
   expect(pkg.name === demo.packageName, `${relativePath}: package name must be ${demo.packageName}`);
-  expect(pkg.scripts?.build === "vite build", `${relativePath}: build script must run vite build`);
-  expect(pkg.scripts?.start === "node --experimental-strip-types src/server/production.ts", `${relativePath}: start script must run production.ts with type stripping`);
+  expect(pkg.scripts?.build === demo.buildScript, `${relativePath}: build script must run ${demo.buildScript}`);
+  expect(pkg.scripts?.start === demo.startScript, `${relativePath}: start script must be ${demo.startScript}`);
 }
 
 function validateReadme(demo) {

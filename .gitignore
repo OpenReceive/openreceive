@@ -43,5 +43,6 @@ coverage/
 dist/
 .turbo/
 .vite/
+.next/
 .cache/
 *.tsbuildinfo

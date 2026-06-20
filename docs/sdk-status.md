@@ -8,11 +8,19 @@ package registry.
 | `@openreceive/core` | Implemented | Shared error codes, rates, settlement, polling, storage, and NWC URI helpers. |
 | `@openreceive/node` | Implemented | Receive-checkout adapter around `@getalby/sdk` NWC with canonical wallet-error normalization. |
 | `@openreceive/express` | Implemented | Mounted HTTP routes, auth hooks, signed event URLs, idempotent create/refresh, lookup, SSE events, fulfillment hook, and static rates/routes/providers helpers. |
-| `@openreceive/browser` | Implemented | Display-safe QR, copy, and open-wallet helpers. |
+| `@openreceive/browser` | Implemented | Display-safe QR, copy, open-wallet, event parsing, and checkout state reducer helpers. |
 | `@openreceive/provider-data` | Implemented | Read-only helpers around the canonical provider registry. |
 | `@openreceive/testkit` | Implemented | Deterministic receive-client fixtures and conformance helpers. |
 | `@openreceive/elements` | Implemented | No-framework checkout web component for display-safe invoice data. |
-| `@openreceive/react` | Implemented | Hook, primitives, and default checkout UI for display-safe invoice data. |
+| `@openreceive/react` | Implemented | Hook, primitives, slot/component overrides, and default checkout UI for display-safe invoice data. |
+
+## Demos
+
+| Demo | Status | Notes |
+| --- | --- | --- |
+| Express + React Hello Fruit | Implemented | Express route adapter with React client UI. |
+| Static HTML + Small API Hello Fruit | Implemented | Web component checkout with a small Express API. |
+| Next.js Fullstack Hello Fruit | Implemented | App Router route handlers and React checkout UI in one server app. |
 
 Non-JS SDKs are planned only after the JS reference path and conformance gate
 are stable. Future SDKs must consume shared vectors and must not expose NWC

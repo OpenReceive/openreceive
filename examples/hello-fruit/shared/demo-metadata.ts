@@ -1,6 +1,7 @@
 export type HelloFruitDemoId =
   | "node-express-react"
-  | "static-html-small-api";
+  | "static-html-small-api"
+  | "nextjs-fullstack";
 
 export type HelloFruitDemoMode =
   | "unconfigured"
