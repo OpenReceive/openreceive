@@ -465,6 +465,9 @@ components:
         settled_at:
           type: integer
           minimum: 0
+        fulfilled_at:
+          type: integer
+          minimum: 0
         metadata:
           type: object
           additionalProperties: true

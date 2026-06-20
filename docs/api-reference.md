@@ -49,7 +49,9 @@ must be strongly authorized to the matching invoice.
 
 The lookup response may include `preimage_present`, but fulfillment still
 requires settled state from backend wallet verification. A preimage alone is not
-settlement proof.
+settlement proof. If the host app configured a backend fulfillment hook, a
+settled lookup may return `workflow_state: "fulfilled"`, `fulfilled_at`, and
+`fulfillment.state: "delivered"` after that hook completes.
 
 ## Refresh Invoice
 

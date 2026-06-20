@@ -40,6 +40,10 @@ SDKs and adapters must treat an incoming invoice as settled only when
 `transaction_state == "settled"`. A preimage is corroborating data, not final
 settlement proof.
 
+Fulfillment hooks may run only after that backend lookup settlement proof. They
+must be idempotent; replaying lookup or events must not double-deliver a
+product.
+
 ## Idempotency Rules
 
 Create-invoice idempotency is scoped to:

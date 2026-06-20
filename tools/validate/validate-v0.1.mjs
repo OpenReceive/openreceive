@@ -314,6 +314,10 @@ function validateOpenApi() {
     "OpenAPI invoice refreshed_from_invoice_id pattern mismatch"
   );
   assert(
+    openapi.components?.schemas?.Invoice?.properties?.fulfilled_at?.minimum === 0,
+    "OpenAPI invoice fulfilled_at timestamp missing"
+  );
+  assert(
     openapi.components?.schemas?.QuoteRateRequest?.required?.includes("fiat"),
     "OpenAPI quote rate request must require fiat"
   );

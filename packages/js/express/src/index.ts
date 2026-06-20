@@ -82,6 +82,16 @@ export interface OpenReceiveExpressCors {
   credentials?: boolean;
 }
 
+export interface OpenReceiveExpressFulfillmentInput {
+  req: ExpressLikeRequest;
+  invoice: InvoiceStorageRow;
+  metadata: Record<string, unknown>;
+}
+
+export type OpenReceiveExpressFulfillHook = (
+  input: OpenReceiveExpressFulfillmentInput
+) => Promise<void> | void;
+
 export interface OpenReceiveExpressOptions {
   client: OpenReceiveReceiveNwcClient;
   store?: InMemoryInvoiceStore;
@@ -91,6 +101,7 @@ export interface OpenReceiveExpressOptions {
   auth?: OpenReceiveExpressAuthorization;
   csrf?: OpenReceiveExpressCsrf;
   cors?: OpenReceiveExpressCors;
+  fulfill?: OpenReceiveExpressFulfillHook;
   unsafeAllowUnauthenticatedDemoMode?: boolean;
   clock?: () => number;
   heartbeatSeconds?: number;
@@ -320,6 +331,14 @@ export function createOpenReceiveExpressHandlers(
             serializeEventData(current)
           );
         }
+        current = await maybeFulfillInvoice({
+          options,
+          req,
+          store,
+          eventBus,
+          invoice: current,
+          clock
+        });
       } else if (lookup.state === "expired" || lookup.transaction_state === "expired") {
         current = store.markExpiredClosed(invoice.invoice_id);
         if (invoice.transaction_state !== "expired") {
@@ -582,6 +601,8 @@ function serializeInvoice(row: InvoiceStorageRow, basePath: string): Record<stri
     amount_msats: row.amount_msats,
     created_at: row.created_at,
     expires_at: row.expires_at,
+    ...(row.settled_at === undefined ? {} : { settled_at: row.settled_at }),
+    ...(row.fulfilled_at === undefined ? {} : { fulfilled_at: row.fulfilled_at }),
     ...(row.refreshed_from_invoice_id === undefined
       ? {}
       : { refreshed_from_invoice_id: row.refreshed_from_invoice_id }),
@@ -605,10 +626,46 @@ function serializeEventData(row: InvoiceStorageRow): Record<string, unknown> {
     workflow_state: row.workflow_state,
     payment_hash: row.payment_hash,
     amount_msats: row.amount_msats,
+    ...(row.settled_at === undefined ? {} : { settled_at: row.settled_at }),
+    ...(row.fulfilled_at === undefined ? {} : { fulfilled_at: row.fulfilled_at }),
     ...(row.refreshed_from_invoice_id === undefined
       ? {}
       : { refreshed_from_invoice_id: row.refreshed_from_invoice_id })
   };
+}
+
+async function maybeFulfillInvoice(input: {
+  options: OpenReceiveExpressOptions;
+  req: ExpressLikeRequest;
+  store: InMemoryInvoiceStore;
+  eventBus: InMemoryInvoiceEventBus;
+  invoice: InvoiceStorageRow;
+  clock: () => number;
+}): Promise<InvoiceStorageRow> {
+  if (input.options.fulfill === undefined) return input.invoice;
+  if (input.invoice.transaction_state !== "settled") return input.invoice;
+  if (
+    input.invoice.workflow_state === "fulfilled" ||
+    input.invoice.fulfillment_state === "delivered"
+  ) {
+    return input.invoice;
+  }
+
+  await input.options.fulfill({
+    req: input.req,
+    invoice: input.invoice,
+    metadata: input.invoice.metadata
+  });
+  const fulfilled = input.store.markFulfilled({
+    invoice_id: input.invoice.invoice_id,
+    fulfilled_at: input.clock()
+  });
+  input.eventBus.publish(
+    fulfilled.invoice_id,
+    "invoice.fulfilled",
+    serializeEventData(fulfilled)
+  );
+  return fulfilled;
 }
 
 function getCreateAmountMsats(

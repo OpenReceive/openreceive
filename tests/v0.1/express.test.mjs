@@ -147,6 +147,7 @@ test("lookup settles invoice and publishes replayable SSE event", async () => {
   assert.equal(lookupRes.statusCode, 200);
   assert.equal(lookupRes.body.transaction_state, "settled");
   assert.equal(lookupRes.body.workflow_state, "awaiting_fulfillment");
+  assert.equal(lookupRes.body.settled_at, 1200);
   assert.equal(lookupRes.body.preimage_present, true);
 
   const eventRes = createResponse();
@@ -164,6 +165,81 @@ test("lookup settles invoice and publishes replayable SSE event", async () => {
   assert.match(stream, /event: invoice\.created/);
   assert.match(stream, /event: invoice\.settled/);
   assert.match(stream, /: heartbeat/);
+});
+
+test("lookup can run an idempotent backend fulfillment hook after settlement", async () => {
+  let fulfillCalls = 0;
+  const { wallet, handlers } = createHarness({
+    clock: () => 1300,
+    fulfill: async ({ invoice, metadata }) => {
+      fulfillCalls += 1;
+      assert.equal(invoice.transaction_state, "settled");
+      assert.deepEqual(metadata, { fruit: "pear" });
+    }
+  });
+  const createRes = createResponse();
+  await handlers.createInvoice(
+    createRequest({
+      headers: {
+        "idempotency-key": "order-fulfill"
+      },
+      body: {
+        amount_msats: 200000,
+        description: "Fruit sticker",
+        metadata: {
+          fruit: "pear"
+        }
+      }
+    }),
+    createRes,
+    raiseNext
+  );
+
+  wallet.lookupState = "settled";
+  const firstLookup = createResponse();
+  await handlers.lookupInvoice(
+    createRequest({
+      body: {
+        payment_hash: PAYMENT_HASH
+      }
+    }),
+    firstLookup,
+    raiseNext
+  );
+
+  assert.equal(firstLookup.statusCode, 200);
+  assert.equal(firstLookup.body.workflow_state, "fulfilled");
+  assert.equal(firstLookup.body.fulfillment.state, "delivered");
+  assert.equal(firstLookup.body.fulfilled_at, 1300);
+  assert.equal(fulfillCalls, 1);
+
+  const secondLookup = createResponse();
+  await handlers.lookupInvoice(
+    createRequest({
+      body: {
+        payment_hash: PAYMENT_HASH
+      }
+    }),
+    secondLookup,
+    raiseNext
+  );
+
+  assert.equal(secondLookup.body.workflow_state, "fulfilled");
+  assert.equal(fulfillCalls, 1);
+
+  const eventRes = createResponse();
+  await handlers.invoiceEvents(
+    createRequest({
+      params: {
+        invoice_id: createRes.body.invoice_id
+      }
+    }),
+    eventRes,
+    raiseNext
+  );
+  const stream = eventRes.writes.join("");
+  assert.match(stream, /event: invoice\.settled/);
+  assert.match(stream, /event: invoice\.fulfilled/);
 });
 
 test("lookup rejects public status oracle requests for unknown payment hashes", async () => {
