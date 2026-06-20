@@ -16,6 +16,7 @@ import DialogContent from "@mui/material/DialogContent";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import {
+  OpenReceiveCheckout,
   OpenReceiveQRCode,
   OpenReceivePaymentState,
   useOpenReceiveCheckout
@@ -62,6 +63,24 @@ export function MaterialOpenReceiveCheckout({
     </Dialog>
   );
 }
+```
+
+The default checkout also accepts component and class slots. Use those slots
+when your design-system button accepts native button props; otherwise keep
+using the headless actions as shown above.
+
+```tsx
+<OpenReceiveCheckout
+  invoice={invoice}
+  components={{
+    Button,
+    InvoiceSummary: MaterialInvoiceSummary
+  }}
+  classNames={{
+    root: "or-material-root",
+    actions: "or-material-actions"
+  }}
+/>
 ```
 
 ## Integration Notes

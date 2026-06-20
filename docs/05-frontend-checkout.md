@@ -47,17 +47,25 @@ Frontend events are UI hints, not payment authority.
 
 ## React
 
-`@openreceive/react` provides a headless hook, small primitives, and a default
-checkout component:
+`@openreceive/react` provides a headless hook, small primitives, slot/component
+overrides, and a default checkout component:
 
 ```tsx
 import {
+  CopyInvoiceButton,
+  OpenWalletButton,
   OpenReceiveCheckout,
+  OpenReceiveInvoiceSummary,
   OpenReceiveQRCode,
   useOpenReceiveCheckout
 } from "@openreceive/react";
 
 const checkout = useOpenReceiveCheckout({ invoice: "lnbc..." });
+```
+
+```tsx
+<CopyInvoiceButton invoice={checkout.invoice}>Copy invoice</CopyInvoiceButton>
+<OpenWalletButton invoice={checkout.invoice}>Open wallet</OpenWalletButton>
 ```
 
 ```tsx
@@ -71,6 +79,29 @@ const checkout = useOpenReceiveCheckout({ invoice: "lnbc..." });
 
 React components follow the same boundary: they render invoice display data and
 browser actions, while the backend remains the settlement authority.
+
+Apps with their own design system can replace the visible pieces without
+forking payment logic:
+
+```tsx
+<OpenReceiveCheckout
+  invoice="lnbc..."
+  amount_msats={200000}
+  transaction_state="pending"
+  components={{
+    Button: MyButton,
+    InvoiceSummary: MySummary
+  }}
+  classNames={{
+    root: "checkout",
+    qr: "checkoutQr",
+    actions: "checkoutActions"
+  }}
+/>
+```
+
+For full markup ownership, pass a render function as `children`. The render
+function receives the display-safe checkout view model.
 
 The Material UI recipe in `docs/recipes/react-material-ui.md` shows how to
 compose the React primitives inside an app-owned design system.

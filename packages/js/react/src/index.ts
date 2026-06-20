@@ -41,12 +41,16 @@ export interface OpenReceiveQRCodeProps
   readonly onError?: (error: unknown) => void;
 }
 
+export type OpenReceiveButtonComponent =
+  React.ElementType<React.ButtonHTMLAttributes<HTMLButtonElement>>;
+
 export interface OpenReceiveCopyButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   readonly invoice: string;
   readonly clipboard?: Pick<Clipboard, "writeText">;
   readonly onCopied?: () => void;
   readonly onError?: (error: unknown) => void;
+  readonly ButtonComponent?: OpenReceiveButtonComponent;
 }
 
 export interface OpenReceiveOpenWalletButtonProps
@@ -55,6 +59,7 @@ export interface OpenReceiveOpenWalletButtonProps
   readonly open?: (uri: string) => void;
   readonly onOpened?: (uri: string) => void;
   readonly onError?: (error: unknown) => void;
+  readonly ButtonComponent?: OpenReceiveButtonComponent;
 }
 
 export interface OpenReceivePaymentStateProps
@@ -62,11 +67,53 @@ export interface OpenReceivePaymentStateProps
   readonly state?: string;
 }
 
+export interface OpenReceiveInvoiceSummaryClassNames {
+  readonly amount?: string;
+  readonly paymentHash?: string;
+  readonly paymentState?: string;
+}
+
+export interface OpenReceiveInvoiceSummaryProps
+  extends React.HTMLAttributes<HTMLDivElement> {
+  readonly amountLabel?: string;
+  readonly paymentHashLabel?: string;
+  readonly transactionStateLabel?: string;
+  readonly PaymentStateComponent?: React.ComponentType<OpenReceivePaymentStateProps>;
+  readonly classNames?: OpenReceiveInvoiceSummaryClassNames;
+}
+
+export interface OpenReceiveCheckoutClassNames
+  extends OpenReceiveInvoiceSummaryClassNames {
+  readonly root?: string;
+  readonly qr?: string;
+  readonly summary?: string;
+  readonly invoice?: string;
+  readonly actions?: string;
+  readonly copyButton?: string;
+  readonly openWalletButton?: string;
+}
+
+export interface OpenReceiveCheckoutComponents {
+  readonly Button?: OpenReceiveButtonComponent;
+  readonly QRCode?: React.ComponentType<OpenReceiveQRCodeProps>;
+  readonly InvoiceSummary?: React.ComponentType<OpenReceiveInvoiceSummaryProps>;
+  readonly CopyButton?: React.ComponentType<OpenReceiveCopyButtonProps>;
+  readonly OpenWalletButton?: React.ComponentType<OpenReceiveOpenWalletButtonProps>;
+  readonly PaymentState?: React.ComponentType<OpenReceivePaymentStateProps>;
+}
+
+export type OpenReceiveCheckoutChildren =
+  | React.ReactNode
+  | ((model: OpenReceiveCheckoutViewModel) => React.ReactNode);
+
 export interface OpenReceiveCheckoutProps
   extends OpenReceiveCheckoutData,
     Omit<React.HTMLAttributes<HTMLElement>, "children"> {
   readonly qrEncoder?: OpenReceiveQrEncoder;
   readonly onError?: (error: unknown) => void;
+  readonly components?: OpenReceiveCheckoutComponents;
+  readonly classNames?: OpenReceiveCheckoutClassNames;
+  readonly children?: OpenReceiveCheckoutChildren;
 }
 
 export function createOpenReceiveCheckoutViewModel(
@@ -179,13 +226,14 @@ export function OpenReceiveCopyButton(
     onCopied,
     onError,
     onClick,
+    ButtonComponent = "button",
     children = "Copy",
     type = "button",
     ...buttonProps
   } = props;
 
   return React.createElement(
-    "button",
+    ButtonComponent,
     {
       ...buttonProps,
       type,
@@ -214,13 +262,14 @@ export function OpenReceiveOpenWalletButton(
     onOpened,
     onError,
     onClick,
+    ButtonComponent = "button",
     children = "Open Wallet",
     type = "button",
     ...buttonProps
   } = props;
 
   return React.createElement(
-    "button",
+    ButtonComponent,
     {
       ...buttonProps,
       type,
@@ -258,6 +307,53 @@ export function OpenReceivePaymentState(
   );
 }
 
+export function OpenReceiveInvoiceSummary(
+  props: OpenReceiveInvoiceSummaryProps
+): React.ReactElement {
+  const {
+    amountLabel,
+    paymentHashLabel,
+    transactionStateLabel,
+    PaymentStateComponent = OpenReceivePaymentState,
+    classNames,
+    className,
+    ...divProps
+  } = props;
+
+  return React.createElement(
+    "div",
+    {
+      ...divProps,
+      className,
+      "data-openreceive-meta": ""
+    },
+    amountLabel === undefined
+      ? null
+      : React.createElement(
+        "span",
+        {
+          className: classNames?.amount
+        },
+        amountLabel
+      ),
+    transactionStateLabel === undefined
+      ? null
+      : React.createElement(PaymentStateComponent, {
+        state: transactionStateLabel,
+        className: classNames?.paymentState
+      }),
+    paymentHashLabel === undefined
+      ? null
+      : React.createElement(
+        "code",
+        {
+          className: classNames?.paymentHash
+        },
+        paymentHashLabel
+      )
+  );
+}
+
 export function OpenReceiveCheckout(
   props: OpenReceiveCheckoutProps
 ): React.ReactElement {
@@ -268,6 +364,10 @@ export function OpenReceiveCheckout(
     transaction_state,
     qrEncoder,
     onError,
+    components,
+    classNames,
+    children,
+    className,
     ...sectionProps
   } = props;
   const model = createOpenReceiveCheckoutViewModel({
@@ -276,60 +376,81 @@ export function OpenReceiveCheckout(
     amount_msats,
     transaction_state
   });
+  const QRCode = components?.QRCode ?? OpenReceiveQRCode;
+  const InvoiceSummary = components?.InvoiceSummary ?? OpenReceiveInvoiceSummary;
+  const CopyButton = components?.CopyButton ?? OpenReceiveCopyButton;
+  const OpenWalletButton =
+    components?.OpenWalletButton ?? OpenReceiveOpenWalletButton;
+  const ButtonComponent = components?.Button;
+  const PaymentStateComponent = components?.PaymentState ?? OpenReceivePaymentState;
+  const customChildren =
+    typeof children === "function" ? children(model) : children;
 
   return React.createElement(
     "section",
     {
       ...sectionProps,
+      className: joinClassNames(className, classNames?.root),
       "data-openreceive-checkout": ""
     },
-    React.createElement(OpenReceiveQRCode, {
-      invoice,
-      encoder: qrEncoder,
-      onError,
-      style: {
-        aspectRatio: "1",
-        maxWidth: 256
-      }
-    }),
-    React.createElement(
-      "div",
-      {
-        "data-openreceive-meta": ""
-      },
-      model.amountLabel === undefined
-        ? null
-        : React.createElement("span", null, model.amountLabel),
-      model.transactionStateLabel === undefined
-        ? null
-        : React.createElement(OpenReceivePaymentState, {
-          state: model.transactionStateLabel
+    customChildren === undefined
+      ? [
+        React.createElement(QRCode, {
+          key: "qr",
+          invoice,
+          encoder: qrEncoder,
+          onError,
+          className: classNames?.qr,
+          style: {
+            aspectRatio: "1",
+            maxWidth: 256
+          }
         }),
-      model.paymentHashLabel === undefined
-        ? null
-        : React.createElement("code", null, model.paymentHashLabel)
-    ),
-    React.createElement("textarea", {
-      readOnly: true,
-      value: invoice,
-      "aria-label": "Lightning invoice"
-    }),
-    React.createElement(
-      "div",
-      {
-        "data-openreceive-actions": ""
-      },
-      React.createElement(OpenReceiveCopyButton, {
-        invoice,
-        onError
-      }),
-      React.createElement(OpenReceiveOpenWalletButton, {
-        invoice,
-        onError
-      })
-    )
+        React.createElement(InvoiceSummary, {
+          key: "summary",
+          amountLabel: model.amountLabel,
+          paymentHashLabel: model.paymentHashLabel,
+          transactionStateLabel: model.transactionStateLabel,
+          PaymentStateComponent,
+          className: classNames?.summary,
+          classNames
+        }),
+        React.createElement("textarea", {
+          key: "invoice",
+          readOnly: true,
+          value: invoice,
+          "aria-label": "Lightning invoice",
+          className: classNames?.invoice
+        }),
+        React.createElement(
+          "div",
+          {
+            key: "actions",
+            className: classNames?.actions,
+            "data-openreceive-actions": ""
+          },
+          React.createElement(CopyButton, {
+            invoice,
+            onError,
+            ButtonComponent,
+            className: classNames?.copyButton
+          }),
+          React.createElement(OpenWalletButton, {
+            invoice,
+            onError,
+            ButtonComponent,
+            className: classNames?.openWalletButton
+          })
+        )
+      ]
+      : customChildren
   );
 }
+
+export const InvoiceSummary = OpenReceiveInvoiceSummary;
+export const CopyInvoiceButton = OpenReceiveCopyButton;
+export const OpenWalletButton = OpenReceiveOpenWalletButton;
+export const PaymentState = OpenReceivePaymentState;
 
 function formatMsats(amountMsats: number): string {
   if (!Number.isSafeInteger(amountMsats) || amountMsats < 0) {
@@ -346,4 +467,11 @@ function formatMsats(amountMsats: number): string {
 
 function shortHash(hash: string): string {
   return hash.length <= 16 ? hash : `${hash.slice(0, 8)}...${hash.slice(-8)}`;
+}
+
+function joinClassNames(
+  ...values: readonly (string | undefined)[]
+): string | undefined {
+  const joined = values.filter(Boolean).join(" ");
+  return joined === "" ? undefined : joined;
 }
