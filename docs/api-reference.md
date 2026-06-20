@@ -47,11 +47,14 @@ Body contains either `payment_hash` or `invoice`. This route performs backend
 wallet verification and must not be exposed as a public status oracle. Access
 must be strongly authorized to the matching invoice.
 
-The lookup response may include `preimage_present`, but fulfillment still
-requires settled state from backend wallet verification. A preimage alone is not
-settlement proof. If the host app configured a backend fulfillment hook, a
-settled lookup may return `workflow_state: "fulfilled"`, `fulfilled_at`, and
-`fulfillment.state: "delivered"` after that hook completes.
+The lookup response may include `preimage_present`, but app actions still
+require settled state from backend wallet verification. A preimage alone is not
+settlement proof. If the host app configured a backend settlement action hook, a
+settled lookup may return `workflow_state: "settlement_action_completed"`,
+`settlement_action_state: "completed"`, and `settlement_action_completed_at`
+after that hook completes.
+If no hook is configured, adapters may complete the settlement action boundary
+as a no-op after backend settlement is proven.
 
 ## Refresh Invoice
 
@@ -63,7 +66,7 @@ Required header:
 
 The body may include `{ "reason": "expired" }`. Refresh creates a new invoice
 row linked to the old row through `refreshed_from_invoice_id`; it never mutates
-the old invoice in place. Settled or fulfilled invoices return `409`.
+the old invoice in place. Settled invoices return `409`.
 
 Responses:
 
@@ -77,7 +80,7 @@ Responses:
 
 The v0.1 reference adapter uses Server-Sent Events. Clients may send
 `Last-Event-ID` for replay. Event streams are passive UI hints; they do not
-fulfill products.
+run merchant settlement actions.
 
 When the Express adapter is configured with signed event URLs,
 `checkout.events_url` includes a short-lived `_or_evt` query value scoped to the
@@ -93,16 +96,16 @@ Event names:
 - `invoice.settled`
 - `invoice.expired`
 - `invoice.failed`
-- `invoice.fulfilled`
+- `invoice.settlement_action_completed`
 - `invoice.cancelled`
 
 ## Rates
 
 `GET /openreceive/v1/rates`
 
-Returns the deterministic v0.1 BTC fiat rate map. The default open-source
-adapter uses `static_mock` data so docs, tests, screenshots, and local demos are
-stable.
+Returns the configured BTC fiat rate map. The default open-source adapter uses
+`static_mock` data so docs, tests, and screenshots are stable. Apps can provide
+live price providers; the JS Hello Fruit demos do this for USD prices.
 
 `POST /openreceive/v1/rates/quote`
 

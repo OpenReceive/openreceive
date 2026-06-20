@@ -13,7 +13,8 @@
     "payment_hash",
     "amount_msats",
     "created_at",
-    "expires_at"
+    "expires_at",
+    "settlement_action_state"
   ],
   "properties": {
     "invoice_id": {
@@ -39,8 +40,8 @@
         "draft",
         "invoice_created",
         "verifying",
-        "awaiting_fulfillment",
-        "fulfilled",
+        "settlement_action_pending",
+        "settlement_action_completed",
         "expiry_pending_verification",
         "expired_closed",
         "failed_closed",
@@ -82,6 +83,18 @@
     },
     "preimage_present": {
       "type": "boolean"
+    },
+    "settlement_action_state": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "completed",
+        "failed"
+      ]
+    },
+    "settlement_action_completed_at": {
+      "type": "integer",
+      "minimum": 0
     },
     "metadata": {
       "type": "object",
@@ -135,30 +148,6 @@
         "routes_url": {
           "type": "string",
           "minLength": 1
-        }
-      }
-    },
-    "fulfillment": {
-      "type": "object",
-      "additionalProperties": true,
-      "required": [
-        "state"
-      ],
-      "properties": {
-        "type": {
-          "type": "string"
-        },
-        "state": {
-          "type": "string",
-          "enum": [
-            "pending",
-            "ready",
-            "delivered",
-            "delivery_failed"
-          ]
-        },
-        "url": {
-          "type": "string"
         }
       }
     }

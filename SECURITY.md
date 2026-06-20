@@ -13,9 +13,9 @@ GitHub or contact the maintainers through the repository owner.
 - NWC secrets never enter browser or mobile bundles.
 - Real env files stay ignored. Commit `.env.example` only.
 - Logs, errors, screenshots, telemetry, and tests must redact NWC secrets.
-- Frontends never fulfill products by themselves.
+- Frontends never run merchant settlement actions by themselves.
 - Settlement is verified by backend `lookup_invoice`.
-- Fulfillment transitions must be idempotent.
+- Settlement action transitions must be idempotent.
 - Invoice creation must use idempotency keys.
 - Public demos must use low amounts, rate limits, and separate receive-only
   wallet credentials.

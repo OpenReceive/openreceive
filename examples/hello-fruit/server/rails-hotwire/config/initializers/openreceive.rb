@@ -21,7 +21,7 @@ OpenReceive::Rails.configure do |config|
       "demo" => "rails-hotwire"
     }
   end
-  config.fulfill = lambda do |invoice|
+  config.settlement_action = lambda do |invoice|
     FruitUnlock.find_or_create_by!(invoice_id: invoice.fetch("invoice_id")) do |unlock|
       unlock.fruit = invoice.fetch("metadata").fetch("fruit")
       unlock.payment_hash = invoice.fetch("payment_hash")

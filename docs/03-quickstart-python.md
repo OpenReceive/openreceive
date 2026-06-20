@@ -12,8 +12,8 @@ docs/01-quickstart-node.md
 ## Planned Shape
 
 A Python integration should install into the merchant's existing server app.
-The app should own auth, invoice storage, order lookup, fulfillment, and worker
-runtime.
+The app should own auth, invoice storage, order lookup, merchant settlement
+actions, and worker runtime.
 
 Expected Python pieces:
 
@@ -22,7 +22,7 @@ Expected Python pieces:
 - database-backed invoice and idempotency storage
 - Celery, RQ, Dramatiq, APScheduler, or framework-native polling workers
 - SSE, WebSocket, HTMX, or template-driven checkout updates
-- idempotent fulfillment after backend wallet lookup proves settlement
+- idempotent settlement actions after backend wallet lookup proves settlement
 
 ## Security Boundary
 

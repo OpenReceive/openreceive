@@ -1,7 +1,8 @@
 import express from "express";
 import { fileURLToPath } from "node:url";
 import {
-  InMemoryInvoiceStore
+  InMemoryInvoiceStore,
+  createDefaultLivePriceProviders
 } from "@openreceive/core";
 import {
   createAlbyNwcReceiveClient
@@ -85,6 +86,8 @@ export function createHelloFruitServer() {
     client: wallet,
     store: new InMemoryInvoiceStore(),
     merchantScope: () => "demo:hello-fruit",
+    priceProviders: createDefaultLivePriceProviders({ currencies: ["USD"] }),
+    priceCurrencies: ["USD"],
     unsafeAllowUnauthenticatedDemoMode: true,
     logger: createHelloFruitOpenReceiveLogger("node-express-react")
   });

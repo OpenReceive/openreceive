@@ -15,7 +15,6 @@ import {
   createOpenReceiveCheckoutStatusModel,
   createOpenReceiveCheckoutStateFromDisplayData,
   createOpenReceivePaymentWizardModel,
-  createOpenReceivePaymentWizardSelection,
   createOpenReceivePaymentWizardController,
   createOpenReceiveProviderCopyEvent,
   createOpenReceiveWizardRouteAssetDisplays,
@@ -67,6 +66,7 @@ export interface UseOpenReceiveCheckoutOptions extends OpenReceiveCheckoutData {
   readonly onError?: (error: unknown) => void;
   readonly lookupInvoice?: (state: OpenReceiveCheckoutState) => Promise<Partial<OpenReceiveCheckoutSnapshot>>;
   readonly lookupUrl?: string;
+  readonly onState?: (state: OpenReceiveCheckoutState) => void;
   readonly refreshInvoice?: (state: OpenReceiveCheckoutState) => Promise<OpenReceiveCheckoutSnapshot | OpenReceiveRefreshInvoiceResult>;
   readonly refreshUrl?: string | ((state: OpenReceiveCheckoutState) => string);
   readonly refreshHeaders?: Readonly<Record<string, string>>;
@@ -187,6 +187,7 @@ export interface OpenReceiveCheckoutProps
   readonly onError?: (error: unknown) => void;
   readonly lookupInvoice?: (state: OpenReceiveCheckoutState) => Promise<Partial<OpenReceiveCheckoutSnapshot>>;
   readonly lookupUrl?: string;
+  readonly onState?: (state: OpenReceiveCheckoutState) => void;
   readonly paymentWizard?: boolean;
   readonly themeSwitcher?: boolean;
   readonly defaultTheme?: OpenReceiveThemePreference;
@@ -326,6 +327,8 @@ export function useOpenReceiveCheckout(
       })
   );
   const controllerRef = React.useRef<OpenReceiveCheckoutController | null>(null);
+  const onStateRef = React.useRef(options.onState);
+  onStateRef.current = options.onState;
   const logContext = React.useMemo(
     () => getCheckoutLogContext(options),
     [
@@ -358,7 +361,10 @@ export function useOpenReceiveCheckout(
       onError: options.onError,
       clipboard: options.clipboard,
       open: options.open,
-      onState: setState
+      onState: (nextState) => {
+        setState(nextState);
+        onStateRef.current?.(nextState);
+      }
     });
     controllerRef.current = controller;
     controller.start();
@@ -822,16 +828,29 @@ export function OpenReceivePaymentWizard(
   const countryStorageKey =
     props.countryStorageKey ?? OPENRECEIVE_COUNTRY_STORAGE_KEY;
   const [selection, setSelection] = React.useState<OpenReceivePaymentWizardSelection>(
-    () => createOpenReceivePaymentWizardSelection({
-      storedCountryCode: readOpenReceiveStoredCountryCode({
-        storageKey: countryStorageKey
-      }),
+    () => createOpenReceivePaymentWizardController({
+      storageKey: countryStorageKey,
       defaultCountryCode: getOpenReceiveDefaultCountryCode()
-    })
+    }).getSelection()
   );
   const [hoveredCountryCode, setHoveredCountryCode] = React.useState<string | null>(null);
   const [copiedProviderId, showCopiedProviderId] =
     useOpenReceiveTransientValue<string | null>(null);
+  const updateWizardSelection = React.useCallback(
+    (
+      apply: (
+        controller: OpenReceivePaymentWizardController
+      ) => OpenReceivePaymentWizardSelection
+    ) => {
+      setSelection((current) =>
+        apply(createOpenReceivePaymentWizardController({
+          selection: current,
+          storageKey: countryStorageKey
+        }))
+      );
+    },
+    [countryStorageKey]
+  );
   const model = createOpenReceivePaymentWizardModel(selection);
   const { wizard } = model;
   const routeAssetDisplays = createOpenReceiveWizardRouteAssetDisplays(model.routeAssets, {
@@ -882,15 +901,8 @@ export function OpenReceivePaymentWizard(
             className: selection.selectedMethod === method.id ? "selected" : "",
             key: method.id,
             onClick: () => {
-              setSelection((current) =>
-                updateOpenReceivePaymentWizardSelection(current, {
-                  type: "select_method",
-                  method: method.id,
-                  storedCountryCode:
-                    method.id === "card" || method.id === "bank"
-                      ? readOpenReceiveStoredCountryCode({ storageKey: countryStorageKey })
-                      : undefined
-                })
+              updateWizardSelection((controller) =>
+                controller.selectMethod(method.id)
               );
             },
             type: "button"
@@ -909,23 +921,14 @@ export function OpenReceivePaymentWizard(
         hoveredCountryCode,
         onHoverCountry: setHoveredCountryCode,
         onSelectRegion: (region) => {
-          setSelection((current) =>
-            updateOpenReceivePaymentWizardSelection(current, {
-              type: "select_region",
-              region
-            })
+          updateWizardSelection((controller) =>
+            controller.selectRegion(region)
           );
         },
         onSelectCountry: (countryCode) => {
-          setSelection((current) =>
-            updateOpenReceivePaymentWizardSelection(current, {
-              type: "select_country",
-              countryCode
-            })
+          updateWizardSelection((controller) =>
+            controller.selectCountry(countryCode)
           );
-          writeOpenReceiveStoredCountryCode(countryCode, {
-            storageKey: countryStorageKey
-          });
         }
       })
       : null,
@@ -945,10 +948,8 @@ export function OpenReceivePaymentWizard(
           "button",
           {
             onClick: () => {
-              setSelection((current) =>
-                updateOpenReceivePaymentWizardSelection(current, {
-                  type: "open_country_picker"
-                })
+              updateWizardSelection((controller) =>
+                controller.openCountryPicker()
               );
             },
             type: "button"
@@ -962,11 +963,8 @@ export function OpenReceivePaymentWizard(
         assets: routeAssetDisplays,
         method: "bitcoin",
         onSelectRoute: (route) => {
-          setSelection((current) =>
-            updateOpenReceivePaymentWizardSelection(current, {
-              type: "select_route",
-              route
-            })
+          updateWizardSelection((controller) =>
+            controller.selectRoute(route)
           );
         }
       })
@@ -976,11 +974,8 @@ export function OpenReceivePaymentWizard(
         assets: routeAssetDisplays,
         method: "crypto",
         onSelectRoute: (route) => {
-          setSelection((current) =>
-            updateOpenReceivePaymentWizardSelection(current, {
-              type: "select_route",
-              route
-            })
+          updateWizardSelection((controller) =>
+            controller.selectRoute(route)
           );
         }
       })
@@ -1161,6 +1156,7 @@ export function OpenReceiveCheckout(
     onError,
     lookupInvoice,
     lookupUrl,
+    onState,
     paymentWizard = true,
     themeSwitcher = false,
     defaultTheme,
@@ -1184,7 +1180,8 @@ export function OpenReceiveCheckout(
     logger,
     onError,
     lookupInvoice,
-    lookupUrl
+    lookupUrl,
+    onState
   });
   const theme = useOpenReceiveTheme({
     defaultTheme,

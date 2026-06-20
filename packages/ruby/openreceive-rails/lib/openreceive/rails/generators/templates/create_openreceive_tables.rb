@@ -12,11 +12,11 @@ class CreateOpenreceiveTables < ActiveRecord::Migration[7.1]
       t.bigint :amount_msats, null: false
       t.string :transaction_state, null: false
       t.string :workflow_state, null: false
-      t.string :fulfillment_state, null: false
+      t.string :settlement_action_state, null: false
       t.bigint :created_at_seconds, null: false
       t.bigint :expires_at_seconds, null: false
       t.bigint :settled_at_seconds
-      t.bigint :fulfilled_at_seconds
+      t.bigint :settlement_action_completed_at_seconds
       t.string :refreshed_from_invoice_id
       t.json :metadata, null: false, default: {}
       t.json :fiat_quote
@@ -39,10 +39,10 @@ class CreateOpenreceiveTables < ActiveRecord::Migration[7.1]
                          "transaction_state IN ('pending','settled','expired','failed','accepted')",
                          name: "chk_openreceive_transaction_state"
     add_check_constraint :openreceive_invoices,
-                         "workflow_state IN ('draft','invoice_created','verifying','awaiting_fulfillment','fulfilled','expiry_pending_verification','expired_closed','failed_closed','cancelled')",
+                         "workflow_state IN ('draft','invoice_created','verifying','settlement_action_pending','settlement_action_completed','expiry_pending_verification','expired_closed','failed_closed','cancelled')",
                          name: "chk_openreceive_workflow_state"
     add_check_constraint :openreceive_invoices,
-                         "fulfillment_state IN ('pending','ready','delivered','delivery_failed')",
-                         name: "chk_openreceive_fulfillment_state"
+                         "settlement_action_state IN ('pending','completed','failed')",
+                         name: "chk_openreceive_settlement_action_state"
   end
 end

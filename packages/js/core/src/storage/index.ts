@@ -7,11 +7,10 @@ export type OpenReceiveIdempotencyOperation =
   | "invoice.create"
   | "invoice.refresh";
 
-export type OpenReceiveFulfillmentState =
+export type OpenReceiveSettlementActionState =
   | "pending"
-  | "ready"
-  | "delivered"
-  | "delivery_failed";
+  | "completed"
+  | "failed";
 
 const TRANSACTION_STATES = new Set<string>([
   "pending",
@@ -24,18 +23,17 @@ const WORKFLOW_STATES = new Set<string>([
   "draft",
   "invoice_created",
   "verifying",
-  "awaiting_fulfillment",
-  "fulfilled",
+  "settlement_action_pending",
+  "settlement_action_completed",
   "expiry_pending_verification",
   "expired_closed",
   "failed_closed",
   "cancelled"
 ]);
-const FULFILLMENT_STATES = new Set<string>([
+const SETTLEMENT_ACTION_STATES = new Set<string>([
   "pending",
-  "ready",
-  "delivered",
-  "delivery_failed"
+  "completed",
+  "failed"
 ]);
 
 export interface OpenReceiveIdempotencyScope {
@@ -52,11 +50,11 @@ export interface InvoiceStorageRow extends OpenReceiveIdempotencyScope {
   amount_msats: number;
   transaction_state: OpenReceiveTransactionState;
   workflow_state: OpenReceiveWorkflowState;
-  fulfillment_state: OpenReceiveFulfillmentState;
+  settlement_action_state: OpenReceiveSettlementActionState;
   created_at: number;
   expires_at: number;
   settled_at?: number;
-  fulfilled_at?: number;
+  settlement_action_completed_at?: number;
   refreshed_from_invoice_id?: string;
   metadata: Record<string, unknown>;
   fiat_quote?: Record<string, unknown> | null;
@@ -210,7 +208,7 @@ export class InMemoryInvoiceStore {
 
     if (row.transaction_state !== "settled") {
       row.transaction_state = "settled";
-      row.workflow_state = "awaiting_fulfillment";
+      row.workflow_state = "settlement_action_pending";
     }
 
     if (row.settled_at === undefined && input.settled_at !== undefined) {
@@ -242,29 +240,36 @@ export class InMemoryInvoiceStore {
     return cloneInvoiceStorageRow(row);
   }
 
-  markFulfillmentReady(invoiceId: string): InvoiceStorageRow {
+  markSettlementActionPending(invoiceId: string): InvoiceStorageRow {
     const row = this.requireStoredInvoice(invoiceId);
 
-    if (row.fulfillment_state === "pending") {
-      row.fulfillment_state = "ready";
+    row.workflow_state = "settlement_action_pending";
+
+    return cloneInvoiceStorageRow(row);
+  }
+
+  markSettlementActionCompleted(input: {
+    invoice_id: string;
+    settlement_action_completed_at: number;
+  }): InvoiceStorageRow {
+    assertUnixSeconds(input.settlement_action_completed_at, "settlement_action_completed_at");
+
+    const row = this.requireStoredInvoice(input.invoice_id);
+    row.workflow_state = "settlement_action_completed";
+    row.settlement_action_state = "completed";
+
+    if (row.settlement_action_completed_at === undefined) {
+      row.settlement_action_completed_at = input.settlement_action_completed_at;
     }
 
     return cloneInvoiceStorageRow(row);
   }
 
-  markFulfilled(input: {
-    invoice_id: string;
-    fulfilled_at: number;
-  }): InvoiceStorageRow {
-    assertUnixSeconds(input.fulfilled_at, "fulfilled_at");
+  markSettlementActionFailed(invoiceId: string): InvoiceStorageRow {
+    const row = this.requireStoredInvoice(invoiceId);
 
-    const row = this.requireStoredInvoice(input.invoice_id);
-    row.workflow_state = "fulfilled";
-    row.fulfillment_state = "delivered";
-
-    if (row.fulfilled_at === undefined) {
-      row.fulfilled_at = input.fulfilled_at;
-    }
+    row.workflow_state = "settlement_action_pending";
+    row.settlement_action_state = "failed";
 
     return cloneInvoiceStorageRow(row);
   }
@@ -335,7 +340,7 @@ export function validateInvoiceStorageRow(row: InvoiceStorageRow): void {
   assertNonEmptyString(row.operation, "operation");
   assertSetMember(row.transaction_state, TRANSACTION_STATES, "transaction_state");
   assertSetMember(row.workflow_state, WORKFLOW_STATES, "workflow_state");
-  assertSetMember(row.fulfillment_state, FULFILLMENT_STATES, "fulfillment_state");
+  assertSetMember(row.settlement_action_state, SETTLEMENT_ACTION_STATES, "settlement_action_state");
   assertUnixSeconds(row.created_at, "created_at");
   assertUnixSeconds(row.expires_at, "expires_at");
 
@@ -359,8 +364,8 @@ export function validateInvoiceStorageRow(row: InvoiceStorageRow): void {
     assertUnixSeconds(row.settled_at, "settled_at");
   }
 
-  if (row.fulfilled_at !== undefined) {
-    assertUnixSeconds(row.fulfilled_at, "fulfilled_at");
+  if (row.settlement_action_completed_at !== undefined) {
+    assertUnixSeconds(row.settlement_action_completed_at, "settlement_action_completed_at");
   }
 }
 

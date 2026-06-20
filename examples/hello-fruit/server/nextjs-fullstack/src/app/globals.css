@@ -139,6 +139,16 @@ p {
   padding: 12px 16px;
 }
 
+.secondary {
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  color: var(--text);
+  cursor: pointer;
+}
+
 .primary:disabled {
   cursor: wait;
   opacity: 0.72;
@@ -151,6 +161,30 @@ p {
 
 .react-checkout [data-openreceive-qr] {
   inline-size: min(100%, 256px);
+}
+
+@media (min-width: 760px) {
+  .react-checkout {
+    grid-template-columns: 256px minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .react-checkout [data-openreceive-qr] {
+    grid-column: 1;
+    grid-row: 1 / 6;
+  }
+
+  .react-checkout .or-wizard {
+    grid-column: 1 / -1;
+  }
+
+  .react-checkout > textarea,
+  .react-checkout > [data-openreceive-actions],
+  .react-checkout > [data-openreceive-meta],
+  .react-checkout > .or-countdown,
+  .react-checkout > .or-payment-status {
+    grid-column: 2;
+  }
 }
 
 .invoice-text {
@@ -180,6 +214,53 @@ p {
   color: #9f1d20;
 }
 
+.sticker-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(15 23 42 / 0.58);
+}
+
+.sticker-modal {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  color: var(--text);
+  box-shadow: 0 24px 80px rgb(15 23 42 / 0.28);
+}
+
+.sticker-modal img {
+  width: min(180px, 56vw);
+  aspect-ratio: 1;
+  justify-self: center;
+}
+
+.sticker-modal h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.sticker-modal-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+}
+
+.sticker-download {
+  display: inline-grid;
+  place-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  text-decoration: none;
+}
+
 @media (max-width: 560px) {
   .page {
     padding: 18px;
@@ -191,5 +272,9 @@ p {
 
   .fruit-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sticker-modal-actions {
+    grid-template-columns: 1fr;
   }
 }

@@ -1,6 +1,8 @@
-import React, { useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import * as QRCode from "qrcode";
 import type {
+  OpenReceiveCheckoutState,
   OpenReceiveCheckoutSnapshot
 } from "@openreceive/browser";
 import {
@@ -22,19 +24,35 @@ import "./styles.css";
 
 const logOpenReceive = createHelloFruitBrowserLogger("node-express-react");
 const fruits = fruitsData.fruits;
+type Fruit = (typeof fruits)[number];
 
 function App(): React.ReactElement {
   const [fruitId, setFruitId] = useState(fruits[1]?.id ?? fruits[0]?.id ?? "");
   const [invoice, setInvoice] = useState<OpenReceiveCheckoutSnapshot | null>(null);
+  const [purchasedFruit, setPurchasedFruit] = useState<Fruit | null>(null);
+  const [stickerModalOpen, setStickerModalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
+  const completedInvoiceRef = useRef("");
   const selectedFruit = fruits.find((fruit) => fruit.id === fruitId) ?? fruits[0];
+
+  const onCheckoutState = useCallback((state: OpenReceiveCheckoutState) => {
+    if (
+      state.workflow_state === "settlement_action_completed" &&
+      completedInvoiceRef.current !== state.invoice_id
+    ) {
+      completedInvoiceRef.current = state.invoice_id;
+      setStickerModalOpen(true);
+    }
+  }, []);
 
   async function createInvoice() {
     if (selectedFruit === undefined) return;
 
     setCreating(true);
     setError("");
+    setStickerModalOpen(false);
+    completedInvoiceRef.current = "";
 
     try {
       const response = await fetch("/openreceive/v1/invoices", {
@@ -62,6 +80,7 @@ function App(): React.ReactElement {
       }
 
       setInvoice(body);
+      setPurchasedFruit(selectedFruit);
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -118,9 +137,11 @@ function App(): React.ReactElement {
             invoice_id={invoice.invoice_id}
             logger={logOpenReceive}
             lookupUrl="/openreceive/v1/invoices/lookup"
+            qrEncoder={QRCode}
             onError={(cause) => {
               setError(cause instanceof Error ? cause.message : String(cause));
             }}
+            onState={onCheckoutState}
             payment_hash={invoice.payment_hash}
             transaction_state={invoice.transaction_state}
             workflow_state={invoice.workflow_state}
@@ -130,6 +151,36 @@ function App(): React.ReactElement {
 
         {error === "" ? null : <p className="error">{error}</p>}
       </section>
+      {purchasedFruit === null || !stickerModalOpen ? null : (
+        <div className="sticker-modal-backdrop">
+          <section
+            aria-labelledby="sticker-modal-title"
+            aria-modal="true"
+            className="sticker-modal"
+            role="dialog"
+          >
+            <img src={`/${purchasedFruit.sticker}`} alt="" />
+            <h2 id="sticker-modal-title">You just got a sticker</h2>
+            <p>{purchasedFruit.name} is ready.</p>
+            <div className="sticker-modal-actions">
+              <a
+                className="primary sticker-download"
+                download={`${purchasedFruit.id}-sticker.svg`}
+                href={`/${purchasedFruit.sticker}`}
+              >
+                Download sticker
+              </a>
+              <button
+                className="secondary"
+                onClick={() => setStickerModalOpen(false)}
+                type="button"
+              >
+                Close
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </OpenReceiveThemeScope>
   );
 }

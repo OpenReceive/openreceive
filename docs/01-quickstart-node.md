@@ -119,5 +119,5 @@ Your backend calls `lookup_invoice` and treats the invoice as settled only when
 the wallet returns `settled_at` or `state == "settled"`. A preimage alone is
 not enough.
 
-Fulfillment should happen in backend code after that lookup result, not in
-browser state.
+Merchant settlement actions should happen in backend code after that lookup
+result, not in browser state.

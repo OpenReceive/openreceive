@@ -162,6 +162,51 @@ test("create invoice rejects idempotency key reuse with a different body", async
   assert.equal(wallet.makeInvoiceCalls, 1);
 });
 
+test("create invoice quotes fiat with configured price providers", async () => {
+  const calls = [];
+  const liveProvider = {
+    source: "openreceive_mirror",
+    async getBtcFiatRates(currencies) {
+      calls.push(currencies);
+      return {
+        bitcoin: {
+          usd: "100000.00"
+        }
+      };
+    }
+  };
+  const { wallet, handlers } = createHarness({
+    priceProviders: [liveProvider],
+    priceCurrencies: ["USD"]
+  });
+
+  const createRes = createResponse();
+  await handlers.createInvoice(
+    createRequest({
+      headers: {
+        "idempotency-key": "order-live-rate"
+      },
+      body: {
+        fiat: {
+          currency: "USD",
+          value: "0.05"
+        },
+        description: "Fruit sticker"
+      }
+    }),
+    createRes,
+    raiseNext
+  );
+
+  assert.equal(createRes.statusCode, 201);
+  assert.equal(createRes.body.amount_msats, 50000);
+  assert.equal(createRes.body.fiat_quote.amount_msats, 50000);
+  assert.equal(createRes.body.fiat_quote.btc_fiat_price, "100000.00");
+  assert.equal(createRes.body.fiat_quote.source, "openreceive_mirror");
+  assert.equal(wallet.makeInvoiceCalls, 1);
+  assert.deepEqual(calls, [["USD"]]);
+});
+
 test("lookup settles invoice and publishes replayable SSE event", async () => {
   const { wallet, handlers } = createHarness();
   const createRes = createResponse();
@@ -193,7 +238,8 @@ test("lookup settles invoice and publishes replayable SSE event", async () => {
 
   assert.equal(lookupRes.statusCode, 200);
   assert.equal(lookupRes.body.transaction_state, "settled");
-  assert.equal(lookupRes.body.workflow_state, "awaiting_fulfillment");
+  assert.equal(lookupRes.body.workflow_state, "settlement_action_completed");
+  assert.equal(lookupRes.body.settlement_action_state, "completed");
   assert.equal(lookupRes.body.settled_at, 1200);
   assert.equal(lookupRes.body.preimage_present, true);
 
@@ -279,6 +325,7 @@ test("logger records invoice transitions without secrets or signed event tokens"
       "invoice.lookup.requested",
       "invoice.verifying",
       "invoice.settled",
+      "invoice.settlement_action_completed",
       "invoice.events.opened",
       "invoice.events.closed"
     ]
@@ -286,7 +333,7 @@ test("logger records invoice transitions without secrets or signed event tokens"
   assert.equal(logs[1].invoice_id, createRes.body.invoice_id);
   assert.equal(logs[1].payment_hash, PAYMENT_HASH);
   assert.equal(logs[4].transaction_state, "settled");
-  assert.equal(logs[5].replayed_events, 3);
+  assert.equal(logs[6].replayed_events, 4);
 
   const serializedLogs = JSON.stringify(logs);
   assert.doesNotMatch(serializedLogs, /nostr\+walletconnect:\/\//);
@@ -426,12 +473,12 @@ test("signed event URLs authorize one invoice and expire", async () => {
   assert.equal(expiredRes.body.message, "Signed event URL is invalid or expired.");
 });
 
-test("lookup can run an idempotent backend fulfillment hook after settlement", async () => {
-  let fulfillCalls = 0;
+test("lookup can run an idempotent backend settlement action hook after settlement", async () => {
+  let settlementActionCalls = 0;
   const { wallet, handlers } = createHarness({
     clock: () => 1300,
-    fulfill: async ({ invoice, metadata }) => {
-      fulfillCalls += 1;
+    settlementAction: async ({ invoice, metadata }) => {
+      settlementActionCalls += 1;
       assert.equal(invoice.transaction_state, "settled");
       assert.deepEqual(metadata, { fruit: "pear" });
     }
@@ -440,7 +487,7 @@ test("lookup can run an idempotent backend fulfillment hook after settlement", a
   await handlers.createInvoice(
     createRequest({
       headers: {
-        "idempotency-key": "order-fulfill"
+        "idempotency-key": "order-settlement-action"
       },
       body: {
         amount_msats: 200000,
@@ -467,10 +514,10 @@ test("lookup can run an idempotent backend fulfillment hook after settlement", a
   );
 
   assert.equal(firstLookup.statusCode, 200);
-  assert.equal(firstLookup.body.workflow_state, "fulfilled");
-  assert.equal(firstLookup.body.fulfillment.state, "delivered");
-  assert.equal(firstLookup.body.fulfilled_at, 1300);
-  assert.equal(fulfillCalls, 1);
+  assert.equal(firstLookup.body.workflow_state, "settlement_action_completed");
+  assert.equal(firstLookup.body.settlement_action_state, "completed");
+  assert.equal(firstLookup.body.settlement_action_completed_at, 1300);
+  assert.equal(settlementActionCalls, 1);
 
   const secondLookup = createResponse();
   await handlers.lookupInvoice(
@@ -483,8 +530,8 @@ test("lookup can run an idempotent backend fulfillment hook after settlement", a
     raiseNext
   );
 
-  assert.equal(secondLookup.body.workflow_state, "fulfilled");
-  assert.equal(fulfillCalls, 1);
+  assert.equal(secondLookup.body.workflow_state, "settlement_action_completed");
+  assert.equal(settlementActionCalls, 1);
 
   const eventRes = createResponse();
   await handlers.invoiceEvents(
@@ -498,15 +545,15 @@ test("lookup can run an idempotent backend fulfillment hook after settlement", a
   );
   const stream = eventRes.writes.join("");
   assert.match(stream, /event: invoice\.settled/);
-  assert.match(stream, /event: invoice\.fulfilled/);
+  assert.match(stream, /event: invoice\.settlement_action_completed/);
 });
 
-test("client-supplied settlement fields cannot trigger fulfillment", async () => {
-  let fulfillCalls = 0;
+test("client-supplied settlement fields cannot trigger settlement action", async () => {
+  let settlementActionCalls = 0;
   const { wallet, store, handlers } = createHarness({
     clock: () => 1300,
-    fulfill: async () => {
-      fulfillCalls += 1;
+    settlementAction: async () => {
+      settlementActionCalls += 1;
     }
   });
   const createRes = createResponse();
@@ -544,12 +591,12 @@ test("client-supplied settlement fields cannot trigger fulfillment", async () =>
   assert.equal(lookupRes.body.transaction_state, "pending");
   // A lookup is the server verifying via lookup_invoice, so the workflow moves
   // invoice_created -> verifying. Crucially, the unverified (still pending)
-  // wallet result keeps transaction_state pending and never fulfills, even
+  // wallet result keeps transaction_state pending and never runs the action, even
   // though the client put settlement fields in the request body.
   assert.equal(lookupRes.body.workflow_state, "verifying");
   assert.equal(stored.transaction_state, "pending");
-  assert.equal(stored.fulfillment_state, "pending");
-  assert.equal(fulfillCalls, 0);
+  assert.equal(stored.settlement_action_state, "pending");
+  assert.equal(settlementActionCalls, 0);
 });
 
 test("lookup rejects public status oracle requests for unknown payment hashes", async () => {
@@ -650,6 +697,46 @@ test("read-only helper routes expose static rates, providers, and route suggesti
   assert.equal(capabilitiesRes.statusCode, 200);
   assert.deepEqual(capabilitiesRes.body.methods, ["make_invoice", "lookup_invoice"]);
   assert.equal(capabilitiesRes.body.methods.includes("get_balance"), false);
+});
+
+test("rate helper routes use configured price providers", async () => {
+  const provider = {
+    source: "megalithic_mirror",
+    async getBtcFiatRates(currencies) {
+      assert.deepEqual(currencies, ["USD"]);
+      return {
+        bitcoin: {
+          usd: "125000.00"
+        }
+      };
+    }
+  };
+  const { handlers } = createHarness({
+    priceProviders: [provider],
+    priceCurrencies: ["USD"]
+  });
+
+  const ratesRes = createResponse();
+  await handlers.listRates(createRequest(), ratesRes, raiseNext);
+  assert.equal(ratesRes.statusCode, 200);
+  assert.equal(ratesRes.body.bitcoin.usd, "125000.00");
+
+  const quoteRes = createResponse();
+  await handlers.quoteRates(
+    createRequest({
+      body: {
+        fiat: {
+          currency: "USD",
+          value: "0.05"
+        }
+      }
+    }),
+    quoteRes,
+    raiseNext
+  );
+  assert.equal(quoteRes.statusCode, 200);
+  assert.equal(quoteRes.body.amount_msats, 40000);
+  assert.equal(quoteRes.body.source, "megalithic_mirror");
 });
 
 test("provider route rejects invalid us filter", async () => {
@@ -850,7 +937,7 @@ test("refresh invoice rejects settled invoices before wallet call", async () => 
   const settledInvoice = seedInvoice(store, {
     invoice_id: "or_inv_settled",
     transaction_state: "settled",
-    workflow_state: "awaiting_fulfillment",
+    workflow_state: "settlement_action_pending",
     settled_at: 1100
   });
   const res = createResponse();
@@ -1108,7 +1195,7 @@ function seedInvoice(store, overrides = {}) {
     amount_msats: 200000,
     transaction_state: "pending",
     workflow_state: "invoice_created",
-    fulfillment_state: "pending",
+    settlement_action_state: "pending",
     created_at: 1000,
     expires_at: 1600,
     metadata: {},

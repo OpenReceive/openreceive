@@ -14,8 +14,9 @@ broker, or bank.
 ## Decision
 
 OpenReceive creates one BOLT11 invoice through a merchant-controlled backend
-and verifies settlement before fulfillment. It may display route suggestions
-for third-party services that may be able to pay that invoice.
+and verifies settlement before a merchant-owned settlement action. It may
+display route suggestions for third-party services that may be able to pay that
+invoice.
 
 OpenReceive does not custody funds, exchange assets, operate accounts, transmit
 money, or guarantee provider route availability.
@@ -25,4 +26,4 @@ money, or guarantee provider route availability.
 - Docs and UI must say "route suggestions", not "pay with fiat" or "pay with
   crypto".
 - Provider registry claims need conservative wording and evidence.
-- The backend owns settlement verification and fulfillment.
+- The backend owns settlement verification and merchant settlement actions.

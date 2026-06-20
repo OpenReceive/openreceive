@@ -4,7 +4,7 @@ This recipe uses `@openreceive/react` primitives with Material UI components.
 It is a composition example, not a dependency of OpenReceive.
 
 Frontend code still receives only display-safe invoice data. The backend creates
-the invoice, performs lookup, and owns fulfillment.
+the invoice, performs lookup, and owns merchant settlement actions.
 
 ## Component
 

@@ -202,7 +202,7 @@ test("in-memory storage replays same idempotency request and conflicts on drift"
     amount_msats: 200000,
     transaction_state: "pending",
     workflow_state: "invoice_created",
-    fulfillment_state: "pending",
+    settlement_action_state: "pending",
     created_at: 1000,
     expires_at: 1600,
     metadata: {}
@@ -347,10 +347,10 @@ test("browser owns checkout payment status display model", () => {
   const settled = createOpenReceiveCheckoutStatusModel({
     ...state,
     transaction_state: "settled",
-    workflow_state: "fulfilled",
-    phase: "fulfilled",
+    workflow_state: "settlement_action_completed",
+    phase: "settled",
     settled: true,
-    terminal: true,
+    terminal: false,
     expiresInSeconds: undefined
   });
   assert.equal(settled.waiting, false);
@@ -697,7 +697,7 @@ test("browser checkout state applies only matching passive invoice events", () =
       payment_hash: PAYMENT_HASH,
       amount_msats: 200000,
       transaction_state: "settled",
-      workflow_state: "awaiting_fulfillment",
+      workflow_state: "settlement_action_pending",
       settled_at: 1010
     },
     { eventName: "invoice.settled", logger }
@@ -785,7 +785,7 @@ test("browser checkout watcher owns countdown, passive events, and lookup pollin
       assert.equal(state.payment_hash, PAYMENT_HASH);
       return {
         transaction_state: "settled",
-        workflow_state: "awaiting_fulfillment",
+        workflow_state: "settlement_action_pending",
         settled_at: 1002
       };
     },
@@ -802,7 +802,7 @@ test("browser checkout watcher owns countdown, passive events, and lookup pollin
   assert.ok(countdownTimer);
   assert.ok(pollTimer);
   assert.equal(listeners.has("invoice.verifying"), true);
-  assert.equal(listeners.has("invoice.fulfilled"), true);
+  assert.equal(listeners.has("invoice.settlement_action_completed"), true);
 
   now = 1003;
   countdownTimer[1].callback();
@@ -831,16 +831,18 @@ test("browser checkout watcher owns countdown, passive events, and lookup pollin
   assert.ok(clearedTimers.includes(countdownTimer[0]));
   assert.ok(clearedTimers.includes(pollTimer[0]));
 
-  listeners.get("invoice.fulfilled")({
-    type: "invoice.fulfilled",
+  listeners.get("invoice.settlement_action_completed")({
+    type: "invoice.settlement_action_completed",
     data: JSON.stringify({
       invoice_id: "or_inv_watch",
       payment_hash: PAYMENT_HASH,
       transaction_state: "settled",
-      workflow_state: "fulfilled"
+      workflow_state: "settlement_action_completed"
     })
   });
-  assert.equal(states.at(-1).phase, "fulfilled");
+  assert.equal(states.at(-1).phase, "settled");
+  assert.equal(closedEvents, 0);
+  watcher.stop();
   assert.equal(closedEvents, 1);
 });
 
@@ -864,7 +866,7 @@ test("browser checkout controller owns lifecycle actions for framework adapters"
       assert.equal(state.payment_hash, PAYMENT_HASH);
       return {
         transaction_state: "settled",
-        workflow_state: "awaiting_fulfillment",
+        workflow_state: "settlement_action_pending",
         settled_at: 1042
       };
     },
@@ -929,7 +931,7 @@ test("browser checkout controller owns lifecycle actions for framework adapters"
       invoice: "lnbc-controller-2",
       payment_hash: PAYMENT_HASH,
       transaction_state: "settled",
-      workflow_state: "awaiting_fulfillment",
+      workflow_state: "settlement_action_pending",
       settled_at: 1000
     },
     clipboard: {
@@ -968,7 +970,7 @@ test("browser checkout controller owns lookupUrl fetcher creation", async () => 
         ok: true,
         json: async () => ({
           transaction_state: "settled",
-          workflow_state: "awaiting_fulfillment",
+          workflow_state: "settlement_action_pending",
           settled_at: 1000
         })
       };
@@ -1059,7 +1061,7 @@ test("browser custom-element event map covers checkout lifecycle events", () => 
     invoice: "lnbc-event",
     payment_hash: PAYMENT_HASH,
     transaction_state: "settled",
-    workflow_state: "awaiting_fulfillment"
+    workflow_state: "settlement_action_pending"
   });
   const stateEvent = createOpenReceiveCheckoutStateEvent(
     OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.settled,
@@ -1168,7 +1170,7 @@ test("browser invoice event parser accepts canonical SSE JSON payloads", () => {
         invoice_id: "or_inv_browser",
         type: "incoming",
         transaction_state: "settled",
-        workflow_state: "awaiting_fulfillment",
+        workflow_state: "settlement_action_pending",
         payment_hash: PAYMENT_HASH,
         amount_msats: 200000,
         settled_at: 1010
@@ -1178,7 +1180,7 @@ test("browser invoice event parser accepts canonical SSE JSON payloads", () => {
       invoice_id: "or_inv_browser",
       type: "incoming",
       transaction_state: "settled",
-      workflow_state: "awaiting_fulfillment",
+      workflow_state: "settlement_action_pending",
       payment_hash: PAYMENT_HASH,
       amount_msats: 200000,
       settled_at: 1010

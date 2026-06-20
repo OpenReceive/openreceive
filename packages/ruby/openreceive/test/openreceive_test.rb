@@ -23,7 +23,7 @@ class OpenReceiveTest < Minitest::Test
       "amount_msats" => 200_000,
       "transaction_state" => "pending",
       "workflow_state" => "invoice_created",
-      "fulfillment_state" => "pending",
+      "settlement_action_state" => "pending",
       "created_at" => 1000,
       "expires_at" => 1600,
       "metadata" => {}
@@ -387,25 +387,25 @@ class OpenReceiveTest < Minitest::Test
     end
   end
 
-  def test_in_memory_invoice_store_settlement_and_fulfillment_are_duplicate_safe
+  def test_in_memory_invoice_store_settlement_action_is_duplicate_safe
     store = OpenReceive::InMemoryInvoiceStore.new
     store.create_invoice(invoice_row)
 
     first_settle = store.mark_settled(invoice_id: "or_inv_test_1", settled_at: 1200)
     second_settle = store.mark_settled(invoice_id: "or_inv_test_1", settled_at: 1300)
-    fulfilled = store.mark_fulfilled(invoice_id: "or_inv_test_1", fulfilled_at: 1400)
-    fulfilled_again = store.mark_fulfilled(invoice_id: "or_inv_test_1", fulfilled_at: 1500)
+    completed = store.mark_settlement_action_completed(invoice_id: "or_inv_test_1", settlement_action_completed_at: 1400)
+    completed_again = store.mark_settlement_action_completed(invoice_id: "or_inv_test_1", settlement_action_completed_at: 1500)
 
     assert_equal "settled", first_settle.fetch("transaction_state")
-    assert_equal "awaiting_fulfillment", first_settle.fetch("workflow_state")
+    assert_equal "settlement_action_pending", first_settle.fetch("workflow_state")
     assert_equal 1200, second_settle.fetch("settled_at")
-    assert_equal "fulfilled", fulfilled.fetch("workflow_state")
-    assert_equal "delivered", fulfilled.fetch("fulfillment_state")
-    assert_equal 1400, fulfilled_again.fetch("fulfilled_at")
+    assert_equal "settlement_action_completed", completed.fetch("workflow_state")
+    assert_equal "completed", completed.fetch("settlement_action_state")
+    assert_equal 1400, completed_again.fetch("settlement_action_completed_at")
 
-    settled_after_fulfillment = store.mark_settled(invoice_id: "or_inv_test_1", settled_at: 1600)
-    assert_equal "fulfilled", settled_after_fulfillment.fetch("workflow_state")
-    assert_equal "delivered", settled_after_fulfillment.fetch("fulfillment_state")
-    assert_equal 1200, settled_after_fulfillment.fetch("settled_at")
+    settled_after_action = store.mark_settled(invoice_id: "or_inv_test_1", settled_at: 1600)
+    assert_equal "settlement_action_completed", settled_after_action.fetch("workflow_state")
+    assert_equal "completed", settled_after_action.fetch("settlement_action_state")
+    assert_equal 1200, settled_after_action.fetch("settled_at")
   end
 end

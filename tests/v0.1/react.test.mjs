@@ -209,10 +209,10 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
     "invoice.settled",
     "invoice.expired",
     "invoice.failed",
-    "invoice.fulfilled"
+    "invoice.settlement_action_completed"
   ]);
   assert.equal(openReceiveCheckoutLabels.copyInvoice, "Copy BOLT11");
-  assert.equal(getOpenReceivePaymentStatusText("fulfilled").title, "Payment received");
+  assert.equal(getOpenReceivePaymentStatusText("settled").title, "Payment received");
   assert.equal(getOpenReceiveWizardEmptyMessage("bitcoin"), "Choose Lightning or on-chain Bitcoin.");
   assert.equal(getOpenReceiveProviderMechanismLabel("pay_invoice"), "Pays invoices");
   assert.equal(getOpenReceiveProviderOpenLabel("Boltz"), "Open Boltz");

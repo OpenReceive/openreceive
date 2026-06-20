@@ -130,7 +130,8 @@ The core product must support:
   - Showing the customer QR/copy/open-wallet UI.
   - Showing payer-side route suggestions that may be able to pay the invoice.
   - Pushing passive settlement updates to the frontend.
-  - Unlocking fulfillment only after backend verification.
+  - Providing an idempotent boundary where a merchant-supplied settlement
+    action may run only after backend verification.
 
 The reference flow:
 
@@ -149,12 +150,15 @@ The reference flow:
    transaction_state/state == "settled". A preimage is corroborating proof, not
    a sufficient settlement signal by itself.
 9. Backend emits invoice.settled to the matching browser session.
-10. Backend fulfills the product.
+10. If configured, backend runs the app-owned settlement action exactly through
+    OpenReceive's idempotent action boundary. OpenReceive records that the
+    action completed or failed, but never records what the action did.
 
 There is no pure-frontend OpenReceive checkout mode. A browser app, mobile app,
 static site, or desktop shell can render the checkout UI, but invoice creation,
-NWC access, settlement lookup, polling, notification handling, and fulfillment
-must always happen in a server-side component controlled by the merchant.
+NWC access, settlement lookup, polling, notification handling, and merchant
+settlement actions must always happen in a server-side component controlled by
+the merchant.
 
 
 Product Wording Boundary
@@ -201,7 +205,8 @@ Security and correctness:
   - The frontend never unlocks a product by itself.
   - Notifications are never final proof by themselves.
   - Settlement truth comes from lookup_invoice; NWC notifications can provide
-    the same data faster but cannot fulfill by themselves.
+    the same data faster but cannot run merchant settlement actions by
+    themselves.
   - Store payment_hash for every invoice.
   - Store preimage when available, but never treat preimage alone as final
     settlement proof for incoming invoices.
@@ -241,7 +246,7 @@ Storage Contract And Invoice Lifecycle
 --------------------------------------
 
 The storage contract must be defined before the first SDK adapter. OpenReceive
-depends on idempotency and fulfillment safety; do not let each language or
+depends on idempotency and settlement-action safety; do not let each language or
 framework invent its own database semantics.
 
 Required invoice row fields:
@@ -255,11 +260,11 @@ Required invoice row fields:
   amount_msats
   transaction_state
   workflow_state
-  fulfillment_state
+  settlement_action_state
   created_at
   expires_at
   settled_at
-  fulfilled_at
+  settlement_action_completed_at
   refreshed_from_invoice_id
   metadata
   fiat_quote
@@ -279,10 +284,10 @@ Required uniqueness and transition invariants:
     invoice response.
   - Reusing an idempotency_key with a different request body returns 409.
   - Settlement transitions are idempotent.
-  - Fulfillment transitions are idempotent.
-  - fulfilled_at can be set once.
+  - Settlement action transitions are idempotent.
+  - settlement_action_completed_at can be set once.
   - invoice.settled events can replay safely.
-  - Notifications never directly fulfill.
+  - Notifications never directly run merchant settlement actions.
   - Expired invoices cannot be refreshed in-place; refresh creates a new
     invoice linked to the old one.
 
@@ -290,15 +295,13 @@ Exact storage model:
 
   {
     "transaction_state": "pending | settled | expired | failed | accepted",
-    "workflow_state": "draft | invoice_created | verifying | awaiting_fulfillment | fulfilled | expiry_pending_verification | expired_closed | failed_closed | cancelled",
-    "fulfillment": {
-      "state": "pending | ready | delivered | delivery_failed"
-    }
+    "workflow_state": "draft | invoice_created | verifying | settlement_action_pending | settlement_action_completed | expiry_pending_verification | expired_closed | failed_closed | cancelled",
+    "settlement_action_state": "pending | completed | failed"
   }
 
 Exact workflow lifecycle:
 
-  draft -> invoice_created -> verifying -> awaiting_fulfillment -> fulfilled
+  draft -> invoice_created -> verifying -> settlement_action_pending -> settlement_action_completed
   draft -> invoice_created -> expiry_pending_verification -> expired_closed
   draft -> invoice_created -> failed_closed
   draft -> invoice_created -> cancelled
@@ -308,11 +311,15 @@ Notes:
   - workflow_state is OpenReceive's app-layer lifecycle.
   - transaction_state preserves the NIP-47 transaction state where available.
   - verifying means the backend is checking activity through lookup_invoice.
-  - awaiting_fulfillment means backend lookup has proven settlement, but
-    delivery may still be pending or retrying.
-  - fulfilled is an application outcome, not wallet settlement.
-  - checking, awaiting_fulfillment, fulfilled, and other workflow labels must
-    never be written to transaction_state.
+  - settlement_action_pending means backend lookup has proven settlement, but
+    the merchant-supplied settlement action has not completed yet.
+  - settlement_action_completed means OpenReceive's optional idempotent
+    settlement action boundary completed. It does not say what merchant
+    business effect happened.
+  - If no settlement action hook is configured, adapters may complete the
+    boundary as a no-op after backend settlement is proven.
+  - checking, settlement_action_pending, settlement_action_completed, and other
+    workflow labels must never be written to transaction_state.
   - Every schema, storage adapter, framework migration, and conformance vector
     must use this lifecycle.
 
@@ -481,8 +488,10 @@ Money JSON representation:
 
   OpenReceive-specific fields are allowed only where they describe app-layer
   behavior that NIP-47 does not model: invoice_id, fiat, fiat_quote, checkout,
-  fulfillment, routes, auth, and idempotency. Public frontend responses may
-  hide sensitive fields such as preimage and expose preimage_present instead.
+  settlement_action_state, routes, auth, and idempotency. Public frontend
+  responses may hide sensitive fields such as preimage and expose
+  preimage_present instead. They must not include product delivery URLs,
+  entitlement data, file paths, or other deliverable-specific fields.
 
   Do not copy the encrypted NWC event envelope into HTTP responses. HTTP routes
   already name the operation, so method, params, and result_type are not needed
@@ -497,7 +506,8 @@ Authentication and authorization:
   custom guest-checkout/session-token system.
 
   The app decides who can create an invoice, who can read an invoice, who can
-  subscribe to events, and who receives fulfillment. OpenReceive provides
+  subscribe to events, and what app-owned action happens after settlement.
+  OpenReceive provides
   hooks, helpers, and safe defaults; it does not decide what "logged in",
   "owns this order", "guest checkout", or "admin" means.
 
@@ -703,7 +713,7 @@ Lookup invoice response:
     "invoice_id": "or_inv_01jz...",
     "type": "incoming",
     "transaction_state": "settled",
-    "workflow_state": "awaiting_fulfillment",
+    "workflow_state": "settlement_action_pending",
     "invoice": "lnbc...",
     "payment_hash": "abc123...",
     "amount_msats": 200000,
@@ -711,11 +721,7 @@ Lookup invoice response:
     "expires_at": 1781741400,
     "settled_at": 1781740990,
     "preimage_present": true,
-    "fulfillment": {
-      "type": "digital_file",
-      "state": "ready",
-      "url": "/demo/fruit-stickers/banana.svg"
-    }
+    "settlement_action_state": "pending"
   }
 
 Refresh invoice:
@@ -729,7 +735,7 @@ Refresh invoice:
 
   Refresh is allowed only when the original invoice is expired, failed, or
   otherwise explicitly refreshable by adapter policy. Refreshing an already
-  settled or fulfilled invoice returns 409.
+  settled invoice returns 409.
 
   Request:
 
@@ -759,7 +765,7 @@ Refresh invoice:
   Storage rules:
 
     - old_invoice_id keeps its original payment_hash, invoice,
-      transaction_state, workflow_state, and fulfillment records.
+      transaction_state, workflow_state, and settlement action records.
     - new_invoice_id has a new payment_hash and new BOLT11 invoice.
     - refreshed_from_invoice_id on the new row points to old_invoice_id.
     - The idempotency key for refresh is scoped separately from initial create.
@@ -804,7 +810,8 @@ Required SSE behavior:
   - Event responses are never cacheable.
   - The browser must verify invoice_id and payment_hash match the current
     invoice before updating UI.
-  - Events are passive UI hints; they never directly fulfill.
+  - Events are passive UI hints; they never directly run merchant settlement
+    actions.
 
 Event names:
 
@@ -813,7 +820,7 @@ Event names:
   invoice.settled
   invoice.expired
   invoice.failed
-  invoice.fulfilled
+  invoice.settlement_action_completed
   invoice.cancelled
 
 Example SSE:
@@ -830,9 +837,13 @@ Example SSE:
 
   id: 3
   event: invoice.settled
-  data: {"invoice_id":"or_inv_01jz...","type":"incoming","transaction_state":"settled","workflow_state":"awaiting_fulfillment","payment_hash":"abc123...","amount_msats":200000,"settled_at":1781740990}
+  data: {"invoice_id":"or_inv_01jz...","type":"incoming","transaction_state":"settled","workflow_state":"settlement_action_pending","payment_hash":"abc123...","amount_msats":200000,"settled_at":1781740990,"settlement_action_state":"pending"}
 
   id: 4
+  event: invoice.settlement_action_completed
+  data: {"invoice_id":"or_inv_01jz...","type":"incoming","transaction_state":"settled","workflow_state":"settlement_action_completed","payment_hash":"abc123...","amount_msats":200000,"settlement_action_state":"completed","settlement_action_completed_at":1781740991}
+
+  id: 5
   event: invoice.expired
   data: {"invoice_id":"or_inv_01jz...","type":"incoming","transaction_state":"expired","workflow_state":"expired_closed"}
 
@@ -883,12 +894,14 @@ OpenReceive workflow states:
     A notification, poll, or user action suggests activity; server is verifying
     by lookup_invoice.
 
-  awaiting_fulfillment
-    Backend lookup has proven settlement, but fulfillment may still be pending
-    or retrying.
+  settlement_action_pending
+    Backend lookup has proven settlement, but the optional merchant settlement
+    action has not completed yet.
 
-  fulfilled
-    App delivered the product, file, credit, pass, or entitlement.
+  settlement_action_completed
+    OpenReceive's optional idempotent settlement action boundary completed.
+    The product, entitlement, credit, download, or other app effect remains
+    private app-owned state.
 
   expiry_pending_verification
     Local expiry time has passed, but wallet truth has not yet conclusively
@@ -910,11 +923,11 @@ Typical workflow transitions:
   draft -> invoice_created
   invoice_created -> verifying
   verifying -> invoice_created
-  verifying -> awaiting_fulfillment
-  awaiting_fulfillment -> fulfilled
+  verifying -> settlement_action_pending
+  settlement_action_pending -> settlement_action_completed
   invoice_created -> expiry_pending_verification
   verifying -> expiry_pending_verification
-  expiry_pending_verification -> awaiting_fulfillment
+  expiry_pending_verification -> settlement_action_pending
   expiry_pending_verification -> expired_closed
   invoice_created -> failed_closed
   verifying -> failed_closed
@@ -922,9 +935,10 @@ Typical workflow transitions:
 
 Invariant:
 
-  Product fulfillment is never triggered by frontend state alone. Fulfillment
-  happens only after backend verification through lookup_invoice. For NIP-47,
-  require settled_at or transaction_state/state == "settled". Treat preimage
+  Merchant settlement actions are never triggered by frontend state alone. A
+  settlement action may run only after backend verification through
+  lookup_invoice. For NIP-47, require settled_at or transaction_state/state ==
+  "settled". Treat preimage
   as corroborating proof only because a receiver can already know the preimage
   when it creates the invoice. Normalize older library-specific variants at
   adapter boundaries only.
@@ -1107,7 +1121,8 @@ NIP-47 to OpenReceive field mapping:
   - result.state -> transaction_state, preserving lowercase NIP-47 values such
     as pending, settled, accepted, expired, and failed.
   - OpenReceive-specific invoice_id, fiat_quote, checkout, routes, and
-    fulfillment fields may be added around the NIP-47 transaction object.
+    settlement_action_state fields may be added around the NIP-47 transaction
+    object. Deliverable fields must stay in the merchant app.
 
 Long-running listener requirements:
 
@@ -1123,7 +1138,8 @@ Long-running listener requirements:
       update guard such as pending -> settled only.
     - Run notification listeners as long-running worker processes, not inside
       request handlers.
-    - Still verify settlement with lookup_invoice before fulfillment.
+    - Still verify settlement with lookup_invoice before running any merchant
+      settlement action.
 
 Settlement detection:
 
@@ -1217,7 +1233,7 @@ Pseudo-code:
     if isSettled(result):
       mark_settled()
       publish_invoice_settled()
-      fulfill()
+      run_settlement_action_once()
       return
 
     next_lookup_at = now + nextDelay(invoice.created_at, now)
@@ -1227,7 +1243,7 @@ Pseudo-code:
   if isSettled(final):
     mark_settled()
     publish_invoice_settled()
-    fulfill()
+    run_settlement_action_once()
     return
 
   if isWalletExpired(final):
@@ -1244,7 +1260,7 @@ Pseudo-code:
     if isSettled(result):
       mark_settled()
       publish_invoice_settled()
-      fulfill()
+      run_settlement_action_once()
       return
 
     if isWalletExpired(result):
@@ -2675,7 +2691,8 @@ Required adapter auth hooks:
 
   buildInvoiceMetadata(request, user, input)
     Attach user_id, order_id, cart_id, tenant_id, checkout_session_id, or other
-    app-owned identifiers needed for fulfillment and authorization.
+    app-owned identifiers needed for authorization and the app's private
+    post-settlement behavior.
 
   eventAuthStrategy(request, invoice)
     Choose same-site session cookies, signed event URL, polling fallback, or a
@@ -2697,7 +2714,7 @@ Express:
     authorizeInvoiceAccess: async (req, invoice) => {
       return invoice.metadata.userId === req.user.id
     },
-    fulfill: async ({ invoice, metadata }) => {
+    settlementAction: async ({ invoice, metadata }) => {
       await unlockSticker(metadata.userId, metadata.fruit)
     }
   }))
@@ -2719,7 +2736,7 @@ Rails:
         order_id: params[:order_id]
       }
     }
-    config.fulfill = ->(invoice) {
+    config.settlement_action = ->(invoice) {
       FruitStickerUnlock.create!(invoice_id: invoice.id)
     }
   end
@@ -2744,7 +2761,7 @@ FastAPI:
 
   router = openreceive_fastapi.router(
       client=client,
-      fulfill=unlock_fruit_sticker,
+      settlement_action=unlock_fruit_sticker,
   )
 
   app.include_router(router, prefix="/openreceive")
@@ -2783,15 +2800,7 @@ Shared product:
       "currency": "USD",
       "value": "0.10"
     },
-    "fulfillment": {
-      "type": "digital_download",
-      "items": [
-        "apple.svg",
-        "banana.svg",
-        "orange.svg",
-        "pear.svg"
-      ]
-    }
+    "sticker_files": ["apple.svg", "banana.svg", "orange.svg", "pear.svg"]
   }
 
 Shared assets:
@@ -3879,7 +3888,7 @@ Test layers:
   - Ensure signed event URLs expire and are scoped to one invoice.
   - Ensure guest checkout tokens are unguessable and scoped to the checkout
     session.
-  - Ensure fulfillment cannot be triggered by client-only state changes.
+  - Ensure settlement actions cannot be triggered by client-only state changes.
 
 9. Package smoke tests
 
@@ -4077,7 +4086,7 @@ Controls:
   - Build-time frontend bundle scan for OPENRECEIVE_NWC and
     nostr+walletconnect://.
   - Backend-only settlement verification.
-  - Idempotent fulfillment.
+  - Idempotent settlement action boundary.
   - Unique payment_hash constraints.
   - Unique invoice_id constraints.
   - Scoped idempotency_key uniqueness and request-body hash checks.
@@ -4092,7 +4101,7 @@ Public demo safety:
   - Low invoice amount.
   - Rate limit by IP/session.
   - Optional captcha only if abused.
-  - No user-uploaded fulfillment.
+  - No user-uploaded post-settlement content.
   - No dynamic file paths.
   - Daily receive cap.
   - Clear "test payment" disclosure.
@@ -4413,11 +4422,11 @@ Current repository position:
     dependency-light: production fail-closed authentication, idempotent invoice
     creation around an injected receive-only client, authorized lookup, backend
     settlement verification, polling-worker verification, passive notification
-    handling, and duplicate-safe fulfillment.
+    handling, and duplicate-safe settlement action tracking.
   - The Rails package also now includes initial ActiveRecord migration and
     model templates for the invoice storage shape, including idempotency scope,
-    amount_msats bounds, state checks, fulfillment timestamps, and uniqueness
-    indexes. These are examples/templates copied by the install generator
+    amount_msats bounds, state checks, settlement action timestamps, and
+    uniqueness indexes. These are examples/templates copied by the install generator
     skeleton.
   - The Rails package now includes public app templates for controller routes,
     polling jobs, payment notification jobs, ActionCable/Turbo stream updates,
@@ -4439,7 +4448,7 @@ Current repository position:
   - This review also starts the Rails Hotwire Hello Fruit demo at
     examples/hello-fruit/server/rails-hotwire. It includes a Rails app skeleton
     with OpenReceive engine mount, Hotwire invoice partial, polling and
-    notification jobs, fulfillment model, Dockerfile, compose templates,
+    notification jobs, app-owned sticker unlock model, Dockerfile, compose templates,
     Makefile, env example, and README. It now boots without OPENRECEIVE_NWC by
     injecting OpenReceive::UnavailableReceiveClient and failing invoice creation
     closed with WALLET_UNAVAILABLE until a receive-only NWC URI is configured.
@@ -4538,7 +4547,7 @@ Already completed:
     nwc-ruby wrapper and fail-closed unavailable-wallet client.
   - Initial Rails adapter-helper package for receive-only idempotent invoice
     creation, authorized lookup, backend settlement verification, and
-    duplicate-safe fulfillment using an injected Ruby receive client, plus
+    duplicate-safe settlement action tracking using an injected Ruby receive client, plus
     worker/listener verification where notifications remain passive hints.
   - Initial Rails ActiveRecord migration/model templates for invoice storage
     invariants.
@@ -4701,9 +4710,9 @@ Deliverables:
 
 Definition of done:
 
-  Rails can create, poll, receive notifications, verify settlement, and fulfill
-  the Hello Fruit flow using nwc-ruby/OpenReceive inside the Rails app and its
-  worker roles.
+  Rails can create, poll, receive notifications, verify settlement, and run the
+  Hello Fruit app's settlement action using nwc-ruby/OpenReceive inside the
+  Rails app and its worker roles.
 
 Milestone 4: PHP and Python ecosystem expansion
 

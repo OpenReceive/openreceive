@@ -116,8 +116,8 @@ strings.
 
 The checkout state helpers are pure browser-side reducers for display state.
 They update only matching `invoice_id` and `payment_hash` events, track
-countdown/phase fields, and keep settlement as a UI hint. Fulfillment still
-requires backend lookup and app-owned authorization.
+countdown/phase fields, and keep settlement as a UI hint. Merchant settlement
+actions still require backend lookup and app-owned authorization.
 
 ```ts
 let checkout = createOpenReceiveCheckoutState(invoiceResponse, {
@@ -163,7 +163,7 @@ lookup-response merge behavior as polling. Refresh controls should call
 or `refreshUrl` plus `refreshIdempotencyKey`; the action POSTs to the merchant
 backend refresh route and replaces browser state with the backend's new invoice
 snapshot. Cancel controls should call `cancel()` to stop the browser watcher
-without pretending the backend invoice has been settled or fulfilled.
+without pretending the backend invoice has been settled.
 Adapters should derive payment status UI from
 `createOpenReceiveCheckoutStatusModel()` instead of rechecking expiry or
 settlement fields locally, formatting countdown labels locally, or composing
@@ -304,8 +304,8 @@ countdown, BOLT11 copy feedback, and country-aware payment wizard. It dispatches
 - `openreceive-open-wallet`
 - `openreceive-error`
 
-Settlement and fulfillment still belong to backend-verified invoice state.
-Frontend events are UI hints, not payment authority.
+Settlement and app-owned settlement actions still belong to backend-verified
+invoice state. Frontend events are UI hints, not payment authority.
 
 `defineOpenReceiveElements()` also registers `<openreceive-theme-toggle>`.
 That element owns the stored light/dark preference, toggle label, and theme

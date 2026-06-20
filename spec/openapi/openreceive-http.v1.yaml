@@ -110,8 +110,8 @@ paths:
       summary: Create a linked replacement invoice for an expired or failed invoice.
       description: >
         Refresh never mutates the original invoice. It creates a new invoice row
-        linked through refreshed_from_invoice_id. Settled or fulfilled invoices
-        must not be refreshed.
+        linked through refreshed_from_invoice_id. Settled invoices must not be
+        refreshed.
       parameters:
         - $ref: "#/components/parameters/InvoiceId"
         - name: Idempotency-Key
@@ -434,6 +434,7 @@ components:
         - amount_msats
         - created_at
         - expires_at
+        - settlement_action_state
       properties:
         invoice_id:
           type: string
@@ -465,7 +466,13 @@ components:
         settled_at:
           type: integer
           minimum: 0
-        fulfilled_at:
+        settlement_action_state:
+          type: string
+          enum:
+            - pending
+            - completed
+            - failed
+        settlement_action_completed_at:
           type: integer
           minimum: 0
         metadata:
@@ -483,9 +490,6 @@ components:
               type: string
             routes_url:
               type: string
-        fulfillment:
-          type: object
-          additionalProperties: true
     FiatAmount:
       type: object
       additionalProperties: false
@@ -524,8 +528,8 @@ components:
         - draft
         - invoice_created
         - verifying
-        - awaiting_fulfillment
-        - fulfilled
+        - settlement_action_pending
+        - settlement_action_completed
         - expiry_pending_verification
         - expired_closed
         - failed_closed

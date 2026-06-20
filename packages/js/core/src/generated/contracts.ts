@@ -38,8 +38,8 @@ export const OPENRECEIVE_EVENT_NAMES = [
   "invoice.created",
   "invoice.expired",
   "invoice.failed",
-  "invoice.fulfilled",
   "invoice.settled",
+  "invoice.settlement_action_completed",
   "invoice.verifying"
 ] as const;
 export type OpenReceiveGeneratedEventName = (typeof OPENRECEIVE_EVENT_NAMES)[number];
@@ -78,8 +78,8 @@ export const OPENRECEIVE_WORKFLOW_STATES = [
   "draft",
   "invoice_created",
   "verifying",
-  "awaiting_fulfillment",
-  "fulfilled",
+  "settlement_action_pending",
+  "settlement_action_completed",
   "expiry_pending_verification",
   "expired_closed",
   "failed_closed",

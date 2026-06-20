@@ -3,9 +3,5 @@
   "product_id": "fruit-sticker-pack",
   "name": "OpenReceive Demo: Buy A Fruit Sticker",
   "description": "get a fruit sticker",
-  "invoice_expiry_seconds": 600,
-  "fulfillment": {
-    "type": "digital_file",
-    "asset_path_template": "stickers/{fruit}.svg"
-  }
+  "invoice_expiry_seconds": 600
 }

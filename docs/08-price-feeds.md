@@ -5,8 +5,8 @@ the quote on the invoice. The wallet still receives `amount_msats`; fiat values
 are only a quoting input.
 
 The static provider is the default for tests, docs, screenshots, and
-deterministic demos. Live adapters may use CoinGecko Simple Price compatible
-JSON.
+deterministic fixtures. Live adapters and the JS Hello Fruit demos use
+CoinGecko Simple Price compatible JSON.
 
 ## Supported Shape
 
@@ -42,9 +42,10 @@ seconds, quote TTL, and endpoint URLs.
 runtime should skip the deterministic static mock and try the OpenReceive
 mirror, Megalithic mirror, then CoinGecko direct.
 
-The Express adapter exposes deterministic v0.1 helper routes at
-`GET /openreceive/v1/rates` and `POST /openreceive/v1/rates/quote`. These routes
-use the static mock source unless the host app wires a later live provider.
+The Express adapter exposes helper routes at `GET /openreceive/v1/rates` and
+`POST /openreceive/v1/rates/quote`. These routes use the static mock source
+unless the host app wires live `priceProviders`; the JS Hello Fruit demos wire
+`createDefaultLivePriceProviders({ currencies: ["USD"] })`.
 
 ## Quote Rules
 

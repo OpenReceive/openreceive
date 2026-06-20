@@ -440,14 +440,14 @@ module OpenReceive
       draft
       invoice_created
       verifying
-      awaiting_fulfillment
-      fulfilled
+      settlement_action_pending
+      settlement_action_completed
       expiry_pending_verification
       expired_closed
       failed_closed
       cancelled
     ].freeze
-    FULFILLMENT_STATES = %w[pending ready delivered delivery_failed].freeze
+    SETTLEMENT_ACTION_STATES = %w[pending completed failed].freeze
 
     def initialize
       @by_invoice_id = {}
@@ -512,17 +512,23 @@ module OpenReceive
     def mark_settled(invoice_id:, settled_at:)
       row = require_stored_invoice(invoice_id)
       row["transaction_state"] = "settled"
-      row["workflow_state"] = "awaiting_fulfillment" unless row["workflow_state"] == "fulfilled"
-      row["fulfillment_state"] = "ready" unless row["fulfillment_state"] == "delivered"
+      row["workflow_state"] = "settlement_action_pending" unless row["workflow_state"] == "settlement_action_completed"
       row["settled_at"] ||= integer(settled_at)
       deep_copy(row)
     end
 
-    def mark_fulfilled(invoice_id:, fulfilled_at:)
+    def mark_settlement_action_completed(invoice_id:, settlement_action_completed_at:)
       row = require_stored_invoice(invoice_id)
-      row["workflow_state"] = "fulfilled"
-      row["fulfillment_state"] = "delivered"
-      row["fulfilled_at"] ||= integer(fulfilled_at)
+      row["workflow_state"] = "settlement_action_completed"
+      row["settlement_action_state"] = "completed"
+      row["settlement_action_completed_at"] ||= integer(settlement_action_completed_at)
+      deep_copy(row)
+    end
+
+    def mark_settlement_action_failed(invoice_id:)
+      row = require_stored_invoice(invoice_id)
+      row["workflow_state"] = "settlement_action_pending"
+      row["settlement_action_state"] = "failed"
       deep_copy(row)
     end
 
@@ -550,7 +556,7 @@ module OpenReceive
 
       assert_member(row.fetch("transaction_state"), TRANSACTION_STATES, "transaction_state")
       assert_member(row.fetch("workflow_state"), WORKFLOW_STATES, "workflow_state")
-      assert_member(row.fetch("fulfillment_state"), FULFILLMENT_STATES, "fulfillment_state")
+      assert_member(row.fetch("settlement_action_state"), SETTLEMENT_ACTION_STATES, "settlement_action_state")
       assert_amount_msats(row.fetch("amount_msats"))
       assert_unix_seconds(row.fetch("created_at"), "created_at")
       assert_unix_seconds(row.fetch("expires_at"), "expires_at")

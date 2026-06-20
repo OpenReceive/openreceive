@@ -295,7 +295,7 @@ function validateRailsDemo(demo) {
   expect(initializer.includes("OpenReceive::UnavailableReceiveClient"), `${demo.dir}/config/initializers/openreceive.rb: must fail closed without a wallet URI`);
   expect(initializer.includes('ENV["OPENRECEIVE_NWC"].to_s'), `${demo.dir}/config/initializers/openreceive.rb: must not require OPENRECEIVE_NWC at boot`);
   expect(!initializer.includes('ENV.fetch("OPENRECEIVE_NWC")'), `${demo.dir}/config/initializers/openreceive.rb: must not fetch OPENRECEIVE_NWC at boot`);
-  expect(initializer.includes("config.fulfill"), `${demo.dir}/config/initializers/openreceive.rb: must configure fulfillment`);
+  expect(initializer.includes("config.settlement_action"), `${demo.dir}/config/initializers/openreceive.rb: must configure settlement action`);
   expect(controller.includes("nwc_secret_exposed: false"), `${demo.dir}/app/controllers/hello_fruit_controller.rb: metadata must explicitly avoid NWC exposure`);
   expect(partial.includes("turbo_frame_tag"), `${demo.dir}/app/views/openreceive/_invoice.html.erb: must render Turbo frame`);
 }

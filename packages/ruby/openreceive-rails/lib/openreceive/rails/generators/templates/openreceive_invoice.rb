@@ -28,8 +28,8 @@ class OpenReceiveInvoice < ApplicationRecord
          draft: "draft",
          invoice_created: "invoice_created",
          verifying: "verifying",
-         awaiting_fulfillment: "awaiting_fulfillment",
-         fulfilled: "fulfilled",
+         settlement_action_pending: "settlement_action_pending",
+         settlement_action_completed: "settlement_action_completed",
          expiry_pending_verification: "expiry_pending_verification",
          expired_closed: "expired_closed",
          failed_closed: "failed_closed",
@@ -37,12 +37,11 @@ class OpenReceiveInvoice < ApplicationRecord
        },
        prefix: true
 
-  enum :fulfillment_state,
+  enum :settlement_action_state,
        {
          pending: "pending",
-         ready: "ready",
-         delivered: "delivered",
-         delivery_failed: "delivery_failed"
+         completed: "completed",
+         failed: "failed"
        },
        prefix: true
 end

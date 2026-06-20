@@ -19,8 +19,8 @@
     "@vitejs/plugin-react": "*",
     "express": "*",
     "qrcode": "*",
-    "react": "*",
-    "react-dom": "*",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "vite": "*"
   },
   "devDependencies": {

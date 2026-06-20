@@ -11,8 +11,8 @@
     "draft",
     "invoice_created",
     "verifying",
-    "awaiting_fulfillment",
-    "fulfilled",
+    "settlement_action_pending",
+    "settlement_action_completed",
     "expiry_pending_verification",
     "expired_closed",
     "failed_closed",
@@ -33,11 +33,11 @@
     ],
     [
       "verifying",
-      "awaiting_fulfillment"
+      "settlement_action_pending"
     ],
     [
-      "awaiting_fulfillment",
-      "fulfilled"
+      "settlement_action_pending",
+      "settlement_action_completed"
     ],
     [
       "invoice_created",
@@ -49,7 +49,7 @@
     ],
     [
       "expiry_pending_verification",
-      "awaiting_fulfillment"
+      "settlement_action_pending"
     ],
     [
       "expiry_pending_verification",
@@ -70,8 +70,8 @@
   ],
   "invariants": [
     "workflow_state never stores pending, settled, expired, failed, or accepted",
-    "transaction_state never stores invoice_created, verifying, awaiting_fulfillment, fulfilled, expiry_pending_verification, expired_closed, failed_closed, or cancelled",
-    "frontend state never fulfills a product",
+    "transaction_state never stores invoice_created, verifying, settlement_action_pending, settlement_action_completed, expiry_pending_verification, expired_closed, failed_closed, or cancelled",
+    "frontend state never runs a merchant settlement action",
     "invoice.settled events replay safely"
   ]
 }

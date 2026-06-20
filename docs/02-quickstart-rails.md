@@ -4,11 +4,12 @@ OpenReceive now has an initial Rails adapter helper package at
 `packages/ruby/openreceive-rails`. It can wrap an injected receive-only client
 for idempotent invoice creation, authorized lookup, backend settlement
 verification, polling-worker verification, passive notification handling, and
-duplicate-safe fulfillment. It also includes initial ActiveRecord migration and
-model templates for the invoice storage shape, plus controller, job, channel,
-route, install-generator templates, an invoice Hotwire partial, and optional
-mounted engine routes with `503 WALLET_UNAVAILABLE` handling for an injected
-unavailable-wallet client. Complete Rails demo smoke is still pending.
+duplicate-safe settlement action tracking. It also includes initial
+ActiveRecord migration and model templates for the invoice storage shape, plus
+controller, job, channel, route, install-generator templates, an invoice
+Hotwire partial, and optional mounted engine routes with
+`503 WALLET_UNAVAILABLE` handling for an injected unavailable-wallet client.
+Complete Rails demo smoke is still pending.
 An initial Rails Hotwire Hello Fruit demo skeleton exists at
 `examples/hello-fruit/server/rails-hotwire`; it is covered by the demo
 container validator, has a root `npm run demo rails` launcher target, and boots
@@ -38,7 +39,7 @@ docs/01-quickstart-node.md
 
 A Rails integration should mount OpenReceive inside the merchant app, not run a
 separate daemon. The app owns authentication, order/session lookup, storage,
-fulfillment, and worker deployment.
+merchant settlement actions, and worker deployment.
 
 Expected Rails pieces:
 
@@ -50,7 +51,7 @@ Expected Rails pieces:
 - ActiveJob, Solid Queue, Sidekiq, or GoodJob polling workers
 - ActionCable, Turbo Streams, or Hotwire updates for browser state using the
   provided channel/job templates as the starting point
-- idempotent fulfillment hooks after backend settlement verification
+- idempotent settlement action hooks after backend settlement verification
 
 ## Security Boundary
 

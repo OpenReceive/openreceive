@@ -14,7 +14,7 @@ apps cannot safely hold merchant wallet credentials.
 OpenReceive does not support pure-frontend live checkout. Frontend packages
 render display-safe invoice data, subscribe to passive events, and call
 merchant backend routes. Invoice creation, NWC access, lookup, polling,
-notification handling, and fulfillment stay server-side.
+notification handling, and merchant settlement actions stay server-side.
 
 ## Consequences
 

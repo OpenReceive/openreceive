@@ -42,8 +42,8 @@ test("generated contract models expose HTTP routes and event names", () => {
     "invoice.created",
     "invoice.expired",
     "invoice.failed",
-    "invoice.fulfilled",
     "invoice.settled",
+    "invoice.settlement_action_completed",
     "invoice.verifying"
   ]);
   assert.deepEqual(OPENRECEIVE_ERROR_CODES, [
@@ -75,7 +75,7 @@ test("generated contract models expose shared state and amount boundaries", () =
     "failed",
     "accepted"
   ]);
-  assert.equal(OPENRECEIVE_WORKFLOW_STATES.includes("awaiting_fulfillment"), true);
+  assert.equal(OPENRECEIVE_WORKFLOW_STATES.includes("settlement_action_pending"), true);
   assert.deepEqual(OPENRECEIVE_AMOUNT_MSATS_BOUNDARY, {
     minimum: 1000,
     maximum: 9007199254740991

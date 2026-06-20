@@ -70,8 +70,8 @@ Signed event URLs must:
 - Use `Referrer-Policy: same-origin` or stricter.
 - Avoid logging full URLs.
 
-The event payload is still passive. It can update UI, but it must not fulfill a
-product by itself.
+The event payload is still passive. It can update UI, but it must not run a
+merchant settlement action by itself.
 
 ## Lookup Authorization
 
@@ -80,12 +80,15 @@ as sensitive. The adapter must check that the current user, cart, order,
 checkout session, or backend service principal may inspect that invoice before
 returning status.
 
-## Fulfillment
+## Settlement Actions
 
-Host apps may provide a backend fulfillment hook. The Express adapter calls it
-only after wallet lookup proves settlement, then marks the invoice fulfilled and
-publishes `invoice.fulfilled`. Hooks must be idempotent and must not trust
-frontend state or passive event delivery as fulfillment authority.
+Host apps may provide a backend settlement action hook. The Express adapter
+calls it only after wallet lookup proves settlement, then marks the invoice
+settlement action completed and publishes `invoice.settlement_action_completed`.
+If no hook is configured, the adapter may complete that boundary as a no-op
+after backend settlement is proven.
+Hooks must be idempotent and must not trust frontend state or passive event
+delivery as action authority.
 
 ## Demo Mode
 

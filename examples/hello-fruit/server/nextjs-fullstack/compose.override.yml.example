@@ -1,4 +1,7 @@
 services:
   hello-fruit-nextjs-fullstack:
+    command: ["npm", "exec", "next", "--", "dev", "-H", "0.0.0.0", "-p", "3002"]
+    environment:
+      NODE_ENV: development
     ports:
       - "3002:3002"

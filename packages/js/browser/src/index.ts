@@ -113,7 +113,7 @@ export const OPENRECEIVE_INVOICE_EVENT_TYPES = [
   "invoice.settled",
   "invoice.expired",
   "invoice.failed",
-  "invoice.fulfilled"
+  "invoice.settlement_action_completed"
 ] as const;
 
 export function createOpenReceiveProviderCopyEvent(
@@ -335,7 +335,6 @@ export type OpenReceiveCheckoutPhase =
   | "invoice_created"
   | "verifying"
   | "settled"
-  | "fulfilled"
   | "expired"
   | "failed"
   | "cancelled";
@@ -1469,7 +1468,7 @@ export function createOpenReceiveCountryDisplay(
 export function getOpenReceivePaymentStatusText(
   phase: OpenReceiveCheckoutPhase
 ): { readonly title: string; readonly detail: string } {
-  if (phase === "settled" || phase === "fulfilled") {
+  if (phase === "settled") {
     return {
       title: openReceiveCheckoutLabels.paymentStatus.settledTitle,
       detail: openReceiveCheckoutLabels.paymentStatus.settledDetail
@@ -1887,9 +1886,11 @@ export function updateOpenReceivePaymentWizardSelection(
 
 export class OpenReceiveBrowserPaymentWizardController
   implements OpenReceivePaymentWizardController {
+  private readonly options: OpenReceivePaymentWizardControllerOptions;
   private selection: OpenReceivePaymentWizardSelection;
 
-  constructor(private readonly options: OpenReceivePaymentWizardControllerOptions = {}) {
+  constructor(options: OpenReceivePaymentWizardControllerOptions = {}) {
+    this.options = options;
     this.selection =
       options.selection ??
       createOpenReceivePaymentWizardSelection({
@@ -3229,7 +3230,6 @@ function getCheckoutPhase(
   transactionState: string,
   workflowState: string
 ): OpenReceiveCheckoutPhase {
-  if (workflowState === "fulfilled") return "fulfilled";
   if (workflowState === "cancelled") return "cancelled";
   if (transactionState === "settled") return "settled";
   if (transactionState === "expired" || workflowState === "expired_closed") {
@@ -3249,7 +3249,6 @@ function getCheckoutPhase(
 
 function isTerminalPhase(phase: OpenReceiveCheckoutPhase): boolean {
   return (
-    phase === "fulfilled" ||
     phase === "expired" ||
     phase === "failed" ||
     phase === "cancelled"

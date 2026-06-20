@@ -14,7 +14,7 @@
     "amount_msats",
     "transaction_state",
     "workflow_state",
-    "fulfillment_state",
+    "settlement_action_state",
     "created_at",
     "expires_at",
     "metadata"
@@ -73,21 +73,20 @@
         "draft",
         "invoice_created",
         "verifying",
-        "awaiting_fulfillment",
-        "fulfilled",
+        "settlement_action_pending",
+        "settlement_action_completed",
         "expiry_pending_verification",
         "expired_closed",
         "failed_closed",
         "cancelled"
       ]
     },
-    "fulfillment_state": {
+    "settlement_action_state": {
       "type": "string",
       "enum": [
         "pending",
-        "ready",
-        "delivered",
-        "delivery_failed"
+        "completed",
+        "failed"
       ]
     },
     "created_at": {
@@ -102,7 +101,7 @@
       "type": "integer",
       "minimum": 0
     },
-    "fulfilled_at": {
+    "settlement_action_completed_at": {
       "type": "integer",
       "minimum": 0
     },
@@ -128,7 +127,7 @@
     "idempotency_key is unique within merchant_scope + operation + idempotency_key",
     "same idempotency request hash returns original response",
     "different idempotency request hash returns 409",
-    "fulfilled_at can be set once",
+    "settlement_action_completed_at can be set once",
     "refresh creates a new invoice row"
   ]
 }

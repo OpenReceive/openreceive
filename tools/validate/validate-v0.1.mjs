@@ -500,6 +500,7 @@ function validateData() {
   assert(demoFruits.product_id === demoSpec.product_id, "Hello Fruit fruit product id drift");
   assert(demoProduct.name === demoSpec.name, "Hello Fruit product name drift");
   assert(demoProduct.description === demoSpec.description, "Hello Fruit product description drift");
+  assert(!Object.hasOwn(demoProduct, "fulfillment"), "Hello Fruit product must not define fulfillment");
   assert(Array.isArray(demoSpec.fruits) && demoSpec.fruits.length > 0, "canonical demo fruits missing");
   assert(demoFruits.fruits.length === demoSpec.fruits.length, "Hello Fruit fruit count drift");
 
@@ -562,8 +563,25 @@ function validateOpenApi() {
     "OpenAPI invoice refreshed_from_invoice_id pattern mismatch"
   );
   assert(
-    openapi.components?.schemas?.Invoice?.properties?.fulfilled_at?.minimum === 0,
-    "OpenAPI invoice fulfilled_at timestamp missing"
+    openapi.components?.schemas?.Invoice?.properties?.settlement_action_completed_at?.minimum === 0,
+    "OpenAPI invoice settlement_action_completed_at timestamp missing"
+  );
+  assert(
+    openapi.components?.schemas?.Invoice?.required?.includes("settlement_action_state"),
+    "OpenAPI invoice settlement_action_state must be required"
+  );
+  assert(
+    JSON.stringify(openapi.components?.schemas?.Invoice?.properties?.settlement_action_state?.enum) ===
+      JSON.stringify(["pending", "completed", "failed"]),
+    "OpenAPI invoice settlement_action_state enum mismatch"
+  );
+  assert(
+    openapi.components?.schemas?.Invoice?.properties?.fulfillment === undefined,
+    "OpenAPI invoice must not expose fulfillment object"
+  );
+  assert(
+    openapi.components?.schemas?.Invoice?.properties?.fulfilled_at === undefined,
+    "OpenAPI invoice must not expose fulfilled_at"
   );
   assert(
     openapi.components?.schemas?.QuoteRateRequest?.required?.includes("fiat"),
@@ -592,9 +610,9 @@ function validateAsyncApi() {
     "invoiceCreated",
     "invoiceVerifying",
     "invoiceSettled",
+    "invoiceSettlementActionCompleted",
     "invoiceExpired",
     "invoiceFailed",
-    "invoiceFulfilled",
     "invoiceCancelled"
   ]) {
     assert(messages[message], `AsyncAPI missing ${message}`);
@@ -603,6 +621,10 @@ function validateAsyncApi() {
   assert(
     asyncapi.components?.schemas?.InvoiceEventPayload?.properties?.amount_msats?.minimum === 1000,
     "AsyncAPI amount_msats minimum mismatch"
+  );
+  assert(
+    asyncapi.components?.schemas?.InvoiceEventPayload?.required?.includes("settlement_action_state"),
+    "AsyncAPI settlement_action_state must be required"
   );
 }
 

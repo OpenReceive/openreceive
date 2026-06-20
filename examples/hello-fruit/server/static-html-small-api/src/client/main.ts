@@ -42,6 +42,13 @@ interface InvoiceResponse {
   };
 }
 
+interface CheckoutStateEventDetail {
+  state?: {
+    invoice_id?: string;
+    workflow_state?: string;
+  };
+}
+
 const fruits = fruitsData.fruits as Fruit[];
 const firstFruit = fruits[0];
 if (firstFruit === undefined) {
@@ -49,6 +56,8 @@ if (firstFruit === undefined) {
 }
 
 let selectedFruit: Fruit = fruits[1] ?? firstFruit;
+let purchasedFruit: Fruit | undefined;
+let completedInvoiceId = "";
 const logOpenReceive = createHelloFruitBrowserLogger("static-html-small-api");
 
 defineOpenReceiveElements({
@@ -115,6 +124,8 @@ function renderFruitGrid(): void {
 async function createInvoice(): Promise<void> {
   setError("");
   setButtonState("creating");
+  closeStickerModal();
+  completedInvoiceId = "";
 
   try {
     const response = await fetch("/openreceive/v1/invoices", {
@@ -142,6 +153,7 @@ async function createInvoice(): Promise<void> {
       throw new Error(body.message ?? helloFruitDemoLabels.createInvoiceError);
     }
 
+    purchasedFruit = selectedFruit;
     renderInvoice(body);
   } catch (error) {
     setError(error instanceof Error ? error.message : String(error));
@@ -162,6 +174,18 @@ function renderInvoice(nextInvoice: InvoiceResponse): void {
     onError: (event) => {
       const detail = (event as CustomEvent<{ error?: unknown }>).detail;
       setError(detail?.error instanceof Error ? detail.error.message : String(detail?.error));
+    },
+    onState: (event) => {
+      const state = (event as CustomEvent<CheckoutStateEventDetail>).detail?.state;
+      if (
+        state?.workflow_state === "settlement_action_completed" &&
+        state.invoice_id !== undefined &&
+        state.invoice_id !== completedInvoiceId &&
+        purchasedFruit !== undefined
+      ) {
+        completedInvoiceId = state.invoice_id;
+        showStickerModal(purchasedFruit);
+      }
     }
   });
 
@@ -179,6 +203,55 @@ function setButtonState(state: "idle" | "creating"): void {
 
 function setError(message: string): void {
   requireElement("error").textContent = message;
+}
+
+function showStickerModal(fruit: Fruit): void {
+  closeStickerModal();
+
+  const backdrop = document.createElement("div");
+  backdrop.className = "sticker-modal-backdrop";
+  backdrop.id = "sticker-modal-backdrop";
+
+  const modal = document.createElement("section");
+  modal.className = "sticker-modal";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.setAttribute("aria-labelledby", "sticker-modal-title");
+
+  const image = document.createElement("img");
+  image.src = `/${fruit.sticker}`;
+  image.alt = "";
+
+  const title = document.createElement("h2");
+  title.id = "sticker-modal-title";
+  title.textContent = "You just got a sticker";
+
+  const detail = document.createElement("p");
+  detail.textContent = `${fruit.name} is ready.`;
+
+  const actions = document.createElement("div");
+  actions.className = "sticker-modal-actions";
+
+  const download = document.createElement("a");
+  download.className = "primary sticker-download";
+  download.href = `/${fruit.sticker}`;
+  download.download = `${fruit.id}-sticker.svg`;
+  download.textContent = "Download sticker";
+
+  const close = document.createElement("button");
+  close.className = "secondary";
+  close.type = "button";
+  close.textContent = "Close";
+  close.addEventListener("click", closeStickerModal);
+
+  actions.append(download, close);
+  modal.append(image, title, detail, actions);
+  backdrop.append(modal);
+  document.body.append(backdrop);
+}
+
+function closeStickerModal(): void {
+  document.getElementById("sticker-modal-backdrop")?.remove();
 }
 
 function requireElement<T extends HTMLElement = HTMLElement>(id: string): T {

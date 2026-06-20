@@ -5,13 +5,18 @@ import {
 import {
   InMemoryInvoiceStore,
   InvoiceNotFoundError,
-  OPENRECEIVE_STATIC_BTC_FIAT_RATES,
+  StaticPriceProvider,
   createIdempotencyRequestHash,
-  quoteFiatToMsats,
+  getBtcFiatRatesWithFallback,
+  quoteFiatToMsatsWithPrice,
   type InvoiceStorageRow,
+  type OpenReceiveBtcFiatRateMapWithSource,
+  type OpenReceiveFiatAmount,
   type OpenReceiveIdempotencyScope,
+  type OpenReceiveRateQuote,
   type OpenReceiveErrorCode,
-  type OpenReceiveReceiveNwcClient
+  type OpenReceiveReceiveNwcClient,
+  type OpenReceiveSourcedPriceProvider
 } from "@openreceive/core";
 import {
   getAssets,
@@ -104,14 +109,14 @@ export interface OpenReceiveExpressSignedEvents {
   queryParam?: string;
 }
 
-export interface OpenReceiveExpressFulfillmentInput {
+export interface OpenReceiveExpressSettlementActionInput {
   req: ExpressLikeRequest;
   invoice: InvoiceStorageRow;
   metadata: Record<string, unknown>;
 }
 
-export type OpenReceiveExpressFulfillHook = (
-  input: OpenReceiveExpressFulfillmentInput
+export type OpenReceiveExpressSettlementActionHook = (
+  input: OpenReceiveExpressSettlementActionInput
 ) => Promise<void> | void;
 
 export interface OpenReceiveExpressOptions {
@@ -124,7 +129,9 @@ export interface OpenReceiveExpressOptions {
   csrf?: OpenReceiveExpressCsrf;
   cors?: OpenReceiveExpressCors;
   signedEvents?: OpenReceiveExpressSignedEvents;
-  fulfill?: OpenReceiveExpressFulfillHook;
+  settlementAction?: OpenReceiveExpressSettlementActionHook;
+  priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
+  priceCurrencies?: readonly string[];
   unsafeAllowUnauthenticatedDemoMode?: boolean;
   logger?: OpenReceiveLogger;
   clock?: () => number;
@@ -157,7 +164,7 @@ export type OpenReceiveInvoiceEventName =
   | "invoice.settled"
   | "invoice.expired"
   | "invoice.failed"
-  | "invoice.fulfilled"
+  | "invoice.settlement_action_completed"
   | "invoice.cancelled";
 
 export interface OpenReceiveInvoiceEvent {
@@ -251,6 +258,8 @@ export function createOpenReceiveExpressHandlers(
   const eventBus = options.eventBus ?? new InMemoryInvoiceEventBus();
   const clock = options.clock ?? currentUnixSeconds;
   const basePath = normalizeBasePath(options.basePath);
+  const priceProviders = options.priceProviders ?? [new StaticPriceProvider()];
+  const priceCurrencies = options.priceCurrencies ?? ["USD"];
   const heartbeatMs =
     (options.heartbeatSeconds ?? DEFAULT_HEARTBEAT_SECONDS) * 1000;
   const handle = (
@@ -291,14 +300,24 @@ export function createOpenReceiveExpressHandlers(
         }));
       }
 
-      const amountMsats = getCreateAmountMsats(body, clock());
+      const resolvedAmount = await resolveCreateAmount({
+        body,
+        now: clock(),
+        priceProviders
+      });
       const descriptionFields = getCreateDescriptionFields(body);
       emitLog(options, "info", "invoice.create.requested", "Creating Lightning invoice through receive wallet.", {
-        amount_msats: amountMsats,
-        amount_source: body.fiat === undefined ? "amount_msats" : "fiat"
+        amount_msats: resolvedAmount.amount_msats,
+        amount_source: resolvedAmount.amount_source,
+        ...(resolvedAmount.fiat_quote === null
+          ? {}
+          : {
+            btc_fiat_price: resolvedAmount.fiat_quote.btc_fiat_price,
+            price_source: resolvedAmount.fiat_quote.source
+          })
       });
       const invoice = await options.client.makeInvoice({
-        amount_msats: BigInt(amountMsats),
+        amount_msats: BigInt(resolvedAmount.amount_msats),
         ...descriptionFields,
         expiry: optionalSafeInteger(body.expiry),
         metadata: parseOptionalRecord(body.metadata, "metadata")
@@ -319,16 +338,13 @@ export function createOpenReceiveExpressHandlers(
         amount_msats: toSafeInteger(invoice.amount_msats, "amount_msats"),
         transaction_state: "pending",
         workflow_state: "invoice_created",
-        fulfillment_state: "pending",
+        settlement_action_state: "pending",
         created_at: createdAt,
         expires_at: expiresAt,
         metadata: parseOptionalRecord(body.metadata, "metadata") ?? {},
-        fiat_quote: body.fiat === undefined ? null : {
-          ...quoteFiatToMsats({
-            fiat: parseFiatAmount(body.fiat),
-            as_of: createdAt
-          })
-        }
+        fiat_quote: resolvedAmount.fiat_quote === null
+          ? null
+          : { ...resolvedAmount.fiat_quote }
       });
       eventBus.publish(
         createResult.row.invoice_id,
@@ -393,7 +409,7 @@ export function createOpenReceiveExpressHandlers(
           );
           emitLog(options, "info", "invoice.settled", "Invoice settlement was verified by wallet lookup.", invoiceLogFields(current));
         }
-        current = await maybeFulfillInvoice({
+        current = await maybeRunSettlementAction({
           options,
           req,
           store,
@@ -497,7 +513,7 @@ export function createOpenReceiveExpressHandlers(
         amount_msats: toSafeInteger(invoice.amount_msats, "amount_msats"),
         transaction_state: "pending",
         workflow_state: "invoice_created",
-        fulfillment_state: "pending",
+        settlement_action_state: "pending",
         created_at: createdAt,
         expires_at: expiresAt,
         refreshed_from_invoice_id: oldInvoice.invoice_id,
@@ -565,7 +581,15 @@ export function createOpenReceiveExpressHandlers(
 
     listRates: handle(async (req, res) => {
       applyDefaultHeaders(req, res, options);
-      return res.status(200).json(OPENRECEIVE_STATIC_BTC_FIAT_RATES);
+      try {
+        const rates = await getBtcFiatRatesForProviders({
+          currencies: priceCurrencies,
+          priceProviders
+        });
+        return res.status(200).json(rates.rates);
+      } catch (error) {
+        throw mapPriceError(error);
+      }
     }),
 
     quoteRates: handle(async (req, res) => {
@@ -573,15 +597,13 @@ export function createOpenReceiveExpressHandlers(
       const body = asRecord(req.body);
 
       try {
-        return res.status(200).json(quoteFiatToMsats({
+        return res.status(200).json(await quoteFiatAmount({
           fiat: parseFiatAmount(body.fiat),
-          as_of: clock()
+          as_of: clock(),
+          priceProviders
         }));
       } catch (error) {
-        if (error instanceof RangeError) {
-          throw httpError(400, "INVALID_REQUEST", error.message);
-        }
-        throw error;
+        throw mapPriceError(error);
       }
     }),
 
@@ -706,7 +728,7 @@ function serializeInvoice(
     created_at: row.created_at,
     expires_at: row.expires_at,
     ...(row.settled_at === undefined ? {} : { settled_at: row.settled_at }),
-    ...(row.fulfilled_at === undefined ? {} : { fulfilled_at: row.fulfilled_at }),
+    ...(row.settlement_action_completed_at === undefined ? {} : { settlement_action_completed_at: row.settlement_action_completed_at }),
     ...(row.refreshed_from_invoice_id === undefined
       ? {}
       : { refreshed_from_invoice_id: row.refreshed_from_invoice_id }),
@@ -716,9 +738,7 @@ function serializeInvoice(
       events_url: createEventUrl(row, context),
       routes_url: `${context.basePath}/routes?invoice_id=${row.invoice_id}`
     },
-    fulfillment: {
-      state: row.fulfillment_state
-    }
+    settlement_action_state: row.settlement_action_state
   };
 }
 
@@ -893,14 +913,15 @@ function serializeEventData(row: InvoiceStorageRow): Record<string, unknown> {
     payment_hash: row.payment_hash,
     amount_msats: row.amount_msats,
     ...(row.settled_at === undefined ? {} : { settled_at: row.settled_at }),
-    ...(row.fulfilled_at === undefined ? {} : { fulfilled_at: row.fulfilled_at }),
+    settlement_action_state: row.settlement_action_state,
+    ...(row.settlement_action_completed_at === undefined ? {} : { settlement_action_completed_at: row.settlement_action_completed_at }),
     ...(row.refreshed_from_invoice_id === undefined
       ? {}
       : { refreshed_from_invoice_id: row.refreshed_from_invoice_id })
   };
 }
 
-async function maybeFulfillInvoice(input: {
+async function maybeRunSettlementAction(input: {
   options: OpenReceiveExpressOptions;
   req: ExpressLikeRequest;
   store: InMemoryInvoiceStore;
@@ -908,31 +929,42 @@ async function maybeFulfillInvoice(input: {
   invoice: InvoiceStorageRow;
   clock: () => number;
 }): Promise<InvoiceStorageRow> {
-  if (input.options.fulfill === undefined) return input.invoice;
   if (input.invoice.transaction_state !== "settled") return input.invoice;
   if (
-    input.invoice.workflow_state === "fulfilled" ||
-    input.invoice.fulfillment_state === "delivered"
+    input.invoice.workflow_state === "settlement_action_completed" ||
+    input.invoice.settlement_action_state === "completed"
   ) {
     return input.invoice;
   }
 
-  await input.options.fulfill({
-    req: input.req,
-    invoice: input.invoice,
-    metadata: input.invoice.metadata
-  });
-  const fulfilled = input.store.markFulfilled({
+  if (input.options.settlementAction !== undefined) {
+    try {
+      await input.options.settlementAction({
+        req: input.req,
+        invoice: input.invoice,
+        metadata: input.invoice.metadata
+      });
+    } catch (error) {
+      const failed = input.store.markSettlementActionFailed(input.invoice.invoice_id);
+      emitLog(input.options, "error", "invoice.settlement_action_failed", "Settlement action hook failed for settled invoice.", {
+        ...invoiceLogFields(failed),
+        error: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
+    }
+  }
+
+  const completed = input.store.markSettlementActionCompleted({
     invoice_id: input.invoice.invoice_id,
-    fulfilled_at: input.clock()
+    settlement_action_completed_at: input.clock()
   });
   input.eventBus.publish(
-    fulfilled.invoice_id,
-    "invoice.fulfilled",
-    serializeEventData(fulfilled)
+    completed.invoice_id,
+    "invoice.settlement_action_completed",
+    serializeEventData(completed)
   );
-  emitLog(input.options, "info", "invoice.fulfilled", "Fulfillment hook completed for settled invoice.", invoiceLogFields(fulfilled));
-  return fulfilled;
+  emitLog(input.options, "info", "invoice.settlement_action_completed", "Settlement action completed for settled invoice.", invoiceLogFields(completed));
+  return completed;
 }
 
 function invoiceLogFields(row: InvoiceStorageRow): Record<string, unknown> {
@@ -942,9 +974,9 @@ function invoiceLogFields(row: InvoiceStorageRow): Record<string, unknown> {
     amount_msats: row.amount_msats,
     transaction_state: row.transaction_state,
     workflow_state: row.workflow_state,
-    fulfillment_state: row.fulfillment_state,
+    settlement_action_state: row.settlement_action_state,
     ...(row.settled_at === undefined ? {} : { settled_at: row.settled_at }),
-    ...(row.fulfilled_at === undefined ? {} : { fulfilled_at: row.fulfilled_at }),
+    ...(row.settlement_action_completed_at === undefined ? {} : { settlement_action_completed_at: row.settlement_action_completed_at }),
     ...(row.refreshed_from_invoice_id === undefined
       ? {}
       : { refreshed_from_invoice_id: row.refreshed_from_invoice_id })
@@ -968,7 +1000,7 @@ function emitLog(
       ...fields
     }));
   } catch {
-    // Logging must never change payment, settlement, or fulfillment behavior.
+    // Logging must never change payment, settlement, or settlement-action behavior.
   }
 }
 
@@ -1010,10 +1042,18 @@ function redactSecrets(value: string): string {
     .replace(/([?&](?:_or_evt|token|secret)=)[^&\s"'`<>]+/gi, "$1[REDACTED]");
 }
 
-function getCreateAmountMsats(
-  body: Record<string, unknown>,
-  now: number
-): number {
+interface ResolvedCreateAmount {
+  amount_msats: number;
+  amount_source: "amount_msats" | "fiat";
+  fiat_quote: OpenReceiveRateQuote | null;
+}
+
+async function resolveCreateAmount(input: {
+  body: Record<string, unknown>;
+  now: number;
+  priceProviders: readonly OpenReceiveSourcedPriceProvider[];
+}): Promise<ResolvedCreateAmount> {
+  const { body } = input;
   const hasAmountMsats = body.amount_msats !== undefined;
   const hasFiat = body.fiat !== undefined;
 
@@ -1030,20 +1070,80 @@ function getCreateAmountMsats(
     if (amountMsats === undefined) {
       throw httpError(400, "INVALID_REQUEST", "amount_msats must be a safe integer.");
     }
-    return amountMsats;
+    return {
+      amount_msats: amountMsats,
+      amount_source: "amount_msats",
+      fiat_quote: null
+    };
   }
 
   try {
-    return quoteFiatToMsats({
+    const quote = await quoteFiatAmount({
       fiat: parseFiatAmount(body.fiat),
-      as_of: now
-    }).amount_msats;
+      as_of: input.now,
+      priceProviders: input.priceProviders
+    });
+    return {
+      amount_msats: quote.amount_msats,
+      amount_source: "fiat",
+      fiat_quote: quote
+    };
   } catch (error) {
-    if (error instanceof RangeError) {
-      throw httpError(400, "INVALID_REQUEST", error.message);
-    }
-    throw error;
+    throw mapPriceError(error);
   }
+}
+
+async function quoteFiatAmount(input: {
+  fiat: OpenReceiveFiatAmount;
+  as_of: number;
+  priceProviders: readonly OpenReceiveSourcedPriceProvider[];
+}): Promise<OpenReceiveRateQuote> {
+  const rates = await getBtcFiatRatesForProviders({
+    currencies: [input.fiat.currency],
+    priceProviders: input.priceProviders
+  });
+  const btcFiatPrice = rates.rates.bitcoin[input.fiat.currency.toLowerCase()];
+
+  if (btcFiatPrice === undefined) {
+    throw new RangeError(`price provider ${rates.source} did not return ${input.fiat.currency}`);
+  }
+
+  return quoteFiatToMsatsWithPrice({
+    fiat: input.fiat,
+    btc_fiat_price: btcFiatPrice,
+    source: rates.source,
+    as_of: input.as_of
+  });
+}
+
+async function getBtcFiatRatesForProviders(input: {
+  currencies: readonly string[];
+  priceProviders: readonly OpenReceiveSourcedPriceProvider[];
+}): Promise<OpenReceiveBtcFiatRateMapWithSource> {
+  if (input.priceProviders.length === 1) {
+    const [provider] = input.priceProviders;
+    return {
+      source: provider.source,
+      rates: await provider.getBtcFiatRates(input.currencies)
+    };
+  }
+
+  return getBtcFiatRatesWithFallback({
+    currencies: input.currencies,
+    providers: input.priceProviders
+  });
+}
+
+function mapPriceError(error: unknown): HttpError {
+  if (error instanceof RangeError) {
+    return httpError(400, "INVALID_REQUEST", error.message);
+  }
+
+  return httpError(
+    503,
+    "INTERNAL",
+    "Unable to fetch BTC fiat exchange rate."
+  );
 }
 
 function getCreateDescriptionFields(body: Record<string, unknown>): {

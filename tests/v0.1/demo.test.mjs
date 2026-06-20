@@ -602,8 +602,8 @@ test("Frontend UI packages consume shared wizard selection model", () => {
   ]) {
     assert.match(source, /createOpenReceivePaymentWizardModel/,
       `${name}: derives wizard view model from browser helper`);
-    assert.match(source, /updateOpenReceivePaymentWizardSelection/,
-      `${name}: updates wizard selection through browser reducer`);
+    assert.match(source, /updateOpenReceivePaymentWizardSelection|createOpenReceivePaymentWizardController/,
+      `${name}: updates wizard selection through browser-owned selection logic`);
     assert.doesNotMatch(source, /setSelectedMethod/,
       `${name}: must not own method selection transitions`);
     assert.doesNotMatch(source, /setSelectedCountryCode/,

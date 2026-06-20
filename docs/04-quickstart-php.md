@@ -19,10 +19,10 @@ Expected PHP pieces:
 - Laravel or Symfony route/controller helpers under `/openreceive/v1`
 - server-side receive-only NWC configuration
 - database tables for invoices, idempotency keys, lifecycle state, and
-  fulfillment state
+  settlement action state
 - queue workers or scheduler jobs for polling and expiry verification
 - SSE, Mercure, Livewire, Inertia, or template-driven browser updates
-- idempotent fulfillment after backend wallet lookup confirms settlement
+- idempotent settlement actions after backend wallet lookup confirms settlement
 
 ## Security Boundary
 
@@ -31,7 +31,7 @@ frontend bundles, mobile apps, logs, exception pages, or analytics payloads.
 
 Frontend code receives only display-safe invoice data and authorized status or
 event URLs. A client-supplied settled flag, preimage, or notification must not
-fulfill an order.
+run a merchant settlement action.
 
 ## Conformance
 

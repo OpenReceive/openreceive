@@ -302,7 +302,7 @@ function getFinalOutcome(
   if (detection.status === "settled") {
     return {
       status: "settled",
-      workflow_state: "awaiting_fulfillment",
+      workflow_state: "settlement_action_pending",
       lookup_invoice: lookup,
       reason: "settlement_detected"
     };

@@ -40,7 +40,7 @@ class OpenReceiveRailsTest < Minitest::Test
   Controller = Struct.new(:current_user_id)
   ROOT = File.expand_path("../../../..", __dir__)
 
-  def build_adapter(client: FakeReceiveClient.new, fulfilled: [])
+  def build_adapter(client: FakeReceiveClient.new, completed: [])
     config = OpenReceive::Rails::Configuration.new
     config.client = client
     config.merchant_scope = "rails:test"
@@ -50,8 +50,8 @@ class OpenReceiveRailsTest < Minitest::Test
       invoice.fetch("metadata").fetch("user_id") == controller.current_user_id
     end
     config.metadata = ->(controller, params) { { "user_id" => controller.current_user_id, "fruit" => params["fruit"] } }
-    config.fulfill = ->(invoice) { fulfilled << invoice.fetch("invoice_id") }
-    [OpenReceive::Rails::Adapter.new(config), client, fulfilled]
+    config.settlement_action = ->(invoice) { completed << invoice.fetch("invoice_id") }
+    [OpenReceive::Rails::Adapter.new(config), client, completed]
   end
 
   def read_template(name)
@@ -85,8 +85,8 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_includes migration, "amount_msats >= 1000"
     assert_includes migration, "9007199254740991"
     assert_includes migration, "settled_at_seconds"
-    assert_includes migration, "fulfilled_at_seconds"
-    assert_includes migration, "fulfillment_state IN"
+    assert_includes migration, "settlement_action_completed_at_seconds"
+    assert_includes migration, "settlement_action_state IN"
     refute_includes migration, "OPENRECEIVE_NWC"
     refute_includes migration, "nostr+walletconnect://"
 
@@ -94,7 +94,7 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_includes model, "idempotency_request_hash"
     assert_includes model, "transaction_state"
     assert_includes model, "workflow_state"
-    assert_includes model, "fulfillment_state"
+    assert_includes model, "settlement_action_state"
   end
 
   def test_rails_route_job_and_channel_templates_preserve_receive_only_boundary
@@ -245,8 +245,8 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_empty client.make_invoice_calls
   end
 
-  def test_lookup_verifies_backend_settlement_before_fulfillment
-    adapter, client, fulfilled = build_adapter
+  def test_lookup_verifies_backend_settlement_before_settlement_action
+    adapter, client, completed = build_adapter
     controller = Controller.new(7)
     created = adapter.create_invoice(
       controller: controller,
@@ -257,22 +257,22 @@ class OpenReceiveRailsTest < Minitest::Test
 
     pending = adapter.lookup_invoice(controller: controller, invoice_id: invoice_id)
     assert_equal "pending", pending.fetch("body").fetch("transaction_state")
-    assert_empty fulfilled
+    assert_empty completed
 
     client.lookup_state = "settled"
     settled = adapter.lookup_invoice(controller: controller, invoice_id: invoice_id)
     replayed = adapter.lookup_invoice(controller: controller, invoice_id: invoice_id)
 
     assert_equal "settled", settled.fetch("body").fetch("transaction_state")
-    assert_equal "fulfilled", settled.fetch("body").fetch("workflow_state")
-    assert_equal [invoice_id], fulfilled
-    assert_equal "fulfilled", replayed.fetch("body").fetch("workflow_state")
-    assert_equal [invoice_id], fulfilled
+    assert_equal "settlement_action_completed", settled.fetch("body").fetch("workflow_state")
+    assert_equal [invoice_id], completed
+    assert_equal "settlement_action_completed", replayed.fetch("body").fetch("workflow_state")
+    assert_equal [invoice_id], completed
     assert_equal [{ "payment_hash" => "a" * 64 }] * 3, client.lookup_invoice_calls
   end
 
   def test_internal_verify_can_be_used_by_polling_workers
-    adapter, client, fulfilled = build_adapter
+    adapter, client, completed = build_adapter
     created = adapter.create_invoice(
       controller: Controller.new(7),
       params: { "amount_msats" => 200_000, "fruit" => "banana" },
@@ -285,12 +285,12 @@ class OpenReceiveRailsTest < Minitest::Test
     settled = adapter.verify_invoice(invoice_id: invoice_id)
 
     assert_equal "pending", pending.fetch("transaction_state")
-    assert_equal "fulfilled", settled.fetch("workflow_state")
-    assert_equal [invoice_id], fulfilled
+    assert_equal "settlement_action_completed", settled.fetch("workflow_state")
+    assert_equal [invoice_id], completed
   end
 
   def test_payment_received_notification_is_only_a_hint
-    adapter, client, fulfilled = build_adapter
+    adapter, client, completed = build_adapter
     created = adapter.create_invoice(
       controller: Controller.new(7),
       params: { "amount_msats" => 200_000, "fruit" => "banana" },
@@ -300,15 +300,15 @@ class OpenReceiveRailsTest < Minitest::Test
 
     pending = adapter.handle_payment_received(notification: { "payment_hash" => "a" * 64 })
     assert_equal "pending", pending.fetch("transaction_state")
-    assert_empty fulfilled
+    assert_empty completed
 
     client.lookup_state = "settled"
     settled = adapter.handle_payment_received(notification: { "payment_hash" => "a" * 64 })
     replayed = adapter.handle_payment_received(notification: { "payment_hash" => "a" * 64 })
 
-    assert_equal "fulfilled", settled.fetch("workflow_state")
-    assert_equal "fulfilled", replayed.fetch("workflow_state")
-    assert_equal [invoice_id], fulfilled
+    assert_equal "settlement_action_completed", settled.fetch("workflow_state")
+    assert_equal "settlement_action_completed", replayed.fetch("workflow_state")
+    assert_equal [invoice_id], completed
   end
 
   def test_lookup_denies_cross_user_invoice_access

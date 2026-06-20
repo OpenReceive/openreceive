@@ -21,7 +21,7 @@ module OpenReceive
                     :authenticate,
                     :authorize_invoice,
                     :metadata,
-                    :fulfill,
+                    :settlement_action,
                     :production,
                     :allow_unauthenticated_demo
 
@@ -110,7 +110,7 @@ module OpenReceive
           invoice_id: row.fetch("invoice_id"),
           settled_at: settled_at
         )
-        fulfill_once(settled)
+        run_settlement_action_once(settled)
       end
 
       def authenticate!(controller)
@@ -167,20 +167,28 @@ module OpenReceive
           "amount_msats" => wallet_invoice.fetch("amount_msats"),
           "transaction_state" => "pending",
           "workflow_state" => "invoice_created",
-          "fulfillment_state" => "pending",
+          "settlement_action_state" => "pending",
           "created_at" => now,
           "expires_at" => wallet_invoice["expires_at"] || now + 600,
           "metadata" => metadata
         }
       end
 
-      def fulfill_once(invoice)
-        return invoice if invoice["fulfillment_state"] == "delivered" || @config.fulfill.nil?
+      def run_settlement_action_once(invoice)
+        return invoice if invoice["settlement_action_state"] == "completed"
 
-        @config.fulfill.call(invoice)
-        @config.store.mark_fulfilled(
+        unless @config.settlement_action.nil?
+          begin
+            @config.settlement_action.call(invoice)
+          rescue StandardError
+            @config.store.mark_settlement_action_failed(invoice_id: invoice.fetch("invoice_id"))
+            raise
+          end
+        end
+
+        @config.store.mark_settlement_action_completed(
           invoice_id: invoice.fetch("invoice_id"),
-          fulfilled_at: Time.now.to_i
+          settlement_action_completed_at: Time.now.to_i
         )
       end
 
@@ -192,11 +200,11 @@ module OpenReceive
           "amount_msats" => row.fetch("amount_msats"),
           "transaction_state" => row.fetch("transaction_state"),
           "workflow_state" => row.fetch("workflow_state"),
-          "fulfillment_state" => row.fetch("fulfillment_state"),
+          "settlement_action_state" => row.fetch("settlement_action_state"),
           "created_at" => row.fetch("created_at"),
           "expires_at" => row.fetch("expires_at"),
           "settled_at" => row["settled_at"],
-          "fulfilled_at" => row["fulfilled_at"]
+          "settlement_action_completed_at" => row["settlement_action_completed_at"]
         }.reject { |_key, value| value.nil? }
       end
 

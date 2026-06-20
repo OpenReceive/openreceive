@@ -9,7 +9,7 @@ It does three narrow things:
    connection.
 2. Lets the frontend show QR, copy, open-wallet, countdown, and route
    suggestion UI for that invoice.
-3. Lets the backend verify settlement before fulfillment.
+3. Lets the backend verify settlement before an app-owned settlement action.
 
 OpenReceive is not a bank, exchange, payment processor, wallet backend,
 custodian, broker, or money transmitter. It does not hold funds, exchange
@@ -31,4 +31,4 @@ merchant's normal app and job system:
 
 The browser or mobile app receives only display-safe invoice data. NWC secrets,
 invoice creation, settlement lookup, polling, notification handling, and
-fulfillment stay server-side.
+app-owned settlement actions stay server-side.

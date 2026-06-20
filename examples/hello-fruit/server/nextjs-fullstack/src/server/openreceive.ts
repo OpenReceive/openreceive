@@ -9,7 +9,8 @@ import {
   createOpenReceiveExpressHandlers
 } from "@openreceive/express";
 import {
-  InMemoryInvoiceStore
+  InMemoryInvoiceStore,
+  createDefaultLivePriceProviders
 } from "@openreceive/core";
 import {
   createAlbyNwcReceiveClient
@@ -208,6 +209,8 @@ function getRuntime(connectionString: string): NextDemoRuntime {
       store,
       eventBus,
       merchantScope: () => "demo:hello-fruit-nextjs",
+      priceProviders: createDefaultLivePriceProviders({ currencies: ["USD"] }),
+      priceCurrencies: ["USD"],
       unsafeAllowUnauthenticatedDemoMode: true,
       logger: createHelloFruitOpenReceiveLogger(DEMO_ID)
     })

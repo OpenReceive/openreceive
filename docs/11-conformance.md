@@ -54,9 +54,9 @@ SDKs and adapters must treat an incoming invoice as settled only when
 `transaction_state == "settled"`. A preimage is corroborating data, not final
 settlement proof.
 
-Fulfillment hooks may run only after that backend lookup settlement proof. They
-must be idempotent; replaying lookup or events must not double-deliver a
-product.
+Settlement action hooks may run only after that backend lookup settlement
+proof. They must be idempotent; replaying lookup or events must not run the
+merchant action twice.
 
 ## Idempotency Rules
 
@@ -136,4 +136,4 @@ long-running backend workers. It subscribes to `payment_received`, dedupes by
 when backend lookup confirms settlement.
 
 Notifications are at-least-once hints. They wake lookup quickly, but they do
-not replace polling and do not fulfill products by themselves.
+not replace polling and do not run merchant settlement actions by themselves.

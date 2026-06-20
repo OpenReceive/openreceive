@@ -38,7 +38,7 @@ The backend owns:
 - idempotency
 - polling and notification listeners
 - settlement verification
-- fulfillment
+- app-owned settlement actions
 
 Mobile UI should treat events and polling responses as display state. The
 backend must remain the settlement authority.

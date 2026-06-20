@@ -8,9 +8,9 @@ Implemented now:
 
 - production fail-closed authentication configuration
 - idempotent invoice creation through an injected receive-only client
-- backend lookup as settlement authority before fulfillment
+- backend lookup as settlement authority before settlement actions
 - authorization hook for app-owned invoice access
-- duplicate-safe fulfillment using the Ruby in-memory store
+- duplicate-safe settlement action tracking using the Ruby in-memory store
 - internal verification for polling workers
 - payment notification handling where the notification is only a passive hint
   and backend lookup remains settlement authority

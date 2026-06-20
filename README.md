@@ -2,7 +2,7 @@
 
 OpenReceive is an open source receive-payments kit for apps that want to
 create one Bitcoin Lightning BOLT11 invoice, show payer-side route suggestions,
-and unlock fulfillment only after backend-verified settlement.
+and run app-owned settlement actions only after backend-verified settlement.
 
 OpenReceive is not a bank, exchange, wallet, broker, custodian, or payment
 processor. It does not transmit money or hold customer funds. A merchant brings
@@ -34,10 +34,14 @@ npm run demo rails     # Rails + Hotwire           http://localhost:3003
 ```
 
 Each command creates a root `.env` if missing and runs that demo's Docker
-Compose stack with local port publishing. Buying fruit creates a live Lightning
-invoice through your own wallet, so set a receive-only `OPENRECEIVE_NWC` string
-(for example from Rizful or Alby Hub) in `.env` first. Without it the UI loads
-but invoice creation returns `503 WALLET_UNAVAILABLE`.
+Compose stack with local port publishing. The JS local overrides run Vite or
+Next.js development servers inside Docker so browser errors stay readable.
+Buying fruit creates a live Lightning invoice through your own wallet, so set a
+receive-only `OPENRECEIVE_NWC` string (for example from Rizful or Alby Hub) in
+`.env` first. Without it the UI loads but invoice creation returns
+`503 WALLET_UNAVAILABLE`.
+The JS demos quote each fruit's USD price through live BTC/USD price providers
+before creating the invoice.
 
 Extra arguments after `--` are forwarded to `docker compose up`, for example to
 run detached: `npm run demo node -- -d`.

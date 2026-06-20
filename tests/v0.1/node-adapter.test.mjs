@@ -284,7 +284,7 @@ test("payment notification listener dedupes and verifies settlement with lookup"
   assert.equal(client.unsubscribed, true);
 });
 
-test("payment notification listener does not fulfill unsettled lookup results", async () => {
+test("payment notification listener does not treat unsettled lookup results as action-ready", async () => {
   const client = new FakeNotificationClient();
   client.lookupState = "pending";
   const settled = [];
