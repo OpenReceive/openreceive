@@ -73,6 +73,13 @@
       "public": true
     },
     {
+      "slug": "demo-deployment",
+      "title": "Demo Deployment",
+      "source_path": "docs/13-demo-deployment.md",
+      "category": "operations",
+      "public": true
+    },
+    {
       "slug": "secret-management",
       "title": "Secret Management",
       "source_path": "docs/14-secret-management.md",

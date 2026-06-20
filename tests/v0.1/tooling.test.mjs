@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -9,6 +9,7 @@ const secretScanner = path.join(process.cwd(), "tools/validate/scan-secrets.mjs"
 const clientBundleScanner = path.join(process.cwd(), "tools/validate/scan-client-bundles.mjs");
 const demoContainerValidator = path.join(process.cwd(), "tools/validate/check-demo-containers.mjs");
 const demoDeployValidator = path.join(process.cwd(), "tools/validate/check-demo-deploy.mjs");
+const demoDeploymentDocs = path.join(process.cwd(), "docs/13-demo-deployment.md");
 const liveNwcSmoke = path.join(process.cwd(), "tools/live-nwc-test/index.mjs");
 
 function withGitRepo(callback) {
@@ -77,6 +78,17 @@ test("demo container validator accepts current Hello Fruit templates", () => {
 
 test("demo deployment validator accepts public deploy templates", () => {
   assert.match(runDemoDeployValidator(), /Demo deployment validation passed for 2 demo\(s\)\./);
+});
+
+test("demo deployment docs preserve public edge and runner boundaries", () => {
+  const docs = readFileSync(demoDeploymentDocs, "utf8");
+
+  assert.match(docs, /separate demo edge or node/);
+  assert.match(docs, /Do not route stable demos through the private apex app/);
+  assert.match(docs, /Caddy with the Cloudflare DNS module and ACME DNS-01/);
+  assert.match(docs, /Keep build\/test runners separate from deploy runners/);
+  assert.match(docs, /Never mount the host Docker socket/);
+  assert.match(docs, /Never commit:\n\n- `OPENRECEIVE_NWC`/);
 });
 
 test("secret scanner rejects force-added non-example env files", () => {
