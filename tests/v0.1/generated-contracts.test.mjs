@@ -16,6 +16,7 @@ test("generated contract models expose HTTP routes and event names", () => {
     "/invoices",
     "/invoices/{invoice_id}",
     "/invoices/{invoice_id}/events",
+    "/invoices/{invoice_id}/refresh",
     "/invoices/lookup"
   ]);
   assert.deepEqual(OPENRECEIVE_HTTP_OPERATION_IDS, [
@@ -24,7 +25,8 @@ test("generated contract models expose HTTP routes and event names", () => {
     "getInvoice",
     "health",
     "invoiceEvents",
-    "lookupInvoice"
+    "lookupInvoice",
+    "refreshInvoice"
   ]);
   assert.deepEqual(OPENRECEIVE_EVENT_NAMES, [
     "invoice.cancelled",

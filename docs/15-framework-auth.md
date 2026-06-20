@@ -5,7 +5,8 @@ not define a separate user-auth system.
 
 ## Route Ownership
 
-The app decides who can create, read, look up, and subscribe to an invoice.
+The app decides who can create, read, refresh, look up, and subscribe to an
+invoice.
 
 Typical rules:
 
@@ -15,6 +16,8 @@ Typical rules:
   invoice, order, cart, or checkout session.
 - `POST /openreceive/v1/invoices/lookup` is server-side or strongly
   authorized. Do not expose `payment_hash` lookup as a public status oracle.
+- `POST /openreceive/v1/invoices/{invoice_id}/refresh` requires ownership of
+  the old invoice and only creates a linked replacement after expiry or failure.
 - `GET /openreceive/v1/invoices/{invoice_id}/events` uses the same ownership
   check as invoice read.
 

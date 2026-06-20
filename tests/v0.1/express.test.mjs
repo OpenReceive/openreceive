@@ -230,6 +230,84 @@ test("create invoice rejects invalid description_hash before wallet call", async
   assert.equal(wallet.makeInvoiceCalls, 0);
 });
 
+test("refresh invoice creates a linked replacement and replays idempotently", async () => {
+  const { wallet, store, handlers } = createHarness();
+  const oldInvoice = seedInvoice(store, {
+    invoice_id: "or_inv_old",
+    payment_hash: "d".repeat(64),
+    invoice: "lnbc-old",
+    transaction_state: "expired",
+    workflow_state: "expired_closed",
+    metadata: {
+      order_id: "order-1"
+    }
+  });
+  const req = createRequest({
+    params: {
+      invoice_id: oldInvoice.invoice_id
+    },
+    headers: {
+      "idempotency-key": "refresh-1"
+    },
+    body: {
+      reason: "expired"
+    }
+  });
+
+  const first = createResponse();
+  await handlers.refreshInvoice(req, first, raiseNext);
+  assert.equal(first.statusCode, 201);
+  assert.equal(first.body.old_invoice_id, oldInvoice.invoice_id);
+  assert.equal(first.body.reason, "expired");
+  assert.equal(first.body.invoice.refreshed_from_invoice_id, oldInvoice.invoice_id);
+  assert.equal(first.body.invoice.transaction_state, "pending");
+
+  const second = createResponse();
+  await handlers.refreshInvoice(req, second, raiseNext);
+  assert.equal(second.statusCode, 200);
+  assert.equal(second.body.new_invoice_id, first.body.new_invoice_id);
+  assert.equal(wallet.makeInvoiceCalls, 1);
+
+  const storedOld = store.getInvoice(oldInvoice.invoice_id);
+  const storedNew = store.getInvoice(first.body.new_invoice_id);
+  assert.equal(storedOld.transaction_state, "expired");
+  assert.equal(storedOld.workflow_state, "expired_closed");
+  assert.equal(storedNew.operation, "invoice.refresh");
+  assert.equal(storedNew.refreshed_from_invoice_id, oldInvoice.invoice_id);
+  assert.deepEqual(storedNew.metadata, { order_id: "order-1" });
+});
+
+test("refresh invoice rejects settled invoices before wallet call", async () => {
+  const { wallet, store, handlers } = createHarness();
+  const settledInvoice = seedInvoice(store, {
+    invoice_id: "or_inv_settled",
+    transaction_state: "settled",
+    workflow_state: "awaiting_fulfillment",
+    settled_at: 1100
+  });
+  const res = createResponse();
+
+  await handlers.refreshInvoice(
+    createRequest({
+      params: {
+        invoice_id: settledInvoice.invoice_id
+      },
+      headers: {
+        "idempotency-key": "refresh-settled"
+      },
+      body: {
+        reason: "expired"
+      }
+    }),
+    res,
+    raiseNext
+  );
+
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.body.message, "Invoice can only be refreshed after it expires or fails.");
+  assert.equal(wallet.makeInvoiceCalls, 0);
+});
+
 test("secure Express handlers fail closed when auth hooks are missing", async () => {
   const { wallet, store, handlers } = createSecureHarness();
   seedInvoice(store);
@@ -266,6 +344,26 @@ test("secure Express handlers fail closed when auth hooks are missing", async ()
 
   assert.equal(readRes.statusCode, 401);
   assert.equal(readRes.body.message, "OpenReceive read authorization hook is required.");
+
+  const refreshRes = createResponse();
+  await handlers.refreshInvoice(
+    createRequest({
+      params: {
+        invoice_id: "or_inv_seed"
+      },
+      headers: {
+        "idempotency-key": "refresh-auth"
+      },
+      body: {
+        reason: "expired"
+      }
+    }),
+    refreshRes,
+    raiseNext
+  );
+
+  assert.equal(refreshRes.statusCode, 401);
+  assert.equal(refreshRes.body.message, "OpenReceive refresh authorization hook is required.");
 });
 
 test("secure Express handlers reject denied create authorization", async () => {

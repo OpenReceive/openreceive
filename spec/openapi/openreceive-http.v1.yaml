@@ -104,6 +104,50 @@ paths:
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
+  /invoices/{invoice_id}/refresh:
+    post:
+      operationId: refreshInvoice
+      summary: Create a linked replacement invoice for an expired or failed invoice.
+      description: >
+        Refresh never mutates the original invoice. It creates a new invoice row
+        linked through refreshed_from_invoice_id. Settled or fulfilled invoices
+        must not be refreshed.
+      parameters:
+        - $ref: "#/components/parameters/InvoiceId"
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshInvoiceRequest"
+      responses:
+        "201":
+          description: Replacement invoice created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshInvoiceResponse"
+        "200":
+          description: Idempotent replay of an existing replacement invoice.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshInvoiceResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
   /invoices/{invoice_id}/events:
     get:
       operationId: invoiceEvents
@@ -232,6 +276,33 @@ components:
             - payment_hash
         - required:
             - invoice
+    RefreshInvoiceRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 128
+    RefreshInvoiceResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - old_invoice_id
+        - new_invoice_id
+        - reason
+        - invoice
+      properties:
+        old_invoice_id:
+          type: string
+          pattern: "^or_inv_[a-z0-9_]+$"
+        new_invoice_id:
+          type: string
+          pattern: "^or_inv_[a-z0-9_]+$"
+        reason:
+          type: string
+        invoice:
+          $ref: "#/components/schemas/Invoice"
     Invoice:
       type: object
       additionalProperties: true
@@ -270,6 +341,9 @@ components:
         expires_at:
           type: integer
           minimum: 0
+        refreshed_from_invoice_id:
+          type: string
+          pattern: "^or_inv_[a-z0-9_]+$"
         settled_at:
           type: integer
           minimum: 0

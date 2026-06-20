@@ -22,7 +22,8 @@ Request body uses exactly one amount input:
 - `fiat`: `{ "currency": "USD", "value": "0.10" }` style decimal string.
 
 Optional fields include `description`, `description_hash`, `expiry`, and
-`metadata`. Metadata must fit the NWC payload guard.
+`metadata`. Exactly one of `description` or `description_hash` may be present.
+Metadata must fit the NWC payload guard.
 
 Responses:
 
@@ -49,6 +50,24 @@ must be strongly authorized to the matching invoice.
 The lookup response may include `preimage_present`, but fulfillment still
 requires settled state from backend wallet verification. A preimage alone is not
 settlement proof.
+
+## Refresh Invoice
+
+`POST /openreceive/v1/invoices/{invoice_id}/refresh`
+
+Required header:
+
+- `Idempotency-Key`: stable per merchant scope and refresh operation.
+
+The body may include `{ "reason": "expired" }`. Refresh creates a new invoice
+row linked to the old row through `refreshed_from_invoice_id`; it never mutates
+the old invoice in place. Settled or fulfilled invoices return `409`.
+
+Responses:
+
+- `201`: linked replacement invoice created.
+- `200`: idempotent replay of the same refresh request.
+- `409`: invoice is not refreshable.
 
 ## Invoice Events
 

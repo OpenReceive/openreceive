@@ -278,6 +278,7 @@ function validateOpenApi() {
     ["post", "/invoices"],
     ["get", "/invoices/{invoice_id}"],
     ["post", "/invoices/lookup"],
+    ["post", "/invoices/{invoice_id}/refresh"],
     ["get", "/invoices/{invoice_id}/events"],
     ["get", "/health"],
     ["get", "/capabilities"]
@@ -297,6 +298,16 @@ function validateOpenApi() {
     createInvoiceRequest?.not?.required?.includes("description") &&
       createInvoiceRequest?.not?.required?.includes("description_hash"),
     "OpenAPI create request must reject description with description_hash"
+  );
+  assert(
+    openapi.components?.schemas?.RefreshInvoiceResponse?.properties?.invoice?.$ref ===
+      "#/components/schemas/Invoice",
+    "OpenAPI refresh response must include replacement invoice"
+  );
+  assert(
+    openapi.components?.schemas?.Invoice?.properties?.refreshed_from_invoice_id?.pattern ===
+      "^or_inv_[a-z0-9_]+$",
+    "OpenAPI invoice refreshed_from_invoice_id pattern mismatch"
   );
 }
 

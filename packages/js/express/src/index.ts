@@ -51,6 +51,10 @@ export interface OpenReceiveExpressAuthorization {
     req: ExpressLikeRequest,
     invoice: InvoiceStorageRow
   ) => Promise<boolean> | boolean;
+  refresh?: (
+    req: ExpressLikeRequest,
+    invoice: InvoiceStorageRow
+  ) => Promise<boolean> | boolean;
   events?: (
     req: ExpressLikeRequest,
     invoice: InvoiceStorageRow
@@ -84,6 +88,7 @@ export interface OpenReceiveExpressHandlers {
   createInvoice: ExpressLikeHandler;
   getInvoice: ExpressLikeHandler;
   lookupInvoice: ExpressLikeHandler;
+  refreshInvoice: ExpressLikeHandler;
   invoiceEvents: ExpressLikeHandler;
   health: ExpressLikeHandler;
   capabilities: ExpressLikeHandler;
@@ -172,6 +177,7 @@ export function mountOpenReceiveExpressRoutes(
   app.post(`${basePath}/invoices`, handlers.createInvoice);
   app.get(`${basePath}/invoices/:invoice_id`, handlers.getInvoice);
   app.post(`${basePath}/invoices/lookup`, handlers.lookupInvoice);
+  app.post(`${basePath}/invoices/:invoice_id/refresh`, handlers.refreshInvoice);
   app.get(`${basePath}/invoices/:invoice_id/events`, handlers.invoiceEvents);
   app.get(`${basePath}/health`, handlers.health);
   app.get(`${basePath}/capabilities`, handlers.capabilities);
@@ -320,6 +326,85 @@ export function createOpenReceiveExpressHandlers(
       });
     }),
 
+    refreshInvoice: wrapHandler(async (req, res) => {
+      applyDefaultHeaders(req, res, options);
+      const oldInvoice = requireStoredInvoice(store, req.params?.invoice_id);
+      await requireAuthorization(options, "refresh", req, oldInvoice);
+      await requireCsrf(options, req);
+
+      if (!isRefreshableInvoice(oldInvoice)) {
+        throw httpError(
+          409,
+          "CONFLICT",
+          "Invoice can only be refreshed after it expires or fails."
+        );
+      }
+
+      const body = asRecord(req.body);
+      const idempotencyKey = getHeader(req, "idempotency-key");
+      if (idempotencyKey === undefined || idempotencyKey.length === 0) {
+        throw httpError(400, "INVALID_REQUEST", "Idempotency-Key header is required.");
+      }
+
+      const reason = optionalString(body.reason) ?? oldInvoice.transaction_state;
+      const operation = "invoice.refresh" as const;
+      const idempotencyScope: OpenReceiveIdempotencyScope = {
+        merchant_scope: oldInvoice.merchant_scope,
+        operation,
+        idempotency_key: idempotencyKey
+      };
+      const requestHash = await createIdempotencyRequestHash(body);
+      const existing = store.checkIdempotency({
+        scope: idempotencyScope,
+        idempotency_request_hash: requestHash
+      });
+
+      if (existing !== undefined) {
+        return res.status(200).json(serializeRefreshResult({
+          oldInvoice,
+          newInvoice: existing.row,
+          reason,
+          basePath
+        }));
+      }
+
+      const invoice = await options.client.makeInvoice({
+        amount_msats: BigInt(oldInvoice.amount_msats)
+      });
+      const createdAt = invoice.created_at ?? clock();
+      const expiresAt = invoice.expires_at ?? createdAt + 600;
+      const createResult = store.createInvoice({
+        invoice_id: createInvoiceId(),
+        merchant_scope: oldInvoice.merchant_scope,
+        operation,
+        idempotency_key: idempotencyKey,
+        idempotency_request_hash: requestHash,
+        payment_hash: invoice.payment_hash,
+        invoice: invoice.invoice,
+        amount_msats: toSafeInteger(invoice.amount_msats, "amount_msats"),
+        transaction_state: "pending",
+        workflow_state: "invoice_created",
+        fulfillment_state: "pending",
+        created_at: createdAt,
+        expires_at: expiresAt,
+        refreshed_from_invoice_id: oldInvoice.invoice_id,
+        metadata: oldInvoice.metadata,
+        fiat_quote: oldInvoice.fiat_quote ?? null
+      });
+      eventBus.publish(
+        createResult.row.invoice_id,
+        "invoice.created",
+        serializeEventData(createResult.row)
+      );
+
+      return res.status(201).json(serializeRefreshResult({
+        oldInvoice,
+        newInvoice: createResult.row,
+        reason,
+        basePath
+      }));
+    }),
+
     invoiceEvents: wrapHandler(async (req, res) => {
       applyDefaultHeaders(req, res, options);
       const invoice = requireStoredInvoice(store, req.params?.invoice_id);
@@ -364,10 +449,25 @@ export function createOpenReceiveExpressHandlers(
         routes: {
           invoices: `${basePath}/invoices`,
           lookup: `${basePath}/invoices/lookup`,
+          refresh: `${basePath}/invoices/{invoice_id}/refresh`,
           health: `${basePath}/health`
         }
       });
     })
+  };
+}
+
+function serializeRefreshResult(input: {
+  oldInvoice: InvoiceStorageRow;
+  newInvoice: InvoiceStorageRow;
+  reason: string;
+  basePath: string;
+}): Record<string, unknown> {
+  return {
+    old_invoice_id: input.oldInvoice.invoice_id,
+    new_invoice_id: input.newInvoice.invoice_id,
+    reason: input.reason,
+    invoice: serializeInvoice(input.newInvoice, input.basePath)
   };
 }
 
@@ -382,6 +482,9 @@ function serializeInvoice(row: InvoiceStorageRow, basePath: string): Record<stri
     amount_msats: row.amount_msats,
     created_at: row.created_at,
     expires_at: row.expires_at,
+    ...(row.refreshed_from_invoice_id === undefined
+      ? {}
+      : { refreshed_from_invoice_id: row.refreshed_from_invoice_id }),
     metadata: row.metadata,
     fiat_quote: row.fiat_quote ?? null,
     checkout: {
@@ -401,7 +504,10 @@ function serializeEventData(row: InvoiceStorageRow): Record<string, unknown> {
     transaction_state: row.transaction_state,
     workflow_state: row.workflow_state,
     payment_hash: row.payment_hash,
-    amount_msats: row.amount_msats
+    amount_msats: row.amount_msats,
+    ...(row.refreshed_from_invoice_id === undefined
+      ? {}
+      : { refreshed_from_invoice_id: row.refreshed_from_invoice_id })
   };
 }
 
@@ -461,6 +567,15 @@ function getCreateDescriptionFields(body: Record<string, unknown>): {
     ...(description === undefined ? {} : { description }),
     ...(descriptionHash === undefined ? {} : { description_hash: descriptionHash })
   };
+}
+
+function isRefreshableInvoice(invoice: InvoiceStorageRow): boolean {
+  return (
+    invoice.transaction_state === "expired" ||
+    invoice.transaction_state === "failed" ||
+    invoice.workflow_state === "expired_closed" ||
+    invoice.workflow_state === "failed_closed"
+  );
 }
 
 function findLookupInvoice(

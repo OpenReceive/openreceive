@@ -9,6 +9,7 @@ export const OPENRECEIVE_HTTP_PATHS = [
   "/invoices",
   "/invoices/{invoice_id}",
   "/invoices/{invoice_id}/events",
+  "/invoices/{invoice_id}/refresh",
   "/invoices/lookup"
 ] as const;
 export type OpenReceiveHttpPath = (typeof OPENRECEIVE_HTTP_PATHS)[number];
@@ -19,7 +20,8 @@ export const OPENRECEIVE_HTTP_OPERATION_IDS = [
   "getInvoice",
   "health",
   "invoiceEvents",
-  "lookupInvoice"
+  "lookupInvoice",
+  "refreshInvoice"
 ] as const;
 export type OpenReceiveHttpOperationId = (typeof OPENRECEIVE_HTTP_OPERATION_IDS)[number];
 
