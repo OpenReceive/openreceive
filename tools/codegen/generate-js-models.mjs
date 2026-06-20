@@ -12,6 +12,10 @@ function readYaml(relativePath) {
   return parseYaml(readFileSync(path.join(root, relativePath), "utf8"));
 }
 
+function readJson(relativePath) {
+  return JSON.parse(readFileSync(path.join(root, relativePath), "utf8"));
+}
+
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -47,12 +51,14 @@ function json(value) {
 function generate() {
   const openApi = readYaml("spec/openapi/openreceive-http.v1.yaml");
   const asyncApi = readYaml("spec/asyncapi/openreceive-events.v1.yaml");
+  const errorSchema = readJson("spec/schemas/error.schema.json");
   const schemas = openApi.components?.schemas ?? {};
   const invoice = schemas.Invoice;
   const amount = invoice?.properties?.amount_msats;
   const invoiceId = invoice?.properties?.invoice_id;
   const transactionStates = schemas.TransactionState?.enum ?? [];
   const workflowStates = schemas.WorkflowState?.enum ?? [];
+  const errorCodes = errorSchema.properties?.code?.enum ?? [];
   const httpPaths = sorted(Object.keys(openApi.paths ?? {}));
   const httpOperationIds = operationIds(openApi);
   const events = messageNames(asyncApi);
@@ -61,6 +67,7 @@ function generate() {
   assert(asyncApi.info?.version, "AsyncAPI info.version is required");
   assert(transactionStates.length > 0, "OpenAPI transaction states are required");
   assert(workflowStates.length > 0, "OpenAPI workflow states are required");
+  assert(errorCodes.length > 0, "OpenReceive error codes are required");
   assert(events.length > 0, "AsyncAPI event names are required");
   assert(amount?.minimum === 1000, "invoice amount minimum drifted");
   assert(amount?.maximum === 9007199254740991, "invoice amount maximum drifted");
@@ -79,6 +86,9 @@ export type OpenReceiveHttpOperationId = (typeof OPENRECEIVE_HTTP_OPERATION_IDS)
 
 export const OPENRECEIVE_EVENT_NAMES = ${json(events)} as const;
 export type OpenReceiveGeneratedEventName = (typeof OPENRECEIVE_EVENT_NAMES)[number];
+
+export const OPENRECEIVE_ERROR_CODES = ${json(errorCodes)} as const;
+export type OpenReceiveGeneratedErrorCode = (typeof OPENRECEIVE_ERROR_CODES)[number];
 
 export const OPENRECEIVE_TRANSACTION_STATES = ${json(transactionStates)} as const;
 export type OpenReceiveGeneratedTransactionState = (typeof OPENRECEIVE_TRANSACTION_STATES)[number];

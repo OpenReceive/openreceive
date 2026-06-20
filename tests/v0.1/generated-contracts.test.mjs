@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   OPENRECEIVE_AMOUNT_MSATS_BOUNDARY,
+  OPENRECEIVE_ERROR_CODES,
   OPENRECEIVE_EVENT_NAMES,
   OPENRECEIVE_HTTP_OPERATION_IDS,
   OPENRECEIVE_HTTP_PATHS,
@@ -44,6 +45,25 @@ test("generated contract models expose HTTP routes and event names", () => {
     "invoice.fulfilled",
     "invoice.settled",
     "invoice.verifying"
+  ]);
+  assert.deepEqual(OPENRECEIVE_ERROR_CODES, [
+    "NOT_IMPLEMENTED",
+    "RESTRICTED",
+    "UNAUTHORIZED",
+    "RATE_LIMITED",
+    "QUOTA_EXCEEDED",
+    "INTERNAL",
+    "UNSUPPORTED_ENCRYPTION",
+    "INSUFFICIENT_BALANCE",
+    "PAYMENT_FAILED",
+    "OTHER",
+    "NOT_FOUND",
+    "TIMEOUT",
+    "INVALID_REQUEST",
+    "WALLET_UNAVAILABLE",
+    "INVOICE_EXPIRED",
+    "UNSUPPORTED_METHOD",
+    "CONFLICT"
   ]);
 });
 

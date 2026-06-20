@@ -6,6 +6,7 @@ import {
   quoteFiatToMsats,
   type InvoiceStorageRow,
   type OpenReceiveIdempotencyScope,
+  type OpenReceiveErrorCode,
   type OpenReceiveReceiveNwcClient
 } from "@openreceive/core";
 import {
@@ -990,10 +991,14 @@ function requiredValue<T>(value: T | undefined): T {
 
 interface HttpError extends Error {
   status: number;
-  code: string;
+  code: OpenReceiveErrorCode;
 }
 
-function httpError(status: number, code: string, message: string): HttpError {
+function httpError(
+  status: number,
+  code: OpenReceiveErrorCode,
+  message: string
+): HttpError {
   const error = new Error(message) as HttpError;
   error.name = "OpenReceiveHttpError";
   error.status = status;

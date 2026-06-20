@@ -2,9 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   InMemoryInvoiceStore,
+  OPENRECEIVE_ERROR_CODES,
+  OpenReceiveError,
   classifyLookupInvoiceSettlement,
   createIdempotencyRequestHash,
   getPollingDelaySeconds,
+  isOpenReceiveErrorCode,
+  isRetryableOpenReceiveErrorCode,
   parseNwcUri,
   pollInvoiceUntilFinalState,
   quoteFiatToMsats,
@@ -51,6 +55,34 @@ test("parses and redacts NWC URI without leaking the client secret", () => {
   assert.match(parsed.redacted, /secret=\[REDACTED\]/);
   assert.doesNotMatch(parsed.redacted, /c{64}/);
   assert.equal(redactNwcUri(NWC_URI), parsed.redacted);
+});
+
+test("canonical OpenReceive errors expose stable schema codes", () => {
+  assert.equal(OPENRECEIVE_ERROR_CODES.includes("PAYMENT_FAILED"), true);
+  assert.equal(isOpenReceiveErrorCode("INSUFFICIENT_BALANCE"), true);
+  assert.equal(isOpenReceiveErrorCode("insufficient_balance"), false);
+  assert.equal(isRetryableOpenReceiveErrorCode("TIMEOUT"), true);
+  assert.equal(isRetryableOpenReceiveErrorCode("INVALID_REQUEST"), false);
+
+  const error = new OpenReceiveError({
+    code: "TIMEOUT",
+    message: "Wallet lookup timed out",
+    retryable: true,
+    request_id: "req_123",
+    details: {
+      relay: "wss://relay.example.com"
+    }
+  });
+
+  assert.deepEqual(error.toJSON(), {
+    code: "TIMEOUT",
+    message: "Wallet lookup timed out",
+    retryable: true,
+    request_id: "req_123",
+    details: {
+      relay: "wss://relay.example.com"
+    }
+  });
 });
 
 test("settlement detection ignores preimage without settled state", () => {

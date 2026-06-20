@@ -33,6 +33,13 @@ Run `npm run generate:models` after changing OpenAPI or AsyncAPI contracts.
 `npm run check:generated` fails if the checked-in generated model constants no
 longer match the source contracts.
 
+## Error Codes
+
+SDKs and adapters must normalize wallet and service failures to the canonical
+uppercase codes in `spec/schemas/error.schema.json`. Receive-only paths should
+still normalize NIP-47 send-payment errors such as `INSUFFICIENT_BALANCE` and
+`PAYMENT_FAILED` so diagnostics match the underlying wallet libraries.
+
 ## Settlement Rules
 
 SDKs and adapters must treat an incoming invoice as settled only when

@@ -44,6 +44,27 @@ export const OPENRECEIVE_EVENT_NAMES = [
 ] as const;
 export type OpenReceiveGeneratedEventName = (typeof OPENRECEIVE_EVENT_NAMES)[number];
 
+export const OPENRECEIVE_ERROR_CODES = [
+  "NOT_IMPLEMENTED",
+  "RESTRICTED",
+  "UNAUTHORIZED",
+  "RATE_LIMITED",
+  "QUOTA_EXCEEDED",
+  "INTERNAL",
+  "UNSUPPORTED_ENCRYPTION",
+  "INSUFFICIENT_BALANCE",
+  "PAYMENT_FAILED",
+  "OTHER",
+  "NOT_FOUND",
+  "TIMEOUT",
+  "INVALID_REQUEST",
+  "WALLET_UNAVAILABLE",
+  "INVOICE_EXPIRED",
+  "UNSUPPORTED_METHOD",
+  "CONFLICT"
+] as const;
+export type OpenReceiveGeneratedErrorCode = (typeof OPENRECEIVE_ERROR_CODES)[number];
+
 export const OPENRECEIVE_TRANSACTION_STATES = [
   "pending",
   "settled",

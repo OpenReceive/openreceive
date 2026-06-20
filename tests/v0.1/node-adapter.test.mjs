@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  OpenReceiveError,
   ReceiveCheckoutValidationError,
   createAlbyNwcReceiveClient,
+  normalizeNwcWalletError,
   startPaymentNotificationListener
 } from "../../packages/js/node/src/index.ts";
 
@@ -101,6 +103,72 @@ test("receive client maps amount_msats to NIP-47 amount and normalizes results",
   assert.equal(lookup.amount_msats, 200000n);
   assert.equal(lookup.state, "settled");
   assert.equal(lookup.settled_at, 1200);
+});
+
+test("normalizes NWC wallet errors into canonical OpenReceive codes", async () => {
+  const insufficient = normalizeNwcWalletError({
+    error: {
+      code: "insufficient-balance",
+      message: "Wallet lacks spendable sats",
+      request_id: "req_balance"
+    }
+  });
+  assert.equal(insufficient instanceof OpenReceiveError, true);
+  assert.deepEqual(insufficient.toJSON(), {
+    code: "INSUFFICIENT_BALANCE",
+    message: "Wallet lacks spendable sats",
+    retryable: false,
+    request_id: "req_balance"
+  });
+
+  const timeout = normalizeNwcWalletError(
+    Object.assign(new Error("Relay request timed out"), {
+      name: "TimeoutError"
+    })
+  );
+  assert.equal(timeout.code, "TIMEOUT");
+  assert.equal(timeout.retryable, true);
+
+  const nativeSendError = normalizeNwcWalletError({
+    code: "PAYMENT_FAILED",
+    message: "Payment route failed"
+  });
+  assert.equal(nativeSendError.code, "PAYMENT_FAILED");
+  assert.equal(nativeSendError.retryable, false);
+});
+
+test("receive client throws normalized wallet errors from make_invoice", async () => {
+  class ErroringMakeInvoiceClient extends FakeAlbyClient {
+    async makeInvoice(params) {
+      this.makeInvoiceParams.push(params);
+      throw {
+        error: {
+          code: "payment_failed",
+          message: "Wallet could not create this invoice"
+        }
+      };
+    }
+  }
+
+  const client = createAlbyNwcReceiveClient({
+    connectionString: NWC_URI,
+    client: new ErroringMakeInvoiceClient()
+  });
+
+  await assert.rejects(
+    () =>
+      client.makeInvoice({
+        amount_msats: 200000n,
+        description: "Fruit sticker"
+      }),
+    (error) => {
+      assert.equal(error instanceof OpenReceiveError, true);
+      assert.equal(error.code, "PAYMENT_FAILED");
+      assert.equal(error.message, "Wallet could not create this invoice");
+      assert.equal(error.retryable, false);
+      return true;
+    }
+  );
 });
 
 test("receive client rejects metadata above the NWC payload guard", async () => {

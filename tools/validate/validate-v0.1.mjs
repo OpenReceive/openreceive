@@ -96,6 +96,31 @@ function validateSchemas() {
 
   const quote = readJson("spec/schemas/rate-quote.schema.json");
   assert(quote.properties.amount_sats.maximum === 9007199254740, "amount_sats maximum mismatch");
+
+  const error = readJson("spec/schemas/error.schema.json");
+  const requiredErrorCodes = [
+    "NOT_IMPLEMENTED",
+    "RESTRICTED",
+    "UNAUTHORIZED",
+    "RATE_LIMITED",
+    "QUOTA_EXCEEDED",
+    "INTERNAL",
+    "UNSUPPORTED_ENCRYPTION",
+    "INSUFFICIENT_BALANCE",
+    "PAYMENT_FAILED",
+    "OTHER",
+    "NOT_FOUND",
+    "TIMEOUT",
+    "INVALID_REQUEST",
+    "WALLET_UNAVAILABLE",
+    "INVOICE_EXPIRED",
+    "UNSUPPORTED_METHOD",
+    "CONFLICT"
+  ];
+  const errorCodes = error.properties?.code?.enum || [];
+  for (const code of requiredErrorCodes) {
+    assert(errorCodes.includes(code), `error schema missing code ${code}`);
+  }
 }
 
 function validateFiatVectors() {
@@ -324,6 +349,13 @@ function validateOpenApi() {
   assert(
     openapi.components?.schemas?.BtcFiatRateMap?.properties?.bitcoin,
     "OpenAPI BTC fiat rate map schema missing bitcoin rates"
+  );
+
+  const canonicalErrorCodes = readJson("spec/schemas/error.schema.json").properties.code.enum;
+  assert(
+    JSON.stringify(openapi.components?.schemas?.Error?.properties?.code?.enum) ===
+      JSON.stringify(canonicalErrorCodes),
+    "OpenAPI error codes must match shared error schema"
   );
 }
 

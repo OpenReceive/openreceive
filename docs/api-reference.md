@@ -150,10 +150,12 @@ Errors use the shared error schema:
 
 ```json
 {
-  "code": "invalid_request",
-  "message": "Human-readable error"
+  "code": "INVALID_REQUEST",
+  "message": "Human-readable error",
+  "retryable": false
 }
 ```
 
-Codes are stable enough for tests, but applications should still render
-defensive fallback messages.
+Codes are the uppercase canonical values from `spec/schemas/error.schema.json`.
+Adapters may include `retryable`, `request_id`, or `details` when that context is
+available, but applications should still render defensive fallback messages.
