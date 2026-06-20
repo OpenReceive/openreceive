@@ -37,6 +37,10 @@ The planned source order is:
 `spec/data/rates/price-sources.json` records the canonical source ids, cache
 seconds, quote TTL, and endpoint URLs.
 
+The Express adapter exposes deterministic v0.1 helper routes at
+`GET /openreceive/v1/rates` and `POST /openreceive/v1/rates/quote`. These routes
+use the static mock source unless the host app wires a later live provider.
+
 ## Quote Rules
 
 - `fiat.value` is a decimal string.

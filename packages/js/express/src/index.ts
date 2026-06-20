@@ -1,12 +1,24 @@
 import {
   InMemoryInvoiceStore,
   InvoiceNotFoundError,
+  OPENRECEIVE_STATIC_BTC_FIAT_RATES,
   createIdempotencyRequestHash,
   quoteFiatToMsats,
   type InvoiceStorageRow,
   type OpenReceiveIdempotencyScope,
   type OpenReceiveReceiveNwcClient
 } from "@openreceive/core";
+import {
+  getAssets,
+  getCountries,
+  getCryptoRoutes,
+  getDisqualifiedProviders,
+  getFiatRails,
+  getPaymentWizardRoutes,
+  getProviderRegistryMetadata,
+  getProviders,
+  type ProviderFilter
+} from "@openreceive/provider-data";
 
 export interface ExpressLikeApp {
   get(path: string, ...handlers: ExpressLikeHandler[]): unknown;
@@ -90,6 +102,10 @@ export interface OpenReceiveExpressHandlers {
   lookupInvoice: ExpressLikeHandler;
   refreshInvoice: ExpressLikeHandler;
   invoiceEvents: ExpressLikeHandler;
+  listRates: ExpressLikeHandler;
+  quoteRates: ExpressLikeHandler;
+  listRoutes: ExpressLikeHandler;
+  listProviders: ExpressLikeHandler;
   health: ExpressLikeHandler;
   capabilities: ExpressLikeHandler;
 }
@@ -179,6 +195,10 @@ export function mountOpenReceiveExpressRoutes(
   app.post(`${basePath}/invoices/lookup`, handlers.lookupInvoice);
   app.post(`${basePath}/invoices/:invoice_id/refresh`, handlers.refreshInvoice);
   app.get(`${basePath}/invoices/:invoice_id/events`, handlers.invoiceEvents);
+  app.get(`${basePath}/rates`, handlers.listRates);
+  app.post(`${basePath}/rates/quote`, handlers.quoteRates);
+  app.get(`${basePath}/routes`, handlers.listRoutes);
+  app.get(`${basePath}/providers`, handlers.listProviders);
   app.get(`${basePath}/health`, handlers.health);
   app.get(`${basePath}/capabilities`, handlers.capabilities);
 
@@ -435,6 +455,63 @@ export function createOpenReceiveExpressHandlers(
       }
     }),
 
+    listRates: wrapHandler(async (req, res) => {
+      applyDefaultHeaders(req, res, options);
+      return res.status(200).json(OPENRECEIVE_STATIC_BTC_FIAT_RATES);
+    }),
+
+    quoteRates: wrapHandler(async (req, res) => {
+      applyDefaultHeaders(req, res, options);
+      const body = asRecord(req.body);
+
+      try {
+        return res.status(200).json(quoteFiatToMsats({
+          fiat: parseFiatAmount(body.fiat),
+          as_of: clock()
+        }));
+      } catch (error) {
+        if (error instanceof RangeError) {
+          throw httpError(400, "INVALID_REQUEST", error.message);
+        }
+        throw error;
+      }
+    }),
+
+    listRoutes: wrapHandler(async (req, res) => {
+      applyDefaultHeaders(req, res, options);
+      const asset = getQueryString(req, "asset");
+      const route = getQueryString(req, "route");
+      const country = getQueryString(req, "country");
+      const rail = getQueryString(req, "rail");
+
+      if (
+        asset !== undefined ||
+        route !== undefined ||
+        country !== undefined ||
+        rail !== undefined
+      ) {
+        return res.status(200).json({
+          routes: getPaymentWizardRoutes({ asset, route, country, rail })
+        });
+      }
+
+      return res.status(200).json({
+        assets: getAssets(),
+        crypto_routes: getCryptoRoutes(),
+        fiat_rails: getFiatRails(),
+        countries: getCountries()
+      });
+    }),
+
+    listProviders: wrapHandler(async (req, res) => {
+      applyDefaultHeaders(req, res, options);
+      return res.status(200).json({
+        metadata: getProviderRegistryMetadata(),
+        providers: getProviders(getProviderFilter(req)),
+        disqualified_providers: getDisqualifiedProviders()
+      });
+    }),
+
     health: wrapHandler(async (req, res) => {
       applyDefaultHeaders(req, res, options);
       return res.status(200).json({ ok: true });
@@ -450,10 +527,33 @@ export function createOpenReceiveExpressHandlers(
           invoices: `${basePath}/invoices`,
           lookup: `${basePath}/invoices/lookup`,
           refresh: `${basePath}/invoices/{invoice_id}/refresh`,
+          rates: `${basePath}/rates`,
+          rate_quote: `${basePath}/rates/quote`,
+          routes: `${basePath}/routes`,
+          providers: `${basePath}/providers`,
           health: `${basePath}/health`
         }
       });
     })
+  };
+}
+
+function getProviderFilter(req: ExpressLikeRequest): ProviderFilter {
+  const filter: ProviderFilter = {};
+  const mechanism = getQueryString(req, "mechanism");
+  const us = getQueryString(req, "us");
+
+  if (mechanism === "pay_invoice" || mechanism === "withdraw_to_invoice") {
+    return {
+      ...filter,
+      mechanism,
+      ...(us === undefined ? {} : { us: parseUsFilter(us) })
+    };
+  }
+
+  return {
+    ...filter,
+    ...(us === undefined ? {} : { us: parseUsFilter(us) })
   };
 }
 
@@ -718,6 +818,22 @@ function getLastEventId(req: ExpressLikeRequest): number {
 
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+function getQueryString(
+  req: ExpressLikeRequest,
+  name: string
+): string | undefined {
+  const value = req.query?.[name];
+  if (Array.isArray(value)) return value[0];
+  return value;
+}
+
+function parseUsFilter(value: string): boolean | null {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  if (value === "unknown" || value === "null") return null;
+  throw httpError(400, "INVALID_REQUEST", "us filter must be true, false, unknown, or null.");
 }
 
 function requireStoredInvoice(

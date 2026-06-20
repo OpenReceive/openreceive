@@ -183,6 +183,84 @@ test("lookup rejects public status oracle requests for unknown payment hashes", 
   assert.equal(res.body.code, "NOT_FOUND");
 });
 
+test("read-only helper routes expose static rates, providers, and route suggestions", async () => {
+  const { handlers } = createHarness();
+
+  const ratesRes = createResponse();
+  await handlers.listRates(createRequest(), ratesRes, raiseNext);
+  assert.equal(ratesRes.statusCode, 200);
+  assert.equal(ratesRes.body.bitcoin.usd, "50000.00");
+
+  const quoteRes = createResponse();
+  await handlers.quoteRates(
+    createRequest({
+      body: {
+        fiat: {
+          currency: "USD",
+          value: "0.10"
+        }
+      }
+    }),
+    quoteRes,
+    raiseNext
+  );
+  assert.equal(quoteRes.statusCode, 200);
+  assert.equal(quoteRes.body.amount_msats, 200000);
+  assert.equal(quoteRes.body.source, "static_mock");
+
+  const providersRes = createResponse();
+  await handlers.listProviders(
+    createRequest({
+      query: {
+        us: "true"
+      }
+    }),
+    providersRes,
+    raiseNext
+  );
+  assert.equal(providersRes.statusCode, 200);
+  assert.equal(providersRes.body.metadata.schema_version, "2.0.0");
+  assert.equal(providersRes.body.providers.every((provider) => provider.us === true), true);
+
+  const catalogRes = createResponse();
+  await handlers.listRoutes(createRequest(), catalogRes, raiseNext);
+  assert.equal(catalogRes.statusCode, 200);
+  assert.equal(catalogRes.body.assets.length, 18);
+  assert.equal(catalogRes.body.crypto_routes.length, 15);
+
+  const wizardRes = createResponse();
+  await handlers.listRoutes(
+    createRequest({
+      query: {
+        asset: "BTC"
+      }
+    }),
+    wizardRes,
+    raiseNext
+  );
+  assert.equal(wizardRes.statusCode, 200);
+  assert.equal(wizardRes.body.routes[0].kind, "crypto");
+  assert.equal(wizardRes.body.routes[0].route.id, "btc-lightning");
+});
+
+test("provider route rejects invalid us filter", async () => {
+  const { handlers } = createHarness();
+  const res = createResponse();
+
+  await handlers.listProviders(
+    createRequest({
+      query: {
+        us: "maybe"
+      }
+    }),
+    res,
+    raiseNext
+  );
+
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.message, "us filter must be true, false, unknown, or null.");
+});
+
 test("create invoice rejects description and description_hash together", async () => {
   const { wallet, handlers } = createHarness();
   const res = createResponse();

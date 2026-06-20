@@ -90,6 +90,49 @@ Event names:
 - `invoice.fulfilled`
 - `invoice.cancelled`
 
+## Rates
+
+`GET /openreceive/v1/rates`
+
+Returns the deterministic v0.1 BTC fiat rate map. The default open-source
+adapter uses `static_mock` data so docs, tests, screenshots, and local demos are
+stable.
+
+`POST /openreceive/v1/rates/quote`
+
+Body:
+
+```json
+{
+  "fiat": {
+    "currency": "USD",
+    "value": "0.10"
+  }
+}
+```
+
+Returns the same rate quote shape used by invoice creation, including
+`amount_msats`, source id, `as_of`, and `expires_at`.
+
+## Provider Routes
+
+`GET /openreceive/v1/routes`
+
+Returns the static route catalog: supported assets, crypto routes, fiat rails,
+and countries. Supplying query parameters such as `asset=btc`,
+`country=US&rail=bank`, or `route=btc-lightning` returns resolved payment wizard
+route suggestions.
+
+`GET /openreceive/v1/providers`
+
+Returns canonical provider registry entries and metadata. Optional query
+filters include `mechanism=pay_invoice|withdraw_to_invoice` and
+`us=true|false|unknown|null`.
+
+Provider routes are suggestions, not settlement proof or availability
+guarantees. The payer chooses a third-party provider, and backend wallet lookup
+remains the payment authority.
+
 ## Health And Capabilities
 
 `GET /openreceive/v1/health` returns `{ "ok": true }` when the adapter is

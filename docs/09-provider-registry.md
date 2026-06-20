@@ -37,6 +37,9 @@ The package does not change provider claims or normalize private copies of the
 data. It imports the canonical registry and exposes immutable objects so route
 helpers cannot accidentally mutate the source.
 
+The Express adapter exposes the same static data through display-safe helper
+routes at `GET /openreceive/v1/providers` and `GET /openreceive/v1/routes`.
+
 The package also exports the master-plan getter names for generated provider
 data: `getAssets()`, `getProviders()`, `getCryptoRoutes()`, `getFiatRails()`,
 `getCountries()`, `getProvider(id)`, and `getDisqualifiedProviders()`.

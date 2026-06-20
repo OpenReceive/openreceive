@@ -178,6 +178,103 @@ paths:
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
+  /rates:
+    get:
+      operationId: listRates
+      summary: Return the deterministic v0.1 BTC fiat rate map.
+      responses:
+        "200":
+          description: CoinGecko Simple Price compatible rate map.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BtcFiatRateMap"
+  /rates/quote:
+    post:
+      operationId: quoteRates
+      summary: Quote fiat amount to whole-sat millisatoshis.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuoteRateRequest"
+      responses:
+        "200":
+          description: Deterministic rate quote.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateQuote"
+        "400":
+          $ref: "#/components/responses/Error"
+  /routes:
+    get:
+      operationId: listRoutes
+      summary: Return provider route catalog or payment wizard route suggestions.
+      parameters:
+        - name: asset
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: route
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: country
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: "^[A-Za-z]{2}$"
+        - name: rail
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Provider route catalog or resolved route suggestions.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /providers:
+    get:
+      operationId: listProviders
+      summary: Return canonical provider registry entries.
+      parameters:
+        - name: mechanism
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - pay_invoice
+              - withdraw_to_invoice
+        - name: us
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - "true"
+              - "false"
+              - unknown
+              - "null"
+      responses:
+        "200":
+          description: Provider registry entries and metadata.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/Error"
   /health:
     get:
       operationId: health
@@ -303,6 +400,27 @@ components:
           type: string
         invoice:
           $ref: "#/components/schemas/Invoice"
+    QuoteRateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - fiat
+      properties:
+        fiat:
+          $ref: "#/components/schemas/FiatAmount"
+    BtcFiatRateMap:
+      type: object
+      additionalProperties: false
+      required:
+        - bitcoin
+      properties:
+        bitcoin:
+          type: object
+          additionalProperties:
+            oneOf:
+              - type: number
+              - type: string
+                pattern: "^[0-9]+(\\.[0-9]+)?$"
     Invoice:
       type: object
       additionalProperties: true

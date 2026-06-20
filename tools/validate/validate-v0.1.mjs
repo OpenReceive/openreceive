@@ -280,6 +280,10 @@ function validateOpenApi() {
     ["post", "/invoices/lookup"],
     ["post", "/invoices/{invoice_id}/refresh"],
     ["get", "/invoices/{invoice_id}/events"],
+    ["get", "/rates"],
+    ["post", "/rates/quote"],
+    ["get", "/routes"],
+    ["get", "/providers"],
     ["get", "/health"],
     ["get", "/capabilities"]
   ];
@@ -308,6 +312,14 @@ function validateOpenApi() {
     openapi.components?.schemas?.Invoice?.properties?.refreshed_from_invoice_id?.pattern ===
       "^or_inv_[a-z0-9_]+$",
     "OpenAPI invoice refreshed_from_invoice_id pattern mismatch"
+  );
+  assert(
+    openapi.components?.schemas?.QuoteRateRequest?.required?.includes("fiat"),
+    "OpenAPI quote rate request must require fiat"
+  );
+  assert(
+    openapi.components?.schemas?.BtcFiatRateMap?.properties?.bitcoin,
+    "OpenAPI BTC fiat rate map schema missing bitcoin rates"
   );
 }
 

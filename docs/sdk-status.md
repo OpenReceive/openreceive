@@ -7,7 +7,7 @@ package registry.
 | --- | --- | --- |
 | `@openreceive/core` | Implemented | Shared rates, settlement, polling, storage, and NWC URI helpers. |
 | `@openreceive/node` | Implemented | Receive-checkout adapter around `@getalby/sdk` NWC. |
-| `@openreceive/express` | Implemented | Mounted HTTP routes, auth hooks, idempotent create/refresh, lookup, and SSE events. |
+| `@openreceive/express` | Implemented | Mounted HTTP routes, auth hooks, idempotent create/refresh, lookup, SSE events, and static rates/routes/providers helpers. |
 | `@openreceive/browser` | Implemented | Display-safe QR, copy, and open-wallet helpers. |
 | `@openreceive/provider-data` | Implemented | Read-only helpers around the canonical provider registry. |
 | `@openreceive/testkit` | Implemented | Deterministic receive-client fixtures and conformance helpers. |
