@@ -273,6 +273,7 @@ export function createOpenReceiveExpressHandlers(
       const body = asRecord(req.body);
       const invoice = findLookupInvoice(store, body);
       await requireAuthorization(options, "lookup", req, invoice);
+      await requireCsrf(options, req);
 
       const lookup = await options.client.lookupInvoice({
         payment_hash: optionalString(body.payment_hash),

@@ -12,6 +12,7 @@ const PAYMENT_HASH = "e".repeat(64);
 
 class FakeWallet {
   makeInvoiceCalls = 0;
+  lookupInvoiceCalls = 0;
   lookupState = "pending";
 
   async preflight() {
@@ -39,6 +40,7 @@ class FakeWallet {
   }
 
   async lookupInvoice() {
+    this.lookupInvoiceCalls += 1;
     return {
       invoice: "lnbc-demo",
       payment_hash: PAYMENT_HASH,
@@ -50,7 +52,7 @@ class FakeWallet {
   }
 }
 
-function createHarness() {
+function createHarness(overrides = {}) {
   const wallet = new FakeWallet();
   const store = new InMemoryInvoiceStore();
   const eventBus = new InMemoryInvoiceEventBus();
@@ -61,7 +63,25 @@ function createHarness() {
     merchantScope: () => "demo:hello-fruit",
     unsafeAllowUnauthenticatedDemoMode: true,
     clock: () => 1000,
-    heartbeatSeconds: 1
+    heartbeatSeconds: 1,
+    ...overrides
+  });
+
+  return { wallet, store, eventBus, handlers };
+}
+
+function createSecureHarness(overrides = {}) {
+  const wallet = new FakeWallet();
+  const store = new InMemoryInvoiceStore();
+  const eventBus = new InMemoryInvoiceEventBus();
+  const handlers = createOpenReceiveExpressHandlers({
+    client: wallet,
+    store,
+    eventBus,
+    merchantScope: () => "demo:hello-fruit",
+    clock: () => 1000,
+    heartbeatSeconds: 1,
+    ...overrides
   });
 
   return { wallet, store, eventBus, handlers };
@@ -162,6 +182,120 @@ test("lookup rejects public status oracle requests for unknown payment hashes", 
   assert.equal(res.statusCode, 404);
   assert.equal(res.body.code, "NOT_FOUND");
 });
+
+test("secure Express handlers fail closed when auth hooks are missing", async () => {
+  const { wallet, store, handlers } = createSecureHarness();
+  seedInvoice(store);
+
+  const createRes = createResponse();
+  await handlers.createInvoice(
+    createRequest({
+      headers: {
+        "idempotency-key": "order-auth"
+      },
+      body: {
+        amount_msats: 200000,
+        description: "Fruit sticker"
+      }
+    }),
+    createRes,
+    raiseNext
+  );
+
+  assert.equal(createRes.statusCode, 401);
+  assert.equal(createRes.body.message, "OpenReceive create authorization hook is required.");
+  assert.equal(wallet.makeInvoiceCalls, 0);
+
+  const readRes = createResponse();
+  await handlers.getInvoice(
+    createRequest({
+      params: {
+        invoice_id: "or_inv_seed"
+      }
+    }),
+    readRes,
+    raiseNext
+  );
+
+  assert.equal(readRes.statusCode, 401);
+  assert.equal(readRes.body.message, "OpenReceive read authorization hook is required.");
+});
+
+test("secure Express handlers reject denied create authorization", async () => {
+  const { wallet, handlers } = createSecureHarness({
+    auth: {
+      create: () => false
+    }
+  });
+  const res = createResponse();
+
+  await handlers.createInvoice(
+    createRequest({
+      headers: {
+        "idempotency-key": "order-denied"
+      },
+      body: {
+        amount_msats: 200000,
+        description: "Fruit sticker"
+      }
+    }),
+    res,
+    raiseNext
+  );
+
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.body.message, "OpenReceive request is not authorized.");
+  assert.equal(wallet.makeInvoiceCalls, 0);
+});
+
+test("lookup invoice requires csrf when configured", async () => {
+  const { wallet, store, handlers } = createSecureHarness({
+    auth: {
+      lookup: () => true
+    },
+    csrf: {
+      verify: () => false
+    }
+  });
+  seedInvoice(store);
+  const res = createResponse();
+
+  await handlers.lookupInvoice(
+    createRequest({
+      body: {
+        payment_hash: PAYMENT_HASH
+      }
+    }),
+    res,
+    raiseNext
+  );
+
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.body.message, "CSRF verification failed.");
+  assert.equal(wallet.lookupInvoiceCalls, 0);
+});
+
+function seedInvoice(store, overrides = {}) {
+  const row = {
+    invoice_id: "or_inv_seed",
+    merchant_scope: "demo:hello-fruit",
+    operation: "invoice.create",
+    idempotency_key: "seed",
+    idempotency_request_hash: `sha256:${"0".repeat(64)}`,
+    payment_hash: PAYMENT_HASH,
+    invoice: "lnbc-demo",
+    amount_msats: 200000,
+    transaction_state: "pending",
+    workflow_state: "invoice_created",
+    fulfillment_state: "pending",
+    created_at: 1000,
+    expires_at: 1600,
+    metadata: {},
+    ...overrides
+  };
+  store.createInvoice(row);
+  return row;
+}
 
 function createRequest(overrides = {}) {
   return {
