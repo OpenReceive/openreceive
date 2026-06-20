@@ -383,6 +383,53 @@ test("lookup can run an idempotent backend fulfillment hook after settlement", a
   assert.match(stream, /event: invoice\.fulfilled/);
 });
 
+test("client-supplied settlement fields cannot trigger fulfillment", async () => {
+  let fulfillCalls = 0;
+  const { wallet, store, handlers } = createHarness({
+    clock: () => 1300,
+    fulfill: async () => {
+      fulfillCalls += 1;
+    }
+  });
+  const createRes = createResponse();
+  await handlers.createInvoice(
+    createRequest({
+      headers: {
+        "idempotency-key": "order-client-state"
+      },
+      body: {
+        amount_msats: 200000,
+        description: "Fruit sticker"
+      }
+    }),
+    createRes,
+    raiseNext
+  );
+
+  wallet.lookupState = "pending";
+  const lookupRes = createResponse();
+  await handlers.lookupInvoice(
+    createRequest({
+      body: {
+        payment_hash: PAYMENT_HASH,
+        transaction_state: "settled",
+        settled_at: 1300,
+        preimage: "1".repeat(64)
+      }
+    }),
+    lookupRes,
+    raiseNext
+  );
+
+  const stored = store.getInvoice(createRes.body.invoice_id);
+  assert.equal(lookupRes.statusCode, 200);
+  assert.equal(lookupRes.body.transaction_state, "pending");
+  assert.equal(lookupRes.body.workflow_state, "invoice_created");
+  assert.equal(stored.transaction_state, "pending");
+  assert.equal(stored.fulfillment_state, "pending");
+  assert.equal(fulfillCalls, 0);
+});
+
 test("lookup rejects public status oracle requests for unknown payment hashes", async () => {
   const { handlers } = createHarness();
   const res = createResponse();
@@ -424,6 +471,23 @@ test("read-only helper routes expose static rates, providers, and route suggesti
   assert.equal(quoteRes.statusCode, 200);
   assert.equal(quoteRes.body.amount_msats, 200000);
   assert.equal(quoteRes.body.source, "static_mock");
+
+  const missingRateRes = createResponse();
+  await handlers.quoteRates(
+    createRequest({
+      body: {
+        fiat: {
+          currency: "EUR",
+          value: "0.10"
+        }
+      }
+    }),
+    missingRateRes,
+    raiseNext
+  );
+  assert.equal(missingRateRes.statusCode, 400);
+  assert.equal(missingRateRes.body.code, "INVALID_REQUEST");
+  assert.equal(missingRateRes.body.message, "unsupported static fiat currency: EUR");
 
   const providersRes = createResponse();
   await handlers.listProviders(
