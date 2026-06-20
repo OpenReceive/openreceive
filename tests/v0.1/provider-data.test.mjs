@@ -148,3 +148,63 @@ test("provider-data validates registry references without exiting", () => {
   assert.equal(result.valid, false);
   assert.equal(result.errors.some((error) => error.includes("references missing provider missing-provider")), true);
 });
+
+test("provider-data validation rejects duplicate route and provider entries", () => {
+  const firstCryptoRoute = providerRegistry.crypto_routes[0];
+  const firstCountry = providerRegistry.countries[0];
+  const firstDisqualifiedProvider = providerRegistry.disqualified_providers[0];
+  const firstBankProvider = providerRegistry.fiat_rails.bank.countries.US[0];
+
+  const brokenRegistry = {
+    ...providerRegistry,
+    crypto_routes: [
+      {
+        ...firstCryptoRoute,
+        providers: [
+          firstCryptoRoute.providers[0],
+          firstCryptoRoute.providers[0],
+          ...firstCryptoRoute.providers.slice(1)
+        ]
+      },
+      firstCryptoRoute,
+      ...providerRegistry.crypto_routes.slice(1)
+    ],
+    countries: [
+      firstCountry,
+      ...providerRegistry.countries
+    ],
+    fiat_rails: {
+      ...providerRegistry.fiat_rails,
+      bank: {
+        ...providerRegistry.fiat_rails.bank,
+        countries: {
+          ...providerRegistry.fiat_rails.bank.countries,
+          US: [
+            firstBankProvider,
+            firstBankProvider,
+            ...providerRegistry.fiat_rails.bank.countries.US.slice(1)
+          ]
+        }
+      }
+    },
+    disqualified_providers: [
+      firstDisqualifiedProvider,
+      ...providerRegistry.disqualified_providers
+    ]
+  };
+
+  const result = validateRegistry(brokenRegistry);
+
+  assert.equal(result.valid, false);
+  assert.equal(result.errors.includes("crypto route id btc-lightning is duplicated"), true);
+  assert.equal(result.errors.includes("country code US is duplicated"), true);
+  assert.equal(result.errors.includes("disqualified provider relai is duplicated"), true);
+  assert.equal(
+    result.errors.includes("crypto route btc-lightning references provider rizful more than once"),
+    true
+  );
+  assert.equal(
+    result.errors.includes("fiat rail bank/US references provider strike more than once"),
+    true
+  );
+});

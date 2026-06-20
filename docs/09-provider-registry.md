@@ -67,11 +67,12 @@ Provider entries include conservative availability metadata:
 ## Validation
 
 `npm run validate` checks the registry version, counts, provider references,
-route references, and contradictory US-availability wording. Package tests
-check that helper functions preserve canonical route order and ranked fiat
-routes. `validateRegistry()` exposes the embeddable reference checks as
-`{ valid, errors }` so applications and generated packages can inspect private
-registry copies without terminating the current process.
+route references, duplicate route or country ids, duplicate provider refs inside
+routes, and contradictory US-availability wording. Package tests check that
+helper functions preserve canonical route order and ranked fiat routes.
+`validateRegistry()` exposes the embeddable reference checks as `{ valid,
+errors }` so applications and generated packages can inspect private registry
+copies without terminating the current process.
 
 Provider claims require evidence URLs or conservative caveats. Do not add new
 claims by editing package code; update the canonical registry and validation in

@@ -351,6 +351,18 @@ export function validateRegistry(input: ProviderRegistry = registry): ProviderRe
   check(input.schema_version === "2.0.0", "provider registry schema version mismatch");
   check(typeof input.generated === "string" && input.generated.length > 0, "provider registry missing generated date");
 
+  for (const duplicate of findDuplicates(cryptoRoutes.map((route) => route.id))) {
+    check(false, `crypto route id ${duplicate} is duplicated`);
+  }
+
+  for (const duplicate of findDuplicates(countries.map((country) => country.code))) {
+    check(false, `country code ${duplicate} is duplicated`);
+  }
+
+  for (const duplicate of findDuplicates(disqualifiedProviders.map((provider) => provider.id))) {
+    check(false, `disqualified provider ${duplicate} is duplicated`);
+  }
+
   for (const [id, provider] of Object.entries(providers)) {
     check(id === provider.id, `provider key/id mismatch for ${id}`);
     check(/^[a-z0-9-]+$/.test(id), `provider ${id} has invalid id`);
@@ -383,9 +395,12 @@ export function validateRegistry(input: ProviderRegistry = registry): ProviderRe
     check(Array.isArray(route.providers) && route.providers.length > 0, `crypto route ${route.id} needs providers`);
 
     let flagshipCount = 0;
+    const routeProviderIds = new Set<ProviderId>();
     for (const ref of route.providers ?? []) {
       check(providerIds.has(ref.provider), `crypto route ${route.id} references missing provider ${ref.provider}`);
       check(!disqualifiedIds.has(ref.provider), `crypto route ${route.id} references disqualified provider ${ref.provider}`);
+      check(!routeProviderIds.has(ref.provider), `crypto route ${route.id} references provider ${ref.provider} more than once`);
+      routeProviderIds.add(ref.provider);
       if (ref.flagship === true) flagshipCount += 1;
     }
     check(flagshipCount <= 1, `crypto route ${route.id} has more than one flagship provider`);
@@ -409,9 +424,12 @@ export function validateRegistry(input: ProviderRegistry = registry): ProviderRe
       check(Array.isArray(refs) && refs.length > 0, `fiat rail ${railId}/${countryCode} needs providers`);
 
       let expectedRank = 1;
+      const railProviderIds = new Set<ProviderId>();
       for (const ref of refs ?? []) {
         check(providerIds.has(ref.provider), `fiat rail ${railId}/${countryCode} references missing provider ${ref.provider}`);
         check(!disqualifiedIds.has(ref.provider), `fiat rail ${railId}/${countryCode} references disqualified provider ${ref.provider}`);
+        check(!railProviderIds.has(ref.provider), `fiat rail ${railId}/${countryCode} references provider ${ref.provider} more than once`);
+        railProviderIds.add(ref.provider);
         check(ref.rank === expectedRank, `fiat rail ${railId}/${countryCode} ranks must be sequential`);
         expectedRank += 1;
       }
@@ -427,4 +445,19 @@ export function validateRegistry(input: ProviderRegistry = registry): ProviderRe
     valid: errors.length === 0,
     errors
   };
+}
+
+function findDuplicates(values: readonly string[]): readonly string[] {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+
+  for (const value of values) {
+    if (seen.has(value)) {
+      duplicates.add(value);
+    } else {
+      seen.add(value);
+    }
+  }
+
+  return [...duplicates];
 }
