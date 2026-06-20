@@ -68,6 +68,24 @@ test("secret scanner rejects force-added non-example env files", () => {
   });
 });
 
+test("secret scanner rejects force-added root env files without echoing secrets", () => {
+  withGitRepo((dir) => {
+    const uri = `nostr+walletconnect://${"a".repeat(64)}?relay=wss%3A%2F%2Frelay.example.com&secret=${"b".repeat(64)}`;
+    writeFileSync(path.join(dir, ".env"), `OPENRECEIVE_NWC=${uri}\n`);
+    execFileSync("git", ["add", "-f", ".env"], { cwd: dir, stdio: "ignore" });
+
+    assert.throws(
+      () => runSecretScanner(dir),
+      (error) => {
+        assert.match(String(error.stderr), /\.env: tracked env file is forbidden/);
+        assert.match(String(error.stderr), /\.env: NWC URI with 64 hex secret/);
+        assert.doesNotMatch(String(error.stderr), new RegExp("b".repeat(64)));
+        return true;
+      }
+    );
+  });
+});
+
 test("secret scanner rejects tracked env-like deployment filenames", () => {
   withGitRepo((dir) => {
     const deployDir = path.join(dir, "demos", "deploy");
