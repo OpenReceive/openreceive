@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+demo="${1:-}"
+if [[ -z "$demo" ]]; then
+  printf 'Usage: %s express-demo|static-demo\n' "$0" >&2
+  exit 64
+fi
+
+case "$demo" in
+  express-demo|static-demo) ;;
+  *)
+    printf 'Unknown demo: %s\n' "$demo" >&2
+    exit 64
+    ;;
+esac
+
+printf 'Rollback template validated for %s.\n' "$demo"
+printf 'Use the previous_image_digest from demos/deploy/manifests/ in a private operator deployment.\n'

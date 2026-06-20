@@ -1,0 +1,23 @@
+networks:
+  demo_proxy:
+    external: true
+    name: openreceive_demo_proxy
+
+services:
+  static-demo:
+    image: ghcr.io/openreceive/demo-static:${OPENRECEIVE_IMAGE_TAG:?set OPENRECEIVE_IMAGE_TAG}
+    expose:
+      - "3001"
+    networks:
+      - demo_proxy
+    env_file:
+      - path: /opt/openreceive/secrets/rizful-test-wallet.env
+        required: false
+    environment:
+      OPENRECEIVE_DEMO_MODE: ${OPENRECEIVE_DEMO_MODE:-test_nwc}
+      OPENRECEIVE_PUBLIC_URL: https://static-demo.openreceive.org
+      OPENRECEIVE_GIT_SHA: ${OPENRECEIVE_GIT_SHA:-}
+      OPENRECEIVE_IMAGE_DIGEST: ${OPENRECEIVE_IMAGE_DIGEST:-}
+      OPENRECEIVE_DEPLOYED_AT: ${OPENRECEIVE_DEPLOYED_AT:-}
+      PORT: "3001"
+    restart: unless-stopped

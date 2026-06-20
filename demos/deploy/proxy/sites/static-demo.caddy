@@ -1,0 +1,6 @@
+static-demo.openreceive.org {
+	encode zstd gzip
+	header /openreceive/* Cache-Control "no-store"
+	header /openreceive/* X-Robots-Tag "noarchive"
+	reverse_proxy static-demo:3001
+}

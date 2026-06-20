@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+base_url="${1:-}"
+if [[ -z "$base_url" ]]; then
+  printf 'Usage: %s https://demo-hostname\n' "$0" >&2
+  exit 64
+fi
+
+case "$base_url" in
+  http://*|https://*) ;;
+  *)
+    printf 'Demo URL must start with http:// or https://\n' >&2
+    exit 64
+    ;;
+esac
+
+curl -fsS "$base_url/healthz" >/dev/null
+curl -fsS "$base_url/demo-metadata.json" >/dev/null
+printf 'Smoke passed for %s\n' "$base_url"

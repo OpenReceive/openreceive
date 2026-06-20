@@ -1,0 +1,6 @@
+express-demo.openreceive.org {
+	encode zstd gzip
+	header /openreceive/* Cache-Control "no-store"
+	header /openreceive/* X-Robots-Tag "noarchive"
+	reverse_proxy express-demo:3000
+}

@@ -9,6 +9,7 @@
 | `npm run generate:models` | Regenerate TypeScript contract constants from OpenAPI and AsyncAPI. | No |
 | `npm run check:generated` | Fail when generated TypeScript contract constants are stale. | No |
 | `npm run check:demo-containers` | Validate Hello Fruit Dockerfiles, compose templates, optional env-file wiring, ports, and secret boundaries. | No |
+| `npm run check:demo-deploy` | Validate public hosted-demo deploy templates, manifests, scripts, proxy wiring, and secret boundaries. | No |
 | `npm run build:docs` | Validate the docs manifest and build the docs import/search artifact under `dist/docs`. | No |
 | `npm run build:demo` | Build the Hello Fruit demos. | No |
 | `npm run test:package-smoke` | Pack every JS workspace package into local tarballs, install them into a temporary project, and import each package. | No |

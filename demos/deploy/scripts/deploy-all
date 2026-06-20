@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+"$(dirname "$0")/deploy-demo" express-demo
+"$(dirname "$0")/deploy-demo" static-demo

@@ -1,0 +1,26 @@
+networks:
+  demo_proxy:
+    external: true
+    name: openreceive_demo_proxy
+
+services:
+  caddy:
+    image: ghcr.io/openreceive/caddy-cloudflare-dns:latest
+    ports:
+      - "80:80"
+      - "443:443"
+    env_file:
+      - path: /opt/openreceive/secrets/cloudflare-dns.env
+        required: false
+    networks:
+      - demo_proxy
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./sites:/etc/caddy/sites:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
