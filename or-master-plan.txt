@@ -4139,6 +4139,102 @@ Release requirements:
 Milestones
 ----------
 
+Current Implementation Status
+-----------------------------
+
+Last updated: 2026-06-20.
+
+Current repository position:
+
+  - HEAD is 1a8181b ("lots of progress").
+  - Milestone 0 is implemented.
+  - Milestone 1 is implemented and should remain the v0.1 release boundary.
+  - Milestone 2 is implemented through the committed Next.js Hello Fruit demo,
+    with one uncommitted finalization step still open.
+  - The current uncommitted step is:
+
+      Finalize Next.js hosted metadata route behavior.
+
+    Files currently in that step:
+
+      examples/hello-fruit/server/nextjs-fullstack/src/app/robots.ts
+      examples/hello-fruit/server/nextjs-fullstack/src/app/sitemap.ts
+      tests/v0.1/demo.test.mjs
+
+    Purpose:
+
+      Make Next.js robots.txt and sitemap.xml runtime-dynamic when they depend
+      on OPENRECEIVE_PUBLIC_URL or OPENRECEIVE_DEMO_NOINDEX, and cover that
+      with tests.
+
+    Verification already run before this pause:
+
+      npm run typecheck
+      node --test tests/v0.1/demo.test.mjs
+      npm run build -w @openreceive/example-nextjs-fullstack
+      npm run test:ci
+
+    Result:
+
+      Passing. The final Next build showed /robots.txt and /sitemap.xml as
+      dynamic routes. OPENRECEIVE_NWC was unset, so the live NWC smoke test
+      skipped as designed.
+
+    Resume instruction:
+
+      Do not start a new feature until this three-file cleanup is either
+      committed or intentionally reverted. If it is kept, run at least
+      node --test tests/v0.1/demo.test.mjs and npm run test:ci before the
+      commit closeout.
+
+Already completed:
+
+  - Repo foundation, governance/security/contribution files, ADRs, scope lock,
+    package ownership, test command map, and forbidden-without-approval rules.
+  - v0.1 schemas, vectors, generated models, validation tooling, secret scan,
+    client bundle scan, release-readiness checks, and workflow checks.
+  - NWC URI parser/redactor, receive-only NWC client interface, Alby/getAlby
+    Node adapter, wallet preflight, info/capability tests, make_invoice and
+    lookup_invoice wrappers, metadata guard, and receive-checkout spend-method
+    guard.
+  - Core storage/idempotency helpers, safe poller, settlement detection,
+    static fiat pricing, CoinGecko-compatible pricing, payment notification
+    listener, and in-memory event replay.
+  - Express adapter with auth hooks, CSRF/CORS behavior, lookup authorization,
+    signed event URLs, SSE invoice events, rates/providers/routes endpoints,
+    refresh support, and secure fail-closed defaults.
+  - @openreceive/browser helpers and checkout state reducer.
+  - @openreceive/elements, @openreceive/react default checkout UI, hooks/
+    primitives/slots, aliases, and the React Material UI recipe.
+  - @openreceive/provider-data and provider registry validation.
+  - @openreceive/testkit and deterministic mock wallet tooling.
+  - Express + React Hello Fruit demo.
+  - Static HTML + small API Hello Fruit demo.
+  - Next.js fullstack Hello Fruit demo, committed in 1a8181b, except for the
+    uncommitted hosted-metadata cleanup named above.
+  - Demo deployment inventory/templates for express-demo, static-demo, and
+    nextjs-demo.
+  - Full CI gate has passed after the Next demo work:
+
+      npm run test:ci
+
+Plan corrections from implementation:
+
+  - Hosted demo routes that expose runtime deployment metadata must not be
+    build-time static when their output depends on environment variables.
+    Next.js robots.txt and sitemap.xml handlers need explicit dynamic/runtime
+    settings when they read OPENRECEIVE_PUBLIC_URL or OPENRECEIVE_DEMO_NOINDEX.
+  - The strict parallelism gate in this master plan remains authoritative.
+    If docs/v0.1-scope-lock.md or any worker notes imply parallel coding is
+    safe merely after the NWC interface exists, update those notes to match
+    this file: v0.1 stayed sequential through the Express reference path, demo,
+    smoke, and CI gates.
+  - After the current uncommitted Next cleanup is closed, the project is past
+    the original v0.1 sequential path and can safely use parallel workers only
+    on isolated post-v0.1 lanes with separate file ownership. Do not let
+    workers concurrently edit schemas, vectors, generated contracts, shared
+    checkout semantics, or the same demo.
+
 Milestone 0: v0.1 foundation
 
 Goal:

@@ -1,5 +1,8 @@
 import type { MetadataRoute } from "next";
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 export default function sitemap(): MetadataRoute.Sitemap {
   const configured = process.env.OPENRECEIVE_PUBLIC_URL;
   let url = "http://localhost:3002";

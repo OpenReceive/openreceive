@@ -14,6 +14,8 @@ import { GET as getNextDemoMetadata } from "../../examples/hello-fruit/server/ne
 import { GET as getNextDocs } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/docs/route.ts";
 import { GET as getNextHealthz } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/healthz/route.ts";
 import { GET as getNextSource } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/source/route.ts";
+import getNextRobots, { dynamic as nextRobotsDynamic } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/robots.ts";
+import getNextSitemap, { dynamic as nextSitemapDynamic } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/sitemap.ts";
 
 const productPath = path.join(
   process.cwd(),
@@ -284,6 +286,20 @@ test("Hello Fruit hosted demo routes expose health, source, docs, robots, and si
       nextDocs.headers.get("location"),
       "https://github.com/openreceive/openreceive/blob/main/docs/05-frontend-checkout.md"
     );
+
+    assert.equal(nextRobotsDynamic, "force-dynamic");
+    const nextRobots = getNextRobots();
+    assert.deepEqual(nextRobots.rules, {
+      userAgent: "*",
+      allow: "/"
+    });
+    assert.equal(nextRobots.sitemap, "https://demo.example.test/sitemap.xml");
+
+    assert.equal(nextSitemapDynamic, "force-dynamic");
+    const nextSitemap = getNextSitemap();
+    assert.equal(nextSitemap[0]?.url, "https://demo.example.test");
+    assert.equal(JSON.stringify(nextRobots).includes("OPENRECEIVE_NWC"), false);
+    assert.equal(JSON.stringify(nextSitemap).includes("nostr+walletconnect://"), false);
   });
 });
 
