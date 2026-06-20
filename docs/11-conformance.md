@@ -77,7 +77,8 @@ frontend NWC behavior to OpenReceive receive-checkout APIs.
 
 `@openreceive/testkit` provides deterministic receive-client fixtures for SDK
 and adapter tests. It can create predictable invoices, look them up by invoice
-or payment hash, and explicitly mark them settled, expired, or failed.
+or payment hash, explicitly mark them settled, expired, or failed, and replay
+duplicate `payment_received` notifications.
 
 The testkit is not a daemon and does not emulate Nostr relay behavior. It is a
 local conformance helper for code paths that already depend on the

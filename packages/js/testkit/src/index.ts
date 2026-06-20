@@ -129,14 +129,29 @@ export class TestkitReceiveClient implements OpenReceiveReceiveNwcClient {
     stored.preimage = options.preimage ?? TESTKIT_PREIMAGE;
 
     const lookup = serializeLookupInvoice(stored);
-    this.#notify({
-      payment_hash: stored.payment_hash,
-      invoice: stored.invoice,
-      amount_msats: stored.amount_msats,
-      settled_at: settledAt,
-      raw: lookup
-    });
+    this.#notify(this.#notificationFor(stored, lookup));
     return lookup;
+  }
+
+  replayPaymentReceived(
+    selector: LookupInvoiceRequest,
+    count = 1
+  ): readonly PaymentReceivedNotification[] {
+    if (!Number.isSafeInteger(count) || count < 1) {
+      throw new RangeError("count must be a positive safe integer");
+    }
+
+    const stored = this.#require(selector);
+    const lookup = serializeLookupInvoice(stored);
+    const notification = this.#notificationFor(stored, lookup);
+    const notifications: PaymentReceivedNotification[] = [];
+
+    for (let index = 0; index < count; index += 1) {
+      notifications.push(notification);
+      this.#notify(notification);
+    }
+
+    return notifications;
   }
 
   expireInvoice(selector: LookupInvoiceRequest): LookupInvoiceResult {
@@ -190,6 +205,19 @@ export class TestkitReceiveClient implements OpenReceiveReceiveNwcClient {
     for (const subscriber of this.#subscribers) {
       void subscriber(notification);
     }
+  }
+
+  #notificationFor(
+    stored: TestkitStoredInvoice,
+    lookup: LookupInvoiceResult
+  ): PaymentReceivedNotification {
+    return {
+      payment_hash: stored.payment_hash,
+      invoice: stored.invoice,
+      amount_msats: stored.amount_msats,
+      ...(stored.settled_at === undefined ? {} : { settled_at: stored.settled_at }),
+      raw: lookup
+    };
   }
 }
 
