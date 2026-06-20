@@ -40,6 +40,14 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+function assertFile(relativePath) {
+  try {
+    assert(statSync(path.join(root, relativePath)).isFile(), `${relativePath}: expected file`);
+  } catch {
+    throw new Error(`${relativePath}: expected file`);
+  }
+}
+
 function parseDecimal(value) {
   assert(/^[0-9]+(\.[0-9]+)?$/.test(value), `invalid decimal: ${value}`);
   const [whole, fraction = ""] = value.split(".");
@@ -392,6 +400,29 @@ function validateData() {
 
   const rates = readJson("spec/data/rates/price-sources.json");
   assert(rates.sources.some((source) => source.id === "static_mock"), "missing static_mock price source");
+
+  const demoSpec = readJson("spec/data/demo/fruits.json");
+  const demoProduct = readJson("examples/hello-fruit/shared/product.json");
+  const demoFruits = readJson("examples/hello-fruit/shared/fruits.json");
+
+  assert(demoSpec.schema_version === "0.1.0", "demo data schema version mismatch");
+  assert(demoProduct.schema_version === demoSpec.schema_version, "Hello Fruit product schema version drift");
+  assert(demoFruits.schema_version === demoSpec.schema_version, "Hello Fruit fruit schema version drift");
+  assert(demoProduct.product_id === demoSpec.product_id, "Hello Fruit product id drift");
+  assert(demoFruits.product_id === demoSpec.product_id, "Hello Fruit fruit product id drift");
+  assert(demoProduct.name === demoSpec.name, "Hello Fruit product name drift");
+  assert(demoProduct.amount_msats === demoSpec.amount_msats, "Hello Fruit amount_msats drift");
+  assert(JSON.stringify(demoProduct.fiat) === JSON.stringify(demoSpec.fiat), "Hello Fruit fiat price drift");
+  assert(Array.isArray(demoSpec.fruits) && demoSpec.fruits.length > 0, "canonical demo fruits missing");
+  assert(demoFruits.fruits.length === demoSpec.fruits.length, "Hello Fruit fruit count drift");
+
+  for (const [index, fruit] of demoSpec.fruits.entries()) {
+    const sharedFruit = demoFruits.fruits[index];
+    assert(sharedFruit?.id === fruit.id, `Hello Fruit id drift at index ${index}`);
+    assert(sharedFruit?.name === fruit.name, `Hello Fruit name drift for ${fruit.id}`);
+    assert(sharedFruit?.sticker === `stickers/${fruit.id}.svg`, `Hello Fruit sticker path drift for ${fruit.id}`);
+    assertFile(`examples/hello-fruit/shared/${sharedFruit.sticker}`);
+  }
 }
 
 function validateOpenApi() {
