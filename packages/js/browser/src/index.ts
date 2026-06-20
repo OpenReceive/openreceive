@@ -36,6 +36,7 @@ export const OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS = {
   state: "openreceive-state",
   settled: "openreceive-settled",
   providerCopy: "openreceive-provider-copy",
+  startOver: "openreceive-start-over",
   error: "openreceive-error"
 } as const;
 export const OPENRECEIVE_THEME_TOGGLE_ELEMENT_EVENTS = {
@@ -85,11 +86,13 @@ export const OPENRECEIVE_CHECKOUT_DATA_SELECTORS = {
 } as const;
 export const OPENRECEIVE_CHECKOUT_ELEMENT_PARTS = {
   copy: "copy",
-  open: "open"
+  open: "open",
+  startOver: "start-over"
 } as const;
 export const OPENRECEIVE_CHECKOUT_ELEMENT_PART_SELECTORS = {
   copy: `[part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.copy}"]`,
-  open: `[part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.open}"]`
+  open: `[part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.open}"]`,
+  startOver: `[part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.startOver}"]`
 } as const;
 export const OPENRECEIVE_THEME_TOGGLE_ELEMENT_PARTS = {
   button: "button"
@@ -139,6 +142,7 @@ export function createOpenReceiveCheckoutActionEvent(
   eventName:
     | typeof OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy
     | typeof OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.openWallet
+    | typeof OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.startOver
 ): CustomEvent {
   return new CustomEvent(eventName);
 }
@@ -458,6 +462,7 @@ export interface OpenReceiveCheckoutElementEventHandlers {
   readonly onState?: (event: Event) => void;
   readonly onSettled?: (event: Event) => void;
   readonly onProviderCopy?: (event: Event) => void;
+  readonly onStartOver?: (event: Event) => void;
   readonly onError?: (event: Event) => void;
 }
 
@@ -913,6 +918,7 @@ export const openReceiveCheckoutLabels = {
     expiredDetail: "Create a fresh invoice to keep going."
   },
   countdownPrefix: "Invoice expires in",
+  startOver: "Start over",
   wizardTitle: "Pay this invoice",
   wizardSubtitle: "Choose how you want to pay.",
   emptyBitcoin: "Choose Lightning or on-chain Bitcoin.",
@@ -2578,6 +2584,9 @@ export function createOpenReceiveCheckoutElementListeners(
     ...(handlers.onProviderCopy === undefined
       ? {}
       : { [OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.providerCopy]: handlers.onProviderCopy }),
+    ...(handlers.onStartOver === undefined
+      ? {}
+      : { [OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.startOver]: handlers.onStartOver }),
     ...(handlers.onError === undefined
       ? {}
       : { [OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.error]: handlers.onError })
@@ -2919,13 +2928,22 @@ export function createOpenReceiveCheckoutStatusModel(
   const isCheckoutState =
     source !== undefined && "invoice_id" in source && "invoice" in source;
   const phase = source?.phase ?? "invoice_created";
-  const statusText = getOpenReceivePaymentStatusText(phase);
   const expiresInSeconds = source?.expiresInSeconds;
+  const displayPhase =
+    phase !== "settled" &&
+    phase !== "failed" &&
+    phase !== "cancelled" &&
+    expiresInSeconds === 0
+      ? "expired"
+      : phase;
+  const statusText = getOpenReceivePaymentStatusText(displayPhase);
 
   return {
-    phase,
+    phase: displayPhase,
     waiting:
-      source === undefined
+      displayPhase === "expired"
+        ? false
+        : source === undefined
         ? false
         : isCheckoutState
           ? shouldOpenReceiveCheckoutShowWaiting(source, options)
@@ -2933,7 +2951,7 @@ export function createOpenReceiveCheckoutStatusModel(
     title: statusText.title,
     detail: statusText.detail,
     countdownPrefix: openReceiveCheckoutLabels.countdownPrefix,
-    ...(expiresInSeconds === undefined
+    ...(expiresInSeconds === undefined || displayPhase === "expired"
       ? {}
       : {
         expiresInSeconds,

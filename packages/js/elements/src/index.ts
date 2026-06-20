@@ -130,18 +130,26 @@ export function renderOpenReceiveCheckoutHtml(view: OpenReceiveCheckoutView): st
   const status = checkoutState === undefined
     ? ""
     : renderElementPaymentStatusHtml(checkoutState);
+  const statusModel = checkoutState === undefined
+    ? undefined
+    : createOpenReceiveCheckoutStatusModel(checkoutState);
+  const expired = statusModel?.phase === "expired";
   const wizard =
-    view.payment_wizard === false ? "" : renderOpenReceivePaymentWizardHtml(view.wizard);
+    expired || view.payment_wizard === false
+      ? ""
+      : renderOpenReceivePaymentWizardHtml(view.wizard);
 
   return `
     <style>${openReceiveCheckoutElementStyles}</style>
     <section part="root"${view.theme === undefined ? "" : ` data-theme="${escapeHtml(view.theme)}"`}>
-      <div part="qr" ${OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.qr}></div>
+      ${expired ? "" : `<div part="qr" ${OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.qr}></div>`}
       ${status}
       <div part="meta">${amountLabel}${fiatLabel}${stateLabel}</div>
-      <textarea part="invoice" readonly>${escapeHtml(view.invoice)}</textarea>
+      ${expired ? "" : `<textarea part="invoice" readonly>${escapeHtml(view.invoice)}</textarea>`}
       <div part="actions">
-        <button part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.copy}" type="button">${escapeHtml(openReceiveCheckoutLabels.copyInvoice)}</button>
+        ${expired
+          ? `<button part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.startOver}" type="button">${escapeHtml(openReceiveCheckoutLabels.startOver)}</button>`
+          : `<button part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.copy}" type="button">${escapeHtml(openReceiveCheckoutLabels.copyInvoice)}</button>`}
       </div>
       ${wizard}
     </section>
@@ -497,15 +505,24 @@ export function defineOpenReceiveElements(
         }
       });
 
-      void createQrSvg(invoice, {
-        encoder: options.qrEncoder,
-        width: 256
-      })
-        .then((svg) => {
-          const qr = root.querySelector(OPENRECEIVE_CHECKOUT_DATA_SELECTORS.qr);
-          if (qr !== null) qr.innerHTML = svg;
+      root.querySelector(OPENRECEIVE_CHECKOUT_ELEMENT_PART_SELECTORS.startOver)?.addEventListener("click", () => {
+        this.dispatchEvent(
+          createOpenReceiveCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.startOver)
+        );
+      });
+
+      const qrTarget = root.querySelector(OPENRECEIVE_CHECKOUT_DATA_SELECTORS.qr);
+      if (qrTarget !== null) {
+        void createQrSvg(invoice, {
+          encoder: options.qrEncoder,
+          width: 256
         })
-        .catch((error) => this.dispatchError(error));
+          .then((svg) => {
+            const qr = root.querySelector(OPENRECEIVE_CHECKOUT_DATA_SELECTORS.qr);
+            if (qr !== null) qr.innerHTML = svg;
+          })
+          .catch((error) => this.dispatchError(error));
+      }
 
       this.bindWizard(root, invoice, options.logger);
     }

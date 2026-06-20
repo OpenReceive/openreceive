@@ -173,6 +173,18 @@ test("provider-data filters providers and countries conservatively", () => {
     true
   );
   assert.equal(listCountries({ currency: "USD" }).every((country) => country.currency === "USD"), true);
+  assert.equal(providerRegistry.providers.strike.tutorials.length, 4);
+  assert.deepEqual(
+    providerRegistry.providers.cashapp.tutorials.map((tutorial) => tutorial.path),
+    [
+      "assets/pay_tutorials/cashapp-1.webp",
+      "assets/pay_tutorials/cashapp-2.webp",
+      "assets/pay_tutorials/cashapp-3.webp",
+      "assets/pay_tutorials/cashapp-4.webp",
+      "assets/pay_tutorials/cashapp-5.webp",
+      "assets/pay_tutorials/cashapp-6.webp"
+    ]
+  );
 });
 
 test("provider-data exports immutable registry objects", () => {

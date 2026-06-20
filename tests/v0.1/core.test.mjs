@@ -370,7 +370,16 @@ test("browser owns checkout payment status display model", () => {
     expiresInSeconds: 0
   });
   assert.equal(lightweight.title, "Invoice expired");
-  assert.equal(lightweight.countdownLabel, "0:00");
+  assert.equal(lightweight.countdownLabel, undefined);
+
+  const zeroCountdown = createOpenReceiveCheckoutStatusModel({
+    ...state,
+    expiresInSeconds: 0
+  });
+  assert.equal(zeroCountdown.phase, "expired");
+  assert.equal(zeroCountdown.waiting, false);
+  assert.equal(zeroCountdown.title, "Invoice expired");
+  assert.equal(zeroCountdown.countdownLabel, undefined);
 });
 
 test("browser owns reusable checkout attribute parsers", () => {
@@ -1052,6 +1061,7 @@ test("browser custom-element event map covers checkout lifecycle events", () => 
     state: "openreceive-state",
     settled: "openreceive-settled",
     providerCopy: "openreceive-provider-copy",
+    startOver: "openreceive-start-over",
     error: "openreceive-error"
   });
   const providerCopyEvent = createOpenReceiveProviderCopyEvent("boltz");
@@ -1062,6 +1072,10 @@ test("browser custom-element event map covers checkout lifecycle events", () => 
   assert.equal(
     createOpenReceiveCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy).type,
     OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy
+  );
+  assert.equal(
+    createOpenReceiveCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.startOver).type,
+    OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.startOver
   );
   const stateEventState = createOpenReceiveCheckoutState({
     invoice_id: "or_inv_event",
@@ -1106,10 +1120,13 @@ test("browser owns payment wizard DOM contract", () => {
     country: "data-or-country",
     switchCountry: "data-or-switch-country",
     route: "data-or-route",
-    providerCopy: "data-or-provider-copy"
+    providerCopy: "data-or-provider-copy",
+    providerTutorial: "data-or-provider-tutorial",
+    providerTutorialIndex: "data-or-provider-tutorial-index"
   });
   assert.equal(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.method, "[data-or-method]");
   assert.equal(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.providerCopy, "[data-or-provider-copy]");
+  assert.equal(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.providerTutorial, "[data-or-provider-tutorial]");
   assert.equal(parseOpenReceivePaymentMethod("bitcoin"), "bitcoin");
   assert.equal(parseOpenReceivePaymentMethod("wire"), null);
   assert.equal(parseOpenReceiveRegion("europe"), "europe");
@@ -1158,11 +1175,13 @@ test("browser owns custom-element attribute contracts", () => {
 test("browser owns web-component shadow part contracts", () => {
   assert.deepEqual(OPENRECEIVE_CHECKOUT_ELEMENT_PARTS, {
     copy: "copy",
-    open: "open"
+    open: "open",
+    startOver: "start-over"
   });
   assert.deepEqual(OPENRECEIVE_CHECKOUT_ELEMENT_PART_SELECTORS, {
     copy: '[part="copy"]',
-    open: '[part="open"]'
+    open: '[part="open"]',
+    startOver: '[part="start-over"]'
   });
   assert.deepEqual(OPENRECEIVE_THEME_TOGGLE_ELEMENT_PARTS, {
     button: "button"

@@ -27,6 +27,7 @@ import {
   getOpenReceivePaymentStatusText,
   getOpenReceiveProviderIcon,
   getOpenReceiveProviderOpenLabel,
+  getOpenReceiveProviderTutorials,
   getOpenReceiveProviderUsBadge,
   getOpenReceiveRouteIcon,
   getOpenReceiveRouteNetworkLabel,
@@ -139,6 +140,28 @@ test("React checkout default UI includes countdown, waiting state, and payment w
   assert.doesNotMatch(html, /or_inv_test/);
 });
 
+test("React checkout hides payable surfaces after invoice expiry", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(OpenReceiveCheckout, {
+      invoice_id: "or_inv_expired",
+      invoice: "lnbc-expired",
+      payment_hash: "c".repeat(64),
+      amount_msats: 1000,
+      transaction_state: "pending",
+      workflow_state: "invoice_created",
+      expires_at: Math.floor(Date.now() / 1000) - 1
+    })
+  );
+
+  assert.match(html, /Invoice expired/);
+  assert.match(html, /Start over/);
+  assert.doesNotMatch(html, /Invoice expires in/);
+  assert.doesNotMatch(html, /data-openreceive-qr/);
+  assert.doesNotMatch(html, /textarea/);
+  assert.doesNotMatch(html, /Pay this invoice/);
+  assert.doesNotMatch(html, /Copy invoice/);
+});
+
 test("React payment wizard server-renders the four package-owned first choices", () => {
   const html = renderToStaticMarkup(
     React.createElement(OpenReceivePaymentWizard, {
@@ -230,6 +253,15 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   const strike = getProvider("strike");
   assert.ok(strike);
   assert.match(getOpenReceiveProviderIcon(strike), /assets\/provider-icons\/strike\.png/);
+  assert.deepEqual(
+    getOpenReceiveProviderTutorials(strike).map((tutorial) => tutorial.caption),
+    [
+      "Tap Send",
+      "Choose Bitcoin wallet",
+      "Tap Paste",
+      "Confirm the payment"
+    ]
+  );
   assert.equal(getOpenReceiveRouteNetworkLabel("btc-lightning"), "Lightning Network");
   assert.equal(getOpenReceiveRouteNetworkLabel("usdt-tron"), "usdt-tron");
   assert.match(getOpenReceivePaymentMethodIcon("card"), /assets\/icons\/card\.svg/);
@@ -417,6 +449,8 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   assert.equal(cardRouteDisplays[0].providers[0].openLabel, "How To Pay");
   assert.match(cardRouteDisplays[0].providers[0].url, /^https:\/\/docs\.strike\.me/);
   assert.match(cardRouteDisplays[0].providers[0].icon, /assets\/provider-icons\/strike\.png/);
+  assert.equal(cardRouteDisplays[0].providers[0].tutorials.length, 4);
+  assert.match(cardRouteDisplays[0].providers[0].tutorials[0].image, /assets\/pay_tutorials\/strike-1\.webp/);
 
   const firstCrypto = getOpenReceiveAltcoinAssets().find((asset) => asset.route !== undefined);
   assert.ok(firstCrypto?.route);

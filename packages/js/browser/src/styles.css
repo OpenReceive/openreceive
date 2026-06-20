@@ -463,6 +463,108 @@
   color: #111827;
 }
 
+.or-provider-actions .or-provider-open {
+  background: var(--or-warm);
+  color: #111827;
+}
+
+.or-tutorial-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 0.6);
+}
+
+.or-tutorial-dialog {
+  box-sizing: border-box;
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  max-width: min(440px, 100%);
+  max-height: min(92vh, 900px);
+  overflow: hidden;
+  padding: 12px;
+  border: 1px solid var(--or-border);
+  border-radius: 8px;
+  background: var(--or-bg);
+  box-shadow: 0 20px 70px rgb(0 0 0 / 0.32);
+}
+
+.or-tutorial-header,
+.or-tutorial-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.or-tutorial-header h3 {
+  min-width: 0;
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.or-tutorial-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--or-border);
+  border-radius: 8px;
+  background: var(--or-bg-soft);
+}
+
+.or-tutorial-image {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: min(66vh, 720px);
+  object-fit: contain;
+}
+
+.or-tutorial-caption {
+  margin: 0;
+  color: var(--or-text);
+  font-size: 16px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.or-tutorial-progress {
+  margin: 0;
+  color: var(--or-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.or-tutorial-steps {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.or-tutorial-step {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--or-border);
+}
+
+.or-tutorial-step.active {
+  background: var(--or-text);
+}
+
+.or-tutorial-controls button {
+  flex: 1 1 0;
+}
+
 @keyframes or-spin {
   to {
     transform: rotate(360deg);
@@ -482,6 +584,20 @@
   .or-country-summary {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .or-tutorial-modal {
+    align-items: stretch;
+    padding: 8px;
+  }
+
+  .or-tutorial-dialog {
+    max-height: calc(100vh - 16px);
+  }
+
+  .or-tutorial-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 
   .or-map-readout {

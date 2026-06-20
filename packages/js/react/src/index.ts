@@ -62,12 +62,12 @@ export interface UseOpenReceiveCheckoutOptions extends OpenReceiveCheckoutData {
   readonly onError?: (error: unknown) => void;
   readonly lookupInvoice?: (state: OpenReceiveCheckoutState) => Promise<Partial<OpenReceiveCheckoutSnapshot>>;
   readonly lookupUrl?: string;
-  readonly onState?: (state: OpenReceiveCheckoutState) => void;
   readonly refreshInvoice?: (state: OpenReceiveCheckoutState) => Promise<OpenReceiveCheckoutSnapshot | OpenReceiveRefreshInvoiceResult>;
   readonly refreshUrl?: string | ((state: OpenReceiveCheckoutState) => string);
   readonly refreshHeaders?: Readonly<Record<string, string>>;
   readonly refreshIdempotencyKey?: string | ((state: OpenReceiveCheckoutState) => string);
   readonly refreshReason?: string | ((state: OpenReceiveCheckoutState) => string);
+  readonly onState?: (state: OpenReceiveCheckoutState) => void;
   readonly pollIntervalMs?: number;
 }
 
@@ -185,7 +185,13 @@ export interface OpenReceiveCheckoutProps
   readonly onError?: (error: unknown) => void;
   readonly lookupInvoice?: (state: OpenReceiveCheckoutState) => Promise<Partial<OpenReceiveCheckoutSnapshot>>;
   readonly lookupUrl?: string;
+  readonly refreshInvoice?: (state: OpenReceiveCheckoutState) => Promise<OpenReceiveCheckoutSnapshot | OpenReceiveRefreshInvoiceResult>;
+  readonly refreshUrl?: string | ((state: OpenReceiveCheckoutState) => string);
+  readonly refreshHeaders?: Readonly<Record<string, string>>;
+  readonly refreshIdempotencyKey?: string | ((state: OpenReceiveCheckoutState) => string);
+  readonly refreshReason?: string | ((state: OpenReceiveCheckoutState) => string);
   readonly onState?: (state: OpenReceiveCheckoutState) => void;
+  readonly onStartOver?: () => void;
   readonly paymentWizard?: boolean;
   readonly themeSwitcher?: boolean;
   readonly defaultTheme?: OpenReceiveThemePreference;
@@ -1057,11 +1063,10 @@ export function OpenReceivePaymentWizard(
                           ? provider.copiedLabel
                           : provider.copyLabel
                       ),
-                      React.createElement(
-                        "a",
-                        {},
-                        ""
-                      )
+                      renderProviderOpenAction(provider, () => setActiveTutorial({
+                        providerId: provider.id,
+                        index: 1
+                      }))
                     )
                   )
                 )
@@ -1080,6 +1085,151 @@ export function OpenReceivePaymentWizard(
           index
         })
       })
+  );
+}
+
+function renderProviderOpenAction(
+  provider: OpenReceiveWizardProviderDisplay,
+  onOpenTutorial: () => void
+): React.ReactElement {
+  if (provider.tutorials.length === 0) {
+    return React.createElement(
+      "a",
+      {
+        href: provider.url,
+        rel: "noreferrer",
+        target: "_blank"
+      },
+      provider.openLabel
+    );
+  }
+
+  return React.createElement(
+    "button",
+    {
+      className: "or-provider-open",
+      onClick: onOpenTutorial,
+      type: "button"
+    },
+    provider.openLabel
+  );
+}
+
+function renderProviderTutorialModal(options: {
+  readonly provider: OpenReceiveWizardProviderDisplay;
+  readonly index: number;
+  readonly onClose: () => void;
+  readonly onStep: (index: number) => void;
+}): React.ReactElement | null {
+  const { provider } = options;
+  if (provider.tutorials.length === 0) return null;
+  const stepIndex = Math.max(1, Math.min(provider.tutorials.length, options.index));
+  const tutorial = provider.tutorials[stepIndex - 1];
+  if (tutorial === undefined) return null;
+  const previousIndex = Math.max(1, stepIndex - 1);
+  const nextIndex = Math.min(provider.tutorials.length, stepIndex + 1);
+
+  return React.createElement(
+    "div",
+    {
+      "aria-label": `${openReceiveCheckoutLabels.tutorialTitlePrefix} ${provider.name}`,
+      "aria-modal": true,
+      className: "or-tutorial-modal",
+      onClick: (event: React.MouseEvent<HTMLDivElement>) => {
+        if (event.target === event.currentTarget) options.onClose();
+      },
+      onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => {
+        if (event.key === "Escape") options.onClose();
+      },
+      role: "dialog",
+      tabIndex: -1
+    },
+    React.createElement(
+      "div",
+      {
+        className: "or-tutorial-dialog"
+      },
+      React.createElement(
+        "div",
+        {
+          className: "or-tutorial-header"
+        },
+        React.createElement(
+          "h3",
+          null,
+          `${openReceiveCheckoutLabels.tutorialTitlePrefix} ${provider.name}`
+        ),
+        React.createElement(
+          "button",
+          {
+            className: "or-tutorial-close",
+            onClick: options.onClose,
+            type: "button"
+          },
+          "Close"
+        )
+      ),
+      React.createElement(
+        "div",
+        {
+          className: "or-tutorial-frame"
+        },
+        React.createElement("img", {
+          alt: tutorial.caption,
+          className: "or-tutorial-image",
+          src: tutorial.image
+        })
+      ),
+      React.createElement("p", {
+        className: "or-tutorial-caption"
+      }, tutorial.caption),
+      React.createElement(
+        "div",
+        {
+          "aria-hidden": "true",
+          className: "or-tutorial-steps"
+        },
+        provider.tutorials.map((step) =>
+          React.createElement("span", {
+            className: step.index === stepIndex
+              ? "or-tutorial-step active"
+              : "or-tutorial-step",
+            key: step.index
+          })
+        )
+      ),
+      React.createElement(
+        "p",
+        {
+          className: "or-tutorial-progress"
+        },
+        `Step ${stepIndex} of ${provider.tutorials.length}`
+      ),
+      React.createElement(
+        "div",
+        {
+          className: "or-tutorial-controls"
+        },
+        React.createElement(
+          "button",
+          {
+            disabled: stepIndex === 1,
+            onClick: () => options.onStep(previousIndex),
+            type: "button"
+          },
+          "Back"
+        ),
+        React.createElement(
+          "button",
+          {
+            disabled: stepIndex === provider.tutorials.length,
+            onClick: () => options.onStep(nextIndex),
+            type: "button"
+          },
+          "Next"
+        )
+      )
+    )
   );
 }
 
@@ -1148,7 +1298,13 @@ export function OpenReceiveCheckout(
     onError,
     lookupInvoice,
     lookupUrl,
+    refreshInvoice,
+    refreshUrl,
+    refreshHeaders,
+    refreshIdempotencyKey,
+    refreshReason,
     onState,
+    onStartOver,
     paymentWizard = true,
     themeSwitcher = false,
     defaultTheme,
@@ -1174,6 +1330,11 @@ export function OpenReceiveCheckout(
     onError,
     lookupInvoice,
     lookupUrl,
+    refreshInvoice,
+    refreshUrl,
+    refreshHeaders,
+    refreshIdempotencyKey,
+    refreshReason,
     onState
   });
   const theme = useOpenReceiveTheme({
@@ -1187,6 +1348,16 @@ export function OpenReceiveCheckout(
   const PaymentStateComponent = components?.PaymentState ?? OpenReceivePaymentState;
   const customChildren =
     typeof children === "function" ? children(checkoutModel) : children;
+  const expired = checkoutModel.status.phase === "expired";
+  const startOver = () => {
+    if (onStartOver !== undefined) {
+      onStartOver();
+      return;
+    }
+    void checkoutModel.refreshExpiredInvoice().catch((error) => {
+      onError?.(error);
+    });
+  };
 
   return React.createElement(
     "section",
@@ -1208,17 +1379,19 @@ export function OpenReceiveCheckout(
             ButtonComponent
           })
           : null,
-        React.createElement(QRCode, {
-          key: "qr",
-          invoice,
-          encoder: qrEncoder,
-          onError,
-          className: classNames?.qr,
-          style: {
-            aspectRatio: "1",
-            maxWidth: 256
-          }
-        }),
+        expired
+          ? null
+          : React.createElement(QRCode, {
+            key: "qr",
+            invoice,
+            encoder: qrEncoder,
+            onError,
+            className: classNames?.qr,
+            style: {
+              aspectRatio: "1",
+              maxWidth: 256
+            }
+          }),
         React.createElement(OpenReceiveWaitingState, {
           key: "waiting",
           status: checkoutModel.status,
@@ -1236,7 +1409,7 @@ export function OpenReceiveCheckout(
             " ",
             React.createElement("strong", null, checkoutModel.countdownLabel)
           ),
-	        React.createElement(InvoiceSummary, {
+        React.createElement(InvoiceSummary, {
 	          key: "summary",
 	          amountLabel: checkoutModel.amountLabel,
 	          fiatLabel: checkoutModel.fiatLabel,
@@ -1247,13 +1420,15 @@ export function OpenReceiveCheckout(
           className: classNames?.summary,
           classNames
         }),
-        React.createElement("textarea", {
-          key: "invoice",
-          readOnly: true,
-          value: invoice,
-          "aria-label": "Lightning invoice",
-          className: classNames?.invoice
-        }),
+        expired
+          ? null
+          : React.createElement("textarea", {
+            key: "invoice",
+            readOnly: true,
+            value: invoice,
+            "aria-label": "Lightning invoice",
+            className: classNames?.invoice
+          }),
         React.createElement(
           "div",
           {
@@ -1261,16 +1436,25 @@ export function OpenReceiveCheckout(
             className: classNames?.actions,
             [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.actions]: ""
           },
-          React.createElement(CopyButton, {
-            invoice,
-            copyInvoice: checkoutModel.copyInvoice,
-            onError,
-            logger,
-            ButtonComponent,
-            className: classNames?.copyButton
-          })
+          expired
+            ? React.createElement(
+              ButtonComponent ?? "button",
+              {
+                type: "button",
+                onClick: startOver
+              },
+              openReceiveCheckoutLabels.startOver
+            )
+            : React.createElement(CopyButton, {
+              invoice,
+              copyInvoice: checkoutModel.copyInvoice,
+              onError,
+              logger,
+              ButtonComponent,
+              className: classNames?.copyButton
+            })
         ),
-        paymentWizard
+        paymentWizard && !expired
           ? React.createElement(OpenReceivePaymentWizard, {
             key: "wizard",
             invoice,

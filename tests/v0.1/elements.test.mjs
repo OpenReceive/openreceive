@@ -63,7 +63,13 @@ test("elements derive waiting display from browser checkout state", () => {
     expires_at: Math.floor(Date.now() / 1000) - 1
   });
 
-  assert.match(expiredHtml, /Invoice expires in/);
+  assert.match(expiredHtml, /Invoice expired/);
+  assert.match(expiredHtml, /Start over/);
+  assert.doesNotMatch(expiredHtml, /Invoice expires in/);
+  assert.doesNotMatch(expiredHtml, /data-openreceive-qr/);
+  assert.doesNotMatch(expiredHtml, /<textarea/);
+  assert.doesNotMatch(expiredHtml, /lnbc-expired/);
+  assert.doesNotMatch(expiredHtml, /data-openreceive-wizard/);
   assert.doesNotMatch(expiredHtml, /<span part="spinner"/);
 });
 
@@ -95,9 +101,22 @@ test("elements render payment wizard route choices and providers from browser st
   assert.match(cardStep, /part="country-select"/);
   assert.match(cardStep, /<select data-or-country="US">/);
   assert.match(cardStep, />United States<\/option>/);
+  assert.match(cardStep, /data-or-provider-tutorial="strike"/);
+  assert.doesNotMatch(cardStep, /href="https:\/\/docs\.strike\.me/);
   assert.doesNotMatch(cardStep, /Switch country/);
   assert.doesNotMatch(cardStep, /part="country-map"/);
   assert.doesNotMatch(cardStep, /US supported|Not US/);
+
+  const tutorialStep = renderOpenReceivePaymentWizardHtml({
+    selectedMethod: "card",
+    selectedCountryCode: "US",
+    activeTutorialProviderId: "strike",
+    activeTutorialIndex: 2
+  });
+  assert.match(tutorialStep, /Pay a Lightning invoice with Strike/);
+  assert.match(tutorialStep, /assets\/pay_tutorials\/strike-2\.webp/);
+  assert.match(tutorialStep, /Choose Bitcoin wallet/);
+  assert.match(tutorialStep, /Step 2 of 4/);
 });
 
 test("elements render package-owned theme toggle HTML", () => {
