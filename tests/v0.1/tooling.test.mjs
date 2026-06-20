@@ -10,6 +10,7 @@ const clientBundleScanner = path.join(process.cwd(), "tools/validate/scan-client
 const demoContainerValidator = path.join(process.cwd(), "tools/validate/check-demo-containers.mjs");
 const demoDeployValidator = path.join(process.cwd(), "tools/validate/check-demo-deploy.mjs");
 const demoDeploymentDocs = path.join(process.cwd(), "docs/13-demo-deployment.md");
+const releaseReadinessValidator = path.join(process.cwd(), "tools/validate/check-release-readiness.mjs");
 const liveNwcSmoke = path.join(process.cwd(), "tools/live-nwc-test/index.mjs");
 
 function withGitRepo(callback) {
@@ -55,6 +56,14 @@ function runDemoDeployValidator() {
   });
 }
 
+function runReleaseReadinessValidator() {
+  return execFileSync(process.execPath, [releaseReadinessValidator], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+}
+
 function runLiveNwcSmoke(env) {
   const childEnv = {
     ...process.env,
@@ -89,6 +98,10 @@ test("demo deployment docs preserve public edge and runner boundaries", () => {
   assert.match(docs, /Keep build\/test runners separate from deploy runners/);
   assert.match(docs, /Never mount the host Docker socket/);
   assert.match(docs, /Never commit:\n\n- `OPENRECEIVE_NWC`/);
+});
+
+test("release readiness validator accepts current v0.1 metadata", () => {
+  assert.match(runReleaseReadinessValidator(), /Release readiness validation passed for 8 package\(s\)\./);
 });
 
 test("secret scanner rejects force-added non-example env files", () => {

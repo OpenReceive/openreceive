@@ -16,6 +16,7 @@
     "check:generated": "node tools/codegen/generate-js-models.mjs --check",
     "check:demo-containers": "node tools/validate/check-demo-containers.mjs",
     "check:demo-deploy": "node tools/validate/check-demo-deploy.mjs",
+    "check:release": "node tools/validate/check-release-readiness.mjs",
     "mock-wallet": "node tools/mock-wallet/server.mjs",
     "scan:client-bundles": "node tools/validate/scan-client-bundles.mjs",
     "test:package-smoke": "node tools/validate/package-smoke.mjs",
@@ -24,7 +25,7 @@
     "validate": "node tools/validate/validate-v0.1.mjs",
     "scan:secrets": "node tools/validate/scan-secrets.mjs",
     "test": "npm run validate && npm run scan:secrets",
-    "test:ci": "npm test && npm run check:generated && npm run typecheck && npm run test:js && npm run test:package-smoke && npm run check:demo-containers && npm run check:demo-deploy && npm run build:demo && npm run scan:client-bundles && npm run build:docs && npm run test:live:nwc",
+    "test:ci": "npm test && npm run check:generated && npm run typecheck && npm run test:js && npm run test:package-smoke && npm run check:demo-containers && npm run check:demo-deploy && npm run check:release && npm run build:demo && npm run scan:client-bundles && npm run build:docs && npm run test:live:nwc",
     "test:vectors": "node tools/validate/validate-v0.1.mjs --vectors",
     "test:live:nwc": "node tools/live-nwc-test/index.mjs"
   },
