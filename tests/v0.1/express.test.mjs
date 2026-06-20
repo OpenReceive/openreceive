@@ -482,6 +482,33 @@ test("create invoice rejects invalid description_hash before wallet call", async
   assert.equal(wallet.makeInvoiceCalls, 0);
 });
 
+test("create invoice rejects invalid fiat quote before wallet call", async () => {
+  const { wallet, handlers } = createHarness();
+  const res = createResponse();
+
+  await handlers.createInvoice(
+    createRequest({
+      headers: {
+        "idempotency-key": "order-invalid-fiat"
+      },
+      body: {
+        fiat: {
+          currency: "usd",
+          value: "0.10"
+        },
+        description: "Fruit sticker"
+      }
+    }),
+    res,
+    raiseNext
+  );
+
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.code, "INVALID_REQUEST");
+  assert.equal(res.body.message, "fiat.currency must be an ISO 4217 uppercase code");
+  assert.equal(wallet.makeInvoiceCalls, 0);
+});
+
 test("refresh invoice creates a linked replacement and replays idempotently", async () => {
   const { wallet, store, handlers } = createHarness();
   const oldInvoice = seedInvoice(store, {

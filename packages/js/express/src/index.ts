@@ -902,10 +902,17 @@ function getCreateAmountMsats(
     return amountMsats;
   }
 
-  return quoteFiatToMsats({
-    fiat: parseFiatAmount(body.fiat),
-    as_of: now
-  }).amount_msats;
+  try {
+    return quoteFiatToMsats({
+      fiat: parseFiatAmount(body.fiat),
+      as_of: now
+    }).amount_msats;
+  } catch (error) {
+    if (error instanceof RangeError) {
+      throw httpError(400, "INVALID_REQUEST", error.message);
+    }
+    throw error;
+  }
 }
 
 function getCreateDescriptionFields(body: Record<string, unknown>): {
