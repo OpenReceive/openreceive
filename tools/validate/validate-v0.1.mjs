@@ -299,6 +299,11 @@ function validateNwcRequestResponseVectors() {
 
 function validateProviderRegistryReferences() {
   const registry = readJson("spec/data/providers/openreceive-providers.v2.json");
+  const packagedRegistry = readJson("packages/js/provider-data/src/data/openreceive-providers.v2.json");
+  assert(
+    JSON.stringify(packagedRegistry) === JSON.stringify(registry),
+    "provider-data package registry copy must match canonical spec/data registry"
+  );
   assert(registry.schema_version === "2.0.0", "provider registry schema version mismatch");
   assert(registry.generated === "2026-06-18", "provider registry generated date changed unexpectedly");
   assert(registry.assets_index.length === 18, "provider registry asset count mismatch");

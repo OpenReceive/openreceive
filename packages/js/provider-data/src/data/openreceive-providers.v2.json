@@ -1,0 +1,2103 @@
+{
+  "schema_version": "2.0.0",
+  "generated": "2026-06-18",
+  "description": "Static database of providers that can PAY an arbitrary third-party BOLT11 Lightning invoice (paste/scan an invoice and send to it, including paste-invoice-as-withdrawal flows). Two wizard flows: (1) crypto — pick an asset, see country-independent routes in `crypto_routes`; (2) fiat — pick a rail (bank/card) then a country, see ranked providers in `fiat_rails`. All routes reference `providers` by id. Providers that only RECEIVE over Lightning are excluded and listed in `disqualified_providers`.",
+  "filter": "pays_arbitrary_invoice == true — user can paste/scan a third-party BOLT11 invoice and the service pays/sends to it (inclusive of withdraw-to-pasted-invoice).",
+  "_meta": {
+    "provider_fields": {
+      "id": "stable slug key",
+      "name": "display name",
+      "url": "homepage",
+      "us": "true=US-available, false=US-excluded, null=unknown",
+      "pays_arbitrary_invoice": "always true in `providers` (the inclusion filter)",
+      "mechanism": "pay_invoice = explicit pay/send-to-invoice UX | withdraw_to_invoice = paste external invoice as a withdrawal/swap payout",
+      "lightning_docs_url": "official 'how to pay/send to a Lightning invoice' page, or null if none found",
+      "blurb": "description",
+      "caveat": "optional warning / restriction"
+    },
+    "route_ref_fields": {
+      "provider": "provider id",
+      "flagship": "recommended option for this route",
+      "blurb_override": "per-route description override",
+      "rank": "1-based ordering (fiat rails)"
+    },
+    "country_fields": {
+      "code": "ISO 3166-1 alpha-2",
+      "name": "display",
+      "currency": "ISO 4217",
+      "coverage": "deep | thin | sparse"
+    }
+  },
+  "assets_index": [
+    {
+      "symbol": "btc",
+      "label": "Lightning",
+      "route": "btc-lightning"
+    },
+    {
+      "symbol": "btc",
+      "label": "Bitcoin (on-chain)",
+      "route": "btc-onchain"
+    },
+    {
+      "symbol": "usdt",
+      "label": "Tether (USDT — any chain)",
+      "route": "usdt"
+    },
+    {
+      "symbol": "usdc",
+      "label": "USD Coin (USDC)",
+      "route": "usdc"
+    },
+    {
+      "symbol": "eth",
+      "label": "Ethereum (ETH)",
+      "route": "eth"
+    },
+    {
+      "symbol": "xmr",
+      "label": "Monero (XMR)",
+      "route": "xmr"
+    },
+    {
+      "symbol": "ltc",
+      "label": "Litecoin (LTC)",
+      "route": "ltc"
+    },
+    {
+      "symbol": "doge",
+      "label": "Dogecoin (DOGE)",
+      "route": "doge"
+    },
+    {
+      "symbol": "trx",
+      "label": "Tron (TRX)",
+      "route": "trx"
+    },
+    {
+      "symbol": "sol",
+      "label": "Solana (SOL)",
+      "route": "sol"
+    },
+    {
+      "symbol": "bch",
+      "label": "Bitcoin Cash (BCH)",
+      "route": "bch"
+    },
+    {
+      "symbol": "xrp",
+      "label": "XRP",
+      "route": "xrp"
+    },
+    {
+      "symbol": "bnb",
+      "label": "BNB",
+      "route": "bnb"
+    },
+    {
+      "symbol": "ada",
+      "label": "Cardano (ADA)",
+      "route": "ada"
+    },
+    {
+      "symbol": "dash",
+      "label": "Dash",
+      "route": "dash"
+    },
+    {
+      "symbol": "usd",
+      "label": "US Dollars (bank / card)"
+    },
+    {
+      "symbol": "eur",
+      "label": "Euro (SEPA / bank)"
+    },
+    {
+      "symbol": "gbp",
+      "label": "British Pound"
+    }
+  ],
+  "providers": {
+    "rizful": {
+      "id": "rizful",
+      "name": "Rizful.com",
+      "url": "https://rizful.com",
+      "us": null,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "pay_invoice",
+      "lightning_docs_url": "https://docs.megalithic.me/the-lightning-network/send_and_receive_lightning_with_rizful/",
+      "blurb": "Pay Lightning invoices from an on-chain BTC balance. The cleanest way to get from on-chain BTC to Lightning.",
+      "caveat": "Requires an email/password account. Sending needs Lightning balance; small routing fee."
+    },
+    "boltz": {
+      "id": "boltz",
+      "name": "Boltz",
+      "url": "https://boltz.exchange",
+      "us": null,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "withdraw_to_invoice",
+      "lightning_docs_url": "https://api.docs.boltz.exchange/lifecycle.html",
+      "blurb": "Atomic Lightning ↔ USDT swaps (via tBTC + USDT0 on Arbitrum). ~0.1% service fee plus DEX and miner fees."
+    },
+    "strike": {
+      "id": "strike",
+      "name": "Strike",
+      "url": "https://strike.me",
+      "us": true,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "pay_invoice",
+      "lightning_docs_url": "https://docs.strike.me/walkthrough/sending-payments/",
+      "blurb": "Pays BOLT11 invoices directly from a USD (or USDT in EU markets) cash balance using Lightning as internal settlement. ~0.15% routing fee, available in 65+ countries."
+    },
+    "aqua": {
+      "id": "aqua",
+      "name": "Aqua Wallet",
+      "url": "https://aqua.net",
+      "us": null,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "pay_invoice",
+      "lightning_docs_url": "https://jan3.zendesk.com/hc/en-us/articles/21952862266779-How-does-Lightning-work-in-AQUA",
+      "blurb": "Mobile wallet. Holds on-chain BTC, Liquid BTC, and USDT-Liquid; pays any pasted BOLT11 invoice via internal Boltz swaps."
+    },
+    "phoenix": {
+      "id": "phoenix",
+      "name": "Phoenix",
+      "url": "https://phoenix.acinq.co",
+      "us": null,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "pay_invoice",
+      "lightning_docs_url": null,
+      "blurb": "Lightning wallet with splicing for on-chain ↔ Lightning conversion.",
+      "caveat": "Must fund wallet first. ~0.4% fee on outgoing Lightning payments (min 4 sats)."
+    },
+    "zeus": {
+      "id": "zeus",
+      "name": "Zeus (+ ZEUS Swaps)",
+      "url": "https://zeusln.com",
+      "us": true,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "pay_invoice",
+      "lightning_docs_url": "https://docs.zeusln.app/",
+      "blurb": "LN wallet; v0.11 added ZEUS Swaps for bidirectional on-chain ↔ Lightning moves."
+    },
+    "coinbase": {
+      "id": "coinbase",
+      "name": "Coinbase (Lightspark)",
+      "url": "https://coinbase.com",
+      "us": true,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "withdraw_to_invoice",
+      "lightning_docs_url": "https://help.coinbase.com/en/coinbase/trading-and-funding/sending-or-receiving-cryptocurrency/lightning",
+      "blurb": "Trade your altcoin to BTC, then withdraw over Lightning (~0.1% send fee). ~15% of Coinbase BTC withdrawals now ride Lightning.",
+      "caveat": "Accepts arbitrary external invoices (invoices only, NOT Lightning addresses). Excludes New York and Canada; ~0.2% processing fee; rolling out by region."
+    },
+    "kraken": {
+      "id": "kraken",
+      "name": "Kraken",
+      "url": "https://kraken.com",
+      "us": true,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "withdraw_to_invoice",
+      "lightning_docs_url": "https://support.kraken.com/articles/5068216131988-how-do-i-send-bitcoin-on-the-lightning-network-",
+      "blurb": "Runs its own LND node; verified accounts can deposit and withdraw BTC via Lightning.",
+      "caveat": "Generate invoice in external wallet, paste into Kraken withdrawal. Verified account required. Not available in Singapore."
+    },
+    "binance": {
+      "id": "binance",
+      "name": "Binance",
+      "url": "https://binance.com",
+      "us": false,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "withdraw_to_invoice",
+      "lightning_docs_url": "https://www.binance.com/en/support/faq/how-to-use-the-bitcoin-lightning-network-to-deposit-and-withdraw-btc-on-binance-7a4eb2d9ccaf4433908b448aa3a93493",
+      "blurb": "Up to 100 BTC/day Lightning withdrawal for verified accounts; minimum 0.00001 BTC. Not available on Binance.US.",
+      "caveat": "Withdraw → BTC → Lightning → paste invoice. Not available to US users; Lightning may be unavailable in some regions due to local regulation."
+    },
+    "okx": {
+      "id": "okx",
+      "name": "OKX",
+      "url": "https://okx.com",
+      "us": false,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "withdraw_to_invoice",
+      "lightning_docs_url": "https://www.okx.com/en-us/help/how-do-i-withdraw-bitcoin-btc-with-okx-lightning-network",
+      "blurb": "Oldest CEX Lightning integration (April 2021). Not available to US users."
+    },
+    "bitfinex": {
+      "id": "bitfinex",
+      "name": "Bitfinex",
+      "url": "https://bitfinex.com",
+      "us": false,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "withdraw_to_invoice",
+      "lightning_docs_url": "https://support.bitfinex.com/hc/en-us/articles/360039801053-Lightning-Network-BTC-LN-BTC-Deposits-Withdrawals",
+      "blurb": "LN-BTC token with dynamic withdrawal fee. Zero trading fees since Dec 2025."
+    },
+    "kucoin": {
+      "id": "kucoin",
+      "name": "KuCoin",
+      "url": "https://kucoin.com",
+      "us": false,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "withdraw_to_invoice",
+      "lightning_docs_url": null,
+      "blurb": "Explicit Lightning option in web / app UI for BTC withdrawals.",
+      "caveat": "Qualifies (LN withdrawal to pasted invoice) but a specific step-by-step docs page could not be verified. Requires holding BTC."
+    },
+    "cashapp": {
+      "id": "cashapp",
+      "name": "Cash App",
+      "url": "https://cash.app",
+      "us": true,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "pay_invoice",
+      "lightning_docs_url": "https://cash.app/help/us/en-US/6506-lightning",
+      "blurb": "US-only. Send/receive BOLT11 and pay any Lightning Address via $cashtag.",
+      "caveat": "Excluded in New York. Up to $999 send/receive over Lightning per 7 days."
+    },
+    "river": {
+      "id": "river",
+      "name": "River Financial",
+      "url": "https://river.com",
+      "us": true,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "pay_invoice",
+      "lightning_docs_url": "https://support.river.com/hc/en-us/articles/45489800672915-How-do-I-send-bitcoin",
+      "blurb": "Bitcoin-only US exchange. Up to 0.01 BTC per Lightning withdrawal.",
+      "caveat": "US-only. Enter a Lightning invoice, LNURL-Pay, or Lightning address; up to 0.1 BTC, one free send/month."
+    },
+    "coincorner": {
+      "id": "coincorner",
+      "name": "CoinCorner",
+      "url": "https://coincorner.com",
+      "us": false,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "pay_invoice",
+      "lightning_docs_url": "https://support.coincorner.com/hc/en-us/articles/360020667299-Sending-and-receiving-via-Lightning",
+      "blurb": "UK / Isle of Man focus. Lightning Addresses name@coincorner.io, Bolt Card support."
+    },
+    "bullbitcoin": {
+      "id": "bullbitcoin",
+      "name": "Bull Bitcoin",
+      "url": "https://bullbitcoin.com",
+      "us": false,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "pay_invoice",
+      "lightning_docs_url": "https://guides.bitcoinsupport.com/guides/bullwallet-guide/how-to-use-bull-wallet/steps-for-sending-lightning",
+      "blurb": "Canada / EU Lightning withdrawals; Instant Payments via Liquid + Boltz."
+    },
+    "simpleswap": {
+      "id": "simpleswap",
+      "name": "SimpleSwap",
+      "url": "https://simpleswap.io",
+      "us": null,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "withdraw_to_invoice",
+      "lightning_docs_url": null,
+      "blurb": "Global swap service; additional review may apply on some transfers.",
+      "caveat": "Swap INTO BTC-LN: supply your own external invoice as payout. LN invoice valid ~1 hour."
+    },
+    "changenow": {
+      "id": "changenow",
+      "name": "ChangeNOW",
+      "url": "https://changenow.io",
+      "us": null,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "withdraw_to_invoice",
+      "lightning_docs_url": null,
+      "blurb": "Swap almost any asset into Bitcoin (Lightning Network); you supply an external BOLT11 invoice as the payout destination.",
+      "caveat": "Reclassified as qualifying (was receive-only). No dedicated how-to page; mechanism inferred from BTC-LN being a payout asset."
+    },
+    "fixedfloat": {
+      "id": "fixedfloat",
+      "name": "FixedFloat",
+      "url": "https://fixedfloat.com",
+      "us": false,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "withdraw_to_invoice",
+      "lightning_docs_url": "https://medium.com/fixedfloat/how-to-start-using-the-lightning-network-92d5c695b085",
+      "blurb": "Most LN-native swap service: runs its own Lightning node, fixed / float rates, 0.5–1% fee. TOS prohibits US users.",
+      "caveat": "Swap any coin → BTC-LN; paste your Lightning invoice as payout. US persons cannot use FixedFloat; routing may fail with no open channel."
+    },
+    "sideshift": {
+      "id": "sideshift",
+      "name": "SideShift.ai",
+      "url": "https://sideshift.ai",
+      "us": false,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "withdraw_to_invoice",
+      "lightning_docs_url": null,
+      "blurb": "Swap service with Lightning as output. Max ≤0.04 BTC per shift.",
+      "caveat": "Swap to BTC-Lightning; supply your invoice as payout. Blocked in US and sanctioned jurisdictions; no account required. No official how-to page found."
+    },
+    "blink": {
+      "id": "blink",
+      "name": "Blink",
+      "url": "https://blink.sv",
+      "us": false,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "pay_invoice",
+      "lightning_docs_url": "https://faq.blink.sv/blink-payment-methods/lightning/how-do-i-send-bitcoin-payments-using-the-lightning-network-with-blink",
+      "blurb": "El Salvador (formerly Bitcoin Beach Wallet). In-app buy/sell via local bank transfer; full Lightning send/receive, LNURL, POS.",
+      "caveat": "Buy/sell requires a Salvadoran bank account; wallet is global."
+    },
+    "pouch": {
+      "id": "pouch",
+      "name": "Pouch",
+      "url": "https://pouch.ph",
+      "us": false,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "pay_invoice",
+      "lightning_docs_url": null,
+      "blurb": "Philippines. Lightning wallet funded by InstaPay/PESONet/QR-PH; pay via invoice or Lightning address."
+    },
+    "bitnob": {
+      "id": "bitnob",
+      "name": "Bitnob",
+      "url": "https://bitnob.com",
+      "us": false,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "pay_invoice",
+      "lightning_docs_url": "https://intercom.help/Bitnob-help-center/en/articles/6073721",
+      "blurb": "Nigeria/Ghana/Kenya and West Africa. Local-currency deposits; send BTC to Lightning address or invoice. Powers Strike Send Globally to Africa."
+    },
+    "amber": {
+      "id": "amber",
+      "name": "Amber (AmberApp)",
+      "url": "https://amber.app",
+      "us": false,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "pay_invoice",
+      "lightning_docs_url": "https://help.amber.app/en/articles/9205794-how-do-i-send-bitcoin",
+      "blurb": "Australia. Bank transfer + card DCA; send/withdraw sats to any Lightning address (free over 210,000 sats). Voltage-powered."
+    },
+    "bringin": {
+      "id": "bringin",
+      "name": "Bringin",
+      "url": "https://bringin.xyz",
+      "us": false,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "pay_invoice",
+      "lightning_docs_url": null,
+      "blurb": "Eurozone/EEA. Lightning wallet with dedicated vIBAN + debit card; sell BTC over Lightning for instant SEPA payout.",
+      "caveat": "Send → Pay Lightning Invoice → paste → approve. EU/EEA."
+    },
+    "mtpelerin": {
+      "id": "mtpelerin",
+      "name": "Mt Pelerin",
+      "url": "https://mtpelerin.com",
+      "us": false,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "pay_invoice",
+      "lightning_docs_url": "https://www.mtpelerin.com/lightning-wallet",
+      "blurb": "Switzerland/EU (SEPA, Swiss, SWIFT) + card. Buy Lightning sats delivered to any wallet; sell from Lightning to bank.",
+      "caveat": "Bridge Wallet app natively pays arbitrary invoices. Swiss-regulated; availability and limits vary."
+    },
+    "bipa": {
+      "id": "bipa",
+      "name": "Bipa",
+      "url": "https://bipa.app",
+      "us": false,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "pay_invoice",
+      "lightning_docs_url": "https://suporte.bipa.app/hc/pt-br/articles/4415356329371-Como-enviar-Bitcoin-pela-rede-Lightning-na-Bipa",
+      "blurb": "Brazil. PIX deposits + card with sats cashback; send by BOLT11 invoice or Lightning address. First Brazil app with Lightning."
+    },
+    "bitso": {
+      "id": "bitso",
+      "name": "Bitso",
+      "url": "https://bitso.com",
+      "us": false,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "pay_invoice",
+      "lightning_docs_url": "https://support.bitso.com/hc/en-us/articles/32048877697172-Bitso-Help-Center-Lightning-Network-for-Bitcoin",
+      "blurb": "Mexico/Argentina/Colombia/Brazil. Local bank rails (SPEI, PIX, etc.); Lightspark-powered Lightning send/receive, min 1 sat."
+    },
+    "ripio": {
+      "id": "ripio",
+      "name": "Ripio",
+      "url": "https://ripio.com",
+      "us": false,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "pay_invoice",
+      "lightning_docs_url": "https://help-ar.ripio.com/space/HC/119865345",
+      "blurb": "Argentina/Brazil + LatAm. Bank transfer + Visa crypto card; Lightning withdrawal, Lightning Address (tag@ripio.com), BOLT11/LNURL."
+    },
+    "belo": {
+      "id": "belo",
+      "name": "Belo",
+      "url": "https://belo.app",
+      "us": false,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "withdraw_to_invoice",
+      "lightning_docs_url": "https://help.belo.app/en/articles/5899323-how-to-withdraw-btc-from-belo-via-the-lightning-network",
+      "blurb": "Argentina. Bank transfer (ARS) + Mastercard prepaid; OpenNode-powered, withdraw BTC via Lightning free."
+    },
+    "shakepay": {
+      "id": "shakepay",
+      "name": "Shakepay",
+      "url": "https://shakepay.com",
+      "us": false,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "pay_invoice",
+      "lightning_docs_url": "https://help.shakepay.com/en/articles/12334301-how-to-receive-or-withdraw-bitcoin-on-the-lightning-network",
+      "blurb": "Canada. Interac e-Transfer / wire; send via Lightning invoice or LNURL. First BTC withdrawal each month free."
+    },
+    "bity": {
+      "id": "bity",
+      "name": "Bity / Bitybank",
+      "url": "https://bity.com.br",
+      "us": false,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "withdraw_to_invoice",
+      "lightning_docs_url": "https://suporte.bity.com.br/pt-BR/articles/6260675-lightning-network",
+      "blurb": "Brazil. PIX deposits; Lightning withdrawal/deposit with zero withdrawal fee."
+    },
+    "chivo": {
+      "id": "chivo",
+      "name": "Chivo",
+      "url": "https://chivowallet.com",
+      "us": false,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "pay_invoice",
+      "lightning_docs_url": null,
+      "blurb": "El Salvador government wallet. Bank/ATM cash; send/receive over Lightning (River-powered).",
+      "caveat": "Reliability/security problems reported; Bitcoin legal-tender mandate rolled back."
+    },
+    "speed": {
+      "id": "speed",
+      "name": "Speed",
+      "url": "https://tryspeed.com",
+      "us": false,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "pay_invoice",
+      "lightning_docs_url": "https://www.tryspeed.com/blog/how-do-i-send-and-receive-bitcoin",
+      "blurb": "India-operated Lightning-native wallet; buy and pay over Lightning.",
+      "caveat": "Regulatory uncertainty in India; verify availability."
+    },
+    "walletofsatoshi": {
+      "id": "walletofsatoshi",
+      "name": "Wallet of Satoshi",
+      "url": "https://www.walletofsatoshi.com",
+      "us": null,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "pay_invoice",
+      "lightning_docs_url": "https://support.walletofsatoshi.com/",
+      "blurb": "Lightning wallet. Scan/paste an invoice, LNURL, or Lightning address to send. Funded by receiving BTC/LN in — no built-in fiat ramp."
+    },
+    "muun": {
+      "id": "muun",
+      "name": "Muun",
+      "url": "https://muun.com",
+      "us": null,
+      "pays_arbitrary_invoice": true,
+      "mechanism": "pay_invoice",
+      "lightning_docs_url": "https://blog.muun.com/lightning-payments-easier-than-ever/",
+      "blurb": "Wallet that scans/pays any Lightning invoice via submarine swap from on-chain BTC. Funded by crypto-in; incurs on-chain swap fee.",
+      "caveat": "Wallet only — no fiat purchase path. Best when you already hold on-chain BTC."
+    }
+  },
+  "crypto_routes": [
+    {
+      "id": "btc-lightning",
+      "symbol": "btc",
+      "label": "Lightning",
+      "summary": "You're already on Lightning. Scan the QR code above with any LN wallet or paste the BOLT11 invoice into it.",
+      "providers": [
+        {
+          "provider": "rizful",
+          "flagship": true
+        },
+        {
+          "provider": "phoenix"
+        },
+        {
+          "provider": "zeus"
+        },
+        {
+          "provider": "walletofsatoshi"
+        },
+        {
+          "provider": "aqua"
+        },
+        {
+          "provider": "strike"
+        },
+        {
+          "provider": "cashapp"
+        },
+        {
+          "provider": "kraken"
+        },
+        {
+          "provider": "coinbase"
+        },
+        {
+          "provider": "binance"
+        },
+        {
+          "provider": "okx"
+        },
+        {
+          "provider": "bitfinex"
+        },
+        {
+          "provider": "kucoin"
+        },
+        {
+          "provider": "river"
+        }
+      ]
+    },
+    {
+      "id": "btc-onchain",
+      "symbol": "btc",
+      "label": "Bitcoin (on-chain)",
+      "summary": "Rizful pays Lightning invoices directly from on-chain BTC — no account needed beyond a quick signup. Swap services and exchanges can also pay an invoice you paste, if you already hold BTC.",
+      "providers": [
+        {
+          "provider": "rizful",
+          "flagship": true
+        },
+        {
+          "provider": "boltz",
+          "blurb_override": "Lightning ↔ on-chain BTC swap — paste the invoice and send BTC to the swap address."
+        },
+        {
+          "provider": "muun"
+        },
+        {
+          "provider": "phoenix"
+        },
+        {
+          "provider": "zeus"
+        },
+        {
+          "provider": "aqua"
+        },
+        {
+          "provider": "kraken"
+        },
+        {
+          "provider": "coinbase"
+        },
+        {
+          "provider": "binance"
+        },
+        {
+          "provider": "okx"
+        },
+        {
+          "provider": "bitfinex"
+        },
+        {
+          "provider": "kucoin"
+        },
+        {
+          "provider": "river"
+        }
+      ]
+    },
+    {
+      "id": "usdt",
+      "symbol": "usdt",
+      "label": "Tether (USDT — any chain)",
+      "summary": "Swap USDT to a Lightning invoice through a swap service.",
+      "providers": [
+        {
+          "provider": "boltz",
+          "flagship": true
+        },
+        {
+          "provider": "fixedfloat"
+        },
+        {
+          "provider": "simpleswap"
+        },
+        {
+          "provider": "changenow"
+        }
+      ]
+    },
+    {
+      "id": "usdc",
+      "symbol": "usdc",
+      "label": "USD Coin (USDC)",
+      "summary": "Swap USDC to a Lightning invoice via a swap service, or withdraw from a CEX to your invoice.",
+      "providers": [
+        {
+          "provider": "fixedfloat",
+          "flagship": true
+        },
+        {
+          "provider": "simpleswap"
+        },
+        {
+          "provider": "changenow"
+        },
+        {
+          "provider": "coinbase"
+        },
+        {
+          "provider": "kraken"
+        }
+      ]
+    },
+    {
+      "id": "eth",
+      "symbol": "eth",
+      "label": "Ethereum (ETH)",
+      "summary": "Direct altcoin → Lightning-invoice swap.",
+      "providers": [
+        {
+          "provider": "fixedfloat",
+          "flagship": true
+        },
+        {
+          "provider": "simpleswap"
+        },
+        {
+          "provider": "changenow"
+        },
+        {
+          "provider": "sideshift"
+        },
+        {
+          "provider": "coinbase"
+        },
+        {
+          "provider": "kraken"
+        }
+      ]
+    },
+    {
+      "id": "xmr",
+      "symbol": "xmr",
+      "label": "Monero (XMR)",
+      "summary": "Route via a privacy-respecting swap service, ideally over Tor.",
+      "providers": [
+        {
+          "provider": "fixedfloat",
+          "flagship": true
+        },
+        {
+          "provider": "sideshift"
+        }
+      ]
+    },
+    {
+      "id": "ltc",
+      "symbol": "ltc",
+      "label": "Litecoin (LTC)",
+      "summary": "Swap service or CEX withdraw-to-invoice.",
+      "providers": [
+        {
+          "provider": "fixedfloat",
+          "flagship": true
+        },
+        {
+          "provider": "simpleswap"
+        },
+        {
+          "provider": "changenow"
+        },
+        {
+          "provider": "sideshift"
+        },
+        {
+          "provider": "kraken"
+        },
+        {
+          "provider": "coinbase"
+        }
+      ]
+    },
+    {
+      "id": "doge",
+      "symbol": "doge",
+      "label": "Dogecoin (DOGE)",
+      "summary": "Swap DOGE to a Lightning invoice.",
+      "providers": [
+        {
+          "provider": "fixedfloat",
+          "flagship": true
+        },
+        {
+          "provider": "simpleswap"
+        },
+        {
+          "provider": "changenow"
+        },
+        {
+          "provider": "coinbase"
+        },
+        {
+          "provider": "kraken"
+        }
+      ]
+    },
+    {
+      "id": "trx",
+      "symbol": "trx",
+      "label": "Tron (TRX)",
+      "summary": "Swap TRX directly to a Lightning invoice.",
+      "providers": [
+        {
+          "provider": "fixedfloat",
+          "flagship": true
+        },
+        {
+          "provider": "simpleswap"
+        },
+        {
+          "provider": "changenow"
+        }
+      ]
+    },
+    {
+      "id": "sol",
+      "symbol": "sol",
+      "label": "Solana (SOL)",
+      "summary": "Swap SOL to a Lightning invoice, or trade to BTC on a CEX and withdraw to your invoice.",
+      "providers": [
+        {
+          "provider": "fixedfloat",
+          "flagship": true
+        },
+        {
+          "provider": "simpleswap"
+        },
+        {
+          "provider": "changenow"
+        },
+        {
+          "provider": "sideshift"
+        },
+        {
+          "provider": "coinbase"
+        },
+        {
+          "provider": "kraken"
+        }
+      ]
+    },
+    {
+      "id": "bch",
+      "symbol": "bch",
+      "label": "Bitcoin Cash (BCH)",
+      "summary": "Swap BCH to a Lightning invoice, or withdraw from a CEX.",
+      "providers": [
+        {
+          "provider": "fixedfloat",
+          "flagship": true
+        },
+        {
+          "provider": "simpleswap"
+        },
+        {
+          "provider": "changenow"
+        },
+        {
+          "provider": "sideshift"
+        },
+        {
+          "provider": "kraken"
+        },
+        {
+          "provider": "coinbase"
+        }
+      ]
+    },
+    {
+      "id": "xrp",
+      "symbol": "xrp",
+      "label": "XRP",
+      "summary": "Swap XRP to a Lightning invoice.",
+      "providers": [
+        {
+          "provider": "fixedfloat",
+          "flagship": true
+        },
+        {
+          "provider": "simpleswap"
+        },
+        {
+          "provider": "changenow"
+        },
+        {
+          "provider": "coinbase"
+        },
+        {
+          "provider": "kraken"
+        }
+      ]
+    },
+    {
+      "id": "bnb",
+      "symbol": "bnb",
+      "label": "BNB",
+      "summary": "Swap BNB to a Lightning invoice, or withdraw from Binance to your invoice (non-US).",
+      "providers": [
+        {
+          "provider": "fixedfloat",
+          "flagship": true
+        },
+        {
+          "provider": "simpleswap"
+        },
+        {
+          "provider": "changenow"
+        },
+        {
+          "provider": "binance"
+        }
+      ]
+    },
+    {
+      "id": "ada",
+      "symbol": "ada",
+      "label": "Cardano (ADA)",
+      "summary": "Swap ADA to a Lightning invoice, or trade to BTC on a CEX.",
+      "providers": [
+        {
+          "provider": "fixedfloat",
+          "flagship": true
+        },
+        {
+          "provider": "simpleswap"
+        },
+        {
+          "provider": "changenow"
+        },
+        {
+          "provider": "coinbase"
+        },
+        {
+          "provider": "kraken"
+        }
+      ]
+    },
+    {
+      "id": "dash",
+      "symbol": "dash",
+      "label": "Dash",
+      "summary": "Swap DASH to a Lightning invoice.",
+      "providers": [
+        {
+          "provider": "fixedfloat",
+          "flagship": true
+        },
+        {
+          "provider": "simpleswap"
+        },
+        {
+          "provider": "changenow"
+        }
+      ]
+    }
+  ],
+  "countries": [
+    {
+      "code": "US",
+      "name": "United States",
+      "currency": "USD",
+      "coverage": "deep"
+    },
+    {
+      "code": "CA",
+      "name": "Canada",
+      "currency": "CAD",
+      "coverage": "deep"
+    },
+    {
+      "code": "GB",
+      "name": "United Kingdom",
+      "currency": "GBP",
+      "coverage": "deep"
+    },
+    {
+      "code": "DE",
+      "name": "Germany",
+      "currency": "EUR",
+      "coverage": "deep"
+    },
+    {
+      "code": "FR",
+      "name": "France",
+      "currency": "EUR",
+      "coverage": "deep"
+    },
+    {
+      "code": "ES",
+      "name": "Spain",
+      "currency": "EUR",
+      "coverage": "deep"
+    },
+    {
+      "code": "IT",
+      "name": "Italy",
+      "currency": "EUR",
+      "coverage": "deep"
+    },
+    {
+      "code": "NL",
+      "name": "Netherlands",
+      "currency": "EUR",
+      "coverage": "deep"
+    },
+    {
+      "code": "IE",
+      "name": "Ireland",
+      "currency": "EUR",
+      "coverage": "deep"
+    },
+    {
+      "code": "PT",
+      "name": "Portugal",
+      "currency": "EUR",
+      "coverage": "deep"
+    },
+    {
+      "code": "PL",
+      "name": "Poland",
+      "currency": "PLN",
+      "coverage": "deep"
+    },
+    {
+      "code": "CH",
+      "name": "Switzerland",
+      "currency": "CHF",
+      "coverage": "deep"
+    },
+    {
+      "code": "NG",
+      "name": "Nigeria",
+      "currency": "NGN",
+      "coverage": "deep"
+    },
+    {
+      "code": "GH",
+      "name": "Ghana",
+      "currency": "GHS",
+      "coverage": "deep"
+    },
+    {
+      "code": "KE",
+      "name": "Kenya",
+      "currency": "KES",
+      "coverage": "deep"
+    },
+    {
+      "code": "ZA",
+      "name": "South Africa",
+      "currency": "ZAR",
+      "coverage": "thin"
+    },
+    {
+      "code": "EG",
+      "name": "Egypt",
+      "currency": "EGP",
+      "coverage": "sparse"
+    },
+    {
+      "code": "IN",
+      "name": "India",
+      "currency": "INR",
+      "coverage": "thin"
+    },
+    {
+      "code": "ID",
+      "name": "Indonesia",
+      "currency": "IDR",
+      "coverage": "thin"
+    },
+    {
+      "code": "VN",
+      "name": "Vietnam",
+      "currency": "VND",
+      "coverage": "thin"
+    },
+    {
+      "code": "TH",
+      "name": "Thailand",
+      "currency": "THB",
+      "coverage": "thin"
+    },
+    {
+      "code": "PH",
+      "name": "Philippines",
+      "currency": "PHP",
+      "coverage": "deep"
+    },
+    {
+      "code": "PK",
+      "name": "Pakistan",
+      "currency": "PKR",
+      "coverage": "sparse"
+    },
+    {
+      "code": "BD",
+      "name": "Bangladesh",
+      "currency": "BDT",
+      "coverage": "sparse"
+    },
+    {
+      "code": "TR",
+      "name": "Turkey",
+      "currency": "TRY",
+      "coverage": "thin"
+    },
+    {
+      "code": "AE",
+      "name": "United Arab Emirates",
+      "currency": "AED",
+      "coverage": "thin"
+    },
+    {
+      "code": "SA",
+      "name": "Saudi Arabia",
+      "currency": "SAR",
+      "coverage": "sparse"
+    },
+    {
+      "code": "BR",
+      "name": "Brazil",
+      "currency": "BRL",
+      "coverage": "deep"
+    },
+    {
+      "code": "AR",
+      "name": "Argentina",
+      "currency": "ARS",
+      "coverage": "deep"
+    },
+    {
+      "code": "MX",
+      "name": "Mexico",
+      "currency": "MXN",
+      "coverage": "deep"
+    },
+    {
+      "code": "CO",
+      "name": "Colombia",
+      "currency": "COP",
+      "coverage": "thin"
+    },
+    {
+      "code": "VE",
+      "name": "Venezuela",
+      "currency": "VES",
+      "coverage": "sparse"
+    },
+    {
+      "code": "CL",
+      "name": "Chile",
+      "currency": "CLP",
+      "coverage": "thin"
+    },
+    {
+      "code": "AU",
+      "name": "Australia",
+      "currency": "AUD",
+      "coverage": "deep"
+    },
+    {
+      "code": "JP",
+      "name": "Japan",
+      "currency": "JPY",
+      "coverage": "thin"
+    },
+    {
+      "code": "KR",
+      "name": "South Korea",
+      "currency": "KRW",
+      "coverage": "sparse"
+    },
+    {
+      "code": "SG",
+      "name": "Singapore",
+      "currency": "SGD",
+      "coverage": "thin"
+    },
+    {
+      "code": "UA",
+      "name": "Ukraine",
+      "currency": "UAH",
+      "coverage": "thin"
+    },
+    {
+      "code": "SV",
+      "name": "El Salvador",
+      "currency": "USD",
+      "coverage": "deep"
+    }
+  ],
+  "fiat_rails": {
+    "bank": {
+      "label": "Bank transfer",
+      "countries": {
+        "US": [
+          {
+            "provider": "strike",
+            "rank": 1
+          },
+          {
+            "provider": "river",
+            "rank": 2
+          },
+          {
+            "provider": "cashapp",
+            "rank": 3
+          },
+          {
+            "provider": "kraken",
+            "rank": 4
+          },
+          {
+            "provider": "coinbase",
+            "rank": 5
+          }
+        ],
+        "CA": [
+          {
+            "provider": "bullbitcoin",
+            "rank": 1
+          },
+          {
+            "provider": "shakepay",
+            "rank": 2
+          },
+          {
+            "provider": "kraken",
+            "rank": 3
+          }
+        ],
+        "GB": [
+          {
+            "provider": "coincorner",
+            "rank": 1
+          },
+          {
+            "provider": "strike",
+            "rank": 2
+          },
+          {
+            "provider": "kraken",
+            "rank": 3
+          },
+          {
+            "provider": "coinbase",
+            "rank": 4
+          }
+        ],
+        "CH": [
+          {
+            "provider": "mtpelerin",
+            "rank": 1
+          },
+          {
+            "provider": "bullbitcoin",
+            "rank": 2
+          },
+          {
+            "provider": "kraken",
+            "rank": 3
+          }
+        ],
+        "NG": [
+          {
+            "provider": "bitnob",
+            "rank": 1
+          },
+          {
+            "provider": "binance",
+            "rank": 2
+          },
+          {
+            "provider": "strike",
+            "rank": 3
+          }
+        ],
+        "GH": [
+          {
+            "provider": "bitnob",
+            "rank": 1
+          },
+          {
+            "provider": "binance",
+            "rank": 2
+          },
+          {
+            "provider": "strike",
+            "rank": 3
+          }
+        ],
+        "KE": [
+          {
+            "provider": "bitnob",
+            "rank": 1
+          },
+          {
+            "provider": "binance",
+            "rank": 2
+          },
+          {
+            "provider": "strike",
+            "rank": 3
+          }
+        ],
+        "ZA": [
+          {
+            "provider": "binance",
+            "rank": 1
+          },
+          {
+            "provider": "kraken",
+            "rank": 2
+          }
+        ],
+        "EG": [
+          {
+            "provider": "binance",
+            "rank": 1
+          },
+          {
+            "provider": "kraken",
+            "rank": 2
+          }
+        ],
+        "IN": [
+          {
+            "provider": "binance",
+            "rank": 1
+          },
+          {
+            "provider": "speed",
+            "rank": 2
+          }
+        ],
+        "ID": [
+          {
+            "provider": "binance",
+            "rank": 1
+          },
+          {
+            "provider": "kraken",
+            "rank": 2
+          }
+        ],
+        "VN": [
+          {
+            "provider": "binance",
+            "rank": 1
+          },
+          {
+            "provider": "kraken",
+            "rank": 2
+          },
+          {
+            "provider": "strike",
+            "rank": 3
+          }
+        ],
+        "TH": [
+          {
+            "provider": "binance",
+            "rank": 1
+          },
+          {
+            "provider": "kraken",
+            "rank": 2
+          }
+        ],
+        "PH": [
+          {
+            "provider": "pouch",
+            "rank": 1
+          },
+          {
+            "provider": "binance",
+            "rank": 2
+          }
+        ],
+        "PK": [
+          {
+            "provider": "binance",
+            "rank": 1
+          }
+        ],
+        "BD": [
+          {
+            "provider": "binance",
+            "rank": 1
+          }
+        ],
+        "TR": [
+          {
+            "provider": "binance",
+            "rank": 1
+          },
+          {
+            "provider": "kraken",
+            "rank": 2
+          }
+        ],
+        "AE": [
+          {
+            "provider": "kraken",
+            "rank": 1
+          },
+          {
+            "provider": "binance",
+            "rank": 2
+          }
+        ],
+        "SA": [
+          {
+            "provider": "binance",
+            "rank": 1
+          }
+        ],
+        "BR": [
+          {
+            "provider": "bipa",
+            "rank": 1
+          },
+          {
+            "provider": "bitso",
+            "rank": 2
+          },
+          {
+            "provider": "ripio",
+            "rank": 3
+          },
+          {
+            "provider": "bity",
+            "rank": 4
+          },
+          {
+            "provider": "binance",
+            "rank": 5
+          }
+        ],
+        "AR": [
+          {
+            "provider": "belo",
+            "rank": 1
+          },
+          {
+            "provider": "ripio",
+            "rank": 2
+          },
+          {
+            "provider": "bitso",
+            "rank": 3
+          },
+          {
+            "provider": "binance",
+            "rank": 4
+          }
+        ],
+        "MX": [
+          {
+            "provider": "bitso",
+            "rank": 1
+          },
+          {
+            "provider": "bullbitcoin",
+            "rank": 2
+          },
+          {
+            "provider": "binance",
+            "rank": 3
+          }
+        ],
+        "CO": [
+          {
+            "provider": "bitso",
+            "rank": 1
+          },
+          {
+            "provider": "binance",
+            "rank": 2
+          }
+        ],
+        "VE": [
+          {
+            "provider": "binance",
+            "rank": 1
+          }
+        ],
+        "CL": [
+          {
+            "provider": "binance",
+            "rank": 1
+          },
+          {
+            "provider": "kraken",
+            "rank": 2
+          }
+        ],
+        "AU": [
+          {
+            "provider": "amber",
+            "rank": 1
+          },
+          {
+            "provider": "kraken",
+            "rank": 2
+          },
+          {
+            "provider": "binance",
+            "rank": 3
+          }
+        ],
+        "JP": [
+          {
+            "provider": "kraken",
+            "rank": 1
+          },
+          {
+            "provider": "binance",
+            "rank": 2
+          }
+        ],
+        "SG": [
+          {
+            "provider": "binance",
+            "rank": 1
+          }
+        ],
+        "UA": [
+          {
+            "provider": "binance",
+            "rank": 1
+          },
+          {
+            "provider": "kraken",
+            "rank": 2
+          }
+        ],
+        "SV": [
+          {
+            "provider": "blink",
+            "rank": 1
+          },
+          {
+            "provider": "strike",
+            "rank": 2
+          },
+          {
+            "provider": "chivo",
+            "rank": 3
+          }
+        ],
+        "DE": [
+          {
+            "provider": "strike",
+            "rank": 1
+          },
+          {
+            "provider": "bringin",
+            "rank": 2
+          },
+          {
+            "provider": "kraken",
+            "rank": 3
+          },
+          {
+            "provider": "binance",
+            "rank": 4
+          }
+        ],
+        "FR": [
+          {
+            "provider": "strike",
+            "rank": 1
+          },
+          {
+            "provider": "bringin",
+            "rank": 2
+          },
+          {
+            "provider": "kraken",
+            "rank": 3
+          },
+          {
+            "provider": "binance",
+            "rank": 4
+          }
+        ],
+        "ES": [
+          {
+            "provider": "strike",
+            "rank": 1
+          },
+          {
+            "provider": "bringin",
+            "rank": 2
+          },
+          {
+            "provider": "kraken",
+            "rank": 3
+          },
+          {
+            "provider": "binance",
+            "rank": 4
+          }
+        ],
+        "IT": [
+          {
+            "provider": "strike",
+            "rank": 1
+          },
+          {
+            "provider": "bringin",
+            "rank": 2
+          },
+          {
+            "provider": "kraken",
+            "rank": 3
+          },
+          {
+            "provider": "binance",
+            "rank": 4
+          }
+        ],
+        "NL": [
+          {
+            "provider": "strike",
+            "rank": 1
+          },
+          {
+            "provider": "bringin",
+            "rank": 2
+          },
+          {
+            "provider": "kraken",
+            "rank": 3
+          },
+          {
+            "provider": "binance",
+            "rank": 4
+          }
+        ],
+        "IE": [
+          {
+            "provider": "strike",
+            "rank": 1
+          },
+          {
+            "provider": "bringin",
+            "rank": 2
+          },
+          {
+            "provider": "kraken",
+            "rank": 3
+          },
+          {
+            "provider": "binance",
+            "rank": 4
+          }
+        ],
+        "PT": [
+          {
+            "provider": "strike",
+            "rank": 1
+          },
+          {
+            "provider": "bringin",
+            "rank": 2
+          },
+          {
+            "provider": "kraken",
+            "rank": 3
+          },
+          {
+            "provider": "binance",
+            "rank": 4
+          }
+        ],
+        "PL": [
+          {
+            "provider": "strike",
+            "rank": 1
+          },
+          {
+            "provider": "bringin",
+            "rank": 2
+          },
+          {
+            "provider": "kraken",
+            "rank": 3
+          },
+          {
+            "provider": "binance",
+            "rank": 4
+          }
+        ]
+      }
+    },
+    "card": {
+      "label": "Credit / debit card",
+      "countries": {
+        "US": [
+          {
+            "provider": "strike",
+            "rank": 1
+          },
+          {
+            "provider": "cashapp",
+            "rank": 2
+          },
+          {
+            "provider": "coinbase",
+            "rank": 3
+          },
+          {
+            "provider": "kraken",
+            "rank": 4
+          }
+        ],
+        "CA": [
+          {
+            "provider": "kraken",
+            "rank": 1
+          }
+        ],
+        "GB": [
+          {
+            "provider": "strike",
+            "rank": 1
+          },
+          {
+            "provider": "coincorner",
+            "rank": 2
+          },
+          {
+            "provider": "coinbase",
+            "rank": 3
+          },
+          {
+            "provider": "kraken",
+            "rank": 4
+          }
+        ],
+        "CH": [
+          {
+            "provider": "mtpelerin",
+            "rank": 1
+          },
+          {
+            "provider": "kraken",
+            "rank": 2
+          }
+        ],
+        "NG": [
+          {
+            "provider": "bitnob",
+            "rank": 1
+          },
+          {
+            "provider": "binance",
+            "rank": 2
+          }
+        ],
+        "GH": [
+          {
+            "provider": "bitnob",
+            "rank": 1
+          },
+          {
+            "provider": "binance",
+            "rank": 2
+          }
+        ],
+        "KE": [
+          {
+            "provider": "bitnob",
+            "rank": 1
+          },
+          {
+            "provider": "binance",
+            "rank": 2
+          }
+        ],
+        "ZA": [
+          {
+            "provider": "binance",
+            "rank": 1
+          }
+        ],
+        "EG": [
+          {
+            "provider": "binance",
+            "rank": 1
+          }
+        ],
+        "IN": [
+          {
+            "provider": "speed",
+            "rank": 1
+          },
+          {
+            "provider": "binance",
+            "rank": 2
+          }
+        ],
+        "ID": [
+          {
+            "provider": "binance",
+            "rank": 1
+          },
+          {
+            "provider": "kraken",
+            "rank": 2
+          }
+        ],
+        "VN": [
+          {
+            "provider": "binance",
+            "rank": 1
+          },
+          {
+            "provider": "kraken",
+            "rank": 2
+          }
+        ],
+        "TH": [
+          {
+            "provider": "binance",
+            "rank": 1
+          },
+          {
+            "provider": "kraken",
+            "rank": 2
+          }
+        ],
+        "PH": [
+          {
+            "provider": "pouch",
+            "rank": 1
+          },
+          {
+            "provider": "binance",
+            "rank": 2
+          }
+        ],
+        "PK": [
+          {
+            "provider": "binance",
+            "rank": 1
+          }
+        ],
+        "BD": [
+          {
+            "provider": "binance",
+            "rank": 1
+          }
+        ],
+        "TR": [
+          {
+            "provider": "binance",
+            "rank": 1
+          }
+        ],
+        "AE": [
+          {
+            "provider": "binance",
+            "rank": 1
+          },
+          {
+            "provider": "kraken",
+            "rank": 2
+          }
+        ],
+        "SA": [
+          {
+            "provider": "binance",
+            "rank": 1
+          }
+        ],
+        "BR": [
+          {
+            "provider": "bipa",
+            "rank": 1
+          },
+          {
+            "provider": "ripio",
+            "rank": 2
+          },
+          {
+            "provider": "binance",
+            "rank": 3
+          }
+        ],
+        "AR": [
+          {
+            "provider": "belo",
+            "rank": 1
+          },
+          {
+            "provider": "ripio",
+            "rank": 2
+          }
+        ],
+        "MX": [
+          {
+            "provider": "bitso",
+            "rank": 1
+          },
+          {
+            "provider": "binance",
+            "rank": 2
+          }
+        ],
+        "CO": [
+          {
+            "provider": "bitso",
+            "rank": 1
+          }
+        ],
+        "VE": [
+          {
+            "provider": "binance",
+            "rank": 1
+          }
+        ],
+        "CL": [
+          {
+            "provider": "binance",
+            "rank": 1
+          }
+        ],
+        "AU": [
+          {
+            "provider": "amber",
+            "rank": 1
+          },
+          {
+            "provider": "kraken",
+            "rank": 2
+          }
+        ],
+        "JP": [
+          {
+            "provider": "kraken",
+            "rank": 1
+          }
+        ],
+        "SG": [
+          {
+            "provider": "binance",
+            "rank": 1
+          }
+        ],
+        "UA": [
+          {
+            "provider": "binance",
+            "rank": 1
+          }
+        ],
+        "SV": [
+          {
+            "provider": "strike",
+            "rank": 1
+          },
+          {
+            "provider": "blink",
+            "rank": 2
+          }
+        ],
+        "DE": [
+          {
+            "provider": "strike",
+            "rank": 1
+          },
+          {
+            "provider": "kraken",
+            "rank": 2
+          },
+          {
+            "provider": "binance",
+            "rank": 3
+          },
+          {
+            "provider": "coinbase",
+            "rank": 4
+          }
+        ],
+        "FR": [
+          {
+            "provider": "strike",
+            "rank": 1
+          },
+          {
+            "provider": "kraken",
+            "rank": 2
+          },
+          {
+            "provider": "binance",
+            "rank": 3
+          },
+          {
+            "provider": "coinbase",
+            "rank": 4
+          }
+        ],
+        "ES": [
+          {
+            "provider": "strike",
+            "rank": 1
+          },
+          {
+            "provider": "kraken",
+            "rank": 2
+          },
+          {
+            "provider": "binance",
+            "rank": 3
+          },
+          {
+            "provider": "coinbase",
+            "rank": 4
+          }
+        ],
+        "IT": [
+          {
+            "provider": "strike",
+            "rank": 1
+          },
+          {
+            "provider": "kraken",
+            "rank": 2
+          },
+          {
+            "provider": "binance",
+            "rank": 3
+          },
+          {
+            "provider": "coinbase",
+            "rank": 4
+          }
+        ],
+        "NL": [
+          {
+            "provider": "strike",
+            "rank": 1
+          },
+          {
+            "provider": "kraken",
+            "rank": 2
+          },
+          {
+            "provider": "binance",
+            "rank": 3
+          },
+          {
+            "provider": "coinbase",
+            "rank": 4
+          }
+        ],
+        "IE": [
+          {
+            "provider": "strike",
+            "rank": 1
+          },
+          {
+            "provider": "kraken",
+            "rank": 2
+          },
+          {
+            "provider": "binance",
+            "rank": 3
+          },
+          {
+            "provider": "coinbase",
+            "rank": 4
+          }
+        ],
+        "PT": [
+          {
+            "provider": "strike",
+            "rank": 1
+          },
+          {
+            "provider": "kraken",
+            "rank": 2
+          },
+          {
+            "provider": "binance",
+            "rank": 3
+          },
+          {
+            "provider": "coinbase",
+            "rank": 4
+          }
+        ],
+        "PL": [
+          {
+            "provider": "strike",
+            "rank": 1
+          },
+          {
+            "provider": "kraken",
+            "rank": 2
+          },
+          {
+            "provider": "binance",
+            "rank": 3
+          },
+          {
+            "provider": "coinbase",
+            "rank": 4
+          }
+        ]
+      }
+    }
+  },
+  "disqualified_providers": [
+    {
+      "id": "relai",
+      "name": "Relai",
+      "url": "https://relai.app",
+      "reason": "Lightning wallet sunset — Relai is removing its Lightning wallet; users told to move funds/close channels."
+    },
+    {
+      "id": "bitrefill",
+      "name": "Bitrefill",
+      "url": "https://bitrefill.com",
+      "reason": "Lightning is only an inbound payment method for Bitrefill's own products; no pay-arbitrary-invoice feature."
+    },
+    {
+      "id": "pocketbitcoin",
+      "name": "Pocket Bitcoin",
+      "url": "https://pocketbitcoin.com",
+      "reason": "Receive-only — fiat→BTC is delivered to your own Lightning wallet; cannot pay a third-party invoice."
+    },
+    {
+      "id": "robosats",
+      "name": "RoboSats",
+      "url": "https://robosats.org",
+      "reason": "Receive-only — you receive trade proceeds to your own invoice / pay only RoboSats' own escrow invoices."
+    },
+    {
+      "id": "lemon",
+      "name": "Lemon Cash",
+      "url": "https://lemon.me",
+      "reason": "Lightning documented for receiving/deposits only; no verified flow to pay an arbitrary external invoice."
+    },
+    {
+      "id": "peach",
+      "name": "Peach Bitcoin",
+      "url": "https://peachbitcoin.com",
+      "reason": "P2P with on-chain multisig escrow; Lightning not live for paying arbitrary invoices."
+    },
+    {
+      "id": "orangefren",
+      "name": "Orangefren",
+      "url": "https://orangefren.com",
+      "reason": "Could not verify arbitrary-invoice payout from any official documentation; excluded pending verification."
+    }
+  ]
+}

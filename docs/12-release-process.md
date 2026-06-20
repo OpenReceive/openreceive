@@ -27,6 +27,7 @@ The release owner also checks:
 - JSON schemas and test vectors pass.
 - OpenAPI and AsyncAPI validation passes through `npm run validate`.
 - Secret scan passes.
+- Local package artifact smoke passes.
 - Demo build passes.
 - Live wallet smoke passes when a trusted `OPENRECEIVE_NWC` is available.
 

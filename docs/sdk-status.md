@@ -27,5 +27,5 @@ npm run test:ci
 ```
 
 The current gate covers schemas, vectors, source secret scanning, TypeScript
-typecheck, JavaScript tests, demo builds, generated client-bundle scanning, docs
-build, and optional live NWC smoke.
+typecheck, JavaScript tests, local package artifact imports, demo builds,
+generated client-bundle scanning, docs build, and optional live NWC smoke.

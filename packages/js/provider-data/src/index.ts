@@ -1,4 +1,4 @@
-import providerRegistryJson from "../../../../spec/data/providers/openreceive-providers.v2.json" with { type: "json" };
+import providerRegistryJson from "./data/openreceive-providers.v2.json" with { type: "json" };
 
 export type ProviderMechanism = "pay_invoice" | "withdraw_to_invoice";
 export type CountryCoverage = "deep" | "thin" | "sparse";
