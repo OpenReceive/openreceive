@@ -331,13 +331,13 @@ export async function startOpenReceiveExpressPaymentNotificationRunner(
   try {
     const listener = await startPaymentNotificationListener({
       client: options.client,
-      onSettledInvoice: async ({ notification, lookup }) => {
+      onSettledInvoice: async ({ notification }) => {
         const invoice = await store.getInvoiceByPaymentHash(notification.payment_hash);
         if (invoice === undefined) {
           emitLog(options, "warn", "notification.invoice_not_found", "Received payment notification for an unknown invoice.", {
             payment_hash: notification.payment_hash
           });
-          return;
+          return false;
         }
 
         let current = invoice;
@@ -352,14 +352,14 @@ export async function startOpenReceiveExpressPaymentNotificationRunner(
 
         const settled = await store.markSettled({
           invoice_id: current.invoice_id,
-          settled_at: lookup.settled_at ?? notification.settled_at
+          settled_at: notification.settled_at ?? clock()
         });
         eventBus.publish(
           settled.invoice_id,
           "invoice.settled",
           serializeEventData(settled)
         );
-        emitLog(options, "info", "invoice.settled", "Notification listener verified invoice settlement by wallet lookup.", invoiceLogFields(settled));
+        emitLog(options, "info", "invoice.settled", "Notification listener accepted trusted payment_received settlement.", invoiceLogFields(settled));
 
         await maybeRunSettlementAction({
           options,
@@ -367,25 +367,11 @@ export async function startOpenReceiveExpressPaymentNotificationRunner(
           eventBus,
           invoice: settled,
           source: "notification_runner",
-          lookupInvoice: lookup,
           clock
         });
       },
-      onUnsettledNotification: async ({ notification }) => {
-        const invoice = await store.getInvoiceByPaymentHash(notification.payment_hash);
-        if (invoice === undefined) return;
-        if (invoice.workflow_state !== "invoice_created") return;
-
-        const verifying = await store.markVerifying(invoice.invoice_id);
-        eventBus.publish(
-          verifying.invoice_id,
-          "invoice.verifying",
-          serializeEventData(verifying)
-        );
-        emitLog(options, "info", "invoice.verifying", "Notification listener woke backend verification.", invoiceLogFields(verifying));
-      },
       onError: async (error, notification) => {
-        emitLog(options, "error", "notification.listener.error", "Payment notification listener failed while verifying a hint.", {
+        emitLog(options, "error", "notification.listener.error", "Payment notification listener failed while applying a trusted notification.", {
           ...(notification === undefined ? {} : { payment_hash: notification.payment_hash }),
           error: error instanceof Error ? error.message : String(error)
         });

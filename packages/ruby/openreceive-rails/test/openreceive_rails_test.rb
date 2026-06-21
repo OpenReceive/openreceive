@@ -419,7 +419,7 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_equal [invoice_id], completed
   end
 
-  def test_payment_received_notification_is_only_a_hint
+  def test_payment_received_notification_marks_settled_without_lookup
     adapter, client, completed = build_adapter
     created = adapter.create_invoice(
       controller: Controller.new(7),
@@ -428,17 +428,14 @@ class OpenReceiveRailsTest < Minitest::Test
     )
     invoice_id = created.fetch("body").fetch("invoice_id")
 
-    pending = adapter.handle_payment_received(notification: { "payment_hash" => "a" * 64 })
-    assert_equal "pending", pending.fetch("transaction_state")
-    assert_empty completed
-
-    client.lookup_state = "settled"
-    settled = adapter.handle_payment_received(notification: { "payment_hash" => "a" * 64 })
+    settled = adapter.handle_payment_received(notification: { "payment_hash" => "a" * 64, "settled_at" => 1300 })
     replayed = adapter.handle_payment_received(notification: { "payment_hash" => "a" * 64 })
 
     assert_equal "settlement_action_completed", settled.fetch("workflow_state")
+    assert_equal 1300, settled.fetch("settled_at")
     assert_equal "settlement_action_completed", replayed.fetch("workflow_state")
     assert_equal [invoice_id], completed
+    assert_empty client.lookup_invoice_calls
   end
 
   def test_lookup_denies_cross_user_invoice_access

@@ -8,14 +8,14 @@ Implemented now:
 
 - production fail-closed authentication configuration
 - idempotent invoice creation through an injected receive-only client
-- backend lookup as settlement authority before settlement actions
+- backend lookup settlement for polling workers
 - authorization hook for app-owned invoice access
 - duplicate-safe settlement action tracking using the configured store
 - internal verification for polling workers
 - `doctor` diagnostics for store, migration, NWC, and worker readiness; the
   doctor task fails if the app still uses the Ruby in-memory test store
-- payment notification handling where the notification is only a passive hint
-  and backend lookup remains settlement authority
+- payment notification handling where trusted `payment_received` events settle
+  the matching invoice directly
 - ActiveRecord invoice store plus migration and model templates for the invoice
   storage shape
 - install generator skeleton that copies the controller, jobs, channel,

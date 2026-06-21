@@ -86,10 +86,11 @@ The reference flow:
 5. Frontend receives only non-secret invoice display data.
 6. Frontend renders QR, copy button, lightning URI, countdown, payment routes,
    and transaction/workflow state.
-7. Backend listens for notifications where practical and also polls
-   lookup_invoice through a background job, queue worker, scheduled task, or
-   long-running framework worker.
-8. Backend confirms settlement by lookup_invoice result with settled_at or
+7. Backend listens for trusted NWC payment_received notifications where
+   practical and also polls lookup_invoice through a background job, queue
+   worker, scheduled task, or long-running framework worker.
+8. Backend marks settlement from either a trusted payment_received notification
+   for the stored payment_hash or a lookup_invoice result with settled_at or
    transaction_state/state == "settled". A preimage is corroborating proof, not
    a sufficient settlement signal by itself.
 9. Backend emits invoice.settled to the matching browser session.
@@ -140,10 +141,10 @@ Security and correctness:
     general NWC users, but OpenReceive checkout adapters hide or refuse send
     methods by default.
   - The frontend never unlocks a product by itself.
-  - Notifications are never final proof by themselves.
-  - Settlement truth comes from lookup_invoice; NWC notifications can provide
-    the same data faster but cannot run merchant settlement actions by
-    themselves.
+  - Trusted NWC payment_received notifications are settlement events.
+  - Settlement may be proven by either a trusted payment_received notification
+    for the stored payment_hash or lookup_invoice with settled_at or
+    transaction_state/state == "settled".
   - Store payment_hash for every invoice.
   - Store preimage when available, but never treat preimage alone as final
     settlement proof for incoming invoices.
@@ -501,11 +502,12 @@ completed. It then continues lookup polling until each invoice is settled,
 expired, failed, cancelled, or its settlement action boundary completes.
 
 The notification listener runner must hold the NWC payment_received
-subscription open where supported. Each notification is only a hint: the runner
-must lookup_invoice by payment_hash before marking settlement or running the
-settlement action. If notification support is absent, the listener command must
-skip or fail clearly while the polling runner remains sufficient for
-correctness.
+subscription open where supported. A payment_received notification from the
+configured NWC client is a trusted payment-received event for its payment_hash:
+the runner may mark the matching invoice settled, stop treating it as pollable,
+and run the idempotent settlement action without an extra lookup_invoice round
+trip. If notification support is absent, the listener command must skip or fail
+clearly while the polling runner remains sufficient for correctness.
 
 Do not make multiprocess coordination, thread pools, or lock managers part of
 the first runner contract. Settlement and settlement-action writes must still
@@ -1219,8 +1221,9 @@ Notifications:
   - NWC notification event kind 23196 is used for NIP-04 compatibility.
   - Subscribe according to the negotiated/advertised encryption mode.
   - Filter notifications by wallet service pubkey and the client pubkey p tag.
-  - Notifications can wake invoice lookup immediately.
-  - Notifications do not replace polling.
+  - Notifications can mark the matching invoice settled immediately.
+  - Notifications do not replace polling as the recovery path for missed,
+    delayed, or unsupported notification delivery.
   - Notification handlers must be idempotent.
   - Duplicate notifications, including duplicate NIP-04/NIP-44 notifications
     from wallets that publish both, must not double-credit payments.
@@ -1264,12 +1267,13 @@ Long-running listener requirements:
       update guard such as pending -> settled only.
     - Run notification listeners as long-running worker processes, not inside
       request handlers.
-    - Still verify settlement with lookup_invoice before running any merchant
-      settlement action.
+    - A trusted payment_received notification may run the idempotent merchant
+      settlement action without an additional lookup_invoice verification.
 
 Settlement detection:
 
-  For NIP-47 incoming invoices, treat invoice as settled only when
+  For NIP-47 incoming invoices, treat invoice as settled when either a trusted
+  payment_received notification arrives for the stored payment_hash or
   lookup_invoice returns one of:
 
     settled_at present
@@ -2097,7 +2101,8 @@ Minimum NWC client responsibilities:
   - Reconnect with bounded exponential backoff.
   - Support heartbeat/ping or equivalent dead-connection detection.
   - Persist or expose the last processed event timestamp/cursor where possible.
-  - Treat notifications as hints that trigger lookup_invoice, not final proof.
+  - Treat trusted payment_received notifications as settlement events that do
+    not require an additional lookup_invoice before marking the invoice paid.
   - Normalize settlement detection into the canonical OpenReceive state model.
   - Normalize wallet/service errors into canonical OpenReceive errors.
   - Enforce NWC metadata below 3900 serialized characters.
@@ -3858,7 +3863,7 @@ Test layers:
     look up the invoice before payment
     poll with the canonical cadence
     subscribe to notifications where the client supports it
-    confirm settlement only through lookup_invoice
+    confirm settlement through either polling lookup or trusted notification
     redact the NWC string in every log and error path
     skip live NWC smoke tests clearly when OPENRECEIVE_NWC is not present
 
@@ -3867,8 +3872,8 @@ Test layers:
     invoice created through the configured wallet profile
     preflight capability summary recorded without secrets
     settled by polling after the owner manually pays the invoice
-    settled by notification plus lookup after the owner manually pays the
-    invoice when notifications are available
+    settled by trusted notification after the owner manually pays the invoice
+    when notifications are available
     duplicate idempotency key
     rate source failure using the static price provider
     receive-only NWC success

@@ -650,7 +650,7 @@ test("Express polling runner recovers invoices without an HTTP request", async (
   assert.match(stream, /event: invoice\.settlement_action_completed/);
 });
 
-test("Express notification runner listens for hints and verifies by lookup", async () => {
+test("Express notification runner trusts payment_received settlement events", async () => {
   let settlementActionCalls = 0;
   const settlementSources = [];
   const logs = [];
@@ -692,13 +692,12 @@ test("Express notification runner listens for hints and verifies by lookup", asy
   );
 
   const listener = await startOpenReceiveExpressPaymentNotificationRunner(options);
-  wallet.lookupState = "settled";
   await wallet.emitPaymentReceived({
     payment_hash: PAYMENT_HASH,
     settled_at: 1300
   });
 
-  assert.equal(wallet.lookupInvoiceCalls, 1);
+  assert.equal(wallet.lookupInvoiceCalls, 0);
   assert.equal(settlementActionCalls, 1);
   assert.deepEqual(settlementSources, ["notification_runner"]);
   assert.equal(store.getInvoice(createRes.body.invoice_id).workflow_state, "settlement_action_completed");

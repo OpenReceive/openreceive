@@ -872,7 +872,7 @@ test("Node CLI runs poll and listen from a server config module", async () => {
   }
 });
 
-test("payment notification listener dedupes and verifies settlement with lookup", async () => {
+test("payment notification listener dedupes trusted settlement notifications", async () => {
   const client = new FakeNotificationClient();
   const settled = [];
   const listener = await startPaymentNotificationListener({
@@ -891,75 +891,98 @@ test("payment notification listener dedupes and verifies settlement with lookup"
     settled_at: 1300
   });
 
-  assert.equal(client.lookupCalls, 1);
+  assert.equal(client.lookupCalls, 0);
   assert.equal(settled.length, 1);
-  assert.equal(settled[0].lookup.state, "settled");
+  assert.equal(settled[0].notification.settled_at, 1300);
   assert.equal(listener.seenPaymentHashes.has("d".repeat(64)), true);
 
   await listener.stop();
   assert.equal(client.unsubscribed, true);
 });
 
-test("payment notification listener does not treat unsettled lookup results as action-ready", async () => {
+test("payment notification listener trusts notifications without settled_at", async () => {
   const client = new FakeNotificationClient();
-  client.lookupState = "pending";
   const settled = [];
-  const unsettled = [];
   await startPaymentNotificationListener({
     client,
-    onSettledInvoice: (event) => settled.push(event),
-    onUnsettledNotification: (event) => unsettled.push(event)
+    onSettledInvoice: (event) => settled.push(event)
   });
 
   await client.emit({
     payment_hash: "c".repeat(64)
   });
 
-  assert.equal(settled.length, 0);
-  assert.equal(unsettled.length, 1);
-  assert.equal(unsettled[0].lookup.state, "pending");
+  assert.equal(client.lookupCalls, 0);
+  assert.equal(settled.length, 1);
+  assert.equal(settled[0].notification.payment_hash, "c".repeat(64));
 });
 
-test("payment notification listener re-verifies a redelivered notification after a transient lookup error", async () => {
+test("payment notification listener retries redelivery after a transient action error", async () => {
   const settled = [];
   const errors = [];
-  let lookupCalls = 0;
+  let actionCalls = 0;
   const client = {
     handler: undefined,
     async subscribeToPaymentReceived(handler) {
       this.handler = handler;
       return () => {};
-    },
-    async lookupInvoice({ payment_hash }) {
-      lookupCalls += 1;
-      if (lookupCalls === 1) {
-        throw new Error("transient relay timeout");
-      }
-      return { payment_hash, state: "settled", settled_at: 1300 };
     }
   };
 
   const listener = await startPaymentNotificationListener({
     client,
-    onSettledInvoice: (event) => settled.push(event),
+    onSettledInvoice: (event) => {
+      actionCalls += 1;
+      if (actionCalls === 1) {
+        throw new Error("transient database timeout");
+      }
+      settled.push(event);
+    },
     onError: (error) => errors.push(error)
   });
 
   const notification = { payment_hash: "a".repeat(64), amount_msats: 200000n };
-  // At-least-once: the first delivery fails verification (transient error) and
-  // must NOT mark the hash seen, so the redelivery re-triggers lookup + credit.
+  // At-least-once: the first delivery fails the local action and must NOT mark
+  // the hash seen, so the redelivery can still credit the invoice.
   await client.handler(notification);
   await client.handler(notification);
 
-  assert.equal(lookupCalls, 2);
+  assert.equal(actionCalls, 2);
   assert.equal(errors.length, 1);
   assert.equal(settled.length, 1);
   assert.equal(listener.seenPaymentHashes.has("a".repeat(64)), true);
 
   // A third delivery after a credited settlement is now deduped.
   await client.handler(notification);
-  assert.equal(lookupCalls, 2);
+  assert.equal(actionCalls, 2);
   assert.equal(settled.length, 1);
+});
+
+test("payment notification listener does not dedupe notifications that were not applied", async () => {
+  const settled = [];
+  const client = {
+    handler: undefined,
+    async subscribeToPaymentReceived(handler) {
+      this.handler = handler;
+      return () => {};
+    }
+  };
+
+  const listener = await startPaymentNotificationListener({
+    client,
+    onSettledInvoice: (event) => {
+      settled.push(event);
+      return settled.length > 1;
+    }
+  });
+
+  const notification = { payment_hash: "e".repeat(64), amount_msats: 200000n };
+  await client.handler(notification);
+  assert.equal(listener.seenPaymentHashes.has("e".repeat(64)), false);
+
+  await client.handler(notification);
+  assert.equal(settled.length, 2);
+  assert.equal(listener.seenPaymentHashes.has("e".repeat(64)), true);
 });
 
 test("receive client normalizes legacy boolean settled/paid lookup variants", async () => {

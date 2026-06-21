@@ -86,9 +86,9 @@ profile. Use `OPENRECEIVE_EXPECTED_CAPABILITIES=/path/to/file.json` to test a
 different wallet profile without editing the committed default.
 
 The live harness verifies preflight, the metadata-size guard, invoice creation,
-initial lookup, and optional notification-plus-lookup confirmation when manual
-payment waiting is enabled. Notification delivery is never settlement proof by
-itself.
+initial lookup, and optional trusted notification confirmation when manual
+payment waiting is enabled. Polling lookup remains the recovery path when
+notifications are unavailable or missed.
 
 Do not run live wallet tests on untrusted pull requests with secrets available.
 

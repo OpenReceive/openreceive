@@ -447,7 +447,11 @@ module OpenReceive
         row = @config.store.find_by_payment_hash(payment_hash)
         raise OpenReceive::InvoiceNotFoundError.new(payment_hash) if row.nil?
 
-        verify_stored_invoice(row)
+        settled = @config.store.mark_settled(
+          invoice_id: row.fetch("invoice_id"),
+          settled_at: data["settled_at"] || Time.now.to_i
+        )
+        run_settlement_action_once(settled)
       end
 
       private

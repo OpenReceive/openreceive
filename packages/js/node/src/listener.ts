@@ -1,24 +1,18 @@
 import {
-  type LookupInvoiceResult,
   type OpenReceiveReceiveNwcClient,
-  type PaymentReceivedNotification,
-  isLookupSettled
+  type PaymentReceivedNotification
 } from "@openreceive/core";
 
-export interface VerifiedPaymentNotification {
+export interface TrustedPaymentNotification {
   readonly notification: PaymentReceivedNotification;
-  readonly lookup: LookupInvoiceResult;
 }
 
 export interface PaymentNotificationListenerOptions {
   readonly client: OpenReceiveReceiveNwcClient;
   readonly seenPaymentHashes?: Set<string>;
   readonly onSettledInvoice: (
-    event: VerifiedPaymentNotification
-  ) => Promise<void> | void;
-  readonly onUnsettledNotification?: (
-    event: VerifiedPaymentNotification
-  ) => Promise<void> | void;
+    event: TrustedPaymentNotification
+  ) => Promise<boolean | void> | boolean | void;
   readonly onError?: (
     error: unknown,
     notification?: PaymentReceivedNotification
@@ -40,28 +34,16 @@ export async function startPaymentNotificationListener(
   const seenPaymentHashes = options.seenPaymentHashes ?? new Set<string>();
   const unsubscribe = await options.client.subscribeToPaymentReceived(
     async (notification) => {
-      // NWC notification delivery is at-least-once, not exactly-once. Only a
-      // settled-and-credited payment_hash is marked seen; a redelivery that
-      // arrives after a transient lookup error or an as-yet-unsettled result
-      // must be allowed to re-trigger verification. The durable no-double-credit
-      // guarantee comes from the host's idempotent pending -> settled
-      // transition, not from this in-memory fast-path dedup.
+      // NWC payment_received notifications are trusted settlement events, but
+      // delivery is at-least-once. The durable no-double-credit guarantee comes
+      // from the host's idempotent payment_hash transition; this in-memory set
+      // is only a fast-path duplicate filter for this listener process.
       if (seenPaymentHashes.has(notification.payment_hash)) return;
 
       try {
-        const lookup = await options.client.lookupInvoice({
-          payment_hash: notification.payment_hash
-        });
-        const event = {
-          notification,
-          lookup
-        };
-
-        if (isLookupSettled(lookup)) {
-          await options.onSettledInvoice(event);
+        const applied = await options.onSettledInvoice({ notification });
+        if (applied !== false) {
           seenPaymentHashes.add(notification.payment_hash);
-        } else {
-          await options.onUnsettledNotification?.(event);
         }
       } catch (error) {
         await options.onError?.(error, notification);
