@@ -5,14 +5,15 @@ import path from "node:path";
 import { parse as parseYaml } from "yaml";
 
 const root = process.cwd();
+const workflowDirectory = ".github/workflows-disabled";
 const requiredWorkflows = {
-  ".github/workflows/ci.yml": ["npm run test:ci"],
-  ".github/workflows/conformance.yml": ["npm run validate", "npm run check:generated", "npm run test:js"],
-  ".github/workflows/demos.yml": ["npm run check:demo-containers", "npm run check:demo-deploy", "npm run build:demo", "npm run scan:client-bundles"],
-  ".github/workflows/provider-registry.yml": ["npm run validate", "tests/v0.1/provider-data.test.mjs"],
-  ".github/workflows/security.yml": ["npm run scan:secrets", "npm run check:workflows", "npm run scan:client-bundles"],
-  ".github/workflows/release.yml": ["npm run check:release", "npm run test:package-smoke", "Release dry run complete"],
-  ".github/workflows/publish.yml": ["npm run check:release", "Publishing is disabled"]
+  [`${workflowDirectory}/ci.yml`]: ["npm run test:ci"],
+  [`${workflowDirectory}/conformance.yml`]: ["npm run validate", "npm run check:generated", "npm run test:js"],
+  [`${workflowDirectory}/demos.yml`]: ["npm run check:demo-containers", "npm run check:demo-deploy", "npm run build:demo", "npm run scan:client-bundles"],
+  [`${workflowDirectory}/provider-registry.yml`]: ["npm run validate", "tests/v0.1/provider-data.test.mjs"],
+  [`${workflowDirectory}/security.yml`]: ["npm run scan:secrets", "npm run check:workflows", "npm run scan:client-bundles"],
+  [`${workflowDirectory}/release.yml`]: ["npm run check:release", "npm run test:package-smoke", "Release dry run complete"],
+  [`${workflowDirectory}/publish.yml`]: ["npm run check:release", "Publishing is disabled"]
 };
 
 const forbiddenText = [

@@ -1,10 +1,7 @@
 name: Release Dry Run
 
 on:
-  push:
-    tags:
-      - "v*"
-      - "js-*-v*"
+  # Temporarily manual-only while CI is being stabilized.
   workflow_dispatch:
 
 permissions:

@@ -3,6 +3,8 @@ import type {
   OpenReceiveWorkflowState
 } from "../nwc/client.ts";
 
+export type MaybePromise<T> = T | Promise<T>;
+
 export type OpenReceiveIdempotencyOperation =
   | "invoice.create"
   | "invoice.refresh";
@@ -58,6 +60,37 @@ export interface InvoiceStorageRow extends OpenReceiveIdempotencyScope {
   refreshed_from_invoice_id?: string;
   metadata: Record<string, unknown>;
   fiat_quote?: Record<string, unknown> | null;
+}
+
+export interface OpenReceiveRecoverableInvoiceQuery {
+  now: number;
+  grace_seconds?: number;
+}
+
+export interface OpenReceiveInvoiceStore {
+  checkIdempotency(input: {
+    scope: OpenReceiveIdempotencyScope;
+    idempotency_request_hash: string;
+  }): MaybePromise<InvoiceCreateStorageResult | undefined>;
+  createInvoice(row: InvoiceStorageRow): MaybePromise<InvoiceCreateStorageResult>;
+  getInvoice(invoiceId: string): MaybePromise<InvoiceStorageRow | undefined>;
+  getInvoiceByPaymentHash(paymentHash: string): MaybePromise<InvoiceStorageRow | undefined>;
+  getInvoiceByBolt11Invoice(invoice: string): MaybePromise<InvoiceStorageRow | undefined>;
+  listRecoverableInvoices(input: OpenReceiveRecoverableInvoiceQuery): MaybePromise<InvoiceStorageRow[]>;
+  markVerifying(invoiceId: string): MaybePromise<InvoiceStorageRow>;
+  markExpiryPendingVerification(invoiceId: string): MaybePromise<InvoiceStorageRow>;
+  markSettled(input: {
+    invoice_id: string;
+    settled_at?: number;
+  }): MaybePromise<InvoiceStorageRow>;
+  markExpiredClosed(invoiceId: string): MaybePromise<InvoiceStorageRow>;
+  markFailedClosed(invoiceId: string): MaybePromise<InvoiceStorageRow>;
+  markSettlementActionPending(invoiceId: string): MaybePromise<InvoiceStorageRow>;
+  markSettlementActionCompleted(input: {
+    invoice_id: string;
+    settlement_action_completed_at: number;
+  }): MaybePromise<InvoiceStorageRow>;
+  markSettlementActionFailed(invoiceId: string): MaybePromise<InvoiceStorageRow>;
 }
 
 export type InvoiceCreateStorageResult =
@@ -186,11 +219,43 @@ export class InMemoryInvoiceStore {
     return invoiceId === undefined ? undefined : this.getInvoice(invoiceId);
   }
 
+  listRecoverableInvoices(
+    input: OpenReceiveRecoverableInvoiceQuery
+  ): InvoiceStorageRow[] {
+    assertUnixSeconds(input.now, "now");
+    const graceSeconds = input.grace_seconds ?? 15;
+    if (!Number.isSafeInteger(graceSeconds) || graceSeconds < 0) {
+      throw new TypeError("grace_seconds must be a non-negative safe integer");
+    }
+
+    return [...this.#byInvoiceId.values()]
+      .filter((row) => isRecoverableInvoice(row, input.now, graceSeconds))
+      .map((row) => cloneInvoiceStorageRow(row));
+  }
+
   markVerifying(invoiceId: string): InvoiceStorageRow {
     const row = this.requireStoredInvoice(invoiceId);
 
-    if (row.workflow_state === "invoice_created") {
+    if (
+      row.transaction_state !== "settled" &&
+      (row.workflow_state === "invoice_created" ||
+        row.workflow_state === "expiry_pending_verification")
+    ) {
       row.workflow_state = "verifying";
+    }
+
+    return cloneInvoiceStorageRow(row);
+  }
+
+  markExpiryPendingVerification(invoiceId: string): InvoiceStorageRow {
+    const row = this.requireStoredInvoice(invoiceId);
+
+    if (
+      row.transaction_state !== "settled" &&
+      row.transaction_state !== "expired" &&
+      row.transaction_state !== "failed"
+    ) {
+      row.workflow_state = "expiry_pending_verification";
     }
 
     return cloneInvoiceStorageRow(row);
@@ -367,6 +432,31 @@ export function validateInvoiceStorageRow(row: InvoiceStorageRow): void {
   if (row.settlement_action_completed_at !== undefined) {
     assertUnixSeconds(row.settlement_action_completed_at, "settlement_action_completed_at");
   }
+}
+
+function isRecoverableInvoice(
+  row: InvoiceStorageRow,
+  now: number,
+  graceSeconds: number
+): boolean {
+  if (
+    row.workflow_state === "settlement_action_completed" ||
+    row.workflow_state === "expired_closed" ||
+    row.workflow_state === "failed_closed" ||
+    row.workflow_state === "cancelled"
+  ) {
+    return false;
+  }
+
+  if (row.transaction_state === "settled") {
+    return row.settlement_action_state !== "completed";
+  }
+
+  if (row.transaction_state === "expired" || row.transaction_state === "failed") {
+    return false;
+  }
+
+  return row.expires_at + graceSeconds >= now;
 }
 
 function cloneInvoiceStorageRow(row: InvoiceStorageRow): InvoiceStorageRow {

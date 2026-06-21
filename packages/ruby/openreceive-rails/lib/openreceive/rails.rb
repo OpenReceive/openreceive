@@ -87,6 +87,28 @@ module OpenReceive
         verify_stored_invoice(row)
       end
 
+      def poll_recoverable_invoices(now: Time.now.to_i)
+        unless @config.store.respond_to?(:recoverable_invoices)
+          raise NotImplementedError, "OpenReceive store must provide recoverable_invoices"
+        end
+
+        @config.store.recoverable_invoices(now: now).map do |row|
+          verify_stored_invoice(row)
+        end
+      end
+
+      def listen_for_payment_notifications
+        unless @config.client.respond_to?(:subscribe_to_payment_received)
+          raise NotImplementedError, "Configured receive client does not support payment_received notification subscriptions"
+        end
+
+        @config.client.subscribe_to_payment_received do |notification|
+          handle_payment_received(notification: notification)
+        end
+
+        sleep
+      end
+
       def handle_payment_received(notification:)
         data = stringify_keys(notification)
         payment_hash = data["payment_hash"]
@@ -101,8 +123,18 @@ module OpenReceive
       private
 
       def verify_stored_invoice(row)
+        if %w[invoice_created expiry_pending_verification].include?(row.fetch("workflow_state"))
+          row = @config.store.mark_verifying(invoice_id: row.fetch("invoice_id"))
+        end
+
         lookup = @config.client.lookup_invoice("payment_hash" => row.fetch("payment_hash"))
         normalized = OpenReceive.normalize_lookup_invoice_response(lookup)
+        if OpenReceive.expired?(normalized)
+          return @config.store.mark_expired_closed(invoice_id: row.fetch("invoice_id"))
+        end
+        if OpenReceive.failed?(normalized)
+          return @config.store.mark_failed_closed(invoice_id: row.fetch("invoice_id"))
+        end
         return row unless OpenReceive.settled?(normalized)
 
         settled_at = normalized["settled_at"] || Time.now.to_i

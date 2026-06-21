@@ -6,6 +6,7 @@ import {
   OpenReceiveError,
   classifyLookupInvoiceSettlement,
   createIdempotencyRequestHash,
+  createOpenReceiveSettlementPollingRunner,
   getPollingDelaySeconds,
   isOpenReceiveErrorCode,
   isRetryableOpenReceiveErrorCode,
@@ -185,6 +186,80 @@ test("polling delay follows canonical cadence", () => {
   assert.equal(getPollingDelaySeconds({ created_at: 1000, now: 1015 }), 5);
   assert.equal(getPollingDelaySeconds({ created_at: 1000, now: 1060 }), 10);
   assert.equal(getPollingDelaySeconds({ created_at: 1000, now: 1180 }), 20);
+});
+
+test("settlement polling runner recovers and completes open invoices", async () => {
+  const store = new InMemoryInvoiceStore();
+  store.createInvoice({
+    invoice_id: "or_inv_runner",
+    merchant_scope: "demo:tenant",
+    operation: "invoice.create",
+    idempotency_key: "order-runner",
+    idempotency_request_hash: `sha256:${"a".repeat(64)}`,
+    payment_hash: PAYMENT_HASH,
+    invoice: "lnbc-runner",
+    amount_msats: 200000,
+    transaction_state: "pending",
+    workflow_state: "invoice_created",
+    settlement_action_state: "pending",
+    created_at: 1000,
+    expires_at: 1600,
+    metadata: {
+      fruit: "banana"
+    }
+  });
+
+  let now = 1000;
+  let settlementActionCalls = 0;
+  const events = [];
+  const client = {
+    async preflight() {
+      throw new Error("preflight is not needed by the polling runner");
+    },
+    async makeInvoice() {
+      throw new Error("makeInvoice is not needed by the polling runner");
+    },
+    async lookupInvoice(request) {
+      assert.equal(request.payment_hash, PAYMENT_HASH);
+      return {
+        payment_hash: PAYMENT_HASH,
+        state: "settled",
+        settled_at: now
+      };
+    }
+  };
+  const runner = createOpenReceiveSettlementPollingRunner({
+    client,
+    store,
+    settlementAction: async ({ invoice }) => {
+      settlementActionCalls += 1;
+      assert.equal(invoice.invoice_id, "or_inv_runner");
+      assert.deepEqual(invoice.metadata, { fruit: "banana" });
+    },
+    onEvent: (event) => events.push(event.event),
+    clock: {
+      now: () => now,
+      sleep_until: async (timestamp) => {
+        now = timestamp;
+      }
+    }
+  });
+
+  const recovery = await runner.recoverOpenInvoices();
+  const result = await runner.watchInvoice("or_inv_runner");
+  const stored = store.getInvoice("or_inv_runner");
+
+  assert.deepEqual(recovery.invoice_ids, ["or_inv_runner"]);
+  assert.equal(result.outcome, "settled");
+  assert.equal(stored.transaction_state, "settled");
+  assert.equal(stored.workflow_state, "settlement_action_completed");
+  assert.equal(stored.settlement_action_state, "completed");
+  assert.equal(settlementActionCalls, 1);
+  assert.deepEqual(events, [
+    "invoice.verifying",
+    "invoice.settled",
+    "invoice.settlement_action_completed"
+  ]);
 });
 
 test("in-memory storage replays same idempotency request and conflicts on drift", async () => {
@@ -1114,6 +1189,7 @@ test("browser custom-element event map covers checkout lifecycle events", () => 
 test("browser owns payment wizard DOM contract", () => {
   assert.deepEqual(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES, {
     root: "data-openreceive-wizard",
+    breadcrumb: "data-or-breadcrumb",
     method: "data-or-method",
     region: "data-or-region",
     regionShape: "data-or-region-shape",
@@ -1124,6 +1200,7 @@ test("browser owns payment wizard DOM contract", () => {
     providerTutorial: "data-or-provider-tutorial",
     providerTutorialIndex: "data-or-provider-tutorial-index"
   });
+  assert.equal(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.breadcrumb, "[data-or-breadcrumb]");
   assert.equal(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.method, "[data-or-method]");
   assert.equal(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.providerCopy, "[data-or-provider-copy]");
   assert.equal(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.providerTutorial, "[data-or-provider-tutorial]");

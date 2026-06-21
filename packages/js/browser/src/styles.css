@@ -39,7 +39,8 @@
 }
 
 [data-openreceive-qr] {
-  width: min(256px, 100%);
+  justify-self: center;
+  width: min(420px, 100%);
 }
 
 [data-openreceive-qr] svg {
@@ -93,8 +94,9 @@
 
 [data-openreceive-theme-toggle] {
   justify-self: end;
-  min-height: 36px;
-  padding: 0 12px;
+  gap: 8px;
+  min-height: 34px;
+  padding: 4px 12px 4px 4px;
   border: 1px solid var(--or-border);
   background: var(--or-bg-raised);
   color: var(--or-text);
@@ -158,22 +160,42 @@
 
 .or-theme-toggle-track {
   align-items: center;
-  background: color-mix(in srgb, currentColor 8%, transparent);
-  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  background: transparent;
+  border: 0;
   border-radius: 999px;
-  display: inline-grid;
+  display: grid;
   flex: 0 0 auto;
-  gap: 2px;
-  grid-template-columns: 1fr 1fr;
-  padding: 2px;
+  grid-template-columns: 1fr;
+  height: 24px;
+  padding: 0;
+  width: 24px;
 }
 
 .or-theme-toggle-icon {
   border-radius: 999px;
   display: block;
-  height: 22px;
+  grid-area: 1 / 1;
+  height: 24px;
   position: relative;
-  width: 22px;
+  transition: background 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+  width: 24px;
+}
+
+.or-theme-toggle-icon-light {
+  opacity: 1;
+}
+
+.or-theme-toggle-dark .or-theme-toggle-icon-light {
+  background: #94a3b8;
+  box-shadow: none;
+  opacity: 0.72;
+}
+
+.or-theme-toggle-label {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .or-theme-toggle-icon-light {
@@ -220,21 +242,6 @@
   inset: 3px;
 }
 
-.or-theme-toggle-icon-dark {
-  background: #172033;
-}
-
-.or-theme-toggle-icon-dark::after {
-  background: var(--page-bg, #f5f7fb);
-  border-radius: 999px;
-  content: "";
-  height: 18px;
-  position: absolute;
-  right: -3px;
-  top: 1px;
-  width: 18px;
-}
-
 .or-wizard {
   display: grid;
   gap: 18px;
@@ -272,6 +279,38 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
+}
+
+.or-wizard-breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.or-wizard-breadcrumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  border: 0;
+  background: transparent;
+  color: var(--or-muted);
+  cursor: pointer;
+  padding: 0;
+}
+
+.or-wizard-breadcrumb:hover {
+  color: var(--or-text);
+}
+
+.or-wizard-breadcrumb-current {
+  color: var(--or-text);
+  font-weight: 800;
+}
+
+.or-wizard-breadcrumbs > span[aria-hidden="true"] {
+  color: var(--or-muted);
 }
 
 .or-method-grid button,
@@ -399,6 +438,11 @@
   gap: 14px;
 }
 
+.or-wizard-route {
+  display: grid;
+  gap: 18px;
+}
+
 .or-provider-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -509,6 +553,55 @@
   line-height: 1.25;
 }
 
+.or-tutorial-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.or-tutorial-header-logo {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+}
+
+.or-tutorial-header button,
+.or-tutorial-copy,
+.or-tutorial-controls button {
+  min-height: 40px;
+  border: 1px solid var(--or-border);
+  border-radius: 8px;
+  background: var(--or-bg-raised);
+  color: var(--or-text);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+}
+
+.or-tutorial-close {
+  border-color: var(--or-border);
+  background: var(--or-bg-raised);
+  color: var(--or-text);
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.or-tutorial-copy,
+.or-tutorial-controls button:last-child:not(:disabled) {
+  border-color: var(--or-warm);
+  background: var(--or-warm);
+  color: #111827;
+}
+
 .or-tutorial-frame {
   display: flex;
   align-items: center;
@@ -537,6 +630,36 @@
   text-align: center;
 }
 
+.or-tutorial-intro {
+  display: grid;
+  gap: 12px;
+  padding: 16px 8px;
+  text-align: center;
+}
+
+.or-tutorial-provider-logo {
+  justify-self: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+}
+
+.or-tutorial-intro p {
+  margin: 0;
+  color: var(--or-text);
+  font-size: 15px;
+}
+
+.or-tutorial-copy {
+  justify-self: center;
+  min-width: min(240px, 100%);
+}
+
+.or-tutorial-copy-message {
+  color: var(--or-good);
+  font-weight: 800;
+}
+
 .or-tutorial-progress {
   margin: 0;
   color: var(--or-muted);
@@ -563,6 +686,13 @@
 
 .or-tutorial-controls button {
   flex: 1 1 0;
+}
+
+.or-tutorial-controls button:disabled {
+  border: 1px solid var(--or-border);
+  background: var(--or-bg-soft);
+  color: var(--or-muted);
+  cursor: not-allowed;
 }
 
 @keyframes or-spin {

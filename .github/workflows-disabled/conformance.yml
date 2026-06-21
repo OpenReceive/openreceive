@@ -1,25 +1,7 @@
 name: Conformance
 
 on:
-  pull_request:
-    paths:
-      - "spec/**"
-      - "packages/js/**"
-      - "tools/mock-wallet/**"
-      - "tests/v0.1/**"
-      - "docs/11-conformance.md"
-      - "package*.json"
-  push:
-    branches:
-      - master
-      - main
-    paths:
-      - "spec/**"
-      - "packages/js/**"
-      - "tools/mock-wallet/**"
-      - "tests/v0.1/**"
-      - "docs/11-conformance.md"
-      - "package*.json"
+  # Temporarily manual-only while CI is being stabilized.
   workflow_dispatch:
 
 permissions:

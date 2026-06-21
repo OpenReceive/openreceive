@@ -146,6 +146,23 @@ test("Hello Fruit React demos delegate checkout state to the React package", () 
   }
 });
 
+test("Hello Fruit Node demo replaces Buy Now with Start over during checkout", () => {
+  const source = readFileSync(
+    path.join(
+      process.cwd(),
+      "examples/hello-fruit/server/node-express-react/src/client/App.tsx"
+    ),
+    "utf8"
+  );
+
+  assert.match(source, /function startOver\(\)/);
+  assert.match(source, /setInvoice\(null\)/);
+  assert.match(source, /setFruitId\(initialFruitId\)/);
+  assert.match(source, /invoice === null \? \(/);
+  assert.match(source, />\s*Start over\s*</);
+  assert.match(source, /crypto\?\.randomUUID/);
+});
+
 test("Hello Fruit browser demos consume shared product display helpers", () => {
   const sources = [
     "examples/hello-fruit/server/node-express-react/src/client/App.tsx",

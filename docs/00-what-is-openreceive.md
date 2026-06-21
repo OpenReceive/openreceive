@@ -22,7 +22,22 @@ outside OpenReceive.
 ## Runtime Model
 
 There is no required OpenReceive daemon. Framework adapters run inside the
-merchant's normal app and job system:
+merchant's normal app and job system, and backend packages provide two
+long-running pieces:
+
+- a settlement polling runner for restart recovery, final expiry lookup, and
+  grace verification
+- a payment notification listener that keeps the wallet subscription open where
+  supported and wakes backend lookup
+
+In production, run those as separate backend processes or worker roles: web,
+poll, and listen. They are not browser code and should not be modeled as
+threads inside the web request path.
+
+OpenReceive packages should also provide the invoice persistence schema for the
+host app database. Developers should run the package migration or install
+generator, then attach app-owned hooks such as `onInvoiceSettlement`; they
+should not design OpenReceive invoice/idempotency tables by hand.
 
 - Express routes in an Express app.
 - Rails controllers, models, and workers in a Rails app.

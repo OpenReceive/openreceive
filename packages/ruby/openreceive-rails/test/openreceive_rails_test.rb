@@ -104,7 +104,8 @@ class OpenReceiveRailsTest < Minitest::Test
     channel = read_generator_template("app/channels/openreceive_invoice_channel.rb")
     partial = read_generator_template("app/views/openreceive/_invoice.html.erb")
     routes = read_generator_template("config/openreceive_routes.rb")
-    combined = [controller, poll_job, notification_job, channel, partial, routes].join("\n")
+    rake_tasks = read_generator_template("lib/tasks/openreceive.rake")
+    combined = [controller, poll_job, notification_job, channel, partial, routes, rake_tasks].join("\n")
 
     assert_includes controller, "create_invoice"
     assert_includes controller, "lookup_invoice"
@@ -118,6 +119,10 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_includes partial, "amount_msats"
     assert_includes routes, "post \"/openreceive/v1/invoices\""
     assert_includes routes, "get \"/openreceive/v1/invoices/:invoice_id\""
+    assert_includes rake_tasks, "task poll: :environment"
+    assert_includes rake_tasks, "task listen: :environment"
+    assert_includes rake_tasks, "poll_recoverable_invoices"
+    assert_includes rake_tasks, "listen_for_payment_notifications"
     refute_includes combined, "pay_invoice"
     refute_includes combined, "OPENRECEIVE_NWC"
     refute_includes combined, "nostr+walletconnect://"
@@ -138,6 +143,7 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_includes generator, "openreceive_payment_received_job.rb"
     assert_includes generator, "openreceive_invoice_channel.rb"
     assert_includes generator, "_invoice.html.erb"
+    assert_includes generator, "openreceive.rake"
     assert_includes generator, "openreceive_routes.rb"
     refute_includes generator, "OPENRECEIVE_NWC"
     refute_includes generator, "nostr+walletconnect://"
@@ -286,6 +292,24 @@ class OpenReceiveRailsTest < Minitest::Test
 
     assert_equal "pending", pending.fetch("transaction_state")
     assert_equal "settlement_action_completed", settled.fetch("workflow_state")
+    assert_equal [invoice_id], completed
+  end
+
+  def test_poll_recoverable_invoices_uses_package_owned_store
+    adapter, client, completed = build_adapter
+    created = adapter.create_invoice(
+      controller: Controller.new(7),
+      params: { "amount_msats" => 200_000, "fruit" => "banana" },
+      headers: { "idempotency-key" => "order-123" }
+    )
+    invoice_id = created.fetch("body").fetch("invoice_id")
+
+    client.lookup_state = "settled"
+    invoices = adapter.poll_recoverable_invoices(now: 1001)
+
+    assert_equal 1, invoices.length
+    assert_equal invoice_id, invoices.first.fetch("invoice_id")
+    assert_equal "settlement_action_completed", invoices.first.fetch("workflow_state")
     assert_equal [invoice_id], completed
   end
 

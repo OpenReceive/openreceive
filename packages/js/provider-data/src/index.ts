@@ -392,12 +392,18 @@ export function validateRegistry(input: ProviderRegistry = registry): ProviderRe
     check(Array.isArray(route.providers) && route.providers.length > 0, `crypto route ${route.id} needs providers`);
 
     let flagshipCount = 0;
+    let expectedRank = 1;
+    const routeHasRanks = route.providers.some((ref) => ref.rank !== undefined);
     const routeProviderIds = new Set<ProviderId>();
     for (const ref of route.providers ?? []) {
       check(providerIds.has(ref.provider), `crypto route ${route.id} references missing provider ${ref.provider}`);
       check(!disqualifiedIds.has(ref.provider), `crypto route ${route.id} references disqualified provider ${ref.provider}`);
       check(!routeProviderIds.has(ref.provider), `crypto route ${route.id} references provider ${ref.provider} more than once`);
       routeProviderIds.add(ref.provider);
+      if (routeHasRanks) {
+        check(ref.rank === expectedRank, `crypto route ${route.id} ranks must be sequential`);
+        expectedRank += 1;
+      }
       if (ref.flagship === true) flagshipCount += 1;
     }
     check(flagshipCount <= 1, `crypto route ${route.id} has more than one flagship provider`);

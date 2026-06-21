@@ -71,6 +71,13 @@ button {
   box-shadow: 0 8px 24px rgb(15 23 42 / 0.08);
 }
 
+.topbar [data-openreceive-theme-toggle] {
+  gap: 8px;
+  justify-content: center;
+  min-height: 34px;
+  padding: 4px 12px 4px 4px;
+}
+
 .product {
   display: grid;
   grid-template-columns: 96px 1fr;
@@ -138,6 +145,10 @@ p {
   background: var(--panel-bg);
   color: var(--text);
   cursor: pointer;
+}
+
+.reset-demo {
+  width: 100%;
 }
 
 .primary:disabled {

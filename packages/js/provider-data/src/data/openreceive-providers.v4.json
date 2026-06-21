@@ -16,7 +16,7 @@
     "route_ref_fields": {
       "provider": "provider id",
       "flagship": "recommended option for this route",
-      "rank": "1-based ordering for fiat rails"
+      "rank": "1-based route-specific display ordering; required when a route has explicit ranked suggestions"
     },
     "country_fields": {
       "code": "ISO 3166-1 alpha-2",
@@ -77,11 +77,6 @@
       "route": "sol"
     },
     {
-      "symbol": "bch",
-      "label": "Bitcoin Cash (BCH)",
-      "route": "bch"
-    },
-    {
       "symbol": "xrp",
       "label": "XRP",
       "route": "xrp"
@@ -90,16 +85,6 @@
       "symbol": "bnb",
       "label": "BNB",
       "route": "bnb"
-    },
-    {
-      "symbol": "ada",
-      "label": "Cardano (ADA)",
-      "route": "ada"
-    },
-    {
-      "symbol": "dash",
-      "label": "Dash",
-      "route": "dash"
     },
     {
       "symbol": "usd",
@@ -179,7 +164,7 @@
     },
     "zeus": {
       "id": "zeus",
-      "name": "Zeus (+ ZEUS Swaps)",
+      "name": "Zeus",
       "url": "https://zeusln.com",
       "us": true,
       "lightning_docs_url": "https://docs.zeusln.app/",
@@ -387,14 +372,6 @@
       "lightning_docs_url": "https://intercom.help/Bitnob-help-center/en/articles/6073721",
       "icon_path": "assets/provider-icons/bitnob.png"
     },
-    "amber": {
-      "id": "amber",
-      "name": "Amber (AmberApp)",
-      "url": "https://amber.app",
-      "us": false,
-      "lightning_docs_url": "https://help.amber.app/en/articles/9205794-how-do-i-send-bitcoin",
-      "icon_path": "assets/provider-icons/amber.png"
-    },
     "bringin": {
       "id": "bringin",
       "name": "Bringin",
@@ -432,7 +409,7 @@
       "name": "Ripio",
       "url": "https://ripio.com",
       "us": false,
-      "lightning_docs_url": "https://help-ar.ripio.com/space/HC/119865345",
+      "lightning_docs_url": "https://ripio.com",
       "icon_path": "assets/provider-icons/ripio.png"
     },
     "belo": {
@@ -556,67 +533,172 @@
       "providers": [
         {
           "provider": "rizful",
-          "flagship": true
+          "flagship": true,
+          "rank": 1
         },
         {
-          "provider": "phoenix"
+          "provider": "phoenix",
+          "rank": 2
         },
         {
-          "provider": "zeus"
+          "provider": "zeus",
+          "rank": 3
         },
         {
-          "provider": "walletofsatoshi"
+          "provider": "walletofsatoshi",
+          "rank": 4
         },
         {
-          "provider": "aqua"
+          "provider": "strike",
+          "rank": 5
         },
         {
-          "provider": "strike"
+          "provider": "cashapp",
+          "rank": 6
         },
         {
-          "provider": "cashapp"
+          "provider": "coinbase",
+          "rank": 7
         },
         {
-          "provider": "kraken"
+          "provider": "binance",
+          "rank": 8
         },
         {
-          "provider": "coinbase"
+          "provider": "kraken",
+          "rank": 9
         },
         {
-          "provider": "binance"
+          "provider": "okx",
+          "rank": 10
         },
         {
-          "provider": "okx"
+          "provider": "bitfinex",
+          "rank": 11
         },
         {
-          "provider": "bitfinex"
+          "provider": "kucoin",
+          "rank": 12
         },
         {
-          "provider": "kucoin"
+          "provider": "river",
+          "rank": 13
         },
         {
-          "provider": "river"
+          "provider": "getalby",
+          "rank": 14
         },
         {
-          "provider": "getalby"
+          "provider": "aqua",
+          "rank": 15
         },
         {
-          "provider": "bluewallet"
+          "provider": "bluewallet",
+          "rank": 16
         },
         {
-          "provider": "cakewallet"
+          "provider": "muun",
+          "rank": 17
         },
         {
-          "provider": "okcoin"
+          "provider": "boltz",
+          "rank": 18
         },
         {
-          "provider": "bitget"
+          "provider": "cakewallet",
+          "rank": 19
         },
         {
-          "provider": "trocador"
+          "provider": "okcoin",
+          "rank": 20
         },
         {
-          "provider": "kryptex"
+          "provider": "bitget",
+          "rank": 21
+        },
+        {
+          "provider": "trocador",
+          "rank": 22
+        },
+        {
+          "provider": "kryptex",
+          "rank": 23
+        },
+        {
+          "provider": "coincorner",
+          "rank": 24
+        },
+        {
+          "provider": "fixedfloat",
+          "rank": 25
+        },
+        {
+          "provider": "simpleswap",
+          "rank": 26
+        },
+        {
+          "provider": "changenow",
+          "rank": 27
+        },
+        {
+          "provider": "sideshift",
+          "rank": 28
+        },
+        {
+          "provider": "blink",
+          "rank": 29
+        },
+        {
+          "provider": "speed",
+          "rank": 30
+        },
+        {
+          "provider": "bullbitcoin",
+          "rank": 31
+        },
+        {
+          "provider": "shakepay",
+          "rank": 32
+        },
+        {
+          "provider": "bitso",
+          "rank": 33
+        },
+        {
+          "provider": "bitnob",
+          "rank": 34
+        },
+        {
+          "provider": "pouch",
+          "rank": 35
+        },
+        {
+          "provider": "bringin",
+          "rank": 36
+        },
+        {
+          "provider": "mtpelerin",
+          "rank": 37
+        },
+        {
+          "provider": "bipa",
+          "rank": 38
+        },
+        {
+          "provider": "ripio",
+          "rank": 39
+        },
+        {
+          "provider": "belo",
+          "rank": 40
+        },
+        {
+          "provider": "bity",
+          "rank": 41
+        },
+        {
+          "provider": "chivo",
+          "rank": 42
         }
       ]
     },
@@ -685,6 +767,72 @@
         },
         {
           "provider": "kryptex"
+        },
+        {
+          "provider": "strike"
+        },
+        {
+          "provider": "cashapp"
+        },
+        {
+          "provider": "coincorner"
+        },
+        {
+          "provider": "bullbitcoin"
+        },
+        {
+          "provider": "simpleswap"
+        },
+        {
+          "provider": "changenow"
+        },
+        {
+          "provider": "fixedfloat"
+        },
+        {
+          "provider": "sideshift"
+        },
+        {
+          "provider": "blink"
+        },
+        {
+          "provider": "pouch"
+        },
+        {
+          "provider": "bitnob"
+        },
+        {
+          "provider": "bringin"
+        },
+        {
+          "provider": "mtpelerin"
+        },
+        {
+          "provider": "bipa"
+        },
+        {
+          "provider": "bitso"
+        },
+        {
+          "provider": "ripio"
+        },
+        {
+          "provider": "belo"
+        },
+        {
+          "provider": "shakepay"
+        },
+        {
+          "provider": "bity"
+        },
+        {
+          "provider": "chivo"
+        },
+        {
+          "provider": "speed"
+        },
+        {
+          "provider": "walletofsatoshi"
         }
       ]
     },
@@ -930,38 +1078,6 @@
       ]
     },
     {
-      "id": "bch",
-      "symbol": "bch",
-      "label": "Bitcoin Cash (BCH)",
-      "providers": [
-        {
-          "provider": "fixedfloat",
-          "flagship": true
-        },
-        {
-          "provider": "simpleswap"
-        },
-        {
-          "provider": "changenow"
-        },
-        {
-          "provider": "sideshift"
-        },
-        {
-          "provider": "kraken"
-        },
-        {
-          "provider": "coinbase"
-        },
-        {
-          "provider": "cakewallet"
-        },
-        {
-          "provider": "bitget"
-        }
-      ]
-    },
-    {
       "id": "xrp",
       "symbol": "xrp",
       "label": "XRP",
@@ -1004,52 +1120,6 @@
         },
         {
           "provider": "binance"
-        },
-        {
-          "provider": "bitget"
-        }
-      ]
-    },
-    {
-      "id": "ada",
-      "symbol": "ada",
-      "label": "Cardano (ADA)",
-      "providers": [
-        {
-          "provider": "fixedfloat",
-          "flagship": true
-        },
-        {
-          "provider": "simpleswap"
-        },
-        {
-          "provider": "changenow"
-        },
-        {
-          "provider": "coinbase"
-        },
-        {
-          "provider": "kraken"
-        },
-        {
-          "provider": "bitget"
-        }
-      ]
-    },
-    {
-      "id": "dash",
-      "symbol": "dash",
-      "label": "Dash",
-      "providers": [
-        {
-          "provider": "fixedfloat",
-          "flagship": true
-        },
-        {
-          "provider": "simpleswap"
-        },
-        {
-          "provider": "changenow"
         },
         {
           "provider": "bitget"
@@ -1311,11 +1381,11 @@
             "rank": 3
           },
           {
-            "provider": "kraken",
+            "provider": "coinbase",
             "rank": 4
           },
           {
-            "provider": "coinbase",
+            "provider": "kraken",
             "rank": 5
           },
           {
@@ -1701,20 +1771,16 @@
         ],
         "AU": [
           {
-            "provider": "amber",
+            "provider": "kraken",
             "rank": 1
           },
           {
-            "provider": "kraken",
+            "provider": "binance",
             "rank": 2
           },
           {
-            "provider": "binance",
-            "rank": 3
-          },
-          {
             "provider": "bitget",
-            "rank": 4
+            "rank": 3
           }
         ],
         "JP": [
@@ -2310,24 +2376,20 @@
         ],
         "AU": [
           {
-            "provider": "amber",
+            "provider": "kraken",
             "rank": 1
           },
           {
-            "provider": "kraken",
+            "provider": "bitget",
             "rank": 2
           },
           {
-            "provider": "bitget",
+            "provider": "cakewallet",
             "rank": 3
           },
           {
-            "provider": "cakewallet",
-            "rank": 4
-          },
-          {
             "provider": "getalby",
-            "rank": 5
+            "rank": 4
           }
         ],
         "JP": [

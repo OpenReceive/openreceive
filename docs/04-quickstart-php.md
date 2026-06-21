@@ -12,15 +12,22 @@ docs/01-quickstart-node.md
 ## Planned Shape
 
 A PHP integration should mount into the merchant's application and use the
-application's existing auth, database, queue, and deployment model.
+application's existing auth, database, queue, and deployment model. The package
+should own two backend entry points: a poll command/job for settlement polling
+and restart recovery, and a listen command/job for payment_received
+notifications where the NWC client supports them.
+The PHP package should ship OpenReceive migrations/models for the target
+framework; host apps should not hand-roll invoice/idempotency tables. The host
+app supplies metadata references and settlement hooks.
 
 Expected PHP pieces:
 
 - Laravel or Symfony route/controller helpers under `/openreceive/v1`
 - server-side receive-only NWC configuration
-- database tables for invoices, idempotency keys, lifecycle state, and
-  settlement action state
-- queue workers or scheduler jobs for polling and expiry verification
+- package-owned database tables for invoices, idempotency keys, lifecycle
+  state, and settlement action state
+- queue workers or scheduler jobs for polling, expiry verification, and
+  notification listening
 - SSE, Mercure, Livewire, Inertia, or template-driven browser updates
 - idempotent settlement actions after backend wallet lookup confirms settlement
 

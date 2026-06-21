@@ -114,11 +114,6 @@
     "icon_path": "assets/provider-icons/bitnob.png",
     "favicon_url": "https://www.google.com/s2/favicons?domain=bitnob.com&sz=128"
   },
-  "amber": {
-    "url": "https://amber.app",
-    "icon_path": "assets/provider-icons/amber.png",
-    "favicon_url": "https://www.google.com/s2/favicons?domain=amber.app&sz=128"
-  },
   "bringin": {
     "url": "https://bringin.xyz",
     "icon_path": "assets/provider-icons/bringin.png",

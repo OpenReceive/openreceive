@@ -28,6 +28,8 @@ module Openreceive
                   "app/channels/openreceive_invoice_channel.rb"
         copy_file "app/views/openreceive/_invoice.html.erb",
                   "app/views/openreceive/_invoice.html.erb"
+        copy_file "lib/tasks/openreceive.rake",
+                  "lib/tasks/openreceive.rake"
       end
 
       def show_route_instructions

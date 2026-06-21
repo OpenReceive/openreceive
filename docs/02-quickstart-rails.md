@@ -39,7 +39,20 @@ docs/01-quickstart-node.md
 
 A Rails integration should mount OpenReceive inside the merchant app, not run a
 separate daemon. The app owns authentication, order/session lookup, storage,
-merchant settlement actions, and worker deployment.
+merchant settlement actions, and worker deployment. The Rails package should
+own the two runner entry points the app deploys:
+
+- `bin/rails openreceive:poll` or a generated recurring job for settlement
+  polling and restart recovery
+- `bin/rails openreceive:listen` or a generated long-running job for
+  payment_received notification subscriptions where the wallet supports them
+
+Deploy those as separate backend processes or worker roles. Do not put the
+long-running polling loop or notification subscription in a web request thread.
+The Rails package should generate and own the OpenReceive invoice tables and
+ActiveRecord model; the host app should not hand-design those rows. The host app
+provides order/user references in metadata and app-owned hooks such as
+`settlement_action`.
 
 Expected Rails pieces:
 
@@ -48,7 +61,7 @@ Expected Rails pieces:
 - Rails engine or route helpers mounted under `/openreceive/v1`
 - server-side receive-only NWC configuration
 - ActiveRecord invoice storage using the provided templates as the starting point
-- ActiveJob, Solid Queue, Sidekiq, or GoodJob polling workers
+- ActiveJob, Solid Queue, Sidekiq, or GoodJob polling and notification workers
 - ActionCable, Turbo Streams, or Hotwire updates for browser state using the
   provided channel/job templates as the starting point
 - idempotent settlement action hooks after backend settlement verification

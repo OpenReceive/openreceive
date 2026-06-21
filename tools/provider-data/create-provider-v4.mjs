@@ -23,12 +23,13 @@ registry._meta = {
     url: "homepage",
     us: "true=US-available, false=US-excluded, null=unknown",
     lightning_docs_url: "official how-to-pay/send Lightning invoice page, or null",
-    icon_path: "repo-local icon path used by browser UI"
+    icon_path: "repo-local icon path used by browser UI",
+    tutorials: "optional ordered app-specific payment tutorial screenshots"
   },
   route_ref_fields: {
     provider: "provider id",
     flagship: "recommended option for this route",
-    rank: "1-based ordering for fiat rails"
+    rank: "1-based route-specific display ordering; required when a route has explicit ranked suggestions"
   },
   country_fields: {
     code: "ISO 3166-1 alpha-2",

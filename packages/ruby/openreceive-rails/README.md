@@ -17,6 +17,9 @@ Implemented now:
 - ActiveRecord migration and model templates for the invoice storage shape
 - install generator skeleton that copies the controller, jobs, channel,
   migration, and model templates and prints the route snippet
+- package-owned OpenReceive invoice persistence inside the Rails database; the
+  host app configures metadata and settlement hooks instead of hand-rolling
+  invoice/idempotency tables
 - optional mounted engine route/controller surface for `/v1/invoices`
 - Hotwire/Turbo invoice partial for passive status updates
 

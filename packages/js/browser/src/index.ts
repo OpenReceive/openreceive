@@ -44,6 +44,7 @@ export const OPENRECEIVE_THEME_TOGGLE_ELEMENT_EVENTS = {
 } as const;
 export const OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES = {
   root: "data-openreceive-wizard",
+  breadcrumb: "data-or-breadcrumb",
   method: "data-or-method",
   region: "data-or-region",
   regionShape: "data-or-region-shape",
@@ -56,6 +57,7 @@ export const OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES = {
 } as const;
 export const OPENRECEIVE_PAYMENT_WIZARD_SELECTORS = {
   root: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.root}]`,
+  breadcrumb: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.breadcrumb}]`,
   method: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.method}]`,
   region: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.region}]`,
   regionShape: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.regionShape}]`,
@@ -205,14 +207,11 @@ export interface OpenReceiveTransientFeedbackController<T> {
 }
 
 export type OpenReceivePaymentIconId =
-  | "ada"
   | "bank"
-  | "bch"
   | "bnb"
   | "btc"
   | "card"
   | "crypto"
-  | "dash"
   | "doge"
   | "eth"
   | "lightning"
@@ -224,14 +223,11 @@ export type OpenReceivePaymentIconId =
   | "xmr"
   | "xrp";
 
-const adaIcon = new URL("./assets/icons/ada.svg", import.meta.url).href;
 const bankIcon = new URL("./assets/icons/bank.svg", import.meta.url).href;
-const bchIcon = new URL("./assets/icons/bch.svg", import.meta.url).href;
 const bnbIcon = new URL("./assets/icons/bnb.svg", import.meta.url).href;
 const btcIcon = new URL("./assets/icons/btc.svg", import.meta.url).href;
 const cardIcon = new URL("./assets/icons/card.svg", import.meta.url).href;
 const cryptoIcon = new URL("./assets/icons/crypto.svg", import.meta.url).href;
-const dashIcon = new URL("./assets/icons/dash.svg", import.meta.url).href;
 const dogeIcon = new URL("./assets/icons/doge.svg", import.meta.url).href;
 const ethIcon = new URL("./assets/icons/eth.svg", import.meta.url).href;
 const lightningIcon = new URL("./assets/icons/lightning.svg", import.meta.url).href;
@@ -244,14 +240,11 @@ const xmrIcon = new URL("./assets/icons/xmr.svg", import.meta.url).href;
 const xrpIcon = new URL("./assets/icons/xrp.svg", import.meta.url).href;
 
 export const openReceivePaymentIconUrls: Readonly<Record<OpenReceivePaymentIconId, string>> = {
-  ada: adaIcon,
   bank: bankIcon,
-  bch: bchIcon,
   bnb: bnbIcon,
   btc: btcIcon,
   card: cardIcon,
   crypto: cryptoIcon,
-  dash: dashIcon,
   doge: dogeIcon,
   eth: ethIcon,
   lightning: lightningIcon,
@@ -273,11 +266,8 @@ Readonly<Record<OpenReceivePaymentMethod, OpenReceivePaymentIconId>> = {
 } as const;
 
 export const openReceiveAssetIconIds: Readonly<Record<string, OpenReceivePaymentIconId>> = {
-  ada: "ada",
-  bch: "bch",
   bnb: "bnb",
   btc: "btc",
-  dash: "dash",
   doge: "doge",
   eth: "eth",
   ltc: "ltc",
@@ -812,6 +802,12 @@ export type OpenReceivePaymentWizardSelectionAction =
     readonly storedCountryCode?: string | null;
   }
   | {
+    readonly type: "change_method";
+  }
+  | {
+    readonly type: "change_route";
+  }
+  | {
     readonly type: "select_region";
     readonly region: OpenReceiveRegionId;
   }
@@ -863,6 +859,7 @@ export interface OpenReceivePaymentWizardController {
     action: OpenReceivePaymentWizardSelectionAction
   ): OpenReceivePaymentWizardSelection;
   selectMethod(method: OpenReceivePaymentMethod): OpenReceivePaymentWizardSelection;
+  changeMethod(): OpenReceivePaymentWizardSelection;
   selectRegion(region: OpenReceiveRegionId): OpenReceivePaymentWizardSelection;
   selectCountry(countryCode: string): OpenReceivePaymentWizardSelection;
   openCountryPicker(): OpenReceivePaymentWizardSelection;
@@ -921,6 +918,7 @@ export const openReceiveCheckoutLabels = {
   startOver: "Start over",
   wizardTitle: "Pay this invoice",
   wizardSubtitle: "Choose how you want to pay.",
+  paymentMethod: "Payment method",
   emptyBitcoin: "Choose Lightning or on-chain Bitcoin.",
   emptyCrypto: "Choose an altcoin.",
   emptyFiat: "No providers found for this country yet.",
@@ -930,6 +928,7 @@ export const openReceiveCheckoutLabels = {
   tutorialIntroPrefix: "It's easy to make this payment using",
   tutorialIntroCopy: "The first step is to copy the invoice to your clipboard.",
   tutorialCopiedContinue: "Copied! Click next below to continue with tutorial.",
+  tutorialExit: "Exit",
   lightningNetwork: "Lightning Network",
   chooseCountry: "Choose a country"
 } as const;
@@ -941,6 +940,7 @@ export const openReceiveCheckoutElementStyles = `
     --or-text: #171717;
     --or-muted: #525252;
     --or-border: #d4d4d4;
+    --or-warm: #f97316;
     --or-good-bg: #e8f5ee;
     --or-good: #11613b;
     color: var(--or-text);
@@ -955,6 +955,7 @@ export const openReceiveCheckoutElementStyles = `
     --or-text: #f7f8fb;
     --or-muted: #b7c0cf;
     --or-border: #333c4d;
+    --or-warm: #ff9f1c;
     --or-good-bg: #173828;
     --or-good: #86efac;
   }
@@ -976,8 +977,10 @@ export const openReceiveCheckoutElementStyles = `
     border-radius: 6px;
     display: flex;
     justify-content: center;
+    justify-self: center;
     min-width: 0;
     overflow: hidden;
+    width: min(100%, 420px);
   }
 
   [part="qr"] svg {
@@ -1137,6 +1140,40 @@ export const openReceiveCheckoutElementStyles = `
 	    gap: 12px;
 	  }
 
+  [part="wizard-breadcrumbs"] {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  [part="wizard-breadcrumb"] {
+    background: transparent;
+    border: 0;
+    color: var(--or-muted);
+    gap: 6px;
+    min-height: 32px;
+    padding: 0;
+  }
+
+  [part="wizard-breadcrumb"]:hover {
+    color: var(--or-text);
+  }
+
+  [part="wizard-breadcrumb-current"] {
+    color: var(--or-text);
+    font-weight: 700;
+  }
+
+  [part="wizard-breadcrumb-separator"] {
+    color: var(--or-muted);
+  }
+
+  [part="wizard-route"] {
+    display: grid;
+    gap: 18px;
+  }
+
   [part="wizard-route"] h3 {
     align-items: center;
     display: flex;
@@ -1280,10 +1317,31 @@ export const openReceiveCheckoutElementStyles = `
     min-width: 0;
   }
 
-  [part="tutorial-close"] {
+  [part="tutorial-title"] {
+    align-items: center;
+    display: flex;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  [part="tutorial-header-logo"] {
+    border-radius: 8px;
     flex: 0 0 auto;
+    height: 36px;
+    width: 36px;
+  }
+
+  [part="tutorial-close"] {
+    background: var(--or-bg-soft);
+    border-color: var(--or-border);
+    color: var(--or-text);
+    flex: 0 0 auto;
+    font-size: 16px;
+    font-weight: 700;
+    height: 36px;
     min-height: 36px;
-    padding: 6px 10px;
+    padding: 0;
+    width: 36px;
   }
 
   [part="tutorial-frame"] {
@@ -1320,12 +1378,22 @@ export const openReceiveCheckoutElementStyles = `
     text-align: center;
   }
 
+  [part="tutorial-provider-logo"] {
+    border-radius: 8px;
+    height: 52px;
+    justify-self: center;
+    width: 52px;
+  }
+
   [part="tutorial-intro"] p {
     color: var(--or-text);
     font-size: 15px;
   }
 
   [part="tutorial-copy"] {
+    background: var(--or-warm);
+    border-color: var(--or-warm);
+    color: #111827;
     justify-self: center;
     min-width: min(240px, 100%);
   }
@@ -1361,6 +1429,12 @@ export const openReceiveCheckoutElementStyles = `
 
   [part="tutorial-nav"] {
     flex: 1 1 0;
+  }
+
+  [part="tutorial-controls"] [part="tutorial-nav"]:last-child:not(:disabled) {
+    background: var(--or-warm);
+    border-color: var(--or-warm);
+    color: #111827;
   }
 
   [part="tutorial-nav"]:disabled {
@@ -1406,39 +1480,59 @@ export const openReceiveThemeToggleElementStyles = `
     display: inline-block;
   }
 
-  button {
-    align-items: center;
-    background: var(--or-theme-toggle-bg, transparent);
-    border: var(--or-theme-toggle-border, 1px solid currentColor);
-    border-radius: var(--or-theme-toggle-radius, 999px);
-    color: inherit;
-    cursor: pointer;
-    display: inline-flex;
-    gap: 8px;
-    font: inherit;
-    min-height: var(--or-theme-toggle-min-height, 36px);
-    padding: var(--or-theme-toggle-padding, 4px 12px 4px 4px);
-  }
+	  button {
+	    align-items: center;
+	    background: var(--or-theme-toggle-bg, transparent);
+	    border: var(--or-theme-toggle-border, 1px solid currentColor);
+	    border-radius: var(--or-theme-toggle-radius, 999px);
+	    color: inherit;
+	    cursor: pointer;
+	    display: inline-flex;
+	    gap: 8px;
+	    font: inherit;
+	    min-height: var(--or-theme-toggle-min-height, 34px);
+	    padding: var(--or-theme-toggle-padding, 4px 12px 4px 4px);
+	  }
 
-  .or-theme-toggle-track {
-    align-items: center;
-    background: color-mix(in srgb, currentColor 8%, transparent);
-    border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
-    border-radius: 999px;
-    display: inline-grid;
-    flex: 0 0 auto;
-    gap: 2px;
-    grid-template-columns: 1fr 1fr;
-    padding: 2px;
-  }
+	  .or-theme-toggle-track {
+	    align-items: center;
+	    background: transparent;
+	    border: 0;
+	    border-radius: 999px;
+	    display: grid;
+	    flex: 0 0 auto;
+	    grid-template-columns: 1fr;
+	    height: 24px;
+	    padding: 0;
+	    width: 24px;
+	  }
 
-  .or-theme-toggle-icon {
-    border-radius: 999px;
-    display: block;
-    height: 22px;
-    position: relative;
-    width: 22px;
-  }
+	  .or-theme-toggle-icon {
+	    border-radius: 999px;
+	    display: block;
+	    grid-area: 1 / 1;
+	    height: 24px;
+	    position: relative;
+	    transition: background 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+	    width: 24px;
+	  }
+
+	  .or-theme-toggle-icon-light {
+	    opacity: 1;
+	  }
+
+	  .or-theme-toggle-dark .or-theme-toggle-icon-light {
+	    background: #94a3b8;
+	    box-shadow: none;
+	    opacity: 0.72;
+	  }
+
+	  .or-theme-toggle-label {
+	    font-size: 14px;
+	    font-weight: 700;
+	    line-height: 1;
+	    white-space: nowrap;
+	  }
 
   .or-theme-toggle-icon-light {
     background: #facc15;
@@ -1484,20 +1578,6 @@ export const openReceiveThemeToggleElementStyles = `
     inset: 3px;
   }
 
-  .or-theme-toggle-icon-dark {
-    background: #172033;
-  }
-
-  .or-theme-toggle-icon-dark::after {
-    background: var(--or-theme-toggle-bg, #ffffff);
-    border-radius: 999px;
-    content: "";
-    height: 18px;
-    position: absolute;
-    right: -3px;
-    top: 1px;
-    width: 18px;
-  }
 `;
 
 export const openReceivePaymentMethods: readonly OpenReceivePaymentMethodOption[] = [
@@ -1821,15 +1901,14 @@ export function createOpenReceiveWizardRouteDisplays(
     readonly providerPreviewLimit?: number;
   } = {}
 ): readonly OpenReceiveWizardRouteDisplay[] {
-  const providerPreviewLimit =
-    options.providerPreviewLimit ?? OPENRECEIVE_PROVIDER_PREVIEW_LIMIT;
   return routes.map((route) => ({
     key: getOpenReceiveWizardRouteDisplayKey(route),
     title: getOpenReceiveWizardRouteDisplayTitle(route),
     subtitle: getOpenReceiveWizardRouteDisplaySubtitle(route),
-    providers: route.providers
-      .slice(0, providerPreviewLimit)
-      .map((entry) => createOpenReceiveWizardProviderDisplay(entry))
+    providers: (options.providerPreviewLimit === undefined
+      ? route.providers
+      : route.providers.slice(0, options.providerPreviewLimit)
+    ).map((entry) => createOpenReceiveWizardProviderDisplay(entry))
   }));
 }
 
@@ -2115,6 +2194,30 @@ export function updateOpenReceivePaymentWizardSelection(
         countryPickerOpen: false
       };
     }
+    case "change_method": {
+      return {
+        ...selection,
+        selectedMethod: null,
+        selectedBitcoinRoute: null,
+        selectedCryptoRoute: null,
+        countryPickerOpen: false
+      };
+    }
+    case "change_route": {
+      if (selection.selectedMethod === "bitcoin") {
+        return {
+          ...selection,
+          selectedBitcoinRoute: null
+        };
+      }
+      if (selection.selectedMethod === "crypto") {
+        return {
+          ...selection,
+          selectedCryptoRoute: null
+        };
+      }
+      return selection;
+    }
     case "select_region": {
       const nextSelection = {
         ...selection,
@@ -2232,6 +2335,12 @@ export class OpenReceiveBrowserPaymentWizardController
     });
   }
 
+  changeMethod(): OpenReceivePaymentWizardSelection {
+    return this.update({
+      type: "change_method"
+    });
+  }
+
   selectRegion(region: OpenReceiveRegionId): OpenReceivePaymentWizardSelection {
     return this.update({
       type: "select_region",
@@ -2343,7 +2452,7 @@ export function getOpenReceiveNextThemePreference(
 export function getOpenReceiveThemeToggleLabel(
   resolvedTheme: OpenReceiveResolvedTheme
 ): string {
-  return resolvedTheme === "dark" ? "Light mode" : "Dark mode";
+  return `${resolvedTheme} mode`;
 }
 
 export function createOpenReceiveThemeModel(

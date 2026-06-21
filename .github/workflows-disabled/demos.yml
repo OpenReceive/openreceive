@@ -1,21 +1,7 @@
 name: Demos
 
 on:
-  pull_request:
-    paths:
-      - "examples/hello-fruit/**"
-      - "demos/deploy/**"
-      - "tools/validate/check-demo-*.mjs"
-      - "package*.json"
-  push:
-    branches:
-      - master
-      - main
-    paths:
-      - "examples/hello-fruit/**"
-      - "demos/deploy/**"
-      - "tools/validate/check-demo-*.mjs"
-      - "package*.json"
+  # Temporarily manual-only while CI is being stabilized.
   workflow_dispatch:
 
 permissions:

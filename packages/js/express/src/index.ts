@@ -7,17 +7,26 @@ import {
   InvoiceNotFoundError,
   StaticPriceProvider,
   createIdempotencyRequestHash,
+  createOpenReceiveSettlementPollingRunner,
   getBtcFiatRatesWithFallback,
   quoteFiatToMsatsWithPrice,
   type InvoiceStorageRow,
   type OpenReceiveBtcFiatRateMapWithSource,
   type OpenReceiveFiatAmount,
   type OpenReceiveIdempotencyScope,
+  type OpenReceiveInvoiceStore,
   type OpenReceiveRateQuote,
   type OpenReceiveErrorCode,
   type OpenReceiveReceiveNwcClient,
+  type OpenReceiveSettlementPollingRunner,
+  type OpenReceiveSettlementPollingRunnerEvent,
+  type OpenReceiveSettlementPollingRunnerOptions,
   type OpenReceiveSourcedPriceProvider
 } from "@openreceive/core";
+import {
+  startPaymentNotificationListener,
+  type PaymentNotificationListener
+} from "@openreceive/node";
 import {
   getAssets,
   getCountries,
@@ -110,9 +119,11 @@ export interface OpenReceiveExpressSignedEvents {
 }
 
 export interface OpenReceiveExpressSettlementActionInput {
-  req: ExpressLikeRequest;
+  req?: ExpressLikeRequest;
   invoice: InvoiceStorageRow;
   metadata: Record<string, unknown>;
+  source: "http_lookup" | "polling_runner" | "notification_runner";
+  lookup_invoice?: unknown;
 }
 
 export type OpenReceiveExpressSettlementActionHook = (
@@ -121,7 +132,7 @@ export type OpenReceiveExpressSettlementActionHook = (
 
 export interface OpenReceiveExpressOptions {
   client: OpenReceiveReceiveNwcClient;
-  store?: InMemoryInvoiceStore;
+  store?: OpenReceiveInvoiceStore;
   eventBus?: InMemoryInvoiceEventBus;
   basePath?: string;
   merchantScope: (req: ExpressLikeRequest) => string;
@@ -136,6 +147,10 @@ export interface OpenReceiveExpressOptions {
   logger?: OpenReceiveLogger;
   clock?: () => number;
   heartbeatSeconds?: number;
+}
+
+export interface OpenReceiveExpressPollingRunnerStartOptions {
+  recoveryIntervalSeconds?: number;
 }
 
 export interface OpenReceiveExpressHandlers {
@@ -249,6 +264,128 @@ export function mountOpenReceiveExpressRoutes(
   return handlers;
 }
 
+export function createOpenReceiveExpressSettlementPollingRunner(
+  options: OpenReceiveExpressOptions,
+  runnerOptions: OpenReceiveExpressPollingRunnerStartOptions = {}
+): OpenReceiveSettlementPollingRunner {
+  const store = options.store ?? new InMemoryInvoiceStore();
+  const eventBus = options.eventBus ?? new InMemoryInvoiceEventBus();
+  const clock = options.clock ?? currentUnixSeconds;
+  const runnerConfig: OpenReceiveSettlementPollingRunnerOptions = {
+    client: options.client,
+    store,
+    settlementAction: async ({ invoice, lookup_invoice }) => {
+      await runExpressSettlementAction({
+        options,
+        invoice,
+        lookupInvoice: lookup_invoice,
+        source: "polling_runner"
+      });
+    },
+    onEvent: async (event) => {
+      publishPollingRunnerEvent({
+        options,
+        eventBus,
+        event
+      });
+    },
+    clock: {
+      now: clock,
+      async sleep_until(timestampSeconds: number) {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, Math.max(0, timestampSeconds - clock()) * 1000);
+        });
+      }
+    }
+  };
+
+  if (runnerOptions.recoveryIntervalSeconds !== undefined) {
+    runnerConfig.recovery_interval_seconds = runnerOptions.recoveryIntervalSeconds;
+  }
+
+  return createOpenReceiveSettlementPollingRunner(runnerConfig);
+}
+
+export function startOpenReceiveExpressSettlementPollingRunner(
+  options: OpenReceiveExpressOptions,
+  runnerOptions: OpenReceiveExpressPollingRunnerStartOptions = {}
+): OpenReceiveSettlementPollingRunner {
+  const runner = createOpenReceiveExpressSettlementPollingRunner(options, runnerOptions);
+  runner.start();
+  return runner;
+}
+
+export async function startOpenReceiveExpressPaymentNotificationRunner(
+  options: OpenReceiveExpressOptions
+): Promise<PaymentNotificationListener> {
+  const store = options.store ?? new InMemoryInvoiceStore();
+  const eventBus = options.eventBus ?? new InMemoryInvoiceEventBus();
+  const clock = options.clock ?? currentUnixSeconds;
+
+  return startPaymentNotificationListener({
+    client: options.client,
+    onSettledInvoice: async ({ notification, lookup }) => {
+      const invoice = await store.getInvoiceByPaymentHash(notification.payment_hash);
+      if (invoice === undefined) {
+        emitLog(options, "warn", "notification.invoice_not_found", "Received payment notification for an unknown invoice.", {
+          payment_hash: notification.payment_hash
+        });
+        return;
+      }
+
+      let current = invoice;
+      if (current.workflow_state === "invoice_created") {
+        current = await store.markVerifying(current.invoice_id);
+        eventBus.publish(
+          current.invoice_id,
+          "invoice.verifying",
+          serializeEventData(current)
+        );
+      }
+
+      const settled = await store.markSettled({
+        invoice_id: current.invoice_id,
+        settled_at: lookup.settled_at ?? notification.settled_at
+      });
+      eventBus.publish(
+        settled.invoice_id,
+        "invoice.settled",
+        serializeEventData(settled)
+      );
+      emitLog(options, "info", "invoice.settled", "Notification listener verified invoice settlement by wallet lookup.", invoiceLogFields(settled));
+
+      await maybeRunSettlementAction({
+        options,
+        store,
+        eventBus,
+        invoice: settled,
+        source: "notification_runner",
+        lookupInvoice: lookup,
+        clock
+      });
+    },
+    onUnsettledNotification: async ({ notification }) => {
+      const invoice = await store.getInvoiceByPaymentHash(notification.payment_hash);
+      if (invoice === undefined) return;
+      if (invoice.workflow_state !== "invoice_created") return;
+
+      const verifying = await store.markVerifying(invoice.invoice_id);
+      eventBus.publish(
+        verifying.invoice_id,
+        "invoice.verifying",
+        serializeEventData(verifying)
+      );
+      emitLog(options, "info", "invoice.verifying", "Notification listener woke backend verification.", invoiceLogFields(verifying));
+    },
+    onError: async (error, notification) => {
+      emitLog(options, "error", "notification.listener.error", "Payment notification listener failed while verifying a hint.", {
+        ...(notification === undefined ? {} : { payment_hash: notification.payment_hash }),
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+}
+
 export function createOpenReceiveExpressHandlers(
   options: OpenReceiveExpressOptions
 ): OpenReceiveExpressHandlers {
@@ -286,7 +423,7 @@ export function createOpenReceiveExpressHandlers(
         idempotency_key: idempotencyKey
       };
       const requestHash = await createIdempotencyRequestHash(body);
-      const existing = store.checkIdempotency({
+      const existing = await store.checkIdempotency({
         scope: idempotencyScope,
         idempotency_request_hash: requestHash
       });
@@ -329,7 +466,7 @@ export function createOpenReceiveExpressHandlers(
         createdAt + requestedExpirySeconds;
       const normalizedExpiresAt = Math.min(expiresAt, createdAt + requestedExpirySeconds);
 
-      const createResult = store.createInvoice({
+      const createResult = await store.createInvoice({
         invoice_id: createInvoiceId(),
         merchant_scope: merchantScope,
         operation,
@@ -364,7 +501,7 @@ export function createOpenReceiveExpressHandlers(
 
     getInvoice: handle(async (req, res) => {
       applyDefaultHeaders(req, res, options);
-      const invoice = requireStoredInvoice(store, req.params?.invoice_id);
+      const invoice = await requireStoredInvoice(store, req.params?.invoice_id);
       await requireAuthorization(options, "read", req, invoice);
       emitLog(options, "debug", "invoice.read", "Read invoice state.", invoiceLogFields(invoice));
       return res.status(200).json(serializeInvoice(invoice, {
@@ -377,14 +514,14 @@ export function createOpenReceiveExpressHandlers(
     lookupInvoice: handle(async (req, res) => {
       applyDefaultHeaders(req, res, options);
       const body = asRecord(req.body);
-      const invoice = findLookupInvoice(store, body);
+      const invoice = await findLookupInvoice(store, body);
       await requireAuthorization(options, "lookup", req, invoice);
       await requireCsrf(options, req);
       emitLog(options, "info", "invoice.lookup.requested", "Looking up invoice settlement through receive wallet.", invoiceLogFields(invoice));
 
       let current = invoice;
       if (invoice.workflow_state === "invoice_created") {
-        current = store.markVerifying(invoice.invoice_id);
+        current = await store.markVerifying(invoice.invoice_id);
         eventBus.publish(
           current.invoice_id,
           "invoice.verifying",
@@ -399,7 +536,7 @@ export function createOpenReceiveExpressHandlers(
       });
 
       if (lookup.settled_at !== undefined || lookup.state === "settled" || lookup.transaction_state === "settled") {
-        current = store.markSettled({
+        current = await store.markSettled({
           invoice_id: invoice.invoice_id,
           settled_at: lookup.settled_at
         });
@@ -417,10 +554,12 @@ export function createOpenReceiveExpressHandlers(
           store,
           eventBus,
           invoice: current,
+          source: "http_lookup",
+          lookupInvoice: lookup,
           clock
         });
       } else if (lookup.state === "expired" || lookup.transaction_state === "expired") {
-        current = store.markExpiredClosed(invoice.invoice_id);
+        current = await store.markExpiredClosed(invoice.invoice_id);
         if (invoice.transaction_state !== "expired") {
           eventBus.publish(
             current.invoice_id,
@@ -430,7 +569,7 @@ export function createOpenReceiveExpressHandlers(
           emitLog(options, "info", "invoice.expired", "Invoice was closed as expired by wallet lookup.", invoiceLogFields(current));
         }
       } else if (lookup.state === "failed" || lookup.transaction_state === "failed") {
-        current = store.markFailedClosed(invoice.invoice_id);
+        current = await store.markFailedClosed(invoice.invoice_id);
         if (invoice.transaction_state !== "failed") {
           eventBus.publish(
             current.invoice_id,
@@ -455,7 +594,7 @@ export function createOpenReceiveExpressHandlers(
 
     refreshInvoice: handle(async (req, res) => {
       applyDefaultHeaders(req, res, options);
-      const oldInvoice = requireStoredInvoice(store, req.params?.invoice_id);
+      const oldInvoice = await requireStoredInvoice(store, req.params?.invoice_id);
       await requireAuthorization(options, "refresh", req, oldInvoice);
       await requireCsrf(options, req);
       emitLog(options, "info", "invoice.refresh.requested", "Refreshing invoice by creating a linked replacement.", invoiceLogFields(oldInvoice));
@@ -482,7 +621,7 @@ export function createOpenReceiveExpressHandlers(
         idempotency_key: idempotencyKey
       };
       const requestHash = await createIdempotencyRequestHash(body);
-      const existing = store.checkIdempotency({
+      const existing = await store.checkIdempotency({
         scope: idempotencyScope,
         idempotency_request_hash: requestHash
       });
@@ -504,7 +643,7 @@ export function createOpenReceiveExpressHandlers(
       });
       const createdAt = invoice.created_at ?? clock();
       const expiresAt = Math.min(invoice.expires_at ?? createdAt + 600, createdAt + 600);
-      const createResult = store.createInvoice({
+      const createResult = await store.createInvoice({
         invoice_id: createInvoiceId(),
         merchant_scope: oldInvoice.merchant_scope,
         operation,
@@ -544,7 +683,7 @@ export function createOpenReceiveExpressHandlers(
 
     invoiceEvents: handle(async (req, res) => {
       applyDefaultHeaders(req, res, options);
-      const invoice = requireStoredInvoice(store, req.params?.invoice_id);
+      const invoice = await requireStoredInvoice(store, req.params?.invoice_id);
       await requireEventAuthorization(options, req, invoice, clock());
 
       res.status(200);
@@ -916,10 +1055,12 @@ function serializeEventData(row: InvoiceStorageRow): Record<string, unknown> {
 
 async function maybeRunSettlementAction(input: {
   options: OpenReceiveExpressOptions;
-  req: ExpressLikeRequest;
-  store: InMemoryInvoiceStore;
+  req?: ExpressLikeRequest;
+  store: OpenReceiveInvoiceStore;
   eventBus: InMemoryInvoiceEventBus;
   invoice: InvoiceStorageRow;
+  source: OpenReceiveExpressSettlementActionInput["source"];
+  lookupInvoice?: unknown;
   clock: () => number;
 }): Promise<InvoiceStorageRow> {
   if (input.invoice.transaction_state !== "settled") return input.invoice;
@@ -935,10 +1076,12 @@ async function maybeRunSettlementAction(input: {
       await input.options.settlementAction({
         req: input.req,
         invoice: input.invoice,
-        metadata: input.invoice.metadata
+        metadata: input.invoice.metadata,
+        source: input.source,
+        lookup_invoice: input.lookupInvoice
       });
     } catch (error) {
-      const failed = input.store.markSettlementActionFailed(input.invoice.invoice_id);
+      const failed = await input.store.markSettlementActionFailed(input.invoice.invoice_id);
       emitLog(input.options, "error", "invoice.settlement_action_failed", "Settlement action hook failed for settled invoice.", {
         ...invoiceLogFields(failed),
         error: error instanceof Error ? error.message : String(error)
@@ -947,7 +1090,7 @@ async function maybeRunSettlementAction(input: {
     }
   }
 
-  const completed = input.store.markSettlementActionCompleted({
+  const completed = await input.store.markSettlementActionCompleted({
     invoice_id: input.invoice.invoice_id,
     settlement_action_completed_at: input.clock()
   });
@@ -958,6 +1101,43 @@ async function maybeRunSettlementAction(input: {
   );
   emitLog(input.options, "info", "invoice.settlement_action_completed", "Settlement action completed for settled invoice.", invoiceLogFields(completed));
   return completed;
+}
+
+async function runExpressSettlementAction(input: {
+  options: OpenReceiveExpressOptions;
+  invoice: InvoiceStorageRow;
+  lookupInvoice?: unknown;
+  source: OpenReceiveExpressSettlementActionInput["source"];
+}): Promise<void> {
+  await input.options.settlementAction?.({
+    invoice: input.invoice,
+    metadata: input.invoice.metadata,
+    source: input.source,
+    lookup_invoice: input.lookupInvoice
+  });
+}
+
+function publishPollingRunnerEvent(input: {
+  options: OpenReceiveExpressOptions;
+  eventBus: InMemoryInvoiceEventBus;
+  event: OpenReceiveSettlementPollingRunnerEvent;
+}): void {
+  const eventName = input.event.event;
+  input.eventBus.publish(
+    input.event.invoice.invoice_id,
+    eventName,
+    serializeEventData(input.event.invoice)
+  );
+  emitLog(
+    input.options,
+    eventName === "invoice.failed" ? "warn" : "info",
+    eventName,
+    "Settlement runner advanced invoice state.",
+    {
+      ...invoiceLogFields(input.event.invoice),
+      ...(input.event.reason === undefined ? {} : { reason: input.event.reason })
+    }
+  );
 }
 
 function invoiceLogFields(row: InvoiceStorageRow): Record<string, unknown> {
@@ -1177,10 +1357,10 @@ function isRefreshableInvoice(invoice: InvoiceStorageRow): boolean {
   );
 }
 
-function findLookupInvoice(
-  store: InMemoryInvoiceStore,
+async function findLookupInvoice(
+  store: OpenReceiveInvoiceStore,
   body: Record<string, unknown>
-): InvoiceStorageRow {
+): Promise<InvoiceStorageRow> {
   const paymentHash = optionalString(body.payment_hash);
   const bolt11Invoice = optionalString(body.invoice);
 
@@ -1194,8 +1374,8 @@ function findLookupInvoice(
 
   const invoice =
     paymentHash === undefined
-      ? store.getInvoiceByBolt11Invoice(requiredValue(bolt11Invoice))
-      : store.getInvoiceByPaymentHash(paymentHash);
+      ? await store.getInvoiceByBolt11Invoice(requiredValue(bolt11Invoice))
+      : await store.getInvoiceByPaymentHash(paymentHash);
 
   if (invoice === undefined) {
     throw new InvoiceNotFoundError(paymentHash ?? requiredValue(bolt11Invoice));
@@ -1373,15 +1553,15 @@ function parseUsFilter(value: string): boolean | null {
   throw httpError(400, "INVALID_REQUEST", "us filter must be true, false, unknown, or null.");
 }
 
-function requireStoredInvoice(
-  store: InMemoryInvoiceStore,
+async function requireStoredInvoice(
+  store: OpenReceiveInvoiceStore,
   invoiceId: string | undefined
-): InvoiceStorageRow {
+): Promise<InvoiceStorageRow> {
   if (invoiceId === undefined || invoiceId.length === 0) {
     throw httpError(400, "INVALID_REQUEST", "invoice_id is required.");
   }
 
-  const invoice = store.getInvoice(invoiceId);
+  const invoice = await store.getInvoice(invoiceId);
   if (invoice === undefined) throw new InvoiceNotFoundError(invoiceId);
   return invoice;
 }

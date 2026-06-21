@@ -249,7 +249,7 @@ test("browser owns shared theme binding state", () => {
     theme: "system",
     resolvedTheme: "light",
     nextTheme: "dark",
-    toggleLabel: "Dark mode",
+    toggleLabel: "light mode",
     attributes: {
       "data-theme": "light",
       "data-openreceive-theme": "light"
@@ -262,7 +262,7 @@ test("browser owns shared theme binding state", () => {
   const dark = createOpenReceiveThemeModel("dark");
   assert.equal(dark.resolvedTheme, "dark");
   assert.equal(dark.nextTheme, "light");
-  assert.equal(dark.toggleLabel, "Light mode");
+  assert.equal(dark.toggleLabel, "dark mode");
 });
 
 test("Vue, Svelte, and Angular adapters expose thin custom-element bindings", () => {
@@ -300,7 +300,7 @@ test("Vue, Svelte, and Angular adapters expose thin custom-element bindings", ()
   assert.equal(angular.attributes.invoice, "lnbc-test");
   assert.equal(typeof angular.events[OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.error], "function");
 
-  assert.equal(createOpenReceiveVueThemeBinding("dark").toggleLabel, "Light mode");
+  assert.equal(createOpenReceiveVueThemeBinding("dark").toggleLabel, "dark mode");
   assert.equal(createOpenReceiveSvelteThemeBinding("system", { systemDark: false }).nextTheme, "dark");
   assert.deepEqual(createOpenReceiveAngularThemeBinding("light").checkoutElementAttributes, {
     theme: "light"
@@ -320,7 +320,7 @@ test("Vue, Svelte, and Angular adapters expose thin custom-element bindings", ()
   assert.equal(createOpenReceiveSvelteThemeToggleBinding().tagName, OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME);
   assert.equal(createOpenReceiveAngularThemeToggleBinding().selector, OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME);
   assert.equal(createOpenReceiveVueStoredThemeBinding({ storage }).resolvedTheme, "dark");
-  assert.equal(createOpenReceiveSvelteStoredThemeBinding({ storage }).toggleLabel, "Light mode");
+  assert.equal(createOpenReceiveSvelteStoredThemeBinding({ storage }).toggleLabel, "dark mode");
   assert.deepEqual(createOpenReceiveAngularStoredThemeBinding({ storage }).checkoutElementAttributes, {
     theme: "dark"
   });
@@ -406,9 +406,9 @@ test("Vue, Svelte, and Angular adapters expose thin custom-element bindings", ()
   assert.equal(toggleAngularThemePreference({ storage }).resolvedTheme, "light");
   const toggleTarget = { textContent: "" };
   assert.equal(syncVueThemeControls({ toggle: toggleTarget }, { storage }).resolvedTheme, "light");
-  assert.equal(toggleTarget.textContent, "Dark mode");
+  assert.equal(toggleTarget.textContent, "light mode");
   assert.equal(toggleAngularThemeControls({ toggle: toggleTarget }, { storage }).resolvedTheme, "dark");
-  assert.equal(toggleTarget.textContent, "Light mode");
+  assert.equal(toggleTarget.textContent, "dark mode");
 });
 
 test("Vue, Svelte, and Angular adapters expose full checkout shell creators", () => {

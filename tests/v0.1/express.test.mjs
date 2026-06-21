@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createOpenReceiveExpressHandlers,
+  createOpenReceiveExpressSettlementPollingRunner,
+  startOpenReceiveExpressPaymentNotificationRunner,
   InMemoryInvoiceEventBus
 } from "../../packages/js/express/src/index.ts";
 import {
@@ -16,6 +18,7 @@ class FakeWallet {
   lookupState = "pending";
   makeInvoiceError = undefined;
   expiresAt = 1600;
+  subscribers = [];
 
   async preflight() {
     return {
@@ -54,6 +57,17 @@ class FakeWallet {
       settled_at: this.lookupState === "settled" ? 1200 : undefined,
       preimage: this.lookupState === "settled" ? "1".repeat(64) : undefined
     };
+  }
+
+  async subscribeToPaymentReceived(handler) {
+    this.subscribers.push(handler);
+    return async () => {
+      this.subscribers = this.subscribers.filter((item) => item !== handler);
+    };
+  }
+
+  async emitPaymentReceived(notification) {
+    await Promise.all(this.subscribers.map((handler) => handler(notification)));
   }
 }
 
@@ -574,6 +588,135 @@ test("lookup can run an idempotent backend settlement action hook after settleme
   assert.match(stream, /event: invoice\.settlement_action_completed/);
 });
 
+test("Express polling runner recovers invoices without an HTTP request", async () => {
+  let settlementActionCalls = 0;
+  const settlementSources = [];
+  const wallet = new FakeWallet();
+  const store = new InMemoryInvoiceStore();
+  const eventBus = new InMemoryInvoiceEventBus();
+  const options = {
+    client: wallet,
+    store,
+    eventBus,
+    merchantScope: () => "demo:hello-fruit",
+    unsafeAllowUnauthenticatedDemoMode: true,
+    clock: () => 1600,
+    settlementAction: async ({ invoice, source, req }) => {
+      settlementActionCalls += 1;
+      settlementSources.push(source);
+      assert.equal(req, undefined);
+      assert.equal(invoice.transaction_state, "settled");
+    }
+  };
+  const handlers = createOpenReceiveExpressHandlers(options);
+  const runner = createOpenReceiveExpressSettlementPollingRunner(options);
+
+  const createRes = createResponse();
+  await handlers.createInvoice(
+    createRequest({
+      headers: {
+        "idempotency-key": "order-runner"
+      },
+      body: {
+        amount_msats: 200000,
+        description: "Fruit sticker"
+      }
+    }),
+    createRes,
+    raiseNext
+  );
+
+  wallet.lookupState = "settled";
+  const result = await runner.pollInvoice(createRes.body.invoice_id);
+
+  assert.equal(result.outcome, "settled");
+  assert.equal(settlementActionCalls, 1);
+  assert.deepEqual(settlementSources, ["polling_runner"]);
+  assert.equal(store.getInvoice(createRes.body.invoice_id).workflow_state, "settlement_action_completed");
+
+  const eventRes = createResponse();
+  await handlers.invoiceEvents(
+    createRequest({
+      params: {
+        invoice_id: createRes.body.invoice_id
+      }
+    }),
+    eventRes,
+    raiseNext
+  );
+  const stream = eventRes.writes.join("");
+  assert.match(stream, /event: invoice\.verifying/);
+  assert.match(stream, /event: invoice\.settled/);
+  assert.match(stream, /event: invoice\.settlement_action_completed/);
+});
+
+test("Express notification runner listens for hints and verifies by lookup", async () => {
+  let settlementActionCalls = 0;
+  const settlementSources = [];
+  const wallet = new FakeWallet();
+  const store = new InMemoryInvoiceStore();
+  const eventBus = new InMemoryInvoiceEventBus();
+  const options = {
+    client: wallet,
+    store,
+    eventBus,
+    merchantScope: () => "demo:hello-fruit",
+    unsafeAllowUnauthenticatedDemoMode: true,
+    clock: () => 1300,
+    settlementAction: async ({ invoice, source, req }) => {
+      settlementActionCalls += 1;
+      settlementSources.push(source);
+      assert.equal(req, undefined);
+      assert.equal(invoice.transaction_state, "settled");
+    }
+  };
+  const handlers = createOpenReceiveExpressHandlers(options);
+
+  const createRes = createResponse();
+  await handlers.createInvoice(
+    createRequest({
+      headers: {
+        "idempotency-key": "order-notification-runner"
+      },
+      body: {
+        amount_msats: 200000,
+        description: "Fruit sticker"
+      }
+    }),
+    createRes,
+    raiseNext
+  );
+
+  const listener = await startOpenReceiveExpressPaymentNotificationRunner(options);
+  wallet.lookupState = "settled";
+  await wallet.emitPaymentReceived({
+    payment_hash: PAYMENT_HASH,
+    settled_at: 1300
+  });
+
+  assert.equal(wallet.lookupInvoiceCalls, 1);
+  assert.equal(settlementActionCalls, 1);
+  assert.deepEqual(settlementSources, ["notification_runner"]);
+  assert.equal(store.getInvoice(createRes.body.invoice_id).workflow_state, "settlement_action_completed");
+
+  const eventRes = createResponse();
+  await handlers.invoiceEvents(
+    createRequest({
+      params: {
+        invoice_id: createRes.body.invoice_id
+      }
+    }),
+    eventRes,
+    raiseNext
+  );
+  const stream = eventRes.writes.join("");
+  assert.match(stream, /event: invoice\.verifying/);
+  assert.match(stream, /event: invoice\.settled/);
+  assert.match(stream, /event: invoice\.settlement_action_completed/);
+
+  await listener.stop();
+});
+
 test("client-supplied settlement fields cannot trigger settlement action", async () => {
   let settlementActionCalls = 0;
   const { wallet, store, handlers } = createHarness({
@@ -703,8 +846,8 @@ test("read-only helper routes expose static rates, providers, and route suggesti
   const catalogRes = createResponse();
   await handlers.listRoutes(createRequest(), catalogRes, raiseNext);
   assert.equal(catalogRes.statusCode, 200);
-  assert.equal(catalogRes.body.assets.length, 18);
-  assert.equal(catalogRes.body.crypto_routes.length, 15);
+  assert.equal(catalogRes.body.assets.length, 15);
+  assert.equal(catalogRes.body.crypto_routes.length, 12);
 
   const wizardRes = createResponse();
   await handlers.listRoutes(

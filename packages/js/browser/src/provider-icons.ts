@@ -1,4 +1,3 @@
-const amberIcon = new URL("./assets/provider-icons/amber.png", import.meta.url).href;
 const aquaIcon = new URL("./assets/provider-icons/aqua.png", import.meta.url).href;
 const beloIcon = new URL("./assets/provider-icons/belo.png", import.meta.url).href;
 const binanceIcon = new URL("./assets/provider-icons/binance.png", import.meta.url).href;
@@ -43,7 +42,6 @@ const walletofsatoshiIcon = new URL("./assets/provider-icons/walletofsatoshi.png
 const zeusIcon = new URL("./assets/provider-icons/zeus.png", import.meta.url).href;
 
 export const openReceiveProviderIconUrls: Readonly<Record<string, string>> = {
-  "assets/provider-icons/amber.png": amberIcon,
   "assets/provider-icons/aqua.png": aquaIcon,
   "assets/provider-icons/belo.png": beloIcon,
   "assets/provider-icons/binance.png": binanceIcon,

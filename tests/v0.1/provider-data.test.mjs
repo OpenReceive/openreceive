@@ -42,9 +42,9 @@ test("provider-data exposes canonical registry metadata and counts", () => {
     filter: providerRegistry.filter
   });
 
-  assert.equal(listAssets().length, 18);
-  assert.equal(listProviders().length, 43);
-  assert.equal(listCryptoRoutes().length, 15);
+  assert.equal(listAssets().length, 15);
+  assert.equal(listProviders().length, 42);
+  assert.equal(listCryptoRoutes().length, 12);
   assert.equal(listCountries().length, 39);
   assert.equal(listDisqualifiedProviders().length, 7);
 });
@@ -75,11 +75,26 @@ test("provider-data v4 keeps wizard copy and icons local", () => {
 test("provider-data resolves crypto route providers without changing route order", () => {
   const btcLightning = listCryptoRouteProviders("btc-lightning");
 
+  assert.equal(btcLightning.length, listProviders().length);
   assert.equal(btcLightning[0].provider.id, "rizful");
   assert.equal(btcLightning[0].flagship, true);
   assert.deepEqual(
     btcLightning.slice(0, 4).map((entry) => entry.provider.id),
     ["rizful", "phoenix", "zeus", "walletofsatoshi"]
+  );
+  assert.deepEqual(
+    btcLightning.slice(4, 13).map((entry) => [entry.provider.id, entry.rank]),
+    [
+      ["strike", 5],
+      ["cashapp", 6],
+      ["coinbase", 7],
+      ["binance", 8],
+      ["kraken", 9],
+      ["okx", 10],
+      ["bitfinex", 11],
+      ["kucoin", 12],
+      ["river", 13]
+    ]
   );
   assert.equal(getAsset("btc")?.route, "btc-lightning");
 });
@@ -97,8 +112,8 @@ test("provider-data resolves ranked fiat rail providers for a country", () => {
       ["strike", 1],
       ["river", 2],
       ["cashapp", 3],
-      ["kraken", 4],
-      ["coinbase", 5],
+      ["coinbase", 4],
+      ["kraken", 5],
       ["okcoin", 6]
     ]
   );

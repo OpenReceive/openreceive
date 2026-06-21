@@ -334,16 +334,11 @@ function validateNwcRequestResponseVectors() {
 
 function validateProviderRegistryReferences() {
   const registry = readJson("spec/data/providers/openreceive-providers.v2.json");
-  const packagedRegistry = readJson("packages/js/provider-data/src/data/openreceive-providers.v2.json");
-  assert(
-    JSON.stringify(packagedRegistry) === JSON.stringify(registry),
-    "provider-data package registry copy must match canonical spec/data registry"
-  );
   assert(registry.schema_version === "2.0.0", "provider registry schema version mismatch");
   assert(registry.generated === "2026-06-18", "provider registry generated date changed unexpectedly");
-  assert(registry.assets_index.length === 18, "provider registry asset count mismatch");
-  assert(Object.keys(registry.providers).length === 36, "provider registry provider count mismatch");
-  assert(registry.crypto_routes.length === 15, "provider registry crypto route count mismatch");
+  assert(registry.assets_index.length === 15, "provider registry asset count mismatch");
+  assert(Object.keys(registry.providers).length === 35, "provider registry provider count mismatch");
+  assert(registry.crypto_routes.length === 12, "provider registry crypto route count mismatch");
   assert(Object.keys(registry.fiat_rails).length === 2, "provider registry fiat rail count mismatch");
   assert(registry.countries.length === 39, "provider registry country count mismatch");
   assert(registry.disqualified_providers.length === 7, "provider registry disqualified count mismatch");

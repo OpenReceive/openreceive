@@ -66,7 +66,7 @@ Recommended public names:
   Playground:        play.openreceive.org
   Registry CDN:      registry.openreceive.org
   Demo subdomains:   django-demo.openreceive.org, express-demo.openreceive.org
-  Runtime model:     no required OpenReceive daemon; run inside the app backend
+  Runtime model:     no required OpenReceive daemon; package runner inside app backend
 
 If the misspelled domain was purchased, keep it only as a redirect.
 
@@ -249,6 +249,40 @@ The storage contract must be defined before the first SDK adapter. OpenReceive
 depends on idempotency and settlement-action safety; do not let each language or
 framework invent its own database semantics.
 
+Persistence ownership:
+
+  OpenReceive packages own OpenReceive invoice persistence inside the
+  merchant's application database. Do not ask app developers to design their own
+  invoice table, idempotency table, lifecycle model, or state transition code.
+  Each backend/framework package must ship the native persistence shape for its
+  ecosystem:
+
+    Rails:
+      migrations, ActiveRecord model, generated jobs/tasks.
+
+    Node:
+      SQL migrations or ORM templates for common app databases, plus a package
+      store adapter contract. Early v0.1 may keep the demo in-memory store, but
+      production docs must point developers to package-owned durable schema, not
+      hand-rolled invoice tables.
+
+    Django/FastAPI:
+      Django migrations/models or SQLAlchemy/SQLModel table definitions and
+      Alembic migration templates.
+
+    Laravel/Symfony:
+      package migrations, Eloquent/Doctrine models, queue job templates.
+
+    Go/Rust/.NET/JVM/Elixir:
+      SQL migrations and package-owned repository/store implementations suited
+      to the ecosystem.
+
+  The merchant app owns the database server/account, deployment, backups,
+  tenant/user/order/cart references, and business hooks such as
+  on_invoice_settlement. OpenReceive owns the invoice/idempotency/settlement
+  rows and the durable transitions that make polling, notifications, replay,
+  and restart recovery safe.
+
 Required invoice row fields:
 
   invoice_id
@@ -346,6 +380,12 @@ Composer package, npm package, PyPI package, SwiftPM package, crate, module, or
 NuGet package into the app the developer already deploys. It should not ask a
 Rails, PHP, Python, Go, Swift, or .NET developer to operate an extra daemon.
 
+Backend packages must still own the settlement runtime. App developers should
+not have to learn and reimplement polling, final expiry lookup, notification
+dedupe, settlement-action idempotency, or restart recovery. They provide
+durable app-owned storage and choose the native runtime shape; OpenReceive
+provides the lifecycle brain.
+
 Frontend and mobile packages are UI clients only:
 
     Browser UI      -> merchant payment backend -> NWC wallet
@@ -385,6 +425,115 @@ Default build strategy:
   - Add neutral standalone NWC clients where the target language lacks a fresh,
     dependable client.
   - Keep conformance identical across all backend SDKs and NWC clients.
+
+
+Package-Owned Polling And Notification Runners
+----------------------------------------------
+
+Every serious server-side OpenReceive package must ship two package-owned
+backend runners:
+
+  1. A settlement polling runner.
+  2. A payment notification listener runner, where the wallet/NWC client
+     supports payment_received subscriptions.
+
+These runners are not OpenReceive-hosted daemons, sidecars, gateways, or
+separate OpenReceive databases. They are code installed into the merchant's own
+backend and run as two separate backend processes, worker roles, scheduler
+commands, or job-system roles. Do not model this as multithreading inside one
+runtime. The clear production shape is:
+
+  web process       -> mounts OpenReceive HTTP routes
+  poll process      -> runs settlement polling/recovery
+  listen process    -> runs payment notification subscription where supported
+
+OpenReceive owns:
+
+  - Invoice persistence schema, migrations/templates, and store/repository
+    implementations inside the app database.
+  - Restart recovery for non-terminal invoices.
+  - Canonical polling cadence.
+  - Final lookup at local expiry.
+  - Grace lookups when wallet truth is inconclusive.
+  - A long-running notification listener as a passive accelerator.
+  - Settlement detection rules.
+  - Duplicate-safe settlement transitions.
+  - The idempotent settlement-action boundary.
+  - Framework-native runner commands, jobs, tasks, or services for both
+    polling and listening.
+
+The merchant application owns:
+
+  - The durable database instance/account and backup policy.
+  - Auth, tenant, user, cart, checkout, and order boundaries.
+  - The settlement action's business effect.
+  - The deployment shape for its normal web, worker, command, or scheduler
+    processes.
+
+The required backend package API shape:
+
+  app_openreceive = create/configure OpenReceive with wallet + store + hooks
+  app_openreceive.mount_routes()
+  app_openreceive.run_settlement_polling_process()
+  app_openreceive.run_payment_notification_process()
+
+Packages should expose functions that are easy to call from separate process
+entrypoints:
+
+  Node/Express:
+    node scripts/openreceive-poll.js
+    node scripts/openreceive-listen.js
+
+  Rails:
+    generated jobs/tasks for polling and listening.
+
+For production, each package must also expose the native worker shape:
+
+  Node:
+    `openreceive poll` and `openreceive listen` CLI commands, plus
+    function exports for custom poll/listen scripts.
+
+  Rails:
+    generated ActiveJob/Solid Queue/Sidekiq/GoodJob job, plus
+    `bin/rails openreceive:poll` and `bin/rails openreceive:listen`.
+
+  Django/FastAPI:
+    management/app commands for poll and listen, Celery/RQ/Dramatiq/Arq tasks,
+    and scheduler recipes.
+
+  Laravel/Symfony:
+    Artisan/console poll and listen commands, queue workers, and
+    scheduler/Messenger recipes.
+
+  Go:
+    `RunSettlementPollingWorker(ctx, store, wallet)` and
+    `RunPaymentNotificationListener(ctx, store, wallet)` for the app's
+    ordinary worker binary or service process.
+
+  ASP.NET Core:
+    separate `IHostedService` integrations and DI registration.
+
+  Phoenix:
+    Oban polling worker and supervised notification listener using the same
+    storage contract.
+
+On poll process boot, the polling runner must query app-owned durable storage
+for invoices whose workflow is not terminal and whose local expiry plus grace
+window has not passed, plus settled invoices whose settlement action has not
+completed. It then continues lookup polling until each invoice is settled,
+expired, failed, cancelled, or its settlement action boundary completes.
+
+The notification listener runner must hold the NWC payment_received
+subscription open where supported. Each notification is only a hint: the runner
+must lookup_invoice by payment_hash before marking settlement or running the
+settlement action. If notification support is absent, the listener command must
+skip or fail clearly while the polling runner remains sufficient for
+correctness.
+
+Do not make multiprocess coordination, thread pools, or lock managers part of
+the first runner contract. Settlement and settlement-action writes must still
+be idempotent and replay-safe, but v0.1 should keep the public installation
+story to two obvious package-provided processes: poll and listen.
 
 
 Serverless And Edge Policy
@@ -1204,7 +1353,8 @@ Safe Polling
 
 Polling is reliable and should be the default. Notifications make checkout feel
 instant, but polling is the recovery path when notification delivery is delayed
-or missed.
+or missed. Backend packages must expose this as a settlement polling runner, so
+app developers configure storage and runtime rather than hand-coding this loop.
 
 Canonical polling cadence:
 
@@ -2118,53 +2268,64 @@ Standalone NWC client test scripts:
   each NWC client README because a real wallet, a human payer, and notification
   observation are part of proving the protocol client.
 
-Framework storage and workers:
+Framework storage, polling runners, and notification listeners:
 
   OpenReceive libraries should not own an external database service. Each
   framework adapter stores payment state in the host application's normal
   database and runs background work in the host application's normal job system.
+  The adapter/package owns the polling runner and notification listener
+  implementations and exposes the native way to start each one.
 
   Rails:
-    ActiveRecord tables, ActiveJob/Solid Queue/Sidekiq/GoodJob workers,
+    ActiveRecord tables, generated ActiveJob/Solid Queue/Sidekiq/GoodJob
+    polling jobs, `bin/rails openreceive:poll`, `bin/rails openreceive:listen`,
     ActionCable/Hotwire events, optional Kamal worker role for notification
     listening.
 
   Laravel:
-    Eloquent models, Laravel queues, scheduler, events, broadcasting, Reverb or
-    Echo for passive frontend updates.
+    Eloquent models, package Artisan poll/listen commands, Laravel queues,
+    scheduler, events, broadcasting, Reverb or Echo for passive frontend updates.
 
   Symfony:
-    Doctrine entities, Messenger workers, Scheduler, Mercure or SSE.
+    Doctrine entities, package poll/listen console commands, Messenger workers,
+    Scheduler, Mercure or SSE.
 
   Django:
-    Django models, management commands, Celery/RQ/Huey, Channels/SSE.
+    Django models, package poll/listen management commands, Celery/RQ/Huey task,
+    Channels/SSE.
 
   FastAPI:
-    SQLAlchemy/SQLModel examples, asyncio tasks, Celery/Arq/RQ, SSE/WebSockets.
+    SQLAlchemy/SQLModel examples, package asyncio poll/listen runners, Celery/Arq/RQ,
+    SSE/WebSockets.
 
   Flask:
-    SQLAlchemy examples, Celery/RQ workers, SSE/WebSocket extension examples.
+    SQLAlchemy examples, package poll/listen CLI commands, Celery/RQ workers,
+    SSE/WebSocket extension examples.
 
   Node:
-    Plain storage interfaces first, with Prisma/Drizzle examples, BullMQ/Bree
+    Plain async storage interface first, package polling runner and notification
+    listener, CLI poll/listen commands, Prisma/Drizzle examples, BullMQ/Bree
     workers, SSE, Socket.IO, and Next.js route handlers.
 
   Go:
-    database/sql interfaces, background goroutines, context cancellation,
-    net/http/Gin/Echo/Fiber adapters, SSE.
+    database/sql interfaces, package `RunSettlementPollingWorker(ctx, ...)`
+    and `RunPaymentNotificationListener(ctx, ...)`, background goroutines,
+    context cancellation, net/http/Gin/Echo/Fiber adapters, SSE.
 
   Rust:
     sqlx/diesel examples, Tokio tasks, Axum/Actix extractors, SSE.
 
   ASP.NET Core:
-    EF Core examples, IHostedService workers, SignalR/SSE, DI registration.
+    EF Core examples, package IHostedService worker, SignalR/SSE, DI
+    registration.
 
   Spring / Ktor:
     Spring Data/JPA or Exposed examples, scheduled jobs, coroutine workers,
     Reactor/SSE where appropriate.
 
   Phoenix:
-    Ecto schemas, Oban workers, Phoenix PubSub, LiveView updates.
+    Ecto schemas, package Oban worker or supervised runner, Phoenix PubSub,
+    LiveView updates.
 
 
 Backend SDK API
@@ -4494,9 +4655,10 @@ Already completed:
     Node adapter, wallet preflight, info/capability tests, make_invoice and
     lookup_invoice wrappers, metadata guard, and receive-checkout spend-method
     guard.
-  - Core storage/idempotency helpers, safe poller, settlement detection,
-    static fiat pricing, CoinGecko-compatible pricing, payment notification
-    listener, and in-memory event replay.
+  - Core storage/idempotency helpers, safe poller, package-owned polling
+    runner, settlement detection, static fiat pricing, CoinGecko-compatible
+    pricing, package-owned payment notification listener, and in-memory event
+    replay.
   - Express adapter with auth hooks, CSRF/CORS behavior, lookup authorization,
     signed event URLs, SSE invoice events, rates/providers/routes endpoints,
     refresh support, and secure fail-closed defaults.
@@ -4642,7 +4804,8 @@ Deliverables:
   - NWC lookup_invoice wrapper.
   - NWC metadata size guard under 3900 serialized characters.
   - Receive-checkout guard that never exposes spend methods.
-  - Safe poller.
+  - Safe poller, package-owned polling runner, and payment notification
+    listener.
   - Settlement detection with preimage as corroborating only.
   - Minimal in-memory/demo storage.
   - SSE invoice events.
@@ -4840,7 +5003,8 @@ Ship only enough to prove the architecture cleanly:
   - @openreceive/node wrapper around getAlby/js-sdk.
   - Automatic wallet preflight.
   - make_invoice and lookup_invoice receive-checkout wrappers.
-  - Safe poller with final expiry lookup and grace verification.
+  - Safe poller and polling runner with final expiry lookup, restart recovery,
+    and grace verification.
   - Settlement detection requiring settled_at or state == "settled".
   - static mock price adapter.
   - @openreceive/node.
@@ -4910,7 +5074,8 @@ v0.1 issue stack:
   15. nwc: implement automatic wallet preflight with capability summary.
   16. nwc: implement make_invoice and lookup_invoice wrappers.
   17. core: implement static price provider and quote locking.
-  18. core: implement safe poller and settlement detection.
+  18. core: implement safe poller, package-owned polling runner, and settlement
+      detection.
   19. core: implement minimal storage/idempotency helper.
   20. express: add route adapter with auth hooks, CSRF/CORS defaults, lookup
       authorization, SSE invoice events, and signed event URL support.

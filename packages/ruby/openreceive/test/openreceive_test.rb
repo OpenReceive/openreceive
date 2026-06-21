@@ -408,4 +408,24 @@ class OpenReceiveTest < Minitest::Test
     assert_equal "completed", settled_after_action.fetch("settlement_action_state")
     assert_equal 1200, settled_after_action.fetch("settled_at")
   end
+
+  def test_in_memory_invoice_store_lists_recoverable_rows
+    store = OpenReceive::InMemoryInvoiceStore.new
+    store.create_invoice(invoice_row)
+    store.create_invoice(
+      invoice_row(
+        "invoice_id" => "or_inv_closed",
+        "idempotency_key" => "closed",
+        "idempotency_request_hash" => "sha256:#{"d" * 64}",
+        "payment_hash" => "e" * 64,
+        "invoice" => "lnbc-closed",
+        "transaction_state" => "expired",
+        "workflow_state" => "expired_closed"
+      )
+    )
+
+    recoverable = store.recoverable_invoices(now: 1001)
+
+    assert_equal ["or_inv_test_1"], recoverable.map { |row| row.fetch("invoice_id") }
+  end
 end

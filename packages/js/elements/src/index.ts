@@ -60,6 +60,7 @@ import {
   type OpenReceiveCheckoutState,
   type OpenReceivePaymentWizardSelection,
   type OpenReceiveWizardProviderDisplay,
+  type OpenReceiveWizardRouteAssetDisplay,
   type OpenReceiveWizardRouteDisplay
 } from "@openreceive/browser";
 
@@ -146,7 +147,6 @@ export function renderOpenReceiveCheckoutHtml(view: OpenReceiveCheckoutView): st
       ${expired ? "" : `<div part="qr" ${OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.qr}></div>`}
       ${status}
       <div part="meta">${amountLabel}${fiatLabel}${stateLabel}</div>
-      ${expired ? "" : `<textarea part="invoice" readonly>${escapeHtml(view.invoice)}</textarea>`}
       <div part="actions">
         ${expired
           ? `<button part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.startOver}" type="button">${escapeHtml(openReceiveCheckoutLabels.startOver)}</button>`
@@ -157,13 +157,22 @@ export function renderOpenReceiveCheckoutHtml(view: OpenReceiveCheckoutView): st
   `;
 }
 
-export function renderOpenReceiveThemeToggleHtml(label: string): string {
+export function renderOpenReceiveThemeToggleHtml(
+  label: string,
+  resolvedTheme: "light" | "dark" = label.toLowerCase().includes("dark") ? "dark" : "light"
+): string {
   return `
     <style>${openReceiveThemeToggleElementStyles}</style>
-    <button part="${OPENRECEIVE_THEME_TOGGLE_ELEMENT_PARTS.button}" type="button" ${OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.themeToggle}>
+    <button
+      aria-label="${escapeHtml(label)}"
+      class="or-theme-toggle-${escapeHtml(resolvedTheme)}"
+      part="${OPENRECEIVE_THEME_TOGGLE_ELEMENT_PARTS.button}"
+      title="${escapeHtml(label)}"
+      type="button"
+      ${OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.themeToggle}
+    >
       <span class="or-theme-toggle-track" aria-hidden="true">
         <span class="or-theme-toggle-icon or-theme-toggle-icon-light"></span>
-        <span class="or-theme-toggle-icon or-theme-toggle-icon-dark"></span>
       </span>
       <span class="or-theme-toggle-label">${escapeHtml(label)}</span>
     </button>
@@ -189,9 +198,19 @@ export function renderOpenReceivePaymentWizardHtml(
     selectedRoute: model.selectedRoute
   });
   const routeDisplays = createOpenReceiveWizardRouteDisplays(wizard.routes);
-
-  return `
-    <section part="wizard" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.root}>
+  const showRoutePicker =
+    routeAssetDisplays.length > 0 &&
+    (model.selectedRoute === null || routeDisplays.length === 0);
+  const breadcrumbs =
+    selection.selectedMethod === null
+      ? ""
+      : renderWizardBreadcrumbsHtml({
+        method: selection.selectedMethod,
+        selectedRoute: model.selectedRoute,
+        routeAssets: routeAssetDisplays
+      });
+  const methodPicker = selection.selectedMethod === null
+    ? `
       <div>
         <h2>${escapeHtml(openReceiveCheckoutLabels.wizardTitle)}</h2>
         <p>${escapeHtml(openReceiveCheckoutLabels.wizardSubtitle)}</p>
@@ -199,7 +218,7 @@ export function renderOpenReceivePaymentWizardHtml(
       <div part="method-grid">
         ${openReceivePaymentMethods.map((method) => `
           <button
-            part="method${selection.selectedMethod === method.id ? " selected" : ""}"
+            part="method"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.method}="${escapeHtml(method.id)}"
             type="button"
           >
@@ -209,7 +228,14 @@ export function renderOpenReceivePaymentWizardHtml(
           </button>
         `).join("")}
       </div>
-      ${routeAssetDisplays.length === 0 ? "" : `
+    `
+    : "";
+
+  return `
+    <section part="wizard" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.root}>
+      ${methodPicker}
+      ${breadcrumbs}
+      ${showRoutePicker ? `
         <div part="route-picker">
           ${routeAssetDisplays.map((asset) => `
               <button
@@ -223,7 +249,7 @@ export function renderOpenReceivePaymentWizardHtml(
               </button>
             `).join("")}
         </div>
-      `}
+      ` : ""}
       ${selection.selectedMethod === null ? "" : `
         <div part="wizard-results">
           ${routeDisplays.length === 0 ? `
@@ -232,14 +258,13 @@ export function renderOpenReceivePaymentWizardHtml(
             }</p>
 	          ` : routeDisplays.map((route) => `
 	            <section part="wizard-route">
-	              <h3>
+                <h3>
                   ${escapeHtml(route.title)}
                   ${wizard.selectedRail === null ? "" : renderCountrySelectHtml({
                     countries: model.countryDisplays,
                     selectedCountryCode: selection.selectedCountryCode
                   })}
                 </h3>
-	              <p>${escapeHtml(route.subtitle)}</p>
               <div part="provider-grid">
                 ${route.providers.map((provider) => `
                   <article part="provider${provider.recommended ? " selected" : ""}">
@@ -249,7 +274,6 @@ export function renderOpenReceivePaymentWizardHtml(
                       ${provider.recommendedLabel === null ? "" : `<span part="recommended">${escapeHtml(provider.recommendedLabel)}</span>`}
 	                    </div>
 	                    <div part="provider-actions">
-                      <button ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerCopy}="${escapeHtml(provider.id)}" type="button">${escapeHtml(provider.copyLabel)}</button>
                       ${renderProviderOpenActionHtml(provider)}
                     </div>
                   </article>
@@ -266,6 +290,44 @@ export function renderOpenReceivePaymentWizardHtml(
         view.activeTutorialCopied ?? false
       )}
     </section>
+  `;
+}
+
+function renderWizardBreadcrumbsHtml(options: {
+  readonly method: OpenReceivePaymentMethod;
+  readonly selectedRoute: string | null;
+  readonly routeAssets: readonly OpenReceiveWizardRouteAssetDisplay[];
+}): string {
+  const method = openReceivePaymentMethods.find((candidate) => candidate.id === options.method);
+  const methodLabel = method?.title ?? openReceiveCheckoutLabels.paymentMethod;
+  const routeLabel = options.selectedRoute === null
+    ? null
+    : options.routeAssets.find((asset) => asset.id === options.selectedRoute)?.label ?? options.selectedRoute;
+
+  return `
+    <nav part="wizard-breadcrumbs" aria-label="Payment path">
+      <button
+        part="wizard-breadcrumb"
+        ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.breadcrumb}="method"
+        type="button"
+      >
+        <span>${escapeHtml(openReceiveCheckoutLabels.paymentMethod)}</span>
+      </button>
+      <span part="wizard-breadcrumb-separator" aria-hidden="true">/</span>
+      ${routeLabel === null
+        ? `<span part="wizard-breadcrumb-current">${escapeHtml(methodLabel)}</span>`
+        : `
+          <button
+            part="wizard-breadcrumb"
+            ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.breadcrumb}="route"
+            type="button"
+          >
+            <span>${escapeHtml(methodLabel)}</span>
+          </button>
+          <span part="wizard-breadcrumb-separator" aria-hidden="true">/</span>
+          <span part="wizard-breadcrumb-current">${escapeHtml(routeLabel)}</span>
+        `}
+    </nav>
   `;
 }
 
@@ -301,9 +363,11 @@ function renderTutorialModalHtml(
   const tutorial = stepIndex === 0 ? undefined : provider.tutorials[stepIndex - 1];
   const previousIndex = Math.max(0, stepIndex - 1);
   const nextIndex = Math.min(provider.tutorials.length, stepIndex + 1);
+  const isFinalStep = stepIndex === provider.tutorials.length;
   const body = stepIndex === 0
     ? `
         <div part="tutorial-intro">
+          <img part="tutorial-provider-logo" alt="" src="${escapeHtml(provider.icon)}">
           <p>${escapeHtml(openReceiveCheckoutLabels.tutorialIntroPrefix)} ${escapeHtml(provider.name)}.</p>
           <p>${escapeHtml(openReceiveCheckoutLabels.tutorialIntroCopy)}</p>
           <button part="tutorial-copy" type="button">${escapeHtml(openReceiveCheckoutLabels.copyInvoice)}</button>
@@ -323,13 +387,16 @@ function renderTutorialModalHtml(
     <div part="tutorial" role="dialog" aria-modal="true" aria-label="${escapeHtml(openReceiveCheckoutLabels.tutorialTitlePrefix)} ${escapeHtml(provider.name)}" tabindex="-1">
       <div part="tutorial-dialog">
         <div part="tutorial-header">
-          <h3>${escapeHtml(openReceiveCheckoutLabels.tutorialTitlePrefix)} ${escapeHtml(provider.name)}</h3>
+          <div part="tutorial-title">
+            <img part="tutorial-header-logo" alt="" src="${escapeHtml(provider.icon)}">
+            <h3>${escapeHtml(openReceiveCheckoutLabels.tutorialTitlePrefix)} ${escapeHtml(provider.name)}</h3>
+          </div>
           <button
             part="tutorial-close"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}=""
             type="button"
             aria-label="Close"
-          >Close</button>
+          >X</button>
         </div>
         ${body}
         <div part="tutorial-steps" aria-hidden="true">
@@ -348,11 +415,10 @@ function renderTutorialModalHtml(
           >Back</button>
           <button
             part="tutorial-nav"
-            ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}="${escapeHtml(provider.id)}"
+            ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}="${isFinalStep ? "" : escapeHtml(provider.id)}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex}="${nextIndex}"
             type="button"
-            ${stepIndex === provider.tutorials.length ? "disabled" : ""}
-          >Next</button>
+          >${escapeHtml(isFinalStep ? openReceiveCheckoutLabels.tutorialExit : "Next")}</button>
         </div>
       </div>
     </div>
@@ -423,7 +489,8 @@ export function defineOpenReceiveElements(
       defaultCountryCode: getOpenReceiveDefaultCountryCode()
     });
     private activeTutorialProviderId: string | null = null;
-    private activeTutorialIndex = 1;
+    private activeTutorialIndex = 0;
+    private activeTutorialCopied = false;
     private controller: OpenReceiveCheckoutController | undefined;
     private announcedSettledPaymentHash: string | undefined;
 
@@ -498,7 +565,8 @@ export function defineOpenReceiveElements(
           selectedRegion: this.selection.selectedRegion,
           countryPickerOpen: this.selection.countryPickerOpen,
           activeTutorialProviderId: this.activeTutorialProviderId,
-          activeTutorialIndex: this.activeTutorialIndex
+          activeTutorialIndex: this.activeTutorialIndex,
+          activeTutorialCopied: this.activeTutorialCopied
         }
       });
 
@@ -664,6 +732,25 @@ export function defineOpenReceiveElements(
         });
       });
 
+      root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.breadcrumb).forEach((button) => {
+        button.addEventListener("click", () => {
+          const target = button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.breadcrumb);
+          if (target === "method") {
+            this.selection = updateOpenReceivePaymentWizardSelection(this.selection, {
+              type: "change_method"
+            });
+            this.render();
+            return;
+          }
+          if (target === "route") {
+            this.selection = updateOpenReceivePaymentWizardSelection(this.selection, {
+              type: "change_route"
+            });
+            this.render();
+          }
+        });
+      });
+
       root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.region).forEach((button) => {
         button.addEventListener("click", () => {
           const region = parseOpenReceiveRegion(
@@ -725,53 +812,58 @@ export function defineOpenReceiveElements(
         });
       });
 
-      root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.providerCopy).forEach((button) => {
-        button.addEventListener("click", () => {
-          const providerId = button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerCopy);
-          if (providerId === null) return;
-          void copyInvoice({ invoice, logger })
-            .then(() => {
-              showElementCopyFeedback(button);
-              this.dispatchEvent(createOpenReceiveProviderCopyEvent(providerId));
-              this.dispatchEvent(
-                createOpenReceiveCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy)
-              );
-            })
-            .catch((error) => this.dispatchError(error));
-        });
-      });
-
       root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.providerTutorial).forEach((button) => {
         button.addEventListener("click", () => {
           const providerId = button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial);
           if (providerId === null) return;
           if (providerId === "") {
             this.activeTutorialProviderId = null;
-            this.activeTutorialIndex = 1;
+            this.activeTutorialIndex = 0;
+            this.activeTutorialCopied = false;
             this.render();
             return;
           }
           const index = Number(
-            button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex) ?? "1"
+            button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex) ?? "0"
           );
+          if (this.activeTutorialProviderId !== providerId) {
+            this.activeTutorialCopied = false;
+          }
           this.activeTutorialProviderId = providerId;
-          this.activeTutorialIndex = Number.isSafeInteger(index) && index > 0 ? index : 1;
+          this.activeTutorialIndex = Number.isSafeInteger(index) && index >= 0 ? index : 0;
           this.render();
         });
+      });
+
+      root.querySelector('[part="tutorial-copy"]')?.addEventListener("click", () => {
+        void copyInvoice({ invoice, logger })
+          .then(() => {
+            this.activeTutorialCopied = true;
+            if (this.activeTutorialProviderId !== null) {
+              this.dispatchEvent(createOpenReceiveProviderCopyEvent(this.activeTutorialProviderId));
+            }
+            this.dispatchEvent(
+              createOpenReceiveCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy)
+            );
+            this.render();
+          })
+          .catch((error) => this.dispatchError(error));
       });
 
       const tutorial = root.querySelector('[part="tutorial"]');
       tutorial?.addEventListener("click", (event) => {
         if (event.target !== event.currentTarget) return;
         this.activeTutorialProviderId = null;
-        this.activeTutorialIndex = 1;
+        this.activeTutorialIndex = 0;
+        this.activeTutorialCopied = false;
         this.render();
       });
       tutorial?.addEventListener("keydown", (event) => {
         if (!(event instanceof KeyboardEvent)) return;
         if (event.key !== "Escape" || this.activeTutorialProviderId === null) return;
         this.activeTutorialProviderId = null;
-        this.activeTutorialIndex = 1;
+        this.activeTutorialIndex = 0;
+        this.activeTutorialCopied = false;
         this.render();
       });
       if (tutorial instanceof HTMLElement) tutorial.focus();
@@ -814,7 +906,7 @@ export function defineOpenReceiveElements(
     render() {
       const root = this.shadowRoot ?? this.attachShadow({ mode: "open" });
       const theme = this.syncTheme();
-      root.innerHTML = renderOpenReceiveThemeToggleHtml(theme.toggleLabel);
+      root.innerHTML = renderOpenReceiveThemeToggleHtml(theme.toggleLabel, theme.resolvedTheme);
       root.querySelector(OPENRECEIVE_THEME_TOGGLE_ELEMENT_PART_SELECTORS.button)?.addEventListener("click", () => {
         const nextTheme = toggleOpenReceiveStoredThemeControls(this.themeTargets(), this.themeOptions());
         this.setAttributeIfChanged(

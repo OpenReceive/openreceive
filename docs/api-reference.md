@@ -4,6 +4,16 @@ OpenReceive does not require a daemon. Framework adapters mount these routes
 inside the merchant application, usually at `/openreceive/v1`. The authoritative
 HTTP contract is `spec/openapi/openreceive-http.v1.yaml`.
 
+The HTTP routes are not the whole backend integration. Server packages also
+provide a settlement polling runner and, where NWC notification subscriptions
+are available, a payment notification listener. Both runners use backend
+`lookup_invoice`; notifications are only hints.
+
+Server packages should also provide OpenReceive-owned persistence for invoice,
+idempotency, lifecycle, and settlement-action rows inside the host app
+database. The host app should attach app-owned hooks after settlement instead
+of designing these tables itself.
+
 All invoice, lookup, and event responses should be returned with
 `Cache-Control: no-store`. Browser responses must never contain an NWC
 connection string or client secret.

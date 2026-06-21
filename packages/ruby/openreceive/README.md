@@ -21,4 +21,6 @@ It does not include a Rails engine, standalone Nostr protocol implementation,
 or browser/mobile code.
 The in-memory store is not a production database adapter.
 Future Rails work should wrap this package plus `nwc-ruby` inside the merchant
-server app and keep NWC secrets out of frontend runtimes.
+server app, run package-owned poll/listen jobs in the app's normal worker
+runtime, install package-owned OpenReceive invoice persistence in the app
+database, and keep NWC secrets out of frontend runtimes.

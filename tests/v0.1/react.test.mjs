@@ -111,6 +111,8 @@ test("React checkout default UI server-renders display-safe invoice data", () =>
   assert.match(html, /1 sat/);
   assert.match(html, /pending/);
   assert.doesNotMatch(html, /bbbbbbbb\.\.\.bbbbbbbb/);
+  assert.doesNotMatch(html, /textarea/);
+  assert.doesNotMatch(html, /lnbc-test/);
   assert.match(html, /Copy invoice/);
   assert.doesNotMatch(html, /Open Wallet/);
   assert.doesNotMatch(html, /nostr\+walletconnect/);
@@ -137,6 +139,8 @@ test("React checkout default UI includes countdown, waiting state, and payment w
   assert.match(html, /Bank Transfer/);
   assert.match(html, /Bitcoin/);
   assert.match(html, /Crypto/);
+  assert.doesNotMatch(html, /textarea/);
+  assert.doesNotMatch(html, /lnbc-test/);
   assert.doesNotMatch(html, /or_inv_test/);
 });
 
@@ -185,7 +189,8 @@ test("React theme toggle renders a package-owned light/dark switch", () => {
   );
 
   assert.match(html, /data-openreceive-theme-toggle/);
-  assert.match(html, /Light mode/);
+  assert.match(html, /dark mode/);
+  assert.doesNotMatch(html, /or-theme-toggle-icon-dark/);
 });
 
 test("React theme scope applies package-owned theme attributes and toggle", () => {
@@ -214,9 +219,9 @@ test("React theme scope applies package-owned theme attributes and toggle", () =
 
   assert.match(html, /<main class="app-shell" data-theme="dark" data-openreceive-theme="dark"/);
   assert.match(html, /class="topbar"/);
-  assert.match(html, /class="theme-button"/);
+  assert.match(html, /class="[^"]*theme-button/);
   assert.match(html, /data-openreceive-theme-toggle/);
-  assert.match(html, /Light mode/);
+  assert.match(html, /dark mode/);
   assert.match(html, /<section class="checkout">Checkout<\/section>/);
 });
 
@@ -278,7 +283,7 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
     theme: "system",
     resolvedTheme: "dark",
     nextTheme: "light",
-    toggleLabel: "Light mode",
+    toggleLabel: "dark mode",
     attributes: {
       "data-theme": "dark",
       "data-openreceive-theme": "dark"
@@ -296,7 +301,7 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
     theme: "dark",
     resolvedTheme: "dark",
     nextTheme: "light",
-    toggleLabel: "Light mode",
+    toggleLabel: "dark mode",
     attributes: {
       "data-theme": "dark",
       "data-openreceive-theme": "dark"
@@ -345,12 +350,12 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   assert.equal(controlTheme.resolvedTheme, "light");
   assert.equal(controlAttrs["data-openreceive-theme"], "light");
   assert.equal(checkoutControlAttrs.theme, "light");
-  assert.equal(toggleControl.textContent, "Dark mode");
+  assert.equal(toggleControl.textContent, "light mode");
   const toggledControlTheme = toggleOpenReceiveStoredThemeControls({
     toggle: toggleControl
   }, { storage });
   assert.equal(toggledControlTheme.resolvedTheme, "dark");
-  assert.equal(toggleControl.textContent, "Light mode");
+  assert.equal(toggleControl.textContent, "dark mode");
   writeOpenReceiveStoredCountryCode("us", { storage });
   assert.equal(readOpenReceiveStoredCountryCode({ storage }), "US");
 
@@ -376,6 +381,13 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   });
   assert.equal(bankSelection.selectedMethod, "bank");
   assert.equal(bankSelection.countryPickerOpen, false);
+
+  const changedMethodSelection = updateOpenReceivePaymentWizardSelection(bankSelection, {
+    type: "change_method"
+  });
+  assert.equal(changedMethodSelection.selectedMethod, null);
+  assert.equal(changedMethodSelection.selectedCountryCode, bankSelection.selectedCountryCode);
+  assert.equal(changedMethodSelection.countryPickerOpen, false);
 
   const europeSelection = updateOpenReceivePaymentWizardSelection(bankSelection, {
     type: "select_region",
@@ -449,7 +461,13 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   const cardRouteDisplays = createOpenReceiveWizardRouteDisplays(cardState.routes);
   assert.equal(cardRouteDisplays[0].title, "Credit / debit card");
   assert.equal(cardRouteDisplays[0].subtitle, "USD");
-  assert.equal(cardRouteDisplays[0].providers.length <= OPENRECEIVE_PROVIDER_PREVIEW_LIMIT, true);
+  assert.equal(cardRouteDisplays[0].providers.length, cardState.routes[0].providers.length);
+  assert.equal(
+    createOpenReceiveWizardRouteDisplays(cardState.routes, {
+      providerPreviewLimit: OPENRECEIVE_PROVIDER_PREVIEW_LIMIT
+    })[0].providers.length <= OPENRECEIVE_PROVIDER_PREVIEW_LIMIT,
+    true
+  );
   assert.equal(cardRouteDisplays[0].providers[0].copyLabel, openReceiveCheckoutLabels.copyInvoice);
   assert.equal(cardRouteDisplays[0].providers[0].copiedLabel, openReceiveCheckoutLabels.copied);
   assert.equal(cardRouteDisplays[0].providers[0].openLabel, "How To Pay");

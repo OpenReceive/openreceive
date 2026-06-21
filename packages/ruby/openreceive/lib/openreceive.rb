@@ -120,6 +120,16 @@ module OpenReceive
         data["transaction_state"] == "settled"
     end
 
+    def expired?(lookup_invoice)
+      data = stringify_keys(lookup_invoice)
+      data["state"] == "expired" || data["transaction_state"] == "expired"
+    end
+
+    def failed?(lookup_invoice)
+      data = stringify_keys(lookup_invoice)
+      data["state"] == "failed" || data["transaction_state"] == "failed"
+    end
+
     def stringify_keys(value)
       return {} unless value.respond_to?(:each_pair)
 
@@ -502,6 +512,14 @@ module OpenReceive
       invoice_id.nil? ? nil : find_by_invoice_id(invoice_id)
     end
 
+    def recoverable_invoices(now:, grace_seconds: 15)
+      current = integer(now)
+      grace = integer(grace_seconds)
+      @by_invoice_id.values.select do |row|
+        recoverable_invoice?(row, current, grace)
+      end.map { |row| deep_copy(row) }
+    end
+
     def require_stored_invoice(invoice_id)
       row = @by_invoice_id[invoice_id]
       raise InvoiceNotFoundError.new(invoice_id) if row.nil?
@@ -509,11 +527,46 @@ module OpenReceive
       row
     end
 
+    def mark_verifying(invoice_id:)
+      row = require_stored_invoice(invoice_id)
+      if row["transaction_state"] != "settled" &&
+          %w[invoice_created expiry_pending_verification].include?(row["workflow_state"])
+        row["workflow_state"] = "verifying"
+      end
+      deep_copy(row)
+    end
+
+    def mark_expiry_pending_verification(invoice_id:)
+      row = require_stored_invoice(invoice_id)
+      unless %w[settled expired failed].include?(row["transaction_state"])
+        row["workflow_state"] = "expiry_pending_verification"
+      end
+      deep_copy(row)
+    end
+
     def mark_settled(invoice_id:, settled_at:)
       row = require_stored_invoice(invoice_id)
       row["transaction_state"] = "settled"
       row["workflow_state"] = "settlement_action_pending" unless row["workflow_state"] == "settlement_action_completed"
       row["settled_at"] ||= integer(settled_at)
+      deep_copy(row)
+    end
+
+    def mark_expired_closed(invoice_id:)
+      row = require_stored_invoice(invoice_id)
+      if row["transaction_state"] != "settled"
+        row["transaction_state"] = "expired"
+        row["workflow_state"] = "expired_closed"
+      end
+      deep_copy(row)
+    end
+
+    def mark_failed_closed(invoice_id:)
+      row = require_stored_invoice(invoice_id)
+      if row["transaction_state"] != "settled"
+        row["transaction_state"] = "failed"
+        row["workflow_state"] = "failed_closed"
+      end
       deep_copy(row)
     end
 
@@ -541,6 +594,20 @@ module OpenReceive
         operation: data.fetch("operation"),
         idempotency_key: data.fetch("idempotency_key")
       )
+    end
+
+    def recoverable_invoice?(row, now, grace_seconds)
+      return false if %w[
+        settlement_action_completed
+        expired_closed
+        failed_closed
+        cancelled
+      ].include?(row["workflow_state"])
+
+      return row["settlement_action_state"] != "completed" if row["transaction_state"] == "settled"
+      return false if %w[expired failed].include?(row["transaction_state"])
+
+      integer(row.fetch("expires_at")) + grace_seconds >= now
     end
 
     def validate_invoice_row(row)
@@ -622,6 +689,14 @@ module OpenReceive
 
   def settled?(lookup_invoice)
     Settlement.settled?(lookup_invoice)
+  end
+
+  def expired?(lookup_invoice)
+    Settlement.expired?(lookup_invoice)
+  end
+
+  def failed?(lookup_invoice)
+    Settlement.failed?(lookup_invoice)
   end
 
   def parse_nwc_uri(uri)

@@ -26,9 +26,10 @@ import "./styles.css";
 const logOpenReceive = createHelloFruitBrowserLogger("node-express-react");
 const fruits = fruitsData.fruits;
 type Fruit = (typeof fruits)[number];
+const initialFruitId = fruits[1]?.id ?? fruits[0]?.id ?? "";
 
 function App(): React.ReactElement {
-  const [fruitId, setFruitId] = useState(fruits[1]?.id ?? fruits[0]?.id ?? "");
+  const [fruitId, setFruitId] = useState(initialFruitId);
   const [invoice, setInvoice] = useState<OpenReceiveCheckoutSnapshot | null>(null);
   const [purchasedFruit, setPurchasedFruit] = useState<Fruit | null>(null);
   const [stickerModalOpen, setStickerModalOpen] = useState(false);
@@ -53,6 +54,8 @@ function App(): React.ReactElement {
 
   async function createInvoice() {
     if (selectedFruit === undefined) return;
+    const idempotencyKey = globalThis.crypto?.randomUUID?.() ??
+      `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
     setCreating(true);
     setError("");
@@ -64,7 +67,7 @@ function App(): React.ReactElement {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Idempotency-Key": `hello-fruit-${selectedFruit.id}`
+          "Idempotency-Key": `hello-fruit-${selectedFruit.id}-${idempotencyKey}`
         },
         body: JSON.stringify({
           fiat: selectedFruit.fiat,
@@ -93,6 +96,16 @@ function App(): React.ReactElement {
     }
   }
 
+  function startOver() {
+    setFruitId(initialFruitId);
+    setInvoice(null);
+    setPurchasedFruit(null);
+    setStickerModalOpen(false);
+    setCreating(false);
+    setError("");
+    completedInvoiceRef.current = "";
+  }
+
   return (
     <OpenReceiveThemeScope
       as="main"
@@ -109,29 +122,41 @@ function App(): React.ReactElement {
           </div>
         </div>
 
-        <div className="fruit-grid">
-          {fruits.map((fruit) => (
+        {invoice === null ? (
+          <>
+            <div className="fruit-grid">
+              {fruits.map((fruit) => (
+                <button
+                  className={fruit.id === fruitId ? "selected" : ""}
+                  key={fruit.id}
+                  onClick={() => setFruitId(fruit.id)}
+                  type="button"
+                >
+                  <img src={`/${fruit.sticker}`} alt="" />
+                  <span>{fruit.name}</span>
+                  <small>{formatHelloFruitFiat(fruit.fiat)}</small>
+                </button>
+              ))}
+            </div>
+
             <button
-              className={fruit.id === fruitId ? "selected" : ""}
-              key={fruit.id}
-              onClick={() => setFruitId(fruit.id)}
+              className="primary"
+              disabled={creating}
+              onClick={createInvoice}
               type="button"
             >
-              <img src={`/${fruit.sticker}`} alt="" />
-              <span>{fruit.name}</span>
-              <small>{formatHelloFruitFiat(fruit.fiat)}</small>
+              {creating ? helloFruitDemoLabels.creatingInvoice : createInvoiceLabel}
             </button>
-          ))}
-        </div>
-
-        <button
-          className="primary"
-          disabled={creating}
-          onClick={createInvoice}
-          type="button"
-        >
-          {creating ? helloFruitDemoLabels.creatingInvoice : createInvoiceLabel}
-        </button>
+          </>
+        ) : (
+          <button
+            className="secondary reset-demo"
+            onClick={startOver}
+            type="button"
+          >
+            Start over
+          </button>
+        )}
 
         {invoice === null ? null : (
           <OpenReceiveCheckout

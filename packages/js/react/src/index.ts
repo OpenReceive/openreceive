@@ -720,6 +720,13 @@ export function OpenReceiveThemeToggle(
   const componentProps: React.ButtonHTMLAttributes<HTMLButtonElement> &
     Record<string, unknown> = {
     ...buttonProps,
+    "aria-label": themeModel.toggleLabel,
+    className: joinClassNames(
+      "or-theme-toggle-button",
+      `or-theme-toggle-${themeModel.resolvedTheme}`,
+      buttonProps.className
+    ),
+    title: themeModel.toggleLabel,
     type,
     [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.themeToggle]: "",
     onClick: (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -741,9 +748,6 @@ export function OpenReceiveThemeToggle(
       },
       React.createElement("span", {
         className: "or-theme-toggle-icon or-theme-toggle-icon-light"
-      }),
-      React.createElement("span", {
-        className: "or-theme-toggle-icon or-theme-toggle-icon-dark"
       })
     ),
     React.createElement(
@@ -857,11 +861,10 @@ export function OpenReceivePaymentWizard(
       defaultCountryCode: getOpenReceiveDefaultCountryCode()
     }).getSelection()
   );
-  const [copiedProviderId, showCopiedProviderId] =
-    useOpenReceiveTransientValue<string | null>(null);
   const [activeTutorial, setActiveTutorial] = React.useState<{
     readonly providerId: string;
     readonly index: number;
+    readonly copied: boolean;
   } | null>(null);
   const updateWizardSelection = React.useCallback(
     (
@@ -884,68 +887,79 @@ export function OpenReceivePaymentWizard(
     selectedRoute: model.selectedRoute
   });
   const routeDisplays = createOpenReceiveWizardRouteDisplays(wizard.routes);
+  const showRoutePicker =
+    routeAssetDisplays.length > 0 &&
+    (model.selectedRoute === null || routeDisplays.length === 0);
   const activeTutorialProvider = activeTutorial === null
     ? undefined
     : routeDisplays
       .flatMap((route) => route.providers)
       .find((provider) => provider.id === activeTutorial.providerId);
 
-  const copyForProvider = async (providerId: string) => {
-    try {
-      await copyInvoiceHelper({
-        invoice: props.invoice,
-        logger: props.logger,
-        logContext: props.logContext
-      });
-      showCopiedProviderId(providerId);
-      globalThis.dispatchEvent?.(createOpenReceiveProviderCopyEvent(providerId));
-    } catch (error) {
-      props.onError?.(error);
-    }
-  };
-
   return React.createElement(
     "div",
     {
       className: joinClassNames("or-wizard", props.className)
     },
-    React.createElement(
-      "div",
-      {
-        className: "or-wizard-header"
-      },
-      React.createElement(
-        "div",
+    selection.selectedMethod === null
+      ? React.createElement(
+        React.Fragment,
         null,
-        React.createElement("h2", null, openReceiveCheckoutLabels.wizardTitle),
-        React.createElement("p", null, openReceiveCheckoutLabels.wizardSubtitle)
-      )
-    ),
-    React.createElement(
-      "div",
-      {
-        className: "or-method-grid"
-      },
-      openReceivePaymentMethods.map((method) =>
         React.createElement(
-          "button",
+          "div",
           {
-            className: selection.selectedMethod === method.id ? "selected" : "",
-            key: method.id,
-            onClick: () => {
-              updateWizardSelection((controller) =>
-                controller.selectMethod(method.id)
-              );
-            },
-            type: "button"
+            className: "or-wizard-header"
           },
-          React.createElement("img", { alt: "", src: getOpenReceivePaymentMethodIcon(method.id) }),
-          React.createElement("span", null, method.title),
-          React.createElement("small", null, method.detail)
+          React.createElement(
+            "div",
+            null,
+            React.createElement("h2", null, openReceiveCheckoutLabels.wizardTitle),
+            React.createElement("p", null, openReceiveCheckoutLabels.wizardSubtitle)
+          )
+        ),
+        React.createElement(
+          "div",
+          {
+            className: "or-method-grid"
+          },
+          openReceivePaymentMethods.map((method) =>
+            React.createElement(
+              "button",
+              {
+                key: method.id,
+                onClick: () => {
+                  updateWizardSelection((controller) =>
+                    controller.selectMethod(method.id)
+                  );
+                },
+                type: "button"
+              },
+              React.createElement("img", { alt: "", src: getOpenReceivePaymentMethodIcon(method.id) }),
+              React.createElement("span", null, method.title),
+              React.createElement("small", null, method.detail)
+            )
+          )
         )
       )
-    ),
-    selection.selectedMethod === "bitcoin"
+      : null,
+    selection.selectedMethod === null
+      ? null
+      : renderWizardBreadcrumbs({
+        method: selection.selectedMethod,
+        selectedRoute: model.selectedRoute,
+        routeAssets: routeAssetDisplays,
+        onChangeMethod: () => {
+          updateWizardSelection((controller) =>
+            controller.changeMethod()
+          );
+        },
+        onChangeRoute: () => {
+          updateWizardSelection((controller) =>
+            controller.update({ type: "change_route" })
+          );
+        }
+      }),
+    showRoutePicker && selection.selectedMethod === "bitcoin"
       ? renderRoutePicker({
         assets: routeAssetDisplays,
         method: "bitcoin",
@@ -956,7 +970,7 @@ export function OpenReceivePaymentWizard(
         }
       })
       : null,
-    selection.selectedMethod === "crypto"
+    showRoutePicker && selection.selectedMethod === "crypto"
       ? renderRoutePicker({
         assets: routeAssetDisplays,
         method: "crypto",
@@ -1012,11 +1026,6 @@ export function OpenReceivePaymentWizard(
 	                          );
 	                        }
 	                      })
-	                  ),
-	                    React.createElement(
-                    "p",
-                    null,
-                    route.subtitle
                   )
                 )
               ),
@@ -1053,19 +1062,10 @@ export function OpenReceivePaymentWizard(
                       {
                         className: "or-provider-actions"
                       },
-                      React.createElement(
-                        "button",
-                        {
-                          onClick: () => void copyForProvider(provider.id),
-                          type: "button"
-                        },
-                        copiedProviderId === provider.id
-                          ? provider.copiedLabel
-                          : provider.copyLabel
-                      ),
                       renderProviderOpenAction(provider, () => setActiveTutorial({
                         providerId: provider.id,
-                        index: 1
+                        index: 0,
+                        copied: false
                       }))
                     )
                   )
@@ -1079,12 +1079,82 @@ export function OpenReceivePaymentWizard(
       : renderProviderTutorialModal({
         provider: activeTutorialProvider,
         index: activeTutorial.index,
+        copied: activeTutorial.copied,
         onClose: () => setActiveTutorial(null),
+        onCopy: async () => {
+          try {
+            await copyInvoiceHelper({
+              invoice: props.invoice,
+              logger: props.logger,
+              logContext: props.logContext
+            });
+            globalThis.dispatchEvent?.(
+              createOpenReceiveProviderCopyEvent(activeTutorialProvider.id)
+            );
+            setActiveTutorial({
+              providerId: activeTutorialProvider.id,
+              index: 0,
+              copied: true
+            });
+          } catch (error) {
+            props.onError?.(error);
+          }
+        },
         onStep: (index) => setActiveTutorial({
           providerId: activeTutorialProvider.id,
-          index
+          index,
+          copied: activeTutorial.copied
         })
       })
+  );
+}
+
+function renderWizardBreadcrumbs(options: {
+  readonly method: OpenReceivePaymentMethod;
+  readonly selectedRoute: string | null;
+  readonly routeAssets: readonly OpenReceiveWizardRouteAssetDisplay[];
+  readonly onChangeMethod: () => void;
+  readonly onChangeRoute: () => void;
+}): React.ReactElement {
+  const method = openReceivePaymentMethods.find((candidate) => candidate.id === options.method);
+  const methodLabel = method?.title ?? openReceiveCheckoutLabels.paymentMethod;
+  const routeLabel = options.selectedRoute === null
+    ? null
+    : options.routeAssets.find((asset) => asset.id === options.selectedRoute)?.label ?? options.selectedRoute;
+
+  return React.createElement(
+    "nav",
+    {
+      "aria-label": "Payment path",
+      className: "or-wizard-breadcrumbs"
+    },
+    React.createElement(
+      "button",
+      {
+        className: "or-wizard-breadcrumb",
+        onClick: options.onChangeMethod,
+        type: "button"
+      },
+      openReceiveCheckoutLabels.paymentMethod
+    ),
+    React.createElement("span", { "aria-hidden": "true" }, "/"),
+    routeLabel === null
+      ? React.createElement("span", { className: "or-wizard-breadcrumb-current" }, methodLabel)
+      : React.createElement(
+        React.Fragment,
+        null,
+        React.createElement(
+          "button",
+          {
+            className: "or-wizard-breadcrumb",
+            onClick: options.onChangeRoute,
+            type: "button"
+          },
+          methodLabel
+        ),
+        React.createElement("span", { "aria-hidden": "true" }, "/"),
+        React.createElement("span", { className: "or-wizard-breadcrumb-current" }, routeLabel)
+      )
   );
 }
 
@@ -1118,16 +1188,19 @@ function renderProviderOpenAction(
 function renderProviderTutorialModal(options: {
   readonly provider: OpenReceiveWizardProviderDisplay;
   readonly index: number;
+  readonly copied: boolean;
   readonly onClose: () => void;
+  readonly onCopy: () => Promise<void>;
   readonly onStep: (index: number) => void;
 }): React.ReactElement | null {
   const { provider } = options;
   if (provider.tutorials.length === 0) return null;
-  const stepIndex = Math.max(1, Math.min(provider.tutorials.length, options.index));
-  const tutorial = provider.tutorials[stepIndex - 1];
-  if (tutorial === undefined) return null;
-  const previousIndex = Math.max(1, stepIndex - 1);
+  const totalSteps = provider.tutorials.length + 1;
+  const stepIndex = Math.max(0, Math.min(provider.tutorials.length, options.index));
+  const tutorial = stepIndex === 0 ? undefined : provider.tutorials[stepIndex - 1];
+  const previousIndex = Math.max(0, stepIndex - 1);
   const nextIndex = Math.min(provider.tutorials.length, stepIndex + 1);
+  const isFinalStep = stepIndex === provider.tutorials.length;
 
   return React.createElement(
     "div",
@@ -1155,46 +1228,102 @@ function renderProviderTutorialModal(options: {
           className: "or-tutorial-header"
         },
         React.createElement(
-          "h3",
-          null,
-          `${openReceiveCheckoutLabels.tutorialTitlePrefix} ${provider.name}`
+          "div",
+          {
+            className: "or-tutorial-title"
+          },
+          React.createElement("img", {
+            alt: "",
+            className: "or-tutorial-header-logo",
+            src: provider.icon
+          }),
+          React.createElement(
+            "h3",
+            null,
+            `${openReceiveCheckoutLabels.tutorialTitlePrefix} ${provider.name}`
+          )
         ),
         React.createElement(
           "button",
           {
+            "aria-label": "Close",
             className: "or-tutorial-close",
             onClick: options.onClose,
             type: "button"
           },
-          "Close"
+          "X"
         )
       ),
-      React.createElement(
-        "div",
-        {
-          className: "or-tutorial-frame"
-        },
-        React.createElement("img", {
-          alt: tutorial.caption,
-          className: "or-tutorial-image",
-          src: tutorial.image
-        })
-      ),
-      React.createElement("p", {
-        className: "or-tutorial-caption"
-      }, tutorial.caption),
+      stepIndex === 0
+        ? React.createElement(
+          "div",
+          {
+            className: "or-tutorial-intro"
+          },
+          React.createElement("img", {
+            alt: "",
+            className: "or-tutorial-provider-logo",
+            src: provider.icon
+          }),
+          React.createElement(
+            "p",
+            null,
+            `${openReceiveCheckoutLabels.tutorialIntroPrefix} ${provider.name}.`
+          ),
+          React.createElement(
+            "p",
+            null,
+            openReceiveCheckoutLabels.tutorialIntroCopy
+          ),
+          React.createElement(
+            "button",
+            {
+              className: "or-tutorial-copy",
+              onClick: () => void options.onCopy(),
+              type: "button"
+            },
+            openReceiveCheckoutLabels.copyInvoice
+          ),
+          options.copied
+            ? React.createElement(
+              "p",
+              {
+                className: "or-tutorial-copy-message"
+              },
+              openReceiveCheckoutLabels.tutorialCopiedContinue
+            )
+            : null
+        )
+        : React.createElement(
+          React.Fragment,
+          null,
+          React.createElement(
+            "div",
+            {
+              className: "or-tutorial-frame"
+            },
+            React.createElement("img", {
+              alt: tutorial?.caption ?? "",
+              className: "or-tutorial-image",
+              src: tutorial?.image ?? ""
+            })
+          ),
+          React.createElement("p", {
+            className: "or-tutorial-caption"
+          }, tutorial?.caption ?? "")
+        ),
       React.createElement(
         "div",
         {
           "aria-hidden": "true",
           className: "or-tutorial-steps"
         },
-        provider.tutorials.map((step) =>
+        Array.from({ length: totalSteps }, (_, index) =>
           React.createElement("span", {
-            className: step.index === stepIndex
+            className: index === stepIndex
               ? "or-tutorial-step active"
               : "or-tutorial-step",
-            key: step.index
+            key: index
           })
         )
       ),
@@ -1203,7 +1332,7 @@ function renderProviderTutorialModal(options: {
         {
           className: "or-tutorial-progress"
         },
-        `Step ${stepIndex} of ${provider.tutorials.length}`
+        `Step ${stepIndex + 1} of ${totalSteps}`
       ),
       React.createElement(
         "div",
@@ -1213,7 +1342,7 @@ function renderProviderTutorialModal(options: {
         React.createElement(
           "button",
           {
-            disabled: stepIndex === 1,
+            disabled: stepIndex === 0,
             onClick: () => options.onStep(previousIndex),
             type: "button"
           },
@@ -1222,11 +1351,16 @@ function renderProviderTutorialModal(options: {
         React.createElement(
           "button",
           {
-            disabled: stepIndex === provider.tutorials.length,
-            onClick: () => options.onStep(nextIndex),
+            onClick: () => {
+              if (isFinalStep) {
+                options.onClose();
+                return;
+              }
+              options.onStep(nextIndex);
+            },
             type: "button"
           },
-          "Next"
+          isFinalStep ? openReceiveCheckoutLabels.tutorialExit : "Next"
         )
       )
     )
@@ -1389,7 +1523,9 @@ export function OpenReceiveCheckout(
             className: classNames?.qr,
             style: {
               aspectRatio: "1",
-              maxWidth: 256
+              justifySelf: "center",
+              maxWidth: 420,
+              width: "min(100%, 420px)"
             }
           }),
         React.createElement(OpenReceiveWaitingState, {
@@ -1420,15 +1556,6 @@ export function OpenReceiveCheckout(
           className: classNames?.summary,
           classNames
         }),
-        expired
-          ? null
-          : React.createElement("textarea", {
-            key: "invoice",
-            readOnly: true,
-            value: invoice,
-            "aria-label": "Lightning invoice",
-            className: classNames?.invoice
-          }),
         React.createElement(
           "div",
           {

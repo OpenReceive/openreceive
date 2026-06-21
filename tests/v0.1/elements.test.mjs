@@ -44,6 +44,8 @@ test("elements render display-safe checkout HTML", () => {
   assert.match(html, /200 sats/);
   assert.match(html, /pending/);
   assert.doesNotMatch(html, /aaaaaaaa\.\.\.aaaaaaaa/);
+  assert.doesNotMatch(html, /<textarea/);
+  assert.doesNotMatch(html, /lnbc-test/);
   assert.match(html, />Copy invoice</);
   assert.doesNotMatch(html, />Open Wallet</);
   assert.match(html, /data-openreceive-wizard/);
@@ -81,15 +83,22 @@ test("elements render payment wizard route choices and providers from browser st
   assert.match(firstStep, /Crypto/);
   assert.match(firstStep, /assets\/icons\/card\.svg/);
   assert.match(firstStep, /assets\/icons\/btc\.svg/);
+  assert.doesNotMatch(firstStep, /change payment method/);
 
   const cryptoStep = renderOpenReceivePaymentWizardHtml({
     selectedMethod: "crypto",
     selectedCryptoRoute: "usdt"
   });
+  assert.match(cryptoStep, /data-or-breadcrumb="method"/);
+  assert.match(cryptoStep, />Payment method<\/span>/);
+  assert.match(cryptoStep, /data-or-breadcrumb="route"/);
+  assert.match(cryptoStep, />Crypto<\/span>/);
+  assert.doesNotMatch(cryptoStep, /part="method-grid"/);
   assert.match(cryptoStep, /Tether/);
-  assert.match(cryptoStep, /assets\/icons\/usdt\.svg/);
+  assert.doesNotMatch(cryptoStep, /part="route-picker"/);
+  assert.doesNotMatch(cryptoStep, /assets\/icons\/usdt\.svg/);
   assert.match(cryptoStep, /assets\/provider-icons\/boltz\.png/);
-  assert.match(cryptoStep, /Copy invoice/);
+  assert.doesNotMatch(cryptoStep, /Copy invoice/);
   assert.match(cryptoStep, /How To Pay/);
   assert.doesNotMatch(cryptoStep, /Pays invoices/);
 
@@ -97,7 +106,13 @@ test("elements render payment wizard route choices and providers from browser st
     selectedMethod: "card",
     selectedCountryCode: "US"
   });
+  assert.match(cardStep, /data-or-breadcrumb="method"/);
+  assert.match(cardStep, />Payment method<\/span>/);
+  assert.match(cardStep, />Credit Card<\/span>/);
+  assert.doesNotMatch(cardStep, /part="method-grid"/);
+  assert.doesNotMatch(cardStep, /Pick your country/);
   assert.match(cardStep, /Credit \/ debit card/);
+  assert.doesNotMatch(cardStep, />USD<\/p>/);
   assert.match(cardStep, /part="country-select"/);
   assert.match(cardStep, /<select data-or-country="US">/);
   assert.match(cardStep, />United States<\/option>/);
@@ -107,6 +122,30 @@ test("elements render payment wizard route choices and providers from browser st
   assert.doesNotMatch(cardStep, /part="country-map"/);
   assert.doesNotMatch(cardStep, /US supported|Not US/);
 
+  const tutorialIntro = renderOpenReceivePaymentWizardHtml({
+    selectedMethod: "card",
+    selectedCountryCode: "US",
+    activeTutorialProviderId: "strike",
+    activeTutorialIndex: 0
+  });
+  assert.match(tutorialIntro, /Pay a Lightning invoice with Strike/);
+  assert.match(tutorialIntro, /part="tutorial-header-logo" alt="" src="[^"]*assets\/provider-icons\/strike\.png"/);
+  assert.match(tutorialIntro, /part="tutorial-provider-logo" alt="" src="[^"]*assets\/provider-icons\/strike\.png"/);
+  assert.match(tutorialIntro, /It's easy to make this payment using Strike\./);
+  assert.match(tutorialIntro, /The first step is to copy the invoice to your clipboard\./);
+  assert.match(tutorialIntro, />Copy invoice</);
+  assert.match(tutorialIntro, /Step 1 of 5/);
+  assert.doesNotMatch(tutorialIntro, /assets\/pay_tutorials\/strike-1\.webp/);
+
+  const copiedTutorialIntro = renderOpenReceivePaymentWizardHtml({
+    selectedMethod: "card",
+    selectedCountryCode: "US",
+    activeTutorialProviderId: "strike",
+    activeTutorialIndex: 0,
+    activeTutorialCopied: true
+  });
+  assert.match(copiedTutorialIntro, /Copied! Click next below to continue with tutorial\./);
+
   const tutorialStep = renderOpenReceivePaymentWizardHtml({
     selectedMethod: "card",
     selectedCountryCode: "US",
@@ -114,16 +153,28 @@ test("elements render payment wizard route choices and providers from browser st
     activeTutorialIndex: 2
   });
   assert.match(tutorialStep, /Pay a Lightning invoice with Strike/);
+  assert.match(tutorialStep, /part="tutorial-header-logo" alt="" src="[^"]*assets\/provider-icons\/strike\.png"/);
   assert.match(tutorialStep, /assets\/pay_tutorials\/strike-2\.webp/);
   assert.match(tutorialStep, /Choose Bitcoin wallet/);
-  assert.match(tutorialStep, /Step 2 of 4/);
+  assert.match(tutorialStep, /Step 3 of 5/);
+
+  const finalTutorialStep = renderOpenReceivePaymentWizardHtml({
+    selectedMethod: "card",
+    selectedCountryCode: "US",
+    activeTutorialProviderId: "strike",
+    activeTutorialIndex: 4
+  });
+  assert.match(finalTutorialStep, /Step 5 of 5/);
+  assert.match(finalTutorialStep, />Exit<\/button>/);
+  assert.doesNotMatch(finalTutorialStep, />Next<\/button>/);
 });
 
 test("elements render package-owned theme toggle HTML", () => {
-  const html = renderOpenReceiveThemeToggleHtml("Dark mode");
+  const html = renderOpenReceiveThemeToggleHtml("dark mode");
   assert.match(html, /data-openreceive-theme-toggle/);
   assert.match(html, /part="button"/);
-  assert.match(html, /Dark mode/);
+  assert.match(html, /dark mode/);
+  assert.doesNotMatch(html, /or-theme-toggle-icon-dark/);
   assert.equal(OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME, "openreceive-theme-toggle");
 });
 
@@ -148,7 +199,7 @@ test("elements package exposes shared browser-owned checkout styles", () => {
     new RegExp(escapeRegExp(openReceiveCheckoutElementStyles.trim().slice(0, 20)))
   );
   assert.match(
-    renderOpenReceiveThemeToggleHtml("Dark mode"),
+    renderOpenReceiveThemeToggleHtml("dark mode"),
     new RegExp(escapeRegExp(openReceiveThemeToggleElementStyles.trim().slice(0, 20)))
   );
   assert.match(source, /openReceiveCheckoutElementStyles/);
@@ -157,12 +208,13 @@ test("elements package exposes shared browser-owned checkout styles", () => {
   assert.doesNotMatch(source, /--or-theme-toggle-bg/);
 });
 
-test("elements escape invoice text and reject NWC strings", () => {
+test("elements hide invoice text and reject NWC strings", () => {
   const html = renderOpenReceiveCheckoutHtml({
     invoice: "lnbc-test<&"
   });
 
-  assert.match(html, /lnbc-test&lt;&amp;/);
+  assert.doesNotMatch(html, /lnbc-test/);
+  assert.doesNotMatch(html, /<textarea/);
   assert.throws(
     () =>
       renderOpenReceiveCheckoutHtml({

@@ -80,11 +80,6 @@
       "route": "sol"
     },
     {
-      "symbol": "bch",
-      "label": "Bitcoin Cash (BCH)",
-      "route": "bch"
-    },
-    {
       "symbol": "xrp",
       "label": "XRP",
       "route": "xrp"
@@ -93,16 +88,6 @@
       "symbol": "bnb",
       "label": "BNB",
       "route": "bnb"
-    },
-    {
-      "symbol": "ada",
-      "label": "Cardano (ADA)",
-      "route": "ada"
-    },
-    {
-      "symbol": "dash",
-      "label": "Dash",
-      "route": "dash"
     },
     {
       "symbol": "usd",
@@ -360,16 +345,6 @@
       "mechanism": "pay_invoice",
       "lightning_docs_url": "https://intercom.help/Bitnob-help-center/en/articles/6073721",
       "blurb": "Nigeria/Ghana/Kenya and West Africa. Local-currency deposits; send BTC to Lightning address or invoice. Powers Strike Send Globally to Africa."
-    },
-    "amber": {
-      "id": "amber",
-      "name": "Amber (AmberApp)",
-      "url": "https://amber.app",
-      "us": false,
-      "pays_arbitrary_invoice": true,
-      "mechanism": "pay_invoice",
-      "lightning_docs_url": "https://help.amber.app/en/articles/9205794-how-do-i-send-bitcoin",
-      "blurb": "Australia. Bank transfer + card DCA; send/withdraw sats to any Lightning address (free over 210,000 sats). Voltage-powered."
     },
     "bringin": {
       "id": "bringin",
@@ -782,33 +757,6 @@
       ]
     },
     {
-      "id": "bch",
-      "symbol": "bch",
-      "label": "Bitcoin Cash (BCH)",
-      "summary": "Swap BCH to a Lightning invoice, or withdraw from a CEX.",
-      "providers": [
-        {
-          "provider": "fixedfloat",
-          "flagship": true
-        },
-        {
-          "provider": "simpleswap"
-        },
-        {
-          "provider": "changenow"
-        },
-        {
-          "provider": "sideshift"
-        },
-        {
-          "provider": "kraken"
-        },
-        {
-          "provider": "coinbase"
-        }
-      ]
-    },
-    {
       "id": "xrp",
       "symbol": "xrp",
       "label": "XRP",
@@ -850,48 +798,6 @@
         },
         {
           "provider": "binance"
-        }
-      ]
-    },
-    {
-      "id": "ada",
-      "symbol": "ada",
-      "label": "Cardano (ADA)",
-      "summary": "Swap ADA to a Lightning invoice, or trade to BTC on a CEX.",
-      "providers": [
-        {
-          "provider": "fixedfloat",
-          "flagship": true
-        },
-        {
-          "provider": "simpleswap"
-        },
-        {
-          "provider": "changenow"
-        },
-        {
-          "provider": "coinbase"
-        },
-        {
-          "provider": "kraken"
-        }
-      ]
-    },
-    {
-      "id": "dash",
-      "symbol": "dash",
-      "label": "Dash",
-      "summary": "Swap DASH to a Lightning invoice.",
-      "providers": [
-        {
-          "provider": "fixedfloat",
-          "flagship": true
-        },
-        {
-          "provider": "simpleswap"
-        },
-        {
-          "provider": "changenow"
         }
       ]
     }
@@ -1440,16 +1346,12 @@
         ],
         "AU": [
           {
-            "provider": "amber",
+            "provider": "kraken",
             "rank": 1
           },
           {
-            "provider": "kraken",
-            "rank": 2
-          },
-          {
             "provider": "binance",
-            "rank": 3
+            "rank": 2
           }
         ],
         "JP": [
@@ -1873,12 +1775,8 @@
         ],
         "AU": [
           {
-            "provider": "amber",
-            "rank": 1
-          },
-          {
             "provider": "kraken",
-            "rank": 2
+            "rank": 1
           }
         ],
         "JP": [
