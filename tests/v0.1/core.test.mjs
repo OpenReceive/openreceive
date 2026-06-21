@@ -262,6 +262,146 @@ test("settlement polling runner recovers and completes open invoices", async () 
   ]);
 });
 
+test("settlement polling runner recovers invoices long after local expiry", async () => {
+  const store = new InMemoryInvoiceStore();
+  store.createInvoice({
+    invoice_id: "or_inv_expired_during_outage",
+    merchant_scope: "demo:tenant",
+    operation: "invoice.create",
+    idempotency_key: "order-outage",
+    idempotency_request_hash: `sha256:${"b".repeat(64)}`,
+    payment_hash: PAYMENT_HASH,
+    invoice: "lnbc-outage",
+    amount_msats: 200000,
+    transaction_state: "pending",
+    workflow_state: "invoice_created",
+    settlement_action_state: "pending",
+    created_at: 1000,
+    expires_at: 1002,
+    metadata: {}
+  });
+
+  const now = 2800;
+  const recoverable = store.listRecoverableInvoices({
+    now,
+    grace_seconds: 15
+  });
+  let lookups = 0;
+  const events = [];
+  const runner = createOpenReceiveSettlementPollingRunner({
+    store,
+    client: {
+      async makeInvoice() {
+        throw new Error("makeInvoice is not needed by the polling runner");
+      },
+      async lookupInvoice(request) {
+        lookups += 1;
+        assert.equal(request.payment_hash, PAYMENT_HASH);
+        return {
+          payment_hash: PAYMENT_HASH,
+          state: "settled",
+          settled_at: 1400
+        };
+      }
+    },
+    onEvent: (event) => {
+      events.push(`${event.event}:${event.reason ?? ""}`);
+    },
+    clock: {
+      now: () => now,
+      sleep_until: async () => {
+        throw new Error("post-expiry settlement should not sleep before lookup");
+      }
+    }
+  });
+
+  const recovery = await runner.recoverOpenInvoices();
+  const result = await runner.watchInvoice("or_inv_expired_during_outage");
+  const stored = store.getInvoice("or_inv_expired_during_outage");
+
+  assert.deepEqual(
+    recoverable.map((invoice) => invoice.invoice_id),
+    ["or_inv_expired_during_outage"]
+  );
+  assert.deepEqual(recovery.invoice_ids, ["or_inv_expired_during_outage"]);
+  assert.equal(lookups, 1);
+  assert.equal(result.outcome, "settled");
+  assert.equal(stored.transaction_state, "settled");
+  assert.equal(stored.workflow_state, "settlement_action_completed");
+  assert.deepEqual(events, [
+    "invoice.verifying:final_lookup",
+    "invoice.settled:settlement_detected",
+    "invoice.settlement_action_completed:"
+  ]);
+});
+
+test("settlement polling runner closes expired invoices only after a post-expiry lookup", async () => {
+  const store = new InMemoryInvoiceStore();
+  store.createInvoice({
+    invoice_id: "or_inv_expiry_verified",
+    merchant_scope: "demo:tenant",
+    operation: "invoice.create",
+    idempotency_key: "order-expiry-verified",
+    idempotency_request_hash: `sha256:${"c".repeat(64)}`,
+    payment_hash: PAYMENT_HASH,
+    invoice: "lnbc-expiry-verified",
+    amount_msats: 200000,
+    transaction_state: "pending",
+    workflow_state: "invoice_created",
+    settlement_action_state: "pending",
+    created_at: 1000,
+    expires_at: 1002,
+    metadata: {}
+  });
+
+  let lookups = 0;
+  const events = [];
+  const runner = createOpenReceiveSettlementPollingRunner({
+    store,
+    client: {
+      async makeInvoice() {
+        throw new Error("makeInvoice is not needed by the polling runner");
+      },
+      async lookupInvoice(request) {
+        lookups += 1;
+        assert.equal(request.payment_hash, PAYMENT_HASH);
+        return {
+          payment_hash: PAYMENT_HASH,
+          state: "pending"
+        };
+      }
+    },
+    grace_policy: {
+      max_attempts: 0,
+      delay_seconds: 1
+    },
+    onEvent: (event) => {
+      events.push(`${event.event}:${event.reason ?? ""}`);
+    },
+    clock: {
+      now: () => 2800,
+      sleep_until: async () => {
+        throw new Error("zero grace attempts should not sleep");
+      }
+    }
+  });
+
+  const recovery = await runner.recoverOpenInvoices();
+  const result = await runner.watchInvoice("or_inv_expiry_verified");
+  const stored = store.getInvoice("or_inv_expiry_verified");
+
+  assert.deepEqual(recovery.invoice_ids, ["or_inv_expiry_verified"]);
+  assert.equal(lookups, 1);
+  assert.equal(result.outcome, "expired");
+  assert.equal(result.reason, "grace_exhausted");
+  assert.equal(stored.transaction_state, "expired");
+  assert.equal(stored.workflow_state, "expired_closed");
+  assert.deepEqual(events, [
+    "invoice.verifying:final_lookup",
+    "invoice.expired:grace_exhausted"
+  ]);
+});
+
 test("in-memory storage replays same idempotency request and conflicts on drift", async () => {
   const store = new InMemoryInvoiceStore();
   const firstHash = await createIdempotencyRequestHash({ amount_msats: 200000 });

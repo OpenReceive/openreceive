@@ -14,8 +14,8 @@ Implemented now:
 - internal verification for polling workers
 - `doctor` diagnostics for store, migration, NWC, and worker readiness; the
   doctor task fails if the app still uses the Ruby in-memory test store
-- payment notification handling where trusted `payment_received` events settle
-  the matching invoice directly
+- payment notification handling; trusted `payment_received` events settle the
+  matching invoice directly
 - ActiveRecord invoice store plus migration and model templates for the invoice
   storage shape
 - install generator skeleton that copies the controller, jobs, channel,
@@ -31,5 +31,6 @@ Implemented now:
 
 Run the poll and listen tasks as separate backend processes or worker roles.
 Do not run the long-lived loops as threads inside the web request process.
+Run both tasks; polling remains the fallback when notifications do not arrive.
 
 It does not include full real-wallet Ruby notification coverage yet.

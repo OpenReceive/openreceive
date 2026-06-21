@@ -425,7 +425,12 @@ class OpenReceiveTest < Minitest::Test
     )
 
     recoverable = store.recoverable_invoices(now: 1001)
+    recoverable_after_local_expiry = store.recoverable_invoices(
+      now: invoice_row.fetch("expires_at") + 3600,
+      grace_seconds: 15
+    )
 
     assert_equal ["or_inv_test_1"], recoverable.map { |row| row.fetch("invoice_id") }
+    assert_equal ["or_inv_test_1"], recoverable_after_local_expiry.map { |row| row.fetch("invoice_id") }
   end
 end

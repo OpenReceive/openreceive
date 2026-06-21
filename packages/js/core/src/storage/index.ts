@@ -229,7 +229,7 @@ export class InMemoryInvoiceStore {
     }
 
     return [...this.#byInvoiceId.values()]
-      .filter((row) => isRecoverableInvoice(row, input.now, graceSeconds))
+      .filter((row) => isRecoverableInvoice(row))
       .map((row) => cloneInvoiceStorageRow(row));
   }
 
@@ -434,11 +434,7 @@ export function validateInvoiceStorageRow(row: InvoiceStorageRow): void {
   }
 }
 
-function isRecoverableInvoice(
-  row: InvoiceStorageRow,
-  now: number,
-  graceSeconds: number
-): boolean {
+function isRecoverableInvoice(row: InvoiceStorageRow): boolean {
   if (
     row.workflow_state === "settlement_action_completed" ||
     row.workflow_state === "expired_closed" ||
@@ -456,7 +452,7 @@ function isRecoverableInvoice(
     return false;
   }
 
-  return row.expires_at + graceSeconds >= now;
+  return true;
 }
 
 function cloneInvoiceStorageRow(row: InvoiceStorageRow): InvoiceStorageRow {

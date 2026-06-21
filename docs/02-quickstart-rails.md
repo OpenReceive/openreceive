@@ -47,13 +47,15 @@ own the two runner entry points the app deploys:
 - `bin/rails openreceive:poll` or a generated recurring job for settlement
   polling and restart recovery
 - `bin/rails openreceive:listen` or a generated long-running job for
-  payment_received notification subscriptions where the wallet supports them
+  payment_received notifications
 - `bin/rails openreceive:doctor` to check storage, migration, NWC preflight,
   and worker readiness. The doctor task fails if the app is still using the
   Ruby in-memory test store or a store without migration diagnostics.
 
 Deploy those as separate backend processes or worker roles. Do not put the
 long-running polling loop or notification subscription in a web request thread.
+Developers should run both poll and listen; polling remains the fallback when
+notifications do not arrive.
 The Rails package should generate and own the OpenReceive invoice tables and
 ActiveRecord model; the host app should not hand-design those rows. The host app
 provides order/user references in metadata and app-owned hooks such as

@@ -13,9 +13,9 @@ receive-only invoices.
 The v0.1 reference path is contract-first and server-owned:
 
 - `spec/` is the source of truth for schemas, shared data, and test vectors.
-- `packages/js/` contains the core contracts, Node NWC adapter, Express and
-  Next.js routes, browser helpers, provider data, testkit, elements, and React
-  packages.
+- `packages/js/` contains the core contracts, Node NWC adapter, Express,
+  Fetch-style, raw Node, and Next.js route bridges, browser helpers, provider
+  data, testkit, elements, and React packages.
 - `examples/hello-fruit/server/` contains the Express + React, static HTML
   + small API, and Next.js fullstack Hello Fruit demos.
 - `demos/deploy/` contains public-safe hosted demo deployment templates.
@@ -120,6 +120,8 @@ checkout always needs a merchant-controlled backend component.
 Public docs live in `docs/` and are indexed by `docs/manifest.json`.
 
 - `docs/01-quickstart-node.md` is the current working backend quickstart.
+- `docs/17-background-workers.md` shows how to run the web app and the
+  combined OpenReceive backend worker on common hosts.
 - `docs/11-conformance.md` covers shared vectors, mock wallet, and live wallet
   smoke expectations.
 - `docs/13-demo-deployment.md` covers the separate demo edge and deployment

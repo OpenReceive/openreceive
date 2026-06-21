@@ -86,9 +86,10 @@ The reference flow:
 5. Frontend receives only non-secret invoice display data.
 6. Frontend renders QR, copy button, lightning URI, countdown, payment routes,
    and transaction/workflow state.
-7. Backend listens for trusted NWC payment_received notifications where
-   practical and also polls lookup_invoice through a background job, queue
-   worker, scheduled task, or long-running framework worker.
+7. Backend runs the package notification listener for trusted NWC
+   payment_received notifications and also polls lookup_invoice through a
+   background job, queue worker, scheduled task, or long-running framework
+   process.
 8. Backend marks settlement from either a trusted payment_received notification
    for the stored payment_hash or a lookup_invoice result with settled_at or
    transaction_state/state == "settled". A preimage is corroborating proof, not
@@ -151,8 +152,9 @@ Security and correctness:
   - Use idempotency keys for invoice creation.
   - Use exact decimal/fixed-point money math, not floating point.
   - When local expiry is reached, perform a final lookup and only close the
-    invoice as expired when wallet truth confirms expiry or the grace policy is
-    exhausted.
+    invoice as expired when a post-expiry wallet lookup confirms expiry or the
+    post-expiry grace policy is exhausted. This remains true after server
+    restarts or long downtime.
   - Redact wallet secrets from logs, errors, telemetry, and screenshots.
 
 Architecture:
@@ -306,14 +308,16 @@ Next developer-experience layer:
 
     Node:
       - Ship a package CLI with `openreceive init`, `openreceive migrate`,
-        `openreceive doctor`, `openreceive poll`, and `openreceive listen`.
+        `openreceive doctor`, `openreceive worker`, `openreceive poll`, and
+        `openreceive listen`.
       - `init` should generate the smallest server-only config stub, env
-        example, poll/listen entrypoints, and framework-specific route wiring.
+        example, a combined worker entrypoint, optional split poll/listen
+        entrypoints, and framework-specific route wiring.
       - `migrate` should run package-owned OpenReceive migrations without
         requiring developers to copy SQL from docs.
       - `doctor` should verify database connectivity, required tables/indexes,
         migration version, durable store usage in production, NWC preflight,
-        secret redaction behavior, and poll/listen runner readiness.
+        secret redaction behavior, and worker runner readiness.
       - Support Node SQLite as a first-class package-owned store alongside
         Postgres. SQLite is the preferred local/small-app path; Postgres is the
         preferred production/reference path. Both must use the same lifecycle,
@@ -412,8 +416,7 @@ Every serious server-side OpenReceive package must ship two package-owned
 backend runners:
 
   1. A settlement polling runner.
-  2. A payment notification listener runner, where the wallet/NWC client
-     supports payment_received subscriptions.
+  2. A payment notification listener runner.
 
 These runners are not OpenReceive-hosted daemons, sidecars, gateways, or
 separate OpenReceive databases. They are code installed into the merchant's own
@@ -423,7 +426,7 @@ runtime. The clear production shape is:
 
   web process       -> mounts OpenReceive HTTP routes
   poll process      -> runs settlement polling/recovery
-  listen process    -> runs payment notification subscription where supported
+  listen process    -> keeps the payment notification subscription open
 
 OpenReceive owns:
 
@@ -452,15 +455,17 @@ The required backend package API shape:
 
   app_openreceive = create/configure OpenReceive with wallet + store + hooks
   app_openreceive.mount_routes()
-  app_openreceive.run_settlement_polling_process()
-  app_openreceive.run_payment_notification_process()
+  app_openreceive.run_openreceive_worker_process()
+  app_openreceive.run_settlement_polling_process()       # optional split mode
+  app_openreceive.run_payment_notification_process()     # optional split mode
 
-Packages should expose functions that are easy to call from separate process
-entrypoints:
+Packages should expose functions that are easy to call from a single worker
+entrypoint, with split entrypoints available for hosts that want isolation:
 
   Node/Express:
-    node scripts/openreceive-poll.js
-    node scripts/openreceive-listen.js
+    node scripts/openreceive-worker.js
+    node scripts/openreceive-poll.js      # optional split mode
+    node scripts/openreceive-listen.js    # optional split mode
 
   Rails:
     generated jobs/tasks for polling and listening.
@@ -468,8 +473,9 @@ entrypoints:
 For production, each package must also expose the native worker shape:
 
   Node:
-    `openreceive poll` and `openreceive listen` CLI commands, plus
-    function exports for custom poll/listen scripts.
+    `openreceive worker` for the normal one-worker deployment, plus
+    `openreceive poll` and `openreceive listen` CLI commands and function
+    exports for custom split-mode scripts.
 
   Rails:
     generated ActiveJob/Solid Queue/Sidekiq/GoodJob job, plus
@@ -496,30 +502,34 @@ For production, each package must also expose the native worker shape:
     storage contract.
 
 On poll process boot, the polling runner must query app-owned durable storage
-for invoices whose workflow is not terminal and whose local expiry plus grace
-window has not passed, plus settled invoices whose settlement action has not
-completed. It then continues lookup polling until each invoice is settled,
+for every non-terminal invoice, including invoices whose local `expires_at`
+passed while the server was down, plus settled invoices whose settlement action
+has not completed. Local expiry must never remove an invoice from recovery by
+itself. The runner then continues lookup polling until each invoice is settled,
 expired, failed, cancelled, or its settlement action boundary completes.
 
-The notification listener runner must hold the NWC payment_received
-subscription open where supported. A payment_received notification from the
-configured NWC client is a trusted payment-received event for its payment_hash:
-the runner may mark the matching invoice settled, stop treating it as pollable,
-and run the idempotent settlement action without an extra lookup_invoice round
-trip. If notification support is absent, the listener command must skip or fail
-clearly while the polling runner remains sufficient for correctness.
+The notification listener runner must try to hold the NWC payment_received
+subscription open. A payment_received notification from the configured NWC
+client is a trusted payment-received event for its payment_hash: the runner may
+mark the matching invoice settled, stop treating it as pollable, and run the
+idempotent settlement action without an extra lookup_invoice round trip. If no
+notifications arrive, or a client cannot open a notification stream, the listen
+process must idle without making the deployment fail and the polling runner
+remains sufficient for correctness.
 
 Do not make multiprocess coordination, thread pools, or lock managers part of
 the first runner contract. Settlement and settlement-action writes must still
 be idempotent and replay-safe, but v0.1 should keep the public installation
-story to two obvious package-provided processes: poll and listen.
+story to one obvious package-provided backend worker that starts polling and
+listening together. Developers should not have to decide whether their wallet
+supports notifications during installation.
 
 
 Serverless And Edge Policy
 --------------------------
 
 Do not promise serverless or edge backends as a complete OpenReceive path until
-the settlement-loop and crypto constraints are proven.
+the settlement-loop, notification listener, and crypto constraints are proven.
 
 The problem:
 
@@ -534,10 +544,13 @@ Allowed stateless patterns:
 
   - Client-driven polling of a backend lookup endpoint, with backend
     authorization and rate limits.
-  - Scheduled/cron functions that poll open invoices from durable storage.
+  - Scheduled/cron functions that run one backend polling pass from durable
+    storage, equivalent to `openreceive poll --once`.
   - Durable primitives such as Cloudflare Durable Objects, queues, or
     long-lived worker-style runtimes that can own invoice state.
   - A small ordinary API service behind the static site.
+  - A static/serverless frontend paired with a persistent companion service for
+    `openreceive worker`.
 
 Edge constraints:
 
@@ -554,9 +567,10 @@ v0.1 policy:
     scheduled/durable backend, not an assumed one-shot serverless function.
   - Cloudflare Worker, Vercel Edge, and similar examples are later compatibility
     proofs after the JS reference path is green.
-  - If a serverless example is included, its README must name who owns polling:
-    browser lookup loop, cron job, durable object, queue worker, or external
-    small API.
+  - If a serverless example is included, its README must give copyable
+    scheduled-poll setup for the host and name the persistent companion service
+    that runs `openreceive worker`, if the example includes notification
+    wakeups.
 
 
 Canonical HTTP Contract
@@ -1036,8 +1050,8 @@ OpenReceive workflow states:
     returned settled or expired.
 
   expired_closed
-    Wallet lookup confirmed expiry, or the grace verification policy completed
-    without settlement.
+    A post-expiry wallet lookup confirmed expiry, or the post-expiry grace
+    verification policy completed without settlement.
 
   failed_closed
     Wallet, provider, network, validation, or internal error occurred and the
@@ -1222,8 +1236,8 @@ Notifications:
   - Subscribe according to the negotiated/advertised encryption mode.
   - Filter notifications by wallet service pubkey and the client pubkey p tag.
   - Notifications can mark the matching invoice settled immediately.
-  - Notifications do not replace polling as the recovery path for missed,
-    delayed, or unsupported notification delivery.
+  - Notifications do not replace polling as the recovery path for missed or
+    delayed notification delivery.
   - Notification handlers must be idempotent.
   - Duplicate notifications, including duplicate NIP-04/NIP-44 notifications
     from wallets that publish both, must not double-credit payments.
@@ -1993,7 +2007,7 @@ Maintenance gate for third-party NWC clients:
   - Supports NIP-47 receive checkout methods: get_info, make_invoice, and
     lookup_invoice.
   - Supports pay_invoice for general standalone NWC client use.
-  - Supports or can be extended to support payment_received notifications.
+  - Provides or can be wrapped with a payment_received notification listener.
   - Handles NIP-04 encrypted wallet messages.
   - Supports or can be extended to support NIP-44 v2 negotiation.
   - Has tests or can pass OpenReceive's wallet-profile NWC conformance smoke
@@ -2094,8 +2108,8 @@ Minimum NWC client responsibilities:
   - Optionally implement list_transactions for diagnostics.
   - Never expose pay_invoice through the OpenReceive receive-checkout surface.
   - Do not implement pay_keysend or hold-invoice methods for v0.1.
-  - Subscribe to payment_received notifications where the language runtime and
-    wallet support it.
+  - Subscribe to payment_received notifications through the package listener
+    API.
   - Dedupe notifications by payment_hash.
   - Dedupe duplicate NIP-04/NIP-44 notifications.
   - Reconnect with bounded exponential backoff.
@@ -2129,9 +2143,8 @@ Standalone NWC client test scripts:
       settlement.
 
     test:live:notifications
-      Subscribe to payment_received notifications where supported, trigger
-      lookup_invoice after notification, and prove duplicate notifications do
-      not double-settle.
+      Subscribe to payment_received notifications, trigger lookup_invoice after
+      notification, and prove duplicate notifications do not double-settle.
 
   Live scripts must skip clearly when OPENRECEIVE_NWC is absent. They must not
   run on untrusted pull requests with secrets. They should be documented in
@@ -2277,7 +2290,7 @@ Backend SDK responsibilities:
   - Error normalization.
   - Settlement-state normalization.
   - Safe polling helper.
-  - Notification listener helper where practical.
+  - Notification listener helper.
   - Idempotency-key helper.
   - Framework storage hooks.
   - Framework job/worker hooks.
@@ -2703,7 +2716,7 @@ Each backend adapter should provide:
   - Guest checkout/session-token support where idiomatic.
   - Payment model/table migration or documented storage interface.
   - Polling job/worker integration.
-  - Notification listener integration where practical.
+  - Notification listener integration.
   - Fulfillment hook.
   - Middleware/security defaults.
   - Test helpers.
@@ -4233,7 +4246,7 @@ Important current code facts:
 
   - OpenReceive packages own the invoice persistence contract. Node has
     package-owned Postgres and SQLite stores plus migration, init, doctor,
-    poll, and listen CLI surfaces.
+    worker, poll, and listen CLI surfaces.
   - Express mounts the canonical HTTP contract, runs authorization hooks,
     supports signed event URLs, exposes SSE, verifies settlement by backend
     lookup, and fails closed in production when in-memory storage is used.
@@ -4390,7 +4403,7 @@ Deliverables:
   - Next.js fruit demo.
   - Static HTML + small API fruit demo.
   - CoinGecko-compatible price adapter.
-  - Notification listener helper where practical in Node.
+  - Notification listener helper in Node.
   - @openreceive/testkit.
 
 Definition of done:

@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import { Readable } from "node:stream";
 import test from "node:test";
 import {
+  createOpenReceiveFetchHandler,
+  createOpenReceiveFetchRuntime,
+  createOpenReceiveNodeHandler,
   createOpenReceiveExpressHandlers,
   createOpenReceiveExpressSettlementPollingRunner,
   startOpenReceiveExpressPaymentNotificationRunner,
@@ -132,6 +136,92 @@ test("create invoice uses idempotency replay without a second wallet call", asyn
   assert.equal(second.statusCode, 200);
   assert.equal(second.body.invoice_id, first.body.invoice_id);
   assert.equal(wallet.makeInvoiceCalls, 1);
+});
+
+test("Fetch bridge dispatches OpenReceive routes for Fetch-style frameworks", async () => {
+  const wallet = new FakeWallet();
+  const runtime = createOpenReceiveFetchRuntime({
+    client: wallet,
+    store: new InMemoryInvoiceStore(),
+    eventBus: new InMemoryInvoiceEventBus(),
+    merchantScope: () => "demo:fetch",
+    unsafeAllowUnauthenticatedDemoMode: true,
+    clock: () => 1000
+  });
+  const handler = createOpenReceiveFetchHandler({
+    runtime
+  });
+
+  const createResponse = await handler(new Request("http://app.test/openreceive/v1/invoices", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "idempotency-key": "fetch-order-1"
+    },
+    body: JSON.stringify({
+      amount_msats: 200000,
+      description: "Fetch bridge invoice"
+    })
+  }));
+  const invoice = await createResponse.json();
+
+  assert.equal(createResponse.status, 201);
+  assert.equal(invoice.transaction_state, "pending");
+  assert.equal(wallet.makeInvoiceCalls, 1);
+
+  const missingResponse = await handler(new Request("http://app.test/not-openreceive"));
+  assert.equal(missingResponse.status, 404);
+
+  const noWalletHandler = createOpenReceiveFetchHandler({
+    runtime: undefined
+  });
+  const healthResponse = await noWalletHandler(
+    new Request("http://app.test/openreceive/v1/health")
+  );
+  assert.equal(healthResponse.status, 200);
+  assert.deepEqual(await healthResponse.json(), {
+    ok: true,
+    wallet_configured: false
+  });
+});
+
+test("Node raw bridge dispatches OpenReceive routes for Fastify and Koa style servers", async () => {
+  const handler = createOpenReceiveNodeHandler({
+    runtime: undefined
+  });
+  const req = new Readable({
+    read() {
+      this.push(null);
+    }
+  });
+  req.method = "GET";
+  req.url = "/openreceive/v1/health";
+  req.headers = {
+    host: "app.test"
+  };
+  req.socket = {};
+
+  const chunks = [];
+  const headers = {};
+  const res = {
+    statusCode: 200,
+    setHeader(name, value) {
+      headers[name.toLowerCase()] = value;
+    },
+    write(chunk) {
+      chunks.push(Buffer.from(chunk));
+    },
+    end() {}
+  };
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(headers["content-type"], "application/json");
+  assert.deepEqual(JSON.parse(Buffer.concat(chunks).toString("utf8")), {
+    ok: true,
+    wallet_configured: false
+  });
 });
 
 test("create invoice does not expose a wallet expiry longer than requested", async () => {
@@ -720,6 +810,31 @@ test("Express notification runner trusts payment_received settlement events", as
   await listener.stop();
   assert.equal(logs.some((entry) => entry.event === "notification.listener.starting"), true);
   assert.equal(logs.some((entry) => entry.event === "notification.listener.started"), true);
+  assert.equal(logs.some((entry) => entry.event === "notification.listener.stopped"), true);
+});
+
+test("Express notification runner idles when a notification stream is unavailable", async () => {
+  const logs = [];
+  const listener = await startOpenReceiveExpressPaymentNotificationRunner({
+    client: {
+      async makeInvoice() {
+        throw new Error("not needed");
+      },
+      async lookupInvoice() {
+        throw new Error("not needed");
+      }
+    },
+    store: new InMemoryInvoiceStore(),
+    eventBus: new InMemoryInvoiceEventBus(),
+    merchantScope: () => "demo:hello-fruit",
+    logger: (entry) => {
+      logs.push(entry);
+    }
+  });
+
+  assert.equal(listener.seenPaymentHashes.size, 0);
+  assert.equal(logs.some((entry) => entry.event === "notification.listener.idle"), true);
+  await listener.stop();
   assert.equal(logs.some((entry) => entry.event === "notification.listener.stopped"), true);
 });
 

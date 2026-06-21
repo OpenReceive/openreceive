@@ -292,7 +292,7 @@ export class OpenReceiveSqliteInvoiceStore implements OpenReceiveInvoiceStore {
   async listRecoverableInvoices(
     input: OpenReceiveRecoverableInvoiceQuery
   ): Promise<InvoiceStorageRow[]> {
-    const graceSeconds = input.grace_seconds ?? 15;
+    assertRecoverableInvoiceQuery(input);
     const result = await this.#client.execute(
       `SELECT * FROM ${this.#tableName}
        WHERE workflow_state NOT IN (
@@ -303,13 +303,9 @@ export class OpenReceiveSqliteInvoiceStore implements OpenReceiveInvoiceStore {
         )
         AND (
           (transaction_state = 'settled' AND settlement_action_state <> 'completed')
-          OR (
-            transaction_state NOT IN ('settled', 'expired', 'failed')
-            AND expires_at + ? >= ?
-          )
+          OR transaction_state NOT IN ('settled', 'expired', 'failed')
         )
-       ORDER BY created_at ASC, invoice_id ASC`,
-      [graceSeconds, input.now]
+       ORDER BY created_at ASC, invoice_id ASC`
     );
 
     return result.rows.map((storedRow) => normalizeSqliteInvoiceRow(storedRow));
@@ -539,6 +535,20 @@ function integerField(value: unknown, field: string): number {
     throw new TypeError(`OpenReceive SQLite row ${field} must be a safe integer`);
   }
   return parsed as number;
+}
+
+function assertRecoverableInvoiceQuery(
+  input: OpenReceiveRecoverableInvoiceQuery
+): void {
+  if (!Number.isSafeInteger(input.now) || input.now < 0) {
+    throw new TypeError("OpenReceive SQLite recoverable query now must be a non-negative safe integer");
+  }
+  if (
+    input.grace_seconds !== undefined &&
+    (!Number.isSafeInteger(input.grace_seconds) || input.grace_seconds < 0)
+  ) {
+    throw new TypeError("OpenReceive SQLite recoverable query grace_seconds must be a non-negative safe integer");
+  }
 }
 
 function jsonRecordField(value: unknown, field: string): Record<string, unknown> {

@@ -288,6 +288,10 @@ test("Node Postgres store owns invoice persistence and recovery semantics", asyn
   const created = await store.createInvoice(row);
   const replayed = await store.createInvoice(row);
   const recoverable = await store.listRecoverableInvoices({ now: 1001 });
+  const recoverableAfterLocalExpiry = await store.listRecoverableInvoices({
+    now: row.expires_at + 3600,
+    grace_seconds: 15
+  });
 
   assert.equal(created.status, "created");
   assert.equal(replayed.status, "replayed");
@@ -295,6 +299,7 @@ test("Node Postgres store owns invoice persistence and recovery semantics", asyn
   assert.equal((await store.getInvoiceByPaymentHash(row.payment_hash)).invoice_id, row.invoice_id);
   assert.equal((await store.getInvoiceByBolt11Invoice(row.invoice)).invoice_id, row.invoice_id);
   assert.deepEqual(recoverable.map((invoice) => invoice.invoice_id), [row.invoice_id]);
+  assert.deepEqual(recoverableAfterLocalExpiry.map((invoice) => invoice.invoice_id), [row.invoice_id]);
 
   const settled = await store.markSettled({
     invoice_id: row.invoice_id,
@@ -372,6 +377,10 @@ test("Node SQLite store owns invoice persistence and recovery semantics", async 
     const created = await store.createInvoice(row);
     const replayed = await store.createInvoice(row);
     const recoverable = await store.listRecoverableInvoices({ now: 1001 });
+    const recoverableAfterLocalExpiry = await store.listRecoverableInvoices({
+      now: row.expires_at + 3600,
+      grace_seconds: 15
+    });
 
     assert.equal(created.status, "created");
     assert.equal(replayed.status, "replayed");
@@ -379,6 +388,7 @@ test("Node SQLite store owns invoice persistence and recovery semantics", async 
     assert.equal((await store.getInvoiceByPaymentHash(row.payment_hash)).invoice_id, row.invoice_id);
     assert.equal((await store.getInvoiceByBolt11Invoice(row.invoice)).invoice_id, row.invoice_id);
     assert.deepEqual(recoverable.map((invoice) => invoice.invoice_id), [row.invoice_id]);
+    assert.deepEqual(recoverableAfterLocalExpiry.map((invoice) => invoice.invoice_id), [row.invoice_id]);
 
     const settled = await store.markSettled({
       invoice_id: row.invoice_id,
@@ -430,6 +440,7 @@ test("Node CLI initializes, migrates, and doctors SQLite setup", async () => {
     assert.equal(existsSync(path.join(tempRoot, "openreceive.config.example.mjs")), true);
     assert.equal(existsSync(path.join(tempRoot, "openreceive.config.mjs")), true);
     assert.equal(existsSync(path.join(tempRoot, "server/openreceive-routes.mjs")), true);
+    assert.equal(existsSync(path.join(tempRoot, "scripts/openreceive-worker.mjs")), true);
     assert.equal(existsSync(path.join(tempRoot, "scripts/openreceive-poll.mjs")), true);
     assert.equal(existsSync(path.join(tempRoot, "scripts/openreceive-listen.mjs")), true);
     assert.match(
@@ -441,12 +452,24 @@ test("Node CLI initializes, migrates, and doctors SQLite setup", async () => {
       /mountOpenReceiveExpressRoutes\(app, openreceive\)/
     );
     assert.match(
+      readFileSync(path.join(tempRoot, "scripts/openreceive-worker.mjs"), "utf8"),
+      /"worker"/
+    );
+    assert.match(
       readFileSync(path.join(tempRoot, "scripts/openreceive-poll.mjs"), "utf8"),
-      /"poll", "--config", "openreceive\.config\.mjs"/
+      /"poll"/
+    );
+    assert.doesNotMatch(
+      readFileSync(path.join(tempRoot, "scripts/openreceive-poll.mjs"), "utf8"),
+      /--config/
     );
     assert.match(
       readFileSync(path.join(tempRoot, "scripts/openreceive-listen.mjs"), "utf8"),
-      /"listen", "--config", "openreceive\.config\.mjs"/
+      /"listen"/
+    );
+    assert.doesNotMatch(
+      readFileSync(path.join(tempRoot, "scripts/openreceive-listen.mjs"), "utf8"),
+      /--config/
     );
 
     const sqlitePath = path.join(tempRoot, "storage", "openreceive.sqlite3");
@@ -505,7 +528,7 @@ test("Node CLI initializes, migrates, and doctors SQLite setup", async () => {
       poll: 0
     };
     const configDoctorCode = await runOpenReceiveCli({
-      argv: ["doctor", "--sqlite", sqlitePath, "--config", "openreceive.config.mjs"],
+      argv: ["doctor", "--sqlite", sqlitePath],
       cwd: tempRoot,
       env: {},
       stdout: io(stdout),
@@ -545,7 +568,7 @@ test("Node CLI initializes, migrates, and doctors SQLite setup", async () => {
     assert.match(stdout.join(""), /ok store package-owned durable invoice store configured/);
     assert.match(stdout.join(""), /ok routes route wiring accepts configured store/);
     assert.match(stdout.join(""), /ok runner poll can be constructed from config/);
-    assert.match(stdout.join(""), /ok runner listen client exposes payment_received subscription/);
+    assert.match(stdout.join(""), /ok runner listen can be started; polling remains the settlement fallback/);
     assert.match(stdout.join(""), /ok NWC preflight completed/);
     assert.match(stdout.join(""), /\[REDACTED_NWC\]/);
     assert.doesNotMatch(stdout.join(""), /nostr\+walletconnect:\/\//);
@@ -791,6 +814,8 @@ test("Node CLI runs poll and listen from a server config module", async () => {
     config: [],
     pollCreated: 0,
     pollRecovered: 0,
+    pollStarted: 0,
+    pollStopped: 0,
     listenStarted: 0,
     listenStopped: 0
   };
@@ -804,7 +829,11 @@ test("Node CLI runs poll and listen from a server config module", async () => {
     createOpenReceiveExpressSettlementPollingRunner(openreceive, runnerOptions) {
       calls.pollCreated += 1;
       assert.equal(openreceive, config);
-      assert.deepEqual(runnerOptions, { recoveryIntervalSeconds: 7 });
+      if (runnerOptions.recoveryIntervalSeconds === undefined) {
+        assert.deepEqual(runnerOptions, {});
+      } else {
+        assert.deepEqual(runnerOptions, { recoveryIntervalSeconds: 7 });
+      }
       return {
         async recoverOpenInvoices() {
           calls.pollRecovered += 1;
@@ -814,9 +843,11 @@ test("Node CLI runs poll and listen from a server config module", async () => {
           };
         },
         start() {
-          throw new Error("poll --once should not start the long-running loop");
+          calls.pollStarted += 1;
         },
-        stop() {}
+        stop() {
+          calls.pollStopped += 1;
+        },
       };
     },
     async startOpenReceiveExpressPaymentNotificationRunner(openreceive) {
@@ -861,12 +892,26 @@ test("Node CLI runs poll and listen from a server config module", async () => {
     });
     assert.equal(listenCode, 0);
     assert.match(stdout.join(""), /OpenReceive listen runner readiness verified\./);
+
+    const workerCode = await runOpenReceiveCli({
+      argv: ["worker", "--ready-only"],
+      cwd: tempRoot,
+      env: {},
+      stdout: io(stdout),
+      stderr: io(stderr),
+      loadConfigModule,
+      loadExpressRunners
+    });
+    assert.equal(workerCode, 0);
+    assert.match(stdout.join(""), /OpenReceive worker readiness verified\./);
     assert.equal(stderr.join(""), "");
-    assert.equal(calls.pollCreated, 1);
+    assert.equal(calls.pollCreated, 2);
     assert.equal(calls.pollRecovered, 1);
-    assert.equal(calls.listenStarted, 1);
-    assert.equal(calls.listenStopped, 1);
-    assert.equal(calls.config.length, 2);
+    assert.equal(calls.pollStarted, 1);
+    assert.equal(calls.pollStopped, 1);
+    assert.equal(calls.listenStarted, 2);
+    assert.equal(calls.listenStopped, 2);
+    assert.equal(calls.config.length, 3);
   } finally {
     rmSync(tempRoot, { force: true, recursive: true });
   }
@@ -898,6 +943,25 @@ test("payment notification listener dedupes trusted settlement notifications", a
 
   await listener.stop();
   assert.equal(client.unsubscribed, true);
+});
+
+test("payment notification listener is safe to start without a subscription method", async () => {
+  const listener = await startPaymentNotificationListener({
+    client: {
+      async makeInvoice() {
+        throw new Error("not needed");
+      },
+      async lookupInvoice() {
+        throw new Error("not needed");
+      }
+    },
+    onSettledInvoice: () => {
+      throw new Error("should not be called");
+    }
+  });
+
+  assert.equal(listener.seenPaymentHashes.size, 0);
+  await listener.stop();
 });
 
 test("payment notification listener trusts notifications without settled_at", async () => {
@@ -1129,10 +1193,9 @@ class FakePostgresClient {
     }
 
     if (sql.includes("ORDER BY created_at")) {
-      const [graceSeconds, now] = values;
       return {
         rows: this.rows
-          .filter((row) => isRecoverableFakeRow(row, graceSeconds, now))
+          .filter((row) => isRecoverableFakeRow(row))
           .sort((left, right) => left.created_at - right.created_at)
           .map((row) => structuredClone(row))
       };
@@ -1216,7 +1279,7 @@ class FakePostgresClient {
   }
 }
 
-function isRecoverableFakeRow(row, graceSeconds, now) {
+function isRecoverableFakeRow(row) {
   if (
     [
       "settlement_action_completed",
@@ -1231,7 +1294,7 @@ function isRecoverableFakeRow(row, graceSeconds, now) {
     return row.settlement_action_state !== "completed";
   }
   if (["expired", "failed"].includes(row.transaction_state)) return false;
-  return row.expires_at + graceSeconds >= now;
+  return true;
 }
 
 function invoiceRow(overrides = {}) {

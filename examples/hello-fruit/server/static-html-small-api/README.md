@@ -50,4 +50,5 @@ Hosted-demo helpers expose `/healthz`, `/source`, `/docs`, `/robots.txt`, and
 
 This demo uses `unsafeAllowUnauthenticatedDemoMode` because it is a local
 single-user example. Production apps should use app auth and CSRF hooks.
-Production Node apps should deploy separate web, poll, and listen processes.
+Production Node apps should deploy a web process plus one OpenReceive worker;
+see [Background Process Deployment](../../../../docs/17-background-workers.md).

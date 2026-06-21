@@ -94,6 +94,13 @@
       "public": true
     },
     {
+      "slug": "background-workers",
+      "title": "Background Process Deployment",
+      "source_path": "docs/17-background-workers.md",
+      "category": "operations",
+      "public": true
+    },
+    {
       "slug": "conformance",
       "title": "Conformance",
       "source_path": "docs/11-conformance.md",

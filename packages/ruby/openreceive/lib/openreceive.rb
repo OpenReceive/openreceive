@@ -513,10 +513,10 @@ module OpenReceive
     end
 
     def recoverable_invoices(now:, grace_seconds: 15)
-      current = integer(now)
-      grace = integer(grace_seconds)
+      integer(now)
+      integer(grace_seconds)
       @by_invoice_id.values.select do |row|
-        recoverable_invoice?(row, current, grace)
+        recoverable_invoice?(row)
       end.map { |row| deep_copy(row) }
     end
 
@@ -596,7 +596,7 @@ module OpenReceive
       )
     end
 
-    def recoverable_invoice?(row, now, grace_seconds)
+    def recoverable_invoice?(row)
       return false if %w[
         settlement_action_completed
         expired_closed
@@ -607,7 +607,7 @@ module OpenReceive
       return row["settlement_action_state"] != "completed" if row["transaction_state"] == "settled"
       return false if %w[expired failed].include?(row["transaction_state"])
 
-      integer(row.fetch("expires_at")) + grace_seconds >= now
+      true
     end
 
     def validate_invoice_row(row)

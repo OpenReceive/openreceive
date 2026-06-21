@@ -29,6 +29,7 @@
     "perform one final lookup at local expiry",
     "mark expiry_pending_verification when wallet truth is inconclusive",
     "perform bounded grace lookups after local expiry",
+    "recover non-terminal invoices after restart even when local expiry plus grace has passed",
     "publish invoice.expired only after wallet expiry or exhausted grace policy"
   ],
   "examples": [

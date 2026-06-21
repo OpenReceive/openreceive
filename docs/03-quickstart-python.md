@@ -15,9 +15,10 @@ A Python integration should install into the merchant's existing server app.
 The app should own auth, invoice storage, order lookup, merchant settlement
 actions, and worker runtime. The package should own two backend entry points:
 a poll command/task for settlement polling and restart recovery, and a listen
-command/task for payment_received notifications where the NWC client supports
-them. Deploy poll and listen as separate backend processes or worker roles, not
-as threads inside the web request path.
+command/task for payment_received notifications. Deploy poll and listen as
+separate backend processes or worker roles, not as threads inside the web
+request path. Developers should run both; polling remains the fallback when
+notifications do not arrive.
 The Python package should ship the OpenReceive persistence model and migration
 path for the target framework or ORM; host apps should not create their own
 invoice/idempotency tables. The host app supplies metadata references and

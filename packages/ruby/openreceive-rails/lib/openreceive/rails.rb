@@ -136,13 +136,10 @@ module OpenReceive
         model_class
           .where.not(workflow_state: TERMINAL_WORKFLOW_STATES)
           .where(
-            "(transaction_state = ? AND settlement_action_state <> ?) OR " \
-            "(transaction_state NOT IN (?) AND expires_at_seconds + ? >= ?)",
+            "(transaction_state = ? AND settlement_action_state <> ?) OR transaction_state NOT IN (?)",
             "settled",
             "completed",
-            TERMINAL_TRANSACTION_STATES,
-            Integer(grace_seconds),
-            Integer(now)
+            TERMINAL_TRANSACTION_STATES
           )
           .order(:created_at_seconds, :id)
           .map { |record| row_from_record(record) }
@@ -367,11 +364,7 @@ module OpenReceive
                   else
                     doctor_check("rails.worker.poll", "error", "store does not support recoverable_invoices")
                   end
-        checks << if @config.client.respond_to?(:subscribe_to_payment_received)
-                    doctor_check("rails.worker.listen", "ok", "client exposes payment_received notifications")
-                  else
-                    doctor_check("rails.worker.listen", "warn", "client does not expose payment_received notifications; run polling")
-                  end
+        checks << doctor_check("rails.worker.listen", "ok", "listen task can start; polling remains the settlement fallback")
 
         {
           "ok" => checks.none? { |check| check.fetch("status") == "error" },
@@ -428,12 +421,10 @@ module OpenReceive
       end
 
       def listen_for_payment_notifications
-        unless @config.client.respond_to?(:subscribe_to_payment_received)
-          raise NotImplementedError, "Configured receive client does not support payment_received notification subscriptions"
-        end
-
-        @config.client.subscribe_to_payment_received do |notification|
-          handle_payment_received(notification: notification)
+        if @config.client.respond_to?(:subscribe_to_payment_received)
+          @config.client.subscribe_to_payment_received do |notification|
+            handle_payment_received(notification: notification)
+          end
         end
 
         sleep

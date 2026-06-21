@@ -2,6 +2,10 @@ import {
   createHmac,
   timingSafeEqual
 } from "node:crypto";
+import type {
+  IncomingMessage,
+  ServerResponse
+} from "node:http";
 import {
   InMemoryInvoiceStore,
   InvoiceNotFoundError,
@@ -167,10 +171,66 @@ export interface OpenReceiveExpressHandlers {
   capabilities: ExpressLikeHandler;
 }
 
+export interface OpenReceiveFetchRuntime {
+  readonly store: OpenReceiveInvoiceStore;
+  readonly eventBus: InMemoryInvoiceEventBus;
+  readonly handlers: OpenReceiveExpressHandlers;
+}
+
+export interface OpenReceiveFetchRouteMatch {
+  readonly name: keyof OpenReceiveExpressHandlers;
+  readonly params?: Record<string, string | undefined>;
+}
+
+export interface DispatchOpenReceiveFetchHandlerOptions {
+  readonly runtime: OpenReceiveFetchRuntime;
+  readonly name: keyof OpenReceiveExpressHandlers;
+  readonly request: Request;
+  readonly params?: Record<string, string | undefined>;
+}
+
+export interface DispatchOpenReceiveFetchRouteOptions {
+  readonly runtime: OpenReceiveFetchRuntime;
+  readonly request: Request;
+  readonly path: readonly string[];
+}
+
+export interface DispatchOpenReceiveFetchNoWalletRouteOptions {
+  readonly request: Request;
+  readonly path: readonly string[];
+  readonly noWallet?: OpenReceiveFetchNoWalletOptions;
+}
+
+export interface OpenReceiveFetchNoWalletOptions {
+  readonly basePath?: string;
+  readonly message?: string;
+}
+
+export type OpenReceiveFetchRuntimeSource =
+  | OpenReceiveFetchRuntime
+  | undefined
+  | (() =>
+    | OpenReceiveFetchRuntime
+    | undefined
+    | Promise<OpenReceiveFetchRuntime | undefined>);
+
+export interface CreateOpenReceiveFetchHandlerOptions {
+  readonly runtime: OpenReceiveFetchRuntimeSource;
+  readonly basePath?: string;
+  readonly noWallet?: OpenReceiveFetchNoWalletOptions;
+}
+
+export interface CreateOpenReceiveNodeHandlerOptions
+  extends CreateOpenReceiveFetchHandlerOptions {
+  readonly origin?: string;
+}
+
 const DEFAULT_BASE_PATH = "/openreceive/v1";
 const DEFAULT_HEARTBEAT_SECONDS = 20;
 const DEFAULT_SIGNED_EVENT_TTL_SECONDS = 300;
 const DEFAULT_SIGNED_EVENT_QUERY_PARAM = "_or_evt";
+const DEFAULT_NO_WALLET_MESSAGE =
+  "Set OPENRECEIVE_NWC before creating live invoices.";
 const HEX_64 = /^[0-9a-fA-F]{64}$/;
 
 export type OpenReceiveInvoiceEventName =
@@ -264,6 +324,282 @@ export function mountOpenReceiveExpressRoutes(
   return handlers;
 }
 
+export function createOpenReceiveFetchRuntime(
+  options: OpenReceiveExpressOptions
+): OpenReceiveFetchRuntime {
+  const store = options.store ?? new InMemoryInvoiceStore();
+  const eventBus = options.eventBus ?? new InMemoryInvoiceEventBus();
+
+  return {
+    store,
+    eventBus,
+    handlers: createOpenReceiveExpressHandlers({
+      ...options,
+      store,
+      eventBus
+    })
+  };
+}
+
+export function createOpenReceiveFetchHandler(
+  options: CreateOpenReceiveFetchHandlerOptions
+): (request: Request) => Promise<Response> {
+  return async (request) => {
+    const path = createOpenReceiveFetchPath(request, options.basePath);
+    if (path === undefined) return createOpenReceiveFetchRouteNotFoundResponse();
+
+    const runtime = await resolveOpenReceiveFetchRuntime(options.runtime);
+    if (runtime === undefined) {
+      return dispatchOpenReceiveFetchNoWalletRoute({
+        request,
+        path,
+        noWallet: options.noWallet
+      });
+    }
+
+    return dispatchOpenReceiveFetchRoute({
+      runtime,
+      request,
+      path
+    });
+  };
+}
+
+export function createOpenReceiveNodeHandler(
+  options: CreateOpenReceiveNodeHandlerOptions
+): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
+  const handler = createOpenReceiveFetchHandler(options);
+
+  return async (req, res) => {
+    let response: Response;
+    try {
+      response = await handler(await createOpenReceiveRequestFromNode(req, options));
+    } catch {
+      response = openReceiveFetchJsonResponse({
+        code: "INTERNAL",
+        message: "OpenReceive request failed."
+      }, 500);
+    }
+
+    await writeOpenReceiveNodeResponse(res, response);
+  };
+}
+
+export async function dispatchOpenReceiveFetchRoute(
+  options: DispatchOpenReceiveFetchRouteOptions
+): Promise<Response> {
+  const match = matchOpenReceiveHttpRoute(options.request.method, options.path);
+  if (match === undefined) return createOpenReceiveFetchRouteNotFoundResponse();
+
+  if (match.name === "invoiceEvents") {
+    return createOpenReceiveFetchInvoiceEventsResponse({
+      runtime: options.runtime,
+      request: options.request,
+      invoiceId: requireOpenReceiveRouteParam(match, "invoice_id")
+    });
+  }
+
+  return dispatchOpenReceiveFetchHandler({
+    runtime: options.runtime,
+    request: options.request,
+    name: match.name,
+    params: match.params
+  });
+}
+
+export function dispatchOpenReceiveFetchNoWalletRoute(
+  options: DispatchOpenReceiveFetchNoWalletRouteOptions
+): Response {
+  const match = matchOpenReceiveHttpRoute(options.request.method, options.path);
+  if (match === undefined) return createOpenReceiveFetchRouteNotFoundResponse();
+
+  return createOpenReceiveFetchNoWalletResponse(match.name, options.noWallet);
+}
+
+export function matchOpenReceiveHttpRoute(
+  method: string,
+  path: readonly string[]
+): OpenReceiveFetchRouteMatch | undefined {
+  const segments = normalizeOpenReceiveFetchRoutePath(path);
+  const normalizedMethod = method.toUpperCase();
+
+  if (segments.length === 1) {
+    if (normalizedMethod === "GET" && segments[0] === "health") {
+      return { name: "health" };
+    }
+    if (normalizedMethod === "GET" && segments[0] === "capabilities") {
+      return { name: "capabilities" };
+    }
+    if (normalizedMethod === "GET" && segments[0] === "rates") {
+      return { name: "listRates" };
+    }
+    if (normalizedMethod === "GET" && segments[0] === "routes") {
+      return { name: "listRoutes" };
+    }
+    if (normalizedMethod === "GET" && segments[0] === "providers") {
+      return { name: "listProviders" };
+    }
+    if (normalizedMethod === "POST" && segments[0] === "invoices") {
+      return { name: "createInvoice" };
+    }
+  }
+
+  if (segments.length === 2) {
+    if (
+      normalizedMethod === "POST" &&
+      segments[0] === "rates" &&
+      segments[1] === "quote"
+    ) {
+      return { name: "quoteRates" };
+    }
+    if (
+      normalizedMethod === "POST" &&
+      segments[0] === "invoices" &&
+      segments[1] === "lookup"
+    ) {
+      return { name: "lookupInvoice" };
+    }
+    if (normalizedMethod === "GET" && segments[0] === "invoices") {
+      return {
+        name: "getInvoice",
+        params: {
+          invoice_id: segments[1]
+        }
+      };
+    }
+  }
+
+  if (segments.length === 3 && segments[0] === "invoices") {
+    if (normalizedMethod === "POST" && segments[2] === "refresh") {
+      return {
+        name: "refreshInvoice",
+        params: {
+          invoice_id: segments[1]
+        }
+      };
+    }
+    if (normalizedMethod === "GET" && segments[2] === "events") {
+      return {
+        name: "invoiceEvents",
+        params: {
+          invoice_id: segments[1]
+        }
+      };
+    }
+  }
+
+  return undefined;
+}
+
+export async function dispatchOpenReceiveFetchHandler(
+  options: DispatchOpenReceiveFetchHandlerOptions
+): Promise<Response> {
+  const handler = options.runtime.handlers[options.name] as ExpressLikeHandler;
+  const req = await createOpenReceiveFetchRequest(
+    options.request,
+    options.params ?? {}
+  );
+  const res = new CapturedOpenReceiveFetchResponse();
+  let nextError: unknown;
+
+  await handler(req, res, (error?: unknown) => {
+    nextError = error;
+  });
+
+  if (nextError !== undefined) throw nextError;
+  return res.toResponse();
+}
+
+export async function createOpenReceiveFetchInvoiceEventsResponse(input: {
+  readonly runtime: OpenReceiveFetchRuntime;
+  readonly request: Request;
+  readonly invoiceId: string;
+  readonly heartbeatMs?: number;
+}): Promise<Response> {
+  const invoice = await input.runtime.store.getInvoice(input.invoiceId);
+  if (invoice === undefined) {
+    return openReceiveFetchJsonResponse({
+      code: "NOT_FOUND",
+      message: `Invoice not found: ${input.invoiceId}`
+    }, 404);
+  }
+
+  return createOpenReceiveFetchEventStreamResponse({
+    invoice,
+    eventBus: input.runtime.eventBus,
+    request: input.request,
+    heartbeatMs: input.heartbeatMs ?? DEFAULT_HEARTBEAT_SECONDS * 1000
+  });
+}
+
+export function createOpenReceiveFetchNoWalletResponse(
+  name: keyof OpenReceiveExpressHandlers,
+  options: OpenReceiveFetchNoWalletOptions = {}
+): Response {
+  const basePath = options.basePath ?? DEFAULT_BASE_PATH;
+  const message = options.message ?? DEFAULT_NO_WALLET_MESSAGE;
+
+  if (name === "health") {
+    return openReceiveFetchJsonResponse({
+      ok: true,
+      wallet_configured: false
+    });
+  }
+
+  if (name === "capabilities") {
+    return openReceiveFetchJsonResponse({
+      base_path: basePath,
+      wallet_configured: false,
+      transports: ["sse"],
+      methods: ["make_invoice", "lookup_invoice"]
+    });
+  }
+
+  return openReceiveFetchJsonResponse({
+    code: "WALLET_UNAVAILABLE",
+    message
+  }, 503);
+}
+
+export function openReceiveFetchJsonResponse(
+  body: unknown,
+  status = 200,
+  headers: HeadersInit = {}
+): Response {
+  const responseHeaders = new Headers(headers);
+  responseHeaders.set("Cache-Control", "no-store");
+  responseHeaders.set("Content-Type", "application/json");
+  responseHeaders.set("Referrer-Policy", "same-origin");
+
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: responseHeaders
+  });
+}
+
+export function createOpenReceiveFetchRouteNotFoundResponse(): Response {
+  return openReceiveFetchJsonResponse({
+    code: "NOT_FOUND",
+    message: "OpenReceive route not found."
+  }, 404);
+}
+
+export function createOpenReceiveFetchPath(
+  request: Request,
+  basePath = DEFAULT_BASE_PATH
+): readonly string[] | undefined {
+  const pathname = new URL(request.url).pathname;
+  const normalizedBasePath = normalizeBasePath(basePath);
+  if (pathname === normalizedBasePath) return [];
+  if (!pathname.startsWith(`${normalizedBasePath}/`)) return undefined;
+
+  return pathname
+    .slice(normalizedBasePath.length + 1)
+    .split("/")
+    .filter((segment) => segment.length > 0)
+    .map((segment) => decodeURIComponent(segment));
+}
+
 export function createOpenReceiveExpressSettlementPollingRunner(
   options: OpenReceiveExpressOptions,
   runnerOptions: OpenReceiveExpressPollingRunnerStartOptions = {}
@@ -324,9 +660,12 @@ export async function startOpenReceiveExpressPaymentNotificationRunner(
   const eventBus = options.eventBus ?? new InMemoryInvoiceEventBus();
   const clock = options.clock ?? currentUnixSeconds;
 
-  emitLog(options, "info", "notification.listener.starting", "Starting OpenReceive payment notification listener.", {
-    supports_payment_received: options.client.subscribeToPaymentReceived !== undefined
-  });
+  emitLog(options, "info", "notification.listener.starting", "Starting OpenReceive payment notification listener.", {});
+
+  if (options.client.subscribeToPaymentReceived === undefined) {
+    emitLog(options, "warn", "notification.listener.idle", "OpenReceive payment notification listener is idle; polling remains the settlement fallback.", {});
+    return createIdlePaymentNotificationListener(options);
+  }
 
   try {
     const listener = await startPaymentNotificationListener({
@@ -393,8 +732,19 @@ export async function startOpenReceiveExpressPaymentNotificationRunner(
     emitLog(options, "warn", "notification.listener.unavailable", "OpenReceive payment notification listener could not start.", {
       error: error instanceof Error ? error.message : String(error)
     });
-    throw error;
+    return createIdlePaymentNotificationListener(options);
   }
+}
+
+function createIdlePaymentNotificationListener(
+  options: OpenReceiveExpressOptions
+): PaymentNotificationListener {
+  return {
+    seenPaymentHashes: new Set<string>(),
+    async stop() {
+      emitLog(options, "info", "notification.listener.stopped", "OpenReceive payment notification listener stopped.", {});
+    }
+  };
 }
 
 export function createOpenReceiveExpressHandlers(
@@ -1490,6 +1840,261 @@ function assertDurableStoreConfiguration(
       "package-owned invoice store such as Postgres or SQLite before mounting " +
       "routes, polling, or notification runners."
   );
+}
+
+async function resolveOpenReceiveFetchRuntime(
+  runtime: OpenReceiveFetchRuntimeSource
+): Promise<OpenReceiveFetchRuntime | undefined> {
+  if (typeof runtime !== "function") return runtime;
+  return await runtime();
+}
+
+async function createOpenReceiveRequestFromNode(
+  req: IncomingMessage,
+  options: CreateOpenReceiveNodeHandlerOptions
+): Promise<Request> {
+  const method = req.method ?? "GET";
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(req.headers)) {
+    if (value === undefined) continue;
+    if (Array.isArray(value)) {
+      for (const item of value) headers.append(name, item);
+    } else {
+      headers.set(name, String(value));
+    }
+  }
+
+  const body =
+    method === "GET" || method === "HEAD"
+      ? undefined
+      : await readOpenReceiveNodeRequestBody(req);
+
+  return new Request(createOpenReceiveNodeRequestUrl(req, options), {
+    method,
+    headers,
+    ...(body === undefined ? {} : { body })
+  });
+}
+
+function createOpenReceiveNodeRequestUrl(
+  req: IncomingMessage,
+  options: CreateOpenReceiveNodeHandlerOptions
+): string {
+  if (options.origin !== undefined) {
+    return new URL(req.url ?? "/", options.origin).toString();
+  }
+
+  const host = req.headers.host ?? "localhost";
+  const encrypted = Boolean((req.socket as { encrypted?: boolean }).encrypted);
+  const protocol = encrypted ? "https" : "http";
+  return new URL(req.url ?? "/", `${protocol}://${host}`).toString();
+}
+
+async function readOpenReceiveNodeRequestBody(
+  req: IncomingMessage
+): Promise<ArrayBuffer | undefined> {
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of req) {
+    if (typeof chunk === "string") {
+      chunks.push(new TextEncoder().encode(chunk));
+    } else {
+      chunks.push(chunk);
+    }
+  }
+
+  if (chunks.length === 0) return undefined;
+  const length = chunks.reduce((total, chunk) => total + chunk.byteLength, 0);
+  const body = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return body.buffer.slice(
+    body.byteOffset,
+    body.byteOffset + body.byteLength
+  );
+}
+
+async function writeOpenReceiveNodeResponse(
+  res: ServerResponse,
+  response: Response
+): Promise<void> {
+  res.statusCode = response.status;
+  response.headers.forEach((value, name) => {
+    res.setHeader(name, value);
+  });
+
+  if (response.body === null) {
+    res.end();
+    return;
+  }
+
+  const reader = response.body.getReader();
+  try {
+    while (true) {
+      const result = await reader.read();
+      if (result.done) break;
+      res.write(Buffer.from(result.value));
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  res.end();
+}
+
+async function createOpenReceiveFetchRequest(
+  request: Request,
+  params: Record<string, string | undefined>
+): Promise<ExpressLikeRequest> {
+  const url = new URL(request.url);
+  const query: Record<string, string> = {};
+  for (const [key, value] of url.searchParams) {
+    query[key] = value;
+  }
+
+  return {
+    method: request.method,
+    path: url.pathname,
+    params,
+    query,
+    headers: Object.fromEntries(request.headers.entries()),
+    get: (header) => request.headers.get(header) ?? undefined,
+    body: await readOpenReceiveFetchRequestBody(request)
+  };
+}
+
+async function readOpenReceiveFetchRequestBody(request: Request): Promise<unknown> {
+  if (request.method === "GET" || request.method === "HEAD") return undefined;
+  const text = await request.text();
+  if (text.length === 0) return undefined;
+  return JSON.parse(text);
+}
+
+class CapturedOpenReceiveFetchResponse implements ExpressLikeResponse {
+  #status = 200;
+  #headers = new Headers();
+  #body: BodyInit | undefined;
+  #chunks: string[] = [];
+
+  status(code: number): ExpressLikeResponse {
+    this.#status = code;
+    return this;
+  }
+
+  set(field: string, value: string): ExpressLikeResponse {
+    this.#headers.set(field, value);
+    return this;
+  }
+
+  json(body: unknown): unknown {
+    this.#headers.set("Content-Type", "application/json");
+    this.#body = JSON.stringify(body);
+    return undefined;
+  }
+
+  write(chunk: string): unknown {
+    this.#chunks.push(chunk);
+    return undefined;
+  }
+
+  end(): unknown {
+    return undefined;
+  }
+
+  flushHeaders(): unknown {
+    return undefined;
+  }
+
+  toResponse(): Response {
+    return new Response(this.#body ?? this.#chunks.join(""), {
+      status: this.#status,
+      headers: this.#headers
+    });
+  }
+}
+
+function createOpenReceiveFetchEventStreamResponse(input: {
+  readonly invoice: InvoiceStorageRow;
+  readonly eventBus: InMemoryInvoiceEventBus;
+  readonly request: Request;
+  readonly heartbeatMs: number;
+}): Response {
+  const encoder = new TextEncoder();
+  let cleanupStream = () => {};
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      let cleanedUp = false;
+      const writeEvent = (event: {
+        readonly id: number;
+        readonly event: string;
+        readonly data: Record<string, unknown>;
+      }) => {
+        controller.enqueue(
+          encoder.encode(formatSseEvent(event.id, event.event, event.data))
+        );
+      };
+
+      for (const event of input.eventBus.replay(
+        input.invoice.invoice_id,
+        parseOpenReceiveFetchLastEventId(input.request.headers.get("last-event-id"))
+      )) {
+        writeEvent(event);
+      }
+
+      const unsubscribe = input.eventBus.subscribe(input.invoice.invoice_id, writeEvent);
+      const heartbeat = setInterval(() => {
+        controller.enqueue(encoder.encode(": heartbeat\n\n"));
+      }, input.heartbeatMs);
+
+      const cleanup = () => {
+        if (cleanedUp) return;
+        cleanedUp = true;
+        clearInterval(heartbeat);
+        unsubscribe();
+        input.request.signal.removeEventListener("abort", cleanup);
+      };
+
+      cleanupStream = cleanup;
+      input.request.signal.addEventListener("abort", cleanup, { once: true });
+    },
+    cancel() {
+      cleanupStream();
+    }
+  });
+
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      "Cache-Control": "no-store",
+      "Content-Type": "text/event-stream",
+      "Referrer-Policy": "same-origin"
+    }
+  });
+}
+
+function normalizeOpenReceiveFetchRoutePath(
+  path: readonly string[]
+): readonly string[] {
+  return path.filter((segment) => segment.length > 0);
+}
+
+function requireOpenReceiveRouteParam(
+  match: OpenReceiveFetchRouteMatch,
+  key: string
+): string {
+  const value = match.params?.[key];
+  if (value === undefined || value.length === 0) {
+    throw new Error(`OpenReceive route is missing ${key}.`);
+  }
+
+  return value;
+}
+
+function parseOpenReceiveFetchLastEventId(value: string | null): number {
+  if (value === null) return 0;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
 }
 
 function applyDefaultHeaders(

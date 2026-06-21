@@ -9,7 +9,7 @@ parallel work. Shared contract files still need lead coordination.
 | Test vectors | `spec/test-vectors/**` | Active | Lead |
 | JS core contracts | `packages/js/core` | Implemented, lead-owned | Lead |
 | Node receive SDK | `packages/js/node` | Implemented | JS worker |
-| Express adapter | `packages/js/express` | Implemented | JS worker |
+| Express, Fetch, and raw Node route adapters | `packages/js/express` | Implemented | JS worker |
 | Browser helpers | `packages/js/browser` | Implemented | Browser worker |
 | Elements package | `packages/js/elements` | Implemented | Browser worker |
 | React package | `packages/js/react` | Implemented | Frontend worker |

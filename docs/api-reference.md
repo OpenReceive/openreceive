@@ -5,10 +5,10 @@ inside the merchant application, usually at `/openreceive/v1`. The authoritative
 HTTP contract is `spec/openapi/openreceive-http.v1.yaml`.
 
 The HTTP routes are not the whole backend integration. Server packages also
-provide a settlement polling runner and, where NWC notification subscriptions
-are available, a payment notification listener. Polling uses backend
-`lookup_invoice`; trusted `payment_received` notifications may settle the
-matching invoice directly.
+provide a settlement polling runner and a payment notification listener.
+Polling uses backend `lookup_invoice`; trusted `payment_received`
+notifications may settle the matching invoice directly. If no notification
+arrives, polling remains the recovery and settlement fallback.
 
 Server packages should also provide OpenReceive-owned persistence for invoice,
 idempotency, lifecycle, and settlement-action rows inside the host app

@@ -26,13 +26,18 @@ merchant's normal app and job system, and backend packages provide two
 long-running pieces:
 
 - a settlement polling runner for restart recovery, final expiry lookup, and
-  grace verification
-- a payment notification listener that keeps the wallet subscription open where
-  supported and wakes backend lookup
+  post-expiry grace verification
+- a payment notification listener that keeps the wallet subscription open and
+  wakes backend lookup when notifications arrive
 
-In production, run those as separate backend processes or worker roles: web,
-poll, and listen. They are not browser code and should not be modeled as
-threads inside the web request path.
+In production, run those as your web process plus one OpenReceive backend
+worker process. The worker starts polling and notification listening together.
+They are not browser code and should not be modeled as threads inside the web
+request path.
+
+Local invoice expiry is not a settlement decision. If the server is down while
+an invoice expires, the poll process must recover that invoice after restart
+and ask the wallet before OpenReceive closes it as expired.
 
 OpenReceive packages should also provide the invoice persistence schema for the
 host app database. Developers should run the package migration or install

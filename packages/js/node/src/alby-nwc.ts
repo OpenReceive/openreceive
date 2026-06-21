@@ -181,10 +181,7 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
     const client = await this.getClient();
 
     if (typeof client.subscribeNotifications !== "function") {
-      throw new WalletPreflightError(
-        "wallet_unavailable",
-        "NWC client does not expose payment_received notification subscription."
-      );
+      return () => {};
     }
 
     let unsubscribe: () => void | Promise<void>;

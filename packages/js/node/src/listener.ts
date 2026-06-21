@@ -27,11 +27,15 @@ export interface PaymentNotificationListener {
 export async function startPaymentNotificationListener(
   options: PaymentNotificationListenerOptions
 ): Promise<PaymentNotificationListener> {
+  const seenPaymentHashes = options.seenPaymentHashes ?? new Set<string>();
+
   if (options.client.subscribeToPaymentReceived === undefined) {
-    throw new Error("client does not support payment_received notifications");
+    return {
+      seenPaymentHashes,
+      async stop() {}
+    };
   }
 
-  const seenPaymentHashes = options.seenPaymentHashes ?? new Set<string>();
   const unsubscribe = await options.client.subscribeToPaymentReceived(
     async (notification) => {
       // NWC payment_received notifications are trusted settlement events, but

@@ -38,4 +38,5 @@ the local override is used.
 `/demo-metadata.json` exposes non-secret build metadata for hosted-demo smoke
 checks. It never includes wallet connection strings or NWC query secrets.
 
-Production Node apps should deploy separate web, poll, and listen processes.
+Production Node apps should deploy a web process plus one OpenReceive worker;
+see [Background Process Deployment](../../../../docs/17-background-workers.md).

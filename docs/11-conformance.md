@@ -89,6 +89,9 @@ The live harness verifies preflight, the metadata-size guard, invoice creation,
 initial lookup, and optional trusted notification confirmation when manual
 payment waiting is enabled. Polling lookup remains the recovery path when
 notifications are unavailable or missed.
+Recovery tests must include invoices whose local `expires_at` passed while the
+server was down; those invoices stay recoverable until a post-expiry wallet
+lookup or post-expiry grace verification closes them.
 
 Do not run live wallet tests on untrusted pull requests with secrets available.
 

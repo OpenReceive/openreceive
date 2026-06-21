@@ -15,7 +15,8 @@ A PHP integration should mount into the merchant's application and use the
 application's existing auth, database, queue, and deployment model. The package
 should own two backend entry points: a poll command/job for settlement polling
 and restart recovery, and a listen command/job for payment_received
-notifications where the NWC client supports them.
+notifications. Developers should run both; polling remains the fallback when
+notifications do not arrive.
 The PHP package should ship OpenReceive migrations/models for the target
 framework; host apps should not hand-roll invoice/idempotency tables. The host
 app supplies metadata references and settlement hooks.

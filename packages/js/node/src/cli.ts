@@ -68,9 +68,10 @@ const HELP = `
 Usage: openreceive <command> [options]
 
 Commands:
-  init                 Generate server-only config, env, poll, and listen stubs.
+  init                 Generate server-only config, env, and worker stubs.
   migrate             Run package-owned OpenReceive database migrations.
   doctor              Check database, migration, NWC, and runner readiness.
+  worker              Run polling and notification listening in one process.
   poll                Run the package-owned settlement polling runner.
   listen              Run the package-owned payment notification listener.
 
@@ -81,9 +82,9 @@ Database options:
   --print             Print migration SQL instead of executing it.
 
 Runner/config options:
-  --config <path>      Import a server-only module that exports openreceive.
+  --config <path>      Import a server-only module. Defaults to openreceive.config.mjs.
   --once               Poll recoverable invoices once, then exit.
-  --ready-only         Start listen once to verify readiness, then exit.
+  --ready-only         Start worker/listen once to verify readiness, then exit.
 `.trim();
 const REQUIRED_INVOICE_COLUMNS = [
   "invoice_id",
@@ -175,6 +176,8 @@ export async function runOpenReceiveCli(options: OpenReceiveCliOptions): Promise
           loadConfigModule: options.loadConfigModule,
           loadExpressRunners: options.loadExpressRunners
         });
+      case "worker":
+        return await runWorker({ args, env, cwd, stdout, loadConfigModule: options.loadConfigModule, loadExpressRunners: options.loadExpressRunners });
       case "poll":
         return await runPoll({ args, env, cwd, stdout, loadConfigModule: options.loadConfigModule, loadExpressRunners: options.loadExpressRunners });
       case "listen":
@@ -231,7 +234,7 @@ function runInit(input: {
         "",
         "const nwc = process.env.OPENRECEIVE_NWC;",
         "if (nwc === undefined || nwc.trim() === \"\") {",
-        "  throw new Error(\"Set OPENRECEIVE_NWC before starting OpenReceive workers.\");",
+        "  throw new Error(\"Set OPENRECEIVE_NWC before starting OpenReceive backend processes.\");",
         "}",
         "",
         "const sqlitePath = process.env.OPENRECEIVE_SQLITE_PATH ?? \"storage/openreceive.sqlite3\";",
@@ -273,12 +276,27 @@ function runInit(input: {
       ].join("\n")
     },
     {
+      relativePath: "scripts/openreceive-worker.mjs",
+      text: [
+        "import { runOpenReceiveCli } from \"@openreceive/node/cli\";",
+        "",
+        "process.exitCode = await runOpenReceiveCli({",
+        "  argv: [\"worker\"],",
+        "  env: process.env,",
+        "  cwd: process.cwd(),",
+        "  stdout: process.stdout,",
+        "  stderr: process.stderr",
+        "});",
+        ""
+      ].join("\n")
+    },
+    {
       relativePath: "scripts/openreceive-poll.mjs",
       text: [
         "import { runOpenReceiveCli } from \"@openreceive/node/cli\";",
         "",
         "process.exitCode = await runOpenReceiveCli({",
-        "  argv: [\"poll\", \"--config\", \"openreceive.config.mjs\"],",
+        "  argv: [\"poll\"],",
         "  env: process.env,",
         "  cwd: process.cwd(),",
         "  stdout: process.stdout,",
@@ -293,7 +311,7 @@ function runInit(input: {
         "import { runOpenReceiveCli } from \"@openreceive/node/cli\";",
         "",
         "process.exitCode = await runOpenReceiveCli({",
-        "  argv: [\"listen\", \"--config\", \"openreceive.config.mjs\"],",
+        "  argv: [\"listen\"],",
         "  env: process.env,",
         "  cwd: process.cwd(),",
         "  stdout: process.stdout,",
@@ -319,6 +337,47 @@ function runInit(input: {
     input.stdout.write(`created ${file.relativePath}\n`);
   }
 
+  return 0;
+}
+
+async function runWorker(input: {
+  args: readonly string[];
+  env: NodeJS.ProcessEnv;
+  cwd: string;
+  stdout: OpenReceiveCliIo;
+  loadConfigModule?: OpenReceiveCliOptions["loadConfigModule"];
+  loadExpressRunners?: OpenReceiveCliOptions["loadExpressRunners"];
+}): Promise<number> {
+  const config = await loadOpenReceiveConfig(input);
+  const express = await loadExpressRunners(input.loadExpressRunners);
+  const runner = express.createOpenReceiveExpressSettlementPollingRunner(
+    config,
+    parseRunnerOptions(input.args)
+  );
+  let listener: Awaited<ReturnType<OpenReceiveExpressRunnerModule["startOpenReceiveExpressPaymentNotificationRunner"]>> | undefined;
+
+  try {
+    runner.start();
+    listener = await express.startOpenReceiveExpressPaymentNotificationRunner(config);
+  } catch (error) {
+    runner.stop();
+    await listener?.stop?.();
+    throw error;
+  }
+
+  input.stdout.write("OpenReceive worker started (poll + listen).\n");
+
+  if (input.args.includes("--ready-only")) {
+    runner.stop();
+    await listener.stop?.();
+    input.stdout.write("OpenReceive worker readiness verified.\n");
+    return 0;
+  }
+
+  await waitForTerminationSignal(async () => {
+    runner.stop();
+    await listener?.stop?.();
+  });
   return 0;
 }
 
@@ -491,8 +550,8 @@ async function runDoctor(input: {
     input.stdout.write("warn OPENRECEIVE_NWC is not configured; invoice creation will fail closed.\n");
   }
 
-  if (!hasConfigTarget(input.args, input.env)) {
-    input.stdout.write("warn config not checked; pass --config to verify route, NWC, and runner readiness.\n");
+  if (!hasConfigTarget(input.args, input.env, input.cwd)) {
+    input.stdout.write("warn config not checked; create openreceive.config.mjs or pass --config to verify route, NWC, and runner readiness.\n");
     return 0;
   }
 
@@ -574,11 +633,7 @@ async function runConfigDoctor(input: {
     ok = false;
   }
 
-  if (typeof config.client?.subscribeToPaymentReceived === "function") {
-    input.stdout.write("ok runner listen client exposes payment_received subscription\n");
-  } else {
-    input.stdout.write("warn runner listen unavailable; client has no payment_received subscription, so keep polling enabled.\n");
-  }
+  input.stdout.write("ok runner listen can be started; polling remains the settlement fallback\n");
 
   if (typeof config.client?.preflight !== "function") {
     input.stdout.write("warn NWC preflight not checked; configured client does not expose preflight().\n");
@@ -686,7 +741,7 @@ function checkConfiguredStore(store: OpenReceiveExpressOptions["store"]):
       ok: false,
       message:
         "OpenReceive config uses InMemoryInvoiceStore. Configure the package-owned " +
-        "Postgres or SQLite invoice store before running production routes or workers."
+        "Postgres or SQLite invoice store before running production routes or backend processes."
     };
   }
 
@@ -754,8 +809,14 @@ function detectDatabaseTarget(
   };
 }
 
-function hasConfigTarget(args: readonly string[], env: NodeJS.ProcessEnv): boolean {
-  return readFlag(args, "--config") !== undefined || (env.OPENRECEIVE_CONFIG ?? "").trim().length > 0;
+function hasConfigTarget(
+  args: readonly string[],
+  env: NodeJS.ProcessEnv,
+  cwd: string
+): boolean {
+  if (readFlag(args, "--config") !== undefined) return true;
+  if ((env.OPENRECEIVE_CONFIG ?? "").trim().length > 0) return true;
+  return fileExists(path.resolve(cwd, "openreceive.config.mjs"));
 }
 
 interface OpenReceiveDoctorSchema {
@@ -976,7 +1037,7 @@ async function loadExpressRunners(
     return await import("@openreceive/express") as unknown as OpenReceiveExpressRunnerModule;
   } catch {
     throw new Error(
-      "OpenReceive poll/listen commands require installing `@openreceive/express` in the app."
+      "OpenReceive worker/poll/listen commands require installing `@openreceive/express` in the app."
     );
   }
 }
@@ -985,14 +1046,21 @@ async function waitForTerminationSignal(
   cleanup: () => Promise<void> | void
 ): Promise<void> {
   await new Promise<void>((resolve) => {
+    const keepAlive = globalThis.setInterval(() => {}, 2_147_483_647);
+    let stopping = false;
     const stop = () => {
-      cleanupPromise();
-      resolve();
+      if (stopping) return;
+      stopping = true;
+      void cleanupPromise().finally(resolve);
     };
-    const cleanupPromise = () => {
-      void cleanup();
-      globalThis.process?.off?.("SIGINT", stop);
-      globalThis.process?.off?.("SIGTERM", stop);
+    const cleanupPromise = async () => {
+      try {
+        await cleanup();
+      } finally {
+        globalThis.clearInterval(keepAlive);
+        globalThis.process?.off?.("SIGINT", stop);
+        globalThis.process?.off?.("SIGTERM", stop);
+      }
     };
     globalThis.process?.once?.("SIGINT", stop);
     globalThis.process?.once?.("SIGTERM", stop);

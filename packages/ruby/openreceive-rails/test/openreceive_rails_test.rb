@@ -139,7 +139,7 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_includes rails_source, "operation: data.fetch(\"operation\")"
     assert_includes rails_source, "idempotency_key: data.fetch(\"idempotency_key\")"
     assert_includes rails_source, "settlement_action_completed_at_seconds ||= Integer"
-    assert_includes rails_source, "expires_at_seconds + ? >= ?"
+    refute_includes rails_source, "expires_at_seconds + ? >= ?"
   end
 
   def test_rails_route_job_and_channel_templates_preserve_receive_only_boundary
@@ -270,7 +270,7 @@ class OpenReceiveRailsTest < Minitest::Test
     assert checks.any? { |check| check.fetch("name") == "rails.migration" && check.fetch("status") == "ok" }
     assert checks.any? { |check| check.fetch("name") == "rails.nwc" && check.fetch("status") == "ok" }
     assert checks.any? { |check| check.fetch("name") == "rails.worker.poll" && check.fetch("status") == "ok" }
-    assert checks.any? { |check| check.fetch("name") == "rails.worker.listen" && check.fetch("status") == "warn" }
+    assert checks.any? { |check| check.fetch("name") == "rails.worker.listen" && check.fetch("status") == "ok" }
     refute_includes result.to_s, "nostr+walletconnect://"
   end
 
