@@ -119,12 +119,6 @@ Do not say or imply:
   - OpenReceive is a processor, exchange, broker, wallet, custodian, or money
     transmitter.
 
-Use wording like this:
-
-  "OpenReceive creates one Lightning invoice and can show payer-side route
-  suggestions for wallets, exchanges, swap services, or fiat onramps that may
-  be able to pay that invoice."
-
 Provider routes are suggestions, not payment guarantees. The payer chooses and
 uses a third-party wallet, exchange, onramp, or swap service outside
 OpenReceive.
@@ -159,7 +153,6 @@ Security and correctness:
     invoice as expired when wallet truth confirms expiry or the grace policy is
     exhausted.
   - Redact wallet secrets from logs, errors, telemetry, and screenshots.
-  - Public demos use rate limits and low invoice amounts.
 
 Architecture:
 
@@ -205,7 +198,7 @@ Persistence ownership:
 
     Node:
       SQL migrations or ORM templates for common app databases, plus a package
-      store adapter contract. Early v0.1 may keep the demo in-memory store, but
+      store adapter contract.
       production docs must point developers to package-owned durable schema, not
       hand-rolled invoice tables.
 

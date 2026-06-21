@@ -103,7 +103,8 @@ function validateDockerfile(demo) {
   const relativePath = `${demo.dir}/Dockerfile`;
   const text = read(relativePath);
   const exposeMatches = [...text.matchAll(/^EXPOSE\s+(\d+)/gm)].map((match) => match[1]);
-  const npmCiIndex = text.indexOf("RUN npm ci");
+  const npmCiMatch = text.match(/^RUN(?:\s+--mount=[^\n]+)?\s+npm ci\b/m);
+  const npmCiIndex = npmCiMatch?.index ?? -1;
   const buildIndex = text.indexOf(`RUN npm run build -w ${demo.packageName}`);
   const nodeEnvIndex = text.indexOf("ENV NODE_ENV=production");
 
