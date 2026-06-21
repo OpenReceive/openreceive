@@ -526,6 +526,19 @@ async function runConfigDoctor(input: {
     ok = false;
   }
 
+  const securityCheck = checkProductionSecurityConfig(config, input.env);
+  for (const warning of securityCheck.warnings) {
+    input.stdout.write(`warn ${warning}\n`);
+  }
+  for (const error of securityCheck.errors) {
+    input.stderr.write(`${error}\n`);
+  }
+  if (securityCheck.errors.length > 0) {
+    ok = false;
+  } else if (securityCheck.production) {
+    input.stdout.write("ok production auth and event authorization diagnostics passed\n");
+  }
+
   let express: OpenReceiveExpressRunnerModule;
   try {
     express = await loadExpressRunners(input.loadExpressRunners);
@@ -589,6 +602,70 @@ async function runConfigDoctor(input: {
   }
 
   return ok;
+}
+
+function checkProductionSecurityConfig(
+  config: OpenReceiveExpressOptions,
+  env: NodeJS.ProcessEnv
+): {
+  production: boolean;
+  warnings: string[];
+  errors: string[];
+} {
+  const mode = (env.OPENRECEIVE_MODE ?? env.NODE_ENV ?? "").toLowerCase();
+  const production = mode === "production";
+  const warnings: string[] = [];
+  const errors: string[] = [];
+
+  if (!production) {
+    if (config.unsafeAllowUnauthenticatedDemoMode === true) {
+      warnings.push("unsafe unauthenticated demo mode is enabled; do not use it in production.");
+    }
+    return { production, warnings, errors };
+  }
+
+  if (
+    config.unsafeAllowUnauthenticatedDemoMode === true &&
+    env.OPENRECEIVE_ALLOW_UNAUTHENTICATED_DEMO !== "true"
+  ) {
+    errors.push(
+      "OpenReceive production config enables unsafeAllowUnauthenticatedDemoMode without OPENRECEIVE_ALLOW_UNAUTHENTICATED_DEMO=true."
+    );
+  }
+
+  const missingAuthHooks = ["create", "read", "lookup", "refresh"].filter(
+    (hook) =>
+      typeof (config.auth as Record<string, unknown> | undefined)?.[hook] !==
+      "function"
+  );
+  if (missingAuthHooks.length > 0) {
+    errors.push(
+      `OpenReceive production config is missing authorization hooks: ${missingAuthHooks.join(", ")}.`
+    );
+  }
+
+  if (
+    typeof config.auth?.events !== "function" &&
+    config.signedEvents === undefined
+  ) {
+    errors.push(
+      "OpenReceive production config must protect invoice events with auth.events or signedEvents."
+    );
+  }
+
+  if (typeof config.csrf?.verify !== "function") {
+    warnings.push(
+      "production config has no csrf.verify hook; cookie-authenticated invoice POSTs must add CSRF protection."
+    );
+  }
+
+  if (config.cors?.allowed_origins?.includes("*") && config.cors.credentials) {
+    errors.push(
+      "OpenReceive production config cannot use wildcard CORS with credentials."
+    );
+  }
+
+  return { production, warnings, errors };
 }
 
 function checkConfiguredStore(store: OpenReceiveExpressOptions["store"]):

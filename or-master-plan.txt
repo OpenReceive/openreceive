@@ -1,50 +1,3 @@
-OpenReceive Master Plan
-=======================
-
-Purpose
--------
-
-OpenReceive is an open source receive-payments kit for websites, server apps,
-mobile apps, and native clients. Its job is intentionally narrow:
-
-1. Let a merchant create one Bitcoin Lightning BOLT11 invoice.
-2. Show payer-side route suggestions for wallets, exchanges, swap services,
-   fiat onramps, or other tools that may be able to pay that one invoice.
-3. Let the merchant backend verify settlement.
-4. Let the app unlock content, credits, files, memberships, stickers, or
-   other products only after verified settlement.
-
-OpenReceive is not a bank, exchange, payment processor, or wallet backend.
-It does not custody funds, exchange assets, broker transactions, transmit
-money, or operate customer payment accounts.
-The merchant brings a wallet they control through Nostr Wallet Connect (NWC /
-NIP-47), such as Rizful, Alby Hub, LNbits, Zeus, or a self-hosted wallet that
-follows the spec. OpenReceive libraries create and track receive-only invoices
-inside the merchant's own server-side app, job system, or API backend.
-
-The main architecture:
-
-  spec/                  = the truth
-  packages/nwc-*         = standalone neutral NWC protocol clients where needed
-  packages/*             = idiomatic SDKs, framework adapters, and UI kits
-  examples/*             = proof it works in real stacks
-  demos/*                = hosted public deployments
-  tools/*                = codegen, conformance, data validation, release
-
-The strongest rule is that the hard behavior must exist once and be tested
-everywhere. Provider data, schemas, price conversion rules, polling cadence,
-payment-state semantics, and demo assets must not be copied by hand into each
-language. They live in specs, shared data, generated types, and test vectors.
-
-
-Inputs Reviewed
----------------
-
-  building/providers-demo.json
-    Legacy provider registry draft, schema version 2.0.0, generated 2026-06-18.
-    It was normalized into the canonical v4 registry at
-    packages/js/provider-data/src/data/openreceive-providers.v4.json and should
-    not be used as a validator input or runtime source.
 
 
 Brand And Naming
@@ -1602,110 +1555,7 @@ The static mock is mandatory. It keeps docs, tests, screenshots, and demos
 stable.
 
 
-Provider Registry
------------------
 
-The provider registry is a product asset. It powers the PayInvoiceWizard and
-shows payer-side route suggestions for third-party services that may be able to
-pay one Lightning invoice from funds or accounts the payer already controls.
-
-Canonical location:
-
-  packages/js/provider-data/src/data/openreceive-providers.v4.json
-
-Current stats:
-
-  schema_version:        4.0.0
-  generated:             2026-06-20
-  assets_index:          15 entries
-  providers:             42 included providers
-  crypto_routes:         12 routes
-  fiat_rails:            2 rails, bank and card
-  countries:             59 countries
-  disqualified:          7 providers
-
-Current asset entries:
-
-  Crypto:
-    btc Lightning
-    btc Bitcoin on-chain
-    usdt Tether
-    usdc USD Coin
-    eth Ethereum
-    xmr Monero
-    ltc Litecoin
-    doge Dogecoin
-    trx Tron
-    sol Solana
-    xrp XRP
-    bnb BNB
-
-  Fiat:
-    usd US Dollars
-    eur Euro
-    gbp British Pound
-
-Current registry shape:
-
-  included providers:        42
-  crypto routes:             12
-  fiat rails:                2
-  countries:                 59
-  disqualified providers:    7
-
-The registry should graduate from draft data to stricter product data.
-
-Recommended provider object:
-
-  {
-    "id": "rizful",
-    "name": "Rizful",
-    "url": "https://rizful.com",
-    "availability": {
-      "us": null,
-      "countries": [],
-      "unknown": true
-    },
-    "capabilities": {
-      "pays_arbitrary_bolt11": true,
-      "onchain_to_lightning": true,
-      "fiat_to_lightning": false
-    },
-    "mechanisms": ["pay_invoice"],
-    "official_docs": [
-      {
-        "title": "Provider docs",
-        "url": "https://example.com/docs"
-      }
-    ],
-    "fees": {
-      "summary": "Provider-specific; verify before payment.",
-      "structured": null
-    },
-    "blurb": "Short user-facing route description.",
-    "caveat": "Short user-facing warning when needed.",
-    "last_verified": "2026-06-18"
-  }
-
-Validation rules:
-
-  - Every provider has a stable id.
-  - Every provider has name and url.
-  - Every provider has mechanism fields.
-  - Provider capabilities describe payer-side route behavior only: can this
-    service help a customer pay a BOLT11 invoice?
-  - Do not track receive-side wallet capabilities such as receive_lightning in
-    the provider registry.
-  - Every provider claim has evidence_urls or official_docs.
-  - Every route references existing providers only.
-  - Every route has deterministic ranking.
-  - Every country is ISO 3166-1 alpha-2.
-  - Every currency is ISO 4217.
-  - No route references a disqualified provider.
-  - No provider blurb contradicts its caveat.
-    - No "US available" claim unless explicitly verified.
-  - Every disqualified provider has a reason.
-  - Registry changes run through CI and produce generated package updates.
 
 Generated provider-data packages:
 
@@ -4364,421 +4214,94 @@ Milestones
 Current Implementation Status
 -----------------------------
 
-Last updated: 2026-06-20.
+Last updated: 2026-06-21.
 
 Current repository position:
 
-  - HEAD is 6a4fee0 ("m").
-  - Baseline verification run during this review:
+  - The repository is clean at the start of this synchronization pass.
+  - The JS/Express reference path exists and is the primary end-developer path
+    for the current release boundary.
+  - Fast checks observed before this pass were green: npm test, npm run
+    test:ruby, and npm run check:release.
+  - Milestone 0 foundation work is implemented.
+  - Milestone 1 JS receive-checkout reference work is implemented.
+  - Milestone 2 JS polish has partially landed and should now be treated as
+    existing surface to harden, not a reason to add more package families.
 
-      npm test
+Current supported release surface:
 
-    Result:
+  - Primary install path: Node/Express backend packages plus browser,
+    elements, and React checkout packages.
+  - Supporting JS packages: core, provider-data, testkit, and Next route-handler
+    glue are present and covered by the local gates.
+  - Thin frontend bindings: Vue, Svelte, and Angular wrap the shared web
+    component and browser-owned checkout model. They are useful, but they are
+    not independent native component systems yet.
+  - Ruby/Rails: Ruby core helpers and the Rails adapter are initial proof work.
+    Keep them in the repo and under test, but do not treat them as the first
+    polished release lane until Rails smoke/live-wallet gaps are closed.
 
-      Passing. v0.1 validation and secret scan are green.
+Important current code facts:
 
-  - The only dirty files at the start of this review were:
+  - OpenReceive packages own the invoice persistence contract. Node has
+    package-owned Postgres and SQLite stores plus migration, init, doctor,
+    poll, and listen CLI surfaces.
+  - Express mounts the canonical HTTP contract, runs authorization hooks,
+    supports signed event URLs, exposes SSE, verifies settlement by backend
+    lookup, and fails closed in production when in-memory storage is used.
+  - Browser, elements, and React packages share checkout state, countdown,
+    copy/open-wallet actions, theme helpers, payment wizard helpers, route
+    suggestions, and default styles instead of duplicating demo UI logic.
+  - Package smoke currently proves local tarball artifacts by building dist
+    output in temporary directories and importing each package from a clean
+    install project.
+  - Public package manifests remain private until explicit publishing approval.
 
-      packages/js/express/src/index.ts
-      tests/v0.1/express.test.mjs
+Current synchronization priorities:
 
-    Purpose:
+  1. Keep the JS/Express path boring and installable: package artifact build,
+     package README/install guidance, doctor diagnostics, release checks, and
+     docs should all tell the same story.
+  2. Keep spec as truth: schema, vectors, generated contracts, validators,
+     storage implementations, and docs must agree on operation-scoped
+     idempotency and amount_msats units.
+  3. Do not add significant new demos, packages, SDKs, provider-data variants,
+     or framework adapters while the current surface still needs release
+     hardening.
+  4. Mark supporting/initial surfaces honestly. Next, Vue/Svelte/Angular, and
+     Rails can stay tested in the repo, but the current developer promise is
+     the Node/Express receive path plus reusable web checkout packages.
 
-      Keep unsafe unauthenticated demo mode fail-closed in production unless a
-      public test demo explicitly acknowledges the risk with
-      OPENRECEIVE_ALLOW_UNAUTHENTICATED_DEMO=true, and assert that lookup emits
-      the canonical invoice.verifying event before invoice.settled.
+Package hardening work now takes precedence over expansion:
 
-  - Milestone 0 is implemented.
-  - Milestone 1 is implemented and remains the v0.1 release boundary.
-  - Milestone 2 is implemented for the current JS reference surface: generated
-    contracts, provider data, deterministic mock wallet tooling,
-    @openreceive/elements, @openreceive/react, React Material UI recipe, static
-    HTML small API demo, Next.js fullstack demo, deployment checks, and package
-    smoke tooling are present.
-  - The repo has moved past the original sequential v0.1 path. New work should
-    still avoid shared-contract drift, but isolated post-v0.1 lanes may proceed
-    after the JS/Express tests stay green.
-  - The current uncommitted implementation from this review extends
-    developer/operator visibility to the browser/client side: @openreceive/browser
-    has an opt-in redacted logger for checkout state, passive events, copy, and
-    open-wallet actions; @openreceive/react and @openreceive/elements thread it
-    through; the Hello Fruit browser clients wire console logging; and frontend
-    docs/tests cover the display-safe logging boundary.
-  - This review also adds the default non-secret live-wallet capability
-    fixture at tools/live-nwc-test/expected_capabilities.json so the Rizful
-    preflight checks the expected receive methods, notification, and encryption
-    fallback without requiring every operator to copy the example file first.
-  - This review also implements the canonical price-source helper chain in
-    @openreceive/core: static_mock, openreceive_mirror, megalithic_mirror, and
-    coingecko_direct providers can now be created in the documented order, with
-    fallback lookup and source-tagged fiat quotes.
-  - This review also adds the first provider-route conformance vectors for
-    crypto and fiat route selection, covering USDT swap routes and US card rail
-    provider ranking through @openreceive/provider-data.
-  - The v0.1 validator now checks provider-route vector shape plus canonical
-    price-source order and mirror URLs, and it keeps the default live NWC
-    expected-capabilities fixture aligned with the documented Rizful example,
-    so these newer plan artifacts are protected by npm test instead of only
-    package-specific tests.
-  - This review also begins the package-first checkout wizard extraction that
-    the demos had started to duplicate. @openreceive/browser now owns
-    payment-method choices, country/region map metadata, provider-route
-    wizard state, persisted country preference, theme preference helpers,
-    countdown formatting, msat display formatting, shared polling/copy/provider
-    preview defaults, the canonical passive invoice event set, and a
-    framework-neutral checkout watcher that owns SSE subscription, backend
-    lookup polling, countdown refresh, lookup POST shape, and lookup-response
-    merging. It now also owns a framework-neutral checkout controller that
-    bundles that watcher lifecycle with package-owned lookupUrl fetcher
-    creation, copy, open-wallet, manual reload, retry, backend-owned
-    refresh-expired-invoice, and cancel actions for headless framework adapters.
-    The refresh action requires app-provided refresh configuration and an
-    idempotency key, then replaces browser state from the backend's linked
-    replacement invoice response. Lookup-response merging and display-data state
-    conversion now preserve `settled_at`, so browser adapters do not drop
-    backend settlement timestamps while rendering display state. It
-    also
-    owns shared checkout labels/status text/provider badge text/provider action
-    labels/route subtitles/country prompts, plus shared checkout icon assets
-    and helpers, plus a transient feedback controller for copy/copy-provider
-    states, so React, web components, demos, and future adapters do not
-    drift on user-visible checkout language or visual payment symbols. The
-    browser package now also owns checkout display-model helpers for Lightning
-    URI, msat amount label, shortened payment-hash label, transaction-state
-    label, display-safe invoice validation, and display-data-to-snapshot/state
-    conversion, so React and web components do not carry their own
-    hash-shortening, invoice-safety, or checkout snapshot mapping helpers. It
-    also owns display HTML escaping for string-rendered adapters, so web
-    components and future adapters do not copy escape rules locally. The
-    browser package also owns the waiting-spinner decision and countdown
-    seconds through checkout state, so React and web components derive those
-    displays instead of rechecking expiry and settlement fields locally; state
-    creation now computes countdown seconds with the browser package's default
-    clock when `expires_at` is present, so adapters do not carry local clock
-    helpers for initial countdown rendering. It now also owns a checkout status
-    display model for spinner visibility, status
-    title/detail text, countdown prefix, and countdown label, so adapters do not
-    recombine the lower-level waiting, label, and countdown helpers locally. The
-    browser package now also owns the wizard selection
-    reducer/model for method, country, region, and route transitions, plus the
-    shared country picker/map model for region tabs, selected/hovered country
-    state, visible country lists, country display labels/readouts, country map
-    viewport/region geometry, optional world-map land paths, route/provider
-    display rows, route asset button display rows, and projected map pins. React and the web component consume
-    the same derived country/route model even when their visual map rendering
-    differs, and React no longer owns D3/topojson/world-atlas projection setup;
-    rich renderers opt into @openreceive/browser/country-map so the default
-    browser helper entry stays lighter.
-    The
-    browser package now also owns wizard DOM attribute names, selectors, and
-    interaction parsers for methods, regions, countries, routes, and
-    provider-copy buttons, so web components and future native adapters do not
-    hand-code the same data-or-* binding contract. It also owns default
-    checkout data attribute names and selectors for QR, state, actions, theme,
-    and theme-toggle hooks, so React, web components, shared CSS, and future
-    adapters share one checkout DOM contract. The
-    browser package also owns checkout and theme-toggle custom-element
-    attribute-name maps, so @openreceive/elements, Vue/Svelte/Angular bindings,
-    and no-framework helpers share the same invoice-id, lookup-url,
-    payment-wizard, root-selector, and storage-key contract. It also owns
-    reusable checkout/theme attribute parsers for non-negative integer fields,
-    boolean attributes, resolved theme attributes, and theme preference
-    attributes, so adapters do not reimplement those edge cases locally. The
-    browser package also owns web-component shadow action part names and
-    selectors for copy, open-wallet, and theme-toggle buttons, so
-    @openreceive/elements and future wrappers do not hand-code those hooks.
-    The
-    browser package also owns checkout custom event construction for copy,
-    open-wallet, state, settled, payment-received, error, and provider-copy
-    events so React, web components, and future adapters share the same event
-    names and detail payloads. It now also owns theme-toggle change event
-    construction so web components and future adapters share the same
-    theme-change event name and detail payload.
-    @openreceive/react now
-    exposes the richer default checkout UI with QR, BOLT11 copy feedback,
-    open-wallet action, waiting state, countdown, first-choice payment wizard
-    (Credit Card, Bank Transfer, Bitcoin, Crypto), country-aware map picker,
-    route/provider suggestions, shared browser-owned icons/assets, a
-    package-owned provider/context layer and package-owned theme scope/toggle
-    for app shells. Default light/dark checkout CSS now lives at
-    @openreceive/browser/styles.css, with @openreceive/react/styles.css
-    retained as a framework-local wrapper. It consumes the browser-owned
-    checkout controller for hook lifecycle/lookup/copy/open-wallet behavior,
-    passes those controller-backed hook actions into the default checkout
-    copy/open-wallet buttons,
-    and the browser-owned transient feedback controller across the headless hook,
-    default copy button, and payment wizard provider copy buttons.
-    @openreceive/elements now accepts a theme attribute, shares the copy
-    feedback behavior through the browser-owned transient feedback controller,
-    and renders a package-owned no-framework payment wizard, country map
-    viewport/region geometry, provider display rows, route asset button rows,
-    and route/method icons from the same browser helpers. It consumes the
-    browser-owned checkout controller for live checkout lookupUrl polling/SSE
-    and primary copy/open-wallet actions. It also
-    registers a package-owned <openreceive-theme-toggle> element for stored
-    light/dark preference, toggle labels, and theme attribute syncing. It now
-    also exposes a styles.css wrapper around the browser-owned default checkout
-    light/dark stylesheet for no-framework apps, while consuming browser-owned
-    checkout and theme-toggle shadow style constants instead of carrying a
-    parallel inline stylesheet. The Node
-    Express React demo is
-    intentionally thin again: it
-    owns fruit selection, invoice creation, and backend lookup, then renders the
-    package checkout. Next.js now follows the same thin frontend pattern by
-    delegating checkout polling, SSE handling, countdown, waiting state, and
-    wizard UI to @openreceive/react. Static HTML now delegates checkout
-    polling, SSE handling, countdown, waiting state, and wizard UI to the
-    @openreceive/elements web component and imports
-    @openreceive/elements/styles.css before demo-local page CSS. Static HTML
-    plus Next.js demos expose light/dark switchers as well. The frontend
-    checkout and SDK status docs now describe the package-owned wizard, theme,
-    countdown, polling/SSE, styles, and demo-thinness boundaries for developers
-    installing these packages.
-    This review now also adds initial @openreceive/vue, @openreceive/svelte,
-    and @openreceive/angular packages as thin typed bindings around the shared
-    <openreceive-checkout> web component. @openreceive/browser owns the
-    checkout element attribute/listener factories plus a no-framework checkout
-    element creator, so these framework packages and demos do not duplicate
-    invoice attribute names, custom event names, or display-safe checkout
-    wiring. @openreceive/browser also now owns a shared
-    theme model for resolved light/dark state, next toggle target, toggle
-    label, package-owned container attributes (`data-openreceive-theme` and
-    `data-theme`), and checkout-element theme attributes; React, Static HTML,
-    Vue, Svelte, and Angular bindings consume that model instead of open-coding
-    theme behavior. @openreceive/browser now also exposes a storage-backed theme
-    model factory, and the Vue/Svelte/Angular packages re-export framework-named
-    stored-theme binding helpers so apps do not copy localStorage keys or theme
-    read/write behavior. @openreceive/browser also owns stored-theme toggling and
-    theme attribute application helpers, re-exported through the framework
-    adapter packages, so no-framework demos and future adapters do not hand-roll
-    theme transitions, toggle labels, or DOM attribute names. @openreceive/browser
-    now also owns stored-theme control helpers that apply root, checkout, and
-    toggle-button state together. The static demo now also uses the package-owned
-    theme-toggle element creator before invoice creation and the full checkout
-    shell creator once an invoice exists instead of hand-applying custom element
-    attributes, hard-coding custom-element markup, event listeners, theme labels,
-    or theme target updates. @openreceive/browser
-    now owns the theme-toggle element tag/attribute factory, DOM creator, and
-    full checkout-shell element creator, and the Vue/Svelte/Angular packages expose
-    framework-named theme-toggle binding helpers so framework adapters do not
-    copy `root-selector`, `checkout-selector`, `default-theme`, or `storage-key`
-    attribute names. @openreceive/browser now also owns a full checkout-shell
-    binding model that combines stored theme resolution, root theme attributes,
-    checkout element attributes/listeners, and theme-toggle attributes. The
-    Vue/Svelte/Angular packages expose framework-named shell bindings so apps
-    can render the full wizard/countdown/theme checkout without composing those
-    pieces by hand. They also expose framework-named shell element creators
-    that delegate to the browser-owned DOM creator for imperative mounting
-    without copying checkout/theme element wiring. They now also expose
-    framework-named checkout component models that bundle the shell binding
-    with the shared custom-element registration hook, and they ship thin
-    Vue/Svelte/Angular component entry files that wrap the shared checkout and
-    theme-toggle custom elements instead of forking checkout behavior. They now
-    also expose framework-named checkout controller helpers that delegate to
-    the browser-owned watcher/copy/open-wallet action controller, plus
-    framework-local styles.css wrappers around the browser-owned default
-    checkout light/dark stylesheet; @openreceive/elements exposes the same
-    wrapper for no-framework apps. The browser
-    demos now keep their existing CSS hooks through
-    package-owned theme attributes so theme semantics stay testable across
-    frameworks, and the React demos now use @openreceive/react's
-    OpenReceiveThemeScope instead of local useOpenReceiveTheme/
-    OpenReceiveThemeToggle wiring, and they pass `lookupUrl` to
-    OpenReceiveCheckout instead of constructing the lookup fetcher locally.
-    @openreceive/elements also passes lookupUrl into the browser-owned checkout
-    controller instead of hand-writing lookup POST requests or lookup fetcher
-    construction inside the web component.
-    React hook/provider consumers now receive controller-backed
-    `reloadState()`, `retry()`, `refreshExpiredInvoice()`, and `cancel()`
-    actions in addition to copy and open-wallet actions, and Vue/Svelte/Angular
-    controller helpers expose the same shared browser controller surface for
-    custom app UIs.
-    Static HTML also consumes the browser-owned custom-element
-    listener map, so demos do not copy `openreceive-*` event names. The Hello
-    Fruit demos also share product display helpers for fiat labels, invoice
-    descriptions, invoice creation button labels, and fallback invoice creation
-    error copy so demo copy and prices do not drift between frontend stacks.
-    Full native Vue/Svelte/Angular component sets remain future work.
-  - This review also starts Milestone 3 with a minimal Ruby core-helper
-    package at packages/ruby/openreceive. It consumes shared vectors for exact
-    fiat-to-msats math, settlement detection, NWC URI parse/redaction, and
-    receive-only NIP-47 request/response mapping, polling cadence, and
-    idempotency classification, plus an in-memory invoice store for local
-    parity tests. The separate openreceive-rails package now builds on it; the
-    Ruby package also includes a receive-only wrapper for nwc-ruby clients using
-    the documented NwcRuby::Client.from_uri and keyword request methods, plus a
-    fail-closed UnavailableReceiveClient that returns WALLET_UNAVAILABLE
-    behavior without exposing wallet methods. The remaining Ruby-side gap is
-    proving the live path against an installed nwc-ruby gem and wallet in
-    trusted environments.
-  - This review also starts the Rails adapter package at
-    packages/ruby/openreceive-rails. The first adapter slice is server-side and
-    dependency-light: production fail-closed authentication, idempotent invoice
-    creation around an injected receive-only client, authorized lookup, backend
-    settlement verification, polling-worker verification, passive notification
-    handling, and duplicate-safe settlement action tracking.
-  - The Rails package also now includes initial ActiveRecord migration and
-    model templates for the invoice storage shape, including idempotency scope,
-    amount_msats bounds, state checks, settlement action timestamps, and
-    uniqueness indexes. These are examples/templates copied by the install generator
-    skeleton.
-  - The Rails package now includes public app templates for controller routes,
-    polling jobs, payment notification jobs, ActionCable/Turbo stream updates,
-    and an install generator skeleton that copies those templates and prints a
-    route snippet.
-  - The Rails package now also exposes an optional mounted engine route and
-    controller surface for /v1/invoices when Rails/ActionController are
-    available, including JSON 503 WALLET_UNAVAILABLE handling for an injected
-    unavailable-wallet client.
-  - The Rails package now includes a packaged Hotwire/Turbo invoice partial for
-    passive status updates. The remaining Rails proof gaps are a full Rails
-    Hotwire bundle/build smoke and the Rails React demo.
-  - The Ruby live-wallet path now has an optional preflight command,
-    npm run test:live:ruby:nwc, that loads OPENRECEIVE_NWC/OPENRECEIVE_ENV_FILE,
-    parses and redacts the connection URI, checks the default expected
-    capabilities fixture, instantiates NwcRuby::Client.from_uri when nwc-ruby is
-    installed, runs get_info preflight, and creates an invoice only when
-    OPENRECEIVE_LIVE_CREATE_INVOICE=1.
-  - This review also starts the Rails Hotwire Hello Fruit demo at
-    examples/hello-fruit/server/rails-hotwire. It includes a Rails app skeleton
-    with OpenReceive engine mount, Hotwire invoice partial, polling and
-    notification jobs, app-owned sticker unlock model, Dockerfile, compose templates,
-    Makefile, env example, and README. It now boots without OPENRECEIVE_NWC by
-    injecting OpenReceive::UnavailableReceiveClient and failing invoice creation
-    closed with WALLET_UNAVAILABLE until a receive-only NWC URI is configured.
-    The root npm run demo launcher includes the rails target, and the demo
-    container validator now checks it as the fourth Hello Fruit demo, but full
-    bundle/build smoke remains pending.
-  - Verification after the package-first checkout extraction:
+  - Extract reusable package artifact build tooling from package-smoke and keep
+    actual publishing disabled.
+  - Add package-level README/install guidance for the primary JS path.
+  - Make Node doctor fail or warn on production configs that are missing auth,
+    event protection, CSRF diagnostics, or durable package-owned storage.
+  - Update the v0.1 scope/release-boundary docs to reflect what exists today.
+  - Keep npm test, npm run validate, check-generated, typecheck, JS tests,
+    package smoke, Ruby tests, release checks, and test:ci green.
 
-      node --test tests/v0.1/core.test.mjs tests/v0.1/react.test.mjs tests/v0.1/elements.test.mjs tests/v0.1/express.test.mjs
-      node --test tests/v0.1/rates.test.mjs
-      node --test tests/v0.1/provider-data.test.mjs
-      node --test tests/v0.1/tooling.test.mjs
-      node --test tests/v0.1/express.test.mjs
-      node --test tests/v0.1/demo.test.mjs
-      node --test tests/v0.1/framework-adapters.test.mjs
-      npm run typecheck
-      npm run validate
-      npm run test:js
-      npm test
-      npm run test:package-smoke
-      npm run build:demo
-      npm run scan:client-bundles
-      npm run build:docs
-      npm run test:ci
+Milestone status:
 
-    Result:
+  - Milestone 0: complete.
+  - Milestone 1: complete and still the correctness reference.
+  - Milestone 2: partially complete; harden what exists before adding more.
+  - Milestone 3: started with Ruby/Rails proof work; keep it initial until full
+    Rails smoke/live-wallet proof is green.
+  - Milestones 4 and later: deferred.
 
-      Passing. Package smoke imported 11 local OpenReceive package tarballs,
-      including the browser country-map subpath, shared checkout styles,
-      package-owned icon assets, and Vue/Svelte/Angular component entry files.
-      No new .env values were required for this checkout-package work; the
-      existing read-only NWC value remains only for optional live smoke checks.
-      The final test:ci run skipped live NWC because OPENRECEIVE_NWC was not
-      present in that command environment.
+Plan corrections from current code:
 
-Already completed:
-
-  - Repo foundation, governance/security/contribution files, ADRs, scope lock,
-    package ownership, test command map, and forbidden-without-approval rules.
-  - v0.1 schemas, vectors, generated models, validation tooling, secret scan,
-    client bundle scan, release-readiness checks, and workflow checks.
-  - NWC URI parser/redactor, receive-only NWC client interface, Alby/getAlby
-    Node adapter, wallet preflight, info/capability tests, make_invoice and
-    lookup_invoice wrappers, metadata guard, and receive-checkout spend-method
-    guard.
-  - Core storage/idempotency helpers, safe poller, package-owned polling
-    runner, settlement detection, static fiat pricing, CoinGecko-compatible
-    pricing, package-owned payment notification listener, and in-memory event
-    replay.
-  - Express adapter with auth hooks, CSRF/CORS behavior, lookup authorization,
-    signed event URLs, SSE invoice events, rates/providers/routes endpoints,
-    refresh support, and secure fail-closed defaults.
-  - @openreceive/browser helpers, checkout state reducer, payment wizard
-    state helpers, country/theme storage helpers, countdown formatting, and
-    provider-route selection helpers, plus shared frontend defaults for
-    polling cadence, copy feedback duration, provider preview count, and
-    passive invoice event names, plus shared checkout display-model helpers,
-    shared checkout labels, wizard selection
-    reducer/model helpers, shared country picker/map helpers, shared
-    route/provider and route-asset display helpers, shared theme model helpers,
-    shared country map viewport/region geometry, a transient feedback
-    controller, a checkout watcher, a checkout action controller used by
-    framework adapters with reload/retry/refresh/cancel actions, browser-owned wizard DOM attributes/selectors/parsers,
-    browser-owned checkout data attributes/selectors, browser-owned
-    checkout/theme-toggle custom-element attribute maps, browser-owned
-    web-component shadow part/action selector maps, browser-owned
-    checkout/provider-copy and theme-change event construction, browser-owned default checkout light/dark CSS, and
-    browser-owned web-component shadow styles consumed by @openreceive/elements.
-  - @openreceive/elements, @openreceive/react default checkout UI, hooks/
-    provider/context, primitives/slots, aliases, copy feedback, light/dark theme surfaces,
-    React and web-component default payment wizards with shared country map
-    model, React hook and web-component lifecycle/lookup/copy/open-wallet
-    behavior through the shared browser checkout controller, React hook
-    reload/retry/refresh/cancel actions through the same controller, browser-owned
-    waiting/countdown display decisions, web-component shadow styles from
-    @openreceive/browser, React default action buttons wired through
-    controller-backed hook actions, and the React Material UI recipe.
-  - Initial @openreceive/vue, @openreceive/svelte, and @openreceive/angular
-    packages with thin typed bindings for the shared checkout web component and
-    shared theme model, plus framework-named checkout-shell and component-model
-    creators, framework-named checkout controller helpers, browser-owned CSS
-    wrapper exports, plus packaged thin component entry files.
-  - @openreceive/provider-data and provider registry validation.
-  - @openreceive/testkit and deterministic mock wallet tooling.
-  - Express + React Hello Fruit demo, now consuming the package checkout
-    wizard/theme UI instead of duplicating provider-data logic locally.
-  - Static HTML + small API Hello Fruit demo with a stored light/dark switcher.
-  - Next.js fullstack Hello Fruit demo with a stored light/dark switcher,
-    including runtime-hosted metadata,
-    robots, sitemap, health, source, and docs routes.
-  - Demo deployment inventory/templates for express-demo, static-demo, and
-    nextjs-demo.
-  - Initial Ruby core-helper package for exact fiat quoting, settlement
-    detection, NWC URI parse/redaction, and receive-only NIP-47 request/
-    response mapping, polling cadence, idempotency classification, and
-    in-memory storage behavior against shared vectors, plus a receive-only
-    nwc-ruby wrapper and fail-closed unavailable-wallet client.
-  - Initial Rails adapter-helper package for receive-only idempotent invoice
-    creation, authorized lookup, backend settlement verification, and
-    duplicate-safe settlement action tracking using an injected Ruby receive client, plus
-    worker/listener verification where notifications remain passive hints.
-  - Initial Rails ActiveRecord migration/model templates for invoice storage
-    invariants.
-  - Initial Rails controller, job, channel, route, and install-generator
-    templates for framework-native integration.
-  - Initial optional mounted Rails engine routes and controller surface for
-    `/v1/invoices`, including WALLET_UNAVAILABLE JSON handling.
-  - Initial packaged Rails Hotwire/Turbo invoice partial for passive checkout
-    status updates.
-  - Optional Ruby live NWC smoke command with redacted output, get_info
-    preflight through nwc-ruby when available, opt-in invoice creation, and
-    clear skip behavior when nwc-ruby is unavailable.
-  - Initial Rails Hotwire Hello Fruit demo skeleton with Docker/compose
-    templates, root `npm run demo rails` launcher support, fail-closed
-    no-wallet boot behavior, and validator coverage.
-  - Full CI gate has passed after the Next demo work:
-
-      npm run test:ci
-
-Plan corrections from implementation:
-
-  - Hosted demo routes that expose runtime deployment metadata must not be
-    build-time static when their output depends on environment variables.
-    Next.js robots.txt and sitemap.xml handlers need explicit dynamic/runtime
-    settings when they read OPENRECEIVE_PUBLIC_URL or OPENRECEIVE_DEMO_NOINDEX.
-  - The strict parallelism gate in this master plan remains authoritative.
-    If docs/v0.1-scope-lock.md or any worker notes imply parallel coding is
-    safe merely after the NWC interface exists, update those notes to match
-    this file: v0.1 stayed sequential through the Express reference path, demo,
-    smoke, and CI gates.
-  - After the current uncommitted Next cleanup is closed, the project is past
-    the original v0.1 sequential path and can safely use parallel workers only
-    on isolated post-v0.1 lanes with separate file ownership. Do not let
-    workers concurrently edit schemas, vectors, generated contracts, shared
-    checkout semantics, or the same demo.
+  - The old v0.1 scope lock is historical. Replace it with a current release
+    boundary that names the packages already present and which ones are primary
+    versus thin/initial.
+  - The working sequence below must no longer start at repo initialization.
+    The next sequence is package hardening and contract synchronization.
+  - Shared schemas, vectors, generated contracts, storage semantics,
+    settlement rules, and checkout behavior remain lead-owned. Do not run
+    parallel workers against those files without explicit coordination.
 
 Milestone 0: v0.1 foundation
 
@@ -5211,33 +4734,31 @@ Working Sequence From Here
 
 The next implementation work should happen in this order:
 
-1. Create the repo skeleton from the monorepo layout.
-2. Add MIT LICENSE, AGENTS.md, CONTRIBUTING.md, SECURITY.md, issue template,
-   ADR folder, package ownership map, test command map, and
-   forbidden-without-approval file list.
-3. Add ADR-0001: product boundary.
-4. Add ADR-0002: no frontend NWC.
-5. Add ADR-0003: invoice/idempotency/storage invariants.
-6. Add ADR-0004: amount_msats vs fiat quote contract.
-7. Add the v0.1 scope lock.
-8. Add invoice, invoice-storage, payment-event, rate-quote, and error schemas.
-9. Add test vectors for fiat-to-msats, amount_msats minimum 1000, safe integer
-    limits, invoice lifecycle, idempotency, settlement detection, and polling.
-10. Add NWC URI parsing and redaction vectors.
-11. Define the NWC client interface.
-12. Add the Node receive-checkout adapter around getAlby/js-sdk.
-13. Add automatic wallet preflight and capability summary.
-14. Implement make_invoice and lookup_invoice wrappers.
-15. Implement the static price provider.
-16. Implement safe polling, expiry verification, and settlement detection.
-17. Add the Express route adapter with auth/CSRF/CORS/lookup authorization.
-18. Add @openreceive/browser QR/copy/open-wallet helpers.
-19. Build the Express + React Hello Fruit demo.
-20. Build the manual live-wallet smoke script with Rizful as the first profile.
-21. Add basic CI: schemas, vectors, JS tests, secret scan, and demo smoke.
-22. Only after the Express path is green, start provider registry, OpenAPI,
-    AsyncAPI, deterministic mock wallet, @openreceive/elements, @openreceive/react,
-    Next.js, static demo, design-system recipes, and non-JS ecosystem work.
+1. Keep the JS/Express reference path green while hardening package release
+   artifacts.
+2. Fix shared-contract drift immediately. In particular, invoice storage must
+   require operation because idempotency scope is merchant_scope + operation +
+   idempotency_key.
+3. Extract package artifact building into reusable tooling, keep packages
+   private, and keep package smoke importing generated dist artifacts rather
+   than raw TypeScript sources.
+4. Add concise package README/install guidance for the primary JS path:
+   @openreceive/node, @openreceive/express, @openreceive/browser,
+   @openreceive/elements, and @openreceive/react.
+5. Make Node doctor production diagnostics explicit for durable store,
+   authorization hooks, event authorization, CSRF warnings, NWC preflight, and
+   poll/listen readiness.
+6. Replace the historical v0.1 scope lock with a current release boundary that
+   names the supported, thin, initial, and deferred surfaces.
+7. Keep Vue/Svelte/Angular as thin web-component bindings and Rails/Ruby as
+   initial proof work until their hardening gaps are closed.
+8. Run the full release gate before calling the synchronization complete:
+   npm test, npm run validate, npm run check:generated, npm run typecheck,
+   npm run test:js, npm run test:package-smoke, npm run test:ruby,
+   npm run check:release, and npm run test:ci.
+9. Do not add new SDK families, demos, ecommerce integrations, mobile kits, or
+   provider-data variants until the current release surface is easier to
+   install, diagnose, package, and document.
 
 
 Acceptance Checklist
@@ -5292,245 +4813,7 @@ It should be:
 That gives the project broad ecosystem coverage without drowning in duplicated
 logic.
 
-
-Agent And Concurrency Plan
---------------------------
-
-Use simultaneous agents carefully. The project benefits from extra readers and
-reviewers early, but not from uncontrolled simultaneous coding.
-
-Hard rule for v0.1:
-
-  There is almost nothing useful to parallelize until the contract is frozen
-  and proven. The v0.1 critical path is sequential:
-
-    repo foundation
-    AGENTS.md / CONTRIBUTING.md / ADRs / scope lock
-    schemas
-    vectors
-    NWC interface
-    @openreceive/node
-    safe poller
-    Express adapter
-    @openreceive/browser
-    Express + React demo
-    manual live-wallet smoke
-    basic CI
-
-  Through v0.1, use one lead/orchestrator and one coding worker at most. Add
-  read-only research/review workers when useful, but do not let multiple
-  workers edit contract files at the same time.
-
-Why:
-
-  Two agents independently deciding idempotency semantics, settlement
-  normalization, event resume behavior, or storage transitions would recreate
-  the drift OpenReceive is designed to prevent. The frozen spec is what makes
-  later parallel SDK work safe.
-
-Required foundation before parallel coding:
-
-  - Create AGENTS.md.
-  - Create CONTRIBUTING.md.
-  - Create issue template.
-  - Create ADR folder.
-  - Create v0.1 scope lock.
-  - Create repo skeleton.
-  - Create package ownership map.
-  - Create test command map.
-  - Create forbidden-without-approval file list.
-
-VS Code and Copilot coding agent can discover workspace instruction files such
-as AGENTS.md. Treat it as the shared operating manual for Codex, Claude Code,
-Copilot, and human contributors.
-
-AGENTS.md must include rules like:
-
-  # OpenReceive agent rules
-
-  Do not expose NWC secrets to browser, mobile, logs, tests, screenshots, or
-  docs.
-
-  Do not add a new SDK or framework adapter unless the v0.1 spec, vectors, and
-  Express reference implementation already cover the behavior. After the
-  deterministic mock wallet exists, new SDKs must pass it too.
-
-  Do not duplicate provider data, currencies, polling cadence, settlement
-  rules, or demo product data.
-
-  If changing a schema, update the relevant test vectors in the same PR. After
-  OpenAPI/AsyncAPI exist, update those contracts too.
-
-  If adding invoice creation behavior, include idempotency tests.
-
-  If adding settlement behavior, include duplicate notification and replay
-  tests.
-
-  Never implement live checkout in pure frontend code.
-
-  Run the smallest relevant test command before finishing.
-
-Early worker model:
-
-  v0.1 foundation:
-
-    1 lead/orchestrator
-    1 coding worker
-    2 read-only research/review workers
-
-  After schemas, vectors, and the Express reference path are committed:
-
-    1 lead/orchestrator
-    3 implementation workers max
-    1 reviewer/security/conformance worker
-
-  After the JS reference demo works:
-
-    1 lead/orchestrator
-    4-6 workers across isolated packages/demos
-    1 reviewer/security/conformance worker
-
-Worker rules:
-
-  - One worker owns one issue.
-  - One worker uses one branch or git worktree.
-  - One worker has one bounded file set.
-  - One worker has one definition of done.
-  - No two workers edit the same contract files.
-  - No broad "build OpenReceive" prompts.
-  - Contract files need lead ownership until v0.1 is frozen.
-
-Safe parallel work after foundation is limited:
-
-  Worker 1: invoice/payment/rate/error schemas
-  Allowed files:
-    spec/schemas/invoice.schema.json
-    spec/schemas/invoice-storage.schema.json
-    spec/schemas/payment-event.schema.json
-    spec/schemas/rate-quote.schema.json
-    spec/schemas/error.schema.json
-
-  Worker 2: fiat/polling/settlement/idempotency vectors
-  Allowed files:
-    spec/test-vectors/*
-    spec/fixtures/*
-
-  Worker 3: docs/security/architecture draft
-  Allowed files:
-    docs/00-what-is-openreceive.md
-    docs/10-security.md
-    docs/11-conformance.md, if created after v0.1
-
-Bad early parallel work:
-
-  Worker A: build @openreceive/node
-  Worker B: build mock wallet
-  Worker C: build Express adapter
-  Worker D: build React checkout
-  Worker E: build provider registry
-
-That set looks productive but would make each worker invent contract details
-separately.
-
-Implementation parallelism starts after the contract is frozen:
-
-  Phase C1:
-
-    Worker 1: static pricing module
-    Worker 2: safe poller and settlement detection
-    Worker 3: NWC URI parser/redactor
-    Worker 4: reviewer checking drift
-
-  Phase C2:
-
-    Worker 1: @openreceive/node NWC adapter
-    Worker 2: Express routes
-    Worker 3: @openreceive/browser QR/copy/open-wallet helpers
-    Worker 4: docs quickstart
-
-  Phase C3:
-
-    Worker 1: Express + React fruit demo
-    Worker 2: manual live-wallet smoke script
-    Worker 3: basic CI and secret scanning
-    Worker 4: Playwright smoke tests, if browser automation is added in v0.1
-
-Do not start provider registry packaging, OpenAPI/AsyncAPI codegen, React
-default UI, Next.js, Rails, Python, PHP, Go, Rust, mobile, or deployment fleet
-workers until the Express reference path is green.
-
-Language-SDK parallelism:
-
-  Parallelism becomes genuinely useful after the contract is frozen and proven
-  with the JS reference. At that point each language SDK or standalone NWC
-  client can live in its own package directory and has an objective goal: pass
-  the conformance vectors and, when OPENRECEIVE_NWC is available, the
-  human-paid live wallet smoke tests.
-
-  This is the ideal autonomous-agent shape:
-
-    one package directory
-    one worktree
-    one conformance command
-    one live test script set
-    no edits to shared contract files without lead approval
-
-Tool split:
-
-  VS Code Agents window:
-    mission control, monitoring, comparing outputs, local review
-
-  Claude Code:
-    architecture review, plan mode, codebase exploration, research subagents,
-    large refactors in local worktrees
-
-  Codex:
-    issue-shaped implementation PRs, CI/test failures, mechanical
-    schema/codegen updates, isolated package work, cloud tasks where a PR is
-    the desired output
-
-Plan/goal mode:
-
-  Use plan mode for bounded milestones:
-
-    Plan Milestone 0 repo foundation.
-    Plan idempotency behavior for invoice creation.
-    Plan the safe poller and expiry grace behavior.
-    Plan the Express adapter auth/CORS/CSRF contract.
-
-  Do not use plan mode for:
-
-    Build the whole OpenReceive project.
-    Create all SDKs.
-    Implement all demos.
-    Make this production ready.
-
-  The gate should be:
-
-    plan -> human review -> implementation -> tests -> reviewer agent -> merge
-
-  Not:
-
-    giant plan -> unattended swarm -> hope
-
-First work to actually start:
-
-  1. Create repo skeleton.
-  2. Add MIT LICENSE, AGENTS.md, CONTRIBUTING.md, SECURITY.md.
-  3. Add ADR-0001: product boundary.
-  4. Add ADR-0002: no frontend NWC.
-  5. Add ADR-0003: invoice/idempotency/storage invariants.
-  6. Add ADR-0004: amount_msats vs fiat quote contract.
-  7. Add invoice/payment/rate/error schemas.
-  8. Add fiat-to-msats vectors.
-  9. Add polling vectors.
-  10. Add settlement detection vectors.
-  11. Add NWC URI redaction vectors.
-  12. Define the NWC client interface.
-
-Only after that should multiple coding workers be allowed, and even then only
-on isolated directories with strict ownership.
-
+ 
 ---- more notes i added
 i wanto see sufficient logging on both client and server side so I can see things in action
 espeically on the serfver... 

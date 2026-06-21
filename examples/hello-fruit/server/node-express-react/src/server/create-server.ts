@@ -21,6 +21,9 @@ import {
 import {
   createHelloFruitOpenReceiveInvoiceStore
 } from "../../../../shared/openreceive-store.ts";
+import {
+  readHelloFruitCatalogCurrencies
+} from "../../../../shared/demo-catalog.ts";
 
 export function createHelloFruitServer() {
   const app = express();
@@ -84,14 +87,16 @@ export function createHelloFruitServer() {
     connectionString
   });
 
+  const priceCurrencies = readHelloFruitCatalogCurrencies();
+
   mountOpenReceiveExpressRoutes(app, {
     client: wallet,
     store: createHelloFruitOpenReceiveInvoiceStore({
       demoId: "node-express-react"
     }),
     merchantScope: () => "demo:hello-fruit",
-    priceProviders: createDefaultLivePriceProviders({ currencies: ["USD"] }),
-    priceCurrencies: ["USD"],
+    priceProviders: createDefaultLivePriceProviders({ currencies: priceCurrencies }),
+    priceCurrencies,
     unsafeAllowUnauthenticatedDemoMode: true,
     logger: createHelloFruitOpenReceiveLogger("node-express-react")
   });

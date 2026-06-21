@@ -27,6 +27,9 @@ import {
 import {
   createHelloFruitOpenReceiveInvoiceStore
 } from "../../../../shared/openreceive-store.ts";
+import {
+  readHelloFruitCatalogCurrencies
+} from "../../../../shared/demo-catalog.ts";
 
 const DEMO_ID = "nextjs-fullstack";
 const DEFAULT_PORT = "3002";
@@ -146,6 +149,8 @@ function getRuntime(connectionString: string): NextDemoRuntime {
     connectionString
   });
 
+  const priceCurrencies = readHelloFruitCatalogCurrencies();
+
   runtime = {
     connectionString,
     ...createOpenReceiveNextRuntime({
@@ -153,8 +158,8 @@ function getRuntime(connectionString: string): NextDemoRuntime {
       store,
       eventBus,
       merchantScope: () => "demo:hello-fruit-nextjs",
-      priceProviders: createDefaultLivePriceProviders({ currencies: ["USD"] }),
-      priceCurrencies: ["USD"],
+      priceProviders: createDefaultLivePriceProviders({ currencies: priceCurrencies }),
+      priceCurrencies,
       unsafeAllowUnauthenticatedDemoMode: true,
       logger: createHelloFruitOpenReceiveLogger(DEMO_ID)
     })

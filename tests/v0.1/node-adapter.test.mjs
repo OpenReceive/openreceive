@@ -609,6 +609,64 @@ test("Node CLI initializes, migrates, and doctors SQLite setup", async () => {
     assert.equal(inMemoryStoreDoctorCode, 1);
     assert.match(stderr.join(""), /uses InMemoryInvoiceStore/);
 
+    stdout.length = 0;
+    stderr.length = 0;
+    const productionMissingAuthDatabase = new DatabaseSync(sqlitePath);
+    const productionMissingAuthCode = await runOpenReceiveCli({
+      argv: ["doctor", "--sqlite", sqlitePath, "--config", "openreceive.config.mjs"],
+      cwd: tempRoot,
+      env: { NODE_ENV: "production" },
+      stdout: io(stdout),
+      stderr: io(stderr),
+      loadConfigModule: async () => ({
+        openreceive: {
+          client: config.client,
+          store: createOpenReceiveSqliteInvoiceStore({
+            client: createOpenReceiveSqliteQueryClient(productionMissingAuthDatabase)
+          }),
+          merchantScope: config.merchantScope
+        }
+      }),
+      loadExpressRunners: loadNoopExpressDiagnostics
+    });
+    productionMissingAuthDatabase.close();
+    assert.equal(productionMissingAuthCode, 1);
+    assert.match(stderr.join(""), /missing authorization hooks: create, read, lookup, refresh/);
+    assert.match(stderr.join(""), /must protect invoice events/);
+
+    stdout.length = 0;
+    stderr.length = 0;
+    const productionSecuredDatabase = new DatabaseSync(sqlitePath);
+    const productionSecuredCode = await runOpenReceiveCli({
+      argv: ["doctor", "--sqlite", sqlitePath, "--config", "openreceive.config.mjs"],
+      cwd: tempRoot,
+      env: { NODE_ENV: "production" },
+      stdout: io(stdout),
+      stderr: io(stderr),
+      loadConfigModule: async () => ({
+        openreceive: {
+          client: config.client,
+          store: createOpenReceiveSqliteInvoiceStore({
+            client: createOpenReceiveSqliteQueryClient(productionSecuredDatabase)
+          }),
+          merchantScope: config.merchantScope,
+          auth: {
+            create: () => true,
+            read: () => true,
+            lookup: () => true,
+            refresh: () => true,
+            events: () => true
+          }
+        }
+      }),
+      loadExpressRunners: loadNoopExpressDiagnostics
+    });
+    productionSecuredDatabase.close();
+    assert.equal(productionSecuredCode, 0);
+    assert.match(stdout.join(""), /ok production auth and event authorization diagnostics passed/);
+    assert.match(stdout.join(""), /warn production config has no csrf\.verify hook/);
+    assert.equal(stderr.join(""), "");
+
     const database = new DatabaseSync(sqlitePath);
     try {
       database.exec("DROP INDEX openreceive_invoices_recovery_idx");

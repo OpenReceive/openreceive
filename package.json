@@ -19,6 +19,7 @@
     "check:demo-deploy": "node tools/validate/check-demo-deploy.mjs",
     "check:release": "node tools/validate/check-release-readiness.mjs",
     "check:workflows": "node tools/validate/check-workflows.mjs",
+    "build:packages": "node tools/package/build-artifacts.mjs --dry-run",
     "mock-wallet": "node tools/mock-wallet/server.mjs",
     "scan:client-bundles": "node tools/validate/scan-client-bundles.mjs",
     "test:package-smoke": "node tools/validate/package-smoke.mjs",

@@ -53,6 +53,7 @@ expect(rootPackage.version === "0.1.0", "package.json: root version must be 0.1.
 expect(rootPackage.private === true, "package.json: root package must stay private before explicit publishing approval");
 expect(rootPackage.scripts?.["test:ci"]?.includes("npm run check:release"), "package.json: test:ci must include check:release");
 expect(rootPackage.scripts?.["check:release"] === "node tools/validate/check-release-readiness.mjs", "package.json: missing check:release script");
+expect(rootPackage.scripts?.["build:packages"] === "node tools/package/build-artifacts.mjs --dry-run", "package.json: missing build:packages dry-run script");
 expect(rootPackage.scripts?.["test:package-smoke"], "package.json: release gate must keep package smoke script");
 
 for (const { relativePath, manifest } of packages) {
@@ -83,6 +84,7 @@ for (const phrase of [
   "Changelog updated.",
   "Package versions match the intended tag.",
   "Workflow safety validation passes through `npm run check:workflows`.",
+  "Package artifact dry run passes through `npm run build:packages`.",
   ".github/workflows/release.yml",
   ".github/workflows/publish.yml",
   "Live wallet smoke passes when a trusted `OPENRECEIVE_NWC` is available.",

@@ -102,6 +102,23 @@ function validateSchemas() {
   assert(invoice.properties.amount_msats.minimum === 1000, "invoice amount_msats minimum must be 1000");
   assert(invoice.properties.amount_msats.maximum === 9007199254740991, "invoice amount_msats maximum mismatch");
 
+  const invoiceStorage = readJson("spec/schemas/invoice-storage.schema.json");
+  assert(
+    invoiceStorage.required.includes("operation"),
+    "invoice-storage schema must require operation for canonical idempotency scope"
+  );
+  assert(
+    JSON.stringify(invoiceStorage.properties.operation.enum) ===
+      JSON.stringify(["invoice.create", "invoice.refresh"]),
+    "invoice-storage operation enum mismatch"
+  );
+  assert(
+    invoiceStorage["x-openreceive-invariants"].some((invariant) =>
+      invariant.includes("merchant_scope + operation + idempotency_key")
+    ),
+    "invoice-storage schema must document canonical idempotency scope"
+  );
+
   const quote = readJson("spec/schemas/rate-quote.schema.json");
   assert(quote.properties.amount_sats.maximum === 9007199254740, "amount_sats maximum mismatch");
 
