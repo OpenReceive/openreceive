@@ -34,6 +34,14 @@ class FakeReceiveClient
       "settled_at" => (@lookup_state == "settled" ? 1200 : nil)
     }
   end
+
+  def preflight
+    {
+      "receive_checkout_ready" => true,
+      "methods" => ["make_invoice", "lookup_invoice"],
+      "notifications" => []
+    }
+  end
 end
 
 class OpenReceiveRailsTest < Minitest::Test
@@ -44,7 +52,7 @@ class OpenReceiveRailsTest < Minitest::Test
     config = OpenReceive::Rails::Configuration.new
     config.client = client
     config.merchant_scope = "rails:test"
-    config.production = true
+    config.production = false
     config.authenticate = ->(controller) { raise "missing user" if controller.current_user_id.nil? }
     config.authorize_invoice = lambda do |controller, invoice|
       invoice.fetch("metadata").fetch("user_id") == controller.current_user_id
@@ -135,6 +143,8 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_includes routes, "get \"/openreceive/v1/invoices/:invoice_id\""
     assert_includes rake_tasks, "task poll: :environment"
     assert_includes rake_tasks, "task listen: :environment"
+    assert_includes rake_tasks, "task doctor: :environment"
+    assert_includes rake_tasks, "OpenReceive::Rails.adapter.doctor"
     assert_includes rake_tasks, "poll_recoverable_invoices"
     assert_includes rake_tasks, "listen_for_payment_notifications"
     refute_includes combined, "pay_invoice"
@@ -206,6 +216,29 @@ class OpenReceiveRailsTest < Minitest::Test
     config.production = true
 
     assert_raises(SecurityError) { OpenReceive::Rails::Adapter.new(config) }
+  end
+
+  def test_production_configuration_fails_closed_with_in_memory_storage
+    config = OpenReceive::Rails::Configuration.new
+    config.client = FakeReceiveClient.new
+    config.production = true
+    config.authenticate = ->(_controller) { true }
+
+    error = assert_raises(SecurityError) { OpenReceive::Rails::Adapter.new(config) }
+    assert_includes error.message, "durable invoice storage"
+  end
+
+  def test_doctor_reports_store_nwc_and_worker_readiness
+    adapter = build_adapter.first
+    result = adapter.doctor
+
+    assert_equal true, result.fetch("ok")
+    checks = result.fetch("checks")
+    assert checks.any? { |check| check.fetch("name") == "rails.store" && check.fetch("status") == "ok" }
+    assert checks.any? { |check| check.fetch("name") == "rails.nwc" && check.fetch("status") == "ok" }
+    assert checks.any? { |check| check.fetch("name") == "rails.worker.poll" && check.fetch("status") == "ok" }
+    assert checks.any? { |check| check.fetch("name") == "rails.worker.listen" && check.fetch("status") == "warn" }
+    refute_includes result.to_s, "nostr+walletconnect://"
   end
 
   def test_create_invoice_is_idempotent_and_receive_only

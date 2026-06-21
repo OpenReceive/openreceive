@@ -251,7 +251,7 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   ]);
   assert.equal(openReceiveCheckoutLabels.copyInvoice, "Copy invoice");
   assert.equal(getOpenReceivePaymentStatusText("settled").title, "Payment received");
-  assert.equal(getOpenReceiveWizardEmptyMessage("bitcoin"), "Choose Lightning or on-chain Bitcoin.");
+  assert.equal(getOpenReceiveWizardEmptyMessage("bitcoin"), "Choose Bitcoin Lightning.");
   assert.equal(getOpenReceiveProviderOpenLabel("Boltz"), "How To Pay");
   assert.equal(getOpenReceiveProviderUsBadge(true), null);
   assert.equal(getOpenReceiveProviderUsBadge(null), null);

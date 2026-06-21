@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import {
+  chmodSync,
   copyFileSync,
   mkdirSync,
   mkdtempSync,
@@ -18,7 +19,15 @@ import ts from "typescript";
 
 const root = process.cwd();
 const packageRoot = path.join(root, "packages/js");
-const localSmokeDependencies = new Set(["react"]);
+const npmTimeoutMs = Number(process.env.OPENRECEIVE_PACKAGE_SMOKE_NPM_TIMEOUT_MS ?? 120_000);
+const localSmokeDependencies = new Set([
+  "commander",
+  "d3-array",
+  "d3-geo",
+  "react",
+  "topojson-client",
+  "world-atlas"
+]);
 
 const importChecks = {
   "@openreceive/angular": "typeof mod.createOpenReceiveAngularCheckoutBinding === 'function' && typeof mod.createOpenReceiveAngularCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveAngularCheckoutComponentModel === 'function' && typeof mod.createOpenReceiveAngularCheckoutController === 'function' && typeof mod.createOpenReceiveAngularThemeBinding === 'function' && typeof mod.createOpenReceiveAngularStoredThemeBinding === 'function' && typeof mod.createOpenReceiveAngularThemeToggleBinding === 'function' && typeof mod.createOpenReceiveCheckoutElement === 'function' && typeof mod.createOpenReceiveThemeToggleElement === 'function' && typeof mod.createOpenReceiveCheckoutShell === 'function' && typeof mod.toggleOpenReceiveStoredThemeControls === 'function'",
@@ -26,7 +35,7 @@ const importChecks = {
   "@openreceive/core": "typeof mod.createIdempotencyRequestHash === 'function'",
   "@openreceive/elements": "typeof mod.renderOpenReceiveCheckoutHtml === 'function' && typeof mod.renderOpenReceiveThemeToggleHtml === 'function' && mod.OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME === 'openreceive-theme-toggle'",
   "@openreceive/express": "typeof mod.createOpenReceiveExpressHandlers === 'function'",
-  "@openreceive/node": "typeof mod.createAlbyNwcReceiveClient === 'function'",
+  "@openreceive/node": "typeof mod.createAlbyNwcReceiveClient === 'function' && typeof mod.createOpenReceivePostgresInvoiceStore === 'function' && typeof mod.createOpenReceiveSqliteInvoiceStore === 'function' && typeof mod.OPENRECEIVE_SQLITE_MIGRATION_SQL === 'string' && typeof mod.runOpenReceiveCli === 'function'",
   "@openreceive/provider-data": "typeof mod.getProviderRegistryMetadata === 'function'",
   "@openreceive/react": "typeof mod.createOpenReceiveCheckoutViewModel === 'function' && typeof mod.OpenReceiveThemeScope === 'function' && typeof mod.OpenReceiveProvider === 'function' && typeof mod.useOpenReceiveCheckoutContext === 'function'",
   "@openreceive/svelte": "typeof mod.createOpenReceiveSvelteCheckoutBinding === 'function' && typeof mod.createOpenReceiveSvelteCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveSvelteCheckoutComponentModel === 'function' && typeof mod.createOpenReceiveSvelteCheckoutController === 'function' && typeof mod.createOpenReceiveSvelteThemeBinding === 'function' && typeof mod.createOpenReceiveSvelteStoredThemeBinding === 'function' && typeof mod.createOpenReceiveSvelteThemeToggleBinding === 'function' && typeof mod.createOpenReceiveCheckoutElement === 'function' && typeof mod.createOpenReceiveThemeToggleElement === 'function' && typeof mod.createOpenReceiveCheckoutShell === 'function' && typeof mod.syncOpenReceiveStoredThemeControls === 'function' && typeof mod.applyOpenReceiveCheckoutThemeAttributes === 'function'",
@@ -64,12 +73,26 @@ function npmEnv(cacheDir) {
 }
 
 function runNpm(args, cwd, cacheDir) {
-  return execFileSync("npm", args, {
-    cwd,
-    env: npmEnv(cacheDir),
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"]
-  });
+  try {
+    return execFileSync("npm", args, {
+      cwd,
+      env: npmEnv(cacheDir),
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: npmTimeoutMs
+    });
+  } catch (error) {
+    const stdout = typeof error.stdout === "string" ? error.stdout : "";
+    const stderr = typeof error.stderr === "string" ? error.stderr : "";
+    throw new Error(
+      [
+        `npm ${args.join(" ")} failed in ${cwd}.`,
+        stdout.trim(),
+        stderr.trim(),
+        error.message
+      ].filter(Boolean).join("\n")
+    );
+  }
 }
 
 function walkFiles(dir) {
@@ -140,6 +163,28 @@ function rewriteExports(exports) {
   );
 }
 
+function rewriteBinSource(source) {
+  return source.replace(/(["'])\.\.\/src\/([^"']+)\.ts\1/g, "$1../dist/$2.js$1");
+}
+
+function copyPackageBins(pkg, artifactDir) {
+  const bin = pkg.manifest.bin;
+  if (bin === undefined) return;
+
+  const binTargets = typeof bin === "string" ? [bin] : Object.values(bin);
+  for (const target of new Set(binTargets)) {
+    assert(
+      typeof target === "string" && target.startsWith("./bin/"),
+      `${pkg.manifest.name}: package bin must point at ./bin`
+    );
+    const sourcePath = path.join(pkg.dir, target);
+    const outputPath = path.join(artifactDir, target);
+    mkdirSync(path.dirname(outputPath), { recursive: true });
+    writeFileSync(outputPath, rewriteBinSource(readFileSync(sourcePath, "utf8")));
+    chmodSync(outputPath, 0o755);
+  }
+}
+
 function buildPackageArtifact(pkg, artifactRoot) {
   const packageDirName = path.basename(pkg.dir);
   const artifactDir = path.join(artifactRoot, packageDirName);
@@ -150,12 +195,13 @@ function buildPackageArtifact(pkg, artifactRoot) {
   const manifest = {
     ...pkg.manifest,
     exports: rewriteExports(pkg.manifest.exports),
-    files: ["dist"]
+    files: pkg.manifest.bin === undefined ? ["dist"] : ["dist", "bin"]
   };
   writeFileSync(
     path.join(artifactDir, "package.json"),
     JSON.stringify(manifest, null, 2)
   );
+  copyPackageBins(pkg, artifactDir);
 
   for (const file of walkFiles(sourceDir)) {
     const relativePath = path.relative(sourceDir, file);
@@ -183,6 +229,7 @@ function buildPackageArtifact(pkg, artifactRoot) {
 }
 
 function packPackageArtifact(pkg, artifactRoot, tarballDir, cacheDir) {
+  console.error(`packing ${pkg.manifest.name}`);
   const artifactDir = buildPackageArtifact(pkg, artifactRoot);
   const output = runNpm(
     ["pack", artifactDir, "--pack-destination", tarballDir, "--json"],
@@ -241,6 +288,7 @@ function writeImportSmoke(installDir, packages) {
   writeFileSync(
     path.join(installDir, "smoke.mjs"),
     `import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { openReceiveCountryMapLandPaths } from "@openreceive/browser/country-map";
 
@@ -293,6 +341,12 @@ assert(
   existsSync("node_modules/@openreceive/angular/dist/openreceive-checkout.component.mjs"),
   "@openreceive/angular: checkout Angular component must be packaged"
 );
+const nodeCliPath = "node_modules/@openreceive/node/bin/openreceive.mjs";
+assert(existsSync(nodeCliPath), "@openreceive/node: CLI bin must be packaged");
+assert(
+  execFileSync(process.execPath, [nodeCliPath, "help"], { encoding: "utf8" }).includes("Usage: openreceive"),
+  "@openreceive/node: CLI bin must run help"
+);
 
 console.log(\`Imported \${checks.length} OpenReceive package tarballs.\`);
 `
@@ -333,12 +387,14 @@ function main() {
   mkdirSync(cacheDir);
 
   try {
+    console.error(`building ${packages.length} package artifact(s)`);
     const tarballs = packages.map((pkg) => ({
       name: pkg.manifest.name,
       tarball: packPackageArtifact(pkg, artifactRoot, tarballDir, cacheDir)
     }));
 
     writeInstallProject(installDir, packages, tarballs);
+    console.error("installing package smoke project");
     runNpm(
       [
         "install",
@@ -350,6 +406,7 @@ function main() {
       cacheDir
     );
     writeImportSmoke(installDir, packages);
+    console.error("running package import smoke");
     const output = runImportSmoke(installDir);
     process.stdout.write(output);
     console.log(`Package smoke passed for ${packages.length} package(s).`);

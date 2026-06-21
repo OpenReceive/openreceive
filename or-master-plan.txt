@@ -1611,21 +1611,17 @@ pay one Lightning invoice from funds or accounts the payer already controls.
 
 Canonical location:
 
-  spec/data/providers/openreceive-providers.v2.json
-
-Current source:
-
-  building/providers-demo.json
+  packages/js/provider-data/src/data/openreceive-providers.v4.json
 
 Current stats:
 
-  schema_version:        2.0.0
-  generated:             2026-06-18
-  assets_index:          18 entries
-  providers:             36 included providers
-  crypto_routes:         15 routes
+  schema_version:        4.0.0
+  generated:             2026-06-20
+  assets_index:          15 entries
+  providers:             42 included providers
+  crypto_routes:         12 routes
   fiat_rails:            2 rails, bank and card
-  countries:             39 countries
+  countries:             59 countries
   disqualified:          7 providers
 
 Current asset entries:
@@ -1641,11 +1637,8 @@ Current asset entries:
     doge Dogecoin
     trx Tron
     sol Solana
-    bch Bitcoin Cash
     xrp XRP
     bnb BNB
-    ada Cardano
-    dash Dash
 
   Fiat:
     usd US Dollars
@@ -1654,10 +1647,10 @@ Current asset entries:
 
 Current registry shape:
 
-  included providers:        36
-  crypto routes:             15
+  included providers:        42
+  crypto routes:             12
   fiat rails:                2
-  countries:                 39
+  countries:                 59
   disqualified providers:    7
 
 The registry should graduate from draft data to stricter product data.
@@ -1864,8 +1857,6 @@ Recommended repository structure:
         error.schema.json
         nwc-info-event.schema.json
       data/
-        providers/
-          openreceive-providers.v2.json
         assets/
           assets.json
         countries/

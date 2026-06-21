@@ -333,41 +333,51 @@ function validateNwcRequestResponseVectors() {
 }
 
 function validateProviderRegistryReferences() {
-  const registry = readJson("spec/data/providers/openreceive-providers.v2.json");
-  assert(registry.schema_version === "2.0.0", "provider registry schema version mismatch");
-  assert(registry.generated === "2026-06-18", "provider registry generated date changed unexpectedly");
-  assert(registry.assets_index.length === 15, "provider registry asset count mismatch");
-  assert(Object.keys(registry.providers).length === 35, "provider registry provider count mismatch");
-  assert(registry.crypto_routes.length === 12, "provider registry crypto route count mismatch");
+  const registry = readJson("packages/js/provider-data/src/data/openreceive-providers.v4.json");
+  assert(registry.schema_version === "4.0.0", "provider registry schema version mismatch");
+  assert(registry.generated === "2026-06-20", "provider registry generated date changed unexpectedly");
   assert(Object.keys(registry.fiat_rails).length === 2, "provider registry fiat rail count mismatch");
-  assert(registry.countries.length === 39, "provider registry country count mismatch");
-  assert(registry.disqualified_providers.length === 7, "provider registry disqualified count mismatch");
 
   const providerIds = new Set(Object.keys(registry.providers || {}));
   const disqualifiedIds = new Set((registry.disqualified_providers || []).map((provider) => provider.id));
   const countryCodes = new Set((registry.countries || []).map((country) => country.code));
   const routeIds = new Set((registry.crypto_routes || []).map((route) => route.id));
+  const railIds = new Set(Object.keys(registry.fiat_rails || {}));
   const assetRouteIds = new Set(
     (registry.assets_index || [])
       .map((asset) => asset.route)
       .filter((route) => route !== undefined)
   );
+  for (const duplicate of findDuplicates(Object.keys(registry.providers || {}))) {
+    assert(false, `provider id ${duplicate} is duplicated`);
+  }
+  for (const duplicate of findDuplicates((registry.crypto_routes || []).map((route) => route.id))) {
+    assert(false, `crypto route id ${duplicate} is duplicated`);
+  }
+  for (const duplicate of findDuplicates((registry.countries || []).map((country) => country.code))) {
+    assert(false, `country code ${duplicate} is duplicated`);
+  }
 
   for (const [id, provider] of Object.entries(registry.providers || {})) {
     assert(id === provider.id, `provider key/id mismatch for ${id}`);
     assert(/^[a-z0-9-]+$/.test(id), `provider ${id} has invalid id`);
     assert(provider.name && provider.url, `provider ${id} missing name or url`);
     assert(provider.url.startsWith("https://"), `provider ${id} url must be https`);
-    assert(provider.pays_arbitrary_invoice === true, `provider ${id} must pay arbitrary invoice`);
-    assert(["pay_invoice", "withdraw_to_invoice"].includes(provider.mechanism), `provider ${id} has invalid mechanism`);
+    assert(provider.icon_path?.startsWith("assets/provider-icons/"), `provider ${id} icon path must be repo-local`);
+    assert(provider.lightning_docs_url === null || provider.lightning_docs_url.startsWith("https://"), `provider ${id} docs url must be https or null`);
+    assert(provider.pays_arbitrary_invoice === undefined, `provider ${id} must not expose v2 pays_arbitrary_invoice in v4`);
+    assert(provider.mechanism === undefined, `provider ${id} must not expose v2 mechanism in v4`);
+    assert(provider.blurb === undefined, `provider ${id} must not expose v2 blurb in v4`);
+    assert(provider.caveat === undefined, `provider ${id} must not expose v2 caveat in v4`);
     assert(!disqualifiedIds.has(id), `provider ${id} appears in disqualified providers`);
-
-    const claimText = `${provider.blurb || ""} ${provider.caveat || ""}`.toLowerCase();
-    if (provider.us === true) {
-      assert(!claimText.includes("not available to us users"), `provider ${id} has contradictory US availability`);
-      assert(!claimText.includes("us persons cannot"), `provider ${id} has contradictory US availability`);
-      assert(!claimText.includes("blocked in us"), `provider ${id} has contradictory US availability`);
-      assert(!claimText.includes("tos prohibits us users"), `provider ${id} has contradictory US availability`);
+    if (provider.tutorials !== undefined) {
+      let expectedIndex = 1;
+      for (const tutorial of provider.tutorials) {
+        assert(tutorial.index === expectedIndex, `provider ${id} tutorials must be sequential`);
+        assert(tutorial.path.startsWith("assets/pay_tutorials/"), `provider ${id} tutorial ${tutorial.index} path must be repo-local`);
+        assert(Boolean(tutorial.caption), `provider ${id} tutorial ${tutorial.index} missing caption`);
+        expectedIndex += 1;
+      }
     }
   }
 
@@ -377,11 +387,22 @@ function validateProviderRegistryReferences() {
 
   for (const route of registry.crypto_routes || []) {
     assert(route.id && route.symbol && route.label, `crypto route ${route.id} missing id/symbol/label`);
+    assert(route.summary === undefined, `crypto route ${route.id} must not expose v2 summary in v4`);
     assert(Array.isArray(route.providers) && route.providers.length > 0, `crypto route ${route.id} needs providers`);
     let flagshipCount = 0;
+    let expectedRank = 1;
+    const routeHasRanks = route.providers.some((ref) => ref.rank !== undefined);
+    const routeProviderIds = new Set();
     for (const ref of route.providers || []) {
       assert(providerIds.has(ref.provider), `crypto route ${route.id} references missing provider ${ref.provider}`);
       assert(!disqualifiedIds.has(ref.provider), `crypto route ${route.id} references disqualified provider ${ref.provider}`);
+      assert(!routeProviderIds.has(ref.provider), `crypto route ${route.id} references provider ${ref.provider} more than once`);
+      routeProviderIds.add(ref.provider);
+      assert(ref.blurb_override === undefined, `crypto route ${route.id} must not expose v2 blurb_override in v4`);
+      if (routeHasRanks) {
+        assert(ref.rank === expectedRank, `crypto route ${route.id} ranks must be sequential`);
+        expectedRank += 1;
+      }
       if (ref.flagship === true) flagshipCount += 1;
     }
     assert(flagshipCount <= 1, `crypto route ${route.id} has more than one flagship provider`);
@@ -394,14 +415,19 @@ function validateProviderRegistryReferences() {
   }
 
   for (const [railId, rail] of Object.entries(registry.fiat_rails || {})) {
+    assert(railIds.has(railId), `fiat rail ${railId} missing from rail id set`);
+    assert(Boolean(rail.label), `fiat rail ${railId} missing label`);
     for (const [countryCode, refs] of Object.entries(rail.countries || {})) {
       assert(/^[A-Z]{2}$/.test(countryCode), `fiat rail ${railId} has invalid country code ${countryCode}`);
       assert(countryCodes.has(countryCode), `fiat rail ${railId} references unknown country ${countryCode}`);
       assert(Array.isArray(refs) && refs.length > 0, `fiat rail ${railId}/${countryCode} needs providers`);
       let expectedRank = 1;
+      const railProviderIds = new Set();
       for (const ref of refs) {
         assert(providerIds.has(ref.provider), `fiat rail ${railId}/${countryCode} references missing provider ${ref.provider}`);
         assert(!disqualifiedIds.has(ref.provider), `fiat rail ${railId}/${countryCode} references disqualified provider ${ref.provider}`);
+        assert(!railProviderIds.has(ref.provider), `fiat rail ${railId}/${countryCode} references provider ${ref.provider} more than once`);
+        railProviderIds.add(ref.provider);
         assert(ref.rank === expectedRank, `fiat rail ${railId}/${countryCode} ranks must be sequential`);
         expectedRank += 1;
       }
@@ -412,6 +438,19 @@ function validateProviderRegistryReferences() {
     assert(!providerIds.has(provider.id), `disqualified provider ${provider.id} also appears as included`);
     assert(provider.reason, `disqualified provider ${provider.id} missing reason`);
   }
+}
+
+function findDuplicates(values) {
+  const seen = new Set();
+  const duplicates = new Set();
+  for (const value of values) {
+    if (seen.has(value)) {
+      duplicates.add(value);
+    } else {
+      seen.add(value);
+    }
+  }
+  return [...duplicates];
 }
 
 function validateProviderRouteVectors() {

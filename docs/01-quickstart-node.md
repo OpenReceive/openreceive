@@ -18,6 +18,14 @@ separate worker processes:
 npm install @openreceive/node @openreceive/express @openreceive/browser @getalby/sdk express pg qrcode
 ```
 
+Postgres apps need `pg`. SQLite apps can omit `pg` and run on a Node runtime
+with `node:sqlite` support.
+
+See [Supported Databases](16-supported-databases.md) for the small supported
+matrix. MongoDB, MySQL, and arbitrary user-designed invoice tables are not
+supported until OpenReceive ships a store, migration path, and conformance
+coverage for them.
+
 ## Configure
 
 ```sh
@@ -28,25 +36,61 @@ DATABASE_URL=postgres://...
 
 Commit `.env.example`, not real secrets.
 
+Generate the server-only OpenReceive config and worker entrypoint stubs:
+
+```sh
+npx openreceive init
+```
+
+This creates `openreceive.config.mjs`, `server/openreceive-routes.mjs`, and
+poll/listen worker scripts. Keep the config module server-only; it imports the
+NWC connection and durable invoice store.
+
 ## Migrate
 
-Run the package-owned OpenReceive invoice schema in your app database:
+Run the package-owned OpenReceive invoice schema in your app database. For
+Postgres:
+
+```sh
+npx openreceive migrate --postgres "$DATABASE_URL"
+npx openreceive doctor --postgres "$DATABASE_URL"
+```
+
+For local or small-app SQLite:
+
+```sh
+npx openreceive migrate --sqlite ./storage/openreceive.sqlite3
+npx openreceive doctor --sqlite ./storage/openreceive.sqlite3
+```
+
+The SQL is still exported for custom migration systems, but app developers
+should not hand-design OpenReceive invoice tables.
 
 ```ts
-import pg from "pg";
 import {
-  OPENRECEIVE_POSTGRES_MIGRATION_SQL
+  OPENRECEIVE_POSTGRES_MIGRATION_SQL,
+  OPENRECEIVE_SQLITE_MIGRATION_SQL
 } from "@openreceive/node";
-
-const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL
-});
-
-await pool.query(OPENRECEIVE_POSTGRES_MIGRATION_SQL);
-await pool.end();
 ```
 
 ## Server
+
+For a new Express app, mount the generated route module:
+
+```ts
+import express from "express";
+import { mountOpenReceiveRoutes } from "./server/openreceive-routes.mjs";
+
+const app = express();
+app.use(express.json());
+
+mountOpenReceiveRoutes(app);
+
+app.listen(3000);
+```
+
+Apps with custom auth, CSRF, CORS, logging, or a Postgres store can export their
+own `openreceive` object and still use the same package route mount:
 
 ```ts
 import express from "express";
@@ -103,13 +147,29 @@ mountOpenReceiveExpressRoutes(app, openreceive);
 app.listen(3000);
 ```
 
+SQLite apps use the same storage contract through the package-owned SQLite
+store. Wrap the SQLite driver with `createOpenReceiveSqliteQueryClient()` and
+pass it to `createOpenReceiveSqliteInvoiceStore()`.
+
 ## Poll Process
 
-Put the `openreceive` object in a shared server-only module, then import it from
-the web, poll, and listen entrypoints.
+The generated `openreceive.config.mjs` exports an `openreceive` object. You can
+also point `--config` at any server-only module that exports `openreceive`, a
+default config object, or `createOpenReceiveConfig()`. Run the package-owned
+worker command as a separate backend process or worker role, not as a thread
+inside the web process:
 
-Run this as a separate backend process or worker role, not as a thread inside
-the web process:
+```sh
+npx openreceive poll --config ./openreceive.config.mjs
+```
+
+Cron-style deployments can run one recovery pass and exit:
+
+```sh
+npx openreceive poll --config ./openreceive.config.mjs --once
+```
+
+Custom worker scripts can still call the Express runner directly:
 
 ```ts
 import {
@@ -124,6 +184,18 @@ startOpenReceiveExpressSettlementPollingRunner(openreceive);
 
 Run this as a second separate backend process when the configured NWC client
 supports `payment_received` notifications:
+
+```sh
+npx openreceive listen --config ./openreceive.config.mjs
+```
+
+Deployment checks can verify listener startup without staying attached:
+
+```sh
+npx openreceive listen --config ./openreceive.config.mjs --ready-only
+```
+
+Custom worker scripts can call the Express listener directly:
 
 ```ts
 import {

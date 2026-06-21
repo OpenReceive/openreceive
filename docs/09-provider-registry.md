@@ -1,11 +1,10 @@
 # Provider Registry
 
 OpenReceive keeps provider suggestions separate from invoice creation.
-The v0.1 scope-lock registry snapshot lives in
-`spec/data/providers/openreceive-providers.v2.json`. The JavaScript runtime
-package consumes `packages/js/provider-data/src/data/openreceive-providers.v4.json`,
-which removes wizard-only summaries, adds repo-local provider icon paths, and
-keeps the same route/provider ids for payment-wizard suggestions.
+The canonical v0.1 registry lives in
+`packages/js/provider-data/src/data/openreceive-providers.v4.json`.
+It is the source used by the JavaScript runtime package, docs validation,
+provider-route vectors, and payment-wizard suggestions.
 
 The registry is static data. It does not prove that a provider will complete a
 payment, quote a particular fee, support a user in a specific jurisdiction, or
@@ -69,10 +68,10 @@ Provider entries include conservative availability metadata:
 
 ## Validation
 
-`npm run validate` checks the registry version, counts, provider references,
-route references, duplicate route or country ids, duplicate provider refs inside
-routes, and contradictory US-availability wording. Package tests check that
-helper functions preserve canonical route order and ranked fiat routes.
+`npm run validate` checks the v4 registry version, counts, provider references,
+route references, local icon/tutorial paths, duplicate route or country ids,
+duplicate provider refs inside routes, and ranked route order. Package tests
+check that helper functions preserve canonical route order and ranked fiat routes.
 `validateRegistry()` exposes the embeddable reference checks as `{ valid,
 errors }` so applications and generated packages can inspect private registry
 copies without terminating the current process.

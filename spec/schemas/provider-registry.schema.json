@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://spec.openreceive.org/schemas/provider-registry.v2.json",
-  "title": "OpenReceive Provider Registry v2 Draft",
+  "$id": "https://spec.openreceive.org/schemas/provider-registry.v4.json",
+  "title": "OpenReceive Provider Registry v4",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -19,7 +19,7 @@
   ],
   "properties": {
     "schema_version": {
-      "const": "2.0.0"
+      "const": "4.0.0"
     },
     "generated": {
       "type": "string",
@@ -72,10 +72,8 @@
           "name",
           "url",
           "us",
-          "pays_arbitrary_invoice",
-          "mechanism",
           "lightning_docs_url",
-          "blurb"
+          "icon_path"
         ],
         "properties": {
           "id": {
@@ -96,28 +94,41 @@
               "null"
             ]
           },
-          "pays_arbitrary_invoice": {
-            "const": true
-          },
-          "mechanism": {
-            "type": "string",
-            "enum": [
-              "pay_invoice",
-              "withdraw_to_invoice"
-            ]
-          },
           "lightning_docs_url": {
             "type": [
               "string",
               "null"
             ]
           },
-          "blurb": {
+          "icon_path": {
             "type": "string",
-            "minLength": 1
+            "pattern": "^assets/provider-icons/[a-z0-9-]+\\.png$"
           },
-          "caveat": {
-            "type": "string"
+          "tutorials": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "index",
+                "path",
+                "caption"
+              ],
+              "properties": {
+                "index": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "path": {
+                  "type": "string",
+                  "pattern": "^assets/pay_tutorials/"
+                },
+                "caption": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
           }
         }
       }
@@ -131,7 +142,6 @@
           "id",
           "symbol",
           "label",
-          "summary",
           "providers"
         ],
         "properties": {
@@ -144,10 +154,6 @@
             "pattern": "^[a-z0-9]+$"
           },
           "label": {
-            "type": "string",
-            "minLength": 1
-          },
-          "summary": {
             "type": "string",
             "minLength": 1
           },
@@ -267,9 +273,6 @@
         },
         "flagship": {
           "type": "boolean"
-        },
-        "blurb_override": {
-          "type": "string"
         },
         "rank": {
           "type": "integer",

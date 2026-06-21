@@ -37,11 +37,41 @@ module OpenReceive
         if production && authenticate.nil? && !allow_unauthenticated_demo
           raise SecurityError, "OpenReceive Rails adapter requires authenticate in production"
         end
+        if production && store.is_a?(OpenReceive::InMemoryInvoiceStore)
+          raise SecurityError, "OpenReceive Rails adapter requires durable invoice storage in production"
+        end
         self
       end
     end
 
     class ActiveRecordInvoiceStore
+      REQUIRED_COLUMNS = %w[
+        id
+        merchant_scope
+        operation
+        idempotency_key
+        idempotency_request_hash
+        payment_hash
+        invoice
+        amount_msats
+        transaction_state
+        workflow_state
+        settlement_action_state
+        created_at_seconds
+        expires_at_seconds
+        settled_at_seconds
+        settlement_action_completed_at_seconds
+        refreshed_from_invoice_id
+        metadata
+        fiat_quote
+        created_at
+        updated_at
+      ].freeze
+      REQUIRED_INDEXES = %w[
+        idx_openreceive_invoice_idempotency
+        index_openreceive_invoices_on_payment_hash
+        index_openreceive_invoices_on_invoice
+      ].freeze
       TERMINAL_WORKFLOW_STATES = %w[
         settlement_action_completed
         expired_closed
@@ -176,7 +206,36 @@ module OpenReceive
         end
       end
 
+      def doctor
+        connection = model_class.connection
+        table_name = model_class.table_name
+        unless connection.data_source_exists?(table_name)
+          return [doctor_check("rails.migration", "error", "missing #{table_name}; run bin/rails db:migrate")]
+        end
+
+        column_names = connection.columns(table_name).map(&:name)
+        index_names = connection.indexes(table_name).map(&:name)
+        missing_columns = REQUIRED_COLUMNS - column_names
+        missing_indexes = REQUIRED_INDEXES - index_names
+        checks = []
+        if missing_columns.empty? && missing_indexes.empty?
+          checks << doctor_check("rails.migration", "ok", "#{table_name} columns/indexes present")
+        else
+          missing = []
+          missing << "columns: #{missing_columns.join(", ")}" unless missing_columns.empty?
+          missing << "indexes: #{missing_indexes.join(", ")}" unless missing_indexes.empty?
+          checks << doctor_check("rails.migration", "error", "incomplete #{table_name}; missing #{missing.join("; ")}")
+        end
+        checks
+      rescue StandardError => error
+        [doctor_check("rails.migration", "error", error.message)]
+      end
+
       private
+
+      def doctor_check(name, status, message)
+        { "name" => name, "status" => status, "message" => message }
+      end
 
       def model_class
         @model_class || Object.const_get(@model_class_name)
@@ -265,10 +324,57 @@ module OpenReceive
 
     class Adapter
       CREATE_OPERATION = "invoice.create"
+      STORE_METHODS = %i[
+        check_idempotency
+        create_invoice
+        find_by_invoice_id
+        find_by_payment_hash
+        recoverable_invoices
+        mark_verifying
+        mark_expiry_pending_verification
+        mark_settled
+        mark_expired_closed
+        mark_failed_closed
+        mark_settlement_action_completed
+        mark_settlement_action_failed
+      ].freeze
 
       def initialize(config = Configuration.new)
         @config = config
         @config.validate!
+      end
+
+      def doctor
+        checks = []
+        missing_store_methods = STORE_METHODS.reject { |method| @config.store.respond_to?(method) }
+        checks << if missing_store_methods.empty?
+                    doctor_check("rails.store", "ok", "invoice store responds to required lifecycle methods")
+                  else
+                    doctor_check("rails.store", "error", "invoice store missing #{missing_store_methods.join(", ")}")
+                  end
+
+        if @config.store.respond_to?(:doctor)
+          checks.concat(@config.store.doctor)
+        elsif @config.store.is_a?(OpenReceive::InMemoryInvoiceStore)
+          checks << doctor_check("rails.store.durable", "warn", "InMemoryInvoiceStore is for tests and demos only")
+        end
+
+        checks.concat(client_doctor_checks)
+        checks << if @config.store.respond_to?(:recoverable_invoices)
+                    doctor_check("rails.worker.poll", "ok", "poll worker can recover invoices from the configured store")
+                  else
+                    doctor_check("rails.worker.poll", "error", "store does not support recoverable_invoices")
+                  end
+        checks << if @config.client.respond_to?(:subscribe_to_payment_received)
+                    doctor_check("rails.worker.listen", "ok", "client exposes payment_received notifications")
+                  else
+                    doctor_check("rails.worker.listen", "warn", "client does not expose payment_received notifications; run polling")
+                  end
+
+        {
+          "ok" => checks.none? { |check| check.fetch("status") == "error" },
+          "checks" => checks
+        }
       end
 
       def create_invoice(controller:, params:, headers: {})
@@ -343,6 +449,21 @@ module OpenReceive
       end
 
       private
+
+      def doctor_check(name, status, message)
+        { "name" => name, "status" => status, "message" => message }
+      end
+
+      def client_doctor_checks
+        unless @config.client.respond_to?(:preflight)
+          return [doctor_check("rails.nwc", "warn", "client does not expose preflight; invoice creation will fail closed if NWC is unavailable")]
+        end
+
+        @config.client.preflight
+        [doctor_check("rails.nwc", "ok", "NWC preflight completed")]
+      rescue StandardError => error
+        [doctor_check("rails.nwc", "error", "NWC preflight failed: #{error.message}")]
+      end
 
       def verify_stored_invoice(row)
         if %w[invoice_created expiry_pending_verification].include?(row.fetch("workflow_state"))

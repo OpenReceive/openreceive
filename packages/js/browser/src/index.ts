@@ -919,7 +919,7 @@ export const openReceiveCheckoutLabels = {
   wizardTitle: "Pay this invoice",
   wizardSubtitle: "Choose how you want to pay.",
   paymentMethod: "Payment method",
-  emptyBitcoin: "Choose Lightning or on-chain Bitcoin.",
+  emptyBitcoin: "Choose Bitcoin Lightning.",
   emptyCrypto: "Choose an altcoin.",
   emptyFiat: "No providers found for this country yet.",
   recommended: "Recommended",

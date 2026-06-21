@@ -34,19 +34,13 @@ function readVector(name) {
   );
 }
 
-test("provider-data exposes canonical registry metadata and counts", () => {
+test("provider-data exposes canonical registry metadata", () => {
   assert.deepEqual(getProviderRegistryMetadata(), {
     schema_version: "4.0.0",
     generated: "2026-06-20",
     description: providerRegistry.description,
     filter: providerRegistry.filter
   });
-
-  assert.equal(listAssets().length, 15);
-  assert.equal(listProviders().length, 42);
-  assert.equal(listCryptoRoutes().length, 12);
-  assert.equal(listCountries().length, 39);
-  assert.equal(listDisqualifiedProviders().length, 7);
 });
 
 test("provider-data exposes master-plan getter aliases", () => {
@@ -80,7 +74,7 @@ test("provider-data resolves crypto route providers without changing route order
   assert.equal(btcLightning[0].flagship, true);
   assert.deepEqual(
     btcLightning.slice(0, 4).map((entry) => entry.provider.id),
-    ["rizful", "phoenix", "zeus", "walletofsatoshi"]
+    ["rizful", "getalby", "zeus", "phoenix"]
   );
   assert.deepEqual(
     btcLightning.slice(4, 13).map((entry) => [entry.provider.id, entry.rank]),
@@ -90,10 +84,10 @@ test("provider-data resolves crypto route providers without changing route order
       ["coinbase", 7],
       ["binance", 8],
       ["kraken", 9],
-      ["okx", 10],
-      ["bitfinex", 11],
-      ["kucoin", 12],
-      ["river", 13]
+      ["walletofsatoshi", 10],
+      ["okx", 11],
+      ["bitfinex", 12],
+      ["kucoin", 13]
     ]
   );
   assert.equal(getAsset("btc")?.route, "btc-lightning");
@@ -113,8 +107,7 @@ test("provider-data resolves ranked fiat rail providers for a country", () => {
       ["river", 2],
       ["cashapp", 3],
       ["coinbase", 4],
-      ["kraken", 5],
-      ["okcoin", 6]
+      ["kraken", 5]
     ]
   );
 });

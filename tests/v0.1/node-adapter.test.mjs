@@ -1,13 +1,26 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import {
   OpenReceiveError,
   ReceiveCheckoutValidationError,
   OPENRECEIVE_POSTGRES_MIGRATION_SQL,
+  OPENRECEIVE_SQLITE_MIGRATION_SQL,
   createAlbyNwcReceiveClient,
   createOpenReceivePostgresInvoiceStore,
+  createOpenReceiveSqliteInvoiceStore,
+  createOpenReceiveSqliteQueryClient,
+  migrateOpenReceiveSqlite,
   normalizeNwcWalletError,
+  runOpenReceiveCli,
   summarizeWalletCapabilities,
   startPaymentNotificationListener
 } from "../../packages/js/node/src/index.ts";
@@ -301,6 +314,242 @@ test("Node Postgres store owns invoice persistence and recovery semantics", asyn
       }),
     /different request body/
   );
+});
+
+test("Node SQLite store owns invoice persistence and recovery semantics", async () => {
+  const database = new DatabaseSync(":memory:");
+  try {
+    const client = createOpenReceiveSqliteQueryClient(database);
+    await migrateOpenReceiveSqlite(client);
+    const store = createOpenReceiveSqliteInvoiceStore({ client });
+    const row = invoiceRow({
+      invoice_id: "or_inv_node_sqlite",
+      idempotency_key: "order-sqlite",
+      payment_hash: "8".repeat(64),
+      invoice: "lnbc-node-sqlite"
+    });
+
+    assert.match(OPENRECEIVE_SQLITE_MIGRATION_SQL, /CREATE TABLE IF NOT EXISTS openreceive_invoices/);
+    assert.match(OPENRECEIVE_SQLITE_MIGRATION_SQL, /openreceive_invoices_idempotency_scope_idx/);
+    assert.match(OPENRECEIVE_SQLITE_MIGRATION_SQL, /amount_msats >= 1000/);
+
+    const created = await store.createInvoice(row);
+    const replayed = await store.createInvoice(row);
+    const recoverable = await store.listRecoverableInvoices({ now: 1001 });
+
+    assert.equal(created.status, "created");
+    assert.equal(replayed.status, "replayed");
+    assert.equal((await store.getInvoice(row.invoice_id)).payment_hash, row.payment_hash);
+    assert.equal((await store.getInvoiceByPaymentHash(row.payment_hash)).invoice_id, row.invoice_id);
+    assert.equal((await store.getInvoiceByBolt11Invoice(row.invoice)).invoice_id, row.invoice_id);
+    assert.deepEqual(recoverable.map((invoice) => invoice.invoice_id), [row.invoice_id]);
+
+    const settled = await store.markSettled({
+      invoice_id: row.invoice_id,
+      settled_at: 1200
+    });
+    const completed = await store.markSettlementActionCompleted({
+      invoice_id: row.invoice_id,
+      settlement_action_completed_at: 1201
+    });
+
+    assert.equal(settled.transaction_state, "settled");
+    assert.equal(settled.workflow_state, "settlement_action_pending");
+    assert.equal(completed.workflow_state, "settlement_action_completed");
+    assert.equal(completed.settlement_action_state, "completed");
+    assert.equal((await store.listRecoverableInvoices({ now: 1202 })).length, 0);
+
+    await assert.rejects(
+      () =>
+        store.createInvoice({
+          ...row,
+          idempotency_request_hash: `sha256:${"c".repeat(64)}`
+        }),
+      /different request body/
+    );
+  } finally {
+    database.close();
+  }
+});
+
+test("Node CLI initializes, migrates, and doctors SQLite setup", async () => {
+  const tempRoot = mkdtempSync(path.join(tmpdir(), "openreceive-node-cli-"));
+  const stdout = [];
+  const stderr = [];
+  const io = (buffer) => ({
+    write(message) {
+      buffer.push(message);
+    }
+  });
+
+  try {
+    const initCode = await runOpenReceiveCli({
+      argv: ["init"],
+      cwd: tempRoot,
+      stdout: io(stdout),
+      stderr: io(stderr)
+    });
+    assert.equal(initCode, 0);
+    assert.equal(existsSync(path.join(tempRoot, ".env.openreceive.example")), true);
+    assert.equal(existsSync(path.join(tempRoot, "openreceive.config.example.mjs")), true);
+    assert.equal(existsSync(path.join(tempRoot, "openreceive.config.mjs")), true);
+    assert.equal(existsSync(path.join(tempRoot, "server/openreceive-routes.mjs")), true);
+    assert.equal(existsSync(path.join(tempRoot, "scripts/openreceive-poll.mjs")), true);
+    assert.equal(existsSync(path.join(tempRoot, "scripts/openreceive-listen.mjs")), true);
+    assert.match(
+      readFileSync(path.join(tempRoot, "openreceive.config.mjs"), "utf8"),
+      /createOpenReceiveSqliteInvoiceStore/
+    );
+    assert.match(
+      readFileSync(path.join(tempRoot, "server/openreceive-routes.mjs"), "utf8"),
+      /mountOpenReceiveExpressRoutes\(app, openreceive\)/
+    );
+    assert.match(
+      readFileSync(path.join(tempRoot, "scripts/openreceive-poll.mjs"), "utf8"),
+      /"poll", "--config", "openreceive\.config\.mjs"/
+    );
+    assert.match(
+      readFileSync(path.join(tempRoot, "scripts/openreceive-listen.mjs"), "utf8"),
+      /"listen", "--config", "openreceive\.config\.mjs"/
+    );
+
+    const sqlitePath = path.join(tempRoot, "storage", "openreceive.sqlite3");
+    const migrateCode = await runOpenReceiveCli({
+      argv: ["migrate", "--sqlite", sqlitePath],
+      env: {},
+      stdout: io(stdout),
+      stderr: io(stderr)
+    });
+    assert.equal(migrateCode, 0);
+
+    const doctorCode = await runOpenReceiveCli({
+      argv: ["doctor", "--sqlite", sqlitePath],
+      env: {},
+      stdout: io(stdout),
+      stderr: io(stderr)
+    });
+    assert.equal(doctorCode, 0);
+    assert.match(stdout.join(""), /ok migration openreceive_invoices/);
+    assert.doesNotMatch(stdout.join(""), /nostr\+walletconnect:\/\//);
+    assert.equal(stderr.join(""), "");
+
+    const database = new DatabaseSync(sqlitePath);
+    try {
+      database.exec("DROP INDEX openreceive_invoices_recovery_idx");
+    } finally {
+      database.close();
+    }
+    stdout.length = 0;
+    stderr.length = 0;
+
+    const brokenDoctorCode = await runOpenReceiveCli({
+      argv: ["doctor", "--sqlite", sqlitePath],
+      env: {},
+      stdout: io(stdout),
+      stderr: io(stderr)
+    });
+    assert.equal(brokenDoctorCode, 1);
+    assert.match(stderr.join(""), /missing indexes: openreceive_invoices_recovery_idx/);
+  } finally {
+    rmSync(tempRoot, { force: true, recursive: true });
+  }
+});
+
+test("Node CLI runs poll and listen from a server config module", async () => {
+  const tempRoot = mkdtempSync(path.join(tmpdir(), "openreceive-node-runners-"));
+  const stdout = [];
+  const stderr = [];
+  const io = (buffer) => ({
+    write(message) {
+      buffer.push(message);
+    }
+  });
+  const config = {
+    marker: "openreceive-config"
+  };
+  const calls = {
+    config: [],
+    pollCreated: 0,
+    pollRecovered: 0,
+    listenStarted: 0,
+    listenStopped: 0
+  };
+
+  const loadConfigModule = async (specifier) => {
+    calls.config.push(specifier);
+    assert.match(specifier, /^file:/);
+    return { openreceive: config };
+  };
+  const loadExpressRunners = async () => ({
+    createOpenReceiveExpressSettlementPollingRunner(openreceive, runnerOptions) {
+      calls.pollCreated += 1;
+      assert.equal(openreceive, config);
+      assert.deepEqual(runnerOptions, { recoveryIntervalSeconds: 7 });
+      return {
+        async recoverOpenInvoices() {
+          calls.pollRecovered += 1;
+          return {
+            recovered: 2,
+            invoice_ids: ["or_inv_1", "or_inv_2"]
+          };
+        },
+        start() {
+          throw new Error("poll --once should not start the long-running loop");
+        },
+        stop() {}
+      };
+    },
+    async startOpenReceiveExpressPaymentNotificationRunner(openreceive) {
+      calls.listenStarted += 1;
+      assert.equal(openreceive, config);
+      return {
+        async stop() {
+          calls.listenStopped += 1;
+        }
+      };
+    }
+  });
+
+  try {
+    const pollCode = await runOpenReceiveCli({
+      argv: [
+        "poll",
+        "--config",
+        "server/openreceive.js",
+        "--once",
+        "--recovery-interval-seconds",
+        "7"
+      ],
+      cwd: tempRoot,
+      env: {},
+      stdout: io(stdout),
+      stderr: io(stderr),
+      loadConfigModule,
+      loadExpressRunners
+    });
+    assert.equal(pollCode, 0);
+    assert.match(stdout.join(""), /OpenReceive poll recovered 2 invoice\(s\)\./);
+
+    const listenCode = await runOpenReceiveCli({
+      argv: ["listen", "--config", "server/openreceive.js", "--ready-only"],
+      cwd: tempRoot,
+      env: {},
+      stdout: io(stdout),
+      stderr: io(stderr),
+      loadConfigModule,
+      loadExpressRunners
+    });
+    assert.equal(listenCode, 0);
+    assert.match(stdout.join(""), /OpenReceive listen runner readiness verified\./);
+    assert.equal(stderr.join(""), "");
+    assert.equal(calls.pollCreated, 1);
+    assert.equal(calls.pollRecovered, 1);
+    assert.equal(calls.listenStarted, 1);
+    assert.equal(calls.listenStopped, 1);
+    assert.equal(calls.config.length, 2);
+  } finally {
+    rmSync(tempRoot, { force: true, recursive: true });
+  }
 });
 
 test("payment notification listener dedupes and verifies settlement with lookup", async () => {

@@ -6,6 +6,9 @@
   "dependencies": {
     "@openreceive/core": "0.1.0"
   },
+  "bin": {
+    "openreceive": "./bin/openreceive.mjs"
+  },
   "peerDependencies": {
     "@getalby/sdk": "*"
   },
@@ -15,6 +18,7 @@
     }
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./cli": "./src/cli.ts"
   }
 }

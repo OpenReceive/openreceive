@@ -87,6 +87,13 @@
       "public": true
     },
     {
+      "slug": "supported-databases",
+      "title": "Supported Databases",
+      "source_path": "docs/16-supported-databases.md",
+      "category": "reference",
+      "public": true
+    },
+    {
       "slug": "conformance",
       "title": "Conformance",
       "source_path": "docs/11-conformance.md",

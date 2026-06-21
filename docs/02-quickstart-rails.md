@@ -7,8 +7,9 @@ verification, polling-worker verification, passive notification handling, and
 duplicate-safe settlement action tracking. It also includes a package-owned
 ActiveRecord invoice store, initial migration and model templates for the
 invoice storage shape, controller, job, channel, route, install-generator
-templates, an invoice Hotwire partial, and optional mounted engine routes with
-`503 WALLET_UNAVAILABLE` handling for an injected unavailable-wallet client.
+templates, generated poll/listen/doctor rake tasks, an invoice Hotwire partial,
+production fail-closed checks for in-memory storage, and optional mounted engine
+routes with `503 WALLET_UNAVAILABLE` handling for an injected unavailable-wallet client.
 Complete Rails demo smoke is still pending.
 An initial Rails Hotwire Hello Fruit demo skeleton exists at
 `examples/hello-fruit/server/rails-hotwire`; it is covered by the demo
@@ -47,6 +48,8 @@ own the two runner entry points the app deploys:
   polling and restart recovery
 - `bin/rails openreceive:listen` or a generated long-running job for
   payment_received notification subscriptions where the wallet supports them
+- `bin/rails openreceive:doctor` to check storage, migration, NWC preflight,
+  and worker readiness
 
 Deploy those as separate backend processes or worker roles. Do not put the
 long-running polling loop or notification subscription in a web request thread.

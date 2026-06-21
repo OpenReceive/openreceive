@@ -853,8 +853,14 @@ test("read-only helper routes expose static rates, providers, and route suggesti
   const catalogRes = createResponse();
   await handlers.listRoutes(createRequest(), catalogRes, raiseNext);
   assert.equal(catalogRes.statusCode, 200);
-  assert.equal(catalogRes.body.assets.length, 15);
-  assert.equal(catalogRes.body.crypto_routes.length, 12);
+  assert.equal(Array.isArray(catalogRes.body.assets), true);
+  assert.equal(Array.isArray(catalogRes.body.crypto_routes), true);
+  assert.equal(catalogRes.body.assets.some((asset) => asset.route === "btc-onchain"), false);
+  assert.equal(catalogRes.body.assets.some((asset) => asset.route === "doge"), false);
+  assert.equal(catalogRes.body.assets.some((asset) => asset.route === "bnb"), false);
+  assert.equal(catalogRes.body.crypto_routes.some((route) => route.id === "btc-onchain"), false);
+  assert.equal(catalogRes.body.crypto_routes.some((route) => route.id === "doge"), false);
+  assert.equal(catalogRes.body.crypto_routes.some((route) => route.id === "bnb"), false);
 
   const wizardRes = createResponse();
   await handlers.listRoutes(
@@ -1213,6 +1219,52 @@ test("secure Express handlers fail closed when auth hooks are missing", async ()
   assert.equal(refreshRes.body.message, "OpenReceive refresh authorization hook is required.");
 });
 
+test("Express refuses in-memory invoice storage in production mode", async () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  const originalOpenReceiveMode = process.env.OPENRECEIVE_MODE;
+  process.env.NODE_ENV = "production";
+  delete process.env.OPENRECEIVE_MODE;
+
+  try {
+    const options = {
+      client: new FakeWallet(),
+      store: new InMemoryInvoiceStore(),
+      eventBus: new InMemoryInvoiceEventBus(),
+      merchantScope: () => "demo:hello-fruit",
+      auth: {
+        create: () => true,
+        read: () => true,
+        lookup: () => true,
+        refresh: () => true,
+        events: () => true
+      }
+    };
+
+    assert.throws(
+      () => createOpenReceiveExpressHandlers(options),
+      /refuses to use InMemoryInvoiceStore/
+    );
+    assert.throws(
+      () => createOpenReceiveExpressSettlementPollingRunner(options),
+      /refuses to use InMemoryInvoiceStore/
+    );
+    await assert.rejects(
+      () => startOpenReceiveExpressPaymentNotificationRunner(options),
+      /refuses to use InMemoryInvoiceStore/
+    );
+    assert.throws(
+      () => createOpenReceiveExpressHandlers({
+        ...options,
+        store: undefined
+      }),
+      /refuses to use InMemoryInvoiceStore/
+    );
+  } finally {
+    restoreEnvVar("NODE_ENV", originalNodeEnv);
+    restoreEnvVar("OPENRECEIVE_MODE", originalOpenReceiveMode);
+  }
+});
+
 test("secure Express handlers reject denied create authorization", async () => {
   const { wallet, handlers } = createSecureHarness({
     auth: {
@@ -1381,6 +1433,14 @@ function seedInvoice(store, overrides = {}) {
   };
   store.createInvoice(row);
   return row;
+}
+
+function restoreEnvVar(name, value) {
+  if (value === undefined) {
+    delete process.env[name];
+  } else {
+    process.env[name] = value;
+  }
 }
 
 function createRequest(overrides = {}) {

@@ -268,6 +268,7 @@ export function createOpenReceiveExpressSettlementPollingRunner(
   options: OpenReceiveExpressOptions,
   runnerOptions: OpenReceiveExpressPollingRunnerStartOptions = {}
 ): OpenReceiveSettlementPollingRunner {
+  assertDurableStoreConfiguration(options);
   const store = options.store ?? new InMemoryInvoiceStore();
   const eventBus = options.eventBus ?? new InMemoryInvoiceEventBus();
   const clock = options.clock ?? currentUnixSeconds;
@@ -318,6 +319,7 @@ export function startOpenReceiveExpressSettlementPollingRunner(
 export async function startOpenReceiveExpressPaymentNotificationRunner(
   options: OpenReceiveExpressOptions
 ): Promise<PaymentNotificationListener> {
+  assertDurableStoreConfiguration(options);
   const store = options.store ?? new InMemoryInvoiceStore();
   const eventBus = options.eventBus ?? new InMemoryInvoiceEventBus();
   const clock = options.clock ?? currentUnixSeconds;
@@ -413,6 +415,7 @@ export function createOpenReceiveExpressHandlers(
   options: OpenReceiveExpressOptions
 ): OpenReceiveExpressHandlers {
   assertSafeDemoModeConfiguration(options);
+  assertDurableStoreConfiguration(options);
 
   const store = options.store ?? new InMemoryInvoiceStore();
   const eventBus = options.eventBus ?? new InMemoryInvoiceEventBus();
@@ -1483,6 +1486,24 @@ function assertSafeDemoModeConfiguration(
         "to explicitly accept the risk for a public test demo."
     );
   }
+}
+
+function assertDurableStoreConfiguration(
+  options: OpenReceiveExpressOptions
+): void {
+  const env = globalThis.process?.env ?? {};
+  const mode = (env.OPENRECEIVE_MODE ?? env.NODE_ENV ?? "").toLowerCase();
+  if (mode !== "production") return;
+
+  const store = options.store;
+  if (store !== undefined && !(store instanceof InMemoryInvoiceStore)) return;
+
+  throw new Error(
+    "OpenReceive refuses to use InMemoryInvoiceStore when " +
+      "OPENRECEIVE_MODE or NODE_ENV is production. Configure a durable " +
+      "package-owned invoice store such as Postgres or SQLite before mounting " +
+      "routes, polling, or notification runners."
+  );
 }
 
 function applyDefaultHeaders(

@@ -28,13 +28,8 @@
   "assets_index": [
     {
       "symbol": "btc",
-      "label": "Lightning",
+      "label": "Bitcoin Lightning",
       "route": "btc-lightning"
-    },
-    {
-      "symbol": "btc",
-      "label": "Bitcoin (on-chain)",
-      "route": "btc-onchain"
     },
     {
       "symbol": "usdt",
@@ -62,11 +57,6 @@
       "route": "ltc"
     },
     {
-      "symbol": "doge",
-      "label": "Dogecoin (DOGE)",
-      "route": "doge"
-    },
-    {
       "symbol": "trx",
       "label": "Tron (TRX)",
       "route": "trx"
@@ -80,11 +70,6 @@
       "symbol": "xrp",
       "label": "XRP",
       "route": "xrp"
-    },
-    {
-      "symbol": "bnb",
-      "label": "BNB",
-      "route": "bnb"
     },
     {
       "symbol": "usd",
@@ -313,7 +298,7 @@
       "name": "Bull Bitcoin",
       "url": "https://bullbitcoin.com",
       "us": false,
-      "lightning_docs_url": "https://guides.bitcoinsupport.com/guides/bullwallet-guide/how-to-use-bull-wallet/steps-for-sending-lightning",
+      "lightning_docs_url": "https://www.bullbitcoin.com/",
       "icon_path": "assets/provider-icons/bullbitcoin.png"
     },
     "simpleswap": {
@@ -500,14 +485,6 @@
       "lightning_docs_url": "https://www.kryptex.com/en/articles/bitcoin-lightning-network",
       "icon_path": "assets/provider-icons/kryptex.png"
     },
-    "cakewallet": {
-      "id": "cakewallet",
-      "name": "Cake Wallet",
-      "url": "https://cakewallet.com",
-      "us": true,
-      "lightning_docs_url": "https://docs.cakewallet.com/features/basic/send-funds",
-      "icon_path": "assets/provider-icons/cakewallet.png"
-    },
     "bluewallet": {
       "id": "bluewallet",
       "name": "BlueWallet",
@@ -529,7 +506,7 @@
     {
       "id": "btc-lightning",
       "symbol": "btc",
-      "label": "Lightning",
+      "label": "Bitcoin Lightning",
       "providers": [
         {
           "provider": "rizful",
@@ -537,7 +514,7 @@
           "rank": 1
         },
         {
-          "provider": "phoenix",
+          "provider": "getalby",
           "rank": 2
         },
         {
@@ -545,7 +522,7 @@
           "rank": 3
         },
         {
-          "provider": "walletofsatoshi",
+          "provider": "phoenix",
           "rank": 4
         },
         {
@@ -569,23 +546,23 @@
           "rank": 9
         },
         {
-          "provider": "okx",
+          "provider": "walletofsatoshi",
           "rank": 10
         },
         {
-          "provider": "bitfinex",
+          "provider": "okx",
           "rank": 11
         },
         {
-          "provider": "kucoin",
+          "provider": "bitfinex",
           "rank": 12
         },
         {
-          "provider": "river",
+          "provider": "kucoin",
           "rank": 13
         },
         {
-          "provider": "getalby",
+          "provider": "river",
           "rank": 14
         },
         {
@@ -605,234 +582,96 @@
           "rank": 18
         },
         {
-          "provider": "cakewallet",
+          "provider": "okcoin",
           "rank": 19
         },
         {
-          "provider": "okcoin",
+          "provider": "bitget",
           "rank": 20
         },
         {
-          "provider": "bitget",
+          "provider": "trocador",
           "rank": 21
         },
         {
-          "provider": "trocador",
+          "provider": "kryptex",
           "rank": 22
         },
         {
-          "provider": "kryptex",
+          "provider": "coincorner",
           "rank": 23
         },
         {
-          "provider": "coincorner",
+          "provider": "fixedfloat",
           "rank": 24
         },
         {
-          "provider": "fixedfloat",
+          "provider": "simpleswap",
           "rank": 25
         },
         {
-          "provider": "simpleswap",
+          "provider": "changenow",
           "rank": 26
         },
         {
-          "provider": "changenow",
+          "provider": "sideshift",
           "rank": 27
         },
         {
-          "provider": "sideshift",
+          "provider": "blink",
           "rank": 28
         },
         {
-          "provider": "blink",
+          "provider": "speed",
           "rank": 29
         },
         {
-          "provider": "speed",
+          "provider": "bullbitcoin",
           "rank": 30
         },
         {
-          "provider": "bullbitcoin",
+          "provider": "shakepay",
           "rank": 31
         },
         {
-          "provider": "shakepay",
+          "provider": "bitso",
           "rank": 32
         },
         {
-          "provider": "bitso",
+          "provider": "bitnob",
           "rank": 33
         },
         {
-          "provider": "bitnob",
+          "provider": "pouch",
           "rank": 34
         },
         {
-          "provider": "pouch",
+          "provider": "bringin",
           "rank": 35
         },
         {
-          "provider": "bringin",
+          "provider": "mtpelerin",
           "rank": 36
         },
         {
-          "provider": "mtpelerin",
+          "provider": "bipa",
           "rank": 37
         },
         {
-          "provider": "bipa",
+          "provider": "ripio",
           "rank": 38
         },
         {
-          "provider": "ripio",
+          "provider": "belo",
           "rank": 39
         },
         {
-          "provider": "belo",
+          "provider": "bity",
           "rank": 40
         },
         {
-          "provider": "bity",
-          "rank": 41
-        },
-        {
           "provider": "chivo",
-          "rank": 42
-        }
-      ]
-    },
-    {
-      "id": "btc-onchain",
-      "symbol": "btc",
-      "label": "Bitcoin (on-chain)",
-      "providers": [
-        {
-          "provider": "rizful",
-          "flagship": true
-        },
-        {
-          "provider": "boltz"
-        },
-        {
-          "provider": "muun"
-        },
-        {
-          "provider": "phoenix"
-        },
-        {
-          "provider": "zeus"
-        },
-        {
-          "provider": "aqua"
-        },
-        {
-          "provider": "kraken"
-        },
-        {
-          "provider": "coinbase"
-        },
-        {
-          "provider": "binance"
-        },
-        {
-          "provider": "okx"
-        },
-        {
-          "provider": "bitfinex"
-        },
-        {
-          "provider": "kucoin"
-        },
-        {
-          "provider": "river"
-        },
-        {
-          "provider": "getalby"
-        },
-        {
-          "provider": "bluewallet"
-        },
-        {
-          "provider": "cakewallet"
-        },
-        {
-          "provider": "okcoin"
-        },
-        {
-          "provider": "bitget"
-        },
-        {
-          "provider": "trocador"
-        },
-        {
-          "provider": "kryptex"
-        },
-        {
-          "provider": "strike"
-        },
-        {
-          "provider": "cashapp"
-        },
-        {
-          "provider": "coincorner"
-        },
-        {
-          "provider": "bullbitcoin"
-        },
-        {
-          "provider": "simpleswap"
-        },
-        {
-          "provider": "changenow"
-        },
-        {
-          "provider": "fixedfloat"
-        },
-        {
-          "provider": "sideshift"
-        },
-        {
-          "provider": "blink"
-        },
-        {
-          "provider": "pouch"
-        },
-        {
-          "provider": "bitnob"
-        },
-        {
-          "provider": "bringin"
-        },
-        {
-          "provider": "mtpelerin"
-        },
-        {
-          "provider": "bipa"
-        },
-        {
-          "provider": "bitso"
-        },
-        {
-          "provider": "ripio"
-        },
-        {
-          "provider": "belo"
-        },
-        {
-          "provider": "shakepay"
-        },
-        {
-          "provider": "bity"
-        },
-        {
-          "provider": "chivo"
-        },
-        {
-          "provider": "speed"
-        },
-        {
-          "provider": "walletofsatoshi"
+          "rank": 41
         }
       ]
     },
@@ -858,9 +697,6 @@
           "provider": "trocador"
         },
         {
-          "provider": "cakewallet"
-        },
-        {
           "provider": "bitget"
         }
       ]
@@ -871,8 +707,11 @@
       "label": "USD Coin (USDC)",
       "providers": [
         {
-          "provider": "fixedfloat",
+          "provider": "boltz",
           "flagship": true
+        },
+        {
+          "provider": "fixedfloat"
         },
         {
           "provider": "simpleswap"
@@ -888,9 +727,6 @@
         },
         {
           "provider": "trocador"
-        },
-        {
-          "provider": "cakewallet"
         },
         {
           "provider": "bitget"
@@ -928,9 +764,6 @@
           "provider": "trocador"
         },
         {
-          "provider": "cakewallet"
-        },
-        {
           "provider": "bitget"
         },
         {
@@ -952,9 +785,6 @@
         },
         {
           "provider": "trocador"
-        },
-        {
-          "provider": "cakewallet"
         }
       ]
     },
@@ -986,39 +816,10 @@
           "provider": "trocador"
         },
         {
-          "provider": "cakewallet"
-        },
-        {
           "provider": "bitget"
         },
         {
           "provider": "okcoin"
-        }
-      ]
-    },
-    {
-      "id": "doge",
-      "symbol": "doge",
-      "label": "Dogecoin (DOGE)",
-      "providers": [
-        {
-          "provider": "fixedfloat",
-          "flagship": true
-        },
-        {
-          "provider": "simpleswap"
-        },
-        {
-          "provider": "changenow"
-        },
-        {
-          "provider": "coinbase"
-        },
-        {
-          "provider": "kraken"
-        },
-        {
-          "provider": "bitget"
         }
       ]
     },
@@ -1036,9 +837,6 @@
         },
         {
           "provider": "changenow"
-        },
-        {
-          "provider": "cakewallet"
         },
         {
           "provider": "bitget"
@@ -1070,9 +868,6 @@
           "provider": "kraken"
         },
         {
-          "provider": "cakewallet"
-        },
-        {
           "provider": "bitget"
         }
       ]
@@ -1102,29 +897,6 @@
           "provider": "bitget"
         }
       ]
-    },
-    {
-      "id": "bnb",
-      "symbol": "bnb",
-      "label": "BNB",
-      "providers": [
-        {
-          "provider": "fixedfloat",
-          "flagship": true
-        },
-        {
-          "provider": "simpleswap"
-        },
-        {
-          "provider": "changenow"
-        },
-        {
-          "provider": "binance"
-        },
-        {
-          "provider": "bitget"
-        }
-      ]
     }
   ],
   "countries": [
@@ -1145,6 +917,60 @@
       "name": "United Kingdom",
       "currency": "GBP",
       "coverage": "deep"
+    },
+    {
+      "code": "AT",
+      "name": "Austria",
+      "currency": "EUR",
+      "coverage": "thin"
+    },
+    {
+      "code": "BE",
+      "name": "Belgium",
+      "currency": "EUR",
+      "coverage": "thin"
+    },
+    {
+      "code": "BG",
+      "name": "Bulgaria",
+      "currency": "BGN",
+      "coverage": "thin"
+    },
+    {
+      "code": "HR",
+      "name": "Croatia",
+      "currency": "EUR",
+      "coverage": "thin"
+    },
+    {
+      "code": "CY",
+      "name": "Cyprus",
+      "currency": "EUR",
+      "coverage": "thin"
+    },
+    {
+      "code": "CZ",
+      "name": "Czech Republic",
+      "currency": "CZK",
+      "coverage": "thin"
+    },
+    {
+      "code": "DK",
+      "name": "Denmark",
+      "currency": "DKK",
+      "coverage": "thin"
+    },
+    {
+      "code": "EE",
+      "name": "Estonia",
+      "currency": "EUR",
+      "coverage": "thin"
+    },
+    {
+      "code": "FI",
+      "name": "Finland",
+      "currency": "EUR",
+      "coverage": "thin"
     },
     {
       "code": "DE",
@@ -1177,6 +1003,18 @@
       "coverage": "deep"
     },
     {
+      "code": "GR",
+      "name": "Greece",
+      "currency": "EUR",
+      "coverage": "thin"
+    },
+    {
+      "code": "HU",
+      "name": "Hungary",
+      "currency": "HUF",
+      "coverage": "thin"
+    },
+    {
       "code": "IE",
       "name": "Ireland",
       "currency": "EUR",
@@ -1193,6 +1031,54 @@
       "name": "Poland",
       "currency": "PLN",
       "coverage": "deep"
+    },
+    {
+      "code": "LV",
+      "name": "Latvia",
+      "currency": "EUR",
+      "coverage": "thin"
+    },
+    {
+      "code": "LT",
+      "name": "Lithuania",
+      "currency": "EUR",
+      "coverage": "thin"
+    },
+    {
+      "code": "LU",
+      "name": "Luxembourg",
+      "currency": "EUR",
+      "coverage": "thin"
+    },
+    {
+      "code": "MT",
+      "name": "Malta",
+      "currency": "EUR",
+      "coverage": "thin"
+    },
+    {
+      "code": "RO",
+      "name": "Romania",
+      "currency": "RON",
+      "coverage": "thin"
+    },
+    {
+      "code": "SK",
+      "name": "Slovakia",
+      "currency": "EUR",
+      "coverage": "thin"
+    },
+    {
+      "code": "SI",
+      "name": "Slovenia",
+      "currency": "EUR",
+      "coverage": "thin"
+    },
+    {
+      "code": "SE",
+      "name": "Sweden",
+      "currency": "SEK",
+      "coverage": "thin"
     },
     {
       "code": "CH",
@@ -1309,6 +1195,12 @@
       "coverage": "deep"
     },
     {
+      "code": "CR",
+      "name": "Costa Rica",
+      "currency": "CRC",
+      "coverage": "thin"
+    },
+    {
       "code": "CO",
       "name": "Colombia",
       "currency": "COP",
@@ -1387,10 +1279,6 @@
           {
             "provider": "kraken",
             "rank": 5
-          },
-          {
-            "provider": "okcoin",
-            "rank": 6
           }
         ],
         "CA": [
@@ -1711,6 +1599,10 @@
           {
             "provider": "bitget",
             "rank": 5
+          },
+          {
+            "provider": "bullbitcoin",
+            "rank": 6
           }
         ],
         "MX": [
@@ -1731,6 +1623,12 @@
             "rank": 4
           }
         ],
+        "CR": [
+          {
+            "provider": "bullbitcoin",
+            "rank": 1
+          }
+        ],
         "CO": [
           {
             "provider": "bitso",
@@ -1743,6 +1641,10 @@
           {
             "provider": "bitget",
             "rank": 3
+          },
+          {
+            "provider": "bullbitcoin",
+            "rank": 4
           }
         ],
         "VE": [
@@ -1839,6 +1741,60 @@
             "rank": 4
           }
         ],
+        "AT": [
+          {
+            "provider": "bullbitcoin",
+            "rank": 1
+          }
+        ],
+        "BE": [
+          {
+            "provider": "bullbitcoin",
+            "rank": 1
+          }
+        ],
+        "BG": [
+          {
+            "provider": "bullbitcoin",
+            "rank": 1
+          }
+        ],
+        "HR": [
+          {
+            "provider": "bullbitcoin",
+            "rank": 1
+          }
+        ],
+        "CY": [
+          {
+            "provider": "bullbitcoin",
+            "rank": 1
+          }
+        ],
+        "CZ": [
+          {
+            "provider": "bullbitcoin",
+            "rank": 1
+          }
+        ],
+        "DK": [
+          {
+            "provider": "bullbitcoin",
+            "rank": 1
+          }
+        ],
+        "EE": [
+          {
+            "provider": "bullbitcoin",
+            "rank": 1
+          }
+        ],
+        "FI": [
+          {
+            "provider": "bullbitcoin",
+            "rank": 1
+          }
+        ],
         "DE": [
           {
             "provider": "strike",
@@ -1859,6 +1815,10 @@
           {
             "provider": "bitget",
             "rank": 5
+          },
+          {
+            "provider": "bullbitcoin",
+            "rank": 6
           }
         ],
         "FR": [
@@ -1881,6 +1841,10 @@
           {
             "provider": "bitget",
             "rank": 5
+          },
+          {
+            "provider": "bullbitcoin",
+            "rank": 6
           }
         ],
         "ES": [
@@ -1903,6 +1867,10 @@
           {
             "provider": "bitget",
             "rank": 5
+          },
+          {
+            "provider": "bullbitcoin",
+            "rank": 6
           }
         ],
         "IT": [
@@ -1925,6 +1893,10 @@
           {
             "provider": "bitget",
             "rank": 5
+          },
+          {
+            "provider": "bullbitcoin",
+            "rank": 6
           }
         ],
         "NL": [
@@ -1947,6 +1919,22 @@
           {
             "provider": "bitget",
             "rank": 5
+          },
+          {
+            "provider": "bullbitcoin",
+            "rank": 6
+          }
+        ],
+        "GR": [
+          {
+            "provider": "bullbitcoin",
+            "rank": 1
+          }
+        ],
+        "HU": [
+          {
+            "provider": "bullbitcoin",
+            "rank": 1
           }
         ],
         "IE": [
@@ -1969,6 +1957,10 @@
           {
             "provider": "bitget",
             "rank": 5
+          },
+          {
+            "provider": "bullbitcoin",
+            "rank": 6
           }
         ],
         "PT": [
@@ -1991,6 +1983,10 @@
           {
             "provider": "bitget",
             "rank": 5
+          },
+          {
+            "provider": "bullbitcoin",
+            "rank": 6
           }
         ],
         "PL": [
@@ -2013,6 +2009,58 @@
           {
             "provider": "bitget",
             "rank": 5
+          },
+          {
+            "provider": "bullbitcoin",
+            "rank": 6
+          }
+        ],
+        "LV": [
+          {
+            "provider": "bullbitcoin",
+            "rank": 1
+          }
+        ],
+        "LT": [
+          {
+            "provider": "bullbitcoin",
+            "rank": 1
+          }
+        ],
+        "LU": [
+          {
+            "provider": "bullbitcoin",
+            "rank": 1
+          }
+        ],
+        "MT": [
+          {
+            "provider": "bullbitcoin",
+            "rank": 1
+          }
+        ],
+        "RO": [
+          {
+            "provider": "bullbitcoin",
+            "rank": 1
+          }
+        ],
+        "SK": [
+          {
+            "provider": "bullbitcoin",
+            "rank": 1
+          }
+        ],
+        "SI": [
+          {
+            "provider": "bullbitcoin",
+            "rank": 1
+          }
+        ],
+        "SE": [
+          {
+            "provider": "bullbitcoin",
+            "rank": 1
           }
         ]
       }
@@ -2036,18 +2084,6 @@
           {
             "provider": "kraken",
             "rank": 4
-          },
-          {
-            "provider": "okcoin",
-            "rank": 5
-          },
-          {
-            "provider": "cakewallet",
-            "rank": 6
-          },
-          {
-            "provider": "getalby",
-            "rank": 7
           }
         ],
         "CA": [
@@ -2060,12 +2096,8 @@
             "rank": 2
           },
           {
-            "provider": "cakewallet",
-            "rank": 3
-          },
-          {
             "provider": "getalby",
-            "rank": 4
+            "rank": 3
           }
         ],
         "GB": [
@@ -2090,12 +2122,8 @@
             "rank": 5
           },
           {
-            "provider": "cakewallet",
-            "rank": 6
-          },
-          {
             "provider": "getalby",
-            "rank": 7
+            "rank": 6
           }
         ],
         "CH": [
@@ -2384,12 +2412,8 @@
             "rank": 2
           },
           {
-            "provider": "cakewallet",
-            "rank": 3
-          },
-          {
             "provider": "getalby",
-            "rank": 4
+            "rank": 3
           }
         ],
         "JP": [
@@ -2458,12 +2482,8 @@
             "rank": 5
           },
           {
-            "provider": "cakewallet",
-            "rank": 6
-          },
-          {
             "provider": "getalby",
-            "rank": 7
+            "rank": 6
           }
         ],
         "FR": [
@@ -2488,12 +2508,8 @@
             "rank": 5
           },
           {
-            "provider": "cakewallet",
-            "rank": 6
-          },
-          {
             "provider": "getalby",
-            "rank": 7
+            "rank": 6
           }
         ],
         "ES": [
@@ -2518,12 +2534,8 @@
             "rank": 5
           },
           {
-            "provider": "cakewallet",
-            "rank": 6
-          },
-          {
             "provider": "getalby",
-            "rank": 7
+            "rank": 6
           }
         ],
         "IT": [
@@ -2548,12 +2560,8 @@
             "rank": 5
           },
           {
-            "provider": "cakewallet",
-            "rank": 6
-          },
-          {
             "provider": "getalby",
-            "rank": 7
+            "rank": 6
           }
         ],
         "NL": [
@@ -2578,12 +2586,8 @@
             "rank": 5
           },
           {
-            "provider": "cakewallet",
-            "rank": 6
-          },
-          {
             "provider": "getalby",
-            "rank": 7
+            "rank": 6
           }
         ],
         "IE": [
@@ -2608,12 +2612,8 @@
             "rank": 5
           },
           {
-            "provider": "cakewallet",
-            "rank": 6
-          },
-          {
             "provider": "getalby",
-            "rank": 7
+            "rank": 6
           }
         ],
         "PT": [
@@ -2638,12 +2638,8 @@
             "rank": 5
           },
           {
-            "provider": "cakewallet",
-            "rank": 6
-          },
-          {
             "provider": "getalby",
-            "rank": 7
+            "rank": 6
           }
         ],
         "PL": [
@@ -2668,12 +2664,8 @@
             "rank": 5
           },
           {
-            "provider": "cakewallet",
-            "rank": 6
-          },
-          {
             "provider": "getalby",
-            "rank": 7
+            "rank": 6
           }
         ]
       }
