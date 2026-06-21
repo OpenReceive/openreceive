@@ -15,7 +15,7 @@ separate worker processes:
 ## Install
 
 ```sh
-npm install @openreceive/node @openreceive/express @openreceive/browser @getalby/sdk express qrcode
+npm install @openreceive/node @openreceive/express @openreceive/browser @getalby/sdk express pg qrcode
 ```
 
 ## Configure
@@ -23,19 +23,37 @@ npm install @openreceive/node @openreceive/express @openreceive/browser @getalby
 ```sh
 OPENRECEIVE_NWC=nostr+walletconnect://...
 OPENRECEIVE_WALLET_PROFILE=rizful
+DATABASE_URL=postgres://...
 ```
 
 Commit `.env.example`, not real secrets.
+
+## Migrate
+
+Run the package-owned OpenReceive invoice schema in your app database:
+
+```ts
+import pg from "pg";
+import {
+  OPENRECEIVE_POSTGRES_MIGRATION_SQL
+} from "@openreceive/node";
+
+const pool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL
+});
+
+await pool.query(OPENRECEIVE_POSTGRES_MIGRATION_SQL);
+await pool.end();
+```
 
 ## Server
 
 ```ts
 import express from "express";
+import pg from "pg";
 import {
-  InMemoryInvoiceStore
-} from "@openreceive/core";
-import {
-  createAlbyNwcReceiveClient
+  createAlbyNwcReceiveClient,
+  createOpenReceivePostgresInvoiceStore
 } from "@openreceive/node";
 import {
   InMemoryInvoiceEventBus,
@@ -48,12 +66,18 @@ app.use(express.json());
 const wallet = createAlbyNwcReceiveClient({
   connectionString: process.env.OPENRECEIVE_NWC
 });
+const pool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL
+});
+const store = createOpenReceivePostgresInvoiceStore({
+  client: pool
+});
 
 await wallet.preflight();
 
 const openreceive = {
   client: wallet,
-  store: new InMemoryInvoiceStore(),
+  store,
   eventBus: new InMemoryInvoiceEventBus(),
   merchantScope: () => "demo:hello-fruit",
   auth: {
@@ -114,11 +138,10 @@ await new Promise(() => {});
 If notifications are unavailable, skip the listen process. The poll process
 remains the settlement authority.
 
-`InMemoryInvoiceStore` is for demos and tests. Production apps should provide a
-package-owned durable OpenReceive store backed by the app database so the poll
-process can recover non-terminal invoices after restart. Do not ask each app to
-invent its own invoice table; the Node package should ship migrations or ORM
-templates for the OpenReceive invoice/idempotency rows.
+`InMemoryInvoiceStore` is for demos and tests only. Production Node apps should
+use the package-owned durable OpenReceive store backed by the app database so
+the poll process can recover non-terminal invoices after restart. Do not invent
+your own invoice table.
 
 Use `settlementAction` for the app-owned business effect after OpenReceive
 proves settlement by backend lookup.

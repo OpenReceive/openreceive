@@ -653,6 +653,7 @@ test("Express polling runner recovers invoices without an HTTP request", async (
 test("Express notification runner listens for hints and verifies by lookup", async () => {
   let settlementActionCalls = 0;
   const settlementSources = [];
+  const logs = [];
   const wallet = new FakeWallet();
   const store = new InMemoryInvoiceStore();
   const eventBus = new InMemoryInvoiceEventBus();
@@ -663,6 +664,9 @@ test("Express notification runner listens for hints and verifies by lookup", asy
     merchantScope: () => "demo:hello-fruit",
     unsafeAllowUnauthenticatedDemoMode: true,
     clock: () => 1300,
+    logger: (entry) => {
+      logs.push(entry);
+    },
     settlementAction: async ({ invoice, source, req }) => {
       settlementActionCalls += 1;
       settlementSources.push(source);
@@ -715,6 +719,9 @@ test("Express notification runner listens for hints and verifies by lookup", asy
   assert.match(stream, /event: invoice\.settlement_action_completed/);
 
   await listener.stop();
+  assert.equal(logs.some((entry) => entry.event === "notification.listener.starting"), true);
+  assert.equal(logs.some((entry) => entry.event === "notification.listener.started"), true);
+  assert.equal(logs.some((entry) => entry.event === "notification.listener.stopped"), true);
 });
 
 test("client-supplied settlement fields cannot trigger settlement action", async () => {

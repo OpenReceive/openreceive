@@ -34,3 +34,7 @@ the local override is used.
 
 `/demo-metadata.json` exposes non-secret build metadata for hosted-demo smoke
 checks. It never includes wallet connection strings or NWC query secrets.
+
+Production Node apps should use the package-owned Postgres invoice store, run
+the OpenReceive migration, and deploy separate web, poll, and listen processes
+instead of relying on in-memory demo storage.

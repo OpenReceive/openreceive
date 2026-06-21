@@ -178,7 +178,9 @@ export class OpenReceivePostgresInvoiceStore implements OpenReceiveInvoiceStore 
           row.settlement_action_completed_at ?? null,
           row.refreshed_from_invoice_id ?? null,
           canonicalJson(row.metadata),
-          row.fiat_quote === undefined ? null : canonicalJson(row.fiat_quote)
+          row.fiat_quote === undefined || row.fiat_quote === null
+            ? null
+            : canonicalJson(row.fiat_quote)
         ]
       );
 
@@ -475,11 +477,11 @@ function stringField(value: unknown, field: string): string {
 }
 
 function integerField(value: unknown, field: string): number {
-  const parsed = typeof value === "string" ? Number(value) : value;
+  const parsed: unknown = typeof value === "string" ? Number(value) : value;
   if (!Number.isSafeInteger(parsed)) {
     throw new TypeError(`OpenReceive Postgres row ${field} must be a safe integer`);
   }
-  return parsed;
+  return parsed as number;
 }
 
 function jsonRecordField(value: unknown, field: string): Record<string, unknown> {

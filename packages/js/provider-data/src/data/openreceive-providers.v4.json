@@ -151,7 +151,7 @@
       "name": "Aqua Wallet",
       "url": "https://aqua.net",
       "us": null,
-      "lightning_docs_url": "https://jan3.zendesk.com/hc/en-us/articles/21952862266779-How-does-Lightning-work-in-AQUA",
+      "lightning_docs_url": "https://aqua.net/",
       "icon_path": "assets/provider-icons/aqua.png"
     },
     "phoenix": {
@@ -337,7 +337,7 @@
       "name": "FixedFloat",
       "url": "https://fixedfloat.com",
       "us": false,
-      "lightning_docs_url": "https://medium.com/fixedfloat/how-to-start-using-the-lightning-network-92d5c695b085",
+      "lightning_docs_url": "https://ff.io/",
       "icon_path": "assets/provider-icons/fixedfloat.png"
     },
     "sideshift": {
@@ -353,7 +353,7 @@
       "name": "Blink",
       "url": "https://blink.sv",
       "us": false,
-      "lightning_docs_url": "https://faq.blink.sv/blink-payment-methods/lightning/how-do-i-send-bitcoin-payments-using-the-lightning-network-with-blink",
+      "lightning_docs_url": "https://www.blink.sv/",
       "icon_path": "assets/provider-icons/blink.png"
     },
     "pouch": {

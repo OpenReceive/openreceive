@@ -467,6 +467,204 @@ class FakeNotificationClient {
   }
 }
 
+class FakePostgresClient {
+  rows = [];
+
+  async query(sql, values = []) {
+    if (sql.includes("WHERE merchant_scope = $1")) {
+      const [merchantScope, operation, idempotencyKey] = values;
+      return {
+        rows: this.rows.filter(
+          (row) =>
+            row.merchant_scope === merchantScope &&
+            row.operation === operation &&
+            row.idempotency_key === idempotencyKey
+        ).slice(0, 1)
+      };
+    }
+
+    if (sql.includes("WHERE invoice_id = $1 LIMIT")) {
+      return {
+        rows: this.rows.filter((row) => row.invoice_id === values[0]).slice(0, 1)
+      };
+    }
+
+    if (sql.includes("WHERE payment_hash = $1")) {
+      return {
+        rows: this.rows.filter((row) => row.payment_hash === values[0]).slice(0, 1)
+      };
+    }
+
+    if (sql.includes("WHERE invoice = $1")) {
+      return {
+        rows: this.rows.filter((row) => row.invoice === values[0]).slice(0, 1)
+      };
+    }
+
+    if (sql.includes("INSERT INTO")) {
+      const row = {
+        invoice_id: values[0],
+        merchant_scope: values[1],
+        operation: values[2],
+        idempotency_key: values[3],
+        idempotency_request_hash: values[4],
+        payment_hash: values[5],
+        invoice: values[6],
+        amount_msats: values[7],
+        transaction_state: values[8],
+        workflow_state: values[9],
+        settlement_action_state: values[10],
+        created_at: values[11],
+        expires_at: values[12],
+        settled_at: values[13],
+        settlement_action_completed_at: values[14],
+        refreshed_from_invoice_id: values[15],
+        metadata: values[16],
+        fiat_quote: values[17]
+      };
+      if (
+        this.rows.some(
+          (item) =>
+            item.invoice_id === row.invoice_id ||
+            item.payment_hash === row.payment_hash ||
+            item.invoice === row.invoice
+        )
+      ) {
+        throw { code: "23505" };
+      }
+      this.rows.push(row);
+      return { rows: [structuredClone(row)] };
+    }
+
+    if (sql.includes("ORDER BY created_at")) {
+      const [graceSeconds, now] = values;
+      return {
+        rows: this.rows
+          .filter((row) => isRecoverableFakeRow(row, graceSeconds, now))
+          .sort((left, right) => left.created_at - right.created_at)
+          .map((row) => structuredClone(row))
+      };
+    }
+
+    if (sql.includes("settlement_action_completed_at = COALESCE")) {
+      const row = this.requireRow(values[0]);
+      row.workflow_state = "settlement_action_completed";
+      row.settlement_action_state = "completed";
+      row.settlement_action_completed_at ??= values[1];
+      return { rows: [structuredClone(row)] };
+    }
+
+    if (sql.includes("settlement_action_state = 'failed'")) {
+      const row = this.requireRow(values[0]);
+      row.workflow_state = "settlement_action_pending";
+      row.settlement_action_state = "failed";
+      return { rows: [structuredClone(row)] };
+    }
+
+    if (sql.includes("SET transaction_state = 'settled'")) {
+      const row = this.requireRow(values[0]);
+      row.transaction_state = "settled";
+      if (row.workflow_state !== "settlement_action_completed") {
+        row.workflow_state = "settlement_action_pending";
+      }
+      row.settled_at ??= values[1];
+      return { rows: [structuredClone(row)] };
+    }
+
+    if (sql.includes("ELSE 'expired'")) {
+      const row = this.requireRow(values[0]);
+      if (row.transaction_state !== "settled") {
+        row.transaction_state = "expired";
+        row.workflow_state = "expired_closed";
+      }
+      return { rows: [structuredClone(row)] };
+    }
+
+    if (sql.includes("ELSE 'failed'")) {
+      const row = this.requireRow(values[0]);
+      if (row.transaction_state !== "settled") {
+        row.transaction_state = "failed";
+        row.workflow_state = "failed_closed";
+      }
+      return { rows: [structuredClone(row)] };
+    }
+
+    if (sql.includes("THEN 'expiry_pending_verification'")) {
+      const row = this.requireRow(values[0]);
+      if (!["settled", "expired", "failed"].includes(row.transaction_state)) {
+        row.workflow_state = "expiry_pending_verification";
+      }
+      return { rows: [structuredClone(row)] };
+    }
+
+    if (sql.includes("THEN 'verifying'")) {
+      const row = this.requireRow(values[0]);
+      if (
+        row.transaction_state !== "settled" &&
+        ["invoice_created", "expiry_pending_verification"].includes(row.workflow_state)
+      ) {
+        row.workflow_state = "verifying";
+      }
+      return { rows: [structuredClone(row)] };
+    }
+
+    if (sql.includes("SET workflow_state = 'settlement_action_pending'")) {
+      const row = this.requireRow(values[0]);
+      row.workflow_state = "settlement_action_pending";
+      return { rows: [structuredClone(row)] };
+    }
+
+    throw new Error(`Unhandled fake Postgres query: ${sql}`);
+  }
+
+  requireRow(invoiceId) {
+    const row = this.rows.find((item) => item.invoice_id === invoiceId);
+    if (row === undefined) return undefined;
+    return row;
+  }
+}
+
+function isRecoverableFakeRow(row, graceSeconds, now) {
+  if (
+    [
+      "settlement_action_completed",
+      "expired_closed",
+      "failed_closed",
+      "cancelled"
+    ].includes(row.workflow_state)
+  ) {
+    return false;
+  }
+  if (row.transaction_state === "settled") {
+    return row.settlement_action_state !== "completed";
+  }
+  if (["expired", "failed"].includes(row.transaction_state)) return false;
+  return row.expires_at + graceSeconds >= now;
+}
+
+function invoiceRow(overrides = {}) {
+  return {
+    invoice_id: "or_inv_node_pg",
+    merchant_scope: "node:test",
+    operation: "invoice.create",
+    idempotency_key: "order-pg",
+    idempotency_request_hash: `sha256:${"b".repeat(64)}`,
+    payment_hash: "9".repeat(64),
+    invoice: "lnbc-node-pg",
+    amount_msats: 200000,
+    transaction_state: "pending",
+    workflow_state: "invoice_created",
+    settlement_action_state: "pending",
+    created_at: 1000,
+    expires_at: 1600,
+    metadata: {
+      user_id: "user-1"
+    },
+    fiat_quote: null,
+    ...overrides
+  };
+}
+
 function makeInvoiceRequestFromVector(input) {
   const request = {
     amount_msats: BigInt(input.amount_msats)
