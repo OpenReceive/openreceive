@@ -10,14 +10,13 @@ Polling uses backend `lookup_invoice`; trusted `payment_received`
 notifications may settle the matching invoice directly. If no notification
 arrives, polling remains the recovery and settlement fallback.
 
-Server packages should also provide OpenReceive-owned persistence for invoice,
+Server packages also provide OpenReceive-owned persistence for invoice,
 idempotency, lifecycle, and settlement-action rows inside the host app
-database. The host app should attach app-owned hooks after settlement instead
-of designing these tables itself.
+database. The host app attaches app-owned hooks after settlement instead of
+designing these tables itself.
 
-All invoice, lookup, and event responses should be returned with
-`Cache-Control: no-store`. Browser responses must never contain an NWC
-connection string or client secret.
+Invoice, lookup, and event responses return `Cache-Control: no-store`. Browser
+responses never contain an NWC connection string or client secret.
 
 ## Create Invoice
 

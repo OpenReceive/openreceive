@@ -59,8 +59,13 @@ Product Definition
 
 OpenReceive should make this promise:
 
-  "Add Bitcoin Lightning receive payments to any app with a tiny backend
-  integration and a polished frontend checkout."
+  "Add uncensorable, global, permissionless inbound payments to any website or
+  app with a tiny backend integration and a polished checkout, using
+  open-source packages and decentralized protocols. The merchant backend
+  creates and verifies one Lightning invoice; purchaser guidance helps people
+  start from a credit card, bank account, Bitcoin wallet, stablecoin balance,
+  exchange, onramp, or swap service and complete an instant payment on the
+  merchant's website."
 
 The core product must support:
 
@@ -71,7 +76,9 @@ The core product must support:
   - Converting fiat amounts to millisatoshis.
   - Locking a quote at invoice creation.
   - Showing the customer QR/copy/open-wallet UI.
-  - Showing payer-side route suggestions that may be able to pay the invoice.
+  - Showing friendly payer-side route guidance for cards, bank accounts,
+    Bitcoin, stablecoins, wallets, exchanges, onramps, and swaps that may be
+    able to reach the invoice.
   - Pushing passive settlement updates to the frontend.
   - Providing an idempotent boundary where a merchant-supplied settlement
     action may run only after backend verification.
@@ -109,20 +116,28 @@ the merchant.
 Product Wording Boundary
 ------------------------
 
-Marketing, docs, demos, provider-registry copy, and README text must be
-conservative about what OpenReceive does.
+Marketing, docs, demos, provider-registry copy, and README text should lead
+with the product promise while staying precise about what OpenReceive does.
+
+Say:
+
+  - OpenReceive adds uncensorable, global, permissionless inbound payments to a
+    website or app.
+  - Purchasers can start from a credit card, bank account, Bitcoin wallet,
+    stablecoin balance, exchange, onramp, or swap service.
+  - OpenReceive guides those purchaser-side routes toward one merchant-created
+    Lightning invoice.
 
 Do not say or imply:
 
-  - OpenReceive lets customers pay with fiat.
-  - OpenReceive lets customers pay with crypto.
-  - OpenReceive processes fiat, crypto, on-chain, card, bank, or exchange
-    payments.
+  - OpenReceive itself processes fiat, crypto, on-chain, card, bank, exchange,
+    onramp, or swap payments.
+  - OpenReceive guarantees every suggested route can pay every invoice.
   - OpenReceive is a processor, exchange, broker, wallet, custodian, or money
     transmitter.
 
 Provider routes are suggestions, not payment guarantees. The payer chooses and
-uses a third-party wallet, exchange, onramp, or swap service outside
+uses third-party wallets, exchanges, onramps, or swap services outside
 OpenReceive.
 
 

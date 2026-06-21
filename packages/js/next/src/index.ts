@@ -10,6 +10,9 @@ import type {
   OpenReceiveFetchRuntime
 } from "@openreceive/express";
 import {
+  formatOpenReceiveMissingNwcMessage
+} from "@openreceive/core";
+import {
   createOpenReceiveFetchInvoiceEventsResponse,
   createOpenReceiveFetchNoWalletResponse,
   createOpenReceiveFetchRouteNotFoundResponse,
@@ -55,7 +58,7 @@ export interface CreateOpenReceiveNextInvoiceEventsResponseOptions {
 
 export const OPENRECEIVE_NEXT_DEFAULT_BASE_PATH = "/openreceive/v1";
 export const OPENRECEIVE_NEXT_DEFAULT_NO_WALLET_MESSAGE =
-  "Set OPENRECEIVE_NWC before creating live invoices.";
+  formatOpenReceiveMissingNwcMessage();
 export const OPENRECEIVE_NEXT_DEFAULT_HEARTBEAT_MS = 20_000;
 
 export function createOpenReceiveNextRuntime(

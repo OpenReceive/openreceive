@@ -1,8 +1,7 @@
 # Supported Databases
 
-OpenReceive owns OpenReceive invoice persistence. App developers should not
-design invoice, idempotency, lifecycle, polling-recovery, or settlement-action
-tables by hand.
+OpenReceive owns OpenReceive invoice persistence. Do not design invoice,
+idempotency, lifecycle, polling-recovery, or settlement-action tables by hand.
 
 A database is supported only when OpenReceive ships all three pieces:
 
@@ -25,7 +24,7 @@ storage when `OPENRECEIVE_MODE=production` or `NODE_ENV=production`.
 MongoDB, MySQL, Prisma-native models, Drizzle-native models, and arbitrary user
 tables are not supported storage targets until OpenReceive ships the adapter,
 migration/setup path, and conformance coverage for them. Prisma and Drizzle
-recipes should wrap the package-owned SQL schema instead of reinventing it.
+recipes wrap the package-owned SQL schema instead of reinventing it.
 
 Keep app-owned references such as user ids, order ids, cart ids, product ids,
 and tenant-specific fields in OpenReceive metadata or in your own app tables.

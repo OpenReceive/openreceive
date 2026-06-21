@@ -14,10 +14,6 @@ import {
   helloFruitDemoLabels
 } from "../../examples/hello-fruit/shared/demo-formatting.ts";
 import { quoteFiatToMsats } from "../../packages/js/core/src/index.ts";
-import {
-  GET as getNextOpenReceive,
-  POST as postNextOpenReceive
-} from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/openreceive/v1/[...openreceive]/route.ts";
 import { GET as getNextDemoMetadata } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/demo-metadata.json/route.ts";
 import { GET as getNextDocs } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/docs/route.ts";
 import { GET as getNextHealthz } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/healthz/route.ts";
@@ -42,6 +38,14 @@ const demoServerDirs = [
   "examples/hello-fruit/server/static-html-small-api",
   "examples/hello-fruit/server/nextjs-fullstack"
 ];
+
+function createValidNwcUri(input = {}) {
+  return (
+    `nostr+walletconnect://${input.walletPubkey ?? "a".repeat(64)}` +
+    `?relay=${encodeURIComponent(input.relay ?? "wss://relay.example.com")}` +
+    `&secret=${input.secret ?? "b".repeat(64)}`
+  );
+}
 
 test("Hello Fruit shared product keeps demo invoices low-value", () => {
   const product = JSON.parse(readFileSync(productPath, "utf8"));
@@ -144,6 +148,50 @@ test("Hello Fruit React demos delegate checkout state to the React package", () 
     assert.doesNotMatch(source, /applyOpenReceiveInvoiceEvent/);
     assert.doesNotMatch(source, /parseOpenReceiveInvoiceEvent/);
     assert.doesNotMatch(source, /createOpenReceiveCheckoutState/);
+  }
+});
+
+test("Hello Fruit JS demos use package-owned QR and default worker wiring", () => {
+  const clientSources = [
+    "examples/hello-fruit/server/node-express-react/src/client/App.tsx",
+    "examples/hello-fruit/server/static-html-small-api/src/client/main.ts",
+    "examples/hello-fruit/server/nextjs-fullstack/src/app/checkout-client.tsx"
+  ];
+
+  for (const sourcePath of clientSources) {
+    const source = readFileSync(path.join(process.cwd(), sourcePath), "utf8");
+    assert.doesNotMatch(source, /from "qrcode"/, `${sourcePath}: QR encoder must come from the UI package`);
+    assert.doesNotMatch(source, /qrEncoder/, `${sourcePath}: demo must not pass a local QR encoder`);
+  }
+
+  assert.equal(
+    existsSync(path.join(
+      process.cwd(),
+      "examples/hello-fruit/server/nextjs-fullstack/src/qrcode.d.ts"
+    )),
+    false
+  );
+
+  for (const demoDir of demoServerDirs) {
+    const packageJson = JSON.parse(
+      readFileSync(path.join(process.cwd(), demoDir, "package.json"), "utf8")
+    );
+    const config = readFileSync(
+      path.join(process.cwd(), demoDir, "openreceive.config.mjs"),
+      "utf8"
+    );
+    const compose = readFileSync(path.join(process.cwd(), demoDir, "compose.yml"), "utf8");
+
+    assert.equal(packageJson.dependencies.qrcode, undefined, `${demoDir}: qrcode is package-owned`);
+    assert.match(packageJson.scripts.dev, /require-openreceive-nwc\.ts/);
+    assert.match(packageJson.scripts.start, /require-openreceive-nwc\.ts/);
+    assert.equal(packageJson.scripts["openreceive:worker"], "openreceive worker");
+    assert.equal(packageJson.scripts["openreceive:poll:once"], "openreceive poll --once");
+    assert.match(config, /createHelloFruitOpenReceiveOptions/);
+    assert.match(config, /export default openreceive/);
+    assert.doesNotMatch(config, /nostr\+walletconnect:\/\//);
+    assert.match(compose, /command:\s+\["npm", "run", "openreceive:worker"\]/);
+    assert.match(compose, /profiles:\s*\n\s+- openreceive-worker/);
   }
 });
 
@@ -790,7 +838,8 @@ test("Next.js demo delegates route handler glue to the Next package", () => {
   assert.match(source, /@openreceive\/next/);
   assert.match(source, /createOpenReceiveNextRuntime/);
   assert.match(source, /dispatchOpenReceiveNextRoute/);
-  assert.match(source, /dispatchOpenReceiveNextNoWalletRoute/);
+  assert.match(source, /readRequiredHelloFruitNwcConnectionString/);
+  assert.doesNotMatch(source, /dispatchOpenReceiveNextNoWalletRoute/);
   assert.doesNotMatch(source, /class CapturedResponse/);
   assert.doesNotMatch(source, /ExpressLikeRequest/);
   assert.doesNotMatch(source, /ReadableStream<Uint8Array>/);
@@ -824,6 +873,9 @@ test("Rails React skeleton is explicitly quarantined and does not claim active R
   assert.match(combined, /quarantined/i);
   assert.match(combined, /rails-react/);
   assert.match(combined, /OpenReceive::Rails\.create_active_record_invoice_store/);
+  assert.match(combined, /ENV\.fetch\("OPENRECEIVE_NWC"/);
+  assert.match(combined, /OpenReceive\.parse_nwc_uri/);
+  assert.doesNotMatch(combined, /OpenReceive::UnavailableReceiveClient/);
   assert.doesNotMatch(combined, /rails-hotwire/);
   assert.doesNotMatch(combined, /Rails Hotwire/);
   assert.doesNotMatch(combined, /demo-rails-hotwire/);
@@ -853,8 +905,9 @@ test("Hello Fruit server demos keep secret-safe local setup docs", () => {
     assert.match(envExample, /^OPENRECEIVE_NWC=$/m, `${demoDir}: placeholder NWC`);
     assert.doesNotMatch(envExample, /nostr\+walletconnect:\/\//);
     assert.match(readme, /The browser never receives `OPENRECEIVE_NWC`\./);
+    assert.match(readme, /refuses to boot/);
     assert.match(readme, /\/demo-metadata\.json/);
-    assert.match(readme, /compose\.override\.yml\.example up --build/);
+    assert.match(readme, /compose\.override\.yml\.example --profile openreceive-worker up --build/);
     assert.match(dockerfile, /CMD \["npm", "start"\]/);
     assert.match(compose, /env_file:/);
     assert.match(compose, /path:\s+\.\.\/\.\.\/\.\.\/\.\.\/\.env/);
@@ -867,52 +920,52 @@ test("Hello Fruit server demos keep secret-safe local setup docs", () => {
   }
 });
 
-test("Hello Fruit production servers expose non-secret metadata without a wallet", async () => {
+test("Hello Fruit demos refuse to boot without OPENRECEIVE_NWC", async () => {
   await withEnv({ OPENRECEIVE_NWC: undefined }, async () => {
     for (const demo of [
       {
         name: "node-express-react-production",
-        metadataId: "node-express-react",
         createApp: createHelloFruitProductionServer
       },
       {
         name: "static-html-small-api-production",
-        metadataId: "static-html-small-api",
         createApp: createHelloFruitStaticProductionServer
       }
     ]) {
-      const app = demo.createApp();
-      const metadata = await getJson(app, "/demo-metadata.json");
-      assert.equal(metadata.status, 200, `${demo.name}: metadata status`);
-      assert.equal(metadata.body.demo.id, demo.metadataId);
-      assert.equal(metadata.body.mode, "unconfigured");
-
-      const health = await getJson(app, "/openreceive/v1/health");
-      assert.equal(health.status, 200, `${demo.name}: health status`);
-      assert.equal(health.body.wallet_configured, false);
+      assert.throws(
+        () => demo.createApp(),
+        /needs a read-only NWC code to receive payments\.[\s\S]+https:\/\/openreceive\.org\/get_an_nwc_code/,
+        `${demo.name}: requires NWC at boot`
+      );
     }
 
-    const nextMetadata = await responseJson(getNextDemoMetadata());
-    assert.equal(nextMetadata.status, 200, "nextjs-fullstack: metadata status");
-    assert.equal(nextMetadata.body.demo.id, "nextjs-fullstack");
-    assert.equal(nextMetadata.body.mode, "unconfigured");
-
-    const nextHealth = await responseJson(
-      getNextOpenReceive(
-        new Request("http://nextjs.test/openreceive/v1/health"),
-        nextOpenReceiveContext(["health"])
-      )
+    assert.throws(
+      () => getNextDemoMetadata(),
+      /needs a read-only NWC code to receive payments\.[\s\S]+https:\/\/openreceive\.org\/get_an_nwc_code/,
+      "nextjs-fullstack: metadata requires NWC"
     );
-    assert.equal(nextHealth.status, 200, "nextjs-fullstack: health status");
-    assert.equal(nextHealth.body.wallet_configured, false);
+  });
+});
+
+test("Hello Fruit demos refuse malformed OPENRECEIVE_NWC before serving", async () => {
+  await withEnv({ OPENRECEIVE_NWC: "https://example.com" }, async () => {
+    assert.throws(
+      () => createHelloFruitServer(),
+      /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_an_nwc_code/
+    );
+    assert.throws(
+      () => createHelloFruitStaticServer(),
+      /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_an_nwc_code/
+    );
+    assert.throws(
+      () => getNextDemoMetadata(),
+      /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_an_nwc_code/
+    );
   });
 });
 
 test("Hello Fruit metadata exposes only allowlisted build fields", async () => {
-  const nwc =
-    `nostr+walletconnect://${"a".repeat(64)}` +
-    `?relay=${encodeURIComponent("wss://relay.example.com")}` +
-    `&secret=${"b".repeat(64)}`;
+  const nwc = createValidNwcUri();
 
   await withEnv({
     OPENRECEIVE_NWC: nwc,
@@ -957,7 +1010,7 @@ test("Hello Fruit metadata exposes only allowlisted build fields", async () => {
 
 test("Hello Fruit hosted demo routes expose health, source, docs, robots, and sitemap", async () => {
   await withEnv({
-    OPENRECEIVE_NWC: undefined,
+    OPENRECEIVE_NWC: createValidNwcUri(),
     OPENRECEIVE_PUBLIC_URL: "https://demo.example.test",
     OPENRECEIVE_DEMO_NOINDEX: undefined
   }, async () => {
@@ -979,7 +1032,7 @@ test("Hello Fruit hosted demo routes expose health, source, docs, robots, and si
       assert.deepEqual(healthz.body, {
         ok: true,
         demo: demo.name,
-        wallet_configured: false
+        wallet_configured: true
       });
 
       const source = await dispatch(app, {
@@ -1032,7 +1085,7 @@ test("Hello Fruit hosted demo routes expose health, source, docs, robots, and si
     assert.deepEqual(nextHealthz.body, {
       ok: true,
       demo: "nextjs-fullstack",
-      wallet_configured: false
+      wallet_configured: true
     });
 
     const nextSource = getNextSource();
@@ -1065,152 +1118,6 @@ test("Hello Fruit hosted demo routes expose health, source, docs, robots, and si
   });
 });
 
-test("Hello Fruit demos fail closed without OPENRECEIVE_NWC", async () => {
-  await withEnv({
-    OPENRECEIVE_NWC: undefined,
-    OPENRECEIVE_DEMO_MODE: "production",
-    OPENRECEIVE_GIT_SHA: "nostr+walletconnect://not-a-sha",
-    OPENRECEIVE_IMAGE_DIGEST: `secret=${"b".repeat(64)}`,
-    OPENRECEIVE_DEPLOYED_AT: `secret=${"b".repeat(64)}`
-  }, async () => {
-    for (const demo of [
-      {
-        name: "node-express-react",
-        createApp: createHelloFruitServer
-      },
-      {
-        name: "static-html-small-api",
-        createApp: createHelloFruitStaticServer
-      }
-    ]) {
-      const app = demo.createApp();
-      const metadata = await getJson(app, "/demo-metadata.json");
-      assert.equal(metadata.status, 200, `${demo.name}: metadata status`);
-      assert.equal(metadata.body.demo.id, demo.name);
-      assert.equal(metadata.body.demo.product, "hello-fruit");
-      assert.equal(metadata.body.mode, "unconfigured");
-      assert.equal(metadata.body.build.git_sha, null);
-      assert.equal(metadata.body.build.image_digest, null);
-      assert.equal(metadata.body.build.deployed_at, null);
-      assert.equal(metadata.body.packages["@openreceive/core"], "0.1.0");
-      assert.equal(metadata.body.packages["@openreceive/express"], "0.1.0");
-      assert.equal(metadata.body.packages["@openreceive/node"], "0.1.0");
-      assert.equal(
-        JSON.stringify(metadata.body).includes("OPENRECEIVE_NWC"),
-        false
-      );
-      assert.equal(
-        JSON.stringify(metadata.body).includes("nostr+walletconnect://"),
-        false
-      );
-      if (demo.name === "node-express-react") {
-        assert.equal(metadata.body.packages["@openreceive/browser"], "0.1.0");
-        assert.equal(metadata.body.packages["@openreceive/react"], "0.1.0");
-      } else {
-        assert.equal(metadata.body.packages["@openreceive/elements"], "0.1.0");
-      }
-
-      const health = await getJson(app, "/openreceive/v1/health");
-      assert.equal(health.status, 200, `${demo.name}: health status`);
-      assert.deepEqual(health.body, {
-        ok: true,
-        wallet_configured: false
-      });
-
-      const capabilities = await getJson(app, "/openreceive/v1/capabilities");
-      assert.equal(capabilities.status, 200, `${demo.name}: capabilities status`);
-      assert.equal(capabilities.body.wallet_configured, false);
-      assert.deepEqual(capabilities.body.methods, ["make_invoice", "lookup_invoice"]);
-      assert.equal(JSON.stringify(capabilities.body).includes("OPENRECEIVE_NWC"), false);
-      assert.equal(JSON.stringify(capabilities.body).includes("nostr+walletconnect://"), false);
-
-      const invoice = await postJson(app, "/openreceive/v1/invoices", {
-        fiat: {
-          currency: "USD",
-          value: "0.10"
-        },
-        description: `Fruit sticker from ${demo.name} smoke test`,
-        expiry: 600,
-        metadata: {
-          product_id: "fruit-sticker-pack",
-          fruit: "banana"
-        }
-      });
-      assert.equal(invoice.status, 503, `${demo.name}: invoice status`);
-      assert.deepEqual(invoice.body, {
-        code: "WALLET_UNAVAILABLE",
-        message: "Set OPENRECEIVE_NWC before creating live invoices."
-      });
-    }
-
-    const nextMetadata = await responseJson(getNextDemoMetadata());
-    assert.equal(nextMetadata.status, 200, "nextjs-fullstack: metadata status");
-    assert.equal(nextMetadata.body.demo.id, "nextjs-fullstack");
-    assert.equal(nextMetadata.body.demo.product, "hello-fruit");
-    assert.equal(nextMetadata.body.mode, "unconfigured");
-    assert.equal(nextMetadata.body.build.git_sha, null);
-    assert.equal(nextMetadata.body.build.image_digest, null);
-    assert.equal(nextMetadata.body.build.deployed_at, null);
-    assert.equal(nextMetadata.body.packages["@openreceive/browser"], "0.1.0");
-    assert.equal(nextMetadata.body.packages["@openreceive/next"], "0.1.0");
-    assert.equal(nextMetadata.body.packages["@openreceive/react"], "0.1.0");
-    assert.equal(JSON.stringify(nextMetadata.body).includes("OPENRECEIVE_NWC"), false);
-    assert.equal(JSON.stringify(nextMetadata.body).includes("nostr+walletconnect://"), false);
-
-    const nextHealth = await responseJson(
-      getNextOpenReceive(
-        new Request("http://nextjs.test/openreceive/v1/health"),
-        nextOpenReceiveContext(["health"])
-      )
-    );
-    assert.deepEqual(nextHealth.body, {
-      ok: true,
-      wallet_configured: false
-    });
-
-    const nextCapabilities = await responseJson(
-      getNextOpenReceive(
-        new Request("http://nextjs.test/openreceive/v1/capabilities"),
-        nextOpenReceiveContext(["capabilities"])
-      )
-    );
-    assert.equal(nextCapabilities.body.wallet_configured, false);
-    assert.deepEqual(nextCapabilities.body.methods, ["make_invoice", "lookup_invoice"]);
-    assert.equal(JSON.stringify(nextCapabilities.body).includes("OPENRECEIVE_NWC"), false);
-    assert.equal(JSON.stringify(nextCapabilities.body).includes("nostr+walletconnect://"), false);
-
-    const nextInvoice = await responseJson(
-      postNextOpenReceive(
-        new Request("http://nextjs.test/openreceive/v1/invoices", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "idempotency-key": "next-demo-smoke"
-          },
-          body: JSON.stringify({
-            fiat: {
-              currency: "USD",
-              value: "0.10"
-            },
-            description: "Fruit sticker from nextjs-fullstack smoke test",
-            expiry: 600,
-            metadata: {
-              product_id: "fruit-sticker-pack",
-              fruit: "banana"
-            }
-          })
-        }),
-        nextOpenReceiveContext(["invoices"])
-      )
-    );
-    assert.equal(nextInvoice.status, 503, "nextjs-fullstack: invoice status");
-    assert.deepEqual(nextInvoice.body, {
-      code: "WALLET_UNAVAILABLE",
-      message: "Set OPENRECEIVE_NWC before creating live invoices."
-    });
-  });
-});
-
 async function responseJson(responseOrPromise) {
   const response = await responseOrPromise;
   return {
@@ -1219,20 +1126,8 @@ async function responseJson(responseOrPromise) {
   };
 }
 
-function nextOpenReceiveContext(openreceive) {
-  return {
-    params: Promise.resolve({
-      openreceive
-    })
-  };
-}
-
 async function getJson(app, url) {
   return await dispatchJson(app, "GET", url);
-}
-
-async function postJson(app, url, body) {
-  return await dispatchJson(app, "POST", url, body);
 }
 
 async function dispatchJson(app, method, url, body) {

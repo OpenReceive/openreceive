@@ -7,6 +7,7 @@ require "uri"
 
 module OpenReceive
   VERSION = "0.1.0"
+  NWC_CODE_HELP_URL = "https://openreceive.org/get_an_nwc_code"
   NWC_METADATA_MAX_BYTES = 3900
   MIN_AMOUNT_MSATS = 1000
   MAX_AMOUNT_MSATS = 9_007_199_254_740_991
@@ -672,6 +673,22 @@ module OpenReceive
   end
 
   module_function
+
+  def missing_nwc_message(subject: "OpenReceive")
+    [
+      "#{subject} needs a read-only NWC code to receive payments.",
+      "Set OPENRECEIVE_NWC to your receive-only Nostr Wallet Connect connection string.",
+      "Get one here: #{NWC_CODE_HELP_URL}"
+    ].join("\n")
+  end
+
+  def invalid_nwc_message(reason: nil)
+    [
+      "OPENRECEIVE_NWC is set, but it is not a valid NWC code.",
+      (reason.nil? ? nil : "Reason: #{reason}"),
+      "Get a read-only NWC code here: #{NWC_CODE_HELP_URL}"
+    ].compact.join("\n")
+  end
 
   def quote_fiat_to_sats(fiat_value:, btc_fiat_price:)
     Money.quote_fiat_to_sats(

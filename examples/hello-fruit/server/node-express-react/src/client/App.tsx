@@ -1,6 +1,5 @@
 import React, { useCallback, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import * as QRCode from "qrcode";
 import type {
   OpenReceiveCheckoutState,
   OpenReceiveCheckoutSnapshot
@@ -168,7 +167,6 @@ function App(): React.ReactElement {
             invoice_id={invoice.invoice_id}
             logger={logOpenReceive}
             lookupUrl="/openreceive/v1/invoices/lookup"
-            qrEncoder={QRCode}
             onError={(cause) => {
               setError(cause instanceof Error ? cause.message : String(cause));
             }}

@@ -4,9 +4,11 @@ import {
 import {
   createAlbyNwcReceiveClient
 } from "@openreceive/node";
+import type {
+  OpenReceiveExpressOptions
+} from "@openreceive/express";
 import {
   createOpenReceiveNextRuntime,
-  dispatchOpenReceiveNextNoWalletRoute,
   dispatchOpenReceiveNextRoute,
   openReceiveNextJsonResponse,
   type OpenReceiveNextRuntime
@@ -14,6 +16,9 @@ import {
 import {
   createHelloFruitDemoMetadata
 } from "../../../../shared/demo-metadata.ts";
+import {
+  readRequiredHelloFruitNwcConnectionString
+} from "../../../../shared/demo-nwc.ts";
 import {
   createHelloFruitOpenReceiveLogger
 } from "../../../../shared/demo-logging.ts";
@@ -35,7 +40,8 @@ interface NextDemoRuntime extends OpenReceiveNextRuntime {
 let runtime: NextDemoRuntime | undefined;
 
 export function isWalletConfigured(): boolean {
-  return getConnectionString() !== undefined;
+  readRequiredHelloFruitNwcConnectionString();
+  return true;
 }
 
 export function demoMetadataResponse(): Response {
@@ -99,10 +105,7 @@ export async function dispatchOpenReceiveRoute(
   request: Request,
   path: readonly string[]
 ): Promise<Response> {
-  const connectionString = getConnectionString();
-  if (connectionString === undefined) {
-    return dispatchOpenReceiveNextNoWalletRoute({ request, path });
-  }
+  const connectionString = readRequiredHelloFruitNwcConnectionString();
 
   return dispatchOpenReceiveNextRoute({
     runtime: getRuntime(connectionString),
@@ -116,6 +119,18 @@ function getRuntime(connectionString: string): NextDemoRuntime {
     return runtime;
   }
 
+  const options = createHelloFruitOpenReceiveOptions(connectionString);
+  runtime = {
+    connectionString,
+    ...createOpenReceiveNextRuntime(options)
+  };
+
+  return runtime;
+}
+
+export function createHelloFruitOpenReceiveOptions(
+  connectionString = readRequiredHelloFruitNwcConnectionString()
+): OpenReceiveExpressOptions {
   const store = createHelloFruitOpenReceiveInvoiceStore({
     demoId: DEMO_ID
   });
@@ -125,25 +140,15 @@ function getRuntime(connectionString: string): NextDemoRuntime {
 
   const priceCurrencies = readHelloFruitCatalogCurrencies();
 
-  runtime = {
-    connectionString,
-    ...createOpenReceiveNextRuntime({
-      client,
-      store,
-      merchantScope: () => "demo:hello-fruit-nextjs",
-      priceProviders: createDefaultLivePriceProviders({ currencies: priceCurrencies }),
-      priceCurrencies,
-      unsafeAllowUnauthenticatedDemoMode: true,
-      logger: createHelloFruitOpenReceiveLogger(DEMO_ID)
-    })
+  return {
+    client,
+    store,
+    merchantScope: () => "demo:hello-fruit-nextjs",
+    priceProviders: createDefaultLivePriceProviders({ currencies: priceCurrencies }),
+    priceCurrencies,
+    unsafeAllowUnauthenticatedDemoMode: true,
+    logger: createHelloFruitOpenReceiveLogger(DEMO_ID)
   };
-
-  return runtime;
-}
-
-function getConnectionString(): string | undefined {
-  const value = process.env.OPENRECEIVE_NWC;
-  return value === undefined || value.length === 0 ? undefined : value;
 }
 
 function publicUrl(): string {

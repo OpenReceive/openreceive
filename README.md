@@ -1,8 +1,12 @@
 # OpenReceive
 
-OpenReceive is an open source receive-payments kit for apps that want to
-create one Bitcoin Lightning BOLT11 invoice, show payer-side route suggestions,
-and run app-owned settlement actions only after backend-verified settlement.
+OpenReceive adds uncensorable, global, permissionless inbound payments to any
+website or app using open-source packages and decentralized protocols. A
+merchant backend creates and verifies one Bitcoin Lightning BOLT11 invoice
+through a wallet it controls, while the checkout gives purchasers friendly
+route guidance so they can start from a credit card, bank account, Bitcoin
+wallet, stablecoin balance, exchange, onramp, or swap service and complete an
+instant payment on the merchant's website.
 
 OpenReceive is not a bank, exchange, wallet, broker, custodian, or payment
 processor. It does not transmit money or hold customer funds. A merchant brings
@@ -34,17 +38,18 @@ npm run demo nextjs    # Next.js fullstack         http://localhost:3002
 npm run demo rails     # Rails + Hotwire           http://localhost:3003
 ```
 
-Each command creates a root `.env` if missing and runs that demo's Docker
-Compose stack with local port publishing. The JS demo stacks start a local
-Postgres container, wait for it to become healthy, run the package-owned
-OpenReceive invoice migration, and record the OpenReceive schema version before
-store queries. The JS local overrides run Vite or Next.js development servers
-inside Docker so browser errors stay readable. The Rails demo container runs
-`rails db:prepare` for its SQLite-backed ActiveRecord store before booting.
+Each command creates a root `.env` if missing, validates `OPENRECEIVE_NWC`, and
+then runs that demo's Docker Compose stack with local port publishing. The JS
+demo stacks start a local Postgres container, wait for it to become healthy,
+run the package-owned OpenReceive invoice migration, and record the OpenReceive
+schema version before store queries. The JS local overrides run Vite or Next.js
+development servers inside Docker so browser errors stay readable. The Rails
+demo container runs `rails db:prepare` for its SQLite-backed ActiveRecord store
+before booting.
 Buying fruit creates a live Lightning invoice through your own wallet, so set a
-receive-only `OPENRECEIVE_NWC` string (for example from Rizful or Alby Hub) in
-`.env` first. Without it the UI loads but invoice creation returns
-`503 WALLET_UNAVAILABLE`.
+valid receive-only `OPENRECEIVE_NWC` string (for example from Rizful or Alby
+Hub) in `.env` before starting a demo. Demos refuse to boot when
+`OPENRECEIVE_NWC` is missing or malformed.
 The JS demos quote each fruit's USD price through live BTC/USD price providers
 before creating the invoice.
 
@@ -107,10 +112,10 @@ file.
 ## Product Boundary
 
 OpenReceive creates one Lightning invoice and can show payer-side route
-suggestions for wallets, exchanges, swap services, or fiat onramps that may be
-able to pay that invoice. Provider routes are suggestions, not payment
-guarantees. The payer chooses and uses third-party services outside
-OpenReceive.
+guidance for wallets, exchanges, swap services, fiat onramps, cards, bank
+accounts, Bitcoin, or stablecoins that may be able to reach that invoice.
+Provider routes are suggestions, not payment guarantees. The payer chooses and
+uses third-party services outside OpenReceive.
 
 Browser, mobile, and static frontend code never receive NWC secrets. Live
 checkout always needs a merchant-controlled backend component.

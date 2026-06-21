@@ -7,6 +7,8 @@ import {
   classifyLookupInvoiceSettlement,
   createIdempotencyRequestHash,
   createOpenReceiveSettlementPollingRunner,
+  formatOpenReceiveInvalidNwcMessage,
+  formatOpenReceiveMissingNwcMessage,
   getPollingDelaySeconds,
   isOpenReceiveErrorCode,
   isRetryableOpenReceiveErrorCode,
@@ -105,6 +107,18 @@ test("parses and redacts NWC URI without leaking the client secret", () => {
   assert.match(parsed.redacted, /secret=\[REDACTED\]/);
   assert.doesNotMatch(parsed.redacted, /c{64}/);
   assert.equal(redactNwcUri(NWC_URI), parsed.redacted);
+});
+
+test("NWC boot messages explain the read-only code requirement", () => {
+  const missing = formatOpenReceiveMissingNwcMessage({ subject: "Demo" });
+  assert.match(missing, /Demo needs a read-only NWC code to receive payments\./);
+  assert.match(missing, /Set OPENRECEIVE_NWC/);
+  assert.match(missing, /https:\/\/openreceive\.org\/get_an_nwc_code/);
+
+  const invalid = formatOpenReceiveInvalidNwcMessage({ reason: "bad scheme" });
+  assert.match(invalid, /not a valid NWC code/);
+  assert.match(invalid, /bad scheme/);
+  assert.match(invalid, /https:\/\/openreceive\.org\/get_an_nwc_code/);
 });
 
 test("canonical OpenReceive errors expose stable schema codes", () => {

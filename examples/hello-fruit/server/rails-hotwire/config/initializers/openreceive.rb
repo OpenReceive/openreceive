@@ -1,16 +1,23 @@
 OpenReceive::Rails.configure do |config|
-  connection_uri = ENV["OPENRECEIVE_NWC"].to_s
-  config.client = if connection_uri.empty?
-    OpenReceive::UnavailableReceiveClient.new(
-      message: "Set OPENRECEIVE_NWC before creating live invoices."
-    )
-  else
-    require "nwc_ruby"
-    OpenReceive::NwcRubyReceiveClient.new(
-      client: NwcRuby::Client.from_uri(connection_uri),
-      connection_uri: connection_uri
-    )
+  connection_uri = ENV.fetch("OPENRECEIVE_NWC", "").to_s.strip
+  if connection_uri.empty?
+    message = OpenReceive.missing_nwc_message(subject: "The Hello Fruit demo")
+    warn message
+    raise message
   end
+  begin
+    OpenReceive.parse_nwc_uri(connection_uri)
+  rescue OpenReceive::NwcUriParseError => error
+    message = OpenReceive.invalid_nwc_message(reason: error.message)
+    warn message
+    raise message
+  end
+
+  require "nwc_ruby"
+  config.client = OpenReceive::NwcRubyReceiveClient.new(
+    client: NwcRuby::Client.from_uri(connection_uri),
+    connection_uri: connection_uri
+  )
   config.store = OpenReceive::Rails.create_active_record_invoice_store
   config.merchant_scope = "hello-fruit-rails-hotwire"
   config.production = ENV.fetch("RAILS_ENV", "development") == "production"

@@ -443,10 +443,14 @@ test("Node CLI initializes, migrates, and doctors SQLite setup", async () => {
     assert.equal(existsSync(path.join(tempRoot, "scripts/openreceive-worker.mjs")), true);
     assert.equal(existsSync(path.join(tempRoot, "scripts/openreceive-poll.mjs")), true);
     assert.equal(existsSync(path.join(tempRoot, "scripts/openreceive-listen.mjs")), true);
-    assert.match(
-      readFileSync(path.join(tempRoot, "openreceive.config.mjs"), "utf8"),
-      /createOpenReceiveSqliteInvoiceStore/
+    const generatedConfig = readFileSync(
+      path.join(tempRoot, "openreceive.config.mjs"),
+      "utf8"
     );
+    assert.match(generatedConfig, /createOpenReceiveSqliteInvoiceStore/);
+    assert.match(generatedConfig, /formatOpenReceiveMissingNwcMessage/);
+    assert.match(generatedConfig, /formatOpenReceiveInvalidNwcMessage/);
+    assert.match(generatedConfig, /parseNwcConnectionUri/);
     assert.match(
       readFileSync(path.join(tempRoot, "server/openreceive-routes.mjs"), "utf8"),
       /mountOpenReceiveExpressRoutes\(app, openreceive\)/

@@ -5,7 +5,6 @@ import {
 import {
   defineOpenReceiveElements
 } from "@openreceive/elements";
-import * as QRCode from "qrcode";
 import {
   createHelloFruitBrowserLogger
 } from "../../../../shared/demo-browser-logging.ts";
@@ -68,7 +67,6 @@ let completedInvoiceId = "";
 const logOpenReceive = createHelloFruitBrowserLogger("static-html-small-api");
 
 defineOpenReceiveElements({
-  qrEncoder: QRCode,
   logger: logOpenReceive
 });
 renderThemeToggle();

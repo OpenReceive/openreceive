@@ -171,8 +171,11 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_includes rake_tasks, "OpenReceive::Rails.adapter.doctor"
     assert_includes rake_tasks, "poll_recoverable_invoices"
     assert_includes rake_tasks, "listen_for_payment_notifications"
-    assert_includes initializer, 'ENV["OPENRECEIVE_NWC"].to_s'
-    assert_includes initializer, "OpenReceive::UnavailableReceiveClient"
+    assert_includes initializer, 'ENV.fetch("OPENRECEIVE_NWC"'
+    assert_includes initializer, "OpenReceive.missing_nwc_message"
+    assert_includes initializer, "OpenReceive.invalid_nwc_message"
+    assert_includes initializer, "OpenReceive.parse_nwc_uri"
+    refute_includes initializer, "OpenReceive::UnavailableReceiveClient"
     assert_includes initializer, "NwcRuby::Client.from_uri"
     assert_includes initializer, "OpenReceive::Rails.create_active_record_invoice_store"
     assert_includes initializer, "Configure OpenReceive authentication before production"

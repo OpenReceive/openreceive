@@ -279,7 +279,7 @@ class OpenReceiveTest < Minitest::Test
 
   def test_unavailable_receive_client_fails_closed_without_wallet_methods
     client = OpenReceive::UnavailableReceiveClient.new(
-      message: "Set OPENRECEIVE_NWC before creating live invoices."
+      message: OpenReceive.missing_nwc_message
     )
 
     error = assert_raises(OpenReceive::WalletUnavailableError) do
@@ -291,10 +291,18 @@ class OpenReceiveTest < Minitest::Test
 
     assert_equal 503, error.status
     assert_equal "WALLET_UNAVAILABLE", error.code
-    assert_equal "Set OPENRECEIVE_NWC before creating live invoices.", error.message
+    assert_includes error.message, "needs a read-only NWC code to receive payments"
+    assert_includes error.message, "https://openreceive.org/get_an_nwc_code"
     assert_equal "WALLET_UNAVAILABLE", lookup_error.code
     assert_equal({ "wallet_configured" => false }, client.get_info)
     refute client.respond_to?(:pay_invoice)
+  end
+
+  def test_nwc_boot_messages_include_help_url
+    assert_includes OpenReceive.missing_nwc_message(subject: "Demo"), "Demo needs a read-only NWC code"
+    assert_includes OpenReceive.missing_nwc_message, "https://openreceive.org/get_an_nwc_code"
+    assert_includes OpenReceive.invalid_nwc_message(reason: "bad scheme"), "bad scheme"
+    assert_includes OpenReceive.invalid_nwc_message, "https://openreceive.org/get_an_nwc_code"
   end
 
   def test_polling_schedule_vectors

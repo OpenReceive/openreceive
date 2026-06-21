@@ -1,4 +1,9 @@
 export { OpenReceiveError } from "@openreceive/core";
+export {
+  formatOpenReceiveInvalidNwcMessage,
+  formatOpenReceiveMissingNwcMessage,
+  parseNwcConnectionUri
+} from "@openreceive/core";
 export type {
   OpenReceiveErrorBody,
   OpenReceiveErrorCode,

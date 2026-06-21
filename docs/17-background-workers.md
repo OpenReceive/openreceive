@@ -10,7 +10,7 @@ openreceive-worker  npx openreceive worker
 
 A background process is just a command your hosting provider keeps running from
 the same codebase, with the same server-only environment variables as the web
-app. It is not browser code, and it should not run inside an HTTP request.
+app. It is not browser code. Do not run it inside an HTTP request.
 
 Always run `openreceive worker` on hosts that can keep a backend process alive.
 It starts both settlement polling and payment notification listening inside one
@@ -22,10 +22,10 @@ OpenReceive loads `./openreceive.config.mjs` by default. Use `--config` only
 when your config lives somewhere else.
 
 The poll process must recover invoices even after their local `expires_at`
-timestamp has passed. OpenReceive should only close an invoice as expired after
-it has asked the wallet after expiry and settlement is still not proven.
+timestamp has passed. OpenReceive only closes an invoice as expired after it
+has asked the wallet after expiry and settlement is still not proven.
 
-Most apps should add these scripts:
+Add these scripts:
 
 ```json
 {

@@ -7,11 +7,15 @@ import {
   createAlbyNwcReceiveClient
 } from "@openreceive/node";
 import {
-  mountOpenReceiveExpressRoutes
+  mountOpenReceiveExpressRoutes,
+  type OpenReceiveExpressOptions
 } from "@openreceive/express";
 import {
   createHelloFruitDemoMetadata
 } from "../../../../shared/demo-metadata.ts";
+import {
+  readRequiredHelloFruitNwcConnectionString
+} from "../../../../shared/demo-nwc.ts";
 import {
   createHelloFruitOpenReceiveLogger
 } from "../../../../shared/demo-logging.ts";
@@ -25,6 +29,28 @@ import {
   readHelloFruitCatalogCurrencies
 } from "../../../../shared/demo-catalog.ts";
 
+const DEMO_ID = "static-html-small-api";
+
+export function createHelloFruitOpenReceiveOptions(): OpenReceiveExpressOptions {
+  const connectionString = readRequiredHelloFruitNwcConnectionString();
+  const wallet = createAlbyNwcReceiveClient({
+    connectionString
+  });
+  const priceCurrencies = readHelloFruitCatalogCurrencies();
+
+  return {
+    client: wallet,
+    store: createHelloFruitOpenReceiveInvoiceStore({
+      demoId: DEMO_ID
+    }),
+    merchantScope: () => "demo:hello-fruit-static",
+    priceProviders: createDefaultLivePriceProviders({ currencies: priceCurrencies }),
+    priceCurrencies,
+    unsafeAllowUnauthenticatedDemoMode: true,
+    logger: createHelloFruitOpenReceiveLogger(DEMO_ID)
+  };
+}
+
 export function createHelloFruitStaticServer() {
   const app = express();
   app.use(express.json());
@@ -33,21 +59,20 @@ export function createHelloFruitStaticServer() {
     express.static(fileURLToPath(new URL("../../../../shared/stickers/", import.meta.url)))
   );
 
-  const connectionString = process.env.OPENRECEIVE_NWC;
-  const walletConfigured = connectionString !== undefined && connectionString.length > 0;
+  const openreceive = createHelloFruitOpenReceiveOptions();
 
   mountHelloFruitHostedDemoRoutes(app, {
-    id: "static-html-small-api",
+    id: DEMO_ID,
     sourcePath: "examples/hello-fruit/server/static-html-small-api",
     docsPath: "docs/01-quickstart-node.md",
-    walletConfigured,
+    walletConfigured: true,
     defaultPort: "3001"
   });
 
   app.get("/demo-metadata.json", (_req, res) => {
     res.status(200).json(createHelloFruitDemoMetadata({
-      id: "static-html-small-api",
-      walletConfigured,
+      id: DEMO_ID,
+      walletConfigured: true,
       requestedMode: process.env.OPENRECEIVE_DEMO_MODE,
       gitSha: process.env.OPENRECEIVE_GIT_SHA,
       imageDigest: process.env.OPENRECEIVE_IMAGE_DIGEST,
@@ -58,47 +83,7 @@ export function createHelloFruitStaticServer() {
     }));
   });
 
-  if (!walletConfigured) {
-    app.get("/openreceive/v1/health", (_req, res) => {
-      res.status(200).json({
-        ok: true,
-        wallet_configured: false
-      });
-    });
-    app.get("/openreceive/v1/capabilities", (_req, res) => {
-      res.status(200).json({
-        base_path: "/openreceive/v1",
-        wallet_configured: false,
-        transports: ["sse"],
-        methods: ["make_invoice", "lookup_invoice"]
-      });
-    });
-    app.use("/openreceive", (_req, res) => {
-      res.status(503).json({
-        code: "WALLET_UNAVAILABLE",
-        message: "Set OPENRECEIVE_NWC before creating live invoices."
-      });
-    });
-    return app;
-  }
-
-  const wallet = createAlbyNwcReceiveClient({
-    connectionString
-  });
-
-  const priceCurrencies = readHelloFruitCatalogCurrencies();
-
-  mountOpenReceiveExpressRoutes(app, {
-    client: wallet,
-    store: createHelloFruitOpenReceiveInvoiceStore({
-      demoId: "static-html-small-api"
-    }),
-    merchantScope: () => "demo:hello-fruit-static",
-    priceProviders: createDefaultLivePriceProviders({ currencies: priceCurrencies }),
-    priceCurrencies,
-    unsafeAllowUnauthenticatedDemoMode: true,
-    logger: createHelloFruitOpenReceiveLogger("static-html-small-api")
-  });
+  mountOpenReceiveExpressRoutes(app, openreceive);
 
   return app;
 }

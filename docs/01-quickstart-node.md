@@ -53,11 +53,16 @@ Create `server/openreceive.ts`:
 import pg from "pg";
 import {
   createAlbyNwcReceiveClient,
-  createOpenReceivePostgresInvoiceStoreFromPool
+  createOpenReceivePostgresInvoiceStoreFromPool,
+  formatOpenReceiveMissingNwcMessage
 } from "@openreceive/node";
 
 const nwc = process.env.OPENRECEIVE_NWC;
-if (!nwc) throw new Error("Set OPENRECEIVE_NWC");
+if (!nwc) {
+  const message = formatOpenReceiveMissingNwcMessage();
+  console.error(message);
+  throw new Error(message);
+}
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL
@@ -129,7 +134,8 @@ import {
 } from "@openreceive/express";
 import {
   createAlbyNwcReceiveClient,
-  createOpenReceivePostgresInvoiceStoreFromPool
+  createOpenReceivePostgresInvoiceStoreFromPool,
+  formatOpenReceiveMissingNwcMessage
 } from "@openreceive/node";
 
 const pool = new pg.Pool({
@@ -142,7 +148,11 @@ function getRuntime() {
   if (runtime) return runtime;
 
   const nwc = process.env.OPENRECEIVE_NWC;
-  if (!nwc) return undefined;
+  if (!nwc) {
+    const message = formatOpenReceiveMissingNwcMessage();
+    console.error(message);
+    throw new Error(message);
+  }
 
   runtime = createOpenReceiveFetchRuntime({
     client: createAlbyNwcReceiveClient({
@@ -244,11 +254,11 @@ Create `src/server/openreceive.ts`:
 import pg from "pg";
 import {
   createAlbyNwcReceiveClient,
-  createOpenReceivePostgresInvoiceStoreFromPool
+  createOpenReceivePostgresInvoiceStoreFromPool,
+  formatOpenReceiveMissingNwcMessage
 } from "@openreceive/node";
 import {
   createOpenReceiveNextRuntime,
-  dispatchOpenReceiveNextNoWalletRoute,
   dispatchOpenReceiveNextRoute
 } from "@openreceive/next";
 
@@ -262,7 +272,11 @@ function getRuntime() {
   if (runtime) return runtime;
 
   const nwc = process.env.OPENRECEIVE_NWC;
-  if (!nwc) return undefined;
+  if (!nwc) {
+    const message = formatOpenReceiveMissingNwcMessage();
+    console.error(message);
+    throw new Error(message);
+  }
 
   runtime = createOpenReceiveNextRuntime({
     client: createAlbyNwcReceiveClient({
@@ -294,9 +308,6 @@ function getRuntime() {
 
 export function openReceiveRoute(request: Request, path: readonly string[]) {
   const openreceive = getRuntime();
-  if (openreceive === undefined) {
-    return dispatchOpenReceiveNextNoWalletRoute({ request, path });
-  }
 
   return dispatchOpenReceiveNextRoute({
     runtime: openreceive,

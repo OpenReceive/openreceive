@@ -1,6 +1,8 @@
 export const OPENRECEIVE_NWC_METADATA_MAX_BYTES = 3900 as const;
 export const NWC_URI_PROTOCOL = "nostr+walletconnect:" as const;
 export const NWC_REDACTED_SECRET = "[REDACTED]" as const;
+export const OPENRECEIVE_NWC_CODE_HELP_URL =
+  "https://openreceive.org/get_an_nwc_code" as const;
 
 const HEX_64 = /^[0-9a-fA-F]{64}$/;
 
@@ -28,6 +30,27 @@ export class NwcUriParseError extends Error {
     this.description = description;
     this.redacted = uri === undefined ? undefined : redactNwcUri(uri);
   }
+}
+
+export function formatOpenReceiveMissingNwcMessage(input: {
+  readonly subject?: string;
+} = {}): string {
+  const subject = input.subject ?? "OpenReceive";
+  return [
+    `${subject} needs a read-only NWC code to receive payments.`,
+    "Set OPENRECEIVE_NWC to your receive-only Nostr Wallet Connect connection string.",
+    `Get one here: ${OPENRECEIVE_NWC_CODE_HELP_URL}`
+  ].join("\n");
+}
+
+export function formatOpenReceiveInvalidNwcMessage(input: {
+  readonly reason?: string;
+} = {}): string {
+  return [
+    "OPENRECEIVE_NWC is set, but it is not a valid NWC code.",
+    input.reason === undefined ? undefined : `Reason: ${input.reason}`,
+    `Get a read-only NWC code here: ${OPENRECEIVE_NWC_CODE_HELP_URL}`
+  ].filter((line): line is string => line !== undefined).join("\n");
 }
 
 export type OpenReceiveTransactionState =

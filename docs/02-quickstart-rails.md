@@ -14,8 +14,8 @@ Complete Rails demo smoke is still pending.
 An initial Rails Hotwire Hello Fruit demo skeleton exists at
 `examples/hello-fruit/server/rails-hotwire`; it is covered by the demo
 container validator, has a root `npm run demo rails` launcher target, prepares
-its SQLite database on container boot, and boots without `OPENRECEIVE_NWC`;
-invoice creation fails closed until the receive-only NWC string is configured.
+its SQLite database on container boot, and refuses to boot until a valid
+receive-only `OPENRECEIVE_NWC` string is configured.
 Full bundle/build smoke is still pending.
 
 The Ruby core-helper package at `packages/ruby/openreceive` provides
@@ -24,7 +24,7 @@ receive-only NIP-47 request mapping, polling/idempotency helpers, and an
 in-memory test store. It also includes a receive-only wrapper for
 `nwc-ruby` clients using `NwcRuby::Client.from_uri` and the documented
 `make_invoice` / `lookup_invoice` methods, plus a fail-closed
-`UnavailableReceiveClient` for demo and development boot paths without wallet
+`UnavailableReceiveClient` for app development boot paths without wallet
 configuration.
 Run `OPENRECEIVE_ENV_FILE=.env npm run test:live:ruby:nwc` for the current Ruby
 preflight; it parses and redacts the configured NWC URI, runs `get_info` when

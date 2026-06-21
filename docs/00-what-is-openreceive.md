@@ -1,23 +1,29 @@
 # What Is OpenReceive
 
-OpenReceive adds Bitcoin Lightning receive payments to an app with a small
-backend integration and a frontend checkout.
-
-It does three narrow things:
-
-1. Creates one BOLT11 invoice through the merchant's own server-side NWC wallet
-   connection.
-2. Lets the frontend show QR, copy, open-wallet, countdown, and route
-   suggestion UI for that invoice.
-3. Lets the backend verify settlement before an app-owned settlement action.
+OpenReceive adds uncensorable, global, permissionless inbound payments to any
+website or app using only open-source technology.
 
 OpenReceive is not a bank, exchange, payment processor, wallet backend,
 custodian, broker, or money transmitter. It does not hold funds, exchange
 assets, route money, or operate customer accounts.
 
+OpenReceive's front end checkout helpers give purchasers friendly
+route guidance so they can start from a credit card, bank account, Bitcoin
+wallet, stablecoin balance, exchange, onramp, or swap service and complete an
+instant payment on the merchant's website.
+
+OpenReceive does three narrow things:
+
+1. Creates one BOLT11 invoice through the merchant's own server-side NWC wallet
+   connection.
+2. Lets the frontend show QR, copy, open-wallet, countdown, and friendly route
+   guidance for that invoice.
+3. Lets the backend verify settlement before an app-owned settlement action.
+
 Provider routes are payer-side suggestions. A wallet, exchange, swap service,
-or fiat onramp may be able to pay the one Lightning invoice, but that happens
-outside OpenReceive.
+fiat onramp, card, bank account, Bitcoin wallet, or stablecoin balance may be
+the purchaser's starting point, but reaching the one Lightning invoice happens
+through third-party services outside OpenReceive.
 
 ## Runtime Model
 
@@ -32,17 +38,17 @@ long-running pieces:
 
 In production, run those as your web process plus one OpenReceive backend
 worker process. The worker starts polling and notification listening together.
-They are not browser code and should not be modeled as threads inside the web
-request path.
+They are not browser code. Do not model them as threads inside the web request
+path.
 
 Local invoice expiry is not a settlement decision. If the server is down while
-an invoice expires, the poll process must recover that invoice after restart
-and ask the wallet before OpenReceive closes it as expired.
+an invoice expires, the poll process recovers that invoice after restart
+and asks the wallet before OpenReceive closes it as expired.
 
-OpenReceive packages should also provide the invoice persistence schema for the
-host app database. Developers should run the package migration or install
-generator, then attach app-owned hooks such as `onInvoiceSettlement`; they
-should not design OpenReceive invoice/idempotency tables by hand.
+OpenReceive packages provide the invoice persistence schema for the host app
+database. Run the package migration or install generator, then attach
+app-owned hooks such as `onInvoiceSettlement`. Do not design OpenReceive
+invoice/idempotency tables by hand.
 
 - Express routes in an Express app.
 - Rails controllers, models, and workers in a Rails app.

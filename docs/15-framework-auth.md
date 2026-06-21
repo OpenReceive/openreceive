@@ -93,4 +93,4 @@ delivery as action authority.
 ## Demo Mode
 
 `unsafeAllowUnauthenticatedDemoMode` is only for local or deliberately public
-low-value demos. Production apps should provide explicit auth and CSRF hooks.
+low-value demos. Production apps provide explicit auth and CSRF hooks.

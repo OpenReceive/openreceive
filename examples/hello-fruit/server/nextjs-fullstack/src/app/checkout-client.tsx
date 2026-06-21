@@ -1,6 +1,5 @@
 "use client";
 
-import * as QRCode from "qrcode";
 import {
   type OpenReceiveCheckoutState,
   type OpenReceiveCheckoutSnapshot,
@@ -177,7 +176,6 @@ export default function CheckoutClient({
             checkout={checkout.checkout}
             logger={logOpenReceive}
             lookupUrl="/openreceive/v1/invoices/lookup"
-            qrEncoder={QRCode}
             onError={(cause) => {
               setError(cause instanceof Error ? cause.message : String(cause));
             }}

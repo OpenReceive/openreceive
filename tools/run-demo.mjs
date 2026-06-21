@@ -7,13 +7,16 @@
 //   npm run demo nextjs    -> Next.js fullstack       (http://localhost:3002)
 //   npm run demo rails     -> Rails + Hotwire         (http://localhost:3003)
 //
-// It ensures the repo-root .env exists, warns when no wallet is configured,
-// and runs the compose stack with the local port-publishing override.
+// It ensures the repo-root .env exists, validates OPENRECEIVE_NWC, and runs the
+// compose stack with the local port-publishing override.
 
 import { spawn } from "node:child_process";
 import { appendFileSync, copyFileSync, existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  readRequiredHelloFruitNwcConnectionString
+} from "../examples/hello-fruit/shared/demo-nwc.ts";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 
@@ -99,17 +102,18 @@ if (demo.requiresUnauthenticatedDemoAck && !new RegExp(`^\\s*${ackKey}\\s*=`, "m
   console.log(`Added ${ackKey}=true to .env (required by the production-mode demo image).`);
 }
 
-// The demo serves the checkout UI even with no wallet, but every invoice call
-// returns 503 WALLET_UNAVAILABLE until a receive-only NWC string is set.
-const nwcMatch = envText.match(/^\s*OPENRECEIVE_NWC\s*=\s*(.*)$/m);
-const nwcConfigured = nwcMatch !== null && nwcMatch[1].trim().length > 0;
-if (!nwcConfigured) {
-  console.warn(
-    "\nWARNING: OPENRECEIVE_NWC is not set in .env.\n" +
-      "  The checkout UI will load, but creating an invoice (buying fruit) returns\n" +
-      "  503 WALLET_UNAVAILABLE. Set a receive-only NWC string from a wallet you\n" +
-      "  control (e.g. Rizful or Alby Hub) in .env, then re-run.\n"
-  );
+try {
+  readRequiredHelloFruitNwcConnectionString({
+    OPENRECEIVE_NWC: readEnvValue(envText, "OPENRECEIVE_NWC") ?? process.env.OPENRECEIVE_NWC
+  });
+} catch (error) {
+  console.error([
+    "",
+    "Cannot start the Hello Fruit demo.",
+    error instanceof Error ? error.message : String(error),
+    ""
+  ].join("\n"));
+  process.exit(1);
 }
 
 const composeArgs = [
@@ -117,11 +121,14 @@ const composeArgs = [
   "-f",
   "compose.yml",
   "-f",
-  "compose.override.yml.example",
-  "up",
-  "--build",
-  ...extra
+  "compose.override.yml.example"
 ];
+
+if (demo.requiresUnauthenticatedDemoAck) {
+  composeArgs.push("--profile", "openreceive-worker");
+}
+
+composeArgs.push("up", "--build", ...extra);
 
 console.log(`Starting ${demo.label} demo -> http://localhost:${demo.port}\n`);
 
@@ -142,3 +149,9 @@ child.on("error", (error) => {
 child.on("exit", (code, signal) => {
   process.exit(signal ? 1 : code ?? 0);
 });
+
+function readEnvValue(text, key) {
+  const match = text.match(new RegExp(`^\\s*${key}\\s*=\\s*(.*)$`, "m"));
+  if (match === null) return undefined;
+  return match[1].trim();
+}

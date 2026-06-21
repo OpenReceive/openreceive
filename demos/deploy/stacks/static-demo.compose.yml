@@ -21,3 +21,12 @@ services:
       OPENRECEIVE_DEPLOYED_AT: ${OPENRECEIVE_DEPLOYED_AT:-}
       PORT: "3001"
     restart: unless-stopped
+  static-demo-openreceive-worker:
+    image: ghcr.io/openreceive/demo-static:${OPENRECEIVE_IMAGE_TAG:?set OPENRECEIVE_IMAGE_TAG}
+    command: ["npm", "run", "openreceive:worker"]
+    env_file:
+      - path: /opt/openreceive/secrets/rizful-test-wallet.env
+        required: false
+    environment:
+      OPENRECEIVE_DEMO_MODE: ${OPENRECEIVE_DEMO_MODE:-test_nwc}
+    restart: unless-stopped

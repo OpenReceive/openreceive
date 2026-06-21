@@ -12,6 +12,7 @@ import {
   StaticPriceProvider,
   createIdempotencyRequestHash,
   createOpenReceiveSettlementPollingRunner,
+  formatOpenReceiveMissingNwcMessage,
   getBtcFiatRatesWithFallback,
   quoteFiatToMsatsWithPrice,
   type InvoiceStorageRow,
@@ -229,8 +230,7 @@ const DEFAULT_BASE_PATH = "/openreceive/v1";
 const DEFAULT_HEARTBEAT_SECONDS = 20;
 const DEFAULT_SIGNED_EVENT_TTL_SECONDS = 300;
 const DEFAULT_SIGNED_EVENT_QUERY_PARAM = "_or_evt";
-const DEFAULT_NO_WALLET_MESSAGE =
-  "Set OPENRECEIVE_NWC before creating live invoices.";
+const DEFAULT_NO_WALLET_MESSAGE = formatOpenReceiveMissingNwcMessage();
 const HEX_64 = /^[0-9a-fA-F]{64}$/;
 
 export type OpenReceiveInvoiceEventName =
