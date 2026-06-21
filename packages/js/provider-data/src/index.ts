@@ -9,6 +9,7 @@ export type CountryCode = string;
 export interface Provider {
   readonly id: ProviderId;
   readonly name: string;
+  readonly kind: string;
   readonly url: string;
   readonly us: boolean | null;
   readonly lightning_docs_url: string | null;
@@ -364,6 +365,7 @@ export function validateRegistry(input: ProviderRegistry = registry): ProviderRe
     check(id === provider.id, `provider key/id mismatch for ${id}`);
     check(/^[a-z0-9-]+$/.test(id), `provider ${id} has invalid id`);
     check(Boolean(provider.name && provider.url), `provider ${id} missing name or url`);
+    check(typeof provider.kind === "string" && provider.kind.length > 0, `provider ${id} missing kind`);
     check(typeof provider.url === "string" && provider.url.startsWith("https://"), `provider ${id} url must be https`);
     check(typeof provider.icon_path === "string" && provider.icon_path.length > 0, `provider ${id} missing icon path`);
     check(!disqualifiedIds.has(id), `provider ${id} appears in disqualified providers`);

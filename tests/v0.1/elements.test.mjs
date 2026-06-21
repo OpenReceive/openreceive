@@ -113,6 +113,8 @@ test("elements render payment wizard route choices and providers from browser st
   assert.doesNotMatch(bitcoinStep, /part="route-picker"/);
   assert.doesNotMatch(bitcoinStep, /Choose Bitcoin Lightning/);
   assert.match(bitcoinStep, /Bitcoin Lightning/);
+  assert.match(bitcoinStep, /browser wallet/);
+  assert.match(bitcoinStep, /mobile wallet/);
   assert.match(bitcoinStep, /How To Pay/);
 
   const cardStep = renderOpenReceivePaymentWizardHtml({

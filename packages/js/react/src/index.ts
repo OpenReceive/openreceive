@@ -1057,6 +1057,13 @@ export function OpenReceivePaymentWizard(
                         ? null
                         : React.createElement("span", null, provider.recommendedLabel)
                     ),
+                    React.createElement(
+                      "p",
+                      {
+                        className: "or-provider-kind"
+                      },
+                      provider.kind
+                    ),
 	                    React.createElement(
                       "div",
                       {

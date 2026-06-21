@@ -74,7 +74,7 @@ test("provider-data resolves crypto route providers without changing route order
   assert.equal(btcLightning[0].flagship, true);
   assert.deepEqual(
     btcLightning.filter((entry) => entry.flagship).map((entry) => entry.provider.id),
-    ["rizful", "getalby", "zeus"]
+    ["rizful", "getalby"]
   );
   assert.deepEqual(
     btcLightning.slice(0, 4).map((entry) => entry.provider.id),
@@ -140,7 +140,7 @@ test("provider-data resolves payment wizard routes from asset and fiat inputs", 
   assert.equal(cryptoRoutes[0].providers[0].flagship, true);
   assert.deepEqual(
     cryptoRoutes[0].providers.filter((entry) => entry.flagship).map((entry) => entry.provider.id),
-    ["rizful", "getalby", "zeus"]
+    ["rizful", "getalby"]
   );
 
   assert.equal(fiatRoutes.length, 1);
@@ -183,6 +183,10 @@ test("provider-data satisfies canonical provider-route vectors", () => {
 test("provider-data filters providers and countries conservatively", () => {
   assert.equal(getProvider("strike")?.us, true);
   assert.equal(getProvider("sideshift")?.us, false);
+  assert.equal(getProvider("rizful")?.kind, "browser wallet");
+  assert.equal(getProvider("kraken")?.kind, "exchange");
+  assert.equal(getProvider("zeus")?.kind, "mobile wallet");
+  assert.equal(Object.values(providerRegistry.providers).every((provider) => typeof provider.kind === "string" && provider.kind.length > 0), true);
   assert.equal(listProviders({ us: true }).every((provider) => provider.us === true), true);
   assert.equal(
     Object.values(providerRegistry.providers).every((provider) => !("mechanism" in provider)),

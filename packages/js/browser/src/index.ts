@@ -884,6 +884,7 @@ export interface OpenReceiveWizardProviderTutorialDisplay {
 export interface OpenReceiveWizardProviderDisplay {
   readonly id: string;
   readonly name: string;
+  readonly kind: string;
   readonly url: string;
   readonly icon: string;
   readonly tutorials: readonly OpenReceiveWizardProviderTutorialDisplay[];
@@ -1208,7 +1209,12 @@ export const openReceiveCheckoutElementStyles = `
   }
 
 	  [part="provider"] {
+	    align-items: center;
+	    column-gap: 10px;
+	    display: grid;
+	    grid-template-columns: minmax(0, 1fr) auto;
 	    min-height: 0;
+	    row-gap: 4px;
 	  }
 
   [part="provider-badges"] {
@@ -1221,7 +1227,8 @@ export const openReceiveCheckoutElementStyles = `
     align-items: center;
     display: flex;
     gap: 8px;
-    justify-content: space-between;
+    justify-content: start;
+    min-width: 0;
   }
 
   [part="provider-heading"] img {
@@ -1234,6 +1241,14 @@ export const openReceiveCheckoutElementStyles = `
   [part="provider-heading"] h4 {
     flex: 1 1 auto;
     min-width: 0;
+  }
+
+  [part="provider-kind"] {
+    grid-column: 1;
+    color: var(--or-muted);
+    font-size: 0.9em;
+    line-height: 1.3;
+    margin: -2px 0 0;
   }
 
   [part="provider-badges"] span,
@@ -1270,6 +1285,23 @@ export const openReceiveCheckoutElementStyles = `
   button[part="provider-open"] {
     background: var(--or-text);
     color: var(--or-bg);
+  }
+
+  [part="provider-actions"] {
+    align-self: center;
+    display: flex;
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    justify-self: end;
+  }
+
+  button[part="provider-open"],
+  [part="provider-actions"] a {
+    background: var(--or-bg-soft);
+    color: var(--or-text);
+    min-height: 36px;
+    padding: 7px 12px;
+    white-space: nowrap;
   }
 
   [part="tutorial"] {
@@ -1945,6 +1977,7 @@ function createOpenReceiveWizardProviderDisplay(
   return {
     id: entry.provider.id,
     name: entry.provider.name,
+    kind: entry.provider.kind,
     url: entry.provider.lightning_docs_url ?? entry.provider.url,
     icon: getOpenReceiveProviderIcon(entry.provider),
     tutorials: getOpenReceiveProviderTutorials(entry.provider),

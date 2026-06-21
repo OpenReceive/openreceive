@@ -468,6 +468,14 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   assert.equal(cardRouteDisplays[0].providers[0].copyLabel, openReceiveCheckoutLabels.copyInvoice);
   assert.equal(cardRouteDisplays[0].providers[0].copiedLabel, openReceiveCheckoutLabels.copied);
   assert.equal(cardRouteDisplays[0].providers[0].openLabel, "How To Pay");
+  assert.equal(cardRouteDisplays[0].providers[0].kind, "payments app");
+
+  const bitcoinRouteDisplays = createOpenReceiveWizardRouteDisplays(routeModel.wizard.routes);
+  assert.equal(bitcoinRouteDisplays[0].providers[0].kind, "browser wallet");
+  assert.equal(
+    bitcoinRouteDisplays[0].providers.find((provider) => provider.id === "zeus")?.kind,
+    "mobile wallet"
+  );
   assert.match(cardRouteDisplays[0].providers[0].url, /^https:\/\/docs\.strike\.me/);
   assert.match(cardRouteDisplays[0].providers[0].icon, /assets\/provider-icons\/strike\.png/);
   assert.equal(cardRouteDisplays[0].providers[0].tutorials.length, 4);

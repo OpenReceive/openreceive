@@ -273,6 +273,7 @@ export function renderOpenReceivePaymentWizardHtml(
                       <h4>${escapeHtml(provider.name)}</h4>
                       ${provider.recommendedLabel === null ? "" : `<span part="recommended">${escapeHtml(provider.recommendedLabel)}</span>`}
 	                    </div>
+                    <p part="provider-kind">${escapeHtml(provider.kind)}</p>
 	                    <div part="provider-actions">
                       ${renderProviderOpenActionHtml(provider)}
                     </div>
