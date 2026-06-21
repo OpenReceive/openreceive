@@ -1212,7 +1212,7 @@ export const openReceiveCheckoutElementStyles = `
 	    align-items: center;
 	    column-gap: 10px;
 	    display: grid;
-	    grid-template-columns: minmax(0, 1fr) auto;
+	    grid-template-columns: minmax(0, 1fr) auto auto;
 	    min-height: 0;
 	    row-gap: 4px;
 	  }
@@ -1227,6 +1227,7 @@ export const openReceiveCheckoutElementStyles = `
     align-items: center;
     display: flex;
     gap: 8px;
+    grid-column: 1;
     justify-content: start;
     min-width: 0;
   }
@@ -1241,6 +1242,9 @@ export const openReceiveCheckoutElementStyles = `
   [part="provider-heading"] h4 {
     flex: 1 1 auto;
     min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   [part="provider-kind"] {
@@ -1257,7 +1261,10 @@ export const openReceiveCheckoutElementStyles = `
     border-radius: 999px;
     color: var(--or-muted);
     font-size: 12px;
+    grid-column: 2;
+    justify-self: end;
     padding: 2px 7px;
+    white-space: nowrap;
   }
 
   button,
@@ -1290,7 +1297,7 @@ export const openReceiveCheckoutElementStyles = `
   [part="provider-actions"] {
     align-self: center;
     display: flex;
-    grid-column: 2;
+    grid-column: 3;
     grid-row: 1 / span 2;
     justify-self: end;
   }

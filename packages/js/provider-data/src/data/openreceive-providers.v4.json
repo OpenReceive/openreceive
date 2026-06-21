@@ -739,8 +739,7 @@
       "label": "Ethereum (ETH)",
       "providers": [
         {
-          "provider": "fixedfloat",
-          "flagship": true
+          "provider": "fixedfloat"
         },
         {
           "provider": "sideshift"
@@ -765,8 +764,7 @@
       "label": "Monero (XMR)",
       "providers": [
         {
-          "provider": "fixedfloat",
-          "flagship": true
+          "provider": "fixedfloat"
         },
         {
           "provider": "sideshift"
@@ -779,8 +777,7 @@
       "label": "Litecoin (LTC)",
       "providers": [
         {
-          "provider": "fixedfloat",
-          "flagship": true
+          "provider": "fixedfloat"
         },
         {
           "provider": "sideshift"
@@ -805,8 +802,7 @@
       "label": "Tron (TRX)",
       "providers": [
         {
-          "provider": "fixedfloat",
-          "flagship": true
+          "provider": "fixedfloat"
         },
         {
           "provider": "bitget"
@@ -819,8 +815,7 @@
       "label": "Solana (SOL)",
       "providers": [
         {
-          "provider": "fixedfloat",
-          "flagship": true
+          "provider": "fixedfloat"
         },
         {
           "provider": "sideshift"
@@ -842,8 +837,7 @@
       "label": "XRP",
       "providers": [
         {
-          "provider": "fixedfloat",
-          "flagship": true
+          "provider": "fixedfloat"
         },
         {
           "provider": "coinbase"

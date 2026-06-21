@@ -453,7 +453,7 @@
   display: grid;
   align-items: center;
   column-gap: 12px;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   row-gap: 4px;
   padding: 14px;
   border: 1px solid var(--or-border);
@@ -476,6 +476,7 @@
 
 .or-provider-heading {
   justify-content: start;
+  grid-column: 1;
   min-width: 0;
 }
 
@@ -489,6 +490,9 @@
 .or-provider-heading h4 {
   flex: 1 1 auto;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .or-provider-kind {
@@ -507,12 +511,15 @@
   font-size: 12px;
   font-weight: 800;
   padding: 4px 8px;
+  grid-column: 2;
+  justify-self: end;
+  white-space: nowrap;
 }
 
 .or-provider-actions {
   align-self: center;
   display: flex;
-  grid-column: 2;
+  grid-column: 3;
   grid-row: 1 / span 2;
   justify-self: end;
 }
