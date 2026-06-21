@@ -2,11 +2,11 @@ import type {
   ExpressLikeHandler,
   ExpressLikeRequest,
   ExpressLikeResponse,
-  InMemoryInvoiceEventBus,
   OpenReceiveExpressHandlers,
   OpenReceiveExpressOptions
 } from "@openreceive/express";
 import {
+  InMemoryInvoiceEventBus,
   createOpenReceiveExpressHandlers
 } from "@openreceive/express";
 import type {
@@ -23,7 +23,7 @@ export interface OpenReceiveNextRuntime {
 export interface CreateOpenReceiveNextRuntimeOptions
   extends OpenReceiveExpressOptions {
   store: OpenReceiveInvoiceStore;
-  eventBus: InMemoryInvoiceEventBus;
+  eventBus?: InMemoryInvoiceEventBus;
 }
 
 export interface OpenReceiveNextNoWalletOptions {
@@ -43,6 +43,27 @@ export interface DispatchOpenReceiveNextNoWalletHandlerOptions {
   readonly noWallet?: OpenReceiveNextNoWalletOptions;
 }
 
+export type OpenReceiveNextRouteHandlerName =
+  | keyof OpenReceiveExpressHandlers
+  | "invoiceEvents";
+
+export interface OpenReceiveNextRouteMatch {
+  readonly name: OpenReceiveNextRouteHandlerName;
+  readonly params?: Record<string, string | undefined>;
+}
+
+export interface DispatchOpenReceiveNextRouteOptions {
+  readonly runtime: OpenReceiveNextRuntime;
+  readonly request: Request;
+  readonly path: readonly string[];
+}
+
+export interface DispatchOpenReceiveNextNoWalletRouteOptions {
+  readonly request: Request;
+  readonly path: readonly string[];
+  readonly noWallet?: OpenReceiveNextNoWalletOptions;
+}
+
 export interface CreateOpenReceiveNextInvoiceEventsResponseOptions {
   readonly runtime: OpenReceiveNextRuntime;
   readonly request: Request;
@@ -58,11 +79,125 @@ export const OPENRECEIVE_NEXT_DEFAULT_HEARTBEAT_MS = 20_000;
 export function createOpenReceiveNextRuntime(
   options: CreateOpenReceiveNextRuntimeOptions
 ): OpenReceiveNextRuntime {
+  const eventBus = options.eventBus ?? new InMemoryInvoiceEventBus();
+
   return {
     store: options.store,
-    eventBus: options.eventBus,
-    handlers: createOpenReceiveExpressHandlers(options)
+    eventBus,
+    handlers: createOpenReceiveExpressHandlers({
+      ...options,
+      eventBus
+    })
   };
+}
+
+export async function dispatchOpenReceiveNextRoute(
+  options: DispatchOpenReceiveNextRouteOptions
+): Promise<Response> {
+  const match = matchOpenReceiveNextRoute(options.request.method, options.path);
+  if (match === undefined) return openReceiveNextRouteNotFoundResponse();
+
+  if (match.name === "invoiceEvents") {
+    return createOpenReceiveNextInvoiceEventsResponse({
+      runtime: options.runtime,
+      request: options.request,
+      invoiceId: requireOpenReceiveNextRouteParam(match, "invoice_id")
+    });
+  }
+
+  return dispatchOpenReceiveNextHandler({
+    runtime: options.runtime,
+    request: options.request,
+    name: match.name,
+    params: match.params
+  });
+}
+
+export function dispatchOpenReceiveNextNoWalletRoute(
+  options: DispatchOpenReceiveNextNoWalletRouteOptions
+): Response {
+  const match = matchOpenReceiveNextRoute(options.request.method, options.path);
+  if (match === undefined) return openReceiveNextRouteNotFoundResponse();
+
+  return dispatchOpenReceiveNextNoWalletHandler({
+    name: match.name === "invoiceEvents" ? "invoiceEvents" : match.name,
+    noWallet: options.noWallet
+  });
+}
+
+export function matchOpenReceiveNextRoute(
+  method: string,
+  path: readonly string[]
+): OpenReceiveNextRouteMatch | undefined {
+  const segments = normalizeOpenReceiveNextRoutePath(path);
+  const normalizedMethod = method.toUpperCase();
+
+  if (segments.length === 1) {
+    if (normalizedMethod === "GET" && segments[0] === "health") {
+      return { name: "health" };
+    }
+    if (normalizedMethod === "GET" && segments[0] === "capabilities") {
+      return { name: "capabilities" };
+    }
+    if (normalizedMethod === "GET" && segments[0] === "rates") {
+      return { name: "listRates" };
+    }
+    if (normalizedMethod === "GET" && segments[0] === "routes") {
+      return { name: "listRoutes" };
+    }
+    if (normalizedMethod === "GET" && segments[0] === "providers") {
+      return { name: "listProviders" };
+    }
+    if (normalizedMethod === "POST" && segments[0] === "invoices") {
+      return { name: "createInvoice" };
+    }
+  }
+
+  if (segments.length === 2) {
+    if (
+      normalizedMethod === "POST" &&
+      segments[0] === "rates" &&
+      segments[1] === "quote"
+    ) {
+      return { name: "quoteRates" };
+    }
+    if (
+      normalizedMethod === "POST" &&
+      segments[0] === "invoices" &&
+      segments[1] === "lookup"
+    ) {
+      return { name: "lookupInvoice" };
+    }
+    if (normalizedMethod === "GET" && segments[0] === "invoices") {
+      return {
+        name: "getInvoice",
+        params: {
+          invoice_id: segments[1]
+        }
+      };
+    }
+  }
+
+  if (segments.length === 3 && segments[0] === "invoices") {
+    if (normalizedMethod === "POST" && segments[2] === "refresh") {
+      return {
+        name: "refreshInvoice",
+        params: {
+          invoice_id: segments[1]
+        }
+      };
+    }
+    if (normalizedMethod === "GET" && segments[2] === "events") {
+      return {
+        name: "invoiceEvents",
+        params: {
+          invoice_id: segments[1]
+        }
+      };
+    }
+  }
+
+  return undefined;
 }
 
 export async function dispatchOpenReceiveNextHandler(
@@ -152,6 +287,13 @@ export function openReceiveNextJsonResponse(
     status,
     headers: responseHeaders
   });
+}
+
+export function openReceiveNextRouteNotFoundResponse(): Response {
+  return openReceiveNextJsonResponse({
+    code: "NOT_FOUND",
+    message: "OpenReceive route not found."
+  }, 404);
 }
 
 async function createOpenReceiveNextRequest(
@@ -284,6 +426,24 @@ function createInvoiceEventStreamResponse(input: {
       "Referrer-Policy": "same-origin"
     }
   });
+}
+
+function normalizeOpenReceiveNextRoutePath(
+  path: readonly string[]
+): readonly string[] {
+  return path.filter((segment) => segment.length > 0);
+}
+
+function requireOpenReceiveNextRouteParam(
+  match: OpenReceiveNextRouteMatch,
+  key: string
+): string {
+  const value = match.params?.[key];
+  if (value === undefined || value.length === 0) {
+    throw new Error(`OpenReceive route is missing ${key}.`);
+  }
+
+  return value;
 }
 
 function parseOpenReceiveNextLastEventId(value: string | null): number {

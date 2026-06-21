@@ -7,13 +7,7 @@
     "@openreceive/browser": "0.1.0"
   },
   "peerDependencies": {
-    "qrcode": "*",
     "react": "*"
-  },
-  "peerDependenciesMeta": {
-    "qrcode": {
-      "optional": true
-    }
   },
   "exports": {
     ".": "./src/index.ts",

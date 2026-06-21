@@ -35,6 +35,7 @@ The release owner also checks:
 - OpenAPI and AsyncAPI validation passes through `npm run validate`.
 - Secret scan passes.
 - Workflow safety validation passes through `npm run check:workflows`.
+- Package artifact dry run passes through `npm run build:packages`.
 - Local package artifact smoke passes.
 - Demo build passes.
 - Live wallet smoke passes when a trusted `OPENRECEIVE_NWC` is available.

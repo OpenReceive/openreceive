@@ -4808,3 +4808,12 @@ espeically on the serfver...
 
 i will want to run all the demos in docker, using the nwc strin gand other env vars from 
 the .env in root
+
+
+need demos and great docs and easy to use workflow for these frameworks:
+
+1. Express.js — Still the most widely used by a comfortable margin, sitting in the 40–55% range among Node backend developers in recent surveys. It's minimal, unopinionated, and battle-tested, with a massive middleware ecosystem (cors, helmet, morgan, rate-limit, etc.). Best for REST APIs, quick prototypes, microservices, and any project where you want full control over your own stack. The trade-off is no built-in structure, so larger teams need discipline (or TypeScript + class-based patterns) to avoid inconsistency.
+2. NestJS — The leading opinionated/structured choice. It's TypeScript-first with an Angular-inspired modular architecture (controllers, services, modules), built on top of Express or Fastify. Strong type safety and a robust module system make it the go-to for enterprise-grade APIs, microservices, and large codebases that need enforced consistency. It currently tops the GitHub star rankings among Node frameworks.
+3. Fastify — The performance-focused option (~36k+ GitHub stars). Built for high throughput and low overhead, with schema-based validation and a plugin architecture. Best when latency and requests-per-second matter: high-traffic APIs, API gateways, microservices, and serverless/edge workloads where startup and execution overhead count. NestJS can even run on Fastify under the hood.
+4. Hono — The rising star, repeatedly singled out for growth and satisfaction in State of JS. It's edge-first and ultra-lightweight, designed for fast cold starts on runtimes like Cloudflare Workers, Deno, Bun, and Node. Best for serverless and edge-deployed APIs where bundle size and startup speed are critical. This is the one to watch if you're targeting modern edge platforms.
+5. AdonisJS — A batteries-included, TypeScript-first MVC framework (think Laravel/Rails for Node). It ships with an ORM, auth, validation, testing tools, and an ecosystem of official packages out of the box. Best for teams who want a full-featured, convention-driven framework for building complete web apps and API servers without assembling everything themselves.

@@ -3,7 +3,7 @@
 OpenReceive does not have a PHP package yet. This page records the intended PHP
 server shape for future Laravel, Symfony, or plain PHP integrations.
 
-Use the Node and Express quickstart for the current working reference path:
+Use the Node framework quickstart for the current working reference path:
 
 ```text
 docs/01-quickstart-node.md

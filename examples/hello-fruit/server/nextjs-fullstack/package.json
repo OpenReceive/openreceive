@@ -9,7 +9,6 @@
     "start": "next start -H 0.0.0.0 -p ${PORT:-3002}"
   },
   "dependencies": {
-    "@getalby/sdk": "*",
     "@openreceive/browser": "0.1.0",
     "@openreceive/core": "0.1.0",
     "@openreceive/express": "0.1.0",

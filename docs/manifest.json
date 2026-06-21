@@ -11,7 +11,7 @@
     },
     {
       "slug": "quickstart-node",
-      "title": "Node And Express Quickstart",
+      "title": "Node Framework Quickstart",
       "source_path": "docs/01-quickstart-node.md",
       "category": "quickstart",
       "public": true

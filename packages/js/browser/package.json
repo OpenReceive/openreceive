@@ -3,14 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "peerDependencies": {
-    "qrcode": "*"
-  },
-  "peerDependenciesMeta": {
-    "qrcode": {
-      "optional": true
-    }
-  },
   "exports": {
     ".": "./src/index.ts",
     "./country-map": "./src/country-map.ts",
@@ -19,6 +11,7 @@
   "dependencies": {
     "@openreceive/provider-data": "0.1.0",
     "d3-geo": "^3.1.1",
+    "qrcode": "^1.5.4",
     "topojson-client": "^3.1.0",
     "world-atlas": "^2.0.2"
   },

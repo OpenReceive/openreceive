@@ -1,20 +1,13 @@
 import {
-  InMemoryInvoiceEventBus
-} from "@openreceive/express";
-import type {
-  OpenReceiveExpressHandlers
-} from "@openreceive/express";
-import {
   createDefaultLivePriceProviders
 } from "@openreceive/core";
 import {
   createAlbyNwcReceiveClient
 } from "@openreceive/node";
 import {
-  createOpenReceiveNextInvoiceEventsResponse,
   createOpenReceiveNextRuntime,
-  dispatchOpenReceiveNextHandler,
-  dispatchOpenReceiveNextNoWalletHandler,
+  dispatchOpenReceiveNextNoWalletRoute,
+  dispatchOpenReceiveNextRoute,
   openReceiveNextJsonResponse,
   type OpenReceiveNextRuntime
 } from "@openreceive/next";
@@ -102,37 +95,19 @@ export function sitemapResponse(): string {
   ].join("\n");
 }
 
-export async function dispatchOpenReceiveHandler(
-  name: keyof OpenReceiveExpressHandlers,
+export async function dispatchOpenReceiveRoute(
   request: Request,
-  params: Record<string, string | undefined> = {}
+  path: readonly string[]
 ): Promise<Response> {
   const connectionString = getConnectionString();
   if (connectionString === undefined) {
-    return dispatchOpenReceiveNextNoWalletHandler({ name });
+    return dispatchOpenReceiveNextNoWalletRoute({ request, path });
   }
 
-  return dispatchOpenReceiveNextHandler({
-    runtime: getRuntime(connectionString),
-    name,
-    request,
-    params
-  });
-}
-
-export async function invoiceEventsResponse(
-  request: Request,
-  invoiceId: string
-): Promise<Response> {
-  const connectionString = getConnectionString();
-  if (connectionString === undefined) {
-    return dispatchOpenReceiveNextNoWalletHandler({ name: "invoiceEvents" });
-  }
-
-  return createOpenReceiveNextInvoiceEventsResponse({
+  return dispatchOpenReceiveNextRoute({
     runtime: getRuntime(connectionString),
     request,
-    invoiceId
+    path
   });
 }
 
@@ -144,7 +119,6 @@ function getRuntime(connectionString: string): NextDemoRuntime {
   const store = createHelloFruitOpenReceiveInvoiceStore({
     demoId: DEMO_ID
   });
-  const eventBus = new InMemoryInvoiceEventBus();
   const client = createAlbyNwcReceiveClient({
     connectionString
   });
@@ -156,7 +130,6 @@ function getRuntime(connectionString: string): NextDemoRuntime {
     ...createOpenReceiveNextRuntime({
       client,
       store,
-      eventBus,
       merchantScope: () => "demo:hello-fruit-nextjs",
       priceProviders: createDefaultLivePriceProviders({ currencies: priceCurrencies }),
       priceCurrencies,

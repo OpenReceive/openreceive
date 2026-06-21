@@ -4,18 +4,11 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@getalby/sdk": "*",
     "@openreceive/core": "0.1.0"
   },
   "bin": {
     "openreceive": "./bin/openreceive.mjs"
-  },
-  "peerDependencies": {
-    "@getalby/sdk": "*"
-  },
-  "peerDependenciesMeta": {
-    "@getalby/sdk": {
-      "optional": true
-    }
   },
   "exports": {
     ".": "./src/index.ts",

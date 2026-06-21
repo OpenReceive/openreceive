@@ -1,135 +1,74 @@
-# Node And Express Quickstart
+# Node Framework Quickstart
 
-This quickstart shows the v0.1 server shape: an Express app creates one
-Lightning invoice through a server-side NWC connection, exposes display-safe
-invoice data to the browser, and verifies settlement on the backend.
+OpenReceive runs inside your app. Pick the framework path you use, add the
+server route, then render the display-safe checkout UI in the browser.
 
-OpenReceive does not require an external daemon. The routes mount inside your
-web process, and the server package provides two backend runners you run as
-separate worker processes:
+Supported Node paths today:
 
-- a settlement polling runner that recovers open invoices on boot
-- a payment notification listener that keeps the NWC subscription open when
-  the wallet supports it
+| App | Use |
+| --- | --- |
+| Express | `@openreceive/express` |
+| Next.js App Router | `@openreceive/next` |
+| Other Node frameworks | Use an Express-compatible mount or build a thin adapter around the route handlers. |
 
-## Install
+Live checkout always needs a server component. Browser code never receives
+`OPENRECEIVE_NWC`.
 
-```sh
-npm install @openreceive/node @openreceive/express @openreceive/browser @getalby/sdk express pg qrcode
-```
+## Common Setup
 
-Postgres apps need `pg`. SQLite apps can omit `pg` and run on a Node runtime
-with `node:sqlite` support.
-
-See [Supported Databases](16-supported-databases.md) for the small supported
-matrix. MongoDB, MySQL, and arbitrary user-designed invoice tables are not
-supported until OpenReceive ships a store, migration path, and conformance
-coverage for them.
-
-## Configure
+Set the wallet secret in your app's server environment:
 
 ```sh
 OPENRECEIVE_NWC=nostr+walletconnect://...
-OPENRECEIVE_WALLET_PROFILE=rizful
-DATABASE_URL=postgres://...
 ```
 
-Commit `.env.example`, not real secrets.
-
-Generate the server-only OpenReceive config and worker entrypoint stubs:
-
-```sh
-npx openreceive init
-```
-
-This creates `openreceive.config.mjs`, `server/openreceive-routes.mjs`, and
-poll/listen worker scripts. Keep the config module server-only; it imports the
-NWC connection and durable invoice store.
-
-## Migrate
-
-Run the package-owned OpenReceive invoice schema in your app database. For
-Postgres:
+Run the OpenReceive invoice migration in the same database your app already
+uses:
 
 ```sh
 npx openreceive migrate --postgres "$DATABASE_URL"
-npx openreceive doctor --postgres "$DATABASE_URL" --config ./openreceive.config.mjs
+npx openreceive doctor --postgres "$DATABASE_URL"
 ```
 
-For local or small-app SQLite:
+If your app uses a different env name, pass that value instead. SQLite apps can
+use `--sqlite ./storage/openreceive.sqlite3`.
+
+MongoDB, MySQL, and arbitrary user-designed invoice tables are not supported
+until OpenReceive ships a store, migration path, and conformance coverage for
+them.
+
+## Express
+
+Install:
 
 ```sh
-npx openreceive migrate --sqlite ./storage/openreceive.sqlite3
-npx openreceive doctor --sqlite ./storage/openreceive.sqlite3 --config ./openreceive.config.mjs
+npm install @openreceive/node @openreceive/express @openreceive/browser express pg
 ```
 
-The SQL is still exported for custom migration systems, but app developers
-should not hand-design OpenReceive invoice tables.
-Without `--config`, doctor checks only database connectivity, required
-columns/indexes, and the package-owned OpenReceive migration version. With
-`--config`, it also checks server route wiring, durable-store production guards,
-NWC preflight, and poll/listen readiness. A config with no store or
-`InMemoryInvoiceStore` fails doctor; use the package-owned Postgres or SQLite
-store before running production routes or workers.
+Create `server/openreceive.ts`:
 
 ```ts
-import {
-  OPENRECEIVE_POSTGRES_MIGRATION_SQL,
-  OPENRECEIVE_SQLITE_MIGRATION_SQL
-} from "@openreceive/node";
-```
-
-## Server
-
-For a new Express app, mount the generated route module:
-
-```ts
-import express from "express";
-import { mountOpenReceiveRoutes } from "./server/openreceive-routes.mjs";
-
-const app = express();
-app.use(express.json());
-
-mountOpenReceiveRoutes(app);
-
-app.listen(3000);
-```
-
-Apps with custom auth, CSRF, CORS, logging, or a Postgres store can export their
-own `openreceive` object and still use the same package route mount:
-
-```ts
-import express from "express";
 import pg from "pg";
 import {
   createAlbyNwcReceiveClient,
   createOpenReceivePostgresInvoiceStoreFromPool
 } from "@openreceive/node";
-import {
-  InMemoryInvoiceEventBus,
-  mountOpenReceiveExpressRoutes
-} from "@openreceive/express";
 
-const app = express();
-app.use(express.json());
+const nwc = process.env.OPENRECEIVE_NWC;
+if (!nwc) throw new Error("Set OPENRECEIVE_NWC");
 
-const wallet = createAlbyNwcReceiveClient({
-  connectionString: process.env.OPENRECEIVE_NWC
-});
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL
 });
-const store = createOpenReceivePostgresInvoiceStoreFromPool({
-  pool
-});
 
-await wallet.preflight();
-
-const openreceive = {
-  client: wallet,
-  store,
-  eventBus: new InMemoryInvoiceEventBus(),
-  merchantScope: () => "demo:hello-fruit",
+export const openreceive = {
+  client: createAlbyNwcReceiveClient({
+    connectionString: nwc
+  }),
+  store: createOpenReceivePostgresInvoiceStoreFromPool({
+    pool
+  }),
+  merchantScope: (req) => `user:${req.user.id}`,
   auth: {
     create: (req) => Boolean(req.user),
     read: (req, invoice) => ownsInvoice(req, invoice),
@@ -139,140 +78,223 @@ const openreceive = {
   csrf: {
     verify: (req) => verifyCsrf(req)
   },
-  cors: {
-    allowed_origins: ["https://example.com"],
-    credentials: true
-  },
-  logger: (entry) => {
-    console[entry.level]("[openreceive]", entry);
+  settlementAction: async ({ invoice, metadata }) => {
+    await markOrderPaid({
+      invoiceId: invoice.invoice_id,
+      orderId: metadata.order_id
+    });
   }
 };
+```
+
+Mount it in your Express server:
+
+```ts
+import express from "express";
+import { mountOpenReceiveExpressRoutes } from "@openreceive/express";
+import { openreceive } from "./server/openreceive";
+
+const app = express();
+app.use(express.json());
 
 mountOpenReceiveExpressRoutes(app, openreceive);
 
 app.listen(3000);
 ```
 
-SQLite apps use the same storage contract through the package-owned SQLite
-store. Wrap the SQLite driver with `createOpenReceiveSqliteQueryClient()` and
-pass it to `createOpenReceiveSqliteInvoiceStore()`.
+That adds the OpenReceive API at `/openreceive/v1`.
 
-## Poll Process
+## Next.js App Router
 
-The generated `openreceive.config.mjs` exports an `openreceive` object. You can
-also point `--config` at any server-only module that exports `openreceive`, a
-default config object, or `createOpenReceiveConfig()`. Run the package-owned
-worker command as a separate backend process or worker role, not as a thread
-inside the web process:
+Install:
+
+```sh
+npm install @openreceive/node @openreceive/next @openreceive/react pg
+```
+
+Create `src/server/openreceive.ts`:
+
+```ts
+import pg from "pg";
+import {
+  createAlbyNwcReceiveClient,
+  createOpenReceivePostgresInvoiceStoreFromPool
+} from "@openreceive/node";
+import {
+  createOpenReceiveNextRuntime,
+  dispatchOpenReceiveNextNoWalletRoute,
+  dispatchOpenReceiveNextRoute
+} from "@openreceive/next";
+
+const pool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL
+});
+
+let runtime;
+
+function getRuntime() {
+  if (runtime) return runtime;
+
+  const nwc = process.env.OPENRECEIVE_NWC;
+  if (!nwc) return undefined;
+
+  runtime = createOpenReceiveNextRuntime({
+    client: createAlbyNwcReceiveClient({
+      connectionString: nwc
+    }),
+    store: createOpenReceivePostgresInvoiceStoreFromPool({
+      pool
+    }),
+    merchantScope: () => "merchant:default",
+    auth: {
+      create: (req) => isAllowedToCreateInvoice(req),
+      read: (req, invoice) => ownsInvoice(req, invoice),
+      lookup: (req, invoice) => ownsInvoice(req, invoice),
+      events: (req, invoice) => ownsInvoice(req, invoice)
+    },
+    csrf: {
+      verify: (req) => verifyCsrf(req)
+    },
+    settlementAction: async ({ invoice, metadata }) => {
+      await markOrderPaid({
+        invoiceId: invoice.invoice_id,
+        orderId: metadata.order_id
+      });
+    }
+  });
+
+  return runtime;
+}
+
+export function openReceiveRoute(request: Request, path: readonly string[]) {
+  const openreceive = getRuntime();
+  if (openreceive === undefined) {
+    return dispatchOpenReceiveNextNoWalletRoute({ request, path });
+  }
+
+  return dispatchOpenReceiveNextRoute({
+    runtime: openreceive,
+    request,
+    path
+  });
+}
+```
+
+Create one catch-all route at
+`src/app/openreceive/v1/[...openreceive]/route.ts`:
+
+```ts
+import { openReceiveRoute } from "@/server/openreceive";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+type Context = {
+  params: Promise<{
+    openreceive?: string[];
+  }>;
+};
+
+async function handle(request: Request, context: Context) {
+  const params = await context.params;
+  return openReceiveRoute(request, params.openreceive ?? []);
+}
+
+export const GET = handle;
+export const POST = handle;
+```
+
+That adds the same `/openreceive/v1` API through Next route handlers.
+
+## Browser Checkout
+
+Your UI creates an invoice by posting to the server route:
+
+```ts
+const response = await fetch("/openreceive/v1/invoices", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Idempotency-Key": orderId
+  },
+  body: JSON.stringify({
+    fiat: {
+      currency: "USD",
+      value: "10.00"
+    },
+    metadata: {
+      order_id: orderId
+    }
+  })
+});
+
+const invoice = await response.json();
+```
+
+React apps can render the checkout with `@openreceive/react`:
+
+```tsx
+import { OpenReceiveCheckout } from "@openreceive/react";
+import "@openreceive/react/styles.css";
+
+export function Checkout({ invoice }) {
+  return (
+    <OpenReceiveCheckout
+      {...invoice}
+      lookupUrl="/openreceive/v1/invoices/lookup"
+    />
+  );
+}
+```
+
+No-framework apps can use `@openreceive/elements` or the lower-level
+`@openreceive/browser` helpers.
+
+## Workers
+
+Run polling as a separate backend process so open invoices recover after
+restart:
 
 ```sh
 npx openreceive poll --config ./openreceive.config.mjs
 ```
 
-Cron-style deployments can run one recovery pass and exit:
-
-```sh
-npx openreceive poll --config ./openreceive.config.mjs --once
-```
-
-Custom worker scripts can still call the Express runner directly:
-
-```ts
-import {
-  startOpenReceiveExpressSettlementPollingRunner
-} from "@openreceive/express";
-import { openreceive } from "./openreceive-config";
-
-startOpenReceiveExpressSettlementPollingRunner(openreceive);
-```
-
-## Listen Process
-
-Run this as a second separate backend process when the configured NWC client
-supports `payment_received` notifications:
+If your wallet supports `payment_received` notifications, also run:
 
 ```sh
 npx openreceive listen --config ./openreceive.config.mjs
 ```
 
-Deployment checks can verify listener startup without staying attached:
+The config module should export the same server-only `openreceive` object used
+by your framework route. The poll process remains the settlement authority even
+when notifications are enabled.
+
+## Other Node Frameworks
+
+First-class v0.1 adapters are Express and Next.js App Router. For NestJS on the
+Express platform, mount the Express adapter. For Fastify, Koa, Hono, Remix,
+SvelteKit, Astro, or custom servers, keep the same boundaries:
+
+- mount the OpenReceive HTTP routes under `/openreceive/v1`
+- keep `OPENRECEIVE_NWC` server-only
+- use the package-owned Postgres or SQLite invoice store
+- protect create/read/lookup/events with your app's auth and CSRF rules
+- run the poll worker outside the request process
+
+If the framework can host Express middleware, use `mountOpenReceiveExpressRoutes`.
+Otherwise, build a small adapter around `createOpenReceiveExpressHandlers()` and
+the HTTP contract in [API Reference](api-reference.md).
+
+## Local Demo
+
+To see a working Express + React app:
 
 ```sh
-npx openreceive listen --config ./openreceive.config.mjs --ready-only
+npm run demo node
 ```
 
-Custom worker scripts can call the Express listener directly:
-
-```ts
-import {
-  startOpenReceiveExpressPaymentNotificationRunner
-} from "@openreceive/express";
-import { openreceive } from "./openreceive-config";
-
-await startOpenReceiveExpressPaymentNotificationRunner(openreceive);
-await new Promise(() => {});
-```
-
-If notifications are unavailable, skip the listen process. The poll process
-remains the settlement authority.
-
-`InMemoryInvoiceStore` is for demos and tests only. Production Node apps should
-use the package-owned durable OpenReceive store backed by the app database so
-the poll process can recover non-terminal invoices after restart. Do not invent
-your own invoice table.
-
-Use `settlementAction` for the app-owned business effect after OpenReceive
-proves settlement by backend lookup.
-
-For a local demo only, `unsafeAllowUnauthenticatedDemoMode: true` can be used
-while building the UI. Do not use it in production.
-
-## Server Logs
-
-The Express adapter accepts an optional `logger(entry)` hook. It emits
-redacted state transitions such as `invoice.create.requested`,
-`invoice.created`, `invoice.verifying`, `invoice.settled`, and
-`invoice.events.opened`.
-
-Log entries include invoice ids, payment hashes, amounts, and state names. They
-do not include request bodies, NWC connection strings, signed event URL tokens,
-authorization headers, cookies, or idempotency keys.
-
-## Create An Invoice
+To see a working Next.js App Router app:
 
 ```sh
-curl -X POST http://localhost:3000/openreceive/v1/invoices \
-  -H 'Content-Type: application/json' \
-  -H 'Idempotency-Key: fruit-demo-user-123-order-456' \
-  -d @examples/hello-fruit/shared/test-data/create-invoice.amount-msats.json
+npm run demo nextjs
 ```
-
-The response contains the BOLT11 invoice, `payment_hash`, timestamps, and
-checkout URLs. It does not contain the NWC connection string.
-
-## Browser Helpers
-
-```ts
-import {
-  copyInvoice,
-  createQrSvg,
-  openWallet
-} from "@openreceive/browser";
-
-const svg = await createQrSvg(invoice.invoice);
-await copyInvoice({ invoice: invoice.invoice });
-openWallet({ invoice: invoice.invoice });
-```
-
-The browser helper uses `lightning:<invoice>` for QR and open-wallet payloads.
-The QR helper uses an opaque white background, black foreground, and a
-four-module quiet zone.
-
-## Settlement
-
-Your backend runners call `lookup_invoice` and treat the invoice as settled
-only when the wallet returns `settled_at` or `state == "settled"`. A preimage
-alone is not enough.
-
-Merchant settlement actions should happen in backend code after that lookup
-result, not in browser state.

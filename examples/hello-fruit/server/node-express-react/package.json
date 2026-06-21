@@ -10,7 +10,6 @@
     "start": "node --experimental-strip-types src/server/production.ts"
   },
   "dependencies": {
-    "@getalby/sdk": "*",
     "@openreceive/browser": "0.1.0",
     "@openreceive/core": "0.1.0",
     "@openreceive/express": "0.1.0",

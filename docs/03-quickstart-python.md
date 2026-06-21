@@ -3,7 +3,7 @@
 OpenReceive does not have a Python package yet. This page records the intended
 Python server shape for future FastAPI, Django, Flask, or Starlette work.
 
-Use the Node and Express quickstart for the current working reference path:
+Use the Node framework quickstart for the current working reference path:
 
 ```text
 docs/01-quickstart-node.md

@@ -201,8 +201,9 @@ function runInit(input: {
       relativePath: ".env.openreceive.example",
       text: [
         "OPENRECEIVE_NWC=",
-        "OPENRECEIVE_WALLET_PROFILE=rizful",
-        "DATABASE_URL=",
+        "# Optional CLI override when your app does not already expose DATABASE_URL.",
+        "OPENRECEIVE_DATABASE_URL=",
+        "# Optional local SQLite path for generated development config.",
         "OPENRECEIVE_SQLITE_PATH=storage/openreceive.sqlite3",
         ""
       ].join("\n")

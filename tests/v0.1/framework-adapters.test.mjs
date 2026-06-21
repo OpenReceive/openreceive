@@ -51,6 +51,9 @@ import {
   createOpenReceiveVueThemeToggleBinding,
   syncOpenReceiveStoredThemeControls as syncVueThemeControls
 } from "@openreceive/vue";
+import {
+  matchOpenReceiveNextRoute
+} from "@openreceive/next";
 
 const snapshot = {
   invoice_id: "or_inv_test",
@@ -70,6 +73,52 @@ const snapshot = {
     events_url: "/openreceive/v1/invoices/or_inv_test/events"
   }
 };
+
+test("Next catch-all matcher covers OpenReceive HTTP routes", () => {
+  assert.deepEqual(matchOpenReceiveNextRoute("POST", ["invoices"]), {
+    name: "createInvoice"
+  });
+  assert.deepEqual(matchOpenReceiveNextRoute("GET", ["invoices", "or_inv_123"]), {
+    name: "getInvoice",
+    params: {
+      invoice_id: "or_inv_123"
+    }
+  });
+  assert.deepEqual(matchOpenReceiveNextRoute("POST", ["invoices", "lookup"]), {
+    name: "lookupInvoice"
+  });
+  assert.deepEqual(matchOpenReceiveNextRoute("POST", ["invoices", "or_inv_123", "refresh"]), {
+    name: "refreshInvoice",
+    params: {
+      invoice_id: "or_inv_123"
+    }
+  });
+  assert.deepEqual(matchOpenReceiveNextRoute("GET", ["invoices", "or_inv_123", "events"]), {
+    name: "invoiceEvents",
+    params: {
+      invoice_id: "or_inv_123"
+    }
+  });
+  assert.deepEqual(matchOpenReceiveNextRoute("GET", ["rates"]), {
+    name: "listRates"
+  });
+  assert.deepEqual(matchOpenReceiveNextRoute("POST", ["rates", "quote"]), {
+    name: "quoteRates"
+  });
+  assert.deepEqual(matchOpenReceiveNextRoute("GET", ["routes"]), {
+    name: "listRoutes"
+  });
+  assert.deepEqual(matchOpenReceiveNextRoute("GET", ["providers"]), {
+    name: "listProviders"
+  });
+  assert.deepEqual(matchOpenReceiveNextRoute("GET", ["health"]), {
+    name: "health"
+  });
+  assert.deepEqual(matchOpenReceiveNextRoute("GET", ["capabilities"]), {
+    name: "capabilities"
+  });
+  assert.equal(matchOpenReceiveNextRoute("DELETE", ["invoices", "or_inv_123"]), undefined);
+});
 
 test("browser owns custom-element checkout attributes and listeners", () => {
   const createdElements = [];

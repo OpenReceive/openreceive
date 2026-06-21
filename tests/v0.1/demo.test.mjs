@@ -14,9 +14,10 @@ import {
   helloFruitDemoLabels
 } from "../../examples/hello-fruit/shared/demo-formatting.ts";
 import { quoteFiatToMsats } from "../../packages/js/core/src/index.ts";
-import { GET as getNextCapabilities } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/openreceive/v1/capabilities/route.ts";
-import { POST as postNextInvoice } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/openreceive/v1/invoices/route.ts";
-import { GET as getNextOpenReceiveHealth } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/openreceive/v1/health/route.ts";
+import {
+  GET as getNextOpenReceive,
+  POST as postNextOpenReceive
+} from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/openreceive/v1/[...openreceive]/route.ts";
 import { GET as getNextDemoMetadata } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/demo-metadata.json/route.ts";
 import { GET as getNextDocs } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/docs/route.ts";
 import { GET as getNextHealthz } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/healthz/route.ts";
@@ -788,8 +789,8 @@ test("Next.js demo delegates route handler glue to the Next package", () => {
 
   assert.match(source, /@openreceive\/next/);
   assert.match(source, /createOpenReceiveNextRuntime/);
-  assert.match(source, /dispatchOpenReceiveNextHandler/);
-  assert.match(source, /createOpenReceiveNextInvoiceEventsResponse/);
+  assert.match(source, /dispatchOpenReceiveNextRoute/);
+  assert.match(source, /dispatchOpenReceiveNextNoWalletRoute/);
   assert.doesNotMatch(source, /class CapturedResponse/);
   assert.doesNotMatch(source, /ExpressLikeRequest/);
   assert.doesNotMatch(source, /ReadableStream<Uint8Array>/);
@@ -897,7 +898,10 @@ test("Hello Fruit production servers expose non-secret metadata without a wallet
     assert.equal(nextMetadata.body.mode, "unconfigured");
 
     const nextHealth = await responseJson(
-      getNextOpenReceiveHealth(new Request("http://nextjs.test/openreceive/v1/health"))
+      getNextOpenReceive(
+        new Request("http://nextjs.test/openreceive/v1/health"),
+        nextOpenReceiveContext(["health"])
+      )
     );
     assert.equal(nextHealth.status, 200, "nextjs-fullstack: health status");
     assert.equal(nextHealth.body.wallet_configured, false);
@@ -1154,7 +1158,10 @@ test("Hello Fruit demos fail closed without OPENRECEIVE_NWC", async () => {
     assert.equal(JSON.stringify(nextMetadata.body).includes("nostr+walletconnect://"), false);
 
     const nextHealth = await responseJson(
-      getNextOpenReceiveHealth(new Request("http://nextjs.test/openreceive/v1/health"))
+      getNextOpenReceive(
+        new Request("http://nextjs.test/openreceive/v1/health"),
+        nextOpenReceiveContext(["health"])
+      )
     );
     assert.deepEqual(nextHealth.body, {
       ok: true,
@@ -1162,7 +1169,10 @@ test("Hello Fruit demos fail closed without OPENRECEIVE_NWC", async () => {
     });
 
     const nextCapabilities = await responseJson(
-      getNextCapabilities(new Request("http://nextjs.test/openreceive/v1/capabilities"))
+      getNextOpenReceive(
+        new Request("http://nextjs.test/openreceive/v1/capabilities"),
+        nextOpenReceiveContext(["capabilities"])
+      )
     );
     assert.equal(nextCapabilities.body.wallet_configured, false);
     assert.deepEqual(nextCapabilities.body.methods, ["make_invoice", "lookup_invoice"]);
@@ -1170,25 +1180,28 @@ test("Hello Fruit demos fail closed without OPENRECEIVE_NWC", async () => {
     assert.equal(JSON.stringify(nextCapabilities.body).includes("nostr+walletconnect://"), false);
 
     const nextInvoice = await responseJson(
-      postNextInvoice(new Request("http://nextjs.test/openreceive/v1/invoices", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "idempotency-key": "next-demo-smoke"
-        },
-        body: JSON.stringify({
-          fiat: {
-            currency: "USD",
-            value: "0.10"
+      postNextOpenReceive(
+        new Request("http://nextjs.test/openreceive/v1/invoices", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "idempotency-key": "next-demo-smoke"
           },
-          description: "Fruit sticker from nextjs-fullstack smoke test",
-          expiry: 600,
-          metadata: {
-            product_id: "fruit-sticker-pack",
-            fruit: "banana"
-          }
-        })
-      }))
+          body: JSON.stringify({
+            fiat: {
+              currency: "USD",
+              value: "0.10"
+            },
+            description: "Fruit sticker from nextjs-fullstack smoke test",
+            expiry: 600,
+            metadata: {
+              product_id: "fruit-sticker-pack",
+              fruit: "banana"
+            }
+          })
+        }),
+        nextOpenReceiveContext(["invoices"])
+      )
     );
     assert.equal(nextInvoice.status, 503, "nextjs-fullstack: invoice status");
     assert.deepEqual(nextInvoice.body, {
@@ -1203,6 +1216,14 @@ async function responseJson(responseOrPromise) {
   return {
     status: response.status,
     body: await response.json()
+  };
+}
+
+function nextOpenReceiveContext(openreceive) {
+  return {
+    params: Promise.resolve({
+      openreceive
+    })
   };
 }
 

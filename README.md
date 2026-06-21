@@ -13,8 +13,9 @@ receive-only invoices.
 The v0.1 reference path is contract-first and server-owned:
 
 - `spec/` is the source of truth for schemas, shared data, and test vectors.
-- `packages/js/` contains the core contracts, Node NWC adapter, Express routes,
-  browser helpers, provider data, testkit, elements, and React packages.
+- `packages/js/` contains the core contracts, Node NWC adapter, Express and
+  Next.js routes, browser helpers, provider data, testkit, elements, and React
+  packages.
 - `examples/hello-fruit/server/` contains the Express + React, static HTML
   + small API, and Next.js fullstack Hello Fruit demos.
 - `demos/deploy/` contains public-safe hosted demo deployment templates.
