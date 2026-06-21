@@ -3,10 +3,7 @@ import {
   type OpenReceiveInvoiceStore
 } from "@openreceive/core";
 import {
-  OPENRECEIVE_DATABASE_SCHEMA_VERSION,
-  OPENRECEIVE_POSTGRES_MIGRATION_SQL,
-  createOpenReceivePostgresInvoiceStore,
-  type OpenReceivePostgresQueryClient
+  createOpenReceivePostgresInvoiceStoreFromPool
 } from "@openreceive/node";
 import { Pool } from "pg";
 
@@ -21,33 +18,18 @@ export function createHelloFruitOpenReceiveInvoiceStore(input: {
   const pool = new Pool({
     connectionString: databaseUrl
   });
-  const migration = pool.query(OPENRECEIVE_POSTGRES_MIGRATION_SQL)
-    .then(() => {
+
+  return createOpenReceivePostgresInvoiceStoreFromPool({
+    pool,
+    onReady(schemaVersion) {
       console.log(
-        `[openreceive:${input.demoId}] Postgres invoice store ready (${OPENRECEIVE_DATABASE_SCHEMA_VERSION}).`
+        `[openreceive:${input.demoId}] Postgres invoice store ready (${schemaVersion}).`
       );
-    });
-
-  void migration.catch(() => {
-    console.error(
-      `[openreceive:${input.demoId}] Postgres invoice store migration failed. Check DATABASE_URL and database reachability.`
-    );
-  });
-
-  const client: OpenReceivePostgresQueryClient = {
-    async query(sql, values) {
-      await migration;
-      const result = await pool.query(
-        sql,
-        values === undefined ? undefined : [...values]
+    },
+    onMigrationError() {
+      console.error(
+        `[openreceive:${input.demoId}] Postgres invoice store migration failed. Check DATABASE_URL and database reachability.`
       );
-      return {
-        rows: result.rows as Record<string, unknown>[]
-      };
     }
-  };
-
-  return createOpenReceivePostgresInvoiceStore({
-    client
   });
 }

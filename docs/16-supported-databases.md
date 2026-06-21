@@ -14,7 +14,7 @@ A database is supported only when OpenReceive ships all three pieces:
 
 | Runtime | Database | Status | Setup Path | Intended Use |
 | --- | --- | --- | --- | --- |
-| Node | Postgres | Supported | `openreceive migrate --postgres "$DATABASE_URL"` and `createOpenReceivePostgresInvoiceStore()` | Production/reference deployments |
+| Node | Postgres | Supported | `openreceive migrate --postgres "$DATABASE_URL"` and `createOpenReceivePostgresInvoiceStoreFromPool()` | Production/reference deployments |
 | Node | SQLite | Supported | `openreceive migrate --sqlite ./storage/openreceive.sqlite3` and `createOpenReceiveSqliteInvoiceStore()` | Local development, demos, small apps |
 | Rails | ActiveRecord SQLite | Initial adapter path | Rails migration/model template and `bin/rails db:prepare` | Rails demo and early Rails apps |
 

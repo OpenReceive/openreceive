@@ -1,20 +1,23 @@
+import {
+  InMemoryInvoiceEventBus
+} from "@openreceive/express";
 import type {
-  ExpressLikeHandler,
-  ExpressLikeRequest,
-  ExpressLikeResponse,
   OpenReceiveExpressHandlers
 } from "@openreceive/express";
 import {
-  InMemoryInvoiceEventBus,
-  createOpenReceiveExpressHandlers
-} from "@openreceive/express";
-import {
-  createDefaultLivePriceProviders,
-  type OpenReceiveInvoiceStore
+  createDefaultLivePriceProviders
 } from "@openreceive/core";
 import {
   createAlbyNwcReceiveClient
 } from "@openreceive/node";
+import {
+  createOpenReceiveNextInvoiceEventsResponse,
+  createOpenReceiveNextRuntime,
+  dispatchOpenReceiveNextHandler,
+  dispatchOpenReceiveNextNoWalletHandler,
+  openReceiveNextJsonResponse,
+  type OpenReceiveNextRuntime
+} from "@openreceive/next";
 import {
   createHelloFruitDemoMetadata
 } from "../../../../shared/demo-metadata.ts";
@@ -29,11 +32,8 @@ const DEMO_ID = "nextjs-fullstack";
 const DEFAULT_PORT = "3002";
 const GITHUB_REPOSITORY_URL = "https://github.com/openreceive/openreceive";
 
-interface NextDemoRuntime {
+interface NextDemoRuntime extends OpenReceiveNextRuntime {
   readonly connectionString: string;
-  readonly store: OpenReceiveInvoiceStore;
-  readonly eventBus: InMemoryInvoiceEventBus;
-  readonly handlers: OpenReceiveExpressHandlers;
 }
 
 let runtime: NextDemoRuntime | undefined;
@@ -43,7 +43,7 @@ export function isWalletConfigured(): boolean {
 }
 
 export function demoMetadataResponse(): Response {
-  return jsonResponse(createHelloFruitDemoMetadata({
+  return openReceiveNextJsonResponse(createHelloFruitDemoMetadata({
     id: DEMO_ID,
     walletConfigured: isWalletConfigured(),
     requestedMode: process.env.OPENRECEIVE_DEMO_MODE,
@@ -52,6 +52,7 @@ export function demoMetadataResponse(): Response {
     deployedAt: process.env.OPENRECEIVE_DEPLOYED_AT,
     packages: {
       "@openreceive/browser": "0.1.0",
+      "@openreceive/next": "0.1.0",
       "@openreceive/react": "0.1.0",
       "next": "0.1.0-demo"
     }
@@ -59,7 +60,7 @@ export function demoMetadataResponse(): Response {
 }
 
 export function healthzResponse(): Response {
-  return jsonResponse({
+  return openReceiveNextJsonResponse({
     ok: true,
     demo: DEMO_ID,
     wallet_configured: isWalletConfigured()
@@ -105,24 +106,15 @@ export async function dispatchOpenReceiveHandler(
 ): Promise<Response> {
   const connectionString = getConnectionString();
   if (connectionString === undefined) {
-    return noWalletResponse(name);
+    return dispatchOpenReceiveNextNoWalletHandler({ name });
   }
 
-  const nextRuntime = getRuntime(connectionString);
-  const handler = nextRuntime.handlers[name] as ExpressLikeHandler;
-  const req = await createExpressLikeRequest(request, params);
-  const res = new CapturedResponse();
-  let nextError: unknown;
-
-  await handler(req, res, (error?: unknown) => {
-    nextError = error;
+  return dispatchOpenReceiveNextHandler({
+    runtime: getRuntime(connectionString),
+    name,
+    request,
+    params
   });
-
-  if (nextError !== undefined) {
-    throw nextError;
-  }
-
-  return res.toResponse();
 }
 
 export async function invoiceEventsResponse(
@@ -131,64 +123,13 @@ export async function invoiceEventsResponse(
 ): Promise<Response> {
   const connectionString = getConnectionString();
   if (connectionString === undefined) {
-    return noWalletResponse("invoiceEvents");
+    return dispatchOpenReceiveNextNoWalletHandler({ name: "invoiceEvents" });
   }
 
-  const nextRuntime = getRuntime(connectionString);
-  const invoice = await nextRuntime.store.getInvoice(invoiceId);
-  if (invoice === undefined) {
-    return jsonResponse({
-      code: "NOT_FOUND",
-      message: `Invoice not found: ${invoiceId}`
-    }, 404);
-  }
-
-  const encoder = new TextEncoder();
-  const lastEventId = parseLastEventId(request.headers.get("last-event-id"));
-  let cleanupStream = () => {};
-  const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      let cleanedUp = false;
-      const writeEvent = (event: {
-        readonly id: number;
-        readonly event: string;
-        readonly data: Record<string, unknown>;
-      }) => {
-        controller.enqueue(encoder.encode(formatSseEvent(event.id, event.event, event.data)));
-      };
-
-      for (const event of nextRuntime.eventBus.replay(invoiceId, lastEventId)) {
-        writeEvent(event);
-      }
-
-      const unsubscribe = nextRuntime.eventBus.subscribe(invoiceId, writeEvent);
-      const heartbeat = setInterval(() => {
-        controller.enqueue(encoder.encode(": heartbeat\n\n"));
-      }, 20000);
-
-      const cleanup = () => {
-        if (cleanedUp) return;
-        cleanedUp = true;
-        clearInterval(heartbeat);
-        unsubscribe();
-        request.signal.removeEventListener("abort", cleanup);
-      };
-
-      cleanupStream = cleanup;
-      request.signal.addEventListener("abort", cleanup, { once: true });
-    },
-    cancel() {
-      cleanupStream();
-    }
-  });
-
-  return new Response(stream, {
-    status: 200,
-    headers: {
-      "Cache-Control": "no-store",
-      "Content-Type": "text/event-stream",
-      "Referrer-Policy": "same-origin"
-    }
+  return createOpenReceiveNextInvoiceEventsResponse({
+    runtime: getRuntime(connectionString),
+    request,
+    invoiceId
   });
 }
 
@@ -207,9 +148,7 @@ function getRuntime(connectionString: string): NextDemoRuntime {
 
   runtime = {
     connectionString,
-    store,
-    eventBus,
-    handlers: createOpenReceiveExpressHandlers({
+    ...createOpenReceiveNextRuntime({
       client,
       store,
       eventBus,
@@ -224,128 +163,9 @@ function getRuntime(connectionString: string): NextDemoRuntime {
   return runtime;
 }
 
-async function createExpressLikeRequest(
-  request: Request,
-  params: Record<string, string | undefined>
-): Promise<ExpressLikeRequest> {
-  const url = new URL(request.url);
-  const query: Record<string, string> = {};
-  for (const [key, value] of url.searchParams) {
-    query[key] = value;
-  }
-
-  return {
-    method: request.method,
-    path: url.pathname,
-    params,
-    query,
-    headers: Object.fromEntries(request.headers.entries()),
-    get: (header) => request.headers.get(header) ?? undefined,
-    body: await readRequestBody(request)
-  };
-}
-
-async function readRequestBody(request: Request): Promise<unknown> {
-  if (request.method === "GET" || request.method === "HEAD") return undefined;
-  const text = await request.text();
-  if (text.length === 0) return undefined;
-  return JSON.parse(text);
-}
-
-function noWalletResponse(name: keyof OpenReceiveExpressHandlers): Response {
-  if (name === "health") {
-    return jsonResponse({
-      ok: true,
-      wallet_configured: false
-    });
-  }
-
-  if (name === "capabilities") {
-    return jsonResponse({
-      base_path: "/openreceive/v1",
-      wallet_configured: false,
-      transports: ["sse"],
-      methods: ["make_invoice", "lookup_invoice"]
-    });
-  }
-
-  return jsonResponse({
-    code: "WALLET_UNAVAILABLE",
-    message: "Set OPENRECEIVE_NWC before creating live invoices."
-  }, 503);
-}
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      "Cache-Control": "no-store",
-      "Content-Type": "application/json",
-      "Referrer-Policy": "same-origin"
-    }
-  });
-}
-
-class CapturedResponse implements ExpressLikeResponse {
-  #status = 200;
-  #headers = new Headers();
-  #body: BodyInit | undefined;
-  #chunks: string[] = [];
-
-  status(code: number): ExpressLikeResponse {
-    this.#status = code;
-    return this;
-  }
-
-  set(field: string, value: string): ExpressLikeResponse {
-    this.#headers.set(field, value);
-    return this;
-  }
-
-  json(body: unknown): unknown {
-    this.#headers.set("Content-Type", "application/json");
-    this.#body = JSON.stringify(body);
-    return undefined;
-  }
-
-  write(chunk: string): unknown {
-    this.#chunks.push(chunk);
-    return undefined;
-  }
-
-  end(): unknown {
-    return undefined;
-  }
-
-  flushHeaders(): unknown {
-    return undefined;
-  }
-
-  toResponse(): Response {
-    return new Response(this.#body ?? this.#chunks.join(""), {
-      status: this.#status,
-      headers: this.#headers
-    });
-  }
-}
-
 function getConnectionString(): string | undefined {
   const value = process.env.OPENRECEIVE_NWC;
   return value === undefined || value.length === 0 ? undefined : value;
-}
-
-function parseLastEventId(value: string | null): number {
-  if (value === null) return 0;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
-}
-
-function formatSseEvent(
-  id: number,
-  event: string,
-  data: Record<string, unknown>
-): string {
-  return `id: ${id}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
 function publicUrl(): string {

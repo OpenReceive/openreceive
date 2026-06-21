@@ -25,6 +25,8 @@ module Openreceive
       end
 
       def copy_controller_jobs_and_channel
+        copy_file "config/initializers/openreceive.rb",
+                  "config/initializers/openreceive.rb"
         copy_file "app/controllers/openreceive_controller.rb",
                   "app/controllers/openreceive_controller.rb"
         copy_file "app/jobs/openreceive_poll_invoice_job.rb",

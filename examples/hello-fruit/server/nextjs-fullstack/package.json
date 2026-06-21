@@ -13,6 +13,7 @@
     "@openreceive/browser": "0.1.0",
     "@openreceive/core": "0.1.0",
     "@openreceive/express": "0.1.0",
+    "@openreceive/next": "0.1.0",
     "@openreceive/node": "0.1.0",
     "@openreceive/react": "0.1.0",
     "next": "*",

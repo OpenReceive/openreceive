@@ -1,0 +1,21 @@
+{
+  "name": "@openreceive/next",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@openreceive/core": "0.1.0",
+    "@openreceive/express": "0.1.0"
+  },
+  "peerDependencies": {
+    "next": "*"
+  },
+  "peerDependenciesMeta": {
+    "next": {
+      "optional": true
+    }
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

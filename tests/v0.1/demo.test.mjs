@@ -742,10 +742,12 @@ test("Hello Fruit JS demos set up package-owned invoice persistence", () => {
     path.join(process.cwd(), "packages/js/node/src/postgres-store.ts"),
     "utf8"
   );
-  assert.match(helper, /OPENRECEIVE_DATABASE_SCHEMA_VERSION/);
-  assert.match(helper, /OPENRECEIVE_POSTGRES_MIGRATION_SQL/);
-  assert.match(helper, /createOpenReceivePostgresInvoiceStore/);
+  assert.match(helper, /createOpenReceivePostgresInvoiceStoreFromPool/);
+  assert.doesNotMatch(helper, /OPENRECEIVE_DATABASE_SCHEMA_VERSION/);
+  assert.doesNotMatch(helper, /OPENRECEIVE_POSTGRES_MIGRATION_SQL/);
+  assert.doesNotMatch(helper, /OpenReceivePostgresQueryClient/);
   assert.match(helper, /new InMemoryInvoiceStore\(\)/);
+  assert.match(postgresStore, /createOpenReceivePostgresInvoiceStoreFromPool/);
   assert.match(postgresStore, /CREATE TABLE IF NOT EXISTS \$\{OPENRECEIVE_SCHEMA_MIGRATIONS_TABLE\}/);
   assert.match(postgresStore, /VALUES \('\$\{OPENRECEIVE_DATABASE_SCHEMA_VERSION\}'\)/);
 
@@ -770,7 +772,61 @@ test("Hello Fruit JS demos set up package-owned invoice persistence", () => {
     const source = readFileSync(path.join(process.cwd(), sourcePath), "utf8");
     assert.match(source, /createHelloFruitOpenReceiveInvoiceStore/);
     assert.doesNotMatch(source, /new InMemoryInvoiceStore\(\)/);
+    assert.doesNotMatch(source, /OPENRECEIVE_POSTGRES_MIGRATION_SQL/);
+    assert.doesNotMatch(source, /OPENRECEIVE_DATABASE_SCHEMA_VERSION/);
   }
+});
+
+test("Next.js demo delegates route handler glue to the Next package", () => {
+  const source = readFileSync(
+    path.join(
+      process.cwd(),
+      "examples/hello-fruit/server/nextjs-fullstack/src/server/openreceive.ts"
+    ),
+    "utf8"
+  );
+
+  assert.match(source, /@openreceive\/next/);
+  assert.match(source, /createOpenReceiveNextRuntime/);
+  assert.match(source, /dispatchOpenReceiveNextHandler/);
+  assert.match(source, /createOpenReceiveNextInvoiceEventsResponse/);
+  assert.doesNotMatch(source, /class CapturedResponse/);
+  assert.doesNotMatch(source, /ExpressLikeRequest/);
+  assert.doesNotMatch(source, /ReadableStream<Uint8Array>/);
+  assert.doesNotMatch(source, /formatSseEvent/);
+  assert.doesNotMatch(source, /parseLastEventId/);
+  assert.doesNotMatch(source, /request\.text\(\)/);
+});
+
+test("Rails React skeleton is explicitly quarantined and does not claim active Rails demo identity", () => {
+  const railsReactDir = path.join(
+    process.cwd(),
+    "examples/hello-fruit/server/rails-react"
+  );
+  const files = [
+    "README.md",
+    "Dockerfile",
+    "Makefile",
+    "compose.yml",
+    "compose.override.yml.example",
+    "app/controllers/hello_fruit_controller.rb",
+    "app/views/hello_fruit/index.html.erb",
+    "config/application.rb",
+    "config/environment.rb",
+    "config/initializers/openreceive.rb"
+  ];
+
+  const combined = files
+    .map((relativePath) => readFileSync(path.join(railsReactDir, relativePath), "utf8"))
+    .join("\n");
+
+  assert.match(combined, /quarantined/i);
+  assert.match(combined, /rails-react/);
+  assert.match(combined, /OpenReceive::Rails\.create_active_record_invoice_store/);
+  assert.doesNotMatch(combined, /rails-hotwire/);
+  assert.doesNotMatch(combined, /Rails Hotwire/);
+  assert.doesNotMatch(combined, /demo-rails-hotwire/);
+  assert.doesNotMatch(combined, /HelloFruitRailsHotwire/);
 });
 
 test("Hello Fruit server demos keep secret-safe local setup docs", () => {
@@ -1092,6 +1148,7 @@ test("Hello Fruit demos fail closed without OPENRECEIVE_NWC", async () => {
     assert.equal(nextMetadata.body.build.image_digest, null);
     assert.equal(nextMetadata.body.build.deployed_at, null);
     assert.equal(nextMetadata.body.packages["@openreceive/browser"], "0.1.0");
+    assert.equal(nextMetadata.body.packages["@openreceive/next"], "0.1.0");
     assert.equal(nextMetadata.body.packages["@openreceive/react"], "0.1.0");
     assert.equal(JSON.stringify(nextMetadata.body).includes("OPENRECEIVE_NWC"), false);
     assert.equal(JSON.stringify(nextMetadata.body).includes("nostr+walletconnect://"), false);

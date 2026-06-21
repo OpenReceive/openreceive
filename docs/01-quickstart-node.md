@@ -103,7 +103,7 @@ import express from "express";
 import pg from "pg";
 import {
   createAlbyNwcReceiveClient,
-  createOpenReceivePostgresInvoiceStore
+  createOpenReceivePostgresInvoiceStoreFromPool
 } from "@openreceive/node";
 import {
   InMemoryInvoiceEventBus,
@@ -119,8 +119,8 @@ const wallet = createAlbyNwcReceiveClient({
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL
 });
-const store = createOpenReceivePostgresInvoiceStore({
-  client: pool
+const store = createOpenReceivePostgresInvoiceStoreFromPool({
+  pool
 });
 
 await wallet.preflight();

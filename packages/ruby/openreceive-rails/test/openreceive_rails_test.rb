@@ -149,6 +149,7 @@ class OpenReceiveRailsTest < Minitest::Test
     channel = read_generator_template("app/channels/openreceive_invoice_channel.rb")
     partial = read_generator_template("app/views/openreceive/_invoice.html.erb")
     routes = read_generator_template("config/openreceive_routes.rb")
+    initializer = read_generator_template("config/initializers/openreceive.rb")
     rake_tasks = read_generator_template("lib/tasks/openreceive.rake")
     combined = [controller, poll_job, notification_job, channel, partial, routes, rake_tasks].join("\n")
 
@@ -170,9 +171,14 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_includes rake_tasks, "OpenReceive::Rails.adapter.doctor"
     assert_includes rake_tasks, "poll_recoverable_invoices"
     assert_includes rake_tasks, "listen_for_payment_notifications"
+    assert_includes initializer, 'ENV["OPENRECEIVE_NWC"].to_s'
+    assert_includes initializer, "OpenReceive::UnavailableReceiveClient"
+    assert_includes initializer, "NwcRuby::Client.from_uri"
+    assert_includes initializer, "OpenReceive::Rails.create_active_record_invoice_store"
+    assert_includes initializer, "Configure OpenReceive authentication before production"
     refute_includes combined, "pay_invoice"
-    refute_includes combined, "OPENRECEIVE_NWC"
     refute_includes combined, "nostr+walletconnect://"
+    refute_includes initializer, "nostr+walletconnect://"
   end
 
   def test_install_generator_copies_public_templates_without_secrets
@@ -188,6 +194,7 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_includes generator, "next_migration_number"
     assert_includes generator, "migration_template \"create_openreceive_tables.rb\""
     assert_includes generator, "create_openreceive_tables.rb"
+    assert_includes generator, "config/initializers/openreceive.rb"
     assert_includes generator, "openreceive_controller.rb"
     assert_includes generator, "openreceive_poll_invoice_job.rb"
     assert_includes generator, "openreceive_payment_received_job.rb"
@@ -195,7 +202,6 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_includes generator, "_invoice.html.erb"
     assert_includes generator, "openreceive.rake"
     assert_includes generator, "openreceive_routes.rb"
-    refute_includes generator, "OPENRECEIVE_NWC"
     refute_includes generator, "nostr+walletconnect://"
   end
 

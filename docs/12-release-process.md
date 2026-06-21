@@ -6,6 +6,7 @@ OpenReceive starts with a small v0.1 release surface:
 - `@openreceive/core`
 - `@openreceive/node`
 - `@openreceive/express`
+- `@openreceive/next`
 - `@openreceive/browser`
 - `@openreceive/provider-data`
 - `@openreceive/testkit`
@@ -64,6 +65,7 @@ commands, concurrency groups, and the disabled publish path.
 - `js-core-v0.1.0`
 - `js-node-v0.1.0`
 - `js-express-v0.1.0`
+- `js-next-v0.1.0`
 - `js-browser-v0.1.0`
 - `js-provider-data-v0.1.0`
 - `js-testkit-v0.1.0`

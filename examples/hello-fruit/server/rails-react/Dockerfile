@@ -7,9 +7,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
 COPY packages/ruby ./packages/ruby
-COPY examples/hello-fruit/server/rails-hotwire ./examples/hello-fruit/server/rails-hotwire
+COPY examples/hello-fruit/server/rails-react ./examples/hello-fruit/server/rails-react
 
-WORKDIR /app/examples/hello-fruit/server/rails-hotwire
+WORKDIR /app/examples/hello-fruit/server/rails-react
 RUN bundle install
 
 ENV RAILS_ENV=production

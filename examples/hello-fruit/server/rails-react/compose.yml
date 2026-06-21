@@ -1,9 +1,9 @@
 services:
-  hello-fruit-rails-hotwire:
+  hello-fruit-rails-react:
     build:
       context: ../../../..
-      dockerfile: examples/hello-fruit/server/rails-hotwire/Dockerfile
-    image: ghcr.io/openreceive/demo-rails-hotwire:local
+      dockerfile: examples/hello-fruit/server/rails-react/Dockerfile
+    image: ghcr.io/openreceive/demo-rails-react:local
     env_file:
       - path: ../../../../.env
         required: false

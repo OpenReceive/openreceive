@@ -5,7 +5,7 @@ require "active_record/railtie"
 require "action_cable/engine"
 require "openreceive/rails"
 
-module HelloFruitRailsHotwire
+module HelloFruitRailsReact
   class Application < Rails::Application
     config.load_defaults 7.1
     config.eager_load = ENV["RAILS_ENV"] == "production"

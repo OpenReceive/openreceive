@@ -11,14 +11,15 @@ OpenReceive::Rails.configure do |config|
       connection_uri: connection_uri
     )
   end
-  config.merchant_scope = "hello-fruit-rails-hotwire"
+  config.store = OpenReceive::Rails.create_active_record_invoice_store
+  config.merchant_scope = "hello-fruit-rails-react"
   config.production = ENV.fetch("RAILS_ENV", "development") == "production"
   config.authenticate = ->(_controller) { true }
   config.authorize_invoice = ->(_controller, _invoice) { true }
   config.metadata = lambda do |_controller, params|
     {
       "fruit" => params["fruit"] || "banana",
-      "demo" => "rails-hotwire"
+      "demo" => "rails-react"
     }
   end
   config.settlement_action = lambda do |invoice|

@@ -32,6 +32,20 @@ export interface OpenReceivePostgresInvoiceStoreOptions {
   tableName?: string;
 }
 
+export interface OpenReceivePostgresPool {
+  query(
+    sql: string,
+    values?: readonly unknown[]
+  ): Promise<OpenReceivePostgresQueryResult>;
+}
+
+export interface OpenReceivePostgresInvoiceStoreFromPoolOptions {
+  pool: OpenReceivePostgresPool;
+  tableName?: string;
+  onReady?: (schemaVersion: string) => void;
+  onMigrationError?: (error: unknown) => void;
+}
+
 const DEFAULT_TABLE_NAME = "openreceive_invoices";
 const IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
@@ -101,6 +115,34 @@ export function createOpenReceivePostgresInvoiceStore(
   options: OpenReceivePostgresInvoiceStoreOptions
 ): OpenReceivePostgresInvoiceStore {
   return new OpenReceivePostgresInvoiceStore(options);
+}
+
+export function createOpenReceivePostgresInvoiceStoreFromPool(
+  options: OpenReceivePostgresInvoiceStoreFromPoolOptions
+): OpenReceivePostgresInvoiceStore {
+  const migration = options.pool.query(OPENRECEIVE_POSTGRES_MIGRATION_SQL)
+    .then(() => {
+      options.onReady?.(OPENRECEIVE_DATABASE_SCHEMA_VERSION);
+    });
+
+  void migration.catch((error) => {
+    options.onMigrationError?.(error);
+  });
+
+  const client: OpenReceivePostgresQueryClient = {
+    async query(sql, values) {
+      await migration;
+      return await options.pool.query(
+        sql,
+        values === undefined ? undefined : [...values]
+      );
+    }
+  };
+
+  return createOpenReceivePostgresInvoiceStore({
+    client,
+    ...(options.tableName === undefined ? {} : { tableName: options.tableName })
+  });
 }
 
 export class OpenReceivePostgresInvoiceStore implements OpenReceiveInvoiceStore {

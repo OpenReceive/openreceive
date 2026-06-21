@@ -142,7 +142,7 @@ test("demo deployment docs preserve public edge and runner boundaries", () => {
 });
 
 test("release readiness validator accepts current v0.1 metadata", () => {
-  assert.match(runReleaseReadinessValidator(), /Release readiness validation passed for 11 package\(s\)\./);
+  assert.match(runReleaseReadinessValidator(), /Release readiness validation passed for 12 package\(s\)\./);
 });
 
 test("workflow validator accepts safe public workflow skeletons", () => {

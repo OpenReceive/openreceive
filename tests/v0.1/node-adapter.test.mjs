@@ -18,6 +18,7 @@ import {
   OPENRECEIVE_SQLITE_MIGRATION_SQL,
   createAlbyNwcReceiveClient,
   createOpenReceivePostgresInvoiceStore,
+  createOpenReceivePostgresInvoiceStoreFromPool,
   createOpenReceiveSqliteInvoiceStore,
   createOpenReceiveSqliteQueryClient,
   migrateOpenReceiveSqlite,
@@ -318,6 +319,31 @@ test("Node Postgres store owns invoice persistence and recovery semantics", asyn
       }),
     /different request body/
   );
+});
+
+test("Node Postgres pool helper owns migration setup before store queries", async () => {
+  const calls = [];
+  const readyVersions = [];
+  const pool = {
+    async query(sql, values) {
+      calls.push({ sql, values });
+      return { rows: [] };
+    }
+  };
+
+  const store = createOpenReceivePostgresInvoiceStoreFromPool({
+    pool,
+    onReady(schemaVersion) {
+      readyVersions.push(schemaVersion);
+    }
+  });
+
+  assert.equal(await store.getInvoice("or_inv_missing"), undefined);
+  assert.match(calls[0].sql, /CREATE TABLE IF NOT EXISTS openreceive_invoices/);
+  assert.match(calls[0].sql, new RegExp(`VALUES \\('${OPENRECEIVE_DATABASE_SCHEMA_VERSION}'\\)`));
+  assert.deepEqual(readyVersions, [OPENRECEIVE_DATABASE_SCHEMA_VERSION]);
+  assert.match(calls.at(-1).sql, /SELECT \* FROM "?openreceive_invoices"?/);
+  assert.deepEqual(calls.at(-1).values, ["or_inv_missing"]);
 });
 
 test("Node SQLite store owns invoice persistence and recovery semantics", async () => {

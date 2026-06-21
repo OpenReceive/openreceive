@@ -5,12 +5,13 @@ class HelloFruitController < ApplicationController
   end
 
   def health
-    render json: { ok: true, demo: "rails-hotwire" }
+    render json: { ok: true, demo: "rails-react", quarantined: true }
   end
 
   def metadata
     render json: {
-      demo: "rails-hotwire",
+      demo: "rails-react",
+      quarantined: true,
       wallet_configured: ENV["OPENRECEIVE_NWC"].to_s != "",
       nwc_secret_exposed: false
     }

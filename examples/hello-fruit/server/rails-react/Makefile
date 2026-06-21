@@ -1,4 +1,4 @@
-IMAGE ?= ghcr.io/openreceive/demo-rails-hotwire:local
+IMAGE ?= ghcr.io/openreceive/demo-rails-react:local
 COMPOSE ?= docker compose -f compose.yml -f compose.override.yml.example
 HEALTH_URL ?= http://127.0.0.1:3003/healthz
 
@@ -9,7 +9,7 @@ dev:
 	bundle exec rails server -b 0.0.0.0 -p $${PORT:-3003}
 
 test:
-	bundle exec rails runner 'puts "rails-hotwire demo skeleton ok"'
+	bundle exec rails runner 'puts "rails-react quarantined skeleton ok"'
 
 demo-test-nwc:
 	OPENRECEIVE_DEMO_MODE=test_nwc $(COMPOSE) up --build

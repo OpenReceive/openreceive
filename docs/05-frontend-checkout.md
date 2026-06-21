@@ -501,6 +501,40 @@ forking payment logic:
 />
 ```
 
+React has three supported UI paths:
+
+- Default UI: use `OpenReceiveCheckout` and package CSS for demos, quickstarts,
+  and teams without a design system.
+- Primitive/slot UI: use `OpenReceiveQRCode`, `CopyInvoiceButton`,
+  `OpenWalletButton`, component overrides, class names, and render props while
+  the package still owns checkout behavior.
+- Fully headless UI: use `useOpenReceiveCheckout()` and app-owned markup/CSS;
+  the hook still owns polling, SSE updates, countdown state, copy/open-wallet,
+  refresh/retry/cancel, and display-safe state conversion.
+
+```tsx
+function CustomCheckout({ invoice }) {
+  const checkout = useOpenReceiveCheckout({
+    ...invoice,
+    lookupUrl: "/openreceive/v1/invoices/lookup"
+  });
+
+  return (
+    <section className="myCheckout">
+      <OpenReceiveQRCode invoice={checkout.invoice} />
+      <p>{checkout.amountLabel}</p>
+      <button onClick={checkout.copyInvoice} type="button">
+        Copy
+      </button>
+      <button onClick={checkout.openWallet} type="button">
+        Open wallet
+      </button>
+      <span>{checkout.status.title}</span>
+    </section>
+  );
+}
+```
+
 For full markup ownership, pass a render function as `children`. The render
 function receives the display-safe checkout view model.
 
