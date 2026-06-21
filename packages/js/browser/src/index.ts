@@ -1778,6 +1778,17 @@ export function getOpenReceiveBitcoinAssets(): readonly AssetIndexEntry[] {
   );
 }
 
+function getOpenReceiveDefaultBitcoinRoute(): string | null {
+  const routes = [
+    ...new Set(
+      getOpenReceiveBitcoinAssets().flatMap((asset) =>
+        asset.route === undefined ? [] : [asset.route]
+      )
+    )
+  ];
+  return routes.length === 1 ? routes[0] ?? null : null;
+}
+
 export function getOpenReceiveAltcoinAssets(): readonly AssetIndexEntry[] {
   return getAssets().filter(
     (asset) =>
@@ -2082,7 +2093,7 @@ export function createOpenReceivePaymentWizardState(
         railCountries[0];
   const selectedRouteId =
     request.selectedMethod === "bitcoin"
-      ? request.selectedBitcoinRoute ?? null
+      ? request.selectedBitcoinRoute ?? getOpenReceiveDefaultBitcoinRoute()
       : request.selectedMethod === "crypto"
         ? request.selectedCryptoRoute ?? null
         : null;
@@ -2138,12 +2149,7 @@ export function createOpenReceivePaymentWizardModel(
       : selection.selectedMethod === "crypto"
         ? getOpenReceiveAltcoinAssets()
         : [];
-  const selectedRoute =
-    selection.selectedMethod === "bitcoin"
-      ? selection.selectedBitcoinRoute
-      : selection.selectedMethod === "crypto"
-        ? selection.selectedCryptoRoute
-        : null;
+  const selectedRoute = wizard.selectedRouteId;
   const countryPicker = createOpenReceiveCountryPickerModel({
     countries: wizard.railCountries,
     selectedCountryCode: selection.selectedCountryCode,
@@ -2180,6 +2186,9 @@ export function updateOpenReceivePaymentWizardSelection(
         return {
           ...selection,
           selectedMethod: action.method,
+          selectedBitcoinRoute: action.method === "bitcoin"
+            ? selection.selectedBitcoinRoute ?? getOpenReceiveDefaultBitcoinRoute()
+            : selection.selectedBitcoinRoute,
           countryPickerOpen: false
         };
       }

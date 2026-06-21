@@ -102,6 +102,19 @@ test("elements render payment wizard route choices and providers from browser st
   assert.match(cryptoStep, /How To Pay/);
   assert.doesNotMatch(cryptoStep, /Pays invoices/);
 
+  const bitcoinStep = renderOpenReceivePaymentWizardHtml({
+    selectedMethod: "bitcoin"
+  });
+  assert.match(bitcoinStep, /data-or-breadcrumb="method"/);
+  assert.match(bitcoinStep, />Payment method<\/span>/);
+  assert.match(bitcoinStep, />Bitcoin<\/span>/);
+  assert.doesNotMatch(bitcoinStep, /data-or-breadcrumb="route"/);
+  assert.doesNotMatch(bitcoinStep, /data-or-route="btc-lightning"/);
+  assert.doesNotMatch(bitcoinStep, /part="route-picker"/);
+  assert.doesNotMatch(bitcoinStep, /Choose Bitcoin Lightning/);
+  assert.match(bitcoinStep, /Bitcoin Lightning/);
+  assert.match(bitcoinStep, /How To Pay/);
+
   const cardStep = renderOpenReceivePaymentWizardHtml({
     selectedMethod: "card",
     selectedCountryCode: "US"

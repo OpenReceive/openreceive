@@ -436,11 +436,8 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
     type: "select_method",
     method: "bitcoin"
   });
-  const routeSelection = updateOpenReceivePaymentWizardSelection(bitcoinSelection, {
-    type: "select_route",
-    route: "btc-lightning"
-  });
-  const routeModel = createOpenReceivePaymentWizardModel(routeSelection);
+  assert.equal(bitcoinSelection.selectedBitcoinRoute, "btc-lightning");
+  const routeModel = createOpenReceivePaymentWizardModel(bitcoinSelection);
   assert.equal(routeModel.selectedRoute, "btc-lightning");
   assert.ok(routeModel.routeAssets.length > 0);
   const routeAssetDisplays = createOpenReceiveWizardRouteAssetDisplays(routeModel.routeAssets, {

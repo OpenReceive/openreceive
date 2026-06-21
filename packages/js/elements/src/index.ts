@@ -300,7 +300,7 @@ function renderWizardBreadcrumbsHtml(options: {
 }): string {
   const method = openReceivePaymentMethods.find((candidate) => candidate.id === options.method);
   const methodLabel = method?.title ?? openReceiveCheckoutLabels.paymentMethod;
-  const routeLabel = options.selectedRoute === null
+  const routeLabel = options.selectedRoute === null || options.routeAssets.length <= 1
     ? null
     : options.routeAssets.find((asset) => asset.id === options.selectedRoute)?.label ?? options.selectedRoute;
 

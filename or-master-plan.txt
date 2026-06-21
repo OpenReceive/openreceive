@@ -14,22 +14,12 @@ Recommended public names:
   GitHub org:        openreceive
   Main repo:         openreceive/openreceive
   Apex/private app:  openreceive.org, private Rails/Kamal app, out of scope
-  Docs:              docs.openreceive.org
   Hosted demos:      demos.openreceive.org
   Playground:        play.openreceive.org
   Registry CDN:      registry.openreceive.org
   Demo subdomains:   django-demo.openreceive.org, express-demo.openreceive.org
   Runtime model:     no required OpenReceive daemon; package runner inside app backend
 
-If the misspelled domain was purchased, keep it only as a redirect.
-
-License
--------
-
-Use the MIT License for the OpenReceive repository and first-party packages
-unless a specific package has a documented compatibility reason to use another
-permissive license. Third-party NWC, crypto, framework, and UI dependencies
-must be compatible with MIT distribution.
 
 Existing openreceive.org app:
 
