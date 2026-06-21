@@ -1,5 +1,10 @@
 # PHP Quickstart Status
 
+First step: get a read-only NWC code so your app can create invoices and check
+payment status from your server. You can use any NWC provider and switch
+providers at any time. Start here:
+https://openreceive.org/get_a_nwc_code_to_receive_payments
+
 OpenReceive does not have a PHP package yet. This page records the intended PHP
 server shape for future Laravel, Symfony, or plain PHP integrations.
 
@@ -11,15 +16,14 @@ docs/01-quickstart-node.md
 
 ## Planned Shape
 
-A PHP integration should mount into the merchant's application and use the
-application's existing auth, database, queue, and deployment model. The package
-should own two backend entry points: a poll command/job for settlement polling
-and restart recovery, and a listen command/job for payment_received
-notifications. Developers should run both; polling remains the fallback when
-notifications do not arrive.
-The PHP package should ship OpenReceive migrations/models for the target
-framework; host apps should not hand-roll invoice/idempotency tables. The host
-app supplies metadata references and settlement hooks.
+A PHP integration mounts into your application and uses the app's
+existing auth, database, queue, and deployment model. The OpenReceive package
+would provide a poll command/job for settlement polling and restart recovery
+plus a listen command/job for `payment_received` notifications. Run both;
+polling remains the fallback when notifications do not arrive.
+The PHP package would ship OpenReceive migrations/models for the target
+framework. The app supplies metadata references and settlement hooks while
+OpenReceive handles its invoice/idempotency rows.
 
 Expected PHP pieces:
 
@@ -34,19 +38,19 @@ Expected PHP pieces:
 
 ## Security Boundary
 
-Never expose `OPENRECEIVE_NWC` through Blade/Twig templates, public env vars,
-frontend bundles, mobile apps, logs, exception pages, or analytics payloads.
+Keep `OPENRECEIVE_NWC` out of Blade/Twig templates, public env vars, frontend
+bundles, mobile apps, logs, exception pages, and analytics payloads.
 
 Frontend code receives only display-safe invoice data and authorized status or
-event URLs. A client-supplied settled flag, preimage, or notification must not
-run a merchant settlement action.
+event URLs. Your settlement actions run from backend wallet verification,
+not from client-supplied settled flags, preimages, or passive notifications.
 
 ## Conformance
 
-Future PHP packages should use the same schemas, test vectors, deterministic
-mock wallet, and live wallet profile smoke flow as the JS reference path.
+PHP packages use the same schemas, test vectors, deterministic mock wallet, and
+live wallet profile smoke flow as the JS reference path.
 
-Do not publish PHP packages until they prove:
+Before publishing a PHP package, cover:
 
 - canonical idempotency replay and conflict behavior
 - `make_invoice` and `lookup_invoice` request validation

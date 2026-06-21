@@ -269,7 +269,7 @@ function runInit(input: {
         "    client: createOpenReceiveSqliteQueryClient(database)",
         "  }),",
         "  eventBus: new InMemoryInvoiceEventBus(),",
-        "  merchantScope: () => \"merchant:default\",",
+        "  merchantScope: () => \"app:default\",",
         "  settlementAction: async (_input) => {",
         "    // Unlock the app-owned order, account, or entitlement here.",
         "  }",

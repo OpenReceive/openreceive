@@ -7,7 +7,7 @@ require "uri"
 
 module OpenReceive
   VERSION = "0.1.0"
-  NWC_CODE_HELP_URL = "https://openreceive.org/get_an_nwc_code"
+  NWC_CODE_HELP_URL = "https://openreceive.org/get_a_nwc_code_to_receive_payments"
   NWC_METADATA_MAX_BYTES = 3900
   MIN_AMOUNT_MSATS = 1000
   MAX_AMOUNT_MSATS = 9_007_199_254_740_991

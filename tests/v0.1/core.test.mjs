@@ -113,12 +113,12 @@ test("NWC boot messages explain the read-only code requirement", () => {
   const missing = formatOpenReceiveMissingNwcMessage({ subject: "Demo" });
   assert.match(missing, /Demo needs a read-only NWC code to receive payments\./);
   assert.match(missing, /Set OPENRECEIVE_NWC/);
-  assert.match(missing, /https:\/\/openreceive\.org\/get_an_nwc_code/);
+  assert.match(missing, /https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/);
 
   const invalid = formatOpenReceiveInvalidNwcMessage({ reason: "bad scheme" });
   assert.match(invalid, /not a valid NWC code/);
   assert.match(invalid, /bad scheme/);
-  assert.match(invalid, /https:\/\/openreceive\.org\/get_an_nwc_code/);
+  assert.match(invalid, /https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/);
 });
 
 test("canonical OpenReceive errors expose stable schema codes", () => {

@@ -1,5 +1,10 @@
 # Rails Quickstart Status
 
+First step: get a read-only NWC code so your app can create invoices and check
+payment status from your server. You can use any NWC provider and switch
+providers at any time. Start here:
+https://openreceive.org/get_a_nwc_code_to_receive_payments
+
 OpenReceive now has an initial Rails adapter helper package at
 `packages/ruby/openreceive-rails`. It can wrap an injected receive-only client
 for idempotent invoice creation, authorized lookup, backend settlement
@@ -39,10 +44,10 @@ docs/01-quickstart-node.md
 
 ## Planned Shape
 
-A Rails integration should mount OpenReceive inside the merchant app, not run a
-separate daemon. The app owns authentication, order/session lookup, storage,
-merchant settlement actions, and worker deployment. The Rails package should
-own the two runner entry points the app deploys:
+A Rails integration mounts OpenReceive inside your app. Rails keeps
+using the app's existing authentication, order/session lookup, database,
+settlement actions, and worker deployment. The Rails package provides the
+backend entry points the app deploys:
 
 - `bin/rails openreceive:poll` or a generated recurring job for settlement
   polling and restart recovery
@@ -52,13 +57,11 @@ own the two runner entry points the app deploys:
   and worker readiness. The doctor task fails if the app is still using the
   Ruby in-memory test store or a store without migration diagnostics.
 
-Deploy those as separate backend processes or worker roles. Do not put the
-long-running polling loop or notification subscription in a web request thread.
-Developers should run both poll and listen; polling remains the fallback when
-notifications do not arrive.
-The Rails package should generate and own the OpenReceive invoice tables and
-ActiveRecord model; the host app should not hand-design those rows. The host app
-provides order/user references in metadata and app-owned hooks such as
+Deploy those as backend worker processes or worker roles next to the Rails web
+process. Run both poll and listen; polling remains the fallback when
+notifications do not arrive. The Rails package generates and owns the
+OpenReceive invoice tables and ActiveRecord model. Your Rails app provides
+order/user references in metadata and app-owned hooks such as
 `settlement_action`.
 
 Expected Rails pieces:
@@ -75,17 +78,18 @@ Expected Rails pieces:
 
 ## Security Boundary
 
-Rails views, Stimulus controllers, import maps, bundled JavaScript, and mobile
-clients must never receive `OPENRECEIVE_NWC`.
+Keep `OPENRECEIVE_NWC` on the Rails server. Rails views, Stimulus controllers,
+import maps, bundled JavaScript, and mobile clients only receive display-safe
+invoice data.
 
 The browser receives only display-safe invoice data: BOLT11 invoice text,
 Lightning URI, amount, status, and authorized event or lookup URLs. Settlement
-must still be confirmed by the Rails backend through `lookup_invoice`.
+is confirmed by the Rails backend through `lookup_invoice`.
 
 ## Conformance
 
-Future Rails work should consume the shared schemas and vectors, then run the
-deterministic mock wallet before live wallet profile tests. It must preserve:
+Rails work uses the shared schemas and vectors, then runs the deterministic
+mock wallet before live wallet profile tests. Before publishing, cover:
 
 - idempotency scope and request-body conflict behavior
 - `amount_msats` boundaries
@@ -94,5 +98,6 @@ deterministic mock wallet before live wallet profile tests. It must preserve:
 - settlement requiring `settled_at` or settled wallet state
 - duplicate notification replay safety
 
-Do not publish a Rails package until it passes the shared conformance gate.
-Do not use the Ruby in-memory store as production Rails persistence.
+The Rails package stays unpublished until it passes the shared conformance
+gate. Use ActiveRecord-backed persistence for Rails apps; the Ruby in-memory
+store is only for local tests.

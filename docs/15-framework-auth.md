@@ -15,7 +15,8 @@ Typical rules:
 - `GET /openreceive/v1/invoices/{invoice_id}` requires ownership of the
   invoice, order, cart, or checkout session.
 - `POST /openreceive/v1/invoices/lookup` is server-side or strongly
-  authorized. Do not expose `payment_hash` lookup as a public status oracle.
+  authorized. Keep `payment_hash` lookup behind your normal order, cart,
+  checkout, or service authorization.
 - `POST /openreceive/v1/invoices/{invoice_id}/refresh` requires ownership of
   the old invoice and only creates a linked replacement after expiry or failure.
 - `GET /openreceive/v1/invoices/{invoice_id}/events` uses the same ownership
@@ -29,9 +30,10 @@ middleware or token verification.
 
 ## CORS
 
-Defaults should deny credentialed cross-origin access.
+Start with credentialed cross-origin access disabled, then add explicit origins
+for the domains that need it.
 
-Do not combine wildcard CORS with credentials. Configure explicit origins:
+For credentialed requests, configure explicit origins:
 
 ```ts
 cors: {
@@ -62,7 +64,7 @@ that invoice. If the query value is missing, the adapter falls back to the
 normal `auth.events` hook. If it is present but expired or scoped to another
 invoice, the route fails closed.
 
-Signed event URLs must:
+Good signed event URLs are:
 
 - Be scoped to one invoice.
 - Expire quickly.
@@ -70,15 +72,14 @@ Signed event URLs must:
 - Use `Referrer-Policy: same-origin` or stricter.
 - Avoid logging full URLs.
 
-The event payload is still passive. It can update UI, but it must not run a
-merchant settlement action by itself.
+The event payload is still passive. It can update UI; your settlement
+actions run from backend wallet verification.
 
 ## Lookup Authorization
 
 Lookup by `payment_hash` or BOLT11 invoice can reveal payment status. Treat it
-as sensitive. The adapter must check that the current user, cart, order,
-checkout session, or backend service principal may inspect that invoice before
-returning status.
+as sensitive. Configure the adapter so only the current user, cart, order,
+checkout session, or backend service principal for that invoice can inspect it.
 
 ## Settlement Actions
 
@@ -87,8 +88,8 @@ calls it only after wallet lookup proves settlement, then marks the invoice
 settlement action completed and publishes `invoice.settlement_action_completed`.
 If no hook is configured, the adapter may complete that boundary as a no-op
 after backend settlement is proven.
-Hooks must be idempotent and must not trust frontend state or passive event
-delivery as action authority.
+Write hooks as idempotent backend actions. They receive settlement from wallet
+verification, not from frontend state or passive event delivery.
 
 ## Demo Mode
 

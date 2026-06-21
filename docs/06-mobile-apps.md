@@ -13,14 +13,14 @@ docs/01-quickstart-node.md
 
 A mobile app may:
 
-- call a merchant backend to create an invoice
+- call your backend to create an invoice
 - display amount, BOLT11 invoice text, QR data, and payment status
 - copy the invoice
 - open a Lightning wallet through a platform deep link
 - poll an authorized lookup endpoint
 - subscribe to server-sent or push-style status updates exposed by the backend
 
-A mobile app must not:
+A mobile app leaves these on the backend:
 
 - store `OPENRECEIVE_NWC`
 - create live invoices directly through NWC
@@ -40,14 +40,14 @@ The backend owns:
 - settlement verification
 - app-owned settlement actions
 
-Mobile UI should treat events and polling responses as display state. The
-backend must remain the settlement authority.
+Mobile UI treats events and polling responses as display state. The backend
+remains the settlement authority.
 
 ## Future SDKs
 
 Native mobile UI kits can wrap display-safe behavior after backend conformance
-is stable. They should share the same visual payload rules as
+is stable. They will share the same visual payload rules as
 `@openreceive/browser`, `@openreceive/elements`, and `@openreceive/react`.
 
-Do not publish a native mobile live-checkout SDK that embeds NWC or promises
-pure frontend checkout.
+Live checkout still goes through your backend; native UI kits
+will stay on the display-safe side of that boundary.

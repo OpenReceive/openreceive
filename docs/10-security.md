@@ -13,7 +13,7 @@ test fixtures.
 ## Settlement
 
 The frontend may show passive progress from polling or events, but it never
-runs merchant settlement actions. Backend lookup is the source of truth.
+runs your settlement actions. Backend lookup is the source of truth.
 OpenReceive treats an incoming invoice as settled only when `lookup_invoice`
 returns `settled_at` or `state == "settled"`. A preimage alone is not enough.
 

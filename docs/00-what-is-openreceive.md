@@ -1,7 +1,7 @@
 # What Is OpenReceive
 
 OpenReceive adds uncensorable, global, permissionless inbound payments to any
-website or app using only open-source technology.
+website or app using open-source, verifiable technology that cannot be shut down.
 
 OpenReceive is not a bank, exchange, payment processor, wallet backend,
 custodian, broker, or money transmitter. It does not hold funds, exchange
@@ -10,11 +10,11 @@ assets, route money, or operate customer accounts.
 OpenReceive's front end checkout helpers give purchasers friendly
 route guidance so they can start from a credit card, bank account, Bitcoin
 wallet, stablecoin balance, exchange, onramp, or swap service and complete an
-instant payment on the merchant's website.
+instant payment on your website or app.
 
 OpenReceive does three narrow things:
 
-1. Creates one BOLT11 invoice through the merchant's own server-side NWC wallet
+1. Creates one BOLT11 invoice through your app's server-side NWC wallet
    connection.
 2. Lets the frontend show QR, copy, open-wallet, countdown, and friendly route
    guidance for that invoice.
@@ -27,8 +27,8 @@ through third-party services outside OpenReceive.
 
 ## Runtime Model
 
-There is no required OpenReceive daemon. Framework adapters run inside the
-merchant's normal app and job system, and backend packages provide two
+There is no required OpenReceive daemon. Framework adapters run inside your
+app's normal server and job system, and backend packages provide two
 long-running pieces:
 
 - a settlement polling runner for restart recovery, final expiry lookup, and
@@ -36,19 +36,27 @@ long-running pieces:
 - a payment notification listener that keeps the wallet subscription open and
   wakes backend lookup when notifications arrive
 
-In production, run those as your web process plus one OpenReceive backend
-worker process. The worker starts polling and notification listening together.
-They are not browser code. Do not model them as threads inside the web request
-path.
+In production, deploy your normal web process plus one OpenReceive backend
+worker process:
+
+```text
+web                 your usual app command
+openreceive-worker  openreceive worker
+```
+
+The worker starts polling and notification listening together. It uses the same
+server-only config as your app, but it runs as its own backend process instead
+of inside an HTTP request handler.
 
 Local invoice expiry is not a settlement decision. If the server is down while
 an invoice expires, the poll process recovers that invoice after restart
 and asks the wallet before OpenReceive closes it as expired.
 
-OpenReceive packages provide the invoice persistence schema for the host app
-database. Run the package migration or install generator, then attach
-app-owned hooks such as `onInvoiceSettlement`. Do not design OpenReceive
-invoice/idempotency tables by hand.
+OpenReceive packages provide the invoice persistence schema for your existing
+app database. Run the package migration or install generator, then attach
+app-owned hooks such as `onInvoiceSettlement`. Your app keeps its own orders,
+carts, users, and fulfillment tables; OpenReceive handles the invoice and
+idempotency rows it needs.
 
 - Express routes in an Express app.
 - Rails controllers, models, and workers in a Rails app.

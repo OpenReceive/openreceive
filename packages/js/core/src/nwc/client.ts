@@ -2,7 +2,7 @@ export const OPENRECEIVE_NWC_METADATA_MAX_BYTES = 3900 as const;
 export const NWC_URI_PROTOCOL = "nostr+walletconnect:" as const;
 export const NWC_REDACTED_SECRET = "[REDACTED]" as const;
 export const OPENRECEIVE_NWC_CODE_HELP_URL =
-  "https://openreceive.org/get_an_nwc_code" as const;
+  "https://openreceive.org/get_a_nwc_code_to_receive_payments" as const;
 
 const HEX_64 = /^[0-9a-fA-F]{64}$/;
 

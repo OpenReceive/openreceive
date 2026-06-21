@@ -1,7 +1,7 @@
 # Frontend Checkout
 
-Frontend code receives display-safe invoice data only. It must never receive an
-NWC connection string, wallet secret, or server-side wallet client.
+Frontend code receives display-safe invoice data only. Keep NWC connection
+strings, wallet secrets, and server-side wallet clients on the backend.
 
 ## Browser Helpers
 
@@ -116,7 +116,7 @@ strings.
 
 The checkout state helpers are pure browser-side reducers for display state.
 They update only matching `invoice_id` and `payment_hash` events, track
-countdown/phase fields, and keep settlement as a UI hint. Merchant settlement
+countdown/phase fields, and keep settlement as a UI hint. Your settlement
 actions still require backend lookup and app-owned authorization.
 
 ```ts
@@ -141,33 +141,31 @@ country storage; country/region metadata; provider-route lookup; and shared UI
 defaults such as polling cadence, copy-feedback timing, and provider preview
 count.
 
-Adapters should use the wizard selection reducer/model for method selection,
-country switching, country map pins, region tabs, Bitcoin/crypto route choices,
-and derived visible country/route lists. That keeps React, web components,
-Vue/Svelte/Angular bindings, and future native framework components from each
-growing slightly different wizard logic.
+Use the wizard selection reducer/model for method selection, country switching,
+country map pins, region tabs, Bitcoin/crypto route choices, and derived
+visible country/route lists. That keeps React, web components,
+Vue/Svelte/Angular bindings, and future native framework components aligned.
 
-Framework adapters should use `createOpenReceiveCheckoutController()` or the
-lower-level `OpenReceiveCheckoutWatcher` instead of reimplementing SSE
-subscriptions, lookup polling, countdown timers, lookup POST bodies, or
-lookup-response merging. The React and web-component packages pass `lookupUrl`
-to the browser controller rather than constructing lookup fetchers locally.
+Framework adapters use `createOpenReceiveCheckoutController()` or the
+lower-level `OpenReceiveCheckoutWatcher` for SSE subscriptions, lookup polling,
+countdown timers, lookup POST bodies, and lookup-response merging. The React
+and web-component packages pass `lookupUrl` to the browser controller rather
+than constructing lookup fetchers locally.
 They emit display-safe checkout state only; backend lookup remains the
 settlement authority. Checkout state creation computes `expiresInSeconds` with
-the browser package's default clock when `expires_at` is present, so adapters do
-not need their own clock helpers to render a countdown.
-Manual reload and retry controls should call the controller's `reloadState()`
-and `retry()` actions so they use the same backend lookup shape and
-lookup-response merge behavior as polling. Refresh controls should call
-`refreshExpiredInvoice()` only after the app provides either `refreshInvoice`
-or `refreshUrl` plus `refreshIdempotencyKey`; the action POSTs to the merchant
-backend refresh route and replaces browser state with the backend's new invoice
-snapshot. Cancel controls should call `cancel()` to stop the browser watcher
-without pretending the backend invoice has been settled.
-Adapters should derive payment status UI from
-`createOpenReceiveCheckoutStatusModel()` instead of rechecking expiry or
-settlement fields locally, formatting countdown labels locally, or composing
-their own waiting/settled/expired status text.
+the browser package's default clock when `expires_at` is present, so adapters
+can render countdowns without their own clock helpers.
+Manual reload and retry controls call the controller's `reloadState()` and
+`retry()` actions so they use the same backend lookup shape and lookup-response
+merge behavior as polling. Refresh controls call `refreshExpiredInvoice()` after
+the app provides either `refreshInvoice` or `refreshUrl` plus
+`refreshIdempotencyKey`; the action POSTs to your backend refresh route
+and replaces browser state with the backend's new invoice snapshot. Cancel
+controls call `cancel()` to stop the browser watcher without changing backend
+invoice settlement.
+Derive payment status UI from `createOpenReceiveCheckoutStatusModel()` so
+adapters share expiry checks, settlement display, countdown labels, and
+waiting/settled/expired status text.
 For framework adapters that need a headless action surface,
 `createOpenReceiveCheckoutController()` bundles the same watcher lifecycle with
 package-owned `copyInvoice()`, `openWallet()`, `reloadState()`, `retry()`,
@@ -180,20 +178,18 @@ controller for live checkout state and primary copy/open-wallet actions.
 Shared checkout labels also live in the browser package so React, web
 components, Vue/Svelte/Angular bindings, future native framework components,
 and demos do not drift on status messages, copy feedback, provider badges, or
-wizard text. Adapter UI should derive provider action labels, route subtitles,
-country prompts, and payment status displays from these helpers instead of
-composing local strings.
-Checkout display labels also live there: adapters should derive Lightning URI,
-amount labels, shortened payment hashes, transaction-state labels, and display
-invoice safety from `createOpenReceiveCheckoutDisplayModel()` instead of
-rebuilding those details locally. When an adapter has display invoice data and
-needs checkout state or a live-controller snapshot, it should use
+wizard text. Adapter UI derives provider action labels, route subtitles,
+country prompts, and payment status displays from these helpers.
+Checkout display labels also live there: adapters derive Lightning URI, amount
+labels, shortened payment hashes, transaction-state labels, and display invoice
+safety from `createOpenReceiveCheckoutDisplayModel()`. When an adapter has
+display invoice data and needs checkout state or a live-controller snapshot, use
 `createOpenReceiveCheckoutStateFromDisplayData()` or
 `createOpenReceiveCheckoutSnapshotFromDisplayData()` rather than duplicating the
 snapshot shape. Those helpers preserve `settled_at` when the backend includes
 it, so adapters do not drop settlement timestamps while rendering display state.
-String-rendered adapters should use `escapeOpenReceiveHtml()` instead of
-copying HTML escape rules locally.
+String-rendered adapters use `escapeOpenReceiveHtml()` for shared display
+escaping.
 Shared checkout icon assets also live in the browser package so default UIs and
 future framework adapters render the same method, Bitcoin route, and crypto
 asset icons without copying SVG ownership into each package.

@@ -934,14 +934,14 @@ test("Hello Fruit demos refuse to boot without OPENRECEIVE_NWC", async () => {
     ]) {
       assert.throws(
         () => demo.createApp(),
-        /needs a read-only NWC code to receive payments\.[\s\S]+https:\/\/openreceive\.org\/get_an_nwc_code/,
+        /needs a read-only NWC code to receive payments\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
         `${demo.name}: requires NWC at boot`
       );
     }
 
     assert.throws(
       () => getNextDemoMetadata(),
-      /needs a read-only NWC code to receive payments\.[\s\S]+https:\/\/openreceive\.org\/get_an_nwc_code/,
+      /needs a read-only NWC code to receive payments\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
       "nextjs-fullstack: metadata requires NWC"
     );
   });
@@ -951,15 +951,15 @@ test("Hello Fruit demos refuse malformed OPENRECEIVE_NWC before serving", async 
   await withEnv({ OPENRECEIVE_NWC: "https://example.com" }, async () => {
     assert.throws(
       () => createHelloFruitServer(),
-      /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_an_nwc_code/
+      /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/
     );
     assert.throws(
       () => createHelloFruitStaticServer(),
-      /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_an_nwc_code/
+      /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/
     );
     assert.throws(
       () => getNextDemoMetadata(),
-      /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_an_nwc_code/
+      /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/
     );
   });
 });

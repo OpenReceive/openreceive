@@ -1,5 +1,10 @@
 # Node Framework Quickstart
 
+First step: get a read-only NWC code so your app can create invoices and check
+payment status from your server. You can use any NWC provider and switch
+providers at any time. Start here:
+https://openreceive.org/get_a_nwc_code_to_receive_payments
+
 OpenReceive runs inside your app. Pick the framework path you use, add the
 server route, then render the display-safe checkout UI in the browser.
 
@@ -35,9 +40,11 @@ npx openreceive doctor --postgres "$DATABASE_URL"
 If your app uses a different env name, pass that value instead. SQLite apps can
 use `--sqlite ./storage/openreceive.sqlite3`.
 
-MongoDB, MySQL, and arbitrary user-designed invoice tables are not supported
-until OpenReceive ships a store, migration path, and conformance coverage for
-them.
+For production today, use the package-owned Postgres store. SQLite is available
+for local development, demos, and small apps. MongoDB, MySQL, Prisma-native
+models, Drizzle-native models, and custom invoice tables are future adapter
+work; OpenReceive needs to ship the store, migration path, and test coverage
+before those are drop-in options.
 
 ## Express
 
@@ -161,7 +168,7 @@ function getRuntime() {
     store: createOpenReceivePostgresInvoiceStoreFromPool({
       pool
     }),
-    merchantScope: () => "merchant:default",
+    merchantScope: () => "app:default",
     auth: {
       create: (req) => isAllowedToCreateInvoice(req),
       read: (req, invoice) => ownsInvoice(req, invoice),
@@ -285,7 +292,7 @@ function getRuntime() {
     store: createOpenReceivePostgresInvoiceStoreFromPool({
       pool
     }),
-    merchantScope: () => "merchant:default",
+    merchantScope: () => "app:default",
     auth: {
       create: (req) => isAllowedToCreateInvoice(req),
       read: (req, invoice) => ownsInvoice(req, invoice),
@@ -396,10 +403,10 @@ web                 npm start
 openreceive-worker  npx openreceive worker
 ```
 
-The config module should export the same server-only `openreceive` object used
-by your framework route. You do not need to decide whether your wallet supports
-notifications. The worker starts both polling and listening; if no notifications
-arrive, polling still recovers and settles invoices.
+Export the same server-only `openreceive` object from your config that your
+framework route uses. There is no wallet-notification checklist for your app:
+the worker starts both polling and listening, and polling still recovers and
+settles invoices if no notifications arrive.
 
 On serverless-only hosts, use a scheduled route or cron job to run one polling
 pass:
@@ -416,13 +423,13 @@ Cloud Run, Coolify, Dokploy, Kamal, and VPS examples.
 
 First-class v0.1 server bridges are Express, Next.js App Router, generic Fetch
 `Request`/`Response`, and raw Node request/response. For NestJS on the Express
-platform, mount the Express adapter. Keep the same boundaries:
+platform, mount the Express adapter. Whichever framework you use, the shape is:
 
 - mount the OpenReceive HTTP routes under `/openreceive/v1`
 - keep `OPENRECEIVE_NWC` server-only
 - use the package-owned Postgres or SQLite invoice store
 - protect create/read/lookup/events with your app's auth and CSRF rules
-- run `openreceive worker` outside the request process
+- deploy one `openreceive worker` backend process next to your web process
 
 If the framework can host Express middleware, use `mountOpenReceiveExpressRoutes`.
 If it exposes Fetch `Request` objects, use `createOpenReceiveFetchHandler()`.

@@ -56,7 +56,7 @@ settlement proof.
 
 Settlement action hooks may run only after that backend lookup settlement
 proof. They must be idempotent; replaying lookup or events must not run the
-merchant action twice.
+app action twice.
 
 ## Idempotency Rules
 
@@ -139,4 +139,4 @@ long-running backend workers. It subscribes to `payment_received`, dedupes by
 when backend lookup confirms settlement.
 
 Notifications are at-least-once hints. They wake lookup quickly, but they do
-not replace polling and do not run merchant settlement actions by themselves.
+not replace polling and do not run app settlement actions by themselves.

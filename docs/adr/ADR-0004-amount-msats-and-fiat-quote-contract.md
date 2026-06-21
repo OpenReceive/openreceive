@@ -6,7 +6,7 @@ Accepted for v0.1.
 
 ## Context
 
-NIP-47 uses `amount` to mean millisatoshis. Merchant APIs often use `amount` to
+NIP-47 uses `amount` to mean millisatoshis. App APIs often use `amount` to
 mean fiat, sats, or display money, which is unsafe.
 
 ## Decision

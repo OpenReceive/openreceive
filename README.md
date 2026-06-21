@@ -1,18 +1,18 @@
 # OpenReceive
 
 OpenReceive adds uncensorable, global, permissionless inbound payments to any
-website or app using open-source packages and decentralized protocols. A
-merchant backend creates and verifies one Bitcoin Lightning BOLT11 invoice
-through a wallet it controls, while the checkout gives purchasers friendly
-route guidance so they can start from a credit card, bank account, Bitcoin
-wallet, stablecoin balance, exchange, onramp, or swap service and complete an
-instant payment on the merchant's website.
+website or app using open-source packages and decentralized protocols. A server
+in your application creates and verifies one Bitcoin Lightning BOLT11 invoice
+through a wallet you control, while the checkout gives purchasers friendly route
+guidance so they can start from a credit card, bank account, Bitcoin wallet,
+stablecoin balance, exchange, onramp, or swap service and complete an instant
+payment on your website or app.
 
 OpenReceive is not a bank, exchange, wallet, broker, custodian, or payment
-processor. It does not transmit money or hold customer funds. A merchant brings
-their own server-side Nostr Wallet Connect (NWC / NIP-47) connection to a wallet
-they control, and OpenReceive helps the merchant backend create and verify
-receive-only invoices.
+processor. It does not transmit money or hold customer funds. Your app brings a
+server-side Nostr Wallet Connect (NWC / NIP-47) connection to a wallet you
+control, and OpenReceive helps your backend create and verify receive-only
+invoices.
 
 The v0.1 reference path is contract-first and server-owned:
 
@@ -118,7 +118,7 @@ Provider routes are suggestions, not payment guarantees. The payer chooses and
 uses third-party services outside OpenReceive.
 
 Browser, mobile, and static frontend code never receive NWC secrets. Live
-checkout always needs a merchant-controlled backend component.
+checkout always needs a backend component controlled by your application.
 
 ## Docs
 

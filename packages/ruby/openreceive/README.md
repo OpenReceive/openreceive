@@ -20,7 +20,7 @@ contains only shared-contract helpers that can run without a wallet secret:
 It does not include a Rails engine, standalone Nostr protocol implementation,
 or browser/mobile code.
 The in-memory store is not a production database adapter.
-Future Rails work should wrap this package plus `nwc-ruby` inside the merchant
-server app, run package-owned poll/listen jobs in the app's normal worker
-runtime, install package-owned OpenReceive invoice persistence in the app
-database, and keep NWC secrets out of frontend runtimes.
+Rails work builds on this package plus `nwc-ruby` inside your server app. The
+Rails adapter runs OpenReceive poll/listen jobs in the app's normal
+worker runtime, installs package-owned OpenReceive invoice persistence in the
+app database, and keeps NWC secrets out of frontend runtimes.

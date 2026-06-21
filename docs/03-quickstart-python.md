@@ -1,5 +1,10 @@
 # Python Quickstart Status
 
+First step: get a read-only NWC code so your app can create invoices and check
+payment status from your server. You can use any NWC provider and switch
+providers at any time. Start here:
+https://openreceive.org/get_a_nwc_code_to_receive_payments
+
 OpenReceive does not have a Python package yet. This page records the intended
 Python server shape for future FastAPI, Django, Flask, or Starlette work.
 
@@ -11,18 +16,16 @@ docs/01-quickstart-node.md
 
 ## Planned Shape
 
-A Python integration should install into the merchant's existing server app.
-The app should own auth, invoice storage, order lookup, merchant settlement
-actions, and worker runtime. The package should own two backend entry points:
-a poll command/task for settlement polling and restart recovery, and a listen
-command/task for payment_received notifications. Deploy poll and listen as
-separate backend processes or worker roles, not as threads inside the web
-request path. Developers should run both; polling remains the fallback when
+A Python integration installs into your existing server app. The app
+keeps its existing auth, order lookup, settlement actions, and worker runtime.
+The OpenReceive package would provide a poll command/task for settlement
+polling and restart recovery plus a listen command/task for
+`payment_received` notifications. Deploy those commands as backend worker
+processes next to the web process. Run both; polling remains the fallback when
 notifications do not arrive.
-The Python package should ship the OpenReceive persistence model and migration
-path for the target framework or ORM; host apps should not create their own
-invoice/idempotency tables. The host app supplies metadata references and
-settlement hooks.
+The Python package would ship the OpenReceive persistence model and migration
+path for the target framework or ORM. The app supplies metadata references and
+settlement hooks while OpenReceive handles its invoice/idempotency rows.
 
 Expected Python pieces:
 
@@ -36,18 +39,17 @@ Expected Python pieces:
 
 ## Security Boundary
 
-Do not put NWC credentials in browser JavaScript, mobile apps, templates,
-static files, logs, error responses, or source maps.
+Keep NWC credentials out of browser JavaScript, mobile apps, templates, static
+files, logs, error responses, and source maps.
 
-Python handlers should return only display-safe checkout data to clients.
+Python handlers return only display-safe checkout data to clients.
 Notification events are hints; settlement authority remains backend
 `lookup_invoice`.
 
 ## Conformance
 
-Future Python packages should consume the shared schemas, vectors, OpenAPI
-contract, and deterministic mock wallet. Before any package is published, it
-must prove:
+Python packages use the shared schemas, vectors, OpenAPI contract, and
+deterministic mock wallet. Before publishing a package, cover:
 
 - create and refresh idempotency
 - amount and metadata validation

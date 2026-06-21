@@ -23,14 +23,15 @@ Implemented now:
 - generated `openreceive:doctor`, `openreceive:poll`, and `openreceive:listen` rake tasks for
   separate backend poll/listen processes
 - package-owned OpenReceive invoice persistence inside the Rails database; the
-  host app configures metadata and settlement hooks instead of hand-rolling
-  invoice/idempotency tables
+  Rails app configures metadata and settlement hooks while OpenReceive handles
+  its invoice/idempotency rows
 - production fail-closed checks that reject the in-memory test store
 - optional mounted engine route/controller surface for `/v1/invoices`
 - Hotwire/Turbo invoice partial for passive status updates
 
-Run the poll and listen tasks as separate backend processes or worker roles.
-Do not run the long-lived loops as threads inside the web request process.
-Run both tasks; polling remains the fallback when notifications do not arrive.
+Run the poll and listen tasks as backend worker processes next to the Rails web
+process. In practice that means one web dyno/process for Rails requests and one
+or more worker roles for OpenReceive jobs. Polling remains the fallback when
+notifications do not arrive.
 
 It does not include full real-wallet Ruby notification coverage yet.

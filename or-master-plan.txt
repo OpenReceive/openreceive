@@ -57,17 +57,17 @@ Existing openreceive.org app:
 Product Definition
 ------------------
 
-OpenReceive should make this promise:
+OpenReceive makes this promise:
 
   "Add uncensorable, global, permissionless inbound payments to any website or
   app with a tiny backend integration and a polished checkout, using
-  open-source packages and decentralized protocols. The merchant backend
+  open-source packages and decentralized protocols. Your application backend
   creates and verifies one Lightning invoice; purchaser guidance helps people
   start from a credit card, bank account, Bitcoin wallet, stablecoin balance,
   exchange, onramp, or swap service and complete an instant payment on the
-  merchant's website."
+  website or app."
 
-The core product must support:
+The core product supports:
 
   - Creating a BOLT11 invoice.
   - Looking up invoice settlement.
@@ -80,12 +80,12 @@ The core product must support:
     Bitcoin, stablecoins, wallets, exchanges, onramps, and swaps that may be
     able to reach the invoice.
   - Pushing passive settlement updates to the frontend.
-  - Providing an idempotent boundary where a merchant-supplied settlement
+  - Providing an idempotent boundary where an app-supplied settlement
     action may run only after backend verification.
 
 The reference flow:
 
-1. Merchant creates or obtains a receive-only NWC connection string.
+1. The app owner creates or obtains a receive-only NWC connection string.
 2. Backend stores that NWC string server-side only.
 3. Backend SDK calls make_invoice through a native NWC client.
 4. Backend stores invoice_id, payment_hash, invoice, amount_msats, expiry,
@@ -108,9 +108,9 @@ The reference flow:
 
 There is no pure-frontend OpenReceive checkout mode. A browser app, mobile app,
 static site, or desktop shell can render the checkout UI, but invoice creation,
-NWC access, settlement lookup, polling, notification handling, and merchant
+NWC access, settlement lookup, polling, notification handling, and app-owned
 settlement actions must always happen in a server-side component controlled by
-the merchant.
+your application.
 
 
 Product Wording Boundary
@@ -125,7 +125,7 @@ Say:
     website or app.
   - Purchasers can start from a credit card, bank account, Bitcoin wallet,
     stablecoin balance, exchange, onramp, or swap service.
-  - OpenReceive guides those purchaser-side routes toward one merchant-created
+  - OpenReceive guides those purchaser-side routes toward one app-created
     Lightning invoice.
 
 Do not say or imply:
@@ -149,7 +149,7 @@ Security and correctness:
   - NWC secrets never go in browser code.
   - NWC secrets never go in mobile apps shipped to users.
   - Pure frontend apps are not supported for live checkout.
-  - Static sites must call a small API, CMS/plugin backend, merchant server, or
+  - Static sites must call a small API, CMS/plugin backend, app server, or
     explicitly proven serverless/durable backend before showing an invoice.
   - Receive-only NWC is the default and recommended mode.
   - OpenReceive receive-checkout APIs never send payments.
@@ -199,17 +199,18 @@ Release strategy:
 Storage Contract And Invoice Lifecycle
 --------------------------------------
 
-The storage contract must be defined before the first SDK adapter. OpenReceive
-depends on idempotency and settlement-action safety; do not let each language or
-framework invent its own database semantics.
+OpenReceive defines the storage contract once, then each SDK adapter presents it
+in the native shape for that framework. That gives developers a package-owned
+path for idempotency and settlement-action safety instead of asking every app
+to invent its own database semantics.
 
 Persistence ownership:
 
   OpenReceive packages own OpenReceive invoice persistence inside the
-  merchant's application database. Do not ask app developers to design their own
-  invoice table, idempotency table, lifecycle model, or state transition code.
-  Each backend/framework package must ship the native persistence shape for its
-  ecosystem:
+  your application's database. App developers run the package migration or
+  install generator, then connect OpenReceive metadata and settlement hooks to
+  their own orders, carts, users, and fulfillment tables. Each backend/framework
+  package ships the native persistence shape for its ecosystem:
 
     Rails:
       migrations, ActiveRecord model, generated jobs/tasks.
@@ -217,8 +218,7 @@ Persistence ownership:
     Node:
       SQL migrations or ORM templates for common app databases, plus a package
       store adapter contract.
-      production docs must point developers to package-owned durable schema, not
-      hand-rolled invoice tables.
+      production docs point developers to the package-owned durable schema.
 
     Django/FastAPI:
       Django migrations/models or SQLAlchemy/SQLModel table definitions and
@@ -231,7 +231,7 @@ Persistence ownership:
       SQL migrations and package-owned repository/store implementations suited
       to the ecosystem.
 
-  The merchant app owns the database server/account, deployment, backups,
+  Your app owns the database server/account, deployment, backups,
   tenant/user/order/cart references, and business hooks such as
   on_invoice_settlement. OpenReceive owns the invoice/idempotency/settlement
   rows and the durable transitions that make polling, notifications, replay,
@@ -263,7 +263,7 @@ Required uniqueness and transition invariants:
   - payment_hash is unique where present.
   - idempotency_key is unique within the canonical idempotency scope:
     merchant_scope + operation + idempotency_key. For v0.1, merchant_scope is
-    the app/tenant/merchant boundary supplied by the adapter, operation is
+    the app/tenant boundary supplied by the adapter, operation is
     invoice.create or invoice.refresh, and user/order/cart identifiers belong
     in metadata or in the idempotency_key value itself. Adapters may add a
     stricter custom namespace, but they must pass the canonical default
@@ -275,7 +275,7 @@ Required uniqueness and transition invariants:
   - Settlement action transitions are idempotent.
   - settlement_action_completed_at can be set once.
   - invoice.settled events can replay safely.
-  - Notifications never directly run merchant settlement actions.
+  - Notifications never directly run app settlement actions.
   - Expired invoices cannot be refreshed in-place; refresh creates a new
     invoice linked to the old one.
 
@@ -300,9 +300,9 @@ Notes:
   - transaction_state preserves the NIP-47 transaction state where available.
   - verifying means the backend is checking activity through lookup_invoice.
   - settlement_action_pending means backend lookup has proven settlement, but
-    the merchant-supplied settlement action has not completed yet.
+    the app-supplied settlement action has not completed yet.
   - settlement_action_completed means OpenReceive's optional idempotent
-    settlement action boundary completed. It does not say what merchant
+    settlement action boundary completed. It does not say what app
     business effect happened.
   - If no settlement action hook is configured, adapters may complete the
     boundary as a no-op after backend settlement is proven.
@@ -385,12 +385,12 @@ provides the lifecycle brain.
 
 Frontend and mobile packages are UI clients only:
 
-    Browser UI      -> merchant payment backend -> NWC wallet
-    iOS/Android app -> merchant payment backend -> NWC wallet
+    Browser UI      -> your payment backend -> NWC wallet
+    iOS/Android app -> your payment backend -> NWC wallet
     Static site     -> small API/proven serverless backend -> NWC wallet
 
 The frontend/mobile decision is only: which backend endpoint do I call? The
-server-side implementation is a separate choice owned by the merchant backend.
+server-side implementation is a separate choice owned by your backend.
 
 Inside that backend, the developer may use:
 
@@ -427,21 +427,21 @@ Default build strategy:
 Package-Owned Polling And Notification Runners
 ----------------------------------------------
 
-Every serious server-side OpenReceive package must ship two package-owned
-backend runners:
+Every serious server-side OpenReceive package ships one normal backend worker
+entrypoint that starts two package-owned loops:
 
   1. A settlement polling runner.
   2. A payment notification listener runner.
 
 These runners are not OpenReceive-hosted daemons, sidecars, gateways, or
-separate OpenReceive databases. They are code installed into the merchant's own
-backend and run as two separate backend processes, worker roles, scheduler
-commands, or job-system roles. Do not model this as multithreading inside one
-runtime. The clear production shape is:
+separate OpenReceive databases. They are code installed into your own
+backend. The clear production shape for most developers is:
 
   web process       -> mounts OpenReceive HTTP routes
-  poll process      -> runs settlement polling/recovery
-  listen process    -> keeps the payment notification subscription open
+  worker process    -> runs `openreceive worker` for polling + listening
+
+Split poll/listen commands stay available for hosts that want isolation, but
+the default install path is one obvious package-provided backend worker.
 
 OpenReceive owns:
 
@@ -455,10 +455,10 @@ OpenReceive owns:
   - Settlement detection rules.
   - Duplicate-safe settlement transitions.
   - The idempotent settlement-action boundary.
-  - Framework-native runner commands, jobs, tasks, or services for both
-    polling and listening.
+  - Framework-native worker commands, jobs, tasks, or services that start
+    polling and listening together.
 
-The merchant application owns:
+Your application owns:
 
   - The durable database instance/account and backup policy.
   - Auth, tenant, user, cart, checkout, and order boundaries.
@@ -485,7 +485,7 @@ entrypoint, with split entrypoints available for hosts that want isolation:
   Rails:
     generated jobs/tasks for polling and listening.
 
-For production, each package must also expose the native worker shape:
+For production, each package exposes the native worker shape:
 
   Node:
     `openreceive worker` for the normal one-worker deployment, plus
@@ -516,28 +516,27 @@ For production, each package must also expose the native worker shape:
     Oban polling worker and supervised notification listener using the same
     storage contract.
 
-On poll process boot, the polling runner must query app-owned durable storage
-for every non-terminal invoice, including invoices whose local `expires_at`
-passed while the server was down, plus settled invoices whose settlement action
-has not completed. Local expiry must never remove an invoice from recovery by
-itself. The runner then continues lookup polling until each invoice is settled,
-expired, failed, cancelled, or its settlement action boundary completes.
+When the worker or split poll runner starts, it queries app-owned durable
+storage for every non-terminal invoice, including invoices whose local
+`expires_at` passed while the server was down, plus settled invoices whose
+settlement action has not completed. Local expiry never removes an invoice from
+recovery by itself. The runner continues lookup polling until each invoice is
+settled, expired, failed, cancelled, or its settlement action boundary
+completes.
 
-The notification listener runner must try to hold the NWC payment_received
-subscription open. A payment_received notification from the configured NWC
-client is a trusted payment-received event for its payment_hash: the runner may
-mark the matching invoice settled, stop treating it as pollable, and run the
-idempotent settlement action without an extra lookup_invoice round trip. If no
-notifications arrive, or a client cannot open a notification stream, the listen
-process must idle without making the deployment fail and the polling runner
-remains sufficient for correctness.
+The notification listener runner opens the NWC `payment_received` subscription.
+A `payment_received` notification from the configured NWC client is a trusted
+payment-received event for its payment_hash: the runner can mark the matching
+invoice settled, stop treating it as pollable, and run the idempotent
+settlement action without an extra `lookup_invoice` round trip. If no
+notifications arrive, or a client cannot open a notification stream, the
+listener idles and polling remains sufficient for correctness.
 
-Do not make multiprocess coordination, thread pools, or lock managers part of
-the first runner contract. Settlement and settlement-action writes must still
-be idempotent and replay-safe, but v0.1 should keep the public installation
-story to one obvious package-provided backend worker that starts polling and
-listening together. Developers should not have to decide whether their wallet
-supports notifications during installation.
+The first public install story stays simple: one package-provided backend
+worker starts polling and listening together. Settlement and settlement-action
+writes remain idempotent and replay-safe, so developers do not need
+multiprocess coordination, thread pools, lock managers, or a wallet
+notification support decision during installation.
 
 
 Serverless And Edge Policy
@@ -592,14 +591,14 @@ Canonical HTTP Contract
 -----------------------
 
 The HTTP API is the application-facing contract exposed by framework adapters,
-demos, and merchant backends. OpenReceive does not ship a required HTTP daemon;
+demos, and app backends. OpenReceive does not ship a required HTTP daemon;
 instead, adapters mount these routes inside Rails, Express, FastAPI, Django,
 Laravel, Spring, ASP.NET Core, Phoenix, Vapor, and similar apps.
 
 This contract is still valuable because it keeps frontend checkout components,
 mobile apps, demos, docs, tests, and server adapters aligned. A React checkout,
 SwiftUI checkout, static-site widget, or mobile app should be able to talk to
-the merchant's backend using the same invoice and event shapes no matter which
+your backend using the same invoice and event shapes no matter which
 server framework created the invoice.
 
 NWC naming policy:
@@ -615,7 +614,7 @@ NWC naming policy:
 
   Intentional naming exception: OpenReceive uses amount_msats instead of NIP-47
   amount in its public HTTP and SDK payloads. In NIP-47, amount means
-  millisatoshis, but in merchant APIs amount is too easy to confuse with fiat,
+  millisatoshis, but in app APIs amount is too easy to confuse with fiat,
   sats, or display money. NWC adapters map amount_msats to NIP-47 amount when
   sending requests and map NIP-47 result.amount back to amount_msats.
 
@@ -657,7 +656,7 @@ Money JSON representation:
 Authentication and authorization:
 
   OpenReceive does not define a standalone user-auth system. Framework adapters
-  mount into the merchant's app and must integrate with the app's existing auth
+  mount into your app and must integrate with the app's existing auth
   model: Rails sessions/Devise, Laravel auth middleware, NextAuth/Auth.js,
   Express middleware, Django auth, Phoenix plugs, ASP.NET policies, or a
   custom guest-checkout/session-token system.
@@ -748,7 +747,7 @@ Create invoice request:
 
     - Use description for normal checkout.
     - Include product, order, or checkout details in description so the payer
-      and merchant can recognize the invoice.
+      and your support team can recognize the invoice.
     - description_hash is advanced/raw mode only.
     - Exactly one of description or description_hash may be present.
     - Demos and quickstarts should use description, not description_hash.
@@ -847,8 +846,8 @@ QR codes:
 
 Lookup invoice request:
 
-  Frontend checkout flows normally use invoice_id because it is scoped to the
-  merchant app's order/session/auth model:
+  Frontend checkout flows normally use invoice_id because it is scoped to your
+  app's order/session/auth model:
 
     GET /openreceive/v1/invoices/or_inv_01jz...
 
@@ -967,7 +966,7 @@ Required SSE behavior:
   - Event responses are never cacheable.
   - The browser must verify invoice_id and payment_hash match the current
     invoice before updating UI.
-  - Events are passive UI hints; they never directly run merchant settlement
+  - Events are passive UI hints; they never directly run app settlement
     actions.
 
 Event names:
@@ -1052,7 +1051,7 @@ OpenReceive workflow states:
     by lookup_invoice.
 
   settlement_action_pending
-    Backend lookup has proven settlement, but the optional merchant settlement
+    Backend lookup has proven settlement, but the optional app settlement
     action has not completed yet.
 
   settlement_action_completed
@@ -1073,7 +1072,7 @@ OpenReceive workflow states:
     app has closed the invoice workflow as failed.
 
   cancelled
-    Merchant/app intentionally cancelled the payment flow.
+    Your app intentionally cancelled the payment flow.
 
 Typical workflow transitions:
 
@@ -1092,7 +1091,7 @@ Typical workflow transitions:
 
 Invariant:
 
-  Merchant settlement actions are never triggered by frontend state alone. A
+  App settlement actions are never triggered by frontend state alone. A
   settlement action may run only after backend verification through
   lookup_invoice. For NIP-47, require settled_at or transaction_state/state ==
   "settled". Treat preimage
@@ -1197,7 +1196,7 @@ OpenReceive receive-checkout methods for v0.1:
 
 get_balance is server-side diagnostic/admin data. It must never be returned to
 the public checkout frontend, included in public invoice responses, exposed
-through browser/mobile SDKs, or logged in user-visible responses. If a merchant
+through browser/mobile SDKs, or logged in user-visible responses. If an app
 dashboard uses get_balance, it must do so on the server with app-owned admin
 authorization.
 
@@ -1280,7 +1279,7 @@ NIP-47 to OpenReceive field mapping:
     as pending, settled, accepted, expired, and failed.
   - OpenReceive-specific invoice_id, fiat_quote, checkout, routes, and
     settlement_action_state fields may be added around the NIP-47 transaction
-    object. Deliverable fields must stay in the merchant app.
+    object. Deliverable fields must stay in your app.
 
 Long-running listener requirements:
 
@@ -1296,7 +1295,7 @@ Long-running listener requirements:
       update guard such as pending -> settled only.
     - Run notification listeners as long-running worker processes, not inside
       request handlers.
-    - A trusted payment_received notification may run the idempotent merchant
+    - A trusted payment_received notification may run the idempotent app
       settlement action without an additional lookup_invoice verification.
 
 Settlement detection:
@@ -1325,7 +1324,7 @@ Metadata:
   NIP-47 metadata must fit in wallet/relay payload constraints. OpenReceive
   should keep NWC metadata below 3900 characters after JSON serialization,
   leaving margin under the NIP-47 4096-character limit. Larger application
-  metadata stays in the merchant database and is referenced by ids such as
+  metadata stays in your app database and is referenced by ids such as
   order_id, cart_id, user_id, or checkout_session_id.
 
 Common wallet/service errors to normalize:
@@ -1437,7 +1436,7 @@ This cadence must live in test vectors so every language agrees.
 Fiat Pricing And Quotes
 -----------------------
 
-OpenReceive must have first-class fiat to msat quoting. Most merchants think in
+OpenReceive must have first-class fiat to msat quoting. Most app owners think in
 USD, EUR, GBP, or local currency, not msats.
 
 Core API:
@@ -2317,8 +2316,8 @@ Frontend SDK API
 
 Frontend packages must never require wallet secrets.
 
-Frontend packages do not create live invoices by themselves. They call the
-merchant backend's OpenReceive routes, receive display-safe invoice data, and
+Frontend packages do not create live invoices by themselves. They call your
+backend's OpenReceive routes, receive display-safe invoice data, and
 listen for passive settlement updates from that backend.
 
 They receive:
@@ -2961,7 +2960,7 @@ Tier 3 demos:
 
   WordPress plugin             Blog/paywall/content unlock
   WooCommerce gateway          Store checkout
-  Shopify-style app            Merchant receive checkout inspired by BLFS
+  Shopify-style app            Receive checkout inspired by BLFS
   Ghost plugin                 Paid blog post demo
   Static-site checkout         Astro/Hugo/Jekyll plus small API or proven
                                serverless/durable backend
@@ -3225,7 +3224,7 @@ Caddy ownership and routing:
   not claim container-to-container isolation for this mode.
 
   If a demo later handles higher-value production mode, user uploads, private
-  integrations, or sensitive merchant data, give that demo its own private
+  integrations, or sensitive app data, give that demo its own private
   network plus the proxy network, and restrict egress explicitly.
 
   Canonical routing rules:
@@ -3749,7 +3748,7 @@ Test and production wallet policy:
   - Test demos should be clearly labeled as real Lightning test purchases.
   - Production demos use a separate receive-only production NWC code only when
     explicitly promoted.
-  - Never share one production merchant wallet across all demo stacks.
+  - Never share one production receive wallet across all demo stacks.
 
 Observability:
 
@@ -4089,7 +4088,7 @@ Top-level docs:
   api-reference.md
   sdk-status.md
 
-Every SDK doc should have the same shape:
+Every SDK doc uses the same shape:
 
   - Install
   - Configure
@@ -4101,7 +4100,7 @@ Every SDK doc should have the same shape:
   - Deploy
   - Security notes
 
-Docs must make these points loud:
+Docs make these points clear:
 
   - OpenReceive creates one Lightning invoice; it does not process fiat,
     crypto, exchange, on-chain, card, bank, or onramp payments.
@@ -4124,9 +4123,9 @@ Security Model
 
 Threats:
 
-  - Merchant accidentally exposes NWC secret to browser.
-  - Merchant commits a receive-only NWC code to git.
-  - Merchant stores NWC secrets in GitHub Actions unnecessarily.
+  - An app accidentally exposes an NWC secret to the browser.
+  - A developer commits a receive-only NWC code to git.
+  - An app stores NWC secrets in GitHub Actions unnecessarily.
   - Read/write NWC leaks and can spend funds.
   - Duplicate notification double-credits a customer.
   - Client forges "settled" state.
@@ -4526,20 +4525,20 @@ Deliverables:
 Definition of done:
 
   Mobile apps can render checkout and receive passive payment updates from a
-  server. They never embed merchant NWC secrets.
+  server. They never embed your app's NWC secrets.
 
 Milestone 7: ecommerce and production polish
 
 Goal:
 
-  Move from developer demos to merchant-ready integrations.
+  Move from developer demos to production-ready app integrations.
 
 Deliverables:
 
   - WooCommerce gateway.
   - WordPress plugin.
   - Shopify-style app inspired by BLFS.
-  - Merchant dashboard.
+  - App owner dashboard.
   - Provider registry CDN.
   - Signed registry releases.
   - Hosted demo gallery.
@@ -4548,7 +4547,7 @@ Deliverables:
 
 Definition of done:
 
-  Real merchants can evaluate OpenReceive through hosted demos, run a local
+  Developers and app owners can evaluate OpenReceive through hosted demos, run a local
   live-wallet-profile test checkout, connect their own receive-only NWC wallet,
   and deploy a production integration with clear security docs.
 
@@ -4607,7 +4606,7 @@ Do not include in v0.1.0:
   - Broad provider-data packaging.
   - Ecommerce plugins.
   - Native mobile UI kits.
-  - Complex merchant dashboard.
+  - Complex app owner dashboard.
   - Edge/serverless live checkout promises before polling and crypto behavior
     are proven.
   - Send-payment features in OpenReceive receive-checkout APIs.
@@ -4772,7 +4771,7 @@ The next implementation work should happen in this order:
    npm test, npm run validate, npm run check:generated, npm run typecheck,
    npm run test:js, npm run test:package-smoke, npm run test:ruby,
    npm run check:release, and npm run test:ci.
-9. Do not add new SDK families, demos, ecommerce integrations, mobile kits, or
+9. Hold new SDK families, demos, ecommerce integrations, mobile kits, and
    provider-data variants until the current release surface is easier to
    install, diagnose, package, and document.
 

@@ -10,20 +10,21 @@ openreceive-worker  npx openreceive worker
 
 A background process is just a command your hosting provider keeps running from
 the same codebase, with the same server-only environment variables as the web
-app. It is not browser code. Do not run it inside an HTTP request.
+app. It is backend code, like your web server, but it is launched separately
+from request handlers.
 
-Always run `openreceive worker` on hosts that can keep a backend process alive.
-It starts both settlement polling and payment notification listening inside one
-Node process. You do not need a wallet-specific notification decision in your
-deploy checklist: if no notifications arrive, polling remains the recovery and
-settlement fallback.
+On hosts that can keep a backend process alive, add one `openreceive worker`
+process. It starts both settlement polling and payment notification listening
+inside one Node process. There is no wallet-specific notification decision in
+your deploy checklist: if no notifications arrive, polling remains the recovery
+and settlement fallback.
 
 OpenReceive loads `./openreceive.config.mjs` by default. Use `--config` only
 when your config lives somewhere else.
 
-The poll process must recover invoices even after their local `expires_at`
-timestamp has passed. OpenReceive only closes an invoice as expired after it
-has asked the wallet after expiry and settlement is still not proven.
+The poller also handles the annoying restart edge case for you. If your server
+is down while an invoice expires, OpenReceive asks the wallet after restart
+before it closes that invoice as expired.
 
 Add these scripts:
 
@@ -184,10 +185,11 @@ database URL, and other server-only app secrets.
 
 ## Serverless And Frontend Hosts
 
-Serverless functions are short-lived. Use a scheduled function to run polling
-once when you do not have a persistent worker. If you want notification wakeups
-too, run one persistent companion service with `npx openreceive worker`; that
-worker handles both polling and listening.
+Serverless functions are short-lived. If your host cannot run a persistent
+backend worker, add a scheduled function that runs one polling pass. For faster
+notification wakeups, add one tiny companion service on Railway, Render, Fly.io,
+or a VPS with `npx openreceive worker`; that same worker handles both polling
+and listening.
 
 Create a one-shot polling helper in server-only code:
 
@@ -290,8 +292,7 @@ export default {
 };
 ```
 
-Keep the NWC connection string server-only. Do not put it in Pages client
-bundles.
+Keep the NWC connection string server-only and out of Pages client bundles.
 
 ### Google Cloud Run
 
@@ -316,6 +317,6 @@ scheduled event  calls runOpenReceivePollOnce()
 worker process   npx openreceive worker on ECS, EC2, App Runner, or another persistent host
 ```
 
-Do not depend on browser polling or client-side timers for settlement. The
-scheduled backend poll is what recovers invoices after deploys, restarts, and
-missed notifications.
+Use backend polling for settlement recovery. Browser polling and client-side
+timers are only display helpers; the scheduled backend poll is what recovers
+invoices after deploys, restarts, and missed notifications.

@@ -1,7 +1,7 @@
 # API Reference
 
 OpenReceive does not require a daemon. Framework adapters mount these routes
-inside the merchant application, usually at `/openreceive/v1`. The authoritative
+inside your application, usually at `/openreceive/v1`. The authoritative
 HTTP contract is `spec/openapi/openreceive-http.v1.yaml`.
 
 The HTTP routes are not the whole backend integration. Server packages also
@@ -11,9 +11,9 @@ notifications may settle the matching invoice directly. If no notification
 arrives, polling remains the recovery and settlement fallback.
 
 Server packages also provide OpenReceive-owned persistence for invoice,
-idempotency, lifecycle, and settlement-action rows inside the host app
-database. The host app attaches app-owned hooks after settlement instead of
-designing these tables itself.
+idempotency, lifecycle, and settlement-action rows inside your app database.
+Your app attaches hooks after settlement and keeps its own business records in
+its existing tables.
 
 Invoice, lookup, and event responses return `Cache-Control: no-store`. Browser
 responses never contain an NWC connection string or client secret.
@@ -24,7 +24,8 @@ responses never contain an NWC connection string or client secret.
 
 Required header:
 
-- `Idempotency-Key`: stable per merchant scope and create-invoice operation.
+- `Idempotency-Key`: stable for your configured OpenReceive scope and
+  create-invoice operation.
 
 Request body uses exactly one amount input:
 
@@ -33,7 +34,7 @@ Request body uses exactly one amount input:
 
 Optional fields include `description`, `description_hash`, `expiry`, and
 `metadata`. Exactly one of `description` or `description_hash` may be present.
-Metadata must fit the NWC payload guard.
+Keep serialized metadata within the NWC payload guard.
 
 Responses:
 
@@ -46,20 +47,20 @@ Responses:
 `GET /openreceive/v1/invoices/{invoice_id}`
 
 The invoice id is application-scoped and matches `or_inv_[a-z0-9_]+`.
-Adapters must authorize this route against the owning order, cart, checkout
-session, or user.
+Configure the adapter to authorize this route against the owning order, cart,
+checkout session, or user.
 
 ## Lookup Invoice
 
 `POST /openreceive/v1/invoices/lookup`
 
 Body contains either `payment_hash` or `invoice`. This route performs backend
-wallet verification and must not be exposed as a public status oracle. Access
-must be strongly authorized to the matching invoice.
+wallet verification. Keep it behind the same order, cart, checkout-session,
+user, or backend-service authorization that owns the matching invoice.
 
 The lookup response may include `preimage_present`, but app actions still
 require settled state from backend wallet verification. A preimage alone is not
-settlement proof. If the host app configured a backend settlement action hook, a
+settlement proof. If your app configured a backend settlement action hook, a
 settled lookup may return `workflow_state: "settlement_action_completed"`,
 `settlement_action_state: "completed"`, and `settlement_action_completed_at`
 after that hook completes.
@@ -72,7 +73,8 @@ as a no-op after backend settlement is proven.
 
 Required header:
 
-- `Idempotency-Key`: stable per merchant scope and refresh operation.
+- `Idempotency-Key`: stable for your configured OpenReceive scope and refresh
+  operation.
 
 The body may include `{ "reason": "expired" }`. Refresh creates a new invoice
 row linked to the old row through `refreshed_from_invoice_id`; it never mutates
@@ -89,12 +91,12 @@ Responses:
 `GET /openreceive/v1/invoices/{invoice_id}/events`
 
 The v0.1 reference adapter uses Server-Sent Events. Clients may send
-`Last-Event-ID` for replay. Event streams are passive UI hints; they do not
-run merchant settlement actions.
+`Last-Event-ID` for replay. Event streams are passive UI hints; your
+settlement actions run from backend wallet verification.
 
 When the Express adapter is configured with signed event URLs,
 `checkout.events_url` includes a short-lived `_or_evt` query value scoped to the
-invoice. Do not log or persist the full URL.
+invoice. Treat the full URL like a short-lived credential in logs and storage.
 
 The authoritative event contract is
 `spec/asyncapi/openreceive-events.v1.yaml`.
@@ -159,7 +161,7 @@ mounted.
 
 `GET /openreceive/v1/capabilities` returns a non-secret capability summary.
 Wallet-specific secrets, raw NWC connection strings, and wallet diagnostics such
-as `get_balance` must not appear in this response.
+as `get_balance` stay out of this response.
 
 ## Error Shape
 
@@ -175,4 +177,5 @@ Errors use the shared error schema:
 
 Codes are the uppercase canonical values from `spec/schemas/error.schema.json`.
 Adapters may include `retryable`, `request_id`, or `details` when that context is
-available, but applications should still render defensive fallback messages.
+available. Render a defensive fallback message when an app sees an unfamiliar
+detail shape.
