@@ -391,7 +391,6 @@ export function validateRegistry(input: ProviderRegistry = registry): ProviderRe
     check(Boolean(route.id && route.symbol && route.label), `crypto route ${route.id} missing id/symbol/label`);
     check(Array.isArray(route.providers) && route.providers.length > 0, `crypto route ${route.id} needs providers`);
 
-    let flagshipCount = 0;
     let expectedRank = 1;
     const routeHasRanks = route.providers.some((ref) => ref.rank !== undefined);
     const routeProviderIds = new Set<ProviderId>();
@@ -404,9 +403,7 @@ export function validateRegistry(input: ProviderRegistry = registry): ProviderRe
         check(ref.rank === expectedRank, `crypto route ${route.id} ranks must be sequential`);
         expectedRank += 1;
       }
-      if (ref.flagship === true) flagshipCount += 1;
     }
-    check(flagshipCount <= 1, `crypto route ${route.id} has more than one flagship provider`);
   }
 
   for (const country of countries) {

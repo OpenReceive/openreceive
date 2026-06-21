@@ -169,11 +169,6 @@
     "icon_path": "assets/provider-icons/walletofsatoshi.png",
     "favicon_url": "https://www.google.com/s2/favicons?domain=www.walletofsatoshi.com&sz=128"
   },
-  "muun": {
-    "url": "https://muun.com",
-    "icon_path": "assets/provider-icons/muun.png",
-    "favicon_url": "https://www.google.com/s2/favicons?domain=muun.com&sz=128"
-  },
   "bitget": {
     "url": "https://www.bitget.com",
     "icon_path": "assets/provider-icons/bitget.png",

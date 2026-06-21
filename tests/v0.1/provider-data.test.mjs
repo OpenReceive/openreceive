@@ -73,6 +73,10 @@ test("provider-data resolves crypto route providers without changing route order
   assert.equal(btcLightning[0].provider.id, "rizful");
   assert.equal(btcLightning[0].flagship, true);
   assert.deepEqual(
+    btcLightning.filter((entry) => entry.flagship).map((entry) => entry.provider.id),
+    ["rizful", "getalby", "zeus"]
+  );
+  assert.deepEqual(
     btcLightning.slice(0, 4).map((entry) => entry.provider.id),
     ["rizful", "getalby", "zeus", "phoenix"]
   );
@@ -134,6 +138,10 @@ test("provider-data resolves payment wizard routes from asset and fiat inputs", 
   assert.equal(cryptoRoutes[0].asset.symbol, "btc");
   assert.equal(cryptoRoutes[0].providers[0].provider.id, "rizful");
   assert.equal(cryptoRoutes[0].providers[0].flagship, true);
+  assert.deepEqual(
+    cryptoRoutes[0].providers.filter((entry) => entry.flagship).map((entry) => entry.provider.id),
+    ["rizful", "getalby", "zeus"]
+  );
 
   assert.equal(fiatRoutes.length, 1);
   assert.equal(fiatRoutes[0].kind, "fiat");
@@ -182,6 +190,20 @@ test("provider-data filters providers and countries conservatively", () => {
   );
   assert.equal(listCountries({ currency: "USD" }).every((country) => country.currency === "USD"), true);
   assert.equal(providerRegistry.providers.coinbase.tutorials.length, 2);
+  assert.deepEqual(
+    providerRegistry.providers.boltz.tutorials.map((tutorial) => tutorial.caption),
+    [
+      "Select the currency you want to start with, and select Receive LN (Bitcoin Lightning)",
+      "Paste Lightning invoice and click Create Swap"
+    ]
+  );
+  assert.deepEqual(
+    providerRegistry.providers.fixedfloat.tutorials.map((tutorial) => tutorial.caption),
+    [
+      "Choose USDT to send, then BTC Lightning to receive",
+      "Paste the Lightning invoice, then tap Exchange now"
+    ]
+  );
   assert.equal(providerRegistry.providers.kraken.tutorials.length, 4);
   assert.deepEqual(
     providerRegistry.providers.kraken.tutorials.map((tutorial) => tutorial.caption),

@@ -389,7 +389,6 @@ function validateProviderRegistryReferences() {
     assert(route.id && route.symbol && route.label, `crypto route ${route.id} missing id/symbol/label`);
     assert(route.summary === undefined, `crypto route ${route.id} must not expose v2 summary in v4`);
     assert(Array.isArray(route.providers) && route.providers.length > 0, `crypto route ${route.id} needs providers`);
-    let flagshipCount = 0;
     let expectedRank = 1;
     const routeHasRanks = route.providers.some((ref) => ref.rank !== undefined);
     const routeProviderIds = new Set();
@@ -403,9 +402,7 @@ function validateProviderRegistryReferences() {
         assert(ref.rank === expectedRank, `crypto route ${route.id} ranks must be sequential`);
         expectedRank += 1;
       }
-      if (ref.flagship === true) flagshipCount += 1;
     }
-    assert(flagshipCount <= 1, `crypto route ${route.id} has more than one flagship provider`);
   }
 
   for (const country of registry.countries || []) {

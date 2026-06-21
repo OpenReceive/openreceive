@@ -15,7 +15,7 @@
     },
     "route_ref_fields": {
       "provider": "provider id",
-      "flagship": "recommended option for this route",
+      "flagship": "recommended option for this route; multiple providers may be recommended",
       "rank": "1-based route-specific display ordering; required when a route has explicit ranked suggestions"
     },
     "country_fields": {
@@ -99,7 +99,19 @@
       "url": "https://boltz.exchange",
       "us": null,
       "lightning_docs_url": "https://api.docs.boltz.exchange/lifecycle.html",
-      "icon_path": "assets/provider-icons/boltz.png"
+      "icon_path": "assets/provider-icons/boltz.png",
+      "tutorials": [
+        {
+          "index": 1,
+          "path": "assets/pay_tutorials/boltz-1.webp",
+          "caption": "Select the currency you want to start with, and select Receive LN (Bitcoin Lightning)"
+        },
+        {
+          "index": 2,
+          "path": "assets/pay_tutorials/boltz-2.webp",
+          "caption": "Paste Lightning invoice and click Create Swap"
+        }
+      ]
     },
     "strike": {
       "id": "strike",
@@ -307,7 +319,19 @@
       "url": "https://fixedfloat.com",
       "us": false,
       "lightning_docs_url": "https://ff.io/",
-      "icon_path": "assets/provider-icons/fixedfloat.png"
+      "icon_path": "assets/provider-icons/fixedfloat.png",
+      "tutorials": [
+        {
+          "index": 1,
+          "path": "assets/pay_tutorials/fixedfloat-1.webp",
+          "caption": "Choose USDT to send, then BTC Lightning to receive"
+        },
+        {
+          "index": 2,
+          "path": "assets/pay_tutorials/fixedfloat-2.webp",
+          "caption": "Paste the Lightning invoice, then tap Exchange now"
+        }
+      ]
     },
     "sideshift": {
       "id": "sideshift",
@@ -429,14 +453,6 @@
       "lightning_docs_url": "https://support.walletofsatoshi.com/",
       "icon_path": "assets/provider-icons/walletofsatoshi.png"
     },
-    "muun": {
-      "id": "muun",
-      "name": "Muun",
-      "url": "https://muun.com",
-      "us": null,
-      "lightning_docs_url": "https://blog.muun.com/lightning-payments-easier-than-ever/",
-      "icon_path": "assets/provider-icons/muun.png"
-    },
     "bitget": {
       "id": "bitget",
       "name": "Bitget",
@@ -491,10 +507,12 @@
         },
         {
           "provider": "getalby",
+          "flagship": true,
           "rank": 2
         },
         {
           "provider": "zeus",
+          "flagship": true,
           "rank": 3
         },
         {
@@ -550,92 +568,88 @@
           "rank": 16
         },
         {
-          "provider": "muun",
+          "provider": "boltz",
           "rank": 17
         },
         {
-          "provider": "boltz",
+          "provider": "okcoin",
           "rank": 18
         },
         {
-          "provider": "okcoin",
+          "provider": "bitget",
           "rank": 19
         },
         {
-          "provider": "bitget",
+          "provider": "kryptex",
           "rank": 20
         },
         {
-          "provider": "kryptex",
+          "provider": "coincorner",
           "rank": 21
         },
         {
-          "provider": "coincorner",
+          "provider": "fixedfloat",
           "rank": 22
         },
         {
-          "provider": "fixedfloat",
+          "provider": "sideshift",
           "rank": 23
         },
         {
-          "provider": "sideshift",
+          "provider": "blink",
           "rank": 24
         },
         {
-          "provider": "blink",
+          "provider": "speed",
           "rank": 25
         },
         {
-          "provider": "speed",
+          "provider": "bullbitcoin",
           "rank": 26
         },
         {
-          "provider": "bullbitcoin",
+          "provider": "shakepay",
           "rank": 27
         },
         {
-          "provider": "shakepay",
+          "provider": "bitso",
           "rank": 28
         },
         {
-          "provider": "bitso",
+          "provider": "bitnob",
           "rank": 29
         },
         {
-          "provider": "bitnob",
+          "provider": "pouch",
           "rank": 30
         },
         {
-          "provider": "pouch",
+          "provider": "bringin",
           "rank": 31
         },
         {
-          "provider": "bringin",
+          "provider": "mtpelerin",
           "rank": 32
         },
         {
-          "provider": "mtpelerin",
+          "provider": "bipa",
           "rank": 33
         },
         {
-          "provider": "bipa",
+          "provider": "ripio",
           "rank": 34
         },
         {
-          "provider": "ripio",
+          "provider": "belo",
           "rank": 35
         },
         {
-          "provider": "belo",
+          "provider": "bity",
           "rank": 36
         },
         {
-          "provider": "bity",
-          "rank": 37
-        },
-        {
           "provider": "chivo",
-          "rank": 38
+          "rank": 37
         }
       ]
     },

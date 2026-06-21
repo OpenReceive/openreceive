@@ -24,7 +24,6 @@ const krakenIcon = new URL("./assets/provider-icons/kraken.png", import.meta.url
 const kryptexIcon = new URL("./assets/provider-icons/kryptex.png", import.meta.url).href;
 const kucoinIcon = new URL("./assets/provider-icons/kucoin.png", import.meta.url).href;
 const mtpelerinIcon = new URL("./assets/provider-icons/mtpelerin.png", import.meta.url).href;
-const muunIcon = new URL("./assets/provider-icons/muun.png", import.meta.url).href;
 const okcoinIcon = new URL("./assets/provider-icons/okcoin.png", import.meta.url).href;
 const okxIcon = new URL("./assets/provider-icons/okx.png", import.meta.url).href;
 const phoenixIcon = new URL("./assets/provider-icons/phoenix.png", import.meta.url).href;
@@ -68,7 +67,6 @@ export const openReceiveProviderIconUrls: Readonly<Record<string, string>> = {
   "assets/provider-icons/kryptex.png": kryptexIcon,
   "assets/provider-icons/kucoin.png": kucoinIcon,
   "assets/provider-icons/mtpelerin.png": mtpelerinIcon,
-  "assets/provider-icons/muun.png": muunIcon,
   "assets/provider-icons/okcoin.png": okcoinIcon,
   "assets/provider-icons/okx.png": okxIcon,
   "assets/provider-icons/phoenix.png": phoenixIcon,
