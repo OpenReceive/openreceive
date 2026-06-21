@@ -9,8 +9,8 @@ import {
   createOpenReceiveExpressHandlers
 } from "@openreceive/express";
 import {
-  InMemoryInvoiceStore,
-  createDefaultLivePriceProviders
+  createDefaultLivePriceProviders,
+  type OpenReceiveInvoiceStore
 } from "@openreceive/core";
 import {
   createAlbyNwcReceiveClient
@@ -21,6 +21,9 @@ import {
 import {
   createHelloFruitOpenReceiveLogger
 } from "../../../../shared/demo-logging.ts";
+import {
+  createHelloFruitOpenReceiveInvoiceStore
+} from "../../../../shared/openreceive-store.ts";
 
 const DEMO_ID = "nextjs-fullstack";
 const DEFAULT_PORT = "3002";
@@ -28,7 +31,7 @@ const GITHUB_REPOSITORY_URL = "https://github.com/openreceive/openreceive";
 
 interface NextDemoRuntime {
   readonly connectionString: string;
-  readonly store: InMemoryInvoiceStore;
+  readonly store: OpenReceiveInvoiceStore;
   readonly eventBus: InMemoryInvoiceEventBus;
   readonly handlers: OpenReceiveExpressHandlers;
 }
@@ -122,17 +125,17 @@ export async function dispatchOpenReceiveHandler(
   return res.toResponse();
 }
 
-export function invoiceEventsResponse(
+export async function invoiceEventsResponse(
   request: Request,
   invoiceId: string
-): Response {
+): Promise<Response> {
   const connectionString = getConnectionString();
   if (connectionString === undefined) {
     return noWalletResponse("invoiceEvents");
   }
 
   const nextRuntime = getRuntime(connectionString);
-  const invoice = nextRuntime.store.getInvoice(invoiceId);
+  const invoice = await nextRuntime.store.getInvoice(invoiceId);
   if (invoice === undefined) {
     return jsonResponse({
       code: "NOT_FOUND",
@@ -194,7 +197,9 @@ function getRuntime(connectionString: string): NextDemoRuntime {
     return runtime;
   }
 
-  const store = new InMemoryInvoiceStore();
+  const store = createHelloFruitOpenReceiveInvoiceStore({
+    demoId: DEMO_ID
+  });
   const eventBus = new InMemoryInvoiceEventBus();
   const client = createAlbyNwcReceiveClient({
     connectionString

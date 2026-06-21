@@ -3,10 +3,14 @@ services:
     build:
       context: ../../../..
       dockerfile: examples/hello-fruit/server/node-express-react/Dockerfile
+    depends_on:
+      openreceive-postgres:
+        condition: service_healthy
     env_file:
       - path: ../../../../.env
         required: false
     environment:
+      DATABASE_URL: postgres://openreceive:openreceive@openreceive-postgres:5432/openreceive
       OPENRECEIVE_DEMO_MODE: ${OPENRECEIVE_DEMO_MODE:-test_nwc}
       OPENRECEIVE_DEPLOYED_AT: ${OPENRECEIVE_DEPLOYED_AT:-}
       OPENRECEIVE_GIT_SHA: ${OPENRECEIVE_GIT_SHA:-}
@@ -14,3 +18,19 @@ services:
       PORT: "3000"
     expose:
       - "3000"
+  openreceive-postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: openreceive
+      POSTGRES_USER: openreceive
+      POSTGRES_PASSWORD: openreceive
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openreceive -d openreceive"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - openreceive-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  openreceive-postgres-data:

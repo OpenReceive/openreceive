@@ -33,7 +33,10 @@ docker compose -f compose.yml -f compose.override.yml.example up --build
 
 Docker loads the repository root `.env` file, so the same
 `OPENRECEIVE_NWC` value can be shared across all local Hello Fruit demos
-without demo-local env files.
+without demo-local env files. The compose stack also starts a local Postgres
+container and points `DATABASE_URL` at it; the demo uses the package-owned
+OpenReceive Postgres invoice store and runs the package migration before store
+queries.
 
 The Makefile exposes the standard demo commands: `make setup`, `make dev`,
 `make test`, `make demo-test-nwc`, `make demo-production`,
@@ -47,6 +50,4 @@ Hosted-demo helpers expose `/healthz`, `/source`, `/docs`, `/robots.txt`, and
 
 This demo uses `unsafeAllowUnauthenticatedDemoMode` because it is a local
 single-user example. Production apps should use app auth and CSRF hooks.
-Production Node apps should also use the package-owned Postgres invoice store,
-run the OpenReceive migration, and deploy separate web, poll, and listen
-processes.
+Production Node apps should deploy separate web, poll, and listen processes.

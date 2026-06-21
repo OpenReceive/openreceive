@@ -16,4 +16,4 @@ ENV RAILS_ENV=production
 ENV PORT=3003
 
 EXPOSE 3003
-CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0", "-p", "3003"]
+CMD ["sh", "-c", "bundle exec rails db:prepare && bundle exec rails server -b 0.0.0.0 -p 3003"]

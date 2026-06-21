@@ -77,6 +77,12 @@ class OpenReceiveRailsTest < Minitest::Test
   def test_active_record_templates_preserve_storage_invariants
     migration = read_template("create_openreceive_tables.rb")
     model = read_template("openreceive_invoice.rb")
+    rails_source = File.read(
+      File.join(
+        ROOT,
+        "packages/ruby/openreceive-rails/lib/openreceive/rails.rb"
+      )
+    )
 
     assert_includes migration, "create_table :openreceive_invoices"
     assert_includes migration, "[:merchant_scope, :operation, :idempotency_key]"
@@ -95,6 +101,14 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_includes model, "transaction_state"
     assert_includes model, "workflow_state"
     assert_includes model, "settlement_action_state"
+
+    assert_includes rails_source, "class ActiveRecordInvoiceStore"
+    assert_includes rails_source, "create_active_record_invoice_store"
+    assert_includes rails_source, "merchant_scope: data.fetch(\"merchant_scope\")"
+    assert_includes rails_source, "operation: data.fetch(\"operation\")"
+    assert_includes rails_source, "idempotency_key: data.fetch(\"idempotency_key\")"
+    assert_includes rails_source, "settlement_action_completed_at_seconds ||= Integer"
+    assert_includes rails_source, "expires_at_seconds + ? >= ?"
   end
 
   def test_rails_route_job_and_channel_templates_preserve_receive_only_boundary

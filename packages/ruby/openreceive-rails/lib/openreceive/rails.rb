@@ -41,6 +41,228 @@ module OpenReceive
       end
     end
 
+    class ActiveRecordInvoiceStore
+      TERMINAL_WORKFLOW_STATES = %w[
+        settlement_action_completed
+        expired_closed
+        failed_closed
+        cancelled
+      ].freeze
+      TERMINAL_TRANSACTION_STATES = %w[settled expired failed].freeze
+
+      def initialize(model_class: nil, model_class_name: "OpenReceiveInvoice")
+        @model_class = model_class
+        @model_class_name = model_class_name
+      end
+
+      def check_idempotency(scope:, idempotency_request_hash:)
+        data = stringify_keys(scope)
+        record = model_class.find_by(
+          merchant_scope: data.fetch("merchant_scope"),
+          operation: data.fetch("operation"),
+          idempotency_key: data.fetch("idempotency_key")
+        )
+        return nil if record.nil?
+
+        row = row_from_record(record)
+        raise OpenReceive::IdempotencyConflictError.new(data) unless row.fetch("idempotency_request_hash") == idempotency_request_hash
+
+        { "status" => "replayed", "row" => row }
+      end
+
+      def create_invoice(row)
+        data = stringify_keys(row)
+        replay = check_idempotency(
+          scope: data,
+          idempotency_request_hash: data.fetch("idempotency_request_hash")
+        )
+        return replay unless replay.nil?
+
+        record = model_class.create!(attributes_from_row(data))
+        { "status" => "created", "row" => row_from_record(record) }
+      rescue StandardError => error
+        replay = check_idempotency(
+          scope: data,
+          idempotency_request_hash: data.fetch("idempotency_request_hash")
+        )
+        return replay unless replay.nil?
+
+        raise OpenReceive::InvoiceStorageConflictError.new("invoice_id, payment_hash, and invoice must be unique") if unique_constraint_error?(error)
+
+        raise
+      end
+
+      def find_by_invoice_id(invoice_id)
+        record = model_class.find_by(id: invoice_id)
+        record.nil? ? nil : row_from_record(record)
+      end
+
+      def find_by_payment_hash(payment_hash)
+        record = model_class.find_by(payment_hash: payment_hash)
+        record.nil? ? nil : row_from_record(record)
+      end
+
+      def recoverable_invoices(now:, grace_seconds: 15)
+        model_class
+          .where.not(workflow_state: TERMINAL_WORKFLOW_STATES)
+          .where(
+            "(transaction_state = ? AND settlement_action_state <> ?) OR " \
+            "(transaction_state NOT IN (?) AND expires_at_seconds + ? >= ?)",
+            "settled",
+            "completed",
+            TERMINAL_TRANSACTION_STATES,
+            Integer(grace_seconds),
+            Integer(now)
+          )
+          .order(:created_at_seconds, :id)
+          .map { |record| row_from_record(record) }
+      end
+
+      def mark_verifying(invoice_id:)
+        update_invoice(invoice_id) do |record|
+          if read(record, :transaction_state) != "settled" &&
+              %w[invoice_created expiry_pending_verification].include?(read(record, :workflow_state))
+            record.workflow_state = "verifying"
+          end
+        end
+      end
+
+      def mark_expiry_pending_verification(invoice_id:)
+        update_invoice(invoice_id) do |record|
+          unless TERMINAL_TRANSACTION_STATES.include?(read(record, :transaction_state))
+            record.workflow_state = "expiry_pending_verification"
+          end
+        end
+      end
+
+      def mark_settled(invoice_id:, settled_at:)
+        update_invoice(invoice_id) do |record|
+          record.transaction_state = "settled"
+          record.workflow_state = "settlement_action_pending" unless read(record, :workflow_state) == "settlement_action_completed"
+          record.settled_at_seconds ||= Integer(settled_at)
+        end
+      end
+
+      def mark_expired_closed(invoice_id:)
+        update_invoice(invoice_id) do |record|
+          if read(record, :transaction_state) != "settled"
+            record.transaction_state = "expired"
+            record.workflow_state = "expired_closed"
+          end
+        end
+      end
+
+      def mark_failed_closed(invoice_id:)
+        update_invoice(invoice_id) do |record|
+          if read(record, :transaction_state) != "settled"
+            record.transaction_state = "failed"
+            record.workflow_state = "failed_closed"
+          end
+        end
+      end
+
+      def mark_settlement_action_completed(invoice_id:, settlement_action_completed_at:)
+        update_invoice(invoice_id) do |record|
+          record.workflow_state = "settlement_action_completed"
+          record.settlement_action_state = "completed"
+          record.settlement_action_completed_at_seconds ||= Integer(settlement_action_completed_at)
+        end
+      end
+
+      def mark_settlement_action_failed(invoice_id:)
+        update_invoice(invoice_id) do |record|
+          record.workflow_state = "settlement_action_pending"
+          record.settlement_action_state = "failed"
+        end
+      end
+
+      private
+
+      def model_class
+        @model_class || Object.const_get(@model_class_name)
+      rescue NameError
+        raise ArgumentError, "#{@model_class_name} model is not loaded; pass model_class:"
+      end
+
+      def update_invoice(invoice_id)
+        model_class.transaction do
+          record = model_class.lock.find_by(id: invoice_id)
+          raise OpenReceive::InvoiceNotFoundError.new(invoice_id) if record.nil?
+
+          yield record
+          record.save!
+          row_from_record(record)
+        end
+      end
+
+      def attributes_from_row(row)
+        {
+          id: row.fetch("invoice_id"),
+          merchant_scope: row.fetch("merchant_scope"),
+          operation: row.fetch("operation"),
+          idempotency_key: row.fetch("idempotency_key"),
+          idempotency_request_hash: row.fetch("idempotency_request_hash"),
+          payment_hash: row.fetch("payment_hash"),
+          invoice: row.fetch("invoice"),
+          amount_msats: Integer(row.fetch("amount_msats")),
+          transaction_state: row.fetch("transaction_state"),
+          workflow_state: row.fetch("workflow_state"),
+          settlement_action_state: row.fetch("settlement_action_state"),
+          created_at_seconds: Integer(row.fetch("created_at")),
+          expires_at_seconds: Integer(row.fetch("expires_at")),
+          settled_at_seconds: optional_integer(row["settled_at"]),
+          settlement_action_completed_at_seconds: optional_integer(row["settlement_action_completed_at"]),
+          refreshed_from_invoice_id: row["refreshed_from_invoice_id"],
+          metadata: row["metadata"] || {},
+          fiat_quote: row["fiat_quote"]
+        }
+      end
+
+      def row_from_record(record)
+        {
+          "invoice_id" => read(record, :id),
+          "merchant_scope" => read(record, :merchant_scope),
+          "operation" => read(record, :operation),
+          "idempotency_key" => read(record, :idempotency_key),
+          "idempotency_request_hash" => read(record, :idempotency_request_hash),
+          "payment_hash" => read(record, :payment_hash),
+          "invoice" => read(record, :invoice),
+          "amount_msats" => Integer(read(record, :amount_msats)),
+          "transaction_state" => read(record, :transaction_state),
+          "workflow_state" => read(record, :workflow_state),
+          "settlement_action_state" => read(record, :settlement_action_state),
+          "created_at" => Integer(read(record, :created_at_seconds)),
+          "expires_at" => Integer(read(record, :expires_at_seconds)),
+          "settled_at" => optional_integer(read(record, :settled_at_seconds)),
+          "settlement_action_completed_at" => optional_integer(read(record, :settlement_action_completed_at_seconds)),
+          "refreshed_from_invoice_id" => read(record, :refreshed_from_invoice_id),
+          "metadata" => read(record, :metadata) || {},
+          "fiat_quote" => read(record, :fiat_quote)
+        }.reject { |_key, value| value.nil? }
+      end
+
+      def read(record, attribute)
+        return record.public_send(attribute) if record.respond_to?(attribute)
+        return record[attribute] if record.respond_to?(:[])
+
+        nil
+      end
+
+      def optional_integer(value)
+        value.nil? ? nil : Integer(value)
+      end
+
+      def unique_constraint_error?(error)
+        error.class.name.end_with?("RecordNotUnique")
+      end
+
+      def stringify_keys(value)
+        value.each_pair.each_with_object({}) do |(key, item), result|
+          result[key.to_s] = item
+        end
+      end
+    end
+
     class Adapter
       CREATE_OPERATION = "invoice.create"
 
@@ -323,6 +545,13 @@ module OpenReceive
 
       def adapter
         Adapter.new(configuration)
+      end
+
+      def create_active_record_invoice_store(model_class: nil, model_class_name: "OpenReceiveInvoice")
+        ActiveRecordInvoiceStore.new(
+          model_class: model_class,
+          model_class_name: model_class_name
+        )
       end
     end
   end

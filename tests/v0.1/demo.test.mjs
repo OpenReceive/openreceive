@@ -717,6 +717,39 @@ test("Frontend UI packages consume shared payment icon helpers", () => {
   }
 });
 
+test("Hello Fruit JS demos set up package-owned invoice persistence", () => {
+  const helper = readFileSync(
+    path.join(process.cwd(), "examples/hello-fruit/shared/openreceive-store.ts"),
+    "utf8"
+  );
+  assert.match(helper, /OPENRECEIVE_POSTGRES_MIGRATION_SQL/);
+  assert.match(helper, /createOpenReceivePostgresInvoiceStore/);
+  assert.match(helper, /new InMemoryInvoiceStore\(\)/);
+
+  for (const demoDir of demoServerDirs) {
+    const packageJson = JSON.parse(
+      readFileSync(path.join(process.cwd(), demoDir, "package.json"), "utf8")
+    );
+    const compose = readFileSync(path.join(process.cwd(), demoDir, "compose.yml"), "utf8");
+
+    assert.equal(packageJson.dependencies.pg, "^8.22.0", `${demoDir}: pg dependency`);
+    assert.match(compose, /DATABASE_URL:\s+postgres:\/\/openreceive:openreceive@openreceive-postgres:5432\/openreceive/);
+    assert.match(compose, /openreceive-postgres:/);
+    assert.match(compose, /image:\s+postgres:17-alpine/);
+    assert.match(compose, /openreceive-postgres-data:\/var\/lib\/postgresql\/data/);
+  }
+
+  for (const sourcePath of [
+    "examples/hello-fruit/server/node-express-react/src/server/create-server.ts",
+    "examples/hello-fruit/server/static-html-small-api/src/server/create-server.ts",
+    "examples/hello-fruit/server/nextjs-fullstack/src/server/openreceive.ts"
+  ]) {
+    const source = readFileSync(path.join(process.cwd(), sourcePath), "utf8");
+    assert.match(source, /createHelloFruitOpenReceiveInvoiceStore/);
+    assert.doesNotMatch(source, /new InMemoryInvoiceStore\(\)/);
+  }
+});
+
 test("Hello Fruit server demos keep secret-safe local setup docs", () => {
   for (const demoDir of demoServerDirs) {
     const envExamplePath = path.join(process.cwd(), demoDir, ".env.example");
@@ -800,6 +833,7 @@ test("Hello Fruit metadata exposes only allowlisted build fields", async () => {
 
   await withEnv({
     OPENRECEIVE_NWC: nwc,
+    DATABASE_URL: undefined,
     OPENRECEIVE_DEMO_MODE: "production",
     OPENRECEIVE_GIT_SHA: "0123456789abcdef",
     OPENRECEIVE_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,

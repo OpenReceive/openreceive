@@ -14,3 +14,8 @@ services:
       RAILS_ENV: ${RAILS_ENV:-production}
     expose:
       - "3003"
+    volumes:
+      - openreceive-rails-storage:/app/examples/hello-fruit/server/rails-hotwire/storage
+
+volumes:
+  openreceive-rails-storage:

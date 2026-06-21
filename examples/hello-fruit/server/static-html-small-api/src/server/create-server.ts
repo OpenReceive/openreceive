@@ -1,7 +1,6 @@
 import express from "express";
 import { fileURLToPath } from "node:url";
 import {
-  InMemoryInvoiceStore,
   createDefaultLivePriceProviders
 } from "@openreceive/core";
 import {
@@ -19,6 +18,9 @@ import {
 import {
   mountHelloFruitHostedDemoRoutes
 } from "../../../../shared/hosted-demo-routes.ts";
+import {
+  createHelloFruitOpenReceiveInvoiceStore
+} from "../../../../shared/openreceive-store.ts";
 
 export function createHelloFruitStaticServer() {
   const app = express();
@@ -83,7 +85,9 @@ export function createHelloFruitStaticServer() {
 
   mountOpenReceiveExpressRoutes(app, {
     client: wallet,
-    store: new InMemoryInvoiceStore(),
+    store: createHelloFruitOpenReceiveInvoiceStore({
+      demoId: "static-html-small-api"
+    }),
     merchantScope: () => "demo:hello-fruit-static",
     priceProviders: createDefaultLivePriceProviders({ currencies: ["USD"] }),
     priceCurrencies: ["USD"],

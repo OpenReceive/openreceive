@@ -358,6 +358,47 @@ Notes:
     must use this lifecycle.
 
 
+Next developer-experience layer:
+
+  The storage architecture is correct only if it does not make developers feel
+  like payment-database engineers. After the durable storage contract is green,
+  the next v0.1 work is package-native setup and diagnostics that hide the
+  persistence machinery behind normal framework workflows.
+
+  Required next work:
+
+    Node:
+      - Ship a package CLI with `openreceive init`, `openreceive migrate`,
+        `openreceive doctor`, `openreceive poll`, and `openreceive listen`.
+      - `init` should generate the smallest server-only config stub, env
+        example, poll/listen entrypoints, and framework-specific route wiring.
+      - `migrate` should run package-owned OpenReceive migrations without
+        requiring developers to copy SQL from docs.
+      - `doctor` should verify database connectivity, required tables/indexes,
+        migration version, durable store usage in production, NWC preflight,
+        secret redaction behavior, and poll/listen runner readiness.
+      - Support Node SQLite as a first-class package-owned store alongside
+        Postgres. SQLite is the preferred local/small-app path; Postgres is the
+        preferred production/reference path. Both must use the same lifecycle,
+        idempotency, recovery, and settlement-action conformance vectors.
+
+    Rails:
+      - Keep the native generator path as the model: install generator,
+        package-owned migration/model/store, `bin/rails db:migrate`,
+        `bin/rails openreceive:poll`, and `bin/rails openreceive:listen`.
+      - Add a Rails doctor task that checks migration status, store wiring,
+        NWC preflight, and worker readiness.
+
+    All backend packages:
+      - Refuse production boot or print an unmistakable fail-closed error when
+        only in-memory storage is configured.
+      - Document a small supported database matrix instead of implying every
+        database is supported. A database is supported only when OpenReceive
+        ships the store adapter, migration/setup path, and conformance coverage.
+      - Keep user-owned fields in metadata or app tables. Do not make app
+        developers add columns to OpenReceive-owned invoice rows.
+
+
 SDK-First Implementation Model
 ------------------------------
 
@@ -2303,9 +2344,11 @@ Framework storage, polling runners, and notification listeners:
     SSE/WebSocket extension examples.
 
   Node:
-    Plain async storage interface first, package polling runner and notification
-    listener, CLI poll/listen commands, Prisma/Drizzle examples, BullMQ/Bree
-    workers, SSE, Socket.IO, and Next.js route handlers.
+    Plain async storage interface first, package-owned Postgres and SQLite
+    stores/migrations, package polling runner and notification listener, CLI
+    init/migrate/doctor/poll/listen commands, Prisma/Drizzle examples that wrap
+    the package-owned schema rather than reinventing it, BullMQ/Bree workers,
+    SSE, Socket.IO, and Next.js route handlers.
 
   Go:
     database/sql interfaces, package `RunSettlementPollingWorker(ctx, ...)`

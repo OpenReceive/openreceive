@@ -4,17 +4,18 @@ OpenReceive now has an initial Rails adapter helper package at
 `packages/ruby/openreceive-rails`. It can wrap an injected receive-only client
 for idempotent invoice creation, authorized lookup, backend settlement
 verification, polling-worker verification, passive notification handling, and
-duplicate-safe settlement action tracking. It also includes initial
-ActiveRecord migration and model templates for the invoice storage shape, plus
-controller, job, channel, route, install-generator templates, an invoice
-Hotwire partial, and optional mounted engine routes with
+duplicate-safe settlement action tracking. It also includes a package-owned
+ActiveRecord invoice store, initial migration and model templates for the
+invoice storage shape, controller, job, channel, route, install-generator
+templates, an invoice Hotwire partial, and optional mounted engine routes with
 `503 WALLET_UNAVAILABLE` handling for an injected unavailable-wallet client.
 Complete Rails demo smoke is still pending.
 An initial Rails Hotwire Hello Fruit demo skeleton exists at
 `examples/hello-fruit/server/rails-hotwire`; it is covered by the demo
-container validator, has a root `npm run demo rails` launcher target, and boots
-without `OPENRECEIVE_NWC`; invoice creation fails closed until the receive-only
-NWC string is configured. Full bundle/build smoke is still pending.
+container validator, has a root `npm run demo rails` launcher target, prepares
+its SQLite database on container boot, and boots without `OPENRECEIVE_NWC`;
+invoice creation fails closed until the receive-only NWC string is configured.
+Full bundle/build smoke is still pending.
 
 The Ruby core-helper package at `packages/ruby/openreceive` provides
 vector-backed exact money and settlement helpers, NWC URI parse/redaction,
@@ -60,7 +61,7 @@ Expected Rails pieces:
 - Rails adapter helpers from `openreceive-rails`
 - Rails engine or route helpers mounted under `/openreceive/v1`
 - server-side receive-only NWC configuration
-- ActiveRecord invoice storage using the provided templates as the starting point
+- package-owned ActiveRecord invoice storage using the provided templates
 - ActiveJob, Solid Queue, Sidekiq, or GoodJob polling and notification workers
 - ActionCable, Turbo Streams, or Hotwire updates for browser state using the
   provided channel/job templates as the starting point

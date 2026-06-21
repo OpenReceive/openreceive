@@ -34,8 +34,12 @@ npm run demo rails     # Rails + Hotwire           http://localhost:3003
 ```
 
 Each command creates a root `.env` if missing and runs that demo's Docker
-Compose stack with local port publishing. The JS local overrides run Vite or
-Next.js development servers inside Docker so browser errors stay readable.
+Compose stack with local port publishing. The JS demo stacks also start a local
+Postgres container and run the package-owned OpenReceive invoice migration when
+`DATABASE_URL` is present. The JS local overrides run Vite or Next.js
+development servers inside Docker so browser errors stay readable. The Rails
+demo container runs `rails db:prepare` for its SQLite-backed ActiveRecord store
+before booting.
 Buying fruit creates a live Lightning invoice through your own wallet, so set a
 receive-only `OPENRECEIVE_NWC` string (for example from Rizful or Alby Hub) in
 `.env` first. Without it the UI loads but invoice creation returns

@@ -17,6 +17,7 @@
     "@openreceive/express": "0.1.0",
     "@openreceive/node": "0.1.0",
     "express": "*",
+    "pg": "^8.22.0",
     "qrcode": "*",
     "vite": "*"
   },
