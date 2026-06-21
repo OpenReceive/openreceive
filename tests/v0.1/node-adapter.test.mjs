@@ -9,9 +9,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
+import { InMemoryInvoiceStore } from "../../packages/js/core/src/index.ts";
 import {
   OpenReceiveError,
   ReceiveCheckoutValidationError,
+  OPENRECEIVE_DATABASE_SCHEMA_VERSION,
   OPENRECEIVE_POSTGRES_MIGRATION_SQL,
   OPENRECEIVE_SQLITE_MIGRATION_SQL,
   createAlbyNwcReceiveClient,
@@ -20,10 +22,10 @@ import {
   createOpenReceiveSqliteQueryClient,
   migrateOpenReceiveSqlite,
   normalizeNwcWalletError,
-  runOpenReceiveCli,
   summarizeWalletCapabilities,
   startPaymentNotificationListener
 } from "../../packages/js/node/src/index.ts";
+import { runOpenReceiveCli } from "../../packages/js/node/src/cli.ts";
 
 const NWC_URI =
   "nostr+walletconnect://" +
@@ -277,6 +279,8 @@ test("Node Postgres store owns invoice persistence and recovery semantics", asyn
   const row = invoiceRow();
 
   assert.match(OPENRECEIVE_POSTGRES_MIGRATION_SQL, /CREATE TABLE IF NOT EXISTS openreceive_invoices/);
+  assert.match(OPENRECEIVE_POSTGRES_MIGRATION_SQL, /CREATE TABLE IF NOT EXISTS openreceive_schema_migrations/);
+  assert.match(OPENRECEIVE_POSTGRES_MIGRATION_SQL, new RegExp(`VALUES \\('${OPENRECEIVE_DATABASE_SCHEMA_VERSION}'\\)`));
   assert.match(OPENRECEIVE_POSTGRES_MIGRATION_SQL, /openreceive_invoices_idempotency_scope_idx/);
   assert.match(OPENRECEIVE_POSTGRES_MIGRATION_SQL, /amount_msats >= 1000/);
 
@@ -321,6 +325,10 @@ test("Node SQLite store owns invoice persistence and recovery semantics", async 
   try {
     const client = createOpenReceiveSqliteQueryClient(database);
     await migrateOpenReceiveSqlite(client);
+    assert.deepEqual(
+      database.prepare("SELECT version FROM openreceive_schema_migrations").all().map((row) => row.version),
+      [OPENRECEIVE_DATABASE_SCHEMA_VERSION]
+    );
     const store = createOpenReceiveSqliteInvoiceStore({ client });
     const row = invoiceRow({
       invoice_id: "or_inv_node_sqlite",
@@ -330,6 +338,8 @@ test("Node SQLite store owns invoice persistence and recovery semantics", async 
     });
 
     assert.match(OPENRECEIVE_SQLITE_MIGRATION_SQL, /CREATE TABLE IF NOT EXISTS openreceive_invoices/);
+    assert.match(OPENRECEIVE_SQLITE_MIGRATION_SQL, /CREATE TABLE IF NOT EXISTS openreceive_schema_migrations/);
+    assert.match(OPENRECEIVE_SQLITE_MIGRATION_SQL, new RegExp(`VALUES \\('${OPENRECEIVE_DATABASE_SCHEMA_VERSION}'\\)`));
     assert.match(OPENRECEIVE_SQLITE_MIGRATION_SQL, /openreceive_invoices_idempotency_scope_idx/);
     assert.match(OPENRECEIVE_SQLITE_MIGRATION_SQL, /amount_msats >= 1000/);
 
@@ -433,6 +443,146 @@ test("Node CLI initializes, migrates, and doctors SQLite setup", async () => {
     assert.doesNotMatch(stdout.join(""), /nostr\+walletconnect:\/\//);
     assert.equal(stderr.join(""), "");
 
+    stdout.length = 0;
+    stderr.length = 0;
+    const configStoreDatabase = new DatabaseSync(sqlitePath);
+    const config = {
+      client: {
+        async preflight() {
+          return {
+            receiveCheckoutReady: true,
+            methods: ["make_invoice", "lookup_invoice"],
+            notifications: ["payment_received"],
+            encryption: "nip44_v2",
+            warnings: [
+              `spend capability advertised by nostr+walletconnect://${"a".repeat(64)}?secret=${"b".repeat(64)}`
+            ]
+          };
+        },
+        async makeInvoice() {
+          throw new Error("not needed");
+        },
+        async lookupInvoice() {
+          throw new Error("not needed");
+        },
+        async subscribeToPaymentReceived() {
+          return () => {};
+        }
+      },
+      store: createOpenReceiveSqliteInvoiceStore({
+        client: createOpenReceiveSqliteQueryClient(configStoreDatabase)
+      }),
+      merchantScope: () => "merchant:test"
+    };
+    const configDoctorCalls = {
+      handlers: 0,
+      poll: 0
+    };
+    const configDoctorCode = await runOpenReceiveCli({
+      argv: ["doctor", "--sqlite", sqlitePath, "--config", "openreceive.config.mjs"],
+      cwd: tempRoot,
+      env: {},
+      stdout: io(stdout),
+      stderr: io(stderr),
+      loadConfigModule: async (specifier) => {
+        assert.match(specifier, /^file:/);
+        return { openreceive: config };
+      },
+      loadExpressRunners: async () => ({
+        createOpenReceiveExpressHandlers(openreceive) {
+          configDoctorCalls.handlers += 1;
+          assert.equal(openreceive, config);
+          return {};
+        },
+        createOpenReceiveExpressSettlementPollingRunner(openreceive, runnerOptions) {
+          configDoctorCalls.poll += 1;
+          assert.equal(openreceive, config);
+          assert.deepEqual(runnerOptions, { recoveryIntervalSeconds: 1 });
+          return {
+            async recoverOpenInvoices() {
+              return { recovered: 0, invoice_ids: [] };
+            },
+            start() {},
+            stop() {}
+          };
+        },
+        async startOpenReceiveExpressPaymentNotificationRunner() {
+          throw new Error("doctor should not start the listener");
+        }
+      })
+    });
+    configStoreDatabase.close();
+    assert.equal(configDoctorCode, 0);
+    assert.equal(configDoctorCalls.handlers, 1);
+    assert.equal(configDoctorCalls.poll, 1);
+    assert.match(stdout.join(""), /ok config loaded/);
+    assert.match(stdout.join(""), /ok store package-owned durable invoice store configured/);
+    assert.match(stdout.join(""), /ok routes route wiring accepts configured store/);
+    assert.match(stdout.join(""), /ok runner poll can be constructed from config/);
+    assert.match(stdout.join(""), /ok runner listen client exposes payment_received subscription/);
+    assert.match(stdout.join(""), /ok NWC preflight completed/);
+    assert.match(stdout.join(""), /\[REDACTED_NWC\]/);
+    assert.doesNotMatch(stdout.join(""), /nostr\+walletconnect:\/\//);
+    assert.doesNotMatch(stdout.join(""), /secret=b{64}/);
+    assert.equal(stderr.join(""), "");
+
+    const loadNoopExpressDiagnostics = async () => ({
+      createOpenReceiveExpressHandlers() {
+        return {};
+      },
+      createOpenReceiveExpressSettlementPollingRunner() {
+        return {
+          async recoverOpenInvoices() {
+            return { recovered: 0, invoice_ids: [] };
+          },
+          start() {},
+          stop() {}
+        };
+      },
+      async startOpenReceiveExpressPaymentNotificationRunner() {
+        throw new Error("doctor should not start the listener");
+      }
+    });
+
+    stdout.length = 0;
+    stderr.length = 0;
+    const missingStoreDoctorCode = await runOpenReceiveCli({
+      argv: ["doctor", "--sqlite", sqlitePath, "--config", "openreceive.config.mjs"],
+      cwd: tempRoot,
+      env: {},
+      stdout: io(stdout),
+      stderr: io(stderr),
+      loadConfigModule: async () => ({
+        openreceive: {
+          client: config.client,
+          merchantScope: config.merchantScope
+        }
+      }),
+      loadExpressRunners: loadNoopExpressDiagnostics
+    });
+    assert.equal(missingStoreDoctorCode, 1);
+    assert.match(stderr.join(""), /must set a package-owned durable invoice store/);
+
+    stdout.length = 0;
+    stderr.length = 0;
+    const inMemoryStoreDoctorCode = await runOpenReceiveCli({
+      argv: ["doctor", "--sqlite", sqlitePath, "--config", "openreceive.config.mjs"],
+      cwd: tempRoot,
+      env: {},
+      stdout: io(stdout),
+      stderr: io(stderr),
+      loadConfigModule: async () => ({
+        openreceive: {
+          client: config.client,
+          store: new InMemoryInvoiceStore(),
+          merchantScope: config.merchantScope
+        }
+      }),
+      loadExpressRunners: loadNoopExpressDiagnostics
+    });
+    assert.equal(inMemoryStoreDoctorCode, 1);
+    assert.match(stderr.join(""), /uses InMemoryInvoiceStore/);
+
     const database = new DatabaseSync(sqlitePath);
     try {
       database.exec("DROP INDEX openreceive_invoices_recovery_idx");
@@ -450,6 +600,92 @@ test("Node CLI initializes, migrates, and doctors SQLite setup", async () => {
     });
     assert.equal(brokenDoctorCode, 1);
     assert.match(stderr.join(""), /missing indexes: openreceive_invoices_recovery_idx/);
+
+    const repairedDatabase = new DatabaseSync(sqlitePath);
+    try {
+      repairedDatabase.exec(
+        "CREATE INDEX IF NOT EXISTS openreceive_invoices_recovery_idx ON openreceive_invoices (workflow_state, transaction_state, expires_at)"
+      );
+    } finally {
+      repairedDatabase.close();
+    }
+    stdout.length = 0;
+    stderr.length = 0;
+
+    const versionlessDatabase = new DatabaseSync(sqlitePath);
+    try {
+      versionlessDatabase.exec("DELETE FROM openreceive_schema_migrations");
+    } finally {
+      versionlessDatabase.close();
+    }
+    const versionlessDoctorCode = await runOpenReceiveCli({
+      argv: ["doctor", "--sqlite", sqlitePath],
+      env: {},
+      stdout: io(stdout),
+      stderr: io(stderr)
+    });
+    assert.equal(versionlessDoctorCode, 1);
+    assert.match(stderr.join(""), /missing migration versions: v0\.1/);
+
+    const restoredVersionDatabase = new DatabaseSync(sqlitePath);
+    try {
+      restoredVersionDatabase
+        .prepare("INSERT INTO openreceive_schema_migrations (version) VALUES (?)")
+        .run(OPENRECEIVE_DATABASE_SCHEMA_VERSION);
+    } finally {
+      restoredVersionDatabase.close();
+    }
+    stdout.length = 0;
+    stderr.length = 0;
+
+    const leakyNwc =
+      `nostr+walletconnect://${"c".repeat(64)}` +
+      `?relay=wss%3A%2F%2Frelay.example.com&secret=${"d".repeat(64)}`;
+    const leakyConfigDoctorCode = await runOpenReceiveCli({
+      argv: ["doctor", "--sqlite", sqlitePath, "--config", "openreceive.config.mjs"],
+      cwd: tempRoot,
+      env: {},
+      stdout: io(stdout),
+      stderr: io(stderr),
+      loadConfigModule: async () => ({
+        openreceive: {
+          client: {
+            async preflight() {
+              throw new Error(`wallet rejected ${leakyNwc}`);
+            },
+            async makeInvoice() {
+              throw new Error("not needed");
+            },
+            async lookupInvoice() {
+              throw new Error("not needed");
+            }
+          },
+          store: {},
+          merchantScope: () => "merchant:test"
+        }
+      }),
+      loadExpressRunners: async () => ({
+        createOpenReceiveExpressHandlers() {
+          throw new Error(`route setup saw ${leakyNwc}`);
+        },
+        createOpenReceiveExpressSettlementPollingRunner() {
+          return {
+            async recoverOpenInvoices() {
+              return { recovered: 0, invoice_ids: [] };
+            },
+            start() {},
+            stop() {}
+          };
+        },
+        async startOpenReceiveExpressPaymentNotificationRunner() {
+          throw new Error("doctor should not start the listener");
+        }
+      })
+    });
+    assert.equal(leakyConfigDoctorCode, 1);
+    assert.match(stderr.join(""), /\[REDACTED_NWC\]/);
+    assert.doesNotMatch(stderr.join(""), /nostr\+walletconnect:\/\//);
+    assert.doesNotMatch(stderr.join(""), /secret=d{64}/);
   } finally {
     rmSync(tempRoot, { force: true, recursive: true });
   }

@@ -44,13 +44,36 @@ class FakeReceiveClient
   end
 end
 
+class FakeDurableInvoiceStore
+  def initialize
+    @inner = OpenReceive::InMemoryInvoiceStore.new
+  end
+
+  def doctor
+    [
+      {
+        "name" => "rails.migration",
+        "status" => "ok",
+        "message" => "fake durable store migration present"
+      }
+    ]
+  end
+
+  OpenReceive::Rails::Adapter::STORE_METHODS.each do |method|
+    define_method(method) do |*args, **kwargs|
+      @inner.public_send(method, *args, **kwargs)
+    end
+  end
+end
+
 class OpenReceiveRailsTest < Minitest::Test
   Controller = Struct.new(:current_user_id)
   ROOT = File.expand_path("../../../..", __dir__)
 
-  def build_adapter(client: FakeReceiveClient.new, completed: [])
+  def build_adapter(client: FakeReceiveClient.new, completed: [], store: nil)
     config = OpenReceive::Rails::Configuration.new
     config.client = client
+    config.store = store unless store.nil?
     config.merchant_scope = "rails:test"
     config.production = false
     config.authenticate = ->(controller) { raise "missing user" if controller.current_user_id.nil? }
@@ -161,6 +184,9 @@ class OpenReceiveRailsTest < Minitest::Test
     )
 
     assert_includes generator, "Rails::Generators::Base"
+    assert_includes generator, "Rails::Generators::Migration"
+    assert_includes generator, "next_migration_number"
+    assert_includes generator, "migration_template \"create_openreceive_tables.rb\""
     assert_includes generator, "create_openreceive_tables.rb"
     assert_includes generator, "openreceive_controller.rb"
     assert_includes generator, "openreceive_poll_invoice_job.rb"
@@ -229,16 +255,43 @@ class OpenReceiveRailsTest < Minitest::Test
   end
 
   def test_doctor_reports_store_nwc_and_worker_readiness
-    adapter = build_adapter.first
+    adapter = build_adapter(store: FakeDurableInvoiceStore.new).first
     result = adapter.doctor
 
     assert_equal true, result.fetch("ok")
     checks = result.fetch("checks")
     assert checks.any? { |check| check.fetch("name") == "rails.store" && check.fetch("status") == "ok" }
+    assert checks.any? { |check| check.fetch("name") == "rails.migration" && check.fetch("status") == "ok" }
     assert checks.any? { |check| check.fetch("name") == "rails.nwc" && check.fetch("status") == "ok" }
     assert checks.any? { |check| check.fetch("name") == "rails.worker.poll" && check.fetch("status") == "ok" }
     assert checks.any? { |check| check.fetch("name") == "rails.worker.listen" && check.fetch("status") == "warn" }
     refute_includes result.to_s, "nostr+walletconnect://"
+  end
+
+  def test_doctor_fails_with_in_memory_storage
+    adapter = build_adapter.first
+    result = adapter.doctor
+
+    assert_equal false, result.fetch("ok")
+    checks = result.fetch("checks")
+    assert checks.any? { |check| check.fetch("name") == "rails.store.durable" && check.fetch("status") == "error" }
+    assert_includes result.to_s, "InMemoryInvoiceStore is for tests only"
+  end
+
+  def test_doctor_redacts_nwc_secrets_from_preflight_errors
+    leaky_uri = "nostr+walletconnect://#{"c" * 64}?relay=wss%3A%2F%2Frelay.example.com&secret=#{"d" * 64}"
+    client = FakeReceiveClient.new
+    client.define_singleton_method(:preflight) do
+      raise "wallet rejected #{leaky_uri}"
+    end
+
+    adapter = build_adapter(client: client, store: FakeDurableInvoiceStore.new).first
+    result = adapter.doctor
+
+    assert_equal false, result.fetch("ok")
+    assert_includes result.to_s, "[REDACTED_NWC]"
+    refute_includes result.to_s, "nostr+walletconnect://"
+    refute_includes result.to_s, "secret=#{"d" * 64}"
   end
 
   def test_create_invoice_is_idempotent_and_receive_only

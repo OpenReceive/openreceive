@@ -53,18 +53,24 @@ Postgres:
 
 ```sh
 npx openreceive migrate --postgres "$DATABASE_URL"
-npx openreceive doctor --postgres "$DATABASE_URL"
+npx openreceive doctor --postgres "$DATABASE_URL" --config ./openreceive.config.mjs
 ```
 
 For local or small-app SQLite:
 
 ```sh
 npx openreceive migrate --sqlite ./storage/openreceive.sqlite3
-npx openreceive doctor --sqlite ./storage/openreceive.sqlite3
+npx openreceive doctor --sqlite ./storage/openreceive.sqlite3 --config ./openreceive.config.mjs
 ```
 
 The SQL is still exported for custom migration systems, but app developers
 should not hand-design OpenReceive invoice tables.
+Without `--config`, doctor checks only database connectivity, required
+columns/indexes, and the package-owned OpenReceive migration version. With
+`--config`, it also checks server route wiring, durable-store production guards,
+NWC preflight, and poll/listen readiness. A config with no store or
+`InMemoryInvoiceStore` fails doctor; use the package-owned Postgres or SQLite
+store before running production routes or workers.
 
 ```ts
 import {

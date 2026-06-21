@@ -3,6 +3,7 @@ import {
   type OpenReceiveInvoiceStore
 } from "@openreceive/core";
 import {
+  OPENRECEIVE_DATABASE_SCHEMA_VERSION,
   OPENRECEIVE_POSTGRES_MIGRATION_SQL,
   createOpenReceivePostgresInvoiceStore,
   type OpenReceivePostgresQueryClient
@@ -22,7 +23,9 @@ export function createHelloFruitOpenReceiveInvoiceStore(input: {
   });
   const migration = pool.query(OPENRECEIVE_POSTGRES_MIGRATION_SQL)
     .then(() => {
-      console.log(`[openreceive:${input.demoId}] Postgres invoice store ready.`);
+      console.log(
+        `[openreceive:${input.demoId}] Postgres invoice store ready (${OPENRECEIVE_DATABASE_SCHEMA_VERSION}).`
+      );
     });
 
   void migration.catch(() => {

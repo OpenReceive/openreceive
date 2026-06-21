@@ -159,8 +159,24 @@ test("Hello Fruit Node demo replaces Buy Now with Start over during checkout", (
   assert.match(source, /setInvoice\(null\)/);
   assert.match(source, /setFruitId\(initialFruitId\)/);
   assert.match(source, /invoice === null \? \(/);
+  assert.match(source, /onStartOver=\{startOver\}/);
   assert.match(source, />\s*Start over\s*</);
   assert.match(source, /crypto\?\.randomUUID/);
+});
+
+test("Hello Fruit Next.js demo resets expired checkout from Start over", () => {
+  const source = readFileSync(
+    path.join(
+      process.cwd(),
+      "examples/hello-fruit/server/nextjs-fullstack/src/app/checkout-client.tsx"
+    ),
+    "utf8"
+  );
+
+  assert.match(source, /function startOver\(\)/);
+  assert.match(source, /setCheckout\(undefined\)/);
+  assert.match(source, /setStatus\("idle"\)/);
+  assert.match(source, /onStartOver=\{startOver\}/);
 });
 
 test("Hello Fruit browser demos consume shared product display helpers", () => {
@@ -722,9 +738,16 @@ test("Hello Fruit JS demos set up package-owned invoice persistence", () => {
     path.join(process.cwd(), "examples/hello-fruit/shared/openreceive-store.ts"),
     "utf8"
   );
+  const postgresStore = readFileSync(
+    path.join(process.cwd(), "packages/js/node/src/postgres-store.ts"),
+    "utf8"
+  );
+  assert.match(helper, /OPENRECEIVE_DATABASE_SCHEMA_VERSION/);
   assert.match(helper, /OPENRECEIVE_POSTGRES_MIGRATION_SQL/);
   assert.match(helper, /createOpenReceivePostgresInvoiceStore/);
   assert.match(helper, /new InMemoryInvoiceStore\(\)/);
+  assert.match(postgresStore, /CREATE TABLE IF NOT EXISTS \$\{OPENRECEIVE_SCHEMA_MIGRATIONS_TABLE\}/);
+  assert.match(postgresStore, /VALUES \('\$\{OPENRECEIVE_DATABASE_SCHEMA_VERSION\}'\)/);
 
   for (const demoDir of demoServerDirs) {
     const packageJson = JSON.parse(

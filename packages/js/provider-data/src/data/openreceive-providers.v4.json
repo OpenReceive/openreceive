@@ -301,22 +301,6 @@
       "lightning_docs_url": "https://www.bullbitcoin.com/",
       "icon_path": "assets/provider-icons/bullbitcoin.png"
     },
-    "simpleswap": {
-      "id": "simpleswap",
-      "name": "SimpleSwap",
-      "url": "https://simpleswap.io",
-      "us": null,
-      "lightning_docs_url": null,
-      "icon_path": "assets/provider-icons/simpleswap.png"
-    },
-    "changenow": {
-      "id": "changenow",
-      "name": "ChangeNOW",
-      "url": "https://changenow.io",
-      "us": null,
-      "lightning_docs_url": null,
-      "icon_path": "assets/provider-icons/changenow.png"
-    },
     "fixedfloat": {
       "id": "fixedfloat",
       "name": "FixedFloat",
@@ -469,14 +453,6 @@
       "lightning_docs_url": "https://support.okcoin.com/hc/en-us/articles/360057853471",
       "icon_path": "assets/provider-icons/okcoin.png"
     },
-    "trocador": {
-      "id": "trocador",
-      "name": "Trocador",
-      "url": "https://trocador.app",
-      "us": true,
-      "lightning_docs_url": null,
-      "icon_path": "assets/provider-icons/trocador.png"
-    },
     "kryptex": {
       "id": "kryptex",
       "name": "Kryptex",
@@ -590,88 +566,76 @@
           "rank": 20
         },
         {
-          "provider": "trocador",
+          "provider": "kryptex",
           "rank": 21
         },
         {
-          "provider": "kryptex",
+          "provider": "coincorner",
           "rank": 22
         },
         {
-          "provider": "coincorner",
+          "provider": "fixedfloat",
           "rank": 23
         },
         {
-          "provider": "fixedfloat",
+          "provider": "sideshift",
           "rank": 24
         },
         {
-          "provider": "simpleswap",
+          "provider": "blink",
           "rank": 25
         },
         {
-          "provider": "changenow",
+          "provider": "speed",
           "rank": 26
         },
         {
-          "provider": "sideshift",
+          "provider": "bullbitcoin",
           "rank": 27
         },
         {
-          "provider": "blink",
+          "provider": "shakepay",
           "rank": 28
         },
         {
-          "provider": "speed",
+          "provider": "bitso",
           "rank": 29
         },
         {
-          "provider": "bullbitcoin",
+          "provider": "bitnob",
           "rank": 30
         },
         {
-          "provider": "shakepay",
+          "provider": "pouch",
           "rank": 31
         },
         {
-          "provider": "bitso",
+          "provider": "bringin",
           "rank": 32
         },
         {
-          "provider": "bitnob",
+          "provider": "mtpelerin",
           "rank": 33
         },
         {
-          "provider": "pouch",
+          "provider": "bipa",
           "rank": 34
         },
         {
-          "provider": "bringin",
+          "provider": "ripio",
           "rank": 35
         },
         {
-          "provider": "mtpelerin",
+          "provider": "belo",
           "rank": 36
         },
         {
-          "provider": "bipa",
+          "provider": "bity",
           "rank": 37
         },
         {
-          "provider": "ripio",
-          "rank": 38
-        },
-        {
-          "provider": "belo",
-          "rank": 39
-        },
-        {
-          "provider": "bity",
-          "rank": 40
-        },
-        {
           "provider": "chivo",
-          "rank": 41
+          "rank": 38
         }
       ]
     },
@@ -686,15 +650,6 @@
         },
         {
           "provider": "fixedfloat"
-        },
-        {
-          "provider": "simpleswap"
-        },
-        {
-          "provider": "changenow"
-        },
-        {
-          "provider": "trocador"
         },
         {
           "provider": "bitget"
@@ -714,19 +669,10 @@
           "provider": "fixedfloat"
         },
         {
-          "provider": "simpleswap"
-        },
-        {
-          "provider": "changenow"
-        },
-        {
           "provider": "coinbase"
         },
         {
           "provider": "kraken"
-        },
-        {
-          "provider": "trocador"
         },
         {
           "provider": "bitget"
@@ -746,12 +692,6 @@
           "flagship": true
         },
         {
-          "provider": "simpleswap"
-        },
-        {
-          "provider": "changenow"
-        },
-        {
           "provider": "sideshift"
         },
         {
@@ -759,9 +699,6 @@
         },
         {
           "provider": "kraken"
-        },
-        {
-          "provider": "trocador"
         },
         {
           "provider": "bitget"
@@ -782,9 +719,6 @@
         },
         {
           "provider": "sideshift"
-        },
-        {
-          "provider": "trocador"
         }
       ]
     },
@@ -798,12 +732,6 @@
           "flagship": true
         },
         {
-          "provider": "simpleswap"
-        },
-        {
-          "provider": "changenow"
-        },
-        {
           "provider": "sideshift"
         },
         {
@@ -811,9 +739,6 @@
         },
         {
           "provider": "coinbase"
-        },
-        {
-          "provider": "trocador"
         },
         {
           "provider": "bitget"
@@ -833,12 +758,6 @@
           "flagship": true
         },
         {
-          "provider": "simpleswap"
-        },
-        {
-          "provider": "changenow"
-        },
-        {
           "provider": "bitget"
         }
       ]
@@ -851,12 +770,6 @@
         {
           "provider": "fixedfloat",
           "flagship": true
-        },
-        {
-          "provider": "simpleswap"
-        },
-        {
-          "provider": "changenow"
         },
         {
           "provider": "sideshift"
@@ -880,12 +793,6 @@
         {
           "provider": "fixedfloat",
           "flagship": true
-        },
-        {
-          "provider": "simpleswap"
-        },
-        {
-          "provider": "changenow"
         },
         {
           "provider": "coinbase"

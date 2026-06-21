@@ -1,18 +1,25 @@
 # frozen_string_literal: true
 
+require "rails/generators/active_record/migration"
 require "rails/generators"
 
 module Openreceive
   module Generators
     class InstallGenerator < Rails::Generators::Base
+      include Rails::Generators::Migration
+
       source_root File.expand_path(
         "../../../openreceive/rails/generators/templates",
         __dir__
       )
 
+      def self.next_migration_number(dirname)
+        ActiveRecord::Generators::Base.next_migration_number(dirname)
+      end
+
       def copy_migration_and_model_templates
-        copy_file "create_openreceive_tables.rb",
-                  "db/migrate/create_openreceive_tables.rb"
+        migration_template "create_openreceive_tables.rb",
+                           "db/migrate/create_openreceive_tables.rb"
         copy_file "openreceive_invoice.rb",
                   "app/models/open_receive_invoice.rb"
       end

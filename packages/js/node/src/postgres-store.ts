@@ -11,6 +11,10 @@ import {
   type OpenReceiveInvoiceStore,
   type OpenReceiveRecoverableInvoiceQuery
 } from "@openreceive/core";
+import {
+  OPENRECEIVE_DATABASE_SCHEMA_VERSION,
+  OPENRECEIVE_SCHEMA_MIGRATIONS_TABLE
+} from "./storage-schema.ts";
 
 export interface OpenReceivePostgresQueryResult {
   rows: Record<string, unknown>[];
@@ -82,6 +86,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS openreceive_invoices_idempotency_scope_idx
 
 CREATE INDEX IF NOT EXISTS openreceive_invoices_recovery_idx
   ON openreceive_invoices (workflow_state, transaction_state, expires_at);
+
+CREATE TABLE IF NOT EXISTS ${OPENRECEIVE_SCHEMA_MIGRATIONS_TABLE} (
+  version TEXT PRIMARY KEY,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+INSERT INTO ${OPENRECEIVE_SCHEMA_MIGRATIONS_TABLE} (version)
+  VALUES ('${OPENRECEIVE_DATABASE_SCHEMA_VERSION}')
+  ON CONFLICT (version) DO NOTHING;
 `.trim();
 
 export function createOpenReceivePostgresInvoiceStore(

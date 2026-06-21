@@ -356,7 +356,9 @@ module OpenReceive
         if @config.store.respond_to?(:doctor)
           checks.concat(@config.store.doctor)
         elsif @config.store.is_a?(OpenReceive::InMemoryInvoiceStore)
-          checks << doctor_check("rails.store.durable", "warn", "InMemoryInvoiceStore is for tests and demos only")
+          checks << doctor_check("rails.store.durable", "error", "InMemoryInvoiceStore is for tests only; configure OpenReceive::Rails::ActiveRecordInvoiceStore and run bin/rails db:migrate")
+        else
+          checks << doctor_check("rails.store.durable", "error", "invoice store must expose doctor migration diagnostics")
         end
 
         checks.concat(client_doctor_checks)
@@ -462,7 +464,13 @@ module OpenReceive
         @config.client.preflight
         [doctor_check("rails.nwc", "ok", "NWC preflight completed")]
       rescue StandardError => error
-        [doctor_check("rails.nwc", "error", "NWC preflight failed: #{error.message}")]
+        [doctor_check("rails.nwc", "error", "NWC preflight failed: #{redact_diagnostic_message(error.message)}")]
+      end
+
+      def redact_diagnostic_message(message)
+        message.to_s
+               .gsub(%r{nostr\+walletconnect://[^\s"'`<>]+}, "[REDACTED_NWC]")
+               .gsub(/([?&](?:_or_evt|token|secret)=)[^&\s"'`<>]+/i, "\\1[REDACTED]")
       end
 
       def verify_stored_invoice(row)

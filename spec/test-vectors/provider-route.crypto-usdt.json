@@ -11,9 +11,6 @@
     "provider_ids": [
       "boltz",
       "fixedfloat",
-      "simpleswap",
-      "changenow",
-      "trocador",
       "bitget"
     ],
     "flagship_provider_ids": [

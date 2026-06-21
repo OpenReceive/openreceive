@@ -49,7 +49,8 @@ own the two runner entry points the app deploys:
 - `bin/rails openreceive:listen` or a generated long-running job for
   payment_received notification subscriptions where the wallet supports them
 - `bin/rails openreceive:doctor` to check storage, migration, NWC preflight,
-  and worker readiness
+  and worker readiness. The doctor task fails if the app is still using the
+  Ruby in-memory test store or a store without migration diagnostics.
 
 Deploy those as separate backend processes or worker roles. Do not put the
 long-running polling loop or notification subscription in a web request thread.

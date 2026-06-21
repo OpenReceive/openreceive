@@ -41,10 +41,10 @@ Inputs Reviewed
 ---------------
 
   building/providers-demo.json
-    Provider registry draft, schema version 2.0.0, generated 2026-06-18.
-    It contains 18 asset entries, 36 included providers, 15 crypto routes,
-    2 fiat rails, 39 countries, and 7 disqualified providers with reasons... .. ushould copy this data into the right
-    place and keep it in git.
+    Legacy provider registry draft, schema version 2.0.0, generated 2026-06-18.
+    It was normalized into the canonical v4 registry at
+    packages/js/provider-data/src/data/openreceive-providers.v4.json and should
+    not be used as a validator input or runtime source.
 
 
 Brand And Naming

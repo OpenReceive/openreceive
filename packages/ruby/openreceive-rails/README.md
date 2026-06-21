@@ -12,7 +12,8 @@ Implemented now:
 - authorization hook for app-owned invoice access
 - duplicate-safe settlement action tracking using the configured store
 - internal verification for polling workers
-- `doctor` diagnostics for store, migration, NWC, and worker readiness
+- `doctor` diagnostics for store, migration, NWC, and worker readiness; the
+  doctor task fails if the app still uses the Ruby in-memory test store
 - payment notification handling where the notification is only a passive hint
   and backend lookup remains settlement authority
 - ActiveRecord invoice store plus migration and model templates for the invoice

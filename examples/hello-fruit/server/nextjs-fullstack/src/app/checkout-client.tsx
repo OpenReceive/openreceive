@@ -113,6 +113,15 @@ export default function CheckoutClient({
     }
   }
 
+  function startOver() {
+    setCheckout(undefined);
+    setPurchasedFruit(undefined);
+    setStickerModalOpen(false);
+    setStatus("idle");
+    setError("");
+    completedInvoiceRef.current = "";
+  }
+
   return (
     <OpenReceiveThemeScope
       as="section"
@@ -173,6 +182,7 @@ export default function CheckoutClient({
               setError(cause instanceof Error ? cause.message : String(cause));
             }}
             onState={onCheckoutState}
+            onStartOver={startOver}
             classNames={{
               root: "react-checkout",
               actions: "actions",

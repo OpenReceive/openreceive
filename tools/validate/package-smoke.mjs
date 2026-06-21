@@ -35,7 +35,7 @@ const importChecks = {
   "@openreceive/core": "typeof mod.createIdempotencyRequestHash === 'function'",
   "@openreceive/elements": "typeof mod.renderOpenReceiveCheckoutHtml === 'function' && typeof mod.renderOpenReceiveThemeToggleHtml === 'function' && mod.OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME === 'openreceive-theme-toggle'",
   "@openreceive/express": "typeof mod.createOpenReceiveExpressHandlers === 'function'",
-  "@openreceive/node": "typeof mod.createAlbyNwcReceiveClient === 'function' && typeof mod.createOpenReceivePostgresInvoiceStore === 'function' && typeof mod.createOpenReceiveSqliteInvoiceStore === 'function' && typeof mod.OPENRECEIVE_SQLITE_MIGRATION_SQL === 'string' && typeof mod.runOpenReceiveCli === 'function'",
+  "@openreceive/node": "typeof mod.createAlbyNwcReceiveClient === 'function' && typeof mod.createOpenReceivePostgresInvoiceStore === 'function' && typeof mod.createOpenReceiveSqliteInvoiceStore === 'function' && mod.OPENRECEIVE_DATABASE_SCHEMA_VERSION === 'v0.1' && typeof mod.OPENRECEIVE_SQLITE_MIGRATION_SQL === 'string' && mod.runOpenReceiveCli === undefined",
   "@openreceive/provider-data": "typeof mod.getProviderRegistryMetadata === 'function'",
   "@openreceive/react": "typeof mod.createOpenReceiveCheckoutViewModel === 'function' && typeof mod.OpenReceiveThemeScope === 'function' && typeof mod.OpenReceiveProvider === 'function' && typeof mod.useOpenReceiveCheckoutContext === 'function'",
   "@openreceive/svelte": "typeof mod.createOpenReceiveSvelteCheckoutBinding === 'function' && typeof mod.createOpenReceiveSvelteCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveSvelteCheckoutComponentModel === 'function' && typeof mod.createOpenReceiveSvelteCheckoutController === 'function' && typeof mod.createOpenReceiveSvelteThemeBinding === 'function' && typeof mod.createOpenReceiveSvelteStoredThemeBinding === 'function' && typeof mod.createOpenReceiveSvelteThemeToggleBinding === 'function' && typeof mod.createOpenReceiveCheckoutElement === 'function' && typeof mod.createOpenReceiveThemeToggleElement === 'function' && typeof mod.createOpenReceiveCheckoutShell === 'function' && typeof mod.syncOpenReceiveStoredThemeControls === 'function' && typeof mod.applyOpenReceiveCheckoutThemeAttributes === 'function'",
@@ -342,6 +342,11 @@ assert(
   "@openreceive/angular: checkout Angular component must be packaged"
 );
 const nodeCliPath = "node_modules/@openreceive/node/bin/openreceive.mjs";
+const nodeCli = await import("@openreceive/node/cli");
+assert(
+  typeof nodeCli.runOpenReceiveCli === "function",
+  "@openreceive/node/cli: CLI runner must be importable from the CLI subpath"
+);
 assert(existsSync(nodeCliPath), "@openreceive/node: CLI bin must be packaged");
 assert(
   execFileSync(process.execPath, [nodeCliPath, "help"], { encoding: "utf8" }).includes("Usage: openreceive"),

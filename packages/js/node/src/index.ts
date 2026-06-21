@@ -5,7 +5,7 @@ export type {
   OpenReceiveReceiveNwcClient
 } from "@openreceive/core";
 export * from "./alby-nwc.ts";
-export * from "./cli.ts";
 export * from "./listener.ts";
 export * from "./postgres-store.ts";
+export * from "./storage-schema.ts";
 export * from "./sqlite-store.ts";

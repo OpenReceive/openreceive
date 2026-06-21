@@ -10,6 +10,8 @@ const clientBundleScanner = path.join(process.cwd(), "tools/validate/scan-client
 const demoContainerValidator = path.join(process.cwd(), "tools/validate/check-demo-containers.mjs");
 const demoDeployValidator = path.join(process.cwd(), "tools/validate/check-demo-deploy.mjs");
 const demoDeploymentDocs = path.join(process.cwd(), "docs/13-demo-deployment.md");
+const supportedDatabaseDocs = path.join(process.cwd(), "docs/16-supported-databases.md");
+const nodeQuickstartDocs = path.join(process.cwd(), "docs/01-quickstart-node.md");
 const releaseReadinessValidator = path.join(process.cwd(), "tools/validate/check-release-readiness.mjs");
 const workflowValidator = path.join(process.cwd(), "tools/validate/check-workflows.mjs");
 const liveNwcSmoke = path.join(process.cwd(), "tools/live-nwc-test/index.mjs");
@@ -145,6 +147,46 @@ test("release readiness validator accepts current v0.1 metadata", () => {
 
 test("workflow validator accepts safe public workflow skeletons", () => {
   assert.match(runWorkflowValidator(), /Workflow validation passed for 7 workflow\(s\)\./);
+});
+
+test("supported database docs keep invoice storage boundaries narrow", () => {
+  const docs = readFileSync(supportedDatabaseDocs, "utf8");
+  const quickstart = readFileSync(nodeQuickstartDocs, "utf8");
+
+  assert.match(docs, /\| Node \| Postgres \| Supported \|/);
+  assert.match(docs, /\| Node \| SQLite \| Supported \|/);
+  assert.match(docs, /\| Rails \| ActiveRecord SQLite \| Initial adapter path \|/);
+  assert.match(docs, /MongoDB, MySQL, Prisma-native models, Drizzle-native models, and arbitrary user\s+tables are not supported storage targets/);
+  assert.match(docs, /Keep app-owned references[\s\S]*in OpenReceive metadata or in your own app tables/);
+  assert.match(docs, /Do not add app-specific columns to OpenReceive-owned invoice rows/);
+  assert.match(quickstart, /MongoDB, MySQL, and arbitrary user-designed invoice tables are not\s+supported/);
+});
+
+test("OpenReceive-owned invoice migrations do not add app-specific columns", () => {
+  const migrationPaths = [
+    "packages/js/node/src/postgres-store.ts",
+    "packages/js/node/src/sqlite-store.ts",
+    "packages/js/node/migrations/001_create_openreceive_invoices.postgres.sql",
+    "packages/ruby/openreceive-rails/lib/openreceive/rails/generators/templates/create_openreceive_tables.rb",
+    "examples/hello-fruit/server/rails-hotwire/db/migrate/002_create_openreceive_tables.rb"
+  ];
+  const appSpecificColumns = [
+    /\buser_id\b/,
+    /\border_id\b/,
+    /\bcart_id\b/,
+    /\bproduct_id\b/,
+    /\btenant_id\b/,
+    /\bcustomer_id\b/,
+    /\bfruit\b/
+  ];
+
+  for (const relativePath of migrationPaths) {
+    const source = readFileSync(path.join(process.cwd(), relativePath), "utf8");
+    assert.match(source, /\bmetadata\b/, `${relativePath}: OpenReceive rows keep app references in metadata`);
+    for (const pattern of appSpecificColumns) {
+      assert.doesNotMatch(source, pattern, `${relativePath}: must not add ${pattern} to OpenReceive invoice rows`);
+    }
+  }
 });
 
 test("live NWC expected capabilities fixture matches the documented Rizful default", () => {

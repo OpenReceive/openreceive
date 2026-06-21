@@ -35,8 +35,8 @@ Docker loads the repository root `.env` file, so the same
 `OPENRECEIVE_NWC` value can be shared across all local Hello Fruit demos
 without demo-local env files. The compose stack also starts a local Postgres
 container and points `DATABASE_URL` at it; the demo uses the package-owned
-OpenReceive Postgres invoice store and runs the package migration before store
-queries.
+OpenReceive Postgres invoice store, runs the package migration, and records the
+OpenReceive schema version before store queries.
 
 The Makefile exposes the standard demo commands: `make setup`, `make dev`,
 `make test`, `make demo-test-nwc`, `make demo-production`,

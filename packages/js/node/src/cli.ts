@@ -10,15 +10,24 @@ import type {
   OpenReceiveExpressPollingRunnerStartOptions
 } from "@openreceive/express";
 import {
-  OPENRECEIVE_POSTGRES_MIGRATION_SQL
+  InMemoryInvoiceStore
+} from "@openreceive/core";
+import {
+  OPENRECEIVE_POSTGRES_MIGRATION_SQL,
+  OpenReceivePostgresInvoiceStore
 } from "./postgres-store.ts";
 import {
   OPENRECEIVE_SQLITE_MIGRATION_SQL,
+  OpenReceiveSqliteInvoiceStore,
   createOpenReceiveSqliteQueryClient,
   migrateOpenReceiveSqlite,
   type OpenReceiveSqliteQueryClient,
   type OpenReceiveSqliteDatabase
 } from "./sqlite-store.ts";
+import {
+  OPENRECEIVE_DATABASE_SCHEMA_VERSION,
+  OPENRECEIVE_SCHEMA_MIGRATIONS_TABLE
+} from "./storage-schema.ts";
 
 export interface OpenReceiveCliIo {
   write(message: string): void;
@@ -101,6 +110,22 @@ const REQUIRED_INVOICE_COLUMNS = [
 const REQUIRED_INVOICE_INDEXES = [
   "openreceive_invoices_idempotency_scope_idx",
   "openreceive_invoices_recovery_idx"
+] as const;
+const REQUIRED_STORE_METHODS = [
+  "checkIdempotency",
+  "createInvoice",
+  "getInvoice",
+  "getInvoiceByPaymentHash",
+  "getInvoiceByBolt11Invoice",
+  "listRecoverableInvoices",
+  "markVerifying",
+  "markExpiryPendingVerification",
+  "markSettled",
+  "markExpiredClosed",
+  "markFailedClosed",
+  "markSettlementActionPending",
+  "markSettlementActionCompleted",
+  "markSettlementActionFailed"
 ] as const;
 
 interface OpenReceiveExpressRunnerModule {
@@ -417,7 +442,7 @@ async function runDoctor(input: {
       migrated = result.rows.length === 1;
       schema = migrated
         ? await readSqliteInvoiceSchema(client)
-        : { columns: new Set(), indexes: new Set() };
+        : { columns: new Set(), indexes: new Set(), migrationVersions: new Set() };
     } finally {
       database.close?.();
     }
@@ -442,7 +467,7 @@ async function runDoctor(input: {
       migrated = result.rows[0]?.table_name === "openreceive_invoices";
       schema = migrated
         ? await readPostgresInvoiceSchema(pool)
-        : { columns: new Set(), indexes: new Set() };
+        : { columns: new Set(), indexes: new Set(), migrationVersions: new Set() };
     } finally {
       await pool.end();
     }
@@ -457,7 +482,7 @@ async function runDoctor(input: {
       return 1;
     }
   }
-  input.stdout.write("ok migration openreceive_invoices v0.1 columns/indexes\n");
+  input.stdout.write(`ok migration openreceive_invoices ${OPENRECEIVE_DATABASE_SCHEMA_VERSION} columns/indexes/version\n`);
 
   if (walletConfigured) {
     input.stdout.write("ok OPENRECEIVE_NWC configured (redacted)\n");
@@ -491,6 +516,14 @@ async function runConfigDoctor(input: {
   } catch (error) {
     input.stderr.write(`OpenReceive config failed to load: ${safeErrorMessage(error)}\n`);
     return false;
+  }
+
+  const storeCheck = checkConfiguredStore(config.store);
+  if (storeCheck.ok) {
+    input.stdout.write("ok store package-owned durable invoice store configured\n");
+  } else {
+    input.stderr.write(`${storeCheck.message}\n`);
+    ok = false;
   }
 
   let express: OpenReceiveExpressRunnerModule;
@@ -558,6 +591,53 @@ async function runConfigDoctor(input: {
   return ok;
 }
 
+function checkConfiguredStore(store: OpenReceiveExpressOptions["store"]):
+  | { ok: true }
+  | { ok: false; message: string } {
+  if (store === undefined || store === null) {
+    return {
+      ok: false,
+      message:
+        "OpenReceive config must set a package-owned durable invoice store. " +
+        "Default in-memory storage is for tests and demos only, and production boot will fail closed."
+    };
+  }
+
+  if (store instanceof InMemoryInvoiceStore) {
+    return {
+      ok: false,
+      message:
+        "OpenReceive config uses InMemoryInvoiceStore. Configure the package-owned " +
+        "Postgres or SQLite invoice store before running production routes or workers."
+    };
+  }
+
+  const missingMethods = REQUIRED_STORE_METHODS.filter((method) => {
+    const candidate = (store as unknown as Record<string, unknown>)[method];
+    return typeof candidate !== "function";
+  });
+  if (missingMethods.length > 0) {
+    return {
+      ok: false,
+      message: `OpenReceive config invoice store is missing lifecycle methods: ${missingMethods.join(", ")}.`
+    };
+  }
+
+  if (
+    store instanceof OpenReceivePostgresInvoiceStore ||
+    store instanceof OpenReceiveSqliteInvoiceStore
+  ) {
+    return { ok: true };
+  }
+
+  return {
+    ok: false,
+    message:
+      "OpenReceive config invoice store is not a package-owned Node Postgres or SQLite store. " +
+      "Node v0.1 supports databases only when OpenReceive ships the store adapter, migration path, and conformance coverage."
+  };
+}
+
 function detectDatabaseTarget(
   args: readonly string[],
   env: NodeJS.ProcessEnv
@@ -603,6 +683,7 @@ function hasConfigTarget(args: readonly string[], env: NodeJS.ProcessEnv): boole
 interface OpenReceiveDoctorSchema {
   columns: Set<string>;
   indexes: Set<string>;
+  migrationVersions: Set<string>;
 }
 
 async function readSqliteInvoiceSchema(
@@ -614,9 +695,19 @@ async function readSqliteInvoiceSchema(
   const indexes = await client.execute(
     "SELECT name FROM pragma_index_list('openreceive_invoices')"
   );
+  const migrationTable = await client.execute(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
+    [OPENRECEIVE_SCHEMA_MIGRATIONS_TABLE]
+  );
+  const versions = migrationTable.rows.length === 0
+    ? { rows: [] }
+    : await client.execute(
+        `SELECT version FROM ${OPENRECEIVE_SCHEMA_MIGRATIONS_TABLE}`
+      );
   return {
     columns: new Set(columns.rows.map((row) => String(row.name))),
-    indexes: new Set(indexes.rows.map((row) => String(row.name)))
+    indexes: new Set(indexes.rows.map((row) => String(row.name))),
+    migrationVersions: new Set(versions.rows.map((row) => String(row.version)))
   };
 }
 
@@ -629,9 +720,18 @@ async function readPostgresInvoiceSchema(client: {
   const indexes = await client.query(
     "SELECT indexname AS name FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'openreceive_invoices'"
   );
+  const migrationTable = await client.query(
+    "SELECT to_regclass('public.openreceive_schema_migrations') AS table_name"
+  );
+  const versions = migrationTable.rows[0]?.table_name === OPENRECEIVE_SCHEMA_MIGRATIONS_TABLE
+    ? await client.query(
+        `SELECT version FROM ${OPENRECEIVE_SCHEMA_MIGRATIONS_TABLE}`
+      )
+    : { rows: [] };
   return {
     columns: new Set(columns.rows.map((row) => String(row.name))),
-    indexes: new Set(indexes.rows.map((row) => String(row.name)))
+    indexes: new Set(indexes.rows.map((row) => String(row.name))),
+    migrationVersions: new Set(versions.rows.map((row) => String(row.version)))
   };
 }
 
@@ -640,13 +740,17 @@ function checkInvoiceSchema(schema: OpenReceiveDoctorSchema):
   | { ok: false; message: string } {
   const missingColumns = REQUIRED_INVOICE_COLUMNS.filter((name) => !schema.columns.has(name));
   const missingIndexes = REQUIRED_INVOICE_INDEXES.filter((name) => !schema.indexes.has(name));
-  if (missingColumns.length === 0 && missingIndexes.length === 0) {
+  const missingVersions = schema.migrationVersions.has(OPENRECEIVE_DATABASE_SCHEMA_VERSION)
+    ? []
+    : [OPENRECEIVE_DATABASE_SCHEMA_VERSION];
+  if (missingColumns.length === 0 && missingIndexes.length === 0 && missingVersions.length === 0) {
     return { ok: true };
   }
 
   const details = [
     missingColumns.length === 0 ? undefined : `columns: ${missingColumns.join(", ")}`,
-    missingIndexes.length === 0 ? undefined : `indexes: ${missingIndexes.join(", ")}`
+    missingIndexes.length === 0 ? undefined : `indexes: ${missingIndexes.join(", ")}`,
+    missingVersions.length === 0 ? undefined : `migration versions: ${missingVersions.join(", ")}`
   ].filter((detail): detail is string => detail !== undefined);
   return {
     ok: false,
@@ -818,6 +922,43 @@ async function waitForTerminationSignal(
 }
 
 function safeErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
+  if (error instanceof Error) return redactPotentialSecrets(error.message);
+  if (typeof error === "string") return redactPotentialSecrets(error);
   return "OpenReceive command failed.";
+}
+
+function redactPotentialSecrets(message: string): string {
+  return message
+    .replace(/nostr\+walletconnect:\/\/[^\s"'`<>]+/g, "[REDACTED_NWC]")
+    .replace(/([?&](?:_or_evt|token|secret)=)[^&\s"'`<>]+/gi, "$1[REDACTED]");
+}
+
+function formatPreflightDetails(summary: unknown): string {
+  if (!isRecord(summary)) return "";
+
+  const details = [];
+  if (typeof summary.encryption === "string" && summary.encryption.length > 0) {
+    details.push(`encryption=${summary.encryption}`);
+  }
+  if (Array.isArray(summary.methods)) {
+    const methods = summary.methods.filter((method): method is string => typeof method === "string");
+    if (methods.length > 0) details.push(`methods=${methods.join(",")}`);
+  }
+  if (Array.isArray(summary.notifications)) {
+    const notifications = summary.notifications.filter((notification): notification is string => typeof notification === "string");
+    if (notifications.length > 0) details.push(`notifications=${notifications.join(",")}`);
+  }
+
+  return details.length === 0 ? "" : ` (${details.join("; ")})`;
+}
+
+function readPreflightWarnings(summary: unknown): string[] {
+  if (!isRecord(summary) || !Array.isArray(summary.warnings)) return [];
+  return summary.warnings
+    .filter((warning): warning is string => typeof warning === "string")
+    .map(redactPotentialSecrets);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }

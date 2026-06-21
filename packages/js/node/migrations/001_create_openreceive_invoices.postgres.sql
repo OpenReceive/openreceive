@@ -48,3 +48,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS openreceive_invoices_idempotency_scope_idx
 
 CREATE INDEX IF NOT EXISTS openreceive_invoices_recovery_idx
   ON openreceive_invoices (workflow_state, transaction_state, expires_at);
+
+CREATE TABLE IF NOT EXISTS openreceive_schema_migrations (
+  version TEXT PRIMARY KEY,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+INSERT INTO openreceive_schema_migrations (version)
+  VALUES ('v0.1')
+  ON CONFLICT (version) DO NOTHING;

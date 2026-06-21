@@ -173,6 +173,7 @@ function App(): React.ReactElement {
               setError(cause instanceof Error ? cause.message : String(cause));
             }}
             onState={onCheckoutState}
+            onStartOver={startOver}
             payment_hash={invoice.payment_hash}
             transaction_state={invoice.transaction_state}
             workflow_state={invoice.workflow_state}
