@@ -268,7 +268,7 @@
       "us": false,
       "pays_arbitrary_invoice": true,
       "mechanism": "pay_invoice",
-      "lightning_docs_url": "https://guides.bitcoinsupport.com/guides/bullwallet-guide/how-to-use-bull-wallet/steps-for-sending-lightning",
+      "lightning_docs_url": "https://guides.bitcoinsupport.com/how-to-use-bull-wallet/steps-for-sending-lightning.html",
       "blurb": "Canada / EU Lightning withdrawals; Instant Payments via Liquid + Boltz."
     },
     "simpleswap": {

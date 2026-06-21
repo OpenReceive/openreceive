@@ -4,7 +4,9 @@ import test from "node:test";
 import {
   OpenReceiveError,
   ReceiveCheckoutValidationError,
+  OPENRECEIVE_POSTGRES_MIGRATION_SQL,
   createAlbyNwcReceiveClient,
+  createOpenReceivePostgresInvoiceStore,
   normalizeNwcWalletError,
   summarizeWalletCapabilities,
   startPaymentNotificationListener
@@ -254,6 +256,51 @@ test("receive checkout wrapper does not expose payInvoice", () => {
   });
 
   assert.equal("payInvoice" in client, false);
+});
+
+test("Node Postgres store owns invoice persistence and recovery semantics", async () => {
+  const db = new FakePostgresClient();
+  const store = createOpenReceivePostgresInvoiceStore({ client: db });
+  const row = invoiceRow();
+
+  assert.match(OPENRECEIVE_POSTGRES_MIGRATION_SQL, /CREATE TABLE IF NOT EXISTS openreceive_invoices/);
+  assert.match(OPENRECEIVE_POSTGRES_MIGRATION_SQL, /openreceive_invoices_idempotency_scope_idx/);
+  assert.match(OPENRECEIVE_POSTGRES_MIGRATION_SQL, /amount_msats >= 1000/);
+
+  const created = await store.createInvoice(row);
+  const replayed = await store.createInvoice(row);
+  const recoverable = await store.listRecoverableInvoices({ now: 1001 });
+
+  assert.equal(created.status, "created");
+  assert.equal(replayed.status, "replayed");
+  assert.equal((await store.getInvoice(row.invoice_id)).payment_hash, row.payment_hash);
+  assert.equal((await store.getInvoiceByPaymentHash(row.payment_hash)).invoice_id, row.invoice_id);
+  assert.equal((await store.getInvoiceByBolt11Invoice(row.invoice)).invoice_id, row.invoice_id);
+  assert.deepEqual(recoverable.map((invoice) => invoice.invoice_id), [row.invoice_id]);
+
+  const settled = await store.markSettled({
+    invoice_id: row.invoice_id,
+    settled_at: 1200
+  });
+  const completed = await store.markSettlementActionCompleted({
+    invoice_id: row.invoice_id,
+    settlement_action_completed_at: 1201
+  });
+
+  assert.equal(settled.transaction_state, "settled");
+  assert.equal(settled.workflow_state, "settlement_action_pending");
+  assert.equal(completed.workflow_state, "settlement_action_completed");
+  assert.equal(completed.settlement_action_state, "completed");
+  assert.equal((await store.listRecoverableInvoices({ now: 1202 })).length, 0);
+
+  await assert.rejects(
+    () =>
+      store.createInvoice({
+        ...row,
+        idempotency_request_hash: `sha256:${"c".repeat(64)}`
+      }),
+    /different request body/
+  );
 });
 
 test("payment notification listener dedupes and verifies settlement with lookup", async () => {

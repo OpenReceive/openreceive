@@ -16,11 +16,17 @@ Implemented now:
   and backend lookup remains settlement authority
 - ActiveRecord migration and model templates for the invoice storage shape
 - install generator skeleton that copies the controller, jobs, channel,
-  migration, and model templates and prints the route snippet
+  migration, model, and rake task templates and prints the route snippet
+- generated `openreceive:poll` and `openreceive:listen` rake tasks for
+  separate backend poll/listen processes
 - package-owned OpenReceive invoice persistence inside the Rails database; the
   host app configures metadata and settlement hooks instead of hand-rolling
   invoice/idempotency tables
 - optional mounted engine route/controller surface for `/v1/invoices`
 - Hotwire/Turbo invoice partial for passive status updates
 
-It does not include Rails demo apps or real-wallet Ruby smoke coverage yet.
+Run the poll and listen tasks as separate backend processes or worker roles.
+Do not run the long-lived loops as threads inside the web request process.
+
+It does not include full Rails demo smoke or real-wallet Ruby notification
+coverage yet.

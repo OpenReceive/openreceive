@@ -322,68 +322,91 @@ export async function startOpenReceiveExpressPaymentNotificationRunner(
   const eventBus = options.eventBus ?? new InMemoryInvoiceEventBus();
   const clock = options.clock ?? currentUnixSeconds;
 
-  return startPaymentNotificationListener({
-    client: options.client,
-    onSettledInvoice: async ({ notification, lookup }) => {
-      const invoice = await store.getInvoiceByPaymentHash(notification.payment_hash);
-      if (invoice === undefined) {
-        emitLog(options, "warn", "notification.invoice_not_found", "Received payment notification for an unknown invoice.", {
-          payment_hash: notification.payment_hash
-        });
-        return;
-      }
-
-      let current = invoice;
-      if (current.workflow_state === "invoice_created") {
-        current = await store.markVerifying(current.invoice_id);
-        eventBus.publish(
-          current.invoice_id,
-          "invoice.verifying",
-          serializeEventData(current)
-        );
-      }
-
-      const settled = await store.markSettled({
-        invoice_id: current.invoice_id,
-        settled_at: lookup.settled_at ?? notification.settled_at
-      });
-      eventBus.publish(
-        settled.invoice_id,
-        "invoice.settled",
-        serializeEventData(settled)
-      );
-      emitLog(options, "info", "invoice.settled", "Notification listener verified invoice settlement by wallet lookup.", invoiceLogFields(settled));
-
-      await maybeRunSettlementAction({
-        options,
-        store,
-        eventBus,
-        invoice: settled,
-        source: "notification_runner",
-        lookupInvoice: lookup,
-        clock
-      });
-    },
-    onUnsettledNotification: async ({ notification }) => {
-      const invoice = await store.getInvoiceByPaymentHash(notification.payment_hash);
-      if (invoice === undefined) return;
-      if (invoice.workflow_state !== "invoice_created") return;
-
-      const verifying = await store.markVerifying(invoice.invoice_id);
-      eventBus.publish(
-        verifying.invoice_id,
-        "invoice.verifying",
-        serializeEventData(verifying)
-      );
-      emitLog(options, "info", "invoice.verifying", "Notification listener woke backend verification.", invoiceLogFields(verifying));
-    },
-    onError: async (error, notification) => {
-      emitLog(options, "error", "notification.listener.error", "Payment notification listener failed while verifying a hint.", {
-        ...(notification === undefined ? {} : { payment_hash: notification.payment_hash }),
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
+  emitLog(options, "info", "notification.listener.starting", "Starting OpenReceive payment notification listener.", {
+    supports_payment_received: options.client.subscribeToPaymentReceived !== undefined
   });
+
+  try {
+    const listener = await startPaymentNotificationListener({
+      client: options.client,
+      onSettledInvoice: async ({ notification, lookup }) => {
+        const invoice = await store.getInvoiceByPaymentHash(notification.payment_hash);
+        if (invoice === undefined) {
+          emitLog(options, "warn", "notification.invoice_not_found", "Received payment notification for an unknown invoice.", {
+            payment_hash: notification.payment_hash
+          });
+          return;
+        }
+
+        let current = invoice;
+        if (current.workflow_state === "invoice_created") {
+          current = await store.markVerifying(current.invoice_id);
+          eventBus.publish(
+            current.invoice_id,
+            "invoice.verifying",
+            serializeEventData(current)
+          );
+        }
+
+        const settled = await store.markSettled({
+          invoice_id: current.invoice_id,
+          settled_at: lookup.settled_at ?? notification.settled_at
+        });
+        eventBus.publish(
+          settled.invoice_id,
+          "invoice.settled",
+          serializeEventData(settled)
+        );
+        emitLog(options, "info", "invoice.settled", "Notification listener verified invoice settlement by wallet lookup.", invoiceLogFields(settled));
+
+        await maybeRunSettlementAction({
+          options,
+          store,
+          eventBus,
+          invoice: settled,
+          source: "notification_runner",
+          lookupInvoice: lookup,
+          clock
+        });
+      },
+      onUnsettledNotification: async ({ notification }) => {
+        const invoice = await store.getInvoiceByPaymentHash(notification.payment_hash);
+        if (invoice === undefined) return;
+        if (invoice.workflow_state !== "invoice_created") return;
+
+        const verifying = await store.markVerifying(invoice.invoice_id);
+        eventBus.publish(
+          verifying.invoice_id,
+          "invoice.verifying",
+          serializeEventData(verifying)
+        );
+        emitLog(options, "info", "invoice.verifying", "Notification listener woke backend verification.", invoiceLogFields(verifying));
+      },
+      onError: async (error, notification) => {
+        emitLog(options, "error", "notification.listener.error", "Payment notification listener failed while verifying a hint.", {
+          ...(notification === undefined ? {} : { payment_hash: notification.payment_hash }),
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    });
+
+    emitLog(options, "info", "notification.listener.started", "OpenReceive payment notification listener started.", {
+      seen_payment_hashes: listener.seenPaymentHashes.size
+    });
+
+    return {
+      seenPaymentHashes: listener.seenPaymentHashes,
+      async stop() {
+        await listener.stop();
+        emitLog(options, "info", "notification.listener.stopped", "OpenReceive payment notification listener stopped.", {});
+      }
+    };
+  } catch (error) {
+    emitLog(options, "warn", "notification.listener.unavailable", "OpenReceive payment notification listener could not start.", {
+      error: error instanceof Error ? error.message : String(error)
+    });
+    throw error;
+  }
 }
 
 export function createOpenReceiveExpressHandlers(
