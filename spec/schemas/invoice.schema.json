@@ -141,10 +141,6 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "events_url": {
-          "type": "string",
-          "minLength": 1
-        },
         "routes_url": {
           "type": "string",
           "minLength": 1

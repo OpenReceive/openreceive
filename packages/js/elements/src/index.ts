@@ -64,9 +64,6 @@ import {
   type OpenReceiveWizardRouteDisplay
 } from "@openreceive/browser";
 
-export { parseOpenReceiveInvoiceEvent } from "@openreceive/browser";
-export type { OpenReceiveInvoiceEventPayload } from "@openreceive/browser";
-
 export interface OpenReceiveCheckoutView {
   readonly invoice_id?: string;
   readonly invoice: string;
@@ -81,9 +78,6 @@ export interface OpenReceiveCheckoutView {
   readonly transaction_state?: string;
   readonly workflow_state?: string;
   readonly expires_at?: number;
-  readonly checkout?: {
-    readonly events_url?: string;
-  };
   readonly theme?: "light" | "dark";
   readonly payment_wizard?: boolean;
   readonly wizard?: OpenReceiveElementsWizardView;
@@ -506,7 +500,6 @@ export function defineOpenReceiveElements(
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.transactionState,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.workflowState,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.expiresAt,
-        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.eventsUrl,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.lookupUrl,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentWizard
@@ -551,11 +544,6 @@ export function defineOpenReceiveElements(
           this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.expiresAt),
           { label: "expires-at" }
         ),
-        checkout: {
-          ...(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.eventsUrl) === null
-            ? {}
-            : { events_url: this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.eventsUrl) ?? undefined })
-        },
         theme: parseOpenReceiveResolvedTheme(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme)),
         payment_wizard: parseOpenReceiveBooleanAttribute(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentWizard)),
         wizard: {
@@ -666,11 +654,6 @@ export function defineOpenReceiveElements(
         transaction_state: this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.transactionState) ?? "pending",
         workflow_state: this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.workflowState) ?? "invoice_created",
         ...(expiresAt === undefined ? {} : { expires_at: expiresAt }),
-        checkout: {
-          ...(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.eventsUrl) === null
-            ? {}
-            : { events_url: this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.eventsUrl) ?? undefined })
-        }
       });
     }
 
@@ -697,12 +680,6 @@ export function defineOpenReceiveElements(
         this.announcedSettledPaymentHash = state.payment_hash;
         this.dispatchEvent(
           createOpenReceiveCheckoutStateEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.settled, state)
-        );
-        this.dispatchEvent(
-          createOpenReceiveCheckoutStateEvent(
-            OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.paymentReceived,
-            state
-          )
         );
       }
     }

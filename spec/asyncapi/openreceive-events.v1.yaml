@@ -2,17 +2,14 @@ asyncapi: 3.0.0
 info:
   title: OpenReceive Invoice Events
   version: 0.1.0
-  summary: Passive invoice event payloads for SSE and framework realtime adapters.
+  summary: Internal lifecycle event payload names for route-driven reconciliation.
   description: >
-    Events are UI hints and replayable status updates. They do not run merchant
-    settlement actions by themselves. Backend lookup remains the settlement
-    authority.
+    Events are emitted to server-side hooks and logs as passive hints. They are
+    not an HTTP stream, do not run merchant settlement actions by themselves,
+    and never replace backend lookup as the settlement authority.
 channels:
-  invoiceEvents:
-    address: /openreceive/v1/invoices/{invoice_id}/events
-    parameters:
-      invoice_id:
-        description: Application-scoped OpenReceive invoice id.
+  invoiceLifecycleEvents:
+    address: openreceive://invoice-lifecycle
     messages:
       invoiceCreated:
         $ref: "#/components/messages/invoiceCreated"
@@ -29,10 +26,10 @@ channels:
       invoiceCancelled:
         $ref: "#/components/messages/invoiceCancelled"
 operations:
-  subscribeInvoiceEvents:
+  observeInvoiceLifecycle:
     action: receive
     channel:
-      $ref: "#/channels/invoiceEvents"
+      $ref: "#/channels/invoiceLifecycleEvents"
 components:
   messages:
     invoiceCreated:

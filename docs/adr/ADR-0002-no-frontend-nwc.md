@@ -12,14 +12,14 @@ apps cannot safely hold wallet credentials for your app.
 ## Decision
 
 OpenReceive does not support pure-frontend live checkout. Frontend packages
-render display-safe invoice data, subscribe to passive events, and call
-your backend routes. Invoice creation, NWC access, lookup, polling,
-notification handling, and app settlement actions stay server-side.
+render display-safe invoice data and call your backend routes. Invoice
+creation, NWC access, lookup, recovery polling, and app settlement actions stay
+server-side.
 
 ## Consequences
 
 - Browser packages must not depend on NWC credentials.
 - Mobile apps call your payment backend.
-- Static sites need a small API, durable backend, cron/polling owner, or normal
-  app server.
+- Static sites need a small API, durable backend, and normal app server or
+  optional scheduler.
 - Secret scanning checks for accidental NWC exposure.

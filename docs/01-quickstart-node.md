@@ -394,22 +394,17 @@ export function Checkout({ invoice }) {
 No-framework apps can use `@openreceive/elements` or the lower-level
 `@openreceive/browser` helpers.
 
-## Background Processes
-
-In production, run your web server plus one OpenReceive backend worker:
+## Recovery
 
 ```text
 web                 npm start
-openreceive-worker  npx openreceive worker
+optional scheduler  npx openreceive poll --once
 ```
 
 Export the same server-only `openreceive` object from your config that your
-framework route uses. There is no wallet-notification checklist for your app:
-the worker starts both polling and listening, and polling still recovers and
-settles invoices if no notifications arrive.
-
-On serverless-only hosts, use a scheduled route or cron job to run one polling
-pass:
+framework route uses. OpenReceive does not need a daemon or wallet
+notification listener. Browser lookups and bounded route-triggered sweeps use
+backend `lookup_invoice`; an optional scheduler can run one extra recovery pass:
 
 ```sh
 npx openreceive poll --once
@@ -428,8 +423,8 @@ platform, mount the Express adapter. Whichever framework you use, the shape is:
 - mount the OpenReceive HTTP routes under `/openreceive/v1`
 - keep `OPENRECEIVE_NWC` server-only
 - use the package-owned Postgres or SQLite invoice store
-- protect create/read/lookup/events with your app's auth and CSRF rules
-- deploy one `openreceive worker` backend process next to your web process
+- protect create/read/lookup/poll with your app's auth and CSRF rules
+- optionally schedule `openreceive poll --once` for extra recovery
 
 If the framework can host Express middleware, use `mountOpenReceiveExpressRoutes`.
 If it exposes Fetch `Request` objects, use `createOpenReceiveFetchHandler()`.

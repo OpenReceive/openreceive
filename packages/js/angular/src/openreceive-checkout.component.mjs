@@ -63,7 +63,6 @@ Component({
         [attr.transaction-state]="checkoutAttributes['transaction-state']"
         [attr.workflow-state]="checkoutAttributes['workflow-state']"
         [attr.expires-at]="checkoutAttributes['expires-at']"
-        [attr.events-url]="checkoutAttributes['events-url']"
         [attr.lookup-url]="checkoutAttributes['lookup-url']"
         [attr.theme]="checkoutAttributes.theme"
         [attr.payment-wizard]="checkoutAttributes['payment-wizard']"

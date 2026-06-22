@@ -15,8 +15,7 @@ const demos = [
     image: "ghcr.io/openreceive/demo-express",
     compose: "demos/deploy/stacks/express-demo.compose.yml",
     caddy: "demos/deploy/proxy/sites/express-demo.caddy",
-    port: "3000",
-    workerService: "express-demo-openreceive-worker"
+    port: "3000"
   },
   {
     slug: "static-demo",
@@ -26,8 +25,7 @@ const demos = [
     image: "ghcr.io/openreceive/demo-static",
     compose: "demos/deploy/stacks/static-demo.compose.yml",
     caddy: "demos/deploy/proxy/sites/static-demo.caddy",
-    port: "3001",
-    workerService: "static-demo-openreceive-worker"
+    port: "3001"
   },
   {
     slug: "nextjs-demo",
@@ -37,8 +35,7 @@ const demos = [
     image: "ghcr.io/openreceive/demo-nextjs",
     compose: "demos/deploy/stacks/nextjs-demo.compose.yml",
     caddy: "demos/deploy/proxy/sites/nextjs-demo.caddy",
-    port: "3002",
-    workerService: "nextjs-demo-openreceive-worker"
+    port: "3002"
   }
 ];
 
@@ -272,13 +269,11 @@ function validateDemoStack(demo) {
   const services = compose.services ?? {};
   const serviceNames = Object.keys(services);
   const service = services[demo.slug] ?? {};
-  const worker = services[demo.workerService] ?? {};
 
   expect(compose.networks?.demo_proxy?.external === true, `${relativePath}: proxy network must be external`);
   expect(compose.networks?.demo_proxy?.name === "openreceive_demo_proxy", `${relativePath}: proxy network name must be openreceive_demo_proxy`);
-  expect(serviceNames.length === 2, `${relativePath}: must define web and OpenReceive worker services`);
+  expect(serviceNames.length === 1, `${relativePath}: must define only the web service`);
   expect(serviceNames.includes(demo.slug), `${relativePath}: must define ${demo.slug}`);
-  expect(serviceNames.includes(demo.workerService), `${relativePath}: must define ${demo.workerService}`);
   expect(
     service.image === `${demo.image}:\${OPENRECEIVE_IMAGE_TAG:?set OPENRECEIVE_IMAGE_TAG}`,
     `${relativePath}: image must use required OPENRECEIVE_IMAGE_TAG`
@@ -298,21 +293,6 @@ function validateDemoStack(demo) {
   expect(service.restart === "unless-stopped", `${relativePath}: restart policy must be unless-stopped`);
   expect(service.network_mode === undefined, `${relativePath}: must not use host networking`);
   expect(JSON.stringify(service.volumes ?? []).includes("/var/run/docker.sock") === false, `${relativePath}: must not mount Docker socket`);
-  expect(
-    worker.image === `${demo.image}:\${OPENRECEIVE_IMAGE_TAG:?set OPENRECEIVE_IMAGE_TAG}`,
-    `${relativePath}: worker image must use required OPENRECEIVE_IMAGE_TAG`
-  );
-  expect(JSON.stringify(worker.command ?? []) === JSON.stringify(["npm", "run", "openreceive:worker"]), `${relativePath}: worker must run npm run openreceive:worker`);
-  expect((worker.expose ?? []).length === 0, `${relativePath}: worker must not expose ports`);
-  expect((worker.ports ?? []).length === 0, `${relativePath}: worker must not publish host ports`);
-  expect(worker.env_file?.length === 1, `${relativePath}: worker must load exactly one env_file`);
-  expect(worker.env_file?.[0]?.path === "/opt/openreceive/secrets/rizful-test-wallet.env", `${relativePath}: worker env_file must use the host wallet secret path`);
-  expect(worker.env_file?.[0]?.required === false, `${relativePath}: worker env_file must be optional for local config validation`);
-  expect(worker.environment?.OPENRECEIVE_DEMO_MODE === "${OPENRECEIVE_DEMO_MODE:-test_nwc}", `${relativePath}: worker demo mode must default to test_nwc`);
-  expect(worker.restart === "unless-stopped", `${relativePath}: worker restart policy must be unless-stopped`);
-  expect(worker.networks === undefined, `${relativePath}: worker must not join the public proxy network`);
-  expect(worker.network_mode === undefined, `${relativePath}: worker must not use host networking`);
-  expect(JSON.stringify(worker.volumes ?? []).includes("/var/run/docker.sock") === false, `${relativePath}: worker must not mount Docker socket`);
 }
 
 function validateScript(relativePath, requiredSnippets) {

@@ -148,35 +148,25 @@ paths:
           $ref: "#/components/responses/Error"
         "409":
           $ref: "#/components/responses/Error"
-  /invoices/{invoice_id}/events:
-    get:
-      operationId: invoiceEvents
-      summary: Subscribe to passive invoice events over SSE.
-      parameters:
-        - $ref: "#/components/parameters/InvoiceId"
-        - name: Last-Event-ID
-          in: header
-          required: false
-          schema:
-            type: integer
-            minimum: 0
+  /poll:
+    post:
+      operationId: pollInvoices
+      summary: Run one protected settlement recovery pass.
+      description: >
+        Intended for platform schedulers or an explicitly authorized operator
+        call. It performs one bounded poll-only reconciliation pass through the
+        store-enforced lookup gates; it is not a long-running worker.
       responses:
         "200":
-          description: Server-sent event stream.
-          headers:
-            Cache-Control:
-              schema:
-                type: string
-              description: Always no-store.
+          description: Bounded poll result.
           content:
-            text/event-stream:
+            application/json:
               schema:
-                type: string
+                type: object
+                additionalProperties: true
         "401":
           $ref: "#/components/responses/Error"
         "403":
-          $ref: "#/components/responses/Error"
-        "404":
           $ref: "#/components/responses/Error"
   /rates:
     get:
@@ -478,8 +468,6 @@ components:
           type: object
           additionalProperties: false
           properties:
-            events_url:
-              type: string
             routes_url:
               type: string
     FiatAmount:

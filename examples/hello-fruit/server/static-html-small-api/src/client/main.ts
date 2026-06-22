@@ -44,7 +44,7 @@ interface InvoiceResponse {
   workflow_state: string;
   expires_at?: number;
   checkout?: {
-    events_url?: string;
+    routes_url?: string;
   };
 }
 

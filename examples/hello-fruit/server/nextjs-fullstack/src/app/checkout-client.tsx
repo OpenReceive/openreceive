@@ -173,7 +173,6 @@ export default function CheckoutClient({
             transaction_state={checkout.transaction_state}
             workflow_state={checkout.workflow_state}
             expires_at={checkout.expires_at}
-            checkout={checkout.checkout}
             logger={logOpenReceive}
             lookupUrl="/openreceive/v1/invoices/lookup"
             onError={(cause) => {

@@ -60,48 +60,9 @@ export interface InvoiceStorageRow extends OpenReceiveIdempotencyScope {
   refreshed_from_invoice_id?: string;
   metadata: Record<string, unknown>;
   fiat_quote?: Record<string, unknown> | null;
+  last_lookup_at?: number;
+  action_claimed_at?: number;
 }
-
-export interface OpenReceiveRecoverableInvoiceQuery {
-  now: number;
-  grace_seconds?: number;
-}
-
-export interface OpenReceiveInvoiceStore {
-  checkIdempotency(input: {
-    scope: OpenReceiveIdempotencyScope;
-    idempotency_request_hash: string;
-  }): MaybePromise<InvoiceCreateStorageResult | undefined>;
-  createInvoice(row: InvoiceStorageRow): MaybePromise<InvoiceCreateStorageResult>;
-  getInvoice(invoiceId: string): MaybePromise<InvoiceStorageRow | undefined>;
-  getInvoiceByPaymentHash(paymentHash: string): MaybePromise<InvoiceStorageRow | undefined>;
-  getInvoiceByBolt11Invoice(invoice: string): MaybePromise<InvoiceStorageRow | undefined>;
-  listRecoverableInvoices(input: OpenReceiveRecoverableInvoiceQuery): MaybePromise<InvoiceStorageRow[]>;
-  markVerifying(invoiceId: string): MaybePromise<InvoiceStorageRow>;
-  markExpiryPendingVerification(invoiceId: string): MaybePromise<InvoiceStorageRow>;
-  markSettled(input: {
-    invoice_id: string;
-    settled_at?: number;
-  }): MaybePromise<InvoiceStorageRow>;
-  markExpiredClosed(invoiceId: string): MaybePromise<InvoiceStorageRow>;
-  markFailedClosed(invoiceId: string): MaybePromise<InvoiceStorageRow>;
-  markSettlementActionPending(invoiceId: string): MaybePromise<InvoiceStorageRow>;
-  markSettlementActionCompleted(input: {
-    invoice_id: string;
-    settlement_action_completed_at: number;
-  }): MaybePromise<InvoiceStorageRow>;
-  markSettlementActionFailed(invoiceId: string): MaybePromise<InvoiceStorageRow>;
-}
-
-export type InvoiceCreateStorageResult =
-  | {
-      status: "created";
-      row: InvoiceStorageRow;
-    }
-  | {
-      status: "replayed";
-      row: InvoiceStorageRow;
-    };
 
 export class IdempotencyConflictError extends Error {
   readonly status = 409;
@@ -118,10 +79,15 @@ export class IdempotencyConflictError extends Error {
 export class InvoiceStorageConflictError extends Error {
   readonly status = 409;
   readonly code = "CONFLICT";
+  readonly on?: "invoice_id" | "idempotency_scope" | "payment_hash" | "bolt11";
 
-  constructor(message: string) {
+  constructor(
+    message: string,
+    on?: "invoice_id" | "idempotency_scope" | "payment_hash" | "bolt11"
+  ) {
     super(message);
     this.name = "InvoiceStorageConflictError";
+    this.on = on;
   }
 }
 
@@ -132,217 +98,6 @@ export class InvoiceNotFoundError extends Error {
   constructor(invoiceId: string) {
     super(`Invoice not found: ${invoiceId}`);
     this.name = "InvoiceNotFoundError";
-  }
-}
-
-export class InMemoryInvoiceStore {
-  #byInvoiceId = new Map<string, InvoiceStorageRow>();
-  #byPaymentHash = new Map<string, string>();
-  #byBolt11Invoice = new Map<string, string>();
-  #byIdempotencyScope = new Map<string, string>();
-
-  checkIdempotency(input: {
-    scope: OpenReceiveIdempotencyScope;
-    idempotency_request_hash: string;
-  }): InvoiceCreateStorageResult | undefined {
-    const existingInvoiceId = this.#byIdempotencyScope.get(
-      idempotencyScopeKey(input.scope)
-    );
-
-    if (existingInvoiceId === undefined) return undefined;
-
-    const existing = this.requireStoredInvoice(existingInvoiceId);
-    if (existing.idempotency_request_hash !== input.idempotency_request_hash) {
-      throw new IdempotencyConflictError(input.scope);
-    }
-
-    return {
-      status: "replayed",
-      row: cloneInvoiceStorageRow(existing)
-    };
-  }
-
-  createInvoice(row: InvoiceStorageRow): InvoiceCreateStorageResult {
-    validateInvoiceStorageRow(row);
-
-    const scopeKey = idempotencyScopeKey(row);
-    const existingInvoiceId = this.#byIdempotencyScope.get(scopeKey);
-
-    if (existingInvoiceId !== undefined) {
-      const existing = this.requireStoredInvoice(existingInvoiceId);
-      if (existing.idempotency_request_hash !== row.idempotency_request_hash) {
-        throw new IdempotencyConflictError(row);
-      }
-
-      return {
-        status: "replayed",
-        row: cloneInvoiceStorageRow(existing)
-      };
-    }
-
-    if (this.#byInvoiceId.has(row.invoice_id)) {
-      throw new InvoiceStorageConflictError("invoice_id must be unique");
-    }
-
-    if (this.#byPaymentHash.has(row.payment_hash)) {
-      throw new InvoiceStorageConflictError("payment_hash must be unique");
-    }
-
-    if (this.#byBolt11Invoice.has(row.invoice)) {
-      throw new InvoiceStorageConflictError("invoice must be unique");
-    }
-
-    const stored = cloneInvoiceStorageRow(row);
-    this.#byInvoiceId.set(stored.invoice_id, stored);
-    this.#byPaymentHash.set(stored.payment_hash, stored.invoice_id);
-    this.#byBolt11Invoice.set(stored.invoice, stored.invoice_id);
-    this.#byIdempotencyScope.set(scopeKey, stored.invoice_id);
-
-    return {
-      status: "created",
-      row: cloneInvoiceStorageRow(stored)
-    };
-  }
-
-  getInvoice(invoiceId: string): InvoiceStorageRow | undefined {
-    const row = this.#byInvoiceId.get(invoiceId);
-    return row === undefined ? undefined : cloneInvoiceStorageRow(row);
-  }
-
-  getInvoiceByPaymentHash(paymentHash: string): InvoiceStorageRow | undefined {
-    const invoiceId = this.#byPaymentHash.get(paymentHash);
-    return invoiceId === undefined ? undefined : this.getInvoice(invoiceId);
-  }
-
-  getInvoiceByBolt11Invoice(invoice: string): InvoiceStorageRow | undefined {
-    const invoiceId = this.#byBolt11Invoice.get(invoice);
-    return invoiceId === undefined ? undefined : this.getInvoice(invoiceId);
-  }
-
-  listRecoverableInvoices(
-    input: OpenReceiveRecoverableInvoiceQuery
-  ): InvoiceStorageRow[] {
-    assertUnixSeconds(input.now, "now");
-    const graceSeconds = input.grace_seconds ?? 15;
-    if (!Number.isSafeInteger(graceSeconds) || graceSeconds < 0) {
-      throw new TypeError("grace_seconds must be a non-negative safe integer");
-    }
-
-    return [...this.#byInvoiceId.values()]
-      .filter((row) => isRecoverableInvoice(row))
-      .map((row) => cloneInvoiceStorageRow(row));
-  }
-
-  markVerifying(invoiceId: string): InvoiceStorageRow {
-    const row = this.requireStoredInvoice(invoiceId);
-
-    if (
-      row.transaction_state !== "settled" &&
-      (row.workflow_state === "invoice_created" ||
-        row.workflow_state === "expiry_pending_verification")
-    ) {
-      row.workflow_state = "verifying";
-    }
-
-    return cloneInvoiceStorageRow(row);
-  }
-
-  markExpiryPendingVerification(invoiceId: string): InvoiceStorageRow {
-    const row = this.requireStoredInvoice(invoiceId);
-
-    if (
-      row.transaction_state !== "settled" &&
-      row.transaction_state !== "expired" &&
-      row.transaction_state !== "failed"
-    ) {
-      row.workflow_state = "expiry_pending_verification";
-    }
-
-    return cloneInvoiceStorageRow(row);
-  }
-
-  markSettled(input: {
-    invoice_id: string;
-    settled_at?: number;
-  }): InvoiceStorageRow {
-    const row = this.requireStoredInvoice(input.invoice_id);
-
-    if (input.settled_at !== undefined) {
-      assertUnixSeconds(input.settled_at, "settled_at");
-    }
-
-    if (row.transaction_state !== "settled") {
-      row.transaction_state = "settled";
-      row.workflow_state = "settlement_action_pending";
-    }
-
-    if (row.settled_at === undefined && input.settled_at !== undefined) {
-      row.settled_at = input.settled_at;
-    }
-
-    return cloneInvoiceStorageRow(row);
-  }
-
-  markExpiredClosed(invoiceId: string): InvoiceStorageRow {
-    const row = this.requireStoredInvoice(invoiceId);
-
-    if (row.transaction_state !== "settled") {
-      row.transaction_state = "expired";
-      row.workflow_state = "expired_closed";
-    }
-
-    return cloneInvoiceStorageRow(row);
-  }
-
-  markFailedClosed(invoiceId: string): InvoiceStorageRow {
-    const row = this.requireStoredInvoice(invoiceId);
-
-    if (row.transaction_state !== "settled") {
-      row.transaction_state = "failed";
-      row.workflow_state = "failed_closed";
-    }
-
-    return cloneInvoiceStorageRow(row);
-  }
-
-  markSettlementActionPending(invoiceId: string): InvoiceStorageRow {
-    const row = this.requireStoredInvoice(invoiceId);
-
-    row.workflow_state = "settlement_action_pending";
-
-    return cloneInvoiceStorageRow(row);
-  }
-
-  markSettlementActionCompleted(input: {
-    invoice_id: string;
-    settlement_action_completed_at: number;
-  }): InvoiceStorageRow {
-    assertUnixSeconds(input.settlement_action_completed_at, "settlement_action_completed_at");
-
-    const row = this.requireStoredInvoice(input.invoice_id);
-    row.workflow_state = "settlement_action_completed";
-    row.settlement_action_state = "completed";
-
-    if (row.settlement_action_completed_at === undefined) {
-      row.settlement_action_completed_at = input.settlement_action_completed_at;
-    }
-
-    return cloneInvoiceStorageRow(row);
-  }
-
-  markSettlementActionFailed(invoiceId: string): InvoiceStorageRow {
-    const row = this.requireStoredInvoice(invoiceId);
-
-    row.workflow_state = "settlement_action_pending";
-    row.settlement_action_state = "failed";
-
-    return cloneInvoiceStorageRow(row);
-  }
-
-  private requireStoredInvoice(invoiceId: string): InvoiceStorageRow {
-    const row = this.#byInvoiceId.get(invoiceId);
-    if (row === undefined) throw new InvoiceNotFoundError(invoiceId);
-    return row;
   }
 }
 
@@ -432,35 +187,31 @@ export function validateInvoiceStorageRow(row: InvoiceStorageRow): void {
   if (row.settlement_action_completed_at !== undefined) {
     assertUnixSeconds(row.settlement_action_completed_at, "settlement_action_completed_at");
   }
+
+  if (row.last_lookup_at !== undefined) {
+    assertUnixSeconds(row.last_lookup_at, "last_lookup_at");
+  }
+
+  if (row.action_claimed_at !== undefined) {
+    assertUnixSeconds(row.action_claimed_at, "action_claimed_at");
+  }
 }
 
-function isRecoverableInvoice(row: InvoiceStorageRow): boolean {
-  if (
-    row.workflow_state === "settlement_action_completed" ||
-    row.workflow_state === "expired_closed" ||
-    row.workflow_state === "failed_closed" ||
-    row.workflow_state === "cancelled"
-  ) {
-    return false;
-  }
-
-  if (row.transaction_state === "settled") {
-    return row.settlement_action_state !== "completed";
-  }
-
-  if (row.transaction_state === "expired" || row.transaction_state === "failed") {
-    return false;
-  }
-
-  return true;
-}
-
-function cloneInvoiceStorageRow(row: InvoiceStorageRow): InvoiceStorageRow {
+export function cloneInvoiceStorageRow(row: InvoiceStorageRow): InvoiceStorageRow {
   return {
     ...row,
     metadata: cloneRecord(row.metadata),
     fiat_quote: row.fiat_quote === undefined ? undefined : cloneNullableRecord(row.fiat_quote)
   };
+}
+
+export function isTerminalInvoiceStorageRow(row: InvoiceStorageRow): boolean {
+  return (
+    row.workflow_state === "settlement_action_completed" ||
+    row.workflow_state === "expired_closed" ||
+    row.workflow_state === "failed_closed" ||
+    row.workflow_state === "cancelled"
+  );
 }
 
 function cloneRecord(record: Record<string, unknown>): Record<string, unknown> {

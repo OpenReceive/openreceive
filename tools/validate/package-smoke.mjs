@@ -33,7 +33,7 @@ const importChecks = {
   "@openreceive/core": "typeof mod.createIdempotencyRequestHash === 'function'",
   "@openreceive/elements": "typeof mod.renderOpenReceiveCheckoutHtml === 'function' && typeof mod.renderOpenReceiveThemeToggleHtml === 'function' && mod.OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME === 'openreceive-theme-toggle'",
   "@openreceive/express": "typeof mod.createOpenReceiveExpressHandlers === 'function'",
-  "@openreceive/next": "typeof mod.createOpenReceiveNextRuntime === 'function' && typeof mod.dispatchOpenReceiveNextHandler === 'function' && typeof mod.createOpenReceiveNextInvoiceEventsResponse === 'function' && typeof mod.openReceiveNextJsonResponse === 'function'",
+  "@openreceive/next": "typeof mod.createOpenReceiveNextRuntime === 'function' && typeof mod.dispatchOpenReceiveNextHandler === 'function' && typeof mod.openReceiveNextJsonResponse === 'function'",
   "@openreceive/node": "typeof mod.createAlbyNwcReceiveClient === 'function' && typeof mod.createOpenReceivePostgresInvoiceStore === 'function' && typeof mod.createOpenReceivePostgresInvoiceStoreFromPool === 'function' && typeof mod.createOpenReceiveSqliteInvoiceStore === 'function' && mod.OPENRECEIVE_DATABASE_SCHEMA_VERSION === 'v0.1' && typeof mod.OPENRECEIVE_SQLITE_MIGRATION_SQL === 'string' && mod.runOpenReceiveCli === undefined",
   "@openreceive/provider-data": "typeof mod.getProviderRegistryMetadata === 'function'",
   "@openreceive/react": "typeof mod.createOpenReceiveCheckoutViewModel === 'function' && typeof mod.OpenReceiveThemeScope === 'function' && typeof mod.OpenReceiveProvider === 'function' && typeof mod.useOpenReceiveCheckoutContext === 'function'",

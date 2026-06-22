@@ -46,7 +46,7 @@ end
 
 class FakeDurableInvoiceStore
   def initialize
-    @inner = OpenReceive::InMemoryInvoiceStore.new
+    @inner = OpenReceive::InMemoryInvoiceKvStore.new
   end
 
   def doctor
@@ -142,23 +142,19 @@ class OpenReceiveRailsTest < Minitest::Test
     refute_includes rails_source, "expires_at_seconds + ? >= ?"
   end
 
-  def test_rails_route_job_and_channel_templates_preserve_receive_only_boundary
+  def test_rails_route_and_poll_templates_preserve_receive_only_boundary
     controller = read_generator_template("app/controllers/openreceive_controller.rb")
     poll_job = read_generator_template("app/jobs/openreceive_poll_invoice_job.rb")
-    notification_job = read_generator_template("app/jobs/openreceive_payment_received_job.rb")
-    channel = read_generator_template("app/channels/openreceive_invoice_channel.rb")
     partial = read_generator_template("app/views/openreceive/_invoice.html.erb")
     routes = read_generator_template("config/openreceive_routes.rb")
     initializer = read_generator_template("config/initializers/openreceive.rb")
     rake_tasks = read_generator_template("lib/tasks/openreceive.rake")
-    combined = [controller, poll_job, notification_job, channel, partial, routes, rake_tasks].join("\n")
+    combined = [controller, poll_job, partial, routes, rake_tasks].join("\n")
 
     assert_includes controller, "create_invoice"
     assert_includes controller, "lookup_invoice"
     assert_includes controller, "protect_from_forgery"
     assert_includes poll_job, "verify_invoice"
-    assert_includes notification_job, "handle_payment_received"
-    assert_includes channel, "authorize_invoice"
     assert_includes partial, "turbo_frame_tag"
     assert_includes partial, "transaction_state"
     assert_includes partial, "workflow_state"
@@ -166,11 +162,10 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_includes routes, "post \"/openreceive/v1/invoices\""
     assert_includes routes, "get \"/openreceive/v1/invoices/:invoice_id\""
     assert_includes rake_tasks, "task poll: :environment"
-    assert_includes rake_tasks, "task listen: :environment"
     assert_includes rake_tasks, "task doctor: :environment"
     assert_includes rake_tasks, "OpenReceive::Rails.adapter.doctor"
     assert_includes rake_tasks, "poll_recoverable_invoices"
-    assert_includes rake_tasks, "listen_for_payment_notifications"
+    refute_includes rake_tasks, "task listen"
     assert_includes initializer, 'ENV.fetch("OPENRECEIVE_NWC"'
     assert_includes initializer, "OpenReceive.missing_nwc_message"
     assert_includes initializer, "OpenReceive.invalid_nwc_message"
@@ -200,8 +195,6 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_includes generator, "config/initializers/openreceive.rb"
     assert_includes generator, "openreceive_controller.rb"
     assert_includes generator, "openreceive_poll_invoice_job.rb"
-    assert_includes generator, "openreceive_payment_received_job.rb"
-    assert_includes generator, "openreceive_invoice_channel.rb"
     assert_includes generator, "_invoice.html.erb"
     assert_includes generator, "openreceive.rake"
     assert_includes generator, "openreceive_routes.rb"
@@ -263,7 +256,7 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_includes error.message, "durable invoice storage"
   end
 
-  def test_doctor_reports_store_nwc_and_worker_readiness
+  def test_doctor_reports_store_nwc_and_poll_readiness
     adapter = build_adapter(store: FakeDurableInvoiceStore.new).first
     result = adapter.doctor
 
@@ -273,7 +266,6 @@ class OpenReceiveRailsTest < Minitest::Test
     assert checks.any? { |check| check.fetch("name") == "rails.migration" && check.fetch("status") == "ok" }
     assert checks.any? { |check| check.fetch("name") == "rails.nwc" && check.fetch("status") == "ok" }
     assert checks.any? { |check| check.fetch("name") == "rails.worker.poll" && check.fetch("status") == "ok" }
-    assert checks.any? { |check| check.fetch("name") == "rails.worker.listen" && check.fetch("status") == "ok" }
     refute_includes result.to_s, "nostr+walletconnect://"
   end
 
@@ -284,7 +276,7 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_equal false, result.fetch("ok")
     checks = result.fetch("checks")
     assert checks.any? { |check| check.fetch("name") == "rails.store.durable" && check.fetch("status") == "error" }
-    assert_includes result.to_s, "InMemoryInvoiceStore is for tests only"
+    assert_includes result.to_s, "InMemoryInvoiceKvStore is for tests only"
   end
 
   def test_doctor_redacts_nwc_secrets_from_preflight_errors
@@ -420,25 +412,6 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_equal invoice_id, invoices.first.fetch("invoice_id")
     assert_equal "settlement_action_completed", invoices.first.fetch("workflow_state")
     assert_equal [invoice_id], completed
-  end
-
-  def test_payment_received_notification_marks_settled_without_lookup
-    adapter, client, completed = build_adapter
-    created = adapter.create_invoice(
-      controller: Controller.new(7),
-      params: { "amount_msats" => 200_000, "fruit" => "banana" },
-      headers: { "idempotency-key" => "order-123" }
-    )
-    invoice_id = created.fetch("body").fetch("invoice_id")
-
-    settled = adapter.handle_payment_received(notification: { "payment_hash" => "a" * 64, "settled_at" => 1300 })
-    replayed = adapter.handle_payment_received(notification: { "payment_hash" => "a" * 64 })
-
-    assert_equal "settlement_action_completed", settled.fetch("workflow_state")
-    assert_equal 1300, settled.fetch("settled_at")
-    assert_equal "settlement_action_completed", replayed.fetch("workflow_state")
-    assert_equal [invoice_id], completed
-    assert_empty client.lookup_invoice_calls
   end
 
   def test_lookup_denies_cross_user_invoice_access

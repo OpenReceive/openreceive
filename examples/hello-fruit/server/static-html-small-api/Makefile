@@ -14,10 +14,10 @@ test:
 	npm run build
 
 demo-test-nwc:
-	OPENRECEIVE_DEMO_MODE=test_nwc $(COMPOSE) --profile openreceive-worker up --build
+	OPENRECEIVE_DEMO_MODE=test_nwc $(COMPOSE) up --build
 
 demo-production:
-	OPENRECEIVE_DEMO_MODE=production $(COMPOSE) --profile openreceive-worker up --build
+	OPENRECEIVE_DEMO_MODE=production $(COMPOSE) up --build
 
 docker-build:
 	docker build -f Dockerfile -t $(IMAGE) ../../../..

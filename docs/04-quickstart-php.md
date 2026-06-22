@@ -16,24 +16,21 @@ docs/01-quickstart-node.md
 
 ## Planned Shape
 
-A PHP integration mounts into your application and uses the app's
-existing auth, database, queue, and deployment model. The OpenReceive package
-would provide a poll command/job for settlement polling and restart recovery
-plus a listen command/job for `payment_received` notifications. Run both;
-polling remains the fallback when notifications do not arrive.
-The PHP package would ship OpenReceive migrations/models for the target
-framework. The app supplies metadata references and settlement hooks while
-OpenReceive handles its invoice/idempotency rows.
+A PHP integration mounts into your application and uses the app's existing auth
+and deployment model. The OpenReceive package would provide route handlers,
+package-owned KV persistence selected by `OPENRECEIVE_STORE`, and an optional
+one-shot poll command/job for platform schedulers. There is no listener or
+required worker process. The app supplies metadata references and settlement
+hooks while OpenReceive handles its invoice/idempotency rows.
 
 Expected PHP pieces:
 
 - Laravel or Symfony route/controller helpers under `/openreceive/v1`
 - server-side receive-only NWC configuration
-- package-owned database tables for invoices, idempotency keys, lifecycle
-  state, and settlement action state
-- queue workers or scheduler jobs for polling, expiry verification, and
-  notification listening
-- SSE, Mercure, Livewire, Inertia, or template-driven browser updates
+- package-owned KV storage for invoices, idempotency, lookup gates, and
+  settlement-action state
+- scheduler jobs for one-shot poll recovery
+- Livewire, Inertia, or template-driven browser updates backed by lookup polling
 - idempotent settlement actions after backend wallet lookup confirms settlement
 
 ## Security Boundary
@@ -41,8 +38,8 @@ Expected PHP pieces:
 Keep `OPENRECEIVE_NWC` out of Blade/Twig templates, public env vars, frontend
 bundles, mobile apps, logs, exception pages, and analytics payloads.
 
-Frontend code receives only display-safe invoice data and authorized status or
-event URLs. Your settlement actions run from backend wallet verification,
+Frontend code receives only display-safe invoice data and authorized status
+responses. Your settlement actions run from backend wallet verification,
 not from client-supplied settled flags, preimages, or passive notifications.
 
 ## Conformance

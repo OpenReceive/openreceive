@@ -13,7 +13,6 @@ import {
   formatOpenReceiveMissingNwcMessage
 } from "@openreceive/core";
 import {
-  createOpenReceiveFetchInvoiceEventsResponse,
   createOpenReceiveFetchNoWalletResponse,
   createOpenReceiveFetchRouteNotFoundResponse,
   createOpenReceiveFetchRuntime,
@@ -49,17 +48,9 @@ export interface DispatchOpenReceiveNextRouteOptions
 export interface DispatchOpenReceiveNextNoWalletRouteOptions
   extends DispatchOpenReceiveFetchNoWalletRouteOptions {}
 
-export interface CreateOpenReceiveNextInvoiceEventsResponseOptions {
-  readonly runtime: OpenReceiveNextRuntime;
-  readonly request: Request;
-  readonly invoiceId: string;
-  readonly heartbeatMs?: number;
-}
-
 export const OPENRECEIVE_NEXT_DEFAULT_BASE_PATH = "/openreceive/v1";
 export const OPENRECEIVE_NEXT_DEFAULT_NO_WALLET_MESSAGE =
   formatOpenReceiveMissingNwcMessage();
-export const OPENRECEIVE_NEXT_DEFAULT_HEARTBEAT_MS = 20_000;
 
 export function createOpenReceiveNextRuntime(
   options: CreateOpenReceiveNextRuntimeOptions
@@ -96,12 +87,6 @@ export function dispatchOpenReceiveNextNoWalletHandler(
   options: DispatchOpenReceiveNextNoWalletHandlerOptions
 ): Response {
   return createOpenReceiveFetchNoWalletResponse(options.name, options.noWallet);
-}
-
-export function createOpenReceiveNextInvoiceEventsResponse(
-  options: CreateOpenReceiveNextInvoiceEventsResponseOptions
-): Promise<Response> {
-  return createOpenReceiveFetchInvoiceEventsResponse(options);
 }
 
 export function createOpenReceiveNextNoWalletResponse(

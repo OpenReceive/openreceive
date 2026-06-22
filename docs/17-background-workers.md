@@ -1,322 +1,68 @@
-# Background Process Deployment
+# Route-Driven Recovery
 
-OpenReceive needs your web server plus one lightweight backend worker in
-production:
+OpenReceive v0.1-v2 does not require a backend worker, notification listener,
+webhook bridge, or in-memory event bus. Mount the HTTP routes in your app,
+configure server-side NWC, and use durable OpenReceive storage as the
+coordination point.
 
 ```text
-web                 npm start
-openreceive-worker  npx openreceive worker
+web process        mounts /openreceive/v1
+browser checkout   polls /openreceive/v1/invoices/lookup
+optional scheduler POSTs /openreceive/v1/poll
 ```
 
-A background process is just a command your hosting provider keeps running from
-the same codebase, with the same server-only environment variables as the web
-app. It is backend code, like your web server, but it is launched separately
-from request handlers.
+Settlement is discovered only by `lookup_invoice`. The interactive lookup route
+checks one invoice through store-enforced gates. A bounded background sweep may
+run after route responses, and an optional scheduler can call `/poll` for one
+recovery pass. There is no long-running process to deploy.
 
-On hosts that can keep a backend process alive, add one `openreceive worker`
-process. It starts both settlement polling and payment notification listening
-inside one Node process. There is no wallet-specific notification decision in
-your deploy checklist: if no notifications arrive, polling remains the recovery
-and settlement fallback.
+## Node
 
-OpenReceive loads `./openreceive.config.mjs` by default. Use `--config` only
-when your config lives somewhere else.
+Use a durable store, usually through `OPENRECEIVE_STORE`:
 
-The poller also handles the annoying restart edge case for you. If your server
-is down while an invoice expires, OpenReceive asks the wallet after restart
-before it closes that invoice as expired.
+```sh
+OPENRECEIVE_STORE=local-sqlite
+OPENRECEIVE_NAMESPACE=default
+OPENRECEIVE_NWC=...
+```
 
-Add these scripts:
+The Node CLI keeps only one-shot poll support:
 
 ```json
 {
   "scripts": {
-    "openreceive:worker": "openreceive worker",
-    "openreceive:poll:once": "openreceive poll --once"
+    "openreceive:poll": "openreceive poll --once"
   }
 }
 ```
 
-## Persistent Node Hosts
-
-Use this shape on hosts that support always-running services, processes, dynos,
-or workers.
-
-### Railway
-
-Create two services from the same repo:
-
-```text
-web                 npm start
-openreceive-worker  npx openreceive worker
-```
-
-Attach the same Postgres database and the same server-only environment
-variables to both services. Expose only the `web` service to the public
-internet.
-
-### Render
-
-Create one Web Service and one Background Worker:
-
-```yaml
-services:
-  - type: web
-    name: web
-    env: node
-    buildCommand: npm ci && npm run build
-    startCommand: npm start
-  - type: worker
-    name: openreceive-worker
-    env: node
-    buildCommand: npm ci && npm run build
-    startCommand: npx openreceive worker
-```
-
-Give both services the same `OPENRECEIVE_NWC` and database environment.
-
-### Heroku
-
-Add a `Procfile`:
-
-```Procfile
-web: npm start
-openreceive-worker: npx openreceive worker
-```
-
-Then scale the two process types:
-
-```sh
-heroku ps:scale web=1 openreceive-worker=1
-```
-
-### Fly.io
-
-Use Fly process groups. Only the `web` process needs an HTTP service:
-
-```toml
-[processes]
-web = "npm start"
-openreceive-worker = "npx openreceive worker"
-
-[[services]]
-processes = ["web"]
-internal_port = 3000
-protocol = "tcp"
-```
-
-Deploy with the same secrets available to each process group.
-
-### DigitalOcean App Platform
-
-Create one Web Service and one Worker component from the same repo:
-
-```text
-Web Service command: npm start
-Worker command:      npx openreceive worker
-```
-
-Connect both components to the same database and environment variables.
-
-### VPS Or Hostinger
-
-With PM2, create `ecosystem.config.cjs`:
-
-```js
-module.exports = {
-  apps: [
-    {
-      name: "web",
-      script: "npm",
-      args: "start"
-    },
-    {
-      name: "openreceive-worker",
-      script: "npm",
-      args: "run openreceive:worker"
-    }
-  ]
-};
-```
-
-Then run:
-
-```sh
-pm2 start ecosystem.config.cjs
-pm2 save
-pm2 startup
-```
-
-With systemd, create one service for the worker and keep `Restart=always`:
-
-```ini
-[Unit]
-Description=OpenReceive worker
-After=network.target
-
-[Service]
-WorkingDirectory=/var/www/myapp
-EnvironmentFile=/var/www/myapp/.env
-ExecStart=/usr/bin/npm run openreceive:worker
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Start and enable it:
-
-```sh
-sudo systemctl enable --now openreceive-worker
-```
-
-### Coolify, Dokploy, And Kamal
-
-Create two app services or roles from the same image/repo and assign these
-commands:
-
-```text
-web                 npm start
-openreceive-worker  npx openreceive worker
-```
-
-Route traffic only to `web`. Give both the same `OPENRECEIVE_NWC`,
-database URL, and other server-only app secrets.
-
-## Serverless And Frontend Hosts
-
-Serverless functions are short-lived. If your host cannot run a persistent
-backend worker, add a scheduled function that runs one polling pass. For faster
-notification wakeups, add one tiny companion service on Railway, Render, Fly.io,
-or a VPS with `npx openreceive worker`; that same worker handles both polling
-and listening.
-
-Create a one-shot polling helper in server-only code:
-
-```ts
-import { createOpenReceiveExpressSettlementPollingRunner } from "@openreceive/express";
-import { openreceive } from "@/server/openreceive-config";
-
-export async function runOpenReceivePollOnce() {
-  const runner = createOpenReceiveExpressSettlementPollingRunner(openreceive);
-  try {
-    return await runner.recoverOpenInvoices();
-  } finally {
-    runner.stop();
-  }
-}
-```
-
-### Vercel
-
-Add a Node.js route:
-
-```ts
-// src/app/api/openreceive/poll/route.ts
-import { runOpenReceivePollOnce } from "@/server/openreceive-poll";
-
-export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
-
-export async function GET() {
-  const result = await runOpenReceivePollOnce();
-  return Response.json(result);
-}
-```
-
-Add a cron entry:
-
-```json
-{
-  "crons": [
-    {
-      "path": "/api/openreceive/poll",
-      "schedule": "* * * * *"
-    }
-  ]
-}
-```
-
-For notification wakeups, deploy one persistent companion worker on Railway,
-Render, Fly.io, or a VPS:
-
-```sh
-npx openreceive worker
-```
-
-### Netlify
-
-Create a scheduled function:
-
-```ts
-// netlify/functions/openreceive-poll.ts
-import { runOpenReceivePollOnce } from "../../src/server/openreceive-poll";
-
-export default async () => {
-  const result = await runOpenReceivePollOnce();
-  return new Response(JSON.stringify(result), {
-    headers: {
-      "content-type": "application/json"
-    }
-  });
-};
-
-export const config = {
-  schedule: "* * * * *"
-};
-```
-
-For notification wakeups, use one persistent companion host running:
-
-```sh
-npx openreceive worker
-```
-
-### Cloudflare Pages Or Workers
-
-If your OpenReceive backend runs inside a Worker-compatible Node bundle, call
-the same one-shot polling helper from the `scheduled` handler. Otherwise, have
-a Cron Trigger call a protected polling endpoint on your Node backend:
-
-```ts
-export default {
-  async scheduled(_controller, env, ctx) {
-    ctx.waitUntil(
-      fetch("https://api.example.com/api/openreceive/poll", {
-        headers: {
-          authorization: `Bearer ${env.OPENRECEIVE_CRON_SECRET}`
-        }
-      })
-    );
-  }
-};
-```
-
-Keep the NWC connection string server-only and out of Pages client bundles.
-
-### Google Cloud Run
-
-Use a Cloud Run Service for the web app. For polling, use a Cloud Run Job or a
-Cloud Scheduler request that runs:
-
-```sh
-npx openreceive poll --once
-```
-
-For notification wakeups, use an always-running container host, VM, or GKE
-deployment running `npx openreceive worker`. Cloud Run Jobs are
-run-to-completion jobs, not long-running notification listeners.
-
-### AWS Lambda, SST, Or OpenNext
-
-Use the same serverless shape as Vercel:
-
-```text
-HTTP route       /api/openreceive/poll
-scheduled event  calls runOpenReceivePollOnce()
-worker process   npx openreceive worker on ECS, EC2, App Runner, or another persistent host
-```
-
-Use backend polling for settlement recovery. Browser polling and client-side
-timers are only display helpers; the scheduled backend poll is what recovers
-invoices after deploys, restarts, and missed notifications.
+Run it from a platform scheduler only when you want extra recovery beyond
+route-triggered lookup and sweep behavior. The scheduler request must be
+authorized with your `auth.poll` hook or `OPENRECEIVE_CRON_SECRET`.
+
+## Common Hosts
+
+- Vercel, Netlify, Cloudflare, Fly Machines, Railway, Render, Heroku, ECS, and
+  systemd deployments can run just the web service.
+- If the platform supports scheduled jobs, schedule `openreceive poll --once`
+  or an authenticated `POST /openreceive/v1/poll`.
+- Do not deploy a notification listener. NWC `payment_received` notifications
+  are passive hints and are not settlement authority.
+- Do not run checkout settlement from frontend code. Browsers receive only
+  display-safe invoices and call backend lookup routes.
+
+## Settlement Hooks
+
+Settlement hooks are delivered at least once. OpenReceive uses a store-backed
+CAS lease to prevent concurrent duplicate execution, but a crash after your
+hook succeeds and before OpenReceive records completion can replay the hook.
+Deduplicate by `payment_hash` or make the effect conditional in your app store.
+
+## Production Checklist
+
+- Use a durable `OPENRECEIVE_STORE`, not memory storage.
+- Configure `OPENRECEIVE_NAMESPACE` when multiple apps share one store.
+- Protect create/read/lookup/poll routes with app auth and CSRF rules.
+- Keep `OPENRECEIVE_NWC` server-side only.
+- Make settlement hooks idempotent by `payment_hash`.
+- Run `openreceive doctor` during deploy checks.

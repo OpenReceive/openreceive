@@ -576,7 +576,7 @@ function validateOpenApi() {
     ["get", "/invoices/{invoice_id}"],
     ["post", "/invoices/lookup"],
     ["post", "/invoices/{invoice_id}/refresh"],
-    ["get", "/invoices/{invoice_id}/events"],
+    ["post", "/poll"],
     ["get", "/rates"],
     ["post", "/rates/quote"],
     ["get", "/routes"],
@@ -653,7 +653,7 @@ function validateAsyncApi() {
   assert(asyncapi.asyncapi === "3.0.0", "AsyncAPI version must be 3.0.0");
   assert(asyncapi.info?.version === "0.1.0", "AsyncAPI info.version mismatch");
 
-  const messages = asyncapi.channels?.invoiceEvents?.messages || {};
+  const messages = asyncapi.channels?.invoiceLifecycleEvents?.messages || {};
   for (const message of [
     "invoiceCreated",
     "invoiceVerifying",

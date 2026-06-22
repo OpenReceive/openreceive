@@ -151,7 +151,7 @@ test("Hello Fruit React demos delegate checkout state to the React package", () 
   }
 });
 
-test("Hello Fruit JS demos use package-owned QR and default worker wiring", () => {
+test("Hello Fruit JS demos use package-owned QR and poll-only wiring", () => {
   const clientSources = [
     "examples/hello-fruit/server/node-express-react/src/client/App.tsx",
     "examples/hello-fruit/server/static-html-small-api/src/client/main.ts",
@@ -185,13 +185,13 @@ test("Hello Fruit JS demos use package-owned QR and default worker wiring", () =
     assert.equal(packageJson.dependencies.qrcode, undefined, `${demoDir}: qrcode is package-owned`);
     assert.match(packageJson.scripts.dev, /require-openreceive-nwc\.ts/);
     assert.match(packageJson.scripts.start, /require-openreceive-nwc\.ts/);
-    assert.equal(packageJson.scripts["openreceive:worker"], "openreceive worker");
-    assert.equal(packageJson.scripts["openreceive:poll:once"], "openreceive poll --once");
+    assert.equal(packageJson.scripts["openreceive:worker"], undefined);
+    assert.equal(packageJson.scripts["openreceive:poll"], "openreceive poll --once");
     assert.match(config, /createHelloFruitOpenReceiveOptions/);
     assert.match(config, /export default openreceive/);
     assert.doesNotMatch(config, /nostr\+walletconnect:\/\//);
-    assert.match(compose, /command:\s+\["npm", "run", "openreceive:worker"\]/);
-    assert.match(compose, /profiles:\s*\n\s+- openreceive-worker/);
+    assert.doesNotMatch(compose, /openreceive-worker/);
+    assert.doesNotMatch(compose, /command:\s+\["npm", "run", "openreceive:worker"\]/);
   }
 });
 
@@ -791,14 +791,14 @@ test("Hello Fruit JS demos set up package-owned invoice persistence", () => {
     path.join(process.cwd(), "packages/js/node/src/postgres-store.ts"),
     "utf8"
   );
-  assert.match(helper, /createOpenReceivePostgresInvoiceStoreFromPool/);
+  assert.match(helper, /createOpenReceivePostgresKvStoreFromPool/);
   assert.doesNotMatch(helper, /OPENRECEIVE_DATABASE_SCHEMA_VERSION/);
   assert.doesNotMatch(helper, /OPENRECEIVE_POSTGRES_MIGRATION_SQL/);
   assert.doesNotMatch(helper, /OpenReceivePostgresQueryClient/);
-  assert.match(helper, /new InMemoryInvoiceStore\(\)/);
-  assert.match(postgresStore, /createOpenReceivePostgresInvoiceStoreFromPool/);
-  assert.match(postgresStore, /CREATE TABLE IF NOT EXISTS \$\{OPENRECEIVE_SCHEMA_MIGRATIONS_TABLE\}/);
-  assert.match(postgresStore, /VALUES \('\$\{OPENRECEIVE_DATABASE_SCHEMA_VERSION\}'\)/);
+  assert.match(helper, /new InMemoryInvoiceKvStore\(\)/);
+  assert.match(postgresStore, /createOpenReceivePostgresKvStoreFromPool/);
+  assert.match(postgresStore, /data JSONB NOT NULL/);
+  assert.match(postgresStore, /openreceive_meta/);
 
   for (const demoDir of demoServerDirs) {
     const packageJson = JSON.parse(
@@ -819,7 +819,7 @@ test("Hello Fruit JS demos set up package-owned invoice persistence", () => {
     "examples/hello-fruit/server/nextjs-fullstack/src/server/openreceive.ts"
   ]) {
     const source = readFileSync(path.join(process.cwd(), sourcePath), "utf8");
-    assert.match(source, /createHelloFruitOpenReceiveInvoiceStore/);
+    assert.match(source, /createHelloFruitOpenReceiveKvStore/);
     assert.doesNotMatch(source, /new InMemoryInvoiceStore\(\)/);
     assert.doesNotMatch(source, /OPENRECEIVE_POSTGRES_MIGRATION_SQL/);
     assert.doesNotMatch(source, /OPENRECEIVE_DATABASE_SCHEMA_VERSION/);
@@ -907,7 +907,8 @@ test("Hello Fruit server demos keep secret-safe local setup docs", () => {
     assert.match(readme, /The browser never receives `OPENRECEIVE_NWC`\./);
     assert.match(readme, /refuses to boot/);
     assert.match(readme, /\/demo-metadata\.json/);
-    assert.match(readme, /compose\.override\.yml\.example --profile openreceive-worker up --build/);
+    assert.match(readme, /compose\.override\.yml\.example up --build/);
+    assert.doesNotMatch(readme, /--profile openreceive-worker/);
     assert.match(dockerfile, /CMD \["npm", "start"\]/);
     assert.match(compose, /env_file:/);
     assert.match(compose, /path:\s+\.\.\/\.\.\/\.\.\/\.\.\/\.env/);

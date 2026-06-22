@@ -28,41 +28,32 @@ through third-party services outside OpenReceive.
 ## Runtime Model
 
 There is no required OpenReceive daemon. Framework adapters run inside your
-app's normal server and job system, and backend packages provide two
-long-running pieces:
-
-- a settlement polling runner for restart recovery, final expiry lookup, and
-  post-expiry grace verification
-- a payment notification listener that keeps the wallet subscription open and
-  wakes backend lookup when notifications arrive
-
-In production, deploy your normal web process plus one OpenReceive backend
-worker process:
+app's normal server. Backend packages provide route-driven lookup recovery and
+an optional one-shot poll command for platform schedulers:
 
 ```text
-web                 your usual app command
-openreceive-worker  openreceive worker
+web                 your usual app command, mounts /openreceive/v1
+optional scheduler  POST /openreceive/v1/poll or openreceive poll --once
 ```
 
-The worker starts polling and notification listening together. It uses the same
-server-only config as your app, but it runs as its own backend process instead
-of inside an HTTP request handler.
+There is no notification listener, webhook bridge, SSE bus, or in-memory
+coordination state. The durable OpenReceive store coordinates lookup gates,
+recovery sweeps, and settlement-action leases across web processes.
 
 Local invoice expiry is not a settlement decision. If the server is down while
 an invoice expires, the poll process recovers that invoice after restart
 and asks the wallet before OpenReceive closes it as expired.
 
-OpenReceive packages provide the invoice persistence schema for your existing
-app database. Run the package migration or install generator, then attach
-app-owned hooks such as `onInvoiceSettlement`. Your app keeps its own orders,
-carts, users, and fulfillment tables; OpenReceive handles the invoice and
-idempotency rows it needs.
+OpenReceive packages provide their own invoice KV persistence, selected with
+`OPENRECEIVE_STORE`. Your app keeps its own orders, carts, users, and
+fulfillment tables; OpenReceive handles the invoice, idempotency, lookup-gate,
+and settlement-action state it needs.
 
 - Express routes in an Express app.
-- Rails controllers, models, and workers in a Rails app.
-- FastAPI routes and workers in a Python app.
+- Rails controllers in a Rails app.
+- FastAPI routes in a Python app.
 - Equivalent native integrations in later ecosystems.
 
 The browser or mobile app receives only display-safe invoice data. NWC secrets,
-invoice creation, settlement lookup, polling, notification handling, and
-app-owned settlement actions stay server-side.
+invoice creation, settlement lookup, recovery polling, and app-owned settlement
+actions stay server-side.

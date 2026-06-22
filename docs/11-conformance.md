@@ -123,20 +123,16 @@ local conformance helper for code paths that already depend on the
 `npm run mock-wallet` starts `tools/mock-wallet`, a deterministic local HTTP
 service backed by `@openreceive/testkit`. It exposes `get_info`, `make_invoice`,
 `lookup_invoice`, scripted terminal states, scripted lookup sequences,
-deterministic lookup errors, duplicate notification replay, and an SSE
-`payment_received` stream for conformance tests.
+and deterministic lookup errors for conformance tests.
 
 The mock wallet returns non-payable invoice fixtures. It does not replace live
 wallet profile tests, does not prove real BOLT11 routing, and does not emulate a
 Nostr relay. Use it for reproducible contract behavior before testing a real
 receive-only NWC wallet with `npm run test:live:nwc`.
 
-## Notification Listeners
+## Recovery
 
-`startPaymentNotificationListener` in `@openreceive/node` is a small helper for
-long-running backend workers. It subscribes to `payment_received`, dedupes by
-`payment_hash`, performs `lookupInvoice`, and calls the settled handler only
-when backend lookup confirms settlement.
-
-Notifications are at-least-once hints. They wake lookup quickly, but they do
-not replace polling and do not run app settlement actions by themselves.
+OpenReceive v0.1-v2 recovery is poll-only. Tests should cover lookup-gated
+interactive refresh, bounded sweeps, one-shot `/poll` recovery, duplicate-safe
+settlement hooks, and the rule that a preimage alone is not final settlement
+proof.

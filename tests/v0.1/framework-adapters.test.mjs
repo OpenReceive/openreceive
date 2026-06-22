@@ -68,10 +68,7 @@ const snapshot = {
   },
   transaction_state: "pending",
   workflow_state: "invoice_created",
-  expires_at: 1781943000,
-  checkout: {
-    events_url: "/openreceive/v1/invoices/or_inv_test/events"
-  }
+  expires_at: 1781943000
 };
 
 test("Next catch-all matcher covers OpenReceive HTTP routes", () => {
@@ -93,11 +90,8 @@ test("Next catch-all matcher covers OpenReceive HTTP routes", () => {
       invoice_id: "or_inv_123"
     }
   });
-  assert.deepEqual(matchOpenReceiveNextRoute("GET", ["invoices", "or_inv_123", "events"]), {
-    name: "invoiceEvents",
-    params: {
-      invoice_id: "or_inv_123"
-    }
+  assert.deepEqual(matchOpenReceiveNextRoute("POST", ["poll"]), {
+    name: "poll"
   });
   assert.deepEqual(matchOpenReceiveNextRoute("GET", ["rates"]), {
     name: "listRates"
@@ -158,7 +152,6 @@ test("browser owns custom-element checkout attributes and listeners", () => {
     "transaction-state": "pending",
     "workflow-state": "invoice_created",
     "expires-at": "1781943000",
-    "events-url": "/openreceive/v1/invoices/or_inv_test/events",
     "lookup-url": "/openreceive/v1/invoices/lookup",
     theme: "dark",
     "payment-wizard": "true"

@@ -1,20 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  InMemoryInvoiceStore,
+  InMemoryInvoiceKvStore,
   OPENRECEIVE_ERROR_CODES,
   OpenReceiveError,
   classifyLookupInvoiceSettlement,
   createIdempotencyRequestHash,
-  createOpenReceiveSettlementPollingRunner,
+  getIdempotentRecord,
   formatOpenReceiveInvalidNwcMessage,
   formatOpenReceiveMissingNwcMessage,
   getPollingDelaySeconds,
   isOpenReceiveErrorCode,
   isRetryableOpenReceiveErrorCode,
+  putCreatedInvoiceRecord,
   parseNwcUri,
   pollInvoiceUntilFinalState,
   quoteFiatToMsats,
+  reconcileOnce,
   redactNwcUri
 } from "../../packages/js/core/src/index.ts";
 import {
@@ -33,7 +35,6 @@ import {
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_PARTS,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_PART_SELECTORS,
-  applyOpenReceiveInvoiceEvent,
   copyInvoice,
   createOpenReceiveCheckoutActionEvent,
   createOpenReceiveCheckoutController,
@@ -57,13 +58,13 @@ import {
   formatOpenReceivePaymentHashLabel,
   OpenReceiveCheckoutWatcher,
   createOpenReceiveThemeModel,
+  mergeOpenReceiveCheckoutSnapshot,
   openReceiveCheckoutElementStyles,
   openReceiveCountryMapRegions,
   openReceiveThemeToggleElementStyles,
   openWallet,
   assertOpenReceiveDisplayInvoice,
   parseOpenReceiveBooleanAttribute,
-  parseOpenReceiveInvoiceEvent,
   parseOpenReceiveOptionalInteger,
   parseOpenReceivePaymentMethod,
   parseOpenReceiveRegion,
@@ -81,6 +82,34 @@ const NWC_URI =
   "?relay=wss%3A%2F%2Frelay.example.com&secret=" +
   "c".repeat(64) +
   "&lud16=demo%40example.com";
+
+function seedRecord(overrides = {}) {
+  const rowOverrides = overrides.row ?? {};
+  const flatOverrides = { ...overrides };
+  delete flatOverrides.row;
+  delete flatOverrides.rev;
+  return {
+    rev: overrides.rev ?? 0,
+    row: {
+      invoice_id: "or_inv_test",
+      merchant_scope: "demo:tenant",
+      operation: "invoice.create",
+      idempotency_key: "order-1",
+      idempotency_request_hash: `sha256:${"a".repeat(64)}`,
+      payment_hash: PAYMENT_HASH,
+      invoice: "lnbc-test",
+      amount_msats: 200000,
+      transaction_state: "pending",
+      workflow_state: "invoice_created",
+      settlement_action_state: "pending",
+      created_at: 1000,
+      expires_at: 1600,
+      metadata: {},
+      ...flatOverrides,
+      ...rowOverrides
+    }
+  };
+}
 
 test("quotes static USD fiat to whole-sat msats without floating point drift", () => {
   const quote = quoteFiatToMsats({
@@ -202,36 +231,23 @@ test("polling delay follows canonical cadence", () => {
   assert.equal(getPollingDelaySeconds({ created_at: 1000, now: 1180 }), 20);
 });
 
-test("settlement polling runner recovers and completes open invoices", async () => {
-  const store = new InMemoryInvoiceStore();
-  store.createInvoice({
+test("reconcileOnce discovers settlement and completes open invoices", async () => {
+  const store = new InMemoryInvoiceKvStore();
+  await store.putIfAbsent(seedRecord({
     invoice_id: "or_inv_runner",
-    merchant_scope: "demo:tenant",
-    operation: "invoice.create",
     idempotency_key: "order-runner",
-    idempotency_request_hash: `sha256:${"a".repeat(64)}`,
-    payment_hash: PAYMENT_HASH,
     invoice: "lnbc-runner",
-    amount_msats: 200000,
-    transaction_state: "pending",
-    workflow_state: "invoice_created",
-    settlement_action_state: "pending",
-    created_at: 1000,
-    expires_at: 1600,
     metadata: {
       fruit: "banana"
     }
-  });
+  }));
 
-  let now = 1000;
+  const now = 1000;
   let settlementActionCalls = 0;
   const events = [];
   const client = {
-    async preflight() {
-      throw new Error("preflight is not needed by the polling runner");
-    },
     async makeInvoice() {
-      throw new Error("makeInvoice is not needed by the polling runner");
+      throw new Error("makeInvoice is not needed by reconciliation");
     },
     async lookupInvoice(request) {
       assert.equal(request.payment_hash, PAYMENT_HASH);
@@ -242,7 +258,8 @@ test("settlement polling runner recovers and completes open invoices", async () 
       };
     }
   };
-  const runner = createOpenReceiveSettlementPollingRunner({
+
+  const result = await reconcileOnce({
     client,
     store,
     settlementAction: async ({ invoice }) => {
@@ -251,62 +268,41 @@ test("settlement polling runner recovers and completes open invoices", async () 
       assert.deepEqual(invoice.metadata, { fruit: "banana" });
     },
     onEvent: (event) => events.push(event.event),
-    clock: {
-      now: () => now,
-      sleep_until: async (timestamp) => {
-        now = timestamp;
-      }
-    }
+    clock: () => now
   });
+  const stored = await store.get("or_inv_runner");
 
-  const recovery = await runner.recoverOpenInvoices();
-  const result = await runner.watchInvoice("or_inv_runner");
-  const stored = store.getInvoice("or_inv_runner");
-
-  assert.deepEqual(recovery.invoice_ids, ["or_inv_runner"]);
-  assert.equal(result.outcome, "settled");
-  assert.equal(stored.transaction_state, "settled");
-  assert.equal(stored.workflow_state, "settlement_action_completed");
-  assert.equal(stored.settlement_action_state, "completed");
+  assert.deepEqual(result.invoice_ids, ["or_inv_runner"]);
+  assert.equal(result.checked, 1);
+  assert.equal(stored.row.transaction_state, "settled");
+  assert.equal(stored.row.workflow_state, "settlement_action_completed");
+  assert.equal(stored.row.settlement_action_state, "completed");
   assert.equal(settlementActionCalls, 1);
   assert.deepEqual(events, [
-    "invoice.verifying",
     "invoice.settled",
     "invoice.settlement_action_completed"
   ]);
 });
 
-test("settlement polling runner recovers invoices long after local expiry", async () => {
-  const store = new InMemoryInvoiceStore();
-  store.createInvoice({
+test("reconcileOnce recovers invoices long after local expiry", async () => {
+  const store = new InMemoryInvoiceKvStore();
+  await store.putIfAbsent(seedRecord({
     invoice_id: "or_inv_expired_during_outage",
-    merchant_scope: "demo:tenant",
-    operation: "invoice.create",
     idempotency_key: "order-outage",
-    idempotency_request_hash: `sha256:${"b".repeat(64)}`,
-    payment_hash: PAYMENT_HASH,
     invoice: "lnbc-outage",
-    amount_msats: 200000,
-    transaction_state: "pending",
-    workflow_state: "invoice_created",
-    settlement_action_state: "pending",
     created_at: 1000,
-    expires_at: 1002,
-    metadata: {}
-  });
+    expires_at: 1002
+  }));
 
   const now = 2800;
-  const recoverable = store.listRecoverableInvoices({
-    now,
-    grace_seconds: 15
-  });
+  const recoverable = await store.listOpen({ now, limit: 10 });
   let lookups = 0;
   const events = [];
-  const runner = createOpenReceiveSettlementPollingRunner({
+  const result = await reconcileOnce({
     store,
     client: {
       async makeInvoice() {
-        throw new Error("makeInvoice is not needed by the polling runner");
+        throw new Error("makeInvoice is not needed by reconciliation");
       },
       async lookupInvoice(request) {
         lookups += 1;
@@ -321,60 +317,41 @@ test("settlement polling runner recovers invoices long after local expiry", asyn
     onEvent: (event) => {
       events.push(`${event.event}:${event.reason ?? ""}`);
     },
-    clock: {
-      now: () => now,
-      sleep_until: async () => {
-        throw new Error("post-expiry settlement should not sleep before lookup");
-      }
-    }
+    clock: () => now
   });
-
-  const recovery = await runner.recoverOpenInvoices();
-  const result = await runner.watchInvoice("or_inv_expired_during_outage");
-  const stored = store.getInvoice("or_inv_expired_during_outage");
+  const stored = await store.get("or_inv_expired_during_outage");
 
   assert.deepEqual(
-    recoverable.map((invoice) => invoice.invoice_id),
+    recoverable.map((record) => record.row.invoice_id),
     ["or_inv_expired_during_outage"]
   );
-  assert.deepEqual(recovery.invoice_ids, ["or_inv_expired_during_outage"]);
+  assert.deepEqual(result.invoice_ids, ["or_inv_expired_during_outage"]);
   assert.equal(lookups, 1);
-  assert.equal(result.outcome, "settled");
-  assert.equal(stored.transaction_state, "settled");
-  assert.equal(stored.workflow_state, "settlement_action_completed");
+  assert.equal(stored.row.transaction_state, "settled");
+  assert.equal(stored.row.workflow_state, "settlement_action_completed");
   assert.deepEqual(events, [
-    "invoice.verifying:final_lookup",
-    "invoice.settled:settlement_detected",
+    "invoice.settled:wallet_settled",
     "invoice.settlement_action_completed:"
   ]);
 });
 
-test("settlement polling runner closes expired invoices only after a post-expiry lookup", async () => {
-  const store = new InMemoryInvoiceStore();
-  store.createInvoice({
-    invoice_id: "or_inv_expiry_verified",
-    merchant_scope: "demo:tenant",
-    operation: "invoice.create",
-    idempotency_key: "order-expiry-verified",
-    idempotency_request_hash: `sha256:${"c".repeat(64)}`,
-    payment_hash: PAYMENT_HASH,
-    invoice: "lnbc-expiry-verified",
-    amount_msats: 200000,
-    transaction_state: "pending",
-    workflow_state: "invoice_created",
-    settlement_action_state: "pending",
+test("reconcileOnce keeps locally expired invoices open without wallet finality", async () => {
+  const store = new InMemoryInvoiceKvStore();
+  await store.putIfAbsent(seedRecord({
+    invoice_id: "or_inv_expiry_pending",
+    idempotency_key: "order-expiry-pending",
+    invoice: "lnbc-expiry-pending",
     created_at: 1000,
-    expires_at: 1002,
-    metadata: {}
-  });
+    expires_at: 1002
+  }));
 
   let lookups = 0;
   const events = [];
-  const runner = createOpenReceiveSettlementPollingRunner({
+  const result = await reconcileOnce({
     store,
     client: {
       async makeInvoice() {
-        throw new Error("makeInvoice is not needed by the polling runner");
+        throw new Error("makeInvoice is not needed by reconciliation");
       },
       async lookupInvoice(request) {
         lookups += 1;
@@ -385,64 +362,37 @@ test("settlement polling runner closes expired invoices only after a post-expiry
         };
       }
     },
-    grace_policy: {
-      max_attempts: 0,
-      delay_seconds: 1
-    },
     onEvent: (event) => {
       events.push(`${event.event}:${event.reason ?? ""}`);
     },
-    clock: {
-      now: () => 2800,
-      sleep_until: async () => {
-        throw new Error("zero grace attempts should not sleep");
-      }
-    }
+    clock: () => 2800
   });
+  const stored = await store.get("or_inv_expiry_pending");
 
-  const recovery = await runner.recoverOpenInvoices();
-  const result = await runner.watchInvoice("or_inv_expiry_verified");
-  const stored = store.getInvoice("or_inv_expiry_verified");
-
-  assert.deepEqual(recovery.invoice_ids, ["or_inv_expiry_verified"]);
+  assert.deepEqual(result.invoice_ids, ["or_inv_expiry_pending"]);
   assert.equal(lookups, 1);
-  assert.equal(result.outcome, "expired");
-  assert.equal(result.reason, "grace_exhausted");
-  assert.equal(stored.transaction_state, "expired");
-  assert.equal(stored.workflow_state, "expired_closed");
+  assert.equal(stored.row.transaction_state, "pending");
+  assert.equal(stored.row.workflow_state, "expiry_pending_verification");
   assert.deepEqual(events, [
-    "invoice.verifying:final_lookup",
-    "invoice.expired:grace_exhausted"
+    "invoice.verifying:expired_pending_wallet_truth"
   ]);
 });
 
-test("in-memory storage replays same idempotency request and conflicts on drift", async () => {
-  const store = new InMemoryInvoiceStore();
+test("in-memory KV storage replays same idempotency request and conflicts on drift", async () => {
+  const store = new InMemoryInvoiceKvStore();
   const firstHash = await createIdempotencyRequestHash({ amount_msats: 200000 });
   const secondHash = await createIdempotencyRequestHash({ amount_msats: 300000 });
-  const row = {
-    invoice_id: "or_inv_test",
-    merchant_scope: "demo:tenant",
-    operation: "invoice.create",
-    idempotency_key: "order-1",
-    idempotency_request_hash: firstHash,
-    payment_hash: PAYMENT_HASH,
-    invoice: "lnbc-test",
-    amount_msats: 200000,
-    transaction_state: "pending",
-    workflow_state: "invoice_created",
-    settlement_action_state: "pending",
-    created_at: 1000,
-    expires_at: 1600,
-    metadata: {}
-  };
+  const record = seedRecord({
+    idempotency_request_hash: firstHash
+  });
 
-  assert.equal(store.createInvoice(row).status, "created");
-  assert.equal(store.createInvoice(row).status, "replayed");
-  assert.throws(
+  assert.equal((await putCreatedInvoiceRecord({ store, record })).status, "created");
+  assert.equal((await putCreatedInvoiceRecord({ store, record })).status, "replayed");
+  await assert.rejects(
     () =>
-      store.checkIdempotency({
-        scope: row,
+      getIdempotentRecord({
+        store,
+        scope: record.row,
         idempotency_request_hash: secondHash
       }),
     /different request body/
@@ -522,10 +472,7 @@ test("browser owns checkout display data to state conversion", () => {
     transaction_state: "pending",
     workflow_state: "invoice_created",
     expires_at: 2000,
-    settled_at: 1999,
-    checkout: {
-      events_url: "/api/openreceive/invoices/or_inv_display_state/events"
-    }
+    settled_at: 1999
   };
 
   const snapshot = createOpenReceiveCheckoutSnapshotFromDisplayData(displayData);
@@ -540,10 +487,6 @@ test("browser owns checkout display data to state conversion", () => {
   assert.equal(state.phase, "invoice_created");
   assert.equal(state.expiresInSeconds, 60);
   assert.equal(state.settled_at, 1999);
-  assert.equal(
-    state.events_url,
-    "/api/openreceive/invoices/or_inv_display_state/events"
-  );
   const defaultClockState = createOpenReceiveCheckoutStateFromDisplayData({
     ...displayData,
     expires_at: Math.floor(Date.now() / 1000) + 30
@@ -871,7 +814,7 @@ test("browser refresh fetcher owns idempotent refresh POST shape", async () => {
   );
 });
 
-test("browser checkout state applies only matching passive invoice events", () => {
+test("browser checkout state keeps route URLs and ignores passive event URLs", () => {
   const logs = [];
   const logger = (entry) => logs.push(entry);
   const state = createOpenReceiveCheckoutState(
@@ -884,7 +827,6 @@ test("browser checkout state applies only matching passive invoice events", () =
       workflow_state: "invoice_created",
       expires_at: 1030,
       checkout: {
-        events_url: "/openreceive/v1/invoices/or_inv_browser/events",
         routes_url: "/openreceive/v1/routes"
       }
     },
@@ -895,99 +837,30 @@ test("browser checkout state applies only matching passive invoice events", () =
   assert.equal(state.phase, "invoice_created");
   assert.equal(state.expiresInSeconds, 30);
   assert.equal(state.terminal, false);
-  assert.equal(state.events_url, "/openreceive/v1/invoices/or_inv_browser/events");
-
-  assert.equal(
-    applyOpenReceiveInvoiceEvent(state, {
-      invoice_id: "or_inv_other",
-      transaction_state: "settled"
-    }, {
-      eventName: "invoice.settled",
-      logger
-    }),
-    state
-  );
-  assert.equal(
-    applyOpenReceiveInvoiceEvent(state, {
-      invoice_id: "or_inv_browser",
-      payment_hash: "b".repeat(64),
-      transaction_state: "settled"
-    }, {
-      eventName: "invoice.settled",
-      logger
-    }),
-    state
-  );
-
-  const verifying = applyOpenReceiveInvoiceEvent(
-    state,
-    {
-      invoice_id: "or_inv_browser",
-      payment_hash: PAYMENT_HASH,
-      transaction_state: "pending",
-      workflow_state: "verifying"
-    },
-    { eventName: "invoice.verifying", logger, now: 1005 }
-  );
-
-  assert.equal(verifying.phase, "verifying");
-  assert.equal(verifying.last_event, "invoice.verifying");
-  assert.equal(verifying.expiresInSeconds, 25);
-  assert.equal(verifying.terminal, false);
-
-  const settled = applyOpenReceiveInvoiceEvent(
-    verifying,
-    {
-      invoice_id: "or_inv_browser",
-      payment_hash: PAYMENT_HASH,
-      amount_msats: 200000,
-      transaction_state: "settled",
-      workflow_state: "settlement_action_pending",
-      settled_at: 1010
-    },
-    { eventName: "invoice.settled", logger }
-  );
-
-  assert.equal(settled.phase, "settled");
-  assert.equal(settled.settled, true);
-  assert.equal(settled.terminal, false);
-  assert.equal(settled.settled_at, 1010);
-  assert.equal(settled.last_event, "invoice.settled");
-  assert.equal(settled.expiresInSeconds, undefined);
-
-  const expired = applyOpenReceiveInvoiceEvent(settled, {
-    invoice_id: "or_inv_browser",
-    payment_hash: PAYMENT_HASH,
-    transaction_state: "expired",
-    workflow_state: "expired_closed"
+  assert.equal(state.routes_url, "/openreceive/v1/routes");
+  assert.equal("events_url" in state, false);
+  const snapshot = mergeOpenReceiveCheckoutSnapshot(state, {
+    checkout: {
+      routes_url: "/openreceive/v1/routes-updated"
+    }
   });
-
-  assert.equal(expired.phase, "expired");
-  assert.equal(expired.terminal, true);
+  assert.deepEqual(snapshot.checkout, {
+    routes_url: "/openreceive/v1/routes-updated"
+  });
   assert.deepEqual(
     logs.map((entry) => entry.event),
-    [
-      "checkout.state.created",
-      "checkout.event.ignored",
-      "checkout.event.ignored",
-      "checkout.event.applied",
-      "checkout.event.applied"
-    ]
+    ["checkout.state.created"]
   );
   assert.equal(logs[0].invoice_id, "or_inv_browser");
-  assert.equal(logs[3].phase, "verifying");
-  assert.equal(logs[4].phase, "settled");
   assert.doesNotMatch(JSON.stringify(logs), /nostr\+walletconnect:\/\//);
 });
 
-test("browser checkout watcher owns countdown, passive events, and lookup polling", async () => {
+test("browser checkout watcher owns countdown and lookup polling", async () => {
   let now = 1000;
   let nextTimer = 1;
   const timers = new Map();
   const clearedTimers = [];
   const states = [];
-  const listeners = new Map();
-  let closedEvents = 0;
   let lookupCalls = 0;
 
   const watcher = new OpenReceiveCheckoutWatcher({
@@ -998,10 +871,7 @@ test("browser checkout watcher owns countdown, passive events, and lookup pollin
       amount_msats: 200000,
       transaction_state: "pending",
       workflow_state: "invoice_created",
-      expires_at: 1010,
-      checkout: {
-        events_url: "/events/or_inv_watch"
-      }
+      expires_at: 1010
     },
     now: () => now,
     setInterval: (callback, ms) => {
@@ -1013,17 +883,6 @@ test("browser checkout watcher owns countdown, passive events, and lookup pollin
     clearInterval: (id) => {
       clearedTimers.push(id);
       timers.delete(id);
-    },
-    eventSourceFactory: (url) => {
-      assert.equal(url, "/events/or_inv_watch");
-      return {
-        addEventListener: (type, listener) => {
-          listeners.set(type, listener);
-        },
-        close: () => {
-          closedEvents += 1;
-        }
-      };
     },
     lookupInvoice: async (state) => {
       lookupCalls += 1;
@@ -1046,23 +905,10 @@ test("browser checkout watcher owns countdown, passive events, and lookup pollin
   const pollTimer = [...timers].find(([, timer]) => timer.ms === 3000);
   assert.ok(countdownTimer);
   assert.ok(pollTimer);
-  assert.equal(listeners.has("invoice.verifying"), true);
-  assert.equal(listeners.has("invoice.settlement_action_completed"), true);
 
   now = 1003;
   countdownTimer[1].callback();
   assert.equal(states.at(-1).expiresInSeconds, 7);
-
-  listeners.get("invoice.verifying")({
-    type: "invoice.verifying",
-    data: JSON.stringify({
-      invoice_id: "or_inv_watch",
-      payment_hash: PAYMENT_HASH,
-      transaction_state: "pending",
-      workflow_state: "verifying"
-    })
-  });
-  assert.equal(states.at(-1).phase, "verifying");
 
   pollTimer[1].callback();
   await Promise.resolve();
@@ -1072,23 +918,9 @@ test("browser checkout watcher owns countdown, passive events, and lookup pollin
   assert.equal(shouldOpenReceiveCheckoutShowWaiting(states.at(-1), { now }), false);
   assert.equal(timers.has(countdownTimer[0]), false);
   assert.equal(timers.has(pollTimer[0]), false);
-  assert.equal(closedEvents, 0);
   assert.ok(clearedTimers.includes(countdownTimer[0]));
   assert.ok(clearedTimers.includes(pollTimer[0]));
-
-  listeners.get("invoice.settlement_action_completed")({
-    type: "invoice.settlement_action_completed",
-    data: JSON.stringify({
-      invoice_id: "or_inv_watch",
-      payment_hash: PAYMENT_HASH,
-      transaction_state: "settled",
-      workflow_state: "settlement_action_completed"
-    })
-  });
-  assert.equal(states.at(-1).phase, "settled");
-  assert.equal(closedEvents, 0);
   watcher.stop();
-  assert.equal(closedEvents, 1);
 });
 
 test("browser checkout controller owns lifecycle actions for framework adapters", async () => {
@@ -1286,7 +1118,6 @@ test("browser custom-element event map covers checkout lifecycle events", () => 
   assert.deepEqual(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS, {
     copy: "openreceive-copy",
     openWallet: "openreceive-open-wallet",
-    paymentReceived: "openreceive-payment-received",
     state: "openreceive-state",
     settled: "openreceive-settled",
     providerCopy: "openreceive-provider-copy",
@@ -1390,7 +1221,6 @@ test("browser owns custom-element attribute contracts", () => {
     transactionState: "transaction-state",
     workflowState: "workflow-state",
     expiresAt: "expires-at",
-    eventsUrl: "events-url",
     lookupUrl: "lookup-url",
     theme: "theme",
     paymentWizard: "payment-wizard"
@@ -1420,34 +1250,4 @@ test("browser owns web-component shadow part contracts", () => {
   assert.deepEqual(OPENRECEIVE_THEME_TOGGLE_ELEMENT_PART_SELECTORS, {
     button: '[part="button"]'
   });
-});
-
-test("browser invoice event parser accepts canonical SSE JSON payloads", () => {
-  assert.deepEqual(
-    parseOpenReceiveInvoiceEvent(
-      JSON.stringify({
-        invoice_id: "or_inv_browser",
-        type: "incoming",
-        transaction_state: "settled",
-        workflow_state: "settlement_action_pending",
-        payment_hash: PAYMENT_HASH,
-        amount_msats: 200000,
-        settled_at: 1010
-      })
-    ),
-    {
-      invoice_id: "or_inv_browser",
-      type: "incoming",
-      transaction_state: "settled",
-      workflow_state: "settlement_action_pending",
-      payment_hash: PAYMENT_HASH,
-      amount_msats: 200000,
-      settled_at: 1010
-    }
-  );
-
-  assert.throws(
-    () => parseOpenReceiveInvoiceEvent(JSON.stringify({ transaction_state: "settled" })),
-    /invoice_id/
-  );
 });

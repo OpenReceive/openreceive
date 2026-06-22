@@ -357,7 +357,7 @@ class OpenReceiveTest < Minitest::Test
   end
 
   def test_in_memory_invoice_store_replays_idempotent_creates
-    store = OpenReceive::InMemoryInvoiceStore.new
+    store = OpenReceive::InMemoryInvoiceKvStore.new
     created = store.create_invoice(invoice_row)
     replayed = store.create_invoice(invoice_row)
 
@@ -368,7 +368,7 @@ class OpenReceiveTest < Minitest::Test
   end
 
   def test_in_memory_invoice_store_rejects_idempotency_drift
-    store = OpenReceive::InMemoryInvoiceStore.new
+    store = OpenReceive::InMemoryInvoiceKvStore.new
     store.create_invoice(invoice_row)
 
     error = assert_raises(OpenReceive::IdempotencyConflictError) do
@@ -380,7 +380,7 @@ class OpenReceiveTest < Minitest::Test
   end
 
   def test_in_memory_invoice_store_rejects_duplicate_payment_hash
-    store = OpenReceive::InMemoryInvoiceStore.new
+    store = OpenReceive::InMemoryInvoiceKvStore.new
     store.create_invoice(invoice_row)
 
     assert_raises(OpenReceive::InvoiceStorageConflictError) do
@@ -396,7 +396,7 @@ class OpenReceiveTest < Minitest::Test
   end
 
   def test_in_memory_invoice_store_settlement_action_is_duplicate_safe
-    store = OpenReceive::InMemoryInvoiceStore.new
+    store = OpenReceive::InMemoryInvoiceKvStore.new
     store.create_invoice(invoice_row)
 
     first_settle = store.mark_settled(invoice_id: "or_inv_test_1", settled_at: 1200)
@@ -418,7 +418,7 @@ class OpenReceiveTest < Minitest::Test
   end
 
   def test_in_memory_invoice_store_lists_recoverable_rows
-    store = OpenReceive::InMemoryInvoiceStore.new
+    store = OpenReceive::InMemoryInvoiceKvStore.new
     store.create_invoice(invoice_row)
     store.create_invoice(
       invoice_row(

@@ -23,7 +23,7 @@ import {
   mountHelloFruitHostedDemoRoutes
 } from "../../../../shared/hosted-demo-routes.ts";
 import {
-  createHelloFruitOpenReceiveInvoiceStore
+  createHelloFruitOpenReceiveKvStore
 } from "../../../../shared/openreceive-store.ts";
 import {
   readHelloFruitCatalogCurrencies
@@ -40,7 +40,7 @@ export function createHelloFruitOpenReceiveOptions(): OpenReceiveExpressOptions 
 
   return {
     client: wallet,
-    store: createHelloFruitOpenReceiveInvoiceStore({
+    store: createHelloFruitOpenReceiveKvStore({
       demoId: DEMO_ID
     }),
     merchantScope: () => "demo:hello-fruit",

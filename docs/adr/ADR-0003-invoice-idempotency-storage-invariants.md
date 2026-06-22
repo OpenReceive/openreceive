@@ -7,15 +7,18 @@ Accepted for v0.1.
 ## Context
 
 Receive checkout must be replay-safe. Duplicate requests, duplicate
-notifications, reconnects, and settlement action retries must not double-credit
-a customer.
+lookups, reconnects, and settlement action retries must not double-credit a
+customer.
 
 ## Decision
 
-Every invoice row stores `invoice_id`, `merchant_scope`, `idempotency_key`,
+Every invoice record is stored as `{ rev, row }` through the
+`OpenReceiveInvoiceKvStore` contract. The row stores `invoice_id`,
+`merchant_scope`, `operation`, `idempotency_key`,
 `idempotency_request_hash`, `payment_hash`, `invoice`, `amount_msats`,
 `transaction_state`, `workflow_state`, `settlement_action_state`, timestamps,
-metadata, and fiat quote data when used.
+metadata, lookup-gate fields, settlement-action lease fields, and fiat quote
+data when used.
 
 The canonical idempotency scope is:
 
@@ -33,6 +36,10 @@ linked to the old invoice.
 ## Consequences
 
 - SDKs and adapters must expose idempotency behavior.
-- Storage adapters need unique `invoice_id` and `payment_hash` constraints.
-- Notifications never run settlement actions directly.
+- Storage adapters need atomic uniqueness for `invoice_id`, `payment_hash`,
+  BOLT11 invoice, and idempotency scope.
+- Store adapters are dumb persistence; lifecycle guards live in core pure
+  transition functions.
+- Settlement actions are delivered at least once and must be app-idempotent by
+  `payment_hash`.
 - Test vectors define lifecycle and idempotency behavior.

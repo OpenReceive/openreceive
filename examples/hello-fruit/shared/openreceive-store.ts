@@ -1,34 +1,34 @@
 import {
-  InMemoryInvoiceStore,
-  type OpenReceiveInvoiceStore
+  InMemoryInvoiceKvStore,
+  type OpenReceiveInvoiceKvStore
 } from "@openreceive/core";
 import {
-  createOpenReceivePostgresInvoiceStoreFromPool
+  createOpenReceivePostgresKvStoreFromPool
 } from "@openreceive/node";
 import { Pool } from "pg";
 
-export function createHelloFruitOpenReceiveInvoiceStore(input: {
+export function createHelloFruitOpenReceiveKvStore(input: {
   readonly demoId: string;
-}): OpenReceiveInvoiceStore {
+}): OpenReceiveInvoiceKvStore {
   const databaseUrl = process.env.DATABASE_URL;
   if (databaseUrl === undefined || databaseUrl.trim().length === 0) {
-    return new InMemoryInvoiceStore();
+    return new InMemoryInvoiceKvStore();
   }
 
   const pool = new Pool({
     connectionString: databaseUrl
   });
 
-  return createOpenReceivePostgresInvoiceStoreFromPool({
+  return createOpenReceivePostgresKvStoreFromPool({
     pool,
     onReady(schemaVersion) {
       console.log(
-        `[openreceive:${input.demoId}] Postgres invoice store ready (${schemaVersion}).`
+        `[openreceive:${input.demoId}] Postgres KV store ready (${schemaVersion}).`
       );
     },
     onMigrationError() {
       console.error(
-        `[openreceive:${input.demoId}] Postgres invoice store migration failed. Check DATABASE_URL and database reachability.`
+        `[openreceive:${input.demoId}] Postgres KV store initialization failed. Check DATABASE_URL and database reachability.`
       );
     }
   });

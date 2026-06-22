@@ -32,7 +32,6 @@ export const OPENRECEIVE_COUNTRY_MAP_VIEW_BOX =
 export const OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS = {
   copy: "openreceive-copy",
   openWallet: "openreceive-open-wallet",
-  paymentReceived: "openreceive-payment-received",
   state: "openreceive-state",
   settled: "openreceive-settled",
   providerCopy: "openreceive-provider-copy",
@@ -119,13 +118,6 @@ export interface OpenReceiveThemeChangeEventDetail {
   readonly theme: OpenReceiveThemePreference;
   readonly resolvedTheme: OpenReceiveResolvedTheme;
 }
-export const OPENRECEIVE_INVOICE_EVENT_TYPES = [
-  "invoice.verifying",
-  "invoice.settled",
-  "invoice.expired",
-  "invoice.failed",
-  "invoice.settlement_action_completed"
-] as const;
 
 export function createOpenReceiveProviderCopyEvent(
   providerId: string
@@ -152,8 +144,7 @@ export function createOpenReceiveCheckoutActionEvent(
 export function createOpenReceiveCheckoutStateEvent(
   eventName:
     | typeof OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.state
-    | typeof OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.settled
-    | typeof OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.paymentReceived,
+    | typeof OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.settled,
   state: OpenReceiveCheckoutState
 ): CustomEvent<OpenReceiveCheckoutStateEventDetail> {
   return new CustomEvent<OpenReceiveCheckoutStateEventDetail>(
@@ -338,8 +329,6 @@ export type OpenReceiveCheckoutPhase =
   | "expired"
   | "failed"
   | "cancelled";
-export type OpenReceiveInvoiceEventType =
-  (typeof OPENRECEIVE_INVOICE_EVENT_TYPES)[number];
 
 export interface OpenReceiveCheckoutSnapshot {
   readonly invoice_id: string;
@@ -357,7 +346,6 @@ export interface OpenReceiveCheckoutSnapshot {
   readonly expires_at?: number;
   readonly settled_at?: number;
   readonly checkout?: {
-    readonly events_url?: string;
     readonly routes_url?: string;
   };
 }
@@ -377,9 +365,6 @@ export interface OpenReceiveCheckoutDisplayData {
   readonly workflow_state?: string;
   readonly expires_at?: number;
   readonly settled_at?: number;
-  readonly checkout?: {
-    readonly events_url?: string;
-  };
 }
 
 export interface OpenReceiveCheckoutDisplayModel
@@ -401,7 +386,6 @@ export const OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES = {
   transactionState: "transaction-state",
   workflowState: "workflow-state",
   expiresAt: "expires-at",
-  eventsUrl: "events-url",
   lookupUrl: "lookup-url",
   theme: "theme",
   paymentWizard: "payment-wizard"
@@ -448,7 +432,6 @@ export type OpenReceiveThemeToggleElementAttributes = Partial<
 export interface OpenReceiveCheckoutElementEventHandlers {
   readonly onCopy?: (event: Event) => void;
   readonly onOpenWallet?: (event: Event) => void;
-  readonly onPaymentReceived?: (event: Event) => void;
   readonly onState?: (event: Event) => void;
   readonly onSettled?: (event: Event) => void;
   readonly onProviderCopy?: (event: Event) => void;
@@ -530,13 +513,11 @@ export interface OpenReceiveCheckoutState {
   readonly workflow_state: string;
   readonly expires_at?: number;
   readonly expiresInSeconds?: number;
-  readonly events_url?: string;
   readonly routes_url?: string;
   readonly phase: OpenReceiveCheckoutPhase;
   readonly settled: boolean;
   readonly terminal: boolean;
   readonly settled_at?: number;
-  readonly last_event?: string;
 }
 
 export interface OpenReceiveCheckoutStatusModelInput {
@@ -554,19 +535,6 @@ export interface OpenReceiveCheckoutStatusModel {
   readonly expiresInSeconds?: number;
   readonly countdownLabel?: string;
 }
-
-export interface OpenReceiveCheckoutEventSource {
-  addEventListener(
-    type: string,
-    listener: (event: MessageEvent) => void
-  ): void;
-  close(): void;
-  onerror?: ((event: Event) => void) | null;
-}
-
-export type OpenReceiveCheckoutEventSourceFactory = (
-  url: string
-) => OpenReceiveCheckoutEventSource;
 
 export type OpenReceiveCheckoutLookup = (
   state: OpenReceiveCheckoutState
@@ -600,7 +568,6 @@ export interface CreateOpenReceiveRefreshInvoiceFetcherOptions {
 export interface OpenReceiveCheckoutWatcherOptions {
   readonly snapshot: OpenReceiveCheckoutSnapshot;
   readonly lookupInvoice?: OpenReceiveCheckoutLookup;
-  readonly eventSourceFactory?: OpenReceiveCheckoutEventSourceFactory;
   readonly pollIntervalMs?: number;
   readonly now?: () => number;
   readonly setInterval?: typeof globalThis.setInterval;
@@ -638,23 +605,7 @@ export interface OpenReceiveCheckoutController {
   openWallet(): string;
 }
 
-export interface OpenReceiveInvoiceEventPayload {
-  readonly invoice_id: string;
-  readonly type?: string;
-  readonly transaction_state?: string;
-  readonly workflow_state?: string;
-  readonly payment_hash?: string;
-  readonly amount_msats?: number;
-  readonly settled_at?: number;
-}
-
 export interface CreateOpenReceiveCheckoutStateOptions {
-  readonly now?: number;
-  readonly logger?: OpenReceiveBrowserLogger;
-}
-
-export interface ApplyOpenReceiveInvoiceEventOptions {
-  readonly eventName?: string;
   readonly now?: number;
   readonly logger?: OpenReceiveBrowserLogger;
 }
@@ -2717,9 +2668,6 @@ export function createOpenReceiveCheckoutElementAttributes(
   if (snapshot.expires_at !== undefined) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.expiresAt] = String(snapshot.expires_at);
   }
-  if (snapshot.checkout?.events_url !== undefined) {
-    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.eventsUrl] = snapshot.checkout.events_url;
-  }
   if (options.lookupUrl !== undefined) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.lookupUrl] = options.lookupUrl;
   }
@@ -2762,9 +2710,6 @@ export function createOpenReceiveCheckoutElementListeners(
     ...(handlers.onOpenWallet === undefined
       ? {}
       : { [OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.openWallet]: handlers.onOpenWallet }),
-    ...(handlers.onPaymentReceived === undefined
-      ? {}
-      : { [OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.paymentReceived]: handlers.onPaymentReceived }),
     ...(handlers.onState === undefined
       ? {}
       : { [OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.state]: handlers.onState }),
@@ -3016,9 +2961,6 @@ export function createOpenReceiveCheckoutState(
     ...(snapshot.settled_at === undefined
       ? {}
       : { settled_at: snapshot.settled_at }),
-    ...(snapshot.checkout?.events_url === undefined
-      ? {}
-      : { events_url: snapshot.checkout.events_url }),
     ...(snapshot.checkout?.routes_url === undefined
       ? {}
       : { routes_url: snapshot.checkout.routes_url })
@@ -3045,8 +2987,7 @@ export function createOpenReceiveCheckoutSnapshotFromDisplayData(
       : { transaction_state: data.transaction_state }),
     ...(data.workflow_state === undefined ? {} : { workflow_state: data.workflow_state }),
     ...(data.expires_at === undefined ? {} : { expires_at: data.expires_at }),
-    ...(data.settled_at === undefined ? {} : { settled_at: data.settled_at }),
-    ...(data.checkout === undefined ? {} : { checkout: data.checkout })
+    ...(data.settled_at === undefined ? {} : { settled_at: data.settled_at })
   };
 }
 
@@ -3092,9 +3033,6 @@ export function mergeOpenReceiveCheckoutSnapshot(
       ? {}
       : { settled_at: next.settled_at ?? current.settled_at }),
     checkout: {
-      ...((next.checkout?.events_url ?? current.events_url) === undefined
-        ? {}
-        : { events_url: next.checkout?.events_url ?? current.events_url }),
       ...((next.checkout?.routes_url ?? current.routes_url) === undefined
         ? {}
         : { routes_url: next.checkout?.routes_url ?? current.routes_url })
@@ -3155,7 +3093,6 @@ export class OpenReceiveCheckoutWatcher {
   private state: OpenReceiveCheckoutState | undefined;
   private countdownTimer: ReturnType<typeof globalThis.setInterval> | undefined;
   private pollTimer: ReturnType<typeof globalThis.setInterval> | undefined;
-  private events: OpenReceiveCheckoutEventSource | undefined;
   private running = false;
 
   constructor(options: OpenReceiveCheckoutWatcherOptions) {
@@ -3182,7 +3119,6 @@ export class OpenReceiveCheckoutWatcher {
     this.running = false;
     this.stopCountdown();
     this.stopPolling();
-    this.stopEvents();
   }
 
   getState(): OpenReceiveCheckoutState | undefined {
@@ -3249,37 +3185,6 @@ export class OpenReceiveCheckoutWatcher {
       }, 1000);
     }
 
-    if (state.events_url !== undefined && this.events === undefined) {
-      const factory = this.options.eventSourceFactory ?? createDefaultEventSource;
-      if (factory !== undefined) {
-        try {
-          this.events = factory(state.events_url);
-          const applyEvent = (event: MessageEvent) => {
-            const current = this.state;
-            if (current === undefined) return;
-            try {
-              const parsed = parseOpenReceiveInvoiceEvent(String(event.data));
-              this.applyState(applyOpenReceiveInvoiceEvent(current, parsed, {
-                eventName: event.type,
-                now: this.now(),
-                logger: this.options.logger
-              }));
-            } catch (error) {
-              this.options.onError?.(error);
-            }
-          };
-          for (const eventName of OPENRECEIVE_INVOICE_EVENT_TYPES) {
-            this.events.addEventListener(eventName, applyEvent);
-          }
-          this.events.onerror = () => {
-            this.stopEvents();
-          };
-        } catch (error) {
-          this.options.onError?.(error);
-        }
-      }
-    }
-
     if (state.settled || this.options.lookupInvoice === undefined || state.payment_hash === undefined) {
       this.stopPolling();
     } else if (this.pollTimer === undefined) {
@@ -3323,11 +3228,6 @@ export class OpenReceiveCheckoutWatcher {
     if (this.pollTimer === undefined) return;
     this.clearInterval()(this.pollTimer);
     this.pollTimer = undefined;
-  }
-
-  private stopEvents(): void {
-    this.events?.close();
-    this.events = undefined;
   }
 
   private now(): number {
@@ -3477,85 +3377,6 @@ export function createOpenReceiveCheckoutController(
   options: OpenReceiveCheckoutControllerOptions
 ): OpenReceiveCheckoutController {
   return new OpenReceiveBrowserCheckoutController(options);
-}
-
-export function applyOpenReceiveInvoiceEvent(
-  state: OpenReceiveCheckoutState,
-  event: OpenReceiveInvoiceEventPayload,
-  options: ApplyOpenReceiveInvoiceEventOptions = {}
-): OpenReceiveCheckoutState {
-  if (event.invoice_id !== state.invoice_id) {
-    emitBrowserLog(options.logger, "debug", "checkout.event.ignored", "Ignored passive invoice event for a different invoice.", {
-      current_invoice_id: state.invoice_id,
-      event_invoice_id: event.invoice_id,
-      event_name: options.eventName
-    });
-    return state;
-  }
-  if (
-    event.payment_hash !== undefined &&
-    state.payment_hash !== undefined &&
-    event.payment_hash !== state.payment_hash
-  ) {
-    emitBrowserLog(options.logger, "debug", "checkout.event.ignored", "Ignored passive invoice event with a mismatched payment hash.", {
-      ...checkoutLogFields(state),
-      event_name: options.eventName
-    });
-    return state;
-  }
-
-  const nextState = normalizeCheckoutState({
-    ...state,
-    ...(event.payment_hash === undefined
-      ? {}
-      : { payment_hash: event.payment_hash }),
-    ...(event.amount_msats === undefined
-      ? {}
-      : { amount_msats: event.amount_msats }),
-    transaction_state: event.transaction_state ?? state.transaction_state,
-    workflow_state: event.workflow_state ?? state.workflow_state,
-    ...(event.settled_at === undefined
-      ? {}
-      : { settled_at: event.settled_at }),
-    ...(options.eventName === undefined
-      ? {}
-      : { last_event: options.eventName })
-  }, options.now);
-  emitBrowserLog(options.logger, "info", "checkout.event.applied", "Applied passive invoice event to checkout state.", {
-    ...checkoutLogFields(nextState),
-    event_name: options.eventName
-  });
-  return nextState;
-}
-
-export function parseOpenReceiveInvoiceEvent(
-  data: string
-): OpenReceiveInvoiceEventPayload {
-  const parsed = asRecord(JSON.parse(data));
-
-  if (typeof parsed.invoice_id !== "string" || parsed.invoice_id.length === 0) {
-    throw new TypeError("invoice event must include invoice_id");
-  }
-
-  return {
-    invoice_id: parsed.invoice_id,
-    ...(typeof parsed.type === "string" ? { type: parsed.type } : {}),
-    ...(typeof parsed.transaction_state === "string"
-      ? { transaction_state: parsed.transaction_state }
-      : {}),
-    ...(typeof parsed.workflow_state === "string"
-      ? { workflow_state: parsed.workflow_state }
-      : {}),
-    ...(typeof parsed.payment_hash === "string"
-      ? { payment_hash: parsed.payment_hash }
-      : {}),
-    ...(typeof parsed.amount_msats === "number"
-      ? { amount_msats: parsed.amount_msats }
-      : {}),
-    ...(typeof parsed.settled_at === "number"
-      ? { settled_at: parsed.settled_at }
-      : {})
-  };
 }
 
 export async function createQrSvg(
@@ -3745,20 +3566,9 @@ function snapshotFromCheckoutState(
     ...(state.expires_at === undefined ? {} : { expires_at: state.expires_at }),
     ...(state.settled_at === undefined ? {} : { settled_at: state.settled_at }),
     checkout: {
-      ...(state.events_url === undefined ? {} : { events_url: state.events_url }),
       ...(state.routes_url === undefined ? {} : { routes_url: state.routes_url })
     }
   };
-}
-
-function createDefaultEventSource(
-  url: string
-): OpenReceiveCheckoutEventSource {
-  const EventSourceCtor = globalThis.EventSource;
-  if (EventSourceCtor === undefined) {
-    throw new Error("EventSource is unavailable.");
-  }
-  return new EventSourceCtor(url);
 }
 
 function currentUnixSeconds(): number {

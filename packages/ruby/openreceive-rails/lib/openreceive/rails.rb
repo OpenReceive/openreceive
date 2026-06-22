@@ -26,7 +26,7 @@ module OpenReceive
                     :allow_unauthenticated_demo
 
       def initialize
-        @store = OpenReceive::InMemoryInvoiceStore.new
+        @store = OpenReceive::InMemoryInvoiceKvStore.new
         @merchant_scope = "default"
         @production = false
         @allow_unauthenticated_demo = false
@@ -37,7 +37,7 @@ module OpenReceive
         if production && authenticate.nil? && !allow_unauthenticated_demo
           raise SecurityError, "OpenReceive Rails adapter requires authenticate in production"
         end
-        if production && store.is_a?(OpenReceive::InMemoryInvoiceStore)
+        if production && store.is_a?(OpenReceive::InMemoryInvoiceKvStore)
           raise SecurityError, "OpenReceive Rails adapter requires durable invoice storage in production"
         end
         self
@@ -352,8 +352,8 @@ module OpenReceive
 
         if @config.store.respond_to?(:doctor)
           checks.concat(@config.store.doctor)
-        elsif @config.store.is_a?(OpenReceive::InMemoryInvoiceStore)
-          checks << doctor_check("rails.store.durable", "error", "InMemoryInvoiceStore is for tests only; configure OpenReceive::Rails::ActiveRecordInvoiceStore and run bin/rails db:migrate")
+        elsif @config.store.is_a?(OpenReceive::InMemoryInvoiceKvStore)
+          checks << doctor_check("rails.store.durable", "error", "InMemoryInvoiceKvStore is for tests only; configure OpenReceive::Rails::ActiveRecordInvoiceStore and run bin/rails db:migrate")
         else
           checks << doctor_check("rails.store.durable", "error", "invoice store must expose doctor migration diagnostics")
         end
@@ -364,8 +364,6 @@ module OpenReceive
                   else
                     doctor_check("rails.worker.poll", "error", "store does not support recoverable_invoices")
                   end
-        checks << doctor_check("rails.worker.listen", "ok", "listen task can start; polling remains the settlement fallback")
-
         {
           "ok" => checks.none? { |check| check.fetch("status") == "error" },
           "checks" => checks
@@ -418,31 +416,6 @@ module OpenReceive
         @config.store.recoverable_invoices(now: now).map do |row|
           verify_stored_invoice(row)
         end
-      end
-
-      def listen_for_payment_notifications
-        if @config.client.respond_to?(:subscribe_to_payment_received)
-          @config.client.subscribe_to_payment_received do |notification|
-            handle_payment_received(notification: notification)
-          end
-        end
-
-        sleep
-      end
-
-      def handle_payment_received(notification:)
-        data = stringify_keys(notification)
-        payment_hash = data["payment_hash"]
-        raise ArgumentError, "payment_hash is required" if blank?(payment_hash)
-
-        row = @config.store.find_by_payment_hash(payment_hash)
-        raise OpenReceive::InvoiceNotFoundError.new(payment_hash) if row.nil?
-
-        settled = @config.store.mark_settled(
-          invoice_id: row.fetch("invoice_id"),
-          settled_at: data["settled_at"] || Time.now.to_i
-        )
-        run_settlement_action_once(settled)
       end
 
       private

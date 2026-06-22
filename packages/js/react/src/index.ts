@@ -314,8 +314,7 @@ export function useOpenReceiveCheckout(
       options.fiat_quote,
       options.transaction_state,
       options.workflow_state,
-      options.expires_at,
-      options.checkout
+      options.expires_at
     ]
   );
   const [state, setState] = React.useState<OpenReceiveCheckoutState | undefined>(
@@ -1433,7 +1432,6 @@ export function OpenReceiveCheckout(
     transaction_state,
     workflow_state,
     expires_at,
-    checkout,
     qrEncoder,
     logger,
     onError,
@@ -1466,7 +1464,6 @@ export function OpenReceiveCheckout(
     transaction_state,
     workflow_state,
     expires_at,
-    checkout,
     logger,
     onError,
     lookupInvoice,

@@ -5,13 +5,10 @@ import {
   createOpenReceiveFetchHandler,
   createOpenReceiveFetchRuntime,
   createOpenReceiveNodeHandler,
-  createOpenReceiveExpressHandlers,
-  createOpenReceiveExpressSettlementPollingRunner,
-  startOpenReceiveExpressPaymentNotificationRunner,
-  InMemoryInvoiceEventBus
+  createOpenReceiveExpressHandlers
 } from "../../packages/js/express/src/index.ts";
 import {
-  InMemoryInvoiceStore
+  InMemoryInvoiceKvStore
 } from "../../packages/js/core/src/index.ts";
 
 const PAYMENT_HASH = "e".repeat(64);
@@ -77,37 +74,33 @@ class FakeWallet {
 
 function createHarness(overrides = {}) {
   const wallet = new FakeWallet();
-  const store = new InMemoryInvoiceStore();
-  const eventBus = new InMemoryInvoiceEventBus();
+  const store = new InMemoryInvoiceKvStore();
   const handlers = createOpenReceiveExpressHandlers({
     client: wallet,
     store,
-    eventBus,
     merchantScope: () => "demo:hello-fruit",
     unsafeAllowUnauthenticatedDemoMode: true,
     clock: () => 1000,
-    heartbeatSeconds: 1,
+    backgroundSweep: false,
     ...overrides
   });
 
-  return { wallet, store, eventBus, handlers };
+  return { wallet, store, handlers };
 }
 
 function createSecureHarness(overrides = {}) {
   const wallet = new FakeWallet();
-  const store = new InMemoryInvoiceStore();
-  const eventBus = new InMemoryInvoiceEventBus();
+  const store = new InMemoryInvoiceKvStore();
   const handlers = createOpenReceiveExpressHandlers({
     client: wallet,
     store,
-    eventBus,
     merchantScope: () => "demo:hello-fruit",
     clock: () => 1000,
-    heartbeatSeconds: 1,
+    backgroundSweep: false,
     ...overrides
   });
 
-  return { wallet, store, eventBus, handlers };
+  return { wallet, store, handlers };
 }
 
 test("create invoice uses idempotency replay without a second wallet call", async () => {
@@ -142,8 +135,7 @@ test("Fetch bridge dispatches OpenReceive routes for Fetch-style frameworks", as
   const wallet = new FakeWallet();
   const runtime = createOpenReceiveFetchRuntime({
     client: wallet,
-    store: new InMemoryInvoiceStore(),
-    eventBus: new InMemoryInvoiceEventBus(),
+    store: new InMemoryInvoiceKvStore(),
     merchantScope: () => "demo:fetch",
     unsafeAllowUnauthenticatedDemoMode: true,
     clock: () => 1000
@@ -337,7 +329,7 @@ test("create invoice quotes fiat with configured price providers", async () => {
   assert.deepEqual(calls, [["USD"]]);
 });
 
-test("lookup settles invoice and publishes replayable SSE event", async () => {
+test("lookup settles invoice through gated backend refresh", async () => {
   const { wallet, handlers } = createHarness();
   const createRes = createResponse();
   await handlers.createInvoice(
@@ -372,33 +364,14 @@ test("lookup settles invoice and publishes replayable SSE event", async () => {
   assert.equal(lookupRes.body.settlement_action_state, "completed");
   assert.equal(lookupRes.body.settled_at, 1200);
   assert.equal(lookupRes.body.preimage_present, true);
-
-  const eventRes = createResponse();
-  await handlers.invoiceEvents(
-    createRequest({
-      params: {
-        invoice_id: createRes.body.invoice_id
-      }
-    }),
-    eventRes,
-    raiseNext
-  );
-
-  const stream = eventRes.writes.join("");
-  assert.match(stream, /event: invoice\.created/);
-  assert.match(stream, /event: invoice\.verifying/);
-  assert.match(stream, /event: invoice\.settled/);
-  assert.match(stream, /: heartbeat/);
+  assert.equal("events_url" in createRes.body.checkout, false);
 });
 
-test("logger records invoice transitions without secrets or signed event tokens", async () => {
+test("logger records invoice transitions without secrets", async () => {
   const logs = [];
   const { wallet, handlers } = createHarness({
     logger: (entry) => {
       logs.push(entry);
-    },
-    signedEvents: {
-      secret: "s".repeat(32)
     }
   });
   const createRes = createResponse();
@@ -428,47 +401,23 @@ test("logger records invoice transitions without secrets or signed event tokens"
     raiseNext
   );
 
-  const eventUrl = new URL(
-    createRes.body.checkout.events_url,
-    "https://shop.example"
-  );
-  const eventToken = eventUrl.searchParams.get("_or_evt");
-  const eventRes = createResponse();
-  await handlers.invoiceEvents(
-    createRequest({
-      params: {
-        invoice_id: createRes.body.invoice_id
-      },
-      query: {
-        _or_evt: eventToken
-      }
-    }),
-    eventRes,
-    raiseNext
-  );
-
   assert.deepEqual(
     logs.map((entry) => entry.event),
     [
       "invoice.create.requested",
       "invoice.created",
       "invoice.lookup.requested",
-      "invoice.verifying",
       "invoice.settled",
       "invoice.settlement_action_completed",
-      "invoice.events.opened",
-      "invoice.events.closed"
+      "invoice.lookup.result"
     ]
   );
   assert.equal(logs[1].invoice_id, createRes.body.invoice_id);
   assert.equal(logs[1].payment_hash, PAYMENT_HASH);
-  assert.equal(logs[4].transaction_state, "settled");
-  assert.equal(logs[6].replayed_events, 4);
+  assert.equal(logs[3].transaction_state, "settled");
 
   const serializedLogs = JSON.stringify(logs);
   assert.doesNotMatch(serializedLogs, /nostr\+walletconnect:\/\//);
-  assert.doesNotMatch(serializedLogs, /_or_evt=/);
-  assert.doesNotMatch(serializedLogs, /s{32}/);
 });
 
 test("logger redacts wallet errors before emitting unhandled failures", async () => {
@@ -503,104 +452,6 @@ test("logger redacts wallet errors before emitting unhandled failures", async ()
   assert.equal(errorLog.error_message, "wallet rejected [REDACTED_NWC]");
   assert.doesNotMatch(JSON.stringify(logs), /nostr\+walletconnect:\/\//);
   assert.doesNotMatch(JSON.stringify(logs), /a{64}/);
-});
-
-test("signed event URLs authorize one invoice and expire", async () => {
-  let now = 1000;
-  const { handlers, store } = createSecureHarness({
-    clock: () => now,
-    auth: {
-      create: () => true
-    },
-    signedEvents: {
-      secret: "s".repeat(32),
-      ttlSeconds: 60
-    }
-  });
-
-  const createRes = createResponse();
-  await handlers.createInvoice(
-    createRequest({
-      headers: {
-        "idempotency-key": "order-signed-events"
-      },
-      body: {
-        amount_msats: 200000,
-        description: "Fruit sticker"
-      }
-    }),
-    createRes,
-    raiseNext
-  );
-
-  assert.equal(createRes.statusCode, 201);
-  assert.match(createRes.body.checkout.events_url, /_or_evt=/);
-  assert.doesNotMatch(createRes.body.checkout.events_url, /secret|token/i);
-  assert.doesNotMatch(createRes.body.checkout.events_url, /s{32}/);
-
-  const eventUrl = new URL(
-    createRes.body.checkout.events_url,
-    "https://shop.example"
-  );
-  const eventToken = eventUrl.searchParams.get("_or_evt");
-  assert.equal(typeof eventToken, "string");
-
-  const eventRes = createResponse();
-  await handlers.invoiceEvents(
-    createRequest({
-      params: {
-        invoice_id: createRes.body.invoice_id
-      },
-      query: {
-        _or_evt: eventToken
-      }
-    }),
-    eventRes,
-    raiseNext
-  );
-
-  assert.equal(eventRes.statusCode, 200);
-  assert.match(eventRes.writes.join(""), /event: invoice\.created/);
-
-  seedInvoice(store, {
-    invoice_id: "or_inv_other",
-    payment_hash: "f".repeat(64),
-    invoice: "lnbc-other"
-  });
-  const wrongInvoiceRes = createResponse();
-  await handlers.invoiceEvents(
-    createRequest({
-      params: {
-        invoice_id: "or_inv_other"
-      },
-      query: {
-        _or_evt: eventToken
-      }
-    }),
-    wrongInvoiceRes,
-    raiseNext
-  );
-
-  assert.equal(wrongInvoiceRes.statusCode, 403);
-  assert.equal(wrongInvoiceRes.body.message, "Signed event URL is invalid or expired.");
-
-  now = 1061;
-  const expiredRes = createResponse();
-  await handlers.invoiceEvents(
-    createRequest({
-      params: {
-        invoice_id: createRes.body.invoice_id
-      },
-      query: {
-        _or_evt: eventToken
-      }
-    }),
-    expiredRes,
-    raiseNext
-  );
-
-  assert.equal(expiredRes.statusCode, 403);
-  assert.equal(expiredRes.body.message, "Signed event URL is invalid or expired.");
 });
 
 test("lookup can run an idempotent backend settlement action hook after settlement", async () => {
@@ -662,34 +513,22 @@ test("lookup can run an idempotent backend settlement action hook after settleme
 
   assert.equal(secondLookup.body.workflow_state, "settlement_action_completed");
   assert.equal(settlementActionCalls, 1);
-
-  const eventRes = createResponse();
-  await handlers.invoiceEvents(
-    createRequest({
-      params: {
-        invoice_id: createRes.body.invoice_id
-      }
-    }),
-    eventRes,
-    raiseNext
-  );
-  const stream = eventRes.writes.join("");
-  assert.match(stream, /event: invoice\.settled/);
-  assert.match(stream, /event: invoice\.settlement_action_completed/);
 });
 
-test("Express polling runner recovers invoices without an HTTP request", async () => {
+test("protected poll route recovers invoices without browser polling", async () => {
   let settlementActionCalls = 0;
   const settlementSources = [];
   const wallet = new FakeWallet();
-  const store = new InMemoryInvoiceStore();
-  const eventBus = new InMemoryInvoiceEventBus();
+  const store = new InMemoryInvoiceKvStore();
   const options = {
     client: wallet,
     store,
-    eventBus,
     merchantScope: () => "demo:hello-fruit",
-    unsafeAllowUnauthenticatedDemoMode: true,
+    auth: {
+      create: () => true
+    },
+    cronSecret: "poll-secret",
+    backgroundSweep: false,
     clock: () => 1600,
     settlementAction: async ({ invoice, source, req }) => {
       settlementActionCalls += 1;
@@ -699,13 +538,13 @@ test("Express polling runner recovers invoices without an HTTP request", async (
     }
   };
   const handlers = createOpenReceiveExpressHandlers(options);
-  const runner = createOpenReceiveExpressSettlementPollingRunner(options);
 
   const createRes = createResponse();
   await handlers.createInvoice(
     createRequest({
       headers: {
-        "idempotency-key": "order-runner"
+        "idempotency-key": "order-runner",
+        authorization: "Bearer poll-secret"
       },
       body: {
         amount_msats: 200000,
@@ -717,125 +556,24 @@ test("Express polling runner recovers invoices without an HTTP request", async (
   );
 
   wallet.lookupState = "settled";
-  const result = await runner.pollInvoice(createRes.body.invoice_id);
-
-  assert.equal(result.outcome, "settled");
-  assert.equal(settlementActionCalls, 1);
-  assert.deepEqual(settlementSources, ["polling_runner"]);
-  assert.equal(store.getInvoice(createRes.body.invoice_id).workflow_state, "settlement_action_completed");
-
-  const eventRes = createResponse();
-  await handlers.invoiceEvents(
-    createRequest({
-      params: {
-        invoice_id: createRes.body.invoice_id
-      }
-    }),
-    eventRes,
-    raiseNext
-  );
-  const stream = eventRes.writes.join("");
-  assert.match(stream, /event: invoice\.verifying/);
-  assert.match(stream, /event: invoice\.settled/);
-  assert.match(stream, /event: invoice\.settlement_action_completed/);
-});
-
-test("Express notification runner trusts payment_received settlement events", async () => {
-  let settlementActionCalls = 0;
-  const settlementSources = [];
-  const logs = [];
-  const wallet = new FakeWallet();
-  const store = new InMemoryInvoiceStore();
-  const eventBus = new InMemoryInvoiceEventBus();
-  const options = {
-    client: wallet,
-    store,
-    eventBus,
-    merchantScope: () => "demo:hello-fruit",
-    unsafeAllowUnauthenticatedDemoMode: true,
-    clock: () => 1300,
-    logger: (entry) => {
-      logs.push(entry);
-    },
-    settlementAction: async ({ invoice, source, req }) => {
-      settlementActionCalls += 1;
-      settlementSources.push(source);
-      assert.equal(req, undefined);
-      assert.equal(invoice.transaction_state, "settled");
-    }
-  };
-  const handlers = createOpenReceiveExpressHandlers(options);
-
-  const createRes = createResponse();
-  await handlers.createInvoice(
+  const pollRes = createResponse();
+  await handlers.poll(
     createRequest({
       headers: {
-        "idempotency-key": "order-notification-runner"
-      },
-      body: {
-        amount_msats: 200000,
-        description: "Fruit sticker"
+        authorization: "Bearer poll-secret"
       }
     }),
-    createRes,
+    pollRes,
     raiseNext
   );
+  const stored = (await store.get(createRes.body.invoice_id)).row;
 
-  const listener = await startOpenReceiveExpressPaymentNotificationRunner(options);
-  await wallet.emitPaymentReceived({
-    payment_hash: PAYMENT_HASH,
-    settled_at: 1300
-  });
-
-  assert.equal(wallet.lookupInvoiceCalls, 0);
+  assert.equal(pollRes.statusCode, 200);
+  assert.deepEqual(pollRes.body.invoice_ids, [createRes.body.invoice_id]);
+  assert.equal(pollRes.body.checked, 1);
   assert.equal(settlementActionCalls, 1);
-  assert.deepEqual(settlementSources, ["notification_runner"]);
-  assert.equal(store.getInvoice(createRes.body.invoice_id).workflow_state, "settlement_action_completed");
-
-  const eventRes = createResponse();
-  await handlers.invoiceEvents(
-    createRequest({
-      params: {
-        invoice_id: createRes.body.invoice_id
-      }
-    }),
-    eventRes,
-    raiseNext
-  );
-  const stream = eventRes.writes.join("");
-  assert.match(stream, /event: invoice\.verifying/);
-  assert.match(stream, /event: invoice\.settled/);
-  assert.match(stream, /event: invoice\.settlement_action_completed/);
-
-  await listener.stop();
-  assert.equal(logs.some((entry) => entry.event === "notification.listener.starting"), true);
-  assert.equal(logs.some((entry) => entry.event === "notification.listener.started"), true);
-  assert.equal(logs.some((entry) => entry.event === "notification.listener.stopped"), true);
-});
-
-test("Express notification runner idles when a notification stream is unavailable", async () => {
-  const logs = [];
-  const listener = await startOpenReceiveExpressPaymentNotificationRunner({
-    client: {
-      async makeInvoice() {
-        throw new Error("not needed");
-      },
-      async lookupInvoice() {
-        throw new Error("not needed");
-      }
-    },
-    store: new InMemoryInvoiceStore(),
-    eventBus: new InMemoryInvoiceEventBus(),
-    merchantScope: () => "demo:hello-fruit",
-    logger: (entry) => {
-      logs.push(entry);
-    }
-  });
-
-  assert.equal(listener.seenPaymentHashes.size, 0);
-  assert.equal(logs.some((entry) => entry.event === "notification.listener.idle"), true);
-  await listener.stop();
-  assert.equal(logs.some((entry) => entry.event === "notification.listener.stopped"), true);
+  assert.deepEqual(settlementSources, ["poll"]);
+  assert.equal(stored.workflow_state, "settlement_action_completed");
 });
 
 test("client-supplied settlement fields cannot trigger settlement action", async () => {
@@ -876,7 +614,7 @@ test("client-supplied settlement fields cannot trigger settlement action", async
     raiseNext
   );
 
-  const stored = store.getInvoice(createRes.body.invoice_id);
+  const stored = (await store.get(createRes.body.invoice_id)).row;
   assert.equal(lookupRes.statusCode, 200);
   assert.equal(lookupRes.body.transaction_state, "pending");
   // A lookup is the server verifying via lookup_invoice, so the workflow moves
@@ -1167,8 +905,8 @@ test("refresh invoice creates a linked replacement and replays idempotently", as
   assert.equal(second.body.new_invoice_id, first.body.new_invoice_id);
   assert.equal(wallet.makeInvoiceCalls, 1);
 
-  const storedOld = store.getInvoice(oldInvoice.invoice_id);
-  const storedNew = store.getInvoice(first.body.new_invoice_id);
+  const storedOld = (await store.get(oldInvoice.invoice_id)).row;
+  const storedNew = (await store.get(first.body.new_invoice_id)).row;
   assert.equal(storedOld.transaction_state, "expired");
   assert.equal(storedOld.workflow_state, "expired_closed");
   assert.equal(storedNew.operation, "invoice.refresh");
@@ -1298,20 +1036,6 @@ test("secure Express handlers fail closed when auth hooks are missing", async ()
   assert.equal(readRes.statusCode, 401);
   assert.equal(readRes.body.message, "OpenReceive read authorization hook is required.");
 
-  const eventsRes = createResponse();
-  await handlers.invoiceEvents(
-    createRequest({
-      params: {
-        invoice_id: "or_inv_seed"
-      }
-    }),
-    eventsRes,
-    raiseNext
-  );
-
-  assert.equal(eventsRes.statusCode, 401);
-  assert.equal(eventsRes.body.message, "OpenReceive events authorization hook is required.");
-
   const refreshRes = createResponse();
   await handlers.refreshInvoice(
     createRequest({
@@ -1342,36 +1066,28 @@ test("Express refuses in-memory invoice storage in production mode", async () =>
   try {
     const options = {
       client: new FakeWallet(),
-      store: new InMemoryInvoiceStore(),
-      eventBus: new InMemoryInvoiceEventBus(),
+      store: new InMemoryInvoiceKvStore(),
       merchantScope: () => "demo:hello-fruit",
       auth: {
         create: () => true,
         read: () => true,
         lookup: () => true,
         refresh: () => true,
-        events: () => true
-      }
+        poll: () => true
+      },
+      backgroundSweep: false
     };
 
     assert.throws(
       () => createOpenReceiveExpressHandlers(options),
-      /refuses to use InMemoryInvoiceStore/
-    );
-    assert.throws(
-      () => createOpenReceiveExpressSettlementPollingRunner(options),
-      /refuses to use InMemoryInvoiceStore/
-    );
-    await assert.rejects(
-      () => startOpenReceiveExpressPaymentNotificationRunner(options),
-      /refuses to use InMemoryInvoiceStore/
+      /refuses to use InMemoryInvoiceKvStore/
     );
     assert.throws(
       () => createOpenReceiveExpressHandlers({
         ...options,
         store: undefined
       }),
-      /refuses to use InMemoryInvoiceStore/
+      /refuses to use InMemoryInvoiceKvStore/
     );
   } finally {
     restoreEnvVar("NODE_ENV", originalNodeEnv);
@@ -1412,7 +1128,6 @@ test("secure Express handlers reject cross-session invoice access", async () => 
     auth: {
       read: ownsInvoice,
       lookup: ownsInvoice,
-      events: ownsInvoice,
       refresh: ownsInvoice
     }
   });
@@ -1456,24 +1171,6 @@ test("secure Express handlers reject cross-session invoice access", async () => 
   assert.equal(lookupRes.statusCode, 403);
   assert.equal(lookupRes.body.message, "OpenReceive request is not authorized.");
   assert.equal(wallet.lookupInvoiceCalls, 0);
-
-  const eventsRes = createResponse();
-  await handlers.invoiceEvents(
-    createRequest({
-      params: {
-        invoice_id: "or_inv_seed"
-      },
-      user: {
-        id: "bob"
-      }
-    }),
-    eventsRes,
-    raiseNext
-  );
-
-  assert.equal(eventsRes.statusCode, 403);
-  assert.equal(eventsRes.body.message, "OpenReceive request is not authorized.");
-  assert.deepEqual(eventsRes.writes, []);
 
   const refreshRes = createResponse();
   await handlers.refreshInvoice(
@@ -1545,7 +1242,7 @@ function seedInvoice(store, overrides = {}) {
     metadata: {},
     ...overrides
   };
-  store.createInvoice(row);
+  store.putIfAbsent({ rev: 0, row });
   return row;
 }
 

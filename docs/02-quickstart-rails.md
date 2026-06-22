@@ -8,11 +8,11 @@ https://openreceive.org/get_a_nwc_code_to_receive_payments
 OpenReceive now has an initial Rails adapter helper package at
 `packages/ruby/openreceive-rails`. It can wrap an injected receive-only client
 for idempotent invoice creation, authorized lookup, backend settlement
-verification, polling-worker verification, passive notification handling, and
+verification, poll recovery, and
 duplicate-safe settlement action tracking. It also includes a package-owned
 ActiveRecord invoice store, initial migration and model templates for the
-invoice storage shape, controller, job, channel, route, install-generator
-templates, generated poll/listen/doctor rake tasks, an invoice Hotwire partial,
+invoice storage shape, controller, poll job, route, install-generator
+templates, generated poll/doctor rake tasks, an invoice Hotwire partial,
 production fail-closed checks for in-memory storage, and optional mounted engine
 routes with `503 WALLET_UNAVAILABLE` handling for an injected unavailable-wallet client.
 Complete Rails demo smoke is still pending.
@@ -45,24 +45,20 @@ docs/01-quickstart-node.md
 ## Planned Shape
 
 A Rails integration mounts OpenReceive inside your app. Rails keeps
-using the app's existing authentication, order/session lookup, database,
-settlement actions, and worker deployment. The Rails package provides the
-backend entry points the app deploys:
+using the app's existing authentication, order/session lookup, and settlement
+actions. The Rails package provides the backend entry points the app deploys:
 
-- `bin/rails openreceive:poll` or a generated recurring job for settlement
-  polling and restart recovery
-- `bin/rails openreceive:listen` or a generated long-running job for
-  payment_received notifications
+- `bin/rails openreceive:poll` or a generated recurring job for one-shot
+  settlement recovery
 - `bin/rails openreceive:doctor` to check storage, migration, NWC preflight,
-  and worker readiness. The doctor task fails if the app is still using the
+  and poll readiness. The doctor task fails if the app is still using the
   Ruby in-memory test store or a store without migration diagnostics.
 
-Deploy those as backend worker processes or worker roles next to the Rails web
-process. Run both poll and listen; polling remains the fallback when
-notifications do not arrive. The Rails package generates and owns the
-OpenReceive invoice tables and ActiveRecord model. Your Rails app provides
-order/user references in metadata and app-owned hooks such as
-`settlement_action`.
+Run poll from a scheduler or framework job when you want extra recovery beyond
+route-triggered lookup. The Rails storage surface is still initial proof work
+and will need full KV alignment before it becomes a primary supported path. Your
+Rails app provides order/user references in metadata and app-owned hooks such
+as `settlement_action`.
 
 Expected Rails pieces:
 
@@ -70,10 +66,9 @@ Expected Rails pieces:
 - Rails adapter helpers from `openreceive-rails`
 - Rails engine or route helpers mounted under `/openreceive/v1`
 - server-side receive-only NWC configuration
-- package-owned ActiveRecord invoice storage using the provided templates
-- ActiveJob, Solid Queue, Sidekiq, or GoodJob polling and notification workers
-- ActionCable, Turbo Streams, or Hotwire updates for browser state using the
-  provided channel/job templates as the starting point
+- package-owned storage using the current initial Rails proof templates
+- ActiveJob, Solid Queue, Sidekiq, or GoodJob one-shot poll jobs
+- Turbo Streams or Hotwire updates for display-safe browser state
 - idempotent settlement action hooks after backend settlement verification
 
 ## Security Boundary
@@ -83,7 +78,7 @@ import maps, bundled JavaScript, and mobile clients only receive display-safe
 invoice data.
 
 The browser receives only display-safe invoice data: BOLT11 invoice text,
-Lightning URI, amount, status, and authorized event or lookup URLs. Settlement
+Lightning URI, amount, status, and authorized lookup URLs. Settlement
 is confirmed by the Rails backend through `lookup_invoice`.
 
 ## Conformance

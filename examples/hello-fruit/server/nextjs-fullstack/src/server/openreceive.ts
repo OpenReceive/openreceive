@@ -23,7 +23,7 @@ import {
   createHelloFruitOpenReceiveLogger
 } from "../../../../shared/demo-logging.ts";
 import {
-  createHelloFruitOpenReceiveInvoiceStore
+  createHelloFruitOpenReceiveKvStore
 } from "../../../../shared/openreceive-store.ts";
 import {
   readHelloFruitCatalogCurrencies
@@ -131,7 +131,7 @@ function getRuntime(connectionString: string): NextDemoRuntime {
 export function createHelloFruitOpenReceiveOptions(
   connectionString = readRequiredHelloFruitNwcConnectionString()
 ): OpenReceiveExpressOptions {
-  const store = createHelloFruitOpenReceiveInvoiceStore({
+  const store = createHelloFruitOpenReceiveKvStore({
     demoId: DEMO_ID
   });
   const client = createAlbyNwcReceiveClient({

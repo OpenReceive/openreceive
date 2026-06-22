@@ -17,24 +17,20 @@ docs/01-quickstart-node.md
 ## Planned Shape
 
 A Python integration installs into your existing server app. The app
-keeps its existing auth, order lookup, settlement actions, and worker runtime.
-The OpenReceive package would provide a poll command/task for settlement
-polling and restart recovery plus a listen command/task for
-`payment_received` notifications. Deploy those commands as backend worker
-processes next to the web process. Run both; polling remains the fallback when
-notifications do not arrive.
-The Python package would ship the OpenReceive persistence model and migration
-path for the target framework or ORM. The app supplies metadata references and
-settlement hooks while OpenReceive handles its invoice/idempotency rows.
+keeps its existing auth, order lookup, and settlement actions. The OpenReceive
+package would mount routes, provide package-owned KV persistence selected by
+`OPENRECEIVE_STORE`, and expose an optional one-shot poll command for platform
+schedulers. There is no listener or required worker process.
+The app supplies metadata references and settlement hooks while OpenReceive
+handles its invoice/idempotency rows.
 
 Expected Python pieces:
 
 - FastAPI or Django route handlers under `/openreceive/v1`
 - server-side receive-only NWC configuration
-- package-owned database-backed invoice and idempotency storage
-- Celery, RQ, Dramatiq, APScheduler, or framework-native polling and
-  notification workers
-- SSE, WebSocket, HTMX, or template-driven checkout updates
+- package-owned KV invoice and idempotency storage
+- APScheduler, cron, or platform scheduled one-shot poll support
+- template, HTMX, or API-driven checkout updates backed by lookup polling
 - idempotent settlement actions after backend wallet lookup proves settlement
 
 ## Security Boundary

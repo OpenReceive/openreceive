@@ -445,7 +445,7 @@ module OpenReceive
     end
   end
 
-  class InMemoryInvoiceStore
+  class InMemoryInvoiceKvStore
     TRANSACTION_STATES = %w[pending settled expired failed accepted].freeze
     WORKFLOW_STATES = %w[
       draft

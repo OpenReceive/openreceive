@@ -9,7 +9,6 @@ import {
   OPENRECEIVE_COUNTRY_MAP_WIDTH,
   OPENRECEIVE_COPY_FEEDBACK_MS,
   OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS,
-  OPENRECEIVE_INVOICE_EVENT_TYPES,
   OPENRECEIVE_PROVIDER_PREVIEW_LIMIT,
   applyOpenReceiveCheckoutThemeAttributes,
   applyOpenReceiveThemeAttributes,
@@ -242,13 +241,6 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   assert.equal(OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS, 3000);
   assert.equal(OPENRECEIVE_COPY_FEEDBACK_MS, 1800);
   assert.equal(OPENRECEIVE_PROVIDER_PREVIEW_LIMIT, 4);
-  assert.deepEqual([...OPENRECEIVE_INVOICE_EVENT_TYPES], [
-    "invoice.verifying",
-    "invoice.settled",
-    "invoice.expired",
-    "invoice.failed",
-    "invoice.settlement_action_completed"
-  ]);
   assert.equal(openReceiveCheckoutLabels.copyInvoice, "Copy invoice");
   assert.equal(getOpenReceivePaymentStatusText("settled").title, "Payment received");
   assert.equal(getOpenReceiveWizardEmptyMessage("bitcoin"), "Choose Bitcoin Lightning.");

@@ -30,9 +30,6 @@ test("elements render display-safe checkout HTML", () => {
     transaction_state: "pending",
     workflow_state: "invoice_created",
     expires_at: Math.floor(Date.now() / 1000) + 600,
-    checkout: {
-      events_url: "/openreceive/v1/invoices/or_inv_test/events"
-    },
     theme: "dark"
   });
 

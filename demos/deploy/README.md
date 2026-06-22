@@ -39,10 +39,10 @@ Keep runtime secrets on the host, for example:
 ```
 
 Those files must be mode `600` and must not be committed. Demo stack compose
-files load secrets through `env_file`; demo images never bake them in. The
-demo web service and `openreceive-worker` service load the same server-side env
-file so invoices, polling, and notifications share the app's durable database
-configuration.
+files load secrets through `env_file`; demo images never bake them in. Each
+demo has one web service that mounts OpenReceive routes, uses package-owned
+durable storage, and exposes the protected one-shot poll route for scheduled
+reconciliation. No demo deploys an OpenReceive worker or notification listener.
 
 Validate public templates locally:
 

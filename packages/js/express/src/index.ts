@@ -1,37 +1,31 @@
-import {
-  createHmac,
-  timingSafeEqual
-} from "node:crypto";
 import type {
   IncomingMessage,
   ServerResponse
 } from "node:http";
 import {
-  InMemoryInvoiceStore,
+  InMemoryInvoiceKvStore,
   InvoiceNotFoundError,
   StaticPriceProvider,
   createIdempotencyRequestHash,
-  createOpenReceiveSettlementPollingRunner,
-  formatOpenReceiveMissingNwcMessage,
+  gatedLookup,
   getBtcFiatRatesWithFallback,
+  getIdempotentRecord,
+  maybeSweep,
+  putCreatedInvoiceRecord,
   quoteFiatToMsatsWithPrice,
+  reconcileOnce,
   type InvoiceStorageRow,
   type OpenReceiveBtcFiatRateMapWithSource,
   type OpenReceiveFiatAmount,
   type OpenReceiveIdempotencyScope,
-  type OpenReceiveInvoiceStore,
+  type OpenReceiveInvoiceKvStore,
   type OpenReceiveRateQuote,
   type OpenReceiveErrorCode,
   type OpenReceiveReceiveNwcClient,
-  type OpenReceiveSettlementPollingRunner,
-  type OpenReceiveSettlementPollingRunnerEvent,
-  type OpenReceiveSettlementPollingRunnerOptions,
-  type OpenReceiveSourcedPriceProvider
+  type OpenReceiveReconcileEvent,
+  type OpenReceiveSourcedPriceProvider,
+  type StoredRecord
 } from "@openreceive/core";
-import {
-  startPaymentNotificationListener,
-  type PaymentNotificationListener
-} from "@openreceive/node";
 import {
   getAssets,
   getCountries,
@@ -43,6 +37,7 @@ import {
   getProviders,
   type ProviderFilter
 } from "@openreceive/provider-data";
+import { formatOpenReceiveMissingNwcMessage } from "@openreceive/core";
 
 export interface ExpressLikeApp {
   get(path: string, ...handlers: ExpressLikeHandler[]): unknown;
@@ -57,7 +52,6 @@ export interface ExpressLikeRequest {
   headers?: Record<string, string | string[] | undefined>;
   body?: unknown;
   get?: (header: string) => string | undefined;
-  on?: (event: "close", listener: () => void) => unknown;
   user?: unknown;
 }
 
@@ -90,6 +84,7 @@ export type OpenReceiveLogger = (entry: OpenReceiveLogEntry) => void;
 
 export interface OpenReceiveExpressAuthorization {
   create?: (req: ExpressLikeRequest) => Promise<boolean> | boolean;
+  poll?: (req: ExpressLikeRequest) => Promise<boolean> | boolean;
   read?: (
     req: ExpressLikeRequest,
     invoice: InvoiceStorageRow
@@ -99,10 +94,6 @@ export interface OpenReceiveExpressAuthorization {
     invoice: InvoiceStorageRow
   ) => Promise<boolean> | boolean;
   refresh?: (
-    req: ExpressLikeRequest,
-    invoice: InvoiceStorageRow
-  ) => Promise<boolean> | boolean;
-  events?: (
     req: ExpressLikeRequest,
     invoice: InvoiceStorageRow
   ) => Promise<boolean> | boolean;
@@ -117,17 +108,11 @@ export interface OpenReceiveExpressCors {
   credentials?: boolean;
 }
 
-export interface OpenReceiveExpressSignedEvents {
-  secret: string | Uint8Array;
-  ttlSeconds?: number;
-  queryParam?: string;
-}
-
 export interface OpenReceiveExpressSettlementActionInput {
   req?: ExpressLikeRequest;
   invoice: InvoiceStorageRow;
   metadata: Record<string, unknown>;
-  source: "http_lookup" | "polling_runner" | "notification_runner";
+  source: "http_lookup" | "poll";
   lookup_invoice?: unknown;
 }
 
@@ -137,25 +122,25 @@ export type OpenReceiveExpressSettlementActionHook = (
 
 export interface OpenReceiveExpressOptions {
   client: OpenReceiveReceiveNwcClient;
-  store?: OpenReceiveInvoiceStore;
-  eventBus?: InMemoryInvoiceEventBus;
+  store?: OpenReceiveInvoiceKvStore;
   basePath?: string;
   merchantScope: (req: ExpressLikeRequest) => string;
   auth?: OpenReceiveExpressAuthorization;
   csrf?: OpenReceiveExpressCsrf;
   cors?: OpenReceiveExpressCors;
-  signedEvents?: OpenReceiveExpressSignedEvents;
+  cronSecret?: string;
   settlementAction?: OpenReceiveExpressSettlementActionHook;
   priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
   priceCurrencies?: readonly string[];
   unsafeAllowUnauthenticatedDemoMode?: boolean;
   logger?: OpenReceiveLogger;
   clock?: () => number;
-  heartbeatSeconds?: number;
-}
-
-export interface OpenReceiveExpressPollingRunnerStartOptions {
-  recoveryIntervalSeconds?: number;
+  lookupBurst?: number;
+  lookupRatePerSecond?: number;
+  actionLeaseTtlSeconds?: number;
+  sweepIntervalSeconds?: number;
+  sweepBatch?: number;
+  backgroundSweep?: boolean;
 }
 
 export interface OpenReceiveExpressHandlers {
@@ -163,7 +148,7 @@ export interface OpenReceiveExpressHandlers {
   getInvoice: ExpressLikeHandler;
   lookupInvoice: ExpressLikeHandler;
   refreshInvoice: ExpressLikeHandler;
-  invoiceEvents: ExpressLikeHandler;
+  poll: ExpressLikeHandler;
   listRates: ExpressLikeHandler;
   quoteRates: ExpressLikeHandler;
   listRoutes: ExpressLikeHandler;
@@ -173,8 +158,7 @@ export interface OpenReceiveExpressHandlers {
 }
 
 export interface OpenReceiveFetchRuntime {
-  readonly store: OpenReceiveInvoiceStore;
-  readonly eventBus: InMemoryInvoiceEventBus;
+  readonly store: OpenReceiveInvoiceKvStore;
   readonly handlers: OpenReceiveExpressHandlers;
 }
 
@@ -227,80 +211,8 @@ export interface CreateOpenReceiveNodeHandlerOptions
 }
 
 const DEFAULT_BASE_PATH = "/openreceive/v1";
-const DEFAULT_HEARTBEAT_SECONDS = 20;
-const DEFAULT_SIGNED_EVENT_TTL_SECONDS = 300;
-const DEFAULT_SIGNED_EVENT_QUERY_PARAM = "_or_evt";
 const DEFAULT_NO_WALLET_MESSAGE = formatOpenReceiveMissingNwcMessage();
 const HEX_64 = /^[0-9a-fA-F]{64}$/;
-
-export type OpenReceiveInvoiceEventName =
-  | "invoice.created"
-  | "invoice.verifying"
-  | "invoice.settled"
-  | "invoice.expired"
-  | "invoice.failed"
-  | "invoice.settlement_action_completed"
-  | "invoice.cancelled";
-
-export interface OpenReceiveInvoiceEvent {
-  id: number;
-  invoice_id: string;
-  event: OpenReceiveInvoiceEventName;
-  data: Record<string, unknown>;
-}
-
-export class InMemoryInvoiceEventBus {
-  #events = new Map<string, OpenReceiveInvoiceEvent[]>();
-  #subscribers = new Map<
-    string,
-    Set<(event: OpenReceiveInvoiceEvent) => void>
-  >();
-
-  publish(
-    invoiceId: string,
-    event: OpenReceiveInvoiceEventName,
-    data: Record<string, unknown>
-  ): OpenReceiveInvoiceEvent {
-    const invoiceEvents = this.#events.get(invoiceId) ?? [];
-    const nextEvent: OpenReceiveInvoiceEvent = {
-      id: invoiceEvents.length + 1,
-      invoice_id: invoiceId,
-      event,
-      data
-    };
-
-    invoiceEvents.push(nextEvent);
-    this.#events.set(invoiceId, invoiceEvents);
-
-    for (const subscriber of this.#subscribers.get(invoiceId) ?? []) {
-      subscriber(nextEvent);
-    }
-
-    return nextEvent;
-  }
-
-  replay(invoiceId: string, afterEventId = 0): OpenReceiveInvoiceEvent[] {
-    return (this.#events.get(invoiceId) ?? []).filter(
-      (event) => event.id > afterEventId
-    );
-  }
-
-  subscribe(
-    invoiceId: string,
-    subscriber: (event: OpenReceiveInvoiceEvent) => void
-  ): () => void {
-    const subscribers = this.#subscribers.get(invoiceId) ?? new Set();
-    subscribers.add(subscriber);
-    this.#subscribers.set(invoiceId, subscribers);
-
-    return () => {
-      subscribers.delete(subscriber);
-      if (subscribers.size === 0) {
-        this.#subscribers.delete(invoiceId);
-      }
-    };
-  }
-}
 
 export function mountOpenReceiveExpressRoutes(
   app: ExpressLikeApp,
@@ -313,7 +225,8 @@ export function mountOpenReceiveExpressRoutes(
   app.get(`${basePath}/invoices/:invoice_id`, handlers.getInvoice);
   app.post(`${basePath}/invoices/lookup`, handlers.lookupInvoice);
   app.post(`${basePath}/invoices/:invoice_id/refresh`, handlers.refreshInvoice);
-  app.get(`${basePath}/invoices/:invoice_id/events`, handlers.invoiceEvents);
+  app.post(`${basePath}/poll`, handlers.poll);
+  app.get(`${basePath}/poll`, handlers.poll);
   app.get(`${basePath}/rates`, handlers.listRates);
   app.post(`${basePath}/rates/quote`, handlers.quoteRates);
   app.get(`${basePath}/routes`, handlers.listRoutes);
@@ -327,16 +240,13 @@ export function mountOpenReceiveExpressRoutes(
 export function createOpenReceiveFetchRuntime(
   options: OpenReceiveExpressOptions
 ): OpenReceiveFetchRuntime {
-  const store = options.store ?? new InMemoryInvoiceStore();
-  const eventBus = options.eventBus ?? new InMemoryInvoiceEventBus();
+  const store = options.store ?? new InMemoryInvoiceKvStore();
 
   return {
     store,
-    eventBus,
     handlers: createOpenReceiveExpressHandlers({
       ...options,
-      store,
-      eventBus
+      store
     })
   };
 }
@@ -391,14 +301,6 @@ export async function dispatchOpenReceiveFetchRoute(
   const match = matchOpenReceiveHttpRoute(options.request.method, options.path);
   if (match === undefined) return createOpenReceiveFetchRouteNotFoundResponse();
 
-  if (match.name === "invoiceEvents") {
-    return createOpenReceiveFetchInvoiceEventsResponse({
-      runtime: options.runtime,
-      request: options.request,
-      invoiceId: requireOpenReceiveRouteParam(match, "invoice_id")
-    });
-  }
-
   return dispatchOpenReceiveFetchHandler({
     runtime: options.runtime,
     request: options.request,
@@ -442,6 +344,12 @@ export function matchOpenReceiveHttpRoute(
     if (normalizedMethod === "POST" && segments[0] === "invoices") {
       return { name: "createInvoice" };
     }
+    if (
+      (normalizedMethod === "POST" || normalizedMethod === "GET") &&
+      segments[0] === "poll"
+    ) {
+      return { name: "poll" };
+    }
   }
 
   if (segments.length === 2) {
@@ -469,23 +377,18 @@ export function matchOpenReceiveHttpRoute(
     }
   }
 
-  if (segments.length === 3 && segments[0] === "invoices") {
-    if (normalizedMethod === "POST" && segments[2] === "refresh") {
-      return {
-        name: "refreshInvoice",
-        params: {
-          invoice_id: segments[1]
-        }
-      };
-    }
-    if (normalizedMethod === "GET" && segments[2] === "events") {
-      return {
-        name: "invoiceEvents",
-        params: {
-          invoice_id: segments[1]
-        }
-      };
-    }
+  if (
+    segments.length === 3 &&
+    normalizedMethod === "POST" &&
+    segments[0] === "invoices" &&
+    segments[2] === "refresh"
+  ) {
+    return {
+      name: "refreshInvoice",
+      params: {
+        invoice_id: segments[1]
+      }
+    };
   }
 
   return undefined;
@@ -510,28 +413,6 @@ export async function dispatchOpenReceiveFetchHandler(
   return res.toResponse();
 }
 
-export async function createOpenReceiveFetchInvoiceEventsResponse(input: {
-  readonly runtime: OpenReceiveFetchRuntime;
-  readonly request: Request;
-  readonly invoiceId: string;
-  readonly heartbeatMs?: number;
-}): Promise<Response> {
-  const invoice = await input.runtime.store.getInvoice(input.invoiceId);
-  if (invoice === undefined) {
-    return openReceiveFetchJsonResponse({
-      code: "NOT_FOUND",
-      message: `Invoice not found: ${input.invoiceId}`
-    }, 404);
-  }
-
-  return createOpenReceiveFetchEventStreamResponse({
-    invoice,
-    eventBus: input.runtime.eventBus,
-    request: input.request,
-    heartbeatMs: input.heartbeatMs ?? DEFAULT_HEARTBEAT_SECONDS * 1000
-  });
-}
-
 export function createOpenReceiveFetchNoWalletResponse(
   name: keyof OpenReceiveExpressHandlers,
   options: OpenReceiveFetchNoWalletOptions = {}
@@ -550,7 +431,7 @@ export function createOpenReceiveFetchNoWalletResponse(
     return openReceiveFetchJsonResponse({
       base_path: basePath,
       wallet_configured: false,
-      transports: ["sse"],
+      settlement: "poll_only",
       methods: ["make_invoice", "lookup_invoice"]
     });
   }
@@ -600,170 +481,25 @@ export function createOpenReceiveFetchPath(
     .map((segment) => decodeURIComponent(segment));
 }
 
-export function createOpenReceiveExpressSettlementPollingRunner(
-  options: OpenReceiveExpressOptions,
-  runnerOptions: OpenReceiveExpressPollingRunnerStartOptions = {}
-): OpenReceiveSettlementPollingRunner {
-  assertDurableStoreConfiguration(options);
-  const store = options.store ?? new InMemoryInvoiceStore();
-  const eventBus = options.eventBus ?? new InMemoryInvoiceEventBus();
-  const clock = options.clock ?? currentUnixSeconds;
-  const runnerConfig: OpenReceiveSettlementPollingRunnerOptions = {
-    client: options.client,
-    store,
-    settlementAction: async ({ invoice, lookup_invoice }) => {
-      await runExpressSettlementAction({
-        options,
-        invoice,
-        lookupInvoice: lookup_invoice,
-        source: "polling_runner"
-      });
-    },
-    onEvent: async (event) => {
-      publishPollingRunnerEvent({
-        options,
-        eventBus,
-        event
-      });
-    },
-    clock: {
-      now: clock,
-      async sleep_until(timestampSeconds: number) {
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, Math.max(0, timestampSeconds - clock()) * 1000);
-        });
-      }
-    }
-  };
-
-  if (runnerOptions.recoveryIntervalSeconds !== undefined) {
-    runnerConfig.recovery_interval_seconds = runnerOptions.recoveryIntervalSeconds;
-  }
-
-  return createOpenReceiveSettlementPollingRunner(runnerConfig);
-}
-
-export function startOpenReceiveExpressSettlementPollingRunner(
-  options: OpenReceiveExpressOptions,
-  runnerOptions: OpenReceiveExpressPollingRunnerStartOptions = {}
-): OpenReceiveSettlementPollingRunner {
-  const runner = createOpenReceiveExpressSettlementPollingRunner(options, runnerOptions);
-  runner.start();
-  return runner;
-}
-
-export async function startOpenReceiveExpressPaymentNotificationRunner(
-  options: OpenReceiveExpressOptions
-): Promise<PaymentNotificationListener> {
-  assertDurableStoreConfiguration(options);
-  const store = options.store ?? new InMemoryInvoiceStore();
-  const eventBus = options.eventBus ?? new InMemoryInvoiceEventBus();
-  const clock = options.clock ?? currentUnixSeconds;
-
-  emitLog(options, "info", "notification.listener.starting", "Starting OpenReceive payment notification listener.", {});
-
-  if (options.client.subscribeToPaymentReceived === undefined) {
-    emitLog(options, "warn", "notification.listener.idle", "OpenReceive payment notification listener is idle; polling remains the settlement fallback.", {});
-    return createIdlePaymentNotificationListener(options);
-  }
-
-  try {
-    const listener = await startPaymentNotificationListener({
-      client: options.client,
-      onSettledInvoice: async ({ notification }) => {
-        const invoice = await store.getInvoiceByPaymentHash(notification.payment_hash);
-        if (invoice === undefined) {
-          emitLog(options, "warn", "notification.invoice_not_found", "Received payment notification for an unknown invoice.", {
-            payment_hash: notification.payment_hash
-          });
-          return false;
-        }
-
-        let current = invoice;
-        if (current.workflow_state === "invoice_created") {
-          current = await store.markVerifying(current.invoice_id);
-          eventBus.publish(
-            current.invoice_id,
-            "invoice.verifying",
-            serializeEventData(current)
-          );
-        }
-
-        const settled = await store.markSettled({
-          invoice_id: current.invoice_id,
-          settled_at: notification.settled_at ?? clock()
-        });
-        eventBus.publish(
-          settled.invoice_id,
-          "invoice.settled",
-          serializeEventData(settled)
-        );
-        emitLog(options, "info", "invoice.settled", "Notification listener accepted trusted payment_received settlement.", invoiceLogFields(settled));
-
-        await maybeRunSettlementAction({
-          options,
-          store,
-          eventBus,
-          invoice: settled,
-          source: "notification_runner",
-          clock
-        });
-      },
-      onError: async (error, notification) => {
-        emitLog(options, "error", "notification.listener.error", "Payment notification listener failed while applying a trusted notification.", {
-          ...(notification === undefined ? {} : { payment_hash: notification.payment_hash }),
-          error: error instanceof Error ? error.message : String(error)
-        });
-      }
-    });
-
-    emitLog(options, "info", "notification.listener.started", "OpenReceive payment notification listener started.", {
-      seen_payment_hashes: listener.seenPaymentHashes.size
-    });
-
-    return {
-      seenPaymentHashes: listener.seenPaymentHashes,
-      async stop() {
-        await listener.stop();
-        emitLog(options, "info", "notification.listener.stopped", "OpenReceive payment notification listener stopped.", {});
-      }
-    };
-  } catch (error) {
-    emitLog(options, "warn", "notification.listener.unavailable", "OpenReceive payment notification listener could not start.", {
-      error: error instanceof Error ? error.message : String(error)
-    });
-    return createIdlePaymentNotificationListener(options);
-  }
-}
-
-function createIdlePaymentNotificationListener(
-  options: OpenReceiveExpressOptions
-): PaymentNotificationListener {
-  return {
-    seenPaymentHashes: new Set<string>(),
-    async stop() {
-      emitLog(options, "info", "notification.listener.stopped", "OpenReceive payment notification listener stopped.", {});
-    }
-  };
-}
-
 export function createOpenReceiveExpressHandlers(
   options: OpenReceiveExpressOptions
 ): OpenReceiveExpressHandlers {
   assertSafeDemoModeConfiguration(options);
   assertDurableStoreConfiguration(options);
 
-  const store = options.store ?? new InMemoryInvoiceStore();
-  const eventBus = options.eventBus ?? new InMemoryInvoiceEventBus();
+  const store = options.store ?? new InMemoryInvoiceKvStore();
   const clock = options.clock ?? currentUnixSeconds;
   const basePath = normalizeBasePath(options.basePath);
   const priceProviders = options.priceProviders ?? [new StaticPriceProvider()];
   const priceCurrencies = options.priceCurrencies ?? ["USD"];
-  const heartbeatMs =
-    (options.heartbeatSeconds ?? DEFAULT_HEARTBEAT_SECONDS) * 1000;
   const handle = (
-    handler: (req: ExpressLikeRequest, res: ExpressLikeResponse) => Promise<unknown>
-  ): ExpressLikeHandler => wrapHandler(options, handler);
+    handler: (req: ExpressLikeRequest, res: ExpressLikeResponse) => Promise<unknown>,
+    sweep = true
+  ): ExpressLikeHandler => wrapHandler(options, async (req, res) => {
+    const result = await handler(req, res);
+    if (sweep) scheduleMaybeSweep(options, store, clock);
+    return result;
+  });
 
   return {
     createInvoice: handle(async (req, res) => {
@@ -785,17 +521,16 @@ export function createOpenReceiveExpressHandlers(
         idempotency_key: idempotencyKey
       };
       const requestHash = await createIdempotencyRequestHash(body);
-      const existing = await store.checkIdempotency({
+      const existing = await getIdempotentRecord({
+        store,
         scope: idempotencyScope,
         idempotency_request_hash: requestHash
       });
 
       if (existing !== undefined) {
-        emitLog(options, "info", "invoice.create.replayed", "Replayed existing invoice for idempotent create request.", invoiceLogFields(existing.row));
-        return res.status(200).json(serializeInvoice(existing.row, {
-          basePath,
-          options,
-          clock
+        emitLog(options, "info", "invoice.create.replayed", "Replayed existing invoice for idempotent create request.", invoiceLogFields(existing.record.row));
+        return res.status(200).json(serializeInvoice(existing.record.row, {
+          basePath
         }));
       }
 
@@ -823,140 +558,80 @@ export function createOpenReceiveExpressHandlers(
       });
       const createdAt = invoice.created_at ?? clock();
       const requestedExpirySeconds = optionalSafeInteger(body.expiry) ?? 600;
-      const expiresAt =
-        invoice.expires_at ??
-        createdAt + requestedExpirySeconds;
+      const expiresAt = invoice.expires_at ?? createdAt + requestedExpirySeconds;
       const normalizedExpiresAt = Math.min(expiresAt, createdAt + requestedExpirySeconds);
 
-      const createResult = await store.createInvoice({
-        invoice_id: createInvoiceId(),
-        merchant_scope: merchantScope,
-        operation,
-        idempotency_key: idempotencyKey,
-        idempotency_request_hash: requestHash,
-        payment_hash: invoice.payment_hash,
-        invoice: invoice.invoice,
-        amount_msats: toSafeInteger(invoice.amount_msats, "amount_msats"),
-        transaction_state: "pending",
-        workflow_state: "invoice_created",
-        settlement_action_state: "pending",
-        created_at: createdAt,
-        expires_at: normalizedExpiresAt,
-        metadata: parseOptionalRecord(body.metadata, "metadata") ?? {},
-        fiat_quote: resolvedAmount.fiat_quote === null
-          ? null
-          : { ...resolvedAmount.fiat_quote }
+      const createResult = await putCreatedInvoiceRecord({
+        store,
+        createInvoiceId,
+        record: {
+          rev: 0,
+          row: {
+            invoice_id: createInvoiceId(),
+            merchant_scope: merchantScope,
+            operation,
+            idempotency_key: idempotencyKey,
+            idempotency_request_hash: requestHash,
+            payment_hash: invoice.payment_hash,
+            invoice: invoice.invoice,
+            amount_msats: toSafeInteger(invoice.amount_msats, "amount_msats"),
+            transaction_state: "pending",
+            workflow_state: "invoice_created",
+            settlement_action_state: "pending",
+            created_at: createdAt,
+            expires_at: normalizedExpiresAt,
+            metadata: parseOptionalRecord(body.metadata, "metadata") ?? {},
+            fiat_quote: resolvedAmount.fiat_quote === null
+              ? null
+              : { ...resolvedAmount.fiat_quote }
+          }
+        }
       });
-      eventBus.publish(
-        createResult.row.invoice_id,
-        "invoice.created",
-        serializeEventData(createResult.row)
-      );
-      emitLog(options, "info", "invoice.created", "Created Lightning invoice.", invoiceLogFields(createResult.row));
+      emitLog(options, "info", "invoice.created", "Created Lightning invoice.", invoiceLogFields(createResult.record.row));
 
-      return res.status(201).json(serializeInvoice(createResult.row, {
-        basePath,
-        options,
-        clock
-      }));
+      return res.status(createResult.status === "created" ? 201 : 200).json(
+        serializeInvoice(createResult.record.row, { basePath })
+      );
     }),
 
     getInvoice: handle(async (req, res) => {
       applyDefaultHeaders(req, res, options);
-      const invoice = await requireStoredInvoice(store, req.params?.invoice_id);
-      await requireAuthorization(options, "read", req, invoice);
-      emitLog(options, "debug", "invoice.read", "Read invoice state.", invoiceLogFields(invoice));
-      return res.status(200).json(serializeInvoice(invoice, {
-        basePath,
-        options,
-        clock
-      }));
+      const record = await requireStoredRecord(store, req.params?.invoice_id);
+      await requireAuthorization(options, "read", req, record.row);
+      emitLog(options, "debug", "invoice.read", "Read invoice state.", invoiceLogFields(record.row));
+      return res.status(200).json(serializeInvoice(record.row, { basePath }));
     }),
 
     lookupInvoice: handle(async (req, res) => {
       applyDefaultHeaders(req, res, options);
       const body = asRecord(req.body);
-      const invoice = await findLookupInvoice(store, body);
-      await requireAuthorization(options, "lookup", req, invoice);
+      const record = await findLookupRecord(store, body);
+      await requireAuthorization(options, "lookup", req, record.row);
       await requireCsrf(options, req);
-      emitLog(options, "info", "invoice.lookup.requested", "Looking up invoice settlement through receive wallet.", invoiceLogFields(invoice));
+      emitLog(options, "info", "invoice.lookup.requested", "Refreshing invoice status through the gated wallet lookup path.", invoiceLogFields(record.row));
 
-      let current = invoice;
-      if (invoice.workflow_state === "invoice_created") {
-        current = await store.markVerifying(invoice.invoice_id);
-        eventBus.publish(
-          current.invoice_id,
-          "invoice.verifying",
-          serializeEventData(current)
-        );
-        emitLog(options, "info", "invoice.verifying", "Invoice entered backend verification.", invoiceLogFields(current));
-      }
-
-      const lookup = await options.client.lookupInvoice({
-        payment_hash: optionalString(body.payment_hash),
-        invoice: optionalString(body.invoice)
+      const result = await gatedLookup({
+        ...reconcileOptions(options, store, clock, req),
+        record,
+        source: "http_lookup"
+      });
+      emitLog(options, "debug", "invoice.lookup.result", "Invoice status refresh completed.", {
+        ...invoiceLogFields(result.record.row),
+        reason: result.reason,
+        wallet_lookup_performed: result.lookup_invoice !== undefined
       });
 
-      if (lookup.settled_at !== undefined || lookup.state === "settled" || lookup.transaction_state === "settled") {
-        current = await store.markSettled({
-          invoice_id: invoice.invoice_id,
-          settled_at: lookup.settled_at
-        });
-        if (invoice.transaction_state !== "settled") {
-          eventBus.publish(
-            current.invoice_id,
-            "invoice.settled",
-            serializeEventData(current)
-          );
-          emitLog(options, "info", "invoice.settled", "Invoice settlement was verified by wallet lookup.", invoiceLogFields(current));
-        }
-        current = await maybeRunSettlementAction({
-          options,
-          req,
-          store,
-          eventBus,
-          invoice: current,
-          source: "http_lookup",
-          lookupInvoice: lookup,
-          clock
-        });
-      } else if (lookup.state === "expired" || lookup.transaction_state === "expired") {
-        current = await store.markExpiredClosed(invoice.invoice_id);
-        if (invoice.transaction_state !== "expired") {
-          eventBus.publish(
-            current.invoice_id,
-            "invoice.expired",
-            serializeEventData(current)
-          );
-          emitLog(options, "info", "invoice.expired", "Invoice was closed as expired by wallet lookup.", invoiceLogFields(current));
-        }
-      } else if (lookup.state === "failed" || lookup.transaction_state === "failed") {
-        current = await store.markFailedClosed(invoice.invoice_id);
-        if (invoice.transaction_state !== "failed") {
-          eventBus.publish(
-            current.invoice_id,
-            "invoice.failed",
-            serializeEventData(current)
-          );
-          emitLog(options, "warn", "invoice.failed", "Invoice was closed as failed by wallet lookup.", invoiceLogFields(current));
-        }
-      } else {
-        emitLog(options, "debug", "invoice.lookup.pending", "Wallet lookup did not prove a terminal invoice state.", invoiceLogFields(current));
-      }
-
       return res.status(200).json({
-        ...serializeInvoice(current, {
-          basePath,
-          options,
-          clock
-        }),
-        preimage_present: lookup.preimage !== undefined
+        ...serializeInvoice(result.record.row, { basePath }),
+        preimage_present: result.lookup_invoice?.preimage !== undefined,
+        wallet_lookup_performed: result.lookup_invoice !== undefined
       });
     }),
 
     refreshInvoice: handle(async (req, res) => {
       applyDefaultHeaders(req, res, options);
-      const oldInvoice = await requireStoredInvoice(store, req.params?.invoice_id);
+      const oldRecord = await requireStoredRecord(store, req.params?.invoice_id);
+      const oldInvoice = oldRecord.row;
       await requireAuthorization(options, "refresh", req, oldInvoice);
       await requireCsrf(options, req);
       emitLog(options, "info", "invoice.refresh.requested", "Refreshing invoice by creating a linked replacement.", invoiceLogFields(oldInvoice));
@@ -983,20 +658,19 @@ export function createOpenReceiveExpressHandlers(
         idempotency_key: idempotencyKey
       };
       const requestHash = await createIdempotencyRequestHash(body);
-      const existing = await store.checkIdempotency({
+      const existing = await getIdempotentRecord({
+        store,
         scope: idempotencyScope,
         idempotency_request_hash: requestHash
       });
 
       if (existing !== undefined) {
-        emitLog(options, "info", "invoice.refresh.replayed", "Replayed existing refreshed invoice for idempotent request.", invoiceLogFields(existing.row));
+        emitLog(options, "info", "invoice.refresh.replayed", "Replayed existing refreshed invoice for idempotent request.", invoiceLogFields(existing.record.row));
         return res.status(200).json(serializeRefreshResult({
           oldInvoice,
-          newInvoice: existing.row,
+          newInvoice: existing.record.row,
           reason,
-          basePath,
-          options,
-          clock
+          basePath
         }));
       }
 
@@ -1005,82 +679,53 @@ export function createOpenReceiveExpressHandlers(
       });
       const createdAt = invoice.created_at ?? clock();
       const expiresAt = Math.min(invoice.expires_at ?? createdAt + 600, createdAt + 600);
-      const createResult = await store.createInvoice({
-        invoice_id: createInvoiceId(),
-        merchant_scope: oldInvoice.merchant_scope,
-        operation,
-        idempotency_key: idempotencyKey,
-        idempotency_request_hash: requestHash,
-        payment_hash: invoice.payment_hash,
-        invoice: invoice.invoice,
-        amount_msats: toSafeInteger(invoice.amount_msats, "amount_msats"),
-        transaction_state: "pending",
-        workflow_state: "invoice_created",
-        settlement_action_state: "pending",
-        created_at: createdAt,
-        expires_at: expiresAt,
-        refreshed_from_invoice_id: oldInvoice.invoice_id,
-        metadata: oldInvoice.metadata,
-        fiat_quote: oldInvoice.fiat_quote ?? null
+      const createResult = await putCreatedInvoiceRecord({
+        store,
+        createInvoiceId,
+        record: {
+          rev: 0,
+          row: {
+            invoice_id: createInvoiceId(),
+            merchant_scope: oldInvoice.merchant_scope,
+            operation,
+            idempotency_key: idempotencyKey,
+            idempotency_request_hash: requestHash,
+            payment_hash: invoice.payment_hash,
+            invoice: invoice.invoice,
+            amount_msats: toSafeInteger(invoice.amount_msats, "amount_msats"),
+            transaction_state: "pending",
+            workflow_state: "invoice_created",
+            settlement_action_state: "pending",
+            created_at: createdAt,
+            expires_at: expiresAt,
+            refreshed_from_invoice_id: oldInvoice.invoice_id,
+            metadata: oldInvoice.metadata,
+            fiat_quote: oldInvoice.fiat_quote ?? null
+          }
+        }
       });
-      eventBus.publish(
-        createResult.row.invoice_id,
-        "invoice.created",
-        serializeEventData(createResult.row)
-      );
       emitLog(options, "info", "invoice.refresh.created", "Created linked replacement invoice.", {
-        ...invoiceLogFields(createResult.row),
+        ...invoiceLogFields(createResult.record.row),
         old_invoice_id: oldInvoice.invoice_id
       });
 
-      return res.status(201).json(serializeRefreshResult({
+      return res.status(createResult.status === "created" ? 201 : 200).json(serializeRefreshResult({
         oldInvoice,
-        newInvoice: createResult.row,
+        newInvoice: createResult.record.row,
         reason,
-        basePath,
-        options,
-        clock
+        basePath
       }));
     }),
 
-    invoiceEvents: handle(async (req, res) => {
+    poll: handle(async (req, res) => {
       applyDefaultHeaders(req, res, options);
-      const invoice = await requireStoredInvoice(store, req.params?.invoice_id);
-      await requireEventAuthorization(options, req, invoice, clock());
-
-      res.status(200);
-      res.set("Content-Type", "text/event-stream");
-      res.set("Cache-Control", "no-store");
-      res.flushHeaders?.();
-      const lastEventId = getLastEventId(req);
-      const replayedEvents = eventBus.replay(invoice.invoice_id, lastEventId);
-      emitLog(options, "info", "invoice.events.opened", "Opened invoice event stream.", {
-        ...invoiceLogFields(invoice),
-        last_event_id: lastEventId,
-        replayed_events: replayedEvents.length
+      await requirePollAuthorization(options, req);
+      const result = await reconcileOnce(reconcileOptions(options, store, clock));
+      return res.status(200).json({
+        invoice_ids: result.invoice_ids,
+        checked: result.checked
       });
-      for (const event of replayedEvents) {
-        res.write?.(formatSseEvent(event.id, event.event, event.data));
-      }
-
-      const unsubscribe = eventBus.subscribe(invoice.invoice_id, (event) => {
-        res.write?.(formatSseEvent(event.id, event.event, event.data));
-      });
-      if (req.on !== undefined) {
-        const heartbeat = setInterval(() => {
-          res.write?.(": heartbeat\n\n");
-        }, heartbeatMs);
-        req.on("close", () => {
-          clearInterval(heartbeat);
-          unsubscribe();
-          emitLog(options, "debug", "invoice.events.closed", "Closed invoice event stream.", invoiceLogFields(invoice));
-        });
-      } else {
-        res.write?.(": heartbeat\n\n");
-        unsubscribe();
-        emitLog(options, "debug", "invoice.events.closed", "Closed invoice event stream.", invoiceLogFields(invoice));
-      }
-    }),
+    }, false),
 
     listRates: handle(async (req, res) => {
       applyDefaultHeaders(req, res, options);
@@ -1148,18 +793,19 @@ export function createOpenReceiveExpressHandlers(
     health: handle(async (req, res) => {
       applyDefaultHeaders(req, res, options);
       return res.status(200).json({ ok: true });
-    }),
+    }, false),
 
     capabilities: handle(async (req, res) => {
       applyDefaultHeaders(req, res, options);
       return res.status(200).json({
         base_path: basePath,
-        transports: ["sse"],
+        settlement: "poll_only",
         methods: ["make_invoice", "lookup_invoice"],
         routes: {
           invoices: `${basePath}/invoices`,
           lookup: `${basePath}/invoices/lookup`,
           refresh: `${basePath}/invoices/{invoice_id}/refresh`,
+          poll: `${basePath}/poll`,
           rates: `${basePath}/rates`,
           rate_quote: `${basePath}/rates/quote`,
           routes: `${basePath}/routes`,
@@ -1167,8 +813,69 @@ export function createOpenReceiveExpressHandlers(
           health: `${basePath}/health`
         }
       });
-    })
+    }, false)
   };
+}
+
+function reconcileOptions(
+  options: OpenReceiveExpressOptions,
+  store: OpenReceiveInvoiceKvStore,
+  clock: () => number,
+  req?: ExpressLikeRequest
+) {
+  return {
+    store,
+    client: options.client,
+    clock,
+    lookupBurst: options.lookupBurst,
+    lookupRatePerSecond: options.lookupRatePerSecond,
+    actionLeaseTtlSeconds: options.actionLeaseTtlSeconds,
+    sweepIntervalSeconds: options.sweepIntervalSeconds,
+    sweepBatch: options.sweepBatch,
+    settlementAction: async (input: {
+      invoice: InvoiceStorageRow;
+      metadata: Record<string, unknown>;
+      source: "http_lookup" | "poll";
+      lookup_invoice?: unknown;
+    }) => {
+      await options.settlementAction?.({
+        req: input.source === "http_lookup" ? req : undefined,
+        invoice: input.invoice,
+        metadata: input.metadata,
+        source: input.source,
+        lookup_invoice: input.lookup_invoice
+      });
+    },
+    onEvent: (event: OpenReceiveReconcileEvent) => {
+      emitLog(
+        options,
+        event.event === "invoice.failed" ? "warn" : "info",
+        event.event,
+        "OpenReceive reconciled invoice state.",
+        {
+          ...invoiceLogFields(event.invoice),
+          ...(event.reason === undefined ? {} : { reason: event.reason })
+        }
+      );
+    }
+  };
+}
+
+function scheduleMaybeSweep(
+  options: OpenReceiveExpressOptions,
+  store: OpenReceiveInvoiceKvStore,
+  clock: () => number
+): void {
+  if (options.backgroundSweep === false) return;
+  const run = async () => {
+    await maybeSweep(reconcileOptions(options, store, clock));
+  };
+
+  void run().catch((error) => {
+    emitLog(options, "warn", "sweep.failed", "OpenReceive background sweep failed.", {
+      error: error instanceof Error ? error.message : String(error)
+    });
+  });
 }
 
 function getProviderFilter(req: ExpressLikeRequest): ProviderFilter {
@@ -1186,25 +893,19 @@ function serializeRefreshResult(input: {
   newInvoice: InvoiceStorageRow;
   reason: string;
   basePath: string;
-  options: OpenReceiveExpressOptions;
-  clock: () => number;
 }): Record<string, unknown> {
   return {
     old_invoice_id: input.oldInvoice.invoice_id,
     new_invoice_id: input.newInvoice.invoice_id,
     reason: input.reason,
     invoice: serializeInvoice(input.newInvoice, {
-      basePath: input.basePath,
-      options: input.options,
-      clock: input.clock
+      basePath: input.basePath
     })
   };
 }
 
 interface SerializeInvoiceContext {
   basePath: string;
-  options: OpenReceiveExpressOptions;
-  clock: () => number;
 }
 
 function serializeInvoice(
@@ -1229,277 +930,10 @@ function serializeInvoice(
     metadata: row.metadata,
     fiat_quote: row.fiat_quote ?? null,
     checkout: {
-      events_url: createEventUrl(row, context),
       routes_url: `${context.basePath}/routes?invoice_id=${row.invoice_id}`
     },
     settlement_action_state: row.settlement_action_state
   };
-}
-
-interface SignedEventTokenPayload {
-  v: 1;
-  invoice_id: string;
-  exp: number;
-}
-
-function createEventUrl(
-  row: InvoiceStorageRow,
-  context: SerializeInvoiceContext
-): string {
-  const baseUrl = `${context.basePath}/invoices/${row.invoice_id}/events`;
-  const signedEvents = context.options.signedEvents;
-  if (signedEvents === undefined) return baseUrl;
-
-  const queryParam = getSignedEventQueryParam(signedEvents);
-  const token = createSignedEventToken(row.invoice_id, context.clock(), signedEvents);
-  return `${baseUrl}?${queryParam}=${encodeURIComponent(token)}`;
-}
-
-async function requireEventAuthorization(
-  options: OpenReceiveExpressOptions,
-  req: ExpressLikeRequest,
-  invoice: InvoiceStorageRow,
-  now: number
-): Promise<void> {
-  const signedEvents = options.signedEvents;
-  if (signedEvents !== undefined) {
-    const token = getQueryString(req, getSignedEventQueryParam(signedEvents));
-
-    if (token !== undefined) {
-      if (!verifySignedEventToken(token, invoice.invoice_id, now, signedEvents)) {
-        throw httpError(
-          403,
-          "UNAUTHORIZED",
-          "Signed event URL is invalid or expired."
-        );
-      }
-      return;
-    }
-  }
-
-  await requireAuthorization(options, "events", req, invoice);
-}
-
-function createSignedEventToken(
-  invoiceId: string,
-  now: number,
-  signedEvents: OpenReceiveExpressSignedEvents
-): string {
-  const payload: SignedEventTokenPayload = {
-    v: 1,
-    invoice_id: invoiceId,
-    exp: now + getSignedEventTtlSeconds(signedEvents)
-  };
-  const encodedPayload = base64UrlEncode(JSON.stringify(payload));
-  const signature = signSignedEventPayload(encodedPayload, signedEvents);
-  return `${encodedPayload}.${signature}`;
-}
-
-function verifySignedEventToken(
-  token: string,
-  invoiceId: string,
-  now: number,
-  signedEvents: OpenReceiveExpressSignedEvents
-): boolean {
-  const parts = token.split(".");
-  if (parts.length !== 2) return false;
-
-  const [encodedPayload, signature] = parts;
-  if (encodedPayload === undefined || signature === undefined) return false;
-
-  const expectedSignature = signSignedEventPayload(encodedPayload, signedEvents);
-  if (!timingSafeStringEqual(signature, expectedSignature)) return false;
-
-  const payload = parseSignedEventPayload(encodedPayload);
-  return (
-    payload !== undefined &&
-    payload.v === 1 &&
-    payload.invoice_id === invoiceId &&
-    Number.isSafeInteger(payload.exp) &&
-    payload.exp >= now
-  );
-}
-
-function parseSignedEventPayload(
-  encodedPayload: string
-): SignedEventTokenPayload | undefined {
-  try {
-    return JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
-  } catch {
-    return undefined;
-  }
-}
-
-function signSignedEventPayload(
-  encodedPayload: string,
-  signedEvents: OpenReceiveExpressSignedEvents
-): string {
-  assertSignedEventSecret(signedEvents);
-  return createHmac("sha256", signedEvents.secret)
-    .update(encodedPayload)
-    .digest("base64url");
-}
-
-function timingSafeStringEqual(left: string, right: string): boolean {
-  const leftBuffer = Buffer.from(left);
-  const rightBuffer = Buffer.from(right);
-  return (
-    leftBuffer.length === rightBuffer.length &&
-    timingSafeEqual(leftBuffer, rightBuffer)
-  );
-}
-
-function base64UrlEncode(value: string): string {
-  return Buffer.from(value, "utf8").toString("base64url");
-}
-
-function getSignedEventTtlSeconds(
-  signedEvents: OpenReceiveExpressSignedEvents
-): number {
-  const ttl = signedEvents.ttlSeconds ?? DEFAULT_SIGNED_EVENT_TTL_SECONDS;
-  if (!Number.isSafeInteger(ttl) || ttl <= 0) {
-    throw httpError(
-      500,
-      "INTERNAL",
-      "signedEvents.ttlSeconds must be a positive safe integer."
-    );
-  }
-  return ttl;
-}
-
-function getSignedEventQueryParam(
-  signedEvents: OpenReceiveExpressSignedEvents
-): string {
-  const queryParam = signedEvents.queryParam ?? DEFAULT_SIGNED_EVENT_QUERY_PARAM;
-  if (!/^[A-Za-z0-9_.~-]+$/.test(queryParam)) {
-    throw httpError(
-      500,
-      "INTERNAL",
-      "signedEvents.queryParam must be URL query-name safe."
-    );
-  }
-  return queryParam;
-}
-
-function assertSignedEventSecret(
-  signedEvents: OpenReceiveExpressSignedEvents
-): void {
-  const byteLength =
-    typeof signedEvents.secret === "string"
-      ? Buffer.byteLength(signedEvents.secret, "utf8")
-      : signedEvents.secret.byteLength;
-
-  if (byteLength < 32) {
-    throw httpError(
-      500,
-      "INTERNAL",
-      "signedEvents.secret must be at least 32 bytes."
-    );
-  }
-}
-
-function serializeEventData(row: InvoiceStorageRow): Record<string, unknown> {
-  return {
-    invoice_id: row.invoice_id,
-    type: "incoming",
-    transaction_state: row.transaction_state,
-    workflow_state: row.workflow_state,
-    payment_hash: row.payment_hash,
-    amount_msats: row.amount_msats,
-    ...(row.settled_at === undefined ? {} : { settled_at: row.settled_at }),
-    settlement_action_state: row.settlement_action_state,
-    ...(row.settlement_action_completed_at === undefined ? {} : { settlement_action_completed_at: row.settlement_action_completed_at }),
-    ...(row.refreshed_from_invoice_id === undefined
-      ? {}
-      : { refreshed_from_invoice_id: row.refreshed_from_invoice_id })
-  };
-}
-
-async function maybeRunSettlementAction(input: {
-  options: OpenReceiveExpressOptions;
-  req?: ExpressLikeRequest;
-  store: OpenReceiveInvoiceStore;
-  eventBus: InMemoryInvoiceEventBus;
-  invoice: InvoiceStorageRow;
-  source: OpenReceiveExpressSettlementActionInput["source"];
-  lookupInvoice?: unknown;
-  clock: () => number;
-}): Promise<InvoiceStorageRow> {
-  if (input.invoice.transaction_state !== "settled") return input.invoice;
-  if (
-    input.invoice.workflow_state === "settlement_action_completed" ||
-    input.invoice.settlement_action_state === "completed"
-  ) {
-    return input.invoice;
-  }
-
-  if (input.options.settlementAction !== undefined) {
-    try {
-      await input.options.settlementAction({
-        req: input.req,
-        invoice: input.invoice,
-        metadata: input.invoice.metadata,
-        source: input.source,
-        lookup_invoice: input.lookupInvoice
-      });
-    } catch (error) {
-      const failed = await input.store.markSettlementActionFailed(input.invoice.invoice_id);
-      emitLog(input.options, "error", "invoice.settlement_action_failed", "Settlement action hook failed for settled invoice.", {
-        ...invoiceLogFields(failed),
-        error: error instanceof Error ? error.message : String(error)
-      });
-      throw error;
-    }
-  }
-
-  const completed = await input.store.markSettlementActionCompleted({
-    invoice_id: input.invoice.invoice_id,
-    settlement_action_completed_at: input.clock()
-  });
-  input.eventBus.publish(
-    completed.invoice_id,
-    "invoice.settlement_action_completed",
-    serializeEventData(completed)
-  );
-  emitLog(input.options, "info", "invoice.settlement_action_completed", "Settlement action completed for settled invoice.", invoiceLogFields(completed));
-  return completed;
-}
-
-async function runExpressSettlementAction(input: {
-  options: OpenReceiveExpressOptions;
-  invoice: InvoiceStorageRow;
-  lookupInvoice?: unknown;
-  source: OpenReceiveExpressSettlementActionInput["source"];
-}): Promise<void> {
-  await input.options.settlementAction?.({
-    invoice: input.invoice,
-    metadata: input.invoice.metadata,
-    source: input.source,
-    lookup_invoice: input.lookupInvoice
-  });
-}
-
-function publishPollingRunnerEvent(input: {
-  options: OpenReceiveExpressOptions;
-  eventBus: InMemoryInvoiceEventBus;
-  event: OpenReceiveSettlementPollingRunnerEvent;
-}): void {
-  const eventName = input.event.event;
-  input.eventBus.publish(
-    input.event.invoice.invoice_id,
-    eventName,
-    serializeEventData(input.event.invoice)
-  );
-  emitLog(
-    input.options,
-    eventName === "invoice.failed" ? "warn" : "info",
-    eventName,
-    "Settlement runner advanced invoice state.",
-    {
-      ...invoiceLogFields(input.event.invoice),
-      ...(input.event.reason === undefined ? {} : { reason: input.event.reason })
-    }
-  );
 }
 
 function invoiceLogFields(row: InvoiceStorageRow): Record<string, unknown> {
@@ -1574,7 +1008,7 @@ function isSensitiveLogKey(key: string): boolean {
 function redactSecrets(value: string): string {
   return value
     .replace(/nostr\+walletconnect:\/\/[^\s"'`<>]+/g, "[REDACTED_NWC]")
-    .replace(/([?&](?:_or_evt|token|secret)=)[^&\s"'`<>]+/gi, "$1[REDACTED]");
+    .replace(/([?&](?:token|secret)=)[^&\s"'`<>]+/gi, "$1[REDACTED]");
 }
 
 interface ResolvedCreateAmount {
@@ -1624,6 +1058,7 @@ async function resolveCreateAmount(input: {
       fiat_quote: quote
     };
   } catch (error) {
+    if (isHttpError(error)) throw error;
     throw mapPriceError(error);
   }
 }
@@ -1719,10 +1154,10 @@ function isRefreshableInvoice(invoice: InvoiceStorageRow): boolean {
   );
 }
 
-async function findLookupInvoice(
-  store: OpenReceiveInvoiceStore,
+async function findLookupRecord(
+  store: OpenReceiveInvoiceKvStore,
   body: Record<string, unknown>
-): Promise<InvoiceStorageRow> {
+): Promise<StoredRecord> {
   const paymentHash = optionalString(body.payment_hash);
   const bolt11Invoice = optionalString(body.invoice);
 
@@ -1734,21 +1169,34 @@ async function findLookupInvoice(
     );
   }
 
-  const invoice =
+  const record =
     paymentHash === undefined
-      ? await store.getInvoiceByBolt11Invoice(requiredValue(bolt11Invoice))
-      : await store.getInvoiceByPaymentHash(paymentHash);
+      ? await store.getByBolt11Invoice(requiredValue(bolt11Invoice))
+      : await store.getByPaymentHash(paymentHash);
 
-  if (invoice === undefined) {
+  if (record === undefined) {
     throw new InvoiceNotFoundError(paymentHash ?? requiredValue(bolt11Invoice));
   }
 
-  return invoice;
+  return record;
+}
+
+async function requireStoredRecord(
+  store: OpenReceiveInvoiceKvStore,
+  invoiceId: string | undefined
+): Promise<StoredRecord> {
+  if (invoiceId === undefined || invoiceId.length === 0) {
+    throw httpError(400, "INVALID_REQUEST", "invoice_id route parameter is required.");
+  }
+
+  const record = await store.get(invoiceId);
+  if (record === undefined) throw new InvoiceNotFoundError(invoiceId);
+  return record;
 }
 
 async function requireAuthorization(
   options: OpenReceiveExpressOptions,
-  action: keyof OpenReceiveExpressAuthorization,
+  action: "create" | "read" | "lookup" | "refresh",
   req: ExpressLikeRequest,
   invoice?: InvoiceStorageRow
 ): Promise<void> {
@@ -1787,6 +1235,32 @@ async function requireAuthorization(
   }
 }
 
+async function requirePollAuthorization(
+  options: OpenReceiveExpressOptions,
+  req: ExpressLikeRequest
+): Promise<void> {
+  if (options.unsafeAllowUnauthenticatedDemoMode === true) return;
+
+  const secret = options.cronSecret ?? globalThis.process?.env?.OPENRECEIVE_CRON_SECRET;
+  const authorization = getHeader(req, "authorization");
+  if (
+    secret !== undefined &&
+    secret.length > 0 &&
+    authorization === `Bearer ${secret}`
+  ) {
+    return;
+  }
+
+  if (options.auth?.poll === undefined) {
+    throw httpError(401, "UNAUTHORIZED", "OpenReceive poll authorization hook or OPENRECEIVE_CRON_SECRET is required.");
+  }
+
+  const allowed = await options.auth.poll(req);
+  if (!allowed) {
+    throw httpError(403, "UNAUTHORIZED", "OpenReceive poll request is not authorized.");
+  }
+}
+
 async function requireCsrf(
   options: OpenReceiveExpressOptions,
   req: ExpressLikeRequest
@@ -1810,10 +1284,6 @@ function assertSafeDemoModeConfiguration(
   const acknowledged =
     env.OPENRECEIVE_ALLOW_UNAUTHENTICATED_DEMO === "true";
 
-  // Fail closed by default: an adapter mounted in a real production app must
-  // not silently disable auth + CSRF. A genuinely public test demo (tiny
-  // amounts, owner pays self) may opt in explicitly with
-  // OPENRECEIVE_ALLOW_UNAUTHENTICATED_DEMO=true.
   if (mode === "production" && !acknowledged) {
     throw new Error(
       "OpenReceive refuses unsafeAllowUnauthenticatedDemoMode when " +
@@ -1831,14 +1301,14 @@ function assertDurableStoreConfiguration(
   const mode = (env.OPENRECEIVE_MODE ?? env.NODE_ENV ?? "").toLowerCase();
   if (mode !== "production") return;
 
-  const store = options.store;
-  if (store !== undefined && !(store instanceof InMemoryInvoiceStore)) return;
+  if (options.store !== undefined && !(options.store instanceof InMemoryInvoiceKvStore)) {
+    return;
+  }
 
   throw new Error(
-    "OpenReceive refuses to use InMemoryInvoiceStore when " +
+    "OpenReceive refuses to use InMemoryInvoiceKvStore when " +
       "OPENRECEIVE_MODE or NODE_ENV is production. Configure a durable " +
-      "package-owned invoice store such as Postgres or SQLite before mounting " +
-      "routes, polling, or notification runners."
+      "OpenReceive store such as Postgres, MySQL, SQLite, Redis, or Durable Object storage."
   );
 }
 
@@ -1860,60 +1330,28 @@ async function createOpenReceiveRequestFromNode(
     if (Array.isArray(value)) {
       for (const item of value) headers.append(name, item);
     } else {
-      headers.set(name, String(value));
+      headers.set(name, value);
     }
   }
 
-  const body =
-    method === "GET" || method === "HEAD"
-      ? undefined
-      : await readOpenReceiveNodeRequestBody(req);
+  const origin = options.origin ?? `http://${headers.get("host") ?? "localhost"}`;
+  const url = new URL(req.url ?? "/", origin);
+  const hasBody = method !== "GET" && method !== "HEAD";
 
-  return new Request(createOpenReceiveNodeRequestUrl(req, options), {
+  return new Request(url, {
     method,
     headers,
-    ...(body === undefined ? {} : { body })
-  });
+    body: hasBody ? await readNodeRequestBody(req) : undefined,
+    duplex: hasBody ? "half" : undefined
+  } as RequestInit & { duplex?: "half" });
 }
 
-function createOpenReceiveNodeRequestUrl(
-  req: IncomingMessage,
-  options: CreateOpenReceiveNodeHandlerOptions
-): string {
-  if (options.origin !== undefined) {
-    return new URL(req.url ?? "/", options.origin).toString();
-  }
-
-  const host = req.headers.host ?? "localhost";
-  const encrypted = Boolean((req.socket as { encrypted?: boolean }).encrypted);
-  const protocol = encrypted ? "https" : "http";
-  return new URL(req.url ?? "/", `${protocol}://${host}`).toString();
-}
-
-async function readOpenReceiveNodeRequestBody(
-  req: IncomingMessage
-): Promise<ArrayBuffer | undefined> {
+async function readNodeRequestBody(req: IncomingMessage): Promise<Uint8Array> {
   const chunks: Uint8Array[] = [];
   for await (const chunk of req) {
-    if (typeof chunk === "string") {
-      chunks.push(new TextEncoder().encode(chunk));
-    } else {
-      chunks.push(chunk);
-    }
+    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
   }
-
-  if (chunks.length === 0) return undefined;
-  const length = chunks.reduce((total, chunk) => total + chunk.byteLength, 0);
-  const body = new Uint8Array(length);
-  let offset = 0;
-  for (const chunk of chunks) {
-    body.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return body.buffer.slice(
-    body.byteOffset,
-    body.byteOffset + body.byteLength
-  );
+  return Buffer.concat(chunks);
 }
 
 async function writeOpenReceiveNodeResponse(
@@ -1921,8 +1359,8 @@ async function writeOpenReceiveNodeResponse(
   response: Response
 ): Promise<void> {
   res.statusCode = response.status;
-  response.headers.forEach((value, name) => {
-    res.setHeader(name, value);
+  response.headers.forEach((value, key) => {
+    res.setHeader(key, value);
   });
 
   if (response.body === null) {
@@ -1933,14 +1371,13 @@ async function writeOpenReceiveNodeResponse(
   const reader = response.body.getReader();
   try {
     while (true) {
-      const result = await reader.read();
-      if (result.done) break;
-      res.write(Buffer.from(result.value));
+      const next = await reader.read();
+      if (next.done) break;
+      res.write(Buffer.from(next.value));
     }
   } finally {
-    reader.releaseLock();
+    res.end();
   }
-  res.end();
 }
 
 async function createOpenReceiveFetchRequest(
@@ -1948,9 +1385,16 @@ async function createOpenReceiveFetchRequest(
   params: Record<string, string | undefined>
 ): Promise<ExpressLikeRequest> {
   const url = new URL(request.url);
-  const query: Record<string, string> = {};
-  for (const [key, value] of url.searchParams) {
-    query[key] = value;
+  const query: Record<string, string | string[] | undefined> = {};
+  for (const [key, value] of url.searchParams.entries()) {
+    const existing = query[key];
+    if (existing === undefined) {
+      query[key] = value;
+    } else if (Array.isArray(existing)) {
+      existing.push(value);
+    } else {
+      query[key] = [existing, value];
+    }
   }
 
   return {
@@ -1959,42 +1403,47 @@ async function createOpenReceiveFetchRequest(
     params,
     query,
     headers: Object.fromEntries(request.headers.entries()),
-    get: (header) => request.headers.get(header) ?? undefined,
-    body: await readOpenReceiveFetchRequestBody(request)
+    body: await readFetchRequestBody(request),
+    get(header) {
+      return request.headers.get(header) ?? undefined;
+    }
   };
 }
 
-async function readOpenReceiveFetchRequestBody(request: Request): Promise<unknown> {
+async function readFetchRequestBody(request: Request): Promise<unknown> {
   if (request.method === "GET" || request.method === "HEAD") return undefined;
-  const text = await request.text();
-  if (text.length === 0) return undefined;
-  return JSON.parse(text);
+  const contentType = request.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    const text = await request.text();
+    return text.length === 0 ? undefined : JSON.parse(text);
+  }
+  return await request.text();
 }
 
 class CapturedOpenReceiveFetchResponse implements ExpressLikeResponse {
-  #status = 200;
-  #headers = new Headers();
-  #body: BodyInit | undefined;
-  #chunks: string[] = [];
+  statusCode = 200;
+  headers = new Headers();
+  body: unknown;
+  writes: string[] = [];
 
   status(code: number): ExpressLikeResponse {
-    this.#status = code;
+    this.statusCode = code;
     return this;
   }
 
   set(field: string, value: string): ExpressLikeResponse {
-    this.#headers.set(field, value);
+    this.headers.set(field, value);
     return this;
   }
 
   json(body: unknown): unknown {
-    this.#headers.set("Content-Type", "application/json");
-    this.#body = JSON.stringify(body);
-    return undefined;
+    this.body = body;
+    this.headers.set("Content-Type", "application/json");
+    return body;
   }
 
   write(chunk: string): unknown {
-    this.#chunks.push(chunk);
+    this.writes.push(chunk);
     return undefined;
   }
 
@@ -2007,94 +1456,44 @@ class CapturedOpenReceiveFetchResponse implements ExpressLikeResponse {
   }
 
   toResponse(): Response {
-    return new Response(this.#body ?? this.#chunks.join(""), {
-      status: this.#status,
-      headers: this.#headers
-    });
+    if (this.writes.length > 0) {
+      return new Response(this.writes.join(""), {
+        status: this.statusCode,
+        headers: this.headers
+      });
+    }
+
+    return openReceiveFetchJsonResponse(
+      this.body ?? null,
+      this.statusCode,
+      this.headers
+    );
   }
 }
 
-function createOpenReceiveFetchEventStreamResponse(input: {
-  readonly invoice: InvoiceStorageRow;
-  readonly eventBus: InMemoryInvoiceEventBus;
-  readonly request: Request;
-  readonly heartbeatMs: number;
-}): Response {
-  const encoder = new TextEncoder();
-  let cleanupStream = () => {};
-  const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      let cleanedUp = false;
-      const writeEvent = (event: {
-        readonly id: number;
-        readonly event: string;
-        readonly data: Record<string, unknown>;
-      }) => {
-        controller.enqueue(
-          encoder.encode(formatSseEvent(event.id, event.event, event.data))
-        );
-      };
+function wrapHandler(
+  options: OpenReceiveExpressOptions,
+  handler: (req: ExpressLikeRequest, res: ExpressLikeResponse) => Promise<unknown>
+): ExpressLikeHandler {
+  return (req, res, next) => {
+    return Promise.resolve()
+      .then(() => handler(req, res))
+      .catch((error) => {
+        if (isHttpError(error)) {
+          applyDefaultHeaders(req, res, options);
+          res.status(error.status).json({
+            code: error.code,
+            message: error.message
+          });
+          return;
+        }
 
-      for (const event of input.eventBus.replay(
-        input.invoice.invoice_id,
-        parseOpenReceiveFetchLastEventId(input.request.headers.get("last-event-id"))
-      )) {
-        writeEvent(event);
-      }
-
-      const unsubscribe = input.eventBus.subscribe(input.invoice.invoice_id, writeEvent);
-      const heartbeat = setInterval(() => {
-        controller.enqueue(encoder.encode(": heartbeat\n\n"));
-      }, input.heartbeatMs);
-
-      const cleanup = () => {
-        if (cleanedUp) return;
-        cleanedUp = true;
-        clearInterval(heartbeat);
-        unsubscribe();
-        input.request.signal.removeEventListener("abort", cleanup);
-      };
-
-      cleanupStream = cleanup;
-      input.request.signal.addEventListener("abort", cleanup, { once: true });
-    },
-    cancel() {
-      cleanupStream();
-    }
-  });
-
-  return new Response(stream, {
-    status: 200,
-    headers: {
-      "Cache-Control": "no-store",
-      "Content-Type": "text/event-stream",
-      "Referrer-Policy": "same-origin"
-    }
-  });
-}
-
-function normalizeOpenReceiveFetchRoutePath(
-  path: readonly string[]
-): readonly string[] {
-  return path.filter((segment) => segment.length > 0);
-}
-
-function requireOpenReceiveRouteParam(
-  match: OpenReceiveFetchRouteMatch,
-  key: string
-): string {
-  const value = match.params?.[key];
-  if (value === undefined || value.length === 0) {
-    throw new Error(`OpenReceive route is missing ${key}.`);
-  }
-
-  return value;
-}
-
-function parseOpenReceiveFetchLastEventId(value: string | null): number {
-  if (value === null) return 0;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
+        emitLog(options, "error", "handler.error", "OpenReceive route handler failed.", {
+          error_message: error instanceof Error ? error.message : String(error)
+        });
+        next(error);
+      });
+  };
 }
 
 function applyDefaultHeaders(
@@ -2104,72 +1503,58 @@ function applyDefaultHeaders(
 ): void {
   res.set("Cache-Control", "no-store");
   res.set("Referrer-Policy", "same-origin");
+  applyCorsHeaders(req, res, options.cors);
+}
 
+function applyCorsHeaders(
+  req: ExpressLikeRequest,
+  res: ExpressLikeResponse,
+  cors: OpenReceiveExpressCors | undefined
+): void {
+  if (cors === undefined) return;
   const origin = getHeader(req, "origin");
-  if (origin === undefined || options.cors?.allowed_origins === undefined) return;
-
-  if (options.cors.allowed_origins.includes("*") && options.cors.credentials) {
-    throw httpError(
-      500,
-      "INTERNAL",
-      "Wildcard CORS cannot be used with credentials."
-    );
-  }
-
-  if (options.cors.allowed_origins.includes(origin)) {
+  if (origin === undefined) return;
+  if (
+    cors.allowed_origins?.includes("*") ||
+    cors.allowed_origins?.includes(origin)
+  ) {
     res.set("Access-Control-Allow-Origin", origin);
-    if (options.cors.credentials === true) {
-      res.set("Access-Control-Allow-Credentials", "true");
-    }
+    if (cors.credentials) res.set("Access-Control-Allow-Credentials", "true");
   }
 }
 
-function wrapHandler(
-  options: OpenReceiveExpressOptions,
-  handler: (req: ExpressLikeRequest, res: ExpressLikeResponse) => Promise<unknown>
-): ExpressLikeHandler {
-  return (req, res, next) => {
-    return handler(req, res).catch((error: unknown) => {
-      if (isHttpError(error)) {
-        emitLog(options, error.status >= 500 ? "error" : "warn", "http.error", "OpenReceive request returned an HTTP error.", {
-          status: error.status,
-          code: error.code,
-          message: error.message,
-          method: req.method,
-          path: req.path
-        });
-        res.status(error.status).json({
-          code: error.code,
-          message: error.message
-        });
-        return;
-      }
-
-      emitLog(options, "error", "handler.error", "OpenReceive request handler failed.", {
-        error_name: error instanceof Error ? error.name : typeof error,
-        error_message: error instanceof Error ? error.message : String(error),
-        method: req.method,
-        path: req.path
-      });
-      next(error);
-    });
-  };
+function normalizeBasePath(basePath = DEFAULT_BASE_PATH): string {
+  if (!basePath.startsWith("/")) return `/${basePath}`;
+  return basePath.replace(/\/+$/, "") || "/";
 }
 
-function formatSseEvent(
-  id: number,
-  event: string,
-  data: Record<string, unknown>
-): string {
-  return `id: ${id}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+function normalizeOpenReceiveFetchRoutePath(
+  path: readonly string[]
+): readonly string[] {
+  return path.filter((segment) => segment.length > 0);
 }
 
-function getLastEventId(req: ExpressLikeRequest): number {
-  const value = getHeader(req, "last-event-id");
-  if (value === undefined) return 0;
+function asRecord(value: unknown): Record<string, unknown> {
+  if (value === undefined) return {};
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw httpError(400, "INVALID_REQUEST", "JSON request body must be an object.");
+  }
+  return value as Record<string, unknown>;
+}
 
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
+function getHeader(
+  req: ExpressLikeRequest,
+  header: string
+): string | undefined {
+  const viaGetter = req.get?.(header);
+  if (viaGetter !== undefined) return viaGetter;
+  const lower = header.toLowerCase();
+  const value =
+    req.headers?.[lower] ??
+    req.headers?.[header] ??
+    req.headers?.[header.toUpperCase()];
+  if (Array.isArray(value)) return value[0];
+  return value;
 }
 
 function getQueryString(
@@ -2181,106 +1566,79 @@ function getQueryString(
   return value;
 }
 
-function parseUsFilter(value: string): boolean | null {
-  if (value === "true") return true;
-  if (value === "false") return false;
-  if (value === "unknown" || value === "null") return null;
-  throw httpError(400, "INVALID_REQUEST", "us filter must be true, false, unknown, or null.");
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
-async function requireStoredInvoice(
-  store: OpenReceiveInvoiceStore,
-  invoiceId: string | undefined
-): Promise<InvoiceStorageRow> {
-  if (invoiceId === undefined || invoiceId.length === 0) {
-    throw httpError(400, "INVALID_REQUEST", "invoice_id is required.");
-  }
-
-  const invoice = await store.getInvoice(invoiceId);
-  if (invoice === undefined) throw new InvoiceNotFoundError(invoiceId);
-  return invoice;
-}
-
-function parseFiatAmount(value: unknown): { currency: string; value: string } {
-  const fiat = asRecord(value);
-  const currency = optionalString(fiat.currency);
-  const amount = optionalString(fiat.value);
-
-  if (currency === undefined || amount === undefined) {
-    throw httpError(400, "INVALID_REQUEST", "fiat.currency and fiat.value are required.");
-  }
-
-  return {
-    currency,
-    value: amount
-  };
-}
-
-function normalizeBasePath(basePath: string | undefined): string {
-  const value = basePath ?? DEFAULT_BASE_PATH;
-  return value.endsWith("/") ? value.slice(0, -1) : value;
-}
-
-function createInvoiceId(): string {
-  return `or_inv_${globalThis.crypto.randomUUID().replace(/-/g, "")}`;
-}
-
-function currentUnixSeconds(): number {
-  return Math.floor(Date.now() / 1000);
-}
-
-function getHeader(
-  req: ExpressLikeRequest,
-  name: string
-): string | undefined {
-  const fromGetter = req.get?.(name);
-  if (fromGetter !== undefined) return fromGetter;
-
-  const headers = req.headers ?? {};
-  const value = headers[name] ?? headers[name.toLowerCase()];
-  return Array.isArray(value) ? value[0] : value;
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  if (typeof value !== "object" || value === null) return {};
-  return value as Record<string, unknown>;
+function optionalSafeInteger(value: unknown): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  const numberValue = typeof value === "number" ? value : Number(value);
+  return Number.isSafeInteger(numberValue) ? numberValue : undefined;
 }
 
 function parseOptionalRecord(
   value: unknown,
-  fieldName: string
+  field: string
 ): Record<string, unknown> | undefined {
   if (value === undefined) return undefined;
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw httpError(400, "INVALID_REQUEST", `${fieldName} must be an object.`);
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw httpError(400, "INVALID_REQUEST", `${field} must be a JSON object.`);
   }
-  return asRecord(value);
+  return value as Record<string, unknown>;
 }
 
-function optionalString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
+function parseFiatAmount(value: unknown): OpenReceiveFiatAmount {
+  const record = parseOptionalRecord(value, "fiat");
+  if (record === undefined) {
+    throw httpError(400, "INVALID_REQUEST", "fiat must be a JSON object.");
+  }
+  const currency = optionalString(record.currency);
+  const amountValue = optionalString(record.value);
+  if (currency === undefined || !/^[A-Z]{3}$/.test(currency)) {
+    throw httpError(400, "INVALID_REQUEST", "fiat.currency must be an ISO 4217 uppercase code");
+  }
+  if (amountValue === undefined) {
+    throw httpError(400, "INVALID_REQUEST", "fiat.value must be a decimal string");
+  }
+  return {
+    currency,
+    value: amountValue
+  };
 }
 
-function optionalSafeInteger(value: unknown): number | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value === "bigint" && value <= BigInt(Number.MAX_SAFE_INTEGER)) {
-    return Number(value);
-  }
-  if (typeof value === "number" && Number.isSafeInteger(value)) return value;
-  return undefined;
-}
-
-function toSafeInteger(value: bigint, fieldName: string): number {
-  if (value > BigInt(Number.MAX_SAFE_INTEGER)) {
-    throw httpError(500, "INTERNAL", `${fieldName} exceeds JSON safe integer boundary.`);
-  }
-
-  return Number(value);
+function parseUsFilter(value: string): boolean | null | undefined {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  if (value === "null") return null;
+  if (value === "unknown") return undefined;
+  throw httpError(400, "INVALID_REQUEST", "us filter must be true, false, unknown, or null.");
 }
 
 function requiredValue<T>(value: T | undefined): T {
-  if (value === undefined) throw new Error("Expected value to be present.");
+  if (value === undefined) {
+    throw new Error("required value was missing");
+  }
   return value;
+}
+
+function toSafeInteger(value: bigint | number, field: string): number {
+  const numberValue = typeof value === "bigint" ? Number(value) : value;
+  if (!Number.isSafeInteger(numberValue)) {
+    throw httpError(500, "INTERNAL", `${field} is outside JavaScript safe integer bounds.`);
+  }
+  return numberValue;
+}
+
+function createInvoiceId(): string {
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  return `or_inv_${[...bytes]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
+function currentUnixSeconds(): number {
+  return Math.floor(Date.now() / 1000);
 }
 
 interface HttpError extends Error {
@@ -2294,7 +1652,7 @@ function httpError(
   message: string
 ): HttpError {
   const error = new Error(message) as HttpError;
-  error.name = "OpenReceiveHttpError";
+  error.name = "HttpError";
   error.status = status;
   error.code = code;
   return error;
@@ -2302,9 +1660,9 @@ function httpError(
 
 function isHttpError(error: unknown): error is HttpError {
   return (
-    typeof error === "object" &&
-    error !== null &&
+    error instanceof Error &&
     "status" in error &&
-    "code" in error
+    "code" in error &&
+    typeof (error as { status?: unknown }).status === "number"
   );
 }

@@ -1,33 +1,41 @@
 import {
+  appendFileSync,
+  existsSync,
   mkdirSync,
+  readFileSync,
   statSync,
   writeFileSync
 } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import type {
-  OpenReceiveExpressOptions,
-  OpenReceiveExpressPollingRunnerStartOptions
+  OpenReceiveExpressOptions
 } from "@openreceive/express";
 import {
-  InMemoryInvoiceStore
+  InMemoryInvoiceKvStore,
+  idempotencyScopeKey,
+  reconcileOnce,
+  type OpenReceiveInvoiceKvStore,
+  type StoredRecord
 } from "@openreceive/core";
 import {
-  OPENRECEIVE_POSTGRES_MIGRATION_SQL,
-  OpenReceivePostgresInvoiceStore
-} from "./postgres-store.ts";
-import {
-  OPENRECEIVE_SQLITE_MIGRATION_SQL,
-  OpenReceiveSqliteInvoiceStore,
   createOpenReceiveSqliteQueryClient,
-  migrateOpenReceiveSqlite,
-  type OpenReceiveSqliteQueryClient,
   type OpenReceiveSqliteDatabase
 } from "./sqlite-store.ts";
 import {
-  OPENRECEIVE_DATABASE_SCHEMA_VERSION,
-  OPENRECEIVE_SCHEMA_MIGRATIONS_TABLE
+  OPENRECEIVE_POSTGRES_MIGRATION_SQL
+} from "./postgres-store.ts";
+import {
+  OPENRECEIVE_SQLITE_MIGRATION_SQL
+} from "./sqlite-store.ts";
+import {
+  OPENRECEIVE_DATABASE_SCHEMA_VERSION
 } from "./storage-schema.ts";
+import {
+  resolveOpenReceiveStore,
+  type OpenReceiveResolvedStore,
+  type ResolveOpenReceiveStoreOptions
+} from "./store-uri.ts";
 
 export interface OpenReceiveCliIo {
   write(message: string): void;
@@ -44,107 +52,30 @@ export interface OpenReceiveCliOptions {
       close?: () => void;
     };
   }>;
-  loadPostgres?: () => Promise<{
-    Pool: new (options: { connectionString: string }) => {
-      query(sql: string, values?: readonly unknown[]): Promise<{ rows: Record<string, unknown>[] }>;
-      end(): Promise<void>;
-    };
-  }>;
+  loadPostgres?: ResolveOpenReceiveStoreOptions["loadPostgres"];
   loadConfigModule?: (specifier: string) => Promise<Record<string, unknown>>;
-  loadExpressRunners?: () => Promise<OpenReceiveExpressRunnerModule>;
 }
-
-type OpenReceiveDatabaseTarget =
-  | {
-      kind: "sqlite";
-      path: string;
-    }
-  | {
-      kind: "postgres";
-      url: string;
-    };
 
 const HELP = `
 Usage: openreceive <command> [options]
 
 Commands:
-  init                 Generate server-only config, env, and worker stubs.
-  migrate             Run package-owned OpenReceive database migrations.
-  doctor              Check database, migration, NWC, and runner readiness.
-  worker              Run polling and notification listening in one process.
-  poll                Run the package-owned settlement polling runner.
-  listen              Run the package-owned payment notification listener.
+  init                 Generate server-only config/env for route-mounted OpenReceive.
+  migrate             Ensure the OpenReceive store schema exists; --print emits DDL.
+  doctor              Check store CAS/idempotency/listOpen, config, NWC, and auth readiness.
+  poll --once          Run one bounded store-throttled recovery sweep.
 
-Database options:
-  --sqlite <path>      Use a SQLite database file.
-  --postgres <url>     Use a Postgres connection URL.
-  --database-url <url> Use DATABASE_URL-style detection.
-  --print             Print migration SQL instead of executing it.
+Store options:
+  --store <uri>        memory:, local-sqlite, sqlite:///path, or postgres://...
+  --namespace <name>   Operational namespace. Defaults to OPENRECEIVE_NAMESPACE or default.
+  --print             Print SQL for the selected SQL store instead of executing it.
 
-Runner/config options:
+Config options:
   --config <path>      Import a server-only module. Defaults to openreceive.config.mjs.
-  --once               Poll recoverable invoices once, then exit.
-  --ready-only         Start worker/listen once to verify readiness, then exit.
-`.trim();
-const REQUIRED_INVOICE_COLUMNS = [
-  "invoice_id",
-  "merchant_scope",
-  "operation",
-  "idempotency_key",
-  "idempotency_request_hash",
-  "payment_hash",
-  "invoice",
-  "amount_msats",
-  "transaction_state",
-  "workflow_state",
-  "settlement_action_state",
-  "created_at",
-  "expires_at",
-  "settled_at",
-  "settlement_action_completed_at",
-  "refreshed_from_invoice_id",
-  "metadata",
-  "fiat_quote",
-  "created_row_at",
-  "updated_row_at"
-] as const;
-const REQUIRED_INVOICE_INDEXES = [
-  "openreceive_invoices_idempotency_scope_idx",
-  "openreceive_invoices_recovery_idx"
-] as const;
-const REQUIRED_STORE_METHODS = [
-  "checkIdempotency",
-  "createInvoice",
-  "getInvoice",
-  "getInvoiceByPaymentHash",
-  "getInvoiceByBolt11Invoice",
-  "listRecoverableInvoices",
-  "markVerifying",
-  "markExpiryPendingVerification",
-  "markSettled",
-  "markExpiredClosed",
-  "markFailedClosed",
-  "markSettlementActionPending",
-  "markSettlementActionCompleted",
-  "markSettlementActionFailed"
-] as const;
 
-interface OpenReceiveExpressRunnerModule {
-  createOpenReceiveExpressHandlers(options: OpenReceiveExpressOptions): unknown;
-  createOpenReceiveExpressSettlementPollingRunner(
-    options: OpenReceiveExpressOptions,
-    runnerOptions?: OpenReceiveExpressPollingRunnerStartOptions
-  ): {
-    recoverOpenInvoices(): Promise<{ recovered: number; invoice_ids: string[] }>;
-    start(): void;
-    stop(): void;
-  };
-  startOpenReceiveExpressPaymentNotificationRunner(
-    options: OpenReceiveExpressOptions
-  ): Promise<{
-    stop?: () => Promise<void> | void;
-  }>;
-}
+Removed:
+  worker, listen       v0.1-v2 is poll-only and worker-free; use poll --once from a scheduler.
+`.trim();
 
 export async function runOpenReceiveCli(options: OpenReceiveCliOptions): Promise<number> {
   const stdout = options.stdout ?? process.stdout;
@@ -163,7 +94,14 @@ export async function runOpenReceiveCli(options: OpenReceiveCliOptions): Promise
       case "init":
         return runInit({ args, cwd, stdout, stderr });
       case "migrate":
-        return await runMigrate({ args, env, stdout, loadSqlite: options.loadSqlite, loadPostgres: options.loadPostgres });
+        return await runMigrate({
+          args,
+          env,
+          cwd,
+          stdout,
+          loadSqlite: options.loadSqlite,
+          loadPostgres: options.loadPostgres
+        });
       case "doctor":
         return await runDoctor({
           args,
@@ -173,15 +111,20 @@ export async function runOpenReceiveCli(options: OpenReceiveCliOptions): Promise
           stderr,
           loadSqlite: options.loadSqlite,
           loadPostgres: options.loadPostgres,
-          loadConfigModule: options.loadConfigModule,
-          loadExpressRunners: options.loadExpressRunners
+          loadConfigModule: options.loadConfigModule
+        });
+      case "poll":
+        return await runPoll({
+          args,
+          env,
+          cwd,
+          stdout,
+          loadConfigModule: options.loadConfigModule
         });
       case "worker":
-        return await runWorker({ args, env, cwd, stdout, loadConfigModule: options.loadConfigModule, loadExpressRunners: options.loadExpressRunners });
-      case "poll":
-        return await runPoll({ args, env, cwd, stdout, loadConfigModule: options.loadConfigModule, loadExpressRunners: options.loadExpressRunners });
       case "listen":
-        return await runListen({ args, env, cwd, stdout, loadConfigModule: options.loadConfigModule, loadExpressRunners: options.loadExpressRunners });
+        stderr.write(`OpenReceive ${command} was removed. Use route-mounted recovery plus \`openreceive poll --once\` for optional schedulers.\n`);
+        return 1;
       default:
         stderr.write(`Unknown OpenReceive command: ${command}\n\n${HELP}\n`);
         return 1;
@@ -204,10 +147,10 @@ function runInit(input: {
       relativePath: ".env.openreceive.example",
       text: [
         "OPENRECEIVE_NWC=",
-        "# Optional CLI override when your app does not already expose DATABASE_URL.",
-        "OPENRECEIVE_DATABASE_URL=",
-        "# Optional local SQLite path for generated development config.",
-        "OPENRECEIVE_SQLITE_PATH=storage/openreceive.sqlite3",
+        "OPENRECEIVE_STORE=local-sqlite",
+        "OPENRECEIVE_NAMESPACE=default",
+        "# Only needed when calling /openreceive/v1/poll from an external scheduler.",
+        "OPENRECEIVE_CRON_SECRET=",
         ""
       ].join("\n")
     },
@@ -222,24 +165,17 @@ function runInit(input: {
     {
       relativePath: "openreceive.config.mjs",
       text: [
-        "import { mkdirSync } from \"node:fs\";",
-        "import { dirname } from \"node:path\";",
-        "import { DatabaseSync } from \"node:sqlite\";",
-        "import { InMemoryInvoiceEventBus } from \"@openreceive/express\";",
         "import {",
         "  createAlbyNwcReceiveClient,",
-        "  createOpenReceiveSqliteInvoiceStore,",
-        "  createOpenReceiveSqliteQueryClient,",
         "  formatOpenReceiveInvalidNwcMessage,",
         "  formatOpenReceiveMissingNwcMessage,",
-        "  parseNwcConnectionUri",
+        "  parseNwcConnectionUri,",
+        "  resolveOpenReceiveStore",
         "} from \"@openreceive/node\";",
         "",
         "const nwc = process.env.OPENRECEIVE_NWC;",
         "if (nwc === undefined || nwc.trim() === \"\") {",
-        "  const message = formatOpenReceiveMissingNwcMessage({",
-        "    subject: \"OpenReceive\"",
-        "  });",
+        "  const message = formatOpenReceiveMissingNwcMessage({ subject: \"OpenReceive\" });",
         "  console.error(message);",
         "  throw new Error(message);",
         "}",
@@ -255,23 +191,15 @@ function runInit(input: {
         "  throw new Error(message);",
         "}",
         "",
-        "const sqlitePath = process.env.OPENRECEIVE_SQLITE_PATH ?? \"storage/openreceive.sqlite3\";",
-        "if (sqlitePath !== \":memory:\" && !sqlitePath.startsWith(\"file:\")) {",
-        "  mkdirSync(dirname(sqlitePath), { recursive: true });",
-        "}",
-        "const database = new DatabaseSync(sqlitePath);",
+        "const store = await resolveOpenReceiveStore();",
         "",
         "export const openreceive = {",
-        "  client: createAlbyNwcReceiveClient({",
-        "    connectionString: nwc",
-        "  }),",
-        "  store: createOpenReceiveSqliteInvoiceStore({",
-        "    client: createOpenReceiveSqliteQueryClient(database)",
-        "  }),",
-        "  eventBus: new InMemoryInvoiceEventBus(),",
+        "  client: createAlbyNwcReceiveClient({ connectionString: nwc }),",
+        "  store,",
+        "  cronSecret: process.env.OPENRECEIVE_CRON_SECRET,",
         "  merchantScope: () => \"app:default\",",
-        "  settlementAction: async (_input) => {",
-        "    // Unlock the app-owned order, account, or entitlement here.",
+        "  settlementAction: async ({ invoice }) => {",
+        "    // MUST be idempotent. Dedupe by invoice.payment_hash.",
         "  }",
         "};",
         "",
@@ -294,42 +222,12 @@ function runInit(input: {
       ].join("\n")
     },
     {
-      relativePath: "scripts/openreceive-worker.mjs",
-      text: [
-        "import { runOpenReceiveCli } from \"@openreceive/node/cli\";",
-        "",
-        "process.exitCode = await runOpenReceiveCli({",
-        "  argv: [\"worker\"],",
-        "  env: process.env,",
-        "  cwd: process.cwd(),",
-        "  stdout: process.stdout,",
-        "  stderr: process.stderr",
-        "});",
-        ""
-      ].join("\n")
-    },
-    {
       relativePath: "scripts/openreceive-poll.mjs",
       text: [
         "import { runOpenReceiveCli } from \"@openreceive/node/cli\";",
         "",
         "process.exitCode = await runOpenReceiveCli({",
-        "  argv: [\"poll\"],",
-        "  env: process.env,",
-        "  cwd: process.cwd(),",
-        "  stdout: process.stdout,",
-        "  stderr: process.stderr",
-        "});",
-        ""
-      ].join("\n")
-    },
-    {
-      relativePath: "scripts/openreceive-listen.mjs",
-      text: [
-        "import { runOpenReceiveCli } from \"@openreceive/node/cli\";",
-        "",
-        "process.exitCode = await runOpenReceiveCli({",
-        "  argv: [\"listen\"],",
+        "  argv: [\"poll\", \"--once\"],",
         "  env: process.env,",
         "  cwd: process.cwd(),",
         "  stdout: process.stdout,",
@@ -355,140 +253,42 @@ function runInit(input: {
     input.stdout.write(`created ${file.relativePath}\n`);
   }
 
-  return 0;
-}
-
-async function runWorker(input: {
-  args: readonly string[];
-  env: NodeJS.ProcessEnv;
-  cwd: string;
-  stdout: OpenReceiveCliIo;
-  loadConfigModule?: OpenReceiveCliOptions["loadConfigModule"];
-  loadExpressRunners?: OpenReceiveCliOptions["loadExpressRunners"];
-}): Promise<number> {
-  const config = await loadOpenReceiveConfig(input);
-  const express = await loadExpressRunners(input.loadExpressRunners);
-  const runner = express.createOpenReceiveExpressSettlementPollingRunner(
-    config,
-    parseRunnerOptions(input.args)
-  );
-  let listener: Awaited<ReturnType<OpenReceiveExpressRunnerModule["startOpenReceiveExpressPaymentNotificationRunner"]>> | undefined;
-
-  try {
-    runner.start();
-    listener = await express.startOpenReceiveExpressPaymentNotificationRunner(config);
-  } catch (error) {
-    runner.stop();
-    await listener?.stop?.();
-    throw error;
-  }
-
-  input.stdout.write("OpenReceive worker started (poll + listen).\n");
-
-  if (input.args.includes("--ready-only")) {
-    runner.stop();
-    await listener.stop?.();
-    input.stdout.write("OpenReceive worker readiness verified.\n");
-    return 0;
-  }
-
-  await waitForTerminationSignal(async () => {
-    runner.stop();
-    await listener?.stop?.();
-  });
-  return 0;
-}
-
-async function runPoll(input: {
-  args: readonly string[];
-  env: NodeJS.ProcessEnv;
-  cwd: string;
-  stdout: OpenReceiveCliIo;
-  loadConfigModule?: OpenReceiveCliOptions["loadConfigModule"];
-  loadExpressRunners?: OpenReceiveCliOptions["loadExpressRunners"];
-}): Promise<number> {
-  const config = await loadOpenReceiveConfig(input);
-  const express = await loadExpressRunners(input.loadExpressRunners);
-  const runner = express.createOpenReceiveExpressSettlementPollingRunner(
-    config,
-    parseRunnerOptions(input.args)
-  );
-
-  if (input.args.includes("--once")) {
-    const result = await runner.recoverOpenInvoices();
-    input.stdout.write(`OpenReceive poll recovered ${result.recovered} invoice(s).\n`);
-    return 0;
-  }
-
-  runner.start();
-  input.stdout.write("OpenReceive poll runner started.\n");
-  await waitForTerminationSignal(() => runner.stop());
-  return 0;
-}
-
-async function runListen(input: {
-  args: readonly string[];
-  env: NodeJS.ProcessEnv;
-  cwd: string;
-  stdout: OpenReceiveCliIo;
-  loadConfigModule?: OpenReceiveCliOptions["loadConfigModule"];
-  loadExpressRunners?: OpenReceiveCliOptions["loadExpressRunners"];
-}): Promise<number> {
-  const config = await loadOpenReceiveConfig(input);
-  const express = await loadExpressRunners(input.loadExpressRunners);
-  const listener = await express.startOpenReceiveExpressPaymentNotificationRunner(config);
-  input.stdout.write("OpenReceive listen runner started.\n");
-
-  if (input.args.includes("--ready-only")) {
-    await listener.stop?.();
-    input.stdout.write("OpenReceive listen runner readiness verified.\n");
-    return 0;
-  }
-
-  await waitForTerminationSignal(() => listener.stop?.());
+  ensureGitignoreContains(input.cwd, ".openreceive/");
+  input.stdout.write("updated .gitignore for .openreceive/\n");
   return 0;
 }
 
 async function runMigrate(input: {
   args: readonly string[];
   env: NodeJS.ProcessEnv;
+  cwd: string;
   stdout: OpenReceiveCliIo;
   loadSqlite?: OpenReceiveCliOptions["loadSqlite"];
   loadPostgres?: OpenReceiveCliOptions["loadPostgres"];
 }): Promise<number> {
-  const target = detectDatabaseTarget(input.args, input.env);
-  const print = input.args.includes("--print");
+  const storeUri = detectStoreUri(input.args, input.env);
+  const namespace = detectNamespace(input.args, input.env);
 
-  if (target.kind === "sqlite") {
-    if (print) {
+  if (input.args.includes("--print")) {
+    if (storeUri === "local-sqlite" || storeUri.startsWith("sqlite:")) {
       input.stdout.write(`${OPENRECEIVE_SQLITE_MIGRATION_SQL}\n`);
       return 0;
     }
-    ensureSqliteDatabaseDirectory(target.path);
-    const sqlite = await loadSqlite(input.loadSqlite);
-    const database = new sqlite.DatabaseSync(target.path);
-    try {
-      await migrateOpenReceiveSqlite(createOpenReceiveSqliteQueryClient(database));
-    } finally {
-      database.close?.();
+    if (/^postgres(?:ql)?:\/\//.test(storeUri)) {
+      input.stdout.write(`${OPENRECEIVE_POSTGRES_MIGRATION_SQL}\n`);
+      return 0;
     }
-    input.stdout.write(`OpenReceive SQLite migration applied: ${target.path}\n`);
+    input.stdout.write("No SQL DDL is required for this OpenReceive store.\n");
     return 0;
   }
 
-  if (print) {
-    input.stdout.write(`${OPENRECEIVE_POSTGRES_MIGRATION_SQL}\n`);
-    return 0;
-  }
-
-  const postgres = await loadPostgres(input.loadPostgres);
-  const pool = new postgres.Pool({ connectionString: target.url });
+  const store = await resolveStoreForCli(input, storeUri, namespace);
   try {
-    await pool.query(OPENRECEIVE_POSTGRES_MIGRATION_SQL);
+    await store.ensureSchema?.();
   } finally {
-    await pool.end();
+    await store.close?.();
   }
-  input.stdout.write("OpenReceive Postgres migration applied.\n");
+  input.stdout.write(`OpenReceive store schema ready (${OPENRECEIVE_DATABASE_SCHEMA_VERSION}).\n`);
   return 0;
 }
 
@@ -501,79 +301,36 @@ async function runDoctor(input: {
   loadSqlite?: OpenReceiveCliOptions["loadSqlite"];
   loadPostgres?: OpenReceiveCliOptions["loadPostgres"];
   loadConfigModule?: OpenReceiveCliOptions["loadConfigModule"];
-  loadExpressRunners?: OpenReceiveCliOptions["loadExpressRunners"];
 }): Promise<number> {
-  const target = detectDatabaseTarget(input.args, input.env);
-  const walletConfigured = (input.env.OPENRECEIVE_NWC ?? "").trim().length > 0;
-  let migrated = false;
+  const storeUri = detectStoreUri(input.args, input.env);
+  const namespace = detectNamespace(input.args, input.env);
+  const store = await resolveStoreForCli(input, storeUri, namespace);
+  let ok = true;
 
-  if (target.kind === "sqlite") {
-    const sqlite = await loadSqlite(input.loadSqlite);
-    const database = new sqlite.DatabaseSync(target.path);
-    let schema: OpenReceiveDoctorSchema;
-    try {
-      const client = createOpenReceiveSqliteQueryClient(database);
-      const result = await client.execute(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
-        ["openreceive_invoices"]
-      );
-      migrated = result.rows.length === 1;
-      schema = migrated
-        ? await readSqliteInvoiceSchema(client)
-        : { columns: new Set(), indexes: new Set(), migrationVersions: new Set() };
-    } finally {
-      database.close?.();
-    }
-    input.stdout.write(`ok database sqlite ${target.path}\n`);
-    if (!migrated) {
-      input.stderr.write("missing OpenReceive migration: run `openreceive migrate`.\n");
-      return 1;
-    }
-    const schemaCheck = checkInvoiceSchema(schema);
-    if (!schemaCheck.ok) {
-      input.stderr.write(`${schemaCheck.message}\n`);
-      return 1;
-    }
-  } else {
-    const postgres = await loadPostgres(input.loadPostgres);
-    const pool = new postgres.Pool({ connectionString: target.url });
-    let schema: OpenReceiveDoctorSchema;
-    try {
-      const result = await pool.query(
-        "SELECT to_regclass('public.openreceive_invoices') AS table_name"
-      );
-      migrated = result.rows[0]?.table_name === "openreceive_invoices";
-      schema = migrated
-        ? await readPostgresInvoiceSchema(pool)
-        : { columns: new Set(), indexes: new Set(), migrationVersions: new Set() };
-    } finally {
-      await pool.end();
-    }
-    input.stdout.write("ok database postgres\n");
-    if (!migrated) {
-      input.stderr.write("missing OpenReceive migration: run `openreceive migrate`.\n");
-      return 1;
-    }
-    const schemaCheck = checkInvoiceSchema(schema);
-    if (!schemaCheck.ok) {
-      input.stderr.write(`${schemaCheck.message}\n`);
-      return 1;
-    }
+  try {
+    await runStoreDiagnostics(store);
+    input.stdout.write(`ok store ${redactStoreUri(storeUri)} namespace=${namespace}\n`);
+    input.stdout.write("ok store putIfAbsent/casMeta/listOpen round-trip\n");
+  } catch (error) {
+    input.stderr.write(`OpenReceive store diagnostics failed: ${safeErrorMessage(error)}\n`);
+    ok = false;
+  } finally {
+    await store.close?.();
   }
-  input.stdout.write(`ok migration openreceive_invoices ${OPENRECEIVE_DATABASE_SCHEMA_VERSION} columns/indexes/version\n`);
 
-  if (walletConfigured) {
+  if ((input.env.OPENRECEIVE_NWC ?? "").trim().length > 0) {
     input.stdout.write("ok OPENRECEIVE_NWC configured (redacted)\n");
   } else {
     input.stdout.write("warn OPENRECEIVE_NWC is not configured; invoice creation will fail closed.\n");
   }
 
-  if (!hasConfigTarget(input.args, input.env, input.cwd)) {
-    input.stdout.write("warn config not checked; create openreceive.config.mjs or pass --config to verify route, NWC, and runner readiness.\n");
-    return 0;
+  if (hasConfigTarget(input.args, input.env, input.cwd)) {
+    ok = (await runConfigDoctor(input)) && ok;
+  } else {
+    input.stdout.write("warn config not checked; create openreceive.config.mjs or pass --config.\n");
   }
 
-  return await runConfigDoctor(input) ? 0 : 1;
+  return ok ? 0 : 1;
 }
 
 async function runConfigDoctor(input: {
@@ -583,7 +340,6 @@ async function runConfigDoctor(input: {
   stdout: OpenReceiveCliIo;
   stderr: OpenReceiveCliIo;
   loadConfigModule?: OpenReceiveCliOptions["loadConfigModule"];
-  loadExpressRunners?: OpenReceiveCliOptions["loadExpressRunners"];
 }): Promise<boolean> {
   let ok = true;
   let config: OpenReceiveExpressOptions;
@@ -598,7 +354,7 @@ async function runConfigDoctor(input: {
 
   const storeCheck = checkConfiguredStore(config.store);
   if (storeCheck.ok) {
-    input.stdout.write("ok store package-owned durable invoice store configured\n");
+    input.stdout.write("ok config store implements OpenReceive KV contract\n");
   } else {
     input.stderr.write(`${storeCheck.message}\n`);
     ok = false;
@@ -614,44 +370,8 @@ async function runConfigDoctor(input: {
   if (securityCheck.errors.length > 0) {
     ok = false;
   } else if (securityCheck.production) {
-    input.stdout.write("ok production auth and event authorization diagnostics passed\n");
+    input.stdout.write("ok production auth diagnostics passed\n");
   }
-
-  let express: OpenReceiveExpressRunnerModule;
-  try {
-    express = await loadExpressRunners(input.loadExpressRunners);
-  } catch (error) {
-    input.stderr.write(`OpenReceive Express diagnostics unavailable: ${safeErrorMessage(error)}\n`);
-    return false;
-  }
-
-  try {
-    express.createOpenReceiveExpressHandlers(config);
-    input.stdout.write("ok routes route wiring accepts configured store/auth/csrf\n");
-  } catch (error) {
-    input.stderr.write(`OpenReceive route wiring failed: ${safeErrorMessage(error)}\n`);
-    ok = false;
-  }
-
-  try {
-    const runner = express.createOpenReceiveExpressSettlementPollingRunner(
-      config,
-      { recoveryIntervalSeconds: 1 }
-    );
-    if (
-      typeof runner.recoverOpenInvoices !== "function" ||
-      typeof runner.start !== "function" ||
-      typeof runner.stop !== "function"
-    ) {
-      throw new Error("poll runner did not expose recover/start/stop.");
-    }
-    input.stdout.write("ok runner poll can be constructed from config\n");
-  } catch (error) {
-    input.stderr.write(`OpenReceive poll runner readiness failed: ${safeErrorMessage(error)}\n`);
-    ok = false;
-  }
-
-  input.stdout.write("ok runner listen can be started; polling remains the settlement fallback\n");
 
   if (typeof config.client?.preflight !== "function") {
     input.stdout.write("warn NWC preflight not checked; configured client does not expose preflight().\n");
@@ -676,6 +396,109 @@ async function runConfigDoctor(input: {
   }
 
   return ok;
+}
+
+async function runPoll(input: {
+  args: readonly string[];
+  env: NodeJS.ProcessEnv;
+  cwd: string;
+  stdout: OpenReceiveCliIo;
+  loadConfigModule?: OpenReceiveCliOptions["loadConfigModule"];
+}): Promise<number> {
+  if (!input.args.includes("--once")) {
+    throw new Error("OpenReceive poll is one-shot only. Pass --once and run it from a scheduler.");
+  }
+  const config = await loadOpenReceiveConfig(input);
+  if (config.store === undefined) {
+    throw new Error("OpenReceive poll requires config.store.");
+  }
+  const result = await reconcileOnce({
+    store: config.store,
+    client: config.client,
+    settlementAction: async ({ invoice, metadata, source, lookup_invoice }) => {
+      await config.settlementAction?.({
+        invoice,
+        metadata,
+        source,
+        lookup_invoice
+      });
+    },
+    lookupBurst: config.lookupBurst,
+    lookupRatePerSecond: config.lookupRatePerSecond,
+    actionLeaseTtlSeconds: config.actionLeaseTtlSeconds,
+    sweepIntervalSeconds: config.sweepIntervalSeconds,
+    sweepBatch: config.sweepBatch,
+    clock: config.clock
+  });
+  input.stdout.write(`OpenReceive poll checked ${result.checked} wallet invoice(s) across ${result.invoice_ids.length} open invoice(s).\n`);
+  return 0;
+}
+
+async function resolveStoreForCli(
+  input: {
+    cwd: string;
+    loadSqlite?: OpenReceiveCliOptions["loadSqlite"];
+    loadPostgres?: OpenReceiveCliOptions["loadPostgres"];
+  },
+  uri: string,
+  namespace: string
+): Promise<OpenReceiveResolvedStore> {
+  return await resolveOpenReceiveStore(uri, {
+    cwd: input.cwd,
+    namespace,
+    loadSqlite: input.loadSqlite,
+    loadPostgres: input.loadPostgres
+  });
+}
+
+async function runStoreDiagnostics(store: OpenReceiveInvoiceKvStore): Promise<void> {
+  const suffix = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const record = diagnosticRecord(suffix);
+  const created = await store.putIfAbsent(record);
+  if (created.status !== "created") {
+    throw new Error("putIfAbsent did not create a fresh diagnostic record");
+  }
+
+  const duplicate = await store.putIfAbsent(record);
+  if (duplicate.status !== "conflict" || duplicate.on !== "idempotency_scope") {
+    throw new Error("putIfAbsent did not report idempotency_scope conflict");
+  }
+
+  const metaKey = `doctor:${suffix}`;
+  const createdMeta = await store.casMeta(metaKey, "one", null);
+  if (createdMeta.status !== "ok") throw new Error("casMeta create failed");
+  const updatedMeta = await store.casMeta(metaKey, "two", createdMeta.row.rev);
+  if (updatedMeta.status !== "ok") throw new Error("casMeta update failed");
+  const staleMeta = await store.casMeta(metaKey, "stale", createdMeta.row.rev);
+  if (staleMeta.status !== "conflict") throw new Error("casMeta stale update did not conflict");
+
+  const open = await store.listOpen({ now: record.row.created_at, limit: 1 });
+  if (!open.some((item) => item.row.invoice_id === record.row.invoice_id)) {
+    throw new Error("listOpen did not return the diagnostic record");
+  }
+}
+
+function diagnosticRecord(suffix: string): StoredRecord {
+  return {
+    rev: 0,
+    row: {
+      invoice_id: `or_inv_doctor_${suffix}`,
+      merchant_scope: "doctor",
+      operation: "invoice.create",
+      idempotency_key: `doctor-${suffix}`,
+      idempotency_request_hash: `sha256:${"a".repeat(64)}`,
+      payment_hash: "b".repeat(48) + suffix.slice(0, 16).padEnd(16, "0"),
+      invoice: `lnbc-doctor-${suffix}`,
+      amount_msats: 1000,
+      transaction_state: "pending",
+      workflow_state: "invoice_created",
+      settlement_action_state: "pending",
+      created_at: 1000,
+      expires_at: 1600,
+      metadata: {},
+      fiat_quote: null
+    }
+  };
 }
 
 function checkProductionSecurityConfig(
@@ -719,11 +542,11 @@ function checkProductionSecurityConfig(
   }
 
   if (
-    typeof config.auth?.events !== "function" &&
-    config.signedEvents === undefined
+    typeof config.auth?.poll !== "function" &&
+    (config.cronSecret ?? env.OPENRECEIVE_CRON_SECRET ?? "").length === 0
   ) {
     errors.push(
-      "OpenReceive production config must protect invoice events with auth.events or signedEvents."
+      "OpenReceive production config must protect /poll with auth.poll or OPENRECEIVE_CRON_SECRET."
     );
   }
 
@@ -749,82 +572,50 @@ function checkConfiguredStore(store: OpenReceiveExpressOptions["store"]):
     return {
       ok: false,
       message:
-        "OpenReceive config must set a package-owned durable invoice store. " +
-        "Default in-memory storage is for tests and demos only, and production boot will fail closed."
+        "OpenReceive config must set a durable OpenReceive KV store. Use resolveOpenReceiveStore() with OPENRECEIVE_STORE."
     };
   }
 
-  if (store instanceof InMemoryInvoiceStore) {
-    return {
-      ok: false,
-      message:
-        "OpenReceive config uses InMemoryInvoiceStore. Configure the package-owned " +
-        "Postgres or SQLite invoice store before running production routes or backend processes."
-    };
-  }
-
-  const missingMethods = REQUIRED_STORE_METHODS.filter((method) => {
+  const missingMethods = [
+    "putIfAbsent",
+    "put",
+    "get",
+    "getByPaymentHash",
+    "getByBolt11Invoice",
+    "getByIdempotencyScope",
+    "listOpen",
+    "getMeta",
+    "casMeta"
+  ].filter((method) => {
     const candidate = (store as unknown as Record<string, unknown>)[method];
     return typeof candidate !== "function";
   });
   if (missingMethods.length > 0) {
     return {
       ok: false,
-      message: `OpenReceive config invoice store is missing lifecycle methods: ${missingMethods.join(", ")}.`
+      message: `OpenReceive config store is missing KV methods: ${missingMethods.join(", ")}.`
     };
   }
 
-  if (
-    store instanceof OpenReceivePostgresInvoiceStore ||
-    store instanceof OpenReceiveSqliteInvoiceStore
-  ) {
-    return { ok: true };
+  if (store instanceof InMemoryInvoiceKvStore) {
+    return {
+      ok: false,
+      message:
+        "OpenReceive config uses InMemoryInvoiceKvStore. Configure local-sqlite, SQLite, Postgres, MySQL, Redis, or Durable Object storage for durable checkout."
+    };
   }
 
-  return {
-    ok: false,
-    message:
-      "OpenReceive config invoice store is not a package-owned Node Postgres or SQLite store. " +
-      "Node v0.1 supports databases only when OpenReceive ships the store adapter, migration path, and conformance coverage."
-  };
+  return { ok: true };
 }
 
-function detectDatabaseTarget(
-  args: readonly string[],
-  env: NodeJS.ProcessEnv
-): OpenReceiveDatabaseTarget {
-  const sqlitePath = readFlag(args, "--sqlite") ?? env.OPENRECEIVE_SQLITE_PATH;
-  if (sqlitePath !== undefined && sqlitePath.trim().length > 0) {
-    return {
-      kind: "sqlite",
-      path: sqlitePath
-    };
-  }
+function detectStoreUri(args: readonly string[], env: NodeJS.ProcessEnv): string {
+  const storeUri = readFlag(args, "--store") ?? env.OPENRECEIVE_STORE;
+  if (storeUri !== undefined && storeUri.trim().length > 0) return storeUri;
+  throw new Error("Set OPENRECEIVE_STORE or pass --store.");
+}
 
-  const databaseUrl =
-    readFlag(args, "--postgres") ??
-    readFlag(args, "--database-url") ??
-    env.OPENRECEIVE_DATABASE_URL ??
-    env.DATABASE_URL;
-  if (databaseUrl === undefined || databaseUrl.trim().length === 0) {
-    throw new Error("Set DATABASE_URL, OPENRECEIVE_DATABASE_URL, OPENRECEIVE_SQLITE_PATH, --postgres, or --sqlite.");
-  }
-
-  if (databaseUrl.startsWith("sqlite:")) {
-    return {
-      kind: "sqlite",
-      path: databaseUrl.replace(/^sqlite:(?:\/\/)?/, "")
-    };
-  }
-
-  if (!/^postgres(?:ql)?:\/\//.test(databaseUrl)) {
-    throw new Error("Unsupported OpenReceive database URL. Supported Node databases: postgres and sqlite.");
-  }
-
-  return {
-    kind: "postgres",
-    url: databaseUrl
-  };
+function detectNamespace(args: readonly string[], env: NodeJS.ProcessEnv): string {
+  return readFlag(args, "--namespace") ?? env.OPENRECEIVE_NAMESPACE ?? "default";
 }
 
 function hasConfigTarget(
@@ -835,84 +626,6 @@ function hasConfigTarget(
   if (readFlag(args, "--config") !== undefined) return true;
   if ((env.OPENRECEIVE_CONFIG ?? "").trim().length > 0) return true;
   return fileExists(path.resolve(cwd, "openreceive.config.mjs"));
-}
-
-interface OpenReceiveDoctorSchema {
-  columns: Set<string>;
-  indexes: Set<string>;
-  migrationVersions: Set<string>;
-}
-
-async function readSqliteInvoiceSchema(
-  client: OpenReceiveSqliteQueryClient
-): Promise<OpenReceiveDoctorSchema> {
-  const columns = await client.execute(
-    "SELECT name FROM pragma_table_info('openreceive_invoices')"
-  );
-  const indexes = await client.execute(
-    "SELECT name FROM pragma_index_list('openreceive_invoices')"
-  );
-  const migrationTable = await client.execute(
-    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
-    [OPENRECEIVE_SCHEMA_MIGRATIONS_TABLE]
-  );
-  const versions = migrationTable.rows.length === 0
-    ? { rows: [] }
-    : await client.execute(
-        `SELECT version FROM ${OPENRECEIVE_SCHEMA_MIGRATIONS_TABLE}`
-      );
-  return {
-    columns: new Set(columns.rows.map((row) => String(row.name))),
-    indexes: new Set(indexes.rows.map((row) => String(row.name))),
-    migrationVersions: new Set(versions.rows.map((row) => String(row.version)))
-  };
-}
-
-async function readPostgresInvoiceSchema(client: {
-  query(sql: string, values?: readonly unknown[]): Promise<{ rows: Record<string, unknown>[] }>;
-}): Promise<OpenReceiveDoctorSchema> {
-  const columns = await client.query(
-    "SELECT column_name AS name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'openreceive_invoices'"
-  );
-  const indexes = await client.query(
-    "SELECT indexname AS name FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'openreceive_invoices'"
-  );
-  const migrationTable = await client.query(
-    "SELECT to_regclass('public.openreceive_schema_migrations') AS table_name"
-  );
-  const versions = migrationTable.rows[0]?.table_name === OPENRECEIVE_SCHEMA_MIGRATIONS_TABLE
-    ? await client.query(
-        `SELECT version FROM ${OPENRECEIVE_SCHEMA_MIGRATIONS_TABLE}`
-      )
-    : { rows: [] };
-  return {
-    columns: new Set(columns.rows.map((row) => String(row.name))),
-    indexes: new Set(indexes.rows.map((row) => String(row.name))),
-    migrationVersions: new Set(versions.rows.map((row) => String(row.version)))
-  };
-}
-
-function checkInvoiceSchema(schema: OpenReceiveDoctorSchema):
-  | { ok: true }
-  | { ok: false; message: string } {
-  const missingColumns = REQUIRED_INVOICE_COLUMNS.filter((name) => !schema.columns.has(name));
-  const missingIndexes = REQUIRED_INVOICE_INDEXES.filter((name) => !schema.indexes.has(name));
-  const missingVersions = schema.migrationVersions.has(OPENRECEIVE_DATABASE_SCHEMA_VERSION)
-    ? []
-    : [OPENRECEIVE_DATABASE_SCHEMA_VERSION];
-  if (missingColumns.length === 0 && missingIndexes.length === 0 && missingVersions.length === 0) {
-    return { ok: true };
-  }
-
-  const details = [
-    missingColumns.length === 0 ? undefined : `columns: ${missingColumns.join(", ")}`,
-    missingIndexes.length === 0 ? undefined : `indexes: ${missingIndexes.join(", ")}`,
-    missingVersions.length === 0 ? undefined : `migration versions: ${missingVersions.join(", ")}`
-  ].filter((detail): detail is string => detail !== undefined);
-  return {
-    ok: false,
-    message: `OpenReceive migration is incomplete; missing ${details.join("; ")}. Run \`openreceive migrate\`.`
-  };
 }
 
 async function loadOpenReceiveConfig(input: {
@@ -954,26 +667,6 @@ function resolveConfigSpecifier(
   return pathToFileURL(path.resolve(cwd, configured)).href;
 }
 
-function parseRunnerOptions(
-  args: readonly string[]
-): OpenReceiveExpressPollingRunnerStartOptions {
-  const recoveryIntervalSeconds = readOptionalIntegerFlag(args, "--recovery-interval-seconds");
-  return recoveryIntervalSeconds === undefined ? {} : { recoveryIntervalSeconds };
-}
-
-function readOptionalIntegerFlag(
-  args: readonly string[],
-  flag: string
-): number | undefined {
-  const value = readFlag(args, flag);
-  if (value === undefined) return undefined;
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-    throw new Error(`${flag} requires a positive integer.`);
-  }
-  return parsed;
-}
-
 function readFlag(args: readonly string[], flag: string): string | undefined {
   const index = args.indexOf(flag);
   if (index === -1) return undefined;
@@ -993,96 +686,11 @@ function fileExists(filePath: string): boolean {
   }
 }
 
-function ensureSqliteDatabaseDirectory(databasePath: string): void {
-  if (databasePath === ":memory:" || databasePath.startsWith("file:")) return;
-  mkdirSync(path.dirname(path.resolve(databasePath)), { recursive: true });
-}
-
-async function loadSqlite(
-  override: OpenReceiveCliOptions["loadSqlite"]
-): Promise<{
-  DatabaseSync: new (filename: string) => OpenReceiveSqliteDatabase & {
-    close?: () => void;
-  };
-}> {
-  if (override !== undefined) return override();
-  try {
-    return await import("node:sqlite") as unknown as {
-      DatabaseSync: new (filename: string) => OpenReceiveSqliteDatabase & {
-        close?: () => void;
-      };
-    };
-  } catch {
-    throw new Error("SQLite migration requires a Node runtime with node:sqlite support.");
-  }
-}
-
-async function loadPostgres(
-  override: OpenReceiveCliOptions["loadPostgres"]
-): Promise<{
-  Pool: new (options: { connectionString: string }) => {
-    query(sql: string, values?: readonly unknown[]): Promise<{ rows: Record<string, unknown>[] }>;
-    end(): Promise<void>;
-  };
-}> {
-  if (override !== undefined) return override();
-  try {
-    const pg = await import("pg") as unknown as {
-      default?: {
-        Pool?: new (options: { connectionString: string }) => {
-          query(sql: string, values?: readonly unknown[]): Promise<{ rows: Record<string, unknown>[] }>;
-          end(): Promise<void>;
-        };
-      };
-      Pool?: new (options: { connectionString: string }) => {
-        query(sql: string, values?: readonly unknown[]): Promise<{ rows: Record<string, unknown>[] }>;
-        end(): Promise<void>;
-      };
-    };
-    const Pool = pg.Pool ?? pg.default?.Pool;
-    if (Pool === undefined) throw new Error("pg Pool export not found");
-    return { Pool };
-  } catch {
-    throw new Error("Postgres migration requires installing the `pg` package in the app.");
-  }
-}
-
-async function loadExpressRunners(
-  override: OpenReceiveCliOptions["loadExpressRunners"]
-): Promise<OpenReceiveExpressRunnerModule> {
-  if (override !== undefined) return override();
-  try {
-    return await import("@openreceive/express") as unknown as OpenReceiveExpressRunnerModule;
-  } catch {
-    throw new Error(
-      "OpenReceive worker/poll/listen commands require installing `@openreceive/express` in the app."
-    );
-  }
-}
-
-async function waitForTerminationSignal(
-  cleanup: () => Promise<void> | void
-): Promise<void> {
-  await new Promise<void>((resolve) => {
-    const keepAlive = globalThis.setInterval(() => {}, 2_147_483_647);
-    let stopping = false;
-    const stop = () => {
-      if (stopping) return;
-      stopping = true;
-      void cleanupPromise().finally(resolve);
-    };
-    const cleanupPromise = async () => {
-      try {
-        await cleanup();
-      } finally {
-        globalThis.clearInterval(keepAlive);
-        globalThis.process?.off?.("SIGINT", stop);
-        globalThis.process?.off?.("SIGTERM", stop);
-      }
-    };
-    globalThis.process?.once?.("SIGINT", stop);
-    globalThis.process?.once?.("SIGTERM", stop);
-  });
+function ensureGitignoreContains(cwd: string, entry: string): void {
+  const gitignore = path.join(cwd, ".gitignore");
+  const existing = existsSync(gitignore) ? readFileSync(gitignore, "utf8") : "";
+  if (existing.split(/\r?\n/).includes(entry)) return;
+  appendFileSync(gitignore, `${existing.endsWith("\n") || existing.length === 0 ? "" : "\n"}${entry}\n`);
 }
 
 function safeErrorMessage(error: unknown): string {
@@ -1094,7 +702,11 @@ function safeErrorMessage(error: unknown): string {
 function redactPotentialSecrets(message: string): string {
   return message
     .replace(/nostr\+walletconnect:\/\/[^\s"'`<>]+/g, "[REDACTED_NWC]")
-    .replace(/([?&](?:_or_evt|token|secret)=)[^&\s"'`<>]+/gi, "$1[REDACTED]");
+    .replace(/([?&](?:token|secret)=)[^&\s"'`<>]+/gi, "$1[REDACTED]");
+}
+
+function redactStoreUri(uri: string): string {
+  return uri.replace(/:\/\/([^:@/]+):([^@/]+)@/, "://$1:[REDACTED]@");
 }
 
 function formatPreflightDetails(summary: unknown): string {
@@ -1118,9 +730,7 @@ function formatPreflightDetails(summary: unknown): string {
 
 function readPreflightWarnings(summary: unknown): string[] {
   if (!isRecord(summary) || !Array.isArray(summary.warnings)) return [];
-  return summary.warnings
-    .filter((warning): warning is string => typeof warning === "string")
-    .map(redactPotentialSecrets);
+  return summary.warnings.filter((warning): warning is string => typeof warning === "string");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

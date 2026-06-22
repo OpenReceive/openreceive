@@ -15,10 +15,10 @@
   demo build, docs build, client-bundle secret scan, and live NWC smoke gates.
 - Added read-only GitHub workflow skeletons, disabled publish workflow, and
   workflow safety validation.
-- Added Express auth, CSRF, idempotency, signed event URL, settlement action,
+- Added Express auth, CSRF, idempotency, protected poll, settlement action,
   rate, provider-route, and security regression coverage.
 - Added deterministic mock wallet tooling for non-payable conformance fixtures.
-- Added a package-owned Next.js route-handler adapter and moved demo route/SSE
+- Added a package-owned Next.js route-handler adapter and moved demo route
   glue out of the Next.js Hello Fruit demo.
 - Added package-owned Node Postgres pool setup for Hello Fruit demos and
   quarantined the copied Rails React skeleton until the Rails proof is green.

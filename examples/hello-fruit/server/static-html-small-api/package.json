@@ -8,8 +8,7 @@
     "build": "vite build",
     "preview": "node --experimental-strip-types ../../shared/require-openreceive-nwc.ts && vite preview --host 127.0.0.1",
     "start": "node --experimental-strip-types ../../shared/require-openreceive-nwc.ts && node --experimental-strip-types src/server/production.ts",
-    "openreceive:worker": "openreceive worker",
-    "openreceive:poll:once": "openreceive poll --once"
+    "openreceive:poll": "openreceive poll --once"
   },
   "dependencies": {
     "@openreceive/browser": "0.1.0",

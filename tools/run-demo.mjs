@@ -121,14 +121,11 @@ const composeArgs = [
   "-f",
   "compose.yml",
   "-f",
-  "compose.override.yml.example"
+  "compose.override.yml.example",
+  "up",
+  "--build",
+  ...extra
 ];
-
-if (demo.requiresUnauthenticatedDemoAck) {
-  composeArgs.push("--profile", "openreceive-worker");
-}
-
-composeArgs.push("up", "--build", ...extra);
 
 console.log(`Starting ${demo.label} demo -> http://localhost:${demo.port}\n`);
 

@@ -29,21 +29,20 @@ To run the container template locally:
 ```sh
 cp ../../../../.env.example ../../../../.env
 # Set OPENRECEIVE_NWC in the repository root .env file.
-docker compose -f compose.yml -f compose.override.yml.example --profile openreceive-worker up --build
+docker compose -f compose.yml -f compose.override.yml.example up --build
 ```
 
 Docker loads the repository root `.env` file, so the same
 `OPENRECEIVE_NWC` value can be shared across all local Hello Fruit demos
-without demo-local env files. Set it before running Compose; the web and worker
-containers validate it at startup. The compose stack also starts a local
+without demo-local env files. Set it before running Compose; the web container
+validates it at startup. The compose stack also starts a local
 Postgres container and points `DATABASE_URL` at it; the demo uses the
-package-owned OpenReceive Postgres invoice store, runs the package migration,
-and records the OpenReceive schema version before store queries.
+package-owned OpenReceive Postgres KV store and self-initializes the
+OpenReceive schema before store queries.
 
-The package exposes `npm run openreceive:worker`, which loads the default
-`openreceive.config.mjs` and runs polling plus notification listening in one
-backend process. `npm run openreceive:poll:once` is available for scheduled
-serverless polling.
+The package exposes `npm run openreceive:poll` for an optional one-shot
+scheduled reconciliation pass through the protected `/openreceive/v1/poll`
+route. There is no demo worker or notification listener process.
 
 The Makefile exposes the standard demo commands: `make setup`, `make dev`,
 `make test`, `make demo-test-nwc`, `make demo-production`,
@@ -56,6 +55,6 @@ Hosted-demo helpers expose `/healthz`, `/source`, `/docs`, `/robots.txt`, and
 `/sitemap.xml`.
 
 This demo uses `unsafeAllowUnauthenticatedDemoMode` because it is a local
-single-user example. Production apps use app auth and CSRF hooks. Production
-Node apps deploy a web process plus one OpenReceive worker;
+single-user example. Production apps use app auth, CSRF hooks, and protected
+poll authorization;
 see [Background Process Deployment](../../../../docs/17-background-workers.md).

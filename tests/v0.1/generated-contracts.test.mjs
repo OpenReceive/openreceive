@@ -16,9 +16,9 @@ test("generated contract models expose HTTP routes and event names", () => {
     "/health",
     "/invoices",
     "/invoices/{invoice_id}",
-    "/invoices/{invoice_id}/events",
     "/invoices/{invoice_id}/refresh",
     "/invoices/lookup",
+    "/poll",
     "/providers",
     "/rates",
     "/rates/quote",
@@ -29,11 +29,11 @@ test("generated contract models expose HTTP routes and event names", () => {
     "createInvoice",
     "getInvoice",
     "health",
-    "invoiceEvents",
     "listProviders",
     "listRates",
     "listRoutes",
     "lookupInvoice",
+    "pollInvoices",
     "quoteRates",
     "refreshInvoice"
   ]);

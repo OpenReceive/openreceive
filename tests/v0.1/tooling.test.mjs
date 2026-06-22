@@ -153,13 +153,12 @@ test("supported database docs keep invoice storage boundaries narrow", () => {
   const docs = readFileSync(supportedDatabaseDocs, "utf8");
   const quickstart = readFileSync(nodeQuickstartDocs, "utf8");
 
-  assert.match(docs, /\| Node \| Postgres \| Supported \|/);
-  assert.match(docs, /\| Node \| SQLite \| Supported \|/);
-  assert.match(docs, /\| Rails \| ActiveRecord SQLite \| Initial adapter path \|/);
+  assert.match(docs, /\| Node \| `postgres:\/\/\.\.\.` \| Supported \|/);
+  assert.match(docs, /\| Node \| `sqlite:\/path\/to\/openreceive\.sqlite3` \| Supported \|/);
+  assert.match(docs, /\| Node \| `local-sqlite` \| Supported \|/);
   assert.match(docs, /MongoDB, MySQL, Prisma-native models, Drizzle-native models, and arbitrary user\s+tables are not supported storage targets/);
-  assert.match(docs, /Keep app-owned references[\s\S]*in OpenReceive metadata or in your own app tables/);
-  assert.match(docs, /Do not add app-specific columns to OpenReceive-owned invoice rows/);
-  assert.match(quickstart, /MongoDB, MySQL, and arbitrary user-designed invoice tables are not\s+supported/);
+  assert.match(docs, /Apps keep business data in app-owned tables/);
+  assert.match(quickstart, /package-owned Postgres or SQLite invoice store/);
 });
 
 test("OpenReceive-owned invoice migrations do not add app-specific columns", () => {

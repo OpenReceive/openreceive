@@ -147,8 +147,8 @@ visible country/route lists. That keeps React, web components,
 Vue/Svelte/Angular bindings, and future native framework components aligned.
 
 Framework adapters use `createOpenReceiveCheckoutController()` or the
-lower-level `OpenReceiveCheckoutWatcher` for SSE subscriptions, lookup polling,
-countdown timers, lookup POST bodies, and lookup-response merging. The React
+lower-level `OpenReceiveCheckoutWatcher` for lookup polling, countdown timers,
+lookup POST bodies, and lookup-response merging. The React
 and web-component packages pass `lookupUrl` to the browser controller rather
 than constructing lookup fetchers locally.
 They emit display-safe checkout state only; backend lookup remains the
@@ -285,15 +285,14 @@ defineOpenReceiveElements({ logger });
   transaction-state="pending"
   workflow-state="invoice_created"
   expires-at="1781943000"
-  events-url="/openreceive/v1/invoices/or_inv_.../events"
   lookup-url="/openreceive/v1/invoices/lookup"
   theme="dark"
 ></openreceive-checkout>
 ```
 
 The element renders QR, copy, and open-wallet controls from display-safe invoice
-data. When `invoice-id`, `payment-hash`, `events-url`, `lookup-url`, and
-`expires-at` are present, it also renders the package-owned waiting state,
+data. When `invoice-id`, `payment-hash`, `lookup-url`, and `expires-at` are
+present, it also renders the package-owned waiting state,
 countdown, BOLT11 copy feedback, and country-aware payment wizard. It dispatches:
 
 - `openreceive-copy`
@@ -448,7 +447,6 @@ package-owned light/dark toggle without local hook or button wiring:
   transaction_state="pending"
   workflow_state="invoice_created"
   expires_at={1781943000}
-  checkout={{ events_url: "/openreceive/v1/invoices/or_inv_.../events" }}
   lookupUrl="/openreceive/v1/invoices/lookup"
   themeSwitcher
   logger={logger}
@@ -459,10 +457,10 @@ React components follow the same boundary: they render invoice display data and
 browser actions, while the backend remains the settlement authority. The default
 checkout UI includes the QR code, waiting state, expiry countdown, BOLT11 copy
 feedback, open-wallet action, and the country-aware payment wizard. The hook can
-consume passive SSE events and poll a server-owned lookup endpoint by passing
-`lookupUrl` into the browser checkout controller, or a custom `lookupInvoice`
-callback when an app needs to override the fetcher. The hook delegates watcher
-lifecycle, copy, lookup, and open-wallet actions to the browser checkout
+poll a server-owned lookup endpoint by passing `lookupUrl` into the browser
+checkout controller, or a custom `lookupInvoice` callback when an app needs to
+override the fetcher. The hook delegates watcher lifecycle, copy, lookup, and
+open-wallet actions to the browser checkout
 controller, and the default checkout passes those hook actions into its default
 copy/open-wallet buttons. Copy feedback timing is
 browser-owned and consumed by the hook, copy button, and provider buttons.
@@ -505,7 +503,7 @@ React has three supported UI paths:
   `OpenWalletButton`, component overrides, class names, and render props while
   the package still owns checkout behavior.
 - Fully headless UI: use `useOpenReceiveCheckout()` and app-owned markup/CSS;
-  the hook still owns polling, SSE updates, countdown state, copy/open-wallet,
+  the hook still owns polling, countdown state, copy/open-wallet,
   refresh/retry/cancel, and display-safe state conversion.
 
 ```tsx

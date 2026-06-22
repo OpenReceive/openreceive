@@ -4,19 +4,18 @@ OpenReceive does not require a daemon. Framework adapters mount these routes
 inside your application, usually at `/openreceive/v1`. The authoritative
 HTTP contract is `spec/openapi/openreceive-http.v1.yaml`.
 
-The HTTP routes are not the whole backend integration. Server packages also
-provide a settlement polling runner and a payment notification listener.
-Polling uses backend `lookup_invoice`; trusted `payment_received`
-notifications may settle the matching invoice directly. If no notification
-arrives, polling remains the recovery and settlement fallback.
+The HTTP routes are the backend integration. Server packages use backend
+`lookup_invoice` for settlement, route-triggered recovery, and optional
+one-shot poll recovery. There is no required daemon, payment notification
+listener, webhook bridge, or in-memory event bus.
 
 Server packages also provide OpenReceive-owned persistence for invoice,
-idempotency, lifecycle, and settlement-action rows inside your app database.
-Your app attaches hooks after settlement and keeps its own business records in
-its existing tables.
+idempotency, lifecycle, lookup-gate, and settlement-action state. Your app
+attaches hooks after settlement and keeps its own business records in its
+existing tables.
 
-Invoice, lookup, and event responses return `Cache-Control: no-store`. Browser
-responses never contain an NWC connection string or client secret.
+Invoice, lookup, refresh, and poll responses return `Cache-Control: no-store`.
+Browser responses never contain an NWC connection string or client secret.
 
 ## Create Invoice
 
@@ -86,20 +85,23 @@ Responses:
 - `200`: idempotent replay of the same refresh request.
 - `409`: invoice is not refreshable.
 
-## Invoice Events
+## Poll
 
-`GET /openreceive/v1/invoices/{invoice_id}/events`
+`POST /openreceive/v1/poll`
 
-The v0.1 reference adapter uses Server-Sent Events. Clients may send
-`Last-Event-ID` for replay. Event streams are passive UI hints; your
-settlement actions run from backend wallet verification.
+Runs one bounded recovery pass through the OpenReceive store. This route is for
+platform schedulers and operator tooling; protect it with `auth.poll` or
+`OPENRECEIVE_CRON_SECRET`. It is not a long-running worker.
 
-When the Express adapter is configured with signed event URLs,
-`checkout.events_url` includes a short-lived `_or_evt` query value scoped to the
-invoice. Treat the full URL like a short-lived credential in logs and storage.
+The response summarizes the invoices checked and any transitions found. Lookup
+calls are still gated by per-invoice cooldown and a global store-backed token
+bucket.
 
-The authoritative event contract is
-`spec/asyncapi/openreceive-events.v1.yaml`.
+## Lifecycle Events
+
+The authoritative server-side lifecycle event-name contract is
+`spec/asyncapi/openreceive-events.v1.yaml`. These events are for logs and
+server-side hooks, not for browser SSE streams.
 
 Event names:
 

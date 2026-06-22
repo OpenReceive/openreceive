@@ -12,7 +12,6 @@ const demoContainers = [
     packageName: "@openreceive/example-node-express-react",
     dir: "examples/hello-fruit/server/node-express-react",
     service: "hello-fruit-node-express-react",
-    workerService: "hello-fruit-node-express-react-openreceive-worker",
     image: "ghcr.io/openreceive/demo-express:local",
     port: "3000",
     buildScript: "vite build",
@@ -23,7 +22,6 @@ const demoContainers = [
     packageName: "@openreceive/example-static-html-small-api",
     dir: "examples/hello-fruit/server/static-html-small-api",
     service: "hello-fruit-static-html-small-api",
-    workerService: "hello-fruit-static-html-small-api-openreceive-worker",
     image: "ghcr.io/openreceive/demo-static:local",
     port: "3001",
     buildScript: "vite build",
@@ -34,7 +32,6 @@ const demoContainers = [
     packageName: "@openreceive/example-nextjs-fullstack",
     dir: "examples/hello-fruit/server/nextjs-fullstack",
     service: "hello-fruit-nextjs-fullstack",
-    workerService: "hello-fruit-nextjs-fullstack-openreceive-worker",
     image: "ghcr.io/openreceive/demo-nextjs:local",
     port: "3002",
     buildScript: "next build",
@@ -131,18 +128,14 @@ function validateCompose(demo) {
   const services = compose.services ?? {};
   const serviceNames = Object.keys(services);
   const service = services[demo.service] ?? {};
-  const worker = services[demo.workerService] ?? {};
   const databaseService = services[jsDemoDatabaseService] ?? {};
   const envFile = service.env_file?.[0];
-  const workerEnvFile = worker.env_file?.[0];
   const ports = service.ports ?? [];
-  const workerPorts = worker.ports ?? [];
   const databasePorts = databaseService.ports ?? [];
 
   forbidSecrets(relativePath, text);
-  expect(serviceNames.length === 3, `${relativePath}: must define app, OpenReceive worker, and Postgres services`);
+  expect(serviceNames.length === 2, `${relativePath}: must define app and Postgres services`);
   expect(serviceNames.includes(demo.service), `${relativePath}: service name must include ${demo.service}`);
-  expect(serviceNames.includes(demo.workerService), `${relativePath}: service name must include ${demo.workerService}`);
   expect(serviceNames.includes(jsDemoDatabaseService), `${relativePath}: service name must include ${jsDemoDatabaseService}`);
   expect(service.build?.context === "../../../..", `${relativePath}: build context must be the repo root`);
   expect(service.build?.dockerfile === `${demo.dir}/Dockerfile`, `${relativePath}: dockerfile path must target the demo Dockerfile`);
@@ -156,18 +149,6 @@ function validateCompose(demo) {
   expect(ports.length === 0, `${relativePath}: stable compose must not publish host ports`);
   expect(service.network_mode === undefined, `${relativePath}: must not use host networking`);
   expect(JSON.stringify(service.volumes ?? []).includes("/var/run/docker.sock") === false, `${relativePath}: must not mount the Docker socket`);
-  expect(worker.build?.context === "../../../..", `${relativePath}: worker build context must be the repo root`);
-  expect(worker.build?.dockerfile === `${demo.dir}/Dockerfile`, `${relativePath}: worker dockerfile path must target the demo Dockerfile`);
-  expect(JSON.stringify(worker.command ?? []) === JSON.stringify(["npm", "run", "openreceive:worker"]), `${relativePath}: worker must run npm run openreceive:worker`);
-  expect(worker.depends_on?.[jsDemoDatabaseService]?.condition === "service_healthy", `${relativePath}: worker must wait for Postgres health`);
-  expect(worker.profiles?.includes("openreceive-worker"), `${relativePath}: worker must be behind the openreceive-worker profile`);
-  expect(workerEnvFile?.path === "../../../../.env" && workerEnvFile?.required === false, `${relativePath}: worker must load optional root .env`);
-  expect(worker.environment?.DATABASE_URL === jsDemoDatabaseUrl, `${relativePath}: worker must receive local Postgres DATABASE_URL`);
-  expect(worker.environment?.OPENRECEIVE_DEMO_MODE === "${OPENRECEIVE_DEMO_MODE:-test_nwc}", `${relativePath}: worker demo mode must default to test_nwc`);
-  expect((worker.expose ?? []).length === 0, `${relativePath}: worker must not expose ports`);
-  expect(workerPorts.length === 0, `${relativePath}: worker must not publish host ports`);
-  expect(worker.network_mode === undefined, `${relativePath}: worker must not use host networking`);
-  expect(JSON.stringify(worker.volumes ?? []).includes("/var/run/docker.sock") === false, `${relativePath}: worker must not mount the Docker socket`);
   expect(databaseService.image === "postgres:17-alpine", `${relativePath}: Postgres service must use pinned alpine image`);
   expect(databaseService.environment?.POSTGRES_DB === "openreceive", `${relativePath}: Postgres database must be openreceive`);
   expect(databaseService.environment?.POSTGRES_USER === "openreceive", `${relativePath}: Postgres user must be openreceive`);
@@ -211,8 +192,8 @@ function validatePackage(demo) {
   expect(pkg.scripts?.build === demo.buildScript, `${relativePath}: build script must run ${demo.buildScript}`);
   expect(pkg.scripts?.start === demo.startScript, `${relativePath}: start script must be ${demo.startScript}`);
   expect(pkg.scripts?.dev?.includes("require-openreceive-nwc.ts"), `${relativePath}: dev script must validate OPENRECEIVE_NWC before boot`);
-  expect(pkg.scripts?.["openreceive:worker"] === "openreceive worker", `${relativePath}: worker script must run openreceive worker`);
-  expect(pkg.scripts?.["openreceive:poll:once"] === "openreceive poll --once", `${relativePath}: one-shot poll script must use default config`);
+  expect(pkg.scripts?.["openreceive:worker"] === undefined, `${relativePath}: worker script must not be exposed`);
+  expect(pkg.scripts?.["openreceive:poll"] === "openreceive poll --once", `${relativePath}: one-shot poll script must use default config`);
   expect(pkg.dependencies?.pg === "^8.22.0", `${relativePath}: demo must depend on pg for package-owned invoice persistence`);
   expect(pkg.dependencies?.qrcode === undefined, `${relativePath}: qrcode must be provided by the OpenReceive UI package`);
 }
@@ -223,8 +204,10 @@ function validateReadme(demo) {
 
   expect(text.includes("The browser never receives `OPENRECEIVE_NWC`."), `${relativePath}: must state browser NWC boundary`);
   expect(text.includes("refuses to boot"), `${relativePath}: must state demos refuse missing or malformed OPENRECEIVE_NWC`);
-  expect(text.includes("docker compose -f compose.yml -f compose.override.yml.example --profile openreceive-worker up --build"), `${relativePath}: must document compose startup with the OpenReceive worker profile`);
-  expect(text.includes("npm run openreceive:worker"), `${relativePath}: must document the worker script`);
+  expect(text.includes("docker compose -f compose.yml -f compose.override.yml.example up --build"), `${relativePath}: must document compose startup without a worker profile`);
+  expect(text.includes("npm run openreceive:poll"), `${relativePath}: must document the one-shot poll script`);
+  expect(!text.includes("openreceive:worker"), `${relativePath}: must not document a worker script`);
+  expect(!text.includes("--profile openreceive-worker"), `${relativePath}: must not document worker profiles`);
   expect(text.includes("/demo-metadata.json"), `${relativePath}: must document demo metadata`);
 }
 
@@ -250,8 +233,9 @@ function validateMakefile(demo) {
   expect(text.includes(`IMAGE ?= ${demo.image}`), `${relativePath}: image must default to ${demo.image}`);
   expect(text.includes(`HEALTH_URL ?= http://127.0.0.1:${demo.port}/healthz`), `${relativePath}: smoke URL must target /healthz on ${demo.port}`);
   expect(text.includes("COMPOSE ?= docker compose -f compose.yml -f compose.override.yml.example"), `${relativePath}: local compose command must include override example`);
-  expect(text.includes("OPENRECEIVE_DEMO_MODE=test_nwc $(COMPOSE) --profile openreceive-worker up --build"), `${relativePath}: demo-test-nwc must use compose test_nwc mode with the worker profile`);
-  expect(text.includes("OPENRECEIVE_DEMO_MODE=production $(COMPOSE) --profile openreceive-worker up --build"), `${relativePath}: demo-production must use compose production mode with the worker profile`);
+  expect(text.includes("OPENRECEIVE_DEMO_MODE=test_nwc $(COMPOSE) up --build"), `${relativePath}: demo-test-nwc must use compose test_nwc mode`);
+  expect(text.includes("OPENRECEIVE_DEMO_MODE=production $(COMPOSE) up --build"), `${relativePath}: demo-production must use compose production mode`);
+  expect(!text.includes("--profile openreceive-worker"), `${relativePath}: Makefile must not use a worker profile`);
   expect(text.includes("$(COMPOSE) up"), `${relativePath}: docker-run must use compose command`);
   expect(text.includes("curl -fsS $(HEALTH_URL)"), `${relativePath}: docker-smoke must curl HEALTH_URL`);
 }

@@ -31,10 +31,6 @@ module Openreceive
                   "app/controllers/openreceive_controller.rb"
         copy_file "app/jobs/openreceive_poll_invoice_job.rb",
                   "app/jobs/openreceive_poll_invoice_job.rb"
-        copy_file "app/jobs/openreceive_payment_received_job.rb",
-                  "app/jobs/openreceive_payment_received_job.rb"
-        copy_file "app/channels/openreceive_invoice_channel.rb",
-                  "app/channels/openreceive_invoice_channel.rb"
         copy_file "app/views/openreceive/_invoice.html.erb",
                   "app/views/openreceive/_invoice.html.erb"
         copy_file "lib/tasks/openreceive.rake",

@@ -36,11 +36,11 @@ The backend owns:
 - wallet preflight
 - invoice creation
 - idempotency
-- polling and notification listeners
+- route-driven lookup and optional one-shot poll recovery
 - settlement verification
 - app-owned settlement actions
 
-Mobile UI treats events and polling responses as display state. The backend
+Mobile UI treats lookup and polling responses as display state. The backend
 remains the settlement authority.
 
 ## Future SDKs

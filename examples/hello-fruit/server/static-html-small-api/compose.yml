@@ -18,22 +18,6 @@ services:
       PORT: "3001"
     expose:
       - "3001"
-  hello-fruit-static-html-small-api-openreceive-worker:
-    build:
-      context: ../../../..
-      dockerfile: examples/hello-fruit/server/static-html-small-api/Dockerfile
-    command: ["npm", "run", "openreceive:worker"]
-    depends_on:
-      openreceive-postgres:
-        condition: service_healthy
-    profiles:
-      - openreceive-worker
-    env_file:
-      - path: ../../../../.env
-        required: false
-    environment:
-      DATABASE_URL: postgres://openreceive:openreceive@openreceive-postgres:5432/openreceive
-      OPENRECEIVE_DEMO_MODE: ${OPENRECEIVE_DEMO_MODE:-test_nwc}
   openreceive-postgres:
     image: postgres:17-alpine
     environment:

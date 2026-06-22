@@ -125,8 +125,8 @@ checkout always needs a backend component controlled by your application.
 Public docs live in `docs/` and are indexed by `docs/manifest.json`.
 
 - `docs/01-quickstart-node.md` is the current working backend quickstart.
-- `docs/17-background-workers.md` shows how to run the web app and the
-  combined OpenReceive backend worker on common hosts.
+- `docs/17-background-workers.md` explains route-driven recovery and optional
+  one-shot poll scheduling on common hosts.
 - `docs/11-conformance.md` covers shared vectors, mock wallet, and live wallet
   smoke expectations.
 - `docs/13-demo-deployment.md` covers the separate demo edge and deployment
