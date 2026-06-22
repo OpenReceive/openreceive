@@ -6,6 +6,8 @@
 
 **v2 incorporates six fixes from review:** (1) `getByBolt11Invoice` restored; (2) typed `putIfAbsent` conflict result + ordered create sequence so replay ≠ collision; (3) settlement is **at-least-once** via a CAS action lease, hooks must be idempotent; (4) **S3 dropped**, gated `local-sqlite` added; (5) active per-invoice lookup split from the background sweep, sweep throttled in the store and run async with hard bounds; (6) the in-memory SSE event bus removed.
 
+**Final review fixes applied:** `invoice_id` collisions are explicit and retried by core; concurrent identical creates may rarely mint an abandoned extra wallet invoice, which is acceptable because only one invoice is stored/returned and only stored invoices can fulfill; Redis/DO uniqueness reservations must be atomic (repair is for stale indexes only); `/events`/AsyncAPI become optional, not unchanged; lookup endpoints are documented as **gated status refreshes** that may return stored state without a wallet call.
+
 ---
 
 ## The three principles
@@ -81,7 +83,7 @@ The complexity in the current tree is not the cost of persistence. It is two des
                          ┌───────────────▼─────────────────────────────┐
                          │  CORE  (backend-agnostic; the ONLY logic)    │
                          │  - state machine (plain functions)           │
-                         │  - idempotency rules (replay vs conflict)    │
+                         │  - idempotency rules (replay vs conflict)     │
                          │  - gatedLookup(invoice)  →  cooldown+bucket  │
                          │  - reconcileSweep(limit) →  listOpen + gates │
                          │  - settlement action LEASE (at-least-once)   │
@@ -99,7 +101,7 @@ The complexity in the current tree is not the cost of persistence. It is two des
    (own pg conn)  (own conn)   (1 machine, WAL)      (SET NX, optional)   (txn storage)
 
    NO S3.  NO NWC listener.  NO webhook.  NO in-memory state / SSE bus.
-   Settlement discovered ONLY by lookup_invoice, paced by two store-enforced gates.
+   Settlement discovered ONLY by gated lookup_invoice, paced by two store-enforced gates.
    Settlement action is AT-LEAST-ONCE (lease + idempotent hooks).
 ```
 
@@ -127,7 +129,8 @@ export interface OpenReceiveInvoiceKvStore {
   /**
    * Atomic put-if-absent across invoice_id AND the three uniqueness keys.
    * On collision, reports WHICH key collided and returns the existing record,
-   * so core can distinguish replay (idempotency_scope) from conflict (payment_hash/bolt11).
+   * so core can distinguish retryable invoice_id collision, replay
+   * (idempotency_scope), and conflict (payment_hash/bolt11).
    */
   putIfAbsent(
     record: StoredRecord,
@@ -135,7 +138,7 @@ export interface OpenReceiveInvoiceKvStore {
     | { status: "created"; record: StoredRecord }
     | {
         status: "conflict";
-        on: "idempotency_scope" | "payment_hash" | "bolt11";
+        on: "invoice_id" | "idempotency_scope" | "payment_hash" | "bolt11";
         existing: StoredRecord;
       }
   >;
@@ -269,7 +272,7 @@ Five control columns the engine needs (uniqueness × 3, recovery scan × 2) + on
 
 ## 7. Idempotency + uniqueness — the precedence rule and the create sequence
 
-Idempotency rides on **atomic `putIfAbsent`** across `invoice_id`, `payment_hash`, `bolt11`, `idempotency_scope`; the bucket/sweep-clock/ownership rows ride on **atomic `casMeta`**. The store reports _which_ key collided so core applies ADR-0003 precedence: **idempotency scope is decided first (replay-or-409), wallet-value uniqueness second.**
+Idempotency rides on **atomic `putIfAbsent`** across `invoice_id`, `payment_hash`, `bolt11`, `idempotency_scope`; the bucket, sweep-clock, and ownership rows ride on **atomic `casMeta`**. The store reports _which_ key collided so core applies ADR-0003 precedence: **idempotency scope is decided first (replay-or-409), retryable `invoice_id` collision second, wallet-value uniqueness third.**
 
 **Invoice-create sequence (in core):**
 
@@ -282,21 +285,27 @@ Idempotency rides on **atomic `putIfAbsent`** across `invoice_id`, `payment_hash
 3. mint via NWC make_invoice → bolt11, payment_hash
 4. r = putIfAbsent(record)
    r.created                         → 201
+   r.conflict on "invoice_id"        → generate a new invoice_id and retry putIfAbsent with the SAME bolt11/payment_hash
+                                       (retryable local id collision; never call make_invoice again)
    r.conflict on "idempotency_scope" → re-read; apply step-2 hash compare (REPLAY or 409). (race between 2 and 4)
    r.conflict on "payment_hash"|"bolt11" → 409 storage-conflict
        (two logical invoices cannot share a payment_hash/bolt11 — a genuine wallet-value collision or a bug)
 ```
 
-This makes replay and collision **distinct outcomes**, never blurred. Transport primitives:
+This makes replay, retryable local-id collision, and wallet-value collision **distinct outcomes**, never blurred. One tradeoff is accepted deliberately: if two workers race with the same idempotency key and neither sees an existing record before calling `make_invoice`, more than one wallet invoice may be minted. Only the `putIfAbsent` winner is stored and returned; the loser re-reads the stored invoice and returns the replay if the request hash matches. The extra wallet invoice is abandoned and expires. That is annoying wallet clutter, not a money-safety bug, because no OpenReceive record or app fulfillment exists for the abandoned invoice.
+
+If a future high-volume merchant or wallet quota makes abandoned invoices costly, OpenReceive can add an optional per-idempotency-scope create lease in `_meta` before `make_invoice`. It is not required for v1 correctness.
+
+Transport primitives:
 
 | Transport                    | Atomic conditional-write primitive                                                         | Notes                                                                          |
 | ---------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
 | Postgres / MySQL             | `INSERT … ON CONFLICT DO NOTHING` returning the conflicting key / `UPDATE … WHERE rev = ?` | native, strongly consistent                                                    |
 | SQLite (single machine, WAL) | same; inter-process locking                                                                | multiple **local** workers OK; cannot span machines or survive ephemeral hosts |
-| Cloudflare                   | **Durable Object storage** (transactional, strongly consistent)                            | **NOT Workers KV** (eventually consistent, no CAS)                             |
-| Redis / Upstash              | `SET … NX` / `WATCH`/`MULTI`                                                               | native; optional v1                                                            |
+| Cloudflare                   | **Durable Object storage** transaction                                                     | **NOT Workers KV** (eventually consistent, no CAS)                             |
+| Redis / Upstash              | one `WATCH`/`MULTI` or Lua operation reserving primary + all indexes                       | native; optional v1                                                            |
 
-A store that cannot provide atomic conditional writes is **not a certified backend.** (SQL enforces all four uniqueness keys in one statement/transaction. Redis/DO write the primary first, then the index keys; a crash between is reconciled on next access — primary is source of truth, indexes rebuildable via `repairIndexes()`; conformance includes that vector.)
+A store that cannot provide atomic conditional writes is **not a certified backend.** SQL enforces all four uniqueness keys in one statement/transaction. Redis/DO must reserve/write the primary record and all secondary uniqueness keys **atomically**; they must not write the primary first and rely on later index repair for uniqueness. `repairIndexes()` is only for stale/missing secondary indexes discovered after non-uniqueness maintenance bugs or older data, never part of the correctness path for `putIfAbsent`.
 
 ---
 
@@ -345,7 +354,7 @@ _Ordering_ (cooldown → token → claim → lookup) is deliberate: the cheap co
 
 ### 8.2 Interactive path — the lookup endpoint (browser 3s poll)
 
-The browser checkout polls the lookup endpoint every 3s by default (`packages/js/browser/src/index.ts:2905`). That endpoint looks up **only the one requested invoice** (by `payment_hash` or `invoice`), via `gatedLookup`. **It never scans.** Because the cooldown is age-based, a _young_ invoice (customer actively waiting) is due roughly every few seconds → responsive confirmation, while an _old_ abandoned invoice is rarely due → mostly cheap stored-state reads. So the 3s poll mostly returns stored state and hits the wallet only when that invoice's cooldown is due and a token is free. A fast or malicious client **cannot** force fast wallet lookups — the gates throttle regardless of poll rate.
+The browser checkout polls the lookup endpoint every 3s by default (`packages/js/browser/src/index.ts:2905`). That endpoint refreshes/checks **only the one requested invoice** (by `payment_hash` or `invoice`), via `gatedLookup`. **It never scans.** Because the cooldown is age-based, a _young_ invoice (customer actively waiting) is due roughly every few seconds → responsive confirmation, while an _old_ abandoned invoice is rarely due → mostly cheap stored-state reads. So the 3s poll mostly returns stored state and hits the wallet only when that invoice's cooldown is due and a token is free. A fast or malicious client **cannot** force fast wallet lookups — the gates throttle regardless of poll rate. Docs should describe this route as a **gated status refresh**: it may perform `lookup_invoice`, but callers are not promised a fresh wallet round trip on every HTTP request.
 
 ### 8.3 Recovery path — the background sweep (catches abandoned invoices)
 
@@ -450,7 +459,8 @@ OPENRECEIVE_NWC=nostr+walletconnect://...                  # the only mandatory 
 OPENRECEIVE_CRON_SECRET=…                                  # only if you add the optional scheduled ping
 # Optional tuning (sane defaults shipped):
 OPENRECEIVE_LOOKUP_BURST=8           OPENRECEIVE_LOOKUP_RATE_PER_SEC=4
-OPENRECEIVE_SWEEP_INTERVAL_SEC=20    OPENRECEIVE_SWEEP_BATCH=200    OPENRECEIVE_ACTION_LEASE_TTL_SEC=60
+OPENRECEIVE_ACTION_LEASE_TTL_SEC=60
+OPENRECEIVE_SWEEP_INTERVAL_SEC=20    OPENRECEIVE_SWEEP_BATCH=200
 ```
 
 Scheme → adapter in `@openreceive/node`: `resolveOpenReceiveStore(uri, { namespace })`.
@@ -514,7 +524,8 @@ New flags: `--store <uri>`, `--namespace <ns>`. `--postgres`/`--sqlite`/`--datab
 
 - `schemas/` — `StoredRecord`, `MetaRow`, `lookup_bucket` value, `last_sweep_at` value; `InvoiceStorageRow` gains `last_lookup_at?`, `action_claimed_at?`; typed `putIfAbsent` result.
 - `test-vectors/` — **add** the transport-agnostic suite (§15).
-- `asyncapi/`, `openapi/` — unchanged HTTP contract (lookup by `payment_hash` **or** `invoice`); document `/poll`, poll-only settlement (no listener), at-least-once hooks.
+- `openapi/` — keep the core HTTP contract (lookup by `payment_hash` **or** `invoice`) but document lookup as a **gated status refresh**, add protected `/poll`, and remove `/events` from the default contract or mark it optional/experimental behind a cross-process event transport.
+- `asyncapi/` — no default event stream contract after SSE removal. If events return later, AsyncAPI is an optional extension for a real cross-process transport, never the in-memory bus.
 
 ### `tools/`
 
@@ -551,19 +562,20 @@ Store adapters are keyed by **transport** (postgres, mysql, sqlite, redis, DO) �
 
 One transport-agnostic suite (in `spec/test-vectors/`) every adapter must pass, plus a per-transport live smoke. (Adapters: memory, postgres, mysql, sqlite, redis, DO. **No S3.**)
 
-1. `putIfAbsent` atomic under concurrency: N parallel creators of the same `invoice_id` → exactly one `created`; **and the conflict result names the correct `on` key** for `idempotency_scope` vs `payment_hash` vs `bolt11` collisions.
-2. Create-sequence precedence: same scope + same request hash → REPLAY (no second `make_invoice`); same scope + different hash → 409 idempotency-conflict; distinct logical invoices can never share `payment_hash`/`bolt11`.
+1. `putIfAbsent` atomic under concurrency: N parallel creators of the same `invoice_id` → exactly one `created`; **and the conflict result names the correct `on` key** for `invoice_id`, `idempotency_scope`, `payment_hash`, and `bolt11` collisions.
+2. Create-sequence precedence: same scope + same request hash → REPLAY; same scope + different hash → 409 idempotency-conflict; distinct logical invoices can never share `payment_hash`/`bolt11`.
 3. `put` rejects stale `rev` (`conflict`), accepts current (`ok`).
 4. `casMeta` atomic under concurrency: N parallel CAS on one key → exactly one `ok` per `rev`.
-5. `listOpen` returns exactly the non-terminal set, honors `limit`; terminalized rows disappear.
-6. Secondary indexes (`ph`, `b11`, `idem`) consistent across create/transition; `repairIndexes` reconstructs them after a planted crash-between-writes.
-7. Ownership guard: planted foreign same-named table → boot refuses; our own table on second boot → no error; newer `schema_version` → refuses.
-8. **Per-invoice lookup claim:** concurrent gated lookups across simulated processes → **at most one `lookup_invoice` per invoice per cooldown window**.
-9. **Global token bucket:** N concurrent passes, M due invoices, bucket size K → **total `lookup_invoice` in a burst window ≤ K**, then refill-rate.
-10. **Sweep throttle:** N concurrent `maybeSweep` across simulated processes → the scan runs **at most once per `SWEEP_INTERVAL_SEC`**, and never exceeds `SWEEP_BATCH` lookups per run.
-11. **Action lease:** concurrent `runSettlementAction` across simulated processes → **at most one hook execution per non-crash window**; a claim whose worker "crashes" (never completes) is **re-claimed after `ACTION_LEASE_TTL`** and re-run (proving at-least-once + recovery, and why hooks must be idempotent).
+5. **Concurrent create tradeoff:** N concurrent identical creates may call `make_invoice` more than once, but exactly one invoice is stored/returned for the idempotency scope; losers replay the winner when request hashes match. Extra wallet invoices are not stored, cannot fulfill, and expire.
+6. `listOpen` returns exactly the non-terminal set, honors `limit`; terminalized rows disappear.
+7. Secondary indexes (`ph`, `b11`, `idem`) consistent across create/transition; Redis/DO prove primary + secondary reservations are atomic. `repairIndexes` may rebuild stale indexes but is never required for uniqueness correctness.
+8. Ownership guard: planted foreign same-named table → boot refuses; our own table on second boot → no error; newer `schema_version` → refuses.
+9. **Per-invoice lookup claim:** concurrent gated lookups across simulated processes → **at most one `lookup_invoice` per invoice per cooldown window**.
+10. **Global token bucket:** N concurrent passes, M due invoices, bucket size K → **total `lookup_invoice` in a burst window ≤ K**, then refill-rate.
+11. **Sweep throttle:** N concurrent `maybeSweep` across simulated processes → the scan runs **at most once per `SWEEP_INTERVAL_SEC`**, and never exceeds `SWEEP_BATCH` lookups per run.
+12. **Action lease:** concurrent `runSettlementAction` across simulated processes → **at most one hook execution per non-crash window**; a claim whose worker "crashes" (never completes) is **re-claimed after `ACTION_LEASE_TTL`** and re-run (proving at-least-once + recovery, and why hooks must be idempotent).
 
-A backend is **certified** iff it passes (1)–(11) + a live round-trip.
+A backend is **certified** iff it passes (1)–(12) + a live round-trip.
 
 ---
 
@@ -578,7 +590,7 @@ A backend is **certified** iff it passes (1)–(11) + a live round-trip.
 
 ### `docs/adr/`
 
-- **ADR-0003 (idempotency/storage invariants)** — amend: enforced by atomic `putIfAbsent`; **precedence rule explicit** (idempotency scope decided first → replay-or-409; payment_hash/bolt11 second → storage-conflict); the typed `putIfAbsent` result; the create sequence.
+- **ADR-0003 (idempotency/storage invariants)** — amend: enforced by atomic `putIfAbsent`; **precedence rule explicit** (idempotency scope decided first → replay-or-409; retryable `invoice_id` collision second; payment_hash/bolt11 third → storage-conflict); the typed `putIfAbsent` result; the create sequence; and the accepted rare abandoned-invoice tradeoff under concurrent identical creates.
 - **New ADR-0005 — Self-owned KV persistence + URI configuration** (9-method contract, own connection, opaque-blob frozen schema, URI/namespace, ownership boot, transports incl. `local-sqlite`, S3 deferred).
 - **New ADR-0006 — Poll-only, worker-free, store-coordinated recovery** (no listener/webhook/in-memory state; interactive gated lookup vs store-throttled async sweep; the two gates; the idle/burst gaps; optional `/poll`).
 - **New ADR-0007 — At-least-once settlement actions** (CAS lease eliminates concurrent duplicates + recovers crashes but not crash-after-hook; hooks MUST be idempotent, deduped by `payment_hash`).
@@ -604,7 +616,7 @@ A backend is **certified** iff it passes (1)–(11) + a live round-trip.
 - **Phase 2 — SQL backends + config.** Rewrite Postgres + SQLite as KV adapters (incl. `local-sqlite`, WAL, ephemeral refusal); `ensureSchema()` + ownership/version; `resolveOpenReceiveStore`; `migrate` optional; `doctor` round-trip; delete `listener.ts`.
 - **Phase 3 — Namespacing + ownership boot.** `OPENRECEIVE_NAMESPACE` across transports; planted-foreign-table refusal; per-namespace bucket + sweep clock.
 - **Phase 4 — Route-driven recovery + remove SSE.** Express/Next/Rails: gated lookup endpoint, `maybeSweep` after responding, protected `/poll`; **delete the in-memory SSE event bus and all event-bus client wiring**; browser polling becomes the sole UI path; rewrite `17-background-workers.md`; document idempotent hooks.
-- **Phase 5 — New transports.** Redis/Upstash + Cloudflare Durable Object storage — each ~120 lines + green suite (incl. vectors 8–11).
+- **Phase 5 — New transports.** Redis/Upstash + Cloudflare Durable Object storage — each ~120 lines + green suite (incl. vectors 9–12, plus atomic index reservation).
 - **Phase 6 — De-couple frameworks + rewrite doctrine.** Drop Rails ActiveRecord model/migration; framework packages = route adapter + optional one-shot poll. Rewrite master-plan persistence + worker sections; add ADR-0005/0006/0007; amend ADR-0003. Update quickstarts, demos, `manifest.json`, `sdk-status.md`.
 
 ---
@@ -629,7 +641,8 @@ npm install @openreceive/node @openreceive/express @openreceive/browser express
 #   OPENRECEIVE_NWC=nostr+walletconnect://...
 #   OPENRECEIVE_STORE=local-sqlite           # or postgres:// / mysql:// / a CF binding
 #   OPENRECEIVE_NAMESPACE=myapp_prod          # optional
-mountOpenReceiveExpressRoutes(app, openreceive);   // self-initializes on boot; adds .openreceive/ to .gitignore
+mountOpenReceiveExpressRoutes(app, openreceive);   // self-initializes on boot
+# openreceive init adds .openreceive/ to .gitignore when using local-sqlite
 # settlementAction MUST be idempotent, e.g. UPDATE orders SET paid=true WHERE id=? AND paid=false
 # deploy web. No worker. No listener. No migrate.
 # Recovery: interactive gated lookups + a store-throttled async sweep on requests/boot.
