@@ -8,9 +8,9 @@ https://openreceive.org/get_a_nwc_code_to_receive_payments
 OpenReceive now has an initial Rails adapter helper package at
 `packages/ruby/openreceive-rails`. It can wrap an injected receive-only client
 for idempotent invoice creation, authorized lookup, backend settlement
-verification, poll recovery, and
+verification, route-triggered recovery sweeps, optional poll recovery, and
 duplicate-safe settlement action tracking. It also includes a package-owned
-SQLite invoice store resolver for `OPENRECEIVE_STORE`, controller, poll job, route, install-generator
+SQLite invoice store resolver for `OPENRECEIVE_STORE`, controller, optional poll job, route, install-generator
 templates, generated poll/doctor rake tasks, an invoice Hotwire partial,
 production fail-closed checks for in-memory storage, and optional mounted engine
 routes with `503 WALLET_UNAVAILABLE` handling for an injected unavailable-wallet client.
@@ -48,15 +48,17 @@ using the app's existing authentication, order/session lookup, and settlement
 actions. The Rails package provides the backend entry points the app deploys:
 
 - `bin/rails openreceive:poll` or a generated recurring job for one-shot
-  settlement recovery
+  settlement recovery as an optional extra
 - `bin/rails openreceive:doctor` to check storage ownership/schema, NWC preflight,
   and poll readiness. The doctor task fails if the app is still using the
   Ruby in-memory test store or a store without ownership/schema diagnostics.
 
-Run poll from a scheduler or framework job when you want extra recovery beyond
-route-triggered lookup. The Rails storage surface is still initial proof work
-and will need full KV alignment before it becomes a primary supported path. It
-does not ship app ActiveRecord invoice models or OpenReceive invoice migrations. Your
+Mounted OpenReceive Rails routes run a bounded route-triggered sweep after
+create/show activity, so paid invoices can recover without a background task.
+Run poll from a scheduler or framework job only when you want extra recovery
+beyond route-triggered lookup and sweep. The Rails storage surface is still
+initial proof work and will need full KV alignment before it becomes a primary
+supported path. It does not ship app ActiveRecord invoice models or OpenReceive invoice migrations. Your
 Rails app provides order/user references in metadata and app-owned hooks such
 as `settlement_action`.
 
@@ -67,7 +69,7 @@ Expected Rails pieces:
 - Rails engine or route helpers mounted under `/openreceive/v1`
 - server-side receive-only NWC configuration
 - package-owned storage selected by `OPENRECEIVE_STORE`
-- ActiveJob, Solid Queue, Sidekiq, or GoodJob one-shot poll jobs
+- optional ActiveJob, Solid Queue, Sidekiq, or GoodJob one-shot poll jobs
 - Turbo Streams or Hotwire updates for display-safe browser state
 - idempotent settlement action hooks after backend settlement verification
 

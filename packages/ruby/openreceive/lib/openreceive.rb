@@ -465,6 +465,7 @@ module OpenReceive
       @by_payment_hash = {}
       @by_bolt11_invoice = {}
       @by_idempotency_scope = {}
+      @meta = {}
     end
 
     def check_idempotency(scope:, idempotency_request_hash:)
@@ -513,12 +514,26 @@ module OpenReceive
       invoice_id.nil? ? nil : find_by_invoice_id(invoice_id)
     end
 
-    def recoverable_invoices(now:, grace_seconds: 15)
+    def recoverable_invoices(now:, grace_seconds: 15, limit: nil)
       integer(now)
       integer(grace_seconds)
-      @by_invoice_id.values.select do |row|
+      rows = @by_invoice_id.values.select do |row|
         recoverable_invoice?(row)
-      end.map { |row| deep_copy(row) }
+      end.sort_by { |row| [integer(row.fetch("expires_at")), row.fetch("invoice_id")] }
+      rows = rows.first(integer(limit)) unless limit.nil?
+      rows.map { |row| deep_copy(row) }
+    end
+
+    def claim_sweep(now:, interval_seconds:)
+      current = integer(now)
+      interval = integer(interval_seconds)
+      raise ArgumentError, "interval_seconds must be positive" unless interval.positive?
+
+      last_sweep_at = @meta["last_sweep_at"]
+      return false if !last_sweep_at.nil? && current - last_sweep_at < interval
+
+      @meta["last_sweep_at"] = current
+      true
     end
 
     def require_stored_invoice(invoice_id)

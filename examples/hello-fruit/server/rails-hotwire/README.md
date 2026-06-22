@@ -1,13 +1,15 @@
 # Hello Fruit Rails Hotwire
 
 This is the Rails Hotwire Hello Fruit demo skeleton. It uses
-`openreceive-rails` inside a normal Rails app, with Rails controllers, jobs, and
-Turbo updates owning the application workflow.
+`openreceive-rails` inside a normal Rails app, with Rails controllers and Turbo
+updates owning the application workflow.
 
 The browser never receives `OPENRECEIVE_NWC`.
 OpenReceive invoice persistence uses the package-owned SQLite store selected by
 `OPENRECEIVE_STORE`. The fruit unlock table remains app-owned demo business
-state.
+state. Mounted OpenReceive routes run route-triggered recovery sweeps, so the
+demo does not require a background worker to credit a paid invoice after a
+restart or closed browser window.
 
 Run locally with Docker:
 

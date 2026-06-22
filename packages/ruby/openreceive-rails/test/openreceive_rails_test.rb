@@ -149,6 +149,19 @@ class OpenReceiveRailsTest < Minitest::Test
     end
   end
 
+  def test_sqlite_store_claims_sweeps_once_per_interval
+    Dir.mktmpdir do |dir|
+      store = OpenReceive::Rails.resolve_invoice_store(
+        uri: "sqlite://#{File.join(dir, "openreceive.sqlite3")}",
+        namespace: "rails_test"
+      )
+
+      assert_equal true, store.claim_sweep(now: 1000, interval_seconds: 20)
+      assert_equal false, store.claim_sweep(now: 1010, interval_seconds: 20)
+      assert_equal true, store.claim_sweep(now: 1020, interval_seconds: 20)
+    end
+  end
+
   def test_rails_route_and_poll_templates_preserve_receive_only_boundary
     controller = read_generator_template("app/controllers/openreceive_controller.rb")
     poll_job = read_generator_template("app/jobs/openreceive_poll_invoice_job.rb")
@@ -161,6 +174,8 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_includes controller, "create_invoice"
     assert_includes controller, "lookup_invoice"
     assert_includes controller, "protect_from_forgery"
+    assert_includes controller, "after_action :openreceive_route_recovery, except: :poll"
+    assert_includes controller, "openreceive_adapter.maybe_sweep"
     assert_includes poll_job, "verify_invoice"
     assert_includes partial, "turbo_frame_tag"
     assert_includes partial, "transaction_state"
@@ -242,6 +257,8 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_includes source, "OpenReceive::Rails::Routes.draw(self)"
     assert_includes source, "create_invoice"
     assert_includes source, "lookup_invoice"
+    assert_includes source, "after_action :run_openreceive_route_recovery, except: :poll"
+    assert_includes source, "maybe_sweep"
     assert_includes source, "def poll"
     assert_includes source, "rescue_from OpenReceive::WalletUnavailableError"
     assert_includes source, "render_openreceive_error"
@@ -405,6 +422,27 @@ class OpenReceiveRailsTest < Minitest::Test
 
     assert_equal "pending", pending.fetch("transaction_state")
     assert_equal "settlement_action_completed", settled.fetch("workflow_state")
+    assert_equal [invoice_id], completed
+  end
+
+  def test_route_triggered_sweep_recovers_paid_invoice_without_background_task
+    adapter, client, completed = build_adapter
+    created = adapter.create_invoice(
+      controller: Controller.new(7),
+      params: { "amount_msats" => 200_000, "fruit" => "banana" },
+      headers: { "idempotency-key" => "order-route-sweep" }
+    )
+    invoice_id = created.fetch("body").fetch("invoice_id")
+
+    client.lookup_state = "settled"
+    sweep = adapter.maybe_sweep(now: 1700)
+    skipped = adapter.maybe_sweep(now: 1705)
+
+    assert_equal "started", sweep.fetch("status")
+    assert_equal [invoice_id], sweep.fetch("invoice_ids")
+    assert_equal 1, sweep.fetch("checked")
+    assert_equal "skipped", skipped.fetch("status")
+    assert_equal "interval", skipped.fetch("reason")
     assert_equal [invoice_id], completed
   end
 

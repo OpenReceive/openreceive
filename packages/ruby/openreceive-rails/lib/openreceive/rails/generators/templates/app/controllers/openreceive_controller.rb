@@ -2,6 +2,7 @@
 
 class OpenreceiveController < ApplicationController
   protect_from_forgery with: :exception
+  after_action :openreceive_route_recovery, except: :poll
 
   def create
     result = openreceive_adapter.create_invoice(
@@ -29,6 +30,12 @@ class OpenreceiveController < ApplicationController
 
   def openreceive_adapter
     OpenReceive::Rails.adapter
+  end
+
+  def openreceive_route_recovery
+    openreceive_adapter.maybe_sweep
+  rescue StandardError
+    true
   end
 
   def openreceive_create_params

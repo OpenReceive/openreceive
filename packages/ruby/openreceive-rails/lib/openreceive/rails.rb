@@ -26,13 +26,19 @@ module OpenReceive
                     :metadata,
                     :settlement_action,
                     :production,
-                    :allow_unauthenticated_demo
+                    :allow_unauthenticated_demo,
+                    :route_recovery,
+                    :sweep_interval_seconds,
+                    :sweep_batch
 
       def initialize
         @store = OpenReceive::InMemoryInvoiceKvStore.new
         @merchant_scope = "default"
         @production = false
         @allow_unauthenticated_demo = false
+        @route_recovery = true
+        @sweep_interval_seconds = nil
+        @sweep_batch = nil
       end
 
       def validate!
@@ -117,12 +123,52 @@ module OpenReceive
         row_by_control("payment_hash", payment_hash)
       end
 
-      def recoverable_invoices(now:, grace_seconds: 15)
+      def recoverable_invoices(now:, grace_seconds: 15, limit: nil)
         Integer(now)
         Integer(grace_seconds)
+        sql = "SELECT data FROM #{invoice_table} WHERE terminal = 0 ORDER BY expires_at ASC, invoice_id ASC"
+        params = []
+        unless limit.nil?
+          sql += " LIMIT ?"
+          params << Integer(limit)
+        end
         @database.execute(
-          "SELECT data FROM #{invoice_table} WHERE terminal = 0 ORDER BY expires_at ASC, invoice_id ASC"
+          sql,
+          params
         ).map { |record| decode_row(record.fetch("data")) }
+      end
+
+      def claim_sweep(now:, interval_seconds:)
+        current = Integer(now)
+        interval = Integer(interval_seconds)
+        raise ArgumentError, "interval_seconds must be positive" unless interval.positive?
+
+        claimed = false
+        @database.execute("BEGIN IMMEDIATE")
+        row = @database.get_first_row(
+          "SELECT value FROM #{meta_table} WHERE key = ? LIMIT 1",
+          "last_sweep_at"
+        )
+        last_sweep_at = row.nil? ? nil : Integer(row.fetch("value"))
+        if last_sweep_at.nil? || current - last_sweep_at >= interval
+          if row.nil?
+            @database.execute(
+              "INSERT INTO #{meta_table} (key, value, rev) VALUES (?, ?, 0)",
+              ["last_sweep_at", current.to_s]
+            )
+          else
+            @database.execute(
+              "UPDATE #{meta_table} SET value = ?, rev = rev + 1 WHERE key = ?",
+              [current.to_s, "last_sweep_at"]
+            )
+          end
+          claimed = true
+        end
+        @database.execute("COMMIT")
+        claimed
+      rescue StandardError
+        @database.execute("ROLLBACK") rescue nil
+        raise
       end
 
       def mark_verifying(invoice_id:)
@@ -351,6 +397,7 @@ module OpenReceive
         find_by_invoice_id
         find_by_payment_hash
         recoverable_invoices
+        claim_sweep
         mark_verifying
         mark_expiry_pending_verification
         mark_settled
@@ -384,7 +431,7 @@ module OpenReceive
 
         checks.concat(client_doctor_checks)
         checks << if @config.store.respond_to?(:recoverable_invoices)
-                    doctor_check("rails.poll", "ok", "one-shot poll can recover invoices from the configured store")
+                    doctor_check("rails.poll", "ok", "route-triggered sweep and one-shot poll can recover invoices from the configured store")
                   else
                     doctor_check("rails.poll", "error", "store does not support recoverable_invoices")
                   end
@@ -432,14 +479,38 @@ module OpenReceive
         verify_stored_invoice(row)
       end
 
-      def poll_recoverable_invoices(now: Time.now.to_i)
+      def poll_recoverable_invoices(now: Time.now.to_i, limit: nil)
         unless @config.store.respond_to?(:recoverable_invoices)
           raise NotImplementedError, "OpenReceive store must provide recoverable_invoices"
         end
 
-        @config.store.recoverable_invoices(now: now).map do |row|
+        @config.store.recoverable_invoices(now: now, limit: limit).map do |row|
           verify_stored_invoice(row)
         end
+      end
+
+      def maybe_sweep(now: Time.now.to_i)
+        return sweep_result("skipped", "disabled", []) if @config.route_recovery == false
+        unless @config.store.respond_to?(:claim_sweep)
+          return sweep_result("skipped", "unsupported_store", [])
+        end
+
+        interval = configured_positive_integer(
+          @config.sweep_interval_seconds,
+          "OPENRECEIVE_SWEEP_INTERVAL_SEC",
+          20,
+          "sweep_interval_seconds"
+        )
+        batch = configured_positive_integer(
+          @config.sweep_batch,
+          "OPENRECEIVE_SWEEP_BATCH",
+          200,
+          "sweep_batch"
+        )
+        return sweep_result("skipped", "interval", []) unless @config.store.claim_sweep(now: now, interval_seconds: interval)
+
+        invoices = poll_recoverable_invoices(now: now, limit: batch)
+        sweep_result("started", nil, invoices)
       end
 
       def poll(controller:, now: Time.now.to_i)
@@ -455,6 +526,32 @@ module OpenReceive
 
       def doctor_check(name, status, message)
         { "name" => name, "status" => status, "message" => message }
+      end
+
+      def sweep_result(status, reason, invoices)
+        body = {
+          "status" => status,
+          "invoice_ids" => invoices.map { |invoice| invoice.fetch("invoice_id") },
+          "checked" => invoices.length
+        }
+        body["reason"] = reason unless reason.nil?
+        body
+      end
+
+      def positive_integer(value, name)
+        parsed = Integer(value)
+        raise ArgumentError, "#{name} must be positive" unless parsed.positive?
+
+        parsed
+      rescue ArgumentError, TypeError
+        raise ArgumentError, "#{name} must be positive"
+      end
+
+      def configured_positive_integer(value, env_name, default_value, name)
+        configured = value
+        configured = ENV[env_name] if configured.nil?
+        configured = default_value if configured.nil? || configured.to_s.strip.empty?
+        positive_integer(configured, name)
       end
 
       def client_doctor_checks
@@ -616,6 +713,7 @@ module OpenReceive
     if defined?(::ActionController::Base)
       class InvoicesController < ::ActionController::Base
         protect_from_forgery with: :exception if respond_to?(:protect_from_forgery)
+        after_action :run_openreceive_route_recovery, except: :poll if respond_to?(:after_action)
         rescue_from OpenReceive::WalletUnavailableError, with: :render_openreceive_error if respond_to?(:rescue_from)
 
         def create
@@ -654,6 +752,12 @@ module OpenReceive
             code: error.code,
             message: error.message
           }, status: error.status
+        end
+
+        def run_openreceive_route_recovery
+          OpenReceive::Rails.adapter.maybe_sweep
+        rescue StandardError
+          true
         end
       end
     end
