@@ -423,15 +423,41 @@ async function runPoll(input: {
         lookup_invoice
       });
     },
-    lookupBurst: config.lookupBurst,
-    lookupRatePerSecond: config.lookupRatePerSecond,
-    actionLeaseTtlSeconds: config.actionLeaseTtlSeconds,
-    sweepIntervalSeconds: config.sweepIntervalSeconds,
-    sweepBatch: config.sweepBatch,
+    lookupBurst: config.lookupBurst ?? readPositiveIntegerEnv(input.env, "OPENRECEIVE_LOOKUP_BURST"),
+    lookupRatePerSecond: config.lookupRatePerSecond ?? readPositiveNumberEnv(input.env, "OPENRECEIVE_LOOKUP_RATE_PER_SEC"),
+    actionLeaseTtlSeconds: config.actionLeaseTtlSeconds ?? readPositiveIntegerEnv(input.env, "OPENRECEIVE_ACTION_LEASE_TTL_SEC"),
+    sweepIntervalSeconds: config.sweepIntervalSeconds ?? readPositiveIntegerEnv(input.env, "OPENRECEIVE_SWEEP_INTERVAL_SEC"),
+    sweepBatch: config.sweepBatch ?? readPositiveIntegerEnv(input.env, "OPENRECEIVE_SWEEP_BATCH"),
     clock: config.clock
   });
   input.stdout.write(`OpenReceive poll checked ${result.checked} wallet invoice(s) across ${result.invoice_ids.length} open invoice(s).\n`);
   return 0;
+}
+
+function readPositiveIntegerEnv(
+  env: NodeJS.ProcessEnv,
+  name: string
+): number | undefined {
+  const value = env[name];
+  if (value === undefined || value.trim().length === 0) return undefined;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new RangeError(`${name} must be a positive integer`);
+  }
+  return parsed;
+}
+
+function readPositiveNumberEnv(
+  env: NodeJS.ProcessEnv,
+  name: string
+): number | undefined {
+  const value = env[name];
+  if (value === undefined || value.trim().length === 0) return undefined;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new RangeError(`${name} must be a positive number`);
+  }
+  return parsed;
 }
 
 async function resolveStoreForCli(
@@ -601,7 +627,7 @@ function checkConfiguredStore(store: OpenReceiveExpressOptions["store"]):
     return {
       ok: false,
       message:
-        "OpenReceive config uses InMemoryInvoiceKvStore. Configure local-sqlite, SQLite, Postgres, MySQL, Redis, or Durable Object storage for durable checkout."
+        "OpenReceive config uses InMemoryInvoiceKvStore. Configure local-sqlite, SQLite, or Postgres for durable checkout."
     };
   }
 

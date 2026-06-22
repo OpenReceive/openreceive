@@ -12,8 +12,8 @@ export default defineConfig({
     react(),
     {
       name: "openreceive-hello-fruit-api",
-      configureServer(server) {
-        server.middlewares.use(createHelloFruitServer());
+      async configureServer(server) {
+        server.middlewares.use(await createHelloFruitServer());
       }
     }
   ]

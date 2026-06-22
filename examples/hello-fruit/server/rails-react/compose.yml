@@ -8,9 +8,16 @@ services:
       - path: ../../../../.env
         required: false
     environment:
+      OPENRECEIVE_STORE: local-sqlite
+      OPENRECEIVE_NAMESPACE: hello_fruit_rails_react
       OPENRECEIVE_DEMO_MODE: ${OPENRECEIVE_DEMO_MODE:-test_nwc}
       OPENRECEIVE_DEPLOYED_AT: ${OPENRECEIVE_DEPLOYED_AT:-}
       PORT: "3003"
       RAILS_ENV: ${RAILS_ENV:-production}
     expose:
       - "3003"
+    volumes:
+      - openreceive-rails-react-openreceive:/app/examples/hello-fruit/server/rails-react/.openreceive
+
+volumes:
+  openreceive-rails-react-openreceive:

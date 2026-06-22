@@ -827,11 +827,11 @@ function reconcileOptions(
     store,
     client: options.client,
     clock,
-    lookupBurst: options.lookupBurst,
-    lookupRatePerSecond: options.lookupRatePerSecond,
-    actionLeaseTtlSeconds: options.actionLeaseTtlSeconds,
-    sweepIntervalSeconds: options.sweepIntervalSeconds,
-    sweepBatch: options.sweepBatch,
+    lookupBurst: options.lookupBurst ?? readPositiveIntegerEnv("OPENRECEIVE_LOOKUP_BURST"),
+    lookupRatePerSecond: options.lookupRatePerSecond ?? readPositiveNumberEnv("OPENRECEIVE_LOOKUP_RATE_PER_SEC"),
+    actionLeaseTtlSeconds: options.actionLeaseTtlSeconds ?? readPositiveIntegerEnv("OPENRECEIVE_ACTION_LEASE_TTL_SEC"),
+    sweepIntervalSeconds: options.sweepIntervalSeconds ?? readPositiveIntegerEnv("OPENRECEIVE_SWEEP_INTERVAL_SEC"),
+    sweepBatch: options.sweepBatch ?? readPositiveIntegerEnv("OPENRECEIVE_SWEEP_BATCH"),
     settlementAction: async (input: {
       invoice: InvoiceStorageRow;
       metadata: Record<string, unknown>;
@@ -859,6 +859,26 @@ function reconcileOptions(
       );
     }
   };
+}
+
+function readPositiveIntegerEnv(name: string): number | undefined {
+  const value = globalThis.process?.env?.[name];
+  if (value === undefined || value.trim().length === 0) return undefined;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new RangeError(`${name} must be a positive integer`);
+  }
+  return parsed;
+}
+
+function readPositiveNumberEnv(name: string): number | undefined {
+  const value = globalThis.process?.env?.[name];
+  if (value === undefined || value.trim().length === 0) return undefined;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new RangeError(`${name} must be a positive number`);
+  }
+  return parsed;
 }
 
 function scheduleMaybeSweep(
@@ -1308,7 +1328,7 @@ function assertDurableStoreConfiguration(
   throw new Error(
     "OpenReceive refuses to use InMemoryInvoiceKvStore when " +
       "OPENRECEIVE_MODE or NODE_ENV is production. Configure a durable " +
-      "OpenReceive store such as Postgres, MySQL, SQLite, Redis, or Durable Object storage."
+      "OpenReceive store such as Postgres, SQLite, or local-sqlite."
   );
 }
 

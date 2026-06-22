@@ -101,6 +101,13 @@
       "public": true
     },
     {
+      "slug": "storage-and-namespaces",
+      "title": "Storage And Namespaces",
+      "source_path": "docs/18-storage-and-namespaces.md",
+      "category": "operations",
+      "public": true
+    },
+    {
       "slug": "conformance",
       "title": "Conformance",
       "source_path": "docs/11-conformance.md",

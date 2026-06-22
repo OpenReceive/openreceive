@@ -5,9 +5,9 @@ This is the Rails Hotwire Hello Fruit demo skeleton. It uses
 Turbo updates owning the application workflow.
 
 The browser never receives `OPENRECEIVE_NWC`.
-OpenReceive invoice persistence uses the package-owned ActiveRecord store and
-`openreceive_invoices` migration. The fruit unlock table remains app-owned demo
-business state.
+OpenReceive invoice persistence uses the package-owned SQLite store selected by
+`OPENRECEIVE_STORE`. The fruit unlock table remains app-owned demo business
+state.
 
 Run locally with Docker:
 
@@ -17,8 +17,9 @@ docker compose -f compose.yml -f compose.override.yml.example up --build
 
 Set a valid receive-only `OPENRECEIVE_NWC` in the repository root `.env` or the
 process environment before starting the container. The demo validates it before
-booting, runs `rails db:prepare`, and stores the SQLite database under a named
-Docker volume.
+booting, runs `rails db:prepare`, stores app SQLite data under a named Docker
+volume, and stores OpenReceive invoice data under a separate `.openreceive`
+volume.
 
 The demo exposes `/healthz` and `/demo-metadata.json` for smoke checks. Runtime
 wallet configuration is read from the environment or the optional root `.env`

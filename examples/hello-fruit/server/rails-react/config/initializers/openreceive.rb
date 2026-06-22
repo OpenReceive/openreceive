@@ -18,7 +18,7 @@ OpenReceive::Rails.configure do |config|
     client: NwcRuby::Client.from_uri(connection_uri),
     connection_uri: connection_uri
   )
-  config.store = OpenReceive::Rails.create_active_record_invoice_store
+  config.store = OpenReceive::Rails.resolve_invoice_store
   config.merchant_scope = "hello-fruit-rails-react"
   config.production = ENV.fetch("RAILS_ENV", "development") == "production"
   config.authenticate = ->(_controller) { true }

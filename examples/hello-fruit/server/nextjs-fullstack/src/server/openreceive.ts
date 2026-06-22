@@ -35,9 +35,10 @@ const GITHUB_REPOSITORY_URL = "https://github.com/openreceive/openreceive";
 
 interface NextDemoRuntime extends OpenReceiveNextRuntime {
   readonly connectionString: string;
+  readonly storeCacheKey: string;
 }
 
-let runtime: NextDemoRuntime | undefined;
+let runtime: Promise<NextDemoRuntime> | undefined;
 
 export function isWalletConfigured(): boolean {
   readRequiredHelloFruitNwcConnectionString();
@@ -108,30 +109,48 @@ export async function dispatchOpenReceiveRoute(
   const connectionString = readRequiredHelloFruitNwcConnectionString();
 
   return dispatchOpenReceiveNextRoute({
-    runtime: getRuntime(connectionString),
+    runtime: await getRuntime(connectionString),
     request,
     path
   });
 }
 
-function getRuntime(connectionString: string): NextDemoRuntime {
-  if (runtime !== undefined && runtime.connectionString === connectionString) {
-    return runtime;
+async function getRuntime(connectionString: string): Promise<NextDemoRuntime> {
+  const storeCacheKey = currentStoreCacheKey();
+  const cachedRuntime = runtime;
+  if (cachedRuntime !== undefined) {
+    try {
+      const cached = await cachedRuntime;
+      if (
+        cached.connectionString === connectionString &&
+        cached.storeCacheKey === storeCacheKey
+      ) {
+        return cached;
+      }
+    } catch {
+      if (runtime === cachedRuntime) runtime = undefined;
+    }
   }
 
-  const options = createHelloFruitOpenReceiveOptions(connectionString);
-  runtime = {
+  const nextRuntime = createHelloFruitOpenReceiveOptions(connectionString).then((options) => ({
     connectionString,
+    storeCacheKey,
     ...createOpenReceiveNextRuntime(options)
-  };
+  }));
+  runtime = nextRuntime;
 
-  return runtime;
+  try {
+    return await nextRuntime;
+  } catch (error) {
+    if (runtime === nextRuntime) runtime = undefined;
+    throw error;
+  }
 }
 
-export function createHelloFruitOpenReceiveOptions(
+export async function createHelloFruitOpenReceiveOptions(
   connectionString = readRequiredHelloFruitNwcConnectionString()
-): OpenReceiveExpressOptions {
-  const store = createHelloFruitOpenReceiveKvStore({
+): Promise<OpenReceiveExpressOptions> {
+  const store = await createHelloFruitOpenReceiveKvStore({
     demoId: DEMO_ID
   });
   const client = createAlbyNwcReceiveClient({
@@ -149,6 +168,13 @@ export function createHelloFruitOpenReceiveOptions(
     unsafeAllowUnauthenticatedDemoMode: true,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID)
   };
+}
+
+function currentStoreCacheKey(): string {
+  return JSON.stringify({
+    store: process.env.OPENRECEIVE_STORE ?? "memory:",
+    namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit"
+  });
 }
 
 function publicUrl(): string {

@@ -10,8 +10,7 @@ OpenReceive now has an initial Rails adapter helper package at
 for idempotent invoice creation, authorized lookup, backend settlement
 verification, poll recovery, and
 duplicate-safe settlement action tracking. It also includes a package-owned
-ActiveRecord invoice store, initial migration and model templates for the
-invoice storage shape, controller, poll job, route, install-generator
+SQLite invoice store resolver for `OPENRECEIVE_STORE`, controller, poll job, route, install-generator
 templates, generated poll/doctor rake tasks, an invoice Hotwire partial,
 production fail-closed checks for in-memory storage, and optional mounted engine
 routes with `503 WALLET_UNAVAILABLE` handling for an injected unavailable-wallet client.
@@ -50,13 +49,14 @@ actions. The Rails package provides the backend entry points the app deploys:
 
 - `bin/rails openreceive:poll` or a generated recurring job for one-shot
   settlement recovery
-- `bin/rails openreceive:doctor` to check storage, migration, NWC preflight,
+- `bin/rails openreceive:doctor` to check storage ownership/schema, NWC preflight,
   and poll readiness. The doctor task fails if the app is still using the
-  Ruby in-memory test store or a store without migration diagnostics.
+  Ruby in-memory test store or a store without ownership/schema diagnostics.
 
 Run poll from a scheduler or framework job when you want extra recovery beyond
 route-triggered lookup. The Rails storage surface is still initial proof work
-and will need full KV alignment before it becomes a primary supported path. Your
+and will need full KV alignment before it becomes a primary supported path. It
+does not ship app ActiveRecord invoice models or OpenReceive invoice migrations. Your
 Rails app provides order/user references in metadata and app-owned hooks such
 as `settlement_action`.
 
@@ -66,7 +66,7 @@ Expected Rails pieces:
 - Rails adapter helpers from `openreceive-rails`
 - Rails engine or route helpers mounted under `/openreceive/v1`
 - server-side receive-only NWC configuration
-- package-owned storage using the current initial Rails proof templates
+- package-owned storage selected by `OPENRECEIVE_STORE`
 - ActiveJob, Solid Queue, Sidekiq, or GoodJob one-shot poll jobs
 - Turbo Streams or Hotwire updates for display-safe browser state
 - idempotent settlement action hooks after backend settlement verification
@@ -94,5 +94,5 @@ mock wallet before live wallet profile tests. Before publishing, cover:
 - duplicate notification replay safety
 
 The Rails package stays unpublished until it passes the shared conformance
-gate. Use ActiveRecord-backed persistence for Rails apps; the Ruby in-memory
-store is only for local tests.
+gate. Use `OpenReceive::Rails.resolve_invoice_store` for package-owned invoice
+persistence; the Ruby in-memory store is only for local tests.

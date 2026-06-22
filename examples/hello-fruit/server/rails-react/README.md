@@ -4,9 +4,9 @@ This Rails React demo is quarantined until the active Rails proof is fully
 green. It stays in the repo only as a parking place for the future React-on-Rails
 proof and must not be treated as an active demo.
 
-It still boots through `openreceive-rails`, uses the package-owned
-ActiveRecord invoice store, and requires a valid `OPENRECEIVE_NWC` before
-runtime.
+It still boots through `openreceive-rails`, uses the package-owned SQLite
+invoice store selected by `OPENRECEIVE_STORE`, and requires a valid
+`OPENRECEIVE_NWC` before runtime.
 
 The browser never receives `OPENRECEIVE_NWC`.
 

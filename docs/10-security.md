@@ -12,8 +12,8 @@ test fixtures.
 
 ## Settlement
 
-The frontend may show passive progress from polling or events, but it never
-runs your settlement actions. Backend lookup is the source of truth.
+The frontend may show passive progress from lookup polling, but it never runs
+your settlement actions. Backend lookup is the source of truth.
 OpenReceive treats an incoming invoice as settled only when `lookup_invoice`
 returns `settled_at` or `state == "settled"`. A preimage alone is not enough.
 
@@ -29,15 +29,17 @@ Default route policy:
 - Invoice reads require ownership of the invoice, order, cart, or checkout
   session.
 - Lookup by `payment_hash` is server-side or strongly authorized.
-- Event streams use same-site sessions or short-lived signed URLs.
+- `/poll` is internal scheduler/operator surface and requires app auth,
+  `auth.poll`, or `OPENRECEIVE_CRON_SECRET`.
 
 ## Browser Defaults
 
 - Deny credentialed cross-origin access by default.
 - Never combine wildcard CORS with credentials.
 - Use CSRF protection for cookie-authenticated POST routes.
-- Return `Cache-Control: no-store` for invoice, lookup, and event responses.
-- Avoid logging signed event URLs.
+- Return `Cache-Control: no-store` for invoice, lookup, refresh, and poll
+  responses.
+- Avoid logging signed lookup, refresh, or scheduler URLs.
 - Keep wallet diagnostics such as `get_balance` out of public checkout
   responses and capability summaries.
 

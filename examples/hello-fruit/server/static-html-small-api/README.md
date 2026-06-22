@@ -36,7 +36,7 @@ Docker loads the repository root `.env` file, so the same
 `OPENRECEIVE_NWC` value can be shared across all local Hello Fruit demos
 without demo-local env files. Set it before running Compose; the web container
 validates it at startup. The compose stack also starts a local
-Postgres container and points `DATABASE_URL` at it; the demo uses the
+Postgres container and points `OPENRECEIVE_STORE` at it; the demo uses the
 package-owned OpenReceive Postgres KV store and self-initializes the
 OpenReceive schema before store queries.
 

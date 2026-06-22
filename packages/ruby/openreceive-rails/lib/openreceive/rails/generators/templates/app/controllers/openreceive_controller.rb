@@ -20,6 +20,11 @@ class OpenreceiveController < ApplicationController
     render json: result.fetch("body"), status: result.fetch("status")
   end
 
+  def poll
+    result = openreceive_adapter.poll(controller: self)
+    render json: result.fetch("body"), status: result.fetch("status")
+  end
+
   private
 
   def openreceive_adapter

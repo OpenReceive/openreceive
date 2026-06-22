@@ -23,14 +23,19 @@ A storage target is supported only when OpenReceive ships all three pieces:
 | Node | `sqlite:/path/to/openreceive.sqlite3` | Supported | Explicit local SQLite files |
 | Node | `postgres://...` | Supported | Production and reference deployments |
 | Node | `memory:` | Tests only | Unit tests and throwaway local experiments |
+| Node | `mysql://...` | Deferred | Future transport target; not certified in v0.1 |
+| Node | `redis://...` / `rediss://...` | Deferred | Future transport target; not certified in v0.1 |
+| Cloudflare | Durable Object binding | Deferred | Future serverless transport target; not certified in v0.1 |
 
 `InMemoryInvoiceKvStore` is for tests and throwaway demos only. Node and
 Express refuse memory storage in production mode.
 
-MongoDB, MySQL, Prisma-native models, Drizzle-native models, and arbitrary user
-tables are not supported storage targets. Prisma and Drizzle recipes may wrap
-the package-owned SQL schema later, but they must not reinvent invoice rows as
-app-owned models.
+MongoDB, Prisma-native models, Drizzle-native models, arbitrary user tables,
+S3/object storage, and Cloudflare Workers KV are not supported storage targets.
+MySQL, Redis/Upstash, and Cloudflare Durable Object storage remain transport
+targets only after they ship package-owned adapters and pass the storage KV
+conformance vector. Prisma and Drizzle recipes may wrap the package-owned SQL
+schema later, but they must not reinvent invoice rows as app-owned models.
 
 `OPENRECEIVE_STORE` selects the transport. `OPENRECEIVE_NAMESPACE` scopes table
 or key prefixes when multiple OpenReceive instances share one store. Supported

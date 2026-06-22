@@ -11,13 +11,12 @@ Implemented now:
 - authorization hook for app-owned invoice access
 - duplicate-safe settlement action tracking using the configured store
 - internal verification for one-shot poll jobs
-- `doctor` diagnostics for store, migration, NWC, and poll readiness
-- ActiveRecord invoice store plus migration and model templates for the current
-  initial Rails proof
-- install generator skeleton that copies the controller, poll job, migration,
-  model, view, rake task, and route templates
+- `doctor` diagnostics for store ownership/schema, NWC, and poll readiness
+- package-owned SQLite invoice store resolver for `OPENRECEIVE_STORE`
+- install generator skeleton that copies the controller, poll job, view, rake
+  task, and route templates
 - generated `openreceive:doctor` and `openreceive:poll` rake tasks
-- optional mounted engine route/controller surface for `/v1/invoices`
+- optional mounted engine route/controller surface for `/v1/invoices` and `/v1/poll`
 - Hotwire/Turbo invoice partial for display-safe status updates
 
 There is no Rails notification listener or `payment_received` job in the
@@ -26,4 +25,5 @@ must be idempotent by `payment_hash`.
 
 The Rails storage surface is still initial proof work and will need full
 alignment with the OpenReceive-owned KV contract before the Rails lane is a
-primary supported path.
+primary supported path. It does not ship app ActiveRecord invoice models or
+OpenReceive invoice migrations.

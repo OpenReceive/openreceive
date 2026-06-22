@@ -18,7 +18,7 @@ package registry.
 | `@openreceive/svelte` | Initial adapter | Thin typed bindings for the shared checkout web component, a packaged `checkout.svelte` wrapper, browser-owned light/dark CSS wrapper export, full checkout shell, framework-named shell/component/controller creators, theme toggle, and storage-backed theme helpers, with package-owned attributes/listeners. |
 | `@openreceive/angular` | Initial adapter | Thin typed bindings for the shared checkout web component, a packaged standalone checkout component module, browser-owned light/dark CSS wrapper export, full checkout shell, framework-named shell/component/controller creators, theme toggle, and storage-backed theme helpers, with package-owned attributes/listeners. |
 | `openreceive` Ruby | Initial core helpers | Vector-backed exact fiat quoting, settlement detection, NWC URI parse/redaction, receive-only NIP-47 request mapping, polling/idempotency helpers, an in-memory test store, a fail-closed unavailable-wallet client, a receive-only `nwc-ruby` wrapper, and an optional Ruby live smoke with opt-in invoice creation. CI skips wallet calls when `nwc-ruby` is unavailable. |
-| `openreceive-rails` Ruby | Initial adapter helpers | Production fail-closed configuration, idempotent invoice creation, authorized lookup, doctor diagnostics, backend settlement checks, duplicate-safe settlement action tracking, controller templates, Hotwire partial, install generator skeleton, and mounted engine routes around an injected receive-only client with `503 WALLET_UNAVAILABLE` handling. Full Rails v2 storage alignment is still pending. |
+| `openreceive-rails` Ruby | Initial adapter helpers | Production fail-closed configuration, idempotent invoice creation, authorized lookup, package-owned SQLite invoice store resolver, doctor diagnostics, backend settlement checks, duplicate-safe settlement action tracking, controller templates, Hotwire partial, install generator skeleton, protected poll route, and mounted engine routes around an injected receive-only client with `503 WALLET_UNAVAILABLE` handling. Full Rails smoke/live proof is still pending. |
 
 ## Demos
 
@@ -27,8 +27,8 @@ package registry.
 | Express + React Hello Fruit | Implemented | Express route adapter with a thin React client that delegates checkout UI/state to `@openreceive/react`. |
 | Static HTML + Small API Hello Fruit | Implemented | Web component checkout with a small Express API; checkout UI/state delegates to `@openreceive/elements`. |
 | Next.js Fullstack Hello Fruit | Implemented | One App Router catch-all route delegates request/response glue to `@openreceive/next`, with a thin React client that delegates checkout UI/state to `@openreceive/react`. |
-| Rails Hotwire Hello Fruit | Initial skeleton | Rails app skeleton with OpenReceive engine mount, Hotwire partial, jobs, Docker/compose templates, fail-closed no-wallet boot behavior, root demo launcher target, and container-validator coverage. Bundle/build smoke is still pending. |
-| Rails React Hello Fruit | Quarantined | Parked until the Rails proof is green; files must not be treated as an active demo. |
+| Rails Hotwire Hello Fruit | Initial skeleton | Rails app skeleton with OpenReceive engine mount, package-owned SQLite invoice storage, Hotwire partial, jobs, Docker/compose templates, fail-closed no-wallet boot behavior, root demo launcher target, and container-validator coverage. Bundle/build smoke is still pending. |
+| Rails React Hello Fruit | Quarantined | Parked until the Rails proof is green; still covered by container and storage-boundary validation but must not be treated as an active demo. |
 
 Non-JS SDK work has started with the Ruby core-helper package after the JS
 reference path and conformance gate. Future SDKs must consume shared vectors

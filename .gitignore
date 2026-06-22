@@ -5,6 +5,7 @@
 .env.*
 !.env.example
 !.env.*.example
+.openreceive/
 
 # OpenReceive demo deployment secrets. Commit *.example files only.
 demos/deploy/secrets/

@@ -12,6 +12,8 @@ const demoDeployValidator = path.join(process.cwd(), "tools/validate/check-demo-
 const demoDeploymentDocs = path.join(process.cwd(), "docs/13-demo-deployment.md");
 const supportedDatabaseDocs = path.join(process.cwd(), "docs/16-supported-databases.md");
 const nodeQuickstartDocs = path.join(process.cwd(), "docs/01-quickstart-node.md");
+const invoiceStorageSchema = path.join(process.cwd(), "spec/schemas/invoice-storage.schema.json");
+const storageKvVectors = path.join(process.cwd(), "spec/test-vectors/storage-kv.json");
 const releaseReadinessValidator = path.join(process.cwd(), "tools/validate/check-release-readiness.mjs");
 const workflowValidator = path.join(process.cwd(), "tools/validate/check-workflows.mjs");
 const liveNwcSmoke = path.join(process.cwd(), "tools/live-nwc-test/index.mjs");
@@ -123,7 +125,7 @@ function runRubyLiveNwcSmoke(env) {
 }
 
 test("demo container validator accepts current Hello Fruit templates", () => {
-  assert.match(runDemoContainerValidator(), /Demo container validation passed for 4 demo\(s\)\./);
+  assert.match(runDemoContainerValidator(), /Demo container validation passed for 5 demo\(s\)\./);
 });
 
 test("demo deployment validator accepts public deploy templates", () => {
@@ -156,18 +158,48 @@ test("supported database docs keep invoice storage boundaries narrow", () => {
   assert.match(docs, /\| Node \| `postgres:\/\/\.\.\.` \| Supported \|/);
   assert.match(docs, /\| Node \| `sqlite:\/path\/to\/openreceive\.sqlite3` \| Supported \|/);
   assert.match(docs, /\| Node \| `local-sqlite` \| Supported \|/);
-  assert.match(docs, /MongoDB, MySQL, Prisma-native models, Drizzle-native models, and arbitrary user\s+tables are not supported storage targets/);
+  assert.match(docs, /\| Node \| `mysql:\/\/\.\.\.` \| Deferred \|/);
+  assert.match(docs, /\| Node \| `redis:\/\/\.\.\.` \/ `rediss:\/\/\.\.\.` \| Deferred \|/);
+  assert.match(docs, /S3\/object storage, and Cloudflare Workers KV are not supported storage targets/);
+  assert.match(docs, /MySQL, Redis\/Upstash, and Cloudflare Durable Object storage remain transport\s+targets only after they ship package-owned adapters/);
   assert.match(docs, /Apps keep business data in app-owned tables/);
   assert.match(quickstart, /package-owned Postgres or SQLite invoice store/);
 });
 
-test("OpenReceive-owned invoice migrations do not add app-specific columns", () => {
-  const migrationPaths = [
+test("storage schema and vectors cover KV coordination fields", () => {
+  const schema = JSON.parse(readFileSync(invoiceStorageSchema, "utf8"));
+  const vectors = JSON.parse(readFileSync(storageKvVectors, "utf8"));
+
+  assert.equal(schema.properties.last_lookup_at.minimum, 0);
+  assert.equal(schema.properties.action_claimed_at.minimum, 0);
+  assert.equal(schema.$defs.StoredRecord.properties.row.$ref, "#");
+  assert.equal(schema.$defs.MetaRow.properties.value.type, "string");
+  assert.equal(schema.$defs.LookupBucket.properties.tokens.minimum, 0);
+
+  assert.deepEqual(vectors.methods, [
+    "putIfAbsent",
+    "put",
+    "get",
+    "getByPaymentHash",
+    "getByBolt11Invoice",
+    "getByIdempotencyScope",
+    "listOpen",
+    "getMeta",
+    "casMeta"
+  ]);
+  assert.equal(vectors.cases.length, 12);
+  assert.equal(vectors.certified_v0_1_transports.includes("postgres"), true);
+  assert.equal(vectors.certified_v0_1_transports.includes("sqlite"), true);
+  assert.equal(vectors.deferred_transport_targets.includes("redis"), true);
+  assert.equal(vectors.unsupported_transport_targets.includes("s3"), true);
+});
+
+test("OpenReceive-owned invoice schemas do not add app-specific columns", () => {
+  const schemaPaths = [
     "packages/js/node/src/postgres-store.ts",
     "packages/js/node/src/sqlite-store.ts",
     "packages/js/node/migrations/001_create_openreceive_invoices.postgres.sql",
-    "packages/ruby/openreceive-rails/lib/openreceive/rails/generators/templates/create_openreceive_tables.rb",
-    "examples/hello-fruit/server/rails-hotwire/db/migrate/002_create_openreceive_tables.rb"
+    "packages/ruby/openreceive-rails/lib/openreceive/rails.rb"
   ];
   const appSpecificColumns = [
     /\buser_id\b/,
@@ -179,7 +211,7 @@ test("OpenReceive-owned invoice migrations do not add app-specific columns", () 
     /\bfruit\b/
   ];
 
-  for (const relativePath of migrationPaths) {
+  for (const relativePath of schemaPaths) {
     const source = readFileSync(path.join(process.cwd(), relativePath), "utf8");
     assert.match(source, /\bmetadata\b/, `${relativePath}: OpenReceive rows keep app references in metadata`);
     for (const pattern of appSpecificColumns) {

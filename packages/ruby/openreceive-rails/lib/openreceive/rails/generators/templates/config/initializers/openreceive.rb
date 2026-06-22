@@ -20,7 +20,7 @@ OpenReceive::Rails.configure do |config|
     connection_uri: connection_uri
   )
 
-  config.store = OpenReceive::Rails.create_active_record_invoice_store
+  config.store = OpenReceive::Rails.resolve_invoice_store
   config.merchant_scope = Rails.application.class.module_parent_name.underscore
   config.production = Rails.env.production?
   config.authenticate = lambda do |controller|

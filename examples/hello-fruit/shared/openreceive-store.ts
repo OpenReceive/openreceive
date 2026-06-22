@@ -1,35 +1,37 @@
 import {
-  InMemoryInvoiceKvStore,
-  type OpenReceiveInvoiceKvStore
-} from "@openreceive/core";
-import {
-  createOpenReceivePostgresKvStoreFromPool
+  resolveOpenReceiveStore,
+  type OpenReceiveResolvedStore
 } from "@openreceive/node";
-import { Pool } from "pg";
 
-export function createHelloFruitOpenReceiveKvStore(input: {
+const DEFAULT_STORE_URI = "memory:";
+const DEFAULT_NAMESPACE = "hello_fruit";
+
+export async function createHelloFruitOpenReceiveKvStore(input: {
   readonly demoId: string;
-}): OpenReceiveInvoiceKvStore {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (databaseUrl === undefined || databaseUrl.trim().length === 0) {
-    return new InMemoryInvoiceKvStore();
+}): Promise<OpenReceiveResolvedStore> {
+  const storeUri = (process.env.OPENRECEIVE_STORE ?? DEFAULT_STORE_URI).trim();
+  const namespace = process.env.OPENRECEIVE_NAMESPACE ?? DEFAULT_NAMESPACE;
+  try {
+    const store = await resolveOpenReceiveStore(storeUri, {
+      namespace,
+      cwd: process.cwd()
+    });
+    console.log(
+      `[openreceive:${input.demoId}] OpenReceive store ready (${describeStore(storeUri)}).`
+    );
+    return store;
+  } catch (error) {
+    console.error(
+      `[openreceive:${input.demoId}] OpenReceive store initialization failed. Check OPENRECEIVE_STORE, OPENRECEIVE_NAMESPACE, and runtime dependencies.`
+    );
+    throw error;
   }
+}
 
-  const pool = new Pool({
-    connectionString: databaseUrl
-  });
-
-  return createOpenReceivePostgresKvStoreFromPool({
-    pool,
-    onReady(schemaVersion) {
-      console.log(
-        `[openreceive:${input.demoId}] Postgres KV store ready (${schemaVersion}).`
-      );
-    },
-    onMigrationError() {
-      console.error(
-        `[openreceive:${input.demoId}] Postgres KV store initialization failed. Check DATABASE_URL and database reachability.`
-      );
-    }
-  });
+function describeStore(storeUri: string): string {
+  if (storeUri === "" || storeUri === "memory:" || storeUri === "memory") return "memory";
+  if (storeUri === "local-sqlite") return "local-sqlite";
+  if (storeUri.startsWith("sqlite:")) return "sqlite";
+  if (/^postgres(?:ql)?:\/\//.test(storeUri)) return "postgres";
+  return "configured";
 }

@@ -82,8 +82,11 @@ Store selection:
 - `OPENRECEIVE_STORE=memory:` for tests only
 - `OPENRECEIVE_NAMESPACE=default` or another app-specific namespace
 
-MongoDB, MySQL, Prisma-native models, Drizzle-native models, and arbitrary user
-tables are not v0.1 supported storage targets.
+MySQL, Redis/Upstash, and Cloudflare Durable Object storage are target
+transports but are not v0.1 certified until package-owned adapters pass the
+storage KV conformance vector. MongoDB, Prisma-native models, Drizzle-native
+models, arbitrary user tables, S3/object storage, and Cloudflare Workers KV are
+not v0.1 supported storage targets.
 
 HTTP Contract
 -------------
@@ -149,8 +152,9 @@ depend on server-side `OPENRECEIVE_NWC`, and expose an optional
 `npm run openreceive:poll` script for one-shot recovery. They do not define
 OpenReceive worker services or notification listeners.
 
-Rails demos remain initial proof work until the Ruby/Rails storage surface is
-aligned with this v2 architecture.
+Rails demos remain initial proof work, but they use the package-owned SQLite
+store selected by `OPENRECEIVE_STORE` and do not ship app invoice models or
+OpenReceive invoice migrations.
 
 Docs And Contracts
 ------------------

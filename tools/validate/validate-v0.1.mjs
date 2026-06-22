@@ -118,6 +118,26 @@ function validateSchemas() {
     ),
     "invoice-storage schema must document canonical idempotency scope"
   );
+  assert(
+    invoiceStorage.properties.last_lookup_at?.minimum === 0,
+    "invoice-storage schema must include last_lookup_at for lookup cooldown claims"
+  );
+  assert(
+    invoiceStorage.properties.action_claimed_at?.minimum === 0,
+    "invoice-storage schema must include action_claimed_at for settlement leases"
+  );
+  assert(
+    invoiceStorage.$defs?.StoredRecord?.properties?.row?.$ref === "#",
+    "invoice-storage schema must define StoredRecord"
+  );
+  assert(
+    invoiceStorage.$defs?.MetaRow?.properties?.value?.type === "string",
+    "invoice-storage schema must define MetaRow"
+  );
+  assert(
+    invoiceStorage.$defs?.LookupBucket?.properties?.tokens?.minimum === 0,
+    "invoice-storage schema must define LookupBucket"
+  );
 
   const quote = readJson("spec/schemas/rate-quote.schema.json");
   assert(quote.properties.amount_sats.maximum === 9007199254740, "amount_sats maximum mismatch");
@@ -256,6 +276,51 @@ function validateIdempotencyVectors() {
   for (const item of vector.cases) {
     const sameHash = item.first_request_hash === item.second_request_hash;
     assert((sameHash && item.expected.status === 200) || (!sameHash && item.expected.status === 409), `${item.name}: expected status mismatch`);
+  }
+}
+
+function validateStorageKvVectors() {
+  const vector = readJson("spec/test-vectors/storage-kv.json");
+  const expectedMethods = [
+    "putIfAbsent",
+    "put",
+    "get",
+    "getByPaymentHash",
+    "getByBolt11Invoice",
+    "getByIdempotencyScope",
+    "listOpen",
+    "getMeta",
+    "casMeta"
+  ];
+  assert(
+    JSON.stringify(vector.methods) === JSON.stringify(expectedMethods),
+    "storage KV vector methods must match OpenReceiveInvoiceKvStore"
+  );
+  assert(vector.record_shape?.rev === "non-negative integer", "storage KV vector must define StoredRecord.rev");
+  assert(vector.meta_shape?.rev === "non-negative integer", "storage KV vector must define MetaRow.rev");
+  assert(vector.lookup_bucket_shape?.tokens === "non-negative number", "storage KV vector must define lookup bucket");
+  assert(vector.certified_v0_1_transports.includes("postgres"), "storage KV vector must include Postgres certification");
+  assert(vector.certified_v0_1_transports.includes("sqlite"), "storage KV vector must include SQLite certification");
+  assert(vector.deferred_transport_targets.includes("redis"), "storage KV vector must track deferred Redis target");
+  assert(vector.unsupported_transport_targets.includes("s3"), "storage KV vector must keep S3 unsupported");
+  assert(vector.unsupported_transport_targets.includes("workers_kv"), "storage KV vector must keep Workers KV unsupported");
+
+  const caseNames = new Set(vector.cases.map((item) => item.name));
+  for (const required of [
+    "putIfAbsent atomic uniqueness conflicts name the collided key",
+    "idempotency scope precedence returns replay or conflict before wallet-value conflicts",
+    "put rejects stale rev and accepts current rev",
+    "casMeta is atomic and rejects stale rev",
+    "concurrent identical creates store exactly one invoice for the idempotency scope",
+    "listOpen returns only non-terminal records and honors limit",
+    "secondary indexes stay consistent across create and transition",
+    "ownership guard accepts OpenReceive tables and refuses foreign or newer schemas",
+    "per-invoice lookup claim allows at most one lookup per cooldown window",
+    "global lookup token bucket limits burst and sustained lookup rate",
+    "sweep throttle runs at most once per interval and respects sweep batch",
+    "settlement action lease prevents concurrent execution and recovers expired claims"
+  ]) {
+    assert(caseNames.has(required), `storage KV vector missing case: ${required}`);
   }
 }
 
@@ -687,6 +752,7 @@ function main() {
   validateLifecycleVectors();
   validatePollingVectors();
   validateIdempotencyVectors();
+  validateStorageKvVectors();
   validateNwcVectors();
   validateNwcInfoVectors();
   validateLiveNwcExpectedCapabilities();

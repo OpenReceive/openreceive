@@ -87,6 +87,6 @@ using the headless actions as shown above.
 
 - Do not pass `OPENRECEIVE_NWC` or any wallet secret into React.
 - Create invoices through your backend.
-- Treat event streams and client polling as UI state only.
+- Treat client polling as UI state only.
 - Fulfill products only after backend lookup confirms settlement.
 - Keep Material UI theme ownership in the host app.

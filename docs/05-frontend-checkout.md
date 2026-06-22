@@ -256,7 +256,7 @@ checkout = applyOpenReceiveInvoiceEvent(checkout, eventPayload, {
 
 Client log entries use display-safe fields such as `invoice_id`,
 `payment_hash`, amount, transaction state, workflow state, and phase. They do
-not log BOLT11 invoice strings, NWC connection strings, signed event URL
+not log BOLT11 invoice strings, NWC connection strings, signed lookup/refresh
 tokens, cookies, authorization headers, or request bodies.
 
 ## Web Components

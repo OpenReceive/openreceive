@@ -23,28 +23,29 @@ Live checkout always needs a server component. Browser code never receives
 
 ## Common Setup
 
-Set the wallet secret in your app's server environment:
+Set the server-only OpenReceive environment:
 
 ```sh
 OPENRECEIVE_NWC=nostr+walletconnect://...
+OPENRECEIVE_STORE=local-sqlite
+OPENRECEIVE_NAMESPACE=default
 ```
 
-Run the OpenReceive invoice migration in the same database your app already
-uses:
+`OPENRECEIVE_STORE` may also be `postgres://...` for production or
+`sqlite:///abs/path/openreceive.sqlite3` for an explicit single-machine file.
+The store self-initializes on boot; there is no required hand-run migration.
+Run doctor during setup or deploy checks:
 
 ```sh
-npx openreceive migrate --postgres "$DATABASE_URL"
-npx openreceive doctor --postgres "$DATABASE_URL"
+npx openreceive doctor
 ```
 
-If your app uses a different env name, pass that value instead. SQLite apps can
-use `--sqlite ./storage/openreceive.sqlite3`.
-
-For production today, use the package-owned Postgres store. SQLite is available
-for local development, demos, and small apps. MongoDB, MySQL, Prisma-native
-models, Drizzle-native models, and custom invoice tables are future adapter
-work; OpenReceive needs to ship the store, migration path, and test coverage
-before those are drop-in options.
+For production today, use package-owned Postgres storage. SQLite is available
+for single-machine self-hosting, local development, demos, and small apps.
+MySQL, Redis/Upstash, and Cloudflare Durable Object storage are future
+transport targets. MongoDB, Prisma-native models, Drizzle-native models, custom
+invoice tables, S3/object storage, and Workers KV are not supported storage
+targets.
 
 ## Express
 
@@ -57,11 +58,10 @@ npm install @openreceive/node @openreceive/express @openreceive/browser express 
 Create `server/openreceive.ts`:
 
 ```ts
-import pg from "pg";
 import {
   createAlbyNwcReceiveClient,
-  createOpenReceivePostgresInvoiceStoreFromPool,
-  formatOpenReceiveMissingNwcMessage
+  formatOpenReceiveMissingNwcMessage,
+  resolveOpenReceiveStore
 } from "@openreceive/node";
 
 const nwc = process.env.OPENRECEIVE_NWC;
@@ -71,23 +71,20 @@ if (!nwc) {
   throw new Error(message);
 }
 
-const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL
-});
+const store = await resolveOpenReceiveStore();
 
 export const openreceive = {
   client: createAlbyNwcReceiveClient({
     connectionString: nwc
   }),
-  store: createOpenReceivePostgresInvoiceStoreFromPool({
-    pool
-  }),
+  store,
   merchantScope: (req) => `user:${req.user.id}`,
   auth: {
     create: (req) => Boolean(req.user),
     read: (req, invoice) => ownsInvoice(req, invoice),
     lookup: (req, invoice) => ownsInvoice(req, invoice),
-    events: (req, invoice) => ownsInvoice(req, invoice)
+    refresh: (req, invoice) => ownsInvoice(req, invoice),
+    poll: (req) => isInternalScheduler(req)
   },
   csrf: {
     verify: (req) => verifyCsrf(req)
@@ -133,7 +130,6 @@ npm install @openreceive/node @openreceive/express @openreceive/browser pg
 Create `server/openreceive.ts`:
 
 ```ts
-import pg from "pg";
 import {
   createOpenReceiveFetchHandler,
   createOpenReceiveFetchRuntime,
@@ -141,15 +137,12 @@ import {
 } from "@openreceive/express";
 import {
   createAlbyNwcReceiveClient,
-  createOpenReceivePostgresInvoiceStoreFromPool,
-  formatOpenReceiveMissingNwcMessage
+  formatOpenReceiveMissingNwcMessage,
+  resolveOpenReceiveStore
 } from "@openreceive/node";
 
-const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL
-});
-
 let runtime;
+const store = await resolveOpenReceiveStore();
 
 function getRuntime() {
   if (runtime) return runtime;
@@ -165,15 +158,14 @@ function getRuntime() {
     client: createAlbyNwcReceiveClient({
       connectionString: nwc
     }),
-    store: createOpenReceivePostgresInvoiceStoreFromPool({
-      pool
-    }),
+    store,
     merchantScope: () => "app:default",
     auth: {
       create: (req) => isAllowedToCreateInvoice(req),
       read: (req, invoice) => ownsInvoice(req, invoice),
       lookup: (req, invoice) => ownsInvoice(req, invoice),
-      events: (req, invoice) => ownsInvoice(req, invoice)
+      refresh: (req, invoice) => ownsInvoice(req, invoice),
+      poll: (req) => isInternalScheduler(req)
     },
     csrf: {
       verify: (req) => verifyCsrf(req)
@@ -258,22 +250,18 @@ npm install @openreceive/node @openreceive/next @openreceive/react pg
 Create `src/server/openreceive.ts`:
 
 ```ts
-import pg from "pg";
 import {
   createAlbyNwcReceiveClient,
-  createOpenReceivePostgresInvoiceStoreFromPool,
-  formatOpenReceiveMissingNwcMessage
+  formatOpenReceiveMissingNwcMessage,
+  resolveOpenReceiveStore
 } from "@openreceive/node";
 import {
   createOpenReceiveNextRuntime,
   dispatchOpenReceiveNextRoute
 } from "@openreceive/next";
 
-const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL
-});
-
 let runtime;
+const store = await resolveOpenReceiveStore();
 
 function getRuntime() {
   if (runtime) return runtime;
@@ -289,15 +277,14 @@ function getRuntime() {
     client: createAlbyNwcReceiveClient({
       connectionString: nwc
     }),
-    store: createOpenReceivePostgresInvoiceStoreFromPool({
-      pool
-    }),
+    store,
     merchantScope: () => "app:default",
     auth: {
       create: (req) => isAllowedToCreateInvoice(req),
       read: (req, invoice) => ownsInvoice(req, invoice),
       lookup: (req, invoice) => ownsInvoice(req, invoice),
-      events: (req, invoice) => ownsInvoice(req, invoice)
+      refresh: (req, invoice) => ownsInvoice(req, invoice),
+      poll: (req) => isInternalScheduler(req)
     },
     csrf: {
       verify: (req) => verifyCsrf(req)

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
+require "tmpdir"
 require "openreceive/rails"
 
 class FakeReceiveClient
@@ -52,9 +53,9 @@ class FakeDurableInvoiceStore
   def doctor
     [
       {
-        "name" => "rails.migration",
+        "name" => "rails.store.owned",
         "status" => "ok",
-        "message" => "fake durable store migration present"
+        "message" => "fake durable store present"
       }
     ]
   end
@@ -105,9 +106,7 @@ class OpenReceiveRailsTest < Minitest::Test
     )
   end
 
-  def test_active_record_templates_preserve_storage_invariants
-    migration = read_template("create_openreceive_tables.rb")
-    model = read_template("openreceive_invoice.rb")
+  def test_rails_storage_resolver_uses_owned_sqlite_store
     rails_source = File.read(
       File.join(
         ROOT,
@@ -115,31 +114,39 @@ class OpenReceiveRailsTest < Minitest::Test
       )
     )
 
-    assert_includes migration, "create_table :openreceive_invoices"
-    assert_includes migration, "[:merchant_scope, :operation, :idempotency_key]"
-    assert_includes migration, "unique: true"
-    assert_includes migration, "payment_hash"
-    assert_includes migration, "amount_msats >= 1000"
-    assert_includes migration, "9007199254740991"
-    assert_includes migration, "settled_at_seconds"
-    assert_includes migration, "settlement_action_completed_at_seconds"
-    assert_includes migration, "settlement_action_state IN"
-    refute_includes migration, "OPENRECEIVE_NWC"
-    refute_includes migration, "nostr+walletconnect://"
+    assert_includes rails_source, "class SqliteInvoiceStore"
+    assert_includes rails_source, "resolve_invoice_store"
+    assert_includes rails_source, "CREATE TABLE IF NOT EXISTS"
+    assert_includes rails_source, "idempotency_scope TEXT NOT NULL UNIQUE"
+    assert_includes rails_source, "data TEXT NOT NULL"
+    refute_includes rails_source, "class ActiveRecordInvoiceStore"
+    refute_includes rails_source, "create_active_record_invoice_store"
+    refute_includes rails_source, "ApplicationRecord"
 
-    assert_includes model, "self.table_name = \"openreceive_invoices\""
-    assert_includes model, "idempotency_request_hash"
-    assert_includes model, "transaction_state"
-    assert_includes model, "workflow_state"
-    assert_includes model, "settlement_action_state"
+    Dir.mktmpdir do |dir|
+      store = OpenReceive::Rails.resolve_invoice_store(
+        uri: "sqlite://#{File.join(dir, "openreceive.sqlite3")}",
+        namespace: "rails_test"
+      )
+      adapter, _client = build_adapter(store: store)
+      first = adapter.create_invoice(
+        controller: Controller.new(7),
+        params: { "amount_msats" => 200_000, "fruit" => "banana" },
+        headers: { "idempotency-key" => "order-sqlite" }
+      )
+      second = adapter.create_invoice(
+        controller: Controller.new(7),
+        params: { "amount_msats" => 200_000, "fruit" => "banana" },
+        headers: { "idempotency-key" => "order-sqlite" }
+      )
 
-    assert_includes rails_source, "class ActiveRecordInvoiceStore"
-    assert_includes rails_source, "create_active_record_invoice_store"
-    assert_includes rails_source, "merchant_scope: data.fetch(\"merchant_scope\")"
-    assert_includes rails_source, "operation: data.fetch(\"operation\")"
-    assert_includes rails_source, "idempotency_key: data.fetch(\"idempotency_key\")"
-    assert_includes rails_source, "settlement_action_completed_at_seconds ||= Integer"
-    refute_includes rails_source, "expires_at_seconds + ? >= ?"
+      assert_equal 201, first.fetch("status")
+      assert_equal 200, second.fetch("status")
+      assert_equal first.fetch("body"), second.fetch("body")
+      checks = adapter.doctor.fetch("checks")
+      assert checks.any? { |check| check.fetch("name") == "rails.store.owned" && check.fetch("status") == "ok" }
+      assert File.exist?(File.join(dir, "openreceive.sqlite3"))
+    end
   end
 
   def test_rails_route_and_poll_templates_preserve_receive_only_boundary
@@ -161,6 +168,7 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_includes partial, "amount_msats"
     assert_includes routes, "post \"/openreceive/v1/invoices\""
     assert_includes routes, "get \"/openreceive/v1/invoices/:invoice_id\""
+    assert_includes routes, "post \"/openreceive/v1/poll\""
     assert_includes rake_tasks, "task poll: :environment"
     assert_includes rake_tasks, "task doctor: :environment"
     assert_includes rake_tasks, "OpenReceive::Rails.adapter.doctor"
@@ -172,7 +180,7 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_includes initializer, "OpenReceive.parse_nwc_uri"
     refute_includes initializer, "OpenReceive::UnavailableReceiveClient"
     assert_includes initializer, "NwcRuby::Client.from_uri"
-    assert_includes initializer, "OpenReceive::Rails.create_active_record_invoice_store"
+    assert_includes initializer, "OpenReceive::Rails.resolve_invoice_store"
     assert_includes initializer, "Configure OpenReceive authentication before production"
     refute_includes combined, "pay_invoice"
     refute_includes combined, "nostr+walletconnect://"
@@ -188,10 +196,11 @@ class OpenReceiveRailsTest < Minitest::Test
     )
 
     assert_includes generator, "Rails::Generators::Base"
-    assert_includes generator, "Rails::Generators::Migration"
-    assert_includes generator, "next_migration_number"
-    assert_includes generator, "migration_template \"create_openreceive_tables.rb\""
-    assert_includes generator, "create_openreceive_tables.rb"
+    refute_includes generator, "Rails::Generators::Migration"
+    refute_includes generator, "next_migration_number"
+    refute_includes generator, "migration_template"
+    refute_includes generator, "create_openreceive_tables.rb"
+    refute_includes generator, "openreceive_invoice.rb"
     assert_includes generator, "config/initializers/openreceive.rb"
     assert_includes generator, "openreceive_controller.rb"
     assert_includes generator, "openreceive_poll_invoice_job.rb"
@@ -212,7 +221,9 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_equal(
       [
         [:post, "/v1/invoices", { to: "invoices#create" }],
-        [:get, "/v1/invoices/:invoice_id", { to: "invoices#show" }]
+        [:get, "/v1/invoices/:invoice_id", { to: "invoices#show" }],
+        [:post, "/v1/poll", { to: "invoices#poll" }],
+        [:get, "/v1/poll", { to: "invoices#poll" }]
       ],
       calls
     )
@@ -231,6 +242,7 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_includes source, "OpenReceive::Rails::Routes.draw(self)"
     assert_includes source, "create_invoice"
     assert_includes source, "lookup_invoice"
+    assert_includes source, "def poll"
     assert_includes source, "rescue_from OpenReceive::WalletUnavailableError"
     assert_includes source, "render_openreceive_error"
     refute_includes source, "pay_invoice"
@@ -263,9 +275,9 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_equal true, result.fetch("ok")
     checks = result.fetch("checks")
     assert checks.any? { |check| check.fetch("name") == "rails.store" && check.fetch("status") == "ok" }
-    assert checks.any? { |check| check.fetch("name") == "rails.migration" && check.fetch("status") == "ok" }
+    assert checks.any? { |check| check.fetch("name") == "rails.store.owned" && check.fetch("status") == "ok" }
     assert checks.any? { |check| check.fetch("name") == "rails.nwc" && check.fetch("status") == "ok" }
-    assert checks.any? { |check| check.fetch("name") == "rails.worker.poll" && check.fetch("status") == "ok" }
+    assert checks.any? { |check| check.fetch("name") == "rails.poll" && check.fetch("status") == "ok" }
     refute_includes result.to_s, "nostr+walletconnect://"
   end
 
@@ -378,7 +390,7 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_equal [{ "payment_hash" => "a" * 64 }] * 3, client.lookup_invoice_calls
   end
 
-  def test_internal_verify_can_be_used_by_polling_workers
+  def test_internal_verify_can_be_used_by_poll_schedulers
     adapter, client, completed = build_adapter
     created = adapter.create_invoice(
       controller: Controller.new(7),

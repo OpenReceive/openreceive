@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "fileutils"
 require "securerandom"
 require "openreceive"
 
@@ -11,6 +12,8 @@ module OpenReceive
       def draw(router)
         router.post "/v1/invoices", to: "invoices#create"
         router.get "/v1/invoices/:invoice_id", to: "invoices#show"
+        router.post "/v1/poll", to: "invoices#poll"
+        router.get "/v1/poll", to: "invoices#poll"
       end
     end
 
@@ -44,34 +47,9 @@ module OpenReceive
       end
     end
 
-    class ActiveRecordInvoiceStore
-      REQUIRED_COLUMNS = %w[
-        id
-        merchant_scope
-        operation
-        idempotency_key
-        idempotency_request_hash
-        payment_hash
-        invoice
-        amount_msats
-        transaction_state
-        workflow_state
-        settlement_action_state
-        created_at_seconds
-        expires_at_seconds
-        settled_at_seconds
-        settlement_action_completed_at_seconds
-        refreshed_from_invoice_id
-        metadata
-        fiat_quote
-        created_at
-        updated_at
-      ].freeze
-      REQUIRED_INDEXES = %w[
-        idx_openreceive_invoice_idempotency
-        index_openreceive_invoices_on_payment_hash
-        index_openreceive_invoices_on_invoice
-      ].freeze
+    class SqliteInvoiceStore
+      DEFAULT_NAMESPACE = "default"
+      SCHEMA_VERSION = "v0.1"
       TERMINAL_WORKFLOW_STATES = %w[
         settlement_action_completed
         expired_closed
@@ -80,21 +58,20 @@ module OpenReceive
       ].freeze
       TERMINAL_TRANSACTION_STATES = %w[settled expired failed].freeze
 
-      def initialize(model_class: nil, model_class_name: "OpenReceiveInvoice")
-        @model_class = model_class
-        @model_class_name = model_class_name
+      def initialize(path:, namespace: DEFAULT_NAMESPACE, database: nil)
+        require "sqlite3" if database.nil? && !defined?(SQLite3)
+
+        @namespace = normalize_namespace(namespace)
+        @database = database || SQLite3::Database.new(path)
+        @database.results_as_hash = true if @database.respond_to?(:results_as_hash=)
+        ensure_schema
       end
 
       def check_idempotency(scope:, idempotency_request_hash:)
         data = stringify_keys(scope)
-        record = model_class.find_by(
-          merchant_scope: data.fetch("merchant_scope"),
-          operation: data.fetch("operation"),
-          idempotency_key: data.fetch("idempotency_key")
-        )
-        return nil if record.nil?
+        row = row_by_control("idempotency_scope", scope_key(scope))
+        return nil if row.nil?
 
-        row = row_from_record(record)
         raise OpenReceive::IdempotencyConflictError.new(data) unless row.fetch("idempotency_request_hash") == idempotency_request_hash
 
         { "status" => "replayed", "row" => row }
@@ -108,124 +85,113 @@ module OpenReceive
         )
         return replay unless replay.nil?
 
-        record = model_class.create!(attributes_from_row(data))
-        { "status" => "created", "row" => row_from_record(record) }
-      rescue StandardError => error
+        @database.execute(
+          "INSERT INTO #{invoice_table} (invoice_id, rev, payment_hash, bolt11, idempotency_scope, terminal, expires_at, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+          [
+            data.fetch("invoice_id"),
+            0,
+            data.fetch("payment_hash"),
+            data.fetch("invoice"),
+            scope_key(data),
+            terminal?(data) ? 1 : 0,
+            Integer(data.fetch("expires_at")),
+            encode_record(0, data)
+          ]
+        )
+        { "status" => "created", "row" => data }
+      rescue SQLite3::ConstraintException
         replay = check_idempotency(
           scope: data,
           idempotency_request_hash: data.fetch("idempotency_request_hash")
         )
         return replay unless replay.nil?
 
-        raise OpenReceive::InvoiceStorageConflictError.new("invoice_id, payment_hash, and invoice must be unique") if unique_constraint_error?(error)
-
-        raise
+        raise OpenReceive::InvoiceStorageConflictError.new("invoice_id, payment_hash, invoice, and idempotency scope must be unique")
       end
 
       def find_by_invoice_id(invoice_id)
-        record = model_class.find_by(id: invoice_id)
-        record.nil? ? nil : row_from_record(record)
+        row_by_control("invoice_id", invoice_id)
       end
 
       def find_by_payment_hash(payment_hash)
-        record = model_class.find_by(payment_hash: payment_hash)
-        record.nil? ? nil : row_from_record(record)
+        row_by_control("payment_hash", payment_hash)
       end
 
       def recoverable_invoices(now:, grace_seconds: 15)
-        model_class
-          .where.not(workflow_state: TERMINAL_WORKFLOW_STATES)
-          .where(
-            "(transaction_state = ? AND settlement_action_state <> ?) OR transaction_state NOT IN (?)",
-            "settled",
-            "completed",
-            TERMINAL_TRANSACTION_STATES
-          )
-          .order(:created_at_seconds, :id)
-          .map { |record| row_from_record(record) }
+        Integer(now)
+        Integer(grace_seconds)
+        @database.execute(
+          "SELECT data FROM #{invoice_table} WHERE terminal = 0 ORDER BY expires_at ASC, invoice_id ASC"
+        ).map { |record| decode_row(record.fetch("data")) }
       end
 
       def mark_verifying(invoice_id:)
         update_invoice(invoice_id) do |record|
-          if read(record, :transaction_state) != "settled" &&
-              %w[invoice_created expiry_pending_verification].include?(read(record, :workflow_state))
-            record.workflow_state = "verifying"
+          if record["transaction_state"] != "settled" &&
+              %w[invoice_created expiry_pending_verification].include?(record["workflow_state"])
+            record["workflow_state"] = "verifying"
           end
         end
       end
 
       def mark_expiry_pending_verification(invoice_id:)
         update_invoice(invoice_id) do |record|
-          unless TERMINAL_TRANSACTION_STATES.include?(read(record, :transaction_state))
-            record.workflow_state = "expiry_pending_verification"
+          unless TERMINAL_TRANSACTION_STATES.include?(record["transaction_state"])
+            record["workflow_state"] = "expiry_pending_verification"
           end
         end
       end
 
       def mark_settled(invoice_id:, settled_at:)
         update_invoice(invoice_id) do |record|
-          record.transaction_state = "settled"
-          record.workflow_state = "settlement_action_pending" unless read(record, :workflow_state) == "settlement_action_completed"
-          record.settled_at_seconds ||= Integer(settled_at)
+          record["transaction_state"] = "settled"
+          record["workflow_state"] = "settlement_action_pending" unless record["workflow_state"] == "settlement_action_completed"
+          record["settled_at"] ||= Integer(settled_at)
         end
       end
 
       def mark_expired_closed(invoice_id:)
         update_invoice(invoice_id) do |record|
-          if read(record, :transaction_state) != "settled"
-            record.transaction_state = "expired"
-            record.workflow_state = "expired_closed"
+          if record["transaction_state"] != "settled"
+            record["transaction_state"] = "expired"
+            record["workflow_state"] = "expired_closed"
           end
         end
       end
 
       def mark_failed_closed(invoice_id:)
         update_invoice(invoice_id) do |record|
-          if read(record, :transaction_state) != "settled"
-            record.transaction_state = "failed"
-            record.workflow_state = "failed_closed"
+          if record["transaction_state"] != "settled"
+            record["transaction_state"] = "failed"
+            record["workflow_state"] = "failed_closed"
           end
         end
       end
 
       def mark_settlement_action_completed(invoice_id:, settlement_action_completed_at:)
         update_invoice(invoice_id) do |record|
-          record.workflow_state = "settlement_action_completed"
-          record.settlement_action_state = "completed"
-          record.settlement_action_completed_at_seconds ||= Integer(settlement_action_completed_at)
+          record["workflow_state"] = "settlement_action_completed"
+          record["settlement_action_state"] = "completed"
+          record["settlement_action_completed_at"] ||= Integer(settlement_action_completed_at)
         end
       end
 
       def mark_settlement_action_failed(invoice_id:)
         update_invoice(invoice_id) do |record|
-          record.workflow_state = "settlement_action_pending"
-          record.settlement_action_state = "failed"
+          record["workflow_state"] = "settlement_action_pending"
+          record["settlement_action_state"] = "failed"
         end
       end
 
       def doctor
-        connection = model_class.connection
-        table_name = model_class.table_name
-        unless connection.data_source_exists?(table_name)
-          return [doctor_check("rails.migration", "error", "missing #{table_name}; run bin/rails db:migrate")]
-        end
-
-        column_names = connection.columns(table_name).map(&:name)
-        index_names = connection.indexes(table_name).map(&:name)
-        missing_columns = REQUIRED_COLUMNS - column_names
-        missing_indexes = REQUIRED_INDEXES - index_names
-        checks = []
-        if missing_columns.empty? && missing_indexes.empty?
-          checks << doctor_check("rails.migration", "ok", "#{table_name} columns/indexes present")
-        else
-          missing = []
-          missing << "columns: #{missing_columns.join(", ")}" unless missing_columns.empty?
-          missing << "indexes: #{missing_indexes.join(", ")}" unless missing_indexes.empty?
-          checks << doctor_check("rails.migration", "error", "incomplete #{table_name}; missing #{missing.join("; ")}")
-        end
-        checks
+        owner = meta_value("owner")
+        version = meta_value("schema_version")
+        [
+          doctor_check("rails.store.owned", owner == "openreceive" ? "ok" : "error", "OpenReceive-owned SQLite store namespace=#{@namespace}"),
+          doctor_check("rails.store.schema", version == SCHEMA_VERSION ? "ok" : "error", "schema_version=#{version || "missing"}")
+        ]
       rescue StandardError => error
-        [doctor_check("rails.migration", "error", error.message)]
+        [doctor_check("rails.store", "error", error.message)]
       end
 
       private
@@ -234,82 +200,140 @@ module OpenReceive
         { "name" => name, "status" => status, "message" => message }
       end
 
-      def model_class
-        @model_class || Object.const_get(@model_class_name)
-      rescue NameError
-        raise ArgumentError, "#{@model_class_name} model is not loaded; pass model_class:"
+      def ensure_schema
+        @database.execute("PRAGMA journal_mode = WAL")
+        @database.execute(
+          "CREATE TABLE IF NOT EXISTS #{invoice_table} (" \
+          "invoice_id TEXT PRIMARY KEY, " \
+          "rev INTEGER NOT NULL, " \
+          "payment_hash TEXT NOT NULL UNIQUE, " \
+          "bolt11 TEXT NOT NULL UNIQUE, " \
+          "idempotency_scope TEXT NOT NULL UNIQUE, " \
+          "terminal INTEGER NOT NULL DEFAULT 0, " \
+          "expires_at INTEGER NOT NULL, " \
+          "data TEXT NOT NULL)"
+        )
+        @database.execute(
+          "CREATE INDEX IF NOT EXISTS #{quoted_identifier("#{@namespace}_openreceive_open_idx")} " \
+          "ON #{invoice_table} (terminal, expires_at)"
+        )
+        @database.execute(
+          "CREATE TABLE IF NOT EXISTS #{meta_table} (" \
+          "key TEXT PRIMARY KEY, " \
+          "value TEXT NOT NULL, " \
+          "rev INTEGER NOT NULL DEFAULT 0)"
+        )
+        claim_meta("owner", "openreceive")
+        claim_meta("schema_version", SCHEMA_VERSION)
+        claim_meta("namespace", @namespace)
       end
 
       def update_invoice(invoice_id)
-        model_class.transaction do
-          record = model_class.lock.find_by(id: invoice_id)
-          raise OpenReceive::InvoiceNotFoundError.new(invoice_id) if record.nil?
+        current = record_by_invoice_id(invoice_id)
+        raise OpenReceive::InvoiceNotFoundError.new(invoice_id) if current.nil?
 
-          yield record
-          record.save!
-          row_from_record(record)
-        end
+        row = current.fetch("row")
+        yield row
+        write_record(row, current.fetch("rev") + 1)
+        row
       end
 
-      def attributes_from_row(row)
+      def row_by_control(column, value)
+        record = record_by_control(column, value)
+        record.nil? ? nil : record.fetch("row")
+      end
+
+      def record_by_invoice_id(invoice_id)
+        record_by_control("invoice_id", invoice_id)
+      end
+
+      def record_by_control(column, value)
+        unless %w[invoice_id payment_hash idempotency_scope].include?(column)
+          raise ArgumentError, "unsupported control lookup"
+        end
+
+        record = @database.get_first_row(
+          "SELECT rev, data FROM #{invoice_table} WHERE #{column} = ? LIMIT 1",
+          value
+        )
+        return nil if record.nil?
+
         {
-          id: row.fetch("invoice_id"),
-          merchant_scope: row.fetch("merchant_scope"),
-          operation: row.fetch("operation"),
-          idempotency_key: row.fetch("idempotency_key"),
-          idempotency_request_hash: row.fetch("idempotency_request_hash"),
-          payment_hash: row.fetch("payment_hash"),
-          invoice: row.fetch("invoice"),
-          amount_msats: Integer(row.fetch("amount_msats")),
-          transaction_state: row.fetch("transaction_state"),
-          workflow_state: row.fetch("workflow_state"),
-          settlement_action_state: row.fetch("settlement_action_state"),
-          created_at_seconds: Integer(row.fetch("created_at")),
-          expires_at_seconds: Integer(row.fetch("expires_at")),
-          settled_at_seconds: optional_integer(row["settled_at"]),
-          settlement_action_completed_at_seconds: optional_integer(row["settlement_action_completed_at"]),
-          refreshed_from_invoice_id: row["refreshed_from_invoice_id"],
-          metadata: row["metadata"] || {},
-          fiat_quote: row["fiat_quote"]
+          "rev" => Integer(record.fetch("rev")),
+          "row" => decode_row(record.fetch("data"))
         }
       end
 
-      def row_from_record(record)
-        {
-          "invoice_id" => read(record, :id),
-          "merchant_scope" => read(record, :merchant_scope),
-          "operation" => read(record, :operation),
-          "idempotency_key" => read(record, :idempotency_key),
-          "idempotency_request_hash" => read(record, :idempotency_request_hash),
-          "payment_hash" => read(record, :payment_hash),
-          "invoice" => read(record, :invoice),
-          "amount_msats" => Integer(read(record, :amount_msats)),
-          "transaction_state" => read(record, :transaction_state),
-          "workflow_state" => read(record, :workflow_state),
-          "settlement_action_state" => read(record, :settlement_action_state),
-          "created_at" => Integer(read(record, :created_at_seconds)),
-          "expires_at" => Integer(read(record, :expires_at_seconds)),
-          "settled_at" => optional_integer(read(record, :settled_at_seconds)),
-          "settlement_action_completed_at" => optional_integer(read(record, :settlement_action_completed_at_seconds)),
-          "refreshed_from_invoice_id" => read(record, :refreshed_from_invoice_id),
-          "metadata" => read(record, :metadata) || {},
-          "fiat_quote" => read(record, :fiat_quote)
-        }.reject { |_key, value| value.nil? }
+      def write_record(row, rev)
+        @database.execute(
+          "UPDATE #{invoice_table} SET rev = ?, payment_hash = ?, bolt11 = ?, idempotency_scope = ?, terminal = ?, expires_at = ?, data = ? WHERE invoice_id = ?",
+          [
+            rev,
+            row.fetch("payment_hash"),
+            row.fetch("invoice"),
+            scope_key(row),
+            terminal?(row) ? 1 : 0,
+            Integer(row.fetch("expires_at")),
+            encode_record(rev, row),
+            row.fetch("invoice_id")
+          ]
+        )
       end
 
-      def read(record, attribute)
-        return record.public_send(attribute) if record.respond_to?(attribute)
-        return record[attribute] if record.respond_to?(:[])
-
-        nil
+      def decode_row(data)
+        JSON.parse(data).fetch("row")
       end
 
-      def optional_integer(value)
-        value.nil? ? nil : Integer(value)
+      def encode_record(rev, row)
+        JSON.generate("rev" => rev, "row" => row)
       end
 
-      def unique_constraint_error?(error)
-        error.class.name.end_with?("RecordNotUnique")
+      def terminal?(row)
+        TERMINAL_WORKFLOW_STATES.include?(row.fetch("workflow_state"))
+      end
+
+      def scope_key(scope)
+        data = stringify_keys(scope)
+        OpenReceive.idempotency_scope_key(
+          merchant_scope: data.fetch("merchant_scope"),
+          operation: data.fetch("operation"),
+          idempotency_key: data.fetch("idempotency_key")
+        )
+      end
+
+      def claim_meta(key, value)
+        @database.execute(
+          "INSERT OR IGNORE INTO #{meta_table} (key, value, rev) VALUES (?, ?, 0)",
+          [key, value]
+        )
+      end
+
+      def meta_value(key)
+        row = @database.get_first_row(
+          "SELECT value FROM #{meta_table} WHERE key = ? LIMIT 1",
+          key
+        )
+        row&.fetch("value")
+      end
+
+      def invoice_table
+        quoted_identifier("#{@namespace}_openreceive_invoices")
+      end
+
+      def meta_table
+        quoted_identifier("#{@namespace}_openreceive_meta")
+      end
+
+      def quoted_identifier(identifier)
+        %("#{identifier.gsub("\"", "\"\"")}")
+      end
+
+      def normalize_namespace(value)
+        namespace = value.to_s.strip
+        unless /\A[a-z0-9_]{1,40}\z/.match?(namespace)
+          raise ArgumentError, "OPENRECEIVE_NAMESPACE must match ^[a-z0-9_]{1,40}$"
+        end
+        namespace
       end
 
       def stringify_keys(value)
@@ -353,16 +377,16 @@ module OpenReceive
         if @config.store.respond_to?(:doctor)
           checks.concat(@config.store.doctor)
         elsif @config.store.is_a?(OpenReceive::InMemoryInvoiceKvStore)
-          checks << doctor_check("rails.store.durable", "error", "InMemoryInvoiceKvStore is for tests only; configure OpenReceive::Rails::ActiveRecordInvoiceStore and run bin/rails db:migrate")
+          checks << doctor_check("rails.store.durable", "error", "InMemoryInvoiceKvStore is for tests only; configure OPENRECEIVE_STORE with OpenReceive::Rails.resolve_invoice_store")
         else
-          checks << doctor_check("rails.store.durable", "error", "invoice store must expose doctor migration diagnostics")
+          checks << doctor_check("rails.store.durable", "error", "invoice store must expose doctor ownership/schema diagnostics")
         end
 
         checks.concat(client_doctor_checks)
         checks << if @config.store.respond_to?(:recoverable_invoices)
-                    doctor_check("rails.worker.poll", "ok", "poll worker can recover invoices from the configured store")
+                    doctor_check("rails.poll", "ok", "one-shot poll can recover invoices from the configured store")
                   else
-                    doctor_check("rails.worker.poll", "error", "store does not support recoverable_invoices")
+                    doctor_check("rails.poll", "error", "store does not support recoverable_invoices")
                   end
         {
           "ok" => checks.none? { |check| check.fetch("status") == "error" },
@@ -416,6 +440,15 @@ module OpenReceive
         @config.store.recoverable_invoices(now: now).map do |row|
           verify_stored_invoice(row)
         end
+      end
+
+      def poll(controller:, now: Time.now.to_i)
+        authenticate!(controller)
+        invoices = poll_recoverable_invoices(now: now)
+        response(200, {
+          "invoice_ids" => invoices.map { |invoice| invoice.fetch("invoice_id") },
+          "checked" => invoices.length
+        })
       end
 
       private
@@ -602,6 +635,11 @@ module OpenReceive
           render json: result.fetch("body"), status: result.fetch("status")
         end
 
+        def poll
+          result = OpenReceive::Rails.adapter.poll(controller: self)
+          render json: result.fetch("body"), status: result.fetch("status")
+        end
+
         private
 
         def openreceive_params
@@ -644,11 +682,33 @@ module OpenReceive
         Adapter.new(configuration)
       end
 
-      def create_active_record_invoice_store(model_class: nil, model_class_name: "OpenReceiveInvoice")
-        ActiveRecordInvoiceStore.new(
-          model_class: model_class,
-          model_class_name: model_class_name
-        )
+      def resolve_invoice_store(
+        uri: ENV["OPENRECEIVE_STORE"],
+        namespace: ENV.fetch("OPENRECEIVE_NAMESPACE", "default"),
+        root: Dir.pwd
+      )
+        store_uri = uri.to_s.strip
+        case store_uri
+        when "", "memory:", "memory"
+          OpenReceive::InMemoryInvoiceKvStore.new
+        when "local-sqlite"
+          path = File.join(root, ".openreceive")
+          FileUtils.mkdir_p(path)
+          SqliteInvoiceStore.new(
+            path: File.join(path, "#{namespace}.sqlite3"),
+            namespace: namespace
+          )
+        else
+          if store_uri.start_with?("sqlite:///")
+            SqliteInvoiceStore.new(path: store_uri.delete_prefix("sqlite://"), namespace: namespace)
+          elsif store_uri.start_with?("sqlite://")
+            SqliteInvoiceStore.new(path: store_uri.delete_prefix("sqlite://"), namespace: namespace)
+          elsif store_uri.start_with?("sqlite:")
+            SqliteInvoiceStore.new(path: store_uri.delete_prefix("sqlite:"), namespace: namespace)
+          else
+            raise ArgumentError, "Set OPENRECEIVE_STORE to local-sqlite, sqlite://, or memory: for the current Rails adapter."
+          end
+        end
       end
     end
   end

@@ -106,6 +106,14 @@
       "type": "integer",
       "minimum": 0
     },
+    "last_lookup_at": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "action_claimed_at": {
+      "type": "integer",
+      "minimum": 0
+    },
     "refreshed_from_invoice_id": {
       "type": "string",
       "pattern": "^or_inv_[a-z0-9_]+$"
@@ -122,6 +130,60 @@
       "additionalProperties": true
     }
   },
+  "$defs": {
+    "StoredRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rev",
+        "row"
+      ],
+      "properties": {
+        "rev": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "row": {
+          "$ref": "#"
+        }
+      }
+    },
+    "MetaRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "rev"
+      ],
+      "properties": {
+        "value": {
+          "type": "string"
+        },
+        "rev": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "LookupBucket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tokens",
+        "refilled_at"
+      ],
+      "properties": {
+        "tokens": {
+          "type": "number",
+          "minimum": 0
+        },
+        "refilled_at": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  },
   "x-openreceive-invariants": [
     "invoice_id is unique",
     "payment_hash is unique where present",
@@ -131,6 +193,8 @@
     "local expires_at alone does not make a row terminal or remove it from recovery",
     "expired_closed requires post-expiry wallet lookup or exhausted post-expiry grace verification",
     "settlement_action_completed_at can be set once",
+    "last_lookup_at records the store-coordinated wallet lookup cooldown claim",
+    "action_claimed_at records the store-coordinated settlement action lease",
     "refresh creates a new invoice row"
   ]
 }

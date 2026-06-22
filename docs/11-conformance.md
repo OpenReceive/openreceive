@@ -11,7 +11,8 @@ or amount rules.
 - `spec/test-vectors/*.json` define amount boundaries, error normalization,
   fiat conversion, idempotency, invoice lifecycle, make-invoice validation, NWC
   info/encryption parsing, NWC request/response mapping, NWC URI parsing,
-  polling cadence, provider route selection, and settlement detection.
+  polling cadence, provider route selection, settlement detection, and the
+  transport-agnostic storage KV contract.
 - `spec/openapi/openreceive-http.v1.yaml` defines mounted HTTP routes.
 - `spec/asyncapi/openreceive-events.v1.yaml` defines invoice event names and
   payloads.
@@ -55,8 +56,8 @@ SDKs and adapters must treat an incoming invoice as settled only when
 settlement proof.
 
 Settlement action hooks may run only after that backend lookup settlement
-proof. They must be idempotent; replaying lookup or events must not run the
-app action twice.
+proof. They must be idempotent; replaying lookup or server-side lifecycle
+events must not run the app action twice.
 
 ## Idempotency Rules
 
@@ -111,7 +112,7 @@ duplicate `payment_received` notifications.
 Use `scriptLookupSequence` when a test needs deterministic lookup behavior over
 time. A sequence can return pending or terminal wallet states, throw a specific
 wallet error, or return a hand-authored lookup result before falling back to the
-stored invoice state. This is useful for polling, retry, and listener tests that
+stored invoice state. This is useful for polling and retry tests that
 need to prove lookup remains the settlement authority.
 
 The testkit is not a daemon and does not emulate Nostr relay behavior. It is a

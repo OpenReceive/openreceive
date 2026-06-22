@@ -576,6 +576,48 @@ test("protected poll route recovers invoices without browser polling", async () 
   assert.equal(stored.workflow_state, "settlement_action_completed");
 });
 
+test("poll route reads sweep tuning from env defaults", async () => {
+  const previousSweepBatch = process.env.OPENRECEIVE_SWEEP_BATCH;
+  process.env.OPENRECEIVE_SWEEP_BATCH = "1";
+
+  try {
+    const wallet = new FakeWallet();
+    const store = new InMemoryInvoiceKvStore();
+    seedInvoice(store, {
+      invoice_id: "or_inv_env_batch_1",
+      idempotency_key: "env-batch-1",
+      payment_hash: "1".repeat(64),
+      invoice: "lnbc-env-batch-1"
+    });
+    seedInvoice(store, {
+      invoice_id: "or_inv_env_batch_2",
+      idempotency_key: "env-batch-2",
+      payment_hash: "2".repeat(64),
+      invoice: "lnbc-env-batch-2"
+    });
+
+    wallet.lookupState = "settled";
+    const handlers = createOpenReceiveExpressHandlers({
+      client: wallet,
+      store,
+      merchantScope: () => "demo:hello-fruit",
+      unsafeAllowUnauthenticatedDemoMode: true,
+      backgroundSweep: false,
+      clock: () => 1600
+    });
+    const res = createResponse();
+
+    await handlers.poll(createRequest(), res, raiseNext);
+
+    assert.equal(res.statusCode, 200);
+    assert.deepEqual(res.body.invoice_ids, ["or_inv_env_batch_1"]);
+    assert.equal(res.body.checked, 1);
+    assert.equal(wallet.lookupInvoiceCalls, 1);
+  } finally {
+    restoreEnvVar("OPENRECEIVE_SWEEP_BATCH", previousSweepBatch);
+  }
+});
+
 test("client-supplied settlement fields cannot trigger settlement action", async () => {
   let settlementActionCalls = 0;
   const { wallet, store, handlers } = createHarness({

@@ -31,18 +31,19 @@ import {
 
 const DEMO_ID = "static-html-small-api";
 
-export function createHelloFruitOpenReceiveOptions(): OpenReceiveExpressOptions {
+export async function createHelloFruitOpenReceiveOptions(): Promise<OpenReceiveExpressOptions> {
   const connectionString = readRequiredHelloFruitNwcConnectionString();
   const wallet = createAlbyNwcReceiveClient({
     connectionString
   });
   const priceCurrencies = readHelloFruitCatalogCurrencies();
+  const store = await createHelloFruitOpenReceiveKvStore({
+    demoId: DEMO_ID
+  });
 
   return {
     client: wallet,
-    store: createHelloFruitOpenReceiveKvStore({
-      demoId: DEMO_ID
-    }),
+    store,
     merchantScope: () => "demo:hello-fruit-static",
     priceProviders: createDefaultLivePriceProviders({ currencies: priceCurrencies }),
     priceCurrencies,
@@ -51,7 +52,7 @@ export function createHelloFruitOpenReceiveOptions(): OpenReceiveExpressOptions 
   };
 }
 
-export function createHelloFruitStaticServer() {
+export async function createHelloFruitStaticServer() {
   const app = express();
   app.use(express.json());
   app.use(
@@ -59,7 +60,7 @@ export function createHelloFruitStaticServer() {
     express.static(fileURLToPath(new URL("../../../../shared/stickers/", import.meta.url)))
   );
 
-  const openreceive = createHelloFruitOpenReceiveOptions();
+  const openreceive = await createHelloFruitOpenReceiveOptions();
 
   mountHelloFruitHostedDemoRoutes(app, {
     id: DEMO_ID,

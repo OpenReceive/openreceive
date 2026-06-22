@@ -791,11 +791,17 @@ test("Hello Fruit JS demos set up package-owned invoice persistence", () => {
     path.join(process.cwd(), "packages/js/node/src/postgres-store.ts"),
     "utf8"
   );
-  assert.match(helper, /createOpenReceivePostgresKvStoreFromPool/);
+  assert.match(helper, /resolveOpenReceiveStore/);
+  assert.match(helper, /OPENRECEIVE_STORE/);
+  assert.match(helper, /OPENRECEIVE_NAMESPACE/);
+  assert.doesNotMatch(helper, /DATABASE_URL/);
   assert.doesNotMatch(helper, /OPENRECEIVE_DATABASE_SCHEMA_VERSION/);
   assert.doesNotMatch(helper, /OPENRECEIVE_POSTGRES_MIGRATION_SQL/);
   assert.doesNotMatch(helper, /OpenReceivePostgresQueryClient/);
-  assert.match(helper, /new InMemoryInvoiceKvStore\(\)/);
+  assert.doesNotMatch(helper, /new InMemoryInvoiceKvStore\(\)/);
+  assert.doesNotMatch(helper, /createOpenReceivePostgresKvStoreFromPool/);
+  assert.doesNotMatch(helper, /createOpenReceiveSqliteKvStore/);
+  assert.doesNotMatch(helper, /node:sqlite/);
   assert.match(postgresStore, /createOpenReceivePostgresKvStoreFromPool/);
   assert.match(postgresStore, /data JSONB NOT NULL/);
   assert.match(postgresStore, /openreceive_meta/);
@@ -807,7 +813,9 @@ test("Hello Fruit JS demos set up package-owned invoice persistence", () => {
     const compose = readFileSync(path.join(process.cwd(), demoDir, "compose.yml"), "utf8");
 
     assert.equal(packageJson.dependencies.pg, "^8.22.0", `${demoDir}: pg dependency`);
-    assert.match(compose, /DATABASE_URL:\s+postgres:\/\/openreceive:openreceive@openreceive-postgres:5432\/openreceive/);
+    assert.match(compose, /OPENRECEIVE_STORE:\s+postgres:\/\/openreceive:openreceive@openreceive-postgres:5432\/openreceive/);
+    assert.match(compose, /OPENRECEIVE_NAMESPACE:\s+hello_fruit_/);
+    assert.doesNotMatch(compose, /DATABASE_URL/);
     assert.match(compose, /openreceive-postgres:/);
     assert.match(compose, /image:\s+postgres:17-alpine/);
     assert.match(compose, /openreceive-postgres-data:\/var\/lib\/postgresql\/data/);
@@ -820,9 +828,19 @@ test("Hello Fruit JS demos set up package-owned invoice persistence", () => {
   ]) {
     const source = readFileSync(path.join(process.cwd(), sourcePath), "utf8");
     assert.match(source, /createHelloFruitOpenReceiveKvStore/);
+    assert.match(source, /await createHelloFruitOpenReceiveKvStore/);
     assert.doesNotMatch(source, /new InMemoryInvoiceStore\(\)/);
     assert.doesNotMatch(source, /OPENRECEIVE_POSTGRES_MIGRATION_SQL/);
     assert.doesNotMatch(source, /OPENRECEIVE_DATABASE_SCHEMA_VERSION/);
+  }
+
+  for (const sourcePath of [
+    "examples/hello-fruit/server/node-express-react/openreceive.config.mjs",
+    "examples/hello-fruit/server/static-html-small-api/openreceive.config.mjs",
+    "examples/hello-fruit/server/nextjs-fullstack/openreceive.config.mjs"
+  ]) {
+    const source = readFileSync(path.join(process.cwd(), sourcePath), "utf8");
+    assert.match(source, /await createHelloFruitOpenReceiveOptions/);
   }
 });
 
@@ -872,10 +890,11 @@ test("Rails React skeleton is explicitly quarantined and does not claim active R
 
   assert.match(combined, /quarantined/i);
   assert.match(combined, /rails-react/);
-  assert.match(combined, /OpenReceive::Rails\.create_active_record_invoice_store/);
+  assert.match(combined, /OpenReceive::Rails\.resolve_invoice_store/);
   assert.match(combined, /ENV\.fetch\("OPENRECEIVE_NWC"/);
   assert.match(combined, /OpenReceive\.parse_nwc_uri/);
   assert.doesNotMatch(combined, /OpenReceive::UnavailableReceiveClient/);
+  assert.doesNotMatch(combined, /create_active_record_invoice_store/);
   assert.doesNotMatch(combined, /rails-hotwire/);
   assert.doesNotMatch(combined, /Rails Hotwire/);
   assert.doesNotMatch(combined, /demo-rails-hotwire/);
@@ -933,7 +952,7 @@ test("Hello Fruit demos refuse to boot without OPENRECEIVE_NWC", async () => {
         createApp: createHelloFruitStaticProductionServer
       }
     ]) {
-      assert.throws(
+      await assert.rejects(
         () => demo.createApp(),
         /needs a read-only NWC code to receive payments\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
         `${demo.name}: requires NWC at boot`
@@ -950,11 +969,11 @@ test("Hello Fruit demos refuse to boot without OPENRECEIVE_NWC", async () => {
 
 test("Hello Fruit demos refuse malformed OPENRECEIVE_NWC before serving", async () => {
   await withEnv({ OPENRECEIVE_NWC: "https://example.com" }, async () => {
-    assert.throws(
+    await assert.rejects(
       () => createHelloFruitServer(),
       /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/
     );
-    assert.throws(
+    await assert.rejects(
       () => createHelloFruitStaticServer(),
       /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/
     );
@@ -970,7 +989,7 @@ test("Hello Fruit metadata exposes only allowlisted build fields", async () => {
 
   await withEnv({
     OPENRECEIVE_NWC: nwc,
-    DATABASE_URL: undefined,
+    OPENRECEIVE_STORE: "memory:",
     OPENRECEIVE_DEMO_MODE: "production",
     OPENRECEIVE_GIT_SHA: "0123456789abcdef",
     OPENRECEIVE_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
@@ -986,7 +1005,7 @@ test("Hello Fruit metadata exposes only allowlisted build fields", async () => {
         createApp: createHelloFruitStaticServer
       }
     ]) {
-      const metadata = await getJson(demo.createApp(), "/demo-metadata.json");
+      const metadata = await getJson(await demo.createApp(), "/demo-metadata.json");
       assert.equal(metadata.status, 200, `${demo.name}: metadata status`);
       assert.equal(metadata.body.mode, "production");
       assert.equal(metadata.body.build.git_sha, "0123456789abcdef");
@@ -1027,7 +1046,7 @@ test("Hello Fruit hosted demo routes expose health, source, docs, robots, and si
         createApp: createHelloFruitStaticServer
       }
     ]) {
-      const app = demo.createApp();
+      const app = await demo.createApp();
       const healthz = await getJson(app, "/healthz");
       assert.equal(healthz.status, 200, `${demo.name}: healthz status`);
       assert.deepEqual(healthz.body, {

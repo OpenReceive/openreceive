@@ -10,8 +10,8 @@ export default defineConfig({
   plugins: [
     {
       name: "openreceive-hello-fruit-static-api",
-      configureServer(server) {
-        server.middlewares.use(createHelloFruitStaticServer());
+      async configureServer(server) {
+        server.middlewares.use(await createHelloFruitStaticServer());
       }
     }
   ]

@@ -8,6 +8,8 @@ services:
       - path: ../../../../.env
         required: false
     environment:
+      OPENRECEIVE_STORE: local-sqlite
+      OPENRECEIVE_NAMESPACE: hello_fruit_rails
       OPENRECEIVE_DEMO_MODE: ${OPENRECEIVE_DEMO_MODE:-test_nwc}
       OPENRECEIVE_DEPLOYED_AT: ${OPENRECEIVE_DEPLOYED_AT:-}
       PORT: "3003"
@@ -16,6 +18,8 @@ services:
       - "3003"
     volumes:
       - openreceive-rails-storage:/app/examples/hello-fruit/server/rails-hotwire/storage
+      - openreceive-rails-openreceive:/app/examples/hello-fruit/server/rails-hotwire/.openreceive
 
 volumes:
   openreceive-rails-storage:
+  openreceive-rails-openreceive:

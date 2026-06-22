@@ -14,6 +14,7 @@ const demoContainers = [
     service: "hello-fruit-node-express-react",
     image: "ghcr.io/openreceive/demo-express:local",
     port: "3000",
+    namespace: "hello_fruit_express",
     buildScript: "vite build",
     startScript: "node --experimental-strip-types ../../shared/require-openreceive-nwc.ts && node --experimental-strip-types src/server/production.ts"
   },
@@ -24,6 +25,7 @@ const demoContainers = [
     service: "hello-fruit-static-html-small-api",
     image: "ghcr.io/openreceive/demo-static:local",
     port: "3001",
+    namespace: "hello_fruit_static",
     buildScript: "vite build",
     startScript: "node --experimental-strip-types ../../shared/require-openreceive-nwc.ts && node --experimental-strip-types src/server/production.ts"
   },
@@ -34,6 +36,7 @@ const demoContainers = [
     service: "hello-fruit-nextjs-fullstack",
     image: "ghcr.io/openreceive/demo-nextjs:local",
     port: "3002",
+    namespace: "hello_fruit_nextjs",
     buildScript: "next build",
     startScript: "node --experimental-strip-types ../../shared/require-openreceive-nwc.ts && next start -H 0.0.0.0 -p ${PORT:-3002}"
   }
@@ -45,14 +48,29 @@ const railsDemoContainers = [
     dir: "examples/hello-fruit/server/rails-hotwire",
     service: "hello-fruit-rails-hotwire",
     image: "ghcr.io/openreceive/demo-rails-hotwire:local",
-    port: "3003"
+    port: "3003",
+    namespace: "hello_fruit_rails",
+    appStorageVolume: "openreceive-rails-storage:/app/examples/hello-fruit/server/rails-hotwire/storage",
+    openreceiveVolume: "openreceive-rails-openreceive:/app/examples/hello-fruit/server/rails-hotwire/.openreceive",
+    appStorageVolumeName: "openreceive-rails-storage",
+    openreceiveVolumeName: "openreceive-rails-openreceive"
+  },
+  {
+    id: "rails-react",
+    dir: "examples/hello-fruit/server/rails-react",
+    service: "hello-fruit-rails-react",
+    image: "ghcr.io/openreceive/demo-rails-react:local",
+    port: "3003",
+    namespace: "hello_fruit_rails_react",
+    openreceiveVolume: "openreceive-rails-react-openreceive:/app/examples/hello-fruit/server/rails-react/.openreceive",
+    openreceiveVolumeName: "openreceive-rails-react-openreceive"
   }
 ];
 
 const findings = [];
 const jsDemoDatabaseService = "openreceive-postgres";
 const jsDemoDatabaseVolume = "openreceive-postgres-data";
-const jsDemoDatabaseUrl = "postgres://openreceive:openreceive@openreceive-postgres:5432/openreceive";
+const jsDemoStoreUri = "postgres://openreceive:openreceive@openreceive-postgres:5432/openreceive";
 
 function fail(message) {
   findings.push(message);
@@ -141,7 +159,8 @@ function validateCompose(demo) {
   expect(service.build?.dockerfile === `${demo.dir}/Dockerfile`, `${relativePath}: dockerfile path must target the demo Dockerfile`);
   expect(service.depends_on?.[jsDemoDatabaseService]?.condition === "service_healthy", `${relativePath}: app must wait for Postgres health`);
   expect(envFile?.path === "../../../../.env" && envFile?.required === false, `${relativePath}: root .env must be optional runtime env_file`);
-  expect(service.environment?.DATABASE_URL === jsDemoDatabaseUrl, `${relativePath}: app must receive local Postgres DATABASE_URL`);
+  expect(service.environment?.OPENRECEIVE_STORE === jsDemoStoreUri, `${relativePath}: app must receive local Postgres OPENRECEIVE_STORE`);
+  expect(service.environment?.OPENRECEIVE_NAMESPACE === demo.namespace, `${relativePath}: app must receive a demo namespace`);
   expect(service.environment?.OPENRECEIVE_DEMO_MODE === "${OPENRECEIVE_DEMO_MODE:-test_nwc}", `${relativePath}: demo mode must default to test_nwc`);
   expect(service.environment?.OPENRECEIVE_DEPLOYED_AT === "${OPENRECEIVE_DEPLOYED_AT:-}", `${relativePath}: deployed_at metadata env must be pass-through`);
   expect(service.environment?.PORT === demo.port, `${relativePath}: PORT must be ${demo.port}`);
@@ -278,8 +297,6 @@ function validateRailsDemo(demo) {
   const initializer = read(`${demo.dir}/config/initializers/openreceive.rb`);
   const controller = read(`${demo.dir}/app/controllers/hello_fruit_controller.rb`);
   const partial = read(`${demo.dir}/app/views/openreceive/_invoice.html.erb`);
-  const openreceiveModel = read(`${demo.dir}/app/models/open_receive_invoice.rb`);
-  const openreceiveMigration = read(`${demo.dir}/db/migrate/002_create_openreceive_tables.rb`);
 
   forbidSecrets(gemfilePath, gemfile);
   forbidSecrets(dockerfilePath, dockerfile);
@@ -290,8 +307,6 @@ function validateRailsDemo(demo) {
   forbidSecrets(`${demo.dir}/config/routes.rb`, routes);
   forbidSecrets(`${demo.dir}/app/controllers/hello_fruit_controller.rb`, controller);
   forbidSecrets(`${demo.dir}/app/views/openreceive/_invoice.html.erb`, partial);
-  forbidSecrets(`${demo.dir}/app/models/open_receive_invoice.rb`, openreceiveModel);
-  forbidSecrets(`${demo.dir}/db/migrate/002_create_openreceive_tables.rb`, openreceiveMigration);
 
   expect(gemfile.includes('gem "rails"'), `${gemfilePath}: must depend on Rails`);
   expect(gemfile.includes('gem "openreceive", path:'), `${gemfilePath}: must use local openreceive gem`);
@@ -312,15 +327,24 @@ function validateRailsDemo(demo) {
   expect(service.image === demo.image, `${composePath}: image must be ${demo.image}`);
   expect(service.env_file?.[0]?.path === "../../../../.env" && service.env_file?.[0]?.required === false, `${composePath}: root .env must be optional runtime env_file`);
   expect(service.environment?.OPENRECEIVE_DEMO_MODE === "${OPENRECEIVE_DEMO_MODE:-test_nwc}", `${composePath}: demo mode must default to test_nwc`);
+  expect(service.environment?.OPENRECEIVE_STORE === "local-sqlite", `${composePath}: OPENRECEIVE_STORE must default to local-sqlite`);
+  expect(service.environment?.OPENRECEIVE_NAMESPACE === demo.namespace, `${composePath}: OPENRECEIVE_NAMESPACE must be ${demo.namespace}`);
   expect(service.environment?.PORT === demo.port, `${composePath}: PORT must be ${demo.port}`);
   expect((service.expose ?? []).length === 1 && service.expose[0] === demo.port, `${composePath}: must expose only ${demo.port}`);
   expect((service.ports ?? []).length === 0, `${composePath}: stable compose must not publish host ports`);
-  expect(service.volumes?.[0] === "openreceive-rails-storage:/app/examples/hello-fruit/server/rails-hotwire/storage", `${composePath}: Rails SQLite storage must use named volume`);
-  expect(compose.volumes?.["openreceive-rails-storage"] !== undefined, `${composePath}: must declare openreceive-rails-storage volume`);
+  if (demo.appStorageVolume !== undefined) {
+    expect(service.volumes?.includes(demo.appStorageVolume), `${composePath}: Rails app SQLite storage must use named volume`);
+    expect(compose.volumes?.[demo.appStorageVolumeName] !== undefined, `${composePath}: must declare ${demo.appStorageVolumeName} volume`);
+  }
+  expect(service.volumes?.includes(demo.openreceiveVolume), `${composePath}: OpenReceive SQLite storage must use named volume`);
+  expect(compose.volumes?.[demo.openreceiveVolumeName] !== undefined, `${composePath}: must declare ${demo.openreceiveVolumeName} volume`);
 
   const overrideService = override.services?.[demo.service] ?? {};
   expect(overrideService.ports?.[0] === `${demo.port}:${demo.port}`, `${overridePath}: local override must publish ${demo.port}:${demo.port}`);
   expect(/^OPENRECEIVE_NWC=$/m.test(envExample), `${envPath}: OPENRECEIVE_NWC must be empty placeholder`);
+  expect(/^OPENRECEIVE_STORE=local-sqlite$/m.test(envExample), `${envPath}: OPENRECEIVE_STORE must default to local-sqlite`);
+  expect(new RegExp(`^OPENRECEIVE_NAMESPACE=${demo.namespace}$`, "m").test(envExample), `${envPath}: OPENRECEIVE_NAMESPACE must default to ${demo.namespace}`);
+  expect(/^OPENRECEIVE_CRON_SECRET=$/m.test(envExample), `${envPath}: OPENRECEIVE_CRON_SECRET must be present but empty`);
   expect(new RegExp(`^PORT=${demo.port}$`, "m").test(envExample), `${envPath}: PORT must default to ${demo.port}`);
   expect(readme.includes("The browser never receives `OPENRECEIVE_NWC`."), `${readmePath}: must state browser NWC boundary`);
   expect(readme.includes("docker compose -f compose.yml -f compose.override.yml.example up --build"), `${readmePath}: must document compose startup`);
@@ -331,13 +355,13 @@ function validateRailsDemo(demo) {
   expect(initializer.includes('ENV.fetch("OPENRECEIVE_NWC"'), `${demo.dir}/config/initializers/openreceive.rb: must require OPENRECEIVE_NWC at boot`);
   expect(initializer.includes("OpenReceive.parse_nwc_uri"), `${demo.dir}/config/initializers/openreceive.rb: must validate OPENRECEIVE_NWC at boot`);
   expect(!initializer.includes("OpenReceive::UnavailableReceiveClient"), `${demo.dir}/config/initializers/openreceive.rb: demos must not boot with an unavailable wallet client`);
-  expect(initializer.includes("OpenReceive::Rails.create_active_record_invoice_store"), `${demo.dir}/config/initializers/openreceive.rb: must use package-owned ActiveRecord invoice store`);
+  expect(initializer.includes("OpenReceive::Rails.resolve_invoice_store"), `${demo.dir}/config/initializers/openreceive.rb: must use package-owned OpenReceive invoice store`);
+  expect(!initializer.includes("create_active_record_invoice_store"), `${demo.dir}/config/initializers/openreceive.rb: must not use app ActiveRecord invoice storage`);
   expect(initializer.includes("config.settlement_action"), `${demo.dir}/config/initializers/openreceive.rb: must configure settlement action`);
   expect(controller.includes("nwc_secret_exposed: false"), `${demo.dir}/app/controllers/hello_fruit_controller.rb: metadata must explicitly avoid NWC exposure`);
   expect(partial.includes("turbo_frame_tag"), `${demo.dir}/app/views/openreceive/_invoice.html.erb: must render Turbo frame`);
-  expect(openreceiveModel.includes('self.table_name = "openreceive_invoices"'), `${demo.dir}/app/models/open_receive_invoice.rb: must use openreceive_invoices table`);
-  expect(openreceiveMigration.includes("create_table :openreceive_invoices"), `${demo.dir}/db/migrate/002_create_openreceive_tables.rb: must create package-owned invoice table`);
-  expect(openreceiveMigration.includes("[:merchant_scope, :operation, :idempotency_key]"), `${demo.dir}/db/migrate/002_create_openreceive_tables.rb: must preserve idempotency scope`);
+  expect(!existsSync(path.join(root, demo.dir, "app/models/open_receive_invoice.rb")), `${demo.dir}: must not ship an app ActiveRecord invoice model`);
+  expect(!existsSync(path.join(root, demo.dir, "db/migrate/002_create_openreceive_tables.rb")), `${demo.dir}: must not ship an app OpenReceive invoice migration`);
 }
 
 for (const demo of demoContainers) {

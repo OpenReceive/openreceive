@@ -470,6 +470,13 @@ test("Node CLI runs poll --once from a server config module", async () => {
     payment_hash: "6".repeat(64),
     invoice: "lnbc-poll-once"
   }));
+  await store.putIfAbsent(invoiceRecord({
+    invoice_id: "or_inv_poll_later",
+    idempotency_key: "order-poll-later",
+    payment_hash: "7".repeat(64),
+    invoice: "lnbc-poll-later",
+    created_at: 1001
+  }));
   const stdout = [];
   const stderr = [];
   let lookupCalls = 0;
@@ -482,7 +489,9 @@ test("Node CLI runs poll --once from a server config module", async () => {
   const code = await runOpenReceiveCli({
     argv: ["poll", "--once", "--config", "openreceive.config.mjs"],
     cwd: process.cwd(),
-    env: {},
+    env: {
+      OPENRECEIVE_SWEEP_BATCH: "1"
+    },
     stdout: io(stdout),
     stderr: io(stderr),
     loadConfigModule: async () => ({
@@ -514,6 +523,7 @@ test("Node CLI runs poll --once from a server config module", async () => {
   assert.equal(lookupCalls, 1);
   assert.match(stdout.join(""), /checked 1 wallet invoice/);
   assert.equal((await store.get("or_inv_poll_once")).row.workflow_state, "settlement_action_completed");
+  assert.equal((await store.get("or_inv_poll_later")).row.workflow_state, "invoice_created");
   assert.equal(stderr.join(""), "");
 });
 
