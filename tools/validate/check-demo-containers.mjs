@@ -15,7 +15,7 @@ const demoContainers = [
     image: "ghcr.io/openreceive/demo-express:local",
     port: "3000",
     namespace: "hello_fruit_express",
-    buildScript: "vite build",
+    buildScript: "vite build --configLoader runner",
     startScript: "tsx ../../shared/require-openreceive-nwc.ts && tsx src/server/production.ts"
   },
   {
@@ -26,7 +26,7 @@ const demoContainers = [
     image: "ghcr.io/openreceive/demo-static:local",
     port: "3001",
     namespace: "hello_fruit_static",
-    buildScript: "vite build",
+    buildScript: "vite build --configLoader runner",
     startScript: "tsx ../../shared/require-openreceive-nwc.ts && tsx src/server/production.ts"
   },
   {

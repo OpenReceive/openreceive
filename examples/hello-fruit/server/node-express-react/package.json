@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx ../../shared/require-openreceive-nwc.ts && vite --host 127.0.0.1",
-    "build": "vite build",
-    "preview": "tsx ../../shared/require-openreceive-nwc.ts && vite preview --host 127.0.0.1",
+    "dev": "tsx ../../shared/require-openreceive-nwc.ts && vite --host 127.0.0.1 --configLoader runner",
+    "build": "vite build --configLoader runner",
+    "preview": "tsx ../../shared/require-openreceive-nwc.ts && vite preview --host 127.0.0.1 --configLoader runner",
     "start": "tsx ../../shared/require-openreceive-nwc.ts && tsx src/server/production.ts",
     "openreceive:poll": "openreceive poll --once"
   },

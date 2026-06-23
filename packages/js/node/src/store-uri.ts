@@ -122,7 +122,7 @@ async function loadSqlite(
 }> {
   if (override !== undefined) return override();
   try {
-    return await import(`node:${"sqlite"}`) as unknown as {
+    return await import(/* @vite-ignore */ `node:${"sqlite"}`) as unknown as {
       DatabaseSync: new (filename: string) => OpenReceiveSqliteDatabase & {
         close?: () => void;
       };

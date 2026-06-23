@@ -14,6 +14,7 @@ import {
   statSync,
   writeFileSync
 } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -251,7 +252,7 @@ function walkFiles(dir) {
 }
 
 function transpileTypeScript(source, fileName) {
-  const result = ts.transpileModule(source, {
+  const result = ts.transpileModule(inlineJsonImportAttributes(source, fileName), {
     fileName,
     compilerOptions: {
       target: ts.ScriptTarget.ES2022,
@@ -277,6 +278,20 @@ function transpileTypeScript(source, fileName) {
   }
 
   return result.outputText;
+}
+
+// Node 20.0 and current Node parse different static JSON import syntaxes.
+// Package artifacts inline JSON imports so one emitted module works on both.
+function inlineJsonImportAttributes(source, fileName) {
+  const jsonImportPattern =
+    /^import\s+([A-Za-z_$][\w$]*)\s+from\s+["']([^"']+\.json)["']\s+with\s+\{\s*type:\s*["']json["']\s*\};/gm;
+  const requireForSource = createRequire(fileName);
+
+  return source.replace(jsonImportPattern, (_match, binding, specifier) => {
+    const jsonPath = requireForSource.resolve(specifier);
+    const json = JSON.parse(readFileSync(jsonPath, "utf8"));
+    return `const ${binding} = ${JSON.stringify(json)};`;
+  });
 }
 
 function rewriteExportTarget(target) {
