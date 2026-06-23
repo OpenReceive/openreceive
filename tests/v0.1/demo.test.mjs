@@ -138,16 +138,17 @@ test("Hello Fruit React demos delegate checkout state to the React package", () 
     ["node-express-react", nodeClient],
     ["nextjs-fullstack", nextClient]
   ]) {
-    assert.match(source, /<OpenReceiveCheckout/);
-    assert.match(source, /lookupUrl="\/openreceive\/v1\/invoices\/lookup"/);
+    assert.match(source, /<Checkout/);
+    assert.match(source, /onPaid=/);
     assert.doesNotMatch(source, /createOpenReceiveLookupInvoiceFetcher/);
+    assert.doesNotMatch(source, /lookupUrl=/);
     assert.doesNotMatch(source, /lookupInvoice=\{lookupInvoice\}/);
     assert.doesNotMatch(source, /fetch\("\/openreceive\/v1\/invoices\/lookup"/);
     assert.doesNotMatch(source, /payment_hash: state\.payment_hash/);
     assert.doesNotMatch(source, /new EventSource/);
     assert.doesNotMatch(source, /applyOpenReceiveInvoiceEvent/);
     assert.doesNotMatch(source, /parseOpenReceiveInvoiceEvent/);
-    assert.doesNotMatch(source, /createOpenReceiveCheckoutState/);
+    assert.doesNotMatch(source, /createCheckoutState/);
   }
 });
 
@@ -275,7 +276,7 @@ test("Hello Fruit static demo delegates checkout state to the web component", ()
   );
 
   assert.match(source, /defineOpenReceiveElements/);
-  assert.match(source, /createOpenReceiveCheckoutShell/);
+  assert.match(source, /createCheckoutShell/);
   assert.match(source, /createOpenReceiveThemeToggleElement/);
   assert.match(source, /@openreceive\/elements\/styles\.css/);
   assert.match(source, /rootSelector: "\.page"/);
@@ -286,11 +287,11 @@ test("Hello Fruit static demo delegates checkout state to the web component", ()
   assert.doesNotMatch(source, /syncOpenReceiveStoredThemeControls/);
   assert.doesNotMatch(source, /toggleOpenReceiveStoredThemeControls/);
   assert.doesNotMatch(source, /theme-toggle/);
-  assert.doesNotMatch(source, /createOpenReceiveCheckoutElement\(/);
+  assert.doesNotMatch(source, /createCheckoutElement\(/);
   assert.doesNotMatch(source, /document\.createElement\("openreceive-checkout"\)/);
   assert.doesNotMatch(source, /document\.createElement\("openreceive-theme-toggle"\)/);
-  assert.doesNotMatch(source, /createOpenReceiveCheckoutElementAttributes/);
-  assert.doesNotMatch(source, /createOpenReceiveCheckoutElementListeners/);
+  assert.doesNotMatch(source, /createCheckoutElementAttributes/);
+  assert.doesNotMatch(source, /createCheckoutElementListeners/);
   assert.doesNotMatch(source, /createOpenReceiveThemeToggleElementAttributes/);
   assert.doesNotMatch(source, /addEventListener\(name/);
   assert.doesNotMatch(source, /setAttribute\(name/);
@@ -328,7 +329,7 @@ test("Hello Fruit browser demos consume shared theme model", () => {
     ["node-express-react", nodeClient],
     ["nextjs-fullstack", nextClient]
   ]) {
-    assert.match(source, /OpenReceiveThemeScope/, `${name}: uses package theme scope`);
+    assert.match(source, /ThemeScope/, `${name}: uses package theme scope`);
     assert.match(source, /themeToggle/, `${name}: enables package theme toggle`);
     assert.match(source, /topbarClassName="topbar"/, `${name}: styles package theme toggle shell`);
     assert.doesNotMatch(source, /useOpenReceiveTheme/, `${name}: must not wire theme hook locally`);
@@ -342,7 +343,7 @@ test("Hello Fruit browser demos consume shared theme model", () => {
   assert.doesNotMatch(staticClient, /toggleOpenReceiveStoredThemeControls/);
   assert.doesNotMatch(staticClient, /toggleOpenReceiveStoredThemePreference/);
   assert.doesNotMatch(staticClient, /applyOpenReceiveThemeAttributes/);
-  assert.doesNotMatch(staticClient, /applyOpenReceiveCheckoutThemeAttributes/);
+  assert.doesNotMatch(staticClient, /applyCheckoutThemeAttributes/);
   assert.doesNotMatch(staticClient, /theme\.toggleLabel/);
   assert.doesNotMatch(staticClient, /Object\.entries\(theme\.attributes\)/);
   assert.doesNotMatch(staticClient, /setAttribute\("data-theme"/);
@@ -365,11 +366,11 @@ test("Frontend UI packages delegate checkout lifecycle to browser helpers", () =
     ["react", reactSource],
     ["elements", elementsSource]
   ]) {
-    assert.match(source, /createOpenReceiveCheckoutController/,
+    assert.match(source, /createCheckoutController/,
       `${name}: uses browser checkout controller`);
-    assert.match(source, /createOpenReceiveCheckoutStatusModel/,
+    assert.match(source, /createCheckoutStatusModel/,
       `${name}: uses browser checkout status display model`);
-    assert.doesNotMatch(source, /new OpenReceiveCheckoutWatcher/,
+    assert.doesNotMatch(source, /new CheckoutWatcher/,
       `${name}: must not construct checkout watcher locally`);
     assert.doesNotMatch(source, /createOpenReceiveLookupInvoiceFetcher/,
       `${name}: must not construct lookup fetcher locally`);
@@ -385,7 +386,7 @@ test("Frontend UI packages delegate checkout lifecycle to browser helpers", () =
       `${name}: must not format checkout countdown labels locally`);
     assert.doesNotMatch(source, /getOpenReceivePaymentStatusText/,
       `${name}: must not compose checkout status text locally`);
-    assert.doesNotMatch(source, /shouldOpenReceiveCheckoutShowWaiting/,
+    assert.doesNotMatch(source, /shouldCheckoutShowWaiting/,
       `${name}: must not compose checkout waiting state locally`);
     assert.doesNotMatch(source, /"Invoice expires in"/,
       `${name}: must not own countdown prefix text`);
@@ -432,7 +433,7 @@ test("Frontend UI packages consume shared checkout labels", () => {
     ["elements", elementsSource]
   ]) {
     assert.match(source, /openReceiveCheckoutLabels/, `${name}: uses shared labels`);
-    assert.match(source, /createOpenReceiveProviderCopyEvent/,
+    assert.match(source, /createCheckoutProviderCopyEvent/,
       `${name}: uses shared provider-copy event helper`);
     assert.doesNotMatch(source, /"Pay this invoice"/, `${name}: wizard title is package-shared`);
     assert.doesNotMatch(source, /"Copy BOLT11"/, `${name}: copy label is package-shared`);
@@ -538,11 +539,11 @@ test("Elements consume shared checkout event constructors", () => {
     "utf8"
   );
 
-  assert.match(elementsSource, /createOpenReceiveCheckoutActionEvent/,
+  assert.match(elementsSource, /createCheckoutActionEvent/,
     "elements: dispatches copy/open events through browser helpers");
-  assert.match(elementsSource, /createOpenReceiveCheckoutStateEvent/,
+  assert.match(elementsSource, /createCheckoutStateEvent/,
     "elements: dispatches state events through browser helpers");
-  assert.match(elementsSource, /createOpenReceiveCheckoutErrorEvent/,
+  assert.match(elementsSource, /createCheckoutErrorEvent/,
     "elements: dispatches error events through browser helpers");
   assert.doesNotMatch(elementsSource, /new CustomEvent\(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS/,
     "elements: must not construct checkout custom events locally");
@@ -584,7 +585,7 @@ test("Frontend UI packages consume shared checkout display model", () => {
     ["react", reactSource],
     ["elements", elementsSource]
   ]) {
-    assert.match(source, /createOpenReceiveCheckoutDisplayModel/,
+    assert.match(source, /createCheckoutDisplayModel/,
       `${name}: uses browser-owned checkout display labels`);
     assert.doesNotMatch(source, /function shortHash/,
       `${name}: must not own payment hash shortening`);
@@ -609,9 +610,9 @@ test("Frontend UI packages consume shared checkout display state conversion", ()
     ["react", reactSource],
     ["elements", elementsSource]
   ]) {
-    assert.match(source, /createOpenReceiveCheckoutStateFromDisplayData/,
+    assert.match(source, /createCheckoutStateFromDisplayData/,
       `${name}: creates checkout state from browser-owned display conversion`);
-    assert.match(source, /createOpenReceiveCheckoutSnapshotFromDisplayData/,
+    assert.match(source, /createCheckoutSnapshotFromDisplayData/,
       `${name}: creates live snapshots from browser-owned display conversion`);
     assert.doesNotMatch(source, /function toCheckoutSnapshot/,
       `${name}: must not own display-to-snapshot mapping`);
@@ -664,11 +665,11 @@ test("Frontend UI packages consume shared wizard route display model", () => {
       `${name}: must not own recommended provider labels`);
     assert.doesNotMatch(source, /entry\.provider/,
       `${name}: must not own raw provider display fields`);
-    assert.doesNotMatch(source, /getOpenReceiveProviderMechanismLabel/,
+    assert.doesNotMatch(source, /getCheckoutProviderMechanismLabel/,
       `${name}: must not compose provider badges locally`);
-    assert.doesNotMatch(source, /getOpenReceiveProviderOpenLabel/,
+    assert.doesNotMatch(source, /getCheckoutProviderOpenLabel/,
       `${name}: must not compose provider links locally`);
-    assert.doesNotMatch(source, /getOpenReceiveProviderUsBadge/,
+    assert.doesNotMatch(source, /getCheckoutProviderUsBadge/,
       `${name}: must not compose provider US badges locally`);
   }
 });
@@ -844,7 +845,7 @@ test("Hello Fruit JS demos set up package-owned invoice persistence", () => {
   }
 });
 
-test("Next.js demo delegates route handler glue to the Next package", () => {
+test("Next.js demo delegates route handling to the OpenReceive server", () => {
   const source = readFileSync(
     path.join(
       process.cwd(),
@@ -853,10 +854,10 @@ test("Next.js demo delegates route handler glue to the Next package", () => {
     "utf8"
   );
 
-  assert.match(source, /@openreceive\/next/);
   assert.match(source, /createOpenReceive/);
-  assert.match(source, /dispatchOpenReceiveNextRoute/);
+  assert.match(source, /handleFetch\(request\)/);
   assert.match(source, /readRequiredHelloFruitNwcConnectionString/);
+  assert.doesNotMatch(source, /@openreceive\/next/);
   assert.doesNotMatch(source, /createNwcReceiveClient/);
   assert.doesNotMatch(source, /createOpenReceiveNextRuntime/);
   assert.doesNotMatch(source, /dispatchOpenReceiveNextNoWalletRoute/);

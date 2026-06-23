@@ -17,17 +17,17 @@ import {
   type OpenReceiveQrEncoder,
   type OpenReceiveRegionId,
   copyInvoice,
-  createOpenReceiveCheckoutActionEvent,
-  createOpenReceiveCheckoutDisplayModel,
-  createOpenReceiveCheckoutController,
-  createOpenReceiveCheckoutErrorEvent,
-  createOpenReceiveCheckoutStatusModel,
-  createOpenReceiveCheckoutSnapshotFromDisplayData,
-  createOpenReceiveCheckoutStateFromDisplayData,
-  createOpenReceiveCheckoutStateEvent,
+  createCheckoutActionEvent,
+  createCheckoutDisplayModel,
+  createCheckoutController,
+  createCheckoutErrorEvent,
+  createCheckoutStatusModel,
+  createCheckoutSnapshotFromDisplayData,
+  createCheckoutStateFromDisplayData,
+  createCheckoutStateEvent,
   createOpenReceivePaymentWizardModel,
   createOpenReceivePaymentWizardSelection,
-  createOpenReceiveProviderCopyEvent,
+  createCheckoutProviderCopyEvent,
   createOpenReceiveThemeChangeEvent,
   createOpenReceiveTransientFeedbackController,
   createOpenReceiveWizardRouteAssetDisplays,
@@ -51,20 +51,22 @@ import {
   parseOpenReceiveResolvedTheme,
   parseOpenReceiveThemePreference,
   readOpenReceiveStoredCountryCode,
+  status as deriveStatus,
   syncOpenReceiveStoredThemeControls,
   toggleOpenReceiveStoredThemeControls,
   updateOpenReceivePaymentWizardSelection,
   writeOpenReceiveStoredCountryCode,
-  type OpenReceiveCheckoutController,
-  type OpenReceiveCheckoutSnapshot,
-  type OpenReceiveCheckoutState,
+  type CheckoutController,
+  type CheckoutSnapshot,
+  type CheckoutState,
   type OpenReceivePaymentWizardSelection,
   type OpenReceiveWizardProviderDisplay,
   type OpenReceiveWizardRouteAssetDisplay,
-  type OpenReceiveWizardRouteDisplay
-} from "@openreceive/browser";
+  type OpenReceiveWizardRouteDisplay,
+  type Status
+} from "@openreceive/browser/internal";
 
-export interface OpenReceiveCheckoutView {
+export interface CheckoutView {
   readonly invoice_id?: string;
   readonly invoice: string;
   readonly payment_hash?: string;
@@ -75,8 +77,7 @@ export interface OpenReceiveCheckoutView {
       readonly value?: string;
     };
   } | null;
-  readonly transaction_state?: string;
-  readonly workflow_state?: string;
+  readonly status?: Status;
   readonly expires_at?: number;
   readonly theme?: "light" | "dark";
   readonly payment_wizard?: boolean;
@@ -104,10 +105,10 @@ export interface DefineOpenReceiveElementsOptions {
 }
 
 const DEFAULT_TAG_NAME = "openreceive-checkout";
-export { OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME } from "@openreceive/browser";
+export { OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME } from "@openreceive/browser/internal";
 
-export function renderOpenReceiveCheckoutHtml(view: OpenReceiveCheckoutView): string {
-  const display = createOpenReceiveCheckoutDisplayModel(view);
+export function renderCheckoutHtml(view: CheckoutView): string {
+  const display = createCheckoutDisplayModel(view);
   const checkoutState = createElementCheckoutState(view);
   const amountLabel =
     display.amountLabel === undefined
@@ -117,18 +118,19 @@ export function renderOpenReceiveCheckoutHtml(view: OpenReceiveCheckoutView): st
     display.fiatLabel === undefined
       ? ""
       : `<span part="amount">${escapeHtml(display.fiatLabel)}</span>`;
-  const transactionStateLabel =
-    checkoutState?.transaction_state ?? display.transactionStateLabel;
+  const statusLabel = view.status ?? (
+    checkoutState === undefined
+      ? deriveStatus(view)
+      : deriveStatus(checkoutState)
+  );
   const stateLabel =
-    transactionStateLabel === undefined
-      ? ""
-      : `<span part="state" data-state="${escapeHtml(transactionStateLabel)}">${escapeHtml(transactionStateLabel)}</span>`;
+    `<span part="state" data-state="${escapeHtml(statusLabel)}">${escapeHtml(statusLabel)}</span>`;
   const status = checkoutState === undefined
     ? ""
     : renderElementPaymentStatusHtml(checkoutState);
   const statusModel = checkoutState === undefined
     ? undefined
-    : createOpenReceiveCheckoutStatusModel(checkoutState);
+    : createCheckoutStatusModel(checkoutState);
   const expired = statusModel?.phase === "expired";
   const wizard =
     expired || view.payment_wizard === false
@@ -440,14 +442,38 @@ function renderCountrySelectHtml(options: {
 }
 
 function createElementCheckoutState(
-  view: OpenReceiveCheckoutView
-): OpenReceiveCheckoutState | undefined {
+  view: CheckoutView
+): CheckoutState | undefined {
   if (view.invoice_id === undefined) return undefined;
-  return createOpenReceiveCheckoutStateFromDisplayData(view);
+  return createCheckoutStateFromDisplayData({
+    ...view,
+    ...(view.status === undefined
+      ? {}
+      : { transaction_state: transactionStateFromStatus(view.status) })
+  });
 }
 
-function renderElementPaymentStatusHtml(state: OpenReceiveCheckoutState): string {
-  const status = createOpenReceiveCheckoutStatusModel(state);
+function transactionStateFromStatus(status: Status): string {
+  if (status === "paid") return "settled";
+  if (status === "expired") return "expired";
+  if (status === "failed") return "failed";
+  return "pending";
+}
+
+function parseElementStatus(value: string | null): Status | undefined {
+  if (
+    value === "pending" ||
+    value === "paid" ||
+    value === "expired" ||
+    value === "failed"
+  ) {
+    return value;
+  }
+  return undefined;
+}
+
+function renderElementPaymentStatusHtml(state: CheckoutState): string {
+  const status = createCheckoutStatusModel(state);
   const countdown =
     status.countdownLabel === undefined
       ? ""
@@ -478,7 +504,7 @@ export function defineOpenReceiveElements(
     throw new Error("Custom elements are unavailable in this environment.");
   }
 
-  class OpenReceiveCheckoutElement extends HTMLElementCtor {
+  class CheckoutElement extends HTMLElementCtor {
     private selection = createOpenReceivePaymentWizardSelection({
       storedCountryCode: readOpenReceiveStoredCountryCode(),
       defaultCountryCode: getOpenReceiveDefaultCountryCode()
@@ -486,7 +512,7 @@ export function defineOpenReceiveElements(
     private activeTutorialProviderId: string | null = null;
     private activeTutorialIndex = 0;
     private activeTutorialCopied = false;
-    private controller: OpenReceiveCheckoutController | undefined;
+    private controller: CheckoutController | undefined;
     private announcedSettledPaymentHash: string | undefined;
 
     static get observedAttributes() {
@@ -497,8 +523,7 @@ export function defineOpenReceiveElements(
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.amountMsats,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.fiatCurrency,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.fiatValue,
-        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.transactionState,
-        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.workflowState,
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.status,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.expiresAt,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.lookupUrl,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme,
@@ -529,7 +554,7 @@ export function defineOpenReceiveElements(
       }
 
       const root = this.shadowRoot ?? this.attachShadow({ mode: "open" });
-      root.innerHTML = renderOpenReceiveCheckoutHtml({
+      root.innerHTML = renderCheckoutHtml({
         invoice_id: this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoiceId) ?? undefined,
         invoice,
         payment_hash: this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentHash) ?? undefined,
@@ -538,8 +563,9 @@ export function defineOpenReceiveElements(
           { label: "amount-msats" }
         ),
         fiat_quote: readElementFiatQuote(this),
-        transaction_state: this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.transactionState) ?? undefined,
-        workflow_state: this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.workflowState) ?? undefined,
+        status: parseElementStatus(
+          this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.status)
+        ),
         expires_at: parseOpenReceiveOptionalInteger(
           this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.expiresAt),
           { label: "expires-at" }
@@ -565,7 +591,7 @@ export function defineOpenReceiveElements(
           .then(() => {
             showElementCopyFeedback(copyButton);
             this.dispatchEvent(
-              createOpenReceiveCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy)
+              createCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy)
             );
           })
           .catch((error) => this.dispatchError(error));
@@ -576,7 +602,7 @@ export function defineOpenReceiveElements(
         try {
           this.controller?.openWallet() ?? openWallet({ invoice, logger: options.logger });
           this.dispatchEvent(
-            createOpenReceiveCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.openWallet)
+            createCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.openWallet)
           );
         } catch (error) {
           this.dispatchError(error);
@@ -585,7 +611,7 @@ export function defineOpenReceiveElements(
 
       root.querySelector(OPENRECEIVE_CHECKOUT_ELEMENT_PART_SELECTORS.startOver)?.addEventListener("click", () => {
         this.dispatchEvent(
-          createOpenReceiveCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.startOver)
+          createCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.startOver)
         );
       });
 
@@ -614,7 +640,7 @@ export function defineOpenReceiveElements(
       }
 
       this.stopCheckoutController();
-      this.controller = createOpenReceiveCheckoutController({
+      this.controller = createCheckoutController({
         snapshot,
         ...(lookupUrl === null
           ? {}
@@ -631,7 +657,7 @@ export function defineOpenReceiveElements(
       this.controller = undefined;
     }
 
-    private currentCheckoutSnapshot(): OpenReceiveCheckoutSnapshot | undefined {
+    private currentCheckoutSnapshot(): CheckoutSnapshot | undefined {
       const invoiceId = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoiceId);
       const invoice = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice);
       if (invoiceId === null || invoice === null) return undefined;
@@ -643,7 +669,7 @@ export function defineOpenReceiveElements(
         this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.expiresAt),
         { label: "expires-at" }
       );
-      return createOpenReceiveCheckoutSnapshotFromDisplayData({
+      return createCheckoutSnapshotFromDisplayData({
         invoice_id: invoiceId,
         invoice,
         ...(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentHash) === null
@@ -651,20 +677,19 @@ export function defineOpenReceiveElements(
           : { payment_hash: this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentHash) ?? undefined }),
         ...(amountMsats === undefined ? {} : { amount_msats: amountMsats }),
         ...(readElementFiatQuote(this) === undefined ? {} : { fiat_quote: readElementFiatQuote(this) }),
-        transaction_state: this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.transactionState) ?? "pending",
-        workflow_state: this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.workflowState) ?? "invoice_created",
+        transaction_state: transactionStateFromStatus(
+          parseElementStatus(
+            this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.status)
+          ) ?? "pending"
+        ),
         ...(expiresAt === undefined ? {} : { expires_at: expiresAt }),
       });
     }
 
-    private applyCheckoutState(state: OpenReceiveCheckoutState): void {
+    private applyCheckoutState(state: CheckoutState): void {
       this.setAttributeIfChanged(
-        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.transactionState,
-        state.transaction_state
-      );
-      this.setAttributeIfChanged(
-        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.workflowState,
-        state.workflow_state
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.status,
+        deriveStatus(state)
       );
       if (state.expires_at !== undefined) {
         this.setAttributeIfChanged(
@@ -674,12 +699,12 @@ export function defineOpenReceiveElements(
       }
       this.render();
       this.dispatchEvent(
-        createOpenReceiveCheckoutStateEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.state, state)
+        createCheckoutStateEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.state, state)
       );
       if (state.settled && state.payment_hash !== this.announcedSettledPaymentHash) {
         this.announcedSettledPaymentHash = state.payment_hash;
         this.dispatchEvent(
-          createOpenReceiveCheckoutStateEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.settled, state)
+          createCheckoutStateEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.settled, state)
         );
       }
     }
@@ -818,10 +843,10 @@ export function defineOpenReceiveElements(
           .then(() => {
             this.activeTutorialCopied = true;
             if (this.activeTutorialProviderId !== null) {
-              this.dispatchEvent(createOpenReceiveProviderCopyEvent(this.activeTutorialProviderId));
+              this.dispatchEvent(createCheckoutProviderCopyEvent(this.activeTutorialProviderId));
             }
             this.dispatchEvent(
-              createOpenReceiveCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy)
+              createCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy)
             );
             this.render();
           })
@@ -848,7 +873,7 @@ export function defineOpenReceiveElements(
     }
 
     private dispatchError(error: unknown): void {
-      this.dispatchEvent(createOpenReceiveCheckoutErrorEvent(error));
+      this.dispatchEvent(createCheckoutErrorEvent(error));
     }
   }
 
@@ -953,7 +978,7 @@ export function defineOpenReceiveElements(
   }
 
   if (registry.get(tagName) === undefined) {
-    registry.define(tagName, OpenReceiveCheckoutElement);
+    registry.define(tagName, CheckoutElement);
   }
   if (registry.get(themeToggleTagName) === undefined) {
     registry.define(themeToggleTagName, OpenReceiveThemeToggleElement);

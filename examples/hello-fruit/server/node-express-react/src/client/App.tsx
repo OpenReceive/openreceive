@@ -1,15 +1,14 @@
 import React, { useCallback, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type {
-  OpenReceiveCheckoutState,
-  OpenReceiveCheckoutSnapshot
+  Invoice
 } from "@openreceive/browser";
 import {
-  createOpenReceiveInvoice
+  createInvoice as requestInvoice
 } from "@openreceive/browser";
 import {
-  OpenReceiveCheckout,
-  OpenReceiveThemeScope
+  Checkout,
+  ThemeScope
 } from "@openreceive/react";
 import "@openreceive/react/styles.css";
 import {
@@ -32,7 +31,7 @@ const initialFruitId = fruits[1]?.id ?? fruits[0]?.id ?? "";
 
 function App(): React.ReactElement {
   const [fruitId, setFruitId] = useState(initialFruitId);
-  const [invoice, setInvoice] = useState<OpenReceiveCheckoutSnapshot | null>(null);
+  const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [purchasedFruit, setPurchasedFruit] = useState<Fruit | null>(null);
   const [stickerModalOpen, setStickerModalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -44,15 +43,12 @@ function App(): React.ReactElement {
       ? helloFruitDemoLabels.createInvoice
       : formatHelloFruitBuyNowLabel(selectedFruit.fiat);
 
-  const onCheckoutState = useCallback((state: OpenReceiveCheckoutState) => {
-    if (
-      state.workflow_state === "settlement_action_completed" &&
-      completedInvoiceRef.current !== state.invoice_id
-    ) {
-      completedInvoiceRef.current = state.invoice_id;
+  const onPaid = useCallback(() => {
+    if (invoice !== null && completedInvoiceRef.current !== invoice.invoice_id) {
+      completedInvoiceRef.current = invoice.invoice_id;
       setStickerModalOpen(true);
     }
-  }, []);
+  }, [invoice]);
 
   async function createInvoice() {
     if (selectedFruit === undefined) return;
@@ -65,7 +61,7 @@ function App(): React.ReactElement {
     completedInvoiceRef.current = "";
 
     try {
-      const body = await createOpenReceiveInvoice({
+      const body = await requestInvoice({
         idempotencyKey: `hello-fruit-${selectedFruit.id}-${idempotencyKey}`,
         fiat: selectedFruit.fiat,
         description: createHelloFruitInvoiceDescription(selectedFruit.name),
@@ -98,7 +94,7 @@ function App(): React.ReactElement {
   }
 
   return (
-    <OpenReceiveThemeScope
+    <ThemeScope
       as="main"
       className="page"
       themeToggle
@@ -150,23 +146,15 @@ function App(): React.ReactElement {
         )}
 
         {invoice === null ? null : (
-          <OpenReceiveCheckout
-            amount_msats={invoice.amount_msats}
-            fiat_quote={invoice.fiat_quote}
+          <Checkout
             className="demo-checkout"
-            invoice={invoice.invoice}
-            invoice_id={invoice.invoice_id}
+            invoice={invoice}
             logger={logOpenReceive}
-            lookupUrl="/openreceive/v1/invoices/lookup"
             onError={(cause) => {
               setError(cause instanceof Error ? cause.message : String(cause));
             }}
-            onState={onCheckoutState}
+            onPaid={onPaid}
             onStartOver={startOver}
-            payment_hash={invoice.payment_hash}
-            transaction_state={invoice.transaction_state}
-            workflow_state={invoice.workflow_state}
-            expires_at={invoice.expires_at}
           />
         )}
 
@@ -202,7 +190,7 @@ function App(): React.ReactElement {
           </section>
         </div>
       )}
-    </OpenReceiveThemeScope>
+    </ThemeScope>
   );
 }
 

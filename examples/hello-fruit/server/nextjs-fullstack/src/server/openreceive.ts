@@ -6,10 +6,6 @@ import {
   type OpenReceiveServer
 } from "@openreceive/node";
 import {
-  dispatchOpenReceiveNextRoute,
-  openReceiveNextJsonResponse
-} from "@openreceive/next";
-import {
   createHelloFruitDemoMetadata
 } from "../../../../shared/demo-metadata.ts";
 import {
@@ -43,7 +39,7 @@ export function isWalletConfigured(): boolean {
 }
 
 export function demoMetadataResponse(): Response {
-  return openReceiveNextJsonResponse(createHelloFruitDemoMetadata({
+  return jsonResponse(createHelloFruitDemoMetadata({
     id: DEMO_ID,
     walletConfigured: isWalletConfigured(),
     requestedMode: process.env.OPENRECEIVE_DEMO_MODE,
@@ -52,7 +48,6 @@ export function demoMetadataResponse(): Response {
     deployedAt: process.env.OPENRECEIVE_DEPLOYED_AT,
     packages: {
       "@openreceive/browser": "0.1.0",
-      "@openreceive/next": "0.1.0",
       "@openreceive/react": "0.1.0",
       "next": "0.1.0-demo"
     }
@@ -60,7 +55,7 @@ export function demoMetadataResponse(): Response {
 }
 
 export function healthzResponse(): Response {
-  return openReceiveNextJsonResponse({
+  return jsonResponse({
     ok: true,
     demo: DEMO_ID,
     wallet_configured: isWalletConfigured()
@@ -100,16 +95,10 @@ export function sitemapResponse(): string {
 }
 
 export async function dispatchOpenReceiveRoute(
-  request: Request,
-  path: readonly string[]
+  request: Request
 ): Promise<Response> {
   const connectionString = readRequiredHelloFruitNwcConnectionString();
-
-  return dispatchOpenReceiveNextRoute({
-    runtime: (await getOpenReceive(connectionString)).runtime,
-    request,
-    path
-  });
+  return (await getOpenReceive(connectionString)).handleFetch(request);
 }
 
 async function getOpenReceive(connectionString: string): Promise<OpenReceiveServer> {
@@ -193,4 +182,14 @@ function escapeXml(value: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      "Cache-Control": "no-store",
+      "Content-Type": "application/json"
+    }
+  });
 }

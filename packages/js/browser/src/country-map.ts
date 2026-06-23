@@ -4,7 +4,7 @@ import worldAtlas from "world-atlas/countries-110m.json" with { type: "json" };
 import {
   OPENRECEIVE_COUNTRY_MAP_HEIGHT,
   OPENRECEIVE_COUNTRY_MAP_WIDTH
-} from "./index.ts";
+} from "./internal.ts";
 
 export interface OpenReceiveCountryMapLandPath {
   readonly id: string;

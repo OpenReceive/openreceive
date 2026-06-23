@@ -36,19 +36,19 @@ import {
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_PARTS,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_PART_SELECTORS,
   copyInvoice,
-  createOpenReceiveCheckoutActionEvent,
-  createOpenReceiveCheckoutController,
-  createOpenReceiveCheckoutDisplayModel,
-  createOpenReceiveCheckoutErrorEvent,
-  createOpenReceiveCheckoutSnapshotFromDisplayData,
-  createOpenReceiveCheckoutStatusModel,
-  createOpenReceiveCheckoutState,
-  createOpenReceiveCheckoutStateFromDisplayData,
-  createOpenReceiveCheckoutStateEvent,
+  createCheckoutActionEvent,
+  createCheckoutController,
+  createCheckoutDisplayModel,
+  createCheckoutErrorEvent,
+  createCheckoutSnapshotFromDisplayData,
+  createCheckoutStatusModel,
+  createCheckoutState,
+  createCheckoutStateFromDisplayData,
+  createCheckoutStateEvent,
   createOpenReceiveCountryPickerModel,
-  createOpenReceiveInvoice,
+  createInvoice,
   createOpenReceiveLookupInvoiceFetcher,
-  createOpenReceiveProviderCopyEvent,
+  createCheckoutProviderCopyEvent,
   createOpenReceiveRefreshInvoiceFetcher,
   createOpenReceiveThemeChangeEvent,
   createOpenReceiveTransientFeedbackController,
@@ -57,9 +57,9 @@ import {
   escapeOpenReceiveHtml,
   formatOpenReceiveCountryMetaLabel,
   formatOpenReceivePaymentHashLabel,
-  OpenReceiveCheckoutWatcher,
+  CheckoutWatcher,
   createOpenReceiveThemeModel,
-  mergeOpenReceiveCheckoutSnapshot,
+  mergeCheckoutSnapshot,
   openReceiveCheckoutElementStyles,
   openReceiveCountryMapRegions,
   openReceiveThemeToggleElementStyles,
@@ -71,8 +71,8 @@ import {
   parseOpenReceiveRegion,
   parseOpenReceiveResolvedTheme,
   parseOpenReceiveThemePreference,
-  shouldOpenReceiveCheckoutShowWaiting
-} from "../../packages/js/browser/src/index.ts";
+  shouldCheckoutShowWaiting
+} from "../../packages/js/browser/src/internal.ts";
 import { openReceiveCountryMapLandPaths } from "../../packages/js/browser/src/country-map.ts";
 
 const PAYMENT_HASH =
@@ -432,7 +432,7 @@ test("browser helpers create lightning URI, copy, open, and QR payloads", async 
 });
 
 test("browser owns checkout display-safe labels", () => {
-  const model = createOpenReceiveCheckoutDisplayModel({
+  const model = createCheckoutDisplayModel({
     invoice: "lnbc-display",
     payment_hash: "a".repeat(64),
     amount_msats: 200000,
@@ -476,10 +476,10 @@ test("browser owns checkout display data to state conversion", () => {
     settled_at: 1999
   };
 
-  const snapshot = createOpenReceiveCheckoutSnapshotFromDisplayData(displayData);
+  const snapshot = createCheckoutSnapshotFromDisplayData(displayData);
   assert.deepEqual(snapshot, displayData);
 
-  const state = createOpenReceiveCheckoutStateFromDisplayData(displayData, {
+  const state = createCheckoutStateFromDisplayData(displayData, {
     now: 1940
   });
   assert.equal(state.invoice_id, "or_inv_display_state");
@@ -488,7 +488,7 @@ test("browser owns checkout display data to state conversion", () => {
   assert.equal(state.phase, "invoice_created");
   assert.equal(state.expiresInSeconds, 60);
   assert.equal(state.settled_at, 1999);
-  const defaultClockState = createOpenReceiveCheckoutStateFromDisplayData({
+  const defaultClockState = createCheckoutStateFromDisplayData({
     ...displayData,
     expires_at: Math.floor(Date.now() / 1000) + 30
   });
@@ -497,7 +497,7 @@ test("browser owns checkout display data to state conversion", () => {
   assert.equal(defaultClockState.expiresInSeconds >= 0, true);
 
   assert.throws(
-    () => createOpenReceiveCheckoutSnapshotFromDisplayData({
+    () => createCheckoutSnapshotFromDisplayData({
       invoice: "lnbc-no-id"
     }),
     /invoice_id is required for checkout state/
@@ -505,7 +505,7 @@ test("browser owns checkout display data to state conversion", () => {
 });
 
 test("browser owns checkout payment status display model", () => {
-  const state = createOpenReceiveCheckoutState({
+  const state = createCheckoutState({
     invoice_id: "or_inv_status",
     invoice: "lnbc-status",
     transaction_state: "pending",
@@ -515,7 +515,7 @@ test("browser owns checkout payment status display model", () => {
     now: 1000
   });
 
-  const status = createOpenReceiveCheckoutStatusModel(state, { now: 1000 });
+  const status = createCheckoutStatusModel(state, { now: 1000 });
   assert.equal(status.phase, "verifying");
   assert.equal(status.waiting, true);
   assert.equal(status.title, "Waiting for payment");
@@ -524,7 +524,7 @@ test("browser owns checkout payment status display model", () => {
   assert.equal(status.expiresInSeconds, 65);
   assert.equal(status.countdownLabel, "1:05");
 
-  const settled = createOpenReceiveCheckoutStatusModel({
+  const settled = createCheckoutStatusModel({
     ...state,
     transaction_state: "settled",
     workflow_state: "settlement_action_completed",
@@ -537,7 +537,7 @@ test("browser owns checkout payment status display model", () => {
   assert.equal(settled.title, "Payment received");
   assert.equal(settled.countdownLabel, undefined);
 
-  const lightweight = createOpenReceiveCheckoutStatusModel({
+  const lightweight = createCheckoutStatusModel({
     phase: "expired",
     waiting: false,
     expiresInSeconds: 0
@@ -545,7 +545,7 @@ test("browser owns checkout payment status display model", () => {
   assert.equal(lightweight.title, "Invoice expired");
   assert.equal(lightweight.countdownLabel, undefined);
 
-  const zeroCountdown = createOpenReceiveCheckoutStatusModel({
+  const zeroCountdown = createCheckoutStatusModel({
     ...state,
     expiresInSeconds: 0
   });
@@ -662,7 +662,7 @@ test("browser owns web-component shadow styles", () => {
 
 test("browser create invoice helper owns idempotent invoice POST shape", async () => {
   const requests = [];
-  const invoice = await createOpenReceiveInvoice({
+  const invoice = await createInvoice({
     idempotencyKey: "order-browser-create",
     fiat: {
       currency: "USD",
@@ -708,7 +708,7 @@ test("browser create invoice helper owns idempotent invoice POST shape", async (
   });
 
   await assert.rejects(
-    () => createOpenReceiveInvoice({
+    () => createInvoice({
       idempotencyKey: "",
       amount_msats: 200000,
       fetch: async () => ({
@@ -719,7 +719,7 @@ test("browser create invoice helper owns idempotent invoice POST shape", async (
     /idempotencyKey/
   );
   await assert.rejects(
-    () => createOpenReceiveInvoice({
+    () => createInvoice({
       idempotencyKey: "bad-nwc",
       metadata: {
         nwc: `nostr+walletconnect://${"a".repeat(64)}?secret=${"b".repeat(64)}`
@@ -732,7 +732,7 @@ test("browser create invoice helper owns idempotent invoice POST shape", async (
     /NWC/
   );
   await assert.rejects(
-    () => createOpenReceiveInvoice({
+    () => createInvoice({
       idempotencyKey: "server-error",
       amount_msats: 200000,
       fetch: async () => ({
@@ -904,7 +904,7 @@ test("browser refresh fetcher owns idempotent refresh POST shape", async () => {
 test("browser checkout state keeps route URLs and ignores passive event URLs", () => {
   const logs = [];
   const logger = (entry) => logs.push(entry);
-  const state = createOpenReceiveCheckoutState(
+  const state = createCheckoutState(
     {
       invoice_id: "or_inv_browser",
       invoice: "lnbc-browser",
@@ -926,7 +926,7 @@ test("browser checkout state keeps route URLs and ignores passive event URLs", (
   assert.equal(state.terminal, false);
   assert.equal(state.routes_url, "/openreceive/v1/routes");
   assert.equal("events_url" in state, false);
-  const snapshot = mergeOpenReceiveCheckoutSnapshot(state, {
+  const snapshot = mergeCheckoutSnapshot(state, {
     checkout: {
       routes_url: "/openreceive/v1/routes-updated"
     }
@@ -950,7 +950,7 @@ test("browser checkout watcher owns countdown and lookup polling", async () => {
   const states = [];
   let lookupCalls = 0;
 
-  const watcher = new OpenReceiveCheckoutWatcher({
+  const watcher = new CheckoutWatcher({
     snapshot: {
       invoice_id: "or_inv_watch",
       invoice: "lnbc-watch",
@@ -987,7 +987,7 @@ test("browser checkout watcher owns countdown and lookup polling", async () => {
 
   const initial = watcher.start();
   assert.equal(initial.expiresInSeconds, 10);
-  assert.equal(shouldOpenReceiveCheckoutShowWaiting(initial, { now }), true);
+  assert.equal(shouldCheckoutShowWaiting(initial, { now }), true);
   const countdownTimer = [...timers].find(([, timer]) => timer.ms === 1000);
   const pollTimer = [...timers].find(([, timer]) => timer.ms === 3000);
   assert.ok(countdownTimer);
@@ -1002,7 +1002,7 @@ test("browser checkout watcher owns countdown and lookup polling", async () => {
   await Promise.resolve();
   assert.equal(lookupCalls, 1);
   assert.equal(states.at(-1).phase, "settled");
-  assert.equal(shouldOpenReceiveCheckoutShowWaiting(states.at(-1), { now }), false);
+  assert.equal(shouldCheckoutShowWaiting(states.at(-1), { now }), false);
   assert.equal(timers.has(countdownTimer[0]), false);
   assert.equal(timers.has(pollTimer[0]), false);
   assert.ok(clearedTimers.includes(countdownTimer[0]));
@@ -1016,7 +1016,7 @@ test("browser checkout controller owns lifecycle actions for framework adapters"
   const opens = [];
   let lookupCalls = 0;
   let refreshCalls = 0;
-  const controller = createOpenReceiveCheckoutController({
+  const controller = createCheckoutController({
     snapshot: {
       invoice_id: "or_inv_controller",
       invoice: "lnbc-controller",
@@ -1116,7 +1116,7 @@ test("browser checkout controller owns lookupUrl fetcher creation", async () => 
   let nextTimer = 1;
   const timers = new Map();
   const states = [];
-  const controller = createOpenReceiveCheckoutController({
+  const controller = createCheckoutController({
     snapshot: {
       invoice_id: "or_inv_controller_lookup",
       invoice: "lnbc-controller-lookup",
@@ -1211,27 +1211,27 @@ test("browser custom-element event map covers checkout lifecycle events", () => 
     startOver: "openreceive-start-over",
     error: "openreceive-error"
   });
-  const providerCopyEvent = createOpenReceiveProviderCopyEvent("boltz");
+  const providerCopyEvent = createCheckoutProviderCopyEvent("boltz");
   assert.equal(providerCopyEvent.type, OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.providerCopy);
   assert.deepEqual(providerCopyEvent.detail, {
     providerId: "boltz"
   });
   assert.equal(
-    createOpenReceiveCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy).type,
+    createCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy).type,
     OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy
   );
   assert.equal(
-    createOpenReceiveCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.startOver).type,
+    createCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.startOver).type,
     OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.startOver
   );
-  const stateEventState = createOpenReceiveCheckoutState({
+  const stateEventState = createCheckoutState({
     invoice_id: "or_inv_event",
     invoice: "lnbc-event",
     payment_hash: PAYMENT_HASH,
     transaction_state: "settled",
     workflow_state: "settlement_action_pending"
   });
-  const stateEvent = createOpenReceiveCheckoutStateEvent(
+  const stateEvent = createCheckoutStateEvent(
     OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.settled,
     stateEventState
   );
@@ -1240,7 +1240,7 @@ test("browser custom-element event map covers checkout lifecycle events", () => 
     state: stateEventState
   });
   const error = new Error("boom");
-  const errorEvent = createOpenReceiveCheckoutErrorEvent(error);
+  const errorEvent = createCheckoutErrorEvent(error);
   assert.equal(errorEvent.type, OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.error);
   assert.deepEqual(errorEvent.detail, {
     error
@@ -1305,8 +1305,7 @@ test("browser owns custom-element attribute contracts", () => {
     amountMsats: "amount-msats",
     fiatCurrency: "fiat-currency",
     fiatValue: "fiat-value",
-    transactionState: "transaction-state",
-    workflowState: "workflow-state",
+    status: "status",
     expiresAt: "expires-at",
     lookupUrl: "lookup-url",
     theme: "theme",

@@ -582,7 +582,7 @@ test("Node CLI runs poll --once from a server config module", async () => {
           }
         },
         merchantScope: () => "node:test",
-        onPaymentSettled: async ({ invoice }) => {
+        onPaid: async ({ invoice }) => {
           assert.equal(invoice.invoice_id, "or_inv_poll_once");
         }
       }

@@ -17,7 +17,7 @@
   },
   "exports": {
     ".": "./src/index.ts",
-    "./checkout.svelte": "./src/OpenReceiveCheckout.svelte",
+    "./checkout.svelte": "./src/Checkout.svelte",
     "./styles.css": "./src/styles.css"
   }
 }

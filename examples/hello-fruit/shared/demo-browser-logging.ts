@@ -1,7 +1,7 @@
 import type {
   OpenReceiveBrowserLogEntry,
   OpenReceiveBrowserLogger
-} from "@openreceive/browser";
+} from "@openreceive/browser/internal";
 
 export function createHelloFruitBrowserLogger(
   demoId: string

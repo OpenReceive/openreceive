@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./internal": "./src/internal.ts",
     "./country-map": "./src/country-map.ts",
     "./styles.css": "./src/styles.css"
   },

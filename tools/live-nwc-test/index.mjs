@@ -3,7 +3,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createLightningUri } from "@openreceive/browser";
+import { lightningUri } from "@openreceive/browser";
 import {
   OPENRECEIVE_NWC_METADATA_MAX_BYTES,
   classifyLookupInvoiceSettlement,
@@ -160,7 +160,7 @@ function assertCapabilities(summary, expected, walletProfile) {
 async function renderTerminalQr(invoice) {
   try {
     const qr = await import("qrcode");
-    return await qr.default.toString(createLightningUri(invoice), {
+    return await qr.default.toString(lightningUri(invoice), {
       type: "terminal",
       small: true,
       errorCorrectionLevel: "M",

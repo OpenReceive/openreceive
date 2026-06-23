@@ -94,7 +94,7 @@ Coolify, Dokploy, and Kamal:
 
 ## Settlement Hooks
 
-Your `onPaymentSettled` hook may run again after a crash. For example, the hook
+Your `onPaid` hook may run again after a crash. For example, the hook
 could mark an order paid successfully, then the process could stop before
 OpenReceive records that the hook completed.
 
@@ -108,5 +108,5 @@ to ensure repeated calls do not double-ship, double-credit, or double-email.
 - Configure `OPENRECEIVE_NAMESPACE` when multiple apps share one store.
 - Protect create, read, lookup, refresh, and poll routes with app auth and CSRF
   rules.
-- Make `onPaymentSettled` idempotent by `payment_hash` or order id.
+- Make `onPaid` idempotent by `payment_hash` or order id.
 - Run `openreceive doctor` during deploy checks.

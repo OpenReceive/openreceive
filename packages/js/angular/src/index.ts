@@ -1,24 +1,24 @@
 import {
   OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
-  createOpenReceiveCheckoutController,
-  createOpenReceiveCheckoutShell,
-  createOpenReceiveCheckoutShellModel,
-  createOpenReceiveCheckoutElementAttributes,
-  createOpenReceiveCheckoutElementListeners,
+  createCheckoutController,
+  createCheckoutShell,
+  createCheckoutShellModel,
+  createCheckoutElementAttributes,
+  createCheckoutElementListeners,
   createOpenReceiveStoredThemeModel,
   createOpenReceiveThemeModel,
   createOpenReceiveThemeToggleElementAttributes,
-  type CreateOpenReceiveCheckoutShellOptions,
-  type OpenReceiveCheckoutElementAttributeOptions,
-  type OpenReceiveCheckoutElementAttributes,
-  type OpenReceiveCheckoutElementEventHandlers,
-  type OpenReceiveCheckoutElementListeners,
-  type OpenReceiveCheckoutController,
-  type OpenReceiveCheckoutControllerOptions,
-  type OpenReceiveCheckoutShellElements,
-  type OpenReceiveCheckoutShellOptions,
-  type OpenReceiveCheckoutSnapshot,
+  type CreateCheckoutShellOptions,
+  type CheckoutElementAttributeOptions,
+  type CheckoutElementAttributes,
+  type CheckoutElementEventHandlers,
+  type CheckoutElementListeners,
+  type CheckoutController,
+  type CheckoutControllerOptions,
+  type CheckoutShellElements,
+  type CheckoutShellOptions,
+  type CheckoutSnapshot,
   type OpenReceiveReadThemePreferenceOptions,
   type OpenReceiveStoredThemeModelOptions,
   type OpenReceiveThemeAttributeTarget,
@@ -28,7 +28,7 @@ import {
   type OpenReceiveThemeStorageOptions,
   type OpenReceiveThemeToggleElementAttributeOptions,
   type OpenReceiveThemeToggleElementAttributes
-} from "@openreceive/browser";
+} from "@openreceive/browser/internal";
 import {
   defineOpenReceiveElements,
   type DefineOpenReceiveElementsOptions
@@ -39,14 +39,14 @@ export {
   OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
   OPENRECEIVE_THEME_STORAGE_KEY,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
-  applyOpenReceiveCheckoutThemeAttributes,
+  applyCheckoutThemeAttributes,
   applyOpenReceiveThemeAttributes,
-  createOpenReceiveCheckoutController,
-  createOpenReceiveCheckoutElement,
-  createOpenReceiveCheckoutElementAttributes,
-  createOpenReceiveCheckoutElementListeners,
-  createOpenReceiveCheckoutShell,
-  createOpenReceiveCheckoutShellModel,
+  createCheckoutController,
+  createCheckoutElement,
+  createCheckoutElementAttributes,
+  createCheckoutElementListeners,
+  createCheckoutShell,
+  createCheckoutShellModel,
   createOpenReceiveStoredThemeModel,
   createOpenReceiveThemeModel,
   createOpenReceiveThemeToggleElement,
@@ -56,25 +56,25 @@ export {
   toggleOpenReceiveStoredThemeControls,
   toggleOpenReceiveStoredThemePreference,
   writeOpenReceiveThemePreference
-} from "@openreceive/browser";
+} from "@openreceive/browser/internal";
 export type {
-  CreateOpenReceiveCheckoutElementOptions,
-  CreateOpenReceiveCheckoutShellOptions,
+  CreateCheckoutElementOptions,
+  CreateCheckoutShellOptions,
   CreateOpenReceiveThemeToggleElementOptions,
-  OpenReceiveCheckoutElementAttributeOptions,
-  OpenReceiveCheckoutElementAttributes,
-  OpenReceiveCheckoutElementDocument,
-  OpenReceiveCheckoutElementEventHandlers,
-  OpenReceiveCheckoutElementListeners,
-  OpenReceiveCheckoutController,
-  OpenReceiveCheckoutControllerOptions,
-  OpenReceiveCheckoutShellElements,
-  OpenReceiveCheckoutShellCheckoutBinding,
-  OpenReceiveCheckoutShellModel,
-  OpenReceiveCheckoutShellOptions,
-  OpenReceiveCheckoutShellThemeToggleBinding,
-  OpenReceiveCheckoutElementTarget,
-  OpenReceiveCheckoutSnapshot,
+  CheckoutElementAttributeOptions,
+  CheckoutElementAttributes,
+  CheckoutElementDocument,
+  CheckoutElementEventHandlers,
+  CheckoutElementListeners,
+  CheckoutController,
+  CheckoutControllerOptions,
+  CheckoutShellElements,
+  CheckoutShellCheckoutBinding,
+  CheckoutShellModel,
+  CheckoutShellOptions,
+  CheckoutShellThemeToggleBinding,
+  CheckoutElementTarget,
+  CheckoutSnapshot,
   OpenReceiveReadThemePreferenceOptions,
   OpenReceiveStoredThemeModelOptions,
   OpenReceiveThemeAttributeTarget,
@@ -86,18 +86,18 @@ export type {
   OpenReceiveThemeStorageOptions,
   OpenReceiveThemeToggleElementAttributeOptions,
   OpenReceiveThemeToggleElementAttributes
-} from "@openreceive/browser";
+} from "@openreceive/browser/internal";
 export { defineOpenReceiveElements } from "@openreceive/elements";
 export type { DefineOpenReceiveElementsOptions } from "@openreceive/elements";
 
 export interface OpenReceiveAngularCheckoutBindingOptions
-  extends OpenReceiveCheckoutElementAttributeOptions,
-    OpenReceiveCheckoutElementEventHandlers {}
+  extends CheckoutElementAttributeOptions,
+    CheckoutElementEventHandlers {}
 
 export interface OpenReceiveAngularCheckoutBinding {
   readonly selector: typeof OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME;
-  readonly attributes: OpenReceiveCheckoutElementAttributes;
-  readonly events: OpenReceiveCheckoutElementListeners;
+  readonly attributes: CheckoutElementAttributes;
+  readonly events: CheckoutElementListeners;
 }
 
 export interface OpenReceiveAngularThemeToggleBinding {
@@ -113,25 +113,25 @@ export interface OpenReceiveAngularCheckoutShellBinding {
 }
 
 export interface OpenReceiveAngularCheckoutComponentOptions
-  extends OpenReceiveCheckoutShellOptions {
+  extends CheckoutShellOptions {
   readonly defineElementsOptions?: DefineOpenReceiveElementsOptions;
 }
 
 export interface OpenReceiveAngularCheckoutComponentModel
   extends OpenReceiveAngularCheckoutShellBinding {
-  readonly componentName: "OpenReceiveCheckout";
+  readonly componentName: "Checkout";
   readonly defineElements: typeof defineOpenReceiveElements;
   readonly defineElementsOptions?: DefineOpenReceiveElementsOptions;
 }
 
 export function createOpenReceiveAngularCheckoutBinding(
-  snapshot: OpenReceiveCheckoutSnapshot,
+  snapshot: CheckoutSnapshot,
   options: OpenReceiveAngularCheckoutBindingOptions = {}
 ): OpenReceiveAngularCheckoutBinding {
   return {
     selector: OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
-    attributes: createOpenReceiveCheckoutElementAttributes(snapshot, options),
-    events: createOpenReceiveCheckoutElementListeners(options)
+    attributes: createCheckoutElementAttributes(snapshot, options),
+    events: createCheckoutElementListeners(options)
   };
 }
 
@@ -158,10 +158,10 @@ export function createOpenReceiveAngularThemeToggleBinding(
 }
 
 export function createOpenReceiveAngularCheckoutShellBinding(
-  snapshot: OpenReceiveCheckoutSnapshot,
-  options: OpenReceiveCheckoutShellOptions = {}
+  snapshot: CheckoutSnapshot,
+  options: CheckoutShellOptions = {}
 ): OpenReceiveAngularCheckoutShellBinding {
-  const shell = createOpenReceiveCheckoutShellModel(snapshot, options);
+  const shell = createCheckoutShellModel(snapshot, options);
   return {
     theme: shell.theme,
     rootAttributes: shell.rootAttributes,
@@ -178,13 +178,13 @@ export function createOpenReceiveAngularCheckoutShellBinding(
 }
 
 export function createOpenReceiveAngularCheckoutComponentModel(
-  snapshot: OpenReceiveCheckoutSnapshot,
+  snapshot: CheckoutSnapshot,
   options: OpenReceiveAngularCheckoutComponentOptions = {}
 ): OpenReceiveAngularCheckoutComponentModel {
   const { defineElementsOptions, ...shellOptions } = options;
   const shell = createOpenReceiveAngularCheckoutShellBinding(snapshot, shellOptions);
   return {
-    componentName: "OpenReceiveCheckout",
+    componentName: "Checkout",
     defineElements: defineOpenReceiveElements,
     defineElementsOptions,
     ...shell
@@ -192,14 +192,14 @@ export function createOpenReceiveAngularCheckoutComponentModel(
 }
 
 export function createOpenReceiveAngularCheckoutController(
-  options: OpenReceiveCheckoutControllerOptions
-): OpenReceiveCheckoutController {
-  return createOpenReceiveCheckoutController(options);
+  options: CheckoutControllerOptions
+): CheckoutController {
+  return createCheckoutController(options);
 }
 
 export function createOpenReceiveAngularCheckoutShell(
-  snapshot: OpenReceiveCheckoutSnapshot,
-  options: CreateOpenReceiveCheckoutShellOptions = {}
-): OpenReceiveCheckoutShellElements {
-  return createOpenReceiveCheckoutShell(snapshot, options);
+  snapshot: CheckoutSnapshot,
+  options: CreateCheckoutShellOptions = {}
+): CheckoutShellElements {
+  return createCheckoutShell(snapshot, options);
 }

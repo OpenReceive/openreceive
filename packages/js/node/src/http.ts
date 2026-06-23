@@ -90,7 +90,7 @@ export interface OpenReceiveLogEntry {
 
 export type OpenReceiveLogger = (entry: OpenReceiveLogEntry) => void;
 
-export interface OpenReceiveNodeAuthorization {
+interface OpenReceiveRouteAuthorization {
   create?: (req: ExpressLikeRequest) => Promise<boolean> | boolean;
   poll?: (req: ExpressLikeRequest) => Promise<boolean> | boolean;
   read?: (
@@ -133,11 +133,11 @@ export interface OpenReceiveNodeOptions {
   store?: OpenReceiveInvoiceKvStore;
   basePath?: string;
   merchantScope: (req: ExpressLikeRequest) => string;
-  auth?: OpenReceiveNodeAuthorization;
+  authorization?: OpenReceiveRouteAuthorization;
   csrf?: OpenReceiveNodeCsrf;
   cors?: OpenReceiveNodeCors;
   cronSecret?: string;
-  onPaymentSettled?: OpenReceiveNodeSettlementActionHook;
+  onPaid?: OpenReceiveNodeSettlementActionHook;
   priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
   priceCurrencies?: readonly string[];
   unsafeAllowUnauthenticatedDemoMode?: boolean;
@@ -151,6 +151,10 @@ export interface OpenReceiveNodeOptions {
   backgroundSweep?: boolean;
 }
 
+type OpenReceiveNodeOptionsInput = OpenReceiveNodeOptions & {
+  readonly authorize?: OpenReceiveAuthorization;
+};
+
 export interface OpenReceiveAuthorization {
   request?: (req: ExpressLikeRequest) => Promise<boolean> | boolean;
   invoice?: (
@@ -163,7 +167,7 @@ export interface OpenReceiveAuthorization {
 export interface CreateOpenReceiveOptions
   extends Omit<
     OpenReceiveNodeOptions,
-    "auth" | "client" | "csrf" | "merchantScope" | "onPaymentSettled" | "store"
+    "authorization" | "client" | "csrf" | "merchantScope" | "onPaid" | "store"
   > {
   client?: OpenReceiveReceiveNwcClient;
   nwc?: string;
@@ -174,7 +178,7 @@ export interface CreateOpenReceiveOptions
   merchantScope?: (req: ExpressLikeRequest) => string;
   authorize?: OpenReceiveAuthorization;
   csrf?: OpenReceiveNodeCsrf | OpenReceiveNodeCsrf["verify"];
-  onPaymentSettled?: OpenReceiveNodeSettlementActionHook;
+  onPaid?: OpenReceiveNodeSettlementActionHook;
   loadSqlite?: ResolveOpenReceiveStoreOptions["loadSqlite"];
   loadPostgres?: ResolveOpenReceiveStoreOptions["loadPostgres"];
 }
@@ -279,25 +283,25 @@ export async function createOpenReceive(
     ...options,
     client,
     store,
-    merchantScope: options.merchantScope ?? (() => "app:default"),
-    auth: createOpenReceiveNodeAuthorization(options.authorize),
+    merchantScope: options.merchantScope ?? (() => "default"),
+    authorization: createOpenReceiveRouteAuthorization(options.authorize),
     csrf: normalizeOpenReceiveCsrf(options.csrf),
     cronSecret: options.cronSecret ?? globalThis.process?.env?.OPENRECEIVE_CRON_SECRET,
-    onPaymentSettled: options.onPaymentSettled
+    onPaid: options.onPaid
   };
-  const runtime = createOpenReceiveNodeRuntime(nodeOptions);
+  const runtime = createNodeRuntime(nodeOptions);
   const server: OpenReceiveServer = {
     ...nodeOptions,
     store,
     runtime,
     handlers: runtime.handlers,
     mountExpress(app) {
-      return mountOpenReceiveExpress(app, server);
+      return mountExpressRoutes(app, server);
     },
-    handleFetch: createOpenReceiveFetchHandler(runtime, {
+    handleFetch: createFetchHandler(runtime, {
       basePath: options.basePath
     }),
-    handleNode: createOpenReceiveNodeHandler(runtime, {
+    handleNode: createNodeHandler(runtime, {
       basePath: options.basePath
     }),
     async close() {
@@ -318,9 +322,9 @@ function readOpenReceiveNwc(configured: string | undefined): string {
   return nwc;
 }
 
-function createOpenReceiveNodeAuthorization(
+function createOpenReceiveRouteAuthorization(
   authorize: OpenReceiveAuthorization | undefined
-): OpenReceiveNodeAuthorization | undefined {
+): OpenReceiveRouteAuthorization | undefined {
   if (authorize === undefined) return undefined;
 
   return {
@@ -343,15 +347,15 @@ function normalizeOpenReceiveCsrf(
 }
 
 function getOpenReceiveNodeHandlers(
-  openreceive: OpenReceiveServer | OpenReceiveNodeRuntime | OpenReceiveNodeOptions
+  openreceive: OpenReceiveServer | OpenReceiveNodeRuntime | OpenReceiveNodeOptionsInput
 ): OpenReceiveNodeHandlers {
   if (isOpenReceiveServer(openreceive)) return openreceive.handlers;
   if (isOpenReceiveNodeRuntime(openreceive)) return openreceive.handlers;
-  return createOpenReceiveNodeHandlers(openreceive);
+  return createNodeHandlers(openreceive);
 }
 
 function getOpenReceiveBasePath(
-  openreceive: OpenReceiveRouteSource | OpenReceiveNodeOptions
+  openreceive: OpenReceiveRouteSource | OpenReceiveNodeOptionsInput
 ): string | undefined {
   if (openreceive === undefined || typeof openreceive === "function") return undefined;
   return "basePath" in openreceive ? openreceive.basePath : undefined;
@@ -376,9 +380,9 @@ async function closeOpenReceiveResource(resource: unknown): Promise<void> {
   }
 }
 
-export function mountOpenReceiveExpress(
+export function mountExpressRoutes(
   app: ExpressLikeApp,
-  openreceive: OpenReceiveServer | OpenReceiveNodeRuntime | OpenReceiveNodeOptions
+  openreceive: OpenReceiveServer | OpenReceiveNodeRuntime | OpenReceiveNodeOptionsInput
 ): OpenReceiveNodeHandlers {
   const handlers = getOpenReceiveNodeHandlers(openreceive);
   const basePath = normalizeBasePath(getOpenReceiveBasePath(openreceive));
@@ -399,41 +403,42 @@ export function mountOpenReceiveExpress(
   return handlers;
 }
 
-export function createOpenReceiveNodeRuntime(
-  options: OpenReceiveNodeOptions
+export function createNodeRuntime(
+  options: OpenReceiveNodeOptionsInput
 ): OpenReceiveNodeRuntime {
   const store = options.store ?? new InMemoryInvoiceKvStore();
+  const normalizedOptions = normalizeOpenReceiveNodeOptions(options);
 
   return {
     basePath: options.basePath,
     store,
-    handlers: createOpenReceiveNodeHandlers({
-      ...options,
+    handlers: createNodeHandlers({
+      ...normalizedOptions,
       store
     })
   };
 }
 
-export function createOpenReceiveFetchHandler(
+export function createFetchHandler(
   openreceive: OpenReceiveRouteSource,
   options: CreateOpenReceiveFetchHandlerOptions = {}
 ): (request: Request) => Promise<Response> {
   const basePath = options.basePath ?? getOpenReceiveBasePath(openreceive);
 
   return async (request) => {
-    const path = createOpenReceiveFetchPath(request, basePath);
-    if (path === undefined) return createOpenReceiveFetchRouteNotFoundResponse();
+    const path = fetchPath(request, basePath);
+    if (path === undefined) return routeNotFoundResponse();
 
     const runtime = await resolveOpenReceiveNodeRuntime(openreceive);
     if (runtime === undefined) {
-      return dispatchOpenReceiveFetchNoWalletRoute({
+      return dispatchNoWalletRoute({
         request,
         path,
         noWallet: options.noWallet
       });
     }
 
-    return dispatchOpenReceiveFetchRoute({
+    return dispatchFetchRoute({
       runtime,
       request,
       path
@@ -441,18 +446,18 @@ export function createOpenReceiveFetchHandler(
   };
 }
 
-export function createOpenReceiveNodeHandler(
+export function createNodeHandler(
   openreceive: OpenReceiveRouteSource,
   options: CreateOpenReceiveNodeHandlerOptions = {}
 ): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
-  const handler = createOpenReceiveFetchHandler(openreceive, options);
+  const handler = createFetchHandler(openreceive, options);
 
   return async (req, res) => {
     let response: Response;
     try {
       response = await handler(await createOpenReceiveRequestFromNode(req, options));
     } catch {
-      response = openReceiveFetchJsonResponse({
+      response = jsonResponse({
         code: "INTERNAL",
         message: "OpenReceive request failed."
       }, 500);
@@ -462,13 +467,13 @@ export function createOpenReceiveNodeHandler(
   };
 }
 
-export async function dispatchOpenReceiveFetchRoute(
+export async function dispatchFetchRoute(
   options: DispatchOpenReceiveFetchRouteOptions
 ): Promise<Response> {
-  const match = matchOpenReceiveHttpRoute(options.request.method, options.path);
-  if (match === undefined) return createOpenReceiveFetchRouteNotFoundResponse();
+  const match = matchHttpRoute(options.request.method, options.path);
+  if (match === undefined) return routeNotFoundResponse();
 
-  return dispatchOpenReceiveFetchHandler({
+  return dispatchFetchHandler({
     runtime: options.runtime,
     request: options.request,
     name: match.name,
@@ -476,16 +481,16 @@ export async function dispatchOpenReceiveFetchRoute(
   });
 }
 
-export function dispatchOpenReceiveFetchNoWalletRoute(
+export function dispatchNoWalletRoute(
   options: DispatchOpenReceiveFetchNoWalletRouteOptions
 ): Response {
-  const match = matchOpenReceiveHttpRoute(options.request.method, options.path);
-  if (match === undefined) return createOpenReceiveFetchRouteNotFoundResponse();
+  const match = matchHttpRoute(options.request.method, options.path);
+  if (match === undefined) return routeNotFoundResponse();
 
-  return createOpenReceiveFetchNoWalletResponse(match.name, options.noWallet);
+  return createNoWalletResponse(match.name, options.noWallet);
 }
 
-export function matchOpenReceiveHttpRoute(
+export function matchHttpRoute(
   method: string,
   path: readonly string[]
 ): OpenReceiveFetchRouteMatch | undefined {
@@ -561,7 +566,7 @@ export function matchOpenReceiveHttpRoute(
   return undefined;
 }
 
-export async function dispatchOpenReceiveFetchHandler(
+export async function dispatchFetchHandler(
   options: DispatchOpenReceiveFetchHandlerOptions
 ): Promise<Response> {
   const handler = options.runtime.handlers[options.name] as ExpressLikeHandler;
@@ -580,7 +585,7 @@ export async function dispatchOpenReceiveFetchHandler(
   return res.toResponse();
 }
 
-export function createOpenReceiveFetchNoWalletResponse(
+export function createNoWalletResponse(
   name: keyof OpenReceiveNodeHandlers,
   options: OpenReceiveFetchNoWalletOptions = {}
 ): Response {
@@ -588,14 +593,14 @@ export function createOpenReceiveFetchNoWalletResponse(
   const message = options.message ?? DEFAULT_NO_WALLET_MESSAGE;
 
   if (name === "health") {
-    return openReceiveFetchJsonResponse({
+    return jsonResponse({
       ok: true,
       wallet_configured: false
     });
   }
 
   if (name === "capabilities") {
-    return openReceiveFetchJsonResponse({
+    return jsonResponse({
       base_path: basePath,
       wallet_configured: false,
       settlement: "poll_only",
@@ -603,13 +608,13 @@ export function createOpenReceiveFetchNoWalletResponse(
     });
   }
 
-  return openReceiveFetchJsonResponse({
+  return jsonResponse({
     code: "WALLET_UNAVAILABLE",
     message
   }, 503);
 }
 
-export function openReceiveFetchJsonResponse(
+export function jsonResponse(
   body: unknown,
   status = 200,
   headers: HeadersInit = {}
@@ -625,14 +630,14 @@ export function openReceiveFetchJsonResponse(
   });
 }
 
-export function createOpenReceiveFetchRouteNotFoundResponse(): Response {
-  return openReceiveFetchJsonResponse({
+export function routeNotFoundResponse(): Response {
+  return jsonResponse({
     code: "NOT_FOUND",
     message: "OpenReceive route not found."
   }, 404);
 }
 
-export function createOpenReceiveFetchPath(
+export function fetchPath(
   request: Request,
   basePath = DEFAULT_BASE_PATH
 ): readonly string[] | undefined {
@@ -648,9 +653,10 @@ export function createOpenReceiveFetchPath(
     .map((segment) => decodeURIComponent(segment));
 }
 
-export function createOpenReceiveNodeHandlers(
-  options: OpenReceiveNodeOptions
+export function createNodeHandlers(
+  options: OpenReceiveNodeOptionsInput
 ): OpenReceiveNodeHandlers {
+  options = normalizeOpenReceiveNodeOptions(options);
   assertSafeDemoModeConfiguration(options);
   assertDurableStoreConfiguration(options);
 
@@ -984,6 +990,17 @@ export function createOpenReceiveNodeHandlers(
   };
 }
 
+function normalizeOpenReceiveNodeOptions(
+  options: OpenReceiveNodeOptionsInput
+): OpenReceiveNodeOptions {
+  return {
+    ...options,
+    authorization:
+      options.authorization ??
+      createOpenReceiveRouteAuthorization(options.authorize)
+  };
+}
+
 function reconcileOptions(
   options: OpenReceiveNodeOptions,
   store: OpenReceiveInvoiceKvStore,
@@ -1005,7 +1022,9 @@ function reconcileOptions(
       source: "http_lookup" | "poll";
       lookup_invoice?: unknown;
     }) => {
-      await options.onPaymentSettled?.({
+      // Delivered after backend-verified settlement, at least once. Apps must
+      // dedupe fulfillment by invoice.payment_hash or their own order id.
+      await options.onPaid?.({
         req: input.source === "http_lookup" ? req : undefined,
         invoice: input.invoice,
         metadata: input.metadata,
@@ -1390,11 +1409,11 @@ async function requireAuthorization(
   if (options.unsafeAllowUnauthenticatedDemoMode === true) return;
 
   if (action === "create") {
-    if (options.auth?.create === undefined) {
+    if (options.authorization?.create === undefined) {
       throw httpError(401, "UNAUTHORIZED", "OpenReceive create authorization hook is required.");
     }
 
-    const allowed = await options.auth.create(req);
+    const allowed = await options.authorization.create(req);
     if (!allowed) {
       throw httpError(403, "UNAUTHORIZED", "OpenReceive request is not authorized.");
     }
@@ -1405,7 +1424,7 @@ async function requireAuthorization(
     throw new Error(`OpenReceive ${action} authorization requires an invoice.`);
   }
 
-  const hook = options.auth?.[action] as
+  const hook = options.authorization?.[action] as
     | ((
         req: ExpressLikeRequest,
         invoice: InvoiceStorageRow
@@ -1438,11 +1457,11 @@ async function requirePollAuthorization(
     return;
   }
 
-  if (options.auth?.poll === undefined) {
+  if (options.authorization?.poll === undefined) {
     throw httpError(401, "UNAUTHORIZED", "OpenReceive poll authorization hook or OPENRECEIVE_CRON_SECRET is required.");
   }
 
-  const allowed = await options.auth.poll(req);
+  const allowed = await options.authorization.poll(req);
   if (!allowed) {
     throw httpError(403, "UNAUTHORIZED", "OpenReceive poll request is not authorized.");
   }
@@ -1652,7 +1671,7 @@ class CapturedOpenReceiveFetchResponse implements ExpressLikeResponse {
       });
     }
 
-    return openReceiveFetchJsonResponse(
+    return jsonResponse(
       this.body ?? null,
       this.statusCode,
       this.headers

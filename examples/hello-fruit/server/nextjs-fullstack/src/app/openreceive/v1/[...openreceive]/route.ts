@@ -13,10 +13,9 @@ type OpenReceiveRouteContext = {
 
 async function handleOpenReceiveRoute(
   request: Request,
-  context: OpenReceiveRouteContext
+  _context: OpenReceiveRouteContext
 ): Promise<Response> {
-  const params = await context.params;
-  return dispatchOpenReceiveRoute(request, params.openreceive ?? []);
+  return dispatchOpenReceiveRoute(request);
 }
 
 export function GET(

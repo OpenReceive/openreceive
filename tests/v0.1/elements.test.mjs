@@ -5,18 +5,18 @@ import test from "node:test";
 import {
   openReceiveCheckoutElementStyles,
   openReceiveThemeToggleElementStyles
-} from "@openreceive/browser";
+} from "@openreceive/browser/internal";
 import {
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
   defineOpenReceiveElements,
   formatMsats,
-  renderOpenReceiveCheckoutHtml,
+  renderCheckoutHtml,
   renderOpenReceivePaymentWizardHtml,
   renderOpenReceiveThemeToggleHtml
 } from "@openreceive/elements";
 
 test("elements render display-safe checkout HTML", () => {
-  const html = renderOpenReceiveCheckoutHtml({
+  const html = renderCheckoutHtml({
     invoice_id: "or_inv_test",
     invoice: "lnbc-test",
     payment_hash: "a".repeat(64),
@@ -53,7 +53,7 @@ test("elements render display-safe checkout HTML", () => {
 });
 
 test("elements derive waiting display from browser checkout state", () => {
-  const expiredHtml = renderOpenReceiveCheckoutHtml({
+  const expiredHtml = renderCheckoutHtml({
     invoice_id: "or_inv_expired",
     invoice: "lnbc-expired",
     payment_hash: "b".repeat(64),
@@ -207,7 +207,7 @@ test("elements package exposes shared browser-owned checkout styles", () => {
   assert.equal(manifest.exports["./styles.css"], "./src/styles.css");
   assert.match(styles, /@openreceive\/browser\/styles\.css/);
   assert.match(
-    renderOpenReceiveCheckoutHtml({ invoice: "lnbc-style-test" }),
+    renderCheckoutHtml({ invoice: "lnbc-style-test" }),
     new RegExp(escapeRegExp(openReceiveCheckoutElementStyles.trim().slice(0, 20)))
   );
   assert.match(
@@ -221,7 +221,7 @@ test("elements package exposes shared browser-owned checkout styles", () => {
 });
 
 test("elements hide invoice text and reject NWC strings", () => {
-  const html = renderOpenReceiveCheckoutHtml({
+  const html = renderCheckoutHtml({
     invoice: "lnbc-test<&"
   });
 
@@ -229,7 +229,7 @@ test("elements hide invoice text and reject NWC strings", () => {
   assert.doesNotMatch(html, /<textarea/);
   assert.throws(
     () =>
-      renderOpenReceiveCheckoutHtml({
+      renderCheckoutHtml({
         invoice: `nostr+walletconnect://${"a".repeat(64)}?secret=${"b".repeat(64)}`
       }),
     /must not be an NWC/

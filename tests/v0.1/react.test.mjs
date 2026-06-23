@@ -10,7 +10,7 @@ import {
   OPENRECEIVE_COPY_FEEDBACK_MS,
   OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS,
   OPENRECEIVE_PROVIDER_PREVIEW_LIMIT,
-  applyOpenReceiveCheckoutThemeAttributes,
+  applyCheckoutThemeAttributes,
   applyOpenReceiveThemeAttributes,
   createOpenReceiveCountryPickerModel,
   createOpenReceivePaymentWizardModel,
@@ -24,10 +24,10 @@ import {
   getOpenReceiveAltcoinAssets,
   getOpenReceivePaymentMethodIcon,
   getOpenReceivePaymentStatusText,
-  getOpenReceiveProviderIcon,
-  getOpenReceiveProviderOpenLabel,
-  getOpenReceiveProviderTutorials,
-  getOpenReceiveProviderUsBadge,
+  getCheckoutProviderIcon,
+  getCheckoutProviderOpenLabel,
+  getCheckoutProviderTutorials,
+  getCheckoutProviderUsBadge,
   getOpenReceiveRouteIcon,
   getOpenReceiveRouteNetworkLabel,
   getOpenReceiveRegionForCountry,
@@ -42,30 +42,27 @@ import {
   updateOpenReceivePaymentWizardSelection,
   writeOpenReceiveStoredCountryCode,
   writeOpenReceiveThemePreference
-} from "@openreceive/browser";
+} from "@openreceive/browser/internal";
 import {
   getProvider,
 } from "@openreceive/provider-data";
 import {
   CopyInvoiceButton,
   InvoiceSummary,
-  OpenReceiveCheckout,
-  OpenReceiveCopyButton,
-  OpenReceiveInvoiceSummary,
-  OpenReceiveOpenWalletButton,
+  Checkout,
   OpenReceivePaymentWizard,
-  OpenReceivePaymentState,
-  OpenReceiveProvider,
-  OpenReceiveThemeScope,
+  PaymentState,
+  CheckoutProvider,
+  ThemeScope,
   OpenReceiveThemeToggle,
   OpenWalletButton,
-  PaymentState,
-  createOpenReceiveCheckoutViewModel,
-  useOpenReceiveCheckoutContext
+  createCheckoutViewModel,
+  useCheckoutContext
 } from "@openreceive/react";
 
-test("React checkout view model exposes display-safe actions", () => {
-  const model = createOpenReceiveCheckoutViewModel({
+function invoice(overrides = {}) {
+  return {
+    invoice_id: "or_inv_test",
     invoice: "lnbc-test",
     payment_hash: "a".repeat(64),
     amount_msats: 200000,
@@ -75,21 +72,31 @@ test("React checkout view model exposes display-safe actions", () => {
         value: "0.05"
       }
     },
-    transaction_state: "pending"
+    transaction_state: "pending",
+    workflow_state: "invoice_created",
+    ...overrides
+  };
+}
+
+test("React checkout view model exposes display-safe actions", () => {
+  const model = createCheckoutViewModel({
+    invoice: invoice()
   });
 
   assert.equal(model.lightningUri, "lightning:lnbc-test");
   assert.equal(model.amountLabel, "200 sats");
   assert.equal(model.fiatLabel, "$0.05");
   assert.equal(model.paymentHashLabel, "aaaaaaaa...aaaaaaaa");
-  assert.equal(model.transactionStateLabel, "pending");
+  assert.equal(model.status, "pending");
 });
 
 test("React checkout rejects NWC strings before rendering", () => {
   assert.throws(
     () =>
-      createOpenReceiveCheckoutViewModel({
-        invoice: `nostr+walletconnect://${"a".repeat(64)}?secret=${"b".repeat(64)}`
+      createCheckoutViewModel({
+        invoice: invoice({
+          invoice: `nostr+walletconnect://${"a".repeat(64)}?secret=${"b".repeat(64)}`
+        })
       }),
     /must not be an NWC/
   );
@@ -97,11 +104,12 @@ test("React checkout rejects NWC strings before rendering", () => {
 
 test("React checkout default UI server-renders display-safe invoice data", () => {
   const html = renderToStaticMarkup(
-    React.createElement(OpenReceiveCheckout, {
-      invoice: "lnbc-test",
-      payment_hash: "b".repeat(64),
-      amount_msats: 1000,
-      transaction_state: "pending"
+    React.createElement(Checkout, {
+      invoice: invoice({
+        payment_hash: "b".repeat(64),
+        amount_msats: 1000,
+        fiat_quote: undefined
+      })
     })
   );
 
@@ -120,14 +128,14 @@ test("React checkout default UI server-renders display-safe invoice data", () =>
 test("React checkout default UI includes countdown, waiting state, and payment wizard", () => {
   const now = Math.floor(Date.now() / 1000);
   const html = renderToStaticMarkup(
-    React.createElement(OpenReceiveCheckout, {
-      invoice_id: "or_inv_test",
-      invoice: "lnbc-test",
-      payment_hash: "b".repeat(64),
-      amount_msats: 1000,
-      transaction_state: "pending",
-      workflow_state: "invoice_created",
-      expires_at: now + 600
+    React.createElement(Checkout, {
+      invoice: invoice({
+        invoice_id: "or_inv_test",
+        payment_hash: "b".repeat(64),
+        amount_msats: 1000,
+        fiat_quote: undefined,
+        expires_at: now + 600
+      })
     })
   );
 
@@ -145,14 +153,15 @@ test("React checkout default UI includes countdown, waiting state, and payment w
 
 test("React checkout hides payable surfaces after invoice expiry", () => {
   const html = renderToStaticMarkup(
-    React.createElement(OpenReceiveCheckout, {
-      invoice_id: "or_inv_expired",
-      invoice: "lnbc-expired",
-      payment_hash: "c".repeat(64),
-      amount_msats: 1000,
-      transaction_state: "pending",
-      workflow_state: "invoice_created",
-      expires_at: Math.floor(Date.now() / 1000) - 1
+    React.createElement(Checkout, {
+      invoice: invoice({
+        invoice_id: "or_inv_expired",
+        invoice: "lnbc-expired",
+        payment_hash: "c".repeat(64),
+        amount_msats: 1000,
+        fiat_quote: undefined,
+        expires_at: Math.floor(Date.now() / 1000) - 1
+      })
     })
   );
 
@@ -203,7 +212,7 @@ test("React theme scope applies package-owned theme attributes and toggle", () =
   };
   const html = renderToStaticMarkup(
     React.createElement(
-      OpenReceiveThemeScope,
+      ThemeScope,
       {
         as: "main",
         className: "app-shell",
@@ -244,14 +253,14 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   assert.equal(openReceiveCheckoutLabels.copyInvoice, "Copy invoice");
   assert.equal(getOpenReceivePaymentStatusText("settled").title, "Payment received");
   assert.equal(getOpenReceiveWizardEmptyMessage("bitcoin"), "Choose Bitcoin Lightning.");
-  assert.equal(getOpenReceiveProviderOpenLabel("Boltz"), "How To Pay");
-  assert.equal(getOpenReceiveProviderUsBadge(true), null);
-  assert.equal(getOpenReceiveProviderUsBadge(null), null);
+  assert.equal(getCheckoutProviderOpenLabel("Boltz"), "How To Pay");
+  assert.equal(getCheckoutProviderUsBadge(true), null);
+  assert.equal(getCheckoutProviderUsBadge(null), null);
   const strike = getProvider("strike");
   assert.ok(strike);
-  assert.match(getOpenReceiveProviderIcon(strike), /assets\/provider-icons\/strike\.png/);
+  assert.match(getCheckoutProviderIcon(strike), /assets\/provider-icons\/strike\.png/);
   assert.deepEqual(
-    getOpenReceiveProviderTutorials(strike).map((tutorial) => tutorial.caption),
+    getCheckoutProviderTutorials(strike).map((tutorial) => tutorial.caption),
     [
       "Tap Send",
       "Choose Bitcoin wallet",
@@ -263,8 +272,8 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   const kraken = getProvider("kraken");
   assert.ok(coinbase);
   assert.ok(kraken);
-  assert.match(getOpenReceiveProviderTutorials(coinbase)[0].image, /assets\/pay_tutorials\/coinbase-1\.webp/);
-  assert.match(getOpenReceiveProviderTutorials(kraken)[3].image, /assets\/pay_tutorials\/kraken-4\.webp/);
+  assert.match(getCheckoutProviderTutorials(coinbase)[0].image, /assets\/pay_tutorials\/coinbase-1\.webp/);
+  assert.match(getCheckoutProviderTutorials(kraken)[3].image, /assets\/pay_tutorials\/kraken-4\.webp/);
   assert.equal(getOpenReceiveRouteNetworkLabel("btc-lightning"), "Lightning Network");
   assert.equal(getOpenReceiveRouteNetworkLabel("usdt-tron"), "usdt-tron");
   assert.match(getOpenReceivePaymentMethodIcon("card"), /assets\/icons\/card\.svg/);
@@ -309,7 +318,7 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
       themeAttrs[name] = value;
     }
   }, storedThemeModel);
-  applyOpenReceiveCheckoutThemeAttributes({
+  applyCheckoutThemeAttributes({
     setAttribute: (name, value) => {
       checkoutAttrs[name] = value;
     }
@@ -486,7 +495,7 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
 
 test("React payment state primitive renders current state", () => {
   const html = renderToStaticMarkup(
-    React.createElement(OpenReceivePaymentState, {
+    React.createElement(PaymentState, {
       state: "settled"
     })
   );
@@ -527,7 +536,7 @@ test("React checkout supports design-system component and class slots", () => {
       },
       props.amountLabel,
 	      React.createElement(props.PaymentStateComponent, {
-	        state: props.transactionStateLabel,
+	        state: props.status,
 	        className: props.classNames.paymentState
 	      })
 	    );
@@ -546,11 +555,13 @@ test("React checkout supports design-system component and class slots", () => {
   }
 
   const html = renderToStaticMarkup(
-    React.createElement(OpenReceiveCheckout, {
-      invoice: "lnbc-slot-test",
-      payment_hash: "c".repeat(64),
-      amount_msats: 200000,
-      transaction_state: "pending",
+    React.createElement(Checkout, {
+      invoice: invoice({
+        invoice: "lnbc-slot-test",
+        payment_hash: "c".repeat(64),
+        amount_msats: 200000,
+        fiat_quote: undefined
+      }),
       components: {
         Button: CustomButton,
         QRCode: CustomQr,
@@ -586,41 +597,43 @@ test("React checkout supports design-system component and class slots", () => {
 test("React checkout render prop can replace default visible markup", () => {
   const html = renderToStaticMarkup(
     React.createElement(
-      OpenReceiveCheckout,
+      Checkout,
       {
-        invoice_id: "or_inv_render_prop",
-        invoice: "lnbc-render-prop",
-        amount_msats: 1000,
-        transaction_state: "pending",
-        workflow_state: "verifying",
-        expires_at: 9999999999
+        invoice: invoice({
+          invoice_id: "or_inv_render_prop",
+          invoice: "lnbc-render-prop",
+          amount_msats: 1000,
+          fiat_quote: undefined,
+          workflow_state: "verifying",
+          expires_at: 9999999999
+        })
       },
       (checkout) =>
         React.createElement(
           "p",
           {
             "data-custom-checkout": checkout.amountLabel,
-            "data-status": checkout.status.title,
-            "data-countdown-prefix": checkout.status.countdownPrefix
+            "data-status": checkout.status,
+            "data-countdown": checkout.countdownLabel
           },
           checkout.lightningUri,
           " ",
-          checkout.status.countdownLabel
+          checkout.countdownLabel
         )
     )
   );
 
   assert.match(html, /data-openreceive-checkout/);
   assert.match(html, /data-custom-checkout="1 sat"/);
-  assert.match(html, /data-status="Waiting for payment"/);
-  assert.match(html, /data-countdown-prefix="Invoice expires in"/);
+  assert.match(html, /data-status="pending"/);
+  assert.match(html, /data-countdown=/);
   assert.match(html, />lightning:lnbc-render-prop /);
   assert.doesNotMatch(html, /aria-label="Lightning invoice"/);
 });
 
 test("React provider shares checkout state with a consumer hook", () => {
   function CheckoutConsumer() {
-    const checkout = useOpenReceiveCheckoutContext();
+    const checkout = useCheckoutContext();
     return React.createElement(
       "strong",
       { "data-provider-amount": checkout.amountLabel },
@@ -630,10 +643,13 @@ test("React provider shares checkout state with a consumer hook", () => {
 
   const html = renderToStaticMarkup(
     React.createElement(
-      OpenReceiveProvider,
+      CheckoutProvider,
       {
-        invoice: "lnbc-provider-context",
-        amount_msats: 1000
+        invoice: invoice({
+          invoice: "lnbc-provider-context",
+          amount_msats: 1000,
+          fiat_quote: undefined
+        })
       },
       React.createElement(CheckoutConsumer)
     )
@@ -646,20 +662,21 @@ test("React provider shares checkout state with a consumer hook", () => {
 test("React provider render prop receives the controller-backed checkout model", () => {
   const html = renderToStaticMarkup(
     React.createElement(
-      OpenReceiveProvider,
+      CheckoutProvider,
       {
-        invoice_id: "or_inv_provider_render",
-        invoice: "lnbc-provider-render",
-        amount_msats: 2000,
-        transaction_state: "pending",
-        workflow_state: "invoice_created"
+        invoice: invoice({
+          invoice_id: "or_inv_provider_render",
+          invoice: "lnbc-provider-render",
+          amount_msats: 2000,
+          fiat_quote: undefined
+        })
       },
       (checkout) =>
         React.createElement(
           "span",
           {
             "data-provider-render": checkout.amountLabel,
-            "data-provider-status": checkout.status.title,
+            "data-provider-status": checkout.status,
             "data-provider-reload": typeof checkout.reloadState,
             "data-provider-retry": typeof checkout.retry,
             "data-provider-refresh": typeof checkout.refreshExpiredInvoice,
@@ -671,7 +688,7 @@ test("React provider render prop receives the controller-backed checkout model",
   );
 
   assert.match(html, /data-provider-render="2 sats"/);
-  assert.match(html, /data-provider-status="Waiting for payment"/);
+  assert.match(html, /data-provider-status="pending"/);
   assert.match(html, /data-provider-reload="function"/);
   assert.match(html, /data-provider-retry="function"/);
   assert.match(html, /data-provider-refresh="function"/);
@@ -681,21 +698,21 @@ test("React provider render prop receives the controller-backed checkout model",
 
 test("React checkout context fails clearly outside the provider", () => {
   function CheckoutConsumer() {
-    useOpenReceiveCheckoutContext();
+    useCheckoutContext();
     return React.createElement("span", null, "never");
   }
 
   assert.throws(
     () => renderToStaticMarkup(React.createElement(CheckoutConsumer)),
-    /OpenReceiveProvider/
+    /CheckoutProvider/
   );
 });
 
 test("React primitive aliases point to the stable components", () => {
-  assert.equal(InvoiceSummary, OpenReceiveInvoiceSummary);
-  assert.equal(CopyInvoiceButton, OpenReceiveCopyButton);
-  assert.equal(OpenWalletButton, OpenReceiveOpenWalletButton);
-  assert.equal(PaymentState, OpenReceivePaymentState);
+  assert.equal(InvoiceSummary, InvoiceSummary);
+  assert.equal(CopyInvoiceButton, CopyInvoiceButton);
+  assert.equal(OpenWalletButton, OpenWalletButton);
+  assert.equal(PaymentState, PaymentState);
 });
 
 test("React package centralizes transient copy feedback timing", () => {

@@ -30,7 +30,7 @@ Default route policy:
   session.
 - Lookup by `payment_hash` is server-side or strongly authorized.
 - `/poll` is internal scheduler/operator surface and requires app auth,
-  `auth.poll`, or `OPENRECEIVE_CRON_SECRET`.
+  `authorize.scheduler`, or `OPENRECEIVE_CRON_SECRET`.
 
 ## Browser Defaults
 

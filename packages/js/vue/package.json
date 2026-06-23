@@ -17,7 +17,7 @@
   },
   "exports": {
     ".": "./src/index.ts",
-    "./checkout.vue": "./src/OpenReceiveCheckout.vue",
+    "./checkout.vue": "./src/Checkout.vue",
     "./styles.css": "./src/styles.css"
   }
 }

@@ -5,7 +5,7 @@ import {
   defineOpenReceiveElements
 } from "./index.js";
 
-export class OpenReceiveCheckoutComponent {
+export class CheckoutComponent {
   snapshot;
   options = {};
 
@@ -37,8 +37,8 @@ export class OpenReceiveCheckoutComponent {
   }
 }
 
-Input({ required: true })(OpenReceiveCheckoutComponent.prototype, "snapshot");
-Input()(OpenReceiveCheckoutComponent.prototype, "options");
+Input({ required: true })(CheckoutComponent.prototype, "snapshot");
+Input()(CheckoutComponent.prototype, "options");
 
 Component({
   selector: "openreceive-angular-checkout",
@@ -60,8 +60,7 @@ Component({
         [attr.invoice]="checkoutAttributes.invoice"
         [attr.payment-hash]="checkoutAttributes['payment-hash']"
         [attr.amount-msats]="checkoutAttributes['amount-msats']"
-        [attr.transaction-state]="checkoutAttributes['transaction-state']"
-        [attr.workflow-state]="checkoutAttributes['workflow-state']"
+        [attr.status]="checkoutAttributes.status"
         [attr.expires-at]="checkoutAttributes['expires-at']"
         [attr.lookup-url]="checkoutAttributes['lookup-url']"
         [attr.theme]="checkoutAttributes.theme"
@@ -75,6 +74,6 @@ Component({
       ></openreceive-checkout>
     </section>
   `
-})(OpenReceiveCheckoutComponent);
+})(CheckoutComponent);
 
-OpenReceiveCheckoutComponent.prototype.openReceiveEvents = OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS;
+CheckoutComponent.prototype.openReceiveEvents = OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS;

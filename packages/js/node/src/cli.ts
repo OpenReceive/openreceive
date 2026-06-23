@@ -200,8 +200,12 @@ function runInit(input: {
         "  nwc,",
         "  store,",
         "  cronSecret: process.env.OPENRECEIVE_CRON_SECRET,",
-        "  merchantScope: () => \"app:default\",",
-        "  onPaymentSettled: async ({ invoice }) => {",
+        "  authorize: {",
+        "    request: () => false,",
+        "    invoice: () => false,",
+        "    scheduler: () => false",
+        "  },",
+        "  onPaid: async ({ invoice }) => {",
         "    // MUST be idempotent. Dedupe by invoice.payment_hash.",
         "  }",
         "});",
@@ -213,11 +217,10 @@ function runInit(input: {
     {
       relativePath: "server/openreceive-routes.mjs",
       text: [
-        "import { mountOpenReceiveExpress } from \"@openreceive/node\";",
         "import { openreceive } from \"../openreceive.config.mjs\";",
         "",
         "export function mountOpenReceiveRoutes(app) {",
-        "  return mountOpenReceiveExpress(app, openreceive);",
+        "  return openreceive.mountExpress(app);",
         "}",
         "",
         "export default mountOpenReceiveRoutes;",
@@ -419,7 +422,7 @@ async function runPoll(input: {
     store: config.store,
     client: config.client,
     settlementAction: async ({ invoice, metadata, source, lookup_invoice }) => {
-      await config.onPaymentSettled?.({
+      await config.onPaid?.({
         invoice,
         metadata,
         source,
@@ -559,23 +562,26 @@ function checkProductionSecurityConfig(
     );
   }
 
-  const missingAuthHooks = ["create", "read", "lookup", "refresh"].filter(
-    (hook) =>
-      typeof (config.auth as Record<string, unknown> | undefined)?.[hook] !==
-      "function"
-  );
-  if (missingAuthHooks.length > 0) {
-    errors.push(
-      `OpenReceive production config is missing authorization hooks: ${missingAuthHooks.join(", ")}.`
-    );
+  const authorize = (config as unknown as {
+    readonly authorize?: {
+      readonly request?: unknown;
+      readonly invoice?: unknown;
+      readonly scheduler?: unknown;
+    };
+  }).authorize;
+  if (typeof authorize?.request !== "function") {
+    errors.push("OpenReceive production config is missing authorize.request.");
+  }
+  if (typeof authorize?.invoice !== "function") {
+    errors.push("OpenReceive production config is missing authorize.invoice.");
   }
 
   if (
-    typeof config.auth?.poll !== "function" &&
+    typeof authorize?.scheduler !== "function" &&
     (config.cronSecret ?? env.OPENRECEIVE_CRON_SECRET ?? "").length === 0
   ) {
     errors.push(
-      "OpenReceive production config must protect /poll with auth.poll or OPENRECEIVE_CRON_SECRET."
+      "OpenReceive production config must protect /poll with authorize.scheduler or OPENRECEIVE_CRON_SECRET."
     );
   }
 

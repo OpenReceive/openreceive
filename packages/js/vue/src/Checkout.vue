@@ -3,14 +3,14 @@ import { computed, onMounted } from "vue";
 import {
   createOpenReceiveVueCheckoutShellBinding,
   defineOpenReceiveElements,
-  type OpenReceiveCheckoutShellOptions,
-  type OpenReceiveCheckoutSnapshot
+  type CheckoutShellOptions,
+  type CheckoutSnapshot
 } from "./index.js";
 
 const props = withDefaults(
   defineProps<{
-    snapshot: OpenReceiveCheckoutSnapshot;
-    options?: OpenReceiveCheckoutShellOptions;
+    snapshot: CheckoutSnapshot;
+    options?: CheckoutShellOptions;
   }>(),
   {
     options: () => ({})

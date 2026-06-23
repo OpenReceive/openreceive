@@ -6,14 +6,14 @@ import {
   OPENRECEIVE_THEME_STORAGE_KEY,
   type OpenReceiveQrEncoder,
   copyInvoice as copyInvoiceHelper,
-  createOpenReceiveCheckoutController,
-  createOpenReceiveCheckoutDisplayModel,
-  createOpenReceiveCheckoutSnapshotFromDisplayData,
-  createOpenReceiveCheckoutStatusModel,
-  createOpenReceiveCheckoutStateFromDisplayData,
+  createCheckoutController,
+  createCheckoutDisplayModel,
+  createCheckoutSnapshotFromDisplayData,
+  createCheckoutStatusModel,
+  createCheckoutStateFromDisplayData,
   createOpenReceivePaymentWizardModel,
   createOpenReceivePaymentWizardController,
-  createOpenReceiveProviderCopyEvent,
+  createCheckoutProviderCopyEvent,
   createOpenReceiveWizardRouteAssetDisplays,
   createOpenReceiveWizardRouteDisplays,
   createQrSvg,
@@ -26,16 +26,17 @@ import {
   openReceivePaymentMethods,
   openWallet as openWalletHelper,
   readOpenReceiveThemePreference,
+  status as deriveStatus,
   writeOpenReceiveThemePreference,
   type OpenReceiveBrowserLogContext,
   type OpenReceiveBrowserLogger,
-  type OpenReceiveCheckoutController,
-  type OpenReceiveCheckoutDisplayData,
-  type OpenReceiveCheckoutDisplayModel,
-  type OpenReceiveCheckoutPhase,
-  type OpenReceiveCheckoutSnapshot,
-  type OpenReceiveCheckoutState,
-  type OpenReceiveCheckoutStatusModel,
+  type CheckoutController,
+  type CheckoutDisplayData,
+  type CheckoutDisplayModel,
+  type CheckoutPhase,
+  type CheckoutSnapshot,
+  type CheckoutState,
+  type CheckoutStatusModel,
   type OpenReceivePaymentMethod,
   type OpenReceivePaymentWizardController,
   type OpenReceivePaymentWizardModel,
@@ -46,53 +47,69 @@ import {
   type OpenReceiveWizardProviderDisplay,
   type OpenReceiveTransientFeedbackController,
   type OpenReceiveThemeModel,
-  type OpenReceiveThemePreference
-} from "@openreceive/browser";
+  type OpenReceiveThemePreference,
+  type Status
+} from "@openreceive/browser/internal";
 
-export interface OpenReceiveCheckoutData
-  extends OpenReceiveCheckoutDisplayData {}
+const DEFAULT_LOOKUP_URL = "/openreceive/v1/invoices/lookup";
 
-export interface OpenReceiveCheckoutViewModel
-  extends OpenReceiveCheckoutDisplayModel {}
+export interface CheckoutData {
+  readonly invoice: CheckoutSnapshot;
+}
 
-export interface UseOpenReceiveCheckoutOptions extends OpenReceiveCheckoutData {
+export interface CheckoutViewModel {
+  readonly invoice_id?: string;
+  readonly invoice: string;
+  readonly payment_hash?: string;
+  readonly amount_msats?: number;
+  readonly fiat_quote?: CheckoutSnapshot["fiat_quote"];
+  readonly expires_at?: number;
+  readonly settled_at?: number;
+  readonly lightningUri: string;
+  readonly amountLabel?: string;
+  readonly fiatLabel?: string;
+  readonly paymentHashLabel?: string;
+  readonly status: Status;
+}
+
+export interface UseCheckoutOptions extends CheckoutData {
   readonly clipboard?: Pick<Clipboard, "writeText">;
   readonly open?: (uri: string) => void;
   readonly logger?: OpenReceiveBrowserLogger;
   readonly onError?: (error: unknown) => void;
-  readonly lookupInvoice?: (state: OpenReceiveCheckoutState) => Promise<Partial<OpenReceiveCheckoutSnapshot>>;
+  readonly lookupInvoice?: (state: CheckoutState) => Promise<Partial<CheckoutSnapshot>>;
   readonly lookupUrl?: string;
-  readonly refreshInvoice?: (state: OpenReceiveCheckoutState) => Promise<OpenReceiveCheckoutSnapshot | OpenReceiveRefreshInvoiceResult>;
-  readonly refreshUrl?: string | ((state: OpenReceiveCheckoutState) => string);
+  readonly refreshInvoice?: (state: CheckoutState) => Promise<CheckoutSnapshot | OpenReceiveRefreshInvoiceResult>;
+  readonly refreshUrl?: string | ((state: CheckoutState) => string);
   readonly refreshHeaders?: Readonly<Record<string, string>>;
-  readonly refreshIdempotencyKey?: string | ((state: OpenReceiveCheckoutState) => string);
-  readonly refreshReason?: string | ((state: OpenReceiveCheckoutState) => string);
-  readonly onState?: (state: OpenReceiveCheckoutState) => void;
+  readonly refreshIdempotencyKey?: string | ((state: CheckoutState) => string);
+  readonly refreshReason?: string | ((state: CheckoutState) => string);
+  readonly onState?: (state: CheckoutState) => void;
+  readonly onPaid?: () => void;
   readonly pollIntervalMs?: number;
 }
 
-export interface UseOpenReceiveCheckoutResult extends OpenReceiveCheckoutViewModel {
+export interface UseCheckoutResult extends CheckoutViewModel {
   readonly copied: boolean;
-  readonly state?: OpenReceiveCheckoutState;
-  readonly status: OpenReceiveCheckoutStatusModel;
+  readonly state?: CheckoutState;
   readonly expiresInSeconds?: number;
   readonly countdownLabel?: string;
   readonly waiting: boolean;
-  reloadState(): Promise<OpenReceiveCheckoutState | undefined>;
-  retry(): Promise<OpenReceiveCheckoutState | undefined>;
-  refreshExpiredInvoice(): Promise<OpenReceiveCheckoutState | undefined>;
-  cancel(): OpenReceiveCheckoutState | undefined;
+  reloadState(): Promise<CheckoutState | undefined>;
+  retry(): Promise<CheckoutState | undefined>;
+  refreshExpiredInvoice(): Promise<CheckoutState | undefined>;
+  cancel(): CheckoutState | undefined;
   copyInvoice(): Promise<void>;
   openWallet(): string;
 }
 
-export interface OpenReceiveProviderProps extends UseOpenReceiveCheckoutOptions {
+export interface CheckoutProviderProps extends UseCheckoutOptions {
   readonly children?:
     | React.ReactNode
-    | ((checkout: UseOpenReceiveCheckoutResult) => React.ReactNode);
+    | ((checkout: UseCheckoutResult) => React.ReactNode);
 }
 
-export interface OpenReceiveQRCodeProps
+export interface QRCodeProps
   extends Omit<React.HTMLAttributes<HTMLDivElement>, "children"> {
   readonly invoice: string;
   readonly encoder?: OpenReceiveQrEncoder;
@@ -100,10 +117,10 @@ export interface OpenReceiveQRCodeProps
   readonly onError?: (error: unknown) => void;
 }
 
-export type OpenReceiveButtonComponent =
+export type ButtonComponent =
   React.ElementType<React.ButtonHTMLAttributes<HTMLButtonElement>>;
 
-export interface OpenReceiveCopyButtonProps
+export interface CopyInvoiceButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   readonly invoice: string;
   readonly copyInvoice?: () => Promise<void>;
@@ -112,10 +129,10 @@ export interface OpenReceiveCopyButtonProps
   readonly onCopied?: () => void;
   readonly onError?: (error: unknown) => void;
   readonly copiedLabel?: React.ReactNode;
-  readonly ButtonComponent?: OpenReceiveButtonComponent;
+  readonly ButtonComponent?: ButtonComponent;
 }
 
-export interface OpenReceiveOpenWalletButtonProps
+export interface OpenWalletButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   readonly invoice: string;
   readonly openWallet?: () => string;
@@ -123,33 +140,33 @@ export interface OpenReceiveOpenWalletButtonProps
   readonly logger?: OpenReceiveBrowserLogger;
   readonly onOpened?: (uri: string) => void;
   readonly onError?: (error: unknown) => void;
-  readonly ButtonComponent?: OpenReceiveButtonComponent;
+  readonly ButtonComponent?: ButtonComponent;
 }
 
-export interface OpenReceivePaymentStateProps
+export interface PaymentStateProps
   extends React.HTMLAttributes<HTMLSpanElement> {
   readonly state?: string;
 }
 
-export interface OpenReceiveInvoiceSummaryClassNames {
+export interface InvoiceSummaryClassNames {
   readonly amount?: string;
   readonly fiat?: string;
   readonly paymentHash?: string;
   readonly paymentState?: string;
 }
 
-export interface OpenReceiveInvoiceSummaryProps
+export interface InvoiceSummaryProps
   extends React.HTMLAttributes<HTMLDivElement> {
   readonly amountLabel?: string;
   readonly fiatLabel?: string;
   readonly paymentHashLabel?: string;
-  readonly transactionStateLabel?: string;
-  readonly PaymentStateComponent?: React.ComponentType<OpenReceivePaymentStateProps>;
-  readonly classNames?: OpenReceiveInvoiceSummaryClassNames;
+  readonly status?: Status;
+  readonly PaymentStateComponent?: React.ComponentType<PaymentStateProps>;
+  readonly classNames?: InvoiceSummaryClassNames;
 }
 
-export interface OpenReceiveCheckoutClassNames
-  extends OpenReceiveInvoiceSummaryClassNames {
+export interface CheckoutClassNames
+  extends InvoiceSummaryClassNames {
   readonly root?: string;
   readonly qr?: string;
   readonly details?: string;
@@ -164,42 +181,43 @@ export interface OpenReceiveCheckoutClassNames
   readonly themeToggle?: string;
 }
 
-export interface OpenReceiveCheckoutComponents {
-  readonly Button?: OpenReceiveButtonComponent;
-  readonly QRCode?: React.ComponentType<OpenReceiveQRCodeProps>;
-  readonly InvoiceSummary?: React.ComponentType<OpenReceiveInvoiceSummaryProps>;
-  readonly CopyButton?: React.ComponentType<OpenReceiveCopyButtonProps>;
-  readonly OpenWalletButton?: React.ComponentType<OpenReceiveOpenWalletButtonProps>;
-  readonly PaymentState?: React.ComponentType<OpenReceivePaymentStateProps>;
+export interface CheckoutComponents {
+  readonly Button?: ButtonComponent;
+  readonly QRCode?: React.ComponentType<QRCodeProps>;
+  readonly InvoiceSummary?: React.ComponentType<InvoiceSummaryProps>;
+  readonly CopyButton?: React.ComponentType<CopyInvoiceButtonProps>;
+  readonly OpenWalletButton?: React.ComponentType<OpenWalletButtonProps>;
+  readonly PaymentState?: React.ComponentType<PaymentStateProps>;
 }
 
-export type OpenReceiveCheckoutChildren =
+export type CheckoutChildren =
   | React.ReactNode
-  | ((model: OpenReceiveCheckoutViewModel) => React.ReactNode);
+  | ((model: UseCheckoutResult) => React.ReactNode);
 
-export interface OpenReceiveCheckoutProps
-  extends OpenReceiveCheckoutData,
+export interface CheckoutProps
+  extends CheckoutData,
     Omit<React.HTMLAttributes<HTMLElement>, "children"> {
   readonly qrEncoder?: OpenReceiveQrEncoder;
   readonly logger?: OpenReceiveBrowserLogger;
   readonly onError?: (error: unknown) => void;
-  readonly lookupInvoice?: (state: OpenReceiveCheckoutState) => Promise<Partial<OpenReceiveCheckoutSnapshot>>;
+  readonly lookupInvoice?: (state: CheckoutState) => Promise<Partial<CheckoutSnapshot>>;
   readonly lookupUrl?: string;
-  readonly refreshInvoice?: (state: OpenReceiveCheckoutState) => Promise<OpenReceiveCheckoutSnapshot | OpenReceiveRefreshInvoiceResult>;
-  readonly refreshUrl?: string | ((state: OpenReceiveCheckoutState) => string);
+  readonly refreshInvoice?: (state: CheckoutState) => Promise<CheckoutSnapshot | OpenReceiveRefreshInvoiceResult>;
+  readonly refreshUrl?: string | ((state: CheckoutState) => string);
   readonly refreshHeaders?: Readonly<Record<string, string>>;
-  readonly refreshIdempotencyKey?: string | ((state: OpenReceiveCheckoutState) => string);
-  readonly refreshReason?: string | ((state: OpenReceiveCheckoutState) => string);
-  readonly onState?: (state: OpenReceiveCheckoutState) => void;
+  readonly refreshIdempotencyKey?: string | ((state: CheckoutState) => string);
+  readonly refreshReason?: string | ((state: CheckoutState) => string);
+  readonly onState?: (state: CheckoutState) => void;
+  readonly onPaid?: () => void;
   readonly onStartOver?: () => void;
   readonly paymentWizard?: boolean;
   readonly themeSwitcher?: boolean;
   readonly defaultTheme?: OpenReceiveThemePreference;
   readonly themeStorageKey?: string;
   readonly countryStorageKey?: string;
-  readonly components?: OpenReceiveCheckoutComponents;
-  readonly classNames?: OpenReceiveCheckoutClassNames;
-  readonly children?: OpenReceiveCheckoutChildren;
+  readonly components?: CheckoutComponents;
+  readonly classNames?: CheckoutClassNames;
+  readonly children?: CheckoutChildren;
 }
 
 export interface UseOpenReceiveThemeOptions {
@@ -225,14 +243,14 @@ export interface OpenReceiveThemeToggleProps
   readonly theme?: OpenReceiveThemePreference;
   readonly resolvedTheme?: OpenReceiveResolvedTheme;
   readonly onThemeChange?: (theme: OpenReceiveThemePreference) => void;
-  readonly ButtonComponent?: OpenReceiveButtonComponent;
+  readonly ButtonComponent?: ButtonComponent;
 }
 
-export type OpenReceiveThemeScopeChildren =
+export type ThemeScopeChildren =
   | React.ReactNode
   | ((theme: UseOpenReceiveThemeResult) => React.ReactNode);
 
-export interface OpenReceiveThemeScopeProps
+export interface ThemeScopeProps
   extends Omit<React.HTMLAttributes<HTMLElement>, "children"> {
   readonly as?: keyof React.JSX.IntrinsicElements;
   readonly defaultTheme?: OpenReceiveThemePreference;
@@ -241,8 +259,8 @@ export interface OpenReceiveThemeScopeProps
   readonly themeToggle?: boolean;
   readonly topbarClassName?: string;
   readonly themeToggleClassName?: string;
-  readonly ButtonComponent?: OpenReceiveButtonComponent;
-  readonly children?: OpenReceiveThemeScopeChildren;
+  readonly ButtonComponent?: ButtonComponent;
+  readonly children?: ThemeScopeChildren;
 }
 
 export interface OpenReceivePaymentWizardProps {
@@ -282,71 +300,105 @@ function useOpenReceiveTransientValue<T>(
   return [value, showValue];
 }
 
-export function createOpenReceiveCheckoutViewModel(
-  data: OpenReceiveCheckoutData
-): OpenReceiveCheckoutViewModel {
-  return createOpenReceiveCheckoutDisplayModel(data);
+function toCheckoutDisplayData(
+  invoice: CheckoutSnapshot
+): CheckoutDisplayData {
+  return {
+    invoice_id: invoice.invoice_id,
+    invoice: invoice.invoice,
+    ...(invoice.payment_hash === undefined ? {} : { payment_hash: invoice.payment_hash }),
+    ...(invoice.amount_msats === undefined ? {} : { amount_msats: invoice.amount_msats }),
+    ...(invoice.fiat_quote === undefined ? {} : { fiat_quote: invoice.fiat_quote }),
+    ...(invoice.transaction_state === undefined
+      ? {}
+      : { transaction_state: invoice.transaction_state }),
+    ...(invoice.workflow_state === undefined ? {} : { workflow_state: invoice.workflow_state }),
+    ...(invoice.expires_at === undefined ? {} : { expires_at: invoice.expires_at }),
+    ...(invoice.settled_at === undefined ? {} : { settled_at: invoice.settled_at })
+  };
 }
 
-export function useOpenReceiveCheckout(
-  options: UseOpenReceiveCheckoutOptions
-): UseOpenReceiveCheckoutResult {
+function toCheckoutViewModel(
+  display: CheckoutDisplayModel,
+  currentStatus: Status
+): CheckoutViewModel {
+  return {
+    invoice_id: display.invoice_id,
+    invoice: display.invoice,
+    ...(display.payment_hash === undefined ? {} : { payment_hash: display.payment_hash }),
+    ...(display.amount_msats === undefined ? {} : { amount_msats: display.amount_msats }),
+    ...(display.fiat_quote === undefined ? {} : { fiat_quote: display.fiat_quote }),
+    ...(display.expires_at === undefined ? {} : { expires_at: display.expires_at }),
+    ...(display.settled_at === undefined ? {} : { settled_at: display.settled_at }),
+    lightningUri: display.lightningUri,
+    ...(display.amountLabel === undefined ? {} : { amountLabel: display.amountLabel }),
+    ...(display.fiatLabel === undefined ? {} : { fiatLabel: display.fiatLabel }),
+    ...(display.paymentHashLabel === undefined ? {} : { paymentHashLabel: display.paymentHashLabel }),
+    status: currentStatus
+  };
+}
+
+export function createCheckoutViewModel(
+  data: CheckoutData
+): CheckoutViewModel {
+  return toCheckoutViewModel(
+    createCheckoutDisplayModel(toCheckoutDisplayData(data.invoice)),
+    deriveStatus(data.invoice)
+  );
+}
+
+export function useCheckout(
+  options: UseCheckoutOptions
+): UseCheckoutResult {
   const [copied, showCopied] = useOpenReceiveTransientValue<boolean>(false);
+  const displayData = React.useMemo(
+    () => toCheckoutDisplayData(options.invoice),
+    [options.invoice]
+  );
   const model = React.useMemo(
-    () => createOpenReceiveCheckoutViewModel(options),
+    () => toCheckoutViewModel(
+      createCheckoutDisplayModel(displayData),
+      deriveStatus(options.invoice)
+    ),
     [
-      options.invoice,
-      options.payment_hash,
-      options.amount_msats,
-      options.fiat_quote,
-      options.transaction_state
+      displayData,
+      options.invoice
     ]
   );
-  const snapshot = React.useMemo<OpenReceiveCheckoutSnapshot | undefined>(
-    () => options.invoice_id === undefined
-      ? undefined
-      : createOpenReceiveCheckoutSnapshotFromDisplayData(options),
+  const snapshot = React.useMemo<CheckoutSnapshot>(
+    () => createCheckoutSnapshotFromDisplayData(displayData),
     [
-      options.invoice_id,
-      options.invoice,
-      options.payment_hash,
-      options.amount_msats,
-      options.fiat_quote,
-      options.transaction_state,
-      options.workflow_state,
-      options.expires_at
+      displayData
     ]
   );
-  const [state, setState] = React.useState<OpenReceiveCheckoutState | undefined>(
-    () => options.invoice_id === undefined
-      ? undefined
-      : createOpenReceiveCheckoutStateFromDisplayData(options, {
-        logger: options.logger
-      })
+  const [state, setState] = React.useState<CheckoutState>(
+    () => createCheckoutStateFromDisplayData(displayData, {
+      logger: options.logger
+    })
   );
-  const controllerRef = React.useRef<OpenReceiveCheckoutController | null>(null);
+  const controllerRef = React.useRef<CheckoutController | null>(null);
   const onStateRef = React.useRef(options.onState);
   onStateRef.current = options.onState;
+  const onPaidRef = React.useRef(options.onPaid);
+  onPaidRef.current = options.onPaid;
+  const paidAnnouncementRef = React.useRef<{
+    readonly invoiceId: string;
+    readonly fired: boolean;
+  }>({
+    invoiceId: snapshot.invoice_id,
+    fired: false
+  });
   const logContext = React.useMemo(
-    () => getCheckoutLogContext(options),
+    () => getCheckoutLogContext(displayData),
     [
-      options.payment_hash,
-      options.amount_msats,
-      options.transaction_state
+      displayData
     ]
   );
   React.useEffect(() => {
-    if (snapshot === undefined) {
-      controllerRef.current?.stop();
-      controllerRef.current = null;
-      setState(undefined);
-      return undefined;
-    }
-
-    const controller = createOpenReceiveCheckoutController({
+    const controller = createCheckoutController({
       snapshot,
       ...(options.lookupInvoice === undefined ? {} : { lookupInvoice: options.lookupInvoice }),
-      ...(options.lookupUrl === undefined ? {} : { lookupUrl: options.lookupUrl }),
+      lookupUrl: options.lookupUrl ?? DEFAULT_LOOKUP_URL,
       ...(options.refreshInvoice === undefined ? {} : { refreshInvoice: options.refreshInvoice }),
       ...(options.refreshUrl === undefined ? {} : { refreshUrl: options.refreshUrl }),
       ...(options.refreshHeaders === undefined ? {} : { refreshHeaders: options.refreshHeaders }),
@@ -386,13 +438,36 @@ export function useOpenReceiveCheckout(
     options.clipboard,
     options.open
   ]);
+  const publicStatus = deriveStatus(state);
+  const richStatus = createCheckoutStatusModel(state);
+
+  React.useEffect(() => {
+    const announced = paidAnnouncementRef.current;
+    if (announced.invoiceId !== snapshot.invoice_id) {
+      paidAnnouncementRef.current = {
+        invoiceId: snapshot.invoice_id,
+        fired: false
+      };
+    }
+  }, [snapshot.invoice_id]);
+
+  React.useEffect(() => {
+    const announced = paidAnnouncementRef.current;
+    if (publicStatus !== "paid" || announced.fired) return;
+    paidAnnouncementRef.current = {
+      invoiceId: snapshot.invoice_id,
+      fired: true
+    };
+    // UI hint only; server-side fulfillment must use the backend onPaid hook.
+    onPaidRef.current?.();
+  }, [publicStatus, snapshot.invoice_id]);
 
   const copyInvoice = React.useCallback(async () => {
     try {
       const controller = controllerRef.current;
       if (controller === null) {
         await copyInvoiceHelper({
-          invoice: options.invoice,
+          invoice: displayData.invoice,
           clipboard: options.clipboard,
           logger: options.logger,
           logContext
@@ -405,14 +480,14 @@ export function useOpenReceiveCheckout(
       options.onError?.(error);
       throw error;
     }
-  }, [logContext, options.invoice, options.clipboard, options.logger, options.onError, showCopied]);
+  }, [logContext, displayData.invoice, options.clipboard, options.logger, options.onError, showCopied]);
 
   const openWallet = React.useCallback(() => {
     try {
       const controller = controllerRef.current;
       return controller === null
         ? openWalletHelper({
-          invoice: options.invoice,
+          invoice: displayData.invoice,
           open: options.open,
           logger: options.logger,
           logContext
@@ -422,7 +497,7 @@ export function useOpenReceiveCheckout(
       options.onError?.(error);
       throw error;
     }
-  }, [logContext, options.invoice, options.open, options.logger, options.onError]);
+  }, [logContext, displayData.invoice, options.open, options.logger, options.onError]);
 
   const reloadState = React.useCallback(async () => {
     try {
@@ -463,16 +538,14 @@ export function useOpenReceiveCheckout(
     return next;
   }, []);
 
-  const status = createOpenReceiveCheckoutStatusModel(state);
-
   return {
     ...model,
     copied,
     state,
-    status,
-    expiresInSeconds: status.expiresInSeconds,
-    countdownLabel: status.countdownLabel,
-    waiting: status.waiting,
+    status: publicStatus,
+    expiresInSeconds: richStatus.expiresInSeconds,
+    countdownLabel: richStatus.countdownLabel,
+    waiting: richStatus.waiting,
     reloadState,
     retry,
     refreshExpiredInvoice,
@@ -482,35 +555,35 @@ export function useOpenReceiveCheckout(
   };
 }
 
-const OpenReceiveCheckoutContext =
-  React.createContext<UseOpenReceiveCheckoutResult | null>(null);
+const CheckoutContext =
+  React.createContext<UseCheckoutResult | null>(null);
 
-export function useOpenReceiveCheckoutContext(): UseOpenReceiveCheckoutResult {
-  const checkout = React.useContext(OpenReceiveCheckoutContext);
+export function useCheckoutContext(): UseCheckoutResult {
+  const checkout = React.useContext(CheckoutContext);
   if (checkout === null) {
     throw new Error(
-      "useOpenReceiveCheckoutContext must be used within OpenReceiveProvider."
+      "useCheckoutContext must be used within CheckoutProvider."
     );
   }
   return checkout;
 }
 
-export function OpenReceiveProvider(
-  props: OpenReceiveProviderProps
+export function CheckoutProvider(
+  props: CheckoutProviderProps
 ): React.ReactElement {
   const { children, ...options } = props;
-  const checkout = useOpenReceiveCheckout(options);
+  const checkout = useCheckout(options);
   const content =
     typeof children === "function" ? children(checkout) : children;
 
   return React.createElement(
-    OpenReceiveCheckoutContext.Provider,
+    CheckoutContext.Provider,
     { value: checkout },
     content
   );
 }
 
-export function OpenReceiveQRCode(props: OpenReceiveQRCodeProps): React.ReactElement {
+export function QRCode(props: QRCodeProps): React.ReactElement {
   const {
     invoice,
     encoder,
@@ -544,8 +617,8 @@ export function OpenReceiveQRCode(props: OpenReceiveQRCodeProps): React.ReactEle
   });
 }
 
-export function OpenReceiveCopyButton(
-  props: OpenReceiveCopyButtonProps
+export function CopyInvoiceButton(
+  props: CopyInvoiceButtonProps
 ): React.ReactElement {
   const {
     invoice,
@@ -589,8 +662,8 @@ export function OpenReceiveCopyButton(
   );
 }
 
-export function OpenReceiveOpenWalletButton(
-  props: OpenReceiveOpenWalletButtonProps
+export function OpenWalletButton(
+  props: OpenWalletButtonProps
 ): React.ReactElement {
   const {
     invoice,
@@ -629,8 +702,8 @@ export function OpenReceiveOpenWalletButton(
   );
 }
 
-export function OpenReceivePaymentState(
-  props: OpenReceivePaymentStateProps
+export function PaymentState(
+  props: PaymentStateProps
 ): React.ReactElement {
   const {
     state = "pending",
@@ -765,8 +838,8 @@ export function OpenReceiveThemeToggle(
   );
 }
 
-export function OpenReceiveThemeScope(
-  props: OpenReceiveThemeScopeProps
+export function ThemeScope(
+  props: ThemeScopeProps
 ): React.ReactElement {
   const {
     as: Element = "div",
@@ -818,13 +891,13 @@ export function OpenReceiveThemeScope(
 
 export function OpenReceiveWaitingState(props: {
   readonly waiting?: boolean;
-  readonly phase?: OpenReceiveCheckoutPhase;
-  readonly status?: OpenReceiveCheckoutStatusModel;
+  readonly phase?: CheckoutPhase;
+  readonly status?: CheckoutStatusModel;
   readonly className?: string;
 }): React.ReactElement {
   const status =
     props.status ??
-    createOpenReceiveCheckoutStatusModel({
+    createCheckoutStatusModel({
       phase: props.phase,
       waiting: props.waiting ?? false
     });
@@ -1095,7 +1168,7 @@ export function OpenReceivePaymentWizard(
               logContext: props.logContext
             });
             globalThis.dispatchEvent?.(
-              createOpenReceiveProviderCopyEvent(activeTutorialProvider.id)
+              createCheckoutProviderCopyEvent(activeTutorialProvider.id)
             );
             setActiveTutorial({
               providerId: activeTutorialProvider.id,
@@ -1373,14 +1446,14 @@ function renderProviderTutorialModal(options: {
   );
 }
 
-export function OpenReceiveInvoiceSummary(
-  props: OpenReceiveInvoiceSummaryProps
+export function InvoiceSummary(
+  props: InvoiceSummaryProps
 ): React.ReactElement {
 	  const {
 	    amountLabel,
 	    fiatLabel,
-	    transactionStateLabel,
-    PaymentStateComponent = OpenReceivePaymentState,
+	    status,
+    PaymentStateComponent = PaymentState,
     classNames,
     className,
     ...divProps
@@ -1411,27 +1484,20 @@ export function OpenReceiveInvoiceSummary(
         },
         fiatLabel
       ),
-    transactionStateLabel === undefined
+    status === undefined
       ? null
       : React.createElement(PaymentStateComponent, {
-        state: transactionStateLabel,
+        state: status,
         className: classNames?.paymentState
       })
   );
 }
 
-export function OpenReceiveCheckout(
-  props: OpenReceiveCheckoutProps
+export function Checkout(
+  props: CheckoutProps
 ): React.ReactElement {
   const {
-    invoice_id,
     invoice,
-    payment_hash,
-    amount_msats,
-    fiat_quote,
-    transaction_state,
-    workflow_state,
-    expires_at,
     qrEncoder,
     logger,
     onError,
@@ -1443,6 +1509,7 @@ export function OpenReceiveCheckout(
     refreshIdempotencyKey,
     refreshReason,
     onState,
+    onPaid,
     onStartOver,
     paymentWizard = true,
     themeSwitcher = false,
@@ -1455,15 +1522,8 @@ export function OpenReceiveCheckout(
     className,
     ...sectionProps
   } = props;
-  const checkoutModel = useOpenReceiveCheckout({
-    invoice_id,
+  const checkoutModel = useCheckout({
     invoice,
-    payment_hash,
-    amount_msats,
-    fiat_quote,
-    transaction_state,
-    workflow_state,
-    expires_at,
     logger,
     onError,
     lookupInvoice,
@@ -1473,20 +1533,22 @@ export function OpenReceiveCheckout(
     refreshHeaders,
     refreshIdempotencyKey,
     refreshReason,
-    onState
+    onState,
+    onPaid
   });
+  const richStatus = createCheckoutStatusModel(checkoutModel.state);
   const theme = useOpenReceiveTheme({
     defaultTheme,
     storageKey: themeStorageKey
   });
-  const QRCode = components?.QRCode ?? OpenReceiveQRCode;
-  const InvoiceSummary = components?.InvoiceSummary ?? OpenReceiveInvoiceSummary;
-  const CopyButton = components?.CopyButton ?? OpenReceiveCopyButton;
+  const QRCodeComponent = components?.QRCode ?? QRCode;
+  const InvoiceSummaryComponent = components?.InvoiceSummary ?? InvoiceSummary;
+  const CopyButton = components?.CopyButton ?? CopyInvoiceButton;
   const ButtonComponent = components?.Button;
-  const PaymentStateComponent = components?.PaymentState ?? OpenReceivePaymentState;
+  const PaymentStateComponent = components?.PaymentState ?? PaymentState;
   const customChildren =
     typeof children === "function" ? children(checkoutModel) : children;
-  const expired = checkoutModel.status.phase === "expired";
+  const expired = checkoutModel.status === "expired";
   const startOver = () => {
     if (onStartOver !== undefined) {
       onStartOver();
@@ -1519,9 +1581,9 @@ export function OpenReceiveCheckout(
           : null,
         expired
           ? null
-          : React.createElement(QRCode, {
+          : React.createElement(QRCodeComponent, {
             key: "qr",
-            invoice,
+            invoice: checkoutModel.invoice,
             encoder: qrEncoder,
             onError,
             className: classNames?.qr,
@@ -1534,7 +1596,7 @@ export function OpenReceiveCheckout(
           }),
         React.createElement(OpenReceiveWaitingState, {
           key: "waiting",
-          status: checkoutModel.status,
+          status: richStatus,
           className: classNames?.waiting
         }),
         checkoutModel.countdownLabel === undefined
@@ -1545,17 +1607,15 @@ export function OpenReceiveCheckout(
               key: "countdown",
               className: joinClassNames("or-countdown", classNames?.countdown)
             },
-            checkoutModel.status.countdownPrefix,
+            richStatus.countdownPrefix,
             " ",
             React.createElement("strong", null, checkoutModel.countdownLabel)
           ),
-        React.createElement(InvoiceSummary, {
+        React.createElement(InvoiceSummaryComponent, {
 	          key: "summary",
 	          amountLabel: checkoutModel.amountLabel,
 	          fiatLabel: checkoutModel.fiatLabel,
-	          transactionStateLabel:
-	            checkoutModel.state?.transaction_state ??
-            checkoutModel.transactionStateLabel,
+	          status: checkoutModel.status,
           PaymentStateComponent,
           className: classNames?.summary,
           classNames
@@ -1577,7 +1637,7 @@ export function OpenReceiveCheckout(
               openReceiveCheckoutLabels.startOver
             )
             : React.createElement(CopyButton, {
-              invoice,
+              invoice: checkoutModel.invoice,
               copyInvoice: checkoutModel.copyInvoice,
               onError,
               logger,
@@ -1588,17 +1648,17 @@ export function OpenReceiveCheckout(
         paymentWizard && !expired
           ? React.createElement(OpenReceivePaymentWizard, {
             key: "wizard",
-            invoice,
+            invoice: checkoutModel.invoice,
             className: classNames?.wizard,
             logger,
             onError,
             countryStorageKey,
             logContext: getCheckoutLogContext({
-              invoice_id,
-              payment_hash,
-              amount_msats,
-              transaction_state: checkoutModel.state?.transaction_state ?? transaction_state,
-              workflow_state: checkoutModel.state?.workflow_state ?? workflow_state
+              invoice_id: checkoutModel.invoice_id,
+              payment_hash: checkoutModel.payment_hash,
+              amount_msats: checkoutModel.amount_msats,
+              transaction_state: checkoutModel.state?.transaction_state,
+              workflow_state: checkoutModel.state?.workflow_state
             })
           })
           : null
@@ -1607,13 +1667,14 @@ export function OpenReceiveCheckout(
   );
 }
 
-export const InvoiceSummary = OpenReceiveInvoiceSummary;
-export const CopyInvoiceButton = OpenReceiveCopyButton;
-export const OpenWalletButton = OpenReceiveOpenWalletButton;
-export const PaymentState = OpenReceivePaymentState;
-
 function getCheckoutLogContext(
-  data: Partial<OpenReceiveCheckoutData>
+  data: {
+    readonly invoice_id?: string;
+    readonly payment_hash?: string;
+    readonly amount_msats?: number;
+    readonly transaction_state?: string;
+    readonly workflow_state?: string;
+  }
 ): OpenReceiveBrowserLogContext {
   return {
     ...(data.invoice_id === undefined ? {} : { invoice_id: data.invoice_id }),

@@ -1,13 +1,12 @@
 "use client";
 
 import {
-  createOpenReceiveInvoice,
-  type OpenReceiveCheckoutState,
-  type OpenReceiveCheckoutSnapshot,
+  createInvoice as requestInvoice,
+  type Invoice,
 } from "@openreceive/browser";
 import {
-  OpenReceiveCheckout,
-  OpenReceiveThemeScope
+  Checkout,
+  ThemeScope
 } from "@openreceive/react";
 import {
   useCallback,
@@ -41,7 +40,7 @@ export default function CheckoutClient({
   fruits
 }: CheckoutClientProps) {
   const [fruitId, setFruitId] = useState(fruits[1]?.id ?? fruits[0]?.id ?? "");
-  const [checkout, setCheckout] = useState<OpenReceiveCheckoutSnapshot | undefined>();
+  const [checkout, setCheckout] = useState<Invoice | undefined>();
   const [purchasedFruit, setPurchasedFruit] = useState<HelloFruit | undefined>();
   const [stickerModalOpen, setStickerModalOpen] = useState(false);
   const [status, setStatus] = useState("idle");
@@ -57,15 +56,12 @@ export default function CheckoutClient({
       ? helloFruitDemoLabels.createInvoice
       : formatHelloFruitBuyNowLabel(selectedFruit.fiat);
 
-  const onCheckoutState = useCallback((state: OpenReceiveCheckoutState) => {
-    if (
-      state.workflow_state === "settlement_action_completed" &&
-      completedInvoiceRef.current !== state.invoice_id
-    ) {
-      completedInvoiceRef.current = state.invoice_id;
+  const onPaid = useCallback(() => {
+    if (checkout !== undefined && completedInvoiceRef.current !== checkout.invoice_id) {
+      completedInvoiceRef.current = checkout.invoice_id;
       setStickerModalOpen(true);
     }
-  }, []);
+  }, [checkout]);
 
   async function createInvoice() {
     if (selectedFruit === undefined) return;
@@ -76,7 +72,7 @@ export default function CheckoutClient({
     completedInvoiceRef.current = "";
 
     try {
-      const body = await createOpenReceiveInvoice({
+      const body = await requestInvoice({
         idempotencyKey: `hello-fruit-nextjs-${selectedFruit.id}`,
         fiat: selectedFruit.fiat,
         description: createHelloFruitInvoiceDescription(selectedFruit.name, {
@@ -111,7 +107,7 @@ export default function CheckoutClient({
   }
 
   return (
-    <OpenReceiveThemeScope
+    <ThemeScope
       as="section"
       className="checkout"
       themeToggle
@@ -153,21 +149,13 @@ export default function CheckoutClient({
 
       {checkout === undefined ? null : (
         <div className="invoice">
-          <OpenReceiveCheckout
-            invoice_id={checkout.invoice_id}
-            invoice={checkout.invoice}
-            payment_hash={checkout.payment_hash}
-            amount_msats={checkout.amount_msats}
-            fiat_quote={checkout.fiat_quote}
-            transaction_state={checkout.transaction_state}
-            workflow_state={checkout.workflow_state}
-            expires_at={checkout.expires_at}
+          <Checkout
+            invoice={checkout}
             logger={logOpenReceive}
-            lookupUrl="/openreceive/v1/invoices/lookup"
             onError={(cause) => {
               setError(cause instanceof Error ? cause.message : String(cause));
             }}
-            onState={onCheckoutState}
+            onPaid={onPaid}
             onStartOver={startOver}
             classNames={{
               root: "react-checkout",
@@ -209,6 +197,6 @@ export default function CheckoutClient({
           </section>
         </div>
       )}
-    </OpenReceiveThemeScope>
+    </ThemeScope>
   );
 }

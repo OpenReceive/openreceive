@@ -7,15 +7,15 @@ import {
   OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
   OPENRECEIVE_THEME_STORAGE_KEY,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
-  createOpenReceiveCheckoutElement,
-  createOpenReceiveCheckoutElementAttributes,
-  createOpenReceiveCheckoutElementListeners,
-  createOpenReceiveCheckoutShell,
-  createOpenReceiveCheckoutShellModel,
+  createCheckoutElement,
+  createCheckoutElementAttributes,
+  createCheckoutElementListeners,
+  createCheckoutShell,
+  createCheckoutShellModel,
   createOpenReceiveThemeToggleElement,
   createOpenReceiveThemeToggleElementAttributes,
   createOpenReceiveThemeModel
-} from "@openreceive/browser";
+} from "@openreceive/browser/internal";
 import {
   createOpenReceiveAngularCheckoutBinding,
   createOpenReceiveAngularCheckoutComponentModel,
@@ -29,7 +29,7 @@ import {
   toggleOpenReceiveStoredThemePreference as toggleAngularThemePreference
 } from "@openreceive/angular";
 import {
-  applyOpenReceiveCheckoutThemeAttributes as applySvelteCheckoutThemeAttributes,
+  applyCheckoutThemeAttributes as applySvelteCheckoutThemeAttributes,
   createOpenReceiveSvelteCheckoutBinding,
   createOpenReceiveSvelteCheckoutComponentModel,
   createOpenReceiveSvelteCheckoutController,
@@ -51,9 +51,7 @@ import {
   createOpenReceiveVueThemeToggleBinding,
   syncOpenReceiveStoredThemeControls as syncVueThemeControls
 } from "@openreceive/vue";
-import {
-  matchOpenReceiveNextRoute
-} from "@openreceive/next";
+import * as nextModule from "@openreceive/next";
 
 const snapshot = {
   invoice_id: "or_inv_test",
@@ -71,47 +69,8 @@ const snapshot = {
   expires_at: 1781943000
 };
 
-test("Next catch-all matcher covers OpenReceive HTTP routes", () => {
-  assert.deepEqual(matchOpenReceiveNextRoute("POST", ["invoices"]), {
-    name: "createInvoice"
-  });
-  assert.deepEqual(matchOpenReceiveNextRoute("GET", ["invoices", "or_inv_123"]), {
-    name: "getInvoice",
-    params: {
-      invoice_id: "or_inv_123"
-    }
-  });
-  assert.deepEqual(matchOpenReceiveNextRoute("POST", ["invoices", "lookup"]), {
-    name: "lookupInvoice"
-  });
-  assert.deepEqual(matchOpenReceiveNextRoute("POST", ["invoices", "or_inv_123", "refresh"]), {
-    name: "refreshInvoice",
-    params: {
-      invoice_id: "or_inv_123"
-    }
-  });
-  assert.deepEqual(matchOpenReceiveNextRoute("POST", ["poll"]), {
-    name: "poll"
-  });
-  assert.deepEqual(matchOpenReceiveNextRoute("GET", ["rates"]), {
-    name: "listRates"
-  });
-  assert.deepEqual(matchOpenReceiveNextRoute("POST", ["rates", "quote"]), {
-    name: "quoteRates"
-  });
-  assert.deepEqual(matchOpenReceiveNextRoute("GET", ["routes"]), {
-    name: "listRoutes"
-  });
-  assert.deepEqual(matchOpenReceiveNextRoute("GET", ["providers"]), {
-    name: "listProviders"
-  });
-  assert.deepEqual(matchOpenReceiveNextRoute("GET", ["health"]), {
-    name: "health"
-  });
-  assert.deepEqual(matchOpenReceiveNextRoute("GET", ["capabilities"]), {
-    name: "capabilities"
-  });
-  assert.equal(matchOpenReceiveNextRoute("DELETE", ["invoices", "or_inv_123"]), undefined);
+test("Next package keeps routing on the OpenReceive server handleFetch method", () => {
+  assert.deepEqual(Object.keys(nextModule), []);
 });
 
 test("browser owns custom-element checkout attributes and listeners", () => {
@@ -136,7 +95,7 @@ test("browser owns custom-element checkout attributes and listeners", () => {
       return element;
     }
   };
-  const attributes = createOpenReceiveCheckoutElementAttributes(snapshot, {
+  const attributes = createCheckoutElementAttributes(snapshot, {
     lookupUrl: "/openreceive/v1/invoices/lookup",
     theme: "dark",
     paymentWizard: true
@@ -149,8 +108,7 @@ test("browser owns custom-element checkout attributes and listeners", () => {
     "amount-msats": "200000",
     "fiat-currency": "USD",
     "fiat-value": "0.05",
-    "transaction-state": "pending",
-    "workflow-state": "invoice_created",
+    status: "pending",
     "expires-at": "1781943000",
     "lookup-url": "/openreceive/v1/invoices/lookup",
     theme: "dark",
@@ -160,7 +118,7 @@ test("browser owns custom-element checkout attributes and listeners", () => {
   let copied = false;
   let receivedState = false;
   let receivedProviderCopy = false;
-  const listeners = createOpenReceiveCheckoutElementListeners({
+  const listeners = createCheckoutElementListeners({
     onCopy: () => {
       copied = true;
     },
@@ -179,7 +137,7 @@ test("browser owns custom-element checkout attributes and listeners", () => {
   assert.equal(receivedProviderCopy, true);
   assert.equal(listeners[OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.error], undefined);
 
-  const checkoutElement = createOpenReceiveCheckoutElement(snapshot, {
+  const checkoutElement = createCheckoutElement(snapshot, {
     document,
     lookupUrl: "/openreceive/v1/invoices/lookup",
     theme: "dark",
@@ -202,7 +160,7 @@ test("browser owns custom-element checkout attributes and listeners", () => {
   assert.equal(themeToggle.attributes["checkout-selector"], "openreceive-checkout");
   assert.equal(themeToggle.attributes["default-theme"], "light");
 
-  const shell = createOpenReceiveCheckoutShell(snapshot, {
+  const shell = createCheckoutShell(snapshot, {
     document,
     root: {
       setAttribute: (name, value) => {
@@ -221,7 +179,7 @@ test("browser owns custom-element checkout attributes and listeners", () => {
 
   assert.throws(
     () =>
-      createOpenReceiveCheckoutElementAttributes({
+      createCheckoutElementAttributes({
         invoice_id: "or_inv_bad",
         invoice: `nostr+walletconnect://${"a".repeat(64)}?secret=${"b".repeat(64)}`
       }),
@@ -257,7 +215,7 @@ test("browser owns full checkout shell binding model", () => {
     }
   };
   let copied = false;
-  const shell = createOpenReceiveCheckoutShellModel(snapshot, {
+  const shell = createCheckoutShellModel(snapshot, {
     lookupUrl: "/openreceive/v1/invoices/lookup",
     rootSelector: ".page",
     defaultTheme: "light",
@@ -398,7 +356,7 @@ test("Vue, Svelte, and Angular adapters expose thin custom-element bindings", ()
     lookupUrl: "/openreceive/v1/invoices/lookup",
     defineElementsOptions: {}
   });
-  assert.equal(vueComponent.componentName, "OpenReceiveCheckout");
+  assert.equal(vueComponent.componentName, "Checkout");
   assert.equal(typeof vueComponent.defineElements, "function");
   assert.equal(vueComponent.checkout.attrs["lookup-url"], "/openreceive/v1/invoices/lookup");
   assert.equal(vueComponent.themeToggle.tagName, OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME);
@@ -406,14 +364,14 @@ test("Vue, Svelte, and Angular adapters expose thin custom-element bindings", ()
   const svelteComponent = createOpenReceiveSvelteCheckoutComponentModel(snapshot, {
     paymentWizard: false
   });
-  assert.equal(svelteComponent.componentName, "OpenReceiveCheckout");
+  assert.equal(svelteComponent.componentName, "Checkout");
   assert.equal(typeof svelteComponent.defineElements, "function");
   assert.equal(svelteComponent.checkout.props["payment-wizard"], "false");
 
   const angularComponent = createOpenReceiveAngularCheckoutComponentModel(snapshot, {
     checkoutSelector: "#checkout"
   });
-  assert.equal(angularComponent.componentName, "OpenReceiveCheckout");
+  assert.equal(angularComponent.componentName, "Checkout");
   assert.equal(typeof angularComponent.defineElements, "function");
   assert.equal(angularComponent.themeToggle.attributes["checkout-selector"], "#checkout");
 
@@ -517,14 +475,14 @@ test("Vue, Svelte, and Angular packages ship component entry files", () => {
     {
       manifestPath: "packages/js/vue/package.json",
       exportName: "./checkout.vue",
-      componentPath: "packages/js/vue/src/OpenReceiveCheckout.vue",
+      componentPath: "packages/js/vue/src/Checkout.vue",
       shellHelper: "createOpenReceiveVueCheckoutShellBinding",
       peerDependency: "vue"
     },
     {
       manifestPath: "packages/js/svelte/package.json",
       exportName: "./checkout.svelte",
-      componentPath: "packages/js/svelte/src/OpenReceiveCheckout.svelte",
+      componentPath: "packages/js/svelte/src/Checkout.svelte",
       shellHelper: "createOpenReceiveSvelteCheckoutShellBinding",
       peerDependency: "svelte"
     },

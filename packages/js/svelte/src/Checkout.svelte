@@ -2,13 +2,13 @@
   import {
     createOpenReceiveSvelteCheckoutShellBinding,
     defineOpenReceiveElements,
-    type OpenReceiveCheckoutElementListeners,
-    type OpenReceiveCheckoutShellOptions,
-    type OpenReceiveCheckoutSnapshot
+    type CheckoutElementListeners,
+    type CheckoutShellOptions,
+    type CheckoutSnapshot
   } from "./index.js";
 
-  export let snapshot: OpenReceiveCheckoutSnapshot;
-  export let options: OpenReceiveCheckoutShellOptions = {};
+  export let snapshot: CheckoutSnapshot;
+  export let options: CheckoutShellOptions = {};
 
   $: shell = createOpenReceiveSvelteCheckoutShellBinding(snapshot, options);
 
@@ -16,7 +16,7 @@
     defineOpenReceiveElements();
   }
 
-  function checkoutListeners(node: HTMLElement, listeners: OpenReceiveCheckoutElementListeners) {
+  function checkoutListeners(node: HTMLElement, listeners: CheckoutElementListeners) {
     let activeListeners = listeners;
 
     const attach = () => {
@@ -37,7 +37,7 @@
     attach();
 
     return {
-      update(nextListeners: OpenReceiveCheckoutElementListeners) {
+      update(nextListeners: CheckoutElementListeners) {
         detach();
         activeListeners = nextListeners;
         attach();

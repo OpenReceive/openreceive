@@ -16,32 +16,24 @@ import DialogContent from "@mui/material/DialogContent";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import {
-  OpenReceiveCheckout,
-  OpenReceiveQRCode,
-  OpenReceivePaymentState,
-  useOpenReceiveCheckout
+  Checkout,
+  QRCode,
+  PaymentState,
+  useCheckout
 } from "@openreceive/react";
 
-export function MaterialOpenReceiveCheckout({
+export function MaterialCheckout({
   invoice,
-  payment_hash,
-  amount_msats,
-  transaction_state,
   open,
   onClose
 }) {
-  const checkout = useOpenReceiveCheckout({
-    invoice,
-    payment_hash,
-    amount_msats,
-    transaction_state
-  });
+  const checkout = useCheckout({ invoice });
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
       <DialogContent>
         <Stack spacing={2} alignItems="center">
-          <OpenReceiveQRCode
+          <QRCode
             invoice={checkout.invoice}
             style={{
               inlineSize: 256,
@@ -51,7 +43,7 @@ export function MaterialOpenReceiveCheckout({
           <Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>
             {checkout.invoice}
           </Typography>
-          <OpenReceivePaymentState state={checkout.transaction_state} />
+          <PaymentState state={checkout.status} />
         </Stack>
       </DialogContent>
       <DialogActions>
@@ -70,7 +62,7 @@ when your design-system button accepts native button props; otherwise keep
 using the headless actions as shown above.
 
 ```tsx
-<OpenReceiveCheckout
+<Checkout
   invoice={invoice}
   components={{
     Button,

@@ -1,8 +1,10 @@
 import {
-  createOpenReceiveCheckoutShell,
-  createOpenReceiveInvoice,
+  createCheckoutShell,
   createOpenReceiveThemeToggleElement,
-  type OpenReceiveCheckoutSnapshot
+  type CheckoutSnapshot
+} from "@openreceive/browser/internal";
+import {
+  createInvoice as requestInvoice
 } from "@openreceive/browser";
 import {
   defineOpenReceiveElements
@@ -34,7 +36,6 @@ interface Fruit {
 interface CheckoutStateEventDetail {
   state?: {
     invoice_id?: string;
-    workflow_state?: string;
   };
 }
 
@@ -123,7 +124,7 @@ async function createInvoice(): Promise<void> {
   completedInvoiceId = "";
 
   try {
-    const body = await createOpenReceiveInvoice({
+    const body = await requestInvoice({
       idempotencyKey: `hello-fruit-static-${selectedFruit.id}`,
       fiat: selectedFruit.fiat,
       description: createHelloFruitInvoiceDescription(selectedFruit.name, {
@@ -147,10 +148,10 @@ async function createInvoice(): Promise<void> {
   }
 }
 
-function renderInvoice(nextInvoice: OpenReceiveCheckoutSnapshot): void {
+function renderInvoice(nextInvoice: CheckoutSnapshot): void {
   const topbar = requireElement("topbar");
   const panel = requireElement("invoice-panel");
-  const shell = createOpenReceiveCheckoutShell(nextInvoice, {
+  const shell = createCheckoutShell(nextInvoice, {
     document,
     root: document.querySelector(".page"),
     lookupUrl: "/openreceive/v1/invoices/lookup",
@@ -160,11 +161,10 @@ function renderInvoice(nextInvoice: OpenReceiveCheckoutSnapshot): void {
       const detail = (event as CustomEvent<{ error?: unknown }>).detail;
       setError(detail?.error instanceof Error ? detail.error.message : String(detail?.error));
     },
-    onState: (event) => {
+    onSettled: (event) => {
       const state = (event as CustomEvent<CheckoutStateEventDetail>).detail?.state;
       if (
-        state?.workflow_state === "settlement_action_completed" &&
-        state.invoice_id !== undefined &&
+        state?.invoice_id !== undefined &&
         state.invoice_id !== completedInvoiceId &&
         purchasedFruit !== undefined
       ) {
