@@ -4,11 +4,8 @@ import {
   createDefaultLivePriceProviders
 } from "@openreceive/core";
 import {
-  createNwcReceiveClient
-} from "@openreceive/node";
-import {
-  mountOpenReceiveExpress,
-  type OpenReceiveNodeOptions
+  createOpenReceive,
+  type OpenReceiveServer
 } from "@openreceive/node";
 import {
   createHelloFruitDemoMetadata
@@ -31,25 +28,21 @@ import {
 
 const DEMO_ID = "node-express-react";
 
-export async function createHelloFruitOpenReceiveOptions(): Promise<OpenReceiveNodeOptions> {
-  const connectionString = readRequiredHelloFruitNwcConnectionString();
-  const wallet = createNwcReceiveClient({
-    connectionString
-  });
+export async function createHelloFruitOpenReceive(): Promise<OpenReceiveServer> {
   const priceCurrencies = readHelloFruitCatalogCurrencies();
   const store = await createHelloFruitOpenReceiveKvStore({
     demoId: DEMO_ID
   });
 
-  return {
-    client: wallet,
+  return await createOpenReceive({
+    nwc: readRequiredHelloFruitNwcConnectionString(),
     store,
     merchantScope: () => "demo:hello-fruit",
     priceProviders: createDefaultLivePriceProviders({ currencies: priceCurrencies }),
     priceCurrencies,
     unsafeAllowUnauthenticatedDemoMode: true,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID)
-  };
+  });
 }
 
 export async function createHelloFruitServer() {
@@ -60,7 +53,7 @@ export async function createHelloFruitServer() {
     express.static(fileURLToPath(new URL("../../../../shared/stickers/", import.meta.url)))
   );
 
-  const openreceive = await createHelloFruitOpenReceiveOptions();
+  const openreceive = await createHelloFruitOpenReceive();
 
   mountHelloFruitHostedDemoRoutes(app, {
     id: DEMO_ID,
@@ -85,7 +78,7 @@ export async function createHelloFruitServer() {
     }));
   });
 
-  mountOpenReceiveExpress(app, openreceive);
+  openreceive.mountExpress(app);
 
   return app;
 }

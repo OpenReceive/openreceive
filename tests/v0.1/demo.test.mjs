@@ -187,7 +187,7 @@ test("Hello Fruit JS demos use package-owned QR and poll-only wiring", () => {
     assert.match(packageJson.scripts.start, /require-openreceive-nwc\.ts/);
     assert.equal(packageJson.scripts["openreceive:worker"], undefined);
     assert.equal(packageJson.scripts["openreceive:poll"], "openreceive poll --once");
-    assert.match(config, /createHelloFruitOpenReceiveOptions/);
+    assert.match(config, /createHelloFruitOpenReceive/);
     assert.match(config, /export default openreceive/);
     assert.doesNotMatch(config, /nostr\+walletconnect:\/\//);
     assert.doesNotMatch(compose, /openreceive-worker/);
@@ -840,7 +840,7 @@ test("Hello Fruit JS demos set up package-owned invoice persistence", () => {
     "examples/hello-fruit/server/nextjs-fullstack/openreceive.config.mjs"
   ]) {
     const source = readFileSync(path.join(process.cwd(), sourcePath), "utf8");
-    assert.match(source, /await createHelloFruitOpenReceiveOptions/);
+    assert.match(source, /await createHelloFruitOpenReceive/);
   }
 });
 
@@ -854,9 +854,11 @@ test("Next.js demo delegates route handler glue to the Next package", () => {
   );
 
   assert.match(source, /@openreceive\/next/);
-  assert.match(source, /createOpenReceiveNextRuntime/);
+  assert.match(source, /createOpenReceive/);
   assert.match(source, /dispatchOpenReceiveNextRoute/);
   assert.match(source, /readRequiredHelloFruitNwcConnectionString/);
+  assert.doesNotMatch(source, /createNwcReceiveClient/);
+  assert.doesNotMatch(source, /createOpenReceiveNextRuntime/);
   assert.doesNotMatch(source, /dispatchOpenReceiveNextNoWalletRoute/);
   assert.doesNotMatch(source, /class CapturedResponse/);
   assert.doesNotMatch(source, /ExpressLikeRequest/);

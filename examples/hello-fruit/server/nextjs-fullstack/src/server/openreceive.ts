@@ -2,16 +2,12 @@ import {
   createDefaultLivePriceProviders
 } from "@openreceive/core";
 import {
-  createNwcReceiveClient
-} from "@openreceive/node";
-import type {
-  OpenReceiveNodeOptions
+  createOpenReceive,
+  type OpenReceiveServer
 } from "@openreceive/node";
 import {
-  createOpenReceiveNextRuntime,
   dispatchOpenReceiveNextRoute,
-  openReceiveNextJsonResponse,
-  type OpenReceiveNextRuntime
+  openReceiveNextJsonResponse
 } from "@openreceive/next";
 import {
   createHelloFruitDemoMetadata
@@ -33,12 +29,13 @@ const DEMO_ID = "nextjs-fullstack";
 const DEFAULT_PORT = "3002";
 const GITHUB_REPOSITORY_URL = "https://github.com/openreceive/openreceive";
 
-interface NextDemoRuntime extends OpenReceiveNextRuntime {
+interface NextDemoOpenReceiveCache {
   readonly connectionString: string;
   readonly storeCacheKey: string;
+  readonly server: Promise<OpenReceiveServer>;
 }
 
-let runtime: Promise<NextDemoRuntime> | undefined;
+let openreceiveCache: NextDemoOpenReceiveCache | undefined;
 
 export function isWalletConfigured(): boolean {
   readRequiredHelloFruitNwcConnectionString();
@@ -109,65 +106,60 @@ export async function dispatchOpenReceiveRoute(
   const connectionString = readRequiredHelloFruitNwcConnectionString();
 
   return dispatchOpenReceiveNextRoute({
-    runtime: await getRuntime(connectionString),
+    runtime: (await getOpenReceive(connectionString)).runtime,
     request,
     path
   });
 }
 
-async function getRuntime(connectionString: string): Promise<NextDemoRuntime> {
+async function getOpenReceive(connectionString: string): Promise<OpenReceiveServer> {
   const storeCacheKey = currentStoreCacheKey();
-  const cachedRuntime = runtime;
-  if (cachedRuntime !== undefined) {
+  const cachedOpenReceive = openreceiveCache;
+  if (cachedOpenReceive !== undefined) {
     try {
-      const cached = await cachedRuntime;
       if (
-        cached.connectionString === connectionString &&
-        cached.storeCacheKey === storeCacheKey
+        cachedOpenReceive.connectionString === connectionString &&
+        cachedOpenReceive.storeCacheKey === storeCacheKey
       ) {
-        return cached;
+        return await cachedOpenReceive.server;
       }
     } catch {
-      if (runtime === cachedRuntime) runtime = undefined;
+      if (openreceiveCache === cachedOpenReceive) openreceiveCache = undefined;
     }
   }
 
-  const nextRuntime = createHelloFruitOpenReceiveOptions(connectionString).then((options) => ({
+  const nextServer = createHelloFruitOpenReceive(connectionString);
+  openreceiveCache = {
     connectionString,
     storeCacheKey,
-    ...createOpenReceiveNextRuntime(options)
-  }));
-  runtime = nextRuntime;
+    server: nextServer
+  };
 
   try {
-    return await nextRuntime;
+    return await nextServer;
   } catch (error) {
-    if (runtime === nextRuntime) runtime = undefined;
+    if (openreceiveCache?.server === nextServer) openreceiveCache = undefined;
     throw error;
   }
 }
 
-export async function createHelloFruitOpenReceiveOptions(
+export async function createHelloFruitOpenReceive(
   connectionString = readRequiredHelloFruitNwcConnectionString()
-): Promise<OpenReceiveNodeOptions> {
+): Promise<OpenReceiveServer> {
   const store = await createHelloFruitOpenReceiveKvStore({
     demoId: DEMO_ID
   });
-  const client = createNwcReceiveClient({
-    connectionString
-  });
-
   const priceCurrencies = readHelloFruitCatalogCurrencies();
 
-  return {
-    client,
+  return await createOpenReceive({
+    nwc: connectionString,
     store,
     merchantScope: () => "demo:hello-fruit-nextjs",
     priceProviders: createDefaultLivePriceProviders({ currencies: priceCurrencies }),
     priceCurrencies,
     unsafeAllowUnauthenticatedDemoMode: true,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID)
-  };
+  });
 }
 
 function currentStoreCacheKey(): string {
