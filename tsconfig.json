@@ -3,7 +3,7 @@
     "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
     "lib": [
-      "ES2023",
+      "ES2022",
       "DOM"
     ],
     "module": "ESNext",
@@ -12,7 +12,7 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "strict": true,
-    "target": "ES2023"
+    "target": "ES2022"
   },
   "include": [
     "packages/js/**/*.ts",

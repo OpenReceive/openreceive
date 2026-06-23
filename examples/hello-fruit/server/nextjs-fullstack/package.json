@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --experimental-strip-types ../../shared/require-openreceive-nwc.ts && next dev -H 127.0.0.1 -p 3002",
+    "dev": "tsx ../../shared/require-openreceive-nwc.ts && next dev -H 127.0.0.1 -p 3002",
     "build": "next build",
-    "start": "node --experimental-strip-types ../../shared/require-openreceive-nwc.ts && next start -H 0.0.0.0 -p ${PORT:-3002}",
+    "start": "tsx ../../shared/require-openreceive-nwc.ts && next start -H 0.0.0.0 -p ${PORT:-3002}",
     "openreceive:poll": "openreceive poll --once"
   },
   "dependencies": {
@@ -14,7 +14,7 @@
     "@openreceive/core": "0.1.0",
     "@openreceive/node": "0.1.0",
     "@openreceive/react": "0.1.0",
-    "next": "*",
+    "next": "^15.5.19",
     "pg": "^8.22.0",
     "react": "*",
     "react-dom": "*"

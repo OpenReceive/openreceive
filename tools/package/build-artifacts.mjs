@@ -254,7 +254,7 @@ function transpileTypeScript(source, fileName) {
   const result = ts.transpileModule(source, {
     fileName,
     compilerOptions: {
-      target: ts.ScriptTarget.ES2023,
+      target: ts.ScriptTarget.ES2022,
       module: ts.ModuleKind.ESNext,
       jsx: ts.JsxEmit.ReactJSX,
       verbatimModuleSyntax: true,

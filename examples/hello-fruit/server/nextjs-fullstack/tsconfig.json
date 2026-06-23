@@ -7,7 +7,10 @@
       {
         "name": "next"
       }
-    ]
+    ],
+    "allowJs": true,
+    "esModuleInterop": true,
+    "jsx": "preserve"
   },
   "include": [
     "next-env.d.ts",

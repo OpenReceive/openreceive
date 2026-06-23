@@ -16,7 +16,7 @@ const demoContainers = [
     port: "3000",
     namespace: "hello_fruit_express",
     buildScript: "vite build",
-    startScript: "node --experimental-strip-types ../../shared/require-openreceive-nwc.ts && node --experimental-strip-types src/server/production.ts"
+    startScript: "tsx ../../shared/require-openreceive-nwc.ts && tsx src/server/production.ts"
   },
   {
     id: "static-html-small-api",
@@ -27,7 +27,7 @@ const demoContainers = [
     port: "3001",
     namespace: "hello_fruit_static",
     buildScript: "vite build",
-    startScript: "node --experimental-strip-types ../../shared/require-openreceive-nwc.ts && node --experimental-strip-types src/server/production.ts"
+    startScript: "tsx ../../shared/require-openreceive-nwc.ts && tsx src/server/production.ts"
   },
   {
     id: "nextjs-fullstack",
@@ -38,7 +38,7 @@ const demoContainers = [
     port: "3002",
     namespace: "hello_fruit_nextjs",
     buildScript: "next build",
-    startScript: "node --experimental-strip-types ../../shared/require-openreceive-nwc.ts && next start -H 0.0.0.0 -p ${PORT:-3002}"
+    startScript: "tsx ../../shared/require-openreceive-nwc.ts && next start -H 0.0.0.0 -p ${PORT:-3002}"
   }
 ];
 
@@ -127,7 +127,7 @@ function validateDockerfile(demo) {
   const nodeEnvIndex = text.indexOf("ENV NODE_ENV=production");
 
   forbidSecrets(relativePath, text);
-  expect(/^FROM node:22-bookworm-slim$/m.test(text), `${relativePath}: must use the pinned Node 22 slim base image`);
+  expect(/^FROM node:20-bookworm-slim$/m.test(text), `${relativePath}: must use the pinned Node 20 slim base image`);
   expect(text.includes("COPY package.json package-lock.json ./"), `${relativePath}: must copy root package manifests`);
   expect(text.includes("COPY packages ./packages"), `${relativePath}: must copy local packages`);
   expect(text.includes("COPY examples/hello-fruit ./examples/hello-fruit"), `${relativePath}: must copy Hello Fruit sources`);

@@ -7,7 +7,6 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { InMemoryInvoiceKvStore } from "../../packages/js/core/src/index.ts";
 import {
@@ -27,6 +26,8 @@ import {
 } from "../../packages/js/node/src/index.ts";
 import { runOpenReceiveCli } from "../../packages/js/node/src/cli.ts";
 
+const BuiltInSqliteDatabaseSync = await loadBuiltInSqliteDatabaseSync();
+
 const NWC_URI =
   "nostr+walletconnect://" +
   "1".repeat(64) +
@@ -44,6 +45,27 @@ const NWC_INFO_VECTORS = JSON.parse(
 const NWC_REQUEST_RESPONSE_VECTORS = JSON.parse(
   readFileSync("spec/test-vectors/nwc-request-response.json", "utf8")
 );
+
+async function loadBuiltInSqliteDatabaseSync() {
+  try {
+    const sqlite = await import(`node:${"sqlite"}`);
+    return sqlite.DatabaseSync;
+  } catch {
+    return undefined;
+  }
+}
+
+function sqliteTest(name, fn) {
+  test(
+    name,
+    {
+      skip: BuiltInSqliteDatabaseSync === undefined
+        ? "built-in SQLite is unavailable in this Node runtime"
+        : false
+    },
+    async () => fn(BuiltInSqliteDatabaseSync)
+  );
+}
 
 class FakeAlbyClient {
   makeInvoiceParams = [];
@@ -285,7 +307,7 @@ test("Node SQL store DDL uses opaque records and meta rows", () => {
   assert.doesNotMatch(OPENRECEIVE_SQLITE_MIGRATION_SQL, /settled_at INTEGER/);
 });
 
-test("Node SQLite KV store owns records, indexes, revisions, and meta CAS", async () => {
+sqliteTest("Node SQLite KV store owns records, indexes, revisions, and meta CAS", async (DatabaseSync) => {
   const database = new DatabaseSync(":memory:");
   try {
     const client = createOpenReceiveSqliteQueryClient(database);
@@ -337,7 +359,7 @@ test("Node SQLite KV store owns records, indexes, revisions, and meta CAS", asyn
   }
 });
 
-test("resolveOpenReceiveStore supports memory and local-sqlite stores", async () => {
+sqliteTest("resolveOpenReceiveStore supports memory and local-sqlite stores", async () => {
   const memory = await resolveOpenReceiveStore("memory:");
   assert.equal(memory instanceof InMemoryInvoiceKvStore, true);
 
@@ -364,7 +386,7 @@ test("resolveOpenReceiveStore supports memory and local-sqlite stores", async ()
   }
 });
 
-test("resolveOpenReceiveStore defaults to local-sqlite when OPENRECEIVE_STORE is omitted", async () => {
+sqliteTest("resolveOpenReceiveStore defaults to local-sqlite when OPENRECEIVE_STORE is omitted", async () => {
   const tempRoot = mkdtempSync(path.join(tmpdir(), "openreceive-store-default-"));
   try {
     const store = await resolveOpenReceiveStore(undefined, {
@@ -433,7 +455,7 @@ test("createOpenReceive builds server handlers from a client and store", async (
   assert.equal(openreceive.handlers, openreceive.runtime.handlers);
 });
 
-test("Node CLI initializes worker-free config and doctors local-sqlite", async () => {
+sqliteTest("Node CLI initializes worker-free config and doctors local-sqlite", async (DatabaseSync) => {
   const tempRoot = mkdtempSync(path.join(tmpdir(), "openreceive-node-cli-"));
   const stdout = [];
   const stderr = [];

@@ -8,7 +8,7 @@
     "@openreceive/node": "0.1.0"
   },
   "peerDependencies": {
-    "next": "*"
+    "next": "^15.0.0"
   },
   "peerDependenciesMeta": {
     "next": {

@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --experimental-strip-types ../../shared/require-openreceive-nwc.ts && vite --host 127.0.0.1",
+    "dev": "tsx ../../shared/require-openreceive-nwc.ts && vite --host 127.0.0.1",
     "build": "vite build",
-    "preview": "node --experimental-strip-types ../../shared/require-openreceive-nwc.ts && vite preview --host 127.0.0.1",
-    "start": "node --experimental-strip-types ../../shared/require-openreceive-nwc.ts && node --experimental-strip-types src/server/production.ts",
+    "preview": "tsx ../../shared/require-openreceive-nwc.ts && vite preview --host 127.0.0.1",
+    "start": "tsx ../../shared/require-openreceive-nwc.ts && tsx src/server/production.ts",
     "openreceive:poll": "openreceive poll --once"
   },
   "dependencies": {
@@ -15,12 +15,12 @@
     "@openreceive/core": "0.1.0",
     "@openreceive/node": "0.1.0",
     "@openreceive/react": "0.1.0",
-    "@vitejs/plugin-react": "*",
+    "@vitejs/plugin-react": "^4.7.0",
     "express": "*",
     "pg": "^8.22.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "vite": "*"
+    "vite": "^6.4.3"
   },
   "devDependencies": {
     "typescript": "*"
