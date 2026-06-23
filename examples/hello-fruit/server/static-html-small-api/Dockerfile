@@ -9,7 +9,6 @@ COPY packages/js/angular/package.json ./packages/js/angular/package.json
 COPY packages/js/browser/package.json ./packages/js/browser/package.json
 COPY packages/js/core/package.json ./packages/js/core/package.json
 COPY packages/js/elements/package.json ./packages/js/elements/package.json
-COPY packages/js/next/package.json ./packages/js/next/package.json
 COPY packages/js/node/package.json ./packages/js/node/package.json
 COPY packages/js/provider-data/package.json ./packages/js/provider-data/package.json
 COPY packages/js/react/package.json ./packages/js/react/package.json

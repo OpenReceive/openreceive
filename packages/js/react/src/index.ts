@@ -222,13 +222,13 @@ export interface CheckoutProps
   readonly children?: CheckoutChildren;
 }
 
-export interface UseOpenReceiveThemeOptions {
+export interface UseThemeOptions {
   readonly defaultTheme?: OpenReceiveThemePreference;
   readonly storageKey?: string;
   readonly storage?: Storage;
 }
 
-export interface UseOpenReceiveThemeResult {
+export interface UseThemeResult {
   readonly theme: OpenReceiveThemePreference;
   readonly resolvedTheme: OpenReceiveResolvedTheme;
   readonly model: OpenReceiveThemeModel;
@@ -240,7 +240,7 @@ export interface UseOpenReceiveThemeResult {
   toggleTheme(): void;
 }
 
-export interface OpenReceiveThemeToggleProps
+export interface ThemeToggleProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   readonly theme?: OpenReceiveThemePreference;
   readonly resolvedTheme?: OpenReceiveResolvedTheme;
@@ -250,7 +250,7 @@ export interface OpenReceiveThemeToggleProps
 
 export type ThemeScopeChildren =
   | React.ReactNode
-  | ((theme: UseOpenReceiveThemeResult) => React.ReactNode);
+  | ((theme: UseThemeResult) => React.ReactNode);
 
 export interface ThemeScopeProps
   extends Omit<React.HTMLAttributes<HTMLElement>, "children"> {
@@ -265,7 +265,7 @@ export interface ThemeScopeProps
   readonly children?: ThemeScopeChildren;
 }
 
-export interface OpenReceivePaymentWizardProps {
+export interface PaymentWizardProps {
   readonly invoice: string;
   readonly className?: string;
   readonly logger?: OpenReceiveBrowserLogger;
@@ -720,9 +720,9 @@ export function PaymentState(
   );
 }
 
-export function useOpenReceiveTheme(
-  options: UseOpenReceiveThemeOptions = {}
-): UseOpenReceiveThemeResult {
+export function useTheme(
+  options: UseThemeOptions = {}
+): UseThemeResult {
   const storageKey = options.storageKey ?? OPENRECEIVE_THEME_STORAGE_KEY;
   const [theme, setThemeState] = React.useState<OpenReceiveThemePreference>(
     () => readOpenReceiveThemePreference({
@@ -770,8 +770,8 @@ export function useOpenReceiveTheme(
   };
 }
 
-export function OpenReceiveThemeToggle(
-  props: OpenReceiveThemeToggleProps
+export function ThemeToggle(
+  props: ThemeToggleProps
 ): React.ReactElement {
   const {
     theme,
@@ -783,7 +783,7 @@ export function OpenReceiveThemeToggle(
     onClick,
     ...buttonProps
   } = props;
-  const fallback = useOpenReceiveTheme({
+  const fallback = useTheme({
     defaultTheme: theme
   });
   const activeTheme = resolvedTheme ?? fallback.resolvedTheme;
@@ -853,7 +853,7 @@ export function ThemeScope(
     children,
     ...elementProps
   } = props;
-  const theme = useOpenReceiveTheme({
+  const theme = useTheme({
     defaultTheme,
     storageKey: themeStorageKey,
     storage
@@ -875,7 +875,7 @@ export function ThemeScope(
             className: topbarClassName,
             key: "openreceive-theme-scope-toggle"
           },
-          React.createElement(OpenReceiveThemeToggle, {
+          React.createElement(ThemeToggle, {
             className: themeToggleClassName,
             theme: theme.theme,
             resolvedTheme: theme.resolvedTheme,
@@ -889,7 +889,7 @@ export function ThemeScope(
   );
 }
 
-export function OpenReceiveWaitingState(props: {
+export function WaitingState(props: {
   readonly waiting?: boolean;
   readonly phase?: CheckoutPhase;
   readonly status?: CheckoutStatusModel;
@@ -924,8 +924,8 @@ export function OpenReceiveWaitingState(props: {
   );
 }
 
-export function OpenReceivePaymentWizard(
-  props: OpenReceivePaymentWizardProps
+export function PaymentWizard(
+  props: PaymentWizardProps
 ): React.ReactElement {
   const countryStorageKey =
     props.countryStorageKey ?? OPENRECEIVE_COUNTRY_STORAGE_KEY;
@@ -1538,7 +1538,7 @@ export function Checkout(
     onState,
     onPaid
   });
-  const theme = useOpenReceiveTheme({
+  const theme = useTheme({
     defaultTheme,
     storageKey: themeStorageKey
   });
@@ -1571,7 +1571,7 @@ export function Checkout(
     customChildren === undefined
       ? [
         themeSwitcher
-          ? React.createElement(OpenReceiveThemeToggle, {
+          ? React.createElement(ThemeToggle, {
             key: "theme",
             className: classNames?.themeToggle,
             theme: theme.theme,
@@ -1595,7 +1595,7 @@ export function Checkout(
               width: "min(100%, 420px)"
             }
           }),
-        React.createElement(OpenReceiveWaitingState, {
+        React.createElement(WaitingState, {
           key: "waiting",
           waiting: checkoutModel.waiting,
           statusTitle: checkoutModel.statusTitle,
@@ -1649,7 +1649,7 @@ export function Checkout(
             })
         ),
         paymentWizard && !expired
-          ? React.createElement(OpenReceivePaymentWizard, {
+          ? React.createElement(PaymentWizard, {
             key: "wizard",
             invoice: checkoutModel.invoice,
             className: classNames?.wizard,

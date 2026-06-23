@@ -46,7 +46,8 @@ function workspacePackages() {
 const rootPackage = readJson("package.json");
 const packages = workspacePackages();
 const changelog = read("CHANGELOG.md");
-const releaseDocs = read("docs/12-release-process.md");
+const releaseDocsPath = "docs/internal/release-process.md";
+const releaseDocs = read(releaseDocsPath);
 
 expect(rootPackage.name === "openreceive", "package.json: root package name must be openreceive");
 expect(rootPackage.version === "0.1.0", "package.json: root version must be 0.1.0");
@@ -76,7 +77,7 @@ for (const phrase of [
 for (const { manifest } of packages) {
   expect(
     releaseDocs.includes(`\`${manifest.name}\``),
-    `docs/12-release-process.md: missing ${manifest.name}`
+    `${releaseDocsPath}: missing ${manifest.name}`
   );
 }
 for (const phrase of [
@@ -90,7 +91,7 @@ for (const phrase of [
   "Live wallet smoke passes when a trusted `OPENRECEIVE_NWC` is available.",
   "Do not publish"
 ]) {
-  expect(releaseDocs.includes(phrase), `docs/12-release-process.md: missing ${phrase}`);
+  expect(releaseDocs.includes(phrase), `${releaseDocsPath}: missing ${phrase}`);
 }
 
 if (findings.length > 0) {

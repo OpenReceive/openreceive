@@ -29,8 +29,8 @@ ownership:
 - `spec/schemas/**`
 - `spec/test-vectors/**`
 - `spec/data/**`
-- `docs/adr/**`
-- `docs/v0.1-scope-lock.md`
+- `docs/internal/adr/**`
+- `docs/internal/scope-lock.md`
 - `packages/js/core/src/nwc/**`
 
 Do not add a new SDK, framework adapter, demo, or provider-data package unless
@@ -39,10 +39,22 @@ the behavior.
 
 ## Testing
 
-Run the smallest relevant command before finishing:
+Run the smallest relevant command while iterating:
 
 ```sh
 npm test
+```
+
+Before declaring work done, run the real local gate:
+
+```sh
+npm run test:ci
+```
+
+If `npm run test:ci` is too broad for a narrow change, run at minimum:
+
+```sh
+npm run typecheck && npm run test:js
 ```
 
 When touching live wallet behavior, also run:

@@ -9,9 +9,9 @@ const secretScanner = path.join(process.cwd(), "tools/validate/scan-secrets.mjs"
 const clientBundleScanner = path.join(process.cwd(), "tools/validate/scan-client-bundles.mjs");
 const demoContainerValidator = path.join(process.cwd(), "tools/validate/check-demo-containers.mjs");
 const demoDeployValidator = path.join(process.cwd(), "tools/validate/check-demo-deploy.mjs");
-const demoDeploymentDocs = path.join(process.cwd(), "docs/13-demo-deployment.md");
-const supportedDatabaseDocs = path.join(process.cwd(), "docs/16-supported-databases.md");
-const nodeQuickstartDocs = path.join(process.cwd(), "docs/01-quickstart-node.md");
+const demoDeploymentDocs = path.join(process.cwd(), "docs/internal/demo-deployment.md");
+const supportedDatabaseDocs = path.join(process.cwd(), "docs/guides/storage.md");
+const nodeQuickstartDocs = path.join(process.cwd(), "docs/guides/quickstart-node.md");
 const invoiceStorageSchema = path.join(process.cwd(), "spec/schemas/invoice-storage.schema.json");
 const storageKvVectors = path.join(process.cwd(), "spec/test-vectors/storage-kv.json");
 const releaseReadinessValidator = path.join(process.cwd(), "tools/validate/check-release-readiness.mjs");
@@ -70,22 +70,22 @@ function runDemoDeployValidator() {
   });
 }
 
-test("workspace metadata does not reference removed express package", () => {
+test("workspace metadata does not reference removed express or next packages", () => {
   assert.equal(existsSync(path.join(process.cwd(), "packages/js/express")), false);
+  assert.equal(existsSync(path.join(process.cwd(), "packages/js/next")), false);
 
   for (const relativePath of [
     "package.json",
     "package-lock.json",
     "packages/js/node/package.json",
-    "packages/js/next/package.json",
     "examples/hello-fruit/server/node-express-react/package.json",
     "examples/hello-fruit/server/static-html-small-api/package.json",
     "examples/hello-fruit/server/nextjs-fullstack/package.json",
-    "docs/12-release-process.md",
-    "docs/sdk-status.md"
+    "docs/internal/release-process.md",
+    "docs/internal/scope-lock.md"
   ]) {
     const text = readFileSync(path.join(process.cwd(), relativePath), "utf8");
-    assert.doesNotMatch(text, /@openreceive\/express|packages\/js\/express/, relativePath);
+    assert.doesNotMatch(text, /@openreceive\/express|packages\/js\/express|@openreceive\/next|packages\/js\/next/, relativePath);
   }
 });
 
@@ -144,7 +144,7 @@ function runRubyLiveNwcSmoke(env) {
 }
 
 test("demo container validator accepts current Hello Fruit templates", () => {
-  assert.match(runDemoContainerValidator(), /Demo container validation passed for 5 demo\(s\)\./);
+  assert.match(runDemoContainerValidator(), /Demo container validation passed for 4 demo\(s\)\./);
 });
 
 test("demo deployment validator accepts public deploy templates", () => {
@@ -163,7 +163,7 @@ test("demo deployment docs preserve public edge and runner boundaries", () => {
 });
 
 test("release readiness validator accepts current v0.1 metadata", () => {
-  assert.match(runReleaseReadinessValidator(), /Release readiness validation passed for 11 package\(s\)\./);
+  assert.match(runReleaseReadinessValidator(), /Release readiness validation passed for 10 package\(s\)\./);
 });
 
 test("workflow validator accepts safe public workflow skeletons", () => {
@@ -174,14 +174,12 @@ test("supported database docs keep invoice storage boundaries narrow", () => {
   const docs = readFileSync(supportedDatabaseDocs, "utf8");
   const quickstart = readFileSync(nodeQuickstartDocs, "utf8");
 
-  assert.match(docs, /\| Node \| `postgres:\/\/\.\.\.` \| Supported \|/);
-  assert.match(docs, /\| Node \| `sqlite:\/path\/to\/openreceive\.sqlite3` \| Supported \|/);
-  assert.match(docs, /\| Node \| `local-sqlite` \| Supported \|/);
-  assert.match(docs, /\| Node \| `mysql:\/\/\.\.\.` \| Deferred \|/);
-  assert.match(docs, /\| Node \| `redis:\/\/\.\.\.` \/ `rediss:\/\/\.\.\.` \| Deferred \|/);
-  assert.match(docs, /S3\/object storage, and Cloudflare Workers KV are not supported storage targets/);
-  assert.match(docs, /MySQL, Redis\/Upstash, and Cloudflare Durable Object storage remain transport\s+targets only after they ship package-owned adapters/);
-  assert.match(docs, /Apps keep business data in app-owned tables/);
+  assert.match(docs, /\| `postgres:\/\/\.\.\.` \| Supported for Node \|/);
+  assert.match(docs, /\| `sqlite:\/path\/to\/openreceive\.sqlite3` \| Supported for Node \|/);
+  assert.match(docs, /\| `local-sqlite` \| Supported for Node \|/);
+  assert.match(docs, /Cloudflare Workers KV/);
+  assert.match(docs, /OpenReceive owns its invoice storage/);
+  assert.match(docs, /Your app keeps orders, carts, users/);
   assert.match(quickstart, /package-owned Postgres or SQLite invoice store/);
 });
 

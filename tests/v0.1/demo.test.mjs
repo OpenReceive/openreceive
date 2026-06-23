@@ -1077,7 +1077,7 @@ test("Hello Fruit hosted demo routes expose health, source, docs, robots, and si
       assert.equal(docs.status, 302, `${demo.name}: docs status`);
       assert.equal(
         docs.headers.get("location"),
-        "https://github.com/openreceive/openreceive/blob/main/docs/01-quickstart-node.md"
+        "https://github.com/openreceive/openreceive/blob/main/docs/guides/quickstart-node.md"
       );
 
       const robots = await dispatch(app, {
@@ -1122,7 +1122,7 @@ test("Hello Fruit hosted demo routes expose health, source, docs, robots, and si
     assert.equal(nextDocs.status, 302, "nextjs-fullstack: docs status");
     assert.equal(
       nextDocs.headers.get("location"),
-      "https://github.com/openreceive/openreceive/blob/main/docs/05-frontend-checkout.md"
+      "https://github.com/openreceive/openreceive/blob/main/docs/guides/frontend-checkout.md"
     );
 
     assert.equal(nextRobotsDynamic, "force-dynamic");

@@ -1,0 +1,41 @@
+# Language Support
+
+The current working reference path is Node plus browser checkout packages. Use
+[Node Framework Quickstart](quickstart-node.md) for copy-pasteable integration
+code.
+
+## Node
+
+Node is the v0.1 supported path:
+
+- `@openreceive/node` mounts Express, Fetch-style, and raw Node routes.
+- `@openreceive/browser` creates display-safe invoices and browser helpers.
+- `@openreceive/react` and `@openreceive/elements` render checkout UI.
+
+## Rails
+
+Rails support is initial proof work. The `openreceive` and `openreceive-rails`
+Ruby packages live in this repository with tests, route helpers, generated
+tasks, package-owned SQLite storage, Hotwire partials, and a Rails Hotwire demo
+skeleton.
+
+Treat Rails as experimental until the Rails smoke and live-wallet proof gaps
+are closed. The active demo is:
+
+```sh
+npm run demo rails
+```
+
+## Python
+
+There is no Python package yet. Future FastAPI, Django, Flask, or Starlette
+work should keep `OPENRECEIVE_NWC` server-side, mount `/openreceive/v1`, use
+package-owned invoice storage, and treat backend `lookup_invoice` as the
+settlement authority.
+
+## PHP
+
+There is no PHP package yet. Future Laravel, Symfony, or plain PHP work should
+follow the same server-owned model: your app keeps auth and fulfillment, while
+OpenReceive owns invoice creation, lookup, recovery, and settlement-action
+state.

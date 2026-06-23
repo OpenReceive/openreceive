@@ -1,9 +1,39 @@
-# Framework Auth And Browser Security
+# Authorization
 
 OpenReceive mounts inside the app you already deploy. It does not define a
-separate user-auth system; your app supplies the authorization hooks.
+separate user-auth system. Your app supplies a merchant scope and the
+authorization hooks for the routes it exposes.
 
-## The Three Hooks
+## Merchant Scope
+
+`merchantScope` is a function on `createOpenReceive()`:
+
+```ts
+import { createOpenReceive } from "@openreceive/node";
+
+export const openreceive = await createOpenReceive({
+  nwc: process.env.OPENRECEIVE_NWC!,
+  merchantScope: (req) => req.user?.tenantId ?? "default",
+  authorize: {
+    request: (req) => Boolean(req.user),
+    invoice: (req, invoice) => ownsInvoice(req, invoice),
+    scheduler: (req) => isInternalScheduler(req)
+  },
+  cronSecret: process.env.OPENRECEIVE_CRON_SECRET
+});
+```
+
+Use one stable scope per tenant, store, checkout surface, or app section that
+must not share idempotency keys. The idempotency scope is:
+
+```text
+merchant_scope + operation + idempotency_key
+```
+
+The default is `() => "default"`. Keep the scope stable for all requests that
+should replay the same invoice.
+
+## Authorization Hooks
 
 `createOpenReceive()` accepts one public authorization object:
 
@@ -15,7 +45,9 @@ authorize: {
 }
 ```
 
-`authorize.request` gates invoice creation.
+`authorize.request` gates invoice creation. Use it for signed-in users, guest
+checkout tokens, cart sessions, or whatever already authorizes checkout in
+your app.
 
 `authorize.invoice` gates read, lookup, and refresh for an existing invoice.
 Use the same ownership rule you use for the order, cart, checkout session, or
@@ -31,11 +63,13 @@ import { createOpenReceive } from "@openreceive/node";
 
 export const openreceive = await createOpenReceive({
   nwc: process.env.OPENRECEIVE_NWC!,
+  merchantScope: (req) => req.user?.tenantId ?? "default",
   authorize: {
     request: (req) => Boolean(req.user),
     invoice: (req, invoice) => ownsInvoice(req, invoice),
     scheduler: (req) => isInternalScheduler(req)
   },
+  cronSecret: process.env.OPENRECEIVE_CRON_SECRET,
   csrf: (req) => verifyCsrf(req),
   cors: {
     allowed_origins: ["https://shop.example"],
@@ -75,6 +109,10 @@ await createOpenReceive({
   unsafeAllowUnauthenticatedDemoMode: true
 });
 ```
+
+In a production build you must also set
+`OPENRECEIVE_ALLOW_UNAUTHENTICATED_DEMO=true`; this double opt-in exists so you
+cannot ship unauthenticated checkout by accident.
 
 Production apps should provide authorization, CSRF protection for cookie POSTs,
 and scheduler authorization when they expose the poll route.

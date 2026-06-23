@@ -1,10 +1,8 @@
 # Provider Registry
 
-OpenReceive keeps provider suggestions separate from invoice creation.
-The canonical v0.1 registry lives in
-`packages/js/provider-data/src/data/openreceive-providers.v4.json`.
-It is the source used by the JavaScript runtime package, docs validation,
-provider-route vectors, and payment-wizard suggestions.
+OpenReceive keeps provider suggestions separate from invoice creation. Provider
+routes help the payer choose a starting point, while the actual payment still
+settles to one Lightning invoice created by your server.
 
 The registry is static data. It does not prove that a provider will complete a
 payment, quote a particular fee, support a user in a specific jurisdiction, or
@@ -42,10 +40,6 @@ at remote favicon URLs.
 The Express adapter exposes the same static data through display-safe helper
 routes at `GET /openreceive/v1/providers` and `GET /openreceive/v1/routes`.
 
-The package also exports the master-plan getter names for generated provider
-data: `getAssets()`, `getProviders()`, `getCryptoRoutes()`, `getFiatRails()`,
-`getCountries()`, `getProvider(id)`, and `getDisqualifiedProviders()`.
-
 ## Route Model
 
 Crypto routes start with an asset such as `btc`, `usdt`, or `eth` and resolve to
@@ -65,17 +59,3 @@ Provider entries include conservative availability metadata:
 - `us: false` means the registry currently marks the provider as unavailable to
   US users.
 - `us: null` means the registry does not make a US availability claim.
-
-## Validation
-
-`npm run validate` checks the v4 registry version, counts, provider references,
-route references, local icon/tutorial paths, duplicate route or country ids,
-duplicate provider refs inside routes, and ranked route order. Package tests
-check that helper functions preserve canonical route order and ranked fiat routes.
-`validateRegistry()` exposes the embeddable reference checks as `{ valid,
-errors }` so applications and generated packages can inspect private registry
-copies without terminating the current process.
-
-Provider claims require evidence URLs or conservative caveats. Do not add new
-claims by editing package code; update the canonical registry and validation in
-the same change.

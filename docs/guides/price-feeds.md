@@ -27,7 +27,7 @@ floating point for fiat-to-sat conversion.
 
 ## Source Order
 
-The planned source order is:
+The default source order is:
 
 1. `static_mock`
 2. `openreceive_mirror`

@@ -4,6 +4,18 @@ OpenReceive runs inside your app. Your server creates invoices with a
 server-only receive NWC, your browser receives display-safe invoice data, and
 backend lookup decides when payment settled.
 
+The `@openreceive/*` packages are private until publishing is explicitly
+approved. To run the reference path today, clone this repository and use the
+demos:
+
+```sh
+npm install
+npm run demo node
+```
+
+The install command below is the integration shape for a normal app once the
+packages are published.
+
 ## Install
 
 ```sh
@@ -25,6 +37,16 @@ production.
 OpenReceive owns a package-owned Postgres or SQLite invoice store. Your app
 keeps orders, carts, users, and fulfillment state in its own tables.
 
+Scaffold and check the server config:
+
+```sh
+npx openreceive init
+npx openreceive doctor
+```
+
+`init` writes `.env.openreceive.example` with the expected variable names.
+`doctor` verifies storage, wallet preflight, and poll-route protection.
+
 ## Server
 
 Create `server/openreceive.ts`:
@@ -34,9 +56,13 @@ import { createOpenReceive } from "@openreceive/node";
 
 export const openreceive = await createOpenReceive({
   nwc: process.env.OPENRECEIVE_NWC!,
+  merchantScope: (req) => req.user?.tenantId ?? "default",
   authorize: {
-    request: (req) => Boolean(req.user)
+    request: (req) => Boolean(req.user),
+    invoice: (req, invoice) => ownsInvoice(req, invoice),
+    scheduler: (req) => isInternalScheduler(req)
   },
+  cronSecret: process.env.OPENRECEIVE_CRON_SECRET,
   onPaid: async ({ invoice, metadata }) => {
     await markOrderPaid({
       orderId: metadata.order_id,
@@ -46,6 +72,10 @@ export const openreceive = await createOpenReceive({
   }
 });
 ```
+
+`merchantScope` namespaces idempotency and invoice lookup inside one
+OpenReceive store. Use one stable scope per tenant, store, or checkout surface.
+The default is `() => "default"`.
 
 `onPaid` runs after backend-verified settlement and is delivered at least once.
 Make it idempotent by `payment_hash`, invoice id, or your own order id.
@@ -75,7 +105,9 @@ export const openreceive = await createOpenReceive({
 });
 ```
 
-Do not use demo mode for production.
+Do not use demo mode for production. In a production build you must also set
+`OPENRECEIVE_ALLOW_UNAUTHENTICATED_DEMO=true`; this double opt-in exists so
+you cannot ship unauthenticated checkout by accident.
 
 ## Client
 
@@ -102,16 +134,14 @@ server `onPaid` hook above.
 
 Every framework uses the same `createOpenReceive()` object.
 
-Fetch-style handlers:
+Express:
+
+Use `openreceive.mountExpress(app)` from the server step above.
+
+Next.js App Router:
 
 ```ts
-export const GET = ({ request }) => openreceive.handleFetch(request);
-export const POST = ({ request }) => openreceive.handleFetch(request);
-```
-
-Next.js App Router catch-all:
-
-```ts
+// app/openreceive/v1/[...openreceive]/route.ts
 import { openreceive } from "@/server/openreceive";
 
 export const dynamic = "force-dynamic";
@@ -123,11 +153,18 @@ export const GET = handle;
 export const POST = handle;
 ```
 
+Any framework whose route receives a Web `Request` and returns a `Response` can
+call `openreceive.handleFetch(request)` directly.
+
 Raw Node or Fastify:
 
 ```ts
 await openreceive.handleNode(req, res);
 ```
+
+This writes the OpenReceive response to the Node response object.
+
+## Production Add-Ons
 
 Advanced production apps usually add:
 
@@ -145,7 +182,7 @@ Run doctor during setup and deploy checks:
 npx openreceive doctor
 ```
 
-Normal checkout does not require a worker:
+OpenReceive runs inside your normal web process:
 
 ```text
 web process        mounts /openreceive/v1

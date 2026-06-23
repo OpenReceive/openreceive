@@ -71,7 +71,7 @@ export function sourceRedirectResponse(): Response {
 
 export function docsRedirectResponse(): Response {
   return Response.redirect(
-    `${GITHUB_REPOSITORY_URL}/blob/main/docs/05-frontend-checkout.md`,
+    `${GITHUB_REPOSITORY_URL}/blob/main/docs/guides/frontend-checkout.md`,
     302
   );
 }

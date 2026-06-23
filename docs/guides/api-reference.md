@@ -13,12 +13,13 @@ App-facing packages:
   `qrPngDataUrl`, `copyInvoice`, `openWallet`, and
   `createCheckoutController`.
 - `@openreceive/react`: `Checkout`, `useCheckout`, `CheckoutProvider`,
-  `ThemeScope`, `QRCode`, `CopyInvoiceButton`, `OpenWalletButton`, and
-  `InvoiceSummary`.
+  `ThemeScope`, `ThemeToggle`, `QRCode`, `CopyInvoiceButton`,
+  `OpenWalletButton`, `InvoiceSummary`, `WaitingState`, and `PaymentWizard`.
 - `@openreceive/elements`: `defineOpenReceiveElements` and the checkout/theme
   custom elements.
 
-Framework-adapter internals live under `@openreceive/browser/internal`.
+Framework-adapter internals live under `@openreceive/browser/internal` and are
+not part of the supported app surface.
 
 ## Create Invoice
 
@@ -26,7 +27,7 @@ Framework-adapter internals live under `@openreceive/browser/internal`.
 
 Required header:
 
-- `Idempotency-Key`: stable for your configured OpenReceive scope and create
+- `Idempotency-Key`: stable for your configured `merchantScope` and create
   operation.
 
 Request body uses exactly one amount input:
@@ -67,7 +68,7 @@ in the server `onPaid` hook. A preimage alone is not settlement proof.
 
 Required header:
 
-- `Idempotency-Key`: stable for your configured OpenReceive scope and refresh
+- `Idempotency-Key`: stable for your configured `merchantScope` and refresh
   operation.
 
 Refresh creates a linked replacement invoice after expiry or failure. It never

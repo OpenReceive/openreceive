@@ -54,16 +54,6 @@ const railsDemoContainers = [
     openreceiveVolume: "openreceive-rails-openreceive:/app/examples/hello-fruit/server/rails-hotwire/.openreceive",
     appStorageVolumeName: "openreceive-rails-storage",
     openreceiveVolumeName: "openreceive-rails-openreceive"
-  },
-  {
-    id: "rails-react",
-    dir: "examples/hello-fruit/server/rails-react",
-    service: "hello-fruit-rails-react",
-    image: "ghcr.io/openreceive/demo-rails-react:local",
-    port: "3003",
-    namespace: "hello_fruit_rails_react",
-    openreceiveVolume: "openreceive-rails-react-openreceive:/app/examples/hello-fruit/server/rails-react/.openreceive",
-    openreceiveVolumeName: "openreceive-rails-react-openreceive"
   }
 ];
 

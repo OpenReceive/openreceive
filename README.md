@@ -35,7 +35,7 @@ sticker. Pick a stack:
 npm run demo node      # Express + React          http://localhost:3000
 npm run demo static    # Static HTML + small API   http://localhost:3001
 npm run demo nextjs    # Next.js fullstack         http://localhost:3002
-npm run demo rails     # Rails + Hotwire           http://localhost:3003
+npm run demo rails     # Rails + Hotwire skeleton  http://localhost:3003
 ```
 
 Each command creates a root `.env` if missing, validates `OPENRECEIVE_NWC`, and
@@ -44,8 +44,8 @@ demo stacks start a local Postgres container, wait for it to become healthy,
 run the package-owned OpenReceive invoice migration, and record the OpenReceive
 schema version before store queries. The JS local overrides run Vite or Next.js
 development servers inside Docker so browser errors stay readable. The Rails
-demo container runs `rails db:prepare` for its SQLite-backed ActiveRecord store
-before booting.
+Hotwire demo is experimental skeleton work; its container runs
+`rails db:prepare` for its SQLite-backed ActiveRecord store before booting.
 Buying fruit creates a live Lightning invoice through your own wallet, so set a
 valid receive-only `OPENRECEIVE_NWC` string (for example from Rizful or Alby
 Hub) in `.env` before starting a demo. Demos refuse to boot when
@@ -122,13 +122,12 @@ checkout always needs a backend component controlled by your application.
 
 ## Docs
 
-Public docs live in `docs/` and are indexed by `docs/manifest.json`.
+Developer docs start at `docs/guides/README.md` and are indexed by
+`docs/manifest.json`.
 
-- `docs/01-quickstart-node.md` is the current working backend quickstart.
-- `docs/17-background-workers.md` explains route-driven recovery and optional
-  one-shot poll scheduling on common hosts.
-- `docs/11-conformance.md` covers shared vectors, mock wallet, and live wallet
-  smoke expectations.
-- `docs/13-demo-deployment.md` covers the separate demo edge and deployment
-  boundary.
-- `docs/sdk-status.md` tracks implemented packages versus planned SDKs.
+- `docs/guides/quickstart-node.md` is the current working backend quickstart.
+- `docs/guides/frontend-checkout.md` covers browser helpers and UI packages.
+- `docs/guides/deployment-and-recovery.md` explains host setup and optional
+  one-shot poll scheduling.
+- `docs/internal/README.md` is the contributor entry point for architecture,
+  conformance, release, package ownership, and ADR docs.

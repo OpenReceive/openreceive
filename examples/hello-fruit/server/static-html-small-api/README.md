@@ -42,7 +42,7 @@ OpenReceive schema before store queries.
 
 The package exposes `npm run openreceive:poll` for an optional one-shot
 scheduled reconciliation pass through the protected `/openreceive/v1/poll`
-route. There is no demo worker or notification listener process.
+route. Normal checkout recovery happens through backend lookup routes.
 
 The Makefile exposes the standard demo commands: `make setup`, `make dev`,
 `make test`, `make demo-test-nwc`, `make demo-production`,
@@ -57,4 +57,4 @@ Hosted-demo helpers expose `/healthz`, `/source`, `/docs`, `/robots.txt`, and
 This demo uses `unsafeAllowUnauthenticatedDemoMode` because it is a local
 single-user example. Production apps use app auth, CSRF hooks, and protected
 poll authorization;
-see [Background Process Deployment](../../../../docs/17-background-workers.md).
+see [Deployment And Recovery](../../../../docs/guides/deployment-and-recovery.md).

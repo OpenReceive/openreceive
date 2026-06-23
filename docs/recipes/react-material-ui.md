@@ -1,7 +1,8 @@
 # React Material UI Recipe
 
-This recipe uses `@openreceive/react` primitives with Material UI components.
-It is a composition example, not a dependency of OpenReceive.
+This recipe uses the individual `@openreceive/react` checkout components with
+Material UI components. It is a composition example, not a dependency of
+OpenReceive.
 
 Frontend code still receives only display-safe invoice data. The backend creates
 the invoice, performs lookup, and owns your settlement actions.

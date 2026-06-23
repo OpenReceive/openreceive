@@ -20,8 +20,7 @@ Implemented now:
 - optional mounted engine route/controller surface for `/v1/invoices` and `/v1/poll`
 - Hotwire/Turbo invoice partial for display-safe status updates
 
-There is no Rails notification listener or `payment_received` job in the
-v0.1-v2 path. Route-triggered recovery and optional poll recovery use backend
+Route-triggered recovery and optional poll recovery use backend
 `lookup_invoice`; settlement actions must be idempotent by `payment_hash`.
 
 The Rails storage surface is still initial proof work and will need full

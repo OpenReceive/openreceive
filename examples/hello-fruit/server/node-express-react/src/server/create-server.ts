@@ -58,7 +58,7 @@ export async function createHelloFruitServer() {
   mountHelloFruitHostedDemoRoutes(app, {
     id: DEMO_ID,
     sourcePath: "examples/hello-fruit/server/node-express-react",
-    docsPath: "docs/01-quickstart-node.md",
+    docsPath: "docs/guides/quickstart-node.md",
     walletConfigured: true,
     defaultPort: "3000"
   });

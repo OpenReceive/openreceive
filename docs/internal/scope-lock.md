@@ -24,7 +24,6 @@ These packages are in the repo and should stay under test:
 - `@openreceive/core`
 - `@openreceive/provider-data`
 - `@openreceive/testkit`
-- `@openreceive/next`
 
 They support the primary JS path, but the release promise is still the
 Node backend plus web checkout packages.

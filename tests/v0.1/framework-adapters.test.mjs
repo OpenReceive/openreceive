@@ -51,7 +51,6 @@ import {
   createOpenReceiveVueThemeToggleBinding,
   syncOpenReceiveStoredThemeControls as syncVueThemeControls
 } from "@openreceive/vue";
-import * as nextModule from "@openreceive/next";
 
 const snapshot = {
   invoice_id: "or_inv_test",
@@ -68,10 +67,6 @@ const snapshot = {
   workflow_state: "invoice_created",
   expires_at: 1999999999
 };
-
-test("Next package keeps routing on the OpenReceive server handleFetch method", () => {
-  assert.deepEqual(Object.keys(nextModule), []);
-});
 
 test("browser owns custom-element checkout attributes and listeners", () => {
   const createdElements = [];

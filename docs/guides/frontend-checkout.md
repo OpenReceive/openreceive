@@ -13,7 +13,9 @@ strings, wallet clients, and settlement actions on the backend.
 - `lightningUri(invoice)`, `qrSvg(invoice)`, and `qrPngDataUrl(invoice)` render
   BOLT11 payment data.
 - `copyInvoice({ invoice })` copies the BOLT11 string.
-- `openWallet({ invoice })` opens a `lightning:` URI.
+- `openWallet({ invoice })` launches the visitor's installed Lightning wallet
+  app with this invoice prefilled. Call it from your own "Open in wallet"
+  button's click handler.
 - `createCheckoutController(options)` powers advanced headless checkout flows.
 
 These helpers reject NWC connection strings. They work with BOLT11 invoices and
@@ -58,7 +60,9 @@ import { Checkout, ThemeScope } from "@openreceive/react";
 </ThemeScope>
 ```
 
-For primitive composition:
+To build your own checkout layout from the individual pieces (QR code, invoice
+summary, copy button, open-wallet button) instead of using the default
+`<Checkout>`:
 
 ```tsx
 import {
@@ -191,11 +195,3 @@ const logger = (entry) => console[entry.level]("[openreceive]", entry);
 
 <Checkout invoice={invoice} logger={logger} />;
 ```
-
-## Internal Subpath
-
-Framework adapters import shared labels, icon registries, custom-element
-contracts, theme helpers, and controller internals from
-`@openreceive/browser/internal`. That subpath is for OpenReceive packages and
-advanced adapter authors. App code should start with the top-level browser and
-React APIs above.

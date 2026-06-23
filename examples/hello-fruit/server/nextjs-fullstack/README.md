@@ -33,7 +33,7 @@ OpenReceive schema before store queries.
 
 The package exposes `npm run openreceive:poll` for an optional one-shot
 scheduled reconciliation pass through the protected `/openreceive/v1/poll`
-route. There is no demo worker or notification listener process.
+route. Normal checkout recovery happens through backend lookup routes.
 
 The production container exposes only port `3002` to the Docker network unless
 the local override is used.
@@ -44,4 +44,4 @@ the local override is used.
 checks. It never includes wallet connection strings or NWC query secrets.
 
 Production Node apps deploy the web process with protected poll authorization;
-see [Background Process Deployment](../../../../docs/17-background-workers.md).
+see [Deployment And Recovery](../../../../docs/guides/deployment-and-recovery.md).

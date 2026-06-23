@@ -27,18 +27,19 @@ through third-party services outside OpenReceive.
 
 ## Runtime Model
 
-There is no required OpenReceive daemon. Framework adapters run inside your
-app's normal server. Backend packages provide route-driven lookup recovery and
-an optional one-shot poll command for platform schedulers:
+OpenReceive runs inside your normal web process. Mount `/openreceive/v1`, and
+the browser checkout polls a backend lookup route to learn when an invoice
+settles. For extra recovery, you can optionally call
+`POST /openreceive/v1/poll` or `openreceive poll --once` on a schedule.
 
 ```text
-web                 your usual app command, mounts /openreceive/v1
-optional scheduler  POST /openreceive/v1/poll or openreceive poll --once
+web process        mounts /openreceive/v1
+browser checkout   polls /openreceive/v1/invoices/lookup
+optional scheduler POST /openreceive/v1/poll or openreceive poll --once
 ```
 
-There is no notification listener, webhook bridge, SSE bus, or in-memory
-coordination state. The durable OpenReceive store coordinates lookup gates,
-recovery sweeps, and settlement-action leases across web processes.
+The OpenReceive store is the only thing coordinating across processes. It
+keeps invoice, idempotency, lookup-gate, recovery, and settlement-action state.
 
 Local invoice expiry is not a settlement decision. If the server is down while
 an invoice expires, the poll process recovers that invoice after restart

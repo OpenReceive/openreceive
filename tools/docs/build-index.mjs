@@ -31,6 +31,7 @@ function validateDocEntry(entry, index, seenSlugs) {
 
   assert(typeof entry.title === "string" && entry.title.trim() !== "", `${label}: missing title`);
   assert(typeof entry.category === "string" && entry.category.trim() !== "", `${label}: missing category`);
+  assert(entry.audience === "developer" || entry.audience === "contributor", `${label}: invalid audience`);
   assert(typeof entry.public === "boolean", `${label}: public must be boolean`);
   assert(typeof entry.source_path === "string", `${label}: missing source_path`);
 
@@ -38,6 +39,22 @@ function validateDocEntry(entry, index, seenSlugs) {
   assert(normalized === entry.source_path, `${label}: source_path must be normalized`);
   assert(normalized.startsWith("docs/"), `${label}: source_path must stay under docs/`);
   assert(normalized.endsWith(".md"), `${label}: source_path must reference markdown`);
+  assert(
+    normalized.startsWith("docs/guides/") ||
+      normalized.startsWith("docs/internal/") ||
+      normalized.startsWith("docs/recipes/"),
+    `${label}: source_path must be under docs/guides, docs/internal, or docs/recipes`
+  );
+  assert(
+    entry.public === (entry.audience === "developer"),
+    `${label}: public flag must match audience`
+  );
+  assert(
+    entry.audience === "developer"
+      ? !normalized.startsWith("docs/internal/")
+      : normalized.startsWith("docs/internal/"),
+    `${label}: audience does not match source tree`
+  );
 
   const absolute = path.join(root, normalized);
   assert(path.relative(path.join(root, "docs"), absolute).startsWith("..") === false, `${label}: source_path escapes docs/`);
@@ -78,6 +95,7 @@ const indexDocs = manifest.docs.map((entry, index) => {
     slug: entry.slug,
     title: entry.title,
     category: entry.category,
+    audience: entry.audience,
     source_path: entry.source_path,
     public: entry.public,
     heading,

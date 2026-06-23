@@ -50,11 +50,11 @@ import {
   CopyInvoiceButton,
   InvoiceSummary,
   Checkout,
-  OpenReceivePaymentWizard,
+  PaymentWizard,
   PaymentState,
   CheckoutProvider,
   ThemeScope,
-  OpenReceiveThemeToggle,
+  ThemeToggle,
   OpenWalletButton,
   createCheckoutViewModel,
   useCheckoutContext
@@ -176,7 +176,7 @@ test("React checkout hides payable surfaces after invoice expiry", () => {
 
 test("React payment wizard server-renders the four package-owned first choices", () => {
   const html = renderToStaticMarkup(
-    React.createElement(OpenReceivePaymentWizard, {
+    React.createElement(PaymentWizard, {
       invoice: "lnbc-test"
     })
   );
@@ -190,7 +190,7 @@ test("React payment wizard server-renders the four package-owned first choices",
 
 test("React theme toggle renders a package-owned light/dark switch", () => {
   const html = renderToStaticMarkup(
-    React.createElement(OpenReceiveThemeToggle, {
+    React.createElement(ThemeToggle, {
       theme: "dark",
       resolvedTheme: "dark"
     })

@@ -6,7 +6,7 @@ checkout always needs a server component that owns the receive-only NWC secret.
 Use the Node framework quickstart for the current working backend reference:
 
 ```text
-docs/01-quickstart-node.md
+docs/guides/quickstart-node.md
 ```
 
 ## Supported Shape
@@ -43,7 +43,7 @@ The backend owns:
 Mobile UI treats lookup and polling responses as display state. The backend
 remains the settlement authority.
 
-## Future SDKs
+## Native UI Kits
 
 Native mobile UI kits can wrap display-safe behavior after backend conformance
 is stable. They will share the same visual payload rules as
