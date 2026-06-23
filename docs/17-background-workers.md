@@ -1,32 +1,21 @@
-# Route-Driven Recovery
+# Background Process Deployment
 
-OpenReceive v0.1-v2 does not require a backend worker, notification listener,
-webhook bridge, or in-memory event bus. Mount the HTTP routes in your app,
-configure server-side NWC, and use durable OpenReceive storage as the
-coordination point.
+OpenReceive does not require a worker, wallet notification listener, webhook
+bridge, or in-memory event bus. Mount `/openreceive/v1` in your web app and let
+the browser checkout call backend lookup routes.
 
 ```text
 web process        mounts /openreceive/v1
 browser checkout   polls /openreceive/v1/invoices/lookup
-optional scheduler POSTs /openreceive/v1/poll
+optional scheduler runs openreceive poll --once
 ```
 
-Settlement is discovered only by `lookup_invoice`. The interactive lookup route
-checks one invoice through store-enforced gates. A bounded background sweep may
-run after route responses, and an optional scheduler can call `/poll` for one
-recovery pass. There is no long-running process to deploy.
+Settlement is discovered by backend `lookup_invoice`. A route lookup checks the
+requested invoice, and an optional scheduler can run one bounded recovery pass.
 
-## Node
+## Scheduler Command
 
-Use a durable store, usually through `OPENRECEIVE_STORE`:
-
-```sh
-OPENRECEIVE_STORE=local-sqlite
-OPENRECEIVE_NAMESPACE=default
-OPENRECEIVE_NWC=...
-```
-
-The Node CLI keeps only one-shot poll support:
+Add a package script when your host supports scheduled jobs:
 
 ```json
 {
@@ -36,33 +25,88 @@ The Node CLI keeps only one-shot poll support:
 }
 ```
 
-Run it from a platform scheduler only when you want extra recovery beyond
-route-triggered lookup and sweep behavior. The scheduler request must be
-authorized with your `auth.poll` hook or `OPENRECEIVE_CRON_SECRET`.
+Use `OPENRECEIVE_CRON_SECRET` or `authorize.scheduler` for scheduler access.
+Do not expose `OPENRECEIVE_NWC` to browser code or scheduled HTTP clients.
 
 ## Common Hosts
 
-- Vercel, Netlify, Cloudflare, Fly Machines, Railway, Render, Heroku, ECS, and
-  systemd deployments can run just the web service.
-- If the platform supports scheduled jobs, schedule `openreceive poll --once`
-  or an authenticated `POST /openreceive/v1/poll`.
-- Do not deploy a notification listener. NWC `payment_received` notifications
-  are passive hints and are not settlement authority.
-- Do not run checkout settlement from frontend code. Browsers receive only
-  display-safe invoices and call backend lookup routes.
+Vercel:
+
+- Deploy the Next.js App Router route under `/openreceive/v1`.
+- Use Vercel Cron to call an authenticated `POST /openreceive/v1/poll`, or run
+  no scheduler and rely on checkout lookups.
+- Use Postgres or another durable store for production.
+
+Cloudflare:
+
+- Use a Node-compatible runtime for the OpenReceive server route.
+- Schedule an authenticated `POST /openreceive/v1/poll` with Cron Triggers when
+  you want extra recovery.
+- Do not use Workers KV as invoice storage.
+
+Netlify:
+
+- Mount OpenReceive routes in a Node function or framework adapter.
+- Use Scheduled Functions for an authenticated `POST /openreceive/v1/poll`.
+- Use durable external storage for production.
+
+Railway and Render:
+
+- Run the normal web service.
+- Add a cron/scheduled job that runs `npm run openreceive:poll` when desired.
+- Configure `OPENRECEIVE_NWC`, `OPENRECEIVE_STORE`, and
+  `OPENRECEIVE_NAMESPACE` as server-only environment variables.
+
+Heroku:
+
+- Run only the web dyno for checkout.
+- Use Heroku Scheduler for `npm run openreceive:poll` if you want extra
+  recovery.
+- Use Heroku Postgres for production storage.
+
+Fly.io:
+
+- Run the web app on Machines.
+- Use Fly Machines, a platform scheduler, or an authenticated HTTP call for
+  `openreceive poll --once`.
+- Use Postgres for multi-machine deployments.
+
+ECS:
+
+- Run the web service behind your load balancer.
+- Use EventBridge Scheduler to run a one-shot task or call
+  `POST /openreceive/v1/poll`.
+- Store secrets in your normal server-side secret manager.
+
+systemd or VPS:
+
+- Run your web app as the normal service.
+- Add a timer for `npm run openreceive:poll`.
+- `local-sqlite` is acceptable for single-machine self-hosting; use Postgres
+  before adding more machines.
+
+Coolify, Dokploy, and Kamal:
+
+- Deploy the web container normally.
+- Add a scheduled command or authenticated HTTP poll call only when you want
+  extra recovery.
+- Keep `OPENRECEIVE_NWC` and database credentials in server-side secrets.
 
 ## Settlement Hooks
 
-Settlement hooks are delivered at least once. OpenReceive uses a store-backed
-CAS lease to prevent concurrent duplicate execution, but a crash after your
-hook succeeds and before OpenReceive records completion can replay the hook.
-Deduplicate by `payment_hash` or make the effect conditional in your app store.
+Your `onPaymentSettled` hook may run again after a crash. For example, the hook
+could mark an order paid successfully, then the process could stop before
+OpenReceive records that the hook completed.
+
+Make the hook idempotent. Use `payment_hash`, invoice id, or your app's order id
+to ensure repeated calls do not double-ship, double-credit, or double-email.
 
 ## Production Checklist
 
-- Use a durable `OPENRECEIVE_STORE`, not memory storage.
-- Configure `OPENRECEIVE_NAMESPACE` when multiple apps share one store.
-- Protect create/read/lookup/poll routes with app auth and CSRF rules.
 - Keep `OPENRECEIVE_NWC` server-side only.
-- Make settlement hooks idempotent by `payment_hash`.
+- Use durable storage for production.
+- Configure `OPENRECEIVE_NAMESPACE` when multiple apps share one store.
+- Protect create, read, lookup, refresh, and poll routes with app auth and CSRF
+  rules.
+- Make `onPaymentSettled` idempotent by `payment_hash` or order id.
 - Run `openreceive doctor` during deploy checks.

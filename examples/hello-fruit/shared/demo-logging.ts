@@ -1,7 +1,7 @@
 import type {
   OpenReceiveLogEntry,
   OpenReceiveLogger
-} from "@openreceive/express";
+} from "@openreceive/node";
 
 export function createHelloFruitOpenReceiveLogger(
   demoId: string

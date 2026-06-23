@@ -3,30 +3,30 @@ import type {
   DispatchOpenReceiveFetchNoWalletRouteOptions,
   DispatchOpenReceiveFetchRouteOptions,
   ExpressLikeHandler,
-  OpenReceiveExpressHandlers,
-  OpenReceiveExpressOptions,
+  OpenReceiveNodeHandlers,
+  OpenReceiveNodeOptions,
   OpenReceiveFetchNoWalletOptions,
   OpenReceiveFetchRouteMatch,
-  OpenReceiveFetchRuntime
-} from "@openreceive/express";
+  OpenReceiveNodeRuntime
+} from "@openreceive/node";
 import {
   formatOpenReceiveMissingNwcMessage
 } from "@openreceive/core";
 import {
   createOpenReceiveFetchNoWalletResponse,
   createOpenReceiveFetchRouteNotFoundResponse,
-  createOpenReceiveFetchRuntime,
+  createOpenReceiveNodeRuntime,
   dispatchOpenReceiveFetchHandler,
   dispatchOpenReceiveFetchNoWalletRoute,
   dispatchOpenReceiveFetchRoute,
   matchOpenReceiveHttpRoute,
   openReceiveFetchJsonResponse
-} from "@openreceive/express";
+} from "@openreceive/node";
 
-export type OpenReceiveNextRuntime = OpenReceiveFetchRuntime;
+export type OpenReceiveNextRuntime = OpenReceiveNodeRuntime;
 
 export interface CreateOpenReceiveNextRuntimeOptions
-  extends OpenReceiveExpressOptions {}
+  extends OpenReceiveNodeOptions {}
 
 export type OpenReceiveNextNoWalletOptions = OpenReceiveFetchNoWalletOptions;
 
@@ -34,11 +34,11 @@ export interface DispatchOpenReceiveNextHandlerOptions
   extends DispatchOpenReceiveFetchHandlerOptions {}
 
 export interface DispatchOpenReceiveNextNoWalletHandlerOptions {
-  readonly name: keyof OpenReceiveExpressHandlers;
+  readonly name: keyof OpenReceiveNodeHandlers;
   readonly noWallet?: OpenReceiveNextNoWalletOptions;
 }
 
-export type OpenReceiveNextRouteHandlerName = keyof OpenReceiveExpressHandlers;
+export type OpenReceiveNextRouteHandlerName = keyof OpenReceiveNodeHandlers;
 
 export type OpenReceiveNextRouteMatch = OpenReceiveFetchRouteMatch;
 
@@ -55,7 +55,7 @@ export const OPENRECEIVE_NEXT_DEFAULT_NO_WALLET_MESSAGE =
 export function createOpenReceiveNextRuntime(
   options: CreateOpenReceiveNextRuntimeOptions
 ): OpenReceiveNextRuntime {
-  return createOpenReceiveFetchRuntime(options);
+  return createOpenReceiveNodeRuntime(options);
 }
 
 export function dispatchOpenReceiveNextRoute(
@@ -90,7 +90,7 @@ export function dispatchOpenReceiveNextNoWalletHandler(
 }
 
 export function createOpenReceiveNextNoWalletResponse(
-  name: keyof OpenReceiveExpressHandlers,
+  name: keyof OpenReceiveNodeHandlers,
   options: OpenReceiveNextNoWalletOptions = {}
 ): Response {
   return createOpenReceiveFetchNoWalletResponse(name, options);

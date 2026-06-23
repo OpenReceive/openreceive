@@ -48,7 +48,6 @@ export function createHelloFruitDemoMetadata(
     },
     packages: {
       "@openreceive/core": "0.1.0",
-      "@openreceive/express": "0.1.0",
       "@openreceive/node": "0.1.0",
       ...(input.packages ?? {})
     }

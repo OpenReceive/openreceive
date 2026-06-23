@@ -4,12 +4,12 @@ import {
   createDefaultLivePriceProviders
 } from "@openreceive/core";
 import {
-  createAlbyNwcReceiveClient
+  createNwcReceiveClient
 } from "@openreceive/node";
 import {
-  mountOpenReceiveExpressRoutes,
-  type OpenReceiveExpressOptions
-} from "@openreceive/express";
+  mountOpenReceiveExpress,
+  type OpenReceiveNodeOptions
+} from "@openreceive/node";
 import {
   createHelloFruitDemoMetadata
 } from "../../../../shared/demo-metadata.ts";
@@ -31,9 +31,9 @@ import {
 
 const DEMO_ID = "node-express-react";
 
-export async function createHelloFruitOpenReceiveOptions(): Promise<OpenReceiveExpressOptions> {
+export async function createHelloFruitOpenReceiveOptions(): Promise<OpenReceiveNodeOptions> {
   const connectionString = readRequiredHelloFruitNwcConnectionString();
-  const wallet = createAlbyNwcReceiveClient({
+  const wallet = createNwcReceiveClient({
     connectionString
   });
   const priceCurrencies = readHelloFruitCatalogCurrencies();
@@ -85,7 +85,7 @@ export async function createHelloFruitServer() {
     }));
   });
 
-  mountOpenReceiveExpressRoutes(app, openreceive);
+  mountOpenReceiveExpress(app, openreceive);
 
   return app;
 }

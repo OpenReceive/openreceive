@@ -14,7 +14,7 @@ import {
 } from "@openreceive/core";
 import {
   ReceiveCheckoutValidationError,
-  createAlbyNwcReceiveClient
+  createNwcReceiveClient
 } from "@openreceive/node";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
@@ -210,7 +210,7 @@ if (expectedCapabilities) {
   console.log("No expected_capabilities.json found; continuing with built-in v0.1 expectations.");
 }
 
-const client = createAlbyNwcReceiveClient({
+const client = createNwcReceiveClient({
   connectionString: nwc
 });
 

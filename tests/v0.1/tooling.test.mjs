@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -69,6 +69,25 @@ function runDemoDeployValidator() {
     stdio: ["ignore", "pipe", "pipe"]
   });
 }
+
+test("workspace metadata does not reference removed express package", () => {
+  assert.equal(existsSync(path.join(process.cwd(), "packages/js/express")), false);
+
+  for (const relativePath of [
+    "package.json",
+    "package-lock.json",
+    "packages/js/node/package.json",
+    "packages/js/next/package.json",
+    "examples/hello-fruit/server/node-express-react/package.json",
+    "examples/hello-fruit/server/static-html-small-api/package.json",
+    "examples/hello-fruit/server/nextjs-fullstack/package.json",
+    "docs/12-release-process.md",
+    "docs/sdk-status.md"
+  ]) {
+    const text = readFileSync(path.join(process.cwd(), relativePath), "utf8");
+    assert.doesNotMatch(text, /@openreceive\/express|packages\/js\/express/, relativePath);
+  }
+});
 
 function runReleaseReadinessValidator() {
   return execFileSync(process.execPath, [releaseReadinessValidator], {
@@ -144,7 +163,7 @@ test("demo deployment docs preserve public edge and runner boundaries", () => {
 });
 
 test("release readiness validator accepts current v0.1 metadata", () => {
-  assert.match(runReleaseReadinessValidator(), /Release readiness validation passed for 12 package\(s\)\./);
+  assert.match(runReleaseReadinessValidator(), /Release readiness validation passed for 11 package\(s\)\./);
 });
 
 test("workflow validator accepts safe public workflow skeletons", () => {

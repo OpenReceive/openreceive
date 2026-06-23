@@ -8,9 +8,6 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import type {
-  OpenReceiveExpressOptions
-} from "@openreceive/express";
 import {
   InMemoryInvoiceKvStore,
   idempotencyScopeKey,
@@ -18,6 +15,10 @@ import {
   type OpenReceiveInvoiceKvStore,
   type StoredRecord
 } from "@openreceive/core";
+import type {
+  OpenReceiveNodeOptions,
+  OpenReceiveServer
+} from "./http.ts";
 import {
   createOpenReceiveSqliteQueryClient,
   type OpenReceiveSqliteDatabase
@@ -55,6 +56,8 @@ export interface OpenReceiveCliOptions {
   loadPostgres?: ResolveOpenReceiveStoreOptions["loadPostgres"];
   loadConfigModule?: (specifier: string) => Promise<Record<string, unknown>>;
 }
+
+type OpenReceiveNodeConfig = OpenReceiveNodeOptions | OpenReceiveServer;
 
 const HELP = `
 Usage: openreceive <command> [options]
@@ -147,7 +150,7 @@ function runInit(input: {
       relativePath: ".env.openreceive.example",
       text: [
         "OPENRECEIVE_NWC=",
-        "OPENRECEIVE_STORE=local-sqlite",
+        "# OPENRECEIVE_STORE defaults to local-sqlite.",
         "OPENRECEIVE_NAMESPACE=default",
         "# Only needed when calling /openreceive/v1/poll from an external scheduler.",
         "OPENRECEIVE_CRON_SECRET=",
@@ -166,7 +169,7 @@ function runInit(input: {
       relativePath: "openreceive.config.mjs",
       text: [
         "import {",
-        "  createAlbyNwcReceiveClient,",
+        "  createOpenReceive,",
         "  formatOpenReceiveInvalidNwcMessage,",
         "  formatOpenReceiveMissingNwcMessage,",
         "  parseNwcConnectionUri,",
@@ -193,15 +196,15 @@ function runInit(input: {
         "",
         "const store = await resolveOpenReceiveStore();",
         "",
-        "export const openreceive = {",
-        "  client: createAlbyNwcReceiveClient({ connectionString: nwc }),",
+        "export const openreceive = await createOpenReceive({",
+        "  nwc,",
         "  store,",
         "  cronSecret: process.env.OPENRECEIVE_CRON_SECRET,",
         "  merchantScope: () => \"app:default\",",
-        "  settlementAction: async ({ invoice }) => {",
+        "  onPaymentSettled: async ({ invoice }) => {",
         "    // MUST be idempotent. Dedupe by invoice.payment_hash.",
         "  }",
-        "};",
+        "});",
         "",
         "export default openreceive;",
         ""
@@ -210,11 +213,11 @@ function runInit(input: {
     {
       relativePath: "server/openreceive-routes.mjs",
       text: [
-        "import { mountOpenReceiveExpressRoutes } from \"@openreceive/express\";",
+        "import { mountOpenReceiveExpress } from \"@openreceive/node\";",
         "import { openreceive } from \"../openreceive.config.mjs\";",
         "",
         "export function mountOpenReceiveRoutes(app) {",
-        "  return mountOpenReceiveExpressRoutes(app, openreceive);",
+        "  return mountOpenReceiveExpress(app, openreceive);",
         "}",
         "",
         "export default mountOpenReceiveRoutes;",
@@ -342,7 +345,7 @@ async function runConfigDoctor(input: {
   loadConfigModule?: OpenReceiveCliOptions["loadConfigModule"];
 }): Promise<boolean> {
   let ok = true;
-  let config: OpenReceiveExpressOptions;
+  let config: OpenReceiveNodeConfig;
 
   try {
     config = await loadOpenReceiveConfig(input);
@@ -416,7 +419,7 @@ async function runPoll(input: {
     store: config.store,
     client: config.client,
     settlementAction: async ({ invoice, metadata, source, lookup_invoice }) => {
-      await config.settlementAction?.({
+      await config.onPaymentSettled?.({
         invoice,
         metadata,
         source,
@@ -528,7 +531,7 @@ function diagnosticRecord(suffix: string): StoredRecord {
 }
 
 function checkProductionSecurityConfig(
-  config: OpenReceiveExpressOptions,
+  config: OpenReceiveNodeConfig,
   env: NodeJS.ProcessEnv
 ): {
   production: boolean;
@@ -591,14 +594,14 @@ function checkProductionSecurityConfig(
   return { production, warnings, errors };
 }
 
-function checkConfiguredStore(store: OpenReceiveExpressOptions["store"]):
+function checkConfiguredStore(store: OpenReceiveNodeConfig["store"]):
   | { ok: true }
   | { ok: false; message: string } {
   if (store === undefined || store === null) {
     return {
       ok: false,
       message:
-        "OpenReceive config must set a durable OpenReceive KV store. Use resolveOpenReceiveStore() with OPENRECEIVE_STORE."
+        "OpenReceive config must set a durable OpenReceive KV store. Use createOpenReceive() or resolveOpenReceiveStore()."
     };
   }
 
@@ -637,7 +640,7 @@ function checkConfiguredStore(store: OpenReceiveExpressOptions["store"]):
 function detectStoreUri(args: readonly string[], env: NodeJS.ProcessEnv): string {
   const storeUri = readFlag(args, "--store") ?? env.OPENRECEIVE_STORE;
   if (storeUri !== undefined && storeUri.trim().length > 0) return storeUri;
-  throw new Error("Set OPENRECEIVE_STORE or pass --store.");
+  return "local-sqlite";
 }
 
 function detectNamespace(args: readonly string[], env: NodeJS.ProcessEnv): string {
@@ -659,7 +662,7 @@ async function loadOpenReceiveConfig(input: {
   env: NodeJS.ProcessEnv;
   cwd: string;
   loadConfigModule?: OpenReceiveCliOptions["loadConfigModule"];
-}): Promise<OpenReceiveExpressOptions> {
+}): Promise<OpenReceiveNodeConfig> {
   const specifier = resolveConfigSpecifier(input.args, input.env, input.cwd);
   const module = input.loadConfigModule === undefined
     ? await import(specifier) as Record<string, unknown>
@@ -680,7 +683,7 @@ async function loadOpenReceiveConfig(input: {
     );
   }
 
-  return config as OpenReceiveExpressOptions;
+  return config as OpenReceiveNodeConfig;
 }
 
 function resolveConfigSpecifier(

@@ -197,7 +197,7 @@ Each applies the guard and returns the next record (`rev + 1`); the runner persi
 
 ### 5.1 Settlement action lease (at-least-once)
 
-OpenReceive cannot guarantee exactly-once external effects without a distributed transaction across its store and the app's store. It guarantees **at-least-once with no _concurrent_ duplicate**, and recovers crashed claims, via a CAS lease on the record (`settlement_action_state` + `action_claimed_at`):
+OpenReceive cannot guarantee exactly-once external effects without a distributed transaction across its store and the app's store. It guarantees **at-least-once with no _concurrent_ duplicate**, and recovers crashed claims, via a store-backed claim on the record (`settlement_action_state` + `action_claimed_at`):
 
 ```
 runSettlementAction(rec, now):
@@ -507,9 +507,9 @@ New flags: `--store <uri>`, `--namespace <ns>`. `--postgres`/`--sqlite`/`--datab
 - `src/cli.ts` — per §12.
 - `src/listener.ts` — **delete**.
 
-### `packages/js/express`, `packages/js/next`
+### `packages/js/node`, `packages/js/next`
 
-- `src/index.ts` — `mountOpenReceiveExpressRoutes` / `createOpenReceiveFetchHandler` / `createOpenReceiveNodeHandler` / Next `dispatchOpenReceiveNextRoute`: the lookup route calls `gatedLookup` on the single requested invoice; all routes call `maybeSweep` **after responding** (`ctx.waitUntil` on serverless); expose protected `/openreceive/v1/poll`. **Delete `createOpenReceiveExpressSettlementPollingRunner` and the in-memory SSE event bus (`express/src/index.ts:252`).** SSE, if reintroduced later, must be an explicitly opt-in cross-process transport — never an in-memory bus (which silently fails across workers).
+- `src/index.ts` — `mountOpenReceiveExpress` / `createOpenReceiveFetchHandler` / `createOpenReceiveNodeHandler` / Next `dispatchOpenReceiveNextRoute`: the lookup route calls `gatedLookup` on the single requested invoice; all routes call `maybeSweep` **after responding** (`ctx.waitUntil` on serverless); expose protected `/openreceive/v1/poll`. **Delete `createOpenReceiveSettlementPollingRunner` and the in-memory SSE event bus (`express/src/index.ts:252`).** SSE, if reintroduced later, must be an explicitly opt-in cross-process transport — never an in-memory bus (which silently fails across workers).
 
 ### `packages/js/browser`, `react`, `elements`, `svelte`, `vue`, `angular`, `provider-data`
 
@@ -593,7 +593,7 @@ A backend is **certified** iff it passes (1)–(12) + a live round-trip.
 - **ADR-0003 (idempotency/storage invariants)** — amend: enforced by atomic `putIfAbsent`; **precedence rule explicit** (idempotency scope decided first → replay-or-409; retryable `invoice_id` collision second; payment_hash/bolt11 third → storage-conflict); the typed `putIfAbsent` result; the create sequence; and the accepted rare abandoned-invoice tradeoff under concurrent identical creates.
 - **New ADR-0005 — Self-owned KV persistence + URI configuration** (9-method contract, own connection, opaque-blob frozen schema, URI/namespace, ownership boot, transports incl. `local-sqlite`, S3 deferred).
 - **New ADR-0006 — Poll-only, worker-free, store-coordinated recovery** (no listener/webhook/in-memory state; interactive gated lookup vs store-throttled async sweep; the two gates; the idle/burst gaps; optional `/poll`).
-- **New ADR-0007 — At-least-once settlement actions** (CAS lease eliminates concurrent duplicates + recovers crashes but not crash-after-hook; hooks MUST be idempotent, deduped by `payment_hash`).
+- **New ADR-0007 — At-least-once settlement actions** (store-backed claim eliminates concurrent duplicates + recovers crashes but not crash-after-hook; hooks MUST be idempotent, deduped by `payment_hash`).
 - **ADR-0002 (no frontend NWC)** — reaffirm `OPENRECEIVE_STORE`, `OPENRECEIVE_NWC`, `OPENRECEIVE_CRON_SECRET` server-only.
 
 ---
@@ -626,7 +626,7 @@ A backend is **certified** iff it passes (1)–(12) + a live round-trip.
 **Before (Node, today):**
 
 ```sh
-npm install @openreceive/node @openreceive/express @openreceive/browser express pg
+npm install @openreceive/node @openreceive/node @openreceive/browser express pg
 npx openreceive migrate --postgres "$DATABASE_URL"     # hand-run, per-DB
 npx openreceive doctor  --postgres "$DATABASE_URL"
 # write server/openreceive.ts wiring a Postgres store
@@ -636,12 +636,12 @@ npx openreceive doctor  --postgres "$DATABASE_URL"
 **After:**
 
 ```sh
-npm install @openreceive/node @openreceive/express @openreceive/browser express
+npm install @openreceive/node @openreceive/node @openreceive/browser express
 # .env:
 #   OPENRECEIVE_NWC=nostr+walletconnect://...
 #   OPENRECEIVE_STORE=local-sqlite           # or postgres:// / mysql:// / a CF binding
 #   OPENRECEIVE_NAMESPACE=myapp_prod          # optional
-mountOpenReceiveExpressRoutes(app, openreceive);   // self-initializes on boot
+mountOpenReceiveExpress(app, openreceive);   // self-initializes on boot
 # openreceive init adds .openreceive/ to .gitignore when using local-sqlite
 # settlementAction MUST be idempotent, e.g. UPDATE orders SET paid=true WHERE id=? AND paid=false
 # deploy web. No worker. No listener. No migrate.

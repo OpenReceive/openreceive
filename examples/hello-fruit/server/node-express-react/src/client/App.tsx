@@ -5,6 +5,9 @@ import type {
   OpenReceiveCheckoutSnapshot
 } from "@openreceive/browser";
 import {
+  createOpenReceiveInvoice
+} from "@openreceive/browser";
+import {
   OpenReceiveCheckout,
   OpenReceiveThemeScope
 } from "@openreceive/react";
@@ -62,29 +65,18 @@ function App(): React.ReactElement {
     completedInvoiceRef.current = "";
 
     try {
-      const response = await fetch("/openreceive/v1/invoices", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Idempotency-Key": `hello-fruit-${selectedFruit.id}-${idempotencyKey}`
+      const body = await createOpenReceiveInvoice({
+        idempotencyKey: `hello-fruit-${selectedFruit.id}-${idempotencyKey}`,
+        fiat: selectedFruit.fiat,
+        description: createHelloFruitInvoiceDescription(selectedFruit.name),
+        expiry: product.invoice_expiry_seconds,
+        metadata: {
+          product_id: product.product_id,
+          fruit: selectedFruit.id,
+          fiat: selectedFruit.fiat
         },
-        body: JSON.stringify({
-          fiat: selectedFruit.fiat,
-          description: createHelloFruitInvoiceDescription(selectedFruit.name),
-          expiry: product.invoice_expiry_seconds,
-          metadata: {
-            product_id: product.product_id,
-            fruit: selectedFruit.id,
-            fiat: selectedFruit.fiat
-          }
-        })
+        fetch
       });
-      const body = await response.json();
-
-      if (!response.ok) {
-        setError(body.message ?? helloFruitDemoLabels.createInvoiceError);
-        return;
-      }
 
       setInvoice(body);
       setPurchasedFruit(selectedFruit);

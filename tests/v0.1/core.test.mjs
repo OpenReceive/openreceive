@@ -46,6 +46,7 @@ import {
   createOpenReceiveCheckoutStateFromDisplayData,
   createOpenReceiveCheckoutStateEvent,
   createOpenReceiveCountryPickerModel,
+  createOpenReceiveInvoice,
   createOpenReceiveLookupInvoiceFetcher,
   createOpenReceiveProviderCopyEvent,
   createOpenReceiveRefreshInvoiceFetcher,
@@ -657,6 +658,92 @@ test("browser owns web-component shadow styles", () => {
   assert.match(openReceiveCheckoutElementStyles, /part="wizard"/);
   assert.match(openReceiveCheckoutElementStyles, /openreceive-spin/);
   assert.match(openReceiveThemeToggleElementStyles, /data-openreceive-theme-toggle|min-height/);
+});
+
+test("browser create invoice helper owns idempotent invoice POST shape", async () => {
+  const requests = [];
+  const invoice = await createOpenReceiveInvoice({
+    idempotencyKey: "order-browser-create",
+    fiat: {
+      currency: "USD",
+      value: "10.00"
+    },
+    description: "Browser helper invoice",
+    expiry: 600,
+    metadata: {
+      order_id: "order-browser-create"
+    },
+    fetch: async (url, init) => {
+      requests.push({ url, init });
+      return {
+        ok: true,
+        json: async () => ({
+          invoice_id: "or_inv_browser_create",
+          invoice: "lnbc-browser-create",
+          payment_hash: PAYMENT_HASH,
+          amount_msats: 200000,
+          transaction_state: "pending",
+          workflow_state: "invoice_created"
+        })
+      };
+    }
+  });
+
+  assert.equal(invoice.invoice_id, "or_inv_browser_create");
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, "/openreceive/v1/invoices");
+  assert.equal(requests[0].init.method, "POST");
+  assert.equal(requests[0].init.headers["Content-Type"], "application/json");
+  assert.equal(requests[0].init.headers["Idempotency-Key"], "order-browser-create");
+  assert.deepEqual(JSON.parse(requests[0].init.body), {
+    fiat: {
+      currency: "USD",
+      value: "10.00"
+    },
+    description: "Browser helper invoice",
+    expiry: 600,
+    metadata: {
+      order_id: "order-browser-create"
+    }
+  });
+
+  await assert.rejects(
+    () => createOpenReceiveInvoice({
+      idempotencyKey: "",
+      amount_msats: 200000,
+      fetch: async () => ({
+        ok: true,
+        json: async () => ({})
+      })
+    }),
+    /idempotencyKey/
+  );
+  await assert.rejects(
+    () => createOpenReceiveInvoice({
+      idempotencyKey: "bad-nwc",
+      metadata: {
+        nwc: `nostr+walletconnect://${"a".repeat(64)}?secret=${"b".repeat(64)}`
+      },
+      fetch: async () => ({
+        ok: true,
+        json: async () => ({})
+      })
+    }),
+    /NWC/
+  );
+  await assert.rejects(
+    () => createOpenReceiveInvoice({
+      idempotencyKey: "server-error",
+      amount_msats: 200000,
+      fetch: async () => ({
+        ok: false,
+        json: async () => ({
+          message: "Could not quote fiat."
+        })
+      })
+    }),
+    /Could not quote fiat/
+  );
 });
 
 test("browser lookup fetcher owns display-safe lookup POST shape", async () => {

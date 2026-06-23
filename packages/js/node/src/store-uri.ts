@@ -37,6 +37,7 @@ export type OpenReceiveResolvedStore = OpenReceiveInvoiceKvStore & {
 };
 
 const DEFAULT_NAMESPACE = "default";
+const DEFAULT_STORE_URI = "local-sqlite";
 
 export async function resolveOpenReceiveStore(
   uri = process.env.OPENRECEIVE_STORE,
@@ -44,10 +45,7 @@ export async function resolveOpenReceiveStore(
 ): Promise<OpenReceiveResolvedStore> {
   const namespace = options.namespace ?? process.env.OPENRECEIVE_NAMESPACE ?? DEFAULT_NAMESPACE;
   const cwd = options.cwd ?? process.cwd();
-  const storeUri = uri?.trim();
-  if (storeUri === undefined || storeUri.length === 0) {
-    throw new Error("Set OPENRECEIVE_STORE to memory:, local-sqlite, sqlite://, or postgres://.");
-  }
+  const storeUri = uri?.trim() || DEFAULT_STORE_URI;
 
   if (storeUri === "memory:" || storeUri === "memory") {
     return new InMemoryInvoiceKvStore();

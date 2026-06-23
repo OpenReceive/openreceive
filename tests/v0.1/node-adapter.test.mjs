@@ -16,7 +16,8 @@ import {
   OPENRECEIVE_DATABASE_SCHEMA_VERSION,
   OPENRECEIVE_POSTGRES_MIGRATION_SQL,
   OPENRECEIVE_SQLITE_MIGRATION_SQL,
-  createAlbyNwcReceiveClient,
+  createNwcReceiveClient,
+  createOpenReceive,
   createOpenReceiveSqliteKvStore,
   createOpenReceiveSqliteQueryClient,
   migrateOpenReceiveSqlite,
@@ -87,7 +88,7 @@ class FakeAlbyClient {
 
 test("preflight summarizes receive readiness and warns on spend capability", async () => {
   const fake = new FakeAlbyClient();
-  const client = createAlbyNwcReceiveClient({
+  const client = createNwcReceiveClient({
     connectionString: NWC_URI,
     client: fake
   });
@@ -101,7 +102,7 @@ test("preflight summarizes receive readiness and warns on spend capability", asy
 });
 
 test("summarizes NWC info vectors for readiness and encryption", () => {
-  const connection = createAlbyNwcReceiveClient({
+  const connection = createNwcReceiveClient({
     connectionString: NWC_URI,
     client: new FakeAlbyClient(),
     requirePreflight: false
@@ -143,7 +144,7 @@ test("receive client maps amount_msats to NIP-47 amount and normalizes results",
   for (const vector of NWC_REQUEST_RESPONSE_VECTORS.cases) {
     const fake = new FakeAlbyClient();
     fake.nextResponse = vector.raw_response;
-    const client = createAlbyNwcReceiveClient({
+    const client = createNwcReceiveClient({
       connectionString: NWC_URI,
       client: fake
     });
@@ -182,7 +183,7 @@ test("receive client maps amount_msats to NIP-47 amount and normalizes results",
 test("receive client enforces make invoice validation vectors", async () => {
   for (const vector of MAKE_INVOICE_VALIDATION_VECTORS.cases) {
     const fake = new FakeAlbyClient();
-    const client = createAlbyNwcReceiveClient({
+    const client = createNwcReceiveClient({
       connectionString: NWC_URI,
       client: fake
     });
@@ -223,7 +224,7 @@ test("receive client throws normalized wallet errors from make_invoice", async (
     }
   }
 
-  const client = createAlbyNwcReceiveClient({
+  const client = createNwcReceiveClient({
     connectionString: NWC_URI,
     client: new ErroringMakeInvoiceClient()
   });
@@ -245,7 +246,7 @@ test("receive client throws normalized wallet errors from make_invoice", async (
 });
 
 test("receive client rejects metadata above the NWC payload guard", async () => {
-  const client = createAlbyNwcReceiveClient({
+  const client = createNwcReceiveClient({
     connectionString: NWC_URI,
     client: new FakeAlbyClient()
   });
@@ -264,7 +265,7 @@ test("receive client rejects metadata above the NWC payload guard", async () => 
 });
 
 test("receive checkout wrapper does not expose payInvoice", () => {
-  const client = createAlbyNwcReceiveClient({
+  const client = createNwcReceiveClient({
     connectionString: NWC_URI,
     client: new FakeAlbyClient()
   });
@@ -361,6 +362,75 @@ test("resolveOpenReceiveStore supports memory and local-sqlite stores", async ()
   } finally {
     rmSync(tempRoot, { force: true, recursive: true });
   }
+});
+
+test("resolveOpenReceiveStore defaults to local-sqlite when OPENRECEIVE_STORE is omitted", async () => {
+  const tempRoot = mkdtempSync(path.join(tmpdir(), "openreceive-store-default-"));
+  try {
+    const store = await resolveOpenReceiveStore(undefined, {
+      cwd: tempRoot,
+      namespace: "defaulted"
+    });
+    try {
+      assert.equal(existsSync(path.join(tempRoot, ".openreceive", "defaulted.sqlite3")), true);
+    } finally {
+      await store.close?.();
+    }
+  } finally {
+    rmSync(tempRoot, { force: true, recursive: true });
+  }
+});
+
+test("createOpenReceive builds server handlers from a client and store", async () => {
+  const store = new InMemoryInvoiceKvStore();
+  const client = {
+    async preflight() {
+      return {
+        receiveCheckoutReady: true,
+        methods: ["make_invoice", "lookup_invoice"],
+        notifications: [],
+        encryption: "nip44_v2",
+        warnings: []
+      };
+    },
+    async makeInvoice(request) {
+      return {
+        invoice: "lnbc-create-openreceive",
+        payment_hash: "9".repeat(64),
+        amount_msats: BigInt(request.amount_msats),
+        created_at: 1000,
+        expires_at: 1600
+      };
+    },
+    async lookupInvoice() {
+      throw new Error("not needed");
+    }
+  };
+  const openreceive = await createOpenReceive({
+    client,
+    store,
+    merchantScope: () => "node:test",
+    unsafeAllowUnauthenticatedDemoMode: true,
+    clock: () => 1000,
+    backgroundSweep: false
+  });
+
+  const response = await openreceive.handleFetch(new Request("http://app.test/openreceive/v1/invoices", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "idempotency-key": "create-openreceive-order"
+    },
+    body: JSON.stringify({
+      amount_msats: 200000,
+      description: "Factory invoice"
+    })
+  }));
+  const body = await response.json();
+
+  assert.equal(response.status, 201);
+  assert.equal(body.invoice, "lnbc-create-openreceive");
+  assert.equal(openreceive.handlers, openreceive.runtime.handlers);
 });
 
 test("Node CLI initializes worker-free config and doctors local-sqlite", async () => {
@@ -512,7 +582,7 @@ test("Node CLI runs poll --once from a server config module", async () => {
           }
         },
         merchantScope: () => "node:test",
-        settlementAction: async ({ invoice }) => {
+        onPaymentSettled: async ({ invoice }) => {
           assert.equal(invoice.invoice_id, "or_inv_poll_once");
         }
       }

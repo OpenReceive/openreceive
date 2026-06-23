@@ -544,6 +544,22 @@ export type OpenReceiveCheckoutRefresh = (
   state: OpenReceiveCheckoutState
 ) => Promise<OpenReceiveCheckoutSnapshot | OpenReceiveRefreshInvoiceResult>;
 
+export interface CreateOpenReceiveInvoiceOptions {
+  readonly invoiceUrl?: string;
+  readonly idempotencyKey: string;
+  readonly fetch?: typeof globalThis.fetch;
+  readonly headers?: Readonly<Record<string, string>>;
+  readonly amount_msats?: number | string;
+  readonly fiat?: {
+    readonly currency: string;
+    readonly value: string;
+  };
+  readonly description?: string;
+  readonly description_hash?: string;
+  readonly expiry?: number;
+  readonly metadata?: Record<string, unknown>;
+}
+
 export interface CreateOpenReceiveLookupInvoiceFetcherOptions {
   readonly lookupUrl: string;
   readonly fetch?: typeof globalThis.fetch;
@@ -2847,6 +2863,54 @@ export function createOpenReceiveCheckoutShell(
   };
 }
 
+export async function createOpenReceiveInvoice(
+  options: CreateOpenReceiveInvoiceOptions
+): Promise<OpenReceiveCheckoutSnapshot> {
+  if (options.idempotencyKey.length === 0) {
+    throw new Error("OpenReceive invoice creation requires an idempotencyKey.");
+  }
+
+  const fetcher = options.fetch ?? globalThis.fetch;
+  if (fetcher === undefined) {
+    throw new Error("OpenReceive invoice creation requires fetch.");
+  }
+
+  const requestBody = {
+    ...(options.amount_msats === undefined ? {} : { amount_msats: options.amount_msats }),
+    ...(options.fiat === undefined ? {} : { fiat: options.fiat }),
+    ...(options.description === undefined ? {} : { description: options.description }),
+    ...(options.description_hash === undefined ? {} : { description_hash: options.description_hash }),
+    ...(options.expiry === undefined ? {} : { expiry: options.expiry }),
+    ...(options.metadata === undefined ? {} : { metadata: options.metadata })
+  };
+  assertOpenReceiveBrowserPayloadSafe(requestBody);
+
+  const response = await fetcher(options.invoiceUrl ?? "/openreceive/v1/invoices", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": options.idempotencyKey,
+      ...(options.headers ?? {})
+    },
+    body: JSON.stringify(requestBody)
+  });
+  const body = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      typeof body?.message === "string"
+        ? body.message
+        : "Could not create invoice."
+    );
+  }
+
+  if (typeof body?.invoice === "string") {
+    assertOpenReceiveDisplayInvoice(body.invoice);
+  }
+
+  return body as OpenReceiveCheckoutSnapshot;
+}
+
 export function createOpenReceiveLookupInvoiceFetcher(
   options: CreateOpenReceiveLookupInvoiceFetcherOptions
 ): OpenReceiveCheckoutLookup {
@@ -3487,6 +3551,26 @@ function assertInvoice(invoice: string): void {
 
   if (invoice.startsWith("nostr+walletconnect://")) {
     throw new TypeError("invoice must not be an NWC connection string");
+  }
+}
+
+function assertOpenReceiveBrowserPayloadSafe(value: unknown): void {
+  if (typeof value === "string") {
+    if (value.startsWith("nostr+walletconnect://")) {
+      throw new TypeError("OpenReceive browser payload must not include an NWC connection string");
+    }
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) assertOpenReceiveBrowserPayloadSafe(item);
+    return;
+  }
+
+  if (value !== null && typeof value === "object") {
+    for (const item of Object.values(value)) {
+      assertOpenReceiveBrowserPayloadSafe(item);
+    }
   }
 }
 

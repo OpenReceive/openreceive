@@ -2,11 +2,11 @@ import {
   createDefaultLivePriceProviders
 } from "@openreceive/core";
 import {
-  createAlbyNwcReceiveClient
+  createNwcReceiveClient
 } from "@openreceive/node";
 import type {
-  OpenReceiveExpressOptions
-} from "@openreceive/express";
+  OpenReceiveNodeOptions
+} from "@openreceive/node";
 import {
   createOpenReceiveNextRuntime,
   dispatchOpenReceiveNextRoute,
@@ -149,11 +149,11 @@ async function getRuntime(connectionString: string): Promise<NextDemoRuntime> {
 
 export async function createHelloFruitOpenReceiveOptions(
   connectionString = readRequiredHelloFruitNwcConnectionString()
-): Promise<OpenReceiveExpressOptions> {
+): Promise<OpenReceiveNodeOptions> {
   const store = await createHelloFruitOpenReceiveKvStore({
     demoId: DEMO_ID
   });
-  const client = createAlbyNwcReceiveClient({
+  const client = createNwcReceiveClient({
     connectionString
   });
 
@@ -172,7 +172,7 @@ export async function createHelloFruitOpenReceiveOptions(
 
 function currentStoreCacheKey(): string {
   return JSON.stringify({
-    store: process.env.OPENRECEIVE_STORE ?? "memory:",
+    store: process.env.OPENRECEIVE_STORE ?? "local-sqlite",
     namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit"
   });
 }

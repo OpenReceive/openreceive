@@ -47,7 +47,7 @@ Core owns all lifecycle logic:
 - per-invoice lookup cooldown
 - global store-backed lookup token bucket
 - bounded background sweep
-- settlement-action CAS lease
+- settlement-action store-backed claim
 - duplicate-safe, at-least-once settlement hook delivery
 
 Persistence Ownership
@@ -116,7 +116,7 @@ Settlement Actions
 ------------------
 
 Settlement hooks are at least once. OpenReceive prevents concurrent duplicate
-execution with a CAS lease, but a crash after the app hook succeeds and before
+execution with a store-backed claim, but a crash after the app hook succeeds and before
 OpenReceive records completion can replay the hook. Apps must deduplicate by
 `payment_hash` or use conditional fulfillment writes.
 

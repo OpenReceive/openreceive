@@ -1,223 +1,154 @@
 # Node Framework Quickstart
 
-First step: get a read-only NWC code so your app can create invoices and check
-payment status from your server. You can use any NWC provider and switch
-providers at any time. Start here:
+OpenReceive runs inside your app. Your server creates invoices, your browser
+shows display-safe checkout data, and backend lookup decides when the payment
+settled. Browser code never receives `OPENRECEIVE_NWC`.
+
+First get a receive-only NWC code:
 https://openreceive.org/get_a_nwc_code_to_receive_payments
 
-OpenReceive runs inside your app. Pick the framework path you use, add the
-server route, then render the display-safe checkout UI in the browser.
+## Install
 
-Supported Node paths today:
+```sh
+npm install @openreceive/node @openreceive/browser @openreceive/react express pg
+```
 
-| App | Use |
-| --- | --- |
-| Express | `mountOpenReceiveExpressRoutes()` from `@openreceive/express` |
-| Next.js App Router | one catch-all route with `@openreceive/next` |
-| Hono, SvelteKit, Remix, Astro, Fetch-style servers | `createOpenReceiveFetchHandler()` from `@openreceive/express` |
-| Fastify, Koa, raw Node HTTP | `createOpenReceiveNodeHandler()` from `@openreceive/express` |
-| NestJS on Express | mount the Express adapter on the underlying Express app |
-
-Live checkout always needs a server component. Browser code never receives
-`OPENRECEIVE_NWC`.
-
-## Common Setup
-
-Set the server-only OpenReceive environment:
+Set the server-only wallet secret:
 
 ```sh
 OPENRECEIVE_NWC=nostr+walletconnect://...
-OPENRECEIVE_STORE=local-sqlite
 OPENRECEIVE_NAMESPACE=default
 ```
 
-`OPENRECEIVE_STORE` may also be `postgres://...` for production or
-`sqlite:///abs/path/openreceive.sqlite3` for an explicit single-machine file.
-The store self-initializes on boot; there is no required hand-run migration.
-Run doctor during setup or deploy checks:
+`OPENRECEIVE_STORE` defaults to `local-sqlite`, which creates
+`./.openreceive/<namespace>.sqlite3`. Use Postgres for multi-instance
+production:
+
+```sh
+OPENRECEIVE_STORE=postgres://user:pass@host:5432/appdb
+```
+
+OpenReceive owns a package-owned Postgres or SQLite invoice store. Your app
+keeps orders, carts, users, and fulfillment state in its own tables.
+
+## Doctor
+
+Run doctor during setup and deploy checks:
 
 ```sh
 npx openreceive doctor
 ```
 
-For production today, use package-owned Postgres storage. SQLite is available
-for single-machine self-hosting, local development, demos, and small apps.
-MySQL, Redis/Upstash, and Cloudflare Durable Object storage are future
-transport targets. MongoDB, Prisma-native models, Drizzle-native models, custom
-invoice tables, S3/object storage, and Workers KV are not supported storage
-targets.
+Expected local output looks like:
 
-## Express
-
-Install:
-
-```sh
-npm install @openreceive/node @openreceive/express @openreceive/browser express pg
+```text
+ok store local-sqlite namespace=default
+ok store putIfAbsent/casMeta/listOpen round-trip
+ok OPENRECEIVE_NWC configured (redacted)
+ok config loaded
+ok config store implements OpenReceive KV contract
+ok NWC preflight completed (encryption=nip44_v2; methods=make_invoice,lookup_invoice)
 ```
+
+Doctor checks that storage can create idempotent records, update coordination
+metadata, and list open invoices. When a config file is present it also loads
+your server config, verifies the store contract, runs NWC preflight, and warns
+if the wallet advertises spend methods. OpenReceive still exposes only receive
+checkout methods to your app.
+
+## Server Setup
 
 Create `server/openreceive.ts`:
 
 ```ts
 import {
-  createAlbyNwcReceiveClient,
-  formatOpenReceiveMissingNwcMessage,
-  resolveOpenReceiveStore
+  createOpenReceive
 } from "@openreceive/node";
 
-const nwc = process.env.OPENRECEIVE_NWC;
-if (!nwc) {
-  const message = formatOpenReceiveMissingNwcMessage();
-  console.error(message);
-  throw new Error(message);
-}
-
-const store = await resolveOpenReceiveStore();
-
-export const openreceive = {
-  client: createAlbyNwcReceiveClient({
-    connectionString: nwc
-  }),
-  store,
+export const openreceive = await createOpenReceive({
   merchantScope: (req) => `user:${req.user.id}`,
-  auth: {
-    create: (req) => Boolean(req.user),
-    read: (req, invoice) => ownsInvoice(req, invoice),
-    lookup: (req, invoice) => ownsInvoice(req, invoice),
-    refresh: (req, invoice) => ownsInvoice(req, invoice),
-    poll: (req) => isInternalScheduler(req)
+  authorize: {
+    request: (req) => Boolean(req.user),
+    invoice: (req, invoice) => ownsInvoice(req, invoice),
+    scheduler: (req) => isInternalScheduler(req)
   },
-  csrf: {
-    verify: (req) => verifyCsrf(req)
-  },
-  settlementAction: async ({ invoice, metadata }) => {
+  csrf: (req) => verifyCsrf(req),
+  onPaymentSettled: async ({ invoice, metadata }) => {
     await markOrderPaid({
       invoiceId: invoice.invoice_id,
-      orderId: metadata.order_id
+      orderId: metadata.order_id,
+      paymentHash: invoice.payment_hash
     });
   }
-};
+});
 ```
 
-Mount it in your Express server:
+`authorize.request` protects invoice creation. `authorize.invoice` protects
+read, lookup, and refresh for an existing invoice. `authorize.scheduler`
+protects optional recovery polling. If your framework already gates these
+routes in controllers or middleware, call the same auth helpers here so
+OpenReceive can still fail closed.
+
+## Framework Routes
+
+All framework routes mount the same API at `/openreceive/v1`.
+
+Express:
 
 ```ts
 import express from "express";
-import { mountOpenReceiveExpressRoutes } from "@openreceive/express";
-import { openreceive } from "./server/openreceive";
+import {
+  mountOpenReceiveExpress
+} from "@openreceive/node";
+import {
+  openreceive
+} from "./server/openreceive";
 
 const app = express();
 app.use(express.json());
 
-mountOpenReceiveExpressRoutes(app, openreceive);
+mountOpenReceiveExpress(app, openreceive);
 
 app.listen(3000);
 ```
 
-That adds the OpenReceive API at `/openreceive/v1`.
-
-## Fetch And Raw Node Frameworks
-
-Use this path for Hono, SvelteKit, Remix, Astro, Fastify, Koa, and any Node
-framework that hands route handlers a standard Fetch `Request` or raw Node
-request/response pair.
-
-Install:
-
-```sh
-npm install @openreceive/node @openreceive/express @openreceive/browser pg
-```
-
-Create `server/openreceive.ts`:
+Fetch-style frameworks such as Hono, SvelteKit, Remix, and Astro:
 
 ```ts
 import {
-  createOpenReceiveFetchHandler,
-  createOpenReceiveFetchRuntime,
-  createOpenReceiveNodeHandler
-} from "@openreceive/express";
-import {
-  createAlbyNwcReceiveClient,
-  formatOpenReceiveMissingNwcMessage,
-  resolveOpenReceiveStore
+  createOpenReceiveFetchHandler
 } from "@openreceive/node";
+import {
+  openreceive
+} from "./server/openreceive";
 
-let runtime;
-const store = await resolveOpenReceiveStore();
-
-function getRuntime() {
-  if (runtime) return runtime;
-
-  const nwc = process.env.OPENRECEIVE_NWC;
-  if (!nwc) {
-    const message = formatOpenReceiveMissingNwcMessage();
-    console.error(message);
-    throw new Error(message);
-  }
-
-  runtime = createOpenReceiveFetchRuntime({
-    client: createAlbyNwcReceiveClient({
-      connectionString: nwc
-    }),
-    store,
-    merchantScope: () => "app:default",
-    auth: {
-      create: (req) => isAllowedToCreateInvoice(req),
-      read: (req, invoice) => ownsInvoice(req, invoice),
-      lookup: (req, invoice) => ownsInvoice(req, invoice),
-      refresh: (req, invoice) => ownsInvoice(req, invoice),
-      poll: (req) => isInternalScheduler(req)
-    },
-    csrf: {
-      verify: (req) => verifyCsrf(req)
-    },
-    settlementAction: async ({ invoice, metadata }) => {
-      await markOrderPaid({
-        invoiceId: invoice.invoice_id,
-        orderId: metadata.order_id
-      });
-    }
-  });
-
-  return runtime;
-}
-
-export const openreceive = createOpenReceiveFetchHandler({
-  runtime: getRuntime
-});
-
-export const openreceiveNode = createOpenReceiveNodeHandler({
-  runtime: getRuntime
-});
+export const openreceiveRoute = createOpenReceiveFetchHandler(openreceive);
 ```
 
 Hono:
 
 ```ts
-import { Hono } from "hono";
-import { openreceive } from "./server/openreceive";
-
-const app = new Hono();
-
-app.all("/openreceive/v1/*", (c) => openreceive(c.req.raw));
+app.all("/openreceive/v1/*", (c) => openreceiveRoute(c.req.raw));
 ```
 
 SvelteKit:
 
 ```ts
-// src/routes/openreceive/v1/[...openreceive]/+server.ts
-import { openreceive } from "$lib/server/openreceive";
-
-export const GET = ({ request }) => openreceive(request);
-export const POST = ({ request }) => openreceive(request);
+export const GET = ({ request }) => openreceiveRoute(request);
+export const POST = ({ request }) => openreceiveRoute(request);
 ```
-
-Remix, Astro, and other Fetch-style Node routes use the same `openreceive`
-handler from their catch-all route file.
 
 Fastify:
 
 ```ts
-import { openreceiveNode } from "./server/openreceive";
+import {
+  createOpenReceiveNodeHandler
+} from "@openreceive/node";
+import {
+  openreceive
+} from "./server/openreceive";
+
+const openreceiveNode = createOpenReceiveNodeHandler(openreceive);
 
 fastify.all("/openreceive/v1/*", async (request, reply) => {
   reply.hijack();
@@ -228,16 +159,35 @@ fastify.all("/openreceive/v1/*", async (request, reply) => {
 Koa:
 
 ```ts
-import Router from "@koa/router";
-import { openreceiveNode } from "./server/openreceive";
-
-const router = new Router();
+const openreceiveNode = createOpenReceiveNodeHandler(openreceive);
 
 router.all("/openreceive/v1/(.*)", async (ctx) => {
   ctx.respond = false;
   await openreceiveNode(ctx.req, ctx.res);
 });
 ```
+
+Raw Node:
+
+```ts
+import {
+  createServer
+} from "node:http";
+import {
+  createOpenReceiveNodeHandler
+} from "@openreceive/node";
+import {
+  openreceive
+} from "./server/openreceive";
+
+const openreceiveNode = createOpenReceiveNodeHandler(openreceive);
+
+createServer((req, res) => {
+  void openreceiveNode(req, res);
+}).listen(3000);
+```
+
+NestJS on Express mounts the same Express helper on the underlying Express app.
 
 ## Next.js App Router
 
@@ -251,71 +201,35 @@ Create `src/server/openreceive.ts`:
 
 ```ts
 import {
-  createAlbyNwcReceiveClient,
-  formatOpenReceiveMissingNwcMessage,
-  resolveOpenReceiveStore
+  createOpenReceive
 } from "@openreceive/node";
-import {
-  createOpenReceiveNextRuntime,
-  dispatchOpenReceiveNextRoute
-} from "@openreceive/next";
 
-let runtime;
-const store = await resolveOpenReceiveStore();
-
-function getRuntime() {
-  if (runtime) return runtime;
-
-  const nwc = process.env.OPENRECEIVE_NWC;
-  if (!nwc) {
-    const message = formatOpenReceiveMissingNwcMessage();
-    console.error(message);
-    throw new Error(message);
+export const openreceive = await createOpenReceive({
+  merchantScope: () => "app:default",
+  authorize: {
+    request: (req) => isAllowedToCreateInvoice(req),
+    invoice: (req, invoice) => ownsInvoice(req, invoice),
+    scheduler: (req) => isInternalScheduler(req)
+  },
+  csrf: (req) => verifyCsrf(req),
+  onPaymentSettled: async ({ invoice, metadata }) => {
+    await markOrderPaid({
+      invoiceId: invoice.invoice_id,
+      orderId: metadata.order_id
+    });
   }
-
-  runtime = createOpenReceiveNextRuntime({
-    client: createAlbyNwcReceiveClient({
-      connectionString: nwc
-    }),
-    store,
-    merchantScope: () => "app:default",
-    auth: {
-      create: (req) => isAllowedToCreateInvoice(req),
-      read: (req, invoice) => ownsInvoice(req, invoice),
-      lookup: (req, invoice) => ownsInvoice(req, invoice),
-      refresh: (req, invoice) => ownsInvoice(req, invoice),
-      poll: (req) => isInternalScheduler(req)
-    },
-    csrf: {
-      verify: (req) => verifyCsrf(req)
-    },
-    settlementAction: async ({ invoice, metadata }) => {
-      await markOrderPaid({
-        invoiceId: invoice.invoice_id,
-        orderId: metadata.order_id
-      });
-    }
-  });
-
-  return runtime;
-}
-
-export function openReceiveRoute(request: Request, path: readonly string[]) {
-  const openreceive = getRuntime();
-
-  return dispatchOpenReceiveNextRoute({
-    runtime: openreceive,
-    request,
-    path
-  });
-}
+});
 ```
 
-Create one catch-all route at
-`src/app/openreceive/v1/[...openreceive]/route.ts`:
+Create `src/app/openreceive/v1/[...openreceive]/route.ts`:
 
 ```ts
-import { openReceiveRoute } from "@/server/openreceive";
+import {
+  dispatchOpenReceiveNextRoute
+} from "@openreceive/next";
+import {
+  openreceive
+} from "@/server/openreceive";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -328,44 +242,46 @@ type Context = {
 
 async function handle(request: Request, context: Context) {
   const params = await context.params;
-  return openReceiveRoute(request, params.openreceive ?? []);
+  return dispatchOpenReceiveNextRoute({
+    runtime: openreceive.runtime,
+    request,
+    path: params.openreceive ?? []
+  });
 }
 
 export const GET = handle;
 export const POST = handle;
 ```
 
-That adds the same `/openreceive/v1` API through Next route handlers.
-
 ## Browser Checkout
 
-Your UI creates an invoice by posting to the server route:
+To get paid for something, create an invoice for that order or cart. The
+idempotency key is the stable order, cart, or payment-attempt id that prevents
+duplicate invoices if the customer double-clicks or retries.
 
 ```ts
-const response = await fetch("/openreceive/v1/invoices", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    "Idempotency-Key": orderId
-  },
-  body: JSON.stringify({
-    fiat: {
-      currency: "USD",
-      value: "10.00"
-    },
-    metadata: {
-      order_id: orderId
-    }
-  })
-});
+import {
+  createOpenReceiveInvoice
+} from "@openreceive/browser";
 
-const invoice = await response.json();
+const invoice = await createOpenReceiveInvoice({
+  idempotencyKey: orderId,
+  fiat: {
+    currency: "USD",
+    value: "10.00"
+  },
+  metadata: {
+    order_id: orderId
+  }
+});
 ```
 
-React apps can render the checkout with `@openreceive/react`:
+Then render checkout:
 
 ```tsx
-import { OpenReceiveCheckout } from "@openreceive/react";
+import {
+  OpenReceiveCheckout
+} from "@openreceive/react";
 import "@openreceive/react/styles.css";
 
 export function Checkout({ invoice }) {
@@ -378,58 +294,34 @@ export function Checkout({ invoice }) {
 }
 ```
 
-No-framework apps can use `@openreceive/elements` or the lower-level
-`@openreceive/browser` helpers.
+No-framework apps can use `@openreceive/elements` or lower-level browser
+helpers.
 
 ## Recovery
 
+Your web process is enough for normal checkout:
+
 ```text
-web                 npm start
-optional scheduler  npx openreceive poll --once
+web process        mounts /openreceive/v1
+browser checkout   polls /openreceive/v1/invoices/lookup
+optional scheduler runs openreceive poll --once
 ```
 
-Export the same server-only `openreceive` object from your config that your
-framework route uses. OpenReceive does not need a daemon or wallet
-notification listener. Browser lookups and bounded route-triggered sweeps use
-backend `lookup_invoice`; an optional scheduler can run one extra recovery pass:
+Do not deploy a wallet notification listener. Notifications are passive hints;
+backend `lookup_invoice` is the settlement authority. If you want extra
+recovery beyond route-triggered lookup, schedule:
 
 ```sh
 npx openreceive poll --once
 ```
 
 See [Background Process Deployment](17-background-workers.md) for Vercel,
-Netlify, Cloudflare, Railway, Render, Heroku, Fly.io, DigitalOcean, Google
-Cloud Run, Coolify, Dokploy, Kamal, and VPS examples.
-
-## Other Node Frameworks
-
-First-class v0.1 server bridges are Express, Next.js App Router, generic Fetch
-`Request`/`Response`, and raw Node request/response. For NestJS on the Express
-platform, mount the Express adapter. Whichever framework you use, the shape is:
-
-- mount the OpenReceive HTTP routes under `/openreceive/v1`
-- keep `OPENRECEIVE_NWC` server-only
-- use the package-owned Postgres or SQLite invoice store
-- protect create/read/lookup/poll with your app's auth and CSRF rules
-- optionally schedule `openreceive poll --once` for extra recovery
-
-If the framework can host Express middleware, use `mountOpenReceiveExpressRoutes`.
-If it exposes Fetch `Request` objects, use `createOpenReceiveFetchHandler()`.
-If it exposes raw Node request/response objects, use
-`createOpenReceiveNodeHandler()`.
-Otherwise, build a small adapter around `createOpenReceiveExpressHandlers()` and
-the HTTP contract in [API Reference](api-reference.md).
+Cloudflare, Netlify, Railway, Render, Heroku, Fly.io, ECS, systemd/VPS,
+Coolify, Dokploy, and Kamal examples.
 
 ## Local Demo
 
-To see a working Express + React app:
-
 ```sh
 npm run demo node
-```
-
-To see a working Next.js App Router app:
-
-```sh
 npm run demo nextjs
 ```

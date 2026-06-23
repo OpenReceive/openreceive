@@ -5,7 +5,6 @@ const nextConfig = {
   transpilePackages: [
     "@openreceive/browser",
     "@openreceive/core",
-    "@openreceive/express",
     "@openreceive/node",
     "@openreceive/react"
   ]

@@ -215,7 +215,7 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
   }
 }
 
-export function createAlbyNwcReceiveClient(
+export function createNwcReceiveClient(
   options: AlbyNwcReceiveClientOptions
 ): AlbyNwcReceiveClient {
   return new AlbyNwcReceiveClient(options);

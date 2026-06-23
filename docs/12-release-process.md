@@ -5,7 +5,6 @@ OpenReceive starts with a small v0.1 release surface:
 - OpenReceive `0.1.0`
 - `@openreceive/core`
 - `@openreceive/node`
-- `@openreceive/express`
 - `@openreceive/next`
 - `@openreceive/browser`
 - `@openreceive/provider-data`

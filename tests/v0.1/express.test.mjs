@@ -3,10 +3,10 @@ import { Readable } from "node:stream";
 import test from "node:test";
 import {
   createOpenReceiveFetchHandler,
-  createOpenReceiveFetchRuntime,
+  createOpenReceiveNodeRuntime,
   createOpenReceiveNodeHandler,
-  createOpenReceiveExpressHandlers
-} from "../../packages/js/express/src/index.ts";
+  createOpenReceiveNodeHandlers
+} from "../../packages/js/node/src/index.ts";
 import {
   InMemoryInvoiceKvStore
 } from "../../packages/js/core/src/index.ts";
@@ -75,7 +75,7 @@ class FakeWallet {
 function createHarness(overrides = {}) {
   const wallet = new FakeWallet();
   const store = new InMemoryInvoiceKvStore();
-  const handlers = createOpenReceiveExpressHandlers({
+  const handlers = createOpenReceiveNodeHandlers({
     client: wallet,
     store,
     merchantScope: () => "demo:hello-fruit",
@@ -91,7 +91,7 @@ function createHarness(overrides = {}) {
 function createSecureHarness(overrides = {}) {
   const wallet = new FakeWallet();
   const store = new InMemoryInvoiceKvStore();
-  const handlers = createOpenReceiveExpressHandlers({
+  const handlers = createOpenReceiveNodeHandlers({
     client: wallet,
     store,
     merchantScope: () => "demo:hello-fruit",
@@ -133,16 +133,14 @@ test("create invoice uses idempotency replay without a second wallet call", asyn
 
 test("Fetch bridge dispatches OpenReceive routes for Fetch-style frameworks", async () => {
   const wallet = new FakeWallet();
-  const runtime = createOpenReceiveFetchRuntime({
+  const runtime = createOpenReceiveNodeRuntime({
     client: wallet,
     store: new InMemoryInvoiceKvStore(),
     merchantScope: () => "demo:fetch",
     unsafeAllowUnauthenticatedDemoMode: true,
     clock: () => 1000
   });
-  const handler = createOpenReceiveFetchHandler({
-    runtime
-  });
+  const handler = createOpenReceiveFetchHandler(runtime);
 
   const createResponse = await handler(new Request("http://app.test/openreceive/v1/invoices", {
     method: "POST",
@@ -164,9 +162,7 @@ test("Fetch bridge dispatches OpenReceive routes for Fetch-style frameworks", as
   const missingResponse = await handler(new Request("http://app.test/not-openreceive"));
   assert.equal(missingResponse.status, 404);
 
-  const noWalletHandler = createOpenReceiveFetchHandler({
-    runtime: undefined
-  });
+  const noWalletHandler = createOpenReceiveFetchHandler(undefined);
   const healthResponse = await noWalletHandler(
     new Request("http://app.test/openreceive/v1/health")
   );
@@ -178,9 +174,7 @@ test("Fetch bridge dispatches OpenReceive routes for Fetch-style frameworks", as
 });
 
 test("Node raw bridge dispatches OpenReceive routes for Fastify and Koa style servers", async () => {
-  const handler = createOpenReceiveNodeHandler({
-    runtime: undefined
-  });
+  const handler = createOpenReceiveNodeHandler(undefined);
   const req = new Readable({
     read() {
       this.push(null);
@@ -455,11 +449,11 @@ test("logger redacts wallet errors before emitting unhandled failures", async ()
 });
 
 test("lookup can run an idempotent backend settlement action hook after settlement", async () => {
-  let settlementActionCalls = 0;
+  let onPaymentSettledCalls = 0;
   const { wallet, handlers } = createHarness({
     clock: () => 1300,
-    settlementAction: async ({ invoice, metadata }) => {
-      settlementActionCalls += 1;
+    onPaymentSettled: async ({ invoice, metadata }) => {
+      onPaymentSettledCalls += 1;
       assert.equal(invoice.transaction_state, "settled");
       assert.deepEqual(metadata, { fruit: "pear" });
     }
@@ -498,7 +492,7 @@ test("lookup can run an idempotent backend settlement action hook after settleme
   assert.equal(firstLookup.body.workflow_state, "settlement_action_completed");
   assert.equal(firstLookup.body.settlement_action_state, "completed");
   assert.equal(firstLookup.body.settlement_action_completed_at, 1300);
-  assert.equal(settlementActionCalls, 1);
+  assert.equal(onPaymentSettledCalls, 1);
 
   const secondLookup = createResponse();
   await handlers.lookupInvoice(
@@ -512,11 +506,11 @@ test("lookup can run an idempotent backend settlement action hook after settleme
   );
 
   assert.equal(secondLookup.body.workflow_state, "settlement_action_completed");
-  assert.equal(settlementActionCalls, 1);
+  assert.equal(onPaymentSettledCalls, 1);
 });
 
 test("protected poll route recovers invoices without browser polling", async () => {
-  let settlementActionCalls = 0;
+  let onPaymentSettledCalls = 0;
   const settlementSources = [];
   const wallet = new FakeWallet();
   const store = new InMemoryInvoiceKvStore();
@@ -530,14 +524,14 @@ test("protected poll route recovers invoices without browser polling", async () 
     cronSecret: "poll-secret",
     backgroundSweep: false,
     clock: () => 1600,
-    settlementAction: async ({ invoice, source, req }) => {
-      settlementActionCalls += 1;
+    onPaymentSettled: async ({ invoice, source, req }) => {
+      onPaymentSettledCalls += 1;
       settlementSources.push(source);
       assert.equal(req, undefined);
       assert.equal(invoice.transaction_state, "settled");
     }
   };
-  const handlers = createOpenReceiveExpressHandlers(options);
+  const handlers = createOpenReceiveNodeHandlers(options);
 
   const createRes = createResponse();
   await handlers.createInvoice(
@@ -571,7 +565,7 @@ test("protected poll route recovers invoices without browser polling", async () 
   assert.equal(pollRes.statusCode, 200);
   assert.deepEqual(pollRes.body.invoice_ids, [createRes.body.invoice_id]);
   assert.equal(pollRes.body.checked, 1);
-  assert.equal(settlementActionCalls, 1);
+  assert.equal(onPaymentSettledCalls, 1);
   assert.deepEqual(settlementSources, ["poll"]);
   assert.equal(stored.workflow_state, "settlement_action_completed");
 });
@@ -597,7 +591,7 @@ test("poll route reads sweep tuning from env defaults", async () => {
     });
 
     wallet.lookupState = "settled";
-    const handlers = createOpenReceiveExpressHandlers({
+    const handlers = createOpenReceiveNodeHandlers({
       client: wallet,
       store,
       merchantScope: () => "demo:hello-fruit",
@@ -619,11 +613,11 @@ test("poll route reads sweep tuning from env defaults", async () => {
 });
 
 test("client-supplied settlement fields cannot trigger settlement action", async () => {
-  let settlementActionCalls = 0;
+  let onPaymentSettledCalls = 0;
   const { wallet, store, handlers } = createHarness({
     clock: () => 1300,
-    settlementAction: async () => {
-      settlementActionCalls += 1;
+    onPaymentSettled: async () => {
+      onPaymentSettledCalls += 1;
     }
   });
   const createRes = createResponse();
@@ -666,7 +660,7 @@ test("client-supplied settlement fields cannot trigger settlement action", async
   assert.equal(lookupRes.body.workflow_state, "verifying");
   assert.equal(stored.transaction_state, "pending");
   assert.equal(stored.settlement_action_state, "pending");
-  assert.equal(settlementActionCalls, 0);
+  assert.equal(onPaymentSettledCalls, 0);
 });
 
 test("lookup rejects public status oracle requests for unknown payment hashes", async () => {
@@ -1121,11 +1115,11 @@ test("Express refuses in-memory invoice storage in production mode", async () =>
     };
 
     assert.throws(
-      () => createOpenReceiveExpressHandlers(options),
+      () => createOpenReceiveNodeHandlers(options),
       /refuses to use InMemoryInvoiceKvStore/
     );
     assert.throws(
-      () => createOpenReceiveExpressHandlers({
+      () => createOpenReceiveNodeHandlers({
         ...options,
         store: undefined
       }),

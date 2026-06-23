@@ -6,10 +6,9 @@ package registry.
 | Package | Status | Notes |
 | --- | --- | --- |
 | `@openreceive/core` | Implemented | Shared errors, rates, NWC helpers, KV storage contract, pure invoice transitions, gated lookup, bounded sweep, and settlement-action lease helpers. |
-| `@openreceive/node` | Implemented | Receive-checkout adapter around `@getalby/sdk` NWC, package-owned Postgres/SQLite KV stores, `OPENRECEIVE_STORE` resolver, and `openreceive` CLI for init/doctor/migrate/poll --once. |
-| `@openreceive/express` | Implemented | Mounted Express routes, generic Fetch and raw Node bridges, auth/CSRF hooks, idempotent create/refresh, gated lookup, protected poll, settlement action hook, production fail-closed checks for memory storage, and static rates/routes/providers helpers. |
-| `@openreceive/next` | Implemented | Next.js/App Router wrapper around the shared Fetch bridge, including catch-all route dispatch and no-wallet fail-closed responses. |
-| `@openreceive/browser` | Implemented | Display-safe QR/copy/open-wallet helpers, checkout display and status models, polling watcher/controller, lookup and refresh fetchers, custom-element attribute/listener helpers, theme helpers, payment wizard state, shared labels/assets, and redacted browser logging hooks. |
+| `@openreceive/node` | Implemented | Receive-checkout NWC client, package-owned Postgres/SQLite KV stores, default local SQLite resolver, mounted Express routes, generic Fetch and raw Node bridges, auth/CSRF hooks, idempotent create/refresh, gated lookup, protected poll, settlement hook, and `openreceive` CLI for init/doctor/migrate/poll --once. |
+| `@openreceive/next` | Implemented | Next.js/App Router wrapper around the node-owned Fetch bridge, including catch-all route dispatch and no-wallet fail-closed responses. |
+| `@openreceive/browser` | Implemented | Display-safe QR/copy/open-wallet helpers, invoice creation helper, checkout display and status models, polling watcher/controller, lookup and refresh fetchers, custom-element attribute/listener helpers, theme helpers, payment wizard state, shared labels/assets, and redacted browser logging hooks. |
 | `@openreceive/provider-data` | Implemented | Read-only helpers around the runtime v4 provider registry with local provider icon paths and provider-route vector coverage. |
 | `@openreceive/testkit` | Implemented | Deterministic receive-client fixtures and conformance helpers. |
 | `@openreceive/elements` | Implemented | No-framework checkout and theme-toggle web components for display-safe invoice data, waiting state, countdown, copy feedback, payment wizard, lookupUrl polling, and optional redacted browser action logging. |

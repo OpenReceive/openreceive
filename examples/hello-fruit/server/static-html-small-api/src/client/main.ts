@@ -1,6 +1,8 @@
 import {
   createOpenReceiveCheckoutShell,
-  createOpenReceiveThemeToggleElement
+  createOpenReceiveInvoice,
+  createOpenReceiveThemeToggleElement,
+  type OpenReceiveCheckoutSnapshot
 } from "@openreceive/browser";
 import {
   defineOpenReceiveElements
@@ -26,25 +28,6 @@ interface Fruit {
   fiat: {
     currency: string;
     value: string;
-  };
-}
-
-interface InvoiceResponse {
-  invoice_id: string;
-  invoice: string;
-  payment_hash: string;
-  amount_msats: number;
-  fiat_quote?: {
-    fiat?: {
-      currency?: string;
-      value?: string;
-    };
-  } | null;
-  transaction_state: string;
-  workflow_state: string;
-  expires_at?: number;
-  checkout?: {
-    routes_url?: string;
   };
 }
 
@@ -140,30 +123,20 @@ async function createInvoice(): Promise<void> {
   completedInvoiceId = "";
 
   try {
-    const response = await fetch("/openreceive/v1/invoices", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Idempotency-Key": `hello-fruit-static-${selectedFruit.id}`
+    const body = await createOpenReceiveInvoice({
+      idempotencyKey: `hello-fruit-static-${selectedFruit.id}`,
+      fiat: selectedFruit.fiat,
+      description: createHelloFruitInvoiceDescription(selectedFruit.name, {
+        demoName: "static"
+      }),
+      expiry: product.invoice_expiry_seconds,
+      metadata: {
+        product_id: product.product_id,
+        fruit: selectedFruit.id,
+        fiat: selectedFruit.fiat
       },
-      body: JSON.stringify({
-        fiat: selectedFruit.fiat,
-        description: createHelloFruitInvoiceDescription(selectedFruit.name, {
-          demoName: "static"
-        }),
-        expiry: product.invoice_expiry_seconds,
-        metadata: {
-          product_id: product.product_id,
-          fruit: selectedFruit.id,
-          fiat: selectedFruit.fiat
-        }
-      })
+      fetch
     });
-    const body = await response.json();
-
-    if (!response.ok) {
-      throw new Error(body.message ?? helloFruitDemoLabels.createInvoiceError);
-    }
 
     purchasedFruit = selectedFruit;
     renderInvoice(body);
@@ -174,7 +147,7 @@ async function createInvoice(): Promise<void> {
   }
 }
 
-function renderInvoice(nextInvoice: InvoiceResponse): void {
+function renderInvoice(nextInvoice: OpenReceiveCheckoutSnapshot): void {
   const topbar = requireElement("topbar");
   const panel = requireElement("invoice-panel");
   const shell = createOpenReceiveCheckoutShell(nextInvoice, {

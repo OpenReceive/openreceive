@@ -12,10 +12,11 @@ OpenReceive records completion.
 
 ## Decision
 
-Settlement actions are delivered at least once. OpenReceive uses a CAS lease on
-the invoice record to prevent concurrent duplicate execution and to recover
-crashed claims. Host apps must make settlement hooks idempotent, usually by
-deduplicating on `payment_hash` or by using a conditional app-store update.
+Settlement actions are delivered at least once. OpenReceive records a
+store-backed claim on the invoice before running the app hook so two processes
+do not run the same hook at the same time, and so crashed claims can be retried.
+Host apps must make settlement hooks idempotent, usually by deduplicating on
+`payment_hash` or by using a conditional app-store update.
 
 ## Consequences
 

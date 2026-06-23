@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  createOpenReceiveInvoice,
   type OpenReceiveCheckoutState,
   type OpenReceiveCheckoutSnapshot,
 } from "@openreceive/browser";
@@ -75,33 +76,21 @@ export default function CheckoutClient({
     completedInvoiceRef.current = "";
 
     try {
-      const response = await fetch("/openreceive/v1/invoices", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Idempotency-Key": `hello-fruit-nextjs-${selectedFruit.id}`
-        },
-        body: JSON.stringify({
+      const body = await createOpenReceiveInvoice({
+        idempotencyKey: `hello-fruit-nextjs-${selectedFruit.id}`,
+        fiat: selectedFruit.fiat,
+        description: createHelloFruitInvoiceDescription(selectedFruit.name, {
+          demoName: "Next.js"
+        }),
+        expiry: product.invoice_expiry_seconds,
+        metadata: {
+          product_id: product.product_id,
+          fruit: selectedFruit.id,
           fiat: selectedFruit.fiat,
-          description: createHelloFruitInvoiceDescription(selectedFruit.name, {
-            demoName: "Next.js"
-          }),
-          expiry: product.invoice_expiry_seconds,
-          metadata: {
-            product_id: product.product_id,
-            fruit: selectedFruit.id,
-            fiat: selectedFruit.fiat,
-            framework: "nextjs"
-          }
-        })
+          framework: "nextjs"
+        },
+        fetch
       });
-      const body = await response.json();
-
-      if (!response.ok) {
-        setStatus("failed");
-        setError(body.message ?? helloFruitDemoLabels.createInvoiceError);
-        return;
-      }
 
       setCheckout(body);
       setPurchasedFruit(selectedFruit);

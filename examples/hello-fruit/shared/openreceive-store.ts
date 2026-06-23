@@ -3,7 +3,7 @@ import {
   type OpenReceiveResolvedStore
 } from "@openreceive/node";
 
-const DEFAULT_STORE_URI = "memory:";
+const DEFAULT_STORE_URI = "local-sqlite";
 const DEFAULT_NAMESPACE = "hello_fruit";
 
 export async function createHelloFruitOpenReceiveKvStore(input: {

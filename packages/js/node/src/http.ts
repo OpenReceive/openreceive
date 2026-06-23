@@ -38,6 +38,14 @@ import {
   type ProviderFilter
 } from "@openreceive/provider-data";
 import { formatOpenReceiveMissingNwcMessage } from "@openreceive/core";
+import {
+  createNwcReceiveClient
+} from "./alby-nwc.ts";
+import {
+  resolveOpenReceiveStore,
+  type OpenReceiveResolvedStore,
+  type ResolveOpenReceiveStoreOptions
+} from "./store-uri.ts";
 
 export interface ExpressLikeApp {
   get(path: string, ...handlers: ExpressLikeHandler[]): unknown;
@@ -82,7 +90,7 @@ export interface OpenReceiveLogEntry {
 
 export type OpenReceiveLogger = (entry: OpenReceiveLogEntry) => void;
 
-export interface OpenReceiveExpressAuthorization {
+export interface OpenReceiveNodeAuthorization {
   create?: (req: ExpressLikeRequest) => Promise<boolean> | boolean;
   poll?: (req: ExpressLikeRequest) => Promise<boolean> | boolean;
   read?: (
@@ -99,16 +107,16 @@ export interface OpenReceiveExpressAuthorization {
   ) => Promise<boolean> | boolean;
 }
 
-export interface OpenReceiveExpressCsrf {
+export interface OpenReceiveNodeCsrf {
   verify?: (req: ExpressLikeRequest) => Promise<boolean> | boolean;
 }
 
-export interface OpenReceiveExpressCors {
+export interface OpenReceiveNodeCors {
   allowed_origins?: string[];
   credentials?: boolean;
 }
 
-export interface OpenReceiveExpressSettlementActionInput {
+export interface OpenReceiveNodeSettlementActionInput {
   req?: ExpressLikeRequest;
   invoice: InvoiceStorageRow;
   metadata: Record<string, unknown>;
@@ -116,20 +124,20 @@ export interface OpenReceiveExpressSettlementActionInput {
   lookup_invoice?: unknown;
 }
 
-export type OpenReceiveExpressSettlementActionHook = (
-  input: OpenReceiveExpressSettlementActionInput
+export type OpenReceiveNodeSettlementActionHook = (
+  input: OpenReceiveNodeSettlementActionInput
 ) => Promise<void> | void;
 
-export interface OpenReceiveExpressOptions {
+export interface OpenReceiveNodeOptions {
   client: OpenReceiveReceiveNwcClient;
   store?: OpenReceiveInvoiceKvStore;
   basePath?: string;
   merchantScope: (req: ExpressLikeRequest) => string;
-  auth?: OpenReceiveExpressAuthorization;
-  csrf?: OpenReceiveExpressCsrf;
-  cors?: OpenReceiveExpressCors;
+  auth?: OpenReceiveNodeAuthorization;
+  csrf?: OpenReceiveNodeCsrf;
+  cors?: OpenReceiveNodeCors;
   cronSecret?: string;
-  settlementAction?: OpenReceiveExpressSettlementActionHook;
+  onPaymentSettled?: OpenReceiveNodeSettlementActionHook;
   priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
   priceCurrencies?: readonly string[];
   unsafeAllowUnauthenticatedDemoMode?: boolean;
@@ -143,7 +151,35 @@ export interface OpenReceiveExpressOptions {
   backgroundSweep?: boolean;
 }
 
-export interface OpenReceiveExpressHandlers {
+export interface OpenReceiveAuthorization {
+  request?: (req: ExpressLikeRequest) => Promise<boolean> | boolean;
+  invoice?: (
+    req: ExpressLikeRequest,
+    invoice: InvoiceStorageRow
+  ) => Promise<boolean> | boolean;
+  scheduler?: (req: ExpressLikeRequest) => Promise<boolean> | boolean;
+}
+
+export interface CreateOpenReceiveOptions
+  extends Omit<
+    OpenReceiveNodeOptions,
+    "auth" | "client" | "csrf" | "merchantScope" | "onPaymentSettled" | "store"
+  > {
+  client?: OpenReceiveReceiveNwcClient;
+  nwc?: string;
+  store?: OpenReceiveInvoiceKvStore;
+  storeUri?: string;
+  namespace?: string;
+  cwd?: string;
+  merchantScope?: (req: ExpressLikeRequest) => string;
+  authorize?: OpenReceiveAuthorization;
+  csrf?: OpenReceiveNodeCsrf | OpenReceiveNodeCsrf["verify"];
+  onPaymentSettled?: OpenReceiveNodeSettlementActionHook;
+  loadSqlite?: ResolveOpenReceiveStoreOptions["loadSqlite"];
+  loadPostgres?: ResolveOpenReceiveStoreOptions["loadPostgres"];
+}
+
+export interface OpenReceiveNodeHandlers {
   createInvoice: ExpressLikeHandler;
   getInvoice: ExpressLikeHandler;
   lookupInvoice: ExpressLikeHandler;
@@ -157,25 +193,37 @@ export interface OpenReceiveExpressHandlers {
   capabilities: ExpressLikeHandler;
 }
 
-export interface OpenReceiveFetchRuntime {
+export interface OpenReceiveNodeRuntime {
   readonly store: OpenReceiveInvoiceKvStore;
-  readonly handlers: OpenReceiveExpressHandlers;
+  readonly handlers: OpenReceiveNodeHandlers;
+  readonly basePath?: string;
+}
+
+export interface OpenReceiveServer
+  extends Omit<OpenReceiveNodeOptions, "store"> {
+  readonly store: OpenReceiveInvoiceKvStore;
+  readonly runtime: OpenReceiveNodeRuntime;
+  readonly handlers: OpenReceiveNodeHandlers;
+  mountExpress(app: ExpressLikeApp): OpenReceiveNodeHandlers;
+  handleFetch(request: Request): Promise<Response>;
+  handleNode(req: IncomingMessage, res: ServerResponse): Promise<void>;
+  close(): Promise<void>;
 }
 
 export interface OpenReceiveFetchRouteMatch {
-  readonly name: keyof OpenReceiveExpressHandlers;
+  readonly name: keyof OpenReceiveNodeHandlers;
   readonly params?: Record<string, string | undefined>;
 }
 
 export interface DispatchOpenReceiveFetchHandlerOptions {
-  readonly runtime: OpenReceiveFetchRuntime;
-  readonly name: keyof OpenReceiveExpressHandlers;
+  readonly runtime: OpenReceiveNodeRuntime;
+  readonly name: keyof OpenReceiveNodeHandlers;
   readonly request: Request;
   readonly params?: Record<string, string | undefined>;
 }
 
 export interface DispatchOpenReceiveFetchRouteOptions {
-  readonly runtime: OpenReceiveFetchRuntime;
+  readonly runtime: OpenReceiveNodeRuntime;
   readonly request: Request;
   readonly path: readonly string[];
 }
@@ -191,16 +239,17 @@ export interface OpenReceiveFetchNoWalletOptions {
   readonly message?: string;
 }
 
-export type OpenReceiveFetchRuntimeSource =
-  | OpenReceiveFetchRuntime
+export type OpenReceiveRouteSource =
+  | OpenReceiveServer
+  | OpenReceiveNodeRuntime
   | undefined
   | (() =>
-    | OpenReceiveFetchRuntime
+    | OpenReceiveServer
+    | OpenReceiveNodeRuntime
     | undefined
-    | Promise<OpenReceiveFetchRuntime | undefined>);
+    | Promise<OpenReceiveServer | OpenReceiveNodeRuntime | undefined>);
 
 export interface CreateOpenReceiveFetchHandlerOptions {
-  readonly runtime: OpenReceiveFetchRuntimeSource;
   readonly basePath?: string;
   readonly noWallet?: OpenReceiveFetchNoWalletOptions;
 }
@@ -214,12 +263,125 @@ const DEFAULT_BASE_PATH = "/openreceive/v1";
 const DEFAULT_NO_WALLET_MESSAGE = formatOpenReceiveMissingNwcMessage();
 const HEX_64 = /^[0-9a-fA-F]{64}$/;
 
-export function mountOpenReceiveExpressRoutes(
+export async function createOpenReceive(
+  options: CreateOpenReceiveOptions = {}
+): Promise<OpenReceiveServer> {
+  const client = options.client ?? createNwcReceiveClient({
+    connectionString: readOpenReceiveNwc(options.nwc)
+  });
+  const store = options.store ?? await resolveOpenReceiveStore(options.storeUri, {
+    cwd: options.cwd,
+    namespace: options.namespace,
+    loadSqlite: options.loadSqlite,
+    loadPostgres: options.loadPostgres
+  });
+  const nodeOptions: OpenReceiveNodeOptions = {
+    ...options,
+    client,
+    store,
+    merchantScope: options.merchantScope ?? (() => "app:default"),
+    auth: createOpenReceiveNodeAuthorization(options.authorize),
+    csrf: normalizeOpenReceiveCsrf(options.csrf),
+    cronSecret: options.cronSecret ?? globalThis.process?.env?.OPENRECEIVE_CRON_SECRET,
+    onPaymentSettled: options.onPaymentSettled
+  };
+  const runtime = createOpenReceiveNodeRuntime(nodeOptions);
+  const server: OpenReceiveServer = {
+    ...nodeOptions,
+    store,
+    runtime,
+    handlers: runtime.handlers,
+    mountExpress(app) {
+      return mountOpenReceiveExpress(app, server);
+    },
+    handleFetch: createOpenReceiveFetchHandler(runtime, {
+      basePath: options.basePath
+    }),
+    handleNode: createOpenReceiveNodeHandler(runtime, {
+      basePath: options.basePath
+    }),
+    async close() {
+      await closeOpenReceiveResource(store);
+      await closeOpenReceiveResource(client);
+    }
+  };
+
+  return server;
+}
+
+function readOpenReceiveNwc(configured: string | undefined): string {
+  const nwc = configured ?? globalThis.process?.env?.OPENRECEIVE_NWC;
+  if (nwc === undefined || nwc.trim().length === 0) {
+    throw new Error(formatOpenReceiveMissingNwcMessage());
+  }
+
+  return nwc;
+}
+
+function createOpenReceiveNodeAuthorization(
+  authorize: OpenReceiveAuthorization | undefined
+): OpenReceiveNodeAuthorization | undefined {
+  if (authorize === undefined) return undefined;
+
+  return {
+    create: authorize.request,
+    read: authorize.invoice,
+    lookup: authorize.invoice,
+    refresh: authorize.invoice,
+    poll: authorize.scheduler
+  };
+}
+
+function normalizeOpenReceiveCsrf(
+  csrf: CreateOpenReceiveOptions["csrf"]
+): OpenReceiveNodeCsrf | undefined {
+  if (typeof csrf === "function") {
+    return { verify: csrf };
+  }
+
+  return csrf;
+}
+
+function getOpenReceiveNodeHandlers(
+  openreceive: OpenReceiveServer | OpenReceiveNodeRuntime | OpenReceiveNodeOptions
+): OpenReceiveNodeHandlers {
+  if (isOpenReceiveServer(openreceive)) return openreceive.handlers;
+  if (isOpenReceiveNodeRuntime(openreceive)) return openreceive.handlers;
+  return createOpenReceiveNodeHandlers(openreceive);
+}
+
+function getOpenReceiveBasePath(
+  openreceive: OpenReceiveRouteSource | OpenReceiveNodeOptions
+): string | undefined {
+  if (openreceive === undefined || typeof openreceive === "function") return undefined;
+  return "basePath" in openreceive ? openreceive.basePath : undefined;
+}
+
+function isOpenReceiveServer(candidate: unknown): candidate is OpenReceiveServer {
+  return isRecord(candidate) &&
+    isOpenReceiveNodeRuntime(candidate.runtime) &&
+    isRecord(candidate.handlers);
+}
+
+function isOpenReceiveNodeRuntime(candidate: unknown): candidate is OpenReceiveNodeRuntime {
+  return isRecord(candidate) &&
+    isRecord(candidate.handlers) &&
+    "store" in candidate;
+}
+
+async function closeOpenReceiveResource(resource: unknown): Promise<void> {
+  const close = isRecord(resource) ? resource.close : undefined;
+  if (typeof close === "function") {
+    await close.call(resource);
+  }
+}
+
+export function mountOpenReceiveExpress(
   app: ExpressLikeApp,
-  options: OpenReceiveExpressOptions
-): OpenReceiveExpressHandlers {
-  const handlers = createOpenReceiveExpressHandlers(options);
-  const basePath = normalizeBasePath(options.basePath);
+  openreceive: OpenReceiveServer | OpenReceiveNodeRuntime | OpenReceiveNodeOptions
+): OpenReceiveNodeHandlers {
+  const handlers = getOpenReceiveNodeHandlers(openreceive);
+  const basePath = normalizeBasePath(getOpenReceiveBasePath(openreceive));
 
   app.post(`${basePath}/invoices`, handlers.createInvoice);
   app.get(`${basePath}/invoices/:invoice_id`, handlers.getInvoice);
@@ -237,14 +399,15 @@ export function mountOpenReceiveExpressRoutes(
   return handlers;
 }
 
-export function createOpenReceiveFetchRuntime(
-  options: OpenReceiveExpressOptions
-): OpenReceiveFetchRuntime {
+export function createOpenReceiveNodeRuntime(
+  options: OpenReceiveNodeOptions
+): OpenReceiveNodeRuntime {
   const store = options.store ?? new InMemoryInvoiceKvStore();
 
   return {
+    basePath: options.basePath,
     store,
-    handlers: createOpenReceiveExpressHandlers({
+    handlers: createOpenReceiveNodeHandlers({
       ...options,
       store
     })
@@ -252,13 +415,16 @@ export function createOpenReceiveFetchRuntime(
 }
 
 export function createOpenReceiveFetchHandler(
-  options: CreateOpenReceiveFetchHandlerOptions
+  openreceive: OpenReceiveRouteSource,
+  options: CreateOpenReceiveFetchHandlerOptions = {}
 ): (request: Request) => Promise<Response> {
+  const basePath = options.basePath ?? getOpenReceiveBasePath(openreceive);
+
   return async (request) => {
-    const path = createOpenReceiveFetchPath(request, options.basePath);
+    const path = createOpenReceiveFetchPath(request, basePath);
     if (path === undefined) return createOpenReceiveFetchRouteNotFoundResponse();
 
-    const runtime = await resolveOpenReceiveFetchRuntime(options.runtime);
+    const runtime = await resolveOpenReceiveNodeRuntime(openreceive);
     if (runtime === undefined) {
       return dispatchOpenReceiveFetchNoWalletRoute({
         request,
@@ -276,9 +442,10 @@ export function createOpenReceiveFetchHandler(
 }
 
 export function createOpenReceiveNodeHandler(
-  options: CreateOpenReceiveNodeHandlerOptions
+  openreceive: OpenReceiveRouteSource,
+  options: CreateOpenReceiveNodeHandlerOptions = {}
 ): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
-  const handler = createOpenReceiveFetchHandler(options);
+  const handler = createOpenReceiveFetchHandler(openreceive, options);
 
   return async (req, res) => {
     let response: Response;
@@ -414,7 +581,7 @@ export async function dispatchOpenReceiveFetchHandler(
 }
 
 export function createOpenReceiveFetchNoWalletResponse(
-  name: keyof OpenReceiveExpressHandlers,
+  name: keyof OpenReceiveNodeHandlers,
   options: OpenReceiveFetchNoWalletOptions = {}
 ): Response {
   const basePath = options.basePath ?? DEFAULT_BASE_PATH;
@@ -481,9 +648,9 @@ export function createOpenReceiveFetchPath(
     .map((segment) => decodeURIComponent(segment));
 }
 
-export function createOpenReceiveExpressHandlers(
-  options: OpenReceiveExpressOptions
-): OpenReceiveExpressHandlers {
+export function createOpenReceiveNodeHandlers(
+  options: OpenReceiveNodeOptions
+): OpenReceiveNodeHandlers {
   assertSafeDemoModeConfiguration(options);
   assertDurableStoreConfiguration(options);
 
@@ -818,7 +985,7 @@ export function createOpenReceiveExpressHandlers(
 }
 
 function reconcileOptions(
-  options: OpenReceiveExpressOptions,
+  options: OpenReceiveNodeOptions,
   store: OpenReceiveInvoiceKvStore,
   clock: () => number,
   req?: ExpressLikeRequest
@@ -838,7 +1005,7 @@ function reconcileOptions(
       source: "http_lookup" | "poll";
       lookup_invoice?: unknown;
     }) => {
-      await options.settlementAction?.({
+      await options.onPaymentSettled?.({
         req: input.source === "http_lookup" ? req : undefined,
         invoice: input.invoice,
         metadata: input.metadata,
@@ -882,7 +1049,7 @@ function readPositiveNumberEnv(name: string): number | undefined {
 }
 
 function scheduleMaybeSweep(
-  options: OpenReceiveExpressOptions,
+  options: OpenReceiveNodeOptions,
   store: OpenReceiveInvoiceKvStore,
   clock: () => number
 ): void {
@@ -973,7 +1140,7 @@ function invoiceLogFields(row: InvoiceStorageRow): Record<string, unknown> {
 }
 
 function emitLog(
-  options: OpenReceiveExpressOptions,
+  options: OpenReceiveNodeOptions,
   level: OpenReceiveLogLevel,
   event: string,
   message: string,
@@ -1215,7 +1382,7 @@ async function requireStoredRecord(
 }
 
 async function requireAuthorization(
-  options: OpenReceiveExpressOptions,
+  options: OpenReceiveNodeOptions,
   action: "create" | "read" | "lookup" | "refresh",
   req: ExpressLikeRequest,
   invoice?: InvoiceStorageRow
@@ -1256,7 +1423,7 @@ async function requireAuthorization(
 }
 
 async function requirePollAuthorization(
-  options: OpenReceiveExpressOptions,
+  options: OpenReceiveNodeOptions,
   req: ExpressLikeRequest
 ): Promise<void> {
   if (options.unsafeAllowUnauthenticatedDemoMode === true) return;
@@ -1282,7 +1449,7 @@ async function requirePollAuthorization(
 }
 
 async function requireCsrf(
-  options: OpenReceiveExpressOptions,
+  options: OpenReceiveNodeOptions,
   req: ExpressLikeRequest
 ): Promise<void> {
   if (options.unsafeAllowUnauthenticatedDemoMode === true) return;
@@ -1295,7 +1462,7 @@ async function requireCsrf(
 }
 
 function assertSafeDemoModeConfiguration(
-  options: OpenReceiveExpressOptions
+  options: OpenReceiveNodeOptions
 ): void {
   if (options.unsafeAllowUnauthenticatedDemoMode !== true) return;
 
@@ -1315,7 +1482,7 @@ function assertSafeDemoModeConfiguration(
 }
 
 function assertDurableStoreConfiguration(
-  options: OpenReceiveExpressOptions
+  options: OpenReceiveNodeOptions
 ): void {
   const env = globalThis.process?.env ?? {};
   const mode = (env.OPENRECEIVE_MODE ?? env.NODE_ENV ?? "").toLowerCase();
@@ -1332,11 +1499,13 @@ function assertDurableStoreConfiguration(
   );
 }
 
-async function resolveOpenReceiveFetchRuntime(
-  runtime: OpenReceiveFetchRuntimeSource
-): Promise<OpenReceiveFetchRuntime | undefined> {
-  if (typeof runtime !== "function") return runtime;
-  return await runtime();
+async function resolveOpenReceiveNodeRuntime(
+  runtime: OpenReceiveRouteSource
+): Promise<OpenReceiveNodeRuntime | undefined> {
+  const resolved = typeof runtime === "function" ? await runtime() : runtime;
+  if (resolved === undefined) return undefined;
+  if (isOpenReceiveServer(resolved)) return resolved.runtime;
+  return resolved;
 }
 
 async function createOpenReceiveRequestFromNode(
@@ -1492,7 +1661,7 @@ class CapturedOpenReceiveFetchResponse implements ExpressLikeResponse {
 }
 
 function wrapHandler(
-  options: OpenReceiveExpressOptions,
+  options: OpenReceiveNodeOptions,
   handler: (req: ExpressLikeRequest, res: ExpressLikeResponse) => Promise<unknown>
 ): ExpressLikeHandler {
   return (req, res, next) => {
@@ -1519,7 +1688,7 @@ function wrapHandler(
 function applyDefaultHeaders(
   req: ExpressLikeRequest,
   res: ExpressLikeResponse,
-  options: OpenReceiveExpressOptions
+  options: OpenReceiveNodeOptions
 ): void {
   res.set("Cache-Control", "no-store");
   res.set("Referrer-Policy", "same-origin");
@@ -1529,7 +1698,7 @@ function applyDefaultHeaders(
 function applyCorsHeaders(
   req: ExpressLikeRequest,
   res: ExpressLikeResponse,
-  cors: OpenReceiveExpressCors | undefined
+  cors: OpenReceiveNodeCors | undefined
 ): void {
   if (cors === undefined) return;
   const origin = getHeader(req, "origin");
@@ -1560,6 +1729,10 @@ function asRecord(value: unknown): Record<string, unknown> {
     throw httpError(400, "INVALID_REQUEST", "JSON request body must be an object.");
   }
   return value as Record<string, unknown>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function getHeader(

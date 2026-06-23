@@ -9,7 +9,17 @@ export type {
   OpenReceiveErrorCode,
   OpenReceiveReceiveNwcClient
 } from "@openreceive/core";
-export * from "./alby-nwc.ts";
+export {
+  ReceiveCheckoutValidationError,
+  WalletPreflightError,
+  createNwcReceiveClient,
+  normalizeNwcWalletError,
+  summarizeWalletCapabilities
+} from "./alby-nwc.ts";
+export type {
+  WalletPreflightErrorCode
+} from "./alby-nwc.ts";
+export * from "./http.ts";
 export * from "./postgres-store.ts";
 export * from "./storage-schema.ts";
 export * from "./sqlite-store.ts";

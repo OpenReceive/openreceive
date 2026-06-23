@@ -342,7 +342,7 @@ function validateRailsDemo(demo) {
   const overrideService = override.services?.[demo.service] ?? {};
   expect(overrideService.ports?.[0] === `${demo.port}:${demo.port}`, `${overridePath}: local override must publish ${demo.port}:${demo.port}`);
   expect(/^OPENRECEIVE_NWC=$/m.test(envExample), `${envPath}: OPENRECEIVE_NWC must be empty placeholder`);
-  expect(/^OPENRECEIVE_STORE=local-sqlite$/m.test(envExample), `${envPath}: OPENRECEIVE_STORE must default to local-sqlite`);
+  expect(/^# OPENRECEIVE_STORE defaults to local-sqlite$/m.test(envExample), `${envPath}: OPENRECEIVE_STORE must document local-sqlite default`);
   expect(new RegExp(`^OPENRECEIVE_NAMESPACE=${demo.namespace}$`, "m").test(envExample), `${envPath}: OPENRECEIVE_NAMESPACE must default to ${demo.namespace}`);
   expect(/^OPENRECEIVE_CRON_SECRET=$/m.test(envExample), `${envPath}: OPENRECEIVE_CRON_SECRET must be present but empty`);
   expect(new RegExp(`^PORT=${demo.port}$`, "m").test(envExample), `${envPath}: PORT must default to ${demo.port}`);
