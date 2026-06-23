@@ -66,7 +66,7 @@ const snapshot = {
   },
   transaction_state: "pending",
   workflow_state: "invoice_created",
-  expires_at: 1781943000
+  expires_at: 1999999999
 };
 
 test("Next package keeps routing on the OpenReceive server handleFetch method", () => {
@@ -109,7 +109,7 @@ test("browser owns custom-element checkout attributes and listeners", () => {
     "fiat-currency": "USD",
     "fiat-value": "0.05",
     status: "pending",
-    "expires-at": "1781943000",
+    "expires-at": "1999999999",
     "lookup-url": "/openreceive/v1/invoices/lookup",
     theme: "dark",
     "payment-wizard": "true"

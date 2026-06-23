@@ -22,6 +22,9 @@ OPENRECEIVE_NAMESPACE=default
 `./.openreceive/<namespace>.sqlite3`. Use Postgres for multi-instance
 production.
 
+OpenReceive owns a package-owned Postgres or SQLite invoice store. Your app
+keeps orders, carts, users, and fulfillment state in its own tables.
+
 ## Server
 
 Create `server/openreceive.ts`:

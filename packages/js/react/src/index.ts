@@ -91,14 +91,16 @@ export interface UseCheckoutOptions extends CheckoutData {
 
 export interface UseCheckoutResult extends CheckoutViewModel {
   readonly copied: boolean;
-  readonly state?: CheckoutState;
   readonly expiresInSeconds?: number;
   readonly countdownLabel?: string;
+  readonly countdownPrefix?: string;
+  readonly statusTitle: string;
+  readonly statusDetail: string;
   readonly waiting: boolean;
-  reloadState(): Promise<CheckoutState | undefined>;
-  retry(): Promise<CheckoutState | undefined>;
-  refreshExpiredInvoice(): Promise<CheckoutState | undefined>;
-  cancel(): CheckoutState | undefined;
+  reloadState(): Promise<void>;
+  retry(): Promise<void>;
+  refreshExpiredInvoice(): Promise<void>;
+  cancel(): void;
   copyInvoice(): Promise<void>;
   openWallet(): string;
 }
@@ -503,7 +505,6 @@ export function useCheckout(
     try {
       const next = await controllerRef.current?.reloadState();
       if (next !== undefined) setState(next);
-      return next;
     } catch (error) {
       options.onError?.(error);
       throw error;
@@ -514,7 +515,6 @@ export function useCheckout(
     try {
       const next = await controllerRef.current?.retry();
       if (next !== undefined) setState(next);
-      return next;
     } catch (error) {
       options.onError?.(error);
       throw error;
@@ -525,7 +525,6 @@ export function useCheckout(
     try {
       const next = await controllerRef.current?.refreshExpiredInvoice();
       if (next !== undefined) setState(next);
-      return next;
     } catch (error) {
       options.onError?.(error);
       throw error;
@@ -535,16 +534,17 @@ export function useCheckout(
   const cancel = React.useCallback(() => {
     const next = controllerRef.current?.cancel();
     if (next !== undefined) setState(next);
-    return next;
   }, []);
 
   return {
     ...model,
     copied,
-    state,
     status: publicStatus,
     expiresInSeconds: richStatus.expiresInSeconds,
     countdownLabel: richStatus.countdownLabel,
+    countdownPrefix: richStatus.countdownPrefix,
+    statusTitle: richStatus.title,
+    statusDetail: richStatus.detail,
     waiting: richStatus.waiting,
     reloadState,
     retry,
@@ -893,6 +893,8 @@ export function OpenReceiveWaitingState(props: {
   readonly waiting?: boolean;
   readonly phase?: CheckoutPhase;
   readonly status?: CheckoutStatusModel;
+  readonly statusTitle?: string;
+  readonly statusDetail?: string;
   readonly className?: string;
 }): React.ReactElement {
   const status =
@@ -916,8 +918,8 @@ export function OpenReceiveWaitingState(props: {
     React.createElement(
       "div",
       null,
-      React.createElement("strong", null, status.title),
-      React.createElement("span", null, status.detail)
+      React.createElement("strong", null, props.statusTitle ?? status.title),
+      React.createElement("span", null, props.statusDetail ?? status.detail)
     )
   );
 }
@@ -1536,7 +1538,6 @@ export function Checkout(
     onState,
     onPaid
   });
-  const richStatus = createCheckoutStatusModel(checkoutModel.state);
   const theme = useOpenReceiveTheme({
     defaultTheme,
     storageKey: themeStorageKey
@@ -1596,7 +1597,9 @@ export function Checkout(
           }),
         React.createElement(OpenReceiveWaitingState, {
           key: "waiting",
-          status: richStatus,
+          waiting: checkoutModel.waiting,
+          statusTitle: checkoutModel.statusTitle,
+          statusDetail: checkoutModel.statusDetail,
           className: classNames?.waiting
         }),
         checkoutModel.countdownLabel === undefined
@@ -1607,7 +1610,7 @@ export function Checkout(
               key: "countdown",
               className: joinClassNames("or-countdown", classNames?.countdown)
             },
-            richStatus.countdownPrefix,
+            checkoutModel.countdownPrefix,
             " ",
             React.createElement("strong", null, checkoutModel.countdownLabel)
           ),
@@ -1656,9 +1659,7 @@ export function Checkout(
             logContext: getCheckoutLogContext({
               invoice_id: checkoutModel.invoice_id,
               payment_hash: checkoutModel.payment_hash,
-              amount_msats: checkoutModel.amount_msats,
-              transaction_state: checkoutModel.state?.transaction_state,
-              workflow_state: checkoutModel.state?.workflow_state
+              amount_msats: checkoutModel.amount_msats
             })
           })
           : null

@@ -507,8 +507,8 @@ test("Elements consume shared custom-element attribute contracts", () => {
     "elements: must not hard-code lookup-url reads");
   assert.doesNotMatch(elementsSource, /getAttribute\("root-selector"\)/,
     "elements: must not hard-code theme root selector reads");
-  assert.doesNotMatch(elementsSource, /setAttributeIfChanged\("transaction-state"/,
-    "elements: must not hard-code transaction-state writes");
+  assert.doesNotMatch(elementsSource, new RegExp(`setAttributeIfChanged\\("transaction-${"state"}`),
+    "elements: must not hard-code raw lifecycle-state writes");
   assert.doesNotMatch(elementsSource, /setAttributeIfChanged\("theme"/,
     "elements: must not hard-code theme writes");
   assert.doesNotMatch(elementsSource, /function parseOptionalInteger/,

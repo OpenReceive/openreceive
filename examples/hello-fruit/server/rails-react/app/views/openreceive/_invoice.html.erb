@@ -1,11 +1,17 @@
 <%= turbo_frame_tag "openreceive_invoice_#{invoice.fetch("invoice_id")}" do %>
+  <% openreceive_status = case invoice.fetch("transaction_state")
+    when "settled" then "paid"
+    when "expired" then "expired"
+    when "failed" then "failed"
+    else "pending"
+  end %>
   <section
     id="openreceive_invoice_<%= invoice.fetch("invoice_id") %>"
-    data-openreceive-transaction-state="<%= invoice.fetch("transaction_state") %>"
+    data-openreceive-status="<%= openreceive_status %>"
   >
     <p><strong>Invoice</strong></p>
     <p><code><%= invoice.fetch("invoice") %></code></p>
     <p><%= invoice.fetch("amount_msats") %> msats</p>
-    <p><%= invoice.fetch("transaction_state") %></p>
+    <p><%= openreceive_status %></p>
   </section>
 <% end %>
