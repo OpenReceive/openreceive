@@ -124,18 +124,15 @@ async function createInvoice(): Promise<void> {
   completedInvoiceId = "";
 
   try {
+    const orderUuid = globalThis.crypto?.randomUUID?.() ??
+      `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const body = await requestInvoice({
-      idempotencyKey: `hello-fruit-static-${selectedFruit.id}`,
+      orderUuid: `hello-fruit-static-${selectedFruit.id}-${orderUuid}`,
       fiat: selectedFruit.fiat,
-      description: createHelloFruitInvoiceDescription(selectedFruit.name, {
+      optionalInvoiceDescription: createHelloFruitInvoiceDescription(selectedFruit.name, {
         demoName: "static"
       }),
       expiry: product.invoice_expiry_seconds,
-      metadata: {
-        product_id: product.product_id,
-        fruit: selectedFruit.id,
-        fiat: selectedFruit.fiat
-      },
       fetch
     });
 

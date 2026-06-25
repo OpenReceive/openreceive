@@ -65,6 +65,8 @@ export default function CheckoutClient({
 
   async function createInvoice() {
     if (selectedFruit === undefined) return;
+    const orderUuid = globalThis.crypto?.randomUUID?.() ??
+      `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
     setStatus("creating");
     setError("");
@@ -73,18 +75,12 @@ export default function CheckoutClient({
 
     try {
       const body = await requestInvoice({
-        idempotencyKey: `hello-fruit-nextjs-${selectedFruit.id}`,
+        orderUuid: `hello-fruit-nextjs-${selectedFruit.id}-${orderUuid}`,
         fiat: selectedFruit.fiat,
-        description: createHelloFruitInvoiceDescription(selectedFruit.name, {
+        optionalInvoiceDescription: createHelloFruitInvoiceDescription(selectedFruit.name, {
           demoName: "Next.js"
         }),
         expiry: product.invoice_expiry_seconds,
-        metadata: {
-          product_id: product.product_id,
-          fruit: selectedFruit.id,
-          fiat: selectedFruit.fiat,
-          framework: "nextjs"
-        },
         fetch
       });
 

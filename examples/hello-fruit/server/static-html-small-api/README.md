@@ -41,8 +41,8 @@ package-owned OpenReceive Postgres KV store and self-initializes the
 OpenReceive schema before store queries.
 
 The package exposes `npm run openreceive:poll` for an optional one-shot
-scheduled reconciliation pass through the protected `/openreceive/v1/poll`
-route. Normal checkout recovery happens through backend lookup routes.
+scheduled reconciliation pass. Normal checkout recovery happens through
+backend lookup routes.
 
 The Makefile exposes the standard demo commands: `make setup`, `make dev`,
 `make test`, `make demo-test-nwc`, `make demo-production`,
@@ -54,7 +54,7 @@ git SHA, image digest, and `deployed_at` metadata for hosted-demo smoke checks.
 Hosted-demo helpers expose `/healthz`, `/source`, `/docs`, `/robots.txt`, and
 `/sitemap.xml`.
 
-This demo uses `unsafeAllowUnauthenticatedDemoMode` because it is a local
-single-user example. Production apps use app auth, CSRF hooks, and protected
-poll authorization;
+This demo is a public guest checkout. Production apps that require signed-in or
+session-bound checkout should mount OpenReceive routes behind their normal app
+middleware;
 see [Deployment And Recovery](../../../../docs/guides/deployment-and-recovery.md).

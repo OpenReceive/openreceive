@@ -11,6 +11,7 @@ import {
   createHelloFruitDemoMetadata
 } from "../../../../shared/demo-metadata.ts";
 import {
+  createHelloFruitTestReceiveClient,
   readRequiredHelloFruitNwcConnectionString
 } from "../../../../shared/demo-nwc.ts";
 import {
@@ -33,14 +34,16 @@ export async function createHelloFruitOpenReceive(): Promise<OpenReceiveServer> 
   const store = await createHelloFruitOpenReceiveKvStore({
     demoId: DEMO_ID
   });
+  const testClient = createHelloFruitTestReceiveClient();
 
   return await createOpenReceive({
-    nwc: readRequiredHelloFruitNwcConnectionString(),
+    ...(testClient === undefined
+      ? { nwc: readRequiredHelloFruitNwcConnectionString() }
+      : { client: testClient }),
     store,
-    merchantScope: () => "demo:hello-fruit-static",
+    namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit",
     priceProviders: createDefaultLivePriceProviders({ currencies: priceCurrencies }),
     priceCurrencies,
-    unsafeAllowUnauthenticatedDemoMode: true,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID)
   });
 }

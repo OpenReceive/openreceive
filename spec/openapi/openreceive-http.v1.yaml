@@ -13,13 +13,6 @@ paths:
     post:
       operationId: createInvoice
       summary: Create a receive invoice.
-      parameters:
-        - name: Idempotency-Key
-          in: header
-          required: true
-          schema:
-            type: string
-            minLength: 1
       requestBody:
         required: true
         content:
@@ -46,10 +39,6 @@ paths:
                 $ref: "#/components/schemas/Invoice"
         "400":
           $ref: "#/components/responses/Error"
-        "401":
-          $ref: "#/components/responses/Error"
-        "403":
-          $ref: "#/components/responses/Error"
         "409":
           $ref: "#/components/responses/Error"
   /invoices/{invoice_id}:
@@ -65,19 +54,16 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Invoice"
-        "401":
-          $ref: "#/components/responses/Error"
-        "403":
-          $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
   /invoices/lookup:
     post:
       operationId: lookupInvoice
-      summary: Strongly authorized lookup by payment hash or BOLT11 invoice.
+      summary: Lookup by payment hash or BOLT11 invoice.
       description: >
-        This endpoint must not be exposed as a public payment status oracle.
-        Framework adapters must authorize access to the matching invoice.
+        This endpoint refreshes invoice status by asking the server-side wallet
+        for authoritative lookup_invoice state. Mount it inside an app route
+        whose access rules fit your checkout flow.
       requestBody:
         required: true
         content:
@@ -97,10 +83,6 @@ paths:
                       preimage_present:
                         type: boolean
         "400":
-          $ref: "#/components/responses/Error"
-        "401":
-          $ref: "#/components/responses/Error"
-        "403":
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
@@ -140,33 +122,9 @@ paths:
                 $ref: "#/components/schemas/RefreshInvoiceResponse"
         "400":
           $ref: "#/components/responses/Error"
-        "401":
-          $ref: "#/components/responses/Error"
-        "403":
-          $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
         "409":
-          $ref: "#/components/responses/Error"
-  /poll:
-    post:
-      operationId: pollInvoices
-      summary: Run one protected settlement recovery pass.
-      description: >
-        Intended for platform schedulers or an explicitly authorized operator
-        call. It performs one bounded poll-only reconciliation pass through the
-        store-enforced lookup gates; it is not a long-running worker.
-      responses:
-        "200":
-          description: Bounded poll result.
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: true
-        "401":
-          $ref: "#/components/responses/Error"
-        "403":
           $ref: "#/components/responses/Error"
   /rates:
     get:
@@ -306,39 +264,60 @@ components:
     CreateInvoiceRequest:
       type: object
       additionalProperties: false
+      required:
+        - order_uuid
       properties:
+        order_uuid:
+          type: string
+          minLength: 1
+          maxLength: 200
+        amount_sats:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740
         amount_msats:
           type: integer
           minimum: 1000
           maximum: 9007199254740991
         fiat:
           $ref: "#/components/schemas/FiatAmount"
-        description:
+        optional_invoice_description:
           type: string
-          maxLength: 1024
+          maxLength: 500
         description_hash:
           type: string
           pattern: "^[0-9a-fA-F]{64}$"
         expiry:
           type: integer
           minimum: 1
-        metadata:
-          type: object
-          additionalProperties: true
       oneOf:
+        - required:
+            - amount_sats
+          not:
+            anyOf:
+              - required:
+                  - amount_msats
+              - required:
+                  - fiat
         - required:
             - amount_msats
           not:
-            required:
-              - fiat
+            anyOf:
+              - required:
+                  - amount_sats
+              - required:
+                  - fiat
         - required:
             - fiat
           not:
-            required:
-              - amount_msats
+            anyOf:
+              - required:
+                  - amount_sats
+              - required:
+                  - amount_msats
       not:
         required:
-          - description
+          - optional_invoice_description
           - description_hash
     LookupInvoiceRequest:
       type: object
@@ -414,6 +393,7 @@ components:
         - invoice
         - payment_hash
         - amount_msats
+        - order_uuid
         - created_at
         - expires_at
         - settlement_action_state
@@ -436,6 +416,9 @@ components:
           type: integer
           minimum: 1000
           maximum: 9007199254740991
+        order_uuid:
+          type: string
+          minLength: 1
         created_at:
           type: integer
           minimum: 0
@@ -457,9 +440,6 @@ components:
         settlement_action_completed_at:
           type: integer
           minimum: 0
-        metadata:
-          type: object
-          additionalProperties: true
         fiat_quote:
           oneOf:
             - $ref: "#/components/schemas/RateQuote"

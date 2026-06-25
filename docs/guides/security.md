@@ -28,18 +28,17 @@ Default route policy:
   checkout token.
 - Invoice reads require ownership of the invoice, order, cart, or checkout
   session.
-- Lookup by `payment_hash` is server-side or strongly authorized.
-- `/poll` is internal scheduler/operator surface and requires app auth,
-  `authorize.scheduler`, or `OPENRECEIVE_CRON_SECRET`.
+- Lookup by `payment_hash` is server-side or protected by your app when payment
+  status should not be public.
+- Optional scheduler recovery runs server-side with `openreceive poll --once`.
 
 ## Browser Defaults
 
 - Deny credentialed cross-origin access by default.
 - Never combine wildcard CORS with credentials.
 - Use CSRF protection for cookie-authenticated POST routes.
-- Return `Cache-Control: no-store` for invoice, lookup, refresh, and poll
-  responses.
-- Avoid logging signed lookup, refresh, or scheduler URLs.
+- Return `Cache-Control: no-store` for invoice, lookup, and refresh responses.
+- Avoid logging signed lookup or refresh URLs.
 - Keep wallet diagnostics such as `get_balance` out of public checkout
   responses and capability summaries.
 

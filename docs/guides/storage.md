@@ -3,7 +3,7 @@
 OpenReceive owns its invoice storage. Your app keeps orders, carts, users,
 products, fulfillment state, and tenant-specific columns in your own tables.
 Link app records to OpenReceive invoices through your app records or invoice
-`metadata`.
+`orderUuid`.
 
 ## Store URI
 
@@ -35,9 +35,9 @@ share the same physical store. Use a short, lowercase value such as `default`,
 Changing the namespace points OpenReceive at a different logical store inside
 the same backend.
 
-`merchantScope` is different. It is an app-level idempotency and tenancy scope
-inside one namespace. Use it to distinguish tenants, checkout surfaces, or
-stores that intentionally share the same OpenReceive operational namespace.
+OpenReceive uses the namespace as the idempotency scope for `order_uuid`
+replays. Use separate namespaces or separate OpenReceive instances when two
+apps should not share invoice replay keys.
 
 ## Production Choices
 
@@ -67,4 +67,3 @@ Keep the defaults unless your deployment has measured pressure:
 | `OPENRECEIVE_ACTION_LEASE_TTL_SEC` | Settlement-action lease duration before another process may retry. |
 | `OPENRECEIVE_SWEEP_INTERVAL_SEC` | Minimum interval between route-triggered recovery sweeps. |
 | `OPENRECEIVE_SWEEP_BATCH` | Maximum invoices examined by one recovery sweep. |
-| `OPENRECEIVE_CRON_SECRET` | Bearer token for protected scheduler calls to `/openreceive/v1/poll`. |

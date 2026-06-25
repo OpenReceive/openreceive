@@ -90,35 +90,10 @@ export interface OpenReceiveLogEntry {
 
 export type OpenReceiveLogger = (entry: OpenReceiveLogEntry) => void;
 
-interface OpenReceiveRouteAuthorization {
-  create?: (req: ExpressLikeRequest) => Promise<boolean> | boolean;
-  poll?: (req: ExpressLikeRequest) => Promise<boolean> | boolean;
-  read?: (
-    req: ExpressLikeRequest,
-    invoice: InvoiceStorageRow
-  ) => Promise<boolean> | boolean;
-  lookup?: (
-    req: ExpressLikeRequest,
-    invoice: InvoiceStorageRow
-  ) => Promise<boolean> | boolean;
-  refresh?: (
-    req: ExpressLikeRequest,
-    invoice: InvoiceStorageRow
-  ) => Promise<boolean> | boolean;
-}
-
-export interface OpenReceiveNodeCsrf {
-  verify?: (req: ExpressLikeRequest) => Promise<boolean> | boolean;
-}
-
-export interface OpenReceiveNodeCors {
-  allowed_origins?: string[];
-  credentials?: boolean;
-}
-
 export interface OpenReceiveNodeSettlementActionInput {
   req?: ExpressLikeRequest;
   invoice: InvoiceStorageRow;
+  orderUuid: string;
   metadata: Record<string, unknown>;
   source: "http_lookup" | "poll";
   lookup_invoice?: unknown;
@@ -132,15 +107,10 @@ export interface OpenReceiveNodeOptions {
   client: OpenReceiveReceiveNwcClient;
   store?: OpenReceiveInvoiceKvStore;
   basePath?: string;
-  merchantScope: (req: ExpressLikeRequest) => string;
-  authorization?: OpenReceiveRouteAuthorization;
-  csrf?: OpenReceiveNodeCsrf;
-  cors?: OpenReceiveNodeCors;
-  cronSecret?: string;
+  namespace?: string;
   onPaid?: OpenReceiveNodeSettlementActionHook;
   priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
   priceCurrencies?: readonly string[];
-  unsafeAllowUnauthenticatedDemoMode?: boolean;
   logger?: OpenReceiveLogger;
   clock?: () => number;
   lookupBurst?: number;
@@ -151,23 +121,12 @@ export interface OpenReceiveNodeOptions {
   backgroundSweep?: boolean;
 }
 
-type OpenReceiveNodeOptionsInput = OpenReceiveNodeOptions & {
-  readonly authorize?: OpenReceiveAuthorization;
-};
-
-export interface OpenReceiveAuthorization {
-  request?: (req: ExpressLikeRequest) => Promise<boolean> | boolean;
-  invoice?: (
-    req: ExpressLikeRequest,
-    invoice: InvoiceStorageRow
-  ) => Promise<boolean> | boolean;
-  scheduler?: (req: ExpressLikeRequest) => Promise<boolean> | boolean;
-}
+type OpenReceiveNodeOptionsInput = OpenReceiveNodeOptions;
 
 export interface CreateOpenReceiveOptions
   extends Omit<
     OpenReceiveNodeOptions,
-    "authorization" | "client" | "csrf" | "merchantScope" | "onPaid" | "store"
+    "client" | "onPaid" | "store"
   > {
   client?: OpenReceiveReceiveNwcClient;
   nwc?: string;
@@ -175,9 +134,6 @@ export interface CreateOpenReceiveOptions
   storeUri?: string;
   namespace?: string;
   cwd?: string;
-  merchantScope?: (req: ExpressLikeRequest) => string;
-  authorize?: OpenReceiveAuthorization;
-  csrf?: OpenReceiveNodeCsrf | OpenReceiveNodeCsrf["verify"];
   onPaid?: OpenReceiveNodeSettlementActionHook;
   loadSqlite?: ResolveOpenReceiveStoreOptions["loadSqlite"];
   loadPostgres?: ResolveOpenReceiveStoreOptions["loadPostgres"];
@@ -270,23 +226,25 @@ const HEX_64 = /^[0-9a-fA-F]{64}$/;
 export async function createOpenReceive(
   options: CreateOpenReceiveOptions = {}
 ): Promise<OpenReceiveServer> {
+  const namespace = readOpenReceiveNamespace(options.namespace);
   const client = options.client ?? createNwcReceiveClient({
     connectionString: readOpenReceiveNwc(options.nwc)
   });
+  await client.preflight();
+
   const store = options.store ?? await resolveOpenReceiveStore(options.storeUri, {
     cwd: options.cwd,
-    namespace: options.namespace,
+    namespace,
     loadSqlite: options.loadSqlite,
     loadPostgres: options.loadPostgres
   });
+  await ensureOpenReceiveStoreSchema(store);
+
   const nodeOptions: OpenReceiveNodeOptions = {
     ...options,
     client,
     store,
-    merchantScope: options.merchantScope ?? (() => "default"),
-    authorization: createOpenReceiveRouteAuthorization(options.authorize),
-    csrf: normalizeOpenReceiveCsrf(options.csrf),
-    cronSecret: options.cronSecret ?? globalThis.process?.env?.OPENRECEIVE_CRON_SECRET,
+    namespace,
     onPaid: options.onPaid
   };
   const runtime = createNodeRuntime(nodeOptions);
@@ -322,28 +280,19 @@ function readOpenReceiveNwc(configured: string | undefined): string {
   return nwc;
 }
 
-function createOpenReceiveRouteAuthorization(
-  authorize: OpenReceiveAuthorization | undefined
-): OpenReceiveRouteAuthorization | undefined {
-  if (authorize === undefined) return undefined;
-
-  return {
-    create: authorize.request,
-    read: authorize.invoice,
-    lookup: authorize.invoice,
-    refresh: authorize.invoice,
-    poll: authorize.scheduler
-  };
+function readOpenReceiveNamespace(configured: string | undefined): string {
+  const namespace = configured ?? globalThis.process?.env?.OPENRECEIVE_NAMESPACE ?? "default";
+  if (namespace.trim().length === 0) {
+    throw new Error("OPENRECEIVE_NAMESPACE must not be empty.");
+  }
+  return namespace;
 }
 
-function normalizeOpenReceiveCsrf(
-  csrf: CreateOpenReceiveOptions["csrf"]
-): OpenReceiveNodeCsrf | undefined {
-  if (typeof csrf === "function") {
-    return { verify: csrf };
+async function ensureOpenReceiveStoreSchema(store: OpenReceiveInvoiceKvStore): Promise<void> {
+  const ensureSchema = isRecord(store) ? store.ensureSchema : undefined;
+  if (typeof ensureSchema === "function") {
+    await ensureSchema.call(store);
   }
-
-  return csrf;
 }
 
 function getOpenReceiveNodeHandlers(
@@ -391,8 +340,6 @@ export function mountExpressRoutes(
   app.get(`${basePath}/invoices/:invoice_id`, handlers.getInvoice);
   app.post(`${basePath}/invoices/lookup`, handlers.lookupInvoice);
   app.post(`${basePath}/invoices/:invoice_id/refresh`, handlers.refreshInvoice);
-  app.post(`${basePath}/poll`, handlers.poll);
-  app.get(`${basePath}/poll`, handlers.poll);
   app.get(`${basePath}/rates`, handlers.listRates);
   app.post(`${basePath}/rates/quote`, handlers.quoteRates);
   app.get(`${basePath}/routes`, handlers.listRoutes);
@@ -515,12 +462,6 @@ export function matchHttpRoute(
     }
     if (normalizedMethod === "POST" && segments[0] === "invoices") {
       return { name: "createInvoice" };
-    }
-    if (
-      (normalizedMethod === "POST" || normalizedMethod === "GET") &&
-      segments[0] === "poll"
-    ) {
-      return { name: "poll" };
     }
   }
 
@@ -657,7 +598,6 @@ export function createNodeHandlers(
   options: OpenReceiveNodeOptionsInput
 ): OpenReceiveNodeHandlers {
   options = normalizeOpenReceiveNodeOptions(options);
-  assertSafeDemoModeConfiguration(options);
   assertDurableStoreConfiguration(options);
 
   const store = options.store ?? new InMemoryInvoiceKvStore();
@@ -677,19 +617,15 @@ export function createNodeHandlers(
   return {
     createInvoice: handle(async (req, res) => {
       applyDefaultHeaders(req, res, options);
-      await requireAuthorization(options, "create", req);
-      await requireCsrf(options, req);
 
       const body = asRecord(req.body);
-      const idempotencyKey = getHeader(req, "idempotency-key");
-      if (idempotencyKey === undefined || idempotencyKey.length === 0) {
-        throw httpError(400, "INVALID_REQUEST", "Idempotency-Key header is required.");
-      }
+      const orderUuid = parseCreateOrderUuid(body);
+      const idempotencyKey = orderUuid;
 
-      const merchantScope = options.merchantScope(req);
+      const namespaceScope = options.namespace ?? readOpenReceiveNamespace(undefined);
       const operation = "invoice.create" as const;
       const idempotencyScope: OpenReceiveIdempotencyScope = {
-        merchant_scope: merchantScope,
+        merchant_scope: namespaceScope,
         operation,
         idempotency_key: idempotencyKey
       };
@@ -726,8 +662,7 @@ export function createNodeHandlers(
       const invoice = await options.client.makeInvoice({
         amount_msats: BigInt(resolvedAmount.amount_msats),
         ...descriptionFields,
-        expiry: optionalSafeInteger(body.expiry),
-        metadata: parseOptionalRecord(body.metadata, "metadata")
+        expiry: optionalSafeInteger(body.expiry)
       });
       const createdAt = invoice.created_at ?? clock();
       const requestedExpirySeconds = optionalSafeInteger(body.expiry) ?? 600;
@@ -741,7 +676,7 @@ export function createNodeHandlers(
           rev: 0,
           row: {
             invoice_id: createInvoiceId(),
-            merchant_scope: merchantScope,
+            merchant_scope: namespaceScope,
             operation,
             idempotency_key: idempotencyKey,
             idempotency_request_hash: requestHash,
@@ -753,7 +688,9 @@ export function createNodeHandlers(
             settlement_action_state: "pending",
             created_at: createdAt,
             expires_at: normalizedExpiresAt,
-            metadata: parseOptionalRecord(body.metadata, "metadata") ?? {},
+            metadata: {
+              order_uuid: orderUuid
+            },
             fiat_quote: resolvedAmount.fiat_quote === null
               ? null
               : { ...resolvedAmount.fiat_quote }
@@ -770,7 +707,6 @@ export function createNodeHandlers(
     getInvoice: handle(async (req, res) => {
       applyDefaultHeaders(req, res, options);
       const record = await requireStoredRecord(store, req.params?.invoice_id);
-      await requireAuthorization(options, "read", req, record.row);
       emitLog(options, "debug", "invoice.read", "Read invoice state.", invoiceLogFields(record.row));
       return res.status(200).json(serializeInvoice(record.row, { basePath }));
     }),
@@ -779,8 +715,6 @@ export function createNodeHandlers(
       applyDefaultHeaders(req, res, options);
       const body = asRecord(req.body);
       const record = await findLookupRecord(store, body);
-      await requireAuthorization(options, "lookup", req, record.row);
-      await requireCsrf(options, req);
       emitLog(options, "info", "invoice.lookup.requested", "Refreshing invoice status through the gated wallet lookup path.", invoiceLogFields(record.row));
 
       const result = await gatedLookup({
@@ -805,8 +739,6 @@ export function createNodeHandlers(
       applyDefaultHeaders(req, res, options);
       const oldRecord = await requireStoredRecord(store, req.params?.invoice_id);
       const oldInvoice = oldRecord.row;
-      await requireAuthorization(options, "refresh", req, oldInvoice);
-      await requireCsrf(options, req);
       emitLog(options, "info", "invoice.refresh.requested", "Refreshing invoice by creating a linked replacement.", invoiceLogFields(oldInvoice));
 
       if (!isRefreshableInvoice(oldInvoice)) {
@@ -892,7 +824,6 @@ export function createNodeHandlers(
 
     poll: handle(async (req, res) => {
       applyDefaultHeaders(req, res, options);
-      await requirePollAuthorization(options, req);
       const result = await reconcileOnce(reconcileOptions(options, store, clock));
       return res.status(200).json({
         invoice_ids: result.invoice_ids,
@@ -978,7 +909,6 @@ export function createNodeHandlers(
           invoices: `${basePath}/invoices`,
           lookup: `${basePath}/invoices/lookup`,
           refresh: `${basePath}/invoices/{invoice_id}/refresh`,
-          poll: `${basePath}/poll`,
           rates: `${basePath}/rates`,
           rate_quote: `${basePath}/rates/quote`,
           routes: `${basePath}/routes`,
@@ -993,12 +923,7 @@ export function createNodeHandlers(
 function normalizeOpenReceiveNodeOptions(
   options: OpenReceiveNodeOptionsInput
 ): OpenReceiveNodeOptions {
-  return {
-    ...options,
-    authorization:
-      options.authorization ??
-      createOpenReceiveRouteAuthorization(options.authorize)
-  };
+  return options;
 }
 
 function reconcileOptions(
@@ -1027,6 +952,7 @@ function reconcileOptions(
       await options.onPaid?.({
         req: input.source === "http_lookup" ? req : undefined,
         invoice: input.invoice,
+        orderUuid: input.invoice.idempotency_key,
         metadata: input.metadata,
         source: input.source,
         lookup_invoice: input.lookup_invoice
@@ -1126,6 +1052,7 @@ function serializeInvoice(
     invoice: row.invoice,
     payment_hash: row.payment_hash,
     amount_msats: row.amount_msats,
+    order_uuid: row.idempotency_key,
     created_at: row.created_at,
     expires_at: row.expires_at,
     ...(row.settled_at === undefined ? {} : { settled_at: row.settled_at }),
@@ -1133,7 +1060,6 @@ function serializeInvoice(
     ...(row.refreshed_from_invoice_id === undefined
       ? {}
       : { refreshed_from_invoice_id: row.refreshed_from_invoice_id }),
-    metadata: row.metadata,
     fiat_quote: row.fiat_quote ?? null,
     checkout: {
       routes_url: `${context.basePath}/routes?invoice_id=${row.invoice_id}`
@@ -1219,7 +1145,7 @@ function redactSecrets(value: string): string {
 
 interface ResolvedCreateAmount {
   amount_msats: number;
-  amount_source: "amount_msats" | "fiat";
+  amount_source: "amount_sats" | "amount_msats" | "fiat";
   fiat_quote: OpenReceiveRateQuote | null;
 }
 
@@ -1229,15 +1155,35 @@ async function resolveCreateAmount(input: {
   priceProviders: readonly OpenReceiveSourcedPriceProvider[];
 }): Promise<ResolvedCreateAmount> {
   const { body } = input;
+  const hasAmountSats = body.amount_sats !== undefined;
   const hasAmountMsats = body.amount_msats !== undefined;
   const hasFiat = body.fiat !== undefined;
+  const sourceCount = [hasAmountSats, hasAmountMsats, hasFiat]
+    .filter(Boolean)
+    .length;
 
-  if (hasAmountMsats === hasFiat) {
+  if (sourceCount !== 1) {
     throw httpError(
       400,
       "INVALID_REQUEST",
-      "Create invoice request requires exactly one of amount_msats or fiat."
+      "Create invoice request requires exactly one of amount_sats, amount_msats, or fiat."
     );
+  }
+
+  if (hasAmountSats) {
+    const amountSats = optionalSafeInteger(body.amount_sats);
+    if (amountSats === undefined) {
+      throw httpError(400, "INVALID_REQUEST", "amount_sats must be a safe integer.");
+    }
+    const amountMsats = amountSats * 1000;
+    if (!Number.isSafeInteger(amountMsats)) {
+      throw httpError(400, "INVALID_REQUEST", "amount_sats is outside the safe integer boundary.");
+    }
+    return {
+      amount_msats: amountMsats,
+      amount_source: "amount_sats",
+      fiat_quote: null
+    };
   }
 
   if (hasAmountMsats) {
@@ -1326,14 +1272,32 @@ function getCreateDescriptionFields(body: Record<string, unknown>): {
   readonly description?: string;
   readonly description_hash?: string;
 } {
+  const optionalInvoiceDescription = optionalString(body.optional_invoice_description);
   const description = optionalString(body.description);
   const descriptionHash = optionalString(body.description_hash);
 
-  if (description !== undefined && descriptionHash !== undefined) {
+  if (optionalInvoiceDescription !== undefined && description !== undefined) {
     throw httpError(
       400,
       "INVALID_REQUEST",
-      "Create invoice request accepts only one of description or description_hash."
+      "Create invoice request accepts only one of optional_invoice_description or description."
+    );
+  }
+
+  const resolvedDescription = optionalInvoiceDescription ?? description;
+  if (resolvedDescription !== undefined && resolvedDescription.length > 500) {
+    throw httpError(
+      400,
+      "INVALID_REQUEST",
+      "optional_invoice_description must be 500 characters or fewer."
+    );
+  }
+
+  if (resolvedDescription !== undefined && descriptionHash !== undefined) {
+    throw httpError(
+      400,
+      "INVALID_REQUEST",
+      "Create invoice request accepts only one of optional_invoice_description or description_hash."
     );
   }
 
@@ -1346,9 +1310,20 @@ function getCreateDescriptionFields(body: Record<string, unknown>): {
   }
 
   return {
-    ...(description === undefined ? {} : { description }),
+    ...(resolvedDescription === undefined ? {} : { description: resolvedDescription }),
     ...(descriptionHash === undefined ? {} : { description_hash: descriptionHash })
   };
+}
+
+function parseCreateOrderUuid(body: Record<string, unknown>): string {
+  const orderUuid = optionalString(body.order_uuid);
+  if (orderUuid === undefined) {
+    throw httpError(400, "INVALID_REQUEST", "order_uuid is required.");
+  }
+  if (orderUuid.length > 200) {
+    throw httpError(400, "INVALID_REQUEST", "order_uuid must be 200 characters or fewer.");
+  }
+  return orderUuid;
 }
 
 function isRefreshableInvoice(invoice: InvoiceStorageRow): boolean {
@@ -1398,106 +1373,6 @@ async function requireStoredRecord(
   const record = await store.get(invoiceId);
   if (record === undefined) throw new InvoiceNotFoundError(invoiceId);
   return record;
-}
-
-async function requireAuthorization(
-  options: OpenReceiveNodeOptions,
-  action: "create" | "read" | "lookup" | "refresh",
-  req: ExpressLikeRequest,
-  invoice?: InvoiceStorageRow
-): Promise<void> {
-  if (options.unsafeAllowUnauthenticatedDemoMode === true) return;
-
-  if (action === "create") {
-    if (options.authorization?.create === undefined) {
-      throw httpError(401, "UNAUTHORIZED", "OpenReceive create authorization hook is required.");
-    }
-
-    const allowed = await options.authorization.create(req);
-    if (!allowed) {
-      throw httpError(403, "UNAUTHORIZED", "OpenReceive request is not authorized.");
-    }
-    return;
-  }
-
-  if (invoice === undefined) {
-    throw new Error(`OpenReceive ${action} authorization requires an invoice.`);
-  }
-
-  const hook = options.authorization?.[action] as
-    | ((
-        req: ExpressLikeRequest,
-        invoice: InvoiceStorageRow
-      ) => Promise<boolean> | boolean)
-    | undefined;
-
-  if (hook === undefined) {
-    throw httpError(401, "UNAUTHORIZED", `OpenReceive ${action} authorization hook is required.`);
-  }
-
-  const allowed = await hook(req, invoice);
-  if (!allowed) {
-    throw httpError(403, "UNAUTHORIZED", "OpenReceive request is not authorized.");
-  }
-}
-
-async function requirePollAuthorization(
-  options: OpenReceiveNodeOptions,
-  req: ExpressLikeRequest
-): Promise<void> {
-  if (options.unsafeAllowUnauthenticatedDemoMode === true) return;
-
-  const secret = options.cronSecret ?? globalThis.process?.env?.OPENRECEIVE_CRON_SECRET;
-  const authorization = getHeader(req, "authorization");
-  if (
-    secret !== undefined &&
-    secret.length > 0 &&
-    authorization === `Bearer ${secret}`
-  ) {
-    return;
-  }
-
-  if (options.authorization?.poll === undefined) {
-    throw httpError(401, "UNAUTHORIZED", "OpenReceive poll authorization hook or OPENRECEIVE_CRON_SECRET is required.");
-  }
-
-  const allowed = await options.authorization.poll(req);
-  if (!allowed) {
-    throw httpError(403, "UNAUTHORIZED", "OpenReceive poll request is not authorized.");
-  }
-}
-
-async function requireCsrf(
-  options: OpenReceiveNodeOptions,
-  req: ExpressLikeRequest
-): Promise<void> {
-  if (options.unsafeAllowUnauthenticatedDemoMode === true) return;
-  if (options.csrf?.verify === undefined) return;
-
-  const verified = await options.csrf.verify(req);
-  if (!verified) {
-    throw httpError(403, "UNAUTHORIZED", "CSRF verification failed.");
-  }
-}
-
-function assertSafeDemoModeConfiguration(
-  options: OpenReceiveNodeOptions
-): void {
-  if (options.unsafeAllowUnauthenticatedDemoMode !== true) return;
-
-  const env = globalThis.process?.env ?? {};
-  const mode = (env.OPENRECEIVE_MODE ?? env.NODE_ENV ?? "").toLowerCase();
-  const acknowledged =
-    env.OPENRECEIVE_ALLOW_UNAUTHENTICATED_DEMO === "true";
-
-  if (mode === "production" && !acknowledged) {
-    throw new Error(
-      "OpenReceive refuses unsafeAllowUnauthenticatedDemoMode when " +
-        "OPENRECEIVE_MODE or NODE_ENV is production. Configure auth hooks " +
-        "to fail closed, or set OPENRECEIVE_ALLOW_UNAUTHENTICATED_DEMO=true " +
-        "to explicitly accept the risk for a public test demo."
-    );
-  }
 }
 
 function assertDurableStoreConfiguration(
@@ -1711,24 +1586,6 @@ function applyDefaultHeaders(
 ): void {
   res.set("Cache-Control", "no-store");
   res.set("Referrer-Policy", "same-origin");
-  applyCorsHeaders(req, res, options.cors);
-}
-
-function applyCorsHeaders(
-  req: ExpressLikeRequest,
-  res: ExpressLikeResponse,
-  cors: OpenReceiveNodeCors | undefined
-): void {
-  if (cors === undefined) return;
-  const origin = getHeader(req, "origin");
-  if (origin === undefined) return;
-  if (
-    cors.allowed_origins?.includes("*") ||
-    cors.allowed_origins?.includes(origin)
-  ) {
-    res.set("Access-Control-Allow-Origin", origin);
-    if (cors.credentials) res.set("Access-Control-Allow-Credentials", "true");
-  }
 }
 
 function normalizeBasePath(basePath = DEFAULT_BASE_PATH): string {

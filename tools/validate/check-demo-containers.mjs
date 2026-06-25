@@ -334,7 +334,6 @@ function validateRailsDemo(demo) {
   expect(/^OPENRECEIVE_NWC=$/m.test(envExample), `${envPath}: OPENRECEIVE_NWC must be empty placeholder`);
   expect(/^# OPENRECEIVE_STORE defaults to local-sqlite$/m.test(envExample), `${envPath}: OPENRECEIVE_STORE must document local-sqlite default`);
   expect(new RegExp(`^OPENRECEIVE_NAMESPACE=${demo.namespace}$`, "m").test(envExample), `${envPath}: OPENRECEIVE_NAMESPACE must default to ${demo.namespace}`);
-  expect(/^OPENRECEIVE_CRON_SECRET=$/m.test(envExample), `${envPath}: OPENRECEIVE_CRON_SECRET must be present but empty`);
   expect(new RegExp(`^PORT=${demo.port}$`, "m").test(envExample), `${envPath}: PORT must default to ${demo.port}`);
   expect(readme.includes("The browser never receives `OPENRECEIVE_NWC`."), `${readmePath}: must state browser NWC boundary`);
   expect(readme.includes("docker compose -f compose.yml -f compose.override.yml.example up --build"), `${readmePath}: must document compose startup`);

@@ -78,8 +78,7 @@ function createHarness(overrides = {}) {
   const handlers = createNodeHandlers({
     client: wallet,
     store,
-    merchantScope: () => "demo:hello-fruit",
-    unsafeAllowUnauthenticatedDemoMode: true,
+    namespace: "demo_hello_fruit",
     clock: () => 1000,
     backgroundSweep: false,
     ...overrides
@@ -94,7 +93,7 @@ function createSecureHarness(overrides = {}) {
   const handlers = createNodeHandlers({
     client: wallet,
     store,
-    merchantScope: () => "demo:hello-fruit",
+    namespace: "demo_hello_fruit",
     clock: () => 1000,
     backgroundSweep: false,
     ...overrides
@@ -106,16 +105,11 @@ function createSecureHarness(overrides = {}) {
 test("create invoice uses idempotency replay without a second wallet call", async () => {
   const { wallet, handlers } = createHarness();
   const req = createRequest({
-    headers: {
-      "idempotency-key": "order-1"
-    },
     body: {
+      order_uuid: "order-1",
       amount_msats: 200000,
-      description: "Fruit sticker",
-      expiry: 600,
-      metadata: {
-        fruit: "banana"
-      }
+      optional_invoice_description: "Fruit sticker",
+      expiry: 600
     }
   });
 
@@ -136,8 +130,7 @@ test("Fetch bridge dispatches OpenReceive routes for Fetch-style frameworks", as
   const runtime = createNodeRuntime({
     client: wallet,
     store: new InMemoryInvoiceKvStore(),
-    merchantScope: () => "demo:fetch",
-    unsafeAllowUnauthenticatedDemoMode: true,
+    namespace: "demo_fetch",
     clock: () => 1000
   });
   const handler = createFetchHandler(runtime);
@@ -145,12 +138,12 @@ test("Fetch bridge dispatches OpenReceive routes for Fetch-style frameworks", as
   const createResponse = await handler(new Request("http://app.test/openreceive/v1/invoices", {
     method: "POST",
     headers: {
-      "content-type": "application/json",
-      "idempotency-key": "fetch-order-1"
+      "content-type": "application/json"
     },
     body: JSON.stringify({
+      order_uuid: "fetch-order-1",
       amount_msats: 200000,
-      description: "Fetch bridge invoice"
+      optional_invoice_description: "Fetch bridge invoice"
     })
   }));
   const invoice = await createResponse.json();
@@ -217,12 +210,10 @@ test("create invoice does not expose a wallet expiry longer than requested", asy
   const res = createResponse();
   await handlers.createInvoice(
     createRequest({
-      headers: {
-        "idempotency-key": "order-short-expiry"
-      },
       body: {
+        order_uuid: "order-short-expiry",
         amount_msats: 200000,
-        description: "Fruit sticker",
+        optional_invoice_description: "Fruit sticker",
         expiry: 600
       }
     }),
@@ -241,12 +232,10 @@ test("create invoice rejects idempotency key reuse with a different body", async
   const first = createResponse();
   await handlers.createInvoice(
     createRequest({
-      headers: {
-        "idempotency-key": "order-create-conflict"
-      },
       body: {
+        order_uuid: "order-create-conflict",
         amount_msats: 200000,
-        description: "Fruit sticker"
+        optional_invoice_description: "Fruit sticker"
       }
     }),
     first,
@@ -257,12 +246,10 @@ test("create invoice rejects idempotency key reuse with a different body", async
   const conflict = createResponse();
   await handlers.createInvoice(
     createRequest({
-      headers: {
-        "idempotency-key": "order-create-conflict"
-      },
       body: {
+        order_uuid: "order-create-conflict",
         amount_msats: 300000,
-        description: "Fruit sticker"
+        optional_invoice_description: "Fruit sticker"
       }
     }),
     conflict,
@@ -299,15 +286,13 @@ test("create invoice quotes fiat with configured price providers", async () => {
   const createRes = createResponse();
   await handlers.createInvoice(
     createRequest({
-      headers: {
-        "idempotency-key": "order-live-rate"
-      },
       body: {
+        order_uuid: "order-live-rate",
         fiat: {
           currency: "USD",
           value: "0.05"
         },
-        description: "Fruit sticker"
+        optional_invoice_description: "Fruit sticker"
       }
     }),
     createRes,
@@ -328,12 +313,10 @@ test("lookup settles invoice through gated backend refresh", async () => {
   const createRes = createResponse();
   await handlers.createInvoice(
     createRequest({
-      headers: {
-        "idempotency-key": "order-2"
-      },
       body: {
+        order_uuid: "order-2",
         amount_msats: 200000,
-        description: "Fruit sticker"
+        optional_invoice_description: "Fruit sticker"
       }
     }),
     createRes,
@@ -371,12 +354,10 @@ test("logger records invoice transitions without secrets", async () => {
   const createRes = createResponse();
   await handlers.createInvoice(
     createRequest({
-      headers: {
-        "idempotency-key": "order-logged"
-      },
       body: {
+        order_uuid: "order-logged",
         amount_msats: 200000,
-        description: "Fruit sticker"
+        optional_invoice_description: "Fruit sticker"
       }
     }),
     createRes,
@@ -427,12 +408,10 @@ test("logger redacts wallet errors before emitting unhandled failures", async ()
   await assert.rejects(
     () => handlers.createInvoice(
       createRequest({
-        headers: {
-          "idempotency-key": "order-wallet-error"
-        },
         body: {
+          order_uuid: "order-wallet-error",
           amount_msats: 200000,
-          description: "Fruit sticker"
+          optional_invoice_description: "Fruit sticker"
         }
       }),
       createResponse(),
@@ -452,24 +431,20 @@ test("lookup can run an idempotent backend settlement action hook after settleme
   let onPaidCalls = 0;
   const { wallet, handlers } = createHarness({
     clock: () => 1300,
-    onPaid: async ({ invoice, metadata }) => {
+    onPaid: async ({ invoice, orderUuid, metadata }) => {
       onPaidCalls += 1;
       assert.equal(invoice.transaction_state, "settled");
-      assert.deepEqual(metadata, { fruit: "pear" });
+      assert.equal(orderUuid, "order-settlement-action");
+      assert.deepEqual(metadata, { order_uuid: "order-settlement-action" });
     }
   });
   const createRes = createResponse();
   await handlers.createInvoice(
     createRequest({
-      headers: {
-        "idempotency-key": "order-settlement-action"
-      },
       body: {
+        order_uuid: "order-settlement-action",
         amount_msats: 200000,
-        description: "Fruit sticker",
-        metadata: {
-          fruit: "pear"
-        }
+        optional_invoice_description: "Fruit sticker"
       }
     }),
     createRes,
@@ -509,7 +484,7 @@ test("lookup can run an idempotent backend settlement action hook after settleme
   assert.equal(onPaidCalls, 1);
 });
 
-test("protected poll route recovers invoices without browser polling", async () => {
+test("poll handler recovers invoices without browser polling", async () => {
   let onPaidCalls = 0;
   const settlementSources = [];
   const wallet = new FakeWallet();
@@ -517,11 +492,7 @@ test("protected poll route recovers invoices without browser polling", async () 
   const options = {
     client: wallet,
     store,
-    merchantScope: () => "demo:hello-fruit",
-    authorize: {
-      request: () => true
-    },
-    cronSecret: "poll-secret",
+    namespace: "demo_hello_fruit",
     backgroundSweep: false,
     clock: () => 1600,
     onPaid: async ({ invoice, source, req }) => {
@@ -536,13 +507,10 @@ test("protected poll route recovers invoices without browser polling", async () 
   const createRes = createResponse();
   await handlers.createInvoice(
     createRequest({
-      headers: {
-        "idempotency-key": "order-runner",
-        authorization: "Bearer poll-secret"
-      },
       body: {
+        order_uuid: "order-runner",
         amount_msats: 200000,
-        description: "Fruit sticker"
+        optional_invoice_description: "Fruit sticker"
       }
     }),
     createRes,
@@ -551,15 +519,7 @@ test("protected poll route recovers invoices without browser polling", async () 
 
   wallet.lookupState = "settled";
   const pollRes = createResponse();
-  await handlers.poll(
-    createRequest({
-      headers: {
-        authorization: "Bearer poll-secret"
-      }
-    }),
-    pollRes,
-    raiseNext
-  );
+  await handlers.poll(createRequest(), pollRes, raiseNext);
   const stored = (await store.get(createRes.body.invoice_id)).row;
 
   assert.equal(pollRes.statusCode, 200);
@@ -594,8 +554,7 @@ test("poll route reads sweep tuning from env defaults", async () => {
     const handlers = createNodeHandlers({
       client: wallet,
       store,
-      merchantScope: () => "demo:hello-fruit",
-      unsafeAllowUnauthenticatedDemoMode: true,
+      namespace: "demo_hello_fruit",
       backgroundSweep: false,
       clock: () => 1600
     });
@@ -623,12 +582,10 @@ test("client-supplied settlement fields cannot trigger settlement action", async
   const createRes = createResponse();
   await handlers.createInvoice(
     createRequest({
-      headers: {
-        "idempotency-key": "order-client-state"
-      },
       body: {
+        order_uuid: "order-client-state",
         amount_msats: 200000,
-        description: "Fruit sticker"
+        optional_invoice_description: "Fruit sticker"
       }
     }),
     createRes,
@@ -835,12 +792,10 @@ test("create invoice rejects description and description_hash together", async (
 
   await handlers.createInvoice(
     createRequest({
-      headers: {
-        "idempotency-key": "order-description-conflict"
-      },
       body: {
+        order_uuid: "order-description-conflict",
         amount_msats: 200000,
-        description: "Fruit sticker",
+        optional_invoice_description: "Fruit sticker",
         description_hash: "a".repeat(64)
       }
     }),
@@ -849,7 +804,7 @@ test("create invoice rejects description and description_hash together", async (
   );
 
   assert.equal(res.statusCode, 400);
-  assert.equal(res.body.message, "Create invoice request accepts only one of description or description_hash.");
+  assert.equal(res.body.message, "Create invoice request accepts only one of optional_invoice_description or description_hash.");
   assert.equal(wallet.makeInvoiceCalls, 0);
 });
 
@@ -859,10 +814,8 @@ test("create invoice rejects invalid description_hash before wallet call", async
 
   await handlers.createInvoice(
     createRequest({
-      headers: {
-        "idempotency-key": "order-description-hash"
-      },
       body: {
+        order_uuid: "order-description-hash",
         amount_msats: 200000,
         description_hash: "not-hex"
       }
@@ -882,15 +835,13 @@ test("create invoice rejects invalid fiat quote before wallet call", async () =>
 
   await handlers.createInvoice(
     createRequest({
-      headers: {
-        "idempotency-key": "order-invalid-fiat"
-      },
       body: {
+        order_uuid: "order-invalid-fiat",
         fiat: {
           currency: "usd",
           value: "0.10"
         },
-        description: "Fruit sticker"
+        optional_invoice_description: "Fruit sticker"
       }
     }),
     res,
@@ -1035,62 +986,83 @@ test("refresh invoice rejects settled invoices before wallet call", async () => 
   assert.equal(wallet.makeInvoiceCalls, 0);
 });
 
-test("secure Express handlers fail closed when auth hooks are missing", async () => {
-  const { wallet, store, handlers } = createSecureHarness();
-  seedInvoice(store);
+test("OpenReceive handlers leave authentication to the host app route", async () => {
+  const { wallet, handlers } = createSecureHarness();
 
   const createRes = createResponse();
   await handlers.createInvoice(
     createRequest({
-      headers: {
-        "idempotency-key": "order-auth"
-      },
       body: {
+        order_uuid: "order-auth",
         amount_msats: 200000,
-        description: "Fruit sticker"
+        optional_invoice_description: "Fruit sticker"
       }
     }),
     createRes,
     raiseNext
   );
 
-  assert.equal(createRes.statusCode, 401);
-  assert.equal(createRes.body.message, "OpenReceive create authorization hook is required.");
-  assert.equal(wallet.makeInvoiceCalls, 0);
+  assert.equal(createRes.statusCode, 201);
+  assert.equal(wallet.makeInvoiceCalls, 1);
 
   const readRes = createResponse();
   await handlers.getInvoice(
     createRequest({
       params: {
-        invoice_id: "or_inv_seed"
+        invoice_id: createRes.body.invoice_id
       }
     }),
     readRes,
     raiseNext
   );
 
-  assert.equal(readRes.statusCode, 401);
-  assert.equal(readRes.body.message, "OpenReceive read authorization hook is required.");
+  assert.equal(readRes.statusCode, 200);
+  assert.equal(readRes.body.invoice_id, createRes.body.invoice_id);
+});
 
-  const refreshRes = createResponse();
-  await handlers.refreshInvoice(
+test("host apps can wrap OpenReceive handlers with their own route guard", async () => {
+  const { wallet, handlers } = createSecureHarness();
+  const guardedCreate = async (req, res, next) => {
+    if (req.user?.id === undefined) {
+      res.status(403).json({
+        code: "UNAUTHORIZED",
+        message: "App route is not authorized."
+      });
+      return;
+    }
+    await handlers.createInvoice(req, res, next);
+  };
+
+  const denied = createResponse();
+  await guardedCreate(
     createRequest({
-      params: {
-        invoice_id: "or_inv_seed"
-      },
-      headers: {
-        "idempotency-key": "refresh-auth"
-      },
       body: {
-        reason: "expired"
+        order_uuid: "order-denied",
+        amount_msats: 200000
       }
     }),
-    refreshRes,
+    denied,
     raiseNext
   );
+  assert.equal(denied.statusCode, 403);
+  assert.equal(wallet.makeInvoiceCalls, 0);
 
-  assert.equal(refreshRes.statusCode, 401);
-  assert.equal(refreshRes.body.message, "OpenReceive refresh authorization hook is required.");
+  const allowed = createResponse();
+  await guardedCreate(
+    createRequest({
+      user: {
+        id: "alice"
+      },
+      body: {
+        order_uuid: "order-allowed",
+        amount_msats: 200000
+      }
+    }),
+    allowed,
+    raiseNext
+  );
+  assert.equal(allowed.statusCode, 201);
+  assert.equal(wallet.makeInvoiceCalls, 1);
 });
 
 test("Express refuses in-memory invoice storage in production mode", async () => {
@@ -1103,12 +1075,7 @@ test("Express refuses in-memory invoice storage in production mode", async () =>
     const options = {
       client: new FakeWallet(),
       store: new InMemoryInvoiceKvStore(),
-      merchantScope: () => "demo:hello-fruit",
-      authorize: {
-        request: () => true,
-        invoice: () => true,
-        scheduler: () => true
-      },
+      namespace: "demo_hello_fruit",
       backgroundSweep: false
     };
 
@@ -1127,133 +1094,6 @@ test("Express refuses in-memory invoice storage in production mode", async () =>
     restoreEnvVar("NODE_ENV", originalNodeEnv);
     restoreEnvVar("OPENRECEIVE_MODE", originalOpenReceiveMode);
   }
-});
-
-test("secure Express handlers reject denied create authorization", async () => {
-  const { wallet, handlers } = createSecureHarness({
-    authorize: {
-      request: () => false
-    }
-  });
-  const res = createResponse();
-
-  await handlers.createInvoice(
-    createRequest({
-      headers: {
-        "idempotency-key": "order-denied"
-      },
-      body: {
-        amount_msats: 200000,
-        description: "Fruit sticker"
-      }
-    }),
-    res,
-    raiseNext
-  );
-
-  assert.equal(res.statusCode, 403);
-  assert.equal(res.body.message, "OpenReceive request is not authorized.");
-  assert.equal(wallet.makeInvoiceCalls, 0);
-});
-
-test("secure Express handlers reject cross-session invoice access", async () => {
-  const ownsInvoice = (req, invoice) => invoice.metadata.owner_id === req.user?.id;
-  const { wallet, store, handlers } = createSecureHarness({
-    authorize: {
-      invoice: ownsInvoice
-    }
-  });
-  seedInvoice(store, {
-    metadata: {
-      owner_id: "alice"
-    }
-  });
-
-  const readRes = createResponse();
-  await handlers.getInvoice(
-    createRequest({
-      params: {
-        invoice_id: "or_inv_seed"
-      },
-      user: {
-        id: "bob"
-      }
-    }),
-    readRes,
-    raiseNext
-  );
-
-  assert.equal(readRes.statusCode, 403);
-  assert.equal(readRes.body.message, "OpenReceive request is not authorized.");
-
-  const lookupRes = createResponse();
-  await handlers.lookupInvoice(
-    createRequest({
-      body: {
-        payment_hash: PAYMENT_HASH
-      },
-      user: {
-        id: "bob"
-      }
-    }),
-    lookupRes,
-    raiseNext
-  );
-
-  assert.equal(lookupRes.statusCode, 403);
-  assert.equal(lookupRes.body.message, "OpenReceive request is not authorized.");
-  assert.equal(wallet.lookupInvoiceCalls, 0);
-
-  const refreshRes = createResponse();
-  await handlers.refreshInvoice(
-    createRequest({
-      params: {
-        invoice_id: "or_inv_seed"
-      },
-      headers: {
-        "idempotency-key": "refresh-cross-session"
-      },
-      body: {
-        reason: "expired"
-      },
-      user: {
-        id: "bob"
-      }
-    }),
-    refreshRes,
-    raiseNext
-  );
-
-  assert.equal(refreshRes.statusCode, 403);
-  assert.equal(refreshRes.body.message, "OpenReceive request is not authorized.");
-  assert.equal(wallet.makeInvoiceCalls, 0);
-});
-
-test("lookup invoice requires csrf when configured", async () => {
-  const { wallet, store, handlers } = createSecureHarness({
-    authorize: {
-      invoice: () => true
-    },
-    csrf: {
-      verify: () => false
-    }
-  });
-  seedInvoice(store);
-  const res = createResponse();
-
-  await handlers.lookupInvoice(
-    createRequest({
-      body: {
-        payment_hash: PAYMENT_HASH
-      }
-    }),
-    res,
-    raiseNext
-  );
-
-  assert.equal(res.statusCode, 403);
-  assert.equal(res.body.message, "CSRF verification failed.");
-  assert.equal(wallet.lookupInvoiceCalls, 0);
 });
 
 function seedInvoice(store, overrides = {}) {

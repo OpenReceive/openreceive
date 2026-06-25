@@ -992,6 +992,7 @@ test("Hello Fruit metadata exposes only allowlisted build fields", async () => {
 
   await withEnv({
     OPENRECEIVE_NWC: nwc,
+    OPENRECEIVE_TEST_FAKE_NWC: "1",
     OPENRECEIVE_STORE: "memory:",
     OPENRECEIVE_DEMO_MODE: "production",
     OPENRECEIVE_GIT_SHA: "0123456789abcdef",
@@ -1034,6 +1035,7 @@ test("Hello Fruit metadata exposes only allowlisted build fields", async () => {
 test("Hello Fruit hosted demo routes expose health, source, docs, robots, and sitemap", async () => {
   await withEnv({
     OPENRECEIVE_NWC: createValidNwcUri(),
+    OPENRECEIVE_TEST_FAKE_NWC: "1",
     OPENRECEIVE_PUBLIC_URL: "https://demo.example.test",
     OPENRECEIVE_DEMO_NOINDEX: undefined
   }, async () => {

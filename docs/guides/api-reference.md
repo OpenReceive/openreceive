@@ -25,18 +25,20 @@ not part of the supported app surface.
 
 `POST /openreceive/v1/invoices`
 
-Required header:
+Request body includes:
 
-- `Idempotency-Key`: stable for your configured `merchantScope` and create
-  operation.
+- `order_uuid`: stable app order/cart/payment-attempt id. Replays the same
+  create request and conflicts on drift.
 
-Request body uses exactly one amount input:
+Use exactly one amount input:
 
+- `amount_sats`: integer satoshis from `1` through `9007199254740`.
 - `amount_msats`: integer from `1000` through `9007199254740991`.
 - `fiat`: `{ "currency": "USD", "value": "0.10" }` style decimal string.
 
-Optional fields include `description`, `description_hash`, `expiry`, and
-`metadata`. Exactly one of `description` or `description_hash` may be present.
+Optional fields include `optional_invoice_description` and `expiry`.
+`optional_invoice_description` becomes the BOLT11 invoice description and is
+limited to 500 characters.
 
 Responses:
 
@@ -48,16 +50,17 @@ Responses:
 
 `GET /openreceive/v1/invoices/{invoice_id}`
 
-Authorize this route against the owning order, cart, checkout session, or user
-with `authorize.invoice`.
+OpenReceive does not implement authentication. Mount this route inside whatever
+controller, middleware, or route group already protects the owning checkout
+session when invoice reads should not be public.
 
 ## Lookup Invoice
 
 `POST /openreceive/v1/invoices/lookup`
 
 Body contains either `payment_hash` or `invoice`. This route performs backend
-wallet verification. Protect it with `authorize.invoice`; lookup can reveal
-payment status.
+wallet verification. Mount it behind your app's route protection when lookup
+should not be public.
 
 The lookup response may include proof details, but app fulfillment still belongs
 in the server `onPaid` hook. A preimage alone is not settlement proof.
@@ -68,19 +71,17 @@ in the server `onPaid` hook. A preimage alone is not settlement proof.
 
 Required header:
 
-- `Idempotency-Key`: stable for your configured `merchantScope` and refresh
-  operation.
+- `Idempotency-Key`: stable for the refresh operation.
 
 Refresh creates a linked replacement invoice after expiry or failure. It never
 mutates the old invoice in place. Settled invoices return `409`.
 
 ## Poll
 
-`POST /openreceive/v1/poll`
+`openreceive poll --once`
 
-Runs one bounded recovery pass through the OpenReceive store. Protect it with
-`authorize.scheduler` or `OPENRECEIVE_CRON_SECRET`. This route is optional and
-is not a long-running worker.
+Runs one bounded recovery pass through the OpenReceive store from a server-side
+scheduler. The Node HTTP adapter does not mount a public poll route.
 
 ## Rates
 

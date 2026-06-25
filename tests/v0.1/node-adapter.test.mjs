@@ -72,7 +72,7 @@ class FakeAlbyClient {
   lookupInvoiceParams = [];
   nextResponse = undefined;
   info = {
-    capabilities: ["get_info", "make_invoice", "lookup_invoice", "pay_invoice"],
+    capabilities: ["get_info", "make_invoice", "lookup_invoice"],
     notifications: ["payment_received"],
     encryptions: ["nip44_v2", "nip04"]
   };
@@ -108,15 +108,26 @@ class FakeAlbyClient {
   }
 }
 
-test("preflight summarizes receive readiness and warns on spend capability", async () => {
+test("preflight rejects spend-capable NWC credentials", async () => {
   const fake = new FakeAlbyClient();
+  fake.info.capabilities = ["get_info", "make_invoice", "lookup_invoice", "pay_invoice"];
   const client = createNwcReceiveClient({
     connectionString: NWC_URI,
     client: fake
   });
 
-  const summary = await client.preflight();
+  await assert.rejects(
+    () => client.preflight(),
+    (error) => {
+      assert.equal(error.name, "WalletPreflightError");
+      assert.equal(error.code, "spend_capability_advertised");
+      assert.equal(error.summary.spendCapabilityAdvertised, true);
+      assert.match(error.summary.warnings[0], /pay_invoice/);
+      return true;
+    }
+  );
 
+  const summary = summarizeWalletCapabilities(client.connection, fake.info);
   assert.equal(summary.receiveCheckoutReady, true);
   assert.equal(summary.encryption, "nip44_v2");
   assert.equal(summary.spendCapabilityAdvertised, true);
@@ -431,8 +442,7 @@ test("createOpenReceive builds server handlers from a client and store", async (
   const openreceive = await createOpenReceive({
     client,
     store,
-    merchantScope: () => "node:test",
-    unsafeAllowUnauthenticatedDemoMode: true,
+    namespace: "node_test",
     clock: () => 1000,
     backgroundSweep: false
   });
@@ -440,12 +450,12 @@ test("createOpenReceive builds server handlers from a client and store", async (
   const response = await openreceive.handleFetch(new Request("http://app.test/openreceive/v1/invoices", {
     method: "POST",
     headers: {
-      "content-type": "application/json",
-      "idempotency-key": "create-openreceive-order"
+      "content-type": "application/json"
     },
     body: JSON.stringify({
+      order_uuid: "create-openreceive-order",
       amount_msats: 200000,
-      description: "Factory invoice"
+      optional_invoice_description: "Factory invoice"
     })
   }));
   const body = await response.json();
@@ -455,7 +465,7 @@ test("createOpenReceive builds server handlers from a client and store", async (
   assert.equal(openreceive.handlers, openreceive.runtime.handlers);
 });
 
-sqliteTest("Node CLI initializes worker-free config and doctors local-sqlite", async (DatabaseSync) => {
+sqliteTest("Node CLI keeps init and doctor removed while migrate remains", async () => {
   const tempRoot = mkdtempSync(path.join(tmpdir(), "openreceive-node-cli-"));
   const stdout = [];
   const stderr = [];
@@ -472,65 +482,22 @@ sqliteTest("Node CLI initializes worker-free config and doctors local-sqlite", a
       stdout: io(stdout),
       stderr: io(stderr)
     });
-    assert.equal(initCode, 0);
-    assert.equal(existsSync(path.join(tempRoot, ".env.openreceive.example")), true);
-    assert.equal(existsSync(path.join(tempRoot, "openreceive.config.mjs")), true);
-    assert.equal(existsSync(path.join(tempRoot, "server/openreceive-routes.mjs")), true);
-    assert.equal(existsSync(path.join(tempRoot, "scripts/openreceive-poll.mjs")), true);
-    assert.equal(existsSync(path.join(tempRoot, "scripts/openreceive-worker.mjs")), false);
-    assert.equal(existsSync(path.join(tempRoot, "scripts/openreceive-listen.mjs")), false);
-    assert.match(readFileSync(path.join(tempRoot, ".gitignore"), "utf8"), /\.openreceive\//);
-    assert.match(readFileSync(path.join(tempRoot, "openreceive.config.mjs"), "utf8"), /resolveOpenReceiveStore/);
-    assert.match(readFileSync(path.join(tempRoot, "scripts/openreceive-poll.mjs"), "utf8"), /"--once"/);
+    assert.equal(initCode, 1);
+    assert.match(stderr.join(""), /Unknown OpenReceive command: init/);
 
     stdout.length = 0;
     stderr.length = 0;
-    const configDatabase = new DatabaseSync(":memory:");
-    const configStore = createOpenReceiveSqliteKvStore({
-      client: createOpenReceiveSqliteQueryClient(configDatabase)
-    });
-    await configStore.ensureSchema();
     const doctorCode = await runOpenReceiveCli({
       argv: ["doctor"],
       cwd: tempRoot,
-      env: {
-        OPENRECEIVE_STORE: "local-sqlite",
-        OPENRECEIVE_NAMESPACE: "doctor"
-      },
       stdout: io(stdout),
-      stderr: io(stderr),
-      loadConfigModule: async () => ({
-        openreceive: {
-          store: configStore,
-          client: {
-            async preflight() {
-              return {
-                receiveCheckoutReady: true,
-                methods: ["make_invoice", "lookup_invoice"],
-                notifications: [],
-                encryption: "nip44_v2",
-                warnings: []
-              };
-            },
-            async makeInvoice() {
-              throw new Error("not needed");
-            },
-            async lookupInvoice() {
-              throw new Error("not needed");
-            }
-          },
-          merchantScope: () => "node:test"
-        }
-      })
+      stderr: io(stderr)
     });
-    configDatabase.close();
-    assert.equal(doctorCode, 0);
-    assert.match(stdout.join(""), /ok store local-sqlite namespace=doctor/);
-    assert.match(stdout.join(""), /ok store putIfAbsent\/casMeta\/listOpen round-trip/);
-    assert.doesNotMatch(stdout.join(""), /nostr\+walletconnect:\/\//);
-    assert.equal(stderr.join(""), "");
+    assert.equal(doctorCode, 1);
+    assert.match(stderr.join(""), /Unknown OpenReceive command: doctor/);
 
     stdout.length = 0;
+    stderr.length = 0;
     const printCode = await runOpenReceiveCli({
       argv: ["migrate", "--store", "local-sqlite", "--print"],
       cwd: tempRoot,
@@ -603,7 +570,6 @@ test("Node CLI runs poll --once from a server config module", async () => {
             };
           }
         },
-        merchantScope: () => "node:test",
         onPaid: async ({ invoice }) => {
           assert.equal(invoice.invoice_id, "or_inv_poll_once");
         }

@@ -641,7 +641,6 @@ function validateOpenApi() {
     ["get", "/invoices/{invoice_id}"],
     ["post", "/invoices/lookup"],
     ["post", "/invoices/{invoice_id}/refresh"],
-    ["post", "/poll"],
     ["get", "/rates"],
     ["post", "/rates/quote"],
     ["get", "/routes"],
@@ -661,9 +660,13 @@ function validateOpenApi() {
   assert(amountMsats?.minimum === 1000, "OpenAPI amount_msats minimum mismatch");
   assert(amountMsats?.maximum === 9007199254740991, "OpenAPI amount_msats maximum mismatch");
   assert(
-    createInvoiceRequest?.not?.required?.includes("description") &&
+    createInvoiceRequest?.required?.includes("order_uuid"),
+    "OpenAPI create request must require order_uuid"
+  );
+  assert(
+    createInvoiceRequest?.not?.required?.includes("optional_invoice_description") &&
       createInvoiceRequest?.not?.required?.includes("description_hash"),
-    "OpenAPI create request must reject description with description_hash"
+    "OpenAPI create request must reject optional_invoice_description with description_hash"
   );
   assert(
     openapi.components?.schemas?.RefreshInvoiceResponse?.properties?.invoice?.$ref ===

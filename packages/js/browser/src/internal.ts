@@ -547,18 +547,18 @@ export type CheckoutRefresh = (
 
 export interface CreateOpenReceiveInvoiceOptions {
   readonly invoiceUrl?: string;
-  readonly idempotencyKey: string;
+  readonly orderUuid: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly headers?: Readonly<Record<string, string>>;
+  readonly amountInSatoshis?: number | string;
   readonly amount_msats?: number | string;
   readonly fiat?: {
     readonly currency: string;
     readonly value: string;
   };
-  readonly description?: string;
+  readonly optionalInvoiceDescription?: string;
   readonly description_hash?: string;
   readonly expiry?: number;
-  readonly metadata?: Record<string, unknown>;
 }
 
 export interface CreateOpenReceiveLookupInvoiceFetcherOptions {
@@ -2862,8 +2862,8 @@ export function createCheckoutShell(
 export async function createInvoice(
   options: CreateOpenReceiveInvoiceOptions
 ): Promise<CheckoutSnapshot> {
-  if (options.idempotencyKey.length === 0) {
-    throw new Error("OpenReceive invoice creation requires an idempotencyKey.");
+  if (options.orderUuid.length === 0) {
+    throw new Error("OpenReceive invoice creation requires an orderUuid.");
   }
 
   const fetcher = options.fetch ?? globalThis.fetch;
@@ -2871,13 +2871,31 @@ export async function createInvoice(
     throw new Error("OpenReceive invoice creation requires fetch.");
   }
 
+  const amountSourceCount = [
+    options.amountInSatoshis !== undefined,
+    options.amount_msats !== undefined,
+    options.fiat !== undefined
+  ].filter(Boolean).length;
+  if (amountSourceCount !== 1) {
+    throw new Error("OpenReceive invoice creation requires exactly one of fiat or amountInSatoshis.");
+  }
+  if (
+    options.optionalInvoiceDescription !== undefined &&
+    options.optionalInvoiceDescription.length > 500
+  ) {
+    throw new Error("OpenReceive optionalInvoiceDescription must be 500 characters or fewer.");
+  }
+
   const requestBody = {
+    order_uuid: options.orderUuid,
+    ...(options.amountInSatoshis === undefined ? {} : { amount_sats: options.amountInSatoshis }),
     ...(options.amount_msats === undefined ? {} : { amount_msats: options.amount_msats }),
     ...(options.fiat === undefined ? {} : { fiat: options.fiat }),
-    ...(options.description === undefined ? {} : { description: options.description }),
+    ...(options.optionalInvoiceDescription === undefined
+      ? {}
+      : { optional_invoice_description: options.optionalInvoiceDescription }),
     ...(options.description_hash === undefined ? {} : { description_hash: options.description_hash }),
-    ...(options.expiry === undefined ? {} : { expiry: options.expiry }),
-    ...(options.metadata === undefined ? {} : { metadata: options.metadata })
+    ...(options.expiry === undefined ? {} : { expiry: options.expiry })
   };
   assertOpenReceiveBrowserPayloadSafe(requestBody);
 
@@ -2885,7 +2903,6 @@ export async function createInvoice(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Idempotency-Key": options.idempotencyKey,
       ...(options.headers ?? {})
     },
     body: JSON.stringify(requestBody)

@@ -12,6 +12,7 @@
     "invoice",
     "payment_hash",
     "amount_msats",
+    "order_uuid",
     "created_at",
     "expires_at",
     "settlement_action_state"
@@ -52,14 +53,6 @@
       "type": "string",
       "minLength": 1
     },
-    "description": {
-      "type": "string",
-      "maxLength": 1024
-    },
-    "description_hash": {
-      "type": "string",
-      "pattern": "^[0-9a-fA-F]{64}$"
-    },
     "payment_hash": {
       "type": "string",
       "pattern": "^[0-9a-fA-F]{64}$"
@@ -68,6 +61,11 @@
       "type": "integer",
       "minimum": 1000,
       "maximum": 9007199254740991
+    },
+    "order_uuid": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
     },
     "created_at": {
       "type": "integer",
@@ -95,10 +93,6 @@
     "settlement_action_completed_at": {
       "type": "integer",
       "minimum": 0
-    },
-    "metadata": {
-      "type": "object",
-      "additionalProperties": true
     },
     "fiat_quote": {
       "type": "object",
@@ -147,43 +141,5 @@
         }
       }
     }
-  },
-  "oneOf": [
-    {
-      "required": [
-        "description"
-      ],
-      "not": {
-        "required": [
-          "description_hash"
-        ]
-      }
-    },
-    {
-      "required": [
-        "description_hash"
-      ],
-      "not": {
-        "required": [
-          "description"
-        ]
-      }
-    },
-    {
-      "not": {
-        "anyOf": [
-          {
-            "required": [
-              "description"
-            ]
-          },
-          {
-            "required": [
-              "description_hash"
-            ]
-          }
-        ]
-      }
-    }
-  ]
+  }
 }

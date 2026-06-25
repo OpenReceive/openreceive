@@ -92,14 +92,31 @@ export function runNpm(args, cwd, cacheDir, timeoutMs = DEFAULT_NPM_TIMEOUT_MS) 
   }
 }
 
-export function localPackageDependency(root, packageName) {
-  const packageJson = path.join(root, "node_modules", packageName, "package.json");
-  if (statSync(packageJson, { throwIfNoEntry: false }) === undefined) {
+export function localPackageDirectory(root, packageName) {
+  const packageSegments = packageName.split("/");
+  const candidates = [
+    path.join(root, "node_modules", ...packageSegments)
+  ];
+  const jsPackageRoot = path.join(root, "packages/js");
+  if (statSync(jsPackageRoot, { throwIfNoEntry: false }) !== undefined) {
+    for (const entry of readdirSync(jsPackageRoot)) {
+      candidates.push(path.join(jsPackageRoot, entry, "node_modules", ...packageSegments));
+    }
+  }
+
+  const packageDir = candidates.find(
+    (candidate) => statSync(path.join(candidate, "package.json"), { throwIfNoEntry: false }) !== undefined
+  );
+  if (packageDir === undefined) {
     throw new Error(
       `${packageName} is required for package artifact smoke imports. Run npm install in the repo first.`
     );
   }
-  return `file:${path.join(root, "node_modules", packageName)}`;
+  return packageDir;
+}
+
+export function localPackageDependency(root, packageName) {
+  return `file:${localPackageDirectory(root, packageName)}`;
 }
 
 export function createPackageBuildWorkspace(input = {}) {

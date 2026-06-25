@@ -1,10 +1,6 @@
 {
+  "order_uuid": "order_456",
   "amount_msats": 200000,
-  "description": "Fruit sticker from OpenReceive demo: banana",
-  "expiry": 600,
-  "metadata": {
-    "order_id": "order_456",
-    "product_id": "fruit-sticker-pack",
-    "fruit": "banana"
-  }
+  "optional_invoice_description": "Fruit sticker from OpenReceive demo: banana",
+  "expiry": 600
 }

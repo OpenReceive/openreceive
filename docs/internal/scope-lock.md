@@ -8,9 +8,9 @@ for the packages that already exist in this repository.
 The first end-developer path to polish is:
 
 - `@openreceive/node` for receive-only NWC, package-owned persistence, CLI
-  setup, store initialization, doctor checks, mounted Node HTTP routes, auth
-  hooks, gated lookup, protected poll, backend settlement verification,
-  settlement actions, and one-shot poll support.
+  store initialization, mounted Node HTTP routes, app-owned route protection,
+  gated lookup, backend settlement verification, settlement actions, and
+  one-shot poll support.
 - `@openreceive/browser`, `@openreceive/elements`, and `@openreceive/react`
   for display-safe checkout UI/state. These packages never receive NWC secrets.
 

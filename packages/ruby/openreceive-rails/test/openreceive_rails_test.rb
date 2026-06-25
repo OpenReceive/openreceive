@@ -106,7 +106,15 @@ class OpenReceiveRailsTest < Minitest::Test
     )
   end
 
+  def require_sqlite3!
+    require "sqlite3"
+  rescue LoadError
+    skip "sqlite3 gem is not installed; skipping SQLite-backed Rails store test"
+  end
+
   def test_rails_storage_resolver_uses_owned_sqlite_store
+    require_sqlite3!
+
     rails_source = File.read(
       File.join(
         ROOT,
@@ -150,6 +158,8 @@ class OpenReceiveRailsTest < Minitest::Test
   end
 
   def test_sqlite_store_claims_sweeps_once_per_interval
+    require_sqlite3!
+
     Dir.mktmpdir do |dir|
       store = OpenReceive::Rails.resolve_invoice_store(
         uri: "sqlite://#{File.join(dir, "openreceive.sqlite3")}",

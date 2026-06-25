@@ -7,21 +7,24 @@ import {
   mkdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync
 } from "node:fs";
 import path from "node:path";
 import {
   buildOpenReceivePackageTarballs,
-  localPackageDependency,
-  runNpm
+  localPackageDirectory,
+  localPackageDependency
 } from "../package/build-artifacts.mjs";
 
 const root = process.cwd();
 const npmTimeoutMs = Number(process.env.OPENRECEIVE_PACKAGE_SMOKE_NPM_TIMEOUT_MS ?? 120_000);
 const localSmokeDependencies = new Set([
+  "@getalby/sdk",
   "commander",
   "d3-array",
   "d3-geo",
+  "qrcode",
   "react",
   "topojson-client",
   "world-atlas"
@@ -62,6 +65,37 @@ function writeInstallProject(installDir, tarballs) {
       2
     )
   );
+}
+
+function packageInstallPath(installDir, packageName) {
+  return path.join(installDir, "node_modules", ...packageName.split("/"));
+}
+
+function extractPackageTarball(tarball, destination) {
+  rmSync(destination, { recursive: true, force: true });
+  mkdirSync(destination, { recursive: true });
+  execFileSync("tar", ["-xzf", tarball, "-C", destination, "--strip-components=1"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+}
+
+function linkLocalDependency(installDir, packageName) {
+  const target = localPackageDirectory(root, packageName);
+  const linkPath = packageInstallPath(installDir, packageName);
+  rmSync(linkPath, { recursive: true, force: true });
+  mkdirSync(path.dirname(linkPath), { recursive: true });
+  symlinkSync(target, linkPath, "dir");
+}
+
+function assembleOfflineInstall(installDir, tarballs) {
+  mkdirSync(path.join(installDir, "node_modules"), { recursive: true });
+  for (const { name, tarball } of tarballs) {
+    extractPackageTarball(tarball, packageInstallPath(installDir, name));
+  }
+  for (const dependency of localSmokeDependencies) {
+    linkLocalDependency(installDir, dependency);
+  }
 }
 
 function writeImportSmoke(installDir, packages) {
@@ -177,18 +211,8 @@ function main() {
     mkdirSync(installDir, { recursive: true });
 
     writeInstallProject(installDir, result.tarballs);
-    console.error("installing package smoke project");
-    runNpm(
-      [
-        "install",
-        "--ignore-scripts",
-        "--legacy-peer-deps",
-        "--package-lock=false"
-      ],
-      installDir,
-      workspace.cacheDir,
-      npmTimeoutMs
-    );
+    console.error("assembling offline package smoke project");
+    assembleOfflineInstall(installDir, result.tarballs);
     writeImportSmoke(installDir, result.packages);
     console.error("running package import smoke");
     const output = runImportSmoke(installDir);

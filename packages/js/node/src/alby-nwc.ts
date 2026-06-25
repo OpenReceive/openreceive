@@ -57,6 +57,7 @@ export interface AlbyNwcReceiveClientOptions {
 
 export type WalletPreflightErrorCode =
   | "missing_required_method"
+  | "spend_capability_advertised"
   | "unsupported_encryption"
   | "wallet_unavailable";
 
@@ -127,6 +128,14 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
       throw new WalletPreflightError(
         "unsupported_encryption",
         "NWC wallet must support NIP-04 or NIP-44 v2 encryption.",
+        summary
+      );
+    }
+
+    if (summary.spendCapabilityAdvertised) {
+      throw new WalletPreflightError(
+        "spend_capability_advertised",
+        "NWC wallet must not advertise send-payment methods for receive checkout.",
         summary
       );
     }
@@ -531,6 +540,7 @@ function knownOpenReceiveErrorCode(
 
   if (error instanceof WalletPreflightError) {
     if (error.code === "missing_required_method") return "UNSUPPORTED_METHOD";
+    if (error.code === "spend_capability_advertised") return "RESTRICTED";
     if (error.code === "unsupported_encryption") return "UNSUPPORTED_ENCRYPTION";
     return "WALLET_UNAVAILABLE";
   }

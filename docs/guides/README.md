@@ -5,7 +5,7 @@ Start here when you are integrating OpenReceive into an app.
 1. [What Is OpenReceive](what-is.md) - product boundary and runtime model.
 2. [Node Framework Quickstart](quickstart-node.md) - working backend and checkout path.
 3. [Frontend Checkout](frontend-checkout.md) - browser helpers, React, and web components.
-4. [Authorization](authorization.md) - `merchantScope`, app auth hooks, CSRF, and CORS.
+4. [App Route Protection](authorization.md) - middleware, controllers, CSRF, and CORS.
 5. [Storage](storage.md) - `OPENRECEIVE_STORE`, namespaces, and production storage.
 6. [Deployment And Recovery](deployment-and-recovery.md) - host setup and optional poll recovery.
 7. [API Reference](api-reference.md) - mounted routes and app-facing packages.

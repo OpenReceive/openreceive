@@ -10,7 +10,6 @@ export const OPENRECEIVE_HTTP_PATHS = [
   "/invoices/{invoice_id}",
   "/invoices/{invoice_id}/refresh",
   "/invoices/lookup",
-  "/poll",
   "/providers",
   "/rates",
   "/rates/quote",
@@ -27,7 +26,6 @@ export const OPENRECEIVE_HTTP_OPERATION_IDS = [
   "listRates",
   "listRoutes",
   "lookupInvoice",
-  "pollInvoices",
   "quoteRates",
   "refreshInvoice"
 ] as const;

@@ -19,15 +19,15 @@ strings, wallet clients, and settlement actions on the backend.
 - `createCheckoutController(options)` powers advanced headless checkout flows.
 
 These helpers reject NWC connection strings. They work with BOLT11 invoices and
-authorized OpenReceive HTTP routes only.
+OpenReceive HTTP routes only.
 
 ```ts
 import { createInvoice, status } from "@openreceive/browser";
 
 const invoice = await createInvoice({
-  idempotencyKey: orderId,
+  orderUuid,
   fiat: { currency: "USD", value: "10.00" },
-  metadata: { order_id: orderId }
+  optionalInvoiceDescription: "Order #1234"
 });
 
 console.log(status(invoice));
@@ -142,14 +142,40 @@ wizard UI from display-safe data. It dispatches UI events such as
 `openreceive-settled`, and `openreceive-error`. Treat all frontend events as
 display hints.
 
-## Vue, Svelte, And Angular
+## Vue
 
-`@openreceive/vue`, `@openreceive/svelte`, and `@openreceive/angular` provide
-thin typed bindings around the shared web component plus packaged component
-entry files:
+```vue
+<script setup lang="ts">
+import Checkout from "@openreceive/vue/checkout.vue";
+import type { CheckoutSnapshot } from "@openreceive/vue";
+import "@openreceive/vue/styles.css";
 
-- `@openreceive/vue/checkout.vue`
-- `@openreceive/svelte/checkout.svelte`
+defineProps<{ invoice: CheckoutSnapshot }>();
+</script>
+
+<template>
+  <Checkout :snapshot="invoice" :options="{ onSettled: showThankYou }" />
+</template>
+```
+
+## Svelte
+
+```svelte
+<script lang="ts">
+  import Checkout from "@openreceive/svelte/checkout.svelte";
+  import "@openreceive/svelte/styles.css";
+
+  export let invoice;
+</script>
+
+<Checkout snapshot={invoice} options={{ onSettled: showThankYou }} />
+```
+
+## Angular
+
+`@openreceive/angular` provides a thin typed binding around the shared web
+component:
+
 - `@openreceive/angular/checkout-component`
 
 The common binding path creates the checkout element attributes and listeners

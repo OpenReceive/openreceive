@@ -17,7 +17,7 @@ A mobile app may:
 - display amount, BOLT11 invoice text, QR data, and payment status
 - copy the invoice
 - open a Lightning wallet through a platform deep link
-- poll an authorized lookup endpoint
+- poll a backend lookup endpoint protected by your app when needed
 - subscribe to server-sent or push-style status updates exposed by the backend
 
 A mobile app leaves these on the backend:

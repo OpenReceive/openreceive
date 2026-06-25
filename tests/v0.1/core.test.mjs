@@ -663,16 +663,13 @@ test("browser owns web-component shadow styles", () => {
 test("browser create invoice helper owns idempotent invoice POST shape", async () => {
   const requests = [];
   const invoice = await createInvoice({
-    idempotencyKey: "order-browser-create",
+    orderUuid: "order-browser-create",
     fiat: {
       currency: "USD",
       value: "10.00"
     },
-    description: "Browser helper invoice",
+    optionalInvoiceDescription: "Browser helper invoice",
     expiry: 600,
-    metadata: {
-      order_id: "order-browser-create"
-    },
     fetch: async (url, init) => {
       requests.push({ url, init });
       return {
@@ -682,6 +679,7 @@ test("browser create invoice helper owns idempotent invoice POST shape", async (
           invoice: "lnbc-browser-create",
           payment_hash: PAYMENT_HASH,
           amount_msats: 200000,
+          order_uuid: "order-browser-create",
           transaction_state: "pending",
           workflow_state: "invoice_created"
         })
@@ -694,36 +692,33 @@ test("browser create invoice helper owns idempotent invoice POST shape", async (
   assert.equal(requests[0].url, "/openreceive/v1/invoices");
   assert.equal(requests[0].init.method, "POST");
   assert.equal(requests[0].init.headers["Content-Type"], "application/json");
-  assert.equal(requests[0].init.headers["Idempotency-Key"], "order-browser-create");
+  assert.equal("Idempotency-Key" in requests[0].init.headers, false);
   assert.deepEqual(JSON.parse(requests[0].init.body), {
+    order_uuid: "order-browser-create",
     fiat: {
       currency: "USD",
       value: "10.00"
     },
-    description: "Browser helper invoice",
-    expiry: 600,
-    metadata: {
-      order_id: "order-browser-create"
-    }
+    optional_invoice_description: "Browser helper invoice",
+    expiry: 600
   });
 
   await assert.rejects(
     () => createInvoice({
-      idempotencyKey: "",
+      orderUuid: "",
       amount_msats: 200000,
       fetch: async () => ({
         ok: true,
         json: async () => ({})
       })
     }),
-    /idempotencyKey/
+    /orderUuid/
   );
   await assert.rejects(
     () => createInvoice({
-      idempotencyKey: "bad-nwc",
-      metadata: {
-        nwc: `nostr+walletconnect://${"a".repeat(64)}?secret=${"b".repeat(64)}`
-      },
+      orderUuid: "bad-nwc",
+      amountInSatoshis: 200,
+      optionalInvoiceDescription: `nostr+walletconnect://${"a".repeat(64)}?secret=${"b".repeat(64)}`,
       fetch: async () => ({
         ok: true,
         json: async () => ({})
@@ -733,8 +728,8 @@ test("browser create invoice helper owns idempotent invoice POST shape", async (
   );
   await assert.rejects(
     () => createInvoice({
-      idempotencyKey: "server-error",
-      amount_msats: 200000,
+      orderUuid: "server-error",
+      amountInSatoshis: 200,
       fetch: async () => ({
         ok: false,
         json: async () => ({

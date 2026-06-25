@@ -20,6 +20,6 @@
 | `npm run mock-wallet` | Start the deterministic local mock wallet service for conformance testing. | No |
 | `npm run build:docs` | Validate the docs manifest and build the docs import/search artifact under `dist/docs`. | No |
 | `npm run build:demo` | Build the Hello Fruit demos. | No |
-| `npm run test:package-smoke` | Pack every JS workspace package into local tarballs, install them into a temporary project, and import each package. | No |
+| `npm run test:package-smoke` | Pack every JS workspace package into local tarballs, assemble an offline temporary project, and import each package. | No |
 | `npm run test:vectors` | Run vector validation. | No |
 | `npm run test:live:nwc` | Live wallet smoke harness. Reads `OPENRECEIVE_NWC` from the environment or `OPENRECEIVE_ENV_FILE`, checks `tools/live-nwc-test/expected_capabilities.json` by default, then skips clearly when unset. | Optional |

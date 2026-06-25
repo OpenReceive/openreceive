@@ -32,8 +32,8 @@ package-owned OpenReceive Postgres KV store and self-initializes the
 OpenReceive schema before store queries.
 
 The package exposes `npm run openreceive:poll` for an optional one-shot
-scheduled reconciliation pass through the protected `/openreceive/v1/poll`
-route. Normal checkout recovery happens through backend lookup routes.
+scheduled reconciliation pass. Normal checkout recovery happens through
+backend lookup routes.
 
 The production container exposes only port `3002` to the Docker network unless
 the local override is used.
@@ -43,5 +43,6 @@ the local override is used.
 `/demo-metadata.json` exposes non-secret build metadata for hosted-demo smoke
 checks. It never includes wallet connection strings or NWC query secrets.
 
-Production Node apps deploy the web process with protected poll authorization;
+Production apps that require signed-in or session-bound checkout should mount
+OpenReceive routes behind their normal app middleware;
 see [Deployment And Recovery](../../../../docs/guides/deployment-and-recovery.md).

@@ -30,12 +30,12 @@ through third-party services outside OpenReceive.
 OpenReceive runs inside your normal web process. Mount `/openreceive/v1`, and
 the browser checkout polls a backend lookup route to learn when an invoice
 settles. For extra recovery, you can optionally call
-`POST /openreceive/v1/poll` or `openreceive poll --once` on a schedule.
+`openreceive poll --once` on a server-side schedule.
 
 ```text
 web process        mounts /openreceive/v1
 browser checkout   polls /openreceive/v1/invoices/lookup
-optional scheduler POST /openreceive/v1/poll or openreceive poll --once
+optional scheduler runs openreceive poll --once
 ```
 
 The OpenReceive store is the only thing coordinating across processes. It

@@ -9,6 +9,7 @@ import {
   createHelloFruitDemoMetadata
 } from "../../../../shared/demo-metadata.ts";
 import {
+  createHelloFruitTestReceiveClient,
   readRequiredHelloFruitNwcConnectionString
 } from "../../../../shared/demo-nwc.ts";
 import {
@@ -139,14 +140,14 @@ export async function createHelloFruitOpenReceive(
     demoId: DEMO_ID
   });
   const priceCurrencies = readHelloFruitCatalogCurrencies();
+  const testClient = createHelloFruitTestReceiveClient();
 
   return await createOpenReceive({
-    nwc: connectionString,
+    ...(testClient === undefined ? { nwc: connectionString } : { client: testClient }),
     store,
-    merchantScope: () => "demo:hello-fruit-nextjs",
+    namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit",
     priceProviders: createDefaultLivePriceProviders({ currencies: priceCurrencies }),
     priceCurrencies,
-    unsafeAllowUnauthenticatedDemoMode: true,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID)
   });
 }

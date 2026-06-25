@@ -62,15 +62,10 @@ function App(): React.ReactElement {
 
     try {
       const body = await requestInvoice({
-        idempotencyKey: `hello-fruit-${selectedFruit.id}-${idempotencyKey}`,
+        orderUuid: `hello-fruit-${selectedFruit.id}-${idempotencyKey}`,
         fiat: selectedFruit.fiat,
-        description: createHelloFruitInvoiceDescription(selectedFruit.name),
+        optionalInvoiceDescription: createHelloFruitInvoiceDescription(selectedFruit.name),
         expiry: product.invoice_expiry_seconds,
-        metadata: {
-          product_id: product.product_id,
-          fruit: selectedFruit.id,
-          fiat: selectedFruit.fiat
-        },
         fetch
       });
 
