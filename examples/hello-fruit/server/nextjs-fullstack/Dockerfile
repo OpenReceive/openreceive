@@ -16,7 +16,7 @@ COPY packages/js/svelte/package.json ./packages/js/svelte/package.json
 COPY packages/js/testkit/package.json ./packages/js/testkit/package.json
 COPY packages/js/vue/package.json ./packages/js/vue/package.json
 COPY examples/hello-fruit/server/nextjs-fullstack/package.json ./examples/hello-fruit/server/nextjs-fullstack/package.json
-COPY examples/hello-fruit/server/node-express-react/package.json ./examples/hello-fruit/server/node-express-react/package.json
+COPY examples/hello-fruit/server/node-express/package.json ./examples/hello-fruit/server/node-express/package.json
 COPY examples/hello-fruit/server/static-html-small-api/package.json ./examples/hello-fruit/server/static-html-small-api/package.json
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit
 

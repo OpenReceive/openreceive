@@ -1,7 +1,8 @@
-# Hello Fruit: Express + React
+# Hello Fruit: Express + React/Vue/Svelte/Angular
 
 This v0.1 demo defines Express routes that call the OpenReceive service and
-renders a React checkout for the shared Hello Fruit sticker product.
+renders React, Vue, Svelte, and Angular checkout tabs for the shared Hello
+Fruit sticker product.
 
 The browser never receives `OPENRECEIVE_NWC`.
 

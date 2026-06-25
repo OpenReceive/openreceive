@@ -17,7 +17,7 @@ if (
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
   startHelloFruitServer(await createHelloFruitProductionServer(), {
-    name: "hello-fruit-node-express-react",
+    name: "hello-fruit-node-express",
     port: process.env.PORT
   });
 }

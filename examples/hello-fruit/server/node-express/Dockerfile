@@ -16,15 +16,15 @@ COPY packages/js/svelte/package.json ./packages/js/svelte/package.json
 COPY packages/js/testkit/package.json ./packages/js/testkit/package.json
 COPY packages/js/vue/package.json ./packages/js/vue/package.json
 COPY examples/hello-fruit/server/nextjs-fullstack/package.json ./examples/hello-fruit/server/nextjs-fullstack/package.json
-COPY examples/hello-fruit/server/node-express-react/package.json ./examples/hello-fruit/server/node-express-react/package.json
+COPY examples/hello-fruit/server/node-express/package.json ./examples/hello-fruit/server/node-express/package.json
 COPY examples/hello-fruit/server/static-html-small-api/package.json ./examples/hello-fruit/server/static-html-small-api/package.json
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit
 
 COPY packages ./packages
 COPY examples/hello-fruit ./examples/hello-fruit
-RUN npm run build -w @openreceive/example-node-express-react
+RUN npm run build -w @openreceive/example-node-express
 
-WORKDIR /app/examples/hello-fruit/server/node-express-react
+WORKDIR /app/examples/hello-fruit/server/node-express
 ENV NODE_ENV=production
 ENV OPENRECEIVE_DEMO_MODE=test_nwc
 ENV PORT=3000

@@ -50,6 +50,28 @@ button {
   gap: 18px;
 }
 
+.framework-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.framework-tabs button {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.framework-tabs button.selected {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+}
+
 .topbar {
   display: flex;
   width: min(1120px, 100%);
@@ -189,6 +211,11 @@ p {
 .demo-checkout > [data-openreceive-qr] {
   grid-column: 1;
   grid-row: 1 / 6;
+}
+
+.embedded-framework-checkout > section,
+.embedded-framework-checkout > [data-openreceive-theme] {
+  display: contents;
 }
 
 .demo-checkout > .or-wizard {

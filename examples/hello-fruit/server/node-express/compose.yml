@@ -1,8 +1,8 @@
 services:
-  hello-fruit-node-express-react:
+  hello-fruit-node-express:
     build:
       context: ../../../..
-      dockerfile: examples/hello-fruit/server/node-express-react/Dockerfile
+      dockerfile: examples/hello-fruit/server/node-express/Dockerfile
     depends_on:
       - openreceive-postgres
     env_file:

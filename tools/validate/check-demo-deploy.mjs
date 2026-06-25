@@ -11,7 +11,7 @@ const demos = [
     slug: "express-demo",
     hostname: "express-demo.openreceive.org",
     stagingHostname: "express-demo.staging.openreceive.org",
-    stack: "Express + React",
+    stack: "Express + React/Vue/Svelte/Angular",
     image: "ghcr.io/openreceive/demo-express",
     compose: "demos/deploy/stacks/express-demo.compose.yml",
     caddy: "demos/deploy/proxy/sites/express-demo.caddy",

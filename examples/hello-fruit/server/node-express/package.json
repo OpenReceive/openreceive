@@ -1,5 +1,5 @@
 {
-  "name": "@openreceive/example-node-express-react",
+  "name": "@openreceive/example-node-express",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -14,13 +14,23 @@
     "@openreceive/browser": "0.1.0",
     "@openreceive/core": "0.1.0",
     "@openreceive/node": "0.1.0",
+    "@openreceive/angular": "0.1.0",
     "@openreceive/react": "0.1.0",
+    "@openreceive/svelte": "0.1.0",
+    "@openreceive/vue": "0.1.0",
+    "@angular/compiler": "^22.0.3",
+    "@angular/core": "^22.0.3",
+    "@angular/platform-browser": "^22.0.3",
+    "@sveltejs/vite-plugin-svelte": "^5.1.1",
     "@vitejs/plugin-react": "^4.7.0",
+    "@vitejs/plugin-vue": "^5.2.4",
     "express": "*",
     "pg": "^8.22.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "vite": "^6.4.3"
+    "svelte": "^5.39.6",
+    "vite": "^6.4.3",
+    "vue": "^3.5.22"
   },
   "devDependencies": {
     "typescript": "*"

@@ -78,7 +78,7 @@ test("workspace metadata does not reference removed express or next packages", (
     "package.json",
     "package-lock.json",
     "packages/js/node/package.json",
-    "examples/hello-fruit/server/node-express-react/package.json",
+    "examples/hello-fruit/server/node-express/package.json",
     "examples/hello-fruit/server/static-html-small-api/package.json",
     "examples/hello-fruit/server/nextjs-fullstack/package.json",
     "docs/internal/release-process.md",

@@ -11,7 +11,7 @@
   ],
   "scripts": {
     "build:docs": "node tools/docs/build-index.mjs",
-    "build:demo": "npm run build -w @openreceive/example-node-express-react && npm run build -w @openreceive/example-static-html-small-api && npm run build -w @openreceive/example-nextjs-fullstack",
+    "build:demo": "npm run build -w @openreceive/example-node-express && npm run build -w @openreceive/example-static-html-small-api && npm run build -w @openreceive/example-nextjs-fullstack",
     "demo": "node --import tsx tools/run-demo.mjs",
     "generate:models": "node tools/codegen/generate-js-models.mjs",
     "check:generated": "node tools/codegen/generate-js-models.mjs --check",
@@ -37,7 +37,14 @@
   "engines": {
     "node": ">=20"
   },
+  "overrides": {
+    "@angular/common": "22.0.3",
+    "@angular/compiler": "22.0.3",
+    "@angular/core": "22.0.3",
+    "@angular/platform-browser": "22.0.3"
+  },
   "devDependencies": {
+    "@angular/core": "22.0.3",
     "@types/express": "^5.0.6",
     "@types/node": "^20.19.43",
     "@types/pg": "^8.20.0",

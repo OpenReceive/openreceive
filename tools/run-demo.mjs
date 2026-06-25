@@ -2,7 +2,7 @@
 
 // Convenience launcher for the dockerized Hello Fruit demos.
 //
-//   npm run demo node      -> Express + React        (http://localhost:3000)
+//   npm run demo node      -> Express + React/Vue/Svelte/Angular (http://localhost:3000)
 //   npm run demo static    -> Static HTML + small API (http://localhost:3001)
 //   npm run demo nextjs    -> Next.js fullstack       (http://localhost:3002)
 //   npm run demo rails     -> Rails + Hotwire         (http://localhost:3003)
@@ -22,10 +22,10 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 
 const DEMOS = [
   {
-    keys: ["node", "node-express-react", "express"],
-    dir: "examples/hello-fruit/server/node-express-react",
+    keys: ["node", "node-express", "express"],
+    dir: "examples/hello-fruit/server/node-express",
     port: 3000,
-    label: "Express + React"
+    label: "Express + React/Vue/Svelte/Angular"
   },
   {
     keys: ["static", "static-html-small-api", "html"],

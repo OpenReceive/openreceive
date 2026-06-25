@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type {
   Invoice
@@ -7,7 +7,10 @@ import {
   Checkout,
   ThemeScope
 } from "@openreceive/react";
+import "@openreceive/angular/styles.css";
 import "@openreceive/react/styles.css";
+import "@openreceive/vue/styles.css";
+import "@openreceive/svelte/styles.css";
 import {
   createHelloFruitBrowserLogger
 } from "../../../../shared/demo-browser-logging.ts";
@@ -20,10 +23,20 @@ import fruitsData from "../../../../shared/fruits.json";
 import product from "../../../../shared/product.json";
 import "./styles.css";
 
-const logOpenReceive = createHelloFruitBrowserLogger("node-express-react");
+const logOpenReceive = createHelloFruitBrowserLogger("node-express");
 const fruits = fruitsData.fruits;
 type Fruit = (typeof fruits)[number];
+type CheckoutFramework = "react" | "vue" | "svelte" | "angular";
 const initialFruitId = fruits[1]?.id ?? fruits[0]?.id ?? "";
+const checkoutFrameworks: readonly {
+  readonly id: CheckoutFramework;
+  readonly label: string;
+}[] = [
+  { id: "react", label: "React" },
+  { id: "vue", label: "Vue" },
+  { id: "svelte", label: "Svelte" },
+  { id: "angular", label: "Angular" }
+];
 
 interface DemoOrder {
   readonly uuid: string;
@@ -46,6 +59,7 @@ interface CreateOrderResponse {
 }
 
 function App(): React.ReactElement {
+  const [framework, setFramework] = useState<CheckoutFramework>("react");
   const [fruitId, setFruitId] = useState(initialFruitId);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [order, setOrder] = useState<DemoOrder | null>(null);
@@ -150,6 +164,21 @@ function App(): React.ReactElement {
       topbarClassName="topbar"
     >
       <section className="checkout">
+        <div className="framework-tabs" role="tablist" aria-label="Checkout framework">
+          {checkoutFrameworks.map((item) => (
+            <button
+              aria-selected={framework === item.id}
+              className={framework === item.id ? "selected" : ""}
+              key={item.id}
+              onClick={() => setFramework(item.id)}
+              role="tab"
+              type="button"
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+
         <div className="product">
           <img src={`/${selectedFruit?.sticker}`} alt="" />
           <div>
@@ -243,11 +272,9 @@ function App(): React.ReactElement {
         )}
 
         {invoice === null ? null : (
-          <Checkout
-            className="demo-checkout"
+          <FrameworkCheckout
+            framework={framework}
             invoice={invoice}
-            lookupUrl="/order_status"
-            logger={logOpenReceive}
             onError={(cause) => {
               setError(cause instanceof Error ? cause.message : String(cause));
             }}
@@ -289,6 +316,143 @@ function App(): React.ReactElement {
         </div>
       )}
     </ThemeScope>
+  );
+}
+
+interface FrameworkCheckoutProps {
+  readonly framework: CheckoutFramework;
+  readonly invoice: Invoice;
+  readonly onError: (error: unknown) => void;
+  readonly onPaid: () => void;
+  readonly onStartOver: () => void;
+}
+
+function FrameworkCheckout({
+  framework,
+  invoice,
+  onError,
+  onPaid,
+  onStartOver
+}: FrameworkCheckoutProps): React.ReactElement {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (host === null || framework === "react") return;
+    const mountTarget = host;
+    let canceled = false;
+    let cleanup: () => void = () => undefined;
+
+    const options = {
+      lookupUrl: "/order_status",
+      rootSelector: ".page",
+      defaultTheme: "light" as const,
+      onError: (event: Event) => {
+        const detail = (event as CustomEvent<{ error?: unknown }>).detail;
+        onError(detail?.error ?? event);
+      },
+      onSettled: onPaid
+    };
+
+    async function mountFrameworkCheckout() {
+      if (framework === "vue") {
+        const [{ default: VueCheckout }, { createApp }] = await Promise.all([
+          import("@openreceive/vue/checkout.vue"),
+          import("vue")
+        ]);
+        if (canceled) return;
+
+        const app = createApp(VueCheckout, {
+          snapshot: invoice,
+          options
+        });
+        app.mount(mountTarget);
+        cleanup = () => app.unmount();
+      }
+
+      if (framework === "angular") {
+        await import("@angular/compiler");
+        const [
+          { CheckoutComponent },
+          { createComponent },
+          { createApplication }
+        ] = await Promise.all([
+          import("@openreceive/angular/checkout-component"),
+          import("@angular/core"),
+          import("@angular/platform-browser")
+        ]);
+        if (canceled) return;
+
+        const application = await createApplication();
+        if (canceled) {
+          application.destroy();
+          return;
+        }
+
+        const component = createComponent(CheckoutComponent, {
+          environmentInjector: application.injector,
+          hostElement: mountTarget
+        });
+        component.setInput("snapshot", invoice);
+        component.setInput("options", options);
+        application.attachView(component.hostView);
+        component.changeDetectorRef.detectChanges();
+        cleanup = () => {
+          application.detachView(component.hostView);
+          component.destroy();
+          application.destroy();
+        };
+      }
+
+      if (framework === "svelte") {
+        const [{ default: SvelteCheckout }, { mount, unmount }] = await Promise.all([
+          import("@openreceive/svelte/checkout.svelte"),
+          import("svelte")
+        ]);
+        if (canceled) return;
+
+        const component = mount(SvelteCheckout, {
+          target: mountTarget,
+          props: {
+            snapshot: invoice,
+            options
+          }
+        });
+        cleanup = () => {
+          void unmount(component);
+        };
+      }
+    }
+
+    void mountFrameworkCheckout().catch(onError);
+
+    return () => {
+      canceled = true;
+      cleanup();
+      host.replaceChildren();
+    };
+  }, [framework, invoice, onError, onPaid]);
+
+  if (framework === "react") {
+    return (
+      <Checkout
+        className="demo-checkout"
+        invoice={invoice}
+        lookupUrl="/order_status"
+        logger={logOpenReceive}
+        onError={onError}
+        onPaid={onPaid}
+        onStartOver={onStartOver}
+      />
+    );
+  }
+
+  return (
+    <div
+      className="demo-checkout embedded-framework-checkout"
+      data-framework={framework}
+      ref={hostRef}
+    />
   );
 }
 

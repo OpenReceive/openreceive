@@ -19,8 +19,9 @@ The v0.1 reference path is contract-first and server-owned:
 - `spec/` is the source of truth for schemas, shared data, and test vectors.
 - `packages/js/` contains the core contracts, Node NWC service, browser
   helpers, provider data, testkit, elements, and frontend framework packages.
-- `examples/hello-fruit/server/` contains the Express + React, static HTML
-  + small API, and Next.js fullstack Hello Fruit demos.
+- `examples/hello-fruit/server/` contains the Express demo with React, Vue,
+  Svelte, and Angular checkout tabs, plus static HTML + small API and Next.js
+  fullstack Hello Fruit demos.
 - `demos/deploy/` contains public-safe hosted demo deployment templates.
 - `tools/` holds validation, conformance, package-smoke, docs, mock-wallet, and
   live-wallet smoke helpers.
@@ -32,7 +33,7 @@ stickers to a cart, create an app order, and pay its Lightning invoice. Pick a
 stack:
 
 ```sh
-npm run demo node      # Express + React          http://localhost:3000
+npm run demo node      # Express + React/Vue/Svelte/Angular http://localhost:3000
 npm run demo static    # Static HTML + small API   http://localhost:3001
 npm run demo nextjs    # Next.js fullstack         http://localhost:3002
 npm run demo rails     # Rails + Hotwire skeleton  http://localhost:3003

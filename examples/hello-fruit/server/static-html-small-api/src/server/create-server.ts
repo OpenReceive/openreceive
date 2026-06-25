@@ -5,9 +5,7 @@ import {
   createDefaultLivePriceProviders
 } from "@openreceive/core";
 import {
-  createOpenReceive,
-  OpenReceiveServiceError,
-  type OpenReceive
+  createOpenReceive
 } from "@openreceive/node";
 import {
   createHelloFruitDemoMetadata
@@ -20,7 +18,6 @@ import {
   createHelloFruitOpenReceiveLogger
 } from "../../../../shared/demo-logging.ts";
 import {
-  HelloFruitDemoOrderError,
   createHelloFruitCreateOrderResult,
   createHelloFruitOrderStatus
 } from "../../../../shared/demo-order.ts";
@@ -37,7 +34,7 @@ import product from "../../../../shared/product.json";
 
 const DEMO_ID = "static-html-small-api";
 
-export async function createHelloFruitOpenReceive(): Promise<OpenReceive> {
+export async function createHelloFruitOpenReceive() {
   const priceCurrencies = readHelloFruitCatalogCurrencies();
   const store = await createHelloFruitOpenReceiveKvStore({
     demoId: DEMO_ID
@@ -106,7 +103,7 @@ export async function createHelloFruitStaticServer() {
         invoice
       });
     } catch (error) {
-      sendOpenReceiveError(res, next, error);
+      next(error);
     }
   });
   app.post("/order_status", async (req, res, next) => {
@@ -122,27 +119,41 @@ export async function createHelloFruitStaticServer() {
         }
       });
     } catch (error) {
-      sendOpenReceiveError(res, next, error);
+      next(error);
     }
   });
+
+  app.use(handleCheckoutError);
 
   return app;
 }
 
-function sendOpenReceiveError(
+function handleCheckoutError(
+  error: unknown,
+  _req: express.Request,
   res: express.Response,
-  next: express.NextFunction,
-  error: unknown
+  next: express.NextFunction
 ): void {
-  if (error instanceof HelloFruitDemoOrderError) {
-    res.status(error.status).json(error.body);
-    return;
-  }
-  if (error instanceof OpenReceiveServiceError) {
+  if (isCheckoutHttpError(error)) {
     res.status(error.status).json(error.body);
     return;
   }
   next(error);
+}
+
+function isCheckoutHttpError(error: unknown): error is {
+  readonly status: number;
+  readonly body: Record<string, unknown>;
+} {
+  if (typeof error !== "object" || error === null) return false;
+  const candidate = error as { readonly status?: unknown; readonly body?: unknown };
+  return Number.isInteger(candidate.status) &&
+    typeof candidate.status === "number" &&
+    candidate.status >= 400 &&
+    candidate.status <= 599 &&
+    typeof candidate.body === "object" &&
+    candidate.body !== null &&
+    !Array.isArray(candidate.body);
 }
 
 function asRequestBody(value: unknown): Record<string, unknown> {

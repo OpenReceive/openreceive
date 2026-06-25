@@ -3,8 +3,8 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { Readable } from "node:stream";
 import test from "node:test";
-import { createHelloFruitServer } from "../../examples/hello-fruit/server/node-express-react/src/server/create-server.ts";
-import { createHelloFruitProductionServer } from "../../examples/hello-fruit/server/node-express-react/src/server/production.ts";
+import { createHelloFruitServer } from "../../examples/hello-fruit/server/node-express/src/server/create-server.ts";
+import { createHelloFruitProductionServer } from "../../examples/hello-fruit/server/node-express/src/server/production.ts";
 import { createHelloFruitStaticServer } from "../../examples/hello-fruit/server/static-html-small-api/src/server/create-server.ts";
 import { createHelloFruitStaticProductionServer } from "../../examples/hello-fruit/server/static-html-small-api/src/server/production.ts";
 import {
@@ -35,7 +35,7 @@ const canonicalDemoDataPath = path.join(
   "spec/data/demo/fruits.json"
 );
 const demoServerDirs = [
-  "examples/hello-fruit/server/node-express-react",
+  "examples/hello-fruit/server/node-express",
   "examples/hello-fruit/server/static-html-small-api",
   "examples/hello-fruit/server/nextjs-fullstack"
 ];
@@ -119,11 +119,11 @@ test("Hello Fruit demos share product display formatting", () => {
   );
 });
 
-test("Hello Fruit React demos delegate checkout state to the React package", () => {
+test("Hello Fruit React demos delegate checkout state to UI packages", () => {
   const nodeClient = readFileSync(
     path.join(
       process.cwd(),
-      "examples/hello-fruit/server/node-express-react/src/client/App.tsx"
+      "examples/hello-fruit/server/node-express/src/client/App.tsx"
     ),
     "utf8"
   );
@@ -136,7 +136,7 @@ test("Hello Fruit React demos delegate checkout state to the React package", () 
   );
 
   for (const [name, source] of [
-    ["node-express-react", nodeClient],
+    ["node-express", nodeClient],
     ["nextjs-fullstack", nextClient]
   ]) {
     assert.match(source, /<Checkout/);
@@ -154,11 +154,20 @@ test("Hello Fruit React demos delegate checkout state to the React package", () 
     assert.doesNotMatch(source, /parseOpenReceiveInvoiceEvent/);
     assert.doesNotMatch(source, /createCheckoutState/);
   }
+
+  assert.match(nodeClient, /@openreceive\/vue\/checkout\.vue/);
+  assert.match(nodeClient, /@openreceive\/svelte\/checkout\.svelte/);
+  assert.match(nodeClient, /@openreceive\/angular\/checkout-component/);
+  assert.match(nodeClient, /checkoutFrameworks/);
+  assert.match(nodeClient, /React/);
+  assert.match(nodeClient, /Vue/);
+  assert.match(nodeClient, /Svelte/);
+  assert.match(nodeClient, /Angular/);
 });
 
 test("Hello Fruit JS demos use package-owned QR and poll-only wiring", () => {
   const clientSources = [
-    "examples/hello-fruit/server/node-express-react/src/client/App.tsx",
+    "examples/hello-fruit/server/node-express/src/client/App.tsx",
     "examples/hello-fruit/server/static-html-small-api/src/client/main.ts",
     "examples/hello-fruit/server/nextjs-fullstack/src/app/checkout-client.tsx"
   ];
@@ -185,9 +194,22 @@ test("Hello Fruit JS demos use package-owned QR and poll-only wiring", () => {
       path.join(process.cwd(), demoDir, "openreceive.config.mjs"),
       "utf8"
     );
+    const viteConfigPath = path.join(process.cwd(), demoDir, "vite.config.ts");
+    const viteConfig = existsSync(viteConfigPath)
+      ? readFileSync(viteConfigPath, "utf8")
+      : "";
     const compose = readFileSync(path.join(process.cwd(), demoDir, "compose.yml"), "utf8");
 
     assert.equal(packageJson.dependencies.qrcode, undefined, `${demoDir}: qrcode is package-owned`);
+    if (demoDir.endsWith("/node-express")) {
+      assert.equal(packageJson.dependencies["@openreceive/angular"], "0.1.0");
+      assert.equal(packageJson.dependencies["@openreceive/vue"], "0.1.0");
+      assert.equal(packageJson.dependencies["@openreceive/svelte"], "0.1.0");
+      assert.equal(packageJson.dependencies["@angular/core"], "^22.0.3");
+      assert.equal(packageJson.dependencies["@angular/platform-browser"], "^22.0.3");
+      assert.match(viteConfig, /@vitejs\/plugin-vue/);
+      assert.match(viteConfig, /@sveltejs\/vite-plugin-svelte/);
+    }
     assert.match(packageJson.scripts.dev, /require-openreceive-nwc\.ts/);
     assert.match(packageJson.scripts.start, /require-openreceive-nwc\.ts/);
     assert.equal(packageJson.scripts["openreceive:worker"], undefined);
@@ -204,7 +226,7 @@ test("Hello Fruit Node demo creates orders from cart before rendering checkout",
   const source = readFileSync(
     path.join(
       process.cwd(),
-      "examples/hello-fruit/server/node-express-react/src/client/App.tsx"
+      "examples/hello-fruit/server/node-express/src/client/App.tsx"
     ),
     "utf8"
   );
@@ -248,7 +270,7 @@ test("Hello Fruit Next.js demo resets expired checkout from Start over", () => {
 
 test("Hello Fruit browser demos consume shared product display helpers", () => {
   const sources = [
-    "examples/hello-fruit/server/node-express-react/src/client/App.tsx",
+    "examples/hello-fruit/server/node-express/src/client/App.tsx",
     "examples/hello-fruit/server/nextjs-fullstack/src/app/checkout-client.tsx",
     "examples/hello-fruit/server/static-html-small-api/src/client/main.ts"
   ].map((relativePath) => [
@@ -325,7 +347,7 @@ test("Hello Fruit browser demos consume shared theme model", () => {
   const nodeClient = readFileSync(
     path.join(
       process.cwd(),
-      "examples/hello-fruit/server/node-express-react/src/client/App.tsx"
+      "examples/hello-fruit/server/node-express/src/client/App.tsx"
     ),
     "utf8"
   );
@@ -345,7 +367,7 @@ test("Hello Fruit browser demos consume shared theme model", () => {
   );
 
   for (const [name, source] of [
-    ["node-express-react", nodeClient],
+    ["node-express", nodeClient],
     ["nextjs-fullstack", nextClient]
   ]) {
     assert.match(source, /ThemeScope/, `${name}: uses package theme scope`);
@@ -842,7 +864,7 @@ test("Hello Fruit JS demos set up package-owned invoice persistence", () => {
   }
 
   for (const sourcePath of [
-    "examples/hello-fruit/server/node-express-react/src/server/create-server.ts",
+    "examples/hello-fruit/server/node-express/src/server/create-server.ts",
     "examples/hello-fruit/server/static-html-small-api/src/server/create-server.ts",
     "examples/hello-fruit/server/nextjs-fullstack/src/server/openreceive.ts"
   ]) {
@@ -855,7 +877,7 @@ test("Hello Fruit JS demos set up package-owned invoice persistence", () => {
   }
 
   for (const sourcePath of [
-    "examples/hello-fruit/server/node-express-react/openreceive.config.mjs",
+    "examples/hello-fruit/server/node-express/openreceive.config.mjs",
     "examples/hello-fruit/server/static-html-small-api/openreceive.config.mjs",
     "examples/hello-fruit/server/nextjs-fullstack/openreceive.config.mjs"
   ]) {
@@ -971,7 +993,7 @@ test("Hello Fruit demos refuse to boot without OPENRECEIVE_NWC", async () => {
   await withEnv({ OPENRECEIVE_NWC: undefined }, async () => {
     for (const demo of [
       {
-        name: "node-express-react-production",
+        name: "node-express-production",
         createApp: createHelloFruitProductionServer
       },
       {
@@ -1025,7 +1047,7 @@ test("Hello Fruit metadata exposes only allowlisted build fields", async () => {
   }, async () => {
     for (const demo of [
       {
-        name: "node-express-react",
+        name: "node-express",
         createApp: createHelloFruitServer
       },
       {
@@ -1072,7 +1094,7 @@ test("Hello Fruit demos create app orders and poll order status through merchant
 
     for (const demo of [
       {
-        name: "node-express-react",
+        name: "node-express",
         createApp: createHelloFruitServer
       },
       {
@@ -1133,8 +1155,8 @@ test("Hello Fruit hosted demo routes expose source, docs, robots, and sitemap", 
   }, async () => {
     for (const demo of [
       {
-        name: "node-express-react",
-        sourcePath: "examples/hello-fruit/server/node-express-react",
+        name: "node-express",
+        sourcePath: "examples/hello-fruit/server/node-express",
         createApp: createHelloFruitServer
       },
       {

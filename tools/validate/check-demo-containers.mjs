@@ -8,10 +8,10 @@ const root = process.cwd();
 
 const demoContainers = [
   {
-    id: "node-express-react",
-    packageName: "@openreceive/example-node-express-react",
-    dir: "examples/hello-fruit/server/node-express-react",
-    service: "hello-fruit-node-express-react",
+    id: "node-express",
+    packageName: "@openreceive/example-node-express",
+    dir: "examples/hello-fruit/server/node-express",
+    service: "hello-fruit-node-express",
     image: "ghcr.io/openreceive/demo-express:local",
     port: "3000",
     namespace: "hello_fruit_express",
