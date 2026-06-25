@@ -1,7 +1,7 @@
 # OpenReceive Ruby
 
 This is the first Ruby core package slice for OpenReceive. It intentionally
-contains only shared-contract helpers that can run without a wallet secret:
+contains only shared-contract helpers that can run without a receive-only NWC code:
 
 - exact decimal fiat-to-sats/msats quoting
 - settlement detection where `settled_at`, `state == "settled"`, or
@@ -21,5 +21,5 @@ or browser/mobile code.
 The in-memory store is not a production database adapter.
 Rails work builds on this package plus `nwc-ruby` inside your server app. The
 Rails adapter can run one-shot poll jobs in the app's normal job runtime,
-keeps NWC secrets out of frontend runtimes, and is still being aligned with the
+keeps receive-only NWC codes out of frontend runtimes, and is still being aligned with the
 OpenReceive-owned KV storage contract.

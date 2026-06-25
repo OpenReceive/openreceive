@@ -139,9 +139,9 @@ test("parses and redacts NWC URI without leaking the client secret", () => {
   assert.equal(redactNwcUri(NWC_URI), parsed.redacted);
 });
 
-test("NWC boot messages explain the read-only code requirement", () => {
+test("NWC boot messages explain the receive-only code requirement", () => {
   const missing = formatOpenReceiveMissingNwcMessage({ subject: "Demo" });
-  assert.match(missing, /Demo needs a read-only NWC code to receive payments\./);
+  assert.match(missing, /Demo needs a receive-only NWC code to receive payments\./);
   assert.match(missing, /Set OPENRECEIVE_NWC/);
   assert.match(missing, /https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/);
 

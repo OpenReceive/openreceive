@@ -54,6 +54,6 @@ fulfillment tables.
 - FastAPI routes in a Python app.
 - Equivalent native integrations in later ecosystems.
 
-The browser or mobile app receives only display-safe invoice data. NWC secrets,
-invoice creation, payment verification, recovery polling, and `onPaid`
-fulfillment stay server-side.
+The browser or mobile app receives only display-safe invoice data. The
+receive-only NWC code, invoice creation, payment verification, recovery polling,
+and `onPaid` fulfillment stay server-side.

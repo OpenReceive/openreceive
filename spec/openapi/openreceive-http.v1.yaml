@@ -5,7 +5,8 @@ info:
   summary: Application-facing receive-checkout routes mounted by framework adapters.
   description: >
     OpenReceive does not ship a required HTTP daemon. Framework adapters mount
-    these routes inside the merchant application. NWC secrets remain server-side.
+    these routes inside the merchant application. Receive-only NWC codes remain
+    server-side.
 servers:
   - url: /openreceive/v1
 paths:

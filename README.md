@@ -47,9 +47,8 @@ development servers inside Docker so browser errors stay readable. The Rails
 Hotwire demo is experimental skeleton work; its container runs
 `rails db:prepare` for its SQLite-backed ActiveRecord store before booting.
 Buying fruit creates a live Lightning invoice through your own wallet, so set a
-valid receive-only `OPENRECEIVE_NWC` string (for example from Rizful or Alby
-Hub) in `.env` before starting a demo. Demos need a valid receive-only wallet
-connection before startup.
+valid receive-only NWC code (for example from Rizful or Alby Hub) in `.env` before
+starting a demo. Demos need a valid receive-only NWC code before startup.
 The JS demos quote each fruit's USD price through live BTC/USD price providers
 before creating the invoice.
 
@@ -117,8 +116,8 @@ accounts, Bitcoin, or stablecoins that may be able to reach that invoice.
 Provider routes are suggestions, not payment guarantees. The payer chooses and
 uses third-party services outside OpenReceive.
 
-Browser, mobile, and static frontend code never receive NWC secrets. Live
-checkout always needs a backend component controlled by your application.
+Browser, mobile, and static frontend code never get the receive-only NWC code.
+Live checkout always needs a backend component controlled by your application.
 
 ## Docs
 

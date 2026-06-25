@@ -282,7 +282,7 @@ function validateDemoStack(demo) {
   expect((service.ports ?? []).length === 0, `${relativePath}: production stack must not publish host ports`);
   expectArrayEqual(service.networks ?? [], ["demo_proxy"], `${relativePath}: ${demo.slug} must join only demo_proxy`);
   expect(service.env_file?.length === 1, `${relativePath}: ${demo.slug} must load exactly one env_file`);
-  expect(service.env_file?.[0]?.path === "/opt/openreceive/secrets/rizful-test-wallet.env", `${relativePath}: ${demo.slug} env_file must use the host wallet secret path`);
+  expect(service.env_file?.[0]?.path === "/opt/openreceive/secrets/rizful-test-wallet.env", `${relativePath}: ${demo.slug} env_file must use the host receive-only NWC code path`);
   expect(service.env_file?.[0]?.required === false, `${relativePath}: ${demo.slug} env_file must be optional for local config validation`);
   expect(service.environment?.OPENRECEIVE_DEMO_MODE === "${OPENRECEIVE_DEMO_MODE:-test_nwc}", `${relativePath}: demo mode must default to test_nwc`);
   expect(service.environment?.OPENRECEIVE_PUBLIC_URL === `https://${demo.hostname}`, `${relativePath}: public URL must be https://${demo.hostname}`);
@@ -342,7 +342,7 @@ function validateReadme() {
 
   expect(text.includes("public, non-secret deployment templates"), `${relativePath}: must describe public non-secret scope`);
   expect(text.includes("docker network create openreceive_demo_proxy"), `${relativePath}: must document proxy network creation`);
-  expect(text.includes("/opt/openreceive/secrets/rizful-test-wallet.env"), `${relativePath}: must document wallet secret path`);
+  expect(text.includes("/opt/openreceive/secrets/rizful-test-wallet.env"), `${relativePath}: must document receive-only NWC code path`);
   expect(text.includes("npm run check:demo-deploy"), `${relativePath}: must document deploy validator`);
   expect(text.includes("scripts/smoke-demo https://express-demo.openreceive.org"), `${relativePath}: must document smoke command`);
 }

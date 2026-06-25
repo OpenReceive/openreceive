@@ -1,15 +1,14 @@
-# Secret Management
+# NWC Code Management
 
-NWC connection strings are wallet secrets. Receive-only credentials are safer
-than read/write credentials, but they can still create invoices and expose
-wallet metadata.
+Receive-only NWC codes can create invoices and expose wallet metadata. Treat
+them as private server-only configuration.
 
 ## Repository Rules
 
 - Commit `.env.example`, not real `.env` files.
 - Do not commit `OPENRECEIVE_NWC` values.
-- Do not put NWC secrets in browser code, mobile apps, fixtures, screenshots,
-  source maps, docs, logs, or error payloads.
+- Do not put receive-only NWC codes in browser code, mobile apps, fixtures,
+  screenshots, source maps, docs, logs, or error payloads.
 - Keep `private/` for local-only launcher scripts and notes.
 
 `npm run scan:secrets` rejects likely NWC strings and tracked non-example env
@@ -33,7 +32,7 @@ variables, set:
 OPENRECEIVE_ENV_FILE=private/rizful-test-wallet.env
 ```
 
-Run live tests only with low-value receive-only credentials:
+Run live tests only with a low-value receive-only NWC code:
 
 ```sh
 npm run test:live:nwc
@@ -41,14 +40,14 @@ npm run test:live:nwc
 
 The script skips when `OPENRECEIVE_NWC` is unset. It only reads an env file when
 `OPENRECEIVE_ENV_FILE` is set, so normal test runs do not accidentally use a
-developer's local wallet secret. When a wallet is configured, it redacts the
-connection string, creates a low-value test invoice, and verifies payment
-server-side before fulfillment.
+developer's local receive-only NWC code. When a wallet is configured, it redacts
+the code, creates a low-value test invoice, and verifies payment server-side
+before fulfillment.
 
 ## Deployment
 
-Inject wallet secrets at runtime from the host, platform secret store, or
-operator-managed secret files. Do not bake secrets into build artifacts or demo
+Inject receive-only NWC codes at runtime from the host, platform secret store, or
+operator-managed env files. Do not bake them into build artifacts or demo
 images.
 
 Hosted demos may expose public build metadata such as package versions, git

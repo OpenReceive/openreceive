@@ -67,10 +67,10 @@ Bypass caching for invoice, lookup, refresh, and poll paths such as
 `/openreceive/*` and `/api/*`. Demo handlers should return `no-store` for
 checkout state, lookup, refresh, and poll responses.
 
-## Secrets
+## Private Runtime Files
 
-Demo images must not bake in wallet credentials. Runtime secrets belong in
-host-managed files such as:
+Demo images must not bake in receive-only NWC codes. Runtime private values belong
+in host-managed files such as:
 
 ```text
 /opt/openreceive/secrets/rizful-test-wallet.env
@@ -147,7 +147,7 @@ GitHub-hosted runners should not need:
 If a self-hosted runner is used for deployment, restrict it to protected
 branches, tags, `workflow_dispatch`, or a protected GitHub environment. Do not
 run untrusted pull requests on a runner that can reach deploy credentials,
-WireGuard keys, Docker on the demo host, or wallet secret files.
+WireGuard keys, Docker on the demo host, or receive-only NWC code files.
 
 Never mount the host Docker socket into a broad or untrusted CI runner. Docker
 socket access is effectively host-root access.
@@ -160,5 +160,4 @@ DNS is needed, scope it under a dedicated namespace such as
 `preview.openreceive.org`.
 
 Staging demo hostnames may use `*.staging.openreceive.org`. Staging still uses
-receive-only wallet credentials and the same secret-handling rules as
-production demos.
+receive-only NWC codes and the same handling rules as production demos.

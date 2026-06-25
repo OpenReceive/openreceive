@@ -17,7 +17,7 @@ const forbiddenPatterns = [
     pattern: /nostr\+walletconnect:\/\/[0-9a-fA-F]{64}/
   },
   {
-    name: "NWC secret query value",
+    name: "NWC code query value",
     pattern: /[?&]secret=[0-9a-fA-F]{16,}/
   }
 ];

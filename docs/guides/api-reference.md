@@ -123,8 +123,7 @@ guarantees. Product fulfillment belongs in the server `onPaid` hook.
 mounted.
 
 `GET /openreceive/v1/capabilities` returns a non-secret capability summary.
-Wallet secrets, raw NWC connection strings, and private wallet details stay out
-of this response.
+The receive-only NWC code and private wallet details stay out of this response.
 
 ## Error Shape
 

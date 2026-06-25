@@ -207,8 +207,8 @@ import "@openreceive/svelte/styles.css";
 import "@openreceive/angular/styles.css";
 ```
 
-Use the package you installed. The CSS does not contain wallet secrets or live
-checkout authority.
+Use the package you installed. The CSS does not contain receive-only NWC codes or
+live checkout authority.
 
 ## Browser Logs
 

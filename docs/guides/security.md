@@ -1,14 +1,13 @@
 # Security
 
-OpenReceive's main security promise is simple: wallet secrets stay server-side,
-and products unlock only after backend-verified settlement.
+OpenReceive's main security promise is simple: the receive-only NWC code stays
+server-side, and products unlock only after backend-verified settlement.
 
-## Wallet Secrets
+## Receive-Only NWC Code
 
-NWC connection strings are secrets. Receive-only NWC is safer than read/write
-NWC, but it can still create invoices and reveal wallet metadata. It must not
-appear in browser code, mobile apps, source maps, logs, screenshots, errors, or
-test fixtures.
+A receive-only NWC code can create invoices and reveal wallet metadata. It must
+not appear in browser code, mobile apps, source maps, logs, screenshots,
+errors, or test fixtures.
 
 ## Settlement
 
@@ -42,5 +41,5 @@ Default route policy:
 
 ## Demos
 
-Public demos must use low invoice amounts, rate limits, separate receive-only
-wallet credentials, and logs that redact secrets.
+Public demos must use low invoice amounts, rate limits, separate receive-only NWC
+codes, and logs that redact those codes.

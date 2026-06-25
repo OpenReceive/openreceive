@@ -14,7 +14,8 @@ checkoutRoutes.use(express.json());
 
 const openreceive = await createOpenReceive({
   onPaid: async ({ orderUuid }) => {
-    await markOrderPaid(orderUuid);
+    // Your app function, not OpenReceive.
+    await markOrderPaidInYourApp(orderUuid);
   },
 });
 const or = openreceive.handlers;
@@ -36,7 +37,8 @@ export const runtime = "nodejs";
 
 const openreceiveReady = createOpenReceive({
   onPaid: async ({ orderUuid }) => {
-    await markOrderPaid(orderUuid);
+    // Your app function, not OpenReceive.
+    await markOrderPaidInYourApp(orderUuid);
   },
 });
 
@@ -88,11 +90,12 @@ server-side `onPaid`:
 ```ts
 export const openreceive = await createOpenReceive({
   onPaid: async ({ orderUuid }) => {
-    await markOrderPaid(orderUuid);
+    // Your app function, not OpenReceive.
+    await markOrderPaidInYourApp(orderUuid);
   }
 });
 ```
 
-`markOrderPaid` is your app code. `orderUuid` is guaranteed to be the unique app
-order key for this checkout, so use it for idempotent fulfillment. Invoice
-details are available only if your app wants extra audit or correlation data.
+`orderUuid` is guaranteed to be the unique app order key for this checkout, so
+use it for idempotent fulfillment. Invoice details are available only if your
+app wants extra audit or correlation data.

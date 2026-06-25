@@ -7,12 +7,13 @@ for the packages that already exist in this repository.
 
 The first end-developer path to polish is:
 
-- `@openreceive/node` for receive-only NWC, package-owned persistence, CLI
+- `@openreceive/node` for receive-only NWC code handling, package-owned persistence, CLI
   store initialization, mounted Node HTTP routes, app-owned route protection,
   gated lookup, backend settlement verification, settlement actions, and
   one-shot poll support.
 - `@openreceive/browser`, `@openreceive/elements`, and `@openreceive/react`
-  for display-safe checkout UI/state. These packages never receive NWC secrets.
+  for display-safe checkout UI/state. These packages never get receive-only NWC
+  codes.
 
 This path must be easy to install, diagnose, package, and test before adding
 new SDK families or demos.
@@ -58,7 +59,7 @@ surface is hardened:
   `namespace + operation + idempotency_key`.
 - Settlement requires backend lookup with `settled_at`, `state == "settled"`,
   or `transaction_state == "settled"`. A preimage alone is not final proof.
-- Browser, mobile, and static frontend code never receive NWC secrets.
+- Browser, mobile, and static frontend code never get receive-only NWC codes.
 
 ## Gate
 
@@ -77,7 +78,7 @@ npm run test:ci
 ```
 
 `npm run test:live:nwc` and `npm run test:live:ruby:nwc` are optional trusted
-live-wallet checks and must skip clearly when wallet secrets are absent.
+live-wallet checks and must skip clearly when receive-only NWC codes are absent.
 
 ## Parallelism
 

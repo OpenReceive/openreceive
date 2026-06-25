@@ -387,7 +387,7 @@ test("client bundle scanner rejects real-looking NWC URIs in generated bundles",
       () => runClientBundleScanner(dir),
       (error) => {
         assert.match(String(error.stderr), /examples\/demo\/dist\/assets\/app\.js: NWC connection URI/);
-        assert.match(String(error.stderr), /examples\/demo\/dist\/assets\/app\.js: NWC secret query value/);
+        assert.match(String(error.stderr), /examples\/demo\/dist\/assets\/app\.js: NWC code query value/);
         return true;
       }
     );

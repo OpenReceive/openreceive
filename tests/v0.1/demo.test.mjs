@@ -957,14 +957,14 @@ test("Hello Fruit demos refuse to boot without OPENRECEIVE_NWC", async () => {
     ]) {
       await assert.rejects(
         () => demo.createApp(),
-        /needs a read-only NWC code to receive payments\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
+        /needs a receive-only NWC code to receive payments\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
         `${demo.name}: requires NWC at boot`
       );
     }
 
     assert.throws(
       () => getNextDemoMetadata(),
-      /needs a read-only NWC code to receive payments\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
+      /needs a receive-only NWC code to receive payments\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
       "nextjs-fullstack: metadata requires NWC"
     );
   });

@@ -513,6 +513,6 @@ test("Vue, Svelte, and Angular packages ship component entry files", () => {
     assert.match(source, /defineOpenReceiveElements/,
       `${item.componentPath}: registers shared custom elements`);
     assert.doesNotMatch(source, /nostr\+walletconnect/,
-      `${item.componentPath}: must not contain wallet secrets`);
+      `${item.componentPath}: must not contain receive-only NWC codes`);
   }
 });

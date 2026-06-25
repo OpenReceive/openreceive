@@ -77,9 +77,9 @@ Refresh idempotency uses the same scope shape with `operation =
 ## Live Wallet Smoke
 
 `npm run test:live:nwc` uses `OPENRECEIVE_NWC` when present and skips clearly
-when absent. It may load secrets from a local ignored env file when
+when absent. It may load a receive-only NWC code from a local ignored env file when
 `OPENRECEIVE_ENV_FILE` points at one. Live runs must use a low-value
-receive-only NWC secret and must redact the connection string in all output.
+receive-only NWC code and must redact the connection string in all output.
 
 The default wallet capability fixture is
 `tools/live-nwc-test/expected_capabilities.json`, currently set for the Rizful
@@ -94,7 +94,8 @@ Recovery tests must include invoices whose local `expires_at` passed while the
 server was down; those invoices stay recoverable until a post-expiry wallet
 lookup or post-expiry grace verification closes them.
 
-Do not run live wallet tests on untrusted pull requests with secrets available.
+Do not run live wallet tests on untrusted pull requests with receive-only NWC codes
+available.
 
 ## Future SDKs
 
@@ -129,7 +130,7 @@ and deterministic lookup errors for conformance tests.
 The mock wallet returns non-payable invoice fixtures. It does not replace live
 wallet profile tests, does not prove real BOLT11 routing, and does not emulate a
 Nostr relay. Use it for reproducible contract behavior before testing a real
-receive-only NWC wallet with `npm run test:live:nwc`.
+receive-only NWC code with `npm run test:live:nwc`.
 
 ## Recovery
 

@@ -5,7 +5,7 @@ contributors working in this repository.
 
 ## Non-Negotiables
 
-- Do not expose NWC secrets to browser code, mobile apps, logs, tests,
+- Do not expose receive-only NWC codes to browser code, mobile apps, logs, tests,
   screenshots, docs, source maps, or demo assets.
 - OpenReceive receive-checkout APIs never expose send-payment methods.
 - Notifications are passive hints. Backend lookup is the settlement authority.

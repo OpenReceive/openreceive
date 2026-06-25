@@ -15,8 +15,8 @@ basic secret patterns.
 
 ## Development Rules
 
-- Keep NWC secrets server-side only.
-- Use receive-only NWC for checkout examples.
+- Keep receive-only NWC codes server-side only.
+- Use receive-only NWC codes for checkout examples.
 - Use `amount_msats` for Lightning invoice amounts.
 - Store and test `payment_hash` for every invoice.
 - Treat provider routes as suggestions, not guarantees.
@@ -30,5 +30,5 @@ Small issue-shaped PRs are preferred. For v0.1, a PR should state:
 - Which contract, package, tool, or doc it changes.
 - Which test vectors were added or updated.
 - Which command was run locally.
-- Whether any live-wallet behavior was skipped because no NWC secret was
+- Whether any live-wallet behavior was skipped because no receive-only NWC code was
   available.

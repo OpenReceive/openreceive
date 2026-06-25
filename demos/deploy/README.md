@@ -5,8 +5,8 @@ hosted demos. It is not an inventory of any private host.
 
 Stable demos run on a separate demo edge, not on the private apex app
 infrastructure. Keep private hostnames, IP addresses, SSH keys, WireGuard
-configuration, Cloudflare tokens, GHCR tokens, and NWC credentials outside this
-repository.
+configuration, Cloudflare tokens, GHCR tokens, and receive-only NWC codes outside
+this repository.
 
 ## Layout
 
@@ -29,7 +29,7 @@ Create the shared proxy network once on the demo node:
 docker network create openreceive_demo_proxy
 ```
 
-Keep runtime secrets on the host, for example:
+Keep runtime env files on the host, for example:
 
 ```text
 /opt/openreceive/secrets/rizful-test-wallet.env
@@ -39,8 +39,8 @@ Keep runtime secrets on the host, for example:
 ```
 
 Those files must be mode `600` and must not be committed. Demo stack compose
-files load secrets through `env_file`; demo images never bake them in. The
-wallet secret file must provide server-only `OPENRECEIVE_NWC`,
+files load private values through `env_file`; demo images never bake them in.
+The receive-only NWC code env file must provide server-only `OPENRECEIVE_NWC`,
 `OPENRECEIVE_STORE`, and `OPENRECEIVE_NAMESPACE`. Each demo has one web service
 that mounts OpenReceive routes and uses package-owned durable storage. Scheduled
 reconciliation runs `openreceive poll --once` from the host or platform

@@ -104,7 +104,7 @@ function expect(condition, message) {
 function forbidSecrets(relativePath, text) {
   expect(!/OPENRECEIVE_NWC\s*=/.test(text), `${relativePath}: must not assign OPENRECEIVE_NWC`);
   expect(!/nostr\+walletconnect:\/\//.test(text), `${relativePath}: must not contain NWC URI`);
-  expect(!/[?&]secret=[0-9a-fA-F]{16,}/.test(text), `${relativePath}: must not contain NWC secret query value`);
+  expect(!/[?&]secret=[0-9a-fA-F]{16,}/.test(text), `${relativePath}: must not contain NWC code query value`);
 }
 
 function validateDockerfile(demo) {

@@ -1,12 +1,14 @@
 # Node Framework Quickstart
 
-OpenReceive runs inside your app. Your server owns the receive-only NWC,
-creates invoices, stores invoice state, verifies payment server-side, and calls
-your `onPaid` hook. The browser only receives display-safe invoice data.
+OpenReceive runs inside your app. When funds arrive, OpenReceive calls your
+`onPaid` hook with your unique `orderUuid`.
 
 ## Environment
 
-Set the wallet secret only in your server environment:
+All you need to start is a receive-only NWC code from any NWC provider, or one
+you build yourself. Details:
+[Get a NWC code to receive payments](https://openreceive.org/get_a_nwc_code_to_receive_payments).
+Set the receive-only NWC code only in your server environment:
 
 ```sh
 OPENRECEIVE_NWC=nostr+walletconnect://...
@@ -27,13 +29,12 @@ OPENRECEIVE_NAMESPACE=my_app
 The default SQLite file is fine for one local server. If more than one server,
 worker, serverless instance, or scheduler can touch the same
 `OPENRECEIVE_NAMESPACE`, point all of them at one shared durable OpenReceive
-store. In v0.1 Node, use Postgres for that shared store. OpenReceive owns only
-its package-owned Postgres or SQLite invoice store; your app still keeps
+store. OpenReceive uses that store for invoice state only; your app keeps
 orders, carts, users, and fulfillment state in your own tables.
 
-Start the server only after `OPENRECEIVE_NWC` and `OPENRECEIVE_STORE` are set
-for that environment. Setup problems should fail before checkout traffic
-reaches customers.
+Start the server only after `OPENRECEIVE_NWC` is set for that environment.
+For local setup, the default SQLite store is enough. For shared production
+deployments, set `OPENRECEIVE_STORE` before checkout traffic reaches customers.
 
 ## Server Object
 
@@ -44,16 +45,17 @@ import { createOpenReceive } from "@openreceive/node";
 
 const openreceive = await createOpenReceive({
   onPaid: async ({ orderUuid }) => {
-    await markOrderPaid(orderUuid);
+    // Your app function, not OpenReceive.
+    await markOrderPaidInYourApp(orderUuid);
   },
 });
 ```
 
 OpenReceive calls `onPaid` after payment is verified. The hook can run more
 than once. `orderUuid` is guaranteed to be the unique app order key for this
-checkout, so use it for idempotent fulfillment. Most apps can ignore the
-invoice details in this hook; they are available only when you want extra audit
-or correlation data.
+checkout, so use it for idempotent fulfillment. Most apps can ignore the invoice
+details in this hook; they are available only when you want extra audit or
+correlation data.
 
 ## Express
 
@@ -75,7 +77,8 @@ app.use(express.json());
 
 const openreceive = await createOpenReceive({
   onPaid: async ({ orderUuid }) => {
-    await markOrderPaid(orderUuid);
+    // Your app function, not OpenReceive.
+    await markOrderPaidInYourApp(orderUuid);
   },
 });
 const or = openreceive.handlers;
@@ -116,7 +119,8 @@ export const runtime = "nodejs";
 
 const openreceiveReady = createOpenReceive({
   onPaid: async ({ orderUuid }) => {
-    await markOrderPaid(orderUuid);
+    // Your app function, not OpenReceive.
+    await markOrderPaidInYourApp(orderUuid);
   },
 });
 
@@ -154,7 +158,8 @@ const app = Fastify();
 
 const openreceive = await createOpenReceive({
   onPaid: async ({ orderUuid }) => {
-    await markOrderPaid(orderUuid);
+    // Your app function, not OpenReceive.
+    await markOrderPaidInYourApp(orderUuid);
   },
 });
 

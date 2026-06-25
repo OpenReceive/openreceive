@@ -291,7 +291,7 @@ class OpenReceiveTest < Minitest::Test
 
     assert_equal 503, error.status
     assert_equal "WALLET_UNAVAILABLE", error.code
-    assert_includes error.message, "needs a read-only NWC code to receive payments"
+    assert_includes error.message, "needs a receive-only NWC code to receive payments"
     assert_includes error.message, "https://openreceive.org/get_a_nwc_code_to_receive_payments"
     assert_equal "WALLET_UNAVAILABLE", lookup_error.code
     assert_equal({ "wallet_configured" => false }, client.get_info)
@@ -299,7 +299,7 @@ class OpenReceiveTest < Minitest::Test
   end
 
   def test_nwc_boot_messages_include_help_url
-    assert_includes OpenReceive.missing_nwc_message(subject: "Demo"), "Demo needs a read-only NWC code"
+    assert_includes OpenReceive.missing_nwc_message(subject: "Demo"), "Demo needs a receive-only NWC code"
     assert_includes OpenReceive.missing_nwc_message, "https://openreceive.org/get_a_nwc_code_to_receive_payments"
     assert_includes OpenReceive.invalid_nwc_message(reason: "bad scheme"), "bad scheme"
     assert_includes OpenReceive.invalid_nwc_message, "https://openreceive.org/get_a_nwc_code_to_receive_payments"

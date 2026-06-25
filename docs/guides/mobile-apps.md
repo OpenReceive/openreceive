@@ -1,7 +1,7 @@
 # Mobile Apps
 
 Mobile apps are checkout clients, not NWC wallet backends. OpenReceive live
-checkout always needs a server component that owns the receive-only NWC secret.
+checkout always needs a server component that owns the receive-only NWC code.
 
 Use the Node framework quickstart for the current working backend reference:
 
@@ -25,14 +25,14 @@ A mobile app leaves these on the backend:
 - store `OPENRECEIVE_NWC`
 - create live invoices directly through NWC
 - call wallet APIs directly
-- include NWC secrets in app bundles, logs, screenshots, analytics, crash
+- include receive-only NWC codes in app bundles, logs, screenshots, analytics, crash
   reports, support tickets, or test fixtures
 
 ## Backend Requirement
 
 The backend owns:
 
-- receive-only NWC configuration
+- receive-only NWC code
 - wallet setup
 - invoice creation
 - idempotency

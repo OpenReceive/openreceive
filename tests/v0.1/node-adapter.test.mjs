@@ -108,7 +108,7 @@ class FakeAlbyClient {
   }
 }
 
-test("preflight rejects spend-capable NWC credentials", async () => {
+test("preflight rejects spend-capable NWC codes", async () => {
   const fake = new FakeAlbyClient();
   fake.info.capabilities = ["get_info", "make_invoice", "lookup_invoice", "pay_invoice"];
   const client = createNwcReceiveClient({

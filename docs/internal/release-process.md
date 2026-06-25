@@ -47,7 +47,7 @@ enabled:
 - `.github/workflows/conformance.yml` runs contract, generated-model, JS, and
   mock-wallet checks.
 - `.github/workflows/demos.yml` validates and builds demo artifacts without
-  injecting wallet secrets.
+  injecting receive-only NWC codes.
 - `.github/workflows/provider-registry.yml` validates canonical provider data.
 - `.github/workflows/security.yml` runs secret and client-bundle boundary
   checks.
