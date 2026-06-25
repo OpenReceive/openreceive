@@ -4,9 +4,9 @@ import {
   reconcileOnce
 } from "@openreceive/core";
 import type {
-  OpenReceiveNodeOptions,
-  OpenReceiveServer
-} from "./http.ts";
+  OpenReceive,
+  OpenReceiveNodeOptions
+} from "./service.ts";
 import type {
   OpenReceiveSqliteDatabase
 } from "./sqlite-store.ts";
@@ -44,7 +44,7 @@ export interface OpenReceiveCliOptions {
   loadConfigModule?: (specifier: string) => Promise<Record<string, unknown>>;
 }
 
-type OpenReceiveNodeConfig = OpenReceiveNodeOptions | OpenReceiveServer;
+type OpenReceiveNodeConfig = OpenReceive | OpenReceiveNodeOptions;
 
 const HELP = `
 Usage: openreceive <command> [options]
@@ -98,7 +98,7 @@ export async function runOpenReceiveCli(options: OpenReceiveCliOptions): Promise
         });
       case "worker":
       case "listen":
-        stderr.write(`OpenReceive ${command} was removed. Use route-mounted recovery plus \`openreceive poll --once\` for optional schedulers.\n`);
+        stderr.write(`OpenReceive ${command} was removed. Use service-backed recovery plus \`openreceive poll --once\` for optional schedulers.\n`);
         return 1;
       default:
         stderr.write(`Unknown OpenReceive command: ${command}\n\n${HELP}\n`);
@@ -155,6 +155,11 @@ async function runPoll(input: {
     throw new Error("OpenReceive poll is one-shot only. Pass --once and run it from a scheduler.");
   }
   const config = await loadOpenReceiveConfig(input);
+  if (isOpenReceiveServiceConfig(config)) {
+    const result = await config.poll();
+    input.stdout.write(`OpenReceive poll checked ${result.checked} wallet invoice(s) across ${result.invoice_ids.length} open invoice(s).\n`);
+    return 0;
+  }
   if (config.store === undefined) {
     throw new Error("OpenReceive poll requires config.store.");
   }
@@ -179,6 +184,13 @@ async function runPoll(input: {
   });
   input.stdout.write(`OpenReceive poll checked ${result.checked} wallet invoice(s) across ${result.invoice_ids.length} open invoice(s).\n`);
   return 0;
+}
+
+function isOpenReceiveServiceConfig(config: OpenReceiveNodeConfig): config is OpenReceive {
+  return (
+    typeof (config as { poll?: unknown }).poll === "function" &&
+    !("client" in config)
+  );
 }
 
 function readPositiveIntegerEnv(

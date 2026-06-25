@@ -4,8 +4,7 @@ services:
       context: ../../../..
       dockerfile: examples/hello-fruit/server/static-html-small-api/Dockerfile
     depends_on:
-      openreceive-postgres:
-        condition: service_healthy
+      - openreceive-postgres
     env_file:
       - path: ../../../../.env
         required: false
@@ -25,11 +24,6 @@ services:
       POSTGRES_DB: openreceive
       POSTGRES_USER: openreceive
       POSTGRES_PASSWORD: openreceive
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U openreceive -d openreceive"]
-      interval: 2s
-      timeout: 5s
-      retries: 20
     volumes:
       - openreceive-postgres-data:/var/lib/postgresql/data
 

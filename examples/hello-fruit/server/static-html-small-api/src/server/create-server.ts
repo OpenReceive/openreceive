@@ -1,11 +1,13 @@
 import express from "express";
 import { fileURLToPath } from "node:url";
 import {
+  createDefaultPriceProviders,
   createDefaultLivePriceProviders
 } from "@openreceive/core";
 import {
   createOpenReceive,
-  type OpenReceiveServer
+  OpenReceiveServiceError,
+  type OpenReceive
 } from "@openreceive/node";
 import {
   createHelloFruitDemoMetadata
@@ -18,6 +20,11 @@ import {
   createHelloFruitOpenReceiveLogger
 } from "../../../../shared/demo-logging.ts";
 import {
+  HelloFruitDemoOrderError,
+  createHelloFruitCreateOrderResult,
+  createHelloFruitOrderStatus
+} from "../../../../shared/demo-order.ts";
+import {
   mountHelloFruitHostedDemoRoutes
 } from "../../../../shared/hosted-demo-routes.ts";
 import {
@@ -26,10 +33,11 @@ import {
 import {
   readHelloFruitCatalogCurrencies
 } from "../../../../shared/demo-catalog.ts";
+import product from "../../../../shared/product.json";
 
 const DEMO_ID = "static-html-small-api";
 
-export async function createHelloFruitOpenReceive(): Promise<OpenReceiveServer> {
+export async function createHelloFruitOpenReceive(): Promise<OpenReceive> {
   const priceCurrencies = readHelloFruitCatalogCurrencies();
   const store = await createHelloFruitOpenReceiveKvStore({
     demoId: DEMO_ID
@@ -42,7 +50,9 @@ export async function createHelloFruitOpenReceive(): Promise<OpenReceiveServer> 
       : { client: testClient }),
     store,
     namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit",
-    priceProviders: createDefaultLivePriceProviders({ currencies: priceCurrencies }),
+    priceProviders: testClient === undefined
+      ? createDefaultLivePriceProviders({ currencies: priceCurrencies })
+      : createDefaultPriceProviders({ currencies: priceCurrencies }),
     priceCurrencies,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID)
   });
@@ -80,17 +90,63 @@ export async function createHelloFruitStaticServer() {
     }));
   });
 
-  const or = openreceive.handlers;
-  app.post("/openreceive/v1/invoices", or.createInvoice);
-  app.get("/openreceive/v1/invoices/:invoice_id", or.getInvoice);
-  app.post("/openreceive/v1/invoices/lookup", or.lookupInvoice);
-  app.post("/openreceive/v1/invoices/:invoice_id/refresh", or.refreshInvoice);
-  app.get("/openreceive/v1/rates", or.listRates);
-  app.post("/openreceive/v1/rates/quote", or.quoteRates);
-  app.get("/openreceive/v1/routes", or.listRoutes);
-  app.get("/openreceive/v1/providers", or.listProviders);
-  app.get("/openreceive/v1/health", or.health);
-  app.get("/openreceive/v1/capabilities", or.capabilities);
+  app.post("/create_order", async (req, res, next) => {
+    try {
+      const orderResult = createHelloFruitCreateOrderResult({
+        ...asRequestBody(req.body),
+        idempotency_key: req.body?.idempotency_key ?? req.get("idempotency-key")
+      }, {
+        demoId: DEMO_ID,
+        invoiceExpirySeconds: product.invoice_expiry_seconds,
+        demoName: "static"
+      });
+      const invoice = await openreceive.createInvoice(orderResult.invoice_request);
+      res.status(201).json({
+        order: orderResult.order,
+        invoice
+      });
+    } catch (error) {
+      sendOpenReceiveError(res, next, error);
+    }
+  });
+  app.post("/order_status", async (req, res, next) => {
+    try {
+      const lookup = await openreceive.lookupInvoice(req.body);
+      const orderStatus = createHelloFruitOrderStatus(lookup);
+      res.status(200).json({
+        ...lookup,
+        ...orderStatus,
+        order: {
+          uuid: orderStatus.order_uuid,
+          status: orderStatus.order_status
+        }
+      });
+    } catch (error) {
+      sendOpenReceiveError(res, next, error);
+    }
+  });
 
   return app;
+}
+
+function sendOpenReceiveError(
+  res: express.Response,
+  next: express.NextFunction,
+  error: unknown
+): void {
+  if (error instanceof HelloFruitDemoOrderError) {
+    res.status(error.status).json(error.body);
+    return;
+  }
+  if (error instanceof OpenReceiveServiceError) {
+    res.status(error.status).json(error.body);
+    return;
+  }
+  next(error);
+}
+
+function asRequestBody(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
 }

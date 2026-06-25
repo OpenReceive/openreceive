@@ -2,13 +2,13 @@
   <h1>Hello Fruit</h1>
   <p>Rails Hotwire checkout demo</p>
 
-  <%= form_with url: "/openreceive/v1/invoices", method: :post, data: { turbo: true } do |form| %>
+  <%= form_with url: "/create_order", method: :post, data: { turbo: true } do |form| %>
     <%= form.hidden_field :amount_msats, value: @amount_msats %>
     <%= form.hidden_field :description, value: "Hello Fruit sticker" %>
     <%= form.hidden_field :idempotency_key, value: "hello-fruit-rails-hotwire-demo" %>
     <%= form.label :fruit, "Fruit" %>
     <%= form.select :fruit, @fruits %>
-    <%= form.submit "Create invoice" %>
+    <%= form.submit "Create order" %>
   <% end %>
 
   <section id="checkout-status"></section>

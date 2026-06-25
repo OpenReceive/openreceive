@@ -1,7 +1,7 @@
 # Hello Fruit: Express + React
 
-This v0.1 demo mounts OpenReceive routes inside an Express app and renders a
-React checkout for the shared Hello Fruit sticker product.
+This v0.1 demo defines Express routes that call the OpenReceive service and
+renders a React checkout for the shared Hello Fruit sticker product.
 
 The browser never receives `OPENRECEIVE_NWC`.
 
@@ -47,7 +47,7 @@ The Makefile exposes the standard demo commands: `make setup`, `make dev`,
 The server also exposes `/demo-metadata.json` with non-secret package, mode,
 git SHA, image digest, and `deployed_at` metadata for hosted-demo smoke checks.
 
-Hosted-demo helpers expose `/healthz`, `/source`, `/docs`, `/robots.txt`, and
+Hosted-demo helpers expose `/source`, `/docs`, `/robots.txt`, and
 `/sitemap.xml`.
 
 This demo is a public guest checkout. Production apps that require signed-in or

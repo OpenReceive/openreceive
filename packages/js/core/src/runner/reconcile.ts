@@ -41,7 +41,7 @@ export interface OpenReceiveReconcileEvent {
 export interface OpenReceiveSettlementActionInput {
   invoice: InvoiceStorageRow;
   metadata: Record<string, unknown>;
-  source: "http_lookup" | "poll";
+  source: "lookup" | "poll";
   lookup_invoice?: LookupInvoiceResult;
 }
 

@@ -347,9 +347,6 @@ export interface CheckoutSnapshot {
   readonly workflow_state?: string;
   readonly expires_at?: number;
   readonly settled_at?: number;
-  readonly checkout?: {
-    readonly routes_url?: string;
-  };
 }
 
 export interface CheckoutDisplayData {
@@ -514,7 +511,6 @@ export interface CheckoutState {
   readonly workflow_state: string;
   readonly expires_at?: number;
   readonly expiresInSeconds?: number;
-  readonly routes_url?: string;
   readonly phase: CheckoutPhase;
   readonly settled: boolean;
   readonly terminal: boolean;
@@ -3037,10 +3033,7 @@ export function createCheckoutState(
       : { expires_at: snapshot.expires_at }),
     ...(snapshot.settled_at === undefined
       ? {}
-      : { settled_at: snapshot.settled_at }),
-    ...(snapshot.checkout?.routes_url === undefined
-      ? {}
-      : { routes_url: snapshot.checkout.routes_url })
+      : { settled_at: snapshot.settled_at })
   }, options.now ?? currentUnixSeconds());
   emitBrowserLog(options.logger, "info", "checkout.state.created", "Created checkout state from invoice snapshot.", checkoutLogFields(state));
   return state;
@@ -3108,12 +3101,7 @@ export function mergeCheckoutSnapshot(
       : { expires_at: next.expires_at ?? current.expires_at }),
     ...((next.settled_at ?? current.settled_at) === undefined
       ? {}
-      : { settled_at: next.settled_at ?? current.settled_at }),
-    checkout: {
-      ...((next.checkout?.routes_url ?? current.routes_url) === undefined
-        ? {}
-        : { routes_url: next.checkout?.routes_url ?? current.routes_url })
-    }
+      : { settled_at: next.settled_at ?? current.settled_at })
   };
 }
 
@@ -3661,10 +3649,7 @@ function snapshotFromCheckoutState(
     transaction_state: state.transaction_state,
     workflow_state: state.workflow_state,
     ...(state.expires_at === undefined ? {} : { expires_at: state.expires_at }),
-    ...(state.settled_at === undefined ? {} : { settled_at: state.settled_at }),
-    checkout: {
-      ...(state.routes_url === undefined ? {} : { routes_url: state.routes_url })
-    }
+    ...(state.settled_at === undefined ? {} : { settled_at: state.settled_at })
   };
 }
 

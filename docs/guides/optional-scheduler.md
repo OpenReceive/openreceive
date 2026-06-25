@@ -12,8 +12,8 @@ The scheduler is optional. It uses the same server-only config as your web app
 and runs your idempotent `onPaid` hook for newly paid invoices.
 
 ```text
-web process        mounts /openreceive/v1
-browser checkout   watches backend payment status
+web process        handles /create_order and /order_status
+browser checkout   watches app order status
 optional scheduler runs openreceive poll --once
 ```
 
@@ -141,8 +141,8 @@ export const config = {
 
 ## Railway And Render
 
-Deploy the web service normally with `/openreceive/v1` mounted. Add a scheduled
-job that runs:
+Deploy the web service normally with your checkout routes mounted. Add a
+scheduled job that runs:
 
 ```sh
 npm run openreceive:poll

@@ -22,6 +22,6 @@ booting, runs `rails db:prepare`, stores app SQLite data under a named Docker
 volume, and stores OpenReceive invoice data under a separate `.openreceive`
 volume.
 
-The demo exposes `/healthz` and `/demo-metadata.json` for smoke checks. Runtime
-wallet configuration is read from the environment or the optional root `.env`
-file mounted by compose.
+The demo exposes `/demo-metadata.json` for smoke checks. Runtime wallet
+configuration is read from the environment or the optional root `.env` file
+mounted by compose.

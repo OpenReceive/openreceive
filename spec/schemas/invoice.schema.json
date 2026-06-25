@@ -130,16 +130,6 @@
           "minimum": 0
         }
       }
-    },
-    "checkout": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "routes_url": {
-          "type": "string",
-          "minLength": 1
-        }
-      }
     }
   }
 }

@@ -642,11 +642,7 @@ function validateOpenApi() {
     ["post", "/invoices/lookup"],
     ["post", "/invoices/{invoice_id}/refresh"],
     ["get", "/rates"],
-    ["post", "/rates/quote"],
-    ["get", "/routes"],
-    ["get", "/providers"],
-    ["get", "/health"],
-    ["get", "/capabilities"]
+    ["post", "/rates/quote"]
   ];
 
   for (const [method, pathName] of requiredOperations) {

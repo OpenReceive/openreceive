@@ -4,27 +4,19 @@ export const OPENRECEIVE_HTTP_CONTRACT_VERSION = "0.1.0" as const;
 export const OPENRECEIVE_EVENT_CONTRACT_VERSION = "0.1.0" as const;
 
 export const OPENRECEIVE_HTTP_PATHS = [
-  "/capabilities",
-  "/health",
   "/invoices",
   "/invoices/{invoice_id}",
   "/invoices/{invoice_id}/refresh",
   "/invoices/lookup",
-  "/providers",
   "/rates",
-  "/rates/quote",
-  "/routes"
+  "/rates/quote"
 ] as const;
 export type OpenReceiveHttpPath = (typeof OPENRECEIVE_HTTP_PATHS)[number];
 
 export const OPENRECEIVE_HTTP_OPERATION_IDS = [
-  "capabilities",
   "createInvoice",
   "getInvoice",
-  "health",
-  "listProviders",
   "listRates",
-  "listRoutes",
   "lookupInvoice",
   "quoteRates",
   "refreshInvoice"

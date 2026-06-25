@@ -23,7 +23,6 @@ the redacted URI and never needs real wallet funds.
 
 ## Endpoints
 
-- `GET /healthz`
 - `GET /nwc/get_info`
 - `POST /nwc/make_invoice`
 - `POST /nwc/lookup_invoice`

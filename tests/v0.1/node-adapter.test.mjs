@@ -414,7 +414,7 @@ sqliteTest("resolveOpenReceiveStore defaults to local-sqlite when OPENRECEIVE_ST
   }
 });
 
-test("createOpenReceive builds server handlers from a client and store", async () => {
+test("createOpenReceive builds service methods from a client and store", async () => {
   const store = new InMemoryInvoiceKvStore();
   const client = {
     async preflight() {
@@ -447,22 +447,14 @@ test("createOpenReceive builds server handlers from a client and store", async (
     backgroundSweep: false
   });
 
-  const response = await openreceive.handleFetch(new Request("http://app.test/openreceive/v1/invoices", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json"
-    },
-    body: JSON.stringify({
-      order_uuid: "create-openreceive-order",
-      amount_msats: 200000,
-      optional_invoice_description: "Factory invoice"
-    })
-  }));
-  const body = await response.json();
+  const body = await openreceive.createInvoice({
+    order_uuid: "create-openreceive-order",
+    amount_msats: 200000,
+    optional_invoice_description: "Factory invoice"
+  });
 
-  assert.equal(response.status, 201);
   assert.equal(body.invoice, "lnbc-create-openreceive");
-  assert.equal(openreceive.handlers, openreceive.runtime.handlers);
+  assert.equal(typeof openreceive.lookupInvoice, "function");
 });
 
 sqliteTest("Node CLI keeps init and doctor removed while migrate remains", async () => {
@@ -582,6 +574,71 @@ test("Node CLI runs poll --once from a server config module", async () => {
   assert.match(stdout.join(""), /checked 1 wallet invoice/);
   assert.equal((await store.get("or_inv_poll_once")).row.workflow_state, "settlement_action_completed");
   assert.equal((await store.get("or_inv_poll_later")).row.workflow_state, "invoice_created");
+  assert.equal(stderr.join(""), "");
+});
+
+test("Node CLI runs poll --once from a createOpenReceive service config", async () => {
+  const store = new InMemoryInvoiceKvStore();
+  await store.putIfAbsent(invoiceRecord({
+    invoice_id: "or_inv_service_poll",
+    idempotency_key: "order-service-poll",
+    payment_hash: "8".repeat(64),
+    invoice: "lnbc-service-poll"
+  }));
+  const stdout = [];
+  const stderr = [];
+  let onPaidCalls = 0;
+  const io = (buffer) => ({
+    write(message) {
+      buffer.push(message);
+    }
+  });
+  const openreceive = await createOpenReceive({
+    client: {
+      async preflight() {
+        return {
+          receiveCheckoutReady: true,
+          methods: ["make_invoice", "lookup_invoice"],
+          notifications: [],
+          encryption: "nip44_v2",
+          warnings: []
+        };
+      },
+      async makeInvoice() {
+        throw new Error("not needed");
+      },
+      async lookupInvoice(request) {
+        assert.equal(request.payment_hash, "8".repeat(64));
+        return {
+          payment_hash: "8".repeat(64),
+          state: "settled",
+          settled_at: 1400
+        };
+      }
+    },
+    store,
+    namespace: "node_test",
+    clock: () => 1600,
+    backgroundSweep: false,
+    onPaid: async ({ invoice, source }) => {
+      onPaidCalls += 1;
+      assert.equal(invoice.invoice_id, "or_inv_service_poll");
+      assert.equal(source, "poll");
+    }
+  });
+
+  const code = await runOpenReceiveCli({
+    argv: ["poll", "--once", "--config", "openreceive.config.mjs"],
+    cwd: process.cwd(),
+    stdout: io(stdout),
+    stderr: io(stderr),
+    loadConfigModule: async () => ({ openreceive })
+  });
+
+  assert.equal(code, 0);
+  assert.equal(onPaidCalls, 1);
+  assert.match(stdout.join(""), /checked 1 wallet invoice/);
+  assert.equal((await store.get("or_inv_service_poll")).row.workflow_state, "settlement_action_completed");
   assert.equal(stderr.join(""), "");
 });
 

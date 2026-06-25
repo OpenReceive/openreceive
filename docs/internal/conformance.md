@@ -135,6 +135,6 @@ receive-only NWC code with `npm run test:live:nwc`.
 ## Recovery
 
 OpenReceive v0.1-v2 recovery is poll-only. Tests should cover lookup-gated
-interactive refresh, bounded sweeps, one-shot `/poll` recovery, duplicate-safe
-settlement hooks, and the rule that a preimage alone is not final settlement
-proof.
+interactive refresh, bounded sweeps, one-shot `openreceive poll --once`
+recovery, duplicate-safe settlement hooks, and the rule that a preimage alone
+is not final settlement proof.

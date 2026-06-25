@@ -1,6 +1,6 @@
 IMAGE ?= ghcr.io/openreceive/demo-rails-react:local
 COMPOSE ?= docker compose -f compose.yml -f compose.override.yml.example
-HEALTH_URL ?= http://127.0.0.1:3003/healthz
+SMOKE_URL ?= http://127.0.0.1:3003/demo-metadata.json
 
 setup:
 	bundle install
@@ -24,4 +24,4 @@ docker-run:
 	$(COMPOSE) up
 
 docker-smoke:
-	curl -fsS $(HEALTH_URL)
+	curl -fsS $(SMOKE_URL)

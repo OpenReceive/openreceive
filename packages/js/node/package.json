@@ -5,8 +5,7 @@
   "type": "module",
   "dependencies": {
     "@getalby/sdk": "^7.0.0",
-    "@openreceive/core": "0.1.0",
-    "@openreceive/provider-data": "0.1.0"
+    "@openreceive/core": "0.1.0"
   },
   "bin": {
     "openreceive": "./bin/openreceive.mjs"

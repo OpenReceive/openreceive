@@ -14,14 +14,6 @@ export function mountHelloFruitHostedDemoRoutes(
   app: Express,
   input: HelloFruitHostedDemoRoutesInput
 ): void {
-  app.get("/healthz", (_req, res) => {
-    res.status(200).json({
-      ok: true,
-      demo: input.id,
-      wallet_configured: input.walletConfigured
-    });
-  });
-
   app.get("/source", (_req, res) => {
     res.redirect(302, `${GITHUB_REPOSITORY_URL}/tree/main/${input.sourcePath}`);
   });

@@ -4,10 +4,6 @@ class HelloFruitController < ApplicationController
     @fruits = %w[apple banana orange pear]
   end
 
-  def health
-    render json: { ok: true, demo: "rails-react", quarantined: true }
-  end
-
   def metadata
     render json: {
       demo: "rails-react",
@@ -15,5 +11,19 @@ class HelloFruitController < ApplicationController
       wallet_configured: ENV["OPENRECEIVE_NWC"].to_s != "",
       nwc_secret_exposed: false
     }
+  end
+
+  def create_order
+    render json: {
+      code: "NOT_IMPLEMENTED",
+      message: "Rails React is quarantined; use the JS demos for the full cart-to-order flow."
+    }, status: :not_implemented
+  end
+
+  def order_status
+    render json: {
+      code: "NOT_IMPLEMENTED",
+      message: "Rails React is quarantined; use the JS demos for the full cart-to-order flow."
+    }, status: :not_implemented
   end
 end

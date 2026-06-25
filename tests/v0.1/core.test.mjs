@@ -896,7 +896,7 @@ test("browser refresh fetcher owns idempotent refresh POST shape", async () => {
   );
 });
 
-test("browser checkout state keeps route URLs and ignores passive event URLs", () => {
+test("browser checkout state ignores passive event and route URLs", () => {
   const logs = [];
   const logger = (entry) => logs.push(entry);
   const state = createCheckoutState(
@@ -907,10 +907,7 @@ test("browser checkout state keeps route URLs and ignores passive event URLs", (
       amount_msats: 200000,
       transaction_state: "pending",
       workflow_state: "invoice_created",
-      expires_at: 1030,
-      checkout: {
-        routes_url: "/openreceive/v1/routes"
-      }
+      expires_at: 1030
     },
     { logger, now: 1000 }
   );
@@ -919,16 +916,10 @@ test("browser checkout state keeps route URLs and ignores passive event URLs", (
   assert.equal(state.phase, "invoice_created");
   assert.equal(state.expiresInSeconds, 30);
   assert.equal(state.terminal, false);
-  assert.equal(state.routes_url, "/openreceive/v1/routes");
+  assert.equal("routes_url" in state, false);
   assert.equal("events_url" in state, false);
-  const snapshot = mergeCheckoutSnapshot(state, {
-    checkout: {
-      routes_url: "/openreceive/v1/routes-updated"
-    }
-  });
-  assert.deepEqual(snapshot.checkout, {
-    routes_url: "/openreceive/v1/routes-updated"
-  });
+  const snapshot = mergeCheckoutSnapshot(state, {});
+  assert.equal("checkout" in snapshot, false);
   assert.deepEqual(
     logs.map((entry) => entry.event),
     ["checkout.state.created"]

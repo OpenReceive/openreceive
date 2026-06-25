@@ -39,14 +39,6 @@ export function createMockWalletService(options = {}) {
   return {
     parsedNwc,
     wallet,
-    health() {
-      return {
-        ok: true,
-        wallet_pubkey: parsedNwc.walletPubkey,
-        relay_count: parsedNwc.relays.length,
-        invoice_count: wallet.listInvoices().length
-      };
-    },
     getInfo: () => wallet.preflight().then(serializeJson),
     makeInvoice: (body) => wallet.makeInvoice(makeInvoiceRequest(body)).then(serializeJson),
     lookupInvoice: (body) => wallet.lookupInvoice(lookupSelector(body)).then(serializeJson),
@@ -133,10 +125,6 @@ export function createMockWalletServer(options = {}) {
 
 async function handleRequest(request, response, context) {
   const url = new URL(request.url ?? "/", "http://127.0.0.1");
-
-  if (request.method === "GET" && url.pathname === "/healthz") {
-    return jsonResponse(response, 200, context.service.health());
-  }
 
   if (request.method === "GET" && url.pathname === "/nwc/get_info") {
     return jsonResponse(response, 200, await context.service.getInfo());

@@ -8,7 +8,8 @@ code.
 
 Node is the v0.1 supported path:
 
-- `@openreceive/node` mounts Express, Fetch-style, and raw Node routes.
+- `@openreceive/node` exposes server-only service methods for app-owned
+  controllers.
 - `@openreceive/browser` creates display-safe invoices and browser helpers.
 - `@openreceive/react` and `@openreceive/elements` render checkout UI.
 
@@ -29,9 +30,9 @@ npm run demo rails
 ## Python
 
 There is no Python package yet. Future FastAPI, Django, Flask, or Starlette
-work should keep `OPENRECEIVE_NWC` server-side, mount `/openreceive/v1`, use
-package-owned invoice storage, and run fulfillment only from a server-side
-payment-verified hook.
+work should keep `OPENRECEIVE_NWC` server-side, expose app-owned checkout
+routes, use package-owned invoice storage, and run fulfillment only from a
+server-side payment-verified hook.
 
 ## PHP
 

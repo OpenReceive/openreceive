@@ -12,25 +12,17 @@ import {
 
 test("generated contract models expose HTTP routes and event names", () => {
   assert.deepEqual(OPENRECEIVE_HTTP_PATHS, [
-    "/capabilities",
-    "/health",
     "/invoices",
     "/invoices/{invoice_id}",
     "/invoices/{invoice_id}/refresh",
     "/invoices/lookup",
-    "/providers",
     "/rates",
-    "/rates/quote",
-    "/routes"
+    "/rates/quote"
   ]);
   assert.deepEqual(OPENRECEIVE_HTTP_OPERATION_IDS, [
-    "capabilities",
     "createInvoice",
     "getInvoice",
-    "health",
-    "listProviders",
     "listRates",
-    "listRoutes",
     "lookupInvoice",
     "quoteRates",
     "refreshInvoice"

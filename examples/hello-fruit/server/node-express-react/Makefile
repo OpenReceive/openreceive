@@ -1,5 +1,5 @@
 IMAGE ?= ghcr.io/openreceive/demo-express:local
-HEALTH_URL ?= http://127.0.0.1:3000/healthz
+SMOKE_URL ?= http://127.0.0.1:3000/demo-metadata.json
 COMPOSE ?= docker compose -f compose.yml -f compose.override.yml.example
 
 .PHONY: setup dev test demo-test-nwc demo-production docker-build docker-run docker-smoke
@@ -26,4 +26,4 @@ docker-run:
 	$(COMPOSE) up
 
 docker-smoke:
-	curl -fsS $(HEALTH_URL)
+	curl -fsS $(SMOKE_URL)

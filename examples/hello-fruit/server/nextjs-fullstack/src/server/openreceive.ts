@@ -1,9 +1,11 @@
 import {
+  createDefaultPriceProviders,
   createDefaultLivePriceProviders
 } from "@openreceive/core";
 import {
   createOpenReceive,
-  type OpenReceiveServer
+  OpenReceiveServiceError,
+  type OpenReceive
 } from "@openreceive/node";
 import {
   createHelloFruitDemoMetadata
@@ -16,11 +18,17 @@ import {
   createHelloFruitOpenReceiveLogger
 } from "../../../../shared/demo-logging.ts";
 import {
+  HelloFruitDemoOrderError,
+  createHelloFruitCreateOrderResult,
+  createHelloFruitOrderStatus
+} from "../../../../shared/demo-order.ts";
+import {
   createHelloFruitOpenReceiveKvStore
 } from "../../../../shared/openreceive-store.ts";
 import {
   readHelloFruitCatalogCurrencies
 } from "../../../../shared/demo-catalog.ts";
+import product from "../../../../shared/product.json";
 
 const DEMO_ID = "nextjs-fullstack";
 const DEFAULT_PORT = "3002";
@@ -29,7 +37,7 @@ const GITHUB_REPOSITORY_URL = "https://github.com/openreceive/openreceive";
 interface NextDemoOpenReceiveCache {
   readonly connectionString: string;
   readonly storeCacheKey: string;
-  readonly server: Promise<OpenReceiveServer>;
+  readonly server: Promise<OpenReceive>;
 }
 
 let openreceiveCache: NextDemoOpenReceiveCache | undefined;
@@ -53,14 +61,6 @@ export function demoMetadataResponse(): Response {
       "next": "0.1.0-demo"
     }
   }));
-}
-
-export function healthzResponse(): Response {
-  return jsonResponse({
-    ok: true,
-    demo: DEMO_ID,
-    wallet_configured: isWalletConfigured()
-  });
 }
 
 export function sourceRedirectResponse(): Response {
@@ -95,14 +95,53 @@ export function sitemapResponse(): string {
   ].join("\n");
 }
 
-export async function dispatchOpenReceiveRoute(
+export async function createOrderResponse(
   request: Request
 ): Promise<Response> {
   const connectionString = readRequiredHelloFruitNwcConnectionString();
-  return (await getOpenReceive(connectionString)).handleFetch(request);
+  const openreceive = await getOpenReceive(connectionString);
+
+  try {
+    const body = await readJsonBody(request);
+    const orderResult = createHelloFruitCreateOrderResult({
+      ...body,
+      idempotency_key: body.idempotency_key ?? request.headers.get("idempotency-key")
+    }, {
+      demoId: DEMO_ID,
+      invoiceExpirySeconds: product.invoice_expiry_seconds,
+      demoName: "Next.js"
+    });
+    const invoice = await openreceive.createInvoice(orderResult.invoice_request);
+    return jsonResponse({
+      order: orderResult.order,
+      invoice
+    }, 201);
+  } catch (error) {
+    return openReceiveErrorResponse(error);
+  }
 }
 
-async function getOpenReceive(connectionString: string): Promise<OpenReceiveServer> {
+export async function orderStatusResponse(request: Request): Promise<Response> {
+  const connectionString = readRequiredHelloFruitNwcConnectionString();
+  const openreceive = await getOpenReceive(connectionString);
+
+  try {
+    const lookup = await openreceive.lookupInvoice(await readJsonBody(request));
+    const orderStatus = createHelloFruitOrderStatus(lookup);
+    return jsonResponse({
+      ...lookup,
+      ...orderStatus,
+      order: {
+        uuid: orderStatus.order_uuid,
+        status: orderStatus.order_status
+      }
+    });
+  } catch (error) {
+    return openReceiveErrorResponse(error);
+  }
+}
+
+async function getOpenReceive(connectionString: string): Promise<OpenReceive> {
   const storeCacheKey = currentStoreCacheKey();
   const cachedOpenReceive = openreceiveCache;
   if (cachedOpenReceive !== undefined) {
@@ -135,7 +174,7 @@ async function getOpenReceive(connectionString: string): Promise<OpenReceiveServ
 
 export async function createHelloFruitOpenReceive(
   connectionString = readRequiredHelloFruitNwcConnectionString()
-): Promise<OpenReceiveServer> {
+): Promise<OpenReceive> {
   const store = await createHelloFruitOpenReceiveKvStore({
     demoId: DEMO_ID
   });
@@ -146,10 +185,36 @@ export async function createHelloFruitOpenReceive(
     ...(testClient === undefined ? { nwc: connectionString } : { client: testClient }),
     store,
     namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit",
-    priceProviders: createDefaultLivePriceProviders({ currencies: priceCurrencies }),
+    priceProviders: testClient === undefined
+      ? createDefaultLivePriceProviders({ currencies: priceCurrencies })
+      : createDefaultPriceProviders({ currencies: priceCurrencies }),
     priceCurrencies,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID)
   });
+}
+
+async function readJsonBody(request: Request): Promise<Record<string, unknown>> {
+  if (request.method === "GET" || request.method === "HEAD") return {};
+  const text = await request.text();
+  if (text.length === 0) return {};
+  const body = JSON.parse(text) as unknown;
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    throw new OpenReceiveServiceError(400, {
+      code: "INVALID_REQUEST",
+      message: "JSON request body must be an object."
+    });
+  }
+  return body as Record<string, unknown>;
+}
+
+function openReceiveErrorResponse(error: unknown): Response {
+  if (error instanceof HelloFruitDemoOrderError) {
+    return jsonResponse(error.body, error.status);
+  }
+  if (error instanceof OpenReceiveServiceError) {
+    return jsonResponse(error.body, error.status);
+  }
+  throw error;
 }
 
 function currentStoreCacheKey(): string {

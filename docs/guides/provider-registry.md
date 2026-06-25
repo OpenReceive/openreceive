@@ -37,8 +37,9 @@ mutate the source. Provider entries include `icon_path` values that resolve to
 local assets bundled by `@openreceive/browser`; they do not point browser code
 at remote favicon URLs.
 
-The Express adapter exposes the same static data through display-safe helper
-routes at `GET /openreceive/v1/providers` and `GET /openreceive/v1/routes`.
+Node receive servers do not re-host this static catalog. Browser UI packages
+import it directly, and server-side apps can import `@openreceive/provider-data`
+when they need the same read-only suggestions.
 
 ## Route Model
 

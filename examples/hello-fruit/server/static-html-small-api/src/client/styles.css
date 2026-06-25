@@ -143,8 +143,29 @@ p {
   cursor: wait;
 }
 
-#invoice-panel {
+#checkout-panel {
   min-height: 0;
+}
+
+.cart {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-bg);
+}
+
+.cart-heading,
+.cart-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.cart-heading {
+  color: var(--text);
 }
 
 openreceive-checkout {

@@ -17,9 +17,8 @@ invoices.
 The v0.1 reference path is contract-first and server-owned:
 
 - `spec/` is the source of truth for schemas, shared data, and test vectors.
-- `packages/js/` contains the core contracts, Node NWC adapter, Express,
-  Fetch-style, raw Node, and Next.js route bridges, browser helpers, provider
-  data, testkit, elements, and React packages.
+- `packages/js/` contains the core contracts, Node NWC service, browser
+  helpers, provider data, testkit, elements, and frontend framework packages.
 - `examples/hello-fruit/server/` contains the Express + React, static HTML
   + small API, and Next.js fullstack Hello Fruit demos.
 - `demos/deploy/` contains public-safe hosted demo deployment templates.
@@ -28,8 +27,9 @@ The v0.1 reference path is contract-first and server-owned:
 
 ## Run A Demo
 
-The dockerized Hello Fruit demos serve a checkout UI where you can buy a fruit
-sticker. Pick a stack:
+The dockerized Hello Fruit demos serve a small store UI where you can add fruit
+stickers to a cart, create an app order, and pay its Lightning invoice. Pick a
+stack:
 
 ```sh
 npm run demo node      # Express + React          http://localhost:3000
@@ -40,8 +40,8 @@ npm run demo rails     # Rails + Hotwire skeleton  http://localhost:3003
 
 Each command creates a root `.env` if missing, validates `OPENRECEIVE_NWC`, and
 then runs that demo's Docker Compose stack with local port publishing. The JS
-demo stacks start a local Postgres container, wait for it to become healthy,
-run the package-owned OpenReceive invoice migration, and record the OpenReceive
+demo stacks start a local Postgres container, run the package-owned OpenReceive
+invoice migration, and record the OpenReceive
 schema version before store queries. The JS local overrides run Vite or Next.js
 development servers inside Docker so browser errors stay readable. The Rails
 Hotwire demo is experimental skeleton work; its container runs
@@ -49,8 +49,8 @@ Hotwire demo is experimental skeleton work; its container runs
 Buying fruit creates a live Lightning invoice through your own wallet, so set a
 valid receive-only NWC code (for example from Rizful or Alby Hub) in `.env` before
 starting a demo. Demos need a valid receive-only NWC code before startup.
-The JS demos quote each fruit's USD price through live BTC/USD price providers
-before creating the invoice.
+The JS demos quote the cart's USD total through live BTC/USD price providers
+inside `/create_order` before returning the order and invoice to the browser.
 
 Extra arguments after `--` are forwarded to `docker compose up`, for example to
 run detached: `npm run demo node -- -d`.

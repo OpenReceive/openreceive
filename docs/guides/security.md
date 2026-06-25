@@ -22,12 +22,13 @@ for any checkout or status route that should not be public.
 
 Default route policy:
 
-- Invoice creation is protected by app auth, cart/session token, or guest
-  checkout token.
-- Invoice reads require ownership of the invoice, order, cart, or checkout
+- Order creation is protected by app auth, cart/session token, or guest
+  checkout token. The backend recomputes the cart total before calling
+  OpenReceive.
+- Order status reads require ownership of the invoice, order, cart, or checkout
   session.
-- Lookup by `payment_hash` is server-side or protected by your app when payment
-  status should not be public.
+- Lookup by `payment_hash` happens behind your `/order_status` or equivalent
+  app route when payment status should not be public.
 - Optional scheduler recovery runs server-side with `openreceive poll --once`.
 
 ## Browser Defaults

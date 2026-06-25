@@ -27,14 +27,15 @@ through third-party services outside OpenReceive.
 
 ## Runtime Model
 
-OpenReceive runs inside your normal web process. Mount `/openreceive/v1`, and
-the browser checkout watches backend payment status to learn when an invoice
-settles. For extra recovery, you can optionally call
-`openreceive poll --once` on a server-side schedule.
+OpenReceive runs inside your normal web process. Your checkout route creates an
+app order, calls OpenReceive server-side to create the invoice, and returns
+display-safe invoice data to the browser. The browser checkout watches your
+backend order-status route to learn when an invoice settles. For extra recovery,
+you can optionally call `openreceive poll --once` on a server-side schedule.
 
 ```text
-web process        mounts /openreceive/v1
-browser checkout   watches backend payment status
+web process        handles /create_order and /order_status
+browser checkout   watches app order status
 optional scheduler runs openreceive poll --once
 ```
 

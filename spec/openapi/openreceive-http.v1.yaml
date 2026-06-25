@@ -2,11 +2,11 @@ openapi: 3.1.0
 info:
   title: OpenReceive HTTP API
   version: 0.1.0
-  summary: Application-facing receive-checkout routes mounted by framework adapters.
+  summary: Example receive-checkout payloads for app-owned controllers.
   description: >
-    OpenReceive does not ship a required HTTP daemon. Framework adapters mount
-    these routes inside the merchant application. Receive-only NWC codes remain
-    server-side.
+    OpenReceive does not ship a required HTTP daemon or route bundle. Apps call
+    the Node service methods from their own controllers. Receive-only NWC codes
+    remain server-side.
 servers:
   - url: /openreceive/v1
 paths:
@@ -157,94 +157,6 @@ paths:
                 $ref: "#/components/schemas/RateQuote"
         "400":
           $ref: "#/components/responses/Error"
-  /routes:
-    get:
-      operationId: listRoutes
-      summary: Return provider route catalog or payment wizard route suggestions.
-      parameters:
-        - name: asset
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: route
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: country
-          in: query
-          required: false
-          schema:
-            type: string
-            pattern: "^[A-Za-z]{2}$"
-        - name: rail
-          in: query
-          required: false
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Provider route catalog or resolved route suggestions.
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: true
-  /providers:
-    get:
-      operationId: listProviders
-      summary: Return runtime payment-wizard provider registry entries.
-      parameters:
-        - name: us
-          in: query
-          required: false
-          schema:
-            type: string
-            enum:
-              - "true"
-              - "false"
-              - unknown
-              - "null"
-      responses:
-        "200":
-          description: Provider registry entries and metadata.
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: true
-        "400":
-          $ref: "#/components/responses/Error"
-  /health:
-    get:
-      operationId: health
-      summary: Adapter health.
-      responses:
-        "200":
-          description: Adapter health response.
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: false
-                required:
-                  - ok
-                properties:
-                  ok:
-                    type: boolean
-  /capabilities:
-    get:
-      operationId: capabilities
-      summary: Adapter capability summary.
-      responses:
-        "200":
-          description: Capability summary.
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: true
 components:
   parameters:
     InvoiceId:
@@ -445,12 +357,6 @@ components:
           oneOf:
             - $ref: "#/components/schemas/RateQuote"
             - type: "null"
-        checkout:
-          type: object
-          additionalProperties: false
-          properties:
-            routes_url:
-              type: string
     FiatAmount:
       type: object
       additionalProperties: false

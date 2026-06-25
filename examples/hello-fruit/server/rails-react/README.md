@@ -18,6 +18,6 @@ Run locally with Docker:
 docker compose -f compose.yml -f compose.override.yml.example up --build
 ```
 
-The quarantined skeleton exposes `/healthz` and `/demo-metadata.json` for smoke
-checks. Runtime wallet configuration is read from the environment or the
+The quarantined skeleton exposes `/demo-metadata.json` for smoke checks.
+Runtime wallet configuration is read from the environment or the
 optional root `.env` file mounted by compose.

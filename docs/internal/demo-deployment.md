@@ -19,7 +19,7 @@ capacity notes, and operator inventory stay outside this repository.
 
 The public deployment templates live in `demos/deploy/`:
 
-- `inventory/hosts.yml` records public demo slugs, hostnames, images, and health
+- `inventory/hosts.yml` records public demo slugs, hostnames, images, and smoke
   URLs.
 - `proxy/compose.yml` runs the shared Caddy proxy on the
   `openreceive_demo_proxy` Docker network.
@@ -120,7 +120,7 @@ Each deploy should:
 - keep a per-demo deploy lock
 - validate compose and Caddy config before reload
 - write public deployment metadata
-- smoke `/healthz` and `/demo-metadata.json`
+- smoke `/demo-metadata.json`
 - roll back to the previous image digest on failure
 
 Stable demo pages should expose non-secret build metadata such as git SHA,

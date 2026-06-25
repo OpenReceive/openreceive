@@ -4,9 +4,9 @@ export interface HelloFruitFiatAmount {
 }
 
 export const helloFruitDemoLabels = {
-  createInvoice: "Create invoice",
-  creatingInvoice: "Creating invoice...",
-  createInvoiceError: "Could not create invoice."
+  createOrder: "Create order",
+  creatingOrder: "Creating order...",
+  createOrderError: "Could not create order."
 } as const;
 
 export function formatHelloFruitFiat(fiat: HelloFruitFiatAmount): string {
@@ -14,7 +14,7 @@ export function formatHelloFruitFiat(fiat: HelloFruitFiatAmount): string {
 }
 
 export function formatHelloFruitBuyNowLabel(fiat: HelloFruitFiatAmount): string {
-  return `Buy Now (${formatHelloFruitFiat(fiat)})`;
+  return `Add to cart (${formatHelloFruitFiat(fiat)})`;
 }
 
 export function createHelloFruitInvoiceDescription(
@@ -27,4 +27,16 @@ export function createHelloFruitInvoiceDescription(
     ? "demo"
     : `${input.demoName} demo`;
   return `Fruit sticker from OpenReceive ${demoLabel}: ${fruitName}`;
+}
+
+export function createHelloFruitOrderInvoiceDescription(
+  itemNames: readonly string[],
+  input: {
+    readonly demoName?: string;
+  } = {}
+): string {
+  const demoLabel = input.demoName === undefined
+    ? "demo"
+    : `${input.demoName} demo`;
+  return `Fruit stickers from OpenReceive ${demoLabel}: ${itemNames.join(", ")}`;
 }

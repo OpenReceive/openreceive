@@ -20,23 +20,25 @@ export type {
   WalletPreflightErrorCode
 } from "./alby-nwc.ts";
 export {
+  OpenReceiveServiceError,
   createOpenReceive
-} from "./http.ts";
+} from "./service.ts";
 export type {
   CreateOpenReceiveOptions,
-  ExpressLikeApp,
-  ExpressLikeHandler,
-  ExpressLikeNext,
-  ExpressLikeRequest,
-  ExpressLikeResponse,
+  OpenReceive,
+  OpenReceiveCreateInvoiceRequest,
+  OpenReceiveInvoice,
   OpenReceiveLogEntry,
   OpenReceiveLogger,
-  OpenReceiveNodeHandlers,
+  OpenReceiveLookupInvoiceRequest,
+  OpenReceiveLookupInvoiceResult,
+  OpenReceivePollResult,
+  OpenReceiveRefreshInvoiceRequest,
+  OpenReceiveRefreshInvoiceResult,
   OpenReceiveNodeOptions,
   OpenReceiveNodeSettlementActionHook,
-  OpenReceiveNodeSettlementActionInput,
-  OpenReceiveServer
-} from "./http.ts";
+  OpenReceiveNodeSettlementActionInput
+} from "./service.ts";
 export * from "./postgres-store.ts";
 export * from "./storage-schema.ts";
 export * from "./sqlite-store.ts";

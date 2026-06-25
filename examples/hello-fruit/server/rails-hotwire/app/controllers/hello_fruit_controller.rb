@@ -4,15 +4,25 @@ class HelloFruitController < ApplicationController
     @fruits = %w[apple banana orange pear]
   end
 
-  def health
-    render json: { ok: true, demo: "rails-hotwire" }
-  end
-
   def metadata
     render json: {
       demo: "rails-hotwire",
       wallet_configured: ENV["OPENRECEIVE_NWC"].to_s != "",
       nwc_secret_exposed: false
     }
+  end
+
+  def create_order
+    render json: {
+      code: "NOT_IMPLEMENTED",
+      message: "Rails Hotwire create_order is a skeleton; use the JS demos for the full cart-to-order flow."
+    }, status: :not_implemented
+  end
+
+  def order_status
+    render json: {
+      code: "NOT_IMPLEMENTED",
+      message: "Rails Hotwire order_status is a skeleton; use the JS demos for the full cart-to-order flow."
+    }, status: :not_implemented
   end
 end

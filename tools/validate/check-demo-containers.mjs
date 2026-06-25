@@ -147,7 +147,7 @@ function validateCompose(demo) {
   expect(serviceNames.includes(jsDemoDatabaseService), `${relativePath}: service name must include ${jsDemoDatabaseService}`);
   expect(service.build?.context === "../../../..", `${relativePath}: build context must be the repo root`);
   expect(service.build?.dockerfile === `${demo.dir}/Dockerfile`, `${relativePath}: dockerfile path must target the demo Dockerfile`);
-  expect(service.depends_on?.[jsDemoDatabaseService]?.condition === "service_healthy", `${relativePath}: app must wait for Postgres health`);
+  expect(service.depends_on?.includes(jsDemoDatabaseService), `${relativePath}: app must depend on Postgres`);
   expect(envFile?.path === "../../../../.env" && envFile?.required === false, `${relativePath}: root .env must be optional runtime env_file`);
   expect(service.environment?.OPENRECEIVE_STORE === jsDemoStoreUri, `${relativePath}: app must receive local Postgres OPENRECEIVE_STORE`);
   expect(service.environment?.OPENRECEIVE_NAMESPACE === demo.namespace, `${relativePath}: app must receive a demo namespace`);
@@ -162,7 +162,6 @@ function validateCompose(demo) {
   expect(databaseService.environment?.POSTGRES_DB === "openreceive", `${relativePath}: Postgres database must be openreceive`);
   expect(databaseService.environment?.POSTGRES_USER === "openreceive", `${relativePath}: Postgres user must be openreceive`);
   expect(databaseService.environment?.POSTGRES_PASSWORD === "openreceive", `${relativePath}: local Postgres password must be explicit demo-only value`);
-  expect(databaseService.healthcheck?.test?.includes("pg_isready -U openreceive -d openreceive"), `${relativePath}: Postgres healthcheck must use pg_isready`);
   expect(databaseService.volumes?.[0] === `${jsDemoDatabaseVolume}:/var/lib/postgresql/data`, `${relativePath}: Postgres data must use named volume`);
   expect(databasePorts.length === 0, `${relativePath}: Postgres service must not publish host ports`);
   expect(databaseService.network_mode === undefined, `${relativePath}: Postgres service must not use host networking`);
@@ -240,13 +239,13 @@ function validateMakefile(demo) {
 
   forbidSecrets(relativePath, text);
   expect(text.includes(`IMAGE ?= ${demo.image}`), `${relativePath}: image must default to ${demo.image}`);
-  expect(text.includes(`HEALTH_URL ?= http://127.0.0.1:${demo.port}/healthz`), `${relativePath}: smoke URL must target /healthz on ${demo.port}`);
+  expect(text.includes(`SMOKE_URL ?= http://127.0.0.1:${demo.port}/demo-metadata.json`), `${relativePath}: smoke URL must target demo metadata on ${demo.port}`);
   expect(text.includes("COMPOSE ?= docker compose -f compose.yml -f compose.override.yml.example"), `${relativePath}: local compose command must include override example`);
   expect(text.includes("OPENRECEIVE_DEMO_MODE=test_nwc $(COMPOSE) up --build"), `${relativePath}: demo-test-nwc must use compose test_nwc mode`);
   expect(text.includes("OPENRECEIVE_DEMO_MODE=production $(COMPOSE) up --build"), `${relativePath}: demo-production must use compose production mode`);
   expect(!text.includes("--profile openreceive-worker"), `${relativePath}: Makefile must not use a worker profile`);
   expect(text.includes("$(COMPOSE) up"), `${relativePath}: docker-run must use compose command`);
-  expect(text.includes("curl -fsS $(HEALTH_URL)"), `${relativePath}: docker-smoke must curl HEALTH_URL`);
+  expect(text.includes("curl -fsS $(SMOKE_URL)"), `${relativePath}: docker-smoke must curl SMOKE_URL`);
 }
 
 function validateDockerignore() {
@@ -338,8 +337,10 @@ function validateRailsDemo(demo) {
   expect(readme.includes("The browser never receives `OPENRECEIVE_NWC`."), `${readmePath}: must state browser NWC boundary`);
   expect(readme.includes("docker compose -f compose.yml -f compose.override.yml.example up --build"), `${readmePath}: must document compose startup`);
   expect(makefile.includes(`IMAGE ?= ${demo.image}`), `${makefilePath}: image must default to ${demo.image}`);
-  expect(makefile.includes(`HEALTH_URL ?= http://127.0.0.1:${demo.port}/healthz`), `${makefilePath}: smoke URL must target healthz`);
-  expect(routes.includes('mount OpenReceive::Rails::Engine => "/openreceive"'), `${demo.dir}/config/routes.rb: must mount OpenReceive engine`);
+  expect(makefile.includes(`SMOKE_URL ?= http://127.0.0.1:${demo.port}/demo-metadata.json`), `${makefilePath}: smoke URL must target demo metadata`);
+  expect(routes.includes('post "/create_order", to: "hello_fruit#create_order"'), `${demo.dir}/config/routes.rb: must expose create_order merchant route`);
+  expect(routes.includes('post "/order_status", to: "hello_fruit#order_status"'), `${demo.dir}/config/routes.rb: must expose order_status merchant route`);
+  expect(!routes.includes('mount OpenReceive::Rails::Engine => "/openreceive"'), `${demo.dir}/config/routes.rb: must not expose raw OpenReceive routes`);
   expect(initializer.includes("NwcRuby::Client.from_uri"), `${demo.dir}/config/initializers/openreceive.rb: must wire nwc-ruby client`);
   expect(initializer.includes('ENV.fetch("OPENRECEIVE_NWC"'), `${demo.dir}/config/initializers/openreceive.rb: must require OPENRECEIVE_NWC at boot`);
   expect(initializer.includes("OpenReceive.parse_nwc_uri"), `${demo.dir}/config/initializers/openreceive.rb: must validate OPENRECEIVE_NWC at boot`);

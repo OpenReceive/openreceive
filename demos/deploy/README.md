@@ -42,9 +42,10 @@ Those files must be mode `600` and must not be committed. Demo stack compose
 files load private values through `env_file`; demo images never bake them in.
 The receive-only NWC code env file must provide server-only `OPENRECEIVE_NWC`,
 `OPENRECEIVE_STORE`, and `OPENRECEIVE_NAMESPACE`. Each demo has one web service
-that mounts OpenReceive routes and uses package-owned durable storage. Scheduled
-reconciliation runs `openreceive poll --once` from the host or platform
-scheduler. No demo deploys an OpenReceive worker or notification listener.
+whose app routes call the OpenReceive service and use package-owned durable
+storage. Scheduled reconciliation runs `openreceive poll --once` from the host
+or platform scheduler. No demo deploys an OpenReceive worker or notification
+listener.
 
 Validate public templates locally:
 

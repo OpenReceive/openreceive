@@ -16,7 +16,8 @@ import {
 import { quoteFiatToMsats } from "../../packages/js/core/src/index.ts";
 import { GET as getNextDemoMetadata } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/demo-metadata.json/route.ts";
 import { GET as getNextDocs } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/docs/route.ts";
-import { GET as getNextHealthz } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/healthz/route.ts";
+import { POST as postNextCreateOrder } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/create_order/route.ts";
+import { POST as postNextOrderStatus } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/order_status/route.ts";
 import { GET as getNextSource } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/source/route.ts";
 import getNextRobots, { dynamic as nextRobotsDynamic } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/robots.ts";
 import getNextSitemap, { dynamic as nextSitemapDynamic } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/sitemap.ts";
@@ -103,11 +104,11 @@ test("Hello Fruit shared data stays aligned with canonical demo data", () => {
 test("Hello Fruit demos share product display formatting", () => {
   assert.equal(formatHelloFruitFiat({ currency: "USD", value: "0.10" }), "$0.10");
   assert.equal(formatHelloFruitFiat({ currency: "EUR", value: "0.10" }), "0.10 EUR");
-  assert.equal(formatHelloFruitBuyNowLabel({ currency: "USD", value: "0.10" }), "Buy Now ($0.10)");
-  assert.equal(formatHelloFruitBuyNowLabel({ currency: "EUR", value: "0.10" }), "Buy Now (0.10 EUR)");
-  assert.equal(helloFruitDemoLabels.createInvoice, "Create invoice");
-  assert.equal(helloFruitDemoLabels.creatingInvoice, "Creating invoice...");
-  assert.equal(helloFruitDemoLabels.createInvoiceError, "Could not create invoice.");
+  assert.equal(formatHelloFruitBuyNowLabel({ currency: "USD", value: "0.10" }), "Add to cart ($0.10)");
+  assert.equal(formatHelloFruitBuyNowLabel({ currency: "EUR", value: "0.10" }), "Add to cart (0.10 EUR)");
+  assert.equal(helloFruitDemoLabels.createOrder, "Create order");
+  assert.equal(helloFruitDemoLabels.creatingOrder, "Creating order...");
+  assert.equal(helloFruitDemoLabels.createOrderError, "Could not create order.");
   assert.equal(
     createHelloFruitInvoiceDescription("Banana"),
     "Fruit sticker from OpenReceive demo: Banana"
@@ -140,10 +141,13 @@ test("Hello Fruit React demos delegate checkout state to the React package", () 
   ]) {
     assert.match(source, /<Checkout/);
     assert.match(source, /onPaid=/);
+    assert.match(source, /lookupUrl="\/order_status"/);
+    assert.match(source, /fetch\("\/create_order"/);
     assert.doesNotMatch(source, /createOpenReceiveLookupInvoiceFetcher/);
-    assert.doesNotMatch(source, /lookupUrl=/);
+    assert.doesNotMatch(source, /lookupUrl="\/openreceive\/v1\/invoices\/lookup"/);
     assert.doesNotMatch(source, /lookupInvoice=\{lookupInvoice\}/);
     assert.doesNotMatch(source, /fetch\("\/openreceive\/v1\/invoices\/lookup"/);
+    assert.doesNotMatch(source, /fetch\("\/openreceive\/v1\/invoices"/);
     assert.doesNotMatch(source, /payment_hash: state\.payment_hash/);
     assert.doesNotMatch(source, /new EventSource/);
     assert.doesNotMatch(source, /applyOpenReceiveInvoiceEvent/);
@@ -196,7 +200,7 @@ test("Hello Fruit JS demos use package-owned QR and poll-only wiring", () => {
   }
 });
 
-test("Hello Fruit Node demo replaces Buy Now with Start over during checkout", () => {
+test("Hello Fruit Node demo creates orders from cart before rendering checkout", () => {
   const source = readFileSync(
     path.join(
       process.cwd(),
@@ -206,12 +210,19 @@ test("Hello Fruit Node demo replaces Buy Now with Start over during checkout", (
   );
 
   assert.match(source, /function startOver\(\)/);
+  assert.match(source, /addSelectedFruitToCart/);
+  assert.match(source, /async function createOrder\(\)/);
+  assert.match(source, /fetch\("\/create_order"/);
+  assert.match(source, /lookupUrl="\/order_status"/);
+  assert.match(source, /setCart\(\{\}\)/);
+  assert.match(source, /setOrder\(null\)/);
   assert.match(source, /setInvoice\(null\)/);
   assert.match(source, /setFruitId\(initialFruitId\)/);
   assert.match(source, /invoice === null \? \(/);
   assert.match(source, /onStartOver=\{startOver\}/);
   assert.match(source, />\s*Start over\s*</);
   assert.match(source, /crypto\?\.randomUUID/);
+  assert.doesNotMatch(source, /createInvoice as requestInvoice/);
 });
 
 test("Hello Fruit Next.js demo resets expired checkout from Start over", () => {
@@ -224,9 +235,15 @@ test("Hello Fruit Next.js demo resets expired checkout from Start over", () => {
   );
 
   assert.match(source, /function startOver\(\)/);
+  assert.match(source, /async function createOrder\(\)/);
+  assert.match(source, /fetch\("\/create_order"/);
+  assert.match(source, /lookupUrl="\/order_status"/);
+  assert.match(source, /setCart\(\{\}\)/);
+  assert.match(source, /setOrder\(undefined\)/);
   assert.match(source, /setCheckout\(undefined\)/);
   assert.match(source, /setStatus\("idle"\)/);
   assert.match(source, /onStartOver=\{startOver\}/);
+  assert.doesNotMatch(source, /createInvoice as requestInvoice/);
 });
 
 test("Hello Fruit browser demos consume shared product display helpers", () => {
@@ -244,10 +261,8 @@ test("Hello Fruit browser demos consume shared product display helpers", () => {
       `${relativePath}: uses shared fiat display helper`);
     assert.match(source, /formatHelloFruitBuyNowLabel/,
       `${relativePath}: uses shared buy-now label helper`);
-    assert.match(source, /createHelloFruitInvoiceDescription/,
-      `${relativePath}: uses shared invoice description helper`);
     assert.match(source, /helloFruitDemoLabels/,
-      `${relativePath}: uses shared demo invoice labels`);
+      `${relativePath}: uses shared demo checkout labels`);
     assert.doesNotMatch(source, /function formatFiat/,
       `${relativePath}: must not duplicate fiat display formatting`);
     assert.doesNotMatch(source, /Fruit sticker from OpenReceive .*demo: \$\{/,
@@ -256,6 +271,10 @@ test("Hello Fruit browser demos consume shared product display helpers", () => {
       `${relativePath}: must not duplicate invoice error fallback`);
     assert.doesNotMatch(source, /"Creating invoice\.\.\."/,
       `${relativePath}: must not duplicate invoice creation label`);
+    assert.doesNotMatch(source, /"Could not create order\."/,
+      `${relativePath}: must not duplicate order error fallback`);
+    assert.doesNotMatch(source, /"Creating order\.\.\."/,
+      `${relativePath}: must not duplicate order creation label`);
   }
 });
 
@@ -845,7 +864,7 @@ test("Hello Fruit JS demos set up package-owned invoice persistence", () => {
   }
 });
 
-test("Next.js demo delegates route handling to the OpenReceive server", () => {
+test("Next.js demo owns merchant route handling and calls OpenReceive service methods", () => {
   const source = readFileSync(
     path.join(
       process.cwd(),
@@ -855,8 +874,14 @@ test("Next.js demo delegates route handling to the OpenReceive server", () => {
   );
 
   assert.match(source, /createOpenReceive/);
-  assert.match(source, /handleFetch\(request\)/);
+  assert.match(source, /createOrderResponse/);
+  assert.match(source, /orderStatusResponse/);
+  assert.match(source, /createHelloFruitCreateOrderResult/);
+  assert.match(source, /openreceive\.createInvoice/);
+  assert.match(source, /openreceive\.lookupInvoice/);
   assert.match(source, /readRequiredHelloFruitNwcConnectionString/);
+  assert.doesNotMatch(source, /dispatchOpenReceiveRoute/);
+  assert.doesNotMatch(source, /matchOpenReceiveRoute/);
   assert.doesNotMatch(source, /@openreceive\/next/);
   assert.doesNotMatch(source, /createNwcReceiveClient/);
   assert.doesNotMatch(source, /createOpenReceiveNextRuntime/);
@@ -866,7 +891,6 @@ test("Next.js demo delegates route handling to the OpenReceive server", () => {
   assert.doesNotMatch(source, /ReadableStream<Uint8Array>/);
   assert.doesNotMatch(source, /formatSseEvent/);
   assert.doesNotMatch(source, /parseLastEventId/);
-  assert.doesNotMatch(source, /request\.text\(\)/);
 });
 
 test("Rails React skeleton is explicitly quarantined and does not claim active Rails demo identity", () => {
@@ -1032,7 +1056,75 @@ test("Hello Fruit metadata exposes only allowlisted build fields", async () => {
   });
 });
 
-test("Hello Fruit hosted demo routes expose health, source, docs, robots, and sitemap", async () => {
+test("Hello Fruit demos create app orders and poll order status through merchant routes", async () => {
+  await withEnv({
+    OPENRECEIVE_NWC: createValidNwcUri(),
+    OPENRECEIVE_TEST_FAKE_NWC: "1",
+    OPENRECEIVE_STORE: "memory:"
+  }, async () => {
+    const orderRequest = {
+      idempotency_key: "cart-smoke",
+      cart: [
+        { product_id: "banana", quantity: 2 },
+        { product_id: "apple", quantity: 1 }
+      ]
+    };
+
+    for (const demo of [
+      {
+        name: "node-express-react",
+        createApp: createHelloFruitServer
+      },
+      {
+        name: "static-html-small-api",
+        createApp: createHelloFruitStaticServer
+      }
+    ]) {
+      const app = await demo.createApp();
+      const created = await dispatchJson(app, "POST", "/create_order", orderRequest);
+      assert.equal(created.status, 201, `${demo.name}: create_order status`);
+      assert.equal(created.body.order.uuid.includes("cart-smoke"), true);
+      assert.equal(created.body.order.status, "pending_payment");
+      assert.equal(created.body.order.total_fiat.currency, "USD");
+      assert.equal(created.body.order.total_fiat.value, "0.25");
+      assert.equal(created.body.invoice.order_uuid, created.body.order.uuid);
+      assert.equal(typeof created.body.invoice.invoice, "string");
+      assert.equal(JSON.stringify(created.body).includes("nostr+walletconnect://"), false);
+
+      const replayed = await dispatchJson(app, "POST", "/create_order", orderRequest);
+      assert.equal(replayed.body.invoice.invoice_id, created.body.invoice.invoice_id,
+        `${demo.name}: create_order is idempotent for the same checkout id and cart`);
+
+      const status = await dispatchJson(app, "POST", "/order_status", {
+        payment_hash: created.body.invoice.payment_hash
+      });
+      assert.equal(status.status, 200, `${demo.name}: order_status status`);
+      assert.equal(status.body.order_uuid, created.body.order.uuid);
+      assert.equal(status.body.order_status, "pending_payment");
+      assert.equal(status.body.order.status, "pending_payment");
+      assert.equal(status.body.payment_hash, created.body.invoice.payment_hash);
+    }
+
+    const nextCreated = await responseJson(postNextCreateOrder(jsonRequest("/create_order", orderRequest)));
+    assert.equal(nextCreated.status, 201, "nextjs-fullstack: create_order status");
+    assert.equal(nextCreated.body.order.uuid.includes("cart-smoke"), true);
+    assert.equal(nextCreated.body.order.total_fiat.value, "0.25");
+    assert.equal(nextCreated.body.invoice.order_uuid, nextCreated.body.order.uuid);
+
+    const nextReplayed = await responseJson(postNextCreateOrder(jsonRequest("/create_order", orderRequest)));
+    assert.equal(nextReplayed.body.invoice.invoice_id, nextCreated.body.invoice.invoice_id,
+      "nextjs-fullstack: create_order is idempotent for the same checkout id and cart");
+
+    const nextStatus = await responseJson(postNextOrderStatus(jsonRequest("/order_status", {
+      payment_hash: nextCreated.body.invoice.payment_hash
+    })));
+    assert.equal(nextStatus.status, 200, "nextjs-fullstack: order_status status");
+    assert.equal(nextStatus.body.order_uuid, nextCreated.body.order.uuid);
+    assert.equal(nextStatus.body.order_status, "pending_payment");
+  });
+});
+
+test("Hello Fruit hosted demo routes expose source, docs, robots, and sitemap", async () => {
   await withEnv({
     OPENRECEIVE_NWC: createValidNwcUri(),
     OPENRECEIVE_TEST_FAKE_NWC: "1",
@@ -1052,14 +1144,6 @@ test("Hello Fruit hosted demo routes expose health, source, docs, robots, and si
       }
     ]) {
       const app = await demo.createApp();
-      const healthz = await getJson(app, "/healthz");
-      assert.equal(healthz.status, 200, `${demo.name}: healthz status`);
-      assert.deepEqual(healthz.body, {
-        ok: true,
-        demo: demo.name,
-        wallet_configured: true
-      });
-
       const source = await dispatch(app, {
         method: "GET",
         url: "/source",
@@ -1099,19 +1183,11 @@ test("Hello Fruit hosted demo routes expose health, source, docs, robots, and si
       assert.equal(sitemap.status, 200, `${demo.name}: sitemap status`);
       assert.match(sitemap.text, /<loc>https:\/\/demo\.example\.test\/<\/loc>/);
 
-      for (const response of [healthz.body, source.text, docs.text, robots.text, sitemap.text]) {
+      for (const response of [source.text, docs.text, robots.text, sitemap.text]) {
         assert.equal(JSON.stringify(response).includes("OPENRECEIVE_NWC"), false);
         assert.equal(JSON.stringify(response).includes("nostr+walletconnect://"), false);
       }
     }
-
-    const nextHealthz = await responseJson(getNextHealthz());
-    assert.equal(nextHealthz.status, 200, "nextjs-fullstack: healthz status");
-    assert.deepEqual(nextHealthz.body, {
-      ok: true,
-      demo: "nextjs-fullstack",
-      wallet_configured: true
-    });
 
     const nextSource = getNextSource();
     assert.equal(nextSource.status, 302, "nextjs-fullstack: source status");
@@ -1151,6 +1227,16 @@ async function responseJson(responseOrPromise) {
   };
 }
 
+function jsonRequest(pathname, body) {
+  return new Request(`http://localhost${pathname}`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+}
+
 async function getJson(app, url) {
   return await dispatchJson(app, "GET", url);
 }
@@ -1188,11 +1274,9 @@ async function dispatch(app, options) {
       ...options.headers,
       ...(payload === undefined ? {} : { "content-length": String(payload.length) })
     };
-    req.connection = { encrypted: false };
-    req.socket = {
-      encrypted: false,
-      destroy() {}
-    };
+    req.encrypted = false;
+    req.connection = req;
+    req.socket = req;
     req.on("error", reject);
 
     const chunks = [];

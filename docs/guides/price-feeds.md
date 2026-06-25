@@ -42,10 +42,11 @@ seconds, quote TTL, and endpoint URLs.
 runtime should skip the deterministic static mock and try the OpenReceive
 mirror, Megalithic mirror, then CoinGecko direct.
 
-The Express adapter exposes helper routes at `GET /openreceive/v1/rates` and
-`POST /openreceive/v1/rates/quote`. These routes use the static mock source
-unless the host app wires live `priceProviders`; the JS Hello Fruit demos wire
-`createDefaultLivePriceProviders({ currencies: ["USD"] })`.
+Apps can expose their own rate or quote endpoints when their UI needs a quote
+before checkout. Invoice creation can also quote internally from the configured
+`priceProviders`; the JS Hello Fruit demos wire
+`createDefaultLivePriceProviders({ currencies: ["USD"] })` for live demos and
+use the deterministic static provider only in fake-wallet tests.
 
 ## Quote Rules
 

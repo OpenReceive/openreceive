@@ -12,10 +12,6 @@ test("mock wallet exposes deterministic info, invoices, and lookup", async () =>
   assert.doesNotMatch(service.parsedNwc.redacted, /0{64}/);
   assert.equal(DEFAULT_MOCK_NWC.includes("secret="), true);
 
-  const health = service.health();
-  assert.equal(health.ok, true);
-  assert.equal(health.invoice_count, 0);
-
   const info = await service.getInfo();
   assert.equal(info.receiveCheckoutReady, true);
   assert.deepEqual(info.methods, ["make_invoice", "lookup_invoice"]);

@@ -4,16 +4,12 @@ import {
   type CheckoutSnapshot
 } from "@openreceive/browser/internal";
 import {
-  createInvoice as requestInvoice
-} from "@openreceive/browser";
-import {
   defineOpenReceiveElements
 } from "@openreceive/elements";
 import {
   createHelloFruitBrowserLogger
 } from "../../../../shared/demo-browser-logging.ts";
 import {
-  createHelloFruitInvoiceDescription,
   formatHelloFruitBuyNowLabel,
   formatHelloFruitFiat,
   helloFruitDemoLabels
@@ -39,6 +35,25 @@ interface CheckoutStateEventDetail {
   };
 }
 
+interface DemoOrder {
+  uuid: string;
+  status: "pending_payment" | "paid";
+  items: {
+    product_id: string;
+    name: string;
+    quantity: number;
+  }[];
+  total_fiat: {
+    currency: string;
+    value: string;
+  };
+}
+
+interface CreateOrderResponse {
+  order: DemoOrder;
+  invoice: CheckoutSnapshot;
+}
+
 const fruits = fruitsData.fruits as Fruit[];
 const firstFruit = fruits[0];
 if (firstFruit === undefined) {
@@ -46,6 +61,8 @@ if (firstFruit === undefined) {
 }
 
 let selectedFruit: Fruit = fruits[1] ?? firstFruit;
+let cart: Record<string, number> = {};
+let currentOrder: DemoOrder | undefined;
 let purchasedFruit: Fruit | undefined;
 let completedInvoiceId = "";
 const logOpenReceive = createHelloFruitBrowserLogger("static-html-small-api");
@@ -56,10 +73,13 @@ defineOpenReceiveElements({
 renderThemeToggle();
 renderProduct();
 renderFruitGrid();
-renderCreateInvoiceButton();
+renderCreateOrderControls();
 
-document.getElementById("create-invoice")?.addEventListener("click", () => {
-  void createInvoice();
+document.getElementById("add-to-cart")?.addEventListener("click", () => {
+  addSelectedFruitToCart();
+});
+document.getElementById("create-order")?.addEventListener("click", () => {
+  void createOrder();
 });
 
 function renderThemeToggle(): void {
@@ -94,7 +114,7 @@ function renderFruitGrid(): void {
       selectedFruit = fruit;
       renderProduct();
       renderFruitGrid();
-      renderCreateInvoiceButton();
+      renderCreateOrderControls();
     });
 
     const image = document.createElement("img");
@@ -112,46 +132,165 @@ function renderFruitGrid(): void {
   }
 }
 
-function renderCreateInvoiceButton(): void {
-  const button = requireElement<HTMLButtonElement>("create-invoice");
-  button.textContent = formatHelloFruitBuyNowLabel(selectedFruit.fiat);
+function renderCreateOrderControls(): void {
+  const addButton = requireElement<HTMLButtonElement>("add-to-cart");
+  addButton.textContent = formatHelloFruitBuyNowLabel(selectedFruit.fiat);
+  renderCart();
+
+  const orderButton = requireElement<HTMLButtonElement>("create-order");
+  const cartQuantity = cartItems().reduce((total, item) => total + item.quantity, 0);
+  orderButton.disabled = cartQuantity === 0;
+  orderButton.textContent = helloFruitDemoLabels.createOrder;
 }
 
-async function createInvoice(): Promise<void> {
+function addSelectedFruitToCart(): void {
+  cart = {
+    ...cart,
+    [selectedFruit.id]: Math.min((cart[selectedFruit.id] ?? 0) + 1, 9)
+  };
+  renderCreateOrderControls();
+}
+
+function removeFruitFromCart(fruitId: string): void {
+  const next = { ...cart };
+  delete next[fruitId];
+  cart = next;
+  renderCreateOrderControls();
+}
+
+function renderCart(): void {
+  const panel = requireElement("cart-panel");
+  panel.replaceChildren();
+
+  const items = cartItems();
+  if (items.length === 0) return;
+
+  const section = document.createElement("section");
+  section.className = "cart";
+  section.setAttribute("aria-label", "Cart");
+
+  const heading = document.createElement("div");
+  heading.className = "cart-heading";
+  const title = document.createElement("strong");
+  title.textContent = "Cart";
+  const count = document.createElement("span");
+  const quantity = items.reduce((total, item) => total + item.quantity, 0);
+  count.textContent = `${quantity} item${quantity === 1 ? "" : "s"}`;
+  heading.append(title, count);
+  section.append(heading);
+
+  for (const item of items) {
+    const row = document.createElement("div");
+    row.className = "cart-row";
+    const name = document.createElement("span");
+    name.textContent = item.fruit.name;
+    const amount = document.createElement("span");
+    amount.textContent = `x${item.quantity}`;
+    const remove = document.createElement("button");
+    remove.className = "secondary";
+    remove.type = "button";
+    remove.textContent = "Remove";
+    remove.addEventListener("click", () => removeFruitFromCart(item.fruit.id));
+    row.append(name, amount, remove);
+    section.append(row);
+  }
+
+  panel.append(section);
+}
+
+function renderOrder(order: DemoOrder): void {
+  const panel = requireElement("cart-panel");
+  panel.replaceChildren();
+
+  const section = document.createElement("section");
+  section.className = "cart";
+  section.setAttribute("aria-label", "Order");
+
+  const heading = document.createElement("div");
+  heading.className = "cart-heading";
+  const title = document.createElement("strong");
+  title.textContent = "Order";
+  const total = document.createElement("span");
+  total.textContent = formatHelloFruitFiat(order.total_fiat);
+  heading.append(title, total);
+  section.append(heading);
+
+  for (const item of order.items) {
+    const row = document.createElement("div");
+    row.className = "cart-row";
+    const name = document.createElement("span");
+    name.textContent = item.name;
+    const quantity = document.createElement("span");
+    quantity.textContent = `x${item.quantity}`;
+    const state = document.createElement("span");
+    state.textContent = order.status === "paid" ? "Paid" : "Pending";
+    row.append(name, quantity, state);
+    section.append(row);
+  }
+
+  panel.append(section);
+}
+
+function cartItems(): { fruit: Fruit; quantity: number }[] {
+  return fruits
+    .map((fruit) => ({ fruit, quantity: cart[fruit.id] ?? 0 }))
+    .filter((item) => item.quantity > 0);
+}
+
+function setOrderButtonState(state: "idle" | "creating"): void {
+  const button = requireElement<HTMLButtonElement>("create-order");
+  button.disabled = state === "creating" || cartItems().length === 0;
+  button.textContent = formatHelloFruitBuyNowLabel(selectedFruit.fiat);
+  button.textContent = state === "creating"
+    ? helloFruitDemoLabels.creatingOrder
+    : helloFruitDemoLabels.createOrder;
+}
+
+async function createOrder(): Promise<void> {
   setError("");
-  setButtonState("creating");
+  setOrderButtonState("creating");
   closeStickerModal();
   completedInvoiceId = "";
 
   try {
-    const orderUuid = globalThis.crypto?.randomUUID?.() ??
+    const idempotencyKey = globalThis.crypto?.randomUUID?.() ??
       `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    const body = await requestInvoice({
-      orderUuid: `hello-fruit-static-${selectedFruit.id}-${orderUuid}`,
-      fiat: selectedFruit.fiat,
-      optionalInvoiceDescription: createHelloFruitInvoiceDescription(selectedFruit.name, {
-        demoName: "static"
-      }),
-      expiry: product.invoice_expiry_seconds,
-      fetch
+    const response = await fetch("/create_order", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        idempotency_key: idempotencyKey,
+        cart: cartItems().map((item) => ({
+          product_id: item.fruit.id,
+          quantity: item.quantity
+        }))
+      })
     });
+    const body = await response.json() as unknown;
+    if (!response.ok || !isCreateOrderResponse(body)) {
+      throw new Error(readErrorMessage(body) ?? helloFruitDemoLabels.createOrderError);
+    }
 
-    purchasedFruit = selectedFruit;
-    renderInvoice(body);
+    currentOrder = body.order;
+    purchasedFruit = cartItems()[0]?.fruit;
+    renderOrder(body.order);
+    renderInvoice(body.invoice);
   } catch (error) {
     setError(error instanceof Error ? error.message : String(error));
   } finally {
-    setButtonState("idle");
+    setOrderButtonState("idle");
   }
 }
 
 function renderInvoice(nextInvoice: CheckoutSnapshot): void {
   const topbar = requireElement("topbar");
-  const panel = requireElement("invoice-panel");
+  const panel = requireElement("checkout-panel");
   const shell = createCheckoutShell(nextInvoice, {
     document,
     root: document.querySelector(".page"),
-    lookupUrl: "/openreceive/v1/invoices/lookup",
+    lookupUrl: "/order_status",
     rootSelector: ".page",
     defaultTheme: "light",
     onError: (event) => {
@@ -163,9 +302,13 @@ function renderInvoice(nextInvoice: CheckoutSnapshot): void {
       if (
         state?.invoice_id !== undefined &&
         state.invoice_id !== completedInvoiceId &&
-        purchasedFruit !== undefined
+          purchasedFruit !== undefined
       ) {
         completedInvoiceId = state.invoice_id;
+        if (currentOrder !== undefined) {
+          currentOrder = { ...currentOrder, status: "paid" };
+          renderOrder(currentOrder);
+        }
         showStickerModal(purchasedFruit);
       }
     }
@@ -173,14 +316,6 @@ function renderInvoice(nextInvoice: CheckoutSnapshot): void {
 
   topbar.replaceChildren(shell.themeToggle);
   panel.replaceChildren(shell.checkout);
-}
-
-function setButtonState(state: "idle" | "creating"): void {
-  const button = requireElement<HTMLButtonElement>("create-invoice");
-  button.disabled = state === "creating";
-  button.textContent = state === "creating"
-    ? helloFruitDemoLabels.creatingInvoice
-    : formatHelloFruitBuyNowLabel(selectedFruit.fiat);
 }
 
 function setError(message: string): void {
@@ -240,4 +375,20 @@ function requireElement<T extends HTMLElement = HTMLElement>(id: string): T {
   const element = document.getElementById(id);
   if (element === null) throw new Error(`missing element #${id}`);
   return element as T;
+}
+
+function isCreateOrderResponse(value: unknown): value is CreateOrderResponse {
+  return typeof value === "object" &&
+    value !== null &&
+    "order" in value &&
+    "invoice" in value;
+}
+
+function readErrorMessage(value: unknown): string | undefined {
+  return typeof value === "object" &&
+    value !== null &&
+    "message" in value &&
+    typeof value.message === "string"
+    ? value.message
+    : undefined;
 }

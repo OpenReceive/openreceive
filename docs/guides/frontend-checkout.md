@@ -7,9 +7,11 @@ strings, wallet clients, and fulfillment on the backend.
 
 `@openreceive/browser` is the small app-facing browser entry:
 
-- `createInvoice(options)` posts to `/openreceive/v1/invoices`.
 - `status(invoiceLike)` returns `"pending"`, `"paid"`, `"expired"`, or
   `"failed"` from display-safe fields.
+- `createInvoice(options)` is a lower-level helper for apps that intentionally
+  expose an invoice-creation route; most stores call their own `/create_order`
+  route and render the invoice returned with the order.
 - `lightningUri(invoice)`, `qrSvg(invoice)`, and `qrPngDataUrl(invoice)` render
   BOLT11 payment data.
 - `copyInvoice({ invoice })` copies the BOLT11 string.
@@ -18,17 +20,18 @@ strings, wallet clients, and fulfillment on the backend.
   button's click handler.
 - `createCheckoutController(options)` powers advanced headless checkout flows.
 
-These helpers reject NWC connection strings. They work with BOLT11 invoices and
-OpenReceive HTTP routes only.
+These helpers reject NWC connection strings. They work with display-safe BOLT11
+invoice data only.
 
 ```ts
-import { createInvoice, status } from "@openreceive/browser";
+import { status } from "@openreceive/browser";
 
-const invoice = await createInvoice({
-  orderUuid,
-  fiat: { currency: "USD", value: "10.00" },
-  optionalInvoiceDescription: "Order #1234"
+const response = await fetch("/create_order", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ cart })
 });
+const { order, invoice } = await response.json();
 
 console.log(status(invoice));
 ```
@@ -44,7 +47,11 @@ The default checkout is one prop:
 import { Checkout } from "@openreceive/react";
 import "@openreceive/react/styles.css";
 
-<Checkout invoice={invoice} onPaid={() => showThankYou()} />;
+<Checkout
+  invoice={invoice}
+  lookupUrl="/order_status"
+  onPaid={() => showThankYou()}
+/>;
 ```
 
 `onPaid` is a UI hint from polling. It is useful for showing a thank-you panel,
@@ -131,7 +138,7 @@ defineOpenReceiveElements();
   amount-msats="200000"
   status="pending"
   expires-at="1781943000"
-  lookup-url="/openreceive/v1/invoices/lookup"
+  lookup-url="/order_status"
   theme="dark"
 ></openreceive-checkout>
 ```

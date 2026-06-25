@@ -15,6 +15,5 @@ case "$base_url" in
     ;;
 esac
 
-curl -fsS "$base_url/healthz" >/dev/null
 curl -fsS "$base_url/demo-metadata.json" >/dev/null
 printf 'Smoke passed for %s\n' "$base_url"

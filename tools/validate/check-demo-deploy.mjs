@@ -186,7 +186,7 @@ function validateInventory() {
     expect(entry?.stack === demo.stack, `${relativePath}: ${demo.slug} stack must be ${demo.stack}`);
     expect(entry?.image === demo.image, `${relativePath}: ${demo.slug} image must be ${demo.image}`);
     expect(entry?.compose === demo.compose, `${relativePath}: ${demo.slug} compose path must be ${demo.compose}`);
-    expect(entry?.health_url === `https://${demo.hostname}/healthz`, `${relativePath}: ${demo.slug} health_url must target /healthz`);
+    expect(entry?.smoke_url === `https://${demo.hostname}/demo-metadata.json`, `${relativePath}: ${demo.slug} smoke_url must target demo metadata`);
   }
 }
 
@@ -330,7 +330,6 @@ function validateScripts() {
     "previous_image_digest"
   ]);
   validateScript("demos/deploy/scripts/smoke-demo", [
-    "curl -fsS \"$base_url/healthz\"",
     "curl -fsS \"$base_url/demo-metadata.json\"",
     "Demo URL must start with http:// or https://"
   ]);
