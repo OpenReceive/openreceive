@@ -228,9 +228,12 @@ test("Hello Fruit JS demos use package-owned QR and poll-only wiring", () => {
     assert.match(dockerfile, /COPY spec\/data\/rates \.\/spec\/data\/rates/,
       `${demoDir}: Docker image includes demo price-source data`);
     if (demoDir.endsWith("/node-express")) {
-      assert.equal(packageJson.dependencies["@openreceive/angular"], "0.1.0");
-      assert.equal(packageJson.dependencies["@openreceive/vue"], "0.1.0");
-      assert.equal(packageJson.dependencies["@openreceive/svelte"], "0.1.0");
+      const openReceiveVersion = JSON.parse(
+        readFileSync(path.join(process.cwd(), "package.json"), "utf8")
+      ).version;
+      assert.equal(packageJson.dependencies["@openreceive/angular"], openReceiveVersion);
+      assert.equal(packageJson.dependencies["@openreceive/vue"], openReceiveVersion);
+      assert.equal(packageJson.dependencies["@openreceive/svelte"], openReceiveVersion);
       assert.equal(packageJson.dependencies["@angular/core"], "^22.0.3");
       assert.equal(packageJson.dependencies["@angular/platform-browser"], "^22.0.3");
       assert.match(viteConfig, /@vitejs\/plugin-vue/);
