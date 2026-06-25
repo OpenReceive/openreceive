@@ -146,12 +146,13 @@ async function loadSqlite3Package(): Promise<{
     };
     const Database = sqlite3Module.Database ?? sqlite3Module.default?.Database;
     if (Database === undefined) throw new Error("sqlite3 Database export not found");
+    const NodeSqlite3Database = Database;
     return {
       DatabaseSync: class OpenReceiveNodeSqlite3Database implements OpenReceiveSqliteDatabase {
         readonly #database: NodeSqlite3Database;
 
         constructor(filename: string) {
-          this.#database = new Database(filename);
+          this.#database = new NodeSqlite3Database(filename);
           this.#database.configure?.("busyTimeout", 5000);
         }
 
