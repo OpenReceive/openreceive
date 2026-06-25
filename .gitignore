@@ -48,3 +48,4 @@ dist/
 .cache/
 *.tsbuildinfo
 tmp/*
+.DS_Store
