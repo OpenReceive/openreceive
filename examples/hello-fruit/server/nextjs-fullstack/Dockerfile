@@ -23,7 +23,7 @@ COPY examples/hello-fruit/server/nextjs-fullstack/package.json ./examples/hello-
 COPY examples/hello-fruit/server/node-express/package.json ./examples/hello-fruit/server/node-express/package.json
 COPY examples/hello-fruit/server/static-html-small-api/package.json ./examples/hello-fruit/server/static-html-small-api/package.json
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit
-RUN --mount=type=cache,target=/root/.npm npm install sqlite3@5.1.7 --no-save --no-audit
+RUN --mount=type=cache,target=/root/.npm npm install sqlite3@5.1.7 ws@8.18.3 --no-save --no-audit
 
 COPY packages ./packages
 COPY spec/data/rates ./spec/data/rates

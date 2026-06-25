@@ -1,6 +1,9 @@
 import {
   mkdirSync
 } from "node:fs";
+import {
+  createRequire
+} from "node:module";
 import path from "node:path";
 import {
   InMemoryInvoiceKvStore,
@@ -38,6 +41,7 @@ export type OpenReceiveResolvedStore = OpenReceiveInvoiceKvStore & {
 
 const DEFAULT_NAMESPACE = "default";
 const DEFAULT_STORE_URI = "local-sqlite";
+const require = createRequire(import.meta.url);
 
 export async function resolveOpenReceiveStore(
   uri = process.env.OPENRECEIVE_STORE,
@@ -138,7 +142,7 @@ async function loadSqlite3Package(): Promise<{
   };
 }> {
   try {
-    const sqlite3Module = await import(/* @vite-ignore */ `sqlite${"3"}`) as unknown as {
+    const sqlite3Module = require("sqlite3") as {
       default?: {
         Database?: new (filename: string) => NodeSqlite3Database;
       };
@@ -213,8 +217,12 @@ async function loadSqlite3Package(): Promise<{
         }
       }
     };
-  } catch {
-    throw new Error("SQLite store requires a Node runtime with built-in SQLite support, the `sqlite3` package, or an injected SQLite loader.");
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `SQLite store requires a Node runtime with built-in SQLite support, the \`sqlite3\` package, or an injected SQLite loader. sqlite3 load failed: ${reason}`,
+      { cause: error }
+    );
   }
 }
 

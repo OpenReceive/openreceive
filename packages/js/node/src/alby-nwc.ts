@@ -1,4 +1,10 @@
 import {
+  createRequire
+} from "node:module";
+import {
+  pathToFileURL
+} from "node:url";
+import {
   OPENRECEIVE_MAX_AMOUNT_MSATS,
   OPENRECEIVE_MIN_AMOUNT_MSATS,
   OPENRECEIVE_NWC_METADATA_MAX_BYTES,
@@ -20,6 +26,7 @@ import {
   parseNwcUri
 } from "@openreceive/core";
 
+const require = createRequire(import.meta.url);
 const REQUIRED_RECEIVE_METHODS = ["make_invoice", "lookup_invoice"] as const;
 const HEX_64 = /^[0-9a-fA-F]{64}$/;
 const SPEND_METHODS = [
@@ -457,11 +464,14 @@ async function callRequiredMethod(
 async function createDefaultAlbyNwcClient(
   connectionString: string
 ): Promise<AlbyNwcCompatibleClient> {
+  ensureNodeWebSocket();
   const dynamicImport = new Function(
     "specifier",
     "return import(specifier)"
   ) as (specifier: string) => Promise<unknown>;
-  const namespace = asRecord(await dynamicImport("@getalby/sdk/nwc"));
+  const namespace = asRecord(
+    await dynamicImport(pathToFileURL(require.resolve("@getalby/sdk/nwc")).href)
+  );
   const Constructor = namespace.NWCClient as unknown;
 
   if (typeof Constructor !== "function") {
@@ -478,6 +488,24 @@ async function createDefaultAlbyNwcClient(
   return new NWCClientConstructor({
     nostrWalletConnectUrl: connectionString
   });
+}
+
+function ensureNodeWebSocket(): void {
+  if (globalThis.WebSocket !== undefined) return;
+  try {
+    const namespace = require("ws") as {
+      default?: typeof WebSocket;
+      WebSocket?: typeof WebSocket;
+    } | typeof WebSocket;
+    const Constructor = typeof namespace === "function"
+      ? namespace
+      : namespace.WebSocket ?? namespace.default;
+    if (Constructor !== undefined) {
+      globalThis.WebSocket = Constructor;
+    }
+  } catch {
+    // The SDK reports the missing WebSocket in its own preflight path.
+  }
 }
 
 const NWC_ERROR_CODE_ALIASES: Readonly<Record<string, OpenReceiveErrorCode>> = {
