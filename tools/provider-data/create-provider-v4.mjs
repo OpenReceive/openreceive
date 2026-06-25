@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const registryPath = "packages/js/provider-data/src/data/openreceive-providers.v4.json";
-const iconDir = "packages/js/browser/src/assets/provider-icons";
+const iconDir = "packages/js/provider-data/src/assets/provider-icons";
 
 const registry = JSON.parse(await readFile(registryPath, "utf8"));
 
@@ -42,4 +42,4 @@ const iconSource = [
   "};",
   ""
 ].join("\n");
-await writeFile("packages/js/browser/src/provider-icons.ts", iconSource);
+await writeFile("packages/js/provider-data/src/provider-icons.ts", iconSource);

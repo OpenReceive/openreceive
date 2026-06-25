@@ -24,6 +24,8 @@ import {
   listFiatRailCountries,
   listFiatRails,
   listProviders,
+  openReceiveProviderIconUrls,
+  providerIconUrl,
   providerRegistry,
   validateRegistry
 } from "@openreceive/provider-data";
@@ -64,6 +66,13 @@ test("provider-data v4 keeps wizard copy and icons local", () => {
     false
   );
   assert.equal(providerRegistry.providers.strike.icon_path, "assets/provider-icons/strike.png");
+});
+
+test("provider-data resolves bundled provider icon URLs", () => {
+  const strike = providerRegistry.providers.strike;
+
+  assert.equal(openReceiveProviderIconUrls[strike.icon_path], providerIconUrl(strike));
+  assert.equal(providerIconUrl(strike).endsWith("/assets/provider-icons/strike.png"), true);
 });
 
 test("provider-data resolves crypto route providers without changing route order", () => {

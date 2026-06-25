@@ -1,8 +1,49 @@
 {
   "name": "@openreceive/provider-data",
   "version": "0.1.0",
+  "description": "Curated, validated, zero-dependency registry of Lightning payment providers and pay-the-invoice route guidance.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/OpenReceive/openreceive.git",
+    "directory": "packages/js/provider-data"
+  },
+  "keywords": [
+    "lightning",
+    "bitcoin",
+    "bolt11",
+    "payments",
+    "providers",
+    "openreceive"
+  ],
   "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./registry.json": "./dist/openreceive-providers.v4.json",
+    "./assets/provider-icons/*": "./dist/assets/provider-icons/*"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node ./build.mjs",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run build"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
   }
 }

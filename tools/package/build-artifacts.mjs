@@ -5,6 +5,7 @@ import { execFileSync } from "node:child_process";
 import {
   chmodSync,
   copyFileSync,
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -144,6 +145,10 @@ export function createPackageBuildWorkspace(input = {}) {
 }
 
 export function buildPackageArtifact(pkg, artifactRoot) {
+  if (pkg.manifest.scripts?.build !== undefined && existsSync(path.join(pkg.dir, "build.mjs"))) {
+    return buildScriptedPackageArtifact(pkg, artifactRoot);
+  }
+
   const packageDirName = path.basename(pkg.dir);
   const artifactDir = path.join(artifactRoot, packageDirName);
   const sourceDir = path.join(pkg.dir, "src");
@@ -189,6 +194,33 @@ export function buildPackageArtifact(pkg, artifactRoot) {
     }
   }
   emitPackageDeclarations(pkg, sourceDir, distDir);
+
+  return artifactDir;
+}
+
+function buildScriptedPackageArtifact(pkg, artifactRoot) {
+  const packageDirName = path.basename(pkg.dir);
+  const artifactDir = path.join(artifactRoot, packageDirName);
+  rmSync(artifactDir, { recursive: true, force: true });
+  mkdirSync(artifactDir, { recursive: true });
+
+  execFileSync("npm", ["run", "build"], {
+    cwd: pkg.dir,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+
+  const manifest = { ...pkg.manifest };
+  delete manifest.scripts;
+  writeFileSync(
+    path.join(artifactDir, "package.json"),
+    JSON.stringify(manifest, null, 2)
+  );
+  copyPackageDocs(pkg, artifactDir);
+  copyPackageBins(pkg, artifactDir);
+  cpSync(path.join(pkg.dir, "dist"), path.join(artifactDir, "dist"), {
+    recursive: true
+  });
 
   return artifactDir;
 }

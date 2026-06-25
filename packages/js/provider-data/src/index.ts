@@ -1,4 +1,7 @@
 import providerRegistryJson from "./data/openreceive-providers.v4.json" with { type: "json" };
+import { openReceiveProviderIconUrls } from "./provider-icons.ts";
+
+export { openReceiveProviderIconUrls };
 
 export type CountryCoverage = "deep" | "thin" | "sparse";
 export type ProviderId = string;
@@ -207,6 +210,12 @@ export const getProviders = listProviders;
 export function getProvider(providerId: ProviderId): Provider | undefined {
   return registry.providers[providerId];
 }
+
+export function providerIconUrl(provider: Pick<Provider, "icon_path">): string {
+  return openReceiveProviderIconUrls[provider.icon_path] ?? provider.icon_path;
+}
+
+export const getProviderIconUrl = providerIconUrl;
 
 export function listAssets(): readonly AssetIndexEntry[] {
   return registry.assets_index;

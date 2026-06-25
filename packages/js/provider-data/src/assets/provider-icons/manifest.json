@@ -1,0 +1,207 @@
+{
+  "rizful": {
+    "url": "https://rizful.com",
+    "icon_path": "assets/provider-icons/rizful.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=rizful.com&sz=128"
+  },
+  "boltz": {
+    "url": "https://boltz.exchange",
+    "icon_path": "assets/provider-icons/boltz.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=boltz.exchange&sz=128"
+  },
+  "strike": {
+    "url": "https://strike.me",
+    "icon_path": "assets/provider-icons/strike.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=strike.me&sz=128"
+  },
+  "aqua": {
+    "url": "https://aqua.net",
+    "icon_path": "assets/provider-icons/aqua.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=aqua.net&sz=128"
+  },
+  "phoenix": {
+    "url": "https://phoenix.acinq.co",
+    "icon_path": "assets/provider-icons/phoenix.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=phoenix.acinq.co&sz=128"
+  },
+  "zeus": {
+    "url": "https://zeusln.com",
+    "icon_path": "assets/provider-icons/zeus.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=zeusln.com&sz=128"
+  },
+  "coinbase": {
+    "url": "https://coinbase.com",
+    "icon_path": "assets/provider-icons/coinbase.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=coinbase.com&sz=128"
+  },
+  "kraken": {
+    "url": "https://kraken.com",
+    "icon_path": "assets/provider-icons/kraken.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=kraken.com&sz=128"
+  },
+  "binance": {
+    "url": "https://binance.com",
+    "icon_path": "assets/provider-icons/binance.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=binance.com&sz=128"
+  },
+  "okx": {
+    "url": "https://okx.com",
+    "icon_path": "assets/provider-icons/okx.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=okx.com&sz=128"
+  },
+  "bitfinex": {
+    "url": "https://bitfinex.com",
+    "icon_path": "assets/provider-icons/bitfinex.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=bitfinex.com&sz=128"
+  },
+  "kucoin": {
+    "url": "https://kucoin.com",
+    "icon_path": "assets/provider-icons/kucoin.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=kucoin.com&sz=128"
+  },
+  "cashapp": {
+    "url": "https://cash.app",
+    "icon_path": "assets/provider-icons/cashapp.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=cash.app&sz=128"
+  },
+  "river": {
+    "url": "https://river.com",
+    "icon_path": "assets/provider-icons/river.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=river.com&sz=128"
+  },
+  "coincorner": {
+    "url": "https://coincorner.com",
+    "icon_path": "assets/provider-icons/coincorner.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=coincorner.com&sz=128"
+  },
+  "bullbitcoin": {
+    "url": "https://bullbitcoin.com",
+    "icon_path": "assets/provider-icons/bullbitcoin.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=bullbitcoin.com&sz=128"
+  },
+  "simpleswap": {
+    "url": "https://simpleswap.io",
+    "icon_path": "assets/provider-icons/simpleswap.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=simpleswap.io&sz=128"
+  },
+  "changenow": {
+    "url": "https://changenow.io",
+    "icon_path": "assets/provider-icons/changenow.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=changenow.io&sz=128"
+  },
+  "fixedfloat": {
+    "url": "https://fixedfloat.com",
+    "icon_path": "assets/provider-icons/fixedfloat.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=fixedfloat.com&sz=128"
+  },
+  "sideshift": {
+    "url": "https://sideshift.ai",
+    "icon_path": "assets/provider-icons/sideshift.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=sideshift.ai&sz=128"
+  },
+  "blink": {
+    "url": "https://blink.sv",
+    "icon_path": "assets/provider-icons/blink.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=blink.sv&sz=128"
+  },
+  "pouch": {
+    "url": "https://pouch.ph",
+    "icon_path": "assets/provider-icons/pouch.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=pouch.ph&sz=128"
+  },
+  "bitnob": {
+    "url": "https://bitnob.com",
+    "icon_path": "assets/provider-icons/bitnob.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=bitnob.com&sz=128"
+  },
+  "bringin": {
+    "url": "https://bringin.xyz",
+    "icon_path": "assets/provider-icons/bringin.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=bringin.xyz&sz=128"
+  },
+  "mtpelerin": {
+    "url": "https://mtpelerin.com",
+    "icon_path": "assets/provider-icons/mtpelerin.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=mtpelerin.com&sz=128"
+  },
+  "bipa": {
+    "url": "https://bipa.app",
+    "icon_path": "assets/provider-icons/bipa.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=bipa.app&sz=128"
+  },
+  "bitso": {
+    "url": "https://bitso.com",
+    "icon_path": "assets/provider-icons/bitso.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=bitso.com&sz=128"
+  },
+  "ripio": {
+    "url": "https://ripio.com",
+    "icon_path": "assets/provider-icons/ripio.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=ripio.com&sz=128"
+  },
+  "belo": {
+    "url": "https://belo.app",
+    "icon_path": "assets/provider-icons/belo.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=belo.app&sz=128"
+  },
+  "shakepay": {
+    "url": "https://shakepay.com",
+    "icon_path": "assets/provider-icons/shakepay.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=shakepay.com&sz=128"
+  },
+  "bity": {
+    "url": "https://bity.com.br",
+    "icon_path": "assets/provider-icons/bity.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=bity.com.br&sz=128"
+  },
+  "chivo": {
+    "url": "https://chivowallet.com",
+    "icon_path": "assets/provider-icons/chivo.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=chivowallet.com&sz=128"
+  },
+  "speed": {
+    "url": "https://tryspeed.com",
+    "icon_path": "assets/provider-icons/speed.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=tryspeed.com&sz=128"
+  },
+  "walletofsatoshi": {
+    "url": "https://www.walletofsatoshi.com",
+    "icon_path": "assets/provider-icons/walletofsatoshi.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=www.walletofsatoshi.com&sz=128"
+  },
+  "bitget": {
+    "url": "https://www.bitget.com",
+    "icon_path": "assets/provider-icons/bitget.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=www.bitget.com&sz=128"
+  },
+  "okcoin": {
+    "url": "https://www.okcoin.com",
+    "icon_path": "assets/provider-icons/okcoin.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=www.okcoin.com&sz=128"
+  },
+  "trocador": {
+    "url": "https://trocador.app",
+    "icon_path": "assets/provider-icons/trocador.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=trocador.app&sz=128"
+  },
+  "kryptex": {
+    "url": "https://kryptex.com",
+    "icon_path": "assets/provider-icons/kryptex.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=kryptex.com&sz=128"
+  },
+  "cakewallet": {
+    "url": "https://cakewallet.com",
+    "icon_path": "assets/provider-icons/cakewallet.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=cakewallet.com&sz=128"
+  },
+  "bluewallet": {
+    "url": "https://bluewallet.io",
+    "icon_path": "assets/provider-icons/bluewallet.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=bluewallet.io&sz=128"
+  },
+  "getalby": {
+    "url": "https://getalby.com",
+    "icon_path": "assets/provider-icons/getalby.png",
+    "favicon_url": "https://www.google.com/s2/favicons?domain=getalby.com&sz=128"
+  }
+}

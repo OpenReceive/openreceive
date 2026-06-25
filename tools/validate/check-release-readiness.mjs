@@ -43,6 +43,13 @@ function workspacePackages() {
     .sort((left, right) => left.manifest.name.localeCompare(right.manifest.name));
 }
 
+function hasRootExport(manifest) {
+  const rootExport = manifest.exports?.["."];
+  if (typeof rootExport === "string") return true;
+  if (rootExport === null || typeof rootExport !== "object" || Array.isArray(rootExport)) return false;
+  return typeof rootExport.import === "string" || typeof rootExport.require === "string";
+}
+
 const rootPackage = readJson("package.json");
 const packages = workspacePackages();
 const changelog = read("CHANGELOG.md");
@@ -73,7 +80,7 @@ for (const { relativePath, manifest } of packages) {
   } else {
     expect(manifest.private === true, `${relativePath}: non-frontend package must stay private`);
   }
-  expect(typeof manifest.exports?.["."] === "string", `${relativePath}: package must expose a root export`);
+  expect(hasRootExport(manifest), `${relativePath}: package must expose a root export`);
 }
 
 expect(/^# Changelog/m.test(changelog), "CHANGELOG.md: missing top-level heading");

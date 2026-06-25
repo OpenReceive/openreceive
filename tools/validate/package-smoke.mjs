@@ -36,7 +36,7 @@ const importChecks = {
   "@openreceive/core": "typeof mod.createIdempotencyRequestHash === 'function'",
   "@openreceive/elements": "typeof mod.renderCheckoutHtml === 'function' && typeof mod.renderOpenReceiveThemeToggleHtml === 'function' && mod.OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME === 'openreceive-theme-toggle'",
   "@openreceive/node": "typeof mod.createOpenReceive === 'function' && typeof mod.OpenReceiveServiceError === 'function' && typeof mod.createNwcReceiveClient === 'function' && mod.mountExpressRoutes === undefined && mod.createFetchHandler === undefined && mod.createNodeHandler === undefined && mod.createNodeHandlers === undefined && mod.createNodeRuntime === undefined && typeof mod.createOpenReceivePostgresInvoiceStore === 'function' && typeof mod.createOpenReceivePostgresInvoiceStoreFromPool === 'function' && typeof mod.createOpenReceiveSqliteInvoiceStore === 'function' && mod.OPENRECEIVE_DATABASE_SCHEMA_VERSION === 'v0.1' && typeof mod.OPENRECEIVE_SQLITE_MIGRATION_SQL === 'string' && mod.runOpenReceiveCli === undefined",
-  "@openreceive/provider-data": "typeof mod.getProviderRegistryMetadata === 'function'",
+  "@openreceive/provider-data": "typeof mod.getProviderRegistryMetadata === 'function' && typeof mod.providerIconUrl === 'function' && mod.providerIconUrl(mod.providerRegistry.providers.strike).includes('assets/provider-icons/strike.png')",
   "@openreceive/react": "typeof mod.createCheckoutViewModel === 'function' && typeof mod.ThemeScope === 'function' && typeof mod.ThemeToggle === 'function' && typeof mod.PaymentWizard === 'function' && typeof mod.WaitingState === 'function' && typeof mod.useTheme === 'function' && typeof mod.CheckoutProvider === 'function' && typeof mod.useCheckoutContext === 'function' && mod.OpenReceiveThemeToggle === undefined && mod.OpenReceivePaymentWizard === undefined && mod.OpenReceiveWaitingState === undefined && mod.useOpenReceiveTheme === undefined",
   "@openreceive/svelte": "typeof mod.createOpenReceiveSvelteCheckoutBinding === 'function' && typeof mod.createOpenReceiveSvelteCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveSvelteCheckoutComponentModel === 'function' && typeof mod.createOpenReceiveSvelteCheckoutController === 'function' && typeof mod.createOpenReceiveSvelteThemeBinding === 'function' && typeof mod.createOpenReceiveSvelteStoredThemeBinding === 'function' && typeof mod.createOpenReceiveSvelteThemeToggleBinding === 'function' && typeof mod.createCheckoutElement === 'function' && typeof mod.createOpenReceiveThemeToggleElement === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.syncOpenReceiveStoredThemeControls === 'function' && typeof mod.applyCheckoutThemeAttributes === 'function'",
   "@openreceive/testkit": "typeof mod.createTestkitReceiveClient === 'function'",
@@ -115,6 +115,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import * as browserInternal from "@openreceive/browser/internal";
 import { openReceiveCountryMapLandPaths } from "@openreceive/browser/country-map";
+import providerRegistryJson from "@openreceive/provider-data/registry.json" with { type: "json" };
 
 const checks = ${JSON.stringify(checks, null, 2)};
 
@@ -174,6 +175,32 @@ assert(
 assert(
   existsSync("node_modules/@openreceive/browser/dist/assets/icons/card.svg"),
   "@openreceive/browser: fiat method icon assets must be packaged"
+);
+assert.equal(
+  providerRegistryJson.schema_version,
+  "4.0.0",
+  "@openreceive/provider-data/registry.json: raw registry JSON must be importable"
+);
+assert(
+  existsSync("node_modules/@openreceive/provider-data/dist/assets/provider-icons/strike.png"),
+  "@openreceive/provider-data: provider icon assets must be packaged"
+);
+assert(
+  existsSync("node_modules/@openreceive/provider-data/dist/openreceive-providers.v4.json"),
+  "@openreceive/provider-data: raw registry JSON must be packaged"
+);
+const providerDataCjs = await import("node:module").then(({ createRequire }) =>
+  createRequire(import.meta.url)("@openreceive/provider-data")
+);
+assert.equal(
+  typeof providerDataCjs.getProvider,
+  "function",
+  "@openreceive/provider-data: CommonJS require must resolve"
+);
+assert.equal(
+  providerDataCjs.providerIconUrl(providerDataCjs.providerRegistry.providers.strike).includes("assets/provider-icons/strike.png"),
+  true,
+  "@openreceive/provider-data: CommonJS icon helper must resolve bundled asset URLs"
 );
 assert(
   existsSync("node_modules/@openreceive/vue/dist/Checkout.vue"),

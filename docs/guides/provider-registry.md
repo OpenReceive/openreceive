@@ -34,8 +34,8 @@ const validation = validateRegistry();
 
 The package exposes immutable objects so route helpers cannot accidentally
 mutate the source. Provider entries include `icon_path` values that resolve to
-local assets bundled by `@openreceive/browser`; they do not point browser code
-at remote favicon URLs.
+local assets bundled by `@openreceive/provider-data`; they do not point browser
+code at remote favicon URLs.
 
 Node receive servers do not re-host this static catalog. Browser UI packages
 import it directly, and server-side apps can import `@openreceive/provider-data`
