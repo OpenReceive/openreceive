@@ -10,6 +10,9 @@ import {
   createHelloFruitBrowserLogger
 } from "../../../../shared/demo-browser-logging.ts";
 import {
+  readHelloFruitCheckoutCurrencies
+} from "../../../../shared/demo-currencies.ts";
+import {
   formatHelloFruitBuyNowLabel,
   formatHelloFruitFiat,
   helloFruitDemoLabels
@@ -43,7 +46,7 @@ interface DemoOrder {
     name: string;
     quantity: number;
   }[];
-  totalFiat: {
+  totalAmount: {
     currency: string;
     value: string;
   };
@@ -55,12 +58,14 @@ interface CreateOrderResponse {
 }
 
 const fruits = fruitsData.fruits as Fruit[];
+const currencyOptions = readHelloFruitCheckoutCurrencies();
 const firstFruit = fruits[0];
 if (firstFruit === undefined) {
   throw new Error("Hello Fruit demo requires at least one fruit.");
 }
 
 let selectedFruit: Fruit = fruits[1] ?? firstFruit;
+let selectedCurrency = "USD";
 let cart: Record<string, number> = {};
 let currentOrder: DemoOrder | undefined;
 let purchasedFruit: Fruit | undefined;
@@ -72,6 +77,7 @@ defineOpenReceiveElements({
 });
 renderThemeToggle();
 renderProduct();
+renderCurrencyPicker();
 renderFruitGrid();
 renderCreateOrderControls();
 
@@ -132,9 +138,35 @@ function renderFruitGrid(): void {
   }
 }
 
+function renderCurrencyPicker(): void {
+  const panel = requireElement("currency-panel");
+  const label = document.createElement("label");
+  label.className = "currency-picker";
+  const text = document.createElement("span");
+  text.textContent = "Currency";
+  const select = document.createElement("select");
+  select.value = selectedCurrency;
+  select.addEventListener("change", () => {
+    selectedCurrency = select.value;
+    renderCreateOrderControls();
+  });
+
+  for (const currency of currencyOptions) {
+    const option = document.createElement("option");
+    option.value = currency;
+    option.textContent = currency;
+    select.append(option);
+  }
+
+  label.append(text, select);
+  panel.replaceChildren(label);
+}
+
 function renderCreateOrderControls(): void {
   const addButton = requireElement<HTMLButtonElement>("add-to-cart");
-  addButton.textContent = formatHelloFruitBuyNowLabel(selectedFruit.fiat);
+  addButton.textContent = selectedCurrency === selectedFruit.fiat.currency
+    ? formatHelloFruitBuyNowLabel(selectedFruit.fiat)
+    : `Add to cart (${selectedCurrency})`;
   renderCart();
 
   const orderButton = requireElement<HTMLButtonElement>("create-order");
@@ -211,7 +243,7 @@ function renderOrder(order: DemoOrder): void {
   const title = document.createElement("strong");
   title.textContent = "Order";
   const total = document.createElement("span");
-  total.textContent = formatHelloFruitFiat(order.totalFiat);
+  total.textContent = formatHelloFruitFiat(order.totalAmount);
   heading.append(title, total);
   section.append(heading);
 
@@ -262,6 +294,7 @@ async function createOrder(): Promise<void> {
       },
       body: JSON.stringify({
         idempotency_key: idempotencyKey,
+        currency: selectedCurrency,
         cart: cartItems().map((item) => ({
           product_id: item.fruit.id,
           quantity: item.quantity

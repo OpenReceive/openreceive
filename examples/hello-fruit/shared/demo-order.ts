@@ -286,8 +286,8 @@ function usdToSats(usdValue: string, usdBtcPrice: string): bigint {
   if (price.units <= 0n) {
     throw new HelloFruitDemoOrderError("BTC/USD price feed rate must be greater than zero.", 503);
   }
-  const numerator = usd.units * price.scale * 100_000_000n;
-  const denominator = price.units * usd.scale;
+  const numerator = usd.units * BigInt(price.scale) * 100_000_000n;
+  const denominator = price.units * BigInt(usd.scale);
   return ceilDiv(numerator, denominator);
 }
 
@@ -305,8 +305,8 @@ function convertUsdToFiat(
 
   const scale = 2;
   const outputScale = 10n ** BigInt(scale);
-  const numerator = usd.units * targetPrice.units * usdPrice.scale * outputScale;
-  const denominator = usd.scale * targetPrice.scale * usdPrice.units;
+  const numerator = usd.units * targetPrice.units * BigInt(usdPrice.scale) * outputScale;
+  const denominator = BigInt(usd.scale) * BigInt(targetPrice.scale) * usdPrice.units;
   return formatDecimal(ceilDiv(numerator, denominator), scale);
 }
 

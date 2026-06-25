@@ -2,6 +2,9 @@ import {
   createDefaultPriceProviders,
   createDefaultLivePriceProviders
 } from "@openreceive/core";
+import type {
+  OpenReceiveSourcedPriceProvider
+} from "@openreceive/core";
 import {
   createOpenReceive
 } from "@openreceive/node";
@@ -23,8 +26,12 @@ import {
   createHelloFruitOpenReceiveKvStore
 } from "../../../../shared/openreceive-store.ts";
 import {
-  readHelloFruitCatalogCurrencies
-} from "../../../../shared/demo-catalog.ts";
+  readHelloFruitCheckoutCurrencies,
+  readHelloFruitPriceFeedCurrencies
+} from "../../../../shared/demo-currencies.ts";
+import {
+  readHelloFruitOrderRates
+} from "../../../../shared/demo-price-feeds.ts";
 import product from "../../../../shared/product.json";
 
 const DEMO_ID = "nextjs-fullstack";
@@ -35,6 +42,12 @@ interface NextDemoOpenReceiveCache {
   readonly connectionString: string;
   readonly storeCacheKey: string;
   readonly server: ReturnType<typeof createHelloFruitOpenReceive>;
+}
+
+interface HelloFruitOpenReceiveBundle {
+  readonly openreceive: Awaited<ReturnType<typeof createOpenReceive>>;
+  readonly priceProviders: readonly OpenReceiveSourcedPriceProvider[];
+  readonly supportedCurrencies: readonly string[];
 }
 
 let openreceiveCache: NextDemoOpenReceiveCache | undefined;
@@ -96,17 +109,28 @@ export async function createOrderResponse(
   request: Request
 ): Promise<Response> {
   const connectionString = readRequiredHelloFruitNwcConnectionString();
-  const openreceive = await getOpenReceive(connectionString);
+  const {
+    openreceive,
+    priceProviders,
+    supportedCurrencies
+  } = await getOpenReceive(connectionString);
 
   try {
     const body = await readJsonBody(request);
+    const rates = await readHelloFruitOrderRates({
+      currency: body.currency,
+      priceProviders,
+      supportedCurrencies
+    });
     const orderResult = createHelloFruitCreateOrderResult({
       ...body,
       idempotency_key: body.idempotency_key ?? request.headers.get("idempotency-key")
     }, {
       demoId: DEMO_ID,
       invoiceExpirySeconds: product.invoice_expiry_seconds,
-      demoName: "Next.js"
+      demoName: "Next.js",
+      rates,
+      supportedCurrencies
     });
     const invoice = await openreceive.createInvoice(orderResult.invoiceRequest);
     return jsonResponse({
@@ -120,7 +144,7 @@ export async function createOrderResponse(
 
 export async function orderStatusResponse(request: Request): Promise<Response> {
   const connectionString = readRequiredHelloFruitNwcConnectionString();
-  const openreceive = await getOpenReceive(connectionString);
+  const { openreceive } = await getOpenReceive(connectionString);
 
   try {
     const lookup = await openreceive.lookupInvoice(await readJsonBody(request));
@@ -140,7 +164,7 @@ export async function orderStatusResponse(request: Request): Promise<Response> {
 
 async function getOpenReceive(
   connectionString: string
-): Promise<Awaited<ReturnType<typeof createHelloFruitOpenReceive>>> {
+): Promise<HelloFruitOpenReceiveBundle> {
   const storeCacheKey = currentStoreCacheKey();
   const cachedOpenReceive = openreceiveCache;
   if (cachedOpenReceive !== undefined) {
@@ -177,19 +201,22 @@ export async function createHelloFruitOpenReceive(
   const store = await createHelloFruitOpenReceiveKvStore({
     demoId: DEMO_ID
   });
-  const priceCurrencies = readHelloFruitCatalogCurrencies();
+  const priceCurrencies = readHelloFruitPriceFeedCurrencies();
+  const supportedCurrencies = readHelloFruitCheckoutCurrencies();
   const testClient = createHelloFruitTestReceiveClient();
+  const priceProviders = testClient === undefined
+    ? createDefaultLivePriceProviders({ currencies: priceCurrencies })
+    : createDefaultPriceProviders({ currencies: priceCurrencies });
 
-  return await createOpenReceive({
+  const openreceive = await createOpenReceive({
     ...(testClient === undefined ? { nwc: connectionString } : { client: testClient }),
     store,
     namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit",
-    priceProviders: testClient === undefined
-      ? createDefaultLivePriceProviders({ currencies: priceCurrencies })
-      : createDefaultPriceProviders({ currencies: priceCurrencies }),
+    priceProviders,
     priceCurrencies,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID)
   });
+  return { openreceive, priceProviders, supportedCurrencies } satisfies HelloFruitOpenReceiveBundle;
 }
 
 async function readJsonBody(request: Request): Promise<Record<string, unknown>> {

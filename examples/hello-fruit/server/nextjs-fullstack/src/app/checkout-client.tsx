@@ -21,12 +21,16 @@ import {
   createHelloFruitBrowserLogger
 } from "../../../../shared/demo-browser-logging.ts";
 import {
+  readHelloFruitCheckoutCurrencies
+} from "../../../../shared/demo-currencies.ts";
+import {
   formatHelloFruitBuyNowLabel,
   formatHelloFruitFiat,
   helloFruitDemoLabels
 } from "../../../../shared/demo-formatting.ts";
 
 const logOpenReceive = createHelloFruitBrowserLogger("nextjs-fullstack");
+const currencyOptions = readHelloFruitCheckoutCurrencies();
 
 interface CheckoutClientProps {
   readonly product: HelloFruitProduct;
@@ -41,7 +45,7 @@ interface DemoOrder {
     readonly name: string;
     readonly quantity: number;
   }[];
-  readonly totalFiat: {
+  readonly totalAmount: {
     readonly currency: string;
     readonly value: string;
   };
@@ -57,6 +61,7 @@ export default function CheckoutClient({
   fruits
 }: CheckoutClientProps) {
   const [fruitId, setFruitId] = useState(fruits[1]?.id ?? fruits[0]?.id ?? "");
+  const [currency, setCurrency] = useState("USD");
   const [cart, setCart] = useState<Record<string, number>>({});
   const [order, setOrder] = useState<DemoOrder | undefined>();
   const [checkout, setCheckout] = useState<Invoice | undefined>();
@@ -73,7 +78,9 @@ export default function CheckoutClient({
   const createInvoiceLabel =
     selectedFruit === undefined
       ? helloFruitDemoLabels.createOrder
-      : formatHelloFruitBuyNowLabel(selectedFruit.fiat);
+      : currency === selectedFruit.fiat.currency
+        ? formatHelloFruitBuyNowLabel(selectedFruit.fiat)
+        : `Add to cart (${currency})`;
   const cartItems = fruits
     .map((fruit) => ({ fruit, quantity: cart[fruit.id] ?? 0 }))
     .filter((item) => item.quantity > 0);
@@ -123,6 +130,7 @@ export default function CheckoutClient({
         },
         body: JSON.stringify({
           idempotency_key: orderUuid,
+          currency,
           cart: cartItems.map((item) => ({
             product_id: item.fruit.id,
             quantity: item.quantity
@@ -171,6 +179,18 @@ export default function CheckoutClient({
           <p>{product.description}</p>
         </div>
       </div>
+
+      <label className="currency-picker">
+        <span>Currency</span>
+        <select
+          value={currency}
+          onChange={(event) => setCurrency(event.target.value)}
+        >
+          {currencyOptions.map((option) => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
+      </label>
 
       <div className="fruit-grid">
         {fruits.map((fruit) => (
@@ -221,7 +241,7 @@ export default function CheckoutClient({
         <section className="cart" aria-label="Order">
           <div className="cart-heading">
             <strong>Order</strong>
-            <span>{formatHelloFruitFiat(order.totalFiat)}</span>
+            <span>{formatHelloFruitFiat(order.totalAmount)}</span>
           </div>
           {order.items.map((item) => (
             <div className="cart-row" key={item.product_id}>
@@ -258,7 +278,7 @@ export default function CheckoutClient({
             <section className="cart" aria-label="Order">
               <div className="cart-heading">
                 <strong>Order</strong>
-                <span>{formatHelloFruitFiat(order.totalFiat)}</span>
+                <span>{formatHelloFruitFiat(order.totalAmount)}</span>
               </div>
               {order.items.map((item) => (
                 <div className="cart-row" key={item.product_id}>

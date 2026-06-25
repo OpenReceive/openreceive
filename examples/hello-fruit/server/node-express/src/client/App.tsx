@@ -15,6 +15,9 @@ import {
   createHelloFruitBrowserLogger
 } from "../../../../shared/demo-browser-logging.ts";
 import {
+  readHelloFruitCheckoutCurrencies
+} from "../../../../shared/demo-currencies.ts";
+import {
   formatHelloFruitBuyNowLabel,
   formatHelloFruitFiat,
   helloFruitDemoLabels
@@ -25,6 +28,7 @@ import "./styles.css";
 
 const logOpenReceive = createHelloFruitBrowserLogger("node-express");
 const fruits = fruitsData.fruits;
+const currencyOptions = readHelloFruitCheckoutCurrencies();
 type Fruit = (typeof fruits)[number];
 type CheckoutFramework = "react" | "vue" | "svelte" | "angular";
 const initialFruitId = fruits[1]?.id ?? fruits[0]?.id ?? "";
@@ -47,7 +51,7 @@ interface DemoOrder {
     readonly sticker: string;
     readonly quantity: number;
   }[];
-  readonly totalFiat: {
+  readonly totalAmount: {
     readonly currency: string;
     readonly value: string;
   };
@@ -61,6 +65,7 @@ interface CreateOrderResponse {
 function App(): React.ReactElement {
   const [framework, setFramework] = useState<CheckoutFramework>("react");
   const [fruitId, setFruitId] = useState(initialFruitId);
+  const [currency, setCurrency] = useState("USD");
   const [cart, setCart] = useState<Record<string, number>>({});
   const [order, setOrder] = useState<DemoOrder | null>(null);
   const [invoice, setInvoice] = useState<Invoice | null>(null);
@@ -73,7 +78,9 @@ function App(): React.ReactElement {
   const createInvoiceLabel =
     selectedFruit === undefined
       ? helloFruitDemoLabels.createOrder
-      : formatHelloFruitBuyNowLabel(selectedFruit.fiat);
+      : currency === selectedFruit.fiat.currency
+        ? formatHelloFruitBuyNowLabel(selectedFruit.fiat)
+        : `Add to cart (${currency})`;
   const cartItems = fruits
     .map((fruit) => ({ fruit, quantity: cart[fruit.id] ?? 0 }))
     .filter((item) => item.quantity > 0);
@@ -123,6 +130,7 @@ function App(): React.ReactElement {
         },
         body: JSON.stringify({
           idempotency_key: idempotencyKey,
+          currency,
           cart: cartItems.map((item) => ({
             product_id: item.fruit.id,
             quantity: item.quantity
@@ -187,6 +195,18 @@ function App(): React.ReactElement {
           </div>
         </div>
 
+        <label className="currency-picker">
+          <span>Currency</span>
+          <select
+            value={currency}
+            onChange={(event) => setCurrency(event.target.value)}
+          >
+            {currencyOptions.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+        </label>
+
         {invoice === null ? (
           <>
             <div className="fruit-grid">
@@ -249,7 +269,7 @@ function App(): React.ReactElement {
               <section className="cart" aria-label="Order">
                 <div className="cart-heading">
                   <strong>Order</strong>
-                  <span>{formatHelloFruitFiat(order.totalFiat)}</span>
+                  <span>{formatHelloFruitFiat(order.totalAmount)}</span>
                 </div>
                 {order.items.map((item) => (
                   <div className="cart-row" key={item.product_id}>
