@@ -3,9 +3,7 @@ import {
   createDefaultLivePriceProviders
 } from "@openreceive/core";
 import {
-  createOpenReceive,
-  OpenReceiveServiceError,
-  type OpenReceive
+  createOpenReceive
 } from "@openreceive/node";
 import {
   createHelloFruitDemoMetadata
@@ -18,7 +16,6 @@ import {
   createHelloFruitOpenReceiveLogger
 } from "../../../../shared/demo-logging.ts";
 import {
-  HelloFruitDemoOrderError,
   createHelloFruitCreateOrderResult,
   createHelloFruitOrderStatus
 } from "../../../../shared/demo-order.ts";
@@ -37,7 +34,7 @@ const GITHUB_REPOSITORY_URL = "https://github.com/openreceive/openreceive";
 interface NextDemoOpenReceiveCache {
   readonly connectionString: string;
   readonly storeCacheKey: string;
-  readonly server: Promise<OpenReceive>;
+  readonly server: ReturnType<typeof createHelloFruitOpenReceive>;
 }
 
 let openreceiveCache: NextDemoOpenReceiveCache | undefined;
@@ -117,7 +114,7 @@ export async function createOrderResponse(
       invoice
     }, 201);
   } catch (error) {
-    return openReceiveErrorResponse(error);
+    return checkoutErrorResponse(error);
   }
 }
 
@@ -137,11 +134,13 @@ export async function orderStatusResponse(request: Request): Promise<Response> {
       }
     });
   } catch (error) {
-    return openReceiveErrorResponse(error);
+    return checkoutErrorResponse(error);
   }
 }
 
-async function getOpenReceive(connectionString: string): Promise<OpenReceive> {
+async function getOpenReceive(
+  connectionString: string
+): Promise<Awaited<ReturnType<typeof createHelloFruitOpenReceive>>> {
   const storeCacheKey = currentStoreCacheKey();
   const cachedOpenReceive = openreceiveCache;
   if (cachedOpenReceive !== undefined) {
@@ -174,7 +173,7 @@ async function getOpenReceive(connectionString: string): Promise<OpenReceive> {
 
 export async function createHelloFruitOpenReceive(
   connectionString = readRequiredHelloFruitNwcConnectionString()
-): Promise<OpenReceive> {
+) {
   const store = await createHelloFruitOpenReceiveKvStore({
     demoId: DEMO_ID
   });
@@ -199,7 +198,7 @@ async function readJsonBody(request: Request): Promise<Record<string, unknown>> 
   if (text.length === 0) return {};
   const body = JSON.parse(text) as unknown;
   if (body === null || typeof body !== "object" || Array.isArray(body)) {
-    throw new OpenReceiveServiceError(400, {
+    throw createCheckoutHttpError(400, {
       code: "INVALID_REQUEST",
       message: "JSON request body must be an object."
     });
@@ -207,14 +206,39 @@ async function readJsonBody(request: Request): Promise<Record<string, unknown>> 
   return body as Record<string, unknown>;
 }
 
-function openReceiveErrorResponse(error: unknown): Response {
-  if (error instanceof HelloFruitDemoOrderError) {
-    return jsonResponse(error.body, error.status);
-  }
-  if (error instanceof OpenReceiveServiceError) {
+function checkoutErrorResponse(error: unknown): Response {
+  if (isCheckoutHttpError(error)) {
     return jsonResponse(error.body, error.status);
   }
   throw error;
+}
+
+function createCheckoutHttpError(
+  status: number,
+  body: Record<string, unknown>
+): Error & {
+  readonly status: number;
+  readonly body: Record<string, unknown>;
+} {
+  return Object.assign(new Error(String(body.message ?? "Checkout request failed.")), {
+    status,
+    body
+  });
+}
+
+function isCheckoutHttpError(error: unknown): error is {
+  readonly status: number;
+  readonly body: Record<string, unknown>;
+} {
+  if (typeof error !== "object" || error === null) return false;
+  const candidate = error as { readonly status?: unknown; readonly body?: unknown };
+  return Number.isInteger(candidate.status) &&
+    typeof candidate.status === "number" &&
+    candidate.status >= 400 &&
+    candidate.status <= 599 &&
+    typeof candidate.body === "object" &&
+    candidate.body !== null &&
+    !Array.isArray(candidate.body);
 }
 
 function currentStoreCacheKey(): string {

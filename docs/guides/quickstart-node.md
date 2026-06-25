@@ -73,10 +73,7 @@ and returns both order and display-safe invoice data:
 ```ts
 // server/index.ts
 import express from "express";
-import {
-  OpenReceiveServiceError,
-  createOpenReceive
-} from "@openreceive/node";
+import { createOpenReceive } from "@openreceive/node";
 
 const app = express();
 app.use(express.json());
@@ -100,7 +97,7 @@ app.post("/create_order", async (req, res, next) => {
 
     res.status(201).json({ order, invoice });
   } catch (error) {
-    sendOpenReceiveError(res, next, error);
+    sendCheckoutError(res, next, error);
   }
 });
 
@@ -117,16 +114,26 @@ app.post("/order_status", async (req, res, next) => {
         : "pending_payment"
     });
   } catch (error) {
-    sendOpenReceiveError(res, next, error);
+    sendCheckoutError(res, next, error);
   }
 });
 
-function sendOpenReceiveError(res, next, error) {
-  if (error instanceof OpenReceiveServiceError) {
+function sendCheckoutError(res, next, error) {
+  if (isCheckoutHttpError(error)) {
     res.status(error.status).json(error.body);
     return;
   }
   next(error);
+}
+
+function isCheckoutHttpError(error) {
+  return typeof error === "object" &&
+    error !== null &&
+    Number.isInteger(error.status) &&
+    error.status >= 400 &&
+    error.status <= 599 &&
+    typeof error.body === "object" &&
+    error.body !== null;
 }
 
 app.listen(3000);
@@ -148,10 +155,7 @@ order controller:
 
 ```ts
 // app/create_order/route.ts
-import {
-  OpenReceiveServiceError,
-  createOpenReceive
-} from "@openreceive/node";
+import { createOpenReceive } from "@openreceive/node";
 
 export const runtime = "nodejs";
 
@@ -179,11 +183,30 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
-    if (error instanceof OpenReceiveServiceError) {
-      return Response.json(error.body, { status: error.status });
-    }
+    const response = checkoutErrorResponse(error);
+    if (response !== undefined) return response;
     throw error;
   }
+}
+
+function checkoutErrorResponse(error: unknown): Response | undefined {
+  if (!isCheckoutHttpError(error)) return undefined;
+  return Response.json(error.body, { status: error.status });
+}
+
+function isCheckoutHttpError(error: unknown): error is {
+  readonly status: number;
+  readonly body: Record<string, unknown>;
+} {
+  if (typeof error !== "object" || error === null) return false;
+  const candidate = error as { readonly status?: unknown; readonly body?: unknown };
+  return Number.isInteger(candidate.status) &&
+    typeof candidate.status === "number" &&
+    candidate.status >= 400 &&
+    candidate.status <= 599 &&
+    typeof candidate.body === "object" &&
+    candidate.body !== null &&
+    !Array.isArray(candidate.body);
 }
 ```
 
@@ -205,10 +228,7 @@ app's order actions:
 ```ts
 // server/index.ts
 import Fastify from "fastify";
-import {
-  OpenReceiveServiceError,
-  createOpenReceive
-} from "@openreceive/node";
+import { createOpenReceive } from "@openreceive/node";
 
 const app = Fastify();
 
@@ -219,12 +239,22 @@ const openreceive = await createOpenReceive({
   },
 });
 
-function sendOpenReceiveError(reply, error) {
-  if (error instanceof OpenReceiveServiceError) {
+function sendCheckoutError(reply, error) {
+  if (isCheckoutHttpError(error)) {
     reply.code(error.status).send(error.body);
     return true;
   }
   return false;
+}
+
+function isCheckoutHttpError(error) {
+  return typeof error === "object" &&
+    error !== null &&
+    Number.isInteger(error.status) &&
+    error.status >= 400 &&
+    error.status <= 599 &&
+    typeof error.body === "object" &&
+    error.body !== null;
 }
 
 app.post("/create_order", async (request, reply) => {
@@ -238,7 +268,7 @@ app.post("/create_order", async (request, reply) => {
     });
     reply.code(201).send({ order, invoice });
   } catch (error) {
-    if (!sendOpenReceiveError(reply, error)) throw error;
+    if (!sendCheckoutError(reply, error)) throw error;
   }
 });
 
@@ -254,7 +284,7 @@ app.post("/order_status", async (request, reply) => {
         : "pending_payment"
     });
   } catch (error) {
-    if (!sendOpenReceiveError(reply, error)) throw error;
+    if (!sendCheckoutError(reply, error)) throw error;
   }
 });
 
@@ -362,6 +392,41 @@ npm install @openreceive/browser @openreceive/svelte
   snapshot={invoice}
   options={{ lookupUrl: "/order_status", onSettled: showThankYou }}
 />
+```
+
+## Angular
+
+```sh
+npm install @openreceive/browser @openreceive/angular @angular/core
+```
+
+Angular apps can use the package's standalone checkout component:
+
+```ts
+import { Component } from "@angular/core";
+import { CheckoutComponent } from "@openreceive/angular/checkout-component";
+import "@openreceive/angular/styles.css";
+
+@Component({
+  selector: "app-checkout",
+  standalone: true,
+  imports: [CheckoutComponent],
+  template: `
+    <openreceive-angular-checkout
+      [snapshot]="invoice"
+      [options]="{
+        lookupUrl: '/order_status',
+        onSettled: showThankYou
+      }"
+    />
+  `
+})
+export class AppCheckoutComponent {
+  invoice;
+  showThankYou = () => {
+    // UI hint only. Unlock from the server onPaid hook.
+  };
+}
 ```
 
 ## Optional Scheduler

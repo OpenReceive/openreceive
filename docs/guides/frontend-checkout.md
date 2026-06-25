@@ -190,13 +190,13 @@ from the same invoice object:
 
 ```ts
 import {
-  createOpenReceiveVueCheckoutShellBinding,
+  createOpenReceiveAngularCheckoutShellBinding,
   defineOpenReceiveElements
-} from "@openreceive/vue";
+} from "@openreceive/angular";
 
 defineOpenReceiveElements();
 
-const shell = createOpenReceiveVueCheckoutShellBinding(invoice, {
+const shell = createOpenReceiveAngularCheckoutShellBinding(invoice, {
   rootSelector: ".page",
   onSettled: () => showThankYou()
 });

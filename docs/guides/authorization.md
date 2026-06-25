@@ -7,10 +7,7 @@ OpenReceive supplies service methods you can call from those routes.
 
 ```ts
 import express from "express";
-import {
-  OpenReceiveServiceError,
-  createOpenReceive
-} from "@openreceive/node";
+import { createOpenReceive } from "@openreceive/node";
 
 const checkoutRoutes = express.Router();
 checkoutRoutes.use(express.json());
@@ -33,11 +30,7 @@ checkoutRoutes.post("/create_order", async (req, res, next) => {
     });
     res.status(201).json({ order, invoice });
   } catch (error) {
-    if (error instanceof OpenReceiveServiceError) {
-      res.status(error.status).json(error.body);
-      return;
-    }
-    next(error);
+    sendCheckoutError(res, next, error);
   }
 });
 
@@ -53,13 +46,27 @@ checkoutRoutes.post("/order_status", async (req, res, next) => {
         : "pending_payment"
     });
   } catch (error) {
-    if (error instanceof OpenReceiveServiceError) {
-      res.status(error.status).json(error.body);
-      return;
-    }
-    next(error);
+    sendCheckoutError(res, next, error);
   }
 });
+
+function sendCheckoutError(res, next, error) {
+  if (isCheckoutHttpError(error)) {
+    res.status(error.status).json(error.body);
+    return;
+  }
+  next(error);
+}
+
+function isCheckoutHttpError(error) {
+  return typeof error === "object" &&
+    error !== null &&
+    Number.isInteger(error.status) &&
+    error.status >= 400 &&
+    error.status <= 599 &&
+    typeof error.body === "object" &&
+    error.body !== null;
+}
 ```
 
 Mount `checkoutRoutes` wherever your app already mounts checkout controllers.
@@ -68,10 +75,7 @@ Mount `checkoutRoutes` wherever your app already mounts checkout controllers.
 
 ```ts
 // app/create_order/route.ts
-import {
-  OpenReceiveServiceError,
-  createOpenReceive
-} from "@openreceive/node";
+import { createOpenReceive } from "@openreceive/node";
 
 export const runtime = "nodejs";
 
@@ -97,11 +101,30 @@ export async function POST(request: Request) {
       status: 201
     });
   } catch (error) {
-    if (error instanceof OpenReceiveServiceError) {
-      return Response.json(error.body, { status: error.status });
-    }
+    const response = checkoutErrorResponse(error);
+    if (response !== undefined) return response;
     throw error;
   }
+}
+
+function checkoutErrorResponse(error: unknown): Response | undefined {
+  if (!isCheckoutHttpError(error)) return undefined;
+  return Response.json(error.body, { status: error.status });
+}
+
+function isCheckoutHttpError(error: unknown): error is {
+  readonly status: number;
+  readonly body: Record<string, unknown>;
+} {
+  if (typeof error !== "object" || error === null) return false;
+  const candidate = error as { readonly status?: unknown; readonly body?: unknown };
+  return Number.isInteger(candidate.status) &&
+    typeof candidate.status === "number" &&
+    candidate.status >= 400 &&
+    candidate.status <= 599 &&
+    typeof candidate.body === "object" &&
+    candidate.body !== null &&
+    !Array.isArray(candidate.body);
 }
 ```
 

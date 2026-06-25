@@ -12,6 +12,7 @@ const demoDeployValidator = path.join(process.cwd(), "tools/validate/check-demo-
 const demoDeploymentDocs = path.join(process.cwd(), "docs/internal/demo-deployment.md");
 const supportedDatabaseDocs = path.join(process.cwd(), "docs/guides/storage.md");
 const nodeQuickstartDocs = path.join(process.cwd(), "docs/guides/quickstart-node.md");
+const authorizationDocs = path.join(process.cwd(), "docs/guides/authorization.md");
 const invoiceStorageSchema = path.join(process.cwd(), "spec/schemas/invoice-storage.schema.json");
 const storageKvVectors = path.join(process.cwd(), "spec/test-vectors/storage-kv.json");
 const releaseReadinessValidator = path.join(process.cwd(), "tools/validate/check-release-readiness.mjs");
@@ -87,6 +88,27 @@ test("workspace metadata does not reference removed express or next packages", (
     const text = readFileSync(path.join(process.cwd(), relativePath), "utf8");
     assert.doesNotMatch(text, /@openreceive\/express|packages\/js\/express|@openreceive\/next|packages\/js\/next/, relativePath);
   }
+});
+
+test("public Node guides show app routes without OpenReceive error class imports", () => {
+  for (const filePath of [nodeQuickstartDocs, authorizationDocs]) {
+    const source = readFileSync(filePath, "utf8");
+    assert.doesNotMatch(source, /OpenReceiveServiceError/, filePath);
+    assert.match(source, /import \{ createOpenReceive \} from "@openreceive\/node";/, filePath);
+  }
+});
+
+test("Node quickstart covers all shipped frontend framework adapters", () => {
+  const source = readFileSync(nodeQuickstartDocs, "utf8");
+
+  for (const heading of ["## React", "## Vue", "## Svelte", "## Angular"]) {
+    assert.match(source, new RegExp(heading), `${heading}: quickstart section exists`);
+  }
+  assert.match(source, /@openreceive\/angular\/checkout-component/);
+  assert.doesNotMatch(
+    source.slice(source.indexOf("## Angular"), source.indexOf("## Optional Scheduler")),
+    /@openreceive\/vue|createOpenReceiveVue/
+  );
 });
 
 function runReleaseReadinessValidator() {

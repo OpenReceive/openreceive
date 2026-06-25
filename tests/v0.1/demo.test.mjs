@@ -915,6 +915,18 @@ test("Next.js demo owns merchant route handling and calls OpenReceive service me
   assert.doesNotMatch(source, /parseLastEventId/);
 });
 
+test("Hello Fruit demos keep app routes decoupled from OpenReceive error classes", () => {
+  for (const sourcePath of [
+    "examples/hello-fruit/server/node-express/src/server/create-server.ts",
+    "examples/hello-fruit/server/static-html-small-api/src/server/create-server.ts",
+    "examples/hello-fruit/server/nextjs-fullstack/src/server/openreceive.ts"
+  ]) {
+    const source = readFileSync(path.join(process.cwd(), sourcePath), "utf8");
+    assert.doesNotMatch(source, /OpenReceiveServiceError/, sourcePath);
+    assert.match(source, /createOpenReceive/, sourcePath);
+  }
+});
+
 test("Rails React skeleton is explicitly quarantined and does not claim active Rails demo identity", () => {
   const railsReactDir = path.join(
     process.cwd(),

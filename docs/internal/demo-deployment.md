@@ -63,9 +63,10 @@ API token only on the demo host, scoped narrowly enough for certificate
 challenges. Cloudflare Origin CA certificates are acceptable for proxied-only
 demo origins, but DNS-01 is the default renewal path.
 
-Bypass caching for invoice, lookup, refresh, and poll paths such as
-`/openreceive/*` and `/api/*`. Demo handlers should return `no-store` for
-checkout state, lookup, refresh, and poll responses.
+Bypass caching for app-owned checkout paths such as `/create_order` and
+`/order_status`, plus any lower-level invoice, refresh, or poll paths a demo
+deploys. Demo handlers should return `no-store` for checkout state, lookup,
+refresh, and poll responses.
 
 ## Private Runtime Files
 
