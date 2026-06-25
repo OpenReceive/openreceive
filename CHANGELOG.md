@@ -13,6 +13,9 @@
   metadata/smoke checks.
 - Added OpenAPI, AsyncAPI, generated contract constants, package artifact smoke,
   demo build, docs build, client-bundle secret scan, and live NWC smoke gates.
+- Prepared the frontend package family for public packaging with publishable
+  browser/provider-data/UI adapter manifests and declaration-emitting package
+  artifacts.
 - Added read-only GitHub workflow skeletons, disabled publish workflow, and
   workflow safety validation.
 - Added idempotency, settlement action, rate, provider-route, route-boundary,

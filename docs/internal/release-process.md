@@ -3,19 +3,20 @@
 OpenReceive starts with a small v0.1 release surface:
 
 - OpenReceive `0.1.0`
-- `@openreceive/core`
-- `@openreceive/node`
 - `@openreceive/browser`
 - `@openreceive/provider-data`
-- `@openreceive/testkit`
 - `@openreceive/elements`
 - `@openreceive/react`
 - `@openreceive/vue`
 - `@openreceive/svelte`
 - `@openreceive/angular`
 
-Packages remain private in this repository until publishing is explicitly
-approved.
+Frontend package manifests are public while server and test packages stay
+private. The public frontend package family is browser-only: it accepts
+display-safe checkout data, app-owned lookup and refresh URLs, and shared
+provider-data assets. The root workspace, `@openreceive/core`,
+`@openreceive/node`, and `@openreceive/testkit` stay private until their server
+release boundary is approved.
 
 ## Release Gate
 
@@ -28,6 +29,7 @@ npm run test:ci
 The release owner also checks:
 
 - Changelog updated.
+- Frontend package manifests are public while server and test packages stay private.
 - Package versions match the intended tag.
 - JSON schemas and test vectors pass.
 - OpenAPI and AsyncAPI validation passes through `npm run validate`.
@@ -81,6 +83,8 @@ avoid confusing SDK consumers.
 Release notes should name which demos were rebuilt, which package versions they
 run, and whether the live wallet smoke was skipped or paid manually.
 
-Do not publish new SDKs, framework adapters, React default UI, provider-data
-variants, or generated models unless the shared contract and conformance gate
-cover the behavior they expose.
+Do not publish package tarballs from automation until the disabled publish
+workflow is explicitly enabled by a maintainer. Do not expand new SDKs,
+framework adapters, React default UI, provider-data variants, or generated
+models unless the shared contract and conformance gate cover the behavior they
+expose.

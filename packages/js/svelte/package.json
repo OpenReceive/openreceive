@@ -1,7 +1,6 @@
 {
   "name": "@openreceive/svelte",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "dependencies": {
     "@openreceive/browser": "0.1.0",

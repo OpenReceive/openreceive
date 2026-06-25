@@ -133,6 +133,20 @@ assert(
 
 for (const item of checks) {
   const mod = await import(item.name);
+  const packagePath = \`node_modules/\${item.name}/package.json\`;
+  const manifest = JSON.parse(readFileSync(packagePath, "utf8"));
+  assert(
+    !JSON.stringify(manifest.exports).includes("./src/"),
+    \`\${item.name}: packed exports must not point at raw source files\`
+  );
+  assert(
+    JSON.stringify(manifest.exports).includes("./dist/"),
+    \`\${item.name}: packed exports must point at dist artifacts\`
+  );
+  assert(
+    typeof manifest.types === "string" && existsSync(\`node_modules/\${item.name}/\${manifest.types}\`),
+    \`\${item.name}: root TypeScript declaration must be packaged\`
+  );
   assert(
     Function("mod", \`return \${item.check};\`)(mod),
     \`\${item.name}: import check failed\`

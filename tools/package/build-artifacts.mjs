@@ -153,6 +153,9 @@ export function buildPackageArtifact(pkg, artifactRoot) {
   const manifest = {
     ...pkg.manifest,
     exports: rewriteExports(pkg.manifest.exports),
+    types: existsSync(path.join(sourceDir, "index.ts"))
+      ? "./dist/index.d.ts"
+      : pkg.manifest.types,
     files: pkg.manifest.bin === undefined
       ? ["dist", "README.md", "LICENSE"]
       : ["dist", "bin", "README.md", "LICENSE"]
@@ -185,6 +188,7 @@ export function buildPackageArtifact(pkg, artifactRoot) {
       copyFileSync(file, outputPath);
     }
   }
+  emitPackageDeclarations(pkg, sourceDir, distDir);
 
   return artifactDir;
 }
@@ -295,6 +299,58 @@ function transpileTypeScript(source, fileName) {
   }
 
   return result.outputText;
+}
+
+function emitPackageDeclarations(pkg, sourceDir, distDir) {
+  const sourceFiles = walkFiles(sourceDir)
+    .filter((file) => file.endsWith(".ts") && !file.endsWith(".d.ts"));
+  if (sourceFiles.length === 0) return;
+
+  const options = {
+    allowImportingTsExtensions: true,
+    declaration: true,
+    emitDeclarationOnly: true,
+    jsx: ts.JsxEmit.ReactJSX,
+    lib: ["lib.es2022.d.ts", "lib.dom.d.ts"],
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    outDir: distDir,
+    resolveJsonModule: true,
+    rootDir: sourceDir,
+    skipLibCheck: true,
+    strict: true,
+    target: ts.ScriptTarget.ES2022,
+    types: ["node"]
+  };
+  const host = ts.createCompilerHost(options);
+  const program = ts.createProgram(sourceFiles, options, host);
+  const result = program.emit();
+  const diagnostics = ts.getPreEmitDiagnostics(program).concat(result.diagnostics);
+  const errors = diagnostics.filter(
+    (diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error
+  );
+  if (errors.length > 0) {
+    const formatted = ts.formatDiagnosticsWithColorAndContext(errors, {
+      getCanonicalFileName: (file) => file,
+      getCurrentDirectory: () => process.cwd(),
+      getNewLine: () => "\n"
+    });
+    throw new Error(`${pkg.manifest.name}: declaration emit failed\n${formatted}`);
+  }
+
+  for (const declaration of walkFiles(distDir).filter((file) => file.endsWith(".d.ts"))) {
+    writeFileSync(
+      declaration,
+      rewriteDeclarationImports(readFileSync(declaration, "utf8"))
+    );
+  }
+}
+
+function rewriteDeclarationImports(source) {
+  return source.replace(
+    /(["'])(\.{1,2}\/[^"']+)\.ts\1/g,
+    "$1$2.js$1"
+  );
 }
 
 // Node 20.0 and current Node parse different static JSON import syntaxes.

@@ -48,6 +48,15 @@ const packages = workspacePackages();
 const changelog = read("CHANGELOG.md");
 const releaseDocsPath = "docs/internal/release-process.md";
 const releaseDocs = read(releaseDocsPath);
+const publicFrontendPackages = new Set([
+  "@openreceive/angular",
+  "@openreceive/browser",
+  "@openreceive/elements",
+  "@openreceive/provider-data",
+  "@openreceive/react",
+  "@openreceive/svelte",
+  "@openreceive/vue"
+]);
 
 expect(rootPackage.name === "openreceive", "package.json: root package name must be openreceive");
 expect(rootPackage.version === "0.1.0", "package.json: root version must be 0.1.0");
@@ -59,7 +68,11 @@ expect(rootPackage.scripts?.["test:package-smoke"], "package.json: release gate 
 
 for (const { relativePath, manifest } of packages) {
   expect(manifest.version === "0.1.0", `${relativePath}: package version must be 0.1.0`);
-  expect(manifest.private === true, `${relativePath}: package must stay private before explicit publishing approval`);
+  if (publicFrontendPackages.has(manifest.name)) {
+    expect(manifest.private !== true, `${relativePath}: public frontend package must not be private`);
+  } else {
+    expect(manifest.private === true, `${relativePath}: non-frontend package must stay private`);
+  }
   expect(typeof manifest.exports?.["."] === "string", `${relativePath}: package must expose a root export`);
 }
 
@@ -83,6 +96,7 @@ for (const { manifest } of packages) {
 for (const phrase of [
   "npm run test:ci",
   "Changelog updated.",
+  "Frontend package manifests are public while server and test packages stay private.",
   "Package versions match the intended tag.",
   "Workflow safety validation passes through `npm run check:workflows`.",
   "Package artifact dry run passes through `npm run build:packages`.",
