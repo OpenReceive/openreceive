@@ -120,8 +120,8 @@ function validateDockerfile(demo) {
 
   forbidSecrets(relativePath, text);
   expect(/^FROM node:20-bookworm-slim$/m.test(text), `${relativePath}: must use the pinned Node 20 slim base image`);
-  expect(text.includes("apt-get install -y --no-install-recommends node-sqlite3"), `${relativePath}: must install the Node 20 SQLite binding`);
-  expect(text.includes("ln -s \"$SQLITE3_NODE_DIR\" ./node_modules/sqlite3"), `${relativePath}: must expose Debian node-sqlite3 to Node module resolution`);
+  expect(text.includes("apt-get install -y --no-install-recommends g++ libsqlite3-dev make python3 sqlite3"), `${relativePath}: must install SQLite native build/runtime packages`);
+  expect(text.includes("npm install sqlite3@5.1.7 --no-save --no-audit"), `${relativePath}: must install the Node 20 sqlite3 driver in the image`);
   expect(text.includes("COPY package.json package-lock.json ./"), `${relativePath}: must copy root package manifests`);
   expect(text.includes("COPY packages ./packages"), `${relativePath}: must copy local packages`);
   expect(text.includes("COPY spec/data/rates ./spec/data/rates"), `${relativePath}: must copy shared price-source data`);

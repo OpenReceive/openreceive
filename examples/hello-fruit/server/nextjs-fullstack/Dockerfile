@@ -5,7 +5,7 @@ FROM node:20-bookworm-slim
 WORKDIR /app
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends node-sqlite3 \
+  && apt-get install -y --no-install-recommends g++ libsqlite3-dev make python3 sqlite3 \
   && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
@@ -23,9 +23,7 @@ COPY examples/hello-fruit/server/nextjs-fullstack/package.json ./examples/hello-
 COPY examples/hello-fruit/server/node-express/package.json ./examples/hello-fruit/server/node-express/package.json
 COPY examples/hello-fruit/server/static-html-small-api/package.json ./examples/hello-fruit/server/static-html-small-api/package.json
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit
-RUN SQLITE3_NODE_DIR="$(find /usr/lib -path '*/nodejs/sqlite3' -type d | head -n 1)" \
-  && test -n "$SQLITE3_NODE_DIR" \
-  && ln -s "$SQLITE3_NODE_DIR" ./node_modules/sqlite3
+RUN --mount=type=cache,target=/root/.npm npm install sqlite3@5.1.7 --no-save --no-audit
 
 COPY packages ./packages
 COPY spec/data/rates ./spec/data/rates
