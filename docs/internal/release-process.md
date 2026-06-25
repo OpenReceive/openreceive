@@ -20,7 +20,23 @@ release boundary is approved.
 
 ## Release Gate
 
-Before tagging a release:
+Use the release helper for repeatable npm releases:
+
+```sh
+npm run release:plan -- --version patch
+npm run release:prepare -- --version 0.1.1
+npm run release:publish -- --tag latest
+```
+
+`release:plan` is read-only. `release:prepare` updates workspace package
+versions, internal `@openreceive/*` dependency versions, the package lock,
+changelog heading, and current release tags in this document. `release:publish`
+runs the local release gate, builds exact tarballs under
+`.release/npm/<version>/tarballs`, checks the target versions are not already on
+npm, and publishes only the public frontend package family. Pass
+`--otp <code>` when npm requires a one-time password.
+
+Before tagging or publishing a release:
 
 ```sh
 npm run test:ci
@@ -39,6 +55,18 @@ The release owner also checks:
 - Local package artifact smoke passes.
 - Demo build passes.
 - Live wallet smoke passes when a trusted `OPENRECEIVE_NWC` is available.
+
+For a prepare preview without editing files:
+
+```sh
+npm run release:prepare -- --version 0.1.1 --dry-run
+```
+
+For a publish rehearsal that builds exact tarballs but asks npm not to publish:
+
+```sh
+npm run release:publish -- --tag latest --dry-run
+```
 
 ## GitHub Workflows
 

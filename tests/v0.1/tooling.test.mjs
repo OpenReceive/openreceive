@@ -16,6 +16,7 @@ const authorizationDocs = path.join(process.cwd(), "docs/guides/authorization.md
 const invoiceStorageSchema = path.join(process.cwd(), "spec/schemas/invoice-storage.schema.json");
 const storageKvVectors = path.join(process.cwd(), "spec/test-vectors/storage-kv.json");
 const releaseReadinessValidator = path.join(process.cwd(), "tools/validate/check-release-readiness.mjs");
+const npmReleaseHelper = path.join(process.cwd(), "tools/release/npm-release.mjs");
 const workflowValidator = path.join(process.cwd(), "tools/validate/check-workflows.mjs");
 const liveNwcSmoke = path.join(process.cwd(), "tools/live-nwc-test/index.mjs");
 const rubyLiveNwcSmoke = path.join(process.cwd(), "tools/live-nwc-test/ruby-smoke.rb");
@@ -123,6 +124,11 @@ function runReleaseReadinessValidator() {
   });
 }
 
+function nextPatchVersion(version) {
+  const [major, minor, patch] = version.split(".").map((part) => Number(part));
+  return `${major}.${minor}.${patch + 1}`;
+}
+
 function runWorkflowValidator() {
   return execFileSync(process.execPath, [workflowValidator], {
     cwd: process.cwd(),
@@ -190,6 +196,40 @@ test("demo deployment docs preserve public edge and runner boundaries", () => {
 
 test("release readiness validator accepts current v0.1 metadata", () => {
   assert.match(runReleaseReadinessValidator(), /Release readiness validation passed for 10 package\(s\)\./);
+});
+
+test("npm release helper plans a patch release without editing files", () => {
+  const currentVersion = JSON.parse(readFileSync(path.join(process.cwd(), "package.json"), "utf8")).version;
+  const nextVersion = nextPatchVersion(currentVersion);
+  const output = execFileSync(process.execPath, [npmReleaseHelper, "plan", "--version", "patch"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+
+  assert.match(output, new RegExp(`OpenReceive npm release plan: ${currentVersion.replace(/\./g, "\\.")} -> ${nextVersion.replace(/\./g, "\\.")}`));
+  assert.match(output, new RegExp(`@openreceive/provider-data@${nextVersion.replace(/\./g, "\\.")}`));
+  assert.match(output, new RegExp(`npm run release:prepare -- --version ${nextVersion.replace(/\./g, "\\.")}`));
+  assert.match(output, /npm run release:publish -- --tag latest/);
+});
+
+test("npm release helper prepare dry-run lists versioned files", () => {
+  const currentVersion = JSON.parse(readFileSync(path.join(process.cwd(), "package.json"), "utf8")).version;
+  const nextVersion = nextPatchVersion(currentVersion);
+  const output = execFileSync(
+    process.execPath,
+    [npmReleaseHelper, "prepare", "--version", nextVersion, "--dry-run"],
+    {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"]
+    }
+  );
+
+  assert.match(output, new RegExp(`Would prepare OpenReceive npm release: ${currentVersion.replace(/\./g, "\\.")} -> ${nextVersion.replace(/\./g, "\\.")}`));
+  assert.match(output, /package\.json/);
+  assert.match(output, /packages\/js\/provider-data\/package\.json/);
+  assert.match(output, /package-lock\.json/);
 });
 
 test("workflow validator accepts safe public workflow skeletons", () => {

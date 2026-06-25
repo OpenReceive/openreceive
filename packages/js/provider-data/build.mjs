@@ -9,7 +9,7 @@ import ts from "typescript";
 const packageRoot = fileURLToPath(new URL(".", import.meta.url));
 const sourceDir = path.join(packageRoot, "src");
 const distDir = path.join(packageRoot, "dist");
-const entrypoints = ["index.ts", "provider-icons.ts"];
+const entrypoints = ["index.ts", "provider-icons.ts", "pay-tutorials.ts"];
 
 rmSync(distDir, { recursive: true, force: true });
 mkdirSync(distDir, { recursive: true });
@@ -87,6 +87,10 @@ function copyStaticAssets() {
     path.join(sourceDir, "assets", "provider-icons"),
     path.join(distDir, "assets", "provider-icons")
   );
+  copyDirectory(
+    path.join(sourceDir, "assets", "pay_tutorials"),
+    path.join(distDir, "assets", "pay_tutorials")
+  );
 }
 
 function copyDirectory(source, destination) {
@@ -117,7 +121,7 @@ function inlineJsonImportAttributes(source, fileName) {
 
 function rewriteCommonJsOutput(source, relativePath) {
   let output = source.replace(/require\("(\.\/[^"]+)\.js"\)/g, 'require("$1.cjs")');
-  if (relativePath === "provider-icons.ts") {
+  if (relativePath === "provider-icons.ts" || relativePath === "pay-tutorials.ts") {
     output = [
       'const { pathToFileURL } = require("node:url");',
       output.replace(/import\.meta\.url/g, "pathToFileURL(__filename).href")

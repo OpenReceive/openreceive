@@ -28,7 +28,8 @@
       "require": "./dist/index.cjs"
     },
     "./registry.json": "./dist/openreceive-providers.v4.json",
-    "./assets/provider-icons/*": "./dist/assets/provider-icons/*"
+    "./assets/provider-icons/*": "./dist/assets/provider-icons/*",
+    "./assets/pay_tutorials/*": "./dist/assets/pay_tutorials/*"
   },
   "files": [
     "dist",

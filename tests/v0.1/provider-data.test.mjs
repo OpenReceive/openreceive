@@ -24,7 +24,9 @@ import {
   listFiatRailCountries,
   listFiatRails,
   listProviders,
+  openReceivePayTutorialUrls,
   openReceiveProviderIconUrls,
+  providerTutorialUrl,
   providerIconUrl,
   providerRegistry,
   validateRegistry
@@ -73,6 +75,15 @@ test("provider-data resolves bundled provider icon URLs", () => {
 
   assert.equal(openReceiveProviderIconUrls[strike.icon_path], providerIconUrl(strike));
   assert.equal(providerIconUrl(strike).endsWith("/assets/provider-icons/strike.png"), true);
+});
+
+test("provider-data resolves bundled provider tutorial URLs", () => {
+  const coinbaseTutorial = providerRegistry.providers.coinbase.tutorials[0];
+  const krakenTutorial = providerRegistry.providers.kraken.tutorials[3];
+
+  assert.equal(openReceivePayTutorialUrls[coinbaseTutorial.path], providerTutorialUrl(coinbaseTutorial));
+  assert.equal(providerTutorialUrl(coinbaseTutorial).endsWith("/assets/pay_tutorials/coinbase-1.webp"), true);
+  assert.equal(providerTutorialUrl(krakenTutorial).endsWith("/assets/pay_tutorials/kraken-4.webp"), true);
 });
 
 test("provider-data resolves crypto route providers without changing route order", () => {

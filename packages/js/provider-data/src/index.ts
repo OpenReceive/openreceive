@@ -1,6 +1,8 @@
 import providerRegistryJson from "./data/openreceive-providers.v4.json" with { type: "json" };
+import { openReceivePayTutorialUrls } from "./pay-tutorials.ts";
 import { openReceiveProviderIconUrls } from "./provider-icons.ts";
 
+export { openReceivePayTutorialUrls };
 export { openReceiveProviderIconUrls };
 
 export type CountryCoverage = "deep" | "thin" | "sparse";
@@ -216,6 +218,12 @@ export function providerIconUrl(provider: Pick<Provider, "icon_path">): string {
 }
 
 export const getProviderIconUrl = providerIconUrl;
+
+export function providerTutorialUrl(tutorial: Pick<ProviderTutorial, "path">): string {
+  return openReceivePayTutorialUrls[tutorial.path] ?? tutorial.path;
+}
+
+export const getProviderTutorialUrl = providerTutorialUrl;
 
 export function listAssets(): readonly AssetIndexEntry[] {
   return registry.assets_index;

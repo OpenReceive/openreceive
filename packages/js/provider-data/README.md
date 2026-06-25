@@ -49,3 +49,9 @@ const registry = require("@openreceive/provider-data/registry.json");
 Provider entries keep repo-local `icon_path` values such as `assets/provider-icons/strike.png`. Use `providerIconUrl(provider)` or `getProviderIconUrl(provider)` to resolve those paths to bundled package asset URLs.
 
 The raw files are also exported under `@openreceive/provider-data/assets/provider-icons/*` for consumers that want to copy or self-host them.
+
+## Provider Tutorials
+
+Some provider entries include ordered walkthrough screenshots under `tutorials`. Use `providerTutorialUrl(tutorial)` or `getProviderTutorialUrl(tutorial)` to resolve paths such as `assets/pay_tutorials/coinbase-1.webp` to bundled package asset URLs.
+
+The raw walkthrough images are also exported under `@openreceive/provider-data/assets/pay_tutorials/*`.

@@ -3,6 +3,7 @@ import {
   getCountries,
   getCountryRoutes,
   getPaymentWizardRoutes,
+  openReceivePayTutorialUrls,
   openReceiveProviderIconUrls,
   type AssetIndexEntry,
   type Country,
@@ -11,7 +12,6 @@ import {
   type Provider,
   type ResolvedProviderRef
 } from "@openreceive/provider-data";
-import { openReceivePayTutorialUrls } from "./pay-tutorials.ts";
 import { status as deriveStatus } from "./status.ts";
 export { status, type Status, type StatusInvoiceLike } from "./status.ts";
 

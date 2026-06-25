@@ -36,7 +36,7 @@ const importChecks = {
   "@openreceive/core": "typeof mod.createIdempotencyRequestHash === 'function'",
   "@openreceive/elements": "typeof mod.renderCheckoutHtml === 'function' && typeof mod.renderOpenReceiveThemeToggleHtml === 'function' && mod.OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME === 'openreceive-theme-toggle'",
   "@openreceive/node": "typeof mod.createOpenReceive === 'function' && typeof mod.OpenReceiveServiceError === 'function' && typeof mod.createNwcReceiveClient === 'function' && mod.mountExpressRoutes === undefined && mod.createFetchHandler === undefined && mod.createNodeHandler === undefined && mod.createNodeHandlers === undefined && mod.createNodeRuntime === undefined && typeof mod.createOpenReceivePostgresInvoiceStore === 'function' && typeof mod.createOpenReceivePostgresInvoiceStoreFromPool === 'function' && typeof mod.createOpenReceiveSqliteInvoiceStore === 'function' && mod.OPENRECEIVE_DATABASE_SCHEMA_VERSION === 'v0.1' && typeof mod.OPENRECEIVE_SQLITE_MIGRATION_SQL === 'string' && mod.runOpenReceiveCli === undefined",
-  "@openreceive/provider-data": "typeof mod.getProviderRegistryMetadata === 'function' && typeof mod.providerIconUrl === 'function' && mod.providerIconUrl(mod.providerRegistry.providers.strike).includes('assets/provider-icons/strike.png')",
+  "@openreceive/provider-data": "typeof mod.getProviderRegistryMetadata === 'function' && typeof mod.providerIconUrl === 'function' && typeof mod.providerTutorialUrl === 'function' && mod.providerIconUrl(mod.providerRegistry.providers.strike).includes('assets/provider-icons/strike.png') && mod.providerTutorialUrl(mod.providerRegistry.providers.kraken.tutorials[3]).includes('assets/pay_tutorials/kraken-4.webp')",
   "@openreceive/react": "typeof mod.createCheckoutViewModel === 'function' && typeof mod.ThemeScope === 'function' && typeof mod.ThemeToggle === 'function' && typeof mod.PaymentWizard === 'function' && typeof mod.WaitingState === 'function' && typeof mod.useTheme === 'function' && typeof mod.CheckoutProvider === 'function' && typeof mod.useCheckoutContext === 'function' && mod.OpenReceiveThemeToggle === undefined && mod.OpenReceivePaymentWizard === undefined && mod.OpenReceiveWaitingState === undefined && mod.useOpenReceiveTheme === undefined",
   "@openreceive/svelte": "typeof mod.createOpenReceiveSvelteCheckoutBinding === 'function' && typeof mod.createOpenReceiveSvelteCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveSvelteCheckoutComponentModel === 'function' && typeof mod.createOpenReceiveSvelteCheckoutController === 'function' && typeof mod.createOpenReceiveSvelteThemeBinding === 'function' && typeof mod.createOpenReceiveSvelteStoredThemeBinding === 'function' && typeof mod.createOpenReceiveSvelteThemeToggleBinding === 'function' && typeof mod.createCheckoutElement === 'function' && typeof mod.createOpenReceiveThemeToggleElement === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.syncOpenReceiveStoredThemeControls === 'function' && typeof mod.applyCheckoutThemeAttributes === 'function'",
   "@openreceive/testkit": "typeof mod.createTestkitReceiveClient === 'function'",
@@ -186,6 +186,14 @@ assert(
   "@openreceive/provider-data: provider icon assets must be packaged"
 );
 assert(
+  existsSync("node_modules/@openreceive/provider-data/dist/assets/pay_tutorials/coinbase-1.webp"),
+  "@openreceive/provider-data: provider tutorial assets must be packaged"
+);
+assert(
+  existsSync("node_modules/@openreceive/provider-data/dist/assets/pay_tutorials/kraken-4.webp"),
+  "@openreceive/provider-data: provider tutorial assets must be packaged"
+);
+assert(
   existsSync("node_modules/@openreceive/provider-data/dist/openreceive-providers.v4.json"),
   "@openreceive/provider-data: raw registry JSON must be packaged"
 );
@@ -201,6 +209,11 @@ assert.equal(
   providerDataCjs.providerIconUrl(providerDataCjs.providerRegistry.providers.strike).includes("assets/provider-icons/strike.png"),
   true,
   "@openreceive/provider-data: CommonJS icon helper must resolve bundled asset URLs"
+);
+assert.equal(
+  providerDataCjs.providerTutorialUrl(providerDataCjs.providerRegistry.providers.kraken.tutorials[3]).includes("assets/pay_tutorials/kraken-4.webp"),
+  true,
+  "@openreceive/provider-data: CommonJS tutorial helper must resolve bundled asset URLs"
 );
 assert(
   existsSync("node_modules/@openreceive/vue/dist/Checkout.vue"),

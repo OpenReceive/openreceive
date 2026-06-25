@@ -46,6 +46,7 @@ dist/
 .vite/
 .next/
 .cache/
+.release/
 *.tsbuildinfo
 tmp/*
 .DS_Store
