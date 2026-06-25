@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS openreceive_invoices (
   invoice_id TEXT PRIMARY KEY,
-  merchant_scope TEXT NOT NULL,
+  namespace TEXT NOT NULL,
   operation TEXT NOT NULL,
   idempotency_key TEXT NOT NULL,
   idempotency_request_hash TEXT NOT NULL,
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS openreceive_invoices (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS openreceive_invoices_idempotency_scope_idx
-  ON openreceive_invoices (merchant_scope, operation, idempotency_key);
+  ON openreceive_invoices (namespace, operation, idempotency_key);
 
 CREATE INDEX IF NOT EXISTS openreceive_invoices_recovery_idx
   ON openreceive_invoices (workflow_state, transaction_state, expires_at);

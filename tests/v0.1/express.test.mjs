@@ -1099,7 +1099,7 @@ test("Express refuses in-memory invoice storage in production mode", async () =>
 function seedInvoice(store, overrides = {}) {
   const row = {
     invoice_id: "or_inv_seed",
-    merchant_scope: "demo:hello-fruit",
+    namespace: "demo:hello-fruit",
     operation: "invoice.create",
     idempotency_key: "seed",
     idempotency_request_hash: `sha256:${"0".repeat(64)}`,

@@ -21,18 +21,8 @@ OpenReceive::Rails.configure do |config|
   )
 
   config.store = OpenReceive::Rails.resolve_invoice_store
-  config.merchant_scope = Rails.application.class.module_parent_name.underscore
+  config.namespace = Rails.application.class.module_parent_name.underscore
   config.production = Rails.env.production?
-  config.authenticate = lambda do |controller|
-    if controller.respond_to?(:authenticate_user!)
-      controller.authenticate_user!
-    elsif Rails.env.production?
-      raise SecurityError, "Configure OpenReceive authentication before production."
-    else
-      true
-    end
-  end
-  config.authorize_invoice = ->(_controller, _invoice) { true }
   config.metadata = ->(_controller, _params) { {} }
   config.settlement_action = lambda do |_invoice|
     # Unlock the app-owned order, account, or entitlement here.

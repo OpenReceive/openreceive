@@ -50,16 +50,6 @@ class FakeDurableInvoiceStore
     @inner = OpenReceive::InMemoryInvoiceKvStore.new
   end
 
-  def doctor
-    [
-      {
-        "name" => "rails.store.owned",
-        "status" => "ok",
-        "message" => "fake durable store present"
-      }
-    ]
-  end
-
   OpenReceive::Rails::Adapter::STORE_METHODS.each do |method|
     define_method(method) do |*args, **kwargs|
       @inner.public_send(method, *args, **kwargs)
@@ -75,12 +65,8 @@ class OpenReceiveRailsTest < Minitest::Test
     config = OpenReceive::Rails::Configuration.new
     config.client = client
     config.store = store unless store.nil?
-    config.merchant_scope = "rails:test"
+    config.namespace = "rails:test"
     config.production = false
-    config.authenticate = ->(controller) { raise "missing user" if controller.current_user_id.nil? }
-    config.authorize_invoice = lambda do |controller, invoice|
-      invoice.fetch("metadata").fetch("user_id") == controller.current_user_id
-    end
     config.metadata = ->(controller, params) { { "user_id" => controller.current_user_id, "fruit" => params["fruit"] } }
     config.settlement_action = ->(invoice) { completed << invoice.fetch("invoice_id") }
     [OpenReceive::Rails::Adapter.new(config), client, completed]
@@ -151,8 +137,6 @@ class OpenReceiveRailsTest < Minitest::Test
       assert_equal 201, first.fetch("status")
       assert_equal 200, second.fetch("status")
       assert_equal first.fetch("body"), second.fetch("body")
-      checks = adapter.doctor.fetch("checks")
-      assert checks.any? { |check| check.fetch("name") == "rails.store.owned" && check.fetch("status") == "ok" }
       assert File.exist?(File.join(dir, "openreceive.sqlite3"))
     end
   end
@@ -194,9 +178,9 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_includes routes, "get \"/openreceive/v1/invoices/:invoice_id\""
     assert_includes routes, "post \"/openreceive/v1/poll\""
     assert_includes rake_tasks, "task poll: :environment"
-    assert_includes rake_tasks, "task doctor: :environment"
-    assert_includes rake_tasks, "OpenReceive::Rails.adapter.doctor"
     assert_includes rake_tasks, "poll_recoverable_invoices"
+    refute_includes rake_tasks, "task doctor"
+    refute_includes rake_tasks, "OpenReceive::Rails.adapter.doctor"
     refute_includes rake_tasks, "task listen"
     assert_includes initializer, 'ENV.fetch("OPENRECEIVE_NWC"'
     assert_includes initializer, "OpenReceive.missing_nwc_message"
@@ -205,7 +189,8 @@ class OpenReceiveRailsTest < Minitest::Test
     refute_includes initializer, "OpenReceive::UnavailableReceiveClient"
     assert_includes initializer, "NwcRuby::Client.from_uri"
     assert_includes initializer, "OpenReceive::Rails.resolve_invoice_store"
-    assert_includes initializer, "Configure OpenReceive authentication before production"
+    refute_includes initializer, "config.authenticate"
+    refute_includes initializer, "config.authorize_invoice"
     refute_includes combined, "pay_invoice"
     refute_includes combined, "nostr+walletconnect://"
     refute_includes initializer, "nostr+walletconnect://"
@@ -276,61 +261,22 @@ class OpenReceiveRailsTest < Minitest::Test
     refute_includes source, "nostr+walletconnect://"
   end
 
-  def test_production_configuration_fails_closed_without_authenticate
+  def test_production_configuration_leaves_route_protection_to_host_app
     config = OpenReceive::Rails::Configuration.new
     config.client = FakeReceiveClient.new
+    config.store = FakeDurableInvoiceStore.new
     config.production = true
 
-    assert_raises(SecurityError) { OpenReceive::Rails::Adapter.new(config) }
+    assert_instance_of OpenReceive::Rails::Adapter, OpenReceive::Rails::Adapter.new(config)
   end
 
   def test_production_configuration_fails_closed_with_in_memory_storage
     config = OpenReceive::Rails::Configuration.new
     config.client = FakeReceiveClient.new
     config.production = true
-    config.authenticate = ->(_controller) { true }
 
     error = assert_raises(SecurityError) { OpenReceive::Rails::Adapter.new(config) }
     assert_includes error.message, "durable invoice storage"
-  end
-
-  def test_doctor_reports_store_nwc_and_poll_readiness
-    adapter = build_adapter(store: FakeDurableInvoiceStore.new).first
-    result = adapter.doctor
-
-    assert_equal true, result.fetch("ok")
-    checks = result.fetch("checks")
-    assert checks.any? { |check| check.fetch("name") == "rails.store" && check.fetch("status") == "ok" }
-    assert checks.any? { |check| check.fetch("name") == "rails.store.owned" && check.fetch("status") == "ok" }
-    assert checks.any? { |check| check.fetch("name") == "rails.nwc" && check.fetch("status") == "ok" }
-    assert checks.any? { |check| check.fetch("name") == "rails.poll" && check.fetch("status") == "ok" }
-    refute_includes result.to_s, "nostr+walletconnect://"
-  end
-
-  def test_doctor_fails_with_in_memory_storage
-    adapter = build_adapter.first
-    result = adapter.doctor
-
-    assert_equal false, result.fetch("ok")
-    checks = result.fetch("checks")
-    assert checks.any? { |check| check.fetch("name") == "rails.store.durable" && check.fetch("status") == "error" }
-    assert_includes result.to_s, "InMemoryInvoiceKvStore is for tests only"
-  end
-
-  def test_doctor_redacts_nwc_secrets_from_preflight_errors
-    leaky_uri = "nostr+walletconnect://#{"c" * 64}?relay=wss%3A%2F%2Frelay.example.com&secret=#{"d" * 64}"
-    client = FakeReceiveClient.new
-    client.define_singleton_method(:preflight) do
-      raise "wallet rejected #{leaky_uri}"
-    end
-
-    adapter = build_adapter(client: client, store: FakeDurableInvoiceStore.new).first
-    result = adapter.doctor
-
-    assert_equal false, result.fetch("ok")
-    assert_includes result.to_s, "[REDACTED_NWC]"
-    refute_includes result.to_s, "nostr+walletconnect://"
-    refute_includes result.to_s, "secret=#{"d" * 64}"
   end
 
   def test_create_invoice_is_idempotent_and_receive_only
@@ -473,7 +419,7 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_equal [invoice_id], completed
   end
 
-  def test_lookup_denies_cross_user_invoice_access
+  def test_lookup_leaves_access_checks_to_host_controller
     adapter = build_adapter.first
     created = adapter.create_invoice(
       controller: Controller.new(7),
@@ -481,11 +427,12 @@ class OpenReceiveRailsTest < Minitest::Test
       headers: { "idempotency-key" => "order-123" }
     )
 
-    assert_raises(SecurityError) do
-      adapter.lookup_invoice(
-        controller: Controller.new(8),
-        invoice_id: created.fetch("body").fetch("invoice_id")
-      )
-    end
+    result = adapter.lookup_invoice(
+      controller: Controller.new(8),
+      invoice_id: created.fetch("body").fetch("invoice_id")
+    )
+
+    assert_equal 200, result.fetch("status")
+    assert_equal created.fetch("body").fetch("invoice_id"), result.fetch("body").fetch("invoice_id")
   end
 end

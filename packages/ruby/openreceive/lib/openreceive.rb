@@ -399,9 +399,9 @@ module OpenReceive
   module Idempotency
     module_function
 
-    def scope_key(merchant_scope:, operation:, idempotency_key:)
+    def scope_key(namespace:, operation:, idempotency_key:)
       [
-        encode_scope_segment(merchant_scope),
+        encode_scope_segment(namespace),
         encode_scope_segment(operation),
         encode_scope_segment(idempotency_key)
       ].join(":")
@@ -606,7 +606,7 @@ module OpenReceive
     def scope_key(scope)
       data = stringify_keys(scope)
       Idempotency.scope_key(
-        merchant_scope: data.fetch("merchant_scope"),
+        namespace: data.fetch("namespace"),
         operation: data.fetch("operation"),
         idempotency_key: data.fetch("idempotency_key")
       )
@@ -632,7 +632,7 @@ module OpenReceive
         idempotency_request_hash
         payment_hash
         invoice
-        merchant_scope
+        namespace
         operation
         idempotency_key
       ].each { |key| assert_non_empty_string(row.fetch(key), key) }
@@ -763,9 +763,9 @@ module OpenReceive
     Polling.schedule(created_at: created_at, expires_at: expires_at, now: now)
   end
 
-  def idempotency_scope_key(merchant_scope:, operation:, idempotency_key:)
+  def idempotency_scope_key(namespace:, operation:, idempotency_key:)
     Idempotency.scope_key(
-      merchant_scope: merchant_scope,
+      namespace: namespace,
       operation: operation,
       idempotency_key: idempotency_key
     )

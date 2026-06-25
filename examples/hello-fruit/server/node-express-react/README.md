@@ -57,4 +57,4 @@ Hosted-demo helpers expose `/healthz`, `/source`, `/docs`, `/robots.txt`, and
 This demo is a public guest checkout. Production apps that require signed-in or
 session-bound checkout should mount OpenReceive routes behind their normal app
 middleware;
-see [Deployment And Recovery](../../../../docs/guides/deployment-and-recovery.md).
+see [Optional Scheduler](../../../../docs/guides/optional-scheduler.md).

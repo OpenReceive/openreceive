@@ -361,10 +361,10 @@ sqliteTest("Node SQLite KV store owns records, indexes, revisions, and meta CAS"
     assert.equal(terminal.status, "ok");
     assert.deepEqual(await store.listOpen({ now: 1202, limit: 10 }), []);
 
-    const meta = await store.casMeta("doctor", "one", null);
+    const meta = await store.casMeta("schema_probe", "one", null);
     assert.equal(meta.status, "ok");
-    assert.equal((await store.casMeta("doctor", "two", meta.row.rev)).status, "ok");
-    assert.equal((await store.casMeta("doctor", "stale", meta.row.rev)).status, "conflict");
+    assert.equal((await store.casMeta("schema_probe", "two", meta.row.rev)).status, "ok");
+    assert.equal((await store.casMeta("schema_probe", "stale", meta.row.rev)).status, "conflict");
   } finally {
     database.close();
   }
@@ -590,7 +590,7 @@ function invoiceRecord(overrides = {}) {
     rev: 0,
     row: {
       invoice_id: "or_inv_node_sqlite",
-      merchant_scope: "node:test",
+      namespace: "node:test",
       operation: "invoice.create",
       idempotency_key: "order-sqlite",
       idempotency_request_hash: `sha256:${"b".repeat(64)}`,

@@ -14,7 +14,7 @@ class OpenReceiveTest < Minitest::Test
   def invoice_row(overrides = {})
     {
       "invoice_id" => "or_inv_test_1",
-      "merchant_scope" => "demo:tenant:alpha",
+      "namespace" => "demo:tenant:alpha",
       "operation" => "invoice.create",
       "idempotency_key" => "fruit-demo-user-123-order-456",
       "idempotency_request_hash" => "sha256:#{"a" * 64}",
@@ -335,11 +335,11 @@ class OpenReceiveTest < Minitest::Test
 
   def test_idempotency_vectors
     vector = read_vector("spec/test-vectors/idempotency.json")
-    assert_equal "merchant_scope+operation+idempotency_key", vector.fetch("canonical_scope").join("+")
+    assert_equal "namespace+operation+idempotency_key", vector.fetch("canonical_scope").join("+")
 
     vector.fetch("cases").each do |item|
       key = OpenReceive.idempotency_scope_key(
-        merchant_scope: item.fetch("merchant_scope"),
+        namespace: item.fetch("namespace"),
         operation: item.fetch("operation"),
         idempotency_key: item.fetch("idempotency_key")
       )

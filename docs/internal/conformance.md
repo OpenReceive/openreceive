@@ -64,7 +64,7 @@ events must not run the app action twice.
 Create-invoice idempotency is scoped to:
 
 ```text
-merchant_scope + operation + idempotency_key
+namespace + operation + idempotency_key
 ```
 
 Replaying the same request returns the same invoice. Reusing the same key with a

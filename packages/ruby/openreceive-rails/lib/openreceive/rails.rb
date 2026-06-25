@@ -20,22 +20,18 @@ module OpenReceive
     class Configuration
       attr_accessor :client,
                     :store,
-                    :merchant_scope,
-                    :authenticate,
-                    :authorize_invoice,
+                    :namespace,
                     :metadata,
                     :settlement_action,
                     :production,
-                    :allow_unauthenticated_demo,
                     :route_recovery,
                     :sweep_interval_seconds,
                     :sweep_batch
 
       def initialize
         @store = OpenReceive::InMemoryInvoiceKvStore.new
-        @merchant_scope = "default"
+        @namespace = "default"
         @production = false
-        @allow_unauthenticated_demo = false
         @route_recovery = true
         @sweep_interval_seconds = nil
         @sweep_batch = nil
@@ -43,9 +39,6 @@ module OpenReceive
 
       def validate!
         raise ArgumentError, "client is required" if client.nil?
-        if production && authenticate.nil? && !allow_unauthenticated_demo
-          raise SecurityError, "OpenReceive Rails adapter requires authenticate in production"
-        end
         if production && store.is_a?(OpenReceive::InMemoryInvoiceKvStore)
           raise SecurityError, "OpenReceive Rails adapter requires durable invoice storage in production"
         end
@@ -229,22 +222,7 @@ module OpenReceive
         end
       end
 
-      def doctor
-        owner = meta_value("owner")
-        version = meta_value("schema_version")
-        [
-          doctor_check("rails.store.owned", owner == "openreceive" ? "ok" : "error", "OpenReceive-owned SQLite store namespace=#{@namespace}"),
-          doctor_check("rails.store.schema", version == SCHEMA_VERSION ? "ok" : "error", "schema_version=#{version || "missing"}")
-        ]
-      rescue StandardError => error
-        [doctor_check("rails.store", "error", error.message)]
-      end
-
       private
-
-      def doctor_check(name, status, message)
-        { "name" => name, "status" => status, "message" => message }
-      end
 
       def ensure_schema
         @database.execute("PRAGMA journal_mode = WAL")
@@ -341,7 +319,7 @@ module OpenReceive
       def scope_key(scope)
         data = stringify_keys(scope)
         OpenReceive.idempotency_scope_key(
-          merchant_scope: data.fetch("merchant_scope"),
+          namespace: data.fetch("namespace"),
           operation: data.fetch("operation"),
           idempotency_key: data.fetch("idempotency_key")
         )
@@ -412,37 +390,7 @@ module OpenReceive
         @config.validate!
       end
 
-      def doctor
-        checks = []
-        missing_store_methods = STORE_METHODS.reject { |method| @config.store.respond_to?(method) }
-        checks << if missing_store_methods.empty?
-                    doctor_check("rails.store", "ok", "invoice store responds to required lifecycle methods")
-                  else
-                    doctor_check("rails.store", "error", "invoice store missing #{missing_store_methods.join(", ")}")
-                  end
-
-        if @config.store.respond_to?(:doctor)
-          checks.concat(@config.store.doctor)
-        elsif @config.store.is_a?(OpenReceive::InMemoryInvoiceKvStore)
-          checks << doctor_check("rails.store.durable", "error", "InMemoryInvoiceKvStore is for tests only; configure OPENRECEIVE_STORE with OpenReceive::Rails.resolve_invoice_store")
-        else
-          checks << doctor_check("rails.store.durable", "error", "invoice store must expose doctor ownership/schema diagnostics")
-        end
-
-        checks.concat(client_doctor_checks)
-        checks << if @config.store.respond_to?(:recoverable_invoices)
-                    doctor_check("rails.poll", "ok", "route-triggered sweep and one-shot poll can recover invoices from the configured store")
-                  else
-                    doctor_check("rails.poll", "error", "store does not support recoverable_invoices")
-                  end
-        {
-          "ok" => checks.none? { |check| check.fetch("status") == "error" },
-          "checks" => checks
-        }
-      end
-
       def create_invoice(controller:, params:, headers: {})
-        authenticate!(controller)
         idempotency_key = header(headers, "idempotency-key") || params["idempotency_key"]
         raise ArgumentError, "idempotency key is required" if blank?(idempotency_key)
 
@@ -467,8 +415,6 @@ module OpenReceive
         row = @config.store.find_by_invoice_id(invoice_id)
         raise OpenReceive::InvoiceNotFoundError.new(invoice_id) if row.nil?
 
-        authenticate!(controller)
-        authorize!(controller, row)
         response(200, invoice_payload(verify_invoice(invoice_id: invoice_id)))
       end
 
@@ -514,7 +460,6 @@ module OpenReceive
       end
 
       def poll(controller:, now: Time.now.to_i)
-        authenticate!(controller)
         invoices = poll_recoverable_invoices(now: now)
         response(200, {
           "invoice_ids" => invoices.map { |invoice| invoice.fetch("invoice_id") },
@@ -523,10 +468,6 @@ module OpenReceive
       end
 
       private
-
-      def doctor_check(name, status, message)
-        { "name" => name, "status" => status, "message" => message }
-      end
 
       def sweep_result(status, reason, invoices)
         body = {
@@ -554,23 +495,6 @@ module OpenReceive
         positive_integer(configured, name)
       end
 
-      def client_doctor_checks
-        unless @config.client.respond_to?(:preflight)
-          return [doctor_check("rails.nwc", "warn", "client does not expose preflight; invoice creation will fail closed if NWC is unavailable")]
-        end
-
-        @config.client.preflight
-        [doctor_check("rails.nwc", "ok", "NWC preflight completed")]
-      rescue StandardError => error
-        [doctor_check("rails.nwc", "error", "NWC preflight failed: #{redact_diagnostic_message(error.message)}")]
-      end
-
-      def redact_diagnostic_message(message)
-        message.to_s
-               .gsub(%r{nostr\+walletconnect://[^\s"'`<>]+}, "[REDACTED_NWC]")
-               .gsub(/([?&](?:_or_evt|token|secret)=)[^&\s"'`<>]+/i, "\\1[REDACTED]")
-      end
-
       def verify_stored_invoice(row)
         if %w[invoice_created expiry_pending_verification].include?(row.fetch("workflow_state"))
           row = @config.store.mark_verifying(invoice_id: row.fetch("invoice_id"))
@@ -594,21 +518,6 @@ module OpenReceive
         run_settlement_action_once(settled)
       end
 
-      def authenticate!(controller)
-        return @config.authenticate.call(controller) unless @config.authenticate.nil?
-        return true unless @config.production
-        return true if @config.allow_unauthenticated_demo
-
-        raise SecurityError, "OpenReceive Rails adapter requires authenticate in production"
-      end
-
-      def authorize!(controller, invoice)
-        return true if @config.authorize_invoice.nil?
-        raise SecurityError, "invoice access denied" unless @config.authorize_invoice.call(controller, invoice)
-
-        true
-      end
-
       def build_metadata(controller, params)
         return {} if @config.metadata.nil?
 
@@ -629,7 +538,7 @@ module OpenReceive
 
       def idempotency_scope(idempotency_key)
         {
-          "merchant_scope" => @config.merchant_scope,
+          "namespace" => @config.namespace,
           "operation" => CREATE_OPERATION,
           "idempotency_key" => idempotency_key
         }
@@ -639,7 +548,7 @@ module OpenReceive
         now = wallet_invoice["created_at"] || Time.now.to_i
         {
           "invoice_id" => "or_inv_#{SecureRandom.hex(12)}",
-          "merchant_scope" => scope.fetch("merchant_scope"),
+          "namespace" => scope.fetch("namespace"),
           "operation" => scope.fetch("operation"),
           "idempotency_key" => scope.fetch("idempotency_key"),
           "idempotency_request_hash" => request_hash,

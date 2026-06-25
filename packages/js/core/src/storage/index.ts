@@ -39,7 +39,7 @@ const SETTLEMENT_ACTION_STATES = new Set<string>([
 ]);
 
 export interface OpenReceiveIdempotencyScope {
-  merchant_scope: string;
+  namespace: string;
   operation: OpenReceiveIdempotencyOperation;
   idempotency_key: string;
 }
@@ -104,12 +104,12 @@ export class InvoiceNotFoundError extends Error {
 export function idempotencyScopeKey(
   scope: OpenReceiveIdempotencyScope
 ): string {
-  assertNonEmptyString(scope.merchant_scope, "merchant_scope");
+  assertNonEmptyString(scope.namespace, "namespace");
   assertNonEmptyString(scope.operation, "operation");
   assertNonEmptyString(scope.idempotency_key, "idempotency_key");
 
   return [
-    encodeScopeSegment(scope.merchant_scope),
+    encodeScopeSegment(scope.namespace),
     encodeScopeSegment(scope.operation),
     encodeScopeSegment(scope.idempotency_key)
   ].join(":");
@@ -156,7 +156,7 @@ export function validateInvoiceStorageRow(row: InvoiceStorageRow): void {
   assertNonEmptyString(row.invoice, "invoice");
   assertNonEmptyString(row.idempotency_request_hash, "idempotency_request_hash");
   assertNonEmptyString(row.idempotency_key, "idempotency_key");
-  assertNonEmptyString(row.merchant_scope, "merchant_scope");
+  assertNonEmptyString(row.namespace, "namespace");
   assertNonEmptyString(row.operation, "operation");
   assertSetMember(row.transaction_state, TRANSACTION_STATES, "transaction_state");
   assertSetMember(row.workflow_state, WORKFLOW_STATES, "workflow_state");

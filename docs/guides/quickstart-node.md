@@ -248,11 +248,5 @@ npm install @openreceive/browser @openreceive/svelte
 ## Optional Scheduler
 
 Browser lookup is enough for the normal checkout path. For extra recovery after
-visitors close the page, schedule:
-
-```sh
-npx openreceive poll --once
-```
-
-See [Deployment And Recovery](deployment-and-recovery.md) for platform-specific
-scheduler examples.
+visitors close the page, see
+[Optional Scheduler](optional-scheduler.md) for platform-specific examples.

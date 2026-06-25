@@ -1,7 +1,7 @@
 {
   "schema_version": "0.1.0",
   "canonical_scope": [
-    "merchant_scope",
+    "namespace",
     "operation",
     "idempotency_key"
   ],
@@ -12,7 +12,7 @@
   "cases": [
     {
       "name": "same key same request returns original response",
-      "merchant_scope": "demo:tenant:alpha",
+      "namespace": "demo:tenant:alpha",
       "operation": "invoice.create",
       "idempotency_key": "fruit-demo-user-123-order-456",
       "first_request_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -24,7 +24,7 @@
     },
     {
       "name": "same key different request returns conflict",
-      "merchant_scope": "demo:tenant:alpha",
+      "namespace": "demo:tenant:alpha",
       "operation": "invoice.create",
       "idempotency_key": "fruit-demo-user-123-order-456",
       "first_request_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -36,7 +36,7 @@
     },
     {
       "name": "refresh scope is separate from create scope",
-      "merchant_scope": "demo:tenant:alpha",
+      "namespace": "demo:tenant:alpha",
       "operation": "invoice.refresh",
       "idempotency_key": "fruit-demo-user-123-order-456-refresh-1",
       "first_request_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",

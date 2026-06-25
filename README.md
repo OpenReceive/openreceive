@@ -127,7 +127,7 @@ Developer docs start at `docs/guides/README.md` and are indexed by
 
 - `docs/guides/quickstart-node.md` is the current working backend quickstart.
 - `docs/guides/frontend-checkout.md` covers browser helpers and UI packages.
-- `docs/guides/deployment-and-recovery.md` explains host setup and optional
-  one-shot poll scheduling.
+- `docs/guides/optional-scheduler.md` explains optional one-shot poll
+  scheduling.
 - `docs/internal/README.md` is the contributor entry point for architecture,
   conformance, release, package ownership, and ADR docs.

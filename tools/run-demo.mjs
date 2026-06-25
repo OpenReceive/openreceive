@@ -11,7 +11,7 @@
 // compose stack with the local port-publishing override.
 
 import { spawn } from "node:child_process";
-import { appendFileSync, copyFileSync, existsSync, readFileSync } from "node:fs";
+import { copyFileSync, existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -25,29 +25,25 @@ const DEMOS = [
     keys: ["node", "node-express-react", "express"],
     dir: "examples/hello-fruit/server/node-express-react",
     port: 3000,
-    label: "Express + React",
-    requiresUnauthenticatedDemoAck: true
+    label: "Express + React"
   },
   {
     keys: ["static", "static-html-small-api", "html"],
     dir: "examples/hello-fruit/server/static-html-small-api",
     port: 3001,
-    label: "Static HTML + small API",
-    requiresUnauthenticatedDemoAck: true
+    label: "Static HTML + small API"
   },
   {
     keys: ["nextjs", "next", "nextjs-fullstack"],
     dir: "examples/hello-fruit/server/nextjs-fullstack",
     port: 3002,
-    label: "Next.js fullstack",
-    requiresUnauthenticatedDemoAck: true
+    label: "Next.js fullstack"
   },
   {
     keys: ["rails", "rails-hotwire", "hotwire"],
     dir: "examples/hello-fruit/server/rails-hotwire",
     port: 3003,
-    label: "Rails + Hotwire",
-    requiresUnauthenticatedDemoAck: false
+    label: "Rails + Hotwire"
   }
 ];
 
@@ -85,22 +81,7 @@ if (!existsSync(envPath)) {
   console.log("Created .env from .env.example.");
 }
 
-let envText = readFileSync(envPath, "utf8");
-
-// The JS demo images run with NODE_ENV=production and an unauthenticated
-// single-user checkout, so their Express guard refuses to start without an
-// explicit opt-in. Ensure it is present for those local runs, but never override
-// a deliberate OPENRECEIVE_ALLOW_UNAUTHENTICATED_DEMO=false.
-const ackKey = "OPENRECEIVE_ALLOW_UNAUTHENTICATED_DEMO";
-if (demo.requiresUnauthenticatedDemoAck && !new RegExp(`^\\s*${ackKey}\\s*=`, "m").test(envText)) {
-  const ackBlock =
-    `\n# Added by \`npm run demo\`: the demo image runs NODE_ENV=production with an\n` +
-    `# unauthenticated single-user checkout, which the server otherwise refuses.\n` +
-    `${ackKey}=true\n`;
-  appendFileSync(envPath, ackBlock);
-  envText += ackBlock;
-  console.log(`Added ${ackKey}=true to .env (required by the production-mode demo image).`);
-}
+const envText = readFileSync(envPath, "utf8");
 
 try {
   readRequiredHelloFruitNwcConnectionString({

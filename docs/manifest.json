@@ -36,7 +36,7 @@
     },
     {
       "slug": "authorization",
-      "title": "Authorization",
+      "title": "App Route Protection",
       "source_path": "docs/guides/authorization.md",
       "category": "security",
       "audience": "developer",
@@ -51,9 +51,9 @@
       "public": true
     },
     {
-      "slug": "deployment-and-recovery",
-      "title": "Deployment And Recovery",
-      "source_path": "docs/guides/deployment-and-recovery.md",
+      "slug": "optional-scheduler",
+      "title": "Optional Scheduler",
+      "source_path": "docs/guides/optional-scheduler.md",
       "category": "operations",
       "audience": "developer",
       "public": true

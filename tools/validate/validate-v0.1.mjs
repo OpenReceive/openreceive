@@ -114,7 +114,7 @@ function validateSchemas() {
   );
   assert(
     invoiceStorage["x-openreceive-invariants"].some((invariant) =>
-      invariant.includes("merchant_scope + operation + idempotency_key")
+      invariant.includes("namespace + operation + idempotency_key")
     ),
     "invoice-storage schema must document canonical idempotency scope"
   );
@@ -272,7 +272,7 @@ function validatePollingVectors() {
 
 function validateIdempotencyVectors() {
   const vector = readJson("spec/test-vectors/idempotency.json");
-  assert(vector.canonical_scope.join("+") === "merchant_scope+operation+idempotency_key", "idempotency scope mismatch");
+  assert(vector.canonical_scope.join("+") === "namespace+operation+idempotency_key", "idempotency scope mismatch");
   for (const item of vector.cases) {
     const sameHash = item.first_request_hash === item.second_request_hash;
     assert((sameHash && item.expected.status === 200) || (!sameHash && item.expected.status === 409), `${item.name}: expected status mismatch`);

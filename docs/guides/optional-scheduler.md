@@ -1,4 +1,4 @@
-# Deployment And Recovery
+# Optional Scheduler
 
 OpenReceive runs inside your normal web process. The browser checkout polls the
 backend lookup route while the visitor is present. For extra recovery after a

@@ -55,7 +55,7 @@ surface is hardened:
 - `spec/` remains the source of truth.
 - `amount_msats` is the public millisatoshi field.
 - Invoice storage requires `operation` because idempotency scope is
-  `merchant_scope + operation + idempotency_key`.
+  `namespace + operation + idempotency_key`.
 - Settlement requires backend lookup with `settled_at`, `state == "settled"`,
   or `transaction_state == "settled"`. A preimage alone is not final proof.
 - Browser, mobile, and static frontend code never receive NWC secrets.

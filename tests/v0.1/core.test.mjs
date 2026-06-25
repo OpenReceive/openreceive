@@ -93,7 +93,7 @@ function seedRecord(overrides = {}) {
     rev: overrides.rev ?? 0,
     row: {
       invoice_id: "or_inv_test",
-      merchant_scope: "demo:tenant",
+      namespace: "demo:tenant",
       operation: "invoice.create",
       idempotency_key: "order-1",
       idempotency_request_hash: `sha256:${"a".repeat(64)}`,

@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": [
     "invoice_id",
-    "merchant_scope",
+    "namespace",
     "operation",
     "idempotency_key",
     "idempotency_request_hash",
@@ -25,7 +25,7 @@
       "type": "string",
       "pattern": "^or_inv_[a-z0-9_]+$"
     },
-    "merchant_scope": {
+    "namespace": {
       "type": "string",
       "minLength": 1
     },
@@ -187,7 +187,7 @@
   "x-openreceive-invariants": [
     "invoice_id is unique",
     "payment_hash is unique where present",
-    "idempotency_key is unique within merchant_scope + operation + idempotency_key",
+    "idempotency_key is unique within namespace + operation + idempotency_key",
     "same idempotency request hash returns original response",
     "different idempotency request hash returns 409",
     "local expires_at alone does not make a row terminal or remove it from recovery",

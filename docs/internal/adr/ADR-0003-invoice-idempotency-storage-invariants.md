@@ -14,7 +14,7 @@ customer.
 
 Every invoice record is stored as `{ rev, row }` through the
 `OpenReceiveInvoiceKvStore` contract. The row stores `invoice_id`,
-`merchant_scope`, `operation`, `idempotency_key`,
+`namespace`, `operation`, `idempotency_key`,
 `idempotency_request_hash`, `payment_hash`, `invoice`, `amount_msats`,
 `transaction_state`, `workflow_state`, `settlement_action_state`, timestamps,
 metadata, lookup-gate fields, settlement-action lease fields, and fiat quote
@@ -23,7 +23,7 @@ data when used.
 The canonical idempotency scope is:
 
 ```text
-merchant_scope + operation + idempotency_key
+namespace + operation + idempotency_key
 ```
 
 Reusing a key with the same request hash returns the original invoice. Reusing

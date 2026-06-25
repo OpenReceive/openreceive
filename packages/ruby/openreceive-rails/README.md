@@ -7,15 +7,13 @@ Implemented proof pieces:
 
 - idempotent invoice creation through an injected receive-only client
 - backend lookup settlement for lookup, route-triggered sweep, and poll recovery
-- controller-level invoice access checks in the proof adapter
 - duplicate-safe settlement action tracking using the configured store
 - bounded route-triggered sweep after OpenReceive create/show routes
 - internal verification for optional one-shot poll jobs
-- diagnostics for store ownership/schema, NWC, and poll readiness
 - package-owned SQLite invoice store resolver for `OPENRECEIVE_STORE`
 - install generator skeleton that copies the controller, poll job, view, rake
   task, and route templates
-- generated `openreceive:doctor` and `openreceive:poll` rake tasks
+- generated `openreceive:poll` rake task for optional scheduled recovery
 - optional mounted engine route/controller surface for invoice proof work
 - Hotwire/Turbo invoice partial for display-safe status updates
 

@@ -625,7 +625,7 @@ export function createNodeHandlers(
       const namespaceScope = options.namespace ?? readOpenReceiveNamespace(undefined);
       const operation = "invoice.create" as const;
       const idempotencyScope: OpenReceiveIdempotencyScope = {
-        merchant_scope: namespaceScope,
+        namespace: namespaceScope,
         operation,
         idempotency_key: idempotencyKey
       };
@@ -676,7 +676,7 @@ export function createNodeHandlers(
           rev: 0,
           row: {
             invoice_id: createInvoiceId(),
-            merchant_scope: namespaceScope,
+            namespace: namespaceScope,
             operation,
             idempotency_key: idempotencyKey,
             idempotency_request_hash: requestHash,
@@ -758,7 +758,7 @@ export function createNodeHandlers(
       const reason = optionalString(body.reason) ?? oldInvoice.transaction_state;
       const operation = "invoice.refresh" as const;
       const idempotencyScope: OpenReceiveIdempotencyScope = {
-        merchant_scope: oldInvoice.merchant_scope,
+        namespace: oldInvoice.namespace,
         operation,
         idempotency_key: idempotencyKey
       };
@@ -791,7 +791,7 @@ export function createNodeHandlers(
           rev: 0,
           row: {
             invoice_id: createInvoiceId(),
-            merchant_scope: oldInvoice.merchant_scope,
+            namespace: oldInvoice.namespace,
             operation,
             idempotency_key: idempotencyKey,
             idempotency_request_hash: requestHash,
