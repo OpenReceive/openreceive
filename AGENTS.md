@@ -7,7 +7,6 @@ contributors working in this repository.
 
 - Do not expose NWC secrets to browser code, mobile apps, logs, tests,
   screenshots, docs, source maps, or demo assets.
-- Do not implement live checkout in pure frontend code.
 - OpenReceive receive-checkout APIs never expose send-payment methods.
 - Notifications are passive hints. Backend lookup is the settlement authority.
 - Settlement requires `settled_at` or `transaction_state/state == "settled"`.
@@ -20,22 +19,6 @@ contributors working in this repository.
 - If adding settlement behavior, include duplicate/replay-safe tests.
 - Do not duplicate provider data, supported currencies, polling cadence,
   settlement rules, or demo product data.
-
-## v0.1 Contract Ownership
-
-Until the v0.1 Express reference path is green, shared contract files need lead
-ownership:
-
-- `spec/schemas/**`
-- `spec/test-vectors/**`
-- `spec/data/**`
-- `docs/internal/adr/**`
-- `docs/internal/scope-lock.md`
-- `packages/js/core/src/nwc/**`
-
-Do not add a new SDK, framework adapter, demo, or provider-data package unless
-the v0.1 schemas, vectors, and Express reference implementation already cover
-the behavior.
 
 ## Testing
 
