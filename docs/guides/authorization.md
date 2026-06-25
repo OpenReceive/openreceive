@@ -1,41 +1,57 @@
 # App Route Protection
 
-OpenReceive does not implement authentication, sessions, CSRF, or CORS. Mount
-its handlers inside the routes/controllers your app already protects.
+Use the routes, controllers, and middleware your app already uses for checkout.
+OpenReceive supplies handlers you can call from those routes.
 
 ## Express
 
 ```ts
 import express from "express";
-import { openreceive } from "./openreceive";
+import { createOpenReceive } from "@openreceive/node";
 
-const app = express();
-app.use(express.json());
+const checkoutRoutes = express.Router();
+checkoutRoutes.use(express.json());
 
-app.use("/openreceive/v1", requireCheckoutAccess);
-openreceive.mountExpress(app);
+const openreceive = await createOpenReceive({
+  onPaid: async ({ orderUuid }) => {
+    await markOrderPaid(orderUuid);
+  },
+});
+const or = openreceive.handlers;
+
+checkoutRoutes.post("/openreceive/v1/invoices", or.createInvoice);
+checkoutRoutes.get("/openreceive/v1/invoices/:invoice_id", or.getInvoice);
+checkoutRoutes.post("/openreceive/v1/invoices/lookup", or.lookupInvoice);
 ```
 
-`requireCheckoutAccess` can check a signed-in user, a guest checkout token, a
-cart session, or whatever your app already trusts for checkout.
+Mount `checkoutRoutes` wherever your app already mounts checkout controllers.
 
 ## Next.js
 
 ```ts
 // app/openreceive/v1/[...openreceive]/route.ts
-import { openreceive } from "@/server/openreceive";
+import { createOpenReceive } from "@openreceive/node";
 
-export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-async function handle(request: Request) {
-  await requireCheckoutAccess(request);
+const openreceiveReady = createOpenReceive({
+  onPaid: async ({ orderUuid }) => {
+    await markOrderPaid(orderUuid);
+  },
+});
+
+export async function GET(request: Request) {
+  const openreceive = await openreceiveReady;
   return openreceive.handleFetch(request);
 }
 
-export const GET = handle;
-export const POST = handle;
+export async function POST(request: Request) {
+  const openreceive = await openreceiveReady;
+  return openreceive.handleFetch(request);
+}
 ```
+
+Put this route file under the checkout path your app already controls.
 
 ## Controllers
 
@@ -44,10 +60,11 @@ access:
 
 ```ts
 export async function createCheckoutInvoice(req, res, next) {
-  await requireCheckoutAccess(req);
   return openreceive.handlers.createInvoice(req, res, next);
 }
 ```
+
+Use this shape inside controller actions your app already protects.
 
 ## CORS And CSRF
 
@@ -70,13 +87,12 @@ server-side `onPaid`:
 
 ```ts
 export const openreceive = await createOpenReceive({
-  onPaid: async ({ orderUuid, invoice }) => {
-    await markOrderPaid({
-      orderUuid,
-      paymentHash: invoice.payment_hash
-    });
+  onPaid: async ({ orderUuid }) => {
+    await markOrderPaid(orderUuid);
   }
 });
 ```
 
-Make the hook idempotent by `orderUuid`, `payment_hash`, or invoice id.
+`markOrderPaid` is your app code. `orderUuid` is guaranteed to be the unique app
+order key for this checkout, so use it for idempotent fulfillment. Invoice
+details are available only if your app wants extra audit or correlation data.

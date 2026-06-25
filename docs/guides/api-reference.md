@@ -1,14 +1,15 @@
 # API Reference
 
-OpenReceive mounts backend routes inside your application, usually at
-`/openreceive/v1`. The source of truth for HTTP payloads is
+OpenReceive supplies backend handlers for routes inside your application. The
+examples use `/openreceive/v1` as the default base path. The source of truth
+for HTTP payloads is
 `spec/openapi/openreceive-http.v1.yaml`.
 
 App-facing packages:
 
 - `@openreceive/node`: `createOpenReceive(options)` returns an object with
-  `mountExpress(app)`, `handleFetch(request)`, `handleNode(req, res)`,
-  `runtime`, and `close()`.
+  `handlers`, `handleFetch(request)`, `handleNode(req, res)`, `runtime`, and
+  `close()`. `mountExpress(app)` is available as a default-route convenience.
 - `@openreceive/browser`: `createInvoice`, `status`, `lightningUri`, `qrSvg`,
   `qrPngDataUrl`, `copyInvoice`, `openWallet`, and
   `createCheckoutController`.
@@ -50,17 +51,16 @@ Responses:
 
 `GET /openreceive/v1/invoices/{invoice_id}`
 
-OpenReceive does not implement authentication. Mount this route inside whatever
-controller, middleware, or route group already protects the owning checkout
-session when invoice reads should not be public.
+Use this route from whatever controller, middleware, or route group already
+protects the owning checkout session when invoice reads should not be public.
 
 ## Lookup Invoice
 
 `POST /openreceive/v1/invoices/lookup`
 
 Body contains either `payment_hash` or `invoice`. This route performs backend
-wallet verification. Mount it behind your app's route protection when lookup
-should not be public.
+payment verification. Use your app's route protection when status should not be
+public.
 
 The lookup response may include proof details, but app fulfillment still belongs
 in the server `onPaid` hook. A preimage alone is not settlement proof.
@@ -80,8 +80,8 @@ mutates the old invoice in place. Settled invoices return `409`.
 
 `openreceive poll --once`
 
-Runs one bounded recovery pass through the OpenReceive store from a server-side
-scheduler. The Node HTTP adapter does not mount a public poll route.
+Runs one scheduled recovery job from a server-side scheduler. The Node HTTP
+adapter does not mount a public poll route.
 
 ## Rates
 
@@ -115,7 +115,7 @@ Returns runtime provider registry entries and metadata, including local
 `icon_path` values.
 
 Provider routes are suggestions, not settlement proof or availability
-guarantees. Backend wallet lookup remains the payment authority.
+guarantees. Product fulfillment belongs in the server `onPaid` hook.
 
 ## Health And Capabilities
 
@@ -123,8 +123,8 @@ guarantees. Backend wallet lookup remains the payment authority.
 mounted.
 
 `GET /openreceive/v1/capabilities` returns a non-secret capability summary.
-Wallet secrets, raw NWC connection strings, and private wallet diagnostics stay
-out of this response.
+Wallet secrets, raw NWC connection strings, and private wallet details stay out
+of this response.
 
 ## Error Shape
 

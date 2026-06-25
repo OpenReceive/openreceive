@@ -48,8 +48,8 @@ Hotwire demo is experimental skeleton work; its container runs
 `rails db:prepare` for its SQLite-backed ActiveRecord store before booting.
 Buying fruit creates a live Lightning invoice through your own wallet, so set a
 valid receive-only `OPENRECEIVE_NWC` string (for example from Rizful or Alby
-Hub) in `.env` before starting a demo. Demos refuse to boot when
-`OPENRECEIVE_NWC` is missing or malformed.
+Hub) in `.env` before starting a demo. Demos need a valid receive-only wallet
+connection before startup.
 The JS demos quote each fruit's USD price through live BTC/USD price providers
 before creating the invoice.
 

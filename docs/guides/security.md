@@ -12,15 +12,14 @@ test fixtures.
 
 ## Settlement
 
-The frontend may show passive progress from lookup polling, but it never runs
-your settlement actions. Backend lookup is the source of truth.
-OpenReceive treats an incoming invoice as settled only when `lookup_invoice`
-returns `settled_at` or `state == "settled"`. A preimage alone is not enough.
+The frontend may show passive progress, but it never unlocks products. Your
+backend `onPaid` hook runs only after OpenReceive verifies the payment
+server-side. A preimage alone is not enough.
 
 ## App Auth
 
-OpenReceive does not define a user-auth system. Framework adapters must plug
-into the host app's sessions, tokens, policies, or guest checkout authorization.
+Use the host app's sessions, tokens, policies, or guest checkout authorization
+for any checkout or status route that should not be public.
 
 Default route policy:
 
@@ -39,8 +38,7 @@ Default route policy:
 - Use CSRF protection for cookie-authenticated POST routes.
 - Return `Cache-Control: no-store` for invoice, lookup, and refresh responses.
 - Avoid logging signed lookup or refresh URLs.
-- Keep wallet diagnostics such as `get_balance` out of public checkout
-  responses and capability summaries.
+- Keep private wallet details out of public checkout responses.
 
 ## Demos
 

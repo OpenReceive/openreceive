@@ -80,7 +80,17 @@ export async function createHelloFruitStaticServer() {
     }));
   });
 
-  openreceive.mountExpress(app);
+  const or = openreceive.handlers;
+  app.post("/openreceive/v1/invoices", or.createInvoice);
+  app.get("/openreceive/v1/invoices/:invoice_id", or.getInvoice);
+  app.post("/openreceive/v1/invoices/lookup", or.lookupInvoice);
+  app.post("/openreceive/v1/invoices/:invoice_id/refresh", or.refreshInvoice);
+  app.get("/openreceive/v1/rates", or.listRates);
+  app.post("/openreceive/v1/rates/quote", or.quoteRates);
+  app.get("/openreceive/v1/routes", or.listRoutes);
+  app.get("/openreceive/v1/providers", or.listProviders);
+  app.get("/openreceive/v1/health", or.health);
+  app.get("/openreceive/v1/capabilities", or.capabilities);
 
   return app;
 }

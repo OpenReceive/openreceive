@@ -1,7 +1,7 @@
 # Frontend Checkout
 
 Frontend code receives display-safe invoice data only. Keep NWC connection
-strings, wallet clients, and settlement actions on the backend.
+strings, wallet clients, and fulfillment on the backend.
 
 ## Browser Helpers
 

@@ -1,8 +1,8 @@
 # Node Framework Quickstart
 
 OpenReceive runs inside your app. Your server owns the receive-only NWC,
-creates invoices, stores invoice state, and decides settlement from backend
-`lookup_invoice`. The browser only receives display-safe invoice data.
+creates invoices, stores invoice state, verifies payment server-side, and calls
+your `onPaid` hook. The browser only receives display-safe invoice data.
 
 ## Environment
 
@@ -24,122 +24,155 @@ OPENRECEIVE_STORE=postgres://user:pass@host:5432/appdb
 OPENRECEIVE_NAMESPACE=my_app
 ```
 
-Use Postgres when more than one server process can create or settle invoices.
-OpenReceive owns only its package-owned Postgres or SQLite invoice store; your
-app keeps orders, carts, users, and fulfillment state in your own tables.
+The default SQLite file is fine for one local server. If more than one server,
+worker, serverless instance, or scheduler can touch the same
+`OPENRECEIVE_NAMESPACE`, point all of them at one shared durable OpenReceive
+store. In v0.1 Node, use Postgres for that shared store. OpenReceive owns only
+its package-owned Postgres or SQLite invoice store; your app still keeps
+orders, carts, users, and fulfillment state in your own tables.
 
-`createOpenReceive()` fails at boot if `OPENRECEIVE_NWC` is missing,
-malformed, unavailable, or advertises send-payment methods. It also initializes
-supported storage before serving routes.
+Start the server only after `OPENRECEIVE_NWC` and `OPENRECEIVE_STORE` are set
+for that environment. Setup problems should fail before checkout traffic
+reaches customers.
 
 ## Server Object
 
-Create one server-only OpenReceive object:
+Each server example creates one server-only OpenReceive object:
 
 ```ts
-// server/openreceive.ts
 import { createOpenReceive } from "@openreceive/node";
 
-export const openreceive = await createOpenReceive({
-  onPaid: async ({ orderUuid, invoice }) => {
-    await markOrderPaid({
-      orderUuid,
-      invoiceId: invoice.invoice_id,
-      paymentHash: invoice.payment_hash
-    });
-  }
+const openreceive = await createOpenReceive({
+  onPaid: async ({ orderUuid }) => {
+    await markOrderPaid(orderUuid);
+  },
 });
 ```
 
-`onPaid` runs after backend-verified settlement and is delivered at least once.
-Make fulfillment idempotent by `orderUuid`, `payment_hash`, or invoice id.
-
-OpenReceive does not implement your authentication, session, CSRF, or CORS
-policy. Put OpenReceive handlers inside routes/controllers already protected by
-your app when checkout should not be public.
+OpenReceive calls `onPaid` after payment is verified. The hook can run more
+than once. `orderUuid` is guaranteed to be the unique app order key for this
+checkout, so use it for idempotent fulfillment. Most apps can ignore the
+invoice details in this hook; they are available only when you want extra audit
+or correlation data.
 
 ## Express
 
-Install the server package and your framework dependencies:
+Install Express, the Node package, and your frontend packages:
 
 ```sh
-npm install @openreceive/node express pg
+npm install express @openreceive/node @openreceive/browser @openreceive/react
 ```
 
-Mount the routes in the same Express app that owns your checkout:
+Define routes in the same Express app that owns your checkout:
 
 ```ts
 // server/index.ts
 import express from "express";
-import { openreceive } from "./openreceive";
+import { createOpenReceive } from "@openreceive/node";
 
 const app = express();
 app.use(express.json());
 
-app.use("/openreceive/v1", requireCheckoutAccess);
-openreceive.mountExpress(app);
+const openreceive = await createOpenReceive({
+  onPaid: async ({ orderUuid }) => {
+    await markOrderPaid(orderUuid);
+  },
+});
+const or = openreceive.handlers;
+
+app.post("/openreceive/v1/invoices", or.createInvoice);
+app.get("/openreceive/v1/invoices/:invoice_id", or.getInvoice);
+app.post("/openreceive/v1/invoices/lookup", or.lookupInvoice);
+app.post("/openreceive/v1/invoices/:invoice_id/refresh", or.refreshInvoice);
+app.get("/openreceive/v1/rates", or.listRates);
+app.post("/openreceive/v1/rates/quote", or.quoteRates);
+app.get("/openreceive/v1/routes", or.listRoutes);
+app.get("/openreceive/v1/providers", or.listProviders);
+app.get("/openreceive/v1/health", or.health);
+app.get("/openreceive/v1/capabilities", or.capabilities);
 
 app.listen(3000);
 ```
 
-If your checkout is public guest checkout, omit `requireCheckoutAccess` and keep
-fulfillment in the server `onPaid` hook.
+`/openreceive/v1` is the default base path used by the browser helpers. You can
+choose another app path if you pass the same base path to `createOpenReceive`
+and the matching frontend helper URLs.
 
 ## Next.js App Router
 
 Install the Node package plus your frontend package:
 
 ```sh
-npm install @openreceive/node @openreceive/browser @openreceive/react pg
+npm install @openreceive/node @openreceive/browser @openreceive/react
 ```
 
 Create the catch-all route:
 
 ```ts
 // app/openreceive/v1/[...openreceive]/route.ts
-import { openreceive } from "@/server/openreceive";
+import { createOpenReceive } from "@openreceive/node";
 
-export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-async function handle(request: Request) {
-  await requireCheckoutAccess(request);
+const openreceiveReady = createOpenReceive({
+  onPaid: async ({ orderUuid }) => {
+    await markOrderPaid(orderUuid);
+  },
+});
+
+export async function GET(request: Request) {
+  const openreceive = await openreceiveReady;
   return openreceive.handleFetch(request);
 }
 
-export const GET = handle;
-export const POST = handle;
+export async function POST(request: Request) {
+  const openreceive = await openreceiveReady;
+  return openreceive.handleFetch(request);
+}
 ```
 
-Remove `requireCheckoutAccess(request)` for public guest checkout.
+Next.js App Router expects one exported function per HTTP method. Both
+functions delegate to OpenReceive. Put this route file wherever your app keeps
+checkout route handlers.
 
 ## Fastify
 
 Install Fastify and the Node package:
 
 ```sh
-npm install @openreceive/node fastify pg
+npm install fastify @openreceive/node
 ```
 
-Forward the matching Node request/response objects:
+Define the same routes in your Fastify app:
 
 ```ts
 // server/index.ts
 import Fastify from "fastify";
-import { openreceive } from "./openreceive";
+import { createOpenReceive } from "@openreceive/node";
 
 const app = Fastify();
 
-app.addHook("preHandler", async (request) => {
-  if (request.url.startsWith("/openreceive/v1/")) {
-    await requireCheckoutAccess(request);
-  }
+const openreceive = await createOpenReceive({
+  onPaid: async ({ orderUuid }) => {
+    await markOrderPaid(orderUuid);
+  },
 });
 
-app.all("/openreceive/v1/*", async (request, reply) => {
+async function openReceiveRoute(request, reply) {
   await openreceive.handleNode(request.raw, reply.raw);
   reply.hijack();
-});
+}
+
+app.post("/openreceive/v1/invoices", openReceiveRoute);
+app.get("/openreceive/v1/invoices/:invoice_id", openReceiveRoute);
+app.post("/openreceive/v1/invoices/lookup", openReceiveRoute);
+app.post("/openreceive/v1/invoices/:invoice_id/refresh", openReceiveRoute);
+app.get("/openreceive/v1/rates", openReceiveRoute);
+app.post("/openreceive/v1/rates/quote", openReceiveRoute);
+app.get("/openreceive/v1/routes", openReceiveRoute);
+app.get("/openreceive/v1/providers", openReceiveRoute);
+app.get("/openreceive/v1/health", openReceiveRoute);
+app.get("/openreceive/v1/capabilities", openReceiveRoute);
 
 await app.listen({ port: 3000 });
 ```
@@ -160,7 +193,7 @@ import { createInvoice } from "@openreceive/browser";
 const invoice = await createInvoice({
   orderUuid,
   fiat: { currency: "USD", value: "10.00" },
-  optionalInvoiceDescription: "Order #1234"
+  optionalInvoiceDescription: "Order #1234",
 });
 ```
 
@@ -170,7 +203,7 @@ Use exactly one amount source:
 await createInvoice({
   orderUuid,
   amountInSatoshis: 500,
-  optionalInvoiceDescription: "Order #1234"
+  optionalInvoiceDescription: "Order #1234",
 });
 ```
 
@@ -191,7 +224,7 @@ import "@openreceive/react/styles.css";
 const invoice = await createInvoice({
   orderUuid,
   fiat: { currency: "USD", value: "10.00" },
-  optionalInvoiceDescription: "Order #1234"
+  optionalInvoiceDescription: "Order #1234",
 });
 
 <Checkout invoice={invoice} onPaid={() => showThankYou()} />;
@@ -214,7 +247,7 @@ import "@openreceive/vue/styles.css";
 const invoice = await createInvoice({
   orderUuid,
   fiat: { currency: "USD", value: "10.00" },
-  optionalInvoiceDescription: "Order #1234"
+  optionalInvoiceDescription: "Order #1234",
 });
 </script>
 
@@ -247,6 +280,6 @@ npm install @openreceive/browser @openreceive/svelte
 
 ## Optional Scheduler
 
-Browser lookup is enough for the normal checkout path. For extra recovery after
-visitors close the page, see
+Browser payment-status checks are enough for the normal checkout path. For
+extra recovery after visitors close the page, see
 [Optional Scheduler](optional-scheduler.md) for platform-specific examples.

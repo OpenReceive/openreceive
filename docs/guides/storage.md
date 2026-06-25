@@ -23,8 +23,8 @@ Supported v0.1 store values:
 | `postgres://...` | Supported for Node | Use for production, serverless, and multi-instance deployments. |
 | `memory:` | Tests only | Use only in unit tests and throwaway local experiments. |
 
-OpenReceive initializes and owns its package schema. App migrations should not
-create or alter OpenReceive invoice tables.
+Use this store only for OpenReceive invoice state. App migrations should stay
+focused on your own app tables.
 
 ## Namespaces
 
@@ -41,8 +41,9 @@ apps should not share invoice replay keys.
 
 ## Production Choices
 
-Use Postgres before adding more than one web process or deploying to an
-ephemeral filesystem:
+Use one shared durable OpenReceive store before adding more than one web
+process, serverless instance, worker, scheduler, or any deployment with an
+ephemeral filesystem. In v0.1 Node, that shared store is Postgres:
 
 ```sh
 OPENRECEIVE_STORE=postgres://openreceive:password@db.example.com:5432/openreceive
@@ -50,20 +51,11 @@ OPENRECEIVE_NAMESPACE=prod
 ```
 
 `local-sqlite` is acceptable for single-machine self-hosting when the SQLite
-file is on durable disk. Do not share one SQLite file across multiple hosts.
+file is on durable disk. Do not use a per-instance SQLite file when multiple
+servers run the same checkout code.
 
 Do not point OpenReceive at arbitrary app tables, ORM models, object storage,
-browser-accessible storage, or Cloudflare Workers KV. The store contains
-wallet-derived payment state and must stay server-side.
-
-## Runtime Tuning
-
-Keep the defaults unless your deployment has measured pressure:
-
-| Variable | Purpose |
-| --- | --- |
-| `OPENRECEIVE_LOOKUP_BURST` | Maximum immediate backend wallet lookups per namespace. |
-| `OPENRECEIVE_LOOKUP_RATE_PER_SEC` | Steady refill rate for lookup gates. |
-| `OPENRECEIVE_ACTION_LEASE_TTL_SEC` | Settlement-action lease duration before another process may retry. |
-| `OPENRECEIVE_SWEEP_INTERVAL_SEC` | Minimum interval between route-triggered recovery sweeps. |
-| `OPENRECEIVE_SWEEP_BATCH` | Maximum invoices examined by one recovery sweep. |
+browser-accessible storage, MySQL, remote SQLite, or platform KV such as
+Cloudflare Workers KV unless this package explicitly ships an OpenReceive store
+adapter for that backend. The store contains wallet-derived payment state and
+must stay server-side.

@@ -17,14 +17,14 @@ A mobile app may:
 - display amount, BOLT11 invoice text, QR data, and payment status
 - copy the invoice
 - open a Lightning wallet through a platform deep link
-- poll a backend lookup endpoint protected by your app when needed
+- poll a backend status endpoint protected by your app when needed
 - subscribe to server-sent or push-style status updates exposed by the backend
 
 A mobile app leaves these on the backend:
 
 - store `OPENRECEIVE_NWC`
 - create live invoices directly through NWC
-- call wallet `lookup_invoice` directly
+- call wallet APIs directly
 - include NWC secrets in app bundles, logs, screenshots, analytics, crash
   reports, support tickets, or test fixtures
 
@@ -33,15 +33,15 @@ A mobile app leaves these on the backend:
 The backend owns:
 
 - receive-only NWC configuration
-- wallet preflight
+- wallet setup
 - invoice creation
 - idempotency
-- route-driven lookup and optional one-shot poll recovery
-- settlement verification
-- app-owned settlement actions
+- payment status and optional recovery jobs
+- payment verification
+- the `onPaid` fulfillment path
 
-Mobile UI treats lookup and polling responses as display state. The backend
-remains the settlement authority.
+Mobile UI treats status and polling responses as display state. The backend
+`onPaid` path remains the fulfillment authority.
 
 ## Native UI Kits
 

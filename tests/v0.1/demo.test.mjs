@@ -927,7 +927,7 @@ test("Hello Fruit server demos keep secret-safe local setup docs", () => {
     assert.match(envExample, /^OPENRECEIVE_NWC=$/m, `${demoDir}: placeholder NWC`);
     assert.doesNotMatch(envExample, /nostr\+walletconnect:\/\//);
     assert.match(readme, /The browser never receives `OPENRECEIVE_NWC`\./);
-    assert.match(readme, /refuses to boot/);
+    assert.match(readme, /valid receive-only `OPENRECEIVE_NWC`/);
     assert.match(readme, /\/demo-metadata\.json/);
     assert.match(readme, /compose\.override\.yml\.example up --build/);
     assert.doesNotMatch(readme, /--profile openreceive-worker/);

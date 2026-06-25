@@ -14,8 +14,7 @@ npm run dev
 
 Open the Vite URL and create a tiny fruit-sticker invoice.
 Set a valid receive-only `OPENRECEIVE_NWC` in the process environment before
-starting the dev server. The demo refuses to boot when it is missing or
-malformed.
+starting the dev server.
 
 For a production-style local run, build the client and start the Express server:
 
@@ -35,14 +34,11 @@ docker compose -f compose.yml -f compose.override.yml.example up --build
 Docker loads the repository root `.env` file, so the same
 `OPENRECEIVE_NWC` value can be shared across all local Hello Fruit demos
 without demo-local env files. Set it before running Compose; the web container
-validates it at startup. The compose stack also starts a local
-Postgres container and points `OPENRECEIVE_STORE` at it; the demo uses the
-package-owned OpenReceive Postgres KV store and self-initializes the
-OpenReceive schema before store queries.
+validates it at startup. The compose stack also starts a local Postgres
+container and points `OPENRECEIVE_STORE` at it.
 
-The package exposes `npm run openreceive:poll` for an optional one-shot
-scheduled reconciliation pass. Normal checkout recovery happens through
-backend lookup routes.
+The package exposes `npm run openreceive:poll` for optional scheduled recovery.
+Normal checkout recovery happens through backend payment-status checks.
 
 The Makefile exposes the standard demo commands: `make setup`, `make dev`,
 `make test`, `make demo-test-nwc`, `make demo-production`,
@@ -55,6 +51,6 @@ Hosted-demo helpers expose `/healthz`, `/source`, `/docs`, `/robots.txt`, and
 `/sitemap.xml`.
 
 This demo is a public guest checkout. Production apps that require signed-in or
-session-bound checkout should mount OpenReceive routes behind their normal app
-middleware;
+session-bound checkout should use their normal app middleware for private
+checkout routes;
 see [Optional Scheduler](../../../../docs/guides/optional-scheduler.md).

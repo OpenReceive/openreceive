@@ -5,7 +5,7 @@ Material UI components. It is a composition example, not a dependency of
 OpenReceive.
 
 Frontend code still receives only display-safe invoice data. The backend creates
-the invoice, performs lookup, and owns your settlement actions.
+the invoice, verifies payment, and owns fulfillment.
 
 ## Component
 
@@ -81,5 +81,5 @@ using the headless actions as shown above.
 - Do not pass `OPENRECEIVE_NWC` or any wallet secret into React.
 - Create invoices through your backend.
 - Treat client polling as UI state only.
-- Fulfill products only after backend lookup confirms settlement.
+- Fulfill products only from your backend `onPaid` path.
 - Keep Material UI theme ownership in the host app.

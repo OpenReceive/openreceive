@@ -30,12 +30,12 @@ npm run demo rails
 
 There is no Python package yet. Future FastAPI, Django, Flask, or Starlette
 work should keep `OPENRECEIVE_NWC` server-side, mount `/openreceive/v1`, use
-package-owned invoice storage, and treat backend `lookup_invoice` as the
-settlement authority.
+package-owned invoice storage, and run fulfillment only from a server-side
+payment-verified hook.
 
 ## PHP
 
 There is no PHP package yet. Future Laravel, Symfony, or plain PHP work should
 follow the same server-owned model: your app keeps auth and fulfillment, while
-OpenReceive owns invoice creation, lookup, recovery, and settlement-action
-state.
+OpenReceive owns invoice creation, payment verification, recovery, and
+fulfillment delivery state.

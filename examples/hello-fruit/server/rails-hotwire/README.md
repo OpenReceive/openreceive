@@ -7,9 +7,8 @@ updates owning the application workflow.
 The browser never receives `OPENRECEIVE_NWC`.
 OpenReceive invoice persistence uses the package-owned SQLite store selected by
 `OPENRECEIVE_STORE`. The fruit unlock table remains app-owned demo business
-state. Mounted OpenReceive routes run route-triggered recovery sweeps, so the
-demo does not require a background worker to credit a paid invoice after a
-restart or closed browser window.
+state. The demo can recover paid invoices after a restart or closed browser
+window without requiring a separate background worker.
 
 Run locally with Docker:
 

@@ -6,10 +6,10 @@ adapter that can be used from Rails controllers or jobs.
 Implemented proof pieces:
 
 - idempotent invoice creation through an injected receive-only client
-- backend lookup settlement for lookup, route-triggered sweep, and poll recovery
-- duplicate-safe settlement action tracking using the configured store
-- bounded route-triggered sweep after OpenReceive create/show routes
-- internal verification for optional one-shot poll jobs
+- server-side payment verification for status and optional recovery
+- duplicate-safe fulfillment tracking using the configured store
+- optional recovery after a restart or closed browser window
+- internal verification for optional scheduled jobs
 - package-owned SQLite invoice store resolver for `OPENRECEIVE_STORE`
 - install generator skeleton that copies the controller, poll job, view, rake
   task, and route templates
@@ -17,8 +17,8 @@ Implemented proof pieces:
 - optional mounted engine route/controller surface for invoice proof work
 - Hotwire/Turbo invoice partial for display-safe status updates
 
-Route-triggered recovery and optional poll recovery use backend
-`lookup_invoice`; settlement actions must be idempotent by `payment_hash`.
+Payment verification happens server-side; fulfillment should be idempotent by
+the app's order id.
 
 The Rails surface is still initial proof work and needs realignment with the
 current Node DX before the Rails lane is a primary supported path. It does not

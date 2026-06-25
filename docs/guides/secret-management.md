@@ -42,8 +42,8 @@ npm run test:live:nwc
 The script skips when `OPENRECEIVE_NWC` is unset. It only reads an env file when
 `OPENRECEIVE_ENV_FILE` is set, so normal test runs do not accidentally use a
 developer's local wallet secret. When a wallet is configured, it redacts the
-connection string, checks the metadata-size guard before wallet invoice
-creation, and uses backend lookup as the settlement authority.
+connection string, creates a low-value test invoice, and verifies payment
+server-side before fulfillment.
 
 ## Deployment
 
@@ -63,6 +63,6 @@ moving from public demos to production payment flows.
 
 ## Logging
 
-Logs may include invoice ids, payment hashes, amounts, workflow states, and
-non-secret capability summaries. Logs must not include raw NWC URIs, client
-secrets, signed lookup/refresh URLs, or bearer tokens.
+Logs may include invoice ids, payment hashes, amounts, and payment status. Logs
+must not include raw NWC URIs, client secrets, signed lookup/refresh URLs, or
+bearer tokens.

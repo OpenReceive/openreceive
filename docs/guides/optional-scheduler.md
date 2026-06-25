@@ -1,20 +1,19 @@
 # Optional Scheduler
 
-OpenReceive runs inside your normal web process. The browser checkout polls the
-backend lookup route while the visitor is present. For extra recovery after a
-visitor closes the page, run one bounded server-side sweep on a schedule:
+OpenReceive runs inside your normal web process. The browser checkout watches
+backend payment status while the visitor is present. For extra recovery after a
+visitor closes the page, run a small server-side recovery job on a schedule:
 
 ```sh
 npx openreceive poll --once
 ```
 
-The scheduler is optional. It uses the same server-only config as your web app,
-reads the OpenReceive store, calls receive-side `lookup_invoice`, and runs your
-idempotent `onPaid` hook for newly settled invoices.
+The scheduler is optional. It uses the same server-only config as your web app
+and runs your idempotent `onPaid` hook for newly paid invoices.
 
 ```text
 web process        mounts /openreceive/v1
-browser checkout   polls /openreceive/v1/invoices/lookup
+browser checkout   watches backend payment status
 optional scheduler runs openreceive poll --once
 ```
 
@@ -196,8 +195,9 @@ npm run openreceive:poll
 
 ## systemd Or VPS
 
-`local-sqlite` is acceptable for one machine on durable disk. Use Postgres
-before adding more machines.
+`local-sqlite` is acceptable for one machine on durable disk. If more than one
+machine, process, or scheduler can touch the same namespace, point all of them
+at one shared durable OpenReceive store. In v0.1 Node, use Postgres for that.
 
 ```ini
 [Unit]
@@ -238,16 +238,18 @@ the platform's server-side secret store.
 
 Your `onPaid` hook may run again after a crash. For example, the hook could
 mark an order paid successfully, then the process could stop before
-OpenReceive records that the hook completed.
+OpenReceive finishes recording that work.
 
-Make the hook idempotent. Use `orderUuid`, `payment_hash`, or invoice id to
-ensure repeated calls do not double-ship, double-credit, or double-email.
+`orderUuid` is guaranteed to be the unique app order key for this checkout, so
+use it for idempotent fulfillment. That prevents repeated calls from
+double-shipping, double-crediting, or double-emailing. Invoice details are
+available only if your app wants extra audit or correlation data.
 
 ## Production Checklist
 
 - Keep `OPENRECEIVE_NWC` server-side only.
 - Use durable storage for production.
 - Configure `OPENRECEIVE_NAMESPACE` when multiple apps share one store.
-- Put OpenReceive routes inside your app's normal route protection when needed.
-- Make `onPaid` idempotent by `orderUuid`, `payment_hash`, or invoice id.
+- Use your app's normal route protection when needed.
+- Use `orderUuid` for idempotent fulfillment.
 - Run `npm run typecheck && npm run test:js` before deploy.

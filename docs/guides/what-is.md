@@ -18,7 +18,7 @@ OpenReceive does three narrow things:
    connection.
 2. Lets the frontend show QR, copy, open-wallet, countdown, and friendly route
    guidance for that invoice.
-3. Lets the backend verify settlement before an app-owned settlement action.
+3. Lets the backend verify payment before app-owned fulfillment runs.
 
 Provider routes are payer-side suggestions. A wallet, exchange, swap service,
 fiat onramp, card, bank account, Bitcoin wallet, or stablecoin balance may be
@@ -28,27 +28,26 @@ through third-party services outside OpenReceive.
 ## Runtime Model
 
 OpenReceive runs inside your normal web process. Mount `/openreceive/v1`, and
-the browser checkout polls a backend lookup route to learn when an invoice
+the browser checkout watches backend payment status to learn when an invoice
 settles. For extra recovery, you can optionally call
 `openreceive poll --once` on a server-side schedule.
 
 ```text
 web process        mounts /openreceive/v1
-browser checkout   polls /openreceive/v1/invoices/lookup
+browser checkout   watches backend payment status
 optional scheduler runs openreceive poll --once
 ```
 
-The OpenReceive store is the only thing coordinating across processes. It
-keeps invoice, idempotency, lookup-gate, recovery, and settlement-action state.
+The OpenReceive store is the only thing coordinating payment state across
+processes.
 
-Local invoice expiry is not a settlement decision. If the server is down while
-an invoice expires, the poll process recovers that invoice after restart
-and asks the wallet before OpenReceive closes it as expired.
+Local invoice expiry is not a payment decision. If your server is down while an
+invoice expires, optional recovery can still verify recent invoices before they
+are closed as expired.
 
-OpenReceive packages provide their own invoice KV persistence, selected with
+OpenReceive packages provide their own invoice storage, selected with
 `OPENRECEIVE_STORE`. Your app keeps its own orders, carts, users, and
-fulfillment tables; OpenReceive handles the invoice, idempotency, lookup-gate,
-and settlement-action state it needs.
+fulfillment tables.
 
 - Express routes in an Express app.
 - Rails controllers in a Rails app.
@@ -56,5 +55,5 @@ and settlement-action state it needs.
 - Equivalent native integrations in later ecosystems.
 
 The browser or mobile app receives only display-safe invoice data. NWC secrets,
-invoice creation, settlement lookup, recovery polling, and app-owned settlement
-actions stay server-side.
+invoice creation, payment verification, recovery polling, and `onPaid`
+fulfillment stay server-side.

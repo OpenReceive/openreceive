@@ -212,7 +212,7 @@ function validateReadme(demo) {
   const text = read(relativePath);
 
   expect(text.includes("The browser never receives `OPENRECEIVE_NWC`."), `${relativePath}: must state browser NWC boundary`);
-  expect(text.includes("refuses to boot"), `${relativePath}: must state demos refuse missing or malformed OPENRECEIVE_NWC`);
+  expect(text.includes("valid receive-only `OPENRECEIVE_NWC`"), `${relativePath}: must state demos need a valid receive-only OPENRECEIVE_NWC`);
   expect(text.includes("docker compose -f compose.yml -f compose.override.yml.example up --build"), `${relativePath}: must document compose startup without a worker profile`);
   expect(text.includes("npm run openreceive:poll"), `${relativePath}: must document the one-shot poll script`);
   expect(!text.includes("openreceive:worker"), `${relativePath}: must not document a worker script`);

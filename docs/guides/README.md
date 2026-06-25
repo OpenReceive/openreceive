@@ -9,7 +9,7 @@ Start here when you are integrating OpenReceive into an app.
 5. [Storage](storage.md) - `OPENRECEIVE_STORE`, namespaces, and production storage.
 6. [Optional Scheduler](optional-scheduler.md) - optional one-shot poll recovery.
 7. [API Reference](api-reference.md) - mounted routes and app-facing packages.
-8. [Security](security.md) - wallet secrets, settlement authority, and route protection.
+8. [Security](security.md) - wallet secrets, payment verification, and route protection.
 9. [Secret Management](secret-management.md) - local and deployment secret handling.
 10. [Provider Registry](provider-registry.md) - payment-route suggestions.
 11. [Price Feeds](price-feeds.md) - fiat quotes and `amount_msats`.
