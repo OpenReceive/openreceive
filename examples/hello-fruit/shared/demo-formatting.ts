@@ -3,6 +3,11 @@ export interface HelloFruitFiatAmount {
   readonly value: string;
 }
 
+export interface HelloFruitDisplayAmount {
+  readonly currency: string;
+  readonly value: string;
+}
+
 export const helloFruitDemoLabels = {
   createOrder: "Create order",
   creatingOrder: "Creating order...",
@@ -10,7 +15,10 @@ export const helloFruitDemoLabels = {
 } as const;
 
 export function formatHelloFruitFiat(fiat: HelloFruitFiatAmount): string {
-  return fiat.currency === "USD" ? `$${fiat.value}` : `${fiat.value} ${fiat.currency}`;
+  if (fiat.currency === "USD") return `$${fiat.value}`;
+  if (fiat.currency === "BTC") return `${fiat.value} BTC`;
+  if (fiat.currency === "SATS") return `${fiat.value} sats`;
+  return `${fiat.value} ${fiat.currency}`;
 }
 
 export function formatHelloFruitBuyNowLabel(fiat: HelloFruitFiatAmount): string {
