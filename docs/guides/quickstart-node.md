@@ -366,6 +366,12 @@ const { invoice } = await response.json();
 ```
 
 `onPaid` is a UI hint. Unlock the order from the server `onPaid` hook.
+If your app only wants QR/copy/provider guidance and has no frontend status
+route, render the checkout without polling:
+
+```tsx
+<Checkout invoice={invoice} polling={false} />;
+```
 
 ## Vue
 

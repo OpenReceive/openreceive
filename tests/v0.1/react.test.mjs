@@ -759,3 +759,18 @@ test("React default checkout passes controller actions into default buttons", ()
   assert.match(source, /copyInvoice === undefined/);
   assert.match(source, /openWallet === undefined/);
 });
+
+test("React checkout can disable default lookup polling", () => {
+  const source = readFileSync(
+    path.join(process.cwd(), "packages/js/react/src/index.ts"),
+    "utf8"
+  );
+
+  assert.match(source, /lookupUrl\?: string \| false/);
+  assert.match(source, /polling\?: boolean/);
+  assert.match(source, /function resolveCheckoutLookupUrl/);
+  assert.match(source, /options\.polling === false \|\| options\.lookupUrl === false/);
+  assert.match(source, /options\.polling === false \? undefined : options\.lookupInvoice/);
+  assert.match(source, /\.\.\.\(lookupUrl === undefined \? \{\} : \{ lookupUrl \}\)/);
+  assert.doesNotMatch(source, /lookupUrl: options\.lookupUrl \?\? DEFAULT_LOOKUP_URL/);
+});

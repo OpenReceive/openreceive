@@ -78,7 +78,7 @@ export interface UseCheckoutOptions extends CheckoutData {
   readonly logger?: OpenReceiveBrowserLogger;
   readonly onError?: (error: unknown) => void;
   readonly lookupInvoice?: (state: CheckoutState) => Promise<Partial<CheckoutSnapshot>>;
-  readonly lookupUrl?: string;
+  readonly lookupUrl?: string | false;
   readonly refreshInvoice?: (state: CheckoutState) => Promise<CheckoutSnapshot | OpenReceiveRefreshInvoiceResult>;
   readonly refreshUrl?: string | ((state: CheckoutState) => string);
   readonly refreshHeaders?: Readonly<Record<string, string>>;
@@ -86,6 +86,7 @@ export interface UseCheckoutOptions extends CheckoutData {
   readonly refreshReason?: string | ((state: CheckoutState) => string);
   readonly onState?: (state: CheckoutState) => void;
   readonly onPaid?: () => void;
+  readonly polling?: boolean;
   readonly pollIntervalMs?: number;
 }
 
@@ -203,7 +204,7 @@ export interface CheckoutProps
   readonly logger?: OpenReceiveBrowserLogger;
   readonly onError?: (error: unknown) => void;
   readonly lookupInvoice?: (state: CheckoutState) => Promise<Partial<CheckoutSnapshot>>;
-  readonly lookupUrl?: string;
+  readonly lookupUrl?: string | false;
   readonly refreshInvoice?: (state: CheckoutState) => Promise<CheckoutSnapshot | OpenReceiveRefreshInvoiceResult>;
   readonly refreshUrl?: string | ((state: CheckoutState) => string);
   readonly refreshHeaders?: Readonly<Record<string, string>>;
@@ -212,6 +213,7 @@ export interface CheckoutProps
   readonly onState?: (state: CheckoutState) => void;
   readonly onPaid?: () => void;
   readonly onStartOver?: () => void;
+  readonly polling?: boolean;
   readonly paymentWizard?: boolean;
   readonly themeSwitcher?: boolean;
   readonly defaultTheme?: OpenReceiveThemePreference;
@@ -349,6 +351,14 @@ export function createCheckoutViewModel(
   );
 }
 
+function resolveCheckoutLookupUrl(options: {
+  readonly lookupUrl?: string | false;
+  readonly polling?: boolean;
+}): string | undefined {
+  if (options.polling === false || options.lookupUrl === false) return undefined;
+  return options.lookupUrl ?? DEFAULT_LOOKUP_URL;
+}
+
 export function useCheckout(
   options: UseCheckoutOptions
 ): UseCheckoutResult {
@@ -397,10 +407,13 @@ export function useCheckout(
     ]
   );
   React.useEffect(() => {
+    const lookupInvoice =
+      options.polling === false ? undefined : options.lookupInvoice;
+    const lookupUrl = resolveCheckoutLookupUrl(options);
     const controller = createCheckoutController({
       snapshot,
-      ...(options.lookupInvoice === undefined ? {} : { lookupInvoice: options.lookupInvoice }),
-      lookupUrl: options.lookupUrl ?? DEFAULT_LOOKUP_URL,
+      ...(lookupInvoice === undefined ? {} : { lookupInvoice }),
+      ...(lookupUrl === undefined ? {} : { lookupUrl }),
       ...(options.refreshInvoice === undefined ? {} : { refreshInvoice: options.refreshInvoice }),
       ...(options.refreshUrl === undefined ? {} : { refreshUrl: options.refreshUrl }),
       ...(options.refreshHeaders === undefined ? {} : { refreshHeaders: options.refreshHeaders }),
@@ -429,6 +442,7 @@ export function useCheckout(
     snapshot,
     options.lookupInvoice,
     options.lookupUrl,
+    options.polling,
     options.refreshInvoice,
     options.refreshUrl,
     options.refreshHeaders,
@@ -1513,6 +1527,7 @@ export function Checkout(
     onState,
     onPaid,
     onStartOver,
+    polling,
     paymentWizard = true,
     themeSwitcher = false,
     defaultTheme,
@@ -1536,7 +1551,8 @@ export function Checkout(
     refreshIdempotencyKey,
     refreshReason,
     onState,
-    onPaid
+    onPaid,
+    polling
   });
   const theme = useTheme({
     defaultTheme,

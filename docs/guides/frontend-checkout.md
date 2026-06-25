@@ -57,6 +57,17 @@ import "@openreceive/react/styles.css";
 `onPaid` is a UI hint from polling. It is useful for showing a thank-you panel,
 but fulfillment stays in the backend `onPaid` hook.
 
+`lookupUrl` is optional. If omitted, React uses the default
+`/openreceive/v1/invoices/lookup` route. Apps without a frontend lookup route
+can render a static checkout surface without polling:
+
+```tsx
+<Checkout invoice={invoice} polling={false} />;
+```
+
+Use `lookupUrl={false}` to disable only the default lookup URL while still
+allowing a custom `lookupInvoice` function.
+
 For app-wide theme attributes and the packaged light/dark toggle:
 
 ```tsx
