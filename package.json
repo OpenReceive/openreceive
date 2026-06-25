@@ -1,6 +1,6 @@
 {
   "name": "openreceive",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "OpenReceive v0.1 receive-checkout reference path",
   "license": "MIT",

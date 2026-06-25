@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/provider-data",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Curated, validated, zero-dependency registry of Lightning payment providers and pay-the-invoice route guidance.",
   "license": "MIT",
   "repository": {

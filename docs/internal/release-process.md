@@ -2,7 +2,7 @@
 
 OpenReceive starts with a small v0.1 release surface:
 
-- OpenReceive `0.1.0`
+- OpenReceive `0.1.1`
 - `@openreceive/browser`
 - `@openreceive/provider-data`
 - `@openreceive/elements`
@@ -90,18 +90,18 @@ commands, concurrency groups, and the disabled publish path.
 
 ## Suggested Tags
 
-- `v0.1.0`
-- `js-core-v0.1.0`
-- `js-node-v0.1.0`
-- `js-express-v0.1.0`
-- `js-browser-v0.1.0`
-- `js-provider-data-v0.1.0`
-- `js-testkit-v0.1.0`
-- `js-elements-v0.1.0`
-- `js-react-v0.1.0`
-- `js-vue-v0.1.0`
-- `js-svelte-v0.1.0`
-- `js-angular-v0.1.0`
+- `v0.1.1`
+- `js-core-v0.1.1`
+- `js-node-v0.1.1`
+- `js-express-v0.1.1`
+- `js-browser-v0.1.1`
+- `js-provider-data-v0.1.1`
+- `js-testkit-v0.1.1`
+- `js-elements-v0.1.1`
+- `js-react-v0.1.1`
+- `js-vue-v0.1.1`
+- `js-svelte-v0.1.1`
+- `js-angular-v0.1.1`
 
 Use independent package versions later, after the contract is stable enough to
 avoid confusing SDK consumers.

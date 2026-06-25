@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/example-static-html-small-api",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,10 +11,10 @@
     "openreceive:poll": "openreceive poll --once"
   },
   "dependencies": {
-    "@openreceive/browser": "0.1.0",
-    "@openreceive/core": "0.1.0",
-    "@openreceive/elements": "0.1.0",
-    "@openreceive/node": "0.1.0",
+    "@openreceive/browser": "0.1.1",
+    "@openreceive/core": "0.1.1",
+    "@openreceive/elements": "0.1.1",
+    "@openreceive/node": "0.1.1",
     "express": "*",
     "pg": "^8.22.0",
     "vite": "^6.4.3"

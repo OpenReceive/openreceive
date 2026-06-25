@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 - Unreleased
+## 0.1.1 - Unreleased
 
 - Initialized the v0.1 contract-first repository foundation.
 - Added governance, security, contribution, and agent operating rules.

@@ -1,11 +1,11 @@
 {
   "name": "@openreceive/node",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "dependencies": {
     "@getalby/sdk": "^7.0.0",
-    "@openreceive/core": "0.1.0"
+    "@openreceive/core": "0.1.1"
   },
   "bin": {
     "openreceive": "./bin/openreceive.mjs"

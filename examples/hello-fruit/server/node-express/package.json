@@ -1,6 +1,6 @@
 {
   "name": "@openreceive/example-node-express",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,13 +11,13 @@
     "openreceive:poll": "openreceive poll --once"
   },
   "dependencies": {
-    "@openreceive/browser": "0.1.0",
-    "@openreceive/core": "0.1.0",
-    "@openreceive/node": "0.1.0",
-    "@openreceive/angular": "0.1.0",
-    "@openreceive/react": "0.1.0",
-    "@openreceive/svelte": "0.1.0",
-    "@openreceive/vue": "0.1.0",
+    "@openreceive/browser": "0.1.1",
+    "@openreceive/core": "0.1.1",
+    "@openreceive/node": "0.1.1",
+    "@openreceive/angular": "0.1.1",
+    "@openreceive/react": "0.1.1",
+    "@openreceive/svelte": "0.1.1",
+    "@openreceive/vue": "0.1.1",
     "@angular/compiler": "^22.0.3",
     "@angular/core": "^22.0.3",
     "@angular/platform-browser": "^22.0.3",
