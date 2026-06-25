@@ -97,7 +97,7 @@ export async function createHelloFruitStaticServer() {
         invoiceExpirySeconds: product.invoice_expiry_seconds,
         demoName: "static"
       });
-      const invoice = await openreceive.createInvoice(orderResult.invoice_request);
+      const invoice = await openreceive.createInvoice(orderResult.invoiceRequest);
       res.status(201).json({
         order: orderResult.order,
         invoice

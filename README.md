@@ -41,8 +41,8 @@ npm run demo rails     # Rails + Hotwire skeleton  http://localhost:3003
 
 Each command creates a root `.env` if missing, validates `OPENRECEIVE_NWC`, and
 then runs that demo's Docker Compose stack with local port publishing. The JS
-demo stacks start a local Postgres container, run the package-owned OpenReceive
-invoice migration, and record the OpenReceive
+demo stacks start a local Postgres container, run the OpenReceive invoice
+migration, and record the OpenReceive
 schema version before store queries. The JS local overrides run Vite or Next.js
 development servers inside Docker so browser errors stay readable. The Rails
 Hotwire demo is experimental skeleton work; its container runs

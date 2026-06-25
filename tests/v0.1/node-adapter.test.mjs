@@ -448,9 +448,9 @@ test("createOpenReceive builds service methods from a client and store", async (
   });
 
   const body = await openreceive.createInvoice({
-    order_uuid: "create-openreceive-order",
+    orderUuid: "create-openreceive-order",
     amount_msats: 200000,
-    optional_invoice_description: "Factory invoice"
+    optionalInvoiceDescription: "Factory invoice"
   });
 
   assert.equal(body.invoice, "lnbc-create-openreceive");

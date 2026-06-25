@@ -17,7 +17,7 @@ Node is the v0.1 supported path:
 
 Rails support is initial proof work. The `openreceive` and `openreceive-rails`
 Ruby packages live in this repository with tests, route helpers, generated
-tasks, package-owned SQLite storage, Hotwire partials, and a Rails Hotwire demo
+tasks, OpenReceive SQLite storage, Hotwire partials, and a Rails Hotwire demo
 skeleton.
 
 Treat Rails as experimental until the Rails smoke and live-wallet proof gaps
@@ -31,7 +31,7 @@ npm run demo rails
 
 There is no Python package yet. Future FastAPI, Django, Flask, or Starlette
 work should keep `OPENRECEIVE_NWC` server-side, expose app-owned checkout
-routes, use package-owned invoice storage, and run fulfillment only from a
+routes, use OpenReceive invoice storage, and run fulfillment only from a
 server-side payment-verified hook.
 
 ## PHP

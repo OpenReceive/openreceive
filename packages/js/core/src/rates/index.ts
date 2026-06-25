@@ -37,6 +37,16 @@ export interface OpenReceiveFiatAmount {
   value: string;
 }
 
+export interface OpenReceiveBitcoinAmount {
+  currency: "BTC" | "SAT" | "SATS";
+  value: string;
+}
+
+export interface OpenReceiveDirectAmountQuote {
+  amount_sats: number;
+  amount_msats: number;
+}
+
 export interface OpenReceiveRateQuote {
   fiat: OpenReceiveFiatAmount;
   btc_fiat_price: string;
@@ -172,6 +182,40 @@ function assertAmountBounds(amountSats: bigint, amountMsats: bigint): void {
   if (amountMsats > OPENRECEIVE_MAX_AMOUNT_MSATS) {
     throw new RangeError("amount_msats exceeds JSON safe integer boundary");
   }
+}
+
+export function isOpenReceiveBitcoinAmountCurrency(currency: string): currency is OpenReceiveBitcoinAmount["currency"] {
+  return currency === "BTC" || currency === "SAT" || currency === "SATS";
+}
+
+export function quoteBitcoinAmountToMsats(
+  amount: OpenReceiveBitcoinAmount
+): OpenReceiveDirectAmountQuote {
+  const parsed = parseDecimal(amount.value, "amount.value");
+  let amountSats: bigint;
+  let amountMsats: bigint;
+
+  if (amount.currency === "BTC") {
+    const numerator = parsed.integer * OPENRECEIVE_SATS_PER_BTC;
+    if (numerator % parsed.scale !== 0n) {
+      throw new RangeError("BTC amount cannot be more precise than satoshis");
+    }
+    amountSats = numerator / parsed.scale;
+    amountMsats = amountSats * OPENRECEIVE_MSATS_PER_SAT;
+  } else {
+    if (parsed.integer % parsed.scale !== 0n) {
+      throw new RangeError("SATS amount must be a whole number of satoshis");
+    }
+    amountSats = parsed.integer / parsed.scale;
+    amountMsats = amountSats * OPENRECEIVE_MSATS_PER_SAT;
+  }
+
+  assertAmountBounds(amountSats, amountMsats);
+
+  return {
+    amount_sats: toSafeJsonInteger(amountSats, "amount_sats"),
+    amount_msats: toSafeJsonInteger(amountMsats, "amount_msats")
+  };
 }
 
 export function getStaticBtcFiatPrice(currency: string): string {

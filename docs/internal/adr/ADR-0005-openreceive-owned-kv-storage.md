@@ -16,7 +16,7 @@ OpenReceive owns its invoice storage through a 9-method KV contract. Apps
 select a transport with `OPENRECEIVE_STORE` and optionally isolate instances
 with `OPENRECEIVE_NAMESPACE`.
 
-The package self-initializes supported stores. SQL adapters use package-owned
+OpenReceive self-initializes supported stores. SQL adapters use OpenReceive
 tables with uniqueness/recovery control columns and an opaque record blob. Apps
 keep business data in app-owned tables and link through metadata or their own
 records.

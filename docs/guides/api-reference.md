@@ -26,15 +26,62 @@ not part of the supported app surface.
 
 ## Create Invoice
 
+App-facing Node service input uses camelCase:
+
+```ts
+await openreceive.createInvoice({
+  orderUuid: order.uuid,
+  fiat: {
+    currency: order.totalFiat.currency,
+    value: order.totalFiat.value
+  },
+  optionalInvoiceDescription: `Order ${order.number}`,
+  expiry: 600
+});
+```
+
+`fiat.currency` must be one of the server's configured `priceCurrencies`; the
+currency is an order property, not a browser-locale guess.
+
+For Bitcoin-denominated orders, use direct amount units instead of `fiat`:
+
+```ts
+await openreceive.createInvoice({
+  orderUuid: order.uuid,
+  amount: {
+    currency: "BTC",
+    value: "0.005"
+  },
+  optionalInvoiceDescription: `Order ${order.number}`,
+  expiry: 600
+});
+
+await openreceive.createInvoice({
+  orderUuid: order.uuid,
+  amount: {
+    currency: "SATS",
+    value: "7000"
+  },
+  optionalInvoiceDescription: `Order ${order.number}`,
+  expiry: 600
+});
+```
+
+`BTC`, `SAT`, and `SATS` are converted directly to `amount_msats`; they are not
+looked up in the configured price feeds.
+
 `POST /openreceive/v1/invoices`
 
-Request body includes:
+Lower-level HTTP request body includes:
 
 - `order_uuid`: stable app order/cart/payment-attempt id. Replays the same
   create request and conflicts on drift.
 
 Use exactly one amount input:
 
+- `amount`: direct Bitcoin units, for example
+  `{ "currency": "BTC", "value": "0.005" }` or
+  `{ "currency": "SATS", "value": "7000" }`.
 - `amount_sats`: integer satoshis from `1` through `9007199254740`.
 - `amount_msats`: integer from `1000` through `9007199254740991`.
 - `fiat`: `{ "currency": "USD", "value": "0.10" }` style decimal string.

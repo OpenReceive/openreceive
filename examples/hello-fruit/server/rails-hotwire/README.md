@@ -5,7 +5,7 @@ This is the Rails Hotwire Hello Fruit demo skeleton. It uses
 updates owning the application workflow.
 
 The browser never receives `OPENRECEIVE_NWC`.
-OpenReceive invoice persistence uses the package-owned SQLite store selected by
+OpenReceive invoice persistence uses SQLite storage selected by
 `OPENRECEIVE_STORE`. The fruit unlock table remains app-owned demo business
 state. The demo can recover paid invoices after a restart or closed browser
 window without requiring a separate background worker.

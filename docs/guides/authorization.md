@@ -21,11 +21,15 @@ const openreceive = await createOpenReceive({
 
 checkoutRoutes.post("/create_order", async (req, res, next) => {
   try {
+    // Your app function. Create and validate the order before calling OpenReceive.
     const order = await createOrderFromCart(req.user, req.body.cart);
     const invoice = await openreceive.createInvoice({
-      order_uuid: order.uuid,
-      fiat: order.total_fiat,
-      optional_invoice_description: `Order ${order.number}`,
+      orderUuid: order.uuid,
+      fiat: {
+        currency: order.totalFiat.currency,
+        value: order.totalFiat.value
+      },
+      optionalInvoiceDescription: `Order ${order.number}`,
       expiry: 600
     });
     res.status(201).json({ order, invoice });
@@ -90,11 +94,15 @@ export async function POST(request: Request) {
   const openreceive = await openreceiveReady;
   try {
     const body = await request.json();
+    // Your app function. Create and validate the order before calling OpenReceive.
     const order = await createOrderFromCart(body.cart);
     const invoice = await openreceive.createInvoice({
-      order_uuid: order.uuid,
-      fiat: order.total_fiat,
-      optional_invoice_description: `Order ${order.number}`,
+      orderUuid: order.uuid,
+      fiat: {
+        currency: order.totalFiat.currency,
+        value: order.totalFiat.value
+      },
+      optionalInvoiceDescription: `Order ${order.number}`,
       expiry: 600
     });
     return Response.json({ order, invoice }, {
@@ -138,11 +146,15 @@ access:
 ```ts
 export async function createOrder(req, res, next) {
   try {
+    // Your app function. Create and validate the order before calling OpenReceive.
     const order = await createOrderFromCart(req.user, req.body.cart);
     const invoice = await openreceive.createInvoice({
-      order_uuid: order.uuid,
-      fiat: order.total_fiat,
-      optional_invoice_description: `Order ${order.number}`,
+      orderUuid: order.uuid,
+      fiat: {
+        currency: order.totalFiat.currency,
+        value: order.totalFiat.value
+      },
+      optionalInvoiceDescription: `Order ${order.number}`,
       expiry: 600
     });
     res.status(201).json({ order, invoice });

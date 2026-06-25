@@ -94,6 +94,10 @@ test("public Node guides show app routes without OpenReceive error class imports
   for (const filePath of [nodeQuickstartDocs, authorizationDocs]) {
     const source = readFileSync(filePath, "utf8");
     assert.doesNotMatch(source, /OpenReceiveServiceError/, filePath);
+    assert.doesNotMatch(source, /order_uuid:|optional_invoice_description:|total_fiat/, filePath);
+    assert.match(source, /orderUuid:/, filePath);
+    assert.match(source, /optionalInvoiceDescription:/, filePath);
+    assert.match(source, /totalFiat/, filePath);
     assert.match(source, /import \{ createOpenReceive \} from "@openreceive\/node";/, filePath);
   }
 });
@@ -202,7 +206,7 @@ test("supported database docs keep invoice storage boundaries narrow", () => {
   assert.match(docs, /Cloudflare Workers KV/);
   assert.match(docs, /OpenReceive owns its invoice storage/);
   assert.match(docs, /Your app keeps orders, carts, users/);
-  assert.match(quickstart, /package-owned Postgres or SQLite invoice store/);
+  assert.match(quickstart, /OpenReceive-managed Postgres or SQLite invoice/);
 });
 
 test("storage schema and vectors cover KV coordination fields", () => {

@@ -9,9 +9,11 @@ import {
   isOpenReceiveErrorCode,
   maybeSweep,
   putCreatedInvoiceRecord,
+  quoteBitcoinAmountToMsats,
   quoteFiatToMsatsWithPrice,
   reconcileOnce,
   type InvoiceStorageRow,
+  type OpenReceiveBitcoinAmount,
   type OpenReceiveBtcFiatRateMapWithSource,
   type OpenReceiveErrorBody,
   type OpenReceiveErrorCode,
@@ -90,11 +92,12 @@ export interface CreateOpenReceiveOptions
 }
 
 export interface OpenReceiveCreateInvoiceRequest {
-  readonly order_uuid: string;
+  readonly orderUuid: string;
+  readonly amount?: OpenReceiveBitcoinAmount;
   readonly amount_sats?: number | string;
   readonly amount_msats?: number | string;
   readonly fiat?: OpenReceiveFiatAmount;
-  readonly optional_invoice_description?: string;
+  readonly optionalInvoiceDescription?: string;
   readonly description?: string;
   readonly description_hash?: string;
   readonly expiry?: number | string;
@@ -184,7 +187,7 @@ interface OpenReceiveServiceContext {
 
 interface ResolvedCreateAmount {
   amount_msats: number;
-  amount_source: "amount_sats" | "amount_msats" | "fiat";
+  amount_source: "amount" | "amount_sats" | "amount_msats" | "fiat";
   fiat_quote: OpenReceiveRateQuote | null;
 }
 
@@ -280,7 +283,7 @@ async function createInvoice(
   context: OpenReceiveServiceContext,
   input: OpenReceiveCreateInvoiceRequest
 ): Promise<OpenReceiveInvoice> {
-  const body = asRecord(input);
+  const body = normalizeCreateInvoiceRequest(asRecord(input));
   const orderUuid = parseCreateOrderUuid(body);
   const idempotencyKey = orderUuid;
   const namespaceScope = context.options.namespace ?? readOpenReceiveNamespace(undefined);
@@ -305,7 +308,8 @@ async function createInvoice(
   const resolvedAmount = await resolveCreateAmount({
     body,
     now: context.clock(),
-    priceProviders: context.priceProviders
+    priceProviders: context.priceProviders,
+    priceCurrencies: context.priceCurrencies
   });
   const descriptionFields = getCreateDescriptionFields(body);
   emitLog(context.options, "info", "invoice.create.requested", "Creating Lightning invoice through receive wallet.", {
@@ -519,8 +523,10 @@ async function quoteRates(
 ): Promise<OpenReceiveRateQuote> {
   const body = asRecord(input);
   try {
+    const fiat = parseFiatAmount(body.fiat);
+    assertAllowedFiatCurrency(fiat.currency, context.priceCurrencies);
     return await quoteFiatAmount({
-      fiat: parseFiatAmount(body.fiat),
+      fiat,
       as_of: context.clock(),
       priceProviders: context.priceProviders
     });
@@ -788,12 +794,14 @@ async function resolveCreateAmount(input: {
   body: Record<string, unknown>;
   now: number;
   priceProviders: readonly OpenReceiveSourcedPriceProvider[];
+  priceCurrencies: readonly string[];
 }): Promise<ResolvedCreateAmount> {
   const { body } = input;
+  const hasAmount = body.amount !== undefined;
   const hasAmountSats = body.amount_sats !== undefined;
   const hasAmountMsats = body.amount_msats !== undefined;
   const hasFiat = body.fiat !== undefined;
-  const sourceCount = [hasAmountSats, hasAmountMsats, hasFiat]
+  const sourceCount = [hasAmount, hasAmountSats, hasAmountMsats, hasFiat]
     .filter(Boolean)
     .length;
 
@@ -801,8 +809,22 @@ async function resolveCreateAmount(input: {
     throw serviceError(
       400,
       "INVALID_REQUEST",
-      "Create invoice request requires exactly one of amount_sats, amount_msats, or fiat."
+      "Create invoice request requires exactly one of amount, amount_sats, amount_msats, or fiat."
     );
+  }
+
+  if (hasAmount) {
+    try {
+      const quote = quoteBitcoinAmountToMsats(parseBitcoinAmount(body.amount));
+      return {
+        amount_msats: quote.amount_msats,
+        amount_source: "amount",
+        fiat_quote: null
+      };
+    } catch (error) {
+      if (error instanceof OpenReceiveServiceError) throw error;
+      throw mapPriceError(error);
+    }
   }
 
   if (hasAmountSats) {
@@ -834,8 +856,10 @@ async function resolveCreateAmount(input: {
   }
 
   try {
+    const fiat = parseFiatAmount(body.fiat);
+    assertAllowedFiatCurrency(fiat.currency, input.priceCurrencies);
     const quote = await quoteFiatAmount({
-      fiat: parseFiatAmount(body.fiat),
+      fiat,
       as_of: input.now,
       priceProviders: input.priceProviders
     });
@@ -873,6 +897,16 @@ async function quoteFiatAmount(input: {
   });
 }
 
+function assertAllowedFiatCurrency(currency: string, allowedCurrencies: readonly string[]): void {
+  if (!allowedCurrencies.includes(currency)) {
+    throw serviceError(
+      400,
+      "INVALID_REQUEST",
+      `fiat.currency must be one of the configured priceCurrencies: ${allowedCurrencies.join(", ")}.`
+    );
+  }
+}
+
 async function getBtcFiatRatesForProviders(input: {
   currencies: readonly string[];
   priceProviders: readonly OpenReceiveSourcedPriceProvider[];
@@ -904,6 +938,48 @@ function mapPriceError(error: unknown): OpenReceiveServiceError {
   );
 }
 
+function normalizeCreateInvoiceRequest(body: Record<string, unknown>): Record<string, unknown> {
+  const orderUuid = optionalString(body.orderUuid);
+  const legacyOrderUuid = optionalString(body.order_uuid);
+  if (orderUuid !== undefined && legacyOrderUuid !== undefined && orderUuid !== legacyOrderUuid) {
+    throw serviceError(
+      400,
+      "INVALID_REQUEST",
+      "Create invoice request accepts only one of orderUuid or order_uuid."
+    );
+  }
+
+  const optionalInvoiceDescription = optionalString(body.optionalInvoiceDescription);
+  const legacyOptionalInvoiceDescription = optionalString(body.optional_invoice_description);
+  if (
+    optionalInvoiceDescription !== undefined &&
+    legacyOptionalInvoiceDescription !== undefined &&
+    optionalInvoiceDescription !== legacyOptionalInvoiceDescription
+  ) {
+    throw serviceError(
+      400,
+      "INVALID_REQUEST",
+      "Create invoice request accepts only one of optionalInvoiceDescription or optional_invoice_description."
+    );
+  }
+
+  const resolvedOrderUuid = orderUuid ?? legacyOrderUuid;
+  const resolvedOptionalInvoiceDescription =
+    optionalInvoiceDescription ?? legacyOptionalInvoiceDescription;
+  const normalized: Record<string, unknown> = {
+    ...body,
+    ...(resolvedOrderUuid === undefined ? {} : { order_uuid: resolvedOrderUuid }),
+    ...(resolvedOptionalInvoiceDescription === undefined
+      ? {}
+      : { optional_invoice_description: resolvedOptionalInvoiceDescription })
+  };
+
+  delete normalized.orderUuid;
+  delete normalized.optionalInvoiceDescription;
+
+  return normalized;
+}
+
 function getCreateDescriptionFields(body: Record<string, unknown>): {
   readonly description?: string;
   readonly description_hash?: string;
@@ -916,7 +992,7 @@ function getCreateDescriptionFields(body: Record<string, unknown>): {
     throw serviceError(
       400,
       "INVALID_REQUEST",
-      "Create invoice request accepts only one of optional_invoice_description or description."
+      "Create invoice request accepts only one of optionalInvoiceDescription or description."
     );
   }
 
@@ -925,7 +1001,7 @@ function getCreateDescriptionFields(body: Record<string, unknown>): {
     throw serviceError(
       400,
       "INVALID_REQUEST",
-      "optional_invoice_description must be 500 characters or fewer."
+      "optionalInvoiceDescription must be 500 characters or fewer."
     );
   }
 
@@ -933,7 +1009,7 @@ function getCreateDescriptionFields(body: Record<string, unknown>): {
     throw serviceError(
       400,
       "INVALID_REQUEST",
-      "Create invoice request accepts only one of optional_invoice_description or description_hash."
+      "Create invoice request accepts only one of optionalInvoiceDescription or description_hash."
     );
   }
 
@@ -954,10 +1030,10 @@ function getCreateDescriptionFields(body: Record<string, unknown>): {
 function parseCreateOrderUuid(body: Record<string, unknown>): string {
   const orderUuid = optionalString(body.order_uuid);
   if (orderUuid === undefined) {
-    throw serviceError(400, "INVALID_REQUEST", "order_uuid is required.");
+    throw serviceError(400, "INVALID_REQUEST", "orderUuid is required.");
   }
   if (orderUuid.length > 200) {
-    throw serviceError(400, "INVALID_REQUEST", "order_uuid must be 200 characters or fewer.");
+    throw serviceError(400, "INVALID_REQUEST", "orderUuid must be 200 characters or fewer.");
   }
   return orderUuid;
 }
@@ -1077,6 +1153,29 @@ function parseFiatAmount(value: unknown): OpenReceiveFiatAmount {
   }
   return {
     currency,
+    value: amountValue
+  };
+}
+
+function parseBitcoinAmount(value: unknown): OpenReceiveBitcoinAmount {
+  const record = parseOptionalRecord(value, "amount");
+  if (record === undefined) {
+    throw serviceError(400, "INVALID_REQUEST", "amount must be a JSON object.");
+  }
+  const currency = optionalString(record.currency);
+  const amountValue = optionalString(record.value);
+  if (currency === undefined || !["BTC", "SAT", "SATS"].includes(currency)) {
+    throw serviceError(
+      400,
+      "INVALID_REQUEST",
+      "amount.currency must be BTC, SAT, or SATS. Use fiat for price-feed currencies."
+    );
+  }
+  if (amountValue === undefined) {
+    throw serviceError(400, "INVALID_REQUEST", "amount.value must be a decimal string");
+  }
+  return {
+    currency: currency as OpenReceiveBitcoinAmount["currency"],
     value: amountValue
   };
 }

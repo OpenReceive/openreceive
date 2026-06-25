@@ -10,7 +10,7 @@ Implemented proof pieces:
 - duplicate-safe fulfillment tracking using the configured store
 - optional recovery after a restart or closed browser window
 - internal verification for optional scheduled jobs
-- package-owned SQLite invoice store resolver for `OPENRECEIVE_STORE`
+- SQLite invoice store resolver for `OPENRECEIVE_STORE`
 - install generator skeleton that copies the controller, poll job, view, rake
   task, and route templates
 - generated `openreceive:poll` rake task for optional scheduled recovery

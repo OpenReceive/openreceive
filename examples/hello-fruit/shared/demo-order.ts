@@ -23,23 +23,23 @@ export interface HelloFruitOrderItem {
   readonly name: string;
   readonly sticker: string;
   readonly quantity: number;
-  readonly unit_fiat: HelloFruitFiatAmount;
-  readonly line_fiat: HelloFruitFiatAmount;
+  readonly unitFiat: HelloFruitFiatAmount;
+  readonly lineFiat: HelloFruitFiatAmount;
 }
 
 export interface HelloFruitDemoOrder {
   readonly uuid: string;
   readonly status: "pending_payment" | "paid";
   readonly items: readonly HelloFruitOrderItem[];
-  readonly total_fiat: HelloFruitFiatAmount;
+  readonly totalFiat: HelloFruitFiatAmount;
 }
 
 export interface HelloFruitCreateOrderResult {
   readonly order: HelloFruitDemoOrder;
-  readonly invoice_request: {
-    readonly order_uuid: string;
+  readonly invoiceRequest: {
+    readonly orderUuid: string;
     readonly fiat: HelloFruitFiatAmount;
-    readonly optional_invoice_description: string;
+    readonly optionalInvoiceDescription: string;
     readonly expiry: number;
   };
 }
@@ -80,21 +80,21 @@ export function createHelloFruitCreateOrderResult(
 ): HelloFruitCreateOrderResult {
   const idempotencyKey = requireIdempotencyKey(input.idempotency_key);
   const items = createHelloFruitOrderItems(input.cart, options.catalog ?? readHelloFruitCatalog());
-  const total_fiat = totalHelloFruitFiat(items);
+  const totalFiat = totalHelloFruitFiat(items);
   const uuid = `hello-fruit-${options.demoId}-${idempotencyKey}`;
   const order: HelloFruitDemoOrder = {
     uuid,
     status: "pending_payment",
     items,
-    total_fiat
+    totalFiat
   };
 
   return {
     order,
-    invoice_request: {
-      order_uuid: uuid,
-      fiat: total_fiat,
-      optional_invoice_description: createHelloFruitOrderInvoiceDescription(
+    invoiceRequest: {
+      orderUuid: uuid,
+      fiat: totalFiat,
+      optionalInvoiceDescription: createHelloFruitOrderInvoiceDescription(
         items.map((item) => `${item.name} x${item.quantity}`),
         { demoName: options.demoName }
       ),
@@ -155,8 +155,8 @@ function createHelloFruitOrderItems(
       name: product.name,
       sticker: product.sticker,
       quantity,
-      unit_fiat: product.fiat,
-      line_fiat: multiplyFiat(product.fiat, quantity)
+      unitFiat: product.fiat,
+      lineFiat: multiplyFiat(product.fiat, quantity)
     };
   });
 }
@@ -166,15 +166,15 @@ function totalHelloFruitFiat(items: readonly HelloFruitOrderItem[]): HelloFruitF
   if (first === undefined) {
     throw new HelloFruitDemoOrderError("Cart must include at least one item.");
   }
-  const currency = first.unit_fiat.currency;
+  const currency = first.unitFiat.currency;
   let scale = 0;
   let totalUnits = 0n;
 
   for (const item of items) {
-    if (item.unit_fiat.currency !== currency) {
+    if (item.unitFiat.currency !== currency) {
       throw new HelloFruitDemoOrderError("Cart items must use one currency.");
     }
-    const decimal = parseDecimal(item.line_fiat.value);
+    const decimal = parseDecimal(item.lineFiat.value);
     if (decimal.scale > scale) {
       totalUnits *= 10n ** BigInt(decimal.scale - scale);
       scale = decimal.scale;

@@ -108,7 +108,7 @@ export async function createOrderResponse(
       invoiceExpirySeconds: product.invoice_expiry_seconds,
       demoName: "Next.js"
     });
-    const invoice = await openreceive.createInvoice(orderResult.invoice_request);
+    const invoice = await openreceive.createInvoice(orderResult.invoiceRequest);
     return jsonResponse({
       order: orderResult.order,
       invoice

@@ -7,7 +7,7 @@ for the packages that already exist in this repository.
 
 The first end-developer path to polish is:
 
-- `@openreceive/node` for receive-only NWC code handling, package-owned persistence, CLI
+- `@openreceive/node` for receive-only NWC code handling, OpenReceive-managed persistence, CLI
   store initialization, mounted Node HTTP routes, app-owned route protection,
   gated lookup, backend settlement verification, settlement actions, and
   one-shot poll support.

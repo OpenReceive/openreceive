@@ -18,7 +18,7 @@
 - Added idempotency, settlement action, rate, provider-route, route-boundary,
   and security regression coverage.
 - Added deterministic mock wallet tooling for non-payable conformance fixtures.
-- Added package-owned Node Postgres pool setup for Hello Fruit demos and
+- Added OpenReceive Node Postgres pool setup for Hello Fruit demos and
   quarantined the copied Rails React skeleton until the Rails proof is green.
 - Simplified the app-facing API before release: `createOpenReceive()` now
   reads `OPENRECEIVE_NWC`, validates receive-only wallet access at boot,

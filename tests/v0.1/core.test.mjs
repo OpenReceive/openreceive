@@ -13,6 +13,7 @@ import {
   isOpenReceiveErrorCode,
   isRetryableOpenReceiveErrorCode,
   putCreatedInvoiceRecord,
+  quoteBitcoinAmountToMsats,
   parseNwcUri,
   pollInvoiceUntilFinalState,
   quoteFiatToMsats,
@@ -125,6 +126,38 @@ test("quotes static USD fiat to whole-sat msats without floating point drift", (
   assert.equal(quote.amount_msats, 200000);
   assert.equal(quote.btc_fiat_price, "50000.00");
   assert.equal(quote.expires_at, 1781741400);
+});
+
+test("quotes BTC and satoshi amounts without price feeds", () => {
+  assert.deepEqual(
+    quoteBitcoinAmountToMsats({
+      currency: "BTC",
+      value: "0.005"
+    }),
+    {
+      amount_sats: 500000,
+      amount_msats: 500000000
+    }
+  );
+
+  assert.deepEqual(
+    quoteBitcoinAmountToMsats({
+      currency: "SATS",
+      value: "7000"
+    }),
+    {
+      amount_sats: 7000,
+      amount_msats: 7000000
+    }
+  );
+
+  assert.throws(
+    () => quoteBitcoinAmountToMsats({
+      currency: "SAT",
+      value: "1.5"
+    }),
+    /SATS amount must be a whole number of satoshis/
+  );
 });
 
 test("parses and redacts NWC URI without leaking the client secret", () => {
@@ -701,6 +734,36 @@ test("browser create invoice helper owns idempotent invoice POST shape", async (
     },
     optional_invoice_description: "Browser helper invoice",
     expiry: 600
+  });
+
+  await createInvoice({
+    orderUuid: "order-browser-btc",
+    amount: {
+      currency: "BTC",
+      value: "0.005"
+    },
+    fetch: async (url, init) => {
+      requests.push({ url, init });
+      return {
+        ok: true,
+        json: async () => ({
+          invoice_id: "or_inv_browser_btc",
+          invoice: "lnbc-browser-btc",
+          payment_hash: PAYMENT_HASH,
+          amount_msats: 500000000,
+          order_uuid: "order-browser-btc",
+          transaction_state: "pending",
+          workflow_state: "invoice_created"
+        })
+      };
+    }
+  });
+  assert.deepEqual(JSON.parse(requests[1].init.body), {
+    order_uuid: "order-browser-btc",
+    amount: {
+      currency: "BTC",
+      value: "0.005"
+    }
   });
 
   await assert.rejects(

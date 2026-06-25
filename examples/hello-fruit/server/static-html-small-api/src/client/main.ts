@@ -43,7 +43,7 @@ interface DemoOrder {
     name: string;
     quantity: number;
   }[];
-  total_fiat: {
+  totalFiat: {
     currency: string;
     value: string;
   };
@@ -211,7 +211,7 @@ function renderOrder(order: DemoOrder): void {
   const title = document.createElement("strong");
   title.textContent = "Order";
   const total = document.createElement("span");
-  total.textContent = formatHelloFruitFiat(order.total_fiat);
+  total.textContent = formatHelloFruitFiat(order.totalFiat);
   heading.append(title, total);
   section.append(heading);
 

@@ -1119,8 +1119,8 @@ test("Hello Fruit demos create app orders and poll order status through merchant
       assert.equal(created.status, 201, `${demo.name}: create_order status`);
       assert.equal(created.body.order.uuid.includes("cart-smoke"), true);
       assert.equal(created.body.order.status, "pending_payment");
-      assert.equal(created.body.order.total_fiat.currency, "USD");
-      assert.equal(created.body.order.total_fiat.value, "0.25");
+      assert.equal(created.body.order.totalFiat.currency, "USD");
+      assert.equal(created.body.order.totalFiat.value, "0.25");
       assert.equal(created.body.invoice.order_uuid, created.body.order.uuid);
       assert.equal(typeof created.body.invoice.invoice, "string");
       assert.equal(JSON.stringify(created.body).includes("nostr+walletconnect://"), false);
@@ -1142,7 +1142,7 @@ test("Hello Fruit demos create app orders and poll order status through merchant
     const nextCreated = await responseJson(postNextCreateOrder(jsonRequest("/create_order", orderRequest)));
     assert.equal(nextCreated.status, 201, "nextjs-fullstack: create_order status");
     assert.equal(nextCreated.body.order.uuid.includes("cart-smoke"), true);
-    assert.equal(nextCreated.body.order.total_fiat.value, "0.25");
+    assert.equal(nextCreated.body.order.totalFiat.value, "0.25");
     assert.equal(nextCreated.body.invoice.order_uuid, nextCreated.body.order.uuid);
 
     const nextReplayed = await responseJson(postNextCreateOrder(jsonRequest("/create_order", orderRequest)));

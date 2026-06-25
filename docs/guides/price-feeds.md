@@ -48,8 +48,20 @@ before checkout. Invoice creation can also quote internally from the configured
 `createDefaultLivePriceProviders({ currencies: ["USD"] })` for live demos and
 use the deterministic static provider only in fake-wallet tests.
 
+The same currency list is the invoice-creation allowlist. A backend that calls
+`createOpenReceive({ priceProviders, priceCurrencies: ["USD", "EUR"] })` may
+create fiat invoices only for those explicit uppercase currency codes. The
+browser can localize display however it wants, but the server must pass the
+actual order currency in `fiat.currency`.
+
+`BTC`, `SAT`, and `SATS` are not fiat price-feed currencies. For
+Bitcoin-denominated products, pass `amount: { currency: "BTC", value: "0.005" }`
+or `amount: { currency: "SATS", value: "7000" }` to `createInvoice`. Those
+amounts convert directly to `amount_msats` and never call a price provider.
+
 ## Quote Rules
 
+- `fiat.currency` is an uppercase allowlisted currency code.
 - `fiat.value` is a decimal string.
 - `btc_fiat_price` is stored as a decimal string.
 - Amounts round up to a whole sat.

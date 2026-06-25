@@ -29,7 +29,8 @@ OPENRECEIVE_NAMESPACE=my_app
 The default SQLite file is fine for one local server. If more than one server,
 worker, serverless instance, or scheduler can touch the same
 `OPENRECEIVE_NAMESPACE`, point all of them at one shared durable OpenReceive
-store. For production, use a package-owned Postgres or SQLite invoice store.
+store. For production, use OpenReceive-managed Postgres or SQLite invoice
+storage.
 OpenReceive uses that store for invoice state only; your app keeps orders,
 carts, users, and fulfillment state in your own tables.
 
@@ -57,6 +58,18 @@ than once. `orderUuid` is guaranteed to be the unique app order key for this
 checkout, so use it for idempotent fulfillment. Most apps can ignore the invoice
 details in this hook; they are available only when you want extra audit or
 correlation data.
+
+When you create an invoice from a fiat order total, pass both the decimal value
+and its server-side currency code, for example
+`{ currency: "USD", value: "0.25" }`. `fiat.currency` must be one of the
+`priceCurrencies` configured on `createOpenReceive`; do not infer it from
+browser locale or a global env var.
+
+For Bitcoin-denominated products, skip price feeds and pass a direct amount:
+`{ amount: { currency: "BTC", value: "0.005" } }` or
+`{ amount: { currency: "SATS", value: "7000" } }`. OpenReceive converts those
+amounts with integer math and never asks a BTC fiat price provider for `BTC` or
+`SATS`.
 
 ## Express
 
@@ -87,11 +100,15 @@ const openreceive = await createOpenReceive({
 
 app.post("/create_order", async (req, res, next) => {
   try {
+    // Your app function. Create and validate the order before calling OpenReceive.
     const order = await createOrderFromCart(req.user, req.body.cart);
     const invoice = await openreceive.createInvoice({
-      order_uuid: order.uuid,
-      fiat: order.total_fiat,
-      optional_invoice_description: `Order ${order.number}`,
+      orderUuid: order.uuid,
+      fiat: {
+        currency: order.totalFiat.currency,
+        value: order.totalFiat.value
+      },
+      optionalInvoiceDescription: `Order ${order.number}`,
       expiry: 600
     });
 
@@ -170,11 +187,15 @@ export async function POST(request: Request) {
   const openreceive = await openreceiveReady;
   try {
     const body = await request.json();
+    // Your app function. Create and validate the order before calling OpenReceive.
     const order = await createOrderFromCart(body.cart);
     const invoice = await openreceive.createInvoice({
-      order_uuid: order.uuid,
-      fiat: order.total_fiat,
-      optional_invoice_description: `Order ${order.number}`,
+      orderUuid: order.uuid,
+      fiat: {
+        currency: order.totalFiat.currency,
+        value: order.totalFiat.value
+      },
+      optionalInvoiceDescription: `Order ${order.number}`,
       expiry: 600
     });
 
@@ -259,11 +280,15 @@ function isCheckoutHttpError(error) {
 
 app.post("/create_order", async (request, reply) => {
   try {
+    // Your app function. Create and validate the order before calling OpenReceive.
     const order = await createOrderFromCart(request.body.cart);
     const invoice = await openreceive.createInvoice({
-      order_uuid: order.uuid,
-      fiat: order.total_fiat,
-      optional_invoice_description: `Order ${order.number}`,
+      orderUuid: order.uuid,
+      fiat: {
+        currency: order.totalFiat.currency,
+        value: order.totalFiat.value
+      },
+      optionalInvoiceDescription: `Order ${order.number}`,
       expiry: 600
     });
     reply.code(201).send({ order, invoice });
@@ -312,7 +337,7 @@ const response = await fetch("/create_order", {
 const { order, invoice } = await response.json();
 ```
 
-Your backend should use a stable order UUID as the OpenReceive `order_uuid`.
+Your backend should use a stable order UUID as the OpenReceive `orderUuid`.
 Reusing the same order UUID with the same invoice request replays the existing
 invoice. Reusing it with a different amount or description returns a conflict.
 

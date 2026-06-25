@@ -660,6 +660,15 @@ function validateOpenApi() {
     "OpenAPI create request must require order_uuid"
   );
   assert(
+    createInvoiceRequest?.properties?.amount?.$ref === "#/components/schemas/BitcoinAmount",
+    "OpenAPI create request must allow direct Bitcoin amount input"
+  );
+  assert(
+    JSON.stringify(openapi.components?.schemas?.BitcoinAmount?.properties?.currency?.enum) ===
+      JSON.stringify(["BTC", "SAT", "SATS"]),
+    "OpenAPI BitcoinAmount currency enum mismatch"
+  );
+  assert(
     createInvoiceRequest?.not?.required?.includes("optional_invoice_description") &&
       createInvoiceRequest?.not?.required?.includes("description_hash"),
     "OpenAPI create request must reject optional_invoice_description with description_hash"

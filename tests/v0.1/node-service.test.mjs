@@ -78,9 +78,9 @@ async function createHarness(overrides = {}) {
 test("create invoice uses idempotency replay without a second wallet call", async () => {
   const { wallet, openreceive } = await createHarness();
   const request = {
-    order_uuid: "order-1",
+    orderUuid: "order-1",
     amount_msats: 200000,
-    optional_invoice_description: "Fruit sticker",
+    optionalInvoiceDescription: "Fruit sticker",
     expiry: 600
   };
 
@@ -97,9 +97,9 @@ test("create invoice does not expose a wallet expiry longer than requested", asy
   wallet.expiresAt = 4600;
 
   const invoice = await openreceive.createInvoice({
-    order_uuid: "order-short-expiry",
+    orderUuid: "order-short-expiry",
     amount_msats: 200000,
-    optional_invoice_description: "Fruit sticker",
+    optionalInvoiceDescription: "Fruit sticker",
     expiry: 600
   });
 
@@ -111,16 +111,16 @@ test("create invoice rejects idempotency key reuse with a different body", async
   const { wallet, openreceive } = await createHarness();
 
   await openreceive.createInvoice({
-    order_uuid: "order-create-conflict",
+    orderUuid: "order-create-conflict",
     amount_msats: 200000,
-    optional_invoice_description: "Fruit sticker"
+    optionalInvoiceDescription: "Fruit sticker"
   });
 
   await assertServiceError(
     () => openreceive.createInvoice({
-      order_uuid: "order-create-conflict",
+      orderUuid: "order-create-conflict",
       amount_msats: 300000,
-      optional_invoice_description: "Fruit sticker"
+      optionalInvoiceDescription: "Fruit sticker"
     }),
     {
       status: 409,
@@ -150,12 +150,12 @@ test("create invoice quotes fiat with configured price providers", async () => {
   });
 
   const invoice = await openreceive.createInvoice({
-    order_uuid: "order-live-rate",
+    orderUuid: "order-live-rate",
     fiat: {
       currency: "USD",
       value: "0.05"
     },
-    optional_invoice_description: "Fruit sticker"
+    optionalInvoiceDescription: "Fruit sticker"
   });
 
   assert.equal(invoice.amount_msats, 50000);
@@ -166,12 +166,54 @@ test("create invoice quotes fiat with configured price providers", async () => {
   assert.deepEqual(calls, [["USD"]]);
 });
 
+test("create invoice accepts BTC and SATS amounts without price providers", async () => {
+  const providerCalls = [];
+  const provider = {
+    source: "openreceive_mirror",
+    async getBtcFiatRates(currencies) {
+      providerCalls.push(currencies);
+      throw new Error("direct Bitcoin amounts must not call price providers");
+    }
+  };
+  const btcHarness = await createHarness({
+    priceProviders: [provider],
+    priceCurrencies: ["USD"]
+  });
+
+  const btcInvoice = await btcHarness.openreceive.createInvoice({
+    orderUuid: "order-btc",
+    amount: {
+      currency: "BTC",
+      value: "0.005"
+    },
+    optionalInvoiceDescription: "BTC amount"
+  });
+  assert.equal(btcInvoice.amount_msats, 500000000);
+
+  const satsHarness = await createHarness({
+    priceProviders: [provider],
+    priceCurrencies: ["USD"]
+  });
+  const satsInvoice = await satsHarness.openreceive.createInvoice({
+    orderUuid: "order-sats",
+    amount: {
+      currency: "SATS",
+      value: "7000"
+    },
+    optionalInvoiceDescription: "SATS amount"
+  });
+  assert.equal(satsInvoice.amount_msats, 7000000);
+  assert.equal(btcHarness.wallet.makeInvoiceCalls, 1);
+  assert.equal(satsHarness.wallet.makeInvoiceCalls, 1);
+  assert.deepEqual(providerCalls, []);
+});
+
 test("lookup settles invoice through gated backend refresh", async () => {
   const { wallet, openreceive } = await createHarness();
   const invoice = await openreceive.createInvoice({
-    order_uuid: "order-2",
+    orderUuid: "order-2",
     amount_msats: 200000,
-    optional_invoice_description: "Fruit sticker"
+    optionalInvoiceDescription: "Fruit sticker"
   });
 
   wallet.lookupState = "settled";
@@ -196,9 +238,9 @@ test("logger records invoice transitions without secrets", async () => {
     }
   });
   const invoice = await openreceive.createInvoice({
-    order_uuid: "order-logged",
+    orderUuid: "order-logged",
     amount_msats: 200000,
-    optional_invoice_description: "Fruit sticker"
+    optionalInvoiceDescription: "Fruit sticker"
   });
 
   wallet.lookupState = "settled";
@@ -235,9 +277,9 @@ test("logger redacts wallet errors before emitting unhandled failures", async ()
 
   await assert.rejects(
     () => openreceive.createInvoice({
-      order_uuid: "order-wallet-error",
+      orderUuid: "order-wallet-error",
       amount_msats: 200000,
-      optional_invoice_description: "Fruit sticker"
+      optionalInvoiceDescription: "Fruit sticker"
     }),
     /wallet rejected/
   );
@@ -261,9 +303,9 @@ test("lookup can run an idempotent backend settlement action hook after settleme
     }
   });
   await openreceive.createInvoice({
-    order_uuid: "order-settlement-action",
+    orderUuid: "order-settlement-action",
     amount_msats: 200000,
-    optional_invoice_description: "Fruit sticker"
+    optionalInvoiceDescription: "Fruit sticker"
   });
 
   wallet.lookupState = "settled";
@@ -304,9 +346,9 @@ test("poll recovers invoices without browser polling", async () => {
   });
 
   const invoice = await openreceive.createInvoice({
-    order_uuid: "order-runner",
+    orderUuid: "order-runner",
     amount_msats: 200000,
-    optional_invoice_description: "Fruit sticker"
+    optionalInvoiceDescription: "Fruit sticker"
   });
 
   wallet.lookupState = "settled";
@@ -368,9 +410,9 @@ test("client-supplied settlement fields cannot trigger settlement action", async
     }
   });
   const invoice = await openreceive.createInvoice({
-    order_uuid: "order-client-state",
+    orderUuid: "order-client-state",
     amount_msats: 200000,
-    optional_invoice_description: "Fruit sticker"
+    optionalInvoiceDescription: "Fruit sticker"
   });
 
   wallet.lookupState = "pending";
@@ -429,9 +471,47 @@ test("read-only rate helpers expose static rates and quotes", async () => {
     {
       status: 400,
       code: "INVALID_REQUEST",
-      message: "unsupported static fiat currency: EUR"
+      message: "fiat.currency must be one of the configured priceCurrencies: USD."
     }
   );
+});
+
+test("create invoice rejects fiat currencies outside configured priceCurrencies", async () => {
+  const providerCalls = [];
+  const provider = {
+    source: "openreceive_mirror",
+    async getBtcFiatRates(currencies) {
+      providerCalls.push(currencies);
+      return {
+        bitcoin: {
+          eur: "90000.00"
+        }
+      };
+    }
+  };
+  const { wallet, openreceive } = await createHarness({
+    priceProviders: [provider],
+    priceCurrencies: ["USD"]
+  });
+
+  await assertServiceError(
+    () => openreceive.createInvoice({
+      orderUuid: "order-eur-denied",
+      fiat: {
+        currency: "EUR",
+        value: "0.10"
+      },
+      optionalInvoiceDescription: "Fruit sticker"
+    }),
+    {
+      status: 400,
+      code: "INVALID_REQUEST",
+      message: "fiat.currency must be one of the configured priceCurrencies: USD."
+    }
+  );
+
+  assert.equal(wallet.makeInvoiceCalls, 0);
+  assert.deepEqual(providerCalls, []);
 });
 
 test("rate helpers use configured price providers", async () => {
@@ -469,15 +549,15 @@ test("create invoice rejects description and description_hash together", async (
 
   await assertServiceError(
     () => openreceive.createInvoice({
-      order_uuid: "order-description-conflict",
+      orderUuid: "order-description-conflict",
       amount_msats: 200000,
-      optional_invoice_description: "Fruit sticker",
+      optionalInvoiceDescription: "Fruit sticker",
       description_hash: "a".repeat(64)
     }),
     {
       status: 400,
       code: "INVALID_REQUEST",
-      message: "Create invoice request accepts only one of optional_invoice_description or description_hash."
+      message: "Create invoice request accepts only one of optionalInvoiceDescription or description_hash."
     }
   );
   assert.equal(wallet.makeInvoiceCalls, 0);
@@ -488,7 +568,7 @@ test("create invoice rejects invalid description_hash before wallet call", async
 
   await assertServiceError(
     () => openreceive.createInvoice({
-      order_uuid: "order-description-hash",
+      orderUuid: "order-description-hash",
       amount_msats: 200000,
       description_hash: "not-hex"
     }),
@@ -506,12 +586,12 @@ test("create invoice rejects invalid fiat quote before wallet call", async () =>
 
   await assertServiceError(
     () => openreceive.createInvoice({
-      order_uuid: "order-invalid-fiat",
+      orderUuid: "order-invalid-fiat",
       fiat: {
         currency: "usd",
         value: "0.10"
       },
-      optional_invoice_description: "Fruit sticker"
+      optionalInvoiceDescription: "Fruit sticker"
     }),
     {
       status: 400,
@@ -651,7 +731,7 @@ test("host apps own routes, guards, and response policy around OpenReceive servi
 
   const denied = await guardedCreate({
     body: {
-      order_uuid: "order-denied",
+      orderUuid: "order-denied",
       amount_msats: 200000
     }
   });
@@ -663,7 +743,7 @@ test("host apps own routes, guards, and response policy around OpenReceive servi
       id: "alice"
     },
     body: {
-      order_uuid: "order-allowed",
+      orderUuid: "order-allowed",
       amount_msats: 200000
     }
   });

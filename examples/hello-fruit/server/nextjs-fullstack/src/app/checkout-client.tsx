@@ -41,7 +41,7 @@ interface DemoOrder {
     readonly name: string;
     readonly quantity: number;
   }[];
-  readonly total_fiat: {
+  readonly totalFiat: {
     readonly currency: string;
     readonly value: string;
   };
@@ -221,7 +221,7 @@ export default function CheckoutClient({
         <section className="cart" aria-label="Order">
           <div className="cart-heading">
             <strong>Order</strong>
-            <span>{formatHelloFruitFiat(order.total_fiat)}</span>
+            <span>{formatHelloFruitFiat(order.totalFiat)}</span>
           </div>
           {order.items.map((item) => (
             <div className="cart-row" key={item.product_id}>
@@ -258,7 +258,7 @@ export default function CheckoutClient({
             <section className="cart" aria-label="Order">
               <div className="cart-heading">
                 <strong>Order</strong>
-                <span>{formatHelloFruitFiat(order.total_fiat)}</span>
+                <span>{formatHelloFruitFiat(order.totalFiat)}</span>
               </div>
               {order.items.map((item) => (
                 <div className="cart-row" key={item.product_id}>

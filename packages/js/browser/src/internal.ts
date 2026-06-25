@@ -546,6 +546,10 @@ export interface CreateOpenReceiveInvoiceOptions {
   readonly orderUuid: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly headers?: Readonly<Record<string, string>>;
+  readonly amount?: {
+    readonly currency: "BTC" | "SAT" | "SATS";
+    readonly value: string;
+  };
   readonly amountInSatoshis?: number | string;
   readonly amount_msats?: number | string;
   readonly fiat?: {
@@ -2868,12 +2872,13 @@ export async function createInvoice(
   }
 
   const amountSourceCount = [
+    options.amount !== undefined,
     options.amountInSatoshis !== undefined,
     options.amount_msats !== undefined,
     options.fiat !== undefined
   ].filter(Boolean).length;
   if (amountSourceCount !== 1) {
-    throw new Error("OpenReceive invoice creation requires exactly one of fiat or amountInSatoshis.");
+    throw new Error("OpenReceive invoice creation requires exactly one of amount, fiat, amountInSatoshis, or amount_msats.");
   }
   if (
     options.optionalInvoiceDescription !== undefined &&
@@ -2884,6 +2889,7 @@ export async function createInvoice(
 
   const requestBody = {
     order_uuid: options.orderUuid,
+    ...(options.amount === undefined ? {} : { amount: options.amount }),
     ...(options.amountInSatoshis === undefined ? {} : { amount_sats: options.amountInSatoshis }),
     ...(options.amount_msats === undefined ? {} : { amount_msats: options.amount_msats }),
     ...(options.fiat === undefined ? {} : { fiat: options.fiat }),
