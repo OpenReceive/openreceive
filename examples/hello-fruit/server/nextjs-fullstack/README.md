@@ -25,8 +25,8 @@ docker compose -f compose.yml -f compose.override.yml.example up --build
 Docker loads the repository root `.env` file, so the same
 `OPENRECEIVE_NWC` value can be shared across all local Hello Fruit demos
 without demo-local env files. Set it before running Compose; the web container
-validates it at startup. The compose stack also starts a local Postgres
-container and points `OPENRECEIVE_STORE` at it.
+validates it at startup. The compose stack uses `local-sqlite` by default and
+stores OpenReceive state in a named `.openreceive` volume.
 
 The package exposes `npm run openreceive:poll` for optional scheduled recovery.
 Normal checkout recovery happens through backend payment-status checks.

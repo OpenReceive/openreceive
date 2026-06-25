@@ -13,6 +13,9 @@ import {
   formatHelloFruitFiat,
   helloFruitDemoLabels
 } from "../../examples/hello-fruit/shared/demo-formatting.ts";
+import {
+  readHelloFruitCheckoutCurrencies
+} from "../../examples/hello-fruit/shared/demo-currencies.ts";
 import { quoteFiatToMsats } from "../../packages/js/core/src/index.ts";
 import { GET as getNextDemoMetadata } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/demo-metadata.json/route.ts";
 import { GET as getNextDocs } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/docs/route.ts";
@@ -143,6 +146,8 @@ test("Hello Fruit React demos delegate checkout state to UI packages", () => {
     assert.match(source, /onPaid=/);
     assert.match(source, /lookupUrl="\/order_status"/);
     assert.match(source, /fetch\("\/create_order"/);
+    assert.match(source, /readHelloFruitCheckoutCurrencies/);
+    assert.match(source, /currency,/);
     assert.doesNotMatch(source, /createOpenReceiveLookupInvoiceFetcher/);
     assert.doesNotMatch(source, /lookupUrl="\/openreceive\/v1\/invoices\/lookup"/);
     assert.doesNotMatch(source, /lookupInvoice=\{lookupInvoice\}/);
@@ -163,6 +168,24 @@ test("Hello Fruit React demos delegate checkout state to UI packages", () => {
   assert.match(nodeClient, /Vue/);
   assert.match(nodeClient, /Svelte/);
   assert.match(nodeClient, /Angular/);
+});
+
+test("Hello Fruit demos expose price-feed currencies plus direct Bitcoin units", () => {
+  const currencies = readHelloFruitCheckoutCurrencies();
+  for (const currency of ["USD", "EUR", "JPY", "BTC", "SATS"]) {
+    assert.equal(currencies.includes(currency), true, currency);
+  }
+
+  const staticClient = readFileSync(
+    path.join(
+      process.cwd(),
+      "examples/hello-fruit/server/static-html-small-api/src/client/main.ts"
+    ),
+    "utf8"
+  );
+  assert.match(staticClient, /readHelloFruitCheckoutCurrencies/);
+  assert.match(staticClient, /selectedCurrency/);
+  assert.match(staticClient, /currency: selectedCurrency/);
 });
 
 test("Hello Fruit JS demos use package-owned QR and poll-only wiring", () => {
@@ -199,8 +222,11 @@ test("Hello Fruit JS demos use package-owned QR and poll-only wiring", () => {
       ? readFileSync(viteConfigPath, "utf8")
       : "";
     const compose = readFileSync(path.join(process.cwd(), demoDir, "compose.yml"), "utf8");
+    const dockerfile = readFileSync(path.join(process.cwd(), demoDir, "Dockerfile"), "utf8");
 
     assert.equal(packageJson.dependencies.qrcode, undefined, `${demoDir}: qrcode is package-owned`);
+    assert.match(dockerfile, /COPY spec\/data\/rates \.\/spec\/data\/rates/,
+      `${demoDir}: Docker image includes demo price-source data`);
     if (demoDir.endsWith("/node-express")) {
       assert.equal(packageJson.dependencies["@openreceive/angular"], "0.1.0");
       assert.equal(packageJson.dependencies["@openreceive/vue"], "0.1.0");
@@ -853,14 +879,15 @@ test("Hello Fruit JS demos set up package-owned invoice persistence", () => {
       readFileSync(path.join(process.cwd(), demoDir, "package.json"), "utf8")
     );
     const compose = readFileSync(path.join(process.cwd(), demoDir, "compose.yml"), "utf8");
+    const volumeName = demoDir.split("/").at(-1);
 
     assert.equal(packageJson.dependencies.pg, "^8.22.0", `${demoDir}: pg dependency`);
-    assert.match(compose, /OPENRECEIVE_STORE:\s+postgres:\/\/openreceive:openreceive@openreceive-postgres:5432\/openreceive/);
+    assert.match(compose, /OPENRECEIVE_STORE:\s+local-sqlite/);
     assert.match(compose, /OPENRECEIVE_NAMESPACE:\s+hello_fruit_/);
     assert.doesNotMatch(compose, /DATABASE_URL/);
-    assert.match(compose, /openreceive-postgres:/);
-    assert.match(compose, /image:\s+postgres:17-alpine/);
-    assert.match(compose, /openreceive-postgres-data:\/var\/lib\/postgresql\/data/);
+    assert.doesNotMatch(compose, /openreceive-postgres/);
+    assert.doesNotMatch(compose, /image:\s+postgres:17-alpine/);
+    assert.match(compose, new RegExp(`openreceive-${volumeName}-openreceive:.+\\.openreceive`));
   }
 
   for (const sourcePath of [
@@ -1155,6 +1182,42 @@ test("Hello Fruit demos create app orders and poll order status through merchant
     assert.equal(nextStatus.status, 200, "nextjs-fullstack: order_status status");
     assert.equal(nextStatus.body.order_uuid, nextCreated.body.order.uuid);
     assert.equal(nextStatus.body.order_status, "pending_payment");
+  });
+});
+
+test("Hello Fruit demos create direct SATS orders from the currency switcher", async () => {
+  await withEnv({
+    OPENRECEIVE_NWC: createValidNwcUri(),
+    OPENRECEIVE_TEST_FAKE_NWC: "1",
+    OPENRECEIVE_STORE: "memory:"
+  }, async () => {
+    const orderRequest = {
+      idempotency_key: "cart-sats",
+      currency: "SATS",
+      cart: [
+        { product_id: "banana", quantity: 2 },
+        { product_id: "apple", quantity: 1 }
+      ]
+    };
+
+    for (const demo of [
+      {
+        name: "node-express",
+        createApp: createHelloFruitServer
+      },
+      {
+        name: "static-html-small-api",
+        createApp: createHelloFruitStaticServer
+      }
+    ]) {
+      const app = await demo.createApp();
+      const created = await dispatchJson(app, "POST", "/create_order", orderRequest);
+      assert.equal(created.status, 201, `${demo.name}: create_order status`);
+      assert.equal(created.body.order.totalAmount.currency, "SATS");
+      assert.equal(created.body.order.totalAmount.value, "500");
+      assert.equal(created.body.invoice.amount_msats, 500000);
+      assert.equal(created.body.invoice.fiat_quote, null);
+    }
   });
 });
 

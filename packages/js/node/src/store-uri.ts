@@ -21,7 +21,7 @@ export interface ResolveOpenReceiveStoreOptions {
   cwd?: string;
   loadSqlite?: () => Promise<{
     DatabaseSync: new (filename: string) => OpenReceiveSqliteDatabase & {
-      close?: () => void;
+      close?: () => void | Promise<void>;
     };
   }>;
   loadPostgres?: () => Promise<{
@@ -117,19 +117,125 @@ async function loadSqlite(
   override: ResolveOpenReceiveStoreOptions["loadSqlite"]
 ): Promise<{
   DatabaseSync: new (filename: string) => OpenReceiveSqliteDatabase & {
-    close?: () => void;
+    close?: () => void | Promise<void>;
   };
 }> {
   if (override !== undefined) return override();
   try {
     return await import(/* @vite-ignore */ `node:${"sqlite"}`) as unknown as {
       DatabaseSync: new (filename: string) => OpenReceiveSqliteDatabase & {
-        close?: () => void;
+        close?: () => void | Promise<void>;
       };
     };
   } catch {
-    throw new Error("SQLite store requires a Node runtime with built-in SQLite support or an injected SQLite loader.");
+    return await loadSqlite3Package();
   }
+}
+
+async function loadSqlite3Package(): Promise<{
+  DatabaseSync: new (filename: string) => OpenReceiveSqliteDatabase & {
+    close?: () => Promise<void>;
+  };
+}> {
+  try {
+    const sqlite3Module = await import(/* @vite-ignore */ `sqlite${"3"}`) as unknown as {
+      default?: {
+        Database?: new (filename: string) => NodeSqlite3Database;
+      };
+      Database?: new (filename: string) => NodeSqlite3Database;
+    };
+    const Database = sqlite3Module.Database ?? sqlite3Module.default?.Database;
+    if (Database === undefined) throw new Error("sqlite3 Database export not found");
+    return {
+      DatabaseSync: class OpenReceiveNodeSqlite3Database implements OpenReceiveSqliteDatabase {
+        readonly #database: NodeSqlite3Database;
+
+        constructor(filename: string) {
+          this.#database = new Database(filename);
+          this.#database.configure?.("busyTimeout", 5000);
+        }
+
+        prepare(sql: string) {
+          return {
+            get: (...values: unknown[]) => new Promise<Record<string, unknown> | undefined>((resolve, reject) => {
+              this.#database.get(sql, values, (error, row) => {
+                if (error !== null) {
+                  reject(error);
+                  return;
+                }
+                resolve(row);
+              });
+            }),
+            all: (...values: unknown[]) => new Promise<Record<string, unknown>[]>((resolve, reject) => {
+              this.#database.all(sql, values, (error, rows) => {
+                if (error !== null) {
+                  reject(error);
+                  return;
+                }
+                resolve(rows);
+              });
+            }),
+            run: (...values: unknown[]) => new Promise<void>((resolve, reject) => {
+              this.#database.run(sql, values, (error) => {
+                if (error !== null) {
+                  reject(error);
+                  return;
+                }
+                resolve();
+              });
+            })
+          };
+        }
+
+        exec(sql: string): Promise<void> {
+          return new Promise((resolve, reject) => {
+            this.#database.exec(sql, (error) => {
+              if (error !== null) {
+                reject(error);
+                return;
+              }
+              resolve();
+            });
+          });
+        }
+
+        close(): Promise<void> {
+          return new Promise((resolve, reject) => {
+            this.#database.close((error) => {
+              if (error !== null) {
+                reject(error);
+                return;
+              }
+              resolve();
+            });
+          });
+        }
+      }
+    };
+  } catch {
+    throw new Error("SQLite store requires a Node runtime with built-in SQLite support, the `sqlite3` package, or an injected SQLite loader.");
+  }
+}
+
+interface NodeSqlite3Database {
+  configure?(option: "busyTimeout", value: number): void;
+  get(
+    sql: string,
+    values: readonly unknown[],
+    callback: (error: Error | null, row: Record<string, unknown> | undefined) => void
+  ): void;
+  all(
+    sql: string,
+    values: readonly unknown[],
+    callback: (error: Error | null, rows: Record<string, unknown>[]) => void
+  ): void;
+  run(
+    sql: string,
+    values: readonly unknown[],
+    callback: (error: Error | null) => void
+  ): void;
+  exec(sql: string, callback: (error: Error | null) => void): void;
+  close(callback: (error: Error | null) => void): void;
 }
 
 async function loadPostgres(

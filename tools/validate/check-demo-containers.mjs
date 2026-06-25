@@ -15,6 +15,8 @@ const demoContainers = [
     image: "ghcr.io/openreceive/demo-express:local",
     port: "3000",
     namespace: "hello_fruit_express",
+    openreceiveVolume: "openreceive-node-express-openreceive:/app/examples/hello-fruit/server/node-express/.openreceive",
+    openreceiveVolumeName: "openreceive-node-express-openreceive",
     buildScript: "vite build --configLoader runner",
     startScript: "tsx ../../shared/require-openreceive-nwc.ts && tsx src/server/production.ts"
   },
@@ -26,6 +28,8 @@ const demoContainers = [
     image: "ghcr.io/openreceive/demo-static:local",
     port: "3001",
     namespace: "hello_fruit_static",
+    openreceiveVolume: "openreceive-static-html-small-api-openreceive:/app/examples/hello-fruit/server/static-html-small-api/.openreceive",
+    openreceiveVolumeName: "openreceive-static-html-small-api-openreceive",
     buildScript: "vite build --configLoader runner",
     startScript: "tsx ../../shared/require-openreceive-nwc.ts && tsx src/server/production.ts"
   },
@@ -37,6 +41,8 @@ const demoContainers = [
     image: "ghcr.io/openreceive/demo-nextjs:local",
     port: "3002",
     namespace: "hello_fruit_nextjs",
+    openreceiveVolume: "openreceive-nextjs-fullstack-openreceive:/app/examples/hello-fruit/server/nextjs-fullstack/.openreceive",
+    openreceiveVolumeName: "openreceive-nextjs-fullstack-openreceive",
     buildScript: "next build",
     startScript: "tsx ../../shared/require-openreceive-nwc.ts && next start -H 0.0.0.0 -p ${PORT:-3002}"
   }
@@ -58,10 +64,6 @@ const railsDemoContainers = [
 ];
 
 const findings = [];
-const jsDemoDatabaseService = "openreceive-postgres";
-const jsDemoDatabaseVolume = "openreceive-postgres-data";
-const jsDemoStoreUri = "postgres://openreceive:openreceive@openreceive-postgres:5432/openreceive";
-
 function fail(message) {
   findings.push(message);
 }
@@ -118,8 +120,11 @@ function validateDockerfile(demo) {
 
   forbidSecrets(relativePath, text);
   expect(/^FROM node:20-bookworm-slim$/m.test(text), `${relativePath}: must use the pinned Node 20 slim base image`);
+  expect(text.includes("apt-get install -y --no-install-recommends node-sqlite3"), `${relativePath}: must install the Node 20 SQLite binding`);
+  expect(text.includes("ln -s \"$SQLITE3_NODE_DIR\" ./node_modules/sqlite3"), `${relativePath}: must expose Debian node-sqlite3 to Node module resolution`);
   expect(text.includes("COPY package.json package-lock.json ./"), `${relativePath}: must copy root package manifests`);
   expect(text.includes("COPY packages ./packages"), `${relativePath}: must copy local packages`);
+  expect(text.includes("COPY spec/data/rates ./spec/data/rates"), `${relativePath}: must copy shared price-source data`);
   expect(text.includes("COPY examples/hello-fruit ./examples/hello-fruit"), `${relativePath}: must copy Hello Fruit sources`);
   expect(npmCiIndex !== -1, `${relativePath}: must run npm ci`);
   expect(buildIndex !== -1, `${relativePath}: must build its workspace package`);
@@ -136,20 +141,17 @@ function validateCompose(demo) {
   const services = compose.services ?? {};
   const serviceNames = Object.keys(services);
   const service = services[demo.service] ?? {};
-  const databaseService = services[jsDemoDatabaseService] ?? {};
   const envFile = service.env_file?.[0];
   const ports = service.ports ?? [];
-  const databasePorts = databaseService.ports ?? [];
 
   forbidSecrets(relativePath, text);
-  expect(serviceNames.length === 2, `${relativePath}: must define app and Postgres services`);
+  expect(serviceNames.length === 1, `${relativePath}: must define only the app service`);
   expect(serviceNames.includes(demo.service), `${relativePath}: service name must include ${demo.service}`);
-  expect(serviceNames.includes(jsDemoDatabaseService), `${relativePath}: service name must include ${jsDemoDatabaseService}`);
   expect(service.build?.context === "../../../..", `${relativePath}: build context must be the repo root`);
   expect(service.build?.dockerfile === `${demo.dir}/Dockerfile`, `${relativePath}: dockerfile path must target the demo Dockerfile`);
-  expect(service.depends_on?.includes(jsDemoDatabaseService), `${relativePath}: app must depend on Postgres`);
+  expect(service.depends_on === undefined, `${relativePath}: local-sqlite demo must not depend on a database service`);
   expect(envFile?.path === "../../../../.env" && envFile?.required === false, `${relativePath}: root .env must be optional runtime env_file`);
-  expect(service.environment?.OPENRECEIVE_STORE === jsDemoStoreUri, `${relativePath}: app must receive local Postgres OPENRECEIVE_STORE`);
+  expect(service.environment?.OPENRECEIVE_STORE === "local-sqlite", `${relativePath}: OPENRECEIVE_STORE must default to local-sqlite`);
   expect(service.environment?.OPENRECEIVE_NAMESPACE === demo.namespace, `${relativePath}: app must receive a demo namespace`);
   expect(service.environment?.OPENRECEIVE_DEMO_MODE === "${OPENRECEIVE_DEMO_MODE:-test_nwc}", `${relativePath}: demo mode must default to test_nwc`);
   expect(service.environment?.OPENRECEIVE_DEPLOYED_AT === "${OPENRECEIVE_DEPLOYED_AT:-}", `${relativePath}: deployed_at metadata env must be pass-through`);
@@ -158,15 +160,9 @@ function validateCompose(demo) {
   expect(ports.length === 0, `${relativePath}: stable compose must not publish host ports`);
   expect(service.network_mode === undefined, `${relativePath}: must not use host networking`);
   expect(JSON.stringify(service.volumes ?? []).includes("/var/run/docker.sock") === false, `${relativePath}: must not mount the Docker socket`);
-  expect(databaseService.image === "postgres:17-alpine", `${relativePath}: Postgres service must use pinned alpine image`);
-  expect(databaseService.environment?.POSTGRES_DB === "openreceive", `${relativePath}: Postgres database must be openreceive`);
-  expect(databaseService.environment?.POSTGRES_USER === "openreceive", `${relativePath}: Postgres user must be openreceive`);
-  expect(databaseService.environment?.POSTGRES_PASSWORD === "openreceive", `${relativePath}: local Postgres password must be explicit demo-only value`);
-  expect(databaseService.volumes?.[0] === `${jsDemoDatabaseVolume}:/var/lib/postgresql/data`, `${relativePath}: Postgres data must use named volume`);
-  expect(databasePorts.length === 0, `${relativePath}: Postgres service must not publish host ports`);
-  expect(databaseService.network_mode === undefined, `${relativePath}: Postgres service must not use host networking`);
-  expect(JSON.stringify(databaseService.volumes ?? []).includes("/var/run/docker.sock") === false, `${relativePath}: Postgres service must not mount the Docker socket`);
-  expect(compose.volumes?.[jsDemoDatabaseVolume] !== undefined, `${relativePath}: must declare ${jsDemoDatabaseVolume} volume`);
+  expect(service.volumes?.includes(demo.openreceiveVolume), `${relativePath}: OpenReceive SQLite storage must use named volume`);
+  expect(compose.volumes?.[demo.openreceiveVolumeName] !== undefined, `${relativePath}: must declare ${demo.openreceiveVolumeName} volume`);
+  expect(!text.includes("openreceive-postgres"), `${relativePath}: default demo compose must not start Postgres`);
 }
 
 function validateComposeOverride(demo) {
@@ -213,6 +209,8 @@ function validateReadme(demo) {
   expect(text.includes("The browser never receives `OPENRECEIVE_NWC`."), `${relativePath}: must state browser NWC boundary`);
   expect(text.includes("valid receive-only `OPENRECEIVE_NWC`"), `${relativePath}: must state demos need a valid receive-only OPENRECEIVE_NWC`);
   expect(text.includes("docker compose -f compose.yml -f compose.override.yml.example up --build"), `${relativePath}: must document compose startup without a worker profile`);
+  expect(text.includes("uses `local-sqlite` by default"), `${relativePath}: must document the local-sqlite default`);
+  expect(text.includes("named `.openreceive` volume"), `${relativePath}: must document persistent OpenReceive SQLite storage`);
   expect(text.includes("npm run openreceive:poll"), `${relativePath}: must document the one-shot poll script`);
   expect(!text.includes("openreceive:worker"), `${relativePath}: must not document a worker script`);
   expect(!text.includes("--profile openreceive-worker"), `${relativePath}: must not document worker profiles`);

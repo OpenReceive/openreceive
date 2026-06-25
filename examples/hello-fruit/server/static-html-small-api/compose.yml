@@ -3,13 +3,11 @@ services:
     build:
       context: ../../../..
       dockerfile: examples/hello-fruit/server/static-html-small-api/Dockerfile
-    depends_on:
-      - openreceive-postgres
     env_file:
       - path: ../../../../.env
         required: false
     environment:
-      OPENRECEIVE_STORE: postgres://openreceive:openreceive@openreceive-postgres:5432/openreceive
+      OPENRECEIVE_STORE: local-sqlite
       OPENRECEIVE_NAMESPACE: hello_fruit_static
       OPENRECEIVE_DEMO_MODE: ${OPENRECEIVE_DEMO_MODE:-test_nwc}
       OPENRECEIVE_DEPLOYED_AT: ${OPENRECEIVE_DEPLOYED_AT:-}
@@ -18,14 +16,8 @@ services:
       PORT: "3001"
     expose:
       - "3001"
-  openreceive-postgres:
-    image: postgres:17-alpine
-    environment:
-      POSTGRES_DB: openreceive
-      POSTGRES_USER: openreceive
-      POSTGRES_PASSWORD: openreceive
     volumes:
-      - openreceive-postgres-data:/var/lib/postgresql/data
+      - openreceive-static-html-small-api-openreceive:/app/examples/hello-fruit/server/static-html-small-api/.openreceive
 
 volumes:
-  openreceive-postgres-data:
+  openreceive-static-html-small-api-openreceive:

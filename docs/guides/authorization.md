@@ -26,8 +26,8 @@ checkoutRoutes.post("/create_order", async (req, res, next) => {
     const invoice = await openreceive.createInvoice({
       orderUuid: order.uuid,
       fiat: {
-        currency: order.totalFiat.currency,
-        value: order.totalFiat.value
+        currency: order.totalAmount.currency,
+        value: order.totalAmount.value
       },
       optionalInvoiceDescription: `Order ${order.number}`,
       expiry: 600
@@ -99,8 +99,8 @@ export async function POST(request: Request) {
     const invoice = await openreceive.createInvoice({
       orderUuid: order.uuid,
       fiat: {
-        currency: order.totalFiat.currency,
-        value: order.totalFiat.value
+        currency: order.totalAmount.currency,
+        value: order.totalAmount.value
       },
       optionalInvoiceDescription: `Order ${order.number}`,
       expiry: 600
@@ -151,8 +151,8 @@ export async function createOrder(req, res, next) {
     const invoice = await openreceive.createInvoice({
       orderUuid: order.uuid,
       fiat: {
-        currency: order.totalFiat.currency,
-        value: order.totalFiat.value
+        currency: order.totalAmount.currency,
+        value: order.totalAmount.value
       },
       optionalInvoiceDescription: `Order ${order.number}`,
       expiry: 600

@@ -50,8 +50,9 @@ Hotwire demo is experimental skeleton work; its container runs
 Buying fruit creates a live Lightning invoice through your own wallet, so set a
 valid receive-only NWC code (for example from Rizful or Alby Hub) in `.env` before
 starting a demo. Demos need a valid receive-only NWC code before startup.
-The JS demos quote the cart's USD total through live BTC/USD price providers
-inside `/create_order` before returning the order and invoice to the browser.
+The JS demos let the browser choose any configured price-feed currency, BTC, or
+sats; `/create_order` builds the order, quotes or converts the total, and
+returns the order and invoice to the browser.
 
 Extra arguments after `--` are forwarded to `docker compose up`, for example to
 run detached: `npm run demo node -- -d`.

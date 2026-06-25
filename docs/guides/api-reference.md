@@ -32,8 +32,8 @@ App-facing Node service input uses camelCase:
 await openreceive.createInvoice({
   orderUuid: order.uuid,
   fiat: {
-    currency: order.totalFiat.currency,
-    value: order.totalFiat.value
+    currency: order.totalAmount.currency,
+    value: order.totalAmount.value
   },
   optionalInvoiceDescription: `Order ${order.number}`,
   expiry: 600

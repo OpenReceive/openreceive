@@ -25,9 +25,9 @@ export interface OpenReceiveSqliteQueryClient {
 }
 
 export interface OpenReceiveSqliteStatement {
-  get?: (...values: unknown[]) => Record<string, unknown> | undefined;
-  all?: (...values: unknown[]) => Record<string, unknown>[];
-  run?: (...values: unknown[]) => unknown;
+  get?: (...values: unknown[]) => MaybePromise<Record<string, unknown> | undefined>;
+  all?: (...values: unknown[]) => MaybePromise<Record<string, unknown>[]>;
+  run?: (...values: unknown[]) => MaybePromise<unknown>;
 }
 
 export interface OpenReceiveSqliteDatabase {
@@ -73,23 +73,23 @@ export function createOpenReceiveSqliteQueryClient(
   database: OpenReceiveSqliteDatabase
 ): OpenReceiveSqliteQueryClient {
   return {
-    execute(sql, values = []) {
+    async execute(sql, values = []) {
       const statement = database.prepare(sql);
       const boundValues = values.map((value) => value ?? null);
       if (returnsRows(sql)) {
         if (statement.all !== undefined) {
           return {
-            rows: statement.all(...boundValues)
+            rows: await statement.all(...boundValues)
           };
         }
         if (statement.get !== undefined) {
-          const row = statement.get(...boundValues);
+          const row = await statement.get(...boundValues);
           return {
             rows: row === undefined ? [] : [row]
           };
         }
       }
-      statement.run?.(...boundValues);
+      await statement.run?.(...boundValues);
       return {
         rows: []
       };

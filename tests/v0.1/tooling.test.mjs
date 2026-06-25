@@ -97,7 +97,7 @@ test("public Node guides show app routes without OpenReceive error class imports
     assert.doesNotMatch(source, /order_uuid:|optional_invoice_description:|total_fiat/, filePath);
     assert.match(source, /orderUuid:/, filePath);
     assert.match(source, /optionalInvoiceDescription:/, filePath);
-    assert.match(source, /totalFiat/, filePath);
+    assert.match(source, /totalAmount/, filePath);
     assert.match(source, /import \{ createOpenReceive \} from "@openreceive\/node";/, filePath);
   }
 });
