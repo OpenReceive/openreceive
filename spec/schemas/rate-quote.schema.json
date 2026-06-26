@@ -50,9 +50,8 @@
       "type": "string",
       "enum": [
         "static_mock",
-        "openreceive_mirror",
-        "megalithic_mirror",
-        "coingecko_direct"
+        "primary",
+        "fallback"
       ]
     },
     "as_of": {

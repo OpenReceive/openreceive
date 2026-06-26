@@ -1,24 +1,58 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  CoinGeckoSimplePriceProvider,
-  OPENRECEIVE_MEGALITHIC_RATE_MIRROR_URL,
-  OPENRECEIVE_RATE_MIRROR_URL,
+  CachedPriceFeed,
+  HttpSimplePriceProvider,
+  InMemoryInvoiceKvStore,
+  OPENRECEIVE_FALLBACK_PRICE_FEED_URL,
+  OPENRECEIVE_PRICE_FEED_PRIMARY_TIMEOUT_MS,
+  OPENRECEIVE_PRIMARY_PRICE_FEED_URL,
   StaticPriceProvider,
-  createCoinGeckoDirectPriceProvider,
-  createCoinGeckoSimplePriceUrl,
-  createDefaultLivePriceProviders,
-  createDefaultPriceProviders,
-  createMegalithicMirrorPriceProvider,
-  createOpenReceiveMirrorPriceProvider,
+  createCachedLivePriceFeed,
+  createLivePriceFeedProviders,
+  createSimplePriceUrl,
   getBtcFiatRatesWithFallback,
-  parseCoinGeckoSimplePriceResponse,
+  isHealthCheckablePriceFeed,
+  isResolvedPriceProvider,
+  parseSimplePriceResponse,
   quoteFiatToMsatsWithPrice,
   quoteFiatToMsatsWithProvider
 } from "@openreceive/core";
 
-test("parses CoinGecko-compatible BTC fiat rates as decimal strings", () => {
-  const rates = parseCoinGeckoSimplePriceResponse(
+const PRIMARY_URL = "https://primary.test/simple/price";
+const FALLBACK_URL = "https://fallback.test/simple/price";
+
+function okResponse(body) {
+  return {
+    ok: true,
+    status: 200,
+    text: async () => JSON.stringify(body)
+  };
+}
+
+function httpErrorResponse(status) {
+  return {
+    ok: false,
+    status,
+    text: async () => ""
+  };
+}
+
+// Records every fetch and dispatches a per-URL handler so tests can stage
+// success, HTTP errors, or a hang (for the timeout path).
+function stageFetch(handlers) {
+  const calls = [];
+  const fetch = (url, init) => {
+    calls.push({ url, accept: init?.headers?.accept, hasSignal: init?.signal !== undefined });
+    const handler = handlers[url];
+    if (handler === undefined) throw new Error(`unexpected fetch URL: ${url}`);
+    return handler();
+  };
+  return { fetch, calls };
+}
+
+test("parses Simple Price BTC fiat rates as decimal strings", () => {
+  const rates = parseSimplePriceResponse(
     {
       bitcoin: {
         usd: 62599,
@@ -36,44 +70,235 @@ test("parses CoinGecko-compatible BTC fiat rates as decimal strings", () => {
   });
 });
 
-test("builds CoinGecko direct URL with normalized fiat currencies", () => {
+test("builds a Simple Price URL with normalized fiat currencies", () => {
   assert.equal(
-    createCoinGeckoSimplePriceUrl(["USD", "EUR"]),
+    createSimplePriceUrl(["USD", "EUR"]),
     "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd%2Ceur"
   );
 });
 
-test("CoinGecko provider fetches compatible endpoint and selects requested currencies", async () => {
-  const requested = [];
-  const provider = new CoinGeckoSimplePriceProvider({
-    url: "https://example.com/exchange_rates",
-    source: "openreceive_mirror",
-    fetch: async (url, init) => {
-      requested.push({ url, accept: init?.headers?.accept });
-      return {
-        ok: true,
-        status: 200,
-        text: async () => JSON.stringify({
-          bitcoin: {
-            usd: 50000,
-            eur: "45000.50"
-          }
-        })
-      };
-    }
+test("HTTP provider fetches the endpoint and selects requested currencies", async () => {
+  const { fetch, calls } = stageFetch({
+    [PRIMARY_URL]: () => okResponse({ bitcoin: { usd: 50000, eur: "45000.50" } })
+  });
+  const provider = new HttpSimplePriceProvider({
+    url: PRIMARY_URL,
+    source: "primary",
+    fetch
   });
 
   assert.deepEqual(await provider.getBtcFiatRates(["USD"]), {
-    bitcoin: {
-      usd: "50000"
-    }
+    bitcoin: { usd: "50000" }
   });
-  assert.deepEqual(requested, [
-    {
-      url: "https://example.com/exchange_rates",
-      accept: "application/json"
-    }
+  assert.deepEqual(calls, [
+    { url: PRIMARY_URL, accept: "application/json", hasSignal: false }
   ]);
+});
+
+test("HTTP provider aborts and rejects when the endpoint exceeds its timeout", async () => {
+  const { fetch, calls } = stageFetch({
+    [PRIMARY_URL]: () => new Promise(() => {})
+  });
+  const provider = new HttpSimplePriceProvider({
+    url: PRIMARY_URL,
+    source: "primary",
+    fetch,
+    timeoutMs: 20
+  });
+
+  await assert.rejects(
+    () => provider.getBtcFiatRates(["USD"]),
+    /price source primary did not respond within 20ms/
+  );
+  assert.equal(calls[0].hasSignal, true);
+});
+
+test("live feed providers pin the hard-coded URLs and 5s primary timeout", () => {
+  const { primary, fallback } = createLivePriceFeedProviders();
+
+  assert.equal(primary.source, "primary");
+  assert.equal(primary.url, OPENRECEIVE_PRIMARY_PRICE_FEED_URL);
+  assert.equal(primary.timeoutMs, OPENRECEIVE_PRICE_FEED_PRIMARY_TIMEOUT_MS);
+  assert.equal(fallback.source, "fallback");
+  assert.equal(fallback.url, OPENRECEIVE_FALLBACK_PRICE_FEED_URL);
+  assert.equal(fallback.timeoutMs, undefined);
+
+  const overridden = createLivePriceFeedProviders({
+    primaryUrl: PRIMARY_URL,
+    fallbackUrl: FALLBACK_URL
+  });
+  assert.equal(overridden.primary.url, PRIMARY_URL);
+  assert.equal(overridden.fallback.url, FALLBACK_URL);
+});
+
+test("cached feed serves from the database within the cache window", async () => {
+  let now = 1000;
+  const store = new InMemoryInvoiceKvStore();
+  const { fetch, calls } = stageFetch({
+    [PRIMARY_URL]: () => okResponse({ bitcoin: { usd: 70000, eur: 64000 } })
+  });
+  const feed = createCachedLivePriceFeed({
+    store,
+    currencies: ["USD", "EUR"],
+    fetch,
+    clock: () => now,
+    primaryUrl: PRIMARY_URL,
+    fallbackUrl: FALLBACK_URL
+  });
+
+  const first = await feed.getBtcFiatRatesWithSource(["USD"]);
+  assert.equal(first.source, "primary");
+  assert.deepEqual(first.rates, { bitcoin: { usd: "70000" } });
+  assert.equal(calls.length, 1);
+
+  // A different currency within the window is served from the cached blob,
+  // with no extra network call.
+  now = 1059;
+  const second = await feed.getBtcFiatRatesWithSource(["EUR"]);
+  assert.deepEqual(second.rates, { bitcoin: { eur: "64000" } });
+  assert.equal(calls.length, 1);
+
+  // The cached JSON blob and its fetch time are durable in the meta store.
+  const cached = JSON.parse((await store.getMeta("price_feed:bitcoin")).value);
+  assert.equal(cached.source, "primary");
+  assert.equal(cached.fetched_at, 1000);
+  assert.deepEqual(cached.rates, { bitcoin: { usd: "70000", eur: "64000" } });
+});
+
+test("cached feed refreshes once the cache is older than 60 seconds", async () => {
+  let now = 1000;
+  const store = new InMemoryInvoiceKvStore();
+  let usd = 70000;
+  const { fetch, calls } = stageFetch({
+    [PRIMARY_URL]: () => okResponse({ bitcoin: { usd } })
+  });
+  const feed = createCachedLivePriceFeed({
+    store,
+    currencies: ["USD"],
+    fetch,
+    clock: () => now,
+    primaryUrl: PRIMARY_URL,
+    fallbackUrl: FALLBACK_URL
+  });
+
+  await feed.getBtcFiatRatesWithSource(["USD"]);
+  assert.equal(calls.length, 1);
+
+  now = 1060;
+  usd = 71000;
+  const refreshed = await feed.getBtcFiatRatesWithSource(["USD"]);
+  assert.deepEqual(refreshed.rates, { bitcoin: { usd: "71000" } });
+  assert.equal(calls.length, 2);
+});
+
+test("cached feed falls back to the second URL when the primary times out", async () => {
+  const now = 1000;
+  const store = new InMemoryInvoiceKvStore();
+  const { fetch, calls } = stageFetch({
+    [PRIMARY_URL]: () => new Promise(() => {}),
+    [FALLBACK_URL]: () => okResponse({ bitcoin: { usd: 68000 } })
+  });
+  const feed = createCachedLivePriceFeed({
+    store,
+    currencies: ["USD"],
+    fetch,
+    clock: () => now,
+    primaryUrl: PRIMARY_URL,
+    fallbackUrl: FALLBACK_URL,
+    primaryTimeoutMs: 20
+  });
+
+  const result = await feed.getBtcFiatRatesWithSource(["USD"]);
+  assert.equal(result.source, "fallback");
+  assert.deepEqual(result.rates, { bitcoin: { usd: "68000" } });
+  assert.deepEqual(calls.map((call) => call.url), [PRIMARY_URL, FALLBACK_URL]);
+
+  const cached = JSON.parse((await store.getMeta("price_feed:bitcoin")).value);
+  assert.equal(cached.source, "fallback");
+});
+
+test("cached feed tolerates an upstream dropping one configured currency", async () => {
+  const store = new InMemoryInvoiceKvStore();
+  // Configured for USD + EUR, but the feed only returns USD this round.
+  const { fetch, calls } = stageFetch({
+    [PRIMARY_URL]: () => okResponse({ bitcoin: { usd: 70000 } })
+  });
+  const feed = createCachedLivePriceFeed({
+    store,
+    currencies: ["USD", "EUR"],
+    fetch,
+    clock: () => 1000,
+    primaryUrl: PRIMARY_URL,
+    fallbackUrl: FALLBACK_URL
+  });
+
+  // The refresh succeeds and caches what was available...
+  const usd = await feed.getBtcFiatRatesWithSource(["USD"]);
+  assert.deepEqual(usd.rates, { bitcoin: { usd: "70000" } });
+  assert.equal(calls.length, 1);
+
+  // ...but a request for the dropped currency fails on its own, served from the
+  // same fresh cache without another network call.
+  await assert.rejects(() => feed.getBtcFiatRatesWithSource(["EUR"]));
+  assert.equal(calls.length, 1);
+});
+
+test("cached feed throws when neither the primary nor fallback URL responds", async () => {
+  const store = new InMemoryInvoiceKvStore();
+  const { fetch } = stageFetch({
+    [PRIMARY_URL]: () => httpErrorResponse(500),
+    [FALLBACK_URL]: () => httpErrorResponse(503)
+  });
+  const feed = createCachedLivePriceFeed({
+    store,
+    currencies: ["USD"],
+    fetch,
+    clock: () => 1000,
+    primaryUrl: PRIMARY_URL,
+    fallbackUrl: FALLBACK_URL
+  });
+
+  await assert.rejects(
+    () => feed.healthCheck(),
+    /all price feeds failed: primary: .*HTTP 500.*fallback: .*HTTP 503/
+  );
+});
+
+test("health check forces a live refresh even when the cache is fresh", async () => {
+  let now = 1000;
+  const store = new InMemoryInvoiceKvStore();
+  const { fetch, calls } = stageFetch({
+    [PRIMARY_URL]: () => okResponse({ bitcoin: { usd: 70000 } })
+  });
+  const feed = createCachedLivePriceFeed({
+    store,
+    currencies: ["USD"],
+    fetch,
+    clock: () => now,
+    primaryUrl: PRIMARY_URL,
+    fallbackUrl: FALLBACK_URL
+  });
+
+  await feed.getBtcFiatRatesWithSource(["USD"]);
+  assert.equal(calls.length, 1);
+
+  now = 1010;
+  const probe = await feed.healthCheck(["USD"]);
+  assert.equal(probe.source, "primary");
+  assert.equal(calls.length, 2);
+});
+
+test("cached feed is recognized as resolved and health-checkable", () => {
+  const feed = new CachedPriceFeed({
+    store: new InMemoryInvoiceKvStore(),
+    currencies: ["USD"],
+    primary: new StaticPriceProvider(),
+    fallback: new StaticPriceProvider()
+  });
+  assert.equal(isResolvedPriceProvider(feed), true);
+  assert.equal(isHealthCheckablePriceFeed(feed), true);
+  assert.equal(isResolvedPriceProvider(new StaticPriceProvider()), false);
+  assert.equal(isHealthCheckablePriceFeed(new StaticPriceProvider()), false);
 });
 
 test("quotes fiat to msats with a live source id using decimal math", () => {
@@ -83,117 +308,38 @@ test("quotes fiat to msats with a live source id using decimal math", () => {
       value: "0.10"
     },
     btc_fiat_price: "50000.00",
-    source: "coingecko_direct",
+    source: "primary",
     as_of: 1781740800,
     ttl_seconds: 30
   });
 
   assert.equal(quote.amount_sats, 200);
   assert.equal(quote.amount_msats, 200000);
-  assert.equal(quote.source, "coingecko_direct");
+  assert.equal(quote.source, "primary");
   assert.equal(quote.expires_at, 1781740830);
 });
 
-test("creates CoinGecko direct provider from currencies", () => {
-  const provider = createCoinGeckoDirectPriceProvider({
-    currencies: ["USD", "GBP"],
-    fetch: async () => ({
-      ok: true,
-      status: 200,
-      text: async () => "{\"bitcoin\":{\"usd\":1,\"gbp\":1}}"
-    })
+test("fallback price lookup reports the resolved source from a cached feed", async () => {
+  const store = new InMemoryInvoiceKvStore();
+  const { fetch } = stageFetch({
+    [PRIMARY_URL]: () => okResponse({ bitcoin: { usd: 50001 } })
   });
-
-  assert.equal(provider.source, "coingecko_direct");
-  assert.equal(
-    provider.url,
-    "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd%2Cgbp"
-  );
-});
-
-test("creates canonical mirror providers from source registry URLs", () => {
-  const openreceive = createOpenReceiveMirrorPriceProvider();
-  const megalithic = createMegalithicMirrorPriceProvider();
-
-  assert.equal(openreceive.source, "openreceive_mirror");
-  assert.equal(openreceive.url, OPENRECEIVE_RATE_MIRROR_URL);
-  assert.equal(megalithic.source, "megalithic_mirror");
-  assert.equal(megalithic.url, OPENRECEIVE_MEGALITHIC_RATE_MIRROR_URL);
-});
-
-test("default price providers follow static, mirror, fallback, direct order", () => {
-  const providers = createDefaultPriceProviders({
-    currencies: ["USD"]
+  const feed = createCachedLivePriceFeed({
+    store,
+    currencies: ["USD"],
+    fetch,
+    clock: () => 1000,
+    primaryUrl: PRIMARY_URL,
+    fallbackUrl: FALLBACK_URL
   });
 
   assert.deepEqual(
-    providers.map((provider) => provider.source),
-    [
-      "static_mock",
-      "openreceive_mirror",
-      "megalithic_mirror",
-      "coingecko_direct"
-    ]
-  );
-
-  assert.deepEqual(
-    createDefaultLivePriceProviders({ currencies: ["USD"] }).map((provider) => provider.source),
-    ["openreceive_mirror", "megalithic_mirror", "coingecko_direct"]
-  );
-});
-
-test("fallback price lookup returns first successful source", async () => {
-  const calls = [];
-  const providers = [
+    await getBtcFiatRatesWithFallback({ currencies: ["USD"], providers: [feed] }),
     {
-      source: "openreceive_mirror",
-      async getBtcFiatRates() {
-        calls.push("openreceive_mirror");
-        throw new Error("mirror unavailable");
-      }
-    },
-    {
-      source: "megalithic_mirror",
-      async getBtcFiatRates(currencies) {
-        calls.push(`megalithic_mirror:${currencies.join(",")}`);
-        return {
-          bitcoin: {
-            usd: "50001"
-          }
-        };
-      }
-    },
-    {
-      source: "coingecko_direct",
-      async getBtcFiatRates() {
-        calls.push("coingecko_direct");
-        return {
-          bitcoin: {
-            usd: "50002"
-          }
-        };
-      }
-    }
-  ];
-
-  assert.deepEqual(
-    await getBtcFiatRatesWithFallback({
-      currencies: ["USD"],
-      providers
-    }),
-    {
-      source: "megalithic_mirror",
-      rates: {
-        bitcoin: {
-          usd: "50001"
-        }
-      }
+      source: "primary",
+      rates: { bitcoin: { usd: "50001" } }
     }
   );
-  assert.deepEqual(calls, [
-    "openreceive_mirror",
-    "megalithic_mirror:USD"
-  ]);
 });
 
 test("static provider and provider-backed quote expose source ids", async () => {

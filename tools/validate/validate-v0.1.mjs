@@ -580,26 +580,29 @@ function validateData() {
   assert(currencies.currencies.includes("gbp"), "supported currencies must include gbp");
 
   const rates = readJson("spec/data/rates/price-sources.json");
+  const priceFeedVsCurrencies =
+    "usd,aed,ars,aud,bdt,bhd,bmd,brl,cad,chf,clp,cny,czk,dkk,eur,gbp,gel,hkd,huf,idr,ils,inr,jpy,krw,kwd,lkr,mmk,mxn,myr,ngn,nok,nzd,php,pkr,pln,rub,sar,sek,sgd,thb,try,twd,uah,vef,vnd,zar";
   assert(rates.sources.some((source) => source.id === "static_mock"), "missing static_mock price source");
+  assert(rates.cache_seconds === 60, "price-feed cache window must be 60 seconds");
+  assert(rates.primary_timeout_ms === 5000, "primary price-feed timeout must be 5000ms");
   assert(
     JSON.stringify(rates.sources.map((source) => source.id)) ===
       JSON.stringify([
         "static_mock",
-        "openreceive_mirror",
-        "megalithic_mirror",
-        "coingecko_direct"
+        "primary",
+        "fallback"
       ]),
     "price source order mismatch"
   );
   assert(
-    rates.sources.find((source) => source.id === "openreceive_mirror")?.url ===
-      "https://openreceive.org/exchange_rates",
-    "OpenReceive mirror URL mismatch"
+    rates.sources.find((source) => source.id === "primary")?.url ===
+      `https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=${priceFeedVsCurrencies}`,
+    "primary price-feed URL mismatch"
   );
   assert(
-    rates.sources.find((source) => source.id === "megalithic_mirror")?.url ===
-      "https://megalithic.me/exchange_rates",
-    "Megalithic mirror URL mismatch"
+    rates.sources.find((source) => source.id === "fallback")?.url ===
+      `https://openreceive.org/api/v3/simple/price?ids=bitcoin&vs_currencies=${priceFeedVsCurrencies}`,
+    "fallback price-feed URL mismatch"
   );
 
   const demoSpec = readJson("spec/data/demo/fruits.json");

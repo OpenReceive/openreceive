@@ -1,7 +1,8 @@
 {
   "schema_version": "0.1.0",
-  "cache_seconds": 30,
+  "cache_seconds": 60,
   "invoice_quote_ttl_seconds": 600,
+  "primary_timeout_ms": 5000,
   "sources": [
     {
       "id": "static_mock",
@@ -19,27 +20,21 @@
       ]
     },
     {
-      "id": "openreceive_mirror",
-      "kind": "coingecko_simple_price_compatible",
-      "url": "https://openreceive.org/exchange_rates",
-      "use": [
-        "production_demo_primary"
-      ]
-    },
-    {
-      "id": "megalithic_mirror",
-      "kind": "coingecko_simple_price_compatible",
-      "url": "https://megalithic.me/exchange_rates",
-      "use": [
-        "fallback"
-      ]
-    },
-    {
-      "id": "coingecko_direct",
-      "kind": "coingecko_simple_price",
+      "id": "primary",
+      "kind": "simple_price_compatible",
       "url": "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,aed,ars,aud,bdt,bhd,bmd,brl,cad,chf,clp,cny,czk,dkk,eur,gbp,gel,hkd,huf,idr,ils,inr,jpy,krw,kwd,lkr,mmk,mxn,myr,ngn,nok,nzd,php,pkr,pln,rub,sar,sek,sgd,thb,try,twd,uah,vef,vnd,zar",
+      "env_override": "OPENRECEIVE_PRICE_FEED_PRIMARY_URL",
       "use": [
-        "fallback"
+        "live_primary"
+      ]
+    },
+    {
+      "id": "fallback",
+      "kind": "simple_price_compatible",
+      "url": "https://openreceive.org/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,aed,ars,aud,bdt,bhd,bmd,brl,cad,chf,clp,cny,czk,dkk,eur,gbp,gel,hkd,huf,idr,ils,inr,jpy,krw,kwd,lkr,mmk,mxn,myr,ngn,nok,nzd,php,pkr,pln,rub,sar,sek,sgd,thb,try,twd,uah,vef,vnd,zar",
+      "env_override": "OPENRECEIVE_PRICE_FEED_FALLBACK_URL",
+      "use": [
+        "live_fallback"
       ]
     }
   ]

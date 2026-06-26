@@ -36,10 +36,10 @@ Run `npm run generate:models` after changing OpenAPI or AsyncAPI contracts.
 longer match the source contracts.
 
 `npm run validate` also checks that provider-route vectors are well formed and
-that the canonical price-source order remains `static_mock`,
-`openreceive_mirror`, `megalithic_mirror`, then `coingecko_direct`.
-It also keeps the default live-wallet expected-capabilities fixture aligned
-with the documented Rizful example.
+that the canonical price-source order remains `static_mock`, `primary`, then
+`fallback`, with the primary and fallback URLs pinned to the hard-coded feed
+endpoints. It also keeps the default live-wallet expected-capabilities fixture
+aligned with the documented Rizful example.
 
 ## Error Codes
 

@@ -1,14 +1,24 @@
-export const OPENRECEIVE_RATE_CACHE_SECONDS = 30 as const;
+import type { MaybePromise } from "../storage/index.ts";
+import type { MetaRow } from "../storage/kv.ts";
+
+// How long a cached price-feed read stays usable before a live refresh.
+export const OPENRECEIVE_PRICE_FEED_CACHE_SECONDS = 60 as const;
+// Back-compat alias for the cache window; both name the same 60s value.
+export const OPENRECEIVE_RATE_CACHE_SECONDS = OPENRECEIVE_PRICE_FEED_CACHE_SECONDS;
 export const OPENRECEIVE_INVOICE_QUOTE_TTL_SECONDS = 600 as const;
+
+// The primary feed must answer within this window before the fallback is tried.
+export const OPENRECEIVE_PRICE_FEED_PRIMARY_TIMEOUT_MS = 5000 as const;
 
 export const OPENRECEIVE_PRICE_SOURCE_IDS = [
   "static_mock",
-  "openreceive_mirror",
-  "megalithic_mirror",
-  "coingecko_direct"
+  "primary",
+  "fallback"
 ] as const;
 
 export type OpenReceivePriceSourceId = (typeof OPENRECEIVE_PRICE_SOURCE_IDS)[number];
+
+export type OpenReceiveLivePriceSourceId = Exclude<OpenReceivePriceSourceId, "static_mock">;
 
 export const OPENRECEIVE_STATIC_PRICE_SOURCE_ID = "static_mock" as const;
 
@@ -18,12 +28,31 @@ export const OPENRECEIVE_STATIC_BTC_FIAT_RATES = {
   }
 } as const;
 
-export const OPENRECEIVE_COINGECKO_DIRECT_BASE_URL =
+// The fixed fiat list both live feeds price Bitcoin against. Hard-coded so the
+// primary and fallback URLs always request the same currencies.
+export const OPENRECEIVE_PRICE_FEED_VS_CURRENCIES =
+  "usd,aed,ars,aud,bdt,bhd,bmd,brl,cad,chf,clp,cny,czk,dkk,eur,gbp,gel,hkd,huf,idr,ils,inr,jpy,krw,kwd,lkr,mmk,mxn,myr,ngn,nok,nzd,php,pkr,pln,rub,sar,sek,sgd,thb,try,twd,uah,vef,vnd,zar" as const;
+
+export const OPENRECEIVE_SIMPLE_PRICE_BASE_URL =
   "https://api.coingecko.com/api/v3/simple/price" as const;
-export const OPENRECEIVE_RATE_MIRROR_URL =
-  "https://openreceive.org/exchange_rates" as const;
-export const OPENRECEIVE_MEGALITHIC_RATE_MIRROR_URL =
-  "https://megalithic.me/exchange_rates" as const;
+
+// Primary live feed: the canonical public Simple Price endpoint.
+export const OPENRECEIVE_PRIMARY_PRICE_FEED_URL =
+  `${OPENRECEIVE_SIMPLE_PRICE_BASE_URL}?ids=bitcoin&vs_currencies=${OPENRECEIVE_PRICE_FEED_VS_CURRENCIES}` as const;
+
+// Fallback live feed: the OpenReceive mirror, in the same response shape.
+export const OPENRECEIVE_FALLBACK_PRICE_FEED_URL =
+  `https://openreceive.org/api/v3/simple/price?ids=bitcoin&vs_currencies=${OPENRECEIVE_PRICE_FEED_VS_CURRENCIES}` as const;
+
+// Dev override env var names. The node service reads these and passes any
+// override through to the feed; core never reads the environment itself.
+export const OPENRECEIVE_PRICE_FEED_PRIMARY_URL_ENV =
+  "OPENRECEIVE_PRICE_FEED_PRIMARY_URL" as const;
+export const OPENRECEIVE_PRICE_FEED_FALLBACK_URL_ENV =
+  "OPENRECEIVE_PRICE_FEED_FALLBACK_URL" as const;
+
+// Meta-store key the cached feed reads/writes the JSON rate blob under.
+export const OPENRECEIVE_PRICE_FEED_CACHE_META_KEY = "price_feed:bitcoin" as const;
 
 export const OPENRECEIVE_SATS_PER_BTC = 100_000_000n;
 export const OPENRECEIVE_MSATS_PER_SAT = 1000n;
@@ -85,23 +114,40 @@ export interface OpenReceiveBtcFiatRateMapWithSource {
   readonly rates: OpenReceiveBtcFiatRateMap;
 }
 
-export interface CoinGeckoSimplePriceResponse {
+export interface SimplePriceHttpResponse {
   ok: boolean;
   status: number;
   text(): Promise<string>;
 }
 
-export type CoinGeckoSimplePriceFetch = (
+export type SimplePriceFetch = (
   url: string,
   init?: {
     headers?: Record<string, string>;
+    signal?: AbortSignal;
   }
-) => Promise<CoinGeckoSimplePriceResponse>;
+) => Promise<SimplePriceHttpResponse>;
 
-export interface CoinGeckoSimplePriceProviderOptions {
+export interface HttpSimplePriceProviderOptions {
   url: string;
-  source: Exclude<OpenReceivePriceSourceId, "static_mock">;
-  fetch?: CoinGeckoSimplePriceFetch;
+  source: OpenReceiveLivePriceSourceId;
+  fetch?: SimplePriceFetch;
+  timeoutMs?: number;
+}
+
+// A price provider that can also report which source actually answered, so a
+// cached or multi-URL feed can attribute each rate to its real origin.
+export interface OpenReceiveResolvedPriceProvider extends OpenReceiveSourcedPriceProvider {
+  getBtcFiatRatesWithSource(
+    currencies: readonly string[]
+  ): Promise<OpenReceiveBtcFiatRateMapWithSource>;
+}
+
+// A live feed that can be probed at boot to confirm it answers correctly.
+export interface OpenReceivePriceFeedHealthCheck {
+  healthCheck(
+    currencies?: readonly string[]
+  ): Promise<OpenReceiveBtcFiatRateMapWithSource>;
 }
 
 interface ParsedDecimal {
@@ -309,9 +355,9 @@ export class StaticPriceProvider implements OpenReceiveSourcedPriceProvider {
   }
 }
 
-export function createCoinGeckoSimplePriceUrl(
+export function createSimplePriceUrl(
   currencies: readonly string[],
-  baseUrl = OPENRECEIVE_COINGECKO_DIRECT_BASE_URL
+  baseUrl = OPENRECEIVE_SIMPLE_PRICE_BASE_URL
 ): string {
   if (currencies.length === 0) {
     throw new RangeError("at least one fiat currency is required");
@@ -326,7 +372,7 @@ export function createCoinGeckoSimplePriceUrl(
   return url.toString();
 }
 
-export function parseCoinGeckoSimplePriceResponse(
+export function parseSimplePriceResponse(
   response: unknown,
   currencies: readonly string[]
 ): OpenReceiveBtcFiatRateMap {
@@ -345,89 +391,350 @@ export function parseCoinGeckoSimplePriceResponse(
   };
 }
 
-export class CoinGeckoSimplePriceProvider implements OpenReceiveSourcedPriceProvider {
-  readonly url: string;
-  readonly source: Exclude<OpenReceivePriceSourceId, "static_mock">;
-  #fetch: CoinGeckoSimplePriceFetch;
+// Tolerant parse for caching the whole feed: keeps every well-formed currency
+// the response carries and skips ones an upstream returned unusably (so a single
+// dropped currency never fails the refresh). Throws only when the response is
+// not Simple Price shaped or carries no usable rate at all.
+export function parseAvailableSimplePriceResponse(
+  response: unknown
+): OpenReceiveBtcFiatRateMap {
+  const bitcoin = asRecord(asRecord(response).bitcoin);
+  const rates: Record<string, string> = {};
 
-  constructor(options: CoinGeckoSimplePriceProviderOptions) {
+  for (const [key, value] of Object.entries(bitcoin)) {
+    if (!/^[a-z]{3}$/.test(key.toLowerCase())) continue;
+    try {
+      rates[key.toLowerCase()] = normalizeBtcFiatRate(value, `bitcoin.${key}`);
+    } catch {
+      // Skip a currency the upstream returned in an unusable form.
+    }
+  }
+
+  if (Object.keys(rates).length === 0) {
+    throw new RangeError("price response contained no usable BTC fiat rates");
+  }
+
+  return {
+    bitcoin: rates
+  };
+}
+
+// Fetches a Simple Price compatible HTTP endpoint and selects the requested
+// fiat currencies. When timeoutMs is set, a slow endpoint is aborted so the
+// caller can fall through to another feed.
+export class HttpSimplePriceProvider implements OpenReceiveSourcedPriceProvider {
+  readonly url: string;
+  readonly source: OpenReceiveLivePriceSourceId;
+  readonly timeoutMs?: number;
+  #fetch: SimplePriceFetch;
+
+  constructor(options: HttpSimplePriceProviderOptions) {
     this.url = options.url;
     this.source = options.source;
-    this.#fetch = options.fetch ?? globalThis.fetch;
+    this.timeoutMs = options.timeoutMs;
+    this.#fetch = options.fetch ?? (globalThis.fetch as unknown as SimplePriceFetch);
   }
 
   async getBtcFiatRates(currencies: readonly string[]): Promise<OpenReceiveBtcFiatRateMap> {
-    const response = await this.#fetch(this.url, {
-      headers: {
-        accept: "application/json"
-      }
-    });
+    return parseSimplePriceResponse(await this.#fetchJson(), currencies);
+  }
+
+  // Returns every well-formed currency the endpoint carries, for caching the
+  // whole feed in one read.
+  async getAllBtcFiatRates(): Promise<OpenReceiveBtcFiatRateMap> {
+    return parseAvailableSimplePriceResponse(await this.#fetchJson());
+  }
+
+  async #fetchJson(): Promise<unknown> {
+    const response = await this.#fetchWithTimeout();
 
     if (!response.ok) {
       throw new Error(`price source ${this.source} returned HTTP ${response.status}`);
     }
 
-    return parseCoinGeckoSimplePriceResponse(JSON.parse(await response.text()), currencies);
+    return JSON.parse(await response.text());
+  }
+
+  async #fetchWithTimeout(): Promise<SimplePriceHttpResponse> {
+    const headers = { accept: "application/json" };
+    if (this.timeoutMs === undefined) {
+      return this.#fetch(this.url, { headers });
+    }
+
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        reject(
+          new Error(`price source ${this.source} did not respond within ${this.timeoutMs}ms`)
+        );
+      }, this.timeoutMs);
+    });
+
+    try {
+      return await Promise.race([
+        this.#fetch(this.url, { headers, signal: controller.signal }),
+        timeout
+      ]);
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
   }
 }
 
-export function createCoinGeckoDirectPriceProvider(options: {
-  currencies: readonly string[];
-  fetch?: CoinGeckoSimplePriceFetch;
-}): CoinGeckoSimplePriceProvider {
-  return new CoinGeckoSimplePriceProvider({
-    url: createCoinGeckoSimplePriceUrl(options.currencies),
-    source: "coingecko_direct",
-    fetch: options.fetch
-  });
+export interface OpenReceiveLivePriceFeedProviders {
+  readonly primary: HttpSimplePriceProvider;
+  readonly fallback: HttpSimplePriceProvider;
 }
 
-export function createOpenReceiveMirrorPriceProvider(options: {
-  fetch?: CoinGeckoSimplePriceFetch;
-} = {}): CoinGeckoSimplePriceProvider {
-  return new CoinGeckoSimplePriceProvider({
-    url: OPENRECEIVE_RATE_MIRROR_URL,
-    source: "openreceive_mirror",
-    fetch: options.fetch
-  });
-}
-
-export function createMegalithicMirrorPriceProvider(options: {
-  fetch?: CoinGeckoSimplePriceFetch;
-} = {}): CoinGeckoSimplePriceProvider {
-  return new CoinGeckoSimplePriceProvider({
-    url: OPENRECEIVE_MEGALITHIC_RATE_MIRROR_URL,
-    source: "megalithic_mirror",
-    fetch: options.fetch
-  });
-}
-
-export function createDefaultLivePriceProviders(options: {
-  currencies: readonly string[];
-  fetch?: CoinGeckoSimplePriceFetch;
-}): readonly OpenReceiveSourcedPriceProvider[] {
-  return [
-    createOpenReceiveMirrorPriceProvider({ fetch: options.fetch }),
-    createMegalithicMirrorPriceProvider({ fetch: options.fetch }),
-    createCoinGeckoDirectPriceProvider({
-      currencies: options.currencies,
+// Builds the primary and fallback live feed providers from the hard-coded URLs
+// (or caller overrides). The primary provider carries the 5s timeout.
+export function createLivePriceFeedProviders(options: {
+  fetch?: SimplePriceFetch;
+  primaryUrl?: string;
+  fallbackUrl?: string;
+  primaryTimeoutMs?: number;
+} = {}): OpenReceiveLivePriceFeedProviders {
+  return {
+    primary: new HttpSimplePriceProvider({
+      url: options.primaryUrl ?? OPENRECEIVE_PRIMARY_PRICE_FEED_URL,
+      source: "primary",
+      fetch: options.fetch,
+      timeoutMs: options.primaryTimeoutMs ?? OPENRECEIVE_PRICE_FEED_PRIMARY_TIMEOUT_MS
+    }),
+    fallback: new HttpSimplePriceProvider({
+      url: options.fallbackUrl ?? OPENRECEIVE_FALLBACK_PRICE_FEED_URL,
+      source: "fallback",
       fetch: options.fetch
     })
-  ];
+  };
 }
 
-export function createDefaultPriceProviders(options: {
+// The subset of the KV store the cached feed needs: a single durable
+// key/value slot it reads and CAS-writes the rate blob into.
+export interface OpenReceivePriceFeedCacheStore {
+  getMeta(key: string): MaybePromise<MetaRow | undefined>;
+  casMeta(
+    key: string,
+    value: string,
+    expectedRev: number | null
+  ): MaybePromise<{ status: "ok" | "conflict"; row: MetaRow }>;
+}
+
+interface PriceFeedCacheEntry {
+  rates: OpenReceiveBtcFiatRateMap;
+  source: OpenReceiveLivePriceSourceId;
+  fetched_at: number;
+}
+
+export interface CachedPriceFeedOptions {
+  store: OpenReceivePriceFeedCacheStore;
   currencies: readonly string[];
-  fetch?: CoinGeckoSimplePriceFetch;
-  includeStatic?: boolean;
-}): readonly OpenReceiveSourcedPriceProvider[] {
-  return [
-    ...(options.includeStatic === false ? [] : [new StaticPriceProvider()]),
-    ...createDefaultLivePriceProviders({
-      currencies: options.currencies,
-      fetch: options.fetch
-    })
-  ];
+  primary: OpenReceiveSourcedPriceProvider;
+  fallback: OpenReceiveSourcedPriceProvider;
+  cacheSeconds?: number;
+  cacheKey?: string;
+  clock?: () => number;
+}
+
+// Serves BTC fiat rates from a database cache, refreshing from the primary feed
+// first and the fallback feed second. The whole rate map is stored as JSON
+// alongside the fetch time, so repeated orders inside the cache window never hit
+// the network.
+export class CachedPriceFeed
+  implements OpenReceiveResolvedPriceProvider, OpenReceivePriceFeedHealthCheck
+{
+  // Representative source for the bare OpenReceiveSourcedPriceProvider view;
+  // the true origin is reported per-call by getBtcFiatRatesWithSource.
+  readonly source: OpenReceiveLivePriceSourceId = "primary";
+  readonly #store: OpenReceivePriceFeedCacheStore;
+  readonly #currencies: readonly string[];
+  readonly #primary: OpenReceiveSourcedPriceProvider;
+  readonly #fallback: OpenReceiveSourcedPriceProvider;
+  readonly #cacheSeconds: number;
+  readonly #cacheKey: string;
+  readonly #clock: () => number;
+
+  constructor(options: CachedPriceFeedOptions) {
+    if (options.currencies.length === 0) {
+      throw new RangeError("CachedPriceFeed requires at least one currency");
+    }
+    this.#store = options.store;
+    this.#currencies = [...options.currencies];
+    this.#primary = options.primary;
+    this.#fallback = options.fallback;
+    this.#cacheSeconds = options.cacheSeconds ?? OPENRECEIVE_PRICE_FEED_CACHE_SECONDS;
+    this.#cacheKey = options.cacheKey ?? OPENRECEIVE_PRICE_FEED_CACHE_META_KEY;
+    this.#clock = options.clock ?? currentUnixSeconds;
+  }
+
+  async getBtcFiatRates(currencies: readonly string[]): Promise<OpenReceiveBtcFiatRateMap> {
+    return (await this.getBtcFiatRatesWithSource(currencies)).rates;
+  }
+
+  async getBtcFiatRatesWithSource(
+    currencies: readonly string[]
+  ): Promise<OpenReceiveBtcFiatRateMapWithSource> {
+    const now = this.#clock();
+    const cached = await this.#readFreshCache(now);
+    const resolved = cached ?? (await this.#refresh(now));
+    return {
+      source: resolved.source,
+      rates: parseSimplePriceResponse(resolved.rates, currencies)
+    };
+  }
+
+  // Forces a live refresh, ignoring the cache, so boot can confirm at least one
+  // feed answers in the expected shape. Throws if both feeds fail. Tolerant of
+  // an upstream that drops an individual currency.
+  async healthCheck(): Promise<OpenReceiveBtcFiatRateMapWithSource> {
+    const resolved = await this.#refresh(this.#clock());
+    return {
+      source: resolved.source,
+      rates: resolved.rates
+    };
+  }
+
+  async #readFreshCache(now: number): Promise<PriceFeedCacheEntry | undefined> {
+    const meta = await this.#store.getMeta(this.#cacheKey);
+    if (meta === undefined) return undefined;
+
+    const entry = parsePriceFeedCacheEntry(meta.value);
+    if (entry === undefined) return undefined;
+    if (now - entry.fetched_at >= this.#cacheSeconds) return undefined;
+    return entry;
+  }
+
+  async #refresh(now: number): Promise<PriceFeedCacheEntry> {
+    const failures: string[] = [];
+    for (const provider of [this.#primary, this.#fallback]) {
+      try {
+        const rates = await this.#fetchProviderRates(provider);
+        const source = provider.source as OpenReceiveLivePriceSourceId;
+        const entry: PriceFeedCacheEntry = { rates, source, fetched_at: now };
+        await this.#writeCache(entry);
+        return entry;
+      } catch (error) {
+        failures.push(
+          `${provider.source}: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+
+    throw new Error(`all price feeds failed: ${failures.join("; ")}`);
+  }
+
+  // Cache the whole feed when the provider can serve it tolerantly; otherwise
+  // request just the configured currencies.
+  #fetchProviderRates(
+    provider: OpenReceiveSourcedPriceProvider
+  ): Promise<OpenReceiveBtcFiatRateMap> {
+    if (providerHasGetAllBtcFiatRates(provider)) {
+      return provider.getAllBtcFiatRates();
+    }
+    return provider.getBtcFiatRates(this.#currencies);
+  }
+
+  async #writeCache(entry: PriceFeedCacheEntry): Promise<void> {
+    const current = await this.#store.getMeta(this.#cacheKey);
+    const expectedRev = current === undefined ? null : current.rev;
+    // A concurrent refresh winning the CAS is fine: its data is equally fresh,
+    // so we ignore a conflict rather than retrying.
+    await this.#store.casMeta(this.#cacheKey, JSON.stringify(entry), expectedRev);
+  }
+}
+
+interface AvailableRatesProvider {
+  getAllBtcFiatRates(): Promise<OpenReceiveBtcFiatRateMap>;
+}
+
+function providerHasGetAllBtcFiatRates(
+  provider: OpenReceiveSourcedPriceProvider
+): provider is OpenReceiveSourcedPriceProvider & AvailableRatesProvider {
+  return (
+    typeof (provider as Partial<AvailableRatesProvider>).getAllBtcFiatRates === "function"
+  );
+}
+
+function parsePriceFeedCacheEntry(value: string): PriceFeedCacheEntry | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return undefined;
+  }
+
+  if (parsed === null || typeof parsed !== "object") return undefined;
+  const record = parsed as Record<string, unknown>;
+  const fetchedAt = record.fetched_at;
+  const source = record.source;
+  const rates = record.rates;
+
+  if (
+    !Number.isSafeInteger(fetchedAt) ||
+    (source !== "primary" && source !== "fallback") ||
+    rates === null ||
+    typeof rates !== "object" ||
+    typeof (rates as { bitcoin?: unknown }).bitcoin !== "object" ||
+    (rates as { bitcoin?: unknown }).bitcoin === null
+  ) {
+    return undefined;
+  }
+
+  return {
+    rates: rates as OpenReceiveBtcFiatRateMap,
+    source,
+    fetched_at: fetchedAt as number
+  };
+}
+
+// Wires the hard-coded (or overridden) primary/fallback feeds to a database
+// cache. Pass an OpenReceive store (or any meta-capable store) as `store`.
+export function createCachedLivePriceFeed(options: {
+  store: OpenReceivePriceFeedCacheStore;
+  currencies: readonly string[];
+  fetch?: SimplePriceFetch;
+  clock?: () => number;
+  cacheSeconds?: number;
+  cacheKey?: string;
+  primaryUrl?: string;
+  fallbackUrl?: string;
+  primaryTimeoutMs?: number;
+}): CachedPriceFeed {
+  const { primary, fallback } = createLivePriceFeedProviders({
+    fetch: options.fetch,
+    primaryUrl: options.primaryUrl,
+    fallbackUrl: options.fallbackUrl,
+    primaryTimeoutMs: options.primaryTimeoutMs
+  });
+
+  return new CachedPriceFeed({
+    store: options.store,
+    currencies: options.currencies,
+    primary,
+    fallback,
+    cacheSeconds: options.cacheSeconds,
+    cacheKey: options.cacheKey,
+    clock: options.clock
+  });
+}
+
+export function isResolvedPriceProvider(
+  provider: OpenReceiveSourcedPriceProvider
+): provider is OpenReceiveResolvedPriceProvider {
+  return (
+    typeof (provider as Partial<OpenReceiveResolvedPriceProvider>)
+      .getBtcFiatRatesWithSource === "function"
+  );
+}
+
+export function isHealthCheckablePriceFeed(
+  provider: OpenReceiveSourcedPriceProvider
+): provider is OpenReceiveSourcedPriceProvider & OpenReceivePriceFeedHealthCheck {
+  return (
+    typeof (provider as Partial<OpenReceivePriceFeedHealthCheck>).healthCheck === "function"
+  );
 }
 
 export async function getBtcFiatRatesWithFallback(input: {
@@ -441,6 +748,9 @@ export async function getBtcFiatRatesWithFallback(input: {
   const failures: string[] = [];
   for (const provider of input.providers) {
     try {
+      if (isResolvedPriceProvider(provider)) {
+        return await provider.getBtcFiatRatesWithSource(input.currencies);
+      }
       return {
         source: provider.source,
         rates: await provider.getBtcFiatRates(input.currencies)

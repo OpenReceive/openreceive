@@ -133,7 +133,7 @@ paths:
       summary: Return the deterministic v0.1 BTC fiat rate map.
       responses:
         "200":
-          description: CoinGecko Simple Price compatible rate map.
+          description: Simple Price compatible BTC fiat rate map.
           content:
             application/json:
               schema:

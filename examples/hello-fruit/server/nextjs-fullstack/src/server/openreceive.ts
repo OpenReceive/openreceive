@@ -1,12 +1,12 @@
 import {
-  createDefaultPriceProviders,
-  createDefaultLivePriceProviders
+  StaticPriceProvider
 } from "@openreceive/core";
 import type {
   OpenReceiveSourcedPriceProvider
 } from "@openreceive/core";
 import {
-  createOpenReceive
+  createOpenReceive,
+  createOpenReceivePriceFeed
 } from "@openreceive/node";
 import {
   createHelloFruitDemoMetadata
@@ -204,9 +204,12 @@ export async function createHelloFruitOpenReceive(
   const priceCurrencies = readHelloFruitPriceFeedCurrencies();
   const supportedCurrencies = readHelloFruitCheckoutCurrencies();
   const testClient = createHelloFruitTestReceiveClient();
-  const priceProviders = testClient === undefined
-    ? createDefaultLivePriceProviders({ currencies: priceCurrencies })
-    : createDefaultPriceProviders({ currencies: priceCurrencies });
+  // Live wallet: database-cached primary/fallback feed (boot-probed by
+  // createOpenReceive). Deterministic fake-wallet mode: static mock only.
+  const priceProviders: readonly OpenReceiveSourcedPriceProvider[] =
+    testClient === undefined
+      ? [createOpenReceivePriceFeed({ store, currencies: priceCurrencies })]
+      : [new StaticPriceProvider()];
 
   const openreceive = await createOpenReceive({
     ...(testClient === undefined ? { nwc: connectionString } : { client: testClient }),

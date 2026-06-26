@@ -8,12 +8,12 @@ export type HelloFruitDirectAmountCurrency =
 export type HelloFruitCurrency = string;
 
 export function readHelloFruitPriceFeedCurrencies(): string[] {
-  const directSource = priceSources.sources.find((source) => source.id === "coingecko_direct");
-  if (directSource === undefined || typeof directSource.url !== "string") {
-    throw new Error("Hello Fruit demo requires the coingecko_direct price source.");
+  const primarySource = priceSources.sources.find((source) => source.id === "primary");
+  if (primarySource === undefined || typeof primarySource.url !== "string") {
+    throw new Error("Hello Fruit demo requires the primary price source.");
   }
 
-  const currencies = new URL(directSource.url).searchParams
+  const currencies = new URL(primarySource.url).searchParams
     .get("vs_currencies")
     ?.split(",")
     .map((currency) => currency.trim().toUpperCase())

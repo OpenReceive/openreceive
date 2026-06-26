@@ -134,7 +134,7 @@ test("create invoice rejects idempotency key reuse with a different body", async
 test("create invoice quotes fiat with configured price providers", async () => {
   const calls = [];
   const liveProvider = {
-    source: "openreceive_mirror",
+    source: "primary",
     async getBtcFiatRates(currencies) {
       calls.push(currencies);
       return {
@@ -161,7 +161,7 @@ test("create invoice quotes fiat with configured price providers", async () => {
   assert.equal(invoice.amount_msats, 50000);
   assert.equal(invoice.fiat_quote.amount_msats, 50000);
   assert.equal(invoice.fiat_quote.btc_fiat_price, "100000.00");
-  assert.equal(invoice.fiat_quote.source, "openreceive_mirror");
+  assert.equal(invoice.fiat_quote.source, "primary");
   assert.equal(wallet.makeInvoiceCalls, 1);
   assert.deepEqual(calls, [["USD"]]);
 });
@@ -169,7 +169,7 @@ test("create invoice quotes fiat with configured price providers", async () => {
 test("create invoice accepts BTC and SATS amounts without price providers", async () => {
   const providerCalls = [];
   const provider = {
-    source: "openreceive_mirror",
+    source: "primary",
     async getBtcFiatRates(currencies) {
       providerCalls.push(currencies);
       throw new Error("direct Bitcoin amounts must not call price providers");
@@ -479,7 +479,7 @@ test("read-only rate helpers expose static rates and quotes", async () => {
 test("create invoice rejects fiat currencies outside configured priceCurrencies", async () => {
   const providerCalls = [];
   const provider = {
-    source: "openreceive_mirror",
+    source: "primary",
     async getBtcFiatRates(currencies) {
       providerCalls.push(currencies);
       return {
@@ -516,7 +516,7 @@ test("create invoice rejects fiat currencies outside configured priceCurrencies"
 
 test("rate helpers use configured price providers", async () => {
   const provider = {
-    source: "megalithic_mirror",
+    source: "fallback",
     async getBtcFiatRates(currencies) {
       assert.deepEqual(currencies, ["USD"]);
       return {
@@ -541,7 +541,7 @@ test("rate helpers use configured price providers", async () => {
     }
   });
   assert.equal(quote.amount_msats, 40000);
-  assert.equal(quote.source, "megalithic_mirror");
+  assert.equal(quote.source, "fallback");
 });
 
 test("create invoice rejects description and description_hash together", async () => {

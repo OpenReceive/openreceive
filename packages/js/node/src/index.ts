@@ -21,7 +21,8 @@ export type {
 } from "./alby-nwc.ts";
 export {
   OpenReceiveServiceError,
-  createOpenReceive
+  createOpenReceive,
+  createOpenReceivePriceFeed
 } from "./service.ts";
 export type {
   CreateOpenReceiveOptions,

@@ -1,17 +1,23 @@
 import {
   InMemoryInvoiceKvStore,
   InvoiceNotFoundError,
+  OPENRECEIVE_PRICE_FEED_FALLBACK_URL_ENV,
+  OPENRECEIVE_PRICE_FEED_PRIMARY_URL_ENV,
   StaticPriceProvider,
+  createCachedLivePriceFeed,
   createIdempotencyRequestHash,
   gatedLookup,
   getBtcFiatRatesWithFallback,
   getIdempotentRecord,
+  isHealthCheckablePriceFeed,
   isOpenReceiveErrorCode,
+  isResolvedPriceProvider,
   maybeSweep,
   putCreatedInvoiceRecord,
   quoteBitcoinAmountToMsats,
   quoteFiatToMsatsWithPrice,
   reconcileOnce,
+  type CachedPriceFeed,
   type InvoiceStorageRow,
   type OpenReceiveBitcoinAmount,
   type OpenReceiveBtcFiatRateMapWithSource,
@@ -20,7 +26,9 @@ import {
   type OpenReceiveFiatAmount,
   type OpenReceiveIdempotencyScope,
   type OpenReceiveInvoiceKvStore,
+  type OpenReceivePriceFeedCacheStore,
   type OpenReceiveRateQuote,
+  type SimplePriceFetch,
   type OpenReceiveReceiveNwcClient,
   type OpenReceiveReconcileEvent,
   type OpenReceiveSourcedPriceProvider,
@@ -226,6 +234,8 @@ export async function createOpenReceive(
     priceProviders: options.priceProviders ?? [new StaticPriceProvider()],
     priceCurrencies: options.priceCurrencies ?? ["USD"]
   };
+
+  await assertPriceFeedBootHealthy(context);
 
   return {
     store,
@@ -913,6 +923,9 @@ async function getBtcFiatRatesForProviders(input: {
 }): Promise<OpenReceiveBtcFiatRateMapWithSource> {
   if (input.priceProviders.length === 1) {
     const [provider] = input.priceProviders;
+    if (isResolvedPriceProvider(provider)) {
+      return await provider.getBtcFiatRatesWithSource(input.currencies);
+    }
     return {
       source: provider.source,
       rates: await provider.getBtcFiatRates(input.currencies)
@@ -923,6 +936,65 @@ async function getBtcFiatRatesForProviders(input: {
     currencies: input.currencies,
     providers: input.priceProviders
   });
+}
+
+// Builds the database-cached live price feed (primary first, fallback second),
+// honoring the OPENRECEIVE_PRICE_FEED_PRIMARY_URL / _FALLBACK_URL dev overrides.
+// Pass the same OpenReceive store the service uses so the 60s cache is durable.
+export function createOpenReceivePriceFeed(options: {
+  store: OpenReceivePriceFeedCacheStore;
+  currencies: readonly string[];
+  fetch?: SimplePriceFetch;
+  clock?: () => number;
+  cacheSeconds?: number;
+}): CachedPriceFeed {
+  const overrides = readPriceFeedUrlOverrides();
+  return createCachedLivePriceFeed({
+    store: options.store,
+    currencies: options.currencies,
+    fetch: options.fetch,
+    clock: options.clock,
+    cacheSeconds: options.cacheSeconds,
+    primaryUrl: overrides.primaryUrl,
+    fallbackUrl: overrides.fallbackUrl
+  });
+}
+
+function readPriceFeedUrlOverrides(): {
+  primaryUrl: string | undefined;
+  fallbackUrl: string | undefined;
+} {
+  return {
+    primaryUrl: readPriceFeedUrlEnv(OPENRECEIVE_PRICE_FEED_PRIMARY_URL_ENV),
+    fallbackUrl: readPriceFeedUrlEnv(OPENRECEIVE_PRICE_FEED_FALLBACK_URL_ENV)
+  };
+}
+
+function readPriceFeedUrlEnv(name: string): string | undefined {
+  const value = globalThis.process?.env?.[name];
+  if (value === undefined || value.trim().length === 0) return undefined;
+  return value.trim();
+}
+
+// Refuses to boot when a configured live price feed cannot answer. The static
+// mock has no health check, so test/fixture configurations boot unaffected.
+async function assertPriceFeedBootHealthy(
+  context: OpenReceiveServiceContext
+): Promise<void> {
+  for (const provider of context.priceProviders) {
+    if (!isHealthCheckablePriceFeed(provider)) continue;
+    try {
+      await provider.healthCheck(context.priceCurrencies);
+    } catch (error) {
+      throw new Error(
+        "OpenReceive refuses to boot: neither the primary nor the fallback price " +
+          "feed responded with a valid BTC fiat rate map. Set " +
+          `${OPENRECEIVE_PRICE_FEED_PRIMARY_URL_ENV} or ` +
+          `${OPENRECEIVE_PRICE_FEED_FALLBACK_URL_ENV} to override the feed URLs. ` +
+          (error instanceof Error ? error.message : String(error))
+      );
+    }
+  }
 }
 
 function mapPriceError(error: unknown): OpenReceiveServiceError {
