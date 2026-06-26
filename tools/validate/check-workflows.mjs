@@ -5,9 +5,15 @@ import path from "node:path";
 import { parse as parseYaml } from "yaml";
 
 const root = process.cwd();
-const workflowDirectory = ".github/workflows-disabled";
+const workflowDirectory = ".github/workflows";
 const requiredWorkflows = {
-  [`${workflowDirectory}/ci.yml`]: ["npm run test:ci"],
+  [`${workflowDirectory}/ci.yml`]: [
+    "npm test",
+    "npm run lint",
+    "npm run check:generated",
+    "npm run typecheck",
+    "npm run test:js"
+  ],
   [`${workflowDirectory}/conformance.yml`]: ["npm run validate", "npm run check:generated", "npm run test:js"],
   [`${workflowDirectory}/demos.yml`]: ["npm run check:demo-containers", "npm run check:demo-deploy", "npm run build:demo", "npm run scan:client-bundles"],
   [`${workflowDirectory}/provider-registry.yml`]: ["npm run validate", "tests/v0.1/provider-data.test.mjs"],
@@ -88,6 +94,18 @@ for (const [relativePath, requiredCommands] of Object.entries(requiredWorkflows)
     expect(!text.includes(forbidden), `${relativePath}: forbidden workflow text ${forbidden}`);
   }
 }
+
+const ciWorkflow = readWorkflow(`${workflowDirectory}/ci.yml`).workflow;
+expect(ciWorkflow.on?.pull_request !== undefined, `${workflowDirectory}/ci.yml: missing pull_request trigger`);
+expect(ciWorkflow.on?.push !== undefined, `${workflowDirectory}/ci.yml: missing push trigger`);
+
+for (const scheduled of ["conformance.yml", "demos.yml", "provider-registry.yml", "security.yml"]) {
+  const workflow = readWorkflow(`${workflowDirectory}/${scheduled}`).workflow;
+  expect(workflow.on?.schedule !== undefined, `${workflowDirectory}/${scheduled}: missing scheduled slow-lane trigger`);
+}
+
+const releaseWorkflow = readWorkflow(`${workflowDirectory}/release.yml`).workflow;
+expect(releaseWorkflow.on?.push?.tags !== undefined, `${workflowDirectory}/release.yml: missing tag pre-release trigger`);
 
 if (findings.length > 0) {
   console.error("Workflow validation failed:");

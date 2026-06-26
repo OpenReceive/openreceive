@@ -1,8 +1,9 @@
 {
   "name": "@openreceive/node",
   "version": "0.1.1",
-  "private": true,
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "dependencies": {
     "@getalby/sdk": "^7.0.0",
     "@openreceive/core": "0.1.1"
@@ -11,7 +12,23 @@
     "openreceive": "./bin/openreceive.mjs"
   },
   "exports": {
-    ".": "./src/index.ts",
-    "./cli": "./src/cli.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./cli": {
+      "types": "./dist/cli.d.ts",
+      "import": "./dist/cli.js"
+    }
+  },
+  "files": [
+    "bin",
+    "dist",
+    "migrations",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts src/cli.ts --format esm --dts --clean --target es2022 --out-dir dist"
   }
 }

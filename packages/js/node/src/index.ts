@@ -20,14 +20,25 @@ export type {
   WalletPreflightErrorCode
 } from "./alby-nwc.ts";
 export {
+  OpenReceiveConfigError,
   OpenReceiveServiceError,
   createOpenReceive,
-  createOpenReceivePriceFeed
+  createOpenReceivePriceFeed,
+  toOpenReceiveHttpInvoice,
+  toOpenReceiveHttpLookupInvoiceResult,
+  toOpenReceiveHttpRefreshInvoiceResult
 } from "./service.ts";
 export type {
   CreateOpenReceiveOptions,
   OpenReceive,
+  OpenReceiveConfigErrorCode,
+  OpenReceiveCreateInvoiceAmount,
   OpenReceiveCreateInvoiceRequest,
+  OpenReceiveEvent,
+  OpenReceiveEventHandler,
+  OpenReceiveHttpInvoice,
+  OpenReceiveHttpLookupInvoiceResult,
+  OpenReceiveHttpRefreshInvoiceResult,
   OpenReceiveInvoice,
   OpenReceiveLogEntry,
   OpenReceiveLogger,

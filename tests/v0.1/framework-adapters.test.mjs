@@ -347,23 +347,36 @@ test("Vue, Svelte, and Angular adapters expose thin custom-element bindings", ()
   assert.equal(angularShell.checkout.attributes.theme, "dark");
   assert.equal(angularShell.themeToggle.attributes["checkout-selector"], "#checkout");
 
-  const vueComponent = createOpenReceiveVueCheckoutComponentModel(snapshot, {
+  let vueSettled = false;
+  const vueComponent = createOpenReceiveVueCheckoutComponentModel({
+    invoice: snapshot,
+    status: "pending",
+    providers: [],
+    theme: "light",
     lookupUrl: "/openreceive/v1/invoices/lookup",
+    onSettled: () => {
+      vueSettled = true;
+    },
     defineElementsOptions: {}
   });
   assert.equal(vueComponent.componentName, "Checkout");
   assert.equal(typeof vueComponent.defineElements, "function");
   assert.equal(vueComponent.checkout.attrs["lookup-url"], "/openreceive/v1/invoices/lookup");
+  assert.equal(vueComponent.checkout.attrs.theme, "light");
+  vueComponent.checkout.listeners[OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.settled]?.(new Event("settled"));
+  assert.equal(vueSettled, true);
   assert.equal(vueComponent.themeToggle.tagName, OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME);
 
-  const svelteComponent = createOpenReceiveSvelteCheckoutComponentModel(snapshot, {
+  const svelteComponent = createOpenReceiveSvelteCheckoutComponentModel({
+    invoice: snapshot,
     paymentWizard: false
   });
   assert.equal(svelteComponent.componentName, "Checkout");
   assert.equal(typeof svelteComponent.defineElements, "function");
   assert.equal(svelteComponent.checkout.props["payment-wizard"], "false");
 
-  const angularComponent = createOpenReceiveAngularCheckoutComponentModel(snapshot, {
+  const angularComponent = createOpenReceiveAngularCheckoutComponentModel({
+    invoice: snapshot,
     checkoutSelector: "#checkout"
   });
   assert.equal(angularComponent.componentName, "Checkout");
@@ -461,8 +474,8 @@ test("Vue, Svelte, and Angular packages ship component entry files", () => {
     "utf8"
   ));
   const browserStylesPath = path.join(process.cwd(), "packages/js/browser/src/styles.css");
-  assert.equal(browserManifest.exports["./styles.css"], "./src/styles.css");
-  assert.equal(browserManifest.exports["./country-map"], "./src/country-map.ts");
+  assert.equal(browserManifest.exports["./styles.css"], "./dist/styles.css");
+  assert.equal(browserManifest.exports["./country-map"].import, "./dist/country-map.js");
   assert.equal(existsSync(browserStylesPath), true, "browser shared styles exist");
   assert.match(readFileSync(browserStylesPath, "utf8"), /\[data-openreceive-checkout\]/);
 
@@ -499,8 +512,8 @@ test("Vue, Svelte, and Angular packages ship component entry files", () => {
     const source = readFileSync(componentPath, "utf8");
 
     assert.equal(existsSync(componentPath), true, `${item.componentPath}: exists`);
-    assert.equal(manifest.exports[item.exportName], `./src/${path.basename(item.componentPath)}`);
-    assert.equal(manifest.exports["./styles.css"], "./src/styles.css");
+    assert.equal(manifest.exports[item.exportName], `./dist/${path.basename(item.componentPath)}`);
+    assert.equal(manifest.exports["./styles.css"], "./dist/styles.css");
     assert.equal(typeof manifest.peerDependencies[item.peerDependency], "string");
     assert.equal(manifest.peerDependenciesMeta[item.peerDependency].optional, true);
     assert.match(

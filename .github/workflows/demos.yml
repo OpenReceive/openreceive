@@ -1,32 +1,31 @@
-name: CI
+name: Demos
 
 on:
-  # Temporarily manual-only while CI is being stabilized.
+  schedule:
+    - cron: "37 8 * * 1"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: demos-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  v0-1-foundation:
+  hello-fruit:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version:
-          - 22
     env:
       OPENRECEIVE_NWC: ""
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run test:ci
+      - run: npm run check:demo-containers
+      - run: npm run check:demo-deploy
+      - run: npm run build:demo
+      - run: npm run scan:client-bundles

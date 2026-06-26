@@ -3,6 +3,9 @@
 OpenReceive starts with a small v0.1 release surface:
 
 - OpenReceive `0.1.1`
+- `openreceive`
+- `@openreceive/core`
+- `@openreceive/node`
 - `@openreceive/browser`
 - `@openreceive/provider-data`
 - `@openreceive/elements`
@@ -11,12 +14,11 @@ OpenReceive starts with a small v0.1 release surface:
 - `@openreceive/svelte`
 - `@openreceive/angular`
 
-Frontend package manifests are public while server and test packages stay
-private. The public frontend package family is browser-only: it accepts
-display-safe checkout data, app-owned lookup and refresh URLs, and shared
-provider-data assets. The root workspace, `@openreceive/core`,
-`@openreceive/node`, and `@openreceive/testkit` stay private until their server
-release boundary is approved.
+Public package manifests are public while testkit stays private. The public
+surface includes the unscoped `openreceive` umbrella package, the Node service
+package, core contracts/helpers, browser checkout helpers, provider-data
+assets, elements, and frontend adapters. The root workspace and
+`@openreceive/testkit` stay private.
 
 ## Release Gate
 
@@ -33,7 +35,7 @@ versions, internal `@openreceive/*` dependency versions, the package lock,
 changelog heading, and current release tags in this document. `release:publish`
 runs the local release gate, builds exact tarballs under
 `.release/npm/<version>/tarballs`, checks the target versions are not already on
-npm, and publishes only the public frontend package family. Pass
+npm, and publishes only the public package family. Pass
 `--otp <code>` when npm requires a one-time password.
 
 Before tagging or publishing a release:
@@ -45,7 +47,7 @@ npm run test:ci
 The release owner also checks:
 
 - Changelog updated.
-- Frontend package manifests are public while server and test packages stay private.
+- Public package manifests are public while testkit stays private.
 - Package versions match the intended tag.
 - JSON schemas and test vectors pass.
 - OpenAPI and AsyncAPI validation passes through `npm run validate`.
@@ -75,7 +77,7 @@ enabled:
 
 - `.github/workflows/ci.yml` runs the full local gate.
 - `.github/workflows/conformance.yml` runs contract, generated-model, JS, and
-  mock-wallet checks.
+  internal testkit checks.
 - `.github/workflows/demos.yml` validates and builds demo artifacts without
   injecting receive-only NWC codes.
 - `.github/workflows/provider-registry.yml` validates canonical provider data.
@@ -91,9 +93,9 @@ commands, concurrency groups, and the disabled publish path.
 ## Suggested Tags
 
 - `v0.1.1`
+- `js-openreceive-v0.1.1`
 - `js-core-v0.1.1`
 - `js-node-v0.1.1`
-- `js-express-v0.1.1`
 - `js-browser-v0.1.1`
 - `js-provider-data-v0.1.1`
 - `js-testkit-v0.1.1`

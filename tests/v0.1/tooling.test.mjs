@@ -96,8 +96,8 @@ test("public Node guides show app routes without OpenReceive error class imports
     const source = readFileSync(filePath, "utf8");
     assert.doesNotMatch(source, /OpenReceiveServiceError/, filePath);
     assert.doesNotMatch(source, /order_uuid:|optional_invoice_description:|total_fiat/, filePath);
-    assert.match(source, /orderUuid:/, filePath);
-    assert.match(source, /optionalInvoiceDescription:/, filePath);
+    assert.match(source, /orderId:/, filePath);
+    assert.match(source, /memo:/, filePath);
     assert.match(source, /totalAmount/, filePath);
     assert.match(source, /import \{ createOpenReceive \} from "@openreceive\/node";/, filePath);
   }
@@ -195,7 +195,7 @@ test("demo deployment docs preserve public edge and runner boundaries", () => {
 });
 
 test("release readiness validator accepts current v0.1 metadata", () => {
-  assert.match(runReleaseReadinessValidator(), /Release readiness validation passed for 10 package\(s\)\./);
+  assert.match(runReleaseReadinessValidator(), /Release readiness validation passed for 11 package\(s\)\./);
 });
 
 test("npm release helper plans a patch release without editing files", () => {

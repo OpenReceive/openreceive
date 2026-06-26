@@ -8,4 +8,3 @@ export * from "./storage/kv.ts";
 export * from "./storage/memory-kv.ts";
 export * from "./state/transitions.ts";
 export * from "./runner/index.ts";
-export * from "./generated/contracts.ts";

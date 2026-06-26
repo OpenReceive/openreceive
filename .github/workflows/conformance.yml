@@ -1,7 +1,8 @@
 name: Conformance
 
 on:
-  # Temporarily manual-only while CI is being stabilized.
+  schedule:
+    - cron: "23 8 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -27,4 +28,3 @@ jobs:
       - run: npm run validate
       - run: npm run check:generated
       - run: npm run test:js
-      - run: node --test tests/v0.1/mock-wallet.test.mjs

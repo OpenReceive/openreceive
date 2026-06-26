@@ -3,23 +3,17 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import {
-  chmodSync,
-  copyFileSync,
-  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
-  statSync,
-  writeFileSync
+  statSync
 } from "node:fs";
-import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import ts from "typescript";
 
 const DEFAULT_NPM_TIMEOUT_MS = 120_000;
 
@@ -42,7 +36,10 @@ export function discoverWorkspacePackages(input = {}) {
         manifest
       };
     })
-    .filter(({ manifest }) => manifest.name?.startsWith("@openreceive/"))
+    .filter(({ manifest }) =>
+      manifest.name === "openreceive" ||
+      manifest.name?.startsWith("@openreceive/")
+    )
     .sort((left, right) => left.manifest.name.localeCompare(right.manifest.name));
 }
 
@@ -53,7 +50,7 @@ export function validateWorkspacePackageGraph(packages) {
   for (const pkg of packages) {
     assert(pkg.manifest.exports?.["."], `${pkg.manifest.name}: package export is required`);
     for (const [dependency, version] of Object.entries(pkg.manifest.dependencies ?? {})) {
-      if (dependency.startsWith("@openreceive/")) {
+      if (dependency === "openreceive" || dependency.startsWith("@openreceive/")) {
         assert(workspaceNames.has(dependency), `${pkg.manifest.name}: unknown workspace dependency ${dependency}`);
         assert(version === pkg.manifest.version, `${pkg.manifest.name}: ${dependency} version must match package version`);
       }
@@ -144,97 +141,15 @@ export function createPackageBuildWorkspace(input = {}) {
   };
 }
 
-export function buildPackageArtifact(pkg, artifactRoot) {
-  if (pkg.manifest.scripts?.build !== undefined && existsSync(path.join(pkg.dir, "build.mjs"))) {
-    return buildScriptedPackageArtifact(pkg, artifactRoot);
+export function buildPackageArtifact(pkg, _artifactRoot, input = {}) {
+  if (pkg.manifest.scripts?.build !== undefined) {
+    runNpm(["run", "build", "-w", pkg.manifest.name], input.root ?? process.cwd(), input.cacheDir, input.npmTimeoutMs);
   }
-
-  const packageDirName = path.basename(pkg.dir);
-  const artifactDir = path.join(artifactRoot, packageDirName);
-  const sourceDir = path.join(pkg.dir, "src");
-  const distDir = path.join(artifactDir, "dist");
-  mkdirSync(distDir, { recursive: true });
-
-  const manifest = {
-    ...pkg.manifest,
-    exports: rewriteExports(pkg.manifest.exports),
-    types: existsSync(path.join(sourceDir, "index.ts"))
-      ? "./dist/index.d.ts"
-      : pkg.manifest.types,
-    files: pkg.manifest.bin === undefined
-      ? ["dist", "README.md", "LICENSE"]
-      : ["dist", "bin", "README.md", "LICENSE"]
-  };
-  writeFileSync(
-    path.join(artifactDir, "package.json"),
-    JSON.stringify(manifest, null, 2)
+  assert(
+    existsSync(path.join(pkg.dir, "dist")),
+    `${pkg.manifest.name}: build must emit dist before npm pack`
   );
-  copyPackageDocs(pkg, artifactDir);
-  copyPackageBins(pkg, artifactDir);
-
-  for (const file of walkFiles(sourceDir)) {
-    const relativePath = path.relative(sourceDir, file);
-    const outputRelativePath = relativePath.endsWith(".d.ts")
-      ? relativePath
-      : relativePath.endsWith(".ts")
-      ? relativePath.replace(/\.ts$/, ".js")
-      : relativePath;
-    const outputPath = path.join(distDir, outputRelativePath);
-    mkdirSync(path.dirname(outputPath), { recursive: true });
-
-    if (relativePath.endsWith(".d.ts")) {
-      copyFileSync(file, outputPath);
-    } else if (relativePath.endsWith(".ts")) {
-      writeFileSync(
-        outputPath,
-        transpileTypeScript(readFileSync(file, "utf8"), file)
-      );
-    } else {
-      copyFileSync(file, outputPath);
-    }
-  }
-  emitPackageDeclarations(pkg, sourceDir, distDir);
-
-  return artifactDir;
-}
-
-function buildScriptedPackageArtifact(pkg, artifactRoot) {
-  const packageDirName = path.basename(pkg.dir);
-  const artifactDir = path.join(artifactRoot, packageDirName);
-  rmSync(artifactDir, { recursive: true, force: true });
-  mkdirSync(artifactDir, { recursive: true });
-
-  execFileSync("npm", ["run", "build"], {
-    cwd: pkg.dir,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"]
-  });
-
-  const manifest = { ...pkg.manifest };
-  delete manifest.scripts;
-  writeFileSync(
-    path.join(artifactDir, "package.json"),
-    JSON.stringify(manifest, null, 2)
-  );
-  copyPackageDocs(pkg, artifactDir);
-  copyPackageBins(pkg, artifactDir);
-  cpSync(path.join(pkg.dir, "dist"), path.join(artifactDir, "dist"), {
-    recursive: true
-  });
-
-  return artifactDir;
-}
-
-function copyPackageDocs(pkg, artifactDir) {
-  const readmePath = path.join(pkg.dir, "README.md");
-  if (existsSync(readmePath)) {
-    copyFileSync(readmePath, path.join(artifactDir, "README.md"));
-  }
-
-  const licensePath = path.join(path.dirname(path.dirname(pkg.dir)), "..", "LICENSE");
-  if (existsSync(licensePath)) {
-    copyFileSync(licensePath, path.join(artifactDir, "LICENSE"));
-  }
+  return pkg.dir;
 }
 
 export function packPackageArtifact(input) {
@@ -249,16 +164,26 @@ export function packPackageArtifact(input) {
   } = input;
 
   log(`packing ${pkg.manifest.name}`);
-  const artifactDir = buildPackageArtifact(pkg, artifactRoot);
+  const packageDir = buildPackageArtifact(pkg, artifactRoot, {
+    root,
+    cacheDir,
+    npmTimeoutMs
+  });
   const output = runNpm(
-    ["pack", artifactDir, "--pack-destination", tarballDir, "--json"],
+    ["pack", packageDir, "--pack-destination", tarballDir, "--json"],
     root,
     cacheDir,
     npmTimeoutMs
   );
-  const [packed] = JSON.parse(output);
+  const [packed] = parseNpmPackJson(output);
   assert(packed?.filename, `${pkg.manifest.name}: npm pack did not return a filename`);
   return path.join(tarballDir, packed.filename);
+}
+
+function parseNpmPackJson(output) {
+  const start = output.lastIndexOf("\n[");
+  const json = (start === -1 ? output : output.slice(start + 1)).trim();
+  return JSON.parse(json);
 }
 
 export function buildOpenReceivePackageTarballs(input = {}) {
@@ -288,162 +213,6 @@ export function buildOpenReceivePackageTarballs(input = {}) {
     tarballs,
     workspace
   };
-}
-
-function walkFiles(dir) {
-  const files = [];
-  for (const entry of readdirSync(dir)) {
-    const fullPath = path.join(dir, entry);
-    const stat = statSync(fullPath);
-    if (stat.isDirectory()) {
-      files.push(...walkFiles(fullPath));
-    } else if (stat.isFile()) {
-      files.push(fullPath);
-    }
-  }
-  return files;
-}
-
-function transpileTypeScript(source, fileName) {
-  const result = ts.transpileModule(inlineJsonImportAttributes(source, fileName), {
-    fileName,
-    compilerOptions: {
-      target: ts.ScriptTarget.ES2022,
-      module: ts.ModuleKind.ESNext,
-      jsx: ts.JsxEmit.ReactJSX,
-      verbatimModuleSyntax: true,
-      rewriteRelativeImportExtensions: true
-    },
-    reportDiagnostics: true
-  });
-
-  const diagnostics = result.diagnostics ?? [];
-  const errors = diagnostics.filter(
-    (diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error
-  );
-  if (errors.length > 0) {
-    const formatted = ts.formatDiagnosticsWithColorAndContext(errors, {
-      getCanonicalFileName: (file) => file,
-      getCurrentDirectory: () => process.cwd(),
-      getNewLine: () => "\n"
-    });
-    throw new Error(formatted);
-  }
-
-  return result.outputText;
-}
-
-function emitPackageDeclarations(pkg, sourceDir, distDir) {
-  const sourceFiles = walkFiles(sourceDir)
-    .filter((file) => file.endsWith(".ts") && !file.endsWith(".d.ts"));
-  if (sourceFiles.length === 0) return;
-
-  const options = {
-    allowImportingTsExtensions: true,
-    declaration: true,
-    emitDeclarationOnly: true,
-    jsx: ts.JsxEmit.ReactJSX,
-    lib: ["lib.es2022.d.ts", "lib.dom.d.ts"],
-    module: ts.ModuleKind.ESNext,
-    moduleResolution: ts.ModuleResolutionKind.Bundler,
-    outDir: distDir,
-    resolveJsonModule: true,
-    rootDir: sourceDir,
-    skipLibCheck: true,
-    strict: true,
-    target: ts.ScriptTarget.ES2022,
-    types: ["node"]
-  };
-  const host = ts.createCompilerHost(options);
-  const program = ts.createProgram(sourceFiles, options, host);
-  const result = program.emit();
-  const diagnostics = ts.getPreEmitDiagnostics(program).concat(result.diagnostics);
-  const errors = diagnostics.filter(
-    (diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error
-  );
-  if (errors.length > 0) {
-    const formatted = ts.formatDiagnosticsWithColorAndContext(errors, {
-      getCanonicalFileName: (file) => file,
-      getCurrentDirectory: () => process.cwd(),
-      getNewLine: () => "\n"
-    });
-    throw new Error(`${pkg.manifest.name}: declaration emit failed\n${formatted}`);
-  }
-
-  for (const declaration of walkFiles(distDir).filter((file) => file.endsWith(".d.ts"))) {
-    writeFileSync(
-      declaration,
-      rewriteDeclarationImports(readFileSync(declaration, "utf8"))
-    );
-  }
-}
-
-function rewriteDeclarationImports(source) {
-  return source.replace(
-    /(["'])(\.{1,2}\/[^"']+)\.ts\1/g,
-    "$1$2.js$1"
-  );
-}
-
-// Node 20.0 and current Node parse different static JSON import syntaxes.
-// Package artifacts inline JSON imports so one emitted module works on both.
-function inlineJsonImportAttributes(source, fileName) {
-  const jsonImportPattern =
-    /^import\s+([A-Za-z_$][\w$]*)\s+from\s+["']([^"']+\.json)["']\s+with\s+\{\s*type:\s*["']json["']\s*\};/gm;
-  const requireForSource = createRequire(fileName);
-
-  return source.replace(jsonImportPattern, (_match, binding, specifier) => {
-    const jsonPath = requireForSource.resolve(specifier);
-    const json = JSON.parse(readFileSync(jsonPath, "utf8"));
-    return `const ${binding} = ${JSON.stringify(json)};`;
-  });
-}
-
-function rewriteExportTarget(target) {
-  if (typeof target !== "string") return target;
-  if (target.startsWith("./src/") && target.endsWith(".ts")) {
-    return `./dist/${target.slice("./src/".length, -".ts".length)}.js`;
-  }
-  if (target.startsWith("./src/")) {
-    return `./dist/${target.slice("./src/".length)}`;
-  }
-  return target;
-}
-
-function rewriteExports(exports) {
-  if (typeof exports === "string") return rewriteExportTarget(exports);
-  if (exports === null || typeof exports !== "object" || Array.isArray(exports)) {
-    return exports;
-  }
-
-  return Object.fromEntries(
-    Object.entries(exports).map(([key, value]) => [
-      key,
-      typeof value === "string" ? rewriteExportTarget(value) : rewriteExports(value)
-    ])
-  );
-}
-
-function rewriteBinSource(source) {
-  return source.replace(/(["'])\.\.\/src\/([^"']+)\.ts\1/g, "$1../dist/$2.js$1");
-}
-
-function copyPackageBins(pkg, artifactDir) {
-  const bin = pkg.manifest.bin;
-  if (bin === undefined) return;
-
-  const binTargets = typeof bin === "string" ? [bin] : Object.values(bin);
-  for (const target of new Set(binTargets)) {
-    assert(
-      typeof target === "string" && target.startsWith("./bin/"),
-      `${pkg.manifest.name}: package bin must point at ./bin`
-    );
-    const sourcePath = path.join(pkg.dir, target);
-    const outputPath = path.join(artifactDir, target);
-    mkdirSync(path.dirname(outputPath), { recursive: true });
-    writeFileSync(outputPath, rewriteBinSource(readFileSync(sourcePath, "utf8")));
-    chmodSync(outputPath, 0o755);
-  }
 }
 
 function readFlag(args, flag) {

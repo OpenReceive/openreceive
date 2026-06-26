@@ -13,9 +13,9 @@ const checkoutRoutes = express.Router();
 checkoutRoutes.use(express.json());
 
 const openreceive = await createOpenReceive({
-  onPaid: async ({ orderUuid }) => {
+  onPaid: async ({ orderId }) => {
     // Your app function, not OpenReceive.
-    await markOrderPaidInYourApp(orderUuid);
+    await markOrderPaidInYourApp(orderId);
   },
 });
 
@@ -24,13 +24,15 @@ checkoutRoutes.post("/create_order", async (req, res, next) => {
     // Your app function. Create and validate the order before calling OpenReceive.
     const order = await createOrderFromCart(req.user, req.body.cart);
     const invoice = await openreceive.createInvoice({
-      orderUuid: order.uuid,
-      fiat: {
-        currency: order.totalAmount.currency,
-        value: order.totalAmount.value
+      orderId: order.uuid,
+      amount: {
+        fiat: {
+          currency: order.totalAmount.currency,
+          value: order.totalAmount.value
+        }
       },
-      optionalInvoiceDescription: `Order ${order.number}`,
-      expiry: 600
+      memo: `Order ${order.number}`,
+      expiresInSeconds: 600
     });
     res.status(201).json({ order, invoice });
   } catch (error) {
@@ -41,12 +43,12 @@ checkoutRoutes.post("/create_order", async (req, res, next) => {
 checkoutRoutes.post("/order_status", async (req, res, next) => {
   try {
     const invoice = await openreceive.lookupInvoice({
-      payment_hash: req.body.payment_hash
+      paymentHash: req.body.payment_hash
     });
     res.status(200).json({
       ...invoice,
-      order_status: invoice.settled_at || invoice.transaction_state === "settled"
-        ? "paid"
+      order_status: invoice.settledAt || invoice.transactionState === "settled"
+        ? "settled"
         : "pending_payment"
     });
   } catch (error) {
@@ -84,9 +86,9 @@ import { createOpenReceive } from "@openreceive/node";
 export const runtime = "nodejs";
 
 const openreceiveReady = createOpenReceive({
-  onPaid: async ({ orderUuid }) => {
+  onPaid: async ({ orderId }) => {
     // Your app function, not OpenReceive.
-    await markOrderPaidInYourApp(orderUuid);
+    await markOrderPaidInYourApp(orderId);
   },
 });
 
@@ -97,13 +99,15 @@ export async function POST(request: Request) {
     // Your app function. Create and validate the order before calling OpenReceive.
     const order = await createOrderFromCart(body.cart);
     const invoice = await openreceive.createInvoice({
-      orderUuid: order.uuid,
-      fiat: {
-        currency: order.totalAmount.currency,
-        value: order.totalAmount.value
+      orderId: order.uuid,
+      amount: {
+        fiat: {
+          currency: order.totalAmount.currency,
+          value: order.totalAmount.value
+        }
       },
-      optionalInvoiceDescription: `Order ${order.number}`,
-      expiry: 600
+      memo: `Order ${order.number}`,
+      expiresInSeconds: 600
     });
     return Response.json({ order, invoice }, {
       status: 201
@@ -149,13 +153,15 @@ export async function createOrder(req, res, next) {
     // Your app function. Create and validate the order before calling OpenReceive.
     const order = await createOrderFromCart(req.user, req.body.cart);
     const invoice = await openreceive.createInvoice({
-      orderUuid: order.uuid,
-      fiat: {
-        currency: order.totalAmount.currency,
-        value: order.totalAmount.value
+      orderId: order.uuid,
+      amount: {
+        fiat: {
+          currency: order.totalAmount.currency,
+          value: order.totalAmount.value
+        }
       },
-      optionalInvoiceDescription: `Order ${order.number}`,
-      expiry: 600
+      memo: `Order ${order.number}`,
+      expiresInSeconds: 600
     });
     res.status(201).json({ order, invoice });
   } catch (error) {
@@ -183,18 +189,18 @@ Do not combine wildcard CORS with credentials.
 
 ## Settlement
 
-Frontend `onPaid` callbacks are display hints only. Fulfillment belongs in
-server-side `onPaid`:
+Frontend `onSettled` callbacks are display hints only. Fulfillment belongs in
+server-side settlement hook:
 
 ```ts
 export const openreceive = await createOpenReceive({
-  onPaid: async ({ orderUuid }) => {
+  onPaid: async ({ orderId }) => {
     // Your app function, not OpenReceive.
-    await markOrderPaidInYourApp(orderUuid);
+    await markOrderPaidInYourApp(orderId);
   }
 });
 ```
 
-`orderUuid` is guaranteed to be the unique app order key for this checkout, so
+`orderId` is guaranteed to be the unique app order key for this checkout, so
 use it for idempotent fulfillment. Invoice details are available only if your
 app wants extra audit or correlation data.

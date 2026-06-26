@@ -7,9 +7,9 @@ strings, wallet clients, and fulfillment on the backend.
 
 `@openreceive/browser` is the small app-facing browser entry:
 
-- `status(invoiceLike)` returns `"pending"`, `"paid"`, `"expired"`, or
+- `status(invoiceLike)` returns `"pending"`, `"settled"`, `"expired"`, or
   `"failed"` from display-safe fields.
-- `createInvoice(options)` is a lower-level helper for apps that intentionally
+- `requestCheckoutInvoice(options)` is a lower-level helper for apps that intentionally
   expose an invoice-creation route; most stores call their own `/create_order`
   route and render the invoice returned with the order.
 - `lightningUri(invoice)`, `qrSvg(invoice)`, and `qrPngDataUrl(invoice)` render
@@ -37,7 +37,7 @@ console.log(status(invoice));
 ```
 
 `status()` is a display helper. Your product still unlocks only after the
-server `onPaid` hook runs.
+backend settlement hook runs.
 
 ## React
 
@@ -50,12 +50,12 @@ import "@openreceive/react/styles.css";
 <Checkout
   invoice={invoice}
   lookupUrl="/order_status"
-  onPaid={() => showThankYou()}
+  onSettled={() => showThankYou()}
 />;
 ```
 
-`onPaid` is a UI hint from polling. It is useful for showing a thank-you panel,
-but fulfillment stays in the backend `onPaid` hook.
+`onSettled` is a UI hint from polling. It is useful for showing a thank-you panel,
+but fulfillment stays in the backend settlement hook.
 
 `lookupUrl` is optional. If omitted, React uses the default
 `/openreceive/v1/invoices/lookup` route. Apps without a frontend lookup route
@@ -172,7 +172,7 @@ defineProps<{ invoice: CheckoutSnapshot }>();
 </script>
 
 <template>
-  <Checkout :snapshot="invoice" :options="{ onSettled: showThankYou }" />
+  <Checkout :invoice="invoice" :options="{ onSettled: showThankYou }" />
 </template>
 ```
 
@@ -186,7 +186,7 @@ defineProps<{ invoice: CheckoutSnapshot }>();
   export let invoice;
 </script>
 
-<Checkout snapshot={invoice} options={{ onSettled: showThankYou }} />
+<Checkout invoice={invoice} options={{ onSettled: showThankYou }} />
 ```
 
 ## Angular

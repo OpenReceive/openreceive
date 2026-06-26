@@ -1,18 +1,17 @@
-import {
-  StaticPriceProvider
-} from "@openreceive/core";
 import type {
+  OpenReceiveReceiveNwcClient,
   OpenReceiveSourcedPriceProvider
 } from "@openreceive/core";
 import {
   createOpenReceive,
-  createOpenReceivePriceFeed
+  createOpenReceivePriceFeed,
+  toOpenReceiveHttpInvoice,
+  toOpenReceiveHttpLookupInvoiceResult
 } from "@openreceive/node";
 import {
   createHelloFruitDemoMetadata
 } from "../../../../shared/demo-metadata.ts";
 import {
-  createHelloFruitTestReceiveClient,
   readRequiredHelloFruitNwcConnectionString
 } from "../../../../shared/demo-nwc.ts";
 import {
@@ -32,7 +31,7 @@ import {
 import {
   readHelloFruitOrderRates
 } from "../../../../shared/demo-price-feeds.ts";
-import product from "../../../../shared/product.json";
+import product from "../../../../shared/product.json" with { type: "json" };
 
 const DEMO_ID = "nextjs-fullstack";
 const DEFAULT_PORT = "3002";
@@ -50,9 +49,23 @@ interface HelloFruitOpenReceiveBundle {
   readonly supportedCurrencies: readonly string[];
 }
 
+export interface HelloFruitOpenReceiveTestOverrides {
+  readonly client?: OpenReceiveReceiveNwcClient;
+  readonly priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
+}
+
 let openreceiveCache: NextDemoOpenReceiveCache | undefined;
+let testOverrides: HelloFruitOpenReceiveTestOverrides | undefined;
+
+export function setHelloFruitOpenReceiveTestOverrides(
+  overrides: HelloFruitOpenReceiveTestOverrides | undefined
+): void {
+  openreceiveCache = undefined;
+  testOverrides = overrides;
+}
 
 export function isWalletConfigured(): boolean {
+  if (testOverrides?.client !== undefined) return true;
   readRequiredHelloFruitNwcConnectionString();
   return true;
 }
@@ -108,7 +121,9 @@ export function sitemapResponse(): string {
 export async function createOrderResponse(
   request: Request
 ): Promise<Response> {
-  const connectionString = readRequiredHelloFruitNwcConnectionString();
+  const connectionString = testOverrides?.client === undefined
+    ? readRequiredHelloFruitNwcConnectionString()
+    : "openreceive-test-client";
   const {
     openreceive,
     priceProviders,
@@ -132,7 +147,9 @@ export async function createOrderResponse(
       rates,
       supportedCurrencies
     });
-    const invoice = await openreceive.createInvoice(orderResult.invoiceRequest);
+    const invoice = toOpenReceiveHttpInvoice(
+      await openreceive.createInvoice(orderResult.invoiceRequest)
+    );
     return jsonResponse({
       order: orderResult.order,
       invoice
@@ -143,11 +160,15 @@ export async function createOrderResponse(
 }
 
 export async function orderStatusResponse(request: Request): Promise<Response> {
-  const connectionString = readRequiredHelloFruitNwcConnectionString();
+  const connectionString = testOverrides?.client === undefined
+    ? readRequiredHelloFruitNwcConnectionString()
+    : "openreceive-test-client";
   const { openreceive } = await getOpenReceive(connectionString);
 
   try {
-    const lookup = await openreceive.lookupInvoice(await readJsonBody(request));
+    const lookup = toOpenReceiveHttpLookupInvoiceResult(
+      await openreceive.lookupInvoice(createLookupRequest(await readJsonBody(request)))
+    );
     const orderStatus = createHelloFruitOrderStatus(lookup);
     return jsonResponse({
       ...lookup,
@@ -196,23 +217,20 @@ async function getOpenReceive(
 }
 
 export async function createHelloFruitOpenReceive(
-  connectionString = readRequiredHelloFruitNwcConnectionString()
+  connectionString = readRequiredHelloFruitNwcConnectionString(),
+  overrides: HelloFruitOpenReceiveTestOverrides = testOverrides ?? {}
 ) {
   const store = await createHelloFruitOpenReceiveKvStore({
     demoId: DEMO_ID
   });
   const priceCurrencies = readHelloFruitPriceFeedCurrencies();
   const supportedCurrencies = readHelloFruitCheckoutCurrencies();
-  const testClient = createHelloFruitTestReceiveClient();
-  // Live wallet: database-cached primary/fallback feed (boot-probed by
-  // createOpenReceive). Deterministic fake-wallet mode: static mock only.
   const priceProviders: readonly OpenReceiveSourcedPriceProvider[] =
-    testClient === undefined
-      ? [createOpenReceivePriceFeed({ store, currencies: priceCurrencies })]
-      : [new StaticPriceProvider()];
+    overrides.priceProviders ??
+    [createOpenReceivePriceFeed({ store, currencies: priceCurrencies })];
 
   const openreceive = await createOpenReceive({
-    ...(testClient === undefined ? { nwc: connectionString } : { client: testClient }),
+    ...(overrides.client === undefined ? { nwc: connectionString } : { client: overrides.client }),
     store,
     namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit",
     priceProviders,
@@ -220,6 +238,16 @@ export async function createHelloFruitOpenReceive(
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID)
   });
   return { openreceive, priceProviders, supportedCurrencies } satisfies HelloFruitOpenReceiveBundle;
+}
+
+function createLookupRequest(body: Record<string, unknown>): {
+  readonly paymentHash?: string;
+  readonly bolt11?: string;
+} {
+  return {
+    ...(typeof body.payment_hash === "string" ? { paymentHash: body.payment_hash } : {}),
+    ...(typeof body.invoice === "string" ? { bolt11: body.invoice } : {})
+  };
 }
 
 async function readJsonBody(request: Request): Promise<Record<string, unknown>> {

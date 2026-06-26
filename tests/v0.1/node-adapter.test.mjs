@@ -8,7 +8,10 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { InMemoryInvoiceKvStore } from "../../packages/js/core/src/index.ts";
+import {
+  InMemoryInvoiceKvStore,
+  StaticPriceProvider
+} from "../../packages/js/core/src/index.ts";
 import {
   OpenReceiveError,
   ReceiveCheckoutValidationError,
@@ -372,7 +375,12 @@ sqliteTest("Node SQLite KV store owns records, indexes, revisions, and meta CAS"
 
 sqliteTest("resolveOpenReceiveStore supports memory and local-sqlite stores", async () => {
   const memory = await resolveOpenReceiveStore("memory:");
-  assert.equal(memory instanceof InMemoryInvoiceKvStore, true);
+  const memoryCreated = await memory.putIfAbsent(invoiceRecord({
+    invoice_id: "or_inv_memory_uri",
+    idempotency_key: "order-memory-uri"
+  }));
+  assert.equal(memoryCreated.status, "created");
+  assert.equal((await memory.get("or_inv_memory_uri")).row.idempotency_key, "order-memory-uri");
 
   const tempRoot = mkdtempSync(path.join(tmpdir(), "openreceive-store-uri-"));
   try {
@@ -444,20 +452,21 @@ test("createOpenReceive builds service methods from a client and store", async (
     store,
     namespace: "node_test",
     clock: () => 1000,
-    backgroundSweep: false
+    backgroundSweep: false,
+    priceProviders: [new StaticPriceProvider()]
   });
 
   const body = await openreceive.createInvoice({
-    orderUuid: "create-openreceive-order",
-    amount_msats: 200000,
-    optionalInvoiceDescription: "Factory invoice"
+    orderId: "create-openreceive-order",
+    amount: { msats: 200000 },
+    memo: "Factory invoice"
   });
 
-  assert.equal(body.invoice, "lnbc-create-openreceive");
+  assert.equal(body.bolt11, "lnbc-create-openreceive");
   assert.equal(typeof openreceive.lookupInvoice, "function");
 });
 
-sqliteTest("Node CLI keeps init and doctor removed while migrate remains", async () => {
+sqliteTest("Node CLI keeps init removed while migrate and doctor remain", async () => {
   const tempRoot = mkdtempSync(path.join(tmpdir(), "openreceive-node-cli-"));
   const stdout = [];
   const stderr = [];
@@ -486,7 +495,10 @@ sqliteTest("Node CLI keeps init and doctor removed while migrate remains", async
       stderr: io(stderr)
     });
     assert.equal(doctorCode, 1);
-    assert.match(stderr.join(""), /Unknown OpenReceive command: doctor/);
+    assert.match(stdout.join(""), /OpenReceive doctor/);
+    assert.match(stdout.join(""), /nwc: missing/);
+    assert.doesNotMatch(stdout.join(""), /nostr\+walletconnect:\/\//);
+    assert.equal(stderr.join(""), "");
 
     stdout.length = 0;
     stderr.length = 0;
@@ -620,6 +632,7 @@ test("Node CLI runs poll --once from a createOpenReceive service config", async 
     namespace: "node_test",
     clock: () => 1600,
     backgroundSweep: false,
+    priceProviders: [new StaticPriceProvider()],
     onPaid: async ({ invoice, source }) => {
       onPaidCalls += 1;
       assert.equal(invoice.invoice_id, "or_inv_service_poll");

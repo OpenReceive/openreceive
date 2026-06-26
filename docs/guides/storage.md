@@ -3,7 +3,7 @@
 OpenReceive owns its invoice storage. Your app keeps orders, carts, users,
 products, fulfillment state, and tenant-specific columns in your own tables.
 Link app records to OpenReceive invoices through your app records or invoice
-`orderUuid`.
+`orderId`.
 
 ## Store URI
 

@@ -12,7 +12,7 @@ import {
   type Provider,
   type ResolvedProviderRef
 } from "@openreceive/provider-data";
-import { status as deriveStatus } from "./status.ts";
+import { status as deriveStatus, type Status } from "./status.ts";
 export { status, type Status, type StatusInvoiceLike } from "./status.ts";
 
 export const OPENRECEIVE_QR_QUIET_ZONE_MODULES = 4 as const;
@@ -449,6 +449,19 @@ export interface CheckoutShellOptions
   readonly checkoutSelector?: string;
 }
 
+export interface OpenReceiveCheckoutProps extends CheckoutElementEventHandlers {
+  readonly invoice: CheckoutSnapshot;
+  readonly status?: Status;
+  readonly providers?: readonly OpenReceiveWizardProviderDisplay[];
+  readonly theme?: OpenReceiveThemePreference;
+}
+
+export interface OpenReceiveCheckoutShellProps
+  extends OpenReceiveCheckoutProps,
+    Omit<CheckoutShellOptions, keyof CheckoutElementEventHandlers | "defaultTheme"> {
+  readonly defaultTheme?: OpenReceiveThemePreference;
+}
+
 export interface CheckoutShellCheckoutBinding {
   readonly tagName: typeof OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME;
   readonly attributes: CheckoutElementAttributes;
@@ -541,24 +554,31 @@ export type CheckoutRefresh = (
   state: CheckoutState
 ) => Promise<CheckoutSnapshot | OpenReceiveRefreshInvoiceResult>;
 
-export interface CreateOpenReceiveInvoiceOptions {
+export type RequestCheckoutInvoiceAmount =
+  | {
+    readonly btc: {
+      readonly currency: "BTC";
+      readonly value: string;
+    };
+  }
+  | { readonly sats: number | string }
+  | { readonly msats: number | string }
+  | {
+    readonly fiat: {
+      readonly currency: string;
+      readonly value: string;
+    };
+  };
+
+export interface RequestCheckoutInvoiceOptions {
   readonly invoiceUrl?: string;
-  readonly orderUuid: string;
+  readonly orderId: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly headers?: Readonly<Record<string, string>>;
-  readonly amount?: {
-    readonly currency: "BTC" | "SAT" | "SATS";
-    readonly value: string;
-  };
-  readonly amountInSatoshis?: number | string;
-  readonly amount_msats?: number | string;
-  readonly fiat?: {
-    readonly currency: string;
-    readonly value: string;
-  };
-  readonly optionalInvoiceDescription?: string;
-  readonly description_hash?: string;
-  readonly expiry?: number;
+  readonly amount: RequestCheckoutInvoiceAmount;
+  readonly memo?: string;
+  readonly descriptionHash?: string;
+  readonly expiresInSeconds?: number;
 }
 
 export interface CreateOpenReceiveLookupInvoiceFetcherOptions {
@@ -2768,6 +2788,32 @@ export function createCheckoutShellModel(
   };
 }
 
+export function createCheckoutShellModelFromProps(
+  props: OpenReceiveCheckoutShellProps
+): CheckoutShellModel {
+  const {
+    invoice,
+    status: _status,
+    providers: _providers,
+    theme,
+    defaultTheme,
+    ...options
+  } = props;
+  return createCheckoutShellModel(invoice, {
+    ...options,
+    defaultTheme: defaultTheme ?? theme
+  });
+}
+
+export function createCheckoutShellFromProps(
+  props: OpenReceiveCheckoutShellProps & Omit<CreateCheckoutShellOptions, "root">
+): CheckoutShellElements {
+  return createCheckoutShell(props.invoice, {
+    ...props,
+    defaultTheme: props.defaultTheme ?? props.theme
+  });
+}
+
 export function applyCheckoutElementAttributes(
   target: OpenReceiveThemeAttributeTarget,
   attributes: CheckoutElementAttributes
@@ -2859,11 +2905,11 @@ export function createCheckoutShell(
   };
 }
 
-export async function createInvoice(
-  options: CreateOpenReceiveInvoiceOptions
+export async function requestCheckoutInvoice(
+  options: RequestCheckoutInvoiceOptions
 ): Promise<CheckoutSnapshot> {
-  if (options.orderUuid.length === 0) {
-    throw new Error("OpenReceive invoice creation requires an orderUuid.");
+  if (options.orderId.length === 0) {
+    throw new Error("OpenReceive invoice creation requires an orderId.");
   }
 
   const fetcher = options.fetch ?? globalThis.fetch;
@@ -2872,32 +2918,32 @@ export async function createInvoice(
   }
 
   const amountSourceCount = [
-    options.amount !== undefined,
-    options.amountInSatoshis !== undefined,
-    options.amount_msats !== undefined,
-    options.fiat !== undefined
+    "btc" in options.amount,
+    "sats" in options.amount,
+    "msats" in options.amount,
+    "fiat" in options.amount
   ].filter(Boolean).length;
   if (amountSourceCount !== 1) {
-    throw new Error("OpenReceive invoice creation requires exactly one of amount, fiat, amountInSatoshis, or amount_msats.");
+    throw new Error("OpenReceive invoice creation requires exactly one of amount.btc, amount.sats, amount.msats, or amount.fiat.");
   }
   if (
-    options.optionalInvoiceDescription !== undefined &&
-    options.optionalInvoiceDescription.length > 500
+    options.memo !== undefined &&
+    options.memo.length > 500
   ) {
-    throw new Error("OpenReceive optionalInvoiceDescription must be 500 characters or fewer.");
+    throw new Error("OpenReceive memo must be 500 characters or fewer.");
   }
 
   const requestBody = {
-    order_uuid: options.orderUuid,
-    ...(options.amount === undefined ? {} : { amount: options.amount }),
-    ...(options.amountInSatoshis === undefined ? {} : { amount_sats: options.amountInSatoshis }),
-    ...(options.amount_msats === undefined ? {} : { amount_msats: options.amount_msats }),
-    ...(options.fiat === undefined ? {} : { fiat: options.fiat }),
-    ...(options.optionalInvoiceDescription === undefined
+    order_uuid: options.orderId,
+    ...("btc" in options.amount ? { amount: options.amount.btc } : {}),
+    ...("sats" in options.amount ? { amount_sats: options.amount.sats } : {}),
+    ...("msats" in options.amount ? { amount_msats: options.amount.msats } : {}),
+    ...("fiat" in options.amount ? { fiat: options.amount.fiat } : {}),
+    ...(options.memo === undefined
       ? {}
-      : { optional_invoice_description: options.optionalInvoiceDescription }),
-    ...(options.description_hash === undefined ? {} : { description_hash: options.description_hash }),
-    ...(options.expiry === undefined ? {} : { expiry: options.expiry })
+      : { optional_invoice_description: options.memo }),
+    ...(options.descriptionHash === undefined ? {} : { description_hash: options.descriptionHash }),
+    ...(options.expiresInSeconds === undefined ? {} : { expiry: options.expiresInSeconds })
   };
   assertOpenReceiveBrowserPayloadSafe(requestBody);
 

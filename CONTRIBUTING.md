@@ -6,12 +6,29 @@ source of truth for payment semantics.
 ## Local Checks
 
 ```sh
+nvm use
+npm ci
 npm test
 ```
 
-The current v0.1 checks are dependency-free and validate JSON files, core
-schema constraints, test vectors, the copied provider registry references, and
-basic secret patterns.
+The repository pins local development to Node 22 in `.nvmrc`. Use `npm ci` so
+the workspace lockfile, package build tooling, and generated checks match CI.
+
+The current v0.1 checks validate JSON files, core schema constraints, test
+vectors, the copied provider registry references, generated package contracts,
+and basic secret patterns. Before declaring repository-wide work done, run:
+
+```sh
+npm run test:ci
+```
+
+If the change is intentionally narrow and the full gate is too broad while
+iterating, run at minimum:
+
+```sh
+npm run typecheck
+npm run test:js
+```
 
 ## Development Rules
 
@@ -22,6 +39,9 @@ basic secret patterns.
 - Treat provider routes as suggestions, not guarantees.
 - Add or update test vectors when changing payment behavior.
 - Keep private deployment and openreceive.org app details outside this repo.
+- Keep repository package versions fixed together. Release changes publish the
+  public JS package set from the monorepo in one coordinated version; do not
+  independently bump one package without updating the release plan.
 
 ## Pull Request Shape
 

@@ -23,8 +23,8 @@ The v0.1 reference path is contract-first and server-owned:
   Svelte, and Angular checkout tabs, plus static HTML + small API and Next.js
   fullstack Hello Fruit demos.
 - `demos/deploy/` contains public-safe hosted demo deployment templates.
-- `tools/` holds validation, conformance, package-smoke, docs, mock-wallet, and
-  live-wallet smoke helpers.
+- `tools/` holds validation, conformance, package-smoke, docs, and live-wallet
+  smoke helpers.
 
 ## Run A Demo
 
@@ -92,12 +92,6 @@ Validate public workflow skeletons:
 
 ```sh
 npm run check:workflows
-```
-
-Start the deterministic, non-payable mock wallet for conformance testing:
-
-```sh
-npm run mock-wallet
 ```
 
 Run the live-wallet smoke harness:

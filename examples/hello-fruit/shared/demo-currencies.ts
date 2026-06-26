@@ -1,4 +1,4 @@
-import priceSources from "../../../spec/data/rates/price-sources.json";
+import priceSources from "../../../spec/data/rates/price-sources.json" with { type: "json" };
 
 export const HELLO_FRUIT_DIRECT_AMOUNT_CURRENCIES = ["BTC", "SATS"] as const;
 

@@ -52,6 +52,8 @@ Usage: openreceive <command> [options]
 Commands:
   migrate             Ensure the OpenReceive store schema exists; --print emits DDL.
   poll --once          Run one bounded store-throttled recovery sweep.
+  doctor              Validate server-only configuration and print redacted diagnostics.
+  debug-report        Print a redacted support report for local diagnostics.
 
 Store options:
   --store <uri>        memory:, local-sqlite, sqlite:///path, or postgres://...
@@ -90,6 +92,16 @@ export async function runOpenReceiveCli(options: OpenReceiveCliOptions): Promise
         });
       case "poll":
         return await runPoll({
+          args,
+          env,
+          cwd,
+          stdout,
+          loadConfigModule: options.loadConfigModule
+        });
+      case "doctor":
+      case "debug-report":
+        return await runDiagnostics({
+          command,
           args,
           env,
           cwd,
@@ -157,7 +169,7 @@ async function runPoll(input: {
   const config = await loadOpenReceiveConfig(input);
   if (isOpenReceiveServiceConfig(config)) {
     const result = await config.poll();
-    input.stdout.write(`OpenReceive poll checked ${result.checked} wallet invoice(s) across ${result.invoice_ids.length} open invoice(s).\n`);
+    input.stdout.write(`OpenReceive poll checked ${result.checked} wallet invoice(s) across ${result.invoiceIds.length} open invoice(s).\n`);
     return 0;
   }
   if (config.store === undefined) {
@@ -169,7 +181,7 @@ async function runPoll(input: {
     settlementAction: async ({ invoice, metadata, source, lookup_invoice }) => {
       await config.onPaid?.({
         invoice,
-        orderUuid: invoice.idempotency_key,
+        orderId: readStoredOrderId(invoice),
         metadata,
         source,
         lookup_invoice
@@ -186,11 +198,53 @@ async function runPoll(input: {
   return 0;
 }
 
+async function runDiagnostics(input: {
+  command: "doctor" | "debug-report";
+  args: readonly string[];
+  env: NodeJS.ProcessEnv;
+  cwd: string;
+  stdout: OpenReceiveCliIo;
+  loadConfigModule?: OpenReceiveCliOptions["loadConfigModule"];
+}): Promise<number> {
+  const lines: string[] = [
+    `OpenReceive ${input.command}`,
+    `node: ${process.version}`,
+    `cwd: ${input.cwd}`,
+    `namespace: ${detectNamespace(input.args, input.env)}`,
+    `nwc: ${input.env.OPENRECEIVE_NWC === undefined || input.env.OPENRECEIVE_NWC.trim().length === 0 ? "missing" : "present-redacted"}`,
+    `store: ${redactPotentialSecrets(detectStoreUri(input.args, input.env))}`
+  ];
+
+  try {
+    const config = await loadOpenReceiveConfig(input);
+    if (isOpenReceiveServiceConfig(config)) {
+      lines.push("config: loaded service");
+      lines.push("store_schema: service-managed");
+    } else {
+      lines.push("config: loaded options");
+      lines.push(`store_schema: ${typeof (config.store as { ensureSchema?: unknown } | undefined)?.ensureSchema === "function" ? "available" : "unknown"}`);
+      lines.push(`price_providers: ${config.priceProviders?.length ?? 0}`);
+    }
+  } catch (error) {
+    lines.push(`config: ${safeErrorMessage(error)}`);
+  }
+
+  input.stdout.write(`${lines.join("\n")}\n`);
+  return lines.some((line) => line.startsWith("config: ") && !line.includes("loaded")) ? 1 : 0;
+}
+
 function isOpenReceiveServiceConfig(config: OpenReceiveNodeConfig): config is OpenReceive {
   return (
     typeof (config as { poll?: unknown }).poll === "function" &&
     !("client" in config)
   );
+}
+
+function readStoredOrderId(invoice: { readonly idempotency_key: string; readonly metadata: Record<string, unknown> }): string {
+  const orderId = invoice.metadata.order_uuid;
+  return typeof orderId === "string" && orderId.length > 0
+    ? orderId
+    : invoice.idempotency_key;
 }
 
 function readPositiveIntegerEnv(

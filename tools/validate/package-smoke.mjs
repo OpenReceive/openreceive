@@ -32,15 +32,16 @@ const localSmokeDependencies = new Set([
 
 const importChecks = {
   "@openreceive/angular": "typeof mod.createOpenReceiveAngularCheckoutBinding === 'function' && typeof mod.createOpenReceiveAngularCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveAngularCheckoutComponentModel === 'function' && typeof mod.createOpenReceiveAngularCheckoutController === 'function' && typeof mod.createOpenReceiveAngularThemeBinding === 'function' && typeof mod.createOpenReceiveAngularStoredThemeBinding === 'function' && typeof mod.createOpenReceiveAngularThemeToggleBinding === 'function' && typeof mod.createCheckoutElement === 'function' && typeof mod.createOpenReceiveThemeToggleElement === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.toggleOpenReceiveStoredThemeControls === 'function'",
-  "@openreceive/browser": "typeof mod.createInvoice === 'function' && typeof mod.status === 'function' && typeof mod.lightningUri === 'function' && typeof mod.qrSvg === 'function' && typeof mod.qrPngDataUrl === 'function' && typeof mod.copyInvoice === 'function' && typeof mod.openWallet === 'function' && typeof mod.createCheckoutController === 'function' && mod['create' + 'OpenReceiveInvoice'] === undefined && mod.createLightningUri === undefined && mod.CheckoutWatcher === undefined && mod.OpenReceiveBrowserCheckoutController === undefined && mod.createCheckoutElement === undefined",
+  "@openreceive/browser": "typeof mod.requestCheckoutInvoice === 'function' && mod.createInvoice === undefined && typeof mod.status === 'function' && typeof mod.lightningUri === 'function' && typeof mod.qrSvg === 'function' && typeof mod.qrPngDataUrl === 'function' && typeof mod.copyInvoice === 'function' && typeof mod.openWallet === 'function' && typeof mod.createCheckoutController === 'function' && mod['create' + 'OpenReceiveInvoice'] === undefined && mod.createLightningUri === undefined && mod.CheckoutWatcher === undefined && mod.OpenReceiveBrowserCheckoutController === undefined && mod.createCheckoutElement === undefined",
   "@openreceive/core": "typeof mod.createIdempotencyRequestHash === 'function'",
   "@openreceive/elements": "typeof mod.renderCheckoutHtml === 'function' && typeof mod.renderOpenReceiveThemeToggleHtml === 'function' && mod.OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME === 'openreceive-theme-toggle'",
-  "@openreceive/node": "typeof mod.createOpenReceive === 'function' && typeof mod.OpenReceiveServiceError === 'function' && typeof mod.createNwcReceiveClient === 'function' && mod.mountExpressRoutes === undefined && mod.createFetchHandler === undefined && mod.createNodeHandler === undefined && mod.createNodeHandlers === undefined && mod.createNodeRuntime === undefined && typeof mod.createOpenReceivePostgresInvoiceStore === 'function' && typeof mod.createOpenReceivePostgresInvoiceStoreFromPool === 'function' && typeof mod.createOpenReceiveSqliteInvoiceStore === 'function' && mod.OPENRECEIVE_DATABASE_SCHEMA_VERSION === 'v0.1' && typeof mod.OPENRECEIVE_SQLITE_MIGRATION_SQL === 'string' && mod.runOpenReceiveCli === undefined",
+  "@openreceive/node": "typeof mod.createOpenReceive === 'function' && typeof mod.OpenReceiveServiceError === 'function' && typeof mod.OpenReceiveConfigError === 'function' && typeof mod.toOpenReceiveHttpInvoice === 'function' && typeof mod.createNwcReceiveClient === 'function' && mod.mountExpressRoutes === undefined && mod.createFetchHandler === undefined && mod.createNodeHandler === undefined && mod.createNodeHandlers === undefined && mod.createNodeRuntime === undefined && typeof mod.createOpenReceivePostgresInvoiceStore === 'function' && typeof mod.createOpenReceivePostgresInvoiceStoreFromPool === 'function' && typeof mod.createOpenReceiveSqliteInvoiceStore === 'function' && mod.OPENRECEIVE_DATABASE_SCHEMA_VERSION === 'v0.1' && typeof mod.OPENRECEIVE_SQLITE_MIGRATION_SQL === 'string' && mod.runOpenReceiveCli === undefined",
   "@openreceive/provider-data": "typeof mod.getProviderRegistryMetadata === 'function' && typeof mod.providerIconUrl === 'function' && typeof mod.providerTutorialUrl === 'function' && mod.providerIconUrl(mod.providerRegistry.providers.strike).includes('assets/provider-icons/strike.png') && mod.providerTutorialUrl(mod.providerRegistry.providers.kraken.tutorials[3]).includes('assets/pay_tutorials/kraken-4.webp')",
   "@openreceive/react": "typeof mod.createCheckoutViewModel === 'function' && typeof mod.ThemeScope === 'function' && typeof mod.ThemeToggle === 'function' && typeof mod.PaymentWizard === 'function' && typeof mod.WaitingState === 'function' && typeof mod.useTheme === 'function' && typeof mod.CheckoutProvider === 'function' && typeof mod.useCheckoutContext === 'function' && mod.OpenReceiveThemeToggle === undefined && mod.OpenReceivePaymentWizard === undefined && mod.OpenReceiveWaitingState === undefined && mod.useOpenReceiveTheme === undefined",
   "@openreceive/svelte": "typeof mod.createOpenReceiveSvelteCheckoutBinding === 'function' && typeof mod.createOpenReceiveSvelteCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveSvelteCheckoutComponentModel === 'function' && typeof mod.createOpenReceiveSvelteCheckoutController === 'function' && typeof mod.createOpenReceiveSvelteThemeBinding === 'function' && typeof mod.createOpenReceiveSvelteStoredThemeBinding === 'function' && typeof mod.createOpenReceiveSvelteThemeToggleBinding === 'function' && typeof mod.createCheckoutElement === 'function' && typeof mod.createOpenReceiveThemeToggleElement === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.syncOpenReceiveStoredThemeControls === 'function' && typeof mod.applyCheckoutThemeAttributes === 'function'",
   "@openreceive/testkit": "typeof mod.createTestkitReceiveClient === 'function'",
-  "@openreceive/vue": "typeof mod.createOpenReceiveVueCheckoutBinding === 'function' && typeof mod.createOpenReceiveVueCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveVueCheckoutComponentModel === 'function' && typeof mod.createOpenReceiveVueCheckoutController === 'function' && typeof mod.createOpenReceiveVueThemeBinding === 'function' && typeof mod.createOpenReceiveVueStoredThemeBinding === 'function' && typeof mod.createOpenReceiveVueThemeToggleBinding === 'function' && typeof mod.createCheckoutElement === 'function' && typeof mod.createOpenReceiveThemeToggleElement === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.syncOpenReceiveStoredThemeControls === 'function' && typeof mod.applyOpenReceiveThemeAttributes === 'function'"
+  "@openreceive/vue": "typeof mod.createOpenReceiveVueCheckoutBinding === 'function' && typeof mod.createOpenReceiveVueCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveVueCheckoutComponentModel === 'function' && typeof mod.createOpenReceiveVueCheckoutController === 'function' && typeof mod.createOpenReceiveVueThemeBinding === 'function' && typeof mod.createOpenReceiveVueStoredThemeBinding === 'function' && typeof mod.createOpenReceiveVueThemeToggleBinding === 'function' && typeof mod.createCheckoutElement === 'function' && typeof mod.createOpenReceiveThemeToggleElement === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.syncOpenReceiveStoredThemeControls === 'function' && typeof mod.applyOpenReceiveThemeAttributes === 'function'",
+  "openreceive": "Object.keys(mod).length === 0"
 };
 
 function writeInstallProject(installDir, tarballs) {
@@ -127,10 +128,42 @@ assert(
   typeof browserInternal.CheckoutWatcher === "function" &&
     typeof browserInternal.createCheckoutElement === "function" &&
     typeof browserInternal.createCheckoutShell === "function" &&
+    typeof browserInternal.createCheckoutShellModelFromProps === "function" &&
     typeof browserInternal.createOpenReceiveLookupInvoiceFetcher === "function" &&
     typeof browserInternal.openReceiveCheckoutElementStyles === "string",
   "@openreceive/browser/internal: framework adapter internals must be importable"
 );
+
+const coreRoot = await import("@openreceive/core");
+const scopedContracts = await import("@openreceive/core/contracts");
+assert.equal(
+  coreRoot.OPENRECEIVE_ERROR_CODES,
+  undefined,
+  "@openreceive/core: generated contracts must only be exported from the contracts subpath"
+);
+assert(
+  Array.isArray(scopedContracts.OPENRECEIVE_ERROR_CODES),
+  "@openreceive/core/contracts: generated contracts must be importable"
+);
+
+const umbrellaChecks = [
+  ["openreceive/node", "createOpenReceive"],
+  ["openreceive/browser", "requestCheckoutInvoice"],
+  ["openreceive/react", "Checkout"],
+  ["openreceive/vue", "createOpenReceiveVueCheckoutBinding"],
+  ["openreceive/svelte", "createOpenReceiveSvelteCheckoutBinding"],
+  ["openreceive/angular", "createOpenReceiveAngularCheckoutBinding"],
+  ["openreceive/elements", "renderCheckoutHtml"],
+  ["openreceive/provider-data", "providerRegistry"],
+  ["openreceive/contracts", "OPENRECEIVE_ERROR_CODES"]
+];
+for (const [specifier, exportName] of umbrellaChecks) {
+  const mod = await import(specifier);
+  assert(
+    mod[exportName] !== undefined,
+    \`\${specifier}: umbrella subpath must re-export \${exportName}\`
+  );
+}
 
 for (const item of checks) {
   const mod = await import(item.name);
@@ -228,6 +261,7 @@ assert(
   "@openreceive/angular: checkout Angular component must be packaged"
 );
 const nodeCliPath = "node_modules/@openreceive/node/bin/openreceive.mjs";
+const umbrellaCliPath = "node_modules/openreceive/bin/openreceive.mjs";
 const nodeCli = await import("@openreceive/node/cli");
 assert(
   typeof nodeCli.runOpenReceiveCli === "function",
@@ -237,6 +271,11 @@ assert(existsSync(nodeCliPath), "@openreceive/node: CLI bin must be packaged");
 assert(
   execFileSync(process.execPath, [nodeCliPath, "help"], { encoding: "utf8" }).includes("Usage: openreceive"),
   "@openreceive/node: CLI bin must run help"
+);
+assert(existsSync(umbrellaCliPath), "openreceive: CLI bin must be packaged");
+assert(
+  execFileSync(process.execPath, [umbrellaCliPath, "help"], { encoding: "utf8" }).includes("doctor"),
+  "openreceive: CLI bin must advertise doctor"
 );
 
 console.log(\`Imported \${checks.length} OpenReceive package tarballs.\`);

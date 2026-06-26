@@ -85,7 +85,7 @@ export interface UseCheckoutOptions extends CheckoutData {
   readonly refreshIdempotencyKey?: string | ((state: CheckoutState) => string);
   readonly refreshReason?: string | ((state: CheckoutState) => string);
   readonly onState?: (state: CheckoutState) => void;
-  readonly onPaid?: () => void;
+  readonly onSettled?: () => void;
   readonly polling?: boolean;
   readonly pollIntervalMs?: number;
 }
@@ -211,7 +211,7 @@ export interface CheckoutProps
   readonly refreshIdempotencyKey?: string | ((state: CheckoutState) => string);
   readonly refreshReason?: string | ((state: CheckoutState) => string);
   readonly onState?: (state: CheckoutState) => void;
-  readonly onPaid?: () => void;
+  readonly onSettled?: () => void;
   readonly onStartOver?: () => void;
   readonly polling?: boolean;
   readonly paymentWizard?: boolean;
@@ -391,9 +391,9 @@ export function useCheckout(
   const controllerRef = React.useRef<CheckoutController | null>(null);
   const onStateRef = React.useRef(options.onState);
   onStateRef.current = options.onState;
-  const onPaidRef = React.useRef(options.onPaid);
-  onPaidRef.current = options.onPaid;
-  const paidAnnouncementRef = React.useRef<{
+  const onSettledRef = React.useRef(options.onSettled);
+  onSettledRef.current = options.onSettled;
+  const settledAnnouncementRef = React.useRef<{
     readonly invoiceId: string;
     readonly fired: boolean;
   }>({
@@ -406,10 +406,13 @@ export function useCheckout(
       displayData
     ]
   );
+  const lookupInvoice =
+    options.polling === false ? undefined : options.lookupInvoice;
+  const lookupUrl = resolveCheckoutLookupUrl({
+    lookupUrl: options.lookupUrl,
+    polling: options.polling
+  });
   React.useEffect(() => {
-    const lookupInvoice =
-      options.polling === false ? undefined : options.lookupInvoice;
-    const lookupUrl = resolveCheckoutLookupUrl(options);
     const controller = createCheckoutController({
       snapshot,
       ...(lookupInvoice === undefined ? {} : { lookupInvoice }),
@@ -440,9 +443,8 @@ export function useCheckout(
     };
   }, [
     snapshot,
-    options.lookupInvoice,
-    options.lookupUrl,
-    options.polling,
+    lookupInvoice,
+    lookupUrl,
     options.refreshInvoice,
     options.refreshUrl,
     options.refreshHeaders,
@@ -458,9 +460,9 @@ export function useCheckout(
   const richStatus = createCheckoutStatusModel(state);
 
   React.useEffect(() => {
-    const announced = paidAnnouncementRef.current;
+    const announced = settledAnnouncementRef.current;
     if (announced.invoiceId !== snapshot.invoice_id) {
-      paidAnnouncementRef.current = {
+      settledAnnouncementRef.current = {
         invoiceId: snapshot.invoice_id,
         fired: false
       };
@@ -468,14 +470,14 @@ export function useCheckout(
   }, [snapshot.invoice_id]);
 
   React.useEffect(() => {
-    const announced = paidAnnouncementRef.current;
-    if (publicStatus !== "paid" || announced.fired) return;
-    paidAnnouncementRef.current = {
+    const announced = settledAnnouncementRef.current;
+    if (publicStatus !== "settled" || announced.fired) return;
+    settledAnnouncementRef.current = {
       invoiceId: snapshot.invoice_id,
       fired: true
     };
-    // UI hint only; server-side fulfillment must use the backend onPaid hook.
-    onPaidRef.current?.();
+    // UI hint only; server-side fulfillment must use the backend settlement hook.
+    onSettledRef.current?.();
   }, [publicStatus, snapshot.invoice_id]);
 
   const copyInvoice = React.useCallback(async () => {
@@ -1525,7 +1527,7 @@ export function Checkout(
     refreshIdempotencyKey,
     refreshReason,
     onState,
-    onPaid,
+    onSettled,
     onStartOver,
     polling,
     paymentWizard = true,
@@ -1551,7 +1553,7 @@ export function Checkout(
     refreshIdempotencyKey,
     refreshReason,
     onState,
-    onPaid,
+    onSettled,
     polling
   });
   const theme = useTheme({

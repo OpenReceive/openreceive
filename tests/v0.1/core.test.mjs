@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   InMemoryInvoiceKvStore,
-  OPENRECEIVE_ERROR_CODES,
   OpenReceiveError,
   classifyLookupInvoiceSettlement,
   createIdempotencyRequestHash,
@@ -20,6 +19,9 @@ import {
   reconcileOnce,
   redactNwcUri
 } from "../../packages/js/core/src/index.ts";
+import {
+  OPENRECEIVE_ERROR_CODES
+} from "../../packages/js/core/src/contracts.ts";
 import {
   OPENRECEIVE_COUNTRY_MAP_HEIGHT,
   OPENRECEIVE_COUNTRY_MAP_VIEW_BOX,
@@ -47,7 +49,6 @@ import {
   createCheckoutStateFromDisplayData,
   createCheckoutStateEvent,
   createOpenReceiveCountryPickerModel,
-  createInvoice,
   createOpenReceiveLookupInvoiceFetcher,
   createCheckoutProviderCopyEvent,
   createOpenReceiveRefreshInvoiceFetcher,
@@ -65,6 +66,7 @@ import {
   openReceiveCountryMapRegions,
   openReceiveThemeToggleElementStyles,
   openWallet,
+  requestCheckoutInvoice,
   assertOpenReceiveDisplayInvoice,
   parseOpenReceiveBooleanAttribute,
   parseOpenReceiveOptionalInteger,
@@ -693,16 +695,18 @@ test("browser owns web-component shadow styles", () => {
   assert.match(openReceiveThemeToggleElementStyles, /data-openreceive-theme-toggle|min-height/);
 });
 
-test("browser create invoice helper owns idempotent invoice POST shape", async () => {
+test("browser request checkout invoice helper owns idempotent invoice POST shape", async () => {
   const requests = [];
-  const invoice = await createInvoice({
-    orderUuid: "order-browser-create",
-    fiat: {
-      currency: "USD",
-      value: "10.00"
+  const invoice = await requestCheckoutInvoice({
+    orderId: "order-browser-create",
+    amount: {
+      fiat: {
+        currency: "USD",
+        value: "10.00"
+      }
     },
-    optionalInvoiceDescription: "Browser helper invoice",
-    expiry: 600,
+    memo: "Browser helper invoice",
+    expiresInSeconds: 600,
     fetch: async (url, init) => {
       requests.push({ url, init });
       return {
@@ -736,11 +740,13 @@ test("browser create invoice helper owns idempotent invoice POST shape", async (
     expiry: 600
   });
 
-  await createInvoice({
-    orderUuid: "order-browser-btc",
+  await requestCheckoutInvoice({
+    orderId: "order-browser-btc",
     amount: {
-      currency: "BTC",
-      value: "0.005"
+      btc: {
+        currency: "BTC",
+        value: "0.005"
+      }
     },
     fetch: async (url, init) => {
       requests.push({ url, init });
@@ -767,21 +773,21 @@ test("browser create invoice helper owns idempotent invoice POST shape", async (
   });
 
   await assert.rejects(
-    () => createInvoice({
-      orderUuid: "",
-      amount_msats: 200000,
+    () => requestCheckoutInvoice({
+      orderId: "",
+      amount: { msats: 200000 },
       fetch: async () => ({
         ok: true,
         json: async () => ({})
       })
     }),
-    /orderUuid/
+    /orderId/
   );
   await assert.rejects(
-    () => createInvoice({
-      orderUuid: "bad-nwc",
-      amountInSatoshis: 200,
-      optionalInvoiceDescription: `nostr+walletconnect://${"a".repeat(64)}?secret=${"b".repeat(64)}`,
+    () => requestCheckoutInvoice({
+      orderId: "bad-nwc",
+      amount: { sats: 200 },
+      memo: `nostr+walletconnect://${"a".repeat(64)}?secret=${"b".repeat(64)}`,
       fetch: async () => ({
         ok: true,
         json: async () => ({})
@@ -790,9 +796,9 @@ test("browser create invoice helper owns idempotent invoice POST shape", async (
     /NWC/
   );
   await assert.rejects(
-    () => createInvoice({
-      orderUuid: "server-error",
-      amountInSatoshis: 200,
+    () => requestCheckoutInvoice({
+      orderId: "server-error",
+      amount: { sats: 200 },
       fetch: async () => ({
         ok: false,
         json: async () => ({

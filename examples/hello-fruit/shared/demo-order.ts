@@ -43,14 +43,18 @@ export interface HelloFruitDemoOrder {
 export interface HelloFruitCreateOrderResult {
   readonly order: HelloFruitDemoOrder;
   readonly invoiceRequest: {
-    readonly orderUuid: string;
-    readonly fiat?: HelloFruitFiatAmount;
-    readonly amount?: {
-      readonly currency: "BTC" | "SATS";
-      readonly value: string;
-    };
-    readonly optionalInvoiceDescription: string;
-    readonly expiry: number;
+    readonly orderId: string;
+    readonly amount:
+      | {
+        readonly btc: {
+          readonly currency: "BTC";
+          readonly value: string;
+        };
+      }
+      | { readonly sats: string }
+      | { readonly fiat: HelloFruitFiatAmount };
+    readonly memo: string;
+    readonly expiresInSeconds: number;
   };
 }
 
@@ -111,25 +115,38 @@ export function createHelloFruitCreateOrderResult(
     items,
     totalAmount
   };
-  const amount = isHelloFruitDirectAmountCurrency(currency)
-    ? {
-      currency,
-      value: totalAmount.value
-    }
-    : undefined;
+  const amount = createOpenReceiveInvoiceAmount(totalAmount, currency);
 
   return {
     order,
     invoiceRequest: {
-      orderUuid: uuid,
-      ...(amount === undefined ? { fiat: totalAmount } : { amount }),
-      optionalInvoiceDescription: createHelloFruitOrderInvoiceDescription(
+      orderId: uuid,
+      amount,
+      memo: createHelloFruitOrderInvoiceDescription(
         items.map((item) => `${item.name} x${item.quantity}`),
         { demoName: options.demoName }
       ),
-      expiry: options.invoiceExpirySeconds
+      expiresInSeconds: options.invoiceExpirySeconds
     }
   };
+}
+
+function createOpenReceiveInvoiceAmount(
+  totalAmount: HelloFruitFiatAmount,
+  currency: string
+): HelloFruitCreateOrderResult["invoiceRequest"]["amount"] {
+  if (!isHelloFruitDirectAmountCurrency(currency)) {
+    return { fiat: totalAmount };
+  }
+  if (currency === "BTC") {
+    return {
+      btc: {
+        currency,
+        value: totalAmount.value
+      }
+    };
+  }
+  return { sats: totalAmount.value };
 }
 
 export function createHelloFruitOrderStatus(input: {
@@ -138,7 +155,7 @@ export function createHelloFruitOrderStatus(input: {
   readonly transaction_state?: unknown;
   readonly state?: unknown;
 }): HelloFruitOrderStatus {
-  const orderUuid = typeof input.order_uuid === "string" && input.order_uuid.length > 0
+  const orderId = typeof input.order_uuid === "string" && input.order_uuid.length > 0
     ? input.order_uuid
     : "unknown";
   const paid = typeof input.settled_at === "number" ||
@@ -146,7 +163,7 @@ export function createHelloFruitOrderStatus(input: {
     input.state === "settled";
 
   return {
-    order_uuid: orderUuid,
+    order_uuid: orderId,
     order_status: paid ? "paid" : "pending_payment"
   };
 }

@@ -204,7 +204,7 @@ test("elements package exposes shared browser-owned checkout styles", () => {
     "utf8"
   );
 
-  assert.equal(manifest.exports["./styles.css"], "./src/styles.css");
+  assert.equal(manifest.exports["./styles.css"], "./dist/styles.css");
   assert.match(styles, /@openreceive\/browser\/styles\.css/);
   assert.match(
     renderCheckoutHtml({ invoice: "lnbc-style-test" }),

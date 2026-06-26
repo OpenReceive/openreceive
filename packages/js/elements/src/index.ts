@@ -454,7 +454,7 @@ function createElementCheckoutState(
 }
 
 function transactionStateFromStatus(status: Status): string {
-  if (status === "paid") return "settled";
+  if (status === "settled") return "settled";
   if (status === "expired") return "expired";
   if (status === "failed") return "failed";
   return "pending";
@@ -463,7 +463,7 @@ function transactionStateFromStatus(status: Status): string {
 function parseElementStatus(value: string | null): Status | undefined {
   if (
     value === "pending" ||
-    value === "paid" ||
+    value === "settled" ||
     value === "expired" ||
     value === "failed"
   ) {

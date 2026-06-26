@@ -16,7 +16,13 @@ import {
 import {
   readHelloFruitCheckoutCurrencies
 } from "../../examples/hello-fruit/shared/demo-currencies.ts";
-import { quoteFiatToMsats } from "../../packages/js/core/src/index.ts";
+import {
+  StaticPriceProvider,
+  quoteFiatToMsats
+} from "../../packages/js/core/src/index.ts";
+import {
+  setHelloFruitOpenReceiveTestOverrides
+} from "../../examples/hello-fruit/server/nextjs-fullstack/src/server/openreceive.ts";
 import { GET as getNextDemoMetadata } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/demo-metadata.json/route.ts";
 import { GET as getNextDocs } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/docs/route.ts";
 import { POST as postNextCreateOrder } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/create_order/route.ts";
@@ -49,6 +55,51 @@ function createValidNwcUri(input = {}) {
     `?relay=${encodeURIComponent(input.relay ?? "wss://relay.example.com")}` +
     `&secret=${input.secret ?? "b".repeat(64)}`
   );
+}
+
+class HelloFruitTestReceiveClient {
+  count = 0;
+
+  async preflight() {
+    return {
+      walletPubkey: "f".repeat(64),
+      relays: ["wss://relay.example.com"],
+      methods: ["make_invoice", "lookup_invoice"],
+      notifications: ["payment_received"],
+      encryption: "nip44_v2",
+      spendCapabilityAdvertised: false,
+      receiveCheckoutReady: true,
+      warnings: []
+    };
+  }
+
+  async makeInvoice(request) {
+    this.count += 1;
+    const suffix = this.count.toString(16).padStart(64, "0");
+    return {
+      invoice: `lnbc-hello-fruit-test-${this.count}`,
+      payment_hash: suffix,
+      amount_msats: request.amount_msats,
+      created_at: 1000,
+      expires_at: 1600
+    };
+  }
+
+  async lookupInvoice(request) {
+    return {
+      invoice: request.invoice ?? "lnbc-hello-fruit-test",
+      payment_hash: request.payment_hash ?? "f".repeat(64),
+      amount_msats: 200000n,
+      transaction_state: "pending"
+    };
+  }
+}
+
+function createHelloFruitTestOpenReceiveOptions() {
+  return {
+    client: new HelloFruitTestReceiveClient(),
+    priceProviders: [new StaticPriceProvider()]
+  };
 }
 
 test("Hello Fruit shared product keeps demo invoices low-value", () => {
@@ -143,7 +194,7 @@ test("Hello Fruit React demos delegate checkout state to UI packages", () => {
     ["nextjs-fullstack", nextClient]
   ]) {
     assert.match(source, /<Checkout/);
-    assert.match(source, /onPaid=/);
+    assert.match(source, /onSettled=/);
     assert.match(source, /lookupUrl="\/order_status"/);
     assert.match(source, /fetch\("\/create_order"/);
     assert.match(source, /readHelloFruitCheckoutCurrencies/);
@@ -1080,7 +1131,6 @@ test("Hello Fruit metadata exposes only allowlisted build fields", async () => {
 
   await withEnv({
     OPENRECEIVE_NWC: nwc,
-    OPENRECEIVE_TEST_FAKE_NWC: "1",
     OPENRECEIVE_STORE: "memory:",
     OPENRECEIVE_DEMO_MODE: "production",
     OPENRECEIVE_GIT_SHA: "0123456789abcdef",
@@ -1097,7 +1147,10 @@ test("Hello Fruit metadata exposes only allowlisted build fields", async () => {
         createApp: createHelloFruitStaticServer
       }
     ]) {
-      const metadata = await getJson(await demo.createApp(), "/demo-metadata.json");
+      const metadata = await getJson(
+        await demo.createApp(createHelloFruitTestOpenReceiveOptions()),
+        "/demo-metadata.json"
+      );
       assert.equal(metadata.status, 200, `${demo.name}: metadata status`);
       assert.equal(metadata.body.mode, "production");
       assert.equal(metadata.body.build.git_sha, "0123456789abcdef");
@@ -1108,22 +1161,26 @@ test("Hello Fruit metadata exposes only allowlisted build fields", async () => {
       assert.equal(JSON.stringify(metadata.body).includes("secret="), false);
     }
 
-    const nextMetadata = await responseJson(getNextDemoMetadata());
-    assert.equal(nextMetadata.status, 200, "nextjs-fullstack: metadata status");
-    assert.equal(nextMetadata.body.mode, "production");
-    assert.equal(nextMetadata.body.build.git_sha, "0123456789abcdef");
-    assert.equal(nextMetadata.body.build.image_digest, `sha256:${"c".repeat(64)}`);
-    assert.equal(nextMetadata.body.build.deployed_at, "2026-06-20T12:34:56Z");
-    assert.equal(JSON.stringify(nextMetadata.body).includes("OPENRECEIVE_NWC"), false);
-    assert.equal(JSON.stringify(nextMetadata.body).includes("nostr+walletconnect://"), false);
-    assert.equal(JSON.stringify(nextMetadata.body).includes("secret="), false);
+    setHelloFruitOpenReceiveTestOverrides(createHelloFruitTestOpenReceiveOptions());
+    try {
+      const nextMetadata = await responseJson(getNextDemoMetadata());
+      assert.equal(nextMetadata.status, 200, "nextjs-fullstack: metadata status");
+      assert.equal(nextMetadata.body.mode, "production");
+      assert.equal(nextMetadata.body.build.git_sha, "0123456789abcdef");
+      assert.equal(nextMetadata.body.build.image_digest, `sha256:${"c".repeat(64)}`);
+      assert.equal(nextMetadata.body.build.deployed_at, "2026-06-20T12:34:56Z");
+      assert.equal(JSON.stringify(nextMetadata.body).includes("OPENRECEIVE_NWC"), false);
+      assert.equal(JSON.stringify(nextMetadata.body).includes("nostr+walletconnect://"), false);
+      assert.equal(JSON.stringify(nextMetadata.body).includes("secret="), false);
+    } finally {
+      setHelloFruitOpenReceiveTestOverrides(undefined);
+    }
   });
 });
 
 test("Hello Fruit demos create app orders and poll order status through merchant routes", async () => {
   await withEnv({
     OPENRECEIVE_NWC: createValidNwcUri(),
-    OPENRECEIVE_TEST_FAKE_NWC: "1",
     OPENRECEIVE_STORE: "memory:"
   }, async () => {
     const orderRequest = {
@@ -1144,7 +1201,7 @@ test("Hello Fruit demos create app orders and poll order status through merchant
         createApp: createHelloFruitStaticServer
       }
     ]) {
-      const app = await demo.createApp();
+      const app = await demo.createApp(createHelloFruitTestOpenReceiveOptions());
       const created = await dispatchJson(app, "POST", "/create_order", orderRequest);
       assert.equal(created.status, 201, `${demo.name}: create_order status`);
       assert.equal(created.body.order.uuid.includes("cart-smoke"), true);
@@ -1169,29 +1226,33 @@ test("Hello Fruit demos create app orders and poll order status through merchant
       assert.equal(status.body.payment_hash, created.body.invoice.payment_hash);
     }
 
-    const nextCreated = await responseJson(postNextCreateOrder(jsonRequest("/create_order", orderRequest)));
-    assert.equal(nextCreated.status, 201, "nextjs-fullstack: create_order status");
-    assert.equal(nextCreated.body.order.uuid.includes("cart-smoke"), true);
-    assert.equal(nextCreated.body.order.totalAmount.value, "0.25");
-    assert.equal(nextCreated.body.invoice.order_uuid, nextCreated.body.order.uuid);
+    setHelloFruitOpenReceiveTestOverrides(createHelloFruitTestOpenReceiveOptions());
+    try {
+      const nextCreated = await responseJson(postNextCreateOrder(jsonRequest("/create_order", orderRequest)));
+      assert.equal(nextCreated.status, 201, "nextjs-fullstack: create_order status");
+      assert.equal(nextCreated.body.order.uuid.includes("cart-smoke"), true);
+      assert.equal(nextCreated.body.order.totalAmount.value, "0.25");
+      assert.equal(nextCreated.body.invoice.order_uuid, nextCreated.body.order.uuid);
 
-    const nextReplayed = await responseJson(postNextCreateOrder(jsonRequest("/create_order", orderRequest)));
-    assert.equal(nextReplayed.body.invoice.invoice_id, nextCreated.body.invoice.invoice_id,
-      "nextjs-fullstack: create_order is idempotent for the same checkout id and cart");
+      const nextReplayed = await responseJson(postNextCreateOrder(jsonRequest("/create_order", orderRequest)));
+      assert.equal(nextReplayed.body.invoice.invoice_id, nextCreated.body.invoice.invoice_id,
+        "nextjs-fullstack: create_order is idempotent for the same checkout id and cart");
 
-    const nextStatus = await responseJson(postNextOrderStatus(jsonRequest("/order_status", {
-      payment_hash: nextCreated.body.invoice.payment_hash
-    })));
-    assert.equal(nextStatus.status, 200, "nextjs-fullstack: order_status status");
-    assert.equal(nextStatus.body.order_uuid, nextCreated.body.order.uuid);
-    assert.equal(nextStatus.body.order_status, "pending_payment");
+      const nextStatus = await responseJson(postNextOrderStatus(jsonRequest("/order_status", {
+        payment_hash: nextCreated.body.invoice.payment_hash
+      })));
+      assert.equal(nextStatus.status, 200, "nextjs-fullstack: order_status status");
+      assert.equal(nextStatus.body.order_uuid, nextCreated.body.order.uuid);
+      assert.equal(nextStatus.body.order_status, "pending_payment");
+    } finally {
+      setHelloFruitOpenReceiveTestOverrides(undefined);
+    }
   });
 });
 
 test("Hello Fruit demos create direct SATS orders from the currency switcher", async () => {
   await withEnv({
     OPENRECEIVE_NWC: createValidNwcUri(),
-    OPENRECEIVE_TEST_FAKE_NWC: "1",
     OPENRECEIVE_STORE: "memory:"
   }, async () => {
     const orderRequest = {
@@ -1213,7 +1274,7 @@ test("Hello Fruit demos create direct SATS orders from the currency switcher", a
         createApp: createHelloFruitStaticServer
       }
     ]) {
-      const app = await demo.createApp();
+      const app = await demo.createApp(createHelloFruitTestOpenReceiveOptions());
       const created = await dispatchJson(app, "POST", "/create_order", orderRequest);
       assert.equal(created.status, 201, `${demo.name}: create_order status`);
       assert.equal(created.body.order.totalAmount.currency, "SATS");
@@ -1227,7 +1288,6 @@ test("Hello Fruit demos create direct SATS orders from the currency switcher", a
 test("Hello Fruit hosted demo routes expose source, docs, robots, and sitemap", async () => {
   await withEnv({
     OPENRECEIVE_NWC: createValidNwcUri(),
-    OPENRECEIVE_TEST_FAKE_NWC: "1",
     OPENRECEIVE_PUBLIC_URL: "https://demo.example.test",
     OPENRECEIVE_DEMO_NOINDEX: undefined
   }, async () => {
@@ -1243,7 +1303,7 @@ test("Hello Fruit hosted demo routes expose source, docs, robots, and sitemap", 
         createApp: createHelloFruitStaticServer
       }
     ]) {
-      const app = await demo.createApp();
+      const app = await demo.createApp(createHelloFruitTestOpenReceiveOptions());
       const source = await dispatch(app, {
         method: "GET",
         url: "/source",

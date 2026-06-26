@@ -17,8 +17,8 @@ import {
   formatHelloFruitFiat,
   helloFruitDemoLabels
 } from "../../../../shared/demo-formatting.ts";
-import fruitsData from "../../../../shared/fruits.json";
-import product from "../../../../shared/product.json";
+import fruitsData from "../../../../shared/fruits.json" with { type: "json" };
+import product from "../../../../shared/product.json" with { type: "json" };
 import "@openreceive/elements/styles.css";
 import "./styles.css";
 

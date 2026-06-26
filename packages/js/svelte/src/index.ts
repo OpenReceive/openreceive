@@ -4,6 +4,7 @@ import {
   createCheckoutController,
   createCheckoutShell,
   createCheckoutShellModel,
+  createCheckoutShellModelFromProps,
   createCheckoutElementAttributes,
   createCheckoutElementListeners,
   createOpenReceiveStoredThemeModel,
@@ -19,6 +20,7 @@ import {
   type CheckoutShellElements,
   type CheckoutShellOptions,
   type CheckoutSnapshot,
+  type OpenReceiveCheckoutShellProps,
   type OpenReceiveReadThemePreferenceOptions,
   type OpenReceiveStoredThemeModelOptions,
   type OpenReceiveThemeAttributeTarget,
@@ -75,6 +77,8 @@ export type {
   CheckoutShellThemeToggleBinding,
   CheckoutElementTarget,
   CheckoutSnapshot,
+  OpenReceiveCheckoutProps,
+  OpenReceiveCheckoutShellProps,
   OpenReceiveReadThemePreferenceOptions,
   OpenReceiveStoredThemeModelOptions,
   OpenReceiveThemeAttributeTarget,
@@ -115,8 +119,8 @@ export interface OpenReceiveSvelteCheckoutShellBinding {
   readonly themeToggle: OpenReceiveSvelteThemeToggleBinding;
 }
 
-export interface OpenReceiveSvelteCheckoutComponentOptions
-  extends CheckoutShellOptions {
+export interface OpenReceiveSvelteCheckoutComponentProps
+  extends OpenReceiveCheckoutShellProps {
   readonly defineElementsOptions?: DefineOpenReceiveElementsOptions;
 }
 
@@ -188,11 +192,23 @@ export function createOpenReceiveSvelteCheckoutShellBinding(
 }
 
 export function createOpenReceiveSvelteCheckoutComponentModel(
-  snapshot: CheckoutSnapshot,
-  options: OpenReceiveSvelteCheckoutComponentOptions = {}
+  props: OpenReceiveSvelteCheckoutComponentProps
 ): OpenReceiveSvelteCheckoutComponentModel {
-  const { defineElementsOptions, ...shellOptions } = options;
-  const shell = createOpenReceiveSvelteCheckoutShellBinding(snapshot, shellOptions);
+  const { defineElementsOptions, ...shellProps } = props;
+  const shellModel = createCheckoutShellModelFromProps(shellProps);
+  const shell: OpenReceiveSvelteCheckoutShellBinding = {
+    theme: shellModel.theme,
+    rootProps: shellModel.rootAttributes,
+    checkout: {
+      tagName: shellModel.checkout.tagName,
+      props: shellModel.checkout.attributes,
+      events: shellModel.checkout.listeners
+    },
+    themeToggle: {
+      tagName: shellModel.themeToggle.tagName,
+      props: shellModel.themeToggle.attributes
+    }
+  };
   return {
     componentName: "Checkout",
     defineElements: defineOpenReceiveElements,

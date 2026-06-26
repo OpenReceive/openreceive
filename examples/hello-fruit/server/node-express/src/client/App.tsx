@@ -22,8 +22,8 @@ import {
   formatHelloFruitFiat,
   helloFruitDemoLabels
 } from "../../../../shared/demo-formatting.ts";
-import fruitsData from "../../../../shared/fruits.json";
-import product from "../../../../shared/product.json";
+import fruitsData from "../../../../shared/fruits.json" with { type: "json" };
+import product from "../../../../shared/product.json" with { type: "json" };
 import "./styles.css";
 
 const logOpenReceive = createHelloFruitBrowserLogger("node-express");
@@ -86,7 +86,7 @@ function App(): React.ReactElement {
     .filter((item) => item.quantity > 0);
   const cartQuantity = cartItems.reduce((total, item) => total + item.quantity, 0);
 
-  const onPaid = useCallback(() => {
+  const onSettled = useCallback(() => {
     if (invoice !== null && completedInvoiceRef.current !== invoice.invoice_id) {
       completedInvoiceRef.current = invoice.invoice_id;
       setOrder((current) => current === null
@@ -298,7 +298,7 @@ function App(): React.ReactElement {
             onError={(cause) => {
               setError(cause instanceof Error ? cause.message : String(cause));
             }}
-            onPaid={onPaid}
+            onSettled={onSettled}
             onStartOver={startOver}
           />
         )}
@@ -343,7 +343,7 @@ interface FrameworkCheckoutProps {
   readonly framework: CheckoutFramework;
   readonly invoice: Invoice;
   readonly onError: (error: unknown) => void;
-  readonly onPaid: () => void;
+  readonly onSettled: () => void;
   readonly onStartOver: () => void;
 }
 
@@ -351,7 +351,7 @@ function FrameworkCheckout({
   framework,
   invoice,
   onError,
-  onPaid,
+  onSettled,
   onStartOver
 }: FrameworkCheckoutProps): React.ReactElement {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -371,7 +371,7 @@ function FrameworkCheckout({
         const detail = (event as CustomEvent<{ error?: unknown }>).detail;
         onError(detail?.error ?? event);
       },
-      onSettled: onPaid
+      onSettled: onSettled
     };
 
     async function mountFrameworkCheckout() {
@@ -451,7 +451,7 @@ function FrameworkCheckout({
       cleanup();
       host.replaceChildren();
     };
-  }, [framework, invoice, onError, onPaid]);
+  }, [framework, invoice, onError, onSettled]);
 
   if (framework === "react") {
     return (
@@ -461,7 +461,7 @@ function FrameworkCheckout({
         lookupUrl="/order_status"
         logger={logOpenReceive}
         onError={onError}
-        onPaid={onPaid}
+        onSettled={onSettled}
         onStartOver={onStartOver}
       />
     );

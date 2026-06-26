@@ -8,7 +8,13 @@ import {
   OPENRECEIVE_HTTP_PATHS,
   OPENRECEIVE_TRANSACTION_STATES,
   OPENRECEIVE_WORKFLOW_STATES
-} from "@openreceive/core";
+} from "@openreceive/core/contracts";
+
+test("generated contract models are not exported from the core root", async () => {
+  const core = await import("@openreceive/core");
+  assert.equal(core.OPENRECEIVE_HTTP_PATHS, undefined);
+  assert.equal(core.OPENRECEIVE_AMOUNT_MSATS_BOUNDARY, undefined);
+});
 
 test("generated contract models expose HTTP routes and event names", () => {
   assert.deepEqual(OPENRECEIVE_HTTP_PATHS, [

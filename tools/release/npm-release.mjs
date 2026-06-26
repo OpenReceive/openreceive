@@ -20,9 +20,12 @@ import {
 } from "../package/build-artifacts.mjs";
 
 const PUBLIC_PACKAGE_NAMES = [
+  "openreceive",
   "@openreceive/angular",
   "@openreceive/browser",
+  "@openreceive/core",
   "@openreceive/elements",
+  "@openreceive/node",
   "@openreceive/provider-data",
   "@openreceive/react",
   "@openreceive/svelte",

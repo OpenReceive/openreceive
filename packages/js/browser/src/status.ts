@@ -1,4 +1,4 @@
-export type Status = "pending" | "paid" | "expired" | "failed";
+export type Status = "pending" | "settled" | "expired" | "failed";
 
 export interface StatusInvoiceLike {
   readonly transaction_state?: string;
@@ -11,7 +11,7 @@ export function status(
   options: { readonly now?: number } = {}
 ): Status {
   if (invoice.transaction_state === "settled" || invoice.settled_at != null) {
-    return "paid";
+    return "settled";
   }
   if (invoice.transaction_state === "failed") return "failed";
   if (invoice.transaction_state === "expired") return "expired";

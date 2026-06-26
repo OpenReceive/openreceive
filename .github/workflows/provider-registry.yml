@@ -1,7 +1,8 @@
 name: Provider Registry
 
 on:
-  # Temporarily manual-only while CI is being stabilized.
+  schedule:
+    - cron: "51 8 * * 1"
   workflow_dispatch:
 
 permissions:

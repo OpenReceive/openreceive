@@ -1,7 +1,8 @@
 name: Security
 
 on:
-  # Temporarily manual-only while CI is being stabilized.
+  schedule:
+    - cron: "9 9 * * 1"
   workflow_dispatch:
 
 permissions:

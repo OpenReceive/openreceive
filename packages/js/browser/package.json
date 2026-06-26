@@ -2,21 +2,40 @@
   "name": "@openreceive/browser",
   "version": "0.1.1",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./internal": "./src/internal.ts",
-    "./country-map": "./src/country-map.ts",
-    "./styles.css": "./src/styles.css"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./internal": {
+      "types": "./dist/internal.d.ts",
+      "import": "./dist/internal.js"
+    },
+    "./country-map": {
+      "types": "./dist/country-map.d.ts",
+      "import": "./dist/country-map.js"
+    },
+    "./styles.css": "./dist/styles.css"
   },
   "dependencies": {
     "@openreceive/provider-data": "0.1.1",
     "d3-geo": "^3.1.1",
     "qrcode": "^1.5.4",
-    "topojson-client": "^3.1.0",
-    "world-atlas": "^2.0.2"
+    "topojson-client": "^3.1.0"
   },
   "devDependencies": {
     "@types/d3-geo": "^3.1.0",
-    "@types/topojson-client": "^3.1.5"
+    "@types/topojson-client": "^3.1.5",
+    "world-atlas": "^2.0.2"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts src/internal.ts src/country-map.ts --format esm --dts --clean --target es2022 --out-dir dist && node ../../../tools/package/copy-static.mjs src dist styles.css assets"
   }
 }

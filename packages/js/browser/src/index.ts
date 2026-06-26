@@ -1,21 +1,22 @@
 export {
   copyInvoice,
-  createInvoice,
   createLightningUri as lightningUri,
   createCheckoutController as createCheckoutController,
   createQrPngDataUrl as qrPngDataUrl,
   createQrSvg as qrSvg,
-  openWallet
+  openWallet,
+  requestCheckoutInvoice
 } from "./internal.ts";
 
 export type {
   CopyInvoiceOptions,
-  CreateOpenReceiveInvoiceOptions as CreateInvoiceOptions,
   CheckoutController as CheckoutController,
   CheckoutControllerOptions as CheckoutControllerOptions,
   CheckoutSnapshot as Invoice,
   OpenReceiveQrOptions as QrOptions,
-  OpenWalletOptions
+  OpenWalletOptions,
+  RequestCheckoutInvoiceAmount,
+  RequestCheckoutInvoiceOptions
 } from "./internal.ts";
 
 export {

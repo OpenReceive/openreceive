@@ -1,44 +1,61 @@
-const aquaIcon = new URL("./assets/provider-icons/aqua.png", import.meta.url).href;
-const beloIcon = new URL("./assets/provider-icons/belo.png", import.meta.url).href;
-const binanceIcon = new URL("./assets/provider-icons/binance.png", import.meta.url).href;
-const bipaIcon = new URL("./assets/provider-icons/bipa.png", import.meta.url).href;
-const bitfinexIcon = new URL("./assets/provider-icons/bitfinex.png", import.meta.url).href;
-const bitgetIcon = new URL("./assets/provider-icons/bitget.png", import.meta.url).href;
-const bitnobIcon = new URL("./assets/provider-icons/bitnob.png", import.meta.url).href;
-const bitsoIcon = new URL("./assets/provider-icons/bitso.png", import.meta.url).href;
-const bityIcon = new URL("./assets/provider-icons/bity.png", import.meta.url).href;
-const blinkIcon = new URL("./assets/provider-icons/blink.png", import.meta.url).href;
-const bluewalletIcon = new URL("./assets/provider-icons/bluewallet.png", import.meta.url).href;
-const boltzIcon = new URL("./assets/provider-icons/boltz.png", import.meta.url).href;
-const bringinIcon = new URL("./assets/provider-icons/bringin.png", import.meta.url).href;
-const bullbitcoinIcon = new URL("./assets/provider-icons/bullbitcoin.png", import.meta.url).href;
-const cakewalletIcon = new URL("./assets/provider-icons/cakewallet.png", import.meta.url).href;
-const cashappIcon = new URL("./assets/provider-icons/cashapp.png", import.meta.url).href;
-const changenowIcon = new URL("./assets/provider-icons/changenow.png", import.meta.url).href;
-const chivoIcon = new URL("./assets/provider-icons/chivo.png", import.meta.url).href;
-const coinbaseIcon = new URL("./assets/provider-icons/coinbase.png", import.meta.url).href;
-const coincornerIcon = new URL("./assets/provider-icons/coincorner.png", import.meta.url).href;
-const fixedfloatIcon = new URL("./assets/provider-icons/fixedfloat.png", import.meta.url).href;
-const getalbyIcon = new URL("./assets/provider-icons/getalby.png", import.meta.url).href;
-const krakenIcon = new URL("./assets/provider-icons/kraken.png", import.meta.url).href;
-const kryptexIcon = new URL("./assets/provider-icons/kryptex.png", import.meta.url).href;
-const kucoinIcon = new URL("./assets/provider-icons/kucoin.png", import.meta.url).href;
-const mtpelerinIcon = new URL("./assets/provider-icons/mtpelerin.png", import.meta.url).href;
-const okcoinIcon = new URL("./assets/provider-icons/okcoin.png", import.meta.url).href;
-const okxIcon = new URL("./assets/provider-icons/okx.png", import.meta.url).href;
-const phoenixIcon = new URL("./assets/provider-icons/phoenix.png", import.meta.url).href;
-const pouchIcon = new URL("./assets/provider-icons/pouch.png", import.meta.url).href;
-const ripioIcon = new URL("./assets/provider-icons/ripio.png", import.meta.url).href;
-const riverIcon = new URL("./assets/provider-icons/river.png", import.meta.url).href;
-const rizfulIcon = new URL("./assets/provider-icons/rizful.png", import.meta.url).href;
-const shakepayIcon = new URL("./assets/provider-icons/shakepay.png", import.meta.url).href;
-const sideshiftIcon = new URL("./assets/provider-icons/sideshift.png", import.meta.url).href;
-const simpleswapIcon = new URL("./assets/provider-icons/simpleswap.png", import.meta.url).href;
-const speedIcon = new URL("./assets/provider-icons/speed.png", import.meta.url).href;
-const strikeIcon = new URL("./assets/provider-icons/strike.png", import.meta.url).href;
-const trocadorIcon = new URL("./assets/provider-icons/trocador.png", import.meta.url).href;
-const walletofsatoshiIcon = new URL("./assets/provider-icons/walletofsatoshi.png", import.meta.url).href;
-const zeusIcon = new URL("./assets/provider-icons/zeus.png", import.meta.url).href;
+declare const __filename: string | undefined;
+
+const moduleUrl =
+  typeof import.meta.url === "string" && import.meta.url.length > 0
+    ? import.meta.url
+    : fileUrlFromPath(__filename as string);
+
+function fileUrlFromPath(path: string): string {
+  const normalized = path.replace(/\\/g, "/");
+  const absolute = normalized.startsWith("/") ? normalized : `/${normalized}`;
+  return `file://${encodeURI(absolute).replace(/#/g, "%23").replace(/\?/g, "%3F")}`;
+}
+
+function assetUrl(path: string): string {
+  return new URL(path, moduleUrl).href;
+}
+
+const aquaIcon = assetUrl("./assets/provider-icons/aqua.png");
+const beloIcon = assetUrl("./assets/provider-icons/belo.png");
+const binanceIcon = assetUrl("./assets/provider-icons/binance.png");
+const bipaIcon = assetUrl("./assets/provider-icons/bipa.png");
+const bitfinexIcon = assetUrl("./assets/provider-icons/bitfinex.png");
+const bitgetIcon = assetUrl("./assets/provider-icons/bitget.png");
+const bitnobIcon = assetUrl("./assets/provider-icons/bitnob.png");
+const bitsoIcon = assetUrl("./assets/provider-icons/bitso.png");
+const bityIcon = assetUrl("./assets/provider-icons/bity.png");
+const blinkIcon = assetUrl("./assets/provider-icons/blink.png");
+const bluewalletIcon = assetUrl("./assets/provider-icons/bluewallet.png");
+const boltzIcon = assetUrl("./assets/provider-icons/boltz.png");
+const bringinIcon = assetUrl("./assets/provider-icons/bringin.png");
+const bullbitcoinIcon = assetUrl("./assets/provider-icons/bullbitcoin.png");
+const cakewalletIcon = assetUrl("./assets/provider-icons/cakewallet.png");
+const cashappIcon = assetUrl("./assets/provider-icons/cashapp.png");
+const changenowIcon = assetUrl("./assets/provider-icons/changenow.png");
+const chivoIcon = assetUrl("./assets/provider-icons/chivo.png");
+const coinbaseIcon = assetUrl("./assets/provider-icons/coinbase.png");
+const coincornerIcon = assetUrl("./assets/provider-icons/coincorner.png");
+const fixedfloatIcon = assetUrl("./assets/provider-icons/fixedfloat.png");
+const getalbyIcon = assetUrl("./assets/provider-icons/getalby.png");
+const krakenIcon = assetUrl("./assets/provider-icons/kraken.png");
+const kryptexIcon = assetUrl("./assets/provider-icons/kryptex.png");
+const kucoinIcon = assetUrl("./assets/provider-icons/kucoin.png");
+const mtpelerinIcon = assetUrl("./assets/provider-icons/mtpelerin.png");
+const okcoinIcon = assetUrl("./assets/provider-icons/okcoin.png");
+const okxIcon = assetUrl("./assets/provider-icons/okx.png");
+const phoenixIcon = assetUrl("./assets/provider-icons/phoenix.png");
+const pouchIcon = assetUrl("./assets/provider-icons/pouch.png");
+const ripioIcon = assetUrl("./assets/provider-icons/ripio.png");
+const riverIcon = assetUrl("./assets/provider-icons/river.png");
+const rizfulIcon = assetUrl("./assets/provider-icons/rizful.png");
+const shakepayIcon = assetUrl("./assets/provider-icons/shakepay.png");
+const sideshiftIcon = assetUrl("./assets/provider-icons/sideshift.png");
+const simpleswapIcon = assetUrl("./assets/provider-icons/simpleswap.png");
+const speedIcon = assetUrl("./assets/provider-icons/speed.png");
+const strikeIcon = assetUrl("./assets/provider-icons/strike.png");
+const trocadorIcon = assetUrl("./assets/provider-icons/trocador.png");
+const walletofsatoshiIcon = assetUrl("./assets/provider-icons/walletofsatoshi.png");
+const zeusIcon = assetUrl("./assets/provider-icons/zeus.png");
 
 export const openReceiveProviderIconUrls: Readonly<Record<string, string>> = {
   "assets/provider-icons/aqua.png": aquaIcon,

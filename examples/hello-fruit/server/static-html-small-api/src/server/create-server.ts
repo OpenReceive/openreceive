@@ -1,20 +1,19 @@
 import express from "express";
 import { fileURLToPath } from "node:url";
-import {
-  StaticPriceProvider
-} from "@openreceive/core";
 import type {
+  OpenReceiveReceiveNwcClient,
   OpenReceiveSourcedPriceProvider
 } from "@openreceive/core";
 import {
   createOpenReceive,
-  createOpenReceivePriceFeed
+  createOpenReceivePriceFeed,
+  toOpenReceiveHttpInvoice,
+  toOpenReceiveHttpLookupInvoiceResult
 } from "@openreceive/node";
 import {
   createHelloFruitDemoMetadata
 } from "../../../../shared/demo-metadata.ts";
 import {
-  createHelloFruitTestReceiveClient,
   readRequiredHelloFruitNwcConnectionString
 } from "../../../../shared/demo-nwc.ts";
 import {
@@ -37,7 +36,7 @@ import {
 import {
   readHelloFruitOrderRates
 } from "../../../../shared/demo-price-feeds.ts";
-import product from "../../../../shared/product.json";
+import product from "../../../../shared/product.json" with { type: "json" };
 
 const DEMO_ID = "static-html-small-api";
 
@@ -47,24 +46,27 @@ interface HelloFruitOpenReceiveBundle {
   readonly supportedCurrencies: readonly string[];
 }
 
-export async function createHelloFruitOpenReceive() {
+export interface HelloFruitOpenReceiveOptions {
+  readonly client?: OpenReceiveReceiveNwcClient;
+  readonly priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
+}
+
+export async function createHelloFruitOpenReceive(
+  options: HelloFruitOpenReceiveOptions = {}
+) {
   const priceCurrencies = readHelloFruitPriceFeedCurrencies();
   const supportedCurrencies = readHelloFruitCheckoutCurrencies();
   const store = await createHelloFruitOpenReceiveKvStore({
     demoId: DEMO_ID
   });
-  const testClient = createHelloFruitTestReceiveClient();
-  // Live wallet: database-cached primary/fallback feed (boot-probed by
-  // createOpenReceive). Deterministic fake-wallet mode: static mock only.
   const priceProviders: readonly OpenReceiveSourcedPriceProvider[] =
-    testClient === undefined
-      ? [createOpenReceivePriceFeed({ store, currencies: priceCurrencies })]
-      : [new StaticPriceProvider()];
+    options.priceProviders ??
+    [createOpenReceivePriceFeed({ store, currencies: priceCurrencies })];
 
   const openreceive = await createOpenReceive({
-    ...(testClient === undefined
+    ...(options.client === undefined
       ? { nwc: readRequiredHelloFruitNwcConnectionString() }
-      : { client: testClient }),
+      : { client: options.client }),
     store,
     namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit",
     priceProviders,
@@ -74,7 +76,9 @@ export async function createHelloFruitOpenReceive() {
   return { openreceive, priceProviders, supportedCurrencies } satisfies HelloFruitOpenReceiveBundle;
 }
 
-export async function createHelloFruitStaticServer() {
+export async function createHelloFruitStaticServer(
+  options: HelloFruitOpenReceiveOptions = {}
+) {
   const app = express();
   app.use(express.json());
   app.use(
@@ -86,7 +90,7 @@ export async function createHelloFruitStaticServer() {
     openreceive,
     priceProviders,
     supportedCurrencies
-  } = await createHelloFruitOpenReceive();
+  } = await createHelloFruitOpenReceive(options);
 
   mountHelloFruitHostedDemoRoutes(app, {
     id: DEMO_ID,
@@ -128,7 +132,9 @@ export async function createHelloFruitStaticServer() {
         rates,
         supportedCurrencies
       });
-      const invoice = await openreceive.createInvoice(orderResult.invoiceRequest);
+      const invoice = toOpenReceiveHttpInvoice(
+        await openreceive.createInvoice(orderResult.invoiceRequest)
+      );
       res.status(201).json({
         order: orderResult.order,
         invoice
@@ -139,7 +145,9 @@ export async function createHelloFruitStaticServer() {
   });
   app.post("/order_status", async (req, res, next) => {
     try {
-      const lookup = await openreceive.lookupInvoice(req.body);
+      const lookup = toOpenReceiveHttpLookupInvoiceResult(
+        await openreceive.lookupInvoice(createLookupRequest(asRequestBody(req.body)))
+      );
       const orderStatus = createHelloFruitOrderStatus(lookup);
       res.status(200).json({
         ...lookup,
@@ -191,4 +199,14 @@ function asRequestBody(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
+}
+
+function createLookupRequest(body: Record<string, unknown>): {
+  readonly paymentHash?: string;
+  readonly bolt11?: string;
+} {
+  return {
+    ...(typeof body.payment_hash === "string" ? { paymentHash: body.payment_hash } : {}),
+    ...(typeof body.invoice === "string" ? { bolt11: body.invoice } : {})
+  };
 }

@@ -240,7 +240,7 @@ Your `onPaid` hook may run again after a crash. For example, the hook could
 mark an order paid successfully, then the process could stop before
 OpenReceive finishes recording that work.
 
-`orderUuid` is guaranteed to be the unique app order key for this checkout, so
+`orderId` is guaranteed to be the unique app order key for this checkout, so
 use it for idempotent fulfillment. That prevents repeated calls from
 double-shipping, double-crediting, or double-emailing. Invoice details are
 available only if your app wants extra audit or correlation data.
@@ -251,5 +251,5 @@ available only if your app wants extra audit or correlation data.
 - Use durable storage for production.
 - Configure `OPENRECEIVE_NAMESPACE` when multiple apps share one store.
 - Use your app's normal route protection when needed.
-- Use `orderUuid` for idempotent fulfillment.
+- Use `orderId` for idempotent fulfillment.
 - Run `npm run typecheck && npm run test:js` before deploy.

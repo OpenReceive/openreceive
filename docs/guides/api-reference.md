@@ -12,8 +12,8 @@ App-facing packages:
 - `@openreceive/node`: `createOpenReceive(options)` returns a server-only
   service with `createInvoice`, `getInvoice`, `lookupInvoice`,
   `refreshInvoice`, `listRates`, `quoteRates`, `poll`, and `close`.
-- `@openreceive/browser`: `createInvoice`, `status`, `lightningUri`, `qrSvg`,
-  `qrPngDataUrl`, `copyInvoice`, `openWallet`, and
+- `@openreceive/browser`: `requestCheckoutInvoice`, `status`,
+  `lightningUri`, `qrSvg`, `qrPngDataUrl`, `copyInvoice`, `openWallet`, and
   `createCheckoutController`.
 - `@openreceive/react`: `Checkout`, `useCheckout`, `CheckoutProvider`,
   `ThemeScope`, `ThemeToggle`, `QRCode`, `CopyInvoiceButton`,
@@ -30,13 +30,15 @@ App-facing Node service input uses camelCase:
 
 ```ts
 await openreceive.createInvoice({
-  orderUuid: order.uuid,
-  fiat: {
-    currency: order.totalAmount.currency,
-    value: order.totalAmount.value
+  orderId: order.uuid,
+  amount: {
+    fiat: {
+      currency: order.totalAmount.currency,
+      value: order.totalAmount.value
+    }
   },
-  optionalInvoiceDescription: `Order ${order.number}`,
-  expiry: 600
+  memo: `Order ${order.number}`,
+  expiresInSeconds: 600
 });
 ```
 
@@ -47,28 +49,29 @@ For Bitcoin-denominated orders, use direct amount units instead of `fiat`:
 
 ```ts
 await openreceive.createInvoice({
-  orderUuid: order.uuid,
+  orderId: order.uuid,
   amount: {
-    currency: "BTC",
-    value: "0.005"
+    btc: {
+      currency: "BTC",
+      value: "0.005"
+    }
   },
-  optionalInvoiceDescription: `Order ${order.number}`,
-  expiry: 600
+  memo: `Order ${order.number}`,
+  expiresInSeconds: 600
 });
 
 await openreceive.createInvoice({
-  orderUuid: order.uuid,
+  orderId: order.uuid,
   amount: {
-    currency: "SATS",
-    value: "7000"
+    sats: "7000"
   },
-  optionalInvoiceDescription: `Order ${order.number}`,
-  expiry: 600
+  memo: `Order ${order.number}`,
+  expiresInSeconds: 600
 });
 ```
 
-`BTC`, `SAT`, and `SATS` are converted directly to `amount_msats`; they are not
-looked up in the configured price feeds.
+Direct BTC and satoshi amounts are converted directly to `amount_msats`; they
+are not looked up in the configured price feeds.
 
 `POST /openreceive/v1/invoices`
 
@@ -86,9 +89,10 @@ Use exactly one amount input:
 - `amount_msats`: integer from `1000` through `9007199254740991`.
 - `fiat`: `{ "currency": "USD", "value": "0.10" }` style decimal string.
 
-Optional fields include `optional_invoice_description` and `expiry`.
-`optional_invoice_description` becomes the BOLT11 invoice description and is
-limited to 500 characters.
+Optional HTTP wire fields include `optional_invoice_description`,
+`description_hash`, and `expiry`. In the Node SDK, `memo` maps to
+`optional_invoice_description` and `expiresInSeconds` maps to `expiry`. The
+memo becomes the BOLT11 invoice description and is limited to 500 characters.
 
 Responses:
 
@@ -112,19 +116,19 @@ payment verification. Use your app's route protection when status should not be
 public.
 
 The lookup response may include proof details, but app fulfillment still belongs
-in the server `onPaid` hook. A preimage alone is not settlement proof.
+in the backend settlement hook. A preimage alone is not settlement proof.
 
 ## Refresh Invoice
 
 `POST /openreceive/v1/invoices/{invoice_id}/refresh`
 
-Service input:
+App-facing Node service input:
 
-- `idempotency_key`: stable for the refresh operation.
+- `idempotencyKey`: stable for the refresh operation.
 
 If your app exposes this as an HTTP route, a common controller pattern is to
 read `Idempotency-Key` and pass it to `openreceive.refreshInvoice()` as
-`idempotency_key`. Refresh creates a linked replacement invoice after expiry or
+`idempotencyKey`. Refresh creates a linked replacement invoice after expiry or
 failure. It never mutates the old invoice in place. Settled invoices return
 `409`.
 

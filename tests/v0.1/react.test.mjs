@@ -743,7 +743,7 @@ test("React package exposes shared browser-owned checkout styles", () => {
     "utf8"
   );
 
-  assert.equal(manifest.exports["./styles.css"], "./src/styles.css");
+  assert.equal(manifest.exports["./styles.css"], "./dist/styles.css");
   assert.match(browserStyles, /\[data-openreceive-checkout\]/);
   assert.match(reactStyles, /@openreceive\/browser\/styles\.css/);
 });

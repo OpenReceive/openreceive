@@ -4,10 +4,10 @@ OpenReceive converts fiat amounts to sats at invoice creation time, then locks
 the quote on the invoice. The wallet still receives `amount_msats`; fiat values
 are only a quoting input.
 
-The static provider is the default for tests, docs, screenshots, and
-deterministic fixtures. Live servers read rates from two hard-coded Simple Price
-endpoints — a primary and a fallback — and cache the result in the OpenReceive
-database.
+`createOpenReceive()` defaults to a live cached price feed. It reads rates from
+two hard-coded Simple Price endpoints — a primary and a fallback — and caches
+the result in the OpenReceive database. Internal tests and deterministic
+fixtures can pass an explicit `StaticPriceProvider`.
 
 ## Supported Shape
 
@@ -64,8 +64,8 @@ An override must still serve the Simple Price shape above.
 When a server configured with the live feed boots, OpenReceive probes the feed
 once (primary, then fallback). **If neither the primary nor the fallback URL
 responds with a valid BTC fiat rate map, `createOpenReceive` throws and the
-server refuses to boot.** The probe also warms the cache. The static mock is not
-health-checked, so test and fixture configurations boot unaffected.
+server refuses to boot.** The probe also warms the cache. Explicit static test
+providers are not health-checked.
 
 A refresh keeps every well-formed currency the response carries and skips any
 single currency an upstream returns unusably, so one dropped currency does not
@@ -113,11 +113,10 @@ const openreceive = await createOpenReceive({
 });
 ```
 
-Use `@openreceive/core`'s `StaticPriceProvider` instead when a runtime should
-stay deterministic and offline (tests, screenshots, fake-wallet demos); it
-serves the static mock and is never boot-probed. The JS Hello Fruit demos wire
-the cached live feed for real-wallet runs and the static provider only in
-fake-wallet mode.
+Use `@openreceive/core`'s `StaticPriceProvider` only when an internal runtime
+should stay deterministic and offline, such as repository tests or screenshots.
+It serves static fixture rates and is never boot-probed. Public demos use a real
+receive-only NWC code and the cached live feed.
 
 `@openreceive/core` also exposes the lower-level pieces:
 `createCachedLivePriceFeed` (the same feed without env reads),
@@ -148,6 +147,6 @@ amounts convert directly to `amount_msats` and never call a price provider.
 - `source` on a quote is `static_mock`, `primary`, or `fallback`.
 
 Use `quoteFiatToMsatsWithPrice` when a live adapter supplied the BTC fiat price.
-Use `quoteFiatToMsats` for the deterministic static mock.
+Use `quoteFiatToMsats` for deterministic fixture-rate conversions.
 Use `quoteFiatToMsatsWithProvider` when a backend adapter wants the quote to
 carry the source id from the provider that supplied the rate.

@@ -1,7 +1,9 @@
 name: Release Dry Run
 
 on:
-  # Temporarily manual-only while CI is being stabilized.
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
 
 permissions:

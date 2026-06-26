@@ -20,16 +20,20 @@
   workflow safety validation.
 - Added idempotency, settlement action, rate, provider-route, route-boundary,
   and security regression coverage.
-- Added deterministic mock wallet tooling for non-payable conformance fixtures.
+- Kept deterministic internal testkit coverage for non-payable conformance
+  fixtures without shipping a public mock-wallet path.
 - Added OpenReceive Node Postgres pool setup for Hello Fruit demos and
   quarantined the copied Rails React skeleton until the Rails proof is green.
 - Simplified the app-facing API before release: `createOpenReceive()` now
   reads `OPENRECEIVE_NWC`, validates receive-only wallet access at boot,
-  initializes storage, and exposes service methods. Host apps own route
-  protection, settlement uses `onPaid`, browser invoice creation uses
-  `orderUuid`, `amountInSatoshis` or `fiat`, and
-  `optionalInvoiceDescription`, and app routes call those service methods from
-  app-owned controllers. Removed Node `init`/`doctor`, built-in
+  initializes storage, defaults to live cached price data, and exposes
+  service methods. Host apps own route protection, settlement uses backend
+  settlement hooks, browser invoice creation uses `requestCheckoutInvoice`,
+  Node invoice creation uses `orderId`, `idempotencyKey`, nested `amount`,
+  `memo`, and `expiresInSeconds`, and app routes call those service methods
+  from app-owned controllers. Added `openreceive` plus public
+  `@openreceive/core` and `@openreceive/node` package surfaces while keeping
+  `@openreceive/testkit` private. Removed Node `init`, built-in
   auth/CSRF/CORS/cron hooks, public mounted poll routes, public provider and
   route catalog endpoints, the old mount functions, Next dispatcher, legacy
   framework bridges, long browser/React names, and public

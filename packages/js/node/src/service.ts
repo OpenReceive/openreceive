@@ -3,7 +3,6 @@ import {
   InvoiceNotFoundError,
   OPENRECEIVE_PRICE_FEED_FALLBACK_URL_ENV,
   OPENRECEIVE_PRICE_FEED_PRIMARY_URL_ENV,
-  StaticPriceProvider,
   createCachedLivePriceFeed,
   createIdempotencyRequestHash,
   gatedLookup,
@@ -45,18 +44,22 @@ import {
 
 export type OpenReceiveLogLevel = "debug" | "info" | "warn" | "error";
 
-export interface OpenReceiveLogEntry {
+export interface OpenReceiveEvent {
   readonly level: OpenReceiveLogLevel;
   readonly event: string;
   readonly message: string;
   readonly [key: string]: unknown;
 }
 
+export type OpenReceiveEventHandler = (event: OpenReceiveEvent) => void;
+
+export interface OpenReceiveLogEntry extends OpenReceiveEvent {}
+
 export type OpenReceiveLogger = (entry: OpenReceiveLogEntry) => void;
 
 export interface OpenReceiveNodeSettlementActionInput {
   invoice: InvoiceStorageRow;
-  orderUuid: string;
+  orderId: string;
   metadata: Record<string, unknown>;
   source: "lookup" | "poll";
   lookup_invoice?: unknown;
@@ -73,6 +76,7 @@ export interface OpenReceiveNodeOptions {
   onPaid?: OpenReceiveNodeSettlementActionHook;
   priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
   priceCurrencies?: readonly string[];
+  onEvent?: OpenReceiveEventHandler;
   logger?: OpenReceiveLogger;
   clock?: () => number;
   lookupBurst?: number;
@@ -97,31 +101,71 @@ export interface CreateOpenReceiveOptions
   onPaid?: OpenReceiveNodeSettlementActionHook;
   loadSqlite?: ResolveOpenReceiveStoreOptions["loadSqlite"];
   loadPostgres?: ResolveOpenReceiveStoreOptions["loadPostgres"];
+  priceFetch?: SimplePriceFetch;
 }
 
 export interface OpenReceiveCreateInvoiceRequest {
-  readonly orderUuid: string;
-  readonly amount?: OpenReceiveBitcoinAmount;
-  readonly amount_sats?: number | string;
-  readonly amount_msats?: number | string;
-  readonly fiat?: OpenReceiveFiatAmount;
-  readonly optionalInvoiceDescription?: string;
-  readonly description?: string;
-  readonly description_hash?: string;
-  readonly expiry?: number | string;
+  readonly orderId: string;
+  readonly idempotencyKey?: string;
+  readonly amount: OpenReceiveCreateInvoiceAmount;
+  readonly memo?: string;
+  readonly descriptionHash?: string;
+  readonly expiresInSeconds?: number | string;
 }
 
+export type OpenReceiveCreateInvoiceAmount =
+  | { readonly btc: OpenReceiveBitcoinAmount }
+  | { readonly sats: number | string }
+  | { readonly msats: number | string }
+  | { readonly fiat: OpenReceiveFiatAmount };
+
 export interface OpenReceiveLookupInvoiceRequest {
-  readonly payment_hash?: string;
-  readonly invoice?: string;
+  readonly paymentHash?: string;
+  readonly bolt11?: string;
 }
 
 export interface OpenReceiveRefreshInvoiceRequest {
-  readonly idempotency_key: string;
+  readonly idempotencyKey: string;
   readonly reason?: string;
 }
 
 export interface OpenReceiveInvoice {
+  readonly invoiceId: string;
+  readonly type: "incoming";
+  readonly status: "pending" | "settled" | "expired" | "failed";
+  readonly transactionState: string;
+  readonly workflowState: string;
+  readonly bolt11: string;
+  readonly paymentHash: string;
+  readonly amountMsats: number;
+  readonly orderId: string;
+  readonly createdAt: number;
+  readonly expiresAt: number;
+  readonly settledAt?: number;
+  readonly settlementActionCompletedAt?: number;
+  readonly refreshedFromInvoiceId?: string;
+  readonly fiatQuote: OpenReceiveRateQuote | null;
+  readonly settlementActionState: string;
+}
+
+export interface OpenReceiveLookupInvoiceResult extends OpenReceiveInvoice {
+  readonly preimagePresent: boolean;
+  readonly walletLookupPerformed: boolean;
+}
+
+export interface OpenReceiveRefreshInvoiceResult {
+  readonly oldInvoiceId: string;
+  readonly newInvoiceId: string;
+  readonly reason: string;
+  readonly invoice: OpenReceiveInvoice;
+}
+
+export interface OpenReceivePollResult {
+  readonly invoiceIds: readonly string[];
+  readonly checked: number;
+}
+
+export interface OpenReceiveHttpInvoice {
   readonly invoice_id: string;
   readonly type: "incoming";
   readonly transaction_state: string;
@@ -139,21 +183,16 @@ export interface OpenReceiveInvoice {
   readonly settlement_action_state: string;
 }
 
-export interface OpenReceiveLookupInvoiceResult extends OpenReceiveInvoice {
+export interface OpenReceiveHttpLookupInvoiceResult extends OpenReceiveHttpInvoice {
   readonly preimage_present: boolean;
   readonly wallet_lookup_performed: boolean;
 }
 
-export interface OpenReceiveRefreshInvoiceResult {
+export interface OpenReceiveHttpRefreshInvoiceResult {
   readonly old_invoice_id: string;
   readonly new_invoice_id: string;
   readonly reason: string;
-  readonly invoice: OpenReceiveInvoice;
-}
-
-export interface OpenReceivePollResult {
-  readonly invoice_ids: readonly string[];
-  readonly checked: number;
+  readonly invoice: OpenReceiveHttpInvoice;
 }
 
 export interface OpenReceive {
@@ -185,6 +224,33 @@ export class OpenReceiveServiceError extends Error {
   }
 }
 
+export type OpenReceiveConfigErrorCode =
+  | "MISSING_NWC"
+  | "INVALID_NWC"
+  | "WALLET_PREFLIGHT_FAILED"
+  | "STORE_UNAVAILABLE"
+  | "UNSAFE_MEMORY_STORE"
+  | "UNHEALTHY_PRICE_DATA";
+
+export class OpenReceiveConfigError extends Error {
+  readonly code: OpenReceiveConfigErrorCode;
+  readonly hint: string;
+  override readonly cause?: unknown;
+
+  constructor(input: {
+    readonly code: OpenReceiveConfigErrorCode;
+    readonly message: string;
+    readonly hint: string;
+    readonly cause?: unknown;
+  }) {
+    super(input.message);
+    this.name = "OpenReceiveConfigError";
+    this.code = input.code;
+    this.hint = input.hint;
+    this.cause = input.cause;
+  }
+}
+
 interface OpenReceiveServiceContext {
   readonly options: OpenReceiveNodeOptions;
   readonly store: OpenReceiveInvoiceKvStore;
@@ -205,18 +271,10 @@ export async function createOpenReceive(
   options: CreateOpenReceiveOptions = {}
 ): Promise<OpenReceive> {
   const namespace = readOpenReceiveNamespace(options.namespace);
-  const client = options.client ?? createNwcReceiveClient({
-    connectionString: readOpenReceiveNwc(options.nwc)
-  });
-  await client.preflight();
+  const client = createConfiguredClient(options);
+  await preflightConfiguredClient(client);
 
-  const store = options.store ?? await resolveOpenReceiveStore(options.storeUri, {
-    cwd: options.cwd,
-    namespace,
-    loadSqlite: options.loadSqlite,
-    loadPostgres: options.loadPostgres
-  });
-  await ensureOpenReceiveStoreSchema(store);
+  const store = await resolveConfiguredStore(options, namespace);
 
   const nodeOptions: OpenReceiveNodeOptions = {
     ...options,
@@ -225,14 +283,22 @@ export async function createOpenReceive(
     namespace,
     onPaid: options.onPaid
   };
-  assertDurableStoreConfiguration(nodeOptions);
+  assertDurableStoreConfiguration(nodeOptions, options.storeUri);
+  const priceCurrencies = options.priceCurrencies ?? ["USD"];
+  const priceProviders = options.priceProviders ??
+    [createOpenReceivePriceFeed({
+      store,
+      currencies: priceCurrencies,
+      fetch: options.priceFetch,
+      clock: options.clock
+    })];
 
   const context: OpenReceiveServiceContext = {
     options: nodeOptions,
     store,
     clock: options.clock ?? currentUnixSeconds,
-    priceProviders: options.priceProviders ?? [new StaticPriceProvider()],
-    priceCurrencies: options.priceCurrencies ?? ["USD"]
+    priceProviders,
+    priceCurrencies
   };
 
   await assertPriceFeedBootHealthy(context);
@@ -293,9 +359,9 @@ async function createInvoice(
   context: OpenReceiveServiceContext,
   input: OpenReceiveCreateInvoiceRequest
 ): Promise<OpenReceiveInvoice> {
-  const body = normalizeCreateInvoiceRequest(asRecord(input));
-  const orderUuid = parseCreateOrderUuid(body);
-  const idempotencyKey = orderUuid;
+  const body = createWireCreateInvoiceRequest(input);
+  const orderId = parseCreateOrderId(body);
+  const idempotencyKey = input.idempotencyKey ?? orderId;
   const namespaceScope = context.options.namespace ?? readOpenReceiveNamespace(undefined);
   const operation = "invoice.create" as const;
   const idempotencyScope: OpenReceiveIdempotencyScope = {
@@ -362,7 +428,7 @@ async function createInvoice(
         created_at: createdAt,
         expires_at: normalizedExpiresAt,
         metadata: {
-          order_uuid: orderUuid
+          order_uuid: orderId
         },
         fiat_quote: resolvedAmount.fiat_quote === null
           ? null
@@ -388,7 +454,7 @@ async function lookupInvoice(
   context: OpenReceiveServiceContext,
   input: OpenReceiveLookupInvoiceRequest
 ): Promise<OpenReceiveLookupInvoiceResult> {
-  const body = asRecord(input);
+  const body = createWireLookupInvoiceRequest(input);
   const record = await findLookupRecord(context.store, body);
   emitLog(context.options, "info", "invoice.lookup.requested", "Refreshing invoice status through the gated wallet lookup path.", invoiceLogFields(record.row));
 
@@ -405,8 +471,17 @@ async function lookupInvoice(
 
   return {
     ...serializeInvoice(result.record.row),
-    preimage_present: result.lookup_invoice?.preimage !== undefined,
-    wallet_lookup_performed: result.lookup_invoice !== undefined
+    preimagePresent: result.lookup_invoice?.preimage !== undefined,
+    walletLookupPerformed: result.lookup_invoice !== undefined
+  };
+}
+
+function createWireLookupInvoiceRequest(
+  input: OpenReceiveLookupInvoiceRequest
+): Record<string, unknown> {
+  return {
+    ...(input.paymentHash === undefined ? {} : { payment_hash: input.paymentHash }),
+    ...(input.bolt11 === undefined ? {} : { invoice: input.bolt11 })
   };
 }
 
@@ -428,9 +503,9 @@ async function refreshInvoice(
   }
 
   const request = asRecord(input);
-  const idempotencyKey = optionalString(request.idempotency_key);
+  const idempotencyKey = optionalString(request.idempotencyKey);
   if (idempotencyKey === undefined) {
-    throw serviceError(400, "INVALID_REQUEST", "idempotency_key is required.");
+    throw serviceError(400, "INVALID_REQUEST", "idempotencyKey is required.");
   }
 
   const body = {
@@ -508,7 +583,7 @@ async function pollOpenReceive(
 ): Promise<OpenReceivePollResult> {
   const result = await reconcileOnce(reconcileOptions(context));
   return {
-    invoice_ids: result.invoice_ids,
+    invoiceIds: result.invoice_ids,
     checked: result.checked
   };
 }
@@ -575,6 +650,63 @@ function normalizeOpenReceiveServiceError(error: unknown): unknown {
   return error;
 }
 
+function createConfiguredClient(
+  options: CreateOpenReceiveOptions
+): OpenReceiveReceiveNwcClient {
+  if (options.client !== undefined) return options.client;
+  try {
+    return createNwcReceiveClient({
+      connectionString: readOpenReceiveNwc(options.nwc)
+    });
+  } catch (error) {
+    if (error instanceof OpenReceiveConfigError) throw error;
+    throw new OpenReceiveConfigError({
+      code: "INVALID_NWC",
+      message: "OpenReceive NWC configuration is invalid.",
+      hint: "Set OPENRECEIVE_NWC to a receive-only nostr+walletconnect URI from your wallet.",
+      cause: error
+    });
+  }
+}
+
+async function preflightConfiguredClient(
+  client: OpenReceiveReceiveNwcClient
+): Promise<void> {
+  try {
+    await client.preflight();
+  } catch (error) {
+    throw new OpenReceiveConfigError({
+      code: "WALLET_PREFLIGHT_FAILED",
+      message: "OpenReceive wallet preflight failed.",
+      hint: "Check that OPENRECEIVE_NWC is receive-only, reachable, and advertises make_invoice plus lookup_invoice.",
+      cause: error
+    });
+  }
+}
+
+async function resolveConfiguredStore(
+  options: CreateOpenReceiveOptions,
+  namespace: string
+): Promise<OpenReceiveInvoiceKvStore> {
+  try {
+    const store = options.store ?? await resolveOpenReceiveStore(options.storeUri, {
+      cwd: options.cwd,
+      namespace,
+      loadSqlite: options.loadSqlite,
+      loadPostgres: options.loadPostgres
+    });
+    await ensureOpenReceiveStoreSchema(store);
+    return store;
+  } catch (error) {
+    throw new OpenReceiveConfigError({
+      code: "STORE_UNAVAILABLE",
+      message: "OpenReceive store is unavailable.",
+      hint: "Check OPENRECEIVE_STORE, database credentials, migrations, and the configured namespace.",
+      cause: error
+    });
+  }
+}
+
 function isStatusCodeError(
   error: unknown
 ): error is Error & { readonly status: number; readonly code: OpenReceiveErrorCode } {
@@ -588,7 +720,11 @@ function isStatusCodeError(
 function readOpenReceiveNwc(configured: string | undefined): string {
   const nwc = configured ?? globalThis.process?.env?.OPENRECEIVE_NWC;
   if (nwc === undefined || nwc.trim().length === 0) {
-    throw new Error(formatOpenReceiveMissingNwcMessage());
+    throw new OpenReceiveConfigError({
+      code: "MISSING_NWC",
+      message: formatOpenReceiveMissingNwcMessage(),
+      hint: "Create a receive-only NWC connection in your wallet and set OPENRECEIVE_NWC on the server."
+    });
   }
 
   return nwc;
@@ -597,7 +733,11 @@ function readOpenReceiveNwc(configured: string | undefined): string {
 function readOpenReceiveNamespace(configured: string | undefined): string {
   const namespace = configured ?? globalThis.process?.env?.OPENRECEIVE_NAMESPACE ?? "default";
   if (namespace.trim().length === 0) {
-    throw new Error("OPENRECEIVE_NAMESPACE must not be empty.");
+    throw new OpenReceiveConfigError({
+      code: "STORE_UNAVAILABLE",
+      message: "OPENRECEIVE_NAMESPACE must not be empty.",
+      hint: "Set OPENRECEIVE_NAMESPACE to a stable non-empty app namespace, or omit it to use default."
+    });
   }
   return namespace;
 }
@@ -636,7 +776,7 @@ function reconcileOptions(context: OpenReceiveServiceContext) {
       // dedupe fulfillment by invoice.payment_hash or their own order id.
       await context.options.onPaid?.({
         invoice: input.invoice,
-        orderUuid: input.invoice.idempotency_key,
+        orderId: readStoredOrderId(input.invoice),
         metadata: input.metadata,
         source: input.source,
         lookup_invoice: input.lookup_invoice
@@ -696,8 +836,8 @@ function serializeRefreshResult(input: {
   reason: string;
 }): OpenReceiveRefreshInvoiceResult {
   return {
-    old_invoice_id: input.oldInvoice.invoice_id,
-    new_invoice_id: input.newInvoice.invoice_id,
+    oldInvoiceId: input.oldInvoice.invoice_id,
+    newInvoiceId: input.newInvoice.invoice_id,
     reason: input.reason,
     invoice: serializeInvoice(input.newInvoice)
   };
@@ -705,23 +845,95 @@ function serializeRefreshResult(input: {
 
 function serializeInvoice(row: InvoiceStorageRow): OpenReceiveInvoice {
   return {
-    invoice_id: row.invoice_id,
+    invoiceId: row.invoice_id,
     type: "incoming",
-    transaction_state: row.transaction_state,
-    workflow_state: row.workflow_state,
-    invoice: row.invoice,
-    payment_hash: row.payment_hash,
-    amount_msats: row.amount_msats,
-    order_uuid: row.idempotency_key,
-    created_at: row.created_at,
-    expires_at: row.expires_at,
-    ...(row.settled_at === undefined ? {} : { settled_at: row.settled_at }),
-    ...(row.settlement_action_completed_at === undefined ? {} : { settlement_action_completed_at: row.settlement_action_completed_at }),
+    status: deriveInvoiceStatus(row),
+    transactionState: row.transaction_state,
+    workflowState: row.workflow_state,
+    bolt11: row.invoice,
+    paymentHash: row.payment_hash,
+    amountMsats: row.amount_msats,
+    orderId: readStoredOrderId(row),
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+    ...(row.settled_at === undefined ? {} : { settledAt: row.settled_at }),
+    ...(row.settlement_action_completed_at === undefined
+      ? {}
+      : { settlementActionCompletedAt: row.settlement_action_completed_at }),
     ...(row.refreshed_from_invoice_id === undefined
       ? {}
-      : { refreshed_from_invoice_id: row.refreshed_from_invoice_id }),
-    fiat_quote: (row.fiat_quote ?? null) as OpenReceiveRateQuote | null,
-    settlement_action_state: row.settlement_action_state
+      : { refreshedFromInvoiceId: row.refreshed_from_invoice_id }),
+    fiatQuote: (row.fiat_quote ?? null) as OpenReceiveRateQuote | null,
+    settlementActionState: row.settlement_action_state
+  };
+}
+
+function deriveInvoiceStatus(
+  row: InvoiceStorageRow
+): OpenReceiveInvoice["status"] {
+  if (row.settled_at !== undefined || row.transaction_state === "settled") {
+    return "settled";
+  }
+  if (row.transaction_state === "expired" || row.workflow_state === "expired_closed") {
+    return "expired";
+  }
+  if (row.transaction_state === "failed" || row.workflow_state === "failed_closed") {
+    return "failed";
+  }
+  return "pending";
+}
+
+function readStoredOrderId(row: InvoiceStorageRow): string {
+  const orderId = row.metadata.order_uuid;
+  return typeof orderId === "string" && orderId.length > 0
+    ? orderId
+    : row.idempotency_key;
+}
+
+export function toOpenReceiveHttpInvoice(
+  invoice: OpenReceiveInvoice
+): OpenReceiveHttpInvoice {
+  return {
+    invoice_id: invoice.invoiceId,
+    type: "incoming",
+    transaction_state: invoice.transactionState,
+    workflow_state: invoice.workflowState,
+    invoice: invoice.bolt11,
+    payment_hash: invoice.paymentHash,
+    amount_msats: invoice.amountMsats,
+    order_uuid: invoice.orderId,
+    created_at: invoice.createdAt,
+    expires_at: invoice.expiresAt,
+    ...(invoice.settledAt === undefined ? {} : { settled_at: invoice.settledAt }),
+    ...(invoice.settlementActionCompletedAt === undefined
+      ? {}
+      : { settlement_action_completed_at: invoice.settlementActionCompletedAt }),
+    ...(invoice.refreshedFromInvoiceId === undefined
+      ? {}
+      : { refreshed_from_invoice_id: invoice.refreshedFromInvoiceId }),
+    fiat_quote: invoice.fiatQuote,
+    settlement_action_state: invoice.settlementActionState
+  };
+}
+
+export function toOpenReceiveHttpLookupInvoiceResult(
+  lookup: OpenReceiveLookupInvoiceResult
+): OpenReceiveHttpLookupInvoiceResult {
+  return {
+    ...toOpenReceiveHttpInvoice(lookup),
+    preimage_present: lookup.preimagePresent,
+    wallet_lookup_performed: lookup.walletLookupPerformed
+  };
+}
+
+export function toOpenReceiveHttpRefreshInvoiceResult(
+  refresh: OpenReceiveRefreshInvoiceResult
+): OpenReceiveHttpRefreshInvoiceResult {
+  return {
+    old_invoice_id: refresh.oldInvoiceId,
+    new_invoice_id: refresh.newInvoiceId,
+    reason: refresh.reason,
+    invoice: toOpenReceiveHttpInvoice(refresh.invoice)
   };
 }
 
@@ -748,21 +960,29 @@ function emitLog(
   message: string,
   fields: Record<string, unknown> = {}
 ): void {
-  if (options.logger === undefined) return;
+  if (options.onEvent === undefined && options.logger === undefined) return;
+
+  const sanitized = sanitizeOpenReceiveEvent({
+    level,
+    event,
+    message,
+    ...fields
+  });
 
   try {
-    options.logger(sanitizeLogEntry({
-      level,
-      event,
-      message,
-      ...fields
-    }));
+    options.onEvent?.(sanitized);
+  } catch {
+    // Diagnostics must never change payment, settlement, or settlement-action behavior.
+  }
+
+  try {
+    options.logger?.(sanitized);
   } catch {
     // Logging must never change payment, settlement, or settlement-action behavior.
   }
 }
 
-function sanitizeLogEntry(entry: OpenReceiveLogEntry): OpenReceiveLogEntry {
+function sanitizeOpenReceiveEvent(entry: OpenReceiveEvent): OpenReceiveEvent {
   const clean: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(entry)) {
     if (isSensitiveLogKey(key)) {
@@ -771,7 +991,7 @@ function sanitizeLogEntry(entry: OpenReceiveLogEntry): OpenReceiveLogEntry {
       clean[key] = sanitizeLogValue(value);
     }
   }
-  return clean as OpenReceiveLogEntry;
+  return clean as OpenReceiveEvent;
 }
 
 function sanitizeLogValue(value: unknown): unknown {
@@ -819,7 +1039,7 @@ async function resolveCreateAmount(input: {
     throw serviceError(
       400,
       "INVALID_REQUEST",
-      "Create invoice request requires exactly one of amount, amount_sats, amount_msats, or fiat."
+      "Create invoice request requires exactly one of amount.btc, amount.sats, amount.msats, or amount.fiat."
     );
   }
 
@@ -840,11 +1060,11 @@ async function resolveCreateAmount(input: {
   if (hasAmountSats) {
     const amountSats = optionalSafeInteger(body.amount_sats);
     if (amountSats === undefined) {
-      throw serviceError(400, "INVALID_REQUEST", "amount_sats must be a safe integer.");
+      throw serviceError(400, "INVALID_REQUEST", "amount.sats must be a safe integer.");
     }
     const amountMsats = amountSats * 1000;
     if (!Number.isSafeInteger(amountMsats)) {
-      throw serviceError(400, "INVALID_REQUEST", "amount_sats is outside the safe integer boundary.");
+      throw serviceError(400, "INVALID_REQUEST", "amount.sats is outside the safe integer boundary.");
     }
     return {
       amount_msats: amountMsats,
@@ -856,7 +1076,7 @@ async function resolveCreateAmount(input: {
   if (hasAmountMsats) {
     const amountMsats = optionalSafeInteger(body.amount_msats);
     if (amountMsats === undefined) {
-      throw serviceError(400, "INVALID_REQUEST", "amount_msats must be a safe integer.");
+      throw serviceError(400, "INVALID_REQUEST", "amount.msats must be a safe integer.");
     }
     return {
       amount_msats: amountMsats,
@@ -976,8 +1196,8 @@ function readPriceFeedUrlEnv(name: string): string | undefined {
   return value.trim();
 }
 
-// Refuses to boot when a configured live price feed cannot answer. The static
-// mock has no health check, so test/fixture configurations boot unaffected.
+// Refuses to boot when a configured live price feed cannot answer. Internal
+// tests can pass explicit non-health-checking providers.
 async function assertPriceFeedBootHealthy(
   context: OpenReceiveServiceContext
 ): Promise<void> {
@@ -986,13 +1206,12 @@ async function assertPriceFeedBootHealthy(
     try {
       await provider.healthCheck(context.priceCurrencies);
     } catch (error) {
-      throw new Error(
-        "OpenReceive refuses to boot: neither the primary nor the fallback price " +
-          "feed responded with a valid BTC fiat rate map. Set " +
-          `${OPENRECEIVE_PRICE_FEED_PRIMARY_URL_ENV} or ` +
-          `${OPENRECEIVE_PRICE_FEED_FALLBACK_URL_ENV} to override the feed URLs. ` +
-          (error instanceof Error ? error.message : String(error))
-      );
+      throw new OpenReceiveConfigError({
+        code: "UNHEALTHY_PRICE_DATA",
+        message: "OpenReceive refuses to boot because live price data is unhealthy.",
+        hint: "Ensure the primary or fallback BTC fiat price feed can refresh, or configure explicit internal test priceProviders.",
+        cause: error
+      });
     }
   }
 }
@@ -1010,70 +1229,63 @@ function mapPriceError(error: unknown): OpenReceiveServiceError {
   );
 }
 
-function normalizeCreateInvoiceRequest(body: Record<string, unknown>): Record<string, unknown> {
-  const orderUuid = optionalString(body.orderUuid);
-  const legacyOrderUuid = optionalString(body.order_uuid);
-  if (orderUuid !== undefined && legacyOrderUuid !== undefined && orderUuid !== legacyOrderUuid) {
+function createWireCreateInvoiceRequest(
+  input: OpenReceiveCreateInvoiceRequest
+): Record<string, unknown> {
+  const body = asRecord(input);
+  const orderId = optionalString(body.orderId);
+  if (orderId === undefined) {
+    throw serviceError(400, "INVALID_REQUEST", "orderId is required.");
+  }
+
+  const amount = asRecord(body.amount);
+  const amountKeys = ["btc", "sats", "msats", "fiat"]
+    .filter((key) => amount[key] !== undefined);
+  if (amountKeys.length !== 1) {
     throw serviceError(
       400,
       "INVALID_REQUEST",
-      "Create invoice request accepts only one of orderUuid or order_uuid."
+      "Create invoice request requires exactly one amount source: amount.btc, amount.sats, amount.msats, or amount.fiat."
     );
   }
 
-  const optionalInvoiceDescription = optionalString(body.optionalInvoiceDescription);
-  const legacyOptionalInvoiceDescription = optionalString(body.optional_invoice_description);
-  if (
-    optionalInvoiceDescription !== undefined &&
-    legacyOptionalInvoiceDescription !== undefined &&
-    optionalInvoiceDescription !== legacyOptionalInvoiceDescription
-  ) {
-    throw serviceError(
-      400,
-      "INVALID_REQUEST",
-      "Create invoice request accepts only one of optionalInvoiceDescription or optional_invoice_description."
-    );
-  }
+  const memo = optionalString(body.memo);
+  const descriptionHash = optionalString(body.descriptionHash);
 
-  const resolvedOrderUuid = orderUuid ?? legacyOrderUuid;
-  const resolvedOptionalInvoiceDescription =
-    optionalInvoiceDescription ?? legacyOptionalInvoiceDescription;
-  const normalized: Record<string, unknown> = {
-    ...body,
-    ...(resolvedOrderUuid === undefined ? {} : { order_uuid: resolvedOrderUuid }),
-    ...(resolvedOptionalInvoiceDescription === undefined
-      ? {}
-      : { optional_invoice_description: resolvedOptionalInvoiceDescription })
+  return {
+    order_uuid: orderId,
+    ...(amount.btc === undefined ? {} : { amount: amount.btc }),
+    ...(amount.sats === undefined ? {} : { amount_sats: amount.sats }),
+    ...(amount.msats === undefined ? {} : { amount_msats: amount.msats }),
+    ...(amount.fiat === undefined ? {} : { fiat: amount.fiat }),
+    ...(memo === undefined ? {} : { optional_invoice_description: memo }),
+    ...(descriptionHash === undefined ? {} : { description_hash: descriptionHash }),
+    ...(body.expiresInSeconds === undefined ? {} : { expiry: body.expiresInSeconds })
   };
-
-  delete normalized.orderUuid;
-  delete normalized.optionalInvoiceDescription;
-
-  return normalized;
 }
 
 function getCreateDescriptionFields(body: Record<string, unknown>): {
   readonly description?: string;
   readonly description_hash?: string;
 } {
-  const optionalInvoiceDescription = optionalString(body.optional_invoice_description);
+  const wireMemo = optionalString(body.optional_invoice_description);
   const description = optionalString(body.description);
   const descriptionHash = optionalString(body.description_hash);
 
-  if (optionalInvoiceDescription !== undefined && description !== undefined) {
+  if (wireMemo !== undefined && description !== undefined) {
     throw serviceError(
       400,
       "INVALID_REQUEST",
-      "Create invoice request accepts only one of optionalInvoiceDescription or description."
+      "Create invoice request accepts only one of memo or description."
     );
   }
 
-  const resolvedDescription = optionalInvoiceDescription ?? description;
+  const resolvedDescription = wireMemo ?? description;
   if (resolvedDescription !== undefined && resolvedDescription.length > 500) {
     throw serviceError(
       400,
       "INVALID_REQUEST",
-      "optionalInvoiceDescription must be 500 characters or fewer."
+      "memo must be 500 characters or fewer."
     );
   }
 
@@ -1081,7 +1293,7 @@ function getCreateDescriptionFields(body: Record<string, unknown>): {
     throw serviceError(
       400,
       "INVALID_REQUEST",
-      "Create invoice request accepts only one of optionalInvoiceDescription or description_hash."
+      "Create invoice request accepts only one of memo or descriptionHash."
     );
   }
 
@@ -1089,7 +1301,7 @@ function getCreateDescriptionFields(body: Record<string, unknown>): {
     throw serviceError(
       400,
       "INVALID_REQUEST",
-      "description_hash must be 64 hex characters."
+      "descriptionHash must be 64 hex characters."
     );
   }
 
@@ -1099,15 +1311,15 @@ function getCreateDescriptionFields(body: Record<string, unknown>): {
   };
 }
 
-function parseCreateOrderUuid(body: Record<string, unknown>): string {
-  const orderUuid = optionalString(body.order_uuid);
-  if (orderUuid === undefined) {
-    throw serviceError(400, "INVALID_REQUEST", "orderUuid is required.");
+function parseCreateOrderId(body: Record<string, unknown>): string {
+  const orderId = optionalString(body.order_uuid);
+  if (orderId === undefined) {
+    throw serviceError(400, "INVALID_REQUEST", "orderId is required.");
   }
-  if (orderUuid.length > 200) {
-    throw serviceError(400, "INVALID_REQUEST", "orderUuid must be 200 characters or fewer.");
+  if (orderId.length > 200) {
+    throw serviceError(400, "INVALID_REQUEST", "orderId must be 200 characters or fewer.");
   }
-  return orderUuid;
+  return orderId;
 }
 
 function isRefreshableInvoice(invoice: InvoiceStorageRow): boolean {
@@ -1160,21 +1372,37 @@ async function requireStoredRecord(
 }
 
 function assertDurableStoreConfiguration(
-  options: OpenReceiveNodeOptions
+  options: OpenReceiveNodeOptions,
+  configuredStoreUri: string | undefined
 ): void {
   const env = globalThis.process?.env ?? {};
   const mode = (env.OPENRECEIVE_MODE ?? env.NODE_ENV ?? "").toLowerCase();
   if (mode !== "production") return;
 
-  if (options.store !== undefined && !(options.store instanceof InMemoryInvoiceKvStore)) {
+  const storeUri = configuredStoreUri ?? env.OPENRECEIVE_STORE;
+  if (
+    !isMemoryStore(options.store) &&
+    !isMemoryStoreUri(storeUri)
+  ) {
     return;
   }
 
-  throw new Error(
-    "OpenReceive refuses to use InMemoryInvoiceKvStore when " +
-      "OPENRECEIVE_MODE or NODE_ENV is production. Configure a durable " +
-      "OpenReceive store such as Postgres, SQLite, or local-sqlite."
-  );
+  throw new OpenReceiveConfigError({
+    code: "UNSAFE_MEMORY_STORE",
+    message: "OpenReceive refuses to use InMemoryInvoiceKvStore in production.",
+    hint: "Configure a durable OpenReceive store such as Postgres, SQLite, or local-sqlite before setting NODE_ENV=production."
+  });
+}
+
+function isMemoryStore(store: OpenReceiveInvoiceKvStore | undefined): boolean {
+  if (store === undefined) return false;
+  return store instanceof InMemoryInvoiceKvStore ||
+    store.constructor?.name === "InMemoryInvoiceKvStore";
+}
+
+function isMemoryStoreUri(uri: string | undefined): boolean {
+  const normalized = uri?.trim();
+  return normalized === "memory:" || normalized === "memory";
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

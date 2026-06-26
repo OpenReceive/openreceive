@@ -86,7 +86,7 @@ export default function CheckoutClient({
     .filter((item) => item.quantity > 0);
   const cartQuantity = cartItems.reduce((total, item) => total + item.quantity, 0);
 
-  const onPaid = useCallback(() => {
+  const onSettled = useCallback(() => {
     if (checkout !== undefined && completedInvoiceRef.current !== checkout.invoice_id) {
       completedInvoiceRef.current = checkout.invoice_id;
       setOrder((current) => current === undefined
@@ -114,7 +114,7 @@ export default function CheckoutClient({
 
   async function createOrder() {
     if (cartItems.length === 0) return;
-    const orderUuid = globalThis.crypto?.randomUUID?.() ??
+    const orderId = globalThis.crypto?.randomUUID?.() ??
       `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
     setStatus("creating");
@@ -129,7 +129,7 @@ export default function CheckoutClient({
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          idempotency_key: orderUuid,
+          idempotency_key: orderId,
           currency,
           cart: cartItems.map((item) => ({
             product_id: item.fruit.id,
@@ -296,7 +296,7 @@ export default function CheckoutClient({
             onError={(cause) => {
               setError(cause instanceof Error ? cause.message : String(cause));
             }}
-            onPaid={onPaid}
+            onSettled={onSettled}
             onStartOver={startOver}
             classNames={{
               root: "react-checkout",

@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  InMemoryInvoiceKvStore
+  InMemoryInvoiceKvStore,
+  StaticPriceProvider
 } from "../../packages/js/core/src/index.ts";
 import {
+  OpenReceiveConfigError,
   OpenReceiveServiceError,
   createOpenReceive
 } from "../../packages/js/node/src/index.ts";
@@ -69,6 +71,7 @@ async function createHarness(overrides = {}) {
     namespace: "demo_hello_fruit",
     clock: () => 1000,
     backgroundSweep: false,
+    priceProviders: [new StaticPriceProvider()],
     ...overrides
   });
 
@@ -78,18 +81,75 @@ async function createHarness(overrides = {}) {
 test("create invoice uses idempotency replay without a second wallet call", async () => {
   const { wallet, openreceive } = await createHarness();
   const request = {
-    orderUuid: "order-1",
-    amount_msats: 200000,
-    optionalInvoiceDescription: "Fruit sticker",
-    expiry: 600
+    orderId: "order-1",
+    amount: { msats: 200000 },
+    memo: "Fruit sticker",
+    expiresInSeconds: 600
   };
 
   const first = await openreceive.createInvoice(request);
-  assert.equal(first.transaction_state, "pending");
+  assert.equal(first.transactionState, "pending");
+  assert.equal(first.status, "pending");
+  assert.equal(first.orderId, "order-1");
+  assert.equal(first.amountMsats, 200000);
 
   const second = await openreceive.createInvoice(request);
-  assert.equal(second.invoice_id, first.invoice_id);
+  assert.equal(second.invoiceId, first.invoiceId);
   assert.equal(wallet.makeInvoiceCalls, 1);
+});
+
+test("createOpenReceive defaults to live cached price data and fails unhealthy boot", async () => {
+  const store = new InMemoryInvoiceKvStore();
+
+  await assert.rejects(
+    () => createOpenReceive({
+      client: new FakeWallet(),
+      store,
+      namespace: "demo_hello_fruit",
+      backgroundSweep: false,
+      priceFetch: async () => ({
+        ok: false,
+        status: 503,
+        text: async () => "{}"
+      })
+    }),
+    (error) => {
+      assert.equal(error instanceof OpenReceiveConfigError, true);
+      assert.equal(error.code, "UNHEALTHY_PRICE_DATA");
+      return true;
+    }
+  );
+});
+
+test("diagnostic events and logger entries are sanitized and non-blocking", async () => {
+  const events = [];
+  const logs = [];
+  const wallet = new FakeWallet();
+  wallet.makeInvoiceError = new Error("wallet failed with https://example.test/path?token=abc123&ok=1");
+  const { openreceive } = await createHarness({
+    client: wallet,
+    onEvent: (event) => {
+      events.push(event);
+      if (event.event === "service.error") throw new Error("event sink is down");
+    },
+    logger: (entry) => logs.push(entry)
+  });
+
+  await assert.rejects(
+    () => openreceive.createInvoice({
+      orderId: "order-diagnostics",
+      amount: { msats: 200000 },
+      memo: "Fruit sticker"
+    }),
+    /token=abc123/
+  );
+
+  const event = events.find((entry) => entry.event === "service.error");
+  const log = logs.find((entry) => entry.event === "service.error");
+  assert.equal(event.error_message.includes("token=[REDACTED]"), true);
+  assert.equal(log.error_message.includes("token=[REDACTED]"), true);
+  assert.equal(String(event.error_message).includes("abc123"), false);
+  assert.equal(String(log.error_message).includes("abc123"), false);
 });
 
 test("create invoice does not expose a wallet expiry longer than requested", async () => {
@@ -97,30 +157,30 @@ test("create invoice does not expose a wallet expiry longer than requested", asy
   wallet.expiresAt = 4600;
 
   const invoice = await openreceive.createInvoice({
-    orderUuid: "order-short-expiry",
-    amount_msats: 200000,
-    optionalInvoiceDescription: "Fruit sticker",
-    expiry: 600
+    orderId: "order-short-expiry",
+    amount: { msats: 200000 },
+    memo: "Fruit sticker",
+    expiresInSeconds: 600
   });
 
-  assert.equal(invoice.created_at, 1000);
-  assert.equal(invoice.expires_at, 1600);
+  assert.equal(invoice.createdAt, 1000);
+  assert.equal(invoice.expiresAt, 1600);
 });
 
 test("create invoice rejects idempotency key reuse with a different body", async () => {
   const { wallet, openreceive } = await createHarness();
 
   await openreceive.createInvoice({
-    orderUuid: "order-create-conflict",
-    amount_msats: 200000,
-    optionalInvoiceDescription: "Fruit sticker"
+    orderId: "order-create-conflict",
+    amount: { msats: 200000 },
+    memo: "Fruit sticker"
   });
 
   await assertServiceError(
     () => openreceive.createInvoice({
-      orderUuid: "order-create-conflict",
-      amount_msats: 300000,
-      optionalInvoiceDescription: "Fruit sticker"
+      orderId: "order-create-conflict",
+      amount: { msats: 300000 },
+      memo: "Fruit sticker"
     }),
     {
       status: 409,
@@ -150,18 +210,20 @@ test("create invoice quotes fiat with configured price providers", async () => {
   });
 
   const invoice = await openreceive.createInvoice({
-    orderUuid: "order-live-rate",
-    fiat: {
-      currency: "USD",
-      value: "0.05"
+    orderId: "order-live-rate",
+    amount: {
+      fiat: {
+        currency: "USD",
+        value: "0.05"
+      }
     },
-    optionalInvoiceDescription: "Fruit sticker"
+    memo: "Fruit sticker"
   });
 
-  assert.equal(invoice.amount_msats, 50000);
-  assert.equal(invoice.fiat_quote.amount_msats, 50000);
-  assert.equal(invoice.fiat_quote.btc_fiat_price, "100000.00");
-  assert.equal(invoice.fiat_quote.source, "primary");
+  assert.equal(invoice.amountMsats, 50000);
+  assert.equal(invoice.fiatQuote.amount_msats, 50000);
+  assert.equal(invoice.fiatQuote.btc_fiat_price, "100000.00");
+  assert.equal(invoice.fiatQuote.source, "primary");
   assert.equal(wallet.makeInvoiceCalls, 1);
   assert.deepEqual(calls, [["USD"]]);
 });
@@ -181,28 +243,29 @@ test("create invoice accepts BTC and SATS amounts without price providers", asyn
   });
 
   const btcInvoice = await btcHarness.openreceive.createInvoice({
-    orderUuid: "order-btc",
+    orderId: "order-btc",
     amount: {
-      currency: "BTC",
-      value: "0.005"
+      btc: {
+        currency: "BTC",
+        value: "0.005"
+      }
     },
-    optionalInvoiceDescription: "BTC amount"
+    memo: "BTC amount"
   });
-  assert.equal(btcInvoice.amount_msats, 500000000);
+  assert.equal(btcInvoice.amountMsats, 500000000);
 
   const satsHarness = await createHarness({
     priceProviders: [provider],
     priceCurrencies: ["USD"]
   });
   const satsInvoice = await satsHarness.openreceive.createInvoice({
-    orderUuid: "order-sats",
+    orderId: "order-sats",
     amount: {
-      currency: "SATS",
-      value: "7000"
+      sats: "7000"
     },
-    optionalInvoiceDescription: "SATS amount"
+    memo: "SATS amount"
   });
-  assert.equal(satsInvoice.amount_msats, 7000000);
+  assert.equal(satsInvoice.amountMsats, 7000000);
   assert.equal(btcHarness.wallet.makeInvoiceCalls, 1);
   assert.equal(satsHarness.wallet.makeInvoiceCalls, 1);
   assert.deepEqual(providerCalls, []);
@@ -211,22 +274,23 @@ test("create invoice accepts BTC and SATS amounts without price providers", asyn
 test("lookup settles invoice through gated backend refresh", async () => {
   const { wallet, openreceive } = await createHarness();
   const invoice = await openreceive.createInvoice({
-    orderUuid: "order-2",
-    amount_msats: 200000,
-    optionalInvoiceDescription: "Fruit sticker"
+    orderId: "order-2",
+    amount: { msats: 200000 },
+    memo: "Fruit sticker"
   });
 
   wallet.lookupState = "settled";
   const lookup = await openreceive.lookupInvoice({
-    payment_hash: PAYMENT_HASH
+    paymentHash: PAYMENT_HASH
   });
 
-  assert.equal(lookup.invoice_id, invoice.invoice_id);
-  assert.equal(lookup.transaction_state, "settled");
-  assert.equal(lookup.workflow_state, "settlement_action_completed");
-  assert.equal(lookup.settlement_action_state, "completed");
-  assert.equal(lookup.settled_at, 1200);
-  assert.equal(lookup.preimage_present, true);
+  assert.equal(lookup.invoiceId, invoice.invoiceId);
+  assert.equal(lookup.status, "settled");
+  assert.equal(lookup.transactionState, "settled");
+  assert.equal(lookup.workflowState, "settlement_action_completed");
+  assert.equal(lookup.settlementActionState, "completed");
+  assert.equal(lookup.settledAt, 1200);
+  assert.equal(lookup.preimagePresent, true);
   assert.equal("checkout" in lookup, false);
 });
 
@@ -238,14 +302,14 @@ test("logger records invoice transitions without secrets", async () => {
     }
   });
   const invoice = await openreceive.createInvoice({
-    orderUuid: "order-logged",
-    amount_msats: 200000,
-    optionalInvoiceDescription: "Fruit sticker"
+    orderId: "order-logged",
+    amount: { msats: 200000 },
+    memo: "Fruit sticker"
   });
 
   wallet.lookupState = "settled";
   await openreceive.lookupInvoice({
-    payment_hash: PAYMENT_HASH
+    paymentHash: PAYMENT_HASH
   });
 
   assert.deepEqual(
@@ -259,7 +323,7 @@ test("logger records invoice transitions without secrets", async () => {
       "invoice.lookup.result"
     ]
   );
-  assert.equal(logs[1].invoice_id, invoice.invoice_id);
+  assert.equal(logs[1].invoice_id, invoice.invoiceId);
   assert.equal(logs[1].payment_hash, PAYMENT_HASH);
   assert.equal(logs[3].transaction_state, "settled");
   assert.doesNotMatch(JSON.stringify(logs), /nostr\+walletconnect:\/\//);
@@ -277,9 +341,9 @@ test("logger redacts wallet errors before emitting unhandled failures", async ()
 
   await assert.rejects(
     () => openreceive.createInvoice({
-      orderUuid: "order-wallet-error",
-      amount_msats: 200000,
-      optionalInvoiceDescription: "Fruit sticker"
+      orderId: "order-wallet-error",
+      amount: { msats: 200000 },
+      memo: "Fruit sticker"
     }),
     /wallet rejected/
   );
@@ -295,34 +359,34 @@ test("lookup can run an idempotent backend settlement action hook after settleme
   let onPaidCalls = 0;
   const { wallet, openreceive } = await createHarness({
     clock: () => 1300,
-    onPaid: async ({ invoice, orderUuid, metadata }) => {
+    onPaid: async ({ invoice, orderId, metadata }) => {
       onPaidCalls += 1;
       assert.equal(invoice.transaction_state, "settled");
-      assert.equal(orderUuid, "order-settlement-action");
+      assert.equal(orderId, "order-settlement-action");
       assert.deepEqual(metadata, { order_uuid: "order-settlement-action" });
     }
   });
   await openreceive.createInvoice({
-    orderUuid: "order-settlement-action",
-    amount_msats: 200000,
-    optionalInvoiceDescription: "Fruit sticker"
+    orderId: "order-settlement-action",
+    amount: { msats: 200000 },
+    memo: "Fruit sticker"
   });
 
   wallet.lookupState = "settled";
   const firstLookup = await openreceive.lookupInvoice({
-    payment_hash: PAYMENT_HASH
+    paymentHash: PAYMENT_HASH
   });
 
-  assert.equal(firstLookup.workflow_state, "settlement_action_completed");
-  assert.equal(firstLookup.settlement_action_state, "completed");
-  assert.equal(firstLookup.settlement_action_completed_at, 1300);
+  assert.equal(firstLookup.workflowState, "settlement_action_completed");
+  assert.equal(firstLookup.settlementActionState, "completed");
+  assert.equal(firstLookup.settlementActionCompletedAt, 1300);
   assert.equal(onPaidCalls, 1);
 
   const secondLookup = await openreceive.lookupInvoice({
-    payment_hash: PAYMENT_HASH
+    paymentHash: PAYMENT_HASH
   });
 
-  assert.equal(secondLookup.workflow_state, "settlement_action_completed");
+  assert.equal(secondLookup.workflowState, "settlement_action_completed");
   assert.equal(onPaidCalls, 1);
 });
 
@@ -337,6 +401,7 @@ test("poll recovers invoices without browser polling", async () => {
     namespace: "demo_hello_fruit",
     backgroundSweep: false,
     clock: () => 1600,
+    priceProviders: [new StaticPriceProvider()],
     onPaid: async ({ invoice, source, req }) => {
       onPaidCalls += 1;
       settlementSources.push(source);
@@ -346,16 +411,16 @@ test("poll recovers invoices without browser polling", async () => {
   });
 
   const invoice = await openreceive.createInvoice({
-    orderUuid: "order-runner",
-    amount_msats: 200000,
-    optionalInvoiceDescription: "Fruit sticker"
+    orderId: "order-runner",
+    amount: { msats: 200000 },
+    memo: "Fruit sticker"
   });
 
   wallet.lookupState = "settled";
   const poll = await openreceive.poll();
-  const stored = (await store.get(invoice.invoice_id)).row;
+  const stored = (await store.get(invoice.invoiceId)).row;
 
-  assert.deepEqual(poll.invoice_ids, [invoice.invoice_id]);
+  assert.deepEqual(poll.invoiceIds, [invoice.invoiceId]);
   assert.equal(poll.checked, 1);
   assert.equal(onPaidCalls, 1);
   assert.deepEqual(settlementSources, ["poll"]);
@@ -388,12 +453,13 @@ test("poll reads sweep tuning from env defaults", async () => {
       store,
       namespace: "demo_hello_fruit",
       backgroundSweep: false,
-      clock: () => 1600
+      clock: () => 1600,
+      priceProviders: [new StaticPriceProvider()]
     });
 
     const poll = await openreceive.poll();
 
-    assert.deepEqual(poll.invoice_ids, ["or_inv_env_batch_1"]);
+    assert.deepEqual(poll.invoiceIds, ["or_inv_env_batch_1"]);
     assert.equal(poll.checked, 1);
     assert.equal(wallet.lookupInvoiceCalls, 1);
   } finally {
@@ -410,22 +476,19 @@ test("client-supplied settlement fields cannot trigger settlement action", async
     }
   });
   const invoice = await openreceive.createInvoice({
-    orderUuid: "order-client-state",
-    amount_msats: 200000,
-    optionalInvoiceDescription: "Fruit sticker"
+    orderId: "order-client-state",
+    amount: { msats: 200000 },
+    memo: "Fruit sticker"
   });
 
   wallet.lookupState = "pending";
   const lookup = await openreceive.lookupInvoice({
-    payment_hash: PAYMENT_HASH,
-    transaction_state: "settled",
-    settled_at: 1300,
-    preimage: "1".repeat(64)
+    paymentHash: PAYMENT_HASH
   });
 
-  const stored = (await store.get(invoice.invoice_id)).row;
-  assert.equal(lookup.transaction_state, "pending");
-  assert.equal(lookup.workflow_state, "verifying");
+  const stored = (await store.get(invoice.invoiceId)).row;
+  assert.equal(lookup.transactionState, "pending");
+  assert.equal(lookup.workflowState, "verifying");
   assert.equal(stored.transaction_state, "pending");
   assert.equal(stored.settlement_action_state, "pending");
   assert.equal(onPaidCalls, 0);
@@ -436,7 +499,7 @@ test("lookup rejects public status oracle requests for unknown payment hashes", 
 
   await assertServiceError(
     () => openreceive.lookupInvoice({
-      payment_hash: "0".repeat(64)
+      paymentHash: "0".repeat(64)
     }),
     {
       status: 404,
@@ -496,12 +559,14 @@ test("create invoice rejects fiat currencies outside configured priceCurrencies"
 
   await assertServiceError(
     () => openreceive.createInvoice({
-      orderUuid: "order-eur-denied",
-      fiat: {
-        currency: "EUR",
-        value: "0.10"
+      orderId: "order-eur-denied",
+      amount: {
+        fiat: {
+          currency: "EUR",
+          value: "0.10"
+        }
       },
-      optionalInvoiceDescription: "Fruit sticker"
+      memo: "Fruit sticker"
     }),
     {
       status: 400,
@@ -549,15 +614,15 @@ test("create invoice rejects description and description_hash together", async (
 
   await assertServiceError(
     () => openreceive.createInvoice({
-      orderUuid: "order-description-conflict",
-      amount_msats: 200000,
-      optionalInvoiceDescription: "Fruit sticker",
-      description_hash: "a".repeat(64)
+      orderId: "order-description-conflict",
+      amount: { msats: 200000 },
+      memo: "Fruit sticker",
+      descriptionHash: "a".repeat(64)
     }),
     {
       status: 400,
       code: "INVALID_REQUEST",
-      message: "Create invoice request accepts only one of optionalInvoiceDescription or description_hash."
+      message: "Create invoice request accepts only one of memo or descriptionHash."
     }
   );
   assert.equal(wallet.makeInvoiceCalls, 0);
@@ -568,14 +633,14 @@ test("create invoice rejects invalid description_hash before wallet call", async
 
   await assertServiceError(
     () => openreceive.createInvoice({
-      orderUuid: "order-description-hash",
-      amount_msats: 200000,
-      description_hash: "not-hex"
+      orderId: "order-description-hash",
+      amount: { msats: 200000 },
+      descriptionHash: "not-hex"
     }),
     {
       status: 400,
       code: "INVALID_REQUEST",
-      message: "description_hash must be 64 hex characters."
+      message: "descriptionHash must be 64 hex characters."
     }
   );
   assert.equal(wallet.makeInvoiceCalls, 0);
@@ -586,12 +651,14 @@ test("create invoice rejects invalid fiat quote before wallet call", async () =>
 
   await assertServiceError(
     () => openreceive.createInvoice({
-      orderUuid: "order-invalid-fiat",
-      fiat: {
-        currency: "usd",
-        value: "0.10"
+      orderId: "order-invalid-fiat",
+      amount: {
+        fiat: {
+          currency: "usd",
+          value: "0.10"
+        }
       },
-      optionalInvoiceDescription: "Fruit sticker"
+      memo: "Fruit sticker"
     }),
     {
       status: 400,
@@ -615,22 +682,22 @@ test("refresh invoice creates a linked replacement and replays idempotently", as
     }
   });
   const request = {
-    idempotency_key: "refresh-1",
+    idempotencyKey: "refresh-1",
     reason: "expired"
   };
 
   const first = await openreceive.refreshInvoice(oldInvoice.invoice_id, request);
-  assert.equal(first.old_invoice_id, oldInvoice.invoice_id);
+  assert.equal(first.oldInvoiceId, oldInvoice.invoice_id);
   assert.equal(first.reason, "expired");
-  assert.equal(first.invoice.refreshed_from_invoice_id, oldInvoice.invoice_id);
-  assert.equal(first.invoice.transaction_state, "pending");
+  assert.equal(first.invoice.refreshedFromInvoiceId, oldInvoice.invoice_id);
+  assert.equal(first.invoice.transactionState, "pending");
 
   const second = await openreceive.refreshInvoice(oldInvoice.invoice_id, request);
-  assert.equal(second.new_invoice_id, first.new_invoice_id);
+  assert.equal(second.newInvoiceId, first.newInvoiceId);
   assert.equal(wallet.makeInvoiceCalls, 1);
 
   const storedOld = (await store.get(oldInvoice.invoice_id)).row;
-  const storedNew = (await store.get(first.new_invoice_id)).row;
+  const storedNew = (await store.get(first.newInvoiceId)).row;
   assert.equal(storedOld.transaction_state, "expired");
   assert.equal(storedOld.workflow_state, "expired_closed");
   assert.equal(storedNew.operation, "invoice.refresh");
@@ -649,13 +716,13 @@ test("refresh invoice rejects idempotency key reuse with a different body", asyn
   });
 
   await openreceive.refreshInvoice(oldInvoice.invoice_id, {
-    idempotency_key: "refresh-conflict",
+    idempotencyKey: "refresh-conflict",
     reason: "expired"
   });
 
   await assertServiceError(
     () => openreceive.refreshInvoice(oldInvoice.invoice_id, {
-      idempotency_key: "refresh-conflict",
+      idempotencyKey: "refresh-conflict",
       reason: "failed"
     }),
     {
@@ -678,7 +745,7 @@ test("refresh invoice rejects settled invoices before wallet call", async () => 
 
   await assertServiceError(
     () => openreceive.refreshInvoice(settledInvoice.invoice_id, {
-      idempotency_key: "refresh-settled",
+      idempotencyKey: "refresh-settled",
       reason: "expired"
     }),
     {
@@ -690,7 +757,7 @@ test("refresh invoice rejects settled invoices before wallet call", async () => 
   assert.equal(wallet.makeInvoiceCalls, 0);
 });
 
-test("refresh invoice requires idempotency_key as service input", async () => {
+test("refresh invoice requires idempotencyKey as service input", async () => {
   const { store, openreceive } = await createHarness();
   const oldInvoice = await seedInvoice(store, {
     invoice_id: "or_inv_refresh_no_key",
@@ -705,7 +772,7 @@ test("refresh invoice requires idempotency_key as service input", async () => {
     {
       status: 400,
       code: "INVALID_REQUEST",
-      message: "idempotency_key is required."
+      message: "idempotencyKey is required."
     }
   );
 });
@@ -731,8 +798,8 @@ test("host apps own routes, guards, and response policy around OpenReceive servi
 
   const denied = await guardedCreate({
     body: {
-      orderUuid: "order-denied",
-      amount_msats: 200000
+      orderId: "order-denied",
+      amount: { msats: 200000 }
     }
   });
   assert.equal(denied.status, 403);
@@ -743,15 +810,15 @@ test("host apps own routes, guards, and response policy around OpenReceive servi
       id: "alice"
     },
     body: {
-      orderUuid: "order-allowed",
-      amount_msats: 200000
+      orderId: "order-allowed",
+      amount: { msats: 200000 }
     }
   });
   assert.equal(allowed.status, 201);
   assert.equal(wallet.makeInvoiceCalls, 1);
 
-  const read = await openreceive.getInvoice(allowed.body.invoice_id);
-  assert.equal(read.invoice_id, allowed.body.invoice_id);
+  const read = await openreceive.getInvoice(allowed.body.invoiceId);
+  assert.equal(read.invoiceId, allowed.body.invoiceId);
 });
 
 test("createOpenReceive refuses in-memory invoice storage in production mode", async () => {
@@ -770,7 +837,11 @@ test("createOpenReceive refuses in-memory invoice storage in production mode", a
 
     await assert.rejects(
       () => createOpenReceive(options),
-      /refuses to use InMemoryInvoiceKvStore/
+      (error) => {
+        assert.equal(error instanceof OpenReceiveConfigError, true);
+        assert.equal(error.code, "UNSAFE_MEMORY_STORE");
+        return true;
+      }
     );
     await assert.rejects(
       () => createOpenReceive({
@@ -778,7 +849,11 @@ test("createOpenReceive refuses in-memory invoice storage in production mode", a
         store: undefined,
         storeUri: "memory:"
       }),
-      /refuses to use InMemoryInvoiceKvStore/
+      (error) => {
+        assert.equal(error instanceof OpenReceiveConfigError, true);
+        assert.equal(error.code, "UNSAFE_MEMORY_STORE");
+        return true;
+      }
     );
   } finally {
     restoreEnvVar("NODE_ENV", originalNodeEnv);

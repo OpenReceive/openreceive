@@ -37,14 +37,12 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "node ./build.mjs",
+    "build": "tsup src/index.ts src/provider-icons.ts src/pay-tutorials.ts --format esm,cjs --dts --clean --target es2022 --out-dir dist && node ../../../tools/package/copy-static.mjs src dist data/openreceive-providers.v4.json:openreceive-providers.v4.json assets",
     "prepack": "npm run build",
     "prepublishOnly": "npm run build"
   },
   "engines": {
     "node": ">=20"
   },
-  "devDependencies": {
-    "typescript": "^6.0.3"
-  }
+  "devDependencies": {}
 }
