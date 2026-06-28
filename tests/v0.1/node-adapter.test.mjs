@@ -72,10 +72,10 @@ function sqliteTest(name, fn) {
 
 class FakeAlbyClient {
   makeInvoiceParams = [];
-  lookupInvoiceParams = [];
+  listTransactionsParams = [];
   nextResponse = undefined;
   info = {
-    capabilities: ["get_info", "make_invoice", "lookup_invoice"],
+    capabilities: ["get_info", "make_invoice", "list_transactions"],
     notifications: ["payment_received"],
     encryptions: ["nip44_v2", "nip04"]
   };
@@ -97,23 +97,26 @@ class FakeAlbyClient {
     };
   }
 
-  async lookupInvoice(params) {
-    this.lookupInvoiceParams.push(params);
+  async listTransactions(params) {
+    this.listTransactionsParams.push(params);
     if (this.nextResponse !== undefined) return this.nextResponse;
     return {
-      invoice: "lnbc-fake",
-      payment_hash: "a".repeat(64),
-      amount: 200000,
-      state: "SETTLED",
-      settled_at: 1200,
-      preimage: "b".repeat(64)
+      transactions: [{
+        type: "incoming",
+        invoice: "lnbc-fake",
+        payment_hash: "a".repeat(64),
+        amount: 200000,
+        state: "SETTLED",
+        settled_at: 1200,
+        preimage: "b".repeat(64)
+      }]
     };
   }
 }
 
 test("preflight rejects spend-capable NWC codes", async () => {
   const fake = new FakeAlbyClient();
-  fake.info.capabilities = ["get_info", "make_invoice", "lookup_invoice", "pay_invoice"];
+  fake.info.capabilities = ["get_info", "make_invoice", "list_transactions", "pay_invoice"];
   const client = createNwcReceiveClient({
     connectionString: NWC_URI,
     client: fake
@@ -198,15 +201,15 @@ test("receive client maps amount_msats to NIP-47 amount and normalizes results",
         vector.expected_openreceive_response,
         vector.name
       );
-    } else if (vector.method === "lookup_invoice") {
-      const lookup = await client.lookupInvoice(request);
+    } else if (vector.method === "list_transactions") {
+      const result = await client.listTransactions(request);
       assert.deepEqual(
-        fake.lookupInvoiceParams[0],
+        fake.listTransactionsParams[0],
         vector.expected_nip47_request,
         vector.name
       );
       assert.deepEqual(
-        makeComparableResult(lookup),
+        makeComparableResult(result),
         vector.expected_openreceive_response,
         vector.name
       );
@@ -428,7 +431,7 @@ test("createOpenReceive builds service methods from a client and store", async (
     async preflight() {
       return {
         receiveCheckoutReady: true,
-        methods: ["make_invoice", "lookup_invoice"],
+        methods: ["make_invoice", "list_transactions"],
         notifications: [],
         encryption: "nip44_v2",
         warnings: []
@@ -443,8 +446,8 @@ test("createOpenReceive builds service methods from a client and store", async (
         expires_at: 1600
       };
     },
-    async lookupInvoice() {
-      throw new Error("not needed");
+    async listTransactions() {
+      return { transactions: [] };
     }
   };
   const openreceive = await createOpenReceive({
@@ -452,7 +455,6 @@ test("createOpenReceive builds service methods from a client and store", async (
     store,
     namespace: "node_test",
     clock: () => 1000,
-    backgroundSweep: false,
     priceProviders: [new StaticPriceProvider()]
   });
 
@@ -463,7 +465,7 @@ test("createOpenReceive builds service methods from a client and store", async (
   });
 
   assert.equal(body.bolt11, "lnbc-create-openreceive");
-  assert.equal(typeof openreceive.lookupInvoice, "function");
+  assert.equal(typeof openreceive.refreshInvoiceStatus, "function");
 });
 
 sqliteTest("Node CLI keeps init removed while migrate and doctor remain", async () => {
@@ -519,140 +521,20 @@ sqliteTest("Node CLI keeps init removed while migrate and doctor remain", async 
       stderr: io(stderr)
     });
     assert.equal(workerCode, 1);
-    assert.match(stderr.join(""), /worker was removed/);
+    assert.match(stderr.join(""), /Unknown OpenReceive command: worker/);
+
+    stderr.length = 0;
+    const pollCode = await runOpenReceiveCli({
+      argv: ["poll", "--once"],
+      cwd: tempRoot,
+      stdout: io(stdout),
+      stderr: io(stderr)
+    });
+    assert.equal(pollCode, 1);
+    assert.match(stderr.join(""), /Unknown OpenReceive command: poll/);
   } finally {
     rmSync(tempRoot, { force: true, recursive: true });
   }
-});
-
-test("Node CLI runs poll --once from a server config module", async () => {
-  const store = new InMemoryInvoiceKvStore();
-  await store.putIfAbsent(invoiceRecord({
-    invoice_id: "or_inv_poll_once",
-    idempotency_key: "order-poll-once",
-    payment_hash: "6".repeat(64),
-    invoice: "lnbc-poll-once"
-  }));
-  await store.putIfAbsent(invoiceRecord({
-    invoice_id: "or_inv_poll_later",
-    idempotency_key: "order-poll-later",
-    payment_hash: "7".repeat(64),
-    invoice: "lnbc-poll-later",
-    created_at: 1001
-  }));
-  const stdout = [];
-  const stderr = [];
-  let lookupCalls = 0;
-  const io = (buffer) => ({
-    write(message) {
-      buffer.push(message);
-    }
-  });
-
-  const code = await runOpenReceiveCli({
-    argv: ["poll", "--once", "--config", "openreceive.config.mjs"],
-    cwd: process.cwd(),
-    env: {
-      OPENRECEIVE_SWEEP_BATCH: "1"
-    },
-    stdout: io(stdout),
-    stderr: io(stderr),
-    loadConfigModule: async () => ({
-      openreceive: {
-        store,
-        client: {
-          async makeInvoice() {
-            throw new Error("not needed");
-          },
-          async lookupInvoice(request) {
-            lookupCalls += 1;
-            assert.equal(request.payment_hash, "6".repeat(64));
-            return {
-              payment_hash: "6".repeat(64),
-              state: "settled",
-              settled_at: 1300
-            };
-          }
-        },
-        onPaid: async ({ invoice }) => {
-          assert.equal(invoice.invoice_id, "or_inv_poll_once");
-        }
-      }
-    })
-  });
-
-  assert.equal(code, 0);
-  assert.equal(lookupCalls, 1);
-  assert.match(stdout.join(""), /checked 1 wallet invoice/);
-  assert.equal((await store.get("or_inv_poll_once")).row.workflow_state, "settlement_action_completed");
-  assert.equal((await store.get("or_inv_poll_later")).row.workflow_state, "invoice_created");
-  assert.equal(stderr.join(""), "");
-});
-
-test("Node CLI runs poll --once from a createOpenReceive service config", async () => {
-  const store = new InMemoryInvoiceKvStore();
-  await store.putIfAbsent(invoiceRecord({
-    invoice_id: "or_inv_service_poll",
-    idempotency_key: "order-service-poll",
-    payment_hash: "8".repeat(64),
-    invoice: "lnbc-service-poll"
-  }));
-  const stdout = [];
-  const stderr = [];
-  let onPaidCalls = 0;
-  const io = (buffer) => ({
-    write(message) {
-      buffer.push(message);
-    }
-  });
-  const openreceive = await createOpenReceive({
-    client: {
-      async preflight() {
-        return {
-          receiveCheckoutReady: true,
-          methods: ["make_invoice", "lookup_invoice"],
-          notifications: [],
-          encryption: "nip44_v2",
-          warnings: []
-        };
-      },
-      async makeInvoice() {
-        throw new Error("not needed");
-      },
-      async lookupInvoice(request) {
-        assert.equal(request.payment_hash, "8".repeat(64));
-        return {
-          payment_hash: "8".repeat(64),
-          state: "settled",
-          settled_at: 1400
-        };
-      }
-    },
-    store,
-    namespace: "node_test",
-    clock: () => 1600,
-    backgroundSweep: false,
-    priceProviders: [new StaticPriceProvider()],
-    onPaid: async ({ invoice, source }) => {
-      onPaidCalls += 1;
-      assert.equal(invoice.invoice_id, "or_inv_service_poll");
-      assert.equal(source, "poll");
-    }
-  });
-
-  const code = await runOpenReceiveCli({
-    argv: ["poll", "--once", "--config", "openreceive.config.mjs"],
-    cwd: process.cwd(),
-    stdout: io(stdout),
-    stderr: io(stderr),
-    loadConfigModule: async () => ({ openreceive })
-  });
-
-  assert.equal(code, 0);
-  assert.equal(onPaidCalls, 1);
-  assert.match(stdout.join(""), /checked 1 wallet invoice/);
-  assert.equal((await store.get("or_inv_service_poll")).row.workflow_state, "settlement_action_completed");
-  assert.equal(stderr.join(""), "");
 });
 
 function invoiceRecord(overrides = {}) {
@@ -706,9 +588,13 @@ function makeRequestResponseVectorRequest(input) {
 }
 
 function makeComparableResult(result) {
-  const comparable = { ...result };
-  if (typeof comparable.amount_msats === "bigint") {
-    comparable.amount_msats = Number(comparable.amount_msats);
-  }
-  return comparable;
+  if (typeof result === "bigint") return Number(result);
+  if (Array.isArray(result)) return result.map(makeComparableResult);
+  if (typeof result !== "object" || result === null) return result;
+  return Object.fromEntries(
+    Object.entries(result).map(([key, value]) => [
+      key,
+      makeComparableResult(value)
+    ])
+  );
 }

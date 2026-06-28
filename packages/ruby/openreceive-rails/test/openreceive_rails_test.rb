@@ -5,18 +5,24 @@ require "tmpdir"
 require "openreceive/rails"
 
 class FakeReceiveClient
-  attr_reader :make_invoice_calls, :lookup_invoice_calls
-  attr_accessor :lookup_state
+  attr_reader :make_invoice_calls, :list_transactions_calls
+  attr_accessor :transactions, :raise_list_transactions
 
   def initialize
     @make_invoice_calls = []
-    @lookup_invoice_calls = []
-    @lookup_state = "pending"
+    @list_transactions_calls = []
+    @invoice_responses = []
+    @transactions = []
+    @raise_list_transactions = false
+  end
+
+  def queue_invoice(response)
+    @invoice_responses << response
   end
 
   def make_invoice(request)
     @make_invoice_calls << request
-    {
+    @invoice_responses.shift || {
       "invoice" => "lnbc-rails",
       "payment_hash" => "a" * 64,
       "amount_msats" => request.fetch("amount_msats"),
@@ -25,21 +31,31 @@ class FakeReceiveClient
     }
   end
 
-  def lookup_invoice(request)
-    @lookup_invoice_calls << request
-    {
-      "invoice" => "lnbc-rails",
-      "payment_hash" => "a" * 64,
-      "amount" => 200_000,
-      "state" => @lookup_state,
-      "settled_at" => (@lookup_state == "settled" ? 1200 : nil)
-    }
+  def list_transactions(request)
+    @list_transactions_calls << request
+    raise OpenReceive::WalletUnavailableError.new("list_transactions failed") if @raise_list_transactions
+
+    offset = Integer(request.fetch("offset", 0))
+    limit = Integer(request.fetch("limit", 20))
+    from = Integer(request.fetch("from", 0))
+    until_time = Integer(request.fetch("until", Time.now.to_i))
+    include_unpaid = request["unpaid"] == true
+    type = request["type"]
+    page = @transactions.select do |transaction|
+      created_at = Integer(transaction.fetch("created_at"))
+      next false if type && transaction["type"] != type
+      next false unless created_at >= from && created_at <= until_time
+      next false if !include_unpaid && transaction["transaction_state"] != "settled" && transaction["state"] != "settled"
+
+      true
+    end.slice(offset, limit) || []
+    { "transactions" => page }
   end
 
   def preflight
     {
       "receive_checkout_ready" => true,
-      "methods" => ["make_invoice", "lookup_invoice"],
+      "methods" => ["make_invoice", "list_transactions"],
       "notifications" => []
     }
   end
@@ -72,16 +88,6 @@ class OpenReceiveRailsTest < Minitest::Test
     [OpenReceive::Rails::Adapter.new(config), client, completed]
   end
 
-  def read_template(name)
-    File.read(
-      File.join(
-        ROOT,
-        "packages/ruby/openreceive-rails/lib/openreceive/rails/generators/templates",
-        name
-      )
-    )
-  end
-
   def read_generator_template(relative_path)
     File.read(
       File.join(
@@ -96,6 +102,30 @@ class OpenReceiveRailsTest < Minitest::Test
     require "sqlite3"
   rescue LoadError
     skip "sqlite3 gem is not installed; skipping SQLite-backed Rails store test"
+  end
+
+  def settled_transaction(payment_hash: "a" * 64, invoice: "lnbc-rails", created_at: 1000)
+    {
+      "type" => "incoming",
+      "invoice" => invoice,
+      "payment_hash" => payment_hash,
+      "amount" => 200_000,
+      "transaction_state" => "settled",
+      "created_at" => created_at,
+      "settled_at" => created_at + 200,
+      "metadata" => { "large" => "not persisted" }
+    }
+  end
+
+  def pending_transaction(payment_hash:, invoice:, created_at: 1000)
+    {
+      "type" => "incoming",
+      "invoice" => invoice,
+      "payment_hash" => payment_hash,
+      "amount" => 200_000,
+      "transaction_state" => "pending",
+      "created_at" => created_at
+    }
   end
 
   def test_rails_storage_resolver_uses_owned_sqlite_store
@@ -141,7 +171,7 @@ class OpenReceiveRailsTest < Minitest::Test
     end
   end
 
-  def test_sqlite_store_claims_sweeps_once_per_interval
+  def test_sqlite_store_claims_transaction_scan_gate_once_per_interval
     require_sqlite3!
 
     Dir.mktmpdir do |dir|
@@ -150,38 +180,37 @@ class OpenReceiveRailsTest < Minitest::Test
         namespace: "rails_test"
       )
 
-      assert_equal true, store.claim_sweep(now: 1000, interval_seconds: 20)
-      assert_equal false, store.claim_sweep(now: 1010, interval_seconds: 20)
-      assert_equal true, store.claim_sweep(now: 1020, interval_seconds: 20)
+      first = store.cas_meta(key: "transaction_scan_gate", value: JSON.generate("claimed_at" => 1000), expected_rev: nil)
+      second = store.cas_meta(key: "transaction_scan_gate", value: JSON.generate("claimed_at" => 1001), expected_rev: nil)
+      current = store.get_meta("transaction_scan_gate")
+      third = store.cas_meta(key: "transaction_scan_gate", value: JSON.generate("claimed_at" => 1002), expected_rev: current.fetch("rev"))
+
+      assert_equal "ok", first.fetch("status")
+      assert_equal "conflict", second.fetch("status")
+      assert_equal "ok", third.fetch("status")
     end
   end
 
-  def test_rails_route_and_poll_templates_preserve_receive_only_boundary
+  def test_rails_route_and_status_templates_preserve_receive_only_boundary
     controller = read_generator_template("app/controllers/openreceive_controller.rb")
-    poll_job = read_generator_template("app/jobs/openreceive_poll_invoice_job.rb")
     partial = read_generator_template("app/views/openreceive/_invoice.html.erb")
     routes = read_generator_template("config/openreceive_routes.rb")
     initializer = read_generator_template("config/initializers/openreceive.rb")
-    rake_tasks = read_generator_template("lib/tasks/openreceive.rake")
-    combined = [controller, poll_job, partial, routes, rake_tasks].join("\n")
+    combined = [controller, partial, routes].join("\n")
 
     assert_includes controller, "create_invoice"
-    assert_includes controller, "lookup_invoice"
+    assert_includes controller, "refresh_invoice_status"
     assert_includes controller, "protect_from_forgery"
-    assert_includes controller, "after_action :openreceive_route_recovery, except: :poll"
-    assert_includes controller, "openreceive_adapter.maybe_sweep"
-    assert_includes poll_job, "verify_invoice"
+    refute_includes controller, "lookup_invoice"
+    refute_includes controller, "after_action"
+    refute_includes controller, "maybe_sweep"
     assert_includes partial, "turbo_frame_tag"
     assert_includes partial, "data-openreceive-status"
     assert_includes partial, "amount_msats"
     assert_includes routes, "post \"/openreceive/v1/invoices\""
     assert_includes routes, "get \"/openreceive/v1/invoices/:invoice_id\""
-    assert_includes routes, "post \"/openreceive/v1/poll\""
-    assert_includes rake_tasks, "task poll: :environment"
-    assert_includes rake_tasks, "poll_recoverable_invoices"
-    refute_includes rake_tasks, "task doctor"
-    refute_includes rake_tasks, "OpenReceive::Rails.adapter.doctor"
-    refute_includes rake_tasks, "task listen"
+    assert_includes routes, "post \"/openreceive/v1/invoices/:invoice_id/status\""
+    refute_includes routes, "/poll"
     assert_includes initializer, 'ENV.fetch("OPENRECEIVE_NWC"'
     assert_includes initializer, "OpenReceive.missing_nwc_message"
     assert_includes initializer, "OpenReceive.invalid_nwc_message"
@@ -196,7 +225,7 @@ class OpenReceiveRailsTest < Minitest::Test
     refute_includes initializer, "nostr+walletconnect://"
   end
 
-  def test_install_generator_copies_public_templates_without_secrets
+  def test_install_generator_copies_public_templates_without_background_tasks_or_secrets
     generator = File.read(
       File.join(
         ROOT,
@@ -212,10 +241,10 @@ class OpenReceiveRailsTest < Minitest::Test
     refute_includes generator, "openreceive_invoice.rb"
     assert_includes generator, "config/initializers/openreceive.rb"
     assert_includes generator, "openreceive_controller.rb"
-    assert_includes generator, "openreceive_poll_invoice_job.rb"
     assert_includes generator, "_invoice.html.erb"
-    assert_includes generator, "openreceive.rake"
     assert_includes generator, "openreceive_routes.rb"
+    refute_includes generator, "openreceive_poll_invoice_job.rb"
+    refute_includes generator, "openreceive.rake"
     refute_includes generator, "nostr+walletconnect://"
   end
 
@@ -231,8 +260,7 @@ class OpenReceiveRailsTest < Minitest::Test
       [
         [:post, "/v1/invoices", { to: "invoices#create" }],
         [:get, "/v1/invoices/:invoice_id", { to: "invoices#show" }],
-        [:post, "/v1/poll", { to: "invoices#poll" }],
-        [:get, "/v1/poll", { to: "invoices#poll" }]
+        [:post, "/v1/invoices/:invoice_id/status", { to: "invoices#status" }]
       ],
       calls
     )
@@ -250,12 +278,14 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_includes source, "routes.draw"
     assert_includes source, "OpenReceive::Rails::Routes.draw(self)"
     assert_includes source, "create_invoice"
-    assert_includes source, "lookup_invoice"
-    assert_includes source, "after_action :run_openreceive_route_recovery, except: :poll"
-    assert_includes source, "maybe_sweep"
-    assert_includes source, "def poll"
+    assert_includes source, "refresh_invoice_status"
+    assert_includes source, "def status"
     assert_includes source, "rescue_from OpenReceive::WalletUnavailableError"
     assert_includes source, "render_openreceive_error"
+    refute_includes source, "lookup_invoice"
+    refute_includes source, "after_action :run_openreceive_route_recovery"
+    refute_includes source, "maybe_sweep"
+    refute_includes source, "def poll"
     refute_includes source, "pay_invoice"
     refute_includes source, "OPENRECEIVE_NWC"
     refute_includes source, "nostr+walletconnect://"
@@ -336,7 +366,7 @@ class OpenReceiveRailsTest < Minitest::Test
     assert_empty client.make_invoice_calls
   end
 
-  def test_lookup_verifies_backend_settlement_before_settlement_action
+  def test_status_refresh_scans_one_page_and_settles_once
     adapter, client, completed = build_adapter
     controller = Controller.new(7)
     created = adapter.create_invoice(
@@ -346,80 +376,117 @@ class OpenReceiveRailsTest < Minitest::Test
     )
     invoice_id = created.fetch("body").fetch("invoice_id")
 
-    pending = adapter.lookup_invoice(controller: controller, invoice_id: invoice_id)
+    pending = adapter.refresh_invoice_status(controller: controller, invoice_id: invoice_id, now: 1000)
     assert_equal "pending", pending.fetch("body").fetch("transaction_state")
+    assert_equal true, pending.fetch("body").fetch("wallet_scan_performed")
+    assert_equal 0, pending.fetch("body").fetch("transactions_checked")
     assert_empty completed
 
-    client.lookup_state = "settled"
-    settled = adapter.lookup_invoice(controller: controller, invoice_id: invoice_id)
-    replayed = adapter.lookup_invoice(controller: controller, invoice_id: invoice_id)
+    client.transactions = [settled_transaction]
+    settled = adapter.refresh_invoice_status(controller: controller, invoice_id: invoice_id, now: 1002)
+    replayed = adapter.refresh_invoice_status(controller: controller, invoice_id: invoice_id, now: 1004)
 
     assert_equal "settled", settled.fetch("body").fetch("transaction_state")
     assert_equal "settlement_action_completed", settled.fetch("body").fetch("workflow_state")
     assert_equal [invoice_id], completed
-    assert_equal "settlement_action_completed", replayed.fetch("body").fetch("workflow_state")
+    assert_equal false, replayed.fetch("body").fetch("wallet_scan_performed")
     assert_equal [invoice_id], completed
-    assert_equal [{ "payment_hash" => "a" * 64 }] * 3, client.lookup_invoice_calls
+    assert_equal [0, 0], client.list_transactions_calls.map { |call| call.fetch("offset") }
   end
 
-  def test_internal_verify_can_be_used_by_poll_schedulers
+  def test_status_refresh_advances_cursor_and_global_gate_blocks_request_storms
     adapter, client, completed = build_adapter
+    controller = Controller.new(7)
     created = adapter.create_invoice(
-      controller: Controller.new(7),
+      controller: controller,
+      params: { "amount_msats" => 200_000, "fruit" => "banana" },
+      headers: { "idempotency-key" => "order-123" }
+    )
+    invoice_id = created.fetch("body").fetch("invoice_id")
+    decoys = 20.times.map do |index|
+      pending_transaction(
+        payment_hash: format("%064x", index + 1),
+        invoice: "lnbc-decoy-#{index}",
+        created_at: 1000
+      )
+    end
+    client.transactions = decoys + [settled_transaction]
+
+    first = adapter.refresh_invoice_status(controller: controller, invoice_id: invoice_id, now: 1000)
+    gated = adapter.refresh_invoice_status(controller: controller, invoice_id: invoice_id, now: 1001)
+    second = adapter.refresh_invoice_status(controller: controller, invoice_id: invoice_id, now: 1002)
+
+    assert_equal "pending", first.fetch("body").fetch("transaction_state")
+    assert_equal false, gated.fetch("body").fetch("wallet_scan_performed")
+    assert_equal "settled", second.fetch("body").fetch("transaction_state")
+    assert_equal [0, 20], client.list_transactions_calls.map { |call| call.fetch("offset") }
+    assert_equal [invoice_id], completed
+  end
+
+  def test_status_refresh_resets_cursor_on_short_page_and_keeps_cycling
+    adapter, client = build_adapter
+    controller = Controller.new(7)
+    created = adapter.create_invoice(
+      controller: controller,
+      params: { "amount_msats" => 200_000, "fruit" => "banana" },
+      headers: { "idempotency-key" => "order-123" }
+    )
+    invoice_id = created.fetch("body").fetch("invoice_id")
+    client.transactions = [
+      pending_transaction(payment_hash: "b" * 64, invoice: "lnbc-decoy", created_at: 1000)
+    ]
+
+    adapter.refresh_invoice_status(controller: controller, invoice_id: invoice_id, now: 1000)
+    adapter.refresh_invoice_status(controller: controller, invoice_id: invoice_id, now: 1002)
+
+    assert_equal [0, 0], client.list_transactions_calls.map { |call| call.fetch("offset") }
+  end
+
+  def test_status_refresh_uses_bolt11_fallback_when_payment_hash_is_missing
+    adapter, client, completed = build_adapter
+    controller = Controller.new(7)
+    created = adapter.create_invoice(
+      controller: controller,
+      params: { "amount_msats" => 200_000, "fruit" => "banana" },
+      headers: { "idempotency-key" => "order-123" }
+    )
+    invoice_id = created.fetch("body").fetch("invoice_id")
+    client.transactions = [settled_transaction(payment_hash: nil).reject { |key, value| key == "payment_hash" && value.nil? }]
+
+    result = adapter.refresh_invoice_status(controller: controller, invoice_id: invoice_id, now: 1000)
+
+    assert_equal "settled", result.fetch("body").fetch("transaction_state")
+    assert_equal [invoice_id], completed
+  end
+
+  def test_wallet_error_returns_stored_status_without_advancing_cursor
+    adapter, client = build_adapter
+    controller = Controller.new(7)
+    created = adapter.create_invoice(
+      controller: controller,
       params: { "amount_msats" => 200_000, "fruit" => "banana" },
       headers: { "idempotency-key" => "order-123" }
     )
     invoice_id = created.fetch("body").fetch("invoice_id")
 
-    pending = adapter.verify_invoice(invoice_id: invoice_id)
-    client.lookup_state = "settled"
-    settled = adapter.verify_invoice(invoice_id: invoice_id)
+    client.raise_list_transactions = true
+    failed = adapter.refresh_invoice_status(controller: controller, invoice_id: invoice_id, now: 1000)
+    client.raise_list_transactions = false
+    client.transactions = 20.times.map do |index|
+      pending_transaction(
+        payment_hash: format("%064x", index + 100),
+        invoice: "lnbc-decoy-#{index}",
+        created_at: 1000
+      )
+    end
+    retried = adapter.refresh_invoice_status(controller: controller, invoice_id: invoice_id, now: 1002)
 
-    assert_equal "pending", pending.fetch("transaction_state")
-    assert_equal "settlement_action_completed", settled.fetch("workflow_state")
-    assert_equal [invoice_id], completed
+    assert_equal false, failed.fetch("body").fetch("wallet_scan_performed")
+    assert_equal true, retried.fetch("body").fetch("wallet_scan_performed")
+    assert_equal [0, 0], client.list_transactions_calls.map { |call| call.fetch("offset") }
   end
 
-  def test_route_triggered_sweep_recovers_paid_invoice_without_background_task
-    adapter, client, completed = build_adapter
-    created = adapter.create_invoice(
-      controller: Controller.new(7),
-      params: { "amount_msats" => 200_000, "fruit" => "banana" },
-      headers: { "idempotency-key" => "order-route-sweep" }
-    )
-    invoice_id = created.fetch("body").fetch("invoice_id")
-
-    client.lookup_state = "settled"
-    sweep = adapter.maybe_sweep(now: 1700)
-    skipped = adapter.maybe_sweep(now: 1705)
-
-    assert_equal "started", sweep.fetch("status")
-    assert_equal [invoice_id], sweep.fetch("invoice_ids")
-    assert_equal 1, sweep.fetch("checked")
-    assert_equal "skipped", skipped.fetch("status")
-    assert_equal "interval", skipped.fetch("reason")
-    assert_equal [invoice_id], completed
-  end
-
-  def test_poll_recoverable_invoices_uses_package_owned_store
-    adapter, client, completed = build_adapter
-    created = adapter.create_invoice(
-      controller: Controller.new(7),
-      params: { "amount_msats" => 200_000, "fruit" => "banana" },
-      headers: { "idempotency-key" => "order-123" }
-    )
-    invoice_id = created.fetch("body").fetch("invoice_id")
-
-    client.lookup_state = "settled"
-    invoices = adapter.poll_recoverable_invoices(now: 1001)
-
-    assert_equal 1, invoices.length
-    assert_equal invoice_id, invoices.first.fetch("invoice_id")
-    assert_equal "settlement_action_completed", invoices.first.fetch("workflow_state")
-    assert_equal [invoice_id], completed
-  end
-
-  def test_lookup_leaves_access_checks_to_host_controller
+  def test_status_refresh_leaves_access_checks_to_host_controller
     adapter = build_adapter.first
     created = adapter.create_invoice(
       controller: Controller.new(7),
@@ -427,7 +494,7 @@ class OpenReceiveRailsTest < Minitest::Test
       headers: { "idempotency-key" => "order-123" }
     )
 
-    result = adapter.lookup_invoice(
+    result = adapter.refresh_invoice_status(
       controller: Controller.new(8),
       invoice_id: created.fetch("body").fetch("invoice_id")
     )

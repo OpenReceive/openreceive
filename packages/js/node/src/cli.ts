@@ -1,8 +1,5 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import {
-  reconcileOnce
-} from "@openreceive/core";
 import type {
   OpenReceive,
   OpenReceiveNodeOptions
@@ -51,7 +48,6 @@ Usage: openreceive <command> [options]
 
 Commands:
   migrate             Ensure the OpenReceive store schema exists; --print emits DDL.
-  poll --once          Run one bounded store-throttled recovery sweep.
   doctor              Validate server-only configuration and print redacted diagnostics.
   debug-report        Print a redacted support report for local diagnostics.
 
@@ -62,9 +58,6 @@ Store options:
 
 Config options:
   --config <path>      Import a server-only module. Defaults to openreceive.config.mjs.
-
-Removed:
-  worker, listen       v0.1-v2 is poll-only and worker-free; use poll --once from a scheduler.
 `.trim();
 
 export async function runOpenReceiveCli(options: OpenReceiveCliOptions): Promise<number> {
@@ -90,14 +83,6 @@ export async function runOpenReceiveCli(options: OpenReceiveCliOptions): Promise
           loadSqlite: options.loadSqlite,
           loadPostgres: options.loadPostgres
         });
-      case "poll":
-        return await runPoll({
-          args,
-          env,
-          cwd,
-          stdout,
-          loadConfigModule: options.loadConfigModule
-        });
       case "doctor":
       case "debug-report":
         return await runDiagnostics({
@@ -108,10 +93,6 @@ export async function runOpenReceiveCli(options: OpenReceiveCliOptions): Promise
           stdout,
           loadConfigModule: options.loadConfigModule
         });
-      case "worker":
-      case "listen":
-        stderr.write(`OpenReceive ${command} was removed. Use service-backed recovery plus \`openreceive poll --once\` for optional schedulers.\n`);
-        return 1;
       default:
         stderr.write(`Unknown OpenReceive command: ${command}\n\n${HELP}\n`);
         return 1;
@@ -156,48 +137,6 @@ async function runMigrate(input: {
   return 0;
 }
 
-async function runPoll(input: {
-  args: readonly string[];
-  env: NodeJS.ProcessEnv;
-  cwd: string;
-  stdout: OpenReceiveCliIo;
-  loadConfigModule?: OpenReceiveCliOptions["loadConfigModule"];
-}): Promise<number> {
-  if (!input.args.includes("--once")) {
-    throw new Error("OpenReceive poll is one-shot only. Pass --once and run it from a scheduler.");
-  }
-  const config = await loadOpenReceiveConfig(input);
-  if (isOpenReceiveServiceConfig(config)) {
-    const result = await config.poll();
-    input.stdout.write(`OpenReceive poll checked ${result.checked} wallet invoice(s) across ${result.invoiceIds.length} open invoice(s).\n`);
-    return 0;
-  }
-  if (config.store === undefined) {
-    throw new Error("OpenReceive poll requires config.store.");
-  }
-  const result = await reconcileOnce({
-    store: config.store,
-    client: config.client,
-    settlementAction: async ({ invoice, metadata, source, lookup_invoice }) => {
-      await config.onPaid?.({
-        invoice,
-        orderId: readStoredOrderId(invoice),
-        metadata,
-        source,
-        lookup_invoice
-      });
-    },
-    lookupBurst: config.lookupBurst ?? readPositiveIntegerEnv(input.env, "OPENRECEIVE_LOOKUP_BURST"),
-    lookupRatePerSecond: config.lookupRatePerSecond ?? readPositiveNumberEnv(input.env, "OPENRECEIVE_LOOKUP_RATE_PER_SEC"),
-    actionLeaseTtlSeconds: config.actionLeaseTtlSeconds ?? readPositiveIntegerEnv(input.env, "OPENRECEIVE_ACTION_LEASE_TTL_SEC"),
-    sweepIntervalSeconds: config.sweepIntervalSeconds ?? readPositiveIntegerEnv(input.env, "OPENRECEIVE_SWEEP_INTERVAL_SEC"),
-    sweepBatch: config.sweepBatch ?? readPositiveIntegerEnv(input.env, "OPENRECEIVE_SWEEP_BATCH"),
-    clock: config.clock
-  });
-  input.stdout.write(`OpenReceive poll checked ${result.checked} wallet invoice(s) across ${result.invoice_ids.length} open invoice(s).\n`);
-  return 0;
-}
-
 async function runDiagnostics(input: {
   command: "doctor" | "debug-report";
   args: readonly string[];
@@ -235,42 +174,9 @@ async function runDiagnostics(input: {
 
 function isOpenReceiveServiceConfig(config: OpenReceiveNodeConfig): config is OpenReceive {
   return (
-    typeof (config as { poll?: unknown }).poll === "function" &&
+    typeof (config as { refreshInvoiceStatus?: unknown }).refreshInvoiceStatus === "function" &&
     !("client" in config)
   );
-}
-
-function readStoredOrderId(invoice: { readonly idempotency_key: string; readonly metadata: Record<string, unknown> }): string {
-  const orderId = invoice.metadata.order_uuid;
-  return typeof orderId === "string" && orderId.length > 0
-    ? orderId
-    : invoice.idempotency_key;
-}
-
-function readPositiveIntegerEnv(
-  env: NodeJS.ProcessEnv,
-  name: string
-): number | undefined {
-  const value = env[name];
-  if (value === undefined || value.trim().length === 0) return undefined;
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-    throw new RangeError(`${name} must be a positive integer`);
-  }
-  return parsed;
-}
-
-function readPositiveNumberEnv(
-  env: NodeJS.ProcessEnv,
-  name: string
-): number | undefined {
-  const value = env[name];
-  if (value === undefined || value.trim().length === 0) return undefined;
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new RangeError(`${name} must be a positive number`);
-  }
-  return parsed;
 }
 
 async function resolveStoreForCli(

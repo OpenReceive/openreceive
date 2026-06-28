@@ -9,10 +9,11 @@ import {
   OPENRECEIVE_MIN_AMOUNT_MSATS,
   OPENRECEIVE_NWC_METADATA_MAX_BYTES,
   OpenReceiveError,
-  type LookupInvoiceRequest,
-  type LookupInvoiceResult,
+  type ListTransactionsRequest,
+  type ListTransactionsResult,
   type MakeInvoiceRequest,
   type MakeInvoiceResult,
+  type NwcTransaction,
   type NwcEncryptionMode,
   type OpenReceiveErrorBody,
   type OpenReceiveErrorCode,
@@ -27,7 +28,7 @@ import {
 } from "@openreceive/core";
 
 const require = createRequire(import.meta.url);
-const REQUIRED_RECEIVE_METHODS = ["make_invoice", "lookup_invoice"] as const;
+const REQUIRED_RECEIVE_METHODS = ["make_invoice", "list_transactions"] as const;
 const HEX_64 = /^[0-9a-fA-F]{64}$/;
 const SPEND_METHODS = [
   "pay_invoice",
@@ -42,8 +43,8 @@ export interface AlbyNwcCompatibleClient {
   getWalletServiceInfo?: () => Promise<unknown>;
   makeInvoice?: (request: Record<string, unknown>) => Promise<unknown>;
   make_invoice?: (request: Record<string, unknown>) => Promise<unknown>;
-  lookupInvoice?: (request: Record<string, unknown>) => Promise<unknown>;
-  lookup_invoice?: (request: Record<string, unknown>) => Promise<unknown>;
+  listTransactions?: (request: Record<string, unknown>) => Promise<unknown>;
+  list_transactions?: (request: Record<string, unknown>) => Promise<unknown>;
   subscribeNotifications?: (
     handler: (notification: unknown) => void,
     notificationTypes?: string[]
@@ -126,7 +127,7 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
     if (!summary.receiveCheckoutReady) {
       throw new WalletPreflightError(
         "missing_required_method",
-        "NWC wallet must advertise make_invoice and lookup_invoice for receive checkout.",
+        "NWC wallet must advertise make_invoice and list_transactions for receive checkout.",
         summary
       );
     }
@@ -168,22 +169,22 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
     return normalizeMakeInvoiceResult(rawResult);
   }
 
-  async lookupInvoice(request: LookupInvoiceRequest): Promise<LookupInvoiceResult> {
+  async listTransactions(request: ListTransactionsRequest): Promise<ListTransactionsResult> {
     await this.ensurePreflight();
-    validateLookupInvoiceRequest(request);
+    validateListTransactionsRequest(request);
 
     let rawResult: unknown;
     try {
       rawResult = await callRequiredMethod(
         await this.getClient(),
-        ["lookupInvoice", "lookup_invoice"],
-        toNip47LookupInvoiceParams(request)
+        ["listTransactions", "list_transactions"],
+        toNip47ListTransactionsParams(request)
       );
     } catch (error) {
       throw normalizeNwcWalletError(error);
     }
 
-    return normalizeLookupInvoiceResult(rawResult);
+    return normalizeListTransactionsResult(rawResult);
   }
 
   async close(): Promise<void> {
@@ -323,12 +324,16 @@ function toNip47MakeInvoiceParams(
   return params;
 }
 
-function toNip47LookupInvoiceParams(
-  request: LookupInvoiceRequest
+function toNip47ListTransactionsParams(
+  request: ListTransactionsRequest
 ): Record<string, unknown> {
   const params: Record<string, unknown> = {};
-  if (request.payment_hash !== undefined) params.payment_hash = request.payment_hash;
-  if (request.invoice !== undefined) params.invoice = request.invoice;
+  if (request.from !== undefined) params.from = request.from;
+  if (request.until !== undefined) params.until = request.until;
+  if (request.limit !== undefined) params.limit = request.limit;
+  if (request.offset !== undefined) params.offset = request.offset;
+  if (request.unpaid !== undefined) params.unpaid = request.unpaid;
+  if (request.type !== undefined) params.type = request.type;
   return params;
 }
 
@@ -368,14 +373,28 @@ function validateMakeInvoiceRequest(request: MakeInvoiceRequest): void {
   }
 }
 
-function validateLookupInvoiceRequest(request: LookupInvoiceRequest): void {
-  const hasPaymentHash = request.payment_hash !== undefined;
-  const hasInvoice = request.invoice !== undefined;
+function validateListTransactionsRequest(request: ListTransactionsRequest): void {
+  validateOptionalNonNegativeInteger(request.from, "from");
+  validateOptionalNonNegativeInteger(request.until, "until");
+  validateOptionalNonNegativeInteger(request.offset, "offset");
+  if (request.limit !== undefined && (!Number.isSafeInteger(request.limit) || request.limit <= 0)) {
+    throw new ReceiveCheckoutValidationError("limit must be a positive safe integer");
+  }
+  if (request.from !== undefined && request.until !== undefined && request.from > request.until) {
+    throw new ReceiveCheckoutValidationError("from must be less than or equal to until");
+  }
+  if (request.type !== undefined && request.type !== "incoming" && request.type !== "outgoing") {
+    throw new ReceiveCheckoutValidationError("type must be incoming or outgoing");
+  }
+}
 
-  if (hasPaymentHash === hasInvoice) {
-    throw new ReceiveCheckoutValidationError(
-      "lookupInvoice requires exactly one of payment_hash or invoice"
-    );
+function validateOptionalNonNegativeInteger(
+  value: number | undefined,
+  field: string
+): void {
+  if (value === undefined) return;
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new ReceiveCheckoutValidationError(`${field} must be a non-negative safe integer`);
   }
 }
 
@@ -397,9 +416,25 @@ function normalizeMakeInvoiceResult(rawResult: unknown): MakeInvoiceResult {
   };
 }
 
-function normalizeLookupInvoiceResult(rawResult: unknown): LookupInvoiceResult {
-  const result = asRecord(unwrapNwcResult(rawResult));
-  const normalized: LookupInvoiceResult = {};
+function normalizeListTransactionsResult(rawResult: unknown): ListTransactionsResult {
+  const unwrapped = unwrapNwcResult(rawResult);
+  const result = asRecord(unwrapped);
+  const rawTransactions = Array.isArray(result.transactions)
+    ? result.transactions
+    : Array.isArray(unwrapped)
+      ? unwrapped
+      : [];
+  return {
+    transactions: rawTransactions.map(normalizeNwcTransaction)
+  };
+}
+
+function normalizeNwcTransaction(rawTransaction: unknown): NwcTransaction {
+  const result = asRecord(rawTransaction);
+  const normalized: NwcTransaction = {};
+
+  const type = normalizeTransactionType(result.type);
+  if (type !== undefined) normalized.type = type;
 
   if (result.invoice !== undefined) {
     normalized.invoice = requiredString(result.invoice, "invoice");
@@ -438,6 +473,21 @@ function normalizeLookupInvoiceResult(rawResult: unknown): LookupInvoiceResult {
 
   if (result.preimage !== undefined) {
     normalized.preimage = requiredString(result.preimage, "preimage");
+  }
+  if (result.description !== undefined) {
+    normalized.description = requiredString(result.description, "description");
+  }
+  if (result.description_hash !== undefined || result.descriptionHash !== undefined) {
+    normalized.description_hash = requiredString(
+      result.description_hash ?? result.descriptionHash,
+      "description_hash"
+    );
+  }
+  if (result.fees_paid !== undefined || result.feesPaid !== undefined) {
+    normalized.fees_paid_msats = toBigInt(
+      result.fees_paid ?? result.feesPaid,
+      "fees_paid"
+    );
   }
 
   return normalized;
@@ -760,6 +810,13 @@ function normalizeTransactionState(
     return normalized;
   }
 
+  return undefined;
+}
+
+function normalizeTransactionType(value: unknown): "incoming" | "outgoing" | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.toLowerCase();
+  if (normalized === "incoming" || normalized === "outgoing") return normalized;
   return undefined;
 }
 

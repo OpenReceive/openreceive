@@ -8,7 +8,7 @@ contributors working in this repository.
 - Do not expose receive-only NWC codes to browser code, mobile apps, logs, tests,
   screenshots, docs, source maps, or demo assets.
 - OpenReceive receive-checkout APIs never expose send-payment methods.
-- Notifications are passive hints. Backend lookup is the settlement authority.
+- Notifications are passive hints. Backend status refresh is the settlement authority.
 - Settlement requires `settled_at` or `transaction_state/state == "settled"`.
   A preimage alone is corroborating proof, not final proof.
 - Use `amount_msats` for millisatoshis in OpenReceive public payloads. Do not
@@ -17,7 +17,7 @@ contributors working in this repository.
 - If changing a schema, update the relevant test vectors in the same change.
 - If adding invoice creation behavior, include idempotency tests.
 - If adding settlement behavior, include duplicate/replay-safe tests.
-- Do not duplicate provider data, supported currencies, polling cadence,
+- Do not duplicate provider data, supported currencies, status refresh cadence,
   settlement rules, or demo product data.
 
 ## Testing

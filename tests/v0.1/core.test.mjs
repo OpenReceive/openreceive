@@ -3,20 +3,18 @@ import test from "node:test";
 import {
   InMemoryInvoiceKvStore,
   OpenReceiveError,
-  classifyLookupInvoiceSettlement,
+  classifyTransactionSettlement,
   createIdempotencyRequestHash,
   getIdempotentRecord,
   formatOpenReceiveInvalidNwcMessage,
   formatOpenReceiveMissingNwcMessage,
-  getPollingDelaySeconds,
   isOpenReceiveErrorCode,
   isRetryableOpenReceiveErrorCode,
   putCreatedInvoiceRecord,
   quoteBitcoinAmountToMsats,
   parseNwcUri,
-  pollInvoiceUntilFinalState,
   quoteFiatToMsats,
-  reconcileOnce,
+  refreshInvoiceStatus,
   redactNwcUri
 } from "../../packages/js/core/src/index.ts";
 import {
@@ -49,7 +47,7 @@ import {
   createCheckoutStateFromDisplayData,
   createCheckoutStateEvent,
   createOpenReceiveCountryPickerModel,
-  createOpenReceiveLookupInvoiceFetcher,
+  createOpenReceiveStatusFetcher,
   createCheckoutProviderCopyEvent,
   createOpenReceiveRefreshInvoiceFetcher,
   createOpenReceiveThemeChangeEvent,
@@ -195,7 +193,7 @@ test("canonical OpenReceive errors expose stable schema codes", () => {
 
   const error = new OpenReceiveError({
     code: "TIMEOUT",
-    message: "Wallet lookup timed out",
+    message: "Wallet request timed out",
     retryable: true,
     request_id: "req_123",
     details: {
@@ -205,7 +203,7 @@ test("canonical OpenReceive errors expose stable schema codes", () => {
 
   assert.deepEqual(error.toJSON(), {
     code: "TIMEOUT",
-    message: "Wallet lookup timed out",
+    message: "Wallet request timed out",
     retryable: true,
     request_id: "req_123",
     details: {
@@ -215,7 +213,7 @@ test("canonical OpenReceive errors expose stable schema codes", () => {
 });
 
 test("settlement detection ignores preimage without settled state", () => {
-  const detection = classifyLookupInvoiceSettlement({
+  const detection = classifyTransactionSettlement({
     payment_hash: PAYMENT_HASH,
     preimage: "d".repeat(64),
     state: "pending"
@@ -226,192 +224,276 @@ test("settlement detection ignores preimage without settled state", () => {
   assert.equal(detection.preimage_present, true);
 });
 
-test("poller performs final lookup and grace lookup before expiring", async () => {
-  let now = 1000;
-  let lookups = 0;
-  const sleeps = [];
+test("refreshInvoiceStatus scans at most one transaction page and advances cursor", async () => {
+  const store = new InMemoryInvoiceKvStore();
+  const transactions = [];
+  for (let index = 0; index < 25; index += 1) {
+    const paymentHash = index === 0 ? PAYMENT_HASH : index.toString(16).padStart(64, "0");
+    const invoiceId = `or_inv_page_${index}`;
+    const invoice = `lnbc-page-${index}`;
+    await store.putIfAbsent(seedRecord({
+      invoice_id: invoiceId,
+      idempotency_key: `order-page-${index}`,
+      payment_hash: paymentHash,
+      invoice
+    }));
+    transactions.push({
+      type: "incoming",
+      invoice,
+      payment_hash: paymentHash,
+      state: "pending",
+      created_at: 1000
+    });
+  }
 
-  const outcome = await pollInvoiceUntilFinalState({
-    created_at: 1000,
-    expires_at: 1002,
-    grace_policy: {
-      max_attempts: 1,
-      delay_seconds: 5
+  let now = 1000;
+  const requests = [];
+  const client = {
+    async preflight() {
+      throw new Error("preflight is not needed by status refresh");
     },
-    clock: {
-      now: () => now,
-      sleep_until: async (timestamp) => {
-        sleeps.push(timestamp);
-        now = timestamp;
-      }
+    async makeInvoice() {
+      throw new Error("makeInvoice is not needed by status refresh");
     },
-    lookup_invoice: async () => {
-      lookups += 1;
+    async listTransactions(request) {
+      requests.push(request);
       return {
-        payment_hash: PAYMENT_HASH,
-        state: "pending"
+        transactions: transactions.slice(request.offset, request.offset + request.limit)
       };
     }
+  };
+  const record = await store.get("or_inv_page_0");
+
+  const first = await refreshInvoiceStatus({
+    store,
+    client,
+    record,
+    clock: () => now
+  });
+  assert.equal(first.wallet_scan_performed, true);
+  assert.equal(first.transactions_checked, 20);
+  assert.deepEqual(requests.at(-1), {
+    type: "incoming",
+    unpaid: true,
+    from: 1000,
+    until: 1000,
+    limit: 20,
+    offset: 0
+  });
+  assert.deepEqual(JSON.parse((await store.getMeta("transaction_scan_cursor:1000:1000")).value), {
+    from: 1000,
+    until: 1000,
+    limit: 20,
+    offset: 20,
+    cycle: 0,
+    last_page_scanned_at: 1000
   });
 
-  assert.deepEqual(sleeps, [1002, 1007]);
-  assert.equal(lookups, 2);
-  assert.equal(outcome.status, "expired");
-  assert.equal(outcome.reason, "grace_exhausted");
+  const gated = await refreshInvoiceStatus({
+    store,
+    client,
+    record: await store.get("or_inv_page_0"),
+    clock: () => now
+  });
+  assert.equal(gated.wallet_scan_performed, false);
+  assert.equal(requests.length, 1);
+
+  now = 1002;
+  const second = await refreshInvoiceStatus({
+    store,
+    client,
+    record: await store.get("or_inv_page_0"),
+    clock: () => now
+  });
+  assert.equal(second.wallet_scan_performed, true);
+  assert.equal(second.transactions_checked, 5);
+  assert.equal(requests.at(-1).offset, 20);
+  assert.deepEqual(JSON.parse((await store.getMeta("transaction_scan_cursor:1000:1000")).value), {
+    from: 1000,
+    until: 1000,
+    limit: 20,
+    offset: 0,
+    cycle: 1,
+    last_page_scanned_at: 1002
+  });
 });
 
-test("polling delay follows canonical cadence", () => {
-  assert.equal(getPollingDelaySeconds({ created_at: 1000, now: 1000 }), 2);
-  assert.equal(getPollingDelaySeconds({ created_at: 1000, now: 1015 }), 5);
-  assert.equal(getPollingDelaySeconds({ created_at: 1000, now: 1060 }), 10);
-  assert.equal(getPollingDelaySeconds({ created_at: 1000, now: 1180 }), 20);
-});
-
-test("reconcileOnce discovers settlement and completes open invoices", async () => {
+test("refreshInvoiceStatus does not advance cursor after wallet scan failure", async () => {
   const store = new InMemoryInvoiceKvStore();
   await store.putIfAbsent(seedRecord({
-    invoice_id: "or_inv_runner",
-    idempotency_key: "order-runner",
-    invoice: "lnbc-runner",
-    metadata: {
-      fruit: "banana"
-    }
+    invoice_id: "or_inv_scan_failure",
+    idempotency_key: "order-scan-failure",
+    payment_hash: PAYMENT_HASH,
+    invoice: "lnbc-scan-failure"
   }));
 
-  const now = 1000;
-  let settlementActionCalls = 0;
-  const events = [];
+  let now = 1000;
+  let fail = true;
+  const requests = [];
   const client = {
-    async makeInvoice() {
-      throw new Error("makeInvoice is not needed by reconciliation");
+    async preflight() {
+      throw new Error("preflight is not needed by status refresh");
     },
-    async lookupInvoice(request) {
-      assert.equal(request.payment_hash, PAYMENT_HASH);
+    async makeInvoice() {
+      throw new Error("makeInvoice is not needed by status refresh");
+    },
+    async listTransactions(request) {
+      requests.push(request);
+      if (fail) throw new Error("wallet unavailable");
       return {
-        payment_hash: PAYMENT_HASH,
-        state: "settled",
-        settled_at: now
+        transactions: Array.from({ length: 20 }, (_value, index) => ({
+          type: "incoming",
+          invoice: `lnbc-decoy-${index}`,
+          payment_hash: index.toString(16).padStart(64, "0"),
+          state: "pending",
+          created_at: 1000
+        }))
       };
     }
   };
 
-  const result = await reconcileOnce({
+  const failed = await refreshInvoiceStatus({
+    store,
     client,
+    record: await store.get("or_inv_scan_failure"),
+    clock: () => now
+  });
+  assert.equal(failed.wallet_scan_performed, false);
+  assert.equal(failed.transactions_checked, 0);
+  assert.equal(failed.reason, "wallet_scan_failed");
+  assert.equal(await store.getMeta("transaction_scan_cursor:1000:1000"), undefined);
+
+  fail = false;
+  now = 1002;
+  const retried = await refreshInvoiceStatus({
     store,
-    settlementAction: async ({ invoice }) => {
+    client,
+    record: await store.get("or_inv_scan_failure"),
+    clock: () => now
+  });
+  assert.equal(retried.wallet_scan_performed, true);
+  assert.equal(retried.transactions_checked, 20);
+  assert.deepEqual(requests.map((request) => request.offset), [0, 0]);
+  assert.deepEqual(JSON.parse((await store.getMeta("transaction_scan_cursor:1000:1000")).value), {
+    from: 1000,
+    until: 1000,
+    limit: 20,
+    offset: 20,
+    cycle: 0,
+    last_page_scanned_at: 1002
+  });
+});
+
+test("refreshInvoiceStatus settles an old pending invoice on a later page cycle", async () => {
+  const store = new InMemoryInvoiceKvStore();
+  const transactions = [];
+  for (let index = 0; index < 21; index += 1) {
+    const target = index === 20;
+    const paymentHash = target ? PAYMENT_HASH : index.toString(16).padStart(64, "0");
+    const invoiceId = target ? "or_inv_late_settle" : `or_inv_late_${index}`;
+    const invoice = target ? "lnbc-late-settle" : `lnbc-late-${index}`;
+    await store.putIfAbsent(seedRecord({
+      invoice_id: invoiceId,
+      idempotency_key: `order-late-${index}`,
+      payment_hash: paymentHash,
+      invoice,
+      created_at: 1000,
+      expires_at: 1300,
+      metadata: {
+        order_uuid: invoiceId
+      }
+    }));
+    transactions.push({
+      type: "incoming",
+      invoice,
+      payment_hash: paymentHash,
+      state: target ? "settled" : "pending",
+      created_at: 1000,
+      ...(target ? { settled_at: 1100 } : {})
+    });
+  }
+
+  let now = 1000;
+  let settlementActionCalls = 0;
+  const client = {
+    async preflight() {
+      throw new Error("preflight is not needed by status refresh");
+    },
+    async makeInvoice() {
+      throw new Error("makeInvoice is not needed by status refresh");
+    },
+    async listTransactions(request) {
+      return {
+        transactions: transactions.slice(request.offset, request.offset + request.limit)
+      };
+    }
+  };
+
+  const first = await refreshInvoiceStatus({
+    store,
+    client,
+    record: await store.get("or_inv_late_settle"),
+    clock: () => now,
+    settlementAction: async () => {
       settlementActionCalls += 1;
-      assert.equal(invoice.invoice_id, "or_inv_runner");
-      assert.deepEqual(invoice.metadata, { fruit: "banana" });
-    },
-    onEvent: (event) => events.push(event.event),
-    clock: () => now
+    }
   });
-  const stored = await store.get("or_inv_runner");
+  assert.equal(first.reason, "wallet_no_match");
+  assert.equal(settlementActionCalls, 0);
 
-  assert.deepEqual(result.invoice_ids, ["or_inv_runner"]);
-  assert.equal(result.checked, 1);
-  assert.equal(stored.row.transaction_state, "settled");
-  assert.equal(stored.row.workflow_state, "settlement_action_completed");
-  assert.equal(stored.row.settlement_action_state, "completed");
+  now = 1002;
+  const second = await refreshInvoiceStatus({
+    store,
+    client,
+    record: await store.get("or_inv_late_settle"),
+    clock: () => now,
+    settlementAction: async ({ invoice, transaction }) => {
+      settlementActionCalls += 1;
+      assert.equal(invoice.invoice_id, "or_inv_late_settle");
+      assert.equal(transaction.payment_hash, PAYMENT_HASH);
+    }
+  });
+  const stored = await store.get("or_inv_late_settle");
+
+  assert.equal(second.reason, "wallet_settled");
   assert.equal(settlementActionCalls, 1);
-  assert.deepEqual(events, [
-    "invoice.settled",
-    "invoice.settlement_action_completed"
-  ]);
-});
-
-test("reconcileOnce recovers invoices long after local expiry", async () => {
-  const store = new InMemoryInvoiceKvStore();
-  await store.putIfAbsent(seedRecord({
-    invoice_id: "or_inv_expired_during_outage",
-    idempotency_key: "order-outage",
-    invoice: "lnbc-outage",
-    created_at: 1000,
-    expires_at: 1002
-  }));
-
-  const now = 2800;
-  const recoverable = await store.listOpen({ now, limit: 10 });
-  let lookups = 0;
-  const events = [];
-  const result = await reconcileOnce({
-    store,
-    client: {
-      async makeInvoice() {
-        throw new Error("makeInvoice is not needed by reconciliation");
-      },
-      async lookupInvoice(request) {
-        lookups += 1;
-        assert.equal(request.payment_hash, PAYMENT_HASH);
-        return {
-          payment_hash: PAYMENT_HASH,
-          state: "settled",
-          settled_at: 1400
-        };
-      }
-    },
-    onEvent: (event) => {
-      events.push(`${event.event}:${event.reason ?? ""}`);
-    },
-    clock: () => now
-  });
-  const stored = await store.get("or_inv_expired_during_outage");
-
-  assert.deepEqual(
-    recoverable.map((record) => record.row.invoice_id),
-    ["or_inv_expired_during_outage"]
-  );
-  assert.deepEqual(result.invoice_ids, ["or_inv_expired_during_outage"]);
-  assert.equal(lookups, 1);
   assert.equal(stored.row.transaction_state, "settled");
   assert.equal(stored.row.workflow_state, "settlement_action_completed");
-  assert.deepEqual(events, [
-    "invoice.settled:wallet_settled",
-    "invoice.settlement_action_completed:"
-  ]);
+  assert.equal(stored.row.settled_at, 1100);
 });
 
-test("reconcileOnce keeps locally expired invoices open without wallet finality", async () => {
+test("refreshInvoiceStatus durable gate prevents request storms", async () => {
   const store = new InMemoryInvoiceKvStore();
   await store.putIfAbsent(seedRecord({
-    invoice_id: "or_inv_expiry_pending",
-    idempotency_key: "order-expiry-pending",
-    invoice: "lnbc-expiry-pending",
-    created_at: 1000,
-    expires_at: 1002
+    invoice_id: "or_inv_gate",
+    idempotency_key: "order-gate",
+    invoice: "lnbc-gate"
   }));
 
-  let lookups = 0;
-  const events = [];
-  const result = await reconcileOnce({
-    store,
-    client: {
-      async makeInvoice() {
-        throw new Error("makeInvoice is not needed by reconciliation");
-      },
-      async lookupInvoice(request) {
-        lookups += 1;
-        assert.equal(request.payment_hash, PAYMENT_HASH);
-        return {
-          payment_hash: PAYMENT_HASH,
-          state: "pending"
-        };
-      }
+  let calls = 0;
+  const client = {
+    async preflight() {
+      throw new Error("preflight is not needed by status refresh");
     },
-    onEvent: (event) => {
-      events.push(`${event.event}:${event.reason ?? ""}`);
+    async makeInvoice() {
+      throw new Error("makeInvoice is not needed by status refresh");
     },
-    clock: () => 2800
-  });
-  const stored = await store.get("or_inv_expiry_pending");
-
-  assert.deepEqual(result.invoice_ids, ["or_inv_expiry_pending"]);
-  assert.equal(lookups, 1);
-  assert.equal(stored.row.transaction_state, "pending");
-  assert.equal(stored.row.workflow_state, "expiry_pending_verification");
-  assert.deepEqual(events, [
-    "invoice.verifying:expired_pending_wallet_truth"
+    async listTransactions() {
+      calls += 1;
+      return { transactions: [] };
+    }
+  };
+  const record = await store.get("or_inv_gate");
+  const [first, second] = await Promise.all([
+    refreshInvoiceStatus({ store, client, record, clock: () => 1000 }),
+    refreshInvoiceStatus({ store, client, record, clock: () => 1000 })
   ]);
+
+  assert.equal(calls, 1);
+  assert.equal(
+    [first.wallet_scan_performed, second.wallet_scan_performed].filter(Boolean).length,
+    1
+  );
 });
 
 test("in-memory KV storage replays same idempotency request and conflicts on drift", async () => {
@@ -810,16 +892,16 @@ test("browser request checkout invoice helper owns idempotent invoice POST shape
   );
 });
 
-test("browser lookup fetcher owns display-safe lookup POST shape", async () => {
+test("browser status fetcher owns display-safe status POST shape", async () => {
   const requests = [];
-  const lookupInvoice = createOpenReceiveLookupInvoiceFetcher({
-    lookupUrl: "/openreceive/v1/invoices/lookup",
+  const refreshStatus = createOpenReceiveStatusFetcher({
+    statusUrl: "/openreceive/v1/invoices/{invoice_id}/status",
     fetch: async (url, init) => {
       requests.push({ url, init });
       return {
         ok: true,
         json: async () => ({
-          invoice_id: "or_inv_lookup",
+          invoice_id: "or_inv_status",
           payment_hash: PAYMENT_HASH,
           transaction_state: "settled"
         })
@@ -827,10 +909,10 @@ test("browser lookup fetcher owns display-safe lookup POST shape", async () => {
     }
   });
 
-  const body = await lookupInvoice({
-    invoice_id: "or_inv_lookup",
-    invoice: "lnbc-lookup",
-    lightningUri: "lightning:lnbc-lookup",
+  const body = await refreshStatus({
+    invoice_id: "or_inv_status",
+    invoice: "lnbc-status",
+    lightningUri: "lightning:lnbc-status",
     payment_hash: PAYMENT_HASH,
     transaction_state: "pending",
     workflow_state: "invoice_created",
@@ -840,20 +922,20 @@ test("browser lookup fetcher owns display-safe lookup POST shape", async () => {
   });
 
   assert.deepEqual(body, {
-    invoice_id: "or_inv_lookup",
+    invoice_id: "or_inv_status",
     payment_hash: PAYMENT_HASH,
     transaction_state: "settled"
   });
   assert.equal(requests.length, 1);
-  assert.equal(requests[0].url, "/openreceive/v1/invoices/lookup");
+  assert.equal(requests[0].url, "/openreceive/v1/invoices/or_inv_status/status");
   assert.equal(requests[0].init.method, "POST");
   assert.equal(requests[0].init.headers["Content-Type"], "application/json");
   assert.deepEqual(JSON.parse(requests[0].init.body), {
-    payment_hash: PAYMENT_HASH
+    invoice_id: "or_inv_status"
   });
 
-  const failingLookup = createOpenReceiveLookupInvoiceFetcher({
-    lookupUrl: "/openreceive/v1/invoices/lookup",
+  const failingStatus = createOpenReceiveStatusFetcher({
+    statusUrl: "/openreceive/v1/invoices/{invoice_id}/status",
     fetch: async () => ({
       ok: false,
       json: async () => ({
@@ -862,23 +944,10 @@ test("browser lookup fetcher owns display-safe lookup POST shape", async () => {
     })
   });
   await assert.rejects(
-    () => failingLookup({
-      invoice_id: "or_inv_lookup",
-      invoice: "lnbc-lookup",
-      lightningUri: "lightning:lnbc-lookup",
-      transaction_state: "pending",
-      workflow_state: "invoice_created",
-      phase: "pending",
-      settled: false,
-      terminal: false
-    }),
-    /payment_hash/
-  );
-  await assert.rejects(
-    () => failingLookup({
-      invoice_id: "or_inv_lookup",
-      invoice: "lnbc-lookup",
-      lightningUri: "lightning:lnbc-lookup",
+    () => failingStatus({
+      invoice_id: "or_inv_status",
+      invoice: "lnbc-status",
+      lightningUri: "lightning:lnbc-status",
       payment_hash: PAYMENT_HASH,
       transaction_state: "pending",
       workflow_state: "invoice_created",
@@ -997,13 +1066,13 @@ test("browser checkout state ignores passive event and route URLs", () => {
   assert.doesNotMatch(JSON.stringify(logs), /nostr\+walletconnect:\/\//);
 });
 
-test("browser checkout watcher owns countdown and lookup polling", async () => {
+test("browser checkout watcher owns countdown and status refresh polling", async () => {
   let now = 1000;
   let nextTimer = 1;
   const timers = new Map();
   const clearedTimers = [];
   const states = [];
-  let lookupCalls = 0;
+  let statusCalls = 0;
 
   const watcher = new CheckoutWatcher({
     snapshot: {
@@ -1026,9 +1095,9 @@ test("browser checkout watcher owns countdown and lookup polling", async () => {
       clearedTimers.push(id);
       timers.delete(id);
     },
-    lookupInvoice: async (state) => {
-      lookupCalls += 1;
-      assert.equal(state.payment_hash, PAYMENT_HASH);
+    refreshStatus: async (state) => {
+      statusCalls += 1;
+      assert.equal(state.invoice_id, "or_inv_watch");
       return {
         transaction_state: "settled",
         workflow_state: "settlement_action_pending",
@@ -1055,7 +1124,7 @@ test("browser checkout watcher owns countdown and lookup polling", async () => {
   pollTimer[1].callback();
   await Promise.resolve();
   await Promise.resolve();
-  assert.equal(lookupCalls, 1);
+  assert.equal(statusCalls, 1);
   assert.equal(states.at(-1).phase, "settled");
   assert.equal(shouldCheckoutShowWaiting(states.at(-1), { now }), false);
   assert.equal(timers.has(countdownTimer[0]), false);
@@ -1069,7 +1138,7 @@ test("browser checkout controller owns lifecycle actions for framework adapters"
   const states = [];
   const writes = [];
   const opens = [];
-  let lookupCalls = 0;
+  let statusCalls = 0;
   let refreshCalls = 0;
   const controller = createCheckoutController({
     snapshot: {
@@ -1080,9 +1149,9 @@ test("browser checkout controller owns lifecycle actions for framework adapters"
       transaction_state: "pending",
       workflow_state: "invoice_created"
     },
-    lookupInvoice: async (state) => {
-      lookupCalls += 1;
-      assert.equal(state.payment_hash, PAYMENT_HASH);
+    refreshStatus: async (state) => {
+      statusCalls += 1;
+      assert.equal(state.invoice_id, "or_inv_controller");
       return {
         transaction_state: "settled",
         workflow_state: "settlement_action_pending",
@@ -1125,13 +1194,13 @@ test("browser checkout controller owns lifecycle actions for framework adapters"
   assert.equal(uri, "lightning:lnbc-controller");
 
   const reloaded = await controller.reloadState();
-  assert.equal(lookupCalls, 1);
+  assert.equal(statusCalls, 1);
   assert.equal(reloaded.phase, "settled");
   assert.equal(reloaded.settled_at, 1042);
   assert.equal(states.at(-1).settled_at, 1042);
 
   const retried = await controller.retry();
-  assert.equal(lookupCalls, 2);
+  assert.equal(statusCalls, 2);
   assert.equal(retried.phase, "settled");
 
   const cancelled = controller.cancel();
@@ -1167,23 +1236,23 @@ test("browser checkout controller owns lifecycle actions for framework adapters"
   controller.stop();
 });
 
-test("browser checkout controller owns lookupUrl fetcher creation", async () => {
+test("browser checkout controller owns statusUrl fetcher creation", async () => {
   let nextTimer = 1;
   const timers = new Map();
   const states = [];
   const controller = createCheckoutController({
     snapshot: {
-      invoice_id: "or_inv_controller_lookup",
-      invoice: "lnbc-controller-lookup",
+      invoice_id: "or_inv_controller_status",
+      invoice: "lnbc-controller-status",
       payment_hash: PAYMENT_HASH,
       transaction_state: "pending",
       workflow_state: "invoice_created"
     },
-    lookupUrl: "/openreceive/v1/invoices/lookup",
+    statusUrl: "/openreceive/v1/invoices/{invoice_id}/status",
     fetch: async (url, init) => {
-      assert.equal(url, "/openreceive/v1/invoices/lookup");
+      assert.equal(url, "/openreceive/v1/invoices/or_inv_controller_status/status");
       assert.deepEqual(JSON.parse(init.body), {
-        payment_hash: PAYMENT_HASH
+        invoice_id: "or_inv_controller_status"
       });
       return {
         ok: true,
@@ -1362,7 +1431,7 @@ test("browser owns custom-element attribute contracts", () => {
     fiatValue: "fiat-value",
     status: "status",
     expiresAt: "expires-at",
-    lookupUrl: "lookup-url",
+    statusUrl: "status-url",
     theme: "theme",
     paymentWizard: "payment-wizard"
   });

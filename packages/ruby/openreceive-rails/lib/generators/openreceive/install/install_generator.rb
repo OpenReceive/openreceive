@@ -10,17 +10,13 @@ module Openreceive
         __dir__
       )
 
-      def copy_controller_jobs_and_channel
+      def copy_controller
         copy_file "config/initializers/openreceive.rb",
                   "config/initializers/openreceive.rb"
         copy_file "app/controllers/openreceive_controller.rb",
                   "app/controllers/openreceive_controller.rb"
-        copy_file "app/jobs/openreceive_poll_invoice_job.rb",
-                  "app/jobs/openreceive_poll_invoice_job.rb"
         copy_file "app/views/openreceive/_invoice.html.erb",
                   "app/views/openreceive/_invoice.html.erb"
-        copy_file "lib/tasks/openreceive.rake",
-                  "lib/tasks/openreceive.rake"
       end
 
       def show_route_instructions

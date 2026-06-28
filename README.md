@@ -122,7 +122,7 @@ Developer docs start at `docs/guides/README.md` and are indexed by
 
 - `docs/guides/quickstart-node.md` is the current working backend quickstart.
 - `docs/guides/frontend-checkout.md` covers browser helpers and UI packages.
-- `docs/guides/optional-scheduler.md` explains optional one-shot poll
-  scheduling.
+- Status refreshes are request-driven; OpenReceive does not run background
+  settlement tasks.
 - `docs/internal/README.md` is the contributor entry point for architecture,
   conformance, release, package ownership, and ADR docs.

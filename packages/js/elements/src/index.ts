@@ -525,7 +525,7 @@ export function defineOpenReceiveElements(
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.fiatValue,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.status,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.expiresAt,
-        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.lookupUrl,
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.statusUrl,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentWizard
       ];
@@ -633,7 +633,7 @@ export function defineOpenReceiveElements(
 
     private startCheckoutController(): void {
       const snapshot = this.currentCheckoutSnapshot();
-      const lookupUrl = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.lookupUrl);
+      const statusUrl = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.statusUrl);
       if (snapshot === undefined) {
         this.stopCheckoutController();
         return;
@@ -642,9 +642,9 @@ export function defineOpenReceiveElements(
       this.stopCheckoutController();
       this.controller = createCheckoutController({
         snapshot,
-        ...(lookupUrl === null
+        ...(statusUrl === null
           ? {}
-          : { lookupUrl }),
+          : { statusUrl }),
         logger: options.logger,
         onError: (error) => this.dispatchError(error),
         onState: (nextState) => this.applyCheckoutState(nextState)

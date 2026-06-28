@@ -291,7 +291,7 @@ export default function CheckoutClient({
           )}
           <Checkout
             invoice={checkout}
-            lookupUrl="/order_status"
+            statusUrl="/order_status"
             logger={logOpenReceive}
             onError={(cause) => {
               setError(cause instanceof Error ? cause.message : String(cause));

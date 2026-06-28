@@ -15,7 +15,7 @@ GitHub or contact the maintainers through the repository owner.
 - Logs, errors, screenshots, telemetry, and tests must redact receive-only NWC
   codes.
 - Frontends never run merchant settlement actions by themselves.
-- Settlement is verified by backend `lookup_invoice`.
+- Settlement is verified by backend status refresh using NWC `list_transactions`.
 - Settlement action transitions must be idempotent.
 - Invoice creation must use idempotency keys.
 - Public demos must use low amounts, rate limits, and separate receive-only NWC

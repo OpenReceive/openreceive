@@ -119,8 +119,8 @@ function validateSchemas() {
     "invoice-storage schema must document canonical idempotency scope"
   );
   assert(
-    invoiceStorage.properties.last_lookup_at?.minimum === 0,
-    "invoice-storage schema must include last_lookup_at for lookup cooldown claims"
+    invoiceStorage.properties.last_transaction_scan_at?.minimum === 0,
+    "invoice-storage schema must include last_transaction_scan_at for status refresh scan attempts"
   );
   assert(
     invoiceStorage.properties.action_claimed_at?.minimum === 0,
@@ -135,8 +135,8 @@ function validateSchemas() {
     "invoice-storage schema must define MetaRow"
   );
   assert(
-    invoiceStorage.$defs?.LookupBucket?.properties?.tokens?.minimum === 0,
-    "invoice-storage schema must define LookupBucket"
+    invoiceStorage.$defs?.TransactionScanCursor?.properties?.offset?.minimum === 0,
+    "invoice-storage schema must define TransactionScanCursor"
   );
 
   const quote = readJson("spec/schemas/rate-quote.schema.json");
@@ -224,7 +224,7 @@ function isSettled(result) {
 function validateSettlementVectors() {
   const vector = readJson("spec/test-vectors/settlement-detection.json");
   for (const item of vector.cases) {
-    assert(isSettled(item.lookup_invoice) === item.expected.settled, `${item.name}: settlement mismatch`);
+    assert(isSettled(item.transaction) === item.expected.settled, `${item.name}: settlement mismatch`);
   }
 }
 
@@ -258,16 +258,28 @@ function validateLifecycleVectors() {
   }
 }
 
-function validatePollingVectors() {
-  const vector = readJson("spec/test-vectors/polling.backoff.json");
-  let previousMax = -1;
-  for (const band of vector.cadence) {
-    assert(band.elapsed_seconds_min === previousMax + 1, "polling cadence has a gap");
-    assert(band.elapsed_seconds_max >= band.elapsed_seconds_min, "polling cadence band is invalid");
-    assert(band.delay_seconds > 0, "polling delay must be positive");
-    previousMax = band.elapsed_seconds_max;
-  }
-  assert(vector.required_behaviors.includes("perform one final lookup at local expiry"), "missing final expiry lookup behavior");
+function validateTransactionScanVectors() {
+  const vector = readJson("spec/test-vectors/transaction-scan-pagination.json");
+  assert(vector.default_gate_seconds === 2, "transaction scan default gate mismatch");
+  assert(vector.default_limit === 20, "transaction scan default limit mismatch");
+  assert(
+    vector.required_behaviors.includes("each claimed refresh performs at most one incoming unpaid list_transactions page"),
+    "missing one-page status refresh behavior"
+  );
+
+  const firstPage = vector.examples.find((item) => item.name === "first page");
+  assert(firstPage?.request?.offset === 0, "transaction scan first page must start at offset 0");
+  assert(firstPage?.cursor_after?.offset === 20, "transaction scan full page must advance offset");
+
+  const shortPage = vector.examples.find((item) => item.name === "short page starts next cycle");
+  assert(shortPage?.cursor_after?.offset === 0, "transaction scan short page must reset offset");
+  assert(shortPage?.cursor_after?.cycle === 1, "transaction scan short page must increment cycle");
+
+  const timeout = vector.examples.find((item) => item.name === "timeout keeps cursor stable");
+  assert(
+    JSON.stringify(timeout?.cursor_before) === JSON.stringify(timeout?.cursor_after),
+    "transaction scan timeout must not advance cursor"
+  );
 }
 
 function validateIdempotencyVectors() {
@@ -298,7 +310,7 @@ function validateStorageKvVectors() {
   );
   assert(vector.record_shape?.rev === "non-negative integer", "storage KV vector must define StoredRecord.rev");
   assert(vector.meta_shape?.rev === "non-negative integer", "storage KV vector must define MetaRow.rev");
-  assert(vector.lookup_bucket_shape?.tokens === "non-negative number", "storage KV vector must define lookup bucket");
+  assert(vector.transaction_scan_cursor_shape?.offset === "non-negative integer", "storage KV vector must define transaction scan cursor");
   assert(vector.certified_v0_1_transports.includes("postgres"), "storage KV vector must include Postgres certification");
   assert(vector.certified_v0_1_transports.includes("sqlite"), "storage KV vector must include SQLite certification");
   assert(vector.deferred_transport_targets.includes("redis"), "storage KV vector must track deferred Redis target");
@@ -315,9 +327,10 @@ function validateStorageKvVectors() {
     "listOpen returns only non-terminal records and honors limit",
     "secondary indexes stay consistent across create and transition",
     "ownership guard accepts OpenReceive tables and refuses foreign or newer schemas",
-    "per-invoice lookup claim allows at most one lookup per cooldown window",
-    "global lookup token bucket limits burst and sustained lookup rate",
-    "sweep throttle runs at most once per interval and respects sweep batch",
+    "global transaction scan gate allows at most one wallet page per interval",
+    "transaction scan cursor advances offset on full pages",
+    "transaction scan cursor resets offset and increments cycle on short pages",
+    "transaction scan cursor is not advanced on wallet errors",
     "settlement action lease prevents concurrent execution and recovers expired claims"
   ]) {
     assert(caseNames.has(required), `storage KV vector missing case: ${required}`);
@@ -364,12 +377,11 @@ function validateLiveNwcExpectedCapabilities() {
   assert(expected.wallet_profile === "rizful", "default live NWC wallet profile must be rizful");
   assert(
     JSON.stringify(expected.required_methods) ===
-      JSON.stringify(["get_info", "make_invoice", "lookup_invoice"]),
+      JSON.stringify(["get_info", "make_invoice", "list_transactions"]),
     "default live NWC required methods mismatch"
   );
   assert(
-    expected.optional_methods.includes("list_transactions") &&
-      expected.optional_methods.includes("get_balance"),
+    expected.optional_methods.includes("get_balance"),
     "default live NWC optional methods mismatch"
   );
   assert(
@@ -386,10 +398,10 @@ function validateNwcRequestResponseVectors() {
 
   const methods = new Set(vector.cases.map((item) => item.method));
   assert(methods.has("make_invoice"), "missing make_invoice request/response vector");
-  assert(methods.has("lookup_invoice"), "missing lookup_invoice request/response vector");
+  assert(methods.has("list_transactions"), "missing list_transactions request/response vector");
 
   for (const item of vector.cases) {
-    assert(["make_invoice", "lookup_invoice"].includes(item.method), `${item.name}: unknown method`);
+    assert(["make_invoice", "list_transactions"].includes(item.method), `${item.name}: unknown method`);
     assert(item.openreceive_request && typeof item.openreceive_request === "object", `${item.name}: openreceive_request required`);
     assert(item.expected_nip47_request && typeof item.expected_nip47_request === "object", `${item.name}: expected_nip47_request required`);
     assert(item.raw_response && typeof item.raw_response === "object", `${item.name}: raw_response required`);
@@ -406,10 +418,11 @@ function validateNwcRequestResponseVectors() {
       );
     }
 
-    if (item.method === "lookup_invoice") {
-      const hasPaymentHash = item.openreceive_request.payment_hash !== undefined;
-      const hasInvoice = item.openreceive_request.invoice !== undefined;
-      assert(hasPaymentHash !== hasInvoice, `${item.name}: lookup vector must use exactly one selector`);
+    if (item.method === "list_transactions") {
+      assert(item.expected_nip47_request.type === "incoming", `${item.name}: list_transactions must request incoming`);
+      assert(item.expected_nip47_request.unpaid === true, `${item.name}: list_transactions must include unpaid invoices`);
+      assert(item.expected_nip47_request.limit === 20, `${item.name}: list_transactions page limit mismatch`);
+      assert(Array.isArray(item.expected_openreceive_response.transactions), `${item.name}: expected transactions array missing`);
     }
   }
 }
@@ -642,7 +655,7 @@ function validateOpenApi() {
   const requiredOperations = [
     ["post", "/invoices"],
     ["get", "/invoices/{invoice_id}"],
-    ["post", "/invoices/lookup"],
+    ["post", "/invoices/{invoice_id}/status"],
     ["post", "/invoices/{invoice_id}/refresh"],
     ["get", "/rates"],
     ["post", "/rates/quote"]
@@ -761,7 +774,7 @@ function main() {
   validateSettlementVectors();
   validateErrorNormalizationVectors();
   validateLifecycleVectors();
-  validatePollingVectors();
+  validateTransactionScanVectors();
   validateIdempotencyVectors();
   validateStorageKvVectors();
   validateNwcVectors();

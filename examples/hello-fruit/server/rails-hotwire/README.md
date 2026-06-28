@@ -8,7 +8,7 @@ The browser never receives `OPENRECEIVE_NWC`.
 OpenReceive invoice persistence uses SQLite storage selected by
 `OPENRECEIVE_STORE`. The fruit unlock table remains app-owned demo business
 state. The demo can recover paid invoices after a restart or closed browser
-window without requiring a separate background worker.
+window when the browser or app asks the status route for fresh state.
 
 Run locally with Docker:
 

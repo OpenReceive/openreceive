@@ -1,41 +1,27 @@
 import type { StoredRecord } from "../storage/kv.ts";
 import {
-  gatedLookup,
-  maybeSweep,
-  reconcileOnce,
-  type OpenReceiveGatedLookupResult,
-  type OpenReceiveMaybeSweepResult,
-  type OpenReceiveReconcileOnceResult,
+  refreshInvoiceStatus,
   type OpenReceiveReconcileOptions,
-  type OpenReceiveSettlementActionInput
+  type OpenReceiveStatusRefreshResult
 } from "./reconcile.ts";
 
 export * from "./reconcile.ts";
 
 export interface OpenReceiveReconciler {
-  lookupInvoice(input: {
+  refreshInvoiceStatus(input: {
     record: StoredRecord;
-    source?: OpenReceiveSettlementActionInput["source"];
-  }): Promise<OpenReceiveGatedLookupResult>;
-  reconcileOnce(): Promise<OpenReceiveReconcileOnceResult>;
-  maybeSweep(): Promise<OpenReceiveMaybeSweepResult>;
+  }): Promise<OpenReceiveStatusRefreshResult>;
 }
 
 export function createOpenReceiveReconciler(
   options: OpenReceiveReconcileOptions
 ): OpenReceiveReconciler {
   return {
-    lookupInvoice(input) {
-      return gatedLookup({
+    refreshInvoiceStatus(input) {
+      return refreshInvoiceStatus({
         ...options,
         ...input
       });
-    },
-    reconcileOnce() {
-      return reconcileOnce(options);
-    },
-    maybeSweep() {
-      return maybeSweep(options);
     }
   };
 }

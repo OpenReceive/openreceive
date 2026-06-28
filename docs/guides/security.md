@@ -27,17 +27,17 @@ Default route policy:
   OpenReceive.
 - Order status reads require ownership of the invoice, order, cart, or checkout
   session.
-- Lookup by `payment_hash` happens behind your `/order_status` or equivalent
-  app route when payment status should not be public.
-- Optional scheduler recovery runs server-side with `openreceive poll --once`.
+- Status refresh happens behind your `/order_status` or equivalent app route
+  when payment status should not be public.
+- OpenReceive does not run or recommend background settlement tasks.
 
 ## Browser Defaults
 
 - Deny credentialed cross-origin access by default.
 - Never combine wildcard CORS with credentials.
 - Use CSRF protection for cookie-authenticated POST routes.
-- Return `Cache-Control: no-store` for invoice, lookup, and refresh responses.
-- Avoid logging signed lookup or refresh URLs.
+- Return `Cache-Control: no-store` for invoice, status, and refresh responses.
+- Avoid logging signed status or refresh URLs.
 - Keep private wallet details out of public checkout responses.
 
 ## Demos

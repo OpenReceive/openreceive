@@ -323,7 +323,7 @@ function renderInvoice(nextInvoice: CheckoutSnapshot): void {
   const shell = createCheckoutShell(nextInvoice, {
     document,
     root: document.querySelector(".page"),
-    lookupUrl: "/order_status",
+    statusUrl: "/order_status",
     rootSelector: ".page",
     defaultTheme: "light",
     onError: (event) => {

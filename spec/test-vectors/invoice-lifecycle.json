@@ -71,8 +71,8 @@
   "invariants": [
     "workflow_state never stores pending, settled, expired, failed, or accepted",
     "transaction_state never stores invoice_created, verifying, settlement_action_pending, settlement_action_completed, expiry_pending_verification, expired_closed, failed_closed, or cancelled",
-    "local expires_at alone does not close an invoice or remove it from recovery",
-    "expired_closed requires post-expiry wallet lookup or exhausted post-expiry grace verification",
+    "local expires_at alone does not close an invoice",
+    "expired_closed requires a matching wallet transaction state from server-side status refresh",
     "frontend state never runs a merchant settlement action",
     "invoice.settled events replay safely"
   ]

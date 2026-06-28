@@ -384,7 +384,7 @@ export const OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES = {
   fiatValue: "fiat-value",
   status: "status",
   expiresAt: "expires-at",
-  lookupUrl: "lookup-url",
+  statusUrl: "status-url",
   theme: "theme",
   paymentWizard: "payment-wizard"
 } as const;
@@ -397,7 +397,7 @@ export const OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES = {
 } as const;
 
 export interface CheckoutElementAttributeOptions {
-  readonly lookupUrl?: string;
+  readonly statusUrl?: string;
   readonly theme?: OpenReceiveResolvedTheme;
   readonly paymentWizard?: boolean;
 }
@@ -546,7 +546,7 @@ export interface CheckoutStatusModel {
   readonly countdownLabel?: string;
 }
 
-export type CheckoutLookup = (
+export type CheckoutStatusRefresh = (
   state: CheckoutState
 ) => Promise<Partial<CheckoutSnapshot>>;
 
@@ -581,8 +581,8 @@ export interface RequestCheckoutInvoiceOptions {
   readonly expiresInSeconds?: number;
 }
 
-export interface CreateOpenReceiveLookupInvoiceFetcherOptions {
-  readonly lookupUrl: string;
+export interface CreateOpenReceiveStatusFetcherOptions {
+  readonly statusUrl: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly headers?: Readonly<Record<string, string>>;
 }
@@ -604,7 +604,7 @@ export interface CreateOpenReceiveRefreshInvoiceFetcherOptions {
 
 export interface CheckoutWatcherOptions {
   readonly snapshot: CheckoutSnapshot;
-  readonly lookupInvoice?: CheckoutLookup;
+  readonly refreshStatus?: CheckoutStatusRefresh;
   readonly pollIntervalMs?: number;
   readonly now?: () => number;
   readonly setInterval?: typeof globalThis.setInterval;
@@ -617,9 +617,9 @@ export interface CheckoutWatcherOptions {
 export interface CheckoutControllerOptions
   extends Omit<CheckoutWatcherOptions, "onState"> {
   readonly onState?: (state: CheckoutState) => void;
-  readonly lookupUrl?: string;
+  readonly statusUrl?: string;
   readonly fetch?: typeof globalThis.fetch;
-  readonly lookupHeaders?: Readonly<Record<string, string>>;
+  readonly statusHeaders?: Readonly<Record<string, string>>;
   readonly refreshInvoice?: CheckoutRefresh;
   readonly refreshUrl?: string | ((state: CheckoutState) => string);
   readonly refreshHeaders?: Readonly<Record<string, string>>;
@@ -2700,8 +2700,8 @@ export function createCheckoutElementAttributes(
   if (snapshot.expires_at !== undefined) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.expiresAt] = String(snapshot.expires_at);
   }
-  if (options.lookupUrl !== undefined) {
-    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.lookupUrl] = options.lookupUrl;
+  if (options.statusUrl !== undefined) {
+    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.statusUrl] = options.statusUrl;
   }
   if (options.theme !== undefined) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme] = options.theme;
@@ -2972,27 +2972,27 @@ export async function requestCheckoutInvoice(
   return body as CheckoutSnapshot;
 }
 
-export function createOpenReceiveLookupInvoiceFetcher(
-  options: CreateOpenReceiveLookupInvoiceFetcherOptions
-): CheckoutLookup {
+export function createOpenReceiveStatusFetcher(
+  options: CreateOpenReceiveStatusFetcherOptions
+): CheckoutStatusRefresh {
   return async (state) => {
-    if (state.payment_hash === undefined) {
-      throw new Error("OpenReceive lookup requires payment_hash.");
+    if (state.invoice_id === undefined) {
+      throw new Error("OpenReceive status refresh requires invoice_id.");
     }
 
     const fetcher = options.fetch ?? globalThis.fetch;
     if (fetcher === undefined) {
-      throw new Error("OpenReceive lookup requires fetch.");
+      throw new Error("OpenReceive status refresh requires fetch.");
     }
 
-    const response = await fetcher(options.lookupUrl, {
+    const response = await fetcher(resolveStatusUrl(options.statusUrl, state.invoice_id), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...(options.headers ?? {})
       },
       body: JSON.stringify({
-        payment_hash: state.payment_hash
+        invoice_id: state.invoice_id
       })
     });
     const body = await response.json();
@@ -3001,12 +3001,18 @@ export function createOpenReceiveLookupInvoiceFetcher(
       throw new Error(
         typeof body?.message === "string"
           ? body.message
-          : "Could not look up invoice."
+          : "Could not refresh invoice status."
       );
     }
 
     return body as Partial<CheckoutSnapshot>;
   };
+}
+
+function resolveStatusUrl(statusUrl: string, invoiceId: string): string {
+  return statusUrl.includes("{invoice_id}")
+    ? statusUrl.replaceAll("{invoice_id}", encodeURIComponent(invoiceId))
+    : statusUrl;
 }
 
 export function createOpenReceiveRefreshInvoiceFetcher(
@@ -3247,13 +3253,13 @@ export class CheckoutWatcher {
       now: this.now(),
       logger: this.options.logger
     });
-    const lookupInvoice = this.options.lookupInvoice;
-    if (lookupInvoice === undefined || current.payment_hash === undefined) {
+    const refreshStatus = this.options.refreshStatus;
+    if (refreshStatus === undefined || current.invoice_id === undefined) {
       return current;
     }
 
     try {
-      const next = await lookupInvoice(current);
+      const next = await refreshStatus(current);
       const nextState = createCheckoutState(
         mergeCheckoutSnapshot(current, next),
         {
@@ -3302,7 +3308,7 @@ export class CheckoutWatcher {
       }, 1000);
     }
 
-    if (state.settled || this.options.lookupInvoice === undefined || state.payment_hash === undefined) {
+    if (state.settled || this.options.refreshStatus === undefined || state.invoice_id === undefined) {
       this.stopPolling();
     } else if (this.pollTimer === undefined) {
       this.pollTimer = this.setInterval()(() => {
@@ -3312,16 +3318,16 @@ export class CheckoutWatcher {
   }
 
   private async poll(): Promise<void> {
-    const lookupInvoice = this.options.lookupInvoice;
+    const refreshStatus = this.options.refreshStatus;
     const current = this.state;
-    if (!this.running || lookupInvoice === undefined || current === undefined) return;
+    if (!this.running || refreshStatus === undefined || current === undefined) return;
     if (current.terminal || current.settled) {
       this.stopPolling();
       return;
     }
 
     try {
-      const next = await lookupInvoice(current);
+      const next = await refreshStatus(current);
       if (!this.running || this.state === undefined) return;
       this.applyState(createCheckoutState(
         mergeCheckoutSnapshot(this.state, next),
@@ -3445,19 +3451,19 @@ export class OpenReceiveBrowserCheckoutController
   private createWatcher(
     options: CheckoutControllerOptions
   ): CheckoutWatcher {
-    const lookupInvoice =
-      options.lookupInvoice ??
-      (options.lookupUrl === undefined
+    const refreshStatus =
+      options.refreshStatus ??
+      (options.statusUrl === undefined
         ? undefined
-        : createOpenReceiveLookupInvoiceFetcher({
-          lookupUrl: options.lookupUrl,
+        : createOpenReceiveStatusFetcher({
+          statusUrl: options.statusUrl,
           fetch: options.fetch,
-          headers: options.lookupHeaders
+          headers: options.statusHeaders
         }));
 
     return new CheckoutWatcher({
       ...options,
-      ...(lookupInvoice === undefined ? {} : { lookupInvoice }),
+      ...(refreshStatus === undefined ? {} : { refreshStatus }),
       onState: (state) => {
         this.state = state;
         options.onState?.(state);

@@ -42,8 +42,8 @@ checkoutRoutes.post("/create_order", async (req, res, next) => {
 
 checkoutRoutes.post("/order_status", async (req, res, next) => {
   try {
-    const invoice = await openreceive.lookupInvoice({
-      paymentHash: req.body.payment_hash
+    const invoice = await openreceive.refreshInvoiceStatus({
+      invoiceId: req.body.invoice_id
     });
     res.status(200).json({
       ...invoice,

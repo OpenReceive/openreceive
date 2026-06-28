@@ -8,7 +8,7 @@
         "capabilities": [
           "getInfo",
           "make_invoice",
-          "lookupInvoice",
+          "listTransactions",
           "pay_invoice"
         ],
         "notifications": [
@@ -23,7 +23,7 @@
         "methods": [
           "get_info",
           "make_invoice",
-          "lookup_invoice",
+          "list_transactions",
           "pay_invoice"
         ],
         "notifications": [
@@ -40,14 +40,14 @@
     {
       "name": "missing encryption falls back to NIP-04",
       "raw_info": {
-        "methods": "get_info make_invoice lookup_invoice",
+        "methods": "get_info make_invoice list_transactions",
         "notifications": "payment_received"
       },
       "expected": {
         "methods": [
           "get_info",
           "make_invoice",
-          "lookup_invoice"
+          "list_transactions"
         ],
         "notifications": [
           "payment_received"
@@ -59,7 +59,7 @@
       }
     },
     {
-      "name": "missing lookup invoice is not receive checkout ready",
+      "name": "missing list transactions is not receive checkout ready",
       "raw_info": {
         "methods": [
           "get_info",

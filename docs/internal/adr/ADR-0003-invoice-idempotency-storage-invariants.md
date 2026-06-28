@@ -6,8 +6,8 @@ Accepted for v0.1.
 
 ## Context
 
-Receive checkout must be replay-safe. Duplicate requests, duplicate
-lookups, reconnects, and settlement action retries must not double-credit a
+Receive checkout must be replay-safe. Duplicate requests, duplicate status
+refreshes, reconnects, and settlement action retries must not double-credit a
 customer.
 
 ## Decision
@@ -17,7 +17,7 @@ Every invoice record is stored as `{ rev, row }` through the
 `namespace`, `operation`, `idempotency_key`,
 `idempotency_request_hash`, `payment_hash`, `invoice`, `amount_msats`,
 `transaction_state`, `workflow_state`, `settlement_action_state`, timestamps,
-metadata, lookup-gate fields, settlement-action lease fields, and fiat quote
+metadata, transaction-scan fields, settlement-action lease fields, and fiat quote
 data when used.
 
 The canonical idempotency scope is:

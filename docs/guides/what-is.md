@@ -30,21 +30,20 @@ through third-party services outside OpenReceive.
 OpenReceive runs inside your normal web process. Your checkout route creates an
 app order, calls OpenReceive server-side to create the invoice, and returns
 display-safe invoice data to the browser. The browser checkout watches your
-backend order-status route to learn when an invoice settles. For extra recovery,
-you can optionally call `openreceive poll --once` on a server-side schedule.
+backend order-status route to learn when an invoice settles. Each status request
+may perform at most one bounded server-side `list_transactions` page.
 
 ```text
 web process        handles /create_order and /order_status
-browser checkout   watches app order status
-optional scheduler runs openreceive poll --once
+browser checkout   asks app order status when it needs fresh state
+wallet scan        happens only inside that server-side status request
 ```
 
 The OpenReceive store is the only thing coordinating payment state across
 processes.
 
-Local invoice expiry is not a payment decision. If your server is down while an
-invoice expires, optional recovery can still verify recent invoices before they
-are closed as expired.
+Local invoice expiry is not a payment decision. If no browser or app request
+asks for status, no settlement scan runs.
 
 OpenReceive packages provide their own invoice storage, selected with
 `OPENRECEIVE_STORE`. Your app keeps its own orders, carts, users, and
@@ -56,5 +55,5 @@ fulfillment tables.
 - Equivalent native integrations in later ecosystems.
 
 The browser or mobile app receives only display-safe invoice data. The
-receive-only NWC code, invoice creation, payment verification, recovery polling,
+receive-only NWC code, invoice creation, payment verification, status refresh,
 and `onPaid` fulfillment stay server-side.

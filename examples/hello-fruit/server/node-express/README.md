@@ -38,8 +38,8 @@ without demo-local env files. Set it before running Compose; the web container
 validates it at startup. The compose stack uses `local-sqlite` by default and
 stores OpenReceive state in a named `.openreceive` volume.
 
-The package exposes `npm run openreceive:poll` for optional scheduled recovery.
-Normal checkout recovery happens through backend payment-status checks.
+Normal checkout recovery happens through backend payment-status checks. No
+extra OpenReceive command is required.
 
 The Makefile exposes the standard demo commands: `make setup`, `make dev`,
 `make test`, `make demo-test-nwc`, `make demo-production`,
@@ -53,5 +53,4 @@ Hosted-demo helpers expose `/source`, `/docs`, `/robots.txt`, and
 
 This demo is a public guest checkout. Production apps that require signed-in or
 session-bound checkout should use their normal app middleware for private
-checkout routes;
-see [Optional Scheduler](../../../../docs/guides/optional-scheduler.md).
+checkout routes.

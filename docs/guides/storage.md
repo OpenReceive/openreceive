@@ -42,7 +42,7 @@ apps should not share invoice replay keys.
 ## Production Choices
 
 Use one shared durable OpenReceive store before adding more than one web
-process, serverless instance, worker, scheduler, or any deployment with an
+process, serverless instance, or any deployment with an
 ephemeral filesystem. In v0.1 Node, that shared store is Postgres:
 
 ```sh

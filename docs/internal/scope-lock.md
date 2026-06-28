@@ -9,8 +9,8 @@ The first end-developer path to polish is:
 
 - `@openreceive/node` for receive-only NWC code handling, OpenReceive-managed persistence, CLI
   store initialization, mounted Node HTTP routes, app-owned route protection,
-  gated lookup, backend settlement verification, settlement actions, and
-  one-shot poll support.
+  request-driven status refresh, backend settlement verification, and
+  settlement actions.
 - `@openreceive/browser`, `@openreceive/elements`, and `@openreceive/react`
   for display-safe checkout UI/state. These packages never get receive-only NWC
   codes.
@@ -57,8 +57,9 @@ surface is hardened:
 - `amount_msats` is the public millisatoshi field.
 - Invoice storage requires `operation` because idempotency scope is
   `namespace + operation + idempotency_key`.
-- Settlement requires backend lookup with `settled_at`, `state == "settled"`,
-  or `transaction_state == "settled"`. A preimage alone is not final proof.
+- Settlement requires a backend `list_transactions` match with `settled_at`,
+  `state == "settled"`, or `transaction_state == "settled"`. A preimage alone
+  is not final proof.
 - Browser, mobile, and static frontend code never get receive-only NWC codes.
 
 ## Gate

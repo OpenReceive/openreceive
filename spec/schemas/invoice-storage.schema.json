@@ -106,7 +106,7 @@
       "type": "integer",
       "minimum": 0
     },
-    "last_lookup_at": {
+    "last_transaction_scan_at": {
       "type": "integer",
       "minimum": 0
     },
@@ -165,19 +165,38 @@
         }
       }
     },
-    "LookupBucket": {
+    "TransactionScanCursor": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "tokens",
-        "refilled_at"
+        "from",
+        "until",
+        "limit",
+        "offset",
+        "cycle"
       ],
       "properties": {
-        "tokens": {
-          "type": "number",
+        "from": {
+          "type": "integer",
           "minimum": 0
         },
-        "refilled_at": {
+        "until": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cycle": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "last_page_scanned_at": {
           "type": "integer",
           "minimum": 0
         }
@@ -190,10 +209,10 @@
     "idempotency_key is unique within namespace + operation + idempotency_key",
     "same idempotency request hash returns original response",
     "different idempotency request hash returns 409",
-    "local expires_at alone does not make a row terminal or remove it from recovery",
-    "expired_closed requires post-expiry wallet lookup or exhausted post-expiry grace verification",
+    "local expires_at alone does not make a row terminal",
+    "expired_closed requires wallet transaction finality",
     "settlement_action_completed_at can be set once",
-    "last_lookup_at records the store-coordinated wallet lookup cooldown claim",
+    "last_transaction_scan_at records the most recent server-side status refresh scan attempt",
     "action_claimed_at records the store-coordinated settlement action lease",
     "refresh creates a new invoice row"
   ]

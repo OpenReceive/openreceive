@@ -31,11 +31,11 @@ class OpenReceiveTest < Minitest::Test
   end
 
   class FakeNwcRubyClient
-    attr_reader :make_invoice_calls, :lookup_invoice_calls
+    attr_reader :make_invoice_calls, :list_transactions_calls
 
     def initialize
       @make_invoice_calls = []
-      @lookup_invoice_calls = []
+      @list_transactions_calls = []
     end
 
     def make_invoice(params)
@@ -50,15 +50,18 @@ class OpenReceiveTest < Minitest::Test
       }
     end
 
-    def lookup_invoice(params)
-      params.fetch("payment_hash")
-      @lookup_invoice_calls << params
+    def list_transactions(params)
+      params.fetch("type")
+      @list_transactions_calls << params
       {
-        "invoice" => "lnbc-ruby-nwc",
-        "payment_hash" => params.fetch("payment_hash"),
-        "amount" => 200_000,
-        "state" => "settled",
-        "settled_at" => 1200
+        "transactions" => [{
+          "type" => "incoming",
+          "invoice" => "lnbc-ruby-nwc",
+          "payment_hash" => "c" * 64,
+          "amount" => 200_000,
+          "state" => "settled",
+          "settled_at" => 1200
+        }]
       }
     end
 
@@ -68,11 +71,11 @@ class OpenReceiveTest < Minitest::Test
   end
 
   class FakeKeywordNwcRubyClient
-    attr_reader :make_invoice_calls, :lookup_invoice_calls
+    attr_reader :make_invoice_calls, :list_transactions_calls
 
     def initialize
       @make_invoice_calls = []
-      @lookup_invoice_calls = []
+      @list_transactions_calls = []
     end
 
     def make_invoice(amount:, description: nil, **_extra)
@@ -86,14 +89,17 @@ class OpenReceiveTest < Minitest::Test
       }
     end
 
-    def lookup_invoice(payment_hash:)
-      @lookup_invoice_calls << { payment_hash: payment_hash }
+    def list_transactions(**params)
+      @list_transactions_calls << params
       {
-        "invoice" => "lnbc-ruby-keyword",
-        "payment_hash" => payment_hash,
-        "amount" => 200_000,
-        "state" => "settled",
-        "settled_at" => 1200
+        "transactions" => [{
+          "type" => "incoming",
+          "invoice" => "lnbc-ruby-keyword",
+          "payment_hash" => "d" * 64,
+          "amount" => 200_000,
+          "state" => "settled",
+          "settled_at" => 1200
+        }]
       }
     end
   end
@@ -133,7 +139,7 @@ class OpenReceiveTest < Minitest::Test
     vector.fetch("cases").each do |item|
       assert_equal(
         item.fetch("expected").fetch("settled"),
-        OpenReceive.settled?(item.fetch("lookup_invoice")),
+        OpenReceive.settled?(item.fetch("transaction")),
         item.fetch("name")
       )
     end
@@ -191,12 +197,12 @@ class OpenReceiveTest < Minitest::Test
       else
         assert_equal(
           item.fetch("expected_nip47_request"),
-          OpenReceive.lookup_invoice_nip47_request(item.fetch("openreceive_request")),
+          OpenReceive.list_transactions_nip47_request(item.fetch("openreceive_request")),
           item.fetch("name")
         )
         assert_equal(
           item.fetch("expected_openreceive_response"),
-          OpenReceive.normalize_lookup_invoice_response(item.fetch("raw_response")),
+          OpenReceive.normalize_list_transactions_response(item.fetch("raw_response")),
           item.fetch("name")
         )
       end
@@ -249,13 +255,21 @@ class OpenReceiveTest < Minitest::Test
       "amount_msats" => 200_000,
       "description" => "Fruit sticker"
     )
-    lookup = client.lookup_invoice("payment_hash" => "c" * 64)
+    transactions = client.list_transactions(
+      "type" => "incoming",
+      "unpaid" => true,
+      "from" => 1000,
+      "until" => 1000,
+      "limit" => 20,
+      "offset" => 0
+    )
+    transaction = transactions.fetch("transactions").first
 
     assert_equal "lnbc-ruby-nwc", invoice.fetch("invoice")
     assert_equal 200_000, invoice.fetch("amount_msats")
-    assert_equal "settled", lookup.fetch("transaction_state")
+    assert_equal "settled", transaction.fetch("transaction_state")
     assert_equal [{ "amount" => 200_000, "description" => "Fruit sticker" }], raw_client.make_invoice_calls
-    assert_equal [{ "payment_hash" => "c" * 64 }], raw_client.lookup_invoice_calls
+    assert_equal [{ "type" => "incoming", "unpaid" => true, "from" => 1000, "until" => 1000, "limit" => 20, "offset" => 0 }], raw_client.list_transactions_calls
     refute client.respond_to?(:pay_invoice)
     assert_includes client.redacted_connection_uri, "secret=[REDACTED]"
     refute_includes client.redacted_connection_uri, "b" * 64
@@ -269,12 +283,20 @@ class OpenReceiveTest < Minitest::Test
       "amount_msats" => 200_000,
       "description" => "Fruit sticker"
     )
-    lookup = client.lookup_invoice("payment_hash" => "d" * 64)
+    transactions = client.list_transactions(
+      "type" => "incoming",
+      "unpaid" => true,
+      "from" => 1000,
+      "until" => 1000,
+      "limit" => 20,
+      "offset" => 0
+    )
+    transaction = transactions.fetch("transactions").first
 
     assert_equal "lnbc-ruby-keyword", invoice.fetch("invoice")
-    assert_equal "settled", lookup.fetch("transaction_state")
+    assert_equal "settled", transaction.fetch("transaction_state")
     assert_equal [{ amount: 200_000, description: "Fruit sticker" }], raw_client.make_invoice_calls
-    assert_equal [{ payment_hash: "d" * 64 }], raw_client.lookup_invoice_calls
+    assert_equal [{ type: "incoming", unpaid: true, from: 1000, until: 1000, limit: 20, offset: 0 }], raw_client.list_transactions_calls
   end
 
   def test_unavailable_receive_client_fails_closed_without_wallet_methods
@@ -285,15 +307,15 @@ class OpenReceiveTest < Minitest::Test
     error = assert_raises(OpenReceive::WalletUnavailableError) do
       client.make_invoice("amount_msats" => 200_000)
     end
-    lookup_error = assert_raises(OpenReceive::WalletUnavailableError) do
-      client.lookup_invoice("payment_hash" => "a" * 64)
+    transaction_error = assert_raises(OpenReceive::WalletUnavailableError) do
+      client.list_transactions("type" => "incoming")
     end
 
     assert_equal 503, error.status
     assert_equal "WALLET_UNAVAILABLE", error.code
     assert_includes error.message, "needs a receive-only NWC code to receive payments"
     assert_includes error.message, "https://openreceive.org/get_a_nwc_code_to_receive_payments"
-    assert_equal "WALLET_UNAVAILABLE", lookup_error.code
+    assert_equal "WALLET_UNAVAILABLE", transaction_error.code
     assert_equal({ "wallet_configured" => false }, client.get_info)
     refute client.respond_to?(:pay_invoice)
   end
@@ -303,34 +325,6 @@ class OpenReceiveTest < Minitest::Test
     assert_includes OpenReceive.missing_nwc_message, "https://openreceive.org/get_a_nwc_code_to_receive_payments"
     assert_includes OpenReceive.invalid_nwc_message(reason: "bad scheme"), "bad scheme"
     assert_includes OpenReceive.invalid_nwc_message, "https://openreceive.org/get_a_nwc_code_to_receive_payments"
-  end
-
-  def test_polling_schedule_vectors
-    vector = read_vector("spec/test-vectors/polling.backoff.json")
-    created_at = vector.fetch("created_at")
-    expires_at = vector.fetch("expires_at")
-
-    vector.fetch("cadence").each do |band|
-      assert_equal(
-        band.fetch("delay_seconds"),
-        OpenReceive.polling_delay_seconds(
-          created_at: created_at,
-          now: created_at + band.fetch("elapsed_seconds_min")
-        )
-      )
-    end
-
-    vector.fetch("examples").each do |item|
-      schedule = OpenReceive.polling_schedule(
-        created_at: created_at,
-        expires_at: expires_at,
-        now: item.fetch("now")
-      )
-
-      assert_equal item["next_lookup_at"], schedule.fetch("next_lookup_at") if item.key?("next_lookup_at")
-      assert_equal item["next_delay_seconds"], schedule.fetch("delay_seconds") if item.key?("next_delay_seconds")
-      assert_equal item["behavior"], schedule.fetch("reason") if item.key?("behavior")
-    end
   end
 
   def test_idempotency_vectors
@@ -417,28 +411,4 @@ class OpenReceiveTest < Minitest::Test
     assert_equal 1200, settled_after_action.fetch("settled_at")
   end
 
-  def test_in_memory_invoice_store_lists_recoverable_rows
-    store = OpenReceive::InMemoryInvoiceKvStore.new
-    store.create_invoice(invoice_row)
-    store.create_invoice(
-      invoice_row(
-        "invoice_id" => "or_inv_closed",
-        "idempotency_key" => "closed",
-        "idempotency_request_hash" => "sha256:#{"d" * 64}",
-        "payment_hash" => "e" * 64,
-        "invoice" => "lnbc-closed",
-        "transaction_state" => "expired",
-        "workflow_state" => "expired_closed"
-      )
-    )
-
-    recoverable = store.recoverable_invoices(now: 1001)
-    recoverable_after_local_expiry = store.recoverable_invoices(
-      now: invoice_row.fetch("expires_at") + 3600,
-      grace_seconds: 15
-    )
-
-    assert_equal ["or_inv_test_1"], recoverable.map { |row| row.fetch("invoice_id") }
-    assert_equal ["or_inv_test_1"], recoverable_after_local_expiry.map { |row| row.fetch("invoice_id") }
-  end
 end

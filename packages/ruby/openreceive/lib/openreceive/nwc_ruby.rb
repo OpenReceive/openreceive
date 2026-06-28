@@ -23,15 +23,15 @@ module OpenReceive
       OpenReceive.normalize_make_invoice_response(response)
     end
 
-    def lookup_invoice(request)
-      params = OpenReceive.lookup_invoice_nip47_request(request)
+    def list_transactions(request)
+      params = OpenReceive.list_transactions_nip47_request(request)
       response = call_receive_method(
-        :lookup_invoice,
-        :lookupInvoice,
+        :list_transactions,
+        :listTransactions,
         params,
         keyword_params: symbolize_keys(params)
       )
-      OpenReceive.normalize_lookup_invoice_response(response)
+      OpenReceive.normalize_list_transactions_response(response)
     end
 
     def preflight

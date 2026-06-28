@@ -1,6 +1,6 @@
 import {
-  isLookupSettled,
-  type LookupInvoiceResult,
+  isTransactionSettled,
+  type NwcTransaction,
   type OpenReceiveTransactionState
 } from "../nwc/client.ts";
 
@@ -9,15 +9,15 @@ export type SettlementFinalitySignal =
   | "state"
   | "transaction_state";
 
-export type LookupInvoiceSettlementStatus =
+export type TransactionSettlementStatus =
   | "pending"
   | "settled"
   | "expired"
   | "failed";
 
-export interface LookupInvoiceSettlementDetection {
+export interface TransactionSettlementDetection {
   settled: boolean;
-  status: LookupInvoiceSettlementStatus;
+  status: TransactionSettlementStatus;
   finality_signal?: SettlementFinalitySignal;
   transaction_state?: OpenReceiveTransactionState;
   state?: OpenReceiveTransactionState;
@@ -26,53 +26,53 @@ export interface LookupInvoiceSettlementDetection {
 }
 
 export function getSettlementFinalitySignal(
-  result: LookupInvoiceResult
+  result: NwcTransaction
 ): SettlementFinalitySignal | undefined {
-  if (!isLookupSettled(result)) return undefined;
+  if (!isTransactionSettled(result)) return undefined;
   if (result.settled_at !== undefined) return "settled_at";
   if (result.state === "settled") return "state";
   if (result.transaction_state === "settled") return "transaction_state";
   return undefined;
 }
 
-export function isLookupInvoiceSettled(result: LookupInvoiceResult): boolean {
-  return isLookupSettled(result);
+export function isTransactionFinal(result: NwcTransaction): boolean {
+  return isTransactionSettled(result);
 }
 
-export function isLookupInvoiceExpired(result: LookupInvoiceResult): boolean {
+export function isTransactionExpired(result: NwcTransaction): boolean {
   return result.state === "expired" || result.transaction_state === "expired";
 }
 
-export function isLookupInvoiceFailed(result: LookupInvoiceResult): boolean {
+export function isTransactionFailed(result: NwcTransaction): boolean {
   return result.state === "failed" || result.transaction_state === "failed";
 }
 
-export function classifyLookupInvoiceSettlement(
-  result: LookupInvoiceResult
-): LookupInvoiceSettlementDetection {
+export function classifyTransactionSettlement(
+  result: NwcTransaction
+): TransactionSettlementDetection {
   const finalitySignal = getSettlementFinalitySignal(result);
 
   if (finalitySignal !== undefined) {
-    return lookupInvoiceSettlementDetection(result, "settled", finalitySignal);
+    return transactionSettlementDetection(result, "settled", finalitySignal);
   }
 
-  if (isLookupInvoiceExpired(result)) {
-    return lookupInvoiceSettlementDetection(result, "expired");
+  if (isTransactionExpired(result)) {
+    return transactionSettlementDetection(result, "expired");
   }
 
-  if (isLookupInvoiceFailed(result)) {
-    return lookupInvoiceSettlementDetection(result, "failed");
+  if (isTransactionFailed(result)) {
+    return transactionSettlementDetection(result, "failed");
   }
 
-  return lookupInvoiceSettlementDetection(result, "pending");
+  return transactionSettlementDetection(result, "pending");
 }
 
-function lookupInvoiceSettlementDetection(
-  result: LookupInvoiceResult,
-  status: LookupInvoiceSettlementStatus,
+function transactionSettlementDetection(
+  result: NwcTransaction,
+  status: TransactionSettlementStatus,
   finalitySignal?: SettlementFinalitySignal
-): LookupInvoiceSettlementDetection {
-  const detection: LookupInvoiceSettlementDetection = {
+): TransactionSettlementDetection {
+  const detection: TransactionSettlementDetection = {
     settled: status === "settled",
     status,
     preimage_present: result.preimage !== undefined

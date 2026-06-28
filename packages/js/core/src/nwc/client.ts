@@ -106,12 +106,17 @@ export interface MakeInvoiceResult {
   expires_at?: number;
 }
 
-export interface LookupInvoiceRequest {
-  payment_hash?: string;
-  invoice?: string;
+export interface ListTransactionsRequest {
+  from?: number;
+  until?: number;
+  limit?: number;
+  offset?: number;
+  unpaid?: boolean;
+  type?: "incoming" | "outgoing";
 }
 
-export interface LookupInvoiceResult {
+export interface NwcTransaction {
+  type?: "incoming" | "outgoing";
   invoice?: string;
   payment_hash?: string;
   amount_msats?: bigint;
@@ -121,6 +126,13 @@ export interface LookupInvoiceResult {
   expires_at?: number;
   settled_at?: number;
   preimage?: string;
+  fees_paid_msats?: bigint;
+  description?: string;
+  description_hash?: string;
+}
+
+export interface ListTransactionsResult {
+  transactions: NwcTransaction[];
 }
 
 export interface PaymentReceivedNotification {
@@ -134,7 +146,7 @@ export interface PaymentReceivedNotification {
 export interface OpenReceiveReceiveNwcClient {
   preflight(): Promise<WalletCapabilitySummary>;
   makeInvoice(request: MakeInvoiceRequest): Promise<MakeInvoiceResult>;
-  lookupInvoice(request: LookupInvoiceRequest): Promise<LookupInvoiceResult>;
+  listTransactions(request: ListTransactionsRequest): Promise<ListTransactionsResult>;
   subscribeToPaymentReceived?(
     handler: (notification: PaymentReceivedNotification) => Promise<void> | void
   ): Promise<() => Promise<void> | void>;
@@ -144,7 +156,7 @@ export interface StandaloneNwcClient extends OpenReceiveReceiveNwcClient {
   payInvoice(request: { invoice: string; amount_msats?: bigint }): Promise<unknown>;
 }
 
-export function isLookupSettled(result: LookupInvoiceResult): boolean {
+export function isTransactionSettled(result: NwcTransaction): boolean {
   return result.settled_at !== undefined || result.transaction_state === "settled" || result.state === "settled";
 }
 

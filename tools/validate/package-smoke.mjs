@@ -129,7 +129,7 @@ assert(
     typeof browserInternal.createCheckoutElement === "function" &&
     typeof browserInternal.createCheckoutShell === "function" &&
     typeof browserInternal.createCheckoutShellModelFromProps === "function" &&
-    typeof browserInternal.createOpenReceiveLookupInvoiceFetcher === "function" &&
+    typeof browserInternal.createOpenReceiveStatusFetcher === "function" &&
     typeof browserInternal.openReceiveCheckoutElementStyles === "string",
   "@openreceive/browser/internal: framework adapter internals must be importable"
 );

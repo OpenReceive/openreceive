@@ -57,32 +57,24 @@ paths:
                 $ref: "#/components/schemas/Invoice"
         "404":
           $ref: "#/components/responses/Error"
-  /invoices/lookup:
+  /invoices/{invoice_id}/status:
     post:
-      operationId: lookupInvoice
-      summary: Lookup by payment hash or BOLT11 invoice.
+      operationId: refreshInvoiceStatus
+      summary: Refresh one invoice status from the server-side wallet.
       description: >
-        This endpoint refreshes invoice status by asking the server-side wallet
-        for authoritative lookup_invoice state. Mount it inside an app route
-        whose access rules fit your checkout flow.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/LookupInvoiceRequest"
+        Each request may claim the durable global scan gate and perform at most
+        one bounded NIP-47 list_transactions page for the invoice's creation-time
+        window. If the gate is already claimed, the stored invoice state is
+        returned without contacting the wallet.
+      parameters:
+        - $ref: "#/components/parameters/InvoiceId"
       responses:
         "200":
-          description: Lookup status after backend wallet verification.
+          description: Stored status, optionally after one wallet transaction page.
           content:
             application/json:
               schema:
-                allOf:
-                  - $ref: "#/components/schemas/Invoice"
-                  - type: object
-                    properties:
-                      preimage_present:
-                        type: boolean
+                $ref: "#/components/schemas/InvoiceStatus"
         "400":
           $ref: "#/components/responses/Error"
         "404":
@@ -250,21 +242,6 @@ components:
         required:
           - optional_invoice_description
           - description_hash
-    LookupInvoiceRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        payment_hash:
-          type: string
-          pattern: "^[0-9a-fA-F]{64}$"
-        invoice:
-          type: string
-          minLength: 1
-      oneOf:
-        - required:
-            - payment_hash
-        - required:
-            - invoice
     RefreshInvoiceRequest:
       type: object
       additionalProperties: false
@@ -375,6 +352,20 @@ components:
           oneOf:
             - $ref: "#/components/schemas/RateQuote"
             - type: "null"
+    InvoiceStatus:
+      allOf:
+        - $ref: "#/components/schemas/Invoice"
+        - type: object
+          additionalProperties: true
+          required:
+            - wallet_scan_performed
+            - transactions_checked
+          properties:
+            wallet_scan_performed:
+              type: boolean
+            transactions_checked:
+              type: integer
+              minimum: 0
     FiatAmount:
       type: object
       additionalProperties: false

@@ -79,7 +79,7 @@ key `price_feed:bitcoin`. It records the rate map (`rates`), which feed produced
 it (`source`, either `primary` or `fallback`), and the Unix-seconds fetch time
 (`fetched_at`). Because it lives in the same durable store as invoices
 (SQLite or Postgres in production), the 60-second window is shared across every
-worker that uses the same store and namespace.
+server process that uses the same store and namespace.
 
 ## Source Order
 

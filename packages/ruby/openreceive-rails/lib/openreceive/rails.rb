@@ -12,8 +12,7 @@ module OpenReceive
       def draw(router)
         router.post "/v1/invoices", to: "invoices#create"
         router.get "/v1/invoices/:invoice_id", to: "invoices#show"
-        router.post "/v1/poll", to: "invoices#poll"
-        router.get "/v1/poll", to: "invoices#poll"
+        router.post "/v1/invoices/:invoice_id/status", to: "invoices#status"
       end
     end
 
@@ -24,17 +23,17 @@ module OpenReceive
                     :metadata,
                     :settlement_action,
                     :production,
-                    :route_recovery,
-                    :sweep_interval_seconds,
-                    :sweep_batch
+                    :transaction_scan_interval_seconds,
+                    :transaction_scan_page_limit,
+                    :transaction_scan_window_padding_seconds
 
       def initialize
         @store = OpenReceive::InMemoryInvoiceKvStore.new
         @namespace = "default"
         @production = false
-        @route_recovery = true
-        @sweep_interval_seconds = nil
-        @sweep_batch = nil
+        @transaction_scan_interval_seconds = 2
+        @transaction_scan_page_limit = 20
+        @transaction_scan_window_padding_seconds = 0
       end
 
       def validate!
@@ -116,52 +115,8 @@ module OpenReceive
         row_by_control("payment_hash", payment_hash)
       end
 
-      def recoverable_invoices(now:, grace_seconds: 15, limit: nil)
-        Integer(now)
-        Integer(grace_seconds)
-        sql = "SELECT data FROM #{invoice_table} WHERE terminal = 0 ORDER BY expires_at ASC, invoice_id ASC"
-        params = []
-        unless limit.nil?
-          sql += " LIMIT ?"
-          params << Integer(limit)
-        end
-        @database.execute(
-          sql,
-          params
-        ).map { |record| decode_row(record.fetch("data")) }
-      end
-
-      def claim_sweep(now:, interval_seconds:)
-        current = Integer(now)
-        interval = Integer(interval_seconds)
-        raise ArgumentError, "interval_seconds must be positive" unless interval.positive?
-
-        claimed = false
-        @database.execute("BEGIN IMMEDIATE")
-        row = @database.get_first_row(
-          "SELECT value FROM #{meta_table} WHERE key = ? LIMIT 1",
-          "last_sweep_at"
-        )
-        last_sweep_at = row.nil? ? nil : Integer(row.fetch("value"))
-        if last_sweep_at.nil? || current - last_sweep_at >= interval
-          if row.nil?
-            @database.execute(
-              "INSERT INTO #{meta_table} (key, value, rev) VALUES (?, ?, 0)",
-              ["last_sweep_at", current.to_s]
-            )
-          else
-            @database.execute(
-              "UPDATE #{meta_table} SET value = ?, rev = rev + 1 WHERE key = ?",
-              [current.to_s, "last_sweep_at"]
-            )
-          end
-          claimed = true
-        end
-        @database.execute("COMMIT")
-        claimed
-      rescue StandardError
-        @database.execute("ROLLBACK") rescue nil
-        raise
+      def find_by_bolt11_invoice(invoice)
+        row_by_control("bolt11", invoice)
       end
 
       def mark_verifying(invoice_id:)
@@ -222,6 +177,45 @@ module OpenReceive
         end
       end
 
+      def get_meta(key)
+        row = @database.get_first_row(
+          "SELECT value, rev FROM #{meta_table} WHERE key = ? LIMIT 1",
+          key
+        )
+        row.nil? ? nil : { "value" => row.fetch("value"), "rev" => Integer(row.fetch("rev")) }
+      end
+
+      def cas_meta(key:, value:, expected_rev:)
+        raise ArgumentError, "meta key must be a non-empty string" unless key.is_a?(String) && !key.empty?
+
+        current = get_meta(key)
+        if expected_rev.nil?
+          return { "status" => "conflict", "row" => current } unless current.nil?
+
+          @database.execute(
+            "INSERT INTO #{meta_table} (key, value, rev) VALUES (?, ?, 0)",
+            [key, value]
+          )
+          return { "status" => "ok", "row" => { "value" => value, "rev" => 0 } }
+        end
+
+        return { "status" => "conflict", "row" => current || { "value" => "", "rev" => -1 } } if current.nil?
+
+        updated = @database.execute(
+          "UPDATE #{meta_table} SET value = ?, rev = ? WHERE key = ? AND rev = ?",
+          [value, Integer(expected_rev) + 1, key, Integer(expected_rev)]
+        )
+        if updated.respond_to?(:changes) && updated.changes.zero?
+          latest = get_meta(key)
+          return { "status" => "conflict", "row" => latest || { "value" => "", "rev" => -1 } }
+        end
+
+        { "status" => "ok", "row" => { "value" => value, "rev" => Integer(expected_rev) + 1 } }
+      rescue SQLite3::ConstraintException
+        current = get_meta(key)
+        { "status" => "conflict", "row" => current || { "value" => "", "rev" => -1 } }
+      end
+
       private
 
       def ensure_schema
@@ -272,8 +266,8 @@ module OpenReceive
       end
 
       def record_by_control(column, value)
-        unless %w[invoice_id payment_hash idempotency_scope].include?(column)
-          raise ArgumentError, "unsupported control lookup"
+        unless %w[invoice_id payment_hash bolt11 idempotency_scope].include?(column)
+          raise ArgumentError, "unsupported control read"
         end
 
         record = @database.get_first_row(
@@ -374,8 +368,7 @@ module OpenReceive
         create_invoice
         find_by_invoice_id
         find_by_payment_hash
-        recoverable_invoices
-        claim_sweep
+        find_by_bolt11_invoice
         mark_verifying
         mark_expiry_pending_verification
         mark_settled
@@ -383,7 +376,11 @@ module OpenReceive
         mark_failed_closed
         mark_settlement_action_completed
         mark_settlement_action_failed
+        get_meta
+        cas_meta
       ].freeze
+
+      TRANSACTION_SCAN_GATE_META_KEY = "transaction_scan_gate"
 
       def initialize(config = Configuration.new)
         @config = config
@@ -411,111 +408,219 @@ module OpenReceive
         response(201, invoice_payload(created.fetch("row")))
       end
 
-      def lookup_invoice(controller:, invoice_id:)
+      def get_invoice(controller:, invoice_id:)
         row = @config.store.find_by_invoice_id(invoice_id)
         raise OpenReceive::InvoiceNotFoundError.new(invoice_id) if row.nil?
 
-        response(200, invoice_payload(verify_invoice(invoice_id: invoice_id)))
+        response(200, invoice_payload(row))
       end
 
-      def verify_invoice(invoice_id:)
+      def refresh_invoice_status(controller:, invoice_id:, now: Time.now.to_i)
         row = @config.store.find_by_invoice_id(invoice_id)
         raise OpenReceive::InvoiceNotFoundError.new(invoice_id) if row.nil?
 
-        verify_stored_invoice(row)
-      end
-
-      def poll_recoverable_invoices(now: Time.now.to_i, limit: nil)
-        unless @config.store.respond_to?(:recoverable_invoices)
-          raise NotImplementedError, "OpenReceive store must provide recoverable_invoices"
+        if terminal?(row)
+          body = invoice_payload(row)
+          body["wallet_scan_performed"] = false
+          body["transactions_checked"] = 0
+          return response(200, body)
         end
 
-        @config.store.recoverable_invoices(now: now, limit: limit).map do |row|
-          verify_stored_invoice(row)
-        end
-      end
-
-      def maybe_sweep(now: Time.now.to_i)
-        return sweep_result("skipped", "disabled", []) if @config.route_recovery == false
-        unless @config.store.respond_to?(:claim_sweep)
-          return sweep_result("skipped", "unsupported_store", [])
+        unless claim_transaction_scan_gate(now)
+          body = invoice_payload(row)
+          body["wallet_scan_performed"] = false
+          body["transactions_checked"] = 0
+          return response(200, body)
         end
 
-        interval = configured_positive_integer(
-          @config.sweep_interval_seconds,
-          "OPENRECEIVE_SWEEP_INTERVAL_SEC",
-          20,
-          "sweep_interval_seconds"
-        )
-        batch = configured_positive_integer(
-          @config.sweep_batch,
-          "OPENRECEIVE_SWEEP_BATCH",
-          200,
-          "sweep_batch"
-        )
-        return sweep_result("skipped", "interval", []) unless @config.store.claim_sweep(now: now, interval_seconds: interval)
-
-        invoices = poll_recoverable_invoices(now: now, limit: batch)
-        sweep_result("started", nil, invoices)
-      end
-
-      def poll(controller:, now: Time.now.to_i)
-        invoices = poll_recoverable_invoices(now: now)
-        response(200, {
-          "invoice_ids" => invoices.map { |invoice| invoice.fetch("invoice_id") },
-          "checked" => invoices.length
-        })
+        refreshed = refresh_stored_invoice(row, now: now)
+        body = invoice_payload(refreshed.fetch("row"))
+        body["wallet_scan_performed"] = refreshed.fetch("wallet_scan_performed")
+        body["transactions_checked"] = refreshed.fetch("transactions_checked")
+        response(200, body)
       end
 
       private
 
-      def sweep_result(status, reason, invoices)
-        body = {
-          "status" => status,
-          "invoice_ids" => invoices.map { |invoice| invoice.fetch("invoice_id") },
-          "checked" => invoices.length
+      def terminal?(row)
+        %w[
+          settlement_action_completed
+          expired_closed
+          failed_closed
+          cancelled
+        ].include?(row.fetch("workflow_state"))
+      end
+
+      def refresh_stored_invoice(row, now:)
+        window = creation_window(row)
+        cursor = read_transaction_scan_cursor(window)
+        begin
+          result = @config.client.list_transactions(
+            "type" => "incoming",
+            "unpaid" => true,
+            "from" => cursor.fetch("from"),
+            "until" => cursor.fetch("until"),
+            "limit" => cursor.fetch("limit"),
+            "offset" => cursor.fetch("offset")
+          )
+          transactions = OpenReceive.normalize_list_transactions_response(result).fetch("transactions")
+        rescue StandardError
+          return {
+            "row" => row,
+            "transactions_checked" => 0,
+            "wallet_scan_performed" => false
+          }
+        end
+
+        apply_transaction_page(transactions, window, now: now)
+        advance_transaction_scan_cursor(cursor, transactions.length, now)
+        latest = @config.store.find_by_invoice_id(row.fetch("invoice_id")) || row
+        {
+          "row" => latest,
+          "transactions_checked" => transactions.length,
+          "wallet_scan_performed" => true
         }
-        body["reason"] = reason unless reason.nil?
-        body
       end
 
-      def positive_integer(value, name)
-        parsed = Integer(value)
-        raise ArgumentError, "#{name} must be positive" unless parsed.positive?
+      def apply_transaction_page(transactions, window, now:)
+        transactions.each do |transaction|
+          next if transaction["type"] && transaction["type"] != "incoming"
 
-        parsed
-      rescue ArgumentError, TypeError
-        raise ArgumentError, "#{name} must be positive"
+          row = find_local_invoice_for_transaction(transaction)
+          next if row.nil? || terminal?(row)
+          created_at = row.fetch("created_at")
+          next unless created_at >= window.fetch("from") && created_at <= window.fetch("until")
+
+          apply_transaction_to_invoice(row, transaction, now: now)
+        end
       end
 
-      def configured_positive_integer(value, env_name, default_value, name)
-        configured = value
-        configured = ENV[env_name] if configured.nil?
-        configured = default_value if configured.nil? || configured.to_s.strip.empty?
-        positive_integer(configured, name)
+      def find_local_invoice_for_transaction(transaction)
+        if transaction["payment_hash"]
+          row = @config.store.find_by_payment_hash(transaction["payment_hash"])
+          return row unless row.nil?
+        end
+
+        return nil unless transaction["invoice"]
+
+        @config.store.find_by_bolt11_invoice(transaction["invoice"])
       end
 
-      def verify_stored_invoice(row)
-        if %w[invoice_created expiry_pending_verification].include?(row.fetch("workflow_state"))
-          row = @config.store.mark_verifying(invoice_id: row.fetch("invoice_id"))
+      def apply_transaction_to_invoice(row, transaction, now:)
+        if OpenReceive.expired?(transaction)
+          row = @config.store.mark_expired_closed(invoice_id: row.fetch("invoice_id"))
+          return row
+        end
+        if OpenReceive.failed?(transaction)
+          row = @config.store.mark_failed_closed(invoice_id: row.fetch("invoice_id"))
+          return row
+        end
+        unless OpenReceive.settled?(transaction)
+          return @config.store.mark_verifying(invoice_id: row.fetch("invoice_id"))
         end
 
-        lookup = @config.client.lookup_invoice("payment_hash" => row.fetch("payment_hash"))
-        normalized = OpenReceive.normalize_lookup_invoice_response(lookup)
-        if OpenReceive.expired?(normalized)
-          return @config.store.mark_expired_closed(invoice_id: row.fetch("invoice_id"))
-        end
-        if OpenReceive.failed?(normalized)
-          return @config.store.mark_failed_closed(invoice_id: row.fetch("invoice_id"))
-        end
-        return row unless OpenReceive.settled?(normalized)
-
-        settled_at = normalized["settled_at"] || Time.now.to_i
+        settled_at = transaction["settled_at"] || now
         settled = @config.store.mark_settled(
           invoice_id: row.fetch("invoice_id"),
           settled_at: settled_at
         )
         run_settlement_action_once(settled)
+      end
+
+      def claim_transaction_scan_gate(now)
+        interval = positive_integer(@config.transaction_scan_interval_seconds, "transaction_scan_interval_seconds")
+        6.times do
+          current = @config.store.get_meta(TRANSACTION_SCAN_GATE_META_KEY)
+          if current
+            claimed_at = parse_claimed_at(current.fetch("value"))
+            return false if claimed_at && now - claimed_at < interval
+          end
+
+          claimed = @config.store.cas_meta(
+            key: TRANSACTION_SCAN_GATE_META_KEY,
+            value: JSON.generate("claimed_at" => now),
+            expected_rev: current ? current.fetch("rev") : nil
+          )
+          return true if claimed.fetch("status") == "ok"
+        end
+        false
+      end
+
+      def creation_window(row)
+        padding = nonnegative_integer(@config.transaction_scan_window_padding_seconds, "transaction_scan_window_padding_seconds")
+        created_at = Integer(row.fetch("created_at"))
+        {
+          "from" => [created_at - padding, 0].max,
+          "until" => created_at + padding,
+          "limit" => positive_integer(@config.transaction_scan_page_limit, "transaction_scan_page_limit")
+        }
+      end
+
+      def read_transaction_scan_cursor(window)
+        row = @config.store.get_meta(transaction_scan_cursor_key(window))
+        return window.merge("offset" => 0, "cycle" => 0) if row.nil?
+
+        parsed = JSON.parse(row.fetch("value"))
+        window.merge(
+          "offset" => nonnegative_or_default(parsed["offset"], 0),
+          "cycle" => nonnegative_or_default(parsed["cycle"], 0),
+          "last_page_scanned_at" => nonnegative_or_default(parsed["last_page_scanned_at"], nil)
+        ).compact
+      rescue JSON::ParserError
+        window.merge("offset" => 0, "cycle" => 0)
+      end
+
+      def advance_transaction_scan_cursor(cursor, count, now)
+        key = transaction_scan_cursor_key(cursor)
+        6.times do
+          current = @config.store.get_meta(key)
+          latest = current.nil? ? cursor : read_transaction_scan_cursor(cursor)
+          full_page = count >= latest.fetch("limit")
+          next_cursor = latest.merge(
+            "offset" => full_page ? latest.fetch("offset") + latest.fetch("limit") : 0,
+            "cycle" => full_page ? latest.fetch("cycle") : latest.fetch("cycle") + 1,
+            "last_page_scanned_at" => now
+          )
+          updated = @config.store.cas_meta(
+            key: key,
+            value: JSON.generate(next_cursor),
+            expected_rev: current ? current.fetch("rev") : nil
+          )
+          return if updated.fetch("status") == "ok"
+        end
+      end
+
+      def transaction_scan_cursor_key(window)
+        "transaction_scan_cursor:#{window.fetch("from")}:#{window.fetch("until")}"
+      end
+
+      def parse_claimed_at(value)
+        parsed = JSON.parse(value)
+        integer = parsed["claimed_at"]
+        integer.is_a?(Integer) && integer >= 0 ? integer : nil
+      rescue JSON::ParserError
+        nil
+      end
+
+      def positive_integer(value, field)
+        integer = Integer(value)
+        raise ArgumentError, "#{field} must be positive" unless integer.positive?
+
+        integer
+      end
+
+      def nonnegative_integer(value, field)
+        integer = Integer(value)
+        raise ArgumentError, "#{field} must be nonnegative" if integer.negative?
+
+        integer
+      end
+
+      def nonnegative_or_default(value, default)
+        integer = Integer(value)
+        integer.negative? ? default : integer
+      rescue ArgumentError, TypeError
+        default
       end
 
       def build_metadata(controller, params)
@@ -622,7 +727,6 @@ module OpenReceive
     if defined?(::ActionController::Base)
       class InvoicesController < ::ActionController::Base
         protect_from_forgery with: :exception if respond_to?(:protect_from_forgery)
-        after_action :run_openreceive_route_recovery, except: :poll if respond_to?(:after_action)
         rescue_from OpenReceive::WalletUnavailableError, with: :render_openreceive_error if respond_to?(:rescue_from)
 
         def create
@@ -635,15 +739,18 @@ module OpenReceive
         end
 
         def show
-          result = OpenReceive::Rails.adapter.lookup_invoice(
+          result = OpenReceive::Rails.adapter.get_invoice(
             controller: self,
             invoice_id: params.fetch(:invoice_id)
           )
           render json: result.fetch("body"), status: result.fetch("status")
         end
 
-        def poll
-          result = OpenReceive::Rails.adapter.poll(controller: self)
+        def status
+          result = OpenReceive::Rails.adapter.refresh_invoice_status(
+            controller: self,
+            invoice_id: params.fetch(:invoice_id)
+          )
           render json: result.fetch("body"), status: result.fetch("status")
         end
 
@@ -663,11 +770,6 @@ module OpenReceive
           }, status: error.status
         end
 
-        def run_openreceive_route_recovery
-          OpenReceive::Rails.adapter.maybe_sweep
-        rescue StandardError
-          true
-        end
       end
     end
 

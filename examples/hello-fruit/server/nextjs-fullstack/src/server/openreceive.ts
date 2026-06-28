@@ -6,7 +6,7 @@ import {
   createOpenReceive,
   createOpenReceivePriceFeed,
   toOpenReceiveHttpInvoice,
-  toOpenReceiveHttpLookupInvoiceResult
+  toOpenReceiveHttpInvoiceStatusResult
 } from "@openreceive/node";
 import {
   createHelloFruitDemoMetadata
@@ -166,12 +166,12 @@ export async function orderStatusResponse(request: Request): Promise<Response> {
   const { openreceive } = await getOpenReceive(connectionString);
 
   try {
-    const lookup = toOpenReceiveHttpLookupInvoiceResult(
-      await openreceive.lookupInvoice(createLookupRequest(await readJsonBody(request)))
+    const status = toOpenReceiveHttpInvoiceStatusResult(
+      await openreceive.refreshInvoiceStatus(createStatusRequest(await readJsonBody(request)))
     );
-    const orderStatus = createHelloFruitOrderStatus(lookup);
+    const orderStatus = createHelloFruitOrderStatus(status);
     return jsonResponse({
-      ...lookup,
+      ...status,
       ...orderStatus,
       order: {
         uuid: orderStatus.order_uuid,
@@ -240,14 +240,17 @@ export async function createHelloFruitOpenReceive(
   return { openreceive, priceProviders, supportedCurrencies } satisfies HelloFruitOpenReceiveBundle;
 }
 
-function createLookupRequest(body: Record<string, unknown>): {
-  readonly paymentHash?: string;
-  readonly bolt11?: string;
+function createStatusRequest(body: Record<string, unknown>): {
+  readonly invoiceId: string;
 } {
-  return {
-    ...(typeof body.payment_hash === "string" ? { paymentHash: body.payment_hash } : {}),
-    ...(typeof body.invoice === "string" ? { bolt11: body.invoice } : {})
-  };
+  const invoiceId = body.invoice_id;
+  if (typeof invoiceId !== "string" || invoiceId.length === 0) {
+    throw createCheckoutHttpError(400, {
+      code: "INVALID_REQUEST",
+      message: "invoice_id is required."
+    });
+  }
+  return { invoiceId };
 }
 
 async function readJsonBody(request: Request): Promise<Record<string, unknown>> {

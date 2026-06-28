@@ -6,9 +6,8 @@ import { fileURLToPath } from "node:url";
 import { lightningUri } from "@openreceive/browser";
 import {
   OPENRECEIVE_NWC_METADATA_MAX_BYTES,
-  classifyLookupInvoiceSettlement,
+  classifyTransactionSettlement,
   parseNwcConnectionUri,
-  pollInvoiceUntilFinalState,
   quoteFiatToMsats,
   redactNwcConnectionUri
 } from "@openreceive/core";
@@ -258,30 +257,26 @@ console.log(`Amount msats: ${invoice.amount_msats.toString()}`);
 const qr = await renderTerminalQr(invoice.invoice);
 if (qr) console.log(qr);
 
-console.log("Running initial lookup before manual payment...");
-const initialLookup = await client.lookupInvoice({
-  payment_hash: invoice.payment_hash
-});
-console.log(`Initial wallet state: ${initialLookup.state ?? initialLookup.transaction_state ?? "unknown"}`);
+console.log("Running initial transaction scan before manual payment...");
+const initialTransaction = await findInvoiceTransaction(client, invoice);
+console.log(`Initial wallet state: ${initialTransaction?.state ?? initialTransaction?.transaction_state ?? "unknown"}`);
 
 if (!waitForPayment) {
-  console.log("Set OPENRECEIVE_LIVE_WAIT_FOR_PAYMENT=1 to poll until manual payment settles.");
+  console.log("Set OPENRECEIVE_LIVE_WAIT_FOR_PAYMENT=1 to refresh status until manual payment settles.");
   process.exit(0);
 }
 
-const notificationState = await subscribeForPaymentNotifications(client, invoice.payment_hash);
-console.log("Waiting for manual payment. Settlement must be proven by lookup_invoice.");
+const notificationState = await subscribeForPaymentNotifications(client, invoice);
+console.log("Waiting for manual payment. Settlement must be proven by list_transactions.");
 const createdAt = invoice.created_at ?? Math.floor(Date.now() / 1000);
 const expiresAt = invoice.expires_at ?? createdAt + product.invoice_expiry_seconds;
 let outcome;
 try {
-  outcome = await pollInvoiceUntilFinalState({
-    created_at: createdAt,
-    expires_at: expiresAt,
-    lookup_invoice: () => client.lookupInvoice({ payment_hash: invoice.payment_hash }),
-    on_transition: (transition) => {
-      console.log(`Workflow transition: ${transition.workflow_state} (${transition.reason})`);
-    }
+  outcome = await waitForListTransactionsFinalState({
+    client,
+    invoice,
+    createdAt,
+    expiresAt
   });
 } finally {
   await notificationState.stop();
@@ -289,10 +284,49 @@ try {
 
 console.log(`Final outcome: ${outcome.status} (${outcome.reason})`);
 if (notificationState.settledByNotification) {
-  console.log("Notification plus lookup confirmed settlement.");
+  console.log("Notification plus transaction scan confirmed settlement.");
 }
 if (outcome.status !== "settled") {
   process.exit(1);
+}
+
+async function waitForListTransactionsFinalState({ client, invoice, createdAt, expiresAt }) {
+  while (Math.floor(Date.now() / 1000) <= expiresAt) {
+    const transaction = await findInvoiceTransaction(client, invoice);
+    const settlement = transaction
+      ? classifyTransactionSettlement(transaction)
+      : { status: "pending", settled: false };
+    console.log(`Workflow transition: ${settlement.status} (${transaction ? "wallet_match" : "wallet_no_match"})`);
+    if (settlement.status === "settled" || settlement.status === "expired" || settlement.status === "failed") {
+      return {
+        status: settlement.status,
+        reason: transaction ? "wallet_match" : "wallet_no_match"
+      };
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+
+  return {
+    status: "expired",
+    reason: "local_expiry_elapsed"
+  };
+}
+
+async function findInvoiceTransaction(client, invoice) {
+  const createdAt = invoice.created_at ?? Math.floor(Date.now() / 1000);
+  const response = await client.listTransactions({
+    type: "incoming",
+    unpaid: true,
+    from: createdAt,
+    until: createdAt,
+    limit: 20,
+    offset: 0
+  });
+  return response.transactions.find((transaction) =>
+    transaction.payment_hash === invoice.payment_hash ||
+    transaction.invoice === invoice.invoice
+  );
 }
 
 async function assertMetadataGuard(client, amountMsats) {
@@ -319,7 +353,7 @@ async function assertMetadataGuard(client, amountMsats) {
   throw new Error("Metadata guard did not reject oversized payload.");
 }
 
-async function subscribeForPaymentNotifications(client, paymentHash) {
+async function subscribeForPaymentNotifications(client, invoice) {
   const state = {
     settledByNotification: false,
     stop: async () => {}
@@ -332,11 +366,11 @@ async function subscribeForPaymentNotifications(client, paymentHash) {
 
   try {
     const unsubscribe = await client.subscribeToPaymentReceived((notification) => {
-      if (notification.payment_hash !== paymentHash) return;
+      if (notification.payment_hash !== invoice.payment_hash) return;
 
-      void confirmNotificationSettlement(client, paymentHash, state).catch(
+      void confirmNotificationSettlement(client, invoice, state).catch(
         (error) => {
-          console.log(`Notification lookup failed: ${formatErrorMessage(error)}`);
+          console.log(`Notification status refresh failed: ${formatErrorMessage(error)}`);
         }
       );
     });
@@ -351,10 +385,12 @@ async function subscribeForPaymentNotifications(client, paymentHash) {
   return state;
 }
 
-async function confirmNotificationSettlement(client, paymentHash, state) {
-  console.log("Received payment_received notification; confirming with lookup_invoice.");
-  const lookup = await client.lookupInvoice({ payment_hash: paymentHash });
-  const settlement = classifyLookupInvoiceSettlement(lookup);
-  console.log(`Notification lookup state: ${settlement.status}`);
+async function confirmNotificationSettlement(client, invoice, state) {
+  console.log("Received payment_received notification; confirming with list_transactions.");
+  const transaction = await findInvoiceTransaction(client, invoice);
+  const settlement = transaction
+    ? classifyTransactionSettlement(transaction)
+    : { status: "pending", settled: false };
+  console.log(`Notification transaction scan state: ${settlement.status}`);
   if (settlement.settled) state.settledByNotification = true;
 }

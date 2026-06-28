@@ -73,7 +73,18 @@ invoice = client.make_invoice(
   "amount_msats" => Integer(ENV.fetch("OPENRECEIVE_LIVE_AMOUNT_MSATS", "1000")),
   "description" => "OpenReceive Ruby live smoke"
 )
-lookup = client.lookup_invoice("payment_hash" => invoice.fetch("payment_hash"))
+transactions = client.list_transactions(
+  "type" => "incoming",
+  "unpaid" => true,
+  "from" => invoice.fetch("created_at"),
+  "until" => invoice.fetch("created_at"),
+  "limit" => 20,
+  "offset" => 0
+).fetch("transactions")
+match = transactions.find do |transaction|
+  transaction["payment_hash"] == invoice.fetch("payment_hash") ||
+    transaction["invoice"] == invoice.fetch("invoice")
+end
 
 puts "Created Ruby live invoice payment hash prefix: #{invoice.fetch("payment_hash")[0, 8]}..."
-puts "Initial Ruby live lookup state: #{lookup["transaction_state"] || "unknown"}"
+puts "Initial Ruby live transaction state: #{match&.fetch("transaction_state", nil) || "unknown"}"

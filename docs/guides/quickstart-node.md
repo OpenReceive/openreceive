@@ -26,8 +26,8 @@ OPENRECEIVE_STORE=postgres://user:pass@host:5432/appdb
 OPENRECEIVE_NAMESPACE=my_app
 ```
 
-The default SQLite file is fine for one local server. If more than one server,
-worker, serverless instance, or scheduler can touch the same
+The default SQLite file is fine for one local server. If more than one server or
+serverless instance can touch the same
 `OPENRECEIVE_NAMESPACE`, point all of them at one shared durable OpenReceive
 store. For production, use OpenReceive-managed Postgres or SQLite invoice
 storage.
@@ -122,8 +122,8 @@ app.post("/create_order", async (req, res, next) => {
 
 app.post("/order_status", async (req, res, next) => {
   try {
-    const invoice = await openreceive.lookupInvoice({
-      paymentHash: req.body.payment_hash
+    const invoice = await openreceive.refreshInvoiceStatus({
+      invoiceId: req.body.invoice_id
     });
 
     res.status(200).json({
@@ -236,7 +236,7 @@ function isCheckoutHttpError(error: unknown): error is {
 ```
 
 Add a sibling `app/order_status/route.ts` that calls
-`openreceive.lookupInvoice({ paymentHash })` and returns your app's order
+`openreceive.refreshInvoiceStatus({ invoiceId })` and returns your app's order
 status plus the display-safe invoice fields.
 
 ## Fastify
@@ -305,8 +305,8 @@ app.post("/create_order", async (request, reply) => {
 
 app.post("/order_status", async (request, reply) => {
   try {
-    const invoice = await openreceive.lookupInvoice({
-      paymentHash: request.body.payment_hash
+    const invoice = await openreceive.refreshInvoiceStatus({
+      invoiceId: request.body.invoice_id
     });
     reply.send({
       ...invoice,
@@ -366,7 +366,7 @@ const { invoice } = await response.json();
 
 <Checkout
   invoice={invoice}
-  lookupUrl="/order_status"
+  statusUrl="/order_status"
   onSettled={() => showThankYou()}
 />;
 ```
@@ -401,7 +401,7 @@ const { invoice } = await response.json();
 <template>
   <Checkout
     :snapshot="invoice"
-    :options="{ lookupUrl: '/order_status', onSettled: showThankYou }"
+    :options="{ statusUrl: '/order_status', onSettled: showThankYou }"
   />
 </template>
 ```
@@ -427,7 +427,7 @@ npm install @openreceive/browser @openreceive/svelte
 
 <Checkout
   snapshot={invoice}
-  options={{ lookupUrl: "/order_status", onSettled: showThankYou }}
+  options={{ statusUrl: "/order_status", onSettled: showThankYou }}
 />
 ```
 
@@ -452,7 +452,7 @@ import "@openreceive/angular/styles.css";
     <openreceive-angular-checkout
       [snapshot]="invoice"
       [options]="{
-        lookupUrl: '/order_status',
+        statusUrl: '/order_status',
         onSettled: showThankYou
       }"
     />
@@ -466,8 +466,8 @@ export class AppCheckoutComponent {
 }
 ```
 
-## Optional Scheduler
+## Status Refresh
 
-Browser payment-status checks are enough for the normal checkout path. For
-extra recovery after visitors close the page, see
-[Optional Scheduler](optional-scheduler.md) for platform-specific examples.
+Browser payment-status checks call your app route. OpenReceive performs at most
+one bounded wallet page during each server-side status refresh. If no browser or
+app request asks for status, no settlement scan runs.

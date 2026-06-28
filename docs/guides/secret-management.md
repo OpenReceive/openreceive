@@ -63,5 +63,5 @@ moving from public demos to production payment flows.
 ## Logging
 
 Logs may include invoice ids, payment hashes, amounts, and payment status. Logs
-must not include raw NWC URIs, client secrets, signed lookup/refresh URLs, or
+must not include raw NWC URIs, client secrets, signed status/refresh URLs, or
 bearer tokens.

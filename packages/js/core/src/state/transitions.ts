@@ -68,12 +68,12 @@ export function applyExpiryPendingVerification(record: StoredRecord): StoredReco
   });
 }
 
-export function markLookupAttempted(
+export function markTransactionScanAttempted(
   record: StoredRecord,
   now: number
 ): StoredRecord {
   return updateRow(record, (row) => {
-    row.last_lookup_at = now;
+    row.last_transaction_scan_at = now;
   });
 }
 

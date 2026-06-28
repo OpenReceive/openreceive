@@ -6,8 +6,7 @@
   "scripts": {
     "dev": "tsx ../../shared/require-openreceive-nwc.ts && next dev -H 127.0.0.1 -p 3002",
     "build": "next build",
-    "start": "tsx ../../shared/require-openreceive-nwc.ts && next start -H 0.0.0.0 -p ${PORT:-3002}",
-    "openreceive:poll": "openreceive poll --once"
+    "start": "tsx ../../shared/require-openreceive-nwc.ts && next start -H 0.0.0.0 -p ${PORT:-3002}"
   },
   "dependencies": {
     "@openreceive/browser": "0.1.1",

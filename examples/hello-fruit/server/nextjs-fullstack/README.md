@@ -2,7 +2,7 @@
 
 This demo runs the Hello Fruit checkout in a Next.js App Router application.
 The browser never receives `OPENRECEIVE_NWC`. Next.js route handlers create and
-check invoices through server-side OpenReceive helpers.
+refresh invoice status through server-side OpenReceive helpers.
 
 ## Local Setup
 
@@ -28,8 +28,8 @@ without demo-local env files. Set it before running Compose; the web container
 validates it at startup. The compose stack uses `local-sqlite` by default and
 stores OpenReceive state in a named `.openreceive` volume.
 
-The package exposes `npm run openreceive:poll` for optional scheduled recovery.
-Normal checkout recovery happens through backend payment-status checks.
+Normal checkout recovery happens through backend payment-status checks. No
+extra OpenReceive command is required.
 
 The production container exposes only port `3002` to the Docker network unless
 the local override is used.
@@ -40,5 +40,4 @@ the local override is used.
 checks. It never includes wallet connection strings or NWC query secrets.
 
 Production apps that require signed-in or session-bound checkout should use
-their normal app middleware for private checkout routes;
-see [Optional Scheduler](../../../../docs/guides/optional-scheduler.md).
+their normal app middleware for private checkout routes.

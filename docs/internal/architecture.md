@@ -5,22 +5,22 @@ to the app-facing API.
 
 ## Settlement Authority
 
-OpenReceive treats backend wallet lookup as the settlement authority. Wallet
-notifications, browser polling, and frontend callbacks are passive hints. A
-payment is settled only when backend `lookup_invoice` returns `settled_at` or a
-settled transaction state.
+OpenReceive treats backend status refresh as the settlement authority. Wallet
+notifications and frontend callbacks are passive hints. A payment is settled
+only when a server-side NWC `list_transactions` result contains `settled_at` or
+a settled transaction state.
 
 ## Store Coordination
 
 The durable OpenReceive store is the only cross-process coordination point.
 Invoice rows keep lifecycle fields such as `transaction_state`,
-`workflow_state`, `settlement_action_state`, timestamps, leases, and lookup
-metadata so multiple web processes can safely create, refresh, look up, sweep,
-and complete settlement actions without a daemon.
+`workflow_state`, `settlement_action_state`, timestamps, leases, and scan
+metadata so multiple web processes can safely create, refresh status, and
+complete settlement actions without a daemon.
 
-Route-triggered lookup and optional one-shot polling both use the same guarded
-path. Per-invoice cooldown and the global lookup token bucket prevent runaway
-wallet calls while still allowing recovery after missed browser activity.
+Route-triggered status refresh uses a durable global scan gate and per-window
+pagination cursor. Each request performs at most one bounded wallet page, then
+returns stored state.
 
 Settlement actions are claimed through the store and are at least once. App
 hooks must deduplicate by `payment_hash`, invoice id, or the app's own order
@@ -28,15 +28,15 @@ id.
 
 OpenReceive does not add a notification listener, webhook bridge, SSE bus, or
 in-memory event bus because those would become a second coordination path.
-Wallet notifications and frontend polling stay passive; the store plus backend
-lookup remain the recovery and settlement authority.
+Wallet notifications and frontend status checks stay passive; the store plus
+backend status refresh remain the settlement authority.
 
 ## NWC Client Strategy
 
 OpenReceive depends on Nostr Wallet Connect, but the receive-checkout API is
 not a raw NWC proxy. The JavaScript path wraps the wallet client behind a
 receive-only interface that exposes `get_info`, `make_invoice`, and
-`lookup_invoice` behavior plus safe diagnostics. OpenReceive checkout APIs do
+`list_transactions` behavior plus safe diagnostics. OpenReceive checkout APIs do
 not expose send-payment methods.
 
 Every NWC client or adapter needs URI parsing and redaction, capability
@@ -46,7 +46,7 @@ metadata size enforcement, and live wallet smoke tests that skip without
 `OPENRECEIVE_NWC`.
 
 Crypto dependencies must be documented before an SDK is published. Do not
-claim edge, serverless, or mobile-secret support until the crypto and polling
+claim edge, serverless, or mobile-secret support until the crypto and refresh
 constraints are proven in that runtime.
 
 ## Package Surfaces

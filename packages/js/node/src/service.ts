@@ -5,19 +5,18 @@ import {
   OPENRECEIVE_PRICE_FEED_PRIMARY_URL_ENV,
   createCachedLivePriceFeed,
   createIdempotencyRequestHash,
-  gatedLookup,
   getBtcFiatRatesWithFallback,
   getIdempotentRecord,
   isHealthCheckablePriceFeed,
   isOpenReceiveErrorCode,
   isResolvedPriceProvider,
-  maybeSweep,
   putCreatedInvoiceRecord,
   quoteBitcoinAmountToMsats,
   quoteFiatToMsatsWithPrice,
-  reconcileOnce,
+  refreshInvoiceStatus as refreshStoredInvoiceStatus,
   type CachedPriceFeed,
   type InvoiceStorageRow,
+  type NwcTransaction,
   type OpenReceiveBitcoinAmount,
   type OpenReceiveBtcFiatRateMapWithSource,
   type OpenReceiveErrorBody,
@@ -30,6 +29,7 @@ import {
   type SimplePriceFetch,
   type OpenReceiveReceiveNwcClient,
   type OpenReceiveReconcileEvent,
+  type OpenReceiveSettlementActionInput,
   type OpenReceiveSourcedPriceProvider,
   type StoredRecord
 } from "@openreceive/core";
@@ -61,8 +61,8 @@ export interface OpenReceiveNodeSettlementActionInput {
   invoice: InvoiceStorageRow;
   orderId: string;
   metadata: Record<string, unknown>;
-  source: "lookup" | "poll";
-  lookup_invoice?: unknown;
+  source: "status";
+  transaction?: NwcTransaction;
 }
 
 export type OpenReceiveNodeSettlementActionHook = (
@@ -79,12 +79,11 @@ export interface OpenReceiveNodeOptions {
   onEvent?: OpenReceiveEventHandler;
   logger?: OpenReceiveLogger;
   clock?: () => number;
-  lookupBurst?: number;
-  lookupRatePerSecond?: number;
   actionLeaseTtlSeconds?: number;
-  sweepIntervalSeconds?: number;
-  sweepBatch?: number;
-  backgroundSweep?: boolean;
+  transactionScanIntervalSeconds?: number;
+  transactionScanPageLimit?: number;
+  transactionScanWindowPaddingSeconds?: number;
+  transactionScanTimeoutMs?: number;
 }
 
 export interface CreateOpenReceiveOptions
@@ -119,9 +118,8 @@ export type OpenReceiveCreateInvoiceAmount =
   | { readonly msats: number | string }
   | { readonly fiat: OpenReceiveFiatAmount };
 
-export interface OpenReceiveLookupInvoiceRequest {
-  readonly paymentHash?: string;
-  readonly bolt11?: string;
+export interface OpenReceiveRefreshInvoiceStatusRequest {
+  readonly invoiceId: string;
 }
 
 export interface OpenReceiveRefreshInvoiceRequest {
@@ -148,9 +146,9 @@ export interface OpenReceiveInvoice {
   readonly settlementActionState: string;
 }
 
-export interface OpenReceiveLookupInvoiceResult extends OpenReceiveInvoice {
-  readonly preimagePresent: boolean;
-  readonly walletLookupPerformed: boolean;
+export interface OpenReceiveInvoiceStatusResult extends OpenReceiveInvoice {
+  readonly walletScanPerformed: boolean;
+  readonly transactionsChecked: number;
 }
 
 export interface OpenReceiveRefreshInvoiceResult {
@@ -158,11 +156,6 @@ export interface OpenReceiveRefreshInvoiceResult {
   readonly newInvoiceId: string;
   readonly reason: string;
   readonly invoice: OpenReceiveInvoice;
-}
-
-export interface OpenReceivePollResult {
-  readonly invoiceIds: readonly string[];
-  readonly checked: number;
 }
 
 export interface OpenReceiveHttpInvoice {
@@ -183,9 +176,9 @@ export interface OpenReceiveHttpInvoice {
   readonly settlement_action_state: string;
 }
 
-export interface OpenReceiveHttpLookupInvoiceResult extends OpenReceiveHttpInvoice {
-  readonly preimage_present: boolean;
-  readonly wallet_lookup_performed: boolean;
+export interface OpenReceiveHttpInvoiceStatusResult extends OpenReceiveHttpInvoice {
+  readonly wallet_scan_performed: boolean;
+  readonly transactions_checked: number;
 }
 
 export interface OpenReceiveHttpRefreshInvoiceResult {
@@ -199,12 +192,11 @@ export interface OpenReceive {
   readonly store: OpenReceiveInvoiceKvStore;
   createInvoice(input: OpenReceiveCreateInvoiceRequest): Promise<OpenReceiveInvoice>;
   getInvoice(invoiceId: string): Promise<OpenReceiveInvoice>;
-  lookupInvoice(input: OpenReceiveLookupInvoiceRequest): Promise<OpenReceiveLookupInvoiceResult>;
+  refreshInvoiceStatus(input: OpenReceiveRefreshInvoiceStatusRequest): Promise<OpenReceiveInvoiceStatusResult>;
   refreshInvoice(
     invoiceId: string,
     input: OpenReceiveRefreshInvoiceRequest
   ): Promise<OpenReceiveRefreshInvoiceResult>;
-  poll(): Promise<OpenReceivePollResult>;
   listRates(): Promise<OpenReceiveBtcFiatRateMapWithSource["rates"]>;
   quoteRates(input: { readonly fiat: OpenReceiveFiatAmount }): Promise<OpenReceiveRateQuote>;
   close(): Promise<void>;
@@ -317,23 +309,16 @@ export async function createOpenReceive(
         () => getInvoice(context, invoiceId)
       );
     },
-    async lookupInvoice(input) {
+    async refreshInvoiceStatus(input) {
       return await runOpenReceiveOperation(
         context,
-        () => lookupInvoice(context, input)
+        () => refreshInvoiceStatus(context, input)
       );
     },
     async refreshInvoice(invoiceId, input) {
       return await runOpenReceiveOperation(
         context,
         () => refreshInvoice(context, invoiceId, input)
-      );
-    },
-    async poll() {
-      return await runOpenReceiveOperation(
-        context,
-        () => pollOpenReceive(context),
-        false
       );
     },
     async listRates() {
@@ -450,38 +435,28 @@ async function getInvoice(
   return serializeInvoice(record.row);
 }
 
-async function lookupInvoice(
+async function refreshInvoiceStatus(
   context: OpenReceiveServiceContext,
-  input: OpenReceiveLookupInvoiceRequest
-): Promise<OpenReceiveLookupInvoiceResult> {
-  const body = createWireLookupInvoiceRequest(input);
-  const record = await findLookupRecord(context.store, body);
-  emitLog(context.options, "info", "invoice.lookup.requested", "Refreshing invoice status through the gated wallet lookup path.", invoiceLogFields(record.row));
+  input: OpenReceiveRefreshInvoiceStatusRequest
+): Promise<OpenReceiveInvoiceStatusResult> {
+  const record = await requireStoredRecord(context.store, input.invoiceId);
+  emitLog(context.options, "info", "invoice.status.requested", "Refreshing invoice status through the transaction scan path.", invoiceLogFields(record.row));
 
-  const result = await gatedLookup({
+  const result = await refreshStoredInvoiceStatus({
     ...reconcileOptions(context),
-    record,
-    source: "lookup"
+    record
   });
-  emitLog(context.options, "debug", "invoice.lookup.result", "Invoice status refresh completed.", {
+  emitLog(context.options, "debug", "invoice.status.result", "Invoice status refresh completed.", {
     ...invoiceLogFields(result.record.row),
     reason: result.reason,
-    wallet_lookup_performed: result.lookup_invoice !== undefined
+    wallet_scan_performed: result.wallet_scan_performed,
+    transactions_checked: result.transactions_checked
   });
 
   return {
     ...serializeInvoice(result.record.row),
-    preimagePresent: result.lookup_invoice?.preimage !== undefined,
-    walletLookupPerformed: result.lookup_invoice !== undefined
-  };
-}
-
-function createWireLookupInvoiceRequest(
-  input: OpenReceiveLookupInvoiceRequest
-): Record<string, unknown> {
-  return {
-    ...(input.paymentHash === undefined ? {} : { payment_hash: input.paymentHash }),
-    ...(input.bolt11 === undefined ? {} : { invoice: input.bolt11 })
+    walletScanPerformed: result.wallet_scan_performed,
+    transactionsChecked: result.transactions_checked
   };
 }
 
@@ -578,16 +553,6 @@ async function refreshInvoice(
   });
 }
 
-async function pollOpenReceive(
-  context: OpenReceiveServiceContext
-): Promise<OpenReceivePollResult> {
-  const result = await reconcileOnce(reconcileOptions(context));
-  return {
-    invoiceIds: result.invoice_ids,
-    checked: result.checked
-  };
-}
-
 async function listRates(
   context: OpenReceiveServiceContext
 ): Promise<OpenReceiveBtcFiatRateMapWithSource["rates"]> {
@@ -622,13 +587,10 @@ async function quoteRates(
 
 async function runOpenReceiveOperation<T>(
   context: OpenReceiveServiceContext,
-  operation: () => Promise<T>,
-  sweep = true
+  operation: () => Promise<T>
 ): Promise<T> {
   try {
-    const result = await operation();
-    if (sweep) scheduleMaybeSweep(context);
-    return result;
+    return await operation();
   } catch (error) {
     const normalized = normalizeOpenReceiveServiceError(error);
     if (normalized instanceof OpenReceiveServiceError) throw normalized;
@@ -678,7 +640,7 @@ async function preflightConfiguredClient(
     throw new OpenReceiveConfigError({
       code: "WALLET_PREFLIGHT_FAILED",
       message: "OpenReceive wallet preflight failed.",
-      hint: "Check that OPENRECEIVE_NWC is receive-only, reachable, and advertises make_invoice plus lookup_invoice.",
+      hint: "Check that OPENRECEIVE_NWC is receive-only, reachable, and advertises make_invoice plus list_transactions.",
       cause: error
     });
   }
@@ -761,17 +723,12 @@ function reconcileOptions(context: OpenReceiveServiceContext) {
     store: context.store,
     client: context.options.client,
     clock: context.clock,
-    lookupBurst: context.options.lookupBurst ?? readPositiveIntegerEnv("OPENRECEIVE_LOOKUP_BURST"),
-    lookupRatePerSecond: context.options.lookupRatePerSecond ?? readPositiveNumberEnv("OPENRECEIVE_LOOKUP_RATE_PER_SEC"),
     actionLeaseTtlSeconds: context.options.actionLeaseTtlSeconds ?? readPositiveIntegerEnv("OPENRECEIVE_ACTION_LEASE_TTL_SEC"),
-    sweepIntervalSeconds: context.options.sweepIntervalSeconds ?? readPositiveIntegerEnv("OPENRECEIVE_SWEEP_INTERVAL_SEC"),
-    sweepBatch: context.options.sweepBatch ?? readPositiveIntegerEnv("OPENRECEIVE_SWEEP_BATCH"),
-    settlementAction: async (input: {
-      invoice: InvoiceStorageRow;
-      metadata: Record<string, unknown>;
-      source: "lookup" | "poll";
-      lookup_invoice?: unknown;
-    }) => {
+    transactionScanIntervalSeconds: context.options.transactionScanIntervalSeconds ?? readPositiveIntegerEnv("OPENRECEIVE_TRANSACTION_SCAN_INTERVAL_SEC"),
+    transactionScanPageLimit: context.options.transactionScanPageLimit ?? readPositiveIntegerEnv("OPENRECEIVE_TRANSACTION_SCAN_PAGE_LIMIT"),
+    transactionScanWindowPaddingSeconds: context.options.transactionScanWindowPaddingSeconds ?? readNonNegativeIntegerEnv("OPENRECEIVE_TRANSACTION_SCAN_WINDOW_PADDING_SEC"),
+    transactionScanTimeoutMs: context.options.transactionScanTimeoutMs ?? readPositiveIntegerEnv("OPENRECEIVE_TRANSACTION_SCAN_TIMEOUT_MS"),
+    settlementAction: async (input: OpenReceiveSettlementActionInput) => {
       // Delivered after backend-verified settlement, at least once. Apps must
       // dedupe fulfillment by invoice.payment_hash or their own order id.
       await context.options.onPaid?.({
@@ -779,15 +736,15 @@ function reconcileOptions(context: OpenReceiveServiceContext) {
         orderId: readStoredOrderId(input.invoice),
         metadata: input.metadata,
         source: input.source,
-        lookup_invoice: input.lookup_invoice
+        transaction: input.transaction
       });
     },
     onEvent: (event: OpenReceiveReconcileEvent) => {
       emitLog(
         context.options,
-        event.event === "invoice.failed" ? "warn" : "info",
+        event.event === "invoice.failed" || event.event === "transaction_scan.failed" ? "warn" : "info",
         event.event,
-        "OpenReceive reconciled invoice state.",
+        "OpenReceive refreshed invoice state.",
         {
           ...invoiceLogFields(event.invoice),
           ...(event.reason === undefined ? {} : { reason: event.reason })
@@ -807,27 +764,14 @@ function readPositiveIntegerEnv(name: string): number | undefined {
   return parsed;
 }
 
-function readPositiveNumberEnv(name: string): number | undefined {
+function readNonNegativeIntegerEnv(name: string): number | undefined {
   const value = globalThis.process?.env?.[name];
   if (value === undefined || value.trim().length === 0) return undefined;
   const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new RangeError(`${name} must be a positive number`);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new RangeError(`${name} must be a non-negative integer`);
   }
   return parsed;
-}
-
-function scheduleMaybeSweep(context: OpenReceiveServiceContext): void {
-  if (context.options.backgroundSweep === false) return;
-  const run = async () => {
-    await maybeSweep(reconcileOptions(context));
-  };
-
-  void run().catch((error) => {
-    emitLog(context.options, "warn", "sweep.failed", "OpenReceive background sweep failed.", {
-      error: error instanceof Error ? error.message : String(error)
-    });
-  });
 }
 
 function serializeRefreshResult(input: {
@@ -916,13 +860,13 @@ export function toOpenReceiveHttpInvoice(
   };
 }
 
-export function toOpenReceiveHttpLookupInvoiceResult(
-  lookup: OpenReceiveLookupInvoiceResult
-): OpenReceiveHttpLookupInvoiceResult {
+export function toOpenReceiveHttpInvoiceStatusResult(
+  status: OpenReceiveInvoiceStatusResult
+): OpenReceiveHttpInvoiceStatusResult {
   return {
-    ...toOpenReceiveHttpInvoice(lookup),
-    preimage_present: lookup.preimagePresent,
-    wallet_lookup_performed: lookup.walletLookupPerformed
+    ...toOpenReceiveHttpInvoice(status),
+    wallet_scan_performed: status.walletScanPerformed,
+    transactions_checked: status.transactionsChecked
   };
 }
 
@@ -1329,33 +1273,6 @@ function isRefreshableInvoice(invoice: InvoiceStorageRow): boolean {
     invoice.workflow_state === "expired_closed" ||
     invoice.workflow_state === "failed_closed"
   );
-}
-
-async function findLookupRecord(
-  store: OpenReceiveInvoiceKvStore,
-  body: Record<string, unknown>
-): Promise<StoredRecord> {
-  const paymentHash = optionalString(body.payment_hash);
-  const bolt11Invoice = optionalString(body.invoice);
-
-  if ((paymentHash === undefined) === (bolt11Invoice === undefined)) {
-    throw serviceError(
-      400,
-      "INVALID_REQUEST",
-      "lookup requires exactly one of payment_hash or invoice."
-    );
-  }
-
-  const record =
-    paymentHash === undefined
-      ? await store.getByBolt11Invoice(requiredValue(bolt11Invoice))
-      : await store.getByPaymentHash(paymentHash);
-
-  if (record === undefined) {
-    throw new InvoiceNotFoundError(paymentHash ?? requiredValue(bolt11Invoice));
-  }
-
-  return record;
 }
 
 async function requireStoredRecord(

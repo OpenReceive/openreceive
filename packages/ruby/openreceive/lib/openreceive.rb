@@ -74,7 +74,7 @@ module OpenReceive
       raise WalletUnavailableError.new(@message)
     end
 
-    def lookup_invoice(_request)
+    def list_transactions(_request)
       raise WalletUnavailableError.new(@message)
     end
 
@@ -114,20 +114,20 @@ module OpenReceive
   module Settlement
     module_function
 
-    def settled?(lookup_invoice)
-      data = stringify_keys(lookup_invoice)
+    def settled?(transaction)
+      data = stringify_keys(transaction)
       present?(data["settled_at"]) ||
         data["state"] == "settled" ||
         data["transaction_state"] == "settled"
     end
 
-    def expired?(lookup_invoice)
-      data = stringify_keys(lookup_invoice)
+    def expired?(transaction)
+      data = stringify_keys(transaction)
       data["state"] == "expired" || data["transaction_state"] == "expired"
     end
 
-    def failed?(lookup_invoice)
-      data = stringify_keys(lookup_invoice)
+    def failed?(transaction)
+      data = stringify_keys(transaction)
       data["state"] == "failed" || data["transaction_state"] == "failed"
     end
 
@@ -186,19 +186,52 @@ module OpenReceive
       }.reject { |_key, value| value.nil? }
     end
 
-    def lookup_invoice_request(request)
+    def list_transactions_request(request)
       data = stringify_keys(request)
-      has_payment_hash = present?(data["payment_hash"])
-      has_invoice = present?(data["invoice"])
-      raise ArgumentError, "lookup_invoice needs exactly one selector" if has_payment_hash == has_invoice
+      result = {}
+      %w[from until offset].each do |key|
+        next unless data.key?(key)
 
-      has_payment_hash ? { "payment_hash" => data["payment_hash"] } : { "invoice" => data["invoice"] }
+        value = integer(data[key])
+        raise ArgumentError, "#{key} must be non-negative" if value.negative?
+
+        result[key] = value
+      end
+      if data.key?("limit")
+        limit = integer(data["limit"])
+        raise ArgumentError, "limit must be positive" unless limit.positive?
+
+        result["limit"] = limit
+      end
+      if data.key?("unpaid")
+        unpaid = data["unpaid"]
+        raise ArgumentError, "unpaid must be true or false" unless unpaid == true || unpaid == false
+
+        result["unpaid"] = unpaid
+      end
+      if data.key?("type")
+        type = data["type"].to_s
+        raise ArgumentError, "type must be incoming or outgoing" unless %w[incoming outgoing].include?(type)
+
+        result["type"] = type
+      end
+      if result.key?("from") && result.key?("until") && result["from"] > result["until"]
+        raise ArgumentError, "from must be less than or equal to until"
+      end
+      result
     end
 
-    def normalize_lookup_invoice_response(response)
+    def normalize_list_transactions_response(response)
       data = stringify_keys(response)
+      raw_transactions = data["transactions"] || data.dig("result", "transactions") || (response.is_a?(Array) ? response : [])
+      { "transactions" => Array(raw_transactions).map { |transaction| normalize_transaction(transaction) } }
+    end
+
+    def normalize_transaction(transaction)
+      data = stringify_keys(transaction)
       transaction_state = data["transaction_state"] || data["transactionState"] || data["state"]
       {
+        "type" => normalize_type(data["type"]),
         "invoice" => data["invoice"],
         "payment_hash" => data["payment_hash"] || data["paymentHash"],
         "amount_msats" => optional_integer(data["amount_msats"] || data["amount"]),
@@ -208,6 +241,11 @@ module OpenReceive
         "settled_at" => optional_integer(data["settled_at"] || data["settledAt"]),
         "preimage" => data["preimage"]
       }.reject { |_key, value| value.nil? }
+    end
+
+    def normalize_type(value)
+      text = value.to_s.downcase
+      %w[incoming outgoing].include?(text) ? text : nil
     end
 
     def parse_uri(uri)
@@ -314,85 +352,6 @@ module OpenReceive
 
     def present?(value)
       !value.nil? && value != ""
-    end
-  end
-
-  module Polling
-    module_function
-
-    CADENCE = [
-      { "elapsed_seconds_min" => 0, "elapsed_seconds_max" => 14, "delay_seconds" => 2 },
-      { "elapsed_seconds_min" => 15, "elapsed_seconds_max" => 59, "delay_seconds" => 5 },
-      { "elapsed_seconds_min" => 60, "elapsed_seconds_max" => 179, "delay_seconds" => 10 },
-      { "elapsed_seconds_min" => 180, "elapsed_seconds_max" => 599, "delay_seconds" => 20 }
-    ].freeze
-
-    def elapsed_seconds(created_at:, now:)
-      [integer(now) - integer(created_at), 0].max
-    end
-
-    def delay_seconds(created_at:, now:)
-      elapsed = elapsed_seconds(created_at: created_at, now: now)
-      band = CADENCE.find do |item|
-        elapsed >= item.fetch("elapsed_seconds_min") &&
-          elapsed <= item.fetch("elapsed_seconds_max")
-      end
-      (band || CADENCE.last).fetch("delay_seconds")
-    end
-
-    def schedule(created_at:, expires_at:, now:)
-      created = integer(created_at)
-      expires = integer(expires_at)
-      current = integer(now)
-      raise ArgumentError, "expires_at must be greater than or equal to created_at" if expires < created
-
-      if current >= expires
-        return {
-          "action" => "final_lookup",
-          "reason" => "final_lookup",
-          "next_lookup_at" => current,
-          "delay_seconds" => 0
-        }
-      end
-
-      effective_now = [current, created].max
-      delay = delay_seconds(created_at: created, now: effective_now)
-      next_lookup_at = effective_now + delay
-
-      if next_lookup_at >= expires
-        return {
-          "action" => "schedule_final_lookup",
-          "reason" => "local_expiry",
-          "next_lookup_at" => expires,
-          "delay_seconds" => expires - current
-        }
-      end
-
-      {
-        "action" => "schedule_lookup",
-        "reason" => "cadence",
-        "next_lookup_at" => next_lookup_at,
-        "delay_seconds" => next_lookup_at - current
-      }
-    end
-
-    def grace_lookup_schedule(expires_at:, now:, max_attempts: 3, delay_seconds: 5)
-      start_at = [integer(expires_at), integer(now)].max
-      attempts = integer(max_attempts)
-      delay = integer(delay_seconds)
-      (1..attempts).map do |attempt|
-        {
-          "attempt" => attempt,
-          "delay_seconds" => delay,
-          "lookup_at" => start_at + delay * attempt
-        }
-      end
-    end
-
-    def integer(value)
-      Integer(value)
-    rescue ArgumentError, TypeError
-      raise ArgumentError, "expected integer seconds"
     end
   end
 
@@ -514,26 +473,9 @@ module OpenReceive
       invoice_id.nil? ? nil : find_by_invoice_id(invoice_id)
     end
 
-    def recoverable_invoices(now:, grace_seconds: 15, limit: nil)
-      integer(now)
-      integer(grace_seconds)
-      rows = @by_invoice_id.values.select do |row|
-        recoverable_invoice?(row)
-      end.sort_by { |row| [integer(row.fetch("expires_at")), row.fetch("invoice_id")] }
-      rows = rows.first(integer(limit)) unless limit.nil?
-      rows.map { |row| deep_copy(row) }
-    end
-
-    def claim_sweep(now:, interval_seconds:)
-      current = integer(now)
-      interval = integer(interval_seconds)
-      raise ArgumentError, "interval_seconds must be positive" unless interval.positive?
-
-      last_sweep_at = @meta["last_sweep_at"]
-      return false if !last_sweep_at.nil? && current - last_sweep_at < interval
-
-      @meta["last_sweep_at"] = current
-      true
+    def find_by_bolt11_invoice(invoice)
+      invoice_id = @by_bolt11_invoice[invoice]
+      invoice_id.nil? ? nil : find_by_invoice_id(invoice_id)
     end
 
     def require_stored_invoice(invoice_id)
@@ -601,6 +543,37 @@ module OpenReceive
       deep_copy(row)
     end
 
+    def get_meta(key)
+      row = @meta[key]
+      row.nil? ? nil : deep_copy(row)
+    end
+
+    def cas_meta(key:, value:, expected_rev:)
+      raise ArgumentError, "meta key must be a non-empty string" unless key.is_a?(String) && !key.empty?
+
+      current = @meta[key]
+      if expected_rev.nil?
+        unless current.nil?
+          return { "status" => "conflict", "row" => deep_copy(current) }
+        end
+
+        row = { "value" => value, "rev" => 0 }
+        @meta[key] = row
+        return { "status" => "ok", "row" => deep_copy(row) }
+      end
+
+      if current.nil? || current.fetch("rev") != Integer(expected_rev)
+        return {
+          "status" => "conflict",
+          "row" => current.nil? ? { "value" => "", "rev" => -1 } : deep_copy(current)
+        }
+      end
+
+      row = { "value" => value, "rev" => Integer(expected_rev) + 1 }
+      @meta[key] = row
+      { "status" => "ok", "row" => deep_copy(row) }
+    end
+
     private
 
     def scope_key(scope)
@@ -610,20 +583,6 @@ module OpenReceive
         operation: data.fetch("operation"),
         idempotency_key: data.fetch("idempotency_key")
       )
-    end
-
-    def recoverable_invoice?(row)
-      return false if %w[
-        settlement_action_completed
-        expired_closed
-        failed_closed
-        cancelled
-      ].include?(row["workflow_state"])
-
-      return row["settlement_action_state"] != "completed" if row["transaction_state"] == "settled"
-      return false if %w[expired failed].include?(row["transaction_state"])
-
-      true
     end
 
     def validate_invoice_row(row)
@@ -719,16 +678,16 @@ module OpenReceive
     )
   end
 
-  def settled?(lookup_invoice)
-    Settlement.settled?(lookup_invoice)
+  def settled?(transaction)
+    Settlement.settled?(transaction)
   end
 
-  def expired?(lookup_invoice)
-    Settlement.expired?(lookup_invoice)
+  def expired?(transaction)
+    Settlement.expired?(transaction)
   end
 
-  def failed?(lookup_invoice)
-    Settlement.failed?(lookup_invoice)
+  def failed?(transaction)
+    Settlement.failed?(transaction)
   end
 
   def parse_nwc_uri(uri)
@@ -747,20 +706,12 @@ module OpenReceive
     Nwc.normalize_make_invoice_response(response)
   end
 
-  def lookup_invoice_nip47_request(request)
-    Nwc.lookup_invoice_request(request)
+  def list_transactions_nip47_request(request)
+    Nwc.list_transactions_request(request)
   end
 
-  def normalize_lookup_invoice_response(response)
-    Nwc.normalize_lookup_invoice_response(response)
-  end
-
-  def polling_delay_seconds(created_at:, now:)
-    Polling.delay_seconds(created_at: created_at, now: now)
-  end
-
-  def polling_schedule(created_at:, expires_at:, now:)
-    Polling.schedule(created_at: created_at, expires_at: expires_at, now: now)
+  def normalize_list_transactions_response(response)
+    Nwc.normalize_list_transactions_response(response)
   end
 
   def idempotency_scope_key(namespace:, operation:, idempotency_key:)

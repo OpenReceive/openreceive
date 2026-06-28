@@ -64,9 +64,9 @@ challenges. Cloudflare Origin CA certificates are acceptable for proxied-only
 demo origins, but DNS-01 is the default renewal path.
 
 Bypass caching for app-owned checkout paths such as `/create_order` and
-`/order_status`, plus any lower-level invoice, refresh, or poll paths a demo
-deploys. Demo handlers should return `no-store` for checkout state, lookup,
-refresh, and poll responses.
+`/order_status`, plus any lower-level invoice, status, or refresh paths a demo
+deploys. Demo handlers should return `no-store` for checkout state, status,
+and refresh responses.
 
 ## Private Runtime Files
 

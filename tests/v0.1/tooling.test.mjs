@@ -253,11 +253,11 @@ test("storage schema and vectors cover KV coordination fields", () => {
   const schema = JSON.parse(readFileSync(invoiceStorageSchema, "utf8"));
   const vectors = JSON.parse(readFileSync(storageKvVectors, "utf8"));
 
-  assert.equal(schema.properties.last_lookup_at.minimum, 0);
+  assert.equal(schema.properties.last_transaction_scan_at.minimum, 0);
   assert.equal(schema.properties.action_claimed_at.minimum, 0);
   assert.equal(schema.$defs.StoredRecord.properties.row.$ref, "#");
   assert.equal(schema.$defs.MetaRow.properties.value.type, "string");
-  assert.equal(schema.$defs.LookupBucket.properties.tokens.minimum, 0);
+  assert.equal(schema.$defs.TransactionScanCursor.properties.offset.minimum, 0);
 
   assert.deepEqual(vectors.methods, [
     "putIfAbsent",
@@ -270,7 +270,7 @@ test("storage schema and vectors cover KV coordination fields", () => {
     "getMeta",
     "casMeta"
   ]);
-  assert.equal(vectors.cases.length, 12);
+  assert.equal(vectors.cases.length, 13);
   assert.equal(vectors.certified_v0_1_transports.includes("postgres"), true);
   assert.equal(vectors.certified_v0_1_transports.includes("sqlite"), true);
   assert.equal(vectors.deferred_transport_targets.includes("redis"), true);
@@ -312,7 +312,7 @@ test("live NWC expected capabilities fixture matches the documented Rizful defau
   assert.deepEqual(fixture.required_methods, [
     "get_info",
     "make_invoice",
-    "lookup_invoice"
+    "list_transactions"
   ]);
   assert.equal(fixture.required_notifications.includes("payment_received"), true);
   assert.equal(fixture.fallback_encryption, "nip04");

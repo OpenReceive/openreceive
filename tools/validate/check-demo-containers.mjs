@@ -197,7 +197,7 @@ function validatePackage(demo) {
   expect(pkg.scripts?.start === demo.startScript, `${relativePath}: start script must be ${demo.startScript}`);
   expect(pkg.scripts?.dev?.includes("require-openreceive-nwc.ts"), `${relativePath}: dev script must validate OPENRECEIVE_NWC before boot`);
   expect(pkg.scripts?.["openreceive:worker"] === undefined, `${relativePath}: worker script must not be exposed`);
-  expect(pkg.scripts?.["openreceive:poll"] === "openreceive poll --once", `${relativePath}: one-shot poll script must use default config`);
+  expect(pkg.scripts?.["openreceive:poll"] === undefined, `${relativePath}: removed status command script must not be exposed`);
   expect(pkg.dependencies?.pg === "^8.22.0", `${relativePath}: demo must depend on pg for package-owned invoice persistence`);
   expect(pkg.dependencies?.qrcode === undefined, `${relativePath}: qrcode must be provided by the OpenReceive UI package`);
 }
@@ -211,7 +211,7 @@ function validateReadme(demo) {
   expect(text.includes("docker compose -f compose.yml -f compose.override.yml.example up --build"), `${relativePath}: must document compose startup without a worker profile`);
   expect(text.includes("uses `local-sqlite` by default"), `${relativePath}: must document the local-sqlite default`);
   expect(text.includes("named `.openreceive` volume"), `${relativePath}: must document persistent OpenReceive SQLite storage`);
-  expect(text.includes("npm run openreceive:poll"), `${relativePath}: must document the one-shot poll script`);
+  expect(!text.includes("npm run openreceive:poll"), `${relativePath}: must not document removed status command scripts`);
   expect(!text.includes("openreceive:worker"), `${relativePath}: must not document a worker script`);
   expect(!text.includes("--profile openreceive-worker"), `${relativePath}: must not document worker profiles`);
   expect(text.includes("/demo-metadata.json"), `${relativePath}: must document demo metadata`);

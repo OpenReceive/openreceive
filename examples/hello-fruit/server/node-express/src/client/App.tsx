@@ -364,7 +364,7 @@ function FrameworkCheckout({
     let cleanup: () => void = () => undefined;
 
     const options = {
-      lookupUrl: "/order_status",
+      statusUrl: "/order_status",
       rootSelector: ".page",
       defaultTheme: "light" as const,
       onError: (event: Event) => {
@@ -458,7 +458,7 @@ function FrameworkCheckout({
       <Checkout
         className="demo-checkout"
         invoice={invoice}
-        lookupUrl="/order_status"
+        statusUrl="/order_status"
         logger={logOpenReceive}
         onError={onError}
         onSettled={onSettled}

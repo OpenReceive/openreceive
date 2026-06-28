@@ -34,7 +34,7 @@
   from app-owned controllers. Added `openreceive` plus public
   `@openreceive/core` and `@openreceive/node` package surfaces while keeping
   `@openreceive/testkit` private. Removed Node `init`, built-in
-  auth/CSRF/CORS/cron hooks, public mounted poll routes, public provider and
+  auth/CSRF/CORS/cron hooks, public provider and
   route catalog endpoints, the old mount functions, Next dispatcher, legacy
   framework bridges, long browser/React names, and public
   workflow-state element attribute rather than keeping compatibility aliases.

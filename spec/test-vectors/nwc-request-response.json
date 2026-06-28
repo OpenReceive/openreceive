@@ -63,53 +63,91 @@
       }
     },
     {
-      "name": "lookup invoice by payment hash maps to NIP-47 payment_hash",
-      "method": "lookup_invoice",
+      "name": "list transactions page maps status scan request to NIP-47 params",
+      "method": "list_transactions",
       "openreceive_request": {
-        "payment_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        "type": "incoming",
+        "unpaid": true,
+        "from": 1200,
+        "until": 1200,
+        "limit": 20,
+        "offset": 40
       },
       "expected_nip47_request": {
-        "payment_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        "type": "incoming",
+        "unpaid": true,
+        "from": 1200,
+        "until": 1200,
+        "limit": 20,
+        "offset": 40
       },
       "raw_response": {
-        "invoice": "lnbc-lookup",
-        "payment_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-        "amount": 200000,
-        "state": "SETTLED",
-        "settled_at": 1200,
-        "preimage": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        "transactions": [
+          {
+            "type": "incoming",
+            "invoice": "lnbc-list",
+            "payment_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "amount": 200000,
+            "state": "SETTLED",
+            "settled_at": 1200,
+            "preimage": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          }
+        ]
       },
       "expected_openreceive_response": {
-        "invoice": "lnbc-lookup",
-        "payment_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-        "amount_msats": 200000,
-        "transaction_state": "settled",
-        "settled_at": 1200,
-        "preimage": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        "transactions": [
+          {
+            "type": "incoming",
+            "invoice": "lnbc-list",
+            "payment_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "amount_msats": 200000,
+            "transaction_state": "settled",
+            "settled_at": 1200,
+            "preimage": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          }
+        ]
       }
     },
     {
-      "name": "lookup invoice by BOLT11 maps invoice only",
-      "method": "lookup_invoice",
+      "name": "list transactions response accepts raw array and camelCase fields",
+      "method": "list_transactions",
       "openreceive_request": {
-        "invoice": "lnbc-lookup-by-invoice"
+        "type": "incoming",
+        "unpaid": true,
+        "from": 1600,
+        "until": 1600,
+        "limit": 20,
+        "offset": 0
       },
       "expected_nip47_request": {
-        "invoice": "lnbc-lookup-by-invoice"
+        "type": "incoming",
+        "unpaid": true,
+        "from": 1600,
+        "until": 1600,
+        "limit": 20,
+        "offset": 0
       },
-      "raw_response": {
-        "invoice": "lnbc-lookup-by-invoice",
-        "paymentHash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-        "amount_msats": 400000,
-        "transactionState": "expired",
-        "expiresAt": 1600
-      },
+      "raw_response": [
+        {
+          "type": "incoming",
+          "invoice": "lnbc-list-by-invoice",
+          "paymentHash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "amount_msats": 400000,
+          "transactionState": "expired",
+          "expiresAt": 1600
+        }
+      ],
       "expected_openreceive_response": {
-        "invoice": "lnbc-lookup-by-invoice",
-        "payment_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-        "amount_msats": 400000,
-        "transaction_state": "expired",
-        "expires_at": 1600
+        "transactions": [
+          {
+            "type": "incoming",
+            "invoice": "lnbc-list-by-invoice",
+            "payment_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "amount_msats": 400000,
+            "transaction_state": "expired",
+            "expires_at": 1600
+          }
+        ]
       }
     }
   ]

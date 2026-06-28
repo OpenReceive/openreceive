@@ -1,10 +1,10 @@
 {
   "schema_version": "0.1.0",
-  "rule": "settled_at present or state == settled; preimage alone is not final proof",
+  "rule": "list_transactions settlement requires settled_at or state == settled; preimage alone is not final proof",
   "cases": [
     {
       "name": "settled by state",
-      "lookup_invoice": {
+      "transaction": {
         "state": "settled",
         "payment_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
@@ -14,7 +14,7 @@
     },
     {
       "name": "settled by settled_at",
-      "lookup_invoice": {
+      "transaction": {
         "state": "pending",
         "settled_at": 1781740990,
         "payment_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
@@ -25,7 +25,7 @@
     },
     {
       "name": "preimage alone is not settled",
-      "lookup_invoice": {
+      "transaction": {
         "state": "pending",
         "preimage": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
         "payment_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
@@ -36,7 +36,7 @@
     },
     {
       "name": "expired is not settled",
-      "lookup_invoice": {
+      "transaction": {
         "state": "expired",
         "payment_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
       },

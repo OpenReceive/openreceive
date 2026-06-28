@@ -7,8 +7,7 @@
     "dev": "tsx ../../shared/require-openreceive-nwc.ts && vite --host 127.0.0.1 --configLoader runner",
     "build": "vite build --configLoader runner",
     "preview": "tsx ../../shared/require-openreceive-nwc.ts && vite preview --host 127.0.0.1 --configLoader runner",
-    "start": "tsx ../../shared/require-openreceive-nwc.ts && tsx src/server/production.ts",
-    "openreceive:poll": "openreceive poll --once"
+    "start": "tsx ../../shared/require-openreceive-nwc.ts && tsx src/server/production.ts"
   },
   "dependencies": {
     "@openreceive/browser": "0.1.1",

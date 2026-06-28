@@ -49,24 +49,24 @@ import "@openreceive/react/styles.css";
 
 <Checkout
   invoice={invoice}
-  lookupUrl="/order_status"
+  statusUrl="/order_status"
   onSettled={() => showThankYou()}
 />;
 ```
 
-`onSettled` is a UI hint from polling. It is useful for showing a thank-you panel,
+`onSettled` is a UI hint from status refresh. It is useful for showing a thank-you panel,
 but fulfillment stays in the backend settlement hook.
 
-`lookupUrl` is optional. If omitted, React uses the default
-`/openreceive/v1/invoices/lookup` route. Apps without a frontend lookup route
-can render a static checkout surface without polling:
+`statusUrl` is optional. If omitted, React uses the default
+`/openreceive/v1/invoices/{invoice_id}/status` route. Apps without a frontend
+status route can render a static checkout surface without status refresh:
 
 ```tsx
 <Checkout invoice={invoice} polling={false} />;
 ```
 
-Use `lookupUrl={false}` to disable only the default lookup URL while still
-allowing a custom `lookupInvoice` function.
+Use `statusUrl={false}` to disable only the default status URL while still
+allowing a custom `refreshStatus` function.
 
 For app-wide theme attributes and the packaged light/dark toggle:
 
@@ -117,7 +117,7 @@ function CustomCheckout({ invoice }) {
 ```
 
 For a fully headless checkout, use `useCheckout({ invoice })` and render your
-own markup. The hook owns lookup polling, countdown state, copy/open-wallet
+own markup. The hook owns status refresh, countdown state, copy/open-wallet
 actions, retry, refresh, cancel, and the public `status` string.
 
 Apps with design systems can also pass `components`, `classNames`, or a render
@@ -149,7 +149,7 @@ defineOpenReceiveElements();
   amount-msats="200000"
   status="pending"
   expires-at="1781943000"
-  lookup-url="/order_status"
+  status-url="/order_status"
   theme="dark"
 ></openreceive-checkout>
 ```
@@ -231,7 +231,7 @@ live checkout authority.
 ## Browser Logs
 
 Checkout helpers accept an optional `logger(entry)` callback. Log entries are
-display-safe and omit BOLT11 strings, NWC connection strings, signed lookup or
+display-safe and omit BOLT11 strings, NWC connection strings, signed status or
 refresh tokens, cookies, authorization headers, and request bodies.
 
 ```ts

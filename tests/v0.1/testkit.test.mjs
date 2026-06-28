@@ -20,14 +20,14 @@ test("testkit receive client creates deterministic invoices", async () => {
   });
 
   assert.equal(summary.receiveCheckoutReady, true);
-  assert.deepEqual(summary.methods, ["make_invoice", "lookup_invoice"]);
+  assert.deepEqual(summary.methods, ["make_invoice", "list_transactions"]);
   assert.equal(invoice.invoice, "lnbcopenreceive000001");
   assert.equal(invoice.payment_hash, "0".repeat(63) + "1");
   assert.equal(invoice.created_at, 2000);
   assert.equal(invoice.expires_at, 2090);
 });
 
-test("testkit receive client looks up and settles invoices by payment hash", async () => {
+test("testkit receive client lists and settles invoices by payment hash", async () => {
   const notifications = [];
   const wallet = createTestkitReceiveClient({ now: () => 3000 });
   const unsubscribe = await wallet.subscribeToPaymentReceived((notification) => {
@@ -36,7 +36,14 @@ test("testkit receive client looks up and settles invoices by payment hash", asy
   const invoice = await wallet.makeInvoice({ amount_msats: 200000n });
 
   assert.equal(
-    (await wallet.lookupInvoice({ payment_hash: invoice.payment_hash })).state,
+    firstTransaction(await wallet.listTransactions({
+      type: "incoming",
+      unpaid: true,
+      from: invoice.created_at,
+      until: invoice.created_at,
+      limit: 20,
+      offset: 0
+    })).state,
     "pending"
   );
 
@@ -82,15 +89,15 @@ test("testkit receive client replays duplicate payment notifications", async () 
   assert.equal(notifications.every((notification) => notification.settled_at === 4000), true);
 });
 
-test("testkit receive client scripts deterministic lookup sequences", async () => {
+test("testkit receive client scripts deterministic transaction sequences", async () => {
   const wallet = createTestkitReceiveClient({ now: () => 5000 });
   const invoice = await wallet.makeInvoice({ amount_msats: 200000n });
 
-  wallet.scriptLookupSequence(
+  wallet.scriptTransactionSequence(
     { payment_hash: invoice.payment_hash },
     [
       { state: "pending" },
-      { error: "wallet lookup timeout" },
+      { error: "wallet transaction timeout" },
       {
         state: "settled",
         settled_at: 5010,
@@ -100,31 +107,64 @@ test("testkit receive client scripts deterministic lookup sequences", async () =
   );
 
   assert.equal(
-    (await wallet.lookupInvoice({ payment_hash: invoice.payment_hash })).state,
+    firstTransaction(await wallet.listTransactions({
+      type: "incoming",
+      unpaid: true,
+      from: invoice.created_at,
+      until: invoice.created_at,
+      limit: 20,
+      offset: 0
+    })).state,
     "pending"
   );
   await assert.rejects(
-    () => wallet.lookupInvoice({ invoice: invoice.invoice }),
-    /wallet lookup timeout/
+    () => wallet.listTransactions({
+      type: "incoming",
+      unpaid: true,
+      from: invoice.created_at,
+      until: invoice.created_at,
+      limit: 20,
+      offset: 0
+    }),
+    /wallet transaction timeout/
   );
 
-  const settled = await wallet.lookupInvoice({
-    payment_hash: invoice.payment_hash
-  });
+  const settled = firstTransaction(await wallet.listTransactions({
+    type: "incoming",
+    unpaid: true,
+    from: invoice.created_at,
+    until: invoice.created_at,
+    limit: 20,
+    offset: 0
+  }));
   assert.equal(settled.state, "settled");
   assert.equal(settled.transaction_state, "settled");
   assert.equal(settled.settled_at, 5010);
   assert.equal(settled.preimage, "2".repeat(64));
 
   assert.equal(
-    (await wallet.lookupInvoice({ payment_hash: invoice.payment_hash })).state,
+    firstTransaction(await wallet.listTransactions({
+      type: "incoming",
+      unpaid: true,
+      from: invoice.created_at,
+      until: invoice.created_at,
+      limit: 20,
+      offset: 0
+    })).state,
     "settled"
   );
 
-  wallet.clearLookupSequence({ payment_hash: invoice.payment_hash });
+  wallet.clearTransactionSequence({ payment_hash: invoice.payment_hash });
   assert.equal(wallet.failInvoice({ payment_hash: invoice.payment_hash }).state, "failed");
   assert.equal(
-    (await wallet.lookupInvoice({ payment_hash: invoice.payment_hash })).state,
+    firstTransaction(await wallet.listTransactions({
+      type: "incoming",
+      unpaid: true,
+      from: invoice.created_at,
+      until: invoice.created_at,
+      limit: 20,
+      offset: 0
+    })).state,
     "failed"
   );
 });
@@ -142,7 +182,14 @@ test("testkit receive client supports seeded fixtures and terminal states", asyn
     ]
   });
 
-  assert.equal((await wallet.lookupInvoice({ invoice: "lnbcseeded" })).state, "pending");
+  assert.equal(firstTransaction(await wallet.listTransactions({
+    type: "incoming",
+    unpaid: true,
+    from: 100,
+    until: 100,
+    limit: 20,
+    offset: 0
+  })).state, "pending");
   assert.equal(wallet.expireInvoice({ invoice: "lnbcseeded" }).state, "expired");
   assert.equal(wallet.failInvoice({ payment_hash: "a".repeat(64) }).state, "failed");
   assert.equal(wallet.listInvoices().length, 1);
@@ -200,4 +247,9 @@ function makeInvoiceRequestFromVector(input) {
     };
   }
   return request;
+}
+
+function firstTransaction(result) {
+  assert.equal(result.transactions.length > 0, true);
+  return result.transactions[0];
 }

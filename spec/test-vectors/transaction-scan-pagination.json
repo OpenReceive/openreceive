@@ -1,0 +1,96 @@
+{
+  "schema_version": "0.1.0",
+  "rule": "status refresh scans one bounded list_transactions page per durable global gate claim",
+  "default_gate_seconds": 2,
+  "default_limit": 20,
+  "cursor_shape": {
+    "from": "unix seconds",
+    "until": "unix seconds",
+    "limit": "positive integer",
+    "offset": "non-negative integer",
+    "cycle": "non-negative integer",
+    "last_page_scanned_at": "unix seconds"
+  },
+  "required_behaviors": [
+    "terminal invoices return stored state without wallet access",
+    "non-terminal refresh claims a durable global scan gate before wallet access",
+    "each claimed refresh performs at most one incoming unpaid list_transactions page",
+    "full pages advance offset by limit",
+    "short pages reset offset to zero and increment cycle",
+    "cursor does not advance on wallet timeout or error",
+    "creation-time windows are never permanently done while matching local invoices remain non-terminal",
+    "transactions match local invoices by payment_hash with BOLT11 invoice fallback"
+  ],
+  "examples": [
+    {
+      "name": "first page",
+      "cursor_before": {
+        "from": 1000,
+        "until": 1000,
+        "limit": 20,
+        "offset": 0,
+        "cycle": 0
+      },
+      "request": {
+        "type": "incoming",
+        "unpaid": true,
+        "from": 1000,
+        "until": 1000,
+        "limit": 20,
+        "offset": 0
+      },
+      "returned_count": 20,
+      "cursor_after": {
+        "from": 1000,
+        "until": 1000,
+        "limit": 20,
+        "offset": 20,
+        "cycle": 0
+      }
+    },
+    {
+      "name": "short page starts next cycle",
+      "cursor_before": {
+        "from": 1000,
+        "until": 1000,
+        "limit": 20,
+        "offset": 20,
+        "cycle": 0
+      },
+      "request": {
+        "type": "incoming",
+        "unpaid": true,
+        "from": 1000,
+        "until": 1000,
+        "limit": 20,
+        "offset": 20
+      },
+      "returned_count": 7,
+      "cursor_after": {
+        "from": 1000,
+        "until": 1000,
+        "limit": 20,
+        "offset": 0,
+        "cycle": 1
+      }
+    },
+    {
+      "name": "timeout keeps cursor stable",
+      "cursor_before": {
+        "from": 1000,
+        "until": 1000,
+        "limit": 20,
+        "offset": 20,
+        "cycle": 0
+      },
+      "error": "TIMEOUT",
+      "cursor_after": {
+        "from": 1000,
+        "until": 1000,
+        "limit": 20,
+        "offset": 20,
+        "cycle": 0
+      }
+    }
+  ]
+}

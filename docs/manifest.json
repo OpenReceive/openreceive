@@ -51,14 +51,6 @@
       "public": true
     },
     {
-      "slug": "optional-scheduler",
-      "title": "Optional Scheduler",
-      "source_path": "docs/guides/optional-scheduler.md",
-      "category": "operations",
-      "audience": "developer",
-      "public": true
-    },
-    {
       "slug": "api-reference",
       "title": "API Reference",
       "source_path": "docs/guides/api-reference.md",
@@ -230,14 +222,6 @@
       "slug": "adr-0005-openreceive-owned-kv-storage",
       "title": "ADR-0005: OpenReceive-Owned KV Storage",
       "source_path": "docs/internal/adr/ADR-0005-openreceive-owned-kv-storage.md",
-      "category": "adr",
-      "audience": "contributor",
-      "public": false
-    },
-    {
-      "slug": "adr-0006-poll-only-recovery",
-      "title": "ADR-0006: Poll-Only Recovery",
-      "source_path": "docs/internal/adr/ADR-0006-poll-only-recovery.md",
       "category": "adr",
       "audience": "contributor",
       "public": false

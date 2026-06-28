@@ -6,7 +6,7 @@ info:
   description: >
     Events are emitted to server-side hooks and logs as passive hints. They are
     not an HTTP stream, do not run merchant settlement actions by themselves,
-    and never replace backend lookup as the settlement authority.
+    and never replace backend status refresh as the settlement authority.
 channels:
   invoiceLifecycleEvents:
     address: openreceive://invoice-lifecycle

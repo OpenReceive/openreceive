@@ -20,9 +20,13 @@
     "value": "string",
     "rev": "non-negative integer"
   },
-  "lookup_bucket_shape": {
-    "tokens": "non-negative number",
-    "refilled_at": "unix seconds"
+  "transaction_scan_cursor_shape": {
+    "from": "unix seconds",
+    "until": "unix seconds",
+    "limit": "positive integer",
+    "offset": "non-negative integer",
+    "cycle": "non-negative integer",
+    "last_page_scanned_at": "unix seconds"
   },
   "certified_v0_1_transports": [
     "memory",
@@ -99,24 +103,31 @@
       ]
     },
     {
-      "name": "per-invoice lookup claim allows at most one lookup per cooldown window",
+      "name": "global transaction scan gate allows at most one wallet page per interval",
       "requires": [
-        "last_lookup_at",
-        "put"
-      ]
-    },
-    {
-      "name": "global lookup token bucket limits burst and sustained lookup rate",
-      "requires": [
-        "lookup_bucket",
+        "transaction_scan_gate",
         "casMeta"
       ]
     },
     {
-      "name": "sweep throttle runs at most once per interval and respects sweep batch",
+      "name": "transaction scan cursor advances offset on full pages",
       "requires": [
-        "last_sweep_at",
-        "listOpen"
+        "transaction_scan_cursor",
+        "casMeta"
+      ]
+    },
+    {
+      "name": "transaction scan cursor resets offset and increments cycle on short pages",
+      "requires": [
+        "transaction_scan_cursor",
+        "casMeta"
+      ]
+    },
+    {
+      "name": "transaction scan cursor is not advanced on wallet errors",
+      "requires": [
+        "transaction_scan_cursor",
+        "casMeta"
       ]
     },
     {

@@ -62,7 +62,7 @@ Component({
         [attr.amount-msats]="checkoutAttributes['amount-msats']"
         [attr.status]="checkoutAttributes.status"
         [attr.expires-at]="checkoutAttributes['expires-at']"
-        [attr.lookup-url]="checkoutAttributes['lookup-url']"
+        [attr.status-url]="checkoutAttributes['status-url']"
         [attr.theme]="checkoutAttributes.theme"
         [attr.payment-wizard]="checkoutAttributes['payment-wizard']"
         (openreceive-copy)="onCheckoutEvent(openReceiveEvents.copy, $event)"

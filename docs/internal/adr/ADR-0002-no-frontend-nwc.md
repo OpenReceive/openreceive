@@ -13,13 +13,12 @@ cannot safely hold the NWC code for your app.
 
 OpenReceive does not support pure-frontend live checkout. Frontend packages
 render display-safe invoice data and call your backend routes. Invoice
-creation, NWC access, lookup, recovery polling, and app settlement actions stay
+creation, NWC access, status refresh, and app settlement actions stay
 server-side.
 
 ## Consequences
 
 - Browser packages must not depend on receive-only NWC codes.
 - Mobile apps call your payment backend.
-- Static sites need a small API, durable backend, and normal app server or
-  optional scheduler.
+- Static sites need a small API and durable backend.
 - Secret scanning checks for accidental receive-only NWC code exposure.

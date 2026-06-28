@@ -10,8 +10,8 @@ The source of truth for the example HTTP payloads is
 App-facing packages:
 
 - `@openreceive/node`: `createOpenReceive(options)` returns a server-only
-  service with `createInvoice`, `getInvoice`, `lookupInvoice`,
-  `refreshInvoice`, `listRates`, `quoteRates`, `poll`, and `close`.
+  service with `createInvoice`, `getInvoice`, `refreshInvoiceStatus`,
+  `refreshInvoice`, `listRates`, `quoteRates`, and `close`.
 - `@openreceive/browser`: `requestCheckoutInvoice`, `status`,
   `lightningUri`, `qrSvg`, `qrPngDataUrl`, `copyInvoice`, `openWallet`, and
   `createCheckoutController`.
@@ -107,16 +107,17 @@ Responses:
 Use this route from whatever controller, middleware, or route group already
 protects the owning checkout session when invoice reads should not be public.
 
-## Lookup Invoice
+## Refresh Invoice Status
 
-`POST /openreceive/v1/invoices/lookup`
+`POST /openreceive/v1/invoices/{invoice_id}/status`
 
-Body contains either `payment_hash` or `invoice`. This route performs backend
-payment verification. Use your app's route protection when status should not be
-public.
+This route performs one bounded backend status refresh for the stored invoice.
+It uses NWC `list_transactions` server-side and returns the stored state. Use
+your app's route protection when status should not be public.
 
-The lookup response may include proof details, but app fulfillment still belongs
-in the backend settlement hook. A preimage alone is not settlement proof.
+The response may include `wallet_scan_performed` and `transactions_checked`.
+App fulfillment still belongs in the backend settlement hook. A preimage alone
+is not settlement proof.
 
 ## Refresh Invoice
 
@@ -131,13 +132,6 @@ read `Idempotency-Key` and pass it to `openreceive.refreshInvoice()` as
 `idempotencyKey`. Refresh creates a linked replacement invoice after expiry or
 failure. It never mutates the old invoice in place. Settled invoices return
 `409`.
-
-## Poll
-
-`openreceive poll --once`
-
-Runs one scheduled recovery job from a server-side scheduler. The Node package
-does not provide a public poll route handler.
 
 ## Rates
 

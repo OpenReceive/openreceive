@@ -1,8 +1,8 @@
 # Conformance
 
 OpenReceive conformance starts with shared source-of-truth files. SDKs and
-adapters should not redefine invoice lifecycle, settlement, polling, idempotency,
-or amount rules.
+adapters should not redefine invoice lifecycle, settlement, status refresh,
+idempotency, or amount rules.
 
 ## Required Sources
 
@@ -11,7 +11,7 @@ or amount rules.
 - `spec/test-vectors/*.json` define amount boundaries, error normalization,
   fiat conversion, idempotency, invoice lifecycle, make-invoice validation, NWC
   info/encryption parsing, NWC request/response mapping, NWC URI parsing,
-  polling cadence, provider route selection, settlement detection, and the
+  transaction scan pagination, provider route selection, settlement detection, and the
   transport-agnostic storage KV contract.
 - `spec/openapi/openreceive-http.v1.yaml` defines mounted HTTP routes.
 - `spec/asyncapi/openreceive-events.v1.yaml` defines invoice event names and
@@ -51,12 +51,12 @@ still normalize NIP-47 send-payment errors such as `INSUFFICIENT_BALANCE` and
 ## Settlement Rules
 
 SDKs and adapters must treat an incoming invoice as settled only when
-`lookup_invoice` returns `settled_at` or `state == "settled"` /
-`transaction_state == "settled"`. A preimage is corroborating data, not final
-settlement proof.
+server-side NWC `list_transactions` returns a matching transaction with
+`settled_at` or `state == "settled"` / `transaction_state == "settled"`. A
+preimage is corroborating data, not final settlement proof.
 
-Settlement action hooks may run only after that backend lookup settlement
-proof. They must be idempotent; replaying lookup or server-side lifecycle
+Settlement action hooks may run only after that backend settlement proof. They
+must be idempotent; replaying status refresh or server-side lifecycle
 events must not run the app action twice.
 
 ## Idempotency Rules
@@ -87,12 +87,8 @@ profile. Use `OPENRECEIVE_EXPECTED_CAPABILITIES=/path/to/file.json` to test a
 different wallet profile without editing the committed default.
 
 The live harness verifies preflight, the metadata-size guard, invoice creation,
-initial lookup, and optional trusted notification confirmation when manual
-payment waiting is enabled. Polling lookup remains the recovery path when
-notifications are unavailable or missed.
-Recovery tests must include invoices whose local `expires_at` passed while the
-server was down; those invoices stay recoverable until a post-expiry wallet
-lookup or post-expiry grace verification closes them.
+initial `list_transactions` status, and optional trusted notification
+confirmation when manual payment waiting is enabled.
 
 Do not run live wallet tests on untrusted pull requests with receive-only NWC codes
 available.
@@ -106,15 +102,15 @@ frontend NWC behavior to OpenReceive receive-checkout APIs.
 ## Testkit
 
 `@openreceive/testkit` provides deterministic receive-client fixtures for SDK
-and adapter tests. It can create predictable invoices, look them up by invoice
-or payment hash, explicitly mark them settled, expired, or failed, and replay
-duplicate `payment_received` notifications.
+and adapter tests. It can create predictable invoices, list them as
+transactions by creation-time window, explicitly mark them settled, expired, or
+failed, and replay duplicate `payment_received` notifications.
 
-Use `scriptLookupSequence` when a test needs deterministic lookup behavior over
-time. A sequence can return pending or terminal wallet states, throw a specific
-wallet error, or return a hand-authored lookup result before falling back to the
-stored invoice state. This is useful for polling and retry tests that
-need to prove lookup remains the settlement authority.
+Use `scriptTransactionSequence` when a test needs deterministic wallet page
+behavior over time. A sequence can return pending or terminal transactions,
+throw a specific wallet error, or return a hand-authored page before falling
+back to the stored invoice state. This is useful for pagination and retry tests
+that need to prove status refresh remains the settlement authority.
 
 The testkit is not a daemon and does not emulate Nostr relay behavior. It is a
 local conformance helper for code paths that already depend on the
@@ -127,9 +123,9 @@ and direct `OpenReceiveReceiveNwcClient` fixtures. They are not published as a
 wallet daemon, do not replace live wallet profile tests, do not prove real
 BOLT11 routing, and do not emulate a Nostr relay.
 
-## Recovery
+## Status Refresh
 
-OpenReceive v0.1-v2 recovery is poll-only. Tests should cover lookup-gated
-interactive refresh, bounded sweeps, one-shot `openreceive poll --once`
-recovery, duplicate-safe settlement hooks, and the rule that a preimage alone
-is not final settlement proof.
+OpenReceive v0.1 settlement discovery is request-driven. Tests should cover
+one-page status refresh, durable global scan gates, per-window pagination
+cursors, duplicate-safe settlement hooks, and the rule that a preimage alone is
+not final settlement proof.

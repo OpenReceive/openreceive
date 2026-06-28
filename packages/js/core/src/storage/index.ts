@@ -60,7 +60,7 @@ export interface InvoiceStorageRow extends OpenReceiveIdempotencyScope {
   refreshed_from_invoice_id?: string;
   metadata: Record<string, unknown>;
   fiat_quote?: Record<string, unknown> | null;
-  last_lookup_at?: number;
+  last_transaction_scan_at?: number;
   action_claimed_at?: number;
 }
 
@@ -188,8 +188,8 @@ export function validateInvoiceStorageRow(row: InvoiceStorageRow): void {
     assertUnixSeconds(row.settlement_action_completed_at, "settlement_action_completed_at");
   }
 
-  if (row.last_lookup_at !== undefined) {
-    assertUnixSeconds(row.last_lookup_at, "last_lookup_at");
+  if (row.last_transaction_scan_at !== undefined) {
+    assertUnixSeconds(row.last_transaction_scan_at, "last_transaction_scan_at");
   }
 
   if (row.action_claimed_at !== undefined) {

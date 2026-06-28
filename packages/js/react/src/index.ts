@@ -51,7 +51,7 @@ import {
   type Status
 } from "@openreceive/browser/internal";
 
-const DEFAULT_LOOKUP_URL = "/openreceive/v1/invoices/lookup";
+const DEFAULT_STATUS_URL = "/openreceive/v1/invoices/{invoice_id}/status";
 
 export interface CheckoutData {
   readonly invoice: CheckoutSnapshot;
@@ -77,8 +77,8 @@ export interface UseCheckoutOptions extends CheckoutData {
   readonly open?: (uri: string) => void;
   readonly logger?: OpenReceiveBrowserLogger;
   readonly onError?: (error: unknown) => void;
-  readonly lookupInvoice?: (state: CheckoutState) => Promise<Partial<CheckoutSnapshot>>;
-  readonly lookupUrl?: string | false;
+  readonly refreshStatus?: (state: CheckoutState) => Promise<Partial<CheckoutSnapshot>>;
+  readonly statusUrl?: string | false;
   readonly refreshInvoice?: (state: CheckoutState) => Promise<CheckoutSnapshot | OpenReceiveRefreshInvoiceResult>;
   readonly refreshUrl?: string | ((state: CheckoutState) => string);
   readonly refreshHeaders?: Readonly<Record<string, string>>;
@@ -203,8 +203,8 @@ export interface CheckoutProps
   readonly qrEncoder?: OpenReceiveQrEncoder;
   readonly logger?: OpenReceiveBrowserLogger;
   readonly onError?: (error: unknown) => void;
-  readonly lookupInvoice?: (state: CheckoutState) => Promise<Partial<CheckoutSnapshot>>;
-  readonly lookupUrl?: string | false;
+  readonly refreshStatus?: (state: CheckoutState) => Promise<Partial<CheckoutSnapshot>>;
+  readonly statusUrl?: string | false;
   readonly refreshInvoice?: (state: CheckoutState) => Promise<CheckoutSnapshot | OpenReceiveRefreshInvoiceResult>;
   readonly refreshUrl?: string | ((state: CheckoutState) => string);
   readonly refreshHeaders?: Readonly<Record<string, string>>;
@@ -351,12 +351,12 @@ export function createCheckoutViewModel(
   );
 }
 
-function resolveCheckoutLookupUrl(options: {
-  readonly lookupUrl?: string | false;
+function resolveCheckoutStatusRefreshUrl(options: {
+  readonly statusUrl?: string | false;
   readonly polling?: boolean;
 }): string | undefined {
-  if (options.polling === false || options.lookupUrl === false) return undefined;
-  return options.lookupUrl ?? DEFAULT_LOOKUP_URL;
+  if (options.polling === false || options.statusUrl === false) return undefined;
+  return options.statusUrl ?? DEFAULT_STATUS_URL;
 }
 
 export function useCheckout(
@@ -406,17 +406,17 @@ export function useCheckout(
       displayData
     ]
   );
-  const lookupInvoice =
-    options.polling === false ? undefined : options.lookupInvoice;
-  const lookupUrl = resolveCheckoutLookupUrl({
-    lookupUrl: options.lookupUrl,
+  const refreshStatus =
+    options.polling === false ? undefined : options.refreshStatus;
+  const statusUrl = resolveCheckoutStatusRefreshUrl({
+    statusUrl: options.statusUrl,
     polling: options.polling
   });
   React.useEffect(() => {
     const controller = createCheckoutController({
       snapshot,
-      ...(lookupInvoice === undefined ? {} : { lookupInvoice }),
-      ...(lookupUrl === undefined ? {} : { lookupUrl }),
+      ...(refreshStatus === undefined ? {} : { refreshStatus }),
+      ...(statusUrl === undefined ? {} : { statusUrl }),
       ...(options.refreshInvoice === undefined ? {} : { refreshInvoice: options.refreshInvoice }),
       ...(options.refreshUrl === undefined ? {} : { refreshUrl: options.refreshUrl }),
       ...(options.refreshHeaders === undefined ? {} : { refreshHeaders: options.refreshHeaders }),
@@ -443,8 +443,8 @@ export function useCheckout(
     };
   }, [
     snapshot,
-    lookupInvoice,
-    lookupUrl,
+    refreshStatus,
+    statusUrl,
     options.refreshInvoice,
     options.refreshUrl,
     options.refreshHeaders,
@@ -1519,8 +1519,8 @@ export function Checkout(
     qrEncoder,
     logger,
     onError,
-    lookupInvoice,
-    lookupUrl,
+    refreshStatus,
+    statusUrl,
     refreshInvoice,
     refreshUrl,
     refreshHeaders,
@@ -1545,8 +1545,8 @@ export function Checkout(
     invoice,
     logger,
     onError,
-    lookupInvoice,
-    lookupUrl,
+    refreshStatus,
+    statusUrl,
     refreshInvoice,
     refreshUrl,
     refreshHeaders,

@@ -36,7 +36,7 @@ The backend owns:
 - wallet setup
 - invoice creation
 - idempotency
-- payment status and optional recovery jobs
+- payment status refresh
 - payment verification
 - the `onPaid` fulfillment path
 

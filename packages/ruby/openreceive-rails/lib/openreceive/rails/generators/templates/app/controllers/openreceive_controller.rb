@@ -2,7 +2,6 @@
 
 class OpenreceiveController < ApplicationController
   protect_from_forgery with: :exception
-  after_action :openreceive_route_recovery, except: :poll
 
   def create
     result = openreceive_adapter.create_invoice(
@@ -14,15 +13,18 @@ class OpenreceiveController < ApplicationController
   end
 
   def show
-    result = openreceive_adapter.lookup_invoice(
+    result = openreceive_adapter.get_invoice(
       controller: self,
       invoice_id: params.fetch(:invoice_id)
     )
     render json: result.fetch("body"), status: result.fetch("status")
   end
 
-  def poll
-    result = openreceive_adapter.poll(controller: self)
+  def status
+    result = openreceive_adapter.refresh_invoice_status(
+      controller: self,
+      invoice_id: params.fetch(:invoice_id)
+    )
     render json: result.fetch("body"), status: result.fetch("status")
   end
 
@@ -30,12 +32,6 @@ class OpenreceiveController < ApplicationController
 
   def openreceive_adapter
     OpenReceive::Rails.adapter
-  end
-
-  def openreceive_route_recovery
-    openreceive_adapter.maybe_sweep
-  rescue StandardError
-    true
   end
 
   def openreceive_create_params

@@ -14,8 +14,8 @@ const PAYMENT_HASH = "e".repeat(64);
 
 class FakeWallet {
   makeInvoiceCalls = 0;
-  lookupInvoiceCalls = 0;
-  lookupState = "pending";
+  listTransactionsCalls = 0;
+  transactionState = "pending";
   makeInvoiceError = undefined;
   expiresAt = 1600;
 
@@ -23,7 +23,7 @@ class FakeWallet {
     return {
       walletPubkey: "f".repeat(64),
       relays: ["wss://relay.example.com"],
-      methods: ["make_invoice", "lookup_invoice"],
+      methods: ["make_invoice", "list_transactions"],
       notifications: ["payment_received"],
       encryption: "nip04",
       spendCapabilityAdvertised: false,
@@ -49,15 +49,21 @@ class FakeWallet {
     };
   }
 
-  async lookupInvoice() {
-    this.lookupInvoiceCalls += 1;
+  async listTransactions(request) {
+    this.listTransactionsCalls += 1;
+    if (request.type === "outgoing" || request.from > 1000 || request.until < 1000) {
+      return { transactions: [] };
+    }
     return {
-      invoice: "lnbc-demo",
-      payment_hash: PAYMENT_HASH,
-      amount_msats: 200000n,
-      state: this.lookupState,
-      settled_at: this.lookupState === "settled" ? 1200 : undefined,
-      preimage: this.lookupState === "settled" ? "1".repeat(64) : undefined
+      transactions: [{
+        type: "incoming",
+        invoice: "lnbc-demo",
+        payment_hash: PAYMENT_HASH,
+        amount_msats: 200000n,
+        state: this.transactionState,
+        settled_at: this.transactionState === "settled" ? 1200 : undefined,
+        preimage: this.transactionState === "settled" ? "1".repeat(64) : undefined
+      }].slice(request.offset ?? 0, (request.offset ?? 0) + (request.limit ?? 20))
     };
   }
 }
@@ -70,7 +76,6 @@ async function createHarness(overrides = {}) {
     store,
     namespace: "demo_hello_fruit",
     clock: () => 1000,
-    backgroundSweep: false,
     priceProviders: [new StaticPriceProvider()],
     ...overrides
   });
@@ -106,7 +111,6 @@ test("createOpenReceive defaults to live cached price data and fails unhealthy b
       client: new FakeWallet(),
       store,
       namespace: "demo_hello_fruit",
-      backgroundSweep: false,
       priceFetch: async () => ({
         ok: false,
         status: 503,
@@ -271,7 +275,7 @@ test("create invoice accepts BTC and SATS amounts without price providers", asyn
   assert.deepEqual(providerCalls, []);
 });
 
-test("lookup settles invoice through gated backend refresh", async () => {
+test("status refresh settles invoice through bounded transaction scan", async () => {
   const { wallet, openreceive } = await createHarness();
   const invoice = await openreceive.createInvoice({
     orderId: "order-2",
@@ -279,19 +283,20 @@ test("lookup settles invoice through gated backend refresh", async () => {
     memo: "Fruit sticker"
   });
 
-  wallet.lookupState = "settled";
-  const lookup = await openreceive.lookupInvoice({
-    paymentHash: PAYMENT_HASH
+  wallet.transactionState = "settled";
+  const status = await openreceive.refreshInvoiceStatus({
+    invoiceId: invoice.invoiceId
   });
 
-  assert.equal(lookup.invoiceId, invoice.invoiceId);
-  assert.equal(lookup.status, "settled");
-  assert.equal(lookup.transactionState, "settled");
-  assert.equal(lookup.workflowState, "settlement_action_completed");
-  assert.equal(lookup.settlementActionState, "completed");
-  assert.equal(lookup.settledAt, 1200);
-  assert.equal(lookup.preimagePresent, true);
-  assert.equal("checkout" in lookup, false);
+  assert.equal(status.invoiceId, invoice.invoiceId);
+  assert.equal(status.status, "settled");
+  assert.equal(status.transactionState, "settled");
+  assert.equal(status.workflowState, "settlement_action_completed");
+  assert.equal(status.settlementActionState, "completed");
+  assert.equal(status.settledAt, 1200);
+  assert.equal(status.walletScanPerformed, true);
+  assert.equal(status.transactionsChecked, 1);
+  assert.equal("checkout" in status, false);
 });
 
 test("logger records invoice transitions without secrets", async () => {
@@ -307,9 +312,9 @@ test("logger records invoice transitions without secrets", async () => {
     memo: "Fruit sticker"
   });
 
-  wallet.lookupState = "settled";
-  await openreceive.lookupInvoice({
-    paymentHash: PAYMENT_HASH
+  wallet.transactionState = "settled";
+  await openreceive.refreshInvoiceStatus({
+    invoiceId: invoice.invoiceId
   });
 
   assert.deepEqual(
@@ -317,10 +322,10 @@ test("logger records invoice transitions without secrets", async () => {
     [
       "invoice.create.requested",
       "invoice.created",
-      "invoice.lookup.requested",
+      "invoice.status.requested",
       "invoice.settled",
       "invoice.settlement_action_completed",
-      "invoice.lookup.result"
+      "invoice.status.result"
     ]
   );
   assert.equal(logs[1].invoice_id, invoice.invoiceId);
@@ -355,7 +360,7 @@ test("logger redacts wallet errors before emitting unhandled failures", async ()
   assert.doesNotMatch(JSON.stringify(logs), /a{64}/);
 });
 
-test("lookup can run an idempotent backend settlement action hook after settlement", async () => {
+test("status refresh can run an idempotent backend settlement action hook after settlement", async () => {
   let onPaidCalls = 0;
   const { wallet, openreceive } = await createHarness({
     clock: () => 1300,
@@ -366,105 +371,28 @@ test("lookup can run an idempotent backend settlement action hook after settleme
       assert.deepEqual(metadata, { order_uuid: "order-settlement-action" });
     }
   });
-  await openreceive.createInvoice({
+  const invoice = await openreceive.createInvoice({
     orderId: "order-settlement-action",
     amount: { msats: 200000 },
     memo: "Fruit sticker"
   });
 
-  wallet.lookupState = "settled";
-  const firstLookup = await openreceive.lookupInvoice({
-    paymentHash: PAYMENT_HASH
+  wallet.transactionState = "settled";
+  const firstStatus = await openreceive.refreshInvoiceStatus({
+    invoiceId: invoice.invoiceId
   });
 
-  assert.equal(firstLookup.workflowState, "settlement_action_completed");
-  assert.equal(firstLookup.settlementActionState, "completed");
-  assert.equal(firstLookup.settlementActionCompletedAt, 1300);
+  assert.equal(firstStatus.workflowState, "settlement_action_completed");
+  assert.equal(firstStatus.settlementActionState, "completed");
+  assert.equal(firstStatus.settlementActionCompletedAt, 1300);
   assert.equal(onPaidCalls, 1);
 
-  const secondLookup = await openreceive.lookupInvoice({
-    paymentHash: PAYMENT_HASH
+  const secondStatus = await openreceive.refreshInvoiceStatus({
+    invoiceId: firstStatus.invoiceId
   });
 
-  assert.equal(secondLookup.workflowState, "settlement_action_completed");
+  assert.equal(secondStatus.workflowState, "settlement_action_completed");
   assert.equal(onPaidCalls, 1);
-});
-
-test("poll recovers invoices without browser polling", async () => {
-  let onPaidCalls = 0;
-  const settlementSources = [];
-  const wallet = new FakeWallet();
-  const store = new InMemoryInvoiceKvStore();
-  const openreceive = await createOpenReceive({
-    client: wallet,
-    store,
-    namespace: "demo_hello_fruit",
-    backgroundSweep: false,
-    clock: () => 1600,
-    priceProviders: [new StaticPriceProvider()],
-    onPaid: async ({ invoice, source, req }) => {
-      onPaidCalls += 1;
-      settlementSources.push(source);
-      assert.equal(req, undefined);
-      assert.equal(invoice.transaction_state, "settled");
-    }
-  });
-
-  const invoice = await openreceive.createInvoice({
-    orderId: "order-runner",
-    amount: { msats: 200000 },
-    memo: "Fruit sticker"
-  });
-
-  wallet.lookupState = "settled";
-  const poll = await openreceive.poll();
-  const stored = (await store.get(invoice.invoiceId)).row;
-
-  assert.deepEqual(poll.invoiceIds, [invoice.invoiceId]);
-  assert.equal(poll.checked, 1);
-  assert.equal(onPaidCalls, 1);
-  assert.deepEqual(settlementSources, ["poll"]);
-  assert.equal(stored.workflow_state, "settlement_action_completed");
-});
-
-test("poll reads sweep tuning from env defaults", async () => {
-  const previousSweepBatch = process.env.OPENRECEIVE_SWEEP_BATCH;
-  process.env.OPENRECEIVE_SWEEP_BATCH = "1";
-
-  try {
-    const wallet = new FakeWallet();
-    const store = new InMemoryInvoiceKvStore();
-    await seedInvoice(store, {
-      invoice_id: "or_inv_env_batch_1",
-      idempotency_key: "env-batch-1",
-      payment_hash: "1".repeat(64),
-      invoice: "lnbc-env-batch-1"
-    });
-    await seedInvoice(store, {
-      invoice_id: "or_inv_env_batch_2",
-      idempotency_key: "env-batch-2",
-      payment_hash: "2".repeat(64),
-      invoice: "lnbc-env-batch-2"
-    });
-
-    wallet.lookupState = "settled";
-    const openreceive = await createOpenReceive({
-      client: wallet,
-      store,
-      namespace: "demo_hello_fruit",
-      backgroundSweep: false,
-      clock: () => 1600,
-      priceProviders: [new StaticPriceProvider()]
-    });
-
-    const poll = await openreceive.poll();
-
-    assert.deepEqual(poll.invoiceIds, ["or_inv_env_batch_1"]);
-    assert.equal(poll.checked, 1);
-    assert.equal(wallet.lookupInvoiceCalls, 1);
-  } finally {
-    restoreEnvVar("OPENRECEIVE_SWEEP_BATCH", previousSweepBatch);
-  }
 });
 
 test("client-supplied settlement fields cannot trigger settlement action", async () => {
@@ -481,30 +409,30 @@ test("client-supplied settlement fields cannot trigger settlement action", async
     memo: "Fruit sticker"
   });
 
-  wallet.lookupState = "pending";
-  const lookup = await openreceive.lookupInvoice({
-    paymentHash: PAYMENT_HASH
+  wallet.transactionState = "pending";
+  const status = await openreceive.refreshInvoiceStatus({
+    invoiceId: invoice.invoiceId
   });
 
   const stored = (await store.get(invoice.invoiceId)).row;
-  assert.equal(lookup.transactionState, "pending");
-  assert.equal(lookup.workflowState, "verifying");
+  assert.equal(status.transactionState, "pending");
+  assert.equal(status.workflowState, "verifying");
   assert.equal(stored.transaction_state, "pending");
   assert.equal(stored.settlement_action_state, "pending");
   assert.equal(onPaidCalls, 0);
 });
 
-test("lookup rejects public status oracle requests for unknown payment hashes", async () => {
+test("status refresh rejects unknown invoice ids", async () => {
   const { openreceive } = await createHarness();
 
   await assertServiceError(
-    () => openreceive.lookupInvoice({
-      paymentHash: "0".repeat(64)
+    () => openreceive.refreshInvoiceStatus({
+      invoiceId: "or_inv_missing"
     }),
     {
       status: 404,
       code: "NOT_FOUND",
-      message: "Invoice not found: " + "0".repeat(64)
+      message: "Invoice not found: or_inv_missing"
     }
   );
 });
@@ -831,8 +759,7 @@ test("createOpenReceive refuses in-memory invoice storage in production mode", a
     const options = {
       client: new FakeWallet(),
       store: new InMemoryInvoiceKvStore(),
-      namespace: "demo_hello_fruit",
-      backgroundSweep: false
+      namespace: "demo_hello_fruit"
     };
 
     await assert.rejects(
