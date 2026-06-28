@@ -83,7 +83,6 @@ export interface WalletCapabilitySummary {
   walletPubkey: string;
   relays: string[];
   methods: string[];
-  notifications: string[];
   encryption: NwcEncryptionMode;
   spendCapabilityAdvertised: boolean;
   receiveCheckoutReady: boolean;
@@ -135,21 +134,10 @@ export interface ListTransactionsResult {
   transactions: NwcTransaction[];
 }
 
-export interface PaymentReceivedNotification {
-  payment_hash: string;
-  invoice?: string;
-  amount_msats?: bigint;
-  settled_at?: number;
-  raw?: unknown;
-}
-
 export interface OpenReceiveReceiveNwcClient {
   preflight(): Promise<WalletCapabilitySummary>;
   makeInvoice(request: MakeInvoiceRequest): Promise<MakeInvoiceResult>;
   listTransactions(request: ListTransactionsRequest): Promise<ListTransactionsResult>;
-  subscribeToPaymentReceived?(
-    handler: (notification: PaymentReceivedNotification) => Promise<void> | void
-  ): Promise<() => Promise<void> | void>;
 }
 
 export interface StandaloneNwcClient extends OpenReceiveReceiveNwcClient {

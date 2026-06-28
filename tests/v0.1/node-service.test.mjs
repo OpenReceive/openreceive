@@ -24,7 +24,6 @@ class FakeWallet {
       walletPubkey: "f".repeat(64),
       relays: ["wss://relay.example.com"],
       methods: ["make_invoice", "list_transactions"],
-      notifications: ["payment_received"],
       encryption: "nip04",
       spendCapabilityAdvertised: false,
       receiveCheckoutReady: true,

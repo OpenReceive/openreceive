@@ -76,7 +76,6 @@ class FakeAlbyClient {
   nextResponse = undefined;
   info = {
     capabilities: ["get_info", "make_invoice", "list_transactions"],
-    notifications: ["payment_received"],
     encryptions: ["nip44_v2", "nip04"]
   };
 
@@ -150,11 +149,6 @@ test("summarizes NWC info vectors for readiness and encryption", () => {
   for (const vector of NWC_INFO_VECTORS.cases) {
     const summary = summarizeWalletCapabilities(connection, vector.raw_info);
     assert.deepEqual(summary.methods, vector.expected.methods, vector.name);
-    assert.deepEqual(
-      summary.notifications,
-      vector.expected.notifications,
-      vector.name
-    );
     assert.equal(summary.encryption, vector.expected.encryption, vector.name);
     assert.equal(
       summary.spendCapabilityAdvertised,
@@ -432,7 +426,6 @@ test("createOpenReceive builds service methods from a client and store", async (
       return {
         receiveCheckoutReady: true,
         methods: ["make_invoice", "list_transactions"],
-        notifications: [],
         encryption: "nip44_v2",
         warnings: []
       };

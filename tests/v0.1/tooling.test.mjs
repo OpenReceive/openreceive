@@ -314,7 +314,13 @@ test("live NWC expected capabilities fixture matches the documented Rizful defau
     "make_invoice",
     "list_transactions"
   ]);
-  assert.equal(fixture.required_notifications.includes("payment_received"), true);
+  assert.deepEqual(Object.keys(fixture).sort(), [
+    "fallback_encryption",
+    "optional_methods",
+    "preferred_encryption",
+    "required_methods",
+    "wallet_profile"
+  ]);
   assert.equal(fixture.fallback_encryption, "nip04");
 });
 

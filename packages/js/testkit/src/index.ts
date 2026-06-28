@@ -9,7 +9,6 @@ import {
   type NwcTransaction,
   type OpenReceiveReceiveNwcClient,
   type OpenReceiveTransactionState,
-  type PaymentReceivedNotification,
   type WalletCapabilitySummary
 } from "@openreceive/core";
 
@@ -66,10 +65,6 @@ interface TestkitTransactionScript {
   next: number;
 }
 
-type PaymentReceivedHandler = (
-  notification: PaymentReceivedNotification
-) => Promise<void> | void;
-
 export class TestkitReceiveClient implements OpenReceiveReceiveNwcClient {
   readonly capabilitySummary: WalletCapabilitySummary;
 
@@ -79,7 +74,6 @@ export class TestkitReceiveClient implements OpenReceiveReceiveNwcClient {
   #byPaymentHash = new Map<string, TestkitStoredInvoice>();
   #byInvoice = new Map<string, TestkitStoredInvoice>();
   #transactionScripts = new Map<TestkitStoredInvoice, TestkitTransactionScript>();
-  #subscribers = new Set<PaymentReceivedHandler>();
 
   constructor(options: TestkitReceiveClientOptions = {}) {
     this.#now = options.now ?? (() => 1000);
@@ -88,7 +82,6 @@ export class TestkitReceiveClient implements OpenReceiveReceiveNwcClient {
       walletPubkey: TESTKIT_WALLET_PUBKEY,
       relays: [TESTKIT_RELAY],
       methods: ["make_invoice", "list_transactions"],
-      notifications: ["payment_received"],
       encryption: "nip04",
       spendCapabilityAdvertised: false,
       receiveCheckoutReady: true,
@@ -191,30 +184,7 @@ export class TestkitReceiveClient implements OpenReceiveReceiveNwcClient {
     stored.settled_at = settledAt;
     stored.preimage = options.preimage ?? TESTKIT_PREIMAGE;
 
-    const transaction = serializeTransaction(stored);
-    this.#notify(this.#notificationFor(stored, transaction));
-    return transaction;
-  }
-
-  replayPaymentReceived(
-    selector: TestkitInvoiceSelector,
-    count = 1
-  ): readonly PaymentReceivedNotification[] {
-    if (!Number.isSafeInteger(count) || count < 1) {
-      throw new RangeError("count must be a positive safe integer");
-    }
-
-    const stored = this.#require(selector);
-    const transaction = serializeTransaction(stored);
-    const notification = this.#notificationFor(stored, transaction);
-    const notifications: PaymentReceivedNotification[] = [];
-
-    for (let index = 0; index < count; index += 1) {
-      notifications.push(notification);
-      this.#notify(notification);
-    }
-
-    return notifications;
+    return serializeTransaction(stored);
   }
 
   expireInvoice(selector: TestkitInvoiceSelector): NwcTransaction {
@@ -227,15 +197,6 @@ export class TestkitReceiveClient implements OpenReceiveReceiveNwcClient {
     const stored = this.#require(selector);
     stored.state = "failed";
     return serializeTransaction(stored);
-  }
-
-  async subscribeToPaymentReceived(
-    handler: PaymentReceivedHandler
-  ): Promise<() => void> {
-    this.#subscribers.add(handler);
-    return () => {
-      this.#subscribers.delete(handler);
-    };
   }
 
   listInvoices(): readonly NwcTransaction[] {
@@ -262,12 +223,6 @@ export class TestkitReceiveClient implements OpenReceiveReceiveNwcClient {
     const stored = this.#find(request);
     if (!stored) throw new Error("testkit invoice not found");
     return stored;
-  }
-
-  #notify(notification: PaymentReceivedNotification): void {
-    for (const subscriber of this.#subscribers) {
-      void subscriber(notification);
-    }
   }
 
   #nextScriptedTransaction(
@@ -306,19 +261,6 @@ export class TestkitReceiveClient implements OpenReceiveReceiveNwcClient {
     const scripted = this.#nextScriptedTransaction(stored);
     if (scripted !== undefined) return scripted;
     return serializeTransaction(stored);
-  }
-
-  #notificationFor(
-    stored: TestkitStoredInvoice,
-    transaction: NwcTransaction
-  ): PaymentReceivedNotification {
-    return {
-      payment_hash: stored.payment_hash,
-      invoice: stored.invoice,
-      amount_msats: stored.amount_msats,
-      ...(stored.settled_at === undefined ? {} : { settled_at: stored.settled_at }),
-      raw: transaction
-    };
   }
 }
 

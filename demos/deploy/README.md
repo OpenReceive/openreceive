@@ -44,7 +44,7 @@ The receive-only NWC code env file must provide server-only `OPENRECEIVE_NWC`,
 `OPENRECEIVE_STORE`, and `OPENRECEIVE_NAMESPACE`. Each demo has one web service
 whose app routes call the OpenReceive service and use durable OpenReceive
 invoice storage. Status refresh happens only inside app requests. No demo
-deploys an extra timed process or notification listener.
+deploys an extra timed process or wallet event listener.
 
 Validate public templates locally:
 

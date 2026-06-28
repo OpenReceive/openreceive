@@ -131,17 +131,6 @@ function assertCapabilities(summary, expected, walletProfile) {
     throw new Error(`Wallet is missing required methods: ${missing.join(", ")}`);
   }
 
-  const notifications = new Set(summary.notifications ?? []);
-  const missingNotifications = (expected.required_notifications ?? []).filter(
-    (notification) => !notifications.has(notification)
-  );
-
-  if (missingNotifications.length > 0) {
-    throw new Error(
-      `Wallet is missing required notifications: ${missingNotifications.join(", ")}`
-    );
-  }
-
   const allowedEncryption = [
     expected.preferred_encryption,
     expected.fallback_encryption
@@ -266,26 +255,17 @@ if (!waitForPayment) {
   process.exit(0);
 }
 
-const notificationState = await subscribeForPaymentNotifications(client, invoice);
 console.log("Waiting for manual payment. Settlement must be proven by list_transactions.");
 const createdAt = invoice.created_at ?? Math.floor(Date.now() / 1000);
 const expiresAt = invoice.expires_at ?? createdAt + product.invoice_expiry_seconds;
-let outcome;
-try {
-  outcome = await waitForListTransactionsFinalState({
-    client,
-    invoice,
-    createdAt,
-    expiresAt
-  });
-} finally {
-  await notificationState.stop();
-}
+const outcome = await waitForListTransactionsFinalState({
+  client,
+  invoice,
+  createdAt,
+  expiresAt
+});
 
 console.log(`Final outcome: ${outcome.status} (${outcome.reason})`);
-if (notificationState.settledByNotification) {
-  console.log("Notification plus transaction scan confirmed settlement.");
-}
 if (outcome.status !== "settled") {
   process.exit(1);
 }
@@ -351,46 +331,4 @@ async function assertMetadataGuard(client, amountMsats) {
   }
 
   throw new Error("Metadata guard did not reject oversized payload.");
-}
-
-async function subscribeForPaymentNotifications(client, invoice) {
-  const state = {
-    settledByNotification: false,
-    stop: async () => {}
-  };
-
-  if (typeof client.subscribeToPaymentReceived !== "function") {
-    console.log("Notification subscription unavailable; relying on polling.");
-    return state;
-  }
-
-  try {
-    const unsubscribe = await client.subscribeToPaymentReceived((notification) => {
-      if (notification.payment_hash !== invoice.payment_hash) return;
-
-      void confirmNotificationSettlement(client, invoice, state).catch(
-        (error) => {
-          console.log(`Notification status refresh failed: ${formatErrorMessage(error)}`);
-        }
-      );
-    });
-    state.stop = async () => {
-      await unsubscribe();
-    };
-    console.log("Subscribed to payment_received notifications.");
-  } catch (error) {
-    console.log(`Notification subscription unavailable: ${formatErrorMessage(error)}`);
-  }
-
-  return state;
-}
-
-async function confirmNotificationSettlement(client, invoice, state) {
-  console.log("Received payment_received notification; confirming with list_transactions.");
-  const transaction = await findInvoiceTransaction(client, invoice);
-  const settlement = transaction
-    ? classifyTransactionSettlement(transaction)
-    : { status: "pending", settled: false };
-  console.log(`Notification transaction scan state: ${settlement.status}`);
-  if (settlement.settled) state.settledByNotification = true;
 }

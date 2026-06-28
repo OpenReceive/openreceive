@@ -6,7 +6,7 @@ to the app-facing API.
 ## Settlement Authority
 
 OpenReceive treats backend status refresh as the settlement authority. Wallet
-notifications and frontend callbacks are passive hints. A payment is settled
+events and frontend callbacks are not settlement proof. A payment is settled
 only when a server-side NWC `list_transactions` result contains `settled_at` or
 a settled transaction state.
 
@@ -26,10 +26,10 @@ Settlement actions are claimed through the store and are at least once. App
 hooks must deduplicate by `payment_hash`, invoice id, or the app's own order
 id.
 
-OpenReceive does not add a notification listener, webhook bridge, SSE bus, or
+OpenReceive does not add a wallet event listener, webhook bridge, SSE bus, or
 in-memory event bus because those would become a second coordination path.
-Wallet notifications and frontend status checks stay passive; the store plus
-backend status refresh remain the settlement authority.
+Frontend status checks only ask the backend to refresh; the store plus backend
+status refresh remain the settlement authority.
 
 ## NWC Client Strategy
 

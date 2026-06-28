@@ -11,9 +11,6 @@
           "listTransactions",
           "pay_invoice"
         ],
-        "notifications": [
-          "payment_received"
-        ],
         "encryptions": [
           "nip44_v2",
           "nip04"
@@ -26,9 +23,6 @@
           "list_transactions",
           "pay_invoice"
         ],
-        "notifications": [
-          "payment_received"
-        ],
         "encryption": "nip44_v2",
         "spend_capability_advertised": true,
         "receive_checkout_ready": true,
@@ -40,17 +34,13 @@
     {
       "name": "missing encryption falls back to NIP-04",
       "raw_info": {
-        "methods": "get_info make_invoice list_transactions",
-        "notifications": "payment_received"
+        "methods": "get_info make_invoice list_transactions"
       },
       "expected": {
         "methods": [
           "get_info",
           "make_invoice",
           "list_transactions"
-        ],
-        "notifications": [
-          "payment_received"
         ],
         "encryption": "nip04",
         "spend_capability_advertised": false,
@@ -65,7 +55,6 @@
           "get_info",
           "make_invoice"
         ],
-        "notifications": [],
         "encryption": [
           "nip04"
         ]
@@ -75,7 +64,6 @@
           "get_info",
           "make_invoice"
         ],
-        "notifications": [],
         "encryption": "nip04",
         "spend_capability_advertised": false,
         "receive_checkout_ready": false,

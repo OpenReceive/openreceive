@@ -28,11 +28,7 @@ test("testkit receive client creates deterministic invoices", async () => {
 });
 
 test("testkit receive client lists and settles invoices by payment hash", async () => {
-  const notifications = [];
   const wallet = createTestkitReceiveClient({ now: () => 3000 });
-  const unsubscribe = await wallet.subscribeToPaymentReceived((notification) => {
-    notifications.push(notification);
-  });
   const invoice = await wallet.makeInvoice({ amount_msats: 200000n });
 
   assert.equal(
@@ -55,38 +51,6 @@ test("testkit receive client lists and settles invoices by payment hash", async 
   assert.equal(settled.transaction_state, "settled");
   assert.equal(settled.settled_at, 3000);
   assert.equal(settled.preimage, TESTKIT_PREIMAGE);
-  assert.deepEqual(notifications.map((event) => event.payment_hash), [
-    invoice.payment_hash
-  ]);
-
-  unsubscribe();
-});
-
-test("testkit receive client replays duplicate payment notifications", async () => {
-  const notifications = [];
-  const wallet = createTestkitReceiveClient({ now: () => 4000 });
-  await wallet.subscribeToPaymentReceived((notification) => {
-    notifications.push(notification);
-  });
-  const invoice = await wallet.makeInvoice({ amount_msats: 200000n });
-
-  wallet.settleInvoice({ payment_hash: invoice.payment_hash });
-  const replayed = wallet.replayPaymentReceived(
-    { payment_hash: invoice.payment_hash },
-    2
-  );
-
-  assert.equal(replayed.length, 2);
-  assert.equal(notifications.length, 3);
-  assert.deepEqual(
-    notifications.map((notification) => notification.payment_hash),
-    [
-      invoice.payment_hash,
-      invoice.payment_hash,
-      invoice.payment_hash
-    ]
-  );
-  assert.equal(notifications.every((notification) => notification.settled_at === 4000), true);
 });
 
 test("testkit receive client scripts deterministic transaction sequences", async () => {

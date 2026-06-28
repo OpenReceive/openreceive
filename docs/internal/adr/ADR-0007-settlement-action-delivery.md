@@ -21,6 +21,6 @@ Host apps must make settlement hooks idempotent, usually by deduplicating on
 ## Consequences
 
 - Hooks may replay after lease expiry.
-- Hooks should not rely on frontend state or passive notifications.
+- Hooks should not rely on frontend state.
 - Documentation and tests must describe duplicate/replay-safe settlement
   behavior.

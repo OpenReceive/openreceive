@@ -19,7 +19,6 @@ import {
   type OpenReceiveErrorCode,
   type OpenReceiveReceiveNwcClient,
   type OpenReceiveTransactionState,
-  type PaymentReceivedNotification,
   type ParsedNwcConnection,
   type WalletCapabilitySummary,
   isOpenReceiveErrorCode,
@@ -45,10 +44,6 @@ export interface AlbyNwcCompatibleClient {
   make_invoice?: (request: Record<string, unknown>) => Promise<unknown>;
   listTransactions?: (request: Record<string, unknown>) => Promise<unknown>;
   list_transactions?: (request: Record<string, unknown>) => Promise<unknown>;
-  subscribeNotifications?: (
-    handler: (notification: unknown) => void,
-    notificationTypes?: string[]
-  ) => Promise<() => void> | (() => void);
   close?: () => Promise<void> | void;
 }
 
@@ -191,29 +186,6 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
     await this.#client?.close?.();
   }
 
-  async subscribeToPaymentReceived(
-    handler: (notification: PaymentReceivedNotification) => Promise<void> | void
-  ): Promise<() => Promise<void> | void> {
-    await this.ensurePreflight();
-    const client = await this.getClient();
-
-    if (typeof client.subscribeNotifications !== "function") {
-      return () => {};
-    }
-
-    let unsubscribe: () => void | Promise<void>;
-    try {
-      unsubscribe = await client.subscribeNotifications((rawNotification) => {
-        const notification = normalizePaymentReceivedNotification(rawNotification);
-        if (notification !== undefined) void handler(notification);
-      }, ["payment_received"]);
-    } catch (error) {
-      throw normalizeNwcWalletError(error);
-    }
-
-    return unsubscribe;
-  }
-
   private async ensurePreflight(): Promise<void> {
     if (!this.#requirePreflight || this.#preflightSummary !== undefined) return;
     await this.preflight();
@@ -277,11 +249,6 @@ export function summarizeWalletCapabilities(
       info.supportedMethods ??
       (typeof unwrappedInfo === "string" ? unwrappedInfo : undefined)
   ).map(normalizeNwcMethodName);
-  const notifications = normalizeStringList(
-    info.notifications ??
-      info.notification_types ??
-      info.notificationTypes
-  );
   const encryption = chooseEncryptionMode(
     normalizeStringList(info.encryption ?? info.encryptions)
   );
@@ -299,7 +266,6 @@ export function summarizeWalletCapabilities(
     walletPubkey: connection.walletPubkey,
     relays: [...connection.relays],
     methods,
-    notifications,
     encryption,
     spendCapabilityAdvertised: spendMethods.length > 0,
     receiveCheckoutReady: missingMethods.length === 0,
@@ -818,45 +784,6 @@ function normalizeTransactionType(value: unknown): "incoming" | "outgoing" | und
   const normalized = value.toLowerCase();
   if (normalized === "incoming" || normalized === "outgoing") return normalized;
   return undefined;
-}
-
-function normalizePaymentReceivedNotification(
-  rawNotification: unknown
-): PaymentReceivedNotification | undefined {
-  const notification = asRecord(unwrapNwcResult(rawNotification));
-  const type = notification.notification_type ?? notification.notificationType;
-  if (type !== "payment_received") return undefined;
-
-  const transaction = asRecord(notification.notification);
-  const paymentHash = transaction.payment_hash ?? transaction.paymentHash;
-  if (typeof paymentHash !== "string" || paymentHash.length === 0) {
-    return undefined;
-  }
-
-  const normalized: PaymentReceivedNotification = {
-    payment_hash: paymentHash,
-    raw: rawNotification
-  };
-
-  if (typeof transaction.invoice === "string") {
-    normalized.invoice = transaction.invoice;
-  }
-
-  if (transaction.amount !== undefined || transaction.amount_msats !== undefined) {
-    normalized.amount_msats = toBigInt(
-      transaction.amount_msats ?? transaction.amount,
-      "amount_msats"
-    );
-  }
-
-  if (
-    typeof transaction.settled_at === "number" &&
-    Number.isSafeInteger(transaction.settled_at)
-  ) {
-    normalized.settled_at = transaction.settled_at;
-  }
-
-  return normalized;
 }
 
 function optionalNumberField(

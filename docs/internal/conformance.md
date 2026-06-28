@@ -87,8 +87,7 @@ profile. Use `OPENRECEIVE_EXPECTED_CAPABILITIES=/path/to/file.json` to test a
 different wallet profile without editing the committed default.
 
 The live harness verifies preflight, the metadata-size guard, invoice creation,
-initial `list_transactions` status, and optional trusted notification
-confirmation when manual payment waiting is enabled.
+and `list_transactions` status refreshes when manual payment waiting is enabled.
 
 Do not run live wallet tests on untrusted pull requests with receive-only NWC codes
 available.
@@ -104,7 +103,7 @@ frontend NWC behavior to OpenReceive receive-checkout APIs.
 `@openreceive/testkit` provides deterministic receive-client fixtures for SDK
 and adapter tests. It can create predictable invoices, list them as
 transactions by creation-time window, explicitly mark them settled, expired, or
-failed, and replay duplicate `payment_received` notifications.
+failed, and script deterministic `list_transactions` responses.
 
 Use `scriptTransactionSequence` when a test needs deterministic wallet page
 behavior over time. A sequence can return pending or terminal transactions,

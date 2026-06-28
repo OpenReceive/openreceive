@@ -385,8 +385,15 @@ function validateLiveNwcExpectedCapabilities() {
     "default live NWC optional methods mismatch"
   );
   assert(
-    JSON.stringify(expected.required_notifications) === JSON.stringify(["payment_received"]),
-    "default live NWC required notifications mismatch"
+    JSON.stringify(Object.keys(expected).sort()) ===
+      JSON.stringify([
+        "fallback_encryption",
+        "optional_methods",
+        "preferred_encryption",
+        "required_methods",
+        "wallet_profile"
+      ]),
+    "default live NWC expected capabilities contain unexpected keys"
   );
   assert(expected.preferred_encryption === "nip44_v2", "default live NWC preferred encryption mismatch");
   assert(expected.fallback_encryption === "nip04", "default live NWC fallback encryption mismatch");

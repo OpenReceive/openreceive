@@ -8,9 +8,6 @@
   "optional_methods": [
     "get_balance"
   ],
-  "required_notifications": [
-    "payment_received"
-  ],
   "preferred_encryption": "nip44_v2",
   "fallback_encryption": "nip04"
 }
