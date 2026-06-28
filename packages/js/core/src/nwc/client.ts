@@ -145,7 +145,7 @@ export interface StandaloneNwcClient extends OpenReceiveReceiveNwcClient {
 }
 
 export function isTransactionSettled(result: NwcTransaction): boolean {
-  return result.settled_at !== undefined || result.transaction_state === "settled" || result.state === "settled";
+  return (result.settled_at !== undefined && result.settled_at > 0) || result.transaction_state === "settled" || result.state === "settled";
 }
 
 export function parseNwcUri(uri: string): ParsedNwcConnection {

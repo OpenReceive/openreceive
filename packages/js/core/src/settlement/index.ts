@@ -29,7 +29,7 @@ export function getSettlementFinalitySignal(
   result: NwcTransaction
 ): SettlementFinalitySignal | undefined {
   if (!isTransactionSettled(result)) return undefined;
-  if (result.settled_at !== undefined) return "settled_at";
+  if (result.settled_at !== undefined && result.settled_at > 0) return "settled_at";
   if (result.state === "settled") return "state";
   if (result.transaction_state === "settled") return "transaction_state";
   return undefined;
