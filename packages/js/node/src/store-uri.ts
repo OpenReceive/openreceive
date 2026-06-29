@@ -5,8 +5,8 @@ import {
   createRequire
 } from "node:module";
 import path from "node:path";
-import {
-  type OpenReceiveInvoiceKvStore
+import type {
+  OpenReceiveInvoiceKvStore
 } from "@openreceive/core";
 import {
   createOpenReceivePostgresKvStore,
