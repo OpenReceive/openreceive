@@ -37,7 +37,7 @@ test("testkit receive client lists and settles invoices by payment hash", async 
       unpaid: true,
       from: invoice.created_at,
       until: invoice.created_at,
-      limit: 20,
+      limit: 25,
       offset: 0
     })).state,
     "pending"
@@ -76,7 +76,7 @@ test("testkit receive client scripts deterministic transaction sequences", async
       unpaid: true,
       from: invoice.created_at,
       until: invoice.created_at,
-      limit: 20,
+      limit: 25,
       offset: 0
     })).state,
     "pending"
@@ -87,7 +87,7 @@ test("testkit receive client scripts deterministic transaction sequences", async
       unpaid: true,
       from: invoice.created_at,
       until: invoice.created_at,
-      limit: 20,
+      limit: 25,
       offset: 0
     }),
     /wallet transaction timeout/
@@ -98,7 +98,7 @@ test("testkit receive client scripts deterministic transaction sequences", async
     unpaid: true,
     from: invoice.created_at,
     until: invoice.created_at,
-    limit: 20,
+    limit: 25,
     offset: 0
   }));
   assert.equal(settled.state, "settled");
@@ -112,7 +112,7 @@ test("testkit receive client scripts deterministic transaction sequences", async
       unpaid: true,
       from: invoice.created_at,
       until: invoice.created_at,
-      limit: 20,
+      limit: 25,
       offset: 0
     })).state,
     "settled"
@@ -126,7 +126,7 @@ test("testkit receive client scripts deterministic transaction sequences", async
       unpaid: true,
       from: invoice.created_at,
       until: invoice.created_at,
-      limit: 20,
+      limit: 25,
       offset: 0
     })).state,
     "failed"
@@ -151,7 +151,7 @@ test("testkit receive client supports seeded fixtures and terminal states", asyn
     unpaid: true,
     from: 100,
     until: 100,
-    limit: 20,
+    limit: 25,
     offset: 0
   })).state, "pending");
   assert.equal(wallet.expireInvoice({ invoice: "lnbcseeded" }).state, "expired");

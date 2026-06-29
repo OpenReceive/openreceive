@@ -1,8 +1,6 @@
 "use client";
 
-import {
-  type Invoice,
-} from "@openreceive/browser";
+import type { Invoice } from "@openreceive/browser";
 import {
   Checkout,
   ThemeScope
@@ -75,7 +73,7 @@ export default function CheckoutClient({
     () => fruits.find((fruit) => fruit.id === fruitId) ?? fruits[0],
     [fruitId, fruits]
   );
-  const createInvoiceLabel =
+  const createCheckoutLabel =
     selectedFruit === undefined
       ? helloFruitDemoLabels.createOrder
       : currency === selectedFruit.fiat.currency
@@ -212,7 +210,7 @@ export default function CheckoutClient({
         onClick={addSelectedFruitToCart}
         type="button"
       >
-        {createInvoiceLabel}
+        {createCheckoutLabel}
       </button>
 
       {checkout !== undefined || cartItems.length === 0 ? null : (

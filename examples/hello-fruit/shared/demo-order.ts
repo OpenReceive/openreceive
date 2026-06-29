@@ -115,7 +115,7 @@ export function createHelloFruitCreateOrderResult(
     items,
     totalAmount
   };
-  const amount = createOpenReceiveInvoiceAmount(totalAmount, currency);
+  const amount = createOpenReceiveCheckoutAmount(totalAmount, currency);
 
   return {
     order,
@@ -131,7 +131,7 @@ export function createHelloFruitCreateOrderResult(
   };
 }
 
-function createOpenReceiveInvoiceAmount(
+function createOpenReceiveCheckoutAmount(
   totalAmount: HelloFruitFiatAmount,
   currency: string
 ): HelloFruitCreateOrderResult["invoiceRequest"]["amount"] {
@@ -245,10 +245,6 @@ function totalHelloFruitAmount(items: readonly HelloFruitOrderItem[]): HelloFrui
     currency,
     value: formatDecimal(totalUnits, scale)
   };
-}
-
-function multiplyFiat(fiat: HelloFruitFiatAmount, quantity: number): HelloFruitFiatAmount {
-  return multiplyAmount(fiat, quantity);
 }
 
 function multiplyAmount(fiat: HelloFruitFiatAmount, quantity: number): HelloFruitFiatAmount {

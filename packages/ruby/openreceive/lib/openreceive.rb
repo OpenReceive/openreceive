@@ -437,7 +437,7 @@ module OpenReceive
       { "status" => "replayed", "row" => deep_copy(row) }
     end
 
-    def create_invoice(row)
+    def put_invoice_record(row)
       data = stringify_keys(row)
       validate_invoice_row(data)
 

@@ -15,17 +15,10 @@ Node is the v0.1 supported path:
 
 ## Rails
 
-Rails support is initial proof work. The `openreceive` and `openreceive-rails`
-Ruby packages live in this repository with tests, route helpers, generated
-tasks, OpenReceive SQLite storage, Hotwire partials, and a Rails Hotwire demo
-skeleton.
-
-Treat Rails as experimental until the Rails smoke and live-wallet proof gaps
-are closed. The active demo is:
-
-```sh
-npm run demo rails
-```
+There is no active Rails adapter package. The stale invoice-route adapter was
+removed while the public API moved to the checkout model. Future Rails work
+should expose app-owned checkout controllers that call the same server-side
+checkout/order functions as the Node reference path.
 
 ## Python
 

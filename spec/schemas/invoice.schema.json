@@ -12,7 +12,7 @@
     "invoice",
     "payment_hash",
     "amount_msats",
-    "order_uuid",
+    "order_id",
     "created_at",
     "expires_at",
     "settlement_action_state"
@@ -62,7 +62,7 @@
       "minimum": 1000,
       "maximum": 9007199254740991
     },
-    "order_uuid": {
+    "order_id": {
       "type": "string",
       "minLength": 1,
       "maxLength": 200

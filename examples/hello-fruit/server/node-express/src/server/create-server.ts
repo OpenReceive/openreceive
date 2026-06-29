@@ -144,6 +144,10 @@ export async function createHelloFruitServer(
         checkout
       });
     } catch (error) {
+      if (error instanceof OpenReceiveServiceError || error instanceof HelloFruitDemoOrderError) {
+        res.status(error.status).json(error.body);
+        return;
+      }
       next(error);
     }
   });
@@ -160,30 +164,15 @@ export async function createHelloFruitServer(
         }
       });
     } catch (error) {
+      if (error instanceof OpenReceiveServiceError || error instanceof HelloFruitDemoOrderError) {
+        res.status(error.status).json(error.body);
+        return;
+      }
       next(error);
     }
   });
 
-  app.use(handleCheckoutError);
-
   return app;
-}
-
-function handleCheckoutError(
-  error: unknown,
-  _req: express.Request,
-  res: express.Response,
-  next: express.NextFunction
-): void {
-  if (error instanceof OpenReceiveServiceError) {
-    res.status(error.status).json(error.body);
-    return;
-  }
-  if (error instanceof HelloFruitDemoOrderError) {
-    res.status(error.status).json(error.body);
-    return;
-  }
-  next(error);
 }
 
 function asRequestBody(value: unknown): Record<string, unknown> {

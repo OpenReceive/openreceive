@@ -8,7 +8,7 @@ parallel work. Shared contract files still need lead coordination.
 | Contract schemas | `spec/schemas/**` | Active | Lead |
 | Test vectors | `spec/test-vectors/**` | Active | Lead |
 | JS core contracts | `packages/js/core` | Implemented, lead-owned | Lead |
-| Node receive SDK and route adapters | `packages/js/node` | Implemented | JS lane |
+| Node receive SDK | `packages/js/node` | Implemented | JS lane |
 | Browser helpers | `packages/js/browser` | Implemented | Browser lane |
 | Elements package | `packages/js/elements` | Implemented | Browser lane |
 | React package | `packages/js/react` | Implemented | Frontend lane |
@@ -18,7 +18,6 @@ parallel work. Shared contract files still need lead coordination.
 | Provider data package | `packages/js/provider-data` | Implemented | Data lane |
 | Testkit package | `packages/js/testkit` | Implemented | Conformance lane |
 | Ruby core package | `packages/ruby/openreceive` | Initial vector-backed helpers | Ecosystem lane |
-| Rails adapter package | `packages/ruby/openreceive-rails` | Initial server-side adapter helpers | Ecosystem lane |
 | Hello Fruit demos | `examples/hello-fruit/**` | Implemented | Demo lane |
 | Other non-JS SDKs | `packages/python`, `packages/php`, etc. | Deferred | Ecosystem lanes |
 

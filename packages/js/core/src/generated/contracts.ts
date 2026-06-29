@@ -3,24 +3,6 @@
 export const OPENRECEIVE_HTTP_CONTRACT_VERSION = "0.1.0" as const;
 export const OPENRECEIVE_EVENT_CONTRACT_VERSION = "0.1.0" as const;
 
-export const OPENRECEIVE_HTTP_PATHS = [
-  "/checkouts/{checkout_id}",
-  "/orders/{order_id}/checkouts",
-  "/orders/{order_id}/status",
-  "/rates",
-  "/rates/quote"
-] as const;
-export type OpenReceiveHttpPath = (typeof OPENRECEIVE_HTTP_PATHS)[number];
-
-export const OPENRECEIVE_HTTP_OPERATION_IDS = [
-  "createCheckout",
-  "getCheckout",
-  "getOrder",
-  "listRates",
-  "quoteRates"
-] as const;
-export type OpenReceiveHttpOperationId = (typeof OPENRECEIVE_HTTP_OPERATION_IDS)[number];
-
 export const OPENRECEIVE_EVENT_NAMES = [
   "invoice.cancelled",
   "invoice.created",

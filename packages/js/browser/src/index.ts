@@ -1,7 +1,7 @@
 export {
   copyInvoice,
   createLightningUri as lightningUri,
-  createCheckoutController as createCheckoutController,
+  createCheckoutController,
   createQrPngDataUrl as qrPngDataUrl,
   createQrSvg as qrSvg,
   openWallet,
@@ -10,8 +10,8 @@ export {
 
 export type {
   CopyInvoiceOptions,
-  CheckoutController as CheckoutController,
-  CheckoutControllerOptions as CheckoutControllerOptions,
+  CheckoutController,
+  CheckoutControllerOptions,
   CheckoutSnapshot as Invoice,
   OpenReceiveQrOptions as QrOptions,
   OpenWalletOptions,

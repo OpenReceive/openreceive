@@ -1,9 +1,0 @@
-{
-  "order_uuid": "order_456",
-  "fiat": {
-    "currency": "USD",
-    "value": "0.10"
-  },
-  "optional_invoice_description": "Fruit sticker from OpenReceive demo: banana",
-  "expiry": 600
-}

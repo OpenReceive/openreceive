@@ -5,7 +5,6 @@
 //   npm run demo node      -> Express + React/Vue/Svelte/Angular (http://localhost:3000)
 //   npm run demo static    -> Static HTML + small API (http://localhost:3001)
 //   npm run demo nextjs    -> Next.js fullstack       (http://localhost:3002)
-//   npm run demo rails     -> Rails + Hotwire         (http://localhost:3003)
 //
 // It ensures the repo-root .env exists, validates OPENRECEIVE_NWC, and runs the
 // compose stack with the local port-publishing override.
@@ -38,12 +37,6 @@ const DEMOS = [
     dir: "examples/hello-fruit/server/nextjs-fullstack",
     port: 3002,
     label: "Next.js fullstack"
-  },
-  {
-    keys: ["rails", "rails-hotwire", "hotwire"],
-    dir: "examples/hello-fruit/server/rails-hotwire",
-    port: 3003,
-    label: "Rails + Hotwire"
   }
 ];
 

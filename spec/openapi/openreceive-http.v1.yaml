@@ -1,122 +1,13 @@
 openapi: 3.1.0
 info:
-  title: OpenReceive HTTP API
+  title: OpenReceive component schemas
   version: 0.1.0
-  summary: Example receive-checkout payloads for app-owned controllers.
+  summary: Shared receive-checkout shapes for app-owned controllers.
   description: >
-    OpenReceive does not ship a required HTTP daemon or route bundle. Apps call
-    the Node service methods from their own controllers. Receive-only NWC codes
-    remain server-side.
-servers:
-  - url: /openreceive/v1
-paths:
-  /orders/{order_id}/checkouts:
-    post:
-      operationId: createCheckout
-      summary: Create or continue a checkout for a merchant order id.
-      description: >
-        Reusing the same order id and amount continues the current checkout.
-        Reusing the same order id with a different amount creates a new checkout
-        and supersedes the previous open checkout. If the active invoice has
-        expired, the checkout is renewed with a linked invoice row.
-      parameters:
-        - $ref: "#/components/parameters/OrderId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateCheckoutRequest"
-      responses:
-        "201":
-          description: Checkout created or renewed.
-          headers:
-            Cache-Control:
-              schema:
-                type: string
-              description: Always no-store for checkout responses.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Checkout"
-        "200":
-          description: Existing active checkout returned.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Checkout"
-        "400":
-          $ref: "#/components/responses/Error"
-        "409":
-          $ref: "#/components/responses/Error"
-  /checkouts/{checkout_id}:
-    get:
-      operationId: getCheckout
-      summary: Read one checkout by checkout id.
-      parameters:
-        - $ref: "#/components/parameters/CheckoutId"
-      responses:
-        "200":
-          description: Checkout status and invoice history.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Checkout"
-        "404":
-          $ref: "#/components/responses/Error"
-  /orders/{order_id}/status:
-    post:
-      operationId: getOrder
-      summary: Refresh and read an order from the server-side wallet.
-      description: >
-        Each request may claim the durable global scan gate and perform at most
-        one bounded NIP-47 list_transactions page for the order's stored invoice
-        windows. If the gate is already claimed, the stored order state is
-        returned without contacting the wallet. Paying any invoice in any
-        checkout for the order marks the order paid.
-      parameters:
-        - $ref: "#/components/parameters/OrderId"
-      responses:
-        "200":
-          description: Stored order status, optionally after one wallet transaction page.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Order"
-        "400":
-          $ref: "#/components/responses/Error"
-        "404":
-          $ref: "#/components/responses/Error"
-  /rates:
-    get:
-      operationId: listRates
-      summary: Return the deterministic v0.1 BTC fiat rate map.
-      responses:
-        "200":
-          description: Simple Price compatible BTC fiat rate map.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BtcFiatRateMap"
-  /rates/quote:
-    post:
-      operationId: quoteRates
-      summary: Quote fiat amount to whole-sat millisatoshis.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/QuoteRateRequest"
-      responses:
-        "200":
-          description: Deterministic rate quote.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RateQuote"
-        "400":
-          $ref: "#/components/responses/Error"
+    OpenReceive does not define application routes. Apps call the Node service
+    methods from their own controllers and may use these schemas as references
+    for their own payloads. Receive-only NWC codes remain server-side.
+paths: {}
 components:
   parameters:
     OrderId:
@@ -145,61 +36,80 @@ components:
     CreateCheckoutRequest:
       type: object
       additionalProperties: false
+      required:
+        - orderId
+        - amount
       properties:
-        order_id:
+        orderId:
           type: string
           minLength: 1
           maxLength: 200
         amount:
-          $ref: "#/components/schemas/BitcoinAmount"
-        amount_sats:
-          type: integer
-          minimum: 1
-          maximum: 9007199254740
-        amount_msats:
-          type: integer
-          minimum: 1000
-          maximum: 9007199254740991
-        fiat:
-          $ref: "#/components/schemas/FiatAmount"
-        optional_invoice_description:
+          $ref: "#/components/schemas/CreateCheckoutAmount"
+        memo:
           type: string
           maxLength: 500
-        description_hash:
+        descriptionHash:
           type: string
           pattern: "^[0-9a-fA-F]{64}$"
-        expiry:
+        expiresInSeconds:
           type: integer
           minimum: 1
+      not:
+        required:
+          - memo
+          - descriptionHash
+    CreateCheckoutAmount:
+      type: object
+      additionalProperties: false
+      properties:
+        btc:
+          $ref: "#/components/schemas/BitcoinAmount"
+        sats:
+          oneOf:
+            - type: integer
+              minimum: 1
+              maximum: 9007199254740
+            - type: string
+              pattern: "^[0-9]+$"
+        msats:
+          oneOf:
+            - type: integer
+              minimum: 1000
+              maximum: 9007199254740991
+            - type: string
+              pattern: "^[0-9]+$"
+        fiat:
+          $ref: "#/components/schemas/FiatAmount"
       oneOf:
         - required:
-            - amount
+            - btc
           not:
             anyOf:
               - required:
-                  - amount_sats
+                  - sats
               - required:
-                  - amount_msats
+                  - msats
               - required:
                   - fiat
         - required:
-            - amount_sats
+            - sats
           not:
             anyOf:
               - required:
-                  - amount
+                  - btc
               - required:
-                  - amount_msats
+                  - msats
               - required:
                   - fiat
         - required:
-            - amount_msats
+            - msats
           not:
             anyOf:
               - required:
-                  - amount
+                  - btc
               - required:
-                  - amount_sats
+                  - sats
               - required:
                   - fiat
         - required:
@@ -207,15 +117,11 @@ components:
           not:
             anyOf:
               - required:
-                  - amount
+                  - btc
               - required:
-                  - amount_sats
+                  - sats
               - required:
-                  - amount_msats
-      not:
-        required:
-          - optional_invoice_description
-          - description_hash
+                  - msats
     QuoteRateRequest:
       type: object
       additionalProperties: false
@@ -248,7 +154,7 @@ components:
         - invoice
         - payment_hash
         - amount_msats
-        - order_uuid
+        - order_id
         - created_at
         - expires_at
         - settlement_action_state
@@ -271,7 +177,7 @@ components:
           type: integer
           minimum: 1000
           maximum: 9007199254740991
-        order_uuid:
+        order_id:
           type: string
           minLength: 1
         created_at:

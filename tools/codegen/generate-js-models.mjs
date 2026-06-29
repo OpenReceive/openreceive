@@ -20,28 +20,11 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-function sorted(values) {
-  return [...values].sort((left, right) => left.localeCompare(right, "en"));
-}
-
-function operationIds(openApi) {
-  const ids = [];
-  for (const methods of Object.values(openApi.paths ?? {})) {
-    for (const operation of Object.values(methods ?? {})) {
-      if (operation && typeof operation.operationId === "string") {
-        ids.push(operation.operationId);
-      }
-    }
-  }
-  return sorted(ids);
-}
-
 function messageNames(asyncApi) {
-  return sorted(
-    Object.values(asyncApi.components?.messages ?? {})
+  return Object.values(asyncApi.components?.messages ?? {})
       .map((message) => message?.name)
       .filter((name) => typeof name === "string")
-  );
+      .sort((left, right) => left.localeCompare(right, "en"));
 }
 
 function json(value) {
@@ -59,8 +42,6 @@ function generate() {
   const transactionStates = schemas.TransactionState?.enum ?? [];
   const workflowStates = schemas.WorkflowState?.enum ?? [];
   const errorCodes = errorSchema.properties?.code?.enum ?? [];
-  const httpPaths = sorted(Object.keys(openApi.paths ?? {}));
-  const httpOperationIds = operationIds(openApi);
   const events = messageNames(asyncApi);
 
   assert(openApi.info?.version, "OpenAPI info.version is required");
@@ -77,12 +58,6 @@ function generate() {
 
 export const OPENRECEIVE_HTTP_CONTRACT_VERSION = ${json(openApi.info.version)} as const;
 export const OPENRECEIVE_EVENT_CONTRACT_VERSION = ${json(asyncApi.info.version)} as const;
-
-export const OPENRECEIVE_HTTP_PATHS = ${json(httpPaths)} as const;
-export type OpenReceiveHttpPath = (typeof OPENRECEIVE_HTTP_PATHS)[number];
-
-export const OPENRECEIVE_HTTP_OPERATION_IDS = ${json(httpOperationIds)} as const;
-export type OpenReceiveHttpOperationId = (typeof OPENRECEIVE_HTTP_OPERATION_IDS)[number];
 
 export const OPENRECEIVE_EVENT_NAMES = ${json(events)} as const;
 export type OpenReceiveGeneratedEventName = (typeof OPENRECEIVE_EVENT_NAMES)[number];

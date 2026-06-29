@@ -330,7 +330,6 @@ test("Hello Fruit Node demo creates orders from cart before rendering checkout",
   assert.match(source, /onStartOver=\{startOver\}/);
   assert.match(source, />\s*Start over\s*</);
   assert.match(source, /crypto\?\.randomUUID/);
-  assert.doesNotMatch(source, /createInvoice as requestInvoice/);
 });
 
 test("Hello Fruit Next.js demo resets expired checkout from Start over", () => {
@@ -351,7 +350,6 @@ test("Hello Fruit Next.js demo resets expired checkout from Start over", () => {
   assert.match(source, /setCheckout\(undefined\)/);
   assert.match(source, /setStatus\("idle"\)/);
   assert.match(source, /onStartOver=\{startOver\}/);
-  assert.doesNotMatch(source, /createInvoice as requestInvoice/);
 });
 
 test("Hello Fruit browser demos consume shared product display helpers", () => {
@@ -389,16 +387,6 @@ test("Hello Fruit browser demos consume shared product display helpers", () => {
       source,
       /Fruit sticker from OpenReceive .*demo: \$\{/,
       `${relativePath}: must not duplicate invoice description templates`,
-    );
-    assert.doesNotMatch(
-      source,
-      /"Could not create invoice\."/,
-      `${relativePath}: must not duplicate invoice error fallback`,
-    );
-    assert.doesNotMatch(
-      source,
-      /"Creating invoice\.\.\."/,
-      `${relativePath}: must not duplicate invoice creation label`,
     );
     assert.doesNotMatch(
       source,
@@ -1355,38 +1343,6 @@ test("Hello Fruit demos normalize OpenReceive service errors at app route bounda
   }
 });
 
-test("Rails React skeleton is explicitly quarantined and does not claim active Rails demo identity", () => {
-  const railsReactDir = path.join(process.cwd(), "examples/hello-fruit/server/rails-react");
-  const files = [
-    "README.md",
-    "Dockerfile",
-    "Makefile",
-    "compose.yml",
-    "compose.override.yml.example",
-    "app/controllers/hello_fruit_controller.rb",
-    "app/views/hello_fruit/index.html.erb",
-    "config/application.rb",
-    "config/environment.rb",
-    "config/initializers/openreceive.rb",
-  ];
-
-  const combined = files
-    .map((relativePath) => readFileSync(path.join(railsReactDir, relativePath), "utf8"))
-    .join("\n");
-
-  assert.match(combined, /quarantined/i);
-  assert.match(combined, /rails-react/);
-  assert.match(combined, /OpenReceive::Rails\.resolve_invoice_store/);
-  assert.match(combined, /ENV\.fetch\("OPENRECEIVE_NWC"/);
-  assert.match(combined, /OpenReceive\.parse_nwc_uri/);
-  assert.doesNotMatch(combined, /OpenReceive::UnavailableReceiveClient/);
-  assert.doesNotMatch(combined, /create_active_record_invoice_store/);
-  assert.doesNotMatch(combined, /rails-hotwire/);
-  assert.doesNotMatch(combined, /Rails Hotwire/);
-  assert.doesNotMatch(combined, /demo-rails-hotwire/);
-  assert.doesNotMatch(combined, /HelloFruitRailsHotwire/);
-});
-
 test("Hello Fruit server demos keep secret-safe local setup docs", () => {
   for (const demoDir of demoServerDirs) {
     const envExamplePath = path.join(process.cwd(), demoDir, ".env.example");
@@ -1557,30 +1513,30 @@ test("Hello Fruit demos create app orders and refresh order status through merch
         assert.equal(created.body.order.status, "pending_payment");
         assert.equal(created.body.order.totalAmount.currency, "USD");
         assert.equal(created.body.order.totalAmount.value, "0.25");
-        assert.equal(created.body.checkout.order_id, created.body.order.uuid);
+        assert.equal(created.body.checkout.orderId, created.body.order.uuid);
         const createdInvoice = created.body.checkout.active ?? created.body.checkout.invoices[0];
-        assert.equal(typeof createdInvoice.invoice, "string");
+        assert.equal(typeof createdInvoice.bolt11, "string");
         assert.equal(JSON.stringify(created.body).includes("nostr+walletconnect://"), false);
 
         const replayed = await dispatchJson(app, "POST", "/create_order", orderRequest);
         const replayedInvoice = replayed.body.checkout.active ?? replayed.body.checkout.invoices[0];
         assert.equal(
-          replayed.body.checkout.checkout_id,
-          created.body.checkout.checkout_id,
+          replayed.body.checkout.checkoutId,
+          created.body.checkout.checkoutId,
           `${demo.name}: create_order continues the same checkout id and cart`,
         );
-        assert.equal(typeof replayedInvoice.invoice_id, "string");
+        assert.equal(typeof replayedInvoice.invoiceId, "string");
 
         const status = await dispatchJson(app, "POST", "/order_status", {
           order_id: created.body.order.uuid,
         });
         assert.equal(status.status, 200, `${demo.name}: order_status status`);
-        assert.equal(status.body.order_uuid, created.body.order.uuid);
+        assert.equal(status.body.order_id, created.body.order.uuid);
         assert.equal(status.body.order_status, "pending_payment");
         assert.equal(status.body.order.status, "pending_payment");
         const statusInvoice =
-          status.body.active_checkout.active ?? status.body.active_checkout.invoices[0];
-        assert.equal(statusInvoice.payment_hash, replayedInvoice.payment_hash);
+          status.body.activeCheckout.active ?? status.body.activeCheckout.invoices[0];
+        assert.equal(statusInvoice.paymentHash, replayedInvoice.paymentHash);
       }
 
       setHelloFruitOpenReceiveTestOverrides(createHelloFruitTestOpenReceiveOptions());
@@ -1591,7 +1547,7 @@ test("Hello Fruit demos create app orders and refresh order status through merch
         assert.equal(nextCreated.status, 201, "nextjs-fullstack: create_order status");
         assert.equal(nextCreated.body.order.uuid.includes("cart-smoke"), true);
         assert.equal(nextCreated.body.order.totalAmount.value, "0.25");
-        assert.equal(nextCreated.body.checkout.order_id, nextCreated.body.order.uuid);
+        assert.equal(nextCreated.body.checkout.orderId, nextCreated.body.order.uuid);
 
         const nextReplayed = await responseJson(
           postNextCreateOrder(jsonRequest("/create_order", orderRequest)),
@@ -1599,11 +1555,11 @@ test("Hello Fruit demos create app orders and refresh order status through merch
         const nextReplayedInvoice =
           nextReplayed.body.checkout.active ?? nextReplayed.body.checkout.invoices[0];
         assert.equal(
-          nextReplayed.body.checkout.checkout_id,
-          nextCreated.body.checkout.checkout_id,
+          nextReplayed.body.checkout.checkoutId,
+          nextCreated.body.checkout.checkoutId,
           "nextjs-fullstack: create_order continues the same checkout id and cart",
         );
-        assert.equal(typeof nextReplayedInvoice.invoice_id, "string");
+        assert.equal(typeof nextReplayedInvoice.invoiceId, "string");
 
         const nextStatus = await responseJson(
           postNextOrderStatus(
@@ -1613,7 +1569,7 @@ test("Hello Fruit demos create app orders and refresh order status through merch
           ),
         );
         assert.equal(nextStatus.status, 200, "nextjs-fullstack: order_status status");
-        assert.equal(nextStatus.body.order_uuid, nextCreated.body.order.uuid);
+        assert.equal(nextStatus.body.order_id, nextCreated.body.order.uuid);
         assert.equal(nextStatus.body.order_status, "pending_payment");
       } finally {
         setHelloFruitOpenReceiveTestOverrides(undefined);
@@ -1653,9 +1609,9 @@ test("Hello Fruit demos create direct SATS orders from the currency switcher", a
         assert.equal(created.status, 201, `${demo.name}: create_order status`);
         assert.equal(created.body.order.totalAmount.currency, "SATS");
         assert.equal(created.body.order.totalAmount.value, "500");
-        assert.equal(created.body.checkout.amount_msats, 500000);
+        assert.equal(created.body.checkout.amountMsats, 500000);
         const createdInvoice = created.body.checkout.active ?? created.body.checkout.invoices[0];
-        assert.equal(createdInvoice.fiat_quote, null);
+        assert.equal(createdInvoice.fiatQuote, null);
       }
     },
   );

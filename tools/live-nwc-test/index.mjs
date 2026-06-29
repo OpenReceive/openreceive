@@ -29,7 +29,7 @@ const expectedCapabilitiesPath =
   process.env.OPENRECEIVE_EXPECTED_CAPABILITIES ??
   path.join(currentDir, "expected_capabilities.json");
 const productPath = path.join(repoRoot, "examples/hello-fruit/shared/product.json");
-const createInvoice = process.env.OPENRECEIVE_LIVE_CREATE_INVOICE !== "0";
+const shouldRequestLiveInvoice = process.env.OPENRECEIVE_LIVE_CREATE_INVOICE !== "0";
 const waitForPayment = process.env.OPENRECEIVE_LIVE_WAIT_FOR_PAYMENT === "1";
 const supportedProfiles = new Set(["rizful", "alby", "zeus", "custom"]);
 const fruitsPath = path.join(repoRoot, "examples/hello-fruit/shared/fruits.json");
@@ -211,7 +211,7 @@ if (summary.spendCapabilityAdvertised) {
   console.log("Warning: wallet advertises spend methods; OpenReceive checkout will not expose them.");
 }
 
-if (!createInvoice) {
+if (!shouldRequestLiveInvoice) {
   console.log("OPENRECEIVE_LIVE_CREATE_INVOICE=0; stopping after preflight.");
   process.exit(0);
 }
@@ -300,7 +300,7 @@ async function findInvoiceTransaction(client, invoice) {
     unpaid: true,
     from: createdAt,
     until: createdAt,
-    limit: 20,
+    limit: 25,
     offset: 0
   });
   return response.transactions.find((transaction) =>

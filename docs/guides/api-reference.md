@@ -1,19 +1,16 @@
 # API Reference
 
-OpenReceive supplies backend service methods for your own checkout controllers.
-Most apps call these methods from routes like `/create_order` and
-`/order_status`. The `/openreceive/v1` paths below are lower-level reference
-HTTP shapes for adapters that intentionally expose OpenReceive-flavored routes.
-The source of truth for the example HTTP payloads is
-`spec/openapi/openreceive-http.v1.yaml`.
+OpenReceive is a server-side SDK, not a route bundle. Your app owns its
+controllers, sessions, CSRF/CORS policy, response status codes, and payload
+shape. OpenReceive supplies functions that those controllers can call.
 
 App-facing packages:
 
 - `@openreceive/node`: `createOpenReceive(options)` returns a server-only
   service with `createCheckout`, `getOrder`, `getCheckout`, `listRates`,
   `quoteRates`, and `close`.
-- `@openreceive/browser`: `requestCheckoutInvoice`, `status`,
-  `lightningUri`, `qrSvg`, `qrPngDataUrl`, `copyInvoice`, `openWallet`, and
+- `@openreceive/browser`: `requestCheckout`, `status`, `lightningUri`,
+  `qrSvg`, `qrPngDataUrl`, `copyInvoice`, `openWallet`, and
   `createCheckoutController`.
 - `@openreceive/react`: `Checkout`, `useCheckout`, `CheckoutProvider`,
   `ThemeScope`, `ThemeToggle`, `QRCode`, `CopyInvoiceButton`,
@@ -24,12 +21,12 @@ App-facing packages:
 Framework-adapter internals live under `@openreceive/browser/internal` and are
 not part of the supported app surface.
 
-## Create Checkout
+## `createCheckout`
 
-App-facing Node service input uses camelCase:
+Create or continue one immutable priced checkout under your app's `orderId`:
 
 ```ts
-await openreceive.createCheckout({
+const checkout = await openreceive.createCheckout({
   orderId: order.uuid,
   amount: {
     fiat: {
@@ -42,124 +39,79 @@ await openreceive.createCheckout({
 });
 ```
 
-`fiat.currency` must be one of the server's configured `priceCurrencies`; the
-currency is an order property, not a browser-locale guess.
+Use exactly one amount source:
 
-For Bitcoin-denominated orders, use direct amount units instead of `fiat`:
+- `{ fiat: { currency: "USD", value: "0.10" } }`
+- `{ btc: { currency: "BTC", value: "0.005" } }`
+- `{ sats: "7000" }`
+- `{ msats: "7000000" }`
+
+`fiat.currency` must be one of the server's configured `priceCurrencies`.
+Direct BTC, satoshi, and millisatoshi amounts do not use price feeds.
+
+Calling `createCheckout` again with the same `orderId` and same amount returns
+the current checkout, or renews its BOLT11 when the active invoice has expired.
+Calling it with the same `orderId` and a different amount creates a new
+checkout and supersedes the prior open checkout. Paying any invoice in any
+checkout settles the order.
+
+Render `checkout.active.bolt11` when present. The full invoice chain is in
+`checkout.invoices`.
+
+## `getOrder`
+
+Refresh and read the stored order:
 
 ```ts
-await openreceive.createCheckout({
-  orderId: order.uuid,
-  amount: {
-    btc: {
-      currency: "BTC",
-      value: "0.005"
-    }
-  },
-  memo: `Order ${order.number}`,
-  expiresInSeconds: 600
-});
-
-await openreceive.createCheckout({
-  orderId: order.uuid,
-  amount: {
-    sats: "7000"
-  },
-  memo: `Order ${order.number}`,
-  expiresInSeconds: 600
-});
+const orderStatus = await openreceive.getOrder({ orderId: order.uuid });
 ```
 
-Direct BTC and satoshi amounts are converted directly to `amount_msats`; they
-are not looked up in the configured price feeds.
+`getOrder` may perform one bounded server-side NWC `list_transactions` scan for
+unpaid, wallet-unexpired invoice records. It never exposes send-payment methods
+and never uses invoice lookup as the settlement authority.
 
-`POST /openreceive/v1/orders/{order_id}/checkouts`
+Fulfillment belongs in your backend settlement hook. When an order is paid,
+fulfill from `orderStatus.paidCheckout`, not from the current cart.
 
-Lower-level HTTP request body includes:
+## `getCheckout`
 
-- `order_id`: optional redundant copy of the path id for browser helpers and
-  app-owned controllers that prefer body-based routing.
+Read one checkout by `checkoutId` when your app already knows that the caller is
+allowed to see it:
 
-Use exactly one amount input:
+```ts
+const checkout = await openreceive.getCheckout({ checkoutId });
+```
 
-- `amount`: direct Bitcoin units, for example
-  `{ "currency": "BTC", "value": "0.005" }` or
-  `{ "currency": "SATS", "value": "7000" }`.
-- `amount_sats`: integer satoshis from `1` through `9007199254740`.
-- `amount_msats`: integer from `1000` through `9007199254740991`.
-- `fiat`: `{ "currency": "USD", "value": "0.10" }` style decimal string.
-
-Optional HTTP wire fields include `optional_invoice_description`,
-`description_hash`, and `expiry`. In the Node SDK, `memo` maps to
-`optional_invoice_description` and `expiresInSeconds` maps to `expiry`. The
-memo becomes the BOLT11 invoice description and is limited to 500 characters.
-
-Responses:
-
-- `201`: a new checkout, superseding checkout, or renewed invoice chain.
-- `200`: the current active checkout for the same order id and amount.
-
-Reusing the same `orderId` with a different amount creates a new checkout and
-supersedes the previous open checkout. Paying any invoice from any checkout for
-that order marks the order paid.
-
-## Read Checkout
-
-`GET /openreceive/v1/checkouts/{checkout_id}`
-
-Use this route from whatever controller, middleware, or route group already
-protects the owning checkout session when checkout reads should not be public.
-
-## Refresh Order Status
-
-`POST /openreceive/v1/orders/{order_id}/status`
-
-This route performs one bounded backend status refresh for the stored order.
-It uses NWC `list_transactions` server-side and returns the stored state. Use
-your app's route protection when status should not be public.
-
-The response may include `wallet_scan_performed` and `transactions_checked`.
-App fulfillment still belongs in the backend settlement hook. A preimage alone
-is not settlement proof.
+Most app controllers only need `createCheckout` and `getOrder`.
 
 ## Rates
 
-`GET /openreceive/v1/rates`
+```ts
+const rates = await openreceive.listRates();
+const quote = await openreceive.quoteRates({
+  fiat: { currency: "USD", value: "0.10" }
+});
+```
 
-Returns the configured BTC fiat rate map.
+`quote.amount_msats` is the exact millisatoshi quote used by checkout-created
+invoices.
 
-`POST /openreceive/v1/rates/quote`
+## Errors
 
-```json
-{
-  "fiat": {
-    "currency": "USD",
-    "value": "0.10"
+Service errors are `OpenReceiveServiceError` instances:
+
+```ts
+import { OpenReceiveServiceError } from "@openreceive/node";
+
+try {
+  const checkout = await openreceive.createCheckout(input);
+  return { checkout };
+} catch (error) {
+  if (error instanceof OpenReceiveServiceError) {
+    return { error: error.body, status: error.status };
   }
+  throw error;
 }
 ```
 
-Returns the same rate quote shape used by checkout-created invoices, including
-`amount_msats`, source id, `as_of`, and `expires_at`.
-
-## Provider Data
-
-Provider and route suggestions belong to `@openreceive/provider-data` and the
-browser UI packages. They are static payer guidance, not Node receive routes,
-settlement proof, or availability guarantees.
-
-## Error Shape
-
-Errors use the shared error schema:
-
-```json
-{
-  "code": "INVALID_REQUEST",
-  "message": "Human-readable error",
-  "retryable": false
-}
-```
-
-Adapters may include `retryable`, `request_id`, or `details` when that context
-is available. Render a defensive fallback message when an app sees an
-unfamiliar detail shape.
+Your framework decides how that `{ error, status }` becomes an HTTP response.

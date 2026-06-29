@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import type React from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type {
   Invoice
@@ -75,7 +76,7 @@ function App(): React.ReactElement {
   const [error, setError] = useState("");
   const completedInvoiceRef = useRef("");
   const selectedFruit = fruits.find((fruit) => fruit.id === fruitId) ?? fruits[0];
-  const createInvoiceLabel =
+  const createCheckoutLabel =
     selectedFruit === undefined
       ? helloFruitDemoLabels.createOrder
       : currency === selectedFruit.fiat.currency
@@ -229,7 +230,7 @@ function App(): React.ReactElement {
               onClick={addSelectedFruitToCart}
               type="button"
             >
-              {createInvoiceLabel}
+              {createCheckoutLabel}
             </button>
 
             {cartItems.length === 0 ? null : (

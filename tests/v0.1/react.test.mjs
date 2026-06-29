@@ -693,7 +693,6 @@ test("React provider render prop receives the controller-backed checkout model",
             "data-provider-status": checkout.status,
             "data-provider-reload": typeof checkout.reloadState,
             "data-provider-retry": typeof checkout.retry,
-            "data-provider-refresh": typeof checkout.refreshExpiredInvoice,
             "data-provider-cancel": typeof checkout.cancel
           },
           checkout.lightningUri
@@ -705,7 +704,6 @@ test("React provider render prop receives the controller-backed checkout model",
   assert.match(html, /data-provider-status="pending"/);
   assert.match(html, /data-provider-reload="function"/);
   assert.match(html, /data-provider-retry="function"/);
-  assert.match(html, /data-provider-refresh="function"/);
   assert.match(html, /data-provider-cancel="function"/);
   assert.match(html, />lightning:lnbc-provider-render</);
 });

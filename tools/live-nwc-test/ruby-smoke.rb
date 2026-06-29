@@ -78,7 +78,7 @@ transactions = client.list_transactions(
   "unpaid" => true,
   "from" => invoice.fetch("created_at"),
   "until" => invoice.fetch("created_at"),
-  "limit" => 20,
+  "limit" => 25,
   "offset" => 0
 ).fetch("transactions")
 match = transactions.find do |transaction|

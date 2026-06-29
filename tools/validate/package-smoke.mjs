@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import {
   buildOpenReceivePackageTarballs,
@@ -27,12 +27,12 @@ const importChecks = {
   "@openreceive/angular":
     "typeof mod.createOpenReceiveAngularCheckoutBinding === 'function' && typeof mod.createOpenReceiveAngularCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveAngularCheckoutComponentModel === 'function' && typeof mod.createOpenReceiveAngularCheckoutController === 'function' && typeof mod.createOpenReceiveAngularThemeBinding === 'function' && typeof mod.createOpenReceiveAngularStoredThemeBinding === 'function' && typeof mod.createOpenReceiveAngularThemeToggleBinding === 'function' && typeof mod.createCheckoutElement === 'function' && typeof mod.createOpenReceiveThemeToggleElement === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.toggleOpenReceiveStoredThemeControls === 'function'",
   "@openreceive/browser":
-    "typeof mod.requestCheckoutInvoice === 'function' && mod.createInvoice === undefined && typeof mod.status === 'function' && typeof mod.lightningUri === 'function' && typeof mod.qrSvg === 'function' && typeof mod.qrPngDataUrl === 'function' && typeof mod.copyInvoice === 'function' && typeof mod.openWallet === 'function' && typeof mod.createCheckoutController === 'function' && mod['create' + 'OpenReceiveInvoice'] === undefined && mod.createLightningUri === undefined && mod.CheckoutWatcher === undefined && mod.OpenReceiveBrowserCheckoutController === undefined && mod.createCheckoutElement === undefined",
+    "typeof mod.requestCheckout === 'function' && typeof mod.status === 'function' && typeof mod.lightningUri === 'function' && typeof mod.qrSvg === 'function' && typeof mod.qrPngDataUrl === 'function' && typeof mod.copyInvoice === 'function' && typeof mod.openWallet === 'function' && typeof mod.createCheckoutController === 'function'",
   "@openreceive/core": "typeof mod.createIdempotencyRequestHash === 'function'",
   "@openreceive/elements":
     "typeof mod.renderCheckoutHtml === 'function' && typeof mod.renderOpenReceiveThemeToggleHtml === 'function' && mod.OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME === 'openreceive-theme-toggle'",
   "@openreceive/node":
-    "typeof mod.createOpenReceive === 'function' && typeof mod.OpenReceiveServiceError === 'function' && typeof mod.OpenReceiveConfigError === 'function' && typeof mod.toOpenReceiveHttpInvoice === 'function' && typeof mod.toOpenReceiveHttpCheckout === 'function' && typeof mod.toOpenReceiveHttpOrder === 'function' && typeof mod.createNwcReceiveClient === 'function' && mod.mountExpressRoutes === undefined && mod.createFetchHandler === undefined && mod.createNodeHandler === undefined && mod.createNodeHandlers === undefined && mod.createNodeRuntime === undefined && typeof mod.createOpenReceivePostgresInvoiceStore === 'function' && typeof mod.createOpenReceivePostgresInvoiceStoreFromPool === 'function' && typeof mod.createOpenReceiveSqliteInvoiceStore === 'function' && mod.OPENRECEIVE_DATABASE_SCHEMA_VERSION === 'v0.2' && typeof mod.OPENRECEIVE_SQLITE_MIGRATION_SQL === 'string' && mod.runOpenReceiveCli === undefined",
+    "typeof mod.createOpenReceive === 'function' && typeof mod.OpenReceiveServiceError === 'function' && typeof mod.OpenReceiveConfigError === 'function' && typeof mod.createNwcReceiveClient === 'function' && typeof mod.createOpenReceivePostgresInvoiceStore === 'function' && typeof mod.createOpenReceivePostgresInvoiceStoreFromPool === 'function' && typeof mod.createOpenReceiveSqliteInvoiceStore === 'function' && mod.OPENRECEIVE_DATABASE_SCHEMA_VERSION === 'v0.2' && typeof mod.OPENRECEIVE_SQLITE_MIGRATION_SQL === 'string'",
   "@openreceive/provider-data":
     "typeof mod.getProviderRegistryMetadata === 'function' && typeof mod.providerIconUrl === 'function' && typeof mod.providerTutorialUrl === 'function' && mod.providerIconUrl(mod.providerRegistry.providers.strike).includes('assets/provider-icons/strike.png') && mod.providerTutorialUrl(mod.providerRegistry.providers.kraken.tutorials[3]).includes('assets/pay_tutorials/kraken-4.webp')",
   "@openreceive/react":
@@ -149,7 +149,7 @@ assert(
 
 const umbrellaChecks = [
   ["openreceive/node", "createOpenReceive"],
-  ["openreceive/browser", "requestCheckoutInvoice"],
+  ["openreceive/browser", "requestCheckout"],
   ["openreceive/react", "Checkout"],
   ["openreceive/vue", "createOpenReceiveVueCheckoutBinding"],
   ["openreceive/svelte", "createOpenReceiveSvelteCheckoutBinding"],
@@ -313,11 +313,7 @@ function main() {
     process.stdout.write(output);
     console.log(`Package smoke passed for ${result.packages.length} package(s).`);
   } finally {
-    if (
-      workspace !== undefined &&
-      workspace.temporary &&
-      process.env.OPENRECEIVE_KEEP_PACKAGE_SMOKE !== "1"
-    ) {
+    if (workspace?.temporary && process.env.OPENRECEIVE_KEEP_PACKAGE_SMOKE !== "1") {
       rmSync(workspace.baseDir, { recursive: true, force: true });
     } else if (workspace !== undefined) {
       console.error(`package smoke workspace kept at ${workspace.baseDir}`);

@@ -41,11 +41,6 @@
   ],
   "cases": [
     {
-      "name": "memory URI is not selectable",
-      "env": { "OPENRECEIVE_STORE": "memory:" },
-      "expected": { "allowed": false, "code": "UNSUPPORTED_STORE_URI" }
-    },
-    {
       "name": "redis is permanently unsupported",
       "env": { "OPENRECEIVE_STORE": "redis://localhost:6379/0" },
       "expected": { "allowed": false, "code": "UNSUPPORTED_STORE_REDIS" }

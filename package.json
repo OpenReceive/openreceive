@@ -32,7 +32,7 @@
     "typecheck": "tsc --noEmit",
     "pretest:js": "npm run build:packages",
     "test:js": "node --import tsx --test tests/v0.1/*.test.mjs",
-    "test:ruby": "ruby -Ipackages/ruby/openreceive/lib -Ipackages/ruby/openreceive-rails/lib -e 'load \"packages/ruby/openreceive/test/openreceive_test.rb\"; load \"packages/ruby/openreceive-rails/test/openreceive_rails_test.rb\"'",
+    "test:ruby": "ruby -Ipackages/ruby/openreceive/lib -e 'load \"packages/ruby/openreceive/test/openreceive_test.rb\"'",
     "test:live:ruby:nwc": "ruby -Ipackages/ruby/openreceive/lib tools/live-nwc-test/ruby-smoke.rb",
     "validate": "node tools/validate/validate-v0.1.mjs",
     "scan:secrets": "node tools/validate/scan-secrets.mjs",

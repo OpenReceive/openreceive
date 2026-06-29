@@ -323,7 +323,8 @@ test("Node SQL store DDL uses opaque records and meta rows", () => {
 });
 
 sqliteTest("Node SQLite KV store owns records, indexes, revisions, and meta CAS", async (DatabaseSync) => {
-  const database = new DatabaseSync(":memory:");
+  const tempRoot = mkdtempSync(path.join(tmpdir(), "openreceive-sqlite-store-"));
+  const database = new DatabaseSync(path.join(tempRoot, "store.sqlite3"));
   try {
     const client = createOpenReceiveSqliteQueryClient(database);
     await migrateOpenReceiveSqlite(client);
@@ -371,14 +372,11 @@ sqliteTest("Node SQLite KV store owns records, indexes, revisions, and meta CAS"
     assert.equal((await store.casMeta("schema_probe", "stale", meta.row.rev)).status, "conflict");
   } finally {
     database.close();
+    rmSync(tempRoot, { recursive: true, force: true });
   }
 });
 
-sqliteTest("resolveOpenReceiveStore rejects memory URI and supports local-sqlite stores", async () => {
-  await assertConfigError(
-    () => resolveOpenReceiveStore("memory:"),
-    "UNSUPPORTED_STORE_URI"
-  );
+sqliteTest("resolveOpenReceiveStore supports local-sqlite stores", async () => {
   const tempRoot = mkdtempSync(path.join(tmpdir(), "openreceive-store-uri-"));
   try {
     const local = await resolveOpenReceiveStore("local-sqlite", {
@@ -629,7 +627,7 @@ function invoiceRecord(overrides = {}) {
       created_at: 1000,
       expires_at: 1600,
       metadata: {
-        order_uuid: "order-sqlite",
+        order_id: "order-sqlite",
         checkout_id: "checkout-sqlite",
         user_id: "user-1"
       },

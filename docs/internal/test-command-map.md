@@ -10,7 +10,7 @@
 | `npm run generate:models` | Regenerate TypeScript contract constants from OpenAPI and AsyncAPI. | No |
 | `npm run typecheck` | Typecheck all JS/TS packages and Hello Fruit server/demo TypeScript. | No |
 | `npm run test:js` | Run the v0.1 Node test suite, including browser/react/elements/framework adapter contract tests. | No |
-| `npm run test:ruby` | Run the Ruby core-helper and Rails adapter tests against shared vectors and receive-only adapter behavior. | No |
+| `npm run test:ruby` | Run the Ruby core-helper tests against shared vectors and receive-only behavior. | No |
 | `npm run test:live:ruby:nwc` | Optional Ruby live-wallet smoke. Reads `OPENRECEIVE_NWC` from the environment or `OPENRECEIVE_ENV_FILE`, redacts the connection string, runs `get_info` when `nwc-ruby` is installed, and creates an invoice only with `OPENRECEIVE_LIVE_CREATE_INVOICE=1`. | Optional |
 | `npm run check:generated` | Fail when generated TypeScript contract constants are stale. | No |
 | `npm run check:demo-containers` | Validate Hello Fruit Dockerfiles, compose templates, optional env-file wiring, ports, and secret boundaries. | No |

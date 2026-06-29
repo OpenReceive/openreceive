@@ -22,14 +22,14 @@
   and security regression coverage.
 - Kept deterministic internal testkit coverage for non-payable conformance
   fixtures without shipping a public mock-wallet path.
-- Added OpenReceive Node Postgres pool setup for Hello Fruit demos and
-  quarantined the copied Rails React skeleton until the Rails proof is green.
+- Added OpenReceive Node Postgres pool setup for Hello Fruit demos and removed
+  the unfinished Rails adapter/demo lane before release.
 - Simplified the app-facing API before release: `createOpenReceive()` now
   reads `OPENRECEIVE_NWC`, validates receive-only wallet access at boot,
   initializes storage, defaults to live cached price data, and exposes
   service methods. Host apps own route protection, settlement uses backend
-  settlement hooks, browser invoice creation uses `requestCheckoutInvoice`,
-  Node invoice creation uses `orderId`, `idempotencyKey`, nested `amount`,
+  settlement hooks, browser checkout creation uses `requestCheckout`, Node
+  checkout creation uses `orderId`, `idempotencyKey`, nested `amount`,
   `memo`, and `expiresInSeconds`, and app routes call those service methods
   from app-owned controllers. Added `openreceive` plus public
   `@openreceive/core` and `@openreceive/node` package surfaces while keeping

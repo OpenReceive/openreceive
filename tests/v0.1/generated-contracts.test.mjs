@@ -4,33 +4,16 @@ import {
   OPENRECEIVE_AMOUNT_MSATS_BOUNDARY,
   OPENRECEIVE_ERROR_CODES,
   OPENRECEIVE_EVENT_NAMES,
-  OPENRECEIVE_HTTP_OPERATION_IDS,
-  OPENRECEIVE_HTTP_PATHS,
   OPENRECEIVE_TRANSACTION_STATES,
   OPENRECEIVE_WORKFLOW_STATES,
 } from "@openreceive/core/contracts";
 
 test("generated contract models are not exported from the core root", async () => {
   const core = await import("@openreceive/core");
-  assert.equal(core.OPENRECEIVE_HTTP_PATHS, undefined);
   assert.equal(core.OPENRECEIVE_AMOUNT_MSATS_BOUNDARY, undefined);
 });
 
-test("generated contract models expose HTTP routes and event names", () => {
-  assert.deepEqual(OPENRECEIVE_HTTP_PATHS, [
-    "/checkouts/{checkout_id}",
-    "/orders/{order_id}/checkouts",
-    "/orders/{order_id}/status",
-    "/rates",
-    "/rates/quote",
-  ]);
-  assert.deepEqual(OPENRECEIVE_HTTP_OPERATION_IDS, [
-    "createCheckout",
-    "getCheckout",
-    "getOrder",
-    "listRates",
-    "quoteRates",
-  ]);
+test("generated contract models expose event names", () => {
   assert.deepEqual(OPENRECEIVE_EVENT_NAMES, [
     "invoice.cancelled",
     "invoice.created",

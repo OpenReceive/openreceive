@@ -1,6 +1,6 @@
 import type { StoredRecord } from "../storage/kv.ts";
 import {
-  refreshInvoiceStatus,
+  refreshStoredInvoiceStatus,
   type OpenReceiveReconcileOptions,
   type OpenReceiveStatusRefreshResult
 } from "./reconcile.ts";
@@ -8,7 +8,7 @@ import {
 export * from "./reconcile.ts";
 
 export interface OpenReceiveReconciler {
-  refreshInvoiceStatus(input: {
+  refreshStoredInvoiceStatus(input: {
     record: StoredRecord;
   }): Promise<OpenReceiveStatusRefreshResult>;
 }
@@ -17,8 +17,8 @@ export function createOpenReceiveReconciler(
   options: OpenReceiveReconcileOptions
 ): OpenReceiveReconciler {
   return {
-    refreshInvoiceStatus(input) {
-      return refreshInvoiceStatus({
+    refreshStoredInvoiceStatus(input) {
+      return refreshStoredInvoiceStatus({
         ...options,
         ...input
       });

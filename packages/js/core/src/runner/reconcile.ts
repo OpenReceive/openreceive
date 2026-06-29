@@ -104,12 +104,13 @@ interface TransactionScanCursor {
 
 const DEFAULT_ACTION_LEASE_TTL_SECONDS = 60;
 const DEFAULT_TRANSACTION_SCAN_INTERVAL_SECONDS = 2;
-const DEFAULT_TRANSACTION_SCAN_PAGE_LIMIT = 20;
+const DEFAULT_TRANSACTION_SCAN_PAGE_LIMIT = 25;
+const MAX_TRANSACTION_SCAN_PAGE_LIMIT = 50;
 const DEFAULT_TRANSACTION_SCAN_WINDOW_PADDING_SECONDS = 0;
 const DEFAULT_TRANSACTION_SCAN_TIMEOUT_MS = 9000;
 const TRANSACTION_SCAN_GATE_META_KEY = "transaction_scan_gate";
 
-export async function refreshInvoiceStatus(input: OpenReceiveReconcileOptions & {
+export async function refreshStoredInvoiceStatus(input: OpenReceiveReconcileOptions & {
   record: StoredRecord;
 }): Promise<OpenReceiveStatusRefreshResult> {
   const now = getNow(input);
@@ -132,11 +133,15 @@ export async function refreshInvoiceStatus(input: OpenReceiveReconcileOptions & 
     };
   }
 
+  if (!isTransactionScanEligible(record.row, now)) {
+    return stored(record, "already_final");
+  }
+
   if (!await claimTransactionScanGate(input, now)) {
     return stored(record, "transaction_scan_claim_conflict");
   }
 
-  const window = creationWindow(record.row, input);
+  const window = invoiceScanWindow(record.row, input);
   const cursor = await readTransactionScanCursor(input.store, window);
   const request: ListTransactionsRequest = {
     type: "incoming",
@@ -193,7 +198,7 @@ export async function refreshInvoiceStatus(input: OpenReceiveReconcileOptions & 
   };
 }
 
-export async function refreshInvoiceRecordsStatus(input: OpenReceiveReconcileOptions & {
+export async function refreshStoredInvoiceRecordsStatus(input: OpenReceiveReconcileOptions & {
   records: readonly StoredRecord[];
 }): Promise<OpenReceiveOrderStatusRefreshResult> {
   const now = getNow(input);
@@ -217,7 +222,9 @@ export async function refreshInvoiceRecordsStatus(input: OpenReceiveReconcileOpt
     };
   }
 
-  if (nonTerminal.length === 0) {
+  const scanEligible = nonTerminal.filter((record) => isTransactionScanEligible(record.row, now));
+
+  if (scanEligible.length === 0) {
     return {
       records,
       wallet_scan_performed: false,
@@ -235,7 +242,7 @@ export async function refreshInvoiceRecordsStatus(input: OpenReceiveReconcileOpt
     };
   }
 
-  const window = creationWindowForRecords(nonTerminal.map((record) => record.row), input);
+  const window = invoiceScanWindowForRecords(scanEligible.map((record) => record.row), input);
   const cursor = await readTransactionScanCursor(input.store, window);
   const request: ListTransactionsRequest = {
     type: "incoming",
@@ -555,7 +562,7 @@ async function claimTransactionScanGate(
   return false;
 }
 
-function creationWindow(
+function invoiceScanWindow(
   row: InvoiceStorageRow,
   options: OpenReceiveReconcileOptions
 ): { from: number; until: number; limit: number } {
@@ -565,20 +572,17 @@ function creationWindow(
   }
   return {
     from: Math.max(0, row.created_at - padding),
-    until: row.created_at + padding,
-    limit: normalizePositiveInteger(
-      options.transactionScanPageLimit ?? DEFAULT_TRANSACTION_SCAN_PAGE_LIMIT,
-      "transactionScanPageLimit"
-    )
+    until: row.expires_at + padding,
+    limit: transactionScanPageLimit(options.transactionScanPageLimit)
   };
 }
 
-function creationWindowForRecords(
+function invoiceScanWindowForRecords(
   rows: readonly InvoiceStorageRow[],
   options: OpenReceiveReconcileOptions
 ): { from: number; until: number; limit: number } {
   if (rows.length === 0) {
-    throw new TypeError("creationWindowForRecords requires at least one invoice");
+    throw new TypeError("invoiceScanWindowForRecords requires at least one invoice");
   }
   const padding = options.transactionScanWindowPaddingSeconds ?? DEFAULT_TRANSACTION_SCAN_WINDOW_PADDING_SECONDS;
   if (!Number.isSafeInteger(padding) || padding < 0) {
@@ -586,12 +590,26 @@ function creationWindowForRecords(
   }
   return {
     from: Math.max(0, Math.min(...rows.map((row) => row.created_at)) - padding),
-    until: Math.max(...rows.map((row) => row.created_at)) + padding,
-    limit: normalizePositiveInteger(
-      options.transactionScanPageLimit ?? DEFAULT_TRANSACTION_SCAN_PAGE_LIMIT,
-      "transactionScanPageLimit"
-    )
+    until: Math.max(...rows.map((row) => row.expires_at)) + padding,
+    limit: transactionScanPageLimit(options.transactionScanPageLimit)
   };
+}
+
+function transactionScanPageLimit(configured: number | undefined): number {
+  return Math.min(
+    normalizePositiveInteger(
+      configured ?? DEFAULT_TRANSACTION_SCAN_PAGE_LIMIT,
+      "transactionScanPageLimit"
+    ),
+    MAX_TRANSACTION_SCAN_PAGE_LIMIT
+  );
+}
+
+function isTransactionScanEligible(row: InvoiceStorageRow, now: number): boolean {
+  return (
+    row.expires_at > now &&
+    (row.transaction_state === "pending" || row.transaction_state === "accepted")
+  );
 }
 
 async function readTransactionScanCursor(

@@ -9,9 +9,9 @@ strings, wallet clients, and fulfillment on the backend.
 
 - `status(invoiceLike)` returns `"pending"`, `"settled"`, `"expired"`, or
   `"failed"` from display-safe fields.
-- `requestCheckoutInvoice(options)` is a lower-level helper for apps that intentionally
-  expose a checkout-creation route; most stores call their own `/create_order`
-  route and render the checkout returned with the order.
+- `requestCheckout(options)` posts SDK-shaped checkout input to your own
+  checkout-creation URL; most stores call their own `/create_order` route and
+  render the checkout returned with the order.
 - `lightningUri(invoice)`, `qrSvg(invoice)`, and `qrPngDataUrl(invoice)` render
   BOLT11 payment data.
 - `copyInvoice({ invoice })` copies the BOLT11 string.
@@ -57,15 +57,15 @@ import "@openreceive/react/styles.css";
 `onSettled` is a UI hint from status refresh. It is useful for showing a thank-you panel,
 but fulfillment stays in the backend settlement hook.
 
-`statusUrl` is optional. If omitted, React uses the default
-`/openreceive/v1/orders/{order_id}/status` route. Apps without a frontend
-status route can render a static checkout surface without status refresh:
+`statusUrl` is optional. If omitted, React does not invent a status route.
+Apps without a frontend status route can render a static checkout surface
+without status refresh:
 
 ```tsx
 <Checkout invoice={checkout} polling={false} />;
 ```
 
-Use `statusUrl={false}` to disable only the default status URL while still
+Use `statusUrl={false}` to disable URL-based status refresh while still
 allowing a custom `refreshStatus` function.
 
 For app-wide theme attributes and the packaged light/dark toggle:

@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -31,6 +39,31 @@ const liveExpectedCapabilitiesExample = path.join(
   process.cwd(),
   "tools/live-nwc-test/expected_capabilities.example.json",
 );
+const exampleDocsRoot = path.join(process.cwd(), "examples");
+const textFileExtensions = new Set([
+  "",
+  ".css",
+  ".env",
+  ".example",
+  ".html",
+  ".js",
+  ".json",
+  ".md",
+  ".mjs",
+  ".rb",
+  ".sh",
+  ".ts",
+  ".tsx",
+  ".txt",
+  ".yaml",
+  ".yml",
+]);
+const generatedFolderNames = new Set([
+  ".next",
+  "coverage",
+  "dist",
+  "node_modules",
+]);
 
 function withGitRepo(callback) {
   const dir = mkdtempSync(path.join(tmpdir(), "openreceive-secret-scan-"));
@@ -57,6 +90,22 @@ function runClientBundleScanner(cwd) {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
+}
+
+function listTextFiles(root) {
+  const files = [];
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    if (generatedFolderNames.has(entry.name)) continue;
+    const fullPath = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...listTextFiles(fullPath));
+      continue;
+    }
+    if (entry.isFile() && textFileExtensions.has(path.extname(entry.name))) {
+      files.push(fullPath);
+    }
+  }
+  return files;
 }
 
 function runDemoContainerValidator() {
@@ -98,17 +147,36 @@ test("workspace metadata does not reference removed express or next packages", (
   }
 });
 
-test("public Node guides show app routes without OpenReceive error class imports", () => {
-  for (const filePath of [nodeQuickstartDocs, authorizationDocs]) {
-    const source = readFileSync(filePath, "utf8");
-    assert.doesNotMatch(source, /OpenReceiveServiceError/, filePath);
-    assert.doesNotMatch(source, /order_uuid:|optional_invoice_description:|total_fiat/, filePath);
-    assert.match(source, /orderId:/, filePath);
-    assert.match(source, /memo:/, filePath);
-    assert.match(source, /totalAmount/, filePath);
-    assert.match(source, /createOpenReceive/, filePath);
-    assert.match(source, /from "@openreceive\/node";/, filePath);
+test("Node quickstart shows service methods without framework route scaffolding", () => {
+  const quickstart = readFileSync(nodeQuickstartDocs, "utf8");
+  assert.match(quickstart, /createCheckoutForCart/);
+  assert.match(quickstart, /refreshOrderStatus/);
+  assert.match(quickstart, /orderId:/);
+  assert.match(quickstart, /memo:/);
+  assert.match(quickstart, /totalAmount/);
+  assert.match(quickstart, /createOpenReceive/);
+  assert.match(quickstart, /from "@openreceive\/node";/);
+  assert.doesNotMatch(quickstart, /OpenReceiveServiceError/);
+  assert.doesNotMatch(quickstart, /app\.post|Response\.json|Fastify|express/i);
+  assert.doesNotMatch(quickstart, /statusUrl|requestCheckout|checkoutUrl/);
+});
+
+test("quickstart and examples do not use OpenReceive HTTP converter helpers", () => {
+  const helperPrefix = ["toOpenReceive", "Http"].join("");
+  const helperPattern = new RegExp(`${helperPrefix}(?:Checkout|Order)\\b`);
+  for (const filePath of [nodeQuickstartDocs, ...listTextFiles(exampleDocsRoot)]) {
+    assert.doesNotMatch(readFileSync(filePath, "utf8"), helperPattern, filePath);
   }
+});
+
+test("authorization guide shows app boundary service error handling", () => {
+  const source = readFileSync(authorizationDocs, "utf8");
+  assert.match(source, /OpenReceiveServiceError/);
+  assert.match(source, /orderId:/);
+  assert.match(source, /memo:/);
+  assert.match(source, /totalAmount/);
+  assert.match(source, /createOpenReceive/);
+  assert.match(source, /from "@openreceive\/node";/);
 });
 
 test("Node quickstart covers all shipped frontend framework adapters", () => {
@@ -180,7 +248,7 @@ function runRubyLiveNwcSmoke(env) {
 }
 
 test("demo container validator accepts current Hello Fruit templates", () => {
-  assert.match(runDemoContainerValidator(), /Demo container validation passed for 4 demo\(s\)\./);
+  assert.match(runDemoContainerValidator(), /Demo container validation passed for 3 demo\(s\)\./);
 });
 
 test("demo deployment validator accepts public deploy templates", () => {
@@ -273,7 +341,6 @@ test("supported database docs keep invoice storage boundaries narrow", () => {
     /\| `sqlite:\/absolute\/path\/to\/openreceive\.sqlite3` \| Supported for Node \|/,
   );
   assert.match(docs, /\| `local-sqlite` \| Supported for Node \|/);
-  assert.doesNotMatch(docs, /\| `memory:` \|/);
   assert.match(docs, /Postgres works anywhere and is the recommended default/);
   assert.match(docs, /Cloudflare Workers KV/);
   assert.match(docs, /OpenReceive owns its invoice storage/);
@@ -318,7 +385,7 @@ test("OpenReceive-owned invoice schemas do not add app-specific columns", () => 
     "packages/js/node/src/postgres-store.ts",
     "packages/js/node/src/sqlite-store.ts",
     "packages/js/node/migrations/001_create_openreceive_invoices.postgres.sql",
-    "packages/ruby/openreceive-rails/lib/openreceive/rails.rb",
+    "packages/ruby/openreceive/lib/openreceive.rb",
   ];
   const appSpecificColumns = [
     /\buser_id\b/,

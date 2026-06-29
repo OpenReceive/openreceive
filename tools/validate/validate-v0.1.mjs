@@ -303,12 +303,23 @@ function validateLifecycleVectors() {
 function validateTransactionScanVectors() {
   const vector = readJson("spec/test-vectors/transaction-scan-pagination.json");
   assert(vector.default_gate_seconds === 2, "transaction scan default gate mismatch");
-  assert(vector.default_limit === 20, "transaction scan default limit mismatch");
+  assert(vector.default_limit === 25, "transaction scan default limit mismatch");
+  assert(vector.max_limit === 50, "transaction scan max limit mismatch");
   assert(
     vector.required_behaviors.includes(
-      "each claimed refresh performs at most one incoming unpaid list_transactions page",
+      "each claimed refresh performs at most one incoming unpaid list_transactions page capped at 50",
     ),
     "missing one-page status refresh behavior",
+  );
+  assert(
+    vector.required_behaviors.includes(
+      "locally expired unpaid invoices return stored state without wallet access",
+    ),
+    "missing expired unpaid scan skip behavior",
+  );
+  assert(
+    vector.required_behaviors.includes("invoice scan windows run from invoice creation through invoice expiry"),
+    "missing invoice lifetime scan window behavior",
   );
 
   const firstPage = vector.examples.find((item) => item.name === "first page");
@@ -452,10 +463,6 @@ function validateManagedPlatformStorageVectors() {
   assert(policies.get("unknown") === "allow-local", "unknown local dev policy mismatch");
 
   const cases = new Map(vector.cases.map((item) => [item.name, item.expected]));
-  assert(
-    cases.get("memory URI is not selectable")?.code === "UNSUPPORTED_STORE_URI",
-    "memory URI case mismatch",
-  );
   assert(
     cases.get("redis is permanently unsupported")?.code === "UNSUPPORTED_STORE_REDIS",
     "redis case mismatch",
@@ -615,7 +622,7 @@ function validateNwcRequestResponseVectors() {
         `${item.name}: list_transactions must include unpaid invoices`,
       );
       assert(
-        item.expected_nip47_request.limit === 20,
+        item.expected_nip47_request.limit === 25,
         `${item.name}: list_transactions page limit mismatch`,
       );
       assert(
@@ -971,33 +978,18 @@ function validateOpenApi() {
   assert(openapi.info?.version === "0.1.0", "OpenAPI info.version mismatch");
 
   const paths = openapi.paths || {};
-  const requiredOperations = [
-    ["post", "/orders/{order_id}/checkouts"],
-    ["get", "/checkouts/{checkout_id}"],
-    ["post", "/orders/{order_id}/status"],
-    ["get", "/rates"],
-    ["post", "/rates/quote"],
-  ];
-
-  for (const [method, pathName] of requiredOperations) {
-    assert(paths[pathName]?.[method], `OpenAPI missing ${method.toUpperCase()} ${pathName}`);
-  }
-
-  const amountMsats = openapi.components?.schemas?.CreateCheckoutRequest?.properties?.amount_msats;
   const createCheckoutRequest = openapi.components?.schemas?.CreateCheckoutRequest;
-  assert(amountMsats?.minimum === 1000, "OpenAPI amount_msats minimum mismatch");
-  assert(amountMsats?.maximum === 9007199254740991, "OpenAPI amount_msats maximum mismatch");
   assert(
-    openapi.components?.parameters?.OrderId?.schema?.maxLength === 200,
-    "OpenAPI order_id path parameter must be bounded",
+    Object.keys(paths).length === 0,
+    "OpenAPI must not define OpenReceive-owned app routes",
   );
   assert(
-    createCheckoutRequest?.properties?.order_id?.maxLength === 200,
-    "OpenAPI create checkout request must accept optional order_id",
+    createCheckoutRequest?.properties?.orderId?.maxLength === 200,
+    "OpenAPI create checkout request must use SDK orderId",
   );
   assert(
-    createCheckoutRequest?.properties?.amount?.$ref === "#/components/schemas/BitcoinAmount",
-    "OpenAPI create checkout request must allow direct Bitcoin amount input",
+    createCheckoutRequest?.properties?.amount?.$ref === "#/components/schemas/CreateCheckoutAmount",
+    "OpenAPI create checkout request must use the SDK amount wrapper",
   );
   assert(
     JSON.stringify(openapi.components?.schemas?.BitcoinAmount?.properties?.currency?.enum) ===
@@ -1005,9 +997,9 @@ function validateOpenApi() {
     "OpenAPI BitcoinAmount currency enum mismatch",
   );
   assert(
-    createCheckoutRequest?.not?.required?.includes("optional_invoice_description") &&
-      createCheckoutRequest?.not?.required?.includes("description_hash"),
-    "OpenAPI create checkout request must reject optional_invoice_description with description_hash",
+    createCheckoutRequest?.not?.required?.includes("memo") &&
+      createCheckoutRequest?.not?.required?.includes("descriptionHash"),
+    "OpenAPI create checkout request must reject memo with descriptionHash",
   );
   assert(
     openapi.components?.schemas?.Checkout?.properties?.checkout_id?.pattern ===

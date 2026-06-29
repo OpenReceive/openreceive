@@ -11,7 +11,6 @@ export type OpenReceiveStoreKind =
   | "local-sqlite"
   | "sqlite"
   | "postgres"
-  | "memory"
   | "redis"
   | "mysql"
   | "other";
@@ -107,7 +106,6 @@ export function classifyOpenReceiveStore(uri: string | undefined): OpenReceiveSt
   const storeUri = uri?.trim();
   if (storeUri === undefined || storeUri.length === 0) return "unset";
   if (storeUri === "local-sqlite") return "local-sqlite";
-  if (storeUri === "memory:" || storeUri === "memory") return "memory";
   if (storeUri.startsWith("sqlite:")) return "sqlite";
   if (/^postgres(?:ql)?:\/\//.test(storeUri)) return "postgres";
   if (/^redis(?:s)?:\/\//.test(storeUri)) return "redis";
@@ -129,7 +127,7 @@ export function sqlitePathFromUri(uri: string): string {
 export function isAbsoluteDurableSqlitePath(uri: string | undefined): boolean {
   if (uri === undefined) return false;
   const sqlitePath = sqlitePathFromUri(uri.trim());
-  return sqlitePath !== ":memory:" && path.isAbsolute(sqlitePath);
+  return path.isAbsolute(sqlitePath);
 }
 
 export function assertOpenReceiveStoreConfiguration(input: StoreConfigurationInput = {}): void {
@@ -149,7 +147,6 @@ export function assertOpenReceiveStoreConfiguration(input: StoreConfigurationInp
   if (kind === "redis") throw unsupportedRedisStoreError(platform);
   if (kind === "mysql") throw storeNotImplementedError(platform, "MySQL");
   if (kind === "other") throw unsupportedStoreUriError(platform, storeUri);
-  if (kind === "memory") throw unsupportedStoreUriError(platform, storeUri);
 
   if (detected) {
     switch (platform.policy) {
@@ -201,12 +198,9 @@ function unsupportedStoreUriError(
   storeUri: string | undefined
 ): OpenReceiveConfigError {
   const normalized = storeUri?.trim();
-  const message = normalized === "memory:" || normalized === "memory"
-    ? "The memory store URI is not selectable; construct InMemoryInvoiceKvStore directly only for local tests."
-    : `Unsupported OPENRECEIVE_STORE URI: ${redactStoreUri(normalized ?? "")}.`;
   return new OpenReceiveConfigError({
     code: "UNSUPPORTED_STORE_URI",
-    message: `${platformLine(platform)} ${message}`,
+    message: `${platformLine(platform)} Unsupported OPENRECEIVE_STORE URI: ${redactStoreUri(normalized ?? "")}.`,
     hint: `${POSTGRES_STEP} ${DOCS_LINK}`
   });
 }

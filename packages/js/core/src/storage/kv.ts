@@ -60,7 +60,7 @@ export interface OpenReceiveInvoiceKvStore {
 export interface PutCreatedInvoiceRecordOptions {
   store: OpenReceiveInvoiceKvStore;
   record: StoredRecord;
-  createInvoiceId?: () => string;
+  createStoredInvoiceId?: () => string;
   maxInvoiceIdRetries?: number;
 }
 
@@ -125,7 +125,7 @@ export async function putCreatedInvoiceRecord(
     }
 
     if (created.on === "invoice_id") {
-      if (options.createInvoiceId === undefined || attempt === maxRetries) {
+      if (options.createStoredInvoiceId === undefined || attempt === maxRetries) {
         throw new InvoiceStorageConflictError(
           "invoice_id must be unique",
           "invoice_id"
@@ -135,7 +135,7 @@ export async function putCreatedInvoiceRecord(
         rev: 0,
         row: {
           ...candidate.row,
-          invoice_id: options.createInvoiceId()
+          invoice_id: options.createStoredInvoiceId()
         }
       };
       continue;

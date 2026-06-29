@@ -1,6 +1,0 @@
-{
-  "order_uuid": "order_456",
-  "amount_msats": 200000,
-  "optional_invoice_description": "Fruit sticker from OpenReceive demo: banana",
-  "expiry": 600
-}

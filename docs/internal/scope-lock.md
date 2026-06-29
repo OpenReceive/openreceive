@@ -7,10 +7,10 @@ for the packages that already exist in this repository.
 
 The first end-developer path to polish is:
 
-- `@openreceive/node` for receive-only NWC code handling, OpenReceive-managed persistence, CLI
-  store initialization, mounted Node HTTP routes, app-owned route protection,
-  request-driven status refresh, backend settlement verification, and
-  settlement actions.
+- `@openreceive/node` for receive-only NWC code handling,
+  OpenReceive-managed persistence, CLI store initialization, app-owned route
+  controllers, request-driven status refresh, backend settlement verification,
+  and settlement actions.
 - `@openreceive/browser`, `@openreceive/elements`, and `@openreceive/react`
   for display-safe checkout UI/state. These packages never get receive-only NWC
   codes.
@@ -34,9 +34,9 @@ Node backend plus web checkout packages.
 - `@openreceive/vue`, `@openreceive/svelte`, and `@openreceive/angular` are thin
   typed bindings around the shared web component and browser-owned checkout
   model. Do not describe them as full native component systems yet.
-- `openreceive` Ruby and `openreceive-rails` are initial proof work. Keep tests
-  green, but do not publish or expand the Rails lane until Rails smoke and
-  trusted live-wallet proof gaps are closed.
+- `openreceive` Ruby is initial vector-backed proof work. Keep it under test,
+  but do not publish or expand new ecosystem lanes until the JS checkout path is
+  hardened.
 
 ## Deferred
 

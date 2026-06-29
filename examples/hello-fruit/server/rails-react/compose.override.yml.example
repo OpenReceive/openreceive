@@ -1,4 +1,0 @@
-services:
-  hello-fruit-rails-react:
-    ports:
-      - "3003:3003"

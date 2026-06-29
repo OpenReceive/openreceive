@@ -260,7 +260,7 @@ class OpenReceiveTest < Minitest::Test
       "unpaid" => true,
       "from" => 1000,
       "until" => 1000,
-      "limit" => 20,
+      "limit" => 25,
       "offset" => 0
     )
     transaction = transactions.fetch("transactions").first
@@ -269,7 +269,7 @@ class OpenReceiveTest < Minitest::Test
     assert_equal 200_000, invoice.fetch("amount_msats")
     assert_equal "settled", transaction.fetch("transaction_state")
     assert_equal [{ "amount" => 200_000, "description" => "Fruit sticker" }], raw_client.make_invoice_calls
-    assert_equal [{ "type" => "incoming", "unpaid" => true, "from" => 1000, "until" => 1000, "limit" => 20, "offset" => 0 }], raw_client.list_transactions_calls
+    assert_equal [{ "type" => "incoming", "unpaid" => true, "from" => 1000, "until" => 1000, "limit" => 25, "offset" => 0 }], raw_client.list_transactions_calls
     refute client.respond_to?(:pay_invoice)
     assert_includes client.redacted_connection_uri, "secret=[REDACTED]"
     refute_includes client.redacted_connection_uri, "b" * 64
@@ -288,7 +288,7 @@ class OpenReceiveTest < Minitest::Test
       "unpaid" => true,
       "from" => 1000,
       "until" => 1000,
-      "limit" => 20,
+      "limit" => 25,
       "offset" => 0
     )
     transaction = transactions.fetch("transactions").first
@@ -296,7 +296,7 @@ class OpenReceiveTest < Minitest::Test
     assert_equal "lnbc-ruby-keyword", invoice.fetch("invoice")
     assert_equal "settled", transaction.fetch("transaction_state")
     assert_equal [{ amount: 200_000, description: "Fruit sticker" }], raw_client.make_invoice_calls
-    assert_equal [{ type: "incoming", unpaid: true, from: 1000, until: 1000, limit: 20, offset: 0 }], raw_client.list_transactions_calls
+    assert_equal [{ type: "incoming", unpaid: true, from: 1000, until: 1000, limit: 25, offset: 0 }], raw_client.list_transactions_calls
   end
 
   def test_unavailable_receive_client_fails_closed_without_wallet_methods
@@ -350,10 +350,10 @@ class OpenReceiveTest < Minitest::Test
     end
   end
 
-  def test_in_memory_invoice_store_replays_idempotent_creates
+  def test_in_memory_invoice_store_replays_idempotent_puts
     store = OpenReceive::InMemoryInvoiceKvStore.new
-    created = store.create_invoice(invoice_row)
-    replayed = store.create_invoice(invoice_row)
+    created = store.put_invoice_record(invoice_row)
+    replayed = store.put_invoice_record(invoice_row)
 
     assert_equal "created", created.fetch("status")
     assert_equal "replayed", replayed.fetch("status")
@@ -363,10 +363,10 @@ class OpenReceiveTest < Minitest::Test
 
   def test_in_memory_invoice_store_rejects_idempotency_drift
     store = OpenReceive::InMemoryInvoiceKvStore.new
-    store.create_invoice(invoice_row)
+    store.put_invoice_record(invoice_row)
 
     error = assert_raises(OpenReceive::IdempotencyConflictError) do
-      store.create_invoice(invoice_row("idempotency_request_hash" => "sha256:#{"c" * 64}"))
+      store.put_invoice_record(invoice_row("idempotency_request_hash" => "sha256:#{"c" * 64}"))
     end
 
     assert_equal 409, error.status
@@ -375,10 +375,10 @@ class OpenReceiveTest < Minitest::Test
 
   def test_in_memory_invoice_store_rejects_duplicate_payment_hash
     store = OpenReceive::InMemoryInvoiceKvStore.new
-    store.create_invoice(invoice_row)
+    store.put_invoice_record(invoice_row)
 
     assert_raises(OpenReceive::InvoiceStorageConflictError) do
-      store.create_invoice(
+      store.put_invoice_record(
         invoice_row(
           "invoice_id" => "or_inv_test_2",
           "idempotency_key" => "fruit-demo-user-123-order-789",
@@ -391,7 +391,7 @@ class OpenReceiveTest < Minitest::Test
 
   def test_in_memory_invoice_store_settlement_action_is_duplicate_safe
     store = OpenReceive::InMemoryInvoiceKvStore.new
-    store.create_invoice(invoice_row)
+    store.put_invoice_record(invoice_row)
 
     first_settle = store.mark_settled(invoice_id: "or_inv_test_1", settled_at: 1200)
     second_settle = store.mark_settled(invoice_id: "or_inv_test_1", settled_at: 1300)

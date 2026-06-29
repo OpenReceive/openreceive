@@ -72,7 +72,7 @@ export async function resolveOpenReceiveStore(
 
   if (storeUri.startsWith("sqlite:")) {
     const sqlitePath = sqlitePathFromUri(storeUri);
-    if (sqlitePath !== ":memory:" && !sqlitePath.startsWith("file:")) {
+    if (!sqlitePath.startsWith("file:")) {
       mkdirSync(path.dirname(path.resolve(sqlitePath)), { recursive: true });
     }
     const sqlite = await loadSqlite(options.loadSqlite);

@@ -14,7 +14,7 @@ import {
   quoteBitcoinAmountToMsats,
   parseNwcUri,
   quoteFiatToMsats,
-  refreshInvoiceStatus,
+  refreshStoredInvoiceStatus,
   redactNwcUri,
 } from "../../packages/js/core/src/index.ts";
 import { OPENRECEIVE_ERROR_CODES } from "../../packages/js/core/src/contracts.ts";
@@ -47,7 +47,6 @@ import {
   createOpenReceiveCountryPickerModel,
   createOpenReceiveStatusFetcher,
   createCheckoutProviderCopyEvent,
-  createOpenReceiveRefreshInvoiceFetcher,
   createOpenReceiveThemeChangeEvent,
   createOpenReceiveTransientFeedbackController,
   createLightningUri,
@@ -62,7 +61,7 @@ import {
   openReceiveCountryMapRegions,
   openReceiveThemeToggleElementStyles,
   openWallet,
-  requestCheckoutInvoice,
+  requestCheckout,
   assertOpenReceiveDisplayInvoice,
   parseOpenReceiveBooleanAttribute,
   parseOpenReceiveOptionalInteger,
@@ -111,7 +110,7 @@ function seedRecord(overrides = {}) {
       ...flatOverrides,
       ...rowOverrides,
       metadata: {
-        order_uuid: metadataOverrides.order_uuid ?? invoiceId,
+        order_id: metadataOverrides.order_id ?? invoiceId,
         checkout_id: metadataOverrides.checkout_id ?? `or_chk_${invoiceId}`,
         ...metadataOverrides,
       },
@@ -266,10 +265,10 @@ test("settlement detection ignores preimage without settled state", () => {
   assert.equal(detection.preimage_present, true);
 });
 
-test("refreshInvoiceStatus scans at most one transaction page and advances cursor", async () => {
+test("refreshStoredInvoiceStatus scans at most one transaction page and advances cursor", async () => {
   const store = new InMemoryInvoiceKvStore();
   const transactions = [];
-  for (let index = 0; index < 25; index += 1) {
+  for (let index = 0; index < 30; index += 1) {
     const paymentHash = index === 0 ? PAYMENT_HASH : index.toString(16).padStart(64, "0");
     const invoiceId = `or_inv_page_${index}`;
     const invoice = `lnbc-page-${index}`;
@@ -308,32 +307,32 @@ test("refreshInvoiceStatus scans at most one transaction page and advances curso
   };
   const record = await store.get("or_inv_page_0");
 
-  const first = await refreshInvoiceStatus({
+  const first = await refreshStoredInvoiceStatus({
     store,
     client,
     record,
     clock: () => now,
   });
   assert.equal(first.wallet_scan_performed, true);
-  assert.equal(first.transactions_checked, 20);
+  assert.equal(first.transactions_checked, 25);
   assert.deepEqual(requests.at(-1), {
     type: "incoming",
     unpaid: true,
     from: 1000,
-    until: 1000,
-    limit: 20,
+    until: 1600,
+    limit: 25,
     offset: 0,
   });
-  assert.deepEqual(JSON.parse((await store.getMeta("transaction_scan_cursor:1000:1000")).value), {
+  assert.deepEqual(JSON.parse((await store.getMeta("transaction_scan_cursor:1000:1600")).value), {
     from: 1000,
-    until: 1000,
-    limit: 20,
-    offset: 20,
+    until: 1600,
+    limit: 25,
+    offset: 25,
     cycle: 0,
     last_page_scanned_at: 1000,
   });
 
-  const gated = await refreshInvoiceStatus({
+  const gated = await refreshStoredInvoiceStatus({
     store,
     client,
     record: await store.get("or_inv_page_0"),
@@ -343,7 +342,7 @@ test("refreshInvoiceStatus scans at most one transaction page and advances curso
   assert.equal(requests.length, 1);
 
   now = 1002;
-  const second = await refreshInvoiceStatus({
+  const second = await refreshStoredInvoiceStatus({
     store,
     client,
     record: await store.get("or_inv_page_0"),
@@ -351,18 +350,18 @@ test("refreshInvoiceStatus scans at most one transaction page and advances curso
   });
   assert.equal(second.wallet_scan_performed, true);
   assert.equal(second.transactions_checked, 5);
-  assert.equal(requests.at(-1).offset, 20);
-  assert.deepEqual(JSON.parse((await store.getMeta("transaction_scan_cursor:1000:1000")).value), {
+  assert.equal(requests.at(-1).offset, 25);
+  assert.deepEqual(JSON.parse((await store.getMeta("transaction_scan_cursor:1000:1600")).value), {
     from: 1000,
-    until: 1000,
-    limit: 20,
+    until: 1600,
+    limit: 25,
     offset: 0,
     cycle: 1,
     last_page_scanned_at: 1002,
   });
 });
 
-test("refreshInvoiceStatus does not advance cursor after wallet scan failure", async () => {
+test("refreshStoredInvoiceStatus does not advance cursor after wallet scan failure", async () => {
   const store = new InMemoryInvoiceKvStore();
   await store.putIfAbsent(
     seedRecord({
@@ -387,7 +386,7 @@ test("refreshInvoiceStatus does not advance cursor after wallet scan failure", a
       requests.push(request);
       if (fail) throw new Error("wallet unavailable");
       return {
-        transactions: Array.from({ length: 20 }, (_value, index) => ({
+        transactions: Array.from({ length: 25 }, (_value, index) => ({
           type: "incoming",
           invoice: `lnbc-decoy-${index}`,
           payment_hash: index.toString(16).padStart(64, "0"),
@@ -398,7 +397,7 @@ test("refreshInvoiceStatus does not advance cursor after wallet scan failure", a
     },
   };
 
-  const failed = await refreshInvoiceStatus({
+  const failed = await refreshStoredInvoiceStatus({
     store,
     client,
     record: await store.get("or_inv_scan_failure"),
@@ -407,37 +406,37 @@ test("refreshInvoiceStatus does not advance cursor after wallet scan failure", a
   assert.equal(failed.wallet_scan_performed, false);
   assert.equal(failed.transactions_checked, 0);
   assert.equal(failed.reason, "wallet_scan_failed");
-  assert.equal(await store.getMeta("transaction_scan_cursor:1000:1000"), undefined);
+  assert.equal(await store.getMeta("transaction_scan_cursor:1000:1600"), undefined);
 
   fail = false;
   now = 1002;
-  const retried = await refreshInvoiceStatus({
+  const retried = await refreshStoredInvoiceStatus({
     store,
     client,
     record: await store.get("or_inv_scan_failure"),
     clock: () => now,
   });
   assert.equal(retried.wallet_scan_performed, true);
-  assert.equal(retried.transactions_checked, 20);
+  assert.equal(retried.transactions_checked, 25);
   assert.deepEqual(
     requests.map((request) => request.offset),
     [0, 0],
   );
-  assert.deepEqual(JSON.parse((await store.getMeta("transaction_scan_cursor:1000:1000")).value), {
+  assert.deepEqual(JSON.parse((await store.getMeta("transaction_scan_cursor:1000:1600")).value), {
     from: 1000,
-    until: 1000,
-    limit: 20,
-    offset: 20,
+    until: 1600,
+    limit: 25,
+    offset: 25,
     cycle: 0,
     last_page_scanned_at: 1002,
   });
 });
 
-test("refreshInvoiceStatus settles an old pending invoice on a later page cycle", async () => {
+test("refreshStoredInvoiceStatus settles an old pending invoice on a later page cycle", async () => {
   const store = new InMemoryInvoiceKvStore();
   const transactions = [];
-  for (let index = 0; index < 21; index += 1) {
-    const target = index === 20;
+  for (let index = 0; index < 26; index += 1) {
+    const target = index === 25;
     const paymentHash = target ? PAYMENT_HASH : index.toString(16).padStart(64, "0");
     const invoiceId = target ? "or_inv_late_settle" : `or_inv_late_${index}`;
     const invoice = target ? "lnbc-late-settle" : `lnbc-late-${index}`;
@@ -450,7 +449,7 @@ test("refreshInvoiceStatus settles an old pending invoice on a later page cycle"
         created_at: 1000,
         expires_at: 1300,
         metadata: {
-          order_uuid: invoiceId,
+          order_id: invoiceId,
         },
       }),
     );
@@ -480,7 +479,7 @@ test("refreshInvoiceStatus settles an old pending invoice on a later page cycle"
     },
   };
 
-  const first = await refreshInvoiceStatus({
+  const first = await refreshStoredInvoiceStatus({
     store,
     client,
     record: await store.get("or_inv_late_settle"),
@@ -493,7 +492,7 @@ test("refreshInvoiceStatus settles an old pending invoice on a later page cycle"
   assert.equal(settlementActionCalls, 0);
 
   now = 1002;
-  const second = await refreshInvoiceStatus({
+  const second = await refreshStoredInvoiceStatus({
     store,
     client,
     record: await store.get("or_inv_late_settle"),
@@ -513,7 +512,7 @@ test("refreshInvoiceStatus settles an old pending invoice on a later page cycle"
   assert.equal(stored.row.settled_at, 1100);
 });
 
-test("refreshInvoiceStatus durable gate prevents request storms", async () => {
+test("refreshStoredInvoiceStatus durable gate prevents request storms", async () => {
   const store = new InMemoryInvoiceKvStore();
   await store.putIfAbsent(
     seedRecord({
@@ -538,8 +537,8 @@ test("refreshInvoiceStatus durable gate prevents request storms", async () => {
   };
   const record = await store.get("or_inv_gate");
   const [first, second] = await Promise.all([
-    refreshInvoiceStatus({ store, client, record, clock: () => 1000 }),
-    refreshInvoiceStatus({ store, client, record, clock: () => 1000 }),
+    refreshStoredInvoiceStatus({ store, client, record, clock: () => 1000 }),
+    refreshStoredInvoiceStatus({ store, client, record, clock: () => 1000 }),
   ]);
 
   assert.equal(calls, 1);
@@ -547,6 +546,75 @@ test("refreshInvoiceStatus durable gate prevents request storms", async () => {
     [first.wallet_scan_performed, second.wallet_scan_performed].filter(Boolean).length,
     1,
   );
+});
+
+test("refreshStoredInvoiceStatus caps list_transactions page size at fifty", async () => {
+  const store = new InMemoryInvoiceKvStore();
+  await store.putIfAbsent(seedRecord({
+    invoice_id: "or_inv_scan_limit",
+    idempotency_key: "order-scan-limit",
+    payment_hash: PAYMENT_HASH,
+    invoice: "lnbc-scan-limit",
+  }));
+
+  const requests = [];
+  const client = {
+    async preflight() {
+      throw new Error("preflight is not needed by status refresh");
+    },
+    async makeInvoice() {
+      throw new Error("makeInvoice is not needed by status refresh");
+    },
+    async listTransactions(request) {
+      requests.push(request);
+      return { transactions: [] };
+    },
+  };
+
+  await refreshStoredInvoiceStatus({
+    store,
+    client,
+    record: await store.get("or_inv_scan_limit"),
+    clock: () => 1000,
+    transactionScanPageLimit: 500,
+  });
+
+  assert.equal(requests[0].limit, 50);
+});
+
+test("refreshStoredInvoiceStatus skips locally expired unpaid invoices", async () => {
+  const store = new InMemoryInvoiceKvStore();
+  await store.putIfAbsent(seedRecord({
+    invoice_id: "or_inv_expired_unpaid",
+    idempotency_key: "order-expired-unpaid",
+    payment_hash: PAYMENT_HASH,
+    invoice: "lnbc-expired-unpaid",
+    expires_at: 1200,
+  }));
+
+  let calls = 0;
+  const client = {
+    async preflight() {
+      throw new Error("preflight is not needed by status refresh");
+    },
+    async makeInvoice() {
+      throw new Error("makeInvoice is not needed by status refresh");
+    },
+    async listTransactions() {
+      calls += 1;
+      return { transactions: [] };
+    },
+  };
+
+  const result = await refreshStoredInvoiceStatus({
+    store,
+    client,
+    record: await store.get("or_inv_expired_unpaid"),
+    clock: () => 1200,
+  });
+
+  assert.equal(calls, 0);
+  assert.equal(result.wallet_scan_performed, false);
 });
 
 test("in-memory KV storage replays same idempotency request and conflicts on drift", async () => {
@@ -826,9 +894,10 @@ test("browser owns web-component shadow styles", () => {
   assert.match(openReceiveThemeToggleElementStyles, /data-openreceive-theme-toggle|min-height/);
 });
 
-test("browser request checkout invoice helper owns idempotent invoice POST shape", async () => {
+test("browser request checkout helper posts SDK-shaped data to an app-owned URL", async () => {
   const requests = [];
-  const invoice = await requestCheckoutInvoice({
+  const checkout = await requestCheckout({
+    checkoutUrl: "/create_order",
     orderId: "order-browser-create",
     amount: {
       fiat: {
@@ -843,18 +912,18 @@ test("browser request checkout invoice helper owns idempotent invoice POST shape
       return {
         ok: true,
         json: async () => ({
-          checkout_id: "or_chk_browser_create",
-          order_id: "order-browser-create",
+          checkoutId: "or_chk_browser_create",
+          orderId: "order-browser-create",
           status: "open",
-          amount_msats: 200000,
+          amountMsats: 200000,
           active: {
-            invoice_id: "or_inv_browser_create",
-            invoice: "lnbc-browser-create",
-            payment_hash: PAYMENT_HASH,
-            amount_msats: 200000,
-            order_uuid: "order-browser-create",
-            transaction_state: "pending",
-            workflow_state: "invoice_created",
+            invoiceId: "or_inv_browser_create",
+            bolt11: "lnbc-browser-create",
+            paymentHash: PAYMENT_HASH,
+            amountMsats: 200000,
+            orderId: "order-browser-create",
+            transactionState: "pending",
+            workflowState: "invoice_created",
           },
           invoices: [],
         }),
@@ -862,24 +931,27 @@ test("browser request checkout invoice helper owns idempotent invoice POST shape
     },
   });
 
-  assert.equal(invoice.checkout_id, "or_chk_browser_create");
-  assert.equal(invoice.active.invoice_id, "or_inv_browser_create");
+  assert.equal(checkout.checkout_id, "or_chk_browser_create");
+  assert.equal(checkout.active.invoice_id, "or_inv_browser_create");
   assert.equal(requests.length, 1);
-  assert.equal(requests[0].url, "/openreceive/v1/orders/order-browser-create/checkouts");
+  assert.equal(requests[0].url, "/create_order");
   assert.equal(requests[0].init.method, "POST");
   assert.equal(requests[0].init.headers["Content-Type"], "application/json");
   assert.equal("Idempotency-Key" in requests[0].init.headers, false);
   assert.deepEqual(JSON.parse(requests[0].init.body), {
-    order_id: "order-browser-create",
-    fiat: {
-      currency: "USD",
-      value: "10.00",
+    orderId: "order-browser-create",
+    amount: {
+      fiat: {
+        currency: "USD",
+        value: "10.00",
+      },
     },
-    optional_invoice_description: "Browser helper invoice",
-    expiry: 600,
+    memo: "Browser helper invoice",
+    expiresInSeconds: 600,
   });
 
-  await requestCheckoutInvoice({
+  await requestCheckout({
+    checkoutUrl: (orderId) => `/checkout/${orderId}`,
     orderId: "order-browser-btc",
     amount: {
       btc: {
@@ -901,7 +973,7 @@ test("browser request checkout invoice helper owns idempotent invoice POST shape
             invoice: "lnbc-browser-btc",
             payment_hash: PAYMENT_HASH,
             amount_msats: 500000000,
-            order_uuid: "order-browser-btc",
+            order_id: "order-browser-btc",
             transaction_state: "pending",
             workflow_state: "invoice_created",
           },
@@ -910,17 +982,21 @@ test("browser request checkout invoice helper owns idempotent invoice POST shape
       };
     },
   });
+  assert.equal(requests[1].url, "/checkout/order-browser-btc");
   assert.deepEqual(JSON.parse(requests[1].init.body), {
-    order_id: "order-browser-btc",
+    orderId: "order-browser-btc",
     amount: {
-      currency: "BTC",
-      value: "0.005",
+      btc: {
+        currency: "BTC",
+        value: "0.005",
+      },
     },
   });
 
   await assert.rejects(
     () =>
-      requestCheckoutInvoice({
+      requestCheckout({
+        checkoutUrl: "/create_order",
         orderId: "",
         amount: { msats: 200000 },
         fetch: async () => ({
@@ -932,7 +1008,8 @@ test("browser request checkout invoice helper owns idempotent invoice POST shape
   );
   await assert.rejects(
     () =>
-      requestCheckoutInvoice({
+      requestCheckout({
+        checkoutUrl: "/create_order",
         orderId: "bad-nwc",
         amount: { sats: 200 },
         memo: `nostr+walletconnect://${"a".repeat(64)}?secret=${"b".repeat(64)}`,
@@ -945,7 +1022,8 @@ test("browser request checkout invoice helper owns idempotent invoice POST shape
   );
   await assert.rejects(
     () =>
-      requestCheckoutInvoice({
+      requestCheckout({
+        checkoutUrl: "/create_order",
         orderId: "server-error",
         amount: { sats: 200 },
         fetch: async () => ({
@@ -962,7 +1040,7 @@ test("browser request checkout invoice helper owns idempotent invoice POST shape
 test("browser status fetcher owns display-safe status POST shape", async () => {
   const requests = [];
   const refreshStatus = createOpenReceiveStatusFetcher({
-    statusUrl: "/openreceive/v1/orders/{order_id}/status",
+    statusUrl: "/order_status",
     fetch: async (url, init) => {
       requests.push({ url, init });
       return {
@@ -1012,7 +1090,7 @@ test("browser status fetcher owns display-safe status POST shape", async () => {
   assert.equal(body.status, "paid");
   assert.equal(body.invoices[0].invoice_id, "or_inv_status");
   assert.equal(requests.length, 1);
-  assert.equal(requests[0].url, "/openreceive/v1/orders/order-status/status");
+  assert.equal(requests[0].url, "/order_status");
   assert.equal(requests[0].init.method, "POST");
   assert.equal(requests[0].init.headers["Content-Type"], "application/json");
   assert.deepEqual(JSON.parse(requests[0].init.body), {
@@ -1020,7 +1098,7 @@ test("browser status fetcher owns display-safe status POST shape", async () => {
   });
 
   const failingStatus = createOpenReceiveStatusFetcher({
-    statusUrl: "/openreceive/v1/orders/{order_id}/status",
+    statusUrl: "/order_status",
     fetch: async () => ({
       ok: false,
       json: async () => ({
@@ -1045,79 +1123,6 @@ test("browser status fetcher owns display-safe status POST shape", async () => {
         paid: false,
       }),
     /Invoice not found/,
-  );
-});
-
-test("browser refresh fetcher owns idempotent refresh POST shape", async () => {
-  const requests = [];
-  const refreshInvoice = createOpenReceiveRefreshInvoiceFetcher({
-    refreshUrl: (state) => `/openreceive/v1/invoices/${state.invoice_id}/refresh`,
-    idempotencyKey: (state) => `${state.invoice_id}-refresh-1`,
-    reason: "expired",
-    fetch: async (url, init) => {
-      requests.push({ url, init });
-      return {
-        ok: true,
-        json: async () => ({
-          old_invoice_id: "or_inv_refresh_old",
-          new_invoice_id: "or_inv_refresh_new",
-          reason: "expired",
-          invoice: {
-            invoice_id: "or_inv_refresh_new",
-            invoice: "lnbc-refresh-new",
-            payment_hash: "c".repeat(64),
-            amount_msats: 200000,
-            transaction_state: "pending",
-            workflow_state: "invoice_created",
-            expires_at: 1100,
-          },
-        }),
-      };
-    },
-  });
-
-  const result = await refreshInvoice({
-    invoice_id: "or_inv_refresh_old",
-    invoice: "lnbc-refresh-old",
-    lightningUri: "lightning:lnbc-refresh-old",
-    payment_hash: PAYMENT_HASH,
-    transaction_state: "expired",
-    workflow_state: "expired_closed",
-    phase: "expired",
-    settled: false,
-    terminal: true,
-  });
-
-  assert.equal(result.new_invoice_id, "or_inv_refresh_new");
-  assert.equal(result.invoice.invoice, "lnbc-refresh-new");
-  assert.equal(requests.length, 1);
-  assert.equal(requests[0].url, "/openreceive/v1/invoices/or_inv_refresh_old/refresh");
-  assert.equal(requests[0].init.method, "POST");
-  assert.equal(requests[0].init.headers["Idempotency-Key"], "or_inv_refresh_old-refresh-1");
-  assert.deepEqual(JSON.parse(requests[0].init.body), {
-    reason: "expired",
-  });
-
-  await assert.rejects(
-    () =>
-      createOpenReceiveRefreshInvoiceFetcher({
-        refreshUrl: "/refresh",
-        idempotencyKey: "",
-        fetch: async () => ({
-          ok: true,
-          json: async () => ({}),
-        }),
-      })({
-        invoice_id: "or_inv_refresh_old",
-        invoice: "lnbc-refresh-old",
-        lightningUri: "lightning:lnbc-refresh-old",
-        transaction_state: "expired",
-        workflow_state: "expired_closed",
-        phase: "expired",
-        settled: false,
-        terminal: true,
-      }),
-    /Idempotency-Key/,
   );
 });
 
@@ -1237,7 +1242,6 @@ test("browser checkout controller owns lifecycle actions for framework adapters"
   const writes = [];
   const opens = [];
   let statusCalls = 0;
-  let refreshCalls = 0;
   const controller = createCheckoutController({
     snapshot: checkoutSnapshot({
       invoice_id: "or_inv_controller",
@@ -1268,27 +1272,6 @@ test("browser checkout controller owns lifecycle actions for framework adapters"
         },
       );
     },
-    refreshInvoice: async (state) => {
-      refreshCalls += 1;
-      assert.equal(state.invoice_id, "or_inv_controller");
-      return {
-        old_invoice_id: state.invoice_id,
-        new_invoice_id: "or_inv_controller_refresh",
-        reason: "expired",
-        invoice: checkoutSnapshot(
-          {
-            invoice_id: "or_inv_controller_refresh",
-            invoice: "lnbc-controller-refresh",
-            payment_hash: "e".repeat(64),
-            amount_msats: state.amount_msats,
-            transaction_state: "pending",
-            workflow_state: "invoice_created",
-            expires_at: 1200,
-          },
-          { order_id: state.order_id },
-        ),
-      };
-    },
     clipboard: {
       writeText: async (value) => writes.push(value),
     },
@@ -1318,13 +1301,6 @@ test("browser checkout controller owns lifecycle actions for framework adapters"
 
   const cancelled = controller.cancel();
   assert.equal(cancelled.phase, "settled");
-
-  const refreshed = await controller.refreshExpiredInvoice();
-  assert.equal(refreshCalls, 1);
-  assert.equal(refreshed.invoice_id, "or_inv_controller_refresh");
-  assert.equal(refreshed.invoice, "lnbc-controller-refresh");
-  assert.equal(refreshed.phase, "invoice_created");
-  assert.equal(states.at(-1).invoice_id, "or_inv_controller_refresh");
 
   const next = controller.update({
     snapshot: checkoutSnapshot(
@@ -1367,9 +1343,9 @@ test("browser checkout controller owns statusUrl fetcher creation", async () => 
       },
       { order_id: "order-controller-status" },
     ),
-    statusUrl: "/openreceive/v1/orders/{order_id}/status",
+    statusUrl: "/order_status",
     fetch: async (url, init) => {
-      assert.equal(url, "/openreceive/v1/orders/order-controller-status/status");
+      assert.equal(url, "/order_status");
       assert.deepEqual(JSON.parse(init.body), {
         order_id: "order-controller-status",
       });

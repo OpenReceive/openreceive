@@ -11,7 +11,7 @@ import {
   putCreatedInvoiceRecord,
   quoteBitcoinAmountToMsats,
   quoteFiatToMsatsWithPrice,
-  refreshInvoiceRecordsStatus as refreshStoredInvoiceRecordsStatus,
+  refreshStoredInvoiceRecordsStatus,
   type CachedPriceFeed,
   type InvoiceStorageRow,
   type NwcTransaction,
@@ -100,13 +100,13 @@ export interface CreateOpenReceiveOptions
 
 export interface OpenReceiveCreateCheckoutRequest {
   readonly orderId: string;
-  readonly amount: OpenReceiveCreateInvoiceAmount;
+  readonly amount: OpenReceiveCreateCheckoutAmount;
   readonly memo?: string;
   readonly descriptionHash?: string;
   readonly expiresInSeconds?: number | string;
 }
 
-export type OpenReceiveCreateInvoiceAmount =
+export type OpenReceiveCreateCheckoutAmount =
   | { readonly btc: OpenReceiveBitcoinAmount }
   | { readonly sats: number | string }
   | { readonly msats: number | string }
@@ -481,11 +481,11 @@ async function mintInvoiceForCheckout(
   const metadata = checkoutMetadata(createInput, orderId, checkoutId, renewal);
   const createResult = await putCreatedInvoiceRecord({
     store: context.store,
-    createInvoiceId,
+    createStoredInvoiceId,
     record: {
       rev: 0,
       row: {
-        invoice_id: createInvoiceId(),
+        invoice_id: createStoredInvoiceId(),
         namespace: namespaceScope,
         operation,
         idempotency_key: idempotencyKey,
@@ -628,7 +628,7 @@ function createRenewalRequestHashBody(
 
 async function amountMatches(
   context: OpenReceiveServiceContext,
-  amount: OpenReceiveCreateInvoiceAmount,
+  amount: OpenReceiveCreateCheckoutAmount,
   checkout: OpenReceiveCheckout,
   now: number,
 ): Promise<boolean> {
@@ -650,7 +650,7 @@ async function amountMatches(
   return resolved.amount_msats === checkout.amountMsats;
 }
 
-function readStoredAmountSpec(row: InvoiceStorageRow): OpenReceiveCreateInvoiceAmount | undefined {
+function readStoredAmountSpec(row: InvoiceStorageRow): OpenReceiveCreateCheckoutAmount | undefined {
   const value = row.metadata.amount_spec;
   if (!isRecord(value)) return undefined;
   if (isRecord(value.btc)) {
@@ -683,7 +683,7 @@ function readStoredAmountSpec(row: InvoiceStorageRow): OpenReceiveCreateInvoiceA
   return undefined;
 }
 
-function createAmountRequest(amount: OpenReceiveCreateInvoiceAmount): Record<string, unknown> {
+function createAmountRequest(amount: OpenReceiveCreateCheckoutAmount): Record<string, unknown> {
   return {
     ...("btc" in amount ? { amount: amount.btc } : {}),
     ...("sats" in amount ? { amount_sats: amount.sats } : {}),
@@ -702,7 +702,7 @@ function createCheckoutRequestHashBody(input: OpenReceiveCreateCheckoutRequest):
   };
 }
 
-function amountKeyFromCreateAmount(amount: OpenReceiveCreateInvoiceAmount): string {
+function amountKeyFromCreateAmount(amount: OpenReceiveCreateCheckoutAmount): string {
   if ("fiat" in amount) {
     return `fiat:${amount.fiat.currency}:${amount.fiat.value}`;
   }
@@ -849,12 +849,6 @@ async function supersedeCheckout(
       rev: record.rev + 1,
       row: {
         ...record.row,
-        transaction_state:
-          record.row.transaction_state === "settled" ? record.row.transaction_state : "expired",
-        workflow_state:
-          record.row.transaction_state === "settled"
-            ? record.row.workflow_state
-            : "expiry_pending_verification",
         metadata: {
           ...record.row.metadata,
           superseded: true,
@@ -1611,7 +1605,7 @@ function toSafeInteger(value: bigint | number, field: string): number {
   return numberValue;
 }
 
-function createInvoiceId(): string {
+function createStoredInvoiceId(): string {
   const bytes = new Uint8Array(16);
   globalThis.crypto.getRandomValues(bytes);
   return `or_inv_${[...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;

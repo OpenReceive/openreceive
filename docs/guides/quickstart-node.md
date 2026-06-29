@@ -1,14 +1,13 @@
-# Node Framework Quickstart
+# Node Quickstart
 
-OpenReceive runs inside your app. When funds arrive, OpenReceive calls your
-`onPaid` hook with your unique `orderId`.
+OpenReceive runs as a server-side service object inside your app. It does not
+define the surrounding app boundary or response schema for you. Your app keeps
+orders, carts, users, sessions, and fulfillment; OpenReceive creates Lightning
+checkouts and refreshes their settlement state.
 
 ## Environment
 
-All you need to start is a receive-only NWC code from any NWC provider, or one
-you build yourself. Details:
-[Get a NWC code to receive payments](https://openreceive.org/get_a_nwc_code_to_receive_payments).
-Set the receive-only NWC code only in your server environment:
+Set a receive-only NWC code only in your server environment:
 
 ```sh
 OPENRECEIVE_NWC=nostr+walletconnect://...
@@ -16,482 +15,160 @@ OPENRECEIVE_NWC=nostr+walletconnect://...
 
 Storage is optional during local setup. If `OPENRECEIVE_STORE` is omitted and no
 managed platform is detected, OpenReceive uses `local-sqlite` and creates
-`./.openreceive/<namespace>.sqlite3`. With the default namespace, the effective
-default file is `./.openreceive/default.sqlite3`.
+SQLite storage. The default file is `./.openreceive/default.sqlite3`, or
+`./.openreceive/<namespace>.sqlite3` when you set `OPENRECEIVE_NAMESPACE`. For
+deployment, use Postgres anywhere; use SQLite only on a single durable
+mounted-volume instance.
 
 ```sh
-# Optional locally. Use Postgres for managed/serverless production.
+# Optional locally. Use Postgres for shared production deployments.
 OPENRECEIVE_STORE=postgres://user:pass@host:5432/appdb
-
-# Optional. Defaults to default.
 OPENRECEIVE_NAMESPACE=my_app
 ```
 
-The default SQLite file is fine for one local server or a raw single-machine
-host with durable disk. If more than one server or serverless instance can touch
-the same `OPENRECEIVE_NAMESPACE`, point all of them at one shared durable
-OpenReceive store. For production, use Postgres anywhere; use SQLite only on a
-single durable machine or a single PaaS instance with a real mounted volume.
-OpenReceive uses that store for invoice state only; your app keeps orders,
-carts, users, and fulfillment state in your own tables.
-
-Start the server only after `OPENRECEIVE_NWC` is set for that environment.
-For local setup, the default SQLite store is enough. For managed or shared
-production deployments, set `OPENRECEIVE_STORE=postgres://...` before checkout
-traffic reaches customers.
+OpenReceive stores invoice state only. Your app keeps orders, carts, users, and
+fulfillment state in your own tables.
 
 ## Server Object
-
-Each server example creates one server-only OpenReceive object:
 
 ```ts
 import { createOpenReceive } from "@openreceive/node";
 
 const openreceive = await createOpenReceive({
   onPaid: async ({ orderId }) => {
-    // Your app function, not OpenReceive.
     await markOrderPaidInYourApp(orderId);
-  },
+  }
 });
 ```
 
-OpenReceive calls `onPaid` after payment is verified. The hook can run more
-than once. `orderId` is guaranteed to be the unique app order key for this
-checkout, so use it for idempotent fulfillment. Most apps can ignore the invoice
-details in this hook; they are available only when you want extra audit or
-correlation data.
+`onPaid` runs after backend-verified settlement and may run more than once. Use
+`orderId` for idempotent fulfillment. When a cart changes and the customer pays
+an older checkout, fulfill from `order.paidCheckout`, not from the current cart.
 
-When you create a checkout from a fiat order total, pass both the decimal value
-and its server-side currency code, for example
-`{ currency: "USD", value: "0.25" }`. `fiat.currency` must be one of the
-`priceCurrencies` configured on `createOpenReceive`; do not infer it from
-browser locale or a global env var.
+## Create A Checkout
+
+```sh
+npm install @openreceive/node
+```
+
+```ts
+export async function createCheckoutForCart(user, cart) {
+  const order = await createOrderFromCart(user, cart);
+  const checkout = await openreceive.createCheckout({
+    orderId: order.uuid,
+    amount: {
+      fiat: {
+        currency: order.totalAmount.currency,
+        value: order.totalAmount.value
+      }
+    },
+    memo: `Order ${order.number}`,
+    expiresInSeconds: 600
+  });
+
+  return { order, checkout };
+}
+```
+
+Call this function from the server-side entry point your app already owns.
+OpenReceive does not choose that boundary.
 
 For Bitcoin-denominated products, skip price feeds and pass a direct amount:
-`{ amount: { btc: { currency: "BTC", value: "0.005" } } }` or
-`{ amount: { sats: "7000" } }`. OpenReceive converts those
-amounts with integer math and never asks a BTC fiat price provider for `BTC` or
-`SATS`.
+`{ amount: { btc: { currency: "BTC", value: "0.005" } } }`,
+`{ amount: { sats: "7000" } }`, or `{ amount: { msats: "7000000" } }`.
 
-## Express
-
-Install Express, the Node package, and your frontend packages:
-
-```sh
-npm install express @openreceive/node @openreceive/browser @openreceive/react
-```
-
-Define routes in the same Express app that owns your checkout. Your app creates
-the order, computes the trusted total, calls OpenReceive to create the checkout,
-and returns both order and display-safe checkout data:
+## Refresh Status
 
 ```ts
-// server/index.ts
-import express from "express";
-import {
-  createOpenReceive,
-  toOpenReceiveHttpCheckout,
-  toOpenReceiveHttpOrder,
-} from "@openreceive/node";
+export async function refreshOrderStatus(orderId) {
+  const order = await openreceive.getOrder({ orderId });
 
-const app = express();
-app.use(express.json());
-
-const openreceive = await createOpenReceive({
-  onPaid: async ({ orderId }) => {
-    // Your app function, not OpenReceive.
-    await markOrderPaidInYourApp(orderId);
-  },
-});
-
-app.post("/create_order", async (req, res, next) => {
-  try {
-    // Your app function. Create and validate the order before calling OpenReceive.
-    const order = await createOrderFromCart(req.user, req.body.cart);
-    const checkout = toOpenReceiveHttpCheckout(
-      await openreceive.createCheckout({
-        orderId: order.uuid,
-        amount: {
-          fiat: {
-            currency: order.totalAmount.currency,
-            value: order.totalAmount.value,
-          },
-        },
-        memo: `Order ${order.number}`,
-        expiresInSeconds: 600,
-      }),
-    );
-
-    res.status(201).json({ order, checkout });
-  } catch (error) {
-    sendCheckoutError(res, next, error);
-  }
-});
-
-app.post("/order_status", async (req, res, next) => {
-  try {
-    const orderStatus = toOpenReceiveHttpOrder(
-      await openreceive.getOrder({ orderId: req.body.order_id }),
-    );
-
-    res.status(200).json({
-      ...orderStatus,
-      order_status:
-        orderStatus.status === "paid" ? "settled" : "pending_payment",
-    });
-  } catch (error) {
-    sendCheckoutError(res, next, error);
-  }
-});
-
-function sendCheckoutError(res, next, error) {
-  if (isCheckoutHttpError(error)) {
-    res.status(error.status).json(error.body);
-    return;
-  }
-  next(error);
-}
-
-function isCheckoutHttpError(error) {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    Number.isInteger(error.status) &&
-    error.status >= 400 &&
-    error.status <= 599 &&
-    typeof error.body === "object" &&
-    error.body !== null
-  );
-}
-
-app.listen(3000);
-```
-
-Use your normal route names, sessions, CSRF, CORS, and authorization. The
-browser posts carts to your app route and renders `response.checkout`.
-
-## Next.js App Router
-
-Install the Node package plus your frontend package:
-
-```sh
-npm install @openreceive/node @openreceive/browser @openreceive/react
-```
-
-Create normal app route handlers and call the same service methods from your
-order controller:
-
-```ts
-// app/create_order/route.ts
-import {
-  createOpenReceive,
-  toOpenReceiveHttpCheckout,
-} from "@openreceive/node";
-
-export const runtime = "nodejs";
-
-const openreceiveReady = createOpenReceive({
-  onPaid: async ({ orderId }) => {
-    // Your app function, not OpenReceive.
-    await markOrderPaidInYourApp(orderId);
-  },
-});
-
-export async function POST(request: Request) {
-  const openreceive = await openreceiveReady;
-  try {
-    const body = await request.json();
-    // Your app function. Create and validate the order before calling OpenReceive.
-    const order = await createOrderFromCart(body.cart);
-    const checkout = toOpenReceiveHttpCheckout(
-      await openreceive.createCheckout({
-        orderId: order.uuid,
-        amount: {
-          fiat: {
-            currency: order.totalAmount.currency,
-            value: order.totalAmount.value,
-          },
-        },
-        memo: `Order ${order.number}`,
-        expiresInSeconds: 600,
-      }),
-    );
-
-    return Response.json({ order, checkout }, { status: 201 });
-  } catch (error) {
-    const response = checkoutErrorResponse(error);
-    if (response !== undefined) return response;
-    throw error;
-  }
-}
-
-function checkoutErrorResponse(error: unknown): Response | undefined {
-  if (!isCheckoutHttpError(error)) return undefined;
-  return Response.json(error.body, { status: error.status });
-}
-
-function isCheckoutHttpError(error: unknown): error is {
-  readonly status: number;
-  readonly body: Record<string, unknown>;
-} {
-  if (typeof error !== "object" || error === null) return false;
-  const candidate = error as {
-    readonly status?: unknown;
-    readonly body?: unknown;
+  return {
+    order,
+    checkout: order.paidCheckout ?? order.activeCheckout,
+    orderStatus: order.paid ? "paid" : "pending_payment"
   };
-  return (
-    Number.isInteger(candidate.status) &&
-    typeof candidate.status === "number" &&
-    candidate.status >= 400 &&
-    candidate.status <= 599 &&
-    typeof candidate.body === "object" &&
-    candidate.body !== null &&
-    !Array.isArray(candidate.body)
-  );
 }
 ```
 
-Add a sibling `app/order_status/route.ts` that calls
-`openreceive.getOrder({ orderId })` and returns your app's order status plus
-the display-safe checkout fields from `toOpenReceiveHttpOrder`.
-
-## Fastify
-
-Install Fastify and the Node package:
-
-```sh
-npm install fastify @openreceive/node
-```
-
-Define your checkout routes in Fastify and call OpenReceive methods inside your
-app's order actions:
-
-```ts
-// server/index.ts
-import Fastify from "fastify";
-import {
-  createOpenReceive,
-  toOpenReceiveHttpCheckout,
-  toOpenReceiveHttpOrder,
-} from "@openreceive/node";
-
-const app = Fastify();
-
-const openreceive = await createOpenReceive({
-  onPaid: async ({ orderId }) => {
-    // Your app function, not OpenReceive.
-    await markOrderPaidInYourApp(orderId);
-  },
-});
-
-function sendCheckoutError(reply, error) {
-  if (isCheckoutHttpError(error)) {
-    reply.code(error.status).send(error.body);
-    return true;
-  }
-  return false;
-}
-
-function isCheckoutHttpError(error) {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    Number.isInteger(error.status) &&
-    error.status >= 400 &&
-    error.status <= 599 &&
-    typeof error.body === "object" &&
-    error.body !== null
-  );
-}
-
-app.post("/create_order", async (request, reply) => {
-  try {
-    // Your app function. Create and validate the order before calling OpenReceive.
-    const order = await createOrderFromCart(request.body.cart);
-    const checkout = toOpenReceiveHttpCheckout(
-      await openreceive.createCheckout({
-        orderId: order.uuid,
-        amount: {
-          fiat: {
-            currency: order.totalAmount.currency,
-            value: order.totalAmount.value,
-          },
-        },
-        memo: `Order ${order.number}`,
-        expiresInSeconds: 600,
-      }),
-    );
-    reply.code(201).send({ order, checkout });
-  } catch (error) {
-    if (!sendCheckoutError(reply, error)) throw error;
-  }
-});
-
-app.post("/order_status", async (request, reply) => {
-  try {
-    const orderStatus = toOpenReceiveHttpOrder(
-      await openreceive.getOrder({ orderId: request.body.order_id }),
-    );
-    reply.send({
-      ...orderStatus,
-      order_status:
-        orderStatus.status === "paid" ? "settled" : "pending_payment",
-    });
-  } catch (error) {
-    if (!sendCheckoutError(reply, error)) throw error;
-  }
-});
-
-await app.listen({ port: 3000 });
-```
-
-## Browser Helper
-
-Install the browser package in your frontend app:
-
-```sh
-npm install @openreceive/browser
-```
-
-Create an order through your app and keep the checkout data returned by the
-server:
-
-```ts
-const response = await fetch("/create_order", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ cart }),
-});
-
-const { order, checkout } = await response.json();
-```
-
-Your backend should use a stable order UUID as the OpenReceive `orderId`.
-Reusing the same order UUID with the same amount continues the current checkout.
-Reusing it with a different amount creates a new checkout and supersedes the old
-open checkout.
+`getOrder` performs one bounded backend settlement refresh for unpaid,
+unexpired invoices on that order. It uses NWC `list_transactions`, checks at
+most 50 wallet transactions in one call, and does not use `lookup_invoice`.
 
 ## React
 
-```sh
-npm install @openreceive/browser @openreceive/react
-```
+Pass the checkout returned by your server function to the React component:
 
 ```tsx
 import { Checkout } from "@openreceive/react";
-import "@openreceive/react/styles.css";
 
-const response = await fetch("/create_order", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ cart }),
-});
-const { checkout } = await response.json();
-
-<Checkout
-  invoice={checkout}
-  statusUrl="/order_status"
-  onSettled={() => showThankYou()}
-/>;
+export function CheckoutView({ checkout }) {
+  return (
+    <Checkout
+      invoice={checkout}
+      refreshStatus={async (state) => {
+        const next = await refreshOrderStatus(state.order_id);
+        return next.checkout ?? {};
+      }}
+      onSettled={() => reloadOrder()}
+      onStartOver={() => restartCheckout()}
+    />
+  );
+}
 ```
 
-`onSettled` is a UI hint. Unlock the order from the backend settlement hook.
-If your app only wants QR/copy/provider guidance and has no frontend status
-route, render the checkout without polling:
-
-```tsx
-<Checkout invoice={checkout} polling={false} />
-```
+`refreshStatus` is your own data-refresh function. You can also omit it and
+refresh order state another way.
 
 ## Vue
 
-```sh
-npm install @openreceive/browser @openreceive/vue
-```
+```ts
+import {
+  createOpenReceiveVueCheckoutBinding
+} from "@openreceive/vue";
 
-```vue
-<script setup lang="ts">
-import Checkout from "@openreceive/vue/checkout.vue";
-import "@openreceive/vue/styles.css";
-
-const response = await fetch("/create_order", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ cart }),
+const binding = createOpenReceiveVueCheckoutBinding(checkout, {
+  refreshStatus: async (state) => {
+    const next = await refreshOrderStatus(state.order_id);
+    return next.checkout ?? {};
+  }
 });
-const { checkout } = await response.json();
-</script>
-
-<template>
-  <Checkout
-    :snapshot="checkout"
-    :options="{ statusUrl: '/order_status', onSettled: showThankYou }"
-  />
-</template>
 ```
 
 ## Svelte
 
-```sh
-npm install @openreceive/browser @openreceive/svelte
-```
+```ts
+import {
+  createOpenReceiveSvelteCheckoutBinding
+} from "@openreceive/svelte";
 
-```svelte
-<script lang="ts">
-  import Checkout from "@openreceive/svelte/checkout.svelte";
-  import "@openreceive/svelte/styles.css";
-
-  const response = await fetch("/create_order", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ cart })
-  });
-  const { checkout } = await response.json();
-</script>
-
-<Checkout
-  snapshot={checkout}
-  options={{ statusUrl: "/order_status", onSettled: showThankYou }}
-/>
+const binding = createOpenReceiveSvelteCheckoutBinding(checkout, {
+  refreshStatus: async (state) => {
+    const next = await refreshOrderStatus(state.order_id);
+    return next.checkout ?? {};
+  }
+});
 ```
 
 ## Angular
 
-```sh
-npm install @openreceive/browser @openreceive/angular @angular/core
-```
-
-Angular apps can use the package's standalone checkout component:
-
 ```ts
-import { Component } from "@angular/core";
-import { CheckoutComponent } from "@openreceive/angular/checkout-component";
-import "@openreceive/angular/styles.css";
+import {
+  createOpenReceiveAngularCheckoutBinding
+} from "@openreceive/angular";
+import "@openreceive/angular/checkout-component";
 
-@Component({
-  selector: "app-checkout",
-  standalone: true,
-  imports: [CheckoutComponent],
-  template: `
-    <openreceive-angular-checkout
-      [snapshot]="checkout"
-      [options]="{
-        statusUrl: '/order_status',
-        onSettled: showThankYou,
-      }"
-    />
-  `,
-})
-export class AppCheckoutComponent {
-  checkout;
-  showThankYou = () => {
-    // UI hint only. Unlock from the server onPaid hook.
-  };
-}
+const binding = createOpenReceiveAngularCheckoutBinding(checkout, {
+  refreshStatus: async (state) => {
+    const next = await refreshOrderStatus(state.order_id);
+    return next.checkout ?? {};
+  }
+});
 ```
 
-## Status Refresh
+## Optional Scheduler
 
-Browser payment-status checks call your app route. OpenReceive performs at most
-one bounded wallet page during each server-side status refresh. If no browser or
-app request asks for status, no settlement scan runs.
+Notifications are passive hints. Backend status refresh is the settlement
+authority. If your app wants background reconciliation, call `getOrder` for
+unpaid order ids from your own worker. OpenReceive uses bounded
+`list_transactions` scans and never asks the wallet for send-payment methods.
