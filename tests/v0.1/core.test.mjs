@@ -56,7 +56,6 @@ import {
   formatOpenReceivePaymentHashLabel,
   CheckoutWatcher,
   createOpenReceiveThemeModel,
-  mergeCheckoutSnapshot,
   openReceiveCheckoutElementStyles,
   openReceiveCountryMapRegions,
   openReceiveThemeToggleElementStyles,
@@ -82,14 +81,16 @@ const NWC_URI =
   "&lud16=demo%40example.com";
 
 function seedRecord(overrides = {}) {
-  const rowOverrides = overrides.row ?? {};
+  const rowOverrides = overrides.row === undefined ? {} : overrides.row;
   const flatOverrides = { ...overrides };
   delete flatOverrides.row;
   delete flatOverrides.rev;
   const invoiceId = rowOverrides.invoice_id ?? flatOverrides.invoice_id ?? "or_inv_test";
+  const flatMetadata = flatOverrides.metadata === undefined ? {} : flatOverrides.metadata;
+  const rowMetadata = rowOverrides.metadata === undefined ? {} : rowOverrides.metadata;
   const metadataOverrides = {
-    ...(flatOverrides.metadata ?? {}),
-    ...(rowOverrides.metadata ?? {}),
+    ...flatMetadata,
+    ...rowMetadata,
   };
   return {
     rev: overrides.rev ?? 0,
@@ -683,7 +684,7 @@ test("browser owns checkout display-safe labels", () => {
     transaction_state: "pending",
   });
 
-  assert.equal(model.lightningUri, "lightning:lnbc-display");
+  assert.equal(model.lightning_uri, "lightning:lnbc-display");
   assert.equal(model.amountLabel, "200 sats");
   assert.equal(model.fiatLabel, "$0.05");
   assert.equal(model.paymentHashLabel, "aaaaaaaa...aaaaaaaa");
@@ -721,18 +722,18 @@ test("browser owns checkout display data to state conversion", () => {
     now: 1940,
   });
   assert.equal(state.invoice_id, "or_inv_display_state");
-  assert.equal(state.lightningUri, "lightning:lnbc-display-state");
+  assert.equal(state.lightning_uri, "lightning:lnbc-display-state");
   assert.equal(state.amount_msats, 21000);
   assert.equal(state.phase, "settled");
-  assert.equal(state.expiresInSeconds, 60);
+  assert.equal(state.expires_in_seconds, 60);
   assert.equal(state.settled_at, 1999);
   const defaultClockState = createCheckoutStateFromDisplayData({
     ...displayData,
     expires_at: Math.floor(Date.now() / 1000) + 30,
   });
-  assert.equal(defaultClockState.expiresInSeconds !== undefined, true);
-  assert.equal(defaultClockState.expiresInSeconds <= 30, true);
-  assert.equal(defaultClockState.expiresInSeconds >= 0, true);
+  assert.equal(defaultClockState.expires_in_seconds !== undefined, true);
+  assert.equal(defaultClockState.expires_in_seconds <= 30, true);
+  assert.equal(defaultClockState.expires_in_seconds >= 0, true);
 
   assert.throws(
     () =>
@@ -765,7 +766,7 @@ test("browser owns checkout payment status display model", () => {
   assert.equal(status.title, "Waiting for payment");
   assert.equal(status.detail, "Keep this page open while we verify settlement.");
   assert.equal(status.countdownPrefix, "Invoice expires in");
-  assert.equal(status.expiresInSeconds, 65);
+  assert.equal(status.expires_in_seconds, 65);
   assert.equal(status.countdownLabel, "1:05");
 
   const settled = createCheckoutStatusModel({
@@ -775,7 +776,7 @@ test("browser owns checkout payment status display model", () => {
     phase: "settled",
     settled: true,
     terminal: false,
-    expiresInSeconds: undefined,
+    expires_in_seconds: undefined,
   });
   assert.equal(settled.waiting, false);
   assert.equal(settled.title, "Payment received");
@@ -784,14 +785,14 @@ test("browser owns checkout payment status display model", () => {
   const lightweight = createCheckoutStatusModel({
     phase: "expired",
     waiting: false,
-    expiresInSeconds: 0,
+    expires_in_seconds: 0,
   });
   assert.equal(lightweight.title, "Invoice expired");
   assert.equal(lightweight.countdownLabel, undefined);
 
   const zeroCountdown = createCheckoutStatusModel({
     ...state,
-    expiresInSeconds: 0,
+    expires_in_seconds: 0,
   });
   assert.equal(zeroCountdown.phase, "expired");
   assert.equal(zeroCountdown.waiting, false);
@@ -898,7 +899,7 @@ test("browser request checkout helper posts SDK-shaped data to an app-owned URL"
   const requests = [];
   const checkout = await requestCheckout({
     checkoutUrl: "/create_order",
-    orderId: "order-browser-create",
+    order_id: "order-browser-create",
     amount: {
       fiat: {
         currency: "USD",
@@ -906,24 +907,24 @@ test("browser request checkout helper posts SDK-shaped data to an app-owned URL"
       },
     },
     memo: "Browser helper invoice",
-    expiresInSeconds: 600,
+    expires_in_seconds: 600,
     fetch: async (url, init) => {
       requests.push({ url, init });
       return {
         ok: true,
         json: async () => ({
-          checkoutId: "or_chk_browser_create",
-          orderId: "order-browser-create",
+          checkout_id: "or_chk_browser_create",
+          order_id: "order-browser-create",
           status: "open",
-          amountMsats: 200000,
+          amount_msats: 200000,
           active: {
-            invoiceId: "or_inv_browser_create",
-            bolt11: "lnbc-browser-create",
-            paymentHash: PAYMENT_HASH,
-            amountMsats: 200000,
-            orderId: "order-browser-create",
-            transactionState: "pending",
-            workflowState: "invoice_created",
+            invoice_id: "or_inv_browser_create",
+            invoice: "lnbc-browser-create",
+            payment_hash: PAYMENT_HASH,
+            amount_msats: 200000,
+            order_id: "order-browser-create",
+            transaction_state: "pending",
+            workflow_state: "invoice_created",
           },
           invoices: [],
         }),
@@ -939,7 +940,7 @@ test("browser request checkout helper posts SDK-shaped data to an app-owned URL"
   assert.equal(requests[0].init.headers["Content-Type"], "application/json");
   assert.equal("Idempotency-Key" in requests[0].init.headers, false);
   assert.deepEqual(JSON.parse(requests[0].init.body), {
-    orderId: "order-browser-create",
+    order_id: "order-browser-create",
     amount: {
       fiat: {
         currency: "USD",
@@ -947,12 +948,12 @@ test("browser request checkout helper posts SDK-shaped data to an app-owned URL"
       },
     },
     memo: "Browser helper invoice",
-    expiresInSeconds: 600,
+    expires_in_seconds: 600,
   });
 
   await requestCheckout({
     checkoutUrl: (orderId) => `/checkout/${orderId}`,
-    orderId: "order-browser-btc",
+    order_id: "order-browser-btc",
     amount: {
       btc: {
         currency: "BTC",
@@ -984,7 +985,7 @@ test("browser request checkout helper posts SDK-shaped data to an app-owned URL"
   });
   assert.equal(requests[1].url, "/checkout/order-browser-btc");
   assert.deepEqual(JSON.parse(requests[1].init.body), {
-    orderId: "order-browser-btc",
+    order_id: "order-browser-btc",
     amount: {
       btc: {
         currency: "BTC",
@@ -997,20 +998,20 @@ test("browser request checkout helper posts SDK-shaped data to an app-owned URL"
     () =>
       requestCheckout({
         checkoutUrl: "/create_order",
-        orderId: "",
+        order_id: "",
         amount: { msats: 200000 },
         fetch: async () => ({
           ok: true,
           json: async () => ({}),
         }),
       }),
-    /orderId/,
+    /order_id/,
   );
   await assert.rejects(
     () =>
       requestCheckout({
         checkoutUrl: "/create_order",
-        orderId: "bad-nwc",
+        order_id: "bad-nwc",
         amount: { sats: 200 },
         memo: `nostr+walletconnect://${"a".repeat(64)}?secret=${"b".repeat(64)}`,
         fetch: async () => ({
@@ -1024,7 +1025,7 @@ test("browser request checkout helper posts SDK-shaped data to an app-owned URL"
     () =>
       requestCheckout({
         checkoutUrl: "/create_order",
-        orderId: "server-error",
+        order_id: "server-error",
         amount: { sats: 200 },
         fetch: async () => ({
           ok: false,
@@ -1049,7 +1050,7 @@ test("browser status fetcher owns display-safe status POST shape", async () => {
           order_id: "order-status",
           status: "paid",
           paid: true,
-          paid_checkout: checkoutSnapshot(
+          display_checkout: checkoutSnapshot(
             {
               invoice_id: "or_inv_status",
               invoice: "lnbc-status",
@@ -1071,20 +1072,7 @@ test("browser status fetcher owns display-safe status POST shape", async () => {
     },
   });
 
-  const body = await refreshStatus({
-    checkout_id: "or_chk_status",
-    order_id: "order-status",
-    invoice_id: "or_inv_status",
-    invoice: "lnbc-status",
-    lightningUri: "lightning:lnbc-status",
-    payment_hash: PAYMENT_HASH,
-    transaction_state: "pending",
-    workflow_state: "invoice_created",
-    phase: "pending",
-    settled: false,
-    terminal: false,
-    paid: false,
-  });
+  const body = await refreshStatus("order-status");
 
   assert.equal(body.checkout_id, "or_chk_status");
   assert.equal(body.status, "paid");
@@ -1108,20 +1096,7 @@ test("browser status fetcher owns display-safe status POST shape", async () => {
   });
   await assert.rejects(
     () =>
-      failingStatus({
-        checkout_id: "or_chk_status",
-        order_id: "order-status",
-        invoice_id: "or_inv_status",
-        invoice: "lnbc-status",
-        lightningUri: "lightning:lnbc-status",
-        payment_hash: PAYMENT_HASH,
-        transaction_state: "pending",
-        workflow_state: "invoice_created",
-        phase: "pending",
-        settled: false,
-        terminal: false,
-        paid: false,
-      }),
+      failingStatus("order-status"),
     /Invoice not found/,
   );
 });
@@ -1142,14 +1117,12 @@ test("browser checkout state ignores passive event and route URLs", () => {
     { logger, now: 1000 },
   );
 
-  assert.equal(state.lightningUri, "lightning:lnbc-browser");
+  assert.equal(state.lightning_uri, "lightning:lnbc-browser");
   assert.equal(state.phase, "invoice_created");
-  assert.equal(state.expiresInSeconds, 30);
+  assert.equal(state.expires_in_seconds, 30);
   assert.equal(state.terminal, false);
   assert.equal("routes_url" in state, false);
   assert.equal("events_url" in state, false);
-  const snapshot = mergeCheckoutSnapshot(state, {});
-  assert.equal("checkout" in snapshot, false);
   assert.deepEqual(
     logs.map((entry) => entry.event),
     ["checkout.state.created"],
@@ -1187,21 +1160,21 @@ test("browser checkout watcher owns countdown and status refresh polling", async
       clearedTimers.push(id);
       timers.delete(id);
     },
-    refreshStatus: async (state) => {
+    refreshStatus: async (order_id) => {
       statusCalls += 1;
-      assert.equal(state.invoice_id, "or_inv_watch");
+      assert.equal(order_id, "order_or_inv_watch");
       return checkoutSnapshot(
         {
-          invoice_id: state.invoice_id,
-          invoice: state.invoice,
-          payment_hash: state.payment_hash,
+          invoice_id: "or_inv_watch",
+          invoice: "lnbc-watch",
+          payment_hash: PAYMENT_HASH,
           transaction_state: "settled",
           workflow_state: "settlement_action_pending",
           settled_at: 1002,
         },
         {
-          checkout_id: state.checkout_id,
-          order_id: state.order_id,
+          checkout_id: "or_chk_or_inv_watch",
+          order_id,
           status: "paid",
           paid_at: 1002,
         },
@@ -1213,7 +1186,7 @@ test("browser checkout watcher owns countdown and status refresh polling", async
   });
 
   const initial = watcher.start();
-  assert.equal(initial.expiresInSeconds, 10);
+  assert.equal(initial.expires_in_seconds, 10);
   assert.equal(shouldCheckoutShowWaiting(initial, { now }), true);
   const countdownTimer = [...timers].find(([, timer]) => timer.ms === 1000);
   const pollTimer = [...timers].find(([, timer]) => timer.ms === 3000);
@@ -1222,7 +1195,7 @@ test("browser checkout watcher owns countdown and status refresh polling", async
 
   now = 1003;
   countdownTimer[1].callback();
-  assert.equal(states.at(-1).expiresInSeconds, 7);
+  assert.equal(states.at(-1).expires_in_seconds, 7);
 
   pollTimer[1].callback();
   await Promise.resolve();
@@ -1251,22 +1224,22 @@ test("browser checkout controller owns lifecycle actions for framework adapters"
       transaction_state: "pending",
       workflow_state: "invoice_created",
     }),
-    refreshStatus: async (state) => {
+    refreshStatus: async (order_id) => {
       statusCalls += 1;
-      assert.equal(state.invoice_id, "or_inv_controller");
+      assert.equal(order_id, "order_or_inv_controller");
       return checkoutSnapshot(
         {
-          invoice_id: state.invoice_id,
-          invoice: state.invoice,
-          payment_hash: state.payment_hash,
-          amount_msats: state.amount_msats,
+          invoice_id: "or_inv_controller",
+          invoice: "lnbc-controller",
+          payment_hash: PAYMENT_HASH,
+          amount_msats: 200000,
           transaction_state: "settled",
           workflow_state: "settlement_action_pending",
           settled_at: 1042,
         },
         {
-          checkout_id: state.checkout_id,
-          order_id: state.order_id,
+          checkout_id: "or_chk_or_inv_controller",
+          order_id,
           status: "paid",
           paid_at: 1042,
         },

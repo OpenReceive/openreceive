@@ -2,7 +2,7 @@ import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type {
-  Invoice
+  Checkout as OpenReceiveCheckout
 } from "@openreceive/browser";
 import {
   Checkout,
@@ -52,7 +52,7 @@ interface DemoOrder {
     readonly sticker: string;
     readonly quantity: number;
   }[];
-  readonly totalAmount: {
+  readonly total_amount: {
     readonly currency: string;
     readonly value: string;
   };
@@ -60,7 +60,7 @@ interface DemoOrder {
 
 interface CreateOrderResponse {
   readonly order: DemoOrder;
-  readonly checkout: Invoice;
+  readonly checkout: OpenReceiveCheckout;
 }
 
 function App(): React.ReactElement {
@@ -69,12 +69,12 @@ function App(): React.ReactElement {
   const [currency, setCurrency] = useState("USD");
   const [cart, setCart] = useState<Record<string, number>>({});
   const [order, setOrder] = useState<DemoOrder | null>(null);
-  const [invoice, setInvoice] = useState<Invoice | null>(null);
+  const [checkout, setCheckout] = useState<OpenReceiveCheckout | null>(null);
   const [purchasedFruit, setPurchasedFruit] = useState<Fruit | null>(null);
   const [stickerModalOpen, setStickerModalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
-  const completedInvoiceRef = useRef("");
+  const completedCheckoutRef = useRef("");
   const selectedFruit = fruits.find((fruit) => fruit.id === fruitId) ?? fruits[0];
   const createCheckoutLabel =
     selectedFruit === undefined
@@ -88,14 +88,14 @@ function App(): React.ReactElement {
   const cartQuantity = cartItems.reduce((total, item) => total + item.quantity, 0);
 
   const onSettled = useCallback(() => {
-    if (invoice !== null && completedInvoiceRef.current !== invoice.order_id) {
-      completedInvoiceRef.current = invoice.order_id;
+    if (checkout !== null && completedCheckoutRef.current !== checkout.order_id) {
+      completedCheckoutRef.current = checkout.order_id;
       setOrder((current) => current === null
         ? current
         : { ...current, status: "paid" });
       setStickerModalOpen(true);
     }
-  }, [invoice]);
+  }, [checkout]);
 
   function addSelectedFruitToCart() {
     if (selectedFruit === undefined) return;
@@ -121,7 +121,7 @@ function App(): React.ReactElement {
     setCreating(true);
     setError("");
     setStickerModalOpen(false);
-    completedInvoiceRef.current = "";
+    completedCheckoutRef.current = "";
 
     try {
       const response = await fetch("/create_order", {
@@ -144,7 +144,7 @@ function App(): React.ReactElement {
       }
 
       setOrder(body.order);
-      setInvoice(body.checkout);
+      setCheckout(body.checkout);
       setPurchasedFruit(cartItems[0]?.fruit ?? null);
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -157,12 +157,12 @@ function App(): React.ReactElement {
     setFruitId(initialFruitId);
     setCart({});
     setOrder(null);
-    setInvoice(null);
+    setCheckout(null);
     setPurchasedFruit(null);
     setStickerModalOpen(false);
     setCreating(false);
     setError("");
-    completedInvoiceRef.current = "";
+    completedCheckoutRef.current = "";
   }
 
   return (
@@ -208,7 +208,7 @@ function App(): React.ReactElement {
           </select>
         </label>
 
-        {invoice === null ? (
+        {checkout === null ? (
           <>
             <div className="fruit-grid">
               {fruits.map((fruit) => (
@@ -270,7 +270,7 @@ function App(): React.ReactElement {
               <section className="cart" aria-label="Order">
                 <div className="cart-heading">
                   <strong>Order</strong>
-                  <span>{formatHelloFruitFiat(order.totalAmount)}</span>
+                  <span>{formatHelloFruitFiat(order.total_amount)}</span>
                 </div>
                 {order.items.map((item) => (
                   <div className="cart-row" key={item.product_id}>
@@ -292,10 +292,10 @@ function App(): React.ReactElement {
           </>
         )}
 
-        {invoice === null ? null : (
+        {checkout === null ? null : (
           <FrameworkCheckout
             framework={framework}
-            invoice={invoice}
+            checkout={checkout}
             onError={(cause) => {
               setError(cause instanceof Error ? cause.message : String(cause));
             }}
@@ -342,7 +342,7 @@ function App(): React.ReactElement {
 
 interface FrameworkCheckoutProps {
   readonly framework: CheckoutFramework;
-  readonly invoice: Invoice;
+  readonly checkout: OpenReceiveCheckout;
   readonly onError: (error: unknown) => void;
   readonly onSettled: () => void;
   readonly onStartOver: () => void;
@@ -350,7 +350,7 @@ interface FrameworkCheckoutProps {
 
 function FrameworkCheckout({
   framework,
-  invoice,
+  checkout,
   onError,
   onSettled,
   onStartOver
@@ -384,8 +384,15 @@ function FrameworkCheckout({
         if (canceled) return;
 
         const app = createApp(VueCheckout, {
-          snapshot: invoice,
-          options
+          checkout,
+          statusUrl: options.statusUrl,
+          onSettled: options.onSettled,
+          onStartOver,
+          options: {
+            rootSelector: options.rootSelector,
+            defaultTheme: options.defaultTheme,
+            onError: options.onError
+          }
         });
         app.mount(mountTarget);
         cleanup = () => app.unmount();
@@ -414,8 +421,15 @@ function FrameworkCheckout({
           environmentInjector: application.injector,
           hostElement: mountTarget
         });
-        component.setInput("snapshot", invoice);
-        component.setInput("options", options);
+        component.setInput("checkout", checkout);
+        component.setInput("statusUrl", options.statusUrl);
+        component.setInput("onSettled", options.onSettled);
+        component.setInput("onStartOver", onStartOver);
+        component.setInput("options", {
+          rootSelector: options.rootSelector,
+          defaultTheme: options.defaultTheme,
+          onError: options.onError
+        });
         application.attachView(component.hostView);
         component.changeDetectorRef.detectChanges();
         cleanup = () => {
@@ -435,8 +449,15 @@ function FrameworkCheckout({
         const component = mount(SvelteCheckout, {
           target: mountTarget,
           props: {
-            snapshot: invoice,
-            options
+            checkout,
+            statusUrl: options.statusUrl,
+            onSettled: options.onSettled,
+            onStartOver,
+            options: {
+              rootSelector: options.rootSelector,
+              defaultTheme: options.defaultTheme,
+              onError: options.onError
+            }
           }
         });
         cleanup = () => {
@@ -452,13 +473,13 @@ function FrameworkCheckout({
       cleanup();
       host.replaceChildren();
     };
-  }, [framework, invoice, onError, onSettled]);
+  }, [framework, checkout, onError, onSettled, onStartOver]);
 
   if (framework === "react") {
     return (
       <Checkout
         className="demo-checkout"
-        invoice={invoice}
+        checkout={checkout}
         statusUrl="/order_status"
         logger={logOpenReceive}
         onError={onError}

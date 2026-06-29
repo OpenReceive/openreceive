@@ -34,6 +34,7 @@ const DOCS_LINK = "See docs/guides/storage.md.";
 const POSTGRES_STEP = "Set OPENRECEIVE_STORE=postgres://USER:PASS@HOST:5432/DB.";
 const MOUNTED_SQLITE_STEP =
   "Or set OPENRECEIVE_STORE=sqlite:/absolute/mounted/volume/openreceive.sqlite3 on a single instance with durable mounted storage.";
+const EMPTY_ENV: Env = Object.freeze({});
 
 export function policyForOpenReceivePlatform(id: string): OpenReceiveSqlitePolicy {
   switch (id) {
@@ -68,7 +69,7 @@ export function policyForOpenReceivePlatform(id: string): OpenReceiveSqlitePolic
 }
 
 export function detectOpenReceivePlatform(
-  env: Env = globalThis.process?.env ?? {}
+  env: Env = globalThis.process?.env ?? EMPTY_ENV
 ): OpenReceiveDetectedPlatform {
   const mk = (id: string, source: string): OpenReceiveDetectedPlatform => ({
     id,
@@ -113,7 +114,7 @@ export function classifyOpenReceiveStore(uri: string | undefined): OpenReceiveSt
   return "other";
 }
 
-export function isOpenReceiveProductionEnv(env: Env = globalThis.process?.env ?? {}): boolean {
+export function isOpenReceiveProductionEnv(env: Env = globalThis.process?.env ?? EMPTY_ENV): boolean {
   return ["NODE_ENV", "VERCEL_ENV", "RAILS_ENV", "RACK_ENV", "APP_ENV"]
     .some((key) => env[key] === "production");
 }
@@ -131,7 +132,7 @@ export function isAbsoluteDurableSqlitePath(uri: string | undefined): boolean {
 }
 
 export function assertOpenReceiveStoreConfiguration(input: StoreConfigurationInput = {}): void {
-  const env = input.env ?? globalThis.process?.env ?? {};
+  const env = input.env ?? globalThis.process?.env ?? EMPTY_ENV;
   const platform = detectOpenReceivePlatform(env);
   const detected = platform.id !== "unknown";
 

@@ -35,6 +35,8 @@ export interface HelloFruitDemoMetadataInput {
 export function createHelloFruitDemoMetadata(
   input: HelloFruitDemoMetadataInput
 ): HelloFruitDemoMetadata {
+  const packageVersions = input.packages === undefined ? {} : input.packages;
+
   return {
     demo: {
       id: input.id,
@@ -49,7 +51,7 @@ export function createHelloFruitDemoMetadata(
     packages: {
       "@openreceive/core": "0.1.0",
       "@openreceive/node": "0.1.0",
-      ...(input.packages ?? {})
+      ...packageVersions
     }
   };
 }

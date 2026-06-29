@@ -37,13 +37,13 @@ export interface HelloFruitDemoOrder {
   readonly uuid: string;
   readonly status: "pending_payment" | "paid";
   readonly items: readonly HelloFruitOrderItem[];
-  readonly totalAmount: HelloFruitFiatAmount;
+  readonly total_amount: HelloFruitFiatAmount;
 }
 
 export interface HelloFruitCreateOrderResult {
   readonly order: HelloFruitDemoOrder;
   readonly invoiceRequest: {
-    readonly orderId: string;
+    readonly order_id: string;
     readonly amount:
       | {
         readonly btc: {
@@ -54,7 +54,7 @@ export interface HelloFruitCreateOrderResult {
       | { readonly sats: string }
       | { readonly fiat: HelloFruitFiatAmount };
     readonly memo: string;
-    readonly expiresInSeconds: number;
+    readonly expires_in_seconds: number;
   };
 }
 
@@ -113,20 +113,20 @@ export function createHelloFruitCreateOrderResult(
     uuid,
     status: "pending_payment",
     items,
-    totalAmount
+    total_amount: totalAmount
   };
   const amount = createOpenReceiveCheckoutAmount(totalAmount, currency);
 
   return {
     order,
     invoiceRequest: {
-      orderId: uuid,
+      order_id: uuid,
       amount,
       memo: createHelloFruitOrderInvoiceDescription(
         items.map((item) => `${item.name} x${item.quantity}`),
         { demoName: options.demoName }
       ),
-      expiresInSeconds: options.invoiceExpirySeconds
+      expires_in_seconds: options.invoiceExpirySeconds
     }
   };
 }
@@ -150,24 +150,21 @@ function createOpenReceiveCheckoutAmount(
 }
 
 export function createHelloFruitOrderStatus(input: {
-  readonly orderId?: unknown;
   readonly order_id?: unknown;
   readonly paid?: unknown;
   readonly status?: unknown;
-  readonly paidAt?: unknown;
+  readonly paid_at?: unknown;
   readonly settled_at?: unknown;
   readonly transaction_state?: unknown;
   readonly state?: unknown;
 }): HelloFruitOrderStatus {
   const orderId =
-    typeof input.orderId === "string" && input.orderId.length > 0
-      ? input.orderId
-      : typeof input.order_id === "string" && input.order_id.length > 0
+    typeof input.order_id === "string" && input.order_id.length > 0
       ? input.order_id
       : "unknown";
   const paid = input.paid === true ||
     input.status === "paid" ||
-    typeof input.paidAt === "number" ||
+    typeof input.paid_at === "number" ||
     typeof input.settled_at === "number" ||
     input.transaction_state === "settled" ||
     input.state === "settled";

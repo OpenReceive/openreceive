@@ -182,11 +182,11 @@ function asRequestBody(value: unknown): Record<string, unknown> {
 }
 
 function createStatusRequest(body: Record<string, unknown>): {
-  readonly orderId: string;
+  readonly order_id: string;
 } {
   const orderId = body.order_id;
   if (typeof orderId !== "string" || orderId.length === 0) {
     throw new HelloFruitDemoOrderError("order_id is required.");
   }
-  return { orderId };
+  return { order_id: orderId };
 }

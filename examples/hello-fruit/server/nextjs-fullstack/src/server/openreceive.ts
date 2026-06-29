@@ -223,7 +223,7 @@ async function getOpenReceive(
 
 export async function createHelloFruitOpenReceive(
   connectionString = readRequiredHelloFruitNwcConnectionString(),
-  overrides: HelloFruitOpenReceiveTestOverrides = testOverrides ?? {}
+  overrides: HelloFruitOpenReceiveTestOverrides = testOverrides === undefined ? {} : testOverrides
 ) {
   const store = overrides.store ?? await createHelloFruitOpenReceiveKvStore({
     demoId: DEMO_ID
@@ -246,7 +246,7 @@ export async function createHelloFruitOpenReceive(
 }
 
 function createStatusRequest(body: Record<string, unknown>): {
-  readonly orderId: string;
+  readonly order_id: string;
 } {
   const orderId = body.order_id;
   if (typeof orderId !== "string" || orderId.length === 0) {
@@ -255,7 +255,7 @@ function createStatusRequest(body: Record<string, unknown>): {
       message: "order_id is required."
     });
   }
-  return { orderId };
+  return { order_id: orderId };
 }
 
 async function readJsonBody(request: Request): Promise<Record<string, unknown>> {

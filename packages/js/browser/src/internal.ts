@@ -371,7 +371,7 @@ export interface CheckoutDisplayData {
 }
 
 export interface CheckoutDisplayModel extends CheckoutDisplayData {
-  readonly lightningUri: string;
+  readonly lightning_uri: string;
   readonly amountLabel?: string;
   readonly fiatLabel?: string;
   readonly paymentHashLabel?: string;
@@ -448,7 +448,7 @@ export interface CheckoutShellOptions
 }
 
 export interface OpenReceiveCheckoutProps extends CheckoutElementEventHandlers {
-  readonly invoice: CheckoutSnapshot;
+  readonly checkout: CheckoutSnapshot;
   readonly status?: Status;
   readonly providers?: readonly OpenReceiveWizardProviderDisplay[];
   readonly theme?: OpenReceiveThemePreference;
@@ -514,14 +514,14 @@ export interface CheckoutState {
   readonly order_id: string;
   readonly invoice_id: string;
   readonly invoice: string;
-  readonly lightningUri: string;
+  readonly lightning_uri: string;
   readonly payment_hash?: string;
   readonly amount_msats?: number;
   readonly fiat_quote?: CheckoutInvoiceSnapshot["fiat_quote"];
   readonly transaction_state: string;
   readonly workflow_state: string;
   readonly expires_at?: number;
-  readonly expiresInSeconds?: number;
+  readonly expires_in_seconds?: number;
   readonly phase: CheckoutPhase;
   readonly settled: boolean;
   readonly terminal: boolean;
@@ -532,7 +532,7 @@ export interface CheckoutState {
 export interface CheckoutStatusModelInput {
   readonly phase?: CheckoutPhase;
   readonly waiting?: boolean;
-  readonly expiresInSeconds?: number;
+  readonly expires_in_seconds?: number;
 }
 
 export interface CheckoutStatusModel {
@@ -541,11 +541,11 @@ export interface CheckoutStatusModel {
   readonly title: string;
   readonly detail: string;
   readonly countdownPrefix: string;
-  readonly expiresInSeconds?: number;
+  readonly expires_in_seconds?: number;
   readonly countdownLabel?: string;
 }
 
-export type CheckoutStatusRefresh = (state: CheckoutState) => Promise<Partial<CheckoutSnapshot>>;
+export type CheckoutStatusRefresh = (order_id: string) => Promise<CheckoutSnapshot | null>;
 
 export type RequestCheckoutAmount =
   | {
@@ -565,13 +565,13 @@ export type RequestCheckoutAmount =
 
 export interface RequestCheckoutOptions {
   readonly checkoutUrl: string | ((orderId: string) => string);
-  readonly orderId: string;
+  readonly order_id: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly headers?: Readonly<Record<string, string>>;
   readonly amount: RequestCheckoutAmount;
   readonly memo?: string;
-  readonly descriptionHash?: string;
-  readonly expiresInSeconds?: number;
+  readonly description_hash?: string;
+  readonly expires_in_seconds?: number;
 }
 
 export interface CreateOpenReceiveStatusFetcherOptions {
@@ -2598,7 +2598,7 @@ export function assertOpenReceiveDisplayInvoice(invoice: string): void {
 export function createCheckoutDisplayModel(data: CheckoutDisplayData): CheckoutDisplayModel {
   return {
     ...data,
-    lightningUri: createLightningUri(data.invoice),
+    lightning_uri: createLightningUri(data.invoice),
     ...(data.amount_msats === undefined
       ? {}
       : { amountLabel: formatOpenReceiveMsats(data.amount_msats) }),
@@ -2749,14 +2749,14 @@ export function createCheckoutShellModelFromProps(
   props: OpenReceiveCheckoutShellProps,
 ): CheckoutShellModel {
   const {
-    invoice,
+    checkout,
     status: _status,
     providers: _providers,
     theme,
     defaultTheme,
     ...options
   } = props;
-  return createCheckoutShellModel(invoice, {
+  return createCheckoutShellModel(checkout, {
     ...options,
     defaultTheme: defaultTheme ?? theme,
   });
@@ -2765,7 +2765,7 @@ export function createCheckoutShellModelFromProps(
 export function createCheckoutShellFromProps(
   props: OpenReceiveCheckoutShellProps & Omit<CreateCheckoutShellOptions, "root">,
 ): CheckoutShellElements {
-  return createCheckoutShell(props.invoice, {
+  return createCheckoutShell(props.checkout, {
     ...props,
     defaultTheme: props.defaultTheme ?? props.theme,
   });
@@ -2859,8 +2859,8 @@ export function createCheckoutShell(
 export async function requestCheckout(
   options: RequestCheckoutOptions,
 ): Promise<CheckoutSnapshot> {
-  if (options.orderId.length === 0) {
-    throw new Error("OpenReceive checkout creation requires an orderId.");
+  if (options.order_id.length === 0) {
+    throw new Error("OpenReceive checkout creation requires order_id.");
   }
 
   const fetcher = options.fetch ?? globalThis.fetch;
@@ -2884,21 +2884,24 @@ export async function requestCheckout(
   }
 
   const requestBody = {
-    orderId: options.orderId,
+    order_id: options.order_id,
     amount: structuredClone(options.amount),
     ...(options.memo === undefined ? {} : { memo: options.memo }),
-    ...(options.descriptionHash === undefined ? {} : { descriptionHash: options.descriptionHash }),
-    ...(options.expiresInSeconds === undefined
+    ...(options.description_hash === undefined
       ? {}
-      : { expiresInSeconds: options.expiresInSeconds }),
+      : { description_hash: options.description_hash }),
+    ...(options.expires_in_seconds === undefined
+      ? {}
+      : { expires_in_seconds: options.expires_in_seconds }),
   };
   assertOpenReceiveBrowserPayloadSafe(requestBody);
 
-  const response = await fetcher(resolveCheckoutUrl(options.checkoutUrl, options.orderId), {
+  const headers = options.headers === undefined ? {} : options.headers;
+  const response = await fetcher(resolveCheckoutUrl(options.checkoutUrl, options.order_id), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(options.headers ?? {}),
+      ...headers,
     },
     body: JSON.stringify(requestBody),
   });
@@ -2922,8 +2925,8 @@ export async function requestCheckout(
 export function createOpenReceiveStatusFetcher(
   options: CreateOpenReceiveStatusFetcherOptions,
 ): CheckoutStatusRefresh {
-  return async (state) => {
-    if (state.order_id.length === 0) {
+  return async (order_id) => {
+    if (order_id.length === 0) {
       throw new Error("OpenReceive status refresh requires order_id.");
     }
 
@@ -2932,14 +2935,15 @@ export function createOpenReceiveStatusFetcher(
       throw new Error("OpenReceive status refresh requires fetch.");
     }
 
-    const response = await fetcher(resolveStatusUrl(options.statusUrl, state.order_id), {
+    const headers = options.headers === undefined ? {} : options.headers;
+    const response = await fetcher(resolveStatusUrl(options.statusUrl, order_id), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(options.headers ?? {}),
+        ...headers,
       },
       body: JSON.stringify({
-        order_id: state.order_id,
+        order_id,
       }),
     });
     const body = await response.json();
@@ -2950,7 +2954,7 @@ export function createOpenReceiveStatusFetcher(
       );
     }
 
-    return checkoutSnapshotFromStatusBody(body, state);
+    return checkoutSnapshotFromStatusBody(body);
   };
 }
 
@@ -2975,54 +2979,41 @@ function checkoutSnapshotFromResponseBody(body: unknown): CheckoutSnapshot {
   const record = asRecord(body);
   const wrapped = asRecord(record.checkout);
   const candidate =
-    typeof wrapped.checkout_id === "string" || typeof wrapped.checkoutId === "string"
+    typeof wrapped.checkout_id === "string"
       ? wrapped
       : record;
   return normalizeCheckoutSnapshot(candidate);
 }
 
-function checkoutSnapshotFromStatusBody(
-  body: unknown,
-  current: CheckoutState,
-): Partial<CheckoutSnapshot> {
+function checkoutSnapshotFromStatusBody(body: unknown): CheckoutSnapshot | null {
   const record = asRecord(body);
-  if (typeof record.checkout_id === "string" || typeof record.checkoutId === "string") {
+  if (typeof record.checkout_id === "string") {
     return normalizeCheckoutSnapshot(record);
   }
 
-  const paidCheckout = asRecord(record.paid_checkout ?? record.paidCheckout);
-  if (typeof paidCheckout.checkout_id === "string" || typeof paidCheckout.checkoutId === "string") {
+  const displayCheckout = asRecord(record.display_checkout);
+  if (typeof displayCheckout.checkout_id === "string") {
+    return normalizeCheckoutSnapshot(displayCheckout);
+  }
+
+  const paidCheckout = asRecord(record.paid_checkout);
+  if (typeof paidCheckout.checkout_id === "string") {
     return normalizeCheckoutSnapshot(paidCheckout);
   }
 
-  const activeCheckout = asRecord(record.active_checkout ?? record.activeCheckout);
-  if (
-    typeof activeCheckout.checkout_id === "string" ||
-    typeof activeCheckout.checkoutId === "string"
-  ) {
+  const activeCheckout = asRecord(record.active_checkout);
+  if (typeof activeCheckout.checkout_id === "string") {
     return normalizeCheckoutSnapshot(activeCheckout);
   }
 
   if (Array.isArray(record.checkouts)) {
-    const matching = record.checkouts
-      .map(asRecord)
-      .find((checkout) => (checkout.checkout_id ?? checkout.checkoutId) === current.checkout_id);
-    if (matching !== undefined) {
-      return normalizeCheckoutSnapshot(matching);
-    }
     const first = asRecord(record.checkouts[0]);
-    if (typeof first.checkout_id === "string" || typeof first.checkoutId === "string") {
+    if (typeof first.checkout_id === "string") {
       return normalizeCheckoutSnapshot(first);
     }
   }
 
-  return normalizePartialCheckoutSnapshot(record);
-}
-
-function normalizePartialCheckoutSnapshot(input: Record<string, unknown>): Partial<CheckoutSnapshot> {
-  const checkoutId = optionalString(input.checkout_id ?? input.checkoutId);
-  if (checkoutId === undefined) return input as Partial<CheckoutSnapshot>;
-  return normalizeCheckoutSnapshot(input);
+  return null;
 }
 
 function normalizeCheckoutSnapshot(input: unknown): CheckoutSnapshot {
@@ -3030,66 +3021,58 @@ function normalizeCheckoutSnapshot(input: unknown): CheckoutSnapshot {
   const active = record.active === undefined ? undefined : normalizeCheckoutInvoiceSnapshot(record.active);
   const rawInvoices = Array.isArray(record.invoices) ? record.invoices : [];
   const invoices = rawInvoices.map(normalizeCheckoutInvoiceSnapshot);
-  const checkoutId = requiredString(record.checkout_id ?? record.checkoutId, "checkout_id");
-  const orderId = requiredString(record.order_id ?? record.orderId, "order_id");
-  const amountMsats = requiredSafeInteger(record.amount_msats ?? record.amountMsats, "amount_msats");
+  const checkoutId = requiredString(record.checkout_id, "checkout_id");
+  const orderId = requiredString(record.order_id, "order_id");
+  const amountMsats = requiredSafeInteger(record.amount_msats, "amount_msats");
   const status = requiredCheckoutStatus(record.status);
 
   return {
     checkout_id: checkoutId,
     order_id: orderId,
     status,
-    ...(optionalSafeInteger(record.paid_at ?? record.paidAt) === undefined
+    ...(optionalSafeInteger(record.paid_at) === undefined
       ? {}
-      : { paid_at: optionalSafeInteger(record.paid_at ?? record.paidAt) }),
+      : { paid_at: optionalSafeInteger(record.paid_at) }),
     amount_msats: amountMsats,
     ...(normalizeFiat(record.fiat) === undefined ? {} : { fiat: normalizeFiat(record.fiat) }),
     ...(active === undefined ? {} : { active }),
     invoices,
-    ...(optionalBoolean(record.wallet_scan_performed ?? record.walletScanPerformed) === undefined
+    ...(optionalBoolean(record.wallet_scan_performed) === undefined
       ? {}
-      : {
-          wallet_scan_performed: optionalBoolean(
-            record.wallet_scan_performed ?? record.walletScanPerformed,
-          ),
-        }),
-    ...(optionalSafeInteger(record.transactions_checked ?? record.transactionsChecked) === undefined
+      : { wallet_scan_performed: optionalBoolean(record.wallet_scan_performed) }),
+    ...(optionalSafeInteger(record.transactions_checked) === undefined
       ? {}
-      : {
-          transactions_checked: optionalSafeInteger(
-            record.transactions_checked ?? record.transactionsChecked,
-          ),
-        }),
+      : { transactions_checked: optionalSafeInteger(record.transactions_checked) }),
   };
 }
 
 function normalizeCheckoutInvoiceSnapshot(input: unknown): CheckoutInvoiceSnapshot {
   const record = asRecord(input);
-  const invoice = requiredString(record.invoice ?? record.bolt11, "invoice");
+  const invoice = requiredString(record.invoice, "invoice");
   return {
-    invoice_id: requiredString(record.invoice_id ?? record.invoiceId, "invoice_id"),
+    invoice_id: requiredString(record.invoice_id, "invoice_id"),
     invoice,
-    ...(optionalString(record.payment_hash ?? record.paymentHash) === undefined
+    ...(optionalString(record.payment_hash) === undefined
       ? {}
-      : { payment_hash: optionalString(record.payment_hash ?? record.paymentHash) }),
-    ...(optionalSafeInteger(record.amount_msats ?? record.amountMsats) === undefined
+      : { payment_hash: optionalString(record.payment_hash) }),
+    ...(optionalSafeInteger(record.amount_msats) === undefined
       ? {}
-      : { amount_msats: optionalSafeInteger(record.amount_msats ?? record.amountMsats) }),
-    ...(isRecord(record.fiat_quote ?? record.fiatQuote) || (record.fiat_quote ?? record.fiatQuote) === null
-      ? { fiat_quote: (record.fiat_quote ?? record.fiatQuote) as CheckoutInvoiceSnapshot["fiat_quote"] }
+      : { amount_msats: optionalSafeInteger(record.amount_msats) }),
+    ...(isRecord(record.fiat_quote) || record.fiat_quote === null
+      ? { fiat_quote: record.fiat_quote as CheckoutInvoiceSnapshot["fiat_quote"] }
       : {}),
-    ...(optionalString(record.transaction_state ?? record.transactionState) === undefined
+    ...(optionalString(record.transaction_state) === undefined
       ? {}
-      : { transaction_state: optionalString(record.transaction_state ?? record.transactionState) }),
-    ...(optionalString(record.workflow_state ?? record.workflowState) === undefined
+      : { transaction_state: optionalString(record.transaction_state) }),
+    ...(optionalString(record.workflow_state) === undefined
       ? {}
-      : { workflow_state: optionalString(record.workflow_state ?? record.workflowState) }),
-    ...(optionalSafeInteger(record.expires_at ?? record.expiresAt) === undefined
+      : { workflow_state: optionalString(record.workflow_state) }),
+    ...(optionalSafeInteger(record.expires_at) === undefined
       ? {}
-      : { expires_at: optionalSafeInteger(record.expires_at ?? record.expiresAt) }),
-    ...(optionalSafeInteger(record.settled_at ?? record.settledAt) === undefined
+      : { expires_at: optionalSafeInteger(record.expires_at) }),
+    ...(optionalSafeInteger(record.settled_at) === undefined
       ? {}
-      : { settled_at: optionalSafeInteger(record.settled_at ?? record.settledAt) }),
+      : { settled_at: optionalSafeInteger(record.settled_at) }),
   };
 }
 
@@ -3123,7 +3106,7 @@ export function createCheckoutState(
       order_id: snapshot.order_id,
       invoice_id: invoice.invoice_id,
       invoice: invoice.invoice,
-      lightningUri: createLightningUri(invoice.invoice),
+      lightning_uri: createLightningUri(invoice.invoice),
       ...(invoice.payment_hash === undefined ? {} : { payment_hash: invoice.payment_hash }),
       amount_msats: invoice.amount_msats ?? snapshot.amount_msats,
       ...(invoice.fiat_quote === undefined ? {} : { fiat_quote: invoice.fiat_quote }),
@@ -3220,7 +3203,7 @@ export function createCheckoutStatusModel(
 ): CheckoutStatusModel {
   const isCheckoutState = source !== undefined && "invoice_id" in source && "invoice" in source;
   const phase = source?.phase ?? "invoice_created";
-  const expiresInSeconds = source?.expiresInSeconds;
+  const expiresInSeconds = source?.expires_in_seconds;
   const displayPhase =
     phase !== "settled" && phase !== "failed" && phase !== "cancelled" && expiresInSeconds === 0
       ? "expired"
@@ -3241,9 +3224,9 @@ export function createCheckoutStatusModel(
     detail: statusText.detail,
     countdownPrefix: openReceiveCheckoutLabels.countdownPrefix,
     ...(expiresInSeconds === undefined || displayPhase === "expired"
-      ? {}
-      : {
-          expiresInSeconds,
+          ? {}
+          : {
+          expires_in_seconds: expiresInSeconds,
           countdownLabel: formatOpenReceiveCountdown(expiresInSeconds),
         }),
   };
@@ -3299,8 +3282,9 @@ export class CheckoutWatcher {
     }
 
     try {
-      const next = await refreshStatus(current);
-      const nextState = createCheckoutState(mergeCheckoutSnapshot(current, next), {
+      const next = await refreshStatus(current.order_id);
+      if (next === null) return current;
+      const nextState = createCheckoutState(next, {
         now: this.now(),
         logger: this.options.logger,
       });
@@ -3366,10 +3350,11 @@ export class CheckoutWatcher {
     }
 
     try {
-      const next = await refreshStatus(current);
+      const next = await refreshStatus(current.order_id);
+      if (next === null) return;
       if (!this.running || this.state === undefined) return;
       this.applyState(
-        createCheckoutState(mergeCheckoutSnapshot(this.state, next), {
+        createCheckoutState(next, {
           now: this.now(),
           logger: this.options.logger,
         }),
@@ -3660,15 +3645,15 @@ function assertOpenReceiveBrowserPayloadSafe(value: unknown): void {
 }
 
 function normalizeCheckoutState(
-  state: Omit<CheckoutState, "phase" | "settled" | "terminal" | "expiresInSeconds"> &
-    Partial<Pick<CheckoutState, "phase" | "settled" | "terminal" | "expiresInSeconds">>,
+  state: Omit<CheckoutState, "phase" | "settled" | "terminal" | "expires_in_seconds"> &
+    Partial<Pick<CheckoutState, "phase" | "settled" | "terminal" | "expires_in_seconds">>,
   now?: number,
 ): CheckoutState {
   const {
     phase: _phase,
     settled: _settled,
     terminal: _terminal,
-    expiresInSeconds: _expiresInSeconds,
+    expires_in_seconds: _expiresInSeconds,
     ...base
   } = state;
   const phase = getCheckoutPhase(state.transaction_state, state.workflow_state);
@@ -3680,7 +3665,7 @@ function normalizeCheckoutState(
     terminal: isTerminalPhase(phase),
     ...(base.expires_at === undefined || now === undefined
       ? {}
-      : { expiresInSeconds: Math.max(0, base.expires_at - now) }),
+      : { expires_in_seconds: Math.max(0, base.expires_at - now) }),
   };
 }
 
@@ -3773,7 +3758,7 @@ function checkoutLogFields(state: {
   readonly transaction_state?: string;
   readonly workflow_state?: string;
   readonly phase?: string;
-  readonly expiresInSeconds?: number;
+  readonly expires_in_seconds?: number;
 }): Record<string, unknown> {
   return {
     ...(state.checkout_id === undefined ? {} : { checkout_id: state.checkout_id }),
@@ -3786,7 +3771,9 @@ function checkoutLogFields(state: {
       : { transaction_state: state.transaction_state }),
     ...(state.workflow_state === undefined ? {} : { workflow_state: state.workflow_state }),
     ...(state.phase === undefined ? {} : { phase: state.phase }),
-    ...(state.expiresInSeconds === undefined ? {} : { expires_in_seconds: state.expiresInSeconds }),
+    ...(state.expires_in_seconds === undefined
+      ? {}
+      : { expires_in_seconds: state.expires_in_seconds }),
   };
 }
 

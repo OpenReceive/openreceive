@@ -94,10 +94,10 @@ function invoice(overrides = {}) {
 
 test("React checkout view model exposes display-safe actions", () => {
   const model = createCheckoutViewModel({
-    invoice: invoice()
+    checkout: invoice()
   });
 
-  assert.equal(model.lightningUri, "lightning:lnbc-test");
+  assert.equal(model.lightning_uri, "lightning:lnbc-test");
   assert.equal(model.amountLabel, "200 sats");
   assert.equal(model.fiatLabel, "$0.05");
   assert.equal(model.paymentHashLabel, "aaaaaaaa...aaaaaaaa");
@@ -108,7 +108,7 @@ test("React checkout rejects NWC strings before rendering", () => {
   assert.throws(
     () =>
       createCheckoutViewModel({
-        invoice: invoice({
+        checkout: invoice({
           invoice: `nostr+walletconnect://${"a".repeat(64)}?secret=${"b".repeat(64)}`
         })
       }),
@@ -119,7 +119,7 @@ test("React checkout rejects NWC strings before rendering", () => {
 test("React checkout default UI server-renders display-safe invoice data", () => {
   const html = renderToStaticMarkup(
     React.createElement(Checkout, {
-      invoice: invoice({
+      checkout: invoice({
         payment_hash: "b".repeat(64),
         amount_msats: 1000,
         fiat_quote: undefined
@@ -143,7 +143,7 @@ test("React checkout default UI includes countdown, waiting state, and payment w
   const now = Math.floor(Date.now() / 1000);
   const html = renderToStaticMarkup(
     React.createElement(Checkout, {
-      invoice: invoice({
+      checkout: invoice({
         invoice_id: "or_inv_test",
         payment_hash: "b".repeat(64),
         amount_msats: 1000,
@@ -168,7 +168,7 @@ test("React checkout default UI includes countdown, waiting state, and payment w
 test("React checkout hides payable surfaces after invoice expiry", () => {
   const html = renderToStaticMarkup(
     React.createElement(Checkout, {
-      invoice: invoice({
+      checkout: invoice({
         invoice_id: "or_inv_expired",
         invoice: "lnbc-expired",
         payment_hash: "c".repeat(64),
@@ -570,7 +570,7 @@ test("React checkout supports design-system component and class slots", () => {
 
   const html = renderToStaticMarkup(
     React.createElement(Checkout, {
-      invoice: invoice({
+      checkout: invoice({
         invoice: "lnbc-slot-test",
         payment_hash: "c".repeat(64),
         amount_msats: 200000,
@@ -613,7 +613,7 @@ test("React checkout render prop can replace default visible markup", () => {
     React.createElement(
       Checkout,
       {
-        invoice: invoice({
+        checkout: invoice({
           invoice_id: "or_inv_render_prop",
           invoice: "lnbc-render-prop",
           amount_msats: 1000,
@@ -630,7 +630,7 @@ test("React checkout render prop can replace default visible markup", () => {
             "data-status": checkout.status,
             "data-countdown": checkout.countdownLabel
           },
-          checkout.lightningUri,
+          checkout.lightning_uri,
           " ",
           checkout.countdownLabel
         )
@@ -651,7 +651,7 @@ test("React provider shares checkout state with a consumer hook", () => {
     return React.createElement(
       "strong",
       { "data-provider-amount": checkout.amountLabel },
-      checkout.lightningUri
+      checkout.lightning_uri
     );
   }
 
@@ -659,7 +659,7 @@ test("React provider shares checkout state with a consumer hook", () => {
     React.createElement(
       CheckoutProvider,
       {
-        invoice: invoice({
+        checkout: invoice({
           invoice: "lnbc-provider-context",
           amount_msats: 1000,
           fiat_quote: undefined
@@ -678,7 +678,7 @@ test("React provider render prop receives the controller-backed checkout model",
     React.createElement(
       CheckoutProvider,
       {
-        invoice: invoice({
+        checkout: invoice({
           invoice_id: "or_inv_provider_render",
           invoice: "lnbc-provider-render",
           amount_msats: 2000,
@@ -695,7 +695,7 @@ test("React provider render prop receives the controller-backed checkout model",
             "data-provider-retry": typeof checkout.retry,
             "data-provider-cancel": typeof checkout.cancel
           },
-          checkout.lightningUri
+          checkout.lightning_uri
         )
     )
   );

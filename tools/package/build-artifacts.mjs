@@ -16,6 +16,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const DEFAULT_NPM_TIMEOUT_MS = 120_000;
+const EMPTY_OBJECT = Object.freeze({});
 
 export function readJson(filePath) {
   return JSON.parse(readFileSync(filePath, "utf8"));
@@ -49,7 +50,7 @@ export function validateWorkspacePackageGraph(packages) {
 
   for (const pkg of packages) {
     assert(pkg.manifest.exports?.["."], `${pkg.manifest.name}: package export is required`);
-    for (const [dependency, version] of Object.entries(pkg.manifest.dependencies ?? {})) {
+    for (const [dependency, version] of Object.entries(pkg.manifest.dependencies ?? EMPTY_OBJECT)) {
       if (dependency === "openreceive" || dependency.startsWith("@openreceive/")) {
         assert(workspaceNames.has(dependency), `${pkg.manifest.name}: unknown workspace dependency ${dependency}`);
         assert(version === pkg.manifest.version, `${pkg.manifest.name}: ${dependency} version must match package version`);

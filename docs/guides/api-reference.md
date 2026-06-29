@@ -23,19 +23,22 @@ not part of the supported app surface.
 
 ## `createCheckout`
 
-Create or continue one immutable priced checkout under your app's `orderId`:
+Create or continue one immutable priced checkout under your app's `order_id`:
 
 ```ts
 const checkout = await openreceive.createCheckout({
-  orderId: order.uuid,
+  order_id: order.uuid,
   amount: {
     fiat: {
-      currency: order.totalAmount.currency,
-      value: order.totalAmount.value
+      currency: order.total_amount.currency,
+      value: order.total_amount.value
     }
   },
   memo: `Order ${order.number}`,
-  expiresInSeconds: 600
+  expires_in_seconds: 600,
+  metadata: {
+    cart_version: order.cart_version
+  }
 });
 ```
 
@@ -49,13 +52,13 @@ Use exactly one amount source:
 `fiat.currency` must be one of the server's configured `priceCurrencies`.
 Direct BTC, satoshi, and millisatoshi amounts do not use price feeds.
 
-Calling `createCheckout` again with the same `orderId` and same amount returns
+Calling `createCheckout` again with the same `order_id` and same amount returns
 the current checkout, or renews its BOLT11 when the active invoice has expired.
-Calling it with the same `orderId` and a different amount creates a new
+Calling it with the same `order_id` and a different amount creates a new
 checkout and supersedes the prior open checkout. Paying any invoice in any
 checkout settles the order.
 
-Render `checkout.active.bolt11` when present. The full invoice chain is in
+Render `checkout.active.invoice` when present. The full invoice chain is in
 `checkout.invoices`.
 
 ## `getOrder`
@@ -63,7 +66,7 @@ Render `checkout.active.bolt11` when present. The full invoice chain is in
 Refresh and read the stored order:
 
 ```ts
-const orderStatus = await openreceive.getOrder({ orderId: order.uuid });
+const orderStatus = await openreceive.getOrder({ order_id: order.uuid });
 ```
 
 `getOrder` may perform one bounded server-side NWC `list_transactions` scan for
@@ -71,15 +74,16 @@ unpaid, wallet-unexpired invoice records. It never exposes send-payment methods
 and never uses invoice lookup as the settlement authority.
 
 Fulfillment belongs in your backend settlement hook. When an order is paid,
-fulfill from `orderStatus.paidCheckout`, not from the current cart.
+fulfill from `orderStatus.paid_checkout`, not from the current cart. For UI
+display, use `orderStatus.display_checkout`.
 
 ## `getCheckout`
 
-Read one checkout by `checkoutId` when your app already knows that the caller is
+Read one checkout by `checkout_id` when your app already knows that the caller is
 allowed to see it:
 
 ```ts
-const checkout = await openreceive.getCheckout({ checkoutId });
+const checkout = await openreceive.getCheckout({ checkout_id });
 ```
 
 Most app controllers only need `createCheckout` and `getOrder`.

@@ -36,6 +36,7 @@ import {
   type CheckoutInvoiceSnapshot,
   type CheckoutSnapshot,
   type CheckoutState,
+  type CheckoutStatusRefresh,
   type CheckoutStatusModel,
   type OpenReceivePaymentMethod,
   type OpenReceivePaymentWizardController,
@@ -50,8 +51,10 @@ import {
   type Status
 } from "@openreceive/browser/internal";
 
+export type Checkout = CheckoutSnapshot;
+
 export interface CheckoutData {
-  readonly invoice: CheckoutSnapshot;
+  readonly checkout: CheckoutSnapshot;
 }
 
 export interface CheckoutViewModel {
@@ -62,7 +65,7 @@ export interface CheckoutViewModel {
   readonly fiat_quote?: CheckoutInvoiceSnapshot["fiat_quote"];
   readonly expires_at?: number;
   readonly settled_at?: number;
-  readonly lightningUri: string;
+  readonly lightning_uri: string;
   readonly amountLabel?: string;
   readonly fiatLabel?: string;
   readonly paymentHashLabel?: string;
@@ -74,7 +77,7 @@ export interface UseCheckoutOptions extends CheckoutData {
   readonly open?: (uri: string) => void;
   readonly logger?: OpenReceiveBrowserLogger;
   readonly onError?: (error: unknown) => void;
-  readonly refreshStatus?: (state: CheckoutState) => Promise<Partial<CheckoutSnapshot>>;
+  readonly refreshStatus?: CheckoutStatusRefresh;
   readonly statusUrl?: string | false;
   readonly onState?: (state: CheckoutState) => void;
   readonly onSettled?: () => void;
@@ -84,7 +87,7 @@ export interface UseCheckoutOptions extends CheckoutData {
 
 export interface UseCheckoutResult extends CheckoutViewModel {
   readonly copied: boolean;
-  readonly expiresInSeconds?: number;
+  readonly expires_in_seconds?: number;
   readonly countdownLabel?: string;
   readonly countdownPrefix?: string;
   readonly statusTitle: string;
@@ -194,7 +197,7 @@ export interface CheckoutProps
   readonly qrEncoder?: OpenReceiveQrEncoder;
   readonly logger?: OpenReceiveBrowserLogger;
   readonly onError?: (error: unknown) => void;
-  readonly refreshStatus?: (state: CheckoutState) => Promise<Partial<CheckoutSnapshot>>;
+  readonly refreshStatus?: CheckoutStatusRefresh;
   readonly statusUrl?: string | false;
   readonly onState?: (state: CheckoutState) => void;
   readonly onSettled?: () => void;
@@ -334,7 +337,7 @@ function toCheckoutViewModel(
     ...(display.fiat_quote === undefined ? {} : { fiat_quote: display.fiat_quote }),
     ...(display.expires_at === undefined ? {} : { expires_at: display.expires_at }),
     ...(display.settled_at === undefined ? {} : { settled_at: display.settled_at }),
-    lightningUri: display.lightningUri,
+    lightning_uri: display.lightning_uri,
     ...(display.amountLabel === undefined ? {} : { amountLabel: display.amountLabel }),
     ...(display.fiatLabel === undefined ? {} : { fiatLabel: display.fiatLabel }),
     ...(display.paymentHashLabel === undefined ? {} : { paymentHashLabel: display.paymentHashLabel }),
@@ -346,8 +349,8 @@ export function createCheckoutViewModel(
   data: CheckoutData
 ): CheckoutViewModel {
   return toCheckoutViewModel(
-    createCheckoutDisplayModel(toCheckoutDisplayData(data.invoice)),
-    deriveCheckoutOrderStatus(data.invoice)
+    createCheckoutDisplayModel(toCheckoutDisplayData(data.checkout)),
+    deriveCheckoutOrderStatus(data.checkout)
   );
 }
 
@@ -364,23 +367,23 @@ export function useCheckout(
 ): UseCheckoutResult {
   const [copied, showCopied] = useOpenReceiveTransientValue<boolean>(false);
   const displayData = React.useMemo(
-    () => toCheckoutDisplayData(options.invoice),
-    [options.invoice]
+    () => toCheckoutDisplayData(options.checkout),
+    [options.checkout]
   );
   const model = React.useMemo(
     () => toCheckoutViewModel(
       createCheckoutDisplayModel(displayData),
-      deriveCheckoutOrderStatus(options.invoice)
+      deriveCheckoutOrderStatus(options.checkout)
     ),
     [
       displayData,
-      options.invoice
+      options.checkout
     ]
   );
   const snapshot = React.useMemo<CheckoutSnapshot>(
-    () => options.invoice,
+    () => options.checkout,
     [
-      options.invoice
+      options.checkout
     ]
   );
   const [state, setState] = React.useState<CheckoutState>(
@@ -534,7 +537,7 @@ export function useCheckout(
     ...model,
     copied,
     status: publicStatus,
-    expiresInSeconds: richStatus.expiresInSeconds,
+    expires_in_seconds: richStatus.expires_in_seconds,
     countdownLabel: richStatus.countdownLabel,
     countdownPrefix: richStatus.countdownPrefix,
     statusTitle: richStatus.title,
@@ -1492,7 +1495,7 @@ export function Checkout(
   props: CheckoutProps
 ): React.ReactElement {
   const {
-    invoice,
+    checkout,
     qrEncoder,
     logger,
     onError,
@@ -1514,7 +1517,7 @@ export function Checkout(
     ...sectionProps
   } = props;
   const checkoutModel = useCheckout({
-    invoice,
+    checkout,
     logger,
     onError,
     refreshStatus,

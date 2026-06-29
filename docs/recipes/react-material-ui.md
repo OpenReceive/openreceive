@@ -4,8 +4,8 @@ This recipe uses the individual `@openreceive/react` checkout components with
 Material UI components. It is a composition example, not a dependency of
 OpenReceive.
 
-Frontend code still receives only display-safe invoice data. The backend creates
-the invoice, verifies payment, and owns fulfillment.
+Frontend code still receives only display-safe checkout data. The backend creates
+the checkout, verifies payment, and owns fulfillment.
 
 ## Component
 
@@ -24,32 +24,32 @@ import {
 } from "@openreceive/react";
 
 export function MaterialCheckout({
-  invoice,
+  checkout,
   open,
   onClose
 }) {
-  const checkout = useCheckout({ invoice });
+  const model = useCheckout({ checkout });
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
       <DialogContent>
         <Stack spacing={2} alignItems="center">
           <QRCode
-            invoice={checkout.invoice}
+            invoice={model.invoice}
             style={{
               inlineSize: 256,
               blockSize: 256
             }}
           />
           <Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>
-            {checkout.invoice}
+            {model.invoice}
           </Typography>
-          <PaymentState state={checkout.status} />
+          <PaymentState state={model.status} />
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={checkout.copyInvoice}>Copy</Button>
-        <Button onClick={checkout.openWallet} variant="contained">
+        <Button onClick={model.copyInvoice}>Copy</Button>
+        <Button onClick={model.openWallet} variant="contained">
           Open Wallet
         </Button>
       </DialogActions>
@@ -64,7 +64,8 @@ using the headless actions as shown above.
 
 ```tsx
 <Checkout
-  invoice={invoice}
+  checkout={checkout}
+  statusUrl="/order_status"
   components={{
     Button,
     InvoiceSummary: MaterialInvoiceSummary

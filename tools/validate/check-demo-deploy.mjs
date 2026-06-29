@@ -86,7 +86,8 @@ function readYaml(relativePath) {
   const text = read(relativePath);
   if (text === "") return {};
   try {
-    return parseYaml(text) ?? {};
+    const value = parseYaml(text);
+    return value === null ? {} : value;
   } catch (error) {
     fail(`${relativePath}: ${error.message}`);
     return {};
@@ -228,9 +229,9 @@ function validateManifest(environment) {
 function validateProxyCompose() {
   const relativePath = "demos/deploy/proxy/compose.yml";
   const compose = readYaml(relativePath);
-  const services = compose.services ?? {};
+  const services = compose.services === undefined ? {} : compose.services;
   const serviceNames = Object.keys(services);
-  const service = services.caddy ?? {};
+  const service = services.caddy === undefined ? {} : services.caddy;
 
   expect(compose.networks?.demo_proxy?.external === true, `${relativePath}: proxy network must be external`);
   expect(compose.networks?.demo_proxy?.name === "openreceive_demo_proxy", `${relativePath}: proxy network name must be openreceive_demo_proxy`);
@@ -266,9 +267,9 @@ function validateCaddyFiles() {
 function validateDemoStack(demo) {
   const relativePath = demo.compose;
   const compose = readYaml(relativePath);
-  const services = compose.services ?? {};
+  const services = compose.services === undefined ? {} : compose.services;
   const serviceNames = Object.keys(services);
-  const service = services[demo.slug] ?? {};
+  const service = services[demo.slug] === undefined ? {} : services[demo.slug];
 
   expect(compose.networks?.demo_proxy?.external === true, `${relativePath}: proxy network must be external`);
   expect(compose.networks?.demo_proxy?.name === "openreceive_demo_proxy", `${relativePath}: proxy network name must be openreceive_demo_proxy`);

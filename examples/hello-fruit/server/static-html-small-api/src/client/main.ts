@@ -46,7 +46,7 @@ interface DemoOrder {
     name: string;
     quantity: number;
   }[];
-  totalAmount: {
+  total_amount: {
     currency: string;
     value: string;
   };
@@ -69,7 +69,7 @@ let selectedCurrency = "USD";
 let cart: Record<string, number> = {};
 let currentOrder: DemoOrder | undefined;
 let purchasedFruit: Fruit | undefined;
-let completedInvoiceId = "";
+let completedOrderId = "";
 const logOpenReceive = createHelloFruitBrowserLogger("static-html-small-api");
 
 defineOpenReceiveElements({
@@ -243,7 +243,7 @@ function renderOrder(order: DemoOrder): void {
   const title = document.createElement("strong");
   title.textContent = "Order";
   const total = document.createElement("span");
-  total.textContent = formatHelloFruitFiat(order.totalAmount);
+  total.textContent = formatHelloFruitFiat(order.total_amount);
   heading.append(title, total);
   section.append(heading);
 
@@ -282,7 +282,7 @@ async function createOrder(): Promise<void> {
   setError("");
   setOrderButtonState("creating");
   closeStickerModal();
-  completedInvoiceId = "";
+  completedOrderId = "";
 
   try {
     const idempotencyKey = globalThis.crypto?.randomUUID?.() ??
@@ -309,7 +309,7 @@ async function createOrder(): Promise<void> {
     currentOrder = body.order;
     purchasedFruit = cartItems()[0]?.fruit;
     renderOrder(body.order);
-    renderInvoice(body.checkout);
+    renderCheckout(body.checkout);
   } catch (error) {
     setError(error instanceof Error ? error.message : String(error));
   } finally {
@@ -317,10 +317,10 @@ async function createOrder(): Promise<void> {
   }
 }
 
-function renderInvoice(nextInvoice: CheckoutSnapshot): void {
+function renderCheckout(checkout: CheckoutSnapshot): void {
   const topbar = requireElement("topbar");
   const panel = requireElement("checkout-panel");
-  const shell = createCheckoutShell(nextInvoice, {
+  const shell = createCheckoutShell(checkout, {
     document,
     root: document.querySelector(".page"),
     statusUrl: "/order_status",
@@ -334,10 +334,10 @@ function renderInvoice(nextInvoice: CheckoutSnapshot): void {
       const state = (event as CustomEvent<CheckoutStateEventDetail>).detail?.state;
       if (
         state?.order_id !== undefined &&
-        state.order_id !== completedInvoiceId &&
+        state.order_id !== completedOrderId &&
           purchasedFruit !== undefined
       ) {
-        completedInvoiceId = state.order_id;
+        completedOrderId = state.order_id;
         if (currentOrder !== undefined) {
           currentOrder = { ...currentOrder, status: "paid" };
           renderOrder(currentOrder);

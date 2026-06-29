@@ -1,6 +1,6 @@
 # Frontend Checkout
 
-Frontend code receives display-safe invoice data only. Keep NWC connection
+Frontend code receives display-safe checkout data only. Keep NWC connection
 strings, wallet clients, and fulfillment on the backend.
 
 ## Browser Helpers
@@ -48,7 +48,7 @@ import { Checkout } from "@openreceive/react";
 import "@openreceive/react/styles.css";
 
 <Checkout
-  invoice={checkout}
+  checkout={checkout}
   statusUrl="/order_status"
   onSettled={() => showThankYou()}
 />;
@@ -62,7 +62,7 @@ Apps without a frontend status route can render a static checkout surface
 without status refresh:
 
 ```tsx
-<Checkout invoice={checkout} polling={false} />;
+<Checkout checkout={checkout} polling={false} />;
 ```
 
 Use `statusUrl={false}` to disable URL-based status refresh while still
@@ -74,7 +74,7 @@ For app-wide theme attributes and the packaged light/dark toggle:
 import { Checkout, ThemeScope } from "@openreceive/react";
 
 <ThemeScope as="main" className="page" themeToggle>
-  <Checkout invoice={checkout} />
+  <Checkout checkout={checkout} />
 </ThemeScope>
 ```
 
@@ -91,32 +91,32 @@ import {
   useCheckout
 } from "@openreceive/react";
 
-function CustomCheckout({ invoice }) {
-  const checkout = useCheckout({ invoice });
+function CustomCheckout({ checkout }) {
+  const model = useCheckout({ checkout });
 
   return (
     <section>
-      <QRCode invoice={checkout.invoice} />
+      <QRCode invoice={model.invoice} />
       <InvoiceSummary
-        amountLabel={checkout.amountLabel}
-        fiatLabel={checkout.fiatLabel}
-        paymentHashLabel={checkout.paymentHashLabel}
-        status={checkout.status}
+        amountLabel={model.amountLabel}
+        fiatLabel={model.fiatLabel}
+        paymentHashLabel={model.paymentHashLabel}
+        status={model.status}
       />
       <CopyInvoiceButton
-        invoice={checkout.invoice}
-        copyInvoice={checkout.copyInvoice}
+        invoice={model.invoice}
+        copyInvoice={model.copyInvoice}
       />
       <OpenWalletButton
-        invoice={checkout.invoice}
-        openWallet={checkout.openWallet}
+        invoice={model.invoice}
+        openWallet={model.openWallet}
       />
     </section>
   );
 }
 ```
 
-For a fully headless checkout, use `useCheckout({ invoice })` and render your
+For a fully headless checkout, use `useCheckout({ checkout })` and render your
 own markup. The hook owns status refresh, countdown state, copy/open-wallet
 actions, retry, refresh, cancel, and the public `status` string.
 
@@ -165,14 +165,18 @@ display hints.
 ```vue
 <script setup lang="ts">
 import Checkout from "@openreceive/vue/checkout.vue";
-import type { CheckoutSnapshot } from "@openreceive/vue";
+import type { Checkout as OpenReceiveCheckout } from "@openreceive/vue";
 import "@openreceive/vue/styles.css";
 
-defineProps<{ invoice: CheckoutSnapshot }>();
+defineProps<{ checkout: OpenReceiveCheckout }>();
 </script>
 
 <template>
-  <Checkout :invoice="invoice" :options="{ onSettled: showThankYou }" />
+  <Checkout
+    :checkout="checkout"
+    status-url="/order_status"
+    :on-settled="showThankYou"
+  />
 </template>
 ```
 
@@ -183,10 +187,14 @@ defineProps<{ invoice: CheckoutSnapshot }>();
   import Checkout from "@openreceive/svelte/checkout.svelte";
   import "@openreceive/svelte/styles.css";
 
-  export let invoice;
+  export let checkout;
 </script>
 
-<Checkout invoice={invoice} options={{ onSettled: showThankYou }} />
+<Checkout
+  {checkout}
+  statusUrl="/order_status"
+  onSettled={showThankYou}
+/>
 ```
 
 ## Angular
@@ -197,7 +205,7 @@ component:
 - `@openreceive/angular/checkout-component`
 
 The common binding path creates the checkout element attributes and listeners
-from the same invoice object:
+from the same checkout object:
 
 ```ts
 import {
@@ -207,8 +215,9 @@ import {
 
 defineOpenReceiveElements();
 
-const shell = createOpenReceiveAngularCheckoutShellBinding(invoice, {
+const shell = createOpenReceiveAngularCheckoutShellBinding(checkout, {
   rootSelector: ".page",
+  statusUrl: "/order_status",
   onSettled: () => showThankYou()
 });
 ```
@@ -237,5 +246,5 @@ refresh tokens, cookies, authorization headers, and request bodies.
 ```ts
 const logger = (entry) => console[entry.level]("[openreceive]", entry);
 
-<Checkout invoice={invoice} logger={logger} />;
+<Checkout checkout={checkout} logger={logger} />;
 ```

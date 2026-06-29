@@ -76,6 +76,7 @@ export type {
   CheckoutShellOptions,
   CheckoutShellThemeToggleBinding,
   CheckoutElementTarget,
+  CheckoutSnapshot as Checkout,
   CheckoutSnapshot,
   OpenReceiveCheckoutProps,
   OpenReceiveCheckoutShellProps,

@@ -76,6 +76,7 @@ export type {
   CheckoutShellOptions,
   CheckoutShellThemeToggleBinding,
   CheckoutElementTarget,
+  CheckoutSnapshot as Checkout,
   CheckoutSnapshot,
   OpenReceiveCheckoutProps,
   OpenReceiveCheckoutShellProps,
@@ -132,19 +133,19 @@ export interface OpenReceiveSvelteCheckoutComponentModel
 }
 
 export function createOpenReceiveSvelteCheckoutProps(
-  snapshot: CheckoutSnapshot,
+  checkout: CheckoutSnapshot,
   options: OpenReceiveSvelteCheckoutPropsOptions = {}
 ): CheckoutElementAttributes {
-  return createCheckoutElementAttributes(snapshot, options);
+  return createCheckoutElementAttributes(checkout, options);
 }
 
-export function createOpenReceiveSvelteCheckoutBinding(
-  snapshot: CheckoutSnapshot,
+export function createCheckoutBinding(
+  checkout: CheckoutSnapshot,
   options: OpenReceiveSvelteCheckoutBindingOptions = {}
 ): OpenReceiveSvelteCheckoutBinding {
   return {
     tagName: OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
-    props: createOpenReceiveSvelteCheckoutProps(snapshot, options),
+    props: createOpenReceiveSvelteCheckoutProps(checkout, options),
     events: createCheckoutElementListeners(options)
   };
 }
@@ -172,10 +173,10 @@ export function createOpenReceiveSvelteThemeToggleBinding(
 }
 
 export function createOpenReceiveSvelteCheckoutShellBinding(
-  snapshot: CheckoutSnapshot,
+  checkout: CheckoutSnapshot,
   options: CheckoutShellOptions = {}
 ): OpenReceiveSvelteCheckoutShellBinding {
-  const shell = createCheckoutShellModel(snapshot, options);
+  const shell = createCheckoutShellModel(checkout, options);
   return {
     theme: shell.theme,
     rootProps: shell.rootAttributes,
@@ -224,8 +225,8 @@ export function createOpenReceiveSvelteCheckoutController(
 }
 
 export function createOpenReceiveSvelteCheckoutShell(
-  snapshot: CheckoutSnapshot,
+  checkout: CheckoutSnapshot,
   options: CreateCheckoutShellOptions = {}
 ): CheckoutShellElements {
-  return createCheckoutShell(snapshot, options);
+  return createCheckoutShell(checkout, options);
 }

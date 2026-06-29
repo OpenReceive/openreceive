@@ -57,7 +57,11 @@ export type OpenReceiveLogger = (entry: OpenReceiveLogEntry) => void;
 
 export interface OpenReceiveNodeSettlementActionInput {
   invoice: InvoiceStorageRow;
-  orderId: string;
+  order_id: string;
+  checkout_id: string;
+  invoice_id: string;
+  payment_hash: string;
+  amount_msats: number;
   metadata: Record<string, unknown>;
   source: "status";
   transaction?: NwcTransaction;
@@ -99,11 +103,12 @@ export interface CreateOpenReceiveOptions
 }
 
 export interface OpenReceiveCreateCheckoutRequest {
-  readonly orderId: string;
+  readonly order_id: string;
   readonly amount: OpenReceiveCreateCheckoutAmount;
   readonly memo?: string;
-  readonly descriptionHash?: string;
-  readonly expiresInSeconds?: number | string;
+  readonly description_hash?: string;
+  readonly expires_in_seconds?: number | string;
+  readonly metadata?: Record<string, unknown>;
 }
 
 export type OpenReceiveCreateCheckoutAmount =
@@ -113,17 +118,74 @@ export type OpenReceiveCreateCheckoutAmount =
   | { readonly fiat: OpenReceiveFiatAmount };
 
 export interface OpenReceiveGetOrderRequest {
-  readonly orderId: string;
+  readonly order_id: string;
 }
 
 export interface OpenReceiveGetCheckoutRequest {
-  readonly checkoutId: string;
+  readonly checkout_id: string;
 }
 
 export interface OpenReceiveInvoice {
-  readonly invoiceId: string;
+  readonly invoice_id: string;
   readonly type: "incoming";
   readonly status: "pending" | "settled" | "expired" | "failed";
+  readonly transaction_state: string;
+  readonly workflow_state: string;
+  readonly invoice: string;
+  readonly payment_hash: string;
+  readonly amount_msats: number;
+  readonly order_id: string;
+  readonly created_at: number;
+  readonly expires_at: number;
+  readonly settled_at?: number;
+  readonly settlement_action_completed_at?: number;
+  readonly refreshed_from_invoice_id?: string;
+  readonly fiat_quote: OpenReceiveRateQuote | null;
+  readonly settlement_action_state: string;
+}
+
+export interface OpenReceiveCheckout {
+  readonly checkout_id: string;
+  readonly order_id: string;
+  readonly status: "open" | "superseded" | "paid" | "expired";
+  readonly amount_msats: number;
+  readonly fiat?: {
+    readonly currency: string;
+    readonly value: string;
+  };
+  readonly active?: OpenReceiveInvoice;
+  readonly invoices: readonly OpenReceiveInvoice[];
+  readonly paid_at?: number;
+  readonly created_at: number;
+}
+
+export interface OpenReceiveOrder {
+  readonly order_id: string;
+  readonly status: "pending" | "paid" | "expired";
+  readonly paid: boolean;
+  readonly paid_at?: number;
+  readonly display_checkout?: OpenReceiveCheckout;
+  readonly paid_checkout?: OpenReceiveCheckout;
+  readonly active_checkout?: OpenReceiveCheckout;
+  readonly checkouts: readonly OpenReceiveCheckout[];
+  readonly wallet_scan_performed: boolean;
+  readonly transactions_checked: number;
+}
+
+export interface OpenReceive {
+  readonly store: OpenReceiveInvoiceKvStore;
+  createCheckout(input: OpenReceiveCreateCheckoutRequest): Promise<OpenReceiveCheckout>;
+  getOrder(input: OpenReceiveGetOrderRequest): Promise<OpenReceiveOrder>;
+  getCheckout(input: OpenReceiveGetCheckoutRequest): Promise<OpenReceiveCheckout>;
+  listRates(): Promise<OpenReceiveBtcFiatRateMapWithSource["rates"]>;
+  quoteRates(input: { readonly fiat: OpenReceiveFiatAmount }): Promise<OpenReceiveRateQuote>;
+  close(): Promise<void>;
+}
+
+interface OpenReceiveInvoiceModel {
+  readonly invoiceId: string;
+  readonly type: "incoming";
+  readonly status: OpenReceiveInvoice["status"];
   readonly transactionState: string;
   readonly workflowState: string;
   readonly bolt11: string;
@@ -139,41 +201,37 @@ export interface OpenReceiveInvoice {
   readonly settlementActionState: string;
 }
 
-export interface OpenReceiveCheckout {
+interface OpenReceiveCheckoutModel {
   readonly checkoutId: string;
   readonly orderId: string;
-  readonly status: "open" | "superseded" | "paid" | "expired";
+  readonly status: OpenReceiveCheckout["status"];
   readonly amountMsats: number;
   readonly fiat?: {
     readonly currency: string;
     readonly value: string;
   };
-  readonly active?: OpenReceiveInvoice;
-  readonly invoices: readonly OpenReceiveInvoice[];
+  readonly active?: OpenReceiveInvoiceModel;
+  readonly invoices: readonly OpenReceiveInvoiceModel[];
   readonly paidAt?: number;
   readonly createdAt: number;
 }
 
-export interface OpenReceiveOrder {
+interface OpenReceiveOrderModel {
   readonly orderId: string;
-  readonly status: "pending" | "paid" | "expired";
+  readonly status: OpenReceiveOrder["status"];
   readonly paid: boolean;
   readonly paidAt?: number;
-  readonly paidCheckout?: OpenReceiveCheckout;
-  readonly activeCheckout?: OpenReceiveCheckout;
-  readonly checkouts: readonly OpenReceiveCheckout[];
+  readonly displayCheckout?: OpenReceiveCheckoutModel;
+  readonly paidCheckout?: OpenReceiveCheckoutModel;
+  readonly activeCheckout?: OpenReceiveCheckoutModel;
+  readonly checkouts: readonly OpenReceiveCheckoutModel[];
   readonly walletScanPerformed: boolean;
   readonly transactionsChecked: number;
 }
 
-export interface OpenReceive {
-  readonly store: OpenReceiveInvoiceKvStore;
-  createCheckout(input: OpenReceiveCreateCheckoutRequest): Promise<OpenReceiveCheckout>;
-  getOrder(input: OpenReceiveGetOrderRequest): Promise<OpenReceiveOrder>;
-  getCheckout(input: OpenReceiveGetCheckoutRequest): Promise<OpenReceiveCheckout>;
-  listRates(): Promise<OpenReceiveBtcFiatRateMapWithSource["rates"]>;
-  quoteRates(input: { readonly fiat: OpenReceiveFiatAmount }): Promise<OpenReceiveRateQuote>;
-  close(): Promise<void>;
+interface OrderScanMeta {
+  readonly walletScanPerformed: boolean;
+  readonly transactionsChecked: number;
 }
 
 export class OpenReceiveServiceError extends Error {
@@ -205,6 +263,15 @@ interface ResolvedCreateAmount {
 }
 
 const HEX_64 = /^[0-9a-fA-F]{64}$/;
+const RESERVED_CHECKOUT_METADATA_KEYS = new Set([
+  "order_id",
+  "checkout_id",
+  "superseded",
+  "amount_spec",
+  "memo",
+  "description_hash",
+  "expires_in_seconds",
+]);
 
 export async function createOpenReceive(
   options: CreateOpenReceiveOptions = {},
@@ -249,13 +316,19 @@ export async function createOpenReceive(
   return {
     store,
     async createCheckout(input) {
-      return await runOpenReceiveOperation(context, () => createCheckout(context, input));
+      return await runOpenReceiveOperation(context, async () =>
+        toWireCheckout(await createCheckout(context, input)),
+      );
     },
     async getOrder(input) {
-      return await runOpenReceiveOperation(context, () => getOrder(context, input));
+      return await runOpenReceiveOperation(context, async () =>
+        toWireOrder(await getOrder(context, input)),
+      );
     },
     async getCheckout(input) {
-      return await runOpenReceiveOperation(context, () => getCheckout(context, input));
+      return await runOpenReceiveOperation(context, async () =>
+        toWireCheckout(await getCheckout(context, input)),
+      );
     },
     async listRates() {
       return await runOpenReceiveOperation(context, () => listRates(context));
@@ -273,7 +346,7 @@ export async function createOpenReceive(
 async function createCheckout(
   context: OpenReceiveServiceContext,
   input: OpenReceiveCreateCheckoutRequest,
-): Promise<OpenReceiveCheckout> {
+): Promise<OpenReceiveCheckoutModel> {
   const orderId = parseCreateCheckoutOrderId(input);
   const now = context.clock();
   const records = await context.store.listByOrderId(orderId);
@@ -325,11 +398,11 @@ async function createCheckout(
 async function getOrder(
   context: OpenReceiveServiceContext,
   input: OpenReceiveGetOrderRequest,
-): Promise<OpenReceiveOrder> {
+): Promise<OpenReceiveOrderModel> {
   const orderId = parseGetOrderId(input);
   const records = await context.store.listByOrderId(orderId);
   if (records.length === 0) {
-    throw serviceError(404, "NOT_FOUND", "No order found for the given orderId.");
+    throw serviceError(404, "NOT_FOUND", "No order found for the given order_id.");
   }
   emitLog(
     context.options,
@@ -368,11 +441,11 @@ async function getOrder(
 async function getCheckout(
   context: OpenReceiveServiceContext,
   input: OpenReceiveGetCheckoutRequest,
-): Promise<OpenReceiveCheckout> {
+): Promise<OpenReceiveCheckoutModel> {
   const checkoutId = parseGetCheckoutId(input);
   const records = await context.store.listByCheckoutId(checkoutId);
   if (records.length === 0) {
-    throw serviceError(404, "NOT_FOUND", "No checkout found for the given checkoutId.");
+    throw serviceError(404, "NOT_FOUND", "No checkout found for the given checkout_id.");
   }
   return requireCheckout(groupCheckouts(records, context.clock()), checkoutId);
 }
@@ -386,7 +459,7 @@ async function mintInvoiceForCheckout(
       readonly input: OpenReceiveCreateCheckoutRequest;
       readonly supersededId?: string;
     };
-    readonly continueCheckout?: OpenReceiveCheckout;
+    readonly continueCheckout?: OpenReceiveCheckoutModel;
     readonly now: number;
   },
 ): Promise<StoredRecord> {
@@ -404,7 +477,7 @@ async function mintInvoiceForCheckout(
       : await context.store.listByCheckoutId(input.continueCheckout.checkoutId);
   const renewal = renewalRecords[0];
   if (input.continueCheckout !== undefined && renewal === undefined) {
-    throw serviceError(404, "NOT_FOUND", "No checkout found for the given checkoutId.");
+    throw serviceError(404, "NOT_FOUND", "No checkout found for the given checkout_id.");
   }
 
   const firstCreate = input.newCheckout !== undefined;
@@ -562,7 +635,7 @@ function checkoutDescriptionFields(
   if (renewal === undefined) {
     return getCreateDescriptionFields({
       memo: requiredValue(input).memo,
-      descriptionHash: requiredValue(input).descriptionHash,
+      descriptionHash: requiredValue(input).description_hash,
     });
   }
   return getCreateDescriptionFields({
@@ -580,7 +653,7 @@ function checkoutExpiry(
   renewal: StoredRecord | undefined,
 ): number | undefined {
   if (renewal === undefined) {
-    return optionalSafeInteger(requiredValue(input).expiresInSeconds);
+    return optionalSafeInteger(requiredValue(input).expires_in_seconds);
   }
   return optionalSafeInteger(renewal.row.metadata.expires_in_seconds);
 }
@@ -599,14 +672,16 @@ function checkoutMetadata(
     renewal === undefined ? requiredValue(input).memo : optionalString(renewal.row.metadata.memo);
   const descriptionHash =
     renewal === undefined
-      ? requiredValue(input).descriptionHash
+      ? requiredValue(input).description_hash
       : optionalString(renewal.row.metadata.description_hash);
   const expiresInSeconds =
     renewal === undefined
-      ? requiredValue(input).expiresInSeconds
+      ? requiredValue(input).expires_in_seconds
       : renewal.row.metadata.expires_in_seconds;
+  const passthrough = checkoutPassthroughMetadata(input, renewal);
 
   return {
+    ...passthrough,
     order_id: orderId,
     checkout_id: checkoutId,
     amount_spec: structuredClone(amountSpec),
@@ -614,6 +689,25 @@ function checkoutMetadata(
     ...(descriptionHash === undefined ? {} : { description_hash: descriptionHash }),
     ...(expiresInSeconds === undefined ? {} : { expires_in_seconds: expiresInSeconds }),
   };
+}
+
+function checkoutPassthroughMetadata(
+  input: OpenReceiveCreateCheckoutRequest | undefined,
+  renewal?: StoredRecord,
+): Record<string, unknown> {
+  const source =
+    renewal === undefined
+      ? parseOptionalRecord(input?.metadata, "metadata")
+      : renewal.row.metadata;
+  if (source === undefined) return {};
+
+  const passthrough: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (!RESERVED_CHECKOUT_METADATA_KEYS.has(key)) {
+      passthrough[key] = structuredClone(value);
+    }
+  }
+  return passthrough;
 }
 
 function createRenewalRequestHashBody(
@@ -629,7 +723,7 @@ function createRenewalRequestHashBody(
 async function amountMatches(
   context: OpenReceiveServiceContext,
   amount: OpenReceiveCreateCheckoutAmount,
-  checkout: OpenReceiveCheckout,
+  checkout: OpenReceiveCheckoutModel,
   now: number,
 ): Promise<boolean> {
   if ("fiat" in amount || checkout.fiat !== undefined) {
@@ -694,11 +788,14 @@ function createAmountRequest(amount: OpenReceiveCreateCheckoutAmount): Record<st
 
 function createCheckoutRequestHashBody(input: OpenReceiveCreateCheckoutRequest): Record<string, unknown> {
   return {
-    orderId: input.orderId,
+    order_id: input.order_id,
     amount: structuredClone(input.amount),
     ...(input.memo === undefined ? {} : { memo: input.memo }),
-    ...(input.descriptionHash === undefined ? {} : { descriptionHash: input.descriptionHash }),
-    ...(input.expiresInSeconds === undefined ? {} : { expiresInSeconds: input.expiresInSeconds }),
+    ...(input.description_hash === undefined ? {} : { description_hash: input.description_hash }),
+    ...(input.expires_in_seconds === undefined
+      ? {}
+      : { expires_in_seconds: input.expires_in_seconds }),
+    ...(input.metadata === undefined ? {} : { metadata: checkoutPassthroughMetadata(input) }),
   };
 }
 
@@ -715,10 +812,7 @@ function amountKeyFromCreateAmount(amount: OpenReceiveCreateCheckoutAmount): str
   return `btc:${amount.btc.currency}:${amount.btc.value}`;
 }
 
-function scanlessOrderMeta(): Pick<
-  OpenReceiveOrder,
-  "walletScanPerformed" | "transactionsChecked"
-> {
+function scanlessOrderMeta(): OrderScanMeta {
   return {
     walletScanPerformed: false,
     transactionsChecked: 0,
@@ -727,9 +821,9 @@ function scanlessOrderMeta(): Pick<
 
 function buildOrder(
   records: readonly StoredRecord[],
-  scanMeta: Pick<OpenReceiveOrder, "walletScanPerformed" | "transactionsChecked">,
+  scanMeta: OrderScanMeta,
   now: number,
-): OpenReceiveOrder {
+): OpenReceiveOrderModel {
   if (records.length === 0) {
     throw serviceError(500, "INTERNAL", "Order has no invoices.");
   }
@@ -737,17 +831,19 @@ function buildOrder(
   const paidCheckout = checkouts.find((checkout) => checkout.status === "paid");
   const activeCheckout = currentOpenCheckout(checkouts);
   const paid = paidCheckout !== undefined;
-  const status: OpenReceiveOrder["status"] = paid
+  const status: OpenReceiveOrderModel["status"] = paid
     ? "paid"
     : activeCheckout !== undefined
       ? "pending"
       : "expired";
+  const displayCheckout = paidCheckout ?? activeCheckout;
 
   return {
     orderId: readStoredOrderId(records[0].row),
     status,
     paid,
     ...(paidCheckout?.paidAt === undefined ? {} : { paidAt: paidCheckout.paidAt }),
+    ...(displayCheckout === undefined ? {} : { displayCheckout }),
     ...(paidCheckout === undefined ? {} : { paidCheckout }),
     ...(activeCheckout === undefined ? {} : { activeCheckout }),
     checkouts,
@@ -756,7 +852,7 @@ function buildOrder(
   };
 }
 
-function groupCheckouts(records: readonly StoredRecord[], now: number): OpenReceiveCheckout[] {
+function groupCheckouts(records: readonly StoredRecord[], now: number): OpenReceiveCheckoutModel[] {
   const groups = new Map<string, StoredRecord[]>();
   for (const record of records) {
     const checkoutId = readStoredCheckoutId(record.row);
@@ -778,7 +874,7 @@ function buildCheckout(
   checkoutId: string,
   records: readonly StoredRecord[],
   now: number,
-): OpenReceiveCheckout {
+): OpenReceiveCheckoutModel {
   const sortedRecords = [...records].sort((left, right) =>
     left.row.created_at === right.row.created_at
       ? right.row.invoice_id.localeCompare(left.row.invoice_id)
@@ -787,7 +883,7 @@ function buildCheckout(
   const invoices = sortedRecords.map((record) => serializeInvoice(record.row));
   const paidInvoice = invoices.find((invoice) => invoice.status === "settled");
   const superseded = sortedRecords.some((record) => record.row.metadata.superseded === true);
-  const status: OpenReceiveCheckout["status"] =
+  const status: OpenReceiveCheckoutModel["status"] =
     paidInvoice !== undefined
       ? "paid"
       : superseded
@@ -823,15 +919,15 @@ function buildCheckout(
 }
 
 function currentOpenCheckout(
-  checkouts: readonly OpenReceiveCheckout[],
-): OpenReceiveCheckout | undefined {
+  checkouts: readonly OpenReceiveCheckoutModel[],
+): OpenReceiveCheckoutModel | undefined {
   return checkouts.find((checkout) => checkout.status === "open");
 }
 
 function requireCheckout(
-  checkouts: readonly OpenReceiveCheckout[],
+  checkouts: readonly OpenReceiveCheckoutModel[],
   checkoutId: string,
-): OpenReceiveCheckout {
+): OpenReceiveCheckoutModel {
   const checkout = checkouts.find((candidate) => candidate.checkoutId === checkoutId);
   if (checkout === undefined) {
     throw serviceError(500, "INTERNAL", "Created checkout was not readable.");
@@ -841,7 +937,7 @@ function requireCheckout(
 
 async function supersedeCheckout(
   context: OpenReceiveServiceContext,
-  checkout: OpenReceiveCheckout,
+  checkout: OpenReceiveCheckoutModel,
 ): Promise<void> {
   const records = await context.store.listByCheckoutId(checkout.checkoutId);
   for (const record of records) {
@@ -1054,10 +1150,14 @@ function reconcileOptions(context: OpenReceiveServiceContext) {
       readPositiveIntegerEnv("OPENRECEIVE_TRANSACTION_SCAN_TIMEOUT_MS"),
     settlementAction: async (input: OpenReceiveSettlementActionInput) => {
       // Delivered after backend-verified settlement, at least once. Apps must
-      // dedupe fulfillment by invoice.payment_hash or their own order id.
+      // dedupe fulfillment by checkout_id or their own order id.
       await context.options.onPaid?.({
         invoice: input.invoice,
-        orderId: readStoredOrderId(input.invoice),
+        order_id: readStoredOrderId(input.invoice),
+        checkout_id: readStoredCheckoutId(input.invoice),
+        invoice_id: input.invoice.invoice_id,
+        payment_hash: input.invoice.payment_hash,
+        amount_msats: input.invoice.amount_msats,
         metadata: input.metadata,
         source: input.source,
         transaction: input.transaction,
@@ -1100,7 +1200,65 @@ function readNonNegativeIntegerEnv(name: string): number | undefined {
   return parsed;
 }
 
-function serializeInvoice(row: InvoiceStorageRow): OpenReceiveInvoice {
+function toWireInvoice(model: OpenReceiveInvoiceModel): OpenReceiveInvoice {
+  return {
+    invoice_id: model.invoiceId,
+    type: model.type,
+    status: model.status,
+    transaction_state: model.transactionState,
+    workflow_state: model.workflowState,
+    invoice: model.bolt11,
+    payment_hash: model.paymentHash,
+    amount_msats: model.amountMsats,
+    order_id: model.orderId,
+    created_at: model.createdAt,
+    expires_at: model.expiresAt,
+    ...(model.settledAt === undefined ? {} : { settled_at: model.settledAt }),
+    ...(model.settlementActionCompletedAt === undefined
+      ? {}
+      : { settlement_action_completed_at: model.settlementActionCompletedAt }),
+    ...(model.refreshedFromInvoiceId === undefined
+      ? {}
+      : { refreshed_from_invoice_id: model.refreshedFromInvoiceId }),
+    fiat_quote: model.fiatQuote,
+    settlement_action_state: model.settlementActionState,
+  };
+}
+
+function toWireCheckout(model: OpenReceiveCheckoutModel): OpenReceiveCheckout {
+  return {
+    checkout_id: model.checkoutId,
+    order_id: model.orderId,
+    status: model.status,
+    amount_msats: model.amountMsats,
+    ...(model.fiat === undefined ? {} : { fiat: model.fiat }),
+    ...(model.active === undefined ? {} : { active: toWireInvoice(model.active) }),
+    invoices: model.invoices.map(toWireInvoice),
+    ...(model.paidAt === undefined ? {} : { paid_at: model.paidAt }),
+    created_at: model.createdAt,
+  };
+}
+
+function toWireOrder(model: OpenReceiveOrderModel): OpenReceiveOrder {
+  return {
+    order_id: model.orderId,
+    status: model.status,
+    paid: model.paid,
+    ...(model.paidAt === undefined ? {} : { paid_at: model.paidAt }),
+    ...(model.displayCheckout === undefined
+      ? {}
+      : { display_checkout: toWireCheckout(model.displayCheckout) }),
+    ...(model.paidCheckout === undefined ? {} : { paid_checkout: toWireCheckout(model.paidCheckout) }),
+    ...(model.activeCheckout === undefined
+      ? {}
+      : { active_checkout: toWireCheckout(model.activeCheckout) }),
+    checkouts: model.checkouts.map(toWireCheckout),
+    wallet_scan_performed: model.walletScanPerformed,
+    transactions_checked: model.transactionsChecked,
+  };
+}
+
+function serializeInvoice(row: InvoiceStorageRow): OpenReceiveInvoiceModel {
   return {
     invoiceId: row.invoice_id,
     type: "incoming",
@@ -1125,7 +1283,7 @@ function serializeInvoice(row: InvoiceStorageRow): OpenReceiveInvoice {
   };
 }
 
-function deriveInvoiceStatus(row: InvoiceStorageRow): OpenReceiveInvoice["status"] {
+function deriveInvoiceStatus(row: InvoiceStorageRow): OpenReceiveInvoiceModel["status"] {
   if (row.settled_at !== undefined || row.transaction_state === "settled") {
     return "settled";
   }
@@ -1457,12 +1615,12 @@ function getCreateDescriptionFields(input: {
     throw serviceError(
       400,
       "INVALID_REQUEST",
-      "Create checkout request accepts only one of memo or descriptionHash.",
+      "Create checkout request accepts only one of memo or description_hash.",
     );
   }
 
   if (descriptionHash !== undefined && !HEX_64.test(descriptionHash)) {
-    throw serviceError(400, "INVALID_REQUEST", "descriptionHash must be 64 hex characters.");
+    throw serviceError(400, "INVALID_REQUEST", "description_hash must be 64 hex characters.");
   }
 
   return {
@@ -1473,36 +1631,36 @@ function getCreateDescriptionFields(input: {
 
 function parseCreateCheckoutOrderId(input: OpenReceiveCreateCheckoutRequest): string {
   const body = asRecord(input);
-  const orderId = optionalString(body.orderId);
+  const orderId = optionalString(body.order_id);
   if (orderId === undefined) {
-    throw serviceError(400, "INVALID_REQUEST", "orderId is required.");
+    throw serviceError(400, "INVALID_REQUEST", "order_id is required.");
   }
   if (orderId.length > 200) {
-    throw serviceError(400, "INVALID_REQUEST", "orderId must be 200 characters or fewer.");
+    throw serviceError(400, "INVALID_REQUEST", "order_id must be 200 characters or fewer.");
   }
   return orderId;
 }
 
 function parseGetCheckoutId(input: OpenReceiveGetCheckoutRequest): string {
   const body = asRecord(input);
-  const checkoutId = optionalString(body.checkoutId);
+  const checkoutId = optionalString(body.checkout_id);
   if (checkoutId === undefined) {
-    throw serviceError(400, "INVALID_REQUEST", "checkoutId is required.");
+    throw serviceError(400, "INVALID_REQUEST", "checkout_id is required.");
   }
   if (checkoutId.length > 200) {
-    throw serviceError(400, "INVALID_REQUEST", "checkoutId must be 200 characters or fewer.");
+    throw serviceError(400, "INVALID_REQUEST", "checkout_id must be 200 characters or fewer.");
   }
   return checkoutId;
 }
 
 function parseGetOrderId(input: OpenReceiveGetOrderRequest): string {
   const body = asRecord(input);
-  const orderId = optionalString(body.orderId);
+  const orderId = optionalString(body.order_id);
   if (orderId === undefined) {
-    throw serviceError(400, "INVALID_REQUEST", "orderId is required.");
+    throw serviceError(400, "INVALID_REQUEST", "order_id is required.");
   }
   if (orderId.length > 200) {
-    throw serviceError(400, "INVALID_REQUEST", "orderId must be 200 characters or fewer.");
+    throw serviceError(400, "INVALID_REQUEST", "order_id must be 200 characters or fewer.");
   }
   return orderId;
 }

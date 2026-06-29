@@ -12,7 +12,7 @@ export type {
   CopyInvoiceOptions,
   CheckoutController,
   CheckoutControllerOptions,
-  CheckoutSnapshot as Invoice,
+  CheckoutSnapshot as Checkout,
   OpenReceiveQrOptions as QrOptions,
   OpenWalletOptions,
   RequestCheckoutAmount,

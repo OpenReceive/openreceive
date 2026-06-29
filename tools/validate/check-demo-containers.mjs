@@ -77,7 +77,8 @@ function readYaml(relativePath) {
   const text = read(relativePath);
   if (text === "") return {};
   try {
-    return parseYaml(text) ?? {};
+    const value = parseYaml(text);
+    return value === null ? {} : value;
   } catch (error) {
     fail(`${relativePath}: ${error.message}`);
     return {};
@@ -123,9 +124,9 @@ function validateCompose(demo) {
   const relativePath = `${demo.dir}/compose.yml`;
   const text = read(relativePath);
   const compose = readYaml(relativePath);
-  const services = compose.services ?? {};
+  const services = compose.services === undefined ? {} : compose.services;
   const serviceNames = Object.keys(services);
-  const service = services[demo.service] ?? {};
+  const service = services[demo.service] === undefined ? {} : services[demo.service];
   const envFile = service.env_file?.[0];
   const ports = service.ports ?? [];
 
@@ -154,7 +155,7 @@ function validateComposeOverride(demo) {
   const relativePath = `${demo.dir}/compose.override.yml.example`;
   const text = read(relativePath);
   const compose = readYaml(relativePath);
-  const service = compose.services?.[demo.service] ?? {};
+  const service = compose.services?.[demo.service] === undefined ? {} : compose.services[demo.service];
   const ports = service.ports ?? [];
 
   forbidSecrets(relativePath, text);

@@ -1,6 +1,6 @@
 "use client";
 
-import type { Invoice } from "@openreceive/browser";
+import type { Checkout as OpenReceiveCheckout } from "@openreceive/browser";
 import {
   Checkout,
   ThemeScope
@@ -43,7 +43,7 @@ interface DemoOrder {
     readonly name: string;
     readonly quantity: number;
   }[];
-  readonly totalAmount: {
+  readonly total_amount: {
     readonly currency: string;
     readonly value: string;
   };
@@ -51,7 +51,7 @@ interface DemoOrder {
 
 interface CreateOrderResponse {
   readonly order: DemoOrder;
-  readonly checkout: Invoice;
+  readonly checkout: OpenReceiveCheckout;
 }
 
 export default function CheckoutClient({
@@ -62,12 +62,12 @@ export default function CheckoutClient({
   const [currency, setCurrency] = useState("USD");
   const [cart, setCart] = useState<Record<string, number>>({});
   const [order, setOrder] = useState<DemoOrder | undefined>();
-  const [checkout, setCheckout] = useState<Invoice | undefined>();
+  const [checkout, setCheckout] = useState<OpenReceiveCheckout | undefined>();
   const [purchasedFruit, setPurchasedFruit] = useState<HelloFruit | undefined>();
   const [stickerModalOpen, setStickerModalOpen] = useState(false);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
-  const completedInvoiceRef = useRef("");
+  const completedCheckoutRef = useRef("");
 
   const selectedFruit = useMemo(
     () => fruits.find((fruit) => fruit.id === fruitId) ?? fruits[0],
@@ -85,8 +85,8 @@ export default function CheckoutClient({
   const cartQuantity = cartItems.reduce((total, item) => total + item.quantity, 0);
 
   const onSettled = useCallback(() => {
-    if (checkout !== undefined && completedInvoiceRef.current !== checkout.order_id) {
-      completedInvoiceRef.current = checkout.order_id;
+    if (checkout !== undefined && completedCheckoutRef.current !== checkout.order_id) {
+      completedCheckoutRef.current = checkout.order_id;
       setOrder((current) => current === undefined
         ? current
         : { ...current, status: "paid" });
@@ -118,7 +118,7 @@ export default function CheckoutClient({
     setStatus("creating");
     setError("");
     setStickerModalOpen(false);
-    completedInvoiceRef.current = "";
+    completedCheckoutRef.current = "";
 
     try {
       const response = await fetch("/create_order", {
@@ -158,7 +158,7 @@ export default function CheckoutClient({
     setStickerModalOpen(false);
     setStatus("idle");
     setError("");
-    completedInvoiceRef.current = "";
+    completedCheckoutRef.current = "";
   }
 
   return (
@@ -239,7 +239,7 @@ export default function CheckoutClient({
         <section className="cart" aria-label="Order">
           <div className="cart-heading">
             <strong>Order</strong>
-            <span>{formatHelloFruitFiat(order.totalAmount)}</span>
+            <span>{formatHelloFruitFiat(order.total_amount)}</span>
           </div>
           {order.items.map((item) => (
             <div className="cart-row" key={item.product_id}>
@@ -276,7 +276,7 @@ export default function CheckoutClient({
             <section className="cart" aria-label="Order">
               <div className="cart-heading">
                 <strong>Order</strong>
-                <span>{formatHelloFruitFiat(order.totalAmount)}</span>
+                <span>{formatHelloFruitFiat(order.total_amount)}</span>
               </div>
               {order.items.map((item) => (
                 <div className="cart-row" key={item.product_id}>
@@ -288,7 +288,7 @@ export default function CheckoutClient({
             </section>
           )}
           <Checkout
-            invoice={checkout}
+            checkout={checkout}
             statusUrl="/order_status"
             logger={logOpenReceive}
             onError={(cause) => {

@@ -531,12 +531,12 @@ test("createOpenReceive builds service methods from a client and store", async (
   });
 
   const body = await openreceive.createCheckout({
-    orderId: "create-openreceive-order",
+    order_id: "create-openreceive-order",
     amount: { msats: 200000 },
     memo: "Factory invoice"
   });
 
-  assert.equal(body.active.bolt11, "lnbc-create-openreceive");
+  assert.equal(body.active.invoice, "lnbc-create-openreceive");
   assert.equal(typeof openreceive.getOrder, "function");
 });
 

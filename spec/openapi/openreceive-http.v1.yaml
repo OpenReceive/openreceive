@@ -37,10 +37,10 @@ components:
       type: object
       additionalProperties: false
       required:
-        - orderId
+        - order_id
         - amount
       properties:
-        orderId:
+        order_id:
           type: string
           minLength: 1
           maxLength: 200
@@ -49,16 +49,19 @@ components:
         memo:
           type: string
           maxLength: 500
-        descriptionHash:
+        description_hash:
           type: string
           pattern: "^[0-9a-fA-F]{64}$"
-        expiresInSeconds:
+        expires_in_seconds:
           type: integer
           minimum: 1
+        metadata:
+          type: object
+          additionalProperties: true
       not:
         required:
           - memo
-          - descriptionHash
+          - description_hash
     CreateCheckoutAmount:
       type: object
       additionalProperties: false
@@ -275,6 +278,8 @@ components:
         paid_checkout:
           $ref: "#/components/schemas/Checkout"
         active_checkout:
+          $ref: "#/components/schemas/Checkout"
+        display_checkout:
           $ref: "#/components/schemas/Checkout"
         checkouts:
           type: array

@@ -6,7 +6,10 @@ import {
 } from "./index.js";
 
 export class CheckoutComponent {
-  snapshot;
+  checkout;
+  statusUrl;
+  onSettled;
+  onStartOver;
   options = {};
 
   ngOnInit() {
@@ -14,9 +17,15 @@ export class CheckoutComponent {
   }
 
   get shell() {
+    const options = {
+      ...this.options,
+      ...(this.statusUrl === undefined ? {} : { statusUrl: this.statusUrl }),
+      ...(this.onSettled === undefined ? {} : { onSettled: this.onSettled }),
+      ...(this.onStartOver === undefined ? {} : { onStartOver: this.onStartOver })
+    };
     return createOpenReceiveAngularCheckoutShellBinding(
-      this.snapshot,
-      this.options
+      this.checkout,
+      options
     );
   }
 
@@ -37,7 +46,10 @@ export class CheckoutComponent {
   }
 }
 
-Input({ required: true })(CheckoutComponent.prototype, "snapshot");
+Input({ required: true })(CheckoutComponent.prototype, "checkout");
+Input()(CheckoutComponent.prototype, "statusUrl");
+Input()(CheckoutComponent.prototype, "onSettled");
+Input()(CheckoutComponent.prototype, "onStartOver");
 Input()(CheckoutComponent.prototype, "options");
 
 Component({
@@ -70,6 +82,7 @@ Component({
         (openreceive-open-wallet)="onCheckoutEvent(openReceiveEvents.openWallet, $event)"
         (openreceive-state)="onCheckoutEvent(openReceiveEvents.state, $event)"
         (openreceive-settled)="onCheckoutEvent(openReceiveEvents.settled, $event)"
+        (openreceive-start-over)="onCheckoutEvent(openReceiveEvents.startOver, $event)"
         (openreceive-error)="onCheckoutEvent(openReceiveEvents.error, $event)"
         (openreceive-provider-copy)="onCheckoutEvent(openReceiveEvents.providerCopy, $event)"
       ></openreceive-checkout>

@@ -353,10 +353,10 @@ export function validateRegistry(input: ProviderRegistry = registry): ProviderRe
     if (!condition) errors.push(message);
   };
 
-  const providers = input.providers ?? {};
+  const providers = input.providers === undefined ? {} : input.providers;
   const cryptoRoutes = input.crypto_routes ?? [];
   const countries = input.countries ?? [];
-  const fiatRails = input.fiat_rails ?? {};
+  const fiatRails = input.fiat_rails === undefined ? {} : input.fiat_rails;
   const disqualifiedProviders = input.disqualified_providers ?? [];
   const providerIds = new Set(Object.keys(providers));
   const disqualifiedIds = new Set(disqualifiedProviders.map((provider) => provider.id));
@@ -437,7 +437,8 @@ export function validateRegistry(input: ProviderRegistry = registry): ProviderRe
   for (const [railId, rail] of Object.entries(fiatRails)) {
     check(Boolean(rail.label), `fiat rail ${railId} missing label`);
 
-    for (const [countryCode, refs] of Object.entries(rail.countries ?? {})) {
+    const countriesByCode = rail.countries === undefined ? {} : rail.countries;
+    for (const [countryCode, refs] of Object.entries(countriesByCode)) {
       check(/^[A-Z]{2}$/.test(countryCode), `fiat rail ${railId} has invalid country code ${countryCode}`);
       check(countryCodes.has(countryCode), `fiat rail ${railId} references unknown country ${countryCode}`);
       check(Array.isArray(refs) && refs.length > 0, `fiat rail ${railId}/${countryCode} needs providers`);

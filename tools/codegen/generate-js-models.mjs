@@ -7,6 +7,7 @@ import { parse as parseYaml } from "yaml";
 const root = process.cwd();
 const outputPath = "packages/js/core/src/generated/contracts.ts";
 const check = process.argv.includes("--check");
+const EMPTY_OBJECT = Object.freeze({});
 
 function readYaml(relativePath) {
   return parseYaml(readFileSync(path.join(root, relativePath), "utf8"));
@@ -21,7 +22,7 @@ function assert(condition, message) {
 }
 
 function messageNames(asyncApi) {
-  return Object.values(asyncApi.components?.messages ?? {})
+  return Object.values(asyncApi.components?.messages ?? EMPTY_OBJECT)
       .map((message) => message?.name)
       .filter((name) => typeof name === "string")
       .sort((left, right) => left.localeCompare(right, "en"));
@@ -35,7 +36,7 @@ function generate() {
   const openApi = readYaml("spec/openapi/openreceive-http.v1.yaml");
   const asyncApi = readYaml("spec/asyncapi/openreceive-events.v1.yaml");
   const errorSchema = readJson("spec/schemas/error.schema.json");
-  const schemas = openApi.components?.schemas ?? {};
+  const schemas = openApi.components?.schemas ?? EMPTY_OBJECT;
   const invoice = schemas.Invoice;
   const amount = invoice?.properties?.amount_msats;
   const invoiceId = invoice?.properties?.invoice_id;

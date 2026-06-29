@@ -50,9 +50,10 @@ function readWorkflow(relativePath) {
 
   const text = readFileSync(absolute, "utf8");
   try {
+    const workflow = parseYaml(text);
     return {
       text,
-      workflow: parseYaml(text) ?? {}
+      workflow: workflow === null ? {} : workflow
     };
   } catch (error) {
     fail(`${relativePath}: ${error.message}`);
@@ -66,7 +67,8 @@ function expect(condition, message) {
 
 function workflowCommands(workflow) {
   const commands = [];
-  for (const job of Object.values(workflow.jobs ?? {})) {
+  const jobs = workflow.jobs === undefined ? {} : workflow.jobs;
+  for (const job of Object.values(jobs)) {
     for (const step of job.steps ?? []) {
       if (typeof step.run === "string") commands.push(step.run);
     }
@@ -82,9 +84,11 @@ for (const [relativePath, requiredCommands] of Object.entries(requiredWorkflows)
   expect(typeof workflow.name === "string" && workflow.name.length > 0, `${relativePath}: missing workflow name`);
   expect(workflow.on !== undefined, `${relativePath}: missing triggers`);
   expect(workflow.permissions?.contents === "read", `${relativePath}: contents permission must be read-only`);
-  expect(Object.keys(workflow.permissions ?? {}).length === 1, `${relativePath}: workflow must not request extra permissions`);
+  const permissions = workflow.permissions === undefined ? {} : workflow.permissions;
+  const jobs = workflow.jobs === undefined ? {} : workflow.jobs;
+  expect(Object.keys(permissions).length === 1, `${relativePath}: workflow must not request extra permissions`);
   expect(workflow.concurrency !== undefined, `${relativePath}: missing concurrency group`);
-  expect(Object.keys(workflow.jobs ?? {}).length > 0, `${relativePath}: missing jobs`);
+  expect(Object.keys(jobs).length > 0, `${relativePath}: missing jobs`);
 
   for (const command of requiredCommands) {
     expect(allCommands.includes(command), `${relativePath}: missing command ${command}`);

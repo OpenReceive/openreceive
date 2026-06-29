@@ -30,7 +30,7 @@ import {
 } from "@openreceive/angular";
 import {
   applyCheckoutThemeAttributes as applySvelteCheckoutThemeAttributes,
-  createOpenReceiveSvelteCheckoutBinding,
+  createCheckoutBinding,
   createOpenReceiveSvelteCheckoutComponentModel,
   createOpenReceiveSvelteCheckoutController,
   createOpenReceiveSvelteCheckoutShell,
@@ -294,7 +294,7 @@ test("Vue, Svelte, and Angular adapters expose thin custom-element bindings", ()
   assert.equal(vue.attrs["status-url"], "/order_status");
   assert.equal(vue.attrs.theme, "light");
 
-  const svelte = createOpenReceiveSvelteCheckoutBinding(snapshot, {
+  const svelte = createCheckoutBinding(snapshot, {
     paymentWizard: false
   });
   assert.equal(svelte.tagName, OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME);
@@ -361,7 +361,7 @@ test("Vue, Svelte, and Angular adapters expose thin custom-element bindings", ()
 
   let vueSettled = false;
   const vueComponent = createOpenReceiveVueCheckoutComponentModel({
-    invoice: snapshot,
+    checkout: snapshot,
     status: "pending",
     providers: [],
     theme: "light",
@@ -380,7 +380,7 @@ test("Vue, Svelte, and Angular adapters expose thin custom-element bindings", ()
   assert.equal(vueComponent.themeToggle.tagName, OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME);
 
   const svelteComponent = createOpenReceiveSvelteCheckoutComponentModel({
-    invoice: snapshot,
+    checkout: snapshot,
     paymentWizard: false
   });
   assert.equal(svelteComponent.componentName, "Checkout");
@@ -388,7 +388,7 @@ test("Vue, Svelte, and Angular adapters expose thin custom-element bindings", ()
   assert.equal(svelteComponent.checkout.props["payment-wizard"], "false");
 
   const angularComponent = createOpenReceiveAngularCheckoutComponentModel({
-    invoice: snapshot,
+    checkout: snapshot,
     checkoutSelector: "#checkout"
   });
   assert.equal(angularComponent.componentName, "Checkout");

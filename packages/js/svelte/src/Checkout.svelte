@@ -7,10 +7,18 @@
     type CheckoutSnapshot
   } from "./index.js";
 
-  export let snapshot: CheckoutSnapshot;
+  export let checkout: CheckoutSnapshot;
+  export let statusUrl: string | undefined = undefined;
+  export let onSettled: ((event: Event) => void) | undefined = undefined;
+  export let onStartOver: ((event: Event) => void) | undefined = undefined;
   export let options: CheckoutShellOptions = {};
 
-  $: shell = createOpenReceiveSvelteCheckoutShellBinding(snapshot, options);
+  $: shell = createOpenReceiveSvelteCheckoutShellBinding(checkout, {
+    ...options,
+    ...(statusUrl === undefined ? {} : { statusUrl }),
+    ...(onSettled === undefined ? {} : { onSettled }),
+    ...(onStartOver === undefined ? {} : { onStartOver })
+  });
 
   if (typeof window !== "undefined") {
     defineOpenReceiveElements();

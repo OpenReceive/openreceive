@@ -116,6 +116,7 @@ function resolveTargetVersion(currentVersion, requestedVersion) {
 
 function run(command, args, root, options = {}) {
   const npmCache = path.join(root, ".release", "npm-cache");
+  const extraEnv = options.env === undefined ? {} : options.env;
   if (command === "npm") mkdirSync(npmCache, { recursive: true });
   return execFileSync(command, args, {
     cwd: root,
@@ -126,7 +127,7 @@ function run(command, args, root, options = {}) {
       npm_config_audit: "false",
       npm_config_fund: "false",
       ...(command === "npm" ? { npm_config_cache: npmCache } : {}),
-      ...(options.env ?? {})
+      ...extraEnv
     }
   });
 }
@@ -332,7 +333,8 @@ function assertVersionsReady(root, targetVersion) {
 
   for (const { manifest } of discoverWorkspacePackages({ root })) {
     assert.equal(manifest.version, targetVersion, `${manifest.name}: version must be ${targetVersion}`);
-    for (const [dependency, version] of Object.entries(manifest.dependencies ?? {})) {
+    const dependencies = manifest.dependencies === undefined ? {} : manifest.dependencies;
+    for (const [dependency, version] of Object.entries(dependencies)) {
       if (dependency.startsWith("@openreceive/")) {
         assert.equal(version, targetVersion, `${manifest.name}: ${dependency} must be ${targetVersion}`);
       }

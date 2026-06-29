@@ -9,7 +9,10 @@ import {
 
 const props = withDefaults(
   defineProps<{
-    snapshot: CheckoutSnapshot;
+    checkout: CheckoutSnapshot;
+    statusUrl?: string;
+    onSettled?: (event: Event) => void;
+    onStartOver?: (event: Event) => void;
     options?: CheckoutShellOptions;
   }>(),
   {
@@ -22,7 +25,12 @@ onMounted(() => {
 });
 
 const shell = computed(() =>
-  createOpenReceiveVueCheckoutShellBinding(props.snapshot, props.options)
+  createOpenReceiveVueCheckoutShellBinding(props.checkout, {
+    ...props.options,
+    ...(props.statusUrl === undefined ? {} : { statusUrl: props.statusUrl }),
+    ...(props.onSettled === undefined ? {} : { onSettled: props.onSettled }),
+    ...(props.onStartOver === undefined ? {} : { onStartOver: props.onStartOver })
+  })
 );
 </script>
 

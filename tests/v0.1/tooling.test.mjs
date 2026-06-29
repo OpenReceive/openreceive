@@ -150,15 +150,15 @@ test("workspace metadata does not reference removed express or next packages", (
 test("Node quickstart shows service methods without framework route scaffolding", () => {
   const quickstart = readFileSync(nodeQuickstartDocs, "utf8");
   assert.match(quickstart, /createCheckoutForCart/);
-  assert.match(quickstart, /refreshOrderStatus/);
-  assert.match(quickstart, /orderId:/);
+  assert.match(quickstart, /orderStatus/);
+  assert.match(quickstart, /order_id:/);
   assert.match(quickstart, /memo:/);
-  assert.match(quickstart, /totalAmount/);
+  assert.match(quickstart, /total_amount/);
   assert.match(quickstart, /createOpenReceive/);
   assert.match(quickstart, /from "@openreceive\/node";/);
   assert.doesNotMatch(quickstart, /OpenReceiveServiceError/);
   assert.doesNotMatch(quickstart, /app\.post|Response\.json|Fastify|express/i);
-  assert.doesNotMatch(quickstart, /statusUrl|requestCheckout|checkoutUrl/);
+  assert.doesNotMatch(quickstart, /requestCheckout|checkoutUrl/);
 });
 
 test("quickstart and examples do not use OpenReceive HTTP converter helpers", () => {
@@ -172,9 +172,9 @@ test("quickstart and examples do not use OpenReceive HTTP converter helpers", ()
 test("authorization guide shows app boundary service error handling", () => {
   const source = readFileSync(authorizationDocs, "utf8");
   assert.match(source, /OpenReceiveServiceError/);
-  assert.match(source, /orderId:/);
+  assert.match(source, /order_id:/);
   assert.match(source, /memo:/);
-  assert.match(source, /totalAmount/);
+  assert.match(source, /total_amount/);
   assert.match(source, /createOpenReceive/);
   assert.match(source, /from "@openreceive\/node";/);
 });
@@ -186,8 +186,14 @@ test("Node quickstart covers all shipped frontend framework adapters", () => {
     assert.match(source, new RegExp(heading), `${heading}: quickstart section exists`);
   }
   assert.match(source, /@openreceive\/angular\/checkout-component/);
+  assert.match(source, /checkout=\{checkout\}/);
+  assert.match(source, /:checkout="checkout"/);
+  assert.match(source, /\{checkout\}/);
+  assert.match(source, /\[checkout\]="checkout"/);
+  assert.match(source, /statusUrl="\/order_status"/);
+  assert.match(source, /status-url="\/order_status"/);
   assert.doesNotMatch(
-    source.slice(source.indexOf("## Angular"), source.indexOf("## Optional Scheduler")),
+    source.slice(source.indexOf("## Angular"), source.indexOf("## How Settlement Works")),
     /@openreceive\/vue|createOpenReceiveVue/,
   );
 });
