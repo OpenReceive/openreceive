@@ -2866,11 +2866,23 @@ export async function requestCheckout(
     throw new Error("OpenReceive checkout creation requires fetch.");
   }
 
+  if (
+    typeof options.amount !== "object" ||
+    options.amount === null ||
+    Array.isArray(options.amount)
+  ) {
+    throw new Error(
+      "OpenReceive checkout creation requires exactly one of amount.btc or amount.fiat.",
+    );
+  }
+  const unsupportedAmountKeys = Object.keys(options.amount).filter(
+    (key) => key !== "btc" && key !== "fiat",
+  );
   const amountSourceCount = [
     "btc" in options.amount,
     "fiat" in options.amount,
   ].filter(Boolean).length;
-  if (amountSourceCount !== 1) {
+  if (unsupportedAmountKeys.length > 0 || amountSourceCount !== 1) {
     throw new Error(
       "OpenReceive checkout creation requires exactly one of amount.btc or amount.fiat.",
     );

@@ -47,11 +47,10 @@ export interface HelloFruitCreateOrderResult {
     readonly amount:
       | {
         readonly btc: {
-          readonly currency: "BTC";
+          readonly currency: "BTC" | "SATS";
           readonly value: string;
         };
       }
-      | { readonly sats: string }
       | { readonly fiat: HelloFruitFiatAmount };
     readonly memo: string;
     readonly expires_in_seconds: number;

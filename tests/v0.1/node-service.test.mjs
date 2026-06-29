@@ -383,6 +383,26 @@ test("service errors surface as OpenReceiveServiceError with status and body", a
   assert.equal(wallet.makeInvoiceCalls, 0);
 });
 
+test("createCheckout rejects removed direct sat and msat amount shortcuts", async () => {
+  const { wallet, openreceive } = await createHarness();
+
+  for (const amount of [{ sats: "200" }, { msats: "200000" }]) {
+    await assertServiceError(
+      () =>
+        openreceive.createCheckout({
+          order_id: `order-invalid-${Object.keys(amount)[0]}`,
+          amount,
+        }),
+      {
+        status: 400,
+        code: "INVALID_REQUEST",
+        message: "Create checkout request requires exactly one of amount.btc or amount.fiat.",
+      },
+    );
+  }
+  assert.equal(wallet.makeInvoiceCalls, 0);
+});
+
 test("diagnostic events and logger entries are sanitized and non-blocking", async () => {
   const events = [];
   const logs = [];

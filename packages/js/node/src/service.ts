@@ -346,6 +346,7 @@ async function createCheckout(
   input: OpenReceiveCreateCheckoutRequest,
 ): Promise<OpenReceiveCheckoutModel> {
   const orderId = parseCreateCheckoutOrderId(input);
+  readCreateAmountKind(input.amount);
   const now = context.clock();
   const records = await context.store.listByOrderId(orderId);
   const checkouts = groupCheckouts(records, now);
@@ -640,6 +641,7 @@ function readStoredAmountSpec(row: InvoiceStorageRow): OpenReceiveCreateCheckout
 }
 
 function createAmountRequest(amount: OpenReceiveCreateCheckoutAmount): Record<string, unknown> {
+  readCreateAmountKind(amount);
   return {
     ...("btc" in amount ? { amount: amount.btc } : {}),
     ...("fiat" in amount ? { fiat: amount.fiat } : {}),
@@ -660,10 +662,33 @@ function createCheckoutRequestHashBody(input: OpenReceiveCreateCheckoutRequest):
 }
 
 function amountKeyFromCreateAmount(amount: OpenReceiveCreateCheckoutAmount): string {
+  readCreateAmountKind(amount);
   if ("fiat" in amount) {
     return `fiat:${amount.fiat.currency}:${amount.fiat.value}`;
   }
   return `btc:${amount.btc.currency}:${amount.btc.value}`;
+}
+
+function readCreateAmountKind(amount: OpenReceiveCreateCheckoutAmount): "btc" | "fiat" {
+  if (!isRecord(amount)) {
+    throw serviceError(
+      400,
+      "INVALID_REQUEST",
+      "Create checkout request requires exactly one of amount.btc or amount.fiat.",
+    );
+  }
+
+  const unsupportedKeys = Object.keys(amount).filter((key) => key !== "btc" && key !== "fiat");
+  const hasBtc = amount.btc !== undefined;
+  const hasFiat = amount.fiat !== undefined;
+  if (unsupportedKeys.length > 0 || [hasBtc, hasFiat].filter(Boolean).length !== 1) {
+    throw serviceError(
+      400,
+      "INVALID_REQUEST",
+      "Create checkout request requires exactly one of amount.btc or amount.fiat.",
+    );
+  }
+  return hasBtc ? "btc" : "fiat";
 }
 
 function scanlessOrderMeta(): OrderScanMeta {

@@ -1011,6 +1011,32 @@ test("browser request checkout helper posts SDK-shaped data to an app-owned URL"
     () =>
       requestCheckout({
         checkoutUrl: "/create_order",
+        order_id: "old-direct-sats",
+        amount: { sats: "200" },
+        fetch: async () => ({
+          ok: true,
+          json: async () => ({}),
+        }),
+      }),
+    /amount\.btc or amount\.fiat/,
+  );
+  await assert.rejects(
+    () =>
+      requestCheckout({
+        checkoutUrl: "/create_order",
+        order_id: "old-direct-msats",
+        amount: { msats: "200000" },
+        fetch: async () => ({
+          ok: true,
+          json: async () => ({}),
+        }),
+      }),
+    /amount\.btc or amount\.fiat/,
+  );
+  await assert.rejects(
+    () =>
+      requestCheckout({
+        checkoutUrl: "/create_order",
         order_id: "bad-nwc",
         amount: { btc: { currency: "BTC", value: "0.000002" } },
         memo: `nostr+walletconnect://${"a".repeat(64)}?secret=${"b".repeat(64)}`,

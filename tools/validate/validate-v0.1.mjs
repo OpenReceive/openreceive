@@ -979,6 +979,7 @@ function validateOpenApi() {
 
   const paths = openapi.paths || {};
   const createCheckoutRequest = openapi.components?.schemas?.CreateCheckoutRequest;
+  const createCheckoutAmount = openapi.components?.schemas?.CreateCheckoutAmount;
   assert(
     Object.keys(paths).length === 0,
     "OpenAPI must not define OpenReceive-owned app routes",
@@ -990,6 +991,16 @@ function validateOpenApi() {
   assert(
     createCheckoutRequest?.properties?.amount?.$ref === "#/components/schemas/CreateCheckoutAmount",
     "OpenAPI create checkout request must use the SDK amount wrapper",
+  );
+  assert(
+    createCheckoutAmount?.properties?.btc?.$ref === "#/components/schemas/BitcoinAmount" &&
+      createCheckoutAmount?.properties?.fiat?.$ref === "#/components/schemas/FiatAmount",
+    "OpenAPI create checkout amount must expose btc and fiat sources",
+  );
+  assert(
+    createCheckoutAmount?.properties?.sats === undefined &&
+      createCheckoutAmount?.properties?.msats === undefined,
+    "OpenAPI create checkout amount must not expose direct sats or msats sources",
   );
   assert(
     JSON.stringify(openapi.components?.schemas?.BitcoinAmount?.properties?.currency?.enum) ===
