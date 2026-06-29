@@ -298,6 +298,8 @@ test("Hello Fruit JS demos use package-owned QR and status refresh wiring", () =
       assert.equal(packageJson.dependencies["@angular/core"], "^22.0.3");
       assert.equal(packageJson.dependencies["@angular/platform-browser"], "^22.0.3");
       assert.match(viteConfig, /@vitejs\/plugin-vue/);
+      assert.match(viteConfig, /vue\/compiler-sfc/);
+      assert.match(viteConfig, /vue\(\{\s*compiler:\s*vueCompiler\s*\}\)/);
       assert.match(viteConfig, /@sveltejs\/vite-plugin-svelte/);
     }
     assert.match(packageJson.scripts.dev, /require-openreceive-nwc\.ts/);

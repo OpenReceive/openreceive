@@ -31,9 +31,11 @@ On a user-driven retry, the order id is the boundary:
 
 ## Late Payments
 
-Old checkouts remain settlement-watchable. If a superseded or expired checkout
-is later paid, `getOrder` exposes the paid checkout as `paid_checkout` and
-`display_checkout`.
+Old unexpired checkouts remain settlement-watchable. If a superseded checkout is
+paid before its invoice expires, `getOrder` exposes the paid checkout as
+`paid_checkout` and `display_checkout`. Once every invoice for an order is past
+`expires_at`, status polling reads storage only and does not call
+`list_transactions`.
 
 Fulfillment must be idempotent on `checkoutId` or your own order id. Fulfill from
 the paid checkout snapshot and its metadata, not from the live cart.

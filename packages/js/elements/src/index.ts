@@ -110,10 +110,15 @@ export { OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME } from "@openreceive/browser/
 export function renderCheckoutHtml(view: CheckoutView): string {
   const display = createCheckoutDisplayModel(view);
   const checkoutState = createElementCheckoutState(view);
+  const summaryAmountLabel = display.fiatLabel === undefined ? display.amountLabel : undefined;
   const amountLabel =
+    summaryAmountLabel === undefined
+      ? ""
+      : `<span part="amount">${escapeHtml(summaryAmountLabel)}</span>`;
+  const satsDetail =
     display.amountLabel === undefined
       ? ""
-      : `<span part="amount">${escapeHtml(display.amountLabel)}</span>`;
+      : `<div part="sats-detail">${escapeHtml(display.amountLabel)}</div>`;
   const fiatLabel =
     display.fiatLabel === undefined
       ? ""
@@ -141,6 +146,7 @@ export function renderCheckoutHtml(view: CheckoutView): string {
     <style>${openReceiveCheckoutElementStyles}</style>
     <section part="root"${view.theme === undefined ? "" : ` data-theme="${escapeHtml(view.theme)}"`}>
       ${expired ? "" : `<div part="qr" ${OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.qr}></div>`}
+      ${expired ? "" : satsDetail}
       ${status}
       <div part="meta">${amountLabel}${fiatLabel}${stateLabel}</div>
       <div part="actions">

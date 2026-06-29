@@ -7,6 +7,7 @@ import {
   defineOpenReceiveElements
 } from "@openreceive/elements";
 import {
+  createHelloFruitDemoBrowserConsoleLogger,
   createHelloFruitBrowserLogger
 } from "../../../../shared/demo-browser-logging.ts";
 import {
@@ -71,15 +72,23 @@ let currentOrder: DemoOrder | undefined;
 let purchasedFruit: Fruit | undefined;
 let completedOrderId = "";
 const logOpenReceive = createHelloFruitBrowserLogger("static-html-small-api");
+const logDemo = createHelloFruitDemoBrowserConsoleLogger("static-html-small-api");
 
 defineOpenReceiveElements({
   logger: logOpenReceive
+});
+logDemo("app.bootstrap", "Bootstrapping static HTML demo app.", {
+  fruitCount: fruits.length,
+  currencyOptions,
+  selectedFruitId: selectedFruit.id,
+  selectedCurrency
 });
 renderThemeToggle();
 renderProduct();
 renderCurrencyPicker();
 renderFruitGrid();
 renderCreateOrderControls();
+logDemo("app.ready", "Static HTML demo app mounted.");
 
 document.getElementById("add-to-cart")?.addEventListener("click", () => {
   addSelectedFruitToCart();
@@ -90,6 +99,7 @@ document.getElementById("create-order")?.addEventListener("click", () => {
 
 function renderThemeToggle(): void {
   const topbar = requireElement("topbar");
+  logDemo("theme_toggle.render", "Rendering OpenReceive theme toggle.");
   topbar.replaceChildren(createOpenReceiveThemeToggleElement({
     document,
     rootSelector: ".page",
@@ -103,6 +113,10 @@ function renderProduct(): void {
   const title = requireElement("product-title");
   const description = requireElement("product-description");
 
+  logDemo("product.render", "Rendering selected product.", {
+    fruitId: selectedFruit.id,
+    fruitName: selectedFruit.name
+  });
   sticker.src = `/${selectedFruit.sticker}`;
   title.textContent = product.name;
   description.textContent = product.description;
@@ -111,12 +125,20 @@ function renderProduct(): void {
 function renderFruitGrid(): void {
   const grid = requireElement("fruit-grid");
   grid.replaceChildren();
+  logDemo("fruit_grid.render", "Rendering fruit picker.", {
+    fruitCount: fruits.length,
+    selectedFruitId: selectedFruit.id
+  });
 
   for (const fruit of fruits) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = fruit.id === selectedFruit.id ? "selected" : "";
     button.addEventListener("click", () => {
+      logDemo("fruit.select", "Fruit selected.", {
+        fruitId: fruit.id,
+        fruitName: fruit.name
+      });
       selectedFruit = fruit;
       renderProduct();
       renderFruitGrid();
@@ -147,6 +169,10 @@ function renderCurrencyPicker(): void {
   const select = document.createElement("select");
   select.value = selectedCurrency;
   select.addEventListener("change", () => {
+    logDemo("currency.change", "Currency changed.", {
+      from: selectedCurrency,
+      to: select.value
+    });
     selectedCurrency = select.value;
     renderCreateOrderControls();
   });
@@ -173,9 +199,22 @@ function renderCreateOrderControls(): void {
   const cartQuantity = cartItems().reduce((total, item) => total + item.quantity, 0);
   orderButton.disabled = cartQuantity === 0;
   orderButton.textContent = helloFruitDemoLabels.createOrder;
+  logDemo("controls.render", "Rendered cart and order controls.", {
+    selectedFruitId: selectedFruit.id,
+    selectedCurrency,
+    cartQuantity,
+    canCreateOrder: cartQuantity > 0
+  });
 }
 
 function addSelectedFruitToCart(): void {
+  const nextQuantity = Math.min((cart[selectedFruit.id] ?? 0) + 1, 9);
+  logDemo("cart.add", "Adding selected fruit to cart.", {
+    fruitId: selectedFruit.id,
+    fruitName: selectedFruit.name,
+    currency: selectedCurrency,
+    quantity: nextQuantity
+  });
   cart = {
     ...cart,
     [selectedFruit.id]: Math.min((cart[selectedFruit.id] ?? 0) + 1, 9)
@@ -184,6 +223,9 @@ function addSelectedFruitToCart(): void {
 }
 
 function removeFruitFromCart(fruitId: string): void {
+  logDemo("cart.remove", "Removing fruit from cart.", {
+    fruitId
+  });
   const next = { ...cart };
   delete next[fruitId];
   cart = next;
@@ -195,7 +237,14 @@ function renderCart(): void {
   panel.replaceChildren();
 
   const items = cartItems();
-  if (items.length === 0) return;
+  if (items.length === 0) {
+    logDemo("cart.render", "Cart is empty.");
+    return;
+  }
+  logDemo("cart.render", "Rendering cart.", {
+    cartLineCount: items.length,
+    cartQuantity: items.reduce((total, item) => total + item.quantity, 0)
+  });
 
   const section = document.createElement("section");
   section.className = "cart";
@@ -233,6 +282,12 @@ function renderCart(): void {
 function renderOrder(order: DemoOrder): void {
   const panel = requireElement("cart-panel");
   panel.replaceChildren();
+  logDemo("order.render", "Rendering order summary.", {
+    orderId: order.uuid,
+    orderStatus: order.status,
+    itemCount: order.items.length,
+    total: order.total_amount
+  });
 
   const section = document.createElement("section");
   section.className = "cart";
@@ -287,6 +342,15 @@ async function createOrder(): Promise<void> {
   try {
     const idempotencyKey = globalThis.crypto?.randomUUID?.() ??
       `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const startedAt = Date.now();
+    const items = cartItems();
+    logDemo("create_order.request", "Posting create order request.", {
+      currency: selectedCurrency,
+      cartLineCount: items.length,
+      cartQuantity: items.reduce((total, item) => total + item.quantity, 0),
+      productIds: items.map((item) => item.fruit.id),
+      idempotencyKeyPresent: idempotencyKey.length > 0
+    });
     const response = await fetch("/create_order", {
       method: "POST",
       headers: {
@@ -302,15 +366,34 @@ async function createOrder(): Promise<void> {
       })
     });
     const body = await response.json() as unknown;
+    logDemo("create_order.response", "Received create order response.", {
+      ok: response.ok,
+      status: response.status,
+      elapsedMs: Date.now() - startedAt,
+      hasCheckout: isCreateOrderResponse(body)
+    });
     if (!response.ok || !isCreateOrderResponse(body)) {
       throw new Error(readErrorMessage(body) ?? helloFruitDemoLabels.createOrderError);
     }
 
     currentOrder = body.order;
-    purchasedFruit = cartItems()[0]?.fruit;
+    purchasedFruit = items[0]?.fruit;
+    logDemo("create_order.ready", "Checkout payload accepted by browser app.", {
+      orderId: body.order.uuid,
+      checkoutOrderId: body.checkout.order_id,
+      orderStatus: body.order.status,
+      itemCount: body.order.items.length,
+      total: body.order.total_amount
+    });
     renderOrder(body.order);
-    renderCheckout(body.checkout);
+    renderCheckout({
+      ...body.checkout,
+      fiat: body.order.total_amount
+    });
   } catch (error) {
+    logDemo("create_order.error", "Create order failed in the browser.", {
+      error: error instanceof Error ? error.message : String(error)
+    });
     setError(error instanceof Error ? error.message : String(error));
   } finally {
     setOrderButtonState("idle");
@@ -320,6 +403,9 @@ async function createOrder(): Promise<void> {
 function renderCheckout(checkout: CheckoutSnapshot): void {
   const topbar = requireElement("topbar");
   const panel = requireElement("checkout-panel");
+  logDemo("checkout.render", "Rendering OpenReceive checkout shell.", {
+    orderId: checkout.order_id
+  });
   const shell = createCheckoutShell(checkout, {
     document,
     root: document.querySelector(".page"),
@@ -328,6 +414,9 @@ function renderCheckout(checkout: CheckoutSnapshot): void {
     defaultTheme: "light",
     onError: (event) => {
       const detail = (event as CustomEvent<{ error?: unknown }>).detail;
+      logDemo("checkout.error", "Checkout shell reported an error.", {
+        error: detail?.error instanceof Error ? detail.error.message : String(detail?.error)
+      });
       setError(detail?.error instanceof Error ? detail.error.message : String(detail?.error));
     },
     onSettled: (event) => {
@@ -337,6 +426,10 @@ function renderCheckout(checkout: CheckoutSnapshot): void {
         state.order_id !== completedOrderId &&
           purchasedFruit !== undefined
       ) {
+        logDemo("checkout.settled", "Checkout settled callback received.", {
+          orderId: state.order_id,
+          purchasedFruitId: purchasedFruit.id
+        });
         completedOrderId = state.order_id;
         if (currentOrder !== undefined) {
           currentOrder = { ...currentOrder, status: "paid" };
@@ -352,11 +445,20 @@ function renderCheckout(checkout: CheckoutSnapshot): void {
 }
 
 function setError(message: string): void {
+  if (message !== "") {
+    logDemo("error.show", "Showing browser error message.", {
+      message
+    });
+  }
   requireElement("error").textContent = message;
 }
 
 function showStickerModal(fruit: Fruit): void {
   closeStickerModal();
+  logDemo("sticker_modal.show", "Showing sticker download modal.", {
+    fruitId: fruit.id,
+    fruitName: fruit.name
+  });
 
   const backdrop = document.createElement("div");
   backdrop.className = "sticker-modal-backdrop";
@@ -401,6 +503,9 @@ function showStickerModal(fruit: Fruit): void {
 }
 
 function closeStickerModal(): void {
+  if (document.getElementById("sticker-modal-backdrop") !== null) {
+    logDemo("sticker_modal.close", "Closing sticker download modal.");
+  }
   document.getElementById("sticker-modal-backdrop")?.remove();
 }
 

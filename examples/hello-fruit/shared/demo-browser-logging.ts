@@ -19,3 +19,16 @@ export function createHelloFruitBrowserLogger(
     console[method](`[openreceive:${demoId}:client] ${event}: ${message}`, fields);
   };
 }
+
+export function createHelloFruitDemoBrowserConsoleLogger(demoId: string) {
+  return (
+    event: string,
+    message: string,
+    fields: Record<string, unknown> = {}
+  ): void => {
+    console.log(`[hello-fruit:${demoId}:browser] ${event}: ${message}`, {
+      at: new Date().toISOString(),
+      ...fields
+    });
+  };
+}

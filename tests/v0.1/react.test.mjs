@@ -86,6 +86,7 @@ function invoice(overrides = {}) {
     order_id: overrides.order_id ?? `order_${invoice.invoice_id}`,
     status: overrides.status ?? "open",
     amount_msats: overrides.amount_msats ?? invoice.amount_msats,
+    ...(overrides.fiat === undefined ? {} : { fiat: overrides.fiat }),
     active: invoice,
     invoices: [invoice],
     ...(overrides.paid_at === undefined ? {} : { paid_at: overrides.paid_at })
@@ -102,6 +103,34 @@ test("React checkout view model exposes display-safe actions", () => {
   assert.equal(model.fiatLabel, "$0.05");
   assert.equal(model.paymentHashLabel, "aaaaaaaa...aaaaaaaa");
   assert.equal(model.status, "pending");
+});
+
+test("React checkout view model falls back to selected checkout amount labels", () => {
+  const satsModel = createCheckoutViewModel({
+    checkout: invoice({
+      amount_msats: 500000,
+      fiat: {
+        currency: "SATS",
+        value: "500"
+      },
+      fiat_quote: null
+    })
+  });
+  const btcModel = createCheckoutViewModel({
+    checkout: invoice({
+      amount_msats: 500000,
+      fiat: {
+        currency: "BTC",
+        value: "0.00000500"
+      },
+      fiat_quote: null
+    })
+  });
+
+  assert.equal(satsModel.amountLabel, "500 sats");
+  assert.equal(satsModel.fiatLabel, "500 sats");
+  assert.equal(btcModel.amountLabel, "500 sats");
+  assert.equal(btcModel.fiatLabel, "0.00000500 BTC");
 });
 
 test("React checkout rejects NWC strings before rendering", () => {
@@ -130,6 +159,7 @@ test("React checkout default UI server-renders display-safe invoice data", () =>
   assert.match(html, /data-openreceive-checkout/);
   assert.match(html, /data-openreceive-theme="light"/);
   assert.match(html, /1 sat/);
+  assert.match(html, /or-sats-detail/);
   assert.match(html, /pending/);
   assert.doesNotMatch(html, /bbbbbbbb\.\.\.bbbbbbbb/);
   assert.doesNotMatch(html, /textarea/);

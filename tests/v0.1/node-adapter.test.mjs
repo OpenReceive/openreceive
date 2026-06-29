@@ -405,6 +405,11 @@ sqliteTest(
       assert.equal(created.status, "created");
       assert.equal(duplicate.status, "conflict");
       assert.equal(duplicate.on, "idempotency_scope");
+      assert.deepEqual(
+        (await store.listOpen({ now: 1599, limit: 10 })).map((item) => item.row.invoice_id),
+        [record.row.invoice_id],
+      );
+      assert.deepEqual(await store.listOpen({ now: 1600, limit: 10 }), []);
       assert.equal(
         (await store.get(record.row.invoice_id)).row.payment_hash,
         record.row.payment_hash,

@@ -541,6 +541,37 @@ test("sweepPendingInvoicesOnce performs no wallet call for an empty open set", a
   assert.equal(calls, 0);
 });
 
+test("sweepPendingInvoicesOnce performs no wallet call when only expired invoices remain", async () => {
+  const store = new InMemoryInvoiceKvStore();
+  await store.putIfAbsent(
+    seedRecord({
+      invoice_id: "or_inv_expired_scan_skip",
+      idempotency_key: "order-expired-scan-skip",
+      invoice: "lnbc-expired-scan-skip",
+      expires_at: 1000,
+    }),
+  );
+  let calls = 0;
+  const client = {
+    async preflight() {
+      throw new Error("preflight is not needed by status refresh");
+    },
+    async makeInvoice() {
+      throw new Error("makeInvoice is not needed by status refresh");
+    },
+    async listTransactions() {
+      calls += 1;
+      return { transactions: [] };
+    },
+  };
+
+  const result = await sweepPendingInvoicesOnce({ store, client, clock: () => 1000 });
+
+  assert.equal(result.swept, false);
+  assert.equal(result.reason, "no_pending");
+  assert.equal(calls, 0);
+});
+
 test("sweepPendingInvoicesOnce durable gate prevents request storms", async () => {
   const store = new InMemoryInvoiceKvStore();
   await store.putIfAbsent(
@@ -1256,6 +1287,63 @@ test("browser checkout watcher owns countdown and status refresh polling", async
   assert.ok(clearedTimers.includes(countdownTimer[0]));
   assert.ok(clearedTimers.includes(pollTimer[0]));
   watcher.stop();
+});
+
+test("browser checkout watcher stops polling once the invoice expires by time", async () => {
+  let now = 1000;
+  let nextTimer = 1;
+  const timers = new Map();
+  const clearedTimers = [];
+  const states = [];
+  let statusCalls = 0;
+
+  const watcher = new CheckoutWatcher({
+    snapshot: checkoutSnapshot({
+      invoice_id: "or_inv_watch_expiry",
+      invoice: "lnbc-watch-expiry",
+      payment_hash: PAYMENT_HASH,
+      amount_msats: 200000,
+      transaction_state: "pending",
+      workflow_state: "invoice_created",
+      expires_at: 1002,
+    }),
+    now: () => now,
+    setInterval: (callback, ms) => {
+      const id = nextTimer;
+      nextTimer += 1;
+      timers.set(id, { callback, ms });
+      return id;
+    },
+    clearInterval: (id) => {
+      clearedTimers.push(id);
+      timers.delete(id);
+    },
+    refreshStatus: async () => {
+      statusCalls += 1;
+      return null;
+    },
+    onState: (state) => {
+      states.push(state);
+    },
+  });
+
+  const initial = watcher.start();
+  assert.equal(initial.expires_in_seconds, 2);
+  const countdownTimer = [...timers].find(([, timer]) => timer.ms === 1000);
+  const pollTimer = [...timers].find(([, timer]) => timer.ms === 3000);
+  assert.ok(countdownTimer);
+  assert.ok(pollTimer);
+
+  now = 1002;
+  countdownTimer[1].callback();
+
+  assert.equal(states.at(-1).phase, "expired");
+  assert.equal(states.at(-1).terminal, true);
+  assert.equal(statusCalls, 0);
+  assert.equal(timers.has(countdownTimer[0]), false);
+  assert.equal(timers.has(pollTimer[0]), false);
+  assert.ok(clearedTimers.includes(countdownTimer[0]));
+  assert.ok(clearedTimers.includes(pollTimer[0]));
 });
 
 test("browser checkout controller owns lifecycle actions for framework adapters", async () => {

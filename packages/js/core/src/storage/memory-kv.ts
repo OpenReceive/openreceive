@@ -151,7 +151,11 @@ export class InMemoryInvoiceKvStore implements OpenReceiveInvoiceKvStore {
   listOpen(input: { now: number; limit: number }): StoredRecord[] {
     assertListOpenInput(input);
     return [...this.#byInvoiceId.values()]
-      .filter((record) => !isTerminalInvoiceStorageRow(record.row))
+      .filter(
+        (record) =>
+          !isTerminalInvoiceStorageRow(record.row) &&
+          record.row.expires_at > input.now
+      )
       .sort((left, right) =>
         left.row.created_at === right.row.created_at
           ? left.row.invoice_id.localeCompare(right.row.invoice_id)

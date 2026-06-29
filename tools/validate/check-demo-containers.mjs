@@ -101,6 +101,7 @@ function validateDockerfile(demo) {
   const exposeMatches = [...text.matchAll(/^EXPOSE\s+(\d+)/gm)].map((match) => match[1]);
   const npmCiMatch = text.match(/^RUN(?:\s+--mount=[^\n]+)?\s+npm ci\b/m);
   const npmCiIndex = npmCiMatch?.index ?? -1;
+  const packageBuildIndex = text.indexOf("RUN npm run build:packages");
   const buildIndex = text.indexOf(`RUN npm run build -w ${demo.packageName}`);
   const nodeEnvIndex = text.indexOf("ENV NODE_ENV=production");
 
@@ -108,13 +109,16 @@ function validateDockerfile(demo) {
   expect(/^FROM node:20-bookworm-slim$/m.test(text), `${relativePath}: must use the pinned Node 20 slim base image`);
   expect(text.includes("apt-get install -y --no-install-recommends g++ libsqlite3-dev make python3 sqlite3"), `${relativePath}: must install SQLite native build/runtime packages`);
   expect(text.includes("npm install sqlite3@5.1.7 ws@8.18.3 --no-save --no-audit"), `${relativePath}: must install the Node 20 sqlite3 driver and WebSocket polyfill in the image`);
-  expect(text.includes("COPY package.json package-lock.json ./"), `${relativePath}: must copy root package manifests`);
+  expect(text.includes("COPY package.json package-lock.json tsconfig.json ./"), `${relativePath}: must copy root package manifests and TypeScript config`);
   expect(text.includes("COPY packages ./packages"), `${relativePath}: must copy local packages`);
+  expect(text.includes("COPY tools/package ./tools/package"), `${relativePath}: must copy package build helpers`);
   expect(text.includes("COPY spec/data/rates ./spec/data/rates"), `${relativePath}: must copy shared price-source data`);
   expect(text.includes("COPY examples/hello-fruit ./examples/hello-fruit"), `${relativePath}: must copy Hello Fruit sources`);
   expect(npmCiIndex !== -1, `${relativePath}: must run npm ci`);
+  expect(packageBuildIndex !== -1, `${relativePath}: must build local workspace packages before the demo build`);
   expect(buildIndex !== -1, `${relativePath}: must build its workspace package`);
-  expect(npmCiIndex !== -1 && buildIndex !== -1 && npmCiIndex < buildIndex, `${relativePath}: npm ci must run before the demo build`);
+  expect(npmCiIndex !== -1 && packageBuildIndex !== -1 && npmCiIndex < packageBuildIndex, `${relativePath}: npm ci must run before local package builds`);
+  expect(packageBuildIndex !== -1 && buildIndex !== -1 && packageBuildIndex < buildIndex, `${relativePath}: local package builds must run before the demo build`);
   expect(buildIndex !== -1 && nodeEnvIndex > buildIndex, `${relativePath}: NODE_ENV=production must be set after build dependencies are used`);
   expect(exposeMatches.length === 1 && exposeMatches[0] === demo.port, `${relativePath}: must expose only ${demo.port}`);
   expect(text.includes('CMD ["npm", "start"]'), `${relativePath}: must start with npm start`);

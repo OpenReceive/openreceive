@@ -166,6 +166,7 @@ export interface CheckoutClassNames
   extends InvoiceSummaryClassNames {
   readonly root?: string;
   readonly qr?: string;
+  readonly satsDetail?: string;
   readonly details?: string;
   readonly waiting?: string;
   readonly countdown?: string;
@@ -300,6 +301,11 @@ function toCheckoutDisplayData(
   if (invoice === undefined) {
     throw new TypeError("OpenReceive checkout requires active or invoices[0].");
   }
+  const fiatQuote = invoice.fiat_quote === null && snapshot.fiat !== undefined
+    ? { fiat: snapshot.fiat }
+    : invoice.fiat_quote ?? (
+      snapshot.fiat === undefined ? undefined : { fiat: snapshot.fiat }
+    );
   const settledAt = snapshot.paid_at ?? invoice.settled_at;
   return {
     checkout_id: snapshot.checkout_id,
@@ -308,7 +314,7 @@ function toCheckoutDisplayData(
     invoice: invoice.invoice,
     ...(invoice.payment_hash === undefined ? {} : { payment_hash: invoice.payment_hash }),
     ...(invoice.amount_msats === undefined ? {} : { amount_msats: invoice.amount_msats }),
-    ...(invoice.fiat_quote === undefined ? {} : { fiat_quote: invoice.fiat_quote }),
+    ...(fiatQuote === undefined ? {} : { fiat_quote: fiatQuote }),
     ...(invoice.transaction_state === undefined
       ? {}
       : { transaction_state: invoice.transaction_state }),
@@ -1491,6 +1497,32 @@ export function InvoiceSummary(
   );
 }
 
+export interface SatsDetailProps
+  extends React.HTMLAttributes<HTMLDivElement> {
+  readonly amountLabel?: string;
+}
+
+export function SatsDetail(
+  props: SatsDetailProps
+): React.ReactElement | null {
+  const {
+    amountLabel,
+    className,
+    ...divProps
+  } = props;
+
+  if (amountLabel === undefined) return null;
+
+  return React.createElement(
+    "div",
+    {
+      ...divProps,
+      className: joinClassNames("or-sats-detail", className)
+    },
+    amountLabel
+  );
+}
+
 export function Checkout(
   props: CheckoutProps
 ): React.ReactElement {
@@ -1538,6 +1570,8 @@ export function Checkout(
   const customChildren =
     typeof children === "function" ? children(checkoutModel) : children;
   const expired = checkoutModel.status === "expired";
+  const summaryAmountLabel =
+    checkoutModel.fiatLabel === undefined ? checkoutModel.amountLabel : undefined;
   const startOver = () => {
     onStartOver?.();
   };
@@ -1564,19 +1598,26 @@ export function Checkout(
           : null,
         expired
           ? null
-          : React.createElement(QRCodeComponent, {
-            key: "qr",
-            invoice: checkoutModel.invoice,
-            encoder: qrEncoder,
-            onError,
-            className: classNames?.qr,
-            style: {
-              aspectRatio: "1",
-              justifySelf: "center",
-              maxWidth: 420,
-              width: "min(100%, 420px)"
-            }
-          }),
+          : [
+            React.createElement(QRCodeComponent, {
+              key: "qr",
+              invoice: checkoutModel.invoice,
+              encoder: qrEncoder,
+              onError,
+              className: classNames?.qr,
+              style: {
+                aspectRatio: "1",
+                justifySelf: "center",
+                maxWidth: 420,
+                width: "min(100%, 420px)"
+              }
+            }),
+            React.createElement(SatsDetail, {
+              key: "sats-detail",
+              amountLabel: checkoutModel.amountLabel,
+              className: classNames?.satsDetail
+            })
+          ],
         React.createElement(WaitingState, {
           key: "waiting",
           waiting: checkoutModel.waiting,
@@ -1597,10 +1638,10 @@ export function Checkout(
             React.createElement("strong", null, checkoutModel.countdownLabel)
           ),
         React.createElement(InvoiceSummaryComponent, {
-	          key: "summary",
-	          amountLabel: checkoutModel.amountLabel,
-	          fiatLabel: checkoutModel.fiatLabel,
-	          status: checkoutModel.status,
+          key: "summary",
+          amountLabel: summaryAmountLabel,
+          fiatLabel: checkoutModel.fiatLabel,
+          status: checkoutModel.status,
           PaymentStateComponent,
           className: classNames?.summary,
           classNames

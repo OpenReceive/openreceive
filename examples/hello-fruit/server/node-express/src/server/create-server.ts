@@ -12,7 +12,10 @@ import {
 } from "@openreceive/node";
 import { createHelloFruitDemoMetadata } from "../../../../shared/demo-metadata.ts";
 import { readRequiredHelloFruitNwcConnectionString } from "../../../../shared/demo-nwc.ts";
-import { createHelloFruitOpenReceiveLogger } from "../../../../shared/demo-logging.ts";
+import {
+  createHelloFruitDemoServerLogger,
+  createHelloFruitOpenReceiveLogger,
+} from "../../../../shared/demo-logging.ts";
 import {
   createHelloFruitCreateOrderResult,
   createHelloFruitOrderStatus,
@@ -28,6 +31,7 @@ import { readHelloFruitOrderRates } from "../../../../shared/demo-price-feeds.ts
 import product from "../../../../shared/product.json" with { type: "json" };
 
 const DEMO_ID = "node-express";
+const logDemo = createHelloFruitDemoServerLogger(DEMO_ID);
 
 interface HelloFruitOpenReceiveBundle {
   readonly openreceive: Awaited<ReturnType<typeof createOpenReceive>>;
@@ -42,6 +46,12 @@ export interface HelloFruitOpenReceiveOptions {
 }
 
 export async function createHelloFruitOpenReceive(options: HelloFruitOpenReceiveOptions = {}) {
+  logDemo("openreceive.configure", "Preparing OpenReceive demo service.", {
+    namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit",
+    customClient: options.client !== undefined,
+    customStore: options.store !== undefined,
+    customPriceProviders: options.priceProviders !== undefined,
+  });
   const priceCurrencies = readHelloFruitPriceFeedCurrencies();
   const supportedCurrencies = readHelloFruitCheckoutCurrencies();
   const clientOptions =
@@ -57,6 +67,11 @@ export async function createHelloFruitOpenReceive(options: HelloFruitOpenReceive
     createOpenReceivePriceFeed({ store, currencies: priceCurrencies }),
   ];
 
+  logDemo("openreceive.price_currencies", "Loaded checkout and price feed currencies.", {
+    checkoutCurrencies: supportedCurrencies,
+    priceCurrencies,
+  });
+
   const openreceive = await createOpenReceive({
     ...clientOptions,
     store,
@@ -65,10 +80,15 @@ export async function createHelloFruitOpenReceive(options: HelloFruitOpenReceive
     priceCurrencies,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
   });
+  logDemo("openreceive.ready", "OpenReceive demo service is ready.", {
+    priceProviderCount: priceProviders.length,
+    checkoutCurrencyCount: supportedCurrencies.length,
+  });
   return { openreceive, priceProviders, supportedCurrencies } satisfies HelloFruitOpenReceiveBundle;
 }
 
 export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptions = {}) {
+  logDemo("server.create", "Creating Express demo server.");
   const app = express();
   app.use(express.json());
   app.use(
@@ -79,6 +99,12 @@ export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptio
   const { openreceive, priceProviders, supportedCurrencies } =
     await createHelloFruitOpenReceive(options);
 
+  logDemo("server.routes", "Mounting demo routes.", {
+    staticStickers: "/stickers",
+    createOrder: "/create_order",
+    orderStatus: "/order_status",
+  });
+
   mountHelloFruitHostedDemoRoutes(app, {
     id: DEMO_ID,
     sourcePath: "examples/hello-fruit/server/node-express",
@@ -88,6 +114,7 @@ export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptio
   });
 
   app.get("/demo-metadata.json", (_req, res) => {
+    logDemo("metadata.request", "Serving demo metadata.");
     res.status(200).json(
       createHelloFruitDemoMetadata({
         id: DEMO_ID,
@@ -108,12 +135,22 @@ export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptio
   });
 
   app.post("/create_order", async (req, res, next) => {
+    const startedAt = Date.now();
     try {
       const body = asRequestBody(req.body);
+      logDemo("create_order.request", "Received create order request.", {
+        ...summarizeOrderRequest(body),
+        idempotencyKeyPresent:
+          body.idempotency_key !== undefined || req.get("idempotency-key") !== undefined,
+      });
       const rates = await readHelloFruitOrderRates({
         currency: body.currency,
         priceProviders,
         supportedCurrencies,
+      });
+      logDemo("create_order.rates", "Resolved order price rates.", {
+        requestedCurrency: body.currency,
+        rateCurrencies: rates === undefined ? [] : Object.keys(rates.bitcoin),
       });
       const orderResult = createHelloFruitCreateOrderResult(
         {
@@ -127,25 +164,55 @@ export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptio
           supportedCurrencies,
         },
       );
+      logDemo("create_order.prepared", "Prepared demo order and invoice request.", {
+        orderId: orderResult.order.uuid,
+        orderStatus: orderResult.order.status,
+        total: orderResult.order.total_amount,
+        itemCount: orderResult.order.items.length,
+      });
       const checkout = await openreceive.getOrCreateCheckout(orderResult.invoiceRequest);
+      logDemo("create_order.checkout_created", "Created or reused checkout.", {
+        orderId: checkout.order_id,
+        elapsedMs: Date.now() - startedAt,
+      });
       res.status(201).json({
         order: orderResult.order,
         checkout,
       });
     } catch (error) {
       if (error instanceof OpenReceiveServiceError || error instanceof HelloFruitDemoOrderError) {
+        logDemo("create_order.rejected", "Create order request returned a known error.", {
+          status: error.status,
+          body: error.body,
+          elapsedMs: Date.now() - startedAt,
+        });
         res.status(error.status).json(error.body);
         return;
       }
+      logDemo("create_order.error", "Create order request failed unexpectedly.", {
+        error: error instanceof Error ? error.message : String(error),
+        elapsedMs: Date.now() - startedAt,
+      });
       next(error);
     }
   });
   app.post("/order_status", async (req, res, next) => {
+    const startedAt = Date.now();
     try {
+      const statusRequest = createStatusRequest(asRequestBody(req.body));
+      logDemo("order_status.request", "Received order status request.", {
+        orderId: statusRequest.orderId,
+      });
       const openreceiveOrder = await openreceive.getOrder(
-        createStatusRequest(asRequestBody(req.body)),
+        statusRequest,
       );
       const orderStatus = createHelloFruitOrderStatus(openreceiveOrder);
+      logDemo("order_status.response", "Refreshed order status.", {
+        orderId: orderStatus.order_id,
+        orderStatus: orderStatus.order_status,
+        ...summarizeSettlementFields(openreceiveOrder),
+        elapsedMs: Date.now() - startedAt,
+      });
       res.status(200).json({
         ...openreceiveOrder,
         ...orderStatus,
@@ -156,14 +223,52 @@ export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptio
       });
     } catch (error) {
       if (error instanceof OpenReceiveServiceError || error instanceof HelloFruitDemoOrderError) {
+        logDemo("order_status.rejected", "Order status request returned a known error.", {
+          status: error.status,
+          body: error.body,
+          elapsedMs: Date.now() - startedAt,
+        });
         res.status(error.status).json(error.body);
         return;
       }
+      logDemo("order_status.error", "Order status request failed unexpectedly.", {
+        error: error instanceof Error ? error.message : String(error),
+        elapsedMs: Date.now() - startedAt,
+      });
       next(error);
     }
   });
 
   return app;
+}
+
+function summarizeOrderRequest(body: Record<string, unknown>): Record<string, unknown> {
+  const cart = Array.isArray(body.cart) ? body.cart : [];
+  return {
+    currency: body.currency,
+    cartLineCount: cart.length,
+    cartQuantity: cart.reduce((total, item) => {
+      if (typeof item !== "object" || item === null || Array.isArray(item)) return total;
+      const quantity = (item as Record<string, unknown>).quantity;
+      return total + (typeof quantity === "number" && Number.isFinite(quantity) ? quantity : 0);
+    }, 0),
+    productIds: cart
+      .map((item) => typeof item === "object" && item !== null && !Array.isArray(item)
+        ? (item as Record<string, unknown>).product_id
+        : undefined)
+      .filter((productId): productId is string => typeof productId === "string"),
+  };
+}
+
+function summarizeSettlementFields(value: unknown): Record<string, unknown> {
+  const order = typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+  return {
+    settledAtPresent: order.settled_at !== undefined,
+    transactionState: order.transaction_state,
+    state: order.state,
+  };
 }
 
 function asRequestBody(value: unknown): Record<string, unknown> {

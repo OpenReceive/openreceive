@@ -292,10 +292,10 @@ export class OpenReceivePostgresKvStore implements OpenReceiveInvoiceKvStore {
     assertListOpenInput(input);
     const result = await this.#client.query(
       `SELECT data FROM ${this.#tableName}
-       WHERE terminal = false
+       WHERE terminal = false AND expires_at > $1
        ORDER BY expires_at ASC, invoice_id ASC
-       LIMIT $1`,
-      [input.limit]
+       LIMIT $2`,
+      [input.now, input.limit]
     );
     return result.rows.map((row) => parseStoredRecordField(row.data));
   }

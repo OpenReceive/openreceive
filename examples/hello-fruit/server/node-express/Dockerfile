@@ -8,7 +8,7 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends g++ libsqlite3-dev make python3 sqlite3 \
   && rm -rf /var/lib/apt/lists/*
 
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json tsconfig.json ./
 COPY packages/js/angular/package.json ./packages/js/angular/package.json
 COPY packages/js/browser/package.json ./packages/js/browser/package.json
 COPY packages/js/core/package.json ./packages/js/core/package.json
@@ -26,8 +26,10 @@ RUN --mount=type=cache,target=/root/.npm npm ci --no-audit
 RUN --mount=type=cache,target=/root/.npm npm install sqlite3@5.1.7 ws@8.18.3 --no-save --no-audit
 
 COPY packages ./packages
+COPY tools/package ./tools/package
 COPY spec/data/rates ./spec/data/rates
 COPY examples/hello-fruit ./examples/hello-fruit
+RUN npm run build:packages
 RUN npm run build -w @openreceive/example-node-express
 
 WORKDIR /app/examples/hello-fruit/server/node-express

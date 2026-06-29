@@ -13,6 +13,7 @@ import "@openreceive/react/styles.css";
 import "@openreceive/vue/styles.css";
 import "@openreceive/svelte/styles.css";
 import {
+  createHelloFruitDemoBrowserConsoleLogger,
   createHelloFruitBrowserLogger
 } from "../../../../shared/demo-browser-logging.ts";
 import {
@@ -28,6 +29,7 @@ import product from "../../../../shared/product.json" with { type: "json" };
 import "./styles.css";
 
 const logOpenReceive = createHelloFruitBrowserLogger("node-express");
+const logDemo = createHelloFruitDemoBrowserConsoleLogger("node-express");
 const fruits = fruitsData.fruits;
 const currencyOptions = readHelloFruitCheckoutCurrencies();
 type CheckoutFramework = "react" | "vue" | "svelte" | "angular";
@@ -98,18 +100,44 @@ function App(): React.ReactElement {
     0
   );
 
+  useEffect(() => {
+    logDemo("app.ready", "React demo app mounted.", {
+      fruitCount: fruits.length,
+      currencyOptions,
+      initialFruitId,
+      framework
+    });
+  }, []);
+
+  useEffect(() => {
+    logDemo("checkout.framework_selected", "Checkout framework selected.", {
+      framework
+    });
+  }, [framework]);
+
   const onSettled = useCallback(() => {
     if (checkout !== null && completedCheckoutRef.current !== checkout.order_id) {
+      logDemo("checkout.settled", "Checkout settled callback received.", {
+        orderId: checkout.order_id,
+        purchasedItemCount: purchasedItems.length
+      });
       completedCheckoutRef.current = checkout.order_id;
       setOrder((current) => current === null
         ? current
         : { ...current, status: "paid" });
       setStickerModalOpen(true);
     }
-  }, [checkout]);
+  }, [checkout, purchasedItems.length]);
 
   function addSelectedFruitToCart() {
     if (selectedFruit === undefined) return;
+    const nextQuantity = Math.min((cart[selectedFruit.id] ?? 0) + 1, 9);
+    logDemo("cart.add", "Adding selected fruit to cart.", {
+      fruitId: selectedFruit.id,
+      fruitName: selectedFruit.name,
+      currency,
+      quantity: nextQuantity
+    });
     setCart((current) => ({
       ...current,
       [selectedFruit.id]: Math.min((current[selectedFruit.id] ?? 0) + 1, 9)
@@ -117,6 +145,9 @@ function App(): React.ReactElement {
   }
 
   function removeFruitFromCart(fruitIdToRemove: string) {
+    logDemo("cart.remove", "Removing fruit from cart.", {
+      fruitId: fruitIdToRemove
+    });
     setCart((current) => {
       const next = { ...current };
       delete next[fruitIdToRemove];
@@ -125,9 +156,13 @@ function App(): React.ReactElement {
   }
 
   async function createOrder() {
-    if (cartItems.length === 0) return;
+    if (cartItems.length === 0) {
+      logDemo("create_order.skipped", "Create order clicked with an empty cart.");
+      return;
+    }
     const idempotencyKey = globalThis.crypto?.randomUUID?.() ??
       `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const startedAt = Date.now();
 
     setCreating(true);
     setError("");
@@ -135,6 +170,13 @@ function App(): React.ReactElement {
     completedCheckoutRef.current = "";
 
     try {
+      logDemo("create_order.request", "Posting create order request.", {
+        currency,
+        cartLineCount: cartItems.length,
+        cartQuantity: cartQuantity,
+        productIds: cartItems.map((item) => item.fruit.id),
+        idempotencyKeyPresent: idempotencyKey.length > 0
+      });
       const response = await fetch("/create_order", {
         method: "POST",
         headers: {
@@ -150,14 +192,34 @@ function App(): React.ReactElement {
         })
       });
       const body = await response.json() as unknown;
+      logDemo("create_order.response", "Received create order response.", {
+        ok: response.ok,
+        status: response.status,
+        elapsedMs: Date.now() - startedAt,
+        hasCheckout: isCreateOrderResponse(body)
+      });
       if (!response.ok || !isCreateOrderResponse(body)) {
         throw new Error(readErrorMessage(body) ?? helloFruitDemoLabels.createOrderError);
       }
 
+      logDemo("create_order.ready", "Checkout payload accepted by browser app.", {
+        orderId: body.order.uuid,
+        checkoutOrderId: body.checkout.order_id,
+        orderStatus: body.order.status,
+        itemCount: body.order.items.length,
+        total: body.order.total_amount
+      });
       setOrder(body.order);
-      setCheckout(body.checkout);
+      setCheckout({
+        ...body.checkout,
+        fiat: body.order.total_amount
+      });
       setPurchasedItems(body.order.items);
     } catch (cause: unknown) {
+      logDemo("create_order.error", "Create order failed in the browser.", {
+        error: cause instanceof Error ? cause.message : String(cause),
+        elapsedMs: Date.now() - startedAt
+      });
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setCreating(false);
@@ -165,6 +227,10 @@ function App(): React.ReactElement {
   }
 
   function startOver() {
+    logDemo("app.reset", "Resetting the demo state.", {
+      hadCheckout: checkout !== null,
+      hadOrder: order !== null
+    });
     setFruitId(initialFruitId);
     setCart({});
     setOrder(null);
@@ -186,11 +252,16 @@ function App(): React.ReactElement {
       <section className="checkout">
         <div className="framework-tabs" role="tablist" aria-label="Checkout framework">
           {checkoutFrameworks.map((item) => (
-            <button
-              aria-selected={framework === item.id}
-              className={framework === item.id ? "selected" : ""}
-              key={item.id}
-              onClick={() => setFramework(item.id)}
+              <button
+                aria-selected={framework === item.id}
+                className={framework === item.id ? "selected" : ""}
+                key={item.id}
+                onClick={() => {
+                  logDemo("checkout.framework_click", "Framework tab clicked.", {
+                    framework: item.id
+                  });
+                  setFramework(item.id);
+                }}
               role="tab"
               type="button"
             >
@@ -211,7 +282,13 @@ function App(): React.ReactElement {
           <span>Currency</span>
           <select
             value={currency}
-            onChange={(event) => setCurrency(event.target.value)}
+            onChange={(event) => {
+              logDemo("currency.change", "Currency changed.", {
+                from: currency,
+                to: event.target.value
+              });
+              setCurrency(event.target.value);
+            }}
           >
             {currencyOptions.map((option) => (
               <option key={option} value={option}>{option}</option>
@@ -226,7 +303,13 @@ function App(): React.ReactElement {
                 <button
                   className={fruit.id === fruitId ? "selected" : ""}
                   key={fruit.id}
-                  onClick={() => setFruitId(fruit.id)}
+                  onClick={() => {
+                    logDemo("fruit.select", "Fruit selected.", {
+                      fruitId: fruit.id,
+                      fruitName: fruit.name
+                    });
+                    setFruitId(fruit.id);
+                  }}
                   type="button"
                 >
                   <img src={`/${fruit.sticker}`} alt="" />
@@ -312,6 +395,10 @@ function App(): React.ReactElement {
             framework={framework}
             checkout={checkout}
             onError={(cause) => {
+              logDemo("checkout.error", "Checkout component reported an error.", {
+                framework,
+                error: cause instanceof Error ? cause.message : String(cause)
+              });
               setError(cause instanceof Error ? cause.message : String(cause));
             }}
             onSettled={onSettled}
@@ -407,12 +494,20 @@ function FrameworkCheckout({
       defaultTheme: "light" as const,
       onError: (event: Event) => {
         const detail = (event as CustomEvent<{ error?: unknown }>).detail;
+        logDemo("checkout.embedded_error", "Embedded framework checkout reported an error.", {
+          framework,
+          error: detail?.error instanceof Error ? detail.error.message : String(detail?.error ?? event)
+        });
         onError(detail?.error ?? event);
       },
       onSettled: onSettled
     };
 
     async function mountFrameworkCheckout() {
+      logDemo("checkout.embedded_mount_start", "Mounting embedded checkout framework.", {
+        framework,
+        orderId: checkout.order_id
+      });
       if (framework === "vue") {
         const [{ default: VueCheckout }, { createApp }] = await Promise.all([
           import("@openreceive/vue/checkout.vue"),
@@ -432,6 +527,9 @@ function FrameworkCheckout({
           }
         });
         app.mount(mountTarget);
+        logDemo("checkout.embedded_mount_ready", "Vue checkout mounted.", {
+          orderId: checkout.order_id
+        });
         cleanup = () => app.unmount();
       }
 
@@ -469,6 +567,9 @@ function FrameworkCheckout({
         });
         application.attachView(component.hostView);
         component.changeDetectorRef.detectChanges();
+        logDemo("checkout.embedded_mount_ready", "Angular checkout mounted.", {
+          orderId: checkout.order_id
+        });
         cleanup = () => {
           application.detachView(component.hostView);
           component.destroy();
@@ -497,6 +598,9 @@ function FrameworkCheckout({
             }
           }
         });
+        logDemo("checkout.embedded_mount_ready", "Svelte checkout mounted.", {
+          orderId: checkout.order_id
+        });
         cleanup = () => {
           void unmount(component);
         };
@@ -506,6 +610,10 @@ function FrameworkCheckout({
     void mountFrameworkCheckout().catch(onError);
 
     return () => {
+      logDemo("checkout.embedded_unmount", "Unmounting embedded checkout framework.", {
+        framework,
+        orderId: checkout.order_id
+      });
       canceled = true;
       cleanup();
       host.replaceChildren();

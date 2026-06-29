@@ -19,3 +19,16 @@ export function createHelloFruitOpenReceiveLogger(
     console[method](`[openreceive:${demoId}] ${event}: ${message}`, fields);
   };
 }
+
+export function createHelloFruitDemoServerLogger(demoId: string) {
+  return (
+    event: string,
+    message: string,
+    fields: Record<string, unknown> = {}
+  ): void => {
+    console.log(`[hello-fruit:${demoId}:server] ${event}: ${message}`, {
+      at: new Date().toISOString(),
+      ...fields
+    });
+  };
+}

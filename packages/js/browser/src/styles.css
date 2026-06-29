@@ -49,6 +49,13 @@
   height: auto;
 }
 
+.or-sats-detail {
+  color: var(--or-muted);
+  font-size: 13px;
+  justify-self: center;
+  margin-top: -8px;
+}
+
 [data-openreceive-meta] {
   display: flex;
   flex-wrap: wrap;

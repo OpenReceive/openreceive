@@ -291,10 +291,10 @@ export class OpenReceiveSqliteKvStore implements OpenReceiveInvoiceKvStore {
     assertListOpenInput(input);
     const result = await this.#client.execute(
       `SELECT data FROM ${this.#tableName}
-       WHERE terminal = 0
+       WHERE terminal = 0 AND expires_at > ?
        ORDER BY expires_at ASC, invoice_id ASC
        LIMIT ?`,
-      [input.limit]
+      [input.now, input.limit]
     );
     return result.rows.map((row) => parseStoredRecordField(row.data));
   }
