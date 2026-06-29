@@ -182,7 +182,7 @@ async function runDiagnostics(input: {
 
 function isOpenReceiveServiceConfig(config: OpenReceiveNodeConfig): config is OpenReceive {
   return (
-    typeof (config as { refreshInvoiceStatus?: unknown }).refreshInvoiceStatus === "function" &&
+    typeof (config as { getOrder?: unknown }).getOrder === "function" &&
     !("client" in config)
   );
 }

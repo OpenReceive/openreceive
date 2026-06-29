@@ -4,10 +4,10 @@ import type {
   OpenReceiveSourcedPriceProvider
 } from "@openreceive/core";
 import {
+  OpenReceiveServiceError,
   createOpenReceive,
   createOpenReceivePriceFeed,
-  toOpenReceiveHttpInvoice,
-  toOpenReceiveHttpInvoiceStatusResult
+  toOpenReceiveHttpOrder
 } from "@openreceive/node";
 import {
   createHelloFruitDemoMetadata
@@ -149,12 +149,12 @@ export async function createOrderResponse(
       rates,
       supportedCurrencies
     });
-    const invoice = toOpenReceiveHttpInvoice(
-      await openreceive.createInvoice(orderResult.invoiceRequest)
+    const checkout = toOpenReceiveHttpOrder(
+      await openreceive.createOrder(orderResult.invoiceRequest)
     );
     return jsonResponse({
       order: orderResult.order,
-      invoice
+      checkout
     }, 201);
   } catch (error) {
     return checkoutErrorResponse(error);
@@ -168,12 +168,12 @@ export async function orderStatusResponse(request: Request): Promise<Response> {
   const { openreceive } = await getOpenReceive(connectionString);
 
   try {
-    const status = toOpenReceiveHttpInvoiceStatusResult(
-      await openreceive.refreshInvoiceStatus(createStatusRequest(await readJsonBody(request)))
+    const checkout = toOpenReceiveHttpOrder(
+      await openreceive.getOrder(createStatusRequest(await readJsonBody(request)))
     );
-    const orderStatus = createHelloFruitOrderStatus(status);
+    const orderStatus = createHelloFruitOrderStatus(checkout);
     return jsonResponse({
-      ...status,
+      ...checkout,
       ...orderStatus,
       order: {
         uuid: orderStatus.order_uuid,
@@ -243,16 +243,16 @@ export async function createHelloFruitOpenReceive(
 }
 
 function createStatusRequest(body: Record<string, unknown>): {
-  readonly invoiceId: string;
+  readonly orderId: string;
 } {
-  const invoiceId = body.invoice_id;
-  if (typeof invoiceId !== "string" || invoiceId.length === 0) {
+  const orderId = body.order_id;
+  if (typeof orderId !== "string" || orderId.length === 0) {
     throw createCheckoutHttpError(400, {
       code: "INVALID_REQUEST",
-      message: "invoice_id is required."
+      message: "order_id is required."
     });
   }
-  return { invoiceId };
+  return { orderId };
 }
 
 async function readJsonBody(request: Request): Promise<Record<string, unknown>> {
@@ -270,7 +270,10 @@ async function readJsonBody(request: Request): Promise<Record<string, unknown>> 
 }
 
 function checkoutErrorResponse(error: unknown): Response {
-  if (isCheckoutHttpError(error)) {
+  if (error instanceof OpenReceiveServiceError) {
+    return jsonResponse(error.body, error.status);
+  }
+  if (isAppHttpError(error)) {
     return jsonResponse(error.body, error.status);
   }
   throw error;
@@ -289,7 +292,7 @@ function createCheckoutHttpError(
   });
 }
 
-function isCheckoutHttpError(error: unknown): error is {
+function isAppHttpError(error: unknown): error is {
   readonly status: number;
   readonly body: Record<string, unknown>;
 } {

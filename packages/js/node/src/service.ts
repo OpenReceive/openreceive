@@ -1,5 +1,4 @@
 import {
-  InvoiceNotFoundError,
   OPENRECEIVE_PRICE_FEED_FALLBACK_URL_ENV,
   OPENRECEIVE_PRICE_FEED_PRIMARY_URL_ENV,
   createCachedLivePriceFeed,
@@ -12,7 +11,7 @@ import {
   putCreatedInvoiceRecord,
   quoteBitcoinAmountToMsats,
   quoteFiatToMsatsWithPrice,
-  refreshInvoiceStatus as refreshStoredInvoiceStatus,
+  refreshInvoiceRecordsStatus as refreshStoredInvoiceRecordsStatus,
   type CachedPriceFeed,
   type InvoiceStorageRow,
   type NwcTransaction,
@@ -116,9 +115,8 @@ export interface CreateOpenReceiveOptions
   priceFetch?: SimplePriceFetch;
 }
 
-export interface OpenReceiveCreateInvoiceRequest {
+export interface OpenReceiveCreateOrderRequest {
   readonly orderId: string;
-  readonly idempotencyKey?: string;
   readonly amount: OpenReceiveCreateInvoiceAmount;
   readonly memo?: string;
   readonly descriptionHash?: string;
@@ -131,13 +129,8 @@ export type OpenReceiveCreateInvoiceAmount =
   | { readonly msats: number | string }
   | { readonly fiat: OpenReceiveFiatAmount };
 
-export interface OpenReceiveRefreshInvoiceStatusRequest {
-  readonly invoiceId: string;
-}
-
-export interface OpenReceiveRefreshInvoiceRequest {
-  readonly idempotencyKey: string;
-  readonly reason?: string;
+export interface OpenReceiveGetOrderRequest {
+  readonly orderId: string;
 }
 
 export interface OpenReceiveInvoice {
@@ -159,18 +152,6 @@ export interface OpenReceiveInvoice {
   readonly settlementActionState: string;
 }
 
-export interface OpenReceiveInvoiceStatusResult extends OpenReceiveInvoice {
-  readonly walletScanPerformed: boolean;
-  readonly transactionsChecked: number;
-}
-
-export interface OpenReceiveRefreshInvoiceResult {
-  readonly oldInvoiceId: string;
-  readonly newInvoiceId: string;
-  readonly reason: string;
-  readonly invoice: OpenReceiveInvoice;
-}
-
 export interface OpenReceiveHttpInvoice {
   readonly invoice_id: string;
   readonly type: "incoming";
@@ -189,27 +170,42 @@ export interface OpenReceiveHttpInvoice {
   readonly settlement_action_state: string;
 }
 
-export interface OpenReceiveHttpInvoiceStatusResult extends OpenReceiveHttpInvoice {
+export interface OpenReceiveOrder {
+  readonly orderId: string;
+  readonly status: "pending" | "paid" | "expired";
+  readonly paid: boolean;
+  readonly paidAt?: number;
+  readonly amountMsats: number;
+  readonly fiat?: {
+    readonly currency: string;
+    readonly value: string;
+  };
+  readonly active?: OpenReceiveInvoice;
+  readonly invoices: readonly OpenReceiveInvoice[];
+  readonly walletScanPerformed: boolean;
+  readonly transactionsChecked: number;
+}
+
+export interface OpenReceiveHttpOrder {
+  readonly order_id: string;
+  readonly status: OpenReceiveOrder["status"];
+  readonly paid: boolean;
+  readonly paid_at?: number;
+  readonly amount_msats: number;
+  readonly fiat?: {
+    readonly currency: string;
+    readonly value: string;
+  };
+  readonly active?: OpenReceiveHttpInvoice;
+  readonly invoices: readonly OpenReceiveHttpInvoice[];
   readonly wallet_scan_performed: boolean;
   readonly transactions_checked: number;
 }
 
-export interface OpenReceiveHttpRefreshInvoiceResult {
-  readonly old_invoice_id: string;
-  readonly new_invoice_id: string;
-  readonly reason: string;
-  readonly invoice: OpenReceiveHttpInvoice;
-}
-
 export interface OpenReceive {
   readonly store: OpenReceiveInvoiceKvStore;
-  createInvoice(input: OpenReceiveCreateInvoiceRequest): Promise<OpenReceiveInvoice>;
-  getInvoice(invoiceId: string): Promise<OpenReceiveInvoice>;
-  refreshInvoiceStatus(input: OpenReceiveRefreshInvoiceStatusRequest): Promise<OpenReceiveInvoiceStatusResult>;
-  refreshInvoice(
-    invoiceId: string,
-    input: OpenReceiveRefreshInvoiceRequest
-  ): Promise<OpenReceiveRefreshInvoiceResult>;
+  createOrder(input: OpenReceiveCreateOrderRequest): Promise<OpenReceiveOrder>;
+  getOrder(input: OpenReceiveGetOrderRequest): Promise<OpenReceiveOrder>;
   listRates(): Promise<OpenReceiveBtcFiatRateMapWithSource["rates"]>;
   quoteRates(input: { readonly fiat: OpenReceiveFiatAmount }): Promise<OpenReceiveRateQuote>;
   close(): Promise<void>;
@@ -286,28 +282,16 @@ export async function createOpenReceive(
 
   return {
     store,
-    async createInvoice(input) {
+    async createOrder(input) {
       return await runOpenReceiveOperation(
         context,
-        () => createInvoice(context, input)
+        () => createOrder(context, input)
       );
     },
-    async getInvoice(invoiceId) {
+    async getOrder(input) {
       return await runOpenReceiveOperation(
         context,
-        () => getInvoice(context, invoiceId)
-      );
-    },
-    async refreshInvoiceStatus(input) {
-      return await runOpenReceiveOperation(
-        context,
-        () => refreshInvoiceStatus(context, input)
-      );
-    },
-    async refreshInvoice(invoiceId, input) {
-      return await runOpenReceiveOperation(
-        context,
-        () => refreshInvoice(context, invoiceId, input)
+        () => getOrder(context, input)
       );
     },
     async listRates() {
@@ -329,16 +313,95 @@ export async function createOpenReceive(
   };
 }
 
-async function createInvoice(
+async function createOrder(
   context: OpenReceiveServiceContext,
-  input: OpenReceiveCreateInvoiceRequest
-): Promise<OpenReceiveInvoice> {
-  const body = createWireCreateInvoiceRequest(input);
+  input: OpenReceiveCreateOrderRequest
+): Promise<OpenReceiveOrder> {
+  const body = createWireCreateOrderRequest(input);
   const orderId = parseCreateOrderId(body);
-  const idempotencyKey = input.idempotencyKey ?? orderId;
+  const now = context.clock();
+  const records = await context.store.listByOrderId(orderId);
+
+  if (records.some((record) => isSettledRecord(record.row))) {
+    return buildOrder(records, scanlessOrderMeta(), now);
+  }
+
+  const newest = records[0];
+  if (newest !== undefined && isLivePendingRecord(newest.row, now)) {
+    if (await amountMatches(context, input.amount, newest, now)) {
+      return buildOrder(records, scanlessOrderMeta(), now);
+    }
+    throw serviceError(
+      409,
+      "CONFLICT",
+      "Order already has a live invoice for a different amount."
+    );
+  }
+
+  await mintInvoiceForOrder(context, {
+    orderId,
+    input,
+    priorRecords: records,
+    now
+  });
+
+  const fresh = await context.store.listByOrderId(orderId);
+  return buildOrder(fresh, scanlessOrderMeta(), now);
+}
+
+async function getOrder(
+  context: OpenReceiveServiceContext,
+  input: OpenReceiveGetOrderRequest
+): Promise<OpenReceiveOrder> {
+  const orderId = parseGetOrderId(input);
+  const records = await context.store.listByOrderId(orderId);
+  if (records.length === 0) {
+    throw serviceError(404, "NOT_FOUND", "No order found for the given orderId.");
+  }
+  emitLog(context.options, "info", "order.status.requested", "Refreshing order status through the transaction scan path.", {
+    order_id: orderId,
+    invoice_count: records.length
+  });
+
+  const result = await refreshStoredInvoiceRecordsStatus({
+    ...reconcileOptions(context),
+    records
+  });
+  const fresh = await context.store.listByOrderId(orderId);
+  emitLog(context.options, "debug", "order.status.result", "Order status refresh completed.", {
+    order_id: orderId,
+    invoice_count: fresh.length,
+    reason: result.reason,
+    wallet_scan_performed: result.wallet_scan_performed,
+    transactions_checked: result.transactions_checked
+  });
+
+  return buildOrder(fresh, {
+    walletScanPerformed: result.wallet_scan_performed,
+    transactionsChecked: result.transactions_checked
+  }, context.clock());
+}
+
+async function mintInvoiceForOrder(
+  context: OpenReceiveServiceContext,
+  input: {
+    readonly orderId: string;
+    readonly input: OpenReceiveCreateOrderRequest;
+    readonly priorRecords: readonly StoredRecord[];
+    readonly now: number;
+  }
+): Promise<StoredRecord> {
+  const renewal = input.priorRecords[0];
+  const firstCreate = renewal === undefined;
+  const body = firstCreate
+    ? createWireCreateOrderRequest(input.input)
+    : createRenewalRequestHashBody(input.orderId, renewal.row.invoice_id);
+  const operation = firstCreate ? "invoice.create" : "invoice.refresh";
+  const idempotencyKey = firstCreate
+    ? input.orderId
+    : `${input.orderId}:after:${renewal.row.invoice_id}`;
   const namespaceScope = context.options.namespace ?? readOpenReceiveNamespace(undefined);
-  const operation = "invoice.create" as const;
-  const idempotencyScope: OpenReceiveIdempotencyScope = {
+  const scope: OpenReceiveIdempotencyScope = {
     namespace: namespaceScope,
     operation,
     idempotency_key: idempotencyKey
@@ -346,42 +409,44 @@ async function createInvoice(
   const requestHash = await createIdempotencyRequestHash(body);
   const existing = await getIdempotentRecord({
     store: context.store,
-    scope: idempotencyScope,
+    scope,
     idempotency_request_hash: requestHash
   });
 
   if (existing !== undefined) {
-    emitLog(context.options, "info", "invoice.create.replayed", "Replayed existing invoice for idempotent create request.", invoiceLogFields(existing.record.row));
-    return serializeInvoice(existing.record.row);
+    emitLog(context.options, "info", firstCreate ? "order.create.replayed" : "order.renew.replayed", "Replayed existing invoice for idempotent order request.", invoiceLogFields(existing.record.row));
+    return existing.record;
   }
 
-  const resolvedAmount = await resolveCreateAmount({
-    body,
-    now: context.clock(),
-    priceProviders: context.priceProviders,
-    priceCurrencies: context.priceCurrencies
+  const resolved = await resolveOrderInvoiceAmount({
+    context,
+    input: input.input,
+    renewal,
+    now: input.now
   });
-  const descriptionFields = getCreateDescriptionFields(body);
-  emitLog(context.options, "info", "invoice.create.requested", "Creating Lightning invoice through receive wallet.", {
-    amount_msats: resolvedAmount.amount_msats,
-    amount_source: resolvedAmount.amount_source,
-    ...(resolvedAmount.fiat_quote === null
+  const descriptionFields = orderDescriptionFields(input.input, renewal);
+  const expiry = orderExpiry(input.input, renewal);
+  emitLog(context.options, "info", firstCreate ? "order.create.requested" : "order.renew.requested", "Creating Lightning invoice through receive wallet.", {
+    order_id: input.orderId,
+    amount_msats: resolved.amount_msats,
+    amount_source: resolved.amount_source,
+    ...(resolved.fiat_quote === null
       ? {}
       : {
-        btc_fiat_price: resolvedAmount.fiat_quote.btc_fiat_price,
-        price_source: resolvedAmount.fiat_quote.source
+        btc_fiat_price: resolved.fiat_quote.btc_fiat_price,
+        price_source: resolved.fiat_quote.source
       })
   });
   const walletInvoice = await context.options.client.makeInvoice({
-    amount_msats: BigInt(resolvedAmount.amount_msats),
+    amount_msats: BigInt(resolved.amount_msats),
     ...descriptionFields,
-    expiry: optionalSafeInteger(body.expiry)
+    expiry
   });
   const createdAt = walletInvoice.created_at ?? context.clock();
-  const requestedExpirySeconds = optionalSafeInteger(body.expiry) ?? 600;
+  const requestedExpirySeconds = expiry ?? 600;
   const expiresAt = walletInvoice.expires_at ?? createdAt + requestedExpirySeconds;
   const normalizedExpiresAt = Math.min(expiresAt, createdAt + requestedExpirySeconds);
-
+  const metadata = orderMetadata(input.input, input.orderId, renewal);
   const createResult = await putCreatedInvoiceRecord({
     store: context.store,
     createInvoiceId,
@@ -401,145 +466,258 @@ async function createInvoice(
         settlement_action_state: "pending",
         created_at: createdAt,
         expires_at: normalizedExpiresAt,
-        metadata: {
-          order_uuid: orderId
-        },
-        fiat_quote: resolvedAmount.fiat_quote === null
+        ...(renewal === undefined
+          ? {}
+          : { refreshed_from_invoice_id: renewal.row.invoice_id }),
+        metadata,
+        fiat_quote: resolved.fiat_quote === null
           ? null
-          : { ...resolvedAmount.fiat_quote }
+          : { ...resolved.fiat_quote }
       }
     }
   });
-  emitLog(context.options, "info", "invoice.created", "Created Lightning invoice.", invoiceLogFields(createResult.record.row));
-
-  return serializeInvoice(createResult.record.row);
-}
-
-async function getInvoice(
-  context: OpenReceiveServiceContext,
-  invoiceId: string
-): Promise<OpenReceiveInvoice> {
-  const record = await requireStoredRecord(context.store, invoiceId);
-  emitLog(context.options, "debug", "invoice.read", "Read invoice state.", invoiceLogFields(record.row));
-  return serializeInvoice(record.row);
-}
-
-async function refreshInvoiceStatus(
-  context: OpenReceiveServiceContext,
-  input: OpenReceiveRefreshInvoiceStatusRequest
-): Promise<OpenReceiveInvoiceStatusResult> {
-  const record = await requireStoredRecord(context.store, input.invoiceId);
-  emitLog(context.options, "info", "invoice.status.requested", "Refreshing invoice status through the transaction scan path.", invoiceLogFields(record.row));
-
-  const result = await refreshStoredInvoiceStatus({
-    ...reconcileOptions(context),
-    record
-  });
-  emitLog(context.options, "debug", "invoice.status.result", "Invoice status refresh completed.", {
-    ...invoiceLogFields(result.record.row),
-    reason: result.reason,
-    wallet_scan_performed: result.wallet_scan_performed,
-    transactions_checked: result.transactions_checked
+  emitLog(context.options, "info", firstCreate ? "order.created" : "order.renewed", "Created Lightning invoice for order.", {
+    ...invoiceLogFields(createResult.record.row),
+    order_id: input.orderId,
+    ...(renewal === undefined ? {} : { old_invoice_id: renewal.row.invoice_id })
   });
 
-  return {
-    ...serializeInvoice(result.record.row),
-    walletScanPerformed: result.wallet_scan_performed,
-    transactionsChecked: result.transactions_checked
-  };
+  return createResult.record;
 }
 
-async function refreshInvoice(
-  context: OpenReceiveServiceContext,
-  invoiceId: string,
-  input: OpenReceiveRefreshInvoiceRequest
-): Promise<OpenReceiveRefreshInvoiceResult> {
-  const oldRecord = await requireStoredRecord(context.store, invoiceId);
-  const oldInvoice = oldRecord.row;
-  emitLog(context.options, "info", "invoice.refresh.requested", "Refreshing invoice by creating a linked replacement.", invoiceLogFields(oldInvoice));
-
-  if (!isRefreshableInvoice(oldInvoice)) {
-    throw serviceError(
-      409,
-      "CONFLICT",
-      "Invoice can only be refreshed after it expires or fails."
-    );
-  }
-
-  const request = asRecord(input);
-  const idempotencyKey = optionalString(request.idempotencyKey);
-  if (idempotencyKey === undefined) {
-    throw serviceError(400, "INVALID_REQUEST", "idempotencyKey is required.");
-  }
-
-  const body = {
-    ...(optionalString(request.reason) === undefined
-      ? {}
-      : { reason: optionalString(request.reason) })
-  };
-  const reason = optionalString(body.reason) ?? oldInvoice.transaction_state;
-  const operation = "invoice.refresh" as const;
-  const idempotencyScope: OpenReceiveIdempotencyScope = {
-    namespace: oldInvoice.namespace,
-    operation,
-    idempotency_key: idempotencyKey
-  };
-  const requestHash = await createIdempotencyRequestHash(body);
-  const existing = await getIdempotentRecord({
-    store: context.store,
-    scope: idempotencyScope,
-    idempotency_request_hash: requestHash
-  });
-
-  if (existing !== undefined) {
-    emitLog(context.options, "info", "invoice.refresh.replayed", "Replayed existing refreshed invoice for idempotent request.", invoiceLogFields(existing.record.row));
-    return serializeRefreshResult({
-      oldInvoice,
-      newInvoice: existing.record.row,
-      reason
+async function resolveOrderInvoiceAmount(input: {
+  context: OpenReceiveServiceContext;
+  input: OpenReceiveCreateOrderRequest;
+  renewal: StoredRecord | undefined;
+  now: number;
+}): Promise<ResolvedCreateAmount> {
+  if (input.renewal === undefined) {
+    return await resolveCreateAmount({
+      body: createWireCreateOrderRequest(input.input),
+      now: input.now,
+      priceProviders: input.context.priceProviders,
+      priceCurrencies: input.context.priceCurrencies
     });
   }
 
-  const walletInvoice = await context.options.client.makeInvoice({
-    amount_msats: BigInt(oldInvoice.amount_msats)
-  });
-  const createdAt = walletInvoice.created_at ?? context.clock();
-  const expiresAt = Math.min(walletInvoice.expires_at ?? createdAt + 600, createdAt + 600);
-  const createResult = await putCreatedInvoiceRecord({
-    store: context.store,
-    createInvoiceId,
-    record: {
-      rev: 0,
-      row: {
-        invoice_id: createInvoiceId(),
-        namespace: oldInvoice.namespace,
-        operation,
-        idempotency_key: idempotencyKey,
-        idempotency_request_hash: requestHash,
-        payment_hash: walletInvoice.payment_hash,
-        invoice: walletInvoice.invoice,
-        amount_msats: toSafeInteger(walletInvoice.amount_msats, "amount_msats"),
-        transaction_state: "pending",
-        workflow_state: "invoice_created",
-        settlement_action_state: "pending",
-        created_at: createdAt,
-        expires_at: expiresAt,
-        refreshed_from_invoice_id: oldInvoice.invoice_id,
-        metadata: oldInvoice.metadata,
-        fiat_quote: oldInvoice.fiat_quote ?? null
-      }
-    }
-  });
-  emitLog(context.options, "info", "invoice.refresh.created", "Created linked replacement invoice.", {
-    ...invoiceLogFields(createResult.record.row),
-    old_invoice_id: oldInvoice.invoice_id
-  });
+  const amountSpec = readStoredAmountSpec(input.renewal.row);
+  if (amountSpec !== undefined && "fiat" in amountSpec) {
+    return await resolveCreateAmount({
+      body: { fiat: amountSpec.fiat },
+      now: input.now,
+      priceProviders: input.context.priceProviders,
+      priceCurrencies: input.context.priceCurrencies
+    });
+  }
 
-  return serializeRefreshResult({
-    oldInvoice,
-    newInvoice: createResult.record.row,
-    reason
+  return {
+    amount_msats: input.renewal.row.amount_msats,
+    amount_source: "amount_msats",
+    fiat_quote: null
+  };
+}
+
+function orderDescriptionFields(
+  input: OpenReceiveCreateOrderRequest,
+  renewal: StoredRecord | undefined
+): {
+  readonly description?: string;
+  readonly description_hash?: string;
+} {
+  if (renewal === undefined) {
+    return getCreateDescriptionFields(createWireCreateOrderRequest(input));
+  }
+  return getCreateDescriptionFields({
+    ...(optionalString(renewal.row.metadata.memo) === undefined
+      ? {}
+      : { optional_invoice_description: optionalString(renewal.row.metadata.memo) }),
+    ...(optionalString(renewal.row.metadata.description_hash) === undefined
+      ? {}
+      : { description_hash: optionalString(renewal.row.metadata.description_hash) })
   });
+}
+
+function orderExpiry(
+  input: OpenReceiveCreateOrderRequest,
+  renewal: StoredRecord | undefined
+): number | undefined {
+  if (renewal === undefined) {
+    return optionalSafeInteger(createWireCreateOrderRequest(input).expiry);
+  }
+  return optionalSafeInteger(renewal.row.metadata.expires_in_seconds);
+}
+
+function orderMetadata(
+  input: OpenReceiveCreateOrderRequest,
+  orderId: string,
+  renewal: StoredRecord | undefined
+): Record<string, unknown> {
+  const amountSpec = renewal === undefined
+    ? structuredClone(input.amount)
+    : readStoredAmountSpec(renewal.row) ?? { msats: renewal.row.amount_msats };
+  const memo = renewal === undefined
+    ? input.memo
+    : optionalString(renewal.row.metadata.memo);
+  const descriptionHash = renewal === undefined
+    ? input.descriptionHash
+    : optionalString(renewal.row.metadata.description_hash);
+  const expiresInSeconds = renewal === undefined
+    ? input.expiresInSeconds
+    : renewal.row.metadata.expires_in_seconds;
+
+  return {
+    order_uuid: orderId,
+    amount_spec: structuredClone(amountSpec),
+    ...(memo === undefined ? {} : { memo }),
+    ...(descriptionHash === undefined ? {} : { description_hash: descriptionHash }),
+    ...(expiresInSeconds === undefined ? {} : { expires_in_seconds: expiresInSeconds })
+  };
+}
+
+function createRenewalRequestHashBody(orderId: string, afterInvoiceId: string): Record<string, unknown> {
+  return {
+    orderId,
+    after: afterInvoiceId
+  };
+}
+
+async function amountMatches(
+  context: OpenReceiveServiceContext,
+  amount: OpenReceiveCreateInvoiceAmount,
+  record: StoredRecord,
+  now: number
+): Promise<boolean> {
+  const storedAmount = readStoredAmountSpec(record.row);
+  if ("fiat" in amount || (storedAmount !== undefined && "fiat" in storedAmount)) {
+    return (
+      "fiat" in amount &&
+      storedAmount !== undefined &&
+      "fiat" in storedAmount &&
+      amount.fiat.currency === storedAmount.fiat.currency &&
+      amount.fiat.value === storedAmount.fiat.value
+    );
+  }
+
+  const resolved = await resolveCreateAmount({
+    body: createWireAmountRequest(amount),
+    now,
+    priceProviders: context.priceProviders,
+    priceCurrencies: context.priceCurrencies
+  });
+  return resolved.amount_msats === record.row.amount_msats;
+}
+
+function readStoredAmountSpec(row: InvoiceStorageRow): OpenReceiveCreateInvoiceAmount | undefined {
+  const value = row.metadata.amount_spec;
+  if (!isRecord(value)) return undefined;
+  if (isRecord(value.btc)) {
+    return {
+      btc: value.btc as unknown as OpenReceiveBitcoinAmount
+    };
+  }
+  if (value.sats !== undefined) {
+    return {
+      sats: value.sats as number | string
+    };
+  }
+  if (value.msats !== undefined) {
+    return {
+      msats: value.msats as number | string
+    };
+  }
+  if (isRecord(value.fiat)) {
+    const currency = optionalString(value.fiat.currency);
+    const fiatValue = optionalString(value.fiat.value);
+    if (currency !== undefined && fiatValue !== undefined) {
+      return {
+        fiat: {
+          currency,
+          value: fiatValue
+        }
+      };
+    }
+  }
+  return undefined;
+}
+
+function createWireAmountRequest(amount: OpenReceiveCreateInvoiceAmount): Record<string, unknown> {
+  return {
+    ...("btc" in amount ? { amount: amount.btc } : {}),
+    ...("sats" in amount ? { amount_sats: amount.sats } : {}),
+    ...("msats" in amount ? { amount_msats: amount.msats } : {}),
+    ...("fiat" in amount ? { fiat: amount.fiat } : {})
+  };
+}
+
+function scanlessOrderMeta(): Pick<OpenReceiveOrder, "walletScanPerformed" | "transactionsChecked"> {
+  return {
+    walletScanPerformed: false,
+    transactionsChecked: 0
+  };
+}
+
+function buildOrder(
+  records: readonly StoredRecord[],
+  scanMeta: Pick<OpenReceiveOrder, "walletScanPerformed" | "transactionsChecked">,
+  now: number
+): OpenReceiveOrder {
+  if (records.length === 0) {
+    throw serviceError(500, "INTERNAL", "Order has no invoices.");
+  }
+  const sortedRecords = [...records].sort((left, right) =>
+    left.row.created_at === right.row.created_at
+      ? right.row.invoice_id.localeCompare(left.row.invoice_id)
+      : right.row.created_at - left.row.created_at
+  );
+  const invoices = sortedRecords.map((record) => serializeInvoice(record.row));
+  const paidInvoice = invoices.find((invoice) => invoice.status === "settled");
+  const paid = paidInvoice !== undefined;
+  const active = paid
+    ? undefined
+    : invoices.find((invoice) => invoice.status === "pending" && invoice.expiresAt > now);
+  const status: OpenReceiveOrder["status"] = paid
+    ? "paid"
+    : active !== undefined
+      ? "pending"
+      : invoices.every((invoice) => isUnavailableInvoice(invoice, now))
+        ? "expired"
+        : "pending";
+  const base = active ?? paidInvoice ?? requiredValue(invoices[0]);
+  const amountSpec = readStoredAmountSpec(sortedRecords[0].row);
+
+  return {
+    orderId: readStoredOrderId(sortedRecords[0].row),
+    status,
+    paid,
+    ...(paidInvoice?.settledAt === undefined ? {} : { paidAt: paidInvoice.settledAt }),
+    amountMsats: base.amountMsats,
+    ...(amountSpec !== undefined && "fiat" in amountSpec
+      ? {
+        fiat: {
+          currency: amountSpec.fiat.currency,
+          value: amountSpec.fiat.value
+        }
+      }
+      : {}),
+    ...(active === undefined ? {} : { active }),
+    invoices,
+    walletScanPerformed: scanMeta.walletScanPerformed,
+    transactionsChecked: scanMeta.transactionsChecked
+  };
+}
+
+function isSettledRecord(row: InvoiceStorageRow): boolean {
+  return row.settled_at !== undefined || row.transaction_state === "settled";
+}
+
+function isLivePendingRecord(row: InvoiceStorageRow, now: number): boolean {
+  return deriveInvoiceStatus(row) === "pending" && row.expires_at > now;
+}
+
+function isUnavailableInvoice(invoice: OpenReceiveInvoice, now: number): boolean {
+  return invoice.status === "expired" ||
+    invoice.status === "failed" ||
+    (invoice.status === "pending" && invoice.expiresAt <= now);
 }
 
 async function listRates(
@@ -764,19 +942,6 @@ function readNonNegativeIntegerEnv(name: string): number | undefined {
   return parsed;
 }
 
-function serializeRefreshResult(input: {
-  oldInvoice: InvoiceStorageRow;
-  newInvoice: InvoiceStorageRow;
-  reason: string;
-}): OpenReceiveRefreshInvoiceResult {
-  return {
-    oldInvoiceId: input.oldInvoice.invoice_id,
-    newInvoiceId: input.newInvoice.invoice_id,
-    reason: input.reason,
-    invoice: serializeInvoice(input.newInvoice)
-  };
-}
-
 function serializeInvoice(row: InvoiceStorageRow): OpenReceiveInvoice {
   return {
     invoiceId: row.invoice_id,
@@ -850,24 +1015,25 @@ export function toOpenReceiveHttpInvoice(
   };
 }
 
-export function toOpenReceiveHttpInvoiceStatusResult(
-  status: OpenReceiveInvoiceStatusResult
-): OpenReceiveHttpInvoiceStatusResult {
+export function toOpenReceiveHttpOrder(order: OpenReceiveOrder): OpenReceiveHttpOrder {
   return {
-    ...toOpenReceiveHttpInvoice(status),
-    wallet_scan_performed: status.walletScanPerformed,
-    transactions_checked: status.transactionsChecked
-  };
-}
-
-export function toOpenReceiveHttpRefreshInvoiceResult(
-  refresh: OpenReceiveRefreshInvoiceResult
-): OpenReceiveHttpRefreshInvoiceResult {
-  return {
-    old_invoice_id: refresh.oldInvoiceId,
-    new_invoice_id: refresh.newInvoiceId,
-    reason: refresh.reason,
-    invoice: toOpenReceiveHttpInvoice(refresh.invoice)
+    order_id: order.orderId,
+    status: order.status,
+    paid: order.paid,
+    ...(order.paidAt === undefined ? {} : { paid_at: order.paidAt }),
+    amount_msats: order.amountMsats,
+    ...(order.fiat === undefined
+      ? {}
+      : {
+        fiat: {
+          currency: order.fiat.currency,
+          value: order.fiat.value
+        }
+      }),
+    ...(order.active === undefined ? {} : { active: toOpenReceiveHttpInvoice(order.active) }),
+    invoices: order.invoices.map(toOpenReceiveHttpInvoice),
+    wallet_scan_performed: order.walletScanPerformed,
+    transactions_checked: order.transactionsChecked
   };
 }
 
@@ -1163,8 +1329,8 @@ function mapPriceError(error: unknown): OpenReceiveServiceError {
   );
 }
 
-function createWireCreateInvoiceRequest(
-  input: OpenReceiveCreateInvoiceRequest
+function createWireCreateOrderRequest(
+  input: OpenReceiveCreateOrderRequest
 ): Record<string, unknown> {
   const body = asRecord(input);
   const orderId = optionalString(body.orderId);
@@ -1256,26 +1422,16 @@ function parseCreateOrderId(body: Record<string, unknown>): string {
   return orderId;
 }
 
-function isRefreshableInvoice(invoice: InvoiceStorageRow): boolean {
-  return (
-    invoice.transaction_state === "expired" ||
-    invoice.transaction_state === "failed" ||
-    invoice.workflow_state === "expired_closed" ||
-    invoice.workflow_state === "failed_closed"
-  );
-}
-
-async function requireStoredRecord(
-  store: OpenReceiveInvoiceKvStore,
-  invoiceId: string | undefined
-): Promise<StoredRecord> {
-  if (invoiceId === undefined || invoiceId.length === 0) {
-    throw serviceError(400, "INVALID_REQUEST", "invoice_id is required.");
+function parseGetOrderId(input: OpenReceiveGetOrderRequest): string {
+  const body = asRecord(input);
+  const orderId = optionalString(body.orderId);
+  if (orderId === undefined) {
+    throw serviceError(400, "INVALID_REQUEST", "orderId is required.");
   }
-
-  const record = await store.get(invoiceId);
-  if (record === undefined) throw new InvoiceNotFoundError(invoiceId);
-  return record;
+  if (orderId.length > 200) {
+    throw serviceError(400, "INVALID_REQUEST", "orderId must be 200 characters or fewer.");
+  }
+  return orderId;
 }
 
 function assertDurableStoreConfiguration(input: {

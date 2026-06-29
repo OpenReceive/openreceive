@@ -8,9 +8,8 @@ import {
   copyInvoice as copyInvoiceHelper,
   createCheckoutController,
   createCheckoutDisplayModel,
-  createCheckoutSnapshotFromDisplayData,
   createCheckoutStatusModel,
-  createCheckoutStateFromDisplayData,
+  createCheckoutState,
   createOpenReceivePaymentWizardModel,
   createOpenReceivePaymentWizardController,
   createCheckoutProviderCopyEvent,
@@ -34,6 +33,7 @@ import {
   type CheckoutDisplayData,
   type CheckoutDisplayModel,
   type CheckoutPhase,
+  type CheckoutInvoiceSnapshot,
   type CheckoutSnapshot,
   type CheckoutState,
   type CheckoutStatusModel,
@@ -51,7 +51,7 @@ import {
   type Status
 } from "@openreceive/browser/internal";
 
-const DEFAULT_STATUS_URL = "/openreceive/v1/invoices/{invoice_id}/status";
+const DEFAULT_STATUS_URL = "/openreceive/v1/orders/{order_id}/status";
 
 export interface CheckoutData {
   readonly invoice: CheckoutSnapshot;
@@ -62,7 +62,7 @@ export interface CheckoutViewModel {
   readonly invoice: string;
   readonly payment_hash?: string;
   readonly amount_msats?: number;
-  readonly fiat_quote?: CheckoutSnapshot["fiat_quote"];
+  readonly fiat_quote?: CheckoutInvoiceSnapshot["fiat_quote"];
   readonly expires_at?: number;
   readonly settled_at?: number;
   readonly lightningUri: string;
@@ -305,9 +305,15 @@ function useOpenReceiveTransientValue<T>(
 }
 
 function toCheckoutDisplayData(
-  invoice: CheckoutSnapshot
+  snapshot: CheckoutSnapshot
 ): CheckoutDisplayData {
+  const invoice = snapshot.active ?? snapshot.invoices[0];
+  if (invoice === undefined) {
+    throw new TypeError("OpenReceive checkout requires active or invoices[0].");
+  }
+  const settledAt = snapshot.paid_at ?? invoice.settled_at;
   return {
+    order_id: snapshot.order_id,
     invoice_id: invoice.invoice_id,
     invoice: invoice.invoice,
     ...(invoice.payment_hash === undefined ? {} : { payment_hash: invoice.payment_hash }),
@@ -318,8 +324,15 @@ function toCheckoutDisplayData(
       : { transaction_state: invoice.transaction_state }),
     ...(invoice.workflow_state === undefined ? {} : { workflow_state: invoice.workflow_state }),
     ...(invoice.expires_at === undefined ? {} : { expires_at: invoice.expires_at }),
-    ...(invoice.settled_at === undefined ? {} : { settled_at: invoice.settled_at })
+    ...(settledAt === undefined ? {} : { settled_at: settledAt })
   };
+}
+
+function deriveCheckoutOrderStatus(snapshot: CheckoutSnapshot): Status {
+  if (snapshot.paid) return "settled";
+  if (snapshot.status === "expired") return "expired";
+  const invoice = snapshot.active ?? snapshot.invoices[0];
+  return invoice === undefined ? "pending" : deriveStatus(invoice);
 }
 
 function toCheckoutViewModel(
@@ -347,7 +360,7 @@ export function createCheckoutViewModel(
 ): CheckoutViewModel {
   return toCheckoutViewModel(
     createCheckoutDisplayModel(toCheckoutDisplayData(data.invoice)),
-    deriveStatus(data.invoice)
+    deriveCheckoutOrderStatus(data.invoice)
   );
 }
 
@@ -370,7 +383,7 @@ export function useCheckout(
   const model = React.useMemo(
     () => toCheckoutViewModel(
       createCheckoutDisplayModel(displayData),
-      deriveStatus(options.invoice)
+      deriveCheckoutOrderStatus(options.invoice)
     ),
     [
       displayData,
@@ -378,13 +391,13 @@ export function useCheckout(
     ]
   );
   const snapshot = React.useMemo<CheckoutSnapshot>(
-    () => createCheckoutSnapshotFromDisplayData(displayData),
+    () => options.invoice,
     [
-      displayData
+      options.invoice
     ]
   );
   const [state, setState] = React.useState<CheckoutState>(
-    () => createCheckoutStateFromDisplayData(displayData, {
+    () => createCheckoutState(snapshot, {
       logger: options.logger
     })
   );
@@ -394,10 +407,10 @@ export function useCheckout(
   const onSettledRef = React.useRef(options.onSettled);
   onSettledRef.current = options.onSettled;
   const settledAnnouncementRef = React.useRef<{
-    readonly invoiceId: string;
+    readonly orderId: string;
     readonly fired: boolean;
   }>({
-    invoiceId: snapshot.invoice_id,
+    orderId: snapshot.order_id,
     fired: false
   });
   const logContext = React.useMemo(
@@ -461,24 +474,24 @@ export function useCheckout(
 
   React.useEffect(() => {
     const announced = settledAnnouncementRef.current;
-    if (announced.invoiceId !== snapshot.invoice_id) {
+    if (announced.orderId !== snapshot.order_id) {
       settledAnnouncementRef.current = {
-        invoiceId: snapshot.invoice_id,
+        orderId: snapshot.order_id,
         fired: false
       };
     }
-  }, [snapshot.invoice_id]);
+  }, [snapshot.order_id]);
 
   React.useEffect(() => {
     const announced = settledAnnouncementRef.current;
     if (publicStatus !== "settled" || announced.fired) return;
     settledAnnouncementRef.current = {
-      invoiceId: snapshot.invoice_id,
+      orderId: snapshot.order_id,
       fired: true
     };
     // UI hint only; server-side fulfillment must use the backend settlement hook.
     onSettledRef.current?.();
-  }, [publicStatus, snapshot.invoice_id]);
+  }, [publicStatus, snapshot.order_id]);
 
   const copyInvoice = React.useCallback(async () => {
     try {

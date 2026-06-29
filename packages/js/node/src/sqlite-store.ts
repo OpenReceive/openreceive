@@ -404,6 +404,9 @@ export class OpenReceiveSqliteKvStore implements OpenReceiveInvoiceKvStore {
       if (existing.value > OPENRECEIVE_DATABASE_SCHEMA_VERSION) {
         throw new Error("OpenReceive store schema is newer than this package.");
       }
+      if (existing.value !== OPENRECEIVE_DATABASE_SCHEMA_VERSION) {
+        throw new Error("OpenReceive store schema is older than this package.");
+      }
       return;
     }
     if (existing.value !== value) throw metaMismatchError(key);
@@ -523,6 +526,12 @@ function assertListOpenInput(input: { now: number; limit: number }): void {
   }
   if (!Number.isSafeInteger(input.limit) || input.limit <= 0) {
     throw new TypeError("OpenReceive SQLite listOpen limit must be a positive safe integer");
+  }
+}
+
+function assertOrderId(orderId: string): void {
+  if (typeof orderId !== "string" || orderId.length === 0) {
+    throw new TypeError("OpenReceive SQLite orderId must be a non-empty string");
   }
 }
 

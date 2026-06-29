@@ -53,7 +53,7 @@ interface DemoOrder {
 
 interface CreateOrderResponse {
   readonly order: DemoOrder;
-  readonly invoice: Invoice;
+  readonly checkout: Invoice;
 }
 
 export default function CheckoutClient({
@@ -87,8 +87,8 @@ export default function CheckoutClient({
   const cartQuantity = cartItems.reduce((total, item) => total + item.quantity, 0);
 
   const onSettled = useCallback(() => {
-    if (checkout !== undefined && completedInvoiceRef.current !== checkout.invoice_id) {
-      completedInvoiceRef.current = checkout.invoice_id;
+    if (checkout !== undefined && completedInvoiceRef.current !== checkout.order_id) {
+      completedInvoiceRef.current = checkout.order_id;
       setOrder((current) => current === undefined
         ? current
         : { ...current, status: "paid" });
@@ -143,7 +143,7 @@ export default function CheckoutClient({
       }
 
       setOrder(body.order);
-      setCheckout(body.invoice);
+      setCheckout(body.checkout);
       setPurchasedFruit(cartItems[0]?.fruit);
       setStatus("invoice_created");
     } catch (cause: unknown) {
@@ -346,7 +346,7 @@ function isCreateOrderResponse(value: unknown): value is CreateOrderResponse {
   return typeof value === "object" &&
     value !== null &&
     "order" in value &&
-    "invoice" in value;
+    "checkout" in value;
 }
 
 function readErrorMessage(value: unknown): string | undefined {

@@ -2,6 +2,7 @@ import {
   canonicalJson,
   idempotencyScopeKey,
   isTerminalInvoiceStorageRow,
+  readInvoiceStorageOrderId,
   validateInvoiceStorageRow,
   type MaybePromise,
   type OpenReceiveInvoiceKvStore,
@@ -59,10 +60,14 @@ CREATE TABLE IF NOT EXISTS openreceive_invoices (
   payment_hash TEXT NOT NULL UNIQUE,
   bolt11 TEXT NOT NULL UNIQUE,
   idempotency_scope TEXT NOT NULL UNIQUE,
+  order_id TEXT NOT NULL,
   terminal BOOLEAN NOT NULL DEFAULT FALSE,
   expires_at BIGINT NOT NULL,
   data JSONB NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS openreceive_invoices_order_idx
+  ON openreceive_invoices (order_id);
 
 CREATE INDEX IF NOT EXISTS openreceive_invoices_open_idx
   ON openreceive_invoices (terminal, expires_at);
@@ -140,8 +145,8 @@ export class OpenReceivePostgresKvStore implements OpenReceiveInvoiceKvStore {
     const data = serializeStoredRecord(record);
     const result = await this.#client.query(
       `INSERT INTO ${this.#tableName} (
-        invoice_id, rev, payment_hash, bolt11, idempotency_scope, terminal, expires_at, data
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+        invoice_id, rev, payment_hash, bolt11, idempotency_scope, order_id, terminal, expires_at, data
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
       ON CONFLICT DO NOTHING
       RETURNING data`,
       [
@@ -150,6 +155,7 @@ export class OpenReceivePostgresKvStore implements OpenReceiveInvoiceKvStore {
         record.row.payment_hash,
         record.row.invoice,
         idempotencyScopeKey(record.row),
+        readInvoiceStorageOrderId(record.row),
         isTerminalInvoiceStorageRow(record.row),
         record.row.expires_at,
         data
@@ -177,10 +183,11 @@ export class OpenReceivePostgresKvStore implements OpenReceiveInvoiceKvStore {
            payment_hash = $3,
            bolt11 = $4,
            idempotency_scope = $5,
-           terminal = $6,
-           expires_at = $7,
-           data = $8::jsonb
-       WHERE invoice_id = $1 AND rev = $9
+           order_id = $6,
+           terminal = $7,
+           expires_at = $8,
+           data = $9::jsonb
+       WHERE invoice_id = $1 AND rev = $10
        RETURNING data`,
       [
         record.row.invoice_id,
@@ -188,6 +195,7 @@ export class OpenReceivePostgresKvStore implements OpenReceiveInvoiceKvStore {
         record.row.payment_hash,
         record.row.invoice,
         idempotencyScopeKey(record.row),
+        readInvoiceStorageOrderId(record.row),
         isTerminalInvoiceStorageRow(record.row),
         record.row.expires_at,
         serializeStoredRecord(record),
@@ -238,6 +246,22 @@ export class OpenReceivePostgresKvStore implements OpenReceiveInvoiceKvStore {
       `SELECT data FROM ${this.#tableName} WHERE idempotency_scope = $1 LIMIT 1`,
       [scopeKey]
     );
+  }
+
+  async listByOrderId(orderId: string): Promise<StoredRecord[]> {
+    assertOrderId(orderId);
+    const result = await this.#client.query(
+      `SELECT data FROM ${this.#tableName}
+       WHERE order_id = $1`,
+      [orderId]
+    );
+    return result.rows
+      .map((row) => parseStoredRecordField(row.data))
+      .sort((left, right) =>
+        left.row.created_at === right.row.created_at
+          ? right.row.invoice_id.localeCompare(left.row.invoice_id)
+          : right.row.created_at - left.row.created_at
+      );
   }
 
   async listOpen(input: { now: number; limit: number }): Promise<StoredRecord[]> {
@@ -381,6 +405,9 @@ export class OpenReceivePostgresKvStore implements OpenReceiveInvoiceKvStore {
       if (existing.value > OPENRECEIVE_DATABASE_SCHEMA_VERSION) {
         throw new Error("OpenReceive store schema is newer than this package.");
       }
+      if (existing.value !== OPENRECEIVE_DATABASE_SCHEMA_VERSION) {
+        throw new Error("OpenReceive store schema is older than this package.");
+      }
       return;
     }
     if (existing.value !== value) throw metaMismatchError(key);
@@ -394,10 +421,14 @@ CREATE TABLE IF NOT EXISTS ${this.#tableName} (
   payment_hash TEXT NOT NULL UNIQUE,
   bolt11 TEXT NOT NULL UNIQUE,
   idempotency_scope TEXT NOT NULL UNIQUE,
+  order_id TEXT NOT NULL,
   terminal BOOLEAN NOT NULL DEFAULT FALSE,
   expires_at BIGINT NOT NULL,
   data JSONB NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS ${unquoted(this.#tableName)}_order_idx
+  ON ${this.#tableName} (order_id);
 
 CREATE INDEX IF NOT EXISTS ${unquoted(this.#tableName)}_open_idx
   ON ${this.#tableName} (terminal, expires_at);
@@ -486,6 +517,12 @@ function assertListOpenInput(input: { now: number; limit: number }): void {
   }
   if (!Number.isSafeInteger(input.limit) || input.limit <= 0) {
     throw new TypeError("OpenReceive Postgres listOpen limit must be a positive safe integer");
+  }
+}
+
+function assertOrderId(orderId: string): void {
+  if (typeof orderId !== "string" || orderId.length === 0) {
+    throw new TypeError("OpenReceive Postgres orderId must be a non-empty string");
   }
 }
 

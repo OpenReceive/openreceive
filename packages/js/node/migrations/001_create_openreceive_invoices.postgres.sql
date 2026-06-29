@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS openreceive_invoices (
   operation TEXT NOT NULL,
   idempotency_key TEXT NOT NULL,
   idempotency_request_hash TEXT NOT NULL,
+  order_id TEXT NOT NULL,
   payment_hash TEXT NOT NULL UNIQUE,
   invoice TEXT NOT NULL UNIQUE,
   amount_msats BIGINT NOT NULL,
@@ -49,11 +50,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS openreceive_invoices_idempotency_scope_idx
 CREATE INDEX IF NOT EXISTS openreceive_invoices_recovery_idx
   ON openreceive_invoices (workflow_state, transaction_state, expires_at);
 
+CREATE INDEX IF NOT EXISTS openreceive_invoices_order_idx
+  ON openreceive_invoices (order_id, created_at);
+
 CREATE TABLE IF NOT EXISTS openreceive_schema_migrations (
   version TEXT PRIMARY KEY,
   applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 INSERT INTO openreceive_schema_migrations (version)
-  VALUES ('v0.1')
+  VALUES ('v0.2')
   ON CONFLICT (version) DO NOTHING;

@@ -34,7 +34,7 @@ interface Fruit {
 
 interface CheckoutStateEventDetail {
   state?: {
-    invoice_id?: string;
+    order_id?: string;
   };
 }
 
@@ -54,7 +54,7 @@ interface DemoOrder {
 
 interface CreateOrderResponse {
   order: DemoOrder;
-  invoice: CheckoutSnapshot;
+  checkout: CheckoutSnapshot;
 }
 
 const fruits = fruitsData.fruits as Fruit[];
@@ -309,7 +309,7 @@ async function createOrder(): Promise<void> {
     currentOrder = body.order;
     purchasedFruit = cartItems()[0]?.fruit;
     renderOrder(body.order);
-    renderInvoice(body.invoice);
+    renderInvoice(body.checkout);
   } catch (error) {
     setError(error instanceof Error ? error.message : String(error));
   } finally {
@@ -333,11 +333,11 @@ function renderInvoice(nextInvoice: CheckoutSnapshot): void {
     onSettled: (event) => {
       const state = (event as CustomEvent<CheckoutStateEventDetail>).detail?.state;
       if (
-        state?.invoice_id !== undefined &&
-        state.invoice_id !== completedInvoiceId &&
+        state?.order_id !== undefined &&
+        state.order_id !== completedInvoiceId &&
           purchasedFruit !== undefined
       ) {
-        completedInvoiceId = state.invoice_id;
+        completedInvoiceId = state.order_id;
         if (currentOrder !== undefined) {
           currentOrder = { ...currentOrder, status: "paid" };
           renderOrder(currentOrder);
@@ -414,7 +414,7 @@ function isCreateOrderResponse(value: unknown): value is CreateOrderResponse {
   return typeof value === "object" &&
     value !== null &&
     "order" in value &&
-    "invoice" in value;
+    "checkout" in value;
 }
 
 function readErrorMessage(value: unknown): string | undefined {

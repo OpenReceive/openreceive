@@ -513,10 +513,11 @@ export function defineOpenReceiveElements(
     private activeTutorialIndex = 0;
     private activeTutorialCopied = false;
     private controller: CheckoutController | undefined;
-    private announcedSettledPaymentHash: string | undefined;
+    private announcedSettledOrderId: string | undefined;
 
     static get observedAttributes() {
       return [
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoiceId,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentHash,
@@ -658,6 +659,7 @@ export function defineOpenReceiveElements(
     }
 
     private currentCheckoutSnapshot(): CheckoutSnapshot | undefined {
+      const orderId = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
       const invoiceId = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoiceId);
       const invoice = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice);
       if (invoiceId === null || invoice === null) return undefined;
@@ -670,6 +672,7 @@ export function defineOpenReceiveElements(
         { label: "expires-at" }
       );
       return createCheckoutSnapshotFromDisplayData({
+        ...(orderId === null ? {} : { order_id: orderId }),
         invoice_id: invoiceId,
         invoice,
         ...(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentHash) === null
@@ -701,8 +704,8 @@ export function defineOpenReceiveElements(
       this.dispatchEvent(
         createCheckoutStateEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.state, state)
       );
-      if (state.settled && state.payment_hash !== this.announcedSettledPaymentHash) {
-        this.announcedSettledPaymentHash = state.payment_hash;
+      if (state.settled && state.order_id !== this.announcedSettledOrderId) {
+        this.announcedSettledOrderId = state.order_id;
         this.dispatchEvent(
           createCheckoutStateEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.settled, state)
         );

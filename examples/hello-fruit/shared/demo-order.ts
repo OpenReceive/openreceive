@@ -150,15 +150,23 @@ function createOpenReceiveInvoiceAmount(
 }
 
 export function createHelloFruitOrderStatus(input: {
+  readonly order_id?: unknown;
   readonly order_uuid?: unknown;
+  readonly paid?: unknown;
+  readonly status?: unknown;
   readonly settled_at?: unknown;
   readonly transaction_state?: unknown;
   readonly state?: unknown;
 }): HelloFruitOrderStatus {
-  const orderId = typeof input.order_uuid === "string" && input.order_uuid.length > 0
-    ? input.order_uuid
-    : "unknown";
-  const paid = typeof input.settled_at === "number" ||
+  const orderId =
+    typeof input.order_id === "string" && input.order_id.length > 0
+      ? input.order_id
+      : typeof input.order_uuid === "string" && input.order_uuid.length > 0
+        ? input.order_uuid
+        : "unknown";
+  const paid = input.paid === true ||
+    input.status === "paid" ||
+    typeof input.settled_at === "number" ||
     input.transaction_state === "settled" ||
     input.state === "settled";
 

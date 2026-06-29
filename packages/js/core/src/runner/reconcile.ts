@@ -86,6 +86,13 @@ export interface OpenReceiveStatusRefreshResult {
     | "wallet_scan_failed";
 }
 
+export interface OpenReceiveOrderStatusRefreshResult {
+  records: StoredRecord[];
+  wallet_scan_performed: boolean;
+  transactions_checked: number;
+  reason?: OpenReceiveStatusRefreshResult["reason"];
+}
+
 interface TransactionScanCursor {
   from: number;
   until: number;
@@ -186,6 +193,104 @@ export async function refreshInvoiceStatus(input: OpenReceiveReconcileOptions & 
   };
 }
 
+export async function refreshInvoiceRecordsStatus(input: OpenReceiveReconcileOptions & {
+  records: readonly StoredRecord[];
+}): Promise<OpenReceiveOrderStatusRefreshResult> {
+  const now = getNow(input);
+  const records = [...input.records];
+  const nonTerminal = records.filter((record) => !isTerminalInvoiceStorageRow(record.row));
+
+  const settled = nonTerminal.filter((record) => record.row.transaction_state === "settled");
+  if (settled.length > 0) {
+    for (const record of settled) {
+      await runSettlementAction({
+        ...input,
+        record,
+        now
+      });
+    }
+    return {
+      records: await refreshRecords(input.store, records),
+      wallet_scan_performed: false,
+      transactions_checked: 0,
+      reason: "settlement_action_completed"
+    };
+  }
+
+  if (nonTerminal.length === 0) {
+    return {
+      records,
+      wallet_scan_performed: false,
+      transactions_checked: 0,
+      reason: "already_final"
+    };
+  }
+
+  if (!await claimTransactionScanGate(input, now)) {
+    return {
+      records,
+      wallet_scan_performed: false,
+      transactions_checked: 0,
+      reason: "transaction_scan_claim_conflict"
+    };
+  }
+
+  const window = creationWindowForRecords(nonTerminal.map((record) => record.row), input);
+  const cursor = await readTransactionScanCursor(input.store, window);
+  const request: ListTransactionsRequest = {
+    type: "incoming",
+    unpaid: true,
+    from: cursor.from,
+    until: cursor.until,
+    limit: cursor.limit,
+    offset: cursor.offset
+  };
+
+  let page: ListTransactionsResult;
+  try {
+    page = await withTimeout(
+      input.client.listTransactions(request),
+      normalizePositiveInteger(
+        input.transactionScanTimeoutMs ?? DEFAULT_TRANSACTION_SCAN_TIMEOUT_MS,
+        "transactionScanTimeoutMs"
+      ),
+      input
+    );
+  } catch {
+    await emitEvent(input, {
+      event: "transaction_scan.failed",
+      invoice: nonTerminal[0].row,
+      reason: "wallet_scan_failed"
+    });
+    return {
+      records,
+      wallet_scan_performed: false,
+      transactions_checked: 0,
+      reason: "wallet_scan_failed"
+    };
+  }
+
+  for (const record of nonTerminal) {
+    const claim = await input.store.put(markTransactionScanAttempted(record, now), record.rev);
+    if (claim.status === "conflict") continue;
+  }
+
+  const applyResult = await applyTransactionPageForRecords({
+    ...input,
+    records: nonTerminal,
+    transactions: page.transactions,
+    now
+  });
+  await advanceTransactionScanCursor(input.store, cursor, page.transactions.length, now);
+
+  return {
+    records: await refreshRecords(input.store, records),
+    wallet_scan_performed: true,
+    transactions_checked: page.transactions.length,
+    reason: applyResult.reason
+  };
+}
+
 export async function runSettlementAction(input: OpenReceiveReconcileOptions & {
   record: StoredRecord;
   now?: number;
@@ -258,6 +363,39 @@ export async function runSettlementAction(input: OpenReceiveReconcileOptions & {
     status: "updated",
     record: finalRecord,
     reason: "settlement_action_completed"
+  };
+}
+
+async function applyTransactionPageForRecords(input: OpenReceiveReconcileOptions & {
+  records: readonly StoredRecord[];
+  transactions: readonly NwcTransaction[];
+  now: number;
+}): Promise<Pick<OpenReceiveStatusRefreshResult, "reason">> {
+  const invoiceIds = new Set(input.records.map((record) => record.row.invoice_id));
+  let orderMatched = false;
+  let orderReason: OpenReceiveStatusRefreshResult["reason"] = "wallet_no_match";
+
+  for (const transaction of input.transactions) {
+    if (transaction.type !== undefined && transaction.type !== "incoming") continue;
+
+    const record = await findTransactionRecord(input.store, transaction);
+    if (record === undefined || isTerminalInvoiceStorageRow(record.row)) continue;
+
+    const result = await applyTransactionResult({
+      ...input,
+      record,
+      transaction
+    });
+    if (invoiceIds.has(record.row.invoice_id)) {
+      orderMatched = true;
+      if (result.reason === "wallet_settled" || orderReason === "wallet_no_match") {
+        orderReason = result.reason;
+      }
+    }
+  }
+
+  return {
+    reason: orderMatched ? orderReason : "wallet_no_match"
   };
 }
 
@@ -435,6 +573,27 @@ function creationWindow(
   };
 }
 
+function creationWindowForRecords(
+  rows: readonly InvoiceStorageRow[],
+  options: OpenReceiveReconcileOptions
+): { from: number; until: number; limit: number } {
+  if (rows.length === 0) {
+    throw new TypeError("creationWindowForRecords requires at least one invoice");
+  }
+  const padding = options.transactionScanWindowPaddingSeconds ?? DEFAULT_TRANSACTION_SCAN_WINDOW_PADDING_SECONDS;
+  if (!Number.isSafeInteger(padding) || padding < 0) {
+    throw new TypeError("transactionScanWindowPaddingSeconds must be a non-negative safe integer");
+  }
+  return {
+    from: Math.max(0, Math.min(...rows.map((row) => row.created_at)) - padding),
+    until: Math.max(...rows.map((row) => row.created_at)) + padding,
+    limit: normalizePositiveInteger(
+      options.transactionScanPageLimit ?? DEFAULT_TRANSACTION_SCAN_PAGE_LIMIT,
+      "transactionScanPageLimit"
+    )
+  };
+}
+
 async function readTransactionScanCursor(
   store: OpenReceiveInvoiceKvStore,
   window: { from: number; until: number; limit: number }
@@ -516,6 +675,16 @@ async function persistTransition(
     current = updated.record;
   }
   return current;
+}
+
+async function refreshRecords(
+  store: OpenReceiveInvoiceKvStore,
+  records: readonly StoredRecord[]
+): Promise<StoredRecord[]> {
+  const refreshed = await Promise.all(
+    records.map(async (record) => await store.get(record.row.invoice_id) ?? record)
+  );
+  return refreshed;
 }
 
 async function emitEvent(

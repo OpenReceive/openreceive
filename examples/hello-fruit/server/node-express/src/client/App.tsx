@@ -59,7 +59,7 @@ interface DemoOrder {
 
 interface CreateOrderResponse {
   readonly order: DemoOrder;
-  readonly invoice: Invoice;
+  readonly checkout: Invoice;
 }
 
 function App(): React.ReactElement {
@@ -87,8 +87,8 @@ function App(): React.ReactElement {
   const cartQuantity = cartItems.reduce((total, item) => total + item.quantity, 0);
 
   const onSettled = useCallback(() => {
-    if (invoice !== null && completedInvoiceRef.current !== invoice.invoice_id) {
-      completedInvoiceRef.current = invoice.invoice_id;
+    if (invoice !== null && completedInvoiceRef.current !== invoice.order_id) {
+      completedInvoiceRef.current = invoice.order_id;
       setOrder((current) => current === null
         ? current
         : { ...current, status: "paid" });
@@ -143,7 +143,7 @@ function App(): React.ReactElement {
       }
 
       setOrder(body.order);
-      setInvoice(body.invoice);
+      setInvoice(body.checkout);
       setPurchasedFruit(cartItems[0]?.fruit ?? null);
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -482,7 +482,7 @@ function isCreateOrderResponse(value: unknown): value is CreateOrderResponse {
   return typeof value === "object" &&
     value !== null &&
     "order" in value &&
-    "invoice" in value;
+    "checkout" in value;
 }
 
 function readErrorMessage(value: unknown): string | undefined {

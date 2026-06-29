@@ -25,27 +25,23 @@ export {
   createOpenReceive,
   createOpenReceivePriceFeed,
   toOpenReceiveHttpInvoice,
-  toOpenReceiveHttpInvoiceStatusResult,
-  toOpenReceiveHttpRefreshInvoiceResult
+  toOpenReceiveHttpOrder
 } from "./service.ts";
 export type {
   CreateOpenReceiveOptions,
   OpenReceive,
   OpenReceiveConfigErrorCode,
   OpenReceiveCreateInvoiceAmount,
-  OpenReceiveCreateInvoiceRequest,
+  OpenReceiveCreateOrderRequest,
   OpenReceiveEvent,
   OpenReceiveEventHandler,
   OpenReceiveHttpInvoice,
-  OpenReceiveHttpInvoiceStatusResult,
-  OpenReceiveHttpRefreshInvoiceResult,
+  OpenReceiveHttpOrder,
   OpenReceiveInvoice,
-  OpenReceiveInvoiceStatusResult,
   OpenReceiveLogEntry,
   OpenReceiveLogger,
-  OpenReceiveRefreshInvoiceStatusRequest,
-  OpenReceiveRefreshInvoiceRequest,
-  OpenReceiveRefreshInvoiceResult,
+  OpenReceiveGetOrderRequest,
+  OpenReceiveOrder,
   OpenReceiveNodeOptions,
   OpenReceiveNodeSettlementActionHook,
   OpenReceiveNodeSettlementActionInput

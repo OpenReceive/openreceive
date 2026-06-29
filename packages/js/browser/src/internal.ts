@@ -316,6 +316,7 @@ export type OpenReceiveBrowserLogger = (
 ) => void;
 
 export interface OpenReceiveBrowserLogContext {
+  readonly order_id?: string;
   readonly invoice_id?: string;
   readonly payment_hash?: string;
   readonly amount_msats?: number;
@@ -332,7 +333,7 @@ export type CheckoutPhase =
   | "failed"
   | "cancelled";
 
-export interface CheckoutSnapshot {
+export interface CheckoutInvoiceSnapshot {
   readonly invoice_id: string;
   readonly invoice: string;
   readonly payment_hash?: string;
@@ -349,7 +350,24 @@ export interface CheckoutSnapshot {
   readonly settled_at?: number;
 }
 
+export interface CheckoutSnapshot {
+  readonly order_id: string;
+  readonly status: "pending" | "paid" | "expired";
+  readonly paid: boolean;
+  readonly paid_at?: number;
+  readonly amount_msats: number;
+  readonly fiat?: {
+    readonly currency: string;
+    readonly value: string;
+  };
+  readonly active?: CheckoutInvoiceSnapshot;
+  readonly invoices: readonly CheckoutInvoiceSnapshot[];
+  readonly wallet_scan_performed?: boolean;
+  readonly transactions_checked?: number;
+}
+
 export interface CheckoutDisplayData {
+  readonly order_id?: string;
   readonly invoice_id?: string;
   readonly invoice: string;
   readonly payment_hash?: string;
@@ -376,6 +394,7 @@ export interface CheckoutDisplayModel
 }
 
 export const OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES = {
+  orderId: "order-id",
   invoiceId: "invoice-id",
   invoice: "invoice",
   paymentHash: "payment-hash",
@@ -514,12 +533,13 @@ export interface CheckoutShellElements {
 }
 
 export interface CheckoutState {
+  readonly order_id: string;
   readonly invoice_id: string;
   readonly invoice: string;
   readonly lightningUri: string;
   readonly payment_hash?: string;
   readonly amount_msats?: number;
-  readonly fiat_quote?: CheckoutSnapshot["fiat_quote"];
+  readonly fiat_quote?: CheckoutInvoiceSnapshot["fiat_quote"];
   readonly transaction_state: string;
   readonly workflow_state: string;
   readonly expires_at?: number;
@@ -527,6 +547,7 @@ export interface CheckoutState {
   readonly phase: CheckoutPhase;
   readonly settled: boolean;
   readonly terminal: boolean;
+  readonly paid: boolean;
   readonly settled_at?: number;
 }
 
@@ -2677,28 +2698,35 @@ export function createCheckoutElementAttributes(
   snapshot: CheckoutSnapshot,
   options: CheckoutElementAttributeOptions = {}
 ): CheckoutElementAttributes {
-  assertInvoice(snapshot.invoice);
+  const invoice = checkoutInvoiceFromOrderSnapshot(snapshot);
+  assertInvoice(invoice.invoice);
   const attributes: CheckoutElementAttributes = {
-    [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoiceId]: snapshot.invoice_id,
-    [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice]: snapshot.invoice
+    [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId]: snapshot.order_id,
+    [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoiceId]: invoice.invoice_id,
+    [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice]: invoice.invoice
   };
 
-  if (snapshot.payment_hash !== undefined) {
-    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentHash] = snapshot.payment_hash;
+  if (invoice.payment_hash !== undefined) {
+    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentHash] = invoice.payment_hash;
   }
-  if (snapshot.amount_msats !== undefined) {
-    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.amountMsats] = String(snapshot.amount_msats);
+  const amountMsats = invoice.amount_msats ?? snapshot.amount_msats;
+  if (amountMsats !== undefined) {
+    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.amountMsats] = String(amountMsats);
   }
-  const fiat = snapshot.fiat_quote?.fiat;
+  const fiat = invoice.fiat_quote?.fiat ?? snapshot.fiat;
   if (fiat?.currency !== undefined) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.fiatCurrency] = fiat.currency;
   }
   if (fiat?.value !== undefined) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.fiatValue] = fiat.value;
   }
-  attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.status] = deriveStatus(snapshot);
-  if (snapshot.expires_at !== undefined) {
-    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.expiresAt] = String(snapshot.expires_at);
+  attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.status] = snapshot.paid
+    ? "settled"
+    : snapshot.status === "expired"
+      ? "expired"
+      : deriveStatus(invoice);
+  if (invoice.expires_at !== undefined) {
+    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.expiresAt] = String(invoice.expires_at);
   }
   if (options.statusUrl !== undefined) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.statusUrl] = options.statusUrl;
@@ -2934,7 +2962,7 @@ export async function requestCheckoutInvoice(
   }
 
   const requestBody = {
-    order_uuid: options.orderId,
+    order_id: options.orderId,
     ...("btc" in options.amount ? { amount: options.amount.btc } : {}),
     ...("sats" in options.amount ? { amount_sats: options.amount.sats } : {}),
     ...("msats" in options.amount ? { amount_msats: options.amount.msats } : {}),
@@ -2947,7 +2975,7 @@ export async function requestCheckoutInvoice(
   };
   assertOpenReceiveBrowserPayloadSafe(requestBody);
 
-  const response = await fetcher(options.invoiceUrl ?? "/openreceive/v1/invoices", {
+  const response = await fetcher(options.invoiceUrl ?? "/openreceive/v1/orders", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -2965,8 +2993,9 @@ export async function requestCheckoutInvoice(
     );
   }
 
-  if (typeof body?.invoice === "string") {
-    assertOpenReceiveDisplayInvoice(body.invoice);
+  const responseInvoice = asRecord(body).active;
+  if (isRecord(responseInvoice) && typeof responseInvoice.invoice === "string") {
+    assertOpenReceiveDisplayInvoice(responseInvoice.invoice);
   }
 
   return body as CheckoutSnapshot;
@@ -2976,8 +3005,8 @@ export function createOpenReceiveStatusFetcher(
   options: CreateOpenReceiveStatusFetcherOptions
 ): CheckoutStatusRefresh {
   return async (state) => {
-    if (state.invoice_id === undefined) {
-      throw new Error("OpenReceive status refresh requires invoice_id.");
+    if (state.order_id.length === 0) {
+      throw new Error("OpenReceive status refresh requires order_id.");
     }
 
     const fetcher = options.fetch ?? globalThis.fetch;
@@ -2985,14 +3014,14 @@ export function createOpenReceiveStatusFetcher(
       throw new Error("OpenReceive status refresh requires fetch.");
     }
 
-    const response = await fetcher(resolveStatusUrl(options.statusUrl, state.invoice_id), {
+    const response = await fetcher(resolveStatusUrl(options.statusUrl, state.order_id), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...(options.headers ?? {})
       },
       body: JSON.stringify({
-        invoice_id: state.invoice_id
+        order_id: state.order_id
       })
     });
     const body = await response.json();
@@ -3009,9 +3038,9 @@ export function createOpenReceiveStatusFetcher(
   };
 }
 
-function resolveStatusUrl(statusUrl: string, invoiceId: string): string {
-  return statusUrl.includes("{invoice_id}")
-    ? statusUrl.replaceAll("{invoice_id}", encodeURIComponent(invoiceId))
+function resolveStatusUrl(statusUrl: string, orderId: string): string {
+  return statusUrl.includes("{order_id}")
+    ? statusUrl.replaceAll("{order_id}", encodeURIComponent(orderId))
     : statusUrl;
 }
 
@@ -3066,34 +3095,50 @@ export function createOpenReceiveRefreshInvoiceFetcher(
   };
 }
 
+function checkoutInvoiceFromOrderSnapshot(
+  snapshot: CheckoutSnapshot
+): CheckoutInvoiceSnapshot {
+  const invoice = snapshot.active ?? snapshot.invoices[0];
+  if (invoice === undefined) {
+    throw new TypeError("OpenReceive order snapshot requires active or invoices[0].");
+  }
+  return invoice;
+}
+
 export function createCheckoutState(
   snapshot: CheckoutSnapshot,
   options: CreateCheckoutStateOptions = {}
 ): CheckoutState {
-  const transactionState = snapshot.transaction_state ?? "pending";
-  const workflowState = snapshot.workflow_state ?? "invoice_created";
+  const invoice = checkoutInvoiceFromOrderSnapshot(snapshot);
+  const settledAt = snapshot.paid_at ?? invoice.settled_at;
+  const transactionState = snapshot.paid
+    ? "settled"
+    : invoice.transaction_state ?? "pending";
+  const workflowState = snapshot.paid
+    ? "settlement_action_completed"
+    : invoice.workflow_state ?? "invoice_created";
 
   const state = normalizeCheckoutState({
-    invoice_id: snapshot.invoice_id,
-    invoice: snapshot.invoice,
-    lightningUri: createLightningUri(snapshot.invoice),
-    ...(snapshot.payment_hash === undefined
+    order_id: snapshot.order_id,
+    invoice_id: invoice.invoice_id,
+    invoice: invoice.invoice,
+    lightningUri: createLightningUri(invoice.invoice),
+    ...(invoice.payment_hash === undefined
       ? {}
-      : { payment_hash: snapshot.payment_hash }),
-    ...(snapshot.amount_msats === undefined
-      ? {}
-      : { amount_msats: snapshot.amount_msats }),
-    ...(snapshot.fiat_quote === undefined ? {} : { fiat_quote: snapshot.fiat_quote }),
+      : { payment_hash: invoice.payment_hash }),
+    amount_msats: invoice.amount_msats ?? snapshot.amount_msats,
+    ...(invoice.fiat_quote === undefined ? {} : { fiat_quote: invoice.fiat_quote }),
     transaction_state: transactionState,
     workflow_state: workflowState,
-    ...(snapshot.expires_at === undefined
+    ...(invoice.expires_at === undefined
       ? {}
-      : { expires_at: snapshot.expires_at }),
-    ...(snapshot.settled_at === undefined
+      : { expires_at: invoice.expires_at }),
+    ...(settledAt === undefined
       ? {}
-      : { settled_at: snapshot.settled_at })
+      : { settled_at: settledAt }),
+    paid: snapshot.paid
   }, options.now ?? currentUnixSeconds());
-  emitBrowserLog(options.logger, "info", "checkout.state.created", "Created checkout state from invoice snapshot.", checkoutLogFields(state));
+  emitBrowserLog(options.logger, "info", "checkout.state.created", "Created checkout state from order snapshot.", checkoutLogFields(state));
   return state;
 }
 
@@ -3104,7 +3149,7 @@ export function createCheckoutSnapshotFromDisplayData(
     throw new TypeError("invoice_id is required for checkout state");
   }
 
-  return {
+  const invoice: CheckoutInvoiceSnapshot = {
     invoice_id: data.invoice_id,
     invoice: data.invoice,
     ...(data.payment_hash === undefined ? {} : { payment_hash: data.payment_hash }),
@@ -3116,6 +3161,16 @@ export function createCheckoutSnapshotFromDisplayData(
     ...(data.workflow_state === undefined ? {} : { workflow_state: data.workflow_state }),
     ...(data.expires_at === undefined ? {} : { expires_at: data.expires_at }),
     ...(data.settled_at === undefined ? {} : { settled_at: data.settled_at })
+  };
+  const paid = data.settled_at !== undefined || data.transaction_state === "settled";
+  return {
+    order_id: data.order_id ?? data.invoice_id,
+    status: paid ? "paid" : "pending",
+    paid,
+    ...(data.settled_at === undefined ? {} : { paid_at: data.settled_at }),
+    amount_msats: data.amount_msats ?? 0,
+    active: paid ? undefined : invoice,
+    invoices: [invoice]
   };
 }
 
@@ -3140,26 +3195,16 @@ export function mergeCheckoutSnapshot(
   current: CheckoutState,
   next: Partial<CheckoutSnapshot>
 ): CheckoutSnapshot {
+  const currentSnapshot = snapshotFromCheckoutState(current);
   return {
-    invoice_id: next.invoice_id ?? current.invoice_id,
-    invoice: next.invoice ?? current.invoice,
-    ...((next.payment_hash ?? current.payment_hash) === undefined
-      ? {}
-      : { payment_hash: next.payment_hash ?? current.payment_hash }),
-    ...((next.amount_msats ?? current.amount_msats) === undefined
-      ? {}
-      : { amount_msats: next.amount_msats ?? current.amount_msats }),
-    ...((next.fiat_quote ?? current.fiat_quote) === undefined
-      ? {}
-      : { fiat_quote: next.fiat_quote ?? current.fiat_quote }),
-    transaction_state: next.transaction_state ?? current.transaction_state,
-    workflow_state: next.workflow_state ?? current.workflow_state,
-    ...((next.expires_at ?? current.expires_at) === undefined
-      ? {}
-      : { expires_at: next.expires_at ?? current.expires_at }),
-    ...((next.settled_at ?? current.settled_at) === undefined
-      ? {}
-      : { settled_at: next.settled_at ?? current.settled_at })
+    ...currentSnapshot,
+    ...next,
+    order_id: next.order_id ?? currentSnapshot.order_id,
+    status: next.status ?? currentSnapshot.status,
+    paid: next.paid ?? currentSnapshot.paid,
+    amount_msats: next.amount_msats ?? currentSnapshot.amount_msats,
+    active: next.active ?? currentSnapshot.active,
+    invoices: next.invoices ?? currentSnapshot.invoices
   };
 }
 
@@ -3254,7 +3299,7 @@ export class CheckoutWatcher {
       logger: this.options.logger
     });
     const refreshStatus = this.options.refreshStatus;
-    if (refreshStatus === undefined || current.invoice_id === undefined) {
+    if (refreshStatus === undefined || current.order_id.length === 0) {
       return current;
     }
 
@@ -3308,7 +3353,7 @@ export class CheckoutWatcher {
       }, 1000);
     }
 
-    if (state.settled || this.options.refreshStatus === undefined || state.invoice_id === undefined) {
+    if (state.settled || this.options.refreshStatus === undefined || state.order_id.length === 0) {
       this.stopPolling();
     } else if (this.pollTimer === undefined) {
       this.pollTimer = this.setInterval()(() => {
@@ -3658,7 +3703,7 @@ function normalizeCheckoutState(
   return {
     ...base,
     phase,
-    settled: base.transaction_state === "settled",
+    settled: base.paid || base.transaction_state === "settled",
     terminal: isTerminalPhase(phase),
     ...(base.expires_at === undefined || now === undefined
       ? {}
@@ -3698,7 +3743,7 @@ function isTerminalPhase(phase: CheckoutPhase): boolean {
 function snapshotFromCheckoutState(
   state: CheckoutState
 ): CheckoutSnapshot {
-  return {
+  const invoice: CheckoutInvoiceSnapshot = {
     invoice_id: state.invoice_id,
     invoice: state.invoice,
     ...(state.payment_hash === undefined ? {} : { payment_hash: state.payment_hash }),
@@ -3708,6 +3753,15 @@ function snapshotFromCheckoutState(
     workflow_state: state.workflow_state,
     ...(state.expires_at === undefined ? {} : { expires_at: state.expires_at }),
     ...(state.settled_at === undefined ? {} : { settled_at: state.settled_at })
+  };
+  return {
+    order_id: state.order_id,
+    status: state.paid ? "paid" : state.terminal ? "expired" : "pending",
+    paid: state.paid,
+    ...(state.settled_at === undefined ? {} : { paid_at: state.settled_at }),
+    amount_msats: state.amount_msats ?? 0,
+    active: state.paid ? undefined : invoice,
+    invoices: [invoice]
   };
 }
 
@@ -3757,6 +3811,7 @@ function getBrowserStorage(): Storage | undefined {
 
 function checkoutLogFields(
   state: {
+    readonly order_id?: string;
     readonly invoice_id?: string;
     readonly payment_hash?: string;
     readonly amount_msats?: number;
@@ -3767,6 +3822,7 @@ function checkoutLogFields(
   }
 ): Record<string, unknown> {
   return {
+    ...(state.order_id === undefined ? {} : { order_id: state.order_id }),
     ...(state.invoice_id === undefined ? {} : { invoice_id: state.invoice_id }),
     ...(state.payment_hash === undefined ? {} : { payment_hash: state.payment_hash }),
     ...(state.amount_msats === undefined ? {} : { amount_msats: state.amount_msats }),

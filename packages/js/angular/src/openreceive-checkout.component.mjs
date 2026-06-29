@@ -56,6 +56,7 @@ Component({
         [attr.storage-key]="themeToggleAttributes['storage-key']"
       ></openreceive-theme-toggle>
       <openreceive-checkout
+        [attr.order-id]="checkoutAttributes['order-id']"
         [attr.invoice-id]="checkoutAttributes['invoice-id']"
         [attr.invoice]="checkoutAttributes.invoice"
         [attr.payment-hash]="checkoutAttributes['payment-hash']"
