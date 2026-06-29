@@ -27,6 +27,14 @@
       "public": true
     },
     {
+      "slug": "checkout-retries",
+      "title": "Checkout Retries",
+      "source_path": "docs/guides/checkout-retries.md",
+      "category": "guide",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "settlement-sweeps",
       "title": "Settlement Sweeps",
       "source_path": "docs/guides/settlement-sweeps.md",

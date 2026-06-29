@@ -46,7 +46,7 @@ const openreceive = await createOpenReceive({
 });
 ```
 
-From a controller in your app, create one checkout for an order you already
+Whe you user wants to pay for something, or you want to get an inbound payment: From a controller in your app, create one checkout for an order you already
 own. Replace `myOrder` with however your app loads its order:
 
 ```ts
@@ -70,7 +70,8 @@ async function createCheckoutForCart(myOrder) {
 Invoices expire. OpenReceive does not create replacement invoices just because
 time passes or because the frontend polls status. When an invoice expires, show a
 try-again or start-over action and call `getOrCreateCheckout` again from that user
-action.
+action. See [Checkout Retries](checkout-retries.md) for the exact outcomes when
+the order id or amount changes.
 
 Add a status endpoint in a controller your app owns. It returns the order from
 `getOrder`; the frontend component reads `display_checkout`.
