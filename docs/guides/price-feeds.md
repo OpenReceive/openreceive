@@ -122,17 +122,17 @@ receive-only NWC code and the cached live feed.
 `createCachedLivePriceFeed` (the same feed without env reads),
 `createLivePriceFeedProviders` (just the two `HttpSimplePriceProvider`
 instances), and `getBtcFiatRatesWithFallback` (try a list of providers in
-order). Invoice creation quotes internally from the configured `priceProviders`.
+order). Checkout creation quotes internally from the configured `priceProviders`.
 
-The same currency list is the invoice-creation allowlist. A backend that calls
+The same currency list is the checkout-creation allowlist. A backend that calls
 `createOpenReceive({ priceProviders, priceCurrencies: ["USD", "EUR"] })` may
-create fiat invoices only for those explicit uppercase currency codes. The
+create fiat checkouts only for those explicit uppercase currency codes. The
 browser can localize display however it wants, but the server must pass the
 actual order currency in `fiat.currency`.
 
 `BTC`, `SAT`, and `SATS` are not fiat price-feed currencies. For
-Bitcoin-denominated products, pass `amount: { currency: "BTC", value: "0.005" }`
-or `amount: { currency: "SATS", value: "7000" }` to `createInvoice`. Those
+Bitcoin-denominated products, pass `amount: { btc: { currency: "BTC", value: "0.005" } }`
+or `amount: { sats: "7000" }` to `createCheckout`. Those
 amounts convert directly to `amount_msats` and never call a price provider.
 
 ## Quote Rules

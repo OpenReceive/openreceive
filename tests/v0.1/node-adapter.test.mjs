@@ -532,14 +532,14 @@ test("createOpenReceive builds service methods from a client and store", async (
     priceProviders: [new StaticPriceProvider()]
   });
 
-  const body = await openreceive.createInvoice({
+  const body = await openreceive.createCheckout({
     orderId: "create-openreceive-order",
     amount: { msats: 200000 },
     memo: "Factory invoice"
   });
 
-  assert.equal(body.bolt11, "lnbc-create-openreceive");
-  assert.equal(typeof openreceive.refreshInvoiceStatus, "function");
+  assert.equal(body.active.bolt11, "lnbc-create-openreceive");
+  assert.equal(typeof openreceive.getOrder, "function");
 });
 
 sqliteTest("Node CLI keeps init removed while migrate and doctor remain", async () => {
@@ -629,6 +629,8 @@ function invoiceRecord(overrides = {}) {
       created_at: 1000,
       expires_at: 1600,
       metadata: {
+        order_uuid: "order-sqlite",
+        checkout_id: "checkout-sqlite",
         user_id: "user-1"
       },
       fiat_quote: null,

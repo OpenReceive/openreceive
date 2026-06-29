@@ -47,6 +47,7 @@ export interface OpenReceiveInvoiceKvStore {
   getByBolt11Invoice(invoice: string): MaybePromise<StoredRecord | undefined>;
   getByIdempotencyScope(scopeKey: string): MaybePromise<StoredRecord | undefined>;
   listByOrderId(orderId: string): MaybePromise<StoredRecord[]>;
+  listByCheckoutId(checkoutId: string): MaybePromise<StoredRecord[]>;
   listOpen(input: { now: number; limit: number }): MaybePromise<StoredRecord[]>;
   getMeta(key: string): MaybePromise<MetaRow | undefined>;
   casMeta(

@@ -72,9 +72,9 @@ share the same physical store. Use a short, lowercase value such as `default`,
 Changing the namespace points OpenReceive at a different logical store inside
 the same backend.
 
-OpenReceive uses the namespace as the idempotency scope for `order_uuid`
-replays. Use separate namespaces or separate OpenReceive instances when two
-apps should not share invoice replay keys.
+OpenReceive uses the namespace as part of the idempotency scope for checkout
+invoice rows. Use separate namespaces or separate OpenReceive instances when
+two apps should not share replay keys.
 
 ## Multi-Instance Choices
 

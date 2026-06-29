@@ -11,43 +11,34 @@ import {
   createHelloFruitInvoiceDescription,
   formatHelloFruitBuyNowLabel,
   formatHelloFruitFiat,
-  helloFruitDemoLabels
+  helloFruitDemoLabels,
 } from "../../examples/hello-fruit/shared/demo-formatting.ts";
-import {
-  readHelloFruitCheckoutCurrencies
-} from "../../examples/hello-fruit/shared/demo-currencies.ts";
+import { readHelloFruitCheckoutCurrencies } from "../../examples/hello-fruit/shared/demo-currencies.ts";
 import {
   InMemoryInvoiceKvStore,
   StaticPriceProvider,
-  quoteFiatToMsats
+  quoteFiatToMsats,
 } from "../../packages/js/core/src/index.ts";
-import {
-  setHelloFruitOpenReceiveTestOverrides
-} from "../../examples/hello-fruit/server/nextjs-fullstack/src/server/openreceive.ts";
+import { setHelloFruitOpenReceiveTestOverrides } from "../../examples/hello-fruit/server/nextjs-fullstack/src/server/openreceive.ts";
 import { GET as getNextDemoMetadata } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/demo-metadata.json/route.ts";
 import { GET as getNextDocs } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/docs/route.ts";
 import { POST as postNextCreateOrder } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/create_order/route.ts";
 import { POST as postNextOrderStatus } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/order_status/route.ts";
 import { GET as getNextSource } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/source/route.ts";
-import getNextRobots, { dynamic as nextRobotsDynamic } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/robots.ts";
-import getNextSitemap, { dynamic as nextSitemapDynamic } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/sitemap.ts";
+import getNextRobots, {
+  dynamic as nextRobotsDynamic,
+} from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/robots.ts";
+import getNextSitemap, {
+  dynamic as nextSitemapDynamic,
+} from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/sitemap.ts";
 
-const productPath = path.join(
-  process.cwd(),
-  "examples/hello-fruit/shared/product.json"
-);
-const fruitsPath = path.join(
-  process.cwd(),
-  "examples/hello-fruit/shared/fruits.json"
-);
-const canonicalDemoDataPath = path.join(
-  process.cwd(),
-  "spec/data/demo/fruits.json"
-);
+const productPath = path.join(process.cwd(), "examples/hello-fruit/shared/product.json");
+const fruitsPath = path.join(process.cwd(), "examples/hello-fruit/shared/fruits.json");
+const canonicalDemoDataPath = path.join(process.cwd(), "spec/data/demo/fruits.json");
 const demoServerDirs = [
   "examples/hello-fruit/server/node-express",
   "examples/hello-fruit/server/static-html-small-api",
-  "examples/hello-fruit/server/nextjs-fullstack"
+  "examples/hello-fruit/server/nextjs-fullstack",
 ];
 
 function createValidNwcUri(input = {}) {
@@ -69,7 +60,7 @@ class HelloFruitTestReceiveClient {
       encryption: "nip44_v2",
       spendCapabilityAdvertised: false,
       receiveCheckoutReady: true,
-      warnings: []
+      warnings: [],
     };
   }
 
@@ -81,20 +72,22 @@ class HelloFruitTestReceiveClient {
       payment_hash: suffix,
       amount_msats: request.amount_msats,
       created_at: 1000,
-      expires_at: 1600
+      expires_at: 1600,
     };
   }
 
   async listTransactions(request) {
     return {
-      transactions: [{
-        type: "incoming",
-        invoice: "lnbc-hello-fruit-test",
-        payment_hash: "f".repeat(64),
-        amount_msats: 200000n,
-        transaction_state: "pending",
-        created_at: request.from
-      }]
+      transactions: [
+        {
+          type: "incoming",
+          invoice: "lnbc-hello-fruit-test",
+          payment_hash: "f".repeat(64),
+          amount_msats: 200000n,
+          transaction_state: "pending",
+          created_at: request.from,
+        },
+      ],
     };
   }
 }
@@ -103,7 +96,7 @@ function createHelloFruitTestOpenReceiveOptions() {
   return {
     client: new HelloFruitTestReceiveClient(),
     store: new InMemoryInvoiceKvStore(),
-    priceProviders: [new StaticPriceProvider()]
+    priceProviders: [new StaticPriceProvider()],
   };
 }
 
@@ -122,12 +115,12 @@ test("Hello Fruit shared product keeps demo invoices low-value", () => {
       ["apple", "USD", "0.05"],
       ["banana", "USD", "0.10"],
       ["orange", "USD", "0.15"],
-      ["pear", "USD", "0.20"]
-    ]
+      ["pear", "USD", "0.20"],
+    ],
   );
   assert.deepEqual(
     fruits.fruits.map((fruit) => quoteFiatToMsats({ fiat: fruit.fiat }).amount_msats),
-    [100000, 200000, 300000, 400000]
+    [100000, 200000, 300000, 400000],
   );
   for (const fruit of fruits.fruits) {
     assert.ok(quoteFiatToMsats({ fiat: fruit.fiat }).amount_msats <= 1000000);
@@ -147,7 +140,7 @@ test("Hello Fruit shared data stays aligned with canonical demo data", () => {
   assert.equal(product.description, canonical.description);
   assert.deepEqual(
     fruits.fruits.map(({ id, name, fiat }) => ({ id, name, fiat })),
-    canonical.fruits
+    canonical.fruits,
   );
 
   for (const fruit of fruits.fruits) {
@@ -155,7 +148,7 @@ test("Hello Fruit shared data stays aligned with canonical demo data", () => {
     assert.equal(
       existsSync(path.join(process.cwd(), "examples/hello-fruit/shared", fruit.sticker)),
       true,
-      `${fruit.id}: sticker exists`
+      `${fruit.id}: sticker exists`,
     );
   }
 });
@@ -163,40 +156,43 @@ test("Hello Fruit shared data stays aligned with canonical demo data", () => {
 test("Hello Fruit demos share product display formatting", () => {
   assert.equal(formatHelloFruitFiat({ currency: "USD", value: "0.10" }), "$0.10");
   assert.equal(formatHelloFruitFiat({ currency: "EUR", value: "0.10" }), "0.10 EUR");
-  assert.equal(formatHelloFruitBuyNowLabel({ currency: "USD", value: "0.10" }), "Add to cart ($0.10)");
-  assert.equal(formatHelloFruitBuyNowLabel({ currency: "EUR", value: "0.10" }), "Add to cart (0.10 EUR)");
+  assert.equal(
+    formatHelloFruitBuyNowLabel({ currency: "USD", value: "0.10" }),
+    "Add to cart ($0.10)",
+  );
+  assert.equal(
+    formatHelloFruitBuyNowLabel({ currency: "EUR", value: "0.10" }),
+    "Add to cart (0.10 EUR)",
+  );
   assert.equal(helloFruitDemoLabels.createOrder, "Create order");
   assert.equal(helloFruitDemoLabels.creatingOrder, "Creating order...");
   assert.equal(helloFruitDemoLabels.createOrderError, "Could not create order.");
   assert.equal(
     createHelloFruitInvoiceDescription("Banana"),
-    "Fruit sticker from OpenReceive demo: Banana"
+    "Fruit sticker from OpenReceive demo: Banana",
   );
   assert.equal(
     createHelloFruitInvoiceDescription("Banana", { demoName: "Next.js" }),
-    "Fruit sticker from OpenReceive Next.js demo: Banana"
+    "Fruit sticker from OpenReceive Next.js demo: Banana",
   );
 });
 
 test("Hello Fruit React demos delegate checkout state to UI packages", () => {
   const nodeClient = readFileSync(
-    path.join(
-      process.cwd(),
-      "examples/hello-fruit/server/node-express/src/client/App.tsx"
-    ),
-    "utf8"
+    path.join(process.cwd(), "examples/hello-fruit/server/node-express/src/client/App.tsx"),
+    "utf8",
   );
   const nextClient = readFileSync(
     path.join(
       process.cwd(),
-      "examples/hello-fruit/server/nextjs-fullstack/src/app/checkout-client.tsx"
+      "examples/hello-fruit/server/nextjs-fullstack/src/app/checkout-client.tsx",
     ),
-    "utf8"
+    "utf8",
   );
 
   for (const [name, source] of [
     ["node-express", nodeClient],
-    ["nextjs-fullstack", nextClient]
+    ["nextjs-fullstack", nextClient],
   ]) {
     assert.match(source, /<Checkout/);
     assert.match(source, /onSettled=/);
@@ -235,9 +231,9 @@ test("Hello Fruit demos expose price-feed currencies plus direct Bitcoin units",
   const staticClient = readFileSync(
     path.join(
       process.cwd(),
-      "examples/hello-fruit/server/static-html-small-api/src/client/main.ts"
+      "examples/hello-fruit/server/static-html-small-api/src/client/main.ts",
     ),
-    "utf8"
+    "utf8",
   );
   assert.match(staticClient, /readHelloFruitCheckoutCurrencies/);
   assert.match(staticClient, /selectedCurrency/);
@@ -248,44 +244,52 @@ test("Hello Fruit JS demos use package-owned QR and status refresh wiring", () =
   const clientSources = [
     "examples/hello-fruit/server/node-express/src/client/App.tsx",
     "examples/hello-fruit/server/static-html-small-api/src/client/main.ts",
-    "examples/hello-fruit/server/nextjs-fullstack/src/app/checkout-client.tsx"
+    "examples/hello-fruit/server/nextjs-fullstack/src/app/checkout-client.tsx",
   ];
 
   for (const sourcePath of clientSources) {
     const source = readFileSync(path.join(process.cwd(), sourcePath), "utf8");
-    assert.doesNotMatch(source, /from "qrcode"/, `${sourcePath}: QR encoder must come from the UI package`);
-    assert.doesNotMatch(source, /qrEncoder/, `${sourcePath}: demo must not pass a local QR encoder`);
+    assert.doesNotMatch(
+      source,
+      /from "qrcode"/,
+      `${sourcePath}: QR encoder must come from the UI package`,
+    );
+    assert.doesNotMatch(
+      source,
+      /qrEncoder/,
+      `${sourcePath}: demo must not pass a local QR encoder`,
+    );
   }
 
   assert.equal(
-    existsSync(path.join(
-      process.cwd(),
-      "examples/hello-fruit/server/nextjs-fullstack/src/qrcode.d.ts"
-    )),
-    false
+    existsSync(
+      path.join(process.cwd(), "examples/hello-fruit/server/nextjs-fullstack/src/qrcode.d.ts"),
+    ),
+    false,
   );
 
   for (const demoDir of demoServerDirs) {
     const packageJson = JSON.parse(
-      readFileSync(path.join(process.cwd(), demoDir, "package.json"), "utf8")
+      readFileSync(path.join(process.cwd(), demoDir, "package.json"), "utf8"),
     );
     const config = readFileSync(
       path.join(process.cwd(), demoDir, "openreceive.config.mjs"),
-      "utf8"
+      "utf8",
     );
     const viteConfigPath = path.join(process.cwd(), demoDir, "vite.config.ts");
-    const viteConfig = existsSync(viteConfigPath)
-      ? readFileSync(viteConfigPath, "utf8")
-      : "";
+    const viteConfig = existsSync(viteConfigPath) ? readFileSync(viteConfigPath, "utf8") : "";
     const compose = readFileSync(path.join(process.cwd(), demoDir, "compose.yml"), "utf8");
     const dockerfile = readFileSync(path.join(process.cwd(), demoDir, "Dockerfile"), "utf8");
 
     assert.equal(packageJson.dependencies.qrcode, undefined, `${demoDir}: qrcode is package-owned`);
-    assert.match(dockerfile, /COPY spec\/data\/rates \.\/spec\/data\/rates/,
-      `${demoDir}: Docker image includes demo price-source data`);
+    assert.match(
+      dockerfile,
+      /COPY spec\/data\/rates \.\/spec\/data\/rates/,
+      `${demoDir}: Docker image includes demo price-source data`,
+    );
     if (demoDir.endsWith("/node-express")) {
       const openReceiveVersion = JSON.parse(
-        readFileSync(path.join(process.cwd(), "package.json"), "utf8")
+        readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
       ).version;
       assert.equal(packageJson.dependencies["@openreceive/angular"], openReceiveVersion);
       assert.equal(packageJson.dependencies["@openreceive/vue"], openReceiveVersion);
@@ -309,11 +313,8 @@ test("Hello Fruit JS demos use package-owned QR and status refresh wiring", () =
 
 test("Hello Fruit Node demo creates orders from cart before rendering checkout", () => {
   const source = readFileSync(
-    path.join(
-      process.cwd(),
-      "examples/hello-fruit/server/node-express/src/client/App.tsx"
-    ),
-    "utf8"
+    path.join(process.cwd(), "examples/hello-fruit/server/node-express/src/client/App.tsx"),
+    "utf8",
   );
 
   assert.match(source, /function startOver\(\)/);
@@ -336,9 +337,9 @@ test("Hello Fruit Next.js demo resets expired checkout from Start over", () => {
   const source = readFileSync(
     path.join(
       process.cwd(),
-      "examples/hello-fruit/server/nextjs-fullstack/src/app/checkout-client.tsx"
+      "examples/hello-fruit/server/nextjs-fullstack/src/app/checkout-client.tsx",
     ),
-    "utf8"
+    "utf8",
   );
 
   assert.match(source, /function startOver\(\)/);
@@ -357,31 +358,58 @@ test("Hello Fruit browser demos consume shared product display helpers", () => {
   const sources = [
     "examples/hello-fruit/server/node-express/src/client/App.tsx",
     "examples/hello-fruit/server/nextjs-fullstack/src/app/checkout-client.tsx",
-    "examples/hello-fruit/server/static-html-small-api/src/client/main.ts"
+    "examples/hello-fruit/server/static-html-small-api/src/client/main.ts",
   ].map((relativePath) => [
     relativePath,
-    readFileSync(path.join(process.cwd(), relativePath), "utf8")
+    readFileSync(path.join(process.cwd(), relativePath), "utf8"),
   ]);
 
   for (const [relativePath, source] of sources) {
-    assert.match(source, /formatHelloFruitFiat/,
-      `${relativePath}: uses shared fiat display helper`);
-    assert.match(source, /formatHelloFruitBuyNowLabel/,
-      `${relativePath}: uses shared buy-now label helper`);
-    assert.match(source, /helloFruitDemoLabels/,
-      `${relativePath}: uses shared demo checkout labels`);
-    assert.doesNotMatch(source, /function formatFiat/,
-      `${relativePath}: must not duplicate fiat display formatting`);
-    assert.doesNotMatch(source, /Fruit sticker from OpenReceive .*demo: \$\{/,
-      `${relativePath}: must not duplicate invoice description templates`);
-    assert.doesNotMatch(source, /"Could not create invoice\."/,
-      `${relativePath}: must not duplicate invoice error fallback`);
-    assert.doesNotMatch(source, /"Creating invoice\.\.\."/,
-      `${relativePath}: must not duplicate invoice creation label`);
-    assert.doesNotMatch(source, /"Could not create order\."/,
-      `${relativePath}: must not duplicate order error fallback`);
-    assert.doesNotMatch(source, /"Creating order\.\.\."/,
-      `${relativePath}: must not duplicate order creation label`);
+    assert.match(
+      source,
+      /formatHelloFruitFiat/,
+      `${relativePath}: uses shared fiat display helper`,
+    );
+    assert.match(
+      source,
+      /formatHelloFruitBuyNowLabel/,
+      `${relativePath}: uses shared buy-now label helper`,
+    );
+    assert.match(
+      source,
+      /helloFruitDemoLabels/,
+      `${relativePath}: uses shared demo checkout labels`,
+    );
+    assert.doesNotMatch(
+      source,
+      /function formatFiat/,
+      `${relativePath}: must not duplicate fiat display formatting`,
+    );
+    assert.doesNotMatch(
+      source,
+      /Fruit sticker from OpenReceive .*demo: \$\{/,
+      `${relativePath}: must not duplicate invoice description templates`,
+    );
+    assert.doesNotMatch(
+      source,
+      /"Could not create invoice\."/,
+      `${relativePath}: must not duplicate invoice error fallback`,
+    );
+    assert.doesNotMatch(
+      source,
+      /"Creating invoice\.\.\."/,
+      `${relativePath}: must not duplicate invoice creation label`,
+    );
+    assert.doesNotMatch(
+      source,
+      /"Could not create order\."/,
+      `${relativePath}: must not duplicate order error fallback`,
+    );
+    assert.doesNotMatch(
+      source,
+      /"Creating order\.\.\."/,
+      `${relativePath}: must not duplicate order creation label`,
+    );
   }
 });
 
@@ -389,16 +417,13 @@ test("Hello Fruit static demo delegates checkout state to the web component", ()
   const source = readFileSync(
     path.join(
       process.cwd(),
-      "examples/hello-fruit/server/static-html-small-api/src/client/main.ts"
+      "examples/hello-fruit/server/static-html-small-api/src/client/main.ts",
     ),
-    "utf8"
+    "utf8",
   );
   const html = readFileSync(
-    path.join(
-      process.cwd(),
-      "examples/hello-fruit/server/static-html-small-api/index.html"
-    ),
-    "utf8"
+    path.join(process.cwd(), "examples/hello-fruit/server/static-html-small-api/index.html"),
+    "utf8",
   );
 
   assert.match(source, /defineOpenReceiveElements/);
@@ -430,37 +455,42 @@ test("Hello Fruit static demo delegates checkout state to the web component", ()
 
 test("Hello Fruit browser demos consume shared theme model", () => {
   const nodeClient = readFileSync(
-    path.join(
-      process.cwd(),
-      "examples/hello-fruit/server/node-express/src/client/App.tsx"
-    ),
-    "utf8"
+    path.join(process.cwd(), "examples/hello-fruit/server/node-express/src/client/App.tsx"),
+    "utf8",
   );
   const nextClient = readFileSync(
     path.join(
       process.cwd(),
-      "examples/hello-fruit/server/nextjs-fullstack/src/app/checkout-client.tsx"
+      "examples/hello-fruit/server/nextjs-fullstack/src/app/checkout-client.tsx",
     ),
-    "utf8"
+    "utf8",
   );
   const staticClient = readFileSync(
     path.join(
       process.cwd(),
-      "examples/hello-fruit/server/static-html-small-api/src/client/main.ts"
+      "examples/hello-fruit/server/static-html-small-api/src/client/main.ts",
     ),
-    "utf8"
+    "utf8",
   );
 
   for (const [name, source] of [
     ["node-express", nodeClient],
-    ["nextjs-fullstack", nextClient]
+    ["nextjs-fullstack", nextClient],
   ]) {
     assert.match(source, /ThemeScope/, `${name}: uses package theme scope`);
     assert.match(source, /themeToggle/, `${name}: enables package theme toggle`);
     assert.match(source, /topbarClassName="topbar"/, `${name}: styles package theme toggle shell`);
     assert.doesNotMatch(source, /useOpenReceiveTheme/, `${name}: must not wire theme hook locally`);
-    assert.doesNotMatch(source, /OpenReceiveThemeToggle/, `${name}: must not wire theme button locally`);
-    assert.doesNotMatch(source, /\.\.\.theme\.attributes/, `${name}: must not apply theme attrs locally`);
+    assert.doesNotMatch(
+      source,
+      /OpenReceiveThemeToggle/,
+      `${name}: must not wire theme button locally`,
+    );
+    assert.doesNotMatch(
+      source,
+      /\.\.\.theme\.attributes/,
+      `${name}: must not apply theme attrs locally`,
+    );
     assert.doesNotMatch(source, /"Light mode"/, `${name}: must not own theme toggle label`);
     assert.doesNotMatch(source, /"Dark mode"/, `${name}: must not own theme toggle label`);
   }
@@ -481,442 +511,754 @@ test("Hello Fruit browser demos consume shared theme model", () => {
 test("Frontend UI packages delegate checkout lifecycle to browser helpers", () => {
   const reactSource = readFileSync(
     path.join(process.cwd(), "packages/js/react/src/index.ts"),
-    "utf8"
+    "utf8",
   );
   const elementsSource = readFileSync(
     path.join(process.cwd(), "packages/js/elements/src/index.ts"),
-    "utf8"
+    "utf8",
   );
 
   for (const [name, source] of [
     ["react", reactSource],
-    ["elements", elementsSource]
+    ["elements", elementsSource],
   ]) {
-    assert.match(source, /createCheckoutController/,
-      `${name}: uses browser checkout controller`);
-    assert.match(source, /createCheckoutStatusModel/,
-      `${name}: uses browser checkout status display model`);
-    assert.doesNotMatch(source, /new CheckoutWatcher/,
-      `${name}: must not construct checkout watcher locally`);
-    assert.doesNotMatch(source, /createOpenReceiveStatusFetcher/,
-      `${name}: must not construct status fetcher locally`);
+    assert.match(source, /createCheckoutController/, `${name}: uses browser checkout controller`);
+    assert.match(
+      source,
+      /createCheckoutStatusModel/,
+      `${name}: uses browser checkout status display model`,
+    );
+    assert.doesNotMatch(
+      source,
+      /new CheckoutWatcher/,
+      `${name}: must not construct checkout watcher locally`,
+    );
+    assert.doesNotMatch(
+      source,
+      /createOpenReceiveStatusFetcher/,
+      `${name}: must not construct status fetcher locally`,
+    );
     assert.doesNotMatch(source, /new EventSource/, `${name}: must not own SSE wiring`);
-    assert.doesNotMatch(source, /setInterval\(/, `${name}: must not own polling or countdown intervals`);
-    assert.doesNotMatch(source, /fetch\(statusUrl/,
-      `${name}: must not own status POST wiring`);
-    assert.doesNotMatch(source, /state\.expires_at - currentUnixSeconds/,
-      `${name}: must not recompute checkout countdown locally`);
-    assert.doesNotMatch(source, /transaction_state !== "settled"/,
-      `${name}: must not own waiting-state settlement rule`);
-    assert.doesNotMatch(source, /formatOpenReceiveCountdown/,
-      `${name}: must not format checkout countdown labels locally`);
-    assert.doesNotMatch(source, /getOpenReceivePaymentStatusText/,
-      `${name}: must not compose checkout status text locally`);
-    assert.doesNotMatch(source, /shouldCheckoutShowWaiting/,
-      `${name}: must not compose checkout waiting state locally`);
-    assert.doesNotMatch(source, /"Invoice expires in"/,
-      `${name}: must not own countdown prefix text`);
+    assert.doesNotMatch(
+      source,
+      /setInterval\(/,
+      `${name}: must not own polling or countdown intervals`,
+    );
+    assert.doesNotMatch(source, /fetch\(statusUrl/, `${name}: must not own status POST wiring`);
+    assert.doesNotMatch(
+      source,
+      /state\.expires_at - currentUnixSeconds/,
+      `${name}: must not recompute checkout countdown locally`,
+    );
+    assert.doesNotMatch(
+      source,
+      /transaction_state !== "settled"/,
+      `${name}: must not own waiting-state settlement rule`,
+    );
+    assert.doesNotMatch(
+      source,
+      /formatOpenReceiveCountdown/,
+      `${name}: must not format checkout countdown labels locally`,
+    );
+    assert.doesNotMatch(
+      source,
+      /getOpenReceivePaymentStatusText/,
+      `${name}: must not compose checkout status text locally`,
+    );
+    assert.doesNotMatch(
+      source,
+      /shouldCheckoutShowWaiting/,
+      `${name}: must not compose checkout waiting state locally`,
+    );
+    assert.doesNotMatch(
+      source,
+      /"Invoice expires in"/,
+      `${name}: must not own countdown prefix text`,
+    );
   }
 });
 
 test("Frontend UI packages consume shared transient feedback timing", () => {
   const reactSource = readFileSync(
     path.join(process.cwd(), "packages/js/react/src/index.ts"),
-    "utf8"
+    "utf8",
   );
   const elementsSource = readFileSync(
     path.join(process.cwd(), "packages/js/elements/src/index.ts"),
-    "utf8"
+    "utf8",
   );
 
   for (const [name, source] of [
     ["react", reactSource],
-    ["elements", elementsSource]
+    ["elements", elementsSource],
   ]) {
-    assert.match(source, /createOpenReceiveTransientFeedbackController/,
-      `${name}: uses browser transient feedback controller`);
-    assert.doesNotMatch(source, /globalThis\.setTimeout/,
-      `${name}: must not own copy-feedback timers`);
-    assert.doesNotMatch(source, /setCopied\(false\)/,
-      `${name}: must not locally reset copied state`);
-    assert.doesNotMatch(source, /setCopiedProviderId\(null\)/,
-      `${name}: must not locally reset provider copied state`);
+    assert.match(
+      source,
+      /createOpenReceiveTransientFeedbackController/,
+      `${name}: uses browser transient feedback controller`,
+    );
+    assert.doesNotMatch(
+      source,
+      /globalThis\.setTimeout/,
+      `${name}: must not own copy-feedback timers`,
+    );
+    assert.doesNotMatch(
+      source,
+      /setCopied\(false\)/,
+      `${name}: must not locally reset copied state`,
+    );
+    assert.doesNotMatch(
+      source,
+      /setCopiedProviderId\(null\)/,
+      `${name}: must not locally reset provider copied state`,
+    );
   }
 });
 
 test("Frontend UI packages consume shared checkout labels", () => {
   const reactSource = readFileSync(
     path.join(process.cwd(), "packages/js/react/src/index.ts"),
-    "utf8"
+    "utf8",
   );
   const elementsSource = readFileSync(
     path.join(process.cwd(), "packages/js/elements/src/index.ts"),
-    "utf8"
+    "utf8",
   );
 
   for (const [name, source] of [
     ["react", reactSource],
-    ["elements", elementsSource]
+    ["elements", elementsSource],
   ]) {
     assert.match(source, /openReceiveCheckoutLabels/, `${name}: uses shared labels`);
-    assert.match(source, /createCheckoutProviderCopyEvent/,
-      `${name}: uses shared provider-copy event helper`);
+    assert.match(
+      source,
+      /createCheckoutProviderCopyEvent/,
+      `${name}: uses shared provider-copy event helper`,
+    );
     assert.doesNotMatch(source, /"Pay this invoice"/, `${name}: wizard title is package-shared`);
     assert.doesNotMatch(source, /"Copy BOLT11"/, `${name}: copy label is package-shared`);
     assert.doesNotMatch(source, /"Waiting for payment"/, `${name}: status label is package-shared`);
-    assert.doesNotMatch(source, /"openreceive-provider-copy"/,
-      `${name}: provider-copy event name is browser-shared`);
-    assert.doesNotMatch(source, /detail: \{ providerId \}/,
-      `${name}: provider-copy event detail is browser-shared`);
+    assert.doesNotMatch(
+      source,
+      /"openreceive-provider-copy"/,
+      `${name}: provider-copy event name is browser-shared`,
+    );
+    assert.doesNotMatch(
+      source,
+      /detail: \{ providerId \}/,
+      `${name}: provider-copy event detail is browser-shared`,
+    );
     assert.doesNotMatch(source, /`Open \$\{/, `${name}: provider action label is package-shared`);
-    assert.doesNotMatch(source, /"Lightning Network"/, `${name}: route network label is package-shared`);
+    assert.doesNotMatch(
+      source,
+      /"Lightning Network"/,
+      `${name}: route network label is package-shared`,
+    );
     assert.doesNotMatch(source, /"Choose a country"/, `${name}: country prompt is package-shared`);
-    assert.doesNotMatch(source, /"No providers found for this country yet\\."/,
-      `${name}: empty state label is package-shared`);
+    assert.doesNotMatch(
+      source,
+      /"No providers found for this country yet\\."/,
+      `${name}: empty state label is package-shared`,
+    );
   }
 });
 
 test("Frontend UI packages consume shared checkout data attributes", () => {
   const reactSource = readFileSync(
     path.join(process.cwd(), "packages/js/react/src/index.ts"),
-    "utf8"
+    "utf8",
   );
   const elementsSource = readFileSync(
     path.join(process.cwd(), "packages/js/elements/src/index.ts"),
-    "utf8"
+    "utf8",
   );
 
   for (const [name, source] of [
     ["react", reactSource],
-    ["elements", elementsSource]
+    ["elements", elementsSource],
   ]) {
-    assert.match(source, /OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES/,
-      `${name}: uses browser-owned checkout data attributes`);
-    assert.doesNotMatch(source, /"data-openreceive-qr"/,
-      `${name}: must not spell QR data attribute locally`);
-    assert.doesNotMatch(source, /"data-openreceive-theme-toggle"/,
-      `${name}: must not spell theme-toggle data attribute locally`);
+    assert.match(
+      source,
+      /OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES/,
+      `${name}: uses browser-owned checkout data attributes`,
+    );
+    assert.doesNotMatch(
+      source,
+      /"data-openreceive-qr"/,
+      `${name}: must not spell QR data attribute locally`,
+    );
+    assert.doesNotMatch(
+      source,
+      /"data-openreceive-theme-toggle"/,
+      `${name}: must not spell theme-toggle data attribute locally`,
+    );
   }
-  assert.match(elementsSource, /OPENRECEIVE_CHECKOUT_DATA_SELECTORS/,
-    "elements: uses browser-owned checkout data selectors");
-  assert.doesNotMatch(reactSource, /"data-openreceive-checkout"/,
-    "react: must not spell checkout root data attribute locally");
-  assert.doesNotMatch(reactSource, /"data-openreceive-actions"/,
-    "react: must not spell checkout actions data attribute locally");
-  assert.doesNotMatch(reactSource, /"data-openreceive-state"/,
-    "react: must not spell checkout state data attribute locally");
-  assert.doesNotMatch(elementsSource, /querySelector\("\[data-openreceive-qr\]"\)/,
-    "elements: must not hard-code checkout QR selector");
+  assert.match(
+    elementsSource,
+    /OPENRECEIVE_CHECKOUT_DATA_SELECTORS/,
+    "elements: uses browser-owned checkout data selectors",
+  );
+  assert.doesNotMatch(
+    reactSource,
+    /"data-openreceive-checkout"/,
+    "react: must not spell checkout root data attribute locally",
+  );
+  assert.doesNotMatch(
+    reactSource,
+    /"data-openreceive-actions"/,
+    "react: must not spell checkout actions data attribute locally",
+  );
+  assert.doesNotMatch(
+    reactSource,
+    /"data-openreceive-state"/,
+    "react: must not spell checkout state data attribute locally",
+  );
+  assert.doesNotMatch(
+    elementsSource,
+    /querySelector\("\[data-openreceive-qr\]"\)/,
+    "elements: must not hard-code checkout QR selector",
+  );
 });
 
 test("Elements consume shared custom-element attribute contracts", () => {
   const elementsSource = readFileSync(
     path.join(process.cwd(), "packages/js/elements/src/index.ts"),
-    "utf8"
+    "utf8",
   );
 
-  assert.match(elementsSource, /OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES/,
-    "elements: uses browser-owned checkout element attributes");
-  assert.match(elementsSource, /OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES/,
-    "elements: uses browser-owned theme-toggle element attributes");
-  assert.match(elementsSource, /parseOpenReceiveOptionalInteger/,
-    "elements: parses numeric attributes through browser helpers");
-  assert.match(elementsSource, /parseOpenReceiveBooleanAttribute/,
-    "elements: parses boolean attributes through browser helpers");
-  assert.match(elementsSource, /parseOpenReceiveResolvedTheme/,
-    "elements: parses checkout theme attributes through browser helpers");
-  assert.match(elementsSource, /parseOpenReceiveThemePreference/,
-    "elements: parses theme preference attributes through browser helpers");
-  assert.doesNotMatch(elementsSource, /getAttribute\("invoice-id"\)/,
-    "elements: must not hard-code invoice-id reads");
-  assert.doesNotMatch(elementsSource, /getAttribute\("status-url"\)/,
-    "elements: must not hard-code status-url reads");
-  assert.doesNotMatch(elementsSource, /getAttribute\("root-selector"\)/,
-    "elements: must not hard-code theme root selector reads");
-  assert.doesNotMatch(elementsSource, new RegExp(`setAttributeIfChanged\\("transaction-${"state"}`),
-    "elements: must not hard-code raw lifecycle-state writes");
-  assert.doesNotMatch(elementsSource, /setAttributeIfChanged\("theme"/,
-    "elements: must not hard-code theme writes");
-  assert.doesNotMatch(elementsSource, /function parseOptionalInteger/,
-    "elements: must not own numeric attribute parsing");
-  assert.doesNotMatch(elementsSource, /function parseTheme/,
-    "elements: must not own theme attribute parsing");
-  assert.doesNotMatch(elementsSource, /function parseBooleanAttribute/,
-    "elements: must not own boolean attribute parsing");
+  assert.match(
+    elementsSource,
+    /OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES/,
+    "elements: uses browser-owned checkout element attributes",
+  );
+  assert.match(
+    elementsSource,
+    /OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES/,
+    "elements: uses browser-owned theme-toggle element attributes",
+  );
+  assert.match(
+    elementsSource,
+    /parseOpenReceiveOptionalInteger/,
+    "elements: parses numeric attributes through browser helpers",
+  );
+  assert.match(
+    elementsSource,
+    /parseOpenReceiveBooleanAttribute/,
+    "elements: parses boolean attributes through browser helpers",
+  );
+  assert.match(
+    elementsSource,
+    /parseOpenReceiveResolvedTheme/,
+    "elements: parses checkout theme attributes through browser helpers",
+  );
+  assert.match(
+    elementsSource,
+    /parseOpenReceiveThemePreference/,
+    "elements: parses theme preference attributes through browser helpers",
+  );
+  assert.doesNotMatch(
+    elementsSource,
+    /getAttribute\("invoice-id"\)/,
+    "elements: must not hard-code invoice-id reads",
+  );
+  assert.doesNotMatch(
+    elementsSource,
+    /getAttribute\("status-url"\)/,
+    "elements: must not hard-code status-url reads",
+  );
+  assert.doesNotMatch(
+    elementsSource,
+    /getAttribute\("root-selector"\)/,
+    "elements: must not hard-code theme root selector reads",
+  );
+  assert.doesNotMatch(
+    elementsSource,
+    new RegExp(`setAttributeIfChanged\\("transaction-${"state"}`),
+    "elements: must not hard-code raw lifecycle-state writes",
+  );
+  assert.doesNotMatch(
+    elementsSource,
+    /setAttributeIfChanged\("theme"/,
+    "elements: must not hard-code theme writes",
+  );
+  assert.doesNotMatch(
+    elementsSource,
+    /function parseOptionalInteger/,
+    "elements: must not own numeric attribute parsing",
+  );
+  assert.doesNotMatch(
+    elementsSource,
+    /function parseTheme/,
+    "elements: must not own theme attribute parsing",
+  );
+  assert.doesNotMatch(
+    elementsSource,
+    /function parseBooleanAttribute/,
+    "elements: must not own boolean attribute parsing",
+  );
 });
 
 test("Elements consume shared theme-toggle event contract", () => {
   const elementsSource = readFileSync(
     path.join(process.cwd(), "packages/js/elements/src/index.ts"),
-    "utf8"
+    "utf8",
   );
 
-  assert.match(elementsSource, /createOpenReceiveThemeChangeEvent/,
-    "elements: dispatches theme changes through browser event helper");
-  assert.doesNotMatch(elementsSource, /"openreceive-theme-change"/,
-    "elements: must not hard-code theme-change event names");
-  assert.doesNotMatch(elementsSource, /resolvedTheme: nextTheme\.resolvedTheme/,
-    "elements: must not compose theme-change event details locally");
+  assert.match(
+    elementsSource,
+    /createOpenReceiveThemeChangeEvent/,
+    "elements: dispatches theme changes through browser event helper",
+  );
+  assert.doesNotMatch(
+    elementsSource,
+    /"openreceive-theme-change"/,
+    "elements: must not hard-code theme-change event names",
+  );
+  assert.doesNotMatch(
+    elementsSource,
+    /resolvedTheme: nextTheme\.resolvedTheme/,
+    "elements: must not compose theme-change event details locally",
+  );
 });
 
 test("Elements consume shared checkout event constructors", () => {
   const elementsSource = readFileSync(
     path.join(process.cwd(), "packages/js/elements/src/index.ts"),
-    "utf8"
+    "utf8",
   );
 
-  assert.match(elementsSource, /createCheckoutActionEvent/,
-    "elements: dispatches copy/open events through browser helpers");
-  assert.match(elementsSource, /createCheckoutStateEvent/,
-    "elements: dispatches state events through browser helpers");
-  assert.match(elementsSource, /createCheckoutErrorEvent/,
-    "elements: dispatches error events through browser helpers");
-  assert.doesNotMatch(elementsSource, /new CustomEvent\(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS/,
-    "elements: must not construct checkout custom events locally");
-  assert.doesNotMatch(elementsSource, /detail: \{ state \}/,
-    "elements: must not compose checkout state event details locally");
+  assert.match(
+    elementsSource,
+    /createCheckoutActionEvent/,
+    "elements: dispatches copy/open events through browser helpers",
+  );
+  assert.match(
+    elementsSource,
+    /createCheckoutStateEvent/,
+    "elements: dispatches state events through browser helpers",
+  );
+  assert.match(
+    elementsSource,
+    /createCheckoutErrorEvent/,
+    "elements: dispatches error events through browser helpers",
+  );
+  assert.doesNotMatch(
+    elementsSource,
+    /new CustomEvent\(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS/,
+    "elements: must not construct checkout custom events locally",
+  );
+  assert.doesNotMatch(
+    elementsSource,
+    /detail: \{ state \}/,
+    "elements: must not compose checkout state event details locally",
+  );
 });
 
 test("Elements consume shared web-component shadow part contracts", () => {
   const elementsSource = readFileSync(
     path.join(process.cwd(), "packages/js/elements/src/index.ts"),
-    "utf8"
+    "utf8",
   );
 
-  assert.match(elementsSource, /OPENRECEIVE_CHECKOUT_ELEMENT_PARTS/,
-    "elements: renders checkout shadow parts from browser constants");
-  assert.match(elementsSource, /OPENRECEIVE_CHECKOUT_ELEMENT_PART_SELECTORS/,
-    "elements: binds checkout shadow actions through browser selectors");
-  assert.match(elementsSource, /OPENRECEIVE_THEME_TOGGLE_ELEMENT_PARTS/,
-    "elements: renders theme-toggle shadow parts from browser constants");
-  assert.match(elementsSource, /OPENRECEIVE_THEME_TOGGLE_ELEMENT_PART_SELECTORS/,
-    "elements: binds theme-toggle actions through browser selectors");
-  assert.doesNotMatch(elementsSource, /querySelector\('\[part="copy"\]'\)/,
-    "elements: must not hard-code copy part selectors");
-  assert.doesNotMatch(elementsSource, /querySelector\("button"\)/,
-    "elements: must not hard-code theme-toggle button selectors");
+  assert.match(
+    elementsSource,
+    /OPENRECEIVE_CHECKOUT_ELEMENT_PARTS/,
+    "elements: renders checkout shadow parts from browser constants",
+  );
+  assert.match(
+    elementsSource,
+    /OPENRECEIVE_CHECKOUT_ELEMENT_PART_SELECTORS/,
+    "elements: binds checkout shadow actions through browser selectors",
+  );
+  assert.match(
+    elementsSource,
+    /OPENRECEIVE_THEME_TOGGLE_ELEMENT_PARTS/,
+    "elements: renders theme-toggle shadow parts from browser constants",
+  );
+  assert.match(
+    elementsSource,
+    /OPENRECEIVE_THEME_TOGGLE_ELEMENT_PART_SELECTORS/,
+    "elements: binds theme-toggle actions through browser selectors",
+  );
+  assert.doesNotMatch(
+    elementsSource,
+    /querySelector\('\[part="copy"\]'\)/,
+    "elements: must not hard-code copy part selectors",
+  );
+  assert.doesNotMatch(
+    elementsSource,
+    /querySelector\("button"\)/,
+    "elements: must not hard-code theme-toggle button selectors",
+  );
 });
 
 test("Frontend UI packages consume shared checkout display model", () => {
   const reactSource = readFileSync(
     path.join(process.cwd(), "packages/js/react/src/index.ts"),
-    "utf8"
+    "utf8",
   );
   const elementsSource = readFileSync(
     path.join(process.cwd(), "packages/js/elements/src/index.ts"),
-    "utf8"
+    "utf8",
   );
 
   for (const [name, source] of [
     ["react", reactSource],
-    ["elements", elementsSource]
+    ["elements", elementsSource],
   ]) {
-    assert.match(source, /createCheckoutDisplayModel/,
-      `${name}: uses browser-owned checkout display labels`);
-    assert.doesNotMatch(source, /function shortHash/,
-      `${name}: must not own payment hash shortening`);
-    assert.doesNotMatch(source, /assertDisplaySafeInvoice/,
-      `${name}: must not own display invoice safety checks`);
-    assert.doesNotMatch(source, /paymentHashLabel: shortHash/,
-      `${name}: must not build hash labels locally`);
+    assert.match(
+      source,
+      /createCheckoutDisplayModel/,
+      `${name}: uses browser-owned checkout display labels`,
+    );
+    assert.doesNotMatch(
+      source,
+      /function shortHash/,
+      `${name}: must not own payment hash shortening`,
+    );
+    assert.doesNotMatch(
+      source,
+      /assertDisplaySafeInvoice/,
+      `${name}: must not own display invoice safety checks`,
+    );
+    assert.doesNotMatch(
+      source,
+      /paymentHashLabel: shortHash/,
+      `${name}: must not build hash labels locally`,
+    );
   }
 });
 
 test("Frontend UI packages consume shared checkout display state conversion", () => {
   const reactSource = readFileSync(
     path.join(process.cwd(), "packages/js/react/src/index.ts"),
-    "utf8"
+    "utf8",
   );
   const elementsSource = readFileSync(
     path.join(process.cwd(), "packages/js/elements/src/index.ts"),
-    "utf8"
+    "utf8",
   );
 
   for (const [name, source] of [
     ["react", reactSource],
-    ["elements", elementsSource]
+    ["elements", elementsSource],
   ]) {
-    assert.match(source, /createCheckoutStateFromDisplayData/,
-      `${name}: creates checkout state from browser-owned display conversion`);
-    assert.match(source, /createCheckoutSnapshotFromDisplayData/,
-      `${name}: creates live snapshots from browser-owned display conversion`);
-    assert.doesNotMatch(source, /function toCheckoutSnapshot/,
-      `${name}: must not own display-to-snapshot mapping`);
-    assert.doesNotMatch(source, /invoice_id is required for checkout state/,
-      `${name}: must not own checkout-state invoice id validation`);
-    assert.doesNotMatch(source, /invoice_id: options\.invoice_id/,
-      `${name}: must not build React-style checkout snapshots locally`);
-    assert.doesNotMatch(source, /function currentUnixSeconds/,
-      `${name}: must not own checkout countdown clock helpers`);
+    assert.match(
+      source,
+      name === "react" ? /createCheckoutState/ : /createCheckoutStateFromDisplayData/,
+      `${name}: creates checkout state from browser-owned display conversion`,
+    );
+    if (name === "elements") {
+      assert.match(
+        source,
+        /createCheckoutSnapshotFromDisplayData/,
+        `${name}: creates live snapshots from browser-owned display conversion`,
+      );
+    }
+    assert.doesNotMatch(
+      source,
+      /function toCheckoutSnapshot/,
+      `${name}: must not own display-to-snapshot mapping`,
+    );
+    assert.doesNotMatch(
+      source,
+      /invoice_id is required for checkout state/,
+      `${name}: must not own checkout-state invoice id validation`,
+    );
+    assert.doesNotMatch(
+      source,
+      /invoice_id: options\.invoice_id/,
+      `${name}: must not build React-style checkout snapshots locally`,
+    );
+    assert.doesNotMatch(
+      source,
+      /function currentUnixSeconds/,
+      `${name}: must not own checkout countdown clock helpers`,
+    );
   }
 });
 
 test("Elements consumes shared display HTML escaping", () => {
   const elementsSource = readFileSync(
     path.join(process.cwd(), "packages/js/elements/src/index.ts"),
-    "utf8"
+    "utf8",
   );
 
-  assert.match(elementsSource, /escapeOpenReceiveHtml/,
-    "elements: escapes rendered HTML through browser helper");
-  assert.doesNotMatch(elementsSource, /function escapeHtml/,
-    "elements: must not own HTML escaping implementation");
-  assert.doesNotMatch(elementsSource, /replaceAll\("&", "&amp;"\)/,
-    "elements: must not duplicate HTML escape rules");
+  assert.match(
+    elementsSource,
+    /escapeOpenReceiveHtml/,
+    "elements: escapes rendered HTML through browser helper",
+  );
+  assert.doesNotMatch(
+    elementsSource,
+    /function escapeHtml/,
+    "elements: must not own HTML escaping implementation",
+  );
+  assert.doesNotMatch(
+    elementsSource,
+    /replaceAll\("&", "&amp;"\)/,
+    "elements: must not duplicate HTML escape rules",
+  );
 });
 
 test("Frontend UI packages consume shared wizard route display model", () => {
   const reactSource = readFileSync(
     path.join(process.cwd(), "packages/js/react/src/index.ts"),
-    "utf8"
+    "utf8",
   );
   const elementsSource = readFileSync(
     path.join(process.cwd(), "packages/js/elements/src/index.ts"),
-    "utf8"
+    "utf8",
   );
 
   for (const [name, source] of [
     ["react", reactSource],
-    ["elements", elementsSource]
+    ["elements", elementsSource],
   ]) {
-    assert.match(source, /createOpenReceiveWizardRouteDisplays/,
-      `${name}: uses shared wizard route display model`);
-    assert.doesNotMatch(source, /OPENRECEIVE_PROVIDER_PREVIEW_LIMIT/,
-      `${name}: must not own provider preview slicing`);
-    assert.doesNotMatch(source, /route\.kind/,
-      `${name}: must not own route heading decisions`);
-    assert.doesNotMatch(source, /route\.providers\.slice/,
-      `${name}: must not slice provider previews locally`);
-    assert.doesNotMatch(source, /entry\.flagship/,
-      `${name}: must not own recommended provider labels`);
-    assert.doesNotMatch(source, /entry\.provider/,
-      `${name}: must not own raw provider display fields`);
-    assert.doesNotMatch(source, /getCheckoutProviderMechanismLabel/,
-      `${name}: must not compose provider badges locally`);
-    assert.doesNotMatch(source, /getCheckoutProviderOpenLabel/,
-      `${name}: must not compose provider links locally`);
-    assert.doesNotMatch(source, /getCheckoutProviderUsBadge/,
-      `${name}: must not compose provider US badges locally`);
+    assert.match(
+      source,
+      /createOpenReceiveWizardRouteDisplays/,
+      `${name}: uses shared wizard route display model`,
+    );
+    assert.doesNotMatch(
+      source,
+      /OPENRECEIVE_PROVIDER_PREVIEW_LIMIT/,
+      `${name}: must not own provider preview slicing`,
+    );
+    assert.doesNotMatch(source, /route\.kind/, `${name}: must not own route heading decisions`);
+    assert.doesNotMatch(
+      source,
+      /route\.providers\.slice/,
+      `${name}: must not slice provider previews locally`,
+    );
+    assert.doesNotMatch(
+      source,
+      /entry\.flagship/,
+      `${name}: must not own recommended provider labels`,
+    );
+    assert.doesNotMatch(
+      source,
+      /entry\.provider/,
+      `${name}: must not own raw provider display fields`,
+    );
+    assert.doesNotMatch(
+      source,
+      /getCheckoutProviderMechanismLabel/,
+      `${name}: must not compose provider badges locally`,
+    );
+    assert.doesNotMatch(
+      source,
+      /getCheckoutProviderOpenLabel/,
+      `${name}: must not compose provider links locally`,
+    );
+    assert.doesNotMatch(
+      source,
+      /getCheckoutProviderUsBadge/,
+      `${name}: must not compose provider US badges locally`,
+    );
   }
 });
 
 test("Frontend UI packages consume shared wizard selection model", () => {
   const reactSource = readFileSync(
     path.join(process.cwd(), "packages/js/react/src/index.ts"),
-    "utf8"
+    "utf8",
   );
   const elementsSource = readFileSync(
     path.join(process.cwd(), "packages/js/elements/src/index.ts"),
-    "utf8"
+    "utf8",
   );
 
   for (const [name, source] of [
     ["react", reactSource],
-    ["elements", elementsSource]
+    ["elements", elementsSource],
   ]) {
-    assert.match(source, /createOpenReceivePaymentWizardModel/,
-      `${name}: derives wizard view model from browser helper`);
-    assert.match(source, /updateOpenReceivePaymentWizardSelection|createOpenReceivePaymentWizardController/,
-      `${name}: updates wizard selection through browser-owned selection logic`);
-    assert.doesNotMatch(source, /setSelectedMethod/,
-      `${name}: must not own method selection transitions`);
-    assert.doesNotMatch(source, /setSelectedCountryCode/,
-      `${name}: must not own country selection transitions`);
+    assert.match(
+      source,
+      /createOpenReceivePaymentWizardModel/,
+      `${name}: derives wizard view model from browser helper`,
+    );
+    assert.match(
+      source,
+      /updateOpenReceivePaymentWizardSelection|createOpenReceivePaymentWizardController/,
+      `${name}: updates wizard selection through browser-owned selection logic`,
+    );
+    assert.doesNotMatch(
+      source,
+      /setSelectedMethod/,
+      `${name}: must not own method selection transitions`,
+    );
+    assert.doesNotMatch(
+      source,
+      /setSelectedCountryCode/,
+      `${name}: must not own country selection transitions`,
+    );
   }
-  assert.match(elementsSource, /OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES/,
-    "elements: renders wizard DOM attributes from browser constants");
-  assert.match(elementsSource, /OPENRECEIVE_PAYMENT_WIZARD_SELECTORS/,
-    "elements: binds wizard DOM events through browser selectors");
-  assert.match(elementsSource, /parseOpenReceivePaymentMethod/,
-    "elements: parses wizard methods through browser helper");
-  assert.match(elementsSource, /parseOpenReceiveRegion/,
-    "elements: parses wizard regions through browser helper");
-  assert.doesNotMatch(elementsSource, /querySelectorAll\("\[data-or-/,
-    "elements: must not hard-code wizard query selectors");
-  assert.doesNotMatch(elementsSource, /getAttribute\("data-or-/,
-    "elements: must not hard-code wizard attribute reads");
+  assert.match(
+    elementsSource,
+    /OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES/,
+    "elements: renders wizard DOM attributes from browser constants",
+  );
+  assert.match(
+    elementsSource,
+    /OPENRECEIVE_PAYMENT_WIZARD_SELECTORS/,
+    "elements: binds wizard DOM events through browser selectors",
+  );
+  assert.match(
+    elementsSource,
+    /parseOpenReceivePaymentMethod/,
+    "elements: parses wizard methods through browser helper",
+  );
+  assert.match(
+    elementsSource,
+    /parseOpenReceiveRegion/,
+    "elements: parses wizard regions through browser helper",
+  );
+  assert.doesNotMatch(
+    elementsSource,
+    /querySelectorAll\("\[data-or-/,
+    "elements: must not hard-code wizard query selectors",
+  );
+  assert.doesNotMatch(
+    elementsSource,
+    /getAttribute\("data-or-/,
+    "elements: must not hard-code wizard attribute reads",
+  );
 });
 
 test("Frontend UI packages consume shared country dropdown model", () => {
   const reactSource = readFileSync(
     path.join(process.cwd(), "packages/js/react/src/index.ts"),
-    "utf8"
+    "utf8",
   );
   const elementsSource = readFileSync(
     path.join(process.cwd(), "packages/js/elements/src/index.ts"),
-    "utf8"
+    "utf8",
   );
 
-  assert.match(reactSource, /model\.countryDisplays/,
-    "react: renders countries from browser display model");
-  assert.match(reactSource, /renderCountrySelect/,
-    "react: renders a package-owned country dropdown");
-  assert.doesNotMatch(reactSource, /projectMapPoint/,
-    "react: must not re-project country map pins");
-  assert.doesNotMatch(reactSource, /geoNaturalEarth1/,
-    "react: must not own country map projection");
-  assert.doesNotMatch(reactSource, /world-atlas/,
-    "react: must not own country map atlas data");
-  assert.doesNotMatch(reactSource, /topojson-client/,
-    "react: must not own country map feature extraction");
-  assert.match(elementsSource, /model\.countryDisplays/,
-    "elements: renders countries from browser display model");
-  assert.match(elementsSource, /renderCountrySelectHtml/,
-    "elements: renders a package-owned country dropdown");
-  assert.doesNotMatch(elementsSource, /part="country-map"/,
-    "elements: must not render the old country map");
+  assert.match(
+    reactSource,
+    /model\.countryDisplays/,
+    "react: renders countries from browser display model",
+  );
+  assert.match(
+    reactSource,
+    /renderCountrySelect/,
+    "react: renders a package-owned country dropdown",
+  );
+  assert.doesNotMatch(
+    reactSource,
+    /projectMapPoint/,
+    "react: must not re-project country map pins",
+  );
+  assert.doesNotMatch(
+    reactSource,
+    /geoNaturalEarth1/,
+    "react: must not own country map projection",
+  );
+  assert.doesNotMatch(reactSource, /world-atlas/, "react: must not own country map atlas data");
+  assert.doesNotMatch(
+    reactSource,
+    /topojson-client/,
+    "react: must not own country map feature extraction",
+  );
+  assert.match(
+    elementsSource,
+    /model\.countryDisplays/,
+    "elements: renders countries from browser display model",
+  );
+  assert.match(
+    elementsSource,
+    /renderCountrySelectHtml/,
+    "elements: renders a package-owned country dropdown",
+  );
+  assert.doesNotMatch(
+    elementsSource,
+    /part="country-map"/,
+    "elements: must not render the old country map",
+  );
   for (const [name, source] of [
     ["react", reactSource],
-    ["elements", elementsSource]
+    ["elements", elementsSource],
   ]) {
-    assert.doesNotMatch(source, /openReceiveCountryPins/,
-      `${name}: must not own country map pin data`);
-    assert.doesNotMatch(source, /openReceiveRegionLabels/,
-      `${name}: must not own region display labels`);
-    assert.doesNotMatch(source, /getOpenReceiveCoverageLabel/,
-      `${name}: must not compose country coverage labels locally`);
-    assert.doesNotMatch(source, /country\.currency.*country\.coverage/s,
-      `${name}: must not compose country meta labels locally`);
+    assert.doesNotMatch(
+      source,
+      /openReceiveCountryPins/,
+      `${name}: must not own country map pin data`,
+    );
+    assert.doesNotMatch(
+      source,
+      /openReceiveRegionLabels/,
+      `${name}: must not own region display labels`,
+    );
+    assert.doesNotMatch(
+      source,
+      /getOpenReceiveCoverageLabel/,
+      `${name}: must not compose country coverage labels locally`,
+    );
+    assert.doesNotMatch(
+      source,
+      /country\.currency.*country\.coverage/s,
+      `${name}: must not compose country meta labels locally`,
+    );
   }
 });
 
 test("Frontend UI packages consume shared payment icon helpers", () => {
   const reactSource = readFileSync(
     path.join(process.cwd(), "packages/js/react/src/index.ts"),
-    "utf8"
+    "utf8",
   );
   const elementsSource = readFileSync(
     path.join(process.cwd(), "packages/js/elements/src/index.ts"),
-    "utf8"
+    "utf8",
   );
 
   for (const [name, source] of [
     ["react", reactSource],
-    ["elements", elementsSource]
+    ["elements", elementsSource],
   ]) {
-    assert.match(source, /getOpenReceivePaymentMethodIcon/,
-      `${name}: method icons come from the browser package`);
-    assert.match(source, /createOpenReceiveWizardRouteAssetDisplays/,
-      `${name}: route asset rows come from the browser package`);
-    assert.doesNotMatch(source, /getOpenReceiveRouteIcon/,
-      `${name}: must not build route icon rows locally`);
-    assert.doesNotMatch(source, /getOpenReceiveRouteNetworkLabel/,
-      `${name}: must not build route subtitles locally`);
-    assert.doesNotMatch(source, /asset\.route \?\? asset\.symbol/,
-      `${name}: must not resolve route ids locally`);
-    assert.doesNotMatch(source, /new URL\("\.\/assets\/icons/,
-      `${name}: must not own checkout icon asset URLs`);
+    assert.match(
+      source,
+      /getOpenReceivePaymentMethodIcon/,
+      `${name}: method icons come from the browser package`,
+    );
+    assert.match(
+      source,
+      /createOpenReceiveWizardRouteAssetDisplays/,
+      `${name}: route asset rows come from the browser package`,
+    );
+    assert.doesNotMatch(
+      source,
+      /getOpenReceiveRouteIcon/,
+      `${name}: must not build route icon rows locally`,
+    );
+    assert.doesNotMatch(
+      source,
+      /getOpenReceiveRouteNetworkLabel/,
+      `${name}: must not build route subtitles locally`,
+    );
+    assert.doesNotMatch(
+      source,
+      /asset\.route \?\? asset\.symbol/,
+      `${name}: must not resolve route ids locally`,
+    );
+    assert.doesNotMatch(
+      source,
+      /new URL\("\.\/assets\/icons/,
+      `${name}: must not own checkout icon asset URLs`,
+    );
   }
 });
 
 test("Hello Fruit JS demos set up package-owned invoice persistence", () => {
   const helper = readFileSync(
     path.join(process.cwd(), "examples/hello-fruit/shared/openreceive-store.ts"),
-    "utf8"
+    "utf8",
   );
   const postgresStore = readFileSync(
     path.join(process.cwd(), "packages/js/node/src/postgres-store.ts"),
-    "utf8"
+    "utf8",
   );
   assert.match(helper, /resolveOpenReceiveStore/);
   assert.match(helper, /OPENRECEIVE_STORE/);
@@ -935,7 +1277,7 @@ test("Hello Fruit JS demos set up package-owned invoice persistence", () => {
 
   for (const demoDir of demoServerDirs) {
     const packageJson = JSON.parse(
-      readFileSync(path.join(process.cwd(), demoDir, "package.json"), "utf8")
+      readFileSync(path.join(process.cwd(), demoDir, "package.json"), "utf8"),
     );
     const compose = readFileSync(path.join(process.cwd(), demoDir, "compose.yml"), "utf8");
     const volumeName = demoDir.split("/").at(-1);
@@ -952,7 +1294,7 @@ test("Hello Fruit JS demos set up package-owned invoice persistence", () => {
   for (const sourcePath of [
     "examples/hello-fruit/server/node-express/src/server/create-server.ts",
     "examples/hello-fruit/server/static-html-small-api/src/server/create-server.ts",
-    "examples/hello-fruit/server/nextjs-fullstack/src/server/openreceive.ts"
+    "examples/hello-fruit/server/nextjs-fullstack/src/server/openreceive.ts",
   ]) {
     const source = readFileSync(path.join(process.cwd(), sourcePath), "utf8");
     assert.match(source, /createHelloFruitOpenReceiveKvStore/);
@@ -965,7 +1307,7 @@ test("Hello Fruit JS demos set up package-owned invoice persistence", () => {
   for (const sourcePath of [
     "examples/hello-fruit/server/node-express/openreceive.config.mjs",
     "examples/hello-fruit/server/static-html-small-api/openreceive.config.mjs",
-    "examples/hello-fruit/server/nextjs-fullstack/openreceive.config.mjs"
+    "examples/hello-fruit/server/nextjs-fullstack/openreceive.config.mjs",
   ]) {
     const source = readFileSync(path.join(process.cwd(), sourcePath), "utf8");
     assert.match(source, /await createHelloFruitOpenReceive/);
@@ -976,17 +1318,17 @@ test("Next.js demo owns merchant route handling and calls OpenReceive service me
   const source = readFileSync(
     path.join(
       process.cwd(),
-      "examples/hello-fruit/server/nextjs-fullstack/src/server/openreceive.ts"
+      "examples/hello-fruit/server/nextjs-fullstack/src/server/openreceive.ts",
     ),
-    "utf8"
+    "utf8",
   );
 
   assert.match(source, /createOpenReceive/);
   assert.match(source, /createOrderResponse/);
   assert.match(source, /orderStatusResponse/);
   assert.match(source, /createHelloFruitCreateOrderResult/);
-  assert.match(source, /openreceive\.createInvoice/);
-  assert.match(source, /openreceive\.refreshInvoiceStatus/);
+  assert.match(source, /openreceive\.createCheckout/);
+  assert.match(source, /openreceive\.getOrder/);
   assert.match(source, /readRequiredHelloFruitNwcConnectionString/);
   assert.doesNotMatch(source, /dispatchOpenReceiveRoute/);
   assert.doesNotMatch(source, /matchOpenReceiveRoute/);
@@ -1001,23 +1343,20 @@ test("Next.js demo owns merchant route handling and calls OpenReceive service me
   assert.doesNotMatch(source, /parseLastEventId/);
 });
 
-test("Hello Fruit demos keep app routes decoupled from OpenReceive error classes", () => {
+test("Hello Fruit demos normalize OpenReceive service errors at app route boundaries", () => {
   for (const sourcePath of [
     "examples/hello-fruit/server/node-express/src/server/create-server.ts",
     "examples/hello-fruit/server/static-html-small-api/src/server/create-server.ts",
-    "examples/hello-fruit/server/nextjs-fullstack/src/server/openreceive.ts"
+    "examples/hello-fruit/server/nextjs-fullstack/src/server/openreceive.ts",
   ]) {
     const source = readFileSync(path.join(process.cwd(), sourcePath), "utf8");
-    assert.doesNotMatch(source, /OpenReceiveServiceError/, sourcePath);
+    assert.match(source, /OpenReceiveServiceError/, sourcePath);
     assert.match(source, /createOpenReceive/, sourcePath);
   }
 });
 
 test("Rails React skeleton is explicitly quarantined and does not claim active Rails demo identity", () => {
-  const railsReactDir = path.join(
-    process.cwd(),
-    "examples/hello-fruit/server/rails-react"
-  );
+  const railsReactDir = path.join(process.cwd(), "examples/hello-fruit/server/rails-react");
   const files = [
     "README.md",
     "Dockerfile",
@@ -1028,7 +1367,7 @@ test("Rails React skeleton is explicitly quarantined and does not claim active R
     "app/views/hello_fruit/index.html.erb",
     "config/application.rb",
     "config/environment.rb",
-    "config/initializers/openreceive.rb"
+    "config/initializers/openreceive.rb",
   ];
 
   const combined = files
@@ -1092,24 +1431,24 @@ test("Hello Fruit demos refuse to boot without OPENRECEIVE_NWC", async () => {
     for (const demo of [
       {
         name: "node-express-production",
-        createApp: createHelloFruitProductionServer
+        createApp: createHelloFruitProductionServer,
       },
       {
         name: "static-html-small-api-production",
-        createApp: createHelloFruitStaticProductionServer
-      }
+        createApp: createHelloFruitStaticProductionServer,
+      },
     ]) {
       await assert.rejects(
         () => demo.createApp(),
         /needs a receive-only NWC code to receive payments\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
-        `${demo.name}: requires NWC at boot`
+        `${demo.name}: requires NWC at boot`,
       );
     }
 
     assert.throws(
       () => getNextDemoMetadata(),
       /needs a receive-only NWC code to receive payments\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
-      "nextjs-fullstack: metadata requires NWC"
+      "nextjs-fullstack: metadata requires NWC",
     );
   });
 });
@@ -1118,15 +1457,15 @@ test("Hello Fruit demos refuse malformed OPENRECEIVE_NWC before serving", async 
   await withEnv({ OPENRECEIVE_NWC: "https://example.com" }, async () => {
     await assert.rejects(
       () => createHelloFruitServer(),
-      /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/
+      /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
     );
     await assert.rejects(
       () => createHelloFruitStaticServer(),
-      /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/
+      /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
     );
     assert.throws(
       () => getNextDemoMetadata(),
-      /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/
+      /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
     );
   });
 });
@@ -1134,261 +1473,296 @@ test("Hello Fruit demos refuse malformed OPENRECEIVE_NWC before serving", async 
 test("Hello Fruit metadata exposes only allowlisted build fields", async () => {
   const nwc = createValidNwcUri();
 
-  await withEnv({
-    OPENRECEIVE_NWC: nwc,
-    OPENRECEIVE_STORE: undefined,
-    OPENRECEIVE_DEMO_MODE: "production",
-    OPENRECEIVE_GIT_SHA: "0123456789abcdef",
-    OPENRECEIVE_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
-    OPENRECEIVE_DEPLOYED_AT: "2026-06-20T12:34:56Z"
-  }, async () => {
-    for (const demo of [
-      {
-        name: "node-express",
-        createApp: createHelloFruitServer
-      },
-      {
-        name: "static-html-small-api",
-        createApp: createHelloFruitStaticServer
+  await withEnv(
+    {
+      OPENRECEIVE_NWC: nwc,
+      OPENRECEIVE_STORE: undefined,
+      OPENRECEIVE_DEMO_MODE: "production",
+      OPENRECEIVE_GIT_SHA: "0123456789abcdef",
+      OPENRECEIVE_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
+      OPENRECEIVE_DEPLOYED_AT: "2026-06-20T12:34:56Z",
+    },
+    async () => {
+      for (const demo of [
+        {
+          name: "node-express",
+          createApp: createHelloFruitServer,
+        },
+        {
+          name: "static-html-small-api",
+          createApp: createHelloFruitStaticServer,
+        },
+      ]) {
+        const metadata = await getJson(
+          await demo.createApp(createHelloFruitTestOpenReceiveOptions()),
+          "/demo-metadata.json",
+        );
+        assert.equal(metadata.status, 200, `${demo.name}: metadata status`);
+        assert.equal(metadata.body.mode, "production");
+        assert.equal(metadata.body.build.git_sha, "0123456789abcdef");
+        assert.equal(metadata.body.build.image_digest, `sha256:${"c".repeat(64)}`);
+        assert.equal(metadata.body.build.deployed_at, "2026-06-20T12:34:56Z");
+        assert.equal(JSON.stringify(metadata.body).includes("OPENRECEIVE_NWC"), false);
+        assert.equal(JSON.stringify(metadata.body).includes("nostr+walletconnect://"), false);
+        assert.equal(JSON.stringify(metadata.body).includes("secret="), false);
       }
-    ]) {
-      const metadata = await getJson(
-        await demo.createApp(createHelloFruitTestOpenReceiveOptions()),
-        "/demo-metadata.json"
-      );
-      assert.equal(metadata.status, 200, `${demo.name}: metadata status`);
-      assert.equal(metadata.body.mode, "production");
-      assert.equal(metadata.body.build.git_sha, "0123456789abcdef");
-      assert.equal(metadata.body.build.image_digest, `sha256:${"c".repeat(64)}`);
-      assert.equal(metadata.body.build.deployed_at, "2026-06-20T12:34:56Z");
-      assert.equal(JSON.stringify(metadata.body).includes("OPENRECEIVE_NWC"), false);
-      assert.equal(JSON.stringify(metadata.body).includes("nostr+walletconnect://"), false);
-      assert.equal(JSON.stringify(metadata.body).includes("secret="), false);
-    }
 
-    setHelloFruitOpenReceiveTestOverrides(createHelloFruitTestOpenReceiveOptions());
-    try {
-      const nextMetadata = await responseJson(getNextDemoMetadata());
-      assert.equal(nextMetadata.status, 200, "nextjs-fullstack: metadata status");
-      assert.equal(nextMetadata.body.mode, "production");
-      assert.equal(nextMetadata.body.build.git_sha, "0123456789abcdef");
-      assert.equal(nextMetadata.body.build.image_digest, `sha256:${"c".repeat(64)}`);
-      assert.equal(nextMetadata.body.build.deployed_at, "2026-06-20T12:34:56Z");
-      assert.equal(JSON.stringify(nextMetadata.body).includes("OPENRECEIVE_NWC"), false);
-      assert.equal(JSON.stringify(nextMetadata.body).includes("nostr+walletconnect://"), false);
-      assert.equal(JSON.stringify(nextMetadata.body).includes("secret="), false);
-    } finally {
-      setHelloFruitOpenReceiveTestOverrides(undefined);
-    }
-  });
+      setHelloFruitOpenReceiveTestOverrides(createHelloFruitTestOpenReceiveOptions());
+      try {
+        const nextMetadata = await responseJson(getNextDemoMetadata());
+        assert.equal(nextMetadata.status, 200, "nextjs-fullstack: metadata status");
+        assert.equal(nextMetadata.body.mode, "production");
+        assert.equal(nextMetadata.body.build.git_sha, "0123456789abcdef");
+        assert.equal(nextMetadata.body.build.image_digest, `sha256:${"c".repeat(64)}`);
+        assert.equal(nextMetadata.body.build.deployed_at, "2026-06-20T12:34:56Z");
+        assert.equal(JSON.stringify(nextMetadata.body).includes("OPENRECEIVE_NWC"), false);
+        assert.equal(JSON.stringify(nextMetadata.body).includes("nostr+walletconnect://"), false);
+        assert.equal(JSON.stringify(nextMetadata.body).includes("secret="), false);
+      } finally {
+        setHelloFruitOpenReceiveTestOverrides(undefined);
+      }
+    },
+  );
 });
 
 test("Hello Fruit demos create app orders and refresh order status through merchant routes", async () => {
-  await withEnv({
-    OPENRECEIVE_NWC: createValidNwcUri(),
-    OPENRECEIVE_STORE: undefined
-  }, async () => {
-    const orderRequest = {
-      idempotency_key: "cart-smoke",
-      cart: [
-        { product_id: "banana", quantity: 2 },
-        { product_id: "apple", quantity: 1 }
-      ]
-    };
+  await withEnv(
+    {
+      OPENRECEIVE_NWC: createValidNwcUri(),
+      OPENRECEIVE_STORE: undefined,
+    },
+    async () => {
+      const orderRequest = {
+        idempotency_key: "cart-smoke",
+        cart: [
+          { product_id: "banana", quantity: 2 },
+          { product_id: "apple", quantity: 1 },
+        ],
+      };
 
-    for (const demo of [
-      {
-        name: "node-express",
-        createApp: createHelloFruitServer
-      },
-      {
-        name: "static-html-small-api",
-        createApp: createHelloFruitStaticServer
+      for (const demo of [
+        {
+          name: "node-express",
+          createApp: createHelloFruitServer,
+        },
+        {
+          name: "static-html-small-api",
+          createApp: createHelloFruitStaticServer,
+        },
+      ]) {
+        const app = await demo.createApp(createHelloFruitTestOpenReceiveOptions());
+        const created = await dispatchJson(app, "POST", "/create_order", orderRequest);
+        assert.equal(created.status, 201, `${demo.name}: create_order status`);
+        assert.equal(created.body.order.uuid.includes("cart-smoke"), true);
+        assert.equal(created.body.order.status, "pending_payment");
+        assert.equal(created.body.order.totalAmount.currency, "USD");
+        assert.equal(created.body.order.totalAmount.value, "0.25");
+        assert.equal(created.body.checkout.order_id, created.body.order.uuid);
+        const createdInvoice = created.body.checkout.active ?? created.body.checkout.invoices[0];
+        assert.equal(typeof createdInvoice.invoice, "string");
+        assert.equal(JSON.stringify(created.body).includes("nostr+walletconnect://"), false);
+
+        const replayed = await dispatchJson(app, "POST", "/create_order", orderRequest);
+        const replayedInvoice = replayed.body.checkout.active ?? replayed.body.checkout.invoices[0];
+        assert.equal(
+          replayed.body.checkout.checkout_id,
+          created.body.checkout.checkout_id,
+          `${demo.name}: create_order continues the same checkout id and cart`,
+        );
+        assert.equal(typeof replayedInvoice.invoice_id, "string");
+
+        const status = await dispatchJson(app, "POST", "/order_status", {
+          order_id: created.body.order.uuid,
+        });
+        assert.equal(status.status, 200, `${demo.name}: order_status status`);
+        assert.equal(status.body.order_uuid, created.body.order.uuid);
+        assert.equal(status.body.order_status, "pending_payment");
+        assert.equal(status.body.order.status, "pending_payment");
+        const statusInvoice =
+          status.body.active_checkout.active ?? status.body.active_checkout.invoices[0];
+        assert.equal(statusInvoice.payment_hash, replayedInvoice.payment_hash);
       }
-    ]) {
-      const app = await demo.createApp(createHelloFruitTestOpenReceiveOptions());
-      const created = await dispatchJson(app, "POST", "/create_order", orderRequest);
-      assert.equal(created.status, 201, `${demo.name}: create_order status`);
-      assert.equal(created.body.order.uuid.includes("cart-smoke"), true);
-      assert.equal(created.body.order.status, "pending_payment");
-      assert.equal(created.body.order.totalAmount.currency, "USD");
-      assert.equal(created.body.order.totalAmount.value, "0.25");
-      assert.equal(created.body.invoice.order_uuid, created.body.order.uuid);
-      assert.equal(typeof created.body.invoice.invoice, "string");
-      assert.equal(JSON.stringify(created.body).includes("nostr+walletconnect://"), false);
 
-      const replayed = await dispatchJson(app, "POST", "/create_order", orderRequest);
-      assert.equal(replayed.body.invoice.invoice_id, created.body.invoice.invoice_id,
-        `${demo.name}: create_order is idempotent for the same checkout id and cart`);
+      setHelloFruitOpenReceiveTestOverrides(createHelloFruitTestOpenReceiveOptions());
+      try {
+        const nextCreated = await responseJson(
+          postNextCreateOrder(jsonRequest("/create_order", orderRequest)),
+        );
+        assert.equal(nextCreated.status, 201, "nextjs-fullstack: create_order status");
+        assert.equal(nextCreated.body.order.uuid.includes("cart-smoke"), true);
+        assert.equal(nextCreated.body.order.totalAmount.value, "0.25");
+        assert.equal(nextCreated.body.checkout.order_id, nextCreated.body.order.uuid);
 
-      const status = await dispatchJson(app, "POST", "/order_status", {
-        invoice_id: created.body.invoice.invoice_id
-      });
-      assert.equal(status.status, 200, `${demo.name}: order_status status`);
-      assert.equal(status.body.order_uuid, created.body.order.uuid);
-      assert.equal(status.body.order_status, "pending_payment");
-      assert.equal(status.body.order.status, "pending_payment");
-      assert.equal(status.body.payment_hash, created.body.invoice.payment_hash);
-    }
+        const nextReplayed = await responseJson(
+          postNextCreateOrder(jsonRequest("/create_order", orderRequest)),
+        );
+        const nextReplayedInvoice =
+          nextReplayed.body.checkout.active ?? nextReplayed.body.checkout.invoices[0];
+        assert.equal(
+          nextReplayed.body.checkout.checkout_id,
+          nextCreated.body.checkout.checkout_id,
+          "nextjs-fullstack: create_order continues the same checkout id and cart",
+        );
+        assert.equal(typeof nextReplayedInvoice.invoice_id, "string");
 
-    setHelloFruitOpenReceiveTestOverrides(createHelloFruitTestOpenReceiveOptions());
-    try {
-      const nextCreated = await responseJson(postNextCreateOrder(jsonRequest("/create_order", orderRequest)));
-      assert.equal(nextCreated.status, 201, "nextjs-fullstack: create_order status");
-      assert.equal(nextCreated.body.order.uuid.includes("cart-smoke"), true);
-      assert.equal(nextCreated.body.order.totalAmount.value, "0.25");
-      assert.equal(nextCreated.body.invoice.order_uuid, nextCreated.body.order.uuid);
-
-      const nextReplayed = await responseJson(postNextCreateOrder(jsonRequest("/create_order", orderRequest)));
-      assert.equal(nextReplayed.body.invoice.invoice_id, nextCreated.body.invoice.invoice_id,
-        "nextjs-fullstack: create_order is idempotent for the same checkout id and cart");
-
-      const nextStatus = await responseJson(postNextOrderStatus(jsonRequest("/order_status", {
-        invoice_id: nextCreated.body.invoice.invoice_id
-      })));
-      assert.equal(nextStatus.status, 200, "nextjs-fullstack: order_status status");
-      assert.equal(nextStatus.body.order_uuid, nextCreated.body.order.uuid);
-      assert.equal(nextStatus.body.order_status, "pending_payment");
-    } finally {
-      setHelloFruitOpenReceiveTestOverrides(undefined);
-    }
-  });
+        const nextStatus = await responseJson(
+          postNextOrderStatus(
+            jsonRequest("/order_status", {
+              order_id: nextCreated.body.order.uuid,
+            }),
+          ),
+        );
+        assert.equal(nextStatus.status, 200, "nextjs-fullstack: order_status status");
+        assert.equal(nextStatus.body.order_uuid, nextCreated.body.order.uuid);
+        assert.equal(nextStatus.body.order_status, "pending_payment");
+      } finally {
+        setHelloFruitOpenReceiveTestOverrides(undefined);
+      }
+    },
+  );
 });
 
 test("Hello Fruit demos create direct SATS orders from the currency switcher", async () => {
-  await withEnv({
-    OPENRECEIVE_NWC: createValidNwcUri(),
-    OPENRECEIVE_STORE: undefined
-  }, async () => {
-    const orderRequest = {
-      idempotency_key: "cart-sats",
-      currency: "SATS",
-      cart: [
-        { product_id: "banana", quantity: 2 },
-        { product_id: "apple", quantity: 1 }
-      ]
-    };
+  await withEnv(
+    {
+      OPENRECEIVE_NWC: createValidNwcUri(),
+      OPENRECEIVE_STORE: undefined,
+    },
+    async () => {
+      const orderRequest = {
+        idempotency_key: "cart-sats",
+        currency: "SATS",
+        cart: [
+          { product_id: "banana", quantity: 2 },
+          { product_id: "apple", quantity: 1 },
+        ],
+      };
 
-    for (const demo of [
-      {
-        name: "node-express",
-        createApp: createHelloFruitServer
-      },
-      {
-        name: "static-html-small-api",
-        createApp: createHelloFruitStaticServer
+      for (const demo of [
+        {
+          name: "node-express",
+          createApp: createHelloFruitServer,
+        },
+        {
+          name: "static-html-small-api",
+          createApp: createHelloFruitStaticServer,
+        },
+      ]) {
+        const app = await demo.createApp(createHelloFruitTestOpenReceiveOptions());
+        const created = await dispatchJson(app, "POST", "/create_order", orderRequest);
+        assert.equal(created.status, 201, `${demo.name}: create_order status`);
+        assert.equal(created.body.order.totalAmount.currency, "SATS");
+        assert.equal(created.body.order.totalAmount.value, "500");
+        assert.equal(created.body.checkout.amount_msats, 500000);
+        const createdInvoice = created.body.checkout.active ?? created.body.checkout.invoices[0];
+        assert.equal(createdInvoice.fiat_quote, null);
       }
-    ]) {
-      const app = await demo.createApp(createHelloFruitTestOpenReceiveOptions());
-      const created = await dispatchJson(app, "POST", "/create_order", orderRequest);
-      assert.equal(created.status, 201, `${demo.name}: create_order status`);
-      assert.equal(created.body.order.totalAmount.currency, "SATS");
-      assert.equal(created.body.order.totalAmount.value, "500");
-      assert.equal(created.body.invoice.amount_msats, 500000);
-      assert.equal(created.body.invoice.fiat_quote, null);
-    }
-  });
+    },
+  );
 });
 
 test("Hello Fruit hosted demo routes expose source, docs, robots, and sitemap", async () => {
-  await withEnv({
-    OPENRECEIVE_NWC: createValidNwcUri(),
-    OPENRECEIVE_PUBLIC_URL: "https://demo.example.test",
-    OPENRECEIVE_DEMO_NOINDEX: undefined
-  }, async () => {
-    for (const demo of [
-      {
-        name: "node-express",
-        sourcePath: "examples/hello-fruit/server/node-express",
-        createApp: createHelloFruitServer
-      },
-      {
-        name: "static-html-small-api",
-        sourcePath: "examples/hello-fruit/server/static-html-small-api",
-        createApp: createHelloFruitStaticServer
+  await withEnv(
+    {
+      OPENRECEIVE_NWC: createValidNwcUri(),
+      OPENRECEIVE_PUBLIC_URL: "https://demo.example.test",
+      OPENRECEIVE_DEMO_NOINDEX: undefined,
+    },
+    async () => {
+      for (const demo of [
+        {
+          name: "node-express",
+          sourcePath: "examples/hello-fruit/server/node-express",
+          createApp: createHelloFruitServer,
+        },
+        {
+          name: "static-html-small-api",
+          sourcePath: "examples/hello-fruit/server/static-html-small-api",
+          createApp: createHelloFruitStaticServer,
+        },
+      ]) {
+        const app = await demo.createApp(createHelloFruitTestOpenReceiveOptions());
+        const source = await dispatch(app, {
+          method: "GET",
+          url: "/source",
+          headers: {},
+        });
+        assert.equal(source.status, 302, `${demo.name}: source status`);
+        assert.equal(
+          source.headers.get("location"),
+          `https://github.com/openreceive/openreceive/tree/main/${demo.sourcePath}`,
+        );
+
+        const docs = await dispatch(app, {
+          method: "GET",
+          url: "/docs",
+          headers: {},
+        });
+        assert.equal(docs.status, 302, `${demo.name}: docs status`);
+        assert.equal(
+          docs.headers.get("location"),
+          "https://github.com/openreceive/openreceive/blob/main/docs/guides/quickstart-node.md",
+        );
+
+        const robots = await dispatch(app, {
+          method: "GET",
+          url: "/robots.txt",
+          headers: {},
+        });
+        assert.equal(robots.status, 200, `${demo.name}: robots status`);
+        assert.match(robots.text, /Allow: \//);
+        assert.match(robots.text, /Sitemap: https:\/\/demo\.example\.test\/sitemap\.xml/);
+
+        const sitemap = await dispatch(app, {
+          method: "GET",
+          url: "/sitemap.xml",
+          headers: {},
+        });
+        assert.equal(sitemap.status, 200, `${demo.name}: sitemap status`);
+        assert.match(sitemap.text, /<loc>https:\/\/demo\.example\.test\/<\/loc>/);
+
+        for (const response of [source.text, docs.text, robots.text, sitemap.text]) {
+          assert.equal(JSON.stringify(response).includes("OPENRECEIVE_NWC"), false);
+          assert.equal(JSON.stringify(response).includes("nostr+walletconnect://"), false);
+        }
       }
-    ]) {
-      const app = await demo.createApp(createHelloFruitTestOpenReceiveOptions());
-      const source = await dispatch(app, {
-        method: "GET",
-        url: "/source",
-        headers: {}
-      });
-      assert.equal(source.status, 302, `${demo.name}: source status`);
+
+      const nextSource = getNextSource();
+      assert.equal(nextSource.status, 302, "nextjs-fullstack: source status");
       assert.equal(
-        source.headers.get("location"),
-        `https://github.com/openreceive/openreceive/tree/main/${demo.sourcePath}`
+        nextSource.headers.get("location"),
+        "https://github.com/openreceive/openreceive/tree/main/examples/hello-fruit/server/nextjs-fullstack",
       );
 
-      const docs = await dispatch(app, {
-        method: "GET",
-        url: "/docs",
-        headers: {}
-      });
-      assert.equal(docs.status, 302, `${demo.name}: docs status`);
+      const nextDocs = getNextDocs();
+      assert.equal(nextDocs.status, 302, "nextjs-fullstack: docs status");
       assert.equal(
-        docs.headers.get("location"),
-        "https://github.com/openreceive/openreceive/blob/main/docs/guides/quickstart-node.md"
+        nextDocs.headers.get("location"),
+        "https://github.com/openreceive/openreceive/blob/main/docs/guides/frontend-checkout.md",
       );
 
-      const robots = await dispatch(app, {
-        method: "GET",
-        url: "/robots.txt",
-        headers: {}
+      assert.equal(nextRobotsDynamic, "force-dynamic");
+      const nextRobots = getNextRobots();
+      assert.deepEqual(nextRobots.rules, {
+        userAgent: "*",
+        allow: "/",
       });
-      assert.equal(robots.status, 200, `${demo.name}: robots status`);
-      assert.match(robots.text, /Allow: \//);
-      assert.match(robots.text, /Sitemap: https:\/\/demo\.example\.test\/sitemap\.xml/);
+      assert.equal(nextRobots.sitemap, "https://demo.example.test/sitemap.xml");
 
-      const sitemap = await dispatch(app, {
-        method: "GET",
-        url: "/sitemap.xml",
-        headers: {}
-      });
-      assert.equal(sitemap.status, 200, `${demo.name}: sitemap status`);
-      assert.match(sitemap.text, /<loc>https:\/\/demo\.example\.test\/<\/loc>/);
-
-      for (const response of [source.text, docs.text, robots.text, sitemap.text]) {
-        assert.equal(JSON.stringify(response).includes("OPENRECEIVE_NWC"), false);
-        assert.equal(JSON.stringify(response).includes("nostr+walletconnect://"), false);
-      }
-    }
-
-    const nextSource = getNextSource();
-    assert.equal(nextSource.status, 302, "nextjs-fullstack: source status");
-    assert.equal(
-      nextSource.headers.get("location"),
-      "https://github.com/openreceive/openreceive/tree/main/examples/hello-fruit/server/nextjs-fullstack"
-    );
-
-    const nextDocs = getNextDocs();
-    assert.equal(nextDocs.status, 302, "nextjs-fullstack: docs status");
-    assert.equal(
-      nextDocs.headers.get("location"),
-      "https://github.com/openreceive/openreceive/blob/main/docs/guides/frontend-checkout.md"
-    );
-
-    assert.equal(nextRobotsDynamic, "force-dynamic");
-    const nextRobots = getNextRobots();
-    assert.deepEqual(nextRobots.rules, {
-      userAgent: "*",
-      allow: "/"
-    });
-    assert.equal(nextRobots.sitemap, "https://demo.example.test/sitemap.xml");
-
-    assert.equal(nextSitemapDynamic, "force-dynamic");
-    const nextSitemap = getNextSitemap();
-    assert.equal(nextSitemap[0]?.url, "https://demo.example.test");
-    assert.equal(JSON.stringify(nextRobots).includes("OPENRECEIVE_NWC"), false);
-    assert.equal(JSON.stringify(nextSitemap).includes("nostr+walletconnect://"), false);
-  });
+      assert.equal(nextSitemapDynamic, "force-dynamic");
+      const nextSitemap = getNextSitemap();
+      assert.equal(nextSitemap[0]?.url, "https://demo.example.test");
+      assert.equal(JSON.stringify(nextRobots).includes("OPENRECEIVE_NWC"), false);
+      assert.equal(JSON.stringify(nextSitemap).includes("nostr+walletconnect://"), false);
+    },
+  );
 });
 
 async function responseJson(responseOrPromise) {
   const response = await responseOrPromise;
   return {
     status: response.status,
-    body: await response.json()
+    body: await response.json(),
   };
 }
 
@@ -1396,9 +1770,9 @@ function jsonRequest(pathname, body) {
   return new Request(`http://localhost${pathname}`, {
     method: "POST",
     headers: {
-      "content-type": "application/json"
+      "content-type": "application/json",
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
   });
 }
 
@@ -1412,14 +1786,14 @@ async function dispatchJson(app, method, url, body) {
     url,
     headers: {
       ...(body === undefined ? {} : { "content-type": "application/json" }),
-      ...(body === undefined ? {} : { "idempotency-key": "demo-smoke" })
+      ...(body === undefined ? {} : { "idempotency-key": "demo-smoke" }),
     },
-    body
+    body,
   });
 
   return {
     status: response.status,
-    body: JSON.parse(response.text)
+    body: JSON.parse(response.text),
   };
 }
 
@@ -1431,13 +1805,13 @@ async function dispatch(app, options) {
       read() {
         if (payload !== undefined) this.push(payload);
         this.push(null);
-      }
+      },
     });
     req.method = options.method;
     req.url = options.url;
     req.headers = {
       ...options.headers,
-      ...(payload === undefined ? {} : { "content-length": String(payload.length) })
+      ...(payload === undefined ? {} : { "content-length": String(payload.length) }),
     };
     req.encrypted = false;
     req.connection = req;
@@ -1483,7 +1857,7 @@ async function dispatch(app, options) {
         resolve({
           status: this.statusCode,
           text: Buffer.concat(chunks).toString("utf8"),
-          headers
+          headers,
         });
       },
       on() {
@@ -1494,7 +1868,7 @@ async function dispatch(app, options) {
       },
       emit() {
         return false;
-      }
+      },
     };
 
     app.handle(req, res, reject);

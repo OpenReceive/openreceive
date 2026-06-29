@@ -70,8 +70,8 @@ namespace + operation + idempotency_key
 Replaying the same request returns the same invoice. Reusing the same key with a
 different request body is a conflict.
 
-Refresh idempotency uses the same scope shape with `operation =
-"invoice.refresh"`. Refresh creates a new linked invoice row with
+Renewal idempotency uses the same scope shape with `operation =
+"invoice.renew"`. Renewal creates a new linked invoice row with
 `refreshed_from_invoice_id`; it must not mutate the old invoice in place.
 
 ## Live Wallet Smoke

@@ -7,6 +7,7 @@ import {
   OpenReceiveServiceError,
   createOpenReceive,
   createOpenReceivePriceFeed,
+  toOpenReceiveHttpCheckout,
   toOpenReceiveHttpOrder
 } from "@openreceive/node";
 import {
@@ -149,8 +150,8 @@ export async function createOrderResponse(
       rates,
       supportedCurrencies
     });
-    const checkout = toOpenReceiveHttpOrder(
-      await openreceive.createOrder(orderResult.invoiceRequest)
+    const checkout = toOpenReceiveHttpCheckout(
+      await openreceive.createCheckout(orderResult.invoiceRequest)
     );
     return jsonResponse({
       order: orderResult.order,

@@ -7,7 +7,11 @@ OpenReceive supplies service methods you can call from those routes.
 
 ```ts
 import express from "express";
-import { createOpenReceive } from "@openreceive/node";
+import {
+  createOpenReceive,
+  toOpenReceiveHttpCheckout,
+  toOpenReceiveHttpOrder
+} from "@openreceive/node";
 
 const checkoutRoutes = express.Router();
 checkoutRoutes.use(express.json());
@@ -23,18 +27,20 @@ checkoutRoutes.post("/create_order", async (req, res, next) => {
   try {
     // Your app function. Create and validate the order before calling OpenReceive.
     const order = await createOrderFromCart(req.user, req.body.cart);
-    const invoice = await openreceive.createInvoice({
-      orderId: order.uuid,
-      amount: {
-        fiat: {
-          currency: order.totalAmount.currency,
-          value: order.totalAmount.value
-        }
-      },
-      memo: `Order ${order.number}`,
-      expiresInSeconds: 600
-    });
-    res.status(201).json({ order, invoice });
+    const checkout = toOpenReceiveHttpCheckout(
+      await openreceive.createCheckout({
+        orderId: order.uuid,
+        amount: {
+          fiat: {
+            currency: order.totalAmount.currency,
+            value: order.totalAmount.value
+          }
+        },
+        memo: `Order ${order.number}`,
+        expiresInSeconds: 600
+      })
+    );
+    res.status(201).json({ order, checkout });
   } catch (error) {
     sendCheckoutError(res, next, error);
   }
@@ -42,14 +48,12 @@ checkoutRoutes.post("/create_order", async (req, res, next) => {
 
 checkoutRoutes.post("/order_status", async (req, res, next) => {
   try {
-    const invoice = await openreceive.refreshInvoiceStatus({
-      invoiceId: req.body.invoice_id
-    });
+    const orderStatus = toOpenReceiveHttpOrder(
+      await openreceive.getOrder({ orderId: req.body.order_id })
+    );
     res.status(200).json({
-      ...invoice,
-      order_status: invoice.settledAt || invoice.transactionState === "settled"
-        ? "settled"
-        : "pending_payment"
+      ...orderStatus,
+      order_status: orderStatus.status === "paid" ? "settled" : "pending_payment"
     });
   } catch (error) {
     sendCheckoutError(res, next, error);
@@ -81,7 +85,10 @@ Mount `checkoutRoutes` wherever your app already mounts checkout controllers.
 
 ```ts
 // app/create_order/route.ts
-import { createOpenReceive } from "@openreceive/node";
+import {
+  createOpenReceive,
+  toOpenReceiveHttpCheckout
+} from "@openreceive/node";
 
 export const runtime = "nodejs";
 
@@ -98,18 +105,20 @@ export async function POST(request: Request) {
     const body = await request.json();
     // Your app function. Create and validate the order before calling OpenReceive.
     const order = await createOrderFromCart(body.cart);
-    const invoice = await openreceive.createInvoice({
-      orderId: order.uuid,
-      amount: {
-        fiat: {
-          currency: order.totalAmount.currency,
-          value: order.totalAmount.value
-        }
-      },
-      memo: `Order ${order.number}`,
-      expiresInSeconds: 600
-    });
-    return Response.json({ order, invoice }, {
+    const checkout = toOpenReceiveHttpCheckout(
+      await openreceive.createCheckout({
+        orderId: order.uuid,
+        amount: {
+          fiat: {
+            currency: order.totalAmount.currency,
+            value: order.totalAmount.value
+          }
+        },
+        memo: `Order ${order.number}`,
+        expiresInSeconds: 600
+      })
+    );
+    return Response.json({ order, checkout }, {
       status: 201
     });
   } catch (error) {
@@ -152,18 +161,20 @@ export async function createOrder(req, res, next) {
   try {
     // Your app function. Create and validate the order before calling OpenReceive.
     const order = await createOrderFromCart(req.user, req.body.cart);
-    const invoice = await openreceive.createInvoice({
-      orderId: order.uuid,
-      amount: {
-        fiat: {
-          currency: order.totalAmount.currency,
-          value: order.totalAmount.value
-        }
-      },
-      memo: `Order ${order.number}`,
-      expiresInSeconds: 600
-    });
-    res.status(201).json({ order, invoice });
+    const checkout = toOpenReceiveHttpCheckout(
+      await openreceive.createCheckout({
+        orderId: order.uuid,
+        amount: {
+          fiat: {
+            currency: order.totalAmount.currency,
+            value: order.totalAmount.value
+          }
+        },
+        memo: `Order ${order.number}`,
+        expiresInSeconds: 600
+      })
+    );
+    res.status(201).json({ order, checkout });
   } catch (error) {
     next(error);
   }

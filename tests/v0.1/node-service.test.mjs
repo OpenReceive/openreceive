@@ -1,13 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  InMemoryInvoiceKvStore,
-  StaticPriceProvider
-} from "../../packages/js/core/src/index.ts";
+import { InMemoryInvoiceKvStore, StaticPriceProvider } from "../../packages/js/core/src/index.ts";
 import {
   OpenReceiveConfigError,
   OpenReceiveServiceError,
-  createOpenReceive
+  createOpenReceive,
 } from "../../packages/js/node/src/index.ts";
 
 class FakeWallet {
@@ -28,7 +25,7 @@ class FakeWallet {
       encryption: "nip04",
       spendCapabilityAdvertised: false,
       receiveCheckoutReady: true,
-      warnings: []
+      warnings: [],
     };
   }
 
@@ -37,9 +34,10 @@ class FakeWallet {
     if (this.makeInvoiceError !== undefined) {
       throw this.makeInvoiceError;
     }
-    const amountMsats = typeof request.amount_msats === "bigint"
-      ? request.amount_msats
-      : BigInt(request.amount_msats ?? request.amount);
+    const amountMsats =
+      typeof request.amount_msats === "bigint"
+        ? request.amount_msats
+        : BigInt(request.amount_msats ?? request.amount);
     const index = this.makeInvoiceCalls;
     const createdAt = this.now();
     const invoice = {
@@ -48,7 +46,7 @@ class FakeWallet {
       amount_msats: amountMsats,
       created_at: createdAt,
       expires_at: createdAt + (request.expiry ?? 600),
-      state: "pending"
+      state: "pending",
     };
     this.invoices.push(invoice);
     return invoice;
@@ -72,8 +70,8 @@ class FakeWallet {
           amount_msats: invoice.amount_msats,
           state: invoice.state,
           settled_at: invoice.state === "settled" ? invoice.settled_at : undefined,
-          preimage: invoice.state === "settled" ? "1".repeat(64) : undefined
-        }))
+          preimage: invoice.state === "settled" ? "1".repeat(64) : undefined,
+        })),
     };
   }
 
@@ -95,7 +93,7 @@ async function createHarness(overrides = {}) {
     namespace: "demo_hello_fruit",
     clock: () => now,
     priceProviders: [new StaticPriceProvider()],
-    ...overrides
+    ...overrides,
   });
 
   return {
@@ -104,76 +102,99 @@ async function createHarness(overrides = {}) {
     openreceive,
     setNow(nextNow) {
       now = nextNow;
-    }
+    },
   };
 }
 
-test("createOrder mints once and replays the live invoice for the same amount", async () => {
+test("createCheckout mints once and replays the live invoice for the same amount", async () => {
   const { wallet, openreceive } = await createHarness();
   const request = {
     orderId: "order-1",
     amount: { msats: 200000 },
     memo: "Fruit sticker",
-    expiresInSeconds: 600
+    expiresInSeconds: 600,
   };
 
-  const first = await openreceive.createOrder(request);
+  const first = await openreceive.createCheckout(request);
+  assert.equal(first.checkoutId.startsWith("or_chk_"), true);
   assert.equal(first.orderId, "order-1");
-  assert.equal(first.status, "pending");
+  assert.equal(first.status, "open");
   assert.equal(first.active.bolt11, "lnbc-demo-1");
   assert.equal(first.amountMsats, 200000);
   assert.equal(first.invoices.length, 1);
 
-  const second = await openreceive.createOrder(request);
+  const second = await openreceive.createCheckout(request);
+  assert.equal(second.checkoutId, first.checkoutId);
   assert.equal(second.active.invoiceId, first.active.invoiceId);
   assert.equal(wallet.makeInvoiceCalls, 1);
 });
 
-test("createOrder rejects a different amount while a live invoice exists", async () => {
-  const { wallet, openreceive } = await createHarness();
+test("createCheckout accepts the checkout HTTP request shape", async () => {
+  const { openreceive } = await createHarness();
 
-  await openreceive.createOrder({
-    orderId: "order-conflict",
-    amount: { msats: 200000 }
+  const checkout = await openreceive.createCheckout({
+    order_id: "order-http-shape",
+    amount_msats: 250000,
+    optional_invoice_description: "Fruit sticker",
+    expiry: 600,
   });
 
-  await assertServiceError(
-    () => openreceive.createOrder({
-      orderId: "order-conflict",
-      amount: { msats: 300000 }
-    }),
-    {
-      status: 409,
-      code: "CONFLICT",
-      message: "Order already has a live invoice for a different amount."
-    }
-  );
-  assert.equal(wallet.makeInvoiceCalls, 1);
+  assert.equal(checkout.orderId, "order-http-shape");
+  assert.equal(checkout.amountMsats, 250000);
+  assert.equal(checkout.active.amountMsats, 250000);
 });
 
-test("createOrder renews after expiry and the renewal is idempotent", async () => {
+test("createCheckout creates a new checkout and supersedes the open checkout for a different amount", async () => {
+  const { wallet, openreceive } = await createHarness();
+
+  const first = await openreceive.createCheckout({
+    orderId: "order-conflict",
+    amount: { msats: 200000 },
+  });
+
+  const second = await openreceive.createCheckout({
+    orderId: "order-conflict",
+    amount: { msats: 300000 },
+  });
+  assert.notEqual(second.checkoutId, first.checkoutId);
+  assert.equal(second.status, "open");
+  assert.equal(second.amountMsats, 300000);
+  assert.equal(wallet.makeInvoiceCalls, 2);
+
+  const order = await openreceive.getOrder({ orderId: "order-conflict" });
+  assert.equal(order.status, "pending");
+  assert.equal(order.activeCheckout.checkoutId, second.checkoutId);
+  assert.equal(order.checkouts.length, 2);
+  assert.equal(
+    order.checkouts.find((checkout) => checkout.checkoutId === first.checkoutId).status,
+    "superseded",
+  );
+});
+
+test("createCheckout renews after expiry within the same checkout", async () => {
   const { wallet, store, openreceive, setNow } = await createHarness();
-  const first = await openreceive.createOrder({
+  const first = await openreceive.createCheckout({
     orderId: "order-renew",
     amount: { sats: "200" },
     memo: "Fruit sticker",
-    expiresInSeconds: 600
+    expiresInSeconds: 600,
   });
 
   setNow(1700);
-  const renewed = await openreceive.createOrder({
+  const renewed = await openreceive.createCheckout({
     orderId: "order-renew",
     amount: { sats: "200" },
     memo: "Fruit sticker",
-    expiresInSeconds: 600
+    expiresInSeconds: 600,
   });
-  const replayed = await openreceive.createOrder({
+  const replayed = await openreceive.createCheckout({
     orderId: "order-renew",
     amount: { sats: "200" },
     memo: "Fruit sticker",
-    expiresInSeconds: 600
+    expiresInSeconds: 600,
   });
 
+  assert.equal(renewed.checkoutId, first.checkoutId);
   assert.notEqual(renewed.active.invoiceId, first.active.invoiceId);
   assert.equal(replayed.active.invoiceId, renewed.active.invoiceId);
   assert.equal(renewed.invoices.length, 2);
@@ -181,8 +202,9 @@ test("createOrder renews after expiry and the renewal is idempotent", async () =
   assert.equal(wallet.makeInvoiceCalls, 2);
 
   const storedRenewal = (await store.get(renewed.active.invoiceId)).row;
-  assert.equal(storedRenewal.operation, "invoice.refresh");
+  assert.equal(storedRenewal.operation, "invoice.renew");
   assert.equal(storedRenewal.metadata.order_uuid, "order-renew");
+  assert.equal(storedRenewal.metadata.checkout_id, first.checkoutId);
   assert.deepEqual(storedRenewal.metadata.amount_spec, { sats: "200" });
   assert.equal(storedRenewal.metadata.expires_in_seconds, 600);
 });
@@ -195,113 +217,117 @@ test("renewal re-quotes fiat orders and reuses fixed bitcoin amounts", async () 
       assert.deepEqual(currencies, ["USD"]);
       return {
         bitcoin: {
-          usd: btcUsd
-        }
+          usd: btcUsd,
+        },
       };
-    }
+    },
   };
   const fiatHarness = await createHarness({
     priceProviders: [provider],
-    priceCurrencies: ["USD"]
+    priceCurrencies: ["USD"],
   });
-  const fiatFirst = await fiatHarness.openreceive.createOrder({
+  const fiatFirst = await fiatHarness.openreceive.createCheckout({
     orderId: "order-fiat-renew",
     amount: {
       fiat: {
         currency: "USD",
-        value: "0.05"
-      }
+        value: "0.05",
+      },
     },
-    expiresInSeconds: 600
+    expiresInSeconds: 600,
   });
   assert.equal(fiatFirst.amountMsats, 50000);
 
   btcUsd = "50000.00";
   fiatHarness.setNow(1700);
-  const fiatRenewed = await fiatHarness.openreceive.createOrder({
+  const fiatRenewed = await fiatHarness.openreceive.createCheckout({
     orderId: "order-fiat-renew",
     amount: {
       fiat: {
         currency: "USD",
-        value: "0.05"
-      }
+        value: "0.05",
+      },
     },
-    expiresInSeconds: 600
+    expiresInSeconds: 600,
   });
   assert.equal(fiatRenewed.amountMsats, 100000);
 
   const fixedHarness = await createHarness();
-  const fixedFirst = await fixedHarness.openreceive.createOrder({
+  const fixedFirst = await fixedHarness.openreceive.createCheckout({
     orderId: "order-fixed-renew",
     amount: { sats: 7000 },
-    expiresInSeconds: 600
+    expiresInSeconds: 600,
   });
   fixedHarness.setNow(1700);
-  const fixedRenewed = await fixedHarness.openreceive.createOrder({
+  const fixedRenewed = await fixedHarness.openreceive.createCheckout({
     orderId: "order-fixed-renew",
     amount: { sats: 7000 },
-    expiresInSeconds: 600
+    expiresInSeconds: 600,
   });
   assert.equal(fixedRenewed.amountMsats, fixedFirst.amountMsats);
 });
 
-test("getOrder settles a late payment on any invoice in the order history", async () => {
+test("getOrder settles a late payment on any invoice in any checkout history", async () => {
   let onPaidCalls = 0;
-  const { wallet, openreceive, setNow } = await createHarness({
+  const { wallet, openreceive } = await createHarness({
     onPaid: async ({ invoice, orderId }) => {
       onPaidCalls += 1;
       assert.equal(orderId, "order-late-paid");
       assert.equal(invoice.transaction_state, "settled");
-    }
+    },
   });
-  const first = await openreceive.createOrder({
+  const first = await openreceive.createCheckout({
     orderId: "order-late-paid",
     amount: { msats: 200000 },
-    expiresInSeconds: 600
+    expiresInSeconds: 600,
   });
-  setNow(1700);
-  const renewed = await openreceive.createOrder({
+  const superseding = await openreceive.createCheckout({
     orderId: "order-late-paid",
-    amount: { msats: 200000 },
-    expiresInSeconds: 600
+    amount: { msats: 300000 },
+    expiresInSeconds: 600,
   });
 
   wallet.settlePaymentHash(first.active.paymentHash, 1200);
   const order = await openreceive.getOrder({
-    orderId: "order-late-paid"
+    orderId: "order-late-paid",
   });
 
   assert.equal(order.paid, true);
   assert.equal(order.status, "paid");
   assert.equal(order.paidAt, 1200);
-  assert.equal(order.active, undefined);
-  assert.equal(order.invoices.length, 2);
-  assert.equal(order.invoices.some((invoice) => invoice.invoiceId === renewed.active.invoiceId), true);
+  assert.equal(order.paidCheckout.checkoutId, first.checkoutId);
+  assert.equal(order.paidCheckout.amountMsats, 200000);
+  assert.equal(order.checkouts.length, 2);
+  assert.equal(
+    order.checkouts.some((checkout) => checkout.checkoutId === superseding.checkoutId),
+    true,
+  );
   assert.equal(order.walletScanPerformed, true);
   assert.equal(order.transactionsChecked, 2);
   assert.equal(onPaidCalls, 1);
 
   const second = await openreceive.getOrder({
-    orderId: "order-late-paid"
+    orderId: "order-late-paid",
   });
   assert.equal(second.paid, true);
   assert.equal(onPaidCalls, 1);
 });
 
-test("createOrder is a no-op for paid orders", async () => {
+test("createCheckout is a no-op for paid orders", async () => {
   const { wallet, openreceive } = await createHarness();
-  const created = await openreceive.createOrder({
+  const created = await openreceive.createCheckout({
     orderId: "order-paid-noop",
-    amount: { msats: 200000 }
+    amount: { msats: 200000 },
   });
   wallet.settlePaymentHash(created.active.paymentHash, 1200);
   await openreceive.getOrder({ orderId: "order-paid-noop" });
 
   const before = wallet.makeInvoiceCalls;
-  const paid = await openreceive.createOrder({
+  const paid = await openreceive.createCheckout({
     orderId: "order-paid-noop",
-    amount: { msats: 300000 }
+    amount: { msats: 300000 },
   });
+  assert.equal(paid.checkoutId, created.checkoutId);
   assert.equal(paid.status, "paid");
   assert.equal(wallet.makeInvoiceCalls, before);
 });
@@ -309,34 +335,32 @@ test("createOrder is a no-op for paid orders", async () => {
 test("getOrder on an unknown order returns a service 404", async () => {
   const { openreceive } = await createHarness();
 
-  await assertServiceError(
-    () => openreceive.getOrder({ orderId: "missing-order" }),
-    {
-      status: 404,
-      code: "NOT_FOUND",
-      message: "No order found for the given orderId."
-    }
-  );
+  await assertServiceError(() => openreceive.getOrder({ orderId: "missing-order" }), {
+    status: 404,
+    code: "NOT_FOUND",
+    message: "No order found for the given orderId.",
+  });
 });
 
 test("service errors surface as OpenReceiveServiceError with status and body", async () => {
   const { wallet, openreceive } = await createHarness();
 
   await assertServiceError(
-    () => openreceive.createOrder({
-      orderId: "order-invalid-fiat",
-      amount: {
-        fiat: {
-          currency: "usd",
-          value: "0.10"
-        }
-      }
-    }),
+    () =>
+      openreceive.createCheckout({
+        orderId: "order-invalid-fiat",
+        amount: {
+          fiat: {
+            currency: "usd",
+            value: "0.10",
+          },
+        },
+      }),
     {
       status: 400,
       code: "INVALID_REQUEST",
-      message: "fiat.currency must be an ISO 4217 uppercase code"
-    }
+      message: "fiat.currency must be an ISO 4217 uppercase code",
+    },
   );
   assert.equal(wallet.makeInvoiceCalls, 0);
 });
@@ -345,23 +369,26 @@ test("diagnostic events and logger entries are sanitized and non-blocking", asyn
   const events = [];
   const logs = [];
   const wallet = new FakeWallet(() => 1000);
-  wallet.makeInvoiceError = new Error("wallet failed with https://example.test/path?token=abc123&ok=1");
+  wallet.makeInvoiceError = new Error(
+    "wallet failed with https://example.test/path?token=abc123&ok=1",
+  );
   const { openreceive } = await createHarness({
     client: wallet,
     onEvent: (event) => {
       events.push(event);
       if (event.event === "service.error") throw new Error("event sink is down");
     },
-    logger: (entry) => logs.push(entry)
+    logger: (entry) => logs.push(entry),
   });
 
   await assert.rejects(
-    () => openreceive.createOrder({
-      orderId: "order-diagnostics",
-      amount: { msats: 200000 },
-      memo: "Fruit sticker"
-    }),
-    /token=abc123/
+    () =>
+      openreceive.createCheckout({
+        orderId: "order-diagnostics",
+        amount: { msats: 200000 },
+        memo: "Fruit sticker",
+      }),
+    /token=abc123/,
   );
 
   const event = events.find((entry) => entry.event === "service.error");
@@ -381,8 +408,8 @@ test("read-only rate helpers expose static rates and quotes", async () => {
   const quote = await openreceive.quoteRates({
     fiat: {
       currency: "USD",
-      value: "0.10"
-    }
+      value: "0.10",
+    },
   });
   assert.equal(quote.amount_msats, 200000);
   assert.equal(quote.source, "static_mock");
@@ -392,21 +419,22 @@ test("createOpenReceive defaults to live cached price data and fails unhealthy b
   const store = new InMemoryInvoiceKvStore();
 
   await assert.rejects(
-    () => createOpenReceive({
-      client: new FakeWallet(() => 1000),
-      store,
-      namespace: "demo_hello_fruit",
-      priceFetch: async () => ({
-        ok: false,
-        status: 503,
-        text: async () => "{}"
-      })
-    }),
+    () =>
+      createOpenReceive({
+        client: new FakeWallet(() => 1000),
+        store,
+        namespace: "demo_hello_fruit",
+        priceFetch: async () => ({
+          ok: false,
+          status: 503,
+          text: async () => "{}",
+        }),
+      }),
     (error) => {
       assert.equal(error instanceof OpenReceiveConfigError, true);
       assert.equal(error.code, "UNHEALTHY_PRICE_DATA");
       return true;
-    }
+    },
   );
 });
 
@@ -418,16 +446,17 @@ test("createOpenReceive refuses in-memory invoice storage in production mode", a
 
   try {
     await assert.rejects(
-      () => createOpenReceive({
-        client: new FakeWallet(() => 1000),
-        store: new InMemoryInvoiceKvStore(),
-        namespace: "demo_hello_fruit"
-      }),
+      () =>
+        createOpenReceive({
+          client: new FakeWallet(() => 1000),
+          store: new InMemoryInvoiceKvStore(),
+          namespace: "demo_hello_fruit",
+        }),
       (error) => {
         assert.equal(error instanceof OpenReceiveConfigError, true);
         assert.equal(error.code, "UNSAFE_MEMORY_STORE");
         return true;
-      }
+      },
     );
   } finally {
     restoreEnvVar("NODE_ENV", originalNodeEnv);
@@ -436,16 +465,13 @@ test("createOpenReceive refuses in-memory invoice storage in production mode", a
 });
 
 async function assertServiceError(action, expected) {
-  await assert.rejects(
-    action,
-    (error) => {
-      assert.equal(error instanceof OpenReceiveServiceError, true);
-      assert.equal(error.status, expected.status);
-      assert.equal(error.body.code, expected.code);
-      assert.equal(error.body.message, expected.message);
-      return true;
-    }
-  );
+  await assert.rejects(action, (error) => {
+    assert.equal(error instanceof OpenReceiveServiceError, true);
+    assert.equal(error.status, expected.status);
+    assert.equal(error.body.code, expected.code);
+    assert.equal(error.body.message, expected.message);
+    return true;
+  });
 }
 
 function restoreEnvVar(name, value) {

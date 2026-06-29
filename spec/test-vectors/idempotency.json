@@ -7,7 +7,7 @@
   ],
   "operations": [
     "invoice.create",
-    "invoice.refresh"
+    "invoice.renew"
   ],
   "cases": [
     {
@@ -35,15 +35,15 @@
       }
     },
     {
-      "name": "refresh scope is separate from create scope",
+      "name": "renew scope is separate from create scope",
       "namespace": "demo:tenant:alpha",
-      "operation": "invoice.refresh",
-      "idempotency_key": "fruit-demo-user-123-order-456-refresh-1",
+      "operation": "invoice.renew",
+      "idempotency_key": "fruit-demo-user-123-order-456-renew-1",
       "first_request_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
       "second_request_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
       "expected": {
         "status": 200,
-        "behavior": "return_original_refresh_invoice"
+        "behavior": "return_original_renewal_invoice"
       }
     }
   ]

@@ -10,7 +10,7 @@ import {
   type FiatRailId,
   type PaymentWizardRoute,
   type Provider,
-  type ResolvedProviderRef
+  type ResolvedProviderRef,
 } from "@openreceive/provider-data";
 import { status as deriveStatus, type Status } from "./status.ts";
 export { status, type Status, type StatusInvoiceLike } from "./status.ts";
@@ -38,10 +38,10 @@ export const OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS = {
   settled: "openreceive-settled",
   providerCopy: "openreceive-provider-copy",
   startOver: "openreceive-start-over",
-  error: "openreceive-error"
+  error: "openreceive-error",
 } as const;
 export const OPENRECEIVE_THEME_TOGGLE_ELEMENT_EVENTS = {
-  change: "openreceive-theme-change"
+  change: "openreceive-theme-change",
 } as const;
 export const OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES = {
   root: "data-openreceive-wizard",
@@ -54,7 +54,7 @@ export const OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES = {
   route: "data-or-route",
   providerCopy: "data-or-provider-copy",
   providerTutorial: "data-or-provider-tutorial",
-  providerTutorialIndex: "data-or-provider-tutorial-index"
+  providerTutorialIndex: "data-or-provider-tutorial-index",
 } as const;
 export const OPENRECEIVE_PAYMENT_WIZARD_SELECTORS = {
   root: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.root}]`,
@@ -67,7 +67,7 @@ export const OPENRECEIVE_PAYMENT_WIZARD_SELECTORS = {
   route: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.route}]`,
   providerCopy: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerCopy}]`,
   providerTutorial: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}]`,
-  providerTutorialIndex: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex}]`
+  providerTutorialIndex: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex}]`,
 } as const;
 export const OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES = {
   root: "data-openreceive-checkout",
@@ -76,7 +76,7 @@ export const OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES = {
   state: "data-openreceive-state",
   actions: "data-openreceive-actions",
   theme: "data-openreceive-theme",
-  themeToggle: "data-openreceive-theme-toggle"
+  themeToggle: "data-openreceive-theme-toggle",
 } as const;
 export const OPENRECEIVE_CHECKOUT_DATA_SELECTORS = {
   root: `[${OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.root}]`,
@@ -85,23 +85,23 @@ export const OPENRECEIVE_CHECKOUT_DATA_SELECTORS = {
   state: `[${OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.state}]`,
   actions: `[${OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.actions}]`,
   theme: `[${OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.theme}]`,
-  themeToggle: `[${OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.themeToggle}]`
+  themeToggle: `[${OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.themeToggle}]`,
 } as const;
 export const OPENRECEIVE_CHECKOUT_ELEMENT_PARTS = {
   copy: "copy",
   open: "open",
-  startOver: "start-over"
+  startOver: "start-over",
 } as const;
 export const OPENRECEIVE_CHECKOUT_ELEMENT_PART_SELECTORS = {
   copy: `[part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.copy}"]`,
   open: `[part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.open}"]`,
-  startOver: `[part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.startOver}"]`
+  startOver: `[part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.startOver}"]`,
 } as const;
 export const OPENRECEIVE_THEME_TOGGLE_ELEMENT_PARTS = {
-  button: "button"
+  button: "button",
 } as const;
 export const OPENRECEIVE_THEME_TOGGLE_ELEMENT_PART_SELECTORS = {
-  button: `[part="${OPENRECEIVE_THEME_TOGGLE_ELEMENT_PARTS.button}"]`
+  button: `[part="${OPENRECEIVE_THEME_TOGGLE_ELEMENT_PARTS.button}"]`,
 } as const;
 export type CheckoutElementEventName =
   (typeof OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS)[keyof typeof OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS];
@@ -122,15 +122,15 @@ export interface OpenReceiveThemeChangeEventDetail {
 }
 
 export function createCheckoutProviderCopyEvent(
-  providerId: string
+  providerId: string,
 ): CustomEvent<CheckoutProviderCopyEventDetail> {
   return new CustomEvent<CheckoutProviderCopyEventDetail>(
     OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.providerCopy,
     {
       detail: {
-        providerId
-      }
-    }
+        providerId,
+      },
+    },
   );
 }
 
@@ -138,7 +138,7 @@ export function createCheckoutActionEvent(
   eventName:
     | typeof OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy
     | typeof OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.openWallet
-    | typeof OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.startOver
+    | typeof OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.startOver,
 ): CustomEvent {
   return new CustomEvent(eventName);
 }
@@ -147,42 +147,34 @@ export function createCheckoutStateEvent(
   eventName:
     | typeof OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.state
     | typeof OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.settled,
-  state: CheckoutState
+  state: CheckoutState,
 ): CustomEvent<CheckoutStateEventDetail> {
-  return new CustomEvent<CheckoutStateEventDetail>(
-    eventName,
-    {
-      detail: {
-        state
-      }
-    }
-  );
+  return new CustomEvent<CheckoutStateEventDetail>(eventName, {
+    detail: {
+      state,
+    },
+  });
 }
 
-export function createCheckoutErrorEvent(
-  error: unknown
-): CustomEvent<CheckoutErrorEventDetail> {
-  return new CustomEvent<CheckoutErrorEventDetail>(
-    OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.error,
-    {
-      detail: {
-        error
-      }
-    }
-  );
+export function createCheckoutErrorEvent(error: unknown): CustomEvent<CheckoutErrorEventDetail> {
+  return new CustomEvent<CheckoutErrorEventDetail>(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.error, {
+    detail: {
+      error,
+    },
+  });
 }
 
 export function createOpenReceiveThemeChangeEvent(
-  theme: OpenReceiveThemeModel
+  theme: OpenReceiveThemeModel,
 ): CustomEvent<OpenReceiveThemeChangeEventDetail> {
   return new CustomEvent<OpenReceiveThemeChangeEventDetail>(
     OPENRECEIVE_THEME_TOGGLE_ELEMENT_EVENTS.change,
     {
       detail: {
         theme: theme.theme,
-        resolvedTheme: theme.resolvedTheme
-      }
-    }
+        resolvedTheme: theme.resolvedTheme,
+      },
+    },
   );
 }
 
@@ -247,15 +239,16 @@ export const openReceivePaymentIconUrls: Readonly<Record<OpenReceivePaymentIconI
   usdc: usdcIcon,
   usdt: usdtIcon,
   xmr: xmrIcon,
-  xrp: xrpIcon
+  xrp: xrpIcon,
 } as const;
 
-export const openReceivePaymentMethodIconIds:
-Readonly<Record<OpenReceivePaymentMethod, OpenReceivePaymentIconId>> = {
+export const openReceivePaymentMethodIconIds: Readonly<
+  Record<OpenReceivePaymentMethod, OpenReceivePaymentIconId>
+> = {
   card: "card",
   bank: "bank",
   bitcoin: "btc",
-  crypto: "crypto"
+  crypto: "crypto",
 } as const;
 
 export const openReceiveAssetIconIds: Readonly<Record<string, OpenReceivePaymentIconId>> = {
@@ -269,18 +262,12 @@ export const openReceiveAssetIconIds: Readonly<Record<string, OpenReceivePayment
   usdc: "usdc",
   usdt: "usdt",
   xmr: "xmr",
-  xrp: "xrp"
+  xrp: "xrp",
 } as const;
 
 export interface OpenReceiveQrEncoder {
-  toString(
-    payload: string,
-    options: Record<string, unknown>
-  ): Promise<string> | string;
-  toDataURL?(
-    payload: string,
-    options: Record<string, unknown>
-  ): Promise<string> | string;
+  toString(payload: string, options: Record<string, unknown>): Promise<string> | string;
+  toDataURL?(payload: string, options: Record<string, unknown>): Promise<string> | string;
 }
 
 export interface OpenReceiveQrOptions {
@@ -311,9 +298,7 @@ export interface OpenReceiveBrowserLogEntry {
   readonly [key: string]: unknown;
 }
 
-export type OpenReceiveBrowserLogger = (
-  entry: OpenReceiveBrowserLogEntry
-) => void;
+export type OpenReceiveBrowserLogger = (entry: OpenReceiveBrowserLogEntry) => void;
 
 export interface OpenReceiveBrowserLogContext {
   readonly order_id?: string;
@@ -351,9 +336,9 @@ export interface CheckoutInvoiceSnapshot {
 }
 
 export interface CheckoutSnapshot {
+  readonly checkout_id: string;
   readonly order_id: string;
-  readonly status: "pending" | "paid" | "expired";
-  readonly paid: boolean;
+  readonly status: "open" | "superseded" | "paid" | "expired";
   readonly paid_at?: number;
   readonly amount_msats: number;
   readonly fiat?: {
@@ -367,6 +352,7 @@ export interface CheckoutSnapshot {
 }
 
 export interface CheckoutDisplayData {
+  readonly checkout_id?: string;
   readonly order_id?: string;
   readonly invoice_id?: string;
   readonly invoice: string;
@@ -384,8 +370,7 @@ export interface CheckoutDisplayData {
   readonly settled_at?: number;
 }
 
-export interface CheckoutDisplayModel
-  extends CheckoutDisplayData {
+export interface CheckoutDisplayModel extends CheckoutDisplayData {
   readonly lightningUri: string;
   readonly amountLabel?: string;
   readonly fiatLabel?: string;
@@ -405,14 +390,14 @@ export const OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES = {
   expiresAt: "expires-at",
   statusUrl: "status-url",
   theme: "theme",
-  paymentWizard: "payment-wizard"
+  paymentWizard: "payment-wizard",
 } as const;
 
 export const OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES = {
   rootSelector: "root-selector",
   checkoutSelector: "checkout-selector",
   defaultTheme: "default-theme",
-  storageKey: "storage-key"
+  storageKey: "storage-key",
 } as const;
 
 export interface CheckoutElementAttributeOptions {
@@ -429,18 +414,12 @@ export interface OpenReceiveThemeToggleElementAttributeOptions {
 }
 
 export type CheckoutElementAttributeName =
-  (typeof OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES)[
-    keyof typeof OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES
-  ];
+  (typeof OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES)[keyof typeof OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES];
 
-export type CheckoutElementAttributes = Partial<
-  Record<CheckoutElementAttributeName, string>
->;
+export type CheckoutElementAttributes = Partial<Record<CheckoutElementAttributeName, string>>;
 
 export type OpenReceiveThemeToggleElementAttributeName =
-  (typeof OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES)[
-    keyof typeof OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES
-  ];
+  (typeof OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES)[keyof typeof OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES];
 
 export type OpenReceiveThemeToggleElementAttributes = Partial<
   Record<OpenReceiveThemeToggleElementAttributeName, string>
@@ -499,8 +478,7 @@ export interface CheckoutShellModel {
   readonly themeToggle: CheckoutShellThemeToggleBinding;
 }
 
-export interface CheckoutElementTarget
-  extends OpenReceiveThemeAttributeTarget {
+export interface CheckoutElementTarget extends OpenReceiveThemeAttributeTarget {
   addEventListener(name: string, listener: (event: Event) => void): void;
 }
 
@@ -519,8 +497,7 @@ export interface CreateOpenReceiveThemeToggleElementOptions
   readonly document?: CheckoutElementDocument;
 }
 
-export interface CreateCheckoutShellOptions
-  extends CheckoutShellOptions {
+export interface CreateCheckoutShellOptions extends CheckoutShellOptions {
   readonly document?: CheckoutElementDocument;
   readonly root?: OpenReceiveThemeAttributeTarget | null;
 }
@@ -533,6 +510,7 @@ export interface CheckoutShellElements {
 }
 
 export interface CheckoutState {
+  readonly checkout_id: string;
   readonly order_id: string;
   readonly invoice_id: string;
   readonly invoice: string;
@@ -567,29 +545,27 @@ export interface CheckoutStatusModel {
   readonly countdownLabel?: string;
 }
 
-export type CheckoutStatusRefresh = (
-  state: CheckoutState
-) => Promise<Partial<CheckoutSnapshot>>;
+export type CheckoutStatusRefresh = (state: CheckoutState) => Promise<Partial<CheckoutSnapshot>>;
 
 export type CheckoutRefresh = (
-  state: CheckoutState
+  state: CheckoutState,
 ) => Promise<CheckoutSnapshot | OpenReceiveRefreshInvoiceResult>;
 
 export type RequestCheckoutInvoiceAmount =
   | {
-    readonly btc: {
-      readonly currency: "BTC";
-      readonly value: string;
-    };
-  }
+      readonly btc: {
+        readonly currency: "BTC";
+        readonly value: string;
+      };
+    }
   | { readonly sats: number | string }
   | { readonly msats: number | string }
   | {
-    readonly fiat: {
-      readonly currency: string;
-      readonly value: string;
+      readonly fiat: {
+        readonly currency: string;
+        readonly value: string;
+      };
     };
-  };
 
 export interface RequestCheckoutInvoiceOptions {
   readonly invoiceUrl?: string;
@@ -635,8 +611,7 @@ export interface CheckoutWatcherOptions {
   readonly onError?: (error: unknown) => void;
 }
 
-export interface CheckoutControllerOptions
-  extends Omit<CheckoutWatcherOptions, "onState"> {
+export interface CheckoutControllerOptions extends Omit<CheckoutWatcherOptions, "onState"> {
   readonly onState?: (state: CheckoutState) => void;
   readonly statusUrl?: string;
   readonly fetch?: typeof globalThis.fetch;
@@ -751,8 +726,7 @@ export interface OpenReceiveThemeStorageOptions {
   readonly storageKey?: string;
 }
 
-export interface OpenReceiveReadThemePreferenceOptions
-  extends OpenReceiveThemeStorageOptions {
+export interface OpenReceiveReadThemePreferenceOptions extends OpenReceiveThemeStorageOptions {
   readonly defaultTheme?: OpenReceiveThemePreference;
 }
 
@@ -806,31 +780,31 @@ export interface OpenReceivePaymentWizardSelection {
 
 export type OpenReceivePaymentWizardSelectionAction =
   | {
-    readonly type: "select_method";
-    readonly method: OpenReceivePaymentMethod;
-    readonly storedCountryCode?: string | null;
-  }
+      readonly type: "select_method";
+      readonly method: OpenReceivePaymentMethod;
+      readonly storedCountryCode?: string | null;
+    }
   | {
-    readonly type: "change_method";
-  }
+      readonly type: "change_method";
+    }
   | {
-    readonly type: "change_route";
-  }
+      readonly type: "change_route";
+    }
   | {
-    readonly type: "select_region";
-    readonly region: OpenReceiveRegionId;
-  }
+      readonly type: "select_region";
+      readonly region: OpenReceiveRegionId;
+    }
   | {
-    readonly type: "select_country";
-    readonly countryCode: string;
-  }
+      readonly type: "select_country";
+      readonly countryCode: string;
+    }
   | {
-    readonly type: "open_country_picker";
-  }
+      readonly type: "open_country_picker";
+    }
   | {
-    readonly type: "select_route";
-    readonly route: string;
-  };
+      readonly type: "select_route";
+      readonly route: string;
+    };
 
 export interface OpenReceivePaymentWizardState {
   readonly selectedRail: FiatRailId | null;
@@ -864,9 +838,7 @@ export interface OpenReceivePaymentWizardControllerOptions {
 export interface OpenReceivePaymentWizardController {
   getSelection(): OpenReceivePaymentWizardSelection;
   getModel(): OpenReceivePaymentWizardModel;
-  update(
-    action: OpenReceivePaymentWizardSelectionAction
-  ): OpenReceivePaymentWizardSelection;
+  update(action: OpenReceivePaymentWizardSelectionAction): OpenReceivePaymentWizardSelection;
   selectMethod(method: OpenReceivePaymentMethod): OpenReceivePaymentWizardSelection;
   changeMethod(): OpenReceivePaymentWizardSelection;
   selectRegion(region: OpenReceiveRegionId): OpenReceivePaymentWizardSelection;
@@ -922,7 +894,7 @@ export const openReceiveCheckoutLabels = {
     settledTitle: "Payment received",
     settledDetail: "Backend settlement verified.",
     expiredTitle: "Invoice expired",
-    expiredDetail: "Create a fresh invoice to keep going."
+    expiredDetail: "Create a fresh invoice to keep going.",
   },
   countdownPrefix: "Invoice expires in",
   startOver: "Start over",
@@ -940,7 +912,7 @@ export const openReceiveCheckoutLabels = {
   tutorialCopiedContinue: "Copied! Click next below to continue with tutorial.",
   tutorialExit: "Exit",
   lightningNetwork: "Lightning Network",
-  chooseCountry: "Choose a country"
+  chooseCountry: "Choose a country",
 } as const;
 
 export const openReceiveCheckoutElementStyles = `
@@ -1632,23 +1604,23 @@ export const openReceivePaymentMethods: readonly OpenReceivePaymentMethodOption[
   {
     id: "card",
     title: "Credit Card",
-    detail: "Pick your country, then use a card-friendly provider."
+    detail: "Pick your country, then use a card-friendly provider.",
   },
   {
     id: "bank",
     title: "Bank Transfer",
-    detail: "Choose a country for local bank rails and cash apps."
+    detail: "Choose a country for local bank rails and cash apps.",
   },
   {
     id: "bitcoin",
     title: "Bitcoin",
-    detail: "Pay from Lightning or send on-chain into a swap."
+    detail: "Pay from Lightning or send on-chain into a swap.",
   },
   {
     id: "crypto",
     title: "Crypto",
-    detail: "Use stablecoins or altcoins through Lightning-capable services."
-  }
+    detail: "Use stablecoins or altcoins through Lightning-capable services.",
+  },
 ];
 
 export const openReceiveRegionLabels: Readonly<Record<OpenReceiveRegionId, string>> = {
@@ -1657,7 +1629,7 @@ export const openReceiveRegionLabels: Readonly<Record<OpenReceiveRegionId, strin
   europe: "Europe",
   africa: "Africa",
   "middle-east": "Middle East",
-  "asia-pacific": "Asia Pacific"
+  "asia-pacific": "Asia Pacific",
 };
 
 export const openReceiveRegionOrder: readonly OpenReceiveRegionId[] = [
@@ -1666,60 +1638,51 @@ export const openReceiveRegionOrder: readonly OpenReceiveRegionId[] = [
   "europe",
   "africa",
   "middle-east",
-  "asia-pacific"
+  "asia-pacific",
 ];
 
 export function parseOpenReceiveOptionalInteger(
   value: string | null | undefined,
-  options: ParseOpenReceiveOptionalIntegerOptions = {}
+  options: ParseOpenReceiveOptionalIntegerOptions = {},
 ): number | undefined {
   if (value === null || value === undefined || value === "") return undefined;
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed < 0) {
-    throw new RangeError(
-      `${options.label ?? "value"} must be a non-negative safe integer`
-    );
+    throw new RangeError(`${options.label ?? "value"} must be a non-negative safe integer`);
   }
   return parsed;
 }
 
 export function parseOpenReceiveBooleanAttribute(
-  value: string | null | undefined
+  value: string | null | undefined,
 ): boolean | undefined {
   if (value === null || value === undefined) return undefined;
   return value !== "false";
 }
 
 export function parseOpenReceiveResolvedTheme(
-  value: string | null | undefined
+  value: string | null | undefined,
 ): OpenReceiveResolvedTheme | undefined {
   return value === "light" || value === "dark" ? value : undefined;
 }
 
 export function parseOpenReceiveThemePreference(
-  value: string | null | undefined
+  value: string | null | undefined,
 ): OpenReceiveThemePreference | undefined {
-  return value === "light" || value === "dark" || value === "system"
-    ? value
-    : undefined;
+  return value === "light" || value === "dark" || value === "system" ? value : undefined;
 }
 
 export function parseOpenReceivePaymentMethod(
-  value: string | null
+  value: string | null,
 ): OpenReceivePaymentMethod | null {
-  return value === "card" ||
-    value === "bank" ||
-    value === "bitcoin" ||
-    value === "crypto"
+  return value === "card" || value === "bank" || value === "bitcoin" || value === "crypto"
     ? value
     : null;
 }
 
-export function parseOpenReceiveRegion(
-  value: string | null
-): OpenReceiveRegionId | null {
+export function parseOpenReceiveRegion(value: string | null): OpenReceiveRegionId | null {
   return openReceiveRegionOrder.includes(value as OpenReceiveRegionId)
-    ? value as OpenReceiveRegionId
+    ? (value as OpenReceiveRegionId)
     : null;
 }
 
@@ -1729,43 +1692,43 @@ export const openReceiveCountryMapRegions = [
     cx: 180,
     cy: 125,
     rx: 150,
-    ry: 78
+    ry: 78,
   },
   {
     id: "latin-america",
     cx: 265,
     cy: 260,
     rx: 82,
-    ry: 130
+    ry: 130,
   },
   {
     id: "europe",
     cx: 425,
     cy: 145,
     rx: 105,
-    ry: 64
+    ry: 64,
   },
   {
     id: "africa",
     cx: 455,
     cy: 255,
     rx: 76,
-    ry: 102
+    ry: 102,
   },
   {
     id: "middle-east",
     cx: 535,
     cy: 213,
     rx: 78,
-    ry: 58
+    ry: 58,
   },
   {
     id: "asia-pacific",
     cx: 655,
     cy: 215,
     rx: 165,
-    ry: 120
-  }
+    ry: 120,
+  },
 ] as const satisfies ReadonlyArray<{
   readonly id: OpenReceiveRegionId;
   readonly cx: number;
@@ -1813,28 +1776,28 @@ export const openReceiveCountryPins: Readonly<Record<string, OpenReceiveCountryM
   VE: { region: "latin-america", coordinates: [-66, 7] },
   VN: { region: "asia-pacific", coordinates: [108, 16] },
   ZA: { region: "africa", coordinates: [24, -29] },
-  AE: { region: "middle-east", coordinates: [54, 24] }
+  AE: { region: "middle-east", coordinates: [54, 24] },
 };
 
 export function getOpenReceiveDefaultCountryCode(): string {
-  return getCountries().find((country) => country.code === "US")?.code ?? getCountries()[0]?.code ?? "";
+  return (
+    getCountries().find((country) => country.code === "US")?.code ?? getCountries()[0]?.code ?? ""
+  );
 }
 
 export function getOpenReceiveBitcoinAssets(): readonly AssetIndexEntry[] {
-  return getAssets().filter(
-    (asset) => asset.symbol === "btc" && asset.route !== undefined
-  );
+  return getAssets().filter((asset) => asset.symbol === "btc" && asset.route !== undefined);
 }
 
 function getOpenReceiveDefaultBitcoinRoute(): string | null {
   const routes = [
     ...new Set(
       getOpenReceiveBitcoinAssets().flatMap((asset) =>
-        asset.route === undefined ? [] : [asset.route]
-      )
-    )
+        asset.route === undefined ? [] : [asset.route],
+      ),
+    ),
   ];
-  return routes.length === 1 ? routes[0] ?? null : null;
+  return routes.length === 1 ? (routes[0] ?? null) : null;
 }
 
 export function getOpenReceiveAltcoinAssets(): readonly AssetIndexEntry[] {
@@ -1842,7 +1805,7 @@ export function getOpenReceiveAltcoinAssets(): readonly AssetIndexEntry[] {
     (asset) =>
       asset.route !== undefined &&
       asset.symbol !== "btc" &&
-      !["usd", "eur", "gbp"].includes(asset.symbol)
+      !["usd", "eur", "gbp"].includes(asset.symbol),
   );
 }
 
@@ -1861,49 +1824,46 @@ export function formatOpenReceiveCountryMetaLabel(country: Country): string {
 
 export function createOpenReceiveCountryDisplay(
   country: Country,
-  options: { readonly selectedCountryCode?: string } = {}
+  options: { readonly selectedCountryCode?: string } = {},
 ): OpenReceiveCountryDisplay {
   return {
     country,
     code: country.code,
     label: country.name,
     metaLabel: formatOpenReceiveCountryMetaLabel(country),
-    selected: country.code === options.selectedCountryCode
+    selected: country.code === options.selectedCountryCode,
   };
 }
 
-export function getOpenReceivePaymentStatusText(
-  phase: CheckoutPhase
-): { readonly title: string; readonly detail: string } {
+export function getOpenReceivePaymentStatusText(phase: CheckoutPhase): {
+  readonly title: string;
+  readonly detail: string;
+} {
   if (phase === "settled") {
     return {
       title: openReceiveCheckoutLabels.paymentStatus.settledTitle,
-      detail: openReceiveCheckoutLabels.paymentStatus.settledDetail
+      detail: openReceiveCheckoutLabels.paymentStatus.settledDetail,
     };
   }
   if (phase === "expired") {
     return {
       title: openReceiveCheckoutLabels.paymentStatus.expiredTitle,
-      detail: openReceiveCheckoutLabels.paymentStatus.expiredDetail
+      detail: openReceiveCheckoutLabels.paymentStatus.expiredDetail,
     };
   }
   return {
     title: openReceiveCheckoutLabels.paymentStatus.waitingTitle,
-    detail: openReceiveCheckoutLabels.paymentStatus.waitingDetail
+    detail: openReceiveCheckoutLabels.paymentStatus.waitingDetail,
   };
 }
 
-export function getOpenReceiveWizardEmptyMessage(
-  method: OpenReceivePaymentMethod | null
-): string {
+export function getOpenReceiveWizardEmptyMessage(method: OpenReceivePaymentMethod | null): string {
   if (method === "bitcoin") return openReceiveCheckoutLabels.emptyBitcoin;
   if (method === "crypto") return openReceiveCheckoutLabels.emptyCrypto;
   return openReceiveCheckoutLabels.emptyFiat;
 }
 
-export function getCheckoutProviderUsBadge(
-  us: boolean | null
-): string | null {
+export function getCheckoutProviderUsBadge(us: boolean | null): string | null {
   void us;
   return null;
 }
@@ -1913,20 +1873,18 @@ export function getCheckoutProviderOpenLabel(providerName: string): string {
   return openReceiveCheckoutLabels.openProvider;
 }
 
-export function getCheckoutProviderIcon(
-  provider: Pick<Provider, "icon_path">
-): string {
+export function getCheckoutProviderIcon(provider: Pick<Provider, "icon_path">): string {
   return openReceiveProviderIconUrls[provider.icon_path] ?? openReceivePaymentIconUrls.crypto;
 }
 
 export function getCheckoutProviderTutorials(
-  provider: Pick<Provider, "tutorials">
+  provider: Pick<Provider, "tutorials">,
 ): readonly OpenReceiveWizardProviderTutorialDisplay[] {
   return (provider.tutorials ?? []).map((tutorial) => ({
     index: tutorial.index,
     path: tutorial.path,
     image: openReceivePayTutorialUrls[tutorial.path] ?? tutorial.path,
-    caption: tutorial.caption
+    caption: tutorial.caption,
   }));
 }
 
@@ -1940,7 +1898,7 @@ export function createOpenReceiveWizardRouteAssetDisplays(
   assets: readonly AssetIndexEntry[],
   options: {
     readonly selectedRoute?: string | null;
-  } = {}
+  } = {},
 ): readonly OpenReceiveWizardRouteAssetDisplay[] {
   return assets.map((asset) => {
     const id = asset.route ?? asset.symbol;
@@ -1949,7 +1907,7 @@ export function createOpenReceiveWizardRouteAssetDisplays(
       label: asset.label,
       subtitle: getOpenReceiveRouteNetworkLabel(id),
       icon: getOpenReceiveRouteIcon(asset),
-      selected: options.selectedRoute === id
+      selected: options.selectedRoute === id,
     };
   });
 }
@@ -1958,7 +1916,7 @@ export function createOpenReceiveWizardRouteDisplays(
   routes: readonly PaymentWizardRoute[],
   options: {
     readonly providerPreviewLimit?: number;
-  } = {}
+  } = {},
 ): readonly OpenReceiveWizardRouteDisplay[] {
   return routes.map((route) => ({
     key: getOpenReceiveWizardRouteDisplayKey(route),
@@ -1967,20 +1925,16 @@ export function createOpenReceiveWizardRouteDisplays(
     providers: (options.providerPreviewLimit === undefined
       ? route.providers
       : route.providers.slice(0, options.providerPreviewLimit)
-    ).map((entry) => createOpenReceiveWizardProviderDisplay(entry))
+    ).map((entry) => createOpenReceiveWizardProviderDisplay(entry)),
   }));
 }
 
 function getOpenReceiveWizardRouteDisplayKey(route: PaymentWizardRoute): string {
-  return route.kind === "crypto"
-    ? route.route.id
-    : `${route.rail.id}:${route.country.code}`;
+  return route.kind === "crypto" ? route.route.id : `${route.rail.id}:${route.country.code}`;
 }
 
 function getOpenReceiveWizardRouteDisplayTitle(route: PaymentWizardRoute): string {
-  return route.kind === "crypto"
-    ? route.route.label
-    : route.rail.label;
+  return route.kind === "crypto" ? route.route.label : route.rail.label;
 }
 
 function getOpenReceiveWizardRouteDisplaySubtitle(route: PaymentWizardRoute): string {
@@ -1988,7 +1942,7 @@ function getOpenReceiveWizardRouteDisplaySubtitle(route: PaymentWizardRoute): st
 }
 
 function createOpenReceiveWizardProviderDisplay(
-  entry: ResolvedProviderRef
+  entry: ResolvedProviderRef,
 ): OpenReceiveWizardProviderDisplay {
   return {
     id: entry.provider.id,
@@ -2002,13 +1956,11 @@ function createOpenReceiveWizardProviderDisplay(
     usBadge: null,
     copyLabel: openReceiveCheckoutLabels.copyInvoice,
     copiedLabel: openReceiveCheckoutLabels.copied,
-    openLabel: getCheckoutProviderOpenLabel(entry.provider.name)
+    openLabel: getCheckoutProviderOpenLabel(entry.provider.name),
   };
 }
 
-export function getOpenReceivePaymentMethodIcon(
-  method: OpenReceivePaymentMethod
-): string {
+export function getOpenReceivePaymentMethodIcon(method: OpenReceivePaymentMethod): string {
   return openReceivePaymentIconUrls[openReceivePaymentMethodIconIds[method]];
 }
 
@@ -2016,9 +1968,7 @@ export function getOpenReceiveAssetIcon(symbol: string): string {
   return openReceivePaymentIconUrls[openReceiveAssetIconIds[symbol] ?? "crypto"];
 }
 
-export function getOpenReceiveRouteIcon(
-  asset: Pick<AssetIndexEntry, "route" | "symbol">
-): string {
+export function getOpenReceiveRouteIcon(asset: Pick<AssetIndexEntry, "route" | "symbol">): string {
   const routeId = asset.route ?? asset.symbol;
   if (asset.symbol === "btc" && routeId.includes("lightning")) {
     return openReceivePaymentIconUrls.lightning;
@@ -2031,7 +1981,7 @@ export function getOpenReceiveCountriesForRail(rail: FiatRailId): readonly Count
     .filter(
       (country) =>
         openReceiveCountryPins[country.code] !== undefined &&
-        getCountryRoutes(country.code).some((route) => route.rail.id === rail)
+        getCountryRoutes(country.code).some((route) => route.rail.id === rail),
     )
     .sort((left, right) => left.name.localeCompare(right.name, "en"));
 }
@@ -2041,55 +1991,55 @@ export function projectOpenReceiveCountryMapPoint(
   options: {
     readonly width?: number;
     readonly height?: number;
-  } = {}
+  } = {},
 ): readonly [number, number] {
   const width = options.width ?? OPENRECEIVE_COUNTRY_MAP_WIDTH;
   const height = options.height ?? OPENRECEIVE_COUNTRY_MAP_HEIGHT;
   const longitude = Math.max(-180, Math.min(180, coordinates[0]));
   const latitude = Math.max(-85, Math.min(85, coordinates[1]));
-  return [
-    ((longitude + 180) / 360) * width,
-    ((85 - latitude) / 170) * height
-  ];
+  return [((longitude + 180) / 360) * width, ((85 - latitude) / 170) * height];
 }
 
 export function createOpenReceiveCountryPickerModel(
-  request: OpenReceiveCountryPickerModelRequest
+  request: OpenReceiveCountryPickerModelRequest,
 ): OpenReceiveCountryPickerModel {
   const selectedCountry = request.countries.find(
-    (country) => country.code === request.selectedCountryCode
+    (country) => country.code === request.selectedCountryCode,
   );
-  const hoveredCountry = request.hoveredCountryCode === undefined || request.hoveredCountryCode === null
-    ? undefined
-    : request.countries.find((country) => country.code === request.hoveredCountryCode);
+  const hoveredCountry =
+    request.hoveredCountryCode === undefined || request.hoveredCountryCode === null
+      ? undefined
+      : request.countries.find((country) => country.code === request.hoveredCountryCode);
   const visibleRegionCountries = request.countries.filter(
-    (country) => getOpenReceiveRegionForCountry(country.code) === request.selectedRegion
+    (country) => getOpenReceiveRegionForCountry(country.code) === request.selectedRegion,
   );
-  const selectedCountryDisplay = selectedCountry === undefined
-    ? undefined
-    : createOpenReceiveCountryDisplay(selectedCountry, {
-      selectedCountryCode: request.selectedCountryCode
-    });
-  const hoveredCountryDisplay = hoveredCountry === undefined
-    ? undefined
-    : createOpenReceiveCountryDisplay(hoveredCountry, {
-      selectedCountryCode: request.selectedCountryCode
-    });
+  const selectedCountryDisplay =
+    selectedCountry === undefined
+      ? undefined
+      : createOpenReceiveCountryDisplay(selectedCountry, {
+          selectedCountryCode: request.selectedCountryCode,
+        });
+  const hoveredCountryDisplay =
+    hoveredCountry === undefined
+      ? undefined
+      : createOpenReceiveCountryDisplay(hoveredCountry, {
+          selectedCountryCode: request.selectedCountryCode,
+        });
   const visibleRegionCountryDisplays = visibleRegionCountries.map((country) =>
     createOpenReceiveCountryDisplay(country, {
-      selectedCountryCode: request.selectedCountryCode
-    })
+      selectedCountryCode: request.selectedCountryCode,
+    }),
   );
   const regions = openReceiveRegionOrder.map((region) => {
     const count = request.countries.filter(
-      (country) => getOpenReceiveRegionForCountry(country.code) === region
+      (country) => getOpenReceiveRegionForCountry(country.code) === region,
     ).length;
     return {
       id: region,
       label: openReceiveRegionLabels[region],
       count,
       enabled: count > 0,
-      selected: region === request.selectedRegion
+      selected: region === request.selectedRegion,
     };
   });
   const mapCountries = request.countries.flatMap((country) => {
@@ -2104,8 +2054,8 @@ export function createOpenReceiveCountryPickerModel(
         selected: country.code === request.selectedCountryCode,
         hovered: country.code === request.hoveredCountryCode,
         label: country.name,
-        metaLabel: formatOpenReceiveCountryMetaLabel(country)
-      }
+        metaLabel: formatOpenReceiveCountryMetaLabel(country),
+      },
     ];
   });
 
@@ -2125,33 +2075,32 @@ export function createOpenReceiveCountryPickerModel(
       : { readoutMetaLabel: (hoveredCountryDisplay ?? selectedCountryDisplay)?.metaLabel }),
     visibleRegionCountries,
     visibleRegionCountryDisplays,
-    mapCountries
+    mapCountries,
   };
 }
 
 export function createOpenReceivePaymentWizardState(
-  request: OpenReceivePaymentWizardRequest
+  request: OpenReceivePaymentWizardRequest,
 ): OpenReceivePaymentWizardState {
   const selectedRail = getRailForPaymentMethod(request.selectedMethod);
-  const railCountries =
-    selectedRail === null ? [] : getOpenReceiveCountriesForRail(selectedRail);
+  const railCountries = selectedRail === null ? [] : getOpenReceiveCountriesForRail(selectedRail);
   const selectedCountry =
     request.selectedCountryCode === undefined
       ? railCountries[0]
-      : railCountries.find((country) => country.code === request.selectedCountryCode) ??
-        railCountries[0];
+      : (railCountries.find((country) => country.code === request.selectedCountryCode) ??
+        railCountries[0]);
   const selectedRouteId =
     request.selectedMethod === "bitcoin"
-      ? request.selectedBitcoinRoute ?? getOpenReceiveDefaultBitcoinRoute()
+      ? (request.selectedBitcoinRoute ?? getOpenReceiveDefaultBitcoinRoute())
       : request.selectedMethod === "crypto"
-        ? request.selectedCryptoRoute ?? null
+        ? (request.selectedCryptoRoute ?? null)
         : null;
   const routes =
     selectedRail !== null && selectedCountry !== undefined
       ? getPaymentWizardRoutes({
-        country: selectedCountry.code,
-        rail: selectedRail
-      })
+          country: selectedCountry.code,
+          rail: selectedRail,
+        })
       : selectedRouteId === null
         ? []
         : getPaymentWizardRoutes({ route: selectedRouteId });
@@ -2161,14 +2110,16 @@ export function createOpenReceivePaymentWizardState(
     ...(selectedCountry === undefined ? {} : { selectedCountry }),
     railCountries,
     selectedRouteId,
-    routes
+    routes,
   };
 }
 
-export function createOpenReceivePaymentWizardSelection(options: {
-  readonly storedCountryCode?: string | null;
-  readonly defaultCountryCode?: string;
-} = {}): OpenReceivePaymentWizardSelection {
+export function createOpenReceivePaymentWizardSelection(
+  options: {
+    readonly storedCountryCode?: string | null;
+    readonly defaultCountryCode?: string;
+  } = {},
+): OpenReceivePaymentWizardSelection {
   const selectedCountryCode =
     options.storedCountryCode ?? options.defaultCountryCode ?? getOpenReceiveDefaultCountryCode();
   return {
@@ -2177,20 +2128,19 @@ export function createOpenReceivePaymentWizardSelection(options: {
     selectedBitcoinRoute: null,
     selectedCryptoRoute: null,
     selectedRegion: getOpenReceiveRegionForCountry(selectedCountryCode),
-    countryPickerOpen: options.storedCountryCode === undefined
-      ? true
-      : options.storedCountryCode === null
+    countryPickerOpen:
+      options.storedCountryCode === undefined ? true : options.storedCountryCode === null,
   };
 }
 
 export function createOpenReceivePaymentWizardModel(
-  selection: OpenReceivePaymentWizardSelection
+  selection: OpenReceivePaymentWizardSelection,
 ): OpenReceivePaymentWizardModel {
   const wizard = createOpenReceivePaymentWizardState({
     selectedMethod: selection.selectedMethod,
     selectedCountryCode: selection.selectedCountryCode,
     selectedBitcoinRoute: selection.selectedBitcoinRoute,
-    selectedCryptoRoute: selection.selectedCryptoRoute
+    selectedCryptoRoute: selection.selectedCryptoRoute,
   });
   const routeAssets =
     selection.selectedMethod === "bitcoin"
@@ -2202,12 +2152,12 @@ export function createOpenReceivePaymentWizardModel(
   const countryPicker = createOpenReceiveCountryPickerModel({
     countries: wizard.railCountries,
     selectedCountryCode: selection.selectedCountryCode,
-    selectedRegion: selection.selectedRegion
+    selectedRegion: selection.selectedRegion,
   });
   const countryDisplays = wizard.railCountries.map((country) =>
     createOpenReceiveCountryDisplay(country, {
-      selectedCountryCode: selection.selectedCountryCode
-    })
+      selectedCountryCode: selection.selectedCountryCode,
+    }),
   );
 
   return {
@@ -2221,13 +2171,13 @@ export function createOpenReceivePaymentWizardModel(
       ? {}
       : { selectedCountryDisplay: countryPicker.selectedCountryDisplay }),
     routeAssets,
-    selectedRoute
+    selectedRoute,
   };
 }
 
 export function updateOpenReceivePaymentWizardSelection(
   selection: OpenReceivePaymentWizardSelection,
-  action: OpenReceivePaymentWizardSelectionAction
+  action: OpenReceivePaymentWizardSelectionAction,
 ): OpenReceivePaymentWizardSelection {
   switch (action.type) {
     case "select_method": {
@@ -2235,21 +2185,21 @@ export function updateOpenReceivePaymentWizardSelection(
         return {
           ...selection,
           selectedMethod: action.method,
-          selectedBitcoinRoute: action.method === "bitcoin"
-            ? selection.selectedBitcoinRoute ?? getOpenReceiveDefaultBitcoinRoute()
-            : selection.selectedBitcoinRoute,
-          countryPickerOpen: false
+          selectedBitcoinRoute:
+            action.method === "bitcoin"
+              ? (selection.selectedBitcoinRoute ?? getOpenReceiveDefaultBitcoinRoute())
+              : selection.selectedBitcoinRoute,
+          countryPickerOpen: false,
         };
       }
 
-      const selectedCountryCode =
-        action.storedCountryCode ?? selection.selectedCountryCode;
+      const selectedCountryCode = action.storedCountryCode ?? selection.selectedCountryCode;
       return {
         ...selection,
         selectedMethod: action.method,
         selectedCountryCode,
         selectedRegion: getOpenReceiveRegionForCountry(selectedCountryCode),
-        countryPickerOpen: false
+        countryPickerOpen: false,
       };
     }
     case "change_method": {
@@ -2258,20 +2208,20 @@ export function updateOpenReceivePaymentWizardSelection(
         selectedMethod: null,
         selectedBitcoinRoute: null,
         selectedCryptoRoute: null,
-        countryPickerOpen: false
+        countryPickerOpen: false,
       };
     }
     case "change_route": {
       if (selection.selectedMethod === "bitcoin") {
         return {
           ...selection,
-          selectedBitcoinRoute: null
+          selectedBitcoinRoute: null,
         };
       }
       if (selection.selectedMethod === "crypto") {
         return {
           ...selection,
-          selectedCryptoRoute: null
+          selectedCryptoRoute: null,
         };
       }
       return selection;
@@ -2279,12 +2229,13 @@ export function updateOpenReceivePaymentWizardSelection(
     case "select_region": {
       const nextSelection = {
         ...selection,
-        selectedRegion: action.region
+        selectedRegion: action.region,
       };
-      const regionCountries = createOpenReceivePaymentWizardModel(nextSelection)
-        .wizard
-        .railCountries
-        .filter((country) => getOpenReceiveRegionForCountry(country.code) === action.region);
+      const regionCountries = createOpenReceivePaymentWizardModel(
+        nextSelection,
+      ).wizard.railCountries.filter(
+        (country) => getOpenReceiveRegionForCountry(country.code) === action.region,
+      );
       if (regionCountries.some((country) => country.code === selection.selectedCountryCode)) {
         return nextSelection;
       }
@@ -2292,35 +2243,35 @@ export function updateOpenReceivePaymentWizardSelection(
       return first === undefined
         ? nextSelection
         : {
-          ...nextSelection,
-          selectedCountryCode: first.code
-        };
+            ...nextSelection,
+            selectedCountryCode: first.code,
+          };
     }
     case "select_country": {
       return {
         ...selection,
         selectedCountryCode: action.countryCode,
         selectedRegion: getOpenReceiveRegionForCountry(action.countryCode),
-        countryPickerOpen: false
+        countryPickerOpen: false,
       };
     }
     case "open_country_picker": {
       return {
         ...selection,
-        countryPickerOpen: true
+        countryPickerOpen: true,
       };
     }
     case "select_route": {
       if (selection.selectedMethod === "bitcoin") {
         return {
           ...selection,
-          selectedBitcoinRoute: action.route
+          selectedBitcoinRoute: action.route,
         };
       }
       if (selection.selectedMethod === "crypto") {
         return {
           ...selection,
-          selectedCryptoRoute: action.route
+          selectedCryptoRoute: action.route,
         };
       }
       return selection;
@@ -2329,7 +2280,8 @@ export function updateOpenReceivePaymentWizardSelection(
 }
 
 export class OpenReceiveBrowserPaymentWizardController
-  implements OpenReceivePaymentWizardController {
+  implements OpenReceivePaymentWizardController
+{
   private readonly options: OpenReceivePaymentWizardControllerOptions;
   private selection: OpenReceivePaymentWizardSelection;
 
@@ -2342,9 +2294,9 @@ export class OpenReceiveBrowserPaymentWizardController
           options.storedCountryCode ??
           readOpenReceiveStoredCountryCode({
             storage: options.storage,
-            storageKey: options.storageKey
+            storageKey: options.storageKey,
           }),
-        defaultCountryCode: options.defaultCountryCode
+        defaultCountryCode: options.defaultCountryCode,
       });
   }
 
@@ -2356,29 +2308,24 @@ export class OpenReceiveBrowserPaymentWizardController
     return createOpenReceivePaymentWizardModel(this.selection);
   }
 
-  update(
-    action: OpenReceivePaymentWizardSelectionAction
-  ): OpenReceivePaymentWizardSelection {
+  update(action: OpenReceivePaymentWizardSelectionAction): OpenReceivePaymentWizardSelection {
     const normalizedAction =
       action.type === "select_method" &&
       (action.method === "card" || action.method === "bank") &&
       action.storedCountryCode === undefined
         ? {
-          ...action,
-          storedCountryCode: readOpenReceiveStoredCountryCode({
-            storage: this.options.storage,
-            storageKey: this.options.storageKey
-          })
-        }
+            ...action,
+            storedCountryCode: readOpenReceiveStoredCountryCode({
+              storage: this.options.storage,
+              storageKey: this.options.storageKey,
+            }),
+          }
         : action;
-    const next = updateOpenReceivePaymentWizardSelection(
-      this.selection,
-      normalizedAction
-    );
+    const next = updateOpenReceivePaymentWizardSelection(this.selection, normalizedAction);
     if (action.type === "select_country") {
       writeOpenReceiveStoredCountryCode(action.countryCode, {
         storage: this.options.storage,
-        storageKey: this.options.storageKey
+        storageKey: this.options.storageKey,
       });
     }
     this.selection = next;
@@ -2389,59 +2336,60 @@ export class OpenReceiveBrowserPaymentWizardController
   selectMethod(method: OpenReceivePaymentMethod): OpenReceivePaymentWizardSelection {
     return this.update({
       type: "select_method",
-      method
+      method,
     });
   }
 
   changeMethod(): OpenReceivePaymentWizardSelection {
     return this.update({
-      type: "change_method"
+      type: "change_method",
     });
   }
 
   selectRegion(region: OpenReceiveRegionId): OpenReceivePaymentWizardSelection {
     return this.update({
       type: "select_region",
-      region
+      region,
     });
   }
 
   selectCountry(countryCode: string): OpenReceivePaymentWizardSelection {
     return this.update({
       type: "select_country",
-      countryCode
+      countryCode,
     });
   }
 
   openCountryPicker(): OpenReceivePaymentWizardSelection {
     return this.update({
-      type: "open_country_picker"
+      type: "open_country_picker",
     });
   }
 
   selectRoute(route: string): OpenReceivePaymentWizardSelection {
     return this.update({
       type: "select_route",
-      route
+      route,
     });
   }
 }
 
 export function createOpenReceivePaymentWizardController(
-  options: OpenReceivePaymentWizardControllerOptions = {}
+  options: OpenReceivePaymentWizardControllerOptions = {},
 ): OpenReceivePaymentWizardController {
   return new OpenReceiveBrowserPaymentWizardController(options);
 }
 
-export function readOpenReceiveStoredCountryCode(options: {
-  readonly storage?: Storage;
-  readonly storageKey?: string;
-  readonly legacyStorageKey?: string;
-} = {}): string | null {
+export function readOpenReceiveStoredCountryCode(
+  options: {
+    readonly storage?: Storage;
+    readonly storageKey?: string;
+    readonly legacyStorageKey?: string;
+  } = {},
+): string | null {
   const storage = options.storage ?? getBrowserStorage();
   const storageKey = options.storageKey ?? OPENRECEIVE_COUNTRY_STORAGE_KEY;
-  const legacyStorageKey =
-    options.legacyStorageKey ?? OPENRECEIVE_LEGACY_DEMO_COUNTRY_STORAGE_KEY;
+  const legacyStorageKey = options.legacyStorageKey ?? OPENRECEIVE_LEGACY_DEMO_COUNTRY_STORAGE_KEY;
   const countryCode =
     readStorageValue(storage, storageKey) ?? readStorageValue(storage, legacyStorageKey);
 
@@ -2451,39 +2399,42 @@ export function readOpenReceiveStoredCountryCode(options: {
   return isKnownCountryCode(normalizedCountryCode) ? normalizedCountryCode : null;
 }
 
-export function writeOpenReceiveStoredCountryCode(countryCode: string, options: {
-  readonly storage?: Storage;
-  readonly storageKey?: string;
-} = {}): void {
+export function writeOpenReceiveStoredCountryCode(
+  countryCode: string,
+  options: {
+    readonly storage?: Storage;
+    readonly storageKey?: string;
+  } = {},
+): void {
   const normalizedCountryCode = countryCode.trim().toUpperCase();
   if (!isKnownCountryCode(normalizedCountryCode)) return;
   writeStorageValue(
     options.storage ?? getBrowserStorage(),
     options.storageKey ?? OPENRECEIVE_COUNTRY_STORAGE_KEY,
-    normalizedCountryCode
+    normalizedCountryCode,
   );
 }
 
 export function readOpenReceiveThemePreference(
-  options: OpenReceiveReadThemePreferenceOptions = {}
+  options: OpenReceiveReadThemePreferenceOptions = {},
 ): OpenReceiveThemePreference {
   const value = readStorageValue(
     options.storage ?? getBrowserStorage(),
-    options.storageKey ?? OPENRECEIVE_THEME_STORAGE_KEY
+    options.storageKey ?? OPENRECEIVE_THEME_STORAGE_KEY,
   );
   return value === "light" || value === "dark" || value === "system"
     ? value
-    : options.defaultTheme ?? "system";
+    : (options.defaultTheme ?? "system");
 }
 
 export function writeOpenReceiveThemePreference(
   theme: OpenReceiveThemePreference,
-  options: OpenReceiveThemeStorageOptions = {}
+  options: OpenReceiveThemeStorageOptions = {},
 ): void {
   writeStorageValue(
     options.storage ?? getBrowserStorage(),
     options.storageKey ?? OPENRECEIVE_THEME_STORAGE_KEY,
-    theme
+    theme,
   );
 }
 
@@ -2491,31 +2442,27 @@ export function resolveOpenReceiveTheme(
   theme: OpenReceiveThemePreference,
   options: {
     readonly systemDark?: boolean;
-  } = {}
+  } = {},
 ): OpenReceiveResolvedTheme {
   if (theme === "light" || theme === "dark") return theme;
   if (options.systemDark !== undefined) return options.systemDark ? "dark" : "light";
-  return globalThis.matchMedia?.("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light";
+  return globalThis.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 export function getOpenReceiveNextThemePreference(
   theme: OpenReceiveThemePreference,
-  options: OpenReceiveThemeModelOptions = {}
+  options: OpenReceiveThemeModelOptions = {},
 ): OpenReceiveThemePreference {
   return resolveOpenReceiveTheme(theme, options) === "dark" ? "light" : "dark";
 }
 
-export function getOpenReceiveThemeToggleLabel(
-  resolvedTheme: OpenReceiveResolvedTheme
-): string {
+export function getOpenReceiveThemeToggleLabel(resolvedTheme: OpenReceiveResolvedTheme): string {
   return `${resolvedTheme} mode`;
 }
 
 export function createOpenReceiveThemeModel(
   theme: OpenReceiveThemePreference,
-  options: OpenReceiveThemeModelOptions = {}
+  options: OpenReceiveThemeModelOptions = {},
 ): OpenReceiveThemeModel {
   const resolvedTheme = resolveOpenReceiveTheme(theme, options);
   return {
@@ -2525,23 +2472,23 @@ export function createOpenReceiveThemeModel(
     toggleLabel: getOpenReceiveThemeToggleLabel(resolvedTheme),
     attributes: {
       "data-theme": resolvedTheme,
-      "data-openreceive-theme": resolvedTheme
+      "data-openreceive-theme": resolvedTheme,
     },
     checkoutElementAttributes: {
-      theme: resolvedTheme
-    }
+      theme: resolvedTheme,
+    },
   };
 }
 
 export function createOpenReceiveStoredThemeModel(
-  options: OpenReceiveStoredThemeModelOptions = {}
+  options: OpenReceiveStoredThemeModelOptions = {},
 ): OpenReceiveThemeModel {
   const theme = readOpenReceiveThemePreference(options);
   return createOpenReceiveThemeModel(theme, { systemDark: options.systemDark });
 }
 
 export function toggleOpenReceiveStoredThemePreference(
-  options: OpenReceiveStoredThemeModelOptions = {}
+  options: OpenReceiveStoredThemeModelOptions = {},
 ): OpenReceiveThemeModel {
   const currentTheme = createOpenReceiveStoredThemeModel(options);
   writeOpenReceiveThemePreference(currentTheme.nextTheme, options);
@@ -2550,7 +2497,7 @@ export function toggleOpenReceiveStoredThemePreference(
 
 export function applyOpenReceiveThemeAttributes(
   target: OpenReceiveThemeAttributeTarget | null | undefined,
-  theme: OpenReceiveThemeModel
+  theme: OpenReceiveThemeModel,
 ): void {
   if (target === null || target === undefined) return;
   for (const [name, value] of Object.entries(theme.attributes)) {
@@ -2560,7 +2507,7 @@ export function applyOpenReceiveThemeAttributes(
 
 export function applyCheckoutThemeAttributes(
   target: OpenReceiveThemeAttributeTarget | null | undefined,
-  theme: OpenReceiveThemeModel
+  theme: OpenReceiveThemeModel,
 ): void {
   if (target === null || target === undefined) return;
   for (const [name, value] of Object.entries(theme.checkoutElementAttributes)) {
@@ -2570,7 +2517,7 @@ export function applyCheckoutThemeAttributes(
 
 export function applyOpenReceiveThemeControls(
   targets: OpenReceiveThemeControlTargets,
-  theme: OpenReceiveThemeModel
+  theme: OpenReceiveThemeModel,
 ): void {
   applyOpenReceiveThemeAttributes(targets.root, theme);
   applyCheckoutThemeAttributes(targets.checkout, theme);
@@ -2581,7 +2528,7 @@ export function applyOpenReceiveThemeControls(
 
 export function syncOpenReceiveStoredThemeControls(
   targets: OpenReceiveThemeControlTargets,
-  options: OpenReceiveStoredThemeModelOptions = {}
+  options: OpenReceiveStoredThemeModelOptions = {},
 ): OpenReceiveThemeModel {
   const theme = createOpenReceiveStoredThemeModel(options);
   applyOpenReceiveThemeControls(targets, theme);
@@ -2590,7 +2537,7 @@ export function syncOpenReceiveStoredThemeControls(
 
 export function toggleOpenReceiveStoredThemeControls(
   targets: OpenReceiveThemeControlTargets,
-  options: OpenReceiveStoredThemeModelOptions = {}
+  options: OpenReceiveStoredThemeModelOptions = {},
 ): OpenReceiveThemeModel {
   const theme = toggleOpenReceiveStoredThemePreference(options);
   applyOpenReceiveThemeControls(targets, theme);
@@ -2598,7 +2545,7 @@ export function toggleOpenReceiveStoredThemeControls(
 }
 
 export function createOpenReceiveTransientFeedbackController<T>(
-  options: OpenReceiveTransientFeedbackOptions<T>
+  options: OpenReceiveTransientFeedbackOptions<T>,
 ): OpenReceiveTransientFeedbackController<T> {
   const delayMs = options.delayMs ?? OPENRECEIVE_COPY_FEEDBACK_MS;
   const setTimeoutFn = options.setTimeout ?? globalThis.setTimeout;
@@ -2620,7 +2567,7 @@ export function createOpenReceiveTransientFeedbackController<T>(
         options.onValue(options.resetValue);
       }, delayMs);
     },
-    clear
+    clear,
   };
 }
 
@@ -2652,10 +2599,15 @@ export function formatOpenReceiveMsats(amountMsats: number): string {
   return `${amountMsats} msats`;
 }
 
-export function formatOpenReceiveFiatAmount(fiat: {
-  readonly currency?: string;
-  readonly value?: string;
-} | null | undefined): string | undefined {
+export function formatOpenReceiveFiatAmount(
+  fiat:
+    | {
+        readonly currency?: string;
+        readonly value?: string;
+      }
+    | null
+    | undefined,
+): string | undefined {
   if (fiat?.currency === undefined || fiat.value === undefined) return undefined;
   return fiat.currency === "USD" ? `$${fiat.value}` : `${fiat.value} ${fiat.currency}`;
 }
@@ -2668,9 +2620,7 @@ export function assertOpenReceiveDisplayInvoice(invoice: string): void {
   assertInvoice(invoice);
 }
 
-export function createCheckoutDisplayModel(
-  data: CheckoutDisplayData
-): CheckoutDisplayModel {
+export function createCheckoutDisplayModel(data: CheckoutDisplayData): CheckoutDisplayModel {
   return {
     ...data,
     lightningUri: createLightningUri(data.invoice),
@@ -2685,7 +2635,7 @@ export function createCheckoutDisplayModel(
       : { paymentHashLabel: formatOpenReceivePaymentHashLabel(data.payment_hash) }),
     ...(data.transaction_state === undefined
       ? {}
-      : { transactionStateLabel: data.transaction_state })
+      : { transactionStateLabel: data.transaction_state }),
   };
 }
 
@@ -2696,14 +2646,14 @@ export function createLightningUri(invoice: string): string {
 
 export function createCheckoutElementAttributes(
   snapshot: CheckoutSnapshot,
-  options: CheckoutElementAttributeOptions = {}
+  options: CheckoutElementAttributeOptions = {},
 ): CheckoutElementAttributes {
   const invoice = checkoutInvoiceFromOrderSnapshot(snapshot);
   assertInvoice(invoice.invoice);
   const attributes: CheckoutElementAttributes = {
     [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId]: snapshot.order_id,
     [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoiceId]: invoice.invoice_id,
-    [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice]: invoice.invoice
+    [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice]: invoice.invoice,
   };
 
   if (invoice.payment_hash !== undefined) {
@@ -2720,7 +2670,7 @@ export function createCheckoutElementAttributes(
   if (fiat?.value !== undefined) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.fiatValue] = fiat.value;
   }
-  attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.status] = snapshot.paid
+  attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.status] = isPaidCheckoutSnapshot(snapshot)
     ? "settled"
     : snapshot.status === "expired"
       ? "expired"
@@ -2735,14 +2685,16 @@ export function createCheckoutElementAttributes(
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme] = options.theme;
   }
   if (options.paymentWizard !== undefined) {
-    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentWizard] = String(options.paymentWizard);
+    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentWizard] = String(
+      options.paymentWizard,
+    );
   }
 
   return attributes;
 }
 
 export function createOpenReceiveThemeToggleElementAttributes(
-  options: OpenReceiveThemeToggleElementAttributeOptions = {}
+  options: OpenReceiveThemeToggleElementAttributeOptions = {},
 ): OpenReceiveThemeToggleElementAttributes {
   return {
     ...(options.rootSelector === undefined
@@ -2750,18 +2702,20 @@ export function createOpenReceiveThemeToggleElementAttributes(
       : { [OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES.rootSelector]: options.rootSelector }),
     ...(options.checkoutSelector === undefined
       ? {}
-      : { [OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES.checkoutSelector]: options.checkoutSelector }),
+      : {
+          [OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES.checkoutSelector]: options.checkoutSelector,
+        }),
     ...(options.defaultTheme === undefined
       ? {}
       : { [OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES.defaultTheme]: options.defaultTheme }),
     ...(options.storageKey === undefined
       ? {}
-      : { [OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES.storageKey]: options.storageKey })
+      : { [OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES.storageKey]: options.storageKey }),
   };
 }
 
 export function createCheckoutElementListeners(
-  handlers: CheckoutElementEventHandlers = {}
+  handlers: CheckoutElementEventHandlers = {},
 ): CheckoutElementListeners {
   return {
     ...(handlers.onCopy === undefined
@@ -2784,13 +2738,13 @@ export function createCheckoutElementListeners(
       : { [OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.startOver]: handlers.onStartOver }),
     ...(handlers.onError === undefined
       ? {}
-      : { [OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.error]: handlers.onError })
+      : { [OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.error]: handlers.onError }),
   };
 }
 
 export function createCheckoutShellModel(
   snapshot: CheckoutSnapshot,
-  options: CheckoutShellOptions = {}
+  options: CheckoutShellOptions = {},
 ): CheckoutShellModel {
   const theme = createOpenReceiveStoredThemeModel(options);
   return {
@@ -2800,9 +2754,9 @@ export function createCheckoutShellModel(
       tagName: OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
       attributes: createCheckoutElementAttributes(snapshot, {
         ...options,
-        theme: theme.resolvedTheme
+        theme: theme.resolvedTheme,
       }),
-      listeners: createCheckoutElementListeners(options)
+      listeners: createCheckoutElementListeners(options),
     },
     themeToggle: {
       tagName: OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
@@ -2810,14 +2764,14 @@ export function createCheckoutShellModel(
         rootSelector: options.rootSelector,
         checkoutSelector: options.checkoutSelector ?? OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
         defaultTheme: options.defaultTheme,
-        storageKey: options.storageKey
-      })
-    }
+        storageKey: options.storageKey,
+      }),
+    },
   };
 }
 
 export function createCheckoutShellModelFromProps(
-  props: OpenReceiveCheckoutShellProps
+  props: OpenReceiveCheckoutShellProps,
 ): CheckoutShellModel {
   const {
     invoice,
@@ -2829,22 +2783,22 @@ export function createCheckoutShellModelFromProps(
   } = props;
   return createCheckoutShellModel(invoice, {
     ...options,
-    defaultTheme: defaultTheme ?? theme
+    defaultTheme: defaultTheme ?? theme,
   });
 }
 
 export function createCheckoutShellFromProps(
-  props: OpenReceiveCheckoutShellProps & Omit<CreateCheckoutShellOptions, "root">
+  props: OpenReceiveCheckoutShellProps & Omit<CreateCheckoutShellOptions, "root">,
 ): CheckoutShellElements {
   return createCheckoutShell(props.invoice, {
     ...props,
-    defaultTheme: props.defaultTheme ?? props.theme
+    defaultTheme: props.defaultTheme ?? props.theme,
   });
 }
 
 export function applyCheckoutElementAttributes(
   target: OpenReceiveThemeAttributeTarget,
-  attributes: CheckoutElementAttributes
+  attributes: CheckoutElementAttributes,
 ): void {
   for (const [name, value] of Object.entries(attributes)) {
     if (value !== undefined) target.setAttribute(name, value);
@@ -2853,7 +2807,7 @@ export function applyCheckoutElementAttributes(
 
 export function applyCheckoutElementListeners(
   target: Pick<CheckoutElementTarget, "addEventListener">,
-  listeners: CheckoutElementListeners
+  listeners: CheckoutElementListeners,
 ): void {
   for (const [name, listener] of Object.entries(listeners)) {
     if (listener !== undefined) target.addEventListener(name, listener);
@@ -2862,7 +2816,7 @@ export function applyCheckoutElementListeners(
 
 export function applyOpenReceiveThemeToggleElementAttributes(
   target: OpenReceiveThemeAttributeTarget,
-  attributes: OpenReceiveThemeToggleElementAttributes
+  attributes: OpenReceiveThemeToggleElementAttributes,
 ): void {
   for (const [name, value] of Object.entries(attributes)) {
     if (value !== undefined) target.setAttribute(name, value);
@@ -2871,7 +2825,7 @@ export function applyOpenReceiveThemeToggleElementAttributes(
 
 export function createCheckoutElement(
   snapshot: CheckoutSnapshot,
-  options: CreateCheckoutElementOptions = {}
+  options: CreateCheckoutElementOptions = {},
 ): HTMLElement {
   const ownerDocument = options.document ?? globalThis.document;
   if (ownerDocument === undefined) {
@@ -2879,19 +2833,13 @@ export function createCheckoutElement(
   }
 
   const element = ownerDocument.createElement(OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME);
-  applyCheckoutElementAttributes(
-    element,
-    createCheckoutElementAttributes(snapshot, options)
-  );
-  applyCheckoutElementListeners(
-    element,
-    createCheckoutElementListeners(options)
-  );
+  applyCheckoutElementAttributes(element, createCheckoutElementAttributes(snapshot, options));
+  applyCheckoutElementListeners(element, createCheckoutElementListeners(options));
   return element;
 }
 
 export function createOpenReceiveThemeToggleElement(
-  options: CreateOpenReceiveThemeToggleElementOptions = {}
+  options: CreateOpenReceiveThemeToggleElementOptions = {},
 ): HTMLElement {
   const ownerDocument = options.document ?? globalThis.document;
   if (ownerDocument === undefined) {
@@ -2901,14 +2849,14 @@ export function createOpenReceiveThemeToggleElement(
   const element = ownerDocument.createElement(OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME);
   applyOpenReceiveThemeToggleElementAttributes(
     element,
-    createOpenReceiveThemeToggleElementAttributes(options)
+    createOpenReceiveThemeToggleElementAttributes(options),
   );
   return element;
 }
 
 export function createCheckoutShell(
   snapshot: CheckoutSnapshot,
-  options: CreateCheckoutShellOptions = {}
+  options: CreateCheckoutShellOptions = {},
 ): CheckoutShellElements {
   const ownerDocument = options.document ?? globalThis.document;
   if (ownerDocument === undefined) {
@@ -2929,35 +2877,34 @@ export function createCheckoutShell(
     theme: shell.theme,
     rootAttributes: shell.rootAttributes,
     checkout,
-    themeToggle
+    themeToggle,
   };
 }
 
 export async function requestCheckoutInvoice(
-  options: RequestCheckoutInvoiceOptions
+  options: RequestCheckoutInvoiceOptions,
 ): Promise<CheckoutSnapshot> {
   if (options.orderId.length === 0) {
-    throw new Error("OpenReceive invoice creation requires an orderId.");
+    throw new Error("OpenReceive checkout creation requires an orderId.");
   }
 
   const fetcher = options.fetch ?? globalThis.fetch;
   if (fetcher === undefined) {
-    throw new Error("OpenReceive invoice creation requires fetch.");
+    throw new Error("OpenReceive checkout creation requires fetch.");
   }
 
   const amountSourceCount = [
     "btc" in options.amount,
     "sats" in options.amount,
     "msats" in options.amount,
-    "fiat" in options.amount
+    "fiat" in options.amount,
   ].filter(Boolean).length;
   if (amountSourceCount !== 1) {
-    throw new Error("OpenReceive invoice creation requires exactly one of amount.btc, amount.sats, amount.msats, or amount.fiat.");
+    throw new Error(
+      "OpenReceive checkout creation requires exactly one of amount.btc, amount.sats, amount.msats, or amount.fiat.",
+    );
   }
-  if (
-    options.memo !== undefined &&
-    options.memo.length > 500
-  ) {
+  if (options.memo !== undefined && options.memo.length > 500) {
     throw new Error("OpenReceive memo must be 500 characters or fewer.");
   }
 
@@ -2967,42 +2914,39 @@ export async function requestCheckoutInvoice(
     ...("sats" in options.amount ? { amount_sats: options.amount.sats } : {}),
     ...("msats" in options.amount ? { amount_msats: options.amount.msats } : {}),
     ...("fiat" in options.amount ? { fiat: options.amount.fiat } : {}),
-    ...(options.memo === undefined
-      ? {}
-      : { optional_invoice_description: options.memo }),
+    ...(options.memo === undefined ? {} : { optional_invoice_description: options.memo }),
     ...(options.descriptionHash === undefined ? {} : { description_hash: options.descriptionHash }),
-    ...(options.expiresInSeconds === undefined ? {} : { expiry: options.expiresInSeconds })
+    ...(options.expiresInSeconds === undefined ? {} : { expiry: options.expiresInSeconds }),
   };
   assertOpenReceiveBrowserPayloadSafe(requestBody);
 
-  const response = await fetcher(options.invoiceUrl ?? "/openreceive/v1/orders", {
+  const response = await fetcher(resolveCreateCheckoutUrl(options.invoiceUrl, options.orderId), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(options.headers ?? {})
+      ...(options.headers ?? {}),
     },
-    body: JSON.stringify(requestBody)
+    body: JSON.stringify(requestBody),
   });
   const body = await response.json();
 
   if (!response.ok) {
     throw new Error(
-      typeof body?.message === "string"
-        ? body.message
-        : "Could not create invoice."
+      typeof body?.message === "string" ? body.message : "Could not create checkout.",
     );
   }
 
-  const responseInvoice = asRecord(body).active;
+  const snapshot = checkoutSnapshotFromResponseBody(body);
+  const responseInvoice = snapshot.active;
   if (isRecord(responseInvoice) && typeof responseInvoice.invoice === "string") {
     assertOpenReceiveDisplayInvoice(responseInvoice.invoice);
   }
 
-  return body as CheckoutSnapshot;
+  return snapshot;
 }
 
 export function createOpenReceiveStatusFetcher(
-  options: CreateOpenReceiveStatusFetcherOptions
+  options: CreateOpenReceiveStatusFetcherOptions,
 ): CheckoutStatusRefresh {
   return async (state) => {
     if (state.order_id.length === 0) {
@@ -3018,24 +2962,29 @@ export function createOpenReceiveStatusFetcher(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(options.headers ?? {})
+        ...(options.headers ?? {}),
       },
       body: JSON.stringify({
-        order_id: state.order_id
-      })
+        order_id: state.order_id,
+      }),
     });
     const body = await response.json();
 
     if (!response.ok) {
       throw new Error(
-        typeof body?.message === "string"
-          ? body.message
-          : "Could not refresh invoice status."
+        typeof body?.message === "string" ? body.message : "Could not refresh invoice status.",
       );
     }
 
-    return body as Partial<CheckoutSnapshot>;
+    return checkoutSnapshotFromStatusBody(body, state);
   };
+}
+
+function resolveCreateCheckoutUrl(invoiceUrl: string | undefined, orderId: string): string {
+  const url = invoiceUrl ?? "/openreceive/v1/orders/{order_id}/checkouts";
+  return url.includes("{order_id}")
+    ? url.replaceAll("{order_id}", encodeURIComponent(orderId))
+    : url;
 }
 
 function resolveStatusUrl(statusUrl: string, orderId: string): string {
@@ -3044,8 +2993,50 @@ function resolveStatusUrl(statusUrl: string, orderId: string): string {
     : statusUrl;
 }
 
+function checkoutSnapshotFromResponseBody(body: unknown): CheckoutSnapshot {
+  const record = asRecord(body);
+  const wrapped = asRecord(record.checkout);
+  const candidate = typeof wrapped.checkout_id === "string" ? wrapped : record;
+  return candidate as unknown as CheckoutSnapshot;
+}
+
+function checkoutSnapshotFromStatusBody(
+  body: unknown,
+  current: CheckoutState,
+): Partial<CheckoutSnapshot> {
+  const record = asRecord(body);
+  if (typeof record.checkout_id === "string") {
+    return record as unknown as CheckoutSnapshot;
+  }
+
+  const paidCheckout = asRecord(record.paid_checkout);
+  if (typeof paidCheckout.checkout_id === "string") {
+    return paidCheckout as unknown as CheckoutSnapshot;
+  }
+
+  const activeCheckout = asRecord(record.active_checkout);
+  if (typeof activeCheckout.checkout_id === "string") {
+    return activeCheckout as unknown as CheckoutSnapshot;
+  }
+
+  if (Array.isArray(record.checkouts)) {
+    const matching = record.checkouts
+      .map(asRecord)
+      .find((checkout) => checkout.checkout_id === current.checkout_id);
+    if (matching !== undefined) {
+      return matching as unknown as CheckoutSnapshot;
+    }
+    const first = asRecord(record.checkouts[0]);
+    if (typeof first.checkout_id === "string") {
+      return first as unknown as CheckoutSnapshot;
+    }
+  }
+
+  return record as Partial<CheckoutSnapshot>;
+}
+
 export function createOpenReceiveRefreshInvoiceFetcher(
-  options: CreateOpenReceiveRefreshInvoiceFetcherOptions
+  options: CreateOpenReceiveRefreshInvoiceFetcherOptions,
 ): CheckoutRefresh {
   return async (state) => {
     const fetcher = options.fetch ?? globalThis.fetch;
@@ -3054,9 +3045,7 @@ export function createOpenReceiveRefreshInvoiceFetcher(
     }
 
     const refreshUrl =
-      typeof options.refreshUrl === "function"
-        ? options.refreshUrl(state)
-        : options.refreshUrl;
+      typeof options.refreshUrl === "function" ? options.refreshUrl(state) : options.refreshUrl;
     const idempotencyKey =
       typeof options.idempotencyKey === "function"
         ? options.idempotencyKey(state)
@@ -3067,24 +3056,22 @@ export function createOpenReceiveRefreshInvoiceFetcher(
     const reason =
       typeof options.reason === "function"
         ? options.reason(state)
-        : options.reason ?? state.phase;
+        : (options.reason ?? state.phase);
 
     const response = await fetcher(refreshUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Idempotency-Key": idempotencyKey,
-        ...(options.headers ?? {})
+        ...(options.headers ?? {}),
       },
-      body: JSON.stringify({ reason })
+      body: JSON.stringify({ reason }),
     });
     const body = await response.json();
 
     if (!response.ok) {
       throw new Error(
-        typeof body?.message === "string"
-          ? body.message
-          : "Could not refresh invoice."
+        typeof body?.message === "string" ? body.message : "Could not refresh invoice.",
       );
     }
     if (asRecord(body).invoice === undefined) {
@@ -3095,9 +3082,7 @@ export function createOpenReceiveRefreshInvoiceFetcher(
   };
 }
 
-function checkoutInvoiceFromOrderSnapshot(
-  snapshot: CheckoutSnapshot
-): CheckoutInvoiceSnapshot {
+function checkoutInvoiceFromOrderSnapshot(snapshot: CheckoutSnapshot): CheckoutInvoiceSnapshot {
   const invoice = snapshot.active ?? snapshot.invoices[0];
   if (invoice === undefined) {
     throw new TypeError("OpenReceive order snapshot requires active or invoices[0].");
@@ -3105,46 +3090,51 @@ function checkoutInvoiceFromOrderSnapshot(
   return invoice;
 }
 
+function isPaidCheckoutSnapshot(snapshot: CheckoutSnapshot): boolean {
+  return snapshot.status === "paid";
+}
+
 export function createCheckoutState(
   snapshot: CheckoutSnapshot,
-  options: CreateCheckoutStateOptions = {}
+  options: CreateCheckoutStateOptions = {},
 ): CheckoutState {
   const invoice = checkoutInvoiceFromOrderSnapshot(snapshot);
+  const paid = isPaidCheckoutSnapshot(snapshot);
   const settledAt = snapshot.paid_at ?? invoice.settled_at;
-  const transactionState = snapshot.paid
-    ? "settled"
-    : invoice.transaction_state ?? "pending";
-  const workflowState = snapshot.paid
+  const transactionState = paid ? "settled" : (invoice.transaction_state ?? "pending");
+  const workflowState = paid
     ? "settlement_action_completed"
-    : invoice.workflow_state ?? "invoice_created";
+    : (invoice.workflow_state ?? "invoice_created");
 
-  const state = normalizeCheckoutState({
-    order_id: snapshot.order_id,
-    invoice_id: invoice.invoice_id,
-    invoice: invoice.invoice,
-    lightningUri: createLightningUri(invoice.invoice),
-    ...(invoice.payment_hash === undefined
-      ? {}
-      : { payment_hash: invoice.payment_hash }),
-    amount_msats: invoice.amount_msats ?? snapshot.amount_msats,
-    ...(invoice.fiat_quote === undefined ? {} : { fiat_quote: invoice.fiat_quote }),
-    transaction_state: transactionState,
-    workflow_state: workflowState,
-    ...(invoice.expires_at === undefined
-      ? {}
-      : { expires_at: invoice.expires_at }),
-    ...(settledAt === undefined
-      ? {}
-      : { settled_at: settledAt }),
-    paid: snapshot.paid
-  }, options.now ?? currentUnixSeconds());
-  emitBrowserLog(options.logger, "info", "checkout.state.created", "Created checkout state from order snapshot.", checkoutLogFields(state));
+  const state = normalizeCheckoutState(
+    {
+      checkout_id: snapshot.checkout_id,
+      order_id: snapshot.order_id,
+      invoice_id: invoice.invoice_id,
+      invoice: invoice.invoice,
+      lightningUri: createLightningUri(invoice.invoice),
+      ...(invoice.payment_hash === undefined ? {} : { payment_hash: invoice.payment_hash }),
+      amount_msats: invoice.amount_msats ?? snapshot.amount_msats,
+      ...(invoice.fiat_quote === undefined ? {} : { fiat_quote: invoice.fiat_quote }),
+      transaction_state: transactionState,
+      workflow_state: workflowState,
+      ...(invoice.expires_at === undefined ? {} : { expires_at: invoice.expires_at }),
+      ...(settledAt === undefined ? {} : { settled_at: settledAt }),
+      paid,
+    },
+    options.now ?? currentUnixSeconds(),
+  );
+  emitBrowserLog(
+    options.logger,
+    "info",
+    "checkout.state.created",
+    "Created checkout state from order snapshot.",
+    checkoutLogFields(state),
+  );
   return state;
 }
 
-export function createCheckoutSnapshotFromDisplayData(
-  data: CheckoutDisplayData
-): CheckoutSnapshot {
+export function createCheckoutSnapshotFromDisplayData(data: CheckoutDisplayData): CheckoutSnapshot {
   if (data.invoice_id === undefined) {
     throw new TypeError("invoice_id is required for checkout state");
   }
@@ -3155,62 +3145,58 @@ export function createCheckoutSnapshotFromDisplayData(
     ...(data.payment_hash === undefined ? {} : { payment_hash: data.payment_hash }),
     ...(data.amount_msats === undefined ? {} : { amount_msats: data.amount_msats }),
     ...(data.fiat_quote === undefined ? {} : { fiat_quote: data.fiat_quote }),
-    ...(data.transaction_state === undefined
-      ? {}
-      : { transaction_state: data.transaction_state }),
+    ...(data.transaction_state === undefined ? {} : { transaction_state: data.transaction_state }),
     ...(data.workflow_state === undefined ? {} : { workflow_state: data.workflow_state }),
     ...(data.expires_at === undefined ? {} : { expires_at: data.expires_at }),
-    ...(data.settled_at === undefined ? {} : { settled_at: data.settled_at })
+    ...(data.settled_at === undefined ? {} : { settled_at: data.settled_at }),
   };
   const paid = data.settled_at !== undefined || data.transaction_state === "settled";
+  const checkoutId = data.checkout_id ?? data.invoice_id;
   return {
+    checkout_id: checkoutId,
     order_id: data.order_id ?? data.invoice_id,
-    status: paid ? "paid" : "pending",
-    paid,
+    status: paid ? "paid" : "open",
     ...(data.settled_at === undefined ? {} : { paid_at: data.settled_at }),
     amount_msats: data.amount_msats ?? 0,
     active: paid ? undefined : invoice,
-    invoices: [invoice]
+    invoices: [invoice],
   };
 }
 
 export function createCheckoutStateFromDisplayData(
   data: CheckoutDisplayData,
-  options: CreateCheckoutStateOptions = {}
+  options: CreateCheckoutStateOptions = {},
 ): CheckoutState {
-  return createCheckoutState(
-    createCheckoutSnapshotFromDisplayData(data),
-    options
-  );
+  return createCheckoutState(createCheckoutSnapshotFromDisplayData(data), options);
 }
 
 export function refreshCheckoutState(
   state: CheckoutState,
-  options: CreateCheckoutStateOptions = {}
+  options: CreateCheckoutStateOptions = {},
 ): CheckoutState {
   return createCheckoutState(snapshotFromCheckoutState(state), options);
 }
 
 export function mergeCheckoutSnapshot(
   current: CheckoutState,
-  next: Partial<CheckoutSnapshot>
+  next: Partial<CheckoutSnapshot>,
 ): CheckoutSnapshot {
   const currentSnapshot = snapshotFromCheckoutState(current);
   return {
     ...currentSnapshot,
     ...next,
+    checkout_id: next.checkout_id ?? currentSnapshot.checkout_id,
     order_id: next.order_id ?? currentSnapshot.order_id,
     status: next.status ?? currentSnapshot.status,
-    paid: next.paid ?? currentSnapshot.paid,
     amount_msats: next.amount_msats ?? currentSnapshot.amount_msats,
     active: next.active ?? currentSnapshot.active,
-    invoices: next.invoices ?? currentSnapshot.invoices
+    invoices: next.invoices ?? currentSnapshot.invoices,
   };
 }
 
 export function shouldCheckoutShowWaiting(
   state: CheckoutState,
-  options: { readonly now?: number } = {}
+  options: { readonly now?: number } = {},
 ): boolean {
   if (state.terminal || state.settled) return false;
   if (state.expires_at === undefined) return true;
@@ -3219,17 +3205,13 @@ export function shouldCheckoutShowWaiting(
 
 export function createCheckoutStatusModel(
   source?: CheckoutState | CheckoutStatusModelInput,
-  options: { readonly now?: number } = {}
+  options: { readonly now?: number } = {},
 ): CheckoutStatusModel {
-  const isCheckoutState =
-    source !== undefined && "invoice_id" in source && "invoice" in source;
+  const isCheckoutState = source !== undefined && "invoice_id" in source && "invoice" in source;
   const phase = source?.phase ?? "invoice_created";
   const expiresInSeconds = source?.expiresInSeconds;
   const displayPhase =
-    phase !== "settled" &&
-    phase !== "failed" &&
-    phase !== "cancelled" &&
-    expiresInSeconds === 0
+    phase !== "settled" && phase !== "failed" && phase !== "cancelled" && expiresInSeconds === 0
       ? "expired"
       : phase;
   const statusText = getOpenReceivePaymentStatusText(displayPhase);
@@ -3240,19 +3222,19 @@ export function createCheckoutStatusModel(
       displayPhase === "expired"
         ? false
         : source === undefined
-        ? false
-        : isCheckoutState
-          ? shouldCheckoutShowWaiting(source, options)
-          : source.waiting ?? false,
+          ? false
+          : isCheckoutState
+            ? shouldCheckoutShowWaiting(source, options)
+            : (source.waiting ?? false),
     title: statusText.title,
     detail: statusText.detail,
     countdownPrefix: openReceiveCheckoutLabels.countdownPrefix,
     ...(expiresInSeconds === undefined || displayPhase === "expired"
       ? {}
       : {
-        expiresInSeconds,
-        countdownLabel: formatOpenReceiveCountdown(expiresInSeconds)
-      })
+          expiresInSeconds,
+          countdownLabel: formatOpenReceiveCountdown(expiresInSeconds),
+        }),
   };
 }
 
@@ -3272,7 +3254,7 @@ export class CheckoutWatcher {
     this.running = true;
     const state = createCheckoutState(this.options.snapshot, {
       now: this.now(),
-      logger: this.options.logger
+      logger: this.options.logger,
     });
     this.applyState(state);
     return state;
@@ -3294,10 +3276,12 @@ export class CheckoutWatcher {
   }
 
   async reloadState(): Promise<CheckoutState> {
-    const current = this.state ?? createCheckoutState(this.options.snapshot, {
-      now: this.now(),
-      logger: this.options.logger
-    });
+    const current =
+      this.state ??
+      createCheckoutState(this.options.snapshot, {
+        now: this.now(),
+        logger: this.options.logger,
+      });
     const refreshStatus = this.options.refreshStatus;
     if (refreshStatus === undefined || current.order_id.length === 0) {
       return current;
@@ -3305,13 +3289,10 @@ export class CheckoutWatcher {
 
     try {
       const next = await refreshStatus(current);
-      const nextState = createCheckoutState(
-        mergeCheckoutSnapshot(current, next),
-        {
-          now: this.now(),
-          logger: this.options.logger
-        }
-      );
+      const nextState = createCheckoutState(mergeCheckoutSnapshot(current, next), {
+        now: this.now(),
+        logger: this.options.logger,
+      });
       if (this.running) {
         this.applyState(nextState);
       } else {
@@ -3346,10 +3327,12 @@ export class CheckoutWatcher {
       this.countdownTimer = this.setInterval()(() => {
         const current = this.state;
         if (current === undefined) return;
-        this.applyState(refreshCheckoutState(current, {
-          now: this.now(),
-          logger: this.options.logger
-        }));
+        this.applyState(
+          refreshCheckoutState(current, {
+            now: this.now(),
+            logger: this.options.logger,
+          }),
+        );
       }, 1000);
     }
 
@@ -3374,13 +3357,12 @@ export class CheckoutWatcher {
     try {
       const next = await refreshStatus(current);
       if (!this.running || this.state === undefined) return;
-      this.applyState(createCheckoutState(
-        mergeCheckoutSnapshot(this.state, next),
-        {
+      this.applyState(
+        createCheckoutState(mergeCheckoutSnapshot(this.state, next), {
           now: this.now(),
-          logger: this.options.logger
-        }
-      ));
+          logger: this.options.logger,
+        }),
+      );
     } catch (error) {
       this.options.onError?.(error);
     }
@@ -3411,8 +3393,7 @@ export class CheckoutWatcher {
   }
 }
 
-export class OpenReceiveBrowserCheckoutController
-  implements CheckoutController {
+export class OpenReceiveBrowserCheckoutController implements CheckoutController {
   private options: CheckoutControllerOptions;
   private watcher: CheckoutWatcher;
   private state: CheckoutState | undefined;
@@ -3448,7 +3429,7 @@ export class OpenReceiveBrowserCheckoutController
       invoice: state.invoice,
       clipboard: this.options.clipboard,
       logger: this.options.logger,
-      logContext: checkoutLogFields(state)
+      logContext: checkoutLogFields(state),
     });
   }
 
@@ -3458,7 +3439,7 @@ export class OpenReceiveBrowserCheckoutController
       invoice: state.invoice,
       open: this.options.open,
       logger: this.options.logger,
-      logContext: checkoutLogFields(state)
+      logContext: checkoutLogFields(state),
     });
   }
 
@@ -3478,33 +3459,36 @@ export class OpenReceiveBrowserCheckoutController
 
     const current = this.currentState();
     const result = await refreshInvoice(current);
-    const snapshot: CheckoutSnapshot =
-      "new_invoice_id" in result ? result.invoice : result;
+    const snapshot: CheckoutSnapshot = "new_invoice_id" in result ? result.invoice : result;
     return this.update({
       ...this.options,
-      snapshot
+      snapshot,
     });
   }
 
   cancel(): CheckoutState {
     this.stop();
     this.state = this.currentState();
-    emitBrowserLog(this.options.logger, "info", "checkout.cancelled", "Stopped checkout watcher after cancel action.", checkoutLogFields(this.state));
+    emitBrowserLog(
+      this.options.logger,
+      "info",
+      "checkout.cancelled",
+      "Stopped checkout watcher after cancel action.",
+      checkoutLogFields(this.state),
+    );
     return this.state;
   }
 
-  private createWatcher(
-    options: CheckoutControllerOptions
-  ): CheckoutWatcher {
+  private createWatcher(options: CheckoutControllerOptions): CheckoutWatcher {
     const refreshStatus =
       options.refreshStatus ??
       (options.statusUrl === undefined
         ? undefined
         : createOpenReceiveStatusFetcher({
-          statusUrl: options.statusUrl,
-          fetch: options.fetch,
-          headers: options.statusHeaders
-        }));
+            statusUrl: options.statusUrl,
+            fetch: options.fetch,
+            headers: options.statusHeaders,
+          }));
 
     return new CheckoutWatcher({
       ...options,
@@ -3512,13 +3496,11 @@ export class OpenReceiveBrowserCheckoutController
       onState: (state) => {
         this.state = state;
         options.onState?.(state);
-      }
+      },
     });
   }
 
-  private createRefreshInvoice(
-    options: CheckoutControllerOptions
-  ): CheckoutRefresh | undefined {
+  private createRefreshInvoice(options: CheckoutControllerOptions): CheckoutRefresh | undefined {
     if (options.refreshInvoice !== undefined) return options.refreshInvoice;
     if (options.refreshUrl === undefined || options.refreshIdempotencyKey === undefined) {
       return undefined;
@@ -3529,27 +3511,28 @@ export class OpenReceiveBrowserCheckoutController
       idempotencyKey: options.refreshIdempotencyKey,
       fetch: options.fetch,
       headers: options.refreshHeaders,
-      reason: options.refreshReason
+      reason: options.refreshReason,
     });
   }
 
   private currentState(): CheckoutState {
-    return this.getState() ?? createCheckoutState(this.options.snapshot, {
-      now: this.options.now?.(),
-      logger: this.options.logger
-    });
+    return (
+      this.getState() ??
+      createCheckoutState(this.options.snapshot, {
+        now: this.options.now?.(),
+        logger: this.options.logger,
+      })
+    );
   }
 }
 
-export function createCheckoutController(
-  options: CheckoutControllerOptions
-): CheckoutController {
+export function createCheckoutController(options: CheckoutControllerOptions): CheckoutController {
   return new OpenReceiveBrowserCheckoutController(options);
 }
 
 export async function createQrSvg(
   invoice: string,
-  options: OpenReceiveQrOptions = {}
+  options: OpenReceiveQrOptions = {},
 ): Promise<string> {
   const encoder = await getQrEncoder(options.encoder);
   const svg = await encoder.toString(createLightningUri(invoice), {
@@ -3559,8 +3542,8 @@ export async function createQrSvg(
     width: options.width,
     color: {
       dark: OPENRECEIVE_QR_DARK_COLOR,
-      light: OPENRECEIVE_QR_LIGHT_COLOR
-    }
+      light: OPENRECEIVE_QR_LIGHT_COLOR,
+    },
   });
 
   return String(svg);
@@ -3568,7 +3551,7 @@ export async function createQrSvg(
 
 export async function createQrPngDataUrl(
   invoice: string,
-  options: OpenReceiveQrOptions = {}
+  options: OpenReceiveQrOptions = {},
 ): Promise<string> {
   const encoder = await getQrEncoder(options.encoder);
 
@@ -3583,8 +3566,8 @@ export async function createQrPngDataUrl(
     width: options.width,
     color: {
       dark: OPENRECEIVE_QR_DARK_COLOR,
-      light: OPENRECEIVE_QR_LIGHT_COLOR
-    }
+      light: OPENRECEIVE_QR_LIGHT_COLOR,
+    },
   });
 
   return String(png);
@@ -3604,7 +3587,13 @@ export async function copyInvoice(options: CopyInvoiceOptions): Promise<void> {
   }
 
   await clipboard.writeText(options.invoice);
-  emitBrowserLog(options.logger, "info", "checkout.invoice.copied", "Copied Lightning invoice to clipboard.", options.logContext);
+  emitBrowserLog(
+    options.logger,
+    "info",
+    "checkout.invoice.copied",
+    "Copied Lightning invoice to clipboard.",
+    options.logContext,
+  );
 }
 
 export function openWallet(options: OpenWalletOptions): string {
@@ -3612,7 +3601,13 @@ export function openWallet(options: OpenWalletOptions): string {
 
   if (options.open !== undefined) {
     options.open(uri);
-    emitBrowserLog(options.logger, "info", "checkout.wallet.opened", "Opened Lightning invoice URI.", options.logContext);
+    emitBrowserLog(
+      options.logger,
+      "info",
+      "checkout.wallet.opened",
+      "Opened Lightning invoice URI.",
+      options.logContext,
+    );
     return uri;
   }
 
@@ -3622,19 +3617,24 @@ export function openWallet(options: OpenWalletOptions): string {
   }
 
   location.assign(uri);
-  emitBrowserLog(options.logger, "info", "checkout.wallet.opened", "Opened Lightning invoice URI.", options.logContext);
+  emitBrowserLog(
+    options.logger,
+    "info",
+    "checkout.wallet.opened",
+    "Opened Lightning invoice URI.",
+    options.logContext,
+  );
   return uri;
 }
 
 async function getQrEncoder(
-  encoder: OpenReceiveQrEncoder | undefined
+  encoder: OpenReceiveQrEncoder | undefined,
 ): Promise<OpenReceiveQrEncoder> {
   if (encoder !== undefined) return encoder;
 
-  const dynamicImport = new Function(
-    "specifier",
-    "return import(specifier)"
-  ) as (specifier: string) => Promise<unknown>;
+  const dynamicImport = new Function("specifier", "return import(specifier)") as (
+    specifier: string,
+  ) => Promise<unknown>;
   const imported = asRecord(await dynamicImport("qrcode"));
   const candidate = (imported.default ?? imported) as unknown;
 
@@ -3679,17 +3679,9 @@ function assertOpenReceiveBrowserPayloadSafe(value: unknown): void {
 }
 
 function normalizeCheckoutState(
-  state: Omit<
-    CheckoutState,
-    "phase" | "settled" | "terminal" | "expiresInSeconds"
-  > &
-    Partial<
-      Pick<
-        CheckoutState,
-        "phase" | "settled" | "terminal" | "expiresInSeconds"
-      >
-    >,
-  now?: number
+  state: Omit<CheckoutState, "phase" | "settled" | "terminal" | "expiresInSeconds"> &
+    Partial<Pick<CheckoutState, "phase" | "settled" | "terminal" | "expiresInSeconds">>,
+  now?: number,
 ): CheckoutState {
   const {
     phase: _phase,
@@ -3707,14 +3699,11 @@ function normalizeCheckoutState(
     terminal: isTerminalPhase(phase),
     ...(base.expires_at === undefined || now === undefined
       ? {}
-      : { expiresInSeconds: Math.max(0, base.expires_at - now) })
+      : { expiresInSeconds: Math.max(0, base.expires_at - now) }),
   };
 }
 
-function getCheckoutPhase(
-  transactionState: string,
-  workflowState: string
-): CheckoutPhase {
+function getCheckoutPhase(transactionState: string, workflowState: string): CheckoutPhase {
   if (workflowState === "cancelled") return "cancelled";
   if (transactionState === "settled") return "settled";
   if (transactionState === "expired" || workflowState === "expired_closed") {
@@ -3723,26 +3712,17 @@ function getCheckoutPhase(
   if (transactionState === "failed" || workflowState === "failed_closed") {
     return "failed";
   }
-  if (
-    workflowState === "verifying" ||
-    workflowState === "expiry_pending_verification"
-  ) {
+  if (workflowState === "verifying" || workflowState === "expiry_pending_verification") {
     return "verifying";
   }
   return "invoice_created";
 }
 
 function isTerminalPhase(phase: CheckoutPhase): boolean {
-  return (
-    phase === "expired" ||
-    phase === "failed" ||
-    phase === "cancelled"
-  );
+  return phase === "expired" || phase === "failed" || phase === "cancelled";
 }
 
-function snapshotFromCheckoutState(
-  state: CheckoutState
-): CheckoutSnapshot {
+function snapshotFromCheckoutState(state: CheckoutState): CheckoutSnapshot {
   const invoice: CheckoutInvoiceSnapshot = {
     invoice_id: state.invoice_id,
     invoice: state.invoice,
@@ -3752,16 +3732,16 @@ function snapshotFromCheckoutState(
     transaction_state: state.transaction_state,
     workflow_state: state.workflow_state,
     ...(state.expires_at === undefined ? {} : { expires_at: state.expires_at }),
-    ...(state.settled_at === undefined ? {} : { settled_at: state.settled_at })
+    ...(state.settled_at === undefined ? {} : { settled_at: state.settled_at }),
   };
   return {
+    checkout_id: state.checkout_id,
     order_id: state.order_id,
-    status: state.paid ? "paid" : state.terminal ? "expired" : "pending",
-    paid: state.paid,
+    status: state.paid ? "paid" : state.terminal ? "expired" : "open",
     ...(state.settled_at === undefined ? {} : { paid_at: state.settled_at }),
     amount_msats: state.amount_msats ?? 0,
     active: state.paid ? undefined : invoice,
-    invoices: [invoice]
+    invoices: [invoice],
   };
 }
 
@@ -3769,9 +3749,7 @@ function currentUnixSeconds(): number {
   return Math.floor(Date.now() / 1000);
 }
 
-function getRailForPaymentMethod(
-  method: OpenReceivePaymentMethod | null
-): FiatRailId | null {
+function getRailForPaymentMethod(method: OpenReceivePaymentMethod | null): FiatRailId | null {
   if (method === "bank") return "bank";
   if (method === "card") return "card";
   return null;
@@ -3789,11 +3767,7 @@ function readStorageValue(storage: Storage | undefined, key: string): string | n
   }
 }
 
-function writeStorageValue(
-  storage: Storage | undefined,
-  key: string,
-  value: string
-): void {
+function writeStorageValue(storage: Storage | undefined, key: string, value: string): void {
   try {
     storage?.setItem(key, value);
   } catch {
@@ -3809,19 +3783,19 @@ function getBrowserStorage(): Storage | undefined {
   }
 }
 
-function checkoutLogFields(
-  state: {
-    readonly order_id?: string;
-    readonly invoice_id?: string;
-    readonly payment_hash?: string;
-    readonly amount_msats?: number;
-    readonly transaction_state?: string;
-    readonly workflow_state?: string;
-    readonly phase?: string;
-    readonly expiresInSeconds?: number;
-  }
-): Record<string, unknown> {
+function checkoutLogFields(state: {
+  readonly checkout_id?: string;
+  readonly order_id?: string;
+  readonly invoice_id?: string;
+  readonly payment_hash?: string;
+  readonly amount_msats?: number;
+  readonly transaction_state?: string;
+  readonly workflow_state?: string;
+  readonly phase?: string;
+  readonly expiresInSeconds?: number;
+}): Record<string, unknown> {
   return {
+    ...(state.checkout_id === undefined ? {} : { checkout_id: state.checkout_id }),
     ...(state.order_id === undefined ? {} : { order_id: state.order_id }),
     ...(state.invoice_id === undefined ? {} : { invoice_id: state.invoice_id }),
     ...(state.payment_hash === undefined ? {} : { payment_hash: state.payment_hash }),
@@ -3829,13 +3803,9 @@ function checkoutLogFields(
     ...(state.transaction_state === undefined
       ? {}
       : { transaction_state: state.transaction_state }),
-    ...(state.workflow_state === undefined
-      ? {}
-      : { workflow_state: state.workflow_state }),
+    ...(state.workflow_state === undefined ? {} : { workflow_state: state.workflow_state }),
     ...(state.phase === undefined ? {} : { phase: state.phase }),
-    ...(state.expiresInSeconds === undefined
-      ? {}
-      : { expires_in_seconds: state.expiresInSeconds })
+    ...(state.expiresInSeconds === undefined ? {} : { expires_in_seconds: state.expiresInSeconds }),
   };
 }
 
@@ -3844,25 +3814,25 @@ function emitBrowserLog(
   level: OpenReceiveBrowserLogLevel,
   event: string,
   message: string,
-  fields: Record<string, unknown> = {}
+  fields: Record<string, unknown> = {},
 ): void {
   if (logger === undefined) return;
 
   try {
-    logger(sanitizeBrowserLogEntry({
-      level,
-      event,
-      message,
-      ...fields
-    }));
+    logger(
+      sanitizeBrowserLogEntry({
+        level,
+        event,
+        message,
+        ...fields,
+      }),
+    );
   } catch {
     // Checkout logs are diagnostic only and must not affect user actions.
   }
 }
 
-function sanitizeBrowserLogEntry(
-  entry: OpenReceiveBrowserLogEntry
-): OpenReceiveBrowserLogEntry {
+function sanitizeBrowserLogEntry(entry: OpenReceiveBrowserLogEntry): OpenReceiveBrowserLogEntry {
   const clean: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(entry)) {
     if (/secret|token|authorization|cookie|nwc/i.test(key)) {
@@ -3899,4 +3869,8 @@ function redactBrowserSecrets(value: string): string {
 function asRecord(value: unknown): Record<string, unknown> {
   if (typeof value !== "object" || value === null) return {};
   return value as Record<string, unknown>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

@@ -10,8 +10,8 @@ strings, wallet clients, and fulfillment on the backend.
 - `status(invoiceLike)` returns `"pending"`, `"settled"`, `"expired"`, or
   `"failed"` from display-safe fields.
 - `requestCheckoutInvoice(options)` is a lower-level helper for apps that intentionally
-  expose an invoice-creation route; most stores call their own `/create_order`
-  route and render the invoice returned with the order.
+  expose a checkout-creation route; most stores call their own `/create_order`
+  route and render the checkout returned with the order.
 - `lightningUri(invoice)`, `qrSvg(invoice)`, and `qrPngDataUrl(invoice)` render
   BOLT11 payment data.
 - `copyInvoice({ invoice })` copies the BOLT11 string.
@@ -31,9 +31,9 @@ const response = await fetch("/create_order", {
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ cart })
 });
-const { order, invoice } = await response.json();
+const { order, checkout } = await response.json();
 
-console.log(status(invoice));
+console.log(status(checkout));
 ```
 
 `status()` is a display helper. Your product still unlocks only after the
@@ -48,7 +48,7 @@ import { Checkout } from "@openreceive/react";
 import "@openreceive/react/styles.css";
 
 <Checkout
-  invoice={invoice}
+  invoice={checkout}
   statusUrl="/order_status"
   onSettled={() => showThankYou()}
 />;
@@ -58,11 +58,11 @@ import "@openreceive/react/styles.css";
 but fulfillment stays in the backend settlement hook.
 
 `statusUrl` is optional. If omitted, React uses the default
-`/openreceive/v1/invoices/{invoice_id}/status` route. Apps without a frontend
+`/openreceive/v1/orders/{order_id}/status` route. Apps without a frontend
 status route can render a static checkout surface without status refresh:
 
 ```tsx
-<Checkout invoice={invoice} polling={false} />;
+<Checkout invoice={checkout} polling={false} />;
 ```
 
 Use `statusUrl={false}` to disable only the default status URL while still
@@ -74,7 +74,7 @@ For app-wide theme attributes and the packaged light/dark toggle:
 import { Checkout, ThemeScope } from "@openreceive/react";
 
 <ThemeScope as="main" className="page" themeToggle>
-  <Checkout invoice={invoice} />
+  <Checkout invoice={checkout} />
 </ThemeScope>
 ```
 

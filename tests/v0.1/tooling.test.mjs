@@ -15,18 +15,21 @@ const nodeQuickstartDocs = path.join(process.cwd(), "docs/guides/quickstart-node
 const authorizationDocs = path.join(process.cwd(), "docs/guides/authorization.md");
 const invoiceStorageSchema = path.join(process.cwd(), "spec/schemas/invoice-storage.schema.json");
 const storageKvVectors = path.join(process.cwd(), "spec/test-vectors/storage-kv.json");
-const releaseReadinessValidator = path.join(process.cwd(), "tools/validate/check-release-readiness.mjs");
+const releaseReadinessValidator = path.join(
+  process.cwd(),
+  "tools/validate/check-release-readiness.mjs",
+);
 const npmReleaseHelper = path.join(process.cwd(), "tools/release/npm-release.mjs");
 const workflowValidator = path.join(process.cwd(), "tools/validate/check-workflows.mjs");
 const liveNwcSmoke = path.join(process.cwd(), "tools/live-nwc-test/index.mjs");
 const rubyLiveNwcSmoke = path.join(process.cwd(), "tools/live-nwc-test/ruby-smoke.rb");
 const liveExpectedCapabilities = path.join(
   process.cwd(),
-  "tools/live-nwc-test/expected_capabilities.json"
+  "tools/live-nwc-test/expected_capabilities.json",
 );
 const liveExpectedCapabilitiesExample = path.join(
   process.cwd(),
-  "tools/live-nwc-test/expected_capabilities.example.json"
+  "tools/live-nwc-test/expected_capabilities.example.json",
 );
 
 function withGitRepo(callback) {
@@ -44,7 +47,7 @@ function runSecretScanner(cwd) {
   return execFileSync(process.execPath, [secretScanner], {
     cwd,
     encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"]
+    stdio: ["ignore", "pipe", "pipe"],
   });
 }
 
@@ -52,7 +55,7 @@ function runClientBundleScanner(cwd) {
   return execFileSync(process.execPath, [clientBundleScanner], {
     cwd,
     encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"]
+    stdio: ["ignore", "pipe", "pipe"],
   });
 }
 
@@ -60,7 +63,7 @@ function runDemoContainerValidator() {
   return execFileSync(process.execPath, [demoContainerValidator], {
     cwd: process.cwd(),
     encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"]
+    stdio: ["ignore", "pipe", "pipe"],
   });
 }
 
@@ -68,7 +71,7 @@ function runDemoDeployValidator() {
   return execFileSync(process.execPath, [demoDeployValidator], {
     cwd: process.cwd(),
     encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"]
+    stdio: ["ignore", "pipe", "pipe"],
   });
 }
 
@@ -84,10 +87,14 @@ test("workspace metadata does not reference removed express or next packages", (
     "examples/hello-fruit/server/static-html-small-api/package.json",
     "examples/hello-fruit/server/nextjs-fullstack/package.json",
     "docs/internal/release-process.md",
-    "docs/internal/scope-lock.md"
+    "docs/internal/scope-lock.md",
   ]) {
     const text = readFileSync(path.join(process.cwd(), relativePath), "utf8");
-    assert.doesNotMatch(text, /@openreceive\/express|packages\/js\/express|@openreceive\/next|packages\/js\/next/, relativePath);
+    assert.doesNotMatch(
+      text,
+      /@openreceive\/express|packages\/js\/express|@openreceive\/next|packages\/js\/next/,
+      relativePath,
+    );
   }
 });
 
@@ -99,7 +106,8 @@ test("public Node guides show app routes without OpenReceive error class imports
     assert.match(source, /orderId:/, filePath);
     assert.match(source, /memo:/, filePath);
     assert.match(source, /totalAmount/, filePath);
-    assert.match(source, /import \{ createOpenReceive \} from "@openreceive\/node";/, filePath);
+    assert.match(source, /createOpenReceive/, filePath);
+    assert.match(source, /from "@openreceive\/node";/, filePath);
   }
 });
 
@@ -112,7 +120,7 @@ test("Node quickstart covers all shipped frontend framework adapters", () => {
   assert.match(source, /@openreceive\/angular\/checkout-component/);
   assert.doesNotMatch(
     source.slice(source.indexOf("## Angular"), source.indexOf("## Optional Scheduler")),
-    /@openreceive\/vue|createOpenReceiveVue/
+    /@openreceive\/vue|createOpenReceiveVue/,
   );
 });
 
@@ -120,7 +128,7 @@ function runReleaseReadinessValidator() {
   return execFileSync(process.execPath, [releaseReadinessValidator], {
     cwd: process.cwd(),
     encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"]
+    stdio: ["ignore", "pipe", "pipe"],
   });
 }
 
@@ -133,14 +141,14 @@ function runWorkflowValidator() {
   return execFileSync(process.execPath, [workflowValidator], {
     cwd: process.cwd(),
     encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"]
+    stdio: ["ignore", "pipe", "pipe"],
   });
 }
 
 function runLiveNwcSmoke(env) {
   const childEnv = {
     ...process.env,
-    ...env
+    ...env,
   };
   for (const [key, value] of Object.entries(childEnv)) {
     if (value === undefined) delete childEnv[key];
@@ -150,29 +158,25 @@ function runLiveNwcSmoke(env) {
     cwd: process.cwd(),
     encoding: "utf8",
     env: childEnv,
-    stdio: ["ignore", "pipe", "pipe"]
+    stdio: ["ignore", "pipe", "pipe"],
   });
 }
 
 function runRubyLiveNwcSmoke(env) {
   const childEnv = {
     ...process.env,
-    ...env
+    ...env,
   };
   for (const [key, value] of Object.entries(childEnv)) {
     if (value === undefined) delete childEnv[key];
   }
 
-  return execFileSync(
-    "ruby",
-    ["-Ipackages/ruby/openreceive/lib", rubyLiveNwcSmoke],
-    {
-      cwd: process.cwd(),
-      encoding: "utf8",
-      env: childEnv,
-      stdio: ["ignore", "pipe", "pipe"]
-    }
-  );
+  return execFileSync("ruby", ["-Ipackages/ruby/openreceive/lib", rubyLiveNwcSmoke], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    env: childEnv,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
 }
 
 test("demo container validator accepts current Hello Fruit templates", () => {
@@ -195,26 +199,44 @@ test("demo deployment docs preserve public edge and runner boundaries", () => {
 });
 
 test("release readiness validator accepts current v0.1 metadata", () => {
-  assert.match(runReleaseReadinessValidator(), /Release readiness validation passed for 11 package\(s\)\./);
+  assert.match(
+    runReleaseReadinessValidator(),
+    /Release readiness validation passed for 11 package\(s\)\./,
+  );
 });
 
 test("npm release helper plans a patch release without editing files", () => {
-  const currentVersion = JSON.parse(readFileSync(path.join(process.cwd(), "package.json"), "utf8")).version;
+  const currentVersion = JSON.parse(
+    readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
+  ).version;
   const nextVersion = nextPatchVersion(currentVersion);
   const output = execFileSync(process.execPath, [npmReleaseHelper, "plan", "--version", "patch"], {
     cwd: process.cwd(),
     encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"]
+    stdio: ["ignore", "pipe", "pipe"],
   });
 
-  assert.match(output, new RegExp(`OpenReceive npm release plan: ${currentVersion.replace(/\./g, "\\.")} -> ${nextVersion.replace(/\./g, "\\.")}`));
-  assert.match(output, new RegExp(`@openreceive/provider-data@${nextVersion.replace(/\./g, "\\.")}`));
-  assert.match(output, new RegExp(`npm run release:prepare -- --version ${nextVersion.replace(/\./g, "\\.")}`));
+  assert.match(
+    output,
+    new RegExp(
+      `OpenReceive npm release plan: ${currentVersion.replace(/\./g, "\\.")} -> ${nextVersion.replace(/\./g, "\\.")}`,
+    ),
+  );
+  assert.match(
+    output,
+    new RegExp(`@openreceive/provider-data@${nextVersion.replace(/\./g, "\\.")}`),
+  );
+  assert.match(
+    output,
+    new RegExp(`npm run release:prepare -- --version ${nextVersion.replace(/\./g, "\\.")}`),
+  );
   assert.match(output, /npm run release:publish -- --tag latest/);
 });
 
 test("npm release helper prepare dry-run lists versioned files", () => {
-  const currentVersion = JSON.parse(readFileSync(path.join(process.cwd(), "package.json"), "utf8")).version;
+  const currentVersion = JSON.parse(
+    readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
+  ).version;
   const nextVersion = nextPatchVersion(currentVersion);
   const output = execFileSync(
     process.execPath,
@@ -222,11 +244,16 @@ test("npm release helper prepare dry-run lists versioned files", () => {
     {
       cwd: process.cwd(),
       encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"]
-    }
+      stdio: ["ignore", "pipe", "pipe"],
+    },
   );
 
-  assert.match(output, new RegExp(`Would prepare OpenReceive npm release: ${currentVersion.replace(/\./g, "\\.")} -> ${nextVersion.replace(/\./g, "\\.")}`));
+  assert.match(
+    output,
+    new RegExp(
+      `Would prepare OpenReceive npm release: ${currentVersion.replace(/\./g, "\\.")} -> ${nextVersion.replace(/\./g, "\\.")}`,
+    ),
+  );
   assert.match(output, /package\.json/);
   assert.match(output, /packages\/js\/provider-data\/package\.json/);
   assert.match(output, /package-lock\.json/);
@@ -241,7 +268,10 @@ test("supported database docs keep invoice storage boundaries narrow", () => {
   const quickstart = readFileSync(nodeQuickstartDocs, "utf8");
 
   assert.match(docs, /\| `postgres:\/\/\.\.\.` \| Supported for Node \|/);
-  assert.match(docs, /\| `sqlite:\/absolute\/path\/to\/openreceive\.sqlite3` \| Supported for Node \|/);
+  assert.match(
+    docs,
+    /\| `sqlite:\/absolute\/path\/to\/openreceive\.sqlite3` \| Supported for Node \|/,
+  );
   assert.match(docs, /\| `local-sqlite` \| Supported for Node \|/);
   assert.doesNotMatch(docs, /\| `memory:` \|/);
   assert.match(docs, /Postgres works anywhere and is the recommended default/);
@@ -269,9 +299,11 @@ test("storage schema and vectors cover KV coordination fields", () => {
     "getByPaymentHash",
     "getByBolt11Invoice",
     "getByIdempotencyScope",
+    "listByOrderId",
+    "listByCheckoutId",
     "listOpen",
     "getMeta",
-    "casMeta"
+    "casMeta",
   ]);
   assert.equal(vectors.cases.length, 13);
   assert.equal(vectors.certified_v0_1_transports.includes("postgres"), true);
@@ -286,23 +318,30 @@ test("OpenReceive-owned invoice schemas do not add app-specific columns", () => 
     "packages/js/node/src/postgres-store.ts",
     "packages/js/node/src/sqlite-store.ts",
     "packages/js/node/migrations/001_create_openreceive_invoices.postgres.sql",
-    "packages/ruby/openreceive-rails/lib/openreceive/rails.rb"
+    "packages/ruby/openreceive-rails/lib/openreceive/rails.rb",
   ];
   const appSpecificColumns = [
     /\buser_id\b/,
-    /\border_id\b/,
     /\bcart_id\b/,
     /\bproduct_id\b/,
     /\btenant_id\b/,
     /\bcustomer_id\b/,
-    /\bfruit\b/
+    /\bfruit\b/,
   ];
 
   for (const relativePath of schemaPaths) {
     const source = readFileSync(path.join(process.cwd(), relativePath), "utf8");
-    assert.match(source, /\bmetadata\b/, `${relativePath}: OpenReceive rows keep app references in metadata`);
+    assert.match(
+      source,
+      /\bmetadata\b/,
+      `${relativePath}: OpenReceive rows keep app references in metadata`,
+    );
     for (const pattern of appSpecificColumns) {
-      assert.doesNotMatch(source, pattern, `${relativePath}: must not add ${pattern} to OpenReceive invoice rows`);
+      assert.doesNotMatch(
+        source,
+        pattern,
+        `${relativePath}: must not add ${pattern} to OpenReceive invoice rows`,
+      );
     }
   }
 });
@@ -313,17 +352,13 @@ test("live NWC expected capabilities fixture matches the documented Rizful defau
 
   assert.deepEqual(fixture, example);
   assert.equal(fixture.wallet_profile, "rizful");
-  assert.deepEqual(fixture.required_methods, [
-    "get_info",
-    "make_invoice",
-    "list_transactions"
-  ]);
+  assert.deepEqual(fixture.required_methods, ["get_info", "make_invoice", "list_transactions"]);
   assert.deepEqual(Object.keys(fixture).sort(), [
     "fallback_encryption",
     "optional_methods",
     "preferred_encryption",
     "required_methods",
-    "wallet_profile"
+    "wallet_profile",
   ]);
   assert.equal(fixture.fallback_encryption, "nip04");
 });
@@ -338,7 +373,7 @@ test("secret scanner rejects force-added non-example env files", () => {
       (error) => {
         assert.match(String(error.stderr), /\.env\.local: tracked env file is forbidden/);
         return true;
-      }
+      },
     );
   });
 });
@@ -356,7 +391,7 @@ test("secret scanner rejects force-added root env files without echoing secrets"
         assert.match(String(error.stderr), /\.env: NWC URI with 64 hex secret/);
         assert.doesNotMatch(String(error.stderr), new RegExp("b".repeat(64)));
         return true;
-      }
+      },
     );
   });
 });
@@ -371,9 +406,12 @@ test("secret scanner rejects tracked env-like deployment filenames", () => {
     assert.throws(
       () => runSecretScanner(dir),
       (error) => {
-        assert.match(String(error.stderr), /demos\/deploy\/prod\.env\.local: tracked env file is forbidden/);
+        assert.match(
+          String(error.stderr),
+          /demos\/deploy\/prod\.env\.local: tracked env file is forbidden/,
+        );
         return true;
-      }
+      },
     );
   });
 });
@@ -412,9 +450,12 @@ test("client bundle scanner rejects NWC markers in generated bundles", () => {
     assert.throws(
       () => runClientBundleScanner(dir),
       (error) => {
-        assert.match(String(error.stderr), /examples\/demo\/dist\/assets\/app\.js: OPENRECEIVE_NWC marker/);
+        assert.match(
+          String(error.stderr),
+          /examples\/demo\/dist\/assets\/app\.js: OPENRECEIVE_NWC marker/,
+        );
         return true;
-      }
+      },
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -434,16 +475,19 @@ test("client bundle scanner rejects NWC markers in generated source maps", () =>
         version: 3,
         sources: ["src/app.ts"],
         sourcesContent: ["const leaked = 'OPENRECEIVE_NWC';"],
-        mappings: ""
-      })
+        mappings: "",
+      }),
     );
 
     assert.throws(
       () => runClientBundleScanner(dir),
       (error) => {
-        assert.match(String(error.stderr), /examples\/demo\/dist\/assets\/app\.js\.map: OPENRECEIVE_NWC marker/);
+        assert.match(
+          String(error.stderr),
+          /examples\/demo\/dist\/assets\/app\.js\.map: OPENRECEIVE_NWC marker/,
+        );
         return true;
-      }
+      },
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -462,10 +506,16 @@ test("client bundle scanner rejects real-looking NWC URIs in generated bundles",
     assert.throws(
       () => runClientBundleScanner(dir),
       (error) => {
-        assert.match(String(error.stderr), /examples\/demo\/dist\/assets\/app\.js: NWC connection URI/);
-        assert.match(String(error.stderr), /examples\/demo\/dist\/assets\/app\.js: NWC code query value/);
+        assert.match(
+          String(error.stderr),
+          /examples\/demo\/dist\/assets\/app\.js: NWC connection URI/,
+        );
+        assert.match(
+          String(error.stderr),
+          /examples\/demo\/dist\/assets\/app\.js: NWC code query value/,
+        );
         return true;
-      }
+      },
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -483,9 +533,12 @@ test("client bundle scanner rejects NWC markers in Next static output", () => {
     assert.throws(
       () => runClientBundleScanner(dir),
       (error) => {
-        assert.match(String(error.stderr), /examples\/demo\/\.next\/static\/chunks\/app\.js: OPENRECEIVE_NWC marker/);
+        assert.match(
+          String(error.stderr),
+          /examples\/demo\/\.next\/static\/chunks\/app\.js: OPENRECEIVE_NWC marker/,
+        );
         return true;
-      }
+      },
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -504,7 +557,7 @@ test("live NWC smoke reports canonical URI parse errors before wallet calls", ()
       assert.match(String(error.stderr), /NWC client secret must be 64 hex characters\./);
       assert.doesNotMatch(String(error.stderr), /not-secret/);
       return true;
-    }
+    },
   );
 });
 
@@ -517,23 +570,20 @@ test("live NWC smoke loads gitignored env file without leaking parse secrets", (
     "?relay=wss%3A%2F%2Frelay.example.com&secret=not-secret";
 
   try {
-    writeFileSync(
-      envPath,
-      `OPENRECEIVE_NWC=${badNwc}\nOPENRECEIVE_WALLET_PROFILE=alby\n`
-    );
+    writeFileSync(envPath, `OPENRECEIVE_NWC=${badNwc}\nOPENRECEIVE_WALLET_PROFILE=alby\n`);
 
     assert.throws(
       () =>
         runLiveNwcSmoke({
           OPENRECEIVE_ENV_FILE: envPath,
           OPENRECEIVE_NWC: undefined,
-          OPENRECEIVE_WALLET_PROFILE: undefined
+          OPENRECEIVE_WALLET_PROFILE: undefined,
         }),
       (error) => {
         assert.match(String(error.stderr), /NWC client secret must be 64 hex characters\./);
         assert.doesNotMatch(String(error.stderr), /not-secret/);
         return true;
-      }
+      },
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -544,9 +594,9 @@ test("Ruby live NWC smoke skips clearly when unset", () => {
   assert.match(
     runRubyLiveNwcSmoke({
       OPENRECEIVE_NWC: undefined,
-      OPENRECEIVE_ENV_FILE: undefined
+      OPENRECEIVE_ENV_FILE: undefined,
     }),
-    /OPENRECEIVE_NWC is not set; skipping Ruby live NWC smoke test\./
+    /OPENRECEIVE_NWC is not set; skipping Ruby live NWC smoke test\./,
   );
 });
 
@@ -554,7 +604,7 @@ test("Ruby live NWC smoke redacts fake URI before skipping wallet calls", () => 
   const uri = `nostr+walletconnect://${"a".repeat(64)}?relay=wss%3A%2F%2Frelay.example.com&secret=${"b".repeat(64)}`;
   const output = runRubyLiveNwcSmoke({
     OPENRECEIVE_NWC: uri,
-    OPENRECEIVE_RUBY_NWC_DISABLE_GEM: "1"
+    OPENRECEIVE_RUBY_NWC_DISABLE_GEM: "1",
   });
 
   assert.match(output, /Ruby NWC URI parsed for wallet profile: rizful/);

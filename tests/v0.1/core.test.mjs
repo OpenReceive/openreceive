@@ -15,11 +15,9 @@ import {
   parseNwcUri,
   quoteFiatToMsats,
   refreshInvoiceStatus,
-  redactNwcUri
+  redactNwcUri,
 } from "../../packages/js/core/src/index.ts";
-import {
-  OPENRECEIVE_ERROR_CODES
-} from "../../packages/js/core/src/contracts.ts";
+import { OPENRECEIVE_ERROR_CODES } from "../../packages/js/core/src/contracts.ts";
 import {
   OPENRECEIVE_COUNTRY_MAP_HEIGHT,
   OPENRECEIVE_COUNTRY_MAP_VIEW_BOX,
@@ -72,12 +70,11 @@ import {
   parseOpenReceiveRegion,
   parseOpenReceiveResolvedTheme,
   parseOpenReceiveThemePreference,
-  shouldCheckoutShowWaiting
+  shouldCheckoutShowWaiting,
 } from "../../packages/js/browser/src/internal.ts";
 import { openReceiveCountryMapLandPaths } from "../../packages/js/browser/src/country-map.ts";
 
-const PAYMENT_HASH =
-  "a".repeat(64);
+const PAYMENT_HASH = "a".repeat(64);
 const NWC_URI =
   "nostr+walletconnect://" +
   "b".repeat(64) +
@@ -90,10 +87,15 @@ function seedRecord(overrides = {}) {
   const flatOverrides = { ...overrides };
   delete flatOverrides.row;
   delete flatOverrides.rev;
+  const invoiceId = rowOverrides.invoice_id ?? flatOverrides.invoice_id ?? "or_inv_test";
+  const metadataOverrides = {
+    ...(flatOverrides.metadata ?? {}),
+    ...(rowOverrides.metadata ?? {}),
+  };
   return {
     rev: overrides.rev ?? 0,
     row: {
-      invoice_id: "or_inv_test",
+      invoice_id: invoiceId,
       namespace: "demo:tenant",
       operation: "invoice.create",
       idempotency_key: "order-1",
@@ -106,10 +108,49 @@ function seedRecord(overrides = {}) {
       settlement_action_state: "pending",
       created_at: 1000,
       expires_at: 1600,
-      metadata: {},
       ...flatOverrides,
-      ...rowOverrides
-    }
+      ...rowOverrides,
+      metadata: {
+        order_uuid: metadataOverrides.order_uuid ?? invoiceId,
+        checkout_id: metadataOverrides.checkout_id ?? `or_chk_${invoiceId}`,
+        ...metadataOverrides,
+      },
+    },
+  };
+}
+
+function checkoutSnapshot(invoiceOverrides = {}, checkoutOverrides = {}) {
+  const invoice = {
+    invoice_id: invoiceOverrides.invoice_id ?? "or_inv_checkout",
+    invoice: invoiceOverrides.invoice ?? "lnbc-checkout",
+    payment_hash: invoiceOverrides.payment_hash ?? PAYMENT_HASH,
+    amount_msats: invoiceOverrides.amount_msats ?? checkoutOverrides.amount_msats ?? 200000,
+    transaction_state: invoiceOverrides.transaction_state ?? "pending",
+    workflow_state: invoiceOverrides.workflow_state ?? "invoice_created",
+    ...(invoiceOverrides.expires_at === undefined
+      ? {}
+      : { expires_at: invoiceOverrides.expires_at }),
+    ...(invoiceOverrides.settled_at === undefined
+      ? {}
+      : { settled_at: invoiceOverrides.settled_at }),
+    ...(invoiceOverrides.fiat_quote === undefined
+      ? {}
+      : { fiat_quote: invoiceOverrides.fiat_quote }),
+  };
+  const status =
+    checkoutOverrides.status ?? (invoice.transaction_state === "settled" ? "paid" : "open");
+  return {
+    checkout_id: checkoutOverrides.checkout_id ?? `or_chk_${invoice.invoice_id}`,
+    order_id: checkoutOverrides.order_id ?? `order_${invoice.invoice_id}`,
+    status,
+    amount_msats: checkoutOverrides.amount_msats ?? invoice.amount_msats,
+    ...(checkoutOverrides.fiat === undefined ? {} : { fiat: checkoutOverrides.fiat }),
+    ...(status === "paid" ? {} : { active: invoice }),
+    invoices: [invoice],
+    ...(checkoutOverrides.paid_at === undefined ? {} : { paid_at: checkoutOverrides.paid_at }),
+    ...(checkoutOverrides.created_at === undefined
+      ? {}
+      : { created_at: checkoutOverrides.created_at }),
   };
 }
 
@@ -117,9 +158,9 @@ test("quotes static USD fiat to whole-sat msats without floating point drift", (
   const quote = quoteFiatToMsats({
     fiat: {
       currency: "USD",
-      value: "0.10"
+      value: "0.10",
     },
-    as_of: 1781740800
+    as_of: 1781740800,
   });
 
   assert.equal(quote.amount_sats, 200);
@@ -132,31 +173,32 @@ test("quotes BTC and satoshi amounts without price feeds", () => {
   assert.deepEqual(
     quoteBitcoinAmountToMsats({
       currency: "BTC",
-      value: "0.005"
+      value: "0.005",
     }),
     {
       amount_sats: 500000,
-      amount_msats: 500000000
-    }
+      amount_msats: 500000000,
+    },
   );
 
   assert.deepEqual(
     quoteBitcoinAmountToMsats({
       currency: "SATS",
-      value: "7000"
+      value: "7000",
     }),
     {
       amount_sats: 7000,
-      amount_msats: 7000000
-    }
+      amount_msats: 7000000,
+    },
   );
 
   assert.throws(
-    () => quoteBitcoinAmountToMsats({
-      currency: "SAT",
-      value: "1.5"
-    }),
-    /SATS amount must be a whole number of satoshis/
+    () =>
+      quoteBitcoinAmountToMsats({
+        currency: "SAT",
+        value: "1.5",
+      }),
+    /SATS amount must be a whole number of satoshis/,
   );
 });
 
@@ -197,8 +239,8 @@ test("canonical OpenReceive errors expose stable schema codes", () => {
     retryable: true,
     request_id: "req_123",
     details: {
-      relay: "wss://relay.example.com"
-    }
+      relay: "wss://relay.example.com",
+    },
   });
 
   assert.deepEqual(error.toJSON(), {
@@ -207,8 +249,8 @@ test("canonical OpenReceive errors expose stable schema codes", () => {
     retryable: true,
     request_id: "req_123",
     details: {
-      relay: "wss://relay.example.com"
-    }
+      relay: "wss://relay.example.com",
+    },
   });
 });
 
@@ -216,7 +258,7 @@ test("settlement detection ignores preimage without settled state", () => {
   const detection = classifyTransactionSettlement({
     payment_hash: PAYMENT_HASH,
     preimage: "d".repeat(64),
-    state: "pending"
+    state: "pending",
   });
 
   assert.equal(detection.settled, false);
@@ -231,18 +273,20 @@ test("refreshInvoiceStatus scans at most one transaction page and advances curso
     const paymentHash = index === 0 ? PAYMENT_HASH : index.toString(16).padStart(64, "0");
     const invoiceId = `or_inv_page_${index}`;
     const invoice = `lnbc-page-${index}`;
-    await store.putIfAbsent(seedRecord({
-      invoice_id: invoiceId,
-      idempotency_key: `order-page-${index}`,
-      payment_hash: paymentHash,
-      invoice
-    }));
+    await store.putIfAbsent(
+      seedRecord({
+        invoice_id: invoiceId,
+        idempotency_key: `order-page-${index}`,
+        payment_hash: paymentHash,
+        invoice,
+      }),
+    );
     transactions.push({
       type: "incoming",
       invoice,
       payment_hash: paymentHash,
       state: "pending",
-      created_at: 1000
+      created_at: 1000,
     });
   }
 
@@ -258,9 +302,9 @@ test("refreshInvoiceStatus scans at most one transaction page and advances curso
     async listTransactions(request) {
       requests.push(request);
       return {
-        transactions: transactions.slice(request.offset, request.offset + request.limit)
+        transactions: transactions.slice(request.offset, request.offset + request.limit),
       };
-    }
+    },
   };
   const record = await store.get("or_inv_page_0");
 
@@ -268,7 +312,7 @@ test("refreshInvoiceStatus scans at most one transaction page and advances curso
     store,
     client,
     record,
-    clock: () => now
+    clock: () => now,
   });
   assert.equal(first.wallet_scan_performed, true);
   assert.equal(first.transactions_checked, 20);
@@ -278,7 +322,7 @@ test("refreshInvoiceStatus scans at most one transaction page and advances curso
     from: 1000,
     until: 1000,
     limit: 20,
-    offset: 0
+    offset: 0,
   });
   assert.deepEqual(JSON.parse((await store.getMeta("transaction_scan_cursor:1000:1000")).value), {
     from: 1000,
@@ -286,14 +330,14 @@ test("refreshInvoiceStatus scans at most one transaction page and advances curso
     limit: 20,
     offset: 20,
     cycle: 0,
-    last_page_scanned_at: 1000
+    last_page_scanned_at: 1000,
   });
 
   const gated = await refreshInvoiceStatus({
     store,
     client,
     record: await store.get("or_inv_page_0"),
-    clock: () => now
+    clock: () => now,
   });
   assert.equal(gated.wallet_scan_performed, false);
   assert.equal(requests.length, 1);
@@ -303,7 +347,7 @@ test("refreshInvoiceStatus scans at most one transaction page and advances curso
     store,
     client,
     record: await store.get("or_inv_page_0"),
-    clock: () => now
+    clock: () => now,
   });
   assert.equal(second.wallet_scan_performed, true);
   assert.equal(second.transactions_checked, 5);
@@ -314,18 +358,20 @@ test("refreshInvoiceStatus scans at most one transaction page and advances curso
     limit: 20,
     offset: 0,
     cycle: 1,
-    last_page_scanned_at: 1002
+    last_page_scanned_at: 1002,
   });
 });
 
 test("refreshInvoiceStatus does not advance cursor after wallet scan failure", async () => {
   const store = new InMemoryInvoiceKvStore();
-  await store.putIfAbsent(seedRecord({
-    invoice_id: "or_inv_scan_failure",
-    idempotency_key: "order-scan-failure",
-    payment_hash: PAYMENT_HASH,
-    invoice: "lnbc-scan-failure"
-  }));
+  await store.putIfAbsent(
+    seedRecord({
+      invoice_id: "or_inv_scan_failure",
+      idempotency_key: "order-scan-failure",
+      payment_hash: PAYMENT_HASH,
+      invoice: "lnbc-scan-failure",
+    }),
+  );
 
   let now = 1000;
   let fail = true;
@@ -346,17 +392,17 @@ test("refreshInvoiceStatus does not advance cursor after wallet scan failure", a
           invoice: `lnbc-decoy-${index}`,
           payment_hash: index.toString(16).padStart(64, "0"),
           state: "pending",
-          created_at: 1000
-        }))
+          created_at: 1000,
+        })),
       };
-    }
+    },
   };
 
   const failed = await refreshInvoiceStatus({
     store,
     client,
     record: await store.get("or_inv_scan_failure"),
-    clock: () => now
+    clock: () => now,
   });
   assert.equal(failed.wallet_scan_performed, false);
   assert.equal(failed.transactions_checked, 0);
@@ -369,18 +415,21 @@ test("refreshInvoiceStatus does not advance cursor after wallet scan failure", a
     store,
     client,
     record: await store.get("or_inv_scan_failure"),
-    clock: () => now
+    clock: () => now,
   });
   assert.equal(retried.wallet_scan_performed, true);
   assert.equal(retried.transactions_checked, 20);
-  assert.deepEqual(requests.map((request) => request.offset), [0, 0]);
+  assert.deepEqual(
+    requests.map((request) => request.offset),
+    [0, 0],
+  );
   assert.deepEqual(JSON.parse((await store.getMeta("transaction_scan_cursor:1000:1000")).value), {
     from: 1000,
     until: 1000,
     limit: 20,
     offset: 20,
     cycle: 0,
-    last_page_scanned_at: 1002
+    last_page_scanned_at: 1002,
   });
 });
 
@@ -392,24 +441,26 @@ test("refreshInvoiceStatus settles an old pending invoice on a later page cycle"
     const paymentHash = target ? PAYMENT_HASH : index.toString(16).padStart(64, "0");
     const invoiceId = target ? "or_inv_late_settle" : `or_inv_late_${index}`;
     const invoice = target ? "lnbc-late-settle" : `lnbc-late-${index}`;
-    await store.putIfAbsent(seedRecord({
-      invoice_id: invoiceId,
-      idempotency_key: `order-late-${index}`,
-      payment_hash: paymentHash,
-      invoice,
-      created_at: 1000,
-      expires_at: 1300,
-      metadata: {
-        order_uuid: invoiceId
-      }
-    }));
+    await store.putIfAbsent(
+      seedRecord({
+        invoice_id: invoiceId,
+        idempotency_key: `order-late-${index}`,
+        payment_hash: paymentHash,
+        invoice,
+        created_at: 1000,
+        expires_at: 1300,
+        metadata: {
+          order_uuid: invoiceId,
+        },
+      }),
+    );
     transactions.push({
       type: "incoming",
       invoice,
       payment_hash: paymentHash,
       state: target ? "settled" : "pending",
       created_at: 1000,
-      ...(target ? { settled_at: 1100 } : {})
+      ...(target ? { settled_at: 1100 } : {}),
     });
   }
 
@@ -424,9 +475,9 @@ test("refreshInvoiceStatus settles an old pending invoice on a later page cycle"
     },
     async listTransactions(request) {
       return {
-        transactions: transactions.slice(request.offset, request.offset + request.limit)
+        transactions: transactions.slice(request.offset, request.offset + request.limit),
       };
-    }
+    },
   };
 
   const first = await refreshInvoiceStatus({
@@ -436,7 +487,7 @@ test("refreshInvoiceStatus settles an old pending invoice on a later page cycle"
     clock: () => now,
     settlementAction: async () => {
       settlementActionCalls += 1;
-    }
+    },
   });
   assert.equal(first.reason, "wallet_no_match");
   assert.equal(settlementActionCalls, 0);
@@ -451,7 +502,7 @@ test("refreshInvoiceStatus settles an old pending invoice on a later page cycle"
       settlementActionCalls += 1;
       assert.equal(invoice.invoice_id, "or_inv_late_settle");
       assert.equal(transaction.payment_hash, PAYMENT_HASH);
-    }
+    },
   });
   const stored = await store.get("or_inv_late_settle");
 
@@ -464,11 +515,13 @@ test("refreshInvoiceStatus settles an old pending invoice on a later page cycle"
 
 test("refreshInvoiceStatus durable gate prevents request storms", async () => {
   const store = new InMemoryInvoiceKvStore();
-  await store.putIfAbsent(seedRecord({
-    invoice_id: "or_inv_gate",
-    idempotency_key: "order-gate",
-    invoice: "lnbc-gate"
-  }));
+  await store.putIfAbsent(
+    seedRecord({
+      invoice_id: "or_inv_gate",
+      idempotency_key: "order-gate",
+      invoice: "lnbc-gate",
+    }),
+  );
 
   let calls = 0;
   const client = {
@@ -481,18 +534,18 @@ test("refreshInvoiceStatus durable gate prevents request storms", async () => {
     async listTransactions() {
       calls += 1;
       return { transactions: [] };
-    }
+    },
   };
   const record = await store.get("or_inv_gate");
   const [first, second] = await Promise.all([
     refreshInvoiceStatus({ store, client, record, clock: () => 1000 }),
-    refreshInvoiceStatus({ store, client, record, clock: () => 1000 })
+    refreshInvoiceStatus({ store, client, record, clock: () => 1000 }),
   ]);
 
   assert.equal(calls, 1);
   assert.equal(
     [first.wallet_scan_performed, second.wallet_scan_performed].filter(Boolean).length,
-    1
+    1,
   );
 });
 
@@ -501,7 +554,7 @@ test("in-memory KV storage replays same idempotency request and conflicts on dri
   const firstHash = await createIdempotencyRequestHash({ amount_msats: 200000 });
   const secondHash = await createIdempotencyRequestHash({ amount_msats: 300000 });
   const record = seedRecord({
-    idempotency_request_hash: firstHash
+    idempotency_request_hash: firstHash,
   });
 
   assert.equal((await putCreatedInvoiceRecord({ store, record })).status, "created");
@@ -511,9 +564,9 @@ test("in-memory KV storage replays same idempotency request and conflicts on dri
       getIdempotentRecord({
         store,
         scope: record.row,
-        idempotency_request_hash: secondHash
+        idempotency_request_hash: secondHash,
       }),
-    /different request body/
+    /different request body/,
   );
 });
 
@@ -526,7 +579,7 @@ test("browser helpers create lightning URI, copy, open, and QR payloads", async 
       assert.equal(options.margin, 4);
       assert.equal(options.color.light, "#FFFFFFFF");
       return "<svg></svg>";
-    }
+    },
   };
 
   assert.equal(createLightningUri("lnbc-test"), "lightning:lnbc-test");
@@ -534,16 +587,16 @@ test("browser helpers create lightning URI, copy, open, and QR payloads", async 
   await copyInvoice({
     invoice: "lnbc-test",
     clipboard: {
-      writeText: async (value) => writes.push(value)
-    }
+      writeText: async (value) => writes.push(value),
+    },
   });
   assert.deepEqual(writes, ["lnbc-test"]);
   assert.equal(
     openWallet({
       invoice: "lnbc-test",
-      open: (uri) => opens.push(uri)
+      open: (uri) => opens.push(uri),
     }),
-    "lightning:lnbc-test"
+    "lightning:lnbc-test",
   );
   assert.deepEqual(opens, ["lightning:lnbc-test"]);
 });
@@ -556,10 +609,10 @@ test("browser owns checkout display-safe labels", () => {
     fiat_quote: {
       fiat: {
         currency: "USD",
-        value: "0.05"
-      }
+        value: "0.05",
+      },
     },
-    transaction_state: "pending"
+    transaction_state: "pending",
   });
 
   assert.equal(model.lightningUri, "lightning:lnbc-display");
@@ -570,15 +623,12 @@ test("browser owns checkout display-safe labels", () => {
   assert.equal(formatOpenReceivePaymentHashLabel("short-hash"), "short-hash");
   assert.throws(
     () => assertOpenReceiveDisplayInvoice("nostr+walletconnect://secret"),
-    /must not be an NWC/
+    /must not be an NWC/,
   );
 });
 
 test("browser owns display HTML escaping for string-rendered adapters", () => {
-  assert.equal(
-    escapeOpenReceiveHtml(`<&>"invoice"`),
-    "&lt;&amp;&gt;&quot;invoice&quot;"
-  );
+  assert.equal(escapeOpenReceiveHtml(`<&>"invoice"`), "&lt;&amp;&gt;&quot;invoice&quot;");
 });
 
 test("browser owns checkout display data to state conversion", () => {
@@ -590,47 +640,56 @@ test("browser owns checkout display data to state conversion", () => {
     transaction_state: "pending",
     workflow_state: "invoice_created",
     expires_at: 2000,
-    settled_at: 1999
+    settled_at: 1999,
   };
 
   const snapshot = createCheckoutSnapshotFromDisplayData(displayData);
-  assert.deepEqual(snapshot, displayData);
+  assert.equal(snapshot.checkout_id, "or_inv_display_state");
+  assert.equal(snapshot.status, "paid");
+  assert.equal(snapshot.paid_at, 1999);
+  assert.deepEqual(snapshot.invoices[0], displayData);
 
   const state = createCheckoutStateFromDisplayData(displayData, {
-    now: 1940
+    now: 1940,
   });
   assert.equal(state.invoice_id, "or_inv_display_state");
   assert.equal(state.lightningUri, "lightning:lnbc-display-state");
   assert.equal(state.amount_msats, 21000);
-  assert.equal(state.phase, "invoice_created");
+  assert.equal(state.phase, "settled");
   assert.equal(state.expiresInSeconds, 60);
   assert.equal(state.settled_at, 1999);
   const defaultClockState = createCheckoutStateFromDisplayData({
     ...displayData,
-    expires_at: Math.floor(Date.now() / 1000) + 30
+    expires_at: Math.floor(Date.now() / 1000) + 30,
   });
   assert.equal(defaultClockState.expiresInSeconds !== undefined, true);
   assert.equal(defaultClockState.expiresInSeconds <= 30, true);
   assert.equal(defaultClockState.expiresInSeconds >= 0, true);
 
   assert.throws(
-    () => createCheckoutSnapshotFromDisplayData({
-      invoice: "lnbc-no-id"
-    }),
-    /invoice_id is required for checkout state/
+    () =>
+      createCheckoutSnapshotFromDisplayData({
+        invoice: "lnbc-no-id",
+      }),
+    /invoice_id is required for checkout state/,
   );
 });
 
 test("browser owns checkout payment status display model", () => {
-  const state = createCheckoutState({
-    invoice_id: "or_inv_status",
-    invoice: "lnbc-status",
-    transaction_state: "pending",
-    workflow_state: "verifying",
-    expires_at: 1065
-  }, {
-    now: 1000
-  });
+  const state = createCheckoutState(
+    {
+      ...checkoutSnapshot({
+        invoice_id: "or_inv_status",
+        invoice: "lnbc-status",
+        transaction_state: "pending",
+        workflow_state: "verifying",
+        expires_at: 1065,
+      }),
+    },
+    {
+      now: 1000,
+    },
+  );
 
   const status = createCheckoutStatusModel(state, { now: 1000 });
   assert.equal(status.phase, "verifying");
@@ -648,7 +707,7 @@ test("browser owns checkout payment status display model", () => {
     phase: "settled",
     settled: true,
     terminal: false,
-    expiresInSeconds: undefined
+    expiresInSeconds: undefined,
   });
   assert.equal(settled.waiting, false);
   assert.equal(settled.title, "Payment received");
@@ -657,14 +716,14 @@ test("browser owns checkout payment status display model", () => {
   const lightweight = createCheckoutStatusModel({
     phase: "expired",
     waiting: false,
-    expiresInSeconds: 0
+    expiresInSeconds: 0,
   });
   assert.equal(lightweight.title, "Invoice expired");
   assert.equal(lightweight.countdownLabel, undefined);
 
   const zeroCountdown = createCheckoutStatusModel({
     ...state,
-    expiresInSeconds: 0
+    expiresInSeconds: 0,
   });
   assert.equal(zeroCountdown.phase, "expired");
   assert.equal(zeroCountdown.waiting, false);
@@ -675,13 +734,10 @@ test("browser owns checkout payment status display model", () => {
 test("browser owns reusable checkout attribute parsers", () => {
   assert.equal(parseOpenReceiveOptionalInteger(null), undefined);
   assert.equal(parseOpenReceiveOptionalInteger(""), undefined);
-  assert.equal(
-    parseOpenReceiveOptionalInteger("123", { label: "amount-msats" }),
-    123
-  );
+  assert.equal(parseOpenReceiveOptionalInteger("123", { label: "amount-msats" }), 123);
   assert.throws(
     () => parseOpenReceiveOptionalInteger("-1", { label: "expires-at" }),
-    /expires-at must be a non-negative safe integer/
+    /expires-at must be a non-negative safe integer/,
   );
   assert.equal(parseOpenReceiveBooleanAttribute(null), undefined);
   assert.equal(parseOpenReceiveBooleanAttribute("false"), false);
@@ -706,14 +762,14 @@ test("browser owns transient copy feedback timing", () => {
           timers.delete(id);
           callback();
         },
-        delay
+        delay,
       });
       return id;
     },
     clearTimeout: (id) => {
       timers.delete(id);
     },
-    onValue: (value) => values.push(value)
+    onValue: (value) => values.push(value),
   });
 
   controller.show("Copied!");
@@ -739,26 +795,19 @@ test("browser owns shared country map geometry", () => {
   assert.equal(OPENRECEIVE_COUNTRY_MAP_VIEW_BOX, "0 0 820 420");
   assert.deepEqual(
     openReceiveCountryMapRegions.map((region) => region.id),
-    [
-      "north-america",
-      "latin-america",
-      "europe",
-      "africa",
-      "middle-east",
-      "asia-pacific"
-    ]
+    ["north-america", "latin-america", "europe", "africa", "middle-east", "asia-pacific"],
   );
   assert.equal(openReceiveCountryMapLandPaths.length > 0, true);
   assert.match(openReceiveCountryMapLandPaths[0].d, /^M/);
   const countries = [
     { code: "US", name: "United States", currency: "USD", coverage: "deep" },
-    { code: "GB", name: "United Kingdom", currency: "GBP", coverage: "thin" }
+    { code: "GB", name: "United Kingdom", currency: "GBP", coverage: "thin" },
   ];
   const picker = createOpenReceiveCountryPickerModel({
     countries,
     selectedCountryCode: "US",
     selectedRegion: "north-america",
-    hoveredCountryCode: "GB"
+    hoveredCountryCode: "GB",
   });
   assert.equal(formatOpenReceiveCountryMetaLabel(countries[0]), "USD");
   assert.equal(picker.selectedCountryDisplay?.label, "United States");
@@ -784,8 +833,8 @@ test("browser request checkout invoice helper owns idempotent invoice POST shape
     amount: {
       fiat: {
         currency: "USD",
-        value: "10.00"
-      }
+        value: "10.00",
+      },
     },
     memo: "Browser helper invoice",
     expiresInSeconds: 600,
@@ -794,32 +843,40 @@ test("browser request checkout invoice helper owns idempotent invoice POST shape
       return {
         ok: true,
         json: async () => ({
-          invoice_id: "or_inv_browser_create",
-          invoice: "lnbc-browser-create",
-          payment_hash: PAYMENT_HASH,
+          checkout_id: "or_chk_browser_create",
+          order_id: "order-browser-create",
+          status: "open",
           amount_msats: 200000,
-          order_uuid: "order-browser-create",
-          transaction_state: "pending",
-          workflow_state: "invoice_created"
-        })
+          active: {
+            invoice_id: "or_inv_browser_create",
+            invoice: "lnbc-browser-create",
+            payment_hash: PAYMENT_HASH,
+            amount_msats: 200000,
+            order_uuid: "order-browser-create",
+            transaction_state: "pending",
+            workflow_state: "invoice_created",
+          },
+          invoices: [],
+        }),
       };
-    }
+    },
   });
 
-  assert.equal(invoice.invoice_id, "or_inv_browser_create");
+  assert.equal(invoice.checkout_id, "or_chk_browser_create");
+  assert.equal(invoice.active.invoice_id, "or_inv_browser_create");
   assert.equal(requests.length, 1);
-  assert.equal(requests[0].url, "/openreceive/v1/invoices");
+  assert.equal(requests[0].url, "/openreceive/v1/orders/order-browser-create/checkouts");
   assert.equal(requests[0].init.method, "POST");
   assert.equal(requests[0].init.headers["Content-Type"], "application/json");
   assert.equal("Idempotency-Key" in requests[0].init.headers, false);
   assert.deepEqual(JSON.parse(requests[0].init.body), {
-    order_uuid: "order-browser-create",
+    order_id: "order-browser-create",
     fiat: {
       currency: "USD",
-      value: "10.00"
+      value: "10.00",
     },
     optional_invoice_description: "Browser helper invoice",
-    expiry: 600
+    expiry: 600,
   });
 
   await requestCheckoutInvoice({
@@ -827,89 +884,118 @@ test("browser request checkout invoice helper owns idempotent invoice POST shape
     amount: {
       btc: {
         currency: "BTC",
-        value: "0.005"
-      }
+        value: "0.005",
+      },
     },
     fetch: async (url, init) => {
       requests.push({ url, init });
       return {
         ok: true,
         json: async () => ({
-          invoice_id: "or_inv_browser_btc",
-          invoice: "lnbc-browser-btc",
-          payment_hash: PAYMENT_HASH,
+          checkout_id: "or_chk_browser_btc",
+          order_id: "order-browser-btc",
+          status: "open",
           amount_msats: 500000000,
-          order_uuid: "order-browser-btc",
-          transaction_state: "pending",
-          workflow_state: "invoice_created"
-        })
+          active: {
+            invoice_id: "or_inv_browser_btc",
+            invoice: "lnbc-browser-btc",
+            payment_hash: PAYMENT_HASH,
+            amount_msats: 500000000,
+            order_uuid: "order-browser-btc",
+            transaction_state: "pending",
+            workflow_state: "invoice_created",
+          },
+          invoices: [],
+        }),
       };
-    }
+    },
   });
   assert.deepEqual(JSON.parse(requests[1].init.body), {
-    order_uuid: "order-browser-btc",
+    order_id: "order-browser-btc",
     amount: {
       currency: "BTC",
-      value: "0.005"
-    }
+      value: "0.005",
+    },
   });
 
   await assert.rejects(
-    () => requestCheckoutInvoice({
-      orderId: "",
-      amount: { msats: 200000 },
-      fetch: async () => ({
-        ok: true,
-        json: async () => ({})
-      })
-    }),
-    /orderId/
+    () =>
+      requestCheckoutInvoice({
+        orderId: "",
+        amount: { msats: 200000 },
+        fetch: async () => ({
+          ok: true,
+          json: async () => ({}),
+        }),
+      }),
+    /orderId/,
   );
   await assert.rejects(
-    () => requestCheckoutInvoice({
-      orderId: "bad-nwc",
-      amount: { sats: 200 },
-      memo: `nostr+walletconnect://${"a".repeat(64)}?secret=${"b".repeat(64)}`,
-      fetch: async () => ({
-        ok: true,
-        json: async () => ({})
-      })
-    }),
-    /NWC/
+    () =>
+      requestCheckoutInvoice({
+        orderId: "bad-nwc",
+        amount: { sats: 200 },
+        memo: `nostr+walletconnect://${"a".repeat(64)}?secret=${"b".repeat(64)}`,
+        fetch: async () => ({
+          ok: true,
+          json: async () => ({}),
+        }),
+      }),
+    /NWC/,
   );
   await assert.rejects(
-    () => requestCheckoutInvoice({
-      orderId: "server-error",
-      amount: { sats: 200 },
-      fetch: async () => ({
-        ok: false,
-        json: async () => ({
-          message: "Could not quote fiat."
-        })
-      })
-    }),
-    /Could not quote fiat/
+    () =>
+      requestCheckoutInvoice({
+        orderId: "server-error",
+        amount: { sats: 200 },
+        fetch: async () => ({
+          ok: false,
+          json: async () => ({
+            message: "Could not quote fiat.",
+          }),
+        }),
+      }),
+    /Could not quote fiat/,
   );
 });
 
 test("browser status fetcher owns display-safe status POST shape", async () => {
   const requests = [];
   const refreshStatus = createOpenReceiveStatusFetcher({
-    statusUrl: "/openreceive/v1/invoices/{invoice_id}/status",
+    statusUrl: "/openreceive/v1/orders/{order_id}/status",
     fetch: async (url, init) => {
       requests.push({ url, init });
       return {
         ok: true,
         json: async () => ({
-          invoice_id: "or_inv_status",
-          payment_hash: PAYMENT_HASH,
-          transaction_state: "settled"
-        })
+          order_id: "order-status",
+          status: "paid",
+          paid: true,
+          paid_checkout: checkoutSnapshot(
+            {
+              invoice_id: "or_inv_status",
+              invoice: "lnbc-status",
+              payment_hash: PAYMENT_HASH,
+              transaction_state: "settled",
+              workflow_state: "settlement_action_pending",
+              settled_at: 1001,
+            },
+            {
+              checkout_id: "or_chk_status",
+              order_id: "order-status",
+              status: "paid",
+              paid_at: 1001,
+            },
+          ),
+          checkouts: [],
+        }),
       };
-    }
+    },
   });
 
   const body = await refreshStatus({
+    checkout_id: "or_chk_status",
+    order_id: "order-status",
     invoice_id: "or_inv_status",
     invoice: "lnbc-status",
     lightningUri: "lightning:lnbc-status",
@@ -918,44 +1004,47 @@ test("browser status fetcher owns display-safe status POST shape", async () => {
     workflow_state: "invoice_created",
     phase: "pending",
     settled: false,
-    terminal: false
+    terminal: false,
+    paid: false,
   });
 
-  assert.deepEqual(body, {
-    invoice_id: "or_inv_status",
-    payment_hash: PAYMENT_HASH,
-    transaction_state: "settled"
-  });
+  assert.equal(body.checkout_id, "or_chk_status");
+  assert.equal(body.status, "paid");
+  assert.equal(body.invoices[0].invoice_id, "or_inv_status");
   assert.equal(requests.length, 1);
-  assert.equal(requests[0].url, "/openreceive/v1/invoices/or_inv_status/status");
+  assert.equal(requests[0].url, "/openreceive/v1/orders/order-status/status");
   assert.equal(requests[0].init.method, "POST");
   assert.equal(requests[0].init.headers["Content-Type"], "application/json");
   assert.deepEqual(JSON.parse(requests[0].init.body), {
-    invoice_id: "or_inv_status"
+    order_id: "order-status",
   });
 
   const failingStatus = createOpenReceiveStatusFetcher({
-    statusUrl: "/openreceive/v1/invoices/{invoice_id}/status",
+    statusUrl: "/openreceive/v1/orders/{order_id}/status",
     fetch: async () => ({
       ok: false,
       json: async () => ({
-        message: "Invoice not found."
-      })
-    })
+        message: "Invoice not found.",
+      }),
+    }),
   });
   await assert.rejects(
-    () => failingStatus({
-      invoice_id: "or_inv_status",
-      invoice: "lnbc-status",
-      lightningUri: "lightning:lnbc-status",
-      payment_hash: PAYMENT_HASH,
-      transaction_state: "pending",
-      workflow_state: "invoice_created",
-      phase: "pending",
-      settled: false,
-      terminal: false
-    }),
-    /Invoice not found/
+    () =>
+      failingStatus({
+        checkout_id: "or_chk_status",
+        order_id: "order-status",
+        invoice_id: "or_inv_status",
+        invoice: "lnbc-status",
+        lightningUri: "lightning:lnbc-status",
+        payment_hash: PAYMENT_HASH,
+        transaction_state: "pending",
+        workflow_state: "invoice_created",
+        phase: "pending",
+        settled: false,
+        terminal: false,
+        paid: false,
+      }),
+    /Invoice not found/,
   );
 });
 
@@ -980,11 +1069,11 @@ test("browser refresh fetcher owns idempotent refresh POST shape", async () => {
             amount_msats: 200000,
             transaction_state: "pending",
             workflow_state: "invoice_created",
-            expires_at: 1100
-          }
-        })
+            expires_at: 1100,
+          },
+        }),
       };
-    }
+    },
   });
 
   const result = await refreshInvoice({
@@ -996,7 +1085,7 @@ test("browser refresh fetcher owns idempotent refresh POST shape", async () => {
     workflow_state: "expired_closed",
     phase: "expired",
     settled: false,
-    terminal: true
+    terminal: true,
   });
 
   assert.equal(result.new_invoice_id, "or_inv_refresh_new");
@@ -1004,33 +1093,31 @@ test("browser refresh fetcher owns idempotent refresh POST shape", async () => {
   assert.equal(requests.length, 1);
   assert.equal(requests[0].url, "/openreceive/v1/invoices/or_inv_refresh_old/refresh");
   assert.equal(requests[0].init.method, "POST");
-  assert.equal(
-    requests[0].init.headers["Idempotency-Key"],
-    "or_inv_refresh_old-refresh-1"
-  );
+  assert.equal(requests[0].init.headers["Idempotency-Key"], "or_inv_refresh_old-refresh-1");
   assert.deepEqual(JSON.parse(requests[0].init.body), {
-    reason: "expired"
+    reason: "expired",
   });
 
   await assert.rejects(
-    () => createOpenReceiveRefreshInvoiceFetcher({
-      refreshUrl: "/refresh",
-      idempotencyKey: "",
-      fetch: async () => ({
-        ok: true,
-        json: async () => ({})
-      })
-    })({
-      invoice_id: "or_inv_refresh_old",
-      invoice: "lnbc-refresh-old",
-      lightningUri: "lightning:lnbc-refresh-old",
-      transaction_state: "expired",
-      workflow_state: "expired_closed",
-      phase: "expired",
-      settled: false,
-      terminal: true
-    }),
-    /Idempotency-Key/
+    () =>
+      createOpenReceiveRefreshInvoiceFetcher({
+        refreshUrl: "/refresh",
+        idempotencyKey: "",
+        fetch: async () => ({
+          ok: true,
+          json: async () => ({}),
+        }),
+      })({
+        invoice_id: "or_inv_refresh_old",
+        invoice: "lnbc-refresh-old",
+        lightningUri: "lightning:lnbc-refresh-old",
+        transaction_state: "expired",
+        workflow_state: "expired_closed",
+        phase: "expired",
+        settled: false,
+        terminal: true,
+      }),
+    /Idempotency-Key/,
   );
 });
 
@@ -1038,16 +1125,16 @@ test("browser checkout state ignores passive event and route URLs", () => {
   const logs = [];
   const logger = (entry) => logs.push(entry);
   const state = createCheckoutState(
-    {
+    checkoutSnapshot({
       invoice_id: "or_inv_browser",
       invoice: "lnbc-browser",
       payment_hash: PAYMENT_HASH,
       amount_msats: 200000,
       transaction_state: "pending",
       workflow_state: "invoice_created",
-      expires_at: 1030
-    },
-    { logger, now: 1000 }
+      expires_at: 1030,
+    }),
+    { logger, now: 1000 },
   );
 
   assert.equal(state.lightningUri, "lightning:lnbc-browser");
@@ -1060,7 +1147,7 @@ test("browser checkout state ignores passive event and route URLs", () => {
   assert.equal("checkout" in snapshot, false);
   assert.deepEqual(
     logs.map((entry) => entry.event),
-    ["checkout.state.created"]
+    ["checkout.state.created"],
   );
   assert.equal(logs[0].invoice_id, "or_inv_browser");
   assert.doesNotMatch(JSON.stringify(logs), /nostr\+walletconnect:\/\//);
@@ -1075,15 +1162,15 @@ test("browser checkout watcher owns countdown and status refresh polling", async
   let statusCalls = 0;
 
   const watcher = new CheckoutWatcher({
-    snapshot: {
+    snapshot: checkoutSnapshot({
       invoice_id: "or_inv_watch",
       invoice: "lnbc-watch",
       payment_hash: PAYMENT_HASH,
       amount_msats: 200000,
       transaction_state: "pending",
       workflow_state: "invoice_created",
-      expires_at: 1010
-    },
+      expires_at: 1010,
+    }),
     now: () => now,
     setInterval: (callback, ms) => {
       const id = nextTimer;
@@ -1098,15 +1185,26 @@ test("browser checkout watcher owns countdown and status refresh polling", async
     refreshStatus: async (state) => {
       statusCalls += 1;
       assert.equal(state.invoice_id, "or_inv_watch");
-      return {
-        transaction_state: "settled",
-        workflow_state: "settlement_action_pending",
-        settled_at: 1002
-      };
+      return checkoutSnapshot(
+        {
+          invoice_id: state.invoice_id,
+          invoice: state.invoice,
+          payment_hash: state.payment_hash,
+          transaction_state: "settled",
+          workflow_state: "settlement_action_pending",
+          settled_at: 1002,
+        },
+        {
+          checkout_id: state.checkout_id,
+          order_id: state.order_id,
+          status: "paid",
+          paid_at: 1002,
+        },
+      );
     },
     onState: (state) => {
       states.push(state);
-    }
+    },
   });
 
   const initial = watcher.start();
@@ -1141,22 +1239,34 @@ test("browser checkout controller owns lifecycle actions for framework adapters"
   let statusCalls = 0;
   let refreshCalls = 0;
   const controller = createCheckoutController({
-    snapshot: {
+    snapshot: checkoutSnapshot({
       invoice_id: "or_inv_controller",
       invoice: "lnbc-controller",
       payment_hash: PAYMENT_HASH,
       amount_msats: 200000,
       transaction_state: "pending",
-      workflow_state: "invoice_created"
-    },
+      workflow_state: "invoice_created",
+    }),
     refreshStatus: async (state) => {
       statusCalls += 1;
       assert.equal(state.invoice_id, "or_inv_controller");
-      return {
-        transaction_state: "settled",
-        workflow_state: "settlement_action_pending",
-        settled_at: 1042
-      };
+      return checkoutSnapshot(
+        {
+          invoice_id: state.invoice_id,
+          invoice: state.invoice,
+          payment_hash: state.payment_hash,
+          amount_msats: state.amount_msats,
+          transaction_state: "settled",
+          workflow_state: "settlement_action_pending",
+          settled_at: 1042,
+        },
+        {
+          checkout_id: state.checkout_id,
+          order_id: state.order_id,
+          status: "paid",
+          paid_at: 1042,
+        },
+      );
     },
     refreshInvoice: async (state) => {
       refreshCalls += 1;
@@ -1165,22 +1275,25 @@ test("browser checkout controller owns lifecycle actions for framework adapters"
         old_invoice_id: state.invoice_id,
         new_invoice_id: "or_inv_controller_refresh",
         reason: "expired",
-        invoice: {
-          invoice_id: "or_inv_controller_refresh",
-          invoice: "lnbc-controller-refresh",
-          payment_hash: "e".repeat(64),
-          amount_msats: state.amount_msats,
-          transaction_state: "pending",
-          workflow_state: "invoice_created",
-          expires_at: 1200
-        }
+        invoice: checkoutSnapshot(
+          {
+            invoice_id: "or_inv_controller_refresh",
+            invoice: "lnbc-controller-refresh",
+            payment_hash: "e".repeat(64),
+            amount_msats: state.amount_msats,
+            transaction_state: "pending",
+            workflow_state: "invoice_created",
+            expires_at: 1200,
+          },
+          { order_id: state.order_id },
+        ),
       };
     },
     clipboard: {
-      writeText: async (value) => writes.push(value)
+      writeText: async (value) => writes.push(value),
     },
     open: (uri) => opens.push(uri),
-    onState: (state) => states.push(state)
+    onState: (state) => states.push(state),
   });
 
   const initial = controller.start();
@@ -1214,19 +1327,22 @@ test("browser checkout controller owns lifecycle actions for framework adapters"
   assert.equal(states.at(-1).invoice_id, "or_inv_controller_refresh");
 
   const next = controller.update({
-    snapshot: {
-      invoice_id: "or_inv_controller_2",
-      invoice: "lnbc-controller-2",
-      payment_hash: PAYMENT_HASH,
-      transaction_state: "settled",
-      workflow_state: "settlement_action_pending",
-      settled_at: 1000
-    },
+    snapshot: checkoutSnapshot(
+      {
+        invoice_id: "or_inv_controller_2",
+        invoice: "lnbc-controller-2",
+        payment_hash: PAYMENT_HASH,
+        transaction_state: "settled",
+        workflow_state: "settlement_action_pending",
+        settled_at: 1000,
+      },
+      { status: "paid", paid_at: 1000 },
+    ),
     clipboard: {
-      writeText: async (value) => writes.push(value)
+      writeText: async (value) => writes.push(value),
     },
     open: (value) => opens.push(value),
-    onState: (state) => states.push(state)
+    onState: (state) => states.push(state),
   });
   assert.equal(next.invoice_id, "or_inv_controller_2");
   assert.equal(next.phase, "settled");
@@ -1241,26 +1357,42 @@ test("browser checkout controller owns statusUrl fetcher creation", async () => 
   const timers = new Map();
   const states = [];
   const controller = createCheckoutController({
-    snapshot: {
-      invoice_id: "or_inv_controller_status",
-      invoice: "lnbc-controller-status",
-      payment_hash: PAYMENT_HASH,
-      transaction_state: "pending",
-      workflow_state: "invoice_created"
-    },
-    statusUrl: "/openreceive/v1/invoices/{invoice_id}/status",
+    snapshot: checkoutSnapshot(
+      {
+        invoice_id: "or_inv_controller_status",
+        invoice: "lnbc-controller-status",
+        payment_hash: PAYMENT_HASH,
+        transaction_state: "pending",
+        workflow_state: "invoice_created",
+      },
+      { order_id: "order-controller-status" },
+    ),
+    statusUrl: "/openreceive/v1/orders/{order_id}/status",
     fetch: async (url, init) => {
-      assert.equal(url, "/openreceive/v1/invoices/or_inv_controller_status/status");
+      assert.equal(url, "/openreceive/v1/orders/order-controller-status/status");
       assert.deepEqual(JSON.parse(init.body), {
-        invoice_id: "or_inv_controller_status"
+        order_id: "order-controller-status",
       });
       return {
         ok: true,
         json: async () => ({
-          transaction_state: "settled",
-          workflow_state: "settlement_action_pending",
-          settled_at: 1000
-        })
+          paid_checkout: checkoutSnapshot(
+            {
+              invoice_id: "or_inv_controller_status",
+              invoice: "lnbc-controller-status",
+              payment_hash: PAYMENT_HASH,
+              transaction_state: "settled",
+              workflow_state: "settlement_action_pending",
+              settled_at: 1000,
+            },
+            {
+              checkout_id: "or_chk_or_inv_controller_status",
+              order_id: "order-controller-status",
+              status: "paid",
+              paid_at: 1000,
+            },
+          ),
+        }),
       };
     },
     setInterval: (callback, ms) => {
@@ -1272,7 +1404,7 @@ test("browser checkout controller owns statusUrl fetcher creation", async () => 
     clearInterval: (id) => {
       timers.delete(id);
     },
-    onState: (state) => states.push(state)
+    onState: (state) => states.push(state),
   });
 
   controller.start();
@@ -1295,13 +1427,13 @@ test("browser action logs are display-safe and redact accidental secrets", async
   await copyInvoice({
     invoice: "lnbc-action",
     clipboard: {
-      writeText: async (value) => writes.push(value)
+      writeText: async (value) => writes.push(value),
     },
     logger,
     logContext: {
       invoice_id: "or_inv_action",
-      payment_hash: PAYMENT_HASH
-    }
+      payment_hash: PAYMENT_HASH,
+    },
   });
   openWallet({
     invoice: "lnbc-action",
@@ -1309,15 +1441,15 @@ test("browser action logs are display-safe and redact accidental secrets", async
     logger,
     logContext: {
       invoice_id: "or_inv_action",
-      nwc_secret: `nostr+walletconnect://${"d".repeat(64)}?secret=${"e".repeat(64)}`
-    }
+      nwc_secret: `nostr+walletconnect://${"d".repeat(64)}?secret=${"e".repeat(64)}`,
+    },
   });
 
   assert.deepEqual(writes, ["lnbc-action"]);
   assert.deepEqual(opens, ["lightning:lnbc-action"]);
   assert.deepEqual(
     logs.map((entry) => entry.event),
-    ["checkout.invoice.copied", "checkout.wallet.opened"]
+    ["checkout.invoice.copied", "checkout.wallet.opened"],
   );
   assert.equal(logs[0].invoice_id, "or_inv_action");
   assert.equal(logs[1].nwc_secret, "[REDACTED]");
@@ -1333,52 +1465,55 @@ test("browser custom-element event map covers checkout lifecycle events", () => 
     settled: "openreceive-settled",
     providerCopy: "openreceive-provider-copy",
     startOver: "openreceive-start-over",
-    error: "openreceive-error"
+    error: "openreceive-error",
   });
   const providerCopyEvent = createCheckoutProviderCopyEvent("boltz");
   assert.equal(providerCopyEvent.type, OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.providerCopy);
   assert.deepEqual(providerCopyEvent.detail, {
-    providerId: "boltz"
+    providerId: "boltz",
   });
   assert.equal(
     createCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy).type,
-    OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy
+    OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy,
   );
   assert.equal(
     createCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.startOver).type,
-    OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.startOver
+    OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.startOver,
   );
-  const stateEventState = createCheckoutState({
-    invoice_id: "or_inv_event",
-    invoice: "lnbc-event",
-    payment_hash: PAYMENT_HASH,
-    transaction_state: "settled",
-    workflow_state: "settlement_action_pending"
-  });
+  const stateEventState = createCheckoutState(
+    checkoutSnapshot(
+      {
+        invoice_id: "or_inv_event",
+        invoice: "lnbc-event",
+        payment_hash: PAYMENT_HASH,
+        transaction_state: "settled",
+        workflow_state: "settlement_action_pending",
+      },
+      { status: "paid" },
+    ),
+  );
   const stateEvent = createCheckoutStateEvent(
     OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.settled,
-    stateEventState
+    stateEventState,
   );
   assert.equal(stateEvent.type, OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.settled);
   assert.deepEqual(stateEvent.detail, {
-    state: stateEventState
+    state: stateEventState,
   });
   const error = new Error("boom");
   const errorEvent = createCheckoutErrorEvent(error);
   assert.equal(errorEvent.type, OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.error);
   assert.deepEqual(errorEvent.detail, {
-    error
+    error,
   });
   assert.deepEqual(OPENRECEIVE_THEME_TOGGLE_ELEMENT_EVENTS, {
-    change: "openreceive-theme-change"
+    change: "openreceive-theme-change",
   });
-  const themeChangeEvent = createOpenReceiveThemeChangeEvent(
-    createOpenReceiveThemeModel("dark")
-  );
+  const themeChangeEvent = createOpenReceiveThemeChangeEvent(createOpenReceiveThemeModel("dark"));
   assert.equal(themeChangeEvent.type, OPENRECEIVE_THEME_TOGGLE_ELEMENT_EVENTS.change);
   assert.deepEqual(themeChangeEvent.detail, {
     theme: "dark",
-    resolvedTheme: "dark"
+    resolvedTheme: "dark",
   });
 });
 
@@ -1394,12 +1529,15 @@ test("browser owns payment wizard DOM contract", () => {
     route: "data-or-route",
     providerCopy: "data-or-provider-copy",
     providerTutorial: "data-or-provider-tutorial",
-    providerTutorialIndex: "data-or-provider-tutorial-index"
+    providerTutorialIndex: "data-or-provider-tutorial-index",
   });
   assert.equal(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.breadcrumb, "[data-or-breadcrumb]");
   assert.equal(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.method, "[data-or-method]");
   assert.equal(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.providerCopy, "[data-or-provider-copy]");
-  assert.equal(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.providerTutorial, "[data-or-provider-tutorial]");
+  assert.equal(
+    OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.providerTutorial,
+    "[data-or-provider-tutorial]",
+  );
   assert.equal(parseOpenReceivePaymentMethod("bitcoin"), "bitcoin");
   assert.equal(parseOpenReceivePaymentMethod("wire"), null);
   assert.equal(parseOpenReceiveRegion("europe"), "europe");
@@ -1414,7 +1552,7 @@ test("browser owns checkout data attribute contract", () => {
     state: "data-openreceive-state",
     actions: "data-openreceive-actions",
     theme: "data-openreceive-theme",
-    themeToggle: "data-openreceive-theme-toggle"
+    themeToggle: "data-openreceive-theme-toggle",
   });
   assert.equal(OPENRECEIVE_CHECKOUT_DATA_SELECTORS.root, "[data-openreceive-checkout]");
   assert.equal(OPENRECEIVE_CHECKOUT_DATA_SELECTORS.qr, "[data-openreceive-qr]");
@@ -1423,6 +1561,7 @@ test("browser owns checkout data attribute contract", () => {
 
 test("browser owns custom-element attribute contracts", () => {
   assert.deepEqual(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES, {
+    orderId: "order-id",
     invoiceId: "invoice-id",
     invoice: "invoice",
     paymentHash: "payment-hash",
@@ -1433,13 +1572,13 @@ test("browser owns custom-element attribute contracts", () => {
     expiresAt: "expires-at",
     statusUrl: "status-url",
     theme: "theme",
-    paymentWizard: "payment-wizard"
+    paymentWizard: "payment-wizard",
   });
   assert.deepEqual(OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES, {
     rootSelector: "root-selector",
     checkoutSelector: "checkout-selector",
     defaultTheme: "default-theme",
-    storageKey: "storage-key"
+    storageKey: "storage-key",
   });
 });
 
@@ -1447,17 +1586,17 @@ test("browser owns web-component shadow part contracts", () => {
   assert.deepEqual(OPENRECEIVE_CHECKOUT_ELEMENT_PARTS, {
     copy: "copy",
     open: "open",
-    startOver: "start-over"
+    startOver: "start-over",
   });
   assert.deepEqual(OPENRECEIVE_CHECKOUT_ELEMENT_PART_SELECTORS, {
     copy: '[part="copy"]',
     open: '[part="open"]',
-    startOver: '[part="start-over"]'
+    startOver: '[part="start-over"]',
   });
   assert.deepEqual(OPENRECEIVE_THEME_TOGGLE_ELEMENT_PARTS, {
-    button: "button"
+    button: "button",
   });
   assert.deepEqual(OPENRECEIVE_THEME_TOGGLE_ELEMENT_PART_SELECTORS, {
-    button: '[part="button"]'
+    button: '[part="button"]',
   });
 });

@@ -7,7 +7,7 @@ export type MaybePromise<T> = T | Promise<T>;
 
 export type OpenReceiveIdempotencyOperation =
   | "invoice.create"
-  | "invoice.refresh";
+  | "invoice.renew";
 
 export type OpenReceiveSettlementActionState =
   | "pending"
@@ -218,6 +218,12 @@ export function readInvoiceStorageOrderId(row: InvoiceStorageRow): string {
   const orderId = row.metadata.order_uuid;
   if (typeof orderId === "string" && orderId.length > 0) return orderId;
   throw new TypeError("metadata.order_uuid must be a non-empty string");
+}
+
+export function readInvoiceStorageCheckoutId(row: InvoiceStorageRow): string {
+  const checkoutId = row.metadata.checkout_id;
+  if (typeof checkoutId === "string" && checkoutId.length > 0) return checkoutId;
+  throw new TypeError("metadata.checkout_id must be a non-empty string");
 }
 
 function cloneRecord(record: Record<string, unknown>): Record<string, unknown> {

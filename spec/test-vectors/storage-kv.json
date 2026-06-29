@@ -8,6 +8,8 @@
     "getByPaymentHash",
     "getByBolt11Invoice",
     "getByIdempotencyScope",
+    "listByOrderId",
+    "listByCheckoutId",
     "listOpen",
     "getMeta",
     "casMeta"

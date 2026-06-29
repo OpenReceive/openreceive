@@ -53,19 +53,26 @@ import {
 } from "@openreceive/vue";
 
 const snapshot = {
-  invoice_id: "or_inv_test",
-  invoice: "lnbc-test",
-  payment_hash: "a".repeat(64),
+  checkout_id: "or_chk_test",
+  order_id: "order-test",
+  status: "open",
   amount_msats: 200000,
-  fiat_quote: {
-    fiat: {
-      currency: "USD",
-      value: "0.05"
-    }
+  active: {
+    invoice_id: "or_inv_test",
+    invoice: "lnbc-test",
+    payment_hash: "a".repeat(64),
+    amount_msats: 200000,
+    fiat_quote: {
+      fiat: {
+        currency: "USD",
+        value: "0.05"
+      }
+    },
+    transaction_state: "pending",
+    workflow_state: "invoice_created",
+    expires_at: 1999999999
   },
-  transaction_state: "pending",
-  workflow_state: "invoice_created",
-  expires_at: 1999999999
+  invoices: []
 };
 
 test("browser owns custom-element checkout attributes and listeners", () => {
@@ -91,12 +98,13 @@ test("browser owns custom-element checkout attributes and listeners", () => {
     }
   };
   const attributes = createCheckoutElementAttributes(snapshot, {
-    statusUrl: "/openreceive/v1/invoices/{invoice_id}/status",
+    statusUrl: "/openreceive/v1/orders/{order_id}/status",
     theme: "dark",
     paymentWizard: true
   });
 
   assert.deepEqual(attributes, {
+    "order-id": "order-test",
     "invoice-id": "or_inv_test",
     invoice: "lnbc-test",
     "payment-hash": "a".repeat(64),
@@ -105,7 +113,7 @@ test("browser owns custom-element checkout attributes and listeners", () => {
     "fiat-value": "0.05",
     status: "pending",
     "expires-at": "1999999999",
-    "status-url": "/openreceive/v1/invoices/{invoice_id}/status",
+    "status-url": "/openreceive/v1/orders/{order_id}/status",
     theme: "dark",
     "payment-wizard": "true"
   });
@@ -134,12 +142,12 @@ test("browser owns custom-element checkout attributes and listeners", () => {
 
   const checkoutElement = createCheckoutElement(snapshot, {
     document,
-    statusUrl: "/openreceive/v1/invoices/{invoice_id}/status",
+    statusUrl: "/openreceive/v1/orders/{order_id}/status",
     theme: "dark",
     onError: () => undefined
   });
   assert.equal(checkoutElement.tagName, OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME);
-  assert.equal(checkoutElement.attributes["status-url"], "/openreceive/v1/invoices/{invoice_id}/status");
+  assert.equal(checkoutElement.attributes["status-url"], "/openreceive/v1/orders/{order_id}/status");
   assert.equal(checkoutElement.attributes.theme, "dark");
   assert.equal(typeof checkoutElement.listeners[OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.error], "function");
   assert.equal(createdElements.length, 1);
@@ -162,7 +170,7 @@ test("browser owns custom-element checkout attributes and listeners", () => {
         rootAttrs[name] = value;
       }
     },
-    statusUrl: "/openreceive/v1/invoices/{invoice_id}/status",
+    statusUrl: "/openreceive/v1/orders/{order_id}/status",
     rootSelector: ".page",
     defaultTheme: "light"
   });
@@ -175,8 +183,12 @@ test("browser owns custom-element checkout attributes and listeners", () => {
   assert.throws(
     () =>
       createCheckoutElementAttributes({
-        invoice_id: "or_inv_bad",
-        invoice: `nostr+walletconnect://${"a".repeat(64)}?secret=${"b".repeat(64)}`
+        ...snapshot,
+        active: {
+          ...snapshot.active,
+          invoice_id: "or_inv_bad",
+          invoice: `nostr+walletconnect://${"a".repeat(64)}?secret=${"b".repeat(64)}`
+        }
       }),
     /must not be an NWC/
   );
@@ -211,7 +223,7 @@ test("browser owns full checkout shell binding model", () => {
   };
   let copied = false;
   const shell = createCheckoutShellModel(snapshot, {
-    statusUrl: "/openreceive/v1/invoices/{invoice_id}/status",
+    statusUrl: "/openreceive/v1/orders/{order_id}/status",
     rootSelector: ".page",
     defaultTheme: "light",
     storage,
@@ -224,7 +236,7 @@ test("browser owns full checkout shell binding model", () => {
   assert.equal(shell.rootAttributes["data-openreceive-theme"], "dark");
   assert.equal(shell.checkout.tagName, OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME);
   assert.equal(shell.checkout.attributes.theme, "dark");
-  assert.equal(shell.checkout.attributes["status-url"], "/openreceive/v1/invoices/{invoice_id}/status");
+  assert.equal(shell.checkout.attributes["status-url"], "/openreceive/v1/orders/{order_id}/status");
   assert.equal(typeof shell.checkout.listeners[OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy], "function");
   shell.checkout.listeners[OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy]?.(new Event("copy"));
   assert.equal(copied, true);
@@ -275,11 +287,11 @@ test("Vue, Svelte, and Angular adapters expose thin custom-element bindings", ()
   storage.setItem(OPENRECEIVE_THEME_STORAGE_KEY, "dark");
 
   const vue = createOpenReceiveVueCheckoutBinding(snapshot, {
-    statusUrl: "/openreceive/v1/invoices/{invoice_id}/status",
+    statusUrl: "/openreceive/v1/orders/{order_id}/status",
     theme: "light"
   });
   assert.equal(vue.tagName, OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME);
-  assert.equal(vue.attrs["status-url"], "/openreceive/v1/invoices/{invoice_id}/status");
+  assert.equal(vue.attrs["status-url"], "/openreceive/v1/orders/{order_id}/status");
   assert.equal(vue.attrs.theme, "light");
 
   const svelte = createOpenReceiveSvelteCheckoutBinding(snapshot, {
@@ -321,13 +333,13 @@ test("Vue, Svelte, and Angular adapters expose thin custom-element bindings", ()
   });
 
   const vueShell = createOpenReceiveVueCheckoutShellBinding(snapshot, {
-    statusUrl: "/openreceive/v1/invoices/{invoice_id}/status",
+    statusUrl: "/openreceive/v1/orders/{order_id}/status",
     rootSelector: ".page",
     storage
   });
   assert.equal(vueShell.rootAttrs["data-theme"], "dark");
   assert.equal(vueShell.checkout.attrs.theme, "dark");
-  assert.equal(vueShell.checkout.attrs["status-url"], "/openreceive/v1/invoices/{invoice_id}/status");
+  assert.equal(vueShell.checkout.attrs["status-url"], "/openreceive/v1/orders/{order_id}/status");
   assert.equal(vueShell.themeToggle.attrs["checkout-selector"], OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME);
 
   const svelteShell = createOpenReceiveSvelteCheckoutShellBinding(snapshot, {
@@ -353,7 +365,7 @@ test("Vue, Svelte, and Angular adapters expose thin custom-element bindings", ()
     status: "pending",
     providers: [],
     theme: "light",
-    statusUrl: "/openreceive/v1/invoices/{invoice_id}/status",
+    statusUrl: "/openreceive/v1/orders/{order_id}/status",
     onSettled: () => {
       vueSettled = true;
     },
@@ -361,7 +373,7 @@ test("Vue, Svelte, and Angular adapters expose thin custom-element bindings", ()
   });
   assert.equal(vueComponent.componentName, "Checkout");
   assert.equal(typeof vueComponent.defineElements, "function");
-  assert.equal(vueComponent.checkout.attrs["status-url"], "/openreceive/v1/invoices/{invoice_id}/status");
+  assert.equal(vueComponent.checkout.attrs["status-url"], "/openreceive/v1/orders/{order_id}/status");
   assert.equal(vueComponent.checkout.attrs.theme, "light");
   vueComponent.checkout.listeners[OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.settled]?.(new Event("settled"));
   assert.equal(vueSettled, true);
@@ -386,9 +398,9 @@ test("Vue, Svelte, and Angular adapters expose thin custom-element bindings", ()
   const vueController = createOpenReceiveVueCheckoutController({ snapshot });
   const svelteController = createOpenReceiveSvelteCheckoutController({ snapshot });
   const angularController = createOpenReceiveAngularCheckoutController({ snapshot });
-  assert.equal(vueController.start().invoice_id, snapshot.invoice_id);
-  assert.equal(svelteController.start().invoice, snapshot.invoice);
-  assert.equal(angularController.start().payment_hash, snapshot.payment_hash);
+  assert.equal(vueController.start().invoice_id, snapshot.active.invoice_id);
+  assert.equal(svelteController.start().invoice, snapshot.active.invoice);
+  assert.equal(angularController.start().payment_hash, snapshot.active.payment_hash);
   assert.equal(typeof vueController.reloadState, "function");
   assert.equal(typeof svelteController.retry, "function");
   assert.equal(typeof vueController.refreshExpiredInvoice, "function");
@@ -443,11 +455,11 @@ test("Vue, Svelte, and Angular adapters expose full checkout shell creators", ()
 
   const vue = createOpenReceiveVueCheckoutShell(snapshot, {
     document: createDocument(),
-    statusUrl: "/openreceive/v1/invoices/{invoice_id}/status",
+    statusUrl: "/openreceive/v1/orders/{order_id}/status",
     defaultTheme: "light"
   });
   assert.equal(vue.checkout.tagName, OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME);
-  assert.equal(vue.checkout.attributes["status-url"], "/openreceive/v1/invoices/{invoice_id}/status");
+  assert.equal(vue.checkout.attributes["status-url"], "/openreceive/v1/orders/{order_id}/status");
   assert.equal(vue.themeToggle.tagName, OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME);
 
   const svelte = createOpenReceiveSvelteCheckoutShell(snapshot, {

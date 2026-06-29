@@ -61,15 +61,15 @@ checkout, so use it for idempotent fulfillment. Most apps can ignore the invoice
 details in this hook; they are available only when you want extra audit or
 correlation data.
 
-When you create an invoice from a fiat order total, pass both the decimal value
+When you create a checkout from a fiat order total, pass both the decimal value
 and its server-side currency code, for example
 `{ currency: "USD", value: "0.25" }`. `fiat.currency` must be one of the
 `priceCurrencies` configured on `createOpenReceive`; do not infer it from
 browser locale or a global env var.
 
 For Bitcoin-denominated products, skip price feeds and pass a direct amount:
-`{ amount: { currency: "BTC", value: "0.005" } }` or
-`{ amount: { currency: "SATS", value: "7000" } }`. OpenReceive converts those
+`{ amount: { btc: { currency: "BTC", value: "0.005" } } }` or
+`{ amount: { sats: "7000" } }`. OpenReceive converts those
 amounts with integer math and never asks a BTC fiat price provider for `BTC` or
 `SATS`.
 
@@ -82,13 +82,17 @@ npm install express @openreceive/node @openreceive/browser @openreceive/react
 ```
 
 Define routes in the same Express app that owns your checkout. Your app creates
-the order, computes the trusted total, calls OpenReceive to create the invoice,
-and returns both order and display-safe invoice data:
+the order, computes the trusted total, calls OpenReceive to create the checkout,
+and returns both order and display-safe checkout data:
 
 ```ts
 // server/index.ts
 import express from "express";
-import { createOpenReceive } from "@openreceive/node";
+import {
+  createOpenReceive,
+  toOpenReceiveHttpCheckout,
+  toOpenReceiveHttpOrder,
+} from "@openreceive/node";
 
 const app = express();
 app.use(express.json());
@@ -104,19 +108,21 @@ app.post("/create_order", async (req, res, next) => {
   try {
     // Your app function. Create and validate the order before calling OpenReceive.
     const order = await createOrderFromCart(req.user, req.body.cart);
-    const invoice = await openreceive.createInvoice({
-      orderId: order.uuid,
-      amount: {
-        fiat: {
-          currency: order.totalAmount.currency,
-          value: order.totalAmount.value
-        }
-      },
-      memo: `Order ${order.number}`,
-      expiresInSeconds: 600
-    });
+    const checkout = toOpenReceiveHttpCheckout(
+      await openreceive.createCheckout({
+        orderId: order.uuid,
+        amount: {
+          fiat: {
+            currency: order.totalAmount.currency,
+            value: order.totalAmount.value,
+          },
+        },
+        memo: `Order ${order.number}`,
+        expiresInSeconds: 600,
+      }),
+    );
 
-    res.status(201).json({ order, invoice });
+    res.status(201).json({ order, checkout });
   } catch (error) {
     sendCheckoutError(res, next, error);
   }
@@ -124,15 +130,14 @@ app.post("/create_order", async (req, res, next) => {
 
 app.post("/order_status", async (req, res, next) => {
   try {
-    const invoice = await openreceive.refreshInvoiceStatus({
-      invoiceId: req.body.invoice_id
-    });
+    const orderStatus = toOpenReceiveHttpOrder(
+      await openreceive.getOrder({ orderId: req.body.order_id }),
+    );
 
     res.status(200).json({
-      ...invoice,
-      order_status: invoice.settledAt || invoice.transactionState === "settled"
-        ? "settled"
-        : "pending_payment"
+      ...orderStatus,
+      order_status:
+        orderStatus.status === "paid" ? "settled" : "pending_payment",
     });
   } catch (error) {
     sendCheckoutError(res, next, error);
@@ -148,20 +153,22 @@ function sendCheckoutError(res, next, error) {
 }
 
 function isCheckoutHttpError(error) {
-  return typeof error === "object" &&
+  return (
+    typeof error === "object" &&
     error !== null &&
     Number.isInteger(error.status) &&
     error.status >= 400 &&
     error.status <= 599 &&
     typeof error.body === "object" &&
-    error.body !== null;
+    error.body !== null
+  );
 }
 
 app.listen(3000);
 ```
 
 Use your normal route names, sessions, CSRF, CORS, and authorization. The
-browser posts carts to your app route and renders `response.invoice`.
+browser posts carts to your app route and renders `response.checkout`.
 
 ## Next.js App Router
 
@@ -176,7 +183,10 @@ order controller:
 
 ```ts
 // app/create_order/route.ts
-import { createOpenReceive } from "@openreceive/node";
+import {
+  createOpenReceive,
+  toOpenReceiveHttpCheckout,
+} from "@openreceive/node";
 
 export const runtime = "nodejs";
 
@@ -193,22 +203,21 @@ export async function POST(request: Request) {
     const body = await request.json();
     // Your app function. Create and validate the order before calling OpenReceive.
     const order = await createOrderFromCart(body.cart);
-    const invoice = await openreceive.createInvoice({
-      orderId: order.uuid,
-      amount: {
-        fiat: {
-          currency: order.totalAmount.currency,
-          value: order.totalAmount.value
-        }
-      },
-      memo: `Order ${order.number}`,
-      expiresInSeconds: 600
-    });
-
-    return Response.json(
-      { order, invoice },
-      { status: 201 }
+    const checkout = toOpenReceiveHttpCheckout(
+      await openreceive.createCheckout({
+        orderId: order.uuid,
+        amount: {
+          fiat: {
+            currency: order.totalAmount.currency,
+            value: order.totalAmount.value,
+          },
+        },
+        memo: `Order ${order.number}`,
+        expiresInSeconds: 600,
+      }),
     );
+
+    return Response.json({ order, checkout }, { status: 201 });
   } catch (error) {
     const response = checkoutErrorResponse(error);
     if (response !== undefined) return response;
@@ -226,20 +235,25 @@ function isCheckoutHttpError(error: unknown): error is {
   readonly body: Record<string, unknown>;
 } {
   if (typeof error !== "object" || error === null) return false;
-  const candidate = error as { readonly status?: unknown; readonly body?: unknown };
-  return Number.isInteger(candidate.status) &&
+  const candidate = error as {
+    readonly status?: unknown;
+    readonly body?: unknown;
+  };
+  return (
+    Number.isInteger(candidate.status) &&
     typeof candidate.status === "number" &&
     candidate.status >= 400 &&
     candidate.status <= 599 &&
     typeof candidate.body === "object" &&
     candidate.body !== null &&
-    !Array.isArray(candidate.body);
+    !Array.isArray(candidate.body)
+  );
 }
 ```
 
 Add a sibling `app/order_status/route.ts` that calls
-`openreceive.refreshInvoiceStatus({ invoiceId })` and returns your app's order
-status plus the display-safe invoice fields.
+`openreceive.getOrder({ orderId })` and returns your app's order status plus
+the display-safe checkout fields from `toOpenReceiveHttpOrder`.
 
 ## Fastify
 
@@ -255,7 +269,11 @@ app's order actions:
 ```ts
 // server/index.ts
 import Fastify from "fastify";
-import { createOpenReceive } from "@openreceive/node";
+import {
+  createOpenReceive,
+  toOpenReceiveHttpCheckout,
+  toOpenReceiveHttpOrder,
+} from "@openreceive/node";
 
 const app = Fastify();
 
@@ -275,31 +293,35 @@ function sendCheckoutError(reply, error) {
 }
 
 function isCheckoutHttpError(error) {
-  return typeof error === "object" &&
+  return (
+    typeof error === "object" &&
     error !== null &&
     Number.isInteger(error.status) &&
     error.status >= 400 &&
     error.status <= 599 &&
     typeof error.body === "object" &&
-    error.body !== null;
+    error.body !== null
+  );
 }
 
 app.post("/create_order", async (request, reply) => {
   try {
     // Your app function. Create and validate the order before calling OpenReceive.
     const order = await createOrderFromCart(request.body.cart);
-    const invoice = await openreceive.createInvoice({
-      orderId: order.uuid,
-      amount: {
-        fiat: {
-          currency: order.totalAmount.currency,
-          value: order.totalAmount.value
-        }
-      },
-      memo: `Order ${order.number}`,
-      expiresInSeconds: 600
-    });
-    reply.code(201).send({ order, invoice });
+    const checkout = toOpenReceiveHttpCheckout(
+      await openreceive.createCheckout({
+        orderId: order.uuid,
+        amount: {
+          fiat: {
+            currency: order.totalAmount.currency,
+            value: order.totalAmount.value,
+          },
+        },
+        memo: `Order ${order.number}`,
+        expiresInSeconds: 600,
+      }),
+    );
+    reply.code(201).send({ order, checkout });
   } catch (error) {
     if (!sendCheckoutError(reply, error)) throw error;
   }
@@ -307,14 +329,13 @@ app.post("/create_order", async (request, reply) => {
 
 app.post("/order_status", async (request, reply) => {
   try {
-    const invoice = await openreceive.refreshInvoiceStatus({
-      invoiceId: request.body.invoice_id
-    });
+    const orderStatus = toOpenReceiveHttpOrder(
+      await openreceive.getOrder({ orderId: request.body.order_id }),
+    );
     reply.send({
-      ...invoice,
-      order_status: invoice.settledAt || invoice.transactionState === "settled"
-        ? "settled"
-        : "pending_payment"
+      ...orderStatus,
+      order_status:
+        orderStatus.status === "paid" ? "settled" : "pending_payment",
     });
   } catch (error) {
     if (!sendCheckoutError(reply, error)) throw error;
@@ -332,22 +353,23 @@ Install the browser package in your frontend app:
 npm install @openreceive/browser
 ```
 
-Create an order through your app and keep the invoice data returned by the
+Create an order through your app and keep the checkout data returned by the
 server:
 
 ```ts
 const response = await fetch("/create_order", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ cart })
+  body: JSON.stringify({ cart }),
 });
 
-const { order, invoice } = await response.json();
+const { order, checkout } = await response.json();
 ```
 
 Your backend should use a stable order UUID as the OpenReceive `orderId`.
-Reusing the same order UUID with the same invoice request replays the existing
-invoice. Reusing it with a different amount or description returns a conflict.
+Reusing the same order UUID with the same amount continues the current checkout.
+Reusing it with a different amount creates a new checkout and supersedes the old
+open checkout.
 
 ## React
 
@@ -362,12 +384,12 @@ import "@openreceive/react/styles.css";
 const response = await fetch("/create_order", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ cart })
+  body: JSON.stringify({ cart }),
 });
-const { invoice } = await response.json();
+const { checkout } = await response.json();
 
 <Checkout
-  invoice={invoice}
+  invoice={checkout}
   statusUrl="/order_status"
   onSettled={() => showThankYou()}
 />;
@@ -378,7 +400,7 @@ If your app only wants QR/copy/provider guidance and has no frontend status
 route, render the checkout without polling:
 
 ```tsx
-<Checkout invoice={invoice} polling={false} />;
+<Checkout invoice={checkout} polling={false} />
 ```
 
 ## Vue
@@ -395,14 +417,14 @@ import "@openreceive/vue/styles.css";
 const response = await fetch("/create_order", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ cart })
+  body: JSON.stringify({ cart }),
 });
-const { invoice } = await response.json();
+const { checkout } = await response.json();
 </script>
 
 <template>
   <Checkout
-    :snapshot="invoice"
+    :snapshot="checkout"
     :options="{ statusUrl: '/order_status', onSettled: showThankYou }"
   />
 </template>
@@ -424,11 +446,11 @@ npm install @openreceive/browser @openreceive/svelte
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cart })
   });
-  const { invoice } = await response.json();
+  const { checkout } = await response.json();
 </script>
 
 <Checkout
-  snapshot={invoice}
+  snapshot={checkout}
   options={{ statusUrl: "/order_status", onSettled: showThankYou }}
 />
 ```
@@ -452,16 +474,16 @@ import "@openreceive/angular/styles.css";
   imports: [CheckoutComponent],
   template: `
     <openreceive-angular-checkout
-      [snapshot]="invoice"
+      [snapshot]="checkout"
       [options]="{
         statusUrl: '/order_status',
-        onSettled: showThankYou
+        onSettled: showThankYou,
       }"
     />
-  `
+  `,
 })
 export class AppCheckoutComponent {
-  invoice;
+  checkout;
   showThankYou = () => {
     // UI hint only. Unlock from the server onPaid hook.
   };

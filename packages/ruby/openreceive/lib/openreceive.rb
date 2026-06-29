@@ -373,7 +373,7 @@ module OpenReceive
     def classify(first_request_hash:, second_request_hash:, operation:)
       if first_request_hash == second_request_hash
         behavior =
-          operation == "invoice.refresh" ? "return_original_refresh_invoice" : "return_original_invoice"
+          operation == "invoice.renew" ? "return_original_renewal_invoice" : "return_original_invoice"
         { "status" => 200, "behavior" => behavior }
       else
         { "status" => 409, "error_code" => "CONFLICT" }

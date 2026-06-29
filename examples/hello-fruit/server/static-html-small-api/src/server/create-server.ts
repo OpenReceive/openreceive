@@ -9,6 +9,7 @@ import {
   OpenReceiveServiceError,
   createOpenReceive,
   createOpenReceivePriceFeed,
+  toOpenReceiveHttpCheckout,
   toOpenReceiveHttpOrder
 } from "@openreceive/node";
 import {
@@ -58,6 +59,9 @@ export async function createHelloFruitOpenReceive(
 ) {
   const priceCurrencies = readHelloFruitPriceFeedCurrencies();
   const supportedCurrencies = readHelloFruitCheckoutCurrencies();
+  const clientOptions = options.client === undefined
+    ? { nwc: readRequiredHelloFruitNwcConnectionString() }
+    : { client: options.client };
   const store = options.store ?? await createHelloFruitOpenReceiveKvStore({
     demoId: DEMO_ID
   });
@@ -66,9 +70,7 @@ export async function createHelloFruitOpenReceive(
     [createOpenReceivePriceFeed({ store, currencies: priceCurrencies })];
 
   const openreceive = await createOpenReceive({
-    ...(options.client === undefined
-      ? { nwc: readRequiredHelloFruitNwcConnectionString() }
-      : { client: options.client }),
+    ...clientOptions,
     store,
     namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit",
     priceProviders,
@@ -134,8 +136,8 @@ export async function createHelloFruitStaticServer(
         rates,
         supportedCurrencies
       });
-      const checkout = toOpenReceiveHttpOrder(
-        await openreceive.createOrder(orderResult.invoiceRequest)
+      const checkout = toOpenReceiveHttpCheckout(
+        await openreceive.createCheckout(orderResult.invoiceRequest)
       );
       res.status(201).json({
         order: orderResult.order,

@@ -31,10 +31,7 @@
     },
     "operation": {
       "type": "string",
-      "enum": [
-        "invoice.create",
-        "invoice.refresh"
-      ]
+      "enum": ["invoice.create", "invoice.renew"]
     },
     "idempotency_key": {
       "type": "string",
@@ -60,13 +57,7 @@
     },
     "transaction_state": {
       "type": "string",
-      "enum": [
-        "pending",
-        "settled",
-        "expired",
-        "failed",
-        "accepted"
-      ]
+      "enum": ["pending", "settled", "expired", "failed", "accepted"]
     },
     "workflow_state": {
       "type": "string",
@@ -84,11 +75,7 @@
     },
     "settlement_action_state": {
       "type": "string",
-      "enum": [
-        "pending",
-        "completed",
-        "failed"
-      ]
+      "enum": ["pending", "completed", "failed"]
     },
     "created_at": {
       "type": "integer",
@@ -123,10 +110,7 @@
       "additionalProperties": true
     },
     "fiat_quote": {
-      "type": [
-        "object",
-        "null"
-      ],
+      "type": ["object", "null"],
       "additionalProperties": true
     }
   },
@@ -134,10 +118,7 @@
     "StoredRecord": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "rev",
-        "row"
-      ],
+      "required": ["rev", "row"],
       "properties": {
         "rev": {
           "type": "integer",
@@ -151,10 +132,7 @@
     "MetaRow": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "value",
-        "rev"
-      ],
+      "required": ["value", "rev"],
       "properties": {
         "value": {
           "type": "string"
@@ -168,13 +146,7 @@
     "TransactionScanCursor": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "from",
-        "until",
-        "limit",
-        "offset",
-        "cycle"
-      ],
+      "required": ["from", "until", "limit", "offset", "cycle"],
       "properties": {
         "from": {
           "type": "integer",
@@ -214,6 +186,6 @@
     "settlement_action_completed_at can be set once",
     "last_transaction_scan_at records the most recent server-side status refresh scan attempt",
     "action_claimed_at records the store-coordinated settlement action lease",
-    "refresh creates a new invoice row"
+    "renewal creates a new invoice row"
   ]
 }

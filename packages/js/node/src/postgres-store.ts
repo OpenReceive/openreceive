@@ -2,6 +2,7 @@ import {
   canonicalJson,
   idempotencyScopeKey,
   isTerminalInvoiceStorageRow,
+  readInvoiceStorageCheckoutId,
   readInvoiceStorageOrderId,
   validateInvoiceStorageRow,
   type MaybePromise,
@@ -61,6 +62,7 @@ CREATE TABLE IF NOT EXISTS openreceive_invoices (
   bolt11 TEXT NOT NULL UNIQUE,
   idempotency_scope TEXT NOT NULL UNIQUE,
   order_id TEXT NOT NULL,
+  checkout_id TEXT NOT NULL,
   terminal BOOLEAN NOT NULL DEFAULT FALSE,
   expires_at BIGINT NOT NULL,
   data JSONB NOT NULL
@@ -68,6 +70,9 @@ CREATE TABLE IF NOT EXISTS openreceive_invoices (
 
 CREATE INDEX IF NOT EXISTS openreceive_invoices_order_idx
   ON openreceive_invoices (order_id);
+
+CREATE INDEX IF NOT EXISTS openreceive_invoices_checkout_idx
+  ON openreceive_invoices (checkout_id);
 
 CREATE INDEX IF NOT EXISTS openreceive_invoices_open_idx
   ON openreceive_invoices (terminal, expires_at);
@@ -145,8 +150,8 @@ export class OpenReceivePostgresKvStore implements OpenReceiveInvoiceKvStore {
     const data = serializeStoredRecord(record);
     const result = await this.#client.query(
       `INSERT INTO ${this.#tableName} (
-        invoice_id, rev, payment_hash, bolt11, idempotency_scope, order_id, terminal, expires_at, data
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+        invoice_id, rev, payment_hash, bolt11, idempotency_scope, order_id, checkout_id, terminal, expires_at, data
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
       ON CONFLICT DO NOTHING
       RETURNING data`,
       [
@@ -156,6 +161,7 @@ export class OpenReceivePostgresKvStore implements OpenReceiveInvoiceKvStore {
         record.row.invoice,
         idempotencyScopeKey(record.row),
         readInvoiceStorageOrderId(record.row),
+        readInvoiceStorageCheckoutId(record.row),
         isTerminalInvoiceStorageRow(record.row),
         record.row.expires_at,
         data
@@ -184,10 +190,11 @@ export class OpenReceivePostgresKvStore implements OpenReceiveInvoiceKvStore {
            bolt11 = $4,
            idempotency_scope = $5,
            order_id = $6,
-           terminal = $7,
-           expires_at = $8,
-           data = $9::jsonb
-       WHERE invoice_id = $1 AND rev = $10
+           checkout_id = $7,
+           terminal = $8,
+           expires_at = $9,
+           data = $10::jsonb
+       WHERE invoice_id = $1 AND rev = $11
        RETURNING data`,
       [
         record.row.invoice_id,
@@ -196,6 +203,7 @@ export class OpenReceivePostgresKvStore implements OpenReceiveInvoiceKvStore {
         record.row.invoice,
         idempotencyScopeKey(record.row),
         readInvoiceStorageOrderId(record.row),
+        readInvoiceStorageCheckoutId(record.row),
         isTerminalInvoiceStorageRow(record.row),
         record.row.expires_at,
         serializeStoredRecord(record),
@@ -254,6 +262,22 @@ export class OpenReceivePostgresKvStore implements OpenReceiveInvoiceKvStore {
       `SELECT data FROM ${this.#tableName}
        WHERE order_id = $1`,
       [orderId]
+    );
+    return result.rows
+      .map((row) => parseStoredRecordField(row.data))
+      .sort((left, right) =>
+        left.row.created_at === right.row.created_at
+          ? right.row.invoice_id.localeCompare(left.row.invoice_id)
+          : right.row.created_at - left.row.created_at
+      );
+  }
+
+  async listByCheckoutId(checkoutId: string): Promise<StoredRecord[]> {
+    assertCheckoutId(checkoutId);
+    const result = await this.#client.query(
+      `SELECT data FROM ${this.#tableName}
+       WHERE checkout_id = $1`,
+      [checkoutId]
     );
     return result.rows
       .map((row) => parseStoredRecordField(row.data))
@@ -422,6 +446,7 @@ CREATE TABLE IF NOT EXISTS ${this.#tableName} (
   bolt11 TEXT NOT NULL UNIQUE,
   idempotency_scope TEXT NOT NULL UNIQUE,
   order_id TEXT NOT NULL,
+  checkout_id TEXT NOT NULL,
   terminal BOOLEAN NOT NULL DEFAULT FALSE,
   expires_at BIGINT NOT NULL,
   data JSONB NOT NULL
@@ -429,6 +454,9 @@ CREATE TABLE IF NOT EXISTS ${this.#tableName} (
 
 CREATE INDEX IF NOT EXISTS ${unquoted(this.#tableName)}_order_idx
   ON ${this.#tableName} (order_id);
+
+CREATE INDEX IF NOT EXISTS ${unquoted(this.#tableName)}_checkout_idx
+  ON ${this.#tableName} (checkout_id);
 
 CREATE INDEX IF NOT EXISTS ${unquoted(this.#tableName)}_open_idx
   ON ${this.#tableName} (terminal, expires_at);
@@ -523,6 +551,12 @@ function assertListOpenInput(input: { now: number; limit: number }): void {
 function assertOrderId(orderId: string): void {
   if (typeof orderId !== "string" || orderId.length === 0) {
     throw new TypeError("OpenReceive Postgres orderId must be a non-empty string");
+  }
+}
+
+function assertCheckoutId(checkoutId: string): void {
+  if (typeof checkoutId !== "string" || checkoutId.length === 0) {
+    throw new TypeError("OpenReceive Postgres checkoutId must be a non-empty string");
   }
 }
 

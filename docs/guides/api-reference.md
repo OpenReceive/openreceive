@@ -10,8 +10,8 @@ The source of truth for the example HTTP payloads is
 App-facing packages:
 
 - `@openreceive/node`: `createOpenReceive(options)` returns a server-only
-  service with `createInvoice`, `getInvoice`, `refreshInvoiceStatus`,
-  `refreshInvoice`, `listRates`, `quoteRates`, and `close`.
+  service with `createCheckout`, `getOrder`, `getCheckout`, `listRates`,
+  `quoteRates`, and `close`.
 - `@openreceive/browser`: `requestCheckoutInvoice`, `status`,
   `lightningUri`, `qrSvg`, `qrPngDataUrl`, `copyInvoice`, `openWallet`, and
   `createCheckoutController`.
@@ -24,12 +24,12 @@ App-facing packages:
 Framework-adapter internals live under `@openreceive/browser/internal` and are
 not part of the supported app surface.
 
-## Create Invoice
+## Create Checkout
 
 App-facing Node service input uses camelCase:
 
 ```ts
-await openreceive.createInvoice({
+await openreceive.createCheckout({
   orderId: order.uuid,
   amount: {
     fiat: {
@@ -48,7 +48,7 @@ currency is an order property, not a browser-locale guess.
 For Bitcoin-denominated orders, use direct amount units instead of `fiat`:
 
 ```ts
-await openreceive.createInvoice({
+await openreceive.createCheckout({
   orderId: order.uuid,
   amount: {
     btc: {
@@ -60,7 +60,7 @@ await openreceive.createInvoice({
   expiresInSeconds: 600
 });
 
-await openreceive.createInvoice({
+await openreceive.createCheckout({
   orderId: order.uuid,
   amount: {
     sats: "7000"
@@ -73,12 +73,12 @@ await openreceive.createInvoice({
 Direct BTC and satoshi amounts are converted directly to `amount_msats`; they
 are not looked up in the configured price feeds.
 
-`POST /openreceive/v1/invoices`
+`POST /openreceive/v1/orders/{order_id}/checkouts`
 
 Lower-level HTTP request body includes:
 
-- `order_uuid`: stable app order/cart/payment-attempt id. Replays the same
-  create request and conflicts on drift.
+- `order_id`: optional redundant copy of the path id for browser helpers and
+  app-owned controllers that prefer body-based routing.
 
 Use exactly one amount input:
 
@@ -96,42 +96,31 @@ memo becomes the BOLT11 invoice description and is limited to 500 characters.
 
 Responses:
 
-- `201`: new invoice.
-- `200`: idempotent replay of the same request.
-- `409`: same idempotency scope with a different request body.
+- `201`: a new checkout, superseding checkout, or renewed invoice chain.
+- `200`: the current active checkout for the same order id and amount.
 
-## Read Invoice
+Reusing the same `orderId` with a different amount creates a new checkout and
+supersedes the previous open checkout. Paying any invoice from any checkout for
+that order marks the order paid.
 
-`GET /openreceive/v1/invoices/{invoice_id}`
+## Read Checkout
+
+`GET /openreceive/v1/checkouts/{checkout_id}`
 
 Use this route from whatever controller, middleware, or route group already
-protects the owning checkout session when invoice reads should not be public.
+protects the owning checkout session when checkout reads should not be public.
 
-## Refresh Invoice Status
+## Refresh Order Status
 
-`POST /openreceive/v1/invoices/{invoice_id}/status`
+`POST /openreceive/v1/orders/{order_id}/status`
 
-This route performs one bounded backend status refresh for the stored invoice.
+This route performs one bounded backend status refresh for the stored order.
 It uses NWC `list_transactions` server-side and returns the stored state. Use
 your app's route protection when status should not be public.
 
 The response may include `wallet_scan_performed` and `transactions_checked`.
 App fulfillment still belongs in the backend settlement hook. A preimage alone
 is not settlement proof.
-
-## Refresh Invoice
-
-`POST /openreceive/v1/invoices/{invoice_id}/refresh`
-
-App-facing Node service input:
-
-- `idempotencyKey`: stable for the refresh operation.
-
-If your app exposes this as an HTTP route, a common controller pattern is to
-read `Idempotency-Key` and pass it to `openreceive.refreshInvoice()` as
-`idempotencyKey`. Refresh creates a linked replacement invoice after expiry or
-failure. It never mutates the old invoice in place. Settled invoices return
-`409`.
 
 ## Rates
 
@@ -150,7 +139,7 @@ Returns the configured BTC fiat rate map.
 }
 ```
 
-Returns the same rate quote shape used by invoice creation, including
+Returns the same rate quote shape used by checkout-created invoices, including
 `amount_msats`, source id, `as_of`, and `expires_at`.
 
 ## Provider Data

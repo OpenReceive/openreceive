@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS openreceive_invoices (
   idempotency_key TEXT NOT NULL,
   idempotency_request_hash TEXT NOT NULL,
   order_id TEXT NOT NULL,
+  checkout_id TEXT NOT NULL,
   payment_hash TEXT NOT NULL UNIQUE,
   invoice TEXT NOT NULL UNIQUE,
   amount_msats BIGINT NOT NULL,
@@ -52,6 +53,9 @@ CREATE INDEX IF NOT EXISTS openreceive_invoices_recovery_idx
 
 CREATE INDEX IF NOT EXISTS openreceive_invoices_order_idx
   ON openreceive_invoices (order_id, created_at);
+
+CREATE INDEX IF NOT EXISTS openreceive_invoices_checkout_idx
+  ON openreceive_invoices (checkout_id, created_at);
 
 CREATE TABLE IF NOT EXISTS openreceive_schema_migrations (
   version TEXT PRIMARY KEY,

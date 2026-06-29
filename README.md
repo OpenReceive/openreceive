@@ -52,7 +52,7 @@ valid receive-only NWC code (for example from Rizful or Alby Hub) in `.env` befo
 starting a demo. Demos need a valid receive-only NWC code before startup.
 The JS demos let the browser choose any configured price-feed currency, BTC, or
 sats; `/create_order` builds the order, quotes or converts the total, and
-returns the order and invoice to the browser.
+returns the order and checkout to the browser.
 
 Extra arguments after `--` are forwarded to `docker compose up`, for example to
 run detached: `npm run demo node -- -d`.

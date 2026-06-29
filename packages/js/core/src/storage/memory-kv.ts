@@ -3,6 +3,7 @@ import {
   cloneInvoiceStorageRow,
   idempotencyScopeKey,
   isTerminalInvoiceStorageRow,
+  readInvoiceStorageCheckoutId,
   readInvoiceStorageOrderId,
   validateInvoiceStorageRow
 } from "./index.ts";
@@ -22,6 +23,7 @@ export class InMemoryInvoiceKvStore implements OpenReceiveInvoiceKvStore {
   #byBolt11Invoice = new Map<string, string>();
   #byIdempotencyScope = new Map<string, string>();
   #byOrderId = new Map<string, Set<string>>();
+  #byCheckoutId = new Map<string, Set<string>>();
   #meta = new Map<string, MetaRow>();
 
   putIfAbsent(record: StoredRecord): OpenReceivePutIfAbsentResult {
@@ -56,6 +58,7 @@ export class InMemoryInvoiceKvStore implements OpenReceiveInvoiceKvStore {
     this.#byBolt11Invoice.set(stored.row.invoice, stored.row.invoice_id);
     this.#byIdempotencyScope.set(scopeKey, stored.row.invoice_id);
     this.#addOrderIndex(stored.row);
+    this.#addCheckoutIndex(stored.row);
 
     return {
       status: "created",
@@ -93,6 +96,7 @@ export class InMemoryInvoiceKvStore implements OpenReceiveInvoiceKvStore {
     this.#byBolt11Invoice.set(stored.row.invoice, stored.row.invoice_id);
     this.#byIdempotencyScope.set(idempotencyScopeKey(stored.row), stored.row.invoice_id);
     this.#addOrderIndex(stored.row);
+    this.#addCheckoutIndex(stored.row);
 
     return {
       status: "ok",
@@ -122,6 +126,16 @@ export class InMemoryInvoiceKvStore implements OpenReceiveInvoiceKvStore {
   listByOrderId(orderId: string): StoredRecord[] {
     assertOrderId(orderId);
     const invoiceIds = this.#byOrderId.get(orderId);
+    return this.#listByInvoiceIdSet(invoiceIds);
+  }
+
+  listByCheckoutId(checkoutId: string): StoredRecord[] {
+    assertCheckoutId(checkoutId);
+    const invoiceIds = this.#byCheckoutId.get(checkoutId);
+    return this.#listByInvoiceIdSet(invoiceIds);
+  }
+
+  #listByInvoiceIdSet(invoiceIds: Set<string> | undefined): StoredRecord[] {
     if (invoiceIds === undefined) return [];
     return [...invoiceIds]
       .map((invoiceId) => this.#byInvoiceId.get(invoiceId))
@@ -215,10 +229,19 @@ export class InMemoryInvoiceKvStore implements OpenReceiveInvoiceKvStore {
     this.#byIdempotencyScope.delete(idempotencyScopeKey(row));
     const orderId = readInvoiceStorageOrderId(row);
     const invoiceIds = this.#byOrderId.get(orderId);
-    if (invoiceIds === undefined) return;
-    invoiceIds.delete(row.invoice_id);
-    if (invoiceIds.size === 0) {
+    if (invoiceIds !== undefined) {
+      invoiceIds.delete(row.invoice_id);
+    }
+    if (invoiceIds?.size === 0) {
       this.#byOrderId.delete(orderId);
+    }
+    const checkoutId = readInvoiceStorageCheckoutId(row);
+    const checkoutInvoiceIds = this.#byCheckoutId.get(checkoutId);
+    if (checkoutInvoiceIds !== undefined) {
+      checkoutInvoiceIds.delete(row.invoice_id);
+    }
+    if (checkoutInvoiceIds?.size === 0) {
+      this.#byCheckoutId.delete(checkoutId);
     }
   }
 
@@ -250,6 +273,13 @@ export class InMemoryInvoiceKvStore implements OpenReceiveInvoiceKvStore {
     invoiceIds.add(row.invoice_id);
     this.#byOrderId.set(orderId, invoiceIds);
   }
+
+  #addCheckoutIndex(row: StoredRecord["row"]): void {
+    const checkoutId = readInvoiceStorageCheckoutId(row);
+    const invoiceIds = this.#byCheckoutId.get(checkoutId) ?? new Set<string>();
+    invoiceIds.add(row.invoice_id);
+    this.#byCheckoutId.set(checkoutId, invoiceIds);
+  }
 }
 
 function assertListOpenInput(input: { now: number; limit: number }): void {
@@ -270,5 +300,11 @@ function assertMetaKey(key: string): void {
 function assertOrderId(orderId: string): void {
   if (typeof orderId !== "string" || orderId.length === 0) {
     throw new TypeError("orderId must be a non-empty string");
+  }
+}
+
+function assertCheckoutId(checkoutId: string): void {
+  if (typeof checkoutId !== "string" || checkoutId.length === 0) {
+    throw new TypeError("checkoutId must be a non-empty string");
   }
 }

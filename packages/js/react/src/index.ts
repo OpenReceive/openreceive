@@ -313,6 +313,7 @@ function toCheckoutDisplayData(
   }
   const settledAt = snapshot.paid_at ?? invoice.settled_at;
   return {
+    checkout_id: snapshot.checkout_id,
     order_id: snapshot.order_id,
     invoice_id: invoice.invoice_id,
     invoice: invoice.invoice,
@@ -329,7 +330,7 @@ function toCheckoutDisplayData(
 }
 
 function deriveCheckoutOrderStatus(snapshot: CheckoutSnapshot): Status {
-  if (snapshot.paid) return "settled";
+  if (snapshot.status === "paid") return "settled";
   if (snapshot.status === "expired") return "expired";
   const invoice = snapshot.active ?? snapshot.invoices[0];
   return invoice === undefined ? "pending" : deriveStatus(invoice);

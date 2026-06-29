@@ -2,6 +2,7 @@ import {
   canonicalJson,
   idempotencyScopeKey,
   isTerminalInvoiceStorageRow,
+  readInvoiceStorageCheckoutId,
   readInvoiceStorageOrderId,
   validateInvoiceStorageRow,
   type MetaRow,
@@ -56,6 +57,7 @@ CREATE TABLE IF NOT EXISTS openreceive_invoices (
   bolt11 TEXT NOT NULL UNIQUE,
   idempotency_scope TEXT NOT NULL UNIQUE,
   order_id TEXT NOT NULL,
+  checkout_id TEXT NOT NULL,
   terminal INTEGER NOT NULL DEFAULT 0,
   expires_at INTEGER NOT NULL,
   data TEXT NOT NULL
@@ -63,6 +65,9 @@ CREATE TABLE IF NOT EXISTS openreceive_invoices (
 
 CREATE INDEX IF NOT EXISTS openreceive_invoices_order_idx
   ON openreceive_invoices (order_id);
+
+CREATE INDEX IF NOT EXISTS openreceive_invoices_checkout_idx
+  ON openreceive_invoices (checkout_id);
 
 CREATE INDEX IF NOT EXISTS openreceive_invoices_open_idx
   ON openreceive_invoices (terminal, expires_at);
@@ -147,8 +152,8 @@ export class OpenReceiveSqliteKvStore implements OpenReceiveInvoiceKvStore {
     validateStoredRecord(record);
     const result = await this.#client.execute(
       `INSERT OR IGNORE INTO ${this.#tableName} (
-        invoice_id, rev, payment_hash, bolt11, idempotency_scope, order_id, terminal, expires_at, data
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        invoice_id, rev, payment_hash, bolt11, idempotency_scope, order_id, checkout_id, terminal, expires_at, data
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING data`,
       [
         record.row.invoice_id,
@@ -157,6 +162,7 @@ export class OpenReceiveSqliteKvStore implements OpenReceiveInvoiceKvStore {
         record.row.invoice,
         idempotencyScopeKey(record.row),
         readInvoiceStorageOrderId(record.row),
+        readInvoiceStorageCheckoutId(record.row),
         isTerminalInvoiceStorageRow(record.row) ? 1 : 0,
         record.row.expires_at,
         serializeStoredRecord(record)
@@ -185,6 +191,7 @@ export class OpenReceiveSqliteKvStore implements OpenReceiveInvoiceKvStore {
            bolt11 = ?,
            idempotency_scope = ?,
            order_id = ?,
+           checkout_id = ?,
            terminal = ?,
            expires_at = ?,
            data = ?
@@ -196,6 +203,7 @@ export class OpenReceiveSqliteKvStore implements OpenReceiveInvoiceKvStore {
         record.row.invoice,
         idempotencyScopeKey(record.row),
         readInvoiceStorageOrderId(record.row),
+        readInvoiceStorageCheckoutId(record.row),
         isTerminalInvoiceStorageRow(record.row) ? 1 : 0,
         record.row.expires_at,
         serializeStoredRecord(record),
@@ -254,6 +262,21 @@ export class OpenReceiveSqliteKvStore implements OpenReceiveInvoiceKvStore {
     const result = await this.#client.execute(
       `SELECT data FROM ${this.#tableName} WHERE order_id = ?`,
       [orderId]
+    );
+    return result.rows
+      .map((row) => parseStoredRecordField(row.data))
+      .sort((left, right) =>
+        left.row.created_at === right.row.created_at
+          ? right.row.invoice_id.localeCompare(left.row.invoice_id)
+          : right.row.created_at - left.row.created_at
+      );
+  }
+
+  async listByCheckoutId(checkoutId: string): Promise<StoredRecord[]> {
+    assertCheckoutId(checkoutId);
+    const result = await this.#client.execute(
+      `SELECT data FROM ${this.#tableName} WHERE checkout_id = ?`,
+      [checkoutId]
     );
     return result.rows
       .map((row) => parseStoredRecordField(row.data))
@@ -421,6 +444,7 @@ CREATE TABLE IF NOT EXISTS ${this.#tableName} (
   bolt11 TEXT NOT NULL UNIQUE,
   idempotency_scope TEXT NOT NULL UNIQUE,
   order_id TEXT NOT NULL,
+  checkout_id TEXT NOT NULL,
   terminal INTEGER NOT NULL DEFAULT 0,
   expires_at INTEGER NOT NULL,
   data TEXT NOT NULL
@@ -428,6 +452,9 @@ CREATE TABLE IF NOT EXISTS ${this.#tableName} (
 
 CREATE INDEX IF NOT EXISTS ${unquoted(this.#tableName)}_order_idx
   ON ${this.#tableName} (order_id);
+
+CREATE INDEX IF NOT EXISTS ${unquoted(this.#tableName)}_checkout_idx
+  ON ${this.#tableName} (checkout_id);
 
 CREATE INDEX IF NOT EXISTS ${unquoted(this.#tableName)}_open_idx
   ON ${this.#tableName} (terminal, expires_at);
@@ -532,6 +559,12 @@ function assertListOpenInput(input: { now: number; limit: number }): void {
 function assertOrderId(orderId: string): void {
   if (typeof orderId !== "string" || orderId.length === 0) {
     throw new TypeError("OpenReceive SQLite orderId must be a non-empty string");
+  }
+}
+
+function assertCheckoutId(checkoutId: string): void {
+  if (typeof checkoutId !== "string" || checkoutId.length === 0) {
+    throw new TypeError("OpenReceive SQLite checkoutId must be a non-empty string");
   }
 }
 

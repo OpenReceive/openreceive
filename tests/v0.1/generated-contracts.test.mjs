@@ -7,7 +7,7 @@ import {
   OPENRECEIVE_HTTP_OPERATION_IDS,
   OPENRECEIVE_HTTP_PATHS,
   OPENRECEIVE_TRANSACTION_STATES,
-  OPENRECEIVE_WORKFLOW_STATES
+  OPENRECEIVE_WORKFLOW_STATES,
 } from "@openreceive/core/contracts";
 
 test("generated contract models are not exported from the core root", async () => {
@@ -18,20 +18,18 @@ test("generated contract models are not exported from the core root", async () =
 
 test("generated contract models expose HTTP routes and event names", () => {
   assert.deepEqual(OPENRECEIVE_HTTP_PATHS, [
-    "/invoices",
-    "/invoices/{invoice_id}",
-    "/invoices/{invoice_id}/refresh",
-    "/invoices/{invoice_id}/status",
+    "/checkouts/{checkout_id}",
+    "/orders/{order_id}/checkouts",
+    "/orders/{order_id}/status",
     "/rates",
-    "/rates/quote"
+    "/rates/quote",
   ]);
   assert.deepEqual(OPENRECEIVE_HTTP_OPERATION_IDS, [
-    "createInvoice",
-    "getInvoice",
+    "createCheckout",
+    "getCheckout",
+    "getOrder",
     "listRates",
     "quoteRates",
-    "refreshInvoice",
-    "refreshInvoiceStatus"
   ]);
   assert.deepEqual(OPENRECEIVE_EVENT_NAMES, [
     "invoice.cancelled",
@@ -40,7 +38,7 @@ test("generated contract models expose HTTP routes and event names", () => {
     "invoice.failed",
     "invoice.settled",
     "invoice.settlement_action_completed",
-    "invoice.verifying"
+    "invoice.verifying",
   ]);
   assert.deepEqual(OPENRECEIVE_ERROR_CODES, [
     "NOT_IMPLEMENTED",
@@ -59,7 +57,7 @@ test("generated contract models expose HTTP routes and event names", () => {
     "WALLET_UNAVAILABLE",
     "INVOICE_EXPIRED",
     "UNSUPPORTED_METHOD",
-    "CONFLICT"
+    "CONFLICT",
   ]);
 });
 
@@ -69,11 +67,11 @@ test("generated contract models expose shared state and amount boundaries", () =
     "settled",
     "expired",
     "failed",
-    "accepted"
+    "accepted",
   ]);
   assert.equal(OPENRECEIVE_WORKFLOW_STATES.includes("settlement_action_pending"), true);
   assert.deepEqual(OPENRECEIVE_AMOUNT_MSATS_BOUNDARY, {
     minimum: 1000,
-    maximum: 9007199254740991
+    maximum: 9007199254740991,
   });
 });
