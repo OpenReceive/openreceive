@@ -215,9 +215,9 @@ export function isTerminalInvoiceStorageRow(row: InvoiceStorageRow): boolean {
 }
 
 export function readInvoiceStorageOrderId(row: InvoiceStorageRow): string {
-  const orderId = row.metadata.order_uuid;
+  const orderId = row.metadata.order_id;
   if (typeof orderId === "string" && orderId.length > 0) return orderId;
-  throw new TypeError("metadata.order_uuid must be a non-empty string");
+  throw new TypeError("metadata.order_id must be a non-empty string");
 }
 
 export function readInvoiceStorageCheckoutId(row: InvoiceStorageRow): string {

@@ -6,9 +6,7 @@ import type {
 import {
   OpenReceiveServiceError,
   createOpenReceive,
-  createOpenReceivePriceFeed,
-  toOpenReceiveHttpCheckout,
-  toOpenReceiveHttpOrder
+  createOpenReceivePriceFeed
 } from "@openreceive/node";
 import {
   createHelloFruitDemoMetadata
@@ -150,15 +148,16 @@ export async function createOrderResponse(
       rates,
       supportedCurrencies
     });
-    const checkout = toOpenReceiveHttpCheckout(
-      await openreceive.createCheckout(orderResult.invoiceRequest)
-    );
+    const checkout = await openreceive.createCheckout(orderResult.invoiceRequest);
     return jsonResponse({
       order: orderResult.order,
       checkout
     }, 201);
   } catch (error) {
-    return checkoutErrorResponse(error);
+    if (error instanceof OpenReceiveServiceError) {
+      return jsonResponse(error.body, error.status);
+    }
+    throw error;
   }
 }
 
@@ -169,20 +168,23 @@ export async function orderStatusResponse(request: Request): Promise<Response> {
   const { openreceive } = await getOpenReceive(connectionString);
 
   try {
-    const checkout = toOpenReceiveHttpOrder(
-      await openreceive.getOrder(createStatusRequest(await readJsonBody(request)))
+    const openreceiveOrder = await openreceive.getOrder(
+      createStatusRequest(await readJsonBody(request))
     );
-    const orderStatus = createHelloFruitOrderStatus(checkout);
+    const orderStatus = createHelloFruitOrderStatus(openreceiveOrder);
     return jsonResponse({
-      ...checkout,
+      ...openreceiveOrder,
       ...orderStatus,
       order: {
-        uuid: orderStatus.order_uuid,
+        uuid: orderStatus.order_id,
         status: orderStatus.order_status
       }
     });
   } catch (error) {
-    return checkoutErrorResponse(error);
+    if (error instanceof OpenReceiveServiceError) {
+      return jsonResponse(error.body, error.status);
+    }
+    throw error;
   }
 }
 
@@ -248,7 +250,7 @@ function createStatusRequest(body: Record<string, unknown>): {
 } {
   const orderId = body.order_id;
   if (typeof orderId !== "string" || orderId.length === 0) {
-    throw createCheckoutHttpError(400, {
+    throw new OpenReceiveServiceError(400, {
       code: "INVALID_REQUEST",
       message: "order_id is required."
     });
@@ -262,50 +264,12 @@ async function readJsonBody(request: Request): Promise<Record<string, unknown>> 
   if (text.length === 0) return {};
   const body = JSON.parse(text) as unknown;
   if (body === null || typeof body !== "object" || Array.isArray(body)) {
-    throw createCheckoutHttpError(400, {
+    throw new OpenReceiveServiceError(400, {
       code: "INVALID_REQUEST",
       message: "JSON request body must be an object."
     });
   }
   return body as Record<string, unknown>;
-}
-
-function checkoutErrorResponse(error: unknown): Response {
-  if (error instanceof OpenReceiveServiceError) {
-    return jsonResponse(error.body, error.status);
-  }
-  if (isAppHttpError(error)) {
-    return jsonResponse(error.body, error.status);
-  }
-  throw error;
-}
-
-function createCheckoutHttpError(
-  status: number,
-  body: Record<string, unknown>
-): Error & {
-  readonly status: number;
-  readonly body: Record<string, unknown>;
-} {
-  return Object.assign(new Error(String(body.message ?? "Checkout request failed.")), {
-    status,
-    body
-  });
-}
-
-function isAppHttpError(error: unknown): error is {
-  readonly status: number;
-  readonly body: Record<string, unknown>;
-} {
-  if (typeof error !== "object" || error === null) return false;
-  const candidate = error as { readonly status?: unknown; readonly body?: unknown };
-  return Number.isInteger(candidate.status) &&
-    typeof candidate.status === "number" &&
-    candidate.status >= 400 &&
-    candidate.status <= 599 &&
-    typeof candidate.body === "object" &&
-    candidate.body !== null &&
-    !Array.isArray(candidate.body);
 }
 
 function currentStoreCacheKey(): string {

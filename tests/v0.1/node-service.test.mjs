@@ -129,21 +129,6 @@ test("createCheckout mints once and replays the live invoice for the same amount
   assert.equal(wallet.makeInvoiceCalls, 1);
 });
 
-test("createCheckout accepts the checkout HTTP request shape", async () => {
-  const { openreceive } = await createHarness();
-
-  const checkout = await openreceive.createCheckout({
-    order_id: "order-http-shape",
-    amount_msats: 250000,
-    optional_invoice_description: "Fruit sticker",
-    expiry: 600,
-  });
-
-  assert.equal(checkout.orderId, "order-http-shape");
-  assert.equal(checkout.amountMsats, 250000);
-  assert.equal(checkout.active.amountMsats, 250000);
-});
-
 test("createCheckout creates a new checkout and supersedes the open checkout for a different amount", async () => {
   const { wallet, openreceive } = await createHarness();
 
@@ -203,7 +188,7 @@ test("createCheckout renews after expiry within the same checkout", async () => 
 
   const storedRenewal = (await store.get(renewed.active.invoiceId)).row;
   assert.equal(storedRenewal.operation, "invoice.renew");
-  assert.equal(storedRenewal.metadata.order_uuid, "order-renew");
+  assert.equal(storedRenewal.metadata.order_id, "order-renew");
   assert.equal(storedRenewal.metadata.checkout_id, first.checkoutId);
   assert.deepEqual(storedRenewal.metadata.amount_spec, { sats: "200" });
   assert.equal(storedRenewal.metadata.expires_in_seconds, 600);

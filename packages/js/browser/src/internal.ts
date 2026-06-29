@@ -547,11 +547,7 @@ export interface CheckoutStatusModel {
 
 export type CheckoutStatusRefresh = (state: CheckoutState) => Promise<Partial<CheckoutSnapshot>>;
 
-export type CheckoutRefresh = (
-  state: CheckoutState,
-) => Promise<CheckoutSnapshot | OpenReceiveRefreshInvoiceResult>;
-
-export type RequestCheckoutInvoiceAmount =
+export type RequestCheckoutAmount =
   | {
       readonly btc: {
         readonly currency: "BTC";
@@ -567,12 +563,12 @@ export type RequestCheckoutInvoiceAmount =
       };
     };
 
-export interface RequestCheckoutInvoiceOptions {
-  readonly invoiceUrl?: string;
+export interface RequestCheckoutOptions {
+  readonly checkoutUrl: string | ((orderId: string) => string);
   readonly orderId: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly headers?: Readonly<Record<string, string>>;
-  readonly amount: RequestCheckoutInvoiceAmount;
+  readonly amount: RequestCheckoutAmount;
   readonly memo?: string;
   readonly descriptionHash?: string;
   readonly expiresInSeconds?: number;
@@ -582,21 +578,6 @@ export interface CreateOpenReceiveStatusFetcherOptions {
   readonly statusUrl: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly headers?: Readonly<Record<string, string>>;
-}
-
-export interface OpenReceiveRefreshInvoiceResult {
-  readonly old_invoice_id: string;
-  readonly new_invoice_id: string;
-  readonly reason?: string;
-  readonly invoice: CheckoutSnapshot;
-}
-
-export interface CreateOpenReceiveRefreshInvoiceFetcherOptions {
-  readonly refreshUrl: string | ((state: CheckoutState) => string);
-  readonly idempotencyKey: string | ((state: CheckoutState) => string);
-  readonly fetch?: typeof globalThis.fetch;
-  readonly headers?: Readonly<Record<string, string>>;
-  readonly reason?: string | ((state: CheckoutState) => string);
 }
 
 export interface CheckoutWatcherOptions {
@@ -616,11 +597,6 @@ export interface CheckoutControllerOptions extends Omit<CheckoutWatcherOptions, 
   readonly statusUrl?: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly statusHeaders?: Readonly<Record<string, string>>;
-  readonly refreshInvoice?: CheckoutRefresh;
-  readonly refreshUrl?: string | ((state: CheckoutState) => string);
-  readonly refreshHeaders?: Readonly<Record<string, string>>;
-  readonly refreshIdempotencyKey?: string | ((state: CheckoutState) => string);
-  readonly refreshReason?: string | ((state: CheckoutState) => string);
   readonly clipboard?: Pick<Clipboard, "writeText">;
   readonly open?: (uri: string) => void;
 }
@@ -632,7 +608,6 @@ export interface CheckoutController {
   getState(): CheckoutState | undefined;
   reloadState(): Promise<CheckoutState>;
   retry(): Promise<CheckoutState>;
-  refreshExpiredInvoice(): Promise<CheckoutState>;
   cancel(): CheckoutState;
   copyInvoice(): Promise<void>;
   openWallet(): string;
@@ -2881,8 +2856,8 @@ export function createCheckoutShell(
   };
 }
 
-export async function requestCheckoutInvoice(
-  options: RequestCheckoutInvoiceOptions,
+export async function requestCheckout(
+  options: RequestCheckoutOptions,
 ): Promise<CheckoutSnapshot> {
   if (options.orderId.length === 0) {
     throw new Error("OpenReceive checkout creation requires an orderId.");
@@ -2909,18 +2884,17 @@ export async function requestCheckoutInvoice(
   }
 
   const requestBody = {
-    order_id: options.orderId,
-    ...("btc" in options.amount ? { amount: options.amount.btc } : {}),
-    ...("sats" in options.amount ? { amount_sats: options.amount.sats } : {}),
-    ...("msats" in options.amount ? { amount_msats: options.amount.msats } : {}),
-    ...("fiat" in options.amount ? { fiat: options.amount.fiat } : {}),
-    ...(options.memo === undefined ? {} : { optional_invoice_description: options.memo }),
-    ...(options.descriptionHash === undefined ? {} : { description_hash: options.descriptionHash }),
-    ...(options.expiresInSeconds === undefined ? {} : { expiry: options.expiresInSeconds }),
+    orderId: options.orderId,
+    amount: structuredClone(options.amount),
+    ...(options.memo === undefined ? {} : { memo: options.memo }),
+    ...(options.descriptionHash === undefined ? {} : { descriptionHash: options.descriptionHash }),
+    ...(options.expiresInSeconds === undefined
+      ? {}
+      : { expiresInSeconds: options.expiresInSeconds }),
   };
   assertOpenReceiveBrowserPayloadSafe(requestBody);
 
-  const response = await fetcher(resolveCreateCheckoutUrl(options.invoiceUrl, options.orderId), {
+  const response = await fetcher(resolveCheckoutUrl(options.checkoutUrl, options.orderId), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -2980,8 +2954,12 @@ export function createOpenReceiveStatusFetcher(
   };
 }
 
-function resolveCreateCheckoutUrl(invoiceUrl: string | undefined, orderId: string): string {
-  const url = invoiceUrl ?? "/openreceive/v1/orders/{order_id}/checkouts";
+function resolveCheckoutUrl(
+  checkoutUrl: string | ((orderId: string) => string),
+  orderId: string,
+): string {
+  const url =
+    typeof checkoutUrl === "function" ? checkoutUrl(orderId) : checkoutUrl;
   return url.includes("{order_id}")
     ? url.replaceAll("{order_id}", encodeURIComponent(orderId))
     : url;
@@ -2996,8 +2974,11 @@ function resolveStatusUrl(statusUrl: string, orderId: string): string {
 function checkoutSnapshotFromResponseBody(body: unknown): CheckoutSnapshot {
   const record = asRecord(body);
   const wrapped = asRecord(record.checkout);
-  const candidate = typeof wrapped.checkout_id === "string" ? wrapped : record;
-  return candidate as unknown as CheckoutSnapshot;
+  const candidate =
+    typeof wrapped.checkout_id === "string" || typeof wrapped.checkoutId === "string"
+      ? wrapped
+      : record;
+  return normalizeCheckoutSnapshot(candidate);
 }
 
 function checkoutSnapshotFromStatusBody(
@@ -3005,80 +2986,110 @@ function checkoutSnapshotFromStatusBody(
   current: CheckoutState,
 ): Partial<CheckoutSnapshot> {
   const record = asRecord(body);
-  if (typeof record.checkout_id === "string") {
-    return record as unknown as CheckoutSnapshot;
+  if (typeof record.checkout_id === "string" || typeof record.checkoutId === "string") {
+    return normalizeCheckoutSnapshot(record);
   }
 
-  const paidCheckout = asRecord(record.paid_checkout);
-  if (typeof paidCheckout.checkout_id === "string") {
-    return paidCheckout as unknown as CheckoutSnapshot;
+  const paidCheckout = asRecord(record.paid_checkout ?? record.paidCheckout);
+  if (typeof paidCheckout.checkout_id === "string" || typeof paidCheckout.checkoutId === "string") {
+    return normalizeCheckoutSnapshot(paidCheckout);
   }
 
-  const activeCheckout = asRecord(record.active_checkout);
-  if (typeof activeCheckout.checkout_id === "string") {
-    return activeCheckout as unknown as CheckoutSnapshot;
+  const activeCheckout = asRecord(record.active_checkout ?? record.activeCheckout);
+  if (
+    typeof activeCheckout.checkout_id === "string" ||
+    typeof activeCheckout.checkoutId === "string"
+  ) {
+    return normalizeCheckoutSnapshot(activeCheckout);
   }
 
   if (Array.isArray(record.checkouts)) {
     const matching = record.checkouts
       .map(asRecord)
-      .find((checkout) => checkout.checkout_id === current.checkout_id);
+      .find((checkout) => (checkout.checkout_id ?? checkout.checkoutId) === current.checkout_id);
     if (matching !== undefined) {
-      return matching as unknown as CheckoutSnapshot;
+      return normalizeCheckoutSnapshot(matching);
     }
     const first = asRecord(record.checkouts[0]);
-    if (typeof first.checkout_id === "string") {
-      return first as unknown as CheckoutSnapshot;
+    if (typeof first.checkout_id === "string" || typeof first.checkoutId === "string") {
+      return normalizeCheckoutSnapshot(first);
     }
   }
 
-  return record as Partial<CheckoutSnapshot>;
+  return normalizePartialCheckoutSnapshot(record);
 }
 
-export function createOpenReceiveRefreshInvoiceFetcher(
-  options: CreateOpenReceiveRefreshInvoiceFetcherOptions,
-): CheckoutRefresh {
-  return async (state) => {
-    const fetcher = options.fetch ?? globalThis.fetch;
-    if (fetcher === undefined) {
-      throw new Error("OpenReceive refresh requires fetch.");
-    }
+function normalizePartialCheckoutSnapshot(input: Record<string, unknown>): Partial<CheckoutSnapshot> {
+  const checkoutId = optionalString(input.checkout_id ?? input.checkoutId);
+  if (checkoutId === undefined) return input as Partial<CheckoutSnapshot>;
+  return normalizeCheckoutSnapshot(input);
+}
 
-    const refreshUrl =
-      typeof options.refreshUrl === "function" ? options.refreshUrl(state) : options.refreshUrl;
-    const idempotencyKey =
-      typeof options.idempotencyKey === "function"
-        ? options.idempotencyKey(state)
-        : options.idempotencyKey;
-    if (idempotencyKey.length === 0) {
-      throw new Error("OpenReceive refresh requires an Idempotency-Key.");
-    }
-    const reason =
-      typeof options.reason === "function"
-        ? options.reason(state)
-        : (options.reason ?? state.phase);
+function normalizeCheckoutSnapshot(input: unknown): CheckoutSnapshot {
+  const record = asRecord(input);
+  const active = record.active === undefined ? undefined : normalizeCheckoutInvoiceSnapshot(record.active);
+  const rawInvoices = Array.isArray(record.invoices) ? record.invoices : [];
+  const invoices = rawInvoices.map(normalizeCheckoutInvoiceSnapshot);
+  const checkoutId = requiredString(record.checkout_id ?? record.checkoutId, "checkout_id");
+  const orderId = requiredString(record.order_id ?? record.orderId, "order_id");
+  const amountMsats = requiredSafeInteger(record.amount_msats ?? record.amountMsats, "amount_msats");
+  const status = requiredCheckoutStatus(record.status);
 
-    const response = await fetcher(refreshUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Idempotency-Key": idempotencyKey,
-        ...(options.headers ?? {}),
-      },
-      body: JSON.stringify({ reason }),
-    });
-    const body = await response.json();
+  return {
+    checkout_id: checkoutId,
+    order_id: orderId,
+    status,
+    ...(optionalSafeInteger(record.paid_at ?? record.paidAt) === undefined
+      ? {}
+      : { paid_at: optionalSafeInteger(record.paid_at ?? record.paidAt) }),
+    amount_msats: amountMsats,
+    ...(normalizeFiat(record.fiat) === undefined ? {} : { fiat: normalizeFiat(record.fiat) }),
+    ...(active === undefined ? {} : { active }),
+    invoices,
+    ...(optionalBoolean(record.wallet_scan_performed ?? record.walletScanPerformed) === undefined
+      ? {}
+      : {
+          wallet_scan_performed: optionalBoolean(
+            record.wallet_scan_performed ?? record.walletScanPerformed,
+          ),
+        }),
+    ...(optionalSafeInteger(record.transactions_checked ?? record.transactionsChecked) === undefined
+      ? {}
+      : {
+          transactions_checked: optionalSafeInteger(
+            record.transactions_checked ?? record.transactionsChecked,
+          ),
+        }),
+  };
+}
 
-    if (!response.ok) {
-      throw new Error(
-        typeof body?.message === "string" ? body.message : "Could not refresh invoice.",
-      );
-    }
-    if (asRecord(body).invoice === undefined) {
-      throw new Error("OpenReceive refresh response did not include an invoice.");
-    }
-
-    return body as OpenReceiveRefreshInvoiceResult;
+function normalizeCheckoutInvoiceSnapshot(input: unknown): CheckoutInvoiceSnapshot {
+  const record = asRecord(input);
+  const invoice = requiredString(record.invoice ?? record.bolt11, "invoice");
+  return {
+    invoice_id: requiredString(record.invoice_id ?? record.invoiceId, "invoice_id"),
+    invoice,
+    ...(optionalString(record.payment_hash ?? record.paymentHash) === undefined
+      ? {}
+      : { payment_hash: optionalString(record.payment_hash ?? record.paymentHash) }),
+    ...(optionalSafeInteger(record.amount_msats ?? record.amountMsats) === undefined
+      ? {}
+      : { amount_msats: optionalSafeInteger(record.amount_msats ?? record.amountMsats) }),
+    ...(isRecord(record.fiat_quote ?? record.fiatQuote) || (record.fiat_quote ?? record.fiatQuote) === null
+      ? { fiat_quote: (record.fiat_quote ?? record.fiatQuote) as CheckoutInvoiceSnapshot["fiat_quote"] }
+      : {}),
+    ...(optionalString(record.transaction_state ?? record.transactionState) === undefined
+      ? {}
+      : { transaction_state: optionalString(record.transaction_state ?? record.transactionState) }),
+    ...(optionalString(record.workflow_state ?? record.workflowState) === undefined
+      ? {}
+      : { workflow_state: optionalString(record.workflow_state ?? record.workflowState) }),
+    ...(optionalSafeInteger(record.expires_at ?? record.expiresAt) === undefined
+      ? {}
+      : { expires_at: optionalSafeInteger(record.expires_at ?? record.expiresAt) }),
+    ...(optionalSafeInteger(record.settled_at ?? record.settledAt) === undefined
+      ? {}
+      : { settled_at: optionalSafeInteger(record.settled_at ?? record.settledAt) }),
   };
 }
 
@@ -3451,21 +3462,6 @@ export class OpenReceiveBrowserCheckoutController implements CheckoutController 
     return this.reloadState();
   }
 
-  async refreshExpiredInvoice(): Promise<CheckoutState> {
-    const refreshInvoice = this.createRefreshInvoice(this.options);
-    if (refreshInvoice === undefined) {
-      throw new Error("OpenReceive refresh requires refreshInvoice or refreshUrl.");
-    }
-
-    const current = this.currentState();
-    const result = await refreshInvoice(current);
-    const snapshot: CheckoutSnapshot = "new_invoice_id" in result ? result.invoice : result;
-    return this.update({
-      ...this.options,
-      snapshot,
-    });
-  }
-
   cancel(): CheckoutState {
     this.stop();
     this.state = this.currentState();
@@ -3497,21 +3493,6 @@ export class OpenReceiveBrowserCheckoutController implements CheckoutController 
         this.state = state;
         options.onState?.(state);
       },
-    });
-  }
-
-  private createRefreshInvoice(options: CheckoutControllerOptions): CheckoutRefresh | undefined {
-    if (options.refreshInvoice !== undefined) return options.refreshInvoice;
-    if (options.refreshUrl === undefined || options.refreshIdempotencyKey === undefined) {
-      return undefined;
-    }
-
-    return createOpenReceiveRefreshInvoiceFetcher({
-      refreshUrl: options.refreshUrl,
-      idempotencyKey: options.refreshIdempotencyKey,
-      fetch: options.fetch,
-      headers: options.refreshHeaders,
-      reason: options.refreshReason,
     });
   }
 
@@ -3873,4 +3854,50 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function requiredString(value: unknown, fieldName: string): string {
+  const text = optionalString(value);
+  if (text === undefined) {
+    throw new TypeError(`OpenReceive checkout response requires ${fieldName}.`);
+  }
+  return text;
+}
+
+function optionalSafeInteger(value: unknown): number | undefined {
+  return Number.isSafeInteger(value) && typeof value === "number" ? value : undefined;
+}
+
+function requiredSafeInteger(value: unknown, fieldName: string): number {
+  const integer = optionalSafeInteger(value);
+  if (integer === undefined) {
+    throw new TypeError(`OpenReceive checkout response requires ${fieldName}.`);
+  }
+  return integer;
+}
+
+function optionalBoolean(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined;
+}
+
+function requiredCheckoutStatus(value: unknown): CheckoutSnapshot["status"] {
+  if (value === "open" || value === "superseded" || value === "paid" || value === "expired") {
+    return value;
+  }
+  throw new TypeError("OpenReceive checkout response requires status.");
+}
+
+function normalizeFiat(value: unknown): CheckoutSnapshot["fiat"] | undefined {
+  const record = asRecord(value);
+  const currency = optionalString(record.currency);
+  const fiatValue = optionalString(record.value);
+  if (currency === undefined || fiatValue === undefined) return undefined;
+  return {
+    currency,
+    value: fiatValue,
+  };
 }

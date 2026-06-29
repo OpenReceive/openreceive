@@ -8,9 +8,7 @@ import type {
 import {
   OpenReceiveServiceError,
   createOpenReceive,
-  createOpenReceivePriceFeed,
-  toOpenReceiveHttpCheckout,
-  toOpenReceiveHttpOrder
+  createOpenReceivePriceFeed
 } from "@openreceive/node";
 import {
   createHelloFruitDemoMetadata
@@ -23,7 +21,8 @@ import {
 } from "../../../../shared/demo-logging.ts";
 import {
   createHelloFruitCreateOrderResult,
-  createHelloFruitOrderStatus
+  createHelloFruitOrderStatus,
+  HelloFruitDemoOrderError
 } from "../../../../shared/demo-order.ts";
 import {
   mountHelloFruitHostedDemoRoutes
@@ -136,9 +135,7 @@ export async function createHelloFruitStaticServer(
         rates,
         supportedCurrencies
       });
-      const checkout = toOpenReceiveHttpCheckout(
-        await openreceive.createCheckout(orderResult.invoiceRequest)
-      );
+      const checkout = await openreceive.createCheckout(orderResult.invoiceRequest);
       res.status(201).json({
         order: orderResult.order,
         checkout
@@ -149,15 +146,13 @@ export async function createHelloFruitStaticServer(
   });
   app.post("/order_status", async (req, res, next) => {
     try {
-      const checkout = toOpenReceiveHttpOrder(
-        await openreceive.getOrder(createStatusRequest(asRequestBody(req.body)))
-      );
-      const orderStatus = createHelloFruitOrderStatus(checkout);
+      const openreceiveOrder = await openreceive.getOrder(createStatusRequest(asRequestBody(req.body)));
+      const orderStatus = createHelloFruitOrderStatus(openreceiveOrder);
       res.status(200).json({
-        ...checkout,
+        ...openreceiveOrder,
         ...orderStatus,
         order: {
-          uuid: orderStatus.order_uuid,
+          uuid: orderStatus.order_id,
           status: orderStatus.order_status
         }
       });
@@ -181,26 +176,11 @@ function handleCheckoutError(
     res.status(error.status).json(error.body);
     return;
   }
-  if (isAppHttpError(error)) {
+  if (error instanceof HelloFruitDemoOrderError) {
     res.status(error.status).json(error.body);
     return;
   }
   next(error);
-}
-
-function isAppHttpError(error: unknown): error is {
-  readonly status: number;
-  readonly body: Record<string, unknown>;
-} {
-  if (typeof error !== "object" || error === null) return false;
-  const candidate = error as { readonly status?: unknown; readonly body?: unknown };
-  return Number.isInteger(candidate.status) &&
-    typeof candidate.status === "number" &&
-    candidate.status >= 400 &&
-    candidate.status <= 599 &&
-    typeof candidate.body === "object" &&
-    candidate.body !== null &&
-    !Array.isArray(candidate.body);
 }
 
 function asRequestBody(value: unknown): Record<string, unknown> {
@@ -214,13 +194,7 @@ function createStatusRequest(body: Record<string, unknown>): {
 } {
   const orderId = body.order_id;
   if (typeof orderId !== "string" || orderId.length === 0) {
-    throw Object.assign(new Error("order_id is required."), {
-      status: 400,
-      body: {
-        code: "INVALID_REQUEST",
-        message: "order_id is required."
-      }
-    });
+    throw new HelloFruitDemoOrderError("order_id is required.");
   }
   return { orderId };
 }

@@ -41,7 +41,6 @@ import {
   type OpenReceivePaymentWizardController,
   type OpenReceivePaymentWizardModel,
   type OpenReceivePaymentWizardSelection,
-  type OpenReceiveRefreshInvoiceResult,
   type OpenReceiveResolvedTheme,
   type OpenReceiveWizardRouteAssetDisplay,
   type OpenReceiveWizardProviderDisplay,
@@ -50,8 +49,6 @@ import {
   type OpenReceiveThemePreference,
   type Status
 } from "@openreceive/browser/internal";
-
-const DEFAULT_STATUS_URL = "/openreceive/v1/orders/{order_id}/status";
 
 export interface CheckoutData {
   readonly invoice: CheckoutSnapshot;
@@ -79,11 +76,6 @@ export interface UseCheckoutOptions extends CheckoutData {
   readonly onError?: (error: unknown) => void;
   readonly refreshStatus?: (state: CheckoutState) => Promise<Partial<CheckoutSnapshot>>;
   readonly statusUrl?: string | false;
-  readonly refreshInvoice?: (state: CheckoutState) => Promise<CheckoutSnapshot | OpenReceiveRefreshInvoiceResult>;
-  readonly refreshUrl?: string | ((state: CheckoutState) => string);
-  readonly refreshHeaders?: Readonly<Record<string, string>>;
-  readonly refreshIdempotencyKey?: string | ((state: CheckoutState) => string);
-  readonly refreshReason?: string | ((state: CheckoutState) => string);
   readonly onState?: (state: CheckoutState) => void;
   readonly onSettled?: () => void;
   readonly polling?: boolean;
@@ -100,7 +92,6 @@ export interface UseCheckoutResult extends CheckoutViewModel {
   readonly waiting: boolean;
   reloadState(): Promise<void>;
   retry(): Promise<void>;
-  refreshExpiredInvoice(): Promise<void>;
   cancel(): void;
   copyInvoice(): Promise<void>;
   openWallet(): string;
@@ -205,11 +196,6 @@ export interface CheckoutProps
   readonly onError?: (error: unknown) => void;
   readonly refreshStatus?: (state: CheckoutState) => Promise<Partial<CheckoutSnapshot>>;
   readonly statusUrl?: string | false;
-  readonly refreshInvoice?: (state: CheckoutState) => Promise<CheckoutSnapshot | OpenReceiveRefreshInvoiceResult>;
-  readonly refreshUrl?: string | ((state: CheckoutState) => string);
-  readonly refreshHeaders?: Readonly<Record<string, string>>;
-  readonly refreshIdempotencyKey?: string | ((state: CheckoutState) => string);
-  readonly refreshReason?: string | ((state: CheckoutState) => string);
   readonly onState?: (state: CheckoutState) => void;
   readonly onSettled?: () => void;
   readonly onStartOver?: () => void;
@@ -370,7 +356,7 @@ function resolveCheckoutStatusRefreshUrl(options: {
   readonly polling?: boolean;
 }): string | undefined {
   if (options.polling === false || options.statusUrl === false) return undefined;
-  return options.statusUrl ?? DEFAULT_STATUS_URL;
+  return options.statusUrl;
 }
 
 export function useCheckout(
@@ -431,13 +417,6 @@ export function useCheckout(
       snapshot,
       ...(refreshStatus === undefined ? {} : { refreshStatus }),
       ...(statusUrl === undefined ? {} : { statusUrl }),
-      ...(options.refreshInvoice === undefined ? {} : { refreshInvoice: options.refreshInvoice }),
-      ...(options.refreshUrl === undefined ? {} : { refreshUrl: options.refreshUrl }),
-      ...(options.refreshHeaders === undefined ? {} : { refreshHeaders: options.refreshHeaders }),
-      ...(options.refreshIdempotencyKey === undefined
-        ? {}
-        : { refreshIdempotencyKey: options.refreshIdempotencyKey }),
-      ...(options.refreshReason === undefined ? {} : { refreshReason: options.refreshReason }),
       pollIntervalMs: options.pollIntervalMs,
       logger: options.logger,
       onError: options.onError,
@@ -459,11 +438,6 @@ export function useCheckout(
     snapshot,
     refreshStatus,
     statusUrl,
-    options.refreshInvoice,
-    options.refreshUrl,
-    options.refreshHeaders,
-    options.refreshIdempotencyKey,
-    options.refreshReason,
     options.pollIntervalMs,
     options.logger,
     options.onError,
@@ -551,16 +525,6 @@ export function useCheckout(
     }
   }, [options.onError]);
 
-  const refreshExpiredInvoice = React.useCallback(async () => {
-    try {
-      const next = await controllerRef.current?.refreshExpiredInvoice();
-      if (next !== undefined) setState(next);
-    } catch (error) {
-      options.onError?.(error);
-      throw error;
-    }
-  }, [options.onError]);
-
   const cancel = React.useCallback(() => {
     const next = controllerRef.current?.cancel();
     if (next !== undefined) setState(next);
@@ -578,7 +542,6 @@ export function useCheckout(
     waiting: richStatus.waiting,
     reloadState,
     retry,
-    refreshExpiredInvoice,
     cancel,
     copyInvoice,
     openWallet
@@ -1535,11 +1498,6 @@ export function Checkout(
     onError,
     refreshStatus,
     statusUrl,
-    refreshInvoice,
-    refreshUrl,
-    refreshHeaders,
-    refreshIdempotencyKey,
-    refreshReason,
     onState,
     onSettled,
     onStartOver,
@@ -1561,11 +1519,6 @@ export function Checkout(
     onError,
     refreshStatus,
     statusUrl,
-    refreshInvoice,
-    refreshUrl,
-    refreshHeaders,
-    refreshIdempotencyKey,
-    refreshReason,
     onState,
     onSettled,
     polling
@@ -1583,13 +1536,7 @@ export function Checkout(
     typeof children === "function" ? children(checkoutModel) : children;
   const expired = checkoutModel.status === "expired";
   const startOver = () => {
-    if (onStartOver !== undefined) {
-      onStartOver();
-      return;
-    }
-    void checkoutModel.refreshExpiredInvoice().catch((error) => {
-      onError?.(error);
-    });
+    onStartOver?.();
   };
 
   return React.createElement(

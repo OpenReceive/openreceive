@@ -5,7 +5,7 @@ export {
   createQrPngDataUrl as qrPngDataUrl,
   createQrSvg as qrSvg,
   openWallet,
-  requestCheckoutInvoice
+  requestCheckout
 } from "./internal.ts";
 
 export type {
@@ -15,8 +15,8 @@ export type {
   CheckoutSnapshot as Invoice,
   OpenReceiveQrOptions as QrOptions,
   OpenWalletOptions,
-  RequestCheckoutInvoiceAmount,
-  RequestCheckoutInvoiceOptions
+  RequestCheckoutAmount,
+  RequestCheckoutOptions
 } from "./internal.ts";
 
 export {

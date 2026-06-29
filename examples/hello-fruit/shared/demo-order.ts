@@ -63,7 +63,7 @@ export interface HelloFruitBtcFiatRates {
 }
 
 export interface HelloFruitOrderStatus {
-  readonly order_uuid: string;
+  readonly order_id: string;
   readonly order_status: "pending_payment" | "paid";
 }
 
@@ -150,28 +150,30 @@ function createOpenReceiveInvoiceAmount(
 }
 
 export function createHelloFruitOrderStatus(input: {
+  readonly orderId?: unknown;
   readonly order_id?: unknown;
-  readonly order_uuid?: unknown;
   readonly paid?: unknown;
   readonly status?: unknown;
+  readonly paidAt?: unknown;
   readonly settled_at?: unknown;
   readonly transaction_state?: unknown;
   readonly state?: unknown;
 }): HelloFruitOrderStatus {
   const orderId =
-    typeof input.order_id === "string" && input.order_id.length > 0
+    typeof input.orderId === "string" && input.orderId.length > 0
+      ? input.orderId
+      : typeof input.order_id === "string" && input.order_id.length > 0
       ? input.order_id
-      : typeof input.order_uuid === "string" && input.order_uuid.length > 0
-        ? input.order_uuid
-        : "unknown";
+      : "unknown";
   const paid = input.paid === true ||
     input.status === "paid" ||
+    typeof input.paidAt === "number" ||
     typeof input.settled_at === "number" ||
     input.transaction_state === "settled" ||
     input.state === "settled";
 
   return {
-    order_uuid: orderId,
+    order_id: orderId,
     order_status: paid ? "paid" : "pending_payment"
   };
 }

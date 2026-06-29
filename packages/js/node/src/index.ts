@@ -23,10 +23,7 @@ export {
   OpenReceiveConfigError,
   OpenReceiveServiceError,
   createOpenReceive,
-  createOpenReceivePriceFeed,
-  toOpenReceiveHttpCheckout,
-  toOpenReceiveHttpInvoice,
-  toOpenReceiveHttpOrder
+  createOpenReceivePriceFeed
 } from "./service.ts";
 export type {
   CreateOpenReceiveOptions,
@@ -39,9 +36,6 @@ export type {
   OpenReceiveEventHandler,
   OpenReceiveGetCheckoutRequest,
   OpenReceiveGetOrderRequest,
-  OpenReceiveHttpCheckout,
-  OpenReceiveHttpInvoice,
-  OpenReceiveHttpOrder,
   OpenReceiveInvoice,
   OpenReceiveLogEntry,
   OpenReceiveLogger,
