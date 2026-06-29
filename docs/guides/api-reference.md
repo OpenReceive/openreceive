@@ -53,10 +53,11 @@ Use exactly one amount source:
 Direct BTC, satoshi, and millisatoshi amounts do not use price feeds.
 
 Calling `createCheckout` again with the same `order_id` and same amount returns
-the current checkout, or renews its BOLT11 when the active invoice has expired.
-Calling it with the same `order_id` and a different amount creates a new
-checkout and supersedes the prior open checkout. Paying any invoice in any
-checkout settles the order.
+the current checkout while its invoice is unexpired. After expiry, a user-driven
+retry can call `createCheckout` again to create a fresh checkout and BOLT11.
+Calling it with the same `order_id` and a different amount creates a new checkout
+and supersedes the prior open checkout. Paying any invoice in any checkout
+settles the order.
 
 Render `checkout.active.invoice` when present. The full invoice chain is in
 `checkout.invoices`.
@@ -70,8 +71,9 @@ const orderStatus = await openreceive.getOrder({ order_id: order.uuid });
 ```
 
 `getOrder` may perform one bounded server-side NWC `list_transactions` scan for
-unpaid, wallet-unexpired invoice records. It never exposes send-payment methods
-and never uses invoice lookup as the settlement authority.
+unpaid, wallet-unexpired invoice records. It never creates replacement invoices,
+never exposes send-payment methods, and never uses invoice lookup as the
+settlement authority.
 
 Fulfillment belongs in your backend settlement hook. When an order is paid,
 fulfill from `orderStatus.paid_checkout`, not from the current cart. For UI

@@ -67,12 +67,13 @@ class HelloFruitTestReceiveClient {
   async makeInvoice(request) {
     this.count += 1;
     const suffix = this.count.toString(16).padStart(64, "0");
+    const createdAt = Math.floor(Date.now() / 1000);
     return {
       invoice: `lnbc-hello-fruit-test-${this.count}`,
       payment_hash: suffix,
       amount_msats: request.amount_msats,
-      created_at: 1000,
-      expires_at: 1600,
+      created_at: createdAt,
+      expires_at: createdAt + 600,
     };
   }
 

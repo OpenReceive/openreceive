@@ -14,15 +14,15 @@ instant payment on your website or app.
 
 OpenReceive does three narrow things:
 
-1. Creates one BOLT11 invoice through your app's server-side NWC wallet
-   connection.
+1. Creates a BOLT11 invoice for a user-triggered checkout action through your
+   app's server-side NWC wallet connection.
 2. Lets the frontend show QR, copy, open-wallet, countdown, and friendly route
    guidance for that invoice.
 3. Lets the backend verify payment before app-owned fulfillment runs.
 
 Provider routes are payer-side suggestions. A wallet, exchange, swap service,
 fiat onramp, card, bank account, Bitcoin wallet, or stablecoin balance may be
-the purchaser's starting point, but reaching the one Lightning invoice happens
+the purchaser's starting point, but reaching the Lightning invoice happens
 through third-party services outside OpenReceive.
 
 ## Runtime Model

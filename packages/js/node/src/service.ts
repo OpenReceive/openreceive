@@ -359,21 +359,10 @@ async function createCheckout(
 
   const open = currentOpenCheckout(checkouts);
   if (open !== undefined && (await amountMatches(context, input.amount, open, now))) {
-    if (open.active !== undefined) {
-      return open;
-    }
-
-    await mintInvoiceForCheckout(context, {
-      continueCheckout: open,
-      now,
-    });
-    return requireCheckout(
-      groupCheckouts(await context.store.listByOrderId(orderId), now),
-      open.checkoutId,
-    );
+    return open;
   }
 
-  const supersededId = open?.checkoutId;
+  const supersededId = open?.checkoutId ?? retryBaseCheckout(checkouts)?.checkoutId;
   if (open !== undefined) {
     await supersedeCheckout(context, open);
   }
@@ -453,45 +442,21 @@ async function getCheckout(
 async function mintInvoiceForCheckout(
   context: OpenReceiveServiceContext,
   input: {
-    readonly newCheckout?: {
+    readonly newCheckout: {
       readonly orderId: string;
       readonly checkoutId: string;
       readonly input: OpenReceiveCreateCheckoutRequest;
       readonly supersededId?: string;
     };
-    readonly continueCheckout?: OpenReceiveCheckoutModel;
     readonly now: number;
   },
 ): Promise<StoredRecord> {
-  if ((input.newCheckout === undefined) === (input.continueCheckout === undefined)) {
-    throw serviceError(
-      500,
-      "INTERNAL",
-      "Checkout invoice mint requires exactly one checkout mode.",
-    );
-  }
-
-  const renewalRecords =
-    input.continueCheckout === undefined
-      ? []
-      : await context.store.listByCheckoutId(input.continueCheckout.checkoutId);
-  const renewal = renewalRecords[0];
-  if (input.continueCheckout !== undefined && renewal === undefined) {
-    throw serviceError(404, "NOT_FOUND", "No checkout found for the given checkout_id.");
-  }
-
-  const firstCreate = input.newCheckout !== undefined;
-  const createInput = input.newCheckout?.input;
-  const orderId = input.newCheckout?.orderId ?? readStoredOrderId(requiredValue(renewal).row);
-  const checkoutId =
-    input.newCheckout?.checkoutId ?? readStoredCheckoutId(requiredValue(renewal).row);
-  const requestHashBody = firstCreate
-    ? createCheckoutRequestHashBody(requiredValue(createInput))
-    : createRenewalRequestHashBody(checkoutId, requiredValue(renewal).row.invoice_id);
-  const operation = firstCreate ? "invoice.create" : "invoice.renew";
-  const idempotencyKey = firstCreate
-    ? `${orderId}:super:${requiredValue(input.newCheckout).supersededId ?? "none"}:amt:${amountKeyFromCreateAmount(requiredValue(createInput).amount)}`
-    : `${checkoutId}:after:${requiredValue(renewal).row.invoice_id}`;
+  const createInput = input.newCheckout.input;
+  const orderId = input.newCheckout.orderId;
+  const checkoutId = input.newCheckout.checkoutId;
+  const requestHashBody = createCheckoutRequestHashBody(createInput);
+  const operation = "invoice.create";
+  const idempotencyKey = `${orderId}:super:${input.newCheckout.supersededId ?? "none"}:amt:${amountKeyFromCreateAmount(createInput.amount)}`;
   const namespaceScope = context.options.namespace ?? readOpenReceiveNamespace(undefined);
   const scope: OpenReceiveIdempotencyScope = {
     namespace: namespaceScope,
@@ -509,25 +474,28 @@ async function mintInvoiceForCheckout(
     emitLog(
       context.options,
       "info",
-      firstCreate ? "checkout.create.replayed" : "checkout.renew.replayed",
+      "checkout.create.replayed",
       "Replayed existing invoice for idempotent checkout request.",
       invoiceLogFields(existing.record.row),
     );
     return existing.record;
   }
 
-  const resolved = await resolveCheckoutInvoiceAmount({
-    context,
-    input: createInput,
-    renewal,
+  const resolved = await resolveCreateAmount({
+    body: createAmountRequest(createInput.amount),
     now: input.now,
+    priceProviders: context.priceProviders,
+    priceCurrencies: context.priceCurrencies,
   });
-  const descriptionFields = checkoutDescriptionFields(createInput, renewal);
-  const expiry = checkoutExpiry(createInput, renewal);
+  const descriptionFields = getCreateDescriptionFields({
+    memo: createInput.memo,
+    descriptionHash: createInput.description_hash,
+  });
+  const expiry = optionalSafeInteger(createInput.expires_in_seconds);
   emitLog(
     context.options,
     "info",
-    firstCreate ? "checkout.create.requested" : "checkout.renew.requested",
+    "checkout.create.requested",
     "Creating Lightning invoice through receive wallet.",
     {
       order_id: orderId,
@@ -551,7 +519,7 @@ async function mintInvoiceForCheckout(
   const requestedExpirySeconds = expiry ?? 600;
   const expiresAt = walletInvoice.expires_at ?? createdAt + requestedExpirySeconds;
   const normalizedExpiresAt = Math.min(expiresAt, createdAt + requestedExpirySeconds);
-  const metadata = checkoutMetadata(createInput, orderId, checkoutId, renewal);
+  const metadata = checkoutMetadata(createInput, orderId, checkoutId);
   const createResult = await putCreatedInvoiceRecord({
     store: context.store,
     createStoredInvoiceId,
@@ -571,7 +539,6 @@ async function mintInvoiceForCheckout(
         settlement_action_state: "pending",
         created_at: createdAt,
         expires_at: normalizedExpiresAt,
-        ...(renewal === undefined ? {} : { refreshed_from_invoice_id: renewal.row.invoice_id }),
         metadata,
         fiat_quote: resolved.fiat_quote === null ? null : { ...resolved.fiat_quote },
       },
@@ -580,125 +547,42 @@ async function mintInvoiceForCheckout(
   emitLog(
     context.options,
     "info",
-    firstCreate ? "checkout.created" : "checkout.renewed",
+    "checkout.created",
     "Created Lightning invoice for checkout.",
     {
       ...invoiceLogFields(createResult.record.row),
       order_id: orderId,
       checkout_id: checkoutId,
-      ...(renewal === undefined ? {} : { old_invoice_id: renewal.row.invoice_id }),
     },
   );
 
   return createResult.record;
 }
 
-async function resolveCheckoutInvoiceAmount(input: {
-  context: OpenReceiveServiceContext;
-  input: OpenReceiveCreateCheckoutRequest | undefined;
-  renewal: StoredRecord | undefined;
-  now: number;
-}): Promise<ResolvedCreateAmount> {
-  if (input.renewal === undefined) {
-    return await resolveCreateAmount({
-      body: createAmountRequest(requiredValue(input.input).amount),
-      now: input.now,
-      priceProviders: input.context.priceProviders,
-      priceCurrencies: input.context.priceCurrencies,
-    });
-  }
-
-  const amountSpec = readStoredAmountSpec(input.renewal.row);
-  if (amountSpec !== undefined && "fiat" in amountSpec) {
-    return await resolveCreateAmount({
-      body: { fiat: amountSpec.fiat },
-      now: input.now,
-      priceProviders: input.context.priceProviders,
-      priceCurrencies: input.context.priceCurrencies,
-    });
-  }
-
-  return {
-    amount_msats: input.renewal.row.amount_msats,
-    amount_source: "amount_msats",
-    fiat_quote: null,
-  };
-}
-
-function checkoutDescriptionFields(
-  input: OpenReceiveCreateCheckoutRequest | undefined,
-  renewal: StoredRecord | undefined,
-): {
-  readonly description?: string;
-  readonly description_hash?: string;
-} {
-  if (renewal === undefined) {
-    return getCreateDescriptionFields({
-      memo: requiredValue(input).memo,
-      descriptionHash: requiredValue(input).description_hash,
-    });
-  }
-  return getCreateDescriptionFields({
-    ...(optionalString(renewal.row.metadata.memo) === undefined
-      ? {}
-      : { memo: optionalString(renewal.row.metadata.memo) }),
-    ...(optionalString(renewal.row.metadata.description_hash) === undefined
-      ? {}
-      : { descriptionHash: optionalString(renewal.row.metadata.description_hash) }),
-  });
-}
-
-function checkoutExpiry(
-  input: OpenReceiveCreateCheckoutRequest | undefined,
-  renewal: StoredRecord | undefined,
-): number | undefined {
-  if (renewal === undefined) {
-    return optionalSafeInteger(requiredValue(input).expires_in_seconds);
-  }
-  return optionalSafeInteger(renewal.row.metadata.expires_in_seconds);
-}
-
 function checkoutMetadata(
-  input: OpenReceiveCreateCheckoutRequest | undefined,
+  input: OpenReceiveCreateCheckoutRequest,
   orderId: string,
   checkoutId: string,
-  renewal: StoredRecord | undefined,
 ): Record<string, unknown> {
-  const amountSpec =
-    renewal === undefined
-      ? structuredClone(requiredValue(input).amount)
-      : (readStoredAmountSpec(renewal.row) ?? { msats: renewal.row.amount_msats });
-  const memo =
-    renewal === undefined ? requiredValue(input).memo : optionalString(renewal.row.metadata.memo);
-  const descriptionHash =
-    renewal === undefined
-      ? requiredValue(input).description_hash
-      : optionalString(renewal.row.metadata.description_hash);
-  const expiresInSeconds =
-    renewal === undefined
-      ? requiredValue(input).expires_in_seconds
-      : renewal.row.metadata.expires_in_seconds;
-  const passthrough = checkoutPassthroughMetadata(input, renewal);
+  const passthrough = checkoutPassthroughMetadata(input);
 
   return {
     ...passthrough,
     order_id: orderId,
     checkout_id: checkoutId,
-    amount_spec: structuredClone(amountSpec),
-    ...(memo === undefined ? {} : { memo }),
-    ...(descriptionHash === undefined ? {} : { description_hash: descriptionHash }),
-    ...(expiresInSeconds === undefined ? {} : { expires_in_seconds: expiresInSeconds }),
+    amount_spec: structuredClone(input.amount),
+    ...(input.memo === undefined ? {} : { memo: input.memo }),
+    ...(input.description_hash === undefined ? {} : { description_hash: input.description_hash }),
+    ...(input.expires_in_seconds === undefined
+      ? {}
+      : { expires_in_seconds: input.expires_in_seconds }),
   };
 }
 
 function checkoutPassthroughMetadata(
   input: OpenReceiveCreateCheckoutRequest | undefined,
-  renewal?: StoredRecord,
 ): Record<string, unknown> {
-  const source =
-    renewal === undefined
-      ? parseOptionalRecord(input?.metadata, "metadata")
-      : renewal.row.metadata;
+  const source = parseOptionalRecord(input?.metadata, "metadata");
   if (source === undefined) return {};
 
   const passthrough: Record<string, unknown> = {};
@@ -708,16 +592,6 @@ function checkoutPassthroughMetadata(
     }
   }
   return passthrough;
-}
-
-function createRenewalRequestHashBody(
-  checkoutId: string,
-  afterInvoiceId: string,
-): Record<string, unknown> {
-  return {
-    checkoutId,
-    after: afterInvoiceId,
-  };
 }
 
 async function amountMatches(
@@ -836,7 +710,7 @@ function buildOrder(
     : activeCheckout !== undefined
       ? "pending"
       : "expired";
-  const displayCheckout = paidCheckout ?? activeCheckout;
+  const displayCheckout = paidCheckout ?? activeCheckout ?? checkouts[0];
 
   return {
     orderId: readStoredOrderId(records[0].row),
@@ -880,7 +754,7 @@ function buildCheckout(
       ? right.row.invoice_id.localeCompare(left.row.invoice_id)
       : right.row.created_at - left.row.created_at,
   );
-  const invoices = sortedRecords.map((record) => serializeInvoice(record.row));
+  const invoices = sortedRecords.map((record) => serializeInvoice(record.row, now));
   const paidInvoice = invoices.find((invoice) => invoice.status === "settled");
   const superseded = sortedRecords.some((record) => record.row.metadata.superseded === true);
   const status: OpenReceiveCheckoutModel["status"] =
@@ -922,6 +796,12 @@ function currentOpenCheckout(
   checkouts: readonly OpenReceiveCheckoutModel[],
 ): OpenReceiveCheckoutModel | undefined {
   return checkouts.find((checkout) => checkout.status === "open");
+}
+
+function retryBaseCheckout(
+  checkouts: readonly OpenReceiveCheckoutModel[],
+): OpenReceiveCheckoutModel | undefined {
+  return checkouts.find((checkout) => checkout.status === "expired");
 }
 
 function requireCheckout(
@@ -1258,11 +1138,11 @@ function toWireOrder(model: OpenReceiveOrderModel): OpenReceiveOrder {
   };
 }
 
-function serializeInvoice(row: InvoiceStorageRow): OpenReceiveInvoiceModel {
+function serializeInvoice(row: InvoiceStorageRow, now: number): OpenReceiveInvoiceModel {
   return {
     invoiceId: row.invoice_id,
     type: "incoming",
-    status: deriveInvoiceStatus(row),
+    status: deriveInvoiceStatus(row, now),
     transactionState: row.transaction_state,
     workflowState: row.workflow_state,
     bolt11: row.invoice,
@@ -1283,7 +1163,7 @@ function serializeInvoice(row: InvoiceStorageRow): OpenReceiveInvoiceModel {
   };
 }
 
-function deriveInvoiceStatus(row: InvoiceStorageRow): OpenReceiveInvoiceModel["status"] {
+function deriveInvoiceStatus(row: InvoiceStorageRow, now: number): OpenReceiveInvoiceModel["status"] {
   if (row.settled_at !== undefined || row.transaction_state === "settled") {
     return "settled";
   }
@@ -1292,6 +1172,9 @@ function deriveInvoiceStatus(row: InvoiceStorageRow): OpenReceiveInvoiceModel["s
   }
   if (row.transaction_state === "failed" || row.workflow_state === "failed_closed") {
     return "failed";
+  }
+  if (row.expires_at <= now) {
+    return "expired";
   }
   return "pending";
 }

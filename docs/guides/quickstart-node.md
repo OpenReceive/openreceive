@@ -51,19 +51,23 @@ own. Replace `myOrder` with however your app loads its order:
 
 ```ts
 // In your own controller / route handler.
-const checkout = await openreceive.createCheckout({
-  order_id: myOrder.id,
-  amount: {
-    fiat: { currency: "USD", value: myOrder.total },
-  },
-  memo: `Order ${myOrder.number}`,
-  // Optional: any data you want returned to you on settlement.
-  metadata: { cart_version: myOrder.cart_version },
-});
+async function createCheckoutForCart(myOrder) {
+  return await openreceive.createCheckout({
+    order_id: myOrder.id,
+    amount: {
+      fiat: { currency: "USD", value: myOrder.total_amount.value },
+    },
+    memo: `Order ${myOrder.number}`,
+    // Optional: any data you want returned to you on settlement.
+    metadata: { cart_version: myOrder.cart_version },
+  });
+}
 ```
 
-Invoices always expire after 10 minutes; OpenReceive renews them automatically
-while the order stays open, so you never manage expiry yourself.
+Invoices expire. OpenReceive does not create replacement invoices just because
+time passes or because the frontend polls status. When an invoice expires, show a
+try-again or start-over action and call `createCheckout` again from that user
+action.
 
 Add a status endpoint in a controller your app owns. It returns the order from
 `getOrder`; the frontend component reads `display_checkout`.
@@ -168,8 +172,9 @@ its metadata, not from the live cart.
 
 When a cart changes, call `createCheckout` again with the same `order_id` and
 the new amount. OpenReceive returns the paid checkout if the order is already
-paid, reuses or renews an open checkout when the amount matches, and supersedes
-the old open checkout when the amount changes.
+paid, reuses an unexpired open checkout when the amount matches, creates a fresh
+checkout when an expired checkout is retried, and supersedes the old open
+checkout when the amount changes.
 
 Old checkouts remain settlement-watchable. If a superseded checkout is later
 paid, `getOrder` exposes it as `paid_checkout` and `display_checkout`.

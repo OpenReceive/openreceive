@@ -157,45 +157,54 @@ test("createCheckout creates a new checkout and supersedes the open checkout for
   );
 });
 
-test("createCheckout renews after expiry within the same checkout", async () => {
+test("createCheckout creates a new checkout after expiry when called again", async () => {
   const { wallet, store, openreceive, setNow } = await createHarness();
   const first = await openreceive.createCheckout({
-    order_id: "order-renew",
+    order_id: "order-retry",
     amount: { sats: "200" },
     memo: "Fruit sticker",
     expires_in_seconds: 600,
   });
 
   setNow(1700);
-  const renewed = await openreceive.createCheckout({
-    order_id: "order-renew",
+  const expiredOrder = await openreceive.getOrder({ order_id: "order-retry" });
+  assert.equal(expiredOrder.status, "expired");
+  assert.equal(expiredOrder.active_checkout, undefined);
+  assert.equal(expiredOrder.display_checkout.checkout_id, first.checkout_id);
+  assert.equal(expiredOrder.checkouts[0].checkout_id, first.checkout_id);
+  assert.equal(expiredOrder.checkouts[0].status, "expired");
+  assert.equal(wallet.makeInvoiceCalls, 1);
+
+  const retried = await openreceive.createCheckout({
+    order_id: "order-retry",
     amount: { sats: "200" },
     memo: "Fruit sticker",
     expires_in_seconds: 600,
   });
   const replayed = await openreceive.createCheckout({
-    order_id: "order-renew",
+    order_id: "order-retry",
     amount: { sats: "200" },
     memo: "Fruit sticker",
     expires_in_seconds: 600,
   });
 
-  assert.equal(renewed.checkout_id, first.checkout_id);
-  assert.notEqual(renewed.active.invoice_id, first.active.invoice_id);
-  assert.equal(replayed.active.invoice_id, renewed.active.invoice_id);
-  assert.equal(renewed.invoices.length, 2);
-  assert.equal(renewed.invoices[0].refreshed_from_invoice_id, first.active.invoice_id);
+  assert.notEqual(retried.checkout_id, first.checkout_id);
+  assert.notEqual(retried.active.invoice_id, first.active.invoice_id);
+  assert.equal(replayed.checkout_id, retried.checkout_id);
+  assert.equal(replayed.active.invoice_id, retried.active.invoice_id);
+  assert.equal(retried.invoices.length, 1);
+  assert.equal(retried.invoices[0].refreshed_from_invoice_id, undefined);
   assert.equal(wallet.makeInvoiceCalls, 2);
 
-  const storedRenewal = (await store.get(renewed.active.invoice_id)).row;
-  assert.equal(storedRenewal.operation, "invoice.renew");
-  assert.equal(storedRenewal.metadata.order_id, "order-renew");
-  assert.equal(storedRenewal.metadata.checkout_id, first.checkout_id);
-  assert.deepEqual(storedRenewal.metadata.amount_spec, { sats: "200" });
-  assert.equal(storedRenewal.metadata.expires_in_seconds, 600);
+  const storedRetry = (await store.get(retried.active.invoice_id)).row;
+  assert.equal(storedRetry.operation, "invoice.create");
+  assert.equal(storedRetry.metadata.order_id, "order-retry");
+  assert.equal(storedRetry.metadata.checkout_id, retried.checkout_id);
+  assert.deepEqual(storedRetry.metadata.amount_spec, { sats: "200" });
+  assert.equal(storedRetry.metadata.expires_in_seconds, 600);
 });
 
-test("renewal re-quotes fiat orders and reuses fixed bitcoin amounts", async () => {
+test("expiry retry re-quotes fiat orders and reuses fixed bitcoin amounts", async () => {
   let btcUsd = "100000.00";
   const provider = {
     source: "primary",
@@ -213,7 +222,7 @@ test("renewal re-quotes fiat orders and reuses fixed bitcoin amounts", async () 
     priceCurrencies: ["USD"],
   });
   const fiatFirst = await fiatHarness.openreceive.createCheckout({
-    order_id: "order-fiat-renew",
+    order_id: "order-fiat-retry",
     amount: {
       fiat: {
         currency: "USD",
@@ -227,7 +236,7 @@ test("renewal re-quotes fiat orders and reuses fixed bitcoin amounts", async () 
   btcUsd = "50000.00";
   fiatHarness.setNow(1700);
   const fiatRenewed = await fiatHarness.openreceive.createCheckout({
-    order_id: "order-fiat-renew",
+    order_id: "order-fiat-retry",
     amount: {
       fiat: {
         currency: "USD",
@@ -237,20 +246,22 @@ test("renewal re-quotes fiat orders and reuses fixed bitcoin amounts", async () 
     expires_in_seconds: 600,
   });
   assert.equal(fiatRenewed.amount_msats, 100000);
+  assert.notEqual(fiatRenewed.checkout_id, fiatFirst.checkout_id);
 
   const fixedHarness = await createHarness();
   const fixedFirst = await fixedHarness.openreceive.createCheckout({
-    order_id: "order-fixed-renew",
+    order_id: "order-fixed-retry",
     amount: { sats: 7000 },
     expires_in_seconds: 600,
   });
   fixedHarness.setNow(1700);
   const fixedRenewed = await fixedHarness.openreceive.createCheckout({
-    order_id: "order-fixed-renew",
+    order_id: "order-fixed-retry",
     amount: { sats: 7000 },
     expires_in_seconds: 600,
   });
   assert.equal(fixedRenewed.amount_msats, fixedFirst.amount_msats);
+  assert.notEqual(fixedRenewed.checkout_id, fixedFirst.checkout_id);
 });
 
 test("getOrder settles a late payment on any invoice in any checkout history", async () => {

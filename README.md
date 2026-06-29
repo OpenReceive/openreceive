@@ -106,9 +106,10 @@ file.
 
 ## Product Boundary
 
-OpenReceive creates one Lightning invoice and can show payer-side route
-guidance for wallets, exchanges, swap services, fiat onramps, cards, bank
-accounts, Bitcoin, or stablecoins that may be able to reach that invoice.
+OpenReceive creates a Lightning invoice for each checkout action and can show
+payer-side route guidance for wallets, exchanges, swap services, fiat onramps,
+cards, bank accounts, Bitcoin, or stablecoins that may be able to reach that
+invoice.
 Provider routes are suggestions, not payment guarantees. The payer chooses and
 uses third-party services outside OpenReceive.
 
