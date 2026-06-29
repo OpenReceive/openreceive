@@ -35,10 +35,10 @@
   ],
   "deferred_transport_targets": [
     "mysql",
-    "redis",
     "durable_object"
   ],
   "unsupported_transport_targets": [
+    "redis",
     "s3",
     "workers_kv"
   ],

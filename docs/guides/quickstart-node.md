@@ -14,29 +14,31 @@ Set the receive-only NWC code only in your server environment:
 OPENRECEIVE_NWC=nostr+walletconnect://...
 ```
 
-Storage is optional during setup. If `OPENRECEIVE_STORE` is omitted,
-OpenReceive uses `local-sqlite` and creates
-`./.openreceive/<namespace>.sqlite3`.
+Storage is optional during local setup. If `OPENRECEIVE_STORE` is omitted and no
+managed platform is detected, OpenReceive uses `local-sqlite` and creates
+`./.openreceive/<namespace>.sqlite3`. With the default namespace, the effective
+default file is `./.openreceive/default.sqlite3`.
 
 ```sh
-# Optional. Defaults to local-sqlite.
+# Optional locally. Use Postgres for managed/serverless production.
 OPENRECEIVE_STORE=postgres://user:pass@host:5432/appdb
 
 # Optional. Defaults to default.
 OPENRECEIVE_NAMESPACE=my_app
 ```
 
-The default SQLite file is fine for one local server. If more than one server or
-serverless instance can touch the same
-`OPENRECEIVE_NAMESPACE`, point all of them at one shared durable OpenReceive
-store. For production, use OpenReceive-managed Postgres or SQLite invoice
-storage.
+The default SQLite file is fine for one local server or a raw single-machine
+host with durable disk. If more than one server or serverless instance can touch
+the same `OPENRECEIVE_NAMESPACE`, point all of them at one shared durable
+OpenReceive store. For production, use Postgres anywhere; use SQLite only on a
+single durable machine or a single PaaS instance with a real mounted volume.
 OpenReceive uses that store for invoice state only; your app keeps orders,
 carts, users, and fulfillment state in your own tables.
 
 Start the server only after `OPENRECEIVE_NWC` is set for that environment.
-For local setup, the default SQLite store is enough. For shared production
-deployments, set `OPENRECEIVE_STORE` before checkout traffic reaches customers.
+For local setup, the default SQLite store is enough. For managed or shared
+production deployments, set `OPENRECEIVE_STORE=postgres://...` before checkout
+traffic reaches customers.
 
 ## Server Object
 

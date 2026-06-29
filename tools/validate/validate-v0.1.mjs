@@ -313,7 +313,8 @@ function validateStorageKvVectors() {
   assert(vector.transaction_scan_cursor_shape?.offset === "non-negative integer", "storage KV vector must define transaction scan cursor");
   assert(vector.certified_v0_1_transports.includes("postgres"), "storage KV vector must include Postgres certification");
   assert(vector.certified_v0_1_transports.includes("sqlite"), "storage KV vector must include SQLite certification");
-  assert(vector.deferred_transport_targets.includes("redis"), "storage KV vector must track deferred Redis target");
+  assert(!vector.deferred_transport_targets.includes("redis"), "storage KV vector must not defer Redis");
+  assert(vector.unsupported_transport_targets.includes("redis"), "storage KV vector must keep Redis unsupported");
   assert(vector.unsupported_transport_targets.includes("s3"), "storage KV vector must keep S3 unsupported");
   assert(vector.unsupported_transport_targets.includes("workers_kv"), "storage KV vector must keep Workers KV unsupported");
 
@@ -335,6 +336,36 @@ function validateStorageKvVectors() {
   ]) {
     assert(caseNames.has(required), `storage KV vector missing case: ${required}`);
   }
+}
+
+function validateManagedPlatformStorageVectors() {
+  const vector = readJson("spec/test-vectors/managed-platform-storage.json");
+  assert(vector.sqlite_policies.includes("never"), "managed platform vector must include never policy");
+  assert(vector.sqlite_policies.includes("explicit-mounted-only"), "managed platform vector must include mounted-volume policy");
+  assert(vector.sqlite_policies.includes("allow-local"), "managed platform vector must include raw-host policy");
+  for (const code of [
+    "EPHEMERAL_STORE_UNSAFE",
+    "UNSUPPORTED_STORE_REDIS",
+    "UNSAFE_MEMORY_STORE",
+    "STORE_MUST_BE_EXPLICIT",
+    "STORE_NOT_IMPLEMENTED",
+    "UNSUPPORTED_STORE_URI"
+  ]) {
+    assert(vector.error_codes.includes(code), `managed platform vector missing error code ${code}`);
+  }
+
+  const policies = new Map(vector.platforms.map((item) => [item.id, item.policy]));
+  assert(policies.get("vercel") === "never", "Vercel must be Postgres-only");
+  assert(policies.get("fly") === "explicit-mounted-only", "Fly must require explicit mounted SQLite");
+  assert(policies.get("vps") === "allow-local", "VPS override must allow local SQLite");
+  assert(policies.get("unknown") === "allow-local", "unknown local dev policy mismatch");
+
+  const cases = new Map(vector.cases.map((item) => [item.name, item.expected]));
+  assert(cases.get("memory URI is not selectable")?.code === "UNSUPPORTED_STORE_URI", "memory URI case mismatch");
+  assert(cases.get("redis is permanently unsupported")?.code === "UNSUPPORTED_STORE_REDIS", "redis case mismatch");
+  assert(cases.get("vercel unset store is unsafe even outside NODE_ENV production")?.code === "EPHEMERAL_STORE_UNSAFE", "vercel unset case mismatch");
+  assert(cases.get("fly allows absolute sqlite")?.allowed === true, "fly absolute sqlite case mismatch");
+  assert(cases.get("manual vps override permits implicit local sqlite")?.allowed === true, "vps override case mismatch");
 }
 
 function validateNwcVectors() {
@@ -784,6 +815,7 @@ function main() {
   validateTransactionScanVectors();
   validateIdempotencyVectors();
   validateStorageKvVectors();
+  validateManagedPlatformStorageVectors();
   validateNwcVectors();
   validateNwcInfoVectors();
   validateLiveNwcExpectedCapabilities();

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "fileutils"
+require "pathname"
 require "securerandom"
 require "openreceive"
 
@@ -16,6 +17,20 @@ module OpenReceive
       end
     end
 
+    class ConfigurationError < StandardError
+      attr_reader :code, :hint
+
+      def initialize(code:, message:, hint:)
+        super(message)
+        @code = code
+        @hint = hint
+      end
+    end
+
+    DOCS_LINK = "See docs/guides/storage.md."
+    POSTGRES_STEP = "Set OPENRECEIVE_STORE=postgres://USER:PASS@HOST:5432/DB."
+    MOUNTED_SQLITE_STEP = "Or set OPENRECEIVE_STORE=sqlite:/absolute/mounted/volume/openreceive.sqlite3 on a single instance with durable mounted storage."
+
     class Configuration
       attr_accessor :client,
                     :store,
@@ -28,7 +43,7 @@ module OpenReceive
                     :transaction_scan_window_padding_seconds
 
       def initialize
-        @store = OpenReceive::InMemoryInvoiceKvStore.new
+        @store = nil
         @namespace = "default"
         @production = false
         @transaction_scan_interval_seconds = 2
@@ -38,9 +53,11 @@ module OpenReceive
 
       def validate!
         raise ArgumentError, "client is required" if client.nil?
-        if production && store.is_a?(OpenReceive::InMemoryInvoiceKvStore)
-          raise SecurityError, "OpenReceive Rails adapter requires durable invoice storage in production"
-        end
+        OpenReceive::Rails.assert_store_configuration!(
+          store: store,
+          production: production
+        )
+        raise ArgumentError, "store is required; set config.store = OpenReceive::Rails.resolve_invoice_store or provide a durable store" if store.nil?
         self
       end
     end
@@ -797,15 +814,86 @@ module OpenReceive
         Adapter.new(configuration)
       end
 
+      def assert_store_configuration!(
+        uri: ENV["OPENRECEIVE_STORE"],
+        store: nil,
+        env: ENV,
+        production: nil,
+        emit_warning: true
+      )
+        platform = detect_platform(env)
+        detected = platform.fetch(:id) != "unknown"
+        production_mode = production == true || production_env?(env)
+
+        unless store.nil?
+          return unless memory_store?(store)
+          return unless detected || production_mode
+
+          raise configuration_error(
+            code: "UNSAFE_MEMORY_STORE",
+            message: "#{platform_line(platform)} OpenReceive refuses to use InMemoryInvoiceKvStore: invoice state would be lost on restart or redeploy.",
+            hint: "#{POSTGRES_STEP} #{DOCS_LINK}"
+          )
+        end
+
+        kind = classify_store(uri)
+        return if kind == "postgres"
+
+        case kind
+        when "redis"
+          raise configuration_error(
+            code: "UNSUPPORTED_STORE_REDIS",
+            message: "#{platform_line(platform)} Redis is not a supported OpenReceive store; its in-memory/eviction model is wrong for payment truth. Use Postgres.",
+            hint: "Redis is not a supported store; use Postgres. #{POSTGRES_STEP} #{DOCS_LINK}"
+          )
+        when "mysql"
+          raise store_not_implemented_error(platform, "MySQL")
+        when "memory", "other"
+          raise configuration_error(
+            code: "UNSUPPORTED_STORE_URI",
+            message: "#{platform_line(platform)} Unsupported OPENRECEIVE_STORE URI: #{uri.to_s.strip.empty? ? "(empty)" : uri.to_s.strip}.",
+            hint: "#{POSTGRES_STEP} #{DOCS_LINK}"
+          )
+        end
+
+        if detected
+          case platform.fetch(:policy)
+          when "allow-local"
+            return
+          when "explicit-mounted-only"
+            return if kind == "sqlite" && absolute_durable_sqlite_path?(uri)
+
+            raise ephemeral_store_error(platform, postgres_only: false)
+          when "never"
+            raise ephemeral_store_error(platform, postgres_only: true)
+          end
+        end
+
+        return unless production_mode
+
+        if env["OPENRECEIVE_REQUIRE_EXPLICIT_STORE"] == "1"
+          raise configuration_error(
+            code: "STORE_MUST_BE_EXPLICIT",
+            message: "#{platform_line(platform)} OpenReceive is running in production without an explicit durable store; an undetected ephemeral host could lose invoice state on deploy/cold start.",
+            hint: "#{POSTGRES_STEP} Or declare a known raw host with OPENRECEIVE_PLATFORM=vps, bare-metal, or raw-linux. #{DOCS_LINK}"
+          )
+        end
+
+        warn(
+          "OPENRECEIVE WARNING: Detected unknown via none while production mode is enabled and the store is #{kind}. " \
+          "Set OPENRECEIVE_STORE=postgres://USER:PASS@HOST:5432/DB or declare OPENRECEIVE_PLATFORM=vps, bare-metal, or raw-linux. #{DOCS_LINK}"
+        ) if emit_warning
+      end
+
       def resolve_invoice_store(
         uri: ENV["OPENRECEIVE_STORE"],
         namespace: ENV.fetch("OPENRECEIVE_NAMESPACE", "default"),
         root: Dir.pwd
       )
+        assert_store_configuration!(uri: uri)
         store_uri = uri.to_s.strip
+        store_uri = "local-sqlite" if store_uri.empty?
         case store_uri
-        when "", "memory:", "memory"
-          OpenReceive::InMemoryInvoiceKvStore.new
         when "local-sqlite"
           path = File.join(root, ".openreceive")
           FileUtils.mkdir_p(path)
@@ -820,10 +908,148 @@ module OpenReceive
             SqliteInvoiceStore.new(path: store_uri.delete_prefix("sqlite://"), namespace: namespace)
           elsif store_uri.start_with?("sqlite:")
             SqliteInvoiceStore.new(path: store_uri.delete_prefix("sqlite:"), namespace: namespace)
+          elsif store_uri.start_with?("postgres://") || store_uri.start_with?("postgresql://")
+            raise store_not_implemented_error(detect_platform(ENV), "Postgres")
+          elsif store_uri.start_with?("mysql://")
+            raise store_not_implemented_error(detect_platform(ENV), "MySQL")
+          elsif store_uri.start_with?("redis://") || store_uri.start_with?("rediss://")
+            raise configuration_error(
+              code: "UNSUPPORTED_STORE_REDIS",
+              message: "Redis is not a supported OpenReceive store; its in-memory/eviction model is wrong for payment truth. Use Postgres.",
+              hint: "Redis is not a supported store; use Postgres. #{POSTGRES_STEP} #{DOCS_LINK}"
+            )
           else
-            raise ArgumentError, "Set OPENRECEIVE_STORE to local-sqlite, sqlite://, or memory: for the current Rails adapter."
+            raise configuration_error(
+              code: "UNSUPPORTED_STORE_URI",
+              message: "Unsupported OPENRECEIVE_STORE URI: #{store_uri}.",
+              hint: "#{POSTGRES_STEP} #{DOCS_LINK}"
+            )
           end
         end
+      end
+
+      def policy_for_platform(id)
+        case id
+        when "vercel", "netlify", "heroku", "google-cloud-run", "aws-lambda",
+             "aws-apprunner", "digitalocean-app-platform", "cloudflare-workers",
+             "cloudflare-pages", "cloudflare-containers"
+          "never"
+        when "render", "railway", "fly", "azure-app-service",
+             "aws-elastic-beanstalk", "kubernetes", "dokku", "coolify", "caprover"
+          "explicit-mounted-only"
+        when "vps", "bare-metal", "raw-linux"
+          "allow-local"
+        else
+          "explicit-mounted-only"
+        end
+      end
+
+      def detect_platform(env = ENV)
+        override = env["OPENRECEIVE_PLATFORM"].to_s.strip.downcase
+        return platform(override, "OPENRECEIVE_PLATFORM") unless override.empty?
+
+        return platform("cloudflare-pages", "CF_PAGES") if env["CF_PAGES"] == "1"
+        return platform("cloudflare-containers", "CLOUDFLARE_*") if present?(env["CLOUDFLARE_APPLICATION_ID"]) || present?(env["CLOUDFLARE_DURABLE_OBJECT_ID"])
+        return platform("vercel", "VERCEL") if env["VERCEL"] == "1"
+        return platform("heroku", "DYNO") if present?(env["DYNO"])
+        return platform("render", "RENDER") if env["RENDER"] == "true"
+        return platform("railway", "RAILWAY_*") if present?(env["RAILWAY_PROJECT_ID"]) || present?(env["RAILWAY_SERVICE_ID"])
+        return platform("fly", "FLY_*") if present?(env["FLY_APP_NAME"]) || present?(env["FLY_MACHINE_ID"])
+        return platform("netlify", "NETLIFY") if env["NETLIFY"] == "true"
+        return platform("google-cloud-run", "K_SERVICE/K_REVISION/CLOUD_RUN_JOB") if present?(env["K_SERVICE"]) || present?(env["K_REVISION"]) || present?(env["CLOUD_RUN_JOB"])
+        return platform("aws-lambda", "AWS_LAMBDA_*") if present?(env["AWS_LAMBDA_FUNCTION_NAME"]) || env["AWS_EXECUTION_ENV"].to_s.start_with?("AWS_Lambda_")
+        return platform("azure-app-service", "WEBSITE_*") if present?(env["WEBSITE_SITE_NAME"]) || present?(env["WEBSITE_HOSTNAME"])
+        return platform("kubernetes", "KUBERNETES_SERVICE_HOST") if present?(env["KUBERNETES_SERVICE_HOST"])
+        return platform("coolify", "COOLIFY_*") if present?(env["COOLIFY_RESOURCE_UUID"]) || present?(env["COOLIFY_CONTAINER_NAME"])
+        return platform("dokku", "DOKKU_APP_NAME") if present?(env["DOKKU_APP_NAME"])
+        return platform("caprover", "CAPROVER_GIT_COMMIT_SHA") if present?(env["CAPROVER_GIT_COMMIT_SHA"])
+
+        { id: "unknown", source: "none", policy: "allow-local" }
+      end
+
+      def classify_store(uri)
+        store_uri = uri.to_s.strip
+        return "unset" if store_uri.empty?
+        return "local-sqlite" if store_uri == "local-sqlite"
+        return "memory" if store_uri == "memory:" || store_uri == "memory"
+        return "sqlite" if store_uri.start_with?("sqlite:")
+        return "postgres" if store_uri.start_with?("postgres://") || store_uri.start_with?("postgresql://")
+        return "redis" if store_uri.start_with?("redis://") || store_uri.start_with?("rediss://")
+        return "mysql" if store_uri.start_with?("mysql://")
+
+        "other"
+      end
+
+      def sqlite_path_from_uri(uri)
+        store_uri = uri.to_s
+        return store_uri.delete_prefix("sqlite://") if store_uri.start_with?("sqlite:///")
+        return store_uri.delete_prefix("sqlite://") if store_uri.start_with?("sqlite://")
+
+        store_uri.delete_prefix("sqlite:")
+      end
+
+      def absolute_durable_sqlite_path?(uri)
+        sqlite_path = sqlite_path_from_uri(uri)
+        sqlite_path != ":memory:" && Pathname.new(sqlite_path).absolute?
+      end
+
+      def production_env?(env)
+        %w[NODE_ENV VERCEL_ENV RAILS_ENV RACK_ENV APP_ENV].any? { |key| env[key] == "production" }
+      end
+
+      def memory_store?(store)
+        store.is_a?(OpenReceive::InMemoryInvoiceKvStore) ||
+          store.class.name == "OpenReceive::InMemoryInvoiceKvStore" ||
+          store.class.name == "InMemoryInvoiceKvStore"
+      end
+
+      def platform(id, source)
+        { id: id, source: source, policy: policy_for_platform(id) }
+      end
+
+      def platform_line(platform)
+        "Detected #{platform.fetch(:id)} via #{platform.fetch(:source)}."
+      end
+
+      def present?(value)
+        !value.nil? && value != ""
+      end
+
+      def ephemeral_store_error(platform, postgres_only:)
+        cause = if postgres_only
+          "this platform has no durable local filesystem; invoice state would be lost on the next deploy/cold start"
+        else
+          "implicit local SQLite is unsafe unless it points at a durable mounted volume for one running instance"
+        end
+        hint = [POSTGRES_STEP]
+        if platform.fetch(:id) == "vercel"
+          hint << "On Vercel, install a Neon Postgres integration from the Vercel Marketplace and use the injected connection string."
+        end
+        unless postgres_only
+          hint << MOUNTED_SQLITE_STEP
+          hint << "SQLite on a mounted volume is only for a single running instance."
+        end
+        if platform.fetch(:id) == "azure-app-service"
+          hint << "Prefer Postgres on Azure App Service; /home is SMB-backed and SQLite over SMB can corrupt data."
+        end
+        hint << DOCS_LINK
+        configuration_error(
+          code: "EPHEMERAL_STORE_UNSAFE",
+          message: "#{platform_line(platform)} OpenReceive refuses this SQLite/local store because #{cause}.",
+          hint: hint.join(" ")
+        )
+      end
+
+      def store_not_implemented_error(platform, name)
+        configuration_error(
+          code: "STORE_NOT_IMPLEMENTED",
+          message: "#{platform_line(platform)} #{name} store URI support is not yet implemented in this Rails adapter build.",
+          hint: "#{POSTGRES_STEP} #{DOCS_LINK}"
+        )
+      end
+
+      def configuration_error(code:, message:, hint:)
+        ConfigurationError.new(code: code, message: message, hint: hint)
       end
     end
   end

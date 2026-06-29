@@ -24,10 +24,14 @@ import {
   createOpenReceiveSqliteQueryClient,
   migrateOpenReceiveSqlite,
   normalizeNwcWalletError,
+  OpenReceiveConfigError,
   resolveOpenReceiveStore,
   summarizeWalletCapabilities
 } from "../../packages/js/node/src/index.ts";
 import { runOpenReceiveCli } from "../../packages/js/node/src/cli.ts";
+import {
+  assertOpenReceiveStoreConfiguration
+} from "../../packages/js/node/src/storage-guard.ts";
 
 const BuiltInSqliteDatabaseSync = await loadBuiltInSqliteDatabaseSync();
 
@@ -370,15 +374,11 @@ sqliteTest("Node SQLite KV store owns records, indexes, revisions, and meta CAS"
   }
 });
 
-sqliteTest("resolveOpenReceiveStore supports memory and local-sqlite stores", async () => {
-  const memory = await resolveOpenReceiveStore("memory:");
-  const memoryCreated = await memory.putIfAbsent(invoiceRecord({
-    invoice_id: "or_inv_memory_uri",
-    idempotency_key: "order-memory-uri"
-  }));
-  assert.equal(memoryCreated.status, "created");
-  assert.equal((await memory.get("or_inv_memory_uri")).row.idempotency_key, "order-memory-uri");
-
+sqliteTest("resolveOpenReceiveStore rejects memory URI and supports local-sqlite stores", async () => {
+  await assertConfigError(
+    () => resolveOpenReceiveStore("memory:"),
+    "UNSUPPORTED_STORE_URI"
+  );
   const tempRoot = mkdtempSync(path.join(tmpdir(), "openreceive-store-uri-"));
   try {
     const local = await resolveOpenReceiveStore("local-sqlite", {
@@ -402,6 +402,17 @@ sqliteTest("resolveOpenReceiveStore supports memory and local-sqlite stores", as
   }
 });
 
+test("resolveOpenReceiveStore rejects Redis as permanently unsupported", async () => {
+  await assertConfigError(
+    () => resolveOpenReceiveStore("redis://localhost:6379/0"),
+    "UNSUPPORTED_STORE_REDIS"
+  );
+  await assertConfigError(
+    () => resolveOpenReceiveStore("rediss://localhost:6379/0"),
+    "UNSUPPORTED_STORE_REDIS"
+  );
+});
+
 sqliteTest("resolveOpenReceiveStore defaults to local-sqlite when OPENRECEIVE_STORE is omitted", async () => {
   const tempRoot = mkdtempSync(path.join(tmpdir(), "openreceive-store-default-"));
   try {
@@ -417,6 +428,76 @@ sqliteTest("resolveOpenReceiveStore defaults to local-sqlite when OPENRECEIVE_ST
   } finally {
     rmSync(tempRoot, { force: true, recursive: true });
   }
+});
+
+test("managed platform storage guard rejects unsafe local SQLite before disk writes", async () => {
+  const tempRoot = mkdtempSync(path.join(tmpdir(), "openreceive-platform-"));
+  try {
+    await withEnv({
+      OPENRECEIVE_STORE: undefined,
+      OPENRECEIVE_PLATFORM: undefined,
+      VERCEL: "1",
+      NODE_ENV: undefined
+    }, async () => {
+      await assertConfigError(
+        () => resolveOpenReceiveStore(undefined, { cwd: tempRoot }),
+        "EPHEMERAL_STORE_UNSAFE"
+      );
+      assert.equal(existsSync(path.join(tempRoot, ".openreceive")), false);
+    });
+  } finally {
+    rmSync(tempRoot, { force: true, recursive: true });
+  }
+});
+
+test("managed platform storage guard follows canonical platform policies", () => {
+  assertConfigErrorSync(
+    () => assertOpenReceiveStoreConfiguration({
+      storeUri: "sqlite:/data/x.sqlite3",
+      env: { VERCEL: "1" }
+    }),
+    "EPHEMERAL_STORE_UNSAFE"
+  );
+  assertConfigErrorSync(
+    () => assertOpenReceiveStoreConfiguration({
+      storeUri: undefined,
+      env: { DYNO: "web.1" }
+    }),
+    "EPHEMERAL_STORE_UNSAFE"
+  );
+  assert.doesNotThrow(() => assertOpenReceiveStoreConfiguration({
+    storeUri: "sqlite:/data/x.sqlite3",
+    env: { FLY_APP_NAME: "openreceive-demo" }
+  }));
+  assertConfigErrorSync(
+    () => assertOpenReceiveStoreConfiguration({
+      storeUri: "sqlite:relative.db",
+      env: { FLY_APP_NAME: "openreceive-demo" }
+    }),
+    "EPHEMERAL_STORE_UNSAFE"
+  );
+  assertConfigErrorSync(
+    () => assertOpenReceiveStoreConfiguration({
+      storeUri: undefined,
+      env: { FLY_APP_NAME: "openreceive-demo" }
+    }),
+    "EPHEMERAL_STORE_UNSAFE"
+  );
+  assertConfigErrorSync(
+    () => assertOpenReceiveStoreConfiguration({
+      storeUri: "sqlite:/x.sqlite3",
+      env: { OPENRECEIVE_PLATFORM: "heroku" }
+    }),
+    "EPHEMERAL_STORE_UNSAFE"
+  );
+  assert.doesNotThrow(() => assertOpenReceiveStoreConfiguration({
+    storeUri: "sqlite:/app/storage/x.sqlite3",
+    env: { OPENRECEIVE_PLATFORM: "coolify" }
+  }));
+  assert.doesNotThrow(() => assertOpenReceiveStoreConfiguration({
+    storeUri: undefined,
+    env: { OPENRECEIVE_PLATFORM: "vps" }
+  }));
 });
 
 test("createOpenReceive builds service methods from a client and store", async () => {
@@ -554,6 +635,52 @@ function invoiceRecord(overrides = {}) {
       ...overrides
     }
   };
+}
+
+async function assertConfigError(action, code) {
+  await assert.rejects(
+    action,
+    (error) => {
+      assert.equal(error instanceof OpenReceiveConfigError, true);
+      assert.equal(error.code, code);
+      return true;
+    }
+  );
+}
+
+function assertConfigErrorSync(action, code) {
+  assert.throws(
+    action,
+    (error) => {
+      assert.equal(error instanceof OpenReceiveConfigError, true);
+      assert.equal(error.code, code);
+      return true;
+    }
+  );
+}
+
+async function withEnv(updates, callback) {
+  const original = new Map(
+    Object.keys(updates).map((key) => [key, process.env[key]])
+  );
+  try {
+    for (const [key, value] of Object.entries(updates)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+    return await callback();
+  } finally {
+    for (const [key, value] of original) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
 }
 
 function makeInvoiceRequestFromVector(input) {

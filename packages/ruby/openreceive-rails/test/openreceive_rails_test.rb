@@ -68,7 +68,7 @@ class FakeDurableInvoiceStore
 
   OpenReceive::Rails::Adapter::STORE_METHODS.each do |method|
     define_method(method) do |*args, **kwargs|
-      @inner.public_send(method, *args, **kwargs)
+      kwargs.empty? ? @inner.public_send(method, *args) : @inner.public_send(method, *args, **kwargs)
     end
   end
 end
@@ -80,7 +80,7 @@ class OpenReceiveRailsTest < Minitest::Test
   def build_adapter(client: FakeReceiveClient.new, completed: [], store: nil)
     config = OpenReceive::Rails::Configuration.new
     config.client = client
-    config.store = store unless store.nil?
+    config.store = store || FakeDurableInvoiceStore.new
     config.namespace = "rails:test"
     config.production = false
     config.metadata = ->(controller, params) { { "user_id" => controller.current_user_id, "fruit" => params["fruit"] } }
@@ -303,10 +303,45 @@ class OpenReceiveRailsTest < Minitest::Test
   def test_production_configuration_fails_closed_with_in_memory_storage
     config = OpenReceive::Rails::Configuration.new
     config.client = FakeReceiveClient.new
+    config.store = OpenReceive::InMemoryInvoiceKvStore.new
     config.production = true
 
-    error = assert_raises(SecurityError) { OpenReceive::Rails::Adapter.new(config) }
-    assert_includes error.message, "durable invoice storage"
+    error = assert_raises(OpenReceive::Rails::ConfigurationError) { OpenReceive::Rails::Adapter.new(config) }
+    assert_equal "UNSAFE_MEMORY_STORE", error.code
+    assert_includes error.message, "InMemoryInvoiceKvStore"
+  end
+
+  def test_storage_guard_rejects_managed_platform_local_sqlite
+    error = assert_raises(OpenReceive::Rails::ConfigurationError) do
+      OpenReceive::Rails.assert_store_configuration!(
+        uri: nil,
+        env: { "VERCEL" => "1" }
+      )
+    end
+    assert_equal "EPHEMERAL_STORE_UNSAFE", error.code
+    assert_includes error.message, "Detected vercel via VERCEL"
+  end
+
+  def test_storage_guard_rejects_redis_permanently
+    error = assert_raises(OpenReceive::Rails::ConfigurationError) do
+      OpenReceive::Rails.assert_store_configuration!(
+        uri: "redis://localhost:6379/0",
+        env: {}
+      )
+    end
+    assert_equal "UNSUPPORTED_STORE_REDIS", error.code
+    assert_includes error.message, "Redis is not a supported OpenReceive store"
+  end
+
+  def test_storage_guard_allows_raw_host_and_mounted_sqlite_overrides
+    OpenReceive::Rails.assert_store_configuration!(
+      uri: nil,
+      env: { "OPENRECEIVE_PLATFORM" => "vps" }
+    )
+    OpenReceive::Rails.assert_store_configuration!(
+      uri: "sqlite:/app/storage/openreceive.sqlite3",
+      env: { "OPENRECEIVE_PLATFORM" => "coolify" }
+    )
   end
 
   def test_create_invoice_is_idempotent_and_receive_only

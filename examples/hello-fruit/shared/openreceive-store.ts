@@ -29,7 +29,6 @@ export async function createHelloFruitOpenReceiveKvStore(input: {
 }
 
 function describeStore(storeUri: string): string {
-  if (storeUri === "" || storeUri === "memory:" || storeUri === "memory") return "memory";
   if (storeUri === "local-sqlite") return "local-sqlite";
   if (storeUri.startsWith("sqlite:")) return "sqlite";
   if (/^postgres(?:ql)?:\/\//.test(storeUri)) return "postgres";

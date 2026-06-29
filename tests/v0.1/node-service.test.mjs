@@ -777,7 +777,7 @@ test("createOpenReceive refuses in-memory invoice storage in production mode", a
       }),
       (error) => {
         assert.equal(error instanceof OpenReceiveConfigError, true);
-        assert.equal(error.code, "UNSAFE_MEMORY_STORE");
+        assert.equal(error.code, "UNSUPPORTED_STORE_URI");
         return true;
       }
     );

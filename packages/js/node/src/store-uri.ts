@@ -6,13 +6,16 @@ import {
 } from "node:module";
 import path from "node:path";
 import {
-  InMemoryInvoiceKvStore,
   type OpenReceiveInvoiceKvStore
 } from "@openreceive/core";
 import {
   createOpenReceivePostgresKvStore,
   type OpenReceivePostgresQueryClient
 } from "./postgres-store.ts";
+import {
+  assertOpenReceiveStoreConfiguration,
+  sqlitePathFromUri
+} from "./storage-guard.ts";
 import {
   createOpenReceiveSqliteKvStore,
   createOpenReceiveSqliteQueryClient,
@@ -49,11 +52,8 @@ export async function resolveOpenReceiveStore(
 ): Promise<OpenReceiveResolvedStore> {
   const namespace = options.namespace ?? process.env.OPENRECEIVE_NAMESPACE ?? DEFAULT_NAMESPACE;
   const cwd = options.cwd ?? process.cwd();
+  assertOpenReceiveStoreConfiguration({ storeUri: uri });
   const storeUri = uri?.trim() || DEFAULT_STORE_URI;
-
-  if (storeUri === "memory:" || storeUri === "memory") {
-    return new InMemoryInvoiceKvStore();
-  }
 
   if (storeUri === "local-sqlite") {
     const root = path.resolve(cwd, ".openreceive");
@@ -100,21 +100,7 @@ export async function resolveOpenReceiveStore(
     });
   }
 
-  if (/^mysql:\/\//.test(storeUri)) {
-    throw new Error("MySQL store URI support is planned but not installed in this package build.");
-  }
-
-  if (/^redis(?:s)?:\/\//.test(storeUri)) {
-    throw new Error("Redis store URI support is planned but not installed in this package build.");
-  }
-
   throw new Error(`Unsupported OPENRECEIVE_STORE URI: ${storeUri}`);
-}
-
-function sqlitePathFromUri(uri: string): string {
-  if (uri.startsWith("sqlite:///")) return uri.slice("sqlite://".length);
-  if (uri.startsWith("sqlite://")) return uri.slice("sqlite://".length);
-  return uri.replace(/^sqlite:/, "");
 }
 
 async function loadSqlite(

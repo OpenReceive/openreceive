@@ -17,6 +17,7 @@ import {
   readHelloFruitCheckoutCurrencies
 } from "../../examples/hello-fruit/shared/demo-currencies.ts";
 import {
+  InMemoryInvoiceKvStore,
   StaticPriceProvider,
   quoteFiatToMsats
 } from "../../packages/js/core/src/index.ts";
@@ -101,6 +102,7 @@ class HelloFruitTestReceiveClient {
 function createHelloFruitTestOpenReceiveOptions() {
   return {
     client: new HelloFruitTestReceiveClient(),
+    store: new InMemoryInvoiceKvStore(),
     priceProviders: [new StaticPriceProvider()]
   };
 }
@@ -1134,7 +1136,7 @@ test("Hello Fruit metadata exposes only allowlisted build fields", async () => {
 
   await withEnv({
     OPENRECEIVE_NWC: nwc,
-    OPENRECEIVE_STORE: "memory:",
+    OPENRECEIVE_STORE: undefined,
     OPENRECEIVE_DEMO_MODE: "production",
     OPENRECEIVE_GIT_SHA: "0123456789abcdef",
     OPENRECEIVE_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
@@ -1184,7 +1186,7 @@ test("Hello Fruit metadata exposes only allowlisted build fields", async () => {
 test("Hello Fruit demos create app orders and refresh order status through merchant routes", async () => {
   await withEnv({
     OPENRECEIVE_NWC: createValidNwcUri(),
-    OPENRECEIVE_STORE: "memory:"
+    OPENRECEIVE_STORE: undefined
   }, async () => {
     const orderRequest = {
       idempotency_key: "cart-smoke",
@@ -1256,7 +1258,7 @@ test("Hello Fruit demos create app orders and refresh order status through merch
 test("Hello Fruit demos create direct SATS orders from the currency switcher", async () => {
   await withEnv({
     OPENRECEIVE_NWC: createValidNwcUri(),
-    OPENRECEIVE_STORE: "memory:"
+    OPENRECEIVE_STORE: undefined
   }, async () => {
     const orderRequest = {
       idempotency_key: "cart-sats",

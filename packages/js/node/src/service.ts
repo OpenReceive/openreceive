@@ -1,5 +1,4 @@
 import {
-  InMemoryInvoiceKvStore,
   InvoiceNotFoundError,
   OPENRECEIVE_PRICE_FEED_FALLBACK_URL_ENV,
   OPENRECEIVE_PRICE_FEED_PRIMARY_URL_ENV,
@@ -38,9 +37,23 @@ import {
   createNwcReceiveClient
 } from "./alby-nwc.ts";
 import {
+  OpenReceiveConfigError,
+  type OpenReceiveConfigErrorCode
+} from "./config-error.ts";
+import {
+  assertOpenReceiveStoreConfiguration
+} from "./storage-guard.ts";
+import {
   resolveOpenReceiveStore,
   type ResolveOpenReceiveStoreOptions
 } from "./store-uri.ts";
+
+export {
+  OpenReceiveConfigError
+} from "./config-error.ts";
+export type {
+  OpenReceiveConfigErrorCode
+} from "./config-error.ts";
 
 export type OpenReceiveLogLevel = "debug" | "info" | "warn" | "error";
 
@@ -216,33 +229,6 @@ export class OpenReceiveServiceError extends Error {
   }
 }
 
-export type OpenReceiveConfigErrorCode =
-  | "MISSING_NWC"
-  | "INVALID_NWC"
-  | "WALLET_PREFLIGHT_FAILED"
-  | "STORE_UNAVAILABLE"
-  | "UNSAFE_MEMORY_STORE"
-  | "UNHEALTHY_PRICE_DATA";
-
-export class OpenReceiveConfigError extends Error {
-  readonly code: OpenReceiveConfigErrorCode;
-  readonly hint: string;
-  override readonly cause?: unknown;
-
-  constructor(input: {
-    readonly code: OpenReceiveConfigErrorCode;
-    readonly message: string;
-    readonly hint: string;
-    readonly cause?: unknown;
-  }) {
-    super(input.message);
-    this.name = "OpenReceiveConfigError";
-    this.code = input.code;
-    this.hint = input.hint;
-    this.cause = input.cause;
-  }
-}
-
 interface OpenReceiveServiceContext {
   readonly options: OpenReceiveNodeOptions;
   readonly store: OpenReceiveInvoiceKvStore;
@@ -263,6 +249,10 @@ export async function createOpenReceive(
   options: CreateOpenReceiveOptions = {}
 ): Promise<OpenReceive> {
   const namespace = readOpenReceiveNamespace(options.namespace);
+  assertDurableStoreConfiguration({
+    configuredStoreUri: options.storeUri,
+    store: options.store
+  });
   const client = createConfiguredClient(options);
   await preflightConfiguredClient(client);
 
@@ -275,7 +265,6 @@ export async function createOpenReceive(
     namespace,
     onPaid: options.onPaid
   };
-  assertDurableStoreConfiguration(nodeOptions, options.storeUri);
   const priceCurrencies = options.priceCurrencies ?? ["USD"];
   const priceProviders = options.priceProviders ??
     [createOpenReceivePriceFeed({
@@ -660,6 +649,7 @@ async function resolveConfiguredStore(
     await ensureOpenReceiveStoreSchema(store);
     return store;
   } catch (error) {
+    if (error instanceof OpenReceiveConfigError) throw error;
     throw new OpenReceiveConfigError({
       code: "STORE_UNAVAILABLE",
       message: "OpenReceive store is unavailable.",
@@ -1288,38 +1278,15 @@ async function requireStoredRecord(
   return record;
 }
 
-function assertDurableStoreConfiguration(
-  options: OpenReceiveNodeOptions,
-  configuredStoreUri: string | undefined
-): void {
-  const env = globalThis.process?.env ?? {};
-  const mode = (env.OPENRECEIVE_MODE ?? env.NODE_ENV ?? "").toLowerCase();
-  if (mode !== "production") return;
-
-  const storeUri = configuredStoreUri ?? env.OPENRECEIVE_STORE;
-  if (
-    !isMemoryStore(options.store) &&
-    !isMemoryStoreUri(storeUri)
-  ) {
-    return;
-  }
-
-  throw new OpenReceiveConfigError({
-    code: "UNSAFE_MEMORY_STORE",
-    message: "OpenReceive refuses to use InMemoryInvoiceKvStore in production.",
-    hint: "Configure a durable OpenReceive store such as Postgres, SQLite, or local-sqlite before setting NODE_ENV=production."
+function assertDurableStoreConfiguration(input: {
+  readonly configuredStoreUri: string | undefined;
+  readonly store: OpenReceiveInvoiceKvStore | undefined;
+}): void {
+  assertOpenReceiveStoreConfiguration({
+    storeUri: input.configuredStoreUri,
+    store: input.store,
+    emitWarning: false
   });
-}
-
-function isMemoryStore(store: OpenReceiveInvoiceKvStore | undefined): boolean {
-  if (store === undefined) return false;
-  return store instanceof InMemoryInvoiceKvStore ||
-    store.constructor?.name === "InMemoryInvoiceKvStore";
-}
-
-function isMemoryStoreUri(uri: string | undefined): boolean {
-  const normalized = uri?.trim();
-  return normalized === "memory:" || normalized === "memory";
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

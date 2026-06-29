@@ -1,4 +1,5 @@
 import type {
+  OpenReceiveInvoiceKvStore,
   OpenReceiveReceiveNwcClient,
   OpenReceiveSourcedPriceProvider
 } from "@openreceive/core";
@@ -51,6 +52,7 @@ interface HelloFruitOpenReceiveBundle {
 
 export interface HelloFruitOpenReceiveTestOverrides {
   readonly client?: OpenReceiveReceiveNwcClient;
+  readonly store?: OpenReceiveInvoiceKvStore;
   readonly priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
 }
 
@@ -220,7 +222,7 @@ export async function createHelloFruitOpenReceive(
   connectionString = readRequiredHelloFruitNwcConnectionString(),
   overrides: HelloFruitOpenReceiveTestOverrides = testOverrides ?? {}
 ) {
-  const store = await createHelloFruitOpenReceiveKvStore({
+  const store = overrides.store ?? await createHelloFruitOpenReceiveKvStore({
     demoId: DEMO_ID
   });
   const priceCurrencies = readHelloFruitPriceFeedCurrencies();

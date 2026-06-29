@@ -17,6 +17,9 @@ import {
   OPENRECEIVE_DATABASE_SCHEMA_VERSION
 } from "./storage-schema.ts";
 import {
+  assertOpenReceiveStoreConfiguration
+} from "./storage-guard.ts";
+import {
   resolveOpenReceiveStore,
   type OpenReceiveResolvedStore,
   type ResolveOpenReceiveStoreOptions
@@ -52,7 +55,7 @@ Commands:
   debug-report        Print a redacted support report for local diagnostics.
 
 Store options:
-  --store <uri>        memory:, local-sqlite, sqlite:///path, or postgres://...
+  --store <uri>        local-sqlite, sqlite:/absolute/path, or postgres://...
   --namespace <name>   Operational namespace. Defaults to OPENRECEIVE_NAMESPACE or default.
   --print             Print SQL for the selected SQL store instead of executing it.
 
@@ -113,6 +116,11 @@ async function runMigrate(input: {
 }): Promise<number> {
   const storeUri = detectStoreUri(input.args, input.env);
   const namespace = detectNamespace(input.args, input.env);
+  assertOpenReceiveStoreConfiguration({
+    storeUri,
+    env: input.env,
+    emitWarning: false
+  });
 
   if (input.args.includes("--print")) {
     if (storeUri === "local-sqlite" || storeUri.startsWith("sqlite:")) {

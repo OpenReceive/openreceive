@@ -1,6 +1,7 @@
 import express from "express";
 import { fileURLToPath } from "node:url";
 import type {
+  OpenReceiveInvoiceKvStore,
   OpenReceiveReceiveNwcClient,
   OpenReceiveSourcedPriceProvider
 } from "@openreceive/core";
@@ -48,6 +49,7 @@ interface HelloFruitOpenReceiveBundle {
 
 export interface HelloFruitOpenReceiveOptions {
   readonly client?: OpenReceiveReceiveNwcClient;
+  readonly store?: OpenReceiveInvoiceKvStore;
   readonly priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
 }
 
@@ -56,7 +58,7 @@ export async function createHelloFruitOpenReceive(
 ) {
   const priceCurrencies = readHelloFruitPriceFeedCurrencies();
   const supportedCurrencies = readHelloFruitCheckoutCurrencies();
-  const store = await createHelloFruitOpenReceiveKvStore({
+  const store = options.store ?? await createHelloFruitOpenReceiveKvStore({
     demoId: DEMO_ID
   });
   const priceProviders: readonly OpenReceiveSourcedPriceProvider[] =

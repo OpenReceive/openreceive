@@ -1,0 +1,99 @@
+{
+  "schema_version": "0.1.0",
+  "rule": "managed platform storage guardrail for OpenReceive invoice truth",
+  "sqlite_policies": [
+    "allow-local",
+    "explicit-mounted-only",
+    "never"
+  ],
+  "error_codes": [
+    "EPHEMERAL_STORE_UNSAFE",
+    "UNSUPPORTED_STORE_REDIS",
+    "UNSAFE_MEMORY_STORE",
+    "STORE_MUST_BE_EXPLICIT",
+    "STORE_NOT_IMPLEMENTED",
+    "UNSUPPORTED_STORE_URI"
+  ],
+  "platforms": [
+    { "id": "vercel", "signals": ["VERCEL"], "policy": "never" },
+    { "id": "netlify", "signals": ["NETLIFY"], "policy": "never" },
+    { "id": "heroku", "signals": ["DYNO"], "policy": "never" },
+    { "id": "google-cloud-run", "signals": ["K_SERVICE", "K_REVISION", "CLOUD_RUN_JOB"], "policy": "never" },
+    { "id": "aws-lambda", "signals": ["AWS_LAMBDA_FUNCTION_NAME", "AWS_EXECUTION_ENV=AWS_Lambda_*"], "policy": "never" },
+    { "id": "aws-apprunner", "signals": ["OPENRECEIVE_PLATFORM=aws-apprunner"], "policy": "never" },
+    { "id": "digitalocean-app-platform", "signals": ["OPENRECEIVE_PLATFORM=digitalocean-app-platform"], "policy": "never" },
+    { "id": "cloudflare-workers", "signals": ["navigator.userAgent=Cloudflare-Workers"], "policy": "never" },
+    { "id": "cloudflare-pages", "signals": ["CF_PAGES"], "policy": "never" },
+    { "id": "cloudflare-containers", "signals": ["CLOUDFLARE_APPLICATION_ID", "CLOUDFLARE_DURABLE_OBJECT_ID"], "policy": "never" },
+    { "id": "render", "signals": ["RENDER"], "policy": "explicit-mounted-only" },
+    { "id": "railway", "signals": ["RAILWAY_PROJECT_ID", "RAILWAY_SERVICE_ID"], "policy": "explicit-mounted-only" },
+    { "id": "fly", "signals": ["FLY_APP_NAME", "FLY_MACHINE_ID"], "policy": "explicit-mounted-only" },
+    { "id": "azure-app-service", "signals": ["WEBSITE_SITE_NAME", "WEBSITE_HOSTNAME"], "policy": "explicit-mounted-only" },
+    { "id": "aws-elastic-beanstalk", "signals": ["OPENRECEIVE_PLATFORM=aws-elastic-beanstalk"], "policy": "explicit-mounted-only" },
+    { "id": "kubernetes", "signals": ["KUBERNETES_SERVICE_HOST"], "policy": "explicit-mounted-only" },
+    { "id": "dokku", "signals": ["DOKKU_APP_NAME", "OPENRECEIVE_PLATFORM=dokku"], "policy": "explicit-mounted-only" },
+    { "id": "coolify", "signals": ["COOLIFY_RESOURCE_UUID", "COOLIFY_CONTAINER_NAME"], "policy": "explicit-mounted-only" },
+    { "id": "caprover", "signals": ["OPENRECEIVE_PLATFORM=caprover"], "policy": "explicit-mounted-only" },
+    { "id": "vps", "signals": ["OPENRECEIVE_PLATFORM=vps"], "policy": "allow-local" },
+    { "id": "bare-metal", "signals": ["OPENRECEIVE_PLATFORM=bare-metal"], "policy": "allow-local" },
+    { "id": "raw-linux", "signals": ["OPENRECEIVE_PLATFORM=raw-linux"], "policy": "allow-local" },
+    { "id": "unknown", "signals": [], "policy": "allow-local" }
+  ],
+  "cases": [
+    {
+      "name": "memory URI is not selectable",
+      "env": { "OPENRECEIVE_STORE": "memory:" },
+      "expected": { "allowed": false, "code": "UNSUPPORTED_STORE_URI" }
+    },
+    {
+      "name": "redis is permanently unsupported",
+      "env": { "OPENRECEIVE_STORE": "redis://localhost:6379/0" },
+      "expected": { "allowed": false, "code": "UNSUPPORTED_STORE_REDIS" }
+    },
+    {
+      "name": "vercel unset store is unsafe even outside NODE_ENV production",
+      "env": { "VERCEL": "1" },
+      "expected": { "allowed": false, "code": "EPHEMERAL_STORE_UNSAFE" }
+    },
+    {
+      "name": "vercel rejects explicit sqlite",
+      "env": { "VERCEL": "1", "OPENRECEIVE_STORE": "sqlite:/data/x.sqlite3" },
+      "expected": { "allowed": false, "code": "EPHEMERAL_STORE_UNSAFE" }
+    },
+    {
+      "name": "heroku dyno rejects unset store",
+      "env": { "DYNO": "web.1" },
+      "expected": { "allowed": false, "code": "EPHEMERAL_STORE_UNSAFE" }
+    },
+    {
+      "name": "fly allows absolute sqlite",
+      "env": { "FLY_APP_NAME": "openreceive", "OPENRECEIVE_STORE": "sqlite:/data/x.sqlite3" },
+      "expected": { "allowed": true }
+    },
+    {
+      "name": "fly rejects relative sqlite",
+      "env": { "FLY_APP_NAME": "openreceive", "OPENRECEIVE_STORE": "sqlite:relative.db" },
+      "expected": { "allowed": false, "code": "EPHEMERAL_STORE_UNSAFE" }
+    },
+    {
+      "name": "fly rejects unset store",
+      "env": { "FLY_APP_NAME": "openreceive" },
+      "expected": { "allowed": false, "code": "EPHEMERAL_STORE_UNSAFE" }
+    },
+    {
+      "name": "manual heroku override routes to never policy",
+      "env": { "OPENRECEIVE_PLATFORM": "heroku", "OPENRECEIVE_STORE": "sqlite:/x.sqlite3" },
+      "expected": { "allowed": false, "code": "EPHEMERAL_STORE_UNSAFE" }
+    },
+    {
+      "name": "manual coolify override permits mounted sqlite",
+      "env": { "OPENRECEIVE_PLATFORM": "coolify", "OPENRECEIVE_STORE": "sqlite:/app/storage/x.sqlite3" },
+      "expected": { "allowed": true }
+    },
+    {
+      "name": "manual vps override permits implicit local sqlite",
+      "env": { "OPENRECEIVE_PLATFORM": "vps" },
+      "expected": { "allowed": true }
+    }
+  ]
+}

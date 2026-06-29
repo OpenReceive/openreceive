@@ -241,12 +241,15 @@ test("supported database docs keep invoice storage boundaries narrow", () => {
   const quickstart = readFileSync(nodeQuickstartDocs, "utf8");
 
   assert.match(docs, /\| `postgres:\/\/\.\.\.` \| Supported for Node \|/);
-  assert.match(docs, /\| `sqlite:\/path\/to\/openreceive\.sqlite3` \| Supported for Node \|/);
+  assert.match(docs, /\| `sqlite:\/absolute\/path\/to\/openreceive\.sqlite3` \| Supported for Node \|/);
   assert.match(docs, /\| `local-sqlite` \| Supported for Node \|/);
+  assert.doesNotMatch(docs, /\| `memory:` \|/);
+  assert.match(docs, /Postgres works anywhere and is the recommended default/);
   assert.match(docs, /Cloudflare Workers KV/);
   assert.match(docs, /OpenReceive owns its invoice storage/);
   assert.match(docs, /Your app keeps orders, carts, users/);
-  assert.match(quickstart, /OpenReceive-managed Postgres or SQLite invoice/);
+  assert.match(quickstart, /default file is `\.\/\.openreceive\/default\.sqlite3`/);
+  assert.match(quickstart, /use Postgres anywhere; use SQLite only on a/);
 });
 
 test("storage schema and vectors cover KV coordination fields", () => {
@@ -273,7 +276,8 @@ test("storage schema and vectors cover KV coordination fields", () => {
   assert.equal(vectors.cases.length, 13);
   assert.equal(vectors.certified_v0_1_transports.includes("postgres"), true);
   assert.equal(vectors.certified_v0_1_transports.includes("sqlite"), true);
-  assert.equal(vectors.deferred_transport_targets.includes("redis"), true);
+  assert.equal(vectors.deferred_transport_targets.includes("redis"), false);
+  assert.equal(vectors.unsupported_transport_targets.includes("redis"), true);
   assert.equal(vectors.unsupported_transport_targets.includes("s3"), true);
 });
 
