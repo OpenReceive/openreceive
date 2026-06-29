@@ -20,7 +20,7 @@ OPENRECEIVE_NAMESPACE=my_app
 ```
 
 If `OPENRECEIVE_STORE` is omitted locally, OpenReceive uses local SQLite under
-`.openreceive/`.
+`.openreceive/`. The default file is `./.openreceive/default.sqlite3`; use Postgres anywhere; use SQLite only on a durable single-machine filesystem.
 
 ## Server
 

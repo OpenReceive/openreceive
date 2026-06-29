@@ -38,7 +38,7 @@ const importChecks = {
   "@openreceive/react":
     "typeof mod.createCheckoutViewModel === 'function' && typeof mod.ThemeScope === 'function' && typeof mod.ThemeToggle === 'function' && typeof mod.PaymentWizard === 'function' && typeof mod.WaitingState === 'function' && typeof mod.useTheme === 'function' && typeof mod.CheckoutProvider === 'function' && typeof mod.useCheckoutContext === 'function' && mod.OpenReceiveThemeToggle === undefined && mod.OpenReceivePaymentWizard === undefined && mod.OpenReceiveWaitingState === undefined && mod.useOpenReceiveTheme === undefined",
   "@openreceive/svelte":
-    "typeof mod.createOpenReceiveSvelteCheckoutBinding === 'function' && typeof mod.createOpenReceiveSvelteCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveSvelteCheckoutComponentModel === 'function' && typeof mod.createOpenReceiveSvelteCheckoutController === 'function' && typeof mod.createOpenReceiveSvelteThemeBinding === 'function' && typeof mod.createOpenReceiveSvelteStoredThemeBinding === 'function' && typeof mod.createOpenReceiveSvelteThemeToggleBinding === 'function' && typeof mod.createCheckoutElement === 'function' && typeof mod.createOpenReceiveThemeToggleElement === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.syncOpenReceiveStoredThemeControls === 'function' && typeof mod.applyCheckoutThemeAttributes === 'function'",
+    "typeof mod.createCheckoutBinding === 'function' && typeof mod.createOpenReceiveSvelteCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveSvelteCheckoutComponentModel === 'function' && typeof mod.createOpenReceiveSvelteCheckoutController === 'function' && typeof mod.createOpenReceiveSvelteThemeBinding === 'function' && typeof mod.createOpenReceiveSvelteStoredThemeBinding === 'function' && typeof mod.createOpenReceiveSvelteThemeToggleBinding === 'function' && typeof mod.createCheckoutElement === 'function' && typeof mod.createOpenReceiveThemeToggleElement === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.syncOpenReceiveStoredThemeControls === 'function' && typeof mod.applyCheckoutThemeAttributes === 'function'",
   "@openreceive/testkit": "typeof mod.createTestkitReceiveClient === 'function'",
   "@openreceive/vue":
     "typeof mod.createOpenReceiveVueCheckoutBinding === 'function' && typeof mod.createOpenReceiveVueCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveVueCheckoutComponentModel === 'function' && typeof mod.createOpenReceiveVueCheckoutController === 'function' && typeof mod.createOpenReceiveVueThemeBinding === 'function' && typeof mod.createOpenReceiveVueStoredThemeBinding === 'function' && typeof mod.createOpenReceiveVueThemeToggleBinding === 'function' && typeof mod.createCheckoutElement === 'function' && typeof mod.createOpenReceiveThemeToggleElement === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.syncOpenReceiveStoredThemeControls === 'function' && typeof mod.applyOpenReceiveThemeAttributes === 'function'",
@@ -152,7 +152,7 @@ const umbrellaChecks = [
   ["openreceive/browser", "requestCheckout"],
   ["openreceive/react", "Checkout"],
   ["openreceive/vue", "createOpenReceiveVueCheckoutBinding"],
-  ["openreceive/svelte", "createOpenReceiveSvelteCheckoutBinding"],
+  ["openreceive/svelte", "createCheckoutBinding"],
   ["openreceive/angular", "createOpenReceiveAngularCheckoutBinding"],
   ["openreceive/elements", "renderCheckoutHtml"],
   ["openreceive/provider-data", "providerRegistry"],

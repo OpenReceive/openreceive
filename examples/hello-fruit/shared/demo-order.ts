@@ -29,8 +29,8 @@ export interface HelloFruitOrderItem {
   readonly name: string;
   readonly sticker: string;
   readonly quantity: number;
-  readonly unitAmount: HelloFruitFiatAmount;
-  readonly lineAmount: HelloFruitFiatAmount;
+  readonly unit_amount: HelloFruitFiatAmount;
+  readonly line_amount: HelloFruitFiatAmount;
 }
 
 export interface HelloFruitDemoOrder {
@@ -107,15 +107,15 @@ export function createHelloFruitCreateOrderResult(
     currency,
     options.rates
   );
-  const totalAmount = totalHelloFruitAmount(items);
+  const total_amount = totalHelloFruitAmount(items);
   const uuid = `hello-fruit-${options.demoId}-${idempotencyKey}`;
   const order: HelloFruitDemoOrder = {
     uuid,
     status: "pending_payment",
     items,
-    total_amount: totalAmount
+    total_amount
   };
-  const amount = createOpenReceiveCheckoutAmount(totalAmount, currency);
+  const amount = createOpenReceiveCheckoutAmount(total_amount, currency);
 
   return {
     order,
@@ -132,21 +132,21 @@ export function createHelloFruitCreateOrderResult(
 }
 
 function createOpenReceiveCheckoutAmount(
-  totalAmount: HelloFruitFiatAmount,
+  total_amount: HelloFruitFiatAmount,
   currency: string
 ): HelloFruitCreateOrderResult["invoiceRequest"]["amount"] {
   if (!isHelloFruitDirectAmountCurrency(currency)) {
-    return { fiat: totalAmount };
+    return { fiat: total_amount };
   }
   if (currency === "BTC") {
     return {
       btc: {
         currency,
-        value: totalAmount.value
+        value: total_amount.value
       }
     };
   }
-  return { sats: totalAmount.value };
+  return { sats: total_amount.value };
 }
 
 export function createHelloFruitOrderStatus(input: {
@@ -205,14 +205,14 @@ function createHelloFruitOrderItems(
     if (product === undefined) {
       throw new HelloFruitDemoOrderError(`Unknown product: ${productId}.`);
     }
-    const unitAmount = convertHelloFruitUsdAmount(product.fiat, currency, rates);
+    const unit_amount = convertHelloFruitUsdAmount(product.fiat, currency, rates);
     return {
       product_id: product.id,
       name: product.name,
       sticker: product.sticker,
       quantity,
-      unitAmount,
-      lineAmount: multiplyAmount(unitAmount, quantity)
+      unit_amount,
+      line_amount: multiplyAmount(unit_amount, quantity)
     };
   });
 }
@@ -222,15 +222,15 @@ function totalHelloFruitAmount(items: readonly HelloFruitOrderItem[]): HelloFrui
   if (first === undefined) {
     throw new HelloFruitDemoOrderError("Cart must include at least one item.");
   }
-  const currency = first.unitAmount.currency;
+  const currency = first.unit_amount.currency;
   let scale = 0;
   let totalUnits = 0n;
 
   for (const item of items) {
-    if (item.unitAmount.currency !== currency) {
+    if (item.unit_amount.currency !== currency) {
       throw new HelloFruitDemoOrderError("Cart items must use one currency.");
     }
-    const decimal = parseDecimal(item.lineAmount.value);
+    const decimal = parseDecimal(item.line_amount.value);
     if (decimal.scale > scale) {
       totalUnits *= 10n ** BigInt(decimal.scale - scale);
       scale = decimal.scale;

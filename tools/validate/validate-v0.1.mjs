@@ -324,7 +324,7 @@ function validateTransactionScanVectors() {
 
   const firstPage = vector.examples.find((item) => item.name === "first page");
   assert(firstPage?.request?.offset === 0, "transaction scan first page must start at offset 0");
-  assert(firstPage?.cursor_after?.offset === 20, "transaction scan full page must advance offset");
+  assert(firstPage?.cursor_after?.offset === 25, "transaction scan full page must advance offset");
 
   const shortPage = vector.examples.find((item) => item.name === "short page starts next cycle");
   assert(shortPage?.cursor_after?.offset === 0, "transaction scan short page must reset offset");
@@ -984,8 +984,8 @@ function validateOpenApi() {
     "OpenAPI must not define OpenReceive-owned app routes",
   );
   assert(
-    createCheckoutRequest?.properties?.orderId?.maxLength === 200,
-    "OpenAPI create checkout request must use SDK orderId",
+    createCheckoutRequest?.properties?.order_id?.maxLength === 200,
+    "OpenAPI create checkout request must use SDK order_id",
   );
   assert(
     createCheckoutRequest?.properties?.amount?.$ref === "#/components/schemas/CreateCheckoutAmount",
@@ -998,8 +998,8 @@ function validateOpenApi() {
   );
   assert(
     createCheckoutRequest?.not?.required?.includes("memo") &&
-      createCheckoutRequest?.not?.required?.includes("descriptionHash"),
-    "OpenAPI create checkout request must reject memo with descriptionHash",
+      createCheckoutRequest?.not?.required?.includes("description_hash"),
+    "OpenAPI create checkout request must reject memo with description_hash",
   );
   assert(
     openapi.components?.schemas?.Checkout?.properties?.checkout_id?.pattern ===
@@ -1015,6 +1015,11 @@ function validateOpenApi() {
     openapi.components?.schemas?.Order?.properties?.paid_checkout?.$ref ===
       "#/components/schemas/Checkout",
     "OpenAPI order response must group the paid checkout",
+  );
+  assert(
+    openapi.components?.schemas?.Order?.properties?.display_checkout?.$ref ===
+      "#/components/schemas/Checkout",
+    "OpenAPI order response must include display_checkout",
   );
   assert(
     openapi.components?.schemas?.Invoice?.properties?.refreshed_from_invoice_id?.pattern ===
