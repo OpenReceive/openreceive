@@ -679,8 +679,8 @@ function readCreateAmountKind(amount: OpenReceiveCreateCheckoutAmount): "btc" | 
   }
 
   const unsupportedKeys = Object.keys(amount).filter((key) => key !== "btc" && key !== "fiat");
-  const hasBtc = amount.btc !== undefined;
-  const hasFiat = amount.fiat !== undefined;
+  const hasBtc = "btc" in amount && amount.btc !== undefined;
+  const hasFiat = "fiat" in amount && amount.fiat !== undefined;
   if (unsupportedKeys.length > 0 || [hasBtc, hasFiat].filter(Boolean).length !== 1) {
     throw serviceError(
       400,
