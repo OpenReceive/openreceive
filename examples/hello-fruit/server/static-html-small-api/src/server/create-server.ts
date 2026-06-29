@@ -3,40 +3,28 @@ import { fileURLToPath } from "node:url";
 import type {
   OpenReceiveInvoiceKvStore,
   OpenReceiveReceiveNwcClient,
-  OpenReceiveSourcedPriceProvider
+  OpenReceiveSourcedPriceProvider,
 } from "@openreceive/core";
 import {
   OpenReceiveServiceError,
   createOpenReceive,
-  createOpenReceivePriceFeed
+  createOpenReceivePriceFeed,
 } from "@openreceive/node";
-import {
-  createHelloFruitDemoMetadata
-} from "../../../../shared/demo-metadata.ts";
-import {
-  readRequiredHelloFruitNwcConnectionString
-} from "../../../../shared/demo-nwc.ts";
-import {
-  createHelloFruitOpenReceiveLogger
-} from "../../../../shared/demo-logging.ts";
+import { createHelloFruitDemoMetadata } from "../../../../shared/demo-metadata.ts";
+import { readRequiredHelloFruitNwcConnectionString } from "../../../../shared/demo-nwc.ts";
+import { createHelloFruitOpenReceiveLogger } from "../../../../shared/demo-logging.ts";
 import {
   createHelloFruitCreateOrderResult,
   createHelloFruitOrderStatus,
-  HelloFruitDemoOrderError
+  HelloFruitDemoOrderError,
 } from "../../../../shared/demo-order.ts";
-import {
-  mountHelloFruitHostedDemoRoutes
-} from "../../../../shared/hosted-demo-routes.ts";
-import {
-  createHelloFruitOpenReceiveKvStore
-} from "../../../../shared/openreceive-store.ts";
+import { mountHelloFruitHostedDemoRoutes } from "../../../../shared/hosted-demo-routes.ts";
+import { createHelloFruitOpenReceiveKvStore } from "../../../../shared/openreceive-store.ts";
 import {
   readHelloFruitCheckoutCurrencies,
-  readHelloFruitPriceFeedCurrencies
+  readHelloFruitPriceFeedCurrencies,
 } from "../../../../shared/demo-currencies.ts";
-import {
-  readHelloFruitOrderRates
-} from "../../../../shared/demo-price-feeds.ts";
+import { readHelloFruitOrderRates } from "../../../../shared/demo-price-feeds.ts";
 import product from "../../../../shared/product.json" with { type: "json" };
 
 const DEMO_ID = "static-html-small-api";
@@ -53,20 +41,21 @@ export interface HelloFruitOpenReceiveOptions {
   readonly priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
 }
 
-export async function createHelloFruitOpenReceive(
-  options: HelloFruitOpenReceiveOptions = {}
-) {
+export async function createHelloFruitOpenReceive(options: HelloFruitOpenReceiveOptions = {}) {
   const priceCurrencies = readHelloFruitPriceFeedCurrencies();
   const supportedCurrencies = readHelloFruitCheckoutCurrencies();
-  const clientOptions = options.client === undefined
-    ? { nwc: readRequiredHelloFruitNwcConnectionString() }
-    : { client: options.client };
-  const store = options.store ?? await createHelloFruitOpenReceiveKvStore({
-    demoId: DEMO_ID
-  });
-  const priceProviders: readonly OpenReceiveSourcedPriceProvider[] =
-    options.priceProviders ??
-    [createOpenReceivePriceFeed({ store, currencies: priceCurrencies })];
+  const clientOptions =
+    options.client === undefined
+      ? { nwc: readRequiredHelloFruitNwcConnectionString() }
+      : { client: options.client };
+  const store =
+    options.store ??
+    (await createHelloFruitOpenReceiveKvStore({
+      demoId: DEMO_ID,
+    }));
+  const priceProviders: readonly OpenReceiveSourcedPriceProvider[] = options.priceProviders ?? [
+    createOpenReceivePriceFeed({ store, currencies: priceCurrencies }),
+  ];
 
   const openreceive = await createOpenReceive({
     ...clientOptions,
@@ -74,47 +63,44 @@ export async function createHelloFruitOpenReceive(
     namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit",
     priceProviders,
     priceCurrencies,
-    logger: createHelloFruitOpenReceiveLogger(DEMO_ID)
+    logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
   });
   return { openreceive, priceProviders, supportedCurrencies } satisfies HelloFruitOpenReceiveBundle;
 }
 
-export async function createHelloFruitStaticServer(
-  options: HelloFruitOpenReceiveOptions = {}
-) {
+export async function createHelloFruitStaticServer(options: HelloFruitOpenReceiveOptions = {}) {
   const app = express();
   app.use(express.json());
   app.use(
     "/stickers",
-    express.static(fileURLToPath(new URL("../../../../shared/stickers/", import.meta.url)))
+    express.static(fileURLToPath(new URL("../../../../shared/stickers/", import.meta.url))),
   );
 
-  const {
-    openreceive,
-    priceProviders,
-    supportedCurrencies
-  } = await createHelloFruitOpenReceive(options);
+  const { openreceive, priceProviders, supportedCurrencies } =
+    await createHelloFruitOpenReceive(options);
 
   mountHelloFruitHostedDemoRoutes(app, {
     id: DEMO_ID,
     sourcePath: "examples/hello-fruit/server/static-html-small-api",
     docsPath: "docs/guides/quickstart-node.md",
     walletConfigured: true,
-    defaultPort: "3001"
+    defaultPort: "3001",
   });
 
   app.get("/demo-metadata.json", (_req, res) => {
-    res.status(200).json(createHelloFruitDemoMetadata({
-      id: DEMO_ID,
-      walletConfigured: true,
-      requestedMode: process.env.OPENRECEIVE_DEMO_MODE,
-      gitSha: process.env.OPENRECEIVE_GIT_SHA,
-      imageDigest: process.env.OPENRECEIVE_IMAGE_DIGEST,
-      deployedAt: process.env.OPENRECEIVE_DEPLOYED_AT,
-      packages: {
-        "@openreceive/elements": "0.1.0"
-      }
-    }));
+    res.status(200).json(
+      createHelloFruitDemoMetadata({
+        id: DEMO_ID,
+        walletConfigured: true,
+        requestedMode: process.env.OPENRECEIVE_DEMO_MODE,
+        gitSha: process.env.OPENRECEIVE_GIT_SHA,
+        imageDigest: process.env.OPENRECEIVE_IMAGE_DIGEST,
+        deployedAt: process.env.OPENRECEIVE_DEPLOYED_AT,
+        packages: {
+          "@openreceive/elements": "0.1.0",
+        },
+      }),
+    );
   });
 
   app.post("/create_order", async (req, res, next) => {
@@ -123,22 +109,25 @@ export async function createHelloFruitStaticServer(
       const rates = await readHelloFruitOrderRates({
         currency: body.currency,
         priceProviders,
-        supportedCurrencies
+        supportedCurrencies,
       });
-      const orderResult = createHelloFruitCreateOrderResult({
-        ...body,
-        idempotency_key: req.body?.idempotency_key ?? req.get("idempotency-key")
-      }, {
-        demoId: DEMO_ID,
-        invoiceExpirySeconds: product.invoice_expiry_seconds,
-        demoName: "static",
-        rates,
-        supportedCurrencies
-      });
-      const checkout = await openreceive.createCheckout(orderResult.invoiceRequest);
+      const orderResult = createHelloFruitCreateOrderResult(
+        {
+          ...body,
+          idempotency_key: req.body?.idempotency_key ?? req.get("idempotency-key"),
+        },
+        {
+          demoId: DEMO_ID,
+          invoiceExpirySeconds: product.invoice_expiry_seconds,
+          demoName: "static",
+          rates,
+          supportedCurrencies,
+        },
+      );
+      const checkout = await openreceive.getOrCreateCheckout(orderResult.invoiceRequest);
       res.status(201).json({
         order: orderResult.order,
-        checkout
+        checkout,
       });
     } catch (error) {
       if (error instanceof OpenReceiveServiceError || error instanceof HelloFruitDemoOrderError) {
@@ -150,15 +139,17 @@ export async function createHelloFruitStaticServer(
   });
   app.post("/order_status", async (req, res, next) => {
     try {
-      const openreceiveOrder = await openreceive.getOrder(createStatusRequest(asRequestBody(req.body)));
+      const openreceiveOrder = await openreceive.getOrder(
+        createStatusRequest(asRequestBody(req.body)),
+      );
       const orderStatus = createHelloFruitOrderStatus(openreceiveOrder);
       res.status(200).json({
         ...openreceiveOrder,
         ...orderStatus,
         order: {
           uuid: orderStatus.order_id,
-          status: orderStatus.order_status
-        }
+          status: orderStatus.order_status,
+        },
       });
     } catch (error) {
       if (error instanceof OpenReceiveServiceError || error instanceof HelloFruitDemoOrderError) {
@@ -174,16 +165,16 @@ export async function createHelloFruitStaticServer(
 
 function asRequestBody(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? (value as Record<string, unknown>)
     : {};
 }
 
 function createStatusRequest(body: Record<string, unknown>): {
-  readonly order_id: string;
+  readonly orderId: string;
 } {
   const orderId = body.order_id;
   if (typeof orderId !== "string" || orderId.length === 0) {
     throw new HelloFruitDemoOrderError("order_id is required.");
   }
-  return { order_id: orderId };
+  return { orderId };
 }

@@ -27,6 +27,14 @@
       "public": true
     },
     {
+      "slug": "settlement-sweeps",
+      "title": "Settlement Sweeps",
+      "source_path": "docs/guides/settlement-sweeps.md",
+      "category": "operations",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "frontend-checkout",
       "title": "Frontend Checkout",
       "source_path": "docs/guides/frontend-checkout.md",

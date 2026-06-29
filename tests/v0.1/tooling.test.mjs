@@ -58,12 +58,7 @@ const textFileExtensions = new Set([
   ".yaml",
   ".yml",
 ]);
-const generatedFolderNames = new Set([
-  ".next",
-  "coverage",
-  "dist",
-  "node_modules",
-]);
+const generatedFolderNames = new Set([".next", "coverage", "dist", "node_modules"]);
 
 function withGitRepo(callback) {
   const dir = mkdtempSync(path.join(tmpdir(), "openreceive-secret-scan-"));
@@ -151,7 +146,8 @@ test("Node quickstart shows service methods without framework route scaffolding"
   const quickstart = readFileSync(nodeQuickstartDocs, "utf8");
   assert.match(quickstart, /createCheckoutForCart/);
   assert.match(quickstart, /orderStatus/);
-  assert.match(quickstart, /order_id:/);
+  assert.match(quickstart, /orderId:/);
+  assert.match(quickstart, /getOrCreateCheckout/);
   assert.match(quickstart, /memo:/);
   assert.match(quickstart, /total_amount/);
   assert.match(quickstart, /createOpenReceive/);
@@ -172,7 +168,8 @@ test("quickstart and examples do not use OpenReceive HTTP converter helpers", ()
 test("authorization guide shows app boundary service error handling", () => {
   const source = readFileSync(authorizationDocs, "utf8");
   assert.match(source, /OpenReceiveServiceError/);
-  assert.match(source, /order_id:/);
+  assert.match(source, /orderId:/);
+  assert.match(source, /getOrCreateCheckout/);
   assert.match(source, /memo:/);
   assert.match(source, /total_amount/);
   assert.match(source, /createOpenReceive/);
@@ -363,7 +360,11 @@ test("storage schema and vectors cover KV coordination fields", () => {
   assert.equal(schema.properties.action_claimed_at.minimum, 0);
   assert.equal(schema.$defs.StoredRecord.properties.row.$ref, "#");
   assert.equal(schema.$defs.MetaRow.properties.value.type, "string");
-  assert.equal(schema.$defs.TransactionScanCursor.properties.offset.minimum, 0);
+  assert.deepEqual(schema.$defs.TransactionScanCursor.properties.until_cursor.type, [
+    "integer",
+    "null",
+  ]);
+  assert.equal(schema.$defs.TransactionScanCursor.properties.last_swept_at.minimum, 0);
 
   assert.deepEqual(vectors.methods, [
     "putIfAbsent",
@@ -379,6 +380,7 @@ test("storage schema and vectors cover KV coordination fields", () => {
     "casMeta",
   ]);
   assert.equal(vectors.cases.length, 13);
+  assert.equal(vectors.transaction_scan_cursor_shape.until_cursor, "unix seconds or null");
   assert.equal(vectors.certified_v0_1_transports.includes("postgres"), true);
   assert.equal(vectors.certified_v0_1_transports.includes("sqlite"), true);
   assert.equal(vectors.deferred_transport_targets.includes("redis"), false);

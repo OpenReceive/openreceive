@@ -23,12 +23,8 @@
     "rev": "non-negative integer"
   },
   "transaction_scan_cursor_shape": {
-    "from": "unix seconds",
-    "until": "unix seconds",
-    "limit": "positive integer",
-    "offset": "non-negative integer",
-    "cycle": "non-negative integer",
-    "last_page_scanned_at": "unix seconds"
+    "until_cursor": "unix seconds or null",
+    "last_swept_at": "unix seconds"
   },
   "certified_v0_1_transports": [
     "memory",
@@ -112,23 +108,23 @@
       ]
     },
     {
-      "name": "transaction scan cursor advances offset on full pages",
+      "name": "global transaction scan cursor walks downward on full temporal pages",
       "requires": [
-        "transaction_scan_cursor",
+        "transaction_scan_cursor:v2:global",
         "casMeta"
       ]
     },
     {
-      "name": "transaction scan cursor resets offset and increments cycle on short pages",
+      "name": "global transaction scan cursor resets to the top after a short page",
       "requires": [
-        "transaction_scan_cursor",
+        "transaction_scan_cursor:v2:global",
         "casMeta"
       ]
     },
     {
       "name": "transaction scan cursor is not advanced on wallet errors",
       "requires": [
-        "transaction_scan_cursor",
+        "transaction_scan_cursor:v2:global",
         "casMeta"
       ]
     },

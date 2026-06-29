@@ -545,7 +545,7 @@ export interface CheckoutStatusModel {
   readonly countdownLabel?: string;
 }
 
-export type CheckoutStatusRefresh = (order_id: string) => Promise<CheckoutSnapshot | null>;
+export type CheckoutStatusRefresh = (orderId: string) => Promise<CheckoutSnapshot | null>;
 
 export type RequestCheckoutAmount =
   | {
@@ -561,15 +561,34 @@ export type RequestCheckoutAmount =
       };
     };
 
-export interface RequestCheckoutOptions {
+export type RequestCheckoutOptions = RequestCheckoutBaseOptions &
+  (
+    | {
+        readonly amount: RequestCheckoutAmount;
+        readonly sats?: never;
+        readonly usd?: never;
+      }
+    | {
+        readonly amount?: never;
+        readonly sats: number | string;
+        readonly usd?: never;
+      }
+    | {
+        readonly amount?: never;
+        readonly sats?: never;
+        readonly usd: string;
+      }
+  );
+
+export interface RequestCheckoutBaseOptions {
   readonly checkoutUrl: string | ((orderId: string) => string);
-  readonly order_id: string;
+  readonly orderId: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly headers?: Readonly<Record<string, string>>;
-  readonly amount: RequestCheckoutAmount;
   readonly memo?: string;
-  readonly description_hash?: string;
-  readonly expires_in_seconds?: number;
+  readonly descriptionHash?: string;
+  readonly expiresInSeconds?: number;
+  readonly metadata?: Record<string, unknown>;
 }
 
 export interface CreateOpenReceiveStatusFetcherOptions {
@@ -2854,58 +2873,151 @@ export function createCheckoutShell(
   };
 }
 
-export async function requestCheckout(
+interface NormalizedRequestCheckoutOptions {
+  readonly checkoutUrl: string | ((orderId: string) => string);
+  readonly orderId: string;
+  readonly fetch?: typeof globalThis.fetch;
+  readonly headers?: Readonly<Record<string, string>>;
+  readonly amount: RequestCheckoutAmount;
+  readonly memo?: string;
+  readonly descriptionHash?: string;
+  readonly expiresInSeconds?: number;
+  readonly metadata?: Record<string, unknown>;
+}
+
+function normalizeRequestCheckoutOptions(
   options: RequestCheckoutOptions,
-): Promise<CheckoutSnapshot> {
-  if (options.order_id.length === 0) {
-    throw new Error("OpenReceive checkout creation requires order_id.");
+): NormalizedRequestCheckoutOptions {
+  const record = options as RequestCheckoutOptions & Record<string, unknown>;
+  const orderId = optionalString(record.orderId ?? record.order_id);
+  const descriptionHash = optionalString(record.descriptionHash ?? record.description_hash);
+  const expiresInSeconds = record.expiresInSeconds ?? record.expires_in_seconds;
+  const metadata = optionalRecord(record.metadata);
+
+  return {
+    checkoutUrl: options.checkoutUrl,
+    orderId: orderId ?? "",
+    fetch: options.fetch,
+    headers: options.headers,
+    amount: normalizeRequestCheckoutAmount(record),
+    ...(options.memo === undefined ? {} : { memo: options.memo }),
+    ...(descriptionHash === undefined ? {} : { descriptionHash }),
+    ...(typeof expiresInSeconds === "number" ? { expiresInSeconds } : {}),
+    ...(metadata === undefined ? {} : { metadata }),
+  };
+}
+
+function normalizeRequestCheckoutAmount(options: Record<string, unknown>): RequestCheckoutAmount {
+  const sourceCount = [
+    options.amount !== undefined,
+    options.usd !== undefined,
+    options.sats !== undefined,
+  ].filter(Boolean).length;
+  if (sourceCount !== 1) {
+    throw new Error("OpenReceive checkout creation requires exactly one of amount, usd, or sats.");
   }
 
-  const fetcher = options.fetch ?? globalThis.fetch;
-  if (fetcher === undefined) {
-    throw new Error("OpenReceive checkout creation requires fetch.");
+  if (options.amount !== undefined) {
+    return normalizeExplicitRequestCheckoutAmount(options.amount);
   }
 
-  if (
-    typeof options.amount !== "object" ||
-    options.amount === null ||
-    Array.isArray(options.amount)
-  ) {
+  if (options.usd !== undefined) {
+    const value = optionalString(options.usd);
+    if (
+      value === undefined ||
+      !/^[0-9]+(?:\.[0-9]+)?$/.test(value) ||
+      /^0+(?:\.0+)?$/.test(value)
+    ) {
+      throw new Error("OpenReceive usd must be a positive decimal string.");
+    }
+    return {
+      fiat: {
+        currency: "USD",
+        value,
+      },
+    };
+  }
+
+  return {
+    btc: {
+      currency: "SATS",
+      value: normalizeRequestCheckoutSats(options.sats),
+    },
+  };
+}
+
+function normalizeExplicitRequestCheckoutAmount(value: unknown): RequestCheckoutAmount {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error(
       "OpenReceive checkout creation requires exactly one of amount.btc or amount.fiat.",
     );
   }
-  const unsupportedAmountKeys = Object.keys(options.amount).filter(
+
+  const amount = value as RequestCheckoutAmount & Record<string, unknown>;
+  const unsupportedAmountKeys = Object.keys(amount).filter(
     (key) => key !== "btc" && key !== "fiat",
   );
-  const amountSourceCount = [
-    "btc" in options.amount,
-    "fiat" in options.amount,
-  ].filter(Boolean).length;
+  const amountSourceCount = ["btc" in amount, "fiat" in amount].filter(Boolean).length;
   if (unsupportedAmountKeys.length > 0 || amountSourceCount !== 1) {
     throw new Error(
       "OpenReceive checkout creation requires exactly one of amount.btc or amount.fiat.",
     );
   }
-  if (options.memo !== undefined && options.memo.length > 500) {
+  return structuredClone(amount) as RequestCheckoutAmount;
+}
+
+function normalizeRequestCheckoutSats(value: unknown): string {
+  if (typeof value === "number") {
+    if (!Number.isSafeInteger(value) || value <= 0) {
+      throw new Error("OpenReceive sats must be a positive integer.");
+    }
+    return String(value);
+  }
+
+  if (typeof value === "string" && /^[0-9]+$/.test(value) && BigInt(value) > 0n) {
+    return value;
+  }
+
+  throw new Error("OpenReceive sats must be a positive integer.");
+}
+
+function optionalRecord(value: unknown): Record<string, unknown> | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("OpenReceive metadata must be an object.");
+  }
+  return value as Record<string, unknown>;
+}
+
+export async function requestCheckout(options: RequestCheckoutOptions): Promise<CheckoutSnapshot> {
+  const request = normalizeRequestCheckoutOptions(options);
+  if (request.orderId.length === 0) {
+    throw new Error("OpenReceive checkout creation requires orderId.");
+  }
+
+  const fetcher = request.fetch ?? globalThis.fetch;
+  if (fetcher === undefined) {
+    throw new Error("OpenReceive checkout creation requires fetch.");
+  }
+
+  if (request.memo !== undefined && request.memo.length > 500) {
     throw new Error("OpenReceive memo must be 500 characters or fewer.");
   }
 
   const requestBody = {
-    order_id: options.order_id,
-    amount: structuredClone(options.amount),
-    ...(options.memo === undefined ? {} : { memo: options.memo }),
-    ...(options.description_hash === undefined
+    order_id: request.orderId,
+    amount: structuredClone(request.amount),
+    ...(request.memo === undefined ? {} : { memo: request.memo }),
+    ...(request.descriptionHash === undefined ? {} : { description_hash: request.descriptionHash }),
+    ...(request.expiresInSeconds === undefined
       ? {}
-      : { description_hash: options.description_hash }),
-    ...(options.expires_in_seconds === undefined
-      ? {}
-      : { expires_in_seconds: options.expires_in_seconds }),
+      : { expires_in_seconds: request.expiresInSeconds }),
+    ...(request.metadata === undefined ? {} : { metadata: structuredClone(request.metadata) }),
   };
   assertOpenReceiveBrowserPayloadSafe(requestBody);
 
-  const headers = options.headers === undefined ? {} : options.headers;
-  const response = await fetcher(resolveCheckoutUrl(options.checkoutUrl, options.order_id), {
+  const headers = request.headers === undefined ? {} : request.headers;
+  const response = await fetcher(resolveCheckoutUrl(request.checkoutUrl, request.orderId), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -2970,14 +3082,19 @@ function resolveCheckoutUrl(
   checkoutUrl: string | ((orderId: string) => string),
   orderId: string,
 ): string {
-  const url =
-    typeof checkoutUrl === "function" ? checkoutUrl(orderId) : checkoutUrl;
+  const url = typeof checkoutUrl === "function" ? checkoutUrl(orderId) : checkoutUrl;
+  if (url.includes("{orderId}")) {
+    return url.replaceAll("{orderId}", encodeURIComponent(orderId));
+  }
   return url.includes("{order_id}")
     ? url.replaceAll("{order_id}", encodeURIComponent(orderId))
     : url;
 }
 
 function resolveStatusUrl(statusUrl: string, orderId: string): string {
+  if (statusUrl.includes("{orderId}")) {
+    return statusUrl.replaceAll("{orderId}", encodeURIComponent(orderId));
+  }
   return statusUrl.includes("{order_id}")
     ? statusUrl.replaceAll("{order_id}", encodeURIComponent(orderId))
     : statusUrl;
@@ -2986,10 +3103,7 @@ function resolveStatusUrl(statusUrl: string, orderId: string): string {
 function checkoutSnapshotFromResponseBody(body: unknown): CheckoutSnapshot {
   const record = asRecord(body);
   const wrapped = asRecord(record.checkout);
-  const candidate =
-    typeof wrapped.checkout_id === "string"
-      ? wrapped
-      : record;
+  const candidate = typeof wrapped.checkout_id === "string" ? wrapped : record;
   return normalizeCheckoutSnapshot(candidate);
 }
 
@@ -3026,7 +3140,8 @@ function checkoutSnapshotFromStatusBody(body: unknown): CheckoutSnapshot | null 
 
 function normalizeCheckoutSnapshot(input: unknown): CheckoutSnapshot {
   const record = asRecord(input);
-  const active = record.active === undefined ? undefined : normalizeCheckoutInvoiceSnapshot(record.active);
+  const active =
+    record.active === undefined ? undefined : normalizeCheckoutInvoiceSnapshot(record.active);
   const rawInvoices = Array.isArray(record.invoices) ? record.invoices : [];
   const invoices = rawInvoices.map(normalizeCheckoutInvoiceSnapshot);
   const checkoutId = requiredString(record.checkout_id, "checkout_id");
@@ -3232,8 +3347,8 @@ export function createCheckoutStatusModel(
     detail: statusText.detail,
     countdownPrefix: openReceiveCheckoutLabels.countdownPrefix,
     ...(expiresInSeconds === undefined || displayPhase === "expired"
-          ? {}
-          : {
+      ? {}
+      : {
           expires_in_seconds: expiresInSeconds,
           countdownLabel: formatOpenReceiveCountdown(expiresInSeconds),
         }),

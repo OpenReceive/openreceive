@@ -1,15 +1,12 @@
 import {
   createHelloFruitOrderInvoiceDescription,
-  type HelloFruitFiatAmount
+  type HelloFruitFiatAmount,
 } from "./demo-formatting.ts";
-import {
-  readHelloFruitCatalog,
-  type HelloFruitProduct
-} from "./demo-catalog.ts";
+import { readHelloFruitCatalog, type HelloFruitProduct } from "./demo-catalog.ts";
 import {
   isHelloFruitDirectAmountCurrency,
   normalizeHelloFruitCurrency,
-  readHelloFruitCheckoutCurrencies
+  readHelloFruitCheckoutCurrencies,
 } from "./demo-currencies.ts";
 
 export interface HelloFruitCartItemInput {
@@ -43,17 +40,17 @@ export interface HelloFruitDemoOrder {
 export interface HelloFruitCreateOrderResult {
   readonly order: HelloFruitDemoOrder;
   readonly invoiceRequest: {
-    readonly order_id: string;
+    readonly orderId: string;
     readonly amount:
       | {
-        readonly btc: {
-          readonly currency: "BTC" | "SATS";
-          readonly value: string;
-        };
-      }
+          readonly btc: {
+            readonly currency: "BTC" | "SATS";
+            readonly value: string;
+          };
+        }
       | { readonly fiat: HelloFruitFiatAmount };
     readonly memo: string;
-    readonly expires_in_seconds: number;
+    readonly expiresInSeconds: number;
   };
 }
 
@@ -81,7 +78,7 @@ export class HelloFruitDemoOrderError extends Error {
     this.body = {
       code: "INVALID_REQUEST",
       message,
-      retryable: false
+      retryable: false,
     };
   }
 }
@@ -95,7 +92,7 @@ export function createHelloFruitCreateOrderResult(
     readonly catalog?: readonly HelloFruitProduct[];
     readonly rates?: HelloFruitBtcFiatRates;
     readonly supportedCurrencies?: readonly string[];
-  }
+  },
 ): HelloFruitCreateOrderResult {
   const idempotencyKey = requireIdempotencyKey(input.idempotency_key);
   const supportedCurrencies = options.supportedCurrencies ?? readHelloFruitCheckoutCurrencies();
@@ -104,7 +101,7 @@ export function createHelloFruitCreateOrderResult(
     input.cart,
     options.catalog ?? readHelloFruitCatalog(),
     currency,
-    options.rates
+    options.rates,
   );
   const total_amount = totalHelloFruitAmount(items);
   const uuid = `hello-fruit-${options.demoId}-${idempotencyKey}`;
@@ -112,27 +109,27 @@ export function createHelloFruitCreateOrderResult(
     uuid,
     status: "pending_payment",
     items,
-    total_amount
+    total_amount,
   };
   const amount = createOpenReceiveCheckoutAmount(total_amount, currency);
 
   return {
     order,
     invoiceRequest: {
-      order_id: uuid,
+      orderId: uuid,
       amount,
       memo: createHelloFruitOrderInvoiceDescription(
         items.map((item) => `${item.name} x${item.quantity}`),
-        { demoName: options.demoName }
+        { demoName: options.demoName },
       ),
-      expires_in_seconds: options.invoiceExpirySeconds
-    }
+      expiresInSeconds: options.invoiceExpirySeconds,
+    },
   };
 }
 
 function createOpenReceiveCheckoutAmount(
   total_amount: HelloFruitFiatAmount,
-  currency: string
+  currency: string,
 ): HelloFruitCreateOrderResult["invoiceRequest"]["amount"] {
   if (!isHelloFruitDirectAmountCurrency(currency)) {
     return { fiat: total_amount };
@@ -141,15 +138,15 @@ function createOpenReceiveCheckoutAmount(
     return {
       btc: {
         currency,
-        value: total_amount.value
-      }
+        value: total_amount.value,
+      },
     };
   }
   return {
     btc: {
       currency: "SATS",
-      value: total_amount.value
-    }
+      value: total_amount.value,
+    },
   };
 }
 
@@ -163,10 +160,9 @@ export function createHelloFruitOrderStatus(input: {
   readonly state?: unknown;
 }): HelloFruitOrderStatus {
   const orderId =
-    typeof input.order_id === "string" && input.order_id.length > 0
-      ? input.order_id
-      : "unknown";
-  const paid = input.paid === true ||
+    typeof input.order_id === "string" && input.order_id.length > 0 ? input.order_id : "unknown";
+  const paid =
+    input.paid === true ||
     input.status === "paid" ||
     typeof input.paid_at === "number" ||
     typeof input.settled_at === "number" ||
@@ -175,7 +171,7 @@ export function createHelloFruitOrderStatus(input: {
 
   return {
     order_id: orderId,
-    order_status: paid ? "paid" : "pending_payment"
+    order_status: paid ? "paid" : "pending_payment",
   };
 }
 
@@ -183,7 +179,7 @@ function createHelloFruitOrderItems(
   cart: unknown,
   catalog: readonly HelloFruitProduct[],
   currency: string,
-  rates: HelloFruitBtcFiatRates | undefined
+  rates: HelloFruitBtcFiatRates | undefined,
 ): HelloFruitOrderItem[] {
   if (!Array.isArray(cart) || cart.length === 0) {
     throw new HelloFruitDemoOrderError("Cart must include at least one item.");
@@ -216,7 +212,7 @@ function createHelloFruitOrderItems(
       sticker: product.sticker,
       quantity,
       unit_amount,
-      line_amount: multiplyAmount(unit_amount, quantity)
+      line_amount: multiplyAmount(unit_amount, quantity),
     };
   });
 }
@@ -239,12 +235,12 @@ function totalHelloFruitAmount(items: readonly HelloFruitOrderItem[]): HelloFrui
       totalUnits *= 10n ** BigInt(decimal.scale - scale);
       scale = decimal.scale;
     }
-    totalUnits += decimal.units * (10n ** BigInt(scale - decimal.scale));
+    totalUnits += decimal.units * 10n ** BigInt(scale - decimal.scale);
   }
 
   return {
     currency,
-    value: formatDecimal(totalUnits, scale)
+    value: formatDecimal(totalUnits, scale),
   };
 }
 
@@ -252,17 +248,19 @@ function multiplyAmount(fiat: HelloFruitFiatAmount, quantity: number): HelloFrui
   const decimal = parseDecimal(fiat.value);
   return {
     currency: fiat.currency,
-    value: formatDecimal(decimal.units * BigInt(quantity), decimal.scale)
+    value: formatDecimal(decimal.units * BigInt(quantity), decimal.scale),
   };
 }
 
 function convertHelloFruitUsdAmount(
   amount: HelloFruitFiatAmount,
   currency: string,
-  rates: HelloFruitBtcFiatRates | undefined
+  rates: HelloFruitBtcFiatRates | undefined,
 ): HelloFruitFiatAmount {
   if (amount.currency !== "USD") {
-    throw new HelloFruitDemoOrderError("Hello Fruit catalog prices must use USD as the base currency.");
+    throw new HelloFruitDemoOrderError(
+      "Hello Fruit catalog prices must use USD as the base currency.",
+    );
   }
   if (currency === "USD") return amount;
 
@@ -271,14 +269,14 @@ function convertHelloFruitUsdAmount(
     const sats = usdToSats(amount.value, usdRate);
     return {
       currency,
-      value: currency === "BTC" ? formatBtcFromSats(sats) : sats.toString()
+      value: currency === "BTC" ? formatBtcFromSats(sats) : sats.toString(),
     };
   }
 
   const targetRate = requiredRate(rates, currency);
   return {
     currency,
-    value: convertUsdToFiat(amount.value, usdRate, targetRate)
+    value: convertUsdToFiat(amount.value, usdRate, targetRate),
   };
 }
 
@@ -289,14 +287,11 @@ function parseDecimal(value: string): { readonly units: bigint; readonly scale: 
   const [integer, fraction = ""] = value.split(".");
   return {
     units: BigInt(`${integer}${fraction}`),
-    scale: fraction.length
+    scale: fraction.length,
   };
 }
 
-function requiredRate(
-  rates: HelloFruitBtcFiatRates | undefined,
-  currency: string
-): string {
+function requiredRate(rates: HelloFruitBtcFiatRates | undefined, currency: string): string {
   const rate = rates?.bitcoin[currency.toLowerCase()];
   if (rate === undefined) {
     throw new HelloFruitDemoOrderError(`Missing BTC/${currency} price feed rate.`, 503);
@@ -315,11 +310,7 @@ function usdToSats(usdValue: string, usdBtcPrice: string): bigint {
   return ceilDiv(numerator, denominator);
 }
 
-function convertUsdToFiat(
-  usdValue: string,
-  usdBtcPrice: string,
-  targetBtcPrice: string
-): string {
+function convertUsdToFiat(usdValue: string, usdBtcPrice: string, targetBtcPrice: string): string {
   const usd = parseDecimal(usdValue);
   const usdPrice = parseDecimal(usdBtcPrice);
   const targetPrice = parseDecimal(targetBtcPrice);

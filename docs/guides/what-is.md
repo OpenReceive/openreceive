@@ -30,20 +30,21 @@ through third-party services outside OpenReceive.
 OpenReceive runs inside your normal web process. Your checkout route creates an
 app order, calls OpenReceive server-side to create the invoice, and returns
 display-safe invoice data to the browser. The browser checkout watches your
-backend order-status route to learn when an invoice settles. Each status request
-may perform at most one bounded server-side `list_transactions` page.
+backend order-status route to learn when an invoice settles. Checkout creation,
+order-status reads, admin pages, or background tasks may advance at most one
+bounded server-side `list_transactions` page through the global sweep.
 
 ```text
 web process        handles /create_order and /order_status
 browser checkout   asks app order status when it needs fresh state
-wallet scan        happens only inside that server-side status request
+wallet scan        happens only inside server-side OpenReceive calls
 ```
 
 The OpenReceive store is the only thing coordinating payment state across
 processes.
 
-Local invoice expiry is not a payment decision. If no browser or app request
-asks for status, no settlement scan runs.
+Local invoice expiry is not a payment decision. If no browser, admin, cron,
+worker, or app request calls OpenReceive, no settlement scan runs.
 
 OpenReceive packages provide their own invoice storage, selected with
 `OPENRECEIVE_STORE`. Your app keeps its own orders, carts, users, and

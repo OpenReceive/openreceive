@@ -40,8 +40,8 @@ import { createOpenReceive } from "@openreceive/node";
 const openreceive = await createOpenReceive({
   // `fulfillPaidCheckout` is your own function. OpenReceive calls it when a
   // checkout settles; you ship the product, grant access, etc.
-  onPaid: async ({ order_id, checkout_id, metadata }) => {
-    await fulfillPaidCheckout({ order_id, checkout_id, metadata });
+  onPaid: async ({ orderId, checkoutId, metadata }) => {
+    await fulfillPaidCheckout({ orderId, checkoutId, metadata });
   },
 });
 ```
@@ -52,11 +52,9 @@ own. Replace `myOrder` with however your app loads its order:
 ```ts
 // In your own controller / route handler.
 async function createCheckoutForCart(myOrder) {
-  return await openreceive.createCheckout({
-    order_id: myOrder.id,
-    amount: {
-      fiat: { currency: "USD", value: myOrder.total_amount.value },
-    },
+  return await openreceive.getOrCreateCheckout({
+    orderId: myOrder.id,
+    usd: myOrder.total_amount.value,
     memo: `Order ${myOrder.number}`,
     // Optional arbitrary app-owned JSON returned to your settlement hook.
     metadata: {
@@ -71,7 +69,7 @@ async function createCheckoutForCart(myOrder) {
 
 Invoices expire. OpenReceive does not create replacement invoices just because
 time passes or because the frontend polls status. When an invoice expires, show a
-try-again or start-over action and call `createCheckout` again from that user
+try-again or start-over action and call `getOrCreateCheckout` again from that user
 action.
 
 Add a status endpoint in a controller your app owns. It returns the order from
@@ -81,7 +79,7 @@ Add a status endpoint in a controller your app owns. It returns the order from
 // In your own controller / route handler.
 export async function orderStatus(req, res) {
   const order = await openreceive.getOrder({
-    order_id: req.body.order_id,
+    orderId: req.body.order_id,
   });
 
   res.json({
@@ -89,6 +87,17 @@ export async function orderStatus(req, res) {
     order_status: order.paid ? "paid" : "pending_payment",
   });
 }
+```
+
+Organic traffic drives settlement sweeps automatically: checkout creation and
+`getOrder` each advance at most one globally gated wallet page. If you want
+settlement latency that does not depend on traffic, run the optional sweep in a
+background task:
+
+```ts
+setInterval(() => {
+  void openreceive.sweepPendingInvoices();
+}, 1000);
 ```
 
 ## React
@@ -170,12 +179,12 @@ the settlement authority, and settlement requires `settled_at` or a settled
 transaction state.
 
 `onPaid` may run more than once. Fulfillment must be idempotent on
-`checkout_id` or your own order id. Fulfill from the paid checkout snapshot and
+`checkoutId` or your own order id. Fulfill from the paid checkout snapshot and
 its metadata, not from the live cart.
 
 ## Cart Changes
 
-When a cart changes, call `createCheckout` again with the same `order_id` and
+When a cart changes, call `getOrCreateCheckout` again with the same order id and
 the new amount. OpenReceive returns the paid checkout if the order is already
 paid, reuses an unexpired open checkout when the amount matches, creates a fresh
 checkout when an expired checkout is retried, and supersedes the old open

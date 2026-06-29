@@ -14,24 +14,19 @@ const checkoutRoutes = express.Router();
 checkoutRoutes.use(express.json());
 
 const openreceive = await createOpenReceive({
-  onPaid: async ({ order_id }) => {
-    await markOrderPaidInYourApp(order_id);
+  onPaid: async ({ orderId }) => {
+    await markOrderPaidInYourApp(orderId);
   }
 });
 
 checkoutRoutes.post("/create_order", async (req, res, next) => {
   try {
     const order = await createOrderFromCart(req.user, req.body.cart);
-    const checkout = await openreceive.createCheckout({
-      order_id: order.uuid,
-      amount: {
-        fiat: {
-          currency: order.total_amount.currency,
-          value: order.total_amount.value
-        }
-      },
+    const checkout = await openreceive.getOrCreateCheckout({
+      orderId: order.uuid,
+      usd: order.total_amount.value,
       memo: `Order ${order.number}`,
-      expires_in_seconds: 600
+      expiresInSeconds: 600
     });
     res.status(201).json({ order, checkout });
   } catch (error) {
@@ -45,7 +40,7 @@ checkoutRoutes.post("/create_order", async (req, res, next) => {
 
 checkoutRoutes.post("/order_status", async (req, res, next) => {
   try {
-    const order = await openreceive.getOrder({ order_id: req.body.order_id });
+    const order = await openreceive.getOrder({ orderId: req.body.order_id });
     res.json({
       order,
       order_status: order.paid ? "paid" : "pending_payment"
@@ -71,8 +66,8 @@ import { createOpenReceive, OpenReceiveServiceError } from "@openreceive/node";
 export const runtime = "nodejs";
 
 const openreceiveReady = createOpenReceive({
-  onPaid: async ({ order_id }) => {
-    await markOrderPaidInYourApp(order_id);
+  onPaid: async ({ orderId }) => {
+    await markOrderPaidInYourApp(orderId);
   }
 });
 
@@ -82,16 +77,11 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const order = await createOrderFromCart(body.cart);
-    const checkout = await openreceive.createCheckout({
-      order_id: order.uuid,
-      amount: {
-        fiat: {
-          currency: order.total_amount.currency,
-          value: order.total_amount.value
-        }
-      },
+    const checkout = await openreceive.getOrCreateCheckout({
+      orderId: order.uuid,
+      usd: order.total_amount.value,
       memo: `Order ${order.number}`,
-      expires_in_seconds: 600
+      expiresInSeconds: 600
     });
     return Response.json({ order, checkout }, { status: 201 });
   } catch (error) {
@@ -114,16 +104,11 @@ access:
 export async function createOrder(req, res, next) {
   try {
     const order = await createOrderFromCart(req.user, req.body.cart);
-    const checkout = await openreceive.createCheckout({
-      order_id: order.uuid,
-      amount: {
-        fiat: {
-          currency: order.total_amount.currency,
-          value: order.total_amount.value
-        }
-      },
+    const checkout = await openreceive.getOrCreateCheckout({
+      orderId: order.uuid,
+      usd: order.total_amount.value,
       memo: `Order ${order.number}`,
-      expires_in_seconds: 600
+      expiresInSeconds: 600
     });
     res.status(201).json({ order, checkout });
   } catch (error) {
@@ -154,8 +139,8 @@ the server-side settlement hook:
 
 ```ts
 export const openreceive = await createOpenReceive({
-  onPaid: async ({ order_id }) => {
-    await markOrderPaidInYourApp(order_id);
+  onPaid: async ({ orderId }) => {
+    await markOrderPaidInYourApp(orderId);
   }
 });
 ```

@@ -146,29 +146,13 @@
     "TransactionScanCursor": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["from", "until", "limit", "offset", "cycle"],
+      "required": ["until_cursor", "last_swept_at"],
       "properties": {
-        "from": {
-          "type": "integer",
+        "until_cursor": {
+          "type": ["integer", "null"],
           "minimum": 0
         },
-        "until": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "limit": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "offset": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "cycle": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "last_page_scanned_at": {
+        "last_swept_at": {
           "type": "integer",
           "minimum": 0
         }

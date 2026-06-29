@@ -11,7 +11,9 @@ strings, wallet clients, and fulfillment on the backend.
   `"failed"` from display-safe fields.
 - `requestCheckout(options)` posts SDK-shaped checkout input to your own
   checkout-creation URL; most stores call their own `/create_order` route and
-  render the checkout returned with the order.
+  render the checkout returned with the order. Options use camelCase and amount
+  shortcuts such as `usd: "9.99"` or `sats: 1000`; the POST body uses
+  OpenReceive's snake_case wire fields.
 - `lightningUri(invoice)`, `qrSvg(invoice)`, and `qrPngDataUrl(invoice)` render
   BOLT11 payment data.
 - `copyInvoice({ invoice })` copies the BOLT11 string.

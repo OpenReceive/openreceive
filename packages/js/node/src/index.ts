@@ -2,31 +2,31 @@ export { OpenReceiveError } from "@openreceive/core";
 export {
   formatOpenReceiveInvalidNwcMessage,
   formatOpenReceiveMissingNwcMessage,
-  parseNwcConnectionUri
+  parseNwcConnectionUri,
 } from "@openreceive/core";
 export type {
   OpenReceiveErrorBody,
   OpenReceiveErrorCode,
-  OpenReceiveReceiveNwcClient
+  OpenReceiveReceiveNwcClient,
 } from "@openreceive/core";
 export {
   ReceiveCheckoutValidationError,
   WalletPreflightError,
   createNwcReceiveClient,
   normalizeNwcWalletError,
-  summarizeWalletCapabilities
+  summarizeWalletCapabilities,
 } from "./alby-nwc.ts";
 export type {
   NwcEndpointLogEntry,
   NwcEndpointLogLevel,
   NwcEndpointLogger,
-  WalletPreflightErrorCode
+  WalletPreflightErrorCode,
 } from "./alby-nwc.ts";
 export {
   OpenReceiveConfigError,
   OpenReceiveServiceError,
   createOpenReceive,
-  createOpenReceivePriceFeed
+  createOpenReceivePriceFeed,
 } from "./service.ts";
 export type {
   CreateOpenReceiveOptions,
@@ -38,6 +38,7 @@ export type {
   OpenReceiveEvent,
   OpenReceiveEventHandler,
   OpenReceiveGetCheckoutRequest,
+  OpenReceiveGetOrCreateCheckoutRequest,
   OpenReceiveGetOrderRequest,
   OpenReceiveInvoice,
   OpenReceiveLogEntry,
@@ -45,7 +46,8 @@ export type {
   OpenReceiveOrder,
   OpenReceiveNodeOptions,
   OpenReceiveNodeSettlementActionHook,
-  OpenReceiveNodeSettlementActionInput
+  OpenReceiveNodeSettlementActionInput,
+  OpenReceivePendingSweepResult,
 } from "./service.ts";
 export * from "./postgres-store.ts";
 export * from "./storage-schema.ts";

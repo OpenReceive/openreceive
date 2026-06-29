@@ -29,7 +29,8 @@ Default route policy:
   session.
 - Status refresh happens behind your `/order_status` or equivalent app route
   when payment status should not be public.
-- OpenReceive does not run or recommend background settlement tasks.
+- Optional background settlement sweeps must run server-side and keep the
+  receive-only NWC code out of browser code.
 
 ## Browser Defaults
 

@@ -1321,7 +1321,7 @@ test("Next.js demo owns merchant route handling and calls OpenReceive service me
   assert.match(source, /createOrderResponse/);
   assert.match(source, /orderStatusResponse/);
   assert.match(source, /createHelloFruitCreateOrderResult/);
-  assert.match(source, /openreceive\.createCheckout/);
+  assert.match(source, /openreceive\.getOrCreateCheckout/);
   assert.match(source, /openreceive\.getOrder/);
   assert.match(source, /readRequiredHelloFruitNwcConnectionString/);
   assert.doesNotMatch(source, /dispatchOpenReceiveRoute/);

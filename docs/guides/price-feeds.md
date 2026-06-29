@@ -133,9 +133,9 @@ actual order currency in `fiat.currency`.
 `BTC`, `SAT`, and `SATS` are not fiat price-feed currencies. For
 Bitcoin-denominated products, pass one bitcoin amount object such as
 `amount: { btc: { currency: "BTC", value: "0.005" } }` or
-`amount: { btc: { currency: "SATS", value: "7000" } }` to `createCheckout`.
-Those amounts convert directly to `amount_msats` and never call a price
-provider.
+`amount: { btc: { currency: "SATS", value: "7000" } }` to
+`getOrCreateCheckout`. For the common sats case, `sats: 7000` is equivalent.
+Those amounts convert directly to `amount_msats` and never call a price provider.
 
 ## Quote Rules
 

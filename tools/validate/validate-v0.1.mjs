@@ -141,7 +141,9 @@ function validateSchemas() {
     "invoice-storage schema must define MetaRow",
   );
   assert(
-    invoiceStorage.$defs?.TransactionScanCursor?.properties?.offset?.minimum === 0,
+    Array.isArray(invoiceStorage.$defs?.TransactionScanCursor?.properties?.until_cursor?.type) &&
+      invoiceStorage.$defs.TransactionScanCursor.properties.until_cursor.type.includes("null") &&
+      invoiceStorage.$defs.TransactionScanCursor.properties.last_swept_at?.minimum === 0,
     "invoice-storage schema must define TransactionScanCursor",
   );
 
@@ -307,28 +309,27 @@ function validateTransactionScanVectors() {
   assert(vector.max_limit === 50, "transaction scan max limit mismatch");
   assert(
     vector.required_behaviors.includes(
-      "each claimed refresh performs at most one incoming unpaid list_transactions page capped at 50",
+      "each claimed sweep performs at most one incoming unpaid list_transactions page capped at 50",
     ),
     "missing one-page status refresh behavior",
   );
   assert(
-    vector.required_behaviors.includes(
-      "locally expired unpaid invoices return stored state without wallet access",
-    ),
-    "missing expired unpaid scan skip behavior",
+    vector.required_behaviors.includes("sweeps never send offset"),
+    "transaction scans must not use offset paging",
   );
   assert(
-    vector.required_behaviors.includes("invoice scan windows run from invoice creation through invoice expiry"),
-    "missing invoice lifetime scan window behavior",
+    vector.required_behaviors.includes(
+      "sweep windows run from oldest open invoice creation minus overlap through the global cursor",
+    ),
+    "missing global temporal scan window behavior",
   );
 
-  const firstPage = vector.examples.find((item) => item.name === "first page");
-  assert(firstPage?.request?.offset === 0, "transaction scan first page must start at offset 0");
-  assert(firstPage?.cursor_after?.offset === 25, "transaction scan full page must advance offset");
+  const firstPage = vector.examples.find((item) => item.name === "first full temporal page");
+  assert(firstPage?.request?.offset === undefined, "transaction scan must not send offset");
+  assert(firstPage?.cursor_after?.until_cursor === 1005, "full page must move until_cursor down");
 
-  const shortPage = vector.examples.find((item) => item.name === "short page starts next cycle");
-  assert(shortPage?.cursor_after?.offset === 0, "transaction scan short page must reset offset");
-  assert(shortPage?.cursor_after?.cycle === 1, "transaction scan short page must increment cycle");
+  const shortPage = vector.examples.find((item) => item.name === "short page resets to top");
+  assert(shortPage?.cursor_after?.until_cursor === shortPage?.now, "short page must reset cursor to now");
 
   const timeout = vector.examples.find((item) => item.name === "timeout keeps cursor stable");
   assert(
@@ -380,7 +381,8 @@ function validateStorageKvVectors() {
     "storage KV vector must define MetaRow.rev",
   );
   assert(
-    vector.transaction_scan_cursor_shape?.offset === "non-negative integer",
+    vector.transaction_scan_cursor_shape?.until_cursor === "unix seconds or null" &&
+      vector.transaction_scan_cursor_shape?.last_swept_at === "unix seconds",
     "storage KV vector must define transaction scan cursor",
   );
   assert(
@@ -419,8 +421,8 @@ function validateStorageKvVectors() {
     "secondary indexes stay consistent across create and transition",
     "ownership guard accepts OpenReceive tables and refuses foreign or newer schemas",
     "global transaction scan gate allows at most one wallet page per interval",
-    "transaction scan cursor advances offset on full pages",
-    "transaction scan cursor resets offset and increments cycle on short pages",
+    "global transaction scan cursor walks downward on full temporal pages",
+    "global transaction scan cursor resets to the top after a short page",
     "transaction scan cursor is not advanced on wallet errors",
     "settlement action lease prevents concurrent execution and recovers expired claims",
   ]) {

@@ -1,97 +1,82 @@
 {
   "schema_version": "0.1.0",
-  "rule": "status refresh scans one bounded list_transactions page per durable global gate claim",
+  "rule": "global pending-invoice sweeps scan one bounded list_transactions page per durable global gate claim",
   "default_gate_seconds": 2,
   "default_limit": 25,
   "max_limit": 50,
+  "default_overlap_seconds": 60,
+  "default_open_invoice_cap": 1000,
+  "cursor_key": "transaction_scan_cursor:v2:global",
   "cursor_shape": {
-    "from": "unix seconds",
-    "until": "unix seconds",
-    "limit": "positive integer",
-    "offset": "non-negative integer",
-    "cycle": "non-negative integer",
-    "last_page_scanned_at": "unix seconds"
+    "until_cursor": "unix seconds or null",
+    "last_swept_at": "unix seconds"
   },
   "required_behaviors": [
-    "terminal invoices return stored state without wallet access",
-    "locally expired unpaid invoices return stored state without wallet access",
-    "non-terminal refresh claims a durable global scan gate before wallet access",
-    "each claimed refresh performs at most one incoming unpaid list_transactions page capped at 50",
-    "full pages advance offset by limit",
-    "short pages reset offset to zero and increment cycle",
+    "empty open invoice sets perform zero wallet calls",
+    "non-empty sweeps claim the durable global scan gate before wallet access",
+    "each claimed sweep performs at most one incoming unpaid list_transactions page capped at 50",
+    "sweeps never send offset",
+    "full pages move until_cursor down to the oldest created_at in the page",
+    "short pages reset until_cursor to now",
     "cursor does not advance on wallet timeout or error",
-    "invoice scan windows run from invoice creation through invoice expiry",
-    "transactions match local invoices by payment_hash with BOLT11 invoice fallback"
+    "sweep windows run from oldest open invoice creation minus overlap through the global cursor",
+    "new invoices above the cursor do not shift or skip older unscanned transactions",
+    "transactions match local invoices globally by payment_hash with BOLT11 invoice fallback"
   ],
   "examples": [
     {
-      "name": "first page",
+      "name": "first full temporal page",
       "cursor_before": {
-        "from": 1000,
-        "until": 1600,
-        "limit": 25,
-        "offset": 0,
-        "cycle": 0
+        "until_cursor": null,
+        "last_swept_at": 0
       },
+      "open_created_at": [1000, 1005, 1040],
+      "now": 2000,
       "request": {
         "type": "incoming",
         "unpaid": true,
-        "from": 1000,
-        "until": 1600,
-        "limit": 25,
-        "offset": 0
+        "from": 940,
+        "until": 2000,
+        "limit": 25
       },
+      "page_oldest_created_at": 1005,
       "returned_count": 25,
       "cursor_after": {
-        "from": 1000,
-        "until": 1600,
-        "limit": 25,
-        "offset": 25,
-        "cycle": 0
+        "until_cursor": 1005,
+        "last_swept_at": 2000
       }
     },
     {
-      "name": "short page starts next cycle",
+      "name": "short page resets to top",
       "cursor_before": {
-        "from": 1000,
-        "until": 1600,
-        "limit": 25,
-        "offset": 25,
-        "cycle": 0
+        "until_cursor": 1005,
+        "last_swept_at": 2000
       },
+      "open_created_at": [1000, 1005, 1040],
+      "now": 2002,
       "request": {
         "type": "incoming",
         "unpaid": true,
-        "from": 1000,
-        "until": 1600,
-        "limit": 25,
-        "offset": 25
+        "from": 940,
+        "until": 1005,
+        "limit": 25
       },
       "returned_count": 7,
       "cursor_after": {
-        "from": 1000,
-        "until": 1600,
-        "limit": 25,
-        "offset": 0,
-        "cycle": 1
+        "until_cursor": 2002,
+        "last_swept_at": 2002
       }
     },
     {
       "name": "timeout keeps cursor stable",
       "cursor_before": {
-        "from": 1000,
-        "until": 1600,
-        "limit": 25,
-        "offset": 25,
-        "cycle": 0
+        "until_cursor": 1005,
+        "last_swept_at": 2000
       },
       "error": "TIMEOUT",
       "cursor_after": {
-        "from": 1000,
-        "until": 1600,
-        "limit": 25,
-        "offset": 25,
-        "cycle": 0
+        "until_cursor": 1005,
+        "last_swept_at": 2000
       }
     }
   ]
