@@ -58,8 +58,13 @@ async function createCheckoutForCart(myOrder) {
       fiat: { currency: "USD", value: myOrder.total_amount.value },
     },
     memo: `Order ${myOrder.number}`,
-    // Optional: any data you want returned to you on settlement.
-    metadata: { cart_version: myOrder.cart_version },
+    // Optional arbitrary app-owned JSON returned to your settlement hook.
+    metadata: {
+      app_context: {
+        fulfillment: "digital",
+        internal_order_number: myOrder.number,
+      },
+    },
   });
 }
 ```

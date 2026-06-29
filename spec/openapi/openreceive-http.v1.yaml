@@ -68,20 +68,6 @@ components:
       properties:
         btc:
           $ref: "#/components/schemas/BitcoinAmount"
-        sats:
-          oneOf:
-            - type: integer
-              minimum: 1
-              maximum: 9007199254740
-            - type: string
-              pattern: "^[0-9]+$"
-        msats:
-          oneOf:
-            - type: integer
-              minimum: 1000
-              maximum: 9007199254740991
-            - type: string
-              pattern: "^[0-9]+$"
         fiat:
           $ref: "#/components/schemas/FiatAmount"
       oneOf:
@@ -90,30 +76,6 @@ components:
           not:
             anyOf:
               - required:
-                  - sats
-              - required:
-                  - msats
-              - required:
-                  - fiat
-        - required:
-            - sats
-          not:
-            anyOf:
-              - required:
-                  - btc
-              - required:
-                  - msats
-              - required:
-                  - fiat
-        - required:
-            - msats
-          not:
-            anyOf:
-              - required:
-                  - btc
-              - required:
-                  - sats
-              - required:
                   - fiat
         - required:
             - fiat
@@ -121,10 +83,6 @@ components:
             anyOf:
               - required:
                   - btc
-              - required:
-                  - sats
-              - required:
-                  - msats
     QuoteRateRequest:
       type: object
       additionalProperties: false

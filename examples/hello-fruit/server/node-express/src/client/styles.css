@@ -281,10 +281,16 @@ p {
   box-shadow: 0 24px 80px rgb(15 23 42 / 0.28);
 }
 
-.sticker-modal img {
+.sticker-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
+  gap: 10px;
+  justify-items: center;
+}
+
+.sticker-preview-grid img {
   width: min(180px, 56vw);
   aspect-ratio: 1;
-  justify-self: center;
 }
 
 .sticker-modal h2 {
@@ -293,17 +299,32 @@ p {
 }
 
 .sticker-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.sticker-modal-actions .primary {
+  min-width: 120px;
+  padding: 0 16px;
+}
+
+.sticker-downloads {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 10px;
+  gap: 8px;
 }
 
 .sticker-download {
-  display: inline-grid;
-  place-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
   min-height: 44px;
   padding: 0 14px;
   text-decoration: none;
+}
+
+.sticker-download small {
+  color: var(--muted);
 }
 
 @media (max-width: 760px) {
@@ -338,6 +359,10 @@ p {
   }
 
   .sticker-modal-actions {
-    grid-template-columns: 1fr;
+    justify-content: stretch;
+  }
+
+  .sticker-modal-actions button {
+    width: 100%;
   }
 }

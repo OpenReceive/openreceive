@@ -110,7 +110,7 @@ test("createCheckout mints once and replays the live invoice for the same amount
   const { wallet, openreceive } = await createHarness();
   const request = {
     order_id: "order-1",
-    amount: { msats: 200000 },
+    amount: { btc: { currency: "BTC", value: "0.000002" } },
     memo: "Fruit sticker",
     expires_in_seconds: 600,
   };
@@ -134,12 +134,12 @@ test("createCheckout creates a new checkout and supersedes the open checkout for
 
   const first = await openreceive.createCheckout({
     order_id: "order-conflict",
-    amount: { msats: 200000 },
+    amount: { btc: { currency: "BTC", value: "0.000002" } },
   });
 
   const second = await openreceive.createCheckout({
     order_id: "order-conflict",
-    amount: { msats: 300000 },
+    amount: { btc: { currency: "BTC", value: "0.000003" } },
   });
   assert.notEqual(second.checkout_id, first.checkout_id);
   assert.equal(second.status, "open");
@@ -161,7 +161,7 @@ test("createCheckout creates a new checkout after expiry when called again", asy
   const { wallet, store, openreceive, setNow } = await createHarness();
   const first = await openreceive.createCheckout({
     order_id: "order-retry",
-    amount: { sats: "200" },
+    amount: { btc: { currency: "SATS", value: "200" } },
     memo: "Fruit sticker",
     expires_in_seconds: 600,
   });
@@ -177,13 +177,13 @@ test("createCheckout creates a new checkout after expiry when called again", asy
 
   const retried = await openreceive.createCheckout({
     order_id: "order-retry",
-    amount: { sats: "200" },
+    amount: { btc: { currency: "SATS", value: "200" } },
     memo: "Fruit sticker",
     expires_in_seconds: 600,
   });
   const replayed = await openreceive.createCheckout({
     order_id: "order-retry",
-    amount: { sats: "200" },
+    amount: { btc: { currency: "SATS", value: "200" } },
     memo: "Fruit sticker",
     expires_in_seconds: 600,
   });
@@ -200,7 +200,9 @@ test("createCheckout creates a new checkout after expiry when called again", asy
   assert.equal(storedRetry.operation, "invoice.create");
   assert.equal(storedRetry.metadata.order_id, "order-retry");
   assert.equal(storedRetry.metadata.checkout_id, retried.checkout_id);
-  assert.deepEqual(storedRetry.metadata.amount_spec, { sats: "200" });
+  assert.deepEqual(storedRetry.metadata.amount_spec, {
+    btc: { currency: "SATS", value: "200" },
+  });
   assert.equal(storedRetry.metadata.expires_in_seconds, 600);
 });
 
@@ -251,13 +253,13 @@ test("expiry retry re-quotes fiat orders and reuses fixed bitcoin amounts", asyn
   const fixedHarness = await createHarness();
   const fixedFirst = await fixedHarness.openreceive.createCheckout({
     order_id: "order-fixed-retry",
-    amount: { sats: 7000 },
+    amount: { btc: { currency: "SATS", value: "7000" } },
     expires_in_seconds: 600,
   });
   fixedHarness.setNow(1700);
   const fixedRenewed = await fixedHarness.openreceive.createCheckout({
     order_id: "order-fixed-retry",
-    amount: { sats: 7000 },
+    amount: { btc: { currency: "SATS", value: "7000" } },
     expires_in_seconds: 600,
   });
   assert.equal(fixedRenewed.amount_msats, fixedFirst.amount_msats);
@@ -289,7 +291,7 @@ test("getOrder settles a late payment on any invoice in any checkout history", a
   });
   const first = await openreceive.createCheckout({
     order_id: "order-late-paid",
-    amount: { msats: 200000 },
+    amount: { btc: { currency: "BTC", value: "0.000002" } },
     expires_in_seconds: 600,
     metadata: {
       cart_id: "cart-123",
@@ -298,7 +300,7 @@ test("getOrder settles a late payment on any invoice in any checkout history", a
   });
   const superseding = await openreceive.createCheckout({
     order_id: "order-late-paid",
-    amount: { msats: 300000 },
+    amount: { btc: { currency: "BTC", value: "0.000003" } },
     expires_in_seconds: 600,
   });
 
@@ -333,7 +335,7 @@ test("createCheckout is a no-op for paid orders", async () => {
   const { wallet, openreceive } = await createHarness();
   const created = await openreceive.createCheckout({
     order_id: "order-paid-noop",
-    amount: { msats: 200000 },
+    amount: { btc: { currency: "BTC", value: "0.000002" } },
   });
   wallet.settlePaymentHash(created.active.payment_hash, 1200);
   await openreceive.getOrder({ order_id: "order-paid-noop" });
@@ -341,7 +343,7 @@ test("createCheckout is a no-op for paid orders", async () => {
   const before = wallet.makeInvoiceCalls;
   const paid = await openreceive.createCheckout({
     order_id: "order-paid-noop",
-    amount: { msats: 300000 },
+    amount: { btc: { currency: "BTC", value: "0.000003" } },
   });
   assert.equal(paid.checkout_id, created.checkout_id);
   assert.equal(paid.status, "paid");
@@ -401,7 +403,7 @@ test("diagnostic events and logger entries are sanitized and non-blocking", asyn
     () =>
       openreceive.createCheckout({
         order_id: "order-diagnostics",
-        amount: { msats: 200000 },
+        amount: { btc: { currency: "BTC", value: "0.000002" } },
         memo: "Fruit sticker",
       }),
     /token=abc123/,

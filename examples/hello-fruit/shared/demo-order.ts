@@ -146,7 +146,12 @@ function createOpenReceiveCheckoutAmount(
       }
     };
   }
-  return { sats: total_amount.value };
+  return {
+    btc: {
+      currency: "SATS",
+      value: total_amount.value
+    }
+  };
 }
 
 export function createHelloFruitOrderStatus(input: {

@@ -550,12 +550,10 @@ export type CheckoutStatusRefresh = (order_id: string) => Promise<CheckoutSnapsh
 export type RequestCheckoutAmount =
   | {
       readonly btc: {
-        readonly currency: "BTC";
+        readonly currency: "BTC" | "SAT" | "SATS";
         readonly value: string;
       };
     }
-  | { readonly sats: number | string }
-  | { readonly msats: number | string }
   | {
       readonly fiat: {
         readonly currency: string;
@@ -2870,13 +2868,11 @@ export async function requestCheckout(
 
   const amountSourceCount = [
     "btc" in options.amount,
-    "sats" in options.amount,
-    "msats" in options.amount,
     "fiat" in options.amount,
   ].filter(Boolean).length;
   if (amountSourceCount !== 1) {
     throw new Error(
-      "OpenReceive checkout creation requires exactly one of amount.btc, amount.sats, amount.msats, or amount.fiat.",
+      "OpenReceive checkout creation requires exactly one of amount.btc or amount.fiat.",
     );
   }
   if (options.memo !== undefined && options.memo.length > 500) {

@@ -191,7 +191,7 @@ test("Hello Fruit React demos delegate checkout state to UI packages", () => {
     "utf8",
   );
 
-  for (const [name, source] of [
+  for (const [, source] of [
     ["node-express", nodeClient],
     ["nextjs-fullstack", nextClient],
   ]) {
@@ -323,14 +323,19 @@ test("Hello Fruit Node demo creates orders from cart before rendering checkout",
   assert.match(source, /async function createOrder\(\)/);
   assert.match(source, /fetch\("\/create_order"/);
   assert.match(source, /statusUrl="\/order_status"/);
+  assert.match(source, /setPurchasedItems\(body\.order\.items\)/);
+  assert.match(source, /formatHelloFruitFiat\(item\.line_amount\)/);
+  assert.match(source, /purchasedItems\.map/);
   assert.match(source, /setCart\(\{\}\)/);
   assert.match(source, /setOrder\(null\)/);
   assert.match(source, /setCheckout\(null\)/);
+  assert.match(source, /setPurchasedItems\(\[\]\)/);
   assert.match(source, /setFruitId\(initialFruitId\)/);
   assert.match(source, /checkout === null \? \(/);
   assert.match(source, /onStartOver=\{startOver\}/);
   assert.match(source, />\s*Start over\s*</);
   assert.match(source, /crypto\?\.randomUUID/);
+  assert.doesNotMatch(source, /purchasedFruit/);
 });
 
 test("Hello Fruit Next.js demo resets expired checkout from Start over", () => {

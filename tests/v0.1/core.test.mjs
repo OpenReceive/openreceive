@@ -999,7 +999,7 @@ test("browser request checkout helper posts SDK-shaped data to an app-owned URL"
       requestCheckout({
         checkoutUrl: "/create_order",
         order_id: "",
-        amount: { msats: 200000 },
+        amount: { btc: { currency: "BTC", value: "0.000002" } },
         fetch: async () => ({
           ok: true,
           json: async () => ({}),
@@ -1012,7 +1012,7 @@ test("browser request checkout helper posts SDK-shaped data to an app-owned URL"
       requestCheckout({
         checkoutUrl: "/create_order",
         order_id: "bad-nwc",
-        amount: { sats: 200 },
+        amount: { btc: { currency: "BTC", value: "0.000002" } },
         memo: `nostr+walletconnect://${"a".repeat(64)}?secret=${"b".repeat(64)}`,
         fetch: async () => ({
           ok: true,
@@ -1026,7 +1026,7 @@ test("browser request checkout helper posts SDK-shaped data to an app-owned URL"
       requestCheckout({
         checkoutUrl: "/create_order",
         order_id: "server-error",
-        amount: { sats: 200 },
+        amount: { btc: { currency: "BTC", value: "0.000002" } },
         fetch: async () => ({
           ok: false,
           json: async () => ({

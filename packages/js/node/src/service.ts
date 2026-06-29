@@ -32,7 +32,7 @@ import {
   type StoredRecord,
 } from "@openreceive/core";
 import { formatOpenReceiveMissingNwcMessage } from "@openreceive/core";
-import { createNwcReceiveClient } from "./alby-nwc.ts";
+import { createNwcReceiveClient, type NwcEndpointLogger } from "./alby-nwc.ts";
 import { OpenReceiveConfigError, type OpenReceiveConfigErrorCode } from "./config-error.ts";
 import { assertOpenReceiveStoreConfiguration } from "./storage-guard.ts";
 import { resolveOpenReceiveStore, type ResolveOpenReceiveStoreOptions } from "./store-uri.ts";
@@ -113,8 +113,6 @@ export interface OpenReceiveCreateCheckoutRequest {
 
 export type OpenReceiveCreateCheckoutAmount =
   | { readonly btc: OpenReceiveBitcoinAmount }
-  | { readonly sats: number | string }
-  | { readonly msats: number | string }
   | { readonly fiat: OpenReceiveFiatAmount };
 
 export interface OpenReceiveGetOrderRequest {
@@ -258,7 +256,7 @@ interface OpenReceiveServiceContext {
 
 interface ResolvedCreateAmount {
   amount_msats: number;
-  amount_source: "amount" | "amount_sats" | "amount_msats" | "fiat";
+  amount_source: "amount" | "fiat";
   fiat_quote: OpenReceiveRateQuote | null;
 }
 
@@ -626,16 +624,6 @@ function readStoredAmountSpec(row: InvoiceStorageRow): OpenReceiveCreateCheckout
       btc: value.btc as unknown as OpenReceiveBitcoinAmount,
     };
   }
-  if (value.sats !== undefined) {
-    return {
-      sats: value.sats as number | string,
-    };
-  }
-  if (value.msats !== undefined) {
-    return {
-      msats: value.msats as number | string,
-    };
-  }
   if (isRecord(value.fiat)) {
     const currency = optionalString(value.fiat.currency);
     const fiatValue = optionalString(value.fiat.value);
@@ -654,8 +642,6 @@ function readStoredAmountSpec(row: InvoiceStorageRow): OpenReceiveCreateCheckout
 function createAmountRequest(amount: OpenReceiveCreateCheckoutAmount): Record<string, unknown> {
   return {
     ...("btc" in amount ? { amount: amount.btc } : {}),
-    ...("sats" in amount ? { amount_sats: amount.sats } : {}),
-    ...("msats" in amount ? { amount_msats: amount.msats } : {}),
     ...("fiat" in amount ? { fiat: amount.fiat } : {}),
   };
 }
@@ -676,12 +662,6 @@ function createCheckoutRequestHashBody(input: OpenReceiveCreateCheckoutRequest):
 function amountKeyFromCreateAmount(amount: OpenReceiveCreateCheckoutAmount): string {
   if ("fiat" in amount) {
     return `fiat:${amount.fiat.currency}:${amount.fiat.value}`;
-  }
-  if ("sats" in amount) {
-    return `sats:${String(amount.sats)}`;
-  }
-  if ("msats" in amount) {
-    return `msats:${String(amount.msats)}`;
   }
   return `btc:${amount.btc.currency}:${amount.btc.value}`;
 }
@@ -908,6 +888,7 @@ function createConfiguredClient(options: CreateOpenReceiveOptions): OpenReceiveR
   try {
     return createNwcReceiveClient({
       connectionString: readOpenReceiveNwc(options.nwc),
+      logger: createNwcEndpointLogger(options),
     });
   } catch (error) {
     if (error instanceof OpenReceiveConfigError) throw error;
@@ -1215,14 +1196,24 @@ function emitLog(
   message: string,
   fields: Record<string, unknown> = {},
 ): void {
-  if (options.onEvent === undefined && options.logger === undefined) return;
-
-  const sanitized = sanitizeOpenReceiveEvent({
+  emitOpenReceiveEvent(options, {
     level,
     event,
     message,
     ...fields,
   });
+}
+
+function emitOpenReceiveEvent(
+  options: {
+    readonly onEvent?: OpenReceiveEventHandler;
+    readonly logger?: OpenReceiveLogger;
+  },
+  event: OpenReceiveEvent,
+): void {
+  if (options.onEvent === undefined && options.logger === undefined) return;
+
+  const sanitized = sanitizeOpenReceiveEvent(event);
 
   try {
     options.onEvent?.(sanitized);
@@ -1235,6 +1226,17 @@ function emitLog(
   } catch {
     // Logging must never change payment, settlement, or settlement-action behavior.
   }
+}
+
+// Bridges the receive client's NWC endpoint hits (get_info / make_invoice /
+// list_transactions) into the service's onEvent + logger sinks, reusing the
+// same sanitization so secrets never reach a log line. Returns undefined when
+// no sink is configured so the client can skip building entries entirely.
+function createNwcEndpointLogger(
+  options: CreateOpenReceiveOptions,
+): NwcEndpointLogger | undefined {
+  if (options.onEvent === undefined && options.logger === undefined) return undefined;
+  return (entry) => emitOpenReceiveEvent(options, entry);
 }
 
 function sanitizeOpenReceiveEvent(entry: OpenReceiveEvent): OpenReceiveEvent {
@@ -1283,16 +1285,14 @@ async function resolveCreateAmount(input: {
 }): Promise<ResolvedCreateAmount> {
   const { body } = input;
   const hasAmount = body.amount !== undefined;
-  const hasAmountSats = body.amount_sats !== undefined;
-  const hasAmountMsats = body.amount_msats !== undefined;
   const hasFiat = body.fiat !== undefined;
-  const sourceCount = [hasAmount, hasAmountSats, hasAmountMsats, hasFiat].filter(Boolean).length;
+  const sourceCount = [hasAmount, hasFiat].filter(Boolean).length;
 
   if (sourceCount !== 1) {
     throw serviceError(
       400,
       "INVALID_REQUEST",
-      "Create checkout request requires exactly one of amount.btc, amount.sats, amount.msats, or amount.fiat.",
+      "Create checkout request requires exactly one of amount.btc or amount.fiat.",
     );
   }
 
@@ -1308,38 +1308,6 @@ async function resolveCreateAmount(input: {
       if (error instanceof OpenReceiveServiceError) throw error;
       throw mapPriceError(error);
     }
-  }
-
-  if (hasAmountSats) {
-    const amountSats = optionalSafeInteger(body.amount_sats);
-    if (amountSats === undefined) {
-      throw serviceError(400, "INVALID_REQUEST", "amount.sats must be a safe integer.");
-    }
-    const amountMsats = amountSats * 1000;
-    if (!Number.isSafeInteger(amountMsats)) {
-      throw serviceError(
-        400,
-        "INVALID_REQUEST",
-        "amount.sats is outside the safe integer boundary.",
-      );
-    }
-    return {
-      amount_msats: amountMsats,
-      amount_source: "amount_sats",
-      fiat_quote: null,
-    };
-  }
-
-  if (hasAmountMsats) {
-    const amountMsats = optionalSafeInteger(body.amount_msats);
-    if (amountMsats === undefined) {
-      throw serviceError(400, "INVALID_REQUEST", "amount.msats must be a safe integer.");
-    }
-    return {
-      amount_msats: amountMsats,
-      amount_source: "amount_msats",
-      fiat_quote: null,
-    };
   }
 
   try {

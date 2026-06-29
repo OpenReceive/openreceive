@@ -51,11 +51,30 @@ export type AlbyNwcClientFactory = (
   connection: ParsedNwcConnection
 ) => Promise<AlbyNwcCompatibleClient> | AlbyNwcCompatibleClient;
 
+export type NwcEndpointLogLevel = "debug" | "info" | "warn" | "error";
+
+export interface NwcEndpointLogEntry {
+  readonly level: NwcEndpointLogLevel;
+  readonly event: string;
+  readonly message: string;
+  readonly [key: string]: unknown;
+}
+
+/**
+ * Server-side hook invoked every time the receive client hits an NWC wallet
+ * endpoint (get_info / make_invoice / list_transactions). Structurally
+ * compatible with the node service's OpenReceiveLogger so the same sink can be
+ * reused. The hook must never throw — failures are swallowed so diagnostics can
+ * never change receive-checkout behavior.
+ */
+export type NwcEndpointLogger = (entry: NwcEndpointLogEntry) => void;
+
 export interface AlbyNwcReceiveClientOptions {
   connectionString: string;
   client?: AlbyNwcCompatibleClient;
   clientFactory?: AlbyNwcClientFactory;
   requirePreflight?: boolean;
+  logger?: NwcEndpointLogger;
 }
 
 export type WalletPreflightErrorCode =
@@ -95,6 +114,7 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
   #clientFactory?: AlbyNwcClientFactory;
   #preflightSummary?: WalletCapabilitySummary;
   #requirePreflight: boolean;
+  #logger?: NwcEndpointLogger;
 
   constructor(options: AlbyNwcReceiveClientOptions) {
     this.#connectionString = options.connectionString;
@@ -102,10 +122,35 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
     this.#client = options.client;
     this.#clientFactory = options.clientFactory;
     this.#requirePreflight = options.requirePreflight ?? true;
+    this.#logger = options.logger;
+  }
+
+  #log(
+    level: NwcEndpointLogLevel,
+    event: string,
+    message: string,
+    fields: Record<string, unknown> = {}
+  ): void {
+    if (this.#logger === undefined) return;
+    try {
+      this.#logger({
+        level,
+        event,
+        message,
+        wallet_pubkey: this.connection.walletPubkey,
+        ...fields
+      });
+    } catch {
+      // Endpoint logging must never change receive-checkout behavior.
+    }
   }
 
   async preflight(): Promise<WalletCapabilitySummary> {
     const client = await this.getClient();
+    this.#log("info", "nwc.get_info.requested", "Calling NWC wallet get_info.", {
+      method: "get_info"
+    });
+    const startedAt = Date.now();
     let rawInfo: unknown;
     try {
       rawInfo =
@@ -113,9 +158,23 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
           ? await client.getWalletServiceInfo()
           : await callRequiredMethod(client, ["getInfo", "get_info"], {});
     } catch (error) {
-      throw normalizeNwcWalletError(error);
+      const normalized = normalizeNwcWalletError(error);
+      this.#log("error", "nwc.get_info.failed", "NWC wallet get_info failed.", {
+        method: "get_info",
+        duration_ms: Date.now() - startedAt,
+        error_code: normalized.code,
+        error_message: normalized.message
+      });
+      throw normalized;
     }
     const summary = summarizeWalletCapabilities(this.connection, rawInfo);
+
+    this.#log("info", "nwc.get_info.completed", "NWC wallet get_info completed.", {
+      method: "get_info",
+      duration_ms: Date.now() - startedAt,
+      methods: summary.methods,
+      receive_checkout_ready: summary.receiveCheckoutReady
+    });
 
     this.#preflightSummary = summary;
 
@@ -150,6 +209,15 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
     await this.ensurePreflight();
     validateMakeInvoiceRequest(request);
 
+    this.#log("info", "nwc.make_invoice.requested", "Calling NWC wallet make_invoice.", {
+      method: "make_invoice",
+      amount_msats: Number(request.amount_msats),
+      ...(request.expiry === undefined ? {} : { expiry: request.expiry }),
+      has_description: request.description !== undefined,
+      has_description_hash: request.description_hash !== undefined
+    });
+    const startedAt = Date.now();
+
     let rawResult: unknown;
     try {
       rawResult = await callRequiredMethod(
@@ -158,15 +226,40 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
         toNip47MakeInvoiceParams(request)
       );
     } catch (error) {
-      throw normalizeNwcWalletError(error);
+      const normalized = normalizeNwcWalletError(error);
+      this.#log("error", "nwc.make_invoice.failed", "NWC wallet make_invoice failed.", {
+        method: "make_invoice",
+        duration_ms: Date.now() - startedAt,
+        error_code: normalized.code,
+        error_message: normalized.message
+      });
+      throw normalized;
     }
 
-    return normalizeMakeInvoiceResult(rawResult);
+    const result = normalizeMakeInvoiceResult(rawResult);
+    this.#log("info", "nwc.make_invoice.completed", "NWC wallet make_invoice completed.", {
+      method: "make_invoice",
+      duration_ms: Date.now() - startedAt,
+      payment_hash: result.payment_hash,
+      amount_msats: Number(result.amount_msats)
+    });
+    return result;
   }
 
   async listTransactions(request: ListTransactionsRequest): Promise<ListTransactionsResult> {
     await this.ensurePreflight();
     validateListTransactionsRequest(request);
+
+    this.#log("info", "nwc.list_transactions.requested", "Calling NWC wallet list_transactions.", {
+      method: "list_transactions",
+      ...(request.from === undefined ? {} : { from: request.from }),
+      ...(request.until === undefined ? {} : { until: request.until }),
+      ...(request.limit === undefined ? {} : { limit: request.limit }),
+      ...(request.offset === undefined ? {} : { offset: request.offset }),
+      ...(request.unpaid === undefined ? {} : { unpaid: request.unpaid }),
+      ...(request.type === undefined ? {} : { type: request.type })
+    });
+    const startedAt = Date.now();
 
     let rawResult: unknown;
     try {
@@ -176,10 +269,23 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
         toNip47ListTransactionsParams(request)
       );
     } catch (error) {
-      throw normalizeNwcWalletError(error);
+      const normalized = normalizeNwcWalletError(error);
+      this.#log("error", "nwc.list_transactions.failed", "NWC wallet list_transactions failed.", {
+        method: "list_transactions",
+        duration_ms: Date.now() - startedAt,
+        error_code: normalized.code,
+        error_message: normalized.message
+      });
+      throw normalized;
     }
 
-    return normalizeListTransactionsResult(rawResult);
+    const result = normalizeListTransactionsResult(rawResult);
+    this.#log("info", "nwc.list_transactions.completed", "NWC wallet list_transactions completed.", {
+      method: "list_transactions",
+      duration_ms: Date.now() - startedAt,
+      transaction_count: result.transactions.length
+    });
+    return result;
   }
 
   async close(): Promise<void> {

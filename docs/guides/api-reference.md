@@ -36,8 +36,13 @@ const checkout = await openreceive.createCheckout({
   },
   memo: `Order ${order.number}`,
   expires_in_seconds: 600,
+  // Optional app-owned JSON. OpenReceive stores and returns it to your
+  // settlement hook without interpreting non-reserved keys.
   metadata: {
-    cart_version: order.cart_version
+    app_context: {
+      fulfillment: "digital",
+      internal_order_number: order.number
+    }
   }
 });
 ```
@@ -46,11 +51,10 @@ Use exactly one amount source:
 
 - `{ fiat: { currency: "USD", value: "0.10" } }`
 - `{ btc: { currency: "BTC", value: "0.005" } }`
-- `{ sats: "7000" }`
-- `{ msats: "7000000" }`
 
 `fiat.currency` must be one of the server's configured `priceCurrencies`.
-Direct BTC, satoshi, and millisatoshi amounts do not use price feeds.
+Direct bitcoin amounts do not use price feeds. If your product is denominated
+in sats, use the `btc` amount object with `currency: "SATS"`.
 
 Calling `createCheckout` again with the same `order_id` and same amount returns
 the current checkout while its invoice is unexpired. After expiry, a user-driven

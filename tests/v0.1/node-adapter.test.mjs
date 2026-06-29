@@ -282,6 +282,86 @@ test("receive client throws normalized wallet errors from make_invoice", async (
   );
 });
 
+test("receive client logs every NWC endpoint hit through the logger hook", async () => {
+  const fake = new FakeAlbyClient();
+  const entries = [];
+  const client = createNwcReceiveClient({
+    connectionString: NWC_URI,
+    client: fake,
+    logger: (entry) => entries.push(entry)
+  });
+
+  await client.makeInvoice({ amount_msats: 200000n, description: "Fruit sticker" });
+  await client.listTransactions({ limit: 5, type: "incoming" });
+
+  const events = entries.map((entry) => entry.event);
+  // make_invoice triggers a lazy preflight (get_info) before the call itself.
+  assert.deepEqual(events, [
+    "nwc.get_info.requested",
+    "nwc.get_info.completed",
+    "nwc.make_invoice.requested",
+    "nwc.make_invoice.completed",
+    "nwc.list_transactions.requested",
+    "nwc.list_transactions.completed"
+  ]);
+
+  for (const entry of entries) {
+    // Every endpoint log carries the wallet pubkey but never the NWC secret.
+    assert.equal(entry.wallet_pubkey, "1".repeat(64));
+    assert.equal(JSON.stringify(entry).includes("2".repeat(64)), false);
+  }
+
+  const makeInvoiceRequested = entries.find((e) => e.event === "nwc.make_invoice.requested");
+  assert.equal(makeInvoiceRequested.level, "info");
+  assert.equal(makeInvoiceRequested.method, "make_invoice");
+  assert.equal(makeInvoiceRequested.amount_msats, 200000);
+
+  const makeInvoiceCompleted = entries.find((e) => e.event === "nwc.make_invoice.completed");
+  assert.equal(makeInvoiceCompleted.payment_hash, "a".repeat(64));
+  assert.equal(typeof makeInvoiceCompleted.duration_ms, "number");
+
+  const listCompleted = entries.find((e) => e.event === "nwc.list_transactions.completed");
+  assert.equal(listCompleted.transaction_count, 1);
+});
+
+test("receive client emits a failure log when an NWC endpoint throws", async () => {
+  class ErroringMakeInvoiceClient extends FakeAlbyClient {
+    async makeInvoice(params) {
+      this.makeInvoiceParams.push(params);
+      throw { error: { code: "payment_failed", message: "Wallet could not create this invoice" } };
+    }
+  }
+
+  const entries = [];
+  const client = createNwcReceiveClient({
+    connectionString: NWC_URI,
+    client: new ErroringMakeInvoiceClient(),
+    logger: (entry) => entries.push(entry)
+  });
+
+  await assert.rejects(() => client.makeInvoice({ amount_msats: 200000n }));
+
+  const failure = entries.find((e) => e.event === "nwc.make_invoice.failed");
+  assert.equal(failure.level, "error");
+  assert.equal(failure.error_code, "PAYMENT_FAILED");
+  assert.equal(failure.error_message, "Wallet could not create this invoice");
+  assert.equal(typeof failure.duration_ms, "number");
+});
+
+test("receive client logging never throws even when the hook does", async () => {
+  const client = createNwcReceiveClient({
+    connectionString: NWC_URI,
+    client: new FakeAlbyClient(),
+    logger: () => {
+      throw new Error("logger blew up");
+    }
+  });
+
+  // A misbehaving logger must not change make_invoice behavior.
+  const invoice = await client.makeInvoice({ amount_msats: 200000n });
+  assert.equal(invoice.payment_hash, "a".repeat(64));
+});
+
 test("receive client rejects metadata above the NWC payload guard", async () => {
   const client = createNwcReceiveClient({
     connectionString: NWC_URI,
@@ -532,7 +612,7 @@ test("createOpenReceive builds service methods from a client and store", async (
 
   const body = await openreceive.createCheckout({
     order_id: "create-openreceive-order",
-    amount: { msats: 200000 },
+    amount: { btc: { currency: "BTC", value: "0.000002" } },
     memo: "Factory invoice"
   });
 

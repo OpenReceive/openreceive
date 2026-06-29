@@ -17,6 +17,9 @@ export {
   summarizeWalletCapabilities
 } from "./alby-nwc.ts";
 export type {
+  NwcEndpointLogEntry,
+  NwcEndpointLogLevel,
+  NwcEndpointLogger,
   WalletPreflightErrorCode
 } from "./alby-nwc.ts";
 export {

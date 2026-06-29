@@ -27,7 +27,6 @@ and enforces:
 ## Consequences
 
 - Do not use binary floating point for fiat math.
-- Create checkout requests contain exactly one amount source: `amount_msats` or
-  `fiat`.
+- Create checkout requests contain exactly one amount source: `btc` or `fiat`.
 - A fiat quote is locked when the checkout mints an invoice and stored with the
   invoice.

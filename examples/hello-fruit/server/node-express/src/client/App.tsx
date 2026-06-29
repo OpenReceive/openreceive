@@ -30,7 +30,6 @@ import "./styles.css";
 const logOpenReceive = createHelloFruitBrowserLogger("node-express");
 const fruits = fruitsData.fruits;
 const currencyOptions = readHelloFruitCheckoutCurrencies();
-type Fruit = (typeof fruits)[number];
 type CheckoutFramework = "react" | "vue" | "svelte" | "angular";
 const initialFruitId = fruits[1]?.id ?? fruits[0]?.id ?? "";
 const checkoutFrameworks: readonly {
@@ -46,16 +45,22 @@ const checkoutFrameworks: readonly {
 interface DemoOrder {
   readonly uuid: string;
   readonly status: "pending_payment" | "paid";
-  readonly items: readonly {
-    readonly product_id: string;
-    readonly name: string;
-    readonly sticker: string;
-    readonly quantity: number;
-  }[];
-  readonly total_amount: {
-    readonly currency: string;
-    readonly value: string;
-  };
+  readonly items: readonly DemoOrderItem[];
+  readonly total_amount: DemoMoneyAmount;
+}
+
+interface DemoOrderItem {
+  readonly product_id: string;
+  readonly name: string;
+  readonly sticker: string;
+  readonly quantity: number;
+  readonly unit_amount: DemoMoneyAmount;
+  readonly line_amount: DemoMoneyAmount;
+}
+
+interface DemoMoneyAmount {
+  readonly currency: string;
+  readonly value: string;
 }
 
 interface CreateOrderResponse {
@@ -70,7 +75,9 @@ function App(): React.ReactElement {
   const [cart, setCart] = useState<Record<string, number>>({});
   const [order, setOrder] = useState<DemoOrder | null>(null);
   const [checkout, setCheckout] = useState<OpenReceiveCheckout | null>(null);
-  const [purchasedFruit, setPurchasedFruit] = useState<Fruit | null>(null);
+  const [purchasedItems, setPurchasedItems] = useState<readonly DemoOrderItem[]>(
+    []
+  );
   const [stickerModalOpen, setStickerModalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
@@ -86,6 +93,10 @@ function App(): React.ReactElement {
     .map((fruit) => ({ fruit, quantity: cart[fruit.id] ?? 0 }))
     .filter((item) => item.quantity > 0);
   const cartQuantity = cartItems.reduce((total, item) => total + item.quantity, 0);
+  const purchasedStickerQuantity = purchasedItems.reduce(
+    (total, item) => total + item.quantity,
+    0
+  );
 
   const onSettled = useCallback(() => {
     if (checkout !== null && completedCheckoutRef.current !== checkout.order_id) {
@@ -145,7 +156,7 @@ function App(): React.ReactElement {
 
       setOrder(body.order);
       setCheckout(body.checkout);
-      setPurchasedFruit(cartItems[0]?.fruit ?? null);
+      setPurchasedItems(body.order.items);
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -158,7 +169,7 @@ function App(): React.ReactElement {
     setCart({});
     setOrder(null);
     setCheckout(null);
-    setPurchasedFruit(null);
+    setPurchasedItems([]);
     setStickerModalOpen(false);
     setCreating(false);
     setError("");
@@ -242,7 +253,7 @@ function App(): React.ReactElement {
                 {cartItems.map((item) => (
                   <div className="cart-row" key={item.fruit.id}>
                     <span>{item.fruit.name}</span>
-                    <span>x{item.quantity}</span>
+                    <span>{formatHelloFruitFiat(item.fruit.fiat)} x{item.quantity}</span>
                     <button
                       className="secondary"
                       onClick={() => removeFruitFromCart(item.fruit.id)}
@@ -276,7 +287,11 @@ function App(): React.ReactElement {
                   <div className="cart-row" key={item.product_id}>
                     <span>{item.name}</span>
                     <span>x{item.quantity}</span>
-                    <span>{order.status === "paid" ? "Paid" : "Pending"}</span>
+                    <span>
+                      {`${formatHelloFruitFiat(item.line_amount)} (${
+                        order.status === "paid" ? "Paid" : "Pending"
+                      })`}
+                    </span>
                   </div>
                 ))}
               </section>
@@ -306,7 +321,7 @@ function App(): React.ReactElement {
 
         {error === "" ? null : <p className="error">{error}</p>}
       </section>
-      {purchasedFruit === null || !stickerModalOpen ? null : (
+      {purchasedItems.length === 0 || !stickerModalOpen ? null : (
         <div className="sticker-modal-backdrop">
           <section
             aria-labelledby="sticker-modal-title"
@@ -314,19 +329,41 @@ function App(): React.ReactElement {
             className="sticker-modal"
             role="dialog"
           >
-            <img src={`/${purchasedFruit.sticker}`} alt="" />
-            <h2 id="sticker-modal-title">You just got a sticker</h2>
-            <p>{purchasedFruit.name} is ready.</p>
+            <div className="sticker-preview-grid">
+              {purchasedItems.map((item) => (
+                <img
+                  key={item.product_id}
+                  src={`/${item.sticker}`}
+                  alt=""
+                />
+              ))}
+            </div>
+            <h2 id="sticker-modal-title">
+              {purchasedStickerQuantity === 1
+                ? "You just got a sticker"
+                : "Your stickers are ready"}
+            </h2>
+            <p>
+              {purchasedStickerQuantity === 1
+                ? `${purchasedItems[0]?.name ?? "Sticker"} is ready.`
+                : `${purchasedStickerQuantity} stickers are ready.`}
+            </p>
+            <div className="sticker-downloads">
+              {purchasedItems.map((item) => (
+                <a
+                  className="secondary sticker-download"
+                  download={`${item.product_id}-sticker.svg`}
+                  href={`/${item.sticker}`}
+                  key={item.product_id}
+                >
+                  <span>Download {item.name}</span>
+                  <small>x{item.quantity}</small>
+                </a>
+              ))}
+            </div>
             <div className="sticker-modal-actions">
-              <a
-                className="primary sticker-download"
-                download={`${purchasedFruit.id}-sticker.svg`}
-                href={`/${purchasedFruit.sticker}`}
-              >
-                Download sticker
-              </a>
               <button
-                className="secondary"
+                className="primary"
                 onClick={() => setStickerModalOpen(false)}
                 type="button"
               >

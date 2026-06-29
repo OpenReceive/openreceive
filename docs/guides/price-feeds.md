@@ -131,9 +131,11 @@ browser can localize display however it wants, but the server must pass the
 actual order currency in `fiat.currency`.
 
 `BTC`, `SAT`, and `SATS` are not fiat price-feed currencies. For
-Bitcoin-denominated products, pass `amount: { btc: { currency: "BTC", value: "0.005" } }`
-or `amount: { sats: "7000" }` to `createCheckout`. Those
-amounts convert directly to `amount_msats` and never call a price provider.
+Bitcoin-denominated products, pass one bitcoin amount object such as
+`amount: { btc: { currency: "BTC", value: "0.005" } }` or
+`amount: { btc: { currency: "SATS", value: "7000" } }` to `createCheckout`.
+Those amounts convert directly to `amount_msats` and never call a price
+provider.
 
 ## Quote Rules
 
