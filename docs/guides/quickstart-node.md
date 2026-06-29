@@ -6,15 +6,25 @@ checkouts and refreshes their settlement state.
 
 ## Install And Configure
 
+Install the packages:
+
 ```sh
 npm install @openreceive/node @openreceive/react
+```
+
+Configure OpenReceive with environment variables. Put these in your `.env` file
+(or your host's secret manager) — never in client code:
+
+```sh
+# .env
 OPENRECEIVE_NWC=nostr+walletconnect://...
 ```
 
 `OPENRECEIVE_NWC` must be a receive-only NWC code and must stay server-side.
-For production, set a durable store:
+For production, also set a durable store:
 
 ```sh
+# .env
 OPENRECEIVE_STORE=postgres://user:pass@host:5432/appdb
 OPENRECEIVE_NAMESPACE=my_app
 ```
@@ -28,60 +38,49 @@ If `OPENRECEIVE_STORE` is omitted locally, OpenReceive uses local SQLite under
 import { createOpenReceive } from "@openreceive/node";
 
 const openreceive = await createOpenReceive({
-  onPaid: async ({ order_id, checkout_id, amount_msats, metadata }) => {
-    await fulfillPaidCheckout({
-      order_id,
-      checkout_id,
-      amount_msats,
-      metadata
-    });
-  }
+  // `fulfillPaidCheckout` is your own function. OpenReceive calls it when a
+  // checkout settles; you ship the product, grant access, etc.
+  onPaid: async ({ order_id, checkout_id, metadata }) => {
+    await fulfillPaidCheckout({ order_id, checkout_id, metadata });
+  },
 });
 ```
 
-Create one checkout from your own order route:
+From a controller in your app, create one checkout for an order you already
+own. Replace `myOrder` with however your app loads its order:
 
 ```ts
-export async function createCheckoutForCart(user, cart) {
-  const order = await createOrderFromCart(user, cart);
-  const checkout = await openreceive.createCheckout({
-    order_id: order.uuid,
-    amount: {
-      fiat: {
-        currency: order.total_amount.currency,
-        value: order.total_amount.value
-      }
-    },
-    memo: `Order ${order.number}`,
-    expires_in_seconds: 600,
-    metadata: {
-      cart_version: order.cart_version
-    }
-  });
-
-  return { order, checkout };
-}
+// In your own controller / route handler.
+const checkout = await openreceive.createCheckout({
+  order_id: myOrder.id,
+  amount: {
+    fiat: { currency: "USD", value: myOrder.total },
+  },
+  memo: `Order ${myOrder.number}`,
+  // Optional: any data you want returned to you on settlement.
+  metadata: { cart_version: myOrder.cart_version },
+});
 ```
 
-Add an app-owned status endpoint. It returns the order from `getOrder`; the
-frontend component reads `display_checkout`.
+Invoices always expire after 10 minutes; OpenReceive renews them automatically
+while the order stays open, so you never manage expiry yourself.
+
+Add a status endpoint in a controller your app owns. It returns the order from
+`getOrder`; the frontend component reads `display_checkout`.
 
 ```ts
+// In your own controller / route handler.
 export async function orderStatus(req, res) {
   const order = await openreceive.getOrder({
-    order_id: req.body.order_id
+    order_id: req.body.order_id,
   });
 
   res.json({
     ...order,
-    order_status: order.paid ? "paid" : "pending_payment"
+    order_status: order.paid ? "paid" : "pending_payment",
   });
 }
 ```
-
-For Bitcoin-denominated products, skip price feeds and pass a direct amount:
-`{ amount: { btc: { currency: "BTC", value: "0.005" } } }`,
-`{ amount: { sats: "7000" } }`, or `{ amount: { msats: "7000000" } }`.
 
 ## React
 
