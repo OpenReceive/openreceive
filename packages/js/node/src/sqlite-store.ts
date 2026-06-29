@@ -2,6 +2,7 @@ import {
   canonicalJson,
   idempotencyScopeKey,
   isTerminalInvoiceStorageRow,
+  readInvoiceStorageOrderId,
   validateInvoiceStorageRow,
   type MetaRow,
   type MaybePromise,
@@ -54,10 +55,14 @@ CREATE TABLE IF NOT EXISTS openreceive_invoices (
   payment_hash TEXT NOT NULL UNIQUE,
   bolt11 TEXT NOT NULL UNIQUE,
   idempotency_scope TEXT NOT NULL UNIQUE,
+  order_id TEXT NOT NULL,
   terminal INTEGER NOT NULL DEFAULT 0,
   expires_at INTEGER NOT NULL,
   data TEXT NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS openreceive_invoices_order_idx
+  ON openreceive_invoices (order_id);
 
 CREATE INDEX IF NOT EXISTS openreceive_invoices_open_idx
   ON openreceive_invoices (terminal, expires_at);
@@ -142,8 +147,8 @@ export class OpenReceiveSqliteKvStore implements OpenReceiveInvoiceKvStore {
     validateStoredRecord(record);
     const result = await this.#client.execute(
       `INSERT OR IGNORE INTO ${this.#tableName} (
-        invoice_id, rev, payment_hash, bolt11, idempotency_scope, terminal, expires_at, data
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        invoice_id, rev, payment_hash, bolt11, idempotency_scope, order_id, terminal, expires_at, data
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING data`,
       [
         record.row.invoice_id,
@@ -151,6 +156,7 @@ export class OpenReceiveSqliteKvStore implements OpenReceiveInvoiceKvStore {
         record.row.payment_hash,
         record.row.invoice,
         idempotencyScopeKey(record.row),
+        readInvoiceStorageOrderId(record.row),
         isTerminalInvoiceStorageRow(record.row) ? 1 : 0,
         record.row.expires_at,
         serializeStoredRecord(record)
@@ -178,6 +184,7 @@ export class OpenReceiveSqliteKvStore implements OpenReceiveInvoiceKvStore {
            payment_hash = ?,
            bolt11 = ?,
            idempotency_scope = ?,
+           order_id = ?,
            terminal = ?,
            expires_at = ?,
            data = ?
@@ -188,6 +195,7 @@ export class OpenReceiveSqliteKvStore implements OpenReceiveInvoiceKvStore {
         record.row.payment_hash,
         record.row.invoice,
         idempotencyScopeKey(record.row),
+        readInvoiceStorageOrderId(record.row),
         isTerminalInvoiceStorageRow(record.row) ? 1 : 0,
         record.row.expires_at,
         serializeStoredRecord(record),
@@ -239,6 +247,21 @@ export class OpenReceiveSqliteKvStore implements OpenReceiveInvoiceKvStore {
       `SELECT data FROM ${this.#tableName} WHERE idempotency_scope = ? LIMIT 1`,
       [scopeKey]
     );
+  }
+
+  async listByOrderId(orderId: string): Promise<StoredRecord[]> {
+    assertOrderId(orderId);
+    const result = await this.#client.execute(
+      `SELECT data FROM ${this.#tableName} WHERE order_id = ?`,
+      [orderId]
+    );
+    return result.rows
+      .map((row) => parseStoredRecordField(row.data))
+      .sort((left, right) =>
+        left.row.created_at === right.row.created_at
+          ? right.row.invoice_id.localeCompare(left.row.invoice_id)
+          : right.row.created_at - left.row.created_at
+      );
   }
 
   async listOpen(input: { now: number; limit: number }): Promise<StoredRecord[]> {
@@ -394,10 +417,14 @@ CREATE TABLE IF NOT EXISTS ${this.#tableName} (
   payment_hash TEXT NOT NULL UNIQUE,
   bolt11 TEXT NOT NULL UNIQUE,
   idempotency_scope TEXT NOT NULL UNIQUE,
+  order_id TEXT NOT NULL,
   terminal INTEGER NOT NULL DEFAULT 0,
   expires_at INTEGER NOT NULL,
   data TEXT NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS ${unquoted(this.#tableName)}_order_idx
+  ON ${this.#tableName} (order_id);
 
 CREATE INDEX IF NOT EXISTS ${unquoted(this.#tableName)}_open_idx
   ON ${this.#tableName} (terminal, expires_at);

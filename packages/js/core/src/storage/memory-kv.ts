@@ -3,6 +3,7 @@ import {
   cloneInvoiceStorageRow,
   idempotencyScopeKey,
   isTerminalInvoiceStorageRow,
+  readInvoiceStorageOrderId,
   validateInvoiceStorageRow
 } from "./index.ts";
 import {
@@ -20,6 +21,7 @@ export class InMemoryInvoiceKvStore implements OpenReceiveInvoiceKvStore {
   #byPaymentHash = new Map<string, string>();
   #byBolt11Invoice = new Map<string, string>();
   #byIdempotencyScope = new Map<string, string>();
+  #byOrderId = new Map<string, Set<string>>();
   #meta = new Map<string, MetaRow>();
 
   putIfAbsent(record: StoredRecord): OpenReceivePutIfAbsentResult {
@@ -53,6 +55,7 @@ export class InMemoryInvoiceKvStore implements OpenReceiveInvoiceKvStore {
     this.#byPaymentHash.set(stored.row.payment_hash, stored.row.invoice_id);
     this.#byBolt11Invoice.set(stored.row.invoice, stored.row.invoice_id);
     this.#byIdempotencyScope.set(scopeKey, stored.row.invoice_id);
+    this.#addOrderIndex(stored.row);
 
     return {
       status: "created",
@@ -89,6 +92,7 @@ export class InMemoryInvoiceKvStore implements OpenReceiveInvoiceKvStore {
     this.#byPaymentHash.set(stored.row.payment_hash, stored.row.invoice_id);
     this.#byBolt11Invoice.set(stored.row.invoice, stored.row.invoice_id);
     this.#byIdempotencyScope.set(idempotencyScopeKey(stored.row), stored.row.invoice_id);
+    this.#addOrderIndex(stored.row);
 
     return {
       status: "ok",
@@ -113,6 +117,21 @@ export class InMemoryInvoiceKvStore implements OpenReceiveInvoiceKvStore {
   getByIdempotencyScope(scopeKey: string): StoredRecord | undefined {
     const invoiceId = this.#byIdempotencyScope.get(scopeKey);
     return invoiceId === undefined ? undefined : this.#cloneByInvoiceId(invoiceId);
+  }
+
+  listByOrderId(orderId: string): StoredRecord[] {
+    assertOrderId(orderId);
+    const invoiceIds = this.#byOrderId.get(orderId);
+    if (invoiceIds === undefined) return [];
+    return [...invoiceIds]
+      .map((invoiceId) => this.#byInvoiceId.get(invoiceId))
+      .filter((record): record is StoredRecord => record !== undefined)
+      .sort((left, right) =>
+        left.row.created_at === right.row.created_at
+          ? right.row.invoice_id.localeCompare(left.row.invoice_id)
+          : right.row.created_at - left.row.created_at
+      )
+      .map((record) => cloneStoredRecord(record));
   }
 
   listOpen(input: { now: number; limit: number }): StoredRecord[] {
@@ -190,10 +209,17 @@ export class InMemoryInvoiceKvStore implements OpenReceiveInvoiceKvStore {
     };
   }
 
-  #removeIndexes(row: { payment_hash: string; invoice: string } & Parameters<typeof idempotencyScopeKey>[0]): void {
+  #removeIndexes(row: StoredRecord["row"]): void {
     this.#byPaymentHash.delete(row.payment_hash);
     this.#byBolt11Invoice.delete(row.invoice);
     this.#byIdempotencyScope.delete(idempotencyScopeKey(row));
+    const orderId = readInvoiceStorageOrderId(row);
+    const invoiceIds = this.#byOrderId.get(orderId);
+    if (invoiceIds === undefined) return;
+    invoiceIds.delete(row.invoice_id);
+    if (invoiceIds.size === 0) {
+      this.#byOrderId.delete(orderId);
+    }
   }
 
   #assertReplacementIndexesAvailable(row: StoredRecord["row"], invoiceId: string): void {
@@ -217,6 +243,13 @@ export class InMemoryInvoiceKvStore implements OpenReceiveInvoiceKvStore {
       );
     }
   }
+
+  #addOrderIndex(row: StoredRecord["row"]): void {
+    const orderId = readInvoiceStorageOrderId(row);
+    const invoiceIds = this.#byOrderId.get(orderId) ?? new Set<string>();
+    invoiceIds.add(row.invoice_id);
+    this.#byOrderId.set(orderId, invoiceIds);
+  }
 }
 
 function assertListOpenInput(input: { now: number; limit: number }): void {
@@ -231,5 +264,11 @@ function assertListOpenInput(input: { now: number; limit: number }): void {
 function assertMetaKey(key: string): void {
   if (typeof key !== "string" || key.length === 0) {
     throw new TypeError("meta key must be a non-empty string");
+  }
+}
+
+function assertOrderId(orderId: string): void {
+  if (typeof orderId !== "string" || orderId.length === 0) {
+    throw new TypeError("orderId must be a non-empty string");
   }
 }
