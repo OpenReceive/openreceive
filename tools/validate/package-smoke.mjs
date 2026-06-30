@@ -134,6 +134,12 @@ assert(
     typeof browserInternal.openReceiveCheckoutElementStyles === "string",
   "@openreceive/browser/internal: framework adapter internals must be importable"
 );
+assert(
+  browserInternal.openReceivePaymentIconUrls.card.includes("/dist/assets/icons/card.svg") &&
+    browserInternal.openReceivePaymentIconUrls.btc.includes("/dist/assets/icons/btc.svg") &&
+    !browserInternal.openReceivePaymentIconUrls.card.includes("/browser/assets/icons/"),
+  "@openreceive/browser/internal: method icon URLs must resolve to packaged dist assets"
+);
 
 const coreRoot = await import("@openreceive/core");
 const scopedContracts = await import("@openreceive/core/contracts");

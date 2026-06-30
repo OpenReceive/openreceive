@@ -366,8 +366,9 @@ export async function createOpenReceive(
       );
     },
     async sweepPendingInvoices() {
-      return await runOpenReceiveOperation(context, async () =>
-        await sweepPendingInvoicesOnce(reconcileOptions(context)),
+      return await runOpenReceiveOperation(
+        context,
+        async () => await sweepPendingInvoicesOnce(reconcileOptions(context)),
       );
     },
     async listRates() {
@@ -461,7 +462,7 @@ async function getOrder(
   emitLog(context.options, "debug", "order.status.result", "Order status refresh completed.", {
     order_id: orderId,
     invoice_count: fresh.length,
-    reason: result.reason,
+    ...(result.reason === undefined ? {} : { reason: result.reason }),
     wallet_scan_performed: result.swept,
     transactions_checked: result.page_count ?? 0,
   });

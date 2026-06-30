@@ -155,8 +155,8 @@ export function usdToSats(usdValue: string, usdBtcPrice: string): bigint {
       503,
     );
   }
-  const numerator = usd.units * BigInt(price.scale) * 100_000_000n;
-  const denominator = price.units * BigInt(usd.scale);
+  const numerator = usd.units * 10n ** BigInt(price.scale) * 100_000_000n;
+  const denominator = price.units * 10n ** BigInt(usd.scale);
   return ceilDiv(numerator, denominator);
 }
 
@@ -178,9 +178,9 @@ export function convertUsdToFiat(
   const scale = 2;
   const outputScale = 10n ** BigInt(scale);
   const numerator =
-    usd.units * targetPrice.units * BigInt(usdPrice.scale) * outputScale;
+    usd.units * targetPrice.units * 10n ** BigInt(usdPrice.scale) * outputScale;
   const denominator =
-    BigInt(usd.scale) * BigInt(targetPrice.scale) * usdPrice.units;
+    10n ** BigInt(usd.scale) * 10n ** BigInt(targetPrice.scale) * usdPrice.units;
   return formatDecimal(ceilDiv(numerator, denominator), scale);
 }
 

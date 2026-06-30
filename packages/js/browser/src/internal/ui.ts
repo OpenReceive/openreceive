@@ -202,21 +202,46 @@ export type OpenReceivePaymentIconId =
   | "xmr"
   | "xrp";
 
-const bankIcon = new URL("../assets/icons/bank.svg", import.meta.url).href;
-const bnbIcon = new URL("../assets/icons/bnb.svg", import.meta.url).href;
-const btcIcon = new URL("../assets/icons/btc.svg", import.meta.url).href;
-const cardIcon = new URL("../assets/icons/card.svg", import.meta.url).href;
-const cryptoIcon = new URL("../assets/icons/crypto.svg", import.meta.url).href;
-const dogeIcon = new URL("../assets/icons/doge.svg", import.meta.url).href;
-const ethIcon = new URL("../assets/icons/eth.svg", import.meta.url).href;
-const lightningIcon = new URL("../assets/icons/lightning.svg", import.meta.url).href;
-const ltcIcon = new URL("../assets/icons/ltc.svg", import.meta.url).href;
-const solIcon = new URL("../assets/icons/sol.svg", import.meta.url).href;
-const trxIcon = new URL("../assets/icons/trx.svg", import.meta.url).href;
-const usdcIcon = new URL("../assets/icons/usdc.svg", import.meta.url).href;
-const usdtIcon = new URL("../assets/icons/usdt.svg", import.meta.url).href;
-const xmrIcon = new URL("../assets/icons/xmr.svg", import.meta.url).href;
-const xrpIcon = new URL("../assets/icons/xrp.svg", import.meta.url).href;
+declare const __filename: string | undefined;
+
+const moduleUrl =
+  typeof import.meta.url === "string" && import.meta.url.length > 0
+    ? import.meta.url
+    : fileUrlFromPath(__filename as string);
+
+function fileUrlFromPath(path: string): string {
+  const normalized = path.replace(/\\/g, "/");
+  const absolute = normalized.startsWith("/") ? normalized : `/${normalized}`;
+  return `file://${encodeURI(absolute).replace(/#/g, "%23").replace(/\?/g, "%3F")}`;
+}
+
+function assetUrl(path: string): string {
+  return new URL(path, moduleUrl).href;
+}
+
+const paymentIconRoot = moduleUrl.includes("/src/internal/")
+  ? "../assets/icons/"
+  : "./assets/icons/";
+
+function paymentIconUrl(file: string): string {
+  return assetUrl(`${paymentIconRoot}${file}`);
+}
+
+const bankIcon = paymentIconUrl("bank.svg");
+const bnbIcon = paymentIconUrl("bnb.svg");
+const btcIcon = paymentIconUrl("btc.svg");
+const cardIcon = paymentIconUrl("card.svg");
+const cryptoIcon = paymentIconUrl("crypto.svg");
+const dogeIcon = paymentIconUrl("doge.svg");
+const ethIcon = paymentIconUrl("eth.svg");
+const lightningIcon = paymentIconUrl("lightning.svg");
+const ltcIcon = paymentIconUrl("ltc.svg");
+const solIcon = paymentIconUrl("sol.svg");
+const trxIcon = paymentIconUrl("trx.svg");
+const usdcIcon = paymentIconUrl("usdc.svg");
+const usdtIcon = paymentIconUrl("usdt.svg");
+const xmrIcon = paymentIconUrl("xmr.svg");
+const xrpIcon = paymentIconUrl("xrp.svg");
 
 export const openReceivePaymentIconUrls: Readonly<Record<OpenReceivePaymentIconId, string>> = {
   bank: bankIcon,
