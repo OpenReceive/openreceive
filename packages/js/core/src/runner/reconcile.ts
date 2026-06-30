@@ -110,7 +110,12 @@ interface TransactionScanCursor {
 }
 
 const DEFAULT_ACTION_LEASE_TTL_SECONDS = 60;
-const DEFAULT_TRANSACTION_SCAN_INTERVAL_SECONDS = 2;
+const MIN_TRANSACTION_SCAN_INTERVAL_SECONDS = 2;
+const EARLY_INVOICE_LOOKUP_DELAY_SECONDS = 2;
+const MID_INVOICE_LOOKUP_DELAY_SECONDS = 6;
+const LATE_INVOICE_LOOKUP_DELAY_SECONDS = 12;
+const EARLY_INVOICE_LOOKUP_WINDOW_SECONDS = 2 * 60;
+const MID_INVOICE_LOOKUP_WINDOW_SECONDS = 5 * 60;
 const PAGE_LIMIT = 25;
 const MAX_TRANSACTION_SCAN_PAGE_LIMIT = 50;
 const SCAN_OVERLAP_SECONDS = 60;
@@ -204,7 +209,7 @@ export async function sweepPendingInvoicesOnce(
     };
   }
 
-  if (!await claimTransactionScanGate(input, now)) {
+  if (!await claimTransactionScanGate(input, now, open)) {
     return {
       swept: false,
       reason: "gate_busy"
@@ -474,12 +479,10 @@ async function findTransactionRecord(
 
 async function claimTransactionScanGate(
   options: OpenReceiveReconcileOptions,
-  now: number
+  now: number,
+  open: readonly StoredRecord[]
 ): Promise<boolean> {
-  const interval = normalizePositiveInteger(
-    options.transactionScanIntervalSeconds ?? DEFAULT_TRANSACTION_SCAN_INTERVAL_SECONDS,
-    "transactionScanIntervalSeconds"
-  );
+  const interval = transactionScanGateIntervalSeconds(options, open, now);
 
   for (let attempt = 0; attempt < 6; attempt += 1) {
     const current = await options.store.getMeta(TRANSACTION_SCAN_GATE_META_KEY);
@@ -497,6 +500,41 @@ async function claimTransactionScanGate(
   }
 
   return false;
+}
+
+function transactionScanGateIntervalSeconds(
+  options: OpenReceiveReconcileOptions,
+  open: readonly StoredRecord[],
+  now: number
+): number {
+  const configuredFloor =
+    options.transactionScanIntervalSeconds === undefined
+      ? MIN_TRANSACTION_SCAN_INTERVAL_SECONDS
+      : normalizePositiveInteger(
+          options.transactionScanIntervalSeconds,
+          "transactionScanIntervalSeconds"
+        );
+  const invoiceDelay = Math.min(
+    ...open.map((record) =>
+      nextInvoiceLookupDelaySeconds(Math.max(0, now - record.row.created_at))
+    )
+  );
+
+  return Math.max(
+    MIN_TRANSACTION_SCAN_INTERVAL_SECONDS,
+    configuredFloor,
+    invoiceDelay
+  );
+}
+
+function nextInvoiceLookupDelaySeconds(elapsedSeconds: number): number {
+  if (elapsedSeconds < EARLY_INVOICE_LOOKUP_WINDOW_SECONDS) {
+    return EARLY_INVOICE_LOOKUP_DELAY_SECONDS;
+  }
+  if (elapsedSeconds < MID_INVOICE_LOOKUP_WINDOW_SECONDS) {
+    return MID_INVOICE_LOOKUP_DELAY_SECONDS;
+  }
+  return LATE_INVOICE_LOOKUP_DELAY_SECONDS;
 }
 
 function transactionScanPageLimit(configured: number | undefined): number {

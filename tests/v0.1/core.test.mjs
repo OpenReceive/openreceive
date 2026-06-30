@@ -351,7 +351,7 @@ test("sweepPendingInvoicesOnce walks a global temporal cursor and catches bottom
   });
   assert.deepEqual(paid, []);
 
-  now = 2002;
+  now = 2012;
   const second = await sweepPendingInvoicesOnce({
     store,
     client,
@@ -364,8 +364,8 @@ test("sweepPendingInvoicesOnce walks a global temporal cursor and catches bottom
   assert.equal(second.page_count, 6);
   assert.equal(requests.at(-1).until, 1005);
   assert.deepEqual(JSON.parse((await store.getMeta(TRANSACTION_SCAN_CURSOR_KEY)).value), {
-    until_cursor: 2002,
-    last_swept_at: 2002,
+    until_cursor: 2012,
+    last_swept_at: 2012,
   });
   assert.deepEqual(paid.sort(), ["or_inv_page_0", "or_inv_page_2", "or_inv_page_4"]);
 
@@ -604,6 +604,159 @@ test("sweepPendingInvoicesOnce durable gate prevents request storms", async () =
   assert.equal(calls, 1);
   assert.equal([first.swept, second.swept].filter(Boolean).length, 1);
   assert.equal([first.reason, second.reason].includes("gate_busy"), true);
+});
+
+test("sweepPendingInvoicesOnce backs off to six seconds when all open invoices are older than two minutes", async () => {
+  const store = new InMemoryInvoiceKvStore();
+  await store.putIfAbsent(
+    seedRecord({
+      invoice_id: "or_inv_mid_gate_1",
+      idempotency_key: "order-mid-gate-1",
+      payment_hash: "1".repeat(64),
+      invoice: "lnbc-mid-gate-1",
+      created_at: 1000,
+      expires_at: 3000,
+    }),
+  );
+  await store.putIfAbsent(
+    seedRecord({
+      invoice_id: "or_inv_mid_gate_2",
+      idempotency_key: "order-mid-gate-2",
+      payment_hash: "2".repeat(64),
+      invoice: "lnbc-mid-gate-2",
+      created_at: 1010,
+      expires_at: 3000,
+    }),
+  );
+
+  let now = 1131;
+  let calls = 0;
+  const client = {
+    async preflight() {
+      throw new Error("preflight is not needed by status refresh");
+    },
+    async makeInvoice() {
+      throw new Error("makeInvoice is not needed by status refresh");
+    },
+    async listTransactions() {
+      calls += 1;
+      return { transactions: [] };
+    },
+  };
+
+  const first = await sweepPendingInvoicesOnce({ store, client, clock: () => now });
+  now = 1136;
+  const second = await sweepPendingInvoicesOnce({ store, client, clock: () => now });
+  now = 1137;
+  const third = await sweepPendingInvoicesOnce({ store, client, clock: () => now });
+
+  assert.equal(first.swept, true);
+  assert.equal(second.swept, false);
+  assert.equal(second.reason, "gate_busy");
+  assert.equal(third.swept, true);
+  assert.equal(calls, 2);
+});
+
+test("sweepPendingInvoicesOnce keeps two second cadence while any open invoice is young", async () => {
+  const store = new InMemoryInvoiceKvStore();
+  await store.putIfAbsent(
+    seedRecord({
+      invoice_id: "or_inv_mixed_gate_old",
+      idempotency_key: "order-mixed-gate-old",
+      payment_hash: "3".repeat(64),
+      invoice: "lnbc-mixed-gate-old",
+      created_at: 1000,
+      expires_at: 3000,
+    }),
+  );
+  await store.putIfAbsent(
+    seedRecord({
+      invoice_id: "or_inv_mixed_gate_young",
+      idempotency_key: "order-mixed-gate-young",
+      payment_hash: "4".repeat(64),
+      invoice: "lnbc-mixed-gate-young",
+      created_at: 1417,
+      expires_at: 3000,
+    }),
+  );
+
+  let now = 1420;
+  let calls = 0;
+  const client = {
+    async preflight() {
+      throw new Error("preflight is not needed by status refresh");
+    },
+    async makeInvoice() {
+      throw new Error("makeInvoice is not needed by status refresh");
+    },
+    async listTransactions() {
+      calls += 1;
+      return { transactions: [] };
+    },
+  };
+
+  const first = await sweepPendingInvoicesOnce({ store, client, clock: () => now });
+  now = 1421;
+  const second = await sweepPendingInvoicesOnce({ store, client, clock: () => now });
+  now = 1422;
+  const third = await sweepPendingInvoicesOnce({ store, client, clock: () => now });
+
+  assert.equal(first.swept, true);
+  assert.equal(second.swept, false);
+  assert.equal(second.reason, "gate_busy");
+  assert.equal(third.swept, true);
+  assert.equal(calls, 2);
+});
+
+test("sweepPendingInvoicesOnce backs off to twelve seconds when all open invoices are older than five minutes", async () => {
+  const store = new InMemoryInvoiceKvStore();
+  await store.putIfAbsent(
+    seedRecord({
+      invoice_id: "or_inv_late_gate_1",
+      idempotency_key: "order-late-gate-1",
+      payment_hash: "5".repeat(64),
+      invoice: "lnbc-late-gate-1",
+      created_at: 1000,
+      expires_at: 3000,
+    }),
+  );
+  await store.putIfAbsent(
+    seedRecord({
+      invoice_id: "or_inv_late_gate_2",
+      idempotency_key: "order-late-gate-2",
+      payment_hash: "6".repeat(64),
+      invoice: "lnbc-late-gate-2",
+      created_at: 1010,
+      expires_at: 3000,
+    }),
+  );
+
+  let now = 1320;
+  let calls = 0;
+  const client = {
+    async preflight() {
+      throw new Error("preflight is not needed by status refresh");
+    },
+    async makeInvoice() {
+      throw new Error("makeInvoice is not needed by status refresh");
+    },
+    async listTransactions() {
+      calls += 1;
+      return { transactions: [] };
+    },
+  };
+
+  const first = await sweepPendingInvoicesOnce({ store, client, clock: () => now });
+  now = 1331;
+  const second = await sweepPendingInvoicesOnce({ store, client, clock: () => now });
+  now = 1332;
+  const third = await sweepPendingInvoicesOnce({ store, client, clock: () => now });
+
+  assert.equal(first.swept, true);
+  assert.equal(second.swept, false);
+  assert.equal(second.reason, "gate_busy");
+  assert.equal(third.swept, true);
+  assert.equal(calls, 2);
 });
 
 test("sweepPendingInvoicesOnce caps list_transactions page size at fifty", async () => {
