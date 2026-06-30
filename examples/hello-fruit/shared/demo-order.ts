@@ -8,6 +8,13 @@ import {
   normalizeHelloFruitCurrency,
   readHelloFruitCheckoutCurrencies,
 } from "./demo-currencies.ts";
+import {
+  convertHelloFruitUsdAmount,
+  HelloFruitPricingError,
+  multiplyHelloFruitAmount,
+  sumHelloFruitAmounts,
+  type HelloFruitBtcFiatRates,
+} from "./demo-pricing.ts";
 
 export interface HelloFruitCartItemInput {
   readonly id?: unknown;
@@ -52,10 +59,6 @@ export interface HelloFruitCreateOrderResult {
     readonly memo: string;
     readonly expiresInSeconds: number;
   };
-}
-
-export interface HelloFruitBtcFiatRates {
-  readonly bitcoin: Readonly<Record<string, string>>;
 }
 
 export interface HelloFruitOrderStatus {
@@ -205,141 +208,40 @@ function createHelloFruitOrderItems(
     if (product === undefined) {
       throw new HelloFruitDemoOrderError(`Unknown product: ${productId}.`);
     }
-    const unit_amount = convertHelloFruitUsdAmount(product.fiat, currency, rates);
+    const unit_amount = withHelloFruitPricing(() =>
+      convertHelloFruitUsdAmount(product.fiat, currency, rates),
+    );
     return {
       product_id: product.id,
       name: product.name,
       sticker: product.sticker,
       quantity,
       unit_amount,
-      line_amount: multiplyAmount(unit_amount, quantity),
+      line_amount: withHelloFruitPricing(() => multiplyHelloFruitAmount(unit_amount, quantity)),
     };
   });
 }
 
 function totalHelloFruitAmount(items: readonly HelloFruitOrderItem[]): HelloFruitFiatAmount {
-  const first = items[0];
-  if (first === undefined) {
+  if (items.length === 0) {
     throw new HelloFruitDemoOrderError("Cart must include at least one item.");
   }
-  const currency = first.unit_amount.currency;
-  let scale = 0;
-  let totalUnits = 0n;
+  return withHelloFruitPricing(() =>
+    sumHelloFruitAmounts(items.map((item) => item.line_amount)),
+  );
+}
 
-  for (const item of items) {
-    if (item.unit_amount.currency !== currency) {
-      throw new HelloFruitDemoOrderError("Cart items must use one currency.");
+function withHelloFruitPricing<T>(compute: () => T): T {
+  try {
+    return compute();
+  } catch (error) {
+    if (error instanceof HelloFruitPricingError) {
+      throw new HelloFruitDemoOrderError(error.message, error.status);
     }
-    const decimal = parseDecimal(item.line_amount.value);
-    if (decimal.scale > scale) {
-      totalUnits *= 10n ** BigInt(decimal.scale - scale);
-      scale = decimal.scale;
-    }
-    totalUnits += decimal.units * 10n ** BigInt(scale - decimal.scale);
+    throw error;
   }
-
-  return {
-    currency,
-    value: formatDecimal(totalUnits, scale),
-  };
 }
 
-function multiplyAmount(fiat: HelloFruitFiatAmount, quantity: number): HelloFruitFiatAmount {
-  const decimal = parseDecimal(fiat.value);
-  return {
-    currency: fiat.currency,
-    value: formatDecimal(decimal.units * BigInt(quantity), decimal.scale),
-  };
-}
-
-function convertHelloFruitUsdAmount(
-  amount: HelloFruitFiatAmount,
-  currency: string,
-  rates: HelloFruitBtcFiatRates | undefined,
-): HelloFruitFiatAmount {
-  if (amount.currency !== "USD") {
-    throw new HelloFruitDemoOrderError(
-      "Hello Fruit catalog prices must use USD as the base currency.",
-    );
-  }
-  if (currency === "USD") return amount;
-
-  const usdRate = requiredRate(rates, "USD");
-  if (currency === "BTC" || currency === "SATS") {
-    const sats = usdToSats(amount.value, usdRate);
-    return {
-      currency,
-      value: currency === "BTC" ? formatBtcFromSats(sats) : sats.toString(),
-    };
-  }
-
-  const targetRate = requiredRate(rates, currency);
-  return {
-    currency,
-    value: convertUsdToFiat(amount.value, usdRate, targetRate),
-  };
-}
-
-function parseDecimal(value: string): { readonly units: bigint; readonly scale: number } {
-  if (!/^\d+(?:\.\d+)?$/.test(value)) {
-    throw new HelloFruitDemoOrderError("Fiat prices must be positive decimal strings.");
-  }
-  const [integer, fraction = ""] = value.split(".");
-  return {
-    units: BigInt(`${integer}${fraction}`),
-    scale: fraction.length,
-  };
-}
-
-function requiredRate(rates: HelloFruitBtcFiatRates | undefined, currency: string): string {
-  const rate = rates?.bitcoin[currency.toLowerCase()];
-  if (rate === undefined) {
-    throw new HelloFruitDemoOrderError(`Missing BTC/${currency} price feed rate.`, 503);
-  }
-  return rate;
-}
-
-function usdToSats(usdValue: string, usdBtcPrice: string): bigint {
-  const usd = parseDecimal(usdValue);
-  const price = parseDecimal(usdBtcPrice);
-  if (price.units <= 0n) {
-    throw new HelloFruitDemoOrderError("BTC/USD price feed rate must be greater than zero.", 503);
-  }
-  const numerator = usd.units * BigInt(price.scale) * 100_000_000n;
-  const denominator = price.units * BigInt(usd.scale);
-  return ceilDiv(numerator, denominator);
-}
-
-function convertUsdToFiat(usdValue: string, usdBtcPrice: string, targetBtcPrice: string): string {
-  const usd = parseDecimal(usdValue);
-  const usdPrice = parseDecimal(usdBtcPrice);
-  const targetPrice = parseDecimal(targetBtcPrice);
-  if (usdPrice.units <= 0n || targetPrice.units <= 0n) {
-    throw new HelloFruitDemoOrderError("BTC fiat price feed rates must be greater than zero.", 503);
-  }
-
-  const scale = 2;
-  const outputScale = 10n ** BigInt(scale);
-  const numerator = usd.units * targetPrice.units * BigInt(usdPrice.scale) * outputScale;
-  const denominator = BigInt(usd.scale) * BigInt(targetPrice.scale) * usdPrice.units;
-  return formatDecimal(ceilDiv(numerator, denominator), scale);
-}
-
-function formatBtcFromSats(sats: bigint): string {
-  return formatDecimal(sats, 8).replace(/0+$/, "").replace(/\.$/, "");
-}
-
-function ceilDiv(numerator: bigint, denominator: bigint): bigint {
-  return (numerator + denominator - 1n) / denominator;
-}
-
-function formatDecimal(units: bigint, scale: number): string {
-  if (scale === 0) return units.toString();
-  const raw = units.toString().padStart(scale + 1, "0");
-  const integer = raw.slice(0, -scale);
-  const fraction = raw.slice(-scale);
-  return `${integer}.${fraction}`;
-}
 
 function asCartItem(value: unknown): HelloFruitCartItemInput {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {

@@ -6,7 +6,8 @@ import {
 import {
   helloFruitOrderRateCurrencies,
   normalizeHelloFruitCurrency,
-  readHelloFruitCheckoutCurrencies
+  readHelloFruitCheckoutCurrencies,
+  readHelloFruitPriceFeedCurrencies
 } from "./demo-currencies.ts";
 
 export async function readHelloFruitOrderRates(input: {
@@ -24,3 +25,21 @@ export async function readHelloFruitOrderRates(input: {
   });
   return rates.rates;
 }
+
+/**
+ * Loads BTC/fiat exchange rates for every checkout currency so a front end can
+ * convert the USD catalog prices for display. This is demo-only presentation
+ * glue; OpenReceive exposes the rate-fetching function, the demo wires the route.
+ */
+export async function readHelloFruitDisplayRates(input: {
+  readonly priceProviders: readonly OpenReceiveSourcedPriceProvider[];
+  readonly priceCurrencies?: readonly string[];
+}): Promise<OpenReceiveBtcFiatRateMap> {
+  const priceCurrencies = input.priceCurrencies ?? readHelloFruitPriceFeedCurrencies();
+  const rates = await getBtcFiatRatesWithFallback({
+    currencies: priceCurrencies,
+    providers: input.priceProviders
+  });
+  return rates.rates;
+}
+

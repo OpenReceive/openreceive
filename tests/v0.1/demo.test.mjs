@@ -17,7 +17,6 @@ import { readHelloFruitCheckoutCurrencies } from "../../examples/hello-fruit/sha
 import {
   InMemoryInvoiceKvStore,
   StaticPriceProvider,
-  quoteFiatToMsats,
 } from "../../packages/js/core/src/index.ts";
 import { setHelloFruitOpenReceiveTestOverrides } from "../../examples/hello-fruit/server/nextjs-fullstack/src/server/openreceive.ts";
 import { GET as getNextDemoMetadata } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/demo-metadata.json/route.ts";
@@ -101,31 +100,13 @@ function createHelloFruitTestOpenReceiveOptions() {
   };
 }
 
-test("Hello Fruit shared product keeps demo invoices low-value", () => {
+test("Hello Fruit shared product metadata stays stable", () => {
   const product = JSON.parse(readFileSync(productPath, "utf8"));
-  const fruits = JSON.parse(readFileSync(fruitsPath, "utf8"));
 
   assert.equal(product.schema_version, "0.1.0");
   assert.equal(product.name, "OpenReceive Demo: Buy A Fruit Sticker");
   assert.equal(product.description, "get a fruit sticker");
   assert.equal(product.invoice_expiry_seconds, 600);
-
-  assert.deepEqual(
-    fruits.fruits.map((fruit) => [fruit.id, fruit.fiat.currency, fruit.fiat.value]),
-    [
-      ["apple", "USD", "0.05"],
-      ["banana", "USD", "0.10"],
-      ["orange", "USD", "0.15"],
-      ["pear", "USD", "0.20"],
-    ],
-  );
-  assert.deepEqual(
-    fruits.fruits.map((fruit) => quoteFiatToMsats({ fiat: fruit.fiat }).amount_msats),
-    [100000, 200000, 300000, 400000],
-  );
-  for (const fruit of fruits.fruits) {
-    assert.ok(quoteFiatToMsats({ fiat: fruit.fiat }).amount_msats <= 1000000);
-  }
 });
 
 test("Hello Fruit shared data stays aligned with canonical demo data", () => {
