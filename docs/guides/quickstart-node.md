@@ -21,6 +21,13 @@ OPENRECEIVE_NWC=nostr+walletconnect://...
 ```
 
 `OPENRECEIVE_NWC` must be a receive-only NWC code and must stay server-side.
+OpenReceive uses USD fiat quotes by default. To allow more fiat checkout
+currencies, set:
+
+```sh
+OPENRECEIVE_PRICE_CURRENCIES=USD,EUR,GBP
+```
+
 For production, also set a durable store:
 
 ```sh

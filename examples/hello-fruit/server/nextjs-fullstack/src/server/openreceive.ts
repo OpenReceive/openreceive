@@ -6,7 +6,6 @@ import type {
 import {
   OpenReceiveServiceError,
   createOpenReceive,
-  createOpenReceivePriceFeed,
 } from "@openreceive/node";
 import { createHelloFruitDemoMetadata } from "../../../../shared/demo-metadata.ts";
 import { readRequiredHelloFruitNwcConnectionString } from "../../../../shared/demo-nwc.ts";
@@ -18,15 +17,11 @@ import {
   createHelloFruitCreateOrderResult,
   createHelloFruitOrderStatus,
 } from "../../../../shared/demo-order.ts";
-import { createHelloFruitOpenReceiveKvStore } from "../../../../shared/openreceive-store.ts";
 import {
   readHelloFruitCheckoutCurrencies,
   readHelloFruitPriceFeedCurrencies,
 } from "../../../../shared/demo-currencies.ts";
-import {
-  readHelloFruitDisplayRates,
-  readHelloFruitOrderRates,
-} from "../../../../shared/demo-price-feeds.ts";
+import { readHelloFruitOrderRates } from "../../../../shared/demo-price-feeds.ts";
 import product from "../../../../shared/product.json" with { type: "json" };
 
 const DEMO_ID = "nextjs-fullstack";
@@ -42,7 +37,6 @@ interface NextDemoOpenReceiveCache {
 
 interface HelloFruitOpenReceiveBundle {
   readonly openreceive: Awaited<ReturnType<typeof createOpenReceive>>;
-  readonly priceProviders: readonly OpenReceiveSourcedPriceProvider[];
   readonly supportedCurrencies: readonly string[];
 }
 
@@ -134,7 +128,7 @@ export async function createOrderResponse(request: Request): Promise<Response> {
     testOverrides?.client === undefined
       ? readRequiredHelloFruitNwcConnectionString()
       : "openreceive-test-client";
-  const { openreceive, priceProviders, supportedCurrencies } =
+  const { openreceive, supportedCurrencies } =
     await getOpenReceive(connectionString);
 
   try {
@@ -147,7 +141,7 @@ export async function createOrderResponse(request: Request): Promise<Response> {
     });
     const rates = await readHelloFruitOrderRates({
       currency: body.currency,
-      priceProviders,
+      listRates: (currencies) => openreceive.listRates({ currencies }),
       supportedCurrencies,
     });
     logDemo("create_order.rates", "Resolved order price rates.", {
@@ -269,11 +263,8 @@ export async function ratesResponse(): Promise<Response> {
     testOverrides?.client === undefined
       ? readRequiredHelloFruitNwcConnectionString()
       : "openreceive-test-client";
-  const { priceProviders } = await getOpenReceive(connectionString);
-  const rates = await readHelloFruitDisplayRates({
-    priceProviders,
-    priceCurrencies: readHelloFruitPriceFeedCurrencies(),
-  });
+  const { openreceive } = await getOpenReceive(connectionString);
+  const rates = await openreceive.listRates();
   logDemo("rates.response", "Served BTC fiat display rates.", {
     rateCurrencies: Object.keys(rates.bitcoin),
     elapsedMs: Date.now() - startedAt,
@@ -348,17 +339,8 @@ export async function createHelloFruitOpenReceive(
     customStore: overrides.store !== undefined,
     customPriceProviders: overrides.priceProviders !== undefined,
   });
-  const store =
-    overrides.store ??
-    (await createHelloFruitOpenReceiveKvStore({
-      demoId: DEMO_ID,
-    }));
   const priceCurrencies = readHelloFruitPriceFeedCurrencies();
   const supportedCurrencies = readHelloFruitCheckoutCurrencies();
-  const priceProviders: readonly OpenReceiveSourcedPriceProvider[] =
-    overrides.priceProviders ?? [
-      createOpenReceivePriceFeed({ store, currencies: priceCurrencies }),
-    ];
 
   logDemo(
     "openreceive.price_currencies",
@@ -373,19 +355,20 @@ export async function createHelloFruitOpenReceive(
     ...(overrides.client === undefined
       ? { nwc: connectionString }
       : { client: overrides.client }),
-    store,
+    ...(overrides.store === undefined ? {} : { store: overrides.store }),
+    ...(overrides.priceProviders === undefined
+      ? {}
+      : { priceProviders: overrides.priceProviders }),
     namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit",
-    priceProviders,
     priceCurrencies,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
   });
   logDemo("openreceive.ready", "OpenReceive demo service is ready.", {
-    priceProviderCount: priceProviders.length,
+    priceCurrencyCount: openreceive.priceCurrencies.length,
     checkoutCurrencyCount: supportedCurrencies.length,
   });
   return {
     openreceive,
-    priceProviders,
     supportedCurrencies,
   } satisfies HelloFruitOpenReceiveBundle;
 }

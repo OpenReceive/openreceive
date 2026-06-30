@@ -41,6 +41,7 @@ export type {
   OpenReceiveGetOrCreateCheckoutRequest,
   OpenReceiveGetOrderRequest,
   OpenReceiveInvoice,
+  OpenReceiveListRatesRequest,
   OpenReceiveLogEntry,
   OpenReceiveLogger,
   OpenReceiveOrder,

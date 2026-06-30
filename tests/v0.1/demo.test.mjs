@@ -1372,8 +1372,9 @@ test("Hello Fruit JS demos set up package-owned invoice persistence", () => {
     "examples/hello-fruit/server/nextjs-fullstack/src/server/openreceive.ts",
   ]) {
     const source = readFileSync(path.join(process.cwd(), sourcePath), "utf8");
-    assert.match(source, /createHelloFruitOpenReceiveKvStore/);
-    assert.match(source, /await createHelloFruitOpenReceiveKvStore/);
+    assert.match(source, /createOpenReceive/);
+    assert.doesNotMatch(source, /createHelloFruitOpenReceiveKvStore/);
+    assert.doesNotMatch(source, /createOpenReceivePriceFeed/);
     assert.doesNotMatch(source, /new InMemoryInvoiceStore\(\)/);
     assert.doesNotMatch(source, /OPENRECEIVE_POSTGRES_MIGRATION_SQL/);
     assert.doesNotMatch(source, /OPENRECEIVE_DATABASE_SCHEMA_VERSION/);

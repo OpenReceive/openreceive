@@ -9,7 +9,7 @@ App-facing packages:
 - `@openreceive/node`: `createOpenReceive(options)` returns a server-only
   service with `getOrCreateCheckout`, `createCheckout`, `getOrder`,
   `getCheckout`, `sweepPendingInvoices`, `listRates`, `quoteRates`, and
-  `close`.
+  `close`, plus the resolved `namespace` and `priceCurrencies`.
 - `@openreceive/browser`: `requestCheckout`, `status`, `lightningUri`,
   `qrSvg`, `qrPngDataUrl`, `copyInvoice`, `openWallet`, and
   `createCheckoutController`.
@@ -130,6 +130,7 @@ const rates = await openreceive.listRates();
 const quote = await openreceive.quoteRates({
   fiat: { currency: "USD", value: "0.10" }
 });
+const configuredFiatCurrencies = openreceive.priceCurrencies;
 ```
 
 `quote.amount_msats` is the exact millisatoshi quote used by checkout-created

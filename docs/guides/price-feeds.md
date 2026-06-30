@@ -102,30 +102,35 @@ The canonical source order is:
 60-second cache window, the 5000ms primary timeout, the quote TTL, and the
 endpoint URLs.
 
-## Wiring It Up
+## Default Wiring
 
-`@openreceive/node` exposes `createOpenReceivePriceFeed({ store, currencies })`,
-which builds the database-cached primary/fallback feed (applying any env-var URL
-overrides) and is then passed to `createOpenReceive`:
+`createOpenReceive()` builds the database-cached primary/fallback feed for you,
+using the same store as invoices:
 
 ```ts
-import { createOpenReceive, createOpenReceivePriceFeed } from "@openreceive/node";
-
-const priceCurrencies = ["USD", "EUR"];
-const priceProviders = [createOpenReceivePriceFeed({ store, currencies: priceCurrencies })];
+import { createOpenReceive } from "@openreceive/node";
 
 const openreceive = await createOpenReceive({
-  nwc,
-  store,
-  priceProviders,
-  priceCurrencies
+  priceCurrencies: ["USD", "EUR"]
 });
+
+console.log(openreceive.priceCurrencies); // ["USD", "EUR"]
 ```
+
+If `priceCurrencies` is omitted, OpenReceive reads
+`OPENRECEIVE_PRICE_CURRENCIES=USD,EUR` or falls back to `["USD"]`.
+
+## Advanced Provider Wiring
 
 Use `@openreceive/core`'s `StaticPriceProvider` only when an internal runtime
 should stay deterministic and offline, such as repository tests or screenshots.
 It serves static fixture rates and never calls a live provider. Public demos use
 a real receive-only NWC code and the cached live feed.
+
+`@openreceive/node` also exposes
+`createOpenReceivePriceFeed({ store, currencies })` for custom runtimes that
+need to construct and pass their own provider list. Most apps should let
+`createOpenReceive()` do this.
 
 `@openreceive/core` also exposes the lower-level pieces:
 `createCachedLivePriceFeed` (the same feed without env reads),
@@ -133,11 +138,10 @@ a real receive-only NWC code and the cached live feed.
 instances), and `getBtcFiatRatesWithFallback` (try a list of providers in
 order). Checkout creation quotes internally from the configured `priceProviders`.
 
-The same currency list is the checkout-creation allowlist. A backend that calls
-`createOpenReceive({ priceProviders, priceCurrencies: ["USD", "EUR"] })` may
-create fiat checkouts only for those explicit uppercase currency codes. The
-browser can localize display however it wants, but the server must pass the
-actual order currency in `fiat.currency`.
+The same currency list is the checkout-creation allowlist. A backend configured
+with `priceCurrencies: ["USD", "EUR"]` may create fiat checkouts only for those
+explicit uppercase currency codes. The browser can localize display however it
+wants, but the server must pass the actual order currency in `fiat.currency`.
 
 `BTC`, `SAT`, and `SATS` are not fiat price-feed currencies. For
 Bitcoin-denominated products, pass one bitcoin amount object such as

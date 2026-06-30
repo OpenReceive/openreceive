@@ -8,7 +8,7 @@
       "sticker": "stickers/apple.svg",
       "fiat": {
         "currency": "USD",
-        "value": "1.00"
+        "value": "0.05"
       }
     },
     {
@@ -17,7 +17,7 @@
       "sticker": "stickers/banana.svg",
       "fiat": {
         "currency": "USD",
-        "value": "2.00"
+        "value": "0.10"
       }
     },
     {
@@ -26,7 +26,7 @@
       "sticker": "stickers/orange.svg",
       "fiat": {
         "currency": "USD",
-        "value": "3.00"
+        "value": "0.15"
       }
     },
     {
@@ -35,7 +35,7 @@
       "sticker": "stickers/pear.svg",
       "fiat": {
         "currency": "USD",
-        "value": "5.00"
+        "value": "0.20"
       }
     }
   ]

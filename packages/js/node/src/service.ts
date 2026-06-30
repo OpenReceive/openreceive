@@ -31,7 +31,11 @@ import {
   type OpenReceiveSourcedPriceProvider,
   type StoredRecord,
 } from "@openreceive/core";
-import { formatOpenReceiveMissingNwcMessage } from "@openreceive/core";
+import {
+  NwcUriParseError,
+  formatOpenReceiveInvalidNwcMessage,
+  formatOpenReceiveMissingNwcMessage,
+} from "@openreceive/core";
 import { createNwcReceiveClient, type NwcEndpointLogger } from "./alby-nwc.ts";
 import { OpenReceiveConfigError } from "./config-error.ts";
 import { assertOpenReceiveStoreConfiguration } from "./storage-guard.ts";
@@ -196,14 +200,20 @@ export interface OpenReceiveOrder {
 
 export interface OpenReceive {
   readonly store: OpenReceiveInvoiceKvStore;
+  readonly namespace: string;
+  readonly priceCurrencies: readonly string[];
   createCheckout(input: OpenReceiveCreateCheckoutRequest): Promise<OpenReceiveCheckout>;
   getOrCreateCheckout(input: OpenReceiveGetOrCreateCheckoutRequest): Promise<OpenReceiveCheckout>;
   getOrder(input: OpenReceiveGetOrderRequest): Promise<OpenReceiveOrder>;
   getCheckout(input: OpenReceiveGetCheckoutRequest): Promise<OpenReceiveCheckout>;
   sweepPendingInvoices(): Promise<OpenReceivePendingSweepResult>;
-  listRates(): Promise<OpenReceiveBtcFiatRateMapWithSource["rates"]>;
+  listRates(input?: OpenReceiveListRatesRequest): Promise<OpenReceiveBtcFiatRateMapWithSource["rates"]>;
   quoteRates(input: { readonly fiat: OpenReceiveFiatAmount }): Promise<OpenReceiveRateQuote>;
   close(): Promise<void>;
+}
+
+export interface OpenReceiveListRatesRequest {
+  readonly currencies?: readonly string[];
 }
 
 interface OpenReceiveInvoiceModel {
@@ -326,7 +336,7 @@ export async function createOpenReceive(
     namespace,
     onPaid: options.onPaid,
   };
-  const priceCurrencies = options.priceCurrencies ?? ["USD"];
+  const priceCurrencies = readOpenReceivePriceCurrencies(options.priceCurrencies);
   const priceProviders = options.priceProviders ?? [
     createOpenReceivePriceFeed({
       store,
@@ -353,6 +363,8 @@ export async function createOpenReceive(
 
   return {
     store,
+    namespace,
+    priceCurrencies,
     createCheckout: getOrCreateCheckout,
     getOrCreateCheckout,
     async getOrder(input) {
@@ -371,8 +383,8 @@ export async function createOpenReceive(
         async () => await sweepPendingInvoicesOnce(reconcileOptions(context)),
       );
     },
-    async listRates() {
-      return await runOpenReceiveOperation(context, () => listRates(context));
+    async listRates(input) {
+      return await runOpenReceiveOperation(context, () => listRates(context, input));
     },
     async quoteRates(input) {
       return await runOpenReceiveOperation(context, () => quoteRates(context, input));
@@ -891,10 +903,21 @@ async function supersedeCheckout(
 
 async function listRates(
   context: OpenReceiveServiceContext,
+  input: OpenReceiveListRatesRequest = {},
 ): Promise<OpenReceiveBtcFiatRateMapWithSource["rates"]> {
   try {
+    const currencies =
+      input.currencies === undefined
+        ? context.priceCurrencies
+        : normalizeOpenReceivePriceCurrencies(
+            input.currencies,
+            "listRates currencies",
+          );
+    for (const currency of currencies) {
+      assertAllowedFiatCurrency(currency, context.priceCurrencies);
+    }
     const rates = await getBtcFiatRatesForProviders({
-      currencies: context.priceCurrencies,
+      currencies,
       priceProviders: context.priceProviders,
     });
     return rates.rates;
@@ -970,9 +993,11 @@ function createConfiguredClient(options: CreateOpenReceiveOptions): OpenReceiveR
     });
   } catch (error) {
     if (error instanceof OpenReceiveConfigError) throw error;
+    const reason =
+      error instanceof NwcUriParseError ? error.description : undefined;
     throw new OpenReceiveConfigError({
       code: "INVALID_NWC",
-      message: "OpenReceive NWC configuration is invalid.",
+      message: formatOpenReceiveInvalidNwcMessage({ reason }),
       hint: "Set OPENRECEIVE_NWC to a receive-only nostr+walletconnect URI from your wallet.",
       cause: error,
     });
@@ -1051,6 +1076,45 @@ function readOpenReceiveNamespace(configured: string | undefined): string {
     });
   }
   return namespace;
+}
+
+function readOpenReceivePriceCurrencies(configured: readonly string[] | undefined): readonly string[] {
+  const rawCurrencies =
+    configured ??
+    globalThis.process?.env?.OPENRECEIVE_PRICE_CURRENCIES?.split(",") ??
+    ["USD"];
+  return normalizeOpenReceivePriceCurrencies(
+    rawCurrencies,
+    "OPENRECEIVE_PRICE_CURRENCIES",
+  );
+}
+
+function normalizeOpenReceivePriceCurrencies(
+  rawCurrencies: readonly string[],
+  label: string,
+): readonly string[] {
+  const currencies = [
+    ...new Set(
+      rawCurrencies.map((currency) => currency.trim().toUpperCase()).filter(Boolean),
+    ),
+  ];
+  if (currencies.length === 0) {
+    throw new OpenReceiveConfigError({
+      code: "INVALID_PRICE_CURRENCIES",
+      message: `${label} must include at least one currency.`,
+      hint: "Set OPENRECEIVE_PRICE_CURRENCIES to comma-separated fiat codes like USD,EUR, or omit it to use USD.",
+    });
+  }
+  for (const currency of currencies) {
+    if (!/^[A-Z]{3}$/.test(currency)) {
+      throw new OpenReceiveConfigError({
+        code: "INVALID_PRICE_CURRENCIES",
+        message: `Invalid ${label} entry: ${currency}.`,
+        hint: "Use three-letter fiat currency codes such as USD or EUR.",
+      });
+    }
+  }
+  return currencies;
 }
 
 async function ensureOpenReceiveStoreSchema(store: OpenReceiveInvoiceKvStore): Promise<void> {

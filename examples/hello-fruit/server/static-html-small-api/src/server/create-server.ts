@@ -8,10 +8,8 @@ import type {
 import {
   OpenReceiveServiceError,
   createOpenReceive,
-  createOpenReceivePriceFeed,
 } from "@openreceive/node";
 import { createHelloFruitDemoMetadata } from "../../../../shared/demo-metadata.ts";
-import { readRequiredHelloFruitNwcConnectionString } from "../../../../shared/demo-nwc.ts";
 import {
   createHelloFruitDemoServerLogger,
   createHelloFruitOpenReceiveLogger,
@@ -22,15 +20,11 @@ import {
   HelloFruitDemoOrderError,
 } from "../../../../shared/demo-order.ts";
 import { mountHelloFruitHostedDemoRoutes } from "../../../../shared/hosted-demo-routes.ts";
-import { createHelloFruitOpenReceiveKvStore } from "../../../../shared/openreceive-store.ts";
 import {
   readHelloFruitCheckoutCurrencies,
   readHelloFruitPriceFeedCurrencies,
 } from "../../../../shared/demo-currencies.ts";
-import {
-  readHelloFruitDisplayRates,
-  readHelloFruitOrderRates,
-} from "../../../../shared/demo-price-feeds.ts";
+import { readHelloFruitOrderRates } from "../../../../shared/demo-price-feeds.ts";
 import product from "../../../../shared/product.json" with { type: "json" };
 
 const DEMO_ID = "static-html-small-api";
@@ -38,7 +32,6 @@ const logDemo = createHelloFruitDemoServerLogger(DEMO_ID);
 
 interface HelloFruitOpenReceiveBundle {
   readonly openreceive: Awaited<ReturnType<typeof createOpenReceive>>;
-  readonly priceProviders: readonly OpenReceiveSourcedPriceProvider[];
   readonly supportedCurrencies: readonly string[];
 }
 
@@ -59,19 +52,6 @@ export async function createHelloFruitOpenReceive(
   });
   const priceCurrencies = readHelloFruitPriceFeedCurrencies();
   const supportedCurrencies = readHelloFruitCheckoutCurrencies();
-  const clientOptions =
-    options.client === undefined
-      ? { nwc: readRequiredHelloFruitNwcConnectionString() }
-      : { client: options.client };
-  const store =
-    options.store ??
-    (await createHelloFruitOpenReceiveKvStore({
-      demoId: DEMO_ID,
-    }));
-  const priceProviders: readonly OpenReceiveSourcedPriceProvider[] =
-    options.priceProviders ?? [
-      createOpenReceivePriceFeed({ store, currencies: priceCurrencies }),
-    ];
 
   logDemo(
     "openreceive.price_currencies",
@@ -83,20 +63,21 @@ export async function createHelloFruitOpenReceive(
   );
 
   const openreceive = await createOpenReceive({
-    ...clientOptions,
-    store,
+    ...(options.client === undefined ? {} : { client: options.client }),
+    ...(options.store === undefined ? {} : { store: options.store }),
+    ...(options.priceProviders === undefined
+      ? {}
+      : { priceProviders: options.priceProviders }),
     namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit",
-    priceProviders,
     priceCurrencies,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
   });
   logDemo("openreceive.ready", "OpenReceive demo service is ready.", {
-    priceProviderCount: priceProviders.length,
+    priceCurrencyCount: openreceive.priceCurrencies.length,
     checkoutCurrencyCount: supportedCurrencies.length,
   });
   return {
     openreceive,
-    priceProviders,
     supportedCurrencies,
   } satisfies HelloFruitOpenReceiveBundle;
 }
@@ -114,7 +95,7 @@ export async function createHelloFruitStaticServer(
     ),
   );
 
-  const { openreceive, priceProviders, supportedCurrencies } =
+  const { openreceive, supportedCurrencies } =
     await createHelloFruitOpenReceive(options);
 
   logDemo("server.routes", "Mounting demo routes.", {
@@ -152,10 +133,7 @@ export async function createHelloFruitStaticServer(
   app.get("/rates", async (_req, res, next) => {
     const startedAt = Date.now();
     try {
-      const rates = await readHelloFruitDisplayRates({
-        priceProviders,
-        priceCurrencies: readHelloFruitPriceFeedCurrencies(),
-      });
+      const rates = await openreceive.listRates();
       logDemo("rates.response", "Served BTC fiat display rates.", {
         rateCurrencies: Object.keys(rates.bitcoin),
         elapsedMs: Date.now() - startedAt,
@@ -182,7 +160,7 @@ export async function createHelloFruitStaticServer(
       });
       const rates = await readHelloFruitOrderRates({
         currency: body.currency,
-        priceProviders,
+        listRates: (currencies) => openreceive.listRates({ currencies }),
         supportedCurrencies,
       });
       logDemo("create_order.rates", "Resolved order price rates.", {

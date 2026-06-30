@@ -512,6 +512,9 @@ test("diagnostic events and logger entries are sanitized and non-blocking", asyn
 test("read-only rate helpers expose static rates and quotes", async () => {
   const { openreceive } = await createHarness();
 
+  assert.equal(openreceive.namespace, "demo_hello_fruit");
+  assert.deepEqual(openreceive.priceCurrencies, ["USD"]);
+
   const rates = await openreceive.listRates();
   assert.equal(rates.bitcoin.usd, "50000.00");
 
@@ -523,6 +526,29 @@ test("read-only rate helpers expose static rates and quotes", async () => {
   });
   assert.equal(quote.amount_msats, 200000);
   assert.equal(quote.source, "static_mock");
+});
+
+test("createOpenReceive exposes normalized price currency configuration", async () => {
+  const previous = process.env.OPENRECEIVE_PRICE_CURRENCIES;
+  process.env.OPENRECEIVE_PRICE_CURRENCIES = "eur, usd, EUR";
+  try {
+    const openreceive = await createOpenReceive({
+      client: new FakeWallet(() => 1000),
+      store: new InMemoryInvoiceKvStore(),
+      namespace: "currency_config",
+      clock: () => 1000,
+      priceProviders: [new StaticPriceProvider()],
+    });
+
+    assert.equal(openreceive.namespace, "currency_config");
+    assert.deepEqual(openreceive.priceCurrencies, ["EUR", "USD"]);
+  } finally {
+    if (previous === undefined) {
+      delete process.env.OPENRECEIVE_PRICE_CURRENCIES;
+    } else {
+      process.env.OPENRECEIVE_PRICE_CURRENCIES = previous;
+    }
+  }
 });
 
 test("createOpenReceive fetches default live price data only when rates are needed", async () => {

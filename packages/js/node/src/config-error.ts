@@ -9,6 +9,7 @@ export type OpenReceiveConfigErrorCode =
   | "STORE_MUST_BE_EXPLICIT"
   | "STORE_NOT_IMPLEMENTED"
   | "UNSUPPORTED_STORE_URI"
+  | "INVALID_PRICE_CURRENCIES"
   | "UNHEALTHY_PRICE_DATA";
 
 export class OpenReceiveConfigError extends Error {
