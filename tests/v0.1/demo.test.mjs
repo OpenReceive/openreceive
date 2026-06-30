@@ -31,9 +31,18 @@ import getNextSitemap, {
   dynamic as nextSitemapDynamic,
 } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/sitemap.ts";
 
-const productPath = path.join(process.cwd(), "examples/hello-fruit/shared/product.json");
-const fruitsPath = path.join(process.cwd(), "examples/hello-fruit/shared/fruits.json");
-const canonicalDemoDataPath = path.join(process.cwd(), "spec/data/demo/fruits.json");
+const productPath = path.join(
+  process.cwd(),
+  "examples/hello-fruit/shared/product.json",
+);
+const fruitsPath = path.join(
+  process.cwd(),
+  "examples/hello-fruit/shared/fruits.json",
+);
+const canonicalDemoDataPath = path.join(
+  process.cwd(),
+  "spec/data/demo/fruits.json",
+);
 const demoServerDirs = [
   "examples/hello-fruit/server/node-express",
   "examples/hello-fruit/server/static-html-small-api",
@@ -128,7 +137,9 @@ test("Hello Fruit shared data stays aligned with canonical demo data", () => {
   for (const fruit of fruits.fruits) {
     assert.equal(fruit.sticker, `stickers/${fruit.id}.svg`);
     assert.equal(
-      existsSync(path.join(process.cwd(), "examples/hello-fruit/shared", fruit.sticker)),
+      existsSync(
+        path.join(process.cwd(), "examples/hello-fruit/shared", fruit.sticker),
+      ),
       true,
       `${fruit.id}: sticker exists`,
     );
@@ -136,8 +147,14 @@ test("Hello Fruit shared data stays aligned with canonical demo data", () => {
 });
 
 test("Hello Fruit demos share product display formatting", () => {
-  assert.equal(formatHelloFruitFiat({ currency: "USD", value: "0.10" }), "$0.10");
-  assert.equal(formatHelloFruitFiat({ currency: "EUR", value: "0.10" }), "0.10 EUR");
+  assert.equal(
+    formatHelloFruitFiat({ currency: "USD", value: "0.10" }),
+    "$0.10",
+  );
+  assert.equal(
+    formatHelloFruitFiat({ currency: "EUR", value: "0.10" }),
+    "0.10 EUR",
+  );
   assert.equal(
     formatHelloFruitBuyNowLabel({ currency: "USD", value: "0.10" }),
     "Add to cart ($0.10)",
@@ -148,7 +165,10 @@ test("Hello Fruit demos share product display formatting", () => {
   );
   assert.equal(helloFruitDemoLabels.createOrder, "Create order");
   assert.equal(helloFruitDemoLabels.creatingOrder, "Creating order...");
-  assert.equal(helloFruitDemoLabels.createOrderError, "Could not create order.");
+  assert.equal(
+    helloFruitDemoLabels.createOrderError,
+    "Could not create order.",
+  );
   assert.equal(
     createHelloFruitInvoiceDescription("Banana"),
     "Fruit sticker from OpenReceive demo: Banana",
@@ -161,7 +181,10 @@ test("Hello Fruit demos share product display formatting", () => {
 
 test("Hello Fruit React demos delegate checkout state to UI packages", () => {
   const nodeClient = readFileSync(
-    path.join(process.cwd(), "examples/hello-fruit/server/node-express/src/client/App.tsx"),
+    path.join(
+      process.cwd(),
+      "examples/hello-fruit/server/node-express/src/client/App.tsx",
+    ),
     "utf8",
   );
   const nextClient = readFileSync(
@@ -183,9 +206,15 @@ test("Hello Fruit React demos delegate checkout state to UI packages", () => {
     assert.match(source, /readHelloFruitCheckoutCurrencies/);
     assert.match(source, /currency,/);
     assert.doesNotMatch(source, /createOpenReceiveStatusFetcher/);
-    assert.doesNotMatch(source, /statusUrl="\/openreceive\/v1\/invoices\/\{invoice_id\}\/status"/);
+    assert.doesNotMatch(
+      source,
+      /statusUrl="\/openreceive\/v1\/invoices\/\{invoice_id\}\/status"/,
+    );
     assert.doesNotMatch(source, /refreshStatus=\{refreshStatus\}/);
-    assert.doesNotMatch(source, /fetch\("\/openreceive\/v1\/invoices\/.*\/status"/);
+    assert.doesNotMatch(
+      source,
+      /fetch\("\/openreceive\/v1\/invoices\/.*\/status"/,
+    );
     assert.doesNotMatch(source, /fetch\("\/openreceive\/v1\/invoices"/);
     assert.doesNotMatch(source, /payment_hash: state\.payment_hash/);
     assert.doesNotMatch(source, /new EventSource/);
@@ -245,7 +274,10 @@ test("Hello Fruit JS demos use package-owned QR and status refresh wiring", () =
 
   assert.equal(
     existsSync(
-      path.join(process.cwd(), "examples/hello-fruit/server/nextjs-fullstack/src/qrcode.d.ts"),
+      path.join(
+        process.cwd(),
+        "examples/hello-fruit/server/nextjs-fullstack/src/qrcode.d.ts",
+      ),
     ),
     false,
   );
@@ -259,11 +291,23 @@ test("Hello Fruit JS demos use package-owned QR and status refresh wiring", () =
       "utf8",
     );
     const viteConfigPath = path.join(process.cwd(), demoDir, "vite.config.ts");
-    const viteConfig = existsSync(viteConfigPath) ? readFileSync(viteConfigPath, "utf8") : "";
-    const compose = readFileSync(path.join(process.cwd(), demoDir, "compose.yml"), "utf8");
-    const dockerfile = readFileSync(path.join(process.cwd(), demoDir, "Dockerfile"), "utf8");
+    const viteConfig = existsSync(viteConfigPath)
+      ? readFileSync(viteConfigPath, "utf8")
+      : "";
+    const compose = readFileSync(
+      path.join(process.cwd(), demoDir, "compose.yml"),
+      "utf8",
+    );
+    const dockerfile = readFileSync(
+      path.join(process.cwd(), demoDir, "Dockerfile"),
+      "utf8",
+    );
 
-    assert.equal(packageJson.dependencies.qrcode, undefined, `${demoDir}: qrcode is package-owned`);
+    assert.equal(
+      packageJson.dependencies.qrcode,
+      undefined,
+      `${demoDir}: qrcode is package-owned`,
+    );
     assert.match(
       dockerfile,
       /COPY spec\/data\/rates \.\/spec\/data\/rates/,
@@ -273,11 +317,23 @@ test("Hello Fruit JS demos use package-owned QR and status refresh wiring", () =
       const openReceiveVersion = JSON.parse(
         readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
       ).version;
-      assert.equal(packageJson.dependencies["@openreceive/angular"], openReceiveVersion);
-      assert.equal(packageJson.dependencies["@openreceive/vue"], openReceiveVersion);
-      assert.equal(packageJson.dependencies["@openreceive/svelte"], openReceiveVersion);
+      assert.equal(
+        packageJson.dependencies["@openreceive/angular"],
+        openReceiveVersion,
+      );
+      assert.equal(
+        packageJson.dependencies["@openreceive/vue"],
+        openReceiveVersion,
+      );
+      assert.equal(
+        packageJson.dependencies["@openreceive/svelte"],
+        openReceiveVersion,
+      );
       assert.equal(packageJson.dependencies["@angular/core"], "^22.0.3");
-      assert.equal(packageJson.dependencies["@angular/platform-browser"], "^22.0.3");
+      assert.equal(
+        packageJson.dependencies["@angular/platform-browser"],
+        "^22.0.3",
+      );
       assert.match(viteConfig, /@vitejs\/plugin-vue/);
       assert.match(viteConfig, /vue\/compiler-sfc/);
       assert.match(viteConfig, /vue\(\{\s*compiler:\s*vueCompiler\s*\}\)/);
@@ -291,13 +347,19 @@ test("Hello Fruit JS demos use package-owned QR and status refresh wiring", () =
     assert.match(config, /export default openreceive/);
     assert.doesNotMatch(config, /nostr\+walletconnect:\/\//);
     assert.doesNotMatch(compose, /openreceive-worker/);
-    assert.doesNotMatch(compose, /command:\s+\["npm", "run", "openreceive:worker"\]/);
+    assert.doesNotMatch(
+      compose,
+      /command:\s+\["npm", "run", "openreceive:worker"\]/,
+    );
   }
 });
 
 test("Hello Fruit Node demo creates orders from cart before rendering checkout", () => {
   const source = readFileSync(
-    path.join(process.cwd(), "examples/hello-fruit/server/node-express/src/client/App.tsx"),
+    path.join(
+      process.cwd(),
+      "examples/hello-fruit/server/node-express/src/client/App.tsx",
+    ),
     "utf8",
   );
 
@@ -399,7 +461,10 @@ test("Hello Fruit static demo delegates checkout state to the web component", ()
     "utf8",
   );
   const html = readFileSync(
-    path.join(process.cwd(), "examples/hello-fruit/server/static-html-small-api/index.html"),
+    path.join(
+      process.cwd(),
+      "examples/hello-fruit/server/static-html-small-api/index.html",
+    ),
     "utf8",
   );
 
@@ -416,8 +481,14 @@ test("Hello Fruit static demo delegates checkout state to the web component", ()
   assert.doesNotMatch(source, /toggleOpenReceiveStoredThemeControls/);
   assert.doesNotMatch(source, /theme-toggle/);
   assert.doesNotMatch(source, /createCheckoutElement\(/);
-  assert.doesNotMatch(source, /document\.createElement\("openreceive-checkout"\)/);
-  assert.doesNotMatch(source, /document\.createElement\("openreceive-theme-toggle"\)/);
+  assert.doesNotMatch(
+    source,
+    /document\.createElement\("openreceive-checkout"\)/,
+  );
+  assert.doesNotMatch(
+    source,
+    /document\.createElement\("openreceive-theme-toggle"\)/,
+  );
   assert.doesNotMatch(source, /createCheckoutElementAttributes/);
   assert.doesNotMatch(source, /createCheckoutElementListeners/);
   assert.doesNotMatch(source, /createOpenReceiveThemeToggleElementAttributes/);
@@ -432,7 +503,10 @@ test("Hello Fruit static demo delegates checkout state to the web component", ()
 
 test("Hello Fruit browser demos consume shared theme model", () => {
   const nodeClient = readFileSync(
-    path.join(process.cwd(), "examples/hello-fruit/server/node-express/src/client/App.tsx"),
+    path.join(
+      process.cwd(),
+      "examples/hello-fruit/server/node-express/src/client/App.tsx",
+    ),
     "utf8",
   );
   const nextClient = readFileSync(
@@ -455,9 +529,21 @@ test("Hello Fruit browser demos consume shared theme model", () => {
     ["nextjs-fullstack", nextClient],
   ]) {
     assert.match(source, /ThemeScope/, `${name}: uses package theme scope`);
-    assert.match(source, /themeToggle/, `${name}: enables package theme toggle`);
-    assert.match(source, /topbarClassName="topbar"/, `${name}: styles package theme toggle shell`);
-    assert.doesNotMatch(source, /useOpenReceiveTheme/, `${name}: must not wire theme hook locally`);
+    assert.match(
+      source,
+      /themeToggle/,
+      `${name}: enables package theme toggle`,
+    );
+    assert.match(
+      source,
+      /topbarClassName="topbar"/,
+      `${name}: styles package theme toggle shell`,
+    );
+    assert.doesNotMatch(
+      source,
+      /useOpenReceiveTheme/,
+      `${name}: must not wire theme hook locally`,
+    );
     assert.doesNotMatch(
       source,
       /OpenReceiveThemeToggle/,
@@ -468,8 +554,16 @@ test("Hello Fruit browser demos consume shared theme model", () => {
       /\.\.\.theme\.attributes/,
       `${name}: must not apply theme attrs locally`,
     );
-    assert.doesNotMatch(source, /"Light mode"/, `${name}: must not own theme toggle label`);
-    assert.doesNotMatch(source, /"Dark mode"/, `${name}: must not own theme toggle label`);
+    assert.doesNotMatch(
+      source,
+      /"Light mode"/,
+      `${name}: must not own theme toggle label`,
+    );
+    assert.doesNotMatch(
+      source,
+      /"Dark mode"/,
+      `${name}: must not own theme toggle label`,
+    );
   }
 
   assert.doesNotMatch(staticClient, /syncOpenReceiveStoredThemeControls/);
@@ -499,7 +593,11 @@ test("Frontend UI packages delegate checkout lifecycle to browser helpers", () =
     ["react", reactSource],
     ["elements", elementsSource],
   ]) {
-    assert.match(source, /createCheckoutController/, `${name}: uses browser checkout controller`);
+    assert.match(
+      source,
+      /createCheckoutController/,
+      `${name}: uses browser checkout controller`,
+    );
     assert.match(
       source,
       /createCheckoutStatusModel/,
@@ -515,13 +613,21 @@ test("Frontend UI packages delegate checkout lifecycle to browser helpers", () =
       /createOpenReceiveStatusFetcher/,
       `${name}: must not construct status fetcher locally`,
     );
-    assert.doesNotMatch(source, /new EventSource/, `${name}: must not own SSE wiring`);
+    assert.doesNotMatch(
+      source,
+      /new EventSource/,
+      `${name}: must not own SSE wiring`,
+    );
     assert.doesNotMatch(
       source,
       /setInterval\(/,
       `${name}: must not own polling or countdown intervals`,
     );
-    assert.doesNotMatch(source, /fetch\(statusUrl/, `${name}: must not own status POST wiring`);
+    assert.doesNotMatch(
+      source,
+      /fetch\(statusUrl/,
+      `${name}: must not own status POST wiring`,
+    );
     assert.doesNotMatch(
       source,
       /state\.expires_at - currentUnixSeconds/,
@@ -606,15 +712,31 @@ test("Frontend UI packages consume shared checkout labels", () => {
     ["react", reactSource],
     ["elements", elementsSource],
   ]) {
-    assert.match(source, /openReceiveCheckoutLabels/, `${name}: uses shared labels`);
+    assert.match(
+      source,
+      /openReceiveCheckoutLabels/,
+      `${name}: uses shared labels`,
+    );
     assert.match(
       source,
       /createCheckoutProviderCopyEvent/,
       `${name}: uses shared provider-copy event helper`,
     );
-    assert.doesNotMatch(source, /"Pay this invoice"/, `${name}: wizard title is package-shared`);
-    assert.doesNotMatch(source, /"Copy BOLT11"/, `${name}: copy label is package-shared`);
-    assert.doesNotMatch(source, /"Waiting for payment"/, `${name}: status label is package-shared`);
+    assert.doesNotMatch(
+      source,
+      /"Pay this invoice"/,
+      `${name}: wizard title is package-shared`,
+    );
+    assert.doesNotMatch(
+      source,
+      /"Copy BOLT11"/,
+      `${name}: copy label is package-shared`,
+    );
+    assert.doesNotMatch(
+      source,
+      /"Waiting for payment"/,
+      `${name}: status label is package-shared`,
+    );
     assert.doesNotMatch(
       source,
       /"openreceive-provider-copy"/,
@@ -625,13 +747,21 @@ test("Frontend UI packages consume shared checkout labels", () => {
       /detail: \{ providerId \}/,
       `${name}: provider-copy event detail is browser-shared`,
     );
-    assert.doesNotMatch(source, /`Open \$\{/, `${name}: provider action label is package-shared`);
+    assert.doesNotMatch(
+      source,
+      /`Open \$\{/,
+      `${name}: provider action label is package-shared`,
+    );
     assert.doesNotMatch(
       source,
       /"Lightning Network"/,
       `${name}: route network label is package-shared`,
     );
-    assert.doesNotMatch(source, /"Choose a country"/, `${name}: country prompt is package-shared`);
+    assert.doesNotMatch(
+      source,
+      /"Choose a country"/,
+      `${name}: country prompt is package-shared`,
+    );
     assert.doesNotMatch(
       source,
       /"No providers found for this country yet\\."/,
@@ -922,7 +1052,9 @@ test("Frontend UI packages consume shared checkout display state conversion", ()
   ]) {
     assert.match(
       source,
-      name === "react" ? /createCheckoutState/ : /createCheckoutStateFromDisplayData/,
+      name === "react"
+        ? /createCheckoutState/
+        : /createCheckoutStateFromDisplayData/,
       `${name}: creates checkout state from browser-owned display conversion`,
     );
     if (name === "elements") {
@@ -1002,7 +1134,11 @@ test("Frontend UI packages consume shared wizard route display model", () => {
       /OPENRECEIVE_PROVIDER_PREVIEW_LIMIT/,
       `${name}: must not own provider preview slicing`,
     );
-    assert.doesNotMatch(source, /route\.kind/, `${name}: must not own route heading decisions`);
+    assert.doesNotMatch(
+      source,
+      /route\.kind/,
+      `${name}: must not own route heading decisions`,
+    );
     assert.doesNotMatch(
       source,
       /route\.providers\.slice/,
@@ -1133,7 +1269,11 @@ test("Frontend UI packages consume shared country dropdown model", () => {
     /geoNaturalEarth1/,
     "react: must not own country map projection",
   );
-  assert.doesNotMatch(reactSource, /world-atlas/, "react: must not own country map atlas data");
+  assert.doesNotMatch(
+    reactSource,
+    /world-atlas/,
+    "react: must not own country map atlas data",
+  );
   assert.doesNotMatch(
     reactSource,
     /topojson-client/,
@@ -1230,7 +1370,10 @@ test("Frontend UI packages consume shared payment icon helpers", () => {
 
 test("Hello Fruit JS demos set up package-owned invoice persistence", () => {
   const helper = readFileSync(
-    path.join(process.cwd(), "examples/hello-fruit/shared/openreceive-store.ts"),
+    path.join(
+      process.cwd(),
+      "examples/hello-fruit/shared/openreceive-store.ts",
+    ),
     "utf8",
   );
   const postgresStore = readFileSync(
@@ -1256,16 +1399,26 @@ test("Hello Fruit JS demos set up package-owned invoice persistence", () => {
     const packageJson = JSON.parse(
       readFileSync(path.join(process.cwd(), demoDir, "package.json"), "utf8"),
     );
-    const compose = readFileSync(path.join(process.cwd(), demoDir, "compose.yml"), "utf8");
+    const compose = readFileSync(
+      path.join(process.cwd(), demoDir, "compose.yml"),
+      "utf8",
+    );
     const volumeName = demoDir.split("/").at(-1);
 
-    assert.equal(packageJson.dependencies.pg, "^8.22.0", `${demoDir}: pg dependency`);
+    assert.equal(
+      packageJson.dependencies.pg,
+      "^8.22.0",
+      `${demoDir}: pg dependency`,
+    );
     assert.match(compose, /OPENRECEIVE_STORE:\s+local-sqlite/);
     assert.match(compose, /OPENRECEIVE_NAMESPACE:\s+hello_fruit_/);
     assert.doesNotMatch(compose, /DATABASE_URL/);
     assert.doesNotMatch(compose, /openreceive-postgres/);
     assert.doesNotMatch(compose, /image:\s+postgres:17-alpine/);
-    assert.match(compose, new RegExp(`openreceive-${volumeName}-openreceive:.+\\.openreceive`));
+    assert.match(
+      compose,
+      new RegExp(`openreceive-${volumeName}-openreceive:.+\\.openreceive`),
+    );
   }
 
   for (const sourcePath of [
@@ -1338,13 +1491,21 @@ test("Hello Fruit server demos keep secret-safe local setup docs", () => {
     const readmePath = path.join(process.cwd(), demoDir, "README.md");
     const dockerfilePath = path.join(process.cwd(), demoDir, "Dockerfile");
     const composePath = path.join(process.cwd(), demoDir, "compose.yml");
-    const composeOverridePath = path.join(process.cwd(), demoDir, "compose.override.yml.example");
+    const composeOverridePath = path.join(
+      process.cwd(),
+      demoDir,
+      "compose.override.yml.example",
+    );
 
     assert.equal(existsSync(envExamplePath), true, `${demoDir}: .env.example`);
     assert.equal(existsSync(readmePath), true, `${demoDir}: README.md`);
     assert.equal(existsSync(dockerfilePath), true, `${demoDir}: Dockerfile`);
     assert.equal(existsSync(composePath), true, `${demoDir}: compose.yml`);
-    assert.equal(existsSync(composeOverridePath), true, `${demoDir}: compose.override.yml.example`);
+    assert.equal(
+      existsSync(composeOverridePath),
+      true,
+      `${demoDir}: compose.override.yml.example`,
+    );
 
     const envExample = readFileSync(envExamplePath, "utf8");
     const readme = readFileSync(readmePath, "utf8");
@@ -1352,7 +1513,11 @@ test("Hello Fruit server demos keep secret-safe local setup docs", () => {
     const compose = readFileSync(composePath, "utf8");
     const composeOverride = readFileSync(composeOverridePath, "utf8");
 
-    assert.match(envExample, /^OPENRECEIVE_NWC=$/m, `${demoDir}: placeholder NWC`);
+    assert.match(
+      envExample,
+      /^OPENRECEIVE_NWC=$/m,
+      `${demoDir}: placeholder NWC`,
+    );
     assert.doesNotMatch(envExample, /nostr\+walletconnect:\/\//);
     assert.match(readme, /The browser never receives `OPENRECEIVE_NWC`\./);
     assert.match(readme, /valid receive-only `OPENRECEIVE_NWC`/);
@@ -1445,24 +1610,54 @@ test("Hello Fruit metadata exposes only allowlisted build fields", async () => {
         assert.equal(metadata.status, 200, `${demo.name}: metadata status`);
         assert.equal(metadata.body.mode, "production");
         assert.equal(metadata.body.build.git_sha, "0123456789abcdef");
-        assert.equal(metadata.body.build.image_digest, `sha256:${"c".repeat(64)}`);
+        assert.equal(
+          metadata.body.build.image_digest,
+          `sha256:${"c".repeat(64)}`,
+        );
         assert.equal(metadata.body.build.deployed_at, "2026-06-20T12:34:56Z");
-        assert.equal(JSON.stringify(metadata.body).includes("OPENRECEIVE_NWC"), false);
-        assert.equal(JSON.stringify(metadata.body).includes("nostr+walletconnect://"), false);
+        assert.equal(
+          JSON.stringify(metadata.body).includes("OPENRECEIVE_NWC"),
+          false,
+        );
+        assert.equal(
+          JSON.stringify(metadata.body).includes("nostr+walletconnect://"),
+          false,
+        );
         assert.equal(JSON.stringify(metadata.body).includes("secret="), false);
       }
 
-      setHelloFruitOpenReceiveTestOverrides(createHelloFruitTestOpenReceiveOptions());
+      setHelloFruitOpenReceiveTestOverrides(
+        createHelloFruitTestOpenReceiveOptions(),
+      );
       try {
         const nextMetadata = await responseJson(getNextDemoMetadata());
-        assert.equal(nextMetadata.status, 200, "nextjs-fullstack: metadata status");
+        assert.equal(
+          nextMetadata.status,
+          200,
+          "nextjs-fullstack: metadata status",
+        );
         assert.equal(nextMetadata.body.mode, "production");
         assert.equal(nextMetadata.body.build.git_sha, "0123456789abcdef");
-        assert.equal(nextMetadata.body.build.image_digest, `sha256:${"c".repeat(64)}`);
-        assert.equal(nextMetadata.body.build.deployed_at, "2026-06-20T12:34:56Z");
-        assert.equal(JSON.stringify(nextMetadata.body).includes("OPENRECEIVE_NWC"), false);
-        assert.equal(JSON.stringify(nextMetadata.body).includes("nostr+walletconnect://"), false);
-        assert.equal(JSON.stringify(nextMetadata.body).includes("secret="), false);
+        assert.equal(
+          nextMetadata.body.build.image_digest,
+          `sha256:${"c".repeat(64)}`,
+        );
+        assert.equal(
+          nextMetadata.body.build.deployed_at,
+          "2026-06-20T12:34:56Z",
+        );
+        assert.equal(
+          JSON.stringify(nextMetadata.body).includes("OPENRECEIVE_NWC"),
+          false,
+        );
+        assert.equal(
+          JSON.stringify(nextMetadata.body).includes("nostr+walletconnect://"),
+          false,
+        );
+        assert.equal(
+          JSON.stringify(nextMetadata.body).includes("secret="),
+          false,
+        );
       } finally {
         setHelloFruitOpenReceiveTestOverrides(undefined);
       }
@@ -1495,20 +1690,37 @@ test("Hello Fruit demos create app orders and refresh order status through merch
           createApp: createHelloFruitStaticServer,
         },
       ]) {
-        const app = await demo.createApp(createHelloFruitTestOpenReceiveOptions());
-        const created = await dispatchJson(app, "POST", "/create_order", orderRequest);
+        const app = await demo.createApp(
+          createHelloFruitTestOpenReceiveOptions(),
+        );
+        const created = await dispatchJson(
+          app,
+          "POST",
+          "/create_order",
+          orderRequest,
+        );
         assert.equal(created.status, 201, `${demo.name}: create_order status`);
         assert.equal(created.body.order.uuid.includes("cart-smoke"), true);
         assert.equal(created.body.order.status, "pending_payment");
         assert.equal(created.body.order.total_amount.currency, "USD");
         assert.equal(created.body.order.total_amount.value, "0.25");
         assert.equal(created.body.checkout.order_id, created.body.order.uuid);
-        const createdInvoice = created.body.checkout.active ?? created.body.checkout.invoices[0];
+        const createdInvoice =
+          created.body.checkout.active ?? created.body.checkout.invoices[0];
         assert.equal(typeof createdInvoice.invoice, "string");
-        assert.equal(JSON.stringify(created.body).includes("nostr+walletconnect://"), false);
+        assert.equal(
+          JSON.stringify(created.body).includes("nostr+walletconnect://"),
+          false,
+        );
 
-        const replayed = await dispatchJson(app, "POST", "/create_order", orderRequest);
-        const replayedInvoice = replayed.body.checkout.active ?? replayed.body.checkout.invoices[0];
+        const replayed = await dispatchJson(
+          app,
+          "POST",
+          "/create_order",
+          orderRequest,
+        );
+        const replayedInvoice =
+          replayed.body.checkout.active ?? replayed.body.checkout.invoices[0];
         assert.equal(
           replayed.body.checkout.checkout_id,
           created.body.checkout.checkout_id,
@@ -1524,25 +1736,36 @@ test("Hello Fruit demos create app orders and refresh order status through merch
         assert.equal(status.body.order_status, "pending_payment");
         assert.equal(status.body.order.status, "pending_payment");
         const statusInvoice =
-          status.body.display_checkout.active ?? status.body.display_checkout.invoices[0];
+          status.body.display_checkout.active ??
+          status.body.display_checkout.invoices[0];
         assert.equal(statusInvoice.payment_hash, replayedInvoice.payment_hash);
       }
 
-      setHelloFruitOpenReceiveTestOverrides(createHelloFruitTestOpenReceiveOptions());
+      setHelloFruitOpenReceiveTestOverrides(
+        createHelloFruitTestOpenReceiveOptions(),
+      );
       try {
         const nextCreated = await responseJson(
           postNextCreateOrder(jsonRequest("/create_order", orderRequest)),
         );
-        assert.equal(nextCreated.status, 201, "nextjs-fullstack: create_order status");
+        assert.equal(
+          nextCreated.status,
+          201,
+          "nextjs-fullstack: create_order status",
+        );
         assert.equal(nextCreated.body.order.uuid.includes("cart-smoke"), true);
         assert.equal(nextCreated.body.order.total_amount.value, "0.25");
-        assert.equal(nextCreated.body.checkout.order_id, nextCreated.body.order.uuid);
+        assert.equal(
+          nextCreated.body.checkout.order_id,
+          nextCreated.body.order.uuid,
+        );
 
         const nextReplayed = await responseJson(
           postNextCreateOrder(jsonRequest("/create_order", orderRequest)),
         );
         const nextReplayedInvoice =
-          nextReplayed.body.checkout.active ?? nextReplayed.body.checkout.invoices[0];
+          nextReplayed.body.checkout.active ??
+          nextReplayed.body.checkout.invoices[0];
         assert.equal(
           nextReplayed.body.checkout.checkout_id,
           nextCreated.body.checkout.checkout_id,
@@ -1557,7 +1780,11 @@ test("Hello Fruit demos create app orders and refresh order status through merch
             }),
           ),
         );
-        assert.equal(nextStatus.status, 200, "nextjs-fullstack: order_status status");
+        assert.equal(
+          nextStatus.status,
+          200,
+          "nextjs-fullstack: order_status status",
+        );
         assert.equal(nextStatus.body.order_id, nextCreated.body.order.uuid);
         assert.equal(nextStatus.body.order_status, "pending_payment");
       } finally {
@@ -1593,13 +1820,21 @@ test("Hello Fruit demos create direct SATS orders from the currency switcher", a
           createApp: createHelloFruitStaticServer,
         },
       ]) {
-        const app = await demo.createApp(createHelloFruitTestOpenReceiveOptions());
-        const created = await dispatchJson(app, "POST", "/create_order", orderRequest);
+        const app = await demo.createApp(
+          createHelloFruitTestOpenReceiveOptions(),
+        );
+        const created = await dispatchJson(
+          app,
+          "POST",
+          "/create_order",
+          orderRequest,
+        );
         assert.equal(created.status, 201, `${demo.name}: create_order status`);
         assert.equal(created.body.order.total_amount.currency, "SATS");
         assert.equal(created.body.order.total_amount.value, "500");
         assert.equal(created.body.checkout.amount_msats, 500000);
-        const createdInvoice = created.body.checkout.active ?? created.body.checkout.invoices[0];
+        const createdInvoice =
+          created.body.checkout.active ?? created.body.checkout.invoices[0];
         assert.equal(createdInvoice.fiat_quote, null);
       }
     },
@@ -1626,7 +1861,9 @@ test("Hello Fruit hosted demo routes expose source, docs, robots, and sitemap", 
           createApp: createHelloFruitStaticServer,
         },
       ]) {
-        const app = await demo.createApp(createHelloFruitTestOpenReceiveOptions());
+        const app = await demo.createApp(
+          createHelloFruitTestOpenReceiveOptions(),
+        );
         const source = await dispatch(app, {
           method: "GET",
           url: "/source",
@@ -1656,7 +1893,10 @@ test("Hello Fruit hosted demo routes expose source, docs, robots, and sitemap", 
         });
         assert.equal(robots.status, 200, `${demo.name}: robots status`);
         assert.match(robots.text, /Allow: \//);
-        assert.match(robots.text, /Sitemap: https:\/\/demo\.example\.test\/sitemap\.xml/);
+        assert.match(
+          robots.text,
+          /Sitemap: https:\/\/demo\.example\.test\/sitemap\.xml/,
+        );
 
         const sitemap = await dispatch(app, {
           method: "GET",
@@ -1664,11 +1904,25 @@ test("Hello Fruit hosted demo routes expose source, docs, robots, and sitemap", 
           headers: {},
         });
         assert.equal(sitemap.status, 200, `${demo.name}: sitemap status`);
-        assert.match(sitemap.text, /<loc>https:\/\/demo\.example\.test\/<\/loc>/);
+        assert.match(
+          sitemap.text,
+          /<loc>https:\/\/demo\.example\.test\/<\/loc>/,
+        );
 
-        for (const response of [source.text, docs.text, robots.text, sitemap.text]) {
-          assert.equal(JSON.stringify(response).includes("OPENRECEIVE_NWC"), false);
-          assert.equal(JSON.stringify(response).includes("nostr+walletconnect://"), false);
+        for (const response of [
+          source.text,
+          docs.text,
+          robots.text,
+          sitemap.text,
+        ]) {
+          assert.equal(
+            JSON.stringify(response).includes("OPENRECEIVE_NWC"),
+            false,
+          );
+          assert.equal(
+            JSON.stringify(response).includes("nostr+walletconnect://"),
+            false,
+          );
         }
       }
 
@@ -1697,8 +1951,14 @@ test("Hello Fruit hosted demo routes expose source, docs, robots, and sitemap", 
       assert.equal(nextSitemapDynamic, "force-dynamic");
       const nextSitemap = getNextSitemap();
       assert.equal(nextSitemap[0]?.url, "https://demo.example.test");
-      assert.equal(JSON.stringify(nextRobots).includes("OPENRECEIVE_NWC"), false);
-      assert.equal(JSON.stringify(nextSitemap).includes("nostr+walletconnect://"), false);
+      assert.equal(
+        JSON.stringify(nextRobots).includes("OPENRECEIVE_NWC"),
+        false,
+      );
+      assert.equal(
+        JSON.stringify(nextSitemap).includes("nostr+walletconnect://"),
+        false,
+      );
     },
   );
 });
@@ -1745,7 +2005,9 @@ async function dispatchJson(app, method, url, body) {
 async function dispatch(app, options) {
   return await new Promise((resolve, reject) => {
     const payload =
-      options.body === undefined ? undefined : Buffer.from(JSON.stringify(options.body));
+      options.body === undefined
+        ? undefined
+        : Buffer.from(JSON.stringify(options.body));
     const req = new Readable({
       read() {
         if (payload !== undefined) this.push(payload);
@@ -1756,7 +2018,9 @@ async function dispatch(app, options) {
     req.url = options.url;
     req.headers = {
       ...options.headers,
-      ...(payload === undefined ? {} : { "content-length": String(payload.length) }),
+      ...(payload === undefined
+        ? {}
+        : { "content-length": String(payload.length) }),
     };
     req.encrypted = false;
     req.connection = req;
@@ -1792,7 +2056,9 @@ async function dispatch(app, options) {
       },
       write(chunk) {
         if (chunk !== undefined) {
-          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+          chunks.push(
+            Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)),
+          );
         }
         return true;
       },

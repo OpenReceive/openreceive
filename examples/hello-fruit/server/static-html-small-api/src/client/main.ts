@@ -1,23 +1,24 @@
 import {
   createCheckoutShell,
   createOpenReceiveThemeToggleElement,
-  type CheckoutSnapshot
+  type CheckoutSnapshot,
 } from "@openreceive/browser/internal";
-import {
-  defineOpenReceiveElements
-} from "@openreceive/elements";
+import { defineOpenReceiveElements } from "@openreceive/elements";
 import {
   createHelloFruitDemoBrowserConsoleLogger,
-  createHelloFruitBrowserLogger
+  createHelloFruitBrowserLogger,
 } from "../../../../shared/demo-browser-logging.ts";
-import {
-  readHelloFruitCheckoutCurrencies
-} from "../../../../shared/demo-currencies.ts";
+import { readHelloFruitCheckoutCurrencies } from "../../../../shared/demo-currencies.ts";
 import {
   formatHelloFruitBuyNowLabel,
   formatHelloFruitFiat,
-  helloFruitDemoLabels
+  helloFruitDemoLabels,
 } from "../../../../shared/demo-formatting.ts";
+import {
+  formatHelloFruitDisplayPrice,
+  toHelloFruitDisplayAmount,
+  type HelloFruitBtcFiatRates,
+} from "../../../../shared/demo-pricing.ts";
 import fruitsData from "../../../../shared/fruits.json" with { type: "json" };
 import product from "../../../../shared/product.json" with { type: "json" };
 import "@openreceive/elements/styles.css";
@@ -67,21 +68,24 @@ if (firstFruit === undefined) {
 
 let selectedFruit: Fruit = fruits[1] ?? firstFruit;
 let selectedCurrency = "USD";
+let displayRates: HelloFruitBtcFiatRates | undefined;
 let cart: Record<string, number> = {};
 let currentOrder: DemoOrder | undefined;
 let purchasedFruit: Fruit | undefined;
 let completedOrderId = "";
 const logOpenReceive = createHelloFruitBrowserLogger("static-html-small-api");
-const logDemo = createHelloFruitDemoBrowserConsoleLogger("static-html-small-api");
+const logDemo = createHelloFruitDemoBrowserConsoleLogger(
+  "static-html-small-api",
+);
 
 defineOpenReceiveElements({
-  logger: logOpenReceive
+  logger: logOpenReceive,
 });
 logDemo("app.bootstrap", "Bootstrapping static HTML demo app.", {
   fruitCount: fruits.length,
   currencyOptions,
   selectedFruitId: selectedFruit.id,
-  selectedCurrency
+  selectedCurrency,
 });
 renderThemeToggle();
 renderProduct();
@@ -89,6 +93,7 @@ renderCurrencyPicker();
 renderFruitGrid();
 renderCreateOrderControls();
 logDemo("app.ready", "Static HTML demo app mounted.");
+void loadDisplayRates();
 
 document.getElementById("add-to-cart")?.addEventListener("click", () => {
   addSelectedFruitToCart();
@@ -100,12 +105,14 @@ document.getElementById("create-order")?.addEventListener("click", () => {
 function renderThemeToggle(): void {
   const topbar = requireElement("topbar");
   logDemo("theme_toggle.render", "Rendering OpenReceive theme toggle.");
-  topbar.replaceChildren(createOpenReceiveThemeToggleElement({
-    document,
-    rootSelector: ".page",
-    checkoutSelector: "openreceive-checkout",
-    defaultTheme: "light"
-  }));
+  topbar.replaceChildren(
+    createOpenReceiveThemeToggleElement({
+      document,
+      rootSelector: ".page",
+      checkoutSelector: "openreceive-checkout",
+      defaultTheme: "light",
+    }),
+  );
 }
 
 function renderProduct(): void {
@@ -115,7 +122,7 @@ function renderProduct(): void {
 
   logDemo("product.render", "Rendering selected product.", {
     fruitId: selectedFruit.id,
-    fruitName: selectedFruit.name
+    fruitName: selectedFruit.name,
   });
   sticker.src = `/${selectedFruit.sticker}`;
   title.textContent = product.name;
@@ -127,7 +134,7 @@ function renderFruitGrid(): void {
   grid.replaceChildren();
   logDemo("fruit_grid.render", "Rendering fruit picker.", {
     fruitCount: fruits.length,
-    selectedFruitId: selectedFruit.id
+    selectedFruitId: selectedFruit.id,
   });
 
   for (const fruit of fruits) {
@@ -137,7 +144,7 @@ function renderFruitGrid(): void {
     button.addEventListener("click", () => {
       logDemo("fruit.select", "Fruit selected.", {
         fruitId: fruit.id,
-        fruitName: fruit.name
+        fruitName: fruit.name,
       });
       selectedFruit = fruit;
       renderProduct();
@@ -153,7 +160,11 @@ function renderFruitGrid(): void {
     label.textContent = fruit.name;
 
     const price = document.createElement("small");
-    price.textContent = formatHelloFruitFiat(fruit.fiat);
+    price.textContent = formatHelloFruitDisplayPrice(
+      fruit.fiat,
+      selectedCurrency,
+      displayRates,
+    );
 
     button.append(image, label, price);
     grid.append(button);
@@ -171,9 +182,10 @@ function renderCurrencyPicker(): void {
   select.addEventListener("change", () => {
     logDemo("currency.change", "Currency changed.", {
       from: selectedCurrency,
-      to: select.value
+      to: select.value,
     });
     selectedCurrency = select.value;
+    renderFruitGrid();
     renderCreateOrderControls();
   });
 
@@ -190,20 +202,27 @@ function renderCurrencyPicker(): void {
 
 function renderCreateOrderControls(): void {
   const addButton = requireElement<HTMLButtonElement>("add-to-cart");
-  addButton.textContent = selectedCurrency === selectedFruit.fiat.currency
-    ? formatHelloFruitBuyNowLabel(selectedFruit.fiat)
-    : `Add to cart (${selectedCurrency})`;
+  addButton.textContent = formatHelloFruitBuyNowLabel(
+    toHelloFruitDisplayAmount(
+      selectedFruit.fiat,
+      selectedCurrency,
+      displayRates,
+    ),
+  );
   renderCart();
 
   const orderButton = requireElement<HTMLButtonElement>("create-order");
-  const cartQuantity = cartItems().reduce((total, item) => total + item.quantity, 0);
+  const cartQuantity = cartItems().reduce(
+    (total, item) => total + item.quantity,
+    0,
+  );
   orderButton.disabled = cartQuantity === 0;
   orderButton.textContent = helloFruitDemoLabels.createOrder;
   logDemo("controls.render", "Rendered cart and order controls.", {
     selectedFruitId: selectedFruit.id,
     selectedCurrency,
     cartQuantity,
-    canCreateOrder: cartQuantity > 0
+    canCreateOrder: cartQuantity > 0,
   });
 }
 
@@ -213,18 +232,18 @@ function addSelectedFruitToCart(): void {
     fruitId: selectedFruit.id,
     fruitName: selectedFruit.name,
     currency: selectedCurrency,
-    quantity: nextQuantity
+    quantity: nextQuantity,
   });
   cart = {
     ...cart,
-    [selectedFruit.id]: Math.min((cart[selectedFruit.id] ?? 0) + 1, 9)
+    [selectedFruit.id]: Math.min((cart[selectedFruit.id] ?? 0) + 1, 9),
   };
   renderCreateOrderControls();
 }
 
 function removeFruitFromCart(fruitId: string): void {
   logDemo("cart.remove", "Removing fruit from cart.", {
-    fruitId
+    fruitId,
   });
   const next = { ...cart };
   delete next[fruitId];
@@ -243,7 +262,7 @@ function renderCart(): void {
   }
   logDemo("cart.render", "Rendering cart.", {
     cartLineCount: items.length,
-    cartQuantity: items.reduce((total, item) => total + item.quantity, 0)
+    cartQuantity: items.reduce((total, item) => total + item.quantity, 0),
   });
 
   const section = document.createElement("section");
@@ -286,7 +305,7 @@ function renderOrder(order: DemoOrder): void {
     orderId: order.uuid,
     orderStatus: order.status,
     itemCount: order.items.length,
-    total: order.total_amount
+    total: order.total_amount,
   });
 
   const section = document.createElement("section");
@@ -328,9 +347,10 @@ function setOrderButtonState(state: "idle" | "creating"): void {
   const button = requireElement<HTMLButtonElement>("create-order");
   button.disabled = state === "creating" || cartItems().length === 0;
   button.textContent = formatHelloFruitBuyNowLabel(selectedFruit.fiat);
-  button.textContent = state === "creating"
-    ? helloFruitDemoLabels.creatingOrder
-    : helloFruitDemoLabels.createOrder;
+  button.textContent =
+    state === "creating"
+      ? helloFruitDemoLabels.creatingOrder
+      : helloFruitDemoLabels.createOrder;
 }
 
 async function createOrder(): Promise<void> {
@@ -340,7 +360,8 @@ async function createOrder(): Promise<void> {
   completedOrderId = "";
 
   try {
-    const idempotencyKey = globalThis.crypto?.randomUUID?.() ??
+    const idempotencyKey =
+      globalThis.crypto?.randomUUID?.() ??
       `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const startedAt = Date.now();
     const items = cartItems();
@@ -349,31 +370,33 @@ async function createOrder(): Promise<void> {
       cartLineCount: items.length,
       cartQuantity: items.reduce((total, item) => total + item.quantity, 0),
       productIds: items.map((item) => item.fruit.id),
-      idempotencyKeyPresent: idempotencyKey.length > 0
+      idempotencyKeyPresent: idempotencyKey.length > 0,
     });
     const response = await fetch("/create_order", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         idempotency_key: idempotencyKey,
         currency: selectedCurrency,
         cart: cartItems().map((item) => ({
           product_id: item.fruit.id,
-          quantity: item.quantity
-        }))
-      })
+          quantity: item.quantity,
+        })),
+      }),
     });
-    const body = await response.json() as unknown;
+    const body = (await response.json()) as unknown;
     logDemo("create_order.response", "Received create order response.", {
       ok: response.ok,
       status: response.status,
       elapsedMs: Date.now() - startedAt,
-      hasCheckout: isCreateOrderResponse(body)
+      hasCheckout: isCreateOrderResponse(body),
     });
     if (!response.ok || !isCreateOrderResponse(body)) {
-      throw new Error(readErrorMessage(body) ?? helloFruitDemoLabels.createOrderError);
+      throw new Error(
+        readErrorMessage(body) ?? helloFruitDemoLabels.createOrderError,
+      );
     }
 
     currentOrder = body.order;
@@ -383,16 +406,16 @@ async function createOrder(): Promise<void> {
       checkoutOrderId: body.checkout.order_id,
       orderStatus: body.order.status,
       itemCount: body.order.items.length,
-      total: body.order.total_amount
+      total: body.order.total_amount,
     });
     renderOrder(body.order);
     renderCheckout({
       ...body.checkout,
-      fiat: body.order.total_amount
+      fiat: body.order.total_amount,
     });
   } catch (error) {
     logDemo("create_order.error", "Create order failed in the browser.", {
-      error: error instanceof Error ? error.message : String(error)
+      error: error instanceof Error ? error.message : String(error),
     });
     setError(error instanceof Error ? error.message : String(error));
   } finally {
@@ -404,7 +427,7 @@ function renderCheckout(checkout: CheckoutSnapshot): void {
   const topbar = requireElement("topbar");
   const panel = requireElement("checkout-panel");
   logDemo("checkout.render", "Rendering OpenReceive checkout shell.", {
-    orderId: checkout.order_id
+    orderId: checkout.order_id,
   });
   const shell = createCheckoutShell(checkout, {
     document,
@@ -415,20 +438,28 @@ function renderCheckout(checkout: CheckoutSnapshot): void {
     onError: (event) => {
       const detail = (event as CustomEvent<{ error?: unknown }>).detail;
       logDemo("checkout.error", "Checkout shell reported an error.", {
-        error: detail?.error instanceof Error ? detail.error.message : String(detail?.error)
+        error:
+          detail?.error instanceof Error
+            ? detail.error.message
+            : String(detail?.error),
       });
-      setError(detail?.error instanceof Error ? detail.error.message : String(detail?.error));
+      setError(
+        detail?.error instanceof Error
+          ? detail.error.message
+          : String(detail?.error),
+      );
     },
     onSettled: (event) => {
-      const state = (event as CustomEvent<CheckoutStateEventDetail>).detail?.state;
+      const state = (event as CustomEvent<CheckoutStateEventDetail>).detail
+        ?.state;
       if (
         state?.order_id !== undefined &&
         state.order_id !== completedOrderId &&
-          purchasedFruit !== undefined
+        purchasedFruit !== undefined
       ) {
         logDemo("checkout.settled", "Checkout settled callback received.", {
           orderId: state.order_id,
-          purchasedFruitId: purchasedFruit.id
+          purchasedFruitId: purchasedFruit.id,
         });
         completedOrderId = state.order_id;
         if (currentOrder !== undefined) {
@@ -437,7 +468,7 @@ function renderCheckout(checkout: CheckoutSnapshot): void {
         }
         showStickerModal(purchasedFruit);
       }
-    }
+    },
   });
 
   topbar.replaceChildren(shell.themeToggle);
@@ -447,7 +478,7 @@ function renderCheckout(checkout: CheckoutSnapshot): void {
 function setError(message: string): void {
   if (message !== "") {
     logDemo("error.show", "Showing browser error message.", {
-      message
+      message,
     });
   }
   requireElement("error").textContent = message;
@@ -457,7 +488,7 @@ function showStickerModal(fruit: Fruit): void {
   closeStickerModal();
   logDemo("sticker_modal.show", "Showing sticker download modal.", {
     fruitId: fruit.id,
-    fruitName: fruit.name
+    fruitName: fruit.name,
   });
 
   const backdrop = document.createElement("div");
@@ -509,6 +540,28 @@ function closeStickerModal(): void {
   document.getElementById("sticker-modal-backdrop")?.remove();
 }
 
+async function loadDisplayRates(): Promise<void> {
+  try {
+    const response = await fetch("/rates");
+    if (!response.ok)
+      throw new Error(`rates request failed: HTTP ${response.status}`);
+    const body = (await response.json()) as { rates?: HelloFruitBtcFiatRates };
+    if (body.rates === undefined) return;
+    displayRates = body.rates;
+    logDemo("rates.loaded", "Loaded display exchange rates.", {
+      rateCurrencies: Object.keys(body.rates.bitcoin),
+    });
+    if (currentOrder === undefined) {
+      renderFruitGrid();
+      renderCreateOrderControls();
+    }
+  } catch (cause: unknown) {
+    logDemo("rates.error", "Failed to load display exchange rates.", {
+      error: cause instanceof Error ? cause.message : String(cause),
+    });
+  }
+}
+
 function requireElement<T extends HTMLElement = HTMLElement>(id: string): T {
   const element = document.getElementById(id);
   if (element === null) throw new Error(`missing element #${id}`);
@@ -516,10 +569,12 @@ function requireElement<T extends HTMLElement = HTMLElement>(id: string): T {
 }
 
 function isCreateOrderResponse(value: unknown): value is CreateOrderResponse {
-  return typeof value === "object" &&
+  return (
+    typeof value === "object" &&
     value !== null &&
     "order" in value &&
-    "checkout" in value;
+    "checkout" in value
+  );
 }
 
 function readErrorMessage(value: unknown): string | undefined {

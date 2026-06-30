@@ -1,33 +1,24 @@
 "use client";
 
 import type { Checkout as OpenReceiveCheckout } from "@openreceive/browser";
-import {
-  Checkout,
-  ThemeScope
-} from "@openreceive/react";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState
-} from "react";
-import type {
-  HelloFruit,
-  HelloFruitProduct
-} from "../server/shared-data.ts";
+import { Checkout, ThemeScope } from "@openreceive/react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { HelloFruit, HelloFruitProduct } from "../server/shared-data.ts";
 import {
   createHelloFruitDemoBrowserConsoleLogger,
-  createHelloFruitBrowserLogger
+  createHelloFruitBrowserLogger,
 } from "../../../../shared/demo-browser-logging.ts";
-import {
-  readHelloFruitCheckoutCurrencies
-} from "../../../../shared/demo-currencies.ts";
+import { readHelloFruitCheckoutCurrencies } from "../../../../shared/demo-currencies.ts";
 import {
   formatHelloFruitBuyNowLabel,
   formatHelloFruitFiat,
-  helloFruitDemoLabels
+  helloFruitDemoLabels,
 } from "../../../../shared/demo-formatting.ts";
+import {
+  formatHelloFruitDisplayPrice,
+  toHelloFruitDisplayAmount,
+  type HelloFruitBtcFiatRates,
+} from "../../../../shared/demo-pricing.ts";
 
 const logOpenReceive = createHelloFruitBrowserLogger("nextjs-fullstack");
 const logDemo = createHelloFruitDemoBrowserConsoleLogger("nextjs-fullstack");
@@ -59,14 +50,17 @@ interface CreateOrderResponse {
 
 export default function CheckoutClient({
   product,
-  fruits
+  fruits,
 }: CheckoutClientProps) {
   const [fruitId, setFruitId] = useState(fruits[1]?.id ?? fruits[0]?.id ?? "");
   const [currency, setCurrency] = useState("USD");
+  const [rates, setRates] = useState<HelloFruitBtcFiatRates | undefined>();
   const [cart, setCart] = useState<Record<string, number>>({});
   const [order, setOrder] = useState<DemoOrder | undefined>();
   const [checkout, setCheckout] = useState<OpenReceiveCheckout | undefined>();
-  const [purchasedFruit, setPurchasedFruit] = useState<HelloFruit | undefined>();
+  const [purchasedFruit, setPurchasedFruit] = useState<
+    HelloFruit | undefined
+  >();
   const [stickerModalOpen, setStickerModalOpen] = useState(false);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
@@ -74,38 +68,70 @@ export default function CheckoutClient({
 
   const selectedFruit = useMemo(
     () => fruits.find((fruit) => fruit.id === fruitId) ?? fruits[0],
-    [fruitId, fruits]
+    [fruitId, fruits],
   );
   const createCheckoutLabel =
     selectedFruit === undefined
       ? helloFruitDemoLabels.createOrder
-      : currency === selectedFruit.fiat.currency
-        ? formatHelloFruitBuyNowLabel(selectedFruit.fiat)
-        : `Add to cart (${currency})`;
+      : formatHelloFruitBuyNowLabel(
+          toHelloFruitDisplayAmount(selectedFruit.fiat, currency, rates),
+        );
   const cartItems = fruits
     .map((fruit) => ({ fruit, quantity: cart[fruit.id] ?? 0 }))
     .filter((item) => item.quantity > 0);
-  const cartQuantity = cartItems.reduce((total, item) => total + item.quantity, 0);
+  const cartQuantity = cartItems.reduce(
+    (total, item) => total + item.quantity,
+    0,
+  );
 
   useEffect(() => {
     logDemo("app.ready", "Next.js checkout client mounted.", {
       fruitCount: fruits.length,
       currencyOptions,
       initialFruitId: fruitId,
-      selectedCurrency: currency
+      selectedCurrency: currency,
     });
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch("/rates");
+        if (!response.ok)
+          throw new Error(`rates request failed: HTTP ${response.status}`);
+        const body = (await response.json()) as {
+          rates?: HelloFruitBtcFiatRates;
+        };
+        if (cancelled || body.rates === undefined) return;
+        setRates(body.rates);
+        logDemo("rates.loaded", "Loaded display exchange rates.", {
+          rateCurrencies: Object.keys(body.rates.bitcoin),
+        });
+      } catch (cause: unknown) {
+        logDemo("rates.error", "Failed to load display exchange rates.", {
+          error: cause instanceof Error ? cause.message : String(cause),
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const onSettled = useCallback(() => {
-    if (checkout !== undefined && completedCheckoutRef.current !== checkout.order_id) {
+    if (
+      checkout !== undefined &&
+      completedCheckoutRef.current !== checkout.order_id
+    ) {
       logDemo("checkout.settled", "Checkout settled callback received.", {
         orderId: checkout.order_id,
-        purchasedFruitId: purchasedFruit?.id
+        purchasedFruitId: purchasedFruit?.id,
       });
       completedCheckoutRef.current = checkout.order_id;
-      setOrder((current) => current === undefined
-        ? current
-        : { ...current, status: "paid" });
+      setOrder((current) =>
+        current === undefined ? current : { ...current, status: "paid" },
+      );
       setStickerModalOpen(true);
     }
   }, [checkout, purchasedFruit?.id]);
@@ -117,17 +143,17 @@ export default function CheckoutClient({
       fruitId: selectedFruit.id,
       fruitName: selectedFruit.name,
       currency,
-      quantity: nextQuantity
+      quantity: nextQuantity,
     });
     setCart((current) => ({
       ...current,
-      [selectedFruit.id]: Math.min((current[selectedFruit.id] ?? 0) + 1, 9)
+      [selectedFruit.id]: Math.min((current[selectedFruit.id] ?? 0) + 1, 9),
     }));
   }
 
   function removeFruitFromCart(fruitIdToRemove: string) {
     logDemo("cart.remove", "Removing fruit from cart.", {
-      fruitId: fruitIdToRemove
+      fruitId: fruitIdToRemove,
     });
     setCart((current) => {
       const next = { ...current };
@@ -138,10 +164,14 @@ export default function CheckoutClient({
 
   async function createOrder() {
     if (cartItems.length === 0) {
-      logDemo("create_order.skipped", "Create order clicked with an empty cart.");
+      logDemo(
+        "create_order.skipped",
+        "Create order clicked with an empty cart.",
+      );
       return;
     }
-    const orderId = globalThis.crypto?.randomUUID?.() ??
+    const orderId =
+      globalThis.crypto?.randomUUID?.() ??
       `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const startedAt = Date.now();
 
@@ -156,51 +186,57 @@ export default function CheckoutClient({
         cartLineCount: cartItems.length,
         cartQuantity,
         productIds: cartItems.map((item) => item.fruit.id),
-        idempotencyKeyPresent: orderId.length > 0
+        idempotencyKeyPresent: orderId.length > 0,
       });
       const response = await fetch("/create_order", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           idempotency_key: orderId,
           currency,
           cart: cartItems.map((item) => ({
             product_id: item.fruit.id,
-            quantity: item.quantity
-          }))
-        })
+            quantity: item.quantity,
+          })),
+        }),
       });
-      const body = await response.json() as unknown;
+      const body = (await response.json()) as unknown;
       logDemo("create_order.response", "Received create order response.", {
         ok: response.ok,
         status: response.status,
         elapsedMs: Date.now() - startedAt,
-        hasCheckout: isCreateOrderResponse(body)
+        hasCheckout: isCreateOrderResponse(body),
       });
       if (!response.ok || !isCreateOrderResponse(body)) {
-        throw new Error(readErrorMessage(body) ?? helloFruitDemoLabels.createOrderError);
+        throw new Error(
+          readErrorMessage(body) ?? helloFruitDemoLabels.createOrderError,
+        );
       }
 
-      logDemo("create_order.ready", "Checkout payload accepted by browser app.", {
-        orderId: body.order.uuid,
-        checkoutOrderId: body.checkout.order_id,
-        orderStatus: body.order.status,
-        itemCount: body.order.items.length,
-        total: body.order.total_amount
-      });
+      logDemo(
+        "create_order.ready",
+        "Checkout payload accepted by browser app.",
+        {
+          orderId: body.order.uuid,
+          checkoutOrderId: body.checkout.order_id,
+          orderStatus: body.order.status,
+          itemCount: body.order.items.length,
+          total: body.order.total_amount,
+        },
+      );
       setOrder(body.order);
       setCheckout({
         ...body.checkout,
-        fiat: body.order.total_amount
+        fiat: body.order.total_amount,
       });
       setPurchasedFruit(cartItems[0]?.fruit);
       setStatus("invoice_created");
     } catch (cause: unknown) {
       logDemo("create_order.error", "Create order failed in the browser.", {
         error: cause instanceof Error ? cause.message : String(cause),
-        elapsedMs: Date.now() - startedAt
+        elapsedMs: Date.now() - startedAt,
       });
       setStatus("failed");
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -210,7 +246,7 @@ export default function CheckoutClient({
   function startOver() {
     logDemo("app.reset", "Resetting the demo state.", {
       hadCheckout: checkout !== undefined,
-      hadOrder: order !== undefined
+      hadOrder: order !== undefined,
     });
     setCart({});
     setOrder(undefined);
@@ -246,13 +282,15 @@ export default function CheckoutClient({
           onChange={(event) => {
             logDemo("currency.change", "Currency changed.", {
               from: currency,
-              to: event.target.value
+              to: event.target.value,
             });
             setCurrency(event.target.value);
           }}
         >
           {currencyOptions.map((option) => (
-            <option key={option} value={option}>{option}</option>
+            <option key={option} value={option}>
+              {option}
+            </option>
           ))}
         </select>
       </label>
@@ -265,7 +303,7 @@ export default function CheckoutClient({
             onClick={() => {
               logDemo("fruit.select", "Fruit selected.", {
                 fruitId: fruit.id,
-                fruitName: fruit.name
+                fruitName: fruit.name,
               });
               setFruitId(fruit.id);
             }}
@@ -273,7 +311,9 @@ export default function CheckoutClient({
           >
             <img src={`/stickers/${fruit.id}.svg`} alt="" />
             <span>{fruit.name}</span>
-            <small>{formatHelloFruitFiat(fruit.fiat)}</small>
+            <small>
+              {formatHelloFruitDisplayPrice(fruit.fiat, currency, rates)}
+            </small>
           </button>
         ))}
       </div>
@@ -290,7 +330,9 @@ export default function CheckoutClient({
         <section className="cart" aria-label="Cart">
           <div className="cart-heading">
             <strong>Cart</strong>
-            <span>{cartQuantity} item{cartQuantity === 1 ? "" : "s"}</span>
+            <span>
+              {cartQuantity} item{cartQuantity === 1 ? "" : "s"}
+            </span>
           </div>
           {cartItems.map((item) => (
             <div className="cart-row" key={item.fruit.id}>
@@ -331,14 +373,12 @@ export default function CheckoutClient({
           onClick={createOrder}
           type="button"
         >
-          {status === "creating" ? helloFruitDemoLabels.creatingOrder : helloFruitDemoLabels.createOrder}
+          {status === "creating"
+            ? helloFruitDemoLabels.creatingOrder
+            : helloFruitDemoLabels.createOrder}
         </button>
       ) : (
-        <button
-          className="secondary"
-          onClick={startOver}
-          type="button"
-        >
+        <button className="secondary" onClick={startOver} type="button">
           Start over
         </button>
       )}
@@ -365,9 +405,13 @@ export default function CheckoutClient({
             statusUrl="/order_status"
             logger={logOpenReceive}
             onError={(cause) => {
-              logDemo("checkout.error", "Checkout component reported an error.", {
-                error: cause instanceof Error ? cause.message : String(cause)
-              });
+              logDemo(
+                "checkout.error",
+                "Checkout component reported an error.",
+                {
+                  error: cause instanceof Error ? cause.message : String(cause),
+                },
+              );
               setError(cause instanceof Error ? cause.message : String(cause));
             }}
             onSettled={onSettled}
@@ -375,7 +419,7 @@ export default function CheckoutClient({
             classNames={{
               root: "react-checkout",
               actions: "actions",
-              invoice: "invoice-text"
+              invoice: "invoice-text",
             }}
           />
         </div>
@@ -417,10 +461,12 @@ export default function CheckoutClient({
 }
 
 function isCreateOrderResponse(value: unknown): value is CreateOrderResponse {
-  return typeof value === "object" &&
+  return (
+    typeof value === "object" &&
     value !== null &&
     "order" in value &&
-    "checkout" in value;
+    "checkout" in value
+  );
 }
 
 function readErrorMessage(value: unknown): string | undefined {

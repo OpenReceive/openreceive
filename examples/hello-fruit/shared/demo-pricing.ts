@@ -1,4 +1,5 @@
 import type { HelloFruitFiatAmount } from "./demo-formatting.ts";
+import { formatHelloFruitFiat } from "./demo-formatting.ts";
 
 export interface HelloFruitBtcFiatRates {
   readonly bitcoin: Readonly<Record<string, string>>;
@@ -12,6 +13,37 @@ export class HelloFruitPricingError extends Error {
     this.name = "HelloFruitPricingError";
     this.status = status;
   }
+}
+
+/**
+ * Converts a USD catalog amount into the selected display currency, falling
+ * back to the base amount when rates are not loaded yet or a rate is missing.
+ * Demo-only presentation glue: keeps the displayed price aligned with the
+ * server-side order math without throwing while a front end is still loading.
+ */
+export function toHelloFruitDisplayAmount(
+  amount: HelloFruitFiatAmount,
+  currency: string,
+  rates: HelloFruitBtcFiatRates | undefined,
+): HelloFruitFiatAmount {
+  if (currency === amount.currency) return amount;
+  if (rates === undefined) return amount;
+  try {
+    return convertHelloFruitUsdAmount(amount, currency, rates);
+  } catch (error) {
+    if (error instanceof HelloFruitPricingError) return amount;
+    throw error;
+  }
+}
+
+export function formatHelloFruitDisplayPrice(
+  amount: HelloFruitFiatAmount,
+  currency: string,
+  rates: HelloFruitBtcFiatRates | undefined,
+): string {
+  return formatHelloFruitFiat(
+    toHelloFruitDisplayAmount(amount, currency, rates),
+  );
 }
 
 export function convertHelloFruitUsdAmount(
@@ -58,7 +90,9 @@ export function sumHelloFruitAmounts(
 ): HelloFruitFiatAmount {
   const first = amounts[0];
   if (first === undefined) {
-    throw new HelloFruitPricingError("At least one amount is required to total.");
+    throw new HelloFruitPricingError(
+      "At least one amount is required to total.",
+    );
   }
   const currency = first.currency;
   let scale = 0;
@@ -88,7 +122,10 @@ export function requiredHelloFruitRate(
 ): string {
   const rate = rates?.bitcoin[currency.toLowerCase()];
   if (rate === undefined) {
-    throw new HelloFruitPricingError(`Missing BTC/${currency} price feed rate.`, 503);
+    throw new HelloFruitPricingError(
+      `Missing BTC/${currency} price feed rate.`,
+      503,
+    );
   }
   return rate;
 }
@@ -98,7 +135,9 @@ export function parseDecimal(value: string): {
   readonly scale: number;
 } {
   if (!/^\d+(?:\.\d+)?$/.test(value)) {
-    throw new HelloFruitPricingError("Fiat prices must be positive decimal strings.");
+    throw new HelloFruitPricingError(
+      "Fiat prices must be positive decimal strings.",
+    );
   }
   const [integer, fraction = ""] = value.split(".");
   return {
@@ -111,7 +150,10 @@ export function usdToSats(usdValue: string, usdBtcPrice: string): bigint {
   const usd = parseDecimal(usdValue);
   const price = parseDecimal(usdBtcPrice);
   if (price.units <= 0n) {
-    throw new HelloFruitPricingError("BTC/USD price feed rate must be greater than zero.", 503);
+    throw new HelloFruitPricingError(
+      "BTC/USD price feed rate must be greater than zero.",
+      503,
+    );
   }
   const numerator = usd.units * BigInt(price.scale) * 100_000_000n;
   const denominator = price.units * BigInt(usd.scale);
@@ -127,13 +169,18 @@ export function convertUsdToFiat(
   const usdPrice = parseDecimal(usdBtcPrice);
   const targetPrice = parseDecimal(targetBtcPrice);
   if (usdPrice.units <= 0n || targetPrice.units <= 0n) {
-    throw new HelloFruitPricingError("BTC fiat price feed rates must be greater than zero.", 503);
+    throw new HelloFruitPricingError(
+      "BTC fiat price feed rates must be greater than zero.",
+      503,
+    );
   }
 
   const scale = 2;
   const outputScale = 10n ** BigInt(scale);
-  const numerator = usd.units * targetPrice.units * BigInt(usdPrice.scale) * outputScale;
-  const denominator = BigInt(usd.scale) * BigInt(targetPrice.scale) * usdPrice.units;
+  const numerator =
+    usd.units * targetPrice.units * BigInt(usdPrice.scale) * outputScale;
+  const denominator =
+    BigInt(usd.scale) * BigInt(targetPrice.scale) * usdPrice.units;
   return formatDecimal(ceilDiv(numerator, denominator), scale);
 }
 

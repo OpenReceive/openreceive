@@ -2,7 +2,10 @@ import {
   createHelloFruitOrderInvoiceDescription,
   type HelloFruitFiatAmount,
 } from "./demo-formatting.ts";
-import { readHelloFruitCatalog, type HelloFruitProduct } from "./demo-catalog.ts";
+import {
+  readHelloFruitCatalog,
+  type HelloFruitProduct,
+} from "./demo-catalog.ts";
 import {
   isHelloFruitDirectAmountCurrency,
   normalizeHelloFruitCurrency,
@@ -98,8 +101,11 @@ export function createHelloFruitCreateOrderResult(
   },
 ): HelloFruitCreateOrderResult {
   const idempotencyKey = requireIdempotencyKey(input.idempotency_key);
-  const supportedCurrencies = options.supportedCurrencies ?? readHelloFruitCheckoutCurrencies();
-  const currency = normalizeHelloFruitCurrency(input.currency, [...supportedCurrencies]);
+  const supportedCurrencies =
+    options.supportedCurrencies ?? readHelloFruitCheckoutCurrencies();
+  const currency = normalizeHelloFruitCurrency(input.currency, [
+    ...supportedCurrencies,
+  ]);
   const items = createHelloFruitOrderItems(
     input.cart,
     options.catalog ?? readHelloFruitCatalog(),
@@ -163,7 +169,9 @@ export function createHelloFruitOrderStatus(input: {
   readonly state?: unknown;
 }): HelloFruitOrderStatus {
   const orderId =
-    typeof input.order_id === "string" && input.order_id.length > 0 ? input.order_id : "unknown";
+    typeof input.order_id === "string" && input.order_id.length > 0
+      ? input.order_id
+      : "unknown";
   const paid =
     input.paid === true ||
     input.status === "paid" ||
@@ -217,12 +225,16 @@ function createHelloFruitOrderItems(
       sticker: product.sticker,
       quantity,
       unit_amount,
-      line_amount: withHelloFruitPricing(() => multiplyHelloFruitAmount(unit_amount, quantity)),
+      line_amount: withHelloFruitPricing(() =>
+        multiplyHelloFruitAmount(unit_amount, quantity),
+      ),
     };
   });
 }
 
-function totalHelloFruitAmount(items: readonly HelloFruitOrderItem[]): HelloFruitFiatAmount {
+function totalHelloFruitAmount(
+  items: readonly HelloFruitOrderItem[],
+): HelloFruitFiatAmount {
   if (items.length === 0) {
     throw new HelloFruitDemoOrderError("Cart must include at least one item.");
   }
@@ -242,7 +254,6 @@ function withHelloFruitPricing<T>(compute: () => T): T {
   }
 }
 
-
 function asCartItem(value: unknown): HelloFruitCartItemInput {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new HelloFruitDemoOrderError("Cart items must be objects.");
@@ -251,7 +262,8 @@ function asCartItem(value: unknown): HelloFruitCartItemInput {
 }
 
 function requireProductId(item: HelloFruitCartItemInput): string {
-  const productId = typeof item.product_id === "string" ? item.product_id : item.id;
+  const productId =
+    typeof item.product_id === "string" ? item.product_id : item.id;
   if (typeof productId !== "string" || productId.length === 0) {
     throw new HelloFruitDemoOrderError("Cart items require product_id.");
   }
@@ -259,8 +271,15 @@ function requireProductId(item: HelloFruitCartItemInput): string {
 }
 
 function requireQuantity(value: unknown): number {
-  if (!Number.isInteger(value) || typeof value !== "number" || value < 1 || value > 9) {
-    throw new HelloFruitDemoOrderError("Cart item quantity must be an integer from 1 through 9.");
+  if (
+    !Number.isInteger(value) ||
+    typeof value !== "number" ||
+    value < 1 ||
+    value > 9
+  ) {
+    throw new HelloFruitDemoOrderError(
+      "Cart item quantity must be an integer from 1 through 9.",
+    );
   }
   return value;
 }
@@ -270,7 +289,9 @@ function requireIdempotencyKey(value: unknown): string {
     throw new HelloFruitDemoOrderError("idempotency_key is required.");
   }
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(value)) {
-    throw new HelloFruitDemoOrderError("idempotency_key must be a URL-safe identifier.");
+    throw new HelloFruitDemoOrderError(
+      "idempotency_key must be a URL-safe identifier.",
+    );
   }
   return value;
 }
