@@ -5,7 +5,6 @@ import {
   createIdempotencyRequestHash,
   getBtcFiatRatesWithFallback,
   getIdempotentRecord,
-  isHealthCheckablePriceFeed,
   isOpenReceiveErrorCode,
   isResolvedPriceProvider,
   putCreatedInvoiceRecord,
@@ -344,8 +343,6 @@ export async function createOpenReceive(
     priceProviders,
     priceCurrencies,
   };
-
-  await assertPriceFeedBootHealthy(context);
 
   const getOrCreateCheckout = async (
     input: OpenReceiveGetOrCreateCheckoutRequest,
@@ -1508,24 +1505,6 @@ function readPriceFeedUrlEnv(name: string): string | undefined {
   const value = globalThis.process?.env?.[name];
   if (value === undefined || value.trim().length === 0) return undefined;
   return value.trim();
-}
-
-// Refuses to boot when a configured live price feed cannot answer. Internal
-// tests can pass explicit non-health-checking providers.
-async function assertPriceFeedBootHealthy(context: OpenReceiveServiceContext): Promise<void> {
-  for (const provider of context.priceProviders) {
-    if (!isHealthCheckablePriceFeed(provider)) continue;
-    try {
-      await provider.healthCheck(context.priceCurrencies);
-    } catch (error) {
-      throw new OpenReceiveConfigError({
-        code: "UNHEALTHY_PRICE_DATA",
-        message: "OpenReceive refuses to boot because live price data is unhealthy.",
-        hint: "Ensure the primary or fallback BTC fiat price feed can refresh, or configure explicit internal test priceProviders.",
-        cause: error,
-      });
-    }
-  }
 }
 
 function mapPriceError(error: unknown): OpenReceiveServiceError {

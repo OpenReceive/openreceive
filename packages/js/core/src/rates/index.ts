@@ -143,7 +143,7 @@ export interface OpenReceiveResolvedPriceProvider extends OpenReceiveSourcedPric
   ): Promise<OpenReceiveBtcFiatRateMapWithSource>;
 }
 
-// A live feed that can be probed at boot to confirm it answers correctly.
+// A live feed that can be probed explicitly to confirm it answers correctly.
 export interface OpenReceivePriceFeedHealthCheck {
   healthCheck(
     currencies?: readonly string[]
@@ -528,6 +528,24 @@ interface PriceFeedCacheEntry {
   fetched_at: number;
 }
 
+interface PriceFeedCacheState {
+  entry?: PriceFeedCacheEntry;
+  refresh_started_at?: number;
+  refresh_failed_at?: number;
+  refresh_error?: string;
+}
+
+type PriceFeedRefreshClaim =
+  | {
+      status: "claimed";
+      row: MetaRow;
+      previousEntry?: PriceFeedCacheEntry;
+    }
+  | {
+      status: "served";
+      entry: PriceFeedCacheEntry;
+    };
+
 export interface CachedPriceFeedOptions {
   store: OpenReceivePriceFeedCacheStore;
   currencies: readonly string[];
@@ -541,7 +559,9 @@ export interface CachedPriceFeedOptions {
 // Serves BTC fiat rates from a database cache, refreshing from the primary feed
 // first and the fallback feed second. The whole rate map is stored as JSON
 // alongside the fetch time, so repeated orders inside the cache window never hit
-// the network.
+// the network. Refresh attempts are claimed in the same database row before any
+// provider call, which keeps concurrent processes from each calling CoinGecko or
+// a fallback when the cache goes stale.
 export class CachedPriceFeed
   implements OpenReceiveResolvedPriceProvider, OpenReceivePriceFeedHealthCheck
 {
@@ -577,43 +597,116 @@ export class CachedPriceFeed
     currencies: readonly string[]
   ): Promise<OpenReceiveBtcFiatRateMapWithSource> {
     const now = this.#clock();
-    const cached = await this.#readFreshCache(now);
-    const resolved = cached ?? (await this.#refresh(now));
+    const claimed = await this.#readOrClaimRefresh(now);
+    const resolved =
+      claimed.status === "served"
+        ? claimed.entry
+        : await this.#refresh(now, claimed.row.rev, claimed.previousEntry);
     return {
       source: resolved.source,
       rates: parseSimplePriceResponse(resolved.rates, currencies)
     };
   }
 
-  // Forces a live refresh, ignoring the cache, so boot can confirm at least one
-  // feed answers in the expected shape. Throws if both feeds fail. Tolerant of
-  // an upstream that drops an individual currency.
+  // Forces a live refresh, ignoring the cache, for explicit operational probes.
+  // Throws if both feeds fail. Tolerant of an upstream that drops an individual
+  // currency.
   async healthCheck(): Promise<OpenReceiveBtcFiatRateMapWithSource> {
-    const resolved = await this.#refresh(this.#clock());
+    const now = this.#clock();
+    const meta = await this.#store.getMeta(this.#cacheKey);
+    const previousEntry = parsePriceFeedCacheState(meta?.value)?.entry;
+    const resolved = await this.#refresh(
+      now,
+      meta === undefined ? null : meta.rev,
+      previousEntry
+    );
     return {
       source: resolved.source,
       rates: resolved.rates
     };
   }
 
-  async #readFreshCache(now: number): Promise<PriceFeedCacheEntry | undefined> {
-    const meta = await this.#store.getMeta(this.#cacheKey);
-    if (meta === undefined) return undefined;
+  async #readOrClaimRefresh(now: number): Promise<PriceFeedRefreshClaim> {
+    let meta = await this.#store.getMeta(this.#cacheKey);
 
-    const entry = parsePriceFeedCacheEntry(meta.value);
-    if (entry === undefined) return undefined;
-    if (now - entry.fetched_at >= this.#cacheSeconds) return undefined;
-    return entry;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const state = parsePriceFeedCacheState(meta?.value);
+      const freshEntry = this.#freshEntry(state, now);
+      if (freshEntry !== undefined) {
+        return {
+          status: "served",
+          entry: freshEntry
+        };
+      }
+
+      if (this.#isRecent(state?.refresh_failed_at, now)) {
+        throw new Error(
+          `price feed refresh already failed within ${this.#cacheSeconds}s${
+            state?.refresh_error === undefined ? "" : `: ${state.refresh_error}`
+          }`
+        );
+      }
+
+      if (this.#isRecent(state?.refresh_started_at, now)) {
+        if (state?.entry !== undefined) {
+          return {
+            status: "served",
+            entry: state.entry
+          };
+        }
+        throw new Error(
+          `price feed refresh already started within ${this.#cacheSeconds}s`
+        );
+      }
+
+      const claim = await this.#store.casMeta(
+        this.#cacheKey,
+        serializePriceFeedCacheState({
+          entry: state?.entry,
+          refresh_started_at: now
+        }),
+        meta === undefined ? null : meta.rev
+      );
+
+      if (claim.status === "ok") {
+        return {
+          status: "claimed",
+          row: claim.row,
+          previousEntry: state?.entry
+        };
+      }
+
+      meta = claim.row.rev < 0 ? undefined : claim.row;
+    }
+
+    throw new Error("price feed cache changed too often while claiming refresh");
   }
 
-  async #refresh(now: number): Promise<PriceFeedCacheEntry> {
+  #freshEntry(
+    state: PriceFeedCacheState | undefined,
+    now: number
+  ): PriceFeedCacheEntry | undefined {
+    if (state?.entry === undefined) return undefined;
+    if (now - state.entry.fetched_at >= this.#cacheSeconds) return undefined;
+    return state.entry;
+  }
+
+  #isRecent(timestamp: number | undefined, now: number): boolean {
+    return timestamp !== undefined && now - timestamp < this.#cacheSeconds;
+  }
+
+  async #refresh(
+    now: number,
+    expectedRev: number | null,
+    previousEntry: PriceFeedCacheEntry | undefined
+  ): Promise<PriceFeedCacheEntry> {
     const failures: string[] = [];
     for (const provider of [this.#primary, this.#fallback]) {
       try {
         const rates = await this.#fetchProviderRates(provider);
         const source = provider.source as OpenReceiveLivePriceSourceId;
         const entry: PriceFeedCacheEntry = { rates, source, fetched_at: now };
-        await this.#writeCache(entry);
+        await this.#writeCacheState({ entry }, expectedRev);
         return entry;
       } catch (error) {
         failures.push(
@@ -622,7 +715,17 @@ export class CachedPriceFeed
       }
     }
 
-    throw new Error(`all price feeds failed: ${failures.join("; ")}`);
+    const error = new Error(`all price feeds failed: ${failures.join("; ")}`);
+    await this.#writeCacheState(
+      {
+        entry: previousEntry,
+        refresh_started_at: now,
+        refresh_failed_at: now,
+        refresh_error: error.message
+      },
+      expectedRev
+    );
+    throw error;
   }
 
   // Cache the whole feed when the provider can serve it tolerantly; otherwise
@@ -636,12 +739,18 @@ export class CachedPriceFeed
     return provider.getBtcFiatRates(this.#currencies);
   }
 
-  async #writeCache(entry: PriceFeedCacheEntry): Promise<void> {
-    const current = await this.#store.getMeta(this.#cacheKey);
-    const expectedRev = current === undefined ? null : current.rev;
-    // A concurrent refresh winning the CAS is fine: its data is equally fresh,
-    // so we ignore a conflict rather than retrying.
-    await this.#store.casMeta(this.#cacheKey, JSON.stringify(entry), expectedRev);
+  async #writeCacheState(
+    state: PriceFeedCacheState,
+    expectedRev: number | null
+  ): Promise<void> {
+    // A concurrent writer winning the CAS is fine: it prevents an extra network
+    // call for other readers, and they will observe the database state on their
+    // next read.
+    await this.#store.casMeta(
+      this.#cacheKey,
+      serializePriceFeedCacheState(state),
+      expectedRev
+    );
   }
 }
 
@@ -657,7 +766,9 @@ function providerHasGetAllBtcFiatRates(
   );
 }
 
-function parsePriceFeedCacheEntry(value: string): PriceFeedCacheEntry | undefined {
+function parsePriceFeedCacheState(value: string | undefined): PriceFeedCacheState | undefined {
+  if (value === undefined) return undefined;
+
   let parsed: unknown;
   try {
     parsed = JSON.parse(value);
@@ -667,12 +778,39 @@ function parsePriceFeedCacheEntry(value: string): PriceFeedCacheEntry | undefine
 
   if (parsed === null || typeof parsed !== "object") return undefined;
   const record = parsed as Record<string, unknown>;
+  const entry = parsePriceFeedCacheEntry(record);
+  const refreshStartedAt = optionalCacheTimestamp(record.refresh_started_at);
+  const refreshFailedAt = optionalCacheTimestamp(record.refresh_failed_at);
+  const refreshError =
+    typeof record.refresh_error === "string" && record.refresh_error.length > 0
+      ? record.refresh_error
+      : undefined;
+
+  if (
+    entry === undefined &&
+    refreshStartedAt === undefined &&
+    refreshFailedAt === undefined
+  ) {
+    return undefined;
+  }
+
+  return {
+    ...(entry === undefined ? {} : { entry }),
+    ...(refreshStartedAt === undefined ? {} : { refresh_started_at: refreshStartedAt }),
+    ...(refreshFailedAt === undefined ? {} : { refresh_failed_at: refreshFailedAt }),
+    ...(refreshError === undefined ? {} : { refresh_error: refreshError })
+  };
+}
+
+function parsePriceFeedCacheEntry(
+  record: Record<string, unknown>
+): PriceFeedCacheEntry | undefined {
   const fetchedAt = record.fetched_at;
   const source = record.source;
   const rates = record.rates;
 
   if (
-    !Number.isSafeInteger(fetchedAt) ||
+    !isCacheTimestamp(fetchedAt) ||
     (source !== "primary" && source !== "fallback") ||
     rates === null ||
     typeof rates !== "object" ||
@@ -687,6 +825,33 @@ function parsePriceFeedCacheEntry(value: string): PriceFeedCacheEntry | undefine
     source,
     fetched_at: fetchedAt as number
   };
+}
+
+function serializePriceFeedCacheState(state: PriceFeedCacheState): string {
+  return JSON.stringify({
+    ...(state.entry === undefined
+      ? {}
+      : {
+          rates: state.entry.rates,
+          source: state.entry.source,
+          fetched_at: state.entry.fetched_at
+        }),
+    ...(state.refresh_started_at === undefined
+      ? {}
+      : { refresh_started_at: state.refresh_started_at }),
+    ...(state.refresh_failed_at === undefined
+      ? {}
+      : { refresh_failed_at: state.refresh_failed_at }),
+    ...(state.refresh_error === undefined ? {} : { refresh_error: state.refresh_error })
+  });
+}
+
+function optionalCacheTimestamp(value: unknown): number | undefined {
+  return isCacheTimestamp(value) ? value : undefined;
+}
+
+function isCacheTimestamp(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0;
 }
 
 // Wires the hard-coded (or overridden) primary/fallback feeds to a database

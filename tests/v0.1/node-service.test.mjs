@@ -525,27 +525,71 @@ test("read-only rate helpers expose static rates and quotes", async () => {
   assert.equal(quote.source, "static_mock");
 });
 
-test("createOpenReceive defaults to live cached price data and fails unhealthy boot", async () => {
+test("createOpenReceive fetches default live price data only when rates are needed", async () => {
   const store = new InMemoryInvoiceKvStore();
+  let fetchCalls = 0;
 
-  await assert.rejects(
+  const openreceive = await createOpenReceive({
+    client: new FakeWallet(() => 1000),
+    store,
+    namespace: "demo_hello_fruit",
+    clock: () => 1000,
+    priceFetch: async () => {
+      fetchCalls += 1;
+      return {
+        ok: false,
+        status: 503,
+        text: async () => "{}",
+      };
+    },
+  });
+
+  assert.equal(fetchCalls, 0);
+
+  const btcCheckout = await openreceive.createCheckout({
+    orderId: "order-live-btc",
+    amount: { btc: { currency: "SATS", value: "200" } },
+  });
+  assert.equal(btcCheckout.amount_msats, 200000);
+  assert.equal(fetchCalls, 0);
+
+  await assertServiceError(
     () =>
-      createOpenReceive({
-        client: new FakeWallet(() => 1000),
-        store,
-        namespace: "demo_hello_fruit",
-        priceFetch: async () => ({
-          ok: false,
-          status: 503,
-          text: async () => "{}",
-        }),
+      openreceive.createCheckout({
+        orderId: "order-live-fiat",
+        amount: {
+          fiat: {
+            currency: "USD",
+            value: "0.10",
+          },
+        },
       }),
-    (error) => {
-      assert.equal(error instanceof OpenReceiveConfigError, true);
-      assert.equal(error.code, "UNHEALTHY_PRICE_DATA");
-      return true;
+    {
+      status: 503,
+      code: "INTERNAL",
+      message: "Unable to fetch BTC fiat exchange rate.",
     },
   );
+  assert.equal(fetchCalls, 2);
+
+  await assertServiceError(
+    () =>
+      openreceive.createCheckout({
+        orderId: "order-live-fiat-retry",
+        amount: {
+          fiat: {
+            currency: "USD",
+            value: "0.10",
+          },
+        },
+      }),
+    {
+      status: 503,
+      code: "INTERNAL",
+      message: "Unable to fetch BTC fiat exchange rate.",
+    },
+  );
+  assert.equal(fetchCalls, 2);
 });
 
 test("createOpenReceive refuses in-memory invoice storage in production mode", async () => {

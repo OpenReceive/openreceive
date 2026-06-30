@@ -51,6 +51,22 @@ function stageFetch(handlers) {
   return { fetch, calls };
 }
 
+function deferred() {
+  let resolve;
+  const promise = new Promise((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+async function waitFor(predicate) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (predicate()) return;
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  throw new Error("condition was not met");
+}
+
 test("parses Simple Price BTC fiat rates as decimal strings", () => {
   const rates = parseSimplePriceResponse(
     {
@@ -189,6 +205,85 @@ test("cached feed refreshes once the cache is older than 60 seconds", async () =
   const refreshed = await feed.getBtcFiatRatesWithSource(["USD"]);
   assert.deepEqual(refreshed.rates, { bitcoin: { usd: "71000" } });
   assert.equal(calls.length, 2);
+});
+
+test("cached feed serves stale DB rates during a claimed refresh", async () => {
+  let now = 1000;
+  let primaryHandler = () => okResponse({ bitcoin: { usd: 70000 } });
+  const store = new InMemoryInvoiceKvStore();
+  const { fetch, calls } = stageFetch({
+    [PRIMARY_URL]: () => primaryHandler()
+  });
+  const feed = createCachedLivePriceFeed({
+    store,
+    currencies: ["USD"],
+    fetch,
+    clock: () => now,
+    primaryUrl: PRIMARY_URL,
+    fallbackUrl: FALLBACK_URL
+  });
+
+  await feed.getBtcFiatRatesWithSource(["USD"]);
+  assert.equal(calls.length, 1);
+
+  now = 1060;
+  const refresh = deferred();
+  primaryHandler = () => refresh.promise;
+  const refreshing = feed.getBtcFiatRatesWithSource(["USD"]);
+  await waitFor(() => calls.length === 2);
+
+  const concurrent = await feed.getBtcFiatRatesWithSource(["USD"]);
+  assert.deepEqual(concurrent.rates, { bitcoin: { usd: "70000" } });
+  assert.equal(calls.length, 2);
+
+  refresh.resolve(okResponse({ bitcoin: { usd: 71000 } }));
+  const refreshed = await refreshing;
+  assert.deepEqual(refreshed.rates, { bitcoin: { usd: "71000" } });
+  assert.equal(calls.length, 2);
+
+  const cached = JSON.parse((await store.getMeta("price_feed:bitcoin")).value);
+  assert.equal(cached.fetched_at, 1060);
+  assert.equal(cached.refresh_started_at, undefined);
+});
+
+test("cached feed throttles failed refresh attempts through the database", async () => {
+  let now = 1000;
+  const store = new InMemoryInvoiceKvStore();
+  const { fetch, calls } = stageFetch({
+    [PRIMARY_URL]: () => httpErrorResponse(500),
+    [FALLBACK_URL]: () => httpErrorResponse(503)
+  });
+  const feed = createCachedLivePriceFeed({
+    store,
+    currencies: ["USD"],
+    fetch,
+    clock: () => now,
+    primaryUrl: PRIMARY_URL,
+    fallbackUrl: FALLBACK_URL
+  });
+
+  await assert.rejects(
+    () => feed.getBtcFiatRatesWithSource(["USD"]),
+    /all price feeds failed: primary: .*HTTP 500.*fallback: .*HTTP 503/
+  );
+  assert.deepEqual(calls.map((call) => call.url), [PRIMARY_URL, FALLBACK_URL]);
+
+  const failed = JSON.parse((await store.getMeta("price_feed:bitcoin")).value);
+  assert.equal(failed.refresh_failed_at, 1000);
+  assert.match(failed.refresh_error, /all price feeds failed/);
+
+  await assert.rejects(
+    () => feed.getBtcFiatRatesWithSource(["USD"]),
+    /price feed refresh already failed within 60s/
+  );
+  assert.equal(calls.length, 2);
+
+  now = 1060;
+  await assert.rejects(
+    () => feed.getBtcFiatRatesWithSource(["USD"]),
+    /all price feeds failed/
+  );
+  assert.equal(calls.length, 4);
 });
 
 test("cached feed falls back to the second URL when the primary times out", async () => {
