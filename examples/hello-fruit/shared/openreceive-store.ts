@@ -1,14 +1,12 @@
-import {
-  resolveOpenReceiveStore,
-  type OpenReceiveResolvedStore
-} from "@openreceive/node";
+import { resolveOpenReceiveStore } from "@openreceive/node";
 
 const DEFAULT_STORE_URI = "local-sqlite";
 const DEFAULT_NAMESPACE = "hello_fruit";
+type HelloFruitOpenReceiveStore = Awaited<ReturnType<typeof resolveOpenReceiveStore>>;
 
 export async function createHelloFruitOpenReceiveKvStore(input: {
   readonly demoId: string;
-}): Promise<OpenReceiveResolvedStore> {
+}): Promise<HelloFruitOpenReceiveStore> {
   const storeUri = (process.env.OPENRECEIVE_STORE ?? DEFAULT_STORE_URI).trim();
   const namespace = process.env.OPENRECEIVE_NAMESPACE ?? DEFAULT_NAMESPACE;
   try {
