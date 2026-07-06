@@ -133,7 +133,6 @@ export interface OpenReceiveCreateCheckoutBase {
   readonly orderId: string;
   readonly memo?: string;
   readonly descriptionHash?: string;
-  readonly expiresInSeconds?: number | string;
   readonly metadata?: Record<string, unknown>;
 }
 
@@ -207,7 +206,9 @@ export interface OpenReceive {
   getOrder(input: OpenReceiveGetOrderRequest): Promise<OpenReceiveOrder>;
   getCheckout(input: OpenReceiveGetCheckoutRequest): Promise<OpenReceiveCheckout>;
   sweepPendingInvoices(): Promise<OpenReceivePendingSweepResult>;
-  listRates(input?: OpenReceiveListRatesRequest): Promise<OpenReceiveBtcFiatRateMapWithSource["rates"]>;
+  listRates(
+    input?: OpenReceiveListRatesRequest,
+  ): Promise<OpenReceiveBtcFiatRateMapWithSource["rates"]>;
   quoteRates(input: { readonly fiat: OpenReceiveFiatAmount }): Promise<OpenReceiveRateQuote>;
   close(): Promise<void>;
 }
@@ -301,11 +302,11 @@ interface NormalizedCreateCheckoutRequest {
   readonly amount: OpenReceiveCreateCheckoutAmount;
   readonly memo?: string;
   readonly description_hash?: string;
-  readonly expires_in_seconds?: number | string;
   readonly metadata?: Record<string, unknown>;
 }
 
 const HEX_64 = /^[0-9a-fA-F]{64}$/;
+const OPENRECEIVE_INVOICE_EXPIRY_SECONDS = 600;
 const RESERVED_CHECKOUT_METADATA_KEYS = new Set([
   "order_id",
   "checkout_id",
@@ -313,7 +314,6 @@ const RESERVED_CHECKOUT_METADATA_KEYS = new Set([
   "amount_spec",
   "memo",
   "description_hash",
-  "expires_in_seconds",
 ]);
 
 export async function createOpenReceive(
@@ -553,7 +553,6 @@ async function mintInvoiceForCheckout(
     memo: createInput.memo,
     descriptionHash: createInput.description_hash,
   });
-  const expiry = optionalSafeInteger(createInput.expires_in_seconds);
   emitLog(
     context.options,
     "info",
@@ -575,12 +574,11 @@ async function mintInvoiceForCheckout(
   const walletInvoice = await context.options.client.makeInvoice({
     amount_msats: BigInt(resolved.amount_msats),
     ...descriptionFields,
-    expiry,
+    expiry: OPENRECEIVE_INVOICE_EXPIRY_SECONDS,
   });
   const createdAt = walletInvoice.created_at ?? context.clock();
-  const requestedExpirySeconds = expiry ?? 600;
-  const expiresAt = walletInvoice.expires_at ?? createdAt + requestedExpirySeconds;
-  const normalizedExpiresAt = Math.min(expiresAt, createdAt + requestedExpirySeconds);
+  const expiresAt = walletInvoice.expires_at ?? createdAt + OPENRECEIVE_INVOICE_EXPIRY_SECONDS;
+  const normalizedExpiresAt = Math.min(expiresAt, createdAt + OPENRECEIVE_INVOICE_EXPIRY_SECONDS);
   const metadata = checkoutMetadata(createInput, orderId, checkoutId);
   const createResult = await putCreatedInvoiceRecord({
     store: context.store,
@@ -629,9 +627,6 @@ function checkoutMetadata(
     amount_spec: structuredClone(input.amount),
     ...(input.memo === undefined ? {} : { memo: input.memo }),
     ...(input.description_hash === undefined ? {} : { description_hash: input.description_hash }),
-    ...(input.expires_in_seconds === undefined
-      ? {}
-      : { expires_in_seconds: input.expires_in_seconds }),
   };
 }
 
@@ -713,9 +708,6 @@ function createCheckoutRequestHashBody(
     amount: structuredClone(input.amount),
     ...(input.memo === undefined ? {} : { memo: input.memo }),
     ...(input.description_hash === undefined ? {} : { description_hash: input.description_hash }),
-    ...(input.expires_in_seconds === undefined
-      ? {}
-      : { expires_in_seconds: input.expires_in_seconds }),
     ...(input.metadata === undefined ? {} : { metadata: checkoutPassthroughMetadata(input) }),
   };
 }
@@ -909,10 +901,7 @@ async function listRates(
     const currencies =
       input.currencies === undefined
         ? context.priceCurrencies
-        : normalizeOpenReceivePriceCurrencies(
-            input.currencies,
-            "listRates currencies",
-          );
+        : normalizeOpenReceivePriceCurrencies(input.currencies, "listRates currencies");
     for (const currency of currencies) {
       assertAllowedFiatCurrency(currency, context.priceCurrencies);
     }
@@ -993,8 +982,7 @@ function createConfiguredClient(options: CreateOpenReceiveOptions): OpenReceiveR
     });
   } catch (error) {
     if (error instanceof OpenReceiveConfigError) throw error;
-    const reason =
-      error instanceof NwcUriParseError ? error.description : undefined;
+    const reason = error instanceof NwcUriParseError ? error.description : undefined;
     throw new OpenReceiveConfigError({
       code: "INVALID_NWC",
       message: formatOpenReceiveInvalidNwcMessage({ reason }),
@@ -1078,15 +1066,12 @@ function readOpenReceiveNamespace(configured: string | undefined): string {
   return namespace;
 }
 
-function readOpenReceivePriceCurrencies(configured: readonly string[] | undefined): readonly string[] {
-  const rawCurrencies =
-    configured ??
-    globalThis.process?.env?.OPENRECEIVE_PRICE_CURRENCIES?.split(",") ??
-    ["USD"];
-  return normalizeOpenReceivePriceCurrencies(
-    rawCurrencies,
-    "OPENRECEIVE_PRICE_CURRENCIES",
-  );
+function readOpenReceivePriceCurrencies(
+  configured: readonly string[] | undefined,
+): readonly string[] {
+  const rawCurrencies = configured ??
+    globalThis.process?.env?.OPENRECEIVE_PRICE_CURRENCIES?.split(",") ?? ["USD"];
+  return normalizeOpenReceivePriceCurrencies(rawCurrencies, "OPENRECEIVE_PRICE_CURRENCIES");
 }
 
 function normalizeOpenReceivePriceCurrencies(
@@ -1094,9 +1079,7 @@ function normalizeOpenReceivePriceCurrencies(
   label: string,
 ): readonly string[] {
   const currencies = [
-    ...new Set(
-      rawCurrencies.map((currency) => currency.trim().toUpperCase()).filter(Boolean),
-    ),
+    ...new Set(rawCurrencies.map((currency) => currency.trim().toUpperCase()).filter(Boolean)),
   ];
   if (currencies.length === 0) {
     throw new OpenReceiveConfigError({
@@ -1621,11 +1604,6 @@ function normalizeCreateCheckoutRequest(
   const amount = normalizeCreateCheckoutAmount(body);
   const memo = optionalString(body.memo);
   const descriptionHash = optionalString(body.descriptionHash ?? body.description_hash);
-  const rawExpiresInSeconds = body.expiresInSeconds ?? body.expires_in_seconds;
-  const expiresInSeconds =
-    typeof rawExpiresInSeconds === "number" || typeof rawExpiresInSeconds === "string"
-      ? rawExpiresInSeconds
-      : undefined;
   const metadata = parseOptionalRecord(body.metadata, "metadata");
 
   return {
@@ -1633,7 +1611,6 @@ function normalizeCreateCheckoutRequest(
     amount,
     ...(memo === undefined ? {} : { memo }),
     ...(descriptionHash === undefined ? {} : { description_hash: descriptionHash }),
-    ...(expiresInSeconds === undefined ? {} : { expires_in_seconds: expiresInSeconds }),
     ...(metadata === undefined ? {} : { metadata }),
   };
 }
@@ -1752,12 +1729,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
-}
-
-function optionalSafeInteger(value: unknown): number | undefined {
-  if (value === undefined || value === null) return undefined;
-  const numberValue = typeof value === "number" ? value : Number(value);
-  return Number.isSafeInteger(numberValue) ? numberValue : undefined;
 }
 
 function parseOptionalRecord(value: unknown, field: string): Record<string, unknown> | undefined {

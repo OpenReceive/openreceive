@@ -48,19 +48,14 @@ interface CreateOrderResponse {
   readonly checkout: OpenReceiveCheckout;
 }
 
-export default function CheckoutClient({
-  product,
-  fruits,
-}: CheckoutClientProps) {
+export default function CheckoutClient({ product, fruits }: CheckoutClientProps) {
   const [fruitId, setFruitId] = useState(fruits[1]?.id ?? fruits[0]?.id ?? "");
   const [currency, setCurrency] = useState("USD");
   const [rates, setRates] = useState<HelloFruitBtcFiatRates | undefined>();
   const [cart, setCart] = useState<Record<string, number>>({});
   const [order, setOrder] = useState<DemoOrder | undefined>();
   const [checkout, setCheckout] = useState<OpenReceiveCheckout | undefined>();
-  const [purchasedFruit, setPurchasedFruit] = useState<
-    HelloFruit | undefined
-  >();
+  const [purchasedFruit, setPurchasedFruit] = useState<HelloFruit | undefined>();
   const [stickerModalOpen, setStickerModalOpen] = useState(false);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
@@ -73,16 +68,11 @@ export default function CheckoutClient({
   const createCheckoutLabel =
     selectedFruit === undefined
       ? helloFruitDemoLabels.createOrder
-      : formatHelloFruitBuyNowLabel(
-          toHelloFruitDisplayAmount(selectedFruit.fiat, currency, rates),
-        );
+      : formatHelloFruitBuyNowLabel(toHelloFruitDisplayAmount(selectedFruit.fiat, currency, rates));
   const cartItems = fruits
     .map((fruit) => ({ fruit, quantity: cart[fruit.id] ?? 0 }))
     .filter((item) => item.quantity > 0);
-  const cartQuantity = cartItems.reduce(
-    (total, item) => total + item.quantity,
-    0,
-  );
+  const cartQuantity = cartItems.reduce((total, item) => total + item.quantity, 0);
 
   useEffect(() => {
     logDemo("app.ready", "Next.js checkout client mounted.", {
@@ -91,15 +81,14 @@ export default function CheckoutClient({
       initialFruitId: fruitId,
       selectedCurrency: currency,
     });
-  }, []);
+  }, [currency, fruitId, fruits.length]);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
         const response = await fetch("/rates");
-        if (!response.ok)
-          throw new Error(`rates request failed: HTTP ${response.status}`);
+        if (!response.ok) throw new Error(`rates request failed: HTTP ${response.status}`);
         const body = (await response.json()) as {
           rates?: HelloFruitBtcFiatRates;
         };
@@ -120,18 +109,13 @@ export default function CheckoutClient({
   }, []);
 
   const onSettled = useCallback(() => {
-    if (
-      checkout !== undefined &&
-      completedCheckoutRef.current !== checkout.order_id
-    ) {
+    if (checkout !== undefined && completedCheckoutRef.current !== checkout.order_id) {
       logDemo("checkout.settled", "Checkout settled callback received.", {
         orderId: checkout.order_id,
         purchasedFruitId: purchasedFruit?.id,
       });
       completedCheckoutRef.current = checkout.order_id;
-      setOrder((current) =>
-        current === undefined ? current : { ...current, status: "paid" },
-      );
+      setOrder((current) => (current === undefined ? current : { ...current, status: "paid" }));
       setStickerModalOpen(true);
     }
   }, [checkout, purchasedFruit?.id]);
@@ -164,15 +148,9 @@ export default function CheckoutClient({
 
   async function createOrder() {
     if (cartItems.length === 0) {
-      logDemo(
-        "create_order.skipped",
-        "Create order clicked with an empty cart.",
-      );
+      logDemo("create_order.skipped", "Create order clicked with an empty cart.");
       return;
     }
-    const orderId =
-      globalThis.crypto?.randomUUID?.() ??
-      `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const startedAt = Date.now();
 
     setStatus("creating");
@@ -186,7 +164,6 @@ export default function CheckoutClient({
         cartLineCount: cartItems.length,
         cartQuantity,
         productIds: cartItems.map((item) => item.fruit.id),
-        idempotencyKeyPresent: orderId.length > 0,
       });
       const response = await fetch("/create_order", {
         method: "POST",
@@ -194,7 +171,6 @@ export default function CheckoutClient({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          idempotency_key: orderId,
           currency,
           cart: cartItems.map((item) => ({
             product_id: item.fruit.id,
@@ -210,22 +186,16 @@ export default function CheckoutClient({
         hasCheckout: isCreateOrderResponse(body),
       });
       if (!response.ok || !isCreateOrderResponse(body)) {
-        throw new Error(
-          readErrorMessage(body) ?? helloFruitDemoLabels.createOrderError,
-        );
+        throw new Error(readErrorMessage(body) ?? helloFruitDemoLabels.createOrderError);
       }
 
-      logDemo(
-        "create_order.ready",
-        "Checkout payload accepted by browser app.",
-        {
-          orderId: body.order.uuid,
-          checkoutOrderId: body.checkout.order_id,
-          orderStatus: body.order.status,
-          itemCount: body.order.items.length,
-          total: body.order.total_amount,
-        },
-      );
+      logDemo("create_order.ready", "Checkout payload accepted by browser app.", {
+        orderId: body.order.uuid,
+        checkoutOrderId: body.checkout.order_id,
+        orderStatus: body.order.status,
+        itemCount: body.order.items.length,
+        total: body.order.total_amount,
+      });
       setOrder(body.order);
       setCheckout({
         ...body.checkout,
@@ -259,12 +229,7 @@ export default function CheckoutClient({
   }
 
   return (
-    <ThemeScope
-      as="section"
-      className="checkout"
-      themeToggle
-      topbarClassName="topbar"
-    >
+    <ThemeScope as="section" className="checkout" themeToggle topbarClassName="topbar">
       <div className="product">
         {selectedFruit === undefined ? null : (
           <img src={`/stickers/${selectedFruit.id}.svg`} alt="" />
@@ -311,18 +276,12 @@ export default function CheckoutClient({
           >
             <img src={`/stickers/${fruit.id}.svg`} alt="" />
             <span>{fruit.name}</span>
-            <small>
-              {formatHelloFruitDisplayPrice(fruit.fiat, currency, rates)}
-            </small>
+            <small>{formatHelloFruitDisplayPrice(fruit.fiat, currency, rates)}</small>
           </button>
         ))}
       </div>
 
-      <button
-        className="primary"
-        onClick={addSelectedFruitToCart}
-        type="button"
-      >
+      <button className="primary" onClick={addSelectedFruitToCart} type="button">
         {createCheckoutLabel}
       </button>
 
@@ -405,13 +364,9 @@ export default function CheckoutClient({
             statusUrl="/order_status"
             logger={logOpenReceive}
             onError={(cause) => {
-              logDemo(
-                "checkout.error",
-                "Checkout component reported an error.",
-                {
-                  error: cause instanceof Error ? cause.message : String(cause),
-                },
-              );
+              logDemo("checkout.error", "Checkout component reported an error.", {
+                error: cause instanceof Error ? cause.message : String(cause),
+              });
               setError(cause instanceof Error ? cause.message : String(cause));
             }}
             onSettled={onSettled}
@@ -461,12 +416,7 @@ export default function CheckoutClient({
 }
 
 function isCreateOrderResponse(value: unknown): value is CreateOrderResponse {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "order" in value &&
-    "checkout" in value
-  );
+  return typeof value === "object" && value !== null && "order" in value && "checkout" in value;
 }
 
 function readErrorMessage(value: unknown): string | undefined {

@@ -1,16 +1,16 @@
+import { randomUUID } from "node:crypto";
+import type { OpenReceive } from "@openreceive/node";
 import {
   createHelloFruitOrderInvoiceDescription,
   type HelloFruitFiatAmount,
 } from "./demo-formatting.ts";
+import { readHelloFruitCatalog, type HelloFruitProduct } from "./demo-catalog.ts";
 import {
-  readHelloFruitCatalog,
-  type HelloFruitProduct,
-} from "./demo-catalog.ts";
-import {
+  HELLO_FRUIT_DIRECT_AMOUNT_CURRENCIES,
   isHelloFruitDirectAmountCurrency,
   normalizeHelloFruitCurrency,
-  readHelloFruitCheckoutCurrencies,
 } from "./demo-currencies.ts";
+import { readHelloFruitOrderRates } from "./demo-price-feeds.ts";
 import {
   convertHelloFruitUsdAmount,
   HelloFruitPricingError,
@@ -28,7 +28,6 @@ export interface HelloFruitCartItemInput {
 export interface HelloFruitCreateOrderInput {
   readonly cart?: unknown;
   readonly currency?: unknown;
-  readonly idempotency_key?: unknown;
 }
 
 export interface HelloFruitOrderItem {
@@ -60,7 +59,6 @@ export interface HelloFruitCreateOrderResult {
         }
       | { readonly fiat: HelloFruitFiatAmount };
     readonly memo: string;
-    readonly expiresInSeconds: number;
   };
 }
 
@@ -89,31 +87,33 @@ export class HelloFruitDemoOrderError extends Error {
   }
 }
 
-export function createHelloFruitCreateOrderResult(
+export async function createHelloFruitCreateOrderResult(
   input: HelloFruitCreateOrderInput,
   options: {
     readonly demoId: string;
-    readonly invoiceExpirySeconds: number;
+    readonly openreceive: Pick<OpenReceive, "listRates" | "priceCurrencies">;
     readonly demoName?: string;
     readonly catalog?: readonly HelloFruitProduct[];
-    readonly rates?: HelloFruitBtcFiatRates;
-    readonly supportedCurrencies?: readonly string[];
   },
-): HelloFruitCreateOrderResult {
-  const idempotencyKey = requireIdempotencyKey(input.idempotency_key);
-  const supportedCurrencies =
-    options.supportedCurrencies ?? readHelloFruitCheckoutCurrencies();
-  const currency = normalizeHelloFruitCurrency(input.currency, [
-    ...supportedCurrencies,
-  ]);
+): Promise<HelloFruitCreateOrderResult> {
+  const supportedCurrencies = [
+    ...options.openreceive.priceCurrencies,
+    ...HELLO_FRUIT_DIRECT_AMOUNT_CURRENCIES,
+  ];
+  const currency = normalizeHelloFruitCurrency(input.currency, [...supportedCurrencies]);
+  const rates = await readHelloFruitOrderRates({
+    currency,
+    listRates: (currencies) => options.openreceive.listRates({ currencies }),
+    supportedCurrencies,
+  });
   const items = createHelloFruitOrderItems(
     input.cart,
     options.catalog ?? readHelloFruitCatalog(),
     currency,
-    options.rates,
+    rates,
   );
   const total_amount = totalHelloFruitAmount(items);
-  const uuid = `hello-fruit-${options.demoId}-${idempotencyKey}`;
+  const uuid = createHelloFruitOrderId(options.demoId);
   const order: HelloFruitDemoOrder = {
     uuid,
     status: "pending_payment",
@@ -131,7 +131,6 @@ export function createHelloFruitCreateOrderResult(
         items.map((item) => `${item.name} x${item.quantity}`),
         { demoName: options.demoName },
       ),
-      expiresInSeconds: options.invoiceExpirySeconds,
     },
   };
 }
@@ -169,9 +168,7 @@ export function createHelloFruitOrderStatus(input: {
   readonly state?: unknown;
 }): HelloFruitOrderStatus {
   const orderId =
-    typeof input.order_id === "string" && input.order_id.length > 0
-      ? input.order_id
-      : "unknown";
+    typeof input.order_id === "string" && input.order_id.length > 0 ? input.order_id : "unknown";
   const paid =
     input.paid === true ||
     input.status === "paid" ||
@@ -225,22 +222,16 @@ function createHelloFruitOrderItems(
       sticker: product.sticker,
       quantity,
       unit_amount,
-      line_amount: withHelloFruitPricing(() =>
-        multiplyHelloFruitAmount(unit_amount, quantity),
-      ),
+      line_amount: withHelloFruitPricing(() => multiplyHelloFruitAmount(unit_amount, quantity)),
     };
   });
 }
 
-function totalHelloFruitAmount(
-  items: readonly HelloFruitOrderItem[],
-): HelloFruitFiatAmount {
+function totalHelloFruitAmount(items: readonly HelloFruitOrderItem[]): HelloFruitFiatAmount {
   if (items.length === 0) {
     throw new HelloFruitDemoOrderError("Cart must include at least one item.");
   }
-  return withHelloFruitPricing(() =>
-    sumHelloFruitAmounts(items.map((item) => item.line_amount)),
-  );
+  return withHelloFruitPricing(() => sumHelloFruitAmounts(items.map((item) => item.line_amount)));
 }
 
 function withHelloFruitPricing<T>(compute: () => T): T {
@@ -262,8 +253,7 @@ function asCartItem(value: unknown): HelloFruitCartItemInput {
 }
 
 function requireProductId(item: HelloFruitCartItemInput): string {
-  const productId =
-    typeof item.product_id === "string" ? item.product_id : item.id;
+  const productId = typeof item.product_id === "string" ? item.product_id : item.id;
   if (typeof productId !== "string" || productId.length === 0) {
     throw new HelloFruitDemoOrderError("Cart items require product_id.");
   }
@@ -271,27 +261,12 @@ function requireProductId(item: HelloFruitCartItemInput): string {
 }
 
 function requireQuantity(value: unknown): number {
-  if (
-    !Number.isInteger(value) ||
-    typeof value !== "number" ||
-    value < 1 ||
-    value > 9
-  ) {
-    throw new HelloFruitDemoOrderError(
-      "Cart item quantity must be an integer from 1 through 9.",
-    );
+  if (!Number.isInteger(value) || typeof value !== "number" || value < 1 || value > 9) {
+    throw new HelloFruitDemoOrderError("Cart item quantity must be an integer from 1 through 9.");
   }
   return value;
 }
 
-function requireIdempotencyKey(value: unknown): string {
-  if (typeof value !== "string" || value.length === 0) {
-    throw new HelloFruitDemoOrderError("idempotency_key is required.");
-  }
-  if (!/^[A-Za-z0-9_-]{1,128}$/.test(value)) {
-    throw new HelloFruitDemoOrderError(
-      "idempotency_key must be a URL-safe identifier.",
-    );
-  }
-  return value;
+function createHelloFruitOrderId(demoId: string): string {
+  return `hello-fruit-${demoId}-${randomUUID()}`;
 }

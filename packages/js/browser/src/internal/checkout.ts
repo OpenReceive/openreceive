@@ -1,3 +1,5 @@
+/// <reference path="../qrcode.d.ts" />
+
 import { getCountries, type FiatRailId } from "@openreceive/provider-data";
 import * as defaultQrEncoder from "qrcode";
 import { status as deriveStatus } from "../status.ts";
@@ -169,7 +171,6 @@ interface NormalizedRequestCheckoutOptions {
   readonly amount: RequestCheckoutAmount;
   readonly memo?: string;
   readonly descriptionHash?: string;
-  readonly expiresInSeconds?: number;
   readonly metadata?: Record<string, unknown>;
 }
 
@@ -179,7 +180,6 @@ function normalizeRequestCheckoutOptions(
   const record = options as RequestCheckoutOptions & Record<string, unknown>;
   const orderId = optionalString(record.orderId ?? record.order_id);
   const descriptionHash = optionalString(record.descriptionHash ?? record.description_hash);
-  const expiresInSeconds = record.expiresInSeconds ?? record.expires_in_seconds;
   const metadata = optionalRecord(record.metadata);
 
   return {
@@ -190,7 +190,6 @@ function normalizeRequestCheckoutOptions(
     amount: normalizeRequestCheckoutAmount(record),
     ...(options.memo === undefined ? {} : { memo: options.memo }),
     ...(descriptionHash === undefined ? {} : { descriptionHash }),
-    ...(typeof expiresInSeconds === "number" ? { expiresInSeconds } : {}),
     ...(metadata === undefined ? {} : { metadata }),
   };
 }
@@ -297,9 +296,6 @@ export async function requestCheckout(options: RequestCheckoutOptions): Promise<
     amount: structuredClone(request.amount),
     ...(request.memo === undefined ? {} : { memo: request.memo }),
     ...(request.descriptionHash === undefined ? {} : { description_hash: request.descriptionHash }),
-    ...(request.expiresInSeconds === undefined
-      ? {}
-      : { expires_in_seconds: request.expiresInSeconds }),
     ...(request.metadata === undefined ? {} : { metadata: structuredClone(request.metadata) }),
   };
   assertOpenReceiveBrowserPayloadSafe(requestBody);

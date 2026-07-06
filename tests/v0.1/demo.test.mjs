@@ -111,7 +111,6 @@ test("Hello Fruit shared product metadata stays stable", () => {
   assert.equal(product.schema_version, "0.1.0");
   assert.equal(product.name, "OpenReceive Demo: Buy A Fruit Sticker");
   assert.equal(product.description, "get a fruit sticker");
-  assert.equal(product.invoice_expiry_seconds, 600);
 });
 
 test("Hello Fruit shared data stays aligned with canonical demo data", () => {
@@ -415,7 +414,8 @@ test("Hello Fruit Node demo creates orders from cart before rendering checkout",
   assert.match(source, /checkout === null \? \(/);
   assert.match(source, /onStartOver=\{startOver\}/);
   assert.match(source, />\s*Start over\s*</);
-  assert.match(source, /crypto\?\.randomUUID/);
+  assert.doesNotMatch(source, /crypto\?\.randomUUID/);
+  assert.doesNotMatch(source, /idempotency_key/);
   assert.doesNotMatch(source, /purchasedFruit/);
 });
 
@@ -1577,7 +1577,6 @@ test("Hello Fruit demos create app orders and refresh order status through merch
     },
     async () => {
       const orderRequest = {
-        idempotency_key: "cart-smoke",
         cart: [
           { product_id: "banana", quantity: 2 },
           { product_id: "apple", quantity: 1 },
@@ -1597,7 +1596,7 @@ test("Hello Fruit demos create app orders and refresh order status through merch
         const app = await demo.createApp(createHelloFruitTestOpenReceiveOptions());
         const created = await dispatchJson(app, "POST", "/create_order", orderRequest);
         assert.equal(created.status, 201, `${demo.name}: create_order status`);
-        assert.equal(created.body.order.uuid.includes("cart-smoke"), true);
+        assert.match(created.body.order.uuid, /^hello-fruit-/);
         assert.equal(created.body.order.status, "pending_payment");
         assert.equal(created.body.order.total_amount.currency, "USD");
         assert.equal(created.body.order.total_amount.value, "0.25");
@@ -1606,14 +1605,9 @@ test("Hello Fruit demos create app orders and refresh order status through merch
         assert.equal(typeof createdInvoice.invoice, "string");
         assert.equal(JSON.stringify(created.body).includes("nostr+walletconnect://"), false);
 
-        const replayed = await dispatchJson(app, "POST", "/create_order", orderRequest);
-        const replayedInvoice = replayed.body.checkout.active ?? replayed.body.checkout.invoices[0];
-        assert.equal(
-          replayed.body.checkout.checkout_id,
-          created.body.checkout.checkout_id,
-          `${demo.name}: create_order continues the same checkout id and cart`,
-        );
-        assert.equal(typeof replayedInvoice.invoice_id, "string");
+        const second = await dispatchJson(app, "POST", "/create_order", orderRequest);
+        assert.equal(second.status, 201, `${demo.name}: second create_order status`);
+        assert.notEqual(second.body.order.uuid, created.body.order.uuid);
 
         const status = await dispatchJson(app, "POST", "/order_status", {
           order_id: created.body.order.uuid,
@@ -1624,7 +1618,7 @@ test("Hello Fruit demos create app orders and refresh order status through merch
         assert.equal(status.body.order.status, "pending_payment");
         const statusInvoice =
           status.body.display_checkout.active ?? status.body.display_checkout.invoices[0];
-        assert.equal(statusInvoice.payment_hash, replayedInvoice.payment_hash);
+        assert.equal(statusInvoice.payment_hash, createdInvoice.payment_hash);
       }
 
       setHelloFruitOpenReceiveTestOverrides(createHelloFruitTestOpenReceiveOptions());
@@ -1633,21 +1627,15 @@ test("Hello Fruit demos create app orders and refresh order status through merch
           postNextCreateOrder(jsonRequest("/create_order", orderRequest)),
         );
         assert.equal(nextCreated.status, 201, "nextjs-fullstack: create_order status");
-        assert.equal(nextCreated.body.order.uuid.includes("cart-smoke"), true);
+        assert.match(nextCreated.body.order.uuid, /^hello-fruit-/);
         assert.equal(nextCreated.body.order.total_amount.value, "0.25");
         assert.equal(nextCreated.body.checkout.order_id, nextCreated.body.order.uuid);
 
-        const nextReplayed = await responseJson(
+        const nextSecond = await responseJson(
           postNextCreateOrder(jsonRequest("/create_order", orderRequest)),
         );
-        const nextReplayedInvoice =
-          nextReplayed.body.checkout.active ?? nextReplayed.body.checkout.invoices[0];
-        assert.equal(
-          nextReplayed.body.checkout.checkout_id,
-          nextCreated.body.checkout.checkout_id,
-          "nextjs-fullstack: create_order continues the same checkout id and cart",
-        );
-        assert.equal(typeof nextReplayedInvoice.invoice_id, "string");
+        assert.equal(nextSecond.status, 201, "nextjs-fullstack: second create_order status");
+        assert.notEqual(nextSecond.body.order.uuid, nextCreated.body.order.uuid);
 
         const nextStatus = await responseJson(
           postNextOrderStatus(
@@ -1674,7 +1662,6 @@ test("Hello Fruit demos create direct SATS orders from the currency switcher", a
     },
     async () => {
       const orderRequest = {
-        idempotency_key: "cart-sats",
         currency: "SATS",
         cart: [
           { product_id: "banana", quantity: 2 },
@@ -1830,7 +1817,6 @@ async function dispatchJson(app, method, url, body) {
     url,
     headers: {
       ...(body === undefined ? {} : { "content-type": "application/json" }),
-      ...(body === undefined ? {} : { "idempotency-key": "demo-smoke" }),
     },
     body,
   });

@@ -52,9 +52,6 @@ components:
         description_hash:
           type: string
           pattern: "^[0-9a-fA-F]{64}$"
-        expires_in_seconds:
-          type: integer
-          minimum: 1
         metadata:
           type: object
           additionalProperties: true

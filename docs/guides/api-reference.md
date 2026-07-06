@@ -33,7 +33,6 @@ const checkout = await openreceive.getOrCreateCheckout({
   orderId: order.uuid,
   usd: order.total_amount.value,
   memo: `Order ${order.number}`,
-  expiresInSeconds: 600,
   // Optional app-owned JSON. OpenReceive stores and returns it to your
   // settlement hook without interpreting non-reserved keys.
   metadata: {

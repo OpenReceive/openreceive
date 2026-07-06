@@ -5,10 +5,7 @@ import type {
   OpenReceiveReceiveNwcClient,
   OpenReceiveSourcedPriceProvider,
 } from "@openreceive/core";
-import {
-  OpenReceiveServiceError,
-  createOpenReceive,
-} from "@openreceive/node";
+import { OpenReceiveServiceError, createOpenReceive } from "@openreceive/node";
 import { createHelloFruitDemoMetadata } from "../../../../shared/demo-metadata.ts";
 import {
   createHelloFruitDemoServerLogger,
@@ -24,15 +21,12 @@ import {
   readHelloFruitCheckoutCurrencies,
   readHelloFruitPriceFeedCurrencies,
 } from "../../../../shared/demo-currencies.ts";
-import { readHelloFruitOrderRates } from "../../../../shared/demo-price-feeds.ts";
-import product from "../../../../shared/product.json" with { type: "json" };
 
 const DEMO_ID = "static-html-small-api";
 const logDemo = createHelloFruitDemoServerLogger(DEMO_ID);
 
 interface HelloFruitOpenReceiveBundle {
   readonly openreceive: Awaited<ReturnType<typeof createOpenReceive>>;
-  readonly supportedCurrencies: readonly string[];
 }
 
 export interface HelloFruitOpenReceiveOptions {
@@ -41,9 +35,7 @@ export interface HelloFruitOpenReceiveOptions {
   readonly priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
 }
 
-export async function createHelloFruitOpenReceive(
-  options: HelloFruitOpenReceiveOptions = {},
-) {
+export async function createHelloFruitOpenReceive(options: HelloFruitOpenReceiveOptions = {}) {
   logDemo("openreceive.configure", "Preparing OpenReceive demo service.", {
     namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit",
     customClient: options.client !== undefined,
@@ -53,21 +45,15 @@ export async function createHelloFruitOpenReceive(
   const priceCurrencies = readHelloFruitPriceFeedCurrencies();
   const supportedCurrencies = readHelloFruitCheckoutCurrencies();
 
-  logDemo(
-    "openreceive.price_currencies",
-    "Loaded checkout and price feed currencies.",
-    {
-      checkoutCurrencies: supportedCurrencies,
-      priceCurrencies,
-    },
-  );
+  logDemo("openreceive.price_currencies", "Loaded checkout and price feed currencies.", {
+    checkoutCurrencies: supportedCurrencies,
+    priceCurrencies,
+  });
 
   const openreceive = await createOpenReceive({
     ...(options.client === undefined ? {} : { client: options.client }),
     ...(options.store === undefined ? {} : { store: options.store }),
-    ...(options.priceProviders === undefined
-      ? {}
-      : { priceProviders: options.priceProviders }),
+    ...(options.priceProviders === undefined ? {} : { priceProviders: options.priceProviders }),
     namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit",
     priceCurrencies,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
@@ -78,25 +64,19 @@ export async function createHelloFruitOpenReceive(
   });
   return {
     openreceive,
-    supportedCurrencies,
   } satisfies HelloFruitOpenReceiveBundle;
 }
 
-export async function createHelloFruitStaticServer(
-  options: HelloFruitOpenReceiveOptions = {},
-) {
+export async function createHelloFruitStaticServer(options: HelloFruitOpenReceiveOptions = {}) {
   logDemo("server.create", "Creating static HTML demo server.");
   const app = express();
   app.use(express.json());
   app.use(
     "/stickers",
-    express.static(
-      fileURLToPath(new URL("../../../../shared/stickers/", import.meta.url)),
-    ),
+    express.static(fileURLToPath(new URL("../../../../shared/stickers/", import.meta.url))),
   );
 
-  const { openreceive, supportedCurrencies } =
-    await createHelloFruitOpenReceive(options);
+  const { openreceive } = await createHelloFruitOpenReceive(options);
 
   logDemo("server.routes", "Mounting demo routes.", {
     staticStickers: "/stickers",
@@ -154,46 +134,19 @@ export async function createHelloFruitStaticServer(
       const body = asRequestBody(req.body);
       logDemo("create_order.request", "Received create order request.", {
         ...summarizeOrderRequest(body),
-        idempotencyKeyPresent:
-          body.idempotency_key !== undefined ||
-          req.get("idempotency-key") !== undefined,
       });
-      const rates = await readHelloFruitOrderRates({
-        currency: body.currency,
-        listRates: (currencies) => openreceive.listRates({ currencies }),
-        supportedCurrencies,
+      const orderResult = await createHelloFruitCreateOrderResult(body, {
+        demoId: DEMO_ID,
+        demoName: "static",
+        openreceive,
       });
-      logDemo("create_order.rates", "Resolved order price rates.", {
-        requestedCurrency: body.currency,
-        rateCurrencies: rates === undefined ? [] : Object.keys(rates.bitcoin),
+      logDemo("create_order.prepared", "Prepared demo order and invoice request.", {
+        orderId: orderResult.order.uuid,
+        orderStatus: orderResult.order.status,
+        total: orderResult.order.total_amount,
+        itemCount: orderResult.order.items.length,
       });
-      const orderResult = createHelloFruitCreateOrderResult(
-        {
-          ...body,
-          idempotency_key:
-            req.body?.idempotency_key ?? req.get("idempotency-key"),
-        },
-        {
-          demoId: DEMO_ID,
-          invoiceExpirySeconds: product.invoice_expiry_seconds,
-          demoName: "static",
-          rates,
-          supportedCurrencies,
-        },
-      );
-      logDemo(
-        "create_order.prepared",
-        "Prepared demo order and invoice request.",
-        {
-          orderId: orderResult.order.uuid,
-          orderStatus: orderResult.order.status,
-          total: orderResult.order.total_amount,
-          itemCount: orderResult.order.items.length,
-        },
-      );
-      const checkout = await openreceive.getOrCreateCheckout(
-        orderResult.invoiceRequest,
-      );
+      const checkout = await openreceive.getOrCreateCheckout(orderResult.invoiceRequest);
       logDemo("create_order.checkout_created", "Created or reused checkout.", {
         orderId: checkout.order_id,
         elapsedMs: Date.now() - startedAt,
@@ -203,30 +156,19 @@ export async function createHelloFruitStaticServer(
         checkout,
       });
     } catch (error) {
-      if (
-        error instanceof OpenReceiveServiceError ||
-        error instanceof HelloFruitDemoOrderError
-      ) {
-        logDemo(
-          "create_order.rejected",
-          "Create order request returned a known error.",
-          {
-            status: error.status,
-            body: error.body,
-            elapsedMs: Date.now() - startedAt,
-          },
-        );
+      if (error instanceof OpenReceiveServiceError || error instanceof HelloFruitDemoOrderError) {
+        logDemo("create_order.rejected", "Create order request returned a known error.", {
+          status: error.status,
+          body: error.body,
+          elapsedMs: Date.now() - startedAt,
+        });
         res.status(error.status).json(error.body);
         return;
       }
-      logDemo(
-        "create_order.error",
-        "Create order request failed unexpectedly.",
-        {
-          error: error instanceof Error ? error.message : String(error),
-          elapsedMs: Date.now() - startedAt,
-        },
-      );
+      logDemo("create_order.error", "Create order request failed unexpectedly.", {
+        error: error instanceof Error ? error.message : String(error),
+        elapsedMs: Date.now() - startedAt,
+      });
       next(error);
     }
   });
@@ -254,30 +196,19 @@ export async function createHelloFruitStaticServer(
         },
       });
     } catch (error) {
-      if (
-        error instanceof OpenReceiveServiceError ||
-        error instanceof HelloFruitDemoOrderError
-      ) {
-        logDemo(
-          "order_status.rejected",
-          "Order status request returned a known error.",
-          {
-            status: error.status,
-            body: error.body,
-            elapsedMs: Date.now() - startedAt,
-          },
-        );
+      if (error instanceof OpenReceiveServiceError || error instanceof HelloFruitDemoOrderError) {
+        logDemo("order_status.rejected", "Order status request returned a known error.", {
+          status: error.status,
+          body: error.body,
+          elapsedMs: Date.now() - startedAt,
+        });
         res.status(error.status).json(error.body);
         return;
       }
-      logDemo(
-        "order_status.error",
-        "Order status request failed unexpectedly.",
-        {
-          error: error instanceof Error ? error.message : String(error),
-          elapsedMs: Date.now() - startedAt,
-        },
-      );
+      logDemo("order_status.error", "Order status request failed unexpectedly.", {
+        error: error instanceof Error ? error.message : String(error),
+        elapsedMs: Date.now() - startedAt,
+      });
       next(error);
     }
   });
@@ -285,23 +216,15 @@ export async function createHelloFruitStaticServer(
   return app;
 }
 
-function summarizeOrderRequest(
-  body: Record<string, unknown>,
-): Record<string, unknown> {
+function summarizeOrderRequest(body: Record<string, unknown>): Record<string, unknown> {
   const cart = Array.isArray(body.cart) ? body.cart : [];
   return {
     currency: body.currency,
     cartLineCount: cart.length,
     cartQuantity: cart.reduce((total, item) => {
-      if (typeof item !== "object" || item === null || Array.isArray(item))
-        return total;
+      if (typeof item !== "object" || item === null || Array.isArray(item)) return total;
       const quantity = (item as Record<string, unknown>).quantity;
-      return (
-        total +
-        (typeof quantity === "number" && Number.isFinite(quantity)
-          ? quantity
-          : 0)
-      );
+      return total + (typeof quantity === "number" && Number.isFinite(quantity) ? quantity : 0);
     }, 0),
     productIds: cart
       .map((item) =>
@@ -309,9 +232,7 @@ function summarizeOrderRequest(
           ? (item as Record<string, unknown>).product_id
           : undefined,
       )
-      .filter(
-        (productId): productId is string => typeof productId === "string",
-      ),
+      .filter((productId): productId is string => typeof productId === "string"),
   };
 }
 

@@ -7,7 +7,6 @@ export interface HelloFruitProduct {
   readonly product_id: string;
   readonly name: string;
   readonly description: string;
-  readonly invoice_expiry_seconds: number;
 }
 
 export interface HelloFruit {
@@ -26,10 +25,7 @@ export interface HelloFruitList {
   readonly fruits: readonly HelloFruit[];
 }
 
-const sharedRoot = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../../../../shared"
-);
+const sharedRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../shared");
 
 export function readHelloFruitProduct(): HelloFruitProduct {
   return readJson("product.json") as HelloFruitProduct;

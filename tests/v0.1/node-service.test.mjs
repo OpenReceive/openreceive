@@ -118,7 +118,6 @@ test("createCheckout mints once and replays the live invoice for the same amount
     orderId: "order-1",
     amount: { btc: { currency: "BTC", value: "0.000002" } },
     memo: "Fruit sticker",
-    expiresInSeconds: 600,
   };
 
   const first = await openreceive.createCheckout(request);
@@ -169,7 +168,6 @@ test("createCheckout creates a new checkout after expiry when called again", asy
     orderId: "order-retry",
     amount: { btc: { currency: "SATS", value: "200" } },
     memo: "Fruit sticker",
-    expiresInSeconds: 600,
   });
 
   setNow(1700);
@@ -185,13 +183,11 @@ test("createCheckout creates a new checkout after expiry when called again", asy
     orderId: "order-retry",
     amount: { btc: { currency: "SATS", value: "200" } },
     memo: "Fruit sticker",
-    expiresInSeconds: 600,
   });
   const replayed = await openreceive.createCheckout({
     orderId: "order-retry",
     amount: { btc: { currency: "SATS", value: "200" } },
     memo: "Fruit sticker",
-    expiresInSeconds: 600,
   });
 
   assert.notEqual(retried.checkout_id, first.checkout_id);
@@ -209,7 +205,7 @@ test("createCheckout creates a new checkout after expiry when called again", asy
   assert.deepEqual(storedRetry.metadata.amount_spec, {
     btc: { currency: "SATS", value: "200" },
   });
-  assert.equal(storedRetry.metadata.expires_in_seconds, 600);
+  assert.equal(storedRetry.metadata.expires_in_seconds, undefined);
 });
 
 test("expiry retry re-quotes fiat orders and reuses fixed bitcoin amounts", async () => {
@@ -237,7 +233,6 @@ test("expiry retry re-quotes fiat orders and reuses fixed bitcoin amounts", asyn
         value: "0.05",
       },
     },
-    expiresInSeconds: 600,
   });
   assert.equal(fiatFirst.amount_msats, 50000);
 
@@ -251,7 +246,6 @@ test("expiry retry re-quotes fiat orders and reuses fixed bitcoin amounts", asyn
         value: "0.05",
       },
     },
-    expiresInSeconds: 600,
   });
   assert.equal(fiatRenewed.amount_msats, 100000);
   assert.notEqual(fiatRenewed.checkout_id, fiatFirst.checkout_id);
@@ -260,13 +254,11 @@ test("expiry retry re-quotes fiat orders and reuses fixed bitcoin amounts", asyn
   const fixedFirst = await fixedHarness.openreceive.createCheckout({
     orderId: "order-fixed-retry",
     amount: { btc: { currency: "SATS", value: "7000" } },
-    expiresInSeconds: 600,
   });
   fixedHarness.setNow(1700);
   const fixedRenewed = await fixedHarness.openreceive.createCheckout({
     orderId: "order-fixed-retry",
     amount: { btc: { currency: "SATS", value: "7000" } },
-    expiresInSeconds: 600,
   });
   assert.equal(fixedRenewed.amount_msats, fixedFirst.amount_msats);
   assert.notEqual(fixedRenewed.checkout_id, fixedFirst.checkout_id);
@@ -298,7 +290,6 @@ test("getOrder settles a late payment on any invoice in any checkout history", a
   const first = await openreceive.createCheckout({
     orderId: "order-late-paid",
     amount: { btc: { currency: "BTC", value: "0.000002" } },
-    expiresInSeconds: 600,
     metadata: {
       cart_id: "cart-123",
       checkout_id: "must-not-overwrite",
@@ -307,7 +298,6 @@ test("getOrder settles a late payment on any invoice in any checkout history", a
   const superseding = await openreceive.createCheckout({
     orderId: "order-late-paid",
     amount: { btc: { currency: "BTC", value: "0.000003" } },
-    expiresInSeconds: 600,
   });
 
   wallet.settlePaymentHash(first.active.payment_hash, 1200);
@@ -354,14 +344,12 @@ test("getOrder on one order settles another order's closed-browser payment", asy
   const orderA = await openreceive.createCheckout({
     orderId: "order-closed-a",
     amount: { btc: { currency: "BTC", value: "0.000002" } },
-    expiresInSeconds: 600,
   });
   await Promise.all(background.splice(0));
   setNow(1003);
   const orderB = await openreceive.createCheckout({
     orderId: "order-active-b",
     amount: { btc: { currency: "BTC", value: "0.000003" } },
-    expiresInSeconds: 600,
   });
   await Promise.all(background.splice(0));
 

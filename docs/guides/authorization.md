@@ -25,8 +25,7 @@ checkoutRoutes.post("/create_order", async (req, res, next) => {
     const checkout = await openreceive.getOrCreateCheckout({
       orderId: order.uuid,
       usd: order.total_amount.value,
-      memo: `Order ${order.number}`,
-      expiresInSeconds: 600
+      memo: `Order ${order.number}`
     });
     res.status(201).json({ order, checkout });
   } catch (error) {
@@ -80,8 +79,7 @@ export async function POST(request: Request) {
     const checkout = await openreceive.getOrCreateCheckout({
       orderId: order.uuid,
       usd: order.total_amount.value,
-      memo: `Order ${order.number}`,
-      expiresInSeconds: 600
+      memo: `Order ${order.number}`
     });
     return Response.json({ order, checkout }, { status: 201 });
   } catch (error) {
@@ -107,8 +105,7 @@ export async function createOrder(req, res, next) {
     const checkout = await openreceive.getOrCreateCheckout({
       orderId: order.uuid,
       usd: order.total_amount.value,
-      memo: `Order ${order.number}`,
-      expiresInSeconds: 600
+      memo: `Order ${order.number}`
     });
     res.status(201).json({ order, checkout });
   } catch (error) {

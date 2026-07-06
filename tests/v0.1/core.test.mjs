@@ -1079,7 +1079,6 @@ test("browser request checkout helper posts SDK-shaped data to an app-owned URL"
     orderId: "order-browser-create",
     usd: "10.00",
     memo: "Browser helper invoice",
-    expiresInSeconds: 600,
     fetch: async (url, init) => {
       requests.push({ url, init });
       return {
@@ -1120,7 +1119,6 @@ test("browser request checkout helper posts SDK-shaped data to an app-owned URL"
       },
     },
     memo: "Browser helper invoice",
-    expires_in_seconds: 600,
   });
 
   await requestCheckout({

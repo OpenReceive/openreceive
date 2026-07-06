@@ -606,7 +606,6 @@ export interface RequestCheckoutBaseOptions {
   readonly headers?: Readonly<Record<string, string>>;
   readonly memo?: string;
   readonly descriptionHash?: string;
-  readonly expiresInSeconds?: number;
   readonly metadata?: Record<string, unknown>;
 }
 

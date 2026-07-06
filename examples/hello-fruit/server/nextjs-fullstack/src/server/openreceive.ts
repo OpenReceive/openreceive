@@ -3,10 +3,7 @@ import type {
   OpenReceiveReceiveNwcClient,
   OpenReceiveSourcedPriceProvider,
 } from "@openreceive/core";
-import {
-  OpenReceiveServiceError,
-  createOpenReceive,
-} from "@openreceive/node";
+import { OpenReceiveServiceError, createOpenReceive } from "@openreceive/node";
 import { createHelloFruitDemoMetadata } from "../../../../shared/demo-metadata.ts";
 import { readRequiredHelloFruitNwcConnectionString } from "../../../../shared/demo-nwc.ts";
 import {
@@ -21,8 +18,6 @@ import {
   readHelloFruitCheckoutCurrencies,
   readHelloFruitPriceFeedCurrencies,
 } from "../../../../shared/demo-currencies.ts";
-import { readHelloFruitOrderRates } from "../../../../shared/demo-price-feeds.ts";
-import product from "../../../../shared/product.json" with { type: "json" };
 
 const DEMO_ID = "nextjs-fullstack";
 const DEFAULT_PORT = "3002";
@@ -37,7 +32,6 @@ interface NextDemoOpenReceiveCache {
 
 interface HelloFruitOpenReceiveBundle {
   readonly openreceive: Awaited<ReturnType<typeof createOpenReceive>>;
-  readonly supportedCurrencies: readonly string[];
 }
 
 export interface HelloFruitOpenReceiveTestOverrides {
@@ -52,15 +46,11 @@ let testOverrides: HelloFruitOpenReceiveTestOverrides | undefined;
 export function setHelloFruitOpenReceiveTestOverrides(
   overrides: HelloFruitOpenReceiveTestOverrides | undefined,
 ): void {
-  logDemo(
-    "test_overrides.set",
-    "Resetting OpenReceive cache for test overrides.",
-    {
-      hasClient: overrides?.client !== undefined,
-      hasStore: overrides?.store !== undefined,
-      hasPriceProviders: overrides?.priceProviders !== undefined,
-    },
-  );
+  logDemo("test_overrides.set", "Resetting OpenReceive cache for test overrides.", {
+    hasClient: overrides?.client !== undefined,
+    hasStore: overrides?.store !== undefined,
+    hasPriceProviders: overrides?.priceProviders !== undefined,
+  });
   openreceiveCache = undefined;
   testOverrides = overrides;
 }
@@ -128,53 +118,25 @@ export async function createOrderResponse(request: Request): Promise<Response> {
     testOverrides?.client === undefined
       ? readRequiredHelloFruitNwcConnectionString()
       : "openreceive-test-client";
-  const { openreceive, supportedCurrencies } =
-    await getOpenReceive(connectionString);
+  const { openreceive } = await getOpenReceive(connectionString);
 
   try {
     const body = await readJsonBody(request);
     logDemo("create_order.request", "Received create order request.", {
       ...summarizeOrderRequest(body),
-      idempotencyKeyPresent:
-        body.idempotency_key !== undefined ||
-        request.headers.get("idempotency-key") !== null,
     });
-    const rates = await readHelloFruitOrderRates({
-      currency: body.currency,
-      listRates: (currencies) => openreceive.listRates({ currencies }),
-      supportedCurrencies,
+    const orderResult = await createHelloFruitCreateOrderResult(body, {
+      demoId: DEMO_ID,
+      demoName: "Next.js",
+      openreceive,
     });
-    logDemo("create_order.rates", "Resolved order price rates.", {
-      requestedCurrency: body.currency,
-      rateCurrencies: rates === undefined ? [] : Object.keys(rates.bitcoin),
+    logDemo("create_order.prepared", "Prepared demo order and invoice request.", {
+      orderId: orderResult.order.uuid,
+      orderStatus: orderResult.order.status,
+      total: orderResult.order.total_amount,
+      itemCount: orderResult.order.items.length,
     });
-    const orderResult = createHelloFruitCreateOrderResult(
-      {
-        ...body,
-        idempotency_key:
-          body.idempotency_key ?? request.headers.get("idempotency-key"),
-      },
-      {
-        demoId: DEMO_ID,
-        invoiceExpirySeconds: product.invoice_expiry_seconds,
-        demoName: "Next.js",
-        rates,
-        supportedCurrencies,
-      },
-    );
-    logDemo(
-      "create_order.prepared",
-      "Prepared demo order and invoice request.",
-      {
-        orderId: orderResult.order.uuid,
-        orderStatus: orderResult.order.status,
-        total: orderResult.order.total_amount,
-        itemCount: orderResult.order.items.length,
-      },
-    );
-    const checkout = await openreceive.getOrCreateCheckout(
-      orderResult.invoiceRequest,
-    );
+    const checkout = await openreceive.getOrCreateCheckout(orderResult.invoiceRequest);
     logDemo("create_order.checkout_created", "Created or reused checkout.", {
       orderId: checkout.order_id,
       elapsedMs: Date.now() - startedAt,
@@ -188,15 +150,11 @@ export async function createOrderResponse(request: Request): Promise<Response> {
     );
   } catch (error) {
     if (error instanceof OpenReceiveServiceError) {
-      logDemo(
-        "create_order.rejected",
-        "Create order request returned a known error.",
-        {
-          status: error.status,
-          body: error.body,
-          elapsedMs: Date.now() - startedAt,
-        },
-      );
+      logDemo("create_order.rejected", "Create order request returned a known error.", {
+        status: error.status,
+        body: error.body,
+        elapsedMs: Date.now() - startedAt,
+      });
       return jsonResponse(error.body, error.status);
     }
     logDemo("create_order.error", "Create order request failed unexpectedly.", {
@@ -238,15 +196,11 @@ export async function orderStatusResponse(request: Request): Promise<Response> {
     });
   } catch (error) {
     if (error instanceof OpenReceiveServiceError) {
-      logDemo(
-        "order_status.rejected",
-        "Order status request returned a known error.",
-        {
-          status: error.status,
-          body: error.body,
-          elapsedMs: Date.now() - startedAt,
-        },
-      );
+      logDemo("order_status.rejected", "Order status request returned a known error.", {
+        status: error.status,
+        body: error.body,
+        elapsedMs: Date.now() - startedAt,
+      });
       return jsonResponse(error.body, error.status);
     }
     logDemo("order_status.error", "Order status request failed unexpectedly.", {
@@ -272,9 +226,7 @@ export async function ratesResponse(): Promise<Response> {
   return jsonResponse({ rates });
 }
 
-async function getOpenReceive(
-  connectionString: string,
-): Promise<HelloFruitOpenReceiveBundle> {
+async function getOpenReceive(connectionString: string): Promise<HelloFruitOpenReceiveBundle> {
   const storeCacheKey = currentStoreCacheKey();
   const cachedOpenReceive = openreceiveCache;
   if (cachedOpenReceive !== undefined) {
@@ -283,20 +235,13 @@ async function getOpenReceive(
         cachedOpenReceive.connectionString === connectionString &&
         cachedOpenReceive.storeCacheKey === storeCacheKey
       ) {
-        logDemo(
-          "openreceive.cache_hit",
-          "Reusing cached OpenReceive demo service.",
-          {
-            storeCacheKey,
-          },
-        );
+        logDemo("openreceive.cache_hit", "Reusing cached OpenReceive demo service.", {
+          storeCacheKey,
+        });
         return await cachedOpenReceive.server;
       }
     } catch {
-      logDemo(
-        "openreceive.cache_stale",
-        "Discarding cached OpenReceive demo service.",
-      );
+      logDemo("openreceive.cache_stale", "Discarding cached OpenReceive demo service.");
       if (openreceiveCache === cachedOpenReceive) openreceiveCache = undefined;
     }
   }
@@ -315,13 +260,9 @@ async function getOpenReceive(
   try {
     return await nextServer;
   } catch (error) {
-    logDemo(
-      "openreceive.create_failed",
-      "OpenReceive demo service failed to initialize.",
-      {
-        error: error instanceof Error ? error.message : String(error),
-      },
-    );
+    logDemo("openreceive.create_failed", "OpenReceive demo service failed to initialize.", {
+      error: error instanceof Error ? error.message : String(error),
+    });
     if (openreceiveCache?.server === nextServer) openreceiveCache = undefined;
     throw error;
   }
@@ -329,9 +270,7 @@ async function getOpenReceive(
 
 export async function createHelloFruitOpenReceive(
   connectionString = readRequiredHelloFruitNwcConnectionString(),
-  overrides: HelloFruitOpenReceiveTestOverrides = testOverrides === undefined
-    ? {}
-    : testOverrides,
+  overrides: HelloFruitOpenReceiveTestOverrides = testOverrides === undefined ? {} : testOverrides,
 ) {
   logDemo("openreceive.configure", "Preparing OpenReceive demo service.", {
     namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit",
@@ -342,23 +281,15 @@ export async function createHelloFruitOpenReceive(
   const priceCurrencies = readHelloFruitPriceFeedCurrencies();
   const supportedCurrencies = readHelloFruitCheckoutCurrencies();
 
-  logDemo(
-    "openreceive.price_currencies",
-    "Loaded checkout and price feed currencies.",
-    {
-      checkoutCurrencies: supportedCurrencies,
-      priceCurrencies,
-    },
-  );
+  logDemo("openreceive.price_currencies", "Loaded checkout and price feed currencies.", {
+    checkoutCurrencies: supportedCurrencies,
+    priceCurrencies,
+  });
 
   const openreceive = await createOpenReceive({
-    ...(overrides.client === undefined
-      ? { nwc: connectionString }
-      : { client: overrides.client }),
+    ...(overrides.client === undefined ? { nwc: connectionString } : { client: overrides.client }),
     ...(overrides.store === undefined ? {} : { store: overrides.store }),
-    ...(overrides.priceProviders === undefined
-      ? {}
-      : { priceProviders: overrides.priceProviders }),
+    ...(overrides.priceProviders === undefined ? {} : { priceProviders: overrides.priceProviders }),
     namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit",
     priceCurrencies,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
@@ -369,27 +300,18 @@ export async function createHelloFruitOpenReceive(
   });
   return {
     openreceive,
-    supportedCurrencies,
   } satisfies HelloFruitOpenReceiveBundle;
 }
 
-function summarizeOrderRequest(
-  body: Record<string, unknown>,
-): Record<string, unknown> {
+function summarizeOrderRequest(body: Record<string, unknown>): Record<string, unknown> {
   const cart = Array.isArray(body.cart) ? body.cart : [];
   return {
     currency: body.currency,
     cartLineCount: cart.length,
     cartQuantity: cart.reduce((total, item) => {
-      if (typeof item !== "object" || item === null || Array.isArray(item))
-        return total;
+      if (typeof item !== "object" || item === null || Array.isArray(item)) return total;
       const quantity = (item as Record<string, unknown>).quantity;
-      return (
-        total +
-        (typeof quantity === "number" && Number.isFinite(quantity)
-          ? quantity
-          : 0)
-      );
+      return total + (typeof quantity === "number" && Number.isFinite(quantity) ? quantity : 0);
     }, 0),
     productIds: cart
       .map((item) =>
@@ -397,9 +319,7 @@ function summarizeOrderRequest(
           ? (item as Record<string, unknown>).product_id
           : undefined,
       )
-      .filter(
-        (productId): productId is string => typeof productId === "string",
-      ),
+      .filter((productId): productId is string => typeof productId === "string"),
   };
 }
 
@@ -428,9 +348,7 @@ function createStatusRequest(body: Record<string, unknown>): {
   return { orderId };
 }
 
-async function readJsonBody(
-  request: Request,
-): Promise<Record<string, unknown>> {
+async function readJsonBody(request: Request): Promise<Record<string, unknown>> {
   if (request.method === "GET" || request.method === "HEAD") return {};
   const text = await request.text();
   if (text.length === 0) return {};

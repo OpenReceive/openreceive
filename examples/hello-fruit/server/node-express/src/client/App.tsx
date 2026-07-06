@@ -72,38 +72,25 @@ function App(): React.ReactElement {
   const [framework, setFramework] = useState<CheckoutFramework>("react");
   const [fruitId, setFruitId] = useState(initialFruitId);
   const [currency, setCurrency] = useState("USD");
-  const [rates, setRates] = useState<HelloFruitBtcFiatRates | undefined>(
-    undefined,
-  );
+  const [rates, setRates] = useState<HelloFruitBtcFiatRates | undefined>(undefined);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [order, setOrder] = useState<DemoOrder | null>(null);
   const [checkout, setCheckout] = useState<OpenReceiveCheckout | null>(null);
-  const [purchasedItems, setPurchasedItems] = useState<
-    readonly DemoOrderItem[]
-  >([]);
+  const [purchasedItems, setPurchasedItems] = useState<readonly DemoOrderItem[]>([]);
   const [stickerModalOpen, setStickerModalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   const completedCheckoutRef = useRef("");
-  const selectedFruit =
-    fruits.find((fruit) => fruit.id === fruitId) ?? fruits[0];
+  const selectedFruit = fruits.find((fruit) => fruit.id === fruitId) ?? fruits[0];
   const createCheckoutLabel =
     selectedFruit === undefined
       ? helloFruitDemoLabels.createOrder
-      : formatHelloFruitBuyNowLabel(
-          toHelloFruitDisplayAmount(selectedFruit.fiat, currency, rates),
-        );
+      : formatHelloFruitBuyNowLabel(toHelloFruitDisplayAmount(selectedFruit.fiat, currency, rates));
   const cartItems = fruits
     .map((fruit) => ({ fruit, quantity: cart[fruit.id] ?? 0 }))
     .filter((item) => item.quantity > 0);
-  const cartQuantity = cartItems.reduce(
-    (total, item) => total + item.quantity,
-    0,
-  );
-  const purchasedStickerQuantity = purchasedItems.reduce(
-    (total, item) => total + item.quantity,
-    0,
-  );
+  const cartQuantity = cartItems.reduce((total, item) => total + item.quantity, 0);
+  const purchasedStickerQuantity = purchasedItems.reduce((total, item) => total + item.quantity, 0);
 
   useEffect(() => {
     logDemo("app.ready", "React demo app mounted.", {
@@ -112,15 +99,14 @@ function App(): React.ReactElement {
       initialFruitId,
       framework,
     });
-  }, []);
+  }, [framework]);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
         const response = await fetch("/rates");
-        if (!response.ok)
-          throw new Error(`rates request failed: HTTP ${response.status}`);
+        if (!response.ok) throw new Error(`rates request failed: HTTP ${response.status}`);
         const body = (await response.json()) as {
           rates?: HelloFruitBtcFiatRates;
         };
@@ -147,18 +133,13 @@ function App(): React.ReactElement {
   }, [framework]);
 
   const onSettled = useCallback(() => {
-    if (
-      checkout !== null &&
-      completedCheckoutRef.current !== checkout.order_id
-    ) {
+    if (checkout !== null && completedCheckoutRef.current !== checkout.order_id) {
       logDemo("checkout.settled", "Checkout settled callback received.", {
         orderId: checkout.order_id,
         purchasedItemCount: purchasedItems.length,
       });
       completedCheckoutRef.current = checkout.order_id;
-      setOrder((current) =>
-        current === null ? current : { ...current, status: "paid" },
-      );
+      setOrder((current) => (current === null ? current : { ...current, status: "paid" }));
       setStickerModalOpen(true);
     }
   }, [checkout, purchasedItems.length]);
@@ -191,15 +172,9 @@ function App(): React.ReactElement {
 
   async function createOrder() {
     if (cartItems.length === 0) {
-      logDemo(
-        "create_order.skipped",
-        "Create order clicked with an empty cart.",
-      );
+      logDemo("create_order.skipped", "Create order clicked with an empty cart.");
       return;
     }
-    const idempotencyKey =
-      globalThis.crypto?.randomUUID?.() ??
-      `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const startedAt = Date.now();
 
     setCreating(true);
@@ -213,7 +188,6 @@ function App(): React.ReactElement {
         cartLineCount: cartItems.length,
         cartQuantity: cartQuantity,
         productIds: cartItems.map((item) => item.fruit.id),
-        idempotencyKeyPresent: idempotencyKey.length > 0,
       });
       const response = await fetch("/create_order", {
         method: "POST",
@@ -221,7 +195,6 @@ function App(): React.ReactElement {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          idempotency_key: idempotencyKey,
           currency,
           cart: cartItems.map((item) => ({
             product_id: item.fruit.id,
@@ -237,22 +210,16 @@ function App(): React.ReactElement {
         hasCheckout: isCreateOrderResponse(body),
       });
       if (!response.ok || !isCreateOrderResponse(body)) {
-        throw new Error(
-          readErrorMessage(body) ?? helloFruitDemoLabels.createOrderError,
-        );
+        throw new Error(readErrorMessage(body) ?? helloFruitDemoLabels.createOrderError);
       }
 
-      logDemo(
-        "create_order.ready",
-        "Checkout payload accepted by browser app.",
-        {
-          orderId: body.order.uuid,
-          checkoutOrderId: body.checkout.order_id,
-          orderStatus: body.order.status,
-          itemCount: body.order.items.length,
-          total: body.order.total_amount,
-        },
-      );
+      logDemo("create_order.ready", "Checkout payload accepted by browser app.", {
+        orderId: body.order.uuid,
+        checkoutOrderId: body.checkout.order_id,
+        orderStatus: body.order.status,
+        itemCount: body.order.items.length,
+        total: body.order.total_amount,
+      });
       setOrder(body.order);
       setCheckout({
         ...body.checkout,
@@ -289,11 +256,7 @@ function App(): React.ReactElement {
   return (
     <ThemeScope as="main" className="page" themeToggle topbarClassName="topbar">
       <section className="checkout">
-        <div
-          className="framework-tabs"
-          role="tablist"
-          aria-label="Checkout framework"
-        >
+        <div className="framework-tabs" role="tablist" aria-label="Checkout framework">
           {checkoutFrameworks.map((item) => (
             <button
               aria-selected={framework === item.id}
@@ -359,18 +322,12 @@ function App(): React.ReactElement {
                 >
                   <img src={`/${fruit.sticker}`} alt="" />
                   <span>{fruit.name}</span>
-                  <small>
-                    {formatHelloFruitDisplayPrice(fruit.fiat, currency, rates)}
-                  </small>
+                  <small>{formatHelloFruitDisplayPrice(fruit.fiat, currency, rates)}</small>
                 </button>
               ))}
             </div>
 
-            <button
-              className="primary"
-              onClick={addSelectedFruitToCart}
-              type="button"
-            >
+            <button className="primary" onClick={addSelectedFruitToCart} type="button">
               {createCheckoutLabel}
             </button>
 
@@ -386,12 +343,8 @@ function App(): React.ReactElement {
                   <div className="cart-row" key={item.fruit.id}>
                     <span>{item.fruit.name}</span>
                     <span>
-                      {formatHelloFruitDisplayPrice(
-                        item.fruit.fiat,
-                        currency,
-                        rates,
-                      )}{" "}
-                      x{item.quantity}
+                      {formatHelloFruitDisplayPrice(item.fruit.fiat, currency, rates)} x
+                      {item.quantity}
                     </span>
                     <button
                       className="secondary"
@@ -411,9 +364,7 @@ function App(): React.ReactElement {
               onClick={createOrder}
               type="button"
             >
-              {creating
-                ? helloFruitDemoLabels.creatingOrder
-                : helloFruitDemoLabels.createOrder}
+              {creating ? helloFruitDemoLabels.creatingOrder : helloFruitDemoLabels.createOrder}
             </button>
           </>
         ) : (
@@ -453,14 +404,10 @@ function App(): React.ReactElement {
             framework={framework}
             checkout={checkout}
             onError={(cause) => {
-              logDemo(
-                "checkout.error",
-                "Checkout component reported an error.",
-                {
-                  framework,
-                  error: cause instanceof Error ? cause.message : String(cause),
-                },
-              );
+              logDemo("checkout.error", "Checkout component reported an error.", {
+                framework,
+                error: cause instanceof Error ? cause.message : String(cause),
+              });
               setError(cause instanceof Error ? cause.message : String(cause));
             }}
             onSettled={onSettled}
@@ -507,11 +454,7 @@ function App(): React.ReactElement {
               ))}
             </div>
             <div className="sticker-modal-actions">
-              <button
-                className="primary"
-                onClick={() => setStickerModalOpen(false)}
-                type="button"
-              >
+              <button className="primary" onClick={() => setStickerModalOpen(false)} type="button">
                 Close
               </button>
             </div>
@@ -552,31 +495,21 @@ function FrameworkCheckout({
       defaultTheme: "light" as const,
       onError: (event: Event) => {
         const detail = (event as CustomEvent<{ error?: unknown }>).detail;
-        logDemo(
-          "checkout.embedded_error",
-          "Embedded framework checkout reported an error.",
-          {
-            framework,
-            error:
-              detail?.error instanceof Error
-                ? detail.error.message
-                : String(detail?.error ?? event),
-          },
-        );
+        logDemo("checkout.embedded_error", "Embedded framework checkout reported an error.", {
+          framework,
+          error:
+            detail?.error instanceof Error ? detail.error.message : String(detail?.error ?? event),
+        });
         onError(detail?.error ?? event);
       },
       onSettled: onSettled,
     };
 
     async function mountFrameworkCheckout() {
-      logDemo(
-        "checkout.embedded_mount_start",
-        "Mounting embedded checkout framework.",
-        {
-          framework,
-          orderId: checkout.order_id,
-        },
-      );
+      logDemo("checkout.embedded_mount_start", "Mounting embedded checkout framework.", {
+        framework,
+        orderId: checkout.order_id,
+      });
       if (framework === "vue") {
         const [{ default: VueCheckout }, { createApp }] = await Promise.all([
           import("@openreceive/vue/checkout.vue"),
@@ -604,15 +537,12 @@ function FrameworkCheckout({
 
       if (framework === "angular") {
         await import("@angular/compiler");
-        const [
-          { CheckoutComponent },
-          { createComponent },
-          { createApplication },
-        ] = await Promise.all([
-          import("@openreceive/angular/checkout-component"),
-          import("@angular/core"),
-          import("@angular/platform-browser"),
-        ]);
+        const [{ CheckoutComponent }, { createComponent }, { createApplication }] =
+          await Promise.all([
+            import("@openreceive/angular/checkout-component"),
+            import("@angular/core"),
+            import("@angular/platform-browser"),
+          ]);
         if (canceled) return;
 
         const application = await createApplication();
@@ -647,11 +577,10 @@ function FrameworkCheckout({
       }
 
       if (framework === "svelte") {
-        const [{ default: SvelteCheckout }, { mount, unmount }] =
-          await Promise.all([
-            import("@openreceive/svelte/checkout.svelte"),
-            import("svelte"),
-          ]);
+        const [{ default: SvelteCheckout }, { mount, unmount }] = await Promise.all([
+          import("@openreceive/svelte/checkout.svelte"),
+          import("svelte"),
+        ]);
         if (canceled) return;
 
         const component = mount(SvelteCheckout, {
@@ -680,14 +609,10 @@ function FrameworkCheckout({
     void mountFrameworkCheckout().catch(onError);
 
     return () => {
-      logDemo(
-        "checkout.embedded_unmount",
-        "Unmounting embedded checkout framework.",
-        {
-          framework,
-          orderId: checkout.order_id,
-        },
-      );
+      logDemo("checkout.embedded_unmount", "Unmounting embedded checkout framework.", {
+        framework,
+        orderId: checkout.order_id,
+      });
       canceled = true;
       cleanup();
       host.replaceChildren();
@@ -720,12 +645,7 @@ function FrameworkCheckout({
 createRoot(document.getElementById("root") as HTMLElement).render(<App />);
 
 function isCreateOrderResponse(value: unknown): value is CreateOrderResponse {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "order" in value &&
-    "checkout" in value
-  );
+  return typeof value === "object" && value !== null && "order" in value && "checkout" in value;
 }
 
 function readErrorMessage(value: unknown): string | undefined {

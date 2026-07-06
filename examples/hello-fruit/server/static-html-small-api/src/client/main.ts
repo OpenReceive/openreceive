@@ -74,9 +74,7 @@ let currentOrder: DemoOrder | undefined;
 let purchasedFruit: Fruit | undefined;
 let completedOrderId = "";
 const logOpenReceive = createHelloFruitBrowserLogger("static-html-small-api");
-const logDemo = createHelloFruitDemoBrowserConsoleLogger(
-  "static-html-small-api",
-);
+const logDemo = createHelloFruitDemoBrowserConsoleLogger("static-html-small-api");
 
 defineOpenReceiveElements({
   logger: logOpenReceive,
@@ -160,11 +158,7 @@ function renderFruitGrid(): void {
     label.textContent = fruit.name;
 
     const price = document.createElement("small");
-    price.textContent = formatHelloFruitDisplayPrice(
-      fruit.fiat,
-      selectedCurrency,
-      displayRates,
-    );
+    price.textContent = formatHelloFruitDisplayPrice(fruit.fiat, selectedCurrency, displayRates);
 
     button.append(image, label, price);
     grid.append(button);
@@ -203,19 +197,12 @@ function renderCurrencyPicker(): void {
 function renderCreateOrderControls(): void {
   const addButton = requireElement<HTMLButtonElement>("add-to-cart");
   addButton.textContent = formatHelloFruitBuyNowLabel(
-    toHelloFruitDisplayAmount(
-      selectedFruit.fiat,
-      selectedCurrency,
-      displayRates,
-    ),
+    toHelloFruitDisplayAmount(selectedFruit.fiat, selectedCurrency, displayRates),
   );
   renderCart();
 
   const orderButton = requireElement<HTMLButtonElement>("create-order");
-  const cartQuantity = cartItems().reduce(
-    (total, item) => total + item.quantity,
-    0,
-  );
+  const cartQuantity = cartItems().reduce((total, item) => total + item.quantity, 0);
   orderButton.disabled = cartQuantity === 0;
   orderButton.textContent = helloFruitDemoLabels.createOrder;
   logDemo("controls.render", "Rendered cart and order controls.", {
@@ -348,9 +335,7 @@ function setOrderButtonState(state: "idle" | "creating"): void {
   button.disabled = state === "creating" || cartItems().length === 0;
   button.textContent = formatHelloFruitBuyNowLabel(selectedFruit.fiat);
   button.textContent =
-    state === "creating"
-      ? helloFruitDemoLabels.creatingOrder
-      : helloFruitDemoLabels.createOrder;
+    state === "creating" ? helloFruitDemoLabels.creatingOrder : helloFruitDemoLabels.createOrder;
 }
 
 async function createOrder(): Promise<void> {
@@ -360,9 +345,6 @@ async function createOrder(): Promise<void> {
   completedOrderId = "";
 
   try {
-    const idempotencyKey =
-      globalThis.crypto?.randomUUID?.() ??
-      `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const startedAt = Date.now();
     const items = cartItems();
     logDemo("create_order.request", "Posting create order request.", {
@@ -370,7 +352,6 @@ async function createOrder(): Promise<void> {
       cartLineCount: items.length,
       cartQuantity: items.reduce((total, item) => total + item.quantity, 0),
       productIds: items.map((item) => item.fruit.id),
-      idempotencyKeyPresent: idempotencyKey.length > 0,
     });
     const response = await fetch("/create_order", {
       method: "POST",
@@ -378,7 +359,6 @@ async function createOrder(): Promise<void> {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        idempotency_key: idempotencyKey,
         currency: selectedCurrency,
         cart: cartItems().map((item) => ({
           product_id: item.fruit.id,
@@ -394,9 +374,7 @@ async function createOrder(): Promise<void> {
       hasCheckout: isCreateOrderResponse(body),
     });
     if (!response.ok || !isCreateOrderResponse(body)) {
-      throw new Error(
-        readErrorMessage(body) ?? helloFruitDemoLabels.createOrderError,
-      );
+      throw new Error(readErrorMessage(body) ?? helloFruitDemoLabels.createOrderError);
     }
 
     currentOrder = body.order;
@@ -438,20 +416,12 @@ function renderCheckout(checkout: CheckoutSnapshot): void {
     onError: (event) => {
       const detail = (event as CustomEvent<{ error?: unknown }>).detail;
       logDemo("checkout.error", "Checkout shell reported an error.", {
-        error:
-          detail?.error instanceof Error
-            ? detail.error.message
-            : String(detail?.error),
+        error: detail?.error instanceof Error ? detail.error.message : String(detail?.error),
       });
-      setError(
-        detail?.error instanceof Error
-          ? detail.error.message
-          : String(detail?.error),
-      );
+      setError(detail?.error instanceof Error ? detail.error.message : String(detail?.error));
     },
     onSettled: (event) => {
-      const state = (event as CustomEvent<CheckoutStateEventDetail>).detail
-        ?.state;
+      const state = (event as CustomEvent<CheckoutStateEventDetail>).detail?.state;
       if (
         state?.order_id !== undefined &&
         state.order_id !== completedOrderId &&
@@ -543,8 +513,7 @@ function closeStickerModal(): void {
 async function loadDisplayRates(): Promise<void> {
   try {
     const response = await fetch("/rates");
-    if (!response.ok)
-      throw new Error(`rates request failed: HTTP ${response.status}`);
+    if (!response.ok) throw new Error(`rates request failed: HTTP ${response.status}`);
     const body = (await response.json()) as { rates?: HelloFruitBtcFiatRates };
     if (body.rates === undefined) return;
     displayRates = body.rates;
@@ -569,12 +538,7 @@ function requireElement<T extends HTMLElement = HTMLElement>(id: string): T {
 }
 
 function isCreateOrderResponse(value: unknown): value is CreateOrderResponse {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "order" in value &&
-    "checkout" in value
-  );
+  return typeof value === "object" && value !== null && "order" in value && "checkout" in value;
 }
 
 function readErrorMessage(value: unknown): string | undefined {
