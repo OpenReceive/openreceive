@@ -157,6 +157,75 @@
           "minimum": 0
         }
       }
+    },
+    "SwapMetadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "provider",
+        "provider_order_id",
+        "provider_token",
+        "pay_in_asset",
+        "deposit_address",
+        "deposit_amount",
+        "provider_state",
+        "provider_expires_at",
+        "created_at",
+        "last_polled_at"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider_order_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider_token": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pay_in_asset": {
+          "type": "string"
+        },
+        "deposit_address": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deposit_memo": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deposit_amount": {
+          "type": "string",
+          "pattern": "^[0-9]+(\\.[0-9]+)?$"
+        },
+        "provider_state": {
+          "type": "string"
+        },
+        "provider_expires_at": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "deposit_tx_id": {
+          "type": "string"
+        },
+        "refund_address": {
+          "type": "string"
+        },
+        "refund_tx_id": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "last_polled_at": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
     }
   },
   "x-openreceive-invariants": [
@@ -170,6 +239,8 @@
     "settlement_action_completed_at can be set once",
     "last_transaction_scan_at records the most recent server-side status refresh scan attempt",
     "action_claimed_at records the store-coordinated settlement action lease",
-    "renewal creates a new invoice row"
+    "renewal creates a new invoice row",
+    "metadata.rail == swap marks a shadow invoice that must not replace checkout.active",
+    "metadata.swap.provider_token is private storage data and must never be serialized to public invoice payloads"
   ]
 }

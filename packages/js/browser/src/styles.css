@@ -456,6 +456,115 @@
   gap: 12px;
 }
 
+.or-swap-actions {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.or-swap-start {
+  min-height: 44px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--or-text);
+  color: var(--or-bg);
+  cursor: pointer;
+  font-weight: 800;
+  padding: 10px 12px;
+}
+
+.or-swap-start:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.or-swap-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--or-border);
+  border-radius: 8px;
+  background: var(--or-bg-raised);
+}
+
+.or-swap-heading {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.or-swap-heading strong {
+  font-size: 18px;
+}
+
+.or-swap-heading span,
+.or-swap-countdown {
+  color: var(--or-muted);
+}
+
+.or-swap-qr {
+  justify-self: center;
+  width: min(220px, 100%);
+}
+
+.or-swap-qr,
+.or-swap-qr svg {
+  display: block;
+  height: auto;
+  width: 100%;
+}
+
+.or-swap-details {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.or-swap-details dt {
+  color: var(--or-muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.or-swap-details dd {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin: 0;
+}
+
+.or-swap-details code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.or-swap-details button,
+.or-swap-back {
+  border: 1px solid var(--or-border);
+  border-radius: 8px;
+  background: var(--or-bg-soft);
+  color: var(--or-text);
+  cursor: pointer;
+  min-height: 36px;
+  padding: 7px 10px;
+}
+
+.or-swap-countdown {
+  margin: 0;
+}
+
+.or-swap-countdown strong {
+  color: var(--or-text);
+}
+
+.or-swap-back {
+  justify-self: start;
+}
+
 .or-provider-card {
   display: grid;
   align-items: center;
@@ -734,6 +843,7 @@
   .or-method-grid,
   .or-route-picker,
   .or-country-grid,
+  .or-swap-actions,
   .or-provider-grid,
   .or-provider-actions {
     grid-template-columns: none;

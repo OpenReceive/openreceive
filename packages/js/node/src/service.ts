@@ -40,6 +40,17 @@ import { createNwcReceiveClient, type NwcEndpointLogger } from "./alby-nwc.ts";
 import { OpenReceiveConfigError } from "./config-error.ts";
 import { assertOpenReceiveStoreConfiguration } from "./storage-guard.ts";
 import { resolveOpenReceiveStore, type ResolveOpenReceiveStoreOptions } from "./store-uri.ts";
+import {
+  formatOpenReceiveSwapAssetLabel,
+  getOpenReceiveSwapAssetInfo,
+  isOpenReceiveSwapPayInAsset,
+  isOpenReceiveSwapTerminalState,
+  listOpenReceiveSwapAssetInfo,
+  type OpenReceiveSwapOrder,
+  type OpenReceiveSwapPayInAsset,
+  type OpenReceiveSwapProvider,
+  type OpenReceiveSwapProviderState,
+} from "./swap/index.ts";
 
 export type { OpenReceivePendingSweepResult };
 export { OpenReceiveConfigError } from "./config-error.ts";
@@ -83,6 +94,7 @@ export interface OpenReceiveNodeOptions {
   onPaid?: OpenReceiveNodeSettlementActionHook;
   priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
   priceCurrencies?: readonly string[];
+  swap?: OpenReceiveSwapOptions;
   onEvent?: OpenReceiveEventHandler;
   logger?: OpenReceiveLogger;
   clock?: () => number;
@@ -150,9 +162,58 @@ export interface OpenReceiveGetCheckoutRequest {
   readonly checkoutId: string;
 }
 
+export interface OpenReceiveSwapOptions {
+  readonly providers?: readonly OpenReceiveSwapProvider[];
+}
+
+export interface OpenReceiveSwapOptionsRequest {
+  readonly orderId: string;
+}
+
+export interface OpenReceiveSwapStartRequest {
+  readonly orderId: string;
+  readonly payInAsset: OpenReceiveSwapPayInAsset | string;
+}
+
+export interface OpenReceiveSwapRefundRequest {
+  readonly orderId: string;
+  readonly payInAsset: OpenReceiveSwapPayInAsset | string;
+  readonly refundAddress: string;
+}
+
+export interface OpenReceiveSwapOption {
+  readonly pay_in_asset: OpenReceiveSwapPayInAsset;
+  readonly label: string;
+  readonly network_label: string;
+  readonly provider: string;
+  readonly min_ok: boolean;
+  readonly max_ok: boolean;
+  readonly pay_amount?: string;
+}
+
+export interface OpenReceiveSwapOptionsResponse {
+  readonly enabled: boolean;
+  readonly options: readonly OpenReceiveSwapOption[];
+}
+
+export interface OpenReceivePublicSwap {
+  readonly provider: string;
+  readonly pay_in_asset: OpenReceiveSwapPayInAsset;
+  readonly deposit_address: string;
+  readonly deposit_memo?: string;
+  readonly deposit_amount: string;
+  readonly provider_state: OpenReceiveSwapProviderState;
+  readonly provider_expires_at: number;
+  readonly deposit_tx_id?: string;
+  readonly refund_address?: string;
+  readonly refund_tx_id?: string;
+  readonly attention?: boolean;
+}
+
 export interface OpenReceiveInvoice {
   readonly invoice_id: string;
   readonly type: "incoming";
+  readonly rail: "lightning" | "swap";
   readonly status: "pending" | "settled" | "expired" | "failed";
   readonly transaction_state: string;
   readonly workflow_state: string;
@@ -167,6 +228,7 @@ export interface OpenReceiveInvoice {
   readonly refreshed_from_invoice_id?: string;
   readonly fiat_quote: OpenReceiveRateQuote | null;
   readonly settlement_action_state: string;
+  readonly swap?: OpenReceivePublicSwap;
 }
 
 export interface OpenReceiveCheckout {
@@ -206,6 +268,9 @@ export interface OpenReceive {
   getOrder(input: OpenReceiveGetOrderRequest): Promise<OpenReceiveOrder>;
   getCheckout(input: OpenReceiveGetCheckoutRequest): Promise<OpenReceiveCheckout>;
   sweepPendingInvoices(): Promise<OpenReceivePendingSweepResult>;
+  swapOptions(input: OpenReceiveSwapOptionsRequest): Promise<OpenReceiveSwapOptionsResponse>;
+  startSwap(input: OpenReceiveSwapStartRequest): Promise<OpenReceiveInvoice>;
+  refundSwap(input: OpenReceiveSwapRefundRequest): Promise<OpenReceiveInvoice>;
   listRates(
     input?: OpenReceiveListRatesRequest,
   ): Promise<OpenReceiveBtcFiatRateMapWithSource["rates"]>;
@@ -234,6 +299,8 @@ interface OpenReceiveInvoiceModel {
   readonly refreshedFromInvoiceId?: string;
   readonly fiatQuote: OpenReceiveRateQuote | null;
   readonly settlementActionState: string;
+  readonly rail: "lightning" | "swap";
+  readonly swap?: OpenReceivePublicSwap;
 }
 
 interface OpenReceiveCheckoutModel {
@@ -289,6 +356,7 @@ interface OpenReceiveServiceContext {
   readonly clock: () => number;
   readonly priceProviders: readonly OpenReceiveSourcedPriceProvider[];
   readonly priceCurrencies: readonly string[];
+  readonly swapProviders: readonly OpenReceiveSwapProvider[];
 }
 
 interface ResolvedCreateAmount {
@@ -314,6 +382,9 @@ const RESERVED_CHECKOUT_METADATA_KEYS = new Set([
   "amount_spec",
   "memo",
   "description_hash",
+  "rail",
+  "swap",
+  "swap_attempt_key",
 ]);
 
 export async function createOpenReceive(
@@ -345,6 +416,7 @@ export async function createOpenReceive(
       clock: options.clock,
     }),
   ];
+  const swapProviders = options.swap?.providers ?? [];
 
   const context: OpenReceiveServiceContext = {
     options: nodeOptions,
@@ -352,6 +424,7 @@ export async function createOpenReceive(
     clock: options.clock ?? currentUnixSeconds,
     priceProviders,
     priceCurrencies,
+    swapProviders,
   };
 
   const getOrCreateCheckout = async (
@@ -381,6 +454,19 @@ export async function createOpenReceive(
       return await runOpenReceiveOperation(
         context,
         async () => await sweepPendingInvoicesOnce(reconcileOptions(context)),
+      );
+    },
+    async swapOptions(input) {
+      return await runOpenReceiveOperation(context, () => getSwapOptions(context, input));
+    },
+    async startSwap(input) {
+      return await runOpenReceiveOperation(context, async () =>
+        toWireInvoice(await startSwap(context, input)),
+      );
+    },
+    async refundSwap(input) {
+      return await runOpenReceiveOperation(context, async () =>
+        toWireInvoice(await refundSwap(context, input)),
       );
     },
     async listRates(input) {
@@ -470,6 +556,7 @@ async function getOrder(
   );
 
   const result = await sweepPendingInvoicesOnce(reconcileOptions(context));
+  await advanceSwapsForOrder(context, orderId);
   const fresh = await context.store.listByOrderId(orderId);
   emitLog(context.options, "debug", "order.status.result", "Order status refresh completed.", {
     order_id: orderId,
@@ -498,7 +585,10 @@ async function getCheckout(
   if (records.length === 0) {
     throw serviceError(404, "NOT_FOUND", "No checkout found for the given checkout_id.");
   }
-  return requireCheckout(groupCheckouts(records, context.clock()), checkoutId);
+  await sweepPendingInvoicesOnce(reconcileOptions(context));
+  await advanceSwapsForRecords(context, await context.store.listByCheckoutId(checkoutId));
+  const fresh = await context.store.listByCheckoutId(checkoutId);
+  return requireCheckout(groupCheckouts(fresh, context.clock()), checkoutId);
 }
 
 async function mintInvoiceForCheckout(
@@ -816,7 +906,10 @@ function buildCheckout(
           : "open";
   const active =
     status === "open"
-      ? invoices.find((invoice) => invoice.status === "pending" && invoice.expiresAt > now)
+      ? invoices.find(
+          (invoice) =>
+            invoice.rail !== "swap" && invoice.status === "pending" && invoice.expiresAt > now,
+        )
       : undefined;
   const amountSpec = readStoredAmountSpec(sortedRecords[0].row);
   const base = active ?? paidInvoice ?? requiredValue(invoices[0]);
@@ -890,6 +983,548 @@ async function supersedeCheckout(
         invoiceLogFields(result.record.row),
       );
     }
+  }
+}
+
+async function getSwapOptions(
+  context: OpenReceiveServiceContext,
+  input: OpenReceiveSwapOptionsRequest,
+): Promise<OpenReceiveSwapOptionsResponse> {
+  const providers = context.swapProviders;
+  if (providers.length === 0) {
+    return {
+      enabled: false,
+      options: [],
+    };
+  }
+
+  const orderId = parseGetOrderId(input);
+  const records = await context.store.listByOrderId(orderId);
+  if (records.length === 0) {
+    throw serviceError(404, "NOT_FOUND", "No order found for the given order_id.");
+  }
+
+  const checkout = currentOpenCheckout(groupCheckouts(records, context.clock()));
+  if (checkout === undefined) {
+    return {
+      enabled: true,
+      options: [],
+    };
+  }
+
+  const providerByAsset = await resolveSwapProvidersByAsset(providers);
+  const options = await Promise.all(
+    listOpenReceiveSwapAssetInfo().map(async (asset) => {
+      const provider = providerByAsset.get(asset.pay_in_asset);
+      if (provider === undefined) {
+        return {
+          pay_in_asset: asset.pay_in_asset,
+          label: asset.label,
+          network_label: asset.network_label,
+          provider: "",
+          min_ok: false,
+          max_ok: false,
+        } satisfies OpenReceiveSwapOption;
+      }
+
+      const quote = await provider.quote({
+        payInAsset: asset.pay_in_asset,
+        invoiceAmountMsats: checkout.amountMsats,
+      });
+      return {
+        pay_in_asset: asset.pay_in_asset,
+        label: asset.label,
+        network_label: asset.network_label,
+        provider: quote.provider,
+        min_ok: quote.min_ok,
+        max_ok: quote.max_ok,
+        ...(quote.pay_amount === undefined ? {} : { pay_amount: quote.pay_amount }),
+      } satisfies OpenReceiveSwapOption;
+    }),
+  );
+
+  return {
+    enabled: true,
+    options,
+  };
+}
+
+async function startSwap(
+  context: OpenReceiveServiceContext,
+  input: OpenReceiveSwapStartRequest,
+): Promise<OpenReceiveInvoiceModel> {
+  const body = asRecord(input);
+  const orderId = parseOrderId(body);
+  const payInAsset = parseSwapPayInAsset(body.payInAsset ?? body.pay_in_asset);
+  const now = context.clock();
+  const records = await context.store.listByOrderId(orderId);
+  if (records.length === 0) {
+    throw serviceError(404, "NOT_FOUND", "No order found for the given order_id.");
+  }
+
+  await sweepPendingInvoicesOnce(reconcileOptions(context));
+  await advanceSwapsForRecords(context, records);
+  const freshRecords = await context.store.listByOrderId(orderId);
+  const checkouts = groupCheckouts(freshRecords, now);
+  const paidCheckout = checkouts.find((checkout) => checkout.status === "paid");
+  if (paidCheckout !== undefined) {
+    throw serviceError(409, "CONFLICT", "Order is already paid.");
+  }
+
+  const checkout = currentOpenCheckout(checkouts);
+  if (checkout === undefined) {
+    throw serviceError(409, "CONFLICT", "Order has no open checkout to start a swap.");
+  }
+  if (checkout.active === undefined) {
+    throw serviceError(409, "CONFLICT", "Open checkout has no Lightning invoice to swap.");
+  }
+
+  const checkoutRecords = await context.store.listByCheckoutId(checkout.checkoutId);
+  const existing = findReusableSwapRecord(checkoutRecords, payInAsset, now);
+  if (existing !== undefined) {
+    return serializeInvoice(existing.row, now);
+  }
+
+  const nonTerminalSwapCount = checkoutRecords.filter((record) =>
+    isReusableSwapRecord(record, now)
+  ).length;
+  if (nonTerminalSwapCount >= 3) {
+    throw serviceError(
+      409,
+      "CONFLICT",
+      "Checkout already has three active swap attempts. Wait for one to expire before starting another.",
+    );
+  }
+
+  const provider = await selectSwapProvider(context.swapProviders, payInAsset);
+  if (provider === undefined) {
+    throw serviceError(
+      400,
+      "INVALID_REQUEST",
+      `${formatOpenReceiveSwapAssetLabel(payInAsset)} is not available for automated swaps.`,
+    );
+  }
+
+  const displayRecord = checkoutRecords.find(
+    (record) => record.row.invoice_id === checkout.active?.invoiceId,
+  );
+  if (displayRecord === undefined) {
+    throw serviceError(500, "INTERNAL", "Active checkout invoice was not readable.");
+  }
+
+  const invoiceExpirySeconds = getOpenReceiveSwapAssetInfo(payInAsset).expiry_seconds;
+  const walletInvoice = await context.options.client.makeInvoice({
+    amount_msats: BigInt(displayRecord.row.amount_msats),
+    ...getStoredDescriptionFields(displayRecord.row),
+    expiry: invoiceExpirySeconds,
+  });
+  const createdAt = walletInvoice.created_at ?? context.clock();
+  const expiresAt = walletInvoice.expires_at ?? createdAt + invoiceExpirySeconds;
+  const normalizedExpiresAt = Math.min(expiresAt, createdAt + invoiceExpirySeconds);
+  const providerOrder = await provider.createSwap({
+    payInAsset,
+    bolt11: walletInvoice.invoice,
+    invoiceAmountMsats: displayRecord.row.amount_msats,
+  });
+  const idempotencyKey = `${checkout.checkoutId}:swap:${payInAsset}`;
+  const requestHash = await createIdempotencyRequestHash({
+    checkout_id: checkout.checkoutId,
+    pay_in_asset: payInAsset,
+    amount_msats: displayRecord.row.amount_msats,
+    rail: "swap",
+  });
+  const namespaceScope = context.options.namespace ?? readOpenReceiveNamespace(undefined);
+  const operation = "invoice.create";
+  const createResult = await putCreatedInvoiceRecord({
+    store: context.store,
+    createStoredInvoiceId,
+    record: {
+      rev: 0,
+      row: {
+        invoice_id: createStoredInvoiceId(),
+        namespace: namespaceScope,
+        operation,
+        idempotency_key: idempotencyKey,
+        idempotency_request_hash: requestHash,
+        payment_hash: walletInvoice.payment_hash,
+        invoice: walletInvoice.invoice,
+        amount_msats: toSafeInteger(walletInvoice.amount_msats, "amount_msats"),
+        transaction_state: "pending",
+        workflow_state: "invoice_created",
+        settlement_action_state: "pending",
+        created_at: createdAt,
+        expires_at: normalizedExpiresAt,
+        metadata: {
+          ...swapBaseMetadata(displayRecord.row),
+          rail: "swap",
+          swap_attempt_key: idempotencyKey,
+          swap: {
+            ...swapMetadataFromProviderOrder(providerOrder, now),
+            created_at: now,
+          },
+        },
+        fiat_quote:
+          displayRecord.row.fiat_quote === undefined
+            ? null
+            : structuredClone(displayRecord.row.fiat_quote),
+      },
+    },
+  });
+
+  emitLog(context.options, "info", "swap.created", "Created automated swap invoice.", {
+    ...invoiceLogFields(createResult.record.row),
+    order_id: orderId,
+    checkout_id: checkout.checkoutId,
+    provider: provider.name,
+    pay_in_asset: payInAsset,
+    provider_order_id: providerOrder.provider_order_id,
+  });
+
+  return serializeInvoice(createResult.record.row, now);
+}
+
+async function refundSwap(
+  context: OpenReceiveServiceContext,
+  input: OpenReceiveSwapRefundRequest,
+): Promise<OpenReceiveInvoiceModel> {
+  const body = asRecord(input);
+  const orderId = parseOrderId(body);
+  const payInAsset = parseSwapPayInAsset(body.payInAsset ?? body.pay_in_asset);
+  const refundAddress = optionalString(body.refundAddress ?? body.refund_address);
+  if (refundAddress === undefined) {
+    throw serviceError(400, "INVALID_REQUEST", "refund_address is required.");
+  }
+  assertRefundAddressShape(payInAsset, refundAddress);
+
+  const records = await context.store.listByOrderId(orderId);
+  const candidate = records
+    .filter((record) => readStoredSwapPayInAsset(record.row) === payInAsset)
+    .sort((left, right) => right.row.created_at - left.row.created_at)
+    .find((record) => readStoredSwapState(record.row) === "refund_required");
+  if (candidate === undefined) {
+    throw serviceError(409, "CONFLICT", "No refund-required swap found for this order and asset.");
+  }
+
+  const order = readStoredSwapOrder(candidate.row);
+  const provider = context.swapProviders.find((item) => item.name === order.provider);
+  if (provider === undefined) {
+    throw serviceError(503, "INTERNAL", "Swap provider is unavailable.");
+  }
+
+  await provider.requestRefund(order, refundAddress);
+  const updated = await updateSwapRecord(context, candidate, (swap) => ({
+    ...swap,
+    provider_state: "refund_pending",
+    refund_address: refundAddress,
+    last_polled_at: context.clock(),
+  }));
+  return serializeInvoice(updated.row, context.clock());
+}
+
+async function advanceSwapsForOrder(
+  context: OpenReceiveServiceContext,
+  orderId: string,
+): Promise<void> {
+  if (context.swapProviders.length === 0) return;
+  await advanceSwapsForRecords(context, await context.store.listByOrderId(orderId));
+}
+
+async function advanceSwapsForRecords(
+  context: OpenReceiveServiceContext,
+  records: readonly StoredRecord[],
+): Promise<void> {
+  if (context.swapProviders.length === 0) return;
+  const now = context.clock();
+  const candidates = records
+    .filter((record) => shouldPollSwapRecord(record, now))
+    .sort((left, right) => left.row.created_at - right.row.created_at);
+
+  for (const record of candidates) {
+    const order = readStoredSwapOrder(record.row);
+    const provider = context.swapProviders.find((item) => item.name === order.provider);
+    if (provider === undefined) continue;
+
+    try {
+      const updatedOrder = await provider.getStatus(order);
+      await updateSwapRecord(context, record, (swap) => ({
+        ...swap,
+        ...swapMetadataFromProviderOrder(updatedOrder, now),
+        last_polled_at: now,
+      }));
+    } catch (error) {
+      emitLog(context.options, "warn", "swap.status.failed", "Swap provider status refresh failed.", {
+        invoice_id: record.row.invoice_id,
+        provider: order.provider,
+        provider_order_id: order.provider_order_id,
+        error_message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+}
+
+async function resolveSwapProvidersByAsset(
+  providers: readonly OpenReceiveSwapProvider[],
+): Promise<Map<OpenReceiveSwapPayInAsset, OpenReceiveSwapProvider>> {
+  const byAsset = new Map<OpenReceiveSwapPayInAsset, OpenReceiveSwapProvider>();
+  for (const provider of providers) {
+    const supported = await provider.supportedPayInAssets();
+    for (const asset of listOpenReceiveSwapAssetInfo()) {
+      if (!byAsset.has(asset.pay_in_asset) && supported.has(asset.pay_in_asset)) {
+        byAsset.set(asset.pay_in_asset, provider);
+      }
+    }
+  }
+  return byAsset;
+}
+
+async function selectSwapProvider(
+  providers: readonly OpenReceiveSwapProvider[],
+  payInAsset: OpenReceiveSwapPayInAsset,
+): Promise<OpenReceiveSwapProvider | undefined> {
+  for (const provider of providers) {
+    if ((await provider.supportedPayInAssets()).has(payInAsset)) return provider;
+  }
+  return undefined;
+}
+
+function findReusableSwapRecord(
+  records: readonly StoredRecord[],
+  payInAsset: OpenReceiveSwapPayInAsset,
+  now: number,
+): StoredRecord | undefined {
+  return records
+    .filter((record) => readStoredSwapPayInAsset(record.row) === payInAsset)
+    .filter((record) => isReusableSwapRecord(record, now))
+    .sort((left, right) => right.row.created_at - left.row.created_at)[0];
+}
+
+function isReusableSwapRecord(record: StoredRecord, now: number): boolean {
+  if (readInvoiceRail(record.row) !== "swap") return false;
+  if (record.row.expires_at <= now) return false;
+  if (record.row.transaction_state === "settled") return false;
+  const state = readStoredSwapState(record.row);
+  return state !== undefined && !isOpenReceiveSwapTerminalState(state);
+}
+
+function shouldPollSwapRecord(record: StoredRecord, now: number): boolean {
+  if (!isReusableSwapRecord(record, now)) return false;
+  const lastPolledAt = readStoredSwapLastPolledAt(record.row);
+  return lastPolledAt === undefined || now - lastPolledAt >= 10;
+}
+
+async function updateSwapRecord(
+  context: OpenReceiveServiceContext,
+  record: StoredRecord,
+  update: (swap: Record<string, unknown>) => Record<string, unknown>,
+): Promise<StoredRecord> {
+  let current = (await context.store.get(record.row.invoice_id)) ?? record;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const currentSwap = parseSwapMetadata(current.row);
+    if (currentSwap === undefined) return current;
+    const updated: StoredRecord = {
+      rev: current.rev + 1,
+      row: {
+        ...current.row,
+        metadata: {
+          ...current.row.metadata,
+          swap: update(currentSwap),
+        },
+      },
+    };
+    const result = await context.store.put(updated, current.rev);
+    if (result.status === "ok") return result.record;
+    current = result.record;
+  }
+  return current;
+}
+
+function swapBaseMetadata(row: InvoiceStorageRow): Record<string, unknown> {
+  const metadata = structuredClone(row.metadata);
+  delete metadata.superseded;
+  delete metadata.rail;
+  delete metadata.swap;
+  delete metadata.swap_attempt_key;
+  return metadata;
+}
+
+function swapMetadataFromProviderOrder(
+  order: OpenReceiveSwapOrder,
+  now: number,
+): Record<string, unknown> {
+  return {
+    provider: order.provider,
+    provider_order_id: order.provider_order_id,
+    provider_token: order.provider_token,
+    pay_in_asset: order.pay_in_asset,
+    deposit_address: order.deposit_address,
+    ...(order.deposit_memo === undefined ? {} : { deposit_memo: order.deposit_memo }),
+    deposit_amount: order.deposit_amount,
+    provider_state: order.state,
+    provider_expires_at: order.expires_at,
+    ...(order.deposit_tx_id === undefined ? {} : { deposit_tx_id: order.deposit_tx_id }),
+    ...(order.refund_tx_id === undefined ? {} : { refund_tx_id: order.refund_tx_id }),
+    ...(order.attention === undefined ? {} : { attention: order.attention }),
+    last_polled_at: now,
+  };
+}
+
+function readInvoiceRail(row: InvoiceStorageRow): "lightning" | "swap" {
+  return row.metadata.rail === "swap" ? "swap" : "lightning";
+}
+
+function readPublicSwap(row: InvoiceStorageRow): OpenReceivePublicSwap | undefined {
+  const swap = parseSwapMetadata(row);
+  if (swap === undefined) return undefined;
+  const payInAsset = parseStoredSwapPayInAsset(swap.pay_in_asset);
+  const provider = optionalString(swap.provider);
+  const depositAddress = optionalString(swap.deposit_address);
+  const depositAmount = optionalString(swap.deposit_amount);
+  const providerState = optionalString(swap.provider_state) as OpenReceiveSwapProviderState | undefined;
+  const providerExpiresAt = optionalSafeInteger(swap.provider_expires_at);
+  if (
+    payInAsset === undefined ||
+    provider === undefined ||
+    depositAddress === undefined ||
+    depositAmount === undefined ||
+    providerState === undefined ||
+    providerExpiresAt === undefined
+  ) {
+    return undefined;
+  }
+
+  return {
+    provider,
+    pay_in_asset: payInAsset,
+    deposit_address: depositAddress,
+    ...(optionalString(swap.deposit_memo) === undefined
+      ? {}
+      : { deposit_memo: optionalString(swap.deposit_memo) }),
+    deposit_amount: depositAmount,
+    provider_state: providerState,
+    provider_expires_at: providerExpiresAt,
+    ...(optionalString(swap.deposit_tx_id) === undefined
+      ? {}
+      : { deposit_tx_id: optionalString(swap.deposit_tx_id) }),
+    ...(optionalString(swap.refund_address) === undefined
+      ? {}
+      : { refund_address: optionalString(swap.refund_address) }),
+    ...(optionalString(swap.refund_tx_id) === undefined
+      ? {}
+      : { refund_tx_id: optionalString(swap.refund_tx_id) }),
+    ...(typeof swap.attention === "boolean" ? { attention: swap.attention } : {}),
+  };
+}
+
+function readStoredSwapOrder(row: InvoiceStorageRow): OpenReceiveSwapOrder {
+  const swap = parseSwapMetadata(row);
+  if (swap === undefined) {
+    throw serviceError(500, "INTERNAL", "Stored swap metadata is missing.");
+  }
+  const provider = optionalString(swap.provider);
+  const providerOrderId = optionalString(swap.provider_order_id);
+  const providerToken = optionalString(swap.provider_token);
+  const payInAsset = parseStoredSwapPayInAsset(swap.pay_in_asset);
+  const depositAddress = optionalString(swap.deposit_address);
+  const depositAmount = optionalString(swap.deposit_amount);
+  const providerState = optionalString(swap.provider_state) as OpenReceiveSwapProviderState | undefined;
+  const providerExpiresAt = optionalSafeInteger(swap.provider_expires_at);
+  if (
+    provider === undefined ||
+    providerOrderId === undefined ||
+    providerToken === undefined ||
+    payInAsset === undefined ||
+    depositAddress === undefined ||
+    depositAmount === undefined ||
+    providerState === undefined ||
+    providerExpiresAt === undefined
+  ) {
+    throw serviceError(500, "INTERNAL", "Stored swap metadata is incomplete.");
+  }
+
+  return {
+    provider,
+    provider_order_id: providerOrderId,
+    provider_token: providerToken,
+    pay_in_asset: payInAsset,
+    deposit_address: depositAddress,
+    ...(optionalString(swap.deposit_memo) === undefined
+      ? {}
+      : { deposit_memo: optionalString(swap.deposit_memo) }),
+    deposit_amount: depositAmount,
+    expires_at: providerExpiresAt,
+    state: providerState,
+    ...(optionalString(swap.deposit_tx_id) === undefined
+      ? {}
+      : { deposit_tx_id: optionalString(swap.deposit_tx_id) }),
+    ...(optionalString(swap.refund_tx_id) === undefined
+      ? {}
+      : { refund_tx_id: optionalString(swap.refund_tx_id) }),
+    ...(typeof swap.attention === "boolean" ? { attention: swap.attention } : {}),
+  };
+}
+
+function parseSwapMetadata(row: InvoiceStorageRow): Record<string, unknown> | undefined {
+  if (readInvoiceRail(row) !== "swap") return undefined;
+  return isRecord(row.metadata.swap) ? row.metadata.swap : undefined;
+}
+
+function readStoredSwapPayInAsset(row: InvoiceStorageRow): OpenReceiveSwapPayInAsset | undefined {
+  return parseStoredSwapPayInAsset(parseSwapMetadata(row)?.pay_in_asset);
+}
+
+function readStoredSwapState(row: InvoiceStorageRow): OpenReceiveSwapProviderState | undefined {
+  return optionalString(parseSwapMetadata(row)?.provider_state) as
+    | OpenReceiveSwapProviderState
+    | undefined;
+}
+
+function readStoredSwapLastPolledAt(row: InvoiceStorageRow): number | undefined {
+  return optionalSafeInteger(parseSwapMetadata(row)?.last_polled_at);
+}
+
+function parseStoredSwapPayInAsset(value: unknown): OpenReceiveSwapPayInAsset | undefined {
+  return isOpenReceiveSwapPayInAsset(value) ? value : undefined;
+}
+
+function parseSwapPayInAsset(value: unknown): OpenReceiveSwapPayInAsset {
+  if (!isOpenReceiveSwapPayInAsset(value)) {
+    throw serviceError(400, "INVALID_REQUEST", "pay_in_asset is not supported.");
+  }
+  return value;
+}
+
+function getStoredDescriptionFields(row: InvoiceStorageRow): {
+  readonly description?: string;
+  readonly description_hash?: string;
+} {
+  return getCreateDescriptionFields({
+    memo: row.metadata.memo,
+    descriptionHash: row.metadata.description_hash,
+  });
+}
+
+function optionalSafeInteger(value: unknown): number | undefined {
+  return Number.isSafeInteger(value) ? (value as number) : undefined;
+}
+
+function assertRefundAddressShape(
+  payInAsset: OpenReceiveSwapPayInAsset,
+  refundAddress: string,
+): void {
+  if (refundAddress.length > 200 || /\s/.test(refundAddress)) {
+    throw serviceError(400, "INVALID_REQUEST", "refund_address is not valid for this asset.");
+  }
+  const network = getOpenReceiveSwapAssetInfo(payInAsset).network;
+  const valid =
+    network === "ETH"
+      ? /^0x[0-9a-fA-F]{40}$/.test(refundAddress)
+      : network === "SOL"
+        ? /^[1-9A-HJ-NP-Za-km-z]{32,64}$/.test(refundAddress)
+        : network === "TRX"
+          ? /^T[1-9A-HJ-NP-Za-km-z]{20,60}$/.test(refundAddress)
+          : refundAddress.length >= 5;
+  if (!valid) {
+    throw serviceError(400, "INVALID_REQUEST", "refund_address is not valid for this asset.");
   }
 }
 
@@ -1196,6 +1831,7 @@ function toWireInvoice(model: OpenReceiveInvoiceModel): OpenReceiveInvoice {
   return {
     invoice_id: model.invoiceId,
     type: model.type,
+    rail: model.rail,
     status: model.status,
     transaction_state: model.transactionState,
     workflow_state: model.workflowState,
@@ -1214,6 +1850,7 @@ function toWireInvoice(model: OpenReceiveInvoiceModel): OpenReceiveInvoice {
       : { refreshed_from_invoice_id: model.refreshedFromInvoiceId }),
     fiat_quote: model.fiatQuote,
     settlement_action_state: model.settlementActionState,
+    ...(model.swap === undefined ? {} : { swap: model.swap }),
   };
 }
 
@@ -1256,6 +1893,7 @@ function serializeInvoice(row: InvoiceStorageRow, now: number): OpenReceiveInvoi
   return {
     invoiceId: row.invoice_id,
     type: "incoming",
+    rail: readInvoiceRail(row),
     status: deriveInvoiceStatus(row, now),
     transactionState: row.transaction_state,
     workflowState: row.workflow_state,
@@ -1274,6 +1912,7 @@ function serializeInvoice(row: InvoiceStorageRow, now: number): OpenReceiveInvoi
       : { refreshedFromInvoiceId: row.refreshed_from_invoice_id }),
     fiatQuote: (row.fiat_quote ?? null) as OpenReceiveRateQuote | null,
     settlementActionState: row.settlement_action_state,
+    ...(readPublicSwap(row) === undefined ? {} : { swap: readPublicSwap(row) }),
   };
 }
 

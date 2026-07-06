@@ -107,6 +107,7 @@ components:
       required:
         - invoice_id
         - type
+        - rail
         - transaction_state
         - workflow_state
         - invoice
@@ -122,6 +123,11 @@ components:
           pattern: "^or_inv_[a-z0-9_]+$"
         type:
           const: incoming
+        rail:
+          type: string
+          enum:
+            - lightning
+            - swap
         transaction_state:
           $ref: "#/components/schemas/TransactionState"
         workflow_state:
@@ -163,6 +169,66 @@ components:
           oneOf:
             - $ref: "#/components/schemas/RateQuote"
             - type: "null"
+        swap:
+          $ref: "#/components/schemas/SwapOrder"
+    SwapOrder:
+      type: object
+      additionalProperties: false
+      required:
+        - provider
+        - pay_in_asset
+        - deposit_address
+        - deposit_amount
+        - provider_state
+        - provider_expires_at
+      properties:
+        provider:
+          type: string
+          minLength: 1
+        pay_in_asset:
+          type: string
+          enum:
+            - SOL_SOL
+            - USDT_TRON
+            - USDT_SOL
+            - USDC_SOL
+            - ETH_ETH
+            - USDT_ETH
+            - USDC_ETH
+        deposit_address:
+          type: string
+          minLength: 1
+        deposit_memo:
+          type: string
+          minLength: 1
+        deposit_amount:
+          type: string
+          pattern: "^[0-9]+(\\.[0-9]+)?$"
+        provider_state:
+          type: string
+          enum:
+            - awaiting_deposit
+            - confirming
+            - exchanging
+            - paying_invoice
+            - completed
+            - expired
+            - refund_required
+            - refund_pending
+            - refunded
+            - attention
+            - failed
+        provider_expires_at:
+          type: integer
+          minimum: 0
+        deposit_tx_id:
+          type: string
+        refund_address:
+          type: string
+        refund_tx_id:
+          type: string
+        attention:
+          type: boolean
     Checkout:
       type: object
       additionalProperties: false

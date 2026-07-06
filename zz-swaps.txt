@@ -1,0 +1,396 @@
+================================================================================
+PROPOSAL: AUTOMATED SWAP RAIL (FIXEDFLOAT) FOR OPENRECEIVE
+Pay a Lightning checkout with ETH / SOL / USDT / USDC on Ethereum, Solana, Tron
+================================================================================
+
+0. SUMMARY
+--------------------------------------------------------------------------------
+Today OpenReceive shows one Lightning BOLT11 invoice plus a payment wizard that
+gives *manual* route guidance: pick "Stablecoin" -> "USDT" -> see ranked provider
+cards (boltz, fixedfloat, bitget) with screenshot tutorials telling the user to
+go to ff.io themselves and paste the displayed invoice. That manual path has a
+built-in failure mode: the displayed invoice expires in 600s (10 min,
+OPENRECEIVE_INVOICE_EXPIRY_SECONDS in packages/js/node/src/service.ts) while the
+user fumbles through an external site.
+
+This proposal adds an AUTOMATED swap rail. When the developer sets
+FIXED_FLOAT_KEY and FIXED_FLOAT_SECRET in .env, crypto routes that FixedFloat
+can service gain a "Pay here" action. Clicking it makes the backend:
+  1) mint a second, hidden ("shadow") Lightning invoice for the SAME checkout,
+     SAME amount_msats, but with a LONGER, per-network expiry, and
+  2) create a FixedFloat fixed-rate order whose payout target is that shadow
+     invoice,
+then the UI shows the FixedFloat deposit address + exact amount + QR + countdown
+inline.
+
+
+my comment: i still want to default to showing the lighting invoice, but if user selects other currency from wizard, then we make the new bolt11 invoice on the back end and get the payment address from fixed float... 
+
+
+
+ The user can switch back to plain Lightning at any time; the original
+displayed invoice never changes. The checkout is paid the moment EITHER invoice
+settles -- which OpenReceive's existing model already supports.
+
+The swap layer is built behind a provider interface shaped exactly like
+FixedFloat's API, so a future self-built swap service that clones FixedFloat's
+API surface is registered with one line (same client, different baseUrl+keys).
+
+IMPORTANT CORRECTION TO THE ORIGINAL IDEA: the shadow invoice is NOT for a
+higher amount. FixedFloat orders are created with direction:"to" (pin the
+OUTPUT), so FixedFloat computes the required deposit amount INCLUDING its 1%
+fixed-rate fee and network fees on the payer's side. Merchant receives exactly
+the cart amount in sats; payer pays cart + fees in USDT/ETH/SOL. Same
+amount_msats on both invoices. The shadow invoice exists for three other
+reasons: (a) per-network expiry (Ethereum needs ~30 min, not 10), (b) race
+isolation (if the user pays Lightning directly AND FixedFloat later tries to
+pay the same invoice, the second payment fails and strands funds at FixedFloat;
+separate invoices make both paths independently safe), (c) clean per-attempt
+tracking (payment_hash <-> FixedFloat order id, 1:1).
+
+1. WHAT THE REPO LOOKS LIKE TODAY (facts this design builds on)
+--------------------------------------------------------------------------------
+- Contract-first monorepo. spec/ holds JSON schemas + test vectors (source of
+  truth); packages/js/core = contracts/logic; packages/js/node = the NWC
+  service (createOpenReceive -> getOrCreateCheckout / getOrder / getCheckout /
+  listRates); packages/js/browser + elements + react/vue/svelte/angular = the
+  checkout UI; packages/js/provider-data = provider registry v4.
+- provider-data already contains fixedfloat as kind "swap service" with manual
+  tutorial screenshots, and crypto_routes for: btc-lightning, usdt, usdc, eth,
+  xmr, ltc, trx, sol, xrp. The wizard renders these as guidance cards.
+- Invoices are stored as InvoiceStorageRow in a KV store (sqlite-store.ts /
+  postgres-store.ts) with optimistic-concurrency revs. Row metadata is
+  schema-open (additionalProperties: true); reserved keys are only
+  {order_id, checkout_id, superseded, amount_spec, memo, description_hash}.
+- A checkout GROUPS MULTIPLE invoice rows by checkout_id (buildCheckout in
+  service.ts). status = "paid" if ANY invoice settled; "expired" only if ALL
+  invoices expired/failed; "open" otherwise. checkout.active = newest pending
+  unexpired invoice. THIS IS THE KEY GIFT: multi-invoice checkouts already
+  exist at the model level; we only add a second row and one filter.
+- Settlement authority is the backend transaction scan: sweepPendingInvoicesOnce
+  matches wallet transactions to stored payment_hash via NWC list_transactions.
+  It runs on every status request plus a best-effort scheduled sweep
+  (waitUntil-friendly; no background daemon is assumed -- serverless safe).
+  AGENTS.md: settlement requires settled_at or transaction_state=="settled";
+  a preimage alone is only corroborating.
+- NWC makeInvoice already accepts a per-call `expiry`; only the service-level
+  constant (600) needs to become parameterizable for shadow invoices.
+- Demo servers (examples/hello-fruit/server/*) expose POST /create_order
+  (returns order + checkout incl. invoice) and POST /order_status (frontend
+  polls it). .env at repo root holds OPENRECEIVE_NWC; tools/run-demo.mjs
+  creates it from .env.example.
+- AGENTS.md non-negotiables that constrain this work: no secrets in browser
+  code/logs; snake_case wire fields; amount_msats naming; integer money math;
+  schema changes ship with test vectors; invoice-creation changes ship with
+  idempotency tests; settlement changes ship with replay-safe tests.
+
+2. FEATURE FLAG AND CONFIG
+--------------------------------------------------------------------------------
+- .env additions (also add commented lines to .env.example):
+    FIXED_FLOAT_KEY=...
+    FIXED_FLOAT_SECRET=...
+    FIXED_FLOAT_BASE_URL=https://ff.io        (optional; default shown)
+- Behavior: if BOTH key and secret are present -> swap rail enabled; otherwise
+  the product behaves exactly as today (manual guidance only). Zero behavior
+  change for existing deployments.
+- Wiring: createOpenReceive gains an optional `swap` option:
+    createOpenReceive({ nwc, storeUri, swap: { providers: [
+      fixedFloatProvider({ key, secret, baseUrl })   // built from env
+    ]}})
+  Demo servers construct that from process.env and pass it through. Secrets
+  never leave the server; the FixedFloat client signs every request
+  server-side (X-API-KEY + X-API-SIGN = hex HMAC-SHA256 of the exact JSON body
+  string). Never log the secret; log order ids only. Extend
+  tools/validate/scan-secrets.mjs patterns so FIXED_FLOAT_SECRET values can
+  never land in committed files or client bundles (scan-client-bundles.mjs).
+
+3. PROVIDER ABSTRACTION (FixedFloat-shaped; future in-house service drops in)
+--------------------------------------------------------------------------------
+New module: packages/js/node/src/swap/ (kept inside @openreceive/node because
+it needs the NWC client + store from the service context; the provider client
+itself has no OpenReceive deps and can be split out later).
+
+  swap/provider.ts        SwapProvider interface + normalized types
+  swap/fixedfloat.ts      the only v1 implementation
+  swap/service.ts         orchestration: startSwap / advanceSwaps / options
+  swap/assets.ts          canonical asset model + dynamic ticker resolution
+
+Canonical pay-in assets (v1):
+  ETH_ETH, SOL_SOL, USDT_ETH, USDT_SOL, USDT_TRON, USDC_ETH, USDC_SOL
+  (optionally TRX_TRON later -- FixedFloat supports it and the wizard already
+  has a trx route; free to add once the rail exists.)
+Each maps to {coin, network} pairs: ETH/ETH, SOL/SOL, USDT/ETH, USDT/SOL,
+USDT/TRX, USDC/ETH, USDC/SOL. NEVER hardcode FixedFloat currency codes
+(TRC-20 USDT is "USDTTRC" etc.); resolve them at startup by matching coin +
+network against POST /ccies, and resolve the Lightning payout code the same
+way (BTC + LN-ish network; commonly "BTCLN"). Cache; refresh daily.
+
+SwapProvider interface (what FixedFloat implements and what the future
+in-house service must satisfy -- it is deliberately FixedFloat's API contract):
+
+  name: string
+  supportedPayInAssets(): Promise<Set<PayInAsset>>
+  quote({payInAsset, invoiceAmountMsats})
+      -> { pay_amount, pay_asset, min_ok, max_ok }
+  createSwap({payInAsset, bolt11, invoiceAmountMsats})
+      -> { provider, provider_order_id, provider_token,
+           deposit_address, deposit_memo?, deposit_amount,
+           expires_at, state, raw }
+  getStatus(order) -> updated normalized order (+ deposit_tx_id, payout ref)
+  requestRefund(order, refundAddress) -> void     (maps to /emergency REFUND)
+
+FixedFloat wire contract (== the acceptance spec for the in-house clone):
+  POST {base}/api/v2/{ccies|price|create|order|emergency}
+  Headers: Content-Type application/json; charset=UTF-8; X-API-KEY;
+           X-API-SIGN = hex hmac_sha256(secret, exact_body_string)
+  Envelope: { code, msg, data }, code===0 is success. Sign "{}" for /ccies.
+  /price + /create body: { type:"fixed", fromCcy, toCcy, direction:"to",
+                           amount:<btc string of invoice sats>, toAddress:<bolt11> }
+  /create data: id, token, from.address, from.amount, from.tag?, to.amount,
+                time.expiration, status
+  /order body {id, token} -> status, from.tx.id, to.tx.id, emergency{...}
+  /emergency body {id, token, choice:"REFUND"|"EXCHANGE", address}
+  Statuses: NEW, PENDING, EXCHANGE, WITHDRAW, DONE, EXPIRED, EMERGENCY
+  Rate limits: 250 weight/min; /create=50 weight, everything else 1.
+Normalized states:
+  NEW->awaiting_deposit  PENDING->confirming  EXCHANGE->exchanging
+  WITHDRAW->paying_invoice  DONE->completed  EXPIRED->expired
+  EMERGENCY->refund_required (inspect emergency substatus: EXPIRED/LESS/MORE/LIMIT)
+Registry: an ordered array of providers; startSwap picks the first provider
+whose supportedPayInAssets() contains the asset. Adding the in-house service
+later is: providers.push(fixedFloatShapedProvider({key, secret, baseUrl:
+"https://swap.yourdomain"})). Same client code, different config.
+
+4. DATA MODEL: THE SHADOW INVOICE ROW CARRIES THE SWAP STATE
+--------------------------------------------------------------------------------
+No new tables. One swap attempt == one extra InvoiceStorageRow under the SAME
+checkout_id, minted through the same NWC client, with:
+  amount_msats  = identical to the display invoice's amount_msats
+  expires_at    = per-network expiry (section 7), passed through makeInvoice's
+                  existing `expiry` param (make OPENRECEIVE_INVOICE_EXPIRY_SECONDS
+                  a default, not a hard constant)
+  metadata.rail = "swap"                        (display rows have no rail key)
+  metadata.swap = {
+    provider, provider_order_id, provider_token,      // token = order secret
+    pay_in_asset, deposit_address, deposit_memo?, deposit_amount,
+    provider_state,                 // normalized state from section 3
+    provider_expires_at,            // FixedFloat's ~10-min rate-lock end
+    deposit_tx_id?, refund_address?, refund_tx_id?,
+    last_polled_at, created_at
+  }
+State updates go through the existing store.put with rev-based optimistic
+concurrency -- reusing storage engines, migrations, and namespacing untouched.
+(Alternative considered and rejected for v1: a dedicated swap_orders table.
+More schema surface, second migration path, and the settlement machinery would
+still need the invoice row anyway. Revisit only if metadata blobs get unwieldy.)
+
+Required core adjustments (small, surgical):
+  a) buildCheckout `active` selection must SKIP rows with metadata.rail=="swap"
+     so a newly minted shadow row never hijacks the invoice shown by default.
+     Display invoice stays `active`; shadow rows still ride in invoices[].
+  b) toWireInvoice: expose rail ("lightning" default | "swap") and, for swap
+     rows, a `swap` object with the PUBLIC subset only (provider, pay_in_asset,
+     deposit_address, deposit_memo, deposit_amount, provider_state,
+     provider_expires_at, refund fields). NEVER serialize provider_token.
+  c) Settlement path: unchanged. The transaction scan already matches ANY
+     stored payment_hash, so when FixedFloat pays the shadow invoice, the
+     existing sweep marks it settled and buildCheckout flips the checkout to
+     "paid". onPaid fires once, as today.
+  d) Supersede interplay: if the user retries/changes amount, supersedeCheckout
+     marks all rows superseded -- but buildCheckout checks paidInvoice FIRST,
+     so a FixedFloat payment landing on a superseded shadow invoice still
+     yields "paid". No change needed; add a test vector locking this in.
+
+Free win from existing semantics: a checkout only goes "expired" when ALL
+invoices are expired/failed, so a live 30-min shadow invoice correctly keeps
+the checkout open even after the 10-min display invoice lapses mid-swap.
+
+5. SERVER API (service methods + demo endpoints)
+--------------------------------------------------------------------------------
+New service methods on the createOpenReceive instance (wired into each demo
+server as thin routes, mirroring /create_order + /order_status style):
+
+POST /swap_options   body { order_id }
+  -> { enabled: bool, options: [ { pay_in_asset, label, network_label,
+       pay_amount, min_ok, max_ok, provider } ] }
+  Runs quote() per asset (parallel, cached ~60s). Assets outside FixedFloat's
+  pair min/max are returned with min_ok/max_ok=false so the UI can grey them
+  out ("amount too small for USDT-TRON") instead of hiding silently.
+  If the rail is disabled (no env keys) -> { enabled:false, options:[] }.
+
+POST /swap_start     body { order_id, pay_in_asset }
+  1) Load the open checkout for order_id (reuse getOrCreateCheckout logic; if
+     none open, 409 with the standard error envelope).
+  2) IDEMPOTENCY (AGENTS.md requirement): key =
+     `{checkout_id}:swap:{pay_in_asset}`. If a non-terminal shadow row already
+     exists for that key, return it -- protects against double-clicks and the
+     50-weight /create cost. Switching assets creates a new attempt; cap
+     concurrent non-terminal swap rows per checkout at 3 (older ones simply
+     expire on both sides; unpaid FixedFloat orders expire harmlessly).
+  3) Mint shadow invoice (same amount_msats, per-network expiry).
+  4) provider.createSwap with the shadow bolt11; persist metadata.swap.
+  5) Return the wire invoice incl. the public swap object.
+  NOTE: the shadow bolt11 itself never needs to be shown to the payer; the UI
+  shows deposit_address + deposit_amount. (Exposing it is harmless -- paying
+  it directly would settle the checkout -- but hide it to avoid confusion.)
+
+Status: NO new polling endpoint. Fold swap progress into the existing
+/order_status response (invoices[] already ride along; they now carry the swap
+object). This keeps one frontend polling loop and matches the repo's
+"status refresh is the settlement authority" doctrine.
+
+advanceSwaps (the poller, serverless-idiomatic): a step function invoked from
+getOrder/getCheckout (same trigger points as sweepPendingInvoicesOnce) plus the
+same best-effort waitUntil scheduling -- NO daemon required. Each pass, for
+every non-terminal swap row (rate-limit aware, oldest first):
+  - provider.getStatus -> update metadata.swap.provider_state (+tx ids)
+  - terminal handling below
+State machine:
+  completed        -> nothing special; wallet-side sweep confirms settlement.
+                      If provider says DONE but our scan hasn't settled the
+                      invoice after N minutes, flag `attention:true` (payment
+                      routed nowhere we can see -- investigate; provider-DONE
+                      alone NEVER marks the checkout paid, per AGENTS.md).
+  expired          -> no deposit ever arrived. Funds never moved; nothing to
+                      refund. Row just expires with its invoice. This is the
+                      user's desired default outcome, and it's automatic.
+  refund_required  -> deposit arrived late/short/over/limit (EMERGENCY).
+                      v1 refund flow (deliberately RPC-free): surface state to
+                      the UI; payer taps "get my funds back" and enters the
+                      address they sent from; server calls
+                      provider.requestRefund(order, address) -> /emergency
+                      REFUND; state -> refund_pending -> refunded (poll).
+                      Never choose EXCHANGE for a fixed-amount invoice: a
+                      re-quote cannot hit the exact sats and the payout fails.
+                      v2 enhancement (separate PR): auto-derive the sender
+                      address from deposit_tx_id via public chain RPCs
+                      (eth_getTransactionByHash .from / Tron owner_address /
+                      Solana source token-account owner) and prefill it.
+                      OpenReceive has zero chain-RPC deps today; keep it that
+                      way in v1.
+  failed / AML hold-> distinct "needs attention" state surfaced in UI + logs
+                      (funds stuck pending provider review, not lost).
+New endpoint for the refund action:
+POST /swap_refund    body { order_id, pay_in_asset, refund_address }
+  -> validates state==refund_required, basic address-shape check per network,
+     calls requestRefund, returns updated wire invoice.
+
+6. RACE / DUAL-PAYMENT SEMANTICS (explicit, tested)
+--------------------------------------------------------------------------------
+- User opens a USDT swap, then pays the DISPLAY invoice via Lightning:
+  checkout -> paid (any-invoice rule). The FixedFloat order sits unpaid and
+  expires on its own; nothing to refund. UI collapses the deposit panel into
+  the paid state on next poll.
+- User pays the swap deposit; FixedFloat pays the SHADOW invoice: sweep settles
+  it; checkout -> paid. Display invoice expires unpaid. Same UI outcome.
+- User does BOTH (pays Lightning, then also sends USDT): display invoice
+  settles first -> paid. The USDT deposit still converts and FixedFloat pays
+  the shadow invoice too -> merchant receives twice; both rows settle; order
+  stays simply "paid". Overpayment is the payer's action against clear UI copy
+  ("pay by ONE method"); merchant can refund out-of-band. Rare, not dangerous,
+  but document it. (This is exactly why separate invoices matter: with a
+  single shared invoice this same double-spend becomes a FAILED FixedFloat
+  payout + stranded funds + forced emergency, i.e. much worse.)
+- Display invoice expires while swap in flight: checkout stays open via the
+  shadow row (section 4). If the user clicks "pay by Lightning" again after
+  display expiry, the normal retry path applies.
+
+7. EXPIRY POLICY
+--------------------------------------------------------------------------------
+Two independent clocks; make both visible in the UI:
+  - FixedFloat fixed-rate deposit window: ~10 min from /create, NOT extendable.
+    Countdown shown = min(provider_expires_at, invoice expiry). Deposit must be
+    BROADCAST + CONFIRMED within it, so /create is called only at the moment
+    the user commits to an asset (never at page load) -- the wizard's asset
+    click IS the commit.
+  - Shadow invoice expiry (ours), sized so the invoice outlives deposit
+    confirmation + exchange + payout:
+      SOL_SOL, USDT_SOL, USDC_SOL, USDT_TRON : 900 s
+      ETH_ETH, USDT_ETH, USDC_ETH            : 1800 s
+  - Display invoice stays at the current 600 s default; unchanged.
+UI steering: order asset buttons Solana/Tron first; Ethereum L1 options carry a
+"confirms slower; send promptly with adequate gas" hint -- Ethereum is the one
+network that realistically misses the 10-min window under congestion, and when
+it does, the refund_required path (section 5) is the designed outcome.
+
+8. FRONTEND (browser/elements + react/vue/svelte/angular wrappers)
+--------------------------------------------------------------------------------
+- /swap_options result flows into the existing wizard model. On crypto routes,
+  each pay_in_asset with min_ok&&max_ok renders a primary "Pay here with
+  USDT (Tron)"-style button ABOVE the existing manual provider guidance cards
+  (which remain as fallback and for disabled deployments). provider-data is
+  not duplicated: the automated action is keyed to provider id "fixedfloat"
+  already present in the registry, reusing its icon/name.
+- Clicking an asset -> POST /swap_start -> deposit panel replaces guidance:
+  network badge, deposit_address (copy), deposit_memo if present (copy, with
+  "required" emphasis), EXACT deposit_amount (copy; "send exactly this
+  amount"), QR encoding the appropriate URI per network, countdown to
+  min(provider_expires_at, invoice expires_at), live status line driven by the
+  normalized provider_state (awaiting deposit -> confirming -> exchanging ->
+  paying invoice -> paid), and a persistent "<- pay with Lightning instead"
+  link that flips back to the untouched display invoice.
+- Terminal renders: paid (existing success state); expired (calm "window
+  passed, nothing was sent -- try again" + re-quote button, which is a fresh
+  /swap_start); refund_required ("your deposit arrived too late for the locked
+  rate" + refund-address form -> /swap_status refund_pending -> refunded with
+  refund_tx_id link); attention/failed ("held for provider review" + support
+  hint).
+- One polling loop: the existing order_status cadence; no new timers.
+
+9. TESTING (repo gate compliant)
+--------------------------------------------------------------------------------
+- spec/: add invoice-storage metadata.swap documentation (schema is already
+  additionalProperties:true; document the shape in spec + a new
+  swap-order.schema.json for the public wire `swap` object) and test vectors:
+  swap-start-idempotency.json, swap-shadow-active-selection.json,
+  swap-settlement-any-invoice.json, swap-supersede-then-paid.json,
+  swap-emergency-refund.json, swap-dual-payment.json. AGENTS.md demands
+  vectors accompany schema changes and idempotency/replay tests accompany
+  invoice-creation/settlement changes -- these are those.
+- packages/js/testkit: add a mock FixedFloat HTTP server implementing the
+  contract in section 3 (envelope, HMAC verification, scripted status walks:
+  happy path, EXPIRED, EMERGENCY/LESS, EMERGENCY/EXPIRED, DONE). Unit-test the
+  client (signing of exact body string incl. "{}", envelope errors, ticker
+  resolution from /ccies fixtures) and the orchestrator against it.
+- tools/live-nwc-test gains an optional live smoke (env-gated, skipped in CI):
+  create a ~$2 real order per network, verify BTCLN ticker, verify whether
+  /create wants `amount` present or omitted when toAddress is a bolt11
+  (unknown until tried -- log the live /ccies and /create responses and lock
+  the accessor paths), verify the merchant wallet's node is REACHABLE from
+  FixedFloat's Lightning node (ff docs: "no path" errors mean no route --
+  custodial/LSP-backed wallets fine, tiny self-hosted nodes may fail), and
+  exercise one deliberate late payment to walk EMERGENCY -> REFUND end-to-end.
+- Run `npm run typecheck && npm run test:js` while iterating and the full
+  `npm run test:ci` gate before calling it done, per AGENTS.md.
+
+10. DELIVERY PLAN
+--------------------------------------------------------------------------------
+PR1  core+node plumbing: parameterizable invoice expiry; rail-aware
+     buildCheckout.active; wire `rail` + public `swap` object; vectors.
+PR2  swap module: assets.ts, provider.ts, fixedfloat.ts client (+ mock server
+     in testkit, unit tests).
+PR3  orchestration + endpoints: startSwap/advanceSwaps/options/refund; demo
+     server routes; env gating; secret-scan patterns.
+PR4  frontend: wizard "Pay here" actions, deposit panel, terminal states,
+     across elements + the four framework wrappers.
+PR5  live smoke tooling + docs (guide under docs/guides: "Enable the swap
+     rail"; .env.example entries).
+Out of scope for v1 (explicitly): ChangeNOW/other heterogeneous providers,
+auto sender-derivation refunds, native TRX asset, quote-racing across
+providers -- all straightforward follow-ups on this interface.
+
+11. OPEN ITEMS TO VERIFY DURING PR2/PR5 (all cheap, none blocking design)
+--------------------------------------------------------------------------------
+- Exact FixedFloat field nesting in live /ccies and /create responses.
+- Lightning payout ticker (expected BTCLN) and per-pair min/max for each of
+  the 7 assets at typical cart sizes -- feeds /swap_options gating.
+- `amount` + Lightning toAddress interaction on /create (present vs derived
+  from invoice).
+- Whether FixedFloat requires the invoice expiry to exceed some floor for
+  Lightning payouts (undocumented; the 900/1800 s policy almost certainly
+  clears it).
+- FixedFloat blocks US persons; surface that in docs so deployers targeting
+  US users know the manual-guidance fallback is what those users get.
+================================================================================
+
+backwards compatibilty not necessary, u can do any rearchitect u need, this project has no users yet 

@@ -5,8 +5,13 @@ import type {
   OpenReceiveReceiveNwcClient,
   OpenReceiveSourcedPriceProvider,
 } from "@openreceive/core";
-import { OpenReceiveServiceError, createOpenReceive } from "@openreceive/node";
+import {
+  OpenReceiveServiceError,
+  createOpenReceive,
+  type OpenReceiveSwapProvider,
+} from "@openreceive/node";
 import { createHelloFruitDemoMetadata } from "../../../../shared/demo-metadata.ts";
+import { createHelloFruitSwapProviders } from "../../../../shared/demo-swaps.ts";
 import {
   createHelloFruitDemoServerLogger,
   createHelloFruitOpenReceiveLogger,
@@ -33,6 +38,7 @@ export interface HelloFruitOpenReceiveOptions {
   readonly client?: OpenReceiveReceiveNwcClient;
   readonly store?: OpenReceiveInvoiceKvStore;
   readonly priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
+  readonly swapProviders?: readonly OpenReceiveSwapProvider[];
 }
 
 export async function createHelloFruitOpenReceive(options: HelloFruitOpenReceiveOptions = {}) {
@@ -41,19 +47,23 @@ export async function createHelloFruitOpenReceive(options: HelloFruitOpenReceive
     customClient: options.client !== undefined,
     customStore: options.store !== undefined,
     customPriceProviders: options.priceProviders !== undefined,
+    customSwapProviders: options.swapProviders !== undefined,
   });
   const priceCurrencies = readHelloFruitPriceFeedCurrencies();
   const supportedCurrencies = readHelloFruitCheckoutCurrencies();
+  const swapProviders = options.swapProviders ?? createHelloFruitSwapProviders();
 
   logDemo("openreceive.price_currencies", "Loaded checkout and price feed currencies.", {
     checkoutCurrencies: supportedCurrencies,
     priceCurrencies,
+    swapEnabled: swapProviders.length > 0,
   });
 
   const openreceive = await createOpenReceive({
     ...(options.client === undefined ? {} : { client: options.client }),
     ...(options.store === undefined ? {} : { store: options.store }),
     ...(options.priceProviders === undefined ? {} : { priceProviders: options.priceProviders }),
+    ...(swapProviders.length === 0 ? {} : { swap: { providers: swapProviders } }),
     namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit",
     priceCurrencies,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
@@ -82,6 +92,9 @@ export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptio
     staticStickers: "/stickers",
     createOrder: "/create_order",
     orderStatus: "/order_status",
+    swapOptions: "/swap_options",
+    swapStart: "/swap_start",
+    swapRefund: "/swap_refund",
     rates: "/rates",
   });
 
@@ -216,6 +229,77 @@ export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptio
     }
   });
 
+  app.post("/swap_options", async (req, res, next) => {
+    const startedAt = Date.now();
+    try {
+      const body = asRequestBody(req.body);
+      const orderId = requireRequestString(body, "order_id");
+      const result = await openreceive.swapOptions({ orderId });
+      logDemo("swap_options.response", "Served automated swap options.", {
+        orderId,
+        enabled: result.enabled,
+        optionCount: result.options.length,
+        elapsedMs: Date.now() - startedAt,
+      });
+      res.status(200).json(result);
+    } catch (error) {
+      if (error instanceof OpenReceiveServiceError || error instanceof HelloFruitDemoOrderError) {
+        res.status(error.status).json(error.body);
+        return;
+      }
+      next(error);
+    }
+  });
+
+  app.post("/swap_start", async (req, res, next) => {
+    const startedAt = Date.now();
+    try {
+      const body = asRequestBody(req.body);
+      const orderId = requireRequestString(body, "order_id");
+      const payInAsset = requireRequestString(body, "pay_in_asset");
+      const invoice = await openreceive.startSwap({ orderId, payInAsset });
+      logDemo("swap_start.response", "Started automated swap.", {
+        orderId,
+        payInAsset,
+        invoiceId: invoice.invoice_id,
+        provider: invoice.swap?.provider,
+        elapsedMs: Date.now() - startedAt,
+      });
+      res.status(201).json({ invoice });
+    } catch (error) {
+      if (error instanceof OpenReceiveServiceError || error instanceof HelloFruitDemoOrderError) {
+        res.status(error.status).json(error.body);
+        return;
+      }
+      next(error);
+    }
+  });
+
+  app.post("/swap_refund", async (req, res, next) => {
+    const startedAt = Date.now();
+    try {
+      const body = asRequestBody(req.body);
+      const orderId = requireRequestString(body, "order_id");
+      const payInAsset = requireRequestString(body, "pay_in_asset");
+      const refundAddress = requireRequestString(body, "refund_address");
+      const invoice = await openreceive.refundSwap({ orderId, payInAsset, refundAddress });
+      logDemo("swap_refund.response", "Requested automated swap refund.", {
+        orderId,
+        payInAsset,
+        invoiceId: invoice.invoice_id,
+        provider: invoice.swap?.provider,
+        elapsedMs: Date.now() - startedAt,
+      });
+      res.status(200).json({ invoice });
+    } catch (error) {
+      if (error instanceof OpenReceiveServiceError || error instanceof HelloFruitDemoOrderError) {
+        res.status(error.status).json(error.body);
+        return;
+      }
+      next(error);
+    }
+  });
+
   return app;
 }
 
@@ -255,6 +339,14 @@ function asRequestBody(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function requireRequestString(body: Record<string, unknown>, key: string): string {
+  const value = body[key];
+  if (typeof value !== "string" || value.length === 0) {
+    throw new HelloFruitDemoOrderError(`${key} is required.`);
+  }
+  return value;
 }
 
 function createStatusRequest(body: Record<string, unknown>): {

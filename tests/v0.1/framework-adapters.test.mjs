@@ -60,6 +60,7 @@ const snapshot = {
   active: {
     invoice_id: "or_inv_test",
     invoice: "lnbc-test",
+    rail: "lightning",
     payment_hash: "a".repeat(64),
     amount_msats: 200000,
     fiat_quote: {
@@ -107,6 +108,7 @@ test("browser owns custom-element checkout attributes and listeners", () => {
     "order-id": "order-test",
     "invoice-id": "or_inv_test",
     invoice: "lnbc-test",
+    rail: "lightning",
     "payment-hash": "a".repeat(64),
     "amount-msats": "200000",
     "fiat-currency": "USD",

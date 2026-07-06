@@ -1,0 +1,20 @@
+{
+  "name": "provider emergency state exposes refund_required and accepts refund request",
+  "swap_before_refund": {
+    "provider": "fixedfloat",
+    "pay_in_asset": "ETH_ETH",
+    "deposit_address": "0x1111111111111111111111111111111111111111",
+    "deposit_amount": "0.0008",
+    "provider_state": "refund_required",
+    "provider_expires_at": 1783361130,
+    "deposit_tx_id": "0xdeposit"
+  },
+  "refund_request": {
+    "refund_address": "0x2222222222222222222222222222222222222222"
+  },
+  "swap_after_refund": {
+    "provider_state": "refund_pending",
+    "refund_address": "0x2222222222222222222222222222222222222222"
+  },
+  "fixedfloat_emergency_choice": "REFUND"
+}

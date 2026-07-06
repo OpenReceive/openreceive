@@ -30,6 +30,10 @@ const secretPatterns = [
   {
     name: "OPENRECEIVE_NWC assignment with 64 hex secret",
     pattern: /OPENRECEIVE_NWC\s*=\s*nostr\+walletconnect:\/\/[^\s"'`]+[?&]secret=[0-9a-fA-F]{64}/
+  },
+  {
+    name: "FIXED_FLOAT_SECRET assignment",
+    pattern: /FIXED_FLOAT_SECRET\s*=\s*["']?[A-Za-z0-9_./+=:-]{16,}/
   }
 ];
 

@@ -491,6 +491,9 @@ function FrameworkCheckout({
 
     const options = {
       statusUrl: "/order_status",
+      swapOptionsUrl: "/swap_options",
+      swapStartUrl: "/swap_start",
+      swapRefundUrl: "/swap_refund",
       rootSelector: ".page",
       defaultTheme: "light" as const,
       onError: (event: Event) => {
@@ -525,6 +528,9 @@ function FrameworkCheckout({
           options: {
             rootSelector: options.rootSelector,
             defaultTheme: options.defaultTheme,
+            swapOptionsUrl: options.swapOptionsUrl,
+            swapStartUrl: options.swapStartUrl,
+            swapRefundUrl: options.swapRefundUrl,
             onError: options.onError,
           },
         });
@@ -562,6 +568,9 @@ function FrameworkCheckout({
         component.setInput("options", {
           rootSelector: options.rootSelector,
           defaultTheme: options.defaultTheme,
+          swapOptionsUrl: options.swapOptionsUrl,
+          swapStartUrl: options.swapStartUrl,
+          swapRefundUrl: options.swapRefundUrl,
           onError: options.onError,
         });
         application.attachView(component.hostView);
@@ -593,6 +602,9 @@ function FrameworkCheckout({
             options: {
               rootSelector: options.rootSelector,
               defaultTheme: options.defaultTheme,
+              swapOptionsUrl: options.swapOptionsUrl,
+              swapStartUrl: options.swapStartUrl,
+              swapRefundUrl: options.swapRefundUrl,
               onError: options.onError,
             },
           },
@@ -625,6 +637,9 @@ function FrameworkCheckout({
         className="demo-checkout"
         checkout={checkout}
         statusUrl="/order_status"
+        swapOptionsUrl="/swap_options"
+        swapStartUrl="/swap_start"
+        swapRefundUrl="/swap_refund"
         logger={logOpenReceive}
         onError={onError}
         onSettled={onSettled}

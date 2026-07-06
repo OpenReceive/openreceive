@@ -7,6 +7,10 @@ import {
   type CheckoutSnapshot
 } from "./index.js";
 
+defineOptions({
+  name: "OpenReceiveCheckout"
+});
+
 const props = withDefaults(
   defineProps<{
     checkout: CheckoutSnapshot;

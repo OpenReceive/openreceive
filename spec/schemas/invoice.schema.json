@@ -7,6 +7,7 @@
   "required": [
     "invoice_id",
     "type",
+    "rail",
     "transaction_state",
     "workflow_state",
     "invoice",
@@ -24,6 +25,13 @@
     },
     "type": {
       "const": "incoming"
+    },
+    "rail": {
+      "type": "string",
+      "enum": [
+        "lightning",
+        "swap"
+      ]
     },
     "transaction_state": {
       "type": "string",
@@ -130,6 +138,9 @@
           "minimum": 0
         }
       }
+    },
+    "swap": {
+      "$ref": "https://spec.openreceive.org/schemas/swap-order.v1.json"
     }
   }
 }

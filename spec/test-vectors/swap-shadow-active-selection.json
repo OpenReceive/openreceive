@@ -1,0 +1,33 @@
+{
+  "name": "shadow swap invoices do not replace active Lightning invoice",
+  "checkout": {
+    "checkout_id": "or_chk_swap_active",
+    "status": "open",
+    "active": {
+      "invoice_id": "or_inv_display",
+      "rail": "lightning",
+      "amount_msats": 200000
+    },
+    "invoices": [
+      {
+        "invoice_id": "or_inv_swap_shadow",
+        "rail": "swap",
+        "amount_msats": 200000,
+        "swap": {
+          "provider": "fixedfloat",
+          "pay_in_asset": "SOL_SOL",
+          "deposit_address": "So11111111111111111111111111111111111111112",
+          "deposit_amount": "0.02",
+          "provider_state": "awaiting_deposit",
+          "provider_expires_at": 1783361130
+        }
+      },
+      {
+        "invoice_id": "or_inv_display",
+        "rail": "lightning",
+        "amount_msats": 200000
+      }
+    ]
+  },
+  "expected_active_invoice_id": "or_inv_display"
+}

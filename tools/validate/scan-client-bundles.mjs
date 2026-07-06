@@ -19,6 +19,10 @@ const forbiddenPatterns = [
   {
     name: "NWC code query value",
     pattern: /[?&]secret=[0-9a-fA-F]{16,}/
+  },
+  {
+    name: "FixedFloat secret marker",
+    pattern: /FIXED_FLOAT_SECRET/
   }
 ];
 

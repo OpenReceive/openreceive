@@ -45,11 +45,24 @@ export type {
   OpenReceiveLogEntry,
   OpenReceiveLogger,
   OpenReceiveOrder,
+  OpenReceivePublicSwap,
   OpenReceiveNodeOptions,
   OpenReceiveNodeSettlementActionHook,
   OpenReceiveNodeSettlementActionInput,
   OpenReceivePendingSweepResult,
+  OpenReceiveSwapOption,
+  OpenReceiveSwapOptions,
+  OpenReceiveSwapOptionsRequest,
+  OpenReceiveSwapOptionsResponse,
+  OpenReceiveSwapRefundRequest,
+  OpenReceiveSwapStartRequest,
 } from "./service.ts";
+export type {
+  OpenReceiveSwapPayInAsset,
+  OpenReceiveSwapProvider,
+  OpenReceiveSwapProviderState,
+} from "./swap/index.ts";
+export { createFixedFloatProviderFromEnv, fixedFloatProvider } from "./swap/index.ts";
 export * from "./postgres-store.ts";
 export * from "./storage-schema.ts";
 export * from "./sqlite-store.ts";

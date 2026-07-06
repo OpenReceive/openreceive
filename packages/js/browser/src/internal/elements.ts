@@ -36,6 +36,7 @@ export function createCheckoutElementAttributes(
     [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId]: snapshot.order_id,
     [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoiceId]: invoice.invoice_id,
     [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice]: invoice.invoice,
+    [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.rail]: invoice.rail,
   };
 
   if (invoice.payment_hash !== undefined) {
@@ -62,6 +63,15 @@ export function createCheckoutElementAttributes(
   }
   if (options.statusUrl !== undefined) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.statusUrl] = options.statusUrl;
+  }
+  if (options.swapOptionsUrl !== undefined) {
+    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.swapOptionsUrl] = options.swapOptionsUrl;
+  }
+  if (options.swapStartUrl !== undefined) {
+    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.swapStartUrl] = options.swapStartUrl;
+  }
+  if (options.swapRefundUrl !== undefined) {
+    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.swapRefundUrl] = options.swapRefundUrl;
   }
   if (options.theme !== undefined) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme] = options.theme;

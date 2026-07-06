@@ -138,6 +138,7 @@ function checkoutSnapshot(invoiceOverrides = {}, checkoutOverrides = {}) {
   const invoice = {
     invoice_id: invoiceOverrides.invoice_id ?? "or_inv_checkout",
     invoice: invoiceOverrides.invoice ?? "lnbc-checkout",
+    rail: invoiceOverrides.rail ?? "lightning",
     payment_hash: invoiceOverrides.payment_hash ?? PAYMENT_HASH,
     amount_msats: invoiceOverrides.amount_msats ?? checkoutOverrides.amount_msats ?? 200000,
     transaction_state: invoiceOverrides.transaction_state ?? "pending",
@@ -849,6 +850,7 @@ test("browser helpers create lightning URI, copy, open, and QR payloads", async 
 
 test("browser owns checkout display-safe labels", () => {
   const model = createCheckoutDisplayModel({
+    rail: "lightning",
     invoice: "lnbc-display",
     payment_hash: "a".repeat(64),
     amount_msats: 200000,
@@ -880,6 +882,7 @@ test("browser owns display HTML escaping for string-rendered adapters", () => {
 test("browser owns checkout display data to state conversion", () => {
   const displayData = {
     invoice_id: "or_inv_display_state",
+    rail: "lightning",
     invoice: "lnbc-display-state",
     payment_hash: "b".repeat(64),
     amount_msats: 21000,
@@ -915,10 +918,68 @@ test("browser owns checkout display data to state conversion", () => {
   assert.throws(
     () =>
       createCheckoutSnapshotFromDisplayData({
+        rail: "lightning",
         invoice: "lnbc-no-id",
       }),
-    /invoice_id is required for checkout state/,
+    /requires invoice_id/,
   );
+});
+
+test("browser preserves swap invoices while keeping Lightning active", async () => {
+  const displayInvoice = {
+    invoice_id: "or_inv_display_swap",
+    rail: "lightning",
+    invoice: "lnbc-display-swap",
+    payment_hash: "d".repeat(64),
+    amount_msats: 200000,
+    transaction_state: "pending",
+    workflow_state: "invoice_created",
+    expires_at: 1600,
+  };
+  const swapInvoice = {
+    invoice_id: "or_inv_shadow_swap",
+    rail: "swap",
+    invoice: "lnbc-shadow-swap",
+    payment_hash: "e".repeat(64),
+    amount_msats: 200000,
+    transaction_state: "pending",
+    workflow_state: "invoice_created",
+    expires_at: 2800,
+    swap: {
+      provider: "fixedfloat",
+      pay_in_asset: "USDT_TRON",
+      deposit_address: "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
+      deposit_amount: "1.05",
+      provider_state: "awaiting_deposit",
+      provider_expires_at: 1590,
+    },
+  };
+  const refresh = createOpenReceiveStatusFetcher({
+    statusUrl: "/order_status",
+    fetch: async () =>
+      new Response(
+        JSON.stringify({
+          checkout_id: "or_chk_swap_browser",
+          order_id: "order-swap-browser",
+          status: "open",
+          amount_msats: 200000,
+          active: displayInvoice,
+          invoices: [swapInvoice, displayInvoice],
+        }),
+        { status: 200 },
+      ),
+  });
+
+  const snapshot = await refresh("order-swap-browser");
+  assert.equal(snapshot.active.invoice_id, "or_inv_display_swap");
+  assert.equal(snapshot.invoices[0].rail, "swap");
+  assert.equal(snapshot.invoices[0].swap.provider, "fixedfloat");
+  assert.equal("provider_token" in snapshot.invoices[0].swap, false);
+
+  const state = createCheckoutState(snapshot, { now: 1000 });
+  assert.equal(state.invoice_id, "or_inv_display_swap");
+  assert.equal(state.rail, "lightning");
+  assert.equal(state.invoice, "lnbc-display-swap");
 });
 
 test("browser owns checkout payment status display model", () => {
@@ -1091,6 +1152,7 @@ test("browser request checkout helper posts SDK-shaped data to an app-owned URL"
           active: {
             invoice_id: "or_inv_browser_create",
             invoice: "lnbc-browser-create",
+            rail: "lightning",
             payment_hash: PAYMENT_HASH,
             amount_msats: 200000,
             order_id: "order-browser-create",
@@ -1142,6 +1204,7 @@ test("browser request checkout helper posts SDK-shaped data to an app-owned URL"
           active: {
             invoice_id: "or_inv_browser_btc",
             invoice: "lnbc-browser-btc",
+            rail: "lightning",
             payment_hash: PAYMENT_HASH,
             amount_msats: 500000000,
             order_id: "order-browser-btc",
@@ -1180,6 +1243,7 @@ test("browser request checkout helper posts SDK-shaped data to an app-owned URL"
           active: {
             invoice_id: "or_inv_browser_sats",
             invoice: "lnbc-browser-sats",
+            rail: "lightning",
             payment_hash: PAYMENT_HASH,
             amount_msats: 500000,
             order_id: "order-browser-sats",
@@ -1763,12 +1827,16 @@ test("browser owns payment wizard DOM contract", () => {
     country: "data-or-country",
     switchCountry: "data-or-switch-country",
     route: "data-or-route",
+    swapStart: "data-or-swap-start",
+    swapBack: "data-or-swap-back",
+    swapQr: "data-or-swap-qr",
     providerCopy: "data-or-provider-copy",
     providerTutorial: "data-or-provider-tutorial",
     providerTutorialIndex: "data-or-provider-tutorial-index",
   });
   assert.equal(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.breadcrumb, "[data-or-breadcrumb]");
   assert.equal(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.method, "[data-or-method]");
+  assert.equal(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapStart, "[data-or-swap-start]");
   assert.equal(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.providerCopy, "[data-or-provider-copy]");
   assert.equal(
     OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.providerTutorial,
@@ -1800,6 +1868,7 @@ test("browser owns custom-element attribute contracts", () => {
     orderId: "order-id",
     invoiceId: "invoice-id",
     invoice: "invoice",
+    rail: "rail",
     paymentHash: "payment-hash",
     amountMsats: "amount-msats",
     fiatCurrency: "fiat-currency",
@@ -1807,6 +1876,9 @@ test("browser owns custom-element attribute contracts", () => {
     status: "status",
     expiresAt: "expires-at",
     statusUrl: "status-url",
+    swapOptionsUrl: "swap-options-url",
+    swapStartUrl: "swap-start-url",
+    swapRefundUrl: "swap-refund-url",
     theme: "theme",
     paymentWizard: "payment-wizard",
   });

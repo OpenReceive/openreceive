@@ -1,12 +1,10 @@
-import {
-  type AssetIndexEntry,
-  type Country,
-  type FiatRailId,
-  type PaymentWizardRoute,
-  type Provider,
-  type ResolvedProviderRef,
+import type {
+  AssetIndexEntry,
+  Country,
+  FiatRailId,
+  PaymentWizardRoute,
 } from "@openreceive/provider-data";
-import { type Status } from "../status.ts";
+import type { Status } from "../status.ts";
 export { status, type Status, type StatusInvoiceLike } from "../status.ts";
 
 export const OPENRECEIVE_QR_QUIET_ZONE_MODULES = 4 as const;
@@ -46,6 +44,9 @@ export const OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES = {
   country: "data-or-country",
   switchCountry: "data-or-switch-country",
   route: "data-or-route",
+  swapStart: "data-or-swap-start",
+  swapBack: "data-or-swap-back",
+  swapQr: "data-or-swap-qr",
   providerCopy: "data-or-provider-copy",
   providerTutorial: "data-or-provider-tutorial",
   providerTutorialIndex: "data-or-provider-tutorial-index",
@@ -59,6 +60,9 @@ export const OPENRECEIVE_PAYMENT_WIZARD_SELECTORS = {
   country: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.country}]`,
   switchCountry: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.switchCountry}]`,
   route: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.route}]`,
+  swapStart: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapStart}]`,
+  swapBack: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapBack}]`,
+  swapQr: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapQr}]`,
   providerCopy: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerCopy}]`,
   providerTutorial: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}]`,
   providerTutorialIndex: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex}]`,
@@ -183,6 +187,21 @@ export interface OpenReceiveTransientFeedbackOptions<T> {
 export interface OpenReceiveTransientFeedbackController<T> {
   show(value: T): void;
   clear(): void;
+}
+
+export interface OpenReceiveTickingValueOptions {
+  readonly active?: boolean;
+  readonly intervalMs?: number;
+  readonly now?: () => number;
+  readonly setInterval?: typeof globalThis.setInterval;
+  readonly clearInterval?: typeof globalThis.clearInterval;
+  readonly onValue: (value: number) => void;
+}
+
+export interface OpenReceiveTickingValueController {
+  start(): void;
+  stop(): void;
+  refresh(): void;
 }
 
 export type OpenReceivePaymentIconId =
@@ -337,9 +356,49 @@ export type CheckoutPhase =
   | "failed"
   | "cancelled";
 
+export type OpenReceiveSwapProviderState =
+  | "awaiting_deposit"
+  | "confirming"
+  | "exchanging"
+  | "paying_invoice"
+  | "completed"
+  | "expired"
+  | "refund_required"
+  | "refund_pending"
+  | "refunded"
+  | "attention"
+  | "failed";
+
+export interface CheckoutInvoiceSwapSnapshot {
+  readonly provider: string;
+  readonly pay_in_asset: string;
+  readonly deposit_address: string;
+  readonly deposit_memo?: string;
+  readonly deposit_amount: string;
+  readonly provider_state: OpenReceiveSwapProviderState;
+  readonly provider_expires_at: number;
+  readonly deposit_tx_id?: string;
+  readonly refund_address?: string;
+  readonly refund_tx_id?: string;
+  readonly attention?: boolean;
+}
+
+export interface OpenReceiveSwapDisplayModel {
+  readonly provider: string;
+  readonly assetLabel: string;
+  readonly depositAddress: string;
+  readonly depositMemo?: string;
+  readonly depositAmount: string;
+  readonly providerStateLabel: string;
+  readonly expiresInSeconds: number;
+  readonly countdownLabel: string;
+  readonly qrPayload: string;
+}
+
 export interface CheckoutInvoiceSnapshot {
   readonly invoice_id: string;
   readonly invoice: string;
+  readonly rail: "lightning" | "swap";
   readonly payment_hash?: string;
   readonly amount_msats?: number;
   readonly fiat_quote?: {
@@ -352,6 +411,7 @@ export interface CheckoutInvoiceSnapshot {
   readonly workflow_state?: string;
   readonly expires_at?: number;
   readonly settled_at?: number;
+  readonly swap?: CheckoutInvoiceSwapSnapshot;
 }
 
 export interface CheckoutSnapshot {
@@ -375,6 +435,7 @@ export interface CheckoutDisplayData {
   readonly order_id?: string;
   readonly invoice_id?: string;
   readonly invoice: string;
+  readonly rail: "lightning" | "swap";
   readonly payment_hash?: string;
   readonly amount_msats?: number;
   readonly fiat_quote?: {
@@ -387,6 +448,7 @@ export interface CheckoutDisplayData {
   readonly workflow_state?: string;
   readonly expires_at?: number;
   readonly settled_at?: number;
+  readonly swap?: CheckoutInvoiceSwapSnapshot;
 }
 
 export interface CheckoutDisplayModel extends CheckoutDisplayData {
@@ -401,6 +463,7 @@ export const OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES = {
   orderId: "order-id",
   invoiceId: "invoice-id",
   invoice: "invoice",
+  rail: "rail",
   paymentHash: "payment-hash",
   amountMsats: "amount-msats",
   fiatCurrency: "fiat-currency",
@@ -408,6 +471,9 @@ export const OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES = {
   status: "status",
   expiresAt: "expires-at",
   statusUrl: "status-url",
+  swapOptionsUrl: "swap-options-url",
+  swapStartUrl: "swap-start-url",
+  swapRefundUrl: "swap-refund-url",
   theme: "theme",
   paymentWizard: "payment-wizard",
 } as const;
@@ -421,6 +487,9 @@ export const OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES = {
 
 export interface CheckoutElementAttributeOptions {
   readonly statusUrl?: string;
+  readonly swapOptionsUrl?: string;
+  readonly swapStartUrl?: string;
+  readonly swapRefundUrl?: string;
   readonly theme?: OpenReceiveResolvedTheme;
   readonly paymentWizard?: boolean;
 }
@@ -533,6 +602,7 @@ export interface CheckoutState {
   readonly order_id: string;
   readonly invoice_id: string;
   readonly invoice: string;
+  readonly rail: "lightning" | "swap";
   readonly lightning_uri: string;
   readonly payment_hash?: string;
   readonly amount_msats?: number;
@@ -546,6 +616,7 @@ export interface CheckoutState {
   readonly terminal: boolean;
   readonly paid: boolean;
   readonly settled_at?: number;
+  readonly swap?: CheckoutInvoiceSwapSnapshot;
 }
 
 export interface CheckoutStatusModelInput {
@@ -624,6 +695,7 @@ export interface CheckoutWatcherOptions {
   readonly clearInterval?: typeof globalThis.clearInterval;
   readonly logger?: OpenReceiveBrowserLogger;
   readonly onState: (state: CheckoutState) => void;
+  readonly onSnapshot?: (snapshot: CheckoutSnapshot) => void;
   readonly onError?: (error: unknown) => void;
 }
 
@@ -1077,6 +1149,7 @@ export const openReceiveCheckoutElementStyles = `
 	  [part="method-grid"],
 	  [part="route-picker"],
 	  [part="country-grid"],
+	  [part="swap-actions"],
 	  [part="provider-grid"],
 	  [part="provider-actions"] {
     display: grid;
@@ -1086,6 +1159,7 @@ export const openReceiveCheckoutElementStyles = `
   [part="method-grid"],
   [part="route-picker"],
   [part="country-grid"],
+  [part="swap-actions"],
   [part="provider-grid"],
   [part="provider-actions"] {
     grid-template-columns: 1fr 1fr;
@@ -1204,6 +1278,77 @@ export const openReceiveCheckoutElementStyles = `
     font: inherit;
     min-height: 34px;
     padding: 0 8px;
+  }
+
+  [part="swap-start"] {
+    background: var(--or-text);
+    border: 1px solid var(--or-text);
+    border-radius: 6px;
+    color: var(--or-bg);
+    min-height: 40px;
+    padding: 8px 10px;
+  }
+
+  [part="swap-panel"] {
+    background: var(--or-bg);
+    border: 1px solid var(--or-border);
+    border-radius: 6px;
+    display: grid;
+    gap: 10px;
+    padding: 10px;
+  }
+
+  [part="swap-heading"] {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: space-between;
+  }
+
+  [part="swap-heading"] span,
+  [part="swap-countdown"] {
+    color: var(--or-muted);
+  }
+
+  [part="swap-qr"] {
+    justify-self: center;
+    width: min(220px, 100%);
+  }
+
+  [part="swap-qr"] svg {
+    display: block;
+    height: auto;
+    width: 100%;
+  }
+
+  [part="swap-details"] {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+  }
+
+  [part="swap-details"] dt {
+    color: var(--or-muted);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  [part="swap-details"] dd {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  [part="swap-back"] {
+    background: var(--or-bg-soft);
+    border: 1px solid var(--or-border);
+    border-radius: 6px;
+    color: var(--or-text);
+    justify-self: start;
+    min-height: 36px;
+    padding: 7px 10px;
   }
 
 	  [part="provider"] {
@@ -1485,6 +1630,7 @@ export const openReceiveCheckoutElementStyles = `
 	    [part="method-grid"],
 	    [part="route-picker"],
 	    [part="country-grid"],
+    [part="swap-actions"],
     [part="provider-grid"],
     [part="provider-actions"] {
       grid-template-columns: 1fr;

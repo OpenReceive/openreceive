@@ -411,6 +411,9 @@ function renderCheckout(checkout: CheckoutSnapshot): void {
     document,
     root: document.querySelector(".page"),
     statusUrl: "/order_status",
+    swapOptionsUrl: "/swap_options",
+    swapStartUrl: "/swap_start",
+    swapRefundUrl: "/swap_refund",
     rootSelector: ".page",
     defaultTheme: "light",
     onError: (event) => {

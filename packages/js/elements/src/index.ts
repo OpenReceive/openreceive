@@ -30,6 +30,8 @@ import {
   createCheckoutProviderCopyEvent,
   createOpenReceiveThemeChangeEvent,
   createOpenReceiveTransientFeedbackController,
+  createOpenReceiveSwapDisplayModel,
+  createQrPayloadSvg,
   createOpenReceiveWizardRouteAssetDisplays,
   createOpenReceiveWizardRouteDisplays,
   createQrSvg,
@@ -43,6 +45,7 @@ import {
   openReceiveCheckoutElementStyles,
   openWallet,
   openReceivePaymentMethods,
+  openReceiveSwapAssetMatchesRoute,
   openReceiveThemeToggleElementStyles,
   parseOpenReceiveBooleanAttribute,
   parseOpenReceiveOptionalInteger,
@@ -57,6 +60,7 @@ import {
   updateOpenReceivePaymentWizardSelection,
   writeOpenReceiveStoredCountryCode,
   type CheckoutController,
+  type CheckoutInvoiceSnapshot,
   type CheckoutSnapshot,
   type CheckoutState,
   type OpenReceivePaymentWizardSelection,
@@ -69,6 +73,7 @@ import {
 export interface CheckoutView {
   readonly invoice_id?: string;
   readonly invoice: string;
+  readonly rail?: "lightning" | "swap";
   readonly payment_hash?: string;
   readonly amount_msats?: number;
   readonly fiat_quote?: {
@@ -91,9 +96,21 @@ export interface OpenReceiveElementsWizardView {
   readonly selectedCryptoRoute?: string | null;
   readonly selectedRegion?: OpenReceiveRegionId;
   readonly countryPickerOpen?: boolean;
+  readonly swapOptions?: readonly OpenReceiveElementsSwapOption[];
+  readonly swapInvoice?: CheckoutInvoiceSnapshot;
   readonly activeTutorialProviderId?: string | null;
   readonly activeTutorialIndex?: number;
   readonly activeTutorialCopied?: boolean;
+}
+
+export interface OpenReceiveElementsSwapOption {
+  readonly pay_in_asset: string;
+  readonly label: string;
+  readonly network_label: string;
+  readonly provider: string;
+  readonly min_ok: boolean;
+  readonly max_ok: boolean;
+  readonly pay_amount?: string;
 }
 
 export interface DefineOpenReceiveElementsOptions {
@@ -108,7 +125,10 @@ const DEFAULT_TAG_NAME = "openreceive-checkout";
 export { OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME } from "@openreceive/browser/internal";
 
 export function renderCheckoutHtml(view: CheckoutView): string {
-  const display = createCheckoutDisplayModel(view);
+  const display = createCheckoutDisplayModel({
+    ...view,
+    rail: view.rail ?? "lightning"
+  });
   const checkoutState = createElementCheckoutState(view);
   const summaryAmountLabel = display.fiatLabel === undefined ? display.amountLabel : undefined;
   const amountLabel =
@@ -258,7 +278,13 @@ export function renderOpenReceivePaymentWizardHtml(
             <p part="wizard-empty">${
               escapeHtml(getOpenReceiveWizardEmptyMessage(selection.selectedMethod))
             }</p>
-	          ` : routeDisplays.map((route) => `
+	          ` : routeDisplays.map((route) => {
+              const activeSwap =
+                view.swapInvoice !== undefined &&
+                openReceiveSwapAssetMatchesRoute(route.key, view.swapInvoice.swap?.pay_in_asset)
+                  ? view.swapInvoice
+                  : undefined;
+              return `
 	            <section part="wizard-route">
                 <h3>
                   ${escapeHtml(route.title)}
@@ -267,7 +293,10 @@ export function renderOpenReceivePaymentWizardHtml(
                     selectedCountryCode: selection.selectedCountryCode
                   })}
                 </h3>
-              <div part="provider-grid">
+              ${activeSwap === undefined
+                ? renderElementSwapActionsHtml(route.key, view.swapOptions ?? [])
+                : renderElementSwapPanelHtml(activeSwap)}
+              ${activeSwap === undefined ? `<div part="provider-grid">
                 ${route.providers.map((provider) => `
                   <article part="provider${provider.recommended ? " selected" : ""}">
                     <div part="provider-heading">
@@ -281,9 +310,10 @@ export function renderOpenReceivePaymentWizardHtml(
                     </div>
                   </article>
                 `).join("")}
-              </div>
+              </div>` : ""}
             </section>
-          `).join("")}
+          `;
+            }).join("")}
         </div>
       `}
       ${renderTutorialModalHtml(
@@ -292,6 +322,54 @@ export function renderOpenReceivePaymentWizardHtml(
         view.activeTutorialIndex ?? 0,
         view.activeTutorialCopied ?? false
       )}
+    </section>
+  `;
+}
+
+function renderElementSwapActionsHtml(
+  routeKey: string,
+  options: readonly OpenReceiveElementsSwapOption[]
+): string {
+  const available = options
+    .filter((option) => option.provider.length > 0 && option.min_ok && option.max_ok)
+    .filter((option) => openReceiveSwapAssetMatchesRoute(routeKey, option.pay_in_asset));
+  if (available.length === 0) return "";
+
+  return `
+    <div part="swap-actions">
+      ${available.map((option) => `
+        <button
+          part="swap-start"
+          ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapStart}="${escapeHtml(option.pay_in_asset)}"
+          type="button"
+        >Pay here with ${escapeHtml(option.label)} (${escapeHtml(option.network_label)})</button>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderElementSwapPanelHtml(invoice: CheckoutInvoiceSnapshot): string {
+  const display = createOpenReceiveSwapDisplayModel(invoice);
+  if (display === undefined) return "";
+  return `
+    <section part="swap-panel">
+      <div part="swap-heading">
+        <strong>${escapeHtml(display.depositAmount)} ${escapeHtml(display.assetLabel)}</strong>
+        <span>${escapeHtml(display.providerStateLabel)}</span>
+      </div>
+      <div part="swap-qr" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapQr}="${escapeHtml(display.qrPayload)}"></div>
+      <dl part="swap-details">
+        <dt>Address</dt>
+        <dd><code>${escapeHtml(display.depositAddress)}</code></dd>
+        ${display.depositMemo === undefined ? "" : `
+          <dt>Memo</dt>
+          <dd><code>${escapeHtml(display.depositMemo)}</code></dd>
+        `}
+        <dt>Amount</dt>
+        <dd><code>${escapeHtml(display.depositAmount)}</code></dd>
+      </dl>
+      <p part="swap-countdown">Deposit window <strong>${escapeHtml(display.countdownLabel)}</strong></p>
+      <button part="swap-back" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapBack} type="button">&lt;- pay with Lightning instead</button>
     </section>
   `;
 }
@@ -453,6 +531,7 @@ function createElementCheckoutState(
   if (view.invoice_id === undefined) return undefined;
   return createCheckoutStateFromDisplayData({
     ...view,
+    rail: view.rail ?? "lightning",
     ...(view.status === undefined
       ? {}
       : { transaction_state: transactionStateFromStatus(view.status) })
@@ -464,6 +543,79 @@ function transactionStateFromStatus(status: Status): string {
   if (status === "expired") return "expired";
   if (status === "failed") return "failed";
   return "pending";
+}
+
+async function postElementJson(url: string, body: Record<string, unknown>): Promise<unknown> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+  const parsed = await response.json();
+  if (!response.ok) {
+    throw new Error(readElementResponseMessage(parsed) ?? "OpenReceive request failed.");
+  }
+  return parsed;
+}
+
+function normalizeElementSwapOptions(body: unknown): readonly OpenReceiveElementsSwapOption[] {
+  const record = elementRecord(body);
+  if (record.enabled !== true || !Array.isArray(record.options)) return [];
+  return record.options
+    .map(normalizeElementSwapOption)
+    .filter((option): option is OpenReceiveElementsSwapOption => option !== undefined);
+}
+
+function normalizeElementSwapOption(input: unknown): OpenReceiveElementsSwapOption | undefined {
+  const record = elementRecord(input);
+  const payInAsset = elementString(record.pay_in_asset);
+  const label = elementString(record.label);
+  const networkLabel = elementString(record.network_label);
+  const provider = elementString(record.provider);
+  if (
+    payInAsset === undefined ||
+    label === undefined ||
+    networkLabel === undefined ||
+    provider === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    pay_in_asset: payInAsset,
+    label,
+    network_label: networkLabel,
+    provider,
+    min_ok: record.min_ok === true,
+    max_ok: record.max_ok === true,
+    ...(elementString(record.pay_amount) === undefined
+      ? {}
+      : { pay_amount: elementString(record.pay_amount) })
+  };
+}
+
+function normalizeElementSwapInvoice(body: unknown): CheckoutInvoiceSnapshot {
+  const record = elementRecord(body);
+  const invoice = elementRecord(record.invoice ?? body);
+  if (elementString(invoice.invoice_id) === undefined || elementString(invoice.invoice) === undefined) {
+    throw new Error("Swap response did not include an invoice.");
+  }
+  return invoice as unknown as CheckoutInvoiceSnapshot;
+}
+
+function readElementResponseMessage(value: unknown): string | undefined {
+  return elementString(elementRecord(value).message);
+}
+
+function elementRecord(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function elementString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 function parseElementStatus(value: string | null): Status | undefined {
@@ -518,6 +670,9 @@ export function defineOpenReceiveElements(
     private activeTutorialProviderId: string | null = null;
     private activeTutorialIndex = 0;
     private activeTutorialCopied = false;
+    private swapOptions: readonly OpenReceiveElementsSwapOption[] = [];
+    private startedSwapInvoice: CheckoutInvoiceSnapshot | undefined;
+    private dismissedSwapInvoiceId: string | null = null;
     private controller: CheckoutController | undefined;
     private announcedSettledOrderId: string | undefined;
 
@@ -526,6 +681,7 @@ export function defineOpenReceiveElements(
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoiceId,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice,
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.rail,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentHash,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.amountMsats,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.fiatCurrency,
@@ -533,6 +689,9 @@ export function defineOpenReceiveElements(
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.status,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.expiresAt,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.statusUrl,
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.swapOptionsUrl,
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.swapStartUrl,
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.swapRefundUrl,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentWizard
       ];
@@ -541,12 +700,14 @@ export function defineOpenReceiveElements(
     connectedCallback() {
       this.render();
       this.startCheckoutController();
+      void this.loadSwapOptions();
     }
 
     attributeChangedCallback() {
       if (!this.isConnected) return;
       this.render();
       this.startCheckoutController();
+      void this.loadSwapOptions();
     }
 
     disconnectedCallback() {
@@ -564,6 +725,7 @@ export function defineOpenReceiveElements(
       root.innerHTML = renderCheckoutHtml({
         invoice_id: this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoiceId) ?? undefined,
         invoice,
+        rail: parseElementRail(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.rail)),
         payment_hash: this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentHash) ?? undefined,
         amount_msats: parseOpenReceiveOptionalInteger(
           this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.amountMsats),
@@ -586,6 +748,8 @@ export function defineOpenReceiveElements(
           selectedCryptoRoute: this.selection.selectedCryptoRoute,
           selectedRegion: this.selection.selectedRegion,
           countryPickerOpen: this.selection.countryPickerOpen,
+          swapOptions: this.swapOptions,
+          swapInvoice: this.currentSwapInvoice(),
           activeTutorialProviderId: this.activeTutorialProviderId,
           activeTutorialIndex: this.activeTutorialIndex,
           activeTutorialCopied: this.activeTutorialCopied
@@ -636,6 +800,7 @@ export function defineOpenReceiveElements(
       }
 
       this.bindWizard(root, invoice, options.logger);
+      this.renderSwapQrCodes(root);
     }
 
     private startCheckoutController(): void {
@@ -654,7 +819,16 @@ export function defineOpenReceiveElements(
           : { statusUrl }),
         logger: options.logger,
         onError: (error) => this.dispatchError(error),
-        onState: (nextState) => this.applyCheckoutState(nextState)
+        onState: (nextState) => this.applyCheckoutState(nextState),
+        onSnapshot: (snapshot) => {
+          const swapInvoice = snapshot.invoices.find((invoice) =>
+            invoice.rail === "swap" && invoice.swap !== undefined
+          );
+          if (swapInvoice !== undefined) {
+            this.startedSwapInvoice = swapInvoice;
+            this.render();
+          }
+        }
       });
       this.controller.start();
     }
@@ -681,6 +855,7 @@ export function defineOpenReceiveElements(
         ...(orderId === null ? {} : { order_id: orderId }),
         invoice_id: invoiceId,
         invoice,
+        rail: parseElementRail(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.rail)),
         ...(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentHash) === null
           ? {}
           : { payment_hash: this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentHash) ?? undefined }),
@@ -824,6 +999,20 @@ export function defineOpenReceiveElements(
         });
       });
 
+      root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapStart).forEach((button) => {
+        button.addEventListener("click", () => {
+          const payInAsset = button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapStart);
+          if (payInAsset === null) return;
+          void this.startSwap(payInAsset);
+        });
+      });
+
+      root.querySelector(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapBack)?.addEventListener("click", () => {
+        const current = this.currentSwapInvoice();
+        this.dismissedSwapInvoiceId = current?.invoice_id ?? null;
+        this.render();
+      });
+
       root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.providerTutorial).forEach((button) => {
         button.addEventListener("click", () => {
           const providerId = button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial);
@@ -879,6 +1068,69 @@ export function defineOpenReceiveElements(
         this.render();
       });
       if (tutorial instanceof HTMLElement) tutorial.focus();
+    }
+
+    private async loadSwapOptions(): Promise<void> {
+      const url = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.swapOptionsUrl);
+      const orderId = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
+      if (url === null || orderId === null || orderId.length === 0 || globalThis.fetch === undefined) {
+        if (this.swapOptions.length > 0) {
+          this.swapOptions = [];
+          this.render();
+        }
+        return;
+      }
+
+      try {
+        const body = await postElementJson(url, { order_id: orderId });
+        this.swapOptions = normalizeElementSwapOptions(body);
+        this.render();
+      } catch (error) {
+        this.dispatchError(error);
+      }
+    }
+
+    private async startSwap(payInAsset: string): Promise<void> {
+      const url = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.swapStartUrl);
+      const orderId = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
+      if (url === null || orderId === null || orderId.length === 0) return;
+
+      try {
+        const body = await postElementJson(url, {
+          order_id: orderId,
+          pay_in_asset: payInAsset
+        });
+        this.startedSwapInvoice = normalizeElementSwapInvoice(body);
+        this.dismissedSwapInvoiceId = null;
+        this.render();
+      } catch (error) {
+        this.dispatchError(error);
+      }
+    }
+
+    private currentSwapInvoice(): CheckoutInvoiceSnapshot | undefined {
+      if (
+        this.startedSwapInvoice === undefined ||
+        this.startedSwapInvoice.invoice_id === this.dismissedSwapInvoiceId
+      ) {
+        return undefined;
+      }
+      return this.startedSwapInvoice;
+    }
+
+    private renderSwapQrCodes(root: ShadowRoot): void {
+      root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapQr).forEach((target) => {
+        const payload = target.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapQr);
+        if (payload === null) return;
+        void createQrPayloadSvg(payload, {
+          encoder: options.qrEncoder,
+          width: 220
+        })
+          .then((svg) => {
+            target.innerHTML = svg;
+          })
+          .catch((error) => this.dispatchError(error));
+      });
     }
 
     private dispatchError(error: unknown): void {
@@ -1010,6 +1262,11 @@ function readElementFiatQuote(element: Element) {
       value
     }
   };
+}
+
+function parseElementRail(value: string | null): "lightning" | "swap" {
+  if (value === "swap") return "swap";
+  return "lightning";
 }
 
 function showElementCopyFeedback(button: Element | null): void {

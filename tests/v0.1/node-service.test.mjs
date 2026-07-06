@@ -89,6 +89,77 @@ class FakeWallet {
   }
 }
 
+class FakeSwapProvider {
+  name = "fixedfloat";
+  createCalls = 0;
+  quoteCalls = 0;
+  statusCalls = 0;
+  refundCalls = [];
+  orders = new Map();
+  nextState = undefined;
+
+  constructor(supported = ["USDT_TRON", "SOL_SOL", "ETH_ETH"]) {
+    this.supported = new Set(supported);
+  }
+
+  async supportedPayInAssets() {
+    return new Set(this.supported);
+  }
+
+  async quote({ payInAsset }) {
+    this.quoteCalls += 1;
+    return {
+      pay_amount: payInAsset === "ETH_ETH" ? "0.0008" : "1.05",
+      pay_asset: payInAsset,
+      min_ok: true,
+      max_ok: true,
+      provider: this.name,
+    };
+  }
+
+  async createSwap({ payInAsset }) {
+    this.createCalls += 1;
+    const order = {
+      provider: this.name,
+      provider_order_id: `ff-order-${this.createCalls}`,
+      provider_token: `ff-token-${this.createCalls}`,
+      pay_in_asset: payInAsset,
+      deposit_address:
+        payInAsset === "SOL_SOL"
+          ? "So11111111111111111111111111111111111111112"
+          : payInAsset === "ETH_ETH"
+            ? "0x1111111111111111111111111111111111111111"
+            : "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
+      deposit_amount: payInAsset === "ETH_ETH" ? "0.0008" : "1.05",
+      expires_at: 1600,
+      state: "awaiting_deposit",
+    };
+    this.orders.set(order.provider_order_id, order);
+    return order;
+  }
+
+  async getStatus(order) {
+    this.statusCalls += 1;
+    const stored = this.orders.get(order.provider_order_id) ?? order;
+    const state = this.nextState ?? stored.state;
+    const updated = {
+      ...stored,
+      state,
+      ...(state === "completed" ? { payout_tx_id: "ln-payout-1" } : {}),
+      ...(state === "refund_required" ? { deposit_tx_id: "deposit-tx-1" } : {}),
+    };
+    this.orders.set(order.provider_order_id, updated);
+    return updated;
+  }
+
+  async requestRefund(order, refundAddress) {
+    this.refundCalls.push({
+      provider_order_id: order.provider_order_id,
+      refundAddress,
+    });
+  }
+}
+
 async function createHarness(overrides = {}) {
   let now = overrides.now ?? 1000;
   const wallet = overrides.client ?? new FakeWallet(() => now);
@@ -132,6 +203,150 @@ test("createCheckout mints once and replays the live invoice for the same amount
   assert.equal(second.checkout_id, first.checkout_id);
   assert.equal(second.active.invoice_id, first.active.invoice_id);
   assert.equal(wallet.makeInvoiceCalls, 1);
+});
+
+test("swapOptions are disabled unless a swap provider is configured", async () => {
+  const { openreceive } = await createHarness();
+  await openreceive.createCheckout({
+    orderId: "order-swap-disabled",
+    amount: { btc: { currency: "SATS", value: "200" } },
+  });
+
+  assert.deepEqual(await openreceive.swapOptions({ orderId: "order-swap-disabled" }), {
+    enabled: false,
+    options: [],
+  });
+});
+
+test("startSwap creates an idempotent shadow invoice without replacing active Lightning", async () => {
+  const swapProvider = new FakeSwapProvider();
+  const { wallet, store, openreceive } = await createHarness({
+    swap: { providers: [swapProvider] },
+  });
+  const checkout = await openreceive.createCheckout({
+    orderId: "order-swap-start",
+    amount: { btc: { currency: "SATS", value: "200" } },
+    memo: "Fruit sticker",
+  });
+
+  const options = await openreceive.swapOptions({ orderId: "order-swap-start" });
+  assert.equal(options.enabled, true);
+  assert.equal(options.options.some((option) => option.pay_in_asset === "USDT_TRON"), true);
+
+  const first = await openreceive.startSwap({
+    orderId: "order-swap-start",
+    payInAsset: "USDT_TRON",
+  });
+  const second = await openreceive.startSwap({
+    orderId: "order-swap-start",
+    payInAsset: "USDT_TRON",
+  });
+
+  assert.equal(first.invoice_id, second.invoice_id);
+  assert.equal(first.rail, "swap");
+  assert.equal(first.amount_msats, checkout.amount_msats);
+  assert.equal(first.swap.provider, "fixedfloat");
+  assert.equal(first.swap.pay_in_asset, "USDT_TRON");
+  assert.equal(first.swap.deposit_address, "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb");
+  assert.equal("provider_token" in first.swap, false);
+  assert.equal(wallet.makeInvoiceCalls, 2);
+  assert.equal(swapProvider.createCalls, 1);
+
+  const order = await openreceive.getOrder({ orderId: "order-swap-start" });
+  assert.equal(order.active_checkout.active.invoice_id, checkout.active.invoice_id);
+  assert.equal(order.active_checkout.invoices.length, 2);
+  assert.equal(order.active_checkout.invoices.some((invoice) => invoice.rail === "swap"), true);
+
+  const stored = await store.get(first.invoice_id);
+  assert.equal(stored.row.metadata.swap.provider_token, "ff-token-1");
+});
+
+test("settling a shadow swap invoice pays the checkout", async () => {
+  const swapProvider = new FakeSwapProvider();
+  const { wallet, openreceive, setNow } = await createHarness({
+    swap: { providers: [swapProvider] },
+  });
+  await openreceive.createCheckout({
+    orderId: "order-swap-settle",
+    amount: { btc: { currency: "SATS", value: "200" } },
+  });
+  const swapInvoice = await openreceive.startSwap({
+    orderId: "order-swap-settle",
+    payInAsset: "SOL_SOL",
+  });
+
+  wallet.settlePaymentHash(swapInvoice.payment_hash, 1200);
+  setNow(1015);
+  const order = await openreceive.getOrder({ orderId: "order-swap-settle" });
+
+  assert.equal(order.status, "paid");
+  assert.equal(order.paid_checkout.invoices.some((invoice) => invoice.invoice_id === swapInvoice.invoice_id), true);
+  assert.equal(order.paid_at, 1200);
+});
+
+test("a superseded checkout is still paid when its shadow invoice settles later", async () => {
+  const swapProvider = new FakeSwapProvider();
+  const { wallet, openreceive, setNow } = await createHarness({
+    swap: { providers: [swapProvider] },
+  });
+  await openreceive.createCheckout({
+    orderId: "order-swap-supersede",
+    amount: { btc: { currency: "SATS", value: "200" } },
+  });
+  const swapInvoice = await openreceive.startSwap({
+    orderId: "order-swap-supersede",
+    payInAsset: "USDT_TRON",
+  });
+  const replacement = await openreceive.createCheckout({
+    orderId: "order-swap-supersede",
+    amount: { btc: { currency: "SATS", value: "300" } },
+  });
+
+  wallet.settlePaymentHash(swapInvoice.payment_hash, 1210);
+  setNow(1015);
+  const order = await openreceive.getOrder({ orderId: "order-swap-supersede" });
+
+  assert.equal(order.status, "paid");
+  assert.equal(order.paid_checkout.checkout_id !== replacement.checkout_id, true);
+  assert.equal(order.paid_checkout.status, "paid");
+  assert.equal(order.paid_checkout.invoices.some((invoice) => invoice.invoice_id === swapInvoice.invoice_id), true);
+});
+
+test("refundSwap requests a provider refund only for refund-required swaps", async () => {
+  const swapProvider = new FakeSwapProvider();
+  const { openreceive, setNow } = await createHarness({
+    swap: { providers: [swapProvider] },
+  });
+  await openreceive.createCheckout({
+    orderId: "order-swap-refund",
+    amount: { btc: { currency: "SATS", value: "200" } },
+  });
+  await openreceive.startSwap({
+    orderId: "order-swap-refund",
+    payInAsset: "ETH_ETH",
+  });
+
+  swapProvider.nextState = "refund_required";
+  setNow(1015);
+  const refreshed = await openreceive.getOrder({ orderId: "order-swap-refund" });
+  const refundRequired = refreshed.active_checkout.invoices.find((invoice) => invoice.rail === "swap");
+  assert.equal(refundRequired.swap.provider_state, "refund_required");
+  assert.equal(refundRequired.swap.deposit_tx_id, "deposit-tx-1");
+
+  const refunded = await openreceive.refundSwap({
+    orderId: "order-swap-refund",
+    payInAsset: "ETH_ETH",
+    refundAddress: "0x2222222222222222222222222222222222222222",
+  });
+
+  assert.equal(refunded.swap.provider_state, "refund_pending");
+  assert.equal(refunded.swap.refund_address, "0x2222222222222222222222222222222222222222");
+  assert.deepEqual(swapProvider.refundCalls, [
+    {
+      provider_order_id: "ff-order-1",
+      refundAddress: "0x2222222222222222222222222222222222222222",
+    },
+  ]);
 });
 
 test("createCheckout creates a new checkout and supersedes the open checkout for a different amount", async () => {
