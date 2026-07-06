@@ -1,3 +1,7 @@
+# IMPORTAT NOTE
+
+this is a brand-new project, we don't yet have users, it's ok to make breaking api changes, we want to maximize user ease and developer experience..
+
 # OpenReceive Agent Rules
 
 These rules apply to Codex, Claude Code, Copilot coding agents, and human
