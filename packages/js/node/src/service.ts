@@ -1391,7 +1391,7 @@ async function readReservedSwapAttemptForStartReplay(
     throw serviceError(
       409,
       "CONFLICT",
-      "Swap payment address is still being prepared. Retry this idempotency key shortly.",
+      "Swap payment address is still being prepared. Retry this swap start shortly.",
     );
   }
 

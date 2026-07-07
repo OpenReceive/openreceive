@@ -60,6 +60,8 @@ When the payer chooses an asset, the client shows the estimate and then calls `s
 
 Show the payer `swap.deposit_address`, `swap.deposit_amount`, `swap.pay_in_asset`, and the provider expiry. Provider tokens are private and never appear in this response.
 
+Do not send an idempotency key for swap start. OpenReceive owns duplicate protection on the server: repeated `startSwap` calls for the same order's current checkout and asset reuse the existing active attempt, or return a conflict while the provider order is still being prepared. A new attempt is created only after the existing attempt expires or reaches a terminal provider state.
+
 Token payments use an address-only QR plus copyable exact amount and network warnings. Native ETH and SOL may use amount-bearing QR payloads. The UI should tell payers to pay with one method only.
 
 ## Refund Flow

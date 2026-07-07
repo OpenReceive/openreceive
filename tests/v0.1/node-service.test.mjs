@@ -496,13 +496,18 @@ test("settling a shadow swap invoice does not expose provider tokens to onPaid",
 
 test("provider completion exposes payout details but does not mark paid without wallet settlement", async () => {
   const swapProvider = new FakeSwapProvider();
-  const { openreceive, setNow } = await createHarness({
+  const background = [];
+  const { wallet, openreceive, setNow } = await createHarness({
     swap: { providers: [swapProvider] },
+    waitUntil: (promise) => {
+      background.push(promise);
+    },
   });
   await openreceive.createCheckout({
     orderId: "order-swap-provider-done",
     amount: { btc: { currency: "SATS", value: "200" } },
   });
+  await Promise.all(background.splice(0));
   await openreceive.startSwap({
     orderId: "order-swap-provider-done",
     payInAsset: "USDT_TRON",
@@ -510,9 +515,12 @@ test("provider completion exposes payout details but does not mark paid without 
 
   swapProvider.nextState = "completed";
   setNow(1015);
+  const walletCallsBefore = wallet.listTransactionsCalls;
   const order = await openreceive.getOrder({ orderId: "order-swap-provider-done" });
+  const expectedGlobalSweepCalls = order.wallet_scan_performed ? 1 : 0;
   const swapInvoice = order.active_checkout.invoices.find((invoice) => invoice.rail === "swap");
 
+  assert.equal(wallet.listTransactionsCalls - walletCallsBefore, expectedGlobalSweepCalls);
   assert.equal(order.status, "pending");
   assert.equal(swapInvoice.swap.provider_state, "completed");
   assert.equal(swapInvoice.swap.provider_order_id, "ff-order-1");
