@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -680,6 +680,32 @@ sqliteTest("Node CLI keeps init removed while migrate and doctor remain", async 
     assert.equal(doctorCode, 1);
     assert.match(stdout.join(""), /OpenReceive doctor/);
     assert.match(stdout.join(""), /nwc: missing/);
+    assert.match(stdout.join(""), /config: missing openreceive\.yml/);
+    assert.doesNotMatch(stdout.join(""), /nostr\+walletconnect:\/\//);
+    assert.equal(stderr.join(""), "");
+
+    writeFileSync(
+      path.join(tempRoot, "openreceive.yml"),
+      [
+        `OPENRECEIVE_NWC: "${NWC_URI}"`,
+        "OPENRECEIVE_NAMESPACE: cli_test",
+        "OPENRECEIVE_STORE: local-sqlite",
+        "",
+      ].join("\n"),
+    );
+    stdout.length = 0;
+    stderr.length = 0;
+    const configuredDoctorCode = await runOpenReceiveCli({
+      argv: ["doctor"],
+      cwd: tempRoot,
+      stdout: io(stdout),
+      stderr: io(stderr),
+    });
+    assert.equal(configuredDoctorCode, 0);
+    assert.match(stdout.join(""), /namespace: cli_test/);
+    assert.match(stdout.join(""), /nwc: present-redacted/);
+    assert.match(stdout.join(""), /store: local-sqlite/);
+    assert.match(stdout.join(""), /config: loaded openreceive\.yml/);
     assert.doesNotMatch(stdout.join(""), /nostr\+walletconnect:\/\//);
     assert.equal(stderr.join(""), "");
 
