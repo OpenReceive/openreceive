@@ -11,20 +11,20 @@ npm install
 npm run dev
 ```
 
-Set a valid receive-only `OPENRECEIVE_NWC` in the process environment before
-starting the dev server.
+Set a valid receive-only `OPENRECEIVE_NWC` in the repository root
+`openreceive.yml` before starting the dev server.
 
 ## Container
 
 ```sh
-cp ../../../../.env.example ../../../../.env
-# Set OPENRECEIVE_NWC in the repository root .env file.
+cp ../../../../openreceive.yml.example ../../../../openreceive.yml
+# Set OPENRECEIVE_NWC in the repository root openreceive.yml file.
 docker compose -f compose.yml -f compose.override.yml.example up --build
 ```
 
-Docker loads the repository root `.env` file, so the same
+Docker mounts the repository root `openreceive.yml` file, so the same
 `OPENRECEIVE_NWC` value can be shared across all local Hello Fruit demos
-without demo-local env files. Set it before running Compose; the web container
+without demo-local config files. Set it before running Compose; the web container
 validates it at startup. The compose stack uses `local-sqlite` by default and
 stores OpenReceive state in a named `.openreceive` volume.
 

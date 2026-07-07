@@ -21,7 +21,7 @@ export async function createHelloFruitOpenReceiveKvStore(input: {
     return store;
   } catch (error) {
     console.error(
-      `[openreceive:${input.demoId}] OpenReceive store initialization failed. Check openreceive.yml store, OPENRECEIVE_NAMESPACE, and runtime dependencies.`
+      `[openreceive:${input.demoId}] OpenReceive store initialization failed. Check openreceive.yml store/namespace settings and runtime dependencies.`
     );
     throw error;
   }

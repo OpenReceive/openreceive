@@ -10,9 +10,6 @@ services:
       - "3000"
     networks:
       - demo_proxy
-    env_file:
-      - path: /opt/openreceive/secrets/rizful-test-wallet.env
-        required: false
     environment:
       OPENRECEIVE_DEMO_MODE: ${OPENRECEIVE_DEMO_MODE:-test_nwc}
       OPENRECEIVE_PUBLIC_URL: https://express-demo.openreceive.org
@@ -20,4 +17,6 @@ services:
       OPENRECEIVE_IMAGE_DIGEST: ${OPENRECEIVE_IMAGE_DIGEST:-}
       OPENRECEIVE_DEPLOYED_AT: ${OPENRECEIVE_DEPLOYED_AT:-}
       PORT: "3000"
+    volumes:
+      - /opt/openreceive/secrets/openreceive.yml:/app/examples/hello-fruit/server/node-express/openreceive.yml:ro
     restart: unless-stopped

@@ -2,33 +2,28 @@
 
 require "json"
 require "openreceive"
+require "yaml"
 
 ROOT = File.expand_path("../..", __dir__)
 DEFAULT_EXPECTED_CAPABILITIES = File.join(ROOT, "tools/live-nwc-test/expected_capabilities.json")
-
-def load_env_file(path)
-  return if path.nil? || path.empty?
-
-  File.readlines(path, chomp: true).each do |line|
-    next if line.strip.empty? || line.lstrip.start_with?("#")
-
-    key, value = line.split("=", 2)
-    next if key.nil? || value.nil? || ENV.key?(key)
-
-    ENV[key] = value
-  end
-end
 
 def read_expected_capabilities
   path = ENV["OPENRECEIVE_EXPECTED_CAPABILITIES"] || DEFAULT_EXPECTED_CAPABILITIES
   JSON.parse(File.read(path))
 end
 
-load_env_file(ENV["OPENRECEIVE_ENV_FILE"])
+def read_openreceive_config_nwc
+  path = File.join(Dir.pwd, "openreceive.yml")
+  return nil unless File.file?(path)
 
-nwc = ENV["OPENRECEIVE_NWC"]
+  config = YAML.safe_load(File.read(path), aliases: false) || {}
+  value = config["OPENRECEIVE_NWC"] || config["nwc"]
+  value.is_a?(String) ? value.strip : nil
+end
+
+nwc = read_openreceive_config_nwc
 if nwc.nil? || nwc.empty?
-  puts "OPENRECEIVE_NWC is not set; skipping Ruby live NWC smoke test."
+  puts "OPENRECEIVE_NWC is not set in openreceive.yml; skipping Ruby live NWC smoke test."
   exit 0
 end
 

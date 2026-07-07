@@ -4,7 +4,7 @@ OpenReceive always settles merchant orders to Lightning. Automated swaps let a p
 
 ## Configure A Provider
 
-Provider credentials stay server-side. The Node library auto-enables providers from a backend-only YAML config whose entries reference secret environment variables, so app code does not need to construct providers.
+Provider credentials stay server-side. The Node library auto-enables providers from `openreceive.yml`, so app code does not need to construct providers.
 
 ```ts
 import { createOpenReceive } from "@openreceive/node";
@@ -12,39 +12,32 @@ import { createOpenReceive } from "@openreceive/node";
 const openreceive = await createOpenReceive();
 ```
 
-Set the config path and provider credentials only in backend environments:
-
-```sh
-OPENRECEIVE_SWAP_CONFIG=./openreceive.swap.yml
-OPENRECEIVE_FIXEDFLOAT_KEY=...
-OPENRECEIVE_FIXEDFLOAT_SECRET=...
-OTHERFLOAT_KEY=...
-OTHERFLOAT_SECRET=...
-```
-
-The YAML file stores provider structure, not secret values:
+Put provider credentials only in the ignored backend `openreceive.yml`:
 
 ```yaml
+OPENRECEIVE_NWC: nostr+walletconnect://...
+OPENRECEIVE_NAMESPACE: my_app
+
 swap:
   providers:
     - id: fixedfloat
       protocol: fixedfloat
       base_url: https://ff.io
-      key_env: OPENRECEIVE_FIXEDFLOAT_KEY
-      secret_env: OPENRECEIVE_FIXEDFLOAT_SECRET
+      key: ...
+      secret: ...
       invoice_expiry_seconds: 1620
 
     - id: otherfloat
       protocol: fixedfloat
       base_url: https://swap.example.com
-      key_env: OTHERFLOAT_KEY
-      secret_env: OTHERFLOAT_SECRET
+      key: ...
+      secret: ...
       invoice_expiry_seconds: 1620
 ```
 
-`providers` order is priority order. `id` must be unique and becomes the public `swap.provider` value. `protocol: fixedfloat` means the service uses the FixedFloat-compatible API shape for currency discovery, quotes, order creation, status, and refunds. The `invoice_expiry_seconds` value must cover the deposit window, settlement SLA, and margin. Omit `OPENRECEIVE_SWAP_CONFIG` to leave automated swaps disabled.
+`providers` order is priority order. `id` must be unique and becomes the public `swap.provider` value. `protocol: fixedfloat` means the service uses the FixedFloat-compatible API shape for currency discovery, quotes, order creation, status, and refunds. The `invoice_expiry_seconds` value must cover the deposit window, settlement SLA, and margin. Leave `swap.providers` empty or leave provider keys blank to keep automated swaps disabled.
 
-Never send provider keys, provider secrets, or the YAML config to browser code, mobile apps, source maps, fixtures, or logs. OpenReceive also supports the older `OPENRECEIVE_SWAP_FIXED_FLOAT_KEY` and `OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET` env pair when `OPENRECEIVE_SWAP_CONFIG` is not set, but YAML is the preferred multi-provider convention.
+Never send provider keys, provider secrets, or `openreceive.yml` to browser code, mobile apps, source maps, fixtures, or logs. Commit `openreceive.yml.example`, not the real file.
 
 ## Payer Flow
 

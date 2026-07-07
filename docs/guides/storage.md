@@ -7,11 +7,11 @@ Link app records to OpenReceive invoices through your app records or invoice
 
 ## Store URI
 
-Set `OPENRECEIVE_STORE` on the server:
+Set `OPENRECEIVE_STORE` in `openreceive.yml`:
 
-```sh
-OPENRECEIVE_STORE=local-sqlite
-OPENRECEIVE_NAMESPACE=default
+```yaml
+OPENRECEIVE_STORE: local-sqlite
+OPENRECEIVE_NAMESPACE: default
 ```
 
 Supported v0.1 store values:
@@ -31,8 +31,8 @@ Postgres works anywhere and is the recommended default. Most apps already run a
 database for orders, customers, or fulfillment, so point `OPENRECEIVE_STORE` at
 that durable Postgres database:
 
-```sh
-OPENRECEIVE_STORE=postgres://USER:PASS@HOST:5432/DB
+```yaml
+OPENRECEIVE_STORE: postgres://USER:PASS@HOST:5432/DB
 ```
 
 SQLite is only for one durable machine, such as a raw VPS/Droplet/Hetzner host,
@@ -40,8 +40,8 @@ or one PaaS instance with a real mounted volume. It is never safe on ephemeral
 serverless filesystems. On mounted-volume platforms, use an explicit absolute
 path:
 
-```sh
-OPENRECEIVE_STORE=sqlite:/absolute/mounted/volume/openreceive.sqlite3
+```yaml
+OPENRECEIVE_STORE: sqlite:/absolute/mounted/volume/openreceive.sqlite3
 ```
 
 Platform defaults:
@@ -52,15 +52,12 @@ Platform defaults:
 | Render, Railway, Fly.io, Azure App Service, Kubernetes, Dokku, Coolify, CapRover | Use Postgres, or an explicit absolute SQLite path on a durable mounted volume for a single instance. Prefer Postgres on Azure because `/home` is SMB-backed. |
 | Raw VPS, Droplet, Hetzner, bare metal | `local-sqlite` is acceptable when the disk is durable and the checkout runs as one instance. |
 
-For platforms without reliable runtime signatures, declare the host with
-`OPENRECEIVE_PLATFORM`; it does not select storage by itself.
+For platforms without reliable runtime signatures, declare the host with runtime
+`OPENRECEIVE_PLATFORM`; it does not select storage by itself. Keep the store URI
+in `openreceive.yml`:
 
-```sh
-OPENRECEIVE_PLATFORM=aws-apprunner
-OPENRECEIVE_STORE=postgres://USER:PASS@HOST:5432/DB
-
-OPENRECEIVE_PLATFORM=coolify
-OPENRECEIVE_STORE=sqlite:/app/storage/openreceive.sqlite3
+```yaml
+OPENRECEIVE_STORE: postgres://USER:PASS@HOST:5432/DB
 ```
 
 ## Namespaces
@@ -82,9 +79,9 @@ Use one shared durable OpenReceive store before adding more than one web
 process, serverless instance, or any deployment with an ephemeral filesystem.
 In v0.1 Node, that shared store is Postgres:
 
-```sh
-OPENRECEIVE_STORE=postgres://openreceive:password@db.example.com:5432/openreceive
-OPENRECEIVE_NAMESPACE=prod
+```yaml
+OPENRECEIVE_STORE: postgres://openreceive:password@db.example.com:5432/openreceive
+OPENRECEIVE_NAMESPACE: prod
 ```
 
 Do not use a per-instance SQLite file when multiple servers run the same

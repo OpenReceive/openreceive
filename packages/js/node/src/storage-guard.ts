@@ -31,9 +31,9 @@ interface StoreConfigurationInput {
 }
 
 const DOCS_LINK = "See docs/guides/storage.md.";
-const POSTGRES_STEP = "Set OPENRECEIVE_STORE=postgres://USER:PASS@HOST:5432/DB.";
+const POSTGRES_STEP = "Set OPENRECEIVE_STORE: postgres://USER:PASS@HOST:5432/DB in openreceive.yml.";
 const MOUNTED_SQLITE_STEP =
-  "Or set OPENRECEIVE_STORE=sqlite:/absolute/mounted/volume/openreceive.sqlite3 on a single instance with durable mounted storage.";
+  "Or set OPENRECEIVE_STORE: sqlite:/absolute/mounted/volume/openreceive.sqlite3 in openreceive.yml on a single instance with durable mounted storage.";
 const EMPTY_ENV: Env = Object.freeze({});
 
 export function policyForOpenReceivePlatform(id: string): OpenReceiveSqlitePolicy {

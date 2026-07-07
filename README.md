@@ -104,8 +104,8 @@ Run the live-wallet smoke harness:
 npm run test:live:nwc
 ```
 
-The live smoke command reads `OPENRECEIVE_NWC` from `openreceive.yml` or the
-process environment, and skips when it is absent.
+The live smoke command reads `OPENRECEIVE_NWC` from `openreceive.yml` and skips
+when it is absent.
 
 ## Product Boundary
 

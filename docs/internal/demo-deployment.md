@@ -74,15 +74,14 @@ Demo images must not bake in receive-only NWC codes. Runtime private values belo
 in host-managed files such as:
 
 ```text
-/opt/openreceive/secrets/rizful-test-wallet.env
-/opt/openreceive/secrets/production-wallet.env
+/opt/openreceive/secrets/openreceive.yml
 /opt/openreceive/secrets/cloudflare-dns.env
 /opt/openreceive/secrets/ghcr.env
 ```
 
-Those files should be mode `600` and owned by the deploy user or root. Compose
-templates load them through `env_file`; the examples mark the files optional so
-local config validation can run without real secrets.
+Those files should be mode `600` and owned by the deploy user or root. Demo
+compose templates mount `openreceive.yml` read-only into each app container;
+the proxy compose may still use an infrastructure env file for Cloudflare DNS.
 
 Never commit:
 

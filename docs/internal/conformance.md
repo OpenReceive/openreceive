@@ -76,10 +76,9 @@ Renewal idempotency uses the same scope shape with `operation =
 
 ## Live Wallet Smoke
 
-`npm run test:live:nwc` uses `OPENRECEIVE_NWC` when present and skips clearly
-when absent. It may load a receive-only NWC code from a local ignored env file when
-`OPENRECEIVE_ENV_FILE` points at one. Live runs must use a low-value
-receive-only NWC code and must redact the connection string in all output.
+`npm run test:live:nwc` reads `OPENRECEIVE_NWC` from `openreceive.yml` and skips
+clearly when absent. Live runs must use a low-value receive-only NWC code and
+must redact the connection string in all output.
 
 The default wallet capability fixture is
 `tools/live-nwc-test/expected_capabilities.json`, currently set for the Rizful

@@ -117,8 +117,8 @@ const openreceive = await createOpenReceive({
 console.log(openreceive.priceCurrencies); // ["USD", "EUR"]
 ```
 
-If `priceCurrencies` is omitted, OpenReceive reads
-`OPENRECEIVE_PRICE_CURRENCIES=USD,EUR` or falls back to `["USD"]`.
+If `priceCurrencies` is omitted, OpenReceive reads `OPENRECEIVE_PRICE_CURRENCIES`
+from `openreceive.yml`; if that field is absent, it falls back to `["USD"]`.
 
 ## Advanced Provider Wiring
 

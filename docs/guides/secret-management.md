@@ -5,48 +5,34 @@ them as private server-only configuration.
 
 ## Repository Rules
 
-- Commit `.env.example`, not real `.env` files.
+- Commit `openreceive.yml.example`, not real `openreceive.yml` files.
 - Do not commit `OPENRECEIVE_NWC` values.
-- Do not commit swap provider credentials. YAML swap config must use `key_env`
-  and `secret_env` references, not inline secret values.
+- Do not commit swap provider credentials.
 - Do not put receive-only NWC codes in browser code, mobile apps, fixtures,
   screenshots, source maps, docs, logs, or error payloads.
 - Keep `private/` for local-only launcher scripts and notes.
 
-`npm run scan:secrets` rejects likely NWC strings and tracked non-example env
+`npm run scan:secrets` rejects likely NWC strings and tracked local config
 files. `npm run scan:client-bundles` scans generated demo bundles after
 `npm run build:demo` so browser artifacts do not contain `OPENRECEIVE_NWC` or
 NWC connection URIs.
 
 ## Local Development
 
-Use a local env file ignored by git:
-
-```sh
-OPENRECEIVE_NWC=nostr+walletconnect://...
-OPENRECEIVE_WALLET_PROFILE=rizful
-OPENRECEIVE_SWAP_CONFIG=private/openreceive.swap.yml
-OPENRECEIVE_FIXEDFLOAT_KEY=...
-OPENRECEIVE_FIXEDFLOAT_SECRET=...
-```
-
-The YAML file should reference those env vars instead of storing their values:
+Use the local YAML file ignored by git:
 
 ```yaml
+OPENRECEIVE_NWC: nostr+walletconnect://...
+OPENRECEIVE_NAMESPACE: default
+OPENRECEIVE_STORE: local-sqlite
+
 swap:
   providers:
     - id: fixedfloat
       protocol: fixedfloat
       base_url: https://ff.io
-      key_env: OPENRECEIVE_FIXEDFLOAT_KEY
-      secret_env: OPENRECEIVE_FIXEDFLOAT_SECRET
-```
-
-To read those values from an ignored local file instead of exported shell
-variables, set:
-
-```sh
-OPENRECEIVE_ENV_FILE=private/rizful-test-wallet.env
+      key: ...
+      secret: ...
 ```
 
 Run live tests only with a low-value receive-only NWC code:
@@ -55,17 +41,15 @@ Run live tests only with a low-value receive-only NWC code:
 npm run test:live:nwc
 ```
 
-The script skips when `OPENRECEIVE_NWC` is unset. It only reads an env file when
-`OPENRECEIVE_ENV_FILE` is set, so normal test runs do not accidentally use a
-developer's local receive-only NWC code. When a wallet is configured, it redacts
-the code, creates a low-value test invoice, and verifies payment server-side
-before fulfillment.
+The script reads `OPENRECEIVE_NWC` from `openreceive.yml` and skips when unset.
+When a wallet is configured, it redacts the code, creates a low-value test
+invoice, and verifies payment server-side before fulfillment.
 
 ## Deployment
 
-Inject receive-only NWC codes at runtime from the host, platform secret store, or
-operator-managed env files. Do not bake them into build artifacts or demo
-images.
+Mount or inject `openreceive.yml` at runtime from the host, platform secret
+store, or operator-managed secret file. Do not bake it into build artifacts or
+demo images.
 
 Hosted demos may expose public build metadata such as package versions, git
 SHA, image digest, demo mode, and `deployed_at`. Treat those as allowlisted

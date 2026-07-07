@@ -37,10 +37,11 @@ export interface HelloFruitOpenReceiveOptions {
   readonly client?: OpenReceiveReceiveNwcClient;
   readonly store?: OpenReceiveInvoiceKvStore;
   readonly priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
+  readonly configPath?: string | false;
 }
 
 export async function createHelloFruitOpenReceive(options: HelloFruitOpenReceiveOptions = {}) {
-  const config = readOpenReceiveConfigFile({ cwd: process.cwd() });
+  const config = readOpenReceiveConfigFile({ cwd: process.cwd(), configPath: options.configPath });
   logDemo("openreceive.configure", "Preparing OpenReceive demo service.", {
     namespace: config?.namespace ?? "hello_fruit",
     customClient: options.client !== undefined,
@@ -59,6 +60,7 @@ export async function createHelloFruitOpenReceive(options: HelloFruitOpenReceive
     ...(options.client === undefined ? {} : { client: options.client }),
     ...(options.store === undefined ? {} : { store: options.store }),
     ...(options.priceProviders === undefined ? {} : { priceProviders: options.priceProviders }),
+    ...(options.configPath === undefined ? {} : { configPath: options.configPath }),
     namespace: config?.namespace ?? "hello_fruit",
     priceCurrencies,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID),

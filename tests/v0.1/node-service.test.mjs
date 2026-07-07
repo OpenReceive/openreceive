@@ -249,108 +249,95 @@ test("createOpenReceive loads ordered FixedFloat-compatible swaps from YAML conf
   const dir = mkdtempSync(path.join(tmpdir(), "openreceive-swap-config-"));
   try {
     writeFileSync(
-      path.join(dir, "openreceive.swap.yml"),
+      path.join(dir, "openreceive.yml"),
       [
         "swap:",
         "  providers:",
         "    - id: otherfloat",
         "      protocol: fixedfloat",
         "      base_url: https://otherfloat.example",
-        "      key_env: OTHERFLOAT_KEY",
-        "      secret_env: OTHERFLOAT_SECRET",
+        "      key: otherfloat-key",
+        "      secret: otherfloat-secret",
         "      invoice_expiry_seconds: 1620",
         "    - id: fixedfloat",
         "      protocol: fixedfloat",
         "      base_url: https://fixedfloat.example",
-        "      key_env: OPENRECEIVE_FIXEDFLOAT_KEY",
-        "      secret_env: OPENRECEIVE_FIXEDFLOAT_SECRET",
+        "      key: fixed-float-key",
+        "      secret: fixed-float-secret",
         "      invoice_expiry_seconds: 1620",
         "",
       ].join("\n"),
     );
 
-    await withEnv(
-      {
-        OPENRECEIVE_SWAP_CONFIG: "openreceive.swap.yml",
-        OTHERFLOAT_KEY: "otherfloat-key",
-        OTHERFLOAT_SECRET: "otherfloat-secret",
-        OPENRECEIVE_FIXEDFLOAT_KEY: "fixed-float-key",
-        OPENRECEIVE_FIXEDFLOAT_SECRET: "fixed-float-secret",
-        OPENRECEIVE_SWAP_FIXED_FLOAT_KEY: undefined,
-        OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET: undefined,
+    const fetchCalls = [];
+    await withGlobalFetch(
+      async (url, options) => {
+        fetchCalls.push({
+          url: String(url),
+          body: JSON.parse(String(options.body)),
+        });
+        if (String(url).endsWith("/api/v2/ccies")) {
+          return jsonResponse({
+            code: 0,
+            data: [
+              {
+                code: "USDTTRC",
+                coin: "USDT",
+                network: "TRC20",
+                send: { min: "1", max: "5000" },
+              },
+              { code: "BTCLN", coin: "BTC", network: "Lightning" },
+            ],
+          });
+        }
+        if (String(url) === "https://otherfloat.example/api/v2/price") {
+          return jsonResponse({
+            code: 0,
+            data: {
+              from: {
+                amount: "1.04",
+              },
+            },
+          });
+        }
+        throw new Error(`unexpected fetch ${url}`);
       },
       async () => {
-        const fetchCalls = [];
-        await withGlobalFetch(
-          async (url, options) => {
-            fetchCalls.push({
-              url: String(url),
-              body: JSON.parse(String(options.body)),
-            });
-            if (String(url).endsWith("/api/v2/ccies")) {
-              return jsonResponse({
-                code: 0,
-                data: [
-                  {
-                    code: "USDTTRC",
-                    coin: "USDT",
-                    network: "TRC20",
-                    send: { min: "1", max: "5000" },
-                  },
-                  { code: "BTCLN", coin: "BTC", network: "Lightning" },
-                ],
-              });
-            }
-            if (String(url) === "https://otherfloat.example/api/v2/price") {
-              return jsonResponse({
-                code: 0,
-                data: {
-                  from: {
-                    amount: "1.04",
-                  },
-                },
-              });
-            }
-            throw new Error(`unexpected fetch ${url}`);
-          },
-          async () => {
-            const openreceive = await createOpenReceive({
-              client: new FakeWallet(() => 1000),
-              store: new InMemoryInvoiceKvStore(),
-              namespace: "swap_yaml",
-              cwd: dir,
-              clock: () => 1000,
-              priceProviders: [new StaticPriceProvider()],
-            });
+        const openreceive = await createOpenReceive({
+          client: new FakeWallet(() => 1000),
+          store: new InMemoryInvoiceKvStore(),
+          namespace: "swap_yaml",
+          cwd: dir,
+          clock: () => 1000,
+          priceProviders: [new StaticPriceProvider()],
+        });
 
-            await openreceive.createCheckout({
-              orderId: "order-swap-yaml",
-              amount: { btc: { currency: "SATS", value: "200" } },
-            });
+        await openreceive.createCheckout({
+          orderId: "order-swap-yaml",
+          amount: { btc: { currency: "SATS", value: "200" } },
+        });
 
-            const options = await openreceive.swapOptions({ orderId: "order-swap-yaml" });
-            const usdtTron = options.options.find((option) => option.pay_in_asset === "USDT_TRON");
-            assert.equal(options.enabled, true);
-            assert.equal(usdtTron?.provider, "otherfloat");
-            assert.equal(usdtTron?.minimum_pay_amount, "1");
-            assert.equal(usdtTron?.maximum_pay_amount, "5000");
+        const options = await openreceive.swapOptions({ orderId: "order-swap-yaml" });
+        const usdtTron = options.options.find((option) => option.pay_in_asset === "USDT_TRON");
+        assert.equal(options.enabled, true);
+        assert.equal(usdtTron?.provider, "otherfloat");
+        assert.equal(usdtTron?.minimum_pay_amount, "1");
+        assert.equal(usdtTron?.maximum_pay_amount, "5000");
 
-            const quote = await openreceive.swapQuote({
-              orderId: "order-swap-yaml",
-              payInAsset: "USDT_TRON",
-            });
-            assert.equal(quote.provider, "otherfloat");
-            assert.equal(quote.available, true);
-            assert.equal(quote.pay_amount, "1.04");
-            assert.deepEqual(
-              fetchCalls.map((call) => call.url),
-              [
-                "https://otherfloat.example/api/v2/ccies",
-                "https://fixedfloat.example/api/v2/ccies",
-                "https://otherfloat.example/api/v2/price",
-              ],
-            );
-          },
+        const quote = await openreceive.swapQuote({
+          orderId: "order-swap-yaml",
+          payInAsset: "USDT_TRON",
+        });
+        assert.equal(quote.provider, "otherfloat");
+        assert.equal(quote.available, true);
+        assert.equal(quote.pay_amount, "1.04");
+        assert.deepEqual(
+          fetchCalls.map((call) => call.url),
+          [
+            "https://otherfloat.example/api/v2/ccies",
+            "https://fixedfloat.example/api/v2/ccies",
+            "https://otherfloat.example/api/v2/price",
+          ],
         );
       },
     );
@@ -359,48 +346,37 @@ test("createOpenReceive loads ordered FixedFloat-compatible swaps from YAML conf
   }
 });
 
-test("createOpenReceive rejects YAML config with missing referenced secret env", async () => {
+test("createOpenReceive rejects YAML config with partially configured provider secrets", async () => {
   const dir = mkdtempSync(path.join(tmpdir(), "openreceive-swap-config-"));
   try {
     writeFileSync(
-      path.join(dir, "openreceive.swap.yml"),
+      path.join(dir, "openreceive.yml"),
       [
         "swap:",
         "  providers:",
         "    - id: otherfloat",
         "      protocol: fixedfloat",
         "      base_url: https://otherfloat.example",
-        "      key_env: OTHERFLOAT_KEY",
-        "      secret_env: OTHERFLOAT_SECRET",
+        "      key: otherfloat-key",
         "",
       ].join("\n"),
     );
 
-    await withEnv(
-      {
-        OPENRECEIVE_SWAP_CONFIG: path.join(dir, "openreceive.swap.yml"),
-        OTHERFLOAT_KEY: "otherfloat-key",
-        OTHERFLOAT_SECRET: undefined,
-        OPENRECEIVE_SWAP_FIXED_FLOAT_KEY: undefined,
-        OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET: undefined,
-      },
-      async () => {
-        await assert.rejects(
-          () =>
-            createOpenReceive({
-              client: new FakeWallet(() => 1000),
-              store: new InMemoryInvoiceKvStore(),
-              namespace: "swap_yaml_missing_secret",
-              clock: () => 1000,
-              priceProviders: [new StaticPriceProvider()],
-            }),
-          (error) => {
-            assert.equal(error instanceof OpenReceiveConfigError, true);
-            assert.equal(error.code, "INVALID_SWAP_PROVIDER_CONFIG");
-            assert.match(String(error.cause?.message), /OTHERFLOAT_SECRET/);
-            return true;
-          },
-        );
+    await assert.rejects(
+      () =>
+        createOpenReceive({
+          client: new FakeWallet(() => 1000),
+          store: new InMemoryInvoiceKvStore(),
+          namespace: "swap_yaml_missing_secret",
+          cwd: dir,
+          clock: () => 1000,
+          priceProviders: [new StaticPriceProvider()],
+        }),
+      (error) => {
+        assert.equal(error instanceof OpenReceiveConfigError, true);
+        assert.equal(error.code, "INVALID_CONFIG_FILE");
+        assert.match(String(error.cause?.message), /key and .*secret must be set together/);
+        return true;
       },
     );
   } finally {
@@ -412,50 +388,39 @@ test("createOpenReceive rejects duplicate YAML swap provider ids", async () => {
   const dir = mkdtempSync(path.join(tmpdir(), "openreceive-swap-config-"));
   try {
     writeFileSync(
-      path.join(dir, "openreceive.swap.yml"),
+      path.join(dir, "openreceive.yml"),
       [
         "swap:",
         "  providers:",
         "    - id: otherfloat",
         "      protocol: fixedfloat",
         "      base_url: https://otherfloat-a.example",
-        "      key_env: OTHERFLOAT_A_KEY",
-        "      secret_env: OTHERFLOAT_A_SECRET",
+        "      key: otherfloat-a-key",
+        "      secret: otherfloat-a-secret",
         "    - id: otherfloat",
         "      protocol: fixedfloat",
         "      base_url: https://otherfloat-b.example",
-        "      key_env: OTHERFLOAT_B_KEY",
-        "      secret_env: OTHERFLOAT_B_SECRET",
+        "      key: otherfloat-b-key",
+        "      secret: otherfloat-b-secret",
         "",
       ].join("\n"),
     );
 
-    await withEnv(
-      {
-        OPENRECEIVE_SWAP_CONFIG: path.join(dir, "openreceive.swap.yml"),
-        OTHERFLOAT_A_KEY: "otherfloat-a-key",
-        OTHERFLOAT_A_SECRET: "otherfloat-a-secret",
-        OTHERFLOAT_B_KEY: "otherfloat-b-key",
-        OTHERFLOAT_B_SECRET: "otherfloat-b-secret",
-        OPENRECEIVE_SWAP_FIXED_FLOAT_KEY: undefined,
-        OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET: undefined,
-      },
-      async () => {
-        await assert.rejects(
-          () =>
-            createOpenReceive({
-              client: new FakeWallet(() => 1000),
-              store: new InMemoryInvoiceKvStore(),
-              namespace: "swap_yaml_duplicate_ids",
-              clock: () => 1000,
-              priceProviders: [new StaticPriceProvider()],
-            }),
-          (error) => {
-            assert.equal(error instanceof OpenReceiveConfigError, true);
-            assert.match(String(error.cause?.message), /duplicates swap provider id/);
-            return true;
-          },
-        );
+    await assert.rejects(
+      () =>
+        createOpenReceive({
+          client: new FakeWallet(() => 1000),
+          store: new InMemoryInvoiceKvStore(),
+          namespace: "swap_yaml_duplicate_ids",
+          cwd: dir,
+          clock: () => 1000,
+          priceProviders: [new StaticPriceProvider()],
+        }),
+      (error) => {
+        assert.equal(error instanceof OpenReceiveConfigError, true);
+        assert.equal(error.code, "INVALID_CONFIG_FILE");
+        assert.match(String(error.cause?.message), /duplicates swap provider id/);
+        return true;
       },
     );
   } finally {
@@ -463,168 +428,44 @@ test("createOpenReceive rejects duplicate YAML swap provider ids", async () => {
   }
 });
 
-test("createOpenReceive rejects inline YAML swap provider secrets", async () => {
+test("createOpenReceive skips blank YAML swap provider secrets", async () => {
   const dir = mkdtempSync(path.join(tmpdir(), "openreceive-swap-config-"));
   try {
     writeFileSync(
-      path.join(dir, "openreceive.swap.yml"),
+      path.join(dir, "openreceive.yml"),
       [
         "swap:",
         "  providers:",
         "    - id: otherfloat",
         "      protocol: fixedfloat",
         "      base_url: https://otherfloat.example",
-        "      key: inline-key-is-not-allowed",
-        "      secret_env: OTHERFLOAT_SECRET",
+        '      key: ""',
+        '      secret: ""',
         "",
       ].join("\n"),
     );
 
-    await withEnv(
-      {
-        OPENRECEIVE_SWAP_CONFIG: path.join(dir, "openreceive.swap.yml"),
-        OTHERFLOAT_SECRET: "otherfloat-secret",
-        OPENRECEIVE_SWAP_FIXED_FLOAT_KEY: undefined,
-        OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET: undefined,
-      },
-      async () => {
-        await assert.rejects(
-          () =>
-            createOpenReceive({
-              client: new FakeWallet(() => 1000),
-              store: new InMemoryInvoiceKvStore(),
-              namespace: "swap_yaml_inline_secret",
-              clock: () => 1000,
-              priceProviders: [new StaticPriceProvider()],
-            }),
-          (error) => {
-            assert.equal(error instanceof OpenReceiveConfigError, true);
-            assert.match(String(error.cause?.message), /key is not allowed/);
-            return true;
-          },
-        );
-      },
-    );
+    const openreceive = await createOpenReceive({
+      client: new FakeWallet(() => 1000),
+      store: new InMemoryInvoiceKvStore(),
+      namespace: "swap_yaml_blank_secret",
+      cwd: dir,
+      clock: () => 1000,
+      priceProviders: [new StaticPriceProvider()],
+    });
+
+    await openreceive.createCheckout({
+      orderId: "order-swap-yaml-blank",
+      amount: { btc: { currency: "SATS", value: "200" } },
+    });
+
+    assert.deepEqual(await openreceive.swapOptions({ orderId: "order-swap-yaml-blank" }), {
+      enabled: false,
+      options: [],
+    });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-});
-
-test("createOpenReceive auto-loads legacy FixedFloat swaps from env", async () => {
-  await withEnv(
-    {
-      OPENRECEIVE_SWAP_CONFIG: undefined,
-      OPENRECEIVE_SWAP_FIXED_FLOAT_KEY: "fixed-float-key",
-      OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET: "fixed-float-secret",
-      OPENRECEIVE_SWAP_FIXED_FLOAT_BASE_URL: "https://fixedfloat.example",
-    },
-    async () => {
-      const fetchCalls = [];
-      await withGlobalFetch(
-        async (url, options) => {
-          fetchCalls.push({
-            url: String(url),
-            body: JSON.parse(String(options.body)),
-          });
-          if (String(url) === "https://fixedfloat.example/api/v2/ccies") {
-            return jsonResponse({
-              code: 0,
-              data: [
-                {
-                  code: "USDTTRC",
-                  coin: "USDT",
-                  network: "TRC20",
-                  send: { min: "1", max: "5000" },
-                },
-                { code: "BTCLN", coin: "BTC", network: "Lightning" },
-              ],
-            });
-          }
-          if (String(url) === "https://fixedfloat.example/api/v2/price") {
-            return jsonResponse({
-              code: 0,
-              data: {
-                from: {
-                  amount: "1.05",
-                },
-              },
-            });
-          }
-          throw new Error(`unexpected fetch ${url}`);
-        },
-        async () => {
-          const wallet = new FakeWallet(() => 1000);
-          const openreceive = await createOpenReceive({
-            client: wallet,
-            store: new InMemoryInvoiceKvStore(),
-            namespace: "fixedfloat_env",
-            clock: () => 1000,
-            priceProviders: [new StaticPriceProvider()],
-          });
-
-          await openreceive.createCheckout({
-            orderId: "order-fixedfloat-env",
-            amount: { btc: { currency: "SATS", value: "200" } },
-          });
-
-          const options = await openreceive.swapOptions({ orderId: "order-fixedfloat-env" });
-          const usdtTron = options.options.find((option) => option.pay_in_asset === "USDT_TRON");
-          assert.equal(options.enabled, true);
-          assert.equal(usdtTron?.provider, "fixedfloat");
-          assert.equal(usdtTron?.available, true);
-          assert.equal(usdtTron?.pay_amount, undefined);
-          assert.equal(usdtTron?.minimum_pay_amount, "1");
-          assert.equal(usdtTron?.maximum_pay_amount, "5000");
-          assert.deepEqual(
-            fetchCalls.map((call) => call.url),
-            ["https://fixedfloat.example/api/v2/ccies"],
-          );
-
-          const quote = await openreceive.swapQuote({
-            orderId: "order-fixedfloat-env",
-            payInAsset: "USDT_TRON",
-          });
-          assert.equal(quote.provider, "fixedfloat");
-          assert.equal(quote.available, true);
-          assert.equal(quote.pay_amount, "1.05");
-          assert.deepEqual(
-            fetchCalls.map((call) => call.url),
-            ["https://fixedfloat.example/api/v2/ccies", "https://fixedfloat.example/api/v2/price"],
-          );
-        },
-      );
-    },
-  );
-});
-
-test("createOpenReceive rejects partial FixedFloat env configuration", async () => {
-  await withEnv(
-    {
-      OPENRECEIVE_SWAP_CONFIG: undefined,
-      OPENRECEIVE_SWAP_FIXED_FLOAT_KEY: "fixed-float-key",
-      OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET: undefined,
-      OPENRECEIVE_SWAP_FIXED_FLOAT_BASE_URL: undefined,
-    },
-    async () => {
-      await assert.rejects(
-        () =>
-          createOpenReceive({
-            client: new FakeWallet(() => 1000),
-            store: new InMemoryInvoiceKvStore(),
-            namespace: "partial_fixedfloat_env",
-            clock: () => 1000,
-            priceProviders: [new StaticPriceProvider()],
-          }),
-        (error) => {
-          assert.equal(error instanceof OpenReceiveConfigError, true);
-          assert.equal(error.code, "INVALID_SWAP_PROVIDER_CONFIG");
-          assert.match(error.hint, /OPENRECEIVE_SWAP_FIXED_FLOAT_KEY/);
-          assert.match(error.hint, /OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET/);
-          return true;
-        },
-      );
-    },
-  );
 });
 
 test("FixedFloat rejects invoice expiry configs shorter than its payout window", () => {
@@ -1604,13 +1445,18 @@ test("read-only rate helpers expose static rates and quotes", async () => {
 });
 
 test("createOpenReceive exposes normalized price currency configuration", async () => {
-  const previous = process.env.OPENRECEIVE_PRICE_CURRENCIES;
-  process.env.OPENRECEIVE_PRICE_CURRENCIES = "eur, usd, EUR";
+  const dir = mkdtempSync(path.join(tmpdir(), "openreceive-price-config-"));
   try {
+    writeFileSync(
+      path.join(dir, "openreceive.yml"),
+      ["OPENRECEIVE_PRICE_CURRENCIES:", "  - eur", "  - usd", "  - EUR", ""].join("\n"),
+    );
+
     const openreceive = await createOpenReceive({
       client: new FakeWallet(() => 1000),
       store: new InMemoryInvoiceKvStore(),
       namespace: "currency_config",
+      cwd: dir,
       clock: () => 1000,
       priceProviders: [new StaticPriceProvider()],
       swap: { providers: [] },
@@ -1619,11 +1465,7 @@ test("createOpenReceive exposes normalized price currency configuration", async 
     assert.equal(openreceive.namespace, "currency_config");
     assert.deepEqual(openreceive.priceCurrencies, ["EUR", "USD"]);
   } finally {
-    if (previous === undefined) {
-      delete process.env.OPENRECEIVE_PRICE_CURRENCIES;
-    } else {
-      process.env.OPENRECEIVE_PRICE_CURRENCIES = previous;
-    }
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 

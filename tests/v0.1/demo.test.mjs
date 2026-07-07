@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
 import test from "node:test";
@@ -102,6 +103,7 @@ function createHelloFruitTestOpenReceiveOptions() {
     client: new HelloFruitTestReceiveClient(),
     store: new InMemoryInvoiceKvStore(),
     priceProviders: [new StaticPriceProvider()],
+    configPath: false,
   };
 }
 
@@ -1336,8 +1338,10 @@ test("Hello Fruit JS demos set up package-owned invoice persistence", () => {
     "utf8",
   );
   assert.match(helper, /resolveOpenReceiveStore/);
-  assert.match(helper, /OPENRECEIVE_STORE/);
-  assert.match(helper, /OPENRECEIVE_NAMESPACE/);
+  assert.match(helper, /readOpenReceiveConfigFile/);
+  assert.match(helper, /openreceive\.yml/);
+  assert.doesNotMatch(helper, /OPENRECEIVE_STORE/);
+  assert.doesNotMatch(helper, /OPENRECEIVE_NAMESPACE/);
   assert.doesNotMatch(helper, /DATABASE_URL/);
   assert.doesNotMatch(helper, /OPENRECEIVE_DATABASE_SCHEMA_VERSION/);
   assert.doesNotMatch(helper, /OPENRECEIVE_POSTGRES_MIGRATION_SQL/);
@@ -1358,11 +1362,12 @@ test("Hello Fruit JS demos set up package-owned invoice persistence", () => {
     const volumeName = demoDir.split("/").at(-1);
 
     assert.equal(packageJson.dependencies.pg, "^8.22.0", `${demoDir}: pg dependency`);
-    assert.match(compose, /OPENRECEIVE_STORE:\s+local-sqlite/);
-    assert.match(compose, /OPENRECEIVE_NAMESPACE:\s+hello_fruit_/);
+    assert.doesNotMatch(compose, /OPENRECEIVE_STORE/);
+    assert.doesNotMatch(compose, /OPENRECEIVE_NAMESPACE/);
     assert.doesNotMatch(compose, /DATABASE_URL/);
     assert.doesNotMatch(compose, /openreceive-postgres/);
     assert.doesNotMatch(compose, /image:\s+postgres:17-alpine/);
+    assert.match(compose, /openreceive\.yml:.+openreceive\.yml:ro/);
     assert.match(compose, new RegExp(`openreceive-${volumeName}-openreceive:.+\\.openreceive`));
   }
 
@@ -1432,35 +1437,42 @@ test("Hello Fruit demos normalize OpenReceive service errors at app route bounda
 });
 
 test("Hello Fruit server demos keep secret-safe local setup docs", () => {
+  const openReceiveExamplePath = path.join(process.cwd(), "openreceive.yml.example");
+  assert.equal(existsSync(openReceiveExamplePath), true, "openreceive.yml.example");
+
+  const openReceiveExample = readFileSync(openReceiveExamplePath, "utf8");
+  assert.match(openReceiveExample, /^OPENRECEIVE_NWC:\s*""$/m, "placeholder NWC");
+  assert.match(openReceiveExample, /^OPENRECEIVE_NAMESPACE:\s+default$/m);
+  assert.match(openReceiveExample, /^OPENRECEIVE_STORE:\s+local-sqlite$/m);
+  assert.match(openReceiveExample, /^\s+key:\s*""$/m);
+  assert.match(openReceiveExample, /^\s+secret:\s*""$/m);
+  assert.doesNotMatch(openReceiveExample, /nostr\+walletconnect:\/\//);
+
   for (const demoDir of demoServerDirs) {
-    const envExamplePath = path.join(process.cwd(), demoDir, ".env.example");
     const readmePath = path.join(process.cwd(), demoDir, "README.md");
     const dockerfilePath = path.join(process.cwd(), demoDir, "Dockerfile");
     const composePath = path.join(process.cwd(), demoDir, "compose.yml");
     const composeOverridePath = path.join(process.cwd(), demoDir, "compose.override.yml.example");
 
-    assert.equal(existsSync(envExamplePath), true, `${demoDir}: .env.example`);
     assert.equal(existsSync(readmePath), true, `${demoDir}: README.md`);
     assert.equal(existsSync(dockerfilePath), true, `${demoDir}: Dockerfile`);
     assert.equal(existsSync(composePath), true, `${demoDir}: compose.yml`);
     assert.equal(existsSync(composeOverridePath), true, `${demoDir}: compose.override.yml.example`);
 
-    const envExample = readFileSync(envExamplePath, "utf8");
     const readme = readFileSync(readmePath, "utf8");
     const dockerfile = readFileSync(dockerfilePath, "utf8");
     const compose = readFileSync(composePath, "utf8");
     const composeOverride = readFileSync(composeOverridePath, "utf8");
 
-    assert.match(envExample, /^OPENRECEIVE_NWC=$/m, `${demoDir}: placeholder NWC`);
-    assert.doesNotMatch(envExample, /nostr\+walletconnect:\/\//);
     assert.match(readme, /The browser never receives `OPENRECEIVE_NWC`\./);
     assert.match(readme, /valid receive-only `OPENRECEIVE_NWC`/);
+    assert.match(readme, /openreceive\.yml\.example/);
     assert.match(readme, /\/demo-metadata\.json/);
     assert.match(readme, /compose\.override\.yml\.example up --build/);
     assert.doesNotMatch(readme, /--profile openreceive-worker/);
     assert.match(dockerfile, /CMD \["npm", "start"\]/);
-    assert.match(compose, /env_file:/);
-    assert.match(compose, /path:\s+\.\.\/\.\.\/\.\.\/\.\.\/\.env/);
+    assert.doesNotMatch(compose, /env_file:/);
+    assert.match(compose, /openreceive\.yml:.+openreceive\.yml:ro/);
     assert.match(compose, /expose:/);
     assert.doesNotMatch(compose, /ports:/);
     assert.match(composeOverride, /ports:/);
@@ -1472,45 +1484,50 @@ test("Hello Fruit server demos keep secret-safe local setup docs", () => {
 
 test("Hello Fruit demos refuse to boot without OPENRECEIVE_NWC", async () => {
   await withEnv({ OPENRECEIVE_NWC: undefined }, async () => {
-    for (const demo of [
-      {
-        name: "node-express-production",
-        createApp: createHelloFruitProductionServer,
-      },
-      {
-        name: "static-html-small-api-production",
-        createApp: createHelloFruitStaticProductionServer,
-      },
-    ]) {
-      await assert.rejects(
-        () => demo.createApp(),
-        /needs a receive-only NWC code to receive payments\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
-        `${demo.name}: requires NWC at boot`,
-      );
-    }
+    await withTempCwd(async () => {
+      for (const demo of [
+        {
+          name: "node-express-production",
+          createApp: createHelloFruitProductionServer,
+        },
+        {
+          name: "static-html-small-api-production",
+          createApp: createHelloFruitStaticProductionServer,
+        },
+      ]) {
+        await assert.rejects(
+          () => demo.createApp(),
+          /needs a receive-only NWC code to receive payments\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
+          `${demo.name}: requires NWC at boot`,
+        );
+      }
 
-    assert.throws(
-      () => getNextDemoMetadata(),
-      /needs a receive-only NWC code to receive payments\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
-      "nextjs-fullstack: metadata requires NWC",
-    );
+      assert.throws(
+        () => getNextDemoMetadata(),
+        /needs a receive-only NWC code to receive payments\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
+        "nextjs-fullstack: metadata requires NWC",
+      );
+    });
   });
 });
 
 test("Hello Fruit demos refuse malformed OPENRECEIVE_NWC before serving", async () => {
-  await withEnv({ OPENRECEIVE_NWC: "https://example.com" }, async () => {
-    await assert.rejects(
-      () => createHelloFruitServer(),
-      /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
-    );
-    await assert.rejects(
-      () => createHelloFruitStaticServer(),
-      /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
-    );
-    assert.throws(
-      () => getNextDemoMetadata(),
-      /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
-    );
+  await withEnv({ OPENRECEIVE_NWC: undefined }, async () => {
+    await withTempCwd(async (dir) => {
+      writeFileSync(path.join(dir, "openreceive.yml"), 'OPENRECEIVE_NWC: "https://example.com"\n');
+      await assert.rejects(
+        () => createHelloFruitServer(),
+        /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
+      );
+      await assert.rejects(
+        () => createHelloFruitStaticServer(),
+        /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
+      );
+      assert.throws(
+        () => getNextDemoMetadata(),
+        /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
+      );
+    });
   });
 });
 
@@ -1920,5 +1937,17 @@ async function withEnv(env, callback) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
+  }
+}
+
+async function withTempCwd(callback) {
+  const previous = process.cwd();
+  const dir = mkdtempSync(path.join(tmpdir(), "openreceive-demo-test-"));
+  try {
+    process.chdir(dir);
+    await callback(dir);
+  } finally {
+    process.chdir(previous);
+    rmSync(dir, { recursive: true, force: true });
   }
 }

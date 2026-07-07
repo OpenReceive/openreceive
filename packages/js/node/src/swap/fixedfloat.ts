@@ -107,19 +107,6 @@ const DEFAULT_FIXED_FLOAT_REQUEST_TIMEOUT_MS = 10_000;
 const DEFAULT_FIXED_FLOAT_DEPOSIT_WINDOW_SECONDS = 10 * 60;
 const DEFAULT_FIXED_FLOAT_SETTLEMENT_SLA_SECONDS = 15 * 60;
 const DEFAULT_FIXED_FLOAT_INVOICE_EXPIRY_MARGIN_SECONDS = 2 * 60;
-const OPENRECEIVE_SWAP_FIXED_FLOAT_KEY_ENV = "OPENRECEIVE_SWAP_FIXED_FLOAT_KEY";
-const OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET_ENV = "OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET";
-const OPENRECEIVE_SWAP_FIXED_FLOAT_BASE_URL_ENV = "OPENRECEIVE_SWAP_FIXED_FLOAT_BASE_URL";
-const OPENRECEIVE_SWAP_FIXED_FLOAT_LIGHTNING_CCY_ENV = "OPENRECEIVE_SWAP_FIXED_FLOAT_LIGHTNING_CCY";
-const OPENRECEIVE_SWAP_FIXED_FLOAT_TIMEOUT_MS_ENV = "OPENRECEIVE_SWAP_FIXED_FLOAT_TIMEOUT_MS";
-const OPENRECEIVE_SWAP_FIXED_FLOAT_INVOICE_EXPIRY_SECONDS_ENV =
-  "OPENRECEIVE_SWAP_FIXED_FLOAT_INVOICE_EXPIRY_SECONDS";
-const OPENRECEIVE_SWAP_FIXED_FLOAT_DEPOSIT_WINDOW_SECONDS_ENV =
-  "OPENRECEIVE_SWAP_FIXED_FLOAT_DEPOSIT_WINDOW_SECONDS";
-const OPENRECEIVE_SWAP_FIXED_FLOAT_SETTLEMENT_SLA_SECONDS_ENV =
-  "OPENRECEIVE_SWAP_FIXED_FLOAT_SETTLEMENT_SLA_SECONDS";
-const OPENRECEIVE_SWAP_FIXED_FLOAT_INVOICE_EXPIRY_MARGIN_SECONDS_ENV =
-  "OPENRECEIVE_SWAP_FIXED_FLOAT_INVOICE_EXPIRY_MARGIN_SECONDS";
 
 export function fixedFloatProvider(options: FixedFloatProviderOptions): OpenReceiveSwapProvider {
   return fixedFloatCompatibleSwapProvider({
@@ -132,88 +119,6 @@ export function fixedFloatCompatibleSwapProvider(
   options: FixedFloatCompatibleSwapProviderOptions,
 ): OpenReceiveSwapProvider {
   return new FixedFloatProvider(options);
-}
-
-export function createConfiguredFixedFloatProvider(
-  env: Record<string, string | undefined> = globalThis.process?.env ?? {},
-  options: Omit<FixedFloatProviderOptions, "key" | "secret" | "baseUrl"> = {},
-): OpenReceiveSwapProvider | undefined {
-  const key = readFixedFloatEnv(env, OPENRECEIVE_SWAP_FIXED_FLOAT_KEY_ENV);
-  const secret = readFixedFloatEnv(env, OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET_ENV);
-  const baseUrl = readFixedFloatEnv(env, OPENRECEIVE_SWAP_FIXED_FLOAT_BASE_URL_ENV);
-  const lightningCcy = readFixedFloatEnv(env, OPENRECEIVE_SWAP_FIXED_FLOAT_LIGHTNING_CCY_ENV);
-  const requestTimeoutMs = readFixedFloatPositiveIntegerEnv(
-    env,
-    OPENRECEIVE_SWAP_FIXED_FLOAT_TIMEOUT_MS_ENV,
-  );
-  const invoiceExpirySeconds = readFixedFloatPositiveIntegerEnv(
-    env,
-    OPENRECEIVE_SWAP_FIXED_FLOAT_INVOICE_EXPIRY_SECONDS_ENV,
-  );
-  const depositWindowSeconds = readFixedFloatPositiveIntegerEnv(
-    env,
-    OPENRECEIVE_SWAP_FIXED_FLOAT_DEPOSIT_WINDOW_SECONDS_ENV,
-  );
-  const settlementSlaSeconds = readFixedFloatPositiveIntegerEnv(
-    env,
-    OPENRECEIVE_SWAP_FIXED_FLOAT_SETTLEMENT_SLA_SECONDS_ENV,
-  );
-  const invoiceExpiryMarginSeconds = readFixedFloatPositiveIntegerEnv(
-    env,
-    OPENRECEIVE_SWAP_FIXED_FLOAT_INVOICE_EXPIRY_MARGIN_SECONDS_ENV,
-  );
-  const configured =
-    key !== undefined ||
-    secret !== undefined ||
-    baseUrl !== undefined ||
-    lightningCcy !== undefined ||
-    requestTimeoutMs !== undefined ||
-    invoiceExpirySeconds !== undefined ||
-    depositWindowSeconds !== undefined ||
-    settlementSlaSeconds !== undefined ||
-    invoiceExpiryMarginSeconds !== undefined;
-  if (!configured) {
-    return undefined;
-  }
-  if (key === undefined || secret === undefined) {
-    throw new TypeError(
-      `Set both ${OPENRECEIVE_SWAP_FIXED_FLOAT_KEY_ENV} and ${OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET_ENV} to enable FixedFloat swaps.`,
-    );
-  }
-
-  return fixedFloatProvider({
-    ...options,
-    key,
-    secret,
-    ...(baseUrl === undefined ? {} : { baseUrl }),
-    ...(lightningCcy === undefined ? {} : { lightningCcy }),
-    ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
-    ...(invoiceExpirySeconds === undefined ? {} : { invoiceExpirySeconds }),
-    ...(depositWindowSeconds === undefined ? {} : { depositWindowSeconds }),
-    ...(settlementSlaSeconds === undefined ? {} : { settlementSlaSeconds }),
-    ...(invoiceExpiryMarginSeconds === undefined ? {} : { invoiceExpiryMarginSeconds }),
-  });
-}
-
-function readFixedFloatEnv(
-  env: Record<string, string | undefined>,
-  name: string,
-): string | undefined {
-  const value = env[name]?.trim();
-  return value === undefined || value.length === 0 ? undefined : value;
-}
-
-function readFixedFloatPositiveIntegerEnv(
-  env: Record<string, string | undefined>,
-  name: string,
-): number | undefined {
-  const value = readFixedFloatEnv(env, name);
-  if (value === undefined) return undefined;
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-    throw new TypeError(`${name} must be a positive integer.`);
-  }
-  return parsed;
 }
 
 class FixedFloatProvider implements OpenReceiveSwapProvider {

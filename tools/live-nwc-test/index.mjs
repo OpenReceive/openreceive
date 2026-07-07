@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { lightningUri } from "@openreceive/browser";
+import { parse as parseYaml } from "yaml";
 import {
   OPENRECEIVE_NWC_METADATA_MAX_BYTES,
   classifyTransactionSettlement,
@@ -22,8 +23,7 @@ const repoRoot = path.resolve(currentDir, "../..");
 process.on("uncaughtException", handleFatalError);
 process.on("unhandledRejection", handleFatalError);
 
-const loadedEnvPath = loadLocalEnvFile();
-const nwc = process.env.OPENRECEIVE_NWC;
+const nwc = readOpenReceiveConfigNwc(process.cwd());
 const profile = process.env.OPENRECEIVE_WALLET_PROFILE || "rizful";
 const expectedCapabilitiesPath =
   process.env.OPENRECEIVE_EXPECTED_CAPABILITIES ??
@@ -34,49 +34,6 @@ const waitForPayment = process.env.OPENRECEIVE_LIVE_WAIT_FOR_PAYMENT === "1";
 const supportedProfiles = new Set(["rizful", "alby", "zeus", "custom"]);
 const fruitsPath = path.join(repoRoot, "examples/hello-fruit/shared/fruits.json");
 
-function loadLocalEnvFile() {
-  const explicitPath = process.env.OPENRECEIVE_ENV_FILE;
-  if (!explicitPath) return null;
-
-  const envPath = path.resolve(explicitPath);
-  if (!existsSync(envPath)) {
-    throw new Error(`OPENRECEIVE_ENV_FILE does not exist: ${envPath}`);
-  }
-
-  const entries = parseEnvFile(readFileSync(envPath, "utf8"));
-  for (const [key, value] of Object.entries(entries)) {
-    if (process.env[key] === undefined) process.env[key] = value;
-  }
-
-  return envPath;
-}
-
-function parseEnvFile(contents) {
-  const entries = {};
-  for (const line of contents.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (trimmed.length === 0 || trimmed.startsWith("#")) continue;
-
-    const match = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(trimmed);
-    if (!match) continue;
-    entries[match[1]] = parseEnvValue(match[2]);
-  }
-
-  return entries;
-}
-
-function parseEnvValue(value) {
-  const withoutComment = value.replace(/\s+#.*$/, "").trim();
-  if (
-    (withoutComment.startsWith("\"") && withoutComment.endsWith("\"")) ||
-    (withoutComment.startsWith("'") && withoutComment.endsWith("'"))
-  ) {
-    return withoutComment.slice(1, -1);
-  }
-
-  return withoutComment;
-}
-
 function handleFatalError(error) {
   console.error(formatErrorMessage(error));
   process.exit(1);
@@ -85,6 +42,17 @@ function handleFatalError(error) {
 function loadExpectedCapabilities(filePath) {
   if (!existsSync(filePath)) return null;
   return JSON.parse(readFileSync(filePath, "utf8"));
+}
+
+function readOpenReceiveConfigNwc(cwd) {
+  const configPath = path.join(cwd, "openreceive.yml");
+  if (!existsSync(configPath)) return undefined;
+  const parsed = parseYaml(readFileSync(configPath, "utf8"));
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("openreceive.yml must be a YAML object.");
+  }
+  const value = parsed.OPENRECEIVE_NWC ?? parsed.nwc;
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 
 function formatErrorMessage(error) {
@@ -160,7 +128,7 @@ async function renderTerminalQr(invoice) {
 }
 
 if (!nwc) {
-  console.log("OPENRECEIVE_NWC is not set; skipping live NWC smoke test.");
+  console.log("OPENRECEIVE_NWC is not set in openreceive.yml; skipping live NWC smoke test.");
   process.exit(0);
 }
 
@@ -183,9 +151,6 @@ try {
 }
 
 console.log(`Live NWC smoke for profile '${profile}'.`);
-if (loadedEnvPath) {
-  console.log(`Loaded local env file: ${path.relative(repoRoot, loadedEnvPath)}`);
-}
 console.log(`Configured NWC: ${parsedNwc.redacted}`);
 console.log(`Wallet pubkey: ${parsedNwc.walletPubkey}`);
 console.log(`Relay count: ${parsedNwc.relays.length}`);

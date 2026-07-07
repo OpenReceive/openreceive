@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 
@@ -16,6 +16,7 @@ const ignoredDirs = new Set([
 const ignoredFiles = new Set([
   ".env",
   ".DS_Store",
+  "openreceive.yml",
   "spec/test-vectors/nwc-uri-parse.json"
 ]);
 const allowedSecretFixtures = new Set([
@@ -83,18 +84,13 @@ function trackedFiles() {
   }
 }
 
-function isAllowedEnvExample(relativePath) {
-  const fileName = path.basename(relativePath);
-  return (
-    fileName === ".env.example" ||
-    fileName.endsWith(".env.example") ||
-    (fileName.startsWith(".env.") && fileName.endsWith(".example"))
-  );
-}
-
 function isEnvFile(relativePath) {
   const fileName = path.basename(relativePath);
   return fileName === ".env" || fileName.startsWith(".env.") || fileName.endsWith(".env") || fileName.includes(".env.");
+}
+
+function isPrivateOpenReceiveConfig(relativePath) {
+  return relativePath === "openreceive.yml";
 }
 
 function filesToScan() {
@@ -106,7 +102,7 @@ function filesToScan() {
 
   for (const file of trackedFiles()) {
     const relativePath = path.relative(root, file);
-    if (!allowedSecretFixtures.has(relativePath)) {
+    if (!allowedSecretFixtures.has(relativePath) && !isPrivateOpenReceiveConfig(relativePath)) {
       files.set(relativePath, file);
     }
   }
@@ -118,8 +114,12 @@ const findings = [];
 
 for (const file of trackedFiles()) {
   const relativePath = path.relative(root, file);
-  if (isEnvFile(relativePath) && !isAllowedEnvExample(relativePath)) {
+  if (!existsSync(file)) continue;
+  if (isEnvFile(relativePath)) {
     findings.push(`${relativePath}: tracked env file is forbidden`);
+  }
+  if (isPrivateOpenReceiveConfig(relativePath)) {
+    findings.push(`${relativePath}: tracked private OpenReceive config is forbidden`);
   }
 }
 

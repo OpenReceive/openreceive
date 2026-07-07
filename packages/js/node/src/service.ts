@@ -2231,7 +2231,7 @@ function createConfiguredClient(options: CreateOpenReceiveOptions): OpenReceiveR
     throw new OpenReceiveConfigError({
       code: "INVALID_NWC",
       message: formatOpenReceiveInvalidNwcMessage({ reason }),
-      hint: "Set OPENRECEIVE_NWC to a receive-only nostr+walletconnect URI from your wallet.",
+      hint: "Set OPENRECEIVE_NWC in openreceive.yml to a receive-only nostr+walletconnect URI from your wallet.",
       cause: error,
     });
   }
@@ -2244,7 +2244,7 @@ async function preflightConfiguredClient(client: OpenReceiveReceiveNwcClient): P
     throw new OpenReceiveConfigError({
       code: "WALLET_PREFLIGHT_FAILED",
       message: "OpenReceive wallet preflight failed.",
-      hint: "Check that OPENRECEIVE_NWC is receive-only, reachable, and advertises make_invoice plus list_transactions.",
+      hint: "Check that OPENRECEIVE_NWC in openreceive.yml is receive-only, reachable, and advertises make_invoice plus list_transactions.",
       cause: error,
     });
   }
@@ -2270,7 +2270,7 @@ async function resolveConfiguredStore(
     throw new OpenReceiveConfigError({
       code: "STORE_UNAVAILABLE",
       message: "OpenReceive store is unavailable.",
-      hint: "Check OPENRECEIVE_STORE, database credentials, migrations, and the configured namespace.",
+      hint: "Check the openreceive.yml store/namespace settings, database credentials, and migrations.",
       cause: error,
     });
   }
@@ -2287,11 +2287,21 @@ function isStatusCodeError(
 }
 
 function mergeOpenReceiveConfigFile(options: CreateOpenReceiveOptions): CreateOpenReceiveOptions {
-  const fileConfig = readOpenReceiveConfigFile({
-    cwd: options.cwd,
-    configPath: options.configPath,
-    now: options.clock,
-  });
+  let fileConfig: OpenReceiveFileConfig | undefined;
+  try {
+    fileConfig = readOpenReceiveConfigFile({
+      cwd: options.cwd,
+      configPath: options.configPath,
+      now: options.clock,
+    });
+  } catch (error) {
+    throw new OpenReceiveConfigError({
+      code: "INVALID_CONFIG_FILE",
+      message: "OpenReceive config file is invalid.",
+      hint: "Fix openreceive.yml or pass createOpenReceive({ configPath: false }) to disable config-file loading.",
+      cause: error,
+    });
+  }
   if (fileConfig === undefined) return options;
 
   const configured: CreateOpenReceiveOptions = {
@@ -2385,7 +2395,7 @@ function normalizeOpenReceivePriceCurrencies(
     throw new OpenReceiveConfigError({
       code: "INVALID_PRICE_CURRENCIES",
       message: `${label} must include at least one currency.`,
-      hint: "Set OPENRECEIVE_PRICE_CURRENCIES to comma-separated fiat codes like USD,EUR, or omit it to use USD.",
+      hint: "Set OPENRECEIVE_PRICE_CURRENCIES in openreceive.yml to fiat codes like USD and EUR, or omit it to use USD.",
     });
   }
   for (const currency of currencies) {

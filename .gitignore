@@ -17,7 +17,6 @@ demos/deploy/.cache/
 demos/deploy/.locks/
 demos/deploy/bundles/
 demos/deploy/**/*.env
-!demos/deploy/**/*.env.example
 demos/deploy/**/*.local.yml
 demos/deploy/**/*.local.yaml
 demos/deploy/**/*.debug.yml

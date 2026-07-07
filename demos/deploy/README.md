@@ -10,7 +10,7 @@ this repository.
 
 ## Layout
 
-- `inventory/*.env.example` documents non-secret deployment variables.
+- `inventory/*.yml.example` documents non-secret deployment variables.
 - `inventory/hosts.yml` records public demo slugs and placeholders for private
   operator-owned host data.
 - `proxy/compose.yml` runs Caddy on the shared `openreceive_demo_proxy`
@@ -29,22 +29,20 @@ Create the shared proxy network once on the demo node:
 docker network create openreceive_demo_proxy
 ```
 
-Keep runtime env files on the host, for example:
+Keep runtime secret files on the host, for example:
 
 ```text
-/opt/openreceive/secrets/rizful-test-wallet.env
-/opt/openreceive/secrets/production-wallet.env
+/opt/openreceive/secrets/openreceive.yml
 /opt/openreceive/secrets/cloudflare-dns.env
 /opt/openreceive/secrets/ghcr.env
 ```
 
 Those files must be mode `600` and must not be committed. Demo stack compose
-files load private values through `env_file`; demo images never bake them in.
-The receive-only NWC code env file must provide server-only `OPENRECEIVE_NWC`,
-`OPENRECEIVE_STORE`, and `OPENRECEIVE_NAMESPACE`. Optional automated swaps use
-server-only `OPENRECEIVE_SWAP_CONFIG` plus the provider secret env vars
-referenced by that YAML file in the same private env boundary. Each demo has one
-web service whose app routes call the
+files mount `/opt/openreceive/secrets/openreceive.yml` read-only into the app
+working directory; demo images never bake it in. That YAML file must provide
+server-only `OPENRECEIVE_NWC`, `OPENRECEIVE_STORE`, `OPENRECEIVE_NAMESPACE`,
+and any swap provider `key`/`secret` values. Each demo has one web service
+whose app routes call the
 OpenReceive service and use durable OpenReceive invoice storage. Status refresh
 happens only inside app requests. No demo deploys an extra timed process or
 wallet event listener.

@@ -5,6 +5,9 @@ import path from "node:path";
 import { parse as parseYaml } from "yaml";
 
 const root = process.cwd();
+const NEXT_PORT_DEFAULT = "$" + "{PORT:-3002}";
+const DEMO_MODE_DEFAULT = "$" + "{OPENRECEIVE_DEMO_MODE:-test_nwc}";
+const DEPLOYED_AT_DEFAULT = "$" + "{OPENRECEIVE_DEPLOYED_AT:-}";
 
 const demoContainers = [
   {
@@ -15,6 +18,7 @@ const demoContainers = [
     image: "ghcr.io/openreceive/demo-express:local",
     port: "3000",
     namespace: "hello_fruit_express",
+    configVolume: "../../../../openreceive.yml:/app/examples/hello-fruit/server/node-express/openreceive.yml:ro",
     openreceiveVolume: "openreceive-node-express-openreceive:/app/examples/hello-fruit/server/node-express/.openreceive",
     openreceiveVolumeName: "openreceive-node-express-openreceive",
     buildScript: "vite build --configLoader runner",
@@ -28,6 +32,7 @@ const demoContainers = [
     image: "ghcr.io/openreceive/demo-static:local",
     port: "3001",
     namespace: "hello_fruit_static",
+    configVolume: "../../../../openreceive.yml:/app/examples/hello-fruit/server/static-html-small-api/openreceive.yml:ro",
     openreceiveVolume: "openreceive-static-html-small-api-openreceive:/app/examples/hello-fruit/server/static-html-small-api/.openreceive",
     openreceiveVolumeName: "openreceive-static-html-small-api-openreceive",
     buildScript: "vite build --configLoader runner",
@@ -41,10 +46,11 @@ const demoContainers = [
     image: "ghcr.io/openreceive/demo-nextjs:local",
     port: "3002",
     namespace: "hello_fruit_nextjs",
+    configVolume: "../../../../openreceive.yml:/app/examples/hello-fruit/server/nextjs-fullstack/openreceive.yml:ro",
     openreceiveVolume: "openreceive-nextjs-fullstack-openreceive:/app/examples/hello-fruit/server/nextjs-fullstack/.openreceive",
     openreceiveVolumeName: "openreceive-nextjs-fullstack-openreceive",
     buildScript: "next build",
-    startScript: "tsx ../../shared/require-openreceive-nwc.ts && next start -H 0.0.0.0 -p ${PORT:-3002}"
+    startScript: `tsx ../../shared/require-openreceive-nwc.ts && next start -H 0.0.0.0 -p ${NEXT_PORT_DEFAULT}`
   }
 ];
 
@@ -131,7 +137,6 @@ function validateCompose(demo) {
   const services = compose.services === undefined ? {} : compose.services;
   const serviceNames = Object.keys(services);
   const service = services[demo.service] === undefined ? {} : services[demo.service];
-  const envFile = service.env_file?.[0];
   const ports = service.ports ?? [];
 
   forbidSecrets(relativePath, text);
@@ -140,16 +145,17 @@ function validateCompose(demo) {
   expect(service.build?.context === "../../../..", `${relativePath}: build context must be the repo root`);
   expect(service.build?.dockerfile === `${demo.dir}/Dockerfile`, `${relativePath}: dockerfile path must target the demo Dockerfile`);
   expect(service.depends_on === undefined, `${relativePath}: local-sqlite demo must not depend on a database service`);
-  expect(envFile?.path === "../../../../.env" && envFile?.required === false, `${relativePath}: root .env must be optional runtime env_file`);
-  expect(service.environment?.OPENRECEIVE_STORE === "local-sqlite", `${relativePath}: OPENRECEIVE_STORE must default to local-sqlite`);
-  expect(service.environment?.OPENRECEIVE_NAMESPACE === demo.namespace, `${relativePath}: app must receive a demo namespace`);
-  expect(service.environment?.OPENRECEIVE_DEMO_MODE === "${OPENRECEIVE_DEMO_MODE:-test_nwc}", `${relativePath}: demo mode must default to test_nwc`);
-  expect(service.environment?.OPENRECEIVE_DEPLOYED_AT === "${OPENRECEIVE_DEPLOYED_AT:-}", `${relativePath}: deployed_at metadata env must be pass-through`);
+  expect(service.env_file === undefined, `${relativePath}: must not load .env files`);
+  expect(service.environment?.OPENRECEIVE_STORE === undefined, `${relativePath}: OpenReceive store must come from openreceive.yml`);
+  expect(service.environment?.OPENRECEIVE_NAMESPACE === undefined, `${relativePath}: OpenReceive namespace must come from openreceive.yml`);
+  expect(service.environment?.OPENRECEIVE_DEMO_MODE === DEMO_MODE_DEFAULT, `${relativePath}: demo mode must default to test_nwc`);
+  expect(service.environment?.OPENRECEIVE_DEPLOYED_AT === DEPLOYED_AT_DEFAULT, `${relativePath}: deployed_at metadata env must be pass-through`);
   expect(service.environment?.PORT === demo.port, `${relativePath}: PORT must be ${demo.port}`);
   expect((service.expose ?? []).length === 1 && service.expose[0] === demo.port, `${relativePath}: must expose only ${demo.port}`);
   expect(ports.length === 0, `${relativePath}: stable compose must not publish host ports`);
   expect(service.network_mode === undefined, `${relativePath}: must not use host networking`);
   expect(JSON.stringify(service.volumes ?? []).includes("/var/run/docker.sock") === false, `${relativePath}: must not mount the Docker socket`);
+  expect(service.volumes?.includes(demo.configVolume), `${relativePath}: must mount root openreceive.yml read-only`);
   expect(service.volumes?.includes(demo.openreceiveVolume), `${relativePath}: OpenReceive SQLite storage must use named volume`);
   expect(compose.volumes?.[demo.openreceiveVolumeName] !== undefined, `${relativePath}: must declare ${demo.openreceiveVolumeName} volume`);
   expect(!text.includes("openreceive-postgres"), `${relativePath}: default demo compose must not start Postgres`);
@@ -168,13 +174,16 @@ function validateComposeOverride(demo) {
   expect(JSON.stringify(service.volumes ?? []).includes("/var/run/docker.sock") === false, `${relativePath}: must not mount the Docker socket`);
 }
 
-function validateEnvExample(demo) {
-  const relativePath = `${demo.dir}/.env.example`;
+function validateOpenReceiveExample() {
+  const relativePath = "openreceive.yml.example";
   const text = read(relativePath);
 
-  expect(/^OPENRECEIVE_NWC=$/m.test(text), `${relativePath}: OPENRECEIVE_NWC must be empty placeholder`);
-  expect(new RegExp(`^PORT=${demo.port}$`, "m").test(text), `${relativePath}: PORT must default to ${demo.port}`);
-  expect(/^OPENRECEIVE_WALLET_PROFILE=rizful$/m.test(text), `${relativePath}: wallet profile must default to rizful`);
+  expect(/^OPENRECEIVE_NWC:\s*""$/m.test(text), `${relativePath}: OPENRECEIVE_NWC must be an empty YAML placeholder`);
+  expect(/^OPENRECEIVE_NAMESPACE:\s+default$/m.test(text), `${relativePath}: namespace must default to default`);
+  expect(/^OPENRECEIVE_STORE:\s+local-sqlite$/m.test(text), `${relativePath}: store must default to local-sqlite`);
+  expect(/providers:\n\s+- id: fixedfloat/m.test(text), `${relativePath}: must include a FixedFloat-compatible provider example`);
+  expect(/^\s+key:\s*""$/m.test(text), `${relativePath}: provider key must be an empty YAML placeholder`);
+  expect(/^\s+secret:\s*""$/m.test(text), `${relativePath}: provider secret must be an empty YAML placeholder`);
   expect(!/nostr\+walletconnect:\/\//.test(text), `${relativePath}: must not contain an NWC URI`);
 }
 
@@ -243,6 +252,7 @@ function validateDockerignore() {
   for (const entry of [
     ".env",
     ".env.*",
+    "openreceive.yml",
     "private",
     "building",
     "demos/deploy/secrets",
@@ -254,13 +264,13 @@ function validateDockerignore() {
 
 for (const demo of demoContainers) {
   validatePackage(demo);
-  validateEnvExample(demo);
   validateReadme(demo);
   validateMakefile(demo);
   validateDockerfile(demo);
   validateCompose(demo);
   validateComposeOverride(demo);
 }
+validateOpenReceiveExample();
 validateDockerignore();
 
 if (findings.length > 0) {

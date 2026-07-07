@@ -15,7 +15,9 @@ const demos = [
     image: "ghcr.io/openreceive/demo-express",
     compose: "demos/deploy/stacks/express-demo.compose.yml",
     caddy: "demos/deploy/proxy/sites/express-demo.caddy",
-    port: "3000"
+    port: "3000",
+    configVolume:
+      "/opt/openreceive/secrets/openreceive.yml:/app/examples/hello-fruit/server/node-express/openreceive.yml:ro"
   },
   {
     slug: "static-demo",
@@ -25,7 +27,9 @@ const demos = [
     image: "ghcr.io/openreceive/demo-static",
     compose: "demos/deploy/stacks/static-demo.compose.yml",
     caddy: "demos/deploy/proxy/sites/static-demo.caddy",
-    port: "3001"
+    port: "3001",
+    configVolume:
+      "/opt/openreceive/secrets/openreceive.yml:/app/examples/hello-fruit/server/static-html-small-api/openreceive.yml:ro"
   },
   {
     slug: "nextjs-demo",
@@ -35,15 +39,17 @@ const demos = [
     image: "ghcr.io/openreceive/demo-nextjs",
     compose: "demos/deploy/stacks/nextjs-demo.compose.yml",
     caddy: "demos/deploy/proxy/sites/nextjs-demo.caddy",
-    port: "3002"
+    port: "3002",
+    configVolume:
+      "/opt/openreceive/secrets/openreceive.yml:/app/examples/hello-fruit/server/nextjs-fullstack/openreceive.yml:ro"
   }
 ];
 
 const requiredFiles = [
   "demos/deploy/README.md",
   "demos/deploy/inventory/hosts.yml",
-  "demos/deploy/inventory/production.env.example",
-  "demos/deploy/inventory/staging.env.example",
+  "demos/deploy/inventory/production.yml.example",
+  "demos/deploy/inventory/staging.yml.example",
   "demos/deploy/manifests/production.json",
   "demos/deploy/manifests/staging.json",
   "demos/deploy/proxy/Caddyfile",
@@ -108,30 +114,13 @@ function expectArrayEqual(actual, expected, message) {
 }
 
 function forbidSecrets(relativePath, text) {
-  expect(!/OPENRECEIVE_NWC\s*=/.test(text), `${relativePath}: must not assign OPENRECEIVE_NWC`);
+  expect(!/OPENRECEIVE_NWC\s*[:=]/.test(text), `${relativePath}: must not assign OPENRECEIVE_NWC`);
   expect(!/nostr\+walletconnect:\/\//.test(text), `${relativePath}: must not contain NWC URI`);
   expect(!/[?&]secret=[^"'\s`]+/.test(text), `${relativePath}: must not contain secret query values`);
   expect(!/CLOUDFLARE_API_TOKEN\s*=\s*\S+/.test(text), `${relativePath}: must not contain Cloudflare token values`);
   expect(!/GHCR_(?:READ_)?TOKEN\s*=\s*\S+/.test(text), `${relativePath}: must not contain GHCR token values`);
   expect(!/OPENRECEIVE_DEPLOY_HOST\s*=\s*\S+/.test(text), `${relativePath}: must not contain private deploy host values`);
   expect(!/PRIVATE KEY-----/.test(text), `${relativePath}: must not contain private keys`);
-}
-
-function readEnvExample(relativePath) {
-  const text = read(relativePath);
-  const env = Object.create(null);
-
-  for (const line of text.split(/\r?\n/)) {
-    if (line === "" || line.startsWith("#")) continue;
-    const equalsIndex = line.indexOf("=");
-    if (equalsIndex === -1) {
-      fail(`${relativePath}: invalid env line ${line}`);
-      continue;
-    }
-    env[line.slice(0, equalsIndex)] = line.slice(equalsIndex + 1);
-  }
-
-  return { env, text };
 }
 
 function validateRequiredFiles() {
@@ -155,7 +144,6 @@ function validateGitignore() {
     "demos/deploy/wireguard/",
     "demos/deploy/.ssh/",
     "demos/deploy/**/*.env",
-    "!demos/deploy/**/*.env.example",
     "demos/deploy/**/*.secret",
     "demos/deploy/**/*.key",
     "demos/deploy/**/*.pem",
@@ -191,9 +179,10 @@ function validateInventory() {
   }
 }
 
-function validateEnvExample(environment) {
-  const relativePath = `demos/deploy/inventory/${environment}.env.example`;
-  const { env, text } = readEnvExample(relativePath);
+function validateInventoryExample(environment) {
+  const relativePath = `demos/deploy/inventory/${environment}.yml.example`;
+  const text = read(relativePath);
+  const env = readYaml(relativePath);
 
   forbidSecrets(relativePath, text);
   expect(env.OPENRECEIVE_ENVIRONMENT === environment, `${relativePath}: OPENRECEIVE_ENVIRONMENT must be ${environment}`);
@@ -282,9 +271,7 @@ function validateDemoStack(demo) {
   expectArrayEqual(service.expose ?? [], [demo.port], `${relativePath}: must expose only ${demo.port}`);
   expect((service.ports ?? []).length === 0, `${relativePath}: production stack must not publish host ports`);
   expectArrayEqual(service.networks ?? [], ["demo_proxy"], `${relativePath}: ${demo.slug} must join only demo_proxy`);
-  expect(service.env_file?.length === 1, `${relativePath}: ${demo.slug} must load exactly one env_file`);
-  expect(service.env_file?.[0]?.path === "/opt/openreceive/secrets/rizful-test-wallet.env", `${relativePath}: ${demo.slug} env_file must use the host receive-only NWC code path`);
-  expect(service.env_file?.[0]?.required === false, `${relativePath}: ${demo.slug} env_file must be optional for local config validation`);
+  expect(service.env_file === undefined, `${relativePath}: ${demo.slug} must not load .env files`);
   expect(service.environment?.OPENRECEIVE_DEMO_MODE === "${OPENRECEIVE_DEMO_MODE:-test_nwc}", `${relativePath}: demo mode must default to test_nwc`);
   expect(service.environment?.OPENRECEIVE_PUBLIC_URL === `https://${demo.hostname}`, `${relativePath}: public URL must be https://${demo.hostname}`);
   expect(service.environment?.OPENRECEIVE_GIT_SHA === "${OPENRECEIVE_GIT_SHA:-}", `${relativePath}: git sha metadata env must pass through`);
@@ -294,6 +281,7 @@ function validateDemoStack(demo) {
   expect(service.restart === "unless-stopped", `${relativePath}: restart policy must be unless-stopped`);
   expect(service.network_mode === undefined, `${relativePath}: must not use host networking`);
   expect(JSON.stringify(service.volumes ?? []).includes("/var/run/docker.sock") === false, `${relativePath}: must not mount Docker socket`);
+  expect((service.volumes ?? []).includes(demo.configVolume), `${relativePath}: ${demo.slug} must mount host openreceive.yml read-only`);
 }
 
 function validateScript(relativePath, requiredSnippets) {
@@ -342,7 +330,7 @@ function validateReadme() {
 
   expect(text.includes("public, non-secret deployment templates"), `${relativePath}: must describe public non-secret scope`);
   expect(text.includes("docker network create openreceive_demo_proxy"), `${relativePath}: must document proxy network creation`);
-  expect(text.includes("/opt/openreceive/secrets/rizful-test-wallet.env"), `${relativePath}: must document receive-only NWC code path`);
+  expect(text.includes("/opt/openreceive/secrets/openreceive.yml"), `${relativePath}: must document receive-only NWC code path`);
   expect(text.includes("npm run check:demo-deploy"), `${relativePath}: must document deploy validator`);
   expect(text.includes("scripts/smoke-demo https://express-demo.openreceive.org"), `${relativePath}: must document smoke command`);
 }
@@ -350,8 +338,8 @@ function validateReadme() {
 validateRequiredFiles();
 validateGitignore();
 validateInventory();
-validateEnvExample("production");
-validateEnvExample("staging");
+validateInventoryExample("production");
+validateInventoryExample("staging");
 validateManifest("production");
 validateManifest("staging");
 validateProxyCompose();

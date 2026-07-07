@@ -42,6 +42,7 @@ export interface HelloFruitOpenReceiveTestOverrides {
   readonly client?: OpenReceiveReceiveNwcClient;
   readonly store?: OpenReceiveInvoiceKvStore;
   readonly priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
+  readonly configPath?: string | false;
 }
 
 let openreceiveCache: NextDemoOpenReceiveCache | undefined;
@@ -386,7 +387,7 @@ async function getOpenReceive(): Promise<HelloFruitOpenReceiveBundle> {
 export async function createHelloFruitOpenReceive(
   overrides: HelloFruitOpenReceiveTestOverrides = testOverrides === undefined ? {} : testOverrides,
 ) {
-  const config = readOpenReceiveConfigFile({ cwd: process.cwd() });
+  const config = readOpenReceiveConfigFile({ cwd: process.cwd(), configPath: overrides.configPath });
   logDemo("openreceive.configure", "Preparing OpenReceive demo service.", {
     namespace: config?.namespace ?? "hello_fruit",
     customClient: overrides.client !== undefined,
@@ -405,6 +406,7 @@ export async function createHelloFruitOpenReceive(
     ...(overrides.client === undefined ? {} : { client: overrides.client }),
     ...(overrides.store === undefined ? {} : { store: overrides.store }),
     ...(overrides.priceProviders === undefined ? {} : { priceProviders: overrides.priceProviders }),
+    ...(overrides.configPath === undefined ? {} : { configPath: overrides.configPath }),
     namespace: config?.namespace ?? "hello_fruit",
     priceCurrencies,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
@@ -489,7 +491,10 @@ async function readJsonBody(request: Request): Promise<Record<string, unknown>> 
 }
 
 function currentStoreCacheKey(): string {
-  const config = readOpenReceiveConfigFile({ cwd: process.cwd() });
+  const config = readOpenReceiveConfigFile({
+    cwd: process.cwd(),
+    configPath: testOverrides?.configPath,
+  });
   return JSON.stringify(config ?? {});
 }
 
