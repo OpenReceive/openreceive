@@ -1,4 +1,4 @@
-import { resolveOpenReceiveStore } from "@openreceive/node";
+import { readOpenReceiveConfigFile, resolveOpenReceiveStore } from "@openreceive/node";
 
 const DEFAULT_STORE_URI = "local-sqlite";
 const DEFAULT_NAMESPACE = "hello_fruit";
@@ -7,8 +7,9 @@ type HelloFruitOpenReceiveStore = Awaited<ReturnType<typeof resolveOpenReceiveSt
 export async function createHelloFruitOpenReceiveKvStore(input: {
   readonly demoId: string;
 }): Promise<HelloFruitOpenReceiveStore> {
-  const storeUri = (process.env.OPENRECEIVE_STORE ?? DEFAULT_STORE_URI).trim();
-  const namespace = process.env.OPENRECEIVE_NAMESPACE ?? DEFAULT_NAMESPACE;
+  const config = readOpenReceiveConfigFile({ cwd: process.cwd() });
+  const storeUri = (config?.storeUri ?? DEFAULT_STORE_URI).trim();
+  const namespace = config?.namespace ?? DEFAULT_NAMESPACE;
   try {
     const store = await resolveOpenReceiveStore(storeUri, {
       namespace,
@@ -20,7 +21,7 @@ export async function createHelloFruitOpenReceiveKvStore(input: {
     return store;
   } catch (error) {
     console.error(
-      `[openreceive:${input.demoId}] OpenReceive store initialization failed. Check OPENRECEIVE_STORE, OPENRECEIVE_NAMESPACE, and runtime dependencies.`
+      `[openreceive:${input.demoId}] OpenReceive store initialization failed. Check openreceive.yml store, OPENRECEIVE_NAMESPACE, and runtime dependencies.`
     );
     throw error;
   }

@@ -3,7 +3,11 @@ import type {
   OpenReceiveReceiveNwcClient,
   OpenReceiveSourcedPriceProvider,
 } from "@openreceive/core";
-import { OpenReceiveServiceError, createOpenReceive } from "@openreceive/node";
+import {
+  OpenReceiveServiceError,
+  createOpenReceive,
+  readOpenReceiveConfigFile,
+} from "@openreceive/node";
 import { createHelloFruitDemoMetadata } from "../../../../shared/demo-metadata.ts";
 import { readRequiredHelloFruitNwcConnectionString } from "../../../../shared/demo-nwc.ts";
 import {
@@ -382,8 +386,9 @@ async function getOpenReceive(): Promise<HelloFruitOpenReceiveBundle> {
 export async function createHelloFruitOpenReceive(
   overrides: HelloFruitOpenReceiveTestOverrides = testOverrides === undefined ? {} : testOverrides,
 ) {
+  const config = readOpenReceiveConfigFile({ cwd: process.cwd() });
   logDemo("openreceive.configure", "Preparing OpenReceive demo service.", {
-    namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit",
+    namespace: config?.namespace ?? "hello_fruit",
     customClient: overrides.client !== undefined,
     customStore: overrides.store !== undefined,
     customPriceProviders: overrides.priceProviders !== undefined,
@@ -400,7 +405,7 @@ export async function createHelloFruitOpenReceive(
     ...(overrides.client === undefined ? {} : { client: overrides.client }),
     ...(overrides.store === undefined ? {} : { store: overrides.store }),
     ...(overrides.priceProviders === undefined ? {} : { priceProviders: overrides.priceProviders }),
-    namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit",
+    namespace: config?.namespace ?? "hello_fruit",
     priceCurrencies,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
   });
@@ -484,15 +489,8 @@ async function readJsonBody(request: Request): Promise<Record<string, unknown>> 
 }
 
 function currentStoreCacheKey(): string {
-  return JSON.stringify({
-    store: process.env.OPENRECEIVE_STORE ?? "local-sqlite",
-    namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit",
-    swapConfig: process.env.OPENRECEIVE_SWAP_CONFIG,
-    fixedFloatEnabled:
-      process.env.OPENRECEIVE_SWAP_FIXED_FLOAT_KEY !== undefined &&
-      process.env.OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET !== undefined,
-    fixedFloatBaseUrl: process.env.OPENRECEIVE_SWAP_FIXED_FLOAT_BASE_URL ?? "https://ff.io",
-  });
+  const config = readOpenReceiveConfigFile({ cwd: process.cwd() });
+  return JSON.stringify(config ?? {});
 }
 
 function publicUrl(): string {

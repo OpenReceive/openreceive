@@ -39,8 +39,8 @@ npm run demo nextjs    # Next.js fullstack         http://localhost:3002
 npm run demo rails     # Rails + Hotwire skeleton  http://localhost:3003
 ```
 
-Each command creates a root `.env` if missing, validates `OPENRECEIVE_NWC`, and
-then runs that demo's Docker Compose stack with local port publishing. The JS
+Each command creates a root `openreceive.yml` if missing, validates
+`OPENRECEIVE_NWC`, and then runs that demo's Docker Compose stack with local port publishing. The JS
 demo stacks start a local Postgres container, run the OpenReceive invoice
 migration, and record the OpenReceive
 schema version before store queries. The JS local overrides run Vite or Next.js
@@ -48,15 +48,15 @@ development servers inside Docker so browser errors stay readable. The Rails
 Hotwire demo is experimental skeleton work; its container runs
 `rails db:prepare` for its SQLite-backed ActiveRecord store before booting.
 Buying fruit creates a live Lightning invoice through your own wallet, so set a
-valid receive-only NWC code (for example from Rizful or Alby Hub) in `.env` before
-starting a demo. Demos need a valid receive-only NWC code before startup.
+valid receive-only NWC code (for example from Rizful or Alby Hub) in
+`openreceive.yml` before starting a demo. Demos need a valid receive-only NWC
+code before startup.
 The JS demos let the browser choose any configured price-feed currency, BTC, or
 sats; `/create_order` builds the order, quotes or converts the total, and
 returns the order and checkout to the browser.
-Optional automated swaps use server-only `OPENRECEIVE_SWAP_CONFIG`, pointing at
-a backend YAML file whose providers reference secret env vars with `key_env` and
-`secret_env`. When present, `createOpenReceive()` loads those providers
-automatically.
+Optional automated swaps live in the same server-only `openreceive.yml` under
+`swap.providers`. When provider `key` and `secret` are present,
+`createOpenReceive()` loads those providers automatically.
 
 Extra arguments after `--` are forwarded to `docker compose up`, for example to
 run detached: `npm run demo node -- -d`.
@@ -104,9 +104,8 @@ Run the live-wallet smoke harness:
 npm run test:live:nwc
 ```
 
-The live smoke command skips when `OPENRECEIVE_NWC` is absent. For a trusted
-local wallet profile, pass `OPENRECEIVE_ENV_FILE` pointing at a gitignored env
-file.
+The live smoke command reads `OPENRECEIVE_NWC` from `openreceive.yml` or the
+process environment, and skips when it is absent.
 
 ## Product Boundary
 

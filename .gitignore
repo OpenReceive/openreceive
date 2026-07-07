@@ -3,8 +3,7 @@
 # Local environment and deployment secrets.
 .env
 .env.*
-!.env.example
-!.env.*.example
+openreceive.yml
 .openreceive/
 
 # OpenReceive demo deployment secrets. Commit *.example files only.

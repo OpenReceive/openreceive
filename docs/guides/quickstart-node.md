@@ -12,41 +12,37 @@ Install the packages:
 npm install @openreceive/node @openreceive/react
 ```
 
-Configure OpenReceive with environment variables. Put these in your `.env` file
-(or your host's secret manager) — never in client code:
+Configure OpenReceive with `openreceive.yml`. Copy the committed example, then
+put private values only in the ignored local file:
 
-```sh
-# .env
-OPENRECEIVE_NWC=nostr+walletconnect://...
+```yaml
+OPENRECEIVE_NWC: nostr+walletconnect://...
+OPENRECEIVE_NAMESPACE: my_app
+OPENRECEIVE_STORE: local-sqlite
 ```
 
 `OPENRECEIVE_NWC` must be a receive-only NWC code and must stay server-side.
 OpenReceive uses USD fiat quotes by default. To allow more fiat checkout
-currencies, set:
+currencies, add:
 
-```sh
-OPENRECEIVE_PRICE_CURRENCIES=USD,EUR,GBP
+```yaml
+OPENRECEIVE_PRICE_CURRENCIES:
+  - USD
+  - EUR
+  - GBP
 ```
 
-For production, also set a durable store:
+For production, set a durable store:
 
-```sh
-# .env
-OPENRECEIVE_STORE=postgres://user:pass@host:5432/appdb
-OPENRECEIVE_NAMESPACE=my_app
+```yaml
+OPENRECEIVE_STORE: postgres://user:pass@host:5432/appdb
+OPENRECEIVE_NAMESPACE: my_app
 ```
 
 If `OPENRECEIVE_STORE` is omitted locally, OpenReceive uses local SQLite under
 `.openreceive/`. The default file is `./.openreceive/default.sqlite3`; use Postgres anywhere; use SQLite only on a durable single-machine filesystem.
 
-Optional automated swap providers use a backend-only YAML config with secret env
-references:
-
-```sh
-OPENRECEIVE_SWAP_CONFIG=./openreceive.swap.yml
-OPENRECEIVE_FIXEDFLOAT_KEY=...
-OPENRECEIVE_FIXEDFLOAT_SECRET=...
-```
+Optional automated swap providers live in the same file:
 
 ```yaml
 swap:
@@ -54,8 +50,9 @@ swap:
     - id: fixedfloat
       protocol: fixedfloat
       base_url: https://ff.io
-      key_env: OPENRECEIVE_FIXEDFLOAT_KEY
-      secret_env: OPENRECEIVE_FIXEDFLOAT_SECRET
+      key: ...
+      secret: ...
+      invoice_expiry_seconds: 1620
 ```
 
 ## Server

@@ -142,7 +142,7 @@ export function assertOpenReceiveStoreConfiguration(input: StoreConfigurationInp
     throw unsafeMemoryStoreError(platform, detected);
   }
 
-  const storeUri = input.storeUri ?? env.OPENRECEIVE_STORE;
+  const storeUri = input.storeUri;
   const kind = classifyOpenReceiveStore(storeUri);
   if (kind === "postgres") return;
   if (kind === "redis") throw unsupportedRedisStoreError(platform);

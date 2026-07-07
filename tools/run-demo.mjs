@@ -6,11 +6,11 @@
 //   npm run demo static    -> Static HTML + small API (http://localhost:3001)
 //   npm run demo nextjs    -> Next.js fullstack       (http://localhost:3002)
 //
-// It ensures the repo-root .env exists, validates OPENRECEIVE_NWC, and runs the
-// compose stack with the local port-publishing override.
+// It ensures the repo-root openreceive.yml exists, validates OPENRECEIVE_NWC,
+// and runs the compose stack with the local port-publishing override.
 
 import { spawn } from "node:child_process";
-import { copyFileSync, existsSync, readFileSync } from "node:fs";
+import { copyFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -66,20 +66,16 @@ if (demo === undefined) {
   process.exit(1);
 }
 
-// Compose reads the repo-root .env as an optional env_file. Create it from the
-// committed example so OPENRECEIVE_NWC has a home before the user fills it in.
-const envPath = path.join(root, ".env");
-if (!existsSync(envPath)) {
-  copyFileSync(path.join(root, ".env.example"), envPath);
-  console.log("Created .env from .env.example.");
+// Compose mounts the repo-root openreceive.yml into the selected demo. Create it
+// from the committed example so OPENRECEIVE_NWC has a home before the user fills it in.
+const configPath = path.join(root, "openreceive.yml");
+if (!existsSync(configPath)) {
+  copyFileSync(path.join(root, "openreceive.yml.example"), configPath);
+  console.log("Created openreceive.yml from openreceive.yml.example.");
 }
 
-const envText = readFileSync(envPath, "utf8");
-
 try {
-  readRequiredHelloFruitNwcConnectionString({
-    OPENRECEIVE_NWC: readEnvValue(envText, "OPENRECEIVE_NWC") ?? process.env.OPENRECEIVE_NWC
-  });
+  readRequiredHelloFruitNwcConnectionString();
 } catch (error) {
   console.error([
     "",
@@ -120,9 +116,3 @@ child.on("error", (error) => {
 child.on("exit", (code, signal) => {
   process.exit(signal ? 1 : code ?? 0);
 });
-
-function readEnvValue(text, key) {
-  const match = text.match(new RegExp(`^\\s*${key}\\s*=\\s*(.*)$`, "m"));
-  if (match === null) return undefined;
-  return match[1].trim();
-}

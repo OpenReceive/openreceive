@@ -5,7 +5,11 @@ import type {
   OpenReceiveReceiveNwcClient,
   OpenReceiveSourcedPriceProvider,
 } from "@openreceive/core";
-import { OpenReceiveServiceError, createOpenReceive } from "@openreceive/node";
+import {
+  OpenReceiveServiceError,
+  createOpenReceive,
+  readOpenReceiveConfigFile,
+} from "@openreceive/node";
 import { createHelloFruitDemoMetadata } from "../../../../shared/demo-metadata.ts";
 import {
   createHelloFruitDemoServerLogger,
@@ -36,8 +40,9 @@ export interface HelloFruitOpenReceiveOptions {
 }
 
 export async function createHelloFruitOpenReceive(options: HelloFruitOpenReceiveOptions = {}) {
+  const config = readOpenReceiveConfigFile({ cwd: process.cwd() });
   logDemo("openreceive.configure", "Preparing OpenReceive demo service.", {
-    namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit",
+    namespace: config?.namespace ?? "hello_fruit",
     customClient: options.client !== undefined,
     customStore: options.store !== undefined,
     customPriceProviders: options.priceProviders !== undefined,
@@ -54,7 +59,7 @@ export async function createHelloFruitOpenReceive(options: HelloFruitOpenReceive
     ...(options.client === undefined ? {} : { client: options.client }),
     ...(options.store === undefined ? {} : { store: options.store }),
     ...(options.priceProviders === undefined ? {} : { priceProviders: options.priceProviders }),
-    namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit",
+    namespace: config?.namespace ?? "hello_fruit",
     priceCurrencies,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
   });

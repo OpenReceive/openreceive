@@ -22,6 +22,13 @@ export type {
   NwcEndpointLogger,
   WalletPreflightErrorCode,
 } from "./alby-nwc.ts";
+export { OPENRECEIVE_CONFIG_FILE, readOpenReceiveConfigFile } from "./config.ts";
+export type {
+  OpenReceiveFileConfig,
+  OpenReceiveFileOperationConfig,
+  OpenReceiveFileSwapConfig,
+  ReadOpenReceiveConfigFileOptions,
+} from "./config.ts";
 export {
   OpenReceiveConfigError,
   OpenReceiveServiceError,

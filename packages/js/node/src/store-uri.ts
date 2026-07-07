@@ -47,10 +47,10 @@ const DEFAULT_STORE_URI = "local-sqlite";
 const require = createRequire(import.meta.url);
 
 export async function resolveOpenReceiveStore(
-  uri = process.env.OPENRECEIVE_STORE,
+  uri?: string,
   options: ResolveOpenReceiveStoreOptions = {}
 ): Promise<OpenReceiveResolvedStore> {
-  const namespace = options.namespace ?? process.env.OPENRECEIVE_NAMESPACE ?? DEFAULT_NAMESPACE;
+  const namespace = options.namespace ?? DEFAULT_NAMESPACE;
   const cwd = options.cwd ?? process.cwd();
   assertOpenReceiveStoreConfiguration({ storeUri: uri });
   const storeUri = uri?.trim() || DEFAULT_STORE_URI;

@@ -38,11 +38,10 @@ import {
   formatOpenReceiveMissingNwcMessage,
 } from "@openreceive/core";
 import { createNwcReceiveClient, type NwcEndpointLogger } from "./alby-nwc.ts";
+import { readOpenReceiveConfigFile, type OpenReceiveFileConfig } from "./config.ts";
 import { OpenReceiveConfigError } from "./config-error.ts";
 import { assertOpenReceiveStoreConfiguration } from "./storage-guard.ts";
 import { resolveOpenReceiveStore, type ResolveOpenReceiveStoreOptions } from "./store-uri.ts";
-import { createConfiguredSwapProvidersFromEnv } from "./swap/config.ts";
-import { createConfiguredFixedFloatProvider } from "./swap/fixedfloat.ts";
 import {
   formatOpenReceiveSwapAssetLabel,
   getOpenReceiveSwapAssetInfo,
@@ -121,6 +120,7 @@ export interface CreateOpenReceiveOptions
   store?: OpenReceiveInvoiceKvStore;
   storeUri?: string;
   namespace?: string;
+  configPath?: string | false;
   cwd?: string;
   onPaid?: OpenReceiveNodeSettlementActionHook;
   loadSqlite?: ResolveOpenReceiveStoreOptions["loadSqlite"];
@@ -430,38 +430,39 @@ const RESERVED_CHECKOUT_METADATA_KEYS = new Set([
 export async function createOpenReceive(
   options: CreateOpenReceiveOptions = {},
 ): Promise<OpenReceive> {
-  const namespace = readOpenReceiveNamespace(options.namespace);
+  const configuredOptions = mergeOpenReceiveConfigFile(options);
+  const namespace = readOpenReceiveNamespace(configuredOptions.namespace);
   assertDurableStoreConfiguration({
-    configuredStoreUri: options.storeUri,
-    store: options.store,
+    configuredStoreUri: configuredOptions.storeUri,
+    store: configuredOptions.store,
   });
-  const client = createConfiguredClient(options);
+  const client = createConfiguredClient(configuredOptions);
   await preflightConfiguredClient(client);
 
-  const store = await resolveConfiguredStore(options, namespace);
+  const store = await resolveConfiguredStore(configuredOptions, namespace);
 
   const nodeOptions: OpenReceiveNodeOptions = {
-    ...options,
+    ...configuredOptions,
     client,
     store,
     namespace,
-    onPaid: options.onPaid,
+    onPaid: configuredOptions.onPaid,
   };
-  const priceCurrencies = readOpenReceivePriceCurrencies(options.priceCurrencies);
-  const priceProviders = options.priceProviders ?? [
+  const priceCurrencies = readOpenReceivePriceCurrencies(configuredOptions.priceCurrencies);
+  const priceProviders = configuredOptions.priceProviders ?? [
     createOpenReceivePriceFeed({
       store,
       currencies: priceCurrencies,
-      fetch: options.priceFetch,
-      clock: options.clock,
+      fetch: configuredOptions.priceFetch,
+      clock: configuredOptions.clock,
     }),
   ];
-  const swapProviders = resolveConfiguredSwapProviders(options);
+  const swapProviders = resolveConfiguredSwapProviders(configuredOptions);
 
   const context: OpenReceiveServiceContext = {
     options: nodeOptions,
     store,
-    clock: options.clock ?? currentUnixSeconds,
+    clock: configuredOptions.clock ?? currentUnixSeconds,
     priceProviders,
     priceCurrencies,
     swapProviders,
@@ -2285,13 +2286,63 @@ function isStatusCodeError(
   );
 }
 
+function mergeOpenReceiveConfigFile(options: CreateOpenReceiveOptions): CreateOpenReceiveOptions {
+  const fileConfig = readOpenReceiveConfigFile({
+    cwd: options.cwd,
+    configPath: options.configPath,
+    now: options.clock,
+  });
+  if (fileConfig === undefined) return options;
+
+  const configured: CreateOpenReceiveOptions = {
+    ...openReceiveConfigToOptions(fileConfig),
+    ...options,
+    swap: options.swap ?? fileConfig.swap,
+  };
+  return configured;
+}
+
+function openReceiveConfigToOptions(config: OpenReceiveFileConfig): CreateOpenReceiveOptions {
+  return {
+    ...(config.nwc === undefined ? {} : { nwc: config.nwc }),
+    ...(config.namespace === undefined ? {} : { namespace: config.namespace }),
+    ...(config.storeUri === undefined ? {} : { storeUri: config.storeUri }),
+    ...(config.priceCurrencies === undefined ? {} : { priceCurrencies: config.priceCurrencies }),
+    ...(config.swap === undefined ? {} : { swap: config.swap }),
+    ...(config.operation?.actionLeaseTtlSeconds === undefined
+      ? {}
+      : { actionLeaseTtlSeconds: config.operation.actionLeaseTtlSeconds }),
+    ...(config.operation?.transactionScanIntervalSeconds === undefined
+      ? {}
+      : { transactionScanIntervalSeconds: config.operation.transactionScanIntervalSeconds }),
+    ...(config.operation?.transactionScanPageLimit === undefined
+      ? {}
+      : { transactionScanPageLimit: config.operation.transactionScanPageLimit }),
+    ...(config.operation?.transactionScanWindowPaddingSeconds === undefined
+      ? {}
+      : {
+          transactionScanWindowPaddingSeconds:
+            config.operation.transactionScanWindowPaddingSeconds,
+        }),
+    ...(config.operation?.transactionScanOverlapSeconds === undefined
+      ? {}
+      : { transactionScanOverlapSeconds: config.operation.transactionScanOverlapSeconds }),
+    ...(config.operation?.sweepOpenInvoiceCap === undefined
+      ? {}
+      : { sweepOpenInvoiceCap: config.operation.sweepOpenInvoiceCap }),
+    ...(config.operation?.transactionScanTimeoutMs === undefined
+      ? {}
+      : { transactionScanTimeoutMs: config.operation.transactionScanTimeoutMs }),
+  };
+}
+
 function readOpenReceiveNwc(configured: string | undefined): string {
-  const nwc = configured ?? globalThis.process?.env?.OPENRECEIVE_NWC;
+  const nwc = configured;
   if (nwc === undefined || nwc.trim().length === 0) {
     throw new OpenReceiveConfigError({
       code: "MISSING_NWC",
       message: formatOpenReceiveMissingNwcMessage(),
-      hint: "Create a receive-only NWC connection in your wallet and set OPENRECEIVE_NWC on the server.",
+      hint: "Create a receive-only NWC connection in your wallet and set OPENRECEIVE_NWC in openreceive.yml.",
     });
   }
 
@@ -2299,12 +2350,12 @@ function readOpenReceiveNwc(configured: string | undefined): string {
 }
 
 function readOpenReceiveNamespace(configured: string | undefined): string {
-  const namespace = configured ?? globalThis.process?.env?.OPENRECEIVE_NAMESPACE ?? "default";
+  const namespace = configured ?? "default";
   if (namespace.trim().length === 0) {
     throw new OpenReceiveConfigError({
       code: "STORE_UNAVAILABLE",
       message: "OPENRECEIVE_NAMESPACE must not be empty.",
-      hint: "Set OPENRECEIVE_NAMESPACE to a stable non-empty app namespace, or omit it to use default.",
+      hint: "Set OPENRECEIVE_NAMESPACE in openreceive.yml to a stable non-empty app namespace, or omit it to use default.",
     });
   }
   return namespace;
@@ -2313,34 +2364,14 @@ function readOpenReceiveNamespace(configured: string | undefined): string {
 function readOpenReceivePriceCurrencies(
   configured: readonly string[] | undefined,
 ): readonly string[] {
-  const rawCurrencies = configured ??
-    globalThis.process?.env?.OPENRECEIVE_PRICE_CURRENCIES?.split(",") ?? ["USD"];
-  return normalizeOpenReceivePriceCurrencies(rawCurrencies, "OPENRECEIVE_PRICE_CURRENCIES");
+  const rawCurrencies = configured ?? ["USD"];
+  return normalizeOpenReceivePriceCurrencies(rawCurrencies, "openreceive.yml price currencies");
 }
 
 function resolveConfiguredSwapProviders(
   options: CreateOpenReceiveOptions,
 ): readonly OpenReceiveSwapProvider[] {
-  if (options.swap?.providers !== undefined) return options.swap.providers;
-  try {
-    const configured = createConfiguredSwapProvidersFromEnv({
-      cwd: options.cwd,
-      now: options.clock,
-    });
-    if (configured !== undefined) return configured;
-    const fixedFloat = createConfiguredFixedFloatProvider(globalThis.process?.env ?? {}, {
-      ...(options.clock === undefined ? {} : { now: options.clock }),
-    });
-    return fixedFloat === undefined ? [] : [fixedFloat];
-  } catch (error) {
-    if (error instanceof OpenReceiveConfigError) throw error;
-    throw new OpenReceiveConfigError({
-      code: "INVALID_SWAP_PROVIDER_CONFIG",
-      message: "OpenReceive swap provider configuration is invalid.",
-      hint: "Set OPENRECEIVE_SWAP_CONFIG to a YAML file with swap.providers[].key_env and secret_env, or omit swap config to disable automated swaps. Legacy FixedFloat env requires OPENRECEIVE_SWAP_FIXED_FLOAT_KEY and OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET together.",
-      cause: error,
-    });
-  }
+  return options.swap?.providers ?? [];
 }
 
 function normalizeOpenReceivePriceCurrencies(

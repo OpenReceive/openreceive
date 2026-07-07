@@ -3,12 +3,7 @@ services:
     build:
       context: ../../../..
       dockerfile: examples/hello-fruit/server/nextjs-fullstack/Dockerfile
-    env_file:
-      - path: ../../../../.env
-        required: false
     environment:
-      OPENRECEIVE_STORE: local-sqlite
-      OPENRECEIVE_NAMESPACE: hello_fruit_nextjs
       OPENRECEIVE_DEMO_MODE: ${OPENRECEIVE_DEMO_MODE:-test_nwc}
       OPENRECEIVE_DEPLOYED_AT: ${OPENRECEIVE_DEPLOYED_AT:-}
       OPENRECEIVE_GIT_SHA: ${OPENRECEIVE_GIT_SHA:-}
@@ -17,6 +12,7 @@ services:
     expose:
       - "3002"
     volumes:
+      - ../../../../openreceive.yml:/app/examples/hello-fruit/server/nextjs-fullstack/openreceive.yml:ro
       - openreceive-nextjs-fullstack-openreceive:/app/examples/hello-fruit/server/nextjs-fullstack/.openreceive
 
 volumes:
