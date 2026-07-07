@@ -43,7 +43,7 @@ import { createNwcReceiveClient, type NwcEndpointLogger } from "./alby-nwc.ts";
 import { OpenReceiveConfigError } from "./config-error.ts";
 import { assertOpenReceiveStoreConfiguration } from "./storage-guard.ts";
 import { resolveOpenReceiveStore, type ResolveOpenReceiveStoreOptions } from "./store-uri.ts";
-import { createFixedFloatProviderFromEnv } from "./swap/fixedfloat.ts";
+import { createConfiguredFixedFloatProvider } from "./swap/fixedfloat.ts";
 import {
   formatOpenReceiveSwapAssetLabel,
   getOpenReceiveSwapAssetInfo,
@@ -2059,7 +2059,7 @@ function resolveConfiguredSwapProviders(
 ): readonly OpenReceiveSwapProvider[] {
   if (options.swap?.providers !== undefined) return options.swap.providers;
   try {
-    const fixedFloat = createFixedFloatProviderFromEnv();
+    const fixedFloat = createConfiguredFixedFloatProvider();
     return fixedFloat === undefined ? [] : [fixedFloat];
   } catch (error) {
     if (error instanceof OpenReceiveConfigError) throw error;

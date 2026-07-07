@@ -43,28 +43,28 @@ interface FixedFloatEnvelope {
 
 const DEFAULT_FIXED_FLOAT_BASE_URL = "https://ff.io";
 const DEFAULT_CCIES_CACHE_SECONDS = 24 * 60 * 60;
-const FIXED_FLOAT_KEY_ENV = "OPENRECEIVE_SWAP_FIXED_FLOAT_KEY";
-const FIXED_FLOAT_SECRET_ENV = "OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET";
-const FIXED_FLOAT_BASE_URL_ENV = "OPENRECEIVE_SWAP_FIXED_FLOAT_BASE_URL";
+const OPENRECEIVE_SWAP_FIXED_FLOAT_KEY_ENV = "OPENRECEIVE_SWAP_FIXED_FLOAT_KEY";
+const OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET_ENV = "OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET";
+const OPENRECEIVE_SWAP_FIXED_FLOAT_BASE_URL_ENV = "OPENRECEIVE_SWAP_FIXED_FLOAT_BASE_URL";
 
 export function fixedFloatProvider(options: FixedFloatProviderOptions): OpenReceiveSwapProvider {
   return new FixedFloatProvider(options);
 }
 
-export function createFixedFloatProviderFromEnv(
+export function createConfiguredFixedFloatProvider(
   env: Record<string, string | undefined> = globalThis.process?.env ?? {},
   options: Omit<FixedFloatProviderOptions, "key" | "secret" | "baseUrl"> = {},
 ): OpenReceiveSwapProvider | undefined {
-  const key = readFixedFloatEnv(env, FIXED_FLOAT_KEY_ENV);
-  const secret = readFixedFloatEnv(env, FIXED_FLOAT_SECRET_ENV);
-  const baseUrl = readFixedFloatEnv(env, FIXED_FLOAT_BASE_URL_ENV);
+  const key = readFixedFloatEnv(env, OPENRECEIVE_SWAP_FIXED_FLOAT_KEY_ENV);
+  const secret = readFixedFloatEnv(env, OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET_ENV);
+  const baseUrl = readFixedFloatEnv(env, OPENRECEIVE_SWAP_FIXED_FLOAT_BASE_URL_ENV);
   const configured = key !== undefined || secret !== undefined || baseUrl !== undefined;
   if (!configured) {
     return undefined;
   }
   if (key === undefined || secret === undefined) {
     throw new TypeError(
-      `Set both ${FIXED_FLOAT_KEY_ENV} and ${FIXED_FLOAT_SECRET_ENV} to enable FixedFloat swaps.`,
+      `Set both ${OPENRECEIVE_SWAP_FIXED_FLOAT_KEY_ENV} and ${OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET_ENV} to enable FixedFloat swaps.`,
     );
   }
 

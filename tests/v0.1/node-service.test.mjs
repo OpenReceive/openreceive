@@ -187,6 +187,7 @@ async function createHarness(overrides = {}) {
     namespace: "demo_hello_fruit",
     clock: () => now,
     priceProviders: [new StaticPriceProvider()],
+    swap: { providers: [] },
     ...overrides,
   });
 
@@ -233,6 +234,99 @@ test("swapOptions are disabled unless a swap provider is configured", async () =
     enabled: false,
     options: [],
   });
+});
+
+test("createOpenReceive auto-loads FixedFloat swaps from env", async () => {
+  await withEnv(
+    {
+      OPENRECEIVE_SWAP_FIXED_FLOAT_KEY: "fixed-float-key",
+      OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET: "fixed-float-secret",
+      OPENRECEIVE_SWAP_FIXED_FLOAT_BASE_URL: "https://fixedfloat.example",
+    },
+    async () => {
+      const fetchCalls = [];
+      await withGlobalFetch(async (url, options) => {
+        fetchCalls.push({
+          url: String(url),
+          body: JSON.parse(String(options.body)),
+        });
+        if (String(url) === "https://fixedfloat.example/api/v2/ccies") {
+          return jsonResponse({
+            code: 0,
+            data: [
+              { code: "USDTTRC", coin: "USDT", network: "TRC20" },
+              { code: "BTCLN", coin: "BTC", network: "Lightning" },
+            ],
+          });
+        }
+        if (String(url) === "https://fixedfloat.example/api/v2/price") {
+          return jsonResponse({
+            code: 0,
+            data: {
+              from: {
+                amount: "1.05",
+              },
+            },
+          });
+        }
+        throw new Error(`unexpected fetch ${url}`);
+      }, async () => {
+        const wallet = new FakeWallet(() => 1000);
+        const openreceive = await createOpenReceive({
+          client: wallet,
+          store: new InMemoryInvoiceKvStore(),
+          namespace: "fixedfloat_env",
+          clock: () => 1000,
+          priceProviders: [new StaticPriceProvider()],
+        });
+
+        await openreceive.createCheckout({
+          orderId: "order-fixedfloat-env",
+          amount: { btc: { currency: "SATS", value: "200" } },
+        });
+
+        const options = await openreceive.swapOptions({ orderId: "order-fixedfloat-env" });
+        const usdtTron = options.options.find((option) => option.pay_in_asset === "USDT_TRON");
+        assert.equal(options.enabled, true);
+        assert.equal(usdtTron?.provider, "fixedfloat");
+        assert.equal(usdtTron?.available, true);
+        assert.equal(usdtTron?.pay_amount, "1.05");
+        assert.deepEqual(fetchCalls.map((call) => call.url), [
+          "https://fixedfloat.example/api/v2/ccies",
+          "https://fixedfloat.example/api/v2/price",
+        ]);
+      });
+    },
+  );
+});
+
+test("createOpenReceive rejects partial FixedFloat env configuration", async () => {
+  await withEnv(
+    {
+      OPENRECEIVE_SWAP_FIXED_FLOAT_KEY: "fixed-float-key",
+      OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET: undefined,
+      OPENRECEIVE_SWAP_FIXED_FLOAT_BASE_URL: undefined,
+    },
+    async () => {
+      await assert.rejects(
+        () =>
+          createOpenReceive({
+            client: new FakeWallet(() => 1000),
+            store: new InMemoryInvoiceKvStore(),
+            namespace: "partial_fixedfloat_env",
+            clock: () => 1000,
+            priceProviders: [new StaticPriceProvider()],
+          }),
+        (error) => {
+          assert.equal(error instanceof OpenReceiveConfigError, true);
+          assert.equal(error.code, "INVALID_SWAP_PROVIDER_CONFIG");
+          assert.match(error.hint, /OPENRECEIVE_SWAP_FIXED_FLOAT_KEY/);
+          assert.match(error.hint, /OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET/);
+          return true;
+        },
+      );
+    },
+  );
 });
 
 test("startSwap creates an idempotent shadow invoice without replacing active Lightning", async () => {
@@ -920,6 +1014,7 @@ test("createOpenReceive exposes normalized price currency configuration", async 
       namespace: "currency_config",
       clock: () => 1000,
       priceProviders: [new StaticPriceProvider()],
+      swap: { providers: [] },
     });
 
     assert.equal(openreceive.namespace, "currency_config");
@@ -942,6 +1037,7 @@ test("createOpenReceive fetches default live price data only when rates are need
     store,
     namespace: "demo_hello_fruit",
     clock: () => 1000,
+    swap: { providers: [] },
     priceFetch: async () => {
       fetchCalls += 1;
       return {
@@ -1013,6 +1109,7 @@ test("createOpenReceive refuses in-memory invoice storage in production mode", a
           client: new FakeWallet(() => 1000),
           store: new InMemoryInvoiceKvStore(),
           namespace: "demo_hello_fruit",
+          swap: { providers: [] },
         }),
       (error) => {
         assert.equal(error instanceof OpenReceiveConfigError, true);
@@ -1042,4 +1139,38 @@ function restoreEnvVar(name, value) {
   } else {
     process.env[name] = value;
   }
+}
+
+async function withEnv(env, callback) {
+  const previous = new Map();
+  for (const [key, value] of Object.entries(env)) {
+    previous.set(key, process.env[key]);
+    restoreEnvVar(key, value);
+  }
+
+  try {
+    await callback();
+  } finally {
+    for (const [key, value] of previous) {
+      restoreEnvVar(key, value);
+    }
+  }
+}
+
+async function withGlobalFetch(fetcher, callback) {
+  const previous = globalThis.fetch;
+  globalThis.fetch = fetcher;
+  try {
+    await callback();
+  } finally {
+    globalThis.fetch = previous;
+  }
+}
+
+function jsonResponse(body, status = 200) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    text: async () => JSON.stringify(body),
+  };
 }
