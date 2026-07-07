@@ -58,6 +58,7 @@ export type {
   OpenReceiveSwapStartRequest,
 } from "./service.ts";
 export type {
+  OpenReceiveSwapAvailabilityReason,
   OpenReceiveSwapPayInAsset,
   OpenReceiveSwapProvider,
   OpenReceiveSwapProviderState,

@@ -135,6 +135,35 @@ const configuredFiatCurrencies = openreceive.priceCurrencies;
 `quote.amount_msats` is the exact millisatoshi quote used by checkout-created
 invoices.
 
+## Automated Swaps
+
+Automated swaps are optional and require explicit backend provider
+configuration. See [Automated Swaps](automated-swaps.md) for setup and payer
+flow details.
+
+```ts
+const options = await openreceive.swapOptions({
+  orderId: order.uuid,
+  countryCode: "CA"
+});
+
+const attempt = await openreceive.startSwap({
+  orderId: order.uuid,
+  payInAsset: "USDT_TRON",
+  idempotencyKey: "payer-click-1",
+  countryCode: "CA"
+});
+
+await openreceive.refundSwap({
+  attemptId: attempt.swap.attempt_id,
+  refundAddress: "..."
+});
+```
+
+Refunds target `attemptId`, not order id plus asset. Public swap payloads expose
+support fields such as `attempt_id`, `provider_order_id`, transaction ids, and
+state. Provider tokens remain private.
+
 ## Errors
 
 Service errors are `OpenReceiveServiceError` instances:

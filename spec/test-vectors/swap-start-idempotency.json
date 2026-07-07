@@ -2,12 +2,16 @@
   "name": "swap start is idempotent per checkout and pay_in_asset",
   "checkout_id": "or_chk_swap_idempotent",
   "pay_in_asset": "USDT_TRON",
+  "idempotency_key": "payer-click-1",
   "first_response": {
     "invoice_id": "or_inv_swap_shadow_1",
     "rail": "swap",
+    "invoice": null,
     "amount_msats": 200000,
     "swap": {
+      "attempt_id": "or_inv_swap_shadow_1",
       "provider": "fixedfloat",
+      "provider_order_id": "ff-order-1",
       "pay_in_asset": "USDT_TRON",
       "deposit_address": "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
       "deposit_amount": "1.05",
@@ -18,6 +22,7 @@
   "replayed_response": {
     "invoice_id": "or_inv_swap_shadow_1",
     "rail": "swap",
+    "invoice": null,
     "amount_msats": 200000
   },
   "expected_provider_create_calls": 1,

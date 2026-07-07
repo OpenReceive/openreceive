@@ -51,6 +51,14 @@
       "public": true
     },
     {
+      "slug": "automated-swaps",
+      "title": "Automated Swaps",
+      "source_path": "docs/guides/automated-swaps.md",
+      "category": "guide",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "authorization",
       "title": "App Route Protection",
       "source_path": "docs/guides/authorization.md",

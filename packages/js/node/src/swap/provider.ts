@@ -1,6 +1,7 @@
 import type { OpenReceiveSwapPayInAsset } from "./assets.ts";
 
 export type OpenReceiveSwapProviderState =
+  | "creating_provider_order"
   | "awaiting_deposit"
   | "confirming"
   | "exchanging"
@@ -13,11 +14,21 @@ export type OpenReceiveSwapProviderState =
   | "attention"
   | "failed";
 
+export type OpenReceiveSwapAvailabilityReason =
+  | "provider_unconfigured"
+  | "amount_too_small"
+  | "amount_too_large"
+  | "pair_temporarily_unavailable"
+  | "region_unsupported"
+  | "provider_rate_limited"
+  | "provider_unreachable";
+
 export interface OpenReceiveSwapQuote {
   readonly pay_amount?: string;
   readonly pay_asset: OpenReceiveSwapPayInAsset;
-  readonly min_ok: boolean;
-  readonly max_ok: boolean;
+  readonly available: boolean;
+  readonly unavailable_reason?: OpenReceiveSwapAvailabilityReason;
+  readonly unavailable_message?: string;
   readonly provider: string;
 }
 
@@ -41,6 +52,19 @@ export interface OpenReceiveSwapOrder {
 export interface OpenReceiveSwapProvider {
   readonly name: string;
   supportedPayInAssets(): Promise<Set<OpenReceiveSwapPayInAsset>>;
+  availability?(input: {
+    readonly countryCode?: string;
+    readonly payInAsset?: OpenReceiveSwapPayInAsset;
+  }): Promise<
+    | {
+        readonly available: true;
+      }
+    | {
+        readonly available: false;
+        readonly reason: OpenReceiveSwapAvailabilityReason;
+        readonly message: string;
+      }
+  >;
   quote(input: {
     readonly payInAsset: OpenReceiveSwapPayInAsset;
     readonly invoiceAmountMsats: number;
@@ -56,7 +80,6 @@ export interface OpenReceiveSwapProvider {
 
 export function isOpenReceiveSwapTerminalState(state: string | undefined): boolean {
   return (
-    state === "completed" ||
     state === "expired" ||
     state === "refunded" ||
     state === "attention" ||

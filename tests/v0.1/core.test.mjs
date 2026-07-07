@@ -939,14 +939,16 @@ test("browser preserves swap invoices while keeping Lightning active", async () 
   const swapInvoice = {
     invoice_id: "or_inv_shadow_swap",
     rail: "swap",
-    invoice: "lnbc-shadow-swap",
+    invoice: null,
     payment_hash: "e".repeat(64),
     amount_msats: 200000,
     transaction_state: "pending",
     workflow_state: "invoice_created",
     expires_at: 2800,
     swap: {
+      attempt_id: "or_inv_shadow_swap",
       provider: "fixedfloat",
+      provider_order_id: "ff-order-1",
       pay_in_asset: "USDT_TRON",
       deposit_address: "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
       deposit_amount: "1.05",
@@ -973,7 +975,9 @@ test("browser preserves swap invoices while keeping Lightning active", async () 
   const snapshot = await refresh("order-swap-browser");
   assert.equal(snapshot.active.invoice_id, "or_inv_display_swap");
   assert.equal(snapshot.invoices[0].rail, "swap");
+  assert.equal(snapshot.invoices[0].invoice, undefined);
   assert.equal(snapshot.invoices[0].swap.provider, "fixedfloat");
+  assert.equal(snapshot.invoices[0].swap.attempt_id, "or_inv_shadow_swap");
   assert.equal("provider_token" in snapshot.invoices[0].swap, false);
 
   const state = createCheckoutState(snapshot, { now: 1000 });
@@ -1830,6 +1834,9 @@ test("browser owns payment wizard DOM contract", () => {
     swapStart: "data-or-swap-start",
     swapBack: "data-or-swap-back",
     swapQr: "data-or-swap-qr",
+    swapCopy: "data-or-swap-copy",
+    swapRefundForm: "data-or-swap-refund-form",
+    swapRefundAddress: "data-or-swap-refund-address",
     providerCopy: "data-or-provider-copy",
     providerTutorial: "data-or-provider-tutorial",
     providerTutorialIndex: "data-or-provider-tutorial-index",
@@ -1837,6 +1844,11 @@ test("browser owns payment wizard DOM contract", () => {
   assert.equal(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.breadcrumb, "[data-or-breadcrumb]");
   assert.equal(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.method, "[data-or-method]");
   assert.equal(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapStart, "[data-or-swap-start]");
+  assert.equal(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapCopy, "[data-or-swap-copy]");
+  assert.equal(
+    OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapRefundForm,
+    "[data-or-swap-refund-form]",
+  );
   assert.equal(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.providerCopy, "[data-or-provider-copy]");
   assert.equal(
     OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.providerTutorial,

@@ -286,8 +286,9 @@ interface OpenReceiveSwapOptionDisplay {
   readonly label: string;
   readonly network_label: string;
   readonly provider: string;
-  readonly min_ok: boolean;
-  readonly max_ok: boolean;
+  readonly available: boolean;
+  readonly unavailable_reason?: string;
+  readonly unavailable_message?: string;
   readonly pay_amount?: string;
 }
 
@@ -346,6 +347,9 @@ function toCheckoutDisplayData(
   const invoice = snapshot.active ?? snapshot.invoices[0];
   if (invoice === undefined) {
     throw new TypeError("OpenReceive checkout requires active or invoices[0].");
+  }
+  if (typeof invoice.invoice !== "string") {
+    throw new TypeError("OpenReceive checkout requires a display Lightning invoice.");
   }
   const fiatQuote = invoice.fiat_quote === null && snapshot.fiat !== undefined
     ? { fiat: snapshot.fiat }
@@ -1004,6 +1008,7 @@ export function PaymentWizard(
   const [startedSwapInvoice, setStartedSwapInvoice] =
     React.useState<CheckoutInvoiceSnapshot | null>(null);
   const [dismissedSwapInvoiceId, setDismissedSwapInvoiceId] = React.useState<string | null>(null);
+  const swapStartIdempotencyKeys = React.useRef(new Map<string, string>());
   const fetcher = props.fetch ?? globalThis.fetch;
   const checkout = props.checkout;
   const orderId = checkout?.order_id;
@@ -1020,7 +1025,10 @@ export function PaymentWizard(
     }
 
     let cancelled = false;
-    void postOpenReceiveJson(fetcher, props.swapOptionsUrl, { order_id: orderId })
+    void postOpenReceiveJson(fetcher, props.swapOptionsUrl, {
+      order_id: orderId,
+      country_code: selection.selectedCountryCode
+    })
       .then((body) => {
         if (cancelled) return;
         setSwapOptions(normalizeSwapOptionsResult(body));
@@ -1034,7 +1042,7 @@ export function PaymentWizard(
     return () => {
       cancelled = true;
     };
-  }, [props.swapOptionsUrl, orderId, fetcher, props.onError]);
+  }, [props.swapOptionsUrl, orderId, fetcher, props.onError, selection.selectedCountryCode]);
 
   const currentSwapInvoice = React.useMemo(
     () => selectCurrentSwapInvoice(checkout, startedSwapInvoice, dismissedSwapInvoiceId),
@@ -1053,9 +1061,14 @@ export function PaymentWizard(
       }
       setSwapStartingAsset(payInAsset);
       try {
+        const idempotencyKey = swapStartIdempotencyKeys.current.get(payInAsset) ??
+          createReactSwapIdempotencyKey();
+        swapStartIdempotencyKeys.current.set(payInAsset, idempotencyKey);
         const body = await postOpenReceiveJson(fetcher, props.swapStartUrl, {
           order_id: orderId,
-          pay_in_asset: payInAsset
+          pay_in_asset: payInAsset,
+          idempotency_key: idempotencyKey,
+          country_code: selection.selectedCountryCode
         });
         const invoice = normalizeSwapStartInvoice(body);
         setStartedSwapInvoice(invoice);
@@ -1066,7 +1079,30 @@ export function PaymentWizard(
         setSwapStartingAsset(null);
       }
     },
-    [props.swapStartUrl, orderId, fetcher, props.onError]
+    [props.swapStartUrl, orderId, fetcher, props.onError, selection.selectedCountryCode]
+  );
+  const refundSwap = React.useCallback(
+    async (attemptId: string, refundAddress: string) => {
+      if (
+        props.swapRefundUrl === undefined ||
+        props.swapRefundUrl === false ||
+        fetcher === undefined
+      ) {
+        return;
+      }
+      try {
+        const body = await postOpenReceiveJson(fetcher, props.swapRefundUrl, {
+          attempt_id: attemptId,
+          refund_address: refundAddress
+        });
+        const invoice = normalizeSwapStartInvoice(body);
+        setStartedSwapInvoice(invoice);
+        setDismissedSwapInvoiceId(null);
+      } catch (error) {
+        props.onError?.(error);
+      }
+    },
+    [props.swapRefundUrl, fetcher, props.onError]
   );
   const updateWizardSelection = React.useCallback(
     (
@@ -1251,6 +1287,7 @@ export function PaymentWizard(
                   clipboard: props.clipboard,
                   logger: props.logger,
                   onError: props.onError,
+                  onRefund: refundSwap,
                   onBackToLightning: () => {
                     setDismissedSwapInvoiceId(activeSwapForRoute.invoice_id);
                   }
@@ -1400,7 +1437,7 @@ function renderSwapActions(options: {
   readonly onStart: (payInAsset: string) => Promise<void>;
 }): React.ReactElement | null {
   const available = options.options.filter((option) =>
-    option.provider.length > 0 && option.min_ok && option.max_ok
+    option.provider.length > 0 && option.available
   );
   if (!options.enabled || available.length === 0) return null;
 
@@ -1411,19 +1448,34 @@ function renderSwapActions(options: {
     },
     available.map((option) =>
       React.createElement(
-        "button",
+        "div",
         {
-          className: "or-swap-start",
-          disabled: options.startingAsset !== null,
-          key: option.pay_in_asset,
-          onClick: () => {
-            void options.onStart(option.pay_in_asset);
-          },
-          type: "button"
+          className: "or-swap-action",
+          key: option.pay_in_asset
         },
-        options.startingAsset === option.pay_in_asset
-          ? "Preparing..."
-          : `Pay here with ${option.label} (${option.network_label})`
+        option.pay_amount === undefined
+          ? null
+          : React.createElement(
+            "p",
+            {
+              className: "or-swap-estimate"
+            },
+            `Estimated ${option.pay_amount} ${option.label} to settle this checkout.`
+          ),
+        React.createElement(
+          "button",
+          {
+            className: "or-swap-start",
+            disabled: options.startingAsset !== null,
+            onClick: () => {
+              void options.onStart(option.pay_in_asset);
+            },
+            type: "button"
+          },
+          options.startingAsset === option.pay_in_asset
+            ? "Preparing..."
+            : `Create ${option.label} (${option.network_label}) payment address`
+        )
       )
     )
   );
@@ -1436,6 +1488,7 @@ function renderSwapDepositPanel(options: {
   readonly clipboard?: Pick<Clipboard, "writeText">;
   readonly logger?: OpenReceiveBrowserLogger;
   readonly onError?: (error: unknown) => void;
+  readonly onRefund: (attemptId: string, refundAddress: string) => Promise<void>;
   readonly onBackToLightning: () => void;
 }): React.ReactElement | null {
   const display = createOpenReceiveSwapDisplayModel(
@@ -1444,19 +1497,138 @@ function renderSwapDepositPanel(options: {
   );
   if (display === undefined) return null;
   const memo = display.depositMemo;
+  const backButton = React.createElement(
+    "button",
+    {
+      className: "or-swap-back",
+      onClick: options.onBackToLightning,
+      type: "button"
+    },
+    "Pay with Lightning instead"
+  );
+  const heading = React.createElement(
+    "div",
+    {
+      className: "or-swap-heading"
+    },
+    React.createElement("strong", null, display.providerStateLabel),
+    React.createElement("span", null, display.providerStateDetail)
+  );
+
+  if (display.state === "creating") {
+    return React.createElement(
+      "section",
+      {
+        className: "or-swap-panel"
+      },
+      heading,
+      React.createElement("p", { className: "or-swap-progress" }, "Preparing payment address."),
+      backButton
+    );
+  }
+
+  if (display.state === "progress") {
+    return React.createElement(
+      "section",
+      {
+        className: "or-swap-panel"
+      },
+      heading,
+      renderSwapSupportDetails(display, options)
+    );
+  }
+
+  if (display.state === "expired") {
+    return React.createElement(
+      "section",
+      {
+        className: "or-swap-panel"
+      },
+      heading,
+      React.createElement(
+        "p",
+        {
+          className: "or-swap-warning"
+        },
+        "This payment address expired without a detected payment. Create a new payment address to try again."
+      ),
+      renderSwapSupportDetails(display, options),
+      backButton
+    );
+  }
+
+  if (display.state === "refund_required") {
+    return React.createElement(
+      "section",
+      {
+        className: "or-swap-panel"
+      },
+      heading,
+      React.createElement(
+        "p",
+        {
+          className: "or-swap-warning"
+        },
+        `Use a ${display.networkLabel} address you control. Do not paste the deposit address.`
+      ),
+      React.createElement(SwapRefundForm, {
+        attemptId: display.attemptId,
+        networkLabel: display.networkLabel,
+        onRefund: options.onRefund,
+        onError: options.onError
+      }),
+      renderSwapSupportDetails(display, options)
+    );
+  }
+
+  if (display.state === "refund_pending" || display.state === "refunded") {
+    return React.createElement(
+      "section",
+      {
+        className: "or-swap-panel"
+      },
+      heading,
+      React.createElement(
+        "dl",
+        {
+          className: "or-swap-details"
+        },
+        display.refundAddress === undefined
+          ? null
+          : renderSwapCopyRow("Refund address", display.refundAddress, options),
+        display.refundTxId === undefined
+          ? null
+          : renderSwapCopyRow("Refund transaction", display.refundTxId, options)
+      ),
+      renderSwapSupportDetails(display, options)
+    );
+  }
+
+  if (display.state === "attention" || display.state === "failed") {
+    return React.createElement(
+      "section",
+      {
+        className: "or-swap-panel"
+      },
+      heading,
+      React.createElement("p", { className: "or-swap-warning" }, "This payment needs support review."),
+      renderSwapSupportDetails(display, options),
+      backButton
+    );
+  }
 
   return React.createElement(
     "section",
     {
       className: "or-swap-panel"
     },
+    heading,
     React.createElement(
-      "div",
+      "p",
       {
-        className: "or-swap-heading"
+        className: "or-swap-warning"
       },
-      React.createElement("strong", null, `${display.depositAmount} ${display.assetLabel}`),
-      React.createElement("span", null, display.providerStateLabel)
+      `${display.networkWarning} Send exactly ${display.depositAmount} ${display.assetLabel}.`
     ),
     React.createElement(SwapPayloadQRCode, {
       payload: display.qrPayload,
@@ -1468,75 +1640,128 @@ function renderSwapDepositPanel(options: {
       {
         className: "or-swap-details"
       },
-      React.createElement("dt", null, "Address"),
-      React.createElement(
-        "dd",
-        null,
-        React.createElement("code", null, display.depositAddress),
-        React.createElement(
-          "button",
-          {
-            onClick: () => {
-              void copyOpenReceiveText(display.depositAddress, options.clipboard).catch(options.onError);
-            },
-            type: "button"
-          },
-          "Copy"
-        )
-      ),
+      renderSwapCopyRow("Address", display.depositAddress, options),
       memo === undefined
         ? null
-        : [
-          React.createElement("dt", { key: "memo-label" }, "Memo"),
-          React.createElement(
-            "dd",
-            { key: "memo-value" },
-            React.createElement("code", null, memo),
-            React.createElement(
-              "button",
-              {
-                onClick: () => {
-                  void copyOpenReceiveText(memo, options.clipboard).catch(options.onError);
-                },
-                type: "button"
-              },
-              "Copy"
-            )
-          )
-        ],
-      React.createElement("dt", null, "Amount"),
-      React.createElement(
-        "dd",
-        null,
-        React.createElement("code", null, display.depositAmount),
-        React.createElement(
-          "button",
-          {
-            onClick: () => {
-              void copyOpenReceiveText(display.depositAmount, options.clipboard).catch(options.onError);
-            },
-            type: "button"
-          },
-          "Copy"
-        )
-      )
+        : renderSwapCopyRow("Memo", memo, options),
+      renderSwapCopyRow("Amount", display.depositAmount, options)
     ),
     React.createElement(
       "p",
       {
         className: "or-swap-countdown"
       },
-      "Deposit window ",
+      "Payment window ",
       React.createElement("strong", null, display.countdownLabel)
     ),
     React.createElement(
+      "p",
+      {
+        className: "or-swap-warning"
+      },
+      `Pay with one method only. If you already sent ${display.assetLabel}, do not also pay the Lightning invoice.`
+    ),
+    backButton
+  );
+}
+
+function renderSwapCopyRow(
+  label: string,
+  value: string,
+  options: {
+    readonly clipboard?: Pick<Clipboard, "writeText">;
+    readonly onError?: (error: unknown) => void;
+  }
+): readonly React.ReactElement[] {
+  return [
+    React.createElement("dt", { key: `${label}-label` }, label),
+    React.createElement(
+      "dd",
+      { key: `${label}-value` },
+      React.createElement("code", null, value),
+      React.createElement(
+        "button",
+        {
+          onClick: () => {
+            void copyOpenReceiveText(value, options.clipboard).catch(options.onError);
+          },
+          type: "button"
+        },
+        "Copy"
+      )
+    )
+  ];
+}
+
+function renderSwapSupportDetails(
+  display: NonNullable<ReturnType<typeof createOpenReceiveSwapDisplayModel>>,
+  options: {
+    readonly clipboard?: Pick<Clipboard, "writeText">;
+    readonly onError?: (error: unknown) => void;
+  }
+): React.ReactElement | null {
+  const rows = [
+    ...(display.depositTxId === undefined
+      ? []
+      : renderSwapCopyRow("Deposit transaction", display.depositTxId, options)),
+    ...(display.payoutTxId === undefined
+      ? []
+      : renderSwapCopyRow("Lightning payout", display.payoutTxId, options)),
+    ...(display.refundTxId === undefined
+      ? []
+      : renderSwapCopyRow("Refund transaction", display.refundTxId, options)),
+    ...(display.providerOrderId === undefined
+      ? []
+      : renderSwapCopyRow("Provider order", display.providerOrderId, options))
+  ];
+  if (rows.length === 0) return null;
+  return React.createElement(
+    "details",
+    {
+      className: "or-swap-support"
+    },
+    React.createElement("summary", null, "Payment details"),
+    React.createElement("dl", { className: "or-swap-details" }, rows)
+  );
+}
+
+function SwapRefundForm(props: {
+  readonly attemptId: string;
+  readonly networkLabel: string;
+  readonly onRefund: (attemptId: string, refundAddress: string) => Promise<void>;
+  readonly onError?: (error: unknown) => void;
+}): React.ReactElement {
+  const [refundAddress, setRefundAddress] = React.useState("");
+  const [submitting, setSubmitting] = React.useState(false);
+  return React.createElement(
+    "form",
+    {
+      className: "or-swap-refund",
+      onSubmit: (event) => {
+        event.preventDefault();
+        const address = refundAddress.trim();
+        if (address.length === 0) return;
+        setSubmitting(true);
+        void props.onRefund(props.attemptId, address)
+          .catch(props.onError)
+          .finally(() => setSubmitting(false));
+      }
+    },
+    React.createElement("input", {
+      autoComplete: "off",
+      onChange: (event) => setRefundAddress(event.currentTarget.value),
+      placeholder: `${props.networkLabel} refund address`,
+      required: true,
+      type: "text",
+      value: refundAddress
+    }),
+    React.createElement(
       "button",
       {
-        className: "or-swap-back",
-        onClick: options.onBackToLightning,
-        type: "button"
+        disabled: submitting,
+        type: "submit"
       },
-      "<- pay with Lightning instead"
+      submitting ? "Requesting..." : "Request refund"
     )
   );
 }
@@ -1640,8 +1865,13 @@ function normalizeSwapOptionDisplay(input: unknown): OpenReceiveSwapOptionDispla
     label,
     network_label: networkLabel,
     provider,
-    min_ok: record.min_ok === true,
-    max_ok: record.max_ok === true,
+    available: record.available === true,
+    ...(reactString(record.unavailable_reason) === undefined
+      ? {}
+      : { unavailable_reason: reactString(record.unavailable_reason) }),
+    ...(reactString(record.unavailable_message) === undefined
+      ? {}
+      : { unavailable_message: reactString(record.unavailable_message) }),
     ...(reactString(record.pay_amount) === undefined
       ? {}
       : { pay_amount: reactString(record.pay_amount) })
@@ -1651,10 +1881,16 @@ function normalizeSwapOptionDisplay(input: unknown): OpenReceiveSwapOptionDispla
 function normalizeSwapStartInvoice(body: unknown): CheckoutInvoiceSnapshot {
   const record = reactRecord(body);
   const invoice = reactRecord(record.invoice ?? body);
-  if (reactString(invoice.invoice_id) === undefined || reactString(invoice.invoice) === undefined) {
+  if (reactString(invoice.invoice_id) === undefined || reactRecord(invoice.swap).provider === undefined) {
     throw new Error("Swap response did not include an invoice.");
   }
   return invoice as unknown as CheckoutInvoiceSnapshot;
+}
+
+function createReactSwapIdempotencyKey(): string {
+  const randomUuid = globalThis.crypto?.randomUUID?.();
+  if (randomUuid !== undefined) return randomUuid;
+  return `swap_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
 }
 
 async function copyOpenReceiveText(

@@ -162,6 +162,12 @@ wizard UI from display-safe data. It dispatches UI events such as
 `openreceive-settled`, and `openreceive-error`. Treat all frontend events as
 display hints.
 
+For automated swap payment methods, pass app-owned `swap-options-url`,
+`swap-start-url`, and `swap-refund-url` attributes. Those endpoints call the
+server-side `swapOptions`, `startSwap`, and `refundSwap` methods. The browser
+receives deposit instructions and an `attempt_id`; provider credentials and
+tokens remain server-side.
+
 ## Vue
 
 ```vue

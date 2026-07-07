@@ -108,8 +108,9 @@ export interface OpenReceiveElementsSwapOption {
   readonly label: string;
   readonly network_label: string;
   readonly provider: string;
-  readonly min_ok: boolean;
-  readonly max_ok: boolean;
+  readonly available: boolean;
+  readonly unavailable_reason?: string;
+  readonly unavailable_message?: string;
   readonly pay_amount?: string;
 }
 
@@ -331,18 +332,21 @@ function renderElementSwapActionsHtml(
   options: readonly OpenReceiveElementsSwapOption[]
 ): string {
   const available = options
-    .filter((option) => option.provider.length > 0 && option.min_ok && option.max_ok)
+    .filter((option) => option.provider.length > 0 && option.available)
     .filter((option) => openReceiveSwapAssetMatchesRoute(routeKey, option.pay_in_asset));
   if (available.length === 0) return "";
 
   return `
     <div part="swap-actions">
       ${available.map((option) => `
+        ${option.pay_amount === undefined ? "" : `
+          <p part="swap-estimate">Estimated ${escapeHtml(option.pay_amount)} ${escapeHtml(option.label)} to settle this checkout.</p>
+        `}
         <button
           part="swap-start"
           ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapStart}="${escapeHtml(option.pay_in_asset)}"
           type="button"
-        >Pay here with ${escapeHtml(option.label)} (${escapeHtml(option.network_label)})</button>
+        >Create ${escapeHtml(option.label)} (${escapeHtml(option.network_label)}) payment address</button>
       `).join("")}
     </div>
   `;
@@ -351,26 +355,148 @@ function renderElementSwapActionsHtml(
 function renderElementSwapPanelHtml(invoice: CheckoutInvoiceSnapshot): string {
   const display = createOpenReceiveSwapDisplayModel(invoice);
   if (display === undefined) return "";
+  const backButton = `
+    <button part="swap-back" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapBack} type="button">Pay with Lightning instead</button>
+  `;
+  const supportDetails = renderElementSwapSupportDetailsHtml(display);
+  const heading = `
+    <div part="swap-heading">
+      <strong>${escapeHtml(display.providerStateLabel)}</strong>
+      <span>${escapeHtml(display.providerStateDetail)}</span>
+    </div>
+  `;
+
+  if (display.state === "creating") {
+    return `
+      <section part="swap-panel">
+        ${heading}
+        <p part="swap-progress">Preparing payment address.</p>
+        ${backButton}
+      </section>
+    `;
+  }
+
+  if (display.state === "deposit") {
+    return `
+      <section part="swap-panel">
+        ${heading}
+        <p part="swap-warning">${escapeHtml(display.networkWarning)} Send exactly ${escapeHtml(display.depositAmount)} ${escapeHtml(display.assetLabel)}.</p>
+        <div part="swap-qr" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapQr}="${escapeHtml(display.qrPayload)}"></div>
+        <dl part="swap-details">
+          ${renderElementSwapCopyDetailHtml("Address", display.depositAddress)}
+          ${display.depositMemo === undefined ? "" : renderElementSwapCopyDetailHtml("Memo", display.depositMemo)}
+          ${renderElementSwapCopyDetailHtml("Amount", display.depositAmount)}
+        </dl>
+        <p part="swap-countdown">Payment window <strong>${escapeHtml(display.countdownLabel)}</strong></p>
+        <p part="swap-warning">Pay with one method only. If you already sent ${escapeHtml(display.assetLabel)}, do not also pay the Lightning invoice.</p>
+        ${backButton}
+      </section>
+    `;
+  }
+
+  if (display.state === "progress") {
+    return `
+      <section part="swap-panel">
+        ${heading}
+        <dl part="swap-details">
+          ${display.depositTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Deposit transaction", display.depositTxId)}
+          ${display.payoutTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Lightning payout", display.payoutTxId)}
+        </dl>
+        ${supportDetails}
+      </section>
+    `;
+  }
+
+  if (display.state === "expired") {
+    return `
+      <section part="swap-panel">
+        ${heading}
+        <p part="swap-warning">This payment address expired without a detected payment. Create a new payment address to try again.</p>
+        ${supportDetails}
+        ${backButton}
+      </section>
+    `;
+  }
+
+  if (display.state === "refund_required") {
+    return `
+      <section part="swap-panel">
+        ${heading}
+        <p part="swap-warning">Use a ${escapeHtml(display.networkLabel)} address you control. Do not paste the deposit address.</p>
+        <form part="swap-refund" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundForm}="${escapeHtml(display.attemptId)}">
+          <input
+            ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundAddress}
+            name="refund_address"
+            placeholder="${escapeHtml(display.networkLabel)} refund address"
+            type="text"
+            autocomplete="off"
+            required
+          >
+          <button type="submit">Request refund</button>
+        </form>
+        ${supportDetails}
+      </section>
+    `;
+  }
+
+  if (display.state === "refund_pending" || display.state === "refunded") {
+    return `
+      <section part="swap-panel">
+        ${heading}
+        <dl part="swap-details">
+          ${display.refundAddress === undefined ? "" : renderElementSwapCopyDetailHtml("Refund address", display.refundAddress)}
+          ${display.refundTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Refund transaction", display.refundTxId)}
+        </dl>
+        ${supportDetails}
+      </section>
+    `;
+  }
+
   return `
     <section part="swap-panel">
-      <div part="swap-heading">
-        <strong>${escapeHtml(display.depositAmount)} ${escapeHtml(display.assetLabel)}</strong>
-        <span>${escapeHtml(display.providerStateLabel)}</span>
-      </div>
-      <div part="swap-qr" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapQr}="${escapeHtml(display.qrPayload)}"></div>
-      <dl part="swap-details">
-        <dt>Address</dt>
-        <dd><code>${escapeHtml(display.depositAddress)}</code></dd>
-        ${display.depositMemo === undefined ? "" : `
-          <dt>Memo</dt>
-          <dd><code>${escapeHtml(display.depositMemo)}</code></dd>
-        `}
-        <dt>Amount</dt>
-        <dd><code>${escapeHtml(display.depositAmount)}</code></dd>
-      </dl>
-      <p part="swap-countdown">Deposit window <strong>${escapeHtml(display.countdownLabel)}</strong></p>
-      <button part="swap-back" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapBack} type="button">&lt;- pay with Lightning instead</button>
+      ${heading}
+      <p part="swap-warning">This payment needs support review.</p>
+      ${supportDetails}
+      ${backButton}
     </section>
+  `;
+}
+
+function renderElementSwapCopyDetailHtml(label: string, value: string): string {
+  return `
+    <dt>${escapeHtml(label)}</dt>
+    <dd>
+      <code>${escapeHtml(value)}</code>
+      <button
+        part="swap-copy"
+        ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapCopy}="${escapeHtml(value)}"
+        type="button"
+      >Copy</button>
+    </dd>
+  `;
+}
+
+function renderElementSwapSupportDetailsHtml(
+  display: NonNullable<ReturnType<typeof createOpenReceiveSwapDisplayModel>>
+): string {
+  if (
+    display.depositTxId === undefined &&
+    display.payoutTxId === undefined &&
+    display.refundTxId === undefined &&
+    display.providerOrderId === undefined
+  ) {
+    return "";
+  }
+  return `
+    <details part="swap-support">
+      <summary>Payment details</summary>
+      <dl part="swap-details">
+        ${display.depositTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Deposit transaction", display.depositTxId)}
+        ${display.payoutTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Lightning payout", display.payoutTxId)}
+        ${display.refundTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Refund transaction", display.refundTxId)}
+        ${display.providerOrderId === undefined ? "" : renderElementSwapCopyDetailHtml("Provider order", display.providerOrderId)}
+      </dl>
+    </details>
   `;
 }
 
@@ -587,8 +713,13 @@ function normalizeElementSwapOption(input: unknown): OpenReceiveElementsSwapOpti
     label,
     network_label: networkLabel,
     provider,
-    min_ok: record.min_ok === true,
-    max_ok: record.max_ok === true,
+    available: record.available === true,
+    ...(elementString(record.unavailable_reason) === undefined
+      ? {}
+      : { unavailable_reason: elementString(record.unavailable_reason) }),
+    ...(elementString(record.unavailable_message) === undefined
+      ? {}
+      : { unavailable_message: elementString(record.unavailable_message) }),
     ...(elementString(record.pay_amount) === undefined
       ? {}
       : { pay_amount: elementString(record.pay_amount) })
@@ -598,7 +729,7 @@ function normalizeElementSwapOption(input: unknown): OpenReceiveElementsSwapOpti
 function normalizeElementSwapInvoice(body: unknown): CheckoutInvoiceSnapshot {
   const record = elementRecord(body);
   const invoice = elementRecord(record.invoice ?? body);
-  if (elementString(invoice.invoice_id) === undefined || elementString(invoice.invoice) === undefined) {
+  if (elementString(invoice.invoice_id) === undefined || elementRecord(invoice.swap).provider === undefined) {
     throw new Error("Swap response did not include an invoice.");
   }
   return invoice as unknown as CheckoutInvoiceSnapshot;
@@ -672,7 +803,9 @@ export function defineOpenReceiveElements(
     private activeTutorialCopied = false;
     private swapOptions: readonly OpenReceiveElementsSwapOption[] = [];
     private startedSwapInvoice: CheckoutInvoiceSnapshot | undefined;
+    private latestCheckoutSnapshot: CheckoutSnapshot | undefined;
     private dismissedSwapInvoiceId: string | null = null;
+    private swapStartIdempotencyKeys = new Map<string, string>();
     private controller: CheckoutController | undefined;
     private announcedSettledOrderId: string | undefined;
 
@@ -821,6 +954,7 @@ export function defineOpenReceiveElements(
         onError: (error) => this.dispatchError(error),
         onState: (nextState) => this.applyCheckoutState(nextState),
         onSnapshot: (snapshot) => {
+          this.latestCheckoutSnapshot = snapshot;
           const swapInvoice = snapshot.invoices.find((invoice) =>
             invoice.rail === "swap" && invoice.swap !== undefined
           );
@@ -831,6 +965,7 @@ export function defineOpenReceiveElements(
         }
       });
       this.controller.start();
+      void this.controller.reloadState().catch((error) => this.dispatchError(error));
     }
 
     private stopCheckoutController(): void {
@@ -966,6 +1101,7 @@ export function defineOpenReceiveElements(
             storageKey: OPENRECEIVE_COUNTRY_STORAGE_KEY
           });
           this.render();
+          void this.loadSwapOptions();
         };
         if (button instanceof HTMLSelectElement) {
           button.addEventListener("change", selectCountry);
@@ -1011,6 +1147,27 @@ export function defineOpenReceiveElements(
         const current = this.currentSwapInvoice();
         this.dismissedSwapInvoiceId = current?.invoice_id ?? null;
         this.render();
+      });
+
+      root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapCopy).forEach((button) => {
+        button.addEventListener("click", () => {
+          const value = button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapCopy);
+          if (value === null) return;
+          void globalThis.navigator?.clipboard?.writeText(value)
+            .then(() => showElementCopyFeedback(button))
+            .catch((error) => this.dispatchError(error));
+        });
+      });
+
+      root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapRefundForm).forEach((form) => {
+        form.addEventListener("submit", (event) => {
+          event.preventDefault();
+          const attemptId = form.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundForm);
+          const input = form.querySelector(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapRefundAddress);
+          const refundAddress = input instanceof HTMLInputElement ? input.value.trim() : "";
+          if (attemptId === null || refundAddress.length === 0) return;
+          void this.refundSwap(attemptId, refundAddress);
+        });
       });
 
       root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.providerTutorial).forEach((button) => {
@@ -1082,7 +1239,10 @@ export function defineOpenReceiveElements(
       }
 
       try {
-        const body = await postElementJson(url, { order_id: orderId });
+        const body = await postElementJson(url, {
+          order_id: orderId,
+          country_code: this.selection.selectedCountryCode
+        });
         this.swapOptions = normalizeElementSwapOptions(body);
         this.render();
       } catch (error) {
@@ -1096,9 +1256,31 @@ export function defineOpenReceiveElements(
       if (url === null || orderId === null || orderId.length === 0) return;
 
       try {
+        const idempotencyKey = this.swapStartIdempotencyKeys.get(payInAsset) ??
+          createElementSwapIdempotencyKey();
+        this.swapStartIdempotencyKeys.set(payInAsset, idempotencyKey);
         const body = await postElementJson(url, {
           order_id: orderId,
-          pay_in_asset: payInAsset
+          pay_in_asset: payInAsset,
+          idempotency_key: idempotencyKey,
+          country_code: this.selection.selectedCountryCode
+        });
+        this.startedSwapInvoice = normalizeElementSwapInvoice(body);
+        this.dismissedSwapInvoiceId = null;
+        this.render();
+      } catch (error) {
+        this.dispatchError(error);
+      }
+    }
+
+    private async refundSwap(attemptId: string, refundAddress: string): Promise<void> {
+      const url = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.swapRefundUrl);
+      if (url === null) return;
+
+      try {
+        const body = await postElementJson(url, {
+          attempt_id: attemptId,
+          refund_address: refundAddress
         });
         this.startedSwapInvoice = normalizeElementSwapInvoice(body);
         this.dismissedSwapInvoiceId = null;
@@ -1109,13 +1291,17 @@ export function defineOpenReceiveElements(
     }
 
     private currentSwapInvoice(): CheckoutInvoiceSnapshot | undefined {
-      if (
-        this.startedSwapInvoice === undefined ||
-        this.startedSwapInvoice.invoice_id === this.dismissedSwapInvoiceId
-      ) {
-        return undefined;
+      const fromSnapshot = this.latestCheckoutSnapshot?.invoices.find((invoice) =>
+        invoice.rail === "swap" &&
+        invoice.swap !== undefined &&
+        invoice.invoice_id !== this.dismissedSwapInvoiceId
+      );
+      if (this.startedSwapInvoice === undefined || this.startedSwapInvoice.invoice_id === this.dismissedSwapInvoiceId) {
+        return fromSnapshot;
       }
-      return this.startedSwapInvoice;
+      return this.latestCheckoutSnapshot?.invoices.find((invoice) =>
+        invoice.invoice_id === this.startedSwapInvoice?.invoice_id
+      ) ?? this.startedSwapInvoice;
     }
 
     private renderSwapQrCodes(root: ShadowRoot): void {
@@ -1282,4 +1468,10 @@ function showElementCopyFeedback(button: Element | null): void {
     elementCopyFeedbackControllers.set(button, controller);
   }
   controller.show(openReceiveCheckoutLabels.copied);
+}
+
+function createElementSwapIdempotencyKey(): string {
+  const randomUuid = globalThis.crypto?.randomUUID?.();
+  if (randomUuid !== undefined) return randomUuid;
+  return `swap_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
 }

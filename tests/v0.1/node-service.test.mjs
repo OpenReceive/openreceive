@@ -97,6 +97,9 @@ class FakeSwapProvider {
   refundCalls = [];
   orders = new Map();
   nextState = undefined;
+  createSwapGate = undefined;
+  createSwapStarted = undefined;
+  blockUs = false;
 
   constructor(supported = ["USDT_TRON", "SOL_SOL", "ETH_ETH"]) {
     this.supported = new Set(supported);
@@ -106,19 +109,33 @@ class FakeSwapProvider {
     return new Set(this.supported);
   }
 
+  async availability({ countryCode }) {
+    if (this.blockUs && countryCode === "US") {
+      return {
+        available: false,
+        reason: "region_unsupported",
+        message: "Provider is not available to US payers.",
+      };
+    }
+    return { available: true };
+  }
+
   async quote({ payInAsset }) {
     this.quoteCalls += 1;
     return {
       pay_amount: payInAsset === "ETH_ETH" ? "0.0008" : "1.05",
       pay_asset: payInAsset,
-      min_ok: true,
-      max_ok: true,
+      available: true,
       provider: this.name,
     };
   }
 
   async createSwap({ payInAsset }) {
     this.createCalls += 1;
+    this.createSwapStarted?.();
+    if (this.createSwapGate !== undefined) {
+      await this.createSwapGate;
+    }
     const order = {
       provider: this.name,
       provider_order_id: `ff-order-${this.createCalls}`,
@@ -236,18 +253,22 @@ test("startSwap creates an idempotent shadow invoice without replacing active Li
   const first = await openreceive.startSwap({
     orderId: "order-swap-start",
     payInAsset: "USDT_TRON",
+    idempotencyKey: "start-1",
   });
   const second = await openreceive.startSwap({
     orderId: "order-swap-start",
     payInAsset: "USDT_TRON",
+    idempotencyKey: "start-1",
   });
 
   assert.equal(first.invoice_id, second.invoice_id);
   assert.equal(first.rail, "swap");
   assert.equal(first.amount_msats, checkout.amount_msats);
   assert.equal(first.swap.provider, "fixedfloat");
+  assert.equal(first.swap.attempt_id, first.invoice_id);
   assert.equal(first.swap.pay_in_asset, "USDT_TRON");
   assert.equal(first.swap.deposit_address, "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb");
+  assert.equal(first.invoice, null);
   assert.equal("provider_token" in first.swap, false);
   assert.equal(wallet.makeInvoiceCalls, 2);
   assert.equal(swapProvider.createCalls, 1);
@@ -258,7 +279,80 @@ test("startSwap creates an idempotent shadow invoice without replacing active Li
   assert.equal(order.active_checkout.invoices.some((invoice) => invoice.rail === "swap"), true);
 
   const stored = await store.get(first.invoice_id);
-  assert.equal(stored.row.metadata.swap.provider_token, "ff-token-1");
+  assert.equal(stored.row.metadata.swap.provider_token, undefined);
+  assert.equal(stored.row.metadata.swap_private.provider_token, "ff-token-1");
+});
+
+test("startSwap reserves the attempt before provider create to avoid duplicate orders", async () => {
+  const swapProvider = new FakeSwapProvider();
+  let releaseCreate;
+  swapProvider.createSwapGate = new Promise((resolve) => {
+    releaseCreate = resolve;
+  });
+  const createStarted = new Promise((resolve) => {
+    swapProvider.createSwapStarted = resolve;
+  });
+  const { openreceive } = await createHarness({
+    swap: { providers: [swapProvider] },
+  });
+  await openreceive.createCheckout({
+    orderId: "order-swap-reserve-first",
+    amount: { btc: { currency: "SATS", value: "200" } },
+  });
+
+  const first = openreceive.startSwap({
+    orderId: "order-swap-reserve-first",
+    payInAsset: "USDT_TRON",
+    idempotencyKey: "reserve-1",
+  });
+  await createStarted;
+
+  await assert.rejects(
+    () =>
+      openreceive.startSwap({
+        orderId: "order-swap-reserve-first",
+        payInAsset: "USDT_TRON",
+        idempotencyKey: "reserve-1",
+      }),
+    (error) => error instanceof OpenReceiveServiceError && error.status === 409,
+  );
+  assert.equal(swapProvider.createCalls, 1);
+
+  releaseCreate();
+  const invoice = await first;
+  assert.equal(invoice.swap.provider_order_id, "ff-order-1");
+  assert.equal(swapProvider.createCalls, 1);
+});
+
+test("swapOptions and startSwap honor provider region availability", async () => {
+  const swapProvider = new FakeSwapProvider();
+  swapProvider.blockUs = true;
+  const { openreceive } = await createHarness({
+    swap: { providers: [swapProvider] },
+  });
+  await openreceive.createCheckout({
+    orderId: "order-swap-region",
+    amount: { btc: { currency: "SATS", value: "200" } },
+  });
+
+  const options = await openreceive.swapOptions({
+    orderId: "order-swap-region",
+    countryCode: "US",
+  });
+  const usdt = options.options.find((option) => option.pay_in_asset === "USDT_TRON");
+  assert.equal(usdt.available, false);
+  assert.equal(usdt.unavailable_reason, "region_unsupported");
+
+  await assert.rejects(
+    () =>
+      openreceive.startSwap({
+        orderId: "order-swap-region",
+        payInAsset: "USDT_TRON",
+        idempotencyKey: "region-1",
+        countryCode: "US",
+      }),
+    /not available to US payers/,
+  );
 });
 
 test("settling a shadow swap invoice pays the checkout", async () => {
@@ -273,6 +367,7 @@ test("settling a shadow swap invoice pays the checkout", async () => {
   const swapInvoice = await openreceive.startSwap({
     orderId: "order-swap-settle",
     payInAsset: "SOL_SOL",
+    idempotencyKey: "settle-1",
   });
 
   wallet.settlePaymentHash(swapInvoice.payment_hash, 1200);
@@ -282,6 +377,89 @@ test("settling a shadow swap invoice pays the checkout", async () => {
   assert.equal(order.status, "paid");
   assert.equal(order.paid_checkout.invoices.some((invoice) => invoice.invoice_id === swapInvoice.invoice_id), true);
   assert.equal(order.paid_at, 1200);
+});
+
+test("settling a shadow swap invoice does not expose provider tokens to onPaid", async () => {
+  const swapProvider = new FakeSwapProvider();
+  let paidMetadata;
+  const { wallet, openreceive, setNow } = await createHarness({
+    swap: { providers: [swapProvider] },
+    onPaid: async ({ metadata }) => {
+      paidMetadata = metadata;
+    },
+  });
+  await openreceive.createCheckout({
+    orderId: "order-swap-onpaid-private",
+    amount: { btc: { currency: "SATS", value: "200" } },
+  });
+  const swapInvoice = await openreceive.startSwap({
+    orderId: "order-swap-onpaid-private",
+    payInAsset: "SOL_SOL",
+    idempotencyKey: "onpaid-1",
+  });
+
+  wallet.settlePaymentHash(swapInvoice.payment_hash, 1200);
+  setNow(1015);
+  await openreceive.getOrder({ orderId: "order-swap-onpaid-private" });
+
+  assert.equal(paidMetadata.swap_private, undefined);
+  assert.equal(paidMetadata.swap.provider_token, undefined);
+  assert.equal(paidMetadata.swap.provider_order_id, "ff-order-1");
+});
+
+test("provider completion exposes payout details but does not mark paid without wallet settlement", async () => {
+  const swapProvider = new FakeSwapProvider();
+  const { openreceive, setNow } = await createHarness({
+    swap: { providers: [swapProvider] },
+  });
+  await openreceive.createCheckout({
+    orderId: "order-swap-provider-done",
+    amount: { btc: { currency: "SATS", value: "200" } },
+  });
+  await openreceive.startSwap({
+    orderId: "order-swap-provider-done",
+    payInAsset: "USDT_TRON",
+    idempotencyKey: "done-1",
+  });
+
+  swapProvider.nextState = "completed";
+  setNow(1015);
+  const order = await openreceive.getOrder({ orderId: "order-swap-provider-done" });
+  const swapInvoice = order.active_checkout.invoices.find((invoice) => invoice.rail === "swap");
+
+  assert.equal(order.status, "pending");
+  assert.equal(swapInvoice.swap.provider_state, "completed");
+  assert.equal(swapInvoice.swap.provider_order_id, "ff-order-1");
+  assert.equal(swapInvoice.swap.payout_tx_id, "ln-payout-1");
+});
+
+test("completed provider orders become attention when wallet settlement never arrives", async () => {
+  const swapProvider = new FakeSwapProvider();
+  const { openreceive, setNow } = await createHarness({
+    swap: {
+      providers: [swapProvider],
+      settlementAttentionSeconds: 10,
+    },
+  });
+  await openreceive.createCheckout({
+    orderId: "order-swap-attention",
+    amount: { btc: { currency: "SATS", value: "200" } },
+  });
+  await openreceive.startSwap({
+    orderId: "order-swap-attention",
+    payInAsset: "USDT_TRON",
+    idempotencyKey: "attention-1",
+  });
+
+  swapProvider.nextState = "completed";
+  setNow(1015);
+  await openreceive.getOrder({ orderId: "order-swap-attention" });
+  setNow(1026);
+  const order = await openreceive.getOrder({ orderId: "order-swap-attention" });
+  const swapInvoice = order.active_checkout.invoices.find((invoice) => invoice.rail === "swap");
+
+  assert.equal(swapInvoice.swap.provider_state, "attention");
+  assert.equal(swapInvoice.swap.attention, true);
 });
 
 test("a superseded checkout is still paid when its shadow invoice settles later", async () => {
@@ -296,6 +474,7 @@ test("a superseded checkout is still paid when its shadow invoice settles later"
   const swapInvoice = await openreceive.startSwap({
     orderId: "order-swap-supersede",
     payInAsset: "USDT_TRON",
+    idempotencyKey: "supersede-1",
   });
   const replacement = await openreceive.createCheckout({
     orderId: "order-swap-supersede",
@@ -321,9 +500,10 @@ test("refundSwap requests a provider refund only for refund-required swaps", asy
     orderId: "order-swap-refund",
     amount: { btc: { currency: "SATS", value: "200" } },
   });
-  await openreceive.startSwap({
+  const swapAttempt = await openreceive.startSwap({
     orderId: "order-swap-refund",
     payInAsset: "ETH_ETH",
+    idempotencyKey: "refund-1",
   });
 
   swapProvider.nextState = "refund_required";
@@ -334,8 +514,7 @@ test("refundSwap requests a provider refund only for refund-required swaps", asy
   assert.equal(refundRequired.swap.deposit_tx_id, "deposit-tx-1");
 
   const refunded = await openreceive.refundSwap({
-    orderId: "order-swap-refund",
-    payInAsset: "ETH_ETH",
+    attemptId: swapAttempt.invoice_id,
     refundAddress: "0x2222222222222222222222222222222222222222",
   });
 

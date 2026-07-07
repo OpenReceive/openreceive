@@ -7,6 +7,7 @@ import {
   type OpenReceiveSwapPayInAsset,
 } from "./assets.ts";
 import type {
+  OpenReceiveSwapAvailabilityReason,
   OpenReceiveSwapOrder,
   OpenReceiveSwapProvider,
   OpenReceiveSwapProviderState,
@@ -102,6 +103,30 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
     return new Set(resolution.pay_in.keys());
   }
 
+  async availability(input: {
+    readonly countryCode?: string;
+    readonly payInAsset?: OpenReceiveSwapPayInAsset;
+  }): Promise<
+    | {
+        readonly available: true;
+      }
+    | {
+        readonly available: false;
+        readonly reason: OpenReceiveSwapAvailabilityReason;
+        readonly message: string;
+      }
+  > {
+    void input.payInAsset;
+    if (input.countryCode?.trim().toUpperCase() === "US") {
+      return {
+        available: false,
+        reason: "region_unsupported",
+        message: "FixedFloat is not available to US payers.",
+      };
+    }
+    return { available: true };
+  }
+
   async quote(input: {
     readonly payInAsset: OpenReceiveSwapPayInAsset;
     readonly invoiceAmountMsats: number;
@@ -119,16 +144,16 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
       return {
         pay_amount: readNestedString(data, ["from", "amount"]) ?? readStringField(asRecord(data), "amount"),
         pay_asset: input.payInAsset,
-        min_ok: true,
-        max_ok: true,
+        available: true,
         provider: this.name,
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message.toLowerCase() : String(error);
+      const reason = classifyFixedFloatQuoteError(error);
       return {
         pay_asset: input.payInAsset,
-        min_ok: !message.includes("min") && !message.includes("small"),
-        max_ok: !message.includes("max") && !message.includes("large"),
+        available: false,
+        unavailable_reason: reason,
+        unavailable_message: fixedFloatAvailabilityMessage(reason),
         provider: this.name,
       };
     }
@@ -253,9 +278,29 @@ function amountMsatsToBtcString(amountMsats: number): string {
   if (!Number.isSafeInteger(amountMsats) || amountMsats <= 0) {
     throw new RangeError("invoiceAmountMsats must be a positive safe integer.");
   }
-  const wholeBtc = Math.floor(amountMsats / 100_000_000_000);
-  const fractional = String(amountMsats % 100_000_000_000).padStart(11, "0").replace(/0+$/, "");
+  const sats = Math.ceil(amountMsats / 1000);
+  const wholeBtc = Math.floor(sats / 100_000_000);
+  const fractional = String(sats % 100_000_000).padStart(8, "0").replace(/0+$/, "");
   return fractional.length === 0 ? String(wholeBtc) : `${wholeBtc}.${fractional}`;
+}
+
+function classifyFixedFloatQuoteError(error: unknown): OpenReceiveSwapAvailabilityReason {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  if (message.includes("rate") || message.includes("429")) return "provider_rate_limited";
+  if (message.includes("fetch") || message.includes("network") || message.includes("timeout")) {
+    return "provider_unreachable";
+  }
+  if (message.includes("min") || message.includes("small")) return "amount_too_small";
+  if (message.includes("max") || message.includes("large")) return "amount_too_large";
+  return "pair_temporarily_unavailable";
+}
+
+function fixedFloatAvailabilityMessage(reason: OpenReceiveSwapAvailabilityReason): string {
+  if (reason === "amount_too_small") return "This invoice is below the provider minimum.";
+  if (reason === "amount_too_large") return "This invoice is above the provider maximum.";
+  if (reason === "provider_rate_limited") return "The swap provider is rate limited.";
+  if (reason === "provider_unreachable") return "The swap provider is temporarily unreachable.";
+  return "This payment route is temporarily unavailable.";
 }
 
 function normalizeFixedFloatOrder(

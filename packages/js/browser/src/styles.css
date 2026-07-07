@@ -462,6 +462,18 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.or-swap-action {
+  display: grid;
+  gap: 8px;
+}
+
+.or-swap-estimate,
+.or-swap-warning,
+.or-swap-progress {
+  color: var(--or-muted);
+  margin: 0;
+}
+
 .or-swap-start {
   min-height: 44px;
   border: 0;
@@ -543,7 +555,8 @@
 }
 
 .or-swap-details button,
-.or-swap-back {
+.or-swap-back,
+.or-swap-refund button {
   border: 1px solid var(--or-border);
   border-radius: 8px;
   background: var(--or-bg-soft);
@@ -563,6 +576,27 @@
 
 .or-swap-back {
   justify-self: start;
+}
+
+.or-swap-support summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.or-swap-refund {
+  display: grid;
+  gap: 8px;
+}
+
+.or-swap-refund input {
+  border: 1px solid var(--or-border);
+  border-radius: 8px;
+  background: var(--or-bg-soft);
+  color: var(--or-text);
+  font: inherit;
+  min-height: 42px;
+  min-width: 0;
+  padding: 8px 10px;
 }
 
 .or-provider-card {

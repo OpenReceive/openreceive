@@ -1,7 +1,9 @@
 {
   "name": "provider emergency state exposes refund_required and accepts refund request",
   "swap_before_refund": {
+    "attempt_id": "or_inv_swap_refund",
     "provider": "fixedfloat",
+    "provider_order_id": "ff-order-refund",
     "pay_in_asset": "ETH_ETH",
     "deposit_address": "0x1111111111111111111111111111111111111111",
     "deposit_amount": "0.0008",
@@ -10,6 +12,7 @@
     "deposit_tx_id": "0xdeposit"
   },
   "refund_request": {
+    "attempt_id": "or_inv_swap_refund",
     "refund_address": "0x2222222222222222222222222222222222222222"
   },
   "swap_after_refund": {

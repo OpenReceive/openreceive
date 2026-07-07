@@ -163,11 +163,7 @@
       "additionalProperties": true,
       "required": [
         "provider",
-        "provider_order_id",
-        "provider_token",
         "pay_in_asset",
-        "deposit_address",
-        "deposit_amount",
         "provider_state",
         "provider_expires_at",
         "created_at",
@@ -179,10 +175,6 @@
           "minLength": 1
         },
         "provider_order_id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "provider_token": {
           "type": "string",
           "minLength": 1
         },
@@ -211,6 +203,9 @@
         "deposit_tx_id": {
           "type": "string"
         },
+        "payout_tx_id": {
+          "type": "string"
+        },
         "refund_address": {
           "type": "string"
         },
@@ -224,6 +219,19 @@
         "last_polled_at": {
           "type": "integer",
           "minimum": 0
+        }
+      }
+    },
+    "SwapPrivateMetadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "provider_token"
+      ],
+      "properties": {
+        "provider_token": {
+          "type": "string",
+          "minLength": 1
         }
       }
     }
@@ -241,6 +249,6 @@
     "action_claimed_at records the store-coordinated settlement action lease",
     "renewal creates a new invoice row",
     "metadata.rail == swap marks a shadow invoice that must not replace checkout.active",
-    "metadata.swap.provider_token is private storage data and must never be serialized to public invoice payloads"
+    "metadata.swap_private.provider_token is private storage data and must never be serialized to public invoice payloads, hooks, logs, docs, fixtures, or bundles"
   ]
 }

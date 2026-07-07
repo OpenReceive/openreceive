@@ -3,6 +3,8 @@ import {
   OPENRECEIVE_PRICE_FEED_PRIMARY_URL_ENV,
   createCachedLivePriceFeed,
   createIdempotencyRequestHash,
+  applySettled,
+  classifyTransactionSettlement,
   getBtcFiatRatesWithFallback,
   getIdempotentRecord,
   isOpenReceiveErrorCode,
@@ -10,6 +12,7 @@ import {
   putCreatedInvoiceRecord,
   quoteBitcoinAmountToMsats,
   quoteFiatToMsatsWithPrice,
+  runSettlementAction,
   sweepPendingInvoicesOnce,
   type CachedPriceFeed,
   type InvoiceStorageRow,
@@ -46,6 +49,7 @@ import {
   isOpenReceiveSwapPayInAsset,
   isOpenReceiveSwapTerminalState,
   listOpenReceiveSwapAssetInfo,
+  type OpenReceiveSwapAvailabilityReason,
   type OpenReceiveSwapOrder,
   type OpenReceiveSwapPayInAsset,
   type OpenReceiveSwapProvider,
@@ -164,21 +168,28 @@ export interface OpenReceiveGetCheckoutRequest {
 
 export interface OpenReceiveSwapOptions {
   readonly providers?: readonly OpenReceiveSwapProvider[];
+  readonly settlementAttentionSeconds?: number;
 }
 
 export interface OpenReceiveSwapOptionsRequest {
   readonly orderId: string;
+  readonly countryCode?: string;
+  readonly country_code?: string;
 }
 
 export interface OpenReceiveSwapStartRequest {
   readonly orderId: string;
   readonly payInAsset: OpenReceiveSwapPayInAsset | string;
+  readonly idempotencyKey: string;
+  readonly countryCode?: string;
+  readonly country_code?: string;
 }
 
 export interface OpenReceiveSwapRefundRequest {
-  readonly orderId: string;
-  readonly payInAsset: OpenReceiveSwapPayInAsset | string;
+  readonly attemptId?: string;
+  readonly attempt_id?: string;
   readonly refundAddress: string;
+  readonly refund_address?: string;
 }
 
 export interface OpenReceiveSwapOption {
@@ -186,8 +197,9 @@ export interface OpenReceiveSwapOption {
   readonly label: string;
   readonly network_label: string;
   readonly provider: string;
-  readonly min_ok: boolean;
-  readonly max_ok: boolean;
+  readonly available: boolean;
+  readonly unavailable_reason?: OpenReceiveSwapAvailabilityReason;
+  readonly unavailable_message?: string;
   readonly pay_amount?: string;
 }
 
@@ -197,7 +209,9 @@ export interface OpenReceiveSwapOptionsResponse {
 }
 
 export interface OpenReceivePublicSwap {
+  readonly attempt_id: string;
   readonly provider: string;
+  readonly provider_order_id?: string;
   readonly pay_in_asset: OpenReceiveSwapPayInAsset;
   readonly deposit_address: string;
   readonly deposit_memo?: string;
@@ -205,6 +219,7 @@ export interface OpenReceivePublicSwap {
   readonly provider_state: OpenReceiveSwapProviderState;
   readonly provider_expires_at: number;
   readonly deposit_tx_id?: string;
+  readonly payout_tx_id?: string;
   readonly refund_address?: string;
   readonly refund_tx_id?: string;
   readonly attention?: boolean;
@@ -217,7 +232,7 @@ export interface OpenReceiveInvoice {
   readonly status: "pending" | "settled" | "expired" | "failed";
   readonly transaction_state: string;
   readonly workflow_state: string;
-  readonly invoice: string;
+  readonly invoice: string | null;
   readonly payment_hash: string;
   readonly amount_msats: number;
   readonly order_id: string;
@@ -375,6 +390,8 @@ interface NormalizedCreateCheckoutRequest {
 
 const HEX_64 = /^[0-9a-fA-F]{64}$/;
 const OPENRECEIVE_INVOICE_EXPIRY_SECONDS = 600;
+const OPENRECEIVE_SWAP_CREATING_TIMEOUT_SECONDS = 30;
+const OPENRECEIVE_SWAP_SETTLEMENT_ATTENTION_SECONDS = 60;
 const RESERVED_CHECKOUT_METADATA_KEYS = new Set([
   "order_id",
   "checkout_id",
@@ -384,6 +401,7 @@ const RESERVED_CHECKOUT_METADATA_KEYS = new Set([
   "description_hash",
   "rail",
   "swap",
+  "swap_private",
   "swap_attempt_key",
 ]);
 
@@ -1013,6 +1031,7 @@ async function getSwapOptions(
   }
 
   const providerByAsset = await resolveSwapProvidersByAsset(providers);
+  const countryCode = parseOptionalCountryCode(input.countryCode ?? input.country_code);
   const options = await Promise.all(
     listOpenReceiveSwapAssetInfo().map(async (asset) => {
       const provider = providerByAsset.get(asset.pay_in_asset);
@@ -1022,22 +1041,44 @@ async function getSwapOptions(
           label: asset.label,
           network_label: asset.network_label,
           provider: "",
-          min_ok: false,
-          max_ok: false,
+          available: false,
+          unavailable_reason: "provider_unconfigured",
+          unavailable_message: "Automated swaps are not configured for this asset.",
+        } satisfies OpenReceiveSwapOption;
+      }
+
+      const regionAvailability = await getSwapProviderAvailability(provider, {
+        countryCode,
+        payInAsset: asset.pay_in_asset,
+      });
+      if (!regionAvailability.available) {
+        return {
+          pay_in_asset: asset.pay_in_asset,
+          label: asset.label,
+          network_label: asset.network_label,
+          provider: provider.name,
+          available: false,
+          unavailable_reason: regionAvailability.reason,
+          unavailable_message: regionAvailability.message,
         } satisfies OpenReceiveSwapOption;
       }
 
       const quote = await provider.quote({
         payInAsset: asset.pay_in_asset,
-        invoiceAmountMsats: checkout.amountMsats,
+        invoiceAmountMsats: roundMsatsUpToWholeSats(checkout.amountMsats),
       });
       return {
         pay_in_asset: asset.pay_in_asset,
         label: asset.label,
         network_label: asset.network_label,
         provider: quote.provider,
-        min_ok: quote.min_ok,
-        max_ok: quote.max_ok,
+        available: quote.available,
+        ...(quote.unavailable_reason === undefined
+          ? {}
+          : { unavailable_reason: quote.unavailable_reason }),
+        ...(quote.unavailable_message === undefined
+          ? {}
+          : { unavailable_message: quote.unavailable_message }),
         ...(quote.pay_amount === undefined ? {} : { pay_amount: quote.pay_amount }),
       } satisfies OpenReceiveSwapOption;
     }),
@@ -1056,6 +1097,10 @@ async function startSwap(
   const body = asRecord(input);
   const orderId = parseOrderId(body);
   const payInAsset = parseSwapPayInAsset(body.payInAsset ?? body.pay_in_asset);
+  const idempotencyKey = parseSwapStartIdempotencyKey(
+    body.idempotencyKey ?? body.idempotency_key,
+  );
+  const countryCode = parseOptionalCountryCode(body.countryCode ?? body.country_code);
   const now = context.clock();
   const records = await context.store.listByOrderId(orderId);
   if (records.length === 0) {
@@ -1082,6 +1127,9 @@ async function startSwap(
   const checkoutRecords = await context.store.listByCheckoutId(checkout.checkoutId);
   const existing = findReusableSwapRecord(checkoutRecords, payInAsset, now);
   if (existing !== undefined) {
+    if (readStoredSwapState(existing.row) === "creating_provider_order") {
+      return await readReservedSwapAttemptForStartReplay(context, existing, now);
+    }
     return serializeInvoice(existing.row, now);
   }
 
@@ -1104,6 +1152,13 @@ async function startSwap(
       `${formatOpenReceiveSwapAssetLabel(payInAsset)} is not available for automated swaps.`,
     );
   }
+  const regionAvailability = await getSwapProviderAvailability(provider, {
+    countryCode,
+    payInAsset,
+  });
+  if (!regionAvailability.available) {
+    throw serviceError(400, "INVALID_REQUEST", regionAvailability.message);
+  }
 
   const displayRecord = checkoutRecords.find(
     (record) => record.row.invoice_id === checkout.active?.invoiceId,
@@ -1113,29 +1168,26 @@ async function startSwap(
   }
 
   const invoiceExpirySeconds = getOpenReceiveSwapAssetInfo(payInAsset).expiry_seconds;
+  const roundedAmountMsats = roundMsatsUpToWholeSats(displayRecord.row.amount_msats);
   const walletInvoice = await context.options.client.makeInvoice({
-    amount_msats: BigInt(displayRecord.row.amount_msats),
+    amount_msats: BigInt(roundedAmountMsats),
     ...getStoredDescriptionFields(displayRecord.row),
     expiry: invoiceExpirySeconds,
   });
   const createdAt = walletInvoice.created_at ?? context.clock();
   const expiresAt = walletInvoice.expires_at ?? createdAt + invoiceExpirySeconds;
   const normalizedExpiresAt = Math.min(expiresAt, createdAt + invoiceExpirySeconds);
-  const providerOrder = await provider.createSwap({
-    payInAsset,
-    bolt11: walletInvoice.invoice,
-    invoiceAmountMsats: displayRecord.row.amount_msats,
-  });
-  const idempotencyKey = `${checkout.checkoutId}:swap:${payInAsset}`;
+  const swapAttemptKey = `${checkout.checkoutId}:swap:${payInAsset}:${idempotencyKey}`;
   const requestHash = await createIdempotencyRequestHash({
     checkout_id: checkout.checkoutId,
     pay_in_asset: payInAsset,
-    amount_msats: displayRecord.row.amount_msats,
+    amount_msats: roundedAmountMsats,
     rail: "swap",
+    idempotency_key: idempotencyKey,
   });
   const namespaceScope = context.options.namespace ?? readOpenReceiveNamespace(undefined);
   const operation = "invoice.create";
-  const createResult = await putCreatedInvoiceRecord({
+  const reserved = await putCreatedInvoiceRecord({
     store: context.store,
     createStoredInvoiceId,
     record: {
@@ -1144,7 +1196,7 @@ async function startSwap(
         invoice_id: createStoredInvoiceId(),
         namespace: namespaceScope,
         operation,
-        idempotency_key: idempotencyKey,
+        idempotency_key: swapAttemptKey,
         idempotency_request_hash: requestHash,
         payment_hash: walletInvoice.payment_hash,
         invoice: walletInvoice.invoice,
@@ -1157,10 +1209,14 @@ async function startSwap(
         metadata: {
           ...swapBaseMetadata(displayRecord.row),
           rail: "swap",
-          swap_attempt_key: idempotencyKey,
+          swap_attempt_key: swapAttemptKey,
           swap: {
-            ...swapMetadataFromProviderOrder(providerOrder, now),
+            provider: provider.name,
+            pay_in_asset: payInAsset,
+            provider_state: "creating_provider_order",
+            provider_expires_at: normalizedExpiresAt,
             created_at: now,
+            last_polled_at: now,
           },
         },
         fiat_quote:
@@ -1171,8 +1227,48 @@ async function startSwap(
     },
   });
 
+  if (reserved.status === "replayed") {
+    return await readReservedSwapAttemptForStartReplay(context, reserved.record, now);
+  }
+
+  let providerOrder: OpenReceiveSwapOrder;
+  try {
+    providerOrder = await provider.createSwap({
+      payInAsset,
+      bolt11: walletInvoice.invoice,
+      invoiceAmountMsats: toSafeInteger(walletInvoice.amount_msats, "amount_msats"),
+    });
+  } catch (error) {
+    const failed = await updateSwapRecord(context, reserved.record, (swap) => ({
+      ...swap,
+      provider_state: "failed",
+      attention: true,
+      provider_error: error instanceof Error ? error.message : String(error),
+      last_polled_at: context.clock(),
+    }));
+    emitLog(context.options, "warn", "swap.create.failed", "Swap provider order creation failed.", {
+      ...invoiceLogFields(failed.row),
+      order_id: orderId,
+      checkout_id: checkout.checkoutId,
+      provider: provider.name,
+      pay_in_asset: payInAsset,
+      error_message: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+
+  const finalized = await updateSwapRecordWithPrivate(context, reserved.record, (swap) => ({
+    swap: {
+      ...swap,
+      ...swapMetadataFromProviderOrder(providerOrder, now),
+      created_at: optionalSafeInteger(swap.created_at) ?? now,
+      last_polled_at: now,
+    },
+    swapPrivate: swapPrivateMetadataFromProviderOrder(providerOrder),
+  }));
+
   emitLog(context.options, "info", "swap.created", "Created automated swap invoice.", {
-    ...invoiceLogFields(createResult.record.row),
+    ...invoiceLogFields(finalized.row),
     order_id: orderId,
     checkout_id: checkout.checkoutId,
     provider: provider.name,
@@ -1180,7 +1276,7 @@ async function startSwap(
     provider_order_id: providerOrder.provider_order_id,
   });
 
-  return serializeInvoice(createResult.record.row, now);
+  return serializeInvoice(finalized.row, now);
 }
 
 async function refundSwap(
@@ -1188,21 +1284,26 @@ async function refundSwap(
   input: OpenReceiveSwapRefundRequest,
 ): Promise<OpenReceiveInvoiceModel> {
   const body = asRecord(input);
-  const orderId = parseOrderId(body);
-  const payInAsset = parseSwapPayInAsset(body.payInAsset ?? body.pay_in_asset);
+  const attemptId = parseSwapAttemptId(body.attemptId ?? body.attempt_id);
   const refundAddress = optionalString(body.refundAddress ?? body.refund_address);
   if (refundAddress === undefined) {
     throw serviceError(400, "INVALID_REQUEST", "refund_address is required.");
   }
-  assertRefundAddressShape(payInAsset, refundAddress);
 
-  const records = await context.store.listByOrderId(orderId);
-  const candidate = records
-    .filter((record) => readStoredSwapPayInAsset(record.row) === payInAsset)
-    .sort((left, right) => right.row.created_at - left.row.created_at)
-    .find((record) => readStoredSwapState(record.row) === "refund_required");
+  const candidate = await context.store.get(attemptId);
   if (candidate === undefined) {
-    throw serviceError(409, "CONFLICT", "No refund-required swap found for this order and asset.");
+    throw serviceError(404, "NOT_FOUND", "No swap attempt found for this attempt_id.");
+  }
+  if (readInvoiceRail(candidate.row) !== "swap") {
+    throw serviceError(400, "INVALID_REQUEST", "attempt_id must reference a swap attempt.");
+  }
+  const payInAsset = readStoredSwapPayInAsset(candidate.row);
+  if (payInAsset === undefined) {
+    throw serviceError(500, "INTERNAL", "Stored swap attempt is missing its asset.");
+  }
+  assertRefundAddressShape(payInAsset, refundAddress);
+  if (readStoredSwapState(candidate.row) !== "refund_required") {
+    throw serviceError(409, "CONFLICT", "Swap attempt does not require a refund.");
   }
 
   const order = readStoredSwapOrder(candidate.row);
@@ -1245,12 +1346,41 @@ async function advanceSwapsForRecords(
     if (provider === undefined) continue;
 
     try {
+      const previousSwap = parseSwapMetadata(record.row) ?? {};
+      const previousState = readStoredSwapState(record.row);
       const updatedOrder = await provider.getStatus(order);
-      await updateSwapRecord(context, record, (swap) => ({
+      const nextState = updatedOrder.state;
+      const providerCompletedAt =
+        optionalSafeInteger(previousSwap.provider_completed_at) ??
+        (nextState === "completed" ? now : undefined);
+      const updatedRecord = await updateSwapRecord(context, record, (swap) => ({
         ...swap,
         ...swapMetadataFromProviderOrder(updatedOrder, now),
+        ...(providerCompletedAt === undefined ? {} : { provider_completed_at: providerCompletedAt }),
         last_polled_at: now,
       }));
+      if (
+        nextState === "paying_invoice" ||
+        nextState === "completed" ||
+        (previousState !== nextState && previousState === "paying_invoice")
+      ) {
+        await refreshSwapInvoiceSettlementImmediately(context, updatedRecord);
+      }
+      if (nextState === "completed" && providerCompletedAt !== undefined) {
+        const latest = (await context.store.get(updatedRecord.row.invoice_id)) ?? updatedRecord;
+        if (
+          latest.row.transaction_state !== "settled" &&
+          now - providerCompletedAt >= swapSettlementAttentionSeconds(context)
+        ) {
+          await updateSwapRecord(context, latest, (swap) => ({
+            ...swap,
+            provider_state: "attention",
+            attention: true,
+            attention_reason: "provider_completed_without_wallet_settlement",
+            last_polled_at: now,
+          }));
+        }
+      }
     } catch (error) {
       emitLog(context.options, "warn", "swap.status.failed", "Swap provider status refresh failed.", {
         invoice_id: record.row.invoice_id,
@@ -1260,6 +1390,58 @@ async function advanceSwapsForRecords(
       });
     }
   }
+}
+
+async function refreshSwapInvoiceSettlementImmediately(
+  context: OpenReceiveServiceContext,
+  record: StoredRecord,
+): Promise<StoredRecord> {
+  const current = (await context.store.get(record.row.invoice_id)) ?? record;
+  if (current.row.transaction_state === "settled") return current;
+
+  let transactions: readonly NwcTransaction[];
+  try {
+    const page = await context.options.client.listTransactions({
+      type: "incoming",
+      unpaid: true,
+      from: Math.max(0, current.row.created_at - 60),
+      until: context.clock(),
+      limit: 10,
+    });
+    transactions = page.transactions;
+  } catch (error) {
+    emitLog(
+      context.options,
+      "warn",
+      "swap.settlement_scan.failed",
+      "Immediate swap settlement scan failed.",
+      {
+        invoice_id: current.row.invoice_id,
+        error_message: error instanceof Error ? error.message : String(error),
+      },
+    );
+    return current;
+  }
+
+  const matched = transactions.find(
+    (transaction) =>
+      transaction.payment_hash === current.row.payment_hash ||
+      transaction.invoice === current.row.invoice,
+  );
+  if (matched === undefined || classifyTransactionSettlement(matched).status !== "settled") {
+    return current;
+  }
+
+  const settled = await context.store.put(applySettled(current, matched.settled_at), current.rev);
+  if (settled.status === "conflict") return settled.record;
+
+  const action = await runSettlementAction({
+    ...reconcileOptions(context),
+    record: settled.record,
+    now: context.clock(),
+    transaction: matched,
+  });
+  return action.record;
 }
 
 async function resolveSwapProvidersByAsset(
@@ -1287,6 +1469,75 @@ async function selectSwapProvider(
   return undefined;
 }
 
+async function getSwapProviderAvailability(
+  provider: OpenReceiveSwapProvider,
+  input: {
+    readonly countryCode?: string;
+    readonly payInAsset?: OpenReceiveSwapPayInAsset;
+  },
+): Promise<
+  | {
+      readonly available: true;
+    }
+  | {
+      readonly available: false;
+      readonly reason: OpenReceiveSwapAvailabilityReason;
+      readonly message: string;
+    }
+> {
+  return provider.availability === undefined
+    ? { available: true }
+    : await provider.availability(input);
+}
+
+async function readReservedSwapAttemptForStartReplay(
+  context: OpenReceiveServiceContext,
+  record: StoredRecord,
+  now: number,
+): Promise<OpenReceiveInvoiceModel> {
+  const state = readStoredSwapState(record.row);
+  if (state !== "creating_provider_order") {
+    return serializeInvoice(record.row, now);
+  }
+
+  if (now - record.row.created_at < OPENRECEIVE_SWAP_CREATING_TIMEOUT_SECONDS) {
+    throw serviceError(
+      409,
+      "CONFLICT",
+      "Swap payment address is still being prepared. Retry this idempotency key shortly.",
+    );
+  }
+
+  const failed = await updateSwapRecord(context, record, (swap) => ({
+    ...swap,
+    provider_state: "failed",
+    attention: true,
+    attention_reason: "provider_order_creation_stale",
+    last_polled_at: now,
+  }));
+  return serializeInvoice(failed.row, now);
+}
+
+function roundMsatsUpToWholeSats(amountMsats: number): number {
+  if (!Number.isSafeInteger(amountMsats) || amountMsats <= 0) {
+    throw serviceError(400, "INVALID_REQUEST", "amount_msats must be a positive safe integer.");
+  }
+  const sats = Math.ceil(amountMsats / 1000);
+  const rounded = sats * 1000;
+  if (!Number.isSafeInteger(rounded)) {
+    throw serviceError(400, "INVALID_REQUEST", "amount_msats is too large.");
+  }
+  return rounded;
+}
+
+function swapSettlementAttentionSeconds(context: OpenReceiveServiceContext): number {
+  return (
+    context.options.swap?.settlementAttentionSeconds ??
+    readPositiveIntegerEnv("OPENRECEIVE_SWAP_SETTLEMENT_ATTENTION_SEC") ??
+    OPENRECEIVE_SWAP_SETTLEMENT_ATTENTION_SECONDS
+  );
+}
+
 function findReusableSwapRecord(
   records: readonly StoredRecord[],
   payInAsset: OpenReceiveSwapPayInAsset,
@@ -1308,6 +1559,7 @@ function isReusableSwapRecord(record: StoredRecord, now: number): boolean {
 
 function shouldPollSwapRecord(record: StoredRecord, now: number): boolean {
   if (!isReusableSwapRecord(record, now)) return false;
+  if (!storedSwapHasProviderOrder(record.row)) return false;
   const lastPolledAt = readStoredSwapLastPolledAt(record.row);
   return lastPolledAt === undefined || now - lastPolledAt >= 10;
 }
@@ -1317,17 +1569,37 @@ async function updateSwapRecord(
   record: StoredRecord,
   update: (swap: Record<string, unknown>) => Record<string, unknown>,
 ): Promise<StoredRecord> {
+  return await updateSwapRecordWithPrivate(context, record, (swap, swapPrivate) => ({
+    swap: update(swap),
+    ...(swapPrivate === undefined ? {} : { swapPrivate }),
+  }));
+}
+
+async function updateSwapRecordWithPrivate(
+  context: OpenReceiveServiceContext,
+  record: StoredRecord,
+  update: (
+    swap: Record<string, unknown>,
+    swapPrivate: Record<string, unknown> | undefined,
+  ) => {
+    readonly swap: Record<string, unknown>;
+    readonly swapPrivate?: Record<string, unknown>;
+  },
+): Promise<StoredRecord> {
   let current = (await context.store.get(record.row.invoice_id)) ?? record;
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const currentSwap = parseSwapMetadata(current.row);
     if (currentSwap === undefined) return current;
+    const currentSwapPrivate = parseSwapPrivateMetadata(current.row);
+    const next = update(currentSwap, currentSwapPrivate);
     const updated: StoredRecord = {
       rev: current.rev + 1,
       row: {
         ...current.row,
         metadata: {
           ...current.row.metadata,
-          swap: update(currentSwap),
+          swap: next.swap,
+          ...(next.swapPrivate === undefined ? {} : { swap_private: next.swapPrivate }),
         },
       },
     };
@@ -1343,6 +1615,7 @@ function swapBaseMetadata(row: InvoiceStorageRow): Record<string, unknown> {
   delete metadata.superseded;
   delete metadata.rail;
   delete metadata.swap;
+  delete metadata.swap_private;
   delete metadata.swap_attempt_key;
   return metadata;
 }
@@ -1354,7 +1627,6 @@ function swapMetadataFromProviderOrder(
   return {
     provider: order.provider,
     provider_order_id: order.provider_order_id,
-    provider_token: order.provider_token,
     pay_in_asset: order.pay_in_asset,
     deposit_address: order.deposit_address,
     ...(order.deposit_memo === undefined ? {} : { deposit_memo: order.deposit_memo }),
@@ -1362,9 +1634,16 @@ function swapMetadataFromProviderOrder(
     provider_state: order.state,
     provider_expires_at: order.expires_at,
     ...(order.deposit_tx_id === undefined ? {} : { deposit_tx_id: order.deposit_tx_id }),
+    ...(order.payout_tx_id === undefined ? {} : { payout_tx_id: order.payout_tx_id }),
     ...(order.refund_tx_id === undefined ? {} : { refund_tx_id: order.refund_tx_id }),
     ...(order.attention === undefined ? {} : { attention: order.attention }),
     last_polled_at: now,
+  };
+}
+
+function swapPrivateMetadataFromProviderOrder(order: OpenReceiveSwapOrder): Record<string, unknown> {
+  return {
+    provider_token: order.provider_token,
   };
 }
 
@@ -1393,7 +1672,11 @@ function readPublicSwap(row: InvoiceStorageRow): OpenReceivePublicSwap | undefin
   }
 
   return {
+    attempt_id: row.invoice_id,
     provider,
+    ...(optionalString(swap.provider_order_id) === undefined
+      ? {}
+      : { provider_order_id: optionalString(swap.provider_order_id) }),
     pay_in_asset: payInAsset,
     deposit_address: depositAddress,
     ...(optionalString(swap.deposit_memo) === undefined
@@ -1405,6 +1688,9 @@ function readPublicSwap(row: InvoiceStorageRow): OpenReceivePublicSwap | undefin
     ...(optionalString(swap.deposit_tx_id) === undefined
       ? {}
       : { deposit_tx_id: optionalString(swap.deposit_tx_id) }),
+    ...(optionalString(swap.payout_tx_id) === undefined
+      ? {}
+      : { payout_tx_id: optionalString(swap.payout_tx_id) }),
     ...(optionalString(swap.refund_address) === undefined
       ? {}
       : { refund_address: optionalString(swap.refund_address) }),
@@ -1417,12 +1703,14 @@ function readPublicSwap(row: InvoiceStorageRow): OpenReceivePublicSwap | undefin
 
 function readStoredSwapOrder(row: InvoiceStorageRow): OpenReceiveSwapOrder {
   const swap = parseSwapMetadata(row);
+  const swapPrivate = parseSwapPrivateMetadata(row);
   if (swap === undefined) {
     throw serviceError(500, "INTERNAL", "Stored swap metadata is missing.");
   }
   const provider = optionalString(swap.provider);
   const providerOrderId = optionalString(swap.provider_order_id);
-  const providerToken = optionalString(swap.provider_token);
+  const providerToken =
+    optionalString(swapPrivate?.provider_token) ?? optionalString(swap.provider_token);
   const payInAsset = parseStoredSwapPayInAsset(swap.pay_in_asset);
   const depositAddress = optionalString(swap.deposit_address);
   const depositAmount = optionalString(swap.deposit_amount);
@@ -1456,6 +1744,9 @@ function readStoredSwapOrder(row: InvoiceStorageRow): OpenReceiveSwapOrder {
     ...(optionalString(swap.deposit_tx_id) === undefined
       ? {}
       : { deposit_tx_id: optionalString(swap.deposit_tx_id) }),
+    ...(optionalString(swap.payout_tx_id) === undefined
+      ? {}
+      : { payout_tx_id: optionalString(swap.payout_tx_id) }),
     ...(optionalString(swap.refund_tx_id) === undefined
       ? {}
       : { refund_tx_id: optionalString(swap.refund_tx_id) }),
@@ -1466,6 +1757,11 @@ function readStoredSwapOrder(row: InvoiceStorageRow): OpenReceiveSwapOrder {
 function parseSwapMetadata(row: InvoiceStorageRow): Record<string, unknown> | undefined {
   if (readInvoiceRail(row) !== "swap") return undefined;
   return isRecord(row.metadata.swap) ? row.metadata.swap : undefined;
+}
+
+function parseSwapPrivateMetadata(row: InvoiceStorageRow): Record<string, unknown> | undefined {
+  if (readInvoiceRail(row) !== "swap") return undefined;
+  return isRecord(row.metadata.swap_private) ? row.metadata.swap_private : undefined;
 }
 
 function readStoredSwapPayInAsset(row: InvoiceStorageRow): OpenReceiveSwapPayInAsset | undefined {
@@ -1482,6 +1778,16 @@ function readStoredSwapLastPolledAt(row: InvoiceStorageRow): number | undefined 
   return optionalSafeInteger(parseSwapMetadata(row)?.last_polled_at);
 }
 
+function storedSwapHasProviderOrder(row: InvoiceStorageRow): boolean {
+  const swap = parseSwapMetadata(row);
+  const swapPrivate = parseSwapPrivateMetadata(row);
+  return (
+    optionalString(swap?.provider_order_id) !== undefined &&
+    (optionalString(swapPrivate?.provider_token) !== undefined ||
+      optionalString(swap?.provider_token) !== undefined)
+  );
+}
+
 function parseStoredSwapPayInAsset(value: unknown): OpenReceiveSwapPayInAsset | undefined {
   return isOpenReceiveSwapPayInAsset(value) ? value : undefined;
 }
@@ -1491,6 +1797,44 @@ function parseSwapPayInAsset(value: unknown): OpenReceiveSwapPayInAsset {
     throw serviceError(400, "INVALID_REQUEST", "pay_in_asset is not supported.");
   }
   return value;
+}
+
+function parseSwapStartIdempotencyKey(value: unknown): string {
+  const key = optionalString(value);
+  if (key === undefined) {
+    throw serviceError(400, "INVALID_REQUEST", "idempotency_key is required.");
+  }
+  if (key.length > 120 || !/^[A-Za-z0-9._:-]+$/.test(key)) {
+    throw serviceError(
+      400,
+      "INVALID_REQUEST",
+      "idempotency_key must be 120 characters or fewer and contain only letters, digits, dot, underscore, colon, or hyphen.",
+    );
+  }
+  return key;
+}
+
+function parseSwapAttemptId(value: unknown): string {
+  const attemptId = optionalString(value);
+  if (attemptId === undefined) {
+    throw serviceError(400, "INVALID_REQUEST", "attempt_id is required.");
+  }
+  if (attemptId.length > 200 || !attemptId.startsWith("or_inv_")) {
+    throw serviceError(400, "INVALID_REQUEST", "attempt_id is not valid.");
+  }
+  return attemptId;
+}
+
+function parseOptionalCountryCode(value: unknown): string | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (typeof value !== "string") {
+    throw serviceError(400, "INVALID_REQUEST", "country_code must be a two-letter country code.");
+  }
+  const countryCode = value.trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(countryCode)) {
+    throw serviceError(400, "INVALID_REQUEST", "country_code must be a two-letter country code.");
+  }
+  return countryCode;
 }
 
 function getStoredDescriptionFields(row: InvoiceStorageRow): {
@@ -1785,7 +2129,7 @@ function reconcileOptions(context: OpenReceiveServiceContext) {
         invoiceId: input.invoice.invoice_id,
         paymentHash: input.invoice.payment_hash,
         amountMsats: input.invoice.amount_msats,
-        metadata: input.metadata,
+        metadata: publicSettlementMetadata(input.metadata),
         source: input.source,
         transaction: input.transaction,
       });
@@ -1835,7 +2179,7 @@ function toWireInvoice(model: OpenReceiveInvoiceModel): OpenReceiveInvoice {
     status: model.status,
     transaction_state: model.transactionState,
     workflow_state: model.workflowState,
-    invoice: model.bolt11,
+    invoice: model.rail === "swap" ? null : model.bolt11,
     payment_hash: model.paymentHash,
     amount_msats: model.amountMsats,
     order_id: model.orderId,
@@ -2022,6 +2366,17 @@ function sanitizeOpenReceiveEvent(entry: OpenReceiveEvent): OpenReceiveEvent {
     }
   }
   return clean as OpenReceiveEvent;
+}
+
+function publicSettlementMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
+  const clean = structuredClone(metadata);
+  delete clean.swap_private;
+  if (isRecord(clean.swap)) {
+    const swap = { ...clean.swap };
+    delete swap.provider_token;
+    clean.swap = swap;
+  }
+  return clean;
 }
 
 function sanitizeLogValue(value: unknown): unknown {

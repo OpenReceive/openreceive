@@ -34,6 +34,14 @@ const secretPatterns = [
   {
     name: "FIXED_FLOAT_SECRET assignment",
     pattern: /FIXED_FLOAT_SECRET\s*=\s*["']?[A-Za-z0-9_./+=:-]{16,}/
+  },
+  {
+    name: "provider_token value",
+    pattern: /provider_token["']?\s*[:=]\s*["'][A-Za-z0-9_./+=:-]{16,}["']/
+  },
+  {
+    name: "X-API-SIGN value",
+    pattern: /X-API-SIGN["']?\s*[:=]\s*["'][0-9a-fA-F]{32,}["']/
   }
 ];
 

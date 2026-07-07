@@ -47,6 +47,9 @@ export const OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES = {
   swapStart: "data-or-swap-start",
   swapBack: "data-or-swap-back",
   swapQr: "data-or-swap-qr",
+  swapCopy: "data-or-swap-copy",
+  swapRefundForm: "data-or-swap-refund-form",
+  swapRefundAddress: "data-or-swap-refund-address",
   providerCopy: "data-or-provider-copy",
   providerTutorial: "data-or-provider-tutorial",
   providerTutorialIndex: "data-or-provider-tutorial-index",
@@ -63,6 +66,9 @@ export const OPENRECEIVE_PAYMENT_WIZARD_SELECTORS = {
   swapStart: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapStart}]`,
   swapBack: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapBack}]`,
   swapQr: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapQr}]`,
+  swapCopy: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapCopy}]`,
+  swapRefundForm: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundForm}]`,
+  swapRefundAddress: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundAddress}]`,
   providerCopy: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerCopy}]`,
   providerTutorial: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}]`,
   providerTutorialIndex: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex}]`,
@@ -357,6 +363,7 @@ export type CheckoutPhase =
   | "cancelled";
 
 export type OpenReceiveSwapProviderState =
+  | "creating_provider_order"
   | "awaiting_deposit"
   | "confirming"
   | "exchanging"
@@ -370,7 +377,9 @@ export type OpenReceiveSwapProviderState =
   | "failed";
 
 export interface CheckoutInvoiceSwapSnapshot {
+  readonly attempt_id?: string;
   readonly provider: string;
+  readonly provider_order_id?: string;
   readonly pay_in_asset: string;
   readonly deposit_address: string;
   readonly deposit_memo?: string;
@@ -378,6 +387,7 @@ export interface CheckoutInvoiceSwapSnapshot {
   readonly provider_state: OpenReceiveSwapProviderState;
   readonly provider_expires_at: number;
   readonly deposit_tx_id?: string;
+  readonly payout_tx_id?: string;
   readonly refund_address?: string;
   readonly refund_tx_id?: string;
   readonly attention?: boolean;
@@ -385,19 +395,39 @@ export interface CheckoutInvoiceSwapSnapshot {
 
 export interface OpenReceiveSwapDisplayModel {
   readonly provider: string;
+  readonly attemptId: string;
+  readonly payInAsset: string;
   readonly assetLabel: string;
+  readonly networkLabel: string;
+  readonly networkWarning: string;
   readonly depositAddress: string;
   readonly depositMemo?: string;
   readonly depositAmount: string;
   readonly providerStateLabel: string;
+  readonly providerStateDetail: string;
+  readonly state:
+    | "creating"
+    | "deposit"
+    | "progress"
+    | "expired"
+    | "refund_required"
+    | "refund_pending"
+    | "refunded"
+    | "attention"
+    | "failed";
   readonly expiresInSeconds: number;
   readonly countdownLabel: string;
   readonly qrPayload: string;
+  readonly depositTxId?: string;
+  readonly payoutTxId?: string;
+  readonly refundAddress?: string;
+  readonly refundTxId?: string;
+  readonly providerOrderId?: string;
 }
 
 export interface CheckoutInvoiceSnapshot {
   readonly invoice_id: string;
-  readonly invoice: string;
+  readonly invoice?: string | null;
   readonly rail: "lightning" | "swap";
   readonly payment_hash?: string;
   readonly amount_msats?: number;
@@ -1289,6 +1319,13 @@ export const openReceiveCheckoutElementStyles = `
     padding: 8px 10px;
   }
 
+  [part="swap-estimate"],
+  [part="swap-warning"],
+  [part="swap-progress"] {
+    color: var(--or-muted);
+    margin: 0;
+  }
+
   [part="swap-panel"] {
     background: var(--or-bg);
     border: 1px solid var(--or-border);
@@ -1336,12 +1373,18 @@ export const openReceiveCheckoutElementStyles = `
   }
 
   [part="swap-details"] dd {
+    align-items: center;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: minmax(0, 1fr) auto;
     margin: 0;
     min-width: 0;
     overflow-wrap: anywhere;
   }
 
-  [part="swap-back"] {
+  [part="swap-copy"],
+  [part="swap-back"],
+  [part="swap-refund"] button {
     background: var(--or-bg-soft);
     border: 1px solid var(--or-border);
     border-radius: 6px;
@@ -1349,6 +1392,27 @@ export const openReceiveCheckoutElementStyles = `
     justify-self: start;
     min-height: 36px;
     padding: 7px 10px;
+  }
+
+  [part="swap-support"] summary {
+    cursor: pointer;
+    font-weight: 700;
+  }
+
+  [part="swap-refund"] {
+    display: grid;
+    gap: 8px;
+  }
+
+  [part="swap-refund"] input {
+    background: var(--or-bg-soft);
+    border: 1px solid var(--or-border);
+    border-radius: 6px;
+    color: var(--or-text);
+    font: inherit;
+    min-height: 40px;
+    min-width: 0;
+    padding: 8px 10px;
   }
 
 	  [part="provider"] {

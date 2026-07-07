@@ -137,18 +137,29 @@ export function createOpenReceiveSwapDisplayModel(
   if (swap === undefined) return undefined;
   const expiresAt = Math.min(swap.provider_expires_at, invoice.expires_at ?? swap.provider_expires_at);
   const expiresInSeconds = Math.max(0, expiresAt - (options.now ?? currentUnixSeconds()));
-  const assetLabel = swap.pay_in_asset.split("_")[0] ?? swap.pay_in_asset;
+  const asset = getOpenReceiveSwapAssetDisplay(swap.pay_in_asset);
 
   return {
     provider: swap.provider,
-    assetLabel,
+    attemptId: swap.attempt_id ?? invoice.invoice_id,
+    payInAsset: swap.pay_in_asset,
+    assetLabel: asset.assetLabel,
+    networkLabel: asset.networkLabel,
+    networkWarning: `Only send ${asset.assetLabel} on ${asset.networkLabel} to this address.`,
     depositAddress: swap.deposit_address,
     ...(swap.deposit_memo === undefined ? {} : { depositMemo: swap.deposit_memo }),
     depositAmount: swap.deposit_amount,
     providerStateLabel: getOpenReceiveSwapProviderStateLabel(swap.provider_state),
+    providerStateDetail: getOpenReceiveSwapProviderStateDetail(swap.provider_state),
+    state: getOpenReceiveSwapPanelState(swap.provider_state),
     expiresInSeconds,
     countdownLabel: formatOpenReceiveCountdown(expiresInSeconds),
-    qrPayload: swap.deposit_address,
+    qrPayload: createOpenReceiveSwapQrPayload(swap),
+    ...(swap.deposit_tx_id === undefined ? {} : { depositTxId: swap.deposit_tx_id }),
+    ...(swap.payout_tx_id === undefined ? {} : { payoutTxId: swap.payout_tx_id }),
+    ...(swap.refund_address === undefined ? {} : { refundAddress: swap.refund_address }),
+    ...(swap.refund_tx_id === undefined ? {} : { refundTxId: swap.refund_tx_id }),
+    ...(swap.provider_order_id === undefined ? {} : { providerOrderId: swap.provider_order_id }),
   };
 }
 
@@ -166,11 +177,12 @@ export function openReceiveSwapAssetMatchesRoute(
 }
 
 function getOpenReceiveSwapProviderStateLabel(state: string): string {
-  if (state === "awaiting_deposit") return "Waiting for deposit";
-  if (state === "confirming") return "Confirming";
-  if (state === "exchanging") return "Exchanging";
-  if (state === "paying_invoice") return "Paying invoice";
-  if (state === "completed") return "Payment sent";
+  if (state === "creating_provider_order") return "Preparing payment address";
+  if (state === "awaiting_deposit") return "Waiting for your payment";
+  if (state === "confirming") return "Confirming payment";
+  if (state === "exchanging") return "Converting payment";
+  if (state === "paying_invoice") return "Finalizing checkout";
+  if (state === "completed") return "Finalizing checkout";
   if (state === "expired") return "Expired";
   if (state === "refund_required") return "Refund needed";
   if (state === "refund_pending") return "Refund pending";
@@ -178,6 +190,79 @@ function getOpenReceiveSwapProviderStateLabel(state: string): string {
   if (state === "attention") return "Needs attention";
   if (state === "failed") return "Failed";
   return state;
+}
+
+function getOpenReceiveSwapProviderStateDetail(state: string): string {
+  if (state === "creating_provider_order") return "Creating a payment address.";
+  if (state === "awaiting_deposit") return "Send exactly the amount shown below.";
+  if (state === "confirming") return "Your payment was detected and is confirming.";
+  if (state === "exchanging") return "Your payment is being converted.";
+  if (state === "paying_invoice" || state === "completed") {
+    return "The provider is sending the Lightning payment.";
+  }
+  if (state === "expired") return "No payment was received before the payment window closed.";
+  if (state === "refund_required") return "Enter an address you control to request a refund.";
+  if (state === "refund_pending") return "Your refund request has been sent.";
+  if (state === "refunded") return "The provider reports the refund was sent.";
+  if (state === "attention") return "This payment needs support review.";
+  if (state === "failed") return "This payment address can no longer be used.";
+  return state;
+}
+
+function getOpenReceiveSwapPanelState(
+  state: string,
+): OpenReceiveSwapDisplayModel["state"] {
+  if (state === "creating_provider_order") return "creating";
+  if (state === "awaiting_deposit") return "deposit";
+  if (state === "confirming" || state === "exchanging" || state === "paying_invoice" || state === "completed") {
+    return "progress";
+  }
+  if (state === "expired") return "expired";
+  if (state === "refund_required") return "refund_required";
+  if (state === "refund_pending") return "refund_pending";
+  if (state === "refunded") return "refunded";
+  if (state === "attention") return "attention";
+  return "failed";
+}
+
+function getOpenReceiveSwapAssetDisplay(payInAsset: string): {
+  readonly assetLabel: string;
+  readonly networkLabel: string;
+} {
+  const [asset, network] = payInAsset.split("_");
+  const networkLabel =
+    network === "TRON"
+      ? "Tron"
+      : network === "SOL"
+        ? "Solana"
+        : network === "ETH"
+          ? "Ethereum"
+          : (network ?? payInAsset);
+  return {
+    assetLabel: asset ?? payInAsset,
+    networkLabel,
+  };
+}
+
+function createOpenReceiveSwapQrPayload(swap: NonNullable<CheckoutInvoiceSnapshot["swap"]>): string {
+  if (swap.pay_in_asset === "ETH_ETH") {
+    const wei = decimalAmountToIntegerString(swap.deposit_amount, 18);
+    return wei === undefined
+      ? swap.deposit_address
+      : `ethereum:${swap.deposit_address}?value=${wei}`;
+  }
+  if (swap.pay_in_asset === "SOL_SOL") {
+    return `solana:${swap.deposit_address}?amount=${encodeURIComponent(swap.deposit_amount)}`;
+  }
+  return swap.deposit_address;
+}
+
+function decimalAmountToIntegerString(amount: string, decimals: number): string | undefined {
+  if (!/^[0-9]+(?:\.[0-9]+)?$/.test(amount)) return undefined;
+  const [whole = "0", fraction = ""] = amount.split(".");
+  if (fraction.length > decimals) return undefined;
+  const combined = `${whole}${fraction.padEnd(decimals, "0")}`.replace(/^0+/, "");
+  return combined.length === 0 ? "0" : combined;
 }
 
 export function escapeOpenReceiveHtml(value: string): string {
@@ -540,13 +625,16 @@ function normalizeCheckoutSnapshot(input: unknown): CheckoutSnapshot {
 
 function normalizeCheckoutInvoiceSnapshot(input: unknown): CheckoutInvoiceSnapshot {
   const record = asRecord(input);
-  const invoice = requiredString(record.invoice, "invoice");
   const rail = requiredInvoiceRail(record.rail);
+  const invoice = optionalString(record.invoice);
+  if (rail !== "swap" && invoice === undefined) {
+    throw new TypeError("OpenReceive checkout response requires invoice.");
+  }
   const swap = normalizeCheckoutInvoiceSwapSnapshot(record.swap);
   return {
     invoice_id: requiredString(record.invoice_id, "invoice_id"),
-    invoice,
     rail,
+    ...(invoice === undefined ? {} : { invoice }),
     ...(optionalString(record.payment_hash) === undefined
       ? {}
       : { payment_hash: optionalString(record.payment_hash) }),
@@ -601,7 +689,13 @@ function normalizeCheckoutInvoiceSwapSnapshot(
   }
 
   return {
+    ...(optionalString(input.attempt_id) === undefined
+      ? {}
+      : { attempt_id: optionalString(input.attempt_id) }),
     provider,
+    ...(optionalString(input.provider_order_id) === undefined
+      ? {}
+      : { provider_order_id: optionalString(input.provider_order_id) }),
     pay_in_asset: payInAsset,
     deposit_address: depositAddress,
     ...(optionalString(input.deposit_memo) === undefined
@@ -613,6 +707,9 @@ function normalizeCheckoutInvoiceSwapSnapshot(
     ...(optionalString(input.deposit_tx_id) === undefined
       ? {}
       : { deposit_tx_id: optionalString(input.deposit_tx_id) }),
+    ...(optionalString(input.payout_tx_id) === undefined
+      ? {}
+      : { payout_tx_id: optionalString(input.payout_tx_id) }),
     ...(optionalString(input.refund_address) === undefined
       ? {}
       : { refund_address: optionalString(input.refund_address) }),
@@ -642,6 +739,7 @@ export function createCheckoutState(
   options: CreateCheckoutStateOptions = {},
 ): CheckoutState {
   const invoice = checkoutInvoiceFromOrderSnapshot(snapshot);
+  const bolt11 = requiredString(invoice.invoice, "invoice");
   const paid = isPaidCheckoutSnapshot(snapshot);
   const settledAt = snapshot.paid_at ?? invoice.settled_at;
   const transactionState = paid ? "settled" : (invoice.transaction_state ?? "pending");
@@ -654,9 +752,9 @@ export function createCheckoutState(
       checkout_id: snapshot.checkout_id,
       order_id: snapshot.order_id,
       invoice_id: invoice.invoice_id,
-      invoice: invoice.invoice,
+      invoice: bolt11,
       rail: invoice.rail,
-      lightning_uri: createLightningUri(invoice.invoice),
+      lightning_uri: createLightningUri(bolt11),
       ...(invoice.payment_hash === undefined ? {} : { payment_hash: invoice.payment_hash }),
       amount_msats: invoice.amount_msats ?? snapshot.amount_msats,
       ...(invoice.fiat_quote === undefined ? {} : { fiat_quote: invoice.fiat_quote }),

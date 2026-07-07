@@ -5,6 +5,7 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
+    "attempt_id",
     "provider",
     "pay_in_asset",
     "deposit_address",
@@ -13,7 +14,15 @@
     "provider_expires_at"
   ],
   "properties": {
+    "attempt_id": {
+      "type": "string",
+      "pattern": "^or_inv_[a-z0-9_]+$"
+    },
     "provider": {
+      "type": "string",
+      "minLength": 1
+    },
+    "provider_order_id": {
       "type": "string",
       "minLength": 1
     },
@@ -44,6 +53,7 @@
     "provider_state": {
       "type": "string",
       "enum": [
+        "creating_provider_order",
         "awaiting_deposit",
         "confirming",
         "exchanging",
@@ -62,6 +72,10 @@
       "minimum": 0
     },
     "deposit_tx_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "payout_tx_id": {
       "type": "string",
       "minLength": 1
     },

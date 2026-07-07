@@ -31,6 +31,9 @@ export function createCheckoutElementAttributes(
   options: CheckoutElementAttributeOptions = {},
 ): CheckoutElementAttributes {
   const invoice = checkoutInvoiceFromOrderSnapshot(snapshot);
+  if (typeof invoice.invoice !== "string") {
+    throw new TypeError("OpenReceive checkout element requires a display Lightning invoice.");
+  }
   assertOpenReceiveDisplayInvoice(invoice.invoice);
   const attributes: CheckoutElementAttributes = {
     [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId]: snapshot.order_id,

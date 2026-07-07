@@ -133,7 +133,9 @@ components:
         workflow_state:
           $ref: "#/components/schemas/WorkflowState"
         invoice:
-          type: string
+          type:
+            - string
+            - "null"
         payment_hash:
           type: string
           pattern: "^[0-9a-fA-F]{64}$"
@@ -175,6 +177,7 @@ components:
       type: object
       additionalProperties: false
       required:
+        - attempt_id
         - provider
         - pay_in_asset
         - deposit_address
@@ -182,7 +185,13 @@ components:
         - provider_state
         - provider_expires_at
       properties:
+        attempt_id:
+          type: string
+          pattern: "^or_inv_[a-z0-9_]+$"
         provider:
+          type: string
+          minLength: 1
+        provider_order_id:
           type: string
           minLength: 1
         pay_in_asset:
@@ -207,6 +216,7 @@ components:
         provider_state:
           type: string
           enum:
+            - creating_provider_order
             - awaiting_deposit
             - confirming
             - exchanging
@@ -222,6 +232,8 @@ components:
           type: integer
           minimum: 0
         deposit_tx_id:
+          type: string
+        payout_tx_id:
           type: string
         refund_address:
           type: string

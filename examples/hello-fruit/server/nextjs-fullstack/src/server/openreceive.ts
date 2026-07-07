@@ -228,7 +228,11 @@ export async function swapOptionsResponse(request: Request): Promise<Response> {
   try {
     const body = await readJsonBody(request);
     const orderId = requireRequestString(body, "order_id");
-    const result = await openreceive.swapOptions({ orderId });
+    const countryCode = optionalRequestString(body, "country_code");
+    const result = await openreceive.swapOptions({
+      orderId,
+      ...(countryCode === undefined ? {} : { countryCode }),
+    });
     logDemo("swap_options.response", "Served automated swap options.", {
       orderId,
       enabled: result.enabled,
@@ -256,7 +260,14 @@ export async function swapStartResponse(request: Request): Promise<Response> {
     const body = await readJsonBody(request);
     const orderId = requireRequestString(body, "order_id");
     const payInAsset = requireRequestString(body, "pay_in_asset");
-    const invoice = await openreceive.startSwap({ orderId, payInAsset });
+    const idempotencyKey = requireRequestString(body, "idempotency_key");
+    const countryCode = optionalRequestString(body, "country_code");
+    const invoice = await openreceive.startSwap({
+      orderId,
+      payInAsset,
+      idempotencyKey,
+      ...(countryCode === undefined ? {} : { countryCode }),
+    });
     logDemo("swap_start.response", "Started automated swap.", {
       orderId,
       payInAsset,
@@ -283,13 +294,11 @@ export async function swapRefundResponse(request: Request): Promise<Response> {
 
   try {
     const body = await readJsonBody(request);
-    const orderId = requireRequestString(body, "order_id");
-    const payInAsset = requireRequestString(body, "pay_in_asset");
+    const attemptId = requireRequestString(body, "attempt_id");
     const refundAddress = requireRequestString(body, "refund_address");
-    const invoice = await openreceive.refundSwap({ orderId, payInAsset, refundAddress });
+    const invoice = await openreceive.refundSwap({ attemptId, refundAddress });
     logDemo("swap_refund.response", "Requested automated swap refund.", {
-      orderId,
-      payInAsset,
+      attemptId,
       invoiceId: invoice.invoice_id,
       provider: invoice.swap?.provider,
       elapsedMs: Date.now() - startedAt,
@@ -453,6 +462,11 @@ function requireRequestString(body: Record<string, unknown>, key: string): strin
     });
   }
   return value;
+}
+
+function optionalRequestString(body: Record<string, unknown>, key: string): string | undefined {
+  const value = body[key];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 async function readJsonBody(request: Request): Promise<Record<string, unknown>> {
