@@ -42,7 +42,8 @@ OPENRECEIVE_NAMESPACE: my_app
 If `OPENRECEIVE_STORE` is omitted locally, OpenReceive uses local SQLite under
 `.openreceive/`. The default file is `./.openreceive/default.sqlite3`; use Postgres anywhere; use SQLite only on a durable single-machine filesystem.
 
-Optional automated swap providers live in the same file:
+Optional automated swap providers live in the same file, and need no extra app
+code — `createOpenReceive()` auto-enables them:
 
 ```yaml
 swap:
@@ -54,6 +55,9 @@ swap:
       secret: ...
       invoice_expiry_seconds: 1620
 ```
+
+See [Automated Swaps](automated-swaps.md) for the provider fields, the payer
+flow, and refunds.
 
 ## Server
 

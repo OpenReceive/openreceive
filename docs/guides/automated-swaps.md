@@ -4,13 +4,11 @@ OpenReceive always settles merchant orders to Lightning. Automated swaps let a p
 
 ## Configure A Provider
 
-Provider credentials stay server-side. The Node library auto-enables providers from `openreceive.yml`, so app code does not need to construct providers.
-
-```ts
-import { createOpenReceive } from "@openreceive/node";
-
-const openreceive = await createOpenReceive();
-```
+You create the OpenReceive server instance exactly as shown in the
+[Node Quickstart](quickstart-node.md) — automated swaps add no swap-specific app
+code. Provider credentials stay server-side, and the Node library auto-enables
+providers from `openreceive.yml`, so the same `createOpenReceive()` call picks
+them up with no extra arguments.
 
 Put provider credentials only in the ignored backend `openreceive.yml`:
 
