@@ -7,6 +7,8 @@ them as private server-only configuration.
 
 - Commit `.env.example`, not real `.env` files.
 - Do not commit `OPENRECEIVE_NWC` values.
+- Do not commit `OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET` or other provider
+  credentials.
 - Do not put receive-only NWC codes in browser code, mobile apps, fixtures,
   screenshots, source maps, docs, logs, or error payloads.
 - Keep `private/` for local-only launcher scripts and notes.
@@ -23,6 +25,9 @@ Use a local env file ignored by git:
 ```sh
 OPENRECEIVE_NWC=nostr+walletconnect://...
 OPENRECEIVE_WALLET_PROFILE=rizful
+# Optional server-only swap provider credentials.
+OPENRECEIVE_SWAP_FIXED_FLOAT_KEY=...
+OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET=...
 ```
 
 To read those values from an ignored local file instead of exported shell

@@ -43,6 +43,9 @@ interface FixedFloatEnvelope {
 
 const DEFAULT_FIXED_FLOAT_BASE_URL = "https://ff.io";
 const DEFAULT_CCIES_CACHE_SECONDS = 24 * 60 * 60;
+const FIXED_FLOAT_KEY_ENV = "OPENRECEIVE_SWAP_FIXED_FLOAT_KEY";
+const FIXED_FLOAT_SECRET_ENV = "OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET";
+const FIXED_FLOAT_BASE_URL_ENV = "OPENRECEIVE_SWAP_FIXED_FLOAT_BASE_URL";
 
 export function fixedFloatProvider(options: FixedFloatProviderOptions): OpenReceiveSwapProvider {
   return new FixedFloatProvider(options);
@@ -52,20 +55,33 @@ export function createFixedFloatProviderFromEnv(
   env: Record<string, string | undefined> = globalThis.process?.env ?? {},
   options: Omit<FixedFloatProviderOptions, "key" | "secret" | "baseUrl"> = {},
 ): OpenReceiveSwapProvider | undefined {
-  const key = env.FIXED_FLOAT_KEY?.trim();
-  const secret = env.FIXED_FLOAT_SECRET?.trim();
-  if (key === undefined || key.length === 0 || secret === undefined || secret.length === 0) {
+  const key = readFixedFloatEnv(env, FIXED_FLOAT_KEY_ENV);
+  const secret = readFixedFloatEnv(env, FIXED_FLOAT_SECRET_ENV);
+  const baseUrl = readFixedFloatEnv(env, FIXED_FLOAT_BASE_URL_ENV);
+  const configured = key !== undefined || secret !== undefined || baseUrl !== undefined;
+  if (!configured) {
     return undefined;
+  }
+  if (key === undefined || secret === undefined) {
+    throw new TypeError(
+      `Set both ${FIXED_FLOAT_KEY_ENV} and ${FIXED_FLOAT_SECRET_ENV} to enable FixedFloat swaps.`,
+    );
   }
 
   return fixedFloatProvider({
     ...options,
     key,
     secret,
-    ...(env.FIXED_FLOAT_BASE_URL === undefined || env.FIXED_FLOAT_BASE_URL.trim().length === 0
-      ? {}
-      : { baseUrl: env.FIXED_FLOAT_BASE_URL.trim() }),
+    ...(baseUrl === undefined ? {} : { baseUrl }),
   });
+}
+
+function readFixedFloatEnv(
+  env: Record<string, string | undefined>,
+  name: string,
+): string | undefined {
+  const value = env[name]?.trim();
+  return value === undefined || value.length === 0 ? undefined : value;
 }
 
 class FixedFloatProvider implements OpenReceiveSwapProvider {

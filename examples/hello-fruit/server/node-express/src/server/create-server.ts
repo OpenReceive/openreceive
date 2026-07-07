@@ -8,10 +8,8 @@ import type {
 import {
   OpenReceiveServiceError,
   createOpenReceive,
-  type OpenReceiveSwapProvider,
 } from "@openreceive/node";
 import { createHelloFruitDemoMetadata } from "../../../../shared/demo-metadata.ts";
-import { createHelloFruitSwapProviders } from "../../../../shared/demo-swaps.ts";
 import {
   createHelloFruitDemoServerLogger,
   createHelloFruitOpenReceiveLogger,
@@ -38,7 +36,6 @@ export interface HelloFruitOpenReceiveOptions {
   readonly client?: OpenReceiveReceiveNwcClient;
   readonly store?: OpenReceiveInvoiceKvStore;
   readonly priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
-  readonly swapProviders?: readonly OpenReceiveSwapProvider[];
 }
 
 export async function createHelloFruitOpenReceive(options: HelloFruitOpenReceiveOptions = {}) {
@@ -47,23 +44,19 @@ export async function createHelloFruitOpenReceive(options: HelloFruitOpenReceive
     customClient: options.client !== undefined,
     customStore: options.store !== undefined,
     customPriceProviders: options.priceProviders !== undefined,
-    customSwapProviders: options.swapProviders !== undefined,
   });
   const priceCurrencies = readHelloFruitPriceFeedCurrencies();
   const supportedCurrencies = readHelloFruitCheckoutCurrencies();
-  const swapProviders = options.swapProviders ?? createHelloFruitSwapProviders();
 
   logDemo("openreceive.price_currencies", "Loaded checkout and price feed currencies.", {
     checkoutCurrencies: supportedCurrencies,
     priceCurrencies,
-    swapEnabled: swapProviders.length > 0,
   });
 
   const openreceive = await createOpenReceive({
     ...(options.client === undefined ? {} : { client: options.client }),
     ...(options.store === undefined ? {} : { store: options.store }),
     ...(options.priceProviders === undefined ? {} : { priceProviders: options.priceProviders }),
-    ...(swapProviders.length === 0 ? {} : { swap: { providers: swapProviders } }),
     namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit",
     priceCurrencies,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID),

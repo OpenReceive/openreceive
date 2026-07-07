@@ -6,11 +6,9 @@ import type {
 import {
   OpenReceiveServiceError,
   createOpenReceive,
-  type OpenReceiveSwapProvider,
 } from "@openreceive/node";
 import { createHelloFruitDemoMetadata } from "../../../../shared/demo-metadata.ts";
 import { readRequiredHelloFruitNwcConnectionString } from "../../../../shared/demo-nwc.ts";
-import { createHelloFruitSwapProviders } from "../../../../shared/demo-swaps.ts";
 import {
   createHelloFruitDemoServerLogger,
   createHelloFruitOpenReceiveLogger,
@@ -30,7 +28,7 @@ const GITHUB_REPOSITORY_URL = "https://github.com/openreceive/openreceive";
 const logDemo = createHelloFruitDemoServerLogger(DEMO_ID);
 
 interface NextDemoOpenReceiveCache {
-  readonly connectionString: string;
+  readonly walletCacheKey: string;
   readonly storeCacheKey: string;
   readonly server: ReturnType<typeof createHelloFruitOpenReceive>;
 }
@@ -43,7 +41,6 @@ export interface HelloFruitOpenReceiveTestOverrides {
   readonly client?: OpenReceiveReceiveNwcClient;
   readonly store?: OpenReceiveInvoiceKvStore;
   readonly priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
-  readonly swapProviders?: readonly OpenReceiveSwapProvider[];
 }
 
 let openreceiveCache: NextDemoOpenReceiveCache | undefined;
@@ -120,11 +117,7 @@ export function sitemapResponse(): string {
 
 export async function createOrderResponse(request: Request): Promise<Response> {
   const startedAt = Date.now();
-  const connectionString =
-    testOverrides?.client === undefined
-      ? readRequiredHelloFruitNwcConnectionString()
-      : "openreceive-test-client";
-  const { openreceive } = await getOpenReceive(connectionString);
+  const { openreceive } = await getOpenReceive();
 
   try {
     const body = await readJsonBody(request);
@@ -173,11 +166,7 @@ export async function createOrderResponse(request: Request): Promise<Response> {
 
 export async function orderStatusResponse(request: Request): Promise<Response> {
   const startedAt = Date.now();
-  const connectionString =
-    testOverrides?.client === undefined
-      ? readRequiredHelloFruitNwcConnectionString()
-      : "openreceive-test-client";
-  const { openreceive } = await getOpenReceive(connectionString);
+  const { openreceive } = await getOpenReceive();
 
   try {
     const statusRequest = createStatusRequest(await readJsonBody(request));
@@ -219,11 +208,7 @@ export async function orderStatusResponse(request: Request): Promise<Response> {
 
 export async function swapOptionsResponse(request: Request): Promise<Response> {
   const startedAt = Date.now();
-  const connectionString =
-    testOverrides?.client === undefined
-      ? readRequiredHelloFruitNwcConnectionString()
-      : "openreceive-test-client";
-  const { openreceive } = await getOpenReceive(connectionString);
+  const { openreceive } = await getOpenReceive();
 
   try {
     const body = await readJsonBody(request);
@@ -250,11 +235,7 @@ export async function swapOptionsResponse(request: Request): Promise<Response> {
 
 export async function swapStartResponse(request: Request): Promise<Response> {
   const startedAt = Date.now();
-  const connectionString =
-    testOverrides?.client === undefined
-      ? readRequiredHelloFruitNwcConnectionString()
-      : "openreceive-test-client";
-  const { openreceive } = await getOpenReceive(connectionString);
+  const { openreceive } = await getOpenReceive();
 
   try {
     const body = await readJsonBody(request);
@@ -286,11 +267,7 @@ export async function swapStartResponse(request: Request): Promise<Response> {
 
 export async function swapRefundResponse(request: Request): Promise<Response> {
   const startedAt = Date.now();
-  const connectionString =
-    testOverrides?.client === undefined
-      ? readRequiredHelloFruitNwcConnectionString()
-      : "openreceive-test-client";
-  const { openreceive } = await getOpenReceive(connectionString);
+  const { openreceive } = await getOpenReceive();
 
   try {
     const body = await readJsonBody(request);
@@ -314,11 +291,7 @@ export async function swapRefundResponse(request: Request): Promise<Response> {
 
 export async function ratesResponse(): Promise<Response> {
   const startedAt = Date.now();
-  const connectionString =
-    testOverrides?.client === undefined
-      ? readRequiredHelloFruitNwcConnectionString()
-      : "openreceive-test-client";
-  const { openreceive } = await getOpenReceive(connectionString);
+  const { openreceive } = await getOpenReceive();
   const rates = await openreceive.listRates();
   logDemo("rates.response", "Served BTC fiat display rates.", {
     rateCurrencies: Object.keys(rates.bitcoin),
@@ -327,13 +300,14 @@ export async function ratesResponse(): Promise<Response> {
   return jsonResponse({ rates });
 }
 
-async function getOpenReceive(connectionString: string): Promise<HelloFruitOpenReceiveBundle> {
+async function getOpenReceive(): Promise<HelloFruitOpenReceiveBundle> {
+  const walletCacheKey = testOverrides?.client === undefined ? "env" : "openreceive-test-client";
   const storeCacheKey = currentStoreCacheKey();
   const cachedOpenReceive = openreceiveCache;
   if (cachedOpenReceive !== undefined) {
     try {
       if (
-        cachedOpenReceive.connectionString === connectionString &&
+        cachedOpenReceive.walletCacheKey === walletCacheKey &&
         cachedOpenReceive.storeCacheKey === storeCacheKey
       ) {
         logDemo("openreceive.cache_hit", "Reusing cached OpenReceive demo service.", {
@@ -351,9 +325,9 @@ async function getOpenReceive(connectionString: string): Promise<HelloFruitOpenR
     storeCacheKey,
     usingTestClient: testOverrides?.client !== undefined,
   });
-  const nextServer = createHelloFruitOpenReceive(connectionString);
+  const nextServer = createHelloFruitOpenReceive();
   openreceiveCache = {
-    connectionString,
+    walletCacheKey,
     storeCacheKey,
     server: nextServer,
   };
@@ -370,7 +344,6 @@ async function getOpenReceive(connectionString: string): Promise<HelloFruitOpenR
 }
 
 export async function createHelloFruitOpenReceive(
-  connectionString = readRequiredHelloFruitNwcConnectionString(),
   overrides: HelloFruitOpenReceiveTestOverrides = testOverrides === undefined ? {} : testOverrides,
 ) {
   logDemo("openreceive.configure", "Preparing OpenReceive demo service.", {
@@ -378,23 +351,19 @@ export async function createHelloFruitOpenReceive(
     customClient: overrides.client !== undefined,
     customStore: overrides.store !== undefined,
     customPriceProviders: overrides.priceProviders !== undefined,
-    customSwapProviders: overrides.swapProviders !== undefined,
   });
   const priceCurrencies = readHelloFruitPriceFeedCurrencies();
   const supportedCurrencies = readHelloFruitCheckoutCurrencies();
-  const swapProviders = overrides.swapProviders ?? createHelloFruitSwapProviders();
 
   logDemo("openreceive.price_currencies", "Loaded checkout and price feed currencies.", {
     checkoutCurrencies: supportedCurrencies,
     priceCurrencies,
-    swapEnabled: swapProviders.length > 0,
   });
 
   const openreceive = await createOpenReceive({
-    ...(overrides.client === undefined ? { nwc: connectionString } : { client: overrides.client }),
+    ...(overrides.client === undefined ? {} : { client: overrides.client }),
     ...(overrides.store === undefined ? {} : { store: overrides.store }),
     ...(overrides.priceProviders === undefined ? {} : { priceProviders: overrides.priceProviders }),
-    ...(swapProviders.length === 0 ? {} : { swap: { providers: swapProviders } }),
     namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit",
     priceCurrencies,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
@@ -488,8 +457,9 @@ function currentStoreCacheKey(): string {
     store: process.env.OPENRECEIVE_STORE ?? "local-sqlite",
     namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit",
     fixedFloatEnabled:
-      process.env.FIXED_FLOAT_KEY !== undefined && process.env.FIXED_FLOAT_SECRET !== undefined,
-    fixedFloatBaseUrl: process.env.FIXED_FLOAT_BASE_URL ?? "https://ff.io",
+      process.env.OPENRECEIVE_SWAP_FIXED_FLOAT_KEY !== undefined &&
+      process.env.OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET !== undefined,
+    fixedFloatBaseUrl: process.env.OPENRECEIVE_SWAP_FIXED_FLOAT_BASE_URL ?? "https://ff.io",
   });
 }
 

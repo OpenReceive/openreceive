@@ -14,8 +14,9 @@ OPENRECEIVE_INVOICE_EXPIRY_SECONDS in packages/js/node/src/service.ts) while the
 user fumbles through an external site.
 
 This proposal adds an AUTOMATED swap rail. When the developer sets
-FIXED_FLOAT_KEY and FIXED_FLOAT_SECRET in .env, crypto routes that FixedFloat
-can service gain a "Pay here" action. Clicking it makes the backend:
+OPENRECEIVE_SWAP_FIXED_FLOAT_KEY and OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET in
+.env, crypto routes that FixedFloat can service gain a "Pay here" action.
+Clicking it makes the backend:
   1) mint a second, hidden ("shadow") Lightning invoice for the SAME checkout,
      SAME amount_msats, but with a LONGER, per-network expiry, and
   2) create a FixedFloat fixed-rate order whose payout target is that shadow
@@ -87,22 +88,20 @@ tracking (payment_hash <-> FixedFloat order id, 1:1).
 2. FEATURE FLAG AND CONFIG
 --------------------------------------------------------------------------------
 - .env additions (also add commented lines to .env.example):
-    FIXED_FLOAT_KEY=...
-    FIXED_FLOAT_SECRET=...
-    FIXED_FLOAT_BASE_URL=https://ff.io        (optional; default shown)
+    OPENRECEIVE_SWAP_FIXED_FLOAT_KEY=...
+    OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET=...
+    OPENRECEIVE_SWAP_FIXED_FLOAT_BASE_URL=https://ff.io        (optional; default shown)
 - Behavior: if BOTH key and secret are present -> swap rail enabled; otherwise
   the product behaves exactly as today (manual guidance only). Zero behavior
   change for existing deployments.
-- Wiring: createOpenReceive gains an optional `swap` option:
-    createOpenReceive({ nwc, storeUri, swap: { providers: [
-      fixedFloatProvider({ key, secret, baseUrl })   // built from env
-    ]}})
-  Demo servers construct that from process.env and pass it through. Secrets
-  never leave the server; the FixedFloat client signs every request
-  server-side (X-API-KEY + X-API-SIGN = hex HMAC-SHA256 of the exact JSON body
-  string). Never log the secret; log order ids only. Extend
-  tools/validate/scan-secrets.mjs patterns so FIXED_FLOAT_SECRET values can
-  never land in committed files or client bundles (scan-client-bundles.mjs).
+- Wiring: createOpenReceive reads supported swap provider credentials from
+  server env automatically. Host apps call `createOpenReceive()`; demos do not
+  construct providers in app code. Secrets never leave the server; the
+  FixedFloat client signs every request server-side (X-API-KEY + X-API-SIGN =
+  hex HMAC-SHA256 of the exact JSON body string). Never log the secret; log
+  order ids only. Extend tools/validate/scan-secrets.mjs patterns so
+  FixedFloat secret values can never land in committed files or client bundles
+  (scan-client-bundles.mjs).
 
 3. PROVIDER ABSTRACTION (FixedFloat-shaped; future in-house service drops in)
 --------------------------------------------------------------------------------

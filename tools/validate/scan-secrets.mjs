@@ -32,8 +32,8 @@ const secretPatterns = [
     pattern: /OPENRECEIVE_NWC\s*=\s*nostr\+walletconnect:\/\/[^\s"'`]+[?&]secret=[0-9a-fA-F]{64}/
   },
   {
-    name: "FIXED_FLOAT_SECRET assignment",
-    pattern: /FIXED_FLOAT_SECRET\s*=\s*["']?[A-Za-z0-9_./+=:-]{16,}/
+    name: "FixedFloat secret assignment",
+    pattern: /(?:OPENRECEIVE_SWAP_)?FIXED_FLOAT_SECRET\s*=\s*["']?[A-Za-z0-9_./+=:-]{16,}/
   },
   {
     name: "provider_token value",

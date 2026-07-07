@@ -43,6 +43,7 @@ import { createNwcReceiveClient, type NwcEndpointLogger } from "./alby-nwc.ts";
 import { OpenReceiveConfigError } from "./config-error.ts";
 import { assertOpenReceiveStoreConfiguration } from "./storage-guard.ts";
 import { resolveOpenReceiveStore, type ResolveOpenReceiveStoreOptions } from "./store-uri.ts";
+import { createFixedFloatProviderFromEnv } from "./swap/fixedfloat.ts";
 import {
   formatOpenReceiveSwapAssetLabel,
   getOpenReceiveSwapAssetInfo,
@@ -434,7 +435,7 @@ export async function createOpenReceive(
       clock: options.clock,
     }),
   ];
-  const swapProviders = options.swap?.providers ?? [];
+  const swapProviders = resolveConfiguredSwapProviders(options);
 
   const context: OpenReceiveServiceContext = {
     options: nodeOptions,
@@ -2051,6 +2052,24 @@ function readOpenReceivePriceCurrencies(
   const rawCurrencies = configured ??
     globalThis.process?.env?.OPENRECEIVE_PRICE_CURRENCIES?.split(",") ?? ["USD"];
   return normalizeOpenReceivePriceCurrencies(rawCurrencies, "OPENRECEIVE_PRICE_CURRENCIES");
+}
+
+function resolveConfiguredSwapProviders(
+  options: CreateOpenReceiveOptions,
+): readonly OpenReceiveSwapProvider[] {
+  if (options.swap?.providers !== undefined) return options.swap.providers;
+  try {
+    const fixedFloat = createFixedFloatProviderFromEnv();
+    return fixedFloat === undefined ? [] : [fixedFloat];
+  } catch (error) {
+    if (error instanceof OpenReceiveConfigError) throw error;
+    throw new OpenReceiveConfigError({
+      code: "INVALID_SWAP_PROVIDER_CONFIG",
+      message: "OpenReceive swap provider configuration is invalid.",
+      hint: "Set OPENRECEIVE_SWAP_FIXED_FLOAT_KEY and OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET together, or omit both to disable FixedFloat swaps.",
+      cause: error,
+    });
+  }
 }
 
 function normalizeOpenReceivePriceCurrencies(

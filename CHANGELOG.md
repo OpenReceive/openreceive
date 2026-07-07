@@ -26,8 +26,9 @@
   the unfinished Rails adapter/demo lane before release.
 - Simplified the app-facing API before release: `createOpenReceive()` now
   reads `OPENRECEIVE_NWC`, validates receive-only wallet access at boot,
-  initializes storage, defaults to live cached price data, and exposes
-  service methods. Host apps own route protection, settlement uses backend
+  initializes storage, defaults to live cached price data, auto-loads configured
+  swap providers from `OPENRECEIVE_SWAP_*` env variables, and exposes service
+  methods. Host apps own route protection, settlement uses backend
   settlement hooks, browser checkout creation uses `requestCheckout`, Node
   checkout creation uses `orderId`, `idempotencyKey`, nested `amount`,
   `memo`, and `expiresInSeconds`, and app routes call those service methods

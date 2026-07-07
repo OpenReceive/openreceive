@@ -137,9 +137,9 @@ invoices.
 
 ## Automated Swaps
 
-Automated swaps are optional and require explicit backend provider
-configuration. See [Automated Swaps](automated-swaps.md) for setup and payer
-flow details.
+Automated swaps are optional and auto-load provider credentials from backend
+environment variables. See [Automated Swaps](automated-swaps.md) for setup and
+payer flow details.
 
 ```ts
 const options = await openreceive.swapOptions({

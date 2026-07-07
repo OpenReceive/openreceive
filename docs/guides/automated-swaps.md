@@ -4,22 +4,24 @@ OpenReceive always settles merchant orders to Lightning. Automated swaps let a p
 
 ## Configure A Provider
 
-Provider credentials stay server-side. The Node library does not auto-enable swaps from environment variables; pass providers explicitly when creating the service.
+Provider credentials stay server-side. The Node library auto-enables configured providers from environment variables, so app code does not need to construct providers.
 
 ```ts
-import { createFixedFloatProviderFromEnv, createOpenReceive } from "@openreceive/node";
+import { createOpenReceive } from "@openreceive/node";
 
-const fixedFloat = createFixedFloatProviderFromEnv();
-
-const openreceive = await createOpenReceive({
-  nwc: process.env.OPENRECEIVE_NWC,
-  swap: {
-    providers: fixedFloat === undefined ? [] : [fixedFloat],
-  },
-});
+const openreceive = await createOpenReceive();
 ```
 
-Set `FIXED_FLOAT_KEY` and `FIXED_FLOAT_SECRET` only in backend environments. Never send them to browser code, mobile apps, source maps, fixtures, or logs.
+Set provider credentials only in backend environments:
+
+```sh
+OPENRECEIVE_SWAP_FIXED_FLOAT_KEY=...
+OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET=...
+# Optional; defaults to https://ff.io
+OPENRECEIVE_SWAP_FIXED_FLOAT_BASE_URL=https://ff.io
+```
+
+OpenReceive enables FixedFloat when both key and secret are present. Omit both to leave automated swaps disabled. Never send these values to browser code, mobile apps, source maps, fixtures, or logs.
 
 ## Payer Flow
 
