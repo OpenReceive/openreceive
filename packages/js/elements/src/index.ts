@@ -1240,8 +1240,7 @@ export function defineOpenReceiveElements(
 
       try {
         const body = await postElementJson(url, {
-          order_id: orderId,
-          country_code: this.selection.selectedCountryCode
+          order_id: orderId
         });
         this.swapOptions = normalizeElementSwapOptions(body);
         this.render();
@@ -1262,8 +1261,7 @@ export function defineOpenReceiveElements(
         const body = await postElementJson(url, {
           order_id: orderId,
           pay_in_asset: payInAsset,
-          idempotency_key: idempotencyKey,
-          country_code: this.selection.selectedCountryCode
+          idempotency_key: idempotencyKey
         });
         this.startedSwapInvoice = normalizeElementSwapInvoice(body);
         this.dismissedSwapInvoiceId = null;

@@ -95,11 +95,12 @@ class FakeSwapProvider {
   quoteCalls = 0;
   statusCalls = 0;
   refundCalls = [];
+  quoteInputs = [];
+  createSwapInputs = [];
   orders = new Map();
   nextState = undefined;
   createSwapGate = undefined;
   createSwapStarted = undefined;
-  blockUs = false;
 
   constructor(supported = ["USDT_TRON", "SOL_SOL", "ETH_ETH"]) {
     this.supported = new Set(supported);
@@ -109,19 +110,10 @@ class FakeSwapProvider {
     return new Set(this.supported);
   }
 
-  async availability({ countryCode }) {
-    if (this.blockUs && countryCode === "US") {
-      return {
-        available: false,
-        reason: "region_unsupported",
-        message: "Provider is not available to US payers.",
-      };
-    }
-    return { available: true };
-  }
-
-  async quote({ payInAsset }) {
+  async quote(input) {
     this.quoteCalls += 1;
+    this.quoteInputs.push(input);
+    const { payInAsset } = input;
     return {
       pay_amount: payInAsset === "ETH_ETH" ? "0.0008" : "1.05",
       pay_asset: payInAsset,
@@ -130,8 +122,10 @@ class FakeSwapProvider {
     };
   }
 
-  async createSwap({ payInAsset }) {
+  async createSwap(input) {
     this.createCalls += 1;
+    this.createSwapInputs.push(input);
+    const { payInAsset } = input;
     this.createSwapStarted?.();
     if (this.createSwapGate !== undefined) {
       await this.createSwapGate;
@@ -418,9 +412,8 @@ test("startSwap reserves the attempt before provider create to avoid duplicate o
   assert.equal(swapProvider.createCalls, 1);
 });
 
-test("swapOptions and startSwap honor provider region availability", async () => {
+test("swapOptions and startSwap pass only swap inputs to providers", async () => {
   const swapProvider = new FakeSwapProvider();
-  swapProvider.blockUs = true;
   const { openreceive } = await createHarness({
     swap: { providers: [swapProvider] },
   });
@@ -431,21 +424,28 @@ test("swapOptions and startSwap honor provider region availability", async () =>
 
   const options = await openreceive.swapOptions({
     orderId: "order-swap-region",
-    countryCode: "US",
   });
   const usdt = options.options.find((option) => option.pay_in_asset === "USDT_TRON");
-  assert.equal(usdt.available, false);
-  assert.equal(usdt.unavailable_reason, "region_unsupported");
+  assert.equal(usdt.available, true);
+  assert.equal(usdt.unavailable_reason, undefined);
+  assert.equal(
+    swapProvider.quoteInputs.every(
+      (input) => Object.keys(input).sort().join(",") === "invoiceAmountMsats,payInAsset",
+    ),
+    true,
+  );
 
-  await assert.rejects(
-    () =>
-      openreceive.startSwap({
-        orderId: "order-swap-region",
-        payInAsset: "USDT_TRON",
-        idempotencyKey: "region-1",
-        countryCode: "US",
-      }),
-    /not available to US payers/,
+  const invoice = await openreceive.startSwap({
+    orderId: "order-swap-region",
+    payInAsset: "USDT_TRON",
+    idempotencyKey: "region-1",
+  });
+  assert.equal(invoice.swap.pay_in_asset, "USDT_TRON");
+  assert.equal(
+    swapProvider.createSwapInputs.every(
+      (input) => Object.keys(input).sort().join(",") === "bolt11,invoiceAmountMsats,payInAsset",
+    ),
+    true,
   );
 });
 

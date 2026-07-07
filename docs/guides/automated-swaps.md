@@ -25,7 +25,7 @@ OpenReceive enables FixedFloat when both key and secret are present. Omit both t
 
 ## Payer Flow
 
-The app asks `swapOptions({ orderId, countryCode })` for available payment methods. The country code is used to hide providers that cannot serve that region; FixedFloat is unavailable to US payers.
+The app asks `swapOptions({ orderId })` for configured payment methods. OpenReceive does not take a payer country code or perform geolocation gating for swap providers. If a provider cannot serve a payer's region, the application should hide or disable that method before calling `startSwap`, because the application owns payer geolocation and eligibility checks.
 
 When the payer chooses an asset, the client shows the estimate and then calls `startSwap` with an app-generated `idempotencyKey`. The service first reserves a durable attempt row, then calls the provider. The public response includes `swap.attempt_id`, deposit instructions, provider order details, and support references. The provider token remains private.
 
@@ -43,4 +43,4 @@ Provider completion never marks an order paid by itself. OpenReceive only settle
 
 ## Adding Providers
 
-Implement `OpenReceiveSwapProvider` for each provider. The interface owns quote, create, status, refund, supported asset, and optional region-availability behavior. A FixedFloat-compatible provider can share protocol ideas, but SimpleSwap or any other provider should implement the interface directly rather than reusing FixedFloat-specific request code.
+Implement `OpenReceiveSwapProvider` for each provider. The interface owns quote, create, status, refund, and supported asset behavior. A FixedFloat-compatible provider can share protocol ideas, but SimpleSwap or any other provider should implement the interface directly rather than reusing FixedFloat-specific request code.

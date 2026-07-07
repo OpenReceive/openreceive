@@ -227,10 +227,8 @@ export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptio
     try {
       const body = asRequestBody(req.body);
       const orderId = requireRequestString(body, "order_id");
-      const countryCode = optionalRequestString(body, "country_code");
       const result = await openreceive.swapOptions({
         orderId,
-        ...(countryCode === undefined ? {} : { countryCode }),
       });
       logDemo("swap_options.response", "Served automated swap options.", {
         orderId,
@@ -255,12 +253,10 @@ export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptio
       const orderId = requireRequestString(body, "order_id");
       const payInAsset = requireRequestString(body, "pay_in_asset");
       const idempotencyKey = requireRequestString(body, "idempotency_key");
-      const countryCode = optionalRequestString(body, "country_code");
       const invoice = await openreceive.startSwap({
         orderId,
         payInAsset,
         idempotencyKey,
-        ...(countryCode === undefined ? {} : { countryCode }),
       });
       logDemo("swap_start.response", "Started automated swap.", {
         orderId,
@@ -349,11 +345,6 @@ function requireRequestString(body: Record<string, unknown>, key: string): strin
     throw new HelloFruitDemoOrderError(`${key} is required.`);
   }
   return value;
-}
-
-function optionalRequestString(body: Record<string, unknown>, key: string): string | undefined {
-  const value = body[key];
-  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 function createStatusRequest(body: Record<string, unknown>): {

@@ -26,22 +26,39 @@ contributors working in this repository.
 
 ## Testing
 
-Run the smallest relevant command while iterating:
+Prefer the smallest relevant check while iterating. Do not run slow full-suite
+commands after every code change unless the change is broad, risky,
+release-like, or the user explicitly asks for it.
+
+Fast/default checks:
 
 ```sh
 npm test
 ```
 
-Before declaring work done, run the real local gate:
+Use this for schema/docs/secret-safety/tooling validation, or as a quick repo
+sanity check.
 
-```sh
-npm run test:ci
-```
-
-If `npm run test:ci` is too broad for a narrow change, run at minimum:
+For most JS/TS code changes, run the narrowest relevant test file first, then at
+minimum:
 
 ```sh
 npm run typecheck && npm run test:js
+```
+
+If the change only touches a small area, it is okay to run a focused test command
+instead of all JS tests while iterating, for example:
+
+```sh
+node --import tsx --test tests/v0.1/node-service.test.mjs
+```
+
+Run the full local gate only when the change has broad blast radius, touches
+release/deployment/package surfaces, changes generated contracts or schemas, or
+the user asks for final full verification:
+
+```sh
+npm run test:ci
 ```
 
 When touching live wallet behavior, also run:
@@ -51,6 +68,9 @@ npm run test:live:nwc
 ```
 
 The live command must skip clearly when `OPENRECEIVE_NWC` is not configured.
+
+Before declaring work done, report exactly which checks were run. If you skip
+`npm run test:ci`, say why the narrower checks were sufficient.
 
 ## Private Boundary
 

@@ -143,15 +143,13 @@ payer flow details.
 
 ```ts
 const options = await openreceive.swapOptions({
-  orderId: order.uuid,
-  countryCode: "CA"
+  orderId: order.uuid
 });
 
 const attempt = await openreceive.startSwap({
   orderId: order.uuid,
   payInAsset: "USDT_TRON",
-  idempotencyKey: "payer-click-1",
-  countryCode: "CA"
+  idempotencyKey: "payer-click-1"
 });
 
 await openreceive.refundSwap({

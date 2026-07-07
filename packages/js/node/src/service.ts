@@ -174,16 +174,12 @@ export interface OpenReceiveSwapOptions {
 
 export interface OpenReceiveSwapOptionsRequest {
   readonly orderId: string;
-  readonly countryCode?: string;
-  readonly country_code?: string;
 }
 
 export interface OpenReceiveSwapStartRequest {
   readonly orderId: string;
   readonly payInAsset: OpenReceiveSwapPayInAsset | string;
   readonly idempotencyKey: string;
-  readonly countryCode?: string;
-  readonly country_code?: string;
 }
 
 export interface OpenReceiveSwapRefundRequest {
@@ -1032,7 +1028,6 @@ async function getSwapOptions(
   }
 
   const providerByAsset = await resolveSwapProvidersByAsset(providers);
-  const countryCode = parseOptionalCountryCode(input.countryCode ?? input.country_code);
   const options = await Promise.all(
     listOpenReceiveSwapAssetInfo().map(async (asset) => {
       const provider = providerByAsset.get(asset.pay_in_asset);
@@ -1045,22 +1040,6 @@ async function getSwapOptions(
           available: false,
           unavailable_reason: "provider_unconfigured",
           unavailable_message: "Automated swaps are not configured for this asset.",
-        } satisfies OpenReceiveSwapOption;
-      }
-
-      const regionAvailability = await getSwapProviderAvailability(provider, {
-        countryCode,
-        payInAsset: asset.pay_in_asset,
-      });
-      if (!regionAvailability.available) {
-        return {
-          pay_in_asset: asset.pay_in_asset,
-          label: asset.label,
-          network_label: asset.network_label,
-          provider: provider.name,
-          available: false,
-          unavailable_reason: regionAvailability.reason,
-          unavailable_message: regionAvailability.message,
         } satisfies OpenReceiveSwapOption;
       }
 
@@ -1101,7 +1080,6 @@ async function startSwap(
   const idempotencyKey = parseSwapStartIdempotencyKey(
     body.idempotencyKey ?? body.idempotency_key,
   );
-  const countryCode = parseOptionalCountryCode(body.countryCode ?? body.country_code);
   const now = context.clock();
   const records = await context.store.listByOrderId(orderId);
   if (records.length === 0) {
@@ -1152,13 +1130,6 @@ async function startSwap(
       "INVALID_REQUEST",
       `${formatOpenReceiveSwapAssetLabel(payInAsset)} is not available for automated swaps.`,
     );
-  }
-  const regionAvailability = await getSwapProviderAvailability(provider, {
-    countryCode,
-    payInAsset,
-  });
-  if (!regionAvailability.available) {
-    throw serviceError(400, "INVALID_REQUEST", regionAvailability.message);
   }
 
   const displayRecord = checkoutRecords.find(
@@ -1468,27 +1439,6 @@ async function selectSwapProvider(
     if ((await provider.supportedPayInAssets()).has(payInAsset)) return provider;
   }
   return undefined;
-}
-
-async function getSwapProviderAvailability(
-  provider: OpenReceiveSwapProvider,
-  input: {
-    readonly countryCode?: string;
-    readonly payInAsset?: OpenReceiveSwapPayInAsset;
-  },
-): Promise<
-  | {
-      readonly available: true;
-    }
-  | {
-      readonly available: false;
-      readonly reason: OpenReceiveSwapAvailabilityReason;
-      readonly message: string;
-    }
-> {
-  return provider.availability === undefined
-    ? { available: true }
-    : await provider.availability(input);
 }
 
 async function readReservedSwapAttemptForStartReplay(
@@ -1824,18 +1774,6 @@ function parseSwapAttemptId(value: unknown): string {
     throw serviceError(400, "INVALID_REQUEST", "attempt_id is not valid.");
   }
   return attemptId;
-}
-
-function parseOptionalCountryCode(value: unknown): string | undefined {
-  if (value === undefined || value === null || value === "") return undefined;
-  if (typeof value !== "string") {
-    throw serviceError(400, "INVALID_REQUEST", "country_code must be a two-letter country code.");
-  }
-  const countryCode = value.trim().toUpperCase();
-  if (!/^[A-Z]{2}$/.test(countryCode)) {
-    throw serviceError(400, "INVALID_REQUEST", "country_code must be a two-letter country code.");
-  }
-  return countryCode;
 }
 
 function getStoredDescriptionFields(row: InvoiceStorageRow): {

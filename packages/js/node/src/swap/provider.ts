@@ -52,19 +52,6 @@ export interface OpenReceiveSwapOrder {
 export interface OpenReceiveSwapProvider {
   readonly name: string;
   supportedPayInAssets(): Promise<Set<OpenReceiveSwapPayInAsset>>;
-  availability?(input: {
-    readonly countryCode?: string;
-    readonly payInAsset?: OpenReceiveSwapPayInAsset;
-  }): Promise<
-    | {
-        readonly available: true;
-      }
-    | {
-        readonly available: false;
-        readonly reason: OpenReceiveSwapAvailabilityReason;
-        readonly message: string;
-      }
-  >;
   quote(input: {
     readonly payInAsset: OpenReceiveSwapPayInAsset;
     readonly invoiceAmountMsats: number;

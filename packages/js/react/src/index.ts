@@ -1026,8 +1026,7 @@ export function PaymentWizard(
 
     let cancelled = false;
     void postOpenReceiveJson(fetcher, props.swapOptionsUrl, {
-      order_id: orderId,
-      country_code: selection.selectedCountryCode
+      order_id: orderId
     })
       .then((body) => {
         if (cancelled) return;
@@ -1042,7 +1041,7 @@ export function PaymentWizard(
     return () => {
       cancelled = true;
     };
-  }, [props.swapOptionsUrl, orderId, fetcher, props.onError, selection.selectedCountryCode]);
+  }, [props.swapOptionsUrl, orderId, fetcher, props.onError]);
 
   const currentSwapInvoice = React.useMemo(
     () => selectCurrentSwapInvoice(checkout, startedSwapInvoice, dismissedSwapInvoiceId),
@@ -1067,8 +1066,7 @@ export function PaymentWizard(
         const body = await postOpenReceiveJson(fetcher, props.swapStartUrl, {
           order_id: orderId,
           pay_in_asset: payInAsset,
-          idempotency_key: idempotencyKey,
-          country_code: selection.selectedCountryCode
+          idempotency_key: idempotencyKey
         });
         const invoice = normalizeSwapStartInvoice(body);
         setStartedSwapInvoice(invoice);
@@ -1079,7 +1077,7 @@ export function PaymentWizard(
         setSwapStartingAsset(null);
       }
     },
-    [props.swapStartUrl, orderId, fetcher, props.onError, selection.selectedCountryCode]
+    [props.swapStartUrl, orderId, fetcher, props.onError]
   );
   const refundSwap = React.useCallback(
     async (attemptId: string, refundAddress: string) => {

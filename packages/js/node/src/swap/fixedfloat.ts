@@ -119,30 +119,6 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
     return new Set(resolution.pay_in.keys());
   }
 
-  async availability(input: {
-    readonly countryCode?: string;
-    readonly payInAsset?: OpenReceiveSwapPayInAsset;
-  }): Promise<
-    | {
-        readonly available: true;
-      }
-    | {
-        readonly available: false;
-        readonly reason: OpenReceiveSwapAvailabilityReason;
-        readonly message: string;
-      }
-  > {
-    void input.payInAsset;
-    if (input.countryCode?.trim().toUpperCase() === "US") {
-      return {
-        available: false,
-        reason: "region_unsupported",
-        message: "FixedFloat is not available to US payers.",
-      };
-    }
-    return { available: true };
-  }
-
   async quote(input: {
     readonly payInAsset: OpenReceiveSwapPayInAsset;
     readonly invoiceAmountMsats: number;
