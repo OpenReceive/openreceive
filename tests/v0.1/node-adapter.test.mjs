@@ -636,6 +636,7 @@ test("createOpenReceive builds service methods from a client and store", async (
     namespace: "node_test",
     clock: () => 1000,
     priceProviders: [new StaticPriceProvider()],
+    swap: { providers: [] },
   });
 
   const body = await openreceive.createCheckout({
