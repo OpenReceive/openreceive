@@ -738,6 +738,110 @@ test("startSwap creates an idempotent shadow invoice without replacing active Li
   assert.equal(stored.row.metadata.swap_private.provider_token, "ff-token-1");
 });
 
+test("openreceive.order routes each action and rides payment_methods on the order", async () => {
+  const swapProvider = new FakeSwapProvider();
+  const { openreceive } = await createHarness({
+    swap: { providers: [swapProvider] },
+  });
+  const checkout = await openreceive.createCheckout({
+    orderId: "order-dispatch",
+    amount: { btc: { currency: "SATS", value: "200" } },
+    memo: "Fruit sticker",
+  });
+
+  // Status action (action omitted) returns the order object plus the payable
+  // assets on payment_methods, so listing methods costs no extra call.
+  const status = await openreceive.order({ order_id: "order-dispatch" });
+  assert.equal(status.order_id, "order-dispatch");
+  assert.equal(status.status, "pending");
+  assert.equal(Array.isArray(status.payment_methods), true);
+  assert.equal(
+    status.payment_methods.some((method) => method.pay_in_asset === "USDT_TRON"),
+    true,
+  );
+
+  // Quote action routes to swapQuote and returns the { quote } envelope.
+  const quoted = await openreceive.order({
+    order_id: "order-dispatch",
+    action: "quote",
+    pay_in_asset: "USDT_TRON",
+  });
+  assert.equal(quoted.quote.provider, "fixedfloat");
+  assert.equal(quoted.quote.pay_amount, "1.05");
+
+  // Start action routes to startSwap and returns the { invoice } envelope. It
+  // reuses startSwap's duplicate protection: two starts share one shadow
+  // invoice and one provider order, and provider tokens never leak.
+  const started = await openreceive.order({
+    order_id: "order-dispatch",
+    action: "start",
+    pay_in_asset: "USDT_TRON",
+  });
+  const restarted = await openreceive.order({
+    order_id: "order-dispatch",
+    action: "start",
+    pay_in_asset: "USDT_TRON",
+  });
+  assert.equal(started.invoice.rail, "swap");
+  assert.equal(started.invoice.swap.pay_in_asset, "USDT_TRON");
+  assert.equal(started.invoice.swap.deposit_address, "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb");
+  assert.equal(started.invoice.invoice, null);
+  assert.equal(started.invoice.invoice_id, restarted.invoice.invoice_id);
+  assert.equal("provider_token" in started.invoice.swap, false);
+  assert.equal(swapProvider.createCalls, 1);
+
+  // The started swap now shows up on the order object without replacing the
+  // active Lightning invoice.
+  const afterStart = await openreceive.order({ order_id: "order-dispatch" });
+  assert.equal(afterStart.active_checkout.active.invoice_id, checkout.active.invoice_id);
+  assert.equal(
+    afterStart.active_checkout.invoices.some((invoice) => invoice.rail === "swap"),
+    true,
+  );
+});
+
+test("openreceive.order propagates OpenReceiveServiceError status codes (404/409/400)", async () => {
+  const swapProvider = new FakeSwapProvider();
+  const harness = await createHarness({
+    swap: { providers: [swapProvider] },
+  });
+  const { openreceive } = harness;
+
+  // 404: no order exists for the id.
+  await assert.rejects(
+    () => openreceive.order({ order_id: "order-dispatch-missing" }),
+    (error) => error instanceof OpenReceiveServiceError && error.status === 404,
+  );
+
+  await openreceive.createCheckout({
+    orderId: "order-dispatch-errors",
+    amount: { btc: { currency: "SATS", value: "200" } },
+  });
+
+  // 400: unsupported pay-in asset is rejected by the shared parser.
+  await assert.rejects(
+    () =>
+      openreceive.order({
+        order_id: "order-dispatch-errors",
+        action: "quote",
+        pay_in_asset: "NOT_AN_ASSET",
+      }),
+    (error) => error instanceof OpenReceiveServiceError && error.status === 400,
+  );
+
+  // 409: after the only checkout expires there is no open checkout to start.
+  harness.setNow(5000);
+  await assert.rejects(
+    () =>
+      openreceive.order({
+        order_id: "order-dispatch-errors",
+        action: "start",
+        pay_in_asset: "USDT_TRON",
+      }),
+    (error) => error instanceof OpenReceiveServiceError && error.status === 409,
+  );
+});
+
 test("startSwap reserves the attempt before provider create to avoid duplicate orders", async () => {
   const swapProvider = new FakeSwapProvider();
   let releaseCreate;

@@ -37,13 +37,11 @@ checkoutRoutes.post("/create_order", async (req, res, next) => {
   }
 });
 
-checkoutRoutes.post("/order_status", async (req, res, next) => {
+checkoutRoutes.post("/order", async (req, res, next) => {
   try {
-    const order = await openreceive.getOrder({ orderId: req.body.order_id });
-    res.json({
-      order,
-      order_status: order.paid ? "paid" : "pending_payment"
-    });
+    // Authorize the caller for req.body.order_id here (session or ownership
+    // check) before forwarding. order_id is an identifier, not a capability.
+    res.json(await openreceive.order(req.body));
   } catch (error) {
     if (error instanceof OpenReceiveServiceError) {
       res.status(error.status).json(error.body);
@@ -120,8 +118,8 @@ Use your normal framework middleware:
 
 ```ts
 app.use("/create_order", csrfProtection);
-app.use("/order_status", csrfProtection);
-app.use(["/create_order", "/order_status"], cors({
+app.use("/order", csrfProtection);
+app.use(["/create_order", "/order"], cors({
   origin: "https://shop.example",
   credentials: true
 }));

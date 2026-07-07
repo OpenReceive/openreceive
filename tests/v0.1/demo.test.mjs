@@ -28,7 +28,7 @@ import { setHelloFruitOpenReceiveTestOverrides } from "../../examples/hello-frui
 import { GET as getNextDemoMetadata } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/demo-metadata.json/route.ts";
 import { GET as getNextDocs } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/docs/route.ts";
 import { POST as postNextCreateOrder } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/create_order/route.ts";
-import { POST as postNextOrderStatus } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/order_status/route.ts";
+import { POST as postNextOrder } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/order/route.ts";
 import { GET as getNextSource } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/source/route.ts";
 import getNextRobots, {
   dynamic as nextRobotsDynamic,
@@ -277,7 +277,7 @@ test("Hello Fruit React demos delegate checkout state to UI packages", () => {
   ]) {
     assert.match(source, /<Checkout/);
     assert.match(source, /onSettled=/);
-    assert.match(source, /statusUrl="\/order_status"/);
+    assert.match(source, /orderUrl="\/order"/);
     assert.match(source, /fetch\("\/create_order"/);
     assert.match(source, /readHelloFruitCheckoutCurrencies/);
     assert.match(source, /currency,/);
@@ -399,7 +399,7 @@ test("Hello Fruit Node demo creates orders from cart before rendering checkout",
   assert.match(source, /addSelectedFruitToCart/);
   assert.match(source, /async function createOrder\(\)/);
   assert.match(source, /fetch\("\/create_order"/);
-  assert.match(source, /statusUrl="\/order_status"/);
+  assert.match(source, /orderUrl="\/order"/);
   assert.match(source, /setPurchasedItems\(body\.order\.items\)/);
   assert.match(source, /formatHelloFruitFiat\(item\.line_amount\)/);
   assert.match(source, /purchasedItems\.map/);
@@ -428,7 +428,7 @@ test("Hello Fruit Next.js demo resets expired checkout from Start over", () => {
   assert.match(source, /function startOver\(\)/);
   assert.match(source, /async function createOrder\(\)/);
   assert.match(source, /fetch\("\/create_order"/);
-  assert.match(source, /statusUrl="\/order_status"/);
+  assert.match(source, /orderUrl="\/order"/);
   assert.match(source, /setCart\(\{\}\)/);
   assert.match(source, /setOrder\(undefined\)/);
   assert.match(source, /setCheckout\(undefined\)/);
@@ -835,8 +835,8 @@ test("Elements consume shared custom-element attribute contracts", () => {
   );
   assert.doesNotMatch(
     elementsSource,
-    /getAttribute\("status-url"\)/,
-    "elements: must not hard-code status-url reads",
+    /getAttribute\("order-url"\)/,
+    "elements: must not hard-code order-url reads",
   );
   assert.doesNotMatch(
     elementsSource,
@@ -1400,10 +1400,10 @@ test("Next.js demo owns merchant route handling and calls OpenReceive service me
 
   assert.match(source, /createOpenReceive/);
   assert.match(source, /createOrderResponse/);
-  assert.match(source, /orderStatusResponse/);
+  assert.match(source, /orderResponse/);
   assert.match(source, /createHelloFruitCreateOrderResult/);
   assert.match(source, /openreceive\.getOrCreateCheckout/);
-  assert.match(source, /openreceive\.getOrder/);
+  assert.match(source, /openreceive\.order/);
   assert.match(source, /readRequiredHelloFruitNwcConnectionString/);
   assert.doesNotMatch(source, /dispatchOpenReceiveRoute/);
   assert.doesNotMatch(source, /matchOpenReceiveRoute/);
@@ -1610,13 +1610,14 @@ test("Hello Fruit demos create app orders and refresh order status through merch
     assert.equal(second.status, 201, `${demo.name}: second create_order status`);
     assert.notEqual(second.body.order.uuid, created.body.order.uuid);
 
-    const status = await dispatchJson(app, "POST", "/order_status", {
+    const status = await dispatchJson(app, "POST", "/order", {
       order_id: created.body.order.uuid,
     });
-    assert.equal(status.status, 200, `${demo.name}: order_status status`);
+    assert.equal(status.status, 200, `${demo.name}: order status`);
     assert.equal(status.body.order_id, created.body.order.uuid);
-    assert.equal(status.body.order_status, "pending_payment");
-    assert.equal(status.body.order.status, "pending_payment");
+    assert.equal(status.body.status, "pending");
+    // Payable assets ride on the order object itself (payment_methods).
+    assert.ok(Array.isArray(status.body.payment_methods));
     const statusInvoice =
       status.body.display_checkout.active ?? status.body.display_checkout.invoices[0];
     assert.equal(statusInvoice.payment_hash, createdInvoice.payment_hash);
@@ -1639,15 +1640,16 @@ test("Hello Fruit demos create app orders and refresh order status through merch
     assert.notEqual(nextSecond.body.order.uuid, nextCreated.body.order.uuid);
 
     const nextStatus = await responseJson(
-      postNextOrderStatus(
-        jsonRequest("/order_status", {
+      postNextOrder(
+        jsonRequest("/order", {
           order_id: nextCreated.body.order.uuid,
         }),
       ),
     );
-    assert.equal(nextStatus.status, 200, "nextjs-fullstack: order_status status");
+    assert.equal(nextStatus.status, 200, "nextjs-fullstack: order status");
     assert.equal(nextStatus.body.order_id, nextCreated.body.order.uuid);
-    assert.equal(nextStatus.body.order_status, "pending_payment");
+    assert.equal(nextStatus.body.status, "pending");
+    assert.ok(Array.isArray(nextStatus.body.payment_methods));
   } finally {
     setHelloFruitOpenReceiveTestOverrides(undefined);
   }

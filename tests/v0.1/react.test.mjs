@@ -808,11 +808,11 @@ test("React checkout can disable default status refresh polling", () => {
     "utf8"
   );
 
-  assert.match(source, /statusUrl\?: string \| false/);
+  assert.match(source, /orderUrl\?: string \| false/);
   assert.match(source, /polling\?: boolean/);
   assert.match(source, /function resolveCheckoutStatusRefreshUrl/);
-  assert.match(source, /options\.polling === false \|\| options\.statusUrl === false/);
+  assert.match(source, /options\.polling === false \|\| options\.orderUrl === false/);
   assert.match(source, /options\.polling === false \? undefined : options\.refreshStatus/);
-  assert.match(source, /\.\.\.\(statusUrl === undefined \? \{\} : \{ statusUrl \}\)/);
-  assert.doesNotMatch(source, /statusUrl: options\.statusUrl \?\? DEFAULT_STATUS_URL/);
+  assert.match(source, /\.\.\.\(orderUrl === undefined \? \{\} : \{ orderUrl \}\)/);
+  assert.doesNotMatch(source, /orderUrl: options\.orderUrl \?\? DEFAULT_STATUS_URL/);
 });

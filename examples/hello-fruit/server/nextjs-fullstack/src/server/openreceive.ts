@@ -16,7 +16,6 @@ import {
 } from "../../../../shared/demo-logging.ts";
 import {
   createHelloFruitCreateOrderResult,
-  createHelloFruitOrderStatus,
 } from "../../../../shared/demo-order.ts";
 import {
   readHelloFruitCheckoutCurrencies,
@@ -166,42 +165,34 @@ export async function createOrderResponse(request: Request): Promise<Response> {
   }
 }
 
-export async function orderStatusResponse(request: Request): Promise<Response> {
+export async function orderResponse(request: Request): Promise<Response> {
   const startedAt = Date.now();
   const { openreceive } = await getOpenReceive();
 
   try {
-    const statusRequest = createStatusRequest(await readJsonBody(request));
-    logDemo("order_status.request", "Received order status request.", {
-      orderId: statusRequest.orderId,
+    const body = await readJsonBody(request);
+    const orderId = requireRequestString(body, "order_id");
+    logDemo("order.request", "Received order request.", {
+      orderId,
+      action: typeof body.action === "string" ? body.action : "status",
     });
-    await authorizeOrderAccess(request, statusRequest.orderId);
-    const openreceiveOrder = await openreceive.getOrder(statusRequest);
-    const orderStatus = createHelloFruitOrderStatus(openreceiveOrder);
-    logDemo("order_status.response", "Refreshed order status.", {
-      orderId: orderStatus.order_id,
-      orderStatus: orderStatus.order_status,
-      ...summarizeSettlementFields(openreceiveOrder),
+    await authorizeOrderAccess(request, orderId);
+    const result = await openreceive.order(body as Parameters<typeof openreceive.order>[0]);
+    logDemo("order.response", "Served order request.", {
+      orderId,
       elapsedMs: Date.now() - startedAt,
     });
-    return jsonResponse({
-      ...openreceiveOrder,
-      ...orderStatus,
-      order: {
-        uuid: orderStatus.order_id,
-        status: orderStatus.order_status,
-      },
-    });
+    return jsonResponse(result);
   } catch (error) {
     if (error instanceof OpenReceiveServiceError) {
-      logDemo("order_status.rejected", "Order status request returned a known error.", {
+      logDemo("order.rejected", "Order request returned a known error.", {
         status: error.status,
         body: error.body,
         elapsedMs: Date.now() - startedAt,
       });
       return jsonResponse(error.body, error.status);
     }
-    logDemo("order_status.error", "Order status request failed unexpectedly.", {
+    logDemo("order.error", "Order request failed unexpectedly.", {
       error: error instanceof Error ? error.message : String(error),
       elapsedMs: Date.now() - startedAt,
     });
@@ -209,125 +200,9 @@ export async function orderStatusResponse(request: Request): Promise<Response> {
   }
 }
 
-export async function swapOptionsResponse(request: Request): Promise<Response> {
-  const startedAt = Date.now();
-  const { openreceive } = await getOpenReceive();
-
-  try {
-    const body = await readJsonBody(request);
-    const orderId = requireRequestString(body, "order_id");
-    await authorizeOrderAccess(request, orderId);
-    const result = await openreceive.swapOptions({
-      orderId,
-    });
-    logDemo("swap_options.response", "Served automated swap options.", {
-      orderId,
-      enabled: result.enabled,
-      optionCount: result.options.length,
-      elapsedMs: Date.now() - startedAt,
-    });
-    return jsonResponse(result);
-  } catch (error) {
-    if (error instanceof OpenReceiveServiceError) {
-      return jsonResponse(error.body, error.status);
-    }
-    throw error;
-  }
-}
-
-export async function swapQuoteResponse(request: Request): Promise<Response> {
-  const startedAt = Date.now();
-  const { openreceive } = await getOpenReceive();
-
-  try {
-    const body = await readJsonBody(request);
-    const orderId = requireRequestString(body, "order_id");
-    const payInAsset = requireRequestString(body, "pay_in_asset");
-    await authorizeOrderAccess(request, orderId);
-    const quote = await openreceive.swapQuote({
-      orderId,
-      payInAsset,
-    });
-    logDemo("swap_quote.response", "Served automated swap quote.", {
-      orderId,
-      payInAsset,
-      provider: quote.provider,
-      available: quote.available,
-      elapsedMs: Date.now() - startedAt,
-    });
-    return jsonResponse({ quote });
-  } catch (error) {
-    if (error instanceof OpenReceiveServiceError) {
-      return jsonResponse(error.body, error.status);
-    }
-    throw error;
-  }
-}
-
-export async function swapStartResponse(request: Request): Promise<Response> {
-  const startedAt = Date.now();
-  const { openreceive } = await getOpenReceive();
-
-  try {
-    const body = await readJsonBody(request);
-    const orderId = requireRequestString(body, "order_id");
-    const payInAsset = requireRequestString(body, "pay_in_asset");
-    await authorizeOrderAccess(request, orderId);
-    const invoice = await openreceive.startSwap({
-      orderId,
-      payInAsset,
-    });
-    logDemo("swap_start.response", "Started automated swap.", {
-      orderId,
-      payInAsset,
-      invoiceId: invoice.invoice_id,
-      provider: invoice.swap?.provider,
-      elapsedMs: Date.now() - startedAt,
-    });
-    return jsonResponse({ invoice }, 201);
-  } catch (error) {
-    if (error instanceof OpenReceiveServiceError) {
-      return jsonResponse(error.body, error.status);
-    }
-    throw error;
-  }
-}
-
-export async function swapRefundResponse(request: Request): Promise<Response> {
-  const startedAt = Date.now();
-  const { openreceive } = await getOpenReceive();
-
-  try {
-    const body = await readJsonBody(request);
-    const orderId = requireRequestString(body, "order_id");
-    const attemptId = requireRequestString(body, "attempt_id");
-    const refundAddress = requireRequestString(body, "refund_address");
-    const refundNonce = requireRequestString(body, "refund_nonce");
-    await authorizeOrderAccess(request, orderId);
-    const invoice = await openreceive.refundSwap({
-      attemptId,
-      refundAddress,
-      refundNonce,
-      confirm: body.confirm === true,
-    });
-    logDemo("swap_refund.response", "Requested automated swap refund.", {
-      attemptId,
-      invoiceId: invoice.invoice_id,
-      provider: invoice.swap?.provider,
-      elapsedMs: Date.now() - startedAt,
-    });
-    return jsonResponse({ invoice });
-  } catch (error) {
-    if (error instanceof OpenReceiveServiceError) {
-      return jsonResponse(error.body, error.status);
-    }
-    throw error;
-  }
-}
-
 async function authorizeOrderAccess(_request: Request, _orderId: string): Promise<void> {
   // Demo seam: production apps should verify the signed-in/session caller owns
-  // this order before proxying OpenReceive order, swap, or refund methods.
+  // this order before forwarding the request to openreceive.order(body).
 }
 
 export async function ratesResponse(): Promise<Response> {
@@ -438,31 +313,6 @@ function summarizeOrderRequest(body: Record<string, unknown>): Record<string, un
       )
       .filter((productId): productId is string => typeof productId === "string"),
   };
-}
-
-function summarizeSettlementFields(value: unknown): Record<string, unknown> {
-  const order =
-    typeof value === "object" && value !== null && !Array.isArray(value)
-      ? (value as Record<string, unknown>)
-      : {};
-  return {
-    settledAtPresent: order.settled_at !== undefined,
-    transactionState: order.transaction_state,
-    state: order.state,
-  };
-}
-
-function createStatusRequest(body: Record<string, unknown>): {
-  readonly orderId: string;
-} {
-  const orderId = body.order_id;
-  if (typeof orderId !== "string" || orderId.length === 0) {
-    throw new OpenReceiveServiceError(400, {
-      code: "INVALID_REQUEST",
-      message: "order_id is required.",
-    });
-  }
-  return { orderId };
 }
 
 function requireRequestString(body: Record<string, unknown>, key: string): string {

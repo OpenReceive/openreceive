@@ -957,7 +957,7 @@ test("browser preserves swap invoices while keeping Lightning active", async () 
     },
   };
   const refresh = createOpenReceiveStatusFetcher({
-    statusUrl: "/order_status",
+    orderUrl: "/order",
     fetch: async () =>
       new Response(
         JSON.stringify({
@@ -1343,7 +1343,7 @@ test("browser request checkout helper posts SDK-shaped data to an app-owned URL"
 test("browser status fetcher owns display-safe status POST shape", async () => {
   const requests = [];
   const refreshStatus = createOpenReceiveStatusFetcher({
-    statusUrl: "/order_status",
+    orderUrl: "/order",
     fetch: async (url, init) => {
       requests.push({ url, init });
       return {
@@ -1369,6 +1369,16 @@ test("browser status fetcher owns display-safe status POST shape", async () => {
             },
           ),
           checkouts: [],
+          payment_methods: [
+            {
+              pay_in_asset: "USDT_TRON",
+              label: "USDT",
+              network_label: "Tron",
+              provider: "fixedfloat",
+              available: true,
+              pay_amount: "1.05",
+            },
+          ],
         }),
       };
     },
@@ -1379,8 +1389,12 @@ test("browser status fetcher owns display-safe status POST shape", async () => {
   assert.equal(body.checkout_id, "or_chk_status");
   assert.equal(body.status, "paid");
   assert.equal(body.invoices[0].invoice_id, "or_inv_status");
+  // Payable assets ride on the order object itself (payment_methods).
+  assert.equal(body.payment_methods.length, 1);
+  assert.equal(body.payment_methods[0].pay_in_asset, "USDT_TRON");
+  assert.equal(body.payment_methods[0].pay_amount, "1.05");
   assert.equal(requests.length, 1);
-  assert.equal(requests[0].url, "/order_status");
+  assert.equal(requests[0].url, "/order");
   assert.equal(requests[0].init.method, "POST");
   assert.equal(requests[0].init.headers["Content-Type"], "application/json");
   assert.deepEqual(JSON.parse(requests[0].init.body), {
@@ -1388,7 +1402,7 @@ test("browser status fetcher owns display-safe status POST shape", async () => {
   });
 
   const failingStatus = createOpenReceiveStatusFetcher({
-    statusUrl: "/order_status",
+    orderUrl: "/order",
     fetch: async () => ({
       ok: false,
       json: async () => ({
@@ -1656,7 +1670,7 @@ test("browser checkout controller owns lifecycle actions for framework adapters"
   controller.stop();
 });
 
-test("browser checkout controller owns statusUrl fetcher creation", async () => {
+test("browser checkout controller owns orderUrl fetcher creation", async () => {
   let nextTimer = 1;
   const timers = new Map();
   const states = [];
@@ -1671,9 +1685,9 @@ test("browser checkout controller owns statusUrl fetcher creation", async () => 
       },
       { order_id: "order-controller-status" },
     ),
-    statusUrl: "/order_status",
+    orderUrl: "/order",
     fetch: async (url, init) => {
-      assert.equal(url, "/order_status");
+      assert.equal(url, "/order");
       assert.deepEqual(JSON.parse(init.body), {
         order_id: "order-controller-status",
       });
@@ -1889,10 +1903,7 @@ test("browser owns custom-element attribute contracts", () => {
     fiatValue: "fiat-value",
     status: "status",
     expiresAt: "expires-at",
-    statusUrl: "status-url",
-    swapOptionsUrl: "swap-options-url",
-    swapStartUrl: "swap-start-url",
-    swapRefundUrl: "swap-refund-url",
+    orderUrl: "order-url",
     theme: "theme",
     paymentWizard: "payment-wizard",
   });

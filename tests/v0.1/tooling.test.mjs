@@ -187,8 +187,8 @@ test("Node quickstart covers all shipped frontend framework adapters", () => {
   assert.match(source, /:checkout="checkout"/);
   assert.match(source, /\{checkout\}/);
   assert.match(source, /\[checkout\]="checkout"/);
-  assert.match(source, /statusUrl="\/order_status"/);
-  assert.match(source, /status-url="\/order_status"/);
+  assert.match(source, /orderUrl="\/order"/);
+  assert.match(source, /order-url="\/order"/);
   assert.doesNotMatch(
     source.slice(source.indexOf("## Angular"), source.indexOf("## How Settlement Works")),
     /@openreceive\/vue|createOpenReceiveVue/,

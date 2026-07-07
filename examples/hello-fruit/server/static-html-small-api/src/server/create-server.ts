@@ -17,7 +17,6 @@ import {
 } from "../../../../shared/demo-logging.ts";
 import {
   createHelloFruitCreateOrderResult,
-  createHelloFruitOrderStatus,
   HelloFruitDemoOrderError,
 } from "../../../../shared/demo-order.ts";
 import { mountHelloFruitHostedDemoRoutes } from "../../../../shared/hosted-demo-routes.ts";
@@ -88,11 +87,7 @@ export async function createHelloFruitStaticServer(options: HelloFruitOpenReceiv
   logDemo("server.routes", "Mounting demo routes.", {
     staticStickers: "/stickers",
     createOrder: "/create_order",
-    orderStatus: "/order_status",
-    swapOptions: "/swap_options",
-    swapQuote: "/swap_quote",
-    swapStart: "/swap_start",
-    swapRefund: "/swap_refund",
+    order: "/order",
     rates: "/rates",
   });
 
@@ -183,33 +178,25 @@ export async function createHelloFruitStaticServer(options: HelloFruitOpenReceiv
       next(error);
     }
   });
-  app.post("/order_status", async (req, res, next) => {
+  app.post("/order", async (req, res, next) => {
     const startedAt = Date.now();
     try {
-      const statusRequest = createStatusRequest(asRequestBody(req.body));
-      logDemo("order_status.request", "Received order status request.", {
-        orderId: statusRequest.orderId,
+      const body = asRequestBody(req.body);
+      const orderId = requireRequestString(body, "order_id");
+      logDemo("order.request", "Received order request.", {
+        orderId,
+        action: typeof body.action === "string" ? body.action : "status",
       });
-      await authorizeOrderAccess(req, statusRequest.orderId);
-      const openreceiveOrder = await openreceive.getOrder(statusRequest);
-      const orderStatus = createHelloFruitOrderStatus(openreceiveOrder);
-      logDemo("order_status.response", "Refreshed order status.", {
-        orderId: orderStatus.order_id,
-        orderStatus: orderStatus.order_status,
-        ...summarizeSettlementFields(openreceiveOrder),
+      await authorizeOrderAccess(req, orderId);
+      const result = await openreceive.order(body as Parameters<typeof openreceive.order>[0]);
+      logDemo("order.response", "Served order request.", {
+        orderId,
         elapsedMs: Date.now() - startedAt,
       });
-      res.status(200).json({
-        ...openreceiveOrder,
-        ...orderStatus,
-        order: {
-          uuid: orderStatus.order_id,
-          status: orderStatus.order_status,
-        },
-      });
+      res.status(200).json(result);
     } catch (error) {
       if (error instanceof OpenReceiveServiceError || error instanceof HelloFruitDemoOrderError) {
-        logDemo("order_status.rejected", "Order status request returned a known error.", {
+        logDemo("order.rejected", "Order request returned a known error.", {
           status: error.status,
           body: error.body,
           elapsedMs: Date.now() - startedAt,
@@ -217,122 +204,10 @@ export async function createHelloFruitStaticServer(options: HelloFruitOpenReceiv
         res.status(error.status).json(error.body);
         return;
       }
-      logDemo("order_status.error", "Order status request failed unexpectedly.", {
+      logDemo("order.error", "Order request failed unexpectedly.", {
         error: error instanceof Error ? error.message : String(error),
         elapsedMs: Date.now() - startedAt,
       });
-      next(error);
-    }
-  });
-
-  app.post("/swap_options", async (req, res, next) => {
-    const startedAt = Date.now();
-    try {
-      const body = asRequestBody(req.body);
-      const orderId = requireRequestString(body, "order_id");
-      await authorizeOrderAccess(req, orderId);
-      const result = await openreceive.swapOptions({
-        orderId,
-      });
-      logDemo("swap_options.response", "Served automated swap options.", {
-        orderId,
-        enabled: result.enabled,
-        optionCount: result.options.length,
-        elapsedMs: Date.now() - startedAt,
-      });
-      res.status(200).json(result);
-    } catch (error) {
-      if (error instanceof OpenReceiveServiceError || error instanceof HelloFruitDemoOrderError) {
-        res.status(error.status).json(error.body);
-        return;
-      }
-      next(error);
-    }
-  });
-
-  app.post("/swap_quote", async (req, res, next) => {
-    const startedAt = Date.now();
-    try {
-      const body = asRequestBody(req.body);
-      const orderId = requireRequestString(body, "order_id");
-      const payInAsset = requireRequestString(body, "pay_in_asset");
-      await authorizeOrderAccess(req, orderId);
-      const quote = await openreceive.swapQuote({
-        orderId,
-        payInAsset,
-      });
-      logDemo("swap_quote.response", "Served automated swap quote.", {
-        orderId,
-        payInAsset,
-        provider: quote.provider,
-        available: quote.available,
-        elapsedMs: Date.now() - startedAt,
-      });
-      res.status(200).json({ quote });
-    } catch (error) {
-      if (error instanceof OpenReceiveServiceError || error instanceof HelloFruitDemoOrderError) {
-        res.status(error.status).json(error.body);
-        return;
-      }
-      next(error);
-    }
-  });
-
-  app.post("/swap_start", async (req, res, next) => {
-    const startedAt = Date.now();
-    try {
-      const body = asRequestBody(req.body);
-      const orderId = requireRequestString(body, "order_id");
-      const payInAsset = requireRequestString(body, "pay_in_asset");
-      await authorizeOrderAccess(req, orderId);
-      const invoice = await openreceive.startSwap({
-        orderId,
-        payInAsset,
-      });
-      logDemo("swap_start.response", "Started automated swap.", {
-        orderId,
-        payInAsset,
-        invoiceId: invoice.invoice_id,
-        provider: invoice.swap?.provider,
-        elapsedMs: Date.now() - startedAt,
-      });
-      res.status(201).json({ invoice });
-    } catch (error) {
-      if (error instanceof OpenReceiveServiceError || error instanceof HelloFruitDemoOrderError) {
-        res.status(error.status).json(error.body);
-        return;
-      }
-      next(error);
-    }
-  });
-
-  app.post("/swap_refund", async (req, res, next) => {
-    const startedAt = Date.now();
-    try {
-      const body = asRequestBody(req.body);
-      const orderId = requireRequestString(body, "order_id");
-      const attemptId = requireRequestString(body, "attempt_id");
-      const refundAddress = requireRequestString(body, "refund_address");
-      const refundNonce = requireRequestString(body, "refund_nonce");
-      await authorizeOrderAccess(req, orderId);
-      const invoice = await openreceive.refundSwap({
-        attemptId,
-        refundAddress,
-        refundNonce,
-        confirm: body.confirm === true,
-      });
-      logDemo("swap_refund.response", "Requested automated swap refund.", {
-        attemptId,
-        invoiceId: invoice.invoice_id,
-        provider: invoice.swap?.provider,
-        elapsedMs: Date.now() - startedAt,
-      });
-      res.status(200).json({ invoice });
-    } catch (error) {
-      if (error instanceof OpenReceiveServiceError || error instanceof HelloFruitDemoOrderError) {
-        res.status(error.status).json(error.body);
-        return;
-      }
       next(error);
     }
   });
@@ -342,7 +217,7 @@ export async function createHelloFruitStaticServer(options: HelloFruitOpenReceiv
 
 async function authorizeOrderAccess(_req: express.Request, _orderId: string): Promise<void> {
   // Demo seam: production apps should verify the signed-in/session caller owns
-  // this order before proxying OpenReceive order, swap, or refund methods.
+  // this order before forwarding the request to openreceive.order(body).
 }
 
 function summarizeOrderRequest(body: Record<string, unknown>): Record<string, unknown> {
@@ -365,18 +240,6 @@ function summarizeOrderRequest(body: Record<string, unknown>): Record<string, un
   };
 }
 
-function summarizeSettlementFields(value: unknown): Record<string, unknown> {
-  const order =
-    typeof value === "object" && value !== null && !Array.isArray(value)
-      ? (value as Record<string, unknown>)
-      : {};
-  return {
-    settledAtPresent: order.settled_at !== undefined,
-    transactionState: order.transaction_state,
-    state: order.state,
-  };
-}
-
 function asRequestBody(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -391,12 +254,3 @@ function requireRequestString(body: Record<string, unknown>, key: string): strin
   return value;
 }
 
-function createStatusRequest(body: Record<string, unknown>): {
-  readonly orderId: string;
-} {
-  const orderId = body.order_id;
-  if (typeof orderId !== "string" || orderId.length === 0) {
-    throw new HelloFruitDemoOrderError("order_id is required.");
-  }
-  return { orderId };
-}

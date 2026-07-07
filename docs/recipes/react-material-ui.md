@@ -65,7 +65,7 @@ using the headless actions as shown above.
 ```tsx
 <Checkout
   checkout={checkout}
-  statusUrl="/order_status"
+  orderUrl="/order"
   components={{
     Button,
     InvoiceSummary: MaterialInvoiceSummary

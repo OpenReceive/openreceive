@@ -7,7 +7,7 @@ import {
 
 export class CheckoutComponent {
   checkout;
-  statusUrl;
+  orderUrl;
   onSettled;
   onStartOver;
   options = {};
@@ -19,7 +19,7 @@ export class CheckoutComponent {
   get shell() {
     const options = {
       ...this.options,
-      ...(this.statusUrl === undefined ? {} : { statusUrl: this.statusUrl }),
+      ...(this.orderUrl === undefined ? {} : { orderUrl: this.orderUrl }),
       ...(this.onSettled === undefined ? {} : { onSettled: this.onSettled }),
       ...(this.onStartOver === undefined ? {} : { onStartOver: this.onStartOver })
     };
@@ -47,7 +47,7 @@ export class CheckoutComponent {
 }
 
 Input({ required: true })(CheckoutComponent.prototype, "checkout");
-Input()(CheckoutComponent.prototype, "statusUrl");
+Input()(CheckoutComponent.prototype, "orderUrl");
 Input()(CheckoutComponent.prototype, "onSettled");
 Input()(CheckoutComponent.prototype, "onStartOver");
 Input()(CheckoutComponent.prototype, "options");
@@ -75,7 +75,7 @@ Component({
         [attr.amount-msats]="checkoutAttributes['amount-msats']"
         [attr.status]="checkoutAttributes.status"
         [attr.expires-at]="checkoutAttributes['expires-at']"
-        [attr.status-url]="checkoutAttributes['status-url']"
+        [attr.order-url]="checkoutAttributes['order-url']"
         [attr.theme]="checkoutAttributes.theme"
         [attr.payment-wizard]="checkoutAttributes['payment-wizard']"
         (openreceive-copy)="onCheckoutEvent(openReceiveEvents.copy, $event)"

@@ -47,6 +47,7 @@ import {
   type OpenReceiveBrowserLogEntry,
   type OpenReceiveBrowserLogLevel,
   type OpenReceiveBrowserLogger,
+  type OpenReceiveCheckoutPaymentMethod,
   type OpenReceiveCheckoutShellProps,
   type OpenReceivePaymentMethod,
   type OpenReceiveQrEncoder,
@@ -511,7 +512,7 @@ export function createOpenReceiveStatusFetcher(
     }
 
     const headers = options.headers === undefined ? {} : options.headers;
-    const response = await fetcher(resolveStatusUrl(options.statusUrl, order_id), {
+    const response = await fetcher(resolveOrderUrl(options.orderUrl, order_id), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -546,13 +547,13 @@ function resolveCheckoutUrl(
     : url;
 }
 
-function resolveStatusUrl(statusUrl: string, orderId: string): string {
-  if (statusUrl.includes("{orderId}")) {
-    return statusUrl.replaceAll("{orderId}", encodeURIComponent(orderId));
+function resolveOrderUrl(orderUrl: string, orderId: string): string {
+  if (orderUrl.includes("{orderId}")) {
+    return orderUrl.replaceAll("{orderId}", encodeURIComponent(orderId));
   }
-  return statusUrl.includes("{order_id}")
-    ? statusUrl.replaceAll("{order_id}", encodeURIComponent(orderId))
-    : statusUrl;
+  return orderUrl.includes("{order_id}")
+    ? orderUrl.replaceAll("{order_id}", encodeURIComponent(orderId))
+    : orderUrl;
 }
 
 function checkoutSnapshotFromResponseBody(body: unknown): CheckoutSnapshot {
@@ -564,6 +565,17 @@ function checkoutSnapshotFromResponseBody(body: unknown): CheckoutSnapshot {
 
 function checkoutSnapshotFromStatusBody(body: unknown): CheckoutSnapshot | null {
   const record = asRecord(body);
+  const snapshot = extractCheckoutSnapshotFromStatusBody(record);
+  if (snapshot === null) return null;
+  // Payable assets ride on the order object itself (payment_methods), so the
+  // element lists methods without a second call.
+  const paymentMethods = normalizePaymentMethods(record.payment_methods);
+  return paymentMethods === undefined ? snapshot : { ...snapshot, payment_methods: paymentMethods };
+}
+
+function extractCheckoutSnapshotFromStatusBody(
+  record: Record<string, unknown>,
+): CheckoutSnapshot | null {
   if (typeof record.checkout_id === "string") {
     return normalizeCheckoutSnapshot(record);
   }
@@ -591,6 +603,53 @@ function checkoutSnapshotFromStatusBody(body: unknown): CheckoutSnapshot | null 
   }
 
   return null;
+}
+
+function normalizePaymentMethods(
+  value: unknown,
+): readonly OpenReceiveCheckoutPaymentMethod[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value
+    .map(normalizePaymentMethod)
+    .filter((method): method is OpenReceiveCheckoutPaymentMethod => method !== undefined);
+}
+
+function normalizePaymentMethod(input: unknown): OpenReceiveCheckoutPaymentMethod | undefined {
+  const record = asRecord(input);
+  const payInAsset = optionalString(record.pay_in_asset);
+  const label = optionalString(record.label);
+  const networkLabel = optionalString(record.network_label);
+  const provider = optionalString(record.provider);
+  if (
+    payInAsset === undefined ||
+    label === undefined ||
+    networkLabel === undefined ||
+    provider === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    pay_in_asset: payInAsset,
+    label,
+    network_label: networkLabel,
+    provider,
+    available: record.available === true,
+    ...(optionalString(record.unavailable_reason) === undefined
+      ? {}
+      : { unavailable_reason: optionalString(record.unavailable_reason) }),
+    ...(optionalString(record.unavailable_message) === undefined
+      ? {}
+      : { unavailable_message: optionalString(record.unavailable_message) }),
+    ...(optionalString(record.pay_amount) === undefined
+      ? {}
+      : { pay_amount: optionalString(record.pay_amount) }),
+    ...(optionalString(record.minimum_pay_amount) === undefined
+      ? {}
+      : { minimum_pay_amount: optionalString(record.minimum_pay_amount) }),
+    ...(optionalString(record.maximum_pay_amount) === undefined
+      ? {}
+      : { maximum_pay_amount: optionalString(record.maximum_pay_amount) }),
+  };
 }
 
 function normalizeCheckoutSnapshot(input: unknown): CheckoutSnapshot {
@@ -1119,10 +1178,10 @@ export class OpenReceiveBrowserCheckoutController implements CheckoutController 
   private createWatcher(options: CheckoutControllerOptions): CheckoutWatcher {
     const refreshStatus =
       options.refreshStatus ??
-      (options.statusUrl === undefined
+      (options.orderUrl === undefined
         ? undefined
         : createOpenReceiveStatusFetcher({
-            statusUrl: options.statusUrl,
+            orderUrl: options.orderUrl,
             fetch: options.fetch,
             headers: options.statusHeaders,
           }));

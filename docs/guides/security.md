@@ -27,7 +27,7 @@ Default route policy:
   OpenReceive.
 - Order status reads require ownership of the invoice, order, cart, or checkout
   session.
-- Status refresh happens behind your `/order_status` or equivalent app route
+- Status refresh happens behind your `/order` or equivalent app route
   when payment status should not be public.
 - Optional background settlement sweeps must run server-side and keep the
   receive-only NWC code out of browser code.

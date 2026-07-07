@@ -41,73 +41,96 @@ Never send provider keys, provider secrets, or `openreceive.yml` to browser code
 
 ## Payer Flow
 
-OpenReceive performs no authentication or authorization. Treat `order_id` and
-`attempt_id` as non-secret identifiers, not capabilities. Call `swapOptions`,
-`swapQuote`, `startSwap`, and `refundSwap` only from backend routes where your
-application has already authorized the caller to act on that order.
+The whole payer experience is one backend route plus one checkout attribute. Your
+route authorizes the order its own way, then forwards the request body to
+`openreceive.order(body)`:
 
-The app asks `swapOptions({ orderId })` for configured payment methods and cached provider limits. This catalog call does not request live provider prices, so it should not block the primary Lightning checkout path. OpenReceive does not take a payer country code or perform geolocation gating for swap providers. If a provider cannot serve a payer's region, the application should hide or disable that method before calling `swapQuote` or `startSwap`, because the application owns payer geolocation and eligibility checks.
-
-When the payer chooses an asset, call `swapQuote({ orderId, payInAsset })` to make the single live quote request for that asset and show the estimate. Then call `startSwap({ orderId, payInAsset })` to create the provider order. The response is a public invoice payload for the swap attempt:
-
-```json
-{
-  "invoice_id": "or_inv_swap_shadow_1",
-  "type": "incoming",
-  "rail": "swap",
-  "status": "pending",
-  "transaction_state": "pending",
-  "workflow_state": "invoice_created",
-  "invoice": null,
-  "payment_hash": "9b8c...",
-  "amount_msats": 200000,
-  "order_id": "order_123",
-  "created_at": 1783360530,
-  "expires_at": 1783361130,
-  "fiat_quote": null,
-  "settlement_action_state": "pending",
-  "swap": {
-    "attempt_id": "or_inv_swap_shadow_1",
-    "provider": "fixedfloat",
-    "provider_order_id": "ff-order-1",
-    "pay_in_asset": "USDT_TRON",
-    "deposit_address": "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
-    "deposit_amount": "1.05",
-    "provider_state": "awaiting_deposit",
-    "provider_expires_at": 1783361130
-  }
+```ts
+// app-owned route — you authorize, OpenReceive routes the rest
+export async function POST(request: Request): Promise<Response> {
+  const body = await request.json();
+  await authorizeOrderAccess(request, body.order_id); // your own session/ownership check
+  return Response.json(await openreceive.order(body));
 }
 ```
 
-Show the payer `swap.deposit_address`, `swap.deposit_amount`, `swap.pay_in_asset`, and the provider expiry. Provider tokens are private and never appear in this response.
+OpenReceive performs no authentication or authorization. Treat `order_id` and
+`attempt_id` as non-secret identifiers, not capabilities — authorize the caller in
+your route before forwarding. `order()` takes no auth callback and adds no new
+payment logic; it is a thin router over the existing server behavior.
 
-Do not send an idempotency key for swap start. OpenReceive owns duplicate protection on the server: repeated `startSwap` calls for the same order's current checkout and asset reuse the existing active attempt, or return a conflict while the provider order is still being prepared. A new attempt is created only after the existing attempt expires or reaches a terminal provider state.
+Point the checkout element at that one route with `order-url` (or the `orderUrl`
+prop on the framework components):
 
-Token payments use an address-only QR plus copyable exact amount and network warnings. Native ETH and SOL may use amount-bearing QR payloads. Show a prominent warning that payers must pay with one method only. If a payer pays the original Lightning invoice and also sends funds to a swap deposit address, the merchant can receive both payments; OpenReceive dedupes fulfillment semantics, not payer funds.
+```html
+<openreceive-checkout order-id="order_123" order-url="/order"></openreceive-checkout>
+```
+
+The element drives everything else through that single route: it polls the order
+for status, lists the payable assets, creates the deposit address the payer sends
+to, and handles refunds. Payable assets ride on the order object itself as
+`payment_methods`, so listing methods costs no extra call:
+
+```json
+{
+  "order_id": "order_123",
+  "status": "pending",
+  "paid": false,
+  "payment_methods": [
+    {
+      "pay_in_asset": "USDT_TRON",
+      "label": "USDT",
+      "network_label": "Tron",
+      "provider": "fixedfloat",
+      "available": true,
+      "pay_amount": "1.05"
+    }
+  ]
+}
+```
+
+Behavior is unchanged from the lower-level methods: OpenReceive owns duplicate
+protection (repeated starts for the same order, checkout, and asset reuse the
+active attempt), provider tokens never reach the browser, and payer geolocation
+and eligibility stay the application's responsibility.
+
+The payer sees the deposit address, exact amount, asset and network, and provider
+expiry. Token payments use an address-only QR plus a copyable exact amount and
+network warnings; native ETH and SOL may use amount-bearing QR payloads. Warn
+payers to pay with one method only — if a payer pays the Lightning invoice and
+also sends funds to a deposit address, the merchant can receive both.
 
 ## Refund Flow
 
-If the provider reports `refund_required`, the public swap payload includes a
-short-lived `refund_nonce`. Collect a refund address for the same network from
-the authorized order session, then call:
+Refunds ride the same route with no extra wiring. When the provider reports
+`refund_required`, the checkout element collects a refund address for the same
+network, shows it back for explicit confirmation, and submits the confirmed
+refund — all through `order-url`.
 
-```ts
-await openreceive.refundSwap({
-  attemptId: swap.attempt_id,
-  refundAddress,
-  refundNonce: swap.refund_nonce,
-  confirm: false
-});
-```
+Warn payers to use an address they control and not to paste the deposit address.
+Shape validation catches obvious mistakes, but it cannot prove that an address
+belongs to the intended wallet or network.
 
-OpenReceive stores and echoes the address while the provider state remains
-`refund_required`. Show the payer the address, asset, and network for explicit
-confirmation, then call the same method with `confirm: true`. The provider refund
-is requested only after the confirmation call succeeds.
+## Custom UIs
 
-Use `swap.attempt_id`; do not target refunds by order id plus asset, because a payer may have multiple attempts for the same asset.
+The single route covers the built-in checkout. To build a fully custom UI,
+`openreceive.order(body)` is a thin router over four lower-level methods that stay
+available as escape hatches. Call them only from backend routes where you have
+already authorized the caller. The `action` in the forwarded body selects one:
 
-Warn payers to use an address they control and not to paste the deposit address. Shape validation catches obvious mistakes, but it cannot prove that an address belongs to the intended wallet or network.
+| `action` | routes to | returns |
+| --- | --- | --- |
+| omitted / `"status"` | `getOrder` + `swapOptions` | order object + `payment_methods` |
+| `"quote"` | `swapQuote` | `{ quote }` — one live estimate |
+| `"start"` | `startSwap` | `{ invoice }` — the swap attempt payload |
+| `"refund"` | `refundSwap` | `{ invoice }` |
+
+`startSwap` returns a public invoice whose `swap` block carries `attempt_id`,
+`deposit_address`, `deposit_amount`, `pay_in_asset`, `provider_state`, and the
+provider expiry. Refund is two-phase: submit with `confirm: false` to stage and
+echo the address while the state is `refund_required`, then `confirm: true` to
+request the provider refund. Target refunds by `attempt_id`, not order id plus
+asset, because a payer may have multiple attempts for one asset.
 
 ## Settlement Authority
 

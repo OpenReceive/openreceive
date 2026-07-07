@@ -361,10 +361,7 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
           )}
           <Checkout
             checkout={checkout}
-            statusUrl="/order_status"
-            swapOptionsUrl="/swap_options"
-            swapStartUrl="/swap_start"
-            swapRefundUrl="/swap_refund"
+            orderUrl="/order"
             logger={logOpenReceive}
             onError={(cause) => {
               logDemo("checkout.error", "Checkout component reported an error.", {

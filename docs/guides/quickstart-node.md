@@ -134,7 +134,7 @@ export function CheckoutView({ checkout }) {
   return (
     <Checkout
       checkout={checkout}
-      statusUrl="/order_status"
+      orderUrl="/order"
       onSettled={reloadOrder}
       onStartOver={returnToCart}
     />
@@ -155,7 +155,7 @@ defineProps<{ checkout: unknown }>();
 <template>
   <Checkout
     :checkout="checkout"
-    status-url="/order_status"
+    order-url="/order"
     :on-settled="reloadOrder"
     :on-start-over="returnToCart"
   />
@@ -174,7 +174,7 @@ defineProps<{ checkout: unknown }>();
 
 <Checkout
   {checkout}
-  statusUrl="/order_status"
+  orderUrl="/order"
   onSettled={reloadOrder}
   onStartOver={returnToCart}
 />
@@ -190,7 +190,7 @@ import "@openreceive/angular/styles.css";
 ```html
 <openreceive-angular-checkout
   [checkout]="checkout"
-  statusUrl="/order_status"
+  orderUrl="/order"
   [onSettled]="reloadOrder"
   [onStartOver]="returnToCart"
 ></openreceive-angular-checkout>

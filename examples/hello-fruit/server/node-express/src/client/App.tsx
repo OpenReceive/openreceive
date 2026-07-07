@@ -490,10 +490,7 @@ function FrameworkCheckout({
     let cleanup: () => void = () => undefined;
 
     const options = {
-      statusUrl: "/order_status",
-      swapOptionsUrl: "/swap_options",
-      swapStartUrl: "/swap_start",
-      swapRefundUrl: "/swap_refund",
+      orderUrl: "/order",
       rootSelector: ".page",
       defaultTheme: "light" as const,
       onError: (event: Event) => {
@@ -522,15 +519,12 @@ function FrameworkCheckout({
 
         const app = createApp(VueCheckout, {
           checkout,
-          statusUrl: options.statusUrl,
+          orderUrl: options.orderUrl,
           onSettled: options.onSettled,
           onStartOver,
           options: {
             rootSelector: options.rootSelector,
             defaultTheme: options.defaultTheme,
-            swapOptionsUrl: options.swapOptionsUrl,
-            swapStartUrl: options.swapStartUrl,
-            swapRefundUrl: options.swapRefundUrl,
             onError: options.onError,
           },
         });
@@ -562,15 +556,12 @@ function FrameworkCheckout({
           hostElement: mountTarget,
         });
         component.setInput("checkout", checkout);
-        component.setInput("statusUrl", options.statusUrl);
+        component.setInput("orderUrl", options.orderUrl);
         component.setInput("onSettled", options.onSettled);
         component.setInput("onStartOver", onStartOver);
         component.setInput("options", {
           rootSelector: options.rootSelector,
           defaultTheme: options.defaultTheme,
-          swapOptionsUrl: options.swapOptionsUrl,
-          swapStartUrl: options.swapStartUrl,
-          swapRefundUrl: options.swapRefundUrl,
           onError: options.onError,
         });
         application.attachView(component.hostView);
@@ -596,15 +587,12 @@ function FrameworkCheckout({
           target: mountTarget,
           props: {
             checkout,
-            statusUrl: options.statusUrl,
+            orderUrl: options.orderUrl,
             onSettled: options.onSettled,
             onStartOver,
             options: {
               rootSelector: options.rootSelector,
               defaultTheme: options.defaultTheme,
-              swapOptionsUrl: options.swapOptionsUrl,
-              swapStartUrl: options.swapStartUrl,
-              swapRefundUrl: options.swapRefundUrl,
               onError: options.onError,
             },
           },
@@ -636,10 +624,7 @@ function FrameworkCheckout({
       <Checkout
         className="demo-checkout"
         checkout={checkout}
-        statusUrl="/order_status"
-        swapOptionsUrl="/swap_options"
-        swapStartUrl="/swap_start"
-        swapRefundUrl="/swap_refund"
+        orderUrl="/order"
         logger={logOpenReceive}
         onError={onError}
         onSettled={onSettled}

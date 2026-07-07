@@ -8,14 +8,14 @@
   } from "./index.js";
 
   export let checkout: CheckoutSnapshot;
-  export let statusUrl: string | undefined = undefined;
+  export let orderUrl: string | undefined = undefined;
   export let onSettled: ((event: Event) => void) | undefined = undefined;
   export let onStartOver: ((event: Event) => void) | undefined = undefined;
   export let options: CheckoutShellOptions = {};
 
   $: shell = createOpenReceiveSvelteCheckoutShellBinding(checkout, {
     ...options,
-    ...(statusUrl === undefined ? {} : { statusUrl }),
+    ...(orderUrl === undefined ? {} : { orderUrl }),
     ...(onSettled === undefined ? {} : { onSettled }),
     ...(onStartOver === undefined ? {} : { onStartOver })
   });

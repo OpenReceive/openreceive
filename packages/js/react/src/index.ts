@@ -82,7 +82,7 @@ export interface UseCheckoutOptions extends CheckoutData {
   readonly logger?: OpenReceiveBrowserLogger;
   readonly onError?: (error: unknown) => void;
   readonly refreshStatus?: CheckoutStatusRefresh;
-  readonly statusUrl?: string | false;
+  readonly orderUrl?: string | false;
   readonly onState?: (state: CheckoutState) => void;
   readonly onSettled?: () => void;
   readonly polling?: boolean;
@@ -204,7 +204,7 @@ export interface CheckoutProps
   readonly logger?: OpenReceiveBrowserLogger;
   readonly onError?: (error: unknown) => void;
   readonly refreshStatus?: CheckoutStatusRefresh;
-  readonly statusUrl?: string | false;
+  readonly orderUrl?: string | false;
   readonly onState?: (state: CheckoutState) => void;
   readonly onSettled?: () => void;
   readonly onStartOver?: () => void;
@@ -214,9 +214,6 @@ export interface CheckoutProps
   readonly defaultTheme?: OpenReceiveThemePreference;
   readonly themeStorageKey?: string;
   readonly countryStorageKey?: string;
-  readonly swapOptionsUrl?: string | false;
-  readonly swapStartUrl?: string | false;
-  readonly swapRefundUrl?: string | false;
   readonly components?: CheckoutComponents;
   readonly classNames?: CheckoutClassNames;
   readonly children?: CheckoutChildren;
@@ -272,9 +269,7 @@ export interface PaymentWizardProps {
   readonly logger?: OpenReceiveBrowserLogger;
   readonly logContext?: OpenReceiveBrowserLogContext;
   readonly countryStorageKey?: string;
-  readonly swapOptionsUrl?: string | false;
-  readonly swapStartUrl?: string | false;
-  readonly swapRefundUrl?: string | false;
+  readonly orderUrl?: string | false;
   readonly fetch?: typeof globalThis.fetch;
   readonly clipboard?: Pick<Clipboard, "writeText">;
   readonly qrEncoder?: OpenReceiveQrEncoder;
@@ -415,11 +410,11 @@ export function createCheckoutViewModel(
 }
 
 function resolveCheckoutStatusRefreshUrl(options: {
-  readonly statusUrl?: string | false;
+  readonly orderUrl?: string | false;
   readonly polling?: boolean;
 }): string | undefined {
-  if (options.polling === false || options.statusUrl === false) return undefined;
-  return options.statusUrl;
+  if (options.polling === false || options.orderUrl === false) return undefined;
+  return options.orderUrl;
 }
 
 export function useCheckout(
@@ -475,15 +470,15 @@ export function useCheckout(
   );
   const refreshStatus =
     options.polling === false ? undefined : options.refreshStatus;
-  const statusUrl = resolveCheckoutStatusRefreshUrl({
-    statusUrl: options.statusUrl,
+  const orderUrl = resolveCheckoutStatusRefreshUrl({
+    orderUrl: options.orderUrl,
     polling: options.polling
   });
   React.useEffect(() => {
     const controller = createCheckoutController({
       snapshot,
       ...(refreshStatus === undefined ? {} : { refreshStatus }),
-      ...(statusUrl === undefined ? {} : { statusUrl }),
+      ...(orderUrl === undefined ? {} : { orderUrl }),
       pollIntervalMs: options.pollIntervalMs,
       logger: options.logger,
       onError: options.onError,
@@ -497,6 +492,9 @@ export function useCheckout(
     });
     controllerRef.current = controller;
     controller.start();
+    // Refresh once immediately so the order object (and its payment_methods)
+    // is available without waiting for the first poll interval.
+    void controller.reloadState().catch(() => undefined);
 
     return () => {
       controller.stop();
@@ -505,7 +503,7 @@ export function useCheckout(
   }, [
     snapshot,
     refreshStatus,
-    statusUrl,
+    orderUrl,
     options.pollIntervalMs,
     options.logger,
     options.onError,
@@ -1002,10 +1000,6 @@ export function PaymentWizard(
     readonly index: number;
     readonly copied: boolean;
   } | null>(null);
-  const [swapOptions, setSwapOptions] = React.useState<OpenReceiveSwapOptionsResult>({
-    enabled: false,
-    options: []
-  });
   const [swapStartingAsset, setSwapStartingAsset] = React.useState<string | null>(null);
   const [startedSwapInvoice, setStartedSwapInvoice] =
     React.useState<CheckoutInvoiceSnapshot | null>(null);
@@ -1013,36 +1007,12 @@ export function PaymentWizard(
   const fetcher = props.fetch ?? globalThis.fetch;
   const checkout = props.checkout;
   const orderId = checkout?.order_id;
-
-  React.useEffect(() => {
-    if (
-      props.swapOptionsUrl === undefined ||
-      props.swapOptionsUrl === false ||
-      orderId === undefined ||
-      fetcher === undefined
-    ) {
-      setSwapOptions({ enabled: false, options: [] });
-      return;
-    }
-
-    let cancelled = false;
-    void postOpenReceiveJson(fetcher, props.swapOptionsUrl, {
-      order_id: orderId
-    })
-      .then((body) => {
-        if (cancelled) return;
-        setSwapOptions(normalizeSwapOptionsResult(body));
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        props.onError?.(error);
-        setSwapOptions({ enabled: false, options: [] });
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [props.swapOptionsUrl, orderId, fetcher, props.onError]);
+  // Payable assets ride on the order object itself (payment_methods), so the
+  // wizard lists methods straight from the polled order snapshot — no extra call.
+  const swapOptions = React.useMemo<OpenReceiveSwapOptionsResult>(() => {
+    const methods = checkout?.payment_methods ?? [];
+    return { enabled: methods.length > 0, options: methods };
+  }, [checkout]);
 
   const currentSwapInvoice = React.useMemo(
     () => selectCurrentSwapInvoice(checkout, startedSwapInvoice, dismissedSwapInvoiceId),
@@ -1052,8 +1022,8 @@ export function PaymentWizard(
   const startSwap = React.useCallback(
     async (payInAsset: string) => {
       if (
-        props.swapStartUrl === undefined ||
-        props.swapStartUrl === false ||
+        props.orderUrl === undefined ||
+        props.orderUrl === false ||
         orderId === undefined ||
         fetcher === undefined
       ) {
@@ -1061,8 +1031,9 @@ export function PaymentWizard(
       }
       setSwapStartingAsset(payInAsset);
       try {
-        const body = await postOpenReceiveJson(fetcher, props.swapStartUrl, {
+        const body = await postOpenReceiveJson(fetcher, props.orderUrl, {
           order_id: orderId,
+          action: "start",
           pay_in_asset: payInAsset
         });
         const invoice = normalizeSwapStartInvoice(body);
@@ -1074,7 +1045,7 @@ export function PaymentWizard(
         setSwapStartingAsset(null);
       }
     },
-    [props.swapStartUrl, orderId, fetcher, props.onError]
+    [props.orderUrl, orderId, fetcher, props.onError]
   );
   const refundSwap = React.useCallback(
     async (
@@ -1084,15 +1055,17 @@ export function PaymentWizard(
       confirm: boolean
     ) => {
       if (
-        props.swapRefundUrl === undefined ||
-        props.swapRefundUrl === false ||
+        props.orderUrl === undefined ||
+        props.orderUrl === false ||
+        orderId === undefined ||
         fetcher === undefined
       ) {
         return;
       }
       try {
-        const body = await postOpenReceiveJson(fetcher, props.swapRefundUrl, {
-          ...(orderId === undefined ? {} : { order_id: orderId }),
+        const body = await postOpenReceiveJson(fetcher, props.orderUrl, {
+          order_id: orderId,
+          action: "refund",
           attempt_id: attemptId,
           refund_address: refundAddress,
           refund_nonce: refundNonce,
@@ -1105,7 +1078,7 @@ export function PaymentWizard(
         props.onError?.(error);
       }
     },
-    [props.swapRefundUrl, orderId, fetcher, props.onError]
+    [props.orderUrl, orderId, fetcher, props.onError]
   );
   const updateWizardSelection = React.useCallback(
     (
@@ -1866,55 +1839,6 @@ async function postOpenReceiveJson(
   return parsed;
 }
 
-function normalizeSwapOptionsResult(body: unknown): OpenReceiveSwapOptionsResult {
-  const record = reactRecord(body);
-  const options = Array.isArray(record.options)
-    ? record.options.map(normalizeSwapOptionDisplay).filter((option): option is OpenReceiveSwapOptionDisplay => option !== undefined)
-    : [];
-  return {
-    enabled: record.enabled === true,
-    options
-  };
-}
-
-function normalizeSwapOptionDisplay(input: unknown): OpenReceiveSwapOptionDisplay | undefined {
-  const record = reactRecord(input);
-  const payInAsset = reactString(record.pay_in_asset);
-  const label = reactString(record.label);
-  const networkLabel = reactString(record.network_label);
-  const provider = reactString(record.provider);
-  if (
-    payInAsset === undefined ||
-    label === undefined ||
-    networkLabel === undefined ||
-    provider === undefined
-  ) {
-    return undefined;
-  }
-  return {
-    pay_in_asset: payInAsset,
-    label,
-    network_label: networkLabel,
-    provider,
-    available: record.available === true,
-    ...(reactString(record.unavailable_reason) === undefined
-      ? {}
-      : { unavailable_reason: reactString(record.unavailable_reason) }),
-    ...(reactString(record.unavailable_message) === undefined
-      ? {}
-      : { unavailable_message: reactString(record.unavailable_message) }),
-    ...(reactString(record.pay_amount) === undefined
-      ? {}
-      : { pay_amount: reactString(record.pay_amount) }),
-    ...(reactString(record.minimum_pay_amount) === undefined
-      ? {}
-      : { minimum_pay_amount: reactString(record.minimum_pay_amount) }),
-    ...(reactString(record.maximum_pay_amount) === undefined
-      ? {}
-      : { maximum_pay_amount: reactString(record.maximum_pay_amount) })
-  };
-}
-
 function normalizeSwapStartInvoice(body: unknown): CheckoutInvoiceSnapshot {
   const record = reactRecord(body);
   const invoice = reactRecord(record.invoice ?? body);
@@ -2238,7 +2162,7 @@ export function Checkout(
     logger,
     onError,
     refreshStatus,
-    statusUrl,
+    orderUrl,
     onState,
     onSettled,
     onStartOver,
@@ -2248,9 +2172,6 @@ export function Checkout(
     defaultTheme,
     themeStorageKey,
     countryStorageKey,
-    swapOptionsUrl,
-    swapStartUrl,
-    swapRefundUrl,
     components,
     classNames,
     children,
@@ -2262,7 +2183,7 @@ export function Checkout(
     logger,
     onError,
     refreshStatus,
-    statusUrl,
+    orderUrl,
     onState,
     onSettled,
     polling
@@ -2389,9 +2310,7 @@ export function Checkout(
             logger,
             onError,
             countryStorageKey,
-            swapOptionsUrl,
-            swapStartUrl,
-            swapRefundUrl,
+            orderUrl,
             qrEncoder,
             logContext: getCheckoutLogContext({
               invoice_id: checkoutModel.invoice_id,

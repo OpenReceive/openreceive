@@ -197,6 +197,19 @@ export interface OpenReceiveSwapRefundRequest {
   readonly confirm?: boolean;
 }
 
+export type OpenReceiveOrderRequest =
+  | { order_id: string; action?: "status" }
+  | { order_id: string; action: "quote"; pay_in_asset: string }
+  | { order_id: string; action: "start"; pay_in_asset: string }
+  | {
+      order_id: string;
+      action: "refund";
+      attempt_id: string;
+      refund_address: string;
+      refund_nonce: string;
+      confirm?: boolean;
+    };
+
 export interface OpenReceiveSwapOption {
   readonly pay_in_asset: OpenReceiveSwapPayInAsset;
   readonly label: string;
@@ -282,6 +295,7 @@ export interface OpenReceiveOrder {
   readonly checkouts: readonly OpenReceiveCheckout[];
   readonly wallet_scan_performed: boolean;
   readonly transactions_checked: number;
+  readonly payment_methods?: readonly OpenReceiveSwapOption[];
 }
 
 export interface OpenReceive {
@@ -291,6 +305,7 @@ export interface OpenReceive {
   createCheckout(input: OpenReceiveCreateCheckoutRequest): Promise<OpenReceiveCheckout>;
   getOrCreateCheckout(input: OpenReceiveGetOrCreateCheckoutRequest): Promise<OpenReceiveCheckout>;
   getOrder(input: OpenReceiveGetOrderRequest): Promise<OpenReceiveOrder>;
+  order(input: OpenReceiveOrderRequest): Promise<unknown>;
   getCheckout(input: OpenReceiveGetCheckoutRequest): Promise<OpenReceiveCheckout>;
   sweepPendingInvoices(): Promise<OpenReceivePendingSweepResult>;
   swapOptions(input: OpenReceiveSwapOptionsRequest): Promise<OpenReceiveSwapOptionsResponse>;
@@ -476,7 +491,7 @@ export async function createOpenReceive(
       toWireCheckout(await createCheckout(context, input)),
     );
 
-  return {
+  const service: OpenReceive = {
     store,
     namespace,
     priceCurrencies,
@@ -514,6 +529,29 @@ export async function createOpenReceive(
         toWireInvoice(await refundSwap(context, input)),
       );
     },
+    async order(input) {
+      const orderId = input.order_id;
+      switch (input.action) {
+        case "quote":
+          return { quote: await service.swapQuote({ orderId, payInAsset: input.pay_in_asset }) };
+        case "start":
+          return { invoice: await service.startSwap({ orderId, payInAsset: input.pay_in_asset }) };
+        case "refund":
+          return {
+            invoice: await service.refundSwap({
+              attemptId: input.attempt_id,
+              refundAddress: input.refund_address,
+              refundNonce: input.refund_nonce,
+              confirm: input.confirm === true,
+            }),
+          };
+        default: {
+          const order = await service.getOrder({ orderId });
+          const swap = await service.swapOptions({ orderId });
+          return { ...order, payment_methods: swap.enabled ? swap.options : [] };
+        }
+      }
+    },
     async listRates(input) {
       return await runOpenReceiveOperation(context, () => listRates(context, input));
     },
@@ -525,6 +563,8 @@ export async function createOpenReceive(
       await closeOpenReceiveResource(client);
     },
   };
+
+  return service;
 }
 
 async function createCheckout(

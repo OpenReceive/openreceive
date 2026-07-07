@@ -57,6 +57,7 @@ export type {
   OpenReceiveNodeOptions,
   OpenReceiveNodeSettlementActionHook,
   OpenReceiveNodeSettlementActionInput,
+  OpenReceiveOrderRequest,
   OpenReceivePendingSweepResult,
   OpenReceiveSwapOption,
   OpenReceiveSwapOptions,

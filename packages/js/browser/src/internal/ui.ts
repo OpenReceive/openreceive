@@ -450,6 +450,19 @@ export interface CheckoutInvoiceSnapshot {
   readonly swap?: CheckoutInvoiceSwapSnapshot;
 }
 
+export interface OpenReceiveCheckoutPaymentMethod {
+  readonly pay_in_asset: string;
+  readonly label: string;
+  readonly network_label: string;
+  readonly provider: string;
+  readonly available: boolean;
+  readonly unavailable_reason?: string;
+  readonly unavailable_message?: string;
+  readonly pay_amount?: string;
+  readonly minimum_pay_amount?: string;
+  readonly maximum_pay_amount?: string;
+}
+
 export interface CheckoutSnapshot {
   readonly checkout_id: string;
   readonly order_id: string;
@@ -464,6 +477,7 @@ export interface CheckoutSnapshot {
   readonly invoices: readonly CheckoutInvoiceSnapshot[];
   readonly wallet_scan_performed?: boolean;
   readonly transactions_checked?: number;
+  readonly payment_methods?: readonly OpenReceiveCheckoutPaymentMethod[];
 }
 
 export interface CheckoutDisplayData {
@@ -506,10 +520,7 @@ export const OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES = {
   fiatValue: "fiat-value",
   status: "status",
   expiresAt: "expires-at",
-  statusUrl: "status-url",
-  swapOptionsUrl: "swap-options-url",
-  swapStartUrl: "swap-start-url",
-  swapRefundUrl: "swap-refund-url",
+  orderUrl: "order-url",
   theme: "theme",
   paymentWizard: "payment-wizard",
 } as const;
@@ -522,10 +533,7 @@ export const OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES = {
 } as const;
 
 export interface CheckoutElementAttributeOptions {
-  readonly statusUrl?: string;
-  readonly swapOptionsUrl?: string;
-  readonly swapStartUrl?: string;
-  readonly swapRefundUrl?: string;
+  readonly orderUrl?: string;
   readonly theme?: OpenReceiveResolvedTheme;
   readonly paymentWizard?: boolean;
 }
@@ -717,7 +725,7 @@ export interface RequestCheckoutBaseOptions {
 }
 
 export interface CreateOpenReceiveStatusFetcherOptions {
-  readonly statusUrl: string;
+  readonly orderUrl: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly headers?: Readonly<Record<string, string>>;
 }
@@ -737,7 +745,7 @@ export interface CheckoutWatcherOptions {
 
 export interface CheckoutControllerOptions extends Omit<CheckoutWatcherOptions, "onState"> {
   readonly onState?: (state: CheckoutState) => void;
-  readonly statusUrl?: string;
+  readonly orderUrl?: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly statusHeaders?: Readonly<Record<string, string>>;
   readonly clipboard?: Pick<Clipboard, "writeText">;

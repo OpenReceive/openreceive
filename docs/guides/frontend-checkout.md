@@ -51,23 +51,27 @@ import "@openreceive/react/styles.css";
 
 <Checkout
   checkout={checkout}
-  statusUrl="/order_status"
+  orderUrl="/order"
   onSettled={() => showThankYou()}
 />;
 ```
 
+`orderUrl` is the single app route that authorizes the order and forwards the
+body to `openreceive.order(body)`. The component polls it for status and drives
+any automated-swap payment methods through it — see
+[Automated Swaps](./automated-swaps.md).
+
 `onSettled` is a UI hint from status refresh. It is useful for showing a thank-you panel,
 but fulfillment stays in the backend settlement hook.
 
-`statusUrl` is optional. If omitted, React does not invent a status route.
-Apps without a frontend status route can render a static checkout surface
-without status refresh:
+`orderUrl` is optional. If omitted, React does not invent an order route.
+Apps without one can render a static checkout surface without status refresh:
 
 ```tsx
 <Checkout checkout={checkout} polling={false} />;
 ```
 
-Use `statusUrl={false}` to disable URL-based status refresh while still
+Use `orderUrl={false}` to disable URL-based status refresh while still
 allowing a custom `refreshStatus` function.
 
 For app-wide theme attributes and the packaged light/dark toggle:
@@ -151,7 +155,7 @@ defineOpenReceiveElements();
   amount-msats="200000"
   status="pending"
   expires-at="1781943000"
-  status-url="/order_status"
+  order-url="/order"
   theme="dark"
 ></openreceive-checkout>
 ```
@@ -162,19 +166,13 @@ wizard UI from display-safe data. It dispatches UI events such as
 `openreceive-settled`, and `openreceive-error`. Treat all frontend events as
 display hints.
 
-For automated swap payment methods, pass app-owned `swap-options-url`,
-`swap-start-url`, and `swap-refund-url` attributes. Those endpoints call the
-server-side `swapOptions`, `startSwap`, and `refundSwap` methods. If your UI
-shows a live estimate before creating the provider order, expose an app-owned
-quote endpoint that calls `swapQuote({ orderId, payInAsset })` after the payer
-selects an asset. The browser receives deposit instructions and an `attempt_id`;
-provider credentials and tokens remain server-side.
-
-Authorize those endpoints in your application before calling OpenReceive.
+Automated swap payment methods ride the same `order-url`: the element lists
+payable assets, creates deposit addresses, and drives refunds through that one
+route, and provider credentials and tokens stay server-side. Your route must
+authorize the caller before forwarding to `openreceive.order(body)` —
 `order_id`, `attempt_id`, and refund nonces are not authentication credentials.
-When a refund is required, the browser first submits the refund address for
-review and then sends a second request with `confirm: true`; the provider refund
-is not dispatched on the first address submission.
+See [Automated Swaps](./automated-swaps.md) for the backend route and refund
+flow.
 
 ## Vue
 
@@ -190,7 +188,7 @@ defineProps<{ checkout: OpenReceiveCheckout }>();
 <template>
   <Checkout
     :checkout="checkout"
-    status-url="/order_status"
+    order-url="/order"
     :on-settled="showThankYou"
   />
 </template>
@@ -208,7 +206,7 @@ defineProps<{ checkout: OpenReceiveCheckout }>();
 
 <Checkout
   {checkout}
-  statusUrl="/order_status"
+  orderUrl="/order"
   onSettled={showThankYou}
 />
 ```
@@ -233,7 +231,7 @@ defineOpenReceiveElements();
 
 const shell = createOpenReceiveAngularCheckoutShellBinding(checkout, {
   rootSelector: ".page",
-  statusUrl: "/order_status",
+  orderUrl: "/order",
   onSettled: () => showThankYou()
 });
 ```

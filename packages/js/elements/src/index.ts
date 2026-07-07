@@ -711,52 +711,6 @@ async function postElementJson(url: string, body: Record<string, unknown>): Prom
   return parsed;
 }
 
-function normalizeElementSwapOptions(body: unknown): readonly OpenReceiveElementsSwapOption[] {
-  const record = elementRecord(body);
-  if (record.enabled !== true || !Array.isArray(record.options)) return [];
-  return record.options
-    .map(normalizeElementSwapOption)
-    .filter((option): option is OpenReceiveElementsSwapOption => option !== undefined);
-}
-
-function normalizeElementSwapOption(input: unknown): OpenReceiveElementsSwapOption | undefined {
-  const record = elementRecord(input);
-  const payInAsset = elementString(record.pay_in_asset);
-  const label = elementString(record.label);
-  const networkLabel = elementString(record.network_label);
-  const provider = elementString(record.provider);
-  if (
-    payInAsset === undefined ||
-    label === undefined ||
-    networkLabel === undefined ||
-    provider === undefined
-  ) {
-    return undefined;
-  }
-  return {
-    pay_in_asset: payInAsset,
-    label,
-    network_label: networkLabel,
-    provider,
-    available: record.available === true,
-    ...(elementString(record.unavailable_reason) === undefined
-      ? {}
-      : { unavailable_reason: elementString(record.unavailable_reason) }),
-    ...(elementString(record.unavailable_message) === undefined
-      ? {}
-      : { unavailable_message: elementString(record.unavailable_message) }),
-    ...(elementString(record.pay_amount) === undefined
-      ? {}
-      : { pay_amount: elementString(record.pay_amount) }),
-    ...(elementString(record.minimum_pay_amount) === undefined
-      ? {}
-      : { minimum_pay_amount: elementString(record.minimum_pay_amount) }),
-    ...(elementString(record.maximum_pay_amount) === undefined
-      ? {}
-      : { maximum_pay_amount: elementString(record.maximum_pay_amount) })
-  };
-}
-
 function normalizeElementSwapInvoice(body: unknown): CheckoutInvoiceSnapshot {
   const record = elementRecord(body);
   const invoice = elementRecord(record.invoice ?? body);
@@ -851,10 +805,7 @@ export function defineOpenReceiveElements(
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.fiatValue,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.status,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.expiresAt,
-        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.statusUrl,
-        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.swapOptionsUrl,
-        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.swapStartUrl,
-        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.swapRefundUrl,
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderUrl,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentWizard
       ];
@@ -863,14 +814,12 @@ export function defineOpenReceiveElements(
     connectedCallback() {
       this.render();
       this.startCheckoutController();
-      void this.loadSwapOptions();
     }
 
     attributeChangedCallback() {
       if (!this.isConnected) return;
       this.render();
       this.startCheckoutController();
-      void this.loadSwapOptions();
     }
 
     disconnectedCallback() {
@@ -968,7 +917,7 @@ export function defineOpenReceiveElements(
 
     private startCheckoutController(): void {
       const snapshot = this.currentCheckoutSnapshot();
-      const statusUrl = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.statusUrl);
+      const orderUrl = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderUrl);
       if (snapshot === undefined) {
         this.stopCheckoutController();
         return;
@@ -977,21 +926,23 @@ export function defineOpenReceiveElements(
       this.stopCheckoutController();
       this.controller = createCheckoutController({
         snapshot,
-        ...(statusUrl === null
+        ...(orderUrl === null
           ? {}
-          : { statusUrl }),
+          : { orderUrl }),
         logger: options.logger,
         onError: (error) => this.dispatchError(error),
         onState: (nextState) => this.applyCheckoutState(nextState),
         onSnapshot: (snapshot) => {
           this.latestCheckoutSnapshot = snapshot;
+          // Payable assets ride on the order object itself (payment_methods).
+          this.swapOptions = snapshot.payment_methods ?? [];
           const swapInvoice = snapshot.invoices.find((invoice) =>
             invoice.rail === "swap" && invoice.swap !== undefined
           );
           if (swapInvoice !== undefined) {
             this.startedSwapInvoice = swapInvoice;
-            this.render();
           }
+          this.render();
         }
       });
       this.controller.start();
@@ -1131,7 +1082,6 @@ export function defineOpenReceiveElements(
             storageKey: OPENRECEIVE_COUNTRY_STORAGE_KEY
           });
           this.render();
-          void this.loadSwapOptions();
         };
         if (button instanceof HTMLSelectElement) {
           button.addEventListener("change", selectCountry);
@@ -1260,36 +1210,15 @@ export function defineOpenReceiveElements(
       if (tutorial instanceof HTMLElement) tutorial.focus();
     }
 
-    private async loadSwapOptions(): Promise<void> {
-      const url = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.swapOptionsUrl);
-      const orderId = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
-      if (url === null || orderId === null || orderId.length === 0 || globalThis.fetch === undefined) {
-        if (this.swapOptions.length > 0) {
-          this.swapOptions = [];
-          this.render();
-        }
-        return;
-      }
-
-      try {
-        const body = await postElementJson(url, {
-          order_id: orderId
-        });
-        this.swapOptions = normalizeElementSwapOptions(body);
-        this.render();
-      } catch (error) {
-        this.dispatchError(error);
-      }
-    }
-
     private async startSwap(payInAsset: string): Promise<void> {
-      const url = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.swapStartUrl);
+      const url = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderUrl);
       const orderId = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
       if (url === null || orderId === null || orderId.length === 0) return;
 
       try {
         const body = await postElementJson(url, {
           order_id: orderId,
+          action: "start",
           pay_in_asset: payInAsset
         });
         this.startedSwapInvoice = normalizeElementSwapInvoice(body);
@@ -1306,13 +1235,14 @@ export function defineOpenReceiveElements(
       refundNonce: string,
       confirm: boolean
     ): Promise<void> {
-      const url = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.swapRefundUrl);
+      const url = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderUrl);
       const orderId = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
       if (url === null) return;
 
       try {
         const body = await postElementJson(url, {
           ...(orderId === null ? {} : { order_id: orderId }),
+          action: "refund",
           attempt_id: attemptId,
           refund_address: refundAddress,
           refund_nonce: refundNonce,

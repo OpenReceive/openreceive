@@ -64,17 +64,8 @@ export function createCheckoutElementAttributes(
   if (invoice.expires_at !== undefined) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.expiresAt] = String(invoice.expires_at);
   }
-  if (options.statusUrl !== undefined) {
-    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.statusUrl] = options.statusUrl;
-  }
-  if (options.swapOptionsUrl !== undefined) {
-    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.swapOptionsUrl] = options.swapOptionsUrl;
-  }
-  if (options.swapStartUrl !== undefined) {
-    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.swapStartUrl] = options.swapStartUrl;
-  }
-  if (options.swapRefundUrl !== undefined) {
-    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.swapRefundUrl] = options.swapRefundUrl;
+  if (options.orderUrl !== undefined) {
+    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderUrl] = options.orderUrl;
   }
   if (options.theme !== undefined) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme] = options.theme;

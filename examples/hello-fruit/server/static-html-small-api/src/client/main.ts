@@ -410,10 +410,7 @@ function renderCheckout(checkout: CheckoutSnapshot): void {
   const shell = createCheckoutShell(checkout, {
     document,
     root: document.querySelector(".page"),
-    statusUrl: "/order_status",
-    swapOptionsUrl: "/swap_options",
-    swapStartUrl: "/swap_start",
-    swapRefundUrl: "/swap_refund",
+    orderUrl: "/order",
     rootSelector: ".page",
     defaultTheme: "light",
     onError: (event) => {

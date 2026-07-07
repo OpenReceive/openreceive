@@ -244,6 +244,49 @@ components:
           type: string
         attention:
           type: boolean
+    SwapOption:
+      type: object
+      additionalProperties: false
+      required:
+        - pay_in_asset
+        - label
+        - network_label
+        - provider
+        - available
+      properties:
+        pay_in_asset:
+          type: string
+          enum:
+            - SOL_SOL
+            - USDT_TRON
+            - USDT_SOL
+            - USDC_SOL
+            - ETH_ETH
+            - USDT_ETH
+            - USDC_ETH
+        label:
+          type: string
+          minLength: 1
+        network_label:
+          type: string
+          minLength: 1
+        provider:
+          type: string
+        available:
+          type: boolean
+        unavailable_reason:
+          type: string
+        unavailable_message:
+          type: string
+        pay_amount:
+          type: string
+          pattern: "^[0-9]+(\\.[0-9]+)?$"
+        minimum_pay_amount:
+          type: string
+          pattern: "^[0-9]+(\\.[0-9]+)?$"
+        maximum_pay_amount:
+          type: string
+          pattern: "^[0-9]+(\\.[0-9]+)?$"
     Checkout:
       type: object
       additionalProperties: false
@@ -326,6 +369,10 @@ components:
         transactions_checked:
           type: integer
           minimum: 0
+        payment_methods:
+          type: array
+          items:
+            $ref: "#/components/schemas/SwapOption"
     FiatAmount:
       type: object
       additionalProperties: false

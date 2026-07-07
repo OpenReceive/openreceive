@@ -35,7 +35,7 @@ order-status reads, admin pages, or background tasks may advance at most one
 bounded server-side `list_transactions` page through the global sweep.
 
 ```text
-web process        handles /create_order and /order_status
+web process        handles /create_order and /order
 browser checkout   asks app order status when it needs fresh state
 wallet scan        happens only inside server-side OpenReceive calls
 ```
