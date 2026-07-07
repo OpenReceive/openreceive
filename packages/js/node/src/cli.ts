@@ -1,12 +1,10 @@
-import path from "node:path";
-import { pathToFileURL } from "node:url";
-import type {
-  OpenReceive,
-  OpenReceiveNodeOptions
-} from "./service.ts";
 import type {
   OpenReceiveSqliteDatabase
 } from "./sqlite-store.ts";
+import {
+  readOpenReceiveConfigFile,
+  type OpenReceiveFileConfig
+} from "./config.ts";
 import {
   OPENRECEIVE_POSTGRES_MIGRATION_SQL
 } from "./postgres-store.ts";
@@ -41,10 +39,7 @@ export interface OpenReceiveCliOptions {
     };
   }>;
   loadPostgres?: ResolveOpenReceiveStoreOptions["loadPostgres"];
-  loadConfigModule?: (specifier: string) => Promise<Record<string, unknown>>;
 }
-
-type OpenReceiveNodeConfig = OpenReceive | OpenReceiveNodeOptions;
 
 const HELP = `
 Usage: openreceive <command> [options]
@@ -56,11 +51,11 @@ Commands:
 
 Store options:
   --store <uri>        local-sqlite, sqlite:/absolute/path, or postgres://...
-  --namespace <name>   Operational namespace. Defaults to OPENRECEIVE_NAMESPACE or default.
+  --namespace <name>   Operational namespace. Defaults to openreceive.yml or default.
   --print             Print SQL for the selected SQL store instead of executing it.
 
 Config options:
-  --config <path>      Import a server-only module. Defaults to openreceive.config.mjs.
+  --config <path>      YAML config file. Defaults to openreceive.yml.
 `.trim();
 
 export async function runOpenReceiveCli(options: OpenReceiveCliOptions): Promise<number> {
@@ -93,8 +88,7 @@ export async function runOpenReceiveCli(options: OpenReceiveCliOptions): Promise
           args,
           env,
           cwd,
-          stdout,
-          loadConfigModule: options.loadConfigModule
+          stdout
         });
       default:
         stderr.write(`Unknown OpenReceive command: ${command}\n\n${HELP}\n`);
@@ -114,8 +108,9 @@ async function runMigrate(input: {
   loadSqlite?: OpenReceiveCliOptions["loadSqlite"];
   loadPostgres?: OpenReceiveCliOptions["loadPostgres"];
 }): Promise<number> {
-  const storeUri = detectStoreUri(input.args, input.env);
-  const namespace = detectNamespace(input.args, input.env);
+  const config = readCliFileConfig(input.args, input.cwd);
+  const storeUri = detectStoreUri(input.args, config);
+  const namespace = detectNamespace(input.args, config);
   assertOpenReceiveStoreConfiguration({
     storeUri,
     env: input.env,
@@ -151,40 +146,38 @@ async function runDiagnostics(input: {
   env: NodeJS.ProcessEnv;
   cwd: string;
   stdout: OpenReceiveCliIo;
-  loadConfigModule?: OpenReceiveCliOptions["loadConfigModule"];
 }): Promise<number> {
+  let config: OpenReceiveFileConfig | undefined;
+  let configError: unknown;
+  try {
+    config = readCliFileConfig(input.args, input.cwd);
+  } catch (error) {
+    configError = error;
+  }
+
+  const storeUri = configError === undefined ? detectStoreUri(input.args, config) : "local-sqlite";
+  const namespace = configError === undefined ? detectNamespace(input.args, config) : "default";
+  const nwc = configError === undefined ? config?.nwc : undefined;
   const lines: string[] = [
     `OpenReceive ${input.command}`,
     `node: ${process.version}`,
     `cwd: ${input.cwd}`,
-    `namespace: ${detectNamespace(input.args, input.env)}`,
-    `nwc: ${input.env.OPENRECEIVE_NWC === undefined || input.env.OPENRECEIVE_NWC.trim().length === 0 ? "missing" : "present-redacted"}`,
-    `store: ${redactPotentialSecrets(detectStoreUri(input.args, input.env))}`
+    `namespace: ${namespace}`,
+    `nwc: ${nwc === undefined || nwc.trim().length === 0 ? "missing" : "present-redacted"}`,
+    `store: ${redactPotentialSecrets(storeUri)}`
   ];
 
-  try {
-    const config = await loadOpenReceiveConfig(input);
-    if (isOpenReceiveServiceConfig(config)) {
-      lines.push("config: loaded service");
-      lines.push("store_schema: service-managed");
-    } else {
-      lines.push("config: loaded options");
-      lines.push(`store_schema: ${typeof (config.store as { ensureSchema?: unknown } | undefined)?.ensureSchema === "function" ? "available" : "unknown"}`);
-      lines.push(`price_providers: ${config.priceProviders?.length ?? 0}`);
-    }
-  } catch (error) {
-    lines.push(`config: ${safeErrorMessage(error)}`);
+  if (configError !== undefined) {
+    lines.push(`config: ${safeErrorMessage(configError)}`);
+  } else if (config === undefined) {
+    lines.push("config: missing openreceive.yml");
+  } else {
+    lines.push("config: loaded openreceive.yml");
+    lines.push(`swap_providers: ${config.swap?.providers?.length ?? 0}`);
   }
 
   input.stdout.write(`${lines.join("\n")}\n`);
-  return lines.some((line) => line.startsWith("config: ") && !line.includes("loaded")) ? 1 : 0;
-}
-
-function isOpenReceiveServiceConfig(config: OpenReceiveNodeConfig): config is OpenReceive {
-  return (
-    typeof (config as { getOrder?: unknown }).getOrder === "function" &&
-    !("client" in config)
-  );
+  return configError !== undefined || nwc === undefined || nwc.trim().length === 0 ? 1 : 0;
 }
 
 async function resolveStoreForCli(
@@ -204,53 +197,21 @@ async function resolveStoreForCli(
   });
 }
 
-function detectStoreUri(args: readonly string[], env: NodeJS.ProcessEnv): string {
-  const storeUri = readFlag(args, "--store") ?? env.OPENRECEIVE_STORE;
+function readCliFileConfig(args: readonly string[], cwd: string): OpenReceiveFileConfig | undefined {
+  return readOpenReceiveConfigFile({
+    cwd,
+    configPath: readFlag(args, "--config")
+  });
+}
+
+function detectStoreUri(args: readonly string[], config: OpenReceiveFileConfig | undefined): string {
+  const storeUri = readFlag(args, "--store") ?? config?.storeUri;
   if (storeUri !== undefined && storeUri.trim().length > 0) return storeUri;
   return "local-sqlite";
 }
 
-function detectNamespace(args: readonly string[], env: NodeJS.ProcessEnv): string {
-  return readFlag(args, "--namespace") ?? env.OPENRECEIVE_NAMESPACE ?? "default";
-}
-
-async function loadOpenReceiveConfig(input: {
-  args: readonly string[];
-  env: NodeJS.ProcessEnv;
-  cwd: string;
-  loadConfigModule?: OpenReceiveCliOptions["loadConfigModule"];
-}): Promise<OpenReceiveNodeConfig> {
-  const specifier = resolveConfigSpecifier(input.args, input.env, input.cwd);
-  const module = input.loadConfigModule === undefined
-    ? await import(specifier) as Record<string, unknown>
-    : await input.loadConfigModule(specifier);
-  const exported =
-    module.openreceive ??
-    module.default ??
-    module.config ??
-    module.createOpenReceiveConfig ??
-    module.createOpenReceive;
-  const config = typeof exported === "function"
-    ? await (exported as () => unknown | Promise<unknown>)()
-    : exported;
-
-  if (config === null || typeof config !== "object") {
-    throw new Error(
-      "OpenReceive config module must export `openreceive`, a default config object, or createOpenReceiveConfig()."
-    );
-  }
-
-  return config as OpenReceiveNodeConfig;
-}
-
-function resolveConfigSpecifier(
-  args: readonly string[],
-  env: NodeJS.ProcessEnv,
-  cwd: string
-): string {
-  const configured = readFlag(args, "--config") ?? env.OPENRECEIVE_CONFIG ?? "openreceive.config.mjs";
-  if (/^(file|data|node):/.test(configured)) return configured;
-  return pathToFileURL(path.resolve(cwd, configured)).href;
+function detectNamespace(args: readonly string[], config: OpenReceiveFileConfig | undefined): string {
+  return readFlag(args, "--namespace") ?? config?.namespace ?? "default";
 }
 
 function readFlag(args: readonly string[], flag: string): string | undefined {

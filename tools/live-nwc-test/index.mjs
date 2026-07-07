@@ -226,7 +226,6 @@ const expiresAt = invoice.expires_at ?? createdAt + product.invoice_expiry_secon
 const outcome = await waitForListTransactionsFinalState({
   client,
   invoice,
-  createdAt,
   expiresAt
 });
 
@@ -235,7 +234,7 @@ if (outcome.status !== "settled") {
   process.exit(1);
 }
 
-async function waitForListTransactionsFinalState({ client, invoice, createdAt, expiresAt }) {
+async function waitForListTransactionsFinalState({ client, invoice, expiresAt }) {
   while (Math.floor(Date.now() / 1000) <= expiresAt) {
     const transaction = await findInvoiceTransaction(client, invoice);
     const settlement = transaction

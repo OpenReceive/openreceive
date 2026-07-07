@@ -6,13 +6,8 @@ import {
 } from "@openreceive/core";
 import { readOpenReceiveConfigFile } from "@openreceive/node";
 
-export function readRequiredHelloFruitNwcConnectionString(
-  env: { readonly [key: string]: string | undefined } = process.env
-): string {
-  const value = (
-    readOpenReceiveConfigFile({ cwd: process.cwd() })?.nwc ??
-    env.OPENRECEIVE_NWC
-  )?.trim();
+export function readRequiredHelloFruitNwcConnectionString(): string {
+  const value = readOpenReceiveConfigFile({ cwd: process.cwd() })?.nwc?.trim();
   if (value === undefined || value.length === 0) {
     throw new Error(formatOpenReceiveMissingNwcMessage({
       subject: "The Hello Fruit demo"

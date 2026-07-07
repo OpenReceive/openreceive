@@ -1702,7 +1702,6 @@ function swapInvoiceExpirySeconds(
 function swapSettlementAttentionSeconds(context: OpenReceiveServiceContext): number {
   return (
     context.options.swap?.settlementAttentionSeconds ??
-    readPositiveIntegerEnv("OPENRECEIVE_SWAP_SETTLEMENT_ATTENTION_SEC") ??
     OPENRECEIVE_SWAP_SETTLEMENT_ATTENTION_SECONDS
   );
 }
@@ -2429,27 +2428,13 @@ function reconcileOptions(context: OpenReceiveServiceContext) {
     store: context.store,
     client: context.options.client,
     clock: context.clock,
-    actionLeaseTtlSeconds:
-      context.options.actionLeaseTtlSeconds ??
-      readPositiveIntegerEnv("OPENRECEIVE_ACTION_LEASE_TTL_SEC"),
-    transactionScanIntervalSeconds:
-      context.options.transactionScanIntervalSeconds ??
-      readPositiveIntegerEnv("OPENRECEIVE_TRANSACTION_SCAN_INTERVAL_SEC"),
-    transactionScanPageLimit:
-      context.options.transactionScanPageLimit ??
-      readPositiveIntegerEnv("OPENRECEIVE_TRANSACTION_SCAN_PAGE_LIMIT"),
-    transactionScanWindowPaddingSeconds:
-      context.options.transactionScanWindowPaddingSeconds ??
-      readNonNegativeIntegerEnv("OPENRECEIVE_TRANSACTION_SCAN_WINDOW_PADDING_SEC"),
-    transactionScanOverlapSeconds:
-      context.options.transactionScanOverlapSeconds ??
-      readNonNegativeIntegerEnv("OPENRECEIVE_TRANSACTION_SCAN_OVERLAP_SEC"),
-    sweepOpenInvoiceCap:
-      context.options.sweepOpenInvoiceCap ??
-      readPositiveIntegerEnv("OPENRECEIVE_SWEEP_OPEN_INVOICE_CAP"),
-    transactionScanTimeoutMs:
-      context.options.transactionScanTimeoutMs ??
-      readPositiveIntegerEnv("OPENRECEIVE_TRANSACTION_SCAN_TIMEOUT_MS"),
+    actionLeaseTtlSeconds: context.options.actionLeaseTtlSeconds,
+    transactionScanIntervalSeconds: context.options.transactionScanIntervalSeconds,
+    transactionScanPageLimit: context.options.transactionScanPageLimit,
+    transactionScanWindowPaddingSeconds: context.options.transactionScanWindowPaddingSeconds,
+    transactionScanOverlapSeconds: context.options.transactionScanOverlapSeconds,
+    sweepOpenInvoiceCap: context.options.sweepOpenInvoiceCap,
+    transactionScanTimeoutMs: context.options.transactionScanTimeoutMs,
     settlementAction: async (input: OpenReceiveSettlementActionInput) => {
       // Delivered after backend-verified settlement, at least once. Apps must
       // dedupe fulfillment by checkoutId or their own order id.
@@ -2480,26 +2465,6 @@ function reconcileOptions(context: OpenReceiveServiceContext) {
       );
     },
   };
-}
-
-function readPositiveIntegerEnv(name: string): number | undefined {
-  const value = globalThis.process?.env?.[name];
-  if (value === undefined || value.trim().length === 0) return undefined;
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-    throw new RangeError(`${name} must be a positive integer`);
-  }
-  return parsed;
-}
-
-function readNonNegativeIntegerEnv(name: string): number | undefined {
-  const value = globalThis.process?.env?.[name];
-  if (value === undefined || value.trim().length === 0) return undefined;
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed < 0) {
-    throw new RangeError(`${name} must be a non-negative integer`);
-  }
-  return parsed;
 }
 
 function toWireInvoice(model: OpenReceiveInvoiceModel): OpenReceiveInvoice {

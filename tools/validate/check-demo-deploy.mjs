@@ -5,6 +5,10 @@ import path from "node:path";
 import { parse as parseYaml } from "yaml";
 
 const root = process.cwd();
+const DEMO_MODE_DEFAULT = "$" + "{OPENRECEIVE_DEMO_MODE:-test_nwc}";
+const GIT_SHA_DEFAULT = "$" + "{OPENRECEIVE_GIT_SHA:-}";
+const IMAGE_DIGEST_DEFAULT = "$" + "{OPENRECEIVE_IMAGE_DIGEST:-}";
+const DEPLOYED_AT_DEFAULT = "$" + "{OPENRECEIVE_DEPLOYED_AT:-}";
 
 const demos = [
   {
@@ -272,11 +276,11 @@ function validateDemoStack(demo) {
   expect((service.ports ?? []).length === 0, `${relativePath}: production stack must not publish host ports`);
   expectArrayEqual(service.networks ?? [], ["demo_proxy"], `${relativePath}: ${demo.slug} must join only demo_proxy`);
   expect(service.env_file === undefined, `${relativePath}: ${demo.slug} must not load .env files`);
-  expect(service.environment?.OPENRECEIVE_DEMO_MODE === "${OPENRECEIVE_DEMO_MODE:-test_nwc}", `${relativePath}: demo mode must default to test_nwc`);
+  expect(service.environment?.OPENRECEIVE_DEMO_MODE === DEMO_MODE_DEFAULT, `${relativePath}: demo mode must default to test_nwc`);
   expect(service.environment?.OPENRECEIVE_PUBLIC_URL === `https://${demo.hostname}`, `${relativePath}: public URL must be https://${demo.hostname}`);
-  expect(service.environment?.OPENRECEIVE_GIT_SHA === "${OPENRECEIVE_GIT_SHA:-}", `${relativePath}: git sha metadata env must pass through`);
-  expect(service.environment?.OPENRECEIVE_IMAGE_DIGEST === "${OPENRECEIVE_IMAGE_DIGEST:-}", `${relativePath}: image digest metadata env must pass through`);
-  expect(service.environment?.OPENRECEIVE_DEPLOYED_AT === "${OPENRECEIVE_DEPLOYED_AT:-}", `${relativePath}: deployed_at metadata env must pass through`);
+  expect(service.environment?.OPENRECEIVE_GIT_SHA === GIT_SHA_DEFAULT, `${relativePath}: git sha metadata env must pass through`);
+  expect(service.environment?.OPENRECEIVE_IMAGE_DIGEST === IMAGE_DIGEST_DEFAULT, `${relativePath}: image digest metadata env must pass through`);
+  expect(service.environment?.OPENRECEIVE_DEPLOYED_AT === DEPLOYED_AT_DEFAULT, `${relativePath}: deployed_at metadata env must pass through`);
   expect(service.environment?.PORT === demo.port, `${relativePath}: PORT must be ${demo.port}`);
   expect(service.restart === "unless-stopped", `${relativePath}: restart policy must be unless-stopped`);
   expect(service.network_mode === undefined, `${relativePath}: must not use host networking`);

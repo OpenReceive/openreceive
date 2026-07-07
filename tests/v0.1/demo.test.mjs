@@ -353,14 +353,11 @@ test("Hello Fruit JS demos use package-owned QR and status refresh wiring", () =
     const packageJson = JSON.parse(
       readFileSync(path.join(process.cwd(), demoDir, "package.json"), "utf8"),
     );
-    const config = readFileSync(
-      path.join(process.cwd(), demoDir, "openreceive.config.mjs"),
-      "utf8",
-    );
     const viteConfigPath = path.join(process.cwd(), demoDir, "vite.config.ts");
     const viteConfig = existsSync(viteConfigPath) ? readFileSync(viteConfigPath, "utf8") : "";
     const compose = readFileSync(path.join(process.cwd(), demoDir, "compose.yml"), "utf8");
     const dockerfile = readFileSync(path.join(process.cwd(), demoDir, "Dockerfile"), "utf8");
+    const configPath = path.join(process.cwd(), demoDir, "openreceive.config.mjs");
 
     assert.equal(packageJson.dependencies.qrcode, undefined, `${demoDir}: qrcode is package-owned`);
     assert.match(
@@ -386,9 +383,7 @@ test("Hello Fruit JS demos use package-owned QR and status refresh wiring", () =
     assert.match(packageJson.scripts.start, /require-openreceive-nwc\.ts/);
     assert.equal(packageJson.scripts["openreceive:worker"], undefined);
     assert.equal(packageJson.scripts["openreceive:poll"], undefined);
-    assert.match(config, /createHelloFruitOpenReceive/);
-    assert.match(config, /export default openreceive/);
-    assert.doesNotMatch(config, /nostr\+walletconnect:\/\//);
+    assert.equal(existsSync(configPath), false, `${demoDir}: openreceive.yml replaces wrapper config`);
     assert.doesNotMatch(compose, /openreceive-worker/);
     assert.doesNotMatch(compose, /command:\s+\["npm", "run", "openreceive:worker"\]/);
   }
@@ -1385,13 +1380,12 @@ test("Hello Fruit JS demos set up package-owned invoice persistence", () => {
     assert.doesNotMatch(source, /OPENRECEIVE_DATABASE_SCHEMA_VERSION/);
   }
 
-  for (const sourcePath of [
-    "examples/hello-fruit/server/node-express/openreceive.config.mjs",
-    "examples/hello-fruit/server/static-html-small-api/openreceive.config.mjs",
-    "examples/hello-fruit/server/nextjs-fullstack/openreceive.config.mjs",
-  ]) {
-    const source = readFileSync(path.join(process.cwd(), sourcePath), "utf8");
-    assert.match(source, /await createHelloFruitOpenReceive/);
+  for (const demoDir of demoServerDirs) {
+    assert.equal(
+      existsSync(path.join(process.cwd(), demoDir, "openreceive.config.mjs")),
+      false,
+      `${demoDir}: openreceive.yml is the only demo config file`,
+    );
   }
 });
 
@@ -1532,12 +1526,8 @@ test("Hello Fruit demos refuse malformed OPENRECEIVE_NWC before serving", async 
 });
 
 test("Hello Fruit metadata exposes only allowlisted build fields", async () => {
-  const nwc = createValidNwcUri();
-
   await withEnv(
     {
-      OPENRECEIVE_NWC: nwc,
-      OPENRECEIVE_STORE: undefined,
       OPENRECEIVE_DEMO_MODE: "production",
       OPENRECEIVE_GIT_SHA: "0123456789abcdef",
       OPENRECEIVE_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
@@ -1587,132 +1577,115 @@ test("Hello Fruit metadata exposes only allowlisted build fields", async () => {
 });
 
 test("Hello Fruit demos create app orders and refresh order status through merchant routes", async () => {
-  await withEnv(
+  const orderRequest = {
+    cart: [
+      { product_id: "banana", quantity: 2 },
+      { product_id: "apple", quantity: 1 },
+    ],
+  };
+
+  for (const demo of [
     {
-      OPENRECEIVE_NWC: createValidNwcUri(),
-      OPENRECEIVE_STORE: undefined,
+      name: "node-express",
+      createApp: createHelloFruitServer,
     },
-    async () => {
-      const orderRequest = {
-        cart: [
-          { product_id: "banana", quantity: 2 },
-          { product_id: "apple", quantity: 1 },
-        ],
-      };
-
-      for (const demo of [
-        {
-          name: "node-express",
-          createApp: createHelloFruitServer,
-        },
-        {
-          name: "static-html-small-api",
-          createApp: createHelloFruitStaticServer,
-        },
-      ]) {
-        const app = await demo.createApp(createHelloFruitTestOpenReceiveOptions());
-        const created = await dispatchJson(app, "POST", "/create_order", orderRequest);
-        assert.equal(created.status, 201, `${demo.name}: create_order status`);
-        assert.match(created.body.order.uuid, /^hello-fruit-/);
-        assert.equal(created.body.order.status, "pending_payment");
-        assert.equal(created.body.order.total_amount.currency, "USD");
-        assert.equal(created.body.order.total_amount.value, "0.25");
-        assert.equal(created.body.checkout.order_id, created.body.order.uuid);
-        const createdInvoice = created.body.checkout.active ?? created.body.checkout.invoices[0];
-        assert.equal(typeof createdInvoice.invoice, "string");
-        assert.equal(JSON.stringify(created.body).includes("nostr+walletconnect://"), false);
-
-        const second = await dispatchJson(app, "POST", "/create_order", orderRequest);
-        assert.equal(second.status, 201, `${demo.name}: second create_order status`);
-        assert.notEqual(second.body.order.uuid, created.body.order.uuid);
-
-        const status = await dispatchJson(app, "POST", "/order_status", {
-          order_id: created.body.order.uuid,
-        });
-        assert.equal(status.status, 200, `${demo.name}: order_status status`);
-        assert.equal(status.body.order_id, created.body.order.uuid);
-        assert.equal(status.body.order_status, "pending_payment");
-        assert.equal(status.body.order.status, "pending_payment");
-        const statusInvoice =
-          status.body.display_checkout.active ?? status.body.display_checkout.invoices[0];
-        assert.equal(statusInvoice.payment_hash, createdInvoice.payment_hash);
-      }
-
-      setHelloFruitOpenReceiveTestOverrides(createHelloFruitTestOpenReceiveOptions());
-      try {
-        const nextCreated = await responseJson(
-          postNextCreateOrder(jsonRequest("/create_order", orderRequest)),
-        );
-        assert.equal(nextCreated.status, 201, "nextjs-fullstack: create_order status");
-        assert.match(nextCreated.body.order.uuid, /^hello-fruit-/);
-        assert.equal(nextCreated.body.order.total_amount.value, "0.25");
-        assert.equal(nextCreated.body.checkout.order_id, nextCreated.body.order.uuid);
-
-        const nextSecond = await responseJson(
-          postNextCreateOrder(jsonRequest("/create_order", orderRequest)),
-        );
-        assert.equal(nextSecond.status, 201, "nextjs-fullstack: second create_order status");
-        assert.notEqual(nextSecond.body.order.uuid, nextCreated.body.order.uuid);
-
-        const nextStatus = await responseJson(
-          postNextOrderStatus(
-            jsonRequest("/order_status", {
-              order_id: nextCreated.body.order.uuid,
-            }),
-          ),
-        );
-        assert.equal(nextStatus.status, 200, "nextjs-fullstack: order_status status");
-        assert.equal(nextStatus.body.order_id, nextCreated.body.order.uuid);
-        assert.equal(nextStatus.body.order_status, "pending_payment");
-      } finally {
-        setHelloFruitOpenReceiveTestOverrides(undefined);
-      }
+    {
+      name: "static-html-small-api",
+      createApp: createHelloFruitStaticServer,
     },
-  );
+  ]) {
+    const app = await demo.createApp(createHelloFruitTestOpenReceiveOptions());
+    const created = await dispatchJson(app, "POST", "/create_order", orderRequest);
+    assert.equal(created.status, 201, `${demo.name}: create_order status`);
+    assert.match(created.body.order.uuid, /^hello-fruit-/);
+    assert.equal(created.body.order.status, "pending_payment");
+    assert.equal(created.body.order.total_amount.currency, "USD");
+    assert.equal(created.body.order.total_amount.value, "0.25");
+    assert.equal(created.body.checkout.order_id, created.body.order.uuid);
+    const createdInvoice = created.body.checkout.active ?? created.body.checkout.invoices[0];
+    assert.equal(typeof createdInvoice.invoice, "string");
+    assert.equal(JSON.stringify(created.body).includes("nostr+walletconnect://"), false);
+
+    const second = await dispatchJson(app, "POST", "/create_order", orderRequest);
+    assert.equal(second.status, 201, `${demo.name}: second create_order status`);
+    assert.notEqual(second.body.order.uuid, created.body.order.uuid);
+
+    const status = await dispatchJson(app, "POST", "/order_status", {
+      order_id: created.body.order.uuid,
+    });
+    assert.equal(status.status, 200, `${demo.name}: order_status status`);
+    assert.equal(status.body.order_id, created.body.order.uuid);
+    assert.equal(status.body.order_status, "pending_payment");
+    assert.equal(status.body.order.status, "pending_payment");
+    const statusInvoice =
+      status.body.display_checkout.active ?? status.body.display_checkout.invoices[0];
+    assert.equal(statusInvoice.payment_hash, createdInvoice.payment_hash);
+  }
+
+  setHelloFruitOpenReceiveTestOverrides(createHelloFruitTestOpenReceiveOptions());
+  try {
+    const nextCreated = await responseJson(
+      postNextCreateOrder(jsonRequest("/create_order", orderRequest)),
+    );
+    assert.equal(nextCreated.status, 201, "nextjs-fullstack: create_order status");
+    assert.match(nextCreated.body.order.uuid, /^hello-fruit-/);
+    assert.equal(nextCreated.body.order.total_amount.value, "0.25");
+    assert.equal(nextCreated.body.checkout.order_id, nextCreated.body.order.uuid);
+
+    const nextSecond = await responseJson(
+      postNextCreateOrder(jsonRequest("/create_order", orderRequest)),
+    );
+    assert.equal(nextSecond.status, 201, "nextjs-fullstack: second create_order status");
+    assert.notEqual(nextSecond.body.order.uuid, nextCreated.body.order.uuid);
+
+    const nextStatus = await responseJson(
+      postNextOrderStatus(
+        jsonRequest("/order_status", {
+          order_id: nextCreated.body.order.uuid,
+        }),
+      ),
+    );
+    assert.equal(nextStatus.status, 200, "nextjs-fullstack: order_status status");
+    assert.equal(nextStatus.body.order_id, nextCreated.body.order.uuid);
+    assert.equal(nextStatus.body.order_status, "pending_payment");
+  } finally {
+    setHelloFruitOpenReceiveTestOverrides(undefined);
+  }
 });
 
 test("Hello Fruit demos create direct SATS orders from the currency switcher", async () => {
-  await withEnv(
-    {
-      OPENRECEIVE_NWC: createValidNwcUri(),
-      OPENRECEIVE_STORE: undefined,
-    },
-    async () => {
-      const orderRequest = {
-        currency: "SATS",
-        cart: [
-          { product_id: "banana", quantity: 2 },
-          { product_id: "apple", quantity: 1 },
-        ],
-      };
+  const orderRequest = {
+    currency: "SATS",
+    cart: [
+      { product_id: "banana", quantity: 2 },
+      { product_id: "apple", quantity: 1 },
+    ],
+  };
 
-      for (const demo of [
-        {
-          name: "node-express",
-          createApp: createHelloFruitServer,
-        },
-        {
-          name: "static-html-small-api",
-          createApp: createHelloFruitStaticServer,
-        },
-      ]) {
-        const app = await demo.createApp(createHelloFruitTestOpenReceiveOptions());
-        const created = await dispatchJson(app, "POST", "/create_order", orderRequest);
-        assert.equal(created.status, 201, `${demo.name}: create_order status`);
-        assert.equal(created.body.order.total_amount.currency, "SATS");
-        assert.equal(created.body.order.total_amount.value, "500");
-        assert.equal(created.body.checkout.amount_msats, 500000);
-        const createdInvoice = created.body.checkout.active ?? created.body.checkout.invoices[0];
-        assert.equal(createdInvoice.fiat_quote, null);
-      }
+  for (const demo of [
+    {
+      name: "node-express",
+      createApp: createHelloFruitServer,
     },
-  );
+    {
+      name: "static-html-small-api",
+      createApp: createHelloFruitStaticServer,
+    },
+  ]) {
+    const app = await demo.createApp(createHelloFruitTestOpenReceiveOptions());
+    const created = await dispatchJson(app, "POST", "/create_order", orderRequest);
+    assert.equal(created.status, 201, `${demo.name}: create_order status`);
+    assert.equal(created.body.order.total_amount.currency, "SATS");
+    assert.equal(created.body.order.total_amount.value, "500");
+    assert.equal(created.body.checkout.amount_msats, 500000);
+    const createdInvoice = created.body.checkout.active ?? created.body.checkout.invoices[0];
+    assert.equal(createdInvoice.fiat_quote, null);
+  }
 });
 
 test("Hello Fruit hosted demo routes expose source, docs, robots, and sitemap", async () => {
   await withEnv(
     {
-      OPENRECEIVE_NWC: createValidNwcUri(),
       OPENRECEIVE_PUBLIC_URL: "https://demo.example.test",
       OPENRECEIVE_DEMO_NOINDEX: undefined,
     },
