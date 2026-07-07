@@ -249,11 +249,9 @@ export async function createHelloFruitStaticServer(options: HelloFruitOpenReceiv
       const body = asRequestBody(req.body);
       const orderId = requireRequestString(body, "order_id");
       const payInAsset = requireRequestString(body, "pay_in_asset");
-      const idempotencyKey = requireRequestString(body, "idempotency_key");
       const invoice = await openreceive.startSwap({
         orderId,
         payInAsset,
-        idempotencyKey,
       });
       logDemo("swap_start.response", "Started automated swap.", {
         orderId,

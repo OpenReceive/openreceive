@@ -148,8 +148,7 @@ const options = await openreceive.swapOptions({
 
 const attempt = await openreceive.startSwap({
   orderId: order.uuid,
-  payInAsset: "USDT_TRON",
-  idempotencyKey: "payer-click-1"
+  payInAsset: "USDT_TRON"
 });
 
 await openreceive.refundSwap({

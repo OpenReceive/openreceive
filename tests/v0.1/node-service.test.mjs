@@ -341,12 +341,10 @@ test("startSwap creates an idempotent shadow invoice without replacing active Li
   const first = await openreceive.startSwap({
     orderId: "order-swap-start",
     payInAsset: "USDT_TRON",
-    idempotencyKey: "start-1",
   });
   const second = await openreceive.startSwap({
     orderId: "order-swap-start",
     payInAsset: "USDT_TRON",
-    idempotencyKey: "start-1",
   });
 
   assert.equal(first.invoice_id, second.invoice_id);
@@ -391,7 +389,6 @@ test("startSwap reserves the attempt before provider create to avoid duplicate o
   const first = openreceive.startSwap({
     orderId: "order-swap-reserve-first",
     payInAsset: "USDT_TRON",
-    idempotencyKey: "reserve-1",
   });
   await createStarted;
 
@@ -400,7 +397,6 @@ test("startSwap reserves the attempt before provider create to avoid duplicate o
       openreceive.startSwap({
         orderId: "order-swap-reserve-first",
         payInAsset: "USDT_TRON",
-        idempotencyKey: "reserve-1",
       }),
     (error) => error instanceof OpenReceiveServiceError && error.status === 409,
   );
@@ -438,7 +434,6 @@ test("swapOptions and startSwap pass only swap inputs to providers", async () =>
   const invoice = await openreceive.startSwap({
     orderId: "order-swap-region",
     payInAsset: "USDT_TRON",
-    idempotencyKey: "region-1",
   });
   assert.equal(invoice.swap.pay_in_asset, "USDT_TRON");
   assert.equal(
@@ -461,7 +456,6 @@ test("settling a shadow swap invoice pays the checkout", async () => {
   const swapInvoice = await openreceive.startSwap({
     orderId: "order-swap-settle",
     payInAsset: "SOL_SOL",
-    idempotencyKey: "settle-1",
   });
 
   wallet.settlePaymentHash(swapInvoice.payment_hash, 1200);
@@ -489,7 +483,6 @@ test("settling a shadow swap invoice does not expose provider tokens to onPaid",
   const swapInvoice = await openreceive.startSwap({
     orderId: "order-swap-onpaid-private",
     payInAsset: "SOL_SOL",
-    idempotencyKey: "onpaid-1",
   });
 
   wallet.settlePaymentHash(swapInvoice.payment_hash, 1200);
@@ -513,7 +506,6 @@ test("provider completion exposes payout details but does not mark paid without 
   await openreceive.startSwap({
     orderId: "order-swap-provider-done",
     payInAsset: "USDT_TRON",
-    idempotencyKey: "done-1",
   });
 
   swapProvider.nextState = "completed";
@@ -542,7 +534,6 @@ test("completed provider orders become attention when wallet settlement never ar
   await openreceive.startSwap({
     orderId: "order-swap-attention",
     payInAsset: "USDT_TRON",
-    idempotencyKey: "attention-1",
   });
 
   swapProvider.nextState = "completed";
@@ -568,7 +559,6 @@ test("a superseded checkout is still paid when its shadow invoice settles later"
   const swapInvoice = await openreceive.startSwap({
     orderId: "order-swap-supersede",
     payInAsset: "USDT_TRON",
-    idempotencyKey: "supersede-1",
   });
   const replacement = await openreceive.createCheckout({
     orderId: "order-swap-supersede",
@@ -597,7 +587,6 @@ test("refundSwap requests a provider refund only for refund-required swaps", asy
   const swapAttempt = await openreceive.startSwap({
     orderId: "order-swap-refund",
     payInAsset: "ETH_ETH",
-    idempotencyKey: "refund-1",
   });
 
   swapProvider.nextState = "refund_required";

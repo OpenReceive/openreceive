@@ -27,7 +27,38 @@ OpenReceive enables FixedFloat when both key and secret are present. Omit both t
 
 The app asks `swapOptions({ orderId })` for configured payment methods. OpenReceive does not take a payer country code or perform geolocation gating for swap providers. If a provider cannot serve a payer's region, the application should hide or disable that method before calling `startSwap`, because the application owns payer geolocation and eligibility checks.
 
-When the payer chooses an asset, the client shows the estimate and then calls `startSwap` with an app-generated `idempotencyKey`. The service first reserves a durable attempt row, then calls the provider. The public response includes `swap.attempt_id`, deposit instructions, provider order details, and support references. The provider token remains private.
+When the payer chooses an asset, the client shows the estimate and then calls `startSwap({ orderId, payInAsset })`. The response is a public invoice payload for the swap attempt:
+
+```json
+{
+  "invoice_id": "or_inv_swap_shadow_1",
+  "type": "incoming",
+  "rail": "swap",
+  "status": "pending",
+  "transaction_state": "pending",
+  "workflow_state": "invoice_created",
+  "invoice": null,
+  "payment_hash": "9b8c...",
+  "amount_msats": 200000,
+  "order_id": "order_123",
+  "created_at": 1783360530,
+  "expires_at": 1783361130,
+  "fiat_quote": null,
+  "settlement_action_state": "pending",
+  "swap": {
+    "attempt_id": "or_inv_swap_shadow_1",
+    "provider": "fixedfloat",
+    "provider_order_id": "ff-order-1",
+    "pay_in_asset": "USDT_TRON",
+    "deposit_address": "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
+    "deposit_amount": "1.05",
+    "provider_state": "awaiting_deposit",
+    "provider_expires_at": 1783361130
+  }
+}
+```
+
+Show the payer `swap.deposit_address`, `swap.deposit_amount`, `swap.pay_in_asset`, and the provider expiry. Provider tokens are private and never appear in this response.
 
 Token payments use an address-only QR plus copyable exact amount and network warnings. Native ETH and SOL may use amount-bearing QR payloads. The UI should tell payers to pay with one method only.
 
@@ -39,7 +70,7 @@ Warn payers to use an address they control and not to paste the deposit address.
 
 ## Settlement Authority
 
-Provider completion never marks an order paid by itself. OpenReceive only settles a checkout when the receive wallet scan sees `settled_at` or a settled transaction state. When a provider reports completion, OpenReceive immediately performs a bounded wallet lookup for that shadow invoice and keeps watching. If the provider says completed but the wallet never settles, the attempt is marked for attention.
+Provider completion never marks an order paid by itself. OpenReceive only settles a checkout when the global pending-invoice sweep sees `settled_at` or a settled transaction state in `list_transactions`. Swap provider status refresh can update provider fields such as `provider_state` and `payout_tx_id`, but it does not run a shadow-invoice-specific wallet lookup. If the provider says completed and later global sweeps never find wallet settlement, the attempt is marked for attention.
 
 ## Adding Providers
 

@@ -805,7 +805,6 @@ export function defineOpenReceiveElements(
     private startedSwapInvoice: CheckoutInvoiceSnapshot | undefined;
     private latestCheckoutSnapshot: CheckoutSnapshot | undefined;
     private dismissedSwapInvoiceId: string | null = null;
-    private swapStartIdempotencyKeys = new Map<string, string>();
     private controller: CheckoutController | undefined;
     private announcedSettledOrderId: string | undefined;
 
@@ -1255,13 +1254,9 @@ export function defineOpenReceiveElements(
       if (url === null || orderId === null || orderId.length === 0) return;
 
       try {
-        const idempotencyKey = this.swapStartIdempotencyKeys.get(payInAsset) ??
-          createElementSwapIdempotencyKey();
-        this.swapStartIdempotencyKeys.set(payInAsset, idempotencyKey);
         const body = await postElementJson(url, {
           order_id: orderId,
-          pay_in_asset: payInAsset,
-          idempotency_key: idempotencyKey
+          pay_in_asset: payInAsset
         });
         this.startedSwapInvoice = normalizeElementSwapInvoice(body);
         this.dismissedSwapInvoiceId = null;
@@ -1466,10 +1461,4 @@ function showElementCopyFeedback(button: Element | null): void {
     elementCopyFeedbackControllers.set(button, controller);
   }
   controller.show(openReceiveCheckoutLabels.copied);
-}
-
-function createElementSwapIdempotencyKey(): string {
-  const randomUuid = globalThis.crypto?.randomUUID?.();
-  if (randomUuid !== undefined) return randomUuid;
-  return `swap_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
 }

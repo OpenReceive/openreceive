@@ -3,8 +3,6 @@ import {
   OPENRECEIVE_PRICE_FEED_PRIMARY_URL_ENV,
   createCachedLivePriceFeed,
   createIdempotencyRequestHash,
-  applySettled,
-  classifyTransactionSettlement,
   getBtcFiatRatesWithFallback,
   getIdempotentRecord,
   isOpenReceiveErrorCode,
@@ -12,7 +10,6 @@ import {
   putCreatedInvoiceRecord,
   quoteBitcoinAmountToMsats,
   quoteFiatToMsatsWithPrice,
-  runSettlementAction,
   sweepPendingInvoicesOnce,
   type CachedPriceFeed,
   type InvoiceStorageRow,
@@ -179,7 +176,6 @@ export interface OpenReceiveSwapOptionsRequest {
 export interface OpenReceiveSwapStartRequest {
   readonly orderId: string;
   readonly payInAsset: OpenReceiveSwapPayInAsset | string;
-  readonly idempotencyKey: string;
 }
 
 export interface OpenReceiveSwapRefundRequest {
@@ -1077,9 +1073,6 @@ async function startSwap(
   const body = asRecord(input);
   const orderId = parseOrderId(body);
   const payInAsset = parseSwapPayInAsset(body.payInAsset ?? body.pay_in_asset);
-  const idempotencyKey = parseSwapStartIdempotencyKey(
-    body.idempotencyKey ?? body.idempotency_key,
-  );
   const now = context.clock();
   const records = await context.store.listByOrderId(orderId);
   if (records.length === 0) {
@@ -1149,13 +1142,16 @@ async function startSwap(
   const createdAt = walletInvoice.created_at ?? context.clock();
   const expiresAt = walletInvoice.expires_at ?? createdAt + invoiceExpirySeconds;
   const normalizedExpiresAt = Math.min(expiresAt, createdAt + invoiceExpirySeconds);
-  const swapAttemptKey = `${checkout.checkoutId}:swap:${payInAsset}:${idempotencyKey}`;
+  const attemptNumber =
+    checkoutRecords.filter((record) => readStoredSwapPayInAsset(record.row) === payInAsset)
+      .length + 1;
+  const swapAttemptKey = `${checkout.checkoutId}:swap:${payInAsset}:attempt:${attemptNumber}`;
   const requestHash = await createIdempotencyRequestHash({
     checkout_id: checkout.checkoutId,
     pay_in_asset: payInAsset,
     amount_msats: roundedAmountMsats,
     rail: "swap",
-    idempotency_key: idempotencyKey,
+    attempt_number: attemptNumber,
   });
   const namespaceScope = context.options.namespace ?? readOpenReceiveNamespace(undefined);
   const operation = "invoice.create";
@@ -1319,7 +1315,6 @@ async function advanceSwapsForRecords(
 
     try {
       const previousSwap = parseSwapMetadata(record.row) ?? {};
-      const previousState = readStoredSwapState(record.row);
       const updatedOrder = await provider.getStatus(order);
       const nextState = updatedOrder.state;
       const providerCompletedAt =
@@ -1331,13 +1326,6 @@ async function advanceSwapsForRecords(
         ...(providerCompletedAt === undefined ? {} : { provider_completed_at: providerCompletedAt }),
         last_polled_at: now,
       }));
-      if (
-        nextState === "paying_invoice" ||
-        nextState === "completed" ||
-        (previousState !== nextState && previousState === "paying_invoice")
-      ) {
-        await refreshSwapInvoiceSettlementImmediately(context, updatedRecord);
-      }
       if (nextState === "completed" && providerCompletedAt !== undefined) {
         const latest = (await context.store.get(updatedRecord.row.invoice_id)) ?? updatedRecord;
         if (
@@ -1362,58 +1350,6 @@ async function advanceSwapsForRecords(
       });
     }
   }
-}
-
-async function refreshSwapInvoiceSettlementImmediately(
-  context: OpenReceiveServiceContext,
-  record: StoredRecord,
-): Promise<StoredRecord> {
-  const current = (await context.store.get(record.row.invoice_id)) ?? record;
-  if (current.row.transaction_state === "settled") return current;
-
-  let transactions: readonly NwcTransaction[];
-  try {
-    const page = await context.options.client.listTransactions({
-      type: "incoming",
-      unpaid: true,
-      from: Math.max(0, current.row.created_at - 60),
-      until: context.clock(),
-      limit: 10,
-    });
-    transactions = page.transactions;
-  } catch (error) {
-    emitLog(
-      context.options,
-      "warn",
-      "swap.settlement_scan.failed",
-      "Immediate swap settlement scan failed.",
-      {
-        invoice_id: current.row.invoice_id,
-        error_message: error instanceof Error ? error.message : String(error),
-      },
-    );
-    return current;
-  }
-
-  const matched = transactions.find(
-    (transaction) =>
-      transaction.payment_hash === current.row.payment_hash ||
-      transaction.invoice === current.row.invoice,
-  );
-  if (matched === undefined || classifyTransactionSettlement(matched).status !== "settled") {
-    return current;
-  }
-
-  const settled = await context.store.put(applySettled(current, matched.settled_at), current.rev);
-  if (settled.status === "conflict") return settled.record;
-
-  const action = await runSettlementAction({
-    ...reconcileOptions(context),
-    record: settled.record,
-    now: context.clock(),
-    transaction: matched,
-  });
-  return action.record;
 }
 
 async function resolveSwapProvidersByAsset(
@@ -1748,21 +1684,6 @@ function parseSwapPayInAsset(value: unknown): OpenReceiveSwapPayInAsset {
     throw serviceError(400, "INVALID_REQUEST", "pay_in_asset is not supported.");
   }
   return value;
-}
-
-function parseSwapStartIdempotencyKey(value: unknown): string {
-  const key = optionalString(value);
-  if (key === undefined) {
-    throw serviceError(400, "INVALID_REQUEST", "idempotency_key is required.");
-  }
-  if (key.length > 120 || !/^[A-Za-z0-9._:-]+$/.test(key)) {
-    throw serviceError(
-      400,
-      "INVALID_REQUEST",
-      "idempotency_key must be 120 characters or fewer and contain only letters, digits, dot, underscore, colon, or hyphen.",
-    );
-  }
-  return key;
 }
 
 function parseSwapAttemptId(value: unknown): string {

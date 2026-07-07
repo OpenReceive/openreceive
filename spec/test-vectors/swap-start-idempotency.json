@@ -2,7 +2,6 @@
   "name": "swap start is idempotent per checkout and pay_in_asset",
   "checkout_id": "or_chk_swap_idempotent",
   "pay_in_asset": "USDT_TRON",
-  "idempotency_key": "payer-click-1",
   "first_response": {
     "invoice_id": "or_inv_swap_shadow_1",
     "rail": "swap",

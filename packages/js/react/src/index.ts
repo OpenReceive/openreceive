@@ -1008,7 +1008,6 @@ export function PaymentWizard(
   const [startedSwapInvoice, setStartedSwapInvoice] =
     React.useState<CheckoutInvoiceSnapshot | null>(null);
   const [dismissedSwapInvoiceId, setDismissedSwapInvoiceId] = React.useState<string | null>(null);
-  const swapStartIdempotencyKeys = React.useRef(new Map<string, string>());
   const fetcher = props.fetch ?? globalThis.fetch;
   const checkout = props.checkout;
   const orderId = checkout?.order_id;
@@ -1060,13 +1059,9 @@ export function PaymentWizard(
       }
       setSwapStartingAsset(payInAsset);
       try {
-        const idempotencyKey = swapStartIdempotencyKeys.current.get(payInAsset) ??
-          createReactSwapIdempotencyKey();
-        swapStartIdempotencyKeys.current.set(payInAsset, idempotencyKey);
         const body = await postOpenReceiveJson(fetcher, props.swapStartUrl, {
           order_id: orderId,
-          pay_in_asset: payInAsset,
-          idempotency_key: idempotencyKey
+          pay_in_asset: payInAsset
         });
         const invoice = normalizeSwapStartInvoice(body);
         setStartedSwapInvoice(invoice);
@@ -1883,12 +1878,6 @@ function normalizeSwapStartInvoice(body: unknown): CheckoutInvoiceSnapshot {
     throw new Error("Swap response did not include an invoice.");
   }
   return invoice as unknown as CheckoutInvoiceSnapshot;
-}
-
-function createReactSwapIdempotencyKey(): string {
-  const randomUuid = globalThis.crypto?.randomUUID?.();
-  if (randomUuid !== undefined) return randomUuid;
-  return `swap_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
 }
 
 async function copyOpenReceiveText(
