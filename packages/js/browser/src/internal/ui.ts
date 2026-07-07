@@ -50,6 +50,8 @@ export const OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES = {
   swapCopy: "data-or-swap-copy",
   swapRefundForm: "data-or-swap-refund-form",
   swapRefundAddress: "data-or-swap-refund-address",
+  swapRefundNonce: "data-or-swap-refund-nonce",
+  swapRefundConfirm: "data-or-swap-refund-confirm",
   providerCopy: "data-or-provider-copy",
   providerTutorial: "data-or-provider-tutorial",
   providerTutorialIndex: "data-or-provider-tutorial-index",
@@ -69,6 +71,8 @@ export const OPENRECEIVE_PAYMENT_WIZARD_SELECTORS = {
   swapCopy: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapCopy}]`,
   swapRefundForm: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundForm}]`,
   swapRefundAddress: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundAddress}]`,
+  swapRefundNonce: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundNonce}]`,
+  swapRefundConfirm: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundConfirm}]`,
   providerCopy: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerCopy}]`,
   providerTutorial: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}]`,
   providerTutorialIndex: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex}]`,
@@ -389,6 +393,7 @@ export interface CheckoutInvoiceSwapSnapshot {
   readonly deposit_tx_id?: string;
   readonly payout_tx_id?: string;
   readonly refund_address?: string;
+  readonly refund_nonce?: string;
   readonly refund_tx_id?: string;
   readonly attention?: boolean;
 }
@@ -421,6 +426,7 @@ export interface OpenReceiveSwapDisplayModel {
   readonly depositTxId?: string;
   readonly payoutTxId?: string;
   readonly refundAddress?: string;
+  readonly refundNonce?: string;
   readonly refundTxId?: string;
   readonly providerOrderId?: string;
 }

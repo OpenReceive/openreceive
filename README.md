@@ -53,9 +53,10 @@ starting a demo. Demos need a valid receive-only NWC code before startup.
 The JS demos let the browser choose any configured price-feed currency, BTC, or
 sats; `/create_order` builds the order, quotes or converts the total, and
 returns the order and checkout to the browser.
-Optional automated swap credentials use server-only
-`OPENRECEIVE_SWAP_FIXED_FLOAT_KEY` and `OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET`;
-when both are present, `createOpenReceive()` loads that provider automatically.
+Optional automated swaps use server-only `OPENRECEIVE_SWAP_CONFIG`, pointing at
+a backend YAML file whose providers reference secret env vars with `key_env` and
+`secret_env`. When present, `createOpenReceive()` loads those providers
+automatically.
 
 Extra arguments after `--` are forwarded to `docker compose up`, for example to
 run detached: `npm run demo node -- -d`.

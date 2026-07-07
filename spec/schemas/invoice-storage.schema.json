@@ -209,6 +209,30 @@
         "refund_address": {
           "type": "string"
         },
+        "refund_nonce": {
+          "type": "string",
+          "pattern": "^or_ref_[a-f0-9]{32}$"
+        },
+        "refund_nonce_expires_at": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "refund_submission_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "refund_submitted_at": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "refund_confirmed_at": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "refund_dispatch_id": {
+          "type": "string",
+          "pattern": "^or_ref_[a-f0-9]{32}$"
+        },
         "refund_tx_id": {
           "type": "string"
         },

@@ -1837,6 +1837,8 @@ test("browser owns payment wizard DOM contract", () => {
     swapCopy: "data-or-swap-copy",
     swapRefundForm: "data-or-swap-refund-form",
     swapRefundAddress: "data-or-swap-refund-address",
+    swapRefundNonce: "data-or-swap-refund-nonce",
+    swapRefundConfirm: "data-or-swap-refund-confirm",
     providerCopy: "data-or-provider-copy",
     providerTutorial: "data-or-provider-tutorial",
     providerTutorialIndex: "data-or-provider-tutorial-index",

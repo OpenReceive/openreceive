@@ -158,6 +158,7 @@ export function createOpenReceiveSwapDisplayModel(
     ...(swap.deposit_tx_id === undefined ? {} : { depositTxId: swap.deposit_tx_id }),
     ...(swap.payout_tx_id === undefined ? {} : { payoutTxId: swap.payout_tx_id }),
     ...(swap.refund_address === undefined ? {} : { refundAddress: swap.refund_address }),
+    ...(swap.refund_nonce === undefined ? {} : { refundNonce: swap.refund_nonce }),
     ...(swap.refund_tx_id === undefined ? {} : { refundTxId: swap.refund_tx_id }),
     ...(swap.provider_order_id === undefined ? {} : { providerOrderId: swap.provider_order_id }),
   };
@@ -713,6 +714,9 @@ function normalizeCheckoutInvoiceSwapSnapshot(
     ...(optionalString(input.refund_address) === undefined
       ? {}
       : { refund_address: optionalString(input.refund_address) }),
+    ...(optionalString(input.refund_nonce) === undefined
+      ? {}
+      : { refund_nonce: optionalString(input.refund_nonce) }),
     ...(optionalString(input.refund_tx_id) === undefined
       ? {}
       : { refund_tx_id: optionalString(input.refund_tx_id) }),

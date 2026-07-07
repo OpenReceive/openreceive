@@ -164,9 +164,17 @@ display hints.
 
 For automated swap payment methods, pass app-owned `swap-options-url`,
 `swap-start-url`, and `swap-refund-url` attributes. Those endpoints call the
-server-side `swapOptions`, `startSwap`, and `refundSwap` methods. The browser
-receives deposit instructions and an `attempt_id`; provider credentials and
-tokens remain server-side.
+server-side `swapOptions`, `startSwap`, and `refundSwap` methods. If your UI
+shows a live estimate before creating the provider order, expose an app-owned
+quote endpoint that calls `swapQuote({ orderId, payInAsset })` after the payer
+selects an asset. The browser receives deposit instructions and an `attempt_id`;
+provider credentials and tokens remain server-side.
+
+Authorize those endpoints in your application before calling OpenReceive.
+`order_id`, `attempt_id`, and refund nonces are not authentication credentials.
+When a refund is required, the browser first submits the refund address for
+review and then sends a second request with `confirm: true`; the provider refund
+is not dispatched on the first address submission.
 
 ## Vue
 

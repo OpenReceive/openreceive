@@ -1,5 +1,5 @@
 {
-  "name": "provider emergency state exposes refund_required and accepts refund request",
+  "name": "provider emergency state exposes refund_required and requires refund confirmation",
   "swap_before_refund": {
     "attempt_id": "or_inv_swap_refund",
     "provider": "fixedfloat",
@@ -9,13 +9,27 @@
     "deposit_amount": "0.0008",
     "provider_state": "refund_required",
     "provider_expires_at": 1783361130,
-    "deposit_tx_id": "0xdeposit"
+    "deposit_tx_id": "0xdeposit",
+    "refund_nonce": "or_ref_11111111111111111111111111111111"
   },
-  "refund_request": {
+  "refund_submit_request": {
     "attempt_id": "or_inv_swap_refund",
-    "refund_address": "0x2222222222222222222222222222222222222222"
+    "refund_address": "0x2222222222222222222222222222222222222222",
+    "refund_nonce": "or_ref_11111111111111111111111111111111",
+    "confirm": false
   },
-  "swap_after_refund": {
+  "swap_after_submit": {
+    "provider_state": "refund_required",
+    "refund_address": "0x2222222222222222222222222222222222222222",
+    "refund_nonce": "or_ref_11111111111111111111111111111111"
+  },
+  "refund_confirm_request": {
+    "attempt_id": "or_inv_swap_refund",
+    "refund_address": "0x2222222222222222222222222222222222222222",
+    "refund_nonce": "or_ref_11111111111111111111111111111111",
+    "confirm": true
+  },
+  "swap_after_confirm": {
     "provider_state": "refund_pending",
     "refund_address": "0x2222222222222222222222222222222222222222"
   },

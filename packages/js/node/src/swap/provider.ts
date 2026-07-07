@@ -25,11 +25,24 @@ export type OpenReceiveSwapAvailabilityReason =
 
 export interface OpenReceiveSwapQuote {
   readonly pay_amount?: string;
+  readonly minimum_pay_amount?: string;
+  readonly maximum_pay_amount?: string;
   readonly pay_asset: OpenReceiveSwapPayInAsset;
   readonly available: boolean;
   readonly unavailable_reason?: OpenReceiveSwapAvailabilityReason;
   readonly unavailable_message?: string;
   readonly provider: string;
+}
+
+export interface OpenReceiveSwapProviderAsset {
+  readonly pay_asset: OpenReceiveSwapPayInAsset;
+  readonly available?: boolean;
+  readonly unavailable_reason?: OpenReceiveSwapAvailabilityReason;
+  readonly unavailable_message?: string;
+  readonly minimum_pay_amount?: string;
+  readonly maximum_pay_amount?: string;
+  readonly minimum_invoice_amount_msats?: number;
+  readonly maximum_invoice_amount_msats?: number;
 }
 
 export interface OpenReceiveSwapOrder {
@@ -52,6 +65,8 @@ export interface OpenReceiveSwapOrder {
 export interface OpenReceiveSwapProvider {
   readonly name: string;
   supportedPayInAssets(): Promise<Set<OpenReceiveSwapPayInAsset>>;
+  payInAssetCatalog?(): Promise<readonly OpenReceiveSwapProviderAsset[]>;
+  invoiceExpirySeconds?(input: { readonly payInAsset: OpenReceiveSwapPayInAsset }): number;
   quote(input: {
     readonly payInAsset: OpenReceiveSwapPayInAsset;
     readonly invoiceAmountMsats: number;
@@ -66,10 +81,5 @@ export interface OpenReceiveSwapProvider {
 }
 
 export function isOpenReceiveSwapTerminalState(state: string | undefined): boolean {
-  return (
-    state === "expired" ||
-    state === "refunded" ||
-    state === "attention" ||
-    state === "failed"
-  );
+  return state === "expired" || state === "refunded" || state === "attention" || state === "failed";
 }

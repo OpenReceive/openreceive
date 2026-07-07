@@ -290,6 +290,8 @@ interface OpenReceiveSwapOptionDisplay {
   readonly unavailable_reason?: string;
   readonly unavailable_message?: string;
   readonly pay_amount?: string;
+  readonly minimum_pay_amount?: string;
+  readonly maximum_pay_amount?: string;
 }
 
 interface OpenReceiveSwapOptionsResult {
@@ -1075,7 +1077,12 @@ export function PaymentWizard(
     [props.swapStartUrl, orderId, fetcher, props.onError]
   );
   const refundSwap = React.useCallback(
-    async (attemptId: string, refundAddress: string) => {
+    async (
+      attemptId: string,
+      refundAddress: string,
+      refundNonce: string,
+      confirm: boolean
+    ) => {
       if (
         props.swapRefundUrl === undefined ||
         props.swapRefundUrl === false ||
@@ -1085,8 +1092,11 @@ export function PaymentWizard(
       }
       try {
         const body = await postOpenReceiveJson(fetcher, props.swapRefundUrl, {
+          ...(orderId === undefined ? {} : { order_id: orderId }),
           attempt_id: attemptId,
-          refund_address: refundAddress
+          refund_address: refundAddress,
+          refund_nonce: refundNonce,
+          confirm
         });
         const invoice = normalizeSwapStartInvoice(body);
         setStartedSwapInvoice(invoice);
@@ -1095,7 +1105,7 @@ export function PaymentWizard(
         props.onError?.(error);
       }
     },
-    [props.swapRefundUrl, fetcher, props.onError]
+    [props.swapRefundUrl, orderId, fetcher, props.onError]
   );
   const updateWizardSelection = React.useCallback(
     (
@@ -1481,7 +1491,12 @@ function renderSwapDepositPanel(options: {
   readonly clipboard?: Pick<Clipboard, "writeText">;
   readonly logger?: OpenReceiveBrowserLogger;
   readonly onError?: (error: unknown) => void;
-  readonly onRefund: (attemptId: string, refundAddress: string) => Promise<void>;
+  readonly onRefund: (
+    attemptId: string,
+    refundAddress: string,
+    refundNonce: string,
+    confirm: boolean
+  ) => Promise<void>;
   readonly onBackToLightning: () => void;
 }): React.ReactElement | null {
   const display = createOpenReceiveSwapDisplayModel(
@@ -1567,6 +1582,8 @@ function renderSwapDepositPanel(options: {
       React.createElement(SwapRefundForm, {
         attemptId: display.attemptId,
         networkLabel: display.networkLabel,
+        submittedRefundAddress: display.refundAddress,
+        refundNonce: display.refundNonce,
         onRefund: options.onRefund,
         onError: options.onError
       }),
@@ -1721,25 +1738,46 @@ function renderSwapSupportDetails(
 function SwapRefundForm(props: {
   readonly attemptId: string;
   readonly networkLabel: string;
-  readonly onRefund: (attemptId: string, refundAddress: string) => Promise<void>;
+  readonly submittedRefundAddress?: string;
+  readonly refundNonce?: string;
+  readonly onRefund: (
+    attemptId: string,
+    refundAddress: string,
+    refundNonce: string,
+    confirm: boolean
+  ) => Promise<void>;
   readonly onError?: (error: unknown) => void;
 }): React.ReactElement {
   const [refundAddress, setRefundAddress] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
+  const address = refundAddress.trim();
+  const confirm =
+    address.length > 0 &&
+    props.submittedRefundAddress !== undefined &&
+    props.submittedRefundAddress === address;
+  const disabled = submitting || props.refundNonce === undefined;
   return React.createElement(
     "form",
     {
       className: "or-swap-refund",
       onSubmit: (event) => {
         event.preventDefault();
-        const address = refundAddress.trim();
-        if (address.length === 0) return;
+        if (address.length === 0 || props.refundNonce === undefined) return;
         setSubmitting(true);
-        void props.onRefund(props.attemptId, address)
+        void props.onRefund(props.attemptId, address, props.refundNonce, confirm)
           .catch(props.onError)
           .finally(() => setSubmitting(false));
       }
     },
+    props.submittedRefundAddress === undefined
+      ? null
+      : React.createElement(
+        "p",
+        {
+          className: "or-swap-warning"
+        },
+        `Confirm refund to ${props.submittedRefundAddress}.`
+      ),
     React.createElement("input", {
       autoComplete: "off",
       onChange: (event) => setRefundAddress(event.currentTarget.value),
@@ -1751,10 +1789,10 @@ function SwapRefundForm(props: {
     React.createElement(
       "button",
       {
-        disabled: submitting,
+        disabled,
         type: "submit"
       },
-      submitting ? "Requesting..." : "Request refund"
+      submitting ? "Submitting..." : confirm ? "Confirm refund" : "Review refund address"
     )
   );
 }
@@ -1867,7 +1905,13 @@ function normalizeSwapOptionDisplay(input: unknown): OpenReceiveSwapOptionDispla
       : { unavailable_message: reactString(record.unavailable_message) }),
     ...(reactString(record.pay_amount) === undefined
       ? {}
-      : { pay_amount: reactString(record.pay_amount) })
+      : { pay_amount: reactString(record.pay_amount) }),
+    ...(reactString(record.minimum_pay_amount) === undefined
+      ? {}
+      : { minimum_pay_amount: reactString(record.minimum_pay_amount) }),
+    ...(reactString(record.maximum_pay_amount) === undefined
+      ? {}
+      : { maximum_pay_amount: reactString(record.maximum_pay_amount) })
   };
 }
 

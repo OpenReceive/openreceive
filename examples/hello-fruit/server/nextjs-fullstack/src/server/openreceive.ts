@@ -3,10 +3,7 @@ import type {
   OpenReceiveReceiveNwcClient,
   OpenReceiveSourcedPriceProvider,
 } from "@openreceive/core";
-import {
-  OpenReceiveServiceError,
-  createOpenReceive,
-} from "@openreceive/node";
+import { OpenReceiveServiceError, createOpenReceive } from "@openreceive/node";
 import { createHelloFruitDemoMetadata } from "../../../../shared/demo-metadata.ts";
 import { readRequiredHelloFruitNwcConnectionString } from "../../../../shared/demo-nwc.ts";
 import {
@@ -173,6 +170,7 @@ export async function orderStatusResponse(request: Request): Promise<Response> {
     logDemo("order_status.request", "Received order status request.", {
       orderId: statusRequest.orderId,
     });
+    await authorizeOrderAccess(request, statusRequest.orderId);
     const openreceiveOrder = await openreceive.getOrder(statusRequest);
     const orderStatus = createHelloFruitOrderStatus(openreceiveOrder);
     logDemo("order_status.response", "Refreshed order status.", {
@@ -213,6 +211,7 @@ export async function swapOptionsResponse(request: Request): Promise<Response> {
   try {
     const body = await readJsonBody(request);
     const orderId = requireRequestString(body, "order_id");
+    await authorizeOrderAccess(request, orderId);
     const result = await openreceive.swapOptions({
       orderId,
     });
@@ -231,6 +230,35 @@ export async function swapOptionsResponse(request: Request): Promise<Response> {
   }
 }
 
+export async function swapQuoteResponse(request: Request): Promise<Response> {
+  const startedAt = Date.now();
+  const { openreceive } = await getOpenReceive();
+
+  try {
+    const body = await readJsonBody(request);
+    const orderId = requireRequestString(body, "order_id");
+    const payInAsset = requireRequestString(body, "pay_in_asset");
+    await authorizeOrderAccess(request, orderId);
+    const quote = await openreceive.swapQuote({
+      orderId,
+      payInAsset,
+    });
+    logDemo("swap_quote.response", "Served automated swap quote.", {
+      orderId,
+      payInAsset,
+      provider: quote.provider,
+      available: quote.available,
+      elapsedMs: Date.now() - startedAt,
+    });
+    return jsonResponse({ quote });
+  } catch (error) {
+    if (error instanceof OpenReceiveServiceError) {
+      return jsonResponse(error.body, error.status);
+    }
+    throw error;
+  }
+}
+
 export async function swapStartResponse(request: Request): Promise<Response> {
   const startedAt = Date.now();
   const { openreceive } = await getOpenReceive();
@@ -239,6 +267,7 @@ export async function swapStartResponse(request: Request): Promise<Response> {
     const body = await readJsonBody(request);
     const orderId = requireRequestString(body, "order_id");
     const payInAsset = requireRequestString(body, "pay_in_asset");
+    await authorizeOrderAccess(request, orderId);
     const invoice = await openreceive.startSwap({
       orderId,
       payInAsset,
@@ -265,9 +294,17 @@ export async function swapRefundResponse(request: Request): Promise<Response> {
 
   try {
     const body = await readJsonBody(request);
+    const orderId = requireRequestString(body, "order_id");
     const attemptId = requireRequestString(body, "attempt_id");
     const refundAddress = requireRequestString(body, "refund_address");
-    const invoice = await openreceive.refundSwap({ attemptId, refundAddress });
+    const refundNonce = requireRequestString(body, "refund_nonce");
+    await authorizeOrderAccess(request, orderId);
+    const invoice = await openreceive.refundSwap({
+      attemptId,
+      refundAddress,
+      refundNonce,
+      confirm: body.confirm === true,
+    });
     logDemo("swap_refund.response", "Requested automated swap refund.", {
       attemptId,
       invoiceId: invoice.invoice_id,
@@ -281,6 +318,11 @@ export async function swapRefundResponse(request: Request): Promise<Response> {
     }
     throw error;
   }
+}
+
+async function authorizeOrderAccess(_request: Request, _orderId: string): Promise<void> {
+  // Demo seam: production apps should verify the signed-in/session caller owns
+  // this order before proxying OpenReceive order, swap, or refund methods.
 }
 
 export async function ratesResponse(): Promise<Response> {
@@ -445,6 +487,7 @@ function currentStoreCacheKey(): string {
   return JSON.stringify({
     store: process.env.OPENRECEIVE_STORE ?? "local-sqlite",
     namespace: process.env.OPENRECEIVE_NAMESPACE ?? "hello_fruit",
+    swapConfig: process.env.OPENRECEIVE_SWAP_CONFIG,
     fixedFloatEnabled:
       process.env.OPENRECEIVE_SWAP_FIXED_FLOAT_KEY !== undefined &&
       process.env.OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET !== undefined,

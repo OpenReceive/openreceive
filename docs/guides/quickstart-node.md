@@ -39,12 +39,23 @@ OPENRECEIVE_NAMESPACE=my_app
 If `OPENRECEIVE_STORE` is omitted locally, OpenReceive uses local SQLite under
 `.openreceive/`. The default file is `./.openreceive/default.sqlite3`; use Postgres anywhere; use SQLite only on a durable single-machine filesystem.
 
-Optional automated swap providers use the same env-first setup. For FixedFloat,
-set both values on the backend:
+Optional automated swap providers use a backend-only YAML config with secret env
+references:
 
 ```sh
-OPENRECEIVE_SWAP_FIXED_FLOAT_KEY=...
-OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET=...
+OPENRECEIVE_SWAP_CONFIG=./openreceive.swap.yml
+OPENRECEIVE_FIXEDFLOAT_KEY=...
+OPENRECEIVE_FIXEDFLOAT_SECRET=...
+```
+
+```yaml
+swap:
+  providers:
+    - id: fixedfloat
+      protocol: fixedfloat
+      base_url: https://ff.io
+      key_env: OPENRECEIVE_FIXEDFLOAT_KEY
+      secret_env: OPENRECEIVE_FIXEDFLOAT_SECRET
 ```
 
 ## Server

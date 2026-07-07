@@ -5,10 +5,7 @@ import type {
   OpenReceiveReceiveNwcClient,
   OpenReceiveSourcedPriceProvider,
 } from "@openreceive/core";
-import {
-  OpenReceiveServiceError,
-  createOpenReceive,
-} from "@openreceive/node";
+import { OpenReceiveServiceError, createOpenReceive } from "@openreceive/node";
 import { createHelloFruitDemoMetadata } from "../../../../shared/demo-metadata.ts";
 import {
   createHelloFruitDemoServerLogger,
@@ -86,6 +83,7 @@ export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptio
     createOrder: "/create_order",
     orderStatus: "/order_status",
     swapOptions: "/swap_options",
+    swapQuote: "/swap_quote",
     swapStart: "/swap_start",
     swapRefund: "/swap_refund",
     rates: "/rates",
@@ -188,6 +186,7 @@ export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptio
       logDemo("order_status.request", "Received order status request.", {
         orderId: statusRequest.orderId,
       });
+      await authorizeOrderAccess(req, statusRequest.orderId);
       const openreceiveOrder = await openreceive.getOrder(statusRequest);
       const orderStatus = createHelloFruitOrderStatus(openreceiveOrder);
       logDemo("order_status.response", "Refreshed order status.", {
@@ -227,6 +226,7 @@ export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptio
     try {
       const body = asRequestBody(req.body);
       const orderId = requireRequestString(body, "order_id");
+      await authorizeOrderAccess(req, orderId);
       const result = await openreceive.swapOptions({
         orderId,
       });
@@ -246,12 +246,41 @@ export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptio
     }
   });
 
+  app.post("/swap_quote", async (req, res, next) => {
+    const startedAt = Date.now();
+    try {
+      const body = asRequestBody(req.body);
+      const orderId = requireRequestString(body, "order_id");
+      const payInAsset = requireRequestString(body, "pay_in_asset");
+      await authorizeOrderAccess(req, orderId);
+      const quote = await openreceive.swapQuote({
+        orderId,
+        payInAsset,
+      });
+      logDemo("swap_quote.response", "Served automated swap quote.", {
+        orderId,
+        payInAsset,
+        provider: quote.provider,
+        available: quote.available,
+        elapsedMs: Date.now() - startedAt,
+      });
+      res.status(200).json({ quote });
+    } catch (error) {
+      if (error instanceof OpenReceiveServiceError || error instanceof HelloFruitDemoOrderError) {
+        res.status(error.status).json(error.body);
+        return;
+      }
+      next(error);
+    }
+  });
+
   app.post("/swap_start", async (req, res, next) => {
     const startedAt = Date.now();
     try {
       const body = asRequestBody(req.body);
       const orderId = requireRequestString(body, "order_id");
       const payInAsset = requireRequestString(body, "pay_in_asset");
+      await authorizeOrderAccess(req, orderId);
       const invoice = await openreceive.startSwap({
         orderId,
         payInAsset,
@@ -277,9 +306,17 @@ export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptio
     const startedAt = Date.now();
     try {
       const body = asRequestBody(req.body);
+      const orderId = requireRequestString(body, "order_id");
       const attemptId = requireRequestString(body, "attempt_id");
       const refundAddress = requireRequestString(body, "refund_address");
-      const invoice = await openreceive.refundSwap({ attemptId, refundAddress });
+      const refundNonce = requireRequestString(body, "refund_nonce");
+      await authorizeOrderAccess(req, orderId);
+      const invoice = await openreceive.refundSwap({
+        attemptId,
+        refundAddress,
+        refundNonce,
+        confirm: body.confirm === true,
+      });
       logDemo("swap_refund.response", "Requested automated swap refund.", {
         attemptId,
         invoiceId: invoice.invoice_id,
@@ -297,6 +334,11 @@ export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptio
   });
 
   return app;
+}
+
+async function authorizeOrderAccess(_req: express.Request, _orderId: string): Promise<void> {
+  // Demo seam: production apps should verify the signed-in/session caller owns
+  // this order before proxying OpenReceive order, swap, or refund methods.
 }
 
 function summarizeOrderRequest(body: Record<string, unknown>): Record<string, unknown> {

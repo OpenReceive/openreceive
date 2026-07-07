@@ -112,6 +112,8 @@ export interface OpenReceiveElementsSwapOption {
   readonly unavailable_reason?: string;
   readonly unavailable_message?: string;
   readonly pay_amount?: string;
+  readonly minimum_pay_amount?: string;
+  readonly maximum_pay_amount?: string;
 }
 
 export interface DefineOpenReceiveElementsOptions {
@@ -419,21 +421,44 @@ function renderElementSwapPanelHtml(invoice: CheckoutInvoiceSnapshot): string {
   }
 
   if (display.state === "refund_required") {
+    const stagedRefundAddress = display.refundAddress;
     return `
       <section part="swap-panel">
         ${heading}
         <p part="swap-warning">Use a ${escapeHtml(display.networkLabel)} address you control. Do not paste the deposit address.</p>
-        <form part="swap-refund" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundForm}="${escapeHtml(display.attemptId)}">
-          <input
-            ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundAddress}
-            name="refund_address"
-            placeholder="${escapeHtml(display.networkLabel)} refund address"
-            type="text"
-            autocomplete="off"
-            required
+        ${stagedRefundAddress === undefined ? `
+          <form
+            part="swap-refund"
+            ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundForm}="${escapeHtml(display.attemptId)}"
+            ${display.refundNonce === undefined ? "" : `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundNonce}="${escapeHtml(display.refundNonce)}"`}
           >
-          <button type="submit">Request refund</button>
-        </form>
+            <input
+              ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundAddress}
+              name="refund_address"
+              placeholder="${escapeHtml(display.networkLabel)} refund address"
+              type="text"
+              autocomplete="off"
+              required
+            >
+            <button type="submit">Review refund address</button>
+          </form>
+        ` : `
+          <form
+            part="swap-refund"
+            ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundForm}="${escapeHtml(display.attemptId)}"
+            ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundConfirm}="true"
+            ${display.refundNonce === undefined ? "" : `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundNonce}="${escapeHtml(display.refundNonce)}"`}
+          >
+            <p part="swap-warning">Confirm refund to ${escapeHtml(stagedRefundAddress)}.</p>
+            <input
+              ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundAddress}
+              name="refund_address"
+              type="hidden"
+              value="${escapeHtml(stagedRefundAddress)}"
+            >
+            <button type="submit">Confirm refund</button>
+          </form>
+        `}
         ${supportDetails}
       </section>
     `;
@@ -722,7 +747,13 @@ function normalizeElementSwapOption(input: unknown): OpenReceiveElementsSwapOpti
       : { unavailable_message: elementString(record.unavailable_message) }),
     ...(elementString(record.pay_amount) === undefined
       ? {}
-      : { pay_amount: elementString(record.pay_amount) })
+      : { pay_amount: elementString(record.pay_amount) }),
+    ...(elementString(record.minimum_pay_amount) === undefined
+      ? {}
+      : { minimum_pay_amount: elementString(record.minimum_pay_amount) }),
+    ...(elementString(record.maximum_pay_amount) === undefined
+      ? {}
+      : { maximum_pay_amount: elementString(record.maximum_pay_amount) })
   };
 }
 
@@ -1162,10 +1193,13 @@ export function defineOpenReceiveElements(
         form.addEventListener("submit", (event) => {
           event.preventDefault();
           const attemptId = form.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundForm);
+          const refundNonce = form.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundNonce);
+          const confirm =
+            form.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundConfirm) === "true";
           const input = form.querySelector(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapRefundAddress);
           const refundAddress = input instanceof HTMLInputElement ? input.value.trim() : "";
-          if (attemptId === null || refundAddress.length === 0) return;
-          void this.refundSwap(attemptId, refundAddress);
+          if (attemptId === null || refundNonce === null || refundAddress.length === 0) return;
+          void this.refundSwap(attemptId, refundAddress, refundNonce, confirm);
         });
       });
 
@@ -1266,14 +1300,23 @@ export function defineOpenReceiveElements(
       }
     }
 
-    private async refundSwap(attemptId: string, refundAddress: string): Promise<void> {
+    private async refundSwap(
+      attemptId: string,
+      refundAddress: string,
+      refundNonce: string,
+      confirm: boolean
+    ): Promise<void> {
       const url = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.swapRefundUrl);
+      const orderId = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
       if (url === null) return;
 
       try {
         const body = await postElementJson(url, {
+          ...(orderId === null ? {} : { order_id: orderId }),
           attempt_id: attemptId,
-          refund_address: refundAddress
+          refund_address: refundAddress,
+          refund_nonce: refundNonce,
+          confirm
         });
         this.startedSwapInvoice = normalizeElementSwapInvoice(body);
         this.dismissedSwapInvoiceId = null;

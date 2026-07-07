@@ -28,6 +28,7 @@ export {
   createOpenReceive,
   createOpenReceivePriceFeed,
 } from "./service.ts";
+export { fixedFloatCompatibleSwapProvider, fixedFloatProvider } from "./swap/index.ts";
 export type {
   CreateOpenReceiveOptions,
   OpenReceive,
@@ -54,10 +55,14 @@ export type {
   OpenReceiveSwapOptions,
   OpenReceiveSwapOptionsRequest,
   OpenReceiveSwapOptionsResponse,
+  OpenReceiveSwapQuoteRequest,
+  OpenReceiveSwapQuoteResponse,
   OpenReceiveSwapRefundRequest,
   OpenReceiveSwapStartRequest,
 } from "./service.ts";
 export type {
+  FixedFloatCompatibleSwapProviderOptions,
+  FixedFloatProviderOptions,
   OpenReceiveSwapAvailabilityReason,
   OpenReceiveSwapPayInAsset,
   OpenReceiveSwapProvider,

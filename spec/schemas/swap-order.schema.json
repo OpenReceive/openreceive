@@ -83,6 +83,10 @@
       "type": "string",
       "minLength": 1
     },
+    "refund_nonce": {
+      "type": "string",
+      "pattern": "^or_ref_[a-f0-9]{32}$"
+    },
     "refund_tx_id": {
       "type": "string",
       "minLength": 1

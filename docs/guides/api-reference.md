@@ -137,13 +137,18 @@ invoices.
 
 ## Automated Swaps
 
-Automated swaps are optional and auto-load provider credentials from backend
-environment variables. See [Automated Swaps](automated-swaps.md) for setup and
-payer flow details.
+Automated swaps are optional and auto-load providers from a backend YAML config
+with secret env references. See [Automated Swaps](automated-swaps.md) for setup
+and payer flow details.
 
 ```ts
 const options = await openreceive.swapOptions({
   orderId: order.uuid
+});
+
+const quote = await openreceive.swapQuote({
+  orderId: order.uuid,
+  payInAsset: "USDT_TRON"
 });
 
 const attempt = await openreceive.startSwap({
@@ -153,13 +158,24 @@ const attempt = await openreceive.startSwap({
 
 await openreceive.refundSwap({
   attemptId: attempt.swap.attempt_id,
-  refundAddress: "..."
+  refundAddress: "...",
+  refundNonce: attempt.swap.refund_nonce,
+  confirm: false
+});
+
+await openreceive.refundSwap({
+  attemptId: attempt.swap.attempt_id,
+  refundAddress: "...",
+  refundNonce: attempt.swap.refund_nonce,
+  confirm: true
 });
 ```
 
 Refunds target `attemptId`, not order id plus asset. Public swap payloads expose
 support fields such as `attempt_id`, `provider_order_id`, transaction ids, and
-state. Provider tokens remain private.
+state. Refunds require the current `refund_nonce` and an explicit confirmation
+call from an application-authorized order context. Provider tokens remain
+private.
 
 ## Errors
 

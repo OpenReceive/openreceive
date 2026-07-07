@@ -6,7 +6,8 @@
   "types": "./dist/index.d.ts",
   "dependencies": {
     "@getalby/sdk": "^7.0.0",
-    "@openreceive/core": "0.1.1"
+    "@openreceive/core": "0.1.1",
+    "yaml": "^2.9.0"
   },
   "bin": {
     "openreceive": "./bin/openreceive.mjs"

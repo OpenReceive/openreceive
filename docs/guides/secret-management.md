@@ -7,8 +7,8 @@ them as private server-only configuration.
 
 - Commit `.env.example`, not real `.env` files.
 - Do not commit `OPENRECEIVE_NWC` values.
-- Do not commit `OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET` or other provider
-  credentials.
+- Do not commit swap provider credentials. YAML swap config must use `key_env`
+  and `secret_env` references, not inline secret values.
 - Do not put receive-only NWC codes in browser code, mobile apps, fixtures,
   screenshots, source maps, docs, logs, or error payloads.
 - Keep `private/` for local-only launcher scripts and notes.
@@ -25,9 +25,21 @@ Use a local env file ignored by git:
 ```sh
 OPENRECEIVE_NWC=nostr+walletconnect://...
 OPENRECEIVE_WALLET_PROFILE=rizful
-# Optional server-only swap provider credentials.
-OPENRECEIVE_SWAP_FIXED_FLOAT_KEY=...
-OPENRECEIVE_SWAP_FIXED_FLOAT_SECRET=...
+OPENRECEIVE_SWAP_CONFIG=private/openreceive.swap.yml
+OPENRECEIVE_FIXEDFLOAT_KEY=...
+OPENRECEIVE_FIXEDFLOAT_SECRET=...
+```
+
+The YAML file should reference those env vars instead of storing their values:
+
+```yaml
+swap:
+  providers:
+    - id: fixedfloat
+      protocol: fixedfloat
+      base_url: https://ff.io
+      key_env: OPENRECEIVE_FIXEDFLOAT_KEY
+      secret_env: OPENRECEIVE_FIXEDFLOAT_SECRET
 ```
 
 To read those values from an ignored local file instead of exported shell

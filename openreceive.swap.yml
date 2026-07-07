@@ -1,0 +1,10 @@
+# Development swap provider config.
+# Secrets stay in environment variables; this file only names which env vars to read.
+swap:
+  providers:
+    - id: fixedfloat
+      protocol: fixedfloat
+      base_url: https://ff.io
+      key_env: OPENRECEIVE_FIXEDFLOAT_KEY
+      secret_env: OPENRECEIVE_FIXEDFLOAT_SECRET
+      invoice_expiry_seconds: 1620

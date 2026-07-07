@@ -41,9 +41,10 @@ Keep runtime env files on the host, for example:
 Those files must be mode `600` and must not be committed. Demo stack compose
 files load private values through `env_file`; demo images never bake them in.
 The receive-only NWC code env file must provide server-only `OPENRECEIVE_NWC`,
-`OPENRECEIVE_STORE`, and `OPENRECEIVE_NAMESPACE`. Optional swap provider
-credentials use server-only `OPENRECEIVE_SWAP_*` variables in the same private
-env boundary. Each demo has one web service whose app routes call the
+`OPENRECEIVE_STORE`, and `OPENRECEIVE_NAMESPACE`. Optional automated swaps use
+server-only `OPENRECEIVE_SWAP_CONFIG` plus the provider secret env vars
+referenced by that YAML file in the same private env boundary. Each demo has one
+web service whose app routes call the
 OpenReceive service and use durable OpenReceive invoice storage. Status refresh
 happens only inside app requests. No demo deploys an extra timed process or
 wallet event listener.
