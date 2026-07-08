@@ -459,6 +459,8 @@ export interface OpenReceiveCheckoutPaymentMethod {
   readonly pay_amount?: string;
   readonly minimum_pay_amount?: string;
   readonly maximum_pay_amount?: string;
+  readonly minimum_invoice_amount_msats?: number;
+  readonly maximum_invoice_amount_msats?: number;
 }
 
 export interface CheckoutSnapshot {

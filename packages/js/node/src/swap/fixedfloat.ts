@@ -7,6 +7,11 @@ import {
   openReceiveSwapNetworkMatches,
   type OpenReceiveSwapPayInAsset,
 } from "./assets.ts";
+import {
+  StoreBackedSwapCache,
+  SWAP_LIMITS_MAX_STALE_SECONDS,
+  swapLimitsMetaKey,
+} from "./limits-cache.ts";
 import type {
   OpenReceiveSwapAttentionReason,
   OpenReceiveSwapAvailabilityReason,
@@ -134,7 +139,7 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
   private readonly cacheSeconds: number;
   private readonly requestTimeoutMs: number;
   private readonly invoiceExpirySecondsValue: number;
-  private currencyResolution: FixedFloatCurrencyResolution | undefined;
+  private cache: StoreBackedSwapCache | undefined;
 
   constructor(options: FixedFloatCompatibleSwapProviderOptions) {
     this.name = readFixedFloatCompatibleProviderId(options.id);
@@ -194,6 +199,10 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
     }
   }
 
+  attachSwapCache(cache: StoreBackedSwapCache): void {
+    this.cache = cache;
+  }
+
   async supportedPayInAssets(): Promise<Set<OpenReceiveSwapPayInAsset>> {
     const resolution = await this.resolveCurrencies();
     return new Set(resolution.pay_in.keys());
@@ -207,6 +216,21 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
     const maximumInvoiceAmountMsats = btcAmountStringToMsats(
       resolution.lightning.maximum_receive_amount ?? resolution.lightning.maximum_send_amount ?? "",
     );
+    // Diagnostic: reveals whether the provider's /ccies response actually carries
+    // the Lightning receive/send limits we derive the invoice min/max from. If these
+    // are undefined, the /ccies payload lacks per-currency limits and the catalog
+    // cannot gate on amount without a /price quote. Remove once confirmed.
+    console.info("[openreceive:swap:fixedfloat] payInAssetCatalog", {
+      provider: this.name,
+      lightning_code: resolution.lightning.code,
+      lightning_minimum_receive_amount: resolution.lightning.minimum_receive_amount,
+      lightning_maximum_receive_amount: resolution.lightning.maximum_receive_amount,
+      lightning_minimum_send_amount: resolution.lightning.minimum_send_amount,
+      lightning_maximum_send_amount: resolution.lightning.maximum_send_amount,
+      minimum_invoice_amount_msats: minimumInvoiceAmountMsats,
+      maximum_invoice_amount_msats: maximumInvoiceAmountMsats,
+      pay_in_asset_count: resolution.pay_in.size,
+    });
     return Array.from(resolution.pay_in.entries(), ([payInAsset, currency]) => ({
       pay_asset: payInAsset,
       ...(currency.minimum_send_amount === undefined
@@ -378,10 +402,23 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
   }
 
   private async resolveCurrencies(): Promise<FixedFloatCurrencyResolution> {
-    const cached = this.currencyResolution;
-    const now = this.now();
-    if (cached !== undefined && now - cached.fetched_at < this.cacheSeconds) return cached;
+    const cache = this.cache;
+    if (cache === undefined) {
+      // No durable cache attached (e.g. tests / standalone use): fetch fresh
+      // each call. The resolution is never retained in process memory.
+      return await this.fetchCurrencyResolution();
+    }
+    return await cache.resolve(swapLimitsMetaKey(this.name), {
+      refreshSeconds: this.cacheSeconds,
+      maxStaleSeconds: Math.max(SWAP_LIMITS_MAX_STALE_SECONDS, this.cacheSeconds),
+      fetch: () => this.fetchCurrencyResolution(),
+      serialize: serializeCurrencyResolution,
+      deserialize: deserializeCurrencyResolution,
+    });
+  }
 
+  private async fetchCurrencyResolution(): Promise<FixedFloatCurrencyResolution> {
+    const now = this.now();
     const data = await this.post("ccies", {});
     const currencies = readFixedFloatCurrencies(data);
     const payIn = new Map<OpenReceiveSwapPayInAsset, FixedFloatCurrency>();
@@ -406,14 +443,33 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
       throw new Error("FixedFloat /ccies did not include a BTC Lightning payout currency.");
     }
 
-    const resolution = {
+    return {
       fetched_at: now,
       pay_in: payIn,
       lightning: lightningCurrency,
     };
-    this.currencyResolution = resolution;
-    return resolution;
   }
+}
+
+function serializeCurrencyResolution(resolution: FixedFloatCurrencyResolution): string {
+  return JSON.stringify({
+    fetched_at: resolution.fetched_at,
+    pay_in: Array.from(resolution.pay_in.entries()),
+    lightning: resolution.lightning,
+  });
+}
+
+function deserializeCurrencyResolution(value: string): FixedFloatCurrencyResolution {
+  const parsed = JSON.parse(value) as {
+    readonly fetched_at: number;
+    readonly pay_in: readonly (readonly [OpenReceiveSwapPayInAsset, FixedFloatCurrency])[];
+    readonly lightning: FixedFloatCurrency;
+  };
+  return {
+    fetched_at: parsed.fetched_at,
+    pay_in: new Map(parsed.pay_in),
+    lightning: parsed.lightning,
+  };
 }
 
 function readFixedFloatCompatibleProviderId(id: string): string {
@@ -503,12 +559,29 @@ function formatFixedFloatApiErrorMessage(path: string, status: number, msg: unkn
 function readFixedFloatQuoteLimits(data: unknown): {
   readonly minimum_pay_amount?: string;
   readonly maximum_pay_amount?: string;
+  readonly minimum_invoice_amount_msats?: number;
+  readonly maximum_invoice_amount_msats?: number;
 } {
   const minimumPayAmount = readNestedString(data, ["from", "min"]);
   const maximumPayAmount = readNestedString(data, ["from", "max"]);
+  // The payout (to) side is BTC on Lightning, so its min/max are the invoice-side
+  // limits. Present them in msats so the checkout can render a fiat figure. Not all
+  // /price responses include them; callers fall back to the pay-side amount.
+  const minimumInvoiceAmountMsats = btcAmountStringToMsats(
+    readNestedString(data, ["to", "min"]) ?? "",
+  );
+  const maximumInvoiceAmountMsats = btcAmountStringToMsats(
+    readNestedString(data, ["to", "max"]) ?? "",
+  );
   return {
     ...(minimumPayAmount === undefined ? {} : { minimum_pay_amount: minimumPayAmount }),
     ...(maximumPayAmount === undefined ? {} : { maximum_pay_amount: maximumPayAmount }),
+    ...(minimumInvoiceAmountMsats === undefined
+      ? {}
+      : { minimum_invoice_amount_msats: minimumInvoiceAmountMsats }),
+    ...(maximumInvoiceAmountMsats === undefined
+      ? {}
+      : { maximum_invoice_amount_msats: maximumInvoiceAmountMsats }),
   };
 }
 

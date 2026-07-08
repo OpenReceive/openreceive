@@ -25,6 +25,7 @@ import {
 } from "./service/pricing.ts";
 import { reconcileOptions } from "./service/reconcile.ts";
 import { getSwapOptions, quoteSwap, refundSwap, startSwap } from "./service/swaps.ts";
+import { StoreBackedSwapCache } from "./swap/index.ts";
 import type {
   CreateOpenReceiveOptions,
   OpenReceive,
@@ -120,14 +121,27 @@ export async function createOpenReceive(
     },
   );
 
+  const clock = configuredOptions.clock ?? currentUnixSeconds;
+  if (swapProviders.length > 0) {
+    // Providers are constructed before the store exists (config parse time / by
+    // the caller), so the durable limits cache is attached here once the store
+    // is available. This keeps slow-changing provider data out of process memory
+    // and shared across serverless instances.
+    const swapCache = new StoreBackedSwapCache(store, clock, {
+      warn: (message, fields) => emitLog(nodeOptions, "warn", "swap.limits.stale", message, fields),
+    });
+    for (const provider of swapProviders) {
+      provider.attachSwapCache?.(swapCache);
+    }
+  }
+
   const context: OpenReceiveServiceContext = {
     options: nodeOptions,
     store,
-    clock: configuredOptions.clock ?? currentUnixSeconds,
+    clock,
     priceProviders,
     priceCurrencies,
     swapProviders,
-    swapQuoteCache: new Map(),
   };
 
   const getOrCreateCheckout = async (

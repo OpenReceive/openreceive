@@ -278,6 +278,47 @@ export function formatOpenReceiveFiatAmount(
   return fiat.currency === "USD" ? `$${fiat.value}` : `${fiat.value} ${fiat.currency}`;
 }
 
+/**
+ * Renders an invoice-side (Lightning receive) msat limit as a short amount for
+ * display next to a disabled swap asset, e.g. "$10.00". Converts to the
+ * checkout's own fiat currency using its rate; falls back to a sats figure when
+ * the checkout is sats/BTC-denominated or no usable rate is available.
+ */
+export function formatOpenReceiveSwapLimit(
+  checkout: {
+    readonly amount_msats: number;
+    readonly fiat?: { readonly currency: string; readonly value: string };
+  },
+  limitMsats: number | undefined,
+): string | undefined {
+  if (limitMsats === undefined || !Number.isFinite(limitMsats) || limitMsats < 0) return undefined;
+  const fiat = checkout.fiat;
+  if (
+    fiat !== undefined &&
+    fiat.currency !== "SATS" &&
+    fiat.currency !== "BTC" &&
+    checkout.amount_msats > 0
+  ) {
+    const invoiceFiat = Number(fiat.value);
+    if (Number.isFinite(invoiceFiat) && invoiceFiat > 0) {
+      const limitFiat = (invoiceFiat / checkout.amount_msats) * limitMsats;
+      const formatted = formatOpenReceiveFiatAmount({
+        currency: fiat.currency,
+        value: limitFiat.toFixed(fiatFractionDigits(fiat.value)),
+      });
+      if (formatted !== undefined) return formatted;
+    }
+  }
+  const sats = Math.round(limitMsats / 1000);
+  return `${sats} ${sats === 1 ? "sat" : "sats"}`;
+}
+
+function fiatFractionDigits(value: string): number {
+  const dot = value.indexOf(".");
+  if (dot === -1) return 2;
+  return Math.min(value.length - dot - 1, 8);
+}
+
 export function formatOpenReceivePaymentHashLabel(hash: string): string {
   return hash.length <= 16 ? hash : `${hash.slice(0, 8)}...${hash.slice(-8)}`;
 }
@@ -624,6 +665,12 @@ function normalizePaymentMethod(input: unknown): OpenReceiveCheckoutPaymentMetho
     ...(optionalString(record.maximum_pay_amount) === undefined
       ? {}
       : { maximum_pay_amount: optionalString(record.maximum_pay_amount) }),
+    ...(optionalSafeInteger(record.minimum_invoice_amount_msats) === undefined
+      ? {}
+      : { minimum_invoice_amount_msats: optionalSafeInteger(record.minimum_invoice_amount_msats) }),
+    ...(optionalSafeInteger(record.maximum_invoice_amount_msats) === undefined
+      ? {}
+      : { maximum_invoice_amount_msats: optionalSafeInteger(record.maximum_invoice_amount_msats) }),
   };
 }
 

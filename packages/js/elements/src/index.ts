@@ -41,6 +41,7 @@ import {
   getOpenReceivePaymentMethodIcon,
   getOpenReceiveRegionForCountry,
   getOpenReceiveWizardEmptyMessage,
+  formatOpenReceiveSwapLimit,
   openReceiveCheckoutLabels,
   openReceiveCheckoutElementStyles,
   openWallet,
@@ -100,6 +101,9 @@ export interface OpenReceiveElementsWizardView {
   readonly selectedRegion?: OpenReceiveRegionId;
   readonly countryPickerOpen?: boolean;
   readonly swapOptions?: readonly OpenReceiveElementsSwapOption[];
+  /** Invoice amount + fiat, used to render fiat limit messages for out-of-range assets. */
+  readonly amountMsats?: number;
+  readonly fiat?: { readonly currency?: string; readonly value?: string };
   readonly swapInvoice?: CheckoutInvoiceSnapshot;
   readonly activeTutorialProviderId?: string | null;
   readonly activeTutorialIndex?: number;
@@ -289,7 +293,7 @@ export function renderOpenReceivePaymentWizardHtml(
                   })}
                 </h3>
               ${activeSwap === undefined
-                ? renderElementSwapActionsHtml(route.key, view.swapOptions ?? [])
+                ? renderElementSwapActionsHtml(route.key, view.swapOptions ?? [], view)
                 : renderElementSwapPanelHtml(activeSwap)}
               ${activeSwap === undefined ? `<div part="provider-grid">
                 ${route.providers.map((provider) => `
@@ -323,27 +327,79 @@ export function renderOpenReceivePaymentWizardHtml(
 
 function renderElementSwapActionsHtml(
   routeKey: string,
-  options: readonly OpenReceiveElementsSwapOption[]
+  options: readonly OpenReceiveElementsSwapOption[],
+  view: OpenReceiveElementsWizardView
 ): string {
-  const available = options
-    .filter((option) => option.provider.length > 0 && option.available)
+  // Out-of-range assets stay in the list but render as a disabled button with
+  // the limit reason, instead of being hidden.
+  const shown = options
+    .filter((option) => option.provider.length > 0)
     .filter((option) => openReceiveSwapAssetMatchesRoute(routeKey, option.pay_in_asset));
-  if (available.length === 0) return "";
+  if (shown.length === 0) return "";
 
   return `
     <div part="swap-actions">
-      ${available.map((option) => `
-        ${option.pay_amount === undefined ? "" : `
-          <p part="swap-estimate">Estimated ${escapeHtml(option.pay_amount)} ${escapeHtml(option.label)} to settle this checkout.</p>
-        `}
+      ${shown.map((option) => {
+        const disabled = option.available === false;
+        const limitMessage = elementsSwapLimitMessage(option, view);
+        const info = disabled
+          ? limitMessage === undefined
+            ? ""
+            : `<p part="swap-warning">${escapeHtml(limitMessage)}</p>`
+          : option.pay_amount === undefined
+            ? ""
+            : `<p part="swap-estimate">Estimated ${escapeHtml(option.pay_amount)} ${escapeHtml(option.label)} to settle this checkout.</p>`;
+        return `
+        ${info}
         <button
           part="swap-start"
-          ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapStart}="${escapeHtml(option.pay_in_asset)}"
+          ${disabled ? "" : `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapStart}="${escapeHtml(option.pay_in_asset)}"`}
+          ${disabled ? "disabled aria-disabled=\"true\"" : ""}
           type="button"
         >Create ${escapeHtml(option.label)} (${escapeHtml(option.network_label)}) payment address</button>
-      `).join("")}
+      `;
+      }).join("")}
     </div>
   `;
+}
+
+// Short reason for an out-of-range swap asset in the web-component surface,
+// mirroring the React wizard's fiat message.
+function elementsSwapLimitMessage(
+  option: OpenReceiveElementsSwapOption,
+  view: OpenReceiveElementsWizardView
+): string | undefined {
+  if (option.available !== false) return undefined;
+  const checkout =
+    view.amountMsats === undefined
+      ? undefined
+      : {
+          amount_msats: view.amountMsats,
+          ...(view.fiat?.currency === undefined || view.fiat.value === undefined
+            ? {}
+            : { fiat: { currency: view.fiat.currency, value: view.fiat.value } })
+        };
+  if (option.unavailable_reason === "amount_too_small") {
+    const fiat =
+      checkout === undefined
+        ? undefined
+        : formatOpenReceiveSwapLimit(checkout, option.minimum_invoice_amount_msats);
+    if (fiat !== undefined) return `Minimum payment ${fiat}`;
+    if (option.minimum_pay_amount !== undefined) {
+      return `Minimum ${option.minimum_pay_amount} ${option.label}`;
+    }
+  }
+  if (option.unavailable_reason === "amount_too_large") {
+    const fiat =
+      checkout === undefined
+        ? undefined
+        : formatOpenReceiveSwapLimit(checkout, option.maximum_invoice_amount_msats);
+    if (fiat !== undefined) return `Maximum payment ${fiat}`;
+    if (option.maximum_pay_amount !== undefined) {
+      return `Maximum ${option.maximum_pay_amount} ${option.label}`;
+    }
+  }
+  return option.unavailable_message;
 }
 
 function renderElementSwapPanelHtml(invoice: CheckoutInvoiceSnapshot): string {
@@ -815,6 +871,12 @@ export function defineOpenReceiveElements(
           selectedRegion: this.selection.selectedRegion,
           countryPickerOpen: this.selection.countryPickerOpen,
           swapOptions: this.swapOptions,
+          ...(this.latestCheckoutSnapshot?.amount_msats === undefined
+            ? {}
+            : { amountMsats: this.latestCheckoutSnapshot.amount_msats }),
+          ...(this.latestCheckoutSnapshot?.fiat === undefined
+            ? {}
+            : { fiat: this.latestCheckoutSnapshot.fiat }),
           swapInvoice: this.currentSwapInvoice(),
           activeTutorialProviderId: this.activeTutorialProviderId,
           activeTutorialIndex: this.activeTutorialIndex,

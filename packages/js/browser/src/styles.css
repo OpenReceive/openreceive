@@ -351,6 +351,18 @@
   box-shadow: 0 0 0 2px var(--or-accent-soft);
 }
 
+.or-method-grid button:disabled,
+.or-method-grid button.or-method-unavailable {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.or-method-grid button:disabled:hover,
+.or-method-grid button.or-method-unavailable:hover {
+  border-color: var(--or-border);
+  box-shadow: none;
+}
+
 .or-method-grid img,
 .or-route-picker img {
   width: 48px;

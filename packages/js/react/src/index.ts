@@ -20,6 +20,7 @@ import {
   createQrPayloadSvg,
   createOpenReceiveThemeModel,
   createOpenReceiveTransientFeedbackController,
+  formatOpenReceiveSwapLimit,
   getOpenReceiveDefaultCountryCode,
   getOpenReceiveAssetIcon,
   getOpenReceivePaymentMethodIcon,
@@ -1149,6 +1150,36 @@ export function PaymentWizard(
   const swapAssetOptions = swapOptions.enabled
     ? swapOptions.options.filter((option) => option.provider.length > 0)
     : [];
+  // Diagnostic: logs the per-asset availability + invoice limits the client received,
+  // so we can see whether out-of-range assets should be disabled. Keyed on a signature
+  // so it only logs when availability actually changes. Remove once confirmed.
+  const swapOptionsSignature = swapAssetOptions
+    .map(
+      (option) =>
+        `${option.pay_in_asset}:${option.available}:${option.unavailable_reason ?? ""}:${option.minimum_invoice_amount_msats ?? ""}`,
+    )
+    .join("|");
+  React.useEffect(() => {
+    if (props.logger === undefined || swapAssetOptions.length === 0) return;
+    props.logger({
+      level: "info",
+      event: "swap.options.debug",
+      message: "Swap pay options and availability.",
+      amount_msats: checkout?.amount_msats,
+      fiat: checkout?.fiat,
+      options: swapAssetOptions.map((option) => ({
+        pay_in_asset: option.pay_in_asset,
+        available: option.available,
+        unavailable_reason: option.unavailable_reason,
+        unavailable_message: option.unavailable_message,
+        minimum_invoice_amount_msats: option.minimum_invoice_amount_msats,
+        maximum_invoice_amount_msats: option.maximum_invoice_amount_msats,
+        minimum_pay_amount: option.minimum_pay_amount,
+        maximum_pay_amount: option.maximum_pay_amount,
+      })),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [swapOptionsSignature, props.logger]);
   const activeSwapForAsset =
     selectedSwapAsset === null
       ? undefined
@@ -1218,7 +1249,7 @@ export function PaymentWizard(
             }
           })
           : selectedSwapQuote !== undefined && !selectedSwapQuote.available
-            ? renderSwapUnavailable(selectedSwapQuote)
+            ? renderSwapUnavailable(selectedSwapQuote, checkout)
             : renderSwapPreparing(selectedSwapLabel)
       )
     );
@@ -1270,15 +1301,25 @@ export function PaymentWizard(
               React.createElement("small", null, method.detail)
             )
           ),
-          swapAssetOptions.map((option) =>
-            React.createElement(
+          swapAssetOptions.map((option) => {
+            // An asset whose provider limits exclude this invoice amount is shown
+            // greyed-out and non-clickable, with a short reason (e.g. the minimum
+            // payment) in place of its network label.
+            const disabled = option.available === false;
+            const limitMessage = swapOptionLimitMessage(option, checkout);
+            return React.createElement(
               "button",
               {
                 key: option.pay_in_asset,
-                onClick: () => {
-                  autoSwapAttemptedRef.current.delete(option.pay_in_asset);
-                  setSelectedSwapAsset(option.pay_in_asset);
-                },
+                className: disabled ? "or-method-unavailable" : undefined,
+                disabled,
+                "aria-disabled": disabled ? "true" : undefined,
+                onClick: disabled
+                  ? undefined
+                  : () => {
+                    autoSwapAttemptedRef.current.delete(option.pay_in_asset);
+                    setSelectedSwapAsset(option.pay_in_asset);
+                  },
                 type: "button"
               },
               React.createElement("img", {
@@ -1286,9 +1327,13 @@ export function PaymentWizard(
                 src: getOpenReceiveAssetIcon(option.label.toLowerCase())
               }),
               React.createElement("span", null, option.label),
-              React.createElement("small", null, option.network_label)
-            )
-          )
+              React.createElement(
+                "small",
+                null,
+                disabled && limitMessage !== undefined ? limitMessage : option.network_label
+              )
+            );
+          })
         )
       )
       : null,
@@ -1390,7 +1435,8 @@ export function PaymentWizard(
                   options: routeSwapOptions,
                   enabled: swapOptions.enabled,
                   startingAsset: swapStartingAsset,
-                  onStart: startSwap
+                  onStart: startSwap,
+                  checkout
                 })
                 : renderSwapDepositPanel({
                   invoice: activeSwapForRoute,
@@ -1565,54 +1611,96 @@ function renderWizardBreadcrumbs(options: {
   );
 }
 
+// Short reason to show for an out-of-range swap asset. Prefers a fiat figure
+// ("Minimum payment $10.00") converted from the invoice-side limit using the
+// checkout's own rate, falling back to the provider's generic message.
+function swapOptionLimitMessage(
+  option: OpenReceiveSwapOptionDisplay,
+  checkout: CheckoutSnapshot | undefined,
+): string | undefined {
+  if (option.available !== false) return undefined;
+  // Prefer a fiat figure ("Minimum payment $10.00"); fall back to the pay-in asset's
+  // own units ("Minimum 5 USDT") when the provider only reports pay-side limits.
+  if (option.unavailable_reason === "amount_too_small") {
+    const fiat =
+      checkout === undefined
+        ? undefined
+        : formatOpenReceiveSwapLimit(checkout, option.minimum_invoice_amount_msats);
+    if (fiat !== undefined) return `Minimum payment ${fiat}`;
+    if (option.minimum_pay_amount !== undefined) {
+      return `Minimum ${option.minimum_pay_amount} ${option.label}`;
+    }
+  }
+  if (option.unavailable_reason === "amount_too_large") {
+    const fiat =
+      checkout === undefined
+        ? undefined
+        : formatOpenReceiveSwapLimit(checkout, option.maximum_invoice_amount_msats);
+    if (fiat !== undefined) return `Maximum payment ${fiat}`;
+    if (option.maximum_pay_amount !== undefined) {
+      return `Maximum ${option.maximum_pay_amount} ${option.label}`;
+    }
+  }
+  return option.unavailable_message;
+}
+
 function renderSwapActions(options: {
   readonly enabled: boolean;
   readonly options: readonly OpenReceiveSwapOptionDisplay[];
   readonly startingAsset: string | null;
   readonly onStart: (payInAsset: string) => Promise<void>;
+  readonly checkout?: CheckoutSnapshot;
 }): React.ReactElement | null {
-  const available = options.options.filter((option) =>
-    option.provider.length > 0 && option.available
-  );
-  if (!options.enabled || available.length === 0) return null;
+  // Out-of-range assets are kept in the list but rendered as a disabled button
+  // with the limit reason, instead of being hidden.
+  const shown = options.options.filter((option) => option.provider.length > 0);
+  if (!options.enabled || shown.length === 0) return null;
 
   return React.createElement(
     "div",
     {
       className: "or-swap-actions"
     },
-    available.map((option) =>
-      React.createElement(
+    shown.map((option) => {
+      const disabled = option.available === false;
+      const limitMessage = swapOptionLimitMessage(option, options.checkout);
+      return React.createElement(
         "div",
         {
           className: "or-swap-action",
           key: option.pay_in_asset
         },
-        option.pay_amount === undefined
-          ? null
-          : React.createElement(
-            "p",
-            {
-              className: "or-swap-estimate"
-            },
-            `Estimated ${option.pay_amount} ${option.label} to settle this checkout.`
-          ),
+        disabled
+          ? limitMessage === undefined
+            ? null
+            : React.createElement("p", { className: "or-swap-warning" }, limitMessage)
+          : option.pay_amount === undefined
+            ? null
+            : React.createElement(
+              "p",
+              {
+                className: "or-swap-estimate"
+              },
+              `Estimated ${option.pay_amount} ${option.label} to settle this checkout.`
+            ),
         React.createElement(
           "button",
           {
             className: "or-swap-start",
-            disabled: options.startingAsset !== null,
-            onClick: () => {
-              void options.onStart(option.pay_in_asset);
-            },
+            disabled: disabled || options.startingAsset !== null,
+            onClick: disabled
+              ? undefined
+              : () => {
+                void options.onStart(option.pay_in_asset);
+              },
             type: "button"
           },
           options.startingAsset === option.pay_in_asset
             ? "Preparing..."
             : `Create ${option.label} (${option.network_label}) payment address`
         )
-      )
-    )
+      );
+    })
   );
 }
 
@@ -1640,9 +1728,14 @@ function renderSwapPreparing(assetLabel: string): React.ReactElement {
   );
 }
 
-function renderSwapUnavailable(quote: OpenReceiveSwapOptionDisplay): React.ReactElement {
+function renderSwapUnavailable(
+  quote: OpenReceiveSwapOptionDisplay,
+  checkout: CheckoutSnapshot | undefined,
+): React.ReactElement {
   const detail =
-    quote.unavailable_message ?? `${quote.label} is not available for this amount.`;
+    swapOptionLimitMessage(quote, checkout) ??
+    quote.unavailable_message ??
+    `${quote.label} is not available for this amount.`;
   const range =
     quote.minimum_pay_amount === undefined
       ? undefined

@@ -1,0 +1,912 @@
+
+About
+Blog
+FAQ
+API
+Support
+Account
+Available currencies
+Introduction
+The FixedFloat API allows you to automate the receipt of information about the exchange rates of currencies, created orders, presented on the FixedFloat service, create orders and manage them using it.
+
+To use the FixedFloat API, you need to get an API key and an API secret.
+
+Getting the API key
+To get an API Key and API Secret, follow these steps:
+
+Sign in or Register in the FixedFloat
+Go to the API management section
+Click the "Generate" button and follow the instructions in the window that appears
+Copy the API Key and API Secret and keep them in a safe place. Use these parameters for requests to the FixedFloat API
+Request and example
+The sent data must be in JSON format with UTF-8 encoding.
+
+For successful API requests, all requests must contain a few mandatory headers:
+
+The Content-Type header must be application/json; charset=UTF-8
+The X-API-KEY header should contain your received API Key (YOUR_API_KEY)
+The X-API-SIGN header must contain the signature GENERATED_SIGN. To get the signature you must use your API Secret (YOUR_API_SECRET) as the HMAC SHA256 operation key and the json data string as the value.
+X-API-SIGN generation
+Curl
+Python
+PHP
+[linux]$ echo -n 'DATA_JSON' | openssl dgst -sha256 -hmac "YOUR_API_SECRET"
+(stdin)= GENERATED_SIGN
+cURL -X POST \
+  -H "Accept: application/json" \
+  -H "X-API-KEY: YOUR_API_KEY" \
+  -H "X-API-SIGN: GENERATED_SIGN" \
+  -H "Content-Type: application/json; charset=UTF-8" \
+  -d 'DATA_JSON'
+  "https://ff.io/api/v2/METHOD" -L
+Request limits
+The request limit per minute is 250 weight units.
+
+The /api/v2/create request costs 50 weight units, all other requests cost 1 weight unit.
+
+If the limit is exceeded, your token will be temporarily blocked. With each subsequent exceeding of the limit after unlocking, the blocking time will increase
+
+Official Libraries
+You can use ready made libraries to use the FixedFloat API:
+
+PHP (Download)
+Python (Download)
+XML export file of rates
+GET
+https://ff.io/rates/fixed.xml
+GET
+https://ff.io/rates/float.xml
+Getting an export file of exchange rates in XML format, containing information about all currency pairs, exchange rates, reserve availability, as well as minimum and maximum amounts for creating an exchange.
+
+Parameters
+No parameters need to be passed for this request. It is also not required to include headers with a key and signature.
+
+Example request
+Curl
+Python
+PHP
+cURL "https://ff.io/rates/float.xml" -L
+Response
+A successful response contains an array of currency information objects.
+
+Field	Type	Description
+<rates>	XML object	List of currency pair objects
+<item>	XML object	An object containing information about the exchange rate, reserves, minimums and maximums for a pair of currencies.
+<from>	string	Currency code of the currency that will be sent for exchange
+<to>	string	Currency code of the currency that will be received as a result of the exchange
+<in>	number	Amount in the <from> currency that will be sent for exchange. Required for calculating the final exchange rate.
+<out>	number	Amount in the <to> currency that will be received as a result of the exchange. Required for calculating the final exchange rate.
+<amount>	number	Indicates the availability of reserves for the <to> currency. The parameter does not specify or allow for obtaining the maximum exchange amount.
+<tofee>	string	Additional fees (network fees) in the <to> currency, which are not included in the exchange rate (in the amount specified in <out>).
+<minamount>	string	The minimum amount of the <from> currency that the service can exchange
+<maxamount>	string	The maximum amount of the <from> currency that the service can exchange
+Example XML response
+<rates>
+  <item>
+    <from>BTC</from>
+    <to>ETH</to>
+    <in>1</in>
+    <out>17.720391807658</out>
+    <amount>191.11148571181</amount>
+    <tofee>0.0004967000 ETH</tofee>
+    <minamount>0.0004896204 BTC</minamount>
+    <maxamount>1.5160672800 BTC</maxamount>
+  </item>
+  <item>
+    <from>BTC</from>
+    <to>USDT</to>
+    <in>1</in>
+    <out>61595.076999999997</out>
+    <amount>1170121.610442</amount>
+    <tofee>2.2490000000 USDT</tofee>
+    <minamount>0.0006675144 BTC</minamount>
+    <maxamount>0.7269365000 BTC</maxamount>
+  </item>
+  <item>
+    <from>ETH</from>
+    <to>USDT</to>
+    <in>1</in>
+    <out>3396.173800000000</out>
+    <amount>1170121.610442</amount>
+    <tofee>2.0380000000 USDT</tofee>
+    <minamount>0.0107817333 ETH</minamount>
+    <maxamount>13.1841012000 ETH</maxamount>
+  </item>
+  ...,
+</rates>
+Available currencies
+POST
+https://ff.io/api/v2/ccies
+Getting a list of currencies supported by the FixedFloat service, as well as data on their display and information about the availability for receiving and sending.
+
+Parameters
+There is no need to pass parameters for this request.
+
+X-API-SIGN is generated by calling the HMAC SHA256 function from an empty string if no parameters are passed, or from an empty JSON object.
+
+Example request
+Curl
+Python
+PHP
+cURL -X POST \
+  -H "Accept: application/json" \
+  -H "X-API-KEY: YOUR_API_KEY" \
+  -H "X-API-SIGN: GENERATED_SIGN" \
+  -H "Content-Type: application/json; charset=UTF-8" \
+  "https://ff.io/api/v2/ccies" -L
+Response
+A successful response contains an array of currency information objects.
+
+Field	Type	Description
+code	number	Response status code. If the request is successful, then the status code is "0", otherwise it is an error
+msg	string	Status message
+data	Array	List of currencies supported by FixedFloat
+data[].code	string	Unique currency code in FixedFloat
+data[].coin	string	Common asset ticker
+data[].network	string	Blockchain network in which this asset is represented
+data[].name	string	Name of currency
+data[].recv	boolean	Availability of currency for acceptance into the service from the client
+data[].send	boolean	Availability of currency to send to the client
+data[].tag	string	The name of the additional field, if available; otherwise null
+data[].logo	string	Link to currency image
+data[].color	string	Currency color specified in HEX format
+data[].priority	number	Priority in the list of currencies of the service
+data[].contract	string	The token contract address, if the currency is not native for the network
+Example JSON response
+{
+  "code": 0,
+  "msg": "",
+  "data": [
+    {
+      "code": "BTC",
+      "coin": "BTC",
+      "network": "BTC",
+      "name": "Bitcoin",
+      "recv": true,
+      "send": true,
+      "tag": null,
+      "logo": "https://fixedfloat.com/assets/images/coins/svg/btc.svg",
+      "color": "#f7931a",
+      "priority": "5",
+    },
+    ...,
+  ],
+}
+Exchange rate
+POST
+https://ff.io/api/v2/price
+Getting the exchange rate of a pair of currencies in the selected direction and type of rate.
+
+ATTENTION! To get the exchange rates of all available currencies, you should use the XML export file of rates
+
+For this method, as well as for method /api/v2/create, it is possible to increase accrued earnings under the affiliate program using parameter afftax.
+
+The final exchange rate when passing parameters afftax and refcode depends on whether your affiliate program code has been approved for earning for orders generated by the API and the base percentage (AFFBASE) set for your code, and will be calculated according to the formula:
+
+total = FF - AFFB + afftax, if afftax < FF - AFFB
+total = afftax x 2        , if FF - AFFB < afftax < FF
+total = FF + afftax       , if afftax > FF
+where FF is the base percentage of the service for the selected type of exchange rate (1% for a fixed rate and 0.5% for a floating rate);
+AFFB is the base percentage of the service profit set for your affiliate program code, for the selected type of exchange rate (AFFBASE for a fixed rate and AFFBASE÷2 for a floating rate)
+
+For clarity, we suggest that you familiarize yourself with the table below with AFFBASE=0.4, where FFP = FF - AFFB:
+
+FIXED RATE	FLOAT RATE
+Total	FFP	afftax	Total	FFP	afftax
+1.0	0.6	0.4	0.5	0.3	0.2
+1.1	0.6	0.5	0.55	0.3	0.25
+1.2	0.6	0.6	0.6	0.3	0.3
+1.4	0.7	0.7	0.7	0.35	0.35
+1.6	0.8	0.8	0.8	0.4	0.4
+1.8	0.9	0.9	0.9	0.45	0.45
+2.0	1.0	1.0	1.0	0.5	0.5
+2.1	1.0	1.1	1.05	0.5	0.55
+2.2	1.0	1.2	1.1	0.5	0.6
+If your affiliate code did not have a base API earnings percentage set, then the final exchange rate will be calculated as:
+
+FF + afftax
+where FF is the base percentage of the service for the selected type of exchange rate (1% for a fixed rate and 0.5% for a floating rate).
+
+Earnings will be credited to your account if the affiliate program code was passed in the refcode parameter and this code belongs to your account. Otherwise, the afftax and refcode parameters will be ignored.
+
+Parameters
+Name	Required	Type	Description
+type	
+true
+string	Order type
+fromCcy	
+true
+string	Code of the currency the client wants to send
+toCcy	
+true
+string	Code of the currency the client wants to receive
+direction	
+true
+string	The direction of the exchange determines whether the client wants to send a certain amount or receive a certain amount. Can take one of the following values:
+● from — if the client wants to send the amount amount in the currency fromCcy
+● to — if the client wants to receive the amount amount in the currency toCcy
+amount	
+true
+numeric	If direction="from", then this is the amount in currency fromCcy that the client wants to send.
+If direction="to", then this is the amount in currency toCcy that the client wants to receive
+ccies	
+false
+boolean	Adding a list of currencies to the response with information about the availability for sending and receiving
+usd	
+false
+boolean	Amount in USD, by which fromAmount or toAmount will be changed in case the limits are exceeded
+refcode	
+false
+string	Affiliate program code for which earnings will be accrued under the affiliate program. If the afftax parameter is not set and this affiliate program code does not participate in earning via the API, passing this parameter will not affect anything. It is possible to transfer only affiliate program codes that were received in the same account in which the API key used for this request was received
+afftax	
+false
+float	Desired earnings under the affiliate program as a percentage of the exchange amount. Affects the final exchange rate and earnings under the affiliate program if the refcode parameter is also set.
+Example request
+Curl
+Python
+PHP
+cURL -X POST \
+  -H "Accept: application/json" \
+  -H "X-API-KEY: YOUR_API_KEY" \
+  -H "X-API-SIGN: GENERATED_SIGN" \
+  -H "Content-Type: application/json; charset=UTF-8" \
+  -d '{"fromCcy":"BTC","toCcy":"USDTTRC","amount":0.5,direction":"from","type":"float"}'
+  "https://ff.io/api/v2/price" -L
+Response
+A successful response contains information about the currencies of the selected pair, the exchange rate, and the amount sent and received.
+
+Field	Type	Description
+code	number	Response status code. If the request is successful, then the status code is "0", otherwise it is an error
+msg	string	Status message
+data	Object	An object with information about the currencies of the selected pair, the exchange rate, and the amount sent and received
+data.from	Object	Data about the asset that the client must send
+data.from.code	string	Unique currency code in FixedFloat
+data.from.network	string	Blockchain network in which this asset is represented
+data.from.coin	string	Common asset ticker
+data.from.amount	number	Amount that the client needs to send
+data.from.rate	number	Final exchange rate
+data.from.precision	number	Rounding accuracy
+data.from.min	number	Minimum amount
+data.from.max	number	Maximum amount
+data.from.usd	number	Equivalent in USD
+data.from.btc	number	Equivalent in BTC
+data.to	Object	Data about the asset that the client will receive
+data.to.code	string	Unique currency code in FixedFloat
+data.to.network	string	Blockchain network in which this asset is represented
+data.to.coin	string	Common asset ticker
+data.to.amount	number	Amount that the client must to receive
+data.to.rate	number	Final exchange rate
+data.to.precision	number	Rounding accuracy
+data.to.min	number	Minimum amount
+data.to.max	number	Maximum amount
+data.to.usd	number	Equivalent in USD
+data.errors	Array	An array of a list of errors. If the array is empty, then creating an order with these parameters is possible.
+The array may contain the following errors:
+● MAINTENANCE_FROM — Currency from data.from object under maintenance
+● MAINTENANCE_TO — Currency from object data.to under maintenance
+● OFFLINE_FROM — Currency from object data.from is not available
+● OFFLINE_TO — Currency from object data.to is not available
+● RESERVE_FROM — Not enough currency reserves from object data.from
+● RESERVE_TO — Not enough currency reserves from object data.to
+● LIMIT_MIN — Amount less than limit
+● LIMIT_MAX — The amount is greater than the limit
+data.ccies	Array	Added if the ccies parameter is true. An array containing a list of objects with information about the availability for sending and receiving currencies
+data.ccies[].code	string	Unique currency code in FixedFloat
+data.ccies[].recv	boolean	Availability of currency for acceptance into the service from the client
+data.ccies[].send	boolean	Availability of currency to send to the client
+Example JSON response
+{
+  "code": 0,
+  "msg": "",
+  "data": {
+    "from": {
+      "code": "BSC",
+      "network": "BSC",
+      "coin": "BNB",
+      "amount": 0.040297,
+      "rate": 0.01452202,
+      "precision": 8,
+      "min": 0.005053,
+      "max": 967.072057,
+      "usd": 12.28,
+      "btc": 0.00058813,
+    },
+    "to": {
+      "code": "BTC",
+      "network": "BTC",
+      "coin": "BTC",
+      "amount": 0.00055984,
+      "rate": 68.164781,
+      "precision": 8,
+      "min": 0.000479,
+      "max": 14.04381911,
+      "usd": 11.69,
+    },
+    "errors": [],
+    "ccies": [
+      {
+        "code": "ADA",
+        "recv": true,
+        "send": true,
+      },
+      ...,
+    ],
+  },
+}
+Create order
+POST
+https://ff.io/api/v2/create
+Creating an order for the exchange of selected currencies with a specified amount and address.
+
+For this method, as well as for the /api/v2/price method, it is possible to increase accrued earnings under the affiliate program using the parameter afftax. The rules for using this parameter are described in method /api/v2/price
+
+Parameters
+Name	Required	Type	Description
+type	
+true
+string	Order type
+fromCcy	
+true
+string	Code of the currency the client wants to send
+toCcy	
+true
+string	Code of the currency the client wants to receive
+direction	
+true
+string	The direction of the exchange determines whether the client wants to send a certain amount or receive a certain amount. Can take one of the following values:
+● from — if the client wants to send the amount amount in the currency fromCcy
+● to — if the client wants to receive the amount amount in the currency toCcy
+amount	
+true
+numeric	If direction="from", then this is the amount in currency fromCcy that the client wants to send.
+If direction="to", then this is the amount in currency toCcy that the client wants to receive
+toAddress	
+true
+string	Destination address to which the funds will be dispatched upon the successful completion of the Order
+tag	
+false
+boolean	If you need to specify a Memo or Destination Tag when sending, you should specify it here. This parameter can be omitted by specifying the MEMO or Destination Tag in toAddress separated by a colon.
+refcode	
+false
+string	Affiliate program code for which earnings will be accrued under the affiliate program. If the afftax parameter is not set and this affiliate program code does not participate in earning via the API, passing this parameter will not affect anything. It is possible to transfer only affiliate program codes that were received in the same account in which the API key used for this request was received
+afftax	
+false
+float	Desired earnings under the affiliate program as a percentage of the exchange amount. Affects the final exchange rate and earnings under the affiliate program if the refcode parameter is also set.
+Example request
+Curl
+Python
+PHP
+cURL -X POST \
+  -H "Accept: application/json" \
+  -H "X-API-KEY: YOUR_API_KEY" \
+  -H "X-API-SIGN: GENERATED_SIGN" \
+  -H "Content-Type: application/json; charset=UTF-8" \
+  -d '{"fromCcy":"BTC","toCcy":"USDTTRC","amount":0.5,direction":"from","type":"float","toAddress":"TAzsQ9Gx8eqFNFSKbeXrbi45CuVPHzA8wr"}'
+  "https://ff.io/api/v2/create" -L
+Response
+A successful response contains an object with information about all the data of the created order, including the token parameter, for later obtaining updated information about the order using the /api/v2/ method order, and order management.
+
+Field	Type	Description
+code	number	Response status code. If the request is successful, then the status code is "0", otherwise it is an error
+msg	string	Status message
+data	Object	Object with information about all the data of the created order
+data.token	string	Order access token
+data.id	string	Order ID. Consists of 6 characters
+data.type	string	Order type. Can be one of the values:
+● fixed — fixed rate order
+● float — floating rate order
+data.email	string	Email address for the order to receive notifications about changes in the order
+data.status	string	Order status. Can be one of the values:
+● NEW — New order
+● PENDING — Transaction received, pending confirmation
+● EXCHANGE — Transaction confirmed, exchange in progress
+● WITHDRAW — Sending funds
+● DONE — Order completed
+● EXPIRED — Order expired
+● EMERGENCY — Emergency, customer choice required
+data.time	Object	Object containing timestamp data
+data.time.reg	number	Order creation timestamp
+data.time.start	number	Transaction receive timestamp
+data.time.finish	number	Timestamp when the order was completed
+data.time.update	number	Timestamp of last order update
+data.time.expiration	number	Timestamp when order expires
+data.time.left	number	The number of seconds before the end of the order
+data.from	Object	An object containing information about the currency sent by clients and transactions
+data.from.code	string	Currency code
+data.from.coin	string	Common asset ticker
+data.from.network	string	Blockchain network in which this asset is represented
+data.from.name	string	Name of currency
+data.from.alias	string	Alias for creating qr code
+data.from.amount	string	Amount that the client needs to send
+data.from.address	string	The destination address to which the user is ought to deposit his funds in order for the trade to execute
+data.from.tag	string	MEMO or Destination Tag if required
+data.from.addressMix	string	Address with a colon-connected tag
+data.from.reqConfirmations	number	Required number of transaction confirmations
+data.from.maxConfirmations	number	The maximum number of transaction confirmations that system updates
+data.from.tx	Object	An object containing data about the received transaction
+data.from.tx.id	string	Transaction hash
+data.from.tx.amount	string	Transaction amount
+data.from.tx.fee	string	Miner fee
+data.from.tx.ccyfee	string	Currency of Miner fee
+data.from.tx.timeReg	number	Transaction registration timestamp
+data.from.tx.timeBlock	number	Timestamp for adding a transaction to a block
+data.from.tx.confirmations	number	Number of transaction confirmations
+data.to	Object	An object containing information about the currency received by the client and the transaction
+data.to.code	string	Currency code
+data.to.coin	string	Common asset ticker
+data.to.network	string	Blockchain network in which this asset is represented
+data.to.name	string	Name of currency
+data.to.alias	string	Alias for creating qr code
+data.to.amount	string	Amount that the client must to receive
+data.to.address	string	The destination address to which the funds will be dispatched upon the successful completion of the order
+data.to.tag	string	MEMO or Destination Tag if required
+data.to.addressMix	string	Address with a colon-connected tag
+data.to.tx	Object	An object containing data about the sent transaction
+data.to.tx.id	string	Transaction hash
+data.to.tx.amount	string	Transaction amount
+data.to.tx.fee	string	Miner fee
+data.to.tx.ccyfee	string	Currency of Miner fee
+data.to.tx.timeReg	number	Transaction registration timestamp
+data.to.tx.timeBlock	number	Timestamp for adding a transaction to a block
+data.to.tx.confirmations	number	Number of transaction confirmations
+data.back	Object	An object containing information about the currency returned to the client and the transaction
+data.back.code	string	Currency code
+data.back.coin	string	Common asset ticker
+data.back.network	string	Blockchain network in which this asset is represented
+data.back.name	string	Name of currency
+data.back.alias	string	Alias for creating qr code
+data.back.amount	string	The amount that the client should receive upon return, excluding the miner fee
+data.back.address	string	The return address to which the funds will be sent when choosing a refund
+data.back.tag	string	MEMO or Destination Tag if required
+data.back.addressMix	string	Address with a colon-connected tag
+data.back.tx	Object	An object containing data about the returned transaction
+data.back.tx.id	string	Transaction hash
+data.back.tx.amount	string	Transaction amount
+data.back.tx.fee	string	Miner fee
+data.back.tx.ccyfee	string	Currency of Miner fee
+data.back.tx.timeReg	number	Transaction registration timestamp
+data.back.tx.timeBlock	number	Timestamp for adding a transaction to a block
+data.back.tx.confirmations	number	Number of transaction confirmations
+data.emergency	Object	An object containing data about the emergency in the order
+data.emergency.status	Array	Emergency status. Can be multiple values from:
+● EXPIRED — the transaction was received after the expiration of the order
+● LESS — a transaction was sent with an amount less than in the order
+● MORE — a transaction was sent with an amount greater than in the order
+● LIMIT — a transaction was sent with an amount less or more than the limit; used with LESS or MORE
+data.emergency.choice	string	user choice. Can be one of the values:
+● NONE — Choice not made
+● EXCHANGE — Continue order at the new market rate
+● REFUND — Make a refund minus the network commission
+data.emergency.repeat	boolean	if true, then a repeated transaction has been received for this order
+Example JSON response
+{
+  "code": 0,
+  "msg": "",
+  "data": {
+    "id": "TESTID",
+    "type": "float",
+    "email": "",
+    "status": "NEW",
+    "time": {
+      "reg": 1676458603,
+      "start": null,
+      "finish": null,
+      "update": 1676458603,
+      "expiration": 1676460403,
+      "left": 1800,
+    },
+    "from": {
+      "code": "BTC",
+      "coin": "BTC",
+      "network": "BTC",
+      "name": "Bitcoin",
+      "alias": "bitcoin",
+      "amount": "0.50000000",
+      "address": "bc1qm8e58htm6qlhz5u7awhe4a5kxt3w86ffwtl9j0",
+      "addressAlt": null,
+      "tag": null,
+      "tagName": null,
+      "reqConfirmations": 1,
+      "maxConfirmations": 6,
+      "tx": {
+        "id": null,
+        "amount": null,
+        "fee": null,
+        "ccyfee": null,
+        "timeReg": null,
+        "timeBlock": null,
+        "confirmations": null,
+      },
+    },
+    "to": {
+      "code": "USDTTRC",
+      "coin": "USDT",
+      "network": "TRX",
+      "name": "Tether (TRC20)",
+      "alias": "usdt",
+      "amount": "11062.06500000",
+      "address": "TVnbp1VCJ1TpWMom4k3URfFky9FGfPdZPd",
+      "tag": null,
+      "tagName": null,
+      "tx": {
+        "id": null,
+        "amount": null,
+        "fee": null,
+        "ccyfee": null,
+        "timeReg": null,
+        "timeBlock": null,
+        "confirmations": null,
+      },
+    },
+    "back": {
+      "code": null,
+      "coin": null,
+      "network": null,
+      "name": null,
+      "alias": null,
+      "amount": null,
+      "address": null,
+      "tag": null,
+      "tagName": null,
+      "tx": {
+        "id": null,
+        "amount": null,
+        "fee": null,
+        "ccyfee": null,
+        "timeReg": null,
+        "timeBlock": null,
+        "confirmations": null,
+      },
+    },
+    "emergency": {
+      "status": [],
+      "choice": "NONE",
+      "repeat": 0,
+    },
+    "token": "TESTTOKENvRB90NOtr397kHY3PJ1VRy2p29HHaN7",
+  },
+}
+Get order details
+POST
+https://ff.io/api/v2/order
+The method receives the updated order data.
+
+Parameters
+Name	Required	Type	Description
+id	
+true
+string	Order ID
+token	
+true
+string	Order security token received when creating an order in data.token
+Example request
+Curl
+Python
+PHP
+cURL -X POST \
+  -H "Accept: application/json" \
+  -H "X-API-KEY: YOUR_API_KEY" \
+  -H "X-API-SIGN: GENERATED_SIGN" \
+  -H "Content-Type: application/json; charset=UTF-8" \
+  -d '{"id":"TESTID","token":"TESTTOKENvRB90NOtr397kHY3PJ1VRy2p29HHaN7"}'
+  "https://ff.io/api/v2/order" -L
+Response
+A successful response contains contains an object with information about all the data of the created order
+
+Field	Type	Description
+code	number	Response status code. If the request is successful, then the status code is "0", otherwise it is an error
+msg	string	Status message
+data	Object	Object with information about all the data of the created order
+data.id	string	Order ID. Consists of 6 characters
+data.type	string	Order type. Can be one of the values:
+● fixed — fixed rate order
+● float — floating rate order
+data.email	string	Email address for the order to receive notifications about changes in the order
+data.status	string	Order status. Can be one of the values:
+● NEW — New order
+● PENDING — Transaction received, pending confirmation
+● EXCHANGE — Transaction confirmed, exchange in progress
+● WITHDRAW — Sending funds
+● DONE — Order completed
+● EXPIRED — Order expired
+● EMERGENCY — Emergency, customer choice required
+data.time	Object	Object containing timestamp data
+data.time.reg	number	Order creation timestamp
+data.time.start	number	Transaction receive timestamp
+data.time.finish	number	Timestamp when the order was completed
+data.time.update	number	Timestamp of last order update
+data.time.expiration	number	Timestamp when order expires
+data.time.left	number	The number of seconds before the end of the order
+data.from	Object	An object containing information about the currency sent by clients and transactions
+data.from.code	string	Currency code
+data.from.coin	string	Common asset ticker
+data.from.network	string	Blockchain network in which this asset is represented
+data.from.name	string	Name of currency
+data.from.alias	string	Alias for creating qr code
+data.from.amount	string	Amount that the client needs to send
+data.from.address	string	The destination address to which the user is ought to deposit his funds in order for the trade to execute
+data.from.tag	string	MEMO or Destination Tag if required
+data.from.addressMix	string	Address with a colon-connected tag
+data.from.reqConfirmations	number	Required number of transaction confirmations
+data.from.maxConfirmations	number	The maximum number of transaction confirmations that system updates
+data.from.tx	Object	An object containing data about the received transaction
+data.from.tx.id	string	Transaction hash
+data.from.tx.amount	string	Transaction amount
+data.from.tx.fee	string	Miner fee
+data.from.tx.ccyfee	string	Currency of Miner fee
+data.from.tx.timeReg	number	Transaction registration timestamp
+data.from.tx.timeBlock	number	Timestamp for adding a transaction to a block
+data.from.tx.confirmations	number	Number of transaction confirmations
+data.to	Object	An object containing information about the currency received by the client and the transaction
+data.to.code	string	Currency code
+data.to.coin	string	Common asset ticker
+data.to.network	string	Blockchain network in which this asset is represented
+data.to.name	string	Name of currency
+data.to.alias	string	Alias for creating qr code
+data.to.amount	string	Amount that the client must to receive
+data.to.address	string	The destination address to which the funds will be dispatched upon the successful completion of the order
+data.to.tag	string	MEMO or Destination Tag if required
+data.to.addressMix	string	Address with a colon-connected tag
+data.to.tx	Object	An object containing data about the sent transaction
+data.to.tx.id	string	Transaction hash
+data.to.tx.amount	string	Transaction amount
+data.to.tx.fee	string	Miner fee
+data.to.tx.ccyfee	string	Currency of Miner fee
+data.to.tx.timeReg	number	Transaction registration timestamp
+data.to.tx.timeBlock	number	Timestamp for adding a transaction to a block
+data.to.tx.confirmations	number	Number of transaction confirmations
+data.back	Object	An object containing information about the currency returned to the client and the transaction
+data.back.code	string	Currency code
+data.back.coin	string	Common asset ticker
+data.back.network	string	Blockchain network in which this asset is represented
+data.back.name	string	Name of currency
+data.back.alias	string	Alias for creating qr code
+data.back.amount	string	The amount that the client should receive upon return, excluding the miner fee
+data.back.address	string	The return address to which the funds will be sent when choosing a refund
+data.back.tag	string	MEMO or Destination Tag if required
+data.back.addressMix	string	Address with a colon-connected tag
+data.back.tx	Object	An object containing data about the returned transaction
+data.back.tx.id	string	Transaction hash
+data.back.tx.amount	string	Transaction amount
+data.back.tx.fee	string	Miner fee
+data.back.tx.ccyfee	string	Currency of Miner fee
+data.back.tx.timeReg	number	Transaction registration timestamp
+data.back.tx.timeBlock	number	Timestamp for adding a transaction to a block
+data.back.tx.confirmations	number	Number of transaction confirmations
+data.emergency	Object	An object containing data about the emergency in the order
+data.emergency.status	Array	Emergency status. Can be multiple values from:
+● EXPIRED — the transaction was received after the expiration of the order
+● LESS — a transaction was sent with an amount less than in the order
+● MORE — a transaction was sent with an amount greater than in the order
+● LIMIT — a transaction was sent with an amount less or more than the limit; used with LESS or MORE
+data.emergency.choice	string	user choice. Can be one of the values:
+● NONE — Choice not made
+● EXCHANGE — Continue order at the new market rate
+● REFUND — Make a refund minus the network commission
+data.emergency.repeat	boolean	if true, then a repeated transaction has been received for this order
+Example JSON response
+{
+  "code": 0,
+  "msg": "",
+  "data": {
+    "id": "TESTID",
+    "type": "float",
+    "email": "",
+    "status": "NEW",
+    "time": {
+      "reg": 1676458603,
+      "start": null,
+      "finish": null,
+      "update": 1676458603,
+      "expiration": 1676460403,
+      "left": 1800,
+    },
+    "from": {
+      "code": "BTC",
+      "coin": "BTC",
+      "network": "BTC",
+      "name": "Bitcoin",
+      "alias": "bitcoin",
+      "amount": "0.50000000",
+      "address": "bc1qm8e58htm6qlhz5u7awhe4a5kxt3w86ffwtl9j0",
+      "addressAlt": null,
+      "tag": null,
+      "tagName": null,
+      "reqConfirmations": 1,
+      "maxConfirmations": 6,
+      "tx": {
+        "id": null,
+        "amount": null,
+        "fee": null,
+        "ccyfee": null,
+        "timeReg": null,
+        "timeBlock": null,
+        "confirmations": null,
+      },
+    },
+    "to": {
+      "code": "USDTTRC",
+      "coin": "USDT",
+      "network": "TRX",
+      "name": "Tether (TRC20)",
+      "alias": "usdt",
+      "amount": "11062.06500000",
+      "address": "TVnbp1VCJ1TpWMom4k3URfFky9FGfPdZPd",
+      "tag": null,
+      "tagName": null,
+      "tx": {
+        "id": null,
+        "amount": null,
+        "fee": null,
+        "ccyfee": null,
+        "timeReg": null,
+        "timeBlock": null,
+        "confirmations": null,
+      },
+    },
+    "back": {
+      "code": null,
+      "coin": null,
+      "network": null,
+      "name": null,
+      "alias": null,
+      "amount": null,
+      "address": null,
+      "tag": null,
+      "tagName": null,
+      "tx": {
+        "id": null,
+        "amount": null,
+        "fee": null,
+        "ccyfee": null,
+        "timeReg": null,
+        "timeBlock": null,
+        "confirmations": null,
+      },
+    },
+    "emergency": {
+      "status": [],
+      "choice": "NONE",
+      "repeat": 0,
+    },
+  },
+}
+Emergency Action Choice
+POST
+https://ff.io/api/v2/emergency
+Selecting an action (continuation of exchange or return) for an order in the EMERGENCY status.
+
+Parameters
+Name	Required	Type	Description
+id	
+true
+string	Order ID
+token	
+true
+string	Order security token received when creating an order in data.token
+choice	
+true
+string	Choice of action in the EMERGENCY status. Can be one of the values:
+● EXCHANGE — Continue the exchange at the market rate at the time the selection was made or at the time the order was corrected
+● REFUND — Refund minus miner fee
+address	
+false*
+string	The address to which the refund is to be made. Required if choice="REFUND".
+tag	
+false
+string	MEMO or Destination Tag if required
+Example request
+Curl
+Python
+PHP
+cURL -X POST \
+  -H "Accept: application/json" \
+  -H "X-API-KEY: YOUR_API_KEY" \
+  -H "X-API-SIGN: GENERATED_SIGN" \
+  -H "Content-Type: application/json; charset=UTF-8" \
+  -d '{"id":"TESTID","token":"TESTTOKENvRB90NOtr397kHY3PJ1VRy2p29HHaN7","choice":"EXCHANGE"}'
+  "https://ff.io/api/v2/emergency" -L
+Response
+A successful response contains True if the choice in the order has been set.
+
+Field	Type	Description
+code	number	Response status code. If the request is successful, then the status code is "0", otherwise it is an error
+msg	string	Status message
+data	boolean	True if successful
+Example JSON response
+{
+  "code": 0,
+  "msg": "",
+  "data": true,
+}
+Subscribe to notification
+POST
+https://ff.io/api/v2/setEmail
+Subscribe to receive notifications by email about a change in the status of the selected order.
+
+Parameters
+Name	Required	Type	Description
+id	
+true
+string	Order ID
+token	
+true
+string	Order security token received when creating an order in data.token
+email	
+false*
+string	Email address to which email notifications about order status changes should be sent
+Example request
+Curl
+Python
+PHP
+cURL -X POST \
+  -H "Accept: application/json" \
+  -H "X-API-KEY: YOUR_API_KEY" \
+  -H "X-API-SIGN: GENERATED_SIGN" \
+  -H "Content-Type: application/json; charset=UTF-8" \
+  -d '{"id":"TESTID","token":"TESTTOKENvRB90NOtr397kHY3PJ1VRy2p29HHaN7","email":"notifyme@gmail.com"}'
+  "https://ff.io/api/v2/setEmail" -L
+Response
+A successful response contains True if the notification has been subscribed.
+
+Field	Type	Description
+code	number	Response status code. If the request is successful, then the status code is "0", otherwise it is an error
+msg	string	Status message
+data	boolean	True if successful
+Example JSON response
+{
+  "code": 0,
+  "msg": "",
+  "data": true,
+}
+Images of QR codes
+POST
+https://ff.io/api/v2/qr
+Getting a list of images of QR codes for an order
+
+Parameters
+Name	Required	Type	Description
+id	
+true
+string	Order ID
+token	
+true
+string	Order security token received when creating an order in data.token
+Example request
+Curl
+Python
+PHP
+cURL -X POST \
+  -H "Accept: application/json" \
+  -H "X-API-KEY: YOUR_API_KEY" \
+  -H "X-API-SIGN: GENERATED_SIGN" \
+  -H "Content-Type: application/json; charset=UTF-8" \
+  -d '{"id":"TESTID","token":"TESTTOKENvRB90NOtr397kHY3PJ1VRy2p29HHaN7","choice":"EXCHANGE"}'
+  "https://ff.io/api/v2/qr" -L
+Response
+A successful response contains an array of objects with information about the name of the QR code and its image in Base64 format.
+
+Field	Type	Description
+code	number	Response status code. If the request is successful, then the status code is "0", otherwise it is an error
+msg	string	Status message
+data	Array	Array of objects with information about the name of the QR code and its image in Base64 format
+data[].title	string	QR code name
+data[].src	string	Base64 encoded QR code image
+data[].checked	boolean	If True, then defined as the default QR code
+Example JSON response
+{
+  "code": 0,
+  "msg": "",
+  "data": [
+    {
+      "title": "With amount",
+      "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQIAAAECAQMAAAAvgUsTAAAABlBMVEX///8AAABVwtN+AAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAAjlJREFUaIHdmeFtxSAMhC0xwBuJ1RmJAZBc7s5O+tQJrlGaNuH742LOZ4j4R9dIXPHJ3IE71/kkRyYGthWx8YLnJw8HLjFy5Z6hUSdi4oXDujv4ef8RjsQNLz7rxEUXAuZ3V4IpeDCFd+YWg3ckkHn3J7dScHVefuepBUF1wDz9ub/0w4F4lHlA4xbmj8vpHTMi7lcMZ+UclhPmT3p3rIiB8K4iBD/di39TIG7MXgQhqHaI4JwxfiwtL+L+Gvq0q6YCwpy1UvgQkLmr0XhhzD1njN+MUO3R/I1fc6b404pQ4QytH4V3n9lm1IrQi+oNUpB6R1sABTxhRezZAs2FBBFfmkVotxWhlcMegNZTr+gKZIDciKd80j0fVqMjHd9OBLSA3SaykO4ZPSdDHe3pXAh5Ai0hqp4C7qcV0dWUi4f5J4sD1aPjMSKUhWo+T7WdUzre2xw+BAVO2ZZU6iw/OqMvF0Lm5kjs2uVw2JIol8Mm55Vsdgi5nYgofwPJPhK+PUu4o4uQCVHNsyxavnW0ddyK2Ko6qqD0N4SSe2pSbRsi8zHQyVaTel3NW/lTH0ING+vNVLRKR+0SWhGLdm1pW1N9jpxo93NOhHob7TjL8aAxyHyjNSGeKiN/NmpfI8fbFdgQ2qVlqBpG25ltQ80I7mayN0j1OVHpGLXx4UTMzrZeTp98rNtwJKrh1NlM9PlTpiHxHPupc5ZA/PZ0JkRlYXQd1Yqqg0AvIsuZ6bz8sPbQSa9vpTMg/tH1A833/BcCRiH/AAAAAElFTkSuQmCC",
+      "checked": true,
+    },
+    {
+      "title": "Address",
+      "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAOoAAADqAQMAAACWWksNAAAABlBMVEX///8AAABVwtN+AAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAAdtJREFUWIXVmOGtBCEIhEksYEuy9S3JAkw4mAHfu1wDo9nbuH7+4YABNbt2DM9hTz5j2Y6l5/U1c3Vp4/jZjKUA8c0nV4ik8Qwzhr/xON694lfgMCw+gm04ads1ON4bXsmJ2SU4Q4cuiVVE0k+saWIk8IBt/5+v/JbENR5sCtuetPBHOyVxJkC6JCaUzhRNT90UxxExDtExiCbUE5FE85RxCU05Y6dvch4TeZzO4NtbgOCPyQTWxekSh0RCdx5Hf1C9gjQOlyATTuinV5ZVi6ON2X5Vc5MMterpNFDFWHqtot+ZwNiRm6SxcTZZaLE0K6uXNsZfz9CBG3ITgqmrgSoGaNvoD5jXsaaMIZQstChaJ5h4ZJLFZpOHvdpUmRyfPrQx+/Wxqo/3Uk/DPnWcNclhSfY3qfW700MZUzTZyhii/wRTSY8sNsPR46X6UPQzn9mQCePR1wEDBw9kRSWzOLaqUmzFJn1TRxF5nM5ADEFAnVX2eEwWwyUlmnTMrvCq87cs5mChtb4pYHOwTRrXhWnfvwxcO/Jew8TxuR5FZdp/+2iYMq4LUzZkyIrZ1l6A2bKzM7BubvYduBqC6mbq7CSO7biBhz2WKIcGSWPGDeQet0jVGYzWVFl87fgAoKe53k6WtX8AAAAASUVORK5CYII=",
+      "checked": false,
+    },
+  ],
+}

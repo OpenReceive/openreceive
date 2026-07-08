@@ -198,6 +198,9 @@ export interface OpenReceiveSwapOption {
   readonly pay_amount?: string;
   readonly minimum_pay_amount?: string;
   readonly maximum_pay_amount?: string;
+  /** Invoice-side (Lightning receive) limits in msats, for rendering a fiat figure. */
+  readonly minimum_invoice_amount_msats?: number;
+  readonly maximum_invoice_amount_msats?: number;
 }
 
 export interface OpenReceiveSwapOptionsResponse {
@@ -384,14 +387,6 @@ export interface OrderScanMeta {
   readonly transactionsChecked: number;
 }
 
-export interface CachedSwapQuote {
-  readonly checkoutId: string;
-  readonly amountMsats: number;
-  readonly payInAsset: OpenReceiveSwapPayInAsset;
-  readonly quote: OpenReceiveSwapQuoteResponse;
-  readonly expiresAt: number;
-}
-
 export interface OpenReceiveServiceContext {
   readonly options: OpenReceiveNodeOptions;
   readonly store: OpenReceiveInvoiceKvStore;
@@ -399,7 +394,6 @@ export interface OpenReceiveServiceContext {
   readonly priceProviders: readonly OpenReceiveSourcedPriceProvider[];
   readonly priceCurrencies: readonly string[];
   readonly swapProviders: readonly OpenReceiveSwapProvider[];
-  readonly swapQuoteCache: Map<string, CachedSwapQuote>;
 }
 
 export interface ResolvedCreateAmount {

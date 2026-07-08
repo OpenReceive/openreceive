@@ -93,13 +93,81 @@ export async function getSwapOptions(
   }
 
   const providerCatalog = await resolveSwapProviderCatalog(providers);
+  const providerByName = new Map(providers.map((provider) => [provider.name, provider]));
   const amountMsats = roundMsatsUpToWholeSats(checkout.amountMsats);
-  const options = listOpenReceiveSwapAssetInfo().map((asset) =>
-    swapCatalogOption({
-      asset,
-      amountMsats,
-      providerAsset: providerCatalog.get(asset.pay_in_asset),
+
+  // FixedFloat (and compatible providers) only expose per-amount min/max through a
+  // live /price quote — the /ccies catalog carries no invoice limits — so gate each
+  // asset by quoting it at the invoice amount. Quotes are served from the durable
+  // short-lived cache, so repeated status polls don't re-hit the provider. Transient
+  // quote failures fail open (asset stays selectable) so a blip doesn't grey the whole
+  // grid; only a hard amount_too_small/large limit disables an asset.
+  const options = await Promise.all(
+    listOpenReceiveSwapAssetInfo().map(async (asset) => {
+      const providerAsset = providerCatalog.get(asset.pay_in_asset);
+      const base = swapCatalogOption({ asset, amountMsats, providerAsset });
+      if (providerAsset === undefined || base.available === false) return base;
+      const provider = providerByName.get(providerAsset.provider);
+      if (provider === undefined) return base;
+      try {
+        const quoted = await resolveCachedSwapQuote(
+          context,
+          checkout.checkoutId,
+          provider,
+          asset.pay_in_asset,
+          amountMsats,
+        );
+        if (
+          quoted.available ||
+          quoted.unavailable_reason === "amount_too_small" ||
+          quoted.unavailable_reason === "amount_too_large"
+        ) {
+          // Merge so catalog-provided limits (e.g. from /ccies) survive when the
+          // quote omits them; quote fields (availability, pay_amount, /price limits)
+          // win where present.
+          return { ...base, ...quoted };
+        }
+        // Transient provider issue (rate limited / unreachable / pair blip): keep the
+        // asset selectable rather than blocking it on a soft error.
+        return base;
+      } catch (error) {
+        emitLog(
+          context.options,
+          "warn",
+          "swap.options.quote_failed",
+          "Swap catalog quote failed; leaving asset available.",
+          {
+            order_id: orderId,
+            pay_in_asset: asset.pay_in_asset,
+            provider: providerAsset.provider,
+            error_message: error instanceof Error ? error.message : String(error),
+          },
+        );
+        return base;
+      }
     }),
+  );
+
+  // Diagnostic: how availability resolved per asset for this invoice amount. Remove
+  // once the disabled-asset behavior is confirmed against the live provider.
+  emitLog(
+    context.options,
+    "info",
+    "swap.options.resolved",
+    "Resolved swap pay options with availability.",
+    {
+      order_id: orderId,
+      amount_msats: amountMsats,
+      options: options.map((option) => ({
+        pay_in_asset: option.pay_in_asset,
+        available: option.available,
+        unavailable_reason: option.unavailable_reason,
+        minimum_invoice_amount_msats: option.minimum_invoice_amount_msats,
+        maximum_invoice_amount_msats: option.maximum_invoice_amount_msats,
+        minimum_pay_amount: option.minimum_pay_amount,
+        maximum_pay_amount: option.maximum_pay_amount,
+      })),
+    },
   );
 
   return {
@@ -143,16 +211,24 @@ export async function quoteSwap(
   }
 
   const amountMsats = roundMsatsUpToWholeSats(checkout.amountMsats);
-  const cacheKey = `${checkout.checkoutId}:${payInAsset}`;
-  const cached = context.swapQuoteCache.get(cacheKey);
+  return await resolveCachedSwapQuote(context, checkout.checkoutId, provider, payInAsset, amountMsats);
+}
+
+// Quotes a pay-in asset at the invoice amount, served from a short-lived durable
+// (store-backed, not process memory) cache so repeated status polls and the catalog
+// screen don't re-hit the provider's /price endpoint within the cache window.
+async function resolveCachedSwapQuote(
+  context: OpenReceiveServiceContext,
+  checkoutId: string,
+  provider: OpenReceiveSwapProvider,
+  payInAsset: OpenReceiveSwapPayInAsset,
+  amountMsats: number,
+): Promise<OpenReceiveSwapOption> {
   const now = context.clock();
-  if (
-    cached !== undefined &&
-    cached.checkoutId === checkout.checkoutId &&
-    cached.amountMsats === amountMsats &&
-    cached.payInAsset === payInAsset &&
-    cached.expiresAt > now
-  ) {
+  const quoteCacheKey = swapQuoteMetaKey(checkoutId, payInAsset);
+  const cachedMeta = await context.store.getMeta(quoteCacheKey);
+  const cached = parseCachedSwapQuote(cachedMeta?.value);
+  if (cached !== undefined && cached.amountMsats === amountMsats && cached.expiresAt > now) {
     return cached.quote;
   }
 
@@ -164,14 +240,53 @@ export async function quoteSwap(
     asset: getOpenReceiveSwapAssetInfo(payInAsset),
     quote,
   });
-  context.swapQuoteCache.set(cacheKey, {
-    checkoutId: checkout.checkoutId,
-    amountMsats,
-    payInAsset,
-    quote: response,
-    expiresAt: now + OPENRECEIVE_SWAP_QUOTE_CACHE_SECONDS,
-  });
+  // Best-effort write: a concurrent writer winning the CAS just means another
+  // instance already cached an equivalent quote, so we still return ours.
+  await context.store.casMeta(
+    quoteCacheKey,
+    JSON.stringify({
+      amountMsats,
+      expiresAt: now + OPENRECEIVE_SWAP_QUOTE_CACHE_SECONDS,
+      quote: response,
+    } satisfies CachedSwapQuoteEntry),
+    cachedMeta === undefined ? null : cachedMeta.rev,
+  );
   return response;
+}
+
+interface CachedSwapQuoteEntry {
+  readonly amountMsats: number;
+  readonly expiresAt: number;
+  readonly quote: OpenReceiveSwapQuoteResponse;
+}
+
+function swapQuoteMetaKey(checkoutId: string, payInAsset: OpenReceiveSwapPayInAsset): string {
+  return `swap_quote:${checkoutId}:${payInAsset}`;
+}
+
+function parseCachedSwapQuote(value: string | undefined): CachedSwapQuoteEntry | undefined {
+  if (value === undefined) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return undefined;
+  }
+  if (parsed === null || typeof parsed !== "object") return undefined;
+  const record = parsed as Record<string, unknown>;
+  if (
+    typeof record.amountMsats !== "number" ||
+    typeof record.expiresAt !== "number" ||
+    record.quote === null ||
+    typeof record.quote !== "object"
+  ) {
+    return undefined;
+  }
+  return {
+    amountMsats: record.amountMsats,
+    expiresAt: record.expiresAt,
+    quote: record.quote as OpenReceiveSwapQuoteResponse,
+  };
 }
 
 export async function startSwap(
@@ -642,6 +757,12 @@ export function swapCatalogOption(input: {
     ...(providerAsset.maximum_pay_amount === undefined
       ? {}
       : { maximum_pay_amount: providerAsset.maximum_pay_amount }),
+    ...(providerAsset.minimum_invoice_amount_msats === undefined
+      ? {}
+      : { minimum_invoice_amount_msats: providerAsset.minimum_invoice_amount_msats }),
+    ...(providerAsset.maximum_invoice_amount_msats === undefined
+      ? {}
+      : { maximum_invoice_amount_msats: providerAsset.maximum_invoice_amount_msats }),
   };
 }
 
@@ -669,6 +790,12 @@ export function swapQuoteOption(input: {
     ...(quote.maximum_pay_amount === undefined
       ? {}
       : { maximum_pay_amount: quote.maximum_pay_amount }),
+    ...(quote.minimum_invoice_amount_msats === undefined
+      ? {}
+      : { minimum_invoice_amount_msats: quote.minimum_invoice_amount_msats }),
+    ...(quote.maximum_invoice_amount_msats === undefined
+      ? {}
+      : { maximum_invoice_amount_msats: quote.maximum_invoice_amount_msats }),
   };
 }
 

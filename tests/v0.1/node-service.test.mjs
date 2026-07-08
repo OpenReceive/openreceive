@@ -945,35 +945,42 @@ test("swapOptions catalogs assets and swapQuote quotes one selected asset", asyn
   const usdt = options.options.find((option) => option.pay_in_asset === "USDT_TRON");
   assert.equal(usdt.available, true);
   assert.equal(usdt.unavailable_reason, undefined);
-  assert.equal(usdt.pay_amount, undefined);
+  // swapOptions now quotes each supported asset at the invoice amount to gate on the
+  // provider's per-amount limits, so the option carries the quote's pay_amount and the
+  // catalog's min/max pay amounts are preserved via merge.
+  assert.equal(usdt.pay_amount, "1.05");
   assert.equal(usdt.minimum_pay_amount, "1");
   assert.equal(swapProvider.catalogCalls, 1);
-  assert.equal(swapProvider.quoteInputs.length, 0);
+  // Each supported asset (USDT_TRON, SOL_SOL, ETH_ETH) is pre-quoted once.
+  assert.equal(swapProvider.quoteInputs.length, 3);
+  assert.deepEqual(
+    swapProvider.quoteInputs.map((input) => input.payInAsset).sort(),
+    ["ETH_ETH", "SOL_SOL", "USDT_TRON"],
+  );
+  assert.equal(
+    swapProvider.quoteInputs.every(
+      (input) =>
+        Object.keys(input).sort().join(",") === "invoiceAmountMsats,payInAsset" &&
+        input.invoiceAmountMsats === 200000,
+    ),
+    true,
+  );
 
+  // Selecting an already-pre-quoted asset is served from the durable 15s quote cache,
+  // so no additional provider quote is issued.
   const quote = await openreceive.swapQuote({
     orderId: "order-swap-region",
     payInAsset: "USDT_TRON",
   });
   assert.equal(quote.pay_amount, "1.05");
-  assert.equal(
-    swapProvider.quoteInputs.every(
-      (input) => Object.keys(input).sort().join(",") === "invoiceAmountMsats,payInAsset",
-    ),
-    true,
-  );
-  assert.deepEqual(swapProvider.quoteInputs, [
-    {
-      payInAsset: "USDT_TRON",
-      invoiceAmountMsats: 200000,
-    },
-  ]);
+  assert.equal(swapProvider.quoteInputs.length, 3);
 
   const cachedQuote = await openreceive.swapQuote({
     orderId: "order-swap-region",
     payInAsset: "USDT_TRON",
   });
   assert.equal(cachedQuote.pay_amount, "1.05");
-  assert.equal(swapProvider.quoteInputs.length, 1);
+  assert.equal(swapProvider.quoteInputs.length, 3);
 
   const invoice = await openreceive.startSwap({
     orderId: "order-swap-region",
