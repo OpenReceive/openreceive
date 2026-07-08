@@ -25,4 +25,6 @@ swap:
       base_url: https://ff.io
       key: ""
       secret: ""
-      invoice_expiry_seconds: 1620
+      # invoice_expiry_seconds auto-derives from
+      # deposit_window_seconds + settlement_sla_seconds + invoice_expiry_margin_seconds.
+      # Omit it (as here) to use the derived floor; set it only to lengthen the window.

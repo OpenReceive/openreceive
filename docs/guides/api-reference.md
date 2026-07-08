@@ -8,8 +8,10 @@ App-facing packages:
 
 - `@openreceive/node`: `createOpenReceive(options)` returns a server-only
   service with `getOrCreateCheckout`, `createCheckout`, `getOrder`,
-  `getCheckout`, `sweepPendingInvoices`, `listRates`, `quoteRates`, and
-  `close`, plus the resolved `namespace` and `priceCurrencies`.
+  `getCheckout`, `order`, `swapOptions`, `swapQuote`, `startSwap`, `refundSwap`,
+  `sweepPendingInvoices`, `listRates`, `quoteRates`, and `close`, plus the
+  resolved `namespace` and `priceCurrencies`. It also exports the swap-state
+  helpers `describeSwapState` and `OPENRECEIVE_SWAP_STATES`.
 - `@openreceive/browser`: `requestCheckout`, `status`, `lightningUri`,
   `qrSvg`, `qrPngDataUrl`, `copyInvoice`, `openWallet`, and
   `createCheckoutController`.
@@ -138,44 +140,69 @@ invoices.
 ## Automated Swaps
 
 Automated swaps are optional and auto-load providers from a backend YAML config
-with secret env references. See [Automated Swaps](automated-swaps.md) for setup
-and payer flow details.
+with secret env references. See [Automated Swaps](automated-swaps.md) for setup,
+the payer flow, the state lifecycle, and offline testing.
+
+Most apps only need the single typed router `openreceive.order(body)`; its return
+type narrows on the request's `action`:
 
 ```ts
-const options = await openreceive.swapOptions({
-  orderId: order.uuid
+const status = await openreceive.order({ order_id: order.uuid });
+// -> OpenReceiveOrderStatus: order fields + swaps_enabled + swap_pay_options
+
+const { quote } = await openreceive.order({
+  order_id: order.uuid,
+  action: "swap_quote",
+  pay_in_asset: "USDT_TRON"
 });
 
-const quote = await openreceive.swapQuote({
-  orderId: order.uuid,
-  payInAsset: "USDT_TRON"
+const { attempt } = await openreceive.order({
+  order_id: order.uuid,
+  action: "start_swap",
+  pay_in_asset: "USDT_TRON"
 });
+```
 
-const attempt = await openreceive.startSwap({
-  orderId: order.uuid,
-  payInAsset: "USDT_TRON"
+The four lower-level methods stay available as escape hatches for custom UIs
+(camelCase SDK inputs). `startSwap` and `refundSwap` return a first-class
+`OpenReceiveSwapAttempt` — deposit fields top-level, shadow invoice under
+`shadow_invoice`:
+
+```ts
+const options = await openreceive.swapOptions({ orderId: order.uuid });
+const quote = await openreceive.swapQuote({ orderId: order.uuid, payInAsset: "USDT_TRON" });
+
+const attempt = await openreceive.startSwap({ orderId: order.uuid, payInAsset: "USDT_TRON" });
+attempt.deposit_address; // no optional `.swap` to unwrap
+
+await openreceive.refundSwap({
+  attemptId: attempt.attempt_id,
+  refundAddress: "...",
+  refundNonce: attempt.refund_nonce,
+  confirm: false // stage
 });
 
 await openreceive.refundSwap({
-  attemptId: attempt.swap.attempt_id,
+  attemptId: attempt.attempt_id,
   refundAddress: "...",
-  refundNonce: attempt.swap.refund_nonce,
-  confirm: false
-});
-
-await openreceive.refundSwap({
-  attemptId: attempt.swap.attempt_id,
-  refundAddress: "...",
-  refundNonce: attempt.swap.refund_nonce,
-  confirm: true
+  refundNonce: attempt.refund_nonce,
+  confirm: true // dispatch
 });
 ```
 
 Refunds target `attemptId`, not order id plus asset. Public swap payloads expose
-support fields such as `attempt_id`, `provider_order_id`, transaction ids, and
-state. Refunds require the current `refund_nonce` and an explicit confirmation
-call from an application-authorized order context. Provider tokens remain
-private.
+support fields such as `attempt_id`, `provider_order_id`, transaction ids,
+`provider_state`, `attention_reason`, and `refund_nonce_expires_at`. Refunds require
+the current `refund_nonce` and an explicit confirmation call from an
+application-authorized order context. Provider tokens remain private.
+
+Classify a `provider_state` for display with the exported helpers:
+
+```ts
+import { describeSwapState, OPENRECEIVE_SWAP_STATES } from "@openreceive/node";
+
+const { label, detail, phase, terminal } = describeSwapState(attempt.provider_state);
+```
 
 ## Errors
 

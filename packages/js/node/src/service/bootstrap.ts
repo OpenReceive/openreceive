@@ -136,12 +136,43 @@ export function mergeOpenReceiveConfigFile(
   }
   if (fileConfig === undefined) return options;
 
+  const mergedSwap = mergeSwapConfig(fileConfig.swap, options.swap);
   const configured: CreateOpenReceiveOptions = {
     ...openReceiveConfigToOptions(fileConfig),
     ...options,
-    swap: options.swap ?? fileConfig.swap,
+    ...(mergedSwap === undefined ? {} : { swap: mergedSwap }),
   };
   return configured;
+}
+
+/**
+ * Merge swap config from `openreceive.yml` with swap options passed to
+ * `createOpenReceive()` instead of letting the programmatic value silently replace the
+ * whole file block. Providers are combined and de-duplicated by `.name` (a programmatic
+ * provider with the same name overrides the YAML one in place; new names are appended
+ * after the YAML providers, which stay in priority order). Scalar options such as
+ * `settlementAttentionSeconds` take the programmatic value when set, else the file value.
+ * This lets you register a custom provider in code while keeping a YAML fixedfloat
+ * fallback, and lets a test inject a fake provider without discarding real config.
+ */
+export function mergeSwapConfig(
+  fileSwap: OpenReceiveFileConfig["swap"],
+  optionSwap: CreateOpenReceiveOptions["swap"],
+): CreateOpenReceiveOptions["swap"] {
+  if (fileSwap === undefined) return optionSwap;
+  if (optionSwap === undefined) return fileSwap;
+
+  const byName = new Map<string, OpenReceiveSwapProvider>();
+  for (const provider of fileSwap.providers ?? []) byName.set(provider.name, provider);
+  for (const provider of optionSwap.providers ?? []) byName.set(provider.name, provider);
+  const providers = [...byName.values()];
+
+  const settlementAttentionSeconds =
+    optionSwap.settlementAttentionSeconds ?? fileSwap.settlementAttentionSeconds;
+  return {
+    ...(providers.length === 0 ? {} : { providers }),
+    ...(settlementAttentionSeconds === undefined ? {} : { settlementAttentionSeconds }),
+  };
 }
 
 export function openReceiveConfigToOptions(

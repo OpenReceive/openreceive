@@ -567,9 +567,9 @@ function checkoutSnapshotFromStatusBody(body: unknown): CheckoutSnapshot | null 
   const record = asRecord(body);
   const snapshot = extractCheckoutSnapshotFromStatusBody(record);
   if (snapshot === null) return null;
-  // Payable assets ride on the order object itself (payment_methods), so the
+  // Payable swap assets ride on the order status itself (swap_pay_options), so the
   // element lists methods without a second call.
-  const paymentMethods = normalizePaymentMethods(record.payment_methods);
+  const paymentMethods = normalizePaymentMethods(record.swap_pay_options);
   return paymentMethods === undefined ? snapshot : { ...snapshot, payment_methods: paymentMethods };
 }
 

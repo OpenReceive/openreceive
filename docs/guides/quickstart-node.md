@@ -53,11 +53,11 @@ swap:
       base_url: https://ff.io
       key: ...
       secret: ...
-      invoice_expiry_seconds: 1620
 ```
 
 See [Automated Swaps](automated-swaps.md) for the provider fields, the payer
-flow, and refunds.
+flow, refunds, the state lifecycle, and how to test swaps offline with
+`@openreceive/testkit`'s in-memory provider.
 
 ## Server
 
@@ -73,8 +73,9 @@ const openreceive = await createOpenReceive({
 });
 ```
 
-Whe you user wants to pay for something, or you want to get an inbound payment: From a controller in your app, create one checkout for an order you already
-own. Replace `myOrder` with however your app loads its order:
+When you want to collect an inbound payment, create one checkout for an order you
+already own from a controller in your app. Replace `myOrder` with however your app
+loads its order:
 
 ```ts
 // In your own controller / route handler.

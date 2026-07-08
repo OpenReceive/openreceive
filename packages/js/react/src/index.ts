@@ -1033,7 +1033,7 @@ export function PaymentWizard(
       try {
         const body = await postOpenReceiveJson(fetcher, props.orderUrl, {
           order_id: orderId,
-          action: "start",
+          action: "start_swap",
           pay_in_asset: payInAsset
         });
         const invoice = normalizeSwapStartInvoice(body);
@@ -1065,7 +1065,7 @@ export function PaymentWizard(
       try {
         const body = await postOpenReceiveJson(fetcher, props.orderUrl, {
           order_id: orderId,
-          action: "refund",
+          action: "refund_swap",
           attempt_id: attemptId,
           refund_address: refundAddress,
           refund_nonce: refundNonce,
@@ -1841,9 +1841,11 @@ async function postOpenReceiveJson(
 
 function normalizeSwapStartInvoice(body: unknown): CheckoutInvoiceSnapshot {
   const record = reactRecord(body);
-  const invoice = reactRecord(record.invoice ?? body);
+  // A swap start/refund returns { attempt }; the backing Lightning invoice (which
+  // carries the swap block the element renders) is attempt.shadow_invoice.
+  const invoice = reactRecord(reactRecord(record.attempt).shadow_invoice ?? record.invoice ?? body);
   if (reactString(invoice.invoice_id) === undefined || reactRecord(invoice.swap).provider === undefined) {
-    throw new Error("Swap response did not include an invoice.");
+    throw new Error("Swap response did not include an attempt.");
   }
   return invoice as unknown as CheckoutInvoiceSnapshot;
 }

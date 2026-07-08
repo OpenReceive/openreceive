@@ -35,7 +35,14 @@ export {
   createOpenReceive,
   createOpenReceivePriceFeed,
 } from "./service.ts";
-export { fixedFloatCompatibleSwapProvider, fixedFloatProvider } from "./swap/index.ts";
+export {
+  describeSwapState,
+  fixedFloatCompatibleSwapProvider,
+  fixedFloatProvider,
+  isOpenReceiveSwapTerminalState,
+  OPENRECEIVE_SWAP_PAY_IN_ASSETS,
+  OPENRECEIVE_SWAP_STATES,
+} from "./swap/index.ts";
 export type {
   CreateOpenReceiveOptions,
   OpenReceive,
@@ -53,12 +60,15 @@ export type {
   OpenReceiveLogEntry,
   OpenReceiveLogger,
   OpenReceiveOrder,
+  OpenReceiveOrderResult,
+  OpenReceiveOrderStatus,
   OpenReceivePublicSwap,
   OpenReceiveNodeOptions,
   OpenReceiveNodeSettlementActionHook,
   OpenReceiveNodeSettlementActionInput,
   OpenReceiveOrderRequest,
   OpenReceivePendingSweepResult,
+  OpenReceiveSwapAttempt,
   OpenReceiveSwapOption,
   OpenReceiveSwapOptions,
   OpenReceiveSwapOptionsRequest,
@@ -71,10 +81,16 @@ export type {
 export type {
   FixedFloatCompatibleSwapProviderOptions,
   FixedFloatProviderOptions,
+  OpenReceiveSwapAttentionReason,
   OpenReceiveSwapAvailabilityReason,
+  OpenReceiveSwapOrder,
   OpenReceiveSwapPayInAsset,
+  OpenReceiveSwapPhase,
   OpenReceiveSwapProvider,
+  OpenReceiveSwapProviderAsset,
   OpenReceiveSwapProviderState,
+  OpenReceiveSwapQuote,
+  OpenReceiveSwapStateInfo,
 } from "./swap/index.ts";
 export * from "./postgres-store.ts";
 export * from "./storage-schema.ts";

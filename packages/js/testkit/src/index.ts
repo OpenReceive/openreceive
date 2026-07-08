@@ -12,6 +12,13 @@ import {
   type WalletCapabilitySummary
 } from "@openreceive/core";
 
+export {
+  createTestkitSwapProvider,
+  TestkitSwapProvider,
+  type TestkitSwapProviderOptions,
+  type TestkitSwapSelector
+} from "./swap-provider.ts";
+
 export const TESTKIT_WALLET_PUBKEY = "f".repeat(64);
 export const TESTKIT_RELAY = "wss://relay.test.openreceive.local";
 export const TESTKIT_PREIMAGE = "1".repeat(64);

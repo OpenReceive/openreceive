@@ -87,12 +87,25 @@
       "type": "string",
       "pattern": "^or_ref_[a-f0-9]{32}$"
     },
+    "refund_nonce_expires_at": {
+      "type": "integer",
+      "minimum": 0
+    },
     "refund_tx_id": {
       "type": "string",
       "minLength": 1
     },
     "attention": {
       "type": "boolean"
+    },
+    "attention_reason": {
+      "type": "string",
+      "enum": [
+        "provider_completed_without_wallet_settlement",
+        "provider_order_creation_stale",
+        "provider_order_creation_failed",
+        "provider_reported_emergency"
+      ]
     }
   },
   "x-openreceive-private-fields": [

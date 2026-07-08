@@ -1369,7 +1369,7 @@ test("browser status fetcher owns display-safe status POST shape", async () => {
             },
           ),
           checkouts: [],
-          payment_methods: [
+          swap_pay_options: [
             {
               pay_in_asset: "USDT_TRON",
               label: "USDT",
@@ -1389,7 +1389,7 @@ test("browser status fetcher owns display-safe status POST shape", async () => {
   assert.equal(body.checkout_id, "or_chk_status");
   assert.equal(body.status, "paid");
   assert.equal(body.invoices[0].invoice_id, "or_inv_status");
-  // Payable assets ride on the order object itself (payment_methods).
+  // Payable swap assets ride on the order status itself (swap_pay_options).
   assert.equal(body.payment_methods.length, 1);
   assert.equal(body.payment_methods[0].pay_in_asset, "USDT_TRON");
   assert.equal(body.payment_methods[0].pay_amount, "1.05");

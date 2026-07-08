@@ -10,8 +10,13 @@ import {
   runOpenReceiveOperation,
 } from "./service/bootstrap.ts";
 import { createCheckout, getCheckout, getOrder } from "./service/checkouts.ts";
-import { currentUnixSeconds, readOpenReceiveNamespace } from "./service/core-utils.ts";
-import { toWireCheckout, toWireInvoice, toWireOrder } from "./service/models.ts";
+import {
+  currentUnixSeconds,
+  readOpenReceiveNamespace,
+  serviceError,
+} from "./service/core-utils.ts";
+import { emitLog } from "./service/logging.ts";
+import { toWireCheckout, toWireOrder, toWireSwapAttempt } from "./service/models.ts";
 import {
   createOpenReceivePriceFeed,
   listRates,
@@ -26,6 +31,9 @@ import type {
   OpenReceiveCheckout,
   OpenReceiveGetOrCreateCheckoutRequest,
   OpenReceiveNodeOptions,
+  OpenReceiveOrderRequest,
+  OpenReceiveOrderResult,
+  OpenReceiveOrderStatus,
   OpenReceiveServiceContext,
 } from "./service/types.ts";
 
@@ -53,7 +61,10 @@ export type {
   OpenReceiveNodeSettlementActionInput,
   OpenReceiveOrder,
   OpenReceiveOrderRequest,
+  OpenReceiveOrderResult,
+  OpenReceiveOrderStatus,
   OpenReceivePublicSwap,
+  OpenReceiveSwapAttempt,
   OpenReceiveSwapOption,
   OpenReceiveSwapOptions,
   OpenReceiveSwapOptionsRequest,
@@ -96,6 +107,18 @@ export async function createOpenReceive(
     }),
   ];
   const swapProviders = resolveConfiguredSwapProviders(configuredOptions);
+  emitLog(
+    nodeOptions,
+    "info",
+    "swap.providers.resolved",
+    swapProviders.length === 0
+      ? "No swap providers configured; automated swaps are disabled."
+      : "Resolved automated swap providers.",
+    {
+      provider_count: swapProviders.length,
+      providers: swapProviders.map((provider) => provider.name),
+    },
+  );
 
   const context: OpenReceiveServiceContext = {
     options: nodeOptions,
@@ -144,35 +167,52 @@ export async function createOpenReceive(
     },
     async startSwap(input) {
       return await runOpenReceiveOperation(context, async () =>
-        toWireInvoice(await startSwap(context, input)),
+        toWireSwapAttempt(await startSwap(context, input)),
       );
     },
     async refundSwap(input) {
       return await runOpenReceiveOperation(context, async () =>
-        toWireInvoice(await refundSwap(context, input)),
+        toWireSwapAttempt(await refundSwap(context, input)),
       );
     },
-    async order(input) {
-      const orderId = input.order_id;
-      switch (input.action) {
-        case "quote":
-          return { quote: await service.swapQuote({ orderId, payInAsset: input.pay_in_asset }) };
-        case "start":
-          return { invoice: await service.startSwap({ orderId, payInAsset: input.pay_in_asset }) };
-        case "refund":
-          return {
-            invoice: await service.refundSwap({
-              attemptId: input.attempt_id,
-              refundAddress: input.refund_address,
-              refundNonce: input.refund_nonce,
-              confirm: input.confirm === true,
-            }),
-          };
-        default: {
+    async order<A extends OpenReceiveOrderRequest>(input: A): Promise<OpenReceiveOrderResult<A>> {
+      const request = input as OpenReceiveOrderRequest;
+      const orderId = request.order_id;
+      switch (request.action) {
+        case undefined:
+        case "status": {
           const order = await service.getOrder({ orderId });
           const swap = await service.swapOptions({ orderId });
-          return { ...order, payment_methods: swap.enabled ? swap.options : [] };
+          const status: OpenReceiveOrderStatus = {
+            ...order,
+            swaps_enabled: swap.enabled,
+            swap_pay_options: swap.enabled ? swap.options : [],
+          };
+          return status as OpenReceiveOrderResult<A>;
         }
+        case "swap_quote":
+          return {
+            quote: await service.swapQuote({ orderId, payInAsset: request.pay_in_asset }),
+          } as OpenReceiveOrderResult<A>;
+        case "start_swap":
+          return {
+            attempt: await service.startSwap({ orderId, payInAsset: request.pay_in_asset }),
+          } as OpenReceiveOrderResult<A>;
+        case "refund_swap":
+          return {
+            attempt: await service.refundSwap({
+              attemptId: request.attempt_id,
+              refundAddress: request.refund_address,
+              refundNonce: request.refund_nonce,
+              confirm: request.confirm === true,
+            }),
+          } as OpenReceiveOrderResult<A>;
+        default:
+          throw serviceError(
+            400,
+            "INVALID_REQUEST",
+            `Unknown order action: ${JSON.stringify((request as { action?: unknown }).action)}. Expected "status", "swap_quote", "start_swap", or "refund_swap".`,
+          );
       }
     },
     async listRates(input) {

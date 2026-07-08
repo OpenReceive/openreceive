@@ -13,6 +13,7 @@ import type {
 } from "@openreceive/core";
 import type { ResolveOpenReceiveStoreOptions } from "../store-uri.ts";
 import type {
+  OpenReceiveSwapAttentionReason,
   OpenReceiveSwapAvailabilityReason,
   OpenReceiveSwapPayInAsset,
   OpenReceiveSwapProvider,
@@ -146,27 +147,45 @@ export interface OpenReceiveSwapStartRequest {
 }
 
 export interface OpenReceiveSwapRefundRequest {
-  readonly attemptId?: string;
-  readonly attempt_id?: string;
+  readonly attemptId: string;
   readonly refundAddress: string;
-  readonly refund_address?: string;
-  readonly refundNonce?: string;
-  readonly refund_nonce?: string;
+  readonly refundNonce: string;
   readonly confirm?: boolean;
 }
 
+/**
+ * The wire body for {@link OpenReceive.order}: a payer-facing router keyed on `action`.
+ * Fields are snake_case because this is the HTTP body your route forwards verbatim.
+ * (The lower-level `swapQuote`/`startSwap`/`refundSwap` methods take camelCase SDK inputs.)
+ * An unrecognized `action` is rejected with a 400, never silently treated as `status`.
+ */
 export type OpenReceiveOrderRequest =
   | { order_id: string; action?: "status" }
-  | { order_id: string; action: "quote"; pay_in_asset: string }
-  | { order_id: string; action: "start"; pay_in_asset: string }
+  | { order_id: string; action: "swap_quote"; pay_in_asset: string }
+  | { order_id: string; action: "start_swap"; pay_in_asset: string }
   | {
       order_id: string;
-      action: "refund";
+      action: "refund_swap";
       attempt_id: string;
       refund_address: string;
       refund_nonce: string;
       confirm?: boolean;
     };
+
+/**
+ * The result of {@link OpenReceive.order}, mapped from the request's `action` so the
+ * recommended entrypoint is fully typed instead of `unknown`. The default `status`
+ * action returns an {@link OpenReceiveOrderStatus}; swap actions return a wrapped
+ * quote or attempt.
+ */
+export type OpenReceiveOrderResult<A extends OpenReceiveOrderRequest = OpenReceiveOrderRequest> =
+  A extends { action: "swap_quote" }
+    ? { readonly quote: OpenReceiveSwapQuoteResponse }
+    : A extends { action: "start_swap" }
+      ? { readonly attempt: OpenReceiveSwapAttempt }
+      : A extends { action: "refund_swap" }
+        ? { readonly attempt: OpenReceiveSwapAttempt }
+        : OpenReceiveOrderStatus;
 
 export interface OpenReceiveSwapOption {
   readonly pay_in_asset: OpenReceiveSwapPayInAsset;
@@ -202,8 +221,16 @@ export interface OpenReceivePublicSwap {
   readonly payout_tx_id?: string;
   readonly refund_address?: string;
   readonly refund_nonce?: string;
+  /**
+   * Unix seconds when `refund_nonce` expires. Present whenever `refund_nonce` is.
+   * Show a countdown and re-fetch status before it lapses; a confirm submitted after
+   * this time is rejected and the staged address is lost.
+   */
+  readonly refund_nonce_expires_at?: number;
   readonly refund_tx_id?: string;
   readonly attention?: boolean;
+  /** Why this attempt needs review, when `attention` is true. See automated-swaps.md. */
+  readonly attention_reason?: OpenReceiveSwapAttentionReason;
 }
 
 export interface OpenReceiveInvoice {
@@ -225,6 +252,17 @@ export interface OpenReceiveInvoice {
   readonly fiat_quote: OpenReceiveRateQuote | null;
   readonly settlement_action_state: string;
   readonly swap?: OpenReceivePublicSwap;
+}
+
+/**
+ * The result of starting or refunding an automated swap. The fields the payer needs —
+ * deposit address, exact amount, asset, provider state, refund nonce — are top-level and
+ * guaranteed present, instead of buried under an optional `.swap` on an invoice-shaped
+ * type. The backing shadow Lightning invoice is available as `shadow_invoice`.
+ */
+export interface OpenReceiveSwapAttempt extends OpenReceivePublicSwap {
+  readonly order_id: string;
+  readonly shadow_invoice: OpenReceiveInvoice;
 }
 
 export interface OpenReceiveCheckout {
@@ -253,7 +291,18 @@ export interface OpenReceiveOrder {
   readonly checkouts: readonly OpenReceiveCheckout[];
   readonly wallet_scan_performed: boolean;
   readonly transactions_checked: number;
-  readonly payment_methods?: readonly OpenReceiveSwapOption[];
+}
+
+/**
+ * An order plus its available automated-swap pay-in options. Returned by the default
+ * (`status`) action of {@link OpenReceive.order}. `swap_pay_options` holds only the
+ * crypto swap methods — Lightning is always available on the order's checkout invoice
+ * and is not listed here. When swaps are not configured, `swaps_enabled` is false and
+ * `swap_pay_options` is empty.
+ */
+export interface OpenReceiveOrderStatus extends OpenReceiveOrder {
+  readonly swaps_enabled: boolean;
+  readonly swap_pay_options: readonly OpenReceiveSwapOption[];
 }
 
 export interface OpenReceive {
@@ -263,13 +312,13 @@ export interface OpenReceive {
   createCheckout(input: OpenReceiveCreateCheckoutRequest): Promise<OpenReceiveCheckout>;
   getOrCreateCheckout(input: OpenReceiveGetOrCreateCheckoutRequest): Promise<OpenReceiveCheckout>;
   getOrder(input: OpenReceiveGetOrderRequest): Promise<OpenReceiveOrder>;
-  order(input: OpenReceiveOrderRequest): Promise<unknown>;
+  order<A extends OpenReceiveOrderRequest>(input: A): Promise<OpenReceiveOrderResult<A>>;
   getCheckout(input: OpenReceiveGetCheckoutRequest): Promise<OpenReceiveCheckout>;
   sweepPendingInvoices(): Promise<OpenReceivePendingSweepResult>;
   swapOptions(input: OpenReceiveSwapOptionsRequest): Promise<OpenReceiveSwapOptionsResponse>;
   swapQuote(input: OpenReceiveSwapQuoteRequest): Promise<OpenReceiveSwapQuoteResponse>;
-  startSwap(input: OpenReceiveSwapStartRequest): Promise<OpenReceiveInvoice>;
-  refundSwap(input: OpenReceiveSwapRefundRequest): Promise<OpenReceiveInvoice>;
+  startSwap(input: OpenReceiveSwapStartRequest): Promise<OpenReceiveSwapAttempt>;
+  refundSwap(input: OpenReceiveSwapRefundRequest): Promise<OpenReceiveSwapAttempt>;
   listRates(
     input?: OpenReceiveListRatesRequest,
   ): Promise<OpenReceiveBtcFiatRateMapWithSource["rates"]>;

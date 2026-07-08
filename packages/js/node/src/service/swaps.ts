@@ -113,7 +113,7 @@ export async function quoteSwap(
 ): Promise<OpenReceiveSwapQuoteResponse> {
   const body = asRecord(input);
   const orderId = parseOrderId(body);
-  const payInAsset = parseSwapPayInAsset(body.payInAsset ?? body.pay_in_asset);
+  const payInAsset = parseSwapPayInAsset(body.payInAsset);
   const providers = context.swapProviders;
   if (providers.length === 0) {
     return swapCatalogOption({
@@ -179,7 +179,7 @@ export async function startSwap(
 ): Promise<OpenReceiveInvoiceModel> {
   const body = asRecord(input);
   const orderId = parseOrderId(body);
-  const payInAsset = parseSwapPayInAsset(body.payInAsset ?? body.pay_in_asset);
+  const payInAsset = parseSwapPayInAsset(body.payInAsset);
   const now = context.clock();
   const records = await context.store.listByOrderId(orderId);
   if (records.length === 0) {
@@ -325,6 +325,7 @@ export async function startSwap(
       ...swap,
       provider_state: "failed",
       attention: true,
+      attention_reason: "provider_order_creation_failed",
       provider_error: error instanceof Error ? error.message : String(error),
       last_polled_at: context.clock(),
     }));
@@ -372,9 +373,9 @@ export async function refundSwap(
   input: OpenReceiveSwapRefundRequest,
 ): Promise<OpenReceiveInvoiceModel> {
   const body = asRecord(input);
-  const attemptId = parseSwapAttemptId(body.attemptId ?? body.attempt_id);
-  const refundAddress = optionalString(body.refundAddress ?? body.refund_address);
-  const refundNonce = optionalString(body.refundNonce ?? body.refund_nonce);
+  const attemptId = parseSwapAttemptId(body.attemptId);
+  const refundAddress = optionalString(body.refundAddress);
+  const refundNonce = optionalString(body.refundNonce);
   const confirm = body.confirm === true;
   if (refundAddress === undefined) {
     throw serviceError(400, "INVALID_REQUEST", "refund_address is required.");
@@ -698,14 +699,21 @@ export async function readReservedSwapAttemptForStartReplay(
     );
   }
 
-  const failed = await updateSwapRecord(context, record, (swap) => ({
+  // The reservation never received a provider order, so it has no deposit address to
+  // return as a swap attempt. Retire it as failed (it is terminal, so a retry mints a
+  // fresh attempt) and surface an actionable 409 instead of a deposit-less attempt.
+  await updateSwapRecord(context, record, (swap) => ({
     ...swap,
     provider_state: "failed",
     attention: true,
     attention_reason: "provider_order_creation_stale",
     last_polled_at: now,
   }));
-  return serializeInvoice(failed.row, now);
+  throw serviceError(
+    409,
+    "CONFLICT",
+    "The previous swap attempt failed before a deposit address was ready. Start the swap again.",
+  );
 }
 
 export function roundMsatsUpToWholeSats(amountMsats: number): number {

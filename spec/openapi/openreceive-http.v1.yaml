@@ -240,10 +240,20 @@ components:
         refund_nonce:
           type: string
           pattern: "^or_ref_[a-f0-9]{32}$"
+        refund_nonce_expires_at:
+          type: integer
+          minimum: 0
         refund_tx_id:
           type: string
         attention:
           type: boolean
+        attention_reason:
+          type: string
+          enum:
+            - provider_completed_without_wallet_settlement
+            - provider_order_creation_stale
+            - provider_order_creation_failed
+            - provider_reported_emergency
     SwapOption:
       type: object
       additionalProperties: false
@@ -369,10 +379,25 @@ components:
         transactions_checked:
           type: integer
           minimum: 0
-        payment_methods:
-          type: array
-          items:
-            $ref: "#/components/schemas/SwapOption"
+    OrderStatus:
+      description: >-
+        An Order plus its available automated-swap pay-in options. Returned by the
+        default (status) action of POST /order. swap_pay_options holds only crypto swap
+        methods; Lightning is always available on the checkout invoice and is not listed.
+      allOf:
+        - $ref: "#/components/schemas/Order"
+        - type: object
+          additionalProperties: false
+          required:
+            - swaps_enabled
+            - swap_pay_options
+          properties:
+            swaps_enabled:
+              type: boolean
+            swap_pay_options:
+              type: array
+              items:
+                $ref: "#/components/schemas/SwapOption"
     FiatAmount:
       type: object
       additionalProperties: false

@@ -23,6 +23,18 @@ export type OpenReceiveSwapAvailabilityReason =
   | "provider_rate_limited"
   | "provider_unreachable";
 
+/**
+ * Why a swap attempt entered the `attention` state and needs human/support review.
+ * Every code path that sets `attention: true` records one of these so a dashboard or
+ * runbook can branch on the cause instead of a bare boolean. See the "Attention"
+ * section of docs/guides/automated-swaps.md for the per-reason operator runbook.
+ */
+export type OpenReceiveSwapAttentionReason =
+  | "provider_completed_without_wallet_settlement"
+  | "provider_order_creation_stale"
+  | "provider_order_creation_failed"
+  | "provider_reported_emergency";
+
 export interface OpenReceiveSwapQuote {
   readonly pay_amount?: string;
   readonly minimum_pay_amount?: string;
@@ -59,6 +71,7 @@ export interface OpenReceiveSwapOrder {
   readonly payout_tx_id?: string;
   readonly refund_tx_id?: string;
   readonly attention?: boolean;
+  readonly attention_reason?: OpenReceiveSwapAttentionReason;
   readonly raw?: unknown;
 }
 

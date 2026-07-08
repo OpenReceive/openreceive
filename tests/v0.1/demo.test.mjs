@@ -1616,8 +1616,8 @@ test("Hello Fruit demos create app orders and refresh order status through merch
     assert.equal(status.status, 200, `${demo.name}: order status`);
     assert.equal(status.body.order_id, created.body.order.uuid);
     assert.equal(status.body.status, "pending");
-    // Payable assets ride on the order object itself (payment_methods).
-    assert.ok(Array.isArray(status.body.payment_methods));
+    // Payable swap assets ride on the order status itself (swap_pay_options).
+    assert.ok(Array.isArray(status.body.swap_pay_options));
     const statusInvoice =
       status.body.display_checkout.active ?? status.body.display_checkout.invoices[0];
     assert.equal(statusInvoice.payment_hash, createdInvoice.payment_hash);
@@ -1649,7 +1649,7 @@ test("Hello Fruit demos create app orders and refresh order status through merch
     assert.equal(nextStatus.status, 200, "nextjs-fullstack: order status");
     assert.equal(nextStatus.body.order_id, nextCreated.body.order.uuid);
     assert.equal(nextStatus.body.status, "pending");
-    assert.ok(Array.isArray(nextStatus.body.payment_methods));
+    assert.ok(Array.isArray(nextStatus.body.swap_pay_options));
   } finally {
     setHelloFruitOpenReceiveTestOverrides(undefined);
   }

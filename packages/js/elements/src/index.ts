@@ -713,9 +713,11 @@ async function postElementJson(url: string, body: Record<string, unknown>): Prom
 
 function normalizeElementSwapInvoice(body: unknown): CheckoutInvoiceSnapshot {
   const record = elementRecord(body);
-  const invoice = elementRecord(record.invoice ?? body);
+  // A swap start/refund returns { attempt }; the backing Lightning invoice (which
+  // carries the swap block the element renders) is attempt.shadow_invoice.
+  const invoice = elementRecord(elementRecord(record.attempt).shadow_invoice ?? record.invoice ?? body);
   if (elementString(invoice.invoice_id) === undefined || elementRecord(invoice.swap).provider === undefined) {
-    throw new Error("Swap response did not include an invoice.");
+    throw new Error("Swap response did not include an attempt.");
   }
   return invoice as unknown as CheckoutInvoiceSnapshot;
 }
@@ -1218,7 +1220,7 @@ export function defineOpenReceiveElements(
       try {
         const body = await postElementJson(url, {
           order_id: orderId,
-          action: "start",
+          action: "start_swap",
           pay_in_asset: payInAsset
         });
         this.startedSwapInvoice = normalizeElementSwapInvoice(body);
@@ -1242,7 +1244,7 @@ export function defineOpenReceiveElements(
       try {
         const body = await postElementJson(url, {
           ...(orderId === null ? {} : { order_id: orderId }),
-          action: "refund",
+          action: "refund_swap",
           attempt_id: attemptId,
           refund_address: refundAddress,
           refund_nonce: refundNonce,

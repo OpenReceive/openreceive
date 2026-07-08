@@ -7,6 +7,7 @@ import type {
 } from "@openreceive/core";
 import {
   isOpenReceiveSwapPayInAsset,
+  type OpenReceiveSwapAttentionReason,
   type OpenReceiveSwapOrder,
   type OpenReceiveSwapPayInAsset,
   type OpenReceiveSwapProviderState,
@@ -27,6 +28,7 @@ import type {
   OpenReceiveOrder,
   OpenReceiveOrderModel,
   OpenReceivePublicSwap,
+  OpenReceiveSwapAttempt,
   OrderScanMeta,
 } from "./types.ts";
 
@@ -212,6 +214,7 @@ export function swapMetadataFromProviderOrder(
     ...(order.payout_tx_id === undefined ? {} : { payout_tx_id: order.payout_tx_id }),
     ...(order.refund_tx_id === undefined ? {} : { refund_tx_id: order.refund_tx_id }),
     ...(order.attention === undefined ? {} : { attention: order.attention }),
+    ...(order.attention_reason === undefined ? {} : { attention_reason: order.attention_reason }),
     last_polled_at: now,
   };
 }
@@ -305,11 +308,32 @@ export function readPublicSwap(row: InvoiceStorageRow): OpenReceivePublicSwap | 
     ...(optionalString(swap.refund_nonce) === undefined
       ? {}
       : { refund_nonce: optionalString(swap.refund_nonce) }),
+    ...(optionalString(swap.refund_nonce) === undefined ||
+    optionalSafeInteger(swap.refund_nonce_expires_at) === undefined
+      ? {}
+      : { refund_nonce_expires_at: optionalSafeInteger(swap.refund_nonce_expires_at) }),
     ...(optionalString(swap.refund_tx_id) === undefined
       ? {}
       : { refund_tx_id: optionalString(swap.refund_tx_id) }),
     ...(typeof swap.attention === "boolean" ? { attention: swap.attention } : {}),
+    ...(readSwapAttentionReason(swap.attention_reason) === undefined
+      ? {}
+      : { attention_reason: readSwapAttentionReason(swap.attention_reason) }),
   };
+}
+
+const SWAP_ATTENTION_REASONS: ReadonlySet<string> = new Set<OpenReceiveSwapAttentionReason>([
+  "provider_completed_without_wallet_settlement",
+  "provider_order_creation_stale",
+  "provider_order_creation_failed",
+  "provider_reported_emergency",
+]);
+
+function readSwapAttentionReason(value: unknown): OpenReceiveSwapAttentionReason | undefined {
+  const reason = optionalString(value);
+  return reason !== undefined && SWAP_ATTENTION_REASONS.has(reason)
+    ? (reason as OpenReceiveSwapAttentionReason)
+    : undefined;
 }
 
 export function readStoredSwapOrder(row: InvoiceStorageRow): OpenReceiveSwapOrder {
@@ -435,6 +459,17 @@ export function toWireInvoice(model: OpenReceiveInvoiceModel): OpenReceiveInvoic
     fiat_quote: model.fiatQuote,
     settlement_action_state: model.settlementActionState,
     ...(model.swap === undefined ? {} : { swap: model.swap }),
+  };
+}
+
+export function toWireSwapAttempt(model: OpenReceiveInvoiceModel): OpenReceiveSwapAttempt {
+  if (model.swap === undefined) {
+    throw serviceError(500, "INTERNAL", "Swap attempt is missing swap details.");
+  }
+  return {
+    ...model.swap,
+    order_id: model.orderId,
+    shadow_invoice: toWireInvoice(model),
   };
 }
 

@@ -191,6 +191,8 @@ async function createHarness(overrides = {}) {
   const wallet = overrides.client ?? new FakeWallet(() => now);
   const store = overrides.store ?? new InMemoryInvoiceKvStore();
   const openreceive = await createOpenReceive({
+    // Stay hermetic: never merge the developer's local openreceive.yml into unit tests.
+    configPath: false,
     client: wallet,
     store,
     namespace: "demo_hello_fruit",
@@ -480,7 +482,7 @@ test("FixedFloat rejects invoice expiry configs shorter than its payout window",
         invoiceExpiryMarginSeconds: 60,
         invoiceExpirySeconds: 779,
       }),
-    /invoiceExpirySeconds must cover/,
+    /invoice_expiry_seconds \(779\) must be at least 780 = deposit_window\(600\) \+ settlement_sla\(120\) \+ margin\(60\)/,
   );
 });
 
@@ -713,15 +715,15 @@ test("startSwap creates an idempotent shadow invoice without replacing active Li
     payInAsset: "USDT_TRON",
   });
 
-  assert.equal(first.invoice_id, second.invoice_id);
-  assert.equal(first.rail, "swap");
-  assert.equal(first.amount_msats, checkout.amount_msats);
-  assert.equal(first.swap.provider, "fixedfloat");
-  assert.equal(first.swap.attempt_id, first.invoice_id);
-  assert.equal(first.swap.pay_in_asset, "USDT_TRON");
-  assert.equal(first.swap.deposit_address, "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb");
-  assert.equal(first.invoice, null);
-  assert.equal("provider_token" in first.swap, false);
+  assert.equal(first.attempt_id, second.attempt_id);
+  assert.equal(first.shadow_invoice.rail, "swap");
+  assert.equal(first.shadow_invoice.amount_msats, checkout.amount_msats);
+  assert.equal(first.provider, "fixedfloat");
+  assert.equal(first.attempt_id, first.shadow_invoice.invoice_id);
+  assert.equal(first.pay_in_asset, "USDT_TRON");
+  assert.equal(first.deposit_address, "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb");
+  assert.equal(first.shadow_invoice.invoice, null);
+  assert.equal("provider_token" in first, false);
   assert.equal(wallet.makeInvoiceCalls, 2);
   assert.equal(swapProvider.createCalls, 1);
 
@@ -733,12 +735,12 @@ test("startSwap creates an idempotent shadow invoice without replacing active Li
     true,
   );
 
-  const stored = await store.get(first.invoice_id);
+  const stored = await store.get(first.attempt_id);
   assert.equal(stored.row.metadata.swap.provider_token, undefined);
   assert.equal(stored.row.metadata.swap_private.provider_token, "ff-token-1");
 });
 
-test("openreceive.order routes each action and rides payment_methods on the order", async () => {
+test("openreceive.order routes each action and rides swap_pay_options on the order", async () => {
   const swapProvider = new FakeSwapProvider();
   const { openreceive } = await createHarness({
     swap: { providers: [swapProvider] },
@@ -750,44 +752,45 @@ test("openreceive.order routes each action and rides payment_methods on the orde
   });
 
   // Status action (action omitted) returns the order object plus the payable
-  // assets on payment_methods, so listing methods costs no extra call.
+  // swap assets on swap_pay_options, so listing methods costs no extra call.
   const status = await openreceive.order({ order_id: "order-dispatch" });
   assert.equal(status.order_id, "order-dispatch");
   assert.equal(status.status, "pending");
-  assert.equal(Array.isArray(status.payment_methods), true);
+  assert.equal(status.swaps_enabled, true);
+  assert.equal(Array.isArray(status.swap_pay_options), true);
   assert.equal(
-    status.payment_methods.some((method) => method.pay_in_asset === "USDT_TRON"),
+    status.swap_pay_options.some((method) => method.pay_in_asset === "USDT_TRON"),
     true,
   );
 
   // Quote action routes to swapQuote and returns the { quote } envelope.
   const quoted = await openreceive.order({
     order_id: "order-dispatch",
-    action: "quote",
+    action: "swap_quote",
     pay_in_asset: "USDT_TRON",
   });
   assert.equal(quoted.quote.provider, "fixedfloat");
   assert.equal(quoted.quote.pay_amount, "1.05");
 
-  // Start action routes to startSwap and returns the { invoice } envelope. It
+  // Start action routes to startSwap and returns the { attempt } envelope. It
   // reuses startSwap's duplicate protection: two starts share one shadow
   // invoice and one provider order, and provider tokens never leak.
   const started = await openreceive.order({
     order_id: "order-dispatch",
-    action: "start",
+    action: "start_swap",
     pay_in_asset: "USDT_TRON",
   });
   const restarted = await openreceive.order({
     order_id: "order-dispatch",
-    action: "start",
+    action: "start_swap",
     pay_in_asset: "USDT_TRON",
   });
-  assert.equal(started.invoice.rail, "swap");
-  assert.equal(started.invoice.swap.pay_in_asset, "USDT_TRON");
-  assert.equal(started.invoice.swap.deposit_address, "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb");
-  assert.equal(started.invoice.invoice, null);
-  assert.equal(started.invoice.invoice_id, restarted.invoice.invoice_id);
-  assert.equal("provider_token" in started.invoice.swap, false);
+  assert.equal(started.attempt.shadow_invoice.rail, "swap");
+  assert.equal(started.attempt.pay_in_asset, "USDT_TRON");
+  assert.equal(started.attempt.deposit_address, "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb");
+  assert.equal(started.attempt.shadow_invoice.invoice, null);
+  assert.equal(started.attempt.attempt_id, restarted.attempt.attempt_id);
+  assert.equal("provider_token" in started.attempt, false);
   assert.equal(swapProvider.createCalls, 1);
 
   // The started swap now shows up on the order object without replacing the
@@ -823,8 +826,18 @@ test("openreceive.order propagates OpenReceiveServiceError status codes (404/409
     () =>
       openreceive.order({
         order_id: "order-dispatch-errors",
-        action: "quote",
+        action: "swap_quote",
         pay_in_asset: "NOT_AN_ASSET",
+      }),
+    (error) => error instanceof OpenReceiveServiceError && error.status === 400,
+  );
+
+  // 400: an unrecognized action fails loud instead of silently returning status.
+  await assert.rejects(
+    () =>
+      openreceive.order({
+        order_id: "order-dispatch-errors",
+        action: "cancel",
       }),
     (error) => error instanceof OpenReceiveServiceError && error.status === 400,
   );
@@ -835,7 +848,7 @@ test("openreceive.order propagates OpenReceiveServiceError status codes (404/409
     () =>
       openreceive.order({
         order_id: "order-dispatch-errors",
-        action: "start",
+        action: "start_swap",
         pay_in_asset: "USDT_TRON",
       }),
     (error) => error instanceof OpenReceiveServiceError && error.status === 409,
@@ -877,8 +890,43 @@ test("startSwap reserves the attempt before provider create to avoid duplicate o
 
   releaseCreate();
   const invoice = await first;
-  assert.equal(invoice.swap.provider_order_id, "ff-order-1");
+  assert.equal(invoice.provider_order_id, "ff-order-1");
   assert.equal(swapProvider.createCalls, 1);
+});
+
+test("startSwap surfaces a 409 (not a 500) when a stale reserved attempt is replayed", async () => {
+  const swapProvider = new FakeSwapProvider();
+  let releaseCreate;
+  swapProvider.createSwapGate = new Promise((resolve) => {
+    releaseCreate = resolve;
+  });
+  const createStarted = new Promise((resolve) => {
+    swapProvider.createSwapStarted = resolve;
+  });
+  const harness = await createHarness({ swap: { providers: [swapProvider] } });
+  const { openreceive } = harness;
+  await openreceive.createCheckout({
+    orderId: "order-swap-stale",
+    amount: { btc: { currency: "SATS", value: "200" } },
+  });
+
+  // First start reserves the record, then hangs inside provider.createSwap, so the
+  // record is stuck in creating_provider_order with no deposit address.
+  const first = openreceive.startSwap({ orderId: "order-swap-stale", payInAsset: "USDT_TRON" });
+  await createStarted;
+
+  // Advance past the creating-provider-order timeout (created_at 1000 + 30s).
+  harness.setNow(1040);
+  await assert.rejects(
+    () => openreceive.startSwap({ orderId: "order-swap-stale", payInAsset: "USDT_TRON" }),
+    (error) =>
+      error instanceof OpenReceiveServiceError &&
+      error.status === 409 &&
+      /Start the swap again/.test(error.body?.message ?? ""),
+  );
+
+  releaseCreate();
+  await first.catch(() => {});
 });
 
 test("swapOptions catalogs assets and swapQuote quotes one selected asset", async () => {
@@ -931,7 +979,7 @@ test("swapOptions catalogs assets and swapQuote quotes one selected asset", asyn
     orderId: "order-swap-region",
     payInAsset: "USDT_TRON",
   });
-  assert.equal(invoice.swap.pay_in_asset, "USDT_TRON");
+  assert.equal(invoice.pay_in_asset, "USDT_TRON");
   assert.equal(
     swapProvider.createSwapInputs.every(
       (input) => Object.keys(input).sort().join(",") === "bolt11,invoiceAmountMsats,payInAsset",
@@ -954,13 +1002,13 @@ test("settling a shadow swap invoice pays the checkout", async () => {
     payInAsset: "SOL_SOL",
   });
 
-  wallet.settlePaymentHash(swapInvoice.payment_hash, 1200);
+  wallet.settlePaymentHash(swapInvoice.shadow_invoice.payment_hash, 1200);
   setNow(1015);
   const order = await openreceive.getOrder({ orderId: "order-swap-settle" });
 
   assert.equal(order.status, "paid");
   assert.equal(
-    order.paid_checkout.invoices.some((invoice) => invoice.invoice_id === swapInvoice.invoice_id),
+    order.paid_checkout.invoices.some((invoice) => invoice.invoice_id === swapInvoice.attempt_id),
     true,
   );
   assert.equal(order.paid_at, 1200);
@@ -984,7 +1032,7 @@ test("settling a shadow swap invoice does not expose provider tokens to onPaid",
     payInAsset: "SOL_SOL",
   });
 
-  wallet.settlePaymentHash(swapInvoice.payment_hash, 1200);
+  wallet.settlePaymentHash(swapInvoice.shadow_invoice.payment_hash, 1200);
   setNow(1015);
   await openreceive.getOrder({ orderId: "order-swap-onpaid-private" });
 
@@ -1069,11 +1117,11 @@ test("expired local swap invoices still poll provider lifecycle states", async (
   });
 
   swapProvider.nextState = "refund_required";
-  setNow(swapInvoice.expires_at + 20);
+  setNow(swapInvoice.shadow_invoice.expires_at + 20);
   const order = await openreceive.getOrder({ orderId: "order-swap-expired-local-poll" });
   const refreshed = order.checkouts
     .flatMap((checkout) => checkout.invoices)
-    .find((invoice) => invoice.invoice_id === swapInvoice.invoice_id);
+    .find((invoice) => invoice.invoice_id === swapInvoice.attempt_id);
 
   assert.equal(swapProvider.statusCalls, 1);
   assert.equal(refreshed.swap.provider_state, "refund_required");
@@ -1099,7 +1147,7 @@ test("a superseded checkout is still paid when its shadow invoice settles later"
     amount: { btc: { currency: "SATS", value: "300" } },
   });
 
-  wallet.settlePaymentHash(swapInvoice.payment_hash, 1210);
+  wallet.settlePaymentHash(swapInvoice.shadow_invoice.payment_hash, 1210);
   setNow(1015);
   const order = await openreceive.getOrder({ orderId: "order-swap-supersede" });
 
@@ -1107,7 +1155,7 @@ test("a superseded checkout is still paid when its shadow invoice settles later"
   assert.equal(order.paid_checkout.checkout_id !== replacement.checkout_id, true);
   assert.equal(order.paid_checkout.status, "paid");
   assert.equal(
-    order.paid_checkout.invoices.some((invoice) => invoice.invoice_id === swapInvoice.invoice_id),
+    order.paid_checkout.invoices.some((invoice) => invoice.invoice_id === swapInvoice.attempt_id),
     true,
   );
 });
@@ -1125,7 +1173,7 @@ test("refundSwap requests a provider refund only for refund-required swaps", asy
     orderId: "order-swap-refund",
     payInAsset: "ETH_ETH",
   });
-  assert.equal(swapAttempt.swap.provider, "otherfloat");
+  assert.equal(swapAttempt.provider, "otherfloat");
 
   swapProvider.nextState = "refund_required";
   setNow(1015);
@@ -1137,27 +1185,32 @@ test("refundSwap requests a provider refund only for refund-required swaps", asy
   assert.equal(refundRequired.swap.provider, "otherfloat");
   assert.equal(refundRequired.swap.deposit_tx_id, "deposit-tx-1");
   assert.match(refundRequired.swap.refund_nonce, /^or_ref_[a-f0-9]{32}$/);
+  // The refund nonce expiry is now surfaced alongside the nonce for countdown UIs.
+  assert.equal(
+    refundRequired.swap.refund_nonce_expires_at,
+    1015 + 10 * 60,
+  );
 
   const submitted = await openreceive.refundSwap({
-    attemptId: swapAttempt.invoice_id,
+    attemptId: swapAttempt.attempt_id,
     refundAddress: "0x2222222222222222222222222222222222222222",
     refundNonce: refundRequired.swap.refund_nonce,
   });
 
-  assert.equal(submitted.swap.provider_state, "refund_required");
-  assert.equal(submitted.swap.refund_address, "0x2222222222222222222222222222222222222222");
+  assert.equal(submitted.provider_state, "refund_required");
+  assert.equal(submitted.refund_address, "0x2222222222222222222222222222222222222222");
   assert.deepEqual(swapProvider.refundCalls, []);
 
   const refunded = await openreceive.refundSwap({
-    attemptId: swapAttempt.invoice_id,
+    attemptId: swapAttempt.attempt_id,
     refundAddress: "0x2222222222222222222222222222222222222222",
-    refundNonce: submitted.swap.refund_nonce,
+    refundNonce: submitted.refund_nonce,
     confirm: true,
   });
 
-  assert.equal(refunded.swap.provider_state, "refund_pending");
-  assert.equal(refunded.swap.refund_address, "0x2222222222222222222222222222222222222222");
-  assert.equal(refunded.swap.refund_nonce, undefined);
+  assert.equal(refunded.provider_state, "refund_pending");
+  assert.equal(refunded.refund_address, "0x2222222222222222222222222222222222222222");
+  assert.equal(refunded.refund_nonce, undefined);
   assert.deepEqual(swapProvider.refundCalls, [
     {
       provider_order_id: "ff-order-1",

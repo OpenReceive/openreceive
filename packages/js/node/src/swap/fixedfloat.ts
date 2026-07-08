@@ -7,6 +7,7 @@ import {
   type OpenReceiveSwapPayInAsset,
 } from "./assets.ts";
 import type {
+  OpenReceiveSwapAttentionReason,
   OpenReceiveSwapAvailabilityReason,
   OpenReceiveSwapOrder,
   OpenReceiveSwapProviderAsset,
@@ -183,7 +184,11 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
       this.invoiceExpirySecondsValue < minimumInvoiceExpirySeconds
     ) {
       throw new TypeError(
-        "FixedFloat invoiceExpirySeconds must cover the deposit window, settlement SLA, and margin.",
+        `FixedFloat provider ${JSON.stringify(this.name)}: invoice_expiry_seconds ` +
+          `(${this.invoiceExpirySecondsValue}) must be at least ${minimumInvoiceExpirySeconds} = ` +
+          `deposit_window(${depositWindowSeconds}) + settlement_sla(${settlementSlaSeconds}) + ` +
+          `margin(${invoiceExpiryMarginSeconds}). Omit invoice_expiry_seconds to auto-derive it, ` +
+          `or raise it above that floor.`,
       );
     }
   }
@@ -620,6 +625,9 @@ function normalizeFixedFloatOrder(
     ...(payoutTxId === undefined ? {} : { payout_tx_id: payoutTxId }),
     ...(refundTxId === undefined ? {} : { refund_tx_id: refundTxId }),
     ...(normalizedStatus.attention === undefined ? {} : { attention: normalizedStatus.attention }),
+    ...(normalizedStatus.attention_reason === undefined
+      ? {}
+      : { attention_reason: normalizedStatus.attention_reason }),
     raw: data,
   };
 }
@@ -649,7 +657,11 @@ function normalizeFixedFloatStatus(
   status: string,
   emergency: Record<string, unknown> | undefined,
   refundTxId: string | undefined,
-): { readonly state: OpenReceiveSwapProviderState; readonly attention?: boolean } {
+): {
+  readonly state: OpenReceiveSwapProviderState;
+  readonly attention?: boolean;
+  readonly attention_reason?: OpenReceiveSwapAttentionReason;
+} {
   const normalized = status.toUpperCase();
   if (refundTxId !== undefined && (normalized === "DONE" || normalized === "FINISHED")) {
     return { state: "refunded" };
@@ -667,18 +679,20 @@ function normalizeFixedFloatStatus(
     );
     if (choice === "REFUND" && refundTxId !== undefined) return { state: "refunded" };
     if (choice === "REFUND") return { state: "refund_pending" };
-    if (choice === "EXCHANGE") return { state: "attention", attention: true };
+    if (choice === "EXCHANGE") {
+      return { state: "attention", attention: true, attention_reason: "provider_reported_emergency" };
+    }
     if (
       emergencyStatuses.includes("MORE") ||
       emergencyStatuses.includes("OVER") ||
       emergencyStatuses.includes("OVERPAID")
     ) {
-      return { state: "attention", attention: true };
+      return { state: "attention", attention: true, attention_reason: "provider_reported_emergency" };
     }
     return { state: "refund_required" };
   }
   if (normalized.includes("FAIL")) return { state: "failed" };
-  return { state: "attention", attention: true };
+  return { state: "attention", attention: true, attention_reason: "provider_reported_emergency" };
 }
 
 function readFixedFloatCurrencies(data: unknown): FixedFloatCurrency[] {
