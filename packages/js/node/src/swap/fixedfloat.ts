@@ -20,6 +20,7 @@ import type {
   OpenReceiveSwapProvider,
   OpenReceiveSwapProviderState,
   OpenReceiveSwapQuote,
+  SwapProviderApiResponseLog,
 } from "./provider.ts";
 
 export interface FixedFloatProviderOptions {
@@ -45,10 +46,6 @@ interface FixedFloatCurrency {
   readonly code: string;
   readonly coin: string;
   readonly network: string;
-  readonly minimum_send_amount?: string;
-  readonly maximum_send_amount?: string;
-  readonly minimum_receive_amount?: string;
-  readonly maximum_receive_amount?: string;
 }
 
 interface FixedFloatCurrencyResolution {
@@ -140,6 +137,7 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
   private readonly requestTimeoutMs: number;
   private readonly invoiceExpirySecondsValue: number;
   private cache: StoreBackedSwapCache | undefined;
+  private apiResponseLogger: ((entry: SwapProviderApiResponseLog) => void) | undefined;
 
   constructor(options: FixedFloatCompatibleSwapProviderOptions) {
     this.name = readFixedFloatCompatibleProviderId(options.id);
@@ -203,6 +201,10 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
     this.cache = cache;
   }
 
+  attachApiResponseLogger(log: (entry: SwapProviderApiResponseLog) => void): void {
+    this.apiResponseLogger = log;
+  }
+
   async supportedPayInAssets(): Promise<Set<OpenReceiveSwapPayInAsset>> {
     const resolution = await this.resolveCurrencies();
     return new Set(resolution.pay_in.keys());
@@ -210,41 +212,12 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
 
   async payInAssetCatalog(): Promise<readonly OpenReceiveSwapProviderAsset[]> {
     const resolution = await this.resolveCurrencies();
-    const minimumInvoiceAmountMsats = btcAmountStringToMsats(
-      resolution.lightning.minimum_receive_amount ?? resolution.lightning.minimum_send_amount ?? "",
-    );
-    const maximumInvoiceAmountMsats = btcAmountStringToMsats(
-      resolution.lightning.maximum_receive_amount ?? resolution.lightning.maximum_send_amount ?? "",
-    );
-    // Diagnostic: reveals whether the provider's /ccies response actually carries
-    // the Lightning receive/send limits we derive the invoice min/max from. If these
-    // are undefined, the /ccies payload lacks per-currency limits and the catalog
-    // cannot gate on amount without a /price quote. Remove once confirmed.
-    console.info("[openreceive:swap:fixedfloat] payInAssetCatalog", {
-      provider: this.name,
-      lightning_code: resolution.lightning.code,
-      lightning_minimum_receive_amount: resolution.lightning.minimum_receive_amount,
-      lightning_maximum_receive_amount: resolution.lightning.maximum_receive_amount,
-      lightning_minimum_send_amount: resolution.lightning.minimum_send_amount,
-      lightning_maximum_send_amount: resolution.lightning.maximum_send_amount,
-      minimum_invoice_amount_msats: minimumInvoiceAmountMsats,
-      maximum_invoice_amount_msats: maximumInvoiceAmountMsats,
-      pay_in_asset_count: resolution.pay_in.size,
-    });
-    return Array.from(resolution.pay_in.entries(), ([payInAsset, currency]) => ({
+    // /ccies reports only availability and display metadata per currency — it carries
+    // no amount limits (data[].recv/.send are booleans, not min/max objects). Per-pair
+    // limits come from a /price quote and are cached by the service layer, so the
+    // catalog just enumerates which pay-in assets this provider supports.
+    return Array.from(resolution.pay_in.keys(), (payInAsset) => ({
       pay_asset: payInAsset,
-      ...(currency.minimum_send_amount === undefined
-        ? {}
-        : { minimum_pay_amount: currency.minimum_send_amount }),
-      ...(currency.maximum_send_amount === undefined
-        ? {}
-        : { maximum_pay_amount: currency.maximum_send_amount }),
-      ...(minimumInvoiceAmountMsats === undefined
-        ? {}
-        : { minimum_invoice_amount_msats: minimumInvoiceAmountMsats }),
-      ...(maximumInvoiceAmountMsats === undefined
-        ? {}
-        : { maximum_invoice_amount_msats: maximumInvoiceAmountMsats }),
     }));
   }
 
@@ -380,6 +353,18 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
         cause: error,
       });
     }
+    // Surface every response (including API-error envelopes) before any throw. The
+    // service sink sanitizes nested secrets — notably the order token in a
+    // create/order response — so this must not pre-redact.
+    this.apiResponseLogger?.({
+      provider: this.name,
+      path,
+      status: response.status,
+      ok: response.ok,
+      code: parsed.code,
+      msg: parsed.msg,
+      data: parsed.data,
+    });
     if (!response.ok) {
       throw new FixedFloatApiError({
         path,
@@ -774,90 +759,10 @@ function readFixedFloatCurrencies(data: unknown): FixedFloatCurrency[] {
         code,
         coin: coin.toUpperCase(),
         network,
-        ...readFixedFloatCurrencyLimits(record),
       });
     }
   }
   return currencies;
-}
-
-function readFixedFloatCurrencyLimits(record: Record<string, unknown>): {
-  readonly minimum_send_amount?: string;
-  readonly maximum_send_amount?: string;
-  readonly minimum_receive_amount?: string;
-  readonly maximum_receive_amount?: string;
-} {
-  const send = asRecord(record.send);
-  const from = asRecord(record.from);
-  const receive = asRecord(record.recv ?? record.receive);
-  const to = asRecord(record.to);
-  return {
-    ...firstStringField(
-      [
-        [send, "min"],
-        [send, "minimum"],
-        [from, "min"],
-        [from, "minimum"],
-        [record, "send_min"],
-        [record, "min_send"],
-        [record, "min"],
-        [record, "minimum"],
-        [record, "minAmount"],
-        [record, "minimumAmount"],
-      ],
-      "minimum_send_amount",
-    ),
-    ...firstStringField(
-      [
-        [send, "max"],
-        [send, "maximum"],
-        [from, "max"],
-        [from, "maximum"],
-        [record, "send_max"],
-        [record, "max_send"],
-        [record, "max"],
-        [record, "maximum"],
-        [record, "maxAmount"],
-        [record, "maximumAmount"],
-      ],
-      "maximum_send_amount",
-    ),
-    ...firstStringField(
-      [
-        [receive, "min"],
-        [receive, "minimum"],
-        [to, "min"],
-        [to, "minimum"],
-        [record, "recv_min"],
-        [record, "receive_min"],
-        [record, "min_receive"],
-      ],
-      "minimum_receive_amount",
-    ),
-    ...firstStringField(
-      [
-        [receive, "max"],
-        [receive, "maximum"],
-        [to, "max"],
-        [to, "maximum"],
-        [record, "recv_max"],
-        [record, "receive_max"],
-        [record, "max_receive"],
-      ],
-      "maximum_receive_amount",
-    ),
-  };
-}
-
-function firstStringField<K extends string>(
-  candidates: readonly (readonly [Record<string, unknown>, string])[],
-  outputKey: K,
-): { readonly [P in K]?: string } {
-  for (const [record, field] of candidates) {
-    const value = readStringField(record, field);
-    if (value !== undefined) return { [outputKey]: value } as { readonly [P in K]?: string };
-  }
-  return {};
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

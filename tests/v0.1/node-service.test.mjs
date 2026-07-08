@@ -286,7 +286,8 @@ test("createOpenReceive loads ordered FixedFloat-compatible swaps from YAML conf
                 code: "USDTTRC",
                 coin: "USDT",
                 network: "TRC20",
-                send: { min: "1", max: "5000" },
+                recv: true,
+                send: true,
               },
               { code: "BTCLN", coin: "BTC", network: "Lightning" },
             ],
@@ -298,6 +299,8 @@ test("createOpenReceive loads ordered FixedFloat-compatible swaps from YAML conf
             data: {
               from: {
                 amount: "1.04",
+                min: "1",
+                max: "5000",
               },
             },
           });
@@ -333,11 +336,14 @@ test("createOpenReceive loads ordered FixedFloat-compatible swaps from YAML conf
         assert.equal(quote.provider, "otherfloat");
         assert.equal(quote.available, true);
         assert.equal(quote.pay_amount, "1.04");
+        // swapOptions probes /price once to cache the pair limits (14-day cache), and
+        // the interactive swapQuote issues a second /price for the live rate.
         assert.deepEqual(
           fetchCalls.map((call) => call.url),
           [
             "https://otherfloat.example/api/v2/ccies",
             "https://fixedfloat.example/api/v2/ccies",
+            "https://otherfloat.example/api/v2/price",
             "https://otherfloat.example/api/v2/price",
           ],
         );
@@ -945,42 +951,42 @@ test("swapOptions catalogs assets and swapQuote quotes one selected asset", asyn
   const usdt = options.options.find((option) => option.pay_in_asset === "USDT_TRON");
   assert.equal(usdt.available, true);
   assert.equal(usdt.unavailable_reason, undefined);
-  // swapOptions now quotes each supported asset at the invoice amount to gate on the
-  // provider's per-amount limits, so the option carries the quote's pay_amount and the
-  // catalog's min/max pay amounts are preserved via merge.
-  assert.equal(usdt.pay_amount, "1.05");
+  // The catalog listing gates on cached per-pair limits and does not quote for display,
+  // so it carries the catalog's min/max pay amounts but no live pay_amount.
+  assert.equal(usdt.pay_amount, undefined);
   assert.equal(usdt.minimum_pay_amount, "1");
   assert.equal(swapProvider.catalogCalls, 1);
-  // Each supported asset (USDT_TRON, SOL_SOL, ETH_ETH) is pre-quoted once.
+  // Each supported asset (USDT_TRON, SOL_SOL, ETH_ETH) is probed once to populate its
+  // 14-day per-pair limits cache.
   assert.equal(swapProvider.quoteInputs.length, 3);
   assert.deepEqual(
     swapProvider.quoteInputs.map((input) => input.payInAsset).sort(),
     ["ETH_ETH", "SOL_SOL", "USDT_TRON"],
   );
-  assert.equal(
-    swapProvider.quoteInputs.every(
-      (input) =>
-        Object.keys(input).sort().join(",") === "invoiceAmountMsats,payInAsset" &&
-        input.invoiceAmountMsats === 200000,
-    ),
-    true,
-  );
 
-  // Selecting an already-pre-quoted asset is served from the durable 15s quote cache,
-  // so no additional provider quote is issued.
+  // A second listing serves limits from the durable cache — no new probes.
+  await openreceive.swapOptions({ orderId: "order-swap-region" });
+  assert.equal(swapProvider.quoteInputs.length, 3);
+
+  // Selecting an asset issues a fresh interactive quote at the real invoice amount.
   const quote = await openreceive.swapQuote({
     orderId: "order-swap-region",
     payInAsset: "USDT_TRON",
   });
   assert.equal(quote.pay_amount, "1.05");
-  assert.equal(swapProvider.quoteInputs.length, 3);
+  assert.equal(swapProvider.quoteInputs.length, 4);
+  assert.deepEqual(swapProvider.quoteInputs[3], {
+    payInAsset: "USDT_TRON",
+    invoiceAmountMsats: 200000,
+  });
 
+  // The interactive quote is served from the durable 15s cache on repeat.
   const cachedQuote = await openreceive.swapQuote({
     orderId: "order-swap-region",
     payInAsset: "USDT_TRON",
   });
   assert.equal(cachedQuote.pay_amount, "1.05");
-  assert.equal(swapProvider.quoteInputs.length, 3);
+  assert.equal(swapProvider.quoteInputs.length, 4);
 
   const invoice = await openreceive.startSwap({
     orderId: "order-swap-region",

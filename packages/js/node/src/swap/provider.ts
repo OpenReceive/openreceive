@@ -79,6 +79,22 @@ export interface OpenReceiveSwapOrder {
   readonly raw?: unknown;
 }
 
+/**
+ * A single raw provider API response, surfaced for server-side observability.
+ * Carries the HTTP status and the parsed `{code, msg, data}` envelope. Emitted
+ * through the service's sanitizing log sink, so any nested secret (e.g. a
+ * FixedFloat order token) is redacted before it reaches a log line.
+ */
+export interface SwapProviderApiResponseLog {
+  readonly provider: string;
+  readonly path: string;
+  readonly status: number;
+  readonly ok: boolean;
+  readonly code: unknown;
+  readonly msg: unknown;
+  readonly data: unknown;
+}
+
 export interface OpenReceiveSwapProvider {
   readonly name: string;
   /**
@@ -88,6 +104,13 @@ export interface OpenReceiveSwapProvider {
    * that don't cache remote data may omit this.
    */
   attachSwapCache?(cache: StoreBackedSwapCache): void;
+  /**
+   * Attach a sink for raw provider API responses. Called once after the store is
+   * resolved, alongside {@link attachSwapCache}. The service routes entries through
+   * its sanitizing log sink, so nested secrets are redacted. Providers that make no
+   * remote calls may omit this.
+   */
+  attachApiResponseLogger?(log: (entry: SwapProviderApiResponseLog) => void): void;
   supportedPayInAssets(): Promise<Set<OpenReceiveSwapPayInAsset>>;
   payInAssetCatalog?(): Promise<readonly OpenReceiveSwapProviderAsset[]>;
   invoiceExpirySeconds?(input: { readonly payInAsset: OpenReceiveSwapPayInAsset }): number;

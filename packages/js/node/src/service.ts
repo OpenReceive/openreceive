@@ -132,6 +132,17 @@ export async function createOpenReceive(
     });
     for (const provider of swapProviders) {
       provider.attachSwapCache?.(swapCache);
+      provider.attachApiResponseLogger?.((entry) =>
+        emitLog(nodeOptions, "info", "swap.provider.response", "Swap provider API response.", {
+          provider: entry.provider,
+          path: entry.path,
+          status: entry.status,
+          ok: entry.ok,
+          code: entry.code,
+          msg: entry.msg,
+          data: entry.data,
+        }),
+      );
     }
   }
 
