@@ -33,6 +33,7 @@ import {
   postOpenReceiveJson,
   openWallet as openWalletHelper,
   readOpenReceiveThemePreference,
+  selectCheckoutDisplayInvoice,
   status as deriveStatus,
   writeOpenReceiveThemePreference,
   type OpenReceiveBrowserLogContext,
@@ -279,6 +280,12 @@ export interface PaymentWizardProps {
   readonly clipboard?: Pick<Clipboard, "writeText">;
   readonly qrEncoder?: OpenReceiveQrEncoder;
   readonly onError?: (error: unknown) => void;
+  /**
+   * Called when the payer enters or leaves the focused swap flow (a pay-in coin is
+   * selected). The default `Checkout` uses this to hide its Lightning payment section
+   * so the swap deposit panel fully replaces it.
+   */
+  readonly onSwapFocusChange?: (focused: boolean) => void;
 }
 
 type OpenReceiveSwapOptionDisplay = OpenReceiveCheckoutPaymentMethod;
@@ -335,7 +342,7 @@ function useOpenReceiveTickingUnixSeconds(active: boolean): number | undefined {
 function toCheckoutDisplayData(
   snapshot: CheckoutSnapshot
 ): CheckoutDisplayData {
-  const invoice = snapshot.active ?? snapshot.invoices[0];
+  const invoice = selectCheckoutDisplayInvoice(snapshot);
   if (invoice === undefined) {
     throw new TypeError("OpenReceive checkout requires active or invoices[0].");
   }
@@ -370,7 +377,7 @@ function toCheckoutDisplayData(
 function deriveCheckoutOrderStatus(snapshot: CheckoutSnapshot): Status {
   if (snapshot.status === "paid") return "settled";
   if (snapshot.status === "expired") return "expired";
-  const invoice = snapshot.active ?? snapshot.invoices[0];
+  const invoice = selectCheckoutDisplayInvoice(snapshot);
   return invoice === undefined ? "pending" : deriveStatus(invoice);
 }
 
@@ -1012,6 +1019,13 @@ export function PaymentWizard(
   // country/route/provider steps. Null means the standard method grid is shown.
   const [selectedSwapAsset, setSelectedSwapAsset] = React.useState<string | null>(null);
   const autoSwapAttemptedRef = React.useRef<Set<string>>(new Set());
+  // Tell the host (default Checkout) whether the payer is in the focused swap flow, so it
+  // can hide the Lightning payment section while the swap deposit panel stands in for it.
+  const onSwapFocusChange = props.onSwapFocusChange;
+  React.useEffect(() => {
+    onSwapFocusChange?.(selectedSwapAsset !== null);
+    return () => onSwapFocusChange?.(false);
+  }, [selectedSwapAsset, onSwapFocusChange]);
   const fetcher = props.fetch ?? globalThis.fetch;
   const checkout = props.checkout;
   const orderId = checkout?.order_id;
@@ -1768,7 +1782,7 @@ function renderSwapUnavailable(
   );
 }
 
-function renderSwapDepositPanel(options: {
+export function renderSwapDepositPanel(options: {
   readonly invoice: CheckoutInvoiceSnapshot;
   readonly now?: number;
   readonly encoder?: OpenReceiveQrEncoder;
@@ -1806,6 +1820,13 @@ function renderSwapDepositPanel(options: {
     React.createElement("strong", null, display.providerStateLabel),
     React.createElement("span", null, display.providerStateDetail)
   );
+  // The "still waiting" states borrow the Lightning section's status card (spinner +
+  // title + detail) so the swap panel that replaces it reads the same.
+  const waitingCard = React.createElement(WaitingState, {
+    waiting: true,
+    statusTitle: display.providerStateLabel,
+    statusDetail: display.providerStateDetail
+  });
 
   if (display.state === "creating") {
     return React.createElement(
@@ -1813,8 +1834,7 @@ function renderSwapDepositPanel(options: {
       {
         className: "or-swap-panel"
       },
-      heading,
-      React.createElement("p", { className: "or-swap-progress" }, "Preparing payment address."),
+      waitingCard,
       backButton
     );
   }
@@ -1916,7 +1936,7 @@ function renderSwapDepositPanel(options: {
     {
       className: "or-swap-panel"
     },
-    heading,
+    waitingCard,
     React.createElement(
       "p",
       {
@@ -2485,6 +2505,7 @@ export function Checkout(
     defaultTheme,
     storageKey: themeStorageKey
   });
+  const [swapFocused, setSwapFocused] = React.useState(false);
   const QRCodeComponent = components?.QRCode ?? QRCode;
   const InvoiceSummaryComponent = components?.InvoiceSummary ?? InvoiceSummary;
   const CopyButton = components?.CopyButton ?? CopyInvoiceButton;
@@ -2493,6 +2514,10 @@ export function Checkout(
   const customChildren =
     typeof children === "function" ? children(checkoutModel) : children;
   const expired = checkoutModel.status === "expired";
+  // While the payer is completing a swap, its deposit panel replaces the Lightning
+  // section entirely, so hide the Lightning QR, status, countdown, summary, and copy
+  // action. Never hide when expired — that path still shows the Lightning "Start over".
+  const hideLightning = swapFocused && !expired;
   const summaryAmountLabel =
     checkoutModel.fiatLabel === undefined ? checkoutModel.amountLabel : undefined;
   const startOver = () => {
@@ -2519,7 +2544,7 @@ export function Checkout(
             ButtonComponent
           })
           : null,
-        expired
+        hideLightning || expired
           ? null
           : [
             React.createElement(QRCodeComponent, {
@@ -2541,14 +2566,16 @@ export function Checkout(
               className: classNames?.satsDetail
             })
           ],
-        React.createElement(WaitingState, {
-          key: "waiting",
-          waiting: checkoutModel.waiting,
-          statusTitle: checkoutModel.statusTitle,
-          statusDetail: checkoutModel.statusDetail,
-          className: classNames?.waiting
-        }),
-        checkoutModel.countdownLabel === undefined
+        hideLightning
+          ? null
+          : React.createElement(WaitingState, {
+            key: "waiting",
+            waiting: checkoutModel.waiting,
+            statusTitle: checkoutModel.statusTitle,
+            statusDetail: checkoutModel.statusDetail,
+            className: classNames?.waiting
+          }),
+        hideLightning || checkoutModel.countdownLabel === undefined
           ? null
           : React.createElement(
             "div",
@@ -2560,40 +2587,44 @@ export function Checkout(
             " ",
             React.createElement("strong", null, checkoutModel.countdownLabel)
           ),
-        React.createElement(InvoiceSummaryComponent, {
-          key: "summary",
-          amountLabel: summaryAmountLabel,
-          fiatLabel: checkoutModel.fiatLabel,
-          status: checkoutModel.status,
-          PaymentStateComponent,
-          className: classNames?.summary,
-          classNames
-        }),
-        React.createElement(
-          "div",
-          {
-            key: "actions",
-            className: classNames?.actions,
-            [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.actions]: ""
-          },
-          expired
-            ? React.createElement(
-              ButtonComponent ?? "button",
-              {
-                type: "button",
-                onClick: startOver
-              },
-              openReceiveCheckoutLabels.startOver
-            )
-            : React.createElement(CopyButton, {
-              invoice: checkoutModel.invoice,
-              copyInvoice: checkoutModel.copyInvoice,
-              onError,
-              logger,
-              ButtonComponent,
-              className: classNames?.copyButton
-            })
-        ),
+        hideLightning
+          ? null
+          : React.createElement(InvoiceSummaryComponent, {
+            key: "summary",
+            amountLabel: summaryAmountLabel,
+            fiatLabel: checkoutModel.fiatLabel,
+            status: checkoutModel.status,
+            PaymentStateComponent,
+            className: classNames?.summary,
+            classNames
+          }),
+        hideLightning
+          ? null
+          : React.createElement(
+            "div",
+            {
+              key: "actions",
+              className: classNames?.actions,
+              [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.actions]: ""
+            },
+            expired
+              ? React.createElement(
+                ButtonComponent ?? "button",
+                {
+                  type: "button",
+                  onClick: startOver
+                },
+                openReceiveCheckoutLabels.startOver
+              )
+              : React.createElement(CopyButton, {
+                invoice: checkoutModel.invoice,
+                copyInvoice: checkoutModel.copyInvoice,
+                onError,
+                logger,
+                ButtonComponent,
+                className: classNames?.copyButton
+              })
+          ),
         paymentWizard && !expired
           ? React.createElement(PaymentWizard, {
             key: "wizard",
@@ -2602,6 +2633,7 @@ export function Checkout(
             className: classNames?.wizard,
             logger,
             onError,
+            onSwapFocusChange: setSwapFocused,
             countryStorageKey,
             orderUrl,
             qrEncoder,

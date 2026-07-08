@@ -807,10 +807,35 @@ function normalizeCheckoutInvoiceSwapSnapshot(
   };
 }
 
+/**
+ * Choose the invoice a checkout should DISPLAY as a Lightning invoice.
+ *
+ * Prefers the active payable invoice; otherwise the most relevant invoice that carries
+ * a bolt11, preferring one that has settled so a paid view reflects the invoice that was
+ * actually paid. This matters after a swap: a swap-paid checkout's newest invoice is the
+ * settled swap shadow (rail "swap", no bolt11 for the payer), so `invoices[0]` is not
+ * renderable as a Lightning invoice. The payable Lightning invoice the swap was started
+ * from is still present, and is what the checkout displays. Falls back to `invoices[0]`
+ * only when no invoice carries a bolt11 (a broken snapshot), leaving the caller's own
+ * guard to report it.
+ */
+export function selectCheckoutDisplayInvoice(
+  snapshot: CheckoutSnapshot,
+): CheckoutInvoiceSnapshot | undefined {
+  if (snapshot.active !== undefined) return snapshot.active;
+  const displayable = snapshot.invoices.filter(
+    (invoice) => typeof invoice.invoice === "string" && invoice.invoice.length > 0,
+  );
+  const settled = displayable.find(
+    (invoice) => invoice.transaction_state === "settled" || invoice.settled_at !== undefined,
+  );
+  return settled ?? displayable[0] ?? snapshot.invoices[0];
+}
+
 export function checkoutInvoiceFromOrderSnapshot(
   snapshot: CheckoutSnapshot,
 ): CheckoutInvoiceSnapshot {
-  const invoice = snapshot.active ?? snapshot.invoices[0];
+  const invoice = selectCheckoutDisplayInvoice(snapshot);
   if (invoice === undefined) {
     throw new TypeError("OpenReceive order snapshot requires active or invoices[0].");
   }

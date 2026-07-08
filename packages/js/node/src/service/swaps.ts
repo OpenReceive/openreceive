@@ -433,7 +433,7 @@ export async function startSwap(
   const roundedAmountMsats = roundMsatsUpToWholeSats(displayRecord.row.amount_msats);
   const walletInvoice = await context.options.client.makeInvoice({
     amount_msats: BigInt(roundedAmountMsats),
-    ...getStoredDescriptionFields(displayRecord.row),
+    ...swapShadowDescriptionFields(displayRecord.row, provider.name, payInAsset),
     expiry: invoiceExpirySeconds,
   });
   const createdAt = walletInvoice.created_at ?? context.clock();
@@ -1055,6 +1055,43 @@ export function getStoredDescriptionFields(row: InvoiceStorageRow): {
     memo: row.metadata.memo,
     descriptionHash: row.metadata.description_hash,
   });
+}
+
+/** Upper bound for a generated memo, matching the checkout memo limit in requests.ts. */
+const SWAP_SHADOW_MEMO_MAX = 500;
+
+/**
+ * The description fields for a swap shadow invoice: the merchant's own memo with a
+ * short annotation naming the swap provider and the currency the payer sends, so the
+ * settled payment in the merchant's wallet reads e.g. "<memo> · via fixedfloat, paid
+ * in USDT (Solana)". The pay-in amount is deliberately absent — it is only locked when
+ * the provider order is created, which happens after this invoice already exists, so
+ * it cannot be baked into the immutable bolt11 description.
+ *
+ * A merchant who committed to a description_hash gets no annotation: the hash pins
+ * exact bytes, leaving no text to extend. When there is no memo at all, the annotation
+ * stands on its own.
+ */
+export function swapShadowDescriptionFields(
+  row: InvoiceStorageRow,
+  providerName: string,
+  payInAsset: OpenReceiveSwapPayInAsset,
+): {
+  readonly description?: string;
+  readonly description_hash?: string;
+} {
+  const base = getStoredDescriptionFields(row);
+  const annotation = `via ${providerName}, paid in ${formatOpenReceiveSwapAssetLabel(payInAsset)}`;
+  if (base.description === undefined) {
+    return base.description_hash === undefined ? { description: annotation } : base;
+  }
+  const suffix = ` · ${annotation}`;
+  const room = Math.max(0, SWAP_SHADOW_MEMO_MAX - suffix.length);
+  const memo =
+    base.description.length > room
+      ? `${base.description.slice(0, Math.max(0, room - 1))}…`
+      : base.description;
+  return { description: `${memo}${suffix}` };
 }
 
 export function assertRefundAddressShape(

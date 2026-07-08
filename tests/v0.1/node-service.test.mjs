@@ -16,6 +16,7 @@ class FakeWallet {
   listTransactionsCalls = 0;
   makeInvoiceError = undefined;
   invoices = [];
+  makeInvoiceRequests = [];
 
   constructor(now) {
     this.now = now;
@@ -35,6 +36,7 @@ class FakeWallet {
 
   async makeInvoice(request) {
     this.makeInvoiceCalls += 1;
+    this.makeInvoiceRequests.push(request);
     if (this.makeInvoiceError !== undefined) {
       throw this.makeInvoiceError;
     }
@@ -779,6 +781,14 @@ test("startSwap creates an idempotent shadow invoice without replacing active Li
   assert.equal("provider_token" in first, false);
   assert.equal(wallet.makeInvoiceCalls, 2);
   assert.equal(swapProvider.createCalls, 1);
+  // The display invoice keeps the merchant memo verbatim; the swap shadow invoice
+  // appends the provider and pay-in currency so the settled wallet payment is
+  // attributable. The pay-in amount is not yet known at this point, so it is absent.
+  assert.equal(wallet.makeInvoiceRequests[0].description, "Fruit sticker");
+  assert.equal(
+    wallet.makeInvoiceRequests[1].description,
+    "Fruit sticker · via fixedfloat, paid in USDT (Tron)",
+  );
 
   const order = await openreceive.getOrder({ orderId: "order-swap-start" });
   assert.equal(order.active_checkout.active.invoice_id, checkout.active.invoice_id);

@@ -145,6 +145,51 @@ test("React checkout rejects NWC strings before rendering", () => {
   );
 });
 
+test("React checkout displays the Lightning invoice after a swap payment settles", () => {
+  // A checkout paid via swap has no active invoice and its newest invoice is the settled
+  // swap shadow, which carries no bolt11. The display must fall back to the payable
+  // Lightning invoice instead of crashing. Regression for the post-swap checkout crash.
+  const lightning = {
+    invoice_id: "or_inv_display_swap",
+    rail: "lightning",
+    invoice: "lnbc-display-swap",
+    payment_hash: "d".repeat(64),
+    amount_msats: 19450000,
+    transaction_state: "pending",
+    workflow_state: "verifying",
+    fiat_quote: null
+  };
+  const settledShadow = {
+    invoice_id: "or_inv_shadow_swap",
+    rail: "swap",
+    invoice: null,
+    payment_hash: "e".repeat(64),
+    amount_msats: 19450000,
+    transaction_state: "settled",
+    workflow_state: "settlement_action_completed",
+    settled_at: 1783518782,
+    fiat_quote: null
+  };
+  const paidSwapCheckout = {
+    checkout_id: "or_chk_paid_swap",
+    order_id: "order-paid-swap",
+    status: "paid",
+    paid_at: 1783518782,
+    amount_msats: 19450000,
+    invoices: [settledShadow, lightning]
+  };
+
+  const model = createCheckoutViewModel({ checkout: paidSwapCheckout });
+  assert.equal(model.invoice_id, "or_inv_display_swap");
+  assert.equal(model.invoice, "lnbc-display-swap");
+  assert.equal(model.status, "settled");
+
+  const html = renderToStaticMarkup(
+    React.createElement(Checkout, { checkout: paidSwapCheckout })
+  );
+  assert.match(html, /data-openreceive-checkout/);
+});
+
 test("React checkout default UI server-renders display-safe invoice data", () => {
   const html = renderToStaticMarkup(
     React.createElement(Checkout, {

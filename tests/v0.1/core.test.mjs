@@ -34,6 +34,7 @@ import {
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_PARTS,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_PART_SELECTORS,
+  checkoutInvoiceFromOrderSnapshot,
   copyInvoice,
   createCheckoutActionEvent,
   createCheckoutController,
@@ -61,6 +62,7 @@ import {
   openReceiveThemeToggleElementStyles,
   openWallet,
   requestCheckout,
+  selectCheckoutDisplayInvoice,
   assertOpenReceiveDisplayInvoice,
   parseOpenReceiveBooleanAttribute,
   parseOpenReceiveOptionalInteger,
@@ -984,6 +986,50 @@ test("browser preserves swap invoices while keeping Lightning active", async () 
   assert.equal(state.invoice_id, "or_inv_display_swap");
   assert.equal(state.rail, "lightning");
   assert.equal(state.invoice, "lnbc-display-swap");
+});
+
+test("browser displays the Lightning invoice after a swap payment settles", () => {
+  // Once a swap settles, the checkout is "paid" so there is no active invoice, and the
+  // settled swap shadow (no bolt11) is the newest invoice. The display must fall back to
+  // the payable Lightning invoice rather than the shadow, or it would have no bolt11 to
+  // render. Regression for the checkout crash after a swap payment.
+  const lightning = {
+    invoice_id: "or_inv_display_swap",
+    rail: "lightning",
+    invoice: "lnbc-display-swap",
+    payment_hash: "d".repeat(64),
+    amount_msats: 200000,
+    transaction_state: "pending",
+    workflow_state: "verifying",
+  };
+  const settledShadow = {
+    invoice_id: "or_inv_shadow_swap",
+    rail: "swap",
+    invoice: null,
+    payment_hash: "e".repeat(64),
+    amount_msats: 200000,
+    transaction_state: "settled",
+    workflow_state: "settlement_action_completed",
+    settled_at: 1783518782,
+  };
+  const paidSwapCheckout = {
+    checkout_id: "or_chk_paid_swap",
+    order_id: "order-paid-swap",
+    status: "paid",
+    paid_at: 1783518782,
+    amount_msats: 200000,
+    // No active invoice once paid; shadow is newest in the invoices array.
+    invoices: [settledShadow, lightning],
+  };
+
+  assert.equal(selectCheckoutDisplayInvoice(paidSwapCheckout).invoice_id, "or_inv_display_swap");
+  assert.equal(checkoutInvoiceFromOrderSnapshot(paidSwapCheckout).invoice_id, "or_inv_display_swap");
+
+  const state = createCheckoutState(paidSwapCheckout, { now: 1783518800 });
+  assert.equal(state.invoice_id, "or_inv_display_swap");
+  assert.equal(state.rail, "lightning");
+  assert.equal(state.invoice, "lnbc-display-swap");
+  assert.equal(state.paid, true);
 });
 
 test("browser owns checkout payment status display model", () => {

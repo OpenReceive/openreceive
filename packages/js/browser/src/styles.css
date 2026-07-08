@@ -538,14 +538,13 @@
 
 .or-swap-qr {
   justify-self: center;
-  width: min(220px, 100%);
+  width: min(200px, 100%);
 }
 
 .or-swap-qr,
 .or-swap-qr svg {
   display: block;
   height: auto;
-  width: 100%;
 }
 
 .or-swap-details {
