@@ -15,6 +15,7 @@ import type { ResolveOpenReceiveStoreOptions } from "../store-uri.ts";
 import type {
   OpenReceiveSwapAttentionReason,
   OpenReceiveSwapAvailabilityReason,
+  OpenReceiveSwapFee,
   OpenReceiveSwapPayInAsset,
   OpenReceiveSwapProvider,
   OpenReceiveSwapProviderState,
@@ -34,6 +35,21 @@ export type OpenReceiveEventHandler = (event: OpenReceiveEvent) => void;
 export interface OpenReceiveLogEntry extends OpenReceiveEvent {}
 
 export type OpenReceiveLogger = (entry: OpenReceiveLogEntry) => void;
+
+export interface OpenReceiveLoggingOptions {
+  /** Set false to disable writing log files. Defaults to true. */
+  readonly enabled?: boolean;
+  /** Directory the log files are written to. Defaults to "./logs". */
+  readonly directory?: string;
+  /** Active log file name. Rotated backups append ".1", ".2", ... Defaults to "openreceive.log". */
+  readonly filename?: string;
+  /** Rotate once the active file would exceed this size in megabytes. Defaults to 10. */
+  readonly maxFileSizeMb?: number;
+  /** Number of log files to keep (active file plus rotated backups). Defaults to 5. */
+  readonly maxFiles?: number;
+  /** Minimum level written to file. Defaults to "debug" (writes every emitted event). */
+  readonly level?: OpenReceiveLogLevel;
+}
 
 export interface OpenReceiveNodeSettlementActionInput {
   invoice: InvoiceStorageRow;
@@ -61,6 +77,7 @@ export interface OpenReceiveNodeOptions {
   swap?: OpenReceiveSwapOptions;
   onEvent?: OpenReceiveEventHandler;
   logger?: OpenReceiveLogger;
+  logging?: OpenReceiveLoggingOptions;
   clock?: () => number;
   actionLeaseTtlSeconds?: number;
   transactionScanIntervalSeconds?: number;
@@ -234,6 +251,8 @@ export interface OpenReceivePublicSwap {
   readonly attention?: boolean;
   /** Why this attempt needs review, when `attention` is true. See automated-swaps.md. */
   readonly attention_reason?: OpenReceiveSwapAttentionReason;
+  /** Fiat equivalents that explain the swap fee the payer absorbs, when the provider reports them. */
+  readonly fee?: OpenReceiveSwapFee;
 }
 
 export interface OpenReceiveInvoice {

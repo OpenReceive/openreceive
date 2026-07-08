@@ -25,10 +25,17 @@ export type {
 export { OPENRECEIVE_CONFIG_FILE, readOpenReceiveConfigFile } from "./config.ts";
 export type {
   OpenReceiveFileConfig,
+  OpenReceiveFileLoggingConfig,
   OpenReceiveFileOperationConfig,
   OpenReceiveFileSwapConfig,
   ReadOpenReceiveConfigFileOptions,
 } from "./config.ts";
+export {
+  createOpenReceiveFileLogger,
+  createOpenReceiveFileLoggerFromConfig,
+  OPENRECEIVE_LOGGING_DEFAULTS,
+} from "./service/file-logger.ts";
+export type { OpenReceiveLoggingOptions } from "./service/types.ts";
 export {
   OpenReceiveConfigError,
   OpenReceiveServiceError,
@@ -83,6 +90,7 @@ export type {
   FixedFloatProviderOptions,
   OpenReceiveSwapAttentionReason,
   OpenReceiveSwapAvailabilityReason,
+  OpenReceiveSwapFee,
   OpenReceiveSwapOrder,
   OpenReceiveSwapPayInAsset,
   OpenReceiveSwapPhase,

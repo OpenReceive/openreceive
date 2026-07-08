@@ -1,20 +1,13 @@
 /// <reference path="../qrcode.d.ts" />
 
 import * as defaultQrEncoder from "qrcode";
-import { getOpenReceivePaymentStatusText } from "./wizard.ts";
 import {
-  OPENRECEIVE_COPY_FEEDBACK_MS,
-  OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS,
-  OPENRECEIVE_QR_DARK_COLOR,
-  OPENRECEIVE_QR_ERROR_CORRECTION,
-  OPENRECEIVE_QR_LIGHT_COLOR,
-  OPENRECEIVE_QR_QUIET_ZONE_MODULES,
-  openReceiveCheckoutLabels,
   type CheckoutController,
   type CheckoutControllerOptions,
   type CheckoutDisplayData,
   type CheckoutDisplayModel,
   type CheckoutInvoiceSnapshot,
+  type CheckoutInvoiceSwapFee,
   type CheckoutPhase,
   type CheckoutSnapshot,
   type CheckoutState,
@@ -25,21 +18,30 @@ import {
   type CopyInvoiceOptions,
   type CreateCheckoutStateOptions,
   type CreateOpenReceiveStatusFetcherOptions,
+  OPENRECEIVE_COPY_FEEDBACK_MS,
+  OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS,
+  OPENRECEIVE_QR_DARK_COLOR,
+  OPENRECEIVE_QR_ERROR_CORRECTION,
+  OPENRECEIVE_QR_LIGHT_COLOR,
+  OPENRECEIVE_QR_QUIET_ZONE_MODULES,
   type OpenReceiveBrowserLogEntry,
-  type OpenReceiveBrowserLogLevel,
   type OpenReceiveBrowserLogger,
+  type OpenReceiveBrowserLogLevel,
   type OpenReceiveCheckoutPaymentMethod,
   type OpenReceiveQrEncoder,
   type OpenReceiveQrOptions,
   type OpenReceiveSwapDisplayModel,
-  type OpenReceiveTransientFeedbackController,
-  type OpenReceiveTransientFeedbackOptions,
+  type OpenReceiveSwapFeeBreakdown,
   type OpenReceiveTickingValueController,
   type OpenReceiveTickingValueOptions,
+  type OpenReceiveTransientFeedbackController,
+  type OpenReceiveTransientFeedbackOptions,
   type OpenWalletOptions,
+  openReceiveCheckoutLabels,
   type RequestCheckoutAmount,
   type RequestCheckoutOptions,
 } from "./ui.ts";
+import { getOpenReceivePaymentStatusText } from "./wizard.ts";
 
 export function createOpenReceiveTransientFeedbackController<T>(
   options: OpenReceiveTransientFeedbackOptions<T>,
@@ -117,13 +119,42 @@ export function formatOpenReceiveDepositAmount(amount: string): string {
   return amount.replace(/0+$/, "").replace(/\.$/, "");
 }
 
+/**
+ * Turn the provider's fiat equivalents into a display-ready fee breakout. The payer
+ * sends crypto worth `pay_in_fiat`; the merchant receives `payout_fiat` (the cart
+ * total). The difference is the swap fee (exchange spread + network fees). Returns
+ * undefined when the figures are missing or not sensible so callers can hide the row.
+ */
+export function createOpenReceiveSwapFeeBreakdown(
+  fee: CheckoutInvoiceSwapFee | undefined,
+): OpenReceiveSwapFeeBreakdown | undefined {
+  if (fee === undefined) return undefined;
+  const payIn = Number(fee.pay_in_fiat);
+  const payout = Number(fee.payout_fiat);
+  if (!Number.isFinite(payIn) || !Number.isFinite(payout) || payout <= 0) return undefined;
+  const feeAmount = Math.max(0, payIn - payout);
+  const feePercent = (feeAmount / payout) * 100;
+  const format = (value: number): string =>
+    formatOpenReceiveFiatAmount({ currency: fee.currency, value: value.toFixed(2) }) ??
+    `${value.toFixed(2)} ${fee.currency}`;
+  return {
+    cartTotal: format(payout),
+    youSend: format(payIn),
+    fee: format(feeAmount),
+    ...(Number.isFinite(feePercent) ? { feePercent: `${feePercent.toFixed(1)}%` } : {}),
+  };
+}
+
 export function createOpenReceiveSwapDisplayModel(
   invoice: CheckoutInvoiceSnapshot,
   options: { readonly now?: number } = {},
 ): OpenReceiveSwapDisplayModel | undefined {
   const swap = invoice.swap;
   if (swap === undefined) return undefined;
-  const expiresAt = Math.min(swap.provider_expires_at, invoice.expires_at ?? swap.provider_expires_at);
+  const expiresAt = Math.min(
+    swap.provider_expires_at,
+    invoice.expires_at ?? swap.provider_expires_at,
+  );
   const expiresInSeconds = Math.max(0, expiresAt - (options.now ?? currentUnixSeconds()));
   const asset = getOpenReceiveSwapAssetDisplay(swap.pay_in_asset);
   // Settlement authority is OpenReceive's own wallet sweep, surfaced as the shadow
@@ -152,6 +183,9 @@ export function createOpenReceiveSwapDisplayModel(
     expiresInSeconds,
     countdownLabel: formatOpenReceiveCountdown(expiresInSeconds),
     qrPayload: createOpenReceiveSwapQrPayload(swap),
+    ...(createOpenReceiveSwapFeeBreakdown(swap.fee) === undefined
+      ? {}
+      : { feeBreakdown: createOpenReceiveSwapFeeBreakdown(swap.fee) }),
     ...(swap.deposit_tx_id === undefined ? {} : { depositTxId: swap.deposit_tx_id }),
     ...(swap.payout_tx_id === undefined ? {} : { payoutTxId: swap.payout_tx_id }),
     ...(swap.refund_address === undefined ? {} : { refundAddress: swap.refund_address }),
@@ -166,7 +200,7 @@ export function openReceiveSwapAssetMatchesRoute(
   payInAsset: string | undefined,
 ): boolean {
   if (payInAsset === undefined) return false;
-  const route = routeKey.includes(":") ? routeKey.split(":").at(-1) ?? routeKey : routeKey;
+  const route = routeKey.includes(":") ? (routeKey.split(":").at(-1) ?? routeKey) : routeKey;
   if (route === "usdt") return payInAsset.startsWith("USDT_");
   if (route === "usdc") return payInAsset.startsWith("USDC_");
   if (route === "eth") return payInAsset === "ETH_ETH";
@@ -206,12 +240,15 @@ function getOpenReceiveSwapProviderStateDetail(state: string): string {
   return state;
 }
 
-function getOpenReceiveSwapPanelState(
-  state: string,
-): OpenReceiveSwapDisplayModel["state"] {
+function getOpenReceiveSwapPanelState(state: string): OpenReceiveSwapDisplayModel["state"] {
   if (state === "creating_provider_order") return "creating";
   if (state === "awaiting_deposit") return "deposit";
-  if (state === "confirming" || state === "exchanging" || state === "paying_invoice" || state === "completed") {
+  if (
+    state === "confirming" ||
+    state === "exchanging" ||
+    state === "paying_invoice" ||
+    state === "completed"
+  ) {
     return "progress";
   }
   if (state === "expired") return "expired";
@@ -241,7 +278,9 @@ function getOpenReceiveSwapAssetDisplay(payInAsset: string): {
   };
 }
 
-function createOpenReceiveSwapQrPayload(swap: NonNullable<CheckoutInvoiceSnapshot["swap"]>): string {
+function createOpenReceiveSwapQrPayload(
+  swap: NonNullable<CheckoutInvoiceSnapshot["swap"]>,
+): string {
   if (swap.pay_in_asset === "ETH_ETH") {
     const wei = decimalAmountToIntegerString(swap.deposit_amount, 18);
     return wei === undefined
@@ -825,7 +864,21 @@ function normalizeCheckoutInvoiceSwapSnapshot(
     ...(optionalBoolean(input.attention) === undefined
       ? {}
       : { attention: optionalBoolean(input.attention) }),
+    ...(normalizeCheckoutInvoiceSwapFee(input.fee) === undefined
+      ? {}
+      : { fee: normalizeCheckoutInvoiceSwapFee(input.fee) }),
   };
+}
+
+function normalizeCheckoutInvoiceSwapFee(input: unknown): CheckoutInvoiceSwapFee | undefined {
+  if (!isRecord(input)) return undefined;
+  const currency = optionalString(input.currency);
+  const payInFiat = optionalString(input.pay_in_fiat);
+  const payoutFiat = optionalString(input.payout_fiat);
+  if (currency === undefined || payInFiat === undefined || payoutFiat === undefined) {
+    return undefined;
+  }
+  return { currency, pay_in_fiat: payInFiat, payout_fiat: payoutFiat };
 }
 
 /**

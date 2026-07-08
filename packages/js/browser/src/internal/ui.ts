@@ -5,7 +5,8 @@ import type {
   PaymentWizardRoute,
 } from "@openreceive/provider-data";
 import type { Status } from "../status.ts";
-export { status, type Status, type StatusInvoiceLike } from "../status.ts";
+
+export { type Status, type StatusInvoiceLike, status } from "../status.ts";
 
 export const OPENRECEIVE_QR_QUIET_ZONE_MODULES = 4 as const;
 export const OPENRECEIVE_QR_DARK_COLOR = "#000000" as const;
@@ -378,6 +379,17 @@ export type OpenReceiveSwapProviderState =
   | "attention"
   | "failed";
 
+/**
+ * Provider-reported fiat equivalents of both sides of a swap. `pay_in_fiat` is the
+ * value of the crypto the payer must send; `payout_fiat` is the cart total delivered
+ * to the merchant. Their gap is the swap fee the payer absorbs.
+ */
+export interface CheckoutInvoiceSwapFee {
+  readonly currency: string;
+  readonly pay_in_fiat: string;
+  readonly payout_fiat: string;
+}
+
 export interface CheckoutInvoiceSwapSnapshot {
   readonly attempt_id?: string;
   readonly provider: string;
@@ -394,6 +406,22 @@ export interface CheckoutInvoiceSwapSnapshot {
   readonly refund_nonce?: string;
   readonly refund_tx_id?: string;
   readonly attention?: boolean;
+  readonly fee?: CheckoutInvoiceSwapFee;
+}
+
+/**
+ * Formatted fee breakout for the deposit panel, explaining why the payer sends more
+ * than the cart total. All figures are display-ready fiat strings.
+ */
+export interface OpenReceiveSwapFeeBreakdown {
+  /** Cart total delivered to the merchant, e.g. "$10.00". */
+  readonly cartTotal: string;
+  /** Fiat value of the crypto the payer sends, e.g. "$10.59". */
+  readonly youSend: string;
+  /** The swap fee absorbed by the payer (exchange spread + network fees), e.g. "$0.59". */
+  readonly fee: string;
+  /** The fee as a percentage of the cart total, e.g. "5.9%", when computable. */
+  readonly feePercent?: string;
 }
 
 export interface OpenReceiveSwapDisplayModel {
@@ -422,6 +450,8 @@ export interface OpenReceiveSwapDisplayModel {
   readonly expiresInSeconds: number;
   readonly countdownLabel: string;
   readonly qrPayload: string;
+  /** Ready-to-render fee breakout, present when the provider reported fiat equivalents. */
+  readonly feeBreakdown?: OpenReceiveSwapFeeBreakdown;
   readonly depositTxId?: string;
   readonly payoutTxId?: string;
   readonly refundAddress?: string;

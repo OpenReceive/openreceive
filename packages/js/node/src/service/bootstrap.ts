@@ -15,7 +15,11 @@ import { resolveOpenReceiveStore } from "../store-uri.ts";
 import type { OpenReceiveSwapProvider } from "../swap/index.ts";
 import { isRecord, OpenReceiveServiceError } from "./core-utils.ts";
 import { createNwcEndpointLogger, emitLog } from "./logging.ts";
-import type { CreateOpenReceiveOptions, OpenReceiveServiceContext } from "./types.ts";
+import type {
+  CreateOpenReceiveOptions,
+  OpenReceiveLoggingOptions,
+  OpenReceiveServiceContext,
+} from "./types.ts";
 
 export async function runOpenReceiveOperation<T>(
   context: OpenReceiveServiceContext,
@@ -184,6 +188,9 @@ export function openReceiveConfigToOptions(
     ...(config.storeUri === undefined ? {} : { storeUri: config.storeUri }),
     ...(config.priceCurrencies === undefined ? {} : { priceCurrencies: config.priceCurrencies }),
     ...(config.swap === undefined ? {} : { swap: config.swap }),
+    ...(config.logging === undefined
+      ? {}
+      : { logging: config.logging as OpenReceiveLoggingOptions }),
     ...(config.operation?.actionLeaseTtlSeconds === undefined
       ? {}
       : { actionLeaseTtlSeconds: config.operation.actionLeaseTtlSeconds }),

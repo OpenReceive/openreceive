@@ -61,6 +61,22 @@ export interface OpenReceiveSwapProviderAsset {
   readonly maximum_invoice_amount_msats?: number;
 }
 
+/**
+ * Fiat equivalents that explain why the payer sends more crypto than the cart total.
+ * Sourced from the provider's own quote (e.g. FixedFloat `from.usd` / `to.usd`). The
+ * swap fee the payer absorbs is `pay_in_fiat` − `payout_fiat` (exchange spread plus
+ * network fees, which the provider bakes into the deposit amount). All values are
+ * decimal strings so they round-trip through storage unchanged.
+ */
+export interface OpenReceiveSwapFee {
+  /** Fiat currency the equivalents are expressed in, e.g. "USD". */
+  readonly currency: string;
+  /** Fiat value of the crypto the payer must send (provider `from.usd`). */
+  readonly pay_in_fiat: string;
+  /** Fiat value delivered to the merchant — the cart total (provider `to.usd`). */
+  readonly payout_fiat: string;
+}
+
 export interface OpenReceiveSwapOrder {
   readonly provider: string;
   readonly provider_order_id: string;
@@ -76,6 +92,7 @@ export interface OpenReceiveSwapOrder {
   readonly refund_tx_id?: string;
   readonly attention?: boolean;
   readonly attention_reason?: OpenReceiveSwapAttentionReason;
+  readonly fee?: OpenReceiveSwapFee;
   readonly raw?: unknown;
 }
 

@@ -444,6 +444,19 @@ function renderElementSwapPanelHtml(invoice: CheckoutInvoiceSnapshot): string {
     `;
   }
 
+  if (display.state === "settled") {
+    return `
+      <section part="swap-panel">
+        ${heading}
+        <dl part="swap-details">
+          ${display.depositTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Deposit transaction", display.depositTxId)}
+          ${display.payoutTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Lightning payout", display.payoutTxId)}
+          ${display.providerOrderId === undefined ? "" : renderElementSwapCopyDetailHtml("Provider order", display.providerOrderId)}
+        </dl>
+      </section>
+    `;
+  }
+
   if (display.state === "progress") {
     return `
       <section part="swap-panel">

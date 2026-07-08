@@ -573,6 +573,50 @@
   overflow-wrap: anywhere;
 }
 
+.or-swap-breakdown {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--or-border);
+  border-radius: 10px;
+  background: var(--or-bg-soft);
+  padding: 12px 14px;
+}
+
+.or-swap-breakdown-title {
+  margin: 0;
+  color: var(--or-muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.or-swap-breakdown-rows {
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 6px 12px;
+}
+
+.or-swap-breakdown-rows dt {
+  text-transform: none;
+  font-weight: 600;
+  color: var(--or-muted);
+}
+
+.or-swap-breakdown-rows dd {
+  grid-template-columns: auto;
+  justify-items: end;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--or-text);
+}
+
+.or-swap-breakdown-note {
+  margin: 0;
+  color: var(--or-muted);
+  font-size: 12px;
+}
+
 .or-swap-details button,
 .or-swap-back,
 .or-swap-refund button {

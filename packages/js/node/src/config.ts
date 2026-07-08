@@ -13,6 +13,16 @@ export interface OpenReceiveFileConfig {
   readonly priceCurrencies?: readonly string[];
   readonly operation?: OpenReceiveFileOperationConfig;
   readonly swap?: OpenReceiveFileSwapConfig;
+  readonly logging?: OpenReceiveFileLoggingConfig;
+}
+
+export interface OpenReceiveFileLoggingConfig {
+  readonly enabled?: boolean;
+  readonly directory?: string;
+  readonly filename?: string;
+  readonly maxFileSizeMb?: number;
+  readonly maxFiles?: number;
+  readonly level?: string;
 }
 
 export interface OpenReceiveFileOperationConfig {
@@ -62,19 +72,19 @@ export function readOpenReceiveConfigFile(
   const root = readRecord(parsed, sourcePath);
   return {
     ...readOptionalStringConfig(root, ["nwc", "OPENRECEIVE_NWC"], "nwc"),
-    ...readOptionalStringConfig(
-      root,
-      ["namespace", "OPENRECEIVE_NAMESPACE"],
-      "namespace",
-    ),
+    ...readOptionalStringConfig(root, ["namespace", "OPENRECEIVE_NAMESPACE"], "namespace"),
     ...readOptionalStringConfig(root, ["store", "OPENRECEIVE_STORE"], "storeUri"),
     ...readPriceCurrencies(root, sourcePath),
     ...readOperationConfig(root, sourcePath),
     ...readSwapConfig(root, sourcePath, options),
+    ...readLoggingConfig(root, sourcePath),
   };
 }
 
-function resolveOpenReceiveConfigPath(cwd: string | undefined, configPath: string | undefined): string {
+function resolveOpenReceiveConfigPath(
+  cwd: string | undefined,
+  configPath: string | undefined,
+): string {
   const raw = configPath ?? OPENRECEIVE_CONFIG_FILE;
   const trimmed = raw.trim();
   if (trimmed.length === 0) {
@@ -89,10 +99,7 @@ function readPriceCurrencies(
   root: Record<string, unknown>,
   sourcePath: string,
 ): Pick<OpenReceiveFileConfig, "priceCurrencies"> {
-  const value =
-    root.price_currencies ??
-    root.priceCurrencies ??
-    root.OPENRECEIVE_PRICE_CURRENCIES;
+  const value = root.price_currencies ?? root.priceCurrencies ?? root.OPENRECEIVE_PRICE_CURRENCIES;
   if (value === undefined) return {};
   if (typeof value === "string") {
     return { priceCurrencies: value.split(",") };
@@ -163,6 +170,39 @@ function readOperationConfig(
     ),
   };
   return Object.keys(result).length === 0 ? {} : { operation: result };
+}
+
+function readLoggingConfig(
+  root: Record<string, unknown>,
+  sourcePath: string,
+): Pick<OpenReceiveFileConfig, "logging"> {
+  const logging = readOptionalRecord(root.logging, `${sourcePath}.logging`);
+  if (logging === undefined) return {};
+  const label = `${sourcePath}.logging`;
+  const enabled = readOptionalBoolean(logging.enabled, `${label}.enabled`);
+  const directory = readOptionalString(logging.directory, `${label}.directory`);
+  const filename = readOptionalString(logging.filename, `${label}.filename`);
+  const level = readOptionalString(logging.level, `${label}.level`);
+  if (level !== undefined && !["debug", "info", "warn", "error"].includes(level)) {
+    throw new TypeError(`${label}.level must be one of debug, info, warn, error.`);
+  }
+  const maxFileSizeMb = readOptionalPositiveInteger(
+    logging.max_file_size_mb ?? logging.maxFileSizeMb,
+    `${label}.max_file_size_mb`,
+  );
+  const maxFiles = readOptionalPositiveInteger(
+    logging.max_files ?? logging.maxFiles,
+    `${label}.max_files`,
+  );
+  const result: OpenReceiveFileLoggingConfig = {
+    ...(enabled === undefined ? {} : { enabled }),
+    ...(directory === undefined ? {} : { directory }),
+    ...(filename === undefined ? {} : { filename }),
+    ...(maxFileSizeMb === undefined ? {} : { maxFileSizeMb }),
+    ...(maxFiles === undefined ? {} : { maxFiles }),
+    ...(level === undefined ? {} : { level }),
+  };
+  return Object.keys(result).length === 0 ? {} : { logging: result };
 }
 
 function readSwapConfig(
@@ -327,6 +367,14 @@ function readOptionalPositiveIntegerField<TargetField extends string>(
     : ({ [targetField]: value } as { readonly [key in TargetField]?: number });
 }
 
+function readOptionalBoolean(value: unknown, label: string): boolean | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "boolean") {
+    throw new TypeError(`${label} must be a boolean.`);
+  }
+  return value;
+}
+
 function readOptionalRecord(value: unknown, label: string): Record<string, unknown> | undefined {
   if (value === undefined) return undefined;
   return readRecord(value, label);
@@ -339,11 +387,7 @@ function readRecord(value: unknown, label: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-function readRequiredString(
-  record: Record<string, unknown>,
-  field: string,
-  label: string,
-): string {
+function readRequiredString(record: Record<string, unknown>, field: string, label: string): string {
   const value = readOptionalString(record[field], `${label}.${field}`);
   if (value === undefined) {
     throw new TypeError(`${label}.${field} must be a non-empty string.`);

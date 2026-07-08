@@ -4,20 +4,21 @@ import {
   isOpenReceiveLightningNetwork,
   isValidSwapAddressForNetwork,
   listOpenReceiveSwapAssetInfo,
-  openReceiveSwapNetworkMatches,
   type OpenReceiveSwapPayInAsset,
+  openReceiveSwapNetworkMatches,
 } from "./assets.ts";
 import {
-  StoreBackedSwapCache,
+  type StoreBackedSwapCache,
   SWAP_LIMITS_MAX_STALE_SECONDS,
   swapLimitsMetaKey,
 } from "./limits-cache.ts";
 import type {
   OpenReceiveSwapAttentionReason,
   OpenReceiveSwapAvailabilityReason,
+  OpenReceiveSwapFee,
   OpenReceiveSwapOrder,
-  OpenReceiveSwapProviderAsset,
   OpenReceiveSwapProvider,
+  OpenReceiveSwapProviderAsset,
   OpenReceiveSwapProviderState,
   OpenReceiveSwapQuote,
   SwapProviderApiRequestLog,
@@ -295,10 +296,39 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
     });
     assertFixedFloatPayoutAmountMatchesInvoice(data, input.invoiceAmountMsats);
 
-    return normalizeFixedFloatOrder(data, {
+    const order = normalizeFixedFloatOrder(data, {
       provider: this.name,
       payInAsset: input.payInAsset,
     });
+    // FixedFloat order objects do not always carry the USD equivalents (`from.usd` /
+    // `to.usd`) that explain the swap fee, so backfill them from a best-effort /price
+    // lookup for the same trade. A failure just leaves the fee off the deposit panel.
+    if (order.fee !== undefined) return order;
+    const fee = await this.fetchFixedFloatOrderFee(
+      fromCcy,
+      resolution.lightning.code,
+      input.invoiceAmountMsats,
+    );
+    return fee === undefined ? order : { ...order, fee };
+  }
+
+  private async fetchFixedFloatOrderFee(
+    fromCcy: string,
+    toCcy: string,
+    invoiceAmountMsats: number,
+  ): Promise<OpenReceiveSwapFee | undefined> {
+    try {
+      const data = await this.post("price", {
+        type: "fixed",
+        fromCcy,
+        toCcy,
+        direction: "to",
+        amount: amountMsatsToBtcString(invoiceAmountMsats),
+      });
+      return readFixedFloatOrderFee(asRecord(data));
+    } catch {
+      return undefined;
+    }
   }
 
   async getStatus(order: OpenReceiveSwapOrder): Promise<OpenReceiveSwapOrder> {
@@ -720,6 +750,7 @@ function normalizeFixedFloatOrder(
     input.fallback?.deposit_address ??
     requiredString(from.address, "from.address");
   assertFixedFloatDepositAddressShape(input.payInAsset, depositAddress);
+  const fee = readFixedFloatOrderFee(record) ?? input.fallback?.fee;
 
   return {
     provider: input.provider,
@@ -750,8 +781,19 @@ function normalizeFixedFloatOrder(
     ...(normalizedStatus.attention_reason === undefined
       ? {}
       : { attention_reason: normalizedStatus.attention_reason }),
+    ...(fee === undefined ? {} : { fee }),
     raw: data,
   };
+}
+
+// FixedFloat reports the USD equivalents of both sides of the exchange (from.usd is the
+// value of the crypto the payer sends, to.usd the value delivered to the merchant). Their
+// gap is the swap fee the payer absorbs, so we surface both to explain the price.
+function readFixedFloatOrderFee(record: Record<string, unknown>): OpenReceiveSwapFee | undefined {
+  const payInFiat = readNestedString(record, ["from", "usd"]);
+  const payoutFiat = readNestedString(record, ["to", "usd"]);
+  if (payInFiat === undefined || payoutFiat === undefined) return undefined;
+  return { currency: "USD", pay_in_fiat: payInFiat, payout_fiat: payoutFiat };
 }
 
 function assertFixedFloatDepositAddressShape(
@@ -790,14 +832,22 @@ function normalizeFixedFloatStatus(
     if (choice === "REFUND" && refundTxId !== undefined) return { state: "refunded" };
     if (choice === "REFUND") return { state: "refund_pending" };
     if (choice === "EXCHANGE") {
-      return { state: "attention", attention: true, attention_reason: "provider_reported_emergency" };
+      return {
+        state: "attention",
+        attention: true,
+        attention_reason: "provider_reported_emergency",
+      };
     }
     if (
       emergencyStatuses.includes("MORE") ||
       emergencyStatuses.includes("OVER") ||
       emergencyStatuses.includes("OVERPAID")
     ) {
-      return { state: "attention", attention: true, attention_reason: "provider_reported_emergency" };
+      return {
+        state: "attention",
+        attention: true,
+        attention_reason: "provider_reported_emergency",
+      };
     }
     return { state: "refund_required" };
   }

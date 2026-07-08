@@ -1,9 +1,20 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
 import test from "node:test";
+
+const REACT_SRC_DIR = path.join(process.cwd(), "packages/js/react/src");
+// The react package source is split across logical modules; read them all so
+// structure assertions stay location-agnostic across future refactors.
+function readReactSource() {
+  return readdirSync(REACT_SRC_DIR)
+    .filter((file) => file.endsWith(".ts"))
+    .sort()
+    .map((file) => readFileSync(path.join(REACT_SRC_DIR, file), "utf8"))
+    .join("\n");
+}
 import { createHelloFruitServer } from "../../examples/hello-fruit/server/node-express/src/server/create-server.ts";
 import { createHelloFruitProductionServer } from "../../examples/hello-fruit/server/node-express/src/server/production.ts";
 import { createHelloFruitStaticServer } from "../../examples/hello-fruit/server/static-html-small-api/src/server/create-server.ts";
@@ -574,10 +585,7 @@ test("Hello Fruit browser demos consume shared theme model", () => {
 });
 
 test("Frontend UI packages delegate checkout lifecycle to browser helpers", () => {
-  const reactSource = readFileSync(
-    path.join(process.cwd(), "packages/js/react/src/index.ts"),
-    "utf8",
-  );
+  const reactSource = readReactSource();
   const elementsSource = readFileSync(
     path.join(process.cwd(), "packages/js/elements/src/index.ts"),
     "utf8",
@@ -644,10 +652,7 @@ test("Frontend UI packages delegate checkout lifecycle to browser helpers", () =
 });
 
 test("Frontend UI packages consume shared transient feedback timing", () => {
-  const reactSource = readFileSync(
-    path.join(process.cwd(), "packages/js/react/src/index.ts"),
-    "utf8",
-  );
+  const reactSource = readReactSource();
   const elementsSource = readFileSync(
     path.join(process.cwd(), "packages/js/elements/src/index.ts"),
     "utf8",
@@ -681,10 +686,7 @@ test("Frontend UI packages consume shared transient feedback timing", () => {
 });
 
 test("Frontend UI packages consume shared checkout labels", () => {
-  const reactSource = readFileSync(
-    path.join(process.cwd(), "packages/js/react/src/index.ts"),
-    "utf8",
-  );
+  const reactSource = readReactSource();
   const elementsSource = readFileSync(
     path.join(process.cwd(), "packages/js/elements/src/index.ts"),
     "utf8",
@@ -729,10 +731,7 @@ test("Frontend UI packages consume shared checkout labels", () => {
 });
 
 test("Frontend UI packages consume shared checkout data attributes", () => {
-  const reactSource = readFileSync(
-    path.join(process.cwd(), "packages/js/react/src/index.ts"),
-    "utf8",
-  );
+  const reactSource = readReactSource();
   const elementsSource = readFileSync(
     path.join(process.cwd(), "packages/js/elements/src/index.ts"),
     "utf8",
@@ -958,10 +957,7 @@ test("Elements consume shared web-component shadow part contracts", () => {
 });
 
 test("Frontend UI packages consume shared checkout display model", () => {
-  const reactSource = readFileSync(
-    path.join(process.cwd(), "packages/js/react/src/index.ts"),
-    "utf8",
-  );
+  const reactSource = readReactSource();
   const elementsSource = readFileSync(
     path.join(process.cwd(), "packages/js/elements/src/index.ts"),
     "utf8",
@@ -995,10 +991,7 @@ test("Frontend UI packages consume shared checkout display model", () => {
 });
 
 test("Frontend UI packages consume shared checkout display state conversion", () => {
-  const reactSource = readFileSync(
-    path.join(process.cwd(), "packages/js/react/src/index.ts"),
-    "utf8",
-  );
+  const reactSource = readReactSource();
   const elementsSource = readFileSync(
     path.join(process.cwd(), "packages/js/elements/src/index.ts"),
     "utf8",
@@ -1067,10 +1060,7 @@ test("Elements consumes shared display HTML escaping", () => {
 });
 
 test("Frontend UI packages consume shared wizard route display model", () => {
-  const reactSource = readFileSync(
-    path.join(process.cwd(), "packages/js/react/src/index.ts"),
-    "utf8",
-  );
+  const reactSource = readReactSource();
   const elementsSource = readFileSync(
     path.join(process.cwd(), "packages/js/elements/src/index.ts"),
     "utf8",
@@ -1125,10 +1115,7 @@ test("Frontend UI packages consume shared wizard route display model", () => {
 });
 
 test("Frontend UI packages consume shared wizard selection model", () => {
-  const reactSource = readFileSync(
-    path.join(process.cwd(), "packages/js/react/src/index.ts"),
-    "utf8",
-  );
+  const reactSource = readReactSource();
   const elementsSource = readFileSync(
     path.join(process.cwd(), "packages/js/elements/src/index.ts"),
     "utf8",
@@ -1192,10 +1179,7 @@ test("Frontend UI packages consume shared wizard selection model", () => {
 });
 
 test("Frontend UI packages consume shared country dropdown model", () => {
-  const reactSource = readFileSync(
-    path.join(process.cwd(), "packages/js/react/src/index.ts"),
-    "utf8",
-  );
+  const reactSource = readReactSource();
   const elementsSource = readFileSync(
     path.join(process.cwd(), "packages/js/elements/src/index.ts"),
     "utf8",
@@ -1270,10 +1254,7 @@ test("Frontend UI packages consume shared country dropdown model", () => {
 });
 
 test("Frontend UI packages consume shared payment icon helpers", () => {
-  const reactSource = readFileSync(
-    path.join(process.cwd(), "packages/js/react/src/index.ts"),
-    "utf8",
-  );
+  const reactSource = readReactSource();
   const elementsSource = readFileSync(
     path.join(process.cwd(), "packages/js/elements/src/index.ts"),
     "utf8",

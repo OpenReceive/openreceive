@@ -28,3 +28,14 @@ swap:
       # invoice_expiry_seconds auto-derives from
       # deposit_window_seconds + settlement_sla_seconds + invoice_expiry_margin_seconds.
       # Omit it (as here) to use the derived floor; set it only to lengthen the window.
+
+logging:
+  # Rotating file logs. Every emitted event is written to ./logs as a single
+  # timestamped JSON line (secrets are redacted before logging). The whole block
+  # can be omitted to use these defaults.
+  enabled: true
+  directory: ./logs
+  filename: openreceive.log
+  max_file_size_mb: 10   # rotate once the active file would exceed this size
+  max_files: 5           # log files kept (active file plus rotated backups)
+  level: debug           # minimum level written: debug | info | warn | error

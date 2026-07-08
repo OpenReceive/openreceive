@@ -1,7 +1,18 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
+
+const REACT_SRC_DIR = path.join(process.cwd(), "packages/js/react/src");
+// The react package source is split across logical modules; read them all so
+// structure assertions stay location-agnostic across future refactors.
+function readReactSource() {
+  return readdirSync(REACT_SRC_DIR)
+    .filter((file) => file.endsWith(".ts"))
+    .sort()
+    .map((file) => readFileSync(path.join(REACT_SRC_DIR, file), "utf8"))
+    .join("\n");
+}
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
@@ -809,10 +820,7 @@ test("React primitive aliases point to the stable components", () => {
 });
 
 test("React package centralizes transient copy feedback timing", () => {
-  const source = readFileSync(
-    path.join(process.cwd(), "packages/js/react/src/index.ts"),
-    "utf8"
-  );
+  const source = readReactSource();
 
   assert.match(source, /function useOpenReceiveTransientValue/);
   assert.match(source, /createOpenReceiveTransientFeedbackController/);
@@ -842,10 +850,7 @@ test("React package exposes shared browser-owned checkout styles", () => {
 });
 
 test("React default checkout passes controller actions into default buttons", () => {
-  const source = readFileSync(
-    path.join(process.cwd(), "packages/js/react/src/index.ts"),
-    "utf8"
-  );
+  const source = readReactSource();
 
   assert.match(source, /copyInvoice: checkoutModel\.copyInvoice/);
   assert.doesNotMatch(source, /openWallet: checkoutModel\.openWallet/);
@@ -854,10 +859,7 @@ test("React default checkout passes controller actions into default buttons", ()
 });
 
 test("React checkout can disable default status refresh polling", () => {
-  const source = readFileSync(
-    path.join(process.cwd(), "packages/js/react/src/index.ts"),
-    "utf8"
-  );
+  const source = readReactSource();
 
   assert.match(source, /orderUrl\?: string \| false/);
   assert.match(source, /polling\?: boolean/);
@@ -874,10 +876,7 @@ test("React checkout recreates its poll controller only on checkout identity cha
   // snapshot, each poll result tears the controller down and recreates it, which
   // immediately re-polls in a tight loop. It must key on a stable identity and
   // seed from a ref instead, while still feeding poll results to the display.
-  const source = readFileSync(
-    path.join(process.cwd(), "packages/js/react/src/index.ts"),
-    "utf8"
-  );
+  const source = readReactSource();
 
   assert.match(
     source,

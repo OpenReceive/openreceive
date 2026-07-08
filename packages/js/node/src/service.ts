@@ -15,6 +15,7 @@ import {
   readOpenReceiveNamespace,
   serviceError,
 } from "./service/core-utils.ts";
+import { attachOpenReceiveFileLogging } from "./service/file-logger.ts";
 import { emitLog } from "./service/logging.ts";
 import { toWireCheckout, toWireOrder, toWireSwapAttempt } from "./service/models.ts";
 import {
@@ -57,6 +58,7 @@ export type {
   OpenReceiveListRatesRequest,
   OpenReceiveLogEntry,
   OpenReceiveLogger,
+  OpenReceiveLoggingOptions,
   OpenReceiveNodeOptions,
   OpenReceiveNodeSettlementActionHook,
   OpenReceiveNodeSettlementActionInput,
@@ -80,7 +82,9 @@ export { createOpenReceivePriceFeed };
 export async function createOpenReceive(
   options: CreateOpenReceiveOptions = {},
 ): Promise<OpenReceive> {
-  const configuredOptions = mergeOpenReceiveConfigFile(options);
+  // Attach the rotating file logger (unless disabled) before any sink is built so the
+  // NWC endpoint bridge and every service event write to ./logs as well as any caller logger.
+  const configuredOptions = attachOpenReceiveFileLogging(mergeOpenReceiveConfigFile(options));
   const namespace = readOpenReceiveNamespace(configuredOptions.namespace);
   assertDurableStoreConfiguration({
     configuredStoreUri: configuredOptions.storeUri,

@@ -8,6 +8,7 @@ import type {
 import {
   isOpenReceiveSwapPayInAsset,
   type OpenReceiveSwapAttentionReason,
+  type OpenReceiveSwapFee,
   type OpenReceiveSwapOrder,
   type OpenReceiveSwapPayInAsset,
   type OpenReceiveSwapProviderState,
@@ -215,6 +216,7 @@ export function swapMetadataFromProviderOrder(
     ...(order.refund_tx_id === undefined ? {} : { refund_tx_id: order.refund_tx_id }),
     ...(order.attention === undefined ? {} : { attention: order.attention }),
     ...(order.attention_reason === undefined ? {} : { attention_reason: order.attention_reason }),
+    ...(order.fee === undefined ? {} : { fee: order.fee }),
     last_polled_at: now,
   };
 }
@@ -319,7 +321,19 @@ export function readPublicSwap(row: InvoiceStorageRow): OpenReceivePublicSwap | 
     ...(readSwapAttentionReason(swap.attention_reason) === undefined
       ? {}
       : { attention_reason: readSwapAttentionReason(swap.attention_reason) }),
+    ...(readStoredSwapFee(swap.fee) === undefined ? {} : { fee: readStoredSwapFee(swap.fee) }),
   };
+}
+
+function readStoredSwapFee(value: unknown): OpenReceiveSwapFee | undefined {
+  if (!isRecord(value)) return undefined;
+  const currency = optionalString(value.currency);
+  const payInFiat = optionalString(value.pay_in_fiat);
+  const payoutFiat = optionalString(value.payout_fiat);
+  if (currency === undefined || payInFiat === undefined || payoutFiat === undefined) {
+    return undefined;
+  }
+  return { currency, pay_in_fiat: payInFiat, payout_fiat: payoutFiat };
 }
 
 const SWAP_ATTENTION_REASONS: ReadonlySet<string> = new Set<OpenReceiveSwapAttentionReason>([
