@@ -1,0 +1,245 @@
+IMPLEMENT THE BELOW MAJOR changes
+NO BACKWRAD COMAPATIBILTY NECESARY, U CAN CLEAR ANY EXISTING DB COMPLETELY AND START over
+NOTE.. WE CAN'T USE IN MEMORY STORE BECAUSE OF ARCHITECTURE LIKE HEROKU AND VERCEL WITH MULTIPLE APP INSTNACES
+USE THE NWC-RUBY GEM https://github.com/MegalithicBTC/nwc-ruby
+make these changes and then delete all oprphan code!
+
+
+
+
+I've now traced the whole system end to end — contracts in spec/, the service methods, the KV store interface, the settlement state machine, the config, the existing (surprisingly mature) Ruby gem, and the exact HTTP shapes the browser packages already call. Here is the implementation spec in plaintext, written to be handed to an agent. It's long because you asked for the full thing; it's organized so an agent can execute it section by section.
+
+OpenReceive Re-Architecture Spec — Route-Shipping Packages (Node + full Ruby port)
+PART 0 — Thesis and ground truth
+OpenReceive today is a library of methods: createOpenReceive(config) returns a service (createCheckout/getOrCreateCheckout, getOrder, getCheckout, order, sweepPendingInvoices, swap ops, rate ops); the host app hand-writes HTTP routes that call those methods. The re-architecture ships the routes themselves (rodauth-style) that operate on the host's database, while authentication stays 100% the host's. We are doing a full Ruby port (two settlement engines), so this spec defines one language-neutral contract that both a Node implementation and a Ruby implementation must satisfy bit-for-bit.
+Source-of-truth files the agent MUST read and treat as authoritative (do not re-derive or guess these):
+
+spec/schemas/*.json — invoice, error, swap-order, rate-quote, payment-event, invoice-storage.
+spec/test-vectors/*.json — settlement-detection, idempotency, fiat-to-msats, amount-boundaries, invoice-lifecycle, swap-*, transaction-scan-pagination. These are the cross-language conformance oracle.
+spec/openapi/openreceive-http.v1.yaml and spec/asyncapi/openreceive-events.v1.yaml.
+AGENTS.md — the non-negotiables. Every one is a hard invariant below.
+packages/js/node/migrations/001_create_openreceive_invoices.postgres.sql — the current schema.
+packages/ruby/openreceive/lib/openreceive.rb — the Ruby core primitives that ALREADY exist (money math, settlement detection, NWC parse/normalize, idempotency, in-memory KV store, error classes). The port reuses these; do not rewrite them.
+
+PART 1 — Invariants both ports MUST preserve (conformance contract)
+
+NWC secret is server-only. The receive-only NWC code never reaches browser/mobile/logs/tests/source maps/error bodies. Route handlers must never echo it. Redaction helper already exists in both languages (redact_nwc_uri in Ruby; equivalent in JS).
+Receive-only. No route ever exposes a send-payment method. Only make-invoice + list-transactions (incoming) NIP-47 methods are used.
+Settlement authority. A payment is settled only when settled_at is present OR transaction_state/state == "settled". A preimage alone is corroboration, not proof. Passive NWC notifications are hints; the authoritative signal is a backend status refresh (list_transactions scan). No background daemons — refresh is request-driven (sweepPendingInvoices / status reads).
+Money math is exact integers/decimals. amount_msats is the only money field in public payloads (millisatoshis, integer, bounds [1000, 9007199254740991]). Fiat→sats uses decimal math with ceil rounding ((fiat * 1e8 / btc_fiat_price).ceil, then *1000 for msats) — see Money.quote_fiat_to_sats (Ruby) and the JS pricing module; both must match spec/test-vectors/fiat-to-msats.usd.json. Never use binary floats for fiat.
+Idempotency. Create operations are keyed by scope = (namespace, operation, idempotency_key) with a canonical-JSON request_hash = sha256:<64hex>. Same scope + same hash ⇒ replay original; same scope + different hash ⇒ 409 CONFLICT. Canonical JSON = keys sorted, see Idempotency.canonical_json. Both languages must produce identical hashes for identical logical requests (add a cross-language vector).
+Replay/duplicate-safe settlement. Applying settlement twice is a no-op; settled_at is write-once (||=).
+Capability-token protection for reads (NEW, this spec). Order/checkout reads are guarded by an unguessable per-order token so anonymous payers can poll their own order without a login and cannot read anyone else's. Defined in PART 2.
+Amount authority stays with the host (NEW, this spec). The shipped create-checkout route must NOT trust a client-supplied price. The host supplies a resolveAmount hook that returns the authoritative amount for an order; the route uses that, not the raw client amount. (Derived from the current demo, where /create_order computes the total server-side before calling OpenReceive.)
+
+Any change to a schema requires updating its test vectors in the same change (AGENTS.md).
+PART 2 — Security model: three tiers, the authorize hook, capability tokens
+The Devise/rodauth "everything behind login" model is wrong here; a content site needs anonymous checkout. Routes fall into three tiers:
+
+Tier 1 — anonymous-capable (create checkout, list/quote rates): open by default; protected by (a) rate-limit hook, (b) the host authorize hook, (c) the host resolveAmount hook so price can't be forged.
+Tier 2 — capability-scoped (read order/checkout status, run swap quote/start on your own order): requires a valid per-order capability token OR an allow decision from authorize.
+Tier 3 — privileged (sweep pending invoices, admin/refund operations): requires authorize to allow; fails closed — if no authorize policy is configured, Tier-3 routes return 403 and log a loud configuration error at mount time.
+
+The authorize hook (single most important contract). Identical shape in both languages:
+authorize(context) -> boolean            # true = allow, false = deny (deny -> 403 UNAUTHORIZED)
+context = {
+  action:   one of
+            "checkout.create" | "order.read" | "checkout.read" |
+            "swap.options" | "swap.quote" | "swap.start" | "swap.refund" |
+            "invoice.sweep",
+  request:  the raw framework request object   # host reads THEIR OWN session/cookie/JWT/header here
+  resource: { order_id?, checkout_id?, amount_msats?, attempt_id? }   # present when known
+  token:    the presented capability token, or null
+}
+Rules:
+
+OpenReceive NEVER inspects the host's session. It only calls authorize and obeys the return value. Inversion of control: the host hooks into OpenReceive, not the reverse.
+Default authorize if the host provides none: allow Tier 1, allow Tier 2 iff a valid capability token is presented, DENY all Tier 3. This makes the package usable with zero auth config on a content site, and safe by default.
+Content-site host example: authorize = ({action, token, resource}) => action==='checkout.create' || (validToken(token, resource.order_id)).
+User/Account host example: authorize = ({action, request, resource}) => { const u = currentUserFromMySession(request); if (action==='checkout.create') return !!u; return orderBelongsTo(u, resource.order_id); }.
+
+Capability tokens. On checkout creation, mint a high-entropy token (≥128 bits, URL-safe). Return it to the caller in the create response as order_access_token. Store only a hash (sha256) in the DB. Reads must present the token (header Authorization: Bearer <token> or X-OpenReceive-Order-Token; the existing browser client already forwards custom headers, so no client-contract break). Verify by hashing and comparing to the stored hash for that order_id. Tokens are per-order (all checkouts under an order share the order's token). This is the mechanism that makes the package work identically for no-User and User apps.
+Rails specifics that let you ride host auth without knowing it:
+
+config.parent_controller (default "ActionController::Base"; hosts set "ApplicationController"). Engine controllers inherit from it, so they automatically get the host's CSRF protection, authenticate_user!, and current_user. The authorize proc can then call current_user because it's inherited.
+CSRF: inherited from the parent controller; do NOT ship your own. For token/API callers the host skips CSRF as they already do.
+
+Node specifics: the router mounts behind the host's existing CSRF and body-parser middleware. OpenReceive ships no CSRF and no auth — only the authorize/resolveAmount/rateLimit seams.
+PART 3 — Canonical HTTP route contract (the thing being shipped)
+One contract; every Node adapter and the Rails engine implement it identically. Wire style matches the existing browser packages (POST + JSON body, snake_case, an action-multiplexer on the order route). Mounted under a host-chosen prefix (default /openreceive).
+POST  {prefix}/checkouts                      Tier 1   action=checkout.create
+  req:  { order_id, amount|sats|usd, memo?, description_hash?, metadata? }
+        (exactly one of amount{btc|fiat} / sats / usd; amount bounds enforced)
+  flow: authorize(checkout.create) -> resolveAmount(order_id, client_amount) ->
+        getOrCreateCheckout -> mint/att capability token (first time for order)
+  res 201: { checkout: <CheckoutSnapshot>, order_access_token }   # token only on first mint
+  errors: 400 INVALID_REQUEST, 403 UNAUTHORIZED, 409 CONFLICT (idempotency),
+          429 RATE_LIMITED, 503 WALLET_UNAVAILABLE
+
+POST  {prefix}/orders/{order_id}              Tier 2/3 action=order.read | swap_*
+  req:  { order_id, action?="status" }
+        | { order_id, action="swap_quote", pay_in_asset }
+        | { order_id, action="start_swap", pay_in_asset }
+        | { order_id, action="refund_swap", attempt_id, refund_address, refund_nonce, confirm? }
+  flow: authorize(order.read | swap.quote | swap.start | swap.refund; token) ->
+        service.order(body)
+  res 200: status -> <OrderStatus>; swap_quote -> {quote}; start_swap|refund_swap -> {attempt}
+  note: unknown action -> 400 (never silently treated as status)
+  errors: 400, 403, 404 NOT_FOUND, 409, 429
+
+GET   {prefix}/checkouts/{checkout_id}         Tier 2   action=checkout.read
+  flow: authorize(checkout.read; token) -> service.getCheckout
+  res 200: <CheckoutSnapshot>;  404 NOT_FOUND
+
+GET   {prefix}/orders/{order_id}/swap-options  Tier 2   action=swap.options
+  res 200: <SwapOptionsResponse> { enabled, options[] }
+
+GET   {prefix}/rates                            Tier 1 (public)
+  query: base?, currencies?   -> res 200: <RateQuote[]> (per spec/schemas/rate-quote)
+
+POST  {prefix}/admin/sweep                      Tier 3   action=invoice.sweep
+  flow: authorize(invoice.sweep) [FAILS CLOSED] -> service.sweepPendingInvoices
+  res 200: { scanned, settled, expired, ... }
+CheckoutSnapshot, OrderStatus, SwapOptionsResponse, SwapAttempt, and the error body all conform to the JSON Schemas in spec/schemas/. Error body shape: { code, message, retryable?, request_id?, details? } with code ∈ the enum in error.schema.json. HTTP status mapping (already implied by the Ruby error classes): INVALID_REQUEST→400, UNAUTHORIZED→403, NOT_FOUND→404, CONFLICT→409, RATE_LIMITED→429, WALLET_UNAVAILABLE→503, INTERNAL→500, INVOICE_EXPIRED→409/410, TIMEOUT→504.
+The OpenAPI file currently defines only shared shapes ("app-owned controllers"). Change: promote it to define these full paths, so it becomes the executable contract both ports are tested against.
+PART 4 — Shared service/orchestration contract (both languages implement)
+The route layer is thin; it calls a service object. Both languages expose the same logical service (names may be idiomatic per language). Signatures (SDK-facing, camelCase in JS / keyword args in Ruby; HTTP bodies are snake_case):
+createOpenReceive(options) -> service
+  options: { nwc, storeUri, namespace, priceCurrencies?, swap?, logging?, operation? }
+
+service.getOrCreateCheckout(req) -> CheckoutSnapshot     # idempotent create
+service.getCheckout({ checkoutId }) -> CheckoutSnapshot
+service.getOrder({ orderId }) -> OrderStatus
+service.order(body) -> OrderStatus | {quote} | {attempt}  # action router, snake_case body
+service.swapOptions({ orderId }) -> SwapOptionsResponse
+service.swapQuote({ orderId, payInAsset }) -> SwapOption
+service.startSwap({ orderId, payInAsset }) -> {attempt}
+service.refundSwap({ attemptId, refundAddress, refundNonce, confirm? }) -> {attempt}
+service.sweepPendingInvoices() -> ReconcileSummary
+service.listRates(input) / service.quoteRates(input) -> RateQuote[]
+service.close()
+Orchestration responsibilities (identical semantics both languages): validate request → idempotency check → resolve fiat quote if needed (pricing) → build NIP-47 make_invoice request → call NWC client → persist invoice row via store → apply state transitions → return snapshot. order/status reads perform a bounded list_transactions scan to refresh settlement (see PART 6). Swaps follow the swap-* test vectors exactly (dual-payment, supersede-then-paid, emergency-refund, settlement-any-invoice, shadow-active-selection, start-idempotency).
+PART 5 — Store interface (port surface) + migrations
+The store is a KV-style interface. Node has it (postgres-store.ts, sqlite-store.ts); Ruby has the in-memory version (InMemoryInvoiceKvStore) and needs a durable one. Required methods (names from the JS Postgres store; Ruby in-memory store already mirrors most):
+ensureSchema()
+putIfAbsent(record) -> {status: created|replayed, row}     # enforces idempotency scope + uniqueness
+put(record) / update transitions
+get(invoiceId) -> row?
+getByPaymentHash(paymentHash) -> row?
+getByIdempotencyScope(scopeKey) -> row?
+listByOrderId(orderId) -> row[]
+listByCheckoutId(checkoutId) -> row[]
+listOpen({ now, limit }) -> row[]        # for sweep/reconcile
+getMeta(key) -> {value, rev}?            # transaction-scan cursor etc.
+casMeta(key, value, expectedRev) -> {status: ok|conflict, row}   # optimistic concurrency
+Uniqueness constraints (already in migration 001): invoice_id PK, payment_hash unique, invoice unique, and unique idempotency scope index on (namespace, operation, idempotency_key). Ruby's in-memory store already enforces all of these — port that logic to SQL/ActiveRecord.
+Migration changes:
+
+Keep openreceive_invoices and the namespaced openreceive_schema_migrations tracking table exactly as-is.
+Add migration 002 introducing capability tokens. Preferred: add order_access_token_hash TEXT (nullable, set on first checkout per order) plus an index on (order_id, order_access_token_hash). Alternative: separate openreceive_order_tokens(order_id PK, token_hash, created_at). Choose the column approach unless multi-token-per-order is needed.
+Author both dialects: 002_*.postgres.sql and 002_*.sqlite.sql. Structure migrations/ to allow migrations/mysql/ later without restructuring.
+Rails: ship the SAME canonical SQL, delivered via the engine's auto-provided openreceive:install:migrations rake task (copies files into host db/migrate/ with fresh timestamps) OR a generator using migration_template. Because the host is on an unknown Rails version, resolve the migration superclass dynamically (ActiveRecord::Migration[<%= ActiveRecord::Migration.current_version %>]) or pin to the minimum supported version. Rails records applied migrations in its own schema_migrations; the engine does NOT ship its own runner. (The Node runner keeps using openreceive_schema_migrations; the two tracking systems coexist in the same DB.)
+
+PART 6 — Settlement state machine (must be bit-identical across languages)
+States (from schema + migration): transaction_state ∈ {pending, settled, expired, failed, accepted}; workflow_state ∈ {draft, invoice_created, verifying, settlement_action_pending, settlement_action_completed, expiry_pending_verification, expired_closed, failed_closed, cancelled}; settlement_action_state ∈ {pending, completed, failed}.
+Transitions (Ruby InMemoryInvoiceKvStore and JS state/transitions.ts are the reference; they already agree — keep them agreeing):
+
+mark_verifying: invoice_created|expiry_pending_verification → verifying iff not settled.
+mark_settled(settled_at): set transaction_state=settled; workflow_state=settlement_action_pending unless already settlement_action_completed; settled_at ||= … (write-once).
+mark_expired_closed: iff not settled → expired / expired_closed.
+mark_failed_closed: iff not settled → failed / failed_closed.
+mark_expiry_pending_verification: iff not in {settled, expired, failed} → expiry_pending_verification.
+mark_settlement_action_completed / _failed: manage settlement_action_state + settlement_action_completed_at (write-once).
+
+Settlement detection predicate (both languages, already implemented — Settlement.settled?/expired?/failed?): settled iff settled_at present OR state=="settled" OR transaction_state=="settled". Validate against spec/test-vectors/settlement-detection.json in BOTH languages.
+Reconcile/scan: sweepPendingInvoices and status reads run a bounded list_transactions scan with a persisted cursor in meta (via casMeta), page limit and window padding from config (transaction_scan_*). Must satisfy spec/test-vectors/transaction-scan-pagination.json.
+PART 7 — Node deliverables (what changes)
+New/changed packages under packages/js/:
+
+NEW @openreceive/http (framework-agnostic). Exposes a factory taking { service, authorize, resolveAmount, rateLimit?, tokens?, prefix? } and returning a Web-standard handler (Request) => Promise<Response> implementing PART 3 (tiers, token verify, error mapping). All routing/authorization/token logic lives here once.
+NEW thin adapters (a few lines each over #1):
+
+@openreceive/express → returns an express.Router() (app.use(prefix, router)).
+@openreceive/fastify → a plugin (fastify.register(plugin, { prefix })).
+@openreceive/next → route handlers for the App Router.
+
+
+CHANGE @openreceive/node: keep createOpenReceive and all service methods (they become the internal layer #4 calls). Add capability-token minting/verification helpers and the resolveAmount seam. Add store methods for token hash. Add migration 002. Add a bin subcommand openreceive migrate (already has a bin) that runs 001 + 002 against OPENRECEIVE_STORE and records versions in openreceive_schema_migrations.
+CHANGE @openreceive/browser: no wire break (it already POSTs the right bodies and forwards custom headers). Add a small helper to store/attach order_access_token and send it as the read header. Optionally surface the token in the React/Vue/Svelte/Angular hooks.
+CHANGE demos (examples/hello-fruit/server/*): replace hand-written /create_order and /order route bodies with the mounted @openreceive/express (and Next adapter) router. Replace the empty authorizeOrderAccess stub with TWO real authorize examples: a content-site config (token-only) and a User-based config. The app keeps ownership of cart→amount and passes it via resolveAmount (preserving amount authority).
+CHANGE spec/openapi/openreceive-http.v1.yaml: add the full PART 3 paths.
+Packaging: ensure .sql migrations ship verbatim ("files": ["dist","migrations"], do not bundle them; resolve via import.meta.url) — or inline SQL into generated TS constants to avoid bundler path loss.
+
+PART 8 — Ruby deliverables (FULL PORT)
+Current gem (packages/ruby/openreceive) ALREADY has, and the port reuses unchanged: money math (Money), settlement detection (Settlement), NWC URI parse/redact + NIP-47 make_invoice/list_transactions request-build + response-normalize (Nwc), idempotency (scope/hash/classify/canonical_json), the full in-memory KV store with the state machine (InMemoryInvoiceKvStore), error classes with status+code, and an injectable NWC client wrapper (NwcRubyReceiveClient, transport delegated to an injected Nostr client). This is a large head start.
+What must be BUILT in Ruby (the gaps):
+
+Orchestration service OpenReceive::Service mirroring PART 4: get_or_create_checkout, get_checkout, get_order, order (action router), swap_options/quote/start/refund, sweep_pending_invoices, list_rates/quote_rates, close. Same semantics as JS; validate against the shared vectors.
+Durable store OpenReceive::ActiveRecordInvoiceStore (and/or a raw-pg store) implementing the PART 5 interface against openreceive_invoices + meta, porting the uniqueness/idempotency logic already proven in InMemoryInvoiceKvStore. Use casMeta via an optimistic rev column.
+Live NWC transport for Ruby: a concrete Nostr relay client to inject into NwcRubyReceiveClient (NIP-47 over wss relays, NIP-04/44 encryption). This is the single biggest new Ruby component; gate it behind the same "no send methods, receive-only" invariant. If a mature Ruby NWC client exists, adapt it; otherwise implement the minimal NIP-47 make_invoice + list_transactions client.
+Pricing/rate feeds in Ruby (price-sources.json is shared data; reuse it) producing fiat_quote matching the schema and fiat-to-msats vector.
+Swaps in Ruby (FixedFloat protocol; provider-data v4 JSON is shared) satisfying all swap-* vectors.
+Config loader for openreceive.yml (same keys as PART config; OPENRECEIVE_NWC/NAMESPACE/STORE/PRICE_CURRENCIES, operation, swap, logging) with secret redaction in logs.
+HTTP layer — Rails engine OpenReceive::Engine (rails plugin new … --mountable, isolate_namespace OpenReceive):
+
+Controllers implementing PART 3, inheriting from config.parent_controller (default ActionController::Base, host sets ApplicationController) so host CSRF/auth/current_user are inherited.
+OpenReceive.configure with authorize proc, resolve_amount proc, rate_limit proc, prefix, parent_controller, namespace, store, nwc. Fail closed on Tier 3 when authorize is unset (raise at boot).
+A controller concern OpenReceive::Authorization the host can include for full access to their own auth, as an alternative to the proc.
+Routes drawn in the engine; host writes mount OpenReceive::Engine => "/openreceive". Optionally provide an openreceive_for routing DSL later for configurable path names.
+Migrations via openreceive:install:migrations (same canonical SQL) + dynamic migration version. Capability-token migration 002 included.
+Generators: openreceive:install (initializer + mount line + copy migrations).
+
+
+HTTP layer — Rack/Sinatra adapter so non-Rails Ruby hosts get the same routes: a Rack app / Sinatra extension wrapping the same Service + authorize/resolve_amount. Mirrors @openreceive/http.
+Gem structure: split into openreceive (core, already exists), openreceive-server (Service + store + transport + Rack app), and openreceive-rails (the engine depending on the other two), so Rails and non-Rails hosts pull only what they need. Update gemspecs and spec.files.
+
+PART 9 — Conformance harness (prove the two engines match)
+
+Run spec/test-vectors/* in BOTH languages for: fiat-to-msats, amount-boundaries, settlement-detection, idempotency (scope+hash+classify), invoice-lifecycle, all swap-*, transaction-scan-pagination, error-normalization. Add a CI job test:ruby alongside test:js.
+Add NEW cross-language vectors: (a) canonical-JSON idempotency hash equality (same logical request ⇒ identical sha256: in JS and Ruby), (b) capability-token hashing (same token ⇒ same stored hash), (c) HTTP-level golden tests: fixed request → expected status + JSON body, run against the Express adapter, the Next adapter, the Rails engine, and the Rack adapter. These four must produce byte-equal JSON bodies (modulo request_id).
+Extend npm run test:ci gate to require the Ruby suite + HTTP golden parity before release. Update AGENTS.md testing section accordingly.
+
+PART 10 — File-by-file change list in the repo
+Add:
+
+packages/js/http/** (new agnostic handler + tests)
+packages/js/express/**, packages/js/fastify/**, packages/js/next/** (new adapters)
+packages/js/node/migrations/002_add_order_access_token.postgres.sql and .sqlite.sql
+packages/ruby/openreceive-server/** (Service, ActiveRecord store, NWC transport, pricing, swaps, Rack app, config loader)
+packages/ruby/openreceive-rails/** (engine, controllers, configure, concern, generators, migration templates, routes)
+spec/test-vectors/idempotency-canonical-json.crosslang.json, capability-token.json, http-golden/*.json
+docs/guides/routes.md (the shipped-routes guide), docs/guides/quickstart-rails.md
+
+Change:
+
+packages/js/node/src/{service.ts,postgres-store.ts,sqlite-store.ts,store-common.ts,cli.ts,index.ts} — token mint/verify, resolveAmount seam, store token methods, migrate subcommand, exports.
+packages/js/browser/src/internal/checkout.ts — token storage/attach helper (no wire break).
+packages/js/{react,vue,svelte,angular}/src/** — optionally surface order_access_token.
+packages/ruby/openreceive/openreceive.gemspec + lib/openreceive.rb — expose token hashing + any shared helpers the server gem needs (keep core dependency-free).
+spec/openapi/openreceive-http.v1.yaml — full paths.
+examples/hello-fruit/server/** (node-express, nextjs-fullstack, static-html-small-api) — mount the router; replace authorizeOrderAccess with real authorize+resolveAmount; keep app-owned pricing.
+examples/hello-fruit/server/rails-* (the experimental skeleton) — promote to use OpenReceive::Engine.
+README.md, docs/manifest.json, AGENTS.md (testing + non-negotiables for the token/tier model), CHANGELOG.md.
+Root package.json scripts: add test:ruby, test:http-parity; wire into test:ci.
+
+Remove/deprecate:
+
+The hand-written route boilerplate in demos (superseded by the mounted router).
+Root _scratch-*.mjs and zz-fixed-float-api-reference.txt are scratch/reference; leave unless the agent is told to clean up.
+
+PART 11 — Suggested execution order for the agent
+
+Land migration 002 + capability-token store methods in Node; add token helpers to Node service. 2. Build @openreceive/http with tiers/authorize/token/resolveAmount + error mapping; unit-test against golden HTTP vectors. 3. Add @openreceive/express + @openreceive/next; convert one demo; delete its route boilerplate; add two authorize examples. 4. Promote OpenAPI to full paths; wire HTTP golden parity for Node adapters. 5. Ruby: build openreceive-server Service + ActiveRecord store (reusing existing core), run shared vectors green. 6. Ruby: live NWC transport + pricing + swaps to green on swap-* and lifecycle vectors. 7. Ruby: openreceive-rails engine (controllers inheriting parent_controller, configure, fail-closed Tier 3, install:migrations, generators); Rack adapter. 8. HTTP golden parity across all four adapters; extend test:ci. 9. Docs + Rails quickstart + demo.
+
+PART 12 — Open decisions the agent MUST surface (do not silently guess)
+
+Capability token storage: single column vs. separate table (default: column).
+Whether swap actions are Tier 2 (owner-token) or Tier 3 (privileged) — spec defaults swap_quote/start to Tier 2 (payer acting on own order), refund to Tier 2 with token + nonce; confirm against product intent.
+Ruby NWC transport: adopt an existing gem vs. implement minimal NIP-47 (affects timeline most).
+Gem split granularity (core/server/rails) vs. a single gem with optional requires.
+Rails parent_controller default (ActionController::Base vs ActionController::API) and whether to also ship an openreceive_for routing DSL now or later.
+Minimum supported Rails version for the migration superclass pin.
+
+
+That's the complete brief. The two things I'd most want you (or the agent) to hold onto: the authorize + resolveAmount + capability-token triad is the entire answer to "ship routes but let the developer own auth and keep prices honest," and the shared spec/test-vectors plus HTTP golden parity is the only thing that will keep two settlement engines from silently diverging on money — which is the real risk you took on by choosing the full Ruby port.
+Want me to draft any single piece concretely next — e.g. the @openreceive/http handler, the 002 capability-token migration in both dialects, or the OpenReceive::Engine skeleton with the configure/authorize concern?
