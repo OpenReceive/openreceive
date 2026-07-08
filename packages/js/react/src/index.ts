@@ -28,6 +28,8 @@ import {
   openReceiveCheckoutLabels,
   openReceivePaymentMethods,
   openReceiveSwapAssetMatchesRoute,
+  normalizeSwapStartInvoice,
+  postOpenReceiveJson,
   openWallet as openWalletHelper,
   readOpenReceiveThemePreference,
   status as deriveStatus,
@@ -43,6 +45,7 @@ import {
   type CheckoutState,
   type CheckoutStatusRefresh,
   type CheckoutStatusModel,
+  type OpenReceiveCheckoutPaymentMethod,
   type OpenReceivePaymentMethod,
   type OpenReceivePaymentWizardController,
   type OpenReceivePaymentWizardModel,
@@ -277,18 +280,7 @@ export interface PaymentWizardProps {
   readonly onError?: (error: unknown) => void;
 }
 
-interface OpenReceiveSwapOptionDisplay {
-  readonly pay_in_asset: string;
-  readonly label: string;
-  readonly network_label: string;
-  readonly provider: string;
-  readonly available: boolean;
-  readonly unavailable_reason?: string;
-  readonly unavailable_message?: string;
-  readonly pay_amount?: string;
-  readonly minimum_pay_amount?: string;
-  readonly maximum_pay_amount?: string;
-}
+type OpenReceiveSwapOptionDisplay = OpenReceiveCheckoutPaymentMethod;
 
 interface OpenReceiveSwapOptionsResult {
   readonly enabled: boolean;
@@ -440,12 +432,8 @@ export function useCheckout(
       latestSnapshot
     ]
   );
-  const snapshot = React.useMemo<CheckoutSnapshot>(
-    () => latestSnapshot,
-    [
-      latestSnapshot
-    ]
-  );
+  // `latestSnapshot` is already memoized above, so no extra useMemo is needed.
+  const snapshot: CheckoutSnapshot = latestSnapshot;
   const [state, setState] = React.useState<CheckoutState>(
     () => createCheckoutState(snapshot, {
       logger: options.logger
@@ -2068,36 +2056,6 @@ function selectCurrentSwapInvoice(
   return checkout?.invoices.find((invoice) => invoice.invoice_id === local.invoice_id) ?? local;
 }
 
-async function postOpenReceiveJson(
-  fetcher: typeof globalThis.fetch,
-  url: string,
-  body: Record<string, unknown>
-): Promise<unknown> {
-  const response = await fetcher(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(body)
-  });
-  const parsed = await response.json();
-  if (!response.ok) {
-    throw new Error(readResponseMessage(parsed) ?? "OpenReceive request failed.");
-  }
-  return parsed;
-}
-
-function normalizeSwapStartInvoice(body: unknown): CheckoutInvoiceSnapshot {
-  const record = reactRecord(body);
-  // A swap start/refund returns { attempt }; the backing Lightning invoice (which
-  // carries the swap block the element renders) is attempt.shadow_invoice.
-  const invoice = reactRecord(reactRecord(record.attempt).shadow_invoice ?? record.invoice ?? body);
-  if (reactString(invoice.invoice_id) === undefined || reactRecord(invoice.swap).provider === undefined) {
-    throw new Error("Swap response did not include an attempt.");
-  }
-  return invoice as unknown as CheckoutInvoiceSnapshot;
-}
-
 async function copyOpenReceiveText(
   text: string,
   clipboard?: Pick<Clipboard, "writeText">
@@ -2107,18 +2065,10 @@ async function copyOpenReceiveText(
   await target.writeText(text);
 }
 
-function readResponseMessage(value: unknown): string | undefined {
-  return reactString(reactRecord(value).message);
-}
-
 function reactRecord(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
-}
-
-function reactString(value: unknown): string | undefined {
-  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 function renderProviderOpenAction(

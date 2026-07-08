@@ -1736,22 +1736,6 @@ function restoreEnvVar(name, value) {
   }
 }
 
-async function withEnv(env, callback) {
-  const previous = new Map();
-  for (const [key, value] of Object.entries(env)) {
-    previous.set(key, process.env[key]);
-    restoreEnvVar(key, value);
-  }
-
-  try {
-    await callback();
-  } finally {
-    for (const [key, value] of previous) {
-      restoreEnvVar(key, value);
-    }
-  }
-}
-
 async function withGlobalFetch(fetcher, callback) {
   const previous = globalThis.fetch;
   globalThis.fetch = fetcher;

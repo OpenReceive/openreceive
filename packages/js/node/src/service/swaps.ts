@@ -10,6 +10,7 @@ import {
   getOpenReceiveSwapAssetInfo,
   isOpenReceiveSwapPayInAsset,
   isOpenReceiveSwapTerminalState,
+  isValidSwapAddressForNetwork,
   listOpenReceiveSwapAssetInfo,
   type OpenReceiveSwapOrder,
   type OpenReceiveSwapPayInAsset,
@@ -859,19 +860,7 @@ export function assertRefundAddressShape(
   payInAsset: OpenReceiveSwapPayInAsset,
   refundAddress: string,
 ): void {
-  if (refundAddress.length > 200 || /\s/.test(refundAddress)) {
-    throw serviceError(400, "INVALID_REQUEST", "refund_address is not valid for this asset.");
-  }
-  const network = getOpenReceiveSwapAssetInfo(payInAsset).network;
-  const valid =
-    network === "ETH"
-      ? /^0x[0-9a-fA-F]{40}$/.test(refundAddress)
-      : network === "SOL"
-        ? /^[1-9A-HJ-NP-Za-km-z]{32,64}$/.test(refundAddress)
-        : network === "TRX"
-          ? /^T[1-9A-HJ-NP-Za-km-z]{20,60}$/.test(refundAddress)
-          : refundAddress.length >= 5;
-  if (!valid) {
+  if (!isValidSwapAddressForNetwork(payInAsset, refundAddress)) {
     throw serviceError(400, "INVALID_REQUEST", "refund_address is not valid for this asset.");
   }
 }

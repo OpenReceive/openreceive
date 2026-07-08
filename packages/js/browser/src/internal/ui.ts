@@ -113,8 +113,6 @@ export const OPENRECEIVE_THEME_TOGGLE_ELEMENT_PART_SELECTORS = {
 } as const;
 export type CheckoutElementEventName =
   (typeof OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS)[keyof typeof OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS];
-export type OpenReceiveThemeToggleElementEventName =
-  (typeof OPENRECEIVE_THEME_TOGGLE_ELEMENT_EVENTS)[keyof typeof OPENRECEIVE_THEME_TOGGLE_ELEMENT_EVENTS];
 export interface CheckoutProviderCopyEventDetail {
   readonly providerId: string;
 }
@@ -1190,22 +1188,14 @@ export const openReceiveCheckoutElementStyles = `
     color: var(--or-muted);
   }
 
-	  [part="method-grid"],
-	  [part="route-picker"],
-	  [part="country-grid"],
-	  [part="swap-actions"],
-	  [part="provider-grid"],
-	  [part="provider-actions"] {
-    display: grid;
-    gap: 8px;
-  }
-
   [part="method-grid"],
   [part="route-picker"],
   [part="country-grid"],
   [part="swap-actions"],
   [part="provider-grid"],
   [part="provider-actions"] {
+    display: grid;
+    gap: 8px;
     grid-template-columns: 1fr 1fr;
   }
 

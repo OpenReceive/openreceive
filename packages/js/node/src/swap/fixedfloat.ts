@@ -2,6 +2,7 @@ import { createHmac } from "node:crypto";
 import {
   getOpenReceiveSwapAssetInfo,
   isOpenReceiveLightningNetwork,
+  isValidSwapAddressForNetwork,
   listOpenReceiveSwapAssetInfo,
   openReceiveSwapNetworkMatches,
   type OpenReceiveSwapPayInAsset,
@@ -481,16 +482,6 @@ function classifyFixedFloatDataErrors(
 ): OpenReceiveSwapAvailabilityReason {
   if (errors.some((error) => error.code === "LIMIT_MIN")) return "amount_too_small";
   if (errors.some((error) => error.code === "LIMIT_MAX")) return "amount_too_large";
-  if (
-    errors.some(
-      (error) =>
-        error.code.startsWith("RESERVE") ||
-        error.code.startsWith("MAINTENANCE") ||
-        error.code.startsWith("OFFLINE"),
-    )
-  ) {
-    return "pair_temporarily_unavailable";
-  }
   return "pair_temporarily_unavailable";
 }
 
@@ -636,19 +627,7 @@ function assertFixedFloatDepositAddressShape(
   payInAsset: OpenReceiveSwapPayInAsset,
   depositAddress: string,
 ): void {
-  if (depositAddress.length > 200 || /\s/.test(depositAddress)) {
-    throw new Error("FixedFloat deposit address is not valid for this asset.");
-  }
-  const network = getOpenReceiveSwapAssetInfo(payInAsset).network;
-  const valid =
-    network === "ETH"
-      ? /^0x[0-9a-fA-F]{40}$/.test(depositAddress)
-      : network === "SOL"
-        ? /^[1-9A-HJ-NP-Za-km-z]{32,64}$/.test(depositAddress)
-        : network === "TRX"
-          ? /^T[1-9A-HJ-NP-Za-km-z]{20,60}$/.test(depositAddress)
-          : depositAddress.length >= 5;
-  if (!valid) {
+  if (!isValidSwapAddressForNetwork(payInAsset, depositAddress)) {
     throw new Error("FixedFloat deposit address is not valid for this asset.");
   }
 }

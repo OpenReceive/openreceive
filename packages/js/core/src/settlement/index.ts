@@ -35,10 +35,6 @@ export function getSettlementFinalitySignal(
   return undefined;
 }
 
-export function isTransactionFinal(result: NwcTransaction): boolean {
-  return isTransactionSettled(result);
-}
-
 export function isTransactionExpired(result: NwcTransaction): boolean {
   return result.state === "expired" || result.transaction_state === "expired";
 }

@@ -1,19 +1,4 @@
-declare const __filename: string | undefined;
-
-const moduleUrl =
-  typeof import.meta.url === "string" && import.meta.url.length > 0
-    ? import.meta.url
-    : fileUrlFromPath(__filename as string);
-
-function fileUrlFromPath(path: string): string {
-  const normalized = path.replace(/\\/g, "/");
-  const absolute = normalized.startsWith("/") ? normalized : `/${normalized}`;
-  return `file://${encodeURI(absolute).replace(/#/g, "%23").replace(/\?/g, "%3F")}`;
-}
-
-function assetUrl(path: string): string {
-  return new URL(path, moduleUrl).href;
-}
+import { assetUrl } from "./asset-url.ts";
 
 const cashappTutorial1 = assetUrl("./assets/pay_tutorials/cashapp-1.webp");
 const cashappTutorial2 = assetUrl("./assets/pay_tutorials/cashapp-2.webp");

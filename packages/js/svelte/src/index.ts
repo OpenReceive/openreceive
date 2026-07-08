@@ -21,13 +21,10 @@ import {
   type CheckoutShellOptions,
   type CheckoutSnapshot,
   type OpenReceiveCheckoutShellProps,
-  type OpenReceiveReadThemePreferenceOptions,
   type OpenReceiveStoredThemeModelOptions,
-  type OpenReceiveThemeAttributeTarget,
   type OpenReceiveThemeModel,
   type OpenReceiveThemeModelOptions,
   type OpenReceiveThemePreference,
-  type OpenReceiveThemeStorageOptions,
   type OpenReceiveThemeToggleElementAttributeOptions,
   type OpenReceiveThemeToggleElementAttributes
 } from "@openreceive/browser/internal";

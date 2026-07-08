@@ -3,8 +3,6 @@ import type { MetaRow } from "../storage/kv.ts";
 
 // How long a cached price-feed read stays usable before a live refresh.
 export const OPENRECEIVE_PRICE_FEED_CACHE_SECONDS = 60 as const;
-// Back-compat alias for the cache window; both name the same 60s value.
-export const OPENRECEIVE_RATE_CACHE_SECONDS = OPENRECEIVE_PRICE_FEED_CACHE_SECONDS;
 export const OPENRECEIVE_INVOICE_QUOTE_TTL_SECONDS = 600 as const;
 
 // The primary feed must answer within this window before the fallback is tried.

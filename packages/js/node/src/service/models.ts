@@ -509,6 +509,7 @@ export function toWireOrder(model: OpenReceiveOrderModel): OpenReceiveOrder {
 }
 
 export function serializeInvoice(row: InvoiceStorageRow, now: number): OpenReceiveInvoiceModel {
+  const swap = readPublicSwap(row);
   return {
     invoiceId: row.invoice_id,
     type: "incoming",
@@ -531,7 +532,7 @@ export function serializeInvoice(row: InvoiceStorageRow, now: number): OpenRecei
       : { refreshedFromInvoiceId: row.refreshed_from_invoice_id }),
     fiatQuote: (row.fiat_quote ?? null) as OpenReceiveRateQuote | null,
     settlementActionState: row.settlement_action_state,
-    ...(readPublicSwap(row) === undefined ? {} : { swap: readPublicSwap(row) }),
+    ...(swap === undefined ? {} : { swap }),
   };
 }
 

@@ -18,6 +18,9 @@ import {
   assertOpenReceiveStoreConfiguration
 } from "./storage-guard.ts";
 import {
+  redactSecrets
+} from "./service/logging.ts";
+import {
   resolveOpenReceiveStore,
   type OpenReceiveResolvedStore,
   type ResolveOpenReceiveStoreOptions
@@ -164,7 +167,7 @@ async function runDiagnostics(input: {
     `cwd: ${input.cwd}`,
     `namespace: ${namespace}`,
     `nwc: ${nwc === undefined || nwc.trim().length === 0 ? "missing" : "present-redacted"}`,
-    `store: ${redactPotentialSecrets(storeUri)}`
+    `store: ${redactSecrets(storeUri)}`
   ];
 
   if (configError !== undefined) {
@@ -225,13 +228,7 @@ function readFlag(args: readonly string[], flag: string): string | undefined {
 }
 
 function safeErrorMessage(error: unknown): string {
-  if (error instanceof Error) return redactPotentialSecrets(error.message);
-  if (typeof error === "string") return redactPotentialSecrets(error);
+  if (error instanceof Error) return redactSecrets(error.message);
+  if (typeof error === "string") return redactSecrets(error);
   return "OpenReceive command failed.";
-}
-
-function redactPotentialSecrets(message: string): string {
-  return message
-    .replace(/nostr\+walletconnect:\/\/[^\s"'`<>]+/g, "[REDACTED_NWC]")
-    .replace(/([?&](?:token|secret)=)[^&\s"'`<>]+/gi, "$1[REDACTED]");
 }

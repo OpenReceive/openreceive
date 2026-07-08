@@ -1,6 +1,10 @@
 import { status as deriveStatus } from "../status.ts";
 import { applyOpenReceiveThemeAttributes, createOpenReceiveStoredThemeModel } from "./theme.ts";
-import { assertOpenReceiveDisplayInvoice } from "./checkout.ts";
+import {
+  assertOpenReceiveDisplayInvoice,
+  checkoutInvoiceFromOrderSnapshot,
+  isPaidCheckoutSnapshot,
+} from "./checkout.ts";
 import {
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
@@ -12,7 +16,6 @@ import {
   type CheckoutElementEventHandlers,
   type CheckoutElementListeners,
   type CheckoutElementTarget,
-  type CheckoutInvoiceSnapshot,
   type CheckoutShellElements,
   type CheckoutShellModel,
   type CheckoutShellOptions,
@@ -173,15 +176,6 @@ export function createCheckoutShellModelFromProps(
   });
 }
 
-export function createCheckoutShellFromProps(
-  props: OpenReceiveCheckoutShellProps & Omit<CreateCheckoutShellOptions, "root">,
-): CheckoutShellElements {
-  return createCheckoutShell(props.checkout, {
-    ...props,
-    defaultTheme: props.defaultTheme ?? props.theme,
-  });
-}
-
 export function applyCheckoutElementAttributes(
   target: OpenReceiveThemeAttributeTarget,
   attributes: CheckoutElementAttributes,
@@ -267,14 +261,3 @@ export function createCheckoutShell(
   };
 }
 
-function checkoutInvoiceFromOrderSnapshot(snapshot: CheckoutSnapshot): CheckoutInvoiceSnapshot {
-  const invoice = snapshot.active ?? snapshot.invoices[0];
-  if (invoice === undefined) {
-    throw new TypeError("OpenReceive order snapshot requires active or invoices[0].");
-  }
-  return invoice;
-}
-
-function isPaidCheckoutSnapshot(snapshot: CheckoutSnapshot): boolean {
-  return snapshot.status === "paid";
-}

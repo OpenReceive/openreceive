@@ -21,6 +21,7 @@ const localSmokeDependencies = new Set([
   "react",
   "topojson-client",
   "world-atlas",
+  "yaml",
 ]);
 
 const importChecks = {

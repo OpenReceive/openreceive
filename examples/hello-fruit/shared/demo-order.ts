@@ -62,10 +62,6 @@ export interface HelloFruitCreateOrderResult {
   };
 }
 
-export interface HelloFruitOrderStatus {
-  readonly order_id: string;
-  readonly order_status: "pending_payment" | "paid";
-}
 
 export class HelloFruitDemoOrderError extends Error {
   readonly status: number;
@@ -155,31 +151,6 @@ function createOpenReceiveCheckoutAmount(
       currency: "SATS",
       value: total_amount.value,
     },
-  };
-}
-
-export function createHelloFruitOrderStatus(input: {
-  readonly order_id?: unknown;
-  readonly paid?: unknown;
-  readonly status?: unknown;
-  readonly paid_at?: unknown;
-  readonly settled_at?: unknown;
-  readonly transaction_state?: unknown;
-  readonly state?: unknown;
-}): HelloFruitOrderStatus {
-  const orderId =
-    typeof input.order_id === "string" && input.order_id.length > 0 ? input.order_id : "unknown";
-  const paid =
-    input.paid === true ||
-    input.status === "paid" ||
-    typeof input.paid_at === "number" ||
-    typeof input.settled_at === "number" ||
-    input.transaction_state === "settled" ||
-    input.state === "settled";
-
-  return {
-    order_id: orderId,
-    order_status: paid ? "paid" : "pending_payment",
   };
 }
 

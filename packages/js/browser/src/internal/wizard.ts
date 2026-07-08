@@ -175,11 +175,6 @@ export function getOpenReceiveRegionForCountry(countryCode: string): OpenReceive
   return openReceiveCountryPins[countryCode]?.region ?? "north-america";
 }
 
-export function getOpenReceiveCoverageLabel(coverage: Country["coverage"]): string {
-  void coverage;
-  return "";
-}
-
 export function formatOpenReceiveCountryMetaLabel(country: Country): string {
   return country.currency;
 }

@@ -46,6 +46,8 @@ import {
   openWallet,
   openReceivePaymentMethods,
   openReceiveSwapAssetMatchesRoute,
+  normalizeSwapStartInvoice,
+  postOpenReceiveJson,
   openReceiveThemeToggleElementStyles,
   parseOpenReceiveBooleanAttribute,
   parseOpenReceiveOptionalInteger,
@@ -63,6 +65,7 @@ import {
   type CheckoutInvoiceSnapshot,
   type CheckoutSnapshot,
   type CheckoutState,
+  type OpenReceiveCheckoutPaymentMethod,
   type OpenReceivePaymentWizardSelection,
   type OpenReceiveWizardProviderDisplay,
   type OpenReceiveWizardRouteAssetDisplay,
@@ -103,18 +106,7 @@ export interface OpenReceiveElementsWizardView {
   readonly activeTutorialCopied?: boolean;
 }
 
-export interface OpenReceiveElementsSwapOption {
-  readonly pay_in_asset: string;
-  readonly label: string;
-  readonly network_label: string;
-  readonly provider: string;
-  readonly available: boolean;
-  readonly unavailable_reason?: string;
-  readonly unavailable_message?: string;
-  readonly pay_amount?: string;
-  readonly minimum_pay_amount?: string;
-  readonly maximum_pay_amount?: string;
-}
+export type OpenReceiveElementsSwapOption = OpenReceiveCheckoutPaymentMethod;
 
 export interface DefineOpenReceiveElementsOptions {
   readonly tagName?: string;
@@ -696,46 +688,6 @@ function transactionStateFromStatus(status: Status): string {
   return "pending";
 }
 
-async function postElementJson(url: string, body: Record<string, unknown>): Promise<unknown> {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(body)
-  });
-  const parsed = await response.json();
-  if (!response.ok) {
-    throw new Error(readElementResponseMessage(parsed) ?? "OpenReceive request failed.");
-  }
-  return parsed;
-}
-
-function normalizeElementSwapInvoice(body: unknown): CheckoutInvoiceSnapshot {
-  const record = elementRecord(body);
-  // A swap start/refund returns { attempt }; the backing Lightning invoice (which
-  // carries the swap block the element renders) is attempt.shadow_invoice.
-  const invoice = elementRecord(elementRecord(record.attempt).shadow_invoice ?? record.invoice ?? body);
-  if (elementString(invoice.invoice_id) === undefined || elementRecord(invoice.swap).provider === undefined) {
-    throw new Error("Swap response did not include an attempt.");
-  }
-  return invoice as unknown as CheckoutInvoiceSnapshot;
-}
-
-function readElementResponseMessage(value: unknown): string | undefined {
-  return elementString(elementRecord(value).message);
-}
-
-function elementRecord(value: unknown): Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-function elementString(value: unknown): string | undefined {
-  return typeof value === "string" && value.length > 0 ? value : undefined;
-}
-
 function parseElementStatus(value: string | null): Status | undefined {
   if (
     value === "pending" ||
@@ -1218,12 +1170,12 @@ export function defineOpenReceiveElements(
       if (url === null || orderId === null || orderId.length === 0) return;
 
       try {
-        const body = await postElementJson(url, {
+        const body = await postOpenReceiveJson(globalThis.fetch, url, {
           order_id: orderId,
           action: "start_swap",
           pay_in_asset: payInAsset
         });
-        this.startedSwapInvoice = normalizeElementSwapInvoice(body);
+        this.startedSwapInvoice = normalizeSwapStartInvoice(body);
         this.dismissedSwapInvoiceId = null;
         this.render();
       } catch (error) {
@@ -1242,7 +1194,7 @@ export function defineOpenReceiveElements(
       if (url === null) return;
 
       try {
-        const body = await postElementJson(url, {
+        const body = await postOpenReceiveJson(globalThis.fetch, url, {
           ...(orderId === null ? {} : { order_id: orderId }),
           action: "refund_swap",
           attempt_id: attemptId,
@@ -1250,7 +1202,7 @@ export function defineOpenReceiveElements(
           refund_nonce: refundNonce,
           confirm
         });
-        this.startedSwapInvoice = normalizeElementSwapInvoice(body);
+        this.startedSwapInvoice = normalizeSwapStartInvoice(body);
         this.dismissedSwapInvoiceId = null;
         this.render();
       } catch (error) {

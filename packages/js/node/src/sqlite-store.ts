@@ -1,10 +1,8 @@
 import {
-  canonicalJson,
   idempotencyScopeKey,
   isTerminalInvoiceStorageRow,
   readInvoiceStorageCheckoutId,
   readInvoiceStorageOrderId,
-  validateInvoiceStorageRow,
   type MetaRow,
   type MaybePromise,
   type OpenReceiveInvoiceKvStore,
@@ -14,6 +12,22 @@ import {
 import {
   OPENRECEIVE_DATABASE_SCHEMA_VERSION
 } from "./storage-schema.ts";
+import {
+  DEFAULT_META_TABLE_NAME,
+  DEFAULT_NAMESPACE,
+  DEFAULT_TABLE_NAME,
+  assertCheckoutId,
+  assertListOpenInput,
+  assertOrderId,
+  namespacedIdentifier,
+  normalizeMetaRow,
+  normalizeNamespace,
+  parseStoredRecordField,
+  quotedIdentifier,
+  serializeStoredRecord,
+  unquoted,
+  validateStoredRecord,
+} from "./store-common.ts";
 
 export interface OpenReceiveSqliteQueryResult {
   rows: Record<string, unknown>[];
@@ -43,11 +57,6 @@ export interface OpenReceiveSqliteKvStoreOptions {
   metaTableName?: string;
   namespace?: string;
 }
-
-const DEFAULT_NAMESPACE = "default";
-const DEFAULT_TABLE_NAME = "openreceive_invoices";
-const DEFAULT_META_TABLE_NAME = "openreceive_meta";
-const IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 export const OPENRECEIVE_SQLITE_MIGRATION_SQL = `
 CREATE TABLE IF NOT EXISTS openreceive_invoices (
@@ -482,94 +491,9 @@ function returnsRows(sql: string): boolean {
   return /^\s*SELECT\b/i.test(sql) || /\bRETURNING\b/i.test(sql);
 }
 
-function validateStoredRecord(record: StoredRecord): void {
-  if (!Number.isSafeInteger(record.rev) || record.rev < 0) {
-    throw new TypeError("OpenReceive SQLite record rev must be a non-negative safe integer");
-  }
-  validateInvoiceStorageRow(record.row);
-}
-
-function serializeStoredRecord(record: StoredRecord): string {
-  return canonicalJson(record);
-}
-
-function parseStoredRecordField(value: unknown): StoredRecord {
-  const parsed = typeof value === "string" ? JSON.parse(value) : value;
-  if (parsed === null || typeof parsed !== "object") {
-    throw new TypeError("OpenReceive SQLite data must be a stored record object");
-  }
-  const record = parsed as StoredRecord;
-  validateStoredRecord(record);
-  return structuredClone(record);
-}
-
-function normalizeMetaRow(row: Record<string, unknown>): MetaRow {
-  return {
-    value: stringField(row.value, "value"),
-    rev: integerField(row.rev, "rev")
-  };
-}
-
-function quotedIdentifier(identifier: string): string {
-  if (!IDENTIFIER.test(identifier)) {
-    throw new TypeError("OpenReceive SQLite identifier must be a simple SQL identifier");
-  }
-  return `"${identifier}"`;
-}
-
-function unquoted(quoted: string): string {
-  return quoted.replace(/^"|"$/g, "");
-}
-
-function namespacedIdentifier(namespace: string, base: string): string {
-  return namespace === DEFAULT_NAMESPACE ? base : `${namespace}_${base}`;
-}
-
-function normalizeNamespace(namespace: string): string {
-  if (!/^[a-z0-9_]{1,40}$/.test(namespace)) {
-    throw new TypeError("OPENRECEIVE_NAMESPACE must match ^[a-z0-9_]{1,40}$");
-  }
-  return namespace;
-}
-
-function stringField(value: unknown, field: string): string {
-  if (typeof value !== "string") {
-    throw new TypeError(`OpenReceive SQLite meta ${field} must be a string`);
-  }
-  return value;
-}
-
-function integerField(value: unknown, field: string): number {
-  const parsed: unknown = typeof value === "string" ? Number(value) : value;
-  if (!Number.isSafeInteger(parsed)) {
-    throw new TypeError(`OpenReceive SQLite meta ${field} must be a safe integer`);
-  }
-  return parsed as number;
-}
-
-function assertListOpenInput(input: { now: number; limit: number }): void {
-  if (!Number.isSafeInteger(input.now) || input.now < 0) {
-    throw new TypeError("OpenReceive SQLite listOpen now must be a non-negative safe integer");
-  }
-  if (!Number.isSafeInteger(input.limit) || input.limit <= 0) {
-    throw new TypeError("OpenReceive SQLite listOpen limit must be a positive safe integer");
-  }
-}
-
-function assertOrderId(orderId: string): void {
-  if (typeof orderId !== "string" || orderId.length === 0) {
-    throw new TypeError("OpenReceive SQLite orderId must be a non-empty string");
-  }
-}
-
-function assertCheckoutId(checkoutId: string): void {
-  if (typeof checkoutId !== "string" || checkoutId.length === 0) {
-    throw new TypeError("OpenReceive SQLite checkoutId must be a non-empty string");
-  }
-}
-
 function metaMismatchError(key: string): Error {
   return new Error(
     `OpenReceive store metadata ${key} does not belong to this OpenReceive namespace.`
   );
 }
+

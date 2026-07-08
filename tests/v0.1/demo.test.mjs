@@ -46,13 +46,6 @@ const demoServerDirs = [
   "examples/hello-fruit/server/nextjs-fullstack",
 ];
 
-function createValidNwcUri(input = {}) {
-  return (
-    `nostr+walletconnect://${input.walletPubkey ?? "a".repeat(64)}` +
-    `?relay=${encodeURIComponent(input.relay ?? "wss://relay.example.com")}` +
-    `&secret=${input.secret ?? "b".repeat(64)}`
-  );
-}
 
 class HelloFruitTestReceiveClient {
   count = 0;

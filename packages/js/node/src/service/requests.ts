@@ -12,8 +12,7 @@ import type {
   OpenReceiveGetCheckoutRequest,
   OpenReceiveGetOrderRequest,
 } from "./types.ts";
-
-export const HEX_64 = /^[0-9a-fA-F]{64}$/;
+import { HEX_64 } from "../hex.ts";
 
 export function createAmountRequest(
   amount: OpenReceiveCreateCheckoutAmount,

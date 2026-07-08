@@ -29,29 +29,6 @@ export function readHelloFruitCatalog(): readonly HelloFruitProduct[] {
   return fruits.map(assertHelloFruitProduct);
 }
 
-/**
- * Distinct fiat currencies present in a product catalog, in first-seen order.
- * Used to configure the server price providers and accepted quote currencies.
- */
-export function helloFruitCatalogCurrencies(
-  products: readonly { readonly fiat: { readonly currency: string } }[]
-): string[] {
-  const currencies: string[] = [];
-  for (const product of products) {
-    if (!currencies.includes(product.fiat.currency)) {
-      currencies.push(product.fiat.currency);
-    }
-  }
-  return currencies;
-}
-
-/**
- * Convenience reader: distinct fiat currencies declared by the demo catalog.
- */
-export function readHelloFruitCatalogCurrencies(): string[] {
-  return helloFruitCatalogCurrencies(readHelloFruitCatalog());
-}
-
 function assertHelloFruitProduct(value: unknown, index: number): HelloFruitProduct {
   if (typeof value !== "object" || value === null) {
     throw new Error(`Hello Fruit product at index ${index} must be an object.`);

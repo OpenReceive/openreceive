@@ -1,37 +1,21 @@
 /// <reference path="../qrcode.d.ts" />
 
-import { getCountries, type FiatRailId } from "@openreceive/provider-data";
 import * as defaultQrEncoder from "qrcode";
-import { status as deriveStatus } from "../status.ts";
-import { applyOpenReceiveThemeAttributes, createOpenReceiveStoredThemeModel } from "./theme.ts";
 import { getOpenReceivePaymentStatusText } from "./wizard.ts";
 import {
-  OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
-  OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
-  OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
   OPENRECEIVE_COPY_FEEDBACK_MS,
   OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS,
   OPENRECEIVE_QR_DARK_COLOR,
   OPENRECEIVE_QR_ERROR_CORRECTION,
   OPENRECEIVE_QR_LIGHT_COLOR,
   OPENRECEIVE_QR_QUIET_ZONE_MODULES,
-  OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES,
-  OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
   openReceiveCheckoutLabels,
   type CheckoutController,
   type CheckoutControllerOptions,
   type CheckoutDisplayData,
   type CheckoutDisplayModel,
-  type CheckoutElementAttributeOptions,
-  type CheckoutElementAttributes,
-  type CheckoutElementEventHandlers,
-  type CheckoutElementListeners,
-  type CheckoutElementTarget,
   type CheckoutInvoiceSnapshot,
   type CheckoutPhase,
-  type CheckoutShellElements,
-  type CheckoutShellModel,
-  type CheckoutShellOptions,
   type CheckoutSnapshot,
   type CheckoutState,
   type CheckoutStatusModel,
@@ -39,23 +23,15 @@ import {
   type CheckoutStatusRefresh,
   type CheckoutWatcherOptions,
   type CopyInvoiceOptions,
-  type CreateCheckoutElementOptions,
-  type CreateCheckoutShellOptions,
   type CreateCheckoutStateOptions,
   type CreateOpenReceiveStatusFetcherOptions,
-  type CreateOpenReceiveThemeToggleElementOptions,
   type OpenReceiveBrowserLogEntry,
   type OpenReceiveBrowserLogLevel,
   type OpenReceiveBrowserLogger,
   type OpenReceiveCheckoutPaymentMethod,
-  type OpenReceiveCheckoutShellProps,
-  type OpenReceivePaymentMethod,
   type OpenReceiveQrEncoder,
   type OpenReceiveQrOptions,
   type OpenReceiveSwapDisplayModel,
-  type OpenReceiveThemeAttributeTarget,
-  type OpenReceiveThemeToggleElementAttributeOptions,
-  type OpenReceiveThemeToggleElementAttributes,
   type OpenReceiveTransientFeedbackController,
   type OpenReceiveTransientFeedbackOptions,
   type OpenReceiveTickingValueController,
@@ -183,8 +159,7 @@ function getOpenReceiveSwapProviderStateLabel(state: string): string {
   if (state === "awaiting_deposit") return "Waiting for your payment";
   if (state === "confirming") return "Confirming payment";
   if (state === "exchanging") return "Converting payment";
-  if (state === "paying_invoice") return "Finalizing checkout";
-  if (state === "completed") return "Finalizing checkout";
+  if (state === "paying_invoice" || state === "completed") return "Finalizing checkout";
   if (state === "expired") return "Expired";
   if (state === "refund_required") return "Refund needed";
   if (state === "refund_pending") return "Refund pending";
@@ -785,7 +760,9 @@ function normalizeCheckoutInvoiceSwapSnapshot(
   };
 }
 
-function checkoutInvoiceFromOrderSnapshot(snapshot: CheckoutSnapshot): CheckoutInvoiceSnapshot {
+export function checkoutInvoiceFromOrderSnapshot(
+  snapshot: CheckoutSnapshot,
+): CheckoutInvoiceSnapshot {
   const invoice = snapshot.active ?? snapshot.invoices[0];
   if (invoice === undefined) {
     throw new TypeError("OpenReceive order snapshot requires active or invoices[0].");
@@ -793,7 +770,7 @@ function checkoutInvoiceFromOrderSnapshot(snapshot: CheckoutSnapshot): CheckoutI
   return invoice;
 }
 
-function isPaidCheckoutSnapshot(snapshot: CheckoutSnapshot): boolean {
+export function isPaidCheckoutSnapshot(snapshot: CheckoutSnapshot): boolean {
   return snapshot.status === "paid";
 }
 
@@ -881,23 +858,6 @@ export function refreshCheckoutState(
   options: CreateCheckoutStateOptions = {},
 ): CheckoutState {
   return createCheckoutState(snapshotFromCheckoutState(state), options);
-}
-
-export function mergeCheckoutSnapshot(
-  current: CheckoutState,
-  next: Partial<CheckoutSnapshot>,
-): CheckoutSnapshot {
-  const currentSnapshot = snapshotFromCheckoutState(current);
-  return {
-    ...currentSnapshot,
-    ...next,
-    checkout_id: next.checkout_id ?? currentSnapshot.checkout_id,
-    order_id: next.order_id ?? currentSnapshot.order_id,
-    status: next.status ?? currentSnapshot.status,
-    amount_msats: next.amount_msats ?? currentSnapshot.amount_msats,
-    active: next.active ?? currentSnapshot.active,
-    invoices: next.invoices ?? currentSnapshot.invoices,
-  };
 }
 
 export function shouldCheckoutShowWaiting(
@@ -1447,40 +1407,6 @@ function snapshotFromCheckoutState(state: CheckoutState): CheckoutSnapshot {
 
 function currentUnixSeconds(): number {
   return Math.floor(Date.now() / 1000);
-}
-
-function getRailForPaymentMethod(method: OpenReceivePaymentMethod | null): FiatRailId | null {
-  if (method === "bank") return "bank";
-  if (method === "card") return "card";
-  return null;
-}
-
-function isKnownCountryCode(countryCode: string): boolean {
-  return getCountries().some((country) => country.code === countryCode);
-}
-
-function readStorageValue(storage: Storage | undefined, key: string): string | null {
-  try {
-    return storage?.getItem(key) ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function writeStorageValue(storage: Storage | undefined, key: string, value: string): void {
-  try {
-    storage?.setItem(key, value);
-  } catch {
-    // Browser storage is convenience only; checkout must keep working without it.
-  }
-}
-
-function getBrowserStorage(): Storage | undefined {
-  try {
-    return globalThis.localStorage;
-  } catch {
-    return undefined;
-  }
 }
 
 function checkoutLogFields(state: {

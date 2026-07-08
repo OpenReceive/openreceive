@@ -25,10 +25,10 @@ import {
   isRetryableOpenReceiveErrorCode,
   parseNwcUri
 } from "@openreceive/core";
+import { HEX_64 } from "./hex.ts";
 
 const require = createRequire(import.meta.url);
 const REQUIRED_RECEIVE_METHODS = ["make_invoice", "list_transactions"] as const;
-const HEX_64 = /^[0-9a-fA-F]{64}$/;
 const SPEND_METHODS = [
   "pay_invoice",
   "multi_pay_invoice",
