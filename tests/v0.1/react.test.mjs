@@ -21,6 +21,7 @@ import {
   createOpenReceiveWizardRouteAssetDisplays,
   createOpenReceiveWizardRouteDisplays,
   formatOpenReceiveCountdown,
+  formatOpenReceiveDepositAmount,
   getOpenReceiveAltcoinAssets,
   getOpenReceivePaymentMethodIcon,
   getOpenReceivePaymentStatusText,

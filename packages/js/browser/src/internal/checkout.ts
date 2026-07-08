@@ -106,6 +106,17 @@ export function formatOpenReceiveCountdown(seconds: number): string {
   return `${minutes}:${remainderSeconds.toString().padStart(2, "0")}`;
 }
 
+/**
+ * Trim insignificant trailing zeros from a decimal crypto amount for display,
+ * e.g. "12.25900000" -> "12.259" and "5.000" -> "5". Only fractional digits are
+ * stripped: integer amounts like "100" keep their zeros, and non-numeric input
+ * is returned unchanged.
+ */
+export function formatOpenReceiveDepositAmount(amount: string): string {
+  if (!/^[0-9]+(?:\.[0-9]+)?$/.test(amount) || !amount.includes(".")) return amount;
+  return amount.replace(/0+$/, "").replace(/\.$/, "");
+}
+
 export function createOpenReceiveSwapDisplayModel(
   invoice: CheckoutInvoiceSnapshot,
   options: { readonly now?: number } = {},
@@ -125,7 +136,7 @@ export function createOpenReceiveSwapDisplayModel(
     networkWarning: `Only send ${asset.assetLabel} on ${asset.networkLabel} to this address.`,
     depositAddress: swap.deposit_address,
     ...(swap.deposit_memo === undefined ? {} : { depositMemo: swap.deposit_memo }),
-    depositAmount: swap.deposit_amount,
+    depositAmount: formatOpenReceiveDepositAmount(swap.deposit_amount),
     providerStateLabel: getOpenReceiveSwapProviderStateLabel(swap.provider_state),
     providerStateDetail: getOpenReceiveSwapProviderStateDetail(swap.provider_state),
     state: getOpenReceiveSwapPanelState(swap.provider_state),
@@ -229,7 +240,8 @@ function createOpenReceiveSwapQrPayload(swap: NonNullable<CheckoutInvoiceSnapsho
       : `ethereum:${swap.deposit_address}?value=${wei}`;
   }
   if (swap.pay_in_asset === "SOL_SOL") {
-    return `solana:${swap.deposit_address}?amount=${encodeURIComponent(swap.deposit_amount)}`;
+    const amount = formatOpenReceiveDepositAmount(swap.deposit_amount);
+    return `solana:${swap.deposit_address}?amount=${encodeURIComponent(amount)}`;
   }
   return swap.deposit_address;
 }
