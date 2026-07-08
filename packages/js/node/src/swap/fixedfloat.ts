@@ -20,6 +20,7 @@ import type {
   OpenReceiveSwapProvider,
   OpenReceiveSwapProviderState,
   OpenReceiveSwapQuote,
+  SwapProviderApiRequestLog,
   SwapProviderApiResponseLog,
 } from "./provider.ts";
 
@@ -137,6 +138,7 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
   private readonly requestTimeoutMs: number;
   private readonly invoiceExpirySecondsValue: number;
   private cache: StoreBackedSwapCache | undefined;
+  private apiRequestLogger: ((entry: SwapProviderApiRequestLog) => void) | undefined;
   private apiResponseLogger: ((entry: SwapProviderApiResponseLog) => void) | undefined;
 
   constructor(options: FixedFloatCompatibleSwapProviderOptions) {
@@ -199,6 +201,10 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
 
   attachSwapCache(cache: StoreBackedSwapCache): void {
     this.cache = cache;
+  }
+
+  attachApiRequestLogger(log: (entry: SwapProviderApiRequestLog) => void): void {
+    this.apiRequestLogger = log;
   }
 
   attachApiResponseLogger(log: (entry: SwapProviderApiResponseLog) => void): void {
@@ -321,6 +327,14 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
 
   private async post(path: string, body: Record<string, unknown>): Promise<unknown> {
     const bodyString = JSON.stringify(body);
+    // Surface every outbound request before the call. The service sink sanitizes
+    // nested secrets (e.g. the order token on status/refund bodies); the API key
+    // and HMAC signature live in headers and are deliberately never logged.
+    this.apiRequestLogger?.({
+      provider: this.name,
+      path,
+      body,
+    });
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.requestTimeoutMs);
     let response: Response;
@@ -549,15 +563,27 @@ function readFixedFloatQuoteLimits(data: unknown): {
 } {
   const minimumPayAmount = readNestedString(data, ["from", "min"]);
   const maximumPayAmount = readNestedString(data, ["from", "max"]);
-  // The payout (to) side is BTC on Lightning, so its min/max are the invoice-side
-  // limits. Present them in msats so the checkout can render a fiat figure. Not all
-  // /price responses include them; callers fall back to the pay-side amount.
-  const minimumInvoiceAmountMsats = btcAmountStringToMsats(
+  // The payout (to) side is always BTC on Lightning, so data.to.min/max are that one
+  // currency's own network floor/ceiling — identical for every pair, and NOT the
+  // effective per-pair limit. The binding per-pair limit lives on the pay-in (from)
+  // side: e.g. Ethereum-network assets carry a ~$10 minimum from gas that dwarfs the
+  // ~$1 Lightning floor. Fold the from-side limits into the invoice-side window using
+  // this quote's own implied rate (from.amount pays for to.amount received), so the
+  // reported minimum_invoice_amount_msats is max(to.min, from.min) and the maximum is
+  // min(to.max, from.max) — whichever side actually binds. Present them in msats so the
+  // checkout can render a fiat figure. Not all /price responses include every field;
+  // any missing input simply drops out of the reconciliation.
+  const invoiceMinFromInvoiceSide = btcAmountStringToMsats(
     readNestedString(data, ["to", "min"]) ?? "",
   );
-  const maximumInvoiceAmountMsats = btcAmountStringToMsats(
+  const invoiceMaxFromInvoiceSide = btcAmountStringToMsats(
     readNestedString(data, ["to", "max"]) ?? "",
   );
+  const payUnitsPerSat = readFixedFloatQuoteRate(data);
+  const invoiceMinFromPaySide = payAmountToInvoiceMsats(minimumPayAmount, payUnitsPerSat, "ceil");
+  const invoiceMaxFromPaySide = payAmountToInvoiceMsats(maximumPayAmount, payUnitsPerSat, "floor");
+  const minimumInvoiceAmountMsats = maxDefined(invoiceMinFromInvoiceSide, invoiceMinFromPaySide);
+  const maximumInvoiceAmountMsats = minDefined(invoiceMaxFromInvoiceSide, invoiceMaxFromPaySide);
   return {
     ...(minimumPayAmount === undefined ? {} : { minimum_pay_amount: minimumPayAmount }),
     ...(maximumPayAmount === undefined ? {} : { maximum_pay_amount: maximumPayAmount }),
@@ -568,6 +594,53 @@ function readFixedFloatQuoteLimits(data: unknown): {
       ? {}
       : { maximum_invoice_amount_msats: maximumInvoiceAmountMsats }),
   };
+}
+
+/**
+ * The pay-in units this quote spends per invoice sat, derived from the quote's own
+ * amounts (data.from.amount pays for data.to.amount received). Returns undefined when
+ * either amount is missing or non-positive, so callers keep only the raw invoice-side
+ * limits rather than inventing a rate.
+ */
+function readFixedFloatQuoteRate(data: unknown): number | undefined {
+  const payAmount = Number(readNestedString(data, ["from", "amount"]));
+  const receiveSats = btcAmountStringToSats(readNestedString(data, ["to", "amount"]) ?? "");
+  if (!Number.isFinite(payAmount) || payAmount <= 0) return undefined;
+  if (receiveSats === undefined || receiveSats <= 0) return undefined;
+  return payAmount / receiveSats;
+}
+
+/**
+ * Converts a pay-in-side amount (e.g. FixedFloat data.from.min) into the equivalent
+ * invoice-side amount in msats at the given rate. Rounds the invoice-side minimum up
+ * and the maximum down so a borderline invoice is never reported as inside a range the
+ * provider would reject.
+ */
+function payAmountToInvoiceMsats(
+  payAmount: string | undefined,
+  payUnitsPerSat: number | undefined,
+  rounding: "ceil" | "floor",
+): number | undefined {
+  if (payAmount === undefined || payUnitsPerSat === undefined) return undefined;
+  const value = Number(payAmount);
+  if (!Number.isFinite(value) || value <= 0) return undefined;
+  const invoiceSats = value / payUnitsPerSat;
+  if (!Number.isFinite(invoiceSats) || invoiceSats <= 0) return undefined;
+  const roundedSats = rounding === "ceil" ? Math.ceil(invoiceSats) : Math.floor(invoiceSats);
+  const msats = roundedSats * 1000;
+  return Number.isSafeInteger(msats) ? msats : undefined;
+}
+
+function maxDefined(left: number | undefined, right: number | undefined): number | undefined {
+  if (left === undefined) return right;
+  if (right === undefined) return left;
+  return Math.max(left, right);
+}
+
+function minDefined(left: number | undefined, right: number | undefined): number | undefined {
+  if (left === undefined) return right;
+  if (right === undefined) return left;
+  return Math.min(left, right);
 }
 
 function readFixedFloatDataErrors(data: unknown): FixedFloatDataError[] {

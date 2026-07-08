@@ -534,6 +534,53 @@ test("FixedFloat quote treats data.errors as unavailable with provider limits", 
   assert.equal(quote.maximum_pay_amount, "5000");
 });
 
+test("FixedFloat quote folds the pay-in floor into the invoice-side minimum", async () => {
+  // data.to (BTC Lightning) reports a ~1609 sat floor for every pair, but this pair's
+  // real floor is the pay-in side: 10 USDT at the quoted rate (~315 USDT per 0.005 BTC)
+  // is ~15,873 sats, well above the Lightning floor. The reported invoice-side minimum
+  // must reflect the binding pay-in floor so the catalog greys sub-minimum invoices.
+  const provider = fixedFloatProvider({
+    key: "fixed-float-key",
+    secret: "fixed-float-secret",
+    baseUrl: "https://fixedfloat.example",
+    fetch: async (url) => {
+      if (String(url) === "https://fixedfloat.example/api/v2/ccies") {
+        return jsonResponse({
+          code: 0,
+          data: [
+            { code: "USDTTRC", coin: "USDT", network: "TRC20" },
+            { code: "BTCLN", coin: "BTC", network: "Lightning" },
+          ],
+        });
+      }
+      if (String(url) === "https://fixedfloat.example/api/v2/price") {
+        return jsonResponse({
+          code: 0,
+          data: {
+            errors: [],
+            from: { amount: "315", min: "10", max: "11340" },
+            to: { amount: "0.005", min: "0.00001609", max: "0.1799895" },
+          },
+        });
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    },
+  });
+
+  const quote = await provider.quote({
+    payInAsset: "USDT_TRON",
+    invoiceAmountMsats: 500_000_000,
+  });
+
+  assert.equal(quote.available, true);
+  assert.equal(quote.minimum_pay_amount, "10");
+  // ceil(10 / (315 / 500000)) = ceil(15873.01) = 15874 sats -> 15,874,000 msats,
+  // taken over the ~1,609,000 msat Lightning floor.
+  assert.equal(quote.minimum_invoice_amount_msats, 15_874_000);
+  // maximum stays the tighter of the two sides (to.max here).
+  assert.equal(quote.maximum_invoice_amount_msats, 17_998_950_000);
+});
+
 test("FixedFloat create rejects payout amount mismatches before returning a deposit", async () => {
   const fetchCalls = [];
   const provider = fixedFloatProvider({

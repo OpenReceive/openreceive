@@ -95,6 +95,19 @@ export interface SwapProviderApiResponseLog {
   readonly data: unknown;
 }
 
+/**
+ * A single outbound provider API request, surfaced for server-side observability
+ * alongside {@link SwapProviderApiResponseLog}. Carries the request path and body.
+ * Emitted through the service's sanitizing log sink, so any secret in the body
+ * (e.g. a FixedFloat order token on status/refund calls) is redacted; provider
+ * auth headers are never included here.
+ */
+export interface SwapProviderApiRequestLog {
+  readonly provider: string;
+  readonly path: string;
+  readonly body: unknown;
+}
+
 export interface OpenReceiveSwapProvider {
   readonly name: string;
   /**
@@ -104,6 +117,13 @@ export interface OpenReceiveSwapProvider {
    * that don't cache remote data may omit this.
    */
   attachSwapCache?(cache: StoreBackedSwapCache): void;
+  /**
+   * Attach a sink for outbound provider API requests, mirroring
+   * {@link attachApiResponseLogger}. Called once after the store is resolved. The
+   * service routes entries through its sanitizing log sink, so secrets in the body
+   * are redacted. Providers that make no remote calls may omit this.
+   */
+  attachApiRequestLogger?(log: (entry: SwapProviderApiRequestLog) => void): void;
   /**
    * Attach a sink for raw provider API responses. Called once after the store is
    * resolved, alongside {@link attachSwapCache}. The service routes entries through

@@ -125,7 +125,7 @@ export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptio
     try {
       const rates = await openreceive.listRates();
       logDemo("rates.response", "Served BTC fiat display rates.", {
-        rateCurrencies: Object.keys(rates.bitcoin),
+        rateCurrencyCount: Object.keys(rates.bitcoin).length,
         elapsedMs: Date.now() - startedAt,
       });
       res.status(200).json({ rates });
