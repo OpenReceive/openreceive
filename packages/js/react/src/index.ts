@@ -58,7 +58,7 @@ import {
   type OpenReceiveTransientFeedbackController,
   type OpenReceiveThemeModel,
   type OpenReceiveThemePreference,
-  type Status
+  type Status,
 } from "@openreceive/browser/internal";
 
 export type Checkout = CheckoutSnapshot;
@@ -117,19 +117,21 @@ export interface CheckoutProviderProps extends UseCheckoutOptions {
     | ((checkout: UseCheckoutResult) => React.ReactNode);
 }
 
-export interface QRCodeProps
-  extends Omit<React.HTMLAttributes<HTMLDivElement>, "children"> {
+export interface QRCodeProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  "children"
+> {
   readonly invoice: string;
   readonly encoder?: OpenReceiveQrEncoder;
   readonly width?: number;
   readonly onError?: (error: unknown) => void;
 }
 
-export type ButtonComponent =
-  React.ElementType<React.ButtonHTMLAttributes<HTMLButtonElement>>;
+export type ButtonComponent = React.ElementType<
+  React.ButtonHTMLAttributes<HTMLButtonElement>
+>;
 
-export interface CopyInvoiceButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface CopyInvoiceButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   readonly invoice: string;
   readonly copyInvoice?: () => Promise<void>;
   readonly clipboard?: Pick<Clipboard, "writeText">;
@@ -140,8 +142,7 @@ export interface CopyInvoiceButtonProps
   readonly ButtonComponent?: ButtonComponent;
 }
 
-export interface OpenWalletButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface OpenWalletButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   readonly invoice: string;
   readonly openWallet?: () => string;
   readonly open?: (uri: string) => void;
@@ -151,8 +152,7 @@ export interface OpenWalletButtonProps
   readonly ButtonComponent?: ButtonComponent;
 }
 
-export interface PaymentStateProps
-  extends React.HTMLAttributes<HTMLSpanElement> {
+export interface PaymentStateProps extends React.HTMLAttributes<HTMLSpanElement> {
   readonly state?: string;
 }
 
@@ -163,8 +163,7 @@ export interface InvoiceSummaryClassNames {
   readonly paymentState?: string;
 }
 
-export interface InvoiceSummaryProps
-  extends React.HTMLAttributes<HTMLDivElement> {
+export interface InvoiceSummaryProps extends React.HTMLAttributes<HTMLDivElement> {
   readonly amountLabel?: string;
   readonly fiatLabel?: string;
   readonly paymentHashLabel?: string;
@@ -173,8 +172,7 @@ export interface InvoiceSummaryProps
   readonly classNames?: InvoiceSummaryClassNames;
 }
 
-export interface CheckoutClassNames
-  extends InvoiceSummaryClassNames {
+export interface CheckoutClassNames extends InvoiceSummaryClassNames {
   readonly root?: string;
   readonly qr?: string;
   readonly satsDetail?: string;
@@ -204,8 +202,7 @@ export type CheckoutChildren =
   | ((model: UseCheckoutResult) => React.ReactNode);
 
 export interface CheckoutProps
-  extends CheckoutData,
-    Omit<React.HTMLAttributes<HTMLElement>, "children"> {
+  extends CheckoutData, Omit<React.HTMLAttributes<HTMLElement>, "children"> {
   readonly qrEncoder?: OpenReceiveQrEncoder;
   readonly logger?: OpenReceiveBrowserLogger;
   readonly onError?: (error: unknown) => void;
@@ -243,8 +240,7 @@ export interface UseThemeResult {
   toggleTheme(): void;
 }
 
-export interface ThemeToggleProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ThemeToggleProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   readonly theme?: OpenReceiveThemePreference;
   readonly resolvedTheme?: OpenReceiveResolvedTheme;
   readonly onThemeChange?: (theme: OpenReceiveThemePreference) => void;
@@ -255,8 +251,10 @@ export type ThemeScopeChildren =
   | React.ReactNode
   | ((theme: UseThemeResult) => React.ReactNode);
 
-export interface ThemeScopeProps
-  extends Omit<React.HTMLAttributes<HTMLElement>, "children"> {
+export interface ThemeScopeProps extends Omit<
+  React.HTMLAttributes<HTMLElement>,
+  "children"
+> {
   readonly as?: keyof React.JSX.IntrinsicElements;
   readonly defaultTheme?: OpenReceiveThemePreference;
   readonly themeStorageKey?: string;
@@ -297,17 +295,18 @@ interface OpenReceiveSwapOptionsResult {
 
 function useOpenReceiveTransientValue<T>(
   resetValue: T,
-  delayMs = OPENRECEIVE_COPY_FEEDBACK_MS
+  delayMs = OPENRECEIVE_COPY_FEEDBACK_MS,
 ): readonly [T, (value: T) => void] {
   const [value, setValue] = React.useState<T>(resetValue);
-  const controller = React.useRef<OpenReceiveTransientFeedbackController<T> | null>(null);
+  const controller =
+    React.useRef<OpenReceiveTransientFeedbackController<T> | null>(null);
 
   React.useEffect(() => {
     controller.current?.clear();
     controller.current = createOpenReceiveTransientFeedbackController({
       resetValue,
       delayMs,
-      onValue: setValue
+      onValue: setValue,
     });
     return () => controller.current?.clear();
   }, [resetValue, delayMs]);
@@ -331,7 +330,7 @@ function useOpenReceiveTickingUnixSeconds(active: boolean): number | undefined {
       return;
     }
     const controller = createOpenReceiveTickingValueController({
-      onValue: setNow
+      onValue: setNow,
     });
     controller.start();
     return () => controller.stop();
@@ -340,20 +339,22 @@ function useOpenReceiveTickingUnixSeconds(active: boolean): number | undefined {
 }
 
 function toCheckoutDisplayData(
-  snapshot: CheckoutSnapshot
+  snapshot: CheckoutSnapshot,
 ): CheckoutDisplayData {
   const invoice = selectCheckoutDisplayInvoice(snapshot);
   if (invoice === undefined) {
     throw new TypeError("OpenReceive checkout requires active or invoices[0].");
   }
   if (typeof invoice.invoice !== "string") {
-    throw new TypeError("OpenReceive checkout requires a display Lightning invoice.");
-  }
-  const fiatQuote = invoice.fiat_quote === null && snapshot.fiat !== undefined
-    ? { fiat: snapshot.fiat }
-    : invoice.fiat_quote ?? (
-      snapshot.fiat === undefined ? undefined : { fiat: snapshot.fiat }
+    throw new TypeError(
+      "OpenReceive checkout requires a display Lightning invoice.",
     );
+  }
+  const fiatQuote =
+    invoice.fiat_quote === null && snapshot.fiat !== undefined
+      ? { fiat: snapshot.fiat }
+      : (invoice.fiat_quote ??
+        (snapshot.fiat === undefined ? undefined : { fiat: snapshot.fiat }));
   const settledAt = snapshot.paid_at ?? invoice.settled_at;
   return {
     checkout_id: snapshot.checkout_id,
@@ -361,16 +362,24 @@ function toCheckoutDisplayData(
     invoice_id: invoice.invoice_id,
     invoice: invoice.invoice,
     rail: invoice.rail,
-    ...(invoice.payment_hash === undefined ? {} : { payment_hash: invoice.payment_hash }),
-    ...(invoice.amount_msats === undefined ? {} : { amount_msats: invoice.amount_msats }),
+    ...(invoice.payment_hash === undefined
+      ? {}
+      : { payment_hash: invoice.payment_hash }),
+    ...(invoice.amount_msats === undefined
+      ? {}
+      : { amount_msats: invoice.amount_msats }),
     ...(fiatQuote === undefined ? {} : { fiat_quote: fiatQuote }),
     ...(invoice.transaction_state === undefined
       ? {}
       : { transaction_state: invoice.transaction_state }),
-    ...(invoice.workflow_state === undefined ? {} : { workflow_state: invoice.workflow_state }),
-    ...(invoice.expires_at === undefined ? {} : { expires_at: invoice.expires_at }),
+    ...(invoice.workflow_state === undefined
+      ? {}
+      : { workflow_state: invoice.workflow_state }),
+    ...(invoice.expires_at === undefined
+      ? {}
+      : { expires_at: invoice.expires_at }),
     ...(settledAt === undefined ? {} : { settled_at: settledAt }),
-    ...(invoice.swap === undefined ? {} : { swap: invoice.swap })
+    ...(invoice.swap === undefined ? {} : { swap: invoice.swap }),
   };
 }
 
@@ -383,30 +392,44 @@ function deriveCheckoutOrderStatus(snapshot: CheckoutSnapshot): Status {
 
 function toCheckoutViewModel(
   display: CheckoutDisplayModel,
-  currentStatus: Status
+  currentStatus: Status,
 ): CheckoutViewModel {
   return {
     invoice_id: display.invoice_id,
     invoice: display.invoice,
-    ...(display.payment_hash === undefined ? {} : { payment_hash: display.payment_hash }),
-    ...(display.amount_msats === undefined ? {} : { amount_msats: display.amount_msats }),
-    ...(display.fiat_quote === undefined ? {} : { fiat_quote: display.fiat_quote }),
-    ...(display.expires_at === undefined ? {} : { expires_at: display.expires_at }),
-    ...(display.settled_at === undefined ? {} : { settled_at: display.settled_at }),
+    ...(display.payment_hash === undefined
+      ? {}
+      : { payment_hash: display.payment_hash }),
+    ...(display.amount_msats === undefined
+      ? {}
+      : { amount_msats: display.amount_msats }),
+    ...(display.fiat_quote === undefined
+      ? {}
+      : { fiat_quote: display.fiat_quote }),
+    ...(display.expires_at === undefined
+      ? {}
+      : { expires_at: display.expires_at }),
+    ...(display.settled_at === undefined
+      ? {}
+      : { settled_at: display.settled_at }),
     lightning_uri: display.lightning_uri,
-    ...(display.amountLabel === undefined ? {} : { amountLabel: display.amountLabel }),
-    ...(display.fiatLabel === undefined ? {} : { fiatLabel: display.fiatLabel }),
-    ...(display.paymentHashLabel === undefined ? {} : { paymentHashLabel: display.paymentHashLabel }),
-    status: currentStatus
+    ...(display.amountLabel === undefined
+      ? {}
+      : { amountLabel: display.amountLabel }),
+    ...(display.fiatLabel === undefined
+      ? {}
+      : { fiatLabel: display.fiatLabel }),
+    ...(display.paymentHashLabel === undefined
+      ? {}
+      : { paymentHashLabel: display.paymentHashLabel }),
+    status: currentStatus,
   };
 }
 
-export function createCheckoutViewModel(
-  data: CheckoutData
-): CheckoutViewModel {
+export function createCheckoutViewModel(data: CheckoutData): CheckoutViewModel {
   return toCheckoutViewModel(
     createCheckoutDisplayModel(toCheckoutDisplayData(data.checkout)),
-    deriveCheckoutOrderStatus(data.checkout)
+    deriveCheckoutOrderStatus(data.checkout),
   );
 }
 
@@ -418,34 +441,32 @@ function resolveCheckoutStatusRefreshUrl(options: {
   return options.orderUrl;
 }
 
-export function useCheckout(
-  options: UseCheckoutOptions
-): UseCheckoutResult {
+export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
   const [copied, showCopied] = useOpenReceiveTransientValue<boolean>(false);
-  const [latestSnapshot, setLatestSnapshot] = React.useState<CheckoutSnapshot>(options.checkout);
+  const [latestSnapshot, setLatestSnapshot] = React.useState<CheckoutSnapshot>(
+    options.checkout,
+  );
   React.useEffect(() => {
     setLatestSnapshot(options.checkout);
   }, [options.checkout]);
   const displayData = React.useMemo(
     () => toCheckoutDisplayData(latestSnapshot),
-    [latestSnapshot]
+    [latestSnapshot],
   );
   const model = React.useMemo(
-    () => toCheckoutViewModel(
-      createCheckoutDisplayModel(displayData),
-      deriveCheckoutOrderStatus(latestSnapshot)
-    ),
-    [
-      displayData,
-      latestSnapshot
-    ]
+    () =>
+      toCheckoutViewModel(
+        createCheckoutDisplayModel(displayData),
+        deriveCheckoutOrderStatus(latestSnapshot),
+      ),
+    [displayData, latestSnapshot],
   );
   // `latestSnapshot` is already memoized above, so no extra useMemo is needed.
   const snapshot: CheckoutSnapshot = latestSnapshot;
-  const [state, setState] = React.useState<CheckoutState>(
-    () => createCheckoutState(snapshot, {
-      logger: options.logger
-    })
+  const [state, setState] = React.useState<CheckoutState>(() =>
+    createCheckoutState(snapshot, {
+      logger: options.logger,
+    }),
   );
   const controllerRef = React.useRef<CheckoutController | null>(null);
   const onStateRef = React.useRef(options.onState);
@@ -457,19 +478,17 @@ export function useCheckout(
     readonly fired: boolean;
   }>({
     orderId: snapshot.order_id,
-    fired: false
+    fired: false,
   });
   const logContext = React.useMemo(
     () => getCheckoutLogContext(displayData),
-    [
-      displayData
-    ]
+    [displayData],
   );
   const refreshStatus =
     options.polling === false ? undefined : options.refreshStatus;
   const orderUrl = resolveCheckoutStatusRefreshUrl({
     orderUrl: options.orderUrl,
-    polling: options.polling
+    polling: options.polling,
   });
   // The controller owns the poll/countdown timers and pushes every poll result
   // back out through onSnapshot -> setLatestSnapshot. Seed it from the current
@@ -495,7 +514,7 @@ export function useCheckout(
         setState(nextState);
         onStateRef.current?.(nextState);
       },
-      onSnapshot: setLatestSnapshot
+      onSnapshot: setLatestSnapshot,
     });
     controllerRef.current = controller;
     controller.start();
@@ -515,7 +534,7 @@ export function useCheckout(
     options.logger,
     options.onError,
     options.clipboard,
-    options.open
+    options.open,
   ]);
   const publicStatus = deriveStatus(state);
   const richStatus = createCheckoutStatusModel(state);
@@ -525,7 +544,7 @@ export function useCheckout(
     if (announced.orderId !== snapshot.order_id) {
       settledAnnouncementRef.current = {
         orderId: snapshot.order_id,
-        fired: false
+        fired: false,
       };
     }
   }, [snapshot.order_id]);
@@ -535,7 +554,7 @@ export function useCheckout(
     if (publicStatus !== "settled" || announced.fired) return;
     settledAnnouncementRef.current = {
       orderId: snapshot.order_id,
-      fired: true
+      fired: true,
     };
     // UI hint only; server-side fulfillment must use the backend settlement hook.
     onSettledRef.current?.();
@@ -549,7 +568,7 @@ export function useCheckout(
           invoice: displayData.invoice,
           clipboard: options.clipboard,
           logger: options.logger,
-          logContext
+          logContext,
         });
       } else {
         await controller.copyInvoice();
@@ -559,24 +578,37 @@ export function useCheckout(
       options.onError?.(error);
       throw error;
     }
-  }, [logContext, displayData.invoice, options.clipboard, options.logger, options.onError, showCopied]);
+  }, [
+    logContext,
+    displayData.invoice,
+    options.clipboard,
+    options.logger,
+    options.onError,
+    showCopied,
+  ]);
 
   const openWallet = React.useCallback(() => {
     try {
       const controller = controllerRef.current;
       return controller === null
         ? openWalletHelper({
-          invoice: displayData.invoice,
-          open: options.open,
-          logger: options.logger,
-          logContext
-        })
+            invoice: displayData.invoice,
+            open: options.open,
+            logger: options.logger,
+            logContext,
+          })
         : controller.openWallet();
     } catch (error) {
       options.onError?.(error);
       throw error;
     }
-  }, [logContext, displayData.invoice, options.open, options.logger, options.onError]);
+  }, [
+    logContext,
+    displayData.invoice,
+    options.open,
+    options.logger,
+    options.onError,
+  ]);
 
   const reloadState = React.useCallback(async () => {
     try {
@@ -618,25 +650,22 @@ export function useCheckout(
     retry,
     cancel,
     copyInvoice,
-    openWallet
+    openWallet,
   };
 }
 
-const CheckoutContext =
-  React.createContext<UseCheckoutResult | null>(null);
+const CheckoutContext = React.createContext<UseCheckoutResult | null>(null);
 
 export function useCheckoutContext(): UseCheckoutResult {
   const checkout = React.useContext(CheckoutContext);
   if (checkout === null) {
-    throw new Error(
-      "useCheckoutContext must be used within CheckoutProvider."
-    );
+    throw new Error("useCheckoutContext must be used within CheckoutProvider.");
   }
   return checkout;
 }
 
 export function CheckoutProvider(
-  props: CheckoutProviderProps
+  props: CheckoutProviderProps,
 ): React.ReactElement {
   const { children, ...options } = props;
   const checkout = useCheckout(options);
@@ -646,18 +675,12 @@ export function CheckoutProvider(
   return React.createElement(
     CheckoutContext.Provider,
     { value: checkout },
-    content
+    content,
   );
 }
 
 export function QRCode(props: QRCodeProps): React.ReactElement {
-  const {
-    invoice,
-    encoder,
-    width = 256,
-    onError,
-    ...divProps
-  } = props;
+  const { invoice, encoder, width = 256, onError, ...divProps } = props;
   const [svg, setSvg] = React.useState("");
 
   React.useEffect(() => {
@@ -679,13 +702,13 @@ export function QRCode(props: QRCodeProps): React.ReactElement {
     ...divProps,
     [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.qr]: "",
     dangerouslySetInnerHTML: {
-      __html: svg
-    }
+      __html: svg,
+    },
   });
 }
 
 export function CopyInvoiceButton(
-  props: CopyInvoiceButtonProps
+  props: CopyInvoiceButtonProps,
 ): React.ReactElement {
   const {
     invoice,
@@ -723,14 +746,14 @@ export function CopyInvoiceButton(
         } catch (error) {
           onError?.(error);
         }
-      }
+      },
     },
-    children ?? (copied ? copiedLabel : openReceiveCheckoutLabels.copyInvoice)
+    children ?? (copied ? copiedLabel : openReceiveCheckoutLabels.copyInvoice),
   );
 }
 
 export function OpenWalletButton(
-  props: OpenWalletButtonProps
+  props: OpenWalletButtonProps,
 ): React.ReactElement {
   const {
     invoice,
@@ -756,50 +779,46 @@ export function OpenWalletButton(
         if (event.defaultPrevented) return;
 
         try {
-          const uri = openWallet === undefined
-            ? openWalletHelper({ invoice, open, logger })
-            : openWallet();
+          const uri =
+            openWallet === undefined
+              ? openWalletHelper({ invoice, open, logger })
+              : openWallet();
           onOpened?.(uri);
         } catch (error) {
           onError?.(error);
         }
-      }
+      },
     },
-    children
+    children,
   );
 }
 
-export function PaymentState(
-  props: PaymentStateProps
-): React.ReactElement {
-  const {
-    state = "pending",
-    ...spanProps
-  } = props;
+export function PaymentState(props: PaymentStateProps): React.ReactElement {
+  const { state = "pending", ...spanProps } = props;
 
   return React.createElement(
     "span",
     {
       ...spanProps,
-      [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.state]: state
+      [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.state]: state,
     },
-    state
+    state,
   );
 }
 
-export function useTheme(
-  options: UseThemeOptions = {}
-): UseThemeResult {
+export function useTheme(options: UseThemeOptions = {}): UseThemeResult {
   const storageKey = options.storageKey ?? OPENRECEIVE_THEME_STORAGE_KEY;
   const [theme, setThemeState] = React.useState<OpenReceiveThemePreference>(
-    () => readOpenReceiveThemePreference({
-      storage: options.storage,
-      storageKey,
-      defaultTheme: options.defaultTheme
-    })
+    () =>
+      readOpenReceiveThemePreference({
+        storage: options.storage,
+        storageKey,
+        defaultTheme: options.defaultTheme,
+      }),
   );
   const [systemDark, setSystemDark] = React.useState(
-    () => globalThis.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false
+    () =>
+      globalThis.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false,
   );
 
   React.useEffect(() => {
@@ -812,13 +831,16 @@ export function useTheme(
 
   const themeModel = createOpenReceiveThemeModel(theme, { systemDark });
 
-  const setTheme = React.useCallback((nextTheme: OpenReceiveThemePreference) => {
-    setThemeState(nextTheme);
-    writeOpenReceiveThemePreference(nextTheme, {
-      storage: options.storage,
-      storageKey
-    });
-  }, [options.storage, storageKey]);
+  const setTheme = React.useCallback(
+    (nextTheme: OpenReceiveThemePreference) => {
+      setThemeState(nextTheme);
+      writeOpenReceiveThemePreference(nextTheme, {
+        storage: options.storage,
+        storageKey,
+      });
+    },
+    [options.storage, storageKey],
+  );
 
   const toggleTheme = React.useCallback(() => {
     setTheme(themeModel.nextTheme);
@@ -833,13 +855,11 @@ export function useTheme(
     attributes: themeModel.attributes,
     checkoutElementAttributes: themeModel.checkoutElementAttributes,
     setTheme,
-    toggleTheme
+    toggleTheme,
   };
 }
 
-export function ThemeToggle(
-  props: ThemeToggleProps
-): React.ReactElement {
+export function ThemeToggle(props: ThemeToggleProps): React.ReactElement {
   const {
     theme,
     resolvedTheme,
@@ -851,7 +871,7 @@ export function ThemeToggle(
     ...buttonProps
   } = props;
   const fallback = useTheme({
-    defaultTheme: theme
+    defaultTheme: theme,
   });
   const activeTheme = resolvedTheme ?? fallback.resolvedTheme;
   const themeModel = createOpenReceiveThemeModel(activeTheme);
@@ -863,7 +883,7 @@ export function ThemeToggle(
     className: joinClassNames(
       "or-theme-toggle-button",
       `or-theme-toggle-${themeModel.resolvedTheme}`,
-      buttonProps.className
+      buttonProps.className,
     ),
     title: themeModel.toggleLabel,
     type,
@@ -873,7 +893,7 @@ export function ThemeToggle(
       if (event.defaultPrevented) return;
       onThemeChange?.(themeModel.nextTheme);
       if (onThemeChange === undefined) fallback.setTheme(themeModel.nextTheme);
-    }
+    },
   };
 
   const defaultChildren = React.createElement(
@@ -883,31 +903,29 @@ export function ThemeToggle(
       "span",
       {
         "aria-hidden": true,
-        className: "or-theme-toggle-track"
+        className: "or-theme-toggle-track",
       },
       React.createElement("span", {
-        className: "or-theme-toggle-icon or-theme-toggle-icon-light"
-      })
+        className: "or-theme-toggle-icon or-theme-toggle-icon-light",
+      }),
     ),
     React.createElement(
       "span",
       {
-        className: "or-theme-toggle-label"
+        className: "or-theme-toggle-label",
       },
-      themeModel.toggleLabel
-    )
+      themeModel.toggleLabel,
+    ),
   );
 
   return React.createElement(
     ButtonComponent,
     componentProps,
-    children ?? defaultChildren
+    children ?? defaultChildren,
   );
 }
 
-export function ThemeScope(
-  props: ThemeScopeProps
-): React.ReactElement {
+export function ThemeScope(props: ThemeScopeProps): React.ReactElement {
   const {
     as: Element = "div",
     defaultTheme,
@@ -923,7 +941,7 @@ export function ThemeScope(
   const theme = useTheme({
     defaultTheme,
     storageKey: themeStorageKey,
-    storage
+    storage,
   });
   const scopedChildren =
     typeof children === "function" ? children(theme) : children;
@@ -932,27 +950,27 @@ export function ThemeScope(
     Element,
     {
       ...elementProps,
-      ...theme.attributes
+      ...theme.attributes,
     },
     [
       themeToggle
         ? React.createElement(
-          "div",
-          {
-            className: topbarClassName,
-            key: "openreceive-theme-scope-toggle"
-          },
-          React.createElement(ThemeToggle, {
-            className: themeToggleClassName,
-            theme: theme.theme,
-            resolvedTheme: theme.resolvedTheme,
-            onThemeChange: theme.setTheme,
-            ButtonComponent
-          })
-        )
+            "div",
+            {
+              className: topbarClassName,
+              key: "openreceive-theme-scope-toggle",
+            },
+            React.createElement(ThemeToggle, {
+              className: themeToggleClassName,
+              theme: theme.theme,
+              resolvedTheme: theme.resolvedTheme,
+              onThemeChange: theme.setTheme,
+              ButtonComponent,
+            }),
+          )
         : null,
-      scopedChildren
-    ]
+      scopedChildren,
+    ],
   );
 }
 
@@ -968,56 +986,61 @@ export function WaitingState(props: {
     props.status ??
     createCheckoutStatusModel({
       phase: props.phase,
-      waiting: props.waiting ?? false
+      waiting: props.waiting ?? false,
     });
 
   return React.createElement(
     "div",
     {
-      className: joinClassNames("or-payment-status", props.className)
+      className: joinClassNames("or-payment-status", props.className),
     },
     status.waiting
       ? React.createElement("span", {
-        className: "or-spinner",
-        "aria-hidden": "true"
-      })
+          className: "or-spinner",
+          "aria-hidden": "true",
+        })
       : null,
     React.createElement(
       "div",
       null,
       React.createElement("strong", null, props.statusTitle ?? status.title),
-      React.createElement("span", null, props.statusDetail ?? status.detail)
-    )
+      React.createElement("span", null, props.statusDetail ?? status.detail),
+    ),
   );
 }
 
-export function PaymentWizard(
-  props: PaymentWizardProps
-): React.ReactElement {
+export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
   const countryStorageKey =
     props.countryStorageKey ?? OPENRECEIVE_COUNTRY_STORAGE_KEY;
-  const [selection, setSelection] = React.useState<OpenReceivePaymentWizardSelection>(
-    () => createOpenReceivePaymentWizardController({
-      storageKey: countryStorageKey,
-      defaultCountryCode: getOpenReceiveDefaultCountryCode()
-    }).getSelection()
-  );
+  const [selection, setSelection] =
+    React.useState<OpenReceivePaymentWizardSelection>(() =>
+      createOpenReceivePaymentWizardController({
+        storageKey: countryStorageKey,
+        defaultCountryCode: getOpenReceiveDefaultCountryCode(),
+      }).getSelection(),
+    );
   const [activeTutorial, setActiveTutorial] = React.useState<{
     readonly providerId: string;
     readonly index: number;
     readonly copied: boolean;
   } | null>(null);
-  const [swapStartingAsset, setSwapStartingAsset] = React.useState<string | null>(null);
+  const [swapStartingAsset, setSwapStartingAsset] = React.useState<
+    string | null
+  >(null);
   const [startedSwapInvoice, setStartedSwapInvoice] =
     React.useState<CheckoutInvoiceSnapshot | null>(null);
-  const [dismissedSwapInvoiceId, setDismissedSwapInvoiceId] = React.useState<string | null>(null);
+  const [dismissedSwapInvoiceId, setDismissedSwapInvoiceId] = React.useState<
+    string | null
+  >(null);
   const [swapQuotes, setSwapQuotes] = React.useState<
     Record<string, OpenReceiveSwapOptionDisplay>
   >({});
   // When a swap provider is configured, each pay-in coin is promoted to a top-level
   // choice. Selecting one jumps straight to its deposit address, bypassing the
   // country/route/provider steps. Null means the standard method grid is shown.
-  const [selectedSwapAsset, setSelectedSwapAsset] = React.useState<string | null>(null);
+  const [selectedSwapAsset, setSelectedSwapAsset] = React.useState<
+    string | null
+  >(null);
   const autoSwapAttemptedRef = React.useRef<Set<string>>(new Set());
   // Tell the host (default Checkout) whether the payer is in the focused swap flow, so it
   // can hide the Lightning payment section while the swap deposit panel stands in for it.
@@ -1037,10 +1060,17 @@ export function PaymentWizard(
   }, [checkout]);
 
   const currentSwapInvoice = React.useMemo(
-    () => selectCurrentSwapInvoice(checkout, startedSwapInvoice, dismissedSwapInvoiceId),
-    [checkout, startedSwapInvoice, dismissedSwapInvoiceId]
+    () =>
+      selectCurrentSwapInvoice(
+        checkout,
+        startedSwapInvoice,
+        dismissedSwapInvoiceId,
+      ),
+    [checkout, startedSwapInvoice, dismissedSwapInvoiceId],
   );
-  const now = useOpenReceiveTickingUnixSeconds(currentSwapInvoice !== undefined);
+  const now = useOpenReceiveTickingUnixSeconds(
+    currentSwapInvoice !== undefined,
+  );
   const startSwap = React.useCallback(
     async (payInAsset: string) => {
       if (
@@ -1056,7 +1086,7 @@ export function PaymentWizard(
         const body = await postOpenReceiveJson(fetcher, props.orderUrl, {
           order_id: orderId,
           action: "start_swap",
-          pay_in_asset: payInAsset
+          pay_in_asset: payInAsset,
         });
         const invoice = normalizeSwapStartInvoice(body);
         setStartedSwapInvoice(invoice);
@@ -1067,10 +1097,12 @@ export function PaymentWizard(
         setSwapStartingAsset(null);
       }
     },
-    [props.orderUrl, orderId, fetcher, props.onError]
+    [props.orderUrl, orderId, fetcher, props.onError],
   );
   const quoteSwap = React.useCallback(
-    async (payInAsset: string): Promise<OpenReceiveSwapOptionDisplay | undefined> => {
+    async (
+      payInAsset: string,
+    ): Promise<OpenReceiveSwapOptionDisplay | undefined> => {
       if (
         props.orderUrl === undefined ||
         props.orderUrl === false ||
@@ -1083,7 +1115,7 @@ export function PaymentWizard(
         const body = await postOpenReceiveJson(fetcher, props.orderUrl, {
           order_id: orderId,
           action: "swap_quote",
-          pay_in_asset: payInAsset
+          pay_in_asset: payInAsset,
         });
         const quote = normalizeSwapQuote(body);
         if (quote !== undefined) {
@@ -1095,14 +1127,14 @@ export function PaymentWizard(
         return undefined;
       }
     },
-    [props.orderUrl, orderId, fetcher, props.onError]
+    [props.orderUrl, orderId, fetcher, props.onError],
   );
   const refundSwap = React.useCallback(
     async (
       attemptId: string,
       refundAddress: string,
       refundNonce: string,
-      confirm: boolean
+      confirm: boolean,
     ) => {
       if (
         props.orderUrl === undefined ||
@@ -1119,7 +1151,7 @@ export function PaymentWizard(
           attempt_id: attemptId,
           refund_address: refundAddress,
           refund_nonce: refundNonce,
-          confirm
+          confirm,
         });
         const invoice = normalizeSwapStartInvoice(body);
         setStartedSwapInvoice(invoice);
@@ -1128,37 +1160,43 @@ export function PaymentWizard(
         props.onError?.(error);
       }
     },
-    [props.orderUrl, orderId, fetcher, props.onError]
+    [props.orderUrl, orderId, fetcher, props.onError],
   );
   const updateWizardSelection = React.useCallback(
     (
       apply: (
-        controller: OpenReceivePaymentWizardController
-      ) => OpenReceivePaymentWizardSelection
+        controller: OpenReceivePaymentWizardController,
+      ) => OpenReceivePaymentWizardSelection,
     ) => {
       setSelection((current) =>
-        apply(createOpenReceivePaymentWizardController({
-          selection: current,
-          storageKey: countryStorageKey
-        }))
+        apply(
+          createOpenReceivePaymentWizardController({
+            selection: current,
+            storageKey: countryStorageKey,
+          }),
+        ),
       );
     },
-    [countryStorageKey]
+    [countryStorageKey],
   );
   const model = createOpenReceivePaymentWizardModel(selection);
   const { wizard } = model;
-  const routeAssetDisplays = createOpenReceiveWizardRouteAssetDisplays(model.routeAssets, {
-    selectedRoute: model.selectedRoute
-  });
+  const routeAssetDisplays = createOpenReceiveWizardRouteAssetDisplays(
+    model.routeAssets,
+    {
+      selectedRoute: model.selectedRoute,
+    },
+  );
   const routeDisplays = createOpenReceiveWizardRouteDisplays(wizard.routes);
   const showRoutePicker =
     routeAssetDisplays.length > 0 &&
     (model.selectedRoute === null || routeDisplays.length === 0);
-  const activeTutorialProvider = activeTutorial === null
-    ? undefined
-    : routeDisplays
-      .flatMap((route) => route.providers)
-      .find((provider) => provider.id === activeTutorial.providerId);
+  const activeTutorialProvider =
+    activeTutorial === null
+      ? undefined
+      : routeDisplays
+          .flatMap((route) => route.providers)
+          .find((provider) => provider.id === activeTutorial.providerId);
   // Top-level swap coins, one per configured pay-in asset (e.g. ETH on Ethereum,
   // USDT on Tron). Only present once the order status reports swaps are enabled.
   const swapAssetOptions = swapOptions.enabled
@@ -1220,13 +1258,20 @@ export function PaymentWizard(
     return () => {
       cancelled = true;
     };
-  }, [selectedSwapAsset, activeSwapForAsset, props.orderUrl, quoteSwap, startSwap]);
+  }, [
+    selectedSwapAsset,
+    activeSwapForAsset,
+    props.orderUrl,
+    quoteSwap,
+    startSwap,
+  ]);
 
   const selectedSwapOption =
     selectedSwapAsset === null
       ? undefined
-      : (swapAssetOptions.find((option) => option.pay_in_asset === selectedSwapAsset) ??
-        swapQuotes[selectedSwapAsset]);
+      : (swapAssetOptions.find(
+          (option) => option.pay_in_asset === selectedSwapAsset,
+        ) ?? swapQuotes[selectedSwapAsset]);
   const selectedSwapQuote =
     selectedSwapAsset === null ? undefined : swapQuotes[selectedSwapAsset];
   const selectedSwapLabel = selectedSwapOption?.label ?? "this coin";
@@ -1235,344 +1280,383 @@ export function PaymentWizard(
     return React.createElement(
       "div",
       {
-        className: joinClassNames("or-wizard", props.className)
+        className: joinClassNames("or-wizard", props.className),
       },
       renderWizardBackBreadcrumb(
         selectedSwapOption === undefined
           ? selectedSwapLabel
           : `${selectedSwapOption.label} · ${selectedSwapOption.network_label}`,
-        () => setSelectedSwapAsset(null)
+        () => setSelectedSwapAsset(null),
       ),
       React.createElement(
         "div",
         {
-          className: "or-wizard-results"
+          className: "or-wizard-results",
         },
         activeSwapForAsset !== undefined
           ? renderSwapDepositPanel({
-            invoice: activeSwapForAsset,
-            now,
-            encoder: props.qrEncoder,
-            clipboard: props.clipboard,
-            logger: props.logger,
-            onError: props.onError,
-            onRefund: refundSwap,
-            onBackToLightning: () => {
-              setDismissedSwapInvoiceId(activeSwapForAsset.invoice_id);
-              setSelectedSwapAsset(null);
-            }
-          })
+              invoice: activeSwapForAsset,
+              now,
+              encoder: props.qrEncoder,
+              clipboard: props.clipboard,
+              logger: props.logger,
+              onError: props.onError,
+              onRefund: refundSwap,
+              onBackToLightning: () => {
+                setDismissedSwapInvoiceId(activeSwapForAsset.invoice_id);
+                setSelectedSwapAsset(null);
+              },
+            })
           : selectedSwapQuote !== undefined && !selectedSwapQuote.available
             ? renderSwapUnavailable(selectedSwapQuote, checkout)
-            : renderSwapPreparing(selectedSwapLabel)
-      )
+            : renderSwapPreparing(selectedSwapLabel),
+      ),
     );
   }
 
   return React.createElement(
     "div",
     {
-      className: joinClassNames("or-wizard", props.className)
+      className: joinClassNames("or-wizard", props.className),
     },
     selection.selectedMethod === null
       ? React.createElement(
-        React.Fragment,
-        null,
-        React.createElement(
-          "div",
-          {
-            className: "or-wizard-header"
-          },
+          React.Fragment,
+          null,
           React.createElement(
             "div",
-            null,
-            React.createElement("h2", null, openReceiveCheckoutLabels.wizardTitle),
-            React.createElement("p", null, openReceiveCheckoutLabels.wizardSubtitle)
-          )
-        ),
-        React.createElement(
-          "div",
-          {
-            className: "or-method-grid"
-          },
-          (swapAssetOptions.length > 0
-            ? openReceivePaymentMethods.filter((method) => method.id !== "crypto")
-            : openReceivePaymentMethods
-          ).map((method) =>
+            {
+              className: "or-wizard-header",
+            },
             React.createElement(
-              "button",
-              {
-                key: method.id,
-                onClick: () => {
-                  updateWizardSelection((controller) =>
-                    controller.selectMethod(method.id)
-                  );
-                },
-                type: "button"
-              },
-              React.createElement("img", { alt: "", src: getOpenReceivePaymentMethodIcon(method.id) }),
-              React.createElement("span", null, method.title),
-              React.createElement("small", null, method.detail)
-            )
-          ),
-          swapAssetOptions.map((option) => {
-            // An asset whose provider limits exclude this invoice amount is shown
-            // greyed-out and non-clickable, with a short reason (e.g. the minimum
-            // payment) in place of its network label.
-            const disabled = option.available === false;
-            const limitMessage = swapOptionLimitMessage(option, checkout);
-            return React.createElement(
-              "button",
-              {
-                key: option.pay_in_asset,
-                className: disabled ? "or-method-unavailable" : undefined,
-                disabled,
-                "aria-disabled": disabled ? "true" : undefined,
-                onClick: disabled
-                  ? undefined
-                  : () => {
-                    autoSwapAttemptedRef.current.delete(option.pay_in_asset);
-                    setSelectedSwapAsset(option.pay_in_asset);
-                  },
-                type: "button"
-              },
-              React.createElement("img", {
-                alt: "",
-                src: getOpenReceiveAssetIcon(option.label.toLowerCase())
-              }),
-              React.createElement("span", null, option.label),
+              "div",
+              null,
               React.createElement(
-                "small",
+                "h2",
                 null,
-                disabled && limitMessage !== undefined ? limitMessage : option.network_label
-              )
-            );
-          })
+                openReceiveCheckoutLabels.wizardTitle,
+              ),
+              React.createElement(
+                "p",
+                null,
+                openReceiveCheckoutLabels.wizardSubtitle,
+              ),
+            ),
+          ),
+          React.createElement(
+            "div",
+            {
+              className: "or-method-grid",
+            },
+            (swapAssetOptions.length > 0
+              ? openReceivePaymentMethods.filter(
+                  (method) => method.id !== "crypto",
+                )
+              : openReceivePaymentMethods
+            ).map((method) =>
+              React.createElement(
+                "button",
+                {
+                  key: method.id,
+                  onClick: () => {
+                    updateWizardSelection((controller) =>
+                      controller.selectMethod(method.id),
+                    );
+                  },
+                  type: "button",
+                },
+                React.createElement("img", {
+                  alt: "",
+                  src: getOpenReceivePaymentMethodIcon(method.id),
+                }),
+                React.createElement("span", null, method.title),
+                React.createElement("small", null, method.detail),
+              ),
+            ),
+            swapAssetOptions.map((option) => {
+              // An asset whose provider limits exclude this invoice amount is shown
+              // greyed-out and non-clickable, with a short reason (e.g. the minimum
+              // payment) in place of its network label.
+              const disabled = option.available === false;
+              const limitMessage = swapOptionLimitMessage(option, checkout);
+              return React.createElement(
+                "button",
+                {
+                  key: option.pay_in_asset,
+                  className: disabled ? "or-method-unavailable" : undefined,
+                  disabled,
+                  "aria-disabled": disabled ? "true" : undefined,
+                  onClick: disabled
+                    ? undefined
+                    : () => {
+                        autoSwapAttemptedRef.current.delete(
+                          option.pay_in_asset,
+                        );
+                        setSelectedSwapAsset(option.pay_in_asset);
+                      },
+                  type: "button",
+                },
+                React.createElement("img", {
+                  alt: "",
+                  src: getOpenReceiveAssetIcon(option.label.toLowerCase()),
+                }),
+                React.createElement("span", null, option.label),
+                React.createElement(
+                  "small",
+                  null,
+                  disabled && limitMessage !== undefined
+                    ? limitMessage
+                    : option.network_label,
+                ),
+              );
+            }),
+          ),
         )
-      )
       : null,
     selection.selectedMethod === null
       ? null
       : renderWizardBreadcrumbs({
-        method: selection.selectedMethod,
-        selectedRoute: model.selectedRoute,
-        routeAssets: routeAssetDisplays,
-        onChangeMethod: () => {
-          updateWizardSelection((controller) =>
-            controller.changeMethod()
-          );
-        },
-        onChangeRoute: () => {
-          updateWizardSelection((controller) =>
-            controller.update({ type: "change_route" })
-          );
-        }
-      }),
+          method: selection.selectedMethod,
+          selectedRoute: model.selectedRoute,
+          routeAssets: routeAssetDisplays,
+          onChangeMethod: () => {
+            updateWizardSelection((controller) => controller.changeMethod());
+          },
+          onChangeRoute: () => {
+            updateWizardSelection((controller) =>
+              controller.update({ type: "change_route" }),
+            );
+          },
+        }),
     showRoutePicker && selection.selectedMethod === "bitcoin"
       ? renderRoutePicker({
-        assets: routeAssetDisplays,
-        method: "bitcoin",
-        onSelectRoute: (route) => {
-          updateWizardSelection((controller) =>
-            controller.selectRoute(route)
-          );
-        }
-      })
+          assets: routeAssetDisplays,
+          method: "bitcoin",
+          onSelectRoute: (route) => {
+            updateWizardSelection((controller) =>
+              controller.selectRoute(route),
+            );
+          },
+        })
       : null,
     showRoutePicker && selection.selectedMethod === "crypto"
       ? renderRoutePicker({
-        assets: routeAssetDisplays,
-        method: "crypto",
-        onSelectRoute: (route) => {
-          updateWizardSelection((controller) =>
-            controller.selectRoute(route)
-          );
-        }
-      })
+          assets: routeAssetDisplays,
+          method: "crypto",
+          onSelectRoute: (route) => {
+            updateWizardSelection((controller) =>
+              controller.selectRoute(route),
+            );
+          },
+        })
       : null,
     selection.selectedMethod === null
       ? null
       : React.createElement(
-        "div",
-        {
-          className: "or-wizard-results"
-        },
-        routeDisplays.length === 0
-          ? React.createElement(
-            "p",
-            {
-              className: "or-wizard-empty"
-            },
-            getOpenReceiveWizardEmptyMessage(selection.selectedMethod)
-          )
-          : routeDisplays.map((route) => {
-            const routeSwapOptions = swapOptionsForRoute(route.key, swapOptions.options);
-            const activeSwapForRoute =
-              currentSwapInvoice !== undefined &&
-              openReceiveSwapAssetMatchesRoute(route.key, currentSwapInvoice.swap?.pay_in_asset)
-                ? currentSwapInvoice
-                : undefined;
-            return React.createElement(
-              "section",
-              {
-                className: "or-wizard-route",
-                key: route.key
-              },
-              React.createElement(
-                "div",
+          "div",
+          {
+            className: "or-wizard-results",
+          },
+          routeDisplays.length === 0
+            ? React.createElement(
+                "p",
                 {
-                  className: "or-wizard-route-heading"
+                  className: "or-wizard-empty",
                 },
-                React.createElement(
-                  "div",
-                  null,
-                  React.createElement(
-                    "h3",
-                    null,
-                    route.title,
-                    wizard.selectedRail === null
-                      ? null
-                      : renderCountrySelect({
-                        countries: model.countryDisplays,
-                        selectedCountryCode: selection.selectedCountryCode,
-                        onSelectCountry: (countryCode) => {
-                          updateWizardSelection((controller) =>
-                            controller.selectCountry(countryCode)
-                          );
-                        }
-                      })
+                getOpenReceiveWizardEmptyMessage(selection.selectedMethod),
+              )
+            : routeDisplays.map((route) => {
+                const routeSwapOptions = swapOptionsForRoute(
+                  route.key,
+                  swapOptions.options,
+                );
+                const activeSwapForRoute =
+                  currentSwapInvoice !== undefined &&
+                  openReceiveSwapAssetMatchesRoute(
+                    route.key,
+                    currentSwapInvoice.swap?.pay_in_asset,
                   )
-                )
-              ),
-              activeSwapForRoute === undefined
-                ? renderSwapActions({
-                  options: routeSwapOptions,
-                  enabled: swapOptions.enabled,
-                  startingAsset: swapStartingAsset,
-                  onStart: startSwap,
-                  checkout
-                })
-                : renderSwapDepositPanel({
-                  invoice: activeSwapForRoute,
-                  now,
-                  encoder: props.qrEncoder,
-                  clipboard: props.clipboard,
-                  logger: props.logger,
-                  onError: props.onError,
-                  onRefund: refundSwap,
-                  onBackToLightning: () => {
-                    setDismissedSwapInvoiceId(activeSwapForRoute.invoice_id);
-                  }
-                }),
-              activeSwapForRoute === undefined
-                ? React.createElement(
-                  "div",
+                    ? currentSwapInvoice
+                    : undefined;
+                return React.createElement(
+                  "section",
                   {
-                    className: "or-provider-grid"
+                    className: "or-wizard-route",
+                    key: route.key,
                   },
-                  route.providers.map((provider) =>
+                  React.createElement(
+                    "div",
+                    {
+                      className: "or-wizard-route-heading",
+                    },
                     React.createElement(
-                      "article",
-                      {
-                        className: provider.recommended
-                          ? "or-provider-card recommended"
-                          : "or-provider-card",
-                        key: provider.id
-                      },
+                      "div",
+                      null,
                       React.createElement(
-                        "div",
-                        {
-                          className: "or-provider-heading"
-                        },
-                        React.createElement("img", {
-                          alt: "",
-                          src: provider.icon
-                        }),
-                        React.createElement("h4", null, provider.name),
-                        provider.recommendedLabel === null
+                        "h3",
+                        null,
+                        route.title,
+                        wizard.selectedRail === null
                           ? null
-                          : React.createElement("span", null, provider.recommendedLabel)
+                          : renderCountrySelect({
+                              countries: model.countryDisplays,
+                              selectedCountryCode:
+                                selection.selectedCountryCode,
+                              onSelectCountry: (countryCode) => {
+                                updateWizardSelection((controller) =>
+                                  controller.selectCountry(countryCode),
+                                );
+                              },
+                            }),
                       ),
-                      React.createElement(
-                        "p",
-                        {
-                          className: "or-provider-kind"
+                    ),
+                  ),
+                  activeSwapForRoute === undefined
+                    ? renderSwapActions({
+                        options: routeSwapOptions,
+                        enabled: swapOptions.enabled,
+                        startingAsset: swapStartingAsset,
+                        onStart: startSwap,
+                        checkout,
+                      })
+                    : renderSwapDepositPanel({
+                        invoice: activeSwapForRoute,
+                        now,
+                        encoder: props.qrEncoder,
+                        clipboard: props.clipboard,
+                        logger: props.logger,
+                        onError: props.onError,
+                        onRefund: refundSwap,
+                        onBackToLightning: () => {
+                          setDismissedSwapInvoiceId(
+                            activeSwapForRoute.invoice_id,
+                          );
                         },
-                        provider.kind
-                      ),
-                      React.createElement(
+                      }),
+                  activeSwapForRoute === undefined
+                    ? React.createElement(
                         "div",
                         {
-                          className: "or-provider-actions"
+                          className: "or-provider-grid",
                         },
-                        renderProviderOpenAction(provider, () => setActiveTutorial({
-                          providerId: provider.id,
-                          index: 0,
-                          copied: false
-                        }))
+                        route.providers.map((provider) =>
+                          React.createElement(
+                            "article",
+                            {
+                              className: provider.recommended
+                                ? "or-provider-card recommended"
+                                : "or-provider-card",
+                              key: provider.id,
+                            },
+                            React.createElement(
+                              "div",
+                              {
+                                className: "or-provider-heading",
+                              },
+                              React.createElement("img", {
+                                alt: "",
+                                src: provider.icon,
+                              }),
+                              React.createElement("h4", null, provider.name),
+                              provider.recommendedLabel === null
+                                ? null
+                                : React.createElement(
+                                    "span",
+                                    null,
+                                    provider.recommendedLabel,
+                                  ),
+                            ),
+                            React.createElement(
+                              "p",
+                              {
+                                className: "or-provider-kind",
+                              },
+                              provider.kind,
+                            ),
+                            React.createElement(
+                              "div",
+                              {
+                                className: "or-provider-actions",
+                              },
+                              renderProviderOpenAction(provider, () =>
+                                setActiveTutorial({
+                                  providerId: provider.id,
+                                  index: 0,
+                                  copied: false,
+                                }),
+                              ),
+                            ),
+                          ),
+                        ),
                       )
-                    )
-                  )
-                )
-                : null
-            );
-          })
-      ),
+                    : null,
+                );
+              }),
+        ),
     activeTutorialProvider === undefined || activeTutorial === null
       ? null
       : renderProviderTutorialModal({
-        provider: activeTutorialProvider,
-        index: activeTutorial.index,
-        copied: activeTutorial.copied,
-        onClose: () => setActiveTutorial(null),
-        onCopy: async () => {
-          try {
-            await copyInvoiceHelper({
-              invoice: props.invoice,
-              logger: props.logger,
-              logContext: props.logContext
-            });
-            globalThis.dispatchEvent?.(
-              createCheckoutProviderCopyEvent(activeTutorialProvider.id)
-            );
+          provider: activeTutorialProvider,
+          index: activeTutorial.index,
+          copied: activeTutorial.copied,
+          onClose: () => setActiveTutorial(null),
+          onCopy: async () => {
+            try {
+              await copyInvoiceHelper({
+                invoice: props.invoice,
+                logger: props.logger,
+                logContext: props.logContext,
+              });
+              globalThis.dispatchEvent?.(
+                createCheckoutProviderCopyEvent(activeTutorialProvider.id),
+              );
+              setActiveTutorial({
+                providerId: activeTutorialProvider.id,
+                index: 0,
+                copied: true,
+              });
+            } catch (error) {
+              props.onError?.(error);
+            }
+          },
+          onStep: (index) =>
             setActiveTutorial({
               providerId: activeTutorialProvider.id,
-              index: 0,
-              copied: true
-            });
-          } catch (error) {
-            props.onError?.(error);
-          }
-        },
-        onStep: (index) => setActiveTutorial({
-          providerId: activeTutorialProvider.id,
-          index,
-          copied: activeTutorial.copied
-        })
-      })
+              index,
+              copied: activeTutorial.copied,
+            }),
+        }),
   );
 }
 
 function renderWizardBackBreadcrumb(
   currentLabel: string,
-  onBack: () => void
+  onBack: () => void,
 ): React.ReactElement {
   return React.createElement(
     "div",
     {
-      className: "or-wizard-breadcrumbs"
+      className: "or-wizard-breadcrumbs",
     },
     React.createElement(
       "button",
       {
         className: "or-wizard-breadcrumb",
         onClick: onBack,
-        type: "button"
+        type: "button",
       },
-      openReceiveCheckoutLabels.paymentMethod
+      openReceiveCheckoutLabels.paymentMethod,
     ),
-    React.createElement("span", { className: "or-wizard-breadcrumb-separator", "aria-hidden": "true" }, "/"),
-    React.createElement("span", { className: "or-wizard-breadcrumb-current" }, currentLabel)
+    React.createElement(
+      "span",
+      { className: "or-wizard-breadcrumb-separator", "aria-hidden": "true" },
+      "/",
+    ),
+    React.createElement(
+      "span",
+      { className: "or-wizard-breadcrumb-current" },
+      currentLabel,
+    ),
   );
 }
 
@@ -1583,45 +1667,57 @@ function renderWizardBreadcrumbs(options: {
   readonly onChangeMethod: () => void;
   readonly onChangeRoute: () => void;
 }): React.ReactElement {
-  const method = openReceivePaymentMethods.find((candidate) => candidate.id === options.method);
+  const method = openReceivePaymentMethods.find(
+    (candidate) => candidate.id === options.method,
+  );
   const methodLabel = method?.title ?? openReceiveCheckoutLabels.paymentMethod;
-  const routeLabel = options.selectedRoute === null || options.routeAssets.length <= 1
-    ? null
-    : options.routeAssets.find((asset) => asset.id === options.selectedRoute)?.label ?? options.selectedRoute;
+  const routeLabel =
+    options.selectedRoute === null || options.routeAssets.length <= 1
+      ? null
+      : (options.routeAssets.find((asset) => asset.id === options.selectedRoute)
+          ?.label ?? options.selectedRoute);
 
   return React.createElement(
     "nav",
     {
       "aria-label": "Payment path",
-      className: "or-wizard-breadcrumbs"
+      className: "or-wizard-breadcrumbs",
     },
     React.createElement(
       "button",
       {
         className: "or-wizard-breadcrumb",
         onClick: options.onChangeMethod,
-        type: "button"
+        type: "button",
       },
-      openReceiveCheckoutLabels.paymentMethod
+      openReceiveCheckoutLabels.paymentMethod,
     ),
     React.createElement("span", { "aria-hidden": "true" }, "/"),
     routeLabel === null
-      ? React.createElement("span", { className: "or-wizard-breadcrumb-current" }, methodLabel)
+      ? React.createElement(
+          "span",
+          { className: "or-wizard-breadcrumb-current" },
+          methodLabel,
+        )
       : React.createElement(
-        React.Fragment,
-        null,
-        React.createElement(
-          "button",
-          {
-            className: "or-wizard-breadcrumb",
-            onClick: options.onChangeRoute,
-            type: "button"
-          },
-          methodLabel
+          React.Fragment,
+          null,
+          React.createElement(
+            "button",
+            {
+              className: "or-wizard-breadcrumb",
+              onClick: options.onChangeRoute,
+              type: "button",
+            },
+            methodLabel,
+          ),
+          React.createElement("span", { "aria-hidden": "true" }, "/"),
+          React.createElement(
+            "span",
+            { className: "or-wizard-breadcrumb-current" },
+            routeLabel,
+          ),
         ),
-        React.createElement("span", { "aria-hidden": "true" }, "/"),
-        React.createElement("span", { className: "or-wizard-breadcrumb-current" }, routeLabel)
-      )
   );
 }
 
@@ -1639,7 +1735,10 @@ function swapOptionLimitMessage(
     const fiat =
       checkout === undefined
         ? undefined
-        : formatOpenReceiveSwapLimit(checkout, option.minimum_invoice_amount_msats);
+        : formatOpenReceiveSwapLimit(
+            checkout,
+            option.minimum_invoice_amount_msats,
+          );
     if (fiat !== undefined) return `Minimum payment ${fiat}`;
     if (option.minimum_pay_amount !== undefined) {
       return `Minimum ${option.minimum_pay_amount} ${option.label}`;
@@ -1649,7 +1748,10 @@ function swapOptionLimitMessage(
     const fiat =
       checkout === undefined
         ? undefined
-        : formatOpenReceiveSwapLimit(checkout, option.maximum_invoice_amount_msats);
+        : formatOpenReceiveSwapLimit(
+            checkout,
+            option.maximum_invoice_amount_msats,
+          );
     if (fiat !== undefined) return `Maximum payment ${fiat}`;
     if (option.maximum_pay_amount !== undefined) {
       return `Maximum ${option.maximum_pay_amount} ${option.label}`;
@@ -1673,7 +1775,7 @@ function renderSwapActions(options: {
   return React.createElement(
     "div",
     {
-      className: "or-swap-actions"
+      className: "or-swap-actions",
     },
     shown.map((option) => {
       const disabled = option.available === false;
@@ -1682,21 +1784,25 @@ function renderSwapActions(options: {
         "div",
         {
           className: "or-swap-action",
-          key: option.pay_in_asset
+          key: option.pay_in_asset,
         },
         disabled
           ? limitMessage === undefined
             ? null
-            : React.createElement("p", { className: "or-swap-warning" }, limitMessage)
+            : React.createElement(
+                "p",
+                { className: "or-swap-warning" },
+                limitMessage,
+              )
           : option.pay_amount === undefined
             ? null
             : React.createElement(
-              "p",
-              {
-                className: "or-swap-estimate"
-              },
-              `Estimated ${option.pay_amount} ${option.label} to settle this checkout.`
-            ),
+                "p",
+                {
+                  className: "or-swap-estimate",
+                },
+                `Estimated ${option.pay_amount} ${option.label} to settle this checkout.`,
+              ),
         React.createElement(
           "button",
           {
@@ -1705,16 +1811,16 @@ function renderSwapActions(options: {
             onClick: disabled
               ? undefined
               : () => {
-                void options.onStart(option.pay_in_asset);
-              },
-            type: "button"
+                  void options.onStart(option.pay_in_asset);
+                },
+            type: "button",
           },
           options.startingAsset === option.pay_in_asset
             ? "Preparing..."
-            : `Create ${option.label} (${option.network_label}) payment address`
-        )
+            : `Create ${option.label} (${option.network_label}) payment address`,
+        ),
       );
-    })
+    }),
   );
 }
 
@@ -1722,23 +1828,23 @@ function renderSwapPreparing(assetLabel: string): React.ReactElement {
   return React.createElement(
     "section",
     {
-      className: "or-swap-panel"
+      className: "or-swap-panel",
     },
     React.createElement(
       "div",
       {
-        className: "or-swap-heading"
+        className: "or-swap-heading",
       },
       React.createElement("strong", null, "Preparing payment address"),
-      React.createElement("span", null, "One moment")
+      React.createElement("span", null, "One moment"),
     ),
     React.createElement(
       "p",
       {
-        className: "or-swap-progress"
+        className: "or-swap-progress",
       },
-      `Getting your ${assetLabel} payment address…`
-    )
+      `Getting your ${assetLabel} payment address…`,
+    ),
   );
 }
 
@@ -1759,14 +1865,14 @@ function renderSwapUnavailable(
   return React.createElement(
     "section",
     {
-      className: "or-swap-panel"
+      className: "or-swap-panel",
     },
     React.createElement(
       "div",
       {
-        className: "or-swap-heading"
+        className: "or-swap-heading",
       },
-      React.createElement("strong", null, `${quote.label} unavailable`)
+      React.createElement("strong", null, `${quote.label} unavailable`),
     ),
     React.createElement("p", { className: "or-swap-warning" }, detail),
     range === undefined
@@ -1775,10 +1881,10 @@ function renderSwapUnavailable(
     React.createElement(
       "p",
       {
-        className: "or-swap-progress"
+        className: "or-swap-progress",
       },
-      "Choose another asset above, or pay the Lightning invoice at the top of this page."
-    )
+      "Choose another asset above, or pay the Lightning invoice at the top of this page.",
+    ),
   );
 }
 
@@ -1793,13 +1899,13 @@ export function renderSwapDepositPanel(options: {
     attemptId: string,
     refundAddress: string,
     refundNonce: string,
-    confirm: boolean
+    confirm: boolean,
   ) => Promise<void>;
   readonly onBackToLightning: () => void;
 }): React.ReactElement | null {
   const display = createOpenReceiveSwapDisplayModel(
     options.invoice,
-    options.now === undefined ? {} : { now: options.now }
+    options.now === undefined ? {} : { now: options.now },
   );
   if (display === undefined) return null;
   const memo = display.depositMemo;
@@ -1808,34 +1914,34 @@ export function renderSwapDepositPanel(options: {
     {
       className: "or-swap-back",
       onClick: options.onBackToLightning,
-      type: "button"
+      type: "button",
     },
-    "Pay with Lightning instead"
+    "Pay with Lightning instead",
   );
   const heading = React.createElement(
     "div",
     {
-      className: "or-swap-heading"
+      className: "or-swap-heading",
     },
     React.createElement("strong", null, display.providerStateLabel),
-    React.createElement("span", null, display.providerStateDetail)
+    React.createElement("span", null, display.providerStateDetail),
   );
   // The "still waiting" states borrow the Lightning section's status card (spinner +
   // title + detail) so the swap panel that replaces it reads the same.
   const waitingCard = React.createElement(WaitingState, {
     waiting: true,
     statusTitle: display.providerStateLabel,
-    statusDetail: display.providerStateDetail
+    statusDetail: display.providerStateDetail,
   });
 
   if (display.state === "creating") {
     return React.createElement(
       "section",
       {
-        className: "or-swap-panel"
+        className: "or-swap-panel",
       },
       waitingCard,
-      backButton
+      backButton,
     );
   }
 
@@ -1843,10 +1949,10 @@ export function renderSwapDepositPanel(options: {
     return React.createElement(
       "section",
       {
-        className: "or-swap-panel"
+        className: "or-swap-panel",
       },
       heading,
-      renderSwapSupportDetails(display, options)
+      renderSwapSupportDetails(display, options),
     );
   }
 
@@ -1854,18 +1960,18 @@ export function renderSwapDepositPanel(options: {
     return React.createElement(
       "section",
       {
-        className: "or-swap-panel"
+        className: "or-swap-panel",
       },
       heading,
       React.createElement(
         "p",
         {
-          className: "or-swap-warning"
+          className: "or-swap-warning",
         },
-        "This payment address expired without a detected payment. Create a new payment address to try again."
+        "This payment address expired without a detected payment. Create a new payment address to try again.",
       ),
       renderSwapSupportDetails(display, options),
-      backButton
+      backButton,
     );
   }
 
@@ -1873,15 +1979,15 @@ export function renderSwapDepositPanel(options: {
     return React.createElement(
       "section",
       {
-        className: "or-swap-panel"
+        className: "or-swap-panel",
       },
       heading,
       React.createElement(
         "p",
         {
-          className: "or-swap-warning"
+          className: "or-swap-warning",
         },
-        `Use a ${display.networkLabel} address you control. Do not paste the deposit address.`
+        `Use a ${display.networkLabel} address you control. Do not paste the deposit address.`,
       ),
       React.createElement(SwapRefundForm, {
         attemptId: display.attemptId,
@@ -1889,9 +1995,9 @@ export function renderSwapDepositPanel(options: {
         submittedRefundAddress: display.refundAddress,
         refundNonce: display.refundNonce,
         onRefund: options.onRefund,
-        onError: options.onError
+        onError: options.onError,
       }),
-      renderSwapSupportDetails(display, options)
+      renderSwapSupportDetails(display, options),
     );
   }
 
@@ -1899,22 +2005,26 @@ export function renderSwapDepositPanel(options: {
     return React.createElement(
       "section",
       {
-        className: "or-swap-panel"
+        className: "or-swap-panel",
       },
       heading,
       React.createElement(
         "dl",
         {
-          className: "or-swap-details"
+          className: "or-swap-details",
         },
         display.refundAddress === undefined
           ? null
           : renderSwapCopyRow("Refund address", display.refundAddress, options),
         display.refundTxId === undefined
           ? null
-          : renderSwapCopyRow("Refund transaction", display.refundTxId, options)
+          : renderSwapCopyRow(
+              "Refund transaction",
+              display.refundTxId,
+              options,
+            ),
       ),
-      renderSwapSupportDetails(display, options)
+      renderSwapSupportDetails(display, options),
     );
   }
 
@@ -1922,69 +2032,75 @@ export function renderSwapDepositPanel(options: {
     return React.createElement(
       "section",
       {
-        className: "or-swap-panel"
+        className: "or-swap-panel",
       },
       heading,
-      React.createElement("p", { className: "or-swap-warning" }, "This payment needs support review."),
+      React.createElement(
+        "p",
+        { className: "or-swap-warning" },
+        "This payment needs support review.",
+      ),
       renderSwapSupportDetails(display, options),
-      backButton
+      backButton,
     );
   }
 
   return React.createElement(
     "section",
     {
-      className: "or-swap-panel"
+      className: "or-swap-panel",
     },
     waitingCard,
     React.createElement(
       "p",
       {
-        className: "or-swap-instruction"
+        className: "or-swap-instruction",
       },
       "Pay ",
-      React.createElement("strong", null, `${display.depositAmount} ${display.assetLabel}`),
-      " to this address"
+      React.createElement(
+        "strong",
+        null,
+        `${display.depositAmount} ${display.assetLabel}`,
+      ),
+      " to this address",
     ),
     React.createElement(SwapPayloadQRCode, {
       payload: display.qrPayload,
       encoder: options.encoder,
-      onError: options.onError
+      onError: options.onError,
     }),
     React.createElement(
       "dl",
       {
-        className: "or-swap-details"
+        className: "or-swap-details",
       },
       renderSwapCopyRow("Address", display.depositAddress, options),
-      memo === undefined
-        ? null
-        : renderSwapCopyRow("Memo", memo, options),
-      renderSwapCopyRow("Amount", display.depositAmount, options)
+      memo === undefined ? null : renderSwapCopyRow("Memo", memo, options),
+      renderSwapCopyRow("Amount", display.depositAmount, options),
     ),
     React.createElement(
       "p",
       {
-        className: "or-swap-warning"
+        className: "or-swap-warning",
       },
-      display.networkWarning
+      display.networkWarning,
     ),
     React.createElement(
       "p",
       {
-        className: "or-swap-countdown"
+        className: "or-swap-countdown",
       },
       "Payment window ",
-      React.createElement("strong", null, display.countdownLabel)
+      React.createElement("strong", null, display.countdownLabel),
     ),
     React.createElement(
       "p",
       {
-        className: "or-swap-warning"
+        className: "or-swap-warning",
       },
-      `Pay with one method only. If you already sent ${display.assetLabel}, do not also pay the Lightning invoice.`
+      `Pay with one method only. If you already sent ${display.assetLabel}, do not also pay the Lightning invoice.`,
     ),
-    backButton
+    backButton,
   );
 }
 
@@ -1994,7 +2110,7 @@ function renderSwapCopyRow(
   options: {
     readonly clipboard?: Pick<Clipboard, "writeText">;
     readonly onError?: (error: unknown) => void;
-  }
+  },
 ): readonly React.ReactElement[] {
   return [
     React.createElement("dt", { key: `${label}-label` }, label),
@@ -2006,13 +2122,15 @@ function renderSwapCopyRow(
         "button",
         {
           onClick: () => {
-            void copyOpenReceiveText(value, options.clipboard).catch(options.onError);
+            void copyOpenReceiveText(value, options.clipboard).catch(
+              options.onError,
+            );
           },
-          type: "button"
+          type: "button",
         },
-        "Copy"
-      )
-    )
+        "Copy",
+      ),
+    ),
   ];
 }
 
@@ -2021,7 +2139,7 @@ function renderSwapSupportDetails(
   options: {
     readonly clipboard?: Pick<Clipboard, "writeText">;
     readonly onError?: (error: unknown) => void;
-  }
+  },
 ): React.ReactElement | null {
   const rows = [
     ...(display.depositTxId === undefined
@@ -2035,16 +2153,16 @@ function renderSwapSupportDetails(
       : renderSwapCopyRow("Refund transaction", display.refundTxId, options)),
     ...(display.providerOrderId === undefined
       ? []
-      : renderSwapCopyRow("Provider order", display.providerOrderId, options))
+      : renderSwapCopyRow("Provider order", display.providerOrderId, options)),
   ];
   if (rows.length === 0) return null;
   return React.createElement(
     "details",
     {
-      className: "or-swap-support"
+      className: "or-swap-support",
     },
     React.createElement("summary", null, "Payment details"),
-    React.createElement("dl", { className: "or-swap-details" }, rows)
+    React.createElement("dl", { className: "or-swap-details" }, rows),
   );
 }
 
@@ -2057,7 +2175,7 @@ function SwapRefundForm(props: {
     attemptId: string,
     refundAddress: string,
     refundNonce: string,
-    confirm: boolean
+    confirm: boolean,
   ) => Promise<void>;
   readonly onError?: (error: unknown) => void;
 }): React.ReactElement {
@@ -2077,36 +2195,41 @@ function SwapRefundForm(props: {
         event.preventDefault();
         if (address.length === 0 || props.refundNonce === undefined) return;
         setSubmitting(true);
-        void props.onRefund(props.attemptId, address, props.refundNonce, confirm)
+        void props
+          .onRefund(props.attemptId, address, props.refundNonce, confirm)
           .catch(props.onError)
           .finally(() => setSubmitting(false));
-      }
+      },
     },
     props.submittedRefundAddress === undefined
       ? null
       : React.createElement(
-        "p",
-        {
-          className: "or-swap-warning"
-        },
-        `Confirm refund to ${props.submittedRefundAddress}.`
-      ),
+          "p",
+          {
+            className: "or-swap-warning",
+          },
+          `Confirm refund to ${props.submittedRefundAddress}.`,
+        ),
     React.createElement("input", {
       autoComplete: "off",
       onChange: (event) => setRefundAddress(event.currentTarget.value),
       placeholder: `${props.networkLabel} refund address`,
       required: true,
       type: "text",
-      value: refundAddress
+      value: refundAddress,
     }),
     React.createElement(
       "button",
       {
         disabled,
-        type: "submit"
+        type: "submit",
       },
-      submitting ? "Submitting..." : confirm ? "Confirm refund" : "Review refund address"
-    )
+      submitting
+        ? "Submitting..."
+        : confirm
+          ? "Confirm refund"
+          : "Review refund address",
+    ),
   );
 }
 
@@ -2130,27 +2253,32 @@ function SwapPayloadQRCode(props: {
     };
   }, [props.payload, props.encoder, props.onError]);
 
-  const imageSource = svg.length === 0
-    ? undefined
-    : `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  const imageSource =
+    svg.length === 0
+      ? undefined
+      : `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 
   return React.createElement("img", {
     alt: "",
     className: "or-swap-qr",
-    src: imageSource
+    src: imageSource,
   });
 }
 
 function swapOptionsForRoute(
   routeKey: string,
-  options: readonly OpenReceiveSwapOptionDisplay[]
+  options: readonly OpenReceiveSwapOptionDisplay[],
 ): readonly OpenReceiveSwapOptionDisplay[] {
-  return options.filter((option) => openReceiveSwapAssetMatchesRoute(routeKey, option.pay_in_asset));
+  return options.filter((option) =>
+    openReceiveSwapAssetMatchesRoute(routeKey, option.pay_in_asset),
+  );
 }
 
 // The pay-in asset to auto-advance to a deposit address, or undefined when the payer
 // should still choose (fiat rails, multi-network stablecoins, no swap configured).
-function normalizeSwapQuote(body: unknown): OpenReceiveSwapOptionDisplay | undefined {
+function normalizeSwapQuote(
+  body: unknown,
+): OpenReceiveSwapOptionDisplay | undefined {
   const quote = reactRecord(reactRecord(body).quote ?? body);
   return typeof quote.pay_in_asset === "string"
     ? (quote as unknown as OpenReceiveSwapOptionDisplay)
@@ -2160,18 +2288,26 @@ function normalizeSwapQuote(body: unknown): OpenReceiveSwapOptionDisplay | undef
 function selectCurrentSwapInvoice(
   checkout: CheckoutSnapshot | undefined,
   local: CheckoutInvoiceSnapshot | null,
-  dismissedInvoiceId: string | null
+  dismissedInvoiceId: string | null,
 ): CheckoutInvoiceSnapshot | undefined {
-  const fromCheckout = checkout?.invoices.find((invoice) =>
-    invoice.rail === "swap" && invoice.swap !== undefined && invoice.invoice_id !== dismissedInvoiceId
+  const fromCheckout = checkout?.invoices.find(
+    (invoice) =>
+      invoice.rail === "swap" &&
+      invoice.swap !== undefined &&
+      invoice.invoice_id !== dismissedInvoiceId,
   );
-  if (local === null || local.invoice_id === dismissedInvoiceId) return fromCheckout;
-  return checkout?.invoices.find((invoice) => invoice.invoice_id === local.invoice_id) ?? local;
+  if (local === null || local.invoice_id === dismissedInvoiceId)
+    return fromCheckout;
+  return (
+    checkout?.invoices.find(
+      (invoice) => invoice.invoice_id === local.invoice_id,
+    ) ?? local
+  );
 }
 
 async function copyOpenReceiveText(
   text: string,
-  clipboard?: Pick<Clipboard, "writeText">
+  clipboard?: Pick<Clipboard, "writeText">,
 ): Promise<void> {
   const target = clipboard ?? globalThis.navigator?.clipboard;
   if (target === undefined) throw new Error("Clipboard API is unavailable.");
@@ -2186,7 +2322,7 @@ function reactRecord(value: unknown): Record<string, unknown> {
 
 function renderProviderOpenAction(
   provider: OpenReceiveWizardProviderDisplay,
-  onOpenTutorial: () => void
+  onOpenTutorial: () => void,
 ): React.ReactElement {
   if (provider.tutorials.length === 0) {
     return React.createElement(
@@ -2194,9 +2330,9 @@ function renderProviderOpenAction(
       {
         href: provider.url,
         rel: "noreferrer",
-        target: "_blank"
+        target: "_blank",
       },
-      provider.openLabel
+      provider.openLabel,
     );
   }
 
@@ -2205,9 +2341,9 @@ function renderProviderOpenAction(
     {
       className: "or-provider-open",
       onClick: onOpenTutorial,
-      type: "button"
+      type: "button",
     },
-    provider.openLabel
+    provider.openLabel,
   );
 }
 
@@ -2222,8 +2358,12 @@ function renderProviderTutorialModal(options: {
   const { provider } = options;
   if (provider.tutorials.length === 0) return null;
   const totalSteps = provider.tutorials.length + 1;
-  const stepIndex = Math.max(0, Math.min(provider.tutorials.length, options.index));
-  const tutorial = stepIndex === 0 ? undefined : provider.tutorials[stepIndex - 1];
+  const stepIndex = Math.max(
+    0,
+    Math.min(provider.tutorials.length, options.index),
+  );
+  const tutorial =
+    stepIndex === 0 ? undefined : provider.tutorials[stepIndex - 1];
   const previousIndex = Math.max(0, stepIndex - 1);
   const nextIndex = Math.min(provider.tutorials.length, stepIndex + 1);
   const isFinalStep = stepIndex === provider.tutorials.length;
@@ -2241,33 +2381,33 @@ function renderProviderTutorialModal(options: {
         if (event.key === "Escape") options.onClose();
       },
       role: "dialog",
-      tabIndex: -1
+      tabIndex: -1,
     },
     React.createElement(
       "div",
       {
-        className: "or-tutorial-dialog"
+        className: "or-tutorial-dialog",
       },
       React.createElement(
         "div",
         {
-          className: "or-tutorial-header"
+          className: "or-tutorial-header",
         },
         React.createElement(
           "div",
           {
-            className: "or-tutorial-title"
+            className: "or-tutorial-title",
           },
           React.createElement("img", {
             alt: "",
             className: "or-tutorial-header-logo",
-            src: provider.icon
+            src: provider.icon,
           }),
           React.createElement(
             "h3",
             null,
-            `${openReceiveCheckoutLabels.tutorialTitlePrefix} ${provider.name}`
-          )
+            `${openReceiveCheckoutLabels.tutorialTitlePrefix} ${provider.name}`,
+          ),
         ),
         React.createElement(
           "button",
@@ -2275,104 +2415,109 @@ function renderProviderTutorialModal(options: {
             "aria-label": "Close",
             className: "or-tutorial-close",
             onClick: options.onClose,
-            type: "button"
+            type: "button",
           },
-          "X"
-        )
+          "X",
+        ),
       ),
       stepIndex === 0
         ? React.createElement(
-          "div",
-          {
-            className: "or-tutorial-intro"
-          },
-          React.createElement("img", {
-            alt: "",
-            className: "or-tutorial-provider-logo",
-            src: provider.icon
-          }),
-          React.createElement(
-            "p",
-            null,
-            `${openReceiveCheckoutLabels.tutorialIntroPrefix} ${provider.name}.`
-          ),
-          React.createElement(
-            "p",
-            null,
-            openReceiveCheckoutLabels.tutorialIntroCopy
-          ),
-          React.createElement(
-            "button",
-            {
-              className: "or-tutorial-copy",
-              onClick: () => void options.onCopy(),
-              type: "button"
-            },
-            openReceiveCheckoutLabels.copyInvoice
-          ),
-          options.copied
-            ? React.createElement(
-              "p",
-              {
-                className: "or-tutorial-copy-message"
-              },
-              openReceiveCheckoutLabels.tutorialCopiedContinue
-            )
-            : null
-        )
-        : React.createElement(
-          React.Fragment,
-          null,
-          React.createElement(
             "div",
             {
-              className: "or-tutorial-frame"
+              className: "or-tutorial-intro",
             },
             React.createElement("img", {
-              alt: tutorial?.caption ?? "",
-              className: "or-tutorial-image",
-              src: tutorial?.image ?? ""
-            })
+              alt: "",
+              className: "or-tutorial-provider-logo",
+              src: provider.icon,
+            }),
+            React.createElement(
+              "p",
+              null,
+              `${openReceiveCheckoutLabels.tutorialIntroPrefix} ${provider.name}.`,
+            ),
+            React.createElement(
+              "p",
+              null,
+              openReceiveCheckoutLabels.tutorialIntroCopy,
+            ),
+            React.createElement(
+              "button",
+              {
+                className: "or-tutorial-copy",
+                onClick: () => void options.onCopy(),
+                type: "button",
+              },
+              openReceiveCheckoutLabels.copyInvoice,
+            ),
+            options.copied
+              ? React.createElement(
+                  "p",
+                  {
+                    className: "or-tutorial-copy-message",
+                  },
+                  openReceiveCheckoutLabels.tutorialCopiedContinue,
+                )
+              : null,
+          )
+        : React.createElement(
+            React.Fragment,
+            null,
+            React.createElement(
+              "div",
+              {
+                className: "or-tutorial-frame",
+              },
+              React.createElement("img", {
+                alt: tutorial?.caption ?? "",
+                className: "or-tutorial-image",
+                src: tutorial?.image ?? "",
+              }),
+            ),
+            React.createElement(
+              "p",
+              {
+                className: "or-tutorial-caption",
+              },
+              tutorial?.caption ?? "",
+            ),
           ),
-          React.createElement("p", {
-            className: "or-tutorial-caption"
-          }, tutorial?.caption ?? "")
-        ),
       React.createElement(
         "div",
         {
           "aria-hidden": "true",
-          className: "or-tutorial-steps"
+          className: "or-tutorial-steps",
         },
         Array.from({ length: totalSteps }, (_, index) =>
           React.createElement("span", {
-            className: index === stepIndex
-              ? "or-tutorial-step active"
-              : "or-tutorial-step",
-            key: index
-          })
-        )
+            className:
+              index === stepIndex
+                ? "or-tutorial-step active"
+                : "or-tutorial-step",
+            key: index,
+          }),
+        ),
       ),
       React.createElement(
         "p",
         {
-          className: "or-tutorial-progress"
+          className: "or-tutorial-progress",
         },
-        `Step ${stepIndex + 1} of ${totalSteps}`
+        `Step ${stepIndex + 1} of ${totalSteps}`,
       ),
       React.createElement(
         "div",
         {
-          className: "or-tutorial-controls"
+          className: "or-tutorial-controls",
         },
         React.createElement(
           "button",
           {
             disabled: stepIndex === 0,
             onClick: () => options.onStep(previousIndex),
-            type: "button"
+            type: "button",
           },
-          "Back"
+          "Back",
         ),
         React.createElement(
           "button",
@@ -2384,22 +2529,20 @@ function renderProviderTutorialModal(options: {
               }
               options.onStep(nextIndex);
             },
-            type: "button"
+            type: "button",
           },
-          isFinalStep ? openReceiveCheckoutLabels.tutorialExit : "Next"
-        )
-      )
-    )
+          isFinalStep ? openReceiveCheckoutLabels.tutorialExit : "Next",
+        ),
+      ),
+    ),
   );
 }
 
-export function InvoiceSummary(
-  props: InvoiceSummaryProps
-): React.ReactElement {
-	  const {
-	    amountLabel,
-	    fiatLabel,
-	    status,
+export function InvoiceSummary(props: InvoiceSummaryProps): React.ReactElement {
+  const {
+    amountLabel,
+    fiatLabel,
+    status,
     PaymentStateComponent = PaymentState,
     classNames,
     className,
@@ -2411,48 +2554,41 @@ export function InvoiceSummary(
     {
       ...divProps,
       className,
-      [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.meta]: ""
+      [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.meta]: "",
     },
     amountLabel === undefined
       ? null
       : React.createElement(
-        "span",
-        {
-          className: classNames?.amount
-        },
-        amountLabel
-      ),
+          "span",
+          {
+            className: classNames?.amount,
+          },
+          amountLabel,
+        ),
     fiatLabel === undefined
       ? null
       : React.createElement(
-        "span",
-        {
-          className: classNames?.fiat
-        },
-        fiatLabel
-      ),
+          "span",
+          {
+            className: classNames?.fiat,
+          },
+          fiatLabel,
+        ),
     status === undefined
       ? null
       : React.createElement(PaymentStateComponent, {
-        state: status,
-        className: classNames?.paymentState
-      })
+          state: status,
+          className: classNames?.paymentState,
+        }),
   );
 }
 
-export interface SatsDetailProps
-  extends React.HTMLAttributes<HTMLDivElement> {
+export interface SatsDetailProps extends React.HTMLAttributes<HTMLDivElement> {
   readonly amountLabel?: string;
 }
 
-export function SatsDetail(
-  props: SatsDetailProps
-): React.ReactElement | null {
-  const {
-    amountLabel,
-    className,
-    ...divProps
-  } = props;
+export function SatsDetail(props: SatsDetailProps): React.ReactElement | null {
+  const { amountLabel, className, ...divProps } = props;
 
   if (amountLabel === undefined) return null;
 
@@ -2460,15 +2596,13 @@ export function SatsDetail(
     "div",
     {
       ...divProps,
-      className: joinClassNames("or-sats-detail", className)
+      className: joinClassNames("or-sats-detail", className),
     },
-    amountLabel
+    amountLabel,
   );
 }
 
-export function Checkout(
-  props: CheckoutProps
-): React.ReactElement {
+export function Checkout(props: CheckoutProps): React.ReactElement {
   const {
     checkout,
     qrEncoder,
@@ -2499,11 +2633,11 @@ export function Checkout(
     orderUrl,
     onState,
     onSettled,
-    polling
+    polling,
   });
   const theme = useTheme({
     defaultTheme,
-    storageKey: themeStorageKey
+    storageKey: themeStorageKey,
   });
   const [swapFocused, setSwapFocused] = React.useState(false);
   const QRCodeComponent = components?.QRCode ?? QRCode;
@@ -2519,7 +2653,9 @@ export function Checkout(
   // action. Never hide when expired — that path still shows the Lightning "Start over".
   const hideLightning = swapFocused && !expired;
   const summaryAmountLabel =
-    checkoutModel.fiatLabel === undefined ? checkoutModel.amountLabel : undefined;
+    checkoutModel.fiatLabel === undefined
+      ? checkoutModel.amountLabel
+      : undefined;
   const startOver = () => {
     onStartOver?.();
   };
@@ -2530,144 +2666,153 @@ export function Checkout(
       ...sectionProps,
       className: joinClassNames(className, classNames?.root),
       [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.root]: "",
-      ...theme.attributes
+      ...theme.attributes,
     },
     customChildren === undefined
       ? [
-        themeSwitcher
-          ? React.createElement(ThemeToggle, {
-            key: "theme",
-            className: classNames?.themeToggle,
-            theme: theme.theme,
-            resolvedTheme: theme.resolvedTheme,
-            onThemeChange: theme.setTheme,
-            ButtonComponent
-          })
-          : null,
-        hideLightning || expired
-          ? null
-          : [
-            React.createElement(QRCodeComponent, {
-              key: "qr",
-              invoice: checkoutModel.invoice,
-              encoder: qrEncoder,
-              onError,
-              className: classNames?.qr,
-              style: {
-                aspectRatio: "1",
-                justifySelf: "center",
-                maxWidth: 420,
-                width: "min(100%, 420px)"
-              }
-            }),
-            React.createElement(SatsDetail, {
-              key: "sats-detail",
-              amountLabel: checkoutModel.amountLabel,
-              className: classNames?.satsDetail
-            })
-          ],
-        hideLightning
-          ? null
-          : React.createElement(WaitingState, {
-            key: "waiting",
-            waiting: checkoutModel.waiting,
-            statusTitle: checkoutModel.statusTitle,
-            statusDetail: checkoutModel.statusDetail,
-            className: classNames?.waiting
-          }),
-        hideLightning || checkoutModel.countdownLabel === undefined
-          ? null
-          : React.createElement(
-            "div",
-            {
-              key: "countdown",
-              className: joinClassNames("or-countdown", classNames?.countdown)
-            },
-            checkoutModel.countdownPrefix,
-            " ",
-            React.createElement("strong", null, checkoutModel.countdownLabel)
-          ),
-        hideLightning
-          ? null
-          : React.createElement(InvoiceSummaryComponent, {
-            key: "summary",
-            amountLabel: summaryAmountLabel,
-            fiatLabel: checkoutModel.fiatLabel,
-            status: checkoutModel.status,
-            PaymentStateComponent,
-            className: classNames?.summary,
-            classNames
-          }),
-        hideLightning
-          ? null
-          : React.createElement(
-            "div",
-            {
-              key: "actions",
-              className: classNames?.actions,
-              [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.actions]: ""
-            },
-            expired
-              ? React.createElement(
-                ButtonComponent ?? "button",
-                {
-                  type: "button",
-                  onClick: startOver
-                },
-                openReceiveCheckoutLabels.startOver
-              )
-              : React.createElement(CopyButton, {
-                invoice: checkoutModel.invoice,
-                copyInvoice: checkoutModel.copyInvoice,
-                onError,
-                logger,
+          themeSwitcher
+            ? React.createElement(ThemeToggle, {
+                key: "theme",
+                className: classNames?.themeToggle,
+                theme: theme.theme,
+                resolvedTheme: theme.resolvedTheme,
+                onThemeChange: theme.setTheme,
                 ButtonComponent,
-                className: classNames?.copyButton
               })
-          ),
-        paymentWizard && !expired
-          ? React.createElement(PaymentWizard, {
-            key: "wizard",
-            invoice: checkoutModel.invoice,
-            checkout: checkoutModel.checkout,
-            className: classNames?.wizard,
-            logger,
-            onError,
-            onSwapFocusChange: setSwapFocused,
-            countryStorageKey,
-            orderUrl,
-            qrEncoder,
-            logContext: getCheckoutLogContext({
-              invoice_id: checkoutModel.invoice_id,
-              payment_hash: checkoutModel.payment_hash,
-              amount_msats: checkoutModel.amount_msats
-            })
-          })
-          : null
-      ]
-      : customChildren
+            : null,
+          hideLightning || expired
+            ? null
+            : [
+                React.createElement(QRCodeComponent, {
+                  key: "qr",
+                  invoice: checkoutModel.invoice,
+                  encoder: qrEncoder,
+                  onError,
+                  className: classNames?.qr,
+                  style: {
+                    aspectRatio: "1",
+                    justifySelf: "center",
+                    maxWidth: 420,
+                    width: "min(100%, 420px)",
+                  },
+                }),
+                React.createElement(SatsDetail, {
+                  key: "sats-detail",
+                  amountLabel: checkoutModel.amountLabel,
+                  className: classNames?.satsDetail,
+                }),
+              ],
+          hideLightning
+            ? null
+            : React.createElement(WaitingState, {
+                key: "waiting",
+                waiting: checkoutModel.waiting,
+                statusTitle: checkoutModel.statusTitle,
+                statusDetail: checkoutModel.statusDetail,
+                className: classNames?.waiting,
+              }),
+          hideLightning || checkoutModel.countdownLabel === undefined
+            ? null
+            : React.createElement(
+                "div",
+                {
+                  key: "countdown",
+                  className: joinClassNames(
+                    "or-countdown",
+                    classNames?.countdown,
+                  ),
+                },
+                checkoutModel.countdownPrefix,
+                " ",
+                React.createElement(
+                  "strong",
+                  null,
+                  checkoutModel.countdownLabel,
+                ),
+              ),
+          hideLightning
+            ? null
+            : React.createElement(InvoiceSummaryComponent, {
+                key: "summary",
+                amountLabel: summaryAmountLabel,
+                fiatLabel: checkoutModel.fiatLabel,
+                status: checkoutModel.status,
+                PaymentStateComponent,
+                className: classNames?.summary,
+                classNames,
+              }),
+          hideLightning
+            ? null
+            : React.createElement(
+                "div",
+                {
+                  key: "actions",
+                  className: classNames?.actions,
+                  [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.actions]: "",
+                },
+                expired
+                  ? React.createElement(
+                      ButtonComponent ?? "button",
+                      {
+                        type: "button",
+                        onClick: startOver,
+                      },
+                      openReceiveCheckoutLabels.startOver,
+                    )
+                  : React.createElement(CopyButton, {
+                      invoice: checkoutModel.invoice,
+                      copyInvoice: checkoutModel.copyInvoice,
+                      onError,
+                      logger,
+                      ButtonComponent,
+                      className: classNames?.copyButton,
+                    }),
+              ),
+          paymentWizard && !expired
+            ? React.createElement(PaymentWizard, {
+                key: "wizard",
+                invoice: checkoutModel.invoice,
+                checkout: checkoutModel.checkout,
+                className: classNames?.wizard,
+                logger,
+                onError,
+                onSwapFocusChange: setSwapFocused,
+                countryStorageKey,
+                orderUrl,
+                qrEncoder,
+                logContext: getCheckoutLogContext({
+                  invoice_id: checkoutModel.invoice_id,
+                  payment_hash: checkoutModel.payment_hash,
+                  amount_msats: checkoutModel.amount_msats,
+                }),
+              })
+            : null,
+        ]
+      : customChildren,
   );
 }
 
-function getCheckoutLogContext(
-  data: {
-    readonly invoice_id?: string;
-    readonly payment_hash?: string;
-    readonly amount_msats?: number;
-    readonly transaction_state?: string;
-    readonly workflow_state?: string;
-  }
-): OpenReceiveBrowserLogContext {
+function getCheckoutLogContext(data: {
+  readonly invoice_id?: string;
+  readonly payment_hash?: string;
+  readonly amount_msats?: number;
+  readonly transaction_state?: string;
+  readonly workflow_state?: string;
+}): OpenReceiveBrowserLogContext {
   return {
     ...(data.invoice_id === undefined ? {} : { invoice_id: data.invoice_id }),
-    ...(data.payment_hash === undefined ? {} : { payment_hash: data.payment_hash }),
-    ...(data.amount_msats === undefined ? {} : { amount_msats: data.amount_msats }),
+    ...(data.payment_hash === undefined
+      ? {}
+      : { payment_hash: data.payment_hash }),
+    ...(data.amount_msats === undefined
+      ? {}
+      : { amount_msats: data.amount_msats }),
     ...(data.transaction_state === undefined
       ? {}
       : { transaction_state: data.transaction_state }),
     ...(data.workflow_state === undefined
       ? {}
-      : { workflow_state: data.workflow_state })
+      : { workflow_state: data.workflow_state }),
   };
 }
 
@@ -2679,32 +2824,28 @@ function renderCountrySelect(options: {
   return React.createElement(
     "label",
     {
-      className: "or-country-select"
+      className: "or-country-select",
     },
-    React.createElement(
-      "span",
-      null,
-      openReceiveCheckoutLabels.chooseCountry
-    ),
+    React.createElement("span", null, openReceiveCheckoutLabels.chooseCountry),
     React.createElement(
       "select",
       {
         value: options.selectedCountryCode,
         onChange: (event: React.ChangeEvent<HTMLSelectElement>) => {
           options.onSelectCountry(event.currentTarget.value);
-        }
+        },
       },
       options.countries.map((country) =>
         React.createElement(
           "option",
           {
             key: country.code,
-            value: country.code
+            value: country.code,
           },
-          country.label
-        )
-      )
-    )
+          country.label,
+        ),
+      ),
+    ),
   );
 }
 
@@ -2716,7 +2857,7 @@ function renderRoutePicker(options: {
   return React.createElement(
     "div",
     {
-      className: `or-route-picker or-route-picker-${options.method}`
+      className: `or-route-picker or-route-picker-${options.method}`,
     },
     options.assets.map((asset) => {
       return React.createElement(
@@ -2725,20 +2866,16 @@ function renderRoutePicker(options: {
           className: asset.selected ? "selected" : "",
           key: asset.id,
           onClick: () => options.onSelectRoute(asset.id),
-          type: "button"
+          type: "button",
         },
         React.createElement("img", {
           alt: "",
-          src: asset.icon
+          src: asset.icon,
         }),
         React.createElement("span", null, asset.label),
-        React.createElement(
-          "small",
-          null,
-          asset.subtitle
-        )
+        React.createElement("small", null, asset.subtitle),
       );
-    })
+    }),
   );
 }
 

@@ -126,6 +126,11 @@ export function createOpenReceiveSwapDisplayModel(
   const expiresAt = Math.min(swap.provider_expires_at, invoice.expires_at ?? swap.provider_expires_at);
   const expiresInSeconds = Math.max(0, expiresAt - (options.now ?? currentUnixSeconds()));
   const asset = getOpenReceiveSwapAssetDisplay(swap.pay_in_asset);
+  // Settlement authority is OpenReceive's own wallet sweep, surfaced as the shadow
+  // invoice's settled transaction_state — never the provider's `completed` state (see
+  // OPENRECEIVE_SWAP_STATES). Once the order is paid the panel shows a final
+  // confirmation, even if `provider_state` still lags on "confirming"/"exchanging".
+  const settled = invoice.transaction_state === "settled" || invoice.settled_at !== undefined;
 
   return {
     provider: swap.provider,
@@ -137,9 +142,13 @@ export function createOpenReceiveSwapDisplayModel(
     depositAddress: swap.deposit_address,
     ...(swap.deposit_memo === undefined ? {} : { depositMemo: swap.deposit_memo }),
     depositAmount: formatOpenReceiveDepositAmount(swap.deposit_amount),
-    providerStateLabel: getOpenReceiveSwapProviderStateLabel(swap.provider_state),
-    providerStateDetail: getOpenReceiveSwapProviderStateDetail(swap.provider_state),
-    state: getOpenReceiveSwapPanelState(swap.provider_state),
+    providerStateLabel: settled
+      ? "Payment complete"
+      : getOpenReceiveSwapProviderStateLabel(swap.provider_state),
+    providerStateDetail: settled
+      ? "Your payment is confirmed and your order is complete."
+      : getOpenReceiveSwapProviderStateDetail(swap.provider_state),
+    state: settled ? "settled" : getOpenReceiveSwapPanelState(swap.provider_state),
     expiresInSeconds,
     countdownLabel: formatOpenReceiveCountdown(expiresInSeconds),
     qrPayload: createOpenReceiveSwapQrPayload(swap),

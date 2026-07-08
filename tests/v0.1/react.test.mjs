@@ -337,6 +337,11 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   };
 
   assert.equal(formatOpenReceiveCountdown(65), "1:05");
+  assert.equal(formatOpenReceiveDepositAmount("12.25900000"), "12.259");
+  assert.equal(formatOpenReceiveDepositAmount("5.000"), "5");
+  assert.equal(formatOpenReceiveDepositAmount("1.05"), "1.05");
+  assert.equal(formatOpenReceiveDepositAmount("0.0008"), "0.0008");
+  assert.equal(formatOpenReceiveDepositAmount("100"), "100");
   assert.equal(OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS, 3000);
   assert.equal(OPENRECEIVE_COPY_FEEDBACK_MS, 1800);
   assert.equal(OPENRECEIVE_PROVIDER_PREVIEW_LIMIT, 4);

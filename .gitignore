@@ -49,3 +49,6 @@ dist/
 tmp/*
 .DS_Store
 **/.DS_Store
+
+!/logs/.keep
+/logs/

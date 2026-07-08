@@ -412,6 +412,7 @@ export interface OpenReceiveSwapDisplayModel {
     | "creating"
     | "deposit"
     | "progress"
+    | "settled"
     | "expired"
     | "refund_required"
     | "refund_pending"
