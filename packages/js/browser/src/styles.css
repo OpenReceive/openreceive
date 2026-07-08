@@ -474,6 +474,14 @@
   margin: 0;
 }
 
+.or-swap-instruction {
+  margin: 0;
+  color: var(--or-text);
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+}
+
 .or-swap-start {
   min-height: 44px;
   border: 0;

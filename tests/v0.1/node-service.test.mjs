@@ -5,9 +5,9 @@ import path from "node:path";
 import test from "node:test";
 import { InMemoryInvoiceKvStore, StaticPriceProvider } from "../../packages/js/core/src/index.ts";
 import {
+  createOpenReceive,
   OpenReceiveConfigError,
   OpenReceiveServiceError,
-  createOpenReceive,
 } from "../../packages/js/node/src/index.ts";
 import { fixedFloatProvider } from "../../packages/js/node/src/swap/fixedfloat.ts";
 
@@ -1186,10 +1186,7 @@ test("refundSwap requests a provider refund only for refund-required swaps", asy
   assert.equal(refundRequired.swap.deposit_tx_id, "deposit-tx-1");
   assert.match(refundRequired.swap.refund_nonce, /^or_ref_[a-f0-9]{32}$/);
   // The refund nonce expiry is now surfaced alongside the nonce for countdown UIs.
-  assert.equal(
-    refundRequired.swap.refund_nonce_expires_at,
-    1015 + 10 * 60,
-  );
+  assert.equal(refundRequired.swap.refund_nonce_expires_at, 1015 + 10 * 60);
 
   const submitted = await openreceive.refundSwap({
     attemptId: swapAttempt.attempt_id,

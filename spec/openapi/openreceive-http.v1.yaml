@@ -384,20 +384,55 @@ components:
         An Order plus its available automated-swap pay-in options. Returned by the
         default (status) action of POST /order. swap_pay_options holds only crypto swap
         methods; Lightning is always available on the checkout invoice and is not listed.
-      allOf:
-        - $ref: "#/components/schemas/Order"
-        - type: object
-          additionalProperties: false
-          required:
-            - swaps_enabled
-            - swap_pay_options
-          properties:
-            swaps_enabled:
-              type: boolean
-            swap_pay_options:
-              type: array
-              items:
-                $ref: "#/components/schemas/SwapOption"
+        Defined as a flat object (not an allOf over Order) because composing two
+        additionalProperties:false schemas is unsatisfiable under JSON Schema 2020-12.
+      type: object
+      additionalProperties: false
+      required:
+        - order_id
+        - status
+        - paid
+        - checkouts
+        - wallet_scan_performed
+        - transactions_checked
+        - swaps_enabled
+        - swap_pay_options
+      properties:
+        order_id:
+          type: string
+          minLength: 1
+        status:
+          type: string
+          enum:
+            - pending
+            - paid
+            - expired
+        paid:
+          type: boolean
+        paid_at:
+          type: integer
+          minimum: 0
+        paid_checkout:
+          $ref: "#/components/schemas/Checkout"
+        active_checkout:
+          $ref: "#/components/schemas/Checkout"
+        display_checkout:
+          $ref: "#/components/schemas/Checkout"
+        checkouts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Checkout"
+        wallet_scan_performed:
+          type: boolean
+        transactions_checked:
+          type: integer
+          minimum: 0
+        swaps_enabled:
+          type: boolean
+        swap_pay_options:
+          type: array
+          items:
+            $ref: "#/components/schemas/SwapOption"
     FiatAmount:
       type: object
       additionalProperties: false

@@ -963,7 +963,7 @@ function validateData() {
       `Hello Fruit fiat value shape drift for ${fruit.id}`,
     );
     assert(
-      quoteFiatToSats(sharedFruit.fiat.value, "50000.00") <= BigInt(400),
+      quoteFiatToSats(sharedFruit.fiat.value, "50000.00") <= BigInt(16000),
       `Hello Fruit fiat price too high for ${fruit.id}`,
     );
     assert(

@@ -21,6 +21,7 @@ import {
   createOpenReceiveThemeModel,
   createOpenReceiveTransientFeedbackController,
   getOpenReceiveDefaultCountryCode,
+  getOpenReceiveAssetIcon,
   getOpenReceivePaymentMethodIcon,
   getOpenReceiveWizardEmptyMessage,
   createOpenReceiveSwapDisplayModel,
@@ -474,9 +475,19 @@ export function useCheckout(
     orderUrl: options.orderUrl,
     polling: options.polling
   });
+  // The controller owns the poll/countdown timers and pushes every poll result
+  // back out through onSnapshot -> setLatestSnapshot. Seed it from the current
+  // snapshot via a ref (as with onStateRef below) and recreate it only when the
+  // checkout it watches changes identity. Keying this effect on the mutable
+  // snapshot instead would tear the controller down on each result it produced,
+  // recreating it and immediately re-polling in a tight loop.
+  const snapshotRef = React.useRef(snapshot);
+  snapshotRef.current = snapshot;
+  const checkoutIdentity = `${snapshot.checkout_id} ${snapshot.order_id}`;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: checkoutIdentity is an intentional recreate trigger — the effect seeds from snapshotRef, not from checkoutIdentity directly.
   React.useEffect(() => {
     const controller = createCheckoutController({
-      snapshot,
+      snapshot: snapshotRef.current,
       ...(refreshStatus === undefined ? {} : { refreshStatus }),
       ...(orderUrl === undefined ? {} : { orderUrl }),
       pollIntervalMs: options.pollIntervalMs,
@@ -501,7 +512,7 @@ export function useCheckout(
       if (controllerRef.current === controller) controllerRef.current = null;
     };
   }, [
-    snapshot,
+    checkoutIdentity,
     refreshStatus,
     orderUrl,
     options.pollIntervalMs,
@@ -1004,6 +1015,14 @@ export function PaymentWizard(
   const [startedSwapInvoice, setStartedSwapInvoice] =
     React.useState<CheckoutInvoiceSnapshot | null>(null);
   const [dismissedSwapInvoiceId, setDismissedSwapInvoiceId] = React.useState<string | null>(null);
+  const [swapQuotes, setSwapQuotes] = React.useState<
+    Record<string, OpenReceiveSwapOptionDisplay>
+  >({});
+  // When a swap provider is configured, each pay-in coin is promoted to a top-level
+  // choice. Selecting one jumps straight to its deposit address, bypassing the
+  // country/route/provider steps. Null means the standard method grid is shown.
+  const [selectedSwapAsset, setSelectedSwapAsset] = React.useState<string | null>(null);
+  const autoSwapAttemptedRef = React.useRef<Set<string>>(new Set());
   const fetcher = props.fetch ?? globalThis.fetch;
   const checkout = props.checkout;
   const orderId = checkout?.order_id;
@@ -1043,6 +1062,34 @@ export function PaymentWizard(
         props.onError?.(error);
       } finally {
         setSwapStartingAsset(null);
+      }
+    },
+    [props.orderUrl, orderId, fetcher, props.onError]
+  );
+  const quoteSwap = React.useCallback(
+    async (payInAsset: string): Promise<OpenReceiveSwapOptionDisplay | undefined> => {
+      if (
+        props.orderUrl === undefined ||
+        props.orderUrl === false ||
+        orderId === undefined ||
+        fetcher === undefined
+      ) {
+        return undefined;
+      }
+      try {
+        const body = await postOpenReceiveJson(fetcher, props.orderUrl, {
+          order_id: orderId,
+          action: "swap_quote",
+          pay_in_asset: payInAsset
+        });
+        const quote = normalizeSwapQuote(body);
+        if (quote !== undefined) {
+          setSwapQuotes((current) => ({ ...current, [payInAsset]: quote }));
+        }
+        return quote;
+      } catch (error) {
+        props.onError?.(error);
+        return undefined;
       }
     },
     [props.orderUrl, orderId, fetcher, props.onError]
@@ -1109,6 +1156,85 @@ export function PaymentWizard(
     : routeDisplays
       .flatMap((route) => route.providers)
       .find((provider) => provider.id === activeTutorial.providerId);
+  // Top-level swap coins, one per configured pay-in asset (e.g. ETH on Ethereum,
+  // USDT on Tron). Only present once the order status reports swaps are enabled.
+  const swapAssetOptions = swapOptions.enabled
+    ? swapOptions.options.filter((option) => option.provider.length > 0)
+    : [];
+  const activeSwapForAsset =
+    selectedSwapAsset === null
+      ? undefined
+      : currentSwapInvoice !== undefined &&
+          currentSwapInvoice.swap?.pay_in_asset === selectedSwapAsset
+        ? currentSwapInvoice
+        : undefined;
+
+  // Selecting a top-level coin quotes it (to confirm the amount is in range) and, when
+  // available, starts the swap so the payer lands on the deposit address immediately.
+  React.useEffect(() => {
+    if (selectedSwapAsset === null) return;
+    if (props.orderUrl === undefined || props.orderUrl === false) return;
+    if (activeSwapForAsset !== undefined) return;
+    if (autoSwapAttemptedRef.current.has(selectedSwapAsset)) return;
+    autoSwapAttemptedRef.current.add(selectedSwapAsset);
+    const asset = selectedSwapAsset;
+    let cancelled = false;
+    void (async () => {
+      const quote = await quoteSwap(asset);
+      if (cancelled || quote === undefined || !quote.available) return;
+      await startSwap(asset);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSwapAsset, activeSwapForAsset, props.orderUrl, quoteSwap, startSwap]);
+
+  const selectedSwapOption =
+    selectedSwapAsset === null
+      ? undefined
+      : (swapAssetOptions.find((option) => option.pay_in_asset === selectedSwapAsset) ??
+        swapQuotes[selectedSwapAsset]);
+  const selectedSwapQuote =
+    selectedSwapAsset === null ? undefined : swapQuotes[selectedSwapAsset];
+  const selectedSwapLabel = selectedSwapOption?.label ?? "this coin";
+
+  if (selectedSwapAsset !== null) {
+    return React.createElement(
+      "div",
+      {
+        className: joinClassNames("or-wizard", props.className)
+      },
+      renderWizardBackBreadcrumb(
+        selectedSwapOption === undefined
+          ? selectedSwapLabel
+          : `${selectedSwapOption.label} · ${selectedSwapOption.network_label}`,
+        () => setSelectedSwapAsset(null)
+      ),
+      React.createElement(
+        "div",
+        {
+          className: "or-wizard-results"
+        },
+        activeSwapForAsset !== undefined
+          ? renderSwapDepositPanel({
+            invoice: activeSwapForAsset,
+            now,
+            encoder: props.qrEncoder,
+            clipboard: props.clipboard,
+            logger: props.logger,
+            onError: props.onError,
+            onRefund: refundSwap,
+            onBackToLightning: () => {
+              setDismissedSwapInvoiceId(activeSwapForAsset.invoice_id);
+              setSelectedSwapAsset(null);
+            }
+          })
+          : selectedSwapQuote !== undefined && !selectedSwapQuote.available
+            ? renderSwapUnavailable(selectedSwapQuote)
+            : renderSwapPreparing(selectedSwapLabel)
+      )
+    );
+  }
 
   return React.createElement(
     "div",
@@ -1136,7 +1262,10 @@ export function PaymentWizard(
           {
             className: "or-method-grid"
           },
-          openReceivePaymentMethods.map((method) =>
+          (swapAssetOptions.length > 0
+            ? openReceivePaymentMethods.filter((method) => method.id !== "crypto")
+            : openReceivePaymentMethods
+          ).map((method) =>
             React.createElement(
               "button",
               {
@@ -1151,6 +1280,25 @@ export function PaymentWizard(
               React.createElement("img", { alt: "", src: getOpenReceivePaymentMethodIcon(method.id) }),
               React.createElement("span", null, method.title),
               React.createElement("small", null, method.detail)
+            )
+          ),
+          swapAssetOptions.map((option) =>
+            React.createElement(
+              "button",
+              {
+                key: option.pay_in_asset,
+                onClick: () => {
+                  autoSwapAttemptedRef.current.delete(option.pay_in_asset);
+                  setSelectedSwapAsset(option.pay_in_asset);
+                },
+                type: "button"
+              },
+              React.createElement("img", {
+                alt: "",
+                src: getOpenReceiveAssetIcon(option.label.toLowerCase())
+              }),
+              React.createElement("span", null, option.label),
+              React.createElement("small", null, option.network_label)
             )
           )
         )
@@ -1357,6 +1505,29 @@ export function PaymentWizard(
   );
 }
 
+function renderWizardBackBreadcrumb(
+  currentLabel: string,
+  onBack: () => void
+): React.ReactElement {
+  return React.createElement(
+    "div",
+    {
+      className: "or-wizard-breadcrumbs"
+    },
+    React.createElement(
+      "button",
+      {
+        className: "or-wizard-breadcrumb",
+        onClick: onBack,
+        type: "button"
+      },
+      openReceiveCheckoutLabels.paymentMethod
+    ),
+    React.createElement("span", { className: "or-wizard-breadcrumb-separator", "aria-hidden": "true" }, "/"),
+    React.createElement("span", { className: "or-wizard-breadcrumb-current" }, currentLabel)
+  );
+}
+
 function renderWizardBreadcrumbs(options: {
   readonly method: OpenReceivePaymentMethod;
   readonly selectedRoute: string | null;
@@ -1453,6 +1624,65 @@ function renderSwapActions(options: {
             : `Create ${option.label} (${option.network_label}) payment address`
         )
       )
+    )
+  );
+}
+
+function renderSwapPreparing(assetLabel: string): React.ReactElement {
+  return React.createElement(
+    "section",
+    {
+      className: "or-swap-panel"
+    },
+    React.createElement(
+      "div",
+      {
+        className: "or-swap-heading"
+      },
+      React.createElement("strong", null, "Preparing payment address"),
+      React.createElement("span", null, "One moment")
+    ),
+    React.createElement(
+      "p",
+      {
+        className: "or-swap-progress"
+      },
+      `Getting your ${assetLabel} payment address…`
+    )
+  );
+}
+
+function renderSwapUnavailable(quote: OpenReceiveSwapOptionDisplay): React.ReactElement {
+  const detail =
+    quote.unavailable_message ?? `${quote.label} is not available for this amount.`;
+  const range =
+    quote.minimum_pay_amount === undefined
+      ? undefined
+      : quote.maximum_pay_amount === undefined
+        ? `Minimum ${quote.minimum_pay_amount} ${quote.label}.`
+        : `Accepted range: ${quote.minimum_pay_amount}–${quote.maximum_pay_amount} ${quote.label}.`;
+  return React.createElement(
+    "section",
+    {
+      className: "or-swap-panel"
+    },
+    React.createElement(
+      "div",
+      {
+        className: "or-swap-heading"
+      },
+      React.createElement("strong", null, `${quote.label} unavailable`)
+    ),
+    React.createElement("p", { className: "or-swap-warning" }, detail),
+    range === undefined
+      ? null
+      : React.createElement("p", { className: "or-swap-warning" }, range),
+    React.createElement(
+      "p",
+      {
+        className: "or-swap-progress"
+      },
+      "Choose another asset above, or pay the Lightning invoice at the top of this page."
     )
   );
 }
@@ -1609,9 +1839,11 @@ function renderSwapDepositPanel(options: {
     React.createElement(
       "p",
       {
-        className: "or-swap-warning"
+        className: "or-swap-instruction"
       },
-      `${display.networkWarning} Send exactly ${display.depositAmount} ${display.assetLabel}.`
+      "Pay ",
+      React.createElement("strong", null, `${display.depositAmount} ${display.assetLabel}`),
+      " to this address"
     ),
     React.createElement(SwapPayloadQRCode, {
       payload: display.qrPayload,
@@ -1628,6 +1860,13 @@ function renderSwapDepositPanel(options: {
         ? null
         : renderSwapCopyRow("Memo", memo, options),
       renderSwapCopyRow("Amount", display.depositAmount, options)
+    ),
+    React.createElement(
+      "p",
+      {
+        className: "or-swap-warning"
+      },
+      display.networkWarning
     ),
     React.createElement(
       "p",
@@ -1806,6 +2045,15 @@ function swapOptionsForRoute(
   options: readonly OpenReceiveSwapOptionDisplay[]
 ): readonly OpenReceiveSwapOptionDisplay[] {
   return options.filter((option) => openReceiveSwapAssetMatchesRoute(routeKey, option.pay_in_asset));
+}
+
+// The pay-in asset to auto-advance to a deposit address, or undefined when the payer
+// should still choose (fiat rails, multi-network stablecoins, no swap configured).
+function normalizeSwapQuote(body: unknown): OpenReceiveSwapOptionDisplay | undefined {
+  const quote = reactRecord(reactRecord(body).quote ?? body);
+  return typeof quote.pay_in_asset === "string"
+    ? (quote as unknown as OpenReceiveSwapOptionDisplay)
+    : undefined;
 }
 
 function selectCurrentSwapInvoice(

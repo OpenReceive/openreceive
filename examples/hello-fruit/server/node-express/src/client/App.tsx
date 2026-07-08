@@ -341,7 +341,10 @@ function App(): React.ReactElement {
                 </div>
                 {cartItems.map((item) => (
                   <div className="cart-row" key={item.fruit.id}>
-                    <span>{item.fruit.name}</span>
+                    <span className="cart-item">
+                      <img className="cart-item-sticker" src={`/${item.fruit.sticker}`} alt="" />
+                      {item.fruit.name}
+                    </span>
                     <span>
                       {formatHelloFruitDisplayPrice(item.fruit.fiat, currency, rates)} x
                       {item.quantity}

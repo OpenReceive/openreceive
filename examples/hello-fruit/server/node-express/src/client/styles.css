@@ -219,6 +219,19 @@ p {
   color: var(--text);
 }
 
+.cart-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.cart-item-sticker {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+}
+
 .primary:disabled {
   cursor: wait;
   opacity: 0.72;

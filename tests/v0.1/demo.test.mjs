@@ -1600,7 +1600,7 @@ test("Hello Fruit demos create app orders and refresh order status through merch
     assert.match(created.body.order.uuid, /^hello-fruit-/);
     assert.equal(created.body.order.status, "pending_payment");
     assert.equal(created.body.order.total_amount.currency, "USD");
-    assert.equal(created.body.order.total_amount.value, "0.25");
+    assert.equal(created.body.order.total_amount.value, "10.00");
     assert.equal(created.body.checkout.order_id, created.body.order.uuid);
     const createdInvoice = created.body.checkout.active ?? created.body.checkout.invoices[0];
     assert.equal(typeof createdInvoice.invoice, "string");
@@ -1630,7 +1630,7 @@ test("Hello Fruit demos create app orders and refresh order status through merch
     );
     assert.equal(nextCreated.status, 201, "nextjs-fullstack: create_order status");
     assert.match(nextCreated.body.order.uuid, /^hello-fruit-/);
-    assert.equal(nextCreated.body.order.total_amount.value, "0.25");
+    assert.equal(nextCreated.body.order.total_amount.value, "10.00");
     assert.equal(nextCreated.body.checkout.order_id, nextCreated.body.order.uuid);
 
     const nextSecond = await responseJson(
@@ -1678,8 +1678,8 @@ test("Hello Fruit demos create direct SATS orders from the currency switcher", a
     const created = await dispatchJson(app, "POST", "/create_order", orderRequest);
     assert.equal(created.status, 201, `${demo.name}: create_order status`);
     assert.equal(created.body.order.total_amount.currency, "SATS");
-    assert.equal(created.body.order.total_amount.value, "500");
-    assert.equal(created.body.checkout.amount_msats, 500000);
+    assert.equal(created.body.order.total_amount.value, "20000");
+    assert.equal(created.body.checkout.amount_msats, 20000000);
     const createdInvoice = created.body.checkout.active ?? created.body.checkout.invoices[0];
     assert.equal(createdInvoice.fiat_quote, null);
   }

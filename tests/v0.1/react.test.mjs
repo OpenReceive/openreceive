@@ -816,3 +816,27 @@ test("React checkout can disable default status refresh polling", () => {
   assert.match(source, /\.\.\.\(orderUrl === undefined \? \{\} : \{ orderUrl \}\)/);
   assert.doesNotMatch(source, /orderUrl: options\.orderUrl \?\? DEFAULT_STATUS_URL/);
 });
+
+test("React checkout recreates its poll controller only on checkout identity change", () => {
+  // The controller pushes every poll result back through onSnapshot ->
+  // setLatestSnapshot. If the controller-creation effect keys on that mutable
+  // snapshot, each poll result tears the controller down and recreates it, which
+  // immediately re-polls in a tight loop. It must key on a stable identity and
+  // seed from a ref instead, while still feeding poll results to the display.
+  const source = readFileSync(
+    path.join(process.cwd(), "packages/js/react/src/index.ts"),
+    "utf8"
+  );
+
+  assert.match(
+    source,
+    /const checkoutIdentity = `\$\{snapshot\.checkout_id\} \$\{snapshot\.order_id\}`/
+  );
+  assert.match(source, /snapshotRef\.current = snapshot/);
+  assert.match(source, /snapshot: snapshotRef\.current/);
+  assert.match(source, /onSnapshot: setLatestSnapshot/);
+  // The controller-creation effect's dependency list keys on the identity, not
+  // the mutable snapshot the controller itself replaces on every poll.
+  assert.match(source, /\}, \[\s*checkoutIdentity,\s*refreshStatus,\s*orderUrl,/);
+  assert.doesNotMatch(source, /\}, \[\s*snapshot,\s*refreshStatus,\s*orderUrl,/);
+});
