@@ -56,6 +56,7 @@ export const OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES = {
   swapBack: "data-or-swap-back",
   swapQr: "data-or-swap-qr",
   swapCopy: "data-or-swap-copy",
+  swapNetwork: "data-or-swap-network",
   swapRefundForm: "data-or-swap-refund-form",
   swapRefundAddress: "data-or-swap-refund-address",
   swapRefundNonce: "data-or-swap-refund-nonce",
@@ -77,6 +78,7 @@ export const OPENRECEIVE_PAYMENT_WIZARD_SELECTORS = {
   swapBack: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapBack}]`,
   swapQr: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapQr}]`,
   swapCopy: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapCopy}]`,
+  swapNetwork: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapNetwork}]`,
   swapRefundForm: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundForm}]`,
   swapRefundAddress: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundAddress}]`,
   swapRefundNonce: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundNonce}]`,
@@ -771,7 +773,7 @@ export type RequestCheckoutOptions = RequestCheckoutBaseOptions &
         readonly usd: string;
       }
     // Amount-less create: `{ prefix, orderId }` (or `{ checkoutUrl, orderId }`) with no amount.
-    // The mounted server's getOrderAmount sets the authoritative price; the client POSTs a body
+    // The mounted server's resolveOrder sets the authoritative price; the client POSTs a body
     // of only `{ order_id }`.
     | {
         readonly amount?: never;
@@ -1192,7 +1194,7 @@ export const openReceiveCheckoutElementStyles = `
     justify-self: center;
     min-width: 0;
     overflow: hidden;
-    width: min(100%, 420px);
+    width: min(100%, 280px);
   }
 
   [part="qr"] svg {
@@ -1243,12 +1245,9 @@ export const openReceiveCheckoutElementStyles = `
 
   [part="status"] {
     align-items: center;
-    background: var(--or-bg-soft);
-    border: 1px solid var(--or-border);
-    border-radius: 6px;
     display: flex;
     gap: 10px;
-    padding: 8px;
+    padding: 4px 0;
   }
 
   [part="status"] p {
@@ -1271,8 +1270,16 @@ export const openReceiveCheckoutElementStyles = `
   }
 
   [part="actions"] {
-    display: grid;
+    display: flex;
+    flex-wrap: wrap;
     gap: 8px;
+    justify-content: center;
+  }
+
+  [part="actions"] button {
+    min-width: 160px;
+    padding: 0 18px;
+    width: auto;
   }
 
   [part="wizard"] {
@@ -1328,9 +1335,64 @@ export const openReceiveCheckoutElementStyles = `
   }
 
   [part="method"] img,
-  [part="route"] img {
+  [part="route"] img,
+  [part="method-card"] img {
     height: 28px;
     width: 28px;
+  }
+
+  [part="method-card"] {
+    background: var(--or-bg);
+    border: 1px solid var(--or-border);
+    border-radius: 6px;
+    box-sizing: border-box;
+    color: var(--or-text);
+    display: grid;
+    gap: 6px;
+    min-height: 64px;
+    padding: 8px;
+    text-align: left;
+  }
+
+  [part="method-network"] {
+    display: grid;
+    gap: 4px;
+  }
+
+  [part="method-network"] .or-method-network-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  [part="method-network"] select {
+    min-height: 34px;
+    width: 100%;
+    border: 1px solid var(--or-border);
+    border-radius: 6px;
+    background: var(--or-bg-soft);
+    color: var(--or-text);
+    font: inherit;
+    padding: 0 24px 0 8px;
+  }
+
+  [part="method-confirm"] {
+    min-height: 34px;
+    border: 0;
+    border-radius: 6px;
+    background: var(--or-text);
+    color: var(--or-bg);
+    cursor: pointer;
+    font-weight: 700;
+    padding: 0 10px;
+  }
+
+  [part="method-confirm"]:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
   }
 
   [part~="selected"] {
@@ -1436,13 +1498,17 @@ export const openReceiveCheckoutElementStyles = `
     margin: 0;
   }
 
+  [part="swap-instruction"] {
+    margin: 0;
+    color: var(--or-text);
+    font-size: 16px;
+    font-weight: 700;
+    text-align: center;
+  }
+
   [part="swap-panel"] {
-    background: var(--or-bg);
-    border: 1px solid var(--or-border);
-    border-radius: 6px;
     display: grid;
     gap: 10px;
-    padding: 10px;
   }
 
   [part="swap-heading"] {
@@ -1467,6 +1533,27 @@ export const openReceiveCheckoutElementStyles = `
     display: block;
     height: auto;
     width: 100%;
+  }
+
+  [part="swap-breakdown"] {
+    display: grid;
+    gap: 8px;
+    padding: 8px 0 4px;
+    border-top: 1px solid var(--or-border);
+  }
+
+  [part="swap-breakdown-title"] {
+    margin: 0;
+    color: var(--or-muted);
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  [part="swap-breakdown-note"] {
+    margin: 0;
+    color: var(--or-muted);
+    font-size: 12px;
   }
 
   [part="swap-details"] {
@@ -1801,6 +1888,10 @@ export const openReceiveCheckoutElementStyles = `
   }
 
 	  @media (max-width: 420px) {
+	    [part="qr"] {
+	      width: min(200px, 72vw);
+	    }
+
 	    [part="method-grid"],
 	    [part="route-picker"],
 	    [part="country-grid"],
@@ -1808,6 +1899,16 @@ export const openReceiveCheckoutElementStyles = `
     [part="provider-grid"],
     [part="provider-actions"] {
       grid-template-columns: 1fr;
+    }
+
+    [part="actions"] {
+      justify-content: stretch;
+    }
+
+    [part="actions"] button {
+      width: auto;
+      max-width: 100%;
+      margin-inline: auto;
     }
 
     [part="tutorial"] {

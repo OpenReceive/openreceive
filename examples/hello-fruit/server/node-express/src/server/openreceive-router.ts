@@ -2,15 +2,15 @@ import { openReceiveExpress } from "@openreceive/express";
 import {
   guestCheckout,
   type OpenReceiveAuthorize,
-  type OpenReceiveGetOrderAmount,
+  type OpenReceiveResolveOrder,
 } from "@openreceive/http";
 import type { OrderAccessTokenManager } from "@openreceive/node";
 import type { Express } from "express";
-import { getHelloFruitOrderAmount } from "../../../../shared/demo-order.ts";
+import { resolveHelloFruitOrder } from "../../../../shared/demo-order.ts";
 
 // This module wires the SHIPPED OpenReceive routes into the demo instead of hand-writing them.
 // It shows the whole re-architecture in one place: mount the router, keep the app's own auth via
-// the `authorize` hook, keep prices honest via `getOrderAmount`, and gate reads with per-order
+// the `authorize` hook, keep prices honest via `resolveOrder`, and gate reads with per-order
 // capability tokens. The demo's own `/prepare_order` still owns cart -> amount (that is the
 // amount-authority example); these routes are the production-grade surface a real app would use.
 
@@ -71,14 +71,13 @@ function demoUserFromRequest(request: unknown): HelloFruitDemoUser | undefined {
 }
 
 /**
- * The amount-authority hook (spec PART 1/2). The client's price is NEVER trusted: `/prepare_order`
- * persisted the authoritative order under `demo_order:${orderId}`, so this just looks that order up
- * by id and returns its amount source.
+ * Required amount-authority hook. `/prepare_order` persisted the order under `demo_order:${orderId}`;
+ * this looks it up and returns payment terms (or null → 404). The create body has no client price.
  */
-export function createHelloFruitGetOrderAmount(
+export function createHelloFruitResolveOrder(
   openreceive: OpenReceiveService,
-): OpenReceiveGetOrderAmount {
-  return ({ orderId }) => getHelloFruitOrderAmount(openreceive, orderId);
+): OpenReceiveResolveOrder {
+  return ({ orderId }) => resolveHelloFruitOrder(openreceive, orderId);
 }
 
 /** Mount the shipped OpenReceive routes at /openreceive with the demo's chosen auth + pricing. */
@@ -99,7 +98,7 @@ export function mountHelloFruitOpenReceiveRouter(
     openReceiveExpress({
       service: openreceive,
       authorize,
-      getOrderAmount: createHelloFruitGetOrderAmount(openreceive),
+      resolveOrder: createHelloFruitResolveOrder(openreceive),
       tokens,
     }),
   );

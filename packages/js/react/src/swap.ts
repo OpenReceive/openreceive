@@ -359,7 +359,6 @@ export function renderSwapDepositPanel(options: {
     {
       className: "or-swap-panel",
     },
-    waitingCard,
     React.createElement(
       "p",
       {
@@ -369,7 +368,6 @@ export function renderSwapDepositPanel(options: {
       React.createElement("strong", null, `${display.depositAmount} ${display.assetLabel}`),
       " to this address",
     ),
-    renderSwapFeeBreakdown(display.feeBreakdown),
     React.createElement(SwapPayloadQRCode, {
       payload: display.qrPayload,
       encoder: options.encoder,
@@ -384,6 +382,8 @@ export function renderSwapDepositPanel(options: {
       memo === undefined ? null : renderSwapCopyRow("Memo", memo, options),
       renderSwapCopyRow("Amount", display.depositAmount, options),
     ),
+    waitingCard,
+    renderSwapFeeBreakdown(display.feeBreakdown),
     React.createElement(
       "p",
       {

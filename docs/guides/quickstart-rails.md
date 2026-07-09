@@ -4,7 +4,7 @@ The `openreceive-rails` gem is a mountable Rails engine that ships OpenReceive's
 your app. Your app keeps 100% of authentication: the engine controllers inherit from your
 `ApplicationController`, so they automatically get your CSRF protection, `authenticate_user!`,
 and `current_user`. OpenReceive never inspects your session — it calls the `authorize` and
-`get_order_amount` hooks you configure and obeys them.
+`resolve_order` hooks you configure and obeys them.
 
 The engine builds on two gems you also depend on: `openreceive` (the dependency-free core:
 money math, settlement detection, NWC parsing, idempotency, capability-token hashing) and
@@ -63,9 +63,11 @@ OpenReceive.configure do |config|
     end
   end
 
-  # Amount authority: never trust the client price. Return the authoritative amount.
-  config.get_order_amount = lambda do |ctx|
-    { usd: Order.find(ctx[:order_id]).total_usd.to_s }
+  # Amount authority — REQUIRED. Create body has no client price; return payment terms or nil (404).
+  config.resolve_order = lambda do |ctx|
+    order = Order.find_by(id: ctx[:order_id])
+    return nil if order.nil?
+    { usd: order.total_usd.to_s }
   end
 end
 ```
@@ -106,6 +108,6 @@ plain Rack hosts get the identical contract.
 
 ```ruby
 service = OpenReceive::Server::Service.new(nwc_client:, store:, namespace: "default")
-app = OpenReceive::Server::RackApp.new(service:, authorize:, get_order_amount:, prefix: "/openreceive")
+app = OpenReceive::Server::RackApp.new(service:, authorize:, resolve_order:, prefix: "/openreceive")
 run app
 ```

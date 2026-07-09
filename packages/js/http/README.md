@@ -9,16 +9,28 @@ The package exposes one factory:
 ```ts
 import { createOpenReceiveHttpHandler } from "@openreceive/http";
 
-const handler = createOpenReceiveHttpHandler({ service, authorize, getOrderAmount });
+// `service` and `resolveOrder` are required. The create body never carries a client price.
+const handler = createOpenReceiveHttpHandler({
+  service,
+  authorize, // optional; default gates Tier 2 on the order token and fails Tier 3 closed
+  resolveOrder: async ({ orderId }) => {
+    const order = await loadOrder(orderId);
+    return order ? { usd: order.total_usd } : null; // null → 404
+  },
+});
 
 // `handler` is a Web-standard Fetch handler: (request: Request) => Promise<Response>.
 // It also carries `handler.prefix` and a `handler.handle` alias.
 const response = await handler(request);
 ```
 
+`POST {prefix}/checkouts` accepts `{ order_id, memo?, description_hash?, metadata? }` only —
+client `amount` / `sats` / `usd` are rejected with 400. Pricing comes solely from `resolveOrder`.
+
 Any runtime with the Fetch `Request`/`Response` globals (Node 20+, Deno, Bun, edge functions) can
 mount it; the framework adapters (Express, Fastify, Next, …) and the Ruby engine are thin wrappers
-over this same handler.
+over this same handler. Umbrella imports: `openreceive/express`, `openreceive/fastify`,
+`openreceive/next`.
 
 ## Routes (mounted under `prefix`, default `/openreceive`)
 

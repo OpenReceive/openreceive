@@ -7,10 +7,11 @@ import {
   createOpenReceiveWizardRouteAssetDisplays,
   createOpenReceiveWizardRouteDisplays,
   copyInvoice as copyInvoiceHelper,
-  getOpenReceiveAssetIcon,
   getOpenReceiveDefaultCountryCode,
   getOpenReceivePaymentMethodIcon,
+  getOpenReceiveSwapOptionIcon,
   getOpenReceiveWizardEmptyMessage,
+  groupOpenReceiveSwapOptionsByLabel,
   normalizeSwapStartInvoice,
   openReceiveCheckoutLabels,
   openReceivePaymentMethods,
@@ -64,6 +65,11 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
   // choice. Selecting one jumps straight to its deposit address, bypassing the
   // country/route/provider steps. Null means the standard method grid is shown.
   const [selectedSwapAsset, setSelectedSwapAsset] = React.useState<string | null>(null);
+  // For multi-network coins (USDT), remember which network the payer picked before
+  // confirming the method tile.
+  const [selectedSwapNetworks, setSelectedSwapNetworks] = React.useState<Record<string, string>>(
+    {},
+  );
   const autoSwapAttemptedRef = React.useRef<Set<string>>(new Set());
   // Tell the host (default Checkout) whether the payer is in the focused swap flow, so it
   // can hide the Lightning payment section while the swap deposit panel stands in for it.
@@ -356,36 +362,111 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
                 React.createElement("small", null, method.detail),
               ),
             ),
-            swapAssetOptions.map((option) => {
-              // An asset whose provider limits exclude this invoice amount is shown
-              // greyed-out and non-clickable, with a short reason (e.g. the minimum
-              // payment) in place of its network label.
-              const disabled = option.available === false;
-              const limitMessage = swapOptionLimitMessage(option, checkout);
+            groupOpenReceiveSwapOptionsByLabel(swapAssetOptions).map((group) => {
+              const groupKey = group.label.trim().toUpperCase();
+              const selectedAsset =
+                selectedSwapNetworks[groupKey] ??
+                group.options.find((option) => option.available !== false)?.pay_in_asset ??
+                group.options[0]?.pay_in_asset;
+              const selectedOption =
+                group.options.find((option) => option.pay_in_asset === selectedAsset) ??
+                group.options[0];
+              if (selectedOption === undefined) return null;
+              const multiNetwork = group.options.length > 1;
+              const disabled = selectedOption.available === false;
+              const limitMessage = swapOptionLimitMessage(selectedOption, checkout);
+              const startSelected = () => {
+                if (disabled) return;
+                autoSwapAttemptedRef.current.delete(selectedOption.pay_in_asset);
+                setSelectedSwapAsset(selectedOption.pay_in_asset);
+              };
+              if (!multiNetwork) {
+                return React.createElement(
+                  "button",
+                  {
+                    key: groupKey,
+                    className: disabled ? "or-method-unavailable" : undefined,
+                    disabled,
+                    "aria-disabled": disabled ? "true" : undefined,
+                    onClick: disabled ? undefined : startSelected,
+                    type: "button",
+                  },
+                  React.createElement("img", {
+                    alt: "",
+                    src: getOpenReceiveSwapOptionIcon(selectedOption),
+                  }),
+                  React.createElement("span", null, group.label),
+                  React.createElement(
+                    "small",
+                    null,
+                    disabled && limitMessage !== undefined
+                      ? limitMessage
+                      : selectedOption.network_label,
+                  ),
+                );
+              }
               return React.createElement(
-                "button",
+                "div",
                 {
-                  key: option.pay_in_asset,
-                  className: disabled ? "or-method-unavailable" : undefined,
-                  disabled,
-                  "aria-disabled": disabled ? "true" : undefined,
-                  onClick: disabled
-                    ? undefined
-                    : () => {
-                        autoSwapAttemptedRef.current.delete(option.pay_in_asset);
-                        setSelectedSwapAsset(option.pay_in_asset);
-                      },
-                  type: "button",
+                  key: groupKey,
+                  className: joinClassNames(
+                    "or-method-card",
+                    disabled ? "or-method-unavailable" : "or-method-ready",
+                  ),
                 },
                 React.createElement("img", {
                   alt: "",
-                  src: getOpenReceiveAssetIcon(option.label.toLowerCase()),
+                  src: getOpenReceiveSwapOptionIcon(selectedOption),
                 }),
-                React.createElement("span", null, option.label),
+                React.createElement("span", null, group.label),
                 React.createElement(
-                  "small",
-                  null,
-                  disabled && limitMessage !== undefined ? limitMessage : option.network_label,
+                  "label",
+                  {
+                    className: "or-method-network",
+                  },
+                  React.createElement(
+                    "span",
+                    { className: "or-method-network-label" },
+                    `${group.label} network`,
+                  ),
+                  React.createElement(
+                    "select",
+                    {
+                      "aria-label": `${group.label} network`,
+                      value: selectedOption.pay_in_asset,
+                      onChange: (event: React.ChangeEvent<HTMLSelectElement>) => {
+                        const next = event.target.value;
+                        setSelectedSwapNetworks((current) => ({
+                          ...current,
+                          [groupKey]: next,
+                        }));
+                      },
+                    },
+                    group.options.map((option) =>
+                      React.createElement(
+                        "option",
+                        {
+                          key: option.pay_in_asset,
+                          value: option.pay_in_asset,
+                          disabled: option.available === false,
+                        },
+                        option.available === false &&
+                          swapOptionLimitMessage(option, checkout) !== undefined
+                          ? `${option.network_label} · ${swapOptionLimitMessage(option, checkout)}`
+                          : option.network_label,
+                      ),
+                    ),
+                  ),
+                ),
+                React.createElement(
+                  "button",
+                  {
+                    className: "or-method-confirm",
+                    disabled,
+                    onClick: startSelected,
+                    type: "button",
+                  },
+                  disabled && limitMessage !== undefined ? limitMessage : "Continue",
                 ),
               );
             }),

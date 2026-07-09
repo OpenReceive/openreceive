@@ -1670,7 +1670,7 @@ test("Hello Fruit demos prepare app orders and settle through the mounted router
     assert.equal(prepared.body.checkout, undefined, `${demo.name}: prepare_order returns no checkout`);
     const orderId = prepared.body.order.uuid;
 
-    // 2. Mounted router creates the checkout from just { order_id } (getOrderAmount is the authority)
+    // 2. Mounted router creates the checkout from just { order_id } (resolveOrder is the authority)
     // and mints the per-order capability token, returned once.
     const created = await dispatchJson(app, "POST", "/openreceive/checkouts", { order_id: orderId });
     assert.equal(created.status, 201, `${demo.name}: create checkout status`);
@@ -1783,7 +1783,7 @@ test("Hello Fruit demos create direct SATS orders from the currency switcher", a
     assert.equal(prepared.body.order.total_amount.value, "20000");
     const orderId = prepared.body.order.uuid;
 
-    // The SATS amount is the amount authority: getOrderAmount looks the persisted order up by id, so
+    // The SATS amount is the amount authority: resolveOrder looks the persisted order up by id, so
     // the mounted create-checkout route mints a direct-sats invoice with no fiat quote.
     const created = await dispatchJson(app, "POST", "/openreceive/checkouts", { order_id: orderId });
     assert.equal(created.status, 201, `${demo.name}: create checkout status`);

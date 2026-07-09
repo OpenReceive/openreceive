@@ -5,11 +5,15 @@ Next.js App Router handlers for the OpenReceive shipped routes. A thin pass-thro
 
 ```ts
 // app/openreceive/[...openreceive]/route.ts
-import { createOpenReceive } from "@openreceive/node";
-import { openReceiveNextHandlers } from "@openreceive/next";
+import { createOpenReceive, openReceiveNextHandlers } from "openreceive/next";
+// or scoped: @openreceive/node + @openreceive/next
 
 const service = await createOpenReceive();
-export const { GET, POST } = openReceiveNextHandlers({ service, authorize, getOrderAmount });
+export const { GET, POST } = openReceiveNextHandlers({
+  service,
+  resolveOrder: async ({ orderId }) => ({ usd: await priceForOrder(orderId) }),
+});
 ```
 
-See `docs/guides/routes.md` for the route contract, tiers, and capability tokens.
+`resolveOrder` is required. See `docs/guides/routes.md` for the route contract, tiers, and
+capability tokens.

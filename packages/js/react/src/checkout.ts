@@ -239,12 +239,6 @@ function CheckoutView(props: CheckoutProps & { readonly checkout: CheckoutSnapsh
                   encoder: qrEncoder,
                   onError,
                   className: classNames?.qr,
-                  style: {
-                    aspectRatio: "1",
-                    justifySelf: "center",
-                    maxWidth: 420,
-                    width: "min(100%, 420px)",
-                  },
                 }),
                 React.createElement(SatsDetail, {
                   key: "sats-detail",

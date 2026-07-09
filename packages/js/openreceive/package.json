@@ -20,6 +20,16 @@
     "@openreceive/svelte": "0.1.1",
     "@openreceive/vue": "0.1.1"
   },
+  "peerDependencies": {
+    "@openreceive/express": "0.1.1",
+    "@openreceive/fastify": "0.1.1",
+    "@openreceive/next": "0.1.1"
+  },
+  "peerDependenciesMeta": {
+    "@openreceive/express": { "optional": true },
+    "@openreceive/fastify": { "optional": true },
+    "@openreceive/next": { "optional": true }
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -60,6 +70,18 @@
     "./contracts": {
       "types": "./dist/contracts.d.ts",
       "import": "./dist/contracts.js"
+    },
+    "./express": {
+      "types": "./dist/express.d.ts",
+      "import": "./dist/express.js"
+    },
+    "./fastify": {
+      "types": "./dist/fastify.d.ts",
+      "import": "./dist/fastify.js"
+    },
+    "./next": {
+      "types": "./dist/next.d.ts",
+      "import": "./dist/next.js"
     }
   },
   "files": [
@@ -69,7 +91,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup src/index.ts src/node.ts src/browser.ts src/react.ts src/vue.ts src/svelte.ts src/angular.ts src/elements.ts src/provider-data.ts src/contracts.ts --format esm --dts --clean --target es2022 --out-dir dist --external @openreceive/angular --external @openreceive/browser --external @openreceive/core --external @openreceive/elements --external @openreceive/node --external @openreceive/provider-data --external @openreceive/react --external @openreceive/svelte --external @openreceive/vue"
+    "build": "tsup src/index.ts src/node.ts src/browser.ts src/react.ts src/vue.ts src/svelte.ts src/angular.ts src/elements.ts src/provider-data.ts src/contracts.ts src/express.ts src/fastify.ts src/next.ts --format esm --dts --clean --target es2022 --out-dir dist --external @openreceive/angular --external @openreceive/browser --external @openreceive/core --external @openreceive/elements --external @openreceive/express --external @openreceive/fastify --external @openreceive/next --external @openreceive/node --external @openreceive/provider-data --external @openreceive/react --external @openreceive/svelte --external @openreceive/vue"
   },
   "sideEffects": false
 }

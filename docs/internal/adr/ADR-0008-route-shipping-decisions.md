@@ -79,6 +79,10 @@ Resolution that honors the "single token per order, no extra table" intent witho
     `Server::Presets.guest_checkout` / `.with_user` in Ruby.
 12. **Default mount prefix (#6).** Components default `prefix` to `/openreceive` and derive the
     order URL from it, so mounting at the default needs no `orderUrl`/`prefix` wiring.
+13. **Required `resolveOrder` / `resolve_order` (2026-07-09).** Handler construction throws if the
+    pricing hook is omitted. Create body is `{ order_id, memo?, description_hash?, metadata? }`;
+    client `amount`/`sats`/`usd` → 400. Hook `null` → 404. Tip-jar hosts honor payer amounts inside
+    the hook. Umbrella subpaths `openreceive/express|fastify|next`; opt-in `startSweeper`.
 
 ## Notes carried from ground-truth mapping
 

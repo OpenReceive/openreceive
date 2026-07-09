@@ -1,22 +1,27 @@
 # API Reference
 
-OpenReceive is a server-side SDK, not a route bundle. Your app owns its
-controllers, sessions, CSRF/CORS policy, response status codes, and payload
-shape. OpenReceive supplies functions that those controllers can call.
+OpenReceive ships HTTP routes you can mount (see [Shipped Routes](routes.md)), and
+also exposes service methods for hosts that call them from their own controllers.
+Your app still owns sessions, CSRF/CORS, and fulfillment. Amounts on the
+**HTTP** create-checkout body are never trusted — use the required `resolveOrder`
+hook there. Amounts passed to `getOrCreateCheckout` below are trusted because they
+come from your server.
 
 App-facing packages:
 
-- `@openreceive/node`: `createOpenReceive(options)` returns a server-only
-  service with `getOrCreateCheckout`, `createCheckout`, `getOrder`,
+- `openreceive` / `@openreceive/node`: `createOpenReceive(options)` returns a
+  server-only service with `getOrCreateCheckout`, `createCheckout`, `getOrder`,
   `getCheckout`, `order`, `swapOptions`, `swapQuote`, `startSwap`, `refundSwap`,
-  `sweepPendingInvoices`, `listRates`, `quoteRates`, and `close`, plus the
-  resolved `namespace` and `priceCurrencies`. It also exports the swap-state
-  helpers `describeSwapState` and `OPENRECEIVE_SWAP_STATES`.
+  `sweepPendingInvoices`, `listRates`, `quoteRates`, and `close`, plus
+  `startSweeper`, the resolved `namespace` and `priceCurrencies`, and the
+  swap-state helpers `describeSwapState` / `OPENRECEIVE_SWAP_STATES`.
+- `openreceive/express` | `fastify` | `next` (optional peers): mount the shipped
+  routes with `createOpenReceive` + the adapter in one import.
 - `@openreceive/browser`: `requestCheckout`, `status`, `lightningUri`,
   `qrSvg`, `qrPngDataUrl`, `copyInvoice`, `openWallet`, and
   `createCheckoutController`.
-- `@openreceive/react`: `Checkout`, `useCheckout`, `CheckoutProvider`,
-  `ThemeScope`, `ThemeToggle`, `QRCode`, `CopyInvoiceButton`,
+- `@openreceive/react` (also `openreceive/react`): `Checkout`, `useCheckout`,
+  `CheckoutProvider`, `ThemeScope`, `ThemeToggle`, `QRCode`, `CopyInvoiceButton`,
   `OpenWalletButton`, `InvoiceSummary`, `WaitingState`, and `PaymentWizard`.
 - `@openreceive/elements`: `defineOpenReceiveElements` and the checkout/theme
   custom elements.

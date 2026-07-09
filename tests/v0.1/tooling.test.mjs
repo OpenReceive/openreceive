@@ -138,26 +138,24 @@ test("shipped route adapters exist and wrap @openreceive/http", () => {
   }
 });
 
-test("Node quickstart mounts the shipped router and covers swaps without hand-written routes", () => {
+test("Node quickstart mounts the shipped router around host-owned orders", () => {
   const quickstart = readFileSync(nodeQuickstartDocs, "utf8");
-  // The recommended path mounts the router — the developer writes no payment endpoints.
+  // One story: host creates order → resolveOrder → <Checkout orderId>.
   assert.match(quickstart, /openReceiveExpress/);
   assert.match(quickstart, /createOpenReceive/);
-  assert.match(quickstart, /getOrderAmount/);
-  assert.match(quickstart, /from "@openreceive\/node";/);
+  assert.match(quickstart, /resolveOrder/);
+  assert.match(quickstart, /from "openreceive\/express"/);
+  assert.match(quickstart, /<Checkout orderId=/);
+  assert.match(quickstart, /Your app creates the order/);
   // No hand-written checkout/order/status route handlers or manual action routing.
   assert.doesNotMatch(quickstart, /app\.post\(\s*["'`]\/(order|create_order)\b/);
   assert.doesNotMatch(quickstart, /openreceive\.order\(/);
   assert.doesNotMatch(quickstart, /OpenReceiveServiceError/);
-  // Everything needed to get swaps started: FixedFloat key/secret -> openreceive.yml.
-  assert.match(quickstart, /fixedfloat/);
-  assert.match(quickstart, /ff\.io/);
-  assert.match(quickstart, /base_url/);
-  assert.match(quickstart, /key:/);
-  assert.match(quickstart, /secret:/);
-  // Service methods stay available for hosts that prefer to call them directly.
-  assert.match(quickstart, /getOrCreateCheckout/);
-  assert.match(quickstart, /sweepPendingInvoices/);
+  // Token deep-dive and direct-methods coda stay out of the happy path.
+  assert.doesNotMatch(quickstart, /What is the order access token/);
+  assert.doesNotMatch(quickstart, /Prefer to call the methods directly/);
+  // Swaps are optional and pointed at the dedicated guide, not inlined.
+  assert.match(quickstart, /Automated Swaps/);
 });
 
 test("quickstart and examples do not use OpenReceive HTTP converter helpers", () => {
@@ -177,17 +175,28 @@ test("authorization guide shows app boundary service error handling", () => {
   assert.match(source, /total_amount/);
   assert.match(source, /createOpenReceive/);
   assert.match(source, /from "@openreceive\/node";/);
+  // Points hosts at the shipped-router happy path first.
+  assert.match(source, /Shipped Routes/);
+  assert.match(source, /resolveOrder/);
 });
 
 test("Node quickstart shows a checkout component and points to the frontend guide", () => {
   const source = readFileSync(nodeQuickstartDocs, "utf8");
   // The quickstart stays simple: one React example, the other frameworks via the frontend guide.
-  assert.match(source, /@openreceive\/react/);
+  assert.match(source, /openreceive\/react/);
+  assert.match(source, /@openreceive\/react\/styles\.css/);
   assert.match(source, /<Checkout/);
   assert.match(source, /frontend-checkout\.md/);
   for (const framework of ["Vue", "Svelte", "Angular"]) {
     assert.match(source, new RegExp(framework), `quickstart mentions ${framework}`);
   }
+});
+
+test("routes guide create body has no client amount fields", () => {
+  const source = readFileSync(path.join(process.cwd(), "docs/guides/routes.md"), "utf8");
+  assert.match(source, /\{ order_id, memo\?, description_hash\?, metadata\? \}/);
+  assert.doesNotMatch(source, /order_id, amount\\\|sats\\\|usd/);
+  assert.match(source, /\*\*required\*\* at handler construction/);
 });
 
 function runReleaseReadinessValidator() {

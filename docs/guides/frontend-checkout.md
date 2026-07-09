@@ -48,11 +48,12 @@ below.
 
 - `status(invoiceLike)` returns `"pending"`, `"settled"`, `"expired"`, or
   `"failed"` from display-safe fields.
-- `requestCheckout(options)` posts SDK-shaped checkout input to your own
-  checkout-creation URL; most stores call their own `/create_order` route and
-  render the checkout returned with the order. Options use camelCase and amount
-  shortcuts such as `usd: "9.99"` or `sats: 1000`; the POST body uses
-  OpenReceive's snake_case wire fields.
+- `requestCheckout(options)` posts to a checkout-creation URL. Against the
+  **mounted** OpenReceive create route, pass `{ prefix, orderId }` (and optional
+  `memo` / `metadata`) — the body is `{ order_id }` only; the server's
+  `resolveOrder` sets the price. Amount shortcuts such as `usd` / `sats` are for
+  posting to **your own** create URL that then calls `getOrCreateCheckout` with a
+  trusted server-side amount; they are rejected by the shipped create route.
 - `lightningUri(invoice)`, `qrSvg(invoice)`, and `qrPngDataUrl(invoice)` render
   BOLT11 payment data.
 - `copyInvoice({ invoice })` copies the BOLT11 string.

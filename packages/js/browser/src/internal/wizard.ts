@@ -325,6 +325,59 @@ export function getOpenReceiveAssetIcon(symbol: string): string {
   return openReceivePaymentIconUrls[openReceiveAssetIconIds[symbol] ?? "crypto"];
 }
 
+/** Icon for a swap network label (Tron → trx, Solana → sol, Ethereum → eth). */
+export function getOpenReceiveNetworkIcon(networkLabel: string): string {
+  const key = networkLabel.trim().toLowerCase();
+  if (key === "tron" || key === "trx") return openReceivePaymentIconUrls.trx;
+  if (key === "solana" || key === "sol") return openReceivePaymentIconUrls.sol;
+  if (key === "ethereum" || key === "eth") return openReceivePaymentIconUrls.eth;
+  return openReceivePaymentIconUrls.crypto;
+}
+
+/**
+ * Icon for a swap pay-in option. Multi-network assets (USDT) use the network icon so the
+ * picker can show Tron/Solana/Ethereum instead of a generic coin mark.
+ */
+export function getOpenReceiveSwapOptionIcon(option: {
+  readonly label: string;
+  readonly network_label: string;
+}): string {
+  const label = option.label.trim().toLowerCase();
+  if (label === "usdt" || label === "usdc") {
+    return getOpenReceiveNetworkIcon(option.network_label);
+  }
+  return getOpenReceiveAssetIcon(label);
+}
+
+export interface OpenReceiveSwapMethodGroup<T extends { readonly label: string }> {
+  readonly label: string;
+  readonly options: readonly T[];
+}
+
+/**
+ * Collapse multi-network coins (e.g. USDT on Tron/Solana/Ethereum) into one method entry
+ * with several network choices. Single-network coins stay as one-option groups.
+ */
+export function groupOpenReceiveSwapOptionsByLabel<T extends { readonly label: string }>(
+  options: readonly T[],
+): readonly OpenReceiveSwapMethodGroup<T>[] {
+  const groups: OpenReceiveSwapMethodGroup<T>[] = [];
+  const indexByLabel = new Map<string, number>();
+  for (const option of options) {
+    const key = option.label.trim().toUpperCase();
+    const existing = indexByLabel.get(key);
+    if (existing === undefined) {
+      indexByLabel.set(key, groups.length);
+      groups.push({ label: option.label, options: [option] });
+      continue;
+    }
+    const group = groups[existing];
+    if (group === undefined) continue;
+    groups[existing] = { label: group.label, options: [...group.options, option] };
+  }
+  return groups;
+}
+
 export function getOpenReceiveRouteIcon(asset: Pick<AssetIndexEntry, "route" | "symbol">): string {
   const routeId = asset.route ?? asset.symbol;
   if (asset.symbol === "btc" && routeId.includes("lightning")) {

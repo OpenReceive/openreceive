@@ -40,7 +40,7 @@
 
 [data-openreceive-qr] {
   justify-self: center;
-  width: min(420px, 100%);
+  width: min(280px, 100%);
 }
 
 [data-openreceive-qr] svg {
@@ -78,8 +78,10 @@
 }
 
 [data-openreceive-actions] {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
+  justify-content: center;
 }
 
 [data-openreceive-actions] button,
@@ -97,6 +99,12 @@
   align-items: center;
   justify-content: center;
   text-decoration: none;
+}
+
+[data-openreceive-actions] button {
+  min-width: 160px;
+  padding: 0 18px;
+  width: auto;
 }
 
 [data-openreceive-theme-toggle] {
@@ -127,10 +135,7 @@
   align-items: center;
   gap: 12px;
   min-width: 0;
-  padding: 12px;
-  border: 1px solid var(--or-border);
-  border-radius: 8px;
-  background: var(--or-bg-soft);
+  padding: 4px 0;
 }
 
 .or-payment-status div {
@@ -322,7 +327,8 @@
 
 .or-method-grid button,
 .or-route-picker button,
-.or-country-grid button {
+.or-country-grid button,
+.or-method-card {
   min-width: 0;
   border: 1px solid var(--or-border);
   border-radius: 8px;
@@ -333,7 +339,8 @@
 }
 
 .or-method-grid button,
-.or-route-picker button {
+.or-route-picker button,
+.or-method-card {
   display: grid;
   gap: 8px;
   align-content: start;
@@ -346,32 +353,37 @@
 .or-country-grid button:hover,
 .or-method-grid button.selected,
 .or-route-picker button.selected,
-.or-country-grid button.selected {
+.or-country-grid button.selected,
+.or-method-card.or-method-ready:hover {
   border-color: var(--or-accent);
   box-shadow: 0 0 0 2px var(--or-accent-soft);
 }
 
 .or-method-grid button:disabled,
-.or-method-grid button.or-method-unavailable {
+.or-method-grid button.or-method-unavailable,
+.or-method-card.or-method-unavailable {
   cursor: not-allowed;
   opacity: 0.5;
 }
 
 .or-method-grid button:disabled:hover,
-.or-method-grid button.or-method-unavailable:hover {
+.or-method-grid button.or-method-unavailable:hover,
+.or-method-card.or-method-unavailable:hover {
   border-color: var(--or-border);
   box-shadow: none;
 }
 
 .or-method-grid img,
-.or-route-picker img {
+.or-route-picker img,
+.or-method-card img {
   width: 48px;
   aspect-ratio: 1;
 }
 
 .or-method-grid span,
 .or-route-picker span,
-.or-country-grid span {
+.or-country-grid span,
+.or-method-card > span {
   font-weight: 800;
 }
 
@@ -513,10 +525,6 @@
 .or-swap-panel {
   display: grid;
   gap: 12px;
-  padding: 14px;
-  border: 1px solid var(--or-border);
-  border-radius: 8px;
-  background: var(--or-bg-raised);
 }
 
 .or-swap-heading {
@@ -576,10 +584,59 @@
 .or-swap-breakdown {
   display: grid;
   gap: 8px;
+  padding: 8px 0 4px;
+  border-top: 1px solid var(--or-border);
+}
+
+.or-method-network {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+}
+
+.or-method-network span[aria-hidden="true"],
+.or-method-network .or-method-network-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.or-method-network select {
+  min-height: 36px;
+  width: 100%;
   border: 1px solid var(--or-border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--or-bg-soft);
-  padding: 12px 14px;
+  color: var(--or-text);
+  font: inherit;
+  padding: 0 28px 0 10px;
+}
+
+.or-method-card {
+  cursor: default;
+}
+
+.or-method-card.or-method-ready {
+  cursor: pointer;
+}
+
+.or-method-card .or-method-confirm {
+  min-height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--or-text);
+  color: var(--or-bg);
+  cursor: pointer;
+  font-weight: 700;
+  padding: 0 10px;
+}
+
+.or-method-card .or-method-confirm:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .or-swap-breakdown-title {
@@ -936,6 +993,10 @@
 }
 
 @media (max-width: 760px) {
+  [data-openreceive-qr] {
+    width: min(200px, 72vw);
+  }
+
   [data-openreceive-actions],
   .or-method-grid,
   .or-route-picker,
@@ -944,6 +1005,17 @@
   .or-provider-grid,
   .or-provider-actions {
     grid-template-columns: none;
+  }
+
+  [data-openreceive-actions] {
+    justify-content: stretch;
+  }
+
+  [data-openreceive-actions] button {
+    width: auto;
+    max-width: 100%;
+    justify-self: center;
+    margin-inline: auto;
   }
 
   .or-country-summary {

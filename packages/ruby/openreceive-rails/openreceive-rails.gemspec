@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
     "A mountable Rails engine that ships OpenReceive's receive-only checkout routes into a " \
     "Rails app. Engine controllers inherit from the host's ApplicationController (keeping its " \
     "CSRF, authentication, and current_user), delegate to the openreceive-server Service and " \
-    "per-order capability tokens, and obey host-supplied `authorize` / `get_order_amount` hooks. " \
+    "per-order capability tokens, and obey host-supplied `authorize` / `resolve_order` hooks. " \
     "Ships an `openreceive:install` generator that writes the initializer, mounts the engine, " \
     "and copies the canonical migrations. Receive-only: it never exposes a spend path."
   spec.authors = ["OpenReceive"]

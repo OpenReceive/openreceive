@@ -1,8 +1,10 @@
 # Hello Fruit Next.js Fullstack Demo
 
 This demo runs the Hello Fruit checkout in a Next.js App Router application.
-The browser never receives `OPENRECEIVE_NWC`. Next.js route handlers create and
-refresh invoice status through server-side OpenReceive helpers.
+The browser never receives `OPENRECEIVE_NWC`. App Router catch-all handlers mount
+OpenReceive via `openReceiveNextHandlers` with a required `resolveOrder`;
+`/prepare_order` persists the host order first. The client uses
+`<Checkout orderId />` and never posts a price.
 
 ## Local Setup
 

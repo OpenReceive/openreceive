@@ -123,4 +123,8 @@ export type {
   OpenReceiveCheckoutAmountSource,
   OpenReceiveGetOrderAmount,
   OpenReceiveGetOrderAmountContext,
-} from "./get-order-amount.ts";
+  OpenReceiveResolveOrder,
+  OpenReceiveResolveOrderContext,
+} from "./resolve-order.ts";
+export { startSweeper } from "./start-sweeper.ts";
+export type { StartSweeperOptions, SweeperHandle } from "./start-sweeper.ts";

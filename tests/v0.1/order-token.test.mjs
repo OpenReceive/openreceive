@@ -131,7 +131,7 @@ test("requestCheckout with just { prefix, orderId } POSTs only { order_id } (no 
     },
   });
 
-  // The mounted server's getOrderAmount owns the price, so the body is order_id only — no amount.
+  // The mounted server's resolveOrder owns the price, so the body is order_id only — no amount.
   assert.equal(requests[0].url, "/openreceive/checkouts");
   assert.deepEqual(JSON.parse(requests[0].init.body), { order_id: "ord-1" });
   assert.equal(checkout.order_id, orderId);

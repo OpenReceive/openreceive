@@ -27,16 +27,18 @@ through third-party services outside OpenReceive.
 
 ## Runtime Model
 
-OpenReceive runs inside your normal web process. Your checkout route creates an
-app order, calls OpenReceive server-side to create the invoice, and returns
-display-safe invoice data to the browser. The browser checkout watches your
-backend order-status route to learn when an invoice settles. Checkout creation,
-order-status reads, admin pages, or background tasks may advance at most one
-bounded server-side `list_transactions` page through the global sweep.
+OpenReceive runs inside your normal web process. Your app creates and persists
+an order, mounts OpenReceive's routes with a required `resolveOrder` hook that
+prices that order server-side, and renders `<Checkout orderId />`. The component
+creates the checkout against the mounted routes and polls order status there.
+Checkout creation, order-status reads, admin pages, or background tasks may
+advance at most one bounded server-side `list_transactions` page through the
+global sweep.
 
 ```text
-web process        handles /create_order and /order
-browser checkout   asks app order status when it needs fresh state
+your app           creates/persists the order (OpenReceive never mints orders)
+mounted routes     POST /openreceive/checkouts (price from resolveOrder only)
+browser checkout   <Checkout orderId> polls /openreceive/orders/{id}
 wallet scan        happens only inside server-side OpenReceive calls
 ```
 
@@ -44,15 +46,15 @@ The OpenReceive store is the only thing coordinating payment state across
 processes.
 
 Local invoice expiry is not a payment decision. If no browser, admin, cron,
-worker, or app request calls OpenReceive, no settlement scan runs.
+worker, or app request calls OpenReceive, no settlement scan runs (opt into
+`startSweeper` on long-lived idle deployments — see [Settlement Sweeps](settlement-sweeps.md)).
 
 OpenReceive packages provide their own invoice storage, selected with
 `OPENRECEIVE_STORE`. Your app keeps its own orders, carts, users, and
 fulfillment tables.
 
-- Express routes in an Express app.
-- Rails controllers in a Rails app.
-- FastAPI routes in a Python app.
+- Express / Fastify / Next adapters (or `openreceive/express|fastify|next`).
+- Rails engine (`openreceive-rails`).
 - Equivalent native integrations in later ecosystems.
 
 The browser or mobile app receives only display-safe invoice data. The

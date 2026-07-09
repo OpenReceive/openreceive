@@ -20,17 +20,20 @@ server-side. A preimage alone is not enough.
 Use the host app's sessions, tokens, policies, or guest checkout authorization
 for any checkout or status route that should not be public.
 
-Default route policy:
+With the shipped routes (recommended):
 
-- Order creation is protected by app auth, cart/session token, or guest
-  checkout token. The backend recomputes the cart total before calling
-  OpenReceive.
-- Order status reads require ownership of the invoice, order, cart, or checkout
-  session.
-- Status refresh happens behind your `/order` or equivalent app route
-  when payment status should not be public.
-- Optional background settlement sweeps must run server-side and keep the
-  receive-only NWC code out of browser code.
+- Your app creates and persists the order; OpenReceive never mints orders.
+- `resolveOrder` is required and is the sole price authority on
+  `POST {prefix}/checkouts`. Client `amount` / `sats` / `usd` are rejected.
+- Tier-2 status/swap reads are gated by the per-order capability token (and/or
+  your `authorize` hook). Same-origin browsers also carry the httpOnly cookie.
+- Tier-3 `invoice.sweep` fails closed unless `authorize` opts in.
+- Optional background settlement sweeps (`startSweeper` or your own cron) must
+  run server-side and keep the receive-only NWC code out of browser code.
+
+If you call service methods from your own controllers instead, recompute the cart
+total on the server before `getOrCreateCheckout`, and authorize status reads the
+same way you authorize any other private order route.
 
 ## Browser Defaults
 

@@ -33,11 +33,11 @@ OpenReceive.configure do |config|
     end
   end
 
-  # Amount authority — NEVER trust the client price. Return the authoritative amount for the order.
-  # Return one of: { usd: "9.99" } | { sats: 21_000 } |
+  # Amount authority — REQUIRED. NEVER trust a client price. Return payment terms for the order,
+  # or nil for 404. Return one of: { usd: "9.99" } | { sats: 21_000 } |
   #   { amount: { "btc" => { "currency" => "SATS", "value" => "21000" } } }.
-  config.get_order_amount = lambda do |context|
-    raise "OpenReceive: implement config.get_order_amount to return the authoritative amount " \
+  config.resolve_order = lambda do |context|
+    raise "OpenReceive: implement config.resolve_order to return the authoritative amount " \
           "for order #{context[:order_id].inspect}."
   end
 end

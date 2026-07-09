@@ -13,7 +13,7 @@ module OpenReceive
   #     config.nwc               = ENV.fetch("OPENRECEIVE_NWC")
   #     config.namespace         = "default"
   #     config.authorize         = ->(ctx) { ... }
-  #     config.get_order_amount    = ->(ctx) { { usd: Order.find(ctx[:order_id]).total_usd.to_s } }
+  #     config.resolve_order       = ->(ctx) { { usd: Order.find(ctx[:order_id]).total_usd.to_s } }
   #   end
   #
   # The Configuration lazily builds — and memoizes — a single `OpenReceive::Server::Service`, a
@@ -48,12 +48,12 @@ module OpenReceive
     # OpenReceive::Server::Presets.guest_checkout / .with_user policies can be assigned here directly.
     attr_accessor :authorize
 
-    # get_order_amount: called to compute the authoritative amount for a checkout (never trust the
-    # client price). Accepts either the single-context form `->(ctx) { { usd: ... } }` (ctx has
+    # resolve_order: REQUIRED. Called to load the host's order and return its payment terms (never
+    # trust a client price). Accepts either the single-context form `->(ctx) { { usd: ... } }` (ctx has
     # :order_id, :client_amount, :metadata, :request, :action) or the keyword form
     # `->(order_id:, client_amount:, metadata:, request:) { ... }` (matching RackApp). Must return
-    # one of { amount: }, { sats: }, or { usd: }.
-    attr_accessor :get_order_amount
+    # one of { amount: }, { sats: }, or { usd: }, or nil for 404 (order not found).
+    attr_accessor :resolve_order
 
     # rate_limit: ->(context) { allowed_boolean }. Returning false yields a 429. Optional.
     attr_accessor :rate_limit
@@ -82,7 +82,7 @@ module OpenReceive
       @namespace = "default"
       @store = nil
       @authorize = nil
-      @get_order_amount = nil
+      @resolve_order = nil
       @rate_limit = nil
       @prefix = "/openreceive"
       @price_provider = nil
@@ -124,11 +124,16 @@ module OpenReceive
     # app) delegate to. Passing `authorize: @authorize` (which may be nil) means the default
     # fail-closed policy is used when the host did not supply one.
     def request_handler
+      if @resolve_order.nil?
+        raise ConfigurationError,
+              "OpenReceive.config.resolve_order is required — the create-checkout route " \
+              "never trusts a client-supplied price."
+      end
       @request_handler ||= OpenReceive::Server::RequestHandler.new(
         service: service,
         tokens: tokens,
         authorize: @authorize,
-        get_order_amount: @get_order_amount,
+        resolve_order: @resolve_order,
         rate_limit: @rate_limit,
         prefix: @prefix
       )

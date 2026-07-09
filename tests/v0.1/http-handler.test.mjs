@@ -34,12 +34,18 @@ async function makeService(overrides = {}) {
   });
 }
 
-// Handlers warn when authorize / getOrderAmount are omitted; silence that noise here.
+// Default pricing for tests: 200 sats unless a test supplies its own resolveOrder.
+const defaultResolveOrder = () => ({ sats: 200 });
+
+// Handlers warn when authorize is omitted; silence that noise here.
 function createHandlerSilently(options) {
   const original = console.warn;
   console.warn = () => {};
   try {
-    return createOpenReceiveHttpHandler(options);
+    return createOpenReceiveHttpHandler({
+      resolveOrder: defaultResolveOrder,
+      ...options,
+    });
   } finally {
     console.warn = original;
   }
@@ -59,10 +65,10 @@ function jsonRequest(method, path, { body, headers } = {}) {
   return new Request(`${BASE}${path}`, init);
 }
 
-async function createCheckout(handler, { orderId, sats = 200, token } = {}) {
+async function createCheckout(handler, { orderId, token } = {}) {
   const response = await handler(
     jsonRequest("POST", "/openreceive/checkouts", {
-      body: { order_id: orderId, sats },
+      body: { order_id: orderId },
       headers: token === undefined ? undefined : { authorization: `Bearer ${token}` },
     }),
   );
@@ -153,9 +159,10 @@ test("admin/sweep fails closed by default and opens for an allow-all authorize",
 
 async function handler_sweep(authorize) {
   const service = await makeService();
-  const handler = createHandlerSilently(
-    authorize === undefined ? { service } : { service, authorize },
-  );
+  const handler = createHandlerSilently({
+    service,
+    ...(authorize === undefined ? {} : { authorize }),
+  });
   return await handler(jsonRequest("POST", "/openreceive/admin/sweep", { body: {} }));
 }
 
@@ -182,25 +189,56 @@ test("a custom authorize policy governs order.read (deny -> 403, allow -> 200)",
   assert.equal((await allowed.json()).order_id, "order-custom-allow");
 });
 
-test("getOrderAmount overrides a forged client amount", async () => {
+test("resolveOrder is the sole price authority; client amount fields are rejected", async () => {
   const service = await makeService();
   const handler = createHandlerSilently({
     service,
-    // Server-side authority: ignore whatever the client sent and price at exactly $1.00.
-    getOrderAmount: () => ({ usd: "1.00" }),
+    resolveOrder: () => ({ usd: "1.00" }),
   });
 
-  const response = await handler(
+  const rejected = await handler(
     jsonRequest("POST", "/openreceive/checkouts", {
       body: { order_id: "order-forged", usd: "999999" },
     }),
   );
+  assert.equal(rejected.status, 400);
+  assert.equal((await rejected.json()).code, "INVALID_REQUEST");
+
+  const response = await handler(
+    jsonRequest("POST", "/openreceive/checkouts", {
+      body: { order_id: "order-priced" },
+    }),
+  );
   assert.equal(response.status, 201);
   const { checkout } = await response.json();
-  // $1.00 at $50,000/BTC = 2,000 sats = 2,000,000 msats — NOT the forged $999,999.
+  // $1.00 at $50,000/BTC = 2,000 sats = 2,000,000 msats.
   assert.equal(checkout.amount_msats, 2000000);
   assert.equal(checkout.fiat.currency, "USD");
   assert.equal(checkout.fiat.value, "1.00");
+});
+
+test("resolveOrder null returns 404 and throw returns 400", async () => {
+  const missing = createHandlerSilently({
+    service: await makeService(),
+    resolveOrder: () => null,
+  });
+  const notFound = await missing(
+    jsonRequest("POST", "/openreceive/checkouts", { body: { order_id: "missing" } }),
+  );
+  assert.equal(notFound.status, 404);
+  assert.equal((await notFound.json()).code, "NOT_FOUND");
+
+  const invalid = createHandlerSilently({
+    service: await makeService(),
+    resolveOrder: () => {
+      throw new Error("bad tip");
+    },
+  });
+  const bad = await invalid(
+    jsonRequest("POST", "/openreceive/checkouts", { body: { order_id: "bad" } }),
+  );
+  assert.equal(bad.status, 400);
+  assert.equal((await bad.json()).code, "INVALID_REQUEST");
 });
 
 test("error responses conform to the shared shape (enum code, non-empty message, request id)", async () => {
@@ -258,20 +296,24 @@ test("swap-options and order swap actions expose the disabled-swap shape", async
   assert.equal((await denied.json()).code, "UNAUTHORIZED");
 });
 
-test("the handler emits the missing-policy warnings and exposes prefix + handle", async () => {
+test("the handler requires resolveOrder and warns only about missing authorize", async () => {
   const service = await makeService();
+  assert.throws(
+    () => createOpenReceiveHttpHandler({ service }),
+    /resolveOrder/,
+  );
+
   const warnings = [];
   const original = console.warn;
   console.warn = (message) => warnings.push(message);
   let handler;
   try {
-    handler = createOpenReceiveHttpHandler({ service });
+    handler = createOpenReceiveHttpHandler({ service, resolveOrder: defaultResolveOrder });
   } finally {
     console.warn = original;
   }
-  assert.equal(warnings.length, 2);
+  assert.equal(warnings.length, 1);
   assert.ok(warnings.some((message) => /Tier-3 admin routes/.test(message)));
-  assert.ok(warnings.some((message) => /getOrderAmount/.test(message)));
 
   assert.equal(handler.prefix, "/openreceive");
   assert.equal(typeof handler.handle, "function");
@@ -427,7 +469,7 @@ test("checkout.create sets a path-scoped httpOnly order-token cookie", async () 
   const handler = await buildHandler();
   const response = await handler(
     jsonRequest("POST", "/openreceive/checkouts", {
-      body: { order_id: "order-cookie-1", sats: 200 },
+      body: { order_id: "order-cookie-1" },
     }),
   );
   assert.equal(response.status, 201);
@@ -474,7 +516,7 @@ test("the order-token cookie is Secure over https (direct or forwarded) and not 
     new Request("https://openreceive.test/openreceive/checkouts", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ order_id: "order-cookie-https", sats: 200 }),
+      body: JSON.stringify({ order_id: "order-cookie-https" }),
     }),
   );
   assert.equal(httpsResponse.status, 201);
@@ -482,7 +524,7 @@ test("the order-token cookie is Secure over https (direct or forwarded) and not 
 
   const forwardedResponse = await handler(
     jsonRequest("POST", "/openreceive/checkouts", {
-      body: { order_id: "order-cookie-fwd", sats: 200 },
+      body: { order_id: "order-cookie-fwd" },
       headers: { "x-forwarded-proto": "https" },
     }),
   );
@@ -491,7 +533,7 @@ test("the order-token cookie is Secure over https (direct or forwarded) and not 
 
   const httpResponse = await handler(
     jsonRequest("POST", "/openreceive/checkouts", {
-      body: { order_id: "order-cookie-http", sats: 200 },
+      body: { order_id: "order-cookie-http" },
     }),
   );
   assert.equal(httpResponse.status, 201);

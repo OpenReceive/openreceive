@@ -20,7 +20,8 @@ The v0.1 reference path is contract-first and server-owned:
   `spec/openapi/openreceive-http.v1.yaml` is the shipped route contract.
 - `packages/js/` contains the core contracts, Node NWC service, the shipped HTTP
   routes (`@openreceive/http`) and thin framework adapters
-  (`@openreceive/express`, `@openreceive/fastify`, `@openreceive/next`), browser
+  (`@openreceive/express`, `@openreceive/fastify`, `@openreceive/next`), the
+  `openreceive` umbrella (`openreceive/express|fastify|next|react|…`), browser
   helpers, provider data, testkit, elements, and frontend framework packages.
 - `packages/ruby/` contains the dependency-free `openreceive` core plus the
   `openreceive-server` (Service + store + Rack app) and `openreceive-rails`
@@ -36,12 +37,11 @@ The v0.1 reference path is contract-first and server-owned:
 
 Instead of hand-writing controllers, mount OpenReceive's routes and keep 100% of
 authentication in your app. OpenReceive never inspects your session — it calls
-your `authorize` and `getOrderAmount` hooks and obeys them.
+your `authorize` and `resolveOrder` hooks and obeys them.
 
 ```ts
 import express from "express";
-import { createOpenReceive } from "@openreceive/node";
-import { openReceiveExpress } from "@openreceive/express";
+import { createOpenReceive, openReceiveExpress } from "openreceive/express";
 
 const service = await createOpenReceive();
 const app = express();
@@ -51,8 +51,8 @@ app.use(openReceiveExpress({
   // Tier 2 reads require the per-order capability token; Tier 3 (sweep) fails closed.
   authorize: ({ action, token, resource }) =>
     action === "checkout.create" || validToken(token, resource.order_id),
-  // The client-supplied price is never trusted; you return the authoritative amount.
-  getOrderAmount: ({ orderId }) => ({ usd: priceForOrder(orderId) }),
+  // Required: the create route never trusts a client price.
+  resolveOrder: ({ orderId }) => ({ usd: priceForOrder(orderId) }),
 }));
 ```
 

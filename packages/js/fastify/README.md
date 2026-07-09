@@ -4,10 +4,16 @@ Fastify plugin for the OpenReceive shipped routes. A thin wrapper over
 [`@openreceive/http`](../http).
 
 ```ts
-import { openReceiveFastify } from "@openreceive/fastify";
+import { createOpenReceive, openReceiveFastify } from "openreceive/fastify";
+// or scoped: @openreceive/node + @openreceive/fastify
+
+const service = await createOpenReceive();
 await fastify.register(openReceiveFastify, {
-  service, authorize, getOrderAmount, prefix: "/openreceive",
+  service,
+  resolveOrder: async ({ orderId }) => ({ usd: await priceForOrder(orderId) }),
+  prefix: "/openreceive",
 });
 ```
 
-See `docs/guides/routes.md` for the route contract, tiers, and capability tokens.
+`resolveOrder` is required. See `docs/guides/routes.md` for the route contract, tiers, and
+capability tokens.

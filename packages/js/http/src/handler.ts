@@ -5,7 +5,7 @@ import type {
   OpenReceiveCheckoutAmountSource,
   OpenReceiveCreateCheckoutRequest,
   OpenReceiveOrderRequest,
-  OpenReceiveGetOrderAmount,
+  OpenReceiveResolveOrder,
 } from "@openreceive/node";
 import {
   createDefaultAuthorize,
@@ -45,14 +45,17 @@ function applyOrderAmount(
   return { ...base, usd: resolved.usd } as OpenReceiveCreateCheckoutRequest;
 }
 
-/** Options for {@link createOpenReceiveHttpHandler}. Only `service` is required. */
+/** Options for {@link createOpenReceiveHttpHandler}. `service` and `resolveOrder` are required. */
 export interface CreateOpenReceiveHttpHandlerOptions {
   /** The host's already-constructed OpenReceive service (created with the host's DB + wallet). */
   readonly service: OpenReceive;
+  /**
+   * Host server-side pricing hook. Required: the create-checkout route obtains the price ONLY
+   * from this hook. Omitting it throws at construction.
+   */
+  readonly resolveOrder: OpenReceiveResolveOrder;
   /** Host authorization policy. Defaults to the token-gated Tier policy (Tier 3 denied). */
   readonly authorize?: OpenReceiveAuthorize;
-  /** Host server-side pricing hook. When omitted, the client-supplied amount is trusted. */
-  readonly getOrderAmount?: OpenReceiveGetOrderAmount;
   /** Host rate-limit hook. When omitted, no rate limiting is applied. */
   readonly rateLimit?: OpenReceiveRateLimit;
   /** Capability-token manager. Defaults to one backed by `service.store` / `service.namespace`. */
@@ -75,7 +78,7 @@ interface HandlerRuntime {
   readonly tokens: OrderAccessTokenManager;
   readonly authorize: OpenReceiveAuthorize;
   readonly rateLimit?: OpenReceiveRateLimit;
-  readonly getOrderAmount?: OpenReceiveGetOrderAmount;
+  readonly resolveOrder: OpenReceiveResolveOrder;
   readonly prefix: string;
 }
 
@@ -98,6 +101,14 @@ export function createOpenReceiveHttpHandler(
     throw new TypeError("createOpenReceiveHttpHandler requires a `service`.");
   }
 
+  if (options.resolveOrder === undefined) {
+    throw new TypeError(
+      "createOpenReceiveHttpHandler requires a `resolveOrder` hook — the create-checkout route " +
+        "never trusts a client-supplied price.",
+    );
+  }
+  const resolveOrder = options.resolveOrder;
+
   const prefix = normalizePrefix(options.prefix ?? "/openreceive");
   const tokens =
     options.tokens ??
@@ -109,18 +120,13 @@ export function createOpenReceiveHttpHandler(
       "OpenReceive: no authorize policy configured — Tier-3 admin routes (invoice.sweep) will always return 403.",
     );
   }
-  if (options.getOrderAmount === undefined) {
-    console.warn(
-      "OpenReceive: no getOrderAmount hook — the client-supplied amount is trusted; set getOrderAmount to enforce server-side pricing.",
-    );
-  }
 
   const runtime: HandlerRuntime = {
     service: options.service,
     tokens,
     authorize,
     rateLimit: options.rateLimit,
-    getOrderAmount: options.getOrderAmount,
+    resolveOrder,
     prefix,
   };
 
@@ -181,20 +187,33 @@ async function handleCreateCheckout(
 
   await guard(runtime, "checkout.create", request, { order_id: orderId }, token);
 
-  const clientAmount = readClientAmountSource(body);
-  const metadata = readMetadata(body);
+  // Client prices are never trusted on this route. amount/sats/usd are rejected so a tampered
+  // client cannot quietly underpay; tip-jar / donation hosts honor a payer-chosen amount inside
+  // resolveOrder (typically via metadata) and return it explicitly.
+  rejectClientAmountFields(body);
 
-  let resolved: OpenReceiveCheckoutAmountSource;
-  if (runtime.getOrderAmount !== undefined) {
-    resolved = await runtime.getOrderAmount({ orderId, clientAmount, metadata, request });
-  } else if (clientAmount !== undefined) {
-    // No server-side pricing hook: fall back to the (trusted) client amount source.
-    resolved = clientAmount;
-  } else {
+  const metadata = readMetadata(body);
+  let resolved: OpenReceiveCheckoutAmountSource | null;
+  try {
+    resolved = await runtime.resolveOrder({
+      orderId,
+      metadata,
+      request,
+    });
+  } catch (error) {
+    if (error instanceof OpenReceiveHttpError) throw error;
+    const message = error instanceof Error ? error.message : "resolveOrder rejected the request.";
+    throw new OpenReceiveHttpError(400, "INVALID_REQUEST", message);
+  }
+
+  if (resolved === null) {
+    throw new OpenReceiveHttpError(404, "NOT_FOUND", "Order not found.");
+  }
+  if (!isAmountSource(resolved)) {
     throw new OpenReceiveHttpError(
       400,
       "INVALID_REQUEST",
-      "Create checkout request requires exactly one of amount, sats, or usd.",
+      "resolveOrder must return one of amount, sats, or usd (or null for not found).",
     );
   }
 
@@ -501,19 +520,24 @@ function readOrderId(body: Record<string, unknown>): string {
   return orderId;
 }
 
-function readClientAmountSource(
-  body: Record<string, unknown>,
-): OpenReceiveCheckoutAmountSource | undefined {
-  if (body.amount !== undefined) {
-    return { amount: body.amount } as OpenReceiveCheckoutAmountSource;
+/** Fail loud when a client tries to set the price on the create-checkout route. */
+function rejectClientAmountFields(body: Record<string, unknown>): void {
+  for (const key of ["amount", "sats", "usd"] as const) {
+    if (body[key] !== undefined) {
+      throw new OpenReceiveHttpError(
+        400,
+        "INVALID_REQUEST",
+        `Create checkout does not accept client-supplied '${key}'. Provide the price via resolveOrder.`,
+      );
+    }
   }
-  if (body.sats !== undefined) {
-    return { sats: body.sats } as OpenReceiveCheckoutAmountSource;
-  }
-  if (body.usd !== undefined) {
-    return { usd: body.usd } as OpenReceiveCheckoutAmountSource;
-  }
-  return undefined;
+}
+
+function isAmountSource(value: unknown): value is OpenReceiveCheckoutAmountSource {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  const keys = ["amount", "sats", "usd"].filter((key) => key in record);
+  return keys.length === 1;
 }
 
 function readMetadata(body: Record<string, unknown>): Record<string, unknown> | undefined {

@@ -13,6 +13,8 @@ export type {
   OpenReceiveOrderStatus,
   OpenReceiveGetOrderAmount,
   OpenReceiveGetOrderAmountContext,
+  OpenReceiveResolveOrder,
+  OpenReceiveResolveOrderContext,
 } from "@openreceive/node";
 export {
   createDefaultAuthorize,

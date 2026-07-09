@@ -13,11 +13,13 @@ docs/guides/quickstart-node.md
 
 A mobile app may:
 
-- call your backend to create an invoice
+- call your backend to create/persist an **order** (OpenReceive never mints orders)
+- create a checkout against your mounted OpenReceive routes (`{ order_id }` only —
+  no client price; present the `order_access_token` as `Authorization: Bearer`)
 - display amount, BOLT11 invoice text, QR data, and payment status
 - copy the invoice
 - open a Lightning wallet through a platform deep link
-- poll a backend status endpoint protected by your app when needed
+- poll `{prefix}/orders/{order_id}` with the capability token when needed
 - subscribe to server-sent or push-style status updates exposed by the backend
 
 A mobile app leaves these on the backend:
@@ -34,7 +36,8 @@ The backend owns:
 
 - receive-only NWC code
 - wallet setup
-- invoice creation
+- host order creation + required `resolveOrder` pricing
+- invoice creation (via mounted routes or service methods)
 - idempotency
 - payment status refresh
 - payment verification

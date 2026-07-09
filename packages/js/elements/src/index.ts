@@ -43,7 +43,9 @@ import {
   getOpenReceiveDefaultCountryCode,
   getOpenReceivePaymentMethodIcon,
   getOpenReceiveRegionForCountry,
+  getOpenReceiveSwapOptionIcon,
   getOpenReceiveWizardEmptyMessage,
+  groupOpenReceiveSwapOptionsByLabel,
   formatOpenReceiveSwapLimit,
   openReceiveCheckoutLabels,
   openReceiveCheckoutElementStyles,
@@ -106,6 +108,10 @@ export interface OpenReceiveElementsWizardView {
   readonly selectedRegion?: OpenReceiveRegionId;
   readonly countryPickerOpen?: boolean;
   readonly swapOptions?: readonly OpenReceiveElementsSwapOption[];
+  /** Selected pay-in asset per multi-network coin label (e.g. USDT → USDT_TRON). */
+  readonly selectedSwapNetworks?: Readonly<Record<string, string>>;
+  /** When set, the wizard shows the focused swap deposit flow for this pay-in asset. */
+  readonly selectedSwapAsset?: string | null;
   /** Invoice amount + fiat, used to render fiat limit messages for out-of-range assets. */
   readonly amountMsats?: number;
   readonly fiat?: { readonly currency?: string; readonly value?: string };
@@ -161,6 +167,7 @@ export function renderCheckoutHtml(view: CheckoutView): string {
     ? undefined
     : createCheckoutStatusModel(checkoutState);
   const expired = statusModel?.phase === "expired";
+  const hideLightning = (view.wizard?.selectedSwapAsset ?? null) !== null && !expired;
   const wizard =
     expired || view.payment_wizard === false
       ? ""
@@ -169,15 +176,15 @@ export function renderCheckoutHtml(view: CheckoutView): string {
   return `
     <style>${openReceiveCheckoutElementStyles}</style>
     <section part="root"${view.theme === undefined ? "" : ` data-theme="${escapeHtml(view.theme)}"`}>
-      ${expired ? "" : `<div part="qr" ${OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.qr}></div>`}
-      ${expired ? "" : satsDetail}
-      ${status}
-      <div part="meta">${amountLabel}${fiatLabel}${stateLabel}</div>
-      <div part="actions">
+      ${hideLightning || expired ? "" : `<div part="qr" ${OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.qr}></div>`}
+      ${hideLightning || expired ? "" : satsDetail}
+      ${hideLightning ? "" : status}
+      ${hideLightning ? "" : `<div part="meta">${amountLabel}${fiatLabel}${stateLabel}</div>`}
+      ${hideLightning ? "" : `<div part="actions">
         ${expired
           ? `<button part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.startOver}" type="button">${escapeHtml(openReceiveCheckoutLabels.startOver)}</button>`
           : `<button part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.copy}" type="button">${escapeHtml(openReceiveCheckoutLabels.copyInvoice)}</button>`}
-      </div>
+      </div>`}
       ${wizard}
     </section>
   `;
@@ -250,6 +257,52 @@ export function renderOpenReceivePaymentWizardHtml(
         selectedRoute: model.selectedRoute,
         routeAssets: routeAssetDisplays
       });
+  const swapAssetOptions = (view.swapOptions ?? []).filter(
+    (option) => option.provider.length > 0,
+  );
+  const selectedSwapAsset = view.selectedSwapAsset ?? null;
+  const selectedSwapOption =
+    selectedSwapAsset === null
+      ? undefined
+      : swapAssetOptions.find((option) => option.pay_in_asset === selectedSwapAsset);
+  if (selectedSwapAsset !== null) {
+    const label =
+      selectedSwapOption === undefined
+        ? "this coin"
+        : `${selectedSwapOption.label} · ${selectedSwapOption.network_label}`;
+    const activeSwap =
+      view.swapInvoice !== undefined && view.swapInvoice.swap?.pay_in_asset === selectedSwapAsset
+        ? view.swapInvoice
+        : undefined;
+    return `
+      <section part="wizard" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.root}>
+        <div part="wizard-breadcrumbs">
+          <button
+            part="wizard-breadcrumb"
+            ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.breadcrumb}="swap-asset"
+            type="button"
+          >${escapeHtml(openReceiveCheckoutLabels.paymentMethod)}</button>
+          <span aria-hidden="true">/</span>
+          <span part="wizard-breadcrumb-current">${escapeHtml(label)}</span>
+        </div>
+        <div part="wizard-results">
+          ${
+            activeSwap === undefined
+              ? `<section part="swap-panel">
+                  <div part="swap-heading">
+                    <strong>Preparing payment address</strong>
+                    <span>One moment</span>
+                  </div>
+                  <p part="swap-progress">Getting your ${escapeHtml(
+                    selectedSwapOption?.label ?? "coin",
+                  )} payment address…</p>
+                </section>`
+              : renderElementSwapPanelHtml(activeSwap)
+          }
+        </div>
+      </section>
+    `;
+  }
   const methodPicker = selection.selectedMethod === null
     ? `
       <div>
@@ -257,7 +310,10 @@ export function renderOpenReceivePaymentWizardHtml(
         <p>${escapeHtml(openReceiveCheckoutLabels.wizardSubtitle)}</p>
       </div>
       <div part="method-grid">
-        ${openReceivePaymentMethods.map((method) => `
+        ${(swapAssetOptions.length > 0
+          ? openReceivePaymentMethods.filter((method) => method.id !== "crypto")
+          : openReceivePaymentMethods
+        ).map((method) => `
           <button
             part="method"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.method}="${escapeHtml(method.id)}"
@@ -268,6 +324,7 @@ export function renderOpenReceivePaymentWizardHtml(
             <small>${escapeHtml(method.detail)}</small>
           </button>
         `).join("")}
+        ${renderElementSwapMethodCardsHtml(swapAssetOptions, view)}
       </div>
     `
     : "";
@@ -383,6 +440,78 @@ function renderElementSwapActionsHtml(
   `;
 }
 
+function renderElementSwapMethodCardsHtml(
+  options: readonly OpenReceiveElementsSwapOption[],
+  view: OpenReceiveElementsWizardView,
+): string {
+  const selectedNetworks = view.selectedSwapNetworks ?? {};
+  return groupOpenReceiveSwapOptionsByLabel(options)
+    .map((group) => {
+      const groupKey = group.label.trim().toUpperCase();
+      const selectedAsset =
+        selectedNetworks[groupKey] ??
+        group.options.find((option) => option.available !== false)?.pay_in_asset ??
+        group.options[0]?.pay_in_asset;
+      const selectedOption =
+        group.options.find((option) => option.pay_in_asset === selectedAsset) ?? group.options[0];
+      if (selectedOption === undefined) return "";
+      const multiNetwork = group.options.length > 1;
+      const disabled = selectedOption.available === false;
+      const limitMessage = elementsSwapLimitMessage(selectedOption, view);
+      if (!multiNetwork) {
+        return `
+          <button
+            part="method"
+            ${disabled ? "" : `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapStart}="${escapeHtml(selectedOption.pay_in_asset)}"`}
+            ${disabled ? "disabled aria-disabled=\"true\"" : ""}
+            type="button"
+          >
+            <img alt="" src="${escapeHtml(getOpenReceiveSwapOptionIcon(selectedOption))}">
+            <strong>${escapeHtml(group.label)}</strong>
+            <small>${escapeHtml(
+              disabled && limitMessage !== undefined ? limitMessage : selectedOption.network_label,
+            )}</small>
+          </button>
+        `;
+      }
+      return `
+        <div part="method-card"${disabled ? ' class="or-method-unavailable"' : ' class="or-method-ready"'}>
+          <img alt="" src="${escapeHtml(getOpenReceiveSwapOptionIcon(selectedOption))}">
+          <strong>${escapeHtml(group.label)}</strong>
+          <label part="method-network">
+            <span class="or-method-network-label">${escapeHtml(group.label)} network</span>
+            <select
+              aria-label="${escapeHtml(group.label)} network"
+              ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapNetwork}="${escapeHtml(groupKey)}"
+            >
+              ${group.options
+                .map((option) => {
+                  const optionLimit = elementsSwapLimitMessage(option, view);
+                  const label =
+                    option.available === false && optionLimit !== undefined
+                      ? `${option.network_label} · ${optionLimit}`
+                      : option.network_label;
+                  return `<option
+                    value="${escapeHtml(option.pay_in_asset)}"
+                    ${option.pay_in_asset === selectedOption.pay_in_asset ? "selected" : ""}
+                    ${option.available === false ? "disabled" : ""}
+                  >${escapeHtml(label)}</option>`;
+                })
+                .join("")}
+            </select>
+          </label>
+          <button
+            part="method-confirm"
+            ${disabled ? "" : `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapStart}="${escapeHtml(selectedOption.pay_in_asset)}"`}
+            ${disabled ? "disabled aria-disabled=\"true\"" : ""}
+            type="button"
+          >${escapeHtml(disabled && limitMessage !== undefined ? limitMessage : "Continue")}</button>
+        </div>
+      `;
+    })
+    .join("");
+}
+
 // Short reason for an out-of-range swap asset in the web-component surface,
 // mirroring the React wizard's fiat message.
 function elementsSwapLimitMessage(
@@ -447,16 +576,19 @@ function renderElementSwapPanelHtml(invoice: CheckoutInvoiceSnapshot): string {
   }
 
   if (display.state === "deposit") {
+    const feeBreakdown = renderElementSwapFeeBreakdownHtml(display.feeBreakdown);
     return `
       <section part="swap-panel">
-        ${heading}
-        <p part="swap-warning">${escapeHtml(display.networkWarning)} Send exactly ${escapeHtml(display.depositAmount)} ${escapeHtml(display.assetLabel)}.</p>
+        <p part="swap-instruction">Pay <strong>${escapeHtml(display.depositAmount)} ${escapeHtml(display.assetLabel)}</strong> to this address</p>
         <div part="swap-qr" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapQr}="${escapeHtml(display.qrPayload)}"></div>
         <dl part="swap-details">
           ${renderElementSwapCopyDetailHtml("Address", display.depositAddress)}
           ${display.depositMemo === undefined ? "" : renderElementSwapCopyDetailHtml("Memo", display.depositMemo)}
           ${renderElementSwapCopyDetailHtml("Amount", display.depositAmount)}
         </dl>
+        ${heading}
+        ${feeBreakdown}
+        <p part="swap-warning">${escapeHtml(display.networkWarning)}</p>
         <p part="swap-countdown">Payment window <strong>${escapeHtml(display.countdownLabel)}</strong></p>
         <p part="swap-warning">Pay with one method only. If you already sent ${escapeHtml(display.assetLabel)}, do not also pay the Lightning invoice.</p>
         ${backButton}
@@ -579,6 +711,30 @@ function renderElementSwapCopyDetailHtml(label: string, value: string): string {
         type="button"
       >Copy</button>
     </dd>
+  `;
+}
+
+function renderElementSwapFeeBreakdownHtml(
+  breakdown: NonNullable<ReturnType<typeof createOpenReceiveSwapDisplayModel>>["feeBreakdown"],
+): string {
+  if (breakdown === undefined) return "";
+  const feeValue =
+    breakdown.feePercent === undefined
+      ? breakdown.fee
+      : `${breakdown.fee} (${breakdown.feePercent})`;
+  return `
+    <div part="swap-breakdown">
+      <p part="swap-breakdown-title">Payment breakdown</p>
+      <dl part="swap-details" class="or-swap-breakdown-rows">
+        <dt>Cart total</dt>
+        <dd>${escapeHtml(breakdown.cartTotal)}</dd>
+        <dt>You send</dt>
+        <dd>${escapeHtml(breakdown.youSend)}</dd>
+        <dt>Swap + network fees</dt>
+        <dd>${escapeHtml(feeValue)}</dd>
+      </dl>
+      <p part="swap-breakdown-note">The swap provider's exchange rate and network fees are included in the amount above.</p>
+    </div>
   `;
 }
 
@@ -830,6 +986,8 @@ export function defineOpenReceiveElements(
     private activeTutorialIndex = 0;
     private activeTutorialCopied = false;
     private swapOptions: readonly OpenReceiveElementsSwapOption[] = [];
+    private selectedSwapNetworks: Record<string, string> = {};
+    private selectedSwapAsset: string | null = null;
     private startedSwapInvoice: CheckoutInvoiceSnapshot | undefined;
     private latestCheckoutSnapshot: CheckoutSnapshot | undefined;
     private dismissedSwapInvoiceId: string | null = null;
@@ -983,6 +1141,8 @@ export function defineOpenReceiveElements(
           selectedRegion: this.selection.selectedRegion,
           countryPickerOpen: this.selection.countryPickerOpen,
           swapOptions: this.swapOptions,
+          selectedSwapNetworks: this.selectedSwapNetworks,
+          selectedSwapAsset: this.selectedSwapAsset,
           ...(this.latestCheckoutSnapshot?.amount_msats === undefined
             ? {}
             : { amountMsats: this.latestCheckoutSnapshot.amount_msats }),
@@ -1155,6 +1315,11 @@ export function defineOpenReceiveElements(
       root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.breadcrumb).forEach((button) => {
         button.addEventListener("click", () => {
           const target = button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.breadcrumb);
+          if (target === "swap-asset") {
+            this.selectedSwapAsset = null;
+            this.render();
+            return;
+          }
           if (target === "method") {
             this.selection = updateOpenReceivePaymentWizardSelection(this.selection, {
               type: "change_method"
@@ -1236,13 +1401,28 @@ export function defineOpenReceiveElements(
         button.addEventListener("click", () => {
           const payInAsset = button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapStart);
           if (payInAsset === null) return;
+          this.selectedSwapAsset = payInAsset;
           void this.startSwap(payInAsset);
+        });
+      });
+
+      root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapNetwork).forEach((select) => {
+        if (!(select instanceof HTMLSelectElement)) return;
+        select.addEventListener("change", () => {
+          const groupKey = select.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapNetwork);
+          if (groupKey === null || groupKey.length === 0) return;
+          this.selectedSwapNetworks = {
+            ...this.selectedSwapNetworks,
+            [groupKey]: select.value,
+          };
+          this.render();
         });
       });
 
       root.querySelector(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapBack)?.addEventListener("click", () => {
         const current = this.currentSwapInvoice();
         this.dismissedSwapInvoiceId = current?.invoice_id ?? null;
+        this.selectedSwapAsset = null;
         this.render();
       });
 

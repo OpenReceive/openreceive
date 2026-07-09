@@ -1,10 +1,16 @@
 # App Route Protection
 
-Use the routes, controllers, and middleware your app already uses for checkout.
-OpenReceive supplies service methods you can call from those routes; it does
-not define a public route layout for you.
+Prefer mounting OpenReceive's shipped routes (see [Shipped Routes](routes.md) and the
+[Node](quickstart-node.md) / [Rails](quickstart-rails.md) quickstarts). With that path,
+OpenReceive owns create/status/swap HTTP; your app keeps auth via `authorize` and pricing
+via the required `resolveOrder` hook. You never hand-write payment endpoints.
 
-## Express
+This page covers the **advanced** path: calling `createOpenReceive()` service methods from
+your own controllers (for example when you create a checkout server-side and pass the
+snapshot into `<Checkout checkout={…} />`). Amounts you pass to `getOrCreateCheckout` are
+trusted because they come from your server, not from the public create-checkout HTTP body.
+
+## Express (direct service methods)
 
 ```ts
 import express from "express";
@@ -19,6 +25,7 @@ const openreceive = await createOpenReceive({
   }
 });
 
+// Your app's order route — not OpenReceive's create-checkout HTTP body.
 checkoutRoutes.post("/create_order", async (req, res, next) => {
   try {
     const order = await createOrderFromCart(req.user, req.body.cart);
@@ -52,9 +59,11 @@ checkoutRoutes.post("/order", async (req, res, next) => {
 });
 ```
 
-Mount `checkoutRoutes` wherever your app already mounts checkout controllers.
+Mount `checkoutRoutes` wherever your app already mounts checkout controllers. For the
+recommended mounted-router path, use `openReceiveExpress({ service, resolveOrder, authorize })`
+instead — see [Shipped Routes](routes.md).
 
-## Next.js
+## Next.js (direct service methods)
 
 ```ts
 // app/create_order/route.ts
@@ -89,7 +98,8 @@ export async function POST(request: Request) {
 }
 ```
 
-Put route files under the checkout path your app already controls.
+For App Router mounts of the shipped routes, use `openReceiveNextHandlers({ service, resolveOrder })`
+under `app/openreceive/[...openreceive]/route.ts`.
 
 ## Controllers
 
@@ -125,7 +135,9 @@ app.use(["/create_order", "/order"], cors({
 }));
 ```
 
-Do not combine wildcard CORS with credentials.
+Do not combine wildcard CORS with credentials. Same-origin mounts of `/openreceive` rely on
+the httpOnly order-token cookie; keep CSRF protection on any cookie-authenticated POSTs your
+app owns.
 
 ## Settlement
 

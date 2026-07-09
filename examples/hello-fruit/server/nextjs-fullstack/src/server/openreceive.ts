@@ -18,7 +18,7 @@ import {
 import {
   HelloFruitDemoOrderError,
   prepareHelloFruitOrder,
-  getHelloFruitOrderAmount,
+  resolveHelloFruitOrder,
 } from "../../../../shared/demo-order.ts";
 import {
   readHelloFruitCheckoutCurrencies,
@@ -120,7 +120,7 @@ export function sitemapResponse(): string {
 }
 
 // App order step (NOT an OpenReceive route): validate the cart, compute the authoritative total,
-// and PERSIST the order via the store's meta KV so `getOrderAmount` can look it up. Creating the
+// and PERSIST the order via the store's meta KV so `resolveOrder` can look it up. Creating the
 // checkout, polling, and swaps are all the mounted OpenReceive router's job (the catch-all route).
 export async function prepareOrderResponse(request: Request): Promise<Response> {
   const startedAt = Date.now();
@@ -163,15 +163,15 @@ export async function prepareOrderResponse(request: Request): Promise<Response> 
 
 /**
  * Options for the mounted OpenReceive router (the app/openreceive/[...openreceive] catch-all).
- * guestCheckout() gates reads on the per-order token; getOrderAmount is the amount authority, looking
- * the persisted order up by id so the client's price is never trusted.
+ * guestCheckout() gates reads on the per-order token; resolveOrder is required and looks the
+ * persisted order up by id (null → 404). The create body never carries a client price.
  */
 export async function openReceiveHttpOptions(): Promise<CreateOpenReceiveHttpHandlerOptions> {
   const { openreceive } = await getOpenReceive();
   return {
     service: openreceive,
     authorize: guestCheckout(),
-    getOrderAmount: ({ orderId }) => getHelloFruitOrderAmount(openreceive, orderId),
+    resolveOrder: ({ orderId }) => resolveHelloFruitOrder(openreceive, orderId),
   };
 }
 

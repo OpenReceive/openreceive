@@ -9,6 +9,8 @@ parallel work. Shared contract files still need lead coordination.
 | Test vectors | `spec/test-vectors/**` | Active | Lead |
 | JS core contracts | `packages/js/core` | Implemented, lead-owned | Lead |
 | Node receive SDK | `packages/js/node` | Implemented | JS lane |
+| HTTP handler + adapters | `packages/js/http`, `express`, `fastify`, `next` | Implemented | JS lane |
+| Umbrella package | `packages/js/openreceive` (`openreceive/express|fastify|next|…`) | Implemented | JS lane |
 | Browser helpers | `packages/js/browser` | Implemented | Browser lane |
 | Elements package | `packages/js/elements` | Implemented | Browser lane |
 | React package | `packages/js/react` | Implemented | Frontend lane |
@@ -17,7 +19,8 @@ parallel work. Shared contract files still need lead coordination.
 | Angular binding package | `packages/js/angular` | Initial web-component bindings | Frontend lane |
 | Provider data package | `packages/js/provider-data` | Implemented | Data lane |
 | Testkit package | `packages/js/testkit` | Implemented | Conformance lane |
-| Ruby core package | `packages/ruby/openreceive` | Initial vector-backed helpers | Ecosystem lane |
+| Ruby core package | `packages/ruby/openreceive` | Implemented (vector-backed) | Ecosystem lane |
+| Ruby server + Rails | `packages/ruby/openreceive-server`, `openreceive-rails` | Implemented | Ecosystem lane |
 | Hello Fruit demos | `examples/hello-fruit/**` | Implemented | Demo lane |
 | Other non-JS SDKs | `packages/python`, `packages/php`, etc. | Deferred | Ecosystem lanes |
 

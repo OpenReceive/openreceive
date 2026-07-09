@@ -7,7 +7,7 @@ require "uri"
 module OpenReceive
   module Server
     # Framework-neutral HTTP request handler — the single home of OpenReceive's request -> response
-    # logic (routing actions, security tiers/authorize, capability-token extraction, get_order_amount
+    # logic (routing actions, security tiers/authorize, capability-token extraction, resolve_order
     # usage, and error mapping). It is the Ruby port of the shipped @openreceive/http contract
     # (spec/openapi/openreceive-http.v1.yaml).
     #
@@ -19,10 +19,10 @@ module OpenReceive
     # Because both adapters share this one implementation, the Rack app and the Rails controllers
     # cannot drift — the routing/authorize/error semantics live in exactly one place.
     #
-    # The one intentional superset over a bare keyword call: `get_order_amount` may be supplied either
+    # The one intentional superset over a bare keyword call: `resolve_order` may be supplied either
     # in the keyword form `->(order_id:, client_amount:, metadata:, request:)` OR in the
     # single-context form `->(ctx) { ctx[:order_id] }` documented in the Rails quickstart. Dispatch
-    # is by the callable's parameters. See #call_get_order_amount.
+    # is by the callable's parameters. See #call_resolve_order. `resolve_order` is REQUIRED.
     class RequestHandler
       TIER_1_ACTIONS = %w[checkout.create rate.list].freeze
       TIER_2_ACTIONS = %w[order.read checkout.read swap.options swap.quote swap.start swap.refund].freeze
@@ -63,24 +63,22 @@ module OpenReceive
       end
 
       # authorize      : ->(context) { boolean } — context = { action:, request:, resource:, token:, token_valid:, order_id? }
-      # get_order_amount : keyword form ->(order_id:, client_amount:, metadata:, request:) OR
-      #                  single-context form ->(ctx) — returns { "amount"|"sats"|"usd" => ... }
+      # resolve_order  : REQUIRED. keyword form ->(order_id:, client_amount:, metadata:, request:) OR
+      #                  single-context form ->(ctx) — returns { "amount"|"sats"|"usd" => ... } or nil (404)
       # rate_limit     : ->(context) { allowed_boolean } — returning false yields 429 (optional)
       # tokens         : Tokens::Manager
       # prefix         : mount prefix used to path-scope the order-token cookie set on create
-      def initialize(service:, tokens:, authorize: nil, get_order_amount: nil, rate_limit: nil, prefix: DEFAULT_PREFIX)
+      def initialize(service:, tokens:, resolve_order:, authorize: nil, rate_limit: nil, prefix: DEFAULT_PREFIX)
+        raise ArgumentError,
+              "RequestHandler requires a `resolve_order` hook — the create-checkout route " \
+              "never trusts a client-supplied price." if resolve_order.nil?
+
         @service = service
         @tokens = tokens
-        @get_order_amount = get_order_amount
+        @resolve_order = resolve_order
         @rate_limit = rate_limit
         @prefix = normalize_prefix(prefix)
         @authorize = authorize || default_authorize
-
-        return unless get_order_amount.nil?
-
-        warn "[openreceive-server] request handler initialized without get_order_amount; the create " \
-             "route will fall back to the client-supplied amount. Provide get_order_amount so the " \
-             "authoritative amount is computed server-side."
       end
 
       # The built-in tier policy, exposed so a host's authorize hook (or the Rails Authorization
@@ -261,6 +259,11 @@ module OpenReceive
       # --- create-request assembly -----------------------------------------------------------------
 
       def build_create_request(order_id, body, context)
+        # Client prices are never trusted on this route. amount/sats/usd are rejected so a tampered
+        # client cannot quietly underpay; tip-jar / donation hosts honor a payer-chosen amount inside
+        # resolve_order (typically via metadata) and return it explicitly.
+        reject_client_amount_fields!(body)
+
         base = { "order_id" => order_id }
         base["memo"] = body["memo"] if body.key?("memo")
         if body.key?("description_hash") || body.key?("descriptionHash")
@@ -268,27 +271,31 @@ module OpenReceive
         end
         base["metadata"] = body["metadata"] if body.key?("metadata")
 
-        if @get_order_amount
-          resolved = call_get_order_amount(
-            order_id: order_id,
-            client_amount: client_amount(body),
-            metadata: body["metadata"],
-            request: context[:request]
-          )
-          apply_order_amount(base, resolved)
-        else
-          apply_client_amount(base, body)
-        end
+        resolved =
+          begin
+            call_resolve_order(
+              order_id: order_id,
+              client_amount: nil,
+              metadata: body["metadata"],
+              request: context[:request]
+            )
+          rescue StandardError => e
+            # Host resolve_order throws map to 400 (validation), matching the JS handler.
+            raise ValidationError, e.message
+          end
+        raise NotFoundError, "Order not found." if resolved.nil?
+
+        apply_order_amount(base, resolved)
       end
 
-      # The keyword form calls get_order_amount with keyword args (byte-identical to a bare host hook).
+      # The keyword form calls resolve_order with keyword args (byte-identical to a bare host hook).
       # The single-context form (documented in the Rails quickstart) receives one hash carrying
       # :order_id (and :action) so `ctx[:order_id]` works. Dispatch by the callable's parameters.
-      def call_get_order_amount(order_id:, client_amount:, metadata:, request:)
-        if keyword_hook?(@get_order_amount)
-          @get_order_amount.call(order_id: order_id, client_amount: client_amount, metadata: metadata, request: request)
+      def call_resolve_order(order_id:, client_amount:, metadata:, request:)
+        if keyword_hook?(@resolve_order)
+          @resolve_order.call(order_id: order_id, client_amount: client_amount, metadata: metadata, request: request)
         else
-          @get_order_amount.call(
+          @resolve_order.call(
             action: "checkout.create",
             order_id: order_id,
             client_amount: client_amount,
@@ -312,22 +319,18 @@ module OpenReceive
         elsif record.key?("usd")
           base["usd"] = record["usd"]
         else
-          raise ValidationError, "get_order_amount must return one of amount, sats, or usd."
+          raise ValidationError, "resolve_order must return one of amount, sats, or usd."
         end
         base
       end
 
-      def apply_client_amount(base, body)
-        %w[amount usd sats].each { |key| base[key] = body[key] if body.key?(key) }
-        base
-      end
+      def reject_client_amount_fields!(body)
+        %w[amount sats usd].each do |key|
+          next unless body.key?(key)
 
-      def client_amount(body)
-        return { "amount" => body["amount"] } if body.key?("amount")
-        return { "usd" => body["usd"] } if body.key?("usd")
-        return { "sats" => body["sats"] } if body.key?("sats")
-
-        nil
+          raise ValidationError,
+                "Create checkout does not accept client-supplied '#{key}'. Provide the price via resolve_order."
+        end
       end
 
       # --- request/response plumbing ---------------------------------------------------------------

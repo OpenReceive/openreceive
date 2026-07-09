@@ -69,13 +69,28 @@ fan out one wallet request per order.
 
 ## Background Task Example
 
-On a long-lived Node process, a simple interval is enough:
+On a long-lived Node process, prefer the opt-in helper (keeps the interval out of
+adapters and off serverless):
+
+```ts
+import { startSweeper } from "@openreceive/node";
+// or: import { startSweeper } from "openreceive/node";
+
+const sweeper = startSweeper(openreceive, { intervalMs: 3000 });
+// on shutdown:
+sweeper.stop();
+```
+
+A bare interval is equivalent:
 
 ```ts
 setInterval(() => {
   void openreceive.sweepPendingInvoices();
 }, 3000);
 ```
+
+Do **not** hide a sweeper inside every adapter by default — organic traffic already
+covers the tab-close case, and serverless / Next have no long-lived process.
 
 On serverless platforms, use the platform's cron, scheduled function, queue, or
 worker mechanism. The job should call your server-side OpenReceive instance and

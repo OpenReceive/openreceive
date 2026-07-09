@@ -278,14 +278,14 @@ class OpenReceiveServerTest < Minitest::Test
     store = OpenReceive::Server::InMemoryInvoiceStore.new
     service = build_service(store: store)
     tokens = OpenReceive::Server::Tokens::Manager.new(store: store, namespace: "default")
-    get_order_amount = ->(order_id:, client_amount:, metadata:, request:) do
+    resolve_order = ->(order_id:, client_amount:, metadata:, request:) do
       _ = [order_id, client_amount, metadata, request]
       { "sats" => 1000 } # authoritative amount, ignores the untrusted client amount
     end
     app = OpenReceive::Server::RackApp.new(
       service: service,
       tokens: tokens,
-      get_order_amount: get_order_amount
+      resolve_order: resolve_order
     )
     [app, store, tokens]
   end
@@ -295,7 +295,7 @@ class OpenReceiveServerTest < Minitest::Test
     env = rack_env(
       method: "POST",
       path: "/openreceive/checkouts",
-      body: { "order_id" => "rack-order", "sats" => 50 } # client amount is ignored by get_order_amount
+      body: { "order_id" => "rack-order" }
     )
     status, headers, body = app.call(env)
 
@@ -304,15 +304,27 @@ class OpenReceiveServerTest < Minitest::Test
     payload = JSON.parse(body.first)
     checkout = payload.fetch("checkout")
     assert_equal "rack-order", checkout.fetch("order_id")
-    # get_order_amount forced 1000 sats, NOT the client-supplied 50.
+    # resolve_order is the sole price authority (1000 sats).
     assert_equal 1_000_000, checkout.fetch("amount_msats")
     assert payload.fetch("order_access_token")
+  end
+
+  def test_rack_post_checkouts_rejects_client_amount
+    app, = build_app
+    env = rack_env(
+      method: "POST",
+      path: "/openreceive/checkouts",
+      body: { "order_id" => "rack-order", "sats" => 50 }
+    )
+    status, _, body = app.call(env)
+    assert_equal 400, status
+    assert_equal "INVALID_REQUEST", JSON.parse(body.first).fetch("code")
   end
 
   def test_rack_order_route_requires_token
     app, = build_app
     # Seed an order so the route has something to read.
-    create_env = rack_env(method: "POST", path: "/openreceive/checkouts", body: { "order_id" => "rack-order", "sats" => 50 })
+    create_env = rack_env(method: "POST", path: "/openreceive/checkouts", body: { "order_id" => "rack-order" })
     create_status, _, create_body = app.call(create_env)
     assert_equal 201, create_status
     token = JSON.parse(create_body.first).fetch("order_access_token")
@@ -352,7 +364,7 @@ class OpenReceiveServerTest < Minitest::Test
     app = OpenReceive::Server::RackApp.new(
       service: service,
       tokens: tokens,
-      get_order_amount: ->(order_id:, client_amount:, metadata:, request:) { { "sats" => 1000 } },
+      resolve_order: ->(order_id:, client_amount:, metadata:, request:) { { "sats" => 1000 } },
       authorize: ->(context) { context[:action] == "invoice.sweep" }
     )
     env = rack_env(method: "POST", path: "/openreceive/admin/sweep", body: {})
@@ -364,7 +376,7 @@ class OpenReceiveServerTest < Minitest::Test
 
   def test_rack_scaffolded_swap_action_maps_to_500_not_implemented
     app, = build_app
-    create = rack_env(method: "POST", path: "/openreceive/checkouts", body: { "order_id" => "swap-order", "sats" => 50 })
+    create = rack_env(method: "POST", path: "/openreceive/checkouts", body: { "order_id" => "swap-order" })
     _, _, create_body = app.call(create)
     token = JSON.parse(create_body.first).fetch("order_access_token")
 
@@ -395,13 +407,13 @@ class OpenReceiveServerTest < Minitest::Test
     OpenReceive::Server::RackApp.new(
       service: service,
       tokens: tokens,
-      get_order_amount: ->(order_id:, client_amount:, metadata:, request:) { { "sats" => 1000 } },
+      resolve_order: ->(order_id:, client_amount:, metadata:, request:) { { "sats" => 1000 } },
       authorize: authorize
     )
   end
 
   def create_and_token(app, order_id, headers: {})
-    env = rack_env(method: "POST", path: "/openreceive/checkouts", body: { "order_id" => order_id, "sats" => 5 }, headers: headers)
+    env = rack_env(method: "POST", path: "/openreceive/checkouts", body: { "order_id" => order_id }, headers: headers)
     status, resp_headers, body = app.call(env)
     assert_equal 201, status
     [JSON.parse(body.first).fetch("order_access_token"), resp_headers]

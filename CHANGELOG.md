@@ -9,18 +9,22 @@
   (promoted from shared shapes to full paths) and is implemented identically by the Node
   adapters and the Ruby engine.
 - Added the framework-agnostic `@openreceive/http` handler `(Request) => Promise<Response>`
-  with three security tiers, an `authorize` hook, per-order capability tokens, a `getOrderAmount`
+  with three security tiers, an `authorize` hook, per-order capability tokens, a `resolveOrder`
   amount-authority hook, and error→status mapping. Thin adapters: `@openreceive/express`,
   `@openreceive/fastify`, `@openreceive/next`.
 - **Capability tokens (PART 2):** checkout creation mints a high-entropy per-order token
   returned once as `order_access_token`; only its sha256 hash is stored (in the meta KV for the
   KV stores; as `order_access_token_hash` in the normalized schema via migration 002). Tier-2
   reads present it as `Authorization: Bearer` / `X-OpenReceive-Order-Token`.
-- **Amount authority:** the create-checkout route never trusts a client-supplied price; the host
-  `getOrderAmount` hook returns the authoritative amount.
+- **Amount authority:** the create-checkout route never trusts a client-supplied price.
+  `resolveOrder` / `resolve_order` is **required** at handler construction (omitting it throws);
+  client `amount` / `sats` / `usd` on the create body are rejected with 400; `null` → 404.
+  The low-level `getOrCreateCheckout` service method still accepts an explicit amount for
+  trusted / testing entry points. Umbrella subpaths: `openreceive/express|fastify|next`.
+  Opt-in `startSweeper({ intervalMs })` for idle long-lived processes (not an adapter default).
 - `@openreceive/node`: added `createOrderAccessTokenManager`, `hashOrderAccessToken`, the
-  `getOrderAmount` types, migration 002 (both dialects), and a `migrate` note that capability
-  tokens are provisioned via the meta KV.
+  `resolveOrder` types, `startSweeper`, migration 002 (both dialects), and a `migrate` note that
+  capability tokens are provisioned via the meta KV.
 - `@openreceive/browser`: `postOpenReceiveJson` now forwards custom headers so swap
   start/quote/refund reads can carry the order capability token (no wire break).
 - **Full Ruby port:** new `openreceive-server` gem (Service, ActiveRecord + in-memory stores,
