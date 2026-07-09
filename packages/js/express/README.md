@@ -29,4 +29,5 @@ app.use(express.json());
 app.use(openReceiveExpress({ service, getCheckoutAmount }));
 ```
 
-See `docs/guides/routes.md` for the route contract, tiers, and capability tokens.
+See `docs/guides/authorization.md` for auth presets and amount authority.
+Contributor route contract: `docs/internal/shipped-routes.md`.

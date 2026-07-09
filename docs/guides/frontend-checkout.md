@@ -5,10 +5,10 @@ strings, wallet clients, and fulfillment on the backend.
 
 ## Self-contained component (recommended)
 
-If your backend mounts the shipped router (see [Shipped Routes](routes.md)), the checkout
-component owns its whole lifecycle — it creates the checkout, polls status, and drives swaps
-against the mounted routes. You pass only an order id; the per-order capability token is stored
-and attached for you (and same-origin browsers also carry it as a cookie), so there is no fetch
+If your backend mounts OpenReceive (see the [Node](quickstart-node.md) /
+[Rails](quickstart-rails.md) quickstarts), the checkout component owns its whole
+lifecycle — it creates the checkout, polls status, and drives swaps. You pass
+only an order id; auth for those polls is handled for you, so there is no fetch
 to write and no token to manage.
 
 ```tsx

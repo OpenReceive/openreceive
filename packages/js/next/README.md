@@ -21,5 +21,5 @@ export const { GET, POST } = openReceiveNextHandlers({
 });
 ```
 
-`getCheckoutAmount` is required. See `docs/guides/routes.md` for the route contract, tiers, and
-capability tokens.
+`getCheckoutAmount` is required. See `docs/guides/authorization.md` for auth
+presets. Contributor route contract: `docs/internal/shipped-routes.md`.

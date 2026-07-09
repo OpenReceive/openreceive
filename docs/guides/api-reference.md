@@ -1,11 +1,12 @@
 # API Reference
 
-OpenReceive ships HTTP routes you can mount (see [Shipped Routes](routes.md)), and
-also exposes service methods for hosts that call them from their own controllers.
-Your app still owns sessions, CSRF/CORS, and fulfillment. Amounts on the
-**HTTP** create-checkout body are never trusted — use the required `getCheckoutAmount`
-hook there. Amounts passed to `getOrCreateCheckout` below are trusted because they
-come from your server.
+Prefer mounting OpenReceive (see the [Node](quickstart-node.md) /
+[Rails](quickstart-rails.md) quickstarts and [Authorization](authorization.md)).
+This page documents the service methods for hosts that call them from their own
+controllers. Your app still owns sessions, CSRF/CORS, and fulfillment. Amounts
+on the public create-checkout HTTP body are never trusted — use the required
+`getCheckoutAmount` hook there. Amounts passed to `getOrCreateCheckout` below
+are trusted because they come from your server.
 
 App-facing packages:
 

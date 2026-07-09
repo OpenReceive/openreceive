@@ -13,7 +13,8 @@ info:
     create checkout, rates), Tier 2 (capability-token-scoped: order/checkout reads and
     swap actions on your own order), Tier 3 (privileged, fails closed: admin sweep). The
     host supplies authorize + getCheckoutAmount hooks; OpenReceive never inspects the host
-    session. See docs/guides/routes.md.
+    session. See docs/internal/shipped-routes.md (contributors) and
+    docs/guides/authorization.md (integrators).
   contact:
     name: OpenReceive
     url: https://openreceive.org

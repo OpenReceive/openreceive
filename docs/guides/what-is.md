@@ -37,8 +37,8 @@ global sweep.
 
 ```text
 your app           creates/persists the order (OpenReceive never mints orders)
-mounted routes     POST /openreceive/checkouts (price from getCheckoutAmount only)
-browser checkout   <Checkout orderId> polls /openreceive/orders/{id}
+mounted OpenReceive  prices via getCheckoutAmount; never trusts a client price
+browser checkout   <Checkout orderId> creates + polls through the mount
 wallet scan        happens only inside server-side OpenReceive calls
 ```
 

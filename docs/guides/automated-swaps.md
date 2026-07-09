@@ -64,9 +64,14 @@ loaded (or noting that swaps are disabled), so "off on purpose" is distinguishab
 
 ## Payer Flow
 
-The whole payer experience is one backend route plus one checkout attribute. Your
-route authorizes the order its own way, then calls the typed camelCase service
-methods (or mounts the shipped HTTP handler, which does the same):
+Prefer mounting OpenReceive and rendering `<Checkout orderId />` — swaps ride the
+same mount with no app-owned multiplexer. Configure providers in
+`openreceive.yml` as above; the checkout UI lists payable assets when swaps are
+enabled.
+
+If you call service methods from your own controllers instead, authorize the
+order your own way, then call the typed camelCase methods (or mount the shipped
+handler, which does the same):
 
 ```ts
 // app-owned route — you authorize, then call typed methods
@@ -106,15 +111,15 @@ export async function POST(request: Request): Promise<Response> {
 }
 ```
 
-OpenReceive performs no authentication or authorization. Treat `order_id` and
-`attempt_id` as non-secret identifiers, not capabilities — authorize the caller in
-your route before calling the service. Prefer mounting the shipped routes
+OpenReceive performs no authentication or authorization on these service calls.
+Treat `order_id` and `attempt_id` as non-secret identifiers, not capabilities —
+authorize the caller in your route before calling the service. Prefer mounting
 (`openReceiveExpress` / `createOpenReceiveHttpHandler`) so you do not hand-write
 this multiplexer. This one route serves both plain Lightning status polling and
 every swap action.
 
 Point the checkout element at that one route with `order-url` (or the `orderUrl`
-prop on the framework components):
+prop on the framework components) when you own the route yourself:
 
 ```html
 <openreceive-checkout order-id="order_123" order-url="/order"></openreceive-checkout>

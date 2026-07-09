@@ -20,14 +20,14 @@ server-side. A preimage alone is not enough.
 Use the host app's sessions, tokens, policies, or guest checkout authorization
 for any checkout or status route that should not be public.
 
-With the shipped routes (recommended):
+With the mounted routes (recommended):
 
 - Your app creates and persists the order; OpenReceive never mints orders.
-- `getCheckoutAmount` is required and is the sole price authority on
-  `POST {prefix}/checkouts`. Client `amount` / `sats` / `usd` are rejected.
-- Tier-2 status/swap reads are gated by the per-order capability token (and/or
-  your `authorize` hook). Same-origin browsers also carry the httpOnly cookie.
-- Tier-3 `invoice.sweep` fails closed unless `authorize` opts in.
+- `getCheckoutAmount` is required and is the sole price authority on create.
+  Client `amount` / `sats` / `usd` on the create body are rejected.
+- Order status and swap reads are gated for you (and/or your `authorize` hook).
+- Admin sweep fails closed unless `authorize` opts in — see
+  [Authorization](authorization.md).
 - Optional background settlement sweeps (`startSweeper` or your own cron) must
   run server-side and keep the receive-only NWC code out of browser code.
 

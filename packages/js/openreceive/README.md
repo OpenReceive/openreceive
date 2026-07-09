@@ -33,7 +33,8 @@ app.use(openReceiveExpress({ service, getCheckoutAmount }));
 ```
 
 `getCheckoutAmount` is **required**. The create-checkout HTTP body never carries a
-client price. See `docs/guides/quickstart-node.md` and `docs/guides/routes.md`.
+client price. See `docs/guides/quickstart-node.md` and
+`docs/guides/authorization.md`.
 
 ## Subpath exports
 

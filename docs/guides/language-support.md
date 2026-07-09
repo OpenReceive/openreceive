@@ -2,7 +2,7 @@
 
 The current working reference path is Node plus browser checkout packages. Use
 [Node Framework Quickstart](quickstart-node.md) for copy-pasteable integration
-code. Rails is a second, vector-conformant settlement engine — see
+code. Rails is a second settlement engine — see
 [Rails Quickstart](quickstart-rails.md).
 
 ## Node
@@ -22,19 +22,18 @@ Node is the v0.1 supported path:
 
 Ruby is a full second settlement engine:
 
-- `openreceive` — dependency-free core (money math, settlement, tokens).
+- `openreceive` — core money math and settlement.
 - `openreceive-server` — Service, stores, Rack app (`get_checkout_amount` required).
 - `openreceive-rails` — mountable engine; configure `get_checkout_amount` in the
   initializer. Controllers inherit your `parent_controller`.
 
-Node adapters and the Rails engine stay byte-equal on the OpenAPI contract and
-HTTP golden vectors.
+Node and Rails stay on the same payment contract for hosts.
 
 ## Python
 
 There is no Python package yet. Future FastAPI, Django, Flask, or Starlette
-work should keep `OPENRECEIVE_NWC` server-side, mount or mirror the same route
-contract (host-owned orders + `getCheckoutAmount`-equivalent pricing), use
+work should keep `OPENRECEIVE_NWC` server-side, mount or mirror the same host
+model (host-owned orders + `getCheckoutAmount`-equivalent pricing), use
 OpenReceive invoice storage, and run fulfillment only from a server-side
 payment-verified hook.
 

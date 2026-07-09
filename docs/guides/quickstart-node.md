@@ -23,7 +23,7 @@ Install only what you use:
 | Svelte | `@openreceive/svelte` |
 | Angular | `@openreceive/angular` |
 
-See [Frontend Checkout](frontend-checkout.md) and [Shipped Routes](routes.md).
+See [Frontend Checkout](frontend-checkout.md) and [Authorization](authorization.md).
 
 ## 2. Configure
 
@@ -92,9 +92,9 @@ app.use(express.json());
 app.use(openReceiveExpress({ service, getCheckoutAmount }));
 ```
 
-That mounts create checkout, order status, swap options/actions, and rates under
-`/openreceive`. Reads are gated by a per-order capability token — you never
-manage it. See [Shipped Routes](routes.md) for auth presets and other adapters.
+That mounts payment HTTP under `/openreceive`. Order reads are gated for you —
+you never manage tokens. See [Authorization](authorization.md) for auth presets
+and Fastify / Next / Rails mounts.
 
 ## 6. Your app creates the order
 
@@ -134,6 +134,6 @@ opt into `startSweeper` — see [Settlement Sweeps](settlement-sweeps.md).
 
 ## What's next
 
-- [Shipped Routes](routes.md) — route contract, amount authority, Fastify / Next / Rails.
+- [Authorization](authorization.md) — presets, amount authority, Fastify / Next / Rails.
 - [Automated Swaps](automated-swaps.md) · [Checkout Retries](checkout-retries.md) ·
   [Frontend Checkout](frontend-checkout.md) · [Security](security.md).

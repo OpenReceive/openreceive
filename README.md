@@ -68,8 +68,9 @@ Rails hosts mount the engine and inherit their own CSRF/auth/current_user:
 mount OpenReceive::Engine => "/openreceive"
 ```
 
-See `docs/guides/routes.md` for the full route contract, tiers, and capability
-tokens.
+See [Authorization](docs/guides/authorization.md) for auth presets and amount
+authority. The OpenAPI route contract for contributors is
+`docs/internal/shipped-routes.md`.
 
 ## Run A Demo
 

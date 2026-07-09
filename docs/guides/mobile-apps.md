@@ -14,12 +14,12 @@ docs/guides/quickstart-node.md
 A mobile app may:
 
 - call your backend to create/persist an **order** (OpenReceive never mints orders)
-- create a checkout against your mounted OpenReceive routes (`{ order_id }` only —
-  no client price; present the `order_access_token` as `Authorization: Bearer`)
+- create a checkout through your backend (or the mounted OpenReceive surface —
+  `{ order_id }` only; no client price)
 - display amount, BOLT11 invoice text, QR data, and payment status
 - copy the invoice
 - open a Lightning wallet through a platform deep link
-- poll `{prefix}/orders/{order_id}` with the capability token when needed
+- poll order status through your backend (or the mounted surface) when needed
 - subscribe to server-sent or push-style status updates exposed by the backend
 
 A mobile app leaves these on the backend:

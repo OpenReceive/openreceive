@@ -176,8 +176,11 @@ test("quickstart and examples do not use OpenReceive HTTP converter helpers", ()
   }
 });
 
-test("authorization guide shows app boundary service error handling", () => {
+test("authorization guide shows mount presets and advanced service error handling", () => {
   const source = readFileSync(authorizationDocs, "utf8");
+  assert.match(source, /guestCheckout/);
+  assert.match(source, /withUser/);
+  assert.match(source, /getCheckoutAmount/);
   assert.match(source, /OpenReceiveServiceError/);
   assert.match(source, /orderId:/);
   assert.match(source, /getOrCreateCheckout/);
@@ -185,9 +188,6 @@ test("authorization guide shows app boundary service error handling", () => {
   assert.match(source, /total_amount/);
   assert.match(source, /createOpenReceive/);
   assert.match(source, /from "@openreceive\/node";/);
-  // Points hosts at the shipped-router happy path first.
-  assert.match(source, /Shipped Routes/);
-  assert.match(source, /getCheckoutAmount/);
 });
 
 test("Node quickstart shows a checkout component and points to the frontend guide", () => {
@@ -202,8 +202,8 @@ test("Node quickstart shows a checkout component and points to the frontend guid
   }
 });
 
-test("routes guide create body has no client amount fields", () => {
-  const source = readFileSync(path.join(process.cwd(), "docs/guides/routes.md"), "utf8");
+test("shipped-routes internal doc create body has no client amount fields", () => {
+  const source = readFileSync(path.join(process.cwd(), "docs/internal/shipped-routes.md"), "utf8");
   assert.match(source, /\{ order_id, memo\?, description_hash\?, metadata\? \}/);
   assert.doesNotMatch(source, /order_id, amount\\\|sats\\\|usd/);
   assert.match(source, /\*\*required\*\* at handler construction/);

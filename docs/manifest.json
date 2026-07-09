@@ -27,18 +27,18 @@
       "public": true
     },
     {
-      "slug": "routes",
-      "title": "Shipped Routes",
-      "source_path": "docs/guides/routes.md",
-      "category": "guide",
-      "audience": "developer",
-      "public": true
-    },
-    {
       "slug": "quickstart-rails",
       "title": "Rails Quickstart",
       "source_path": "docs/guides/quickstart-rails.md",
       "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "authorization",
+      "title": "Authorization",
+      "source_path": "docs/guides/authorization.md",
+      "category": "security",
       "audience": "developer",
       "public": true
     },
@@ -71,14 +71,6 @@
       "title": "Automated Swaps",
       "source_path": "docs/guides/automated-swaps.md",
       "category": "guide",
-      "audience": "developer",
-      "public": true
-    },
-    {
-      "slug": "authorization",
-      "title": "App Route Protection",
-      "source_path": "docs/guides/authorization.md",
-      "category": "security",
       "audience": "developer",
       "public": true
     },
@@ -166,6 +158,14 @@
       "slug": "architecture",
       "title": "Architecture Notes",
       "source_path": "docs/internal/architecture.md",
+      "category": "architecture",
+      "audience": "contributor",
+      "public": false
+    },
+    {
+      "slug": "shipped-routes",
+      "title": "Shipped Routes",
+      "source_path": "docs/internal/shipped-routes.md",
       "category": "architecture",
       "audience": "contributor",
       "public": false
