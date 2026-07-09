@@ -4,6 +4,7 @@ import {
   copyInvoice as copyInvoiceHelper,
   createCheckoutStatusModel,
   createQrSvg,
+  formatOpenReceiveAmountCaption,
   openReceiveCheckoutLabels,
   openWallet as openWalletHelper,
   type CheckoutPhase,
@@ -19,6 +20,36 @@ import type {
   QRCodeProps,
   SatsDetailProps,
 } from "./types.ts";
+
+function ClipboardIcon(): React.ReactElement {
+  return React.createElement(
+    "svg",
+    {
+      className: "or-copy-icon",
+      width: 16,
+      height: 16,
+      viewBox: "0 0 16 16",
+      fill: "none",
+      "aria-hidden": "true",
+      focusable: "false",
+    },
+    React.createElement("rect", {
+      x: 5,
+      y: 5,
+      width: 8,
+      height: 9,
+      rx: 1.5,
+      stroke: "currentColor",
+      strokeWidth: 1.5,
+    }),
+    React.createElement("path", {
+      d: "M3.5 11V3.5A1.5 1.5 0 0 1 5 2h5.5",
+      stroke: "currentColor",
+      strokeWidth: 1.5,
+      strokeLinecap: "round",
+    }),
+  );
+}
 
 export function QRCode(props: QRCodeProps): React.ReactElement {
   const { invoice, encoder, width = 256, onError, ...divProps } = props;
@@ -87,7 +118,13 @@ export function CopyInvoiceButton(props: CopyInvoiceButtonProps): React.ReactEle
         }
       },
     },
-    children ?? (copied ? copiedLabel : openReceiveCheckoutLabels.copyInvoice),
+    children ??
+      React.createElement(
+        React.Fragment,
+        null,
+        React.createElement(ClipboardIcon),
+        copied ? copiedLabel : openReceiveCheckoutLabels.copyInvoice,
+      ),
   );
 }
 
@@ -222,9 +259,10 @@ export function InvoiceSummary(props: InvoiceSummaryProps): React.ReactElement {
 }
 
 export function SatsDetail(props: SatsDetailProps): React.ReactElement | null {
-  const { amountLabel, className, ...divProps } = props;
+  const { amountLabel, fiatLabel, fiatCurrency, className, ...divProps } = props;
+  const caption = formatOpenReceiveAmountCaption({ amountLabel, fiatLabel, fiatCurrency });
 
-  if (amountLabel === undefined) return null;
+  if (caption === undefined) return null;
 
   return React.createElement(
     "div",
@@ -232,6 +270,6 @@ export function SatsDetail(props: SatsDetailProps): React.ReactElement | null {
       ...divProps,
       className: joinClassNames("or-sats-detail", className),
     },
-    amountLabel,
+    caption,
   );
 }

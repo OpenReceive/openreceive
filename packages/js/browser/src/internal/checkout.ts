@@ -321,10 +321,10 @@ export function formatOpenReceiveMsats(amountMsats: number): string {
 
   if (amountMsats % 1000 === 0) {
     const sats = amountMsats / 1000;
-    return `${sats} ${sats === 1 ? "sat" : "sats"}`;
+    return `${formatOpenReceiveInteger(sats)} ${sats === 1 ? "sat" : "sats"}`;
   }
 
-  return `${amountMsats} msats`;
+  return `${formatOpenReceiveInteger(amountMsats)} msats`;
 }
 
 export function formatOpenReceiveFiatAmount(
@@ -340,6 +340,28 @@ export function formatOpenReceiveFiatAmount(
   if (fiat.currency === "BTC") return `${fiat.value} BTC`;
   if (fiat.currency === "SATS") return `${fiat.value} sats`;
   return fiat.currency === "USD" ? `$${fiat.value}` : `${fiat.value} ${fiat.currency}`;
+}
+
+/** Combined QR caption, e.g. `19,174 sats / $12.00 US`. */
+export function formatOpenReceiveAmountCaption(options: {
+  readonly amountLabel?: string;
+  readonly fiatLabel?: string;
+  readonly fiatCurrency?: string;
+}): string | undefined {
+  const fiat =
+    options.fiatLabel === undefined
+      ? undefined
+      : options.fiatCurrency === "USD" && !options.fiatLabel.endsWith(" US")
+        ? `${options.fiatLabel} US`
+        : options.fiatLabel;
+  if (options.amountLabel !== undefined && fiat !== undefined) {
+    return `${options.amountLabel} / ${fiat}`;
+  }
+  return options.amountLabel ?? fiat;
+}
+
+function formatOpenReceiveInteger(value: number): string {
+  return value.toLocaleString("en-US");
 }
 
 /**

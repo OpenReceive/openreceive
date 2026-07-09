@@ -134,6 +134,7 @@ export interface CheckoutClassNames extends InvoiceSummaryClassNames {
   readonly root?: string;
   readonly qr?: string;
   readonly satsDetail?: string;
+  readonly lightningPane?: string;
   readonly details?: string;
   readonly waiting?: string;
   readonly countdown?: string;
@@ -249,4 +250,6 @@ export interface OpenReceiveSwapOptionsResult {
 
 export interface SatsDetailProps extends React.HTMLAttributes<HTMLDivElement> {
   readonly amountLabel?: string;
+  readonly fiatLabel?: string;
+  readonly fiatCurrency?: string;
 }

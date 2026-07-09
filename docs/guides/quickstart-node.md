@@ -56,7 +56,8 @@ import express from "express";
 import { createOpenReceive, openReceiveExpress } from "openreceive/express";
 
 const service = await createOpenReceive({
-  // Fires when a checkout settles — ship the product, grant access, etc.
+  // Fires when a checkout settles. Call YOUR app's fulfillment here
+  // (fulfillPaidCheckout is your function — OpenReceive does not provide it).
   // May fire more than once: make it idempotent on checkoutId / orderId.
   onPaid: async ({ orderId, checkoutId, metadata }) => {
     await fulfillPaidCheckout({ orderId, checkoutId, metadata });

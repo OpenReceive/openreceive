@@ -206,9 +206,51 @@ function CheckoutView(props: CheckoutProps & { readonly checkout: CheckoutSnapsh
   const hideLightning = swapFocused && !expired;
   const summaryAmountLabel =
     checkoutModel.fiatLabel === undefined ? checkoutModel.amountLabel : undefined;
+  const fiatCurrency = checkoutModel.fiat_quote?.fiat?.currency;
   const startOver = () => {
     onStartOver?.();
   };
+
+  const lightningPane =
+    hideLightning || expired
+      ? null
+      : React.createElement(
+          "div",
+          {
+            key: "lightning-pane",
+            className: joinClassNames("or-lightning-pane", classNames?.lightningPane),
+          },
+          React.createElement(QRCodeComponent, {
+            key: "qr",
+            invoice: checkoutModel.invoice,
+            encoder: qrEncoder,
+            onError,
+            className: classNames?.qr,
+          }),
+          React.createElement(SatsDetail, {
+            key: "sats-detail",
+            amountLabel: checkoutModel.amountLabel,
+            fiatLabel: checkoutModel.fiatLabel,
+            fiatCurrency,
+            className: classNames?.satsDetail,
+          }),
+          React.createElement(
+            "div",
+            {
+              key: "actions",
+              className: joinClassNames("or-lightning-actions", classNames?.actions),
+              [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.actions]: "",
+            },
+            React.createElement(CopyButton, {
+              invoice: checkoutModel.invoice,
+              copyInvoice: checkoutModel.copyInvoice,
+              onError,
+              logger,
+              ButtonComponent,
+              className: classNames?.copyButton,
+            }),
+          ),
+        );
 
   return React.createElement(
     "section",
@@ -230,80 +272,68 @@ function CheckoutView(props: CheckoutProps & { readonly checkout: CheckoutSnapsh
                 ButtonComponent,
               })
             : null,
-          hideLightning || expired
-            ? null
-            : [
-                React.createElement(QRCodeComponent, {
-                  key: "qr",
-                  invoice: checkoutModel.invoice,
-                  encoder: qrEncoder,
-                  onError,
-                  className: classNames?.qr,
-                }),
-                React.createElement(SatsDetail, {
-                  key: "sats-detail",
-                  amountLabel: checkoutModel.amountLabel,
-                  className: classNames?.satsDetail,
-                }),
-              ],
-          hideLightning
-            ? null
-            : React.createElement(WaitingState, {
-                key: "waiting",
-                waiting: checkoutModel.waiting,
-                statusTitle: checkoutModel.statusTitle,
-                statusDetail: checkoutModel.statusDetail,
-                className: classNames?.waiting,
-              }),
-          hideLightning || checkoutModel.countdownLabel === undefined
-            ? null
-            : React.createElement(
-                "div",
-                {
-                  key: "countdown",
-                  className: joinClassNames("or-countdown", classNames?.countdown),
-                },
-                checkoutModel.countdownPrefix,
-                " ",
-                React.createElement("strong", null, checkoutModel.countdownLabel),
-              ),
-          hideLightning
-            ? null
-            : React.createElement(InvoiceSummaryComponent, {
-                key: "summary",
-                amountLabel: summaryAmountLabel,
-                fiatLabel: checkoutModel.fiatLabel,
-                status: checkoutModel.status,
-                PaymentStateComponent,
-                className: classNames?.summary,
-                classNames,
-              }),
           hideLightning
             ? null
             : React.createElement(
                 "div",
                 {
-                  key: "actions",
-                  className: classNames?.actions,
-                  [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.actions]: "",
+                  key: "payment-layout",
+                  className: "or-payment-layout",
                 },
-                expired
-                  ? React.createElement(
-                      ButtonComponent ?? "button",
-                      {
-                        type: "button",
-                        onClick: startOver,
-                      },
-                      openReceiveCheckoutLabels.startOver,
-                    )
-                  : React.createElement(CopyButton, {
-                      invoice: checkoutModel.invoice,
-                      copyInvoice: checkoutModel.copyInvoice,
-                      onError,
-                      logger,
-                      ButtonComponent,
-                      className: classNames?.copyButton,
-                    }),
+                lightningPane,
+                React.createElement(
+                  "div",
+                  {
+                    key: "payment-info",
+                    className: "or-payment-info",
+                  },
+                  React.createElement(WaitingState, {
+                    key: "waiting",
+                    waiting: checkoutModel.waiting,
+                    statusTitle: checkoutModel.statusTitle,
+                    statusDetail: checkoutModel.statusDetail,
+                    className: classNames?.waiting,
+                  }),
+                  checkoutModel.countdownLabel === undefined
+                    ? null
+                    : React.createElement(
+                        "div",
+                        {
+                          key: "countdown",
+                          className: joinClassNames("or-countdown", classNames?.countdown),
+                        },
+                        checkoutModel.countdownPrefix,
+                        " ",
+                        React.createElement("strong", null, checkoutModel.countdownLabel),
+                      ),
+                  React.createElement(InvoiceSummaryComponent, {
+                    key: "summary",
+                    amountLabel: summaryAmountLabel,
+                    fiatLabel: checkoutModel.fiatLabel,
+                    status: checkoutModel.status,
+                    PaymentStateComponent,
+                    className: classNames?.summary,
+                    classNames,
+                  }),
+                  expired
+                    ? React.createElement(
+                        "div",
+                        {
+                          key: "expired-actions",
+                          className: joinClassNames("or-lightning-actions", classNames?.actions),
+                          [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.actions]: "",
+                        },
+                        React.createElement(
+                          ButtonComponent ?? "button",
+                          {
+                            type: "button",
+                            onClick: startOver,
+                          },
+                          openReceiveCheckoutLabels.startOver,
+                        ),
+                      )
+                    : null,
+                ),
               ),
           paymentWizard && !expired
             ? React.createElement(PaymentWizard, {
