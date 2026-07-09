@@ -1149,7 +1149,35 @@ export const openReceiveCheckoutLabels = {
   tutorialExit: "Exit",
   lightningNetwork: "Lightning Network",
   chooseCountry: "Choose a country",
+  transactionDetails: "Transaction details",
 } as const;
+
+/**
+ * One display row for post-settlement transaction details. Values are already
+ * formatted for UI; `copyValue` is the full string when the display value is truncated.
+ * Never includes NWC secrets — those are not part of checkout public state.
+ */
+export interface OpenReceiveTransactionDetailRow {
+  readonly label: string;
+  readonly value: string;
+  readonly copyValue?: string;
+}
+
+export interface OpenReceiveTransactionDetailsInput {
+  readonly order_id?: string;
+  readonly checkout_id?: string;
+  readonly invoice_id?: string;
+  readonly invoice?: string | null;
+  readonly rail?: "lightning" | "swap";
+  readonly payment_hash?: string;
+  readonly amount_msats?: number;
+  readonly fiat_quote?: CheckoutInvoiceSnapshot["fiat_quote"];
+  readonly transaction_state?: string;
+  readonly workflow_state?: string;
+  readonly expires_at?: number;
+  readonly settled_at?: number;
+  readonly swap?: CheckoutInvoiceSwapSnapshot;
+}
 
 export { orClasses } from "../ui-classes.ts";
 export { openReceiveCompiledStyles };

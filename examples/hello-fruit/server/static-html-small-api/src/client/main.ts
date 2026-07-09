@@ -2,6 +2,7 @@ import {
   createOpenReceiveThemeToggleElement,
   OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
   OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
+  type CheckoutState,
 } from "@openreceive/browser/internal";
 import { defineOpenReceiveElements } from "@openreceive/elements";
 import {
@@ -19,6 +20,7 @@ import {
   toHelloFruitDisplayAmount,
   type HelloFruitBtcFiatRates,
 } from "../../../../shared/demo-pricing.ts";
+import { createHelloFruitTransactionDetailsElement } from "../../../../shared/demo-transaction-details.ts";
 import fruitsData from "../../../../shared/fruits.json" with { type: "json" };
 import product from "../../../../shared/product.json" with { type: "json" };
 import "@openreceive/elements/styles.css";
@@ -66,6 +68,7 @@ let cart: Record<string, number> = {};
 let currentOrder: DemoOrder | undefined;
 let purchasedFruit: Fruit | undefined;
 let completedOrderId = "";
+let settledCheckoutState: CheckoutState | undefined;
 const logOpenReceive = createHelloFruitBrowserLogger("static-html-small-api");
 const logDemo = createHelloFruitDemoBrowserConsoleLogger("static-html-small-api");
 
@@ -206,6 +209,7 @@ function startOver(): void {
   currentOrder = undefined;
   purchasedFruit = undefined;
   completedOrderId = "";
+  settledCheckoutState = undefined;
   cart = {};
   closeStickerModal();
   setError("");
@@ -377,6 +381,7 @@ async function createOrder(): Promise<void> {
   setOrderButtonState("creating");
   closeStickerModal();
   completedOrderId = "";
+  settledCheckoutState = undefined;
 
   try {
     const startedAt = Date.now();
@@ -451,9 +456,20 @@ function renderCheckout(orderId: string): void {
     setError(detail?.error instanceof Error ? detail.error.message : String(detail?.error));
   });
 
-  checkoutElement.addEventListener(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.settled, () => {
+  checkoutElement.addEventListener(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.state, (event) => {
+    const detail = (event as CustomEvent<{ state?: CheckoutState }>).detail;
+    if (detail?.state !== undefined) {
+      settledCheckoutState = detail.state;
+    }
+  });
+
+  checkoutElement.addEventListener(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.settled, (event) => {
     if (currentOrder === undefined || completedOrderId === orderId || purchasedFruit === undefined) {
       return;
+    }
+    const detail = (event as CustomEvent<{ state?: CheckoutState }>).detail;
+    if (detail?.state !== undefined) {
+      settledCheckoutState = detail.state;
     }
     logDemo("checkout.settled", "Checkout settled callback received.", {
       orderId,
@@ -529,7 +545,12 @@ function showStickerModal(fruit: Fruit): void {
   close.addEventListener("click", closeStickerModal);
 
   actions.append(download, close);
-  modal.append(image, title, detail, actions);
+  const transactionDetails = createHelloFruitTransactionDetailsElement(settledCheckoutState);
+  if (transactionDetails === null) {
+    modal.append(image, title, detail, actions);
+  } else {
+    modal.append(image, title, detail, transactionDetails, actions);
+  }
   backdrop.append(modal);
   document.body.append(backdrop);
 }

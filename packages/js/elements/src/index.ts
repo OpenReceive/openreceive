@@ -34,6 +34,7 @@ import {
   createOpenReceiveThemeChangeEvent,
   createOpenReceiveTransientFeedbackController,
   createOpenReceiveSwapDisplayModel,
+  createOpenReceiveTransactionDetails,
   createQrPayloadSvg,
   createOpenReceiveWizardRouteAssetDisplays,
   createOpenReceiveWizardRouteDisplays,
@@ -118,6 +119,11 @@ export interface OpenReceiveElementsWizardView {
   /** Invoice amount + fiat, used to render fiat limit messages for out-of-range assets. */
   readonly amountMsats?: number;
   readonly fiat?: { readonly currency?: string; readonly value?: string };
+  readonly orderId?: string;
+  readonly checkoutId?: string;
+  /** Display Lightning BOLT11 from the checkout (swap shadows may omit invoice). */
+  readonly lightningInvoice?: string;
+  readonly paymentHash?: string;
   readonly swapInvoice?: CheckoutInvoiceSnapshot;
   readonly activeTutorialProviderId?: string | null;
   readonly activeTutorialIndex?: number;
@@ -324,7 +330,7 @@ export function renderOpenReceivePaymentWizardHtml(
                     selectedSwapOption?.label ?? "coin",
                   )} payment address…</p>
                 </section>`
-              : renderElementSwapPanelHtml(activeSwap)
+              : renderElementSwapPanelHtml(activeSwap, view)
           }
         </div>
       </section>
@@ -400,7 +406,7 @@ export function renderOpenReceivePaymentWizardHtml(
                 </h3>
               ${activeSwap === undefined
                 ? renderElementSwapActionsHtml(route.key, view.swapOptions ?? [], view)
-                : renderElementSwapPanelHtml(activeSwap)}
+                : renderElementSwapPanelHtml(activeSwap, view)}
               ${activeSwap === undefined ? `<div part="provider-grid" class="${orClasses.providerGrid}">
                 ${route.providers.map((provider) => `
                   <article part="provider${provider.recommended ? " selected" : ""}" class="${provider.recommended ? orClasses.providerCardRecommended : orClasses.providerCard}">
@@ -600,7 +606,10 @@ function elementsSwapLimitMessage(
   return option.unavailable_message;
 }
 
-function renderElementSwapPanelHtml(invoice: CheckoutInvoiceSnapshot): string {
+function renderElementSwapPanelHtml(
+  invoice: CheckoutInvoiceSnapshot,
+  view: OpenReceiveElementsWizardView = {},
+): string {
   const display = createOpenReceiveSwapDisplayModel(invoice);
   if (display === undefined) return "";
   const backButton = `
@@ -669,6 +678,7 @@ function renderElementSwapPanelHtml(invoice: CheckoutInvoiceSnapshot): string {
           ${display.payoutTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Lightning payout", display.payoutTxId)}
           ${display.providerOrderId === undefined ? "" : renderElementSwapCopyDetailHtml("Provider order", display.providerOrderId)}
         </dl>
+        ${renderElementTransactionDetailsHtml(invoice, view)}
       </section>
     `;
   }
@@ -767,11 +777,15 @@ function renderElementSwapPanelHtml(invoice: CheckoutInvoiceSnapshot): string {
   `;
 }
 
-function renderElementSwapCopyDetailHtml(label: string, value: string): string {
+function renderElementSwapCopyDetailHtml(
+  label: string,
+  value: string,
+  displayValue: string = value,
+): string {
   return `
     <dt class="${orClasses.swapDetailsDt}">${escapeHtml(label)}</dt>
     <dd class="${orClasses.swapDetailsDd}">
-      <code class="${orClasses.swapDetailsCode}">${escapeHtml(value)}</code>
+      <code class="${orClasses.swapDetailsCode}">${escapeHtml(displayValue)}</code>
       <button
         part="swap-copy"
         class="${orClasses.btnSm}"
@@ -779,6 +793,60 @@ function renderElementSwapCopyDetailHtml(label: string, value: string): string {
         type="button"
       >Copy</button>
     </dd>
+  `;
+}
+
+function renderElementTransactionDetailsHtml(
+  invoice: CheckoutInvoiceSnapshot,
+  view: OpenReceiveElementsWizardView,
+): string {
+  const bolt11 =
+    typeof invoice.invoice === "string"
+      ? invoice.invoice
+      : view.lightningInvoice;
+  const rows = createOpenReceiveTransactionDetails({
+    ...(view.orderId === undefined ? {} : { order_id: view.orderId }),
+    ...(view.checkoutId === undefined ? {} : { checkout_id: view.checkoutId }),
+    invoice_id: invoice.invoice_id,
+    ...(bolt11 === undefined ? {} : { invoice: bolt11 }),
+    rail: invoice.rail,
+    ...(invoice.payment_hash === undefined
+      ? view.paymentHash === undefined
+        ? {}
+        : { payment_hash: view.paymentHash }
+      : { payment_hash: invoice.payment_hash }),
+    ...(invoice.amount_msats === undefined
+      ? view.amountMsats === undefined
+        ? {}
+        : { amount_msats: view.amountMsats }
+      : { amount_msats: invoice.amount_msats }),
+    ...(invoice.fiat_quote === undefined
+      ? view.fiat?.currency === undefined || view.fiat.value === undefined
+        ? {}
+        : { fiat_quote: { fiat: { currency: view.fiat.currency, value: view.fiat.value } } }
+      : { fiat_quote: invoice.fiat_quote }),
+    ...(invoice.transaction_state === undefined
+      ? {}
+      : { transaction_state: invoice.transaction_state }),
+    ...(invoice.workflow_state === undefined ? {} : { workflow_state: invoice.workflow_state }),
+    ...(invoice.expires_at === undefined ? {} : { expires_at: invoice.expires_at }),
+    ...(invoice.settled_at === undefined ? {} : { settled_at: invoice.settled_at }),
+    ...(invoice.swap === undefined ? {} : { swap: invoice.swap }),
+  });
+  if (rows.length === 0) return "";
+  return `
+    <details part="transaction-details" class="${orClasses.transactionDetails}">
+      <summary class="${orClasses.transactionDetailsTitle}">${escapeHtml(openReceiveCheckoutLabels.transactionDetails)}</summary>
+      <div class="${orClasses.transactionDetailsContent}">
+        <dl part="swap-details" class="${orClasses.swapDetails}">
+          ${rows
+            .map((row) =>
+              renderElementSwapCopyDetailHtml(row.label, row.copyValue ?? row.value, row.value),
+            )
+            .join("")}
+        </dl>
+      </div>
+    </details>
   `;
 }
 
@@ -1225,6 +1293,20 @@ export function defineOpenReceiveElements(
           ...(this.latestCheckoutSnapshot?.fiat === undefined
             ? {}
             : { fiat: this.latestCheckoutSnapshot.fiat }),
+          ...(this.latestCheckoutSnapshot?.order_id === undefined
+            ? {}
+            : { orderId: this.latestCheckoutSnapshot.order_id }),
+          ...(this.latestCheckoutSnapshot?.checkout_id === undefined
+            ? {}
+            : { checkoutId: this.latestCheckoutSnapshot.checkout_id }),
+          lightningInvoice: invoice,
+          ...(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentHash) === null
+            ? {}
+            : {
+                paymentHash:
+                  this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentHash) ??
+                  undefined,
+              }),
           swapInvoice: this.currentSwapInvoice(),
           activeTutorialProviderId: this.activeTutorialProviderId,
           activeTutorialIndex: this.activeTutorialIndex,

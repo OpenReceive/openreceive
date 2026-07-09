@@ -1,7 +1,8 @@
 "use client";
 
+import type { CheckoutState } from "@openreceive/browser/internal";
 import { Checkout, ThemeScope } from "@openreceive/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import type { HelloFruit, HelloFruitProduct } from "../server/shared-data.ts";
 import {
   createHelloFruitDemoBrowserConsoleLogger,
@@ -18,6 +19,10 @@ import {
   toHelloFruitDisplayAmount,
   type HelloFruitBtcFiatRates,
 } from "../../../../shared/demo-pricing.ts";
+import {
+  buildHelloFruitTransactionDetailRows,
+  openReceiveCheckoutLabels,
+} from "../../../../shared/demo-transaction-details.ts";
 
 const logOpenReceive = createHelloFruitBrowserLogger("nextjs-fullstack");
 const logDemo = createHelloFruitDemoBrowserConsoleLogger("nextjs-fullstack");
@@ -56,7 +61,9 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
   const [stickerModalOpen, setStickerModalOpen] = useState(false);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
+  const [settledCheckoutState, setSettledCheckoutState] = useState<CheckoutState | null>(null);
   const completedCheckoutRef = useRef("");
+  const latestCheckoutStateRef = useRef<CheckoutState | null>(null);
 
   const selectedFruit = useMemo(
     () => fruits.find((fruit) => fruit.id === fruitId) ?? fruits[0],
@@ -105,6 +112,13 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
     };
   }, []);
 
+  const onCheckoutState = useCallback((state: CheckoutState) => {
+    latestCheckoutStateRef.current = state;
+    if (state.settled) {
+      setSettledCheckoutState(state);
+    }
+  }, []);
+
   const onSettled = useCallback(() => {
     if (order !== undefined && completedCheckoutRef.current !== order.uuid) {
       logDemo("checkout.settled", "Checkout settled callback received.", {
@@ -112,6 +126,7 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
         purchasedFruitId: purchasedFruit?.id,
       });
       completedCheckoutRef.current = order.uuid;
+      setSettledCheckoutState(latestCheckoutStateRef.current);
       setOrder((current) => (current === undefined ? current : { ...current, status: "paid" }));
       setStickerModalOpen(true);
     }
@@ -153,6 +168,8 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
     setStatus("creating");
     setError("");
     setStickerModalOpen(false);
+    setSettledCheckoutState(null);
+    latestCheckoutStateRef.current = null;
     completedCheckoutRef.current = "";
 
     try {
@@ -215,6 +232,8 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
     setOrder(undefined);
     setPurchasedFruit(undefined);
     setStickerModalOpen(false);
+    setSettledCheckoutState(null);
+    latestCheckoutStateRef.current = null;
     setStatus("idle");
     setError("");
     completedCheckoutRef.current = "";
@@ -372,6 +391,7 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
               setError(cause instanceof Error ? cause.message : String(cause));
             }}
             onSettled={onSettled}
+            onState={onCheckoutState}
             onStartOver={startOver}
           />
         </div>
@@ -395,6 +415,7 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
               You just got a sticker
             </h2>
             <p>{purchasedFruit.name} is ready.</p>
+            <HelloFruitTransactionDetailsPanel source={settledCheckoutState} />
             <div className="modal-action">
               <a
                 className="btn"
@@ -415,6 +436,58 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
         </div>
       )}
     </ThemeScope>
+  );
+}
+
+function HelloFruitTransactionDetailsPanel(props: {
+  readonly source: CheckoutState | null;
+}): ReactElement | null {
+  const rows = buildHelloFruitTransactionDetailRows(props.source);
+  if (rows.length === 0) return null;
+  return (
+    <details className="collapse collapse-arrow bg-base-200">
+      <summary className="collapse-title font-bold min-h-0 py-2">
+        {openReceiveCheckoutLabels.transactionDetails}
+      </summary>
+      <div className="collapse-content">
+        <dl className="grid gap-2 m-0">
+          {rows.map((row) => (
+            <HelloFruitTransactionDetailRow key={row.label} row={row} />
+          ))}
+        </dl>
+      </div>
+    </details>
+  );
+}
+
+function HelloFruitTransactionDetailRow(props: {
+  readonly row: {
+    readonly label: string;
+    readonly value: string;
+    readonly copyValue?: string;
+  };
+}): ReactElement {
+  const [copied, setCopied] = useState(false);
+  const copyValue = props.row.copyValue ?? props.row.value;
+  return (
+    <>
+      <dt className="text-base-content/60 text-xs font-bold uppercase">{props.row.label}</dt>
+      <dd className="grid gap-2 grid-cols-[minmax(0,1fr)_auto] items-center m-0">
+        <code className="min-w-0 break-all font-mono text-sm">{props.row.value}</code>
+        <button
+          className="btn btn-sm"
+          onClick={() => {
+            void navigator.clipboard.writeText(copyValue).then(() => {
+              setCopied(true);
+              globalThis.setTimeout(() => setCopied(false), 1500);
+            });
+          }}
+          type="button"
+        >
+          {copied ? openReceiveCheckoutLabels.copied : "Copy"}
+        </button>
+      </dd>
+    </>
   );
 }
 

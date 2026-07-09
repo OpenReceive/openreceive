@@ -2,11 +2,14 @@ import {
   type CheckoutInvoiceSnapshot,
   type CheckoutSnapshot,
   createOpenReceiveSwapDisplayModel,
+  createOpenReceiveTransactionDetails,
   createQrPayloadSvg,
   formatOpenReceiveSwapLimit,
   openReceiveCheckoutLabels,
+  selectCheckoutDisplayInvoice,
   type OpenReceiveBrowserLogger,
   type OpenReceiveQrEncoder,
+  type OpenReceiveTransactionDetailRow,
   orClasses,
 } from "@openreceive/browser/internal";
 import * as React from "react";
@@ -176,6 +179,7 @@ export function renderSwapUnavailable(
 
 export function renderSwapDepositPanel(options: {
   readonly invoice: CheckoutInvoiceSnapshot;
+  readonly checkout?: CheckoutSnapshot;
   readonly now?: number;
   readonly encoder?: OpenReceiveQrEncoder;
   readonly clipboard?: Pick<Clipboard, "writeText">;
@@ -234,7 +238,7 @@ export function renderSwapDepositPanel(options: {
   }
 
   if (display.state === "settled") {
-    const detailRows = [
+    const highlightRows = [
       ...(display.depositTxId === undefined
         ? []
         : renderSwapCopyRow("Deposit transaction", display.depositTxId, options)),
@@ -245,6 +249,14 @@ export function renderSwapDepositPanel(options: {
         ? []
         : renderSwapCopyRow("Provider order", display.providerOrderId, options)),
     ];
+    const displayInvoice =
+      options.checkout === undefined ? undefined : selectCheckoutDisplayInvoice(options.checkout);
+    const bolt11 =
+      typeof options.invoice.invoice === "string"
+        ? options.invoice.invoice
+        : typeof displayInvoice?.invoice === "string"
+          ? displayInvoice.invoice
+          : undefined;
     return React.createElement(
       "section",
       {
@@ -255,15 +267,59 @@ export function renderSwapDepositPanel(options: {
         statusTitle: display.providerStateLabel,
         statusDetail: display.providerStateDetail,
       }),
-      detailRows.length === 0
+      highlightRows.length === 0
         ? null
         : React.createElement(
             "dl",
             {
               className: orClasses.swapDetails,
             },
-            detailRows,
+            highlightRows,
           ),
+      renderTransactionDetailsCollapse(
+        createOpenReceiveTransactionDetails({
+          ...(options.checkout === undefined
+            ? {}
+            : {
+                order_id: options.checkout.order_id,
+                checkout_id: options.checkout.checkout_id,
+                ...(options.checkout.fiat === undefined
+                  ? {}
+                  : { fiat_quote: { fiat: options.checkout.fiat } }),
+                ...(options.checkout.amount_msats === undefined
+                  ? {}
+                  : { amount_msats: options.checkout.amount_msats }),
+              }),
+          invoice_id: options.invoice.invoice_id,
+          ...(bolt11 === undefined ? {} : { invoice: bolt11 }),
+          rail: options.invoice.rail,
+          ...(options.invoice.payment_hash === undefined
+            ? displayInvoice?.payment_hash === undefined
+              ? {}
+              : { payment_hash: displayInvoice.payment_hash }
+            : { payment_hash: options.invoice.payment_hash }),
+          ...(options.invoice.amount_msats === undefined
+            ? {}
+            : { amount_msats: options.invoice.amount_msats }),
+          ...(options.invoice.fiat_quote === undefined
+            ? {}
+            : { fiat_quote: options.invoice.fiat_quote }),
+          ...(options.invoice.transaction_state === undefined
+            ? {}
+            : { transaction_state: options.invoice.transaction_state }),
+          ...(options.invoice.workflow_state === undefined
+            ? {}
+            : { workflow_state: options.invoice.workflow_state }),
+          ...(options.invoice.expires_at === undefined
+            ? {}
+            : { expires_at: options.invoice.expires_at }),
+          ...((options.checkout?.paid_at ?? options.invoice.settled_at) === undefined
+            ? {}
+            : { settled_at: options.checkout?.paid_at ?? options.invoice.settled_at }),
+          ...(options.invoice.swap === undefined ? {} : { swap: options.invoice.swap }),
+        }),
+        options,
+      ),
     );
   }
 
@@ -467,13 +523,14 @@ function renderSwapCopyRow(
     readonly clipboard?: Pick<Clipboard, "writeText">;
     readonly onError?: (error: unknown) => void;
   },
+  displayValue: string = value,
 ): readonly React.ReactElement[] {
   return [
     React.createElement("dt", { key: `${label}-label`, className: orClasses.swapDetailsDt }, label),
     React.createElement(
       "dd",
       { key: `${label}-value`, className: orClasses.swapDetailsDd },
-      React.createElement("code", { className: orClasses.swapDetailsCode }, value),
+      React.createElement("code", { className: orClasses.swapDetailsCode }, displayValue),
       React.createElement(SwapCopyButton, {
         value,
         clipboard: options.clipboard,
@@ -536,6 +593,38 @@ function renderSwapSupportDetails(
       "div",
       { className: orClasses.swapSupportContent },
       React.createElement("dl", { className: orClasses.swapDetails }, rows),
+    ),
+  );
+}
+
+function renderTransactionDetailsCollapse(
+  rows: readonly OpenReceiveTransactionDetailRow[],
+  options: {
+    readonly clipboard?: Pick<Clipboard, "writeText">;
+    readonly onError?: (error: unknown) => void;
+  },
+): React.ReactElement | null {
+  if (rows.length === 0) return null;
+  return React.createElement(
+    "details",
+    {
+      className: orClasses.transactionDetails,
+    },
+    React.createElement(
+      "summary",
+      { className: orClasses.transactionDetailsTitle },
+      openReceiveCheckoutLabels.transactionDetails,
+    ),
+    React.createElement(
+      "div",
+      { className: orClasses.transactionDetailsContent },
+      React.createElement(
+        "dl",
+        { className: orClasses.swapDetails },
+        rows.flatMap((row) =>
+          renderSwapCopyRow(row.label, row.copyValue ?? row.value, options, row.value),
+        ),
+      ),
     ),
   );
 }

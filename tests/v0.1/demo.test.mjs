@@ -308,6 +308,39 @@ test("Hello Fruit display conversion handles integer (scale-0) BTC rates", () =>
   });
 });
 
+test("Hello Fruit demos share transaction details helper on success UI", () => {
+  const helper = readFileSync(
+    path.join(process.cwd(), "examples/hello-fruit/shared/demo-transaction-details.ts"),
+    "utf8",
+  );
+  assert.match(helper, /createOpenReceiveTransactionDetails/);
+  assert.match(helper, /createOpenReceiveTransactionDetailsFromState/);
+  assert.match(helper, /openReceiveCheckoutLabels\.transactionDetails/);
+  assert.match(helper, /data-hello-fruit-copy/);
+  assert.doesNotMatch(helper, /nwc/i);
+  assert.doesNotMatch(helper, /nostr\+walletconnect/i);
+
+  const sources = [
+    "examples/hello-fruit/server/node-express/src/client/App.tsx",
+    "examples/hello-fruit/server/nextjs-fullstack/src/app/checkout-client.tsx",
+    "examples/hello-fruit/server/static-html-small-api/src/client/main.ts",
+  ];
+  for (const relativePath of sources) {
+    const source = readFileSync(path.join(process.cwd(), relativePath), "utf8");
+    assert.match(
+      source,
+      /demo-transaction-details/,
+      `${relativePath}: uses shared transaction details helper`,
+    );
+    assert.match(
+      source,
+      /Transaction details|transactionDetails|createHelloFruitTransactionDetailsElement/,
+      `${relativePath}: surfaces transaction details on success UI`,
+    );
+    assert.doesNotMatch(source, /nwc/i, `${relativePath}: must not expose NWC in browser UI`);
+  }
+});
+
 test("Hello Fruit React demos delegate checkout state to UI packages", () => {
   const nodeClient = readFileSync(
     path.join(process.cwd(), "examples/hello-fruit/server/node-express/src/client/App.tsx"),

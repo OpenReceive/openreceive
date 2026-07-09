@@ -38,6 +38,8 @@ import {
   type OpenReceiveSwapFeeBreakdown,
   type OpenReceiveTickingValueController,
   type OpenReceiveTickingValueOptions,
+  type OpenReceiveTransactionDetailRow,
+  type OpenReceiveTransactionDetailsInput,
   type OpenReceiveTransientFeedbackController,
   type OpenReceiveTransientFeedbackOptions,
   type OpenWalletOptions,
@@ -407,6 +409,136 @@ function fiatFractionDigits(value: string): number {
 
 export function formatOpenReceivePaymentHashLabel(hash: string): string {
   return hash.length <= 16 ? hash : `${hash.slice(0, 8)}...${hash.slice(-8)}`;
+}
+
+export function formatOpenReceiveUnixTime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return String(seconds);
+  return new Date(seconds * 1000).toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
+export function formatOpenReceiveInvoiceLabel(invoice: string): string {
+  if (invoice.length <= 48) return invoice;
+  return `${invoice.slice(0, 20)}…${invoice.slice(-16)}`;
+}
+
+/**
+ * Build display rows for settled checkout / swap state from public OpenReceive
+ * fields only. Omits undefined values; never surfaces NWC or send-payment secrets.
+ */
+export function createOpenReceiveTransactionDetails(
+  input: OpenReceiveTransactionDetailsInput,
+): OpenReceiveTransactionDetailRow[] {
+  const rows: OpenReceiveTransactionDetailRow[] = [];
+  const push = (label: string, value: string | undefined, copyValue?: string) => {
+    if (value === undefined || value === "") return;
+    rows.push(copyValue === undefined ? { label, value } : { label, value, copyValue });
+  };
+
+  push("Order ID", input.order_id);
+  push("Checkout ID", input.checkout_id);
+  push("Invoice ID", input.invoice_id);
+  push("Rail", input.rail);
+  push("Status", input.transaction_state);
+  push("Workflow", input.workflow_state);
+
+  if (input.amount_msats !== undefined) {
+    push("Amount", formatOpenReceiveMsats(input.amount_msats));
+    push("Amount (msats)", String(input.amount_msats));
+  }
+  const fiat = formatOpenReceiveFiatAmount(input.fiat_quote?.fiat);
+  push("Fiat", fiat);
+
+  if (typeof input.invoice === "string" && input.invoice.length > 0) {
+    push("Lightning invoice", formatOpenReceiveInvoiceLabel(input.invoice), input.invoice);
+  }
+  if (input.payment_hash !== undefined) {
+    push(
+      "Payment hash",
+      formatOpenReceivePaymentHashLabel(input.payment_hash),
+      input.payment_hash,
+    );
+  }
+
+  if (input.settled_at !== undefined) {
+    push("Settled at", formatOpenReceiveUnixTime(input.settled_at));
+  }
+  if (input.expires_at !== undefined) {
+    push("Expires at", formatOpenReceiveUnixTime(input.expires_at));
+  }
+
+  const swap = input.swap;
+  if (swap !== undefined) {
+    const asset = getOpenReceiveSwapAssetDisplay(swap.pay_in_asset);
+    push("Swap provider", swap.provider);
+    push("Provider order", swap.provider_order_id);
+    push("Swap attempt", swap.attempt_id);
+    push("Pay-in asset", swap.pay_in_asset);
+    push("Asset", asset.assetLabel);
+    push("Network", asset.networkLabel);
+    push("Deposit address", swap.deposit_address);
+    push("Deposit memo", swap.deposit_memo);
+    push("Deposit amount", formatOpenReceiveDepositAmount(swap.deposit_amount));
+    push("Provider state", swap.provider_state);
+    if (swap.provider_expires_at !== undefined) {
+      push("Provider expires at", formatOpenReceiveUnixTime(swap.provider_expires_at));
+    }
+    push("Deposit transaction", swap.deposit_tx_id);
+    push("Lightning payout", swap.payout_tx_id);
+    push("Refund address", swap.refund_address);
+    push("Refund transaction", swap.refund_tx_id);
+    const feeBreakdown = createOpenReceiveSwapFeeBreakdown(swap.fee);
+    if (feeBreakdown !== undefined) {
+      push("Cart total", feeBreakdown.cartTotal);
+      push("You send", feeBreakdown.youSend);
+      push(
+        "Swap + network fees",
+        feeBreakdown.feePercent === undefined
+          ? feeBreakdown.fee
+          : `${feeBreakdown.fee} (${feeBreakdown.feePercent})`,
+      );
+    } else if (swap.fee !== undefined) {
+      push("Fee currency", swap.fee.currency);
+      push("Pay-in fiat", swap.fee.pay_in_fiat);
+      push("Payout fiat", swap.fee.payout_fiat);
+    }
+  }
+
+  return rows;
+}
+
+export function createOpenReceiveTransactionDetailsFromState(
+  state: Pick<
+    CheckoutState,
+    | "order_id"
+    | "checkout_id"
+    | "invoice_id"
+    | "invoice"
+    | "rail"
+    | "payment_hash"
+    | "amount_msats"
+    | "fiat_quote"
+    | "transaction_state"
+    | "workflow_state"
+    | "expires_at"
+    | "settled_at"
+    | "swap"
+  >,
+): OpenReceiveTransactionDetailRow[] {
+  return createOpenReceiveTransactionDetails({
+    order_id: state.order_id,
+    checkout_id: state.checkout_id,
+    invoice_id: state.invoice_id,
+    invoice: state.invoice,
+    rail: state.rail,
+    ...(state.payment_hash === undefined ? {} : { payment_hash: state.payment_hash }),
+    ...(state.amount_msats === undefined ? {} : { amount_msats: state.amount_msats }),
+    ...(state.fiat_quote === undefined ? {} : { fiat_quote: state.fiat_quote }),
+    transaction_state: state.transaction_state,
+    workflow_state: state.workflow_state,
+    ...(state.expires_at === undefined ? {} : { expires_at: state.expires_at }),
+    ...(state.settled_at === undefined ? {} : { settled_at: state.settled_at }),
+    ...(state.swap === undefined ? {} : { swap: state.swap }),
+  });
 }
 
 export function assertOpenReceiveDisplayInvoice(invoice: string): void {

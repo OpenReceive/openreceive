@@ -1,6 +1,7 @@
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import type { CheckoutState } from "@openreceive/browser/internal";
 import { Checkout, ThemeScope } from "@openreceive/react";
 import "@openreceive/angular/styles.css";
 import "@openreceive/react/styles.css";
@@ -21,6 +22,10 @@ import {
   toHelloFruitDisplayAmount,
   type HelloFruitBtcFiatRates,
 } from "../../../../shared/demo-pricing.ts";
+import {
+  buildHelloFruitTransactionDetailRows,
+  openReceiveCheckoutLabels,
+} from "../../../../shared/demo-transaction-details.ts";
 import fruitsData from "../../../../shared/fruits.json" with { type: "json" };
 import product from "../../../../shared/product.json" with { type: "json" };
 import "./styles.css";
@@ -77,7 +82,9 @@ function App(): React.ReactElement {
   const [stickerModalOpen, setStickerModalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
+  const [settledCheckoutState, setSettledCheckoutState] = useState<CheckoutState | null>(null);
   const completedCheckoutRef = useRef("");
+  const latestCheckoutStateRef = useRef<CheckoutState | null>(null);
   const selectedFruit = fruits.find((fruit) => fruit.id === fruitId) ?? fruits[0];
   const createCheckoutLabel =
     selectedFruit === undefined
@@ -129,6 +136,13 @@ function App(): React.ReactElement {
     });
   }, [framework]);
 
+  const onCheckoutState = useCallback((state: CheckoutState) => {
+    latestCheckoutStateRef.current = state;
+    if (state.settled) {
+      setSettledCheckoutState(state);
+    }
+  }, []);
+
   const onSettled = useCallback(() => {
     if (order !== null && completedCheckoutRef.current !== order.uuid) {
       logDemo("checkout.settled", "Checkout settled callback received.", {
@@ -136,6 +150,7 @@ function App(): React.ReactElement {
         purchasedItemCount: purchasedItems.length,
       });
       completedCheckoutRef.current = order.uuid;
+      setSettledCheckoutState(latestCheckoutStateRef.current);
       setOrder((current) => (current === null ? current : { ...current, status: "paid" }));
       setStickerModalOpen(true);
     }
@@ -177,6 +192,8 @@ function App(): React.ReactElement {
     setCreating(true);
     setError("");
     setStickerModalOpen(false);
+    setSettledCheckoutState(null);
+    latestCheckoutStateRef.current = null;
     completedCheckoutRef.current = "";
 
     try {
@@ -240,6 +257,8 @@ function App(): React.ReactElement {
     setOrder(null);
     setPurchasedItems([]);
     setStickerModalOpen(false);
+    setSettledCheckoutState(null);
+    latestCheckoutStateRef.current = null;
     setCreating(false);
     setError("");
     completedCheckoutRef.current = "";
@@ -427,6 +446,7 @@ function App(): React.ReactElement {
                 setError(cause instanceof Error ? cause.message : String(cause));
               }}
               onSettled={onSettled}
+              onState={onCheckoutState}
               onStartOver={startOver}
             />
           </>
@@ -475,6 +495,7 @@ function App(): React.ReactElement {
                 </a>
               ))}
             </div>
+            <HelloFruitTransactionDetailsPanel source={settledCheckoutState} />
             <div className="modal-action">
               <button className="btn" onClick={() => setStickerModalOpen(false)} type="button">
                 Close
@@ -487,11 +508,64 @@ function App(): React.ReactElement {
   );
 }
 
+function HelloFruitTransactionDetailsPanel(props: {
+  readonly source: CheckoutState | null;
+}): React.ReactElement | null {
+  const rows = buildHelloFruitTransactionDetailRows(props.source);
+  if (rows.length === 0) return null;
+  return (
+    <details className="collapse collapse-arrow bg-base-200">
+      <summary className="collapse-title font-bold min-h-0 py-2">
+        {openReceiveCheckoutLabels.transactionDetails}
+      </summary>
+      <div className="collapse-content">
+        <dl className="grid gap-2 m-0">
+          {rows.map((row) => (
+            <HelloFruitTransactionDetailRow key={row.label} row={row} />
+          ))}
+        </dl>
+      </div>
+    </details>
+  );
+}
+
+function HelloFruitTransactionDetailRow(props: {
+  readonly row: {
+    readonly label: string;
+    readonly value: string;
+    readonly copyValue?: string;
+  };
+}): React.ReactElement {
+  const [copied, setCopied] = useState(false);
+  const copyValue = props.row.copyValue ?? props.row.value;
+  return (
+    <>
+      <dt className="text-base-content/60 text-xs font-bold uppercase">{props.row.label}</dt>
+      <dd className="grid gap-2 grid-cols-[minmax(0,1fr)_auto] items-center m-0">
+        <code className="min-w-0 break-all font-mono text-sm">{props.row.value}</code>
+        <button
+          className="btn btn-sm"
+          onClick={() => {
+            void navigator.clipboard.writeText(copyValue).then(() => {
+              setCopied(true);
+              globalThis.setTimeout(() => setCopied(false), 1500);
+            });
+          }}
+          type="button"
+        >
+          {copied ? openReceiveCheckoutLabels.copied : "Copy"}
+        </button>
+      </dd>
+    </>
+  );
+}
+
 interface FrameworkCheckoutProps {
   readonly framework: CheckoutFramework;
   readonly orderId: string;
   readonly onError: (error: unknown) => void;
   readonly onSettled: () => void;
+  readonly onState: (state: CheckoutState) => void;
   readonly onStartOver: () => void;
 }
 
@@ -503,6 +577,7 @@ function FrameworkCheckout({
   orderId,
   onError,
   onSettled,
+  onState,
   onStartOver,
 }: FrameworkCheckoutProps): React.ReactElement {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -526,7 +601,15 @@ function FrameworkCheckout({
         });
         onError(detail?.error ?? event);
       },
-      onSettled: onSettled,
+      onSettled: (event: Event) => {
+        const detail = (event as CustomEvent<{ state?: CheckoutState }>).detail;
+        if (detail?.state !== undefined) onState(detail.state);
+        onSettled();
+      },
+      onState: (event: Event) => {
+        const detail = (event as CustomEvent<{ state?: CheckoutState }>).detail;
+        if (detail?.state !== undefined) onState(detail.state);
+      },
     };
 
     async function mountFrameworkCheckout() {
@@ -638,7 +721,7 @@ function FrameworkCheckout({
       cleanup();
       host.replaceChildren();
     };
-  }, [framework, orderId, onError, onSettled, onStartOver]);
+  }, [framework, orderId, onError, onSettled, onState, onStartOver]);
 
   if (framework === "react") {
     return (
@@ -648,6 +731,7 @@ function FrameworkCheckout({
         logger={logOpenReceive}
         onError={onError}
         onSettled={onSettled}
+        onState={onState}
         onStartOver={onStartOver}
       />
     );

@@ -299,6 +299,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
         activeSwapForAsset !== undefined
           ? renderSwapDepositPanel({
               invoice: activeSwapForAsset,
+              checkout,
               now,
               encoder: props.qrEncoder,
               clipboard: props.clipboard,
@@ -612,6 +613,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
                       })
                     : renderSwapDepositPanel({
                         invoice: activeSwapForRoute,
+                        checkout,
                         now,
                         encoder: props.qrEncoder,
                         clipboard: props.clipboard,
