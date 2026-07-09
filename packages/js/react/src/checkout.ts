@@ -256,7 +256,8 @@ function CheckoutView(props: CheckoutProps & { readonly checkout: CheckoutSnapsh
       ...sectionProps,
       className: joinClassNames(className, orClasses.root, classNames?.root),
       [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.root]: "",
-      ...theme.attributes,
+      // Under ThemeScope, inherit data-theme from the page. Standalone Checkout owns it.
+      ...(theme.fromScope && !themeSwitcher ? {} : theme.attributes),
     },
     customChildren === undefined
       ? [

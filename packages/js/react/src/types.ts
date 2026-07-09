@@ -197,6 +197,8 @@ export interface UseThemeResult {
   readonly toggleLabel: string;
   readonly attributes: OpenReceiveThemeModel["attributes"];
   readonly checkoutElementAttributes: OpenReceiveThemeModel["checkoutElementAttributes"];
+  /** True when this result comes from an ancestor ThemeScope (inherit, don't re-stamp). */
+  readonly fromScope: boolean;
   setTheme(theme: OpenReceiveThemePreference): void;
   toggleTheme(): void;
 }

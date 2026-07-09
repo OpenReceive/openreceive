@@ -373,7 +373,7 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
               </div>
             ))}
             <div className="card-actions pt-1">
-              <button className="btn btn-sm" onClick={startOver} type="button">
+              <button className="btn btn-sm btn-soft" onClick={startOver} type="button">
                 Start over
               </button>
             </div>
@@ -475,7 +475,7 @@ function HelloFruitTransactionDetailRow(props: {
       <dd className="grid gap-2 grid-cols-[minmax(0,1fr)_auto] items-center m-0">
         <code className="min-w-0 break-all font-mono text-sm">{props.row.value}</code>
         <button
-          className="btn btn-sm"
+          className="btn btn-sm btn-soft"
           onClick={() => {
             void navigator.clipboard.writeText(copyValue).then(() => {
               setCopied(true);

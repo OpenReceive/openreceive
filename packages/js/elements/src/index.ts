@@ -48,7 +48,7 @@ import {
   getOpenReceiveRegionForCountry,
   getOpenReceiveSwapOptionIcon,
   getOpenReceiveWizardEmptyMessage,
-  groupOpenReceiveSwapOptionsByLabel,
+  buildOpenReceiveMethodGridEntries,
   formatOpenReceiveSwapLimit,
   openReceiveCheckoutLabels,
   openReceiveCheckoutElementStyles,
@@ -343,10 +343,11 @@ export function renderOpenReceivePaymentWizardHtml(
         <p class="${orClasses.wizardHeaderSubtitle}">${escapeHtml(openReceiveCheckoutLabels.wizardSubtitle)}</p>
       </div>
       <div part="method-grid" class="${orClasses.methodGrid}">
-        ${(swapAssetOptions.length > 0
-          ? openReceivePaymentMethods.filter((method) => method.id !== "crypto")
-          : openReceivePaymentMethods
-        ).map((method) => `
+        ${buildOpenReceiveMethodGridEntries(openReceivePaymentMethods, swapAssetOptions)
+          .map((entry) => {
+            if (entry.kind === "method") {
+              const method = entry.method;
+              return `
           <button
             part="method"
             class="${orClasses.methodCard}"
@@ -356,9 +357,11 @@ export function renderOpenReceivePaymentWizardHtml(
             <img class="${orClasses.methodIcon}" alt="" src="${escapeHtml(getOpenReceivePaymentMethodIcon(method.id))}">
             <strong class="${orClasses.methodTitle}">${escapeHtml(method.title)}</strong>
             <small class="${orClasses.methodDetail}">${escapeHtml(method.detail)}</small>
-          </button>
-        `).join("")}
-        ${renderElementSwapMethodCardsHtml(swapAssetOptions, view)}
+          </button>`;
+            }
+            return renderElementSwapMethodGroupHtml(entry.group, view);
+          })
+          .join("")}
       </div>
     `
     : "";
@@ -478,30 +481,31 @@ function renderElementSwapActionsHtml(
   `;
 }
 
-function renderElementSwapMethodCardsHtml(
-  options: readonly OpenReceiveElementsSwapOption[],
+function renderElementSwapMethodGroupHtml(
+  group: {
+    readonly label: string;
+    readonly options: readonly OpenReceiveElementsSwapOption[];
+  },
   view: OpenReceiveElementsWizardView,
 ): string {
   const selectedNetworks = view.selectedSwapNetworks ?? {};
-  return groupOpenReceiveSwapOptionsByLabel(options)
-    .map((group) => {
-      const groupKey = group.label.trim().toUpperCase();
-      const displayOption =
-        group.options.find((option) => option.available !== false) ?? group.options[0];
-      if (displayOption === undefined) return "";
-      const multiNetwork = group.options.length > 1;
-      const selectedAsset = selectedNetworks[groupKey];
-      const selectedOption =
-        selectedAsset === undefined
-          ? undefined
-          : group.options.find((option) => option.pay_in_asset === selectedAsset);
-      const activeOption = selectedOption ?? displayOption;
-      const networkSelected = selectedOption !== undefined;
-      const disabled = activeOption.available === false;
-      const continueDisabled = multiNetwork ? !networkSelected || disabled : disabled;
-      const limitMessage = elementsSwapLimitMessage(activeOption, view);
-      if (!multiNetwork) {
-        return `
+  const groupKey = group.label.trim().toUpperCase();
+  const displayOption =
+    group.options.find((option) => option.available !== false) ?? group.options[0];
+  if (displayOption === undefined) return "";
+  const multiNetwork = group.options.length > 1;
+  const selectedAsset = selectedNetworks[groupKey];
+  const selectedOption =
+    selectedAsset === undefined
+      ? undefined
+      : group.options.find((option) => option.pay_in_asset === selectedAsset);
+  const activeOption = selectedOption ?? displayOption;
+  const networkSelected = selectedOption !== undefined;
+  const disabled = activeOption.available === false;
+  const continueDisabled = multiNetwork ? !networkSelected || disabled : disabled;
+  const limitMessage = elementsSwapLimitMessage(activeOption, view);
+  if (!multiNetwork) {
+    return `
           <button
             part="method"
             class="${disabled ? orClasses.methodCardUnavailable : orClasses.methodCardReady}"
@@ -516,17 +520,17 @@ function renderElementSwapMethodCardsHtml(
             )}</small>
           </button>
         `;
-      }
-      const triggerLabel = networkSelected
-        ? `<img class="${orClasses.methodNetworkIcon}" alt="" src="${escapeHtml(getOpenReceiveNetworkIcon(selectedOption.network_label))}">
+  }
+  const triggerLabel = networkSelected
+    ? `<img class="${orClasses.methodNetworkIcon}" alt="" src="${escapeHtml(getOpenReceiveNetworkIcon(selectedOption.network_label))}">
                 ${escapeHtml(selectedOption.network_label)}`
-        : escapeHtml(openReceiveCheckoutLabels.selectNetwork);
-      const triggerLabelClass = networkSelected
-        ? orClasses.methodNetworkTriggerLabel
-        : `${orClasses.methodNetworkTriggerLabel} ${orClasses.methodNetworkPlaceholder}`;
-      const continueLabel =
-        networkSelected && disabled && limitMessage !== undefined ? limitMessage : "Continue";
-      return `
+    : escapeHtml(openReceiveCheckoutLabels.selectNetwork);
+  const triggerLabelClass = networkSelected
+    ? orClasses.methodNetworkTriggerLabel
+    : `${orClasses.methodNetworkTriggerLabel} ${orClasses.methodNetworkPlaceholder}`;
+  const continueLabel =
+    networkSelected && disabled && limitMessage !== undefined ? limitMessage : "Continue";
+  return `
         <div part="method-card" class="${orClasses.methodCardReady}">
           <img class="${orClasses.methodIcon}" alt="" src="${escapeHtml(getOpenReceiveSwapOptionIcon(displayOption))}">
           <strong class="${orClasses.methodTitle}">${escapeHtml(group.label)}</strong>
@@ -581,8 +585,6 @@ function renderElementSwapMethodCardsHtml(
           >${escapeHtml(continueLabel)}</button>
         </div>
       `;
-    })
-    .join("");
 }
 
 // Short reason for an out-of-range swap asset in the web-component surface,

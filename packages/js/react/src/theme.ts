@@ -16,7 +16,9 @@ import type {
   UseThemeResult,
 } from "./types.ts";
 
-export function useTheme(options: UseThemeOptions = {}): UseThemeResult {
+const OpenReceiveThemeContext = React.createContext<UseThemeResult | null>(null);
+
+function useLocalTheme(options: UseThemeOptions = {}): UseThemeResult {
   const storageKey = options.storageKey ?? OPENRECEIVE_THEME_STORAGE_KEY;
   const [theme, setThemeState] = React.useState<OpenReceiveThemePreference>(() =>
     readOpenReceiveThemePreference({
@@ -36,6 +38,27 @@ export function useTheme(options: UseThemeOptions = {}): UseThemeResult {
     media.addEventListener?.("change", update);
     return () => media.removeEventListener?.("change", update);
   }, []);
+
+  // Keep nested checkouts in sync when ThemeScope (or another tab) updates storage.
+  React.useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (
+        event.key !== storageKey ||
+        event.storageArea !== (options.storage ?? globalThis.localStorage)
+      ) {
+        return;
+      }
+      setThemeState(
+        readOpenReceiveThemePreference({
+          storage: options.storage,
+          storageKey,
+          defaultTheme: options.defaultTheme,
+        }),
+      );
+    };
+    globalThis.addEventListener?.("storage", onStorage);
+    return () => globalThis.removeEventListener?.("storage", onStorage);
+  }, [options.defaultTheme, options.storage, storageKey]);
 
   const themeModel = createOpenReceiveThemeModel(theme, { systemDark });
 
@@ -62,9 +85,26 @@ export function useTheme(options: UseThemeOptions = {}): UseThemeResult {
     toggleLabel: themeModel.toggleLabel,
     attributes: themeModel.attributes,
     checkoutElementAttributes: themeModel.checkoutElementAttributes,
+    fromScope: false,
     setTheme,
     toggleTheme,
   };
+}
+
+export function useTheme(options: UseThemeOptions = {}): UseThemeResult {
+  const scoped = React.useContext(OpenReceiveThemeContext);
+  const local = useLocalTheme(options);
+  const storageKey = options.storageKey ?? OPENRECEIVE_THEME_STORAGE_KEY;
+  // Prefer an ancestor ThemeScope so nested Checkout stays in sync with the page toggle.
+  if (
+    scoped !== null &&
+    options.storage === undefined &&
+    (options.storageKey === undefined || options.storageKey === storageKey) &&
+    options.defaultTheme === undefined
+  ) {
+    return { ...scoped, fromScope: true };
+  }
+  return local;
 }
 
 export function ThemeToggle(props: ThemeToggleProps): React.ReactElement {
@@ -119,7 +159,7 @@ export function ThemeScope(props: ThemeScopeProps): React.ReactElement {
     children,
     ...elementProps
   } = props;
-  const theme = useTheme({
+  const theme = useLocalTheme({
     defaultTheme,
     storageKey: themeStorageKey,
     storage,
@@ -127,29 +167,33 @@ export function ThemeScope(props: ThemeScopeProps): React.ReactElement {
   const scopedChildren = typeof children === "function" ? children(theme) : children;
 
   return React.createElement(
-    Element,
-    {
-      ...elementProps,
-      ...theme.attributes,
-    },
-    [
-      themeToggle
-        ? React.createElement(
-            "div",
-            {
-              className: topbarClassName,
-              key: "openreceive-theme-scope-toggle",
-            },
-            React.createElement(ThemeToggle, {
-              className: themeToggleClassName,
-              theme: theme.theme,
-              resolvedTheme: theme.resolvedTheme,
-              onThemeChange: theme.setTheme,
-              ButtonComponent,
-            }),
-          )
-        : null,
-      scopedChildren,
-    ],
+    OpenReceiveThemeContext.Provider,
+    { value: theme },
+    React.createElement(
+      Element,
+      {
+        ...elementProps,
+        ...theme.attributes,
+      },
+      [
+        themeToggle
+          ? React.createElement(
+              "div",
+              {
+                className: topbarClassName,
+                key: "openreceive-theme-scope-toggle",
+              },
+              React.createElement(ThemeToggle, {
+                className: themeToggleClassName,
+                theme: theme.theme,
+                resolvedTheme: theme.resolvedTheme,
+                onThemeChange: theme.setTheme,
+                ButtonComponent,
+              }),
+            )
+          : null,
+        scopedChildren,
+      ],
+    ),
   );
 }

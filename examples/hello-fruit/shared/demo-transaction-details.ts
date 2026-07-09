@@ -48,7 +48,7 @@ export function renderHelloFruitTransactionDetailsHtml(
             <dd class="grid gap-2 grid-cols-[minmax(0,1fr)_auto] items-center m-0">
               <code class="min-w-0 break-all font-mono text-sm">${escapeHtml(row.value)}</code>
               <button
-                class="btn btn-sm"
+                class="btn btn-sm btn-soft"
                 type="button"
                 data-hello-fruit-copy="${escapeHtml(row.copyValue ?? row.value)}"
               >Copy</button>
