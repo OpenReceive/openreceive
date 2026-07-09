@@ -23,7 +23,7 @@ for any checkout or status route that should not be public.
 With the shipped routes (recommended):
 
 - Your app creates and persists the order; OpenReceive never mints orders.
-- `resolveOrder` is required and is the sole price authority on
+- `getCheckoutAmount` is required and is the sole price authority on
   `POST {prefix}/checkouts`. Client `amount` / `sats` / `usd` are rejected.
 - Tier-2 status/swap reads are gated by the per-order capability token (and/or
   your `authorize` hook). Same-origin browsers also carry the httpOnly cookie.

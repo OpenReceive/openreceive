@@ -28,13 +28,13 @@ contributors working in this repository.
 
 - OpenReceive ships the routes (`@openreceive/http` + adapters; `openreceive-rails`
   engine). The host keeps 100% of authentication. OpenReceive NEVER inspects the host
-  session — it only calls the host `authorize`/`resolveOrder`/`rateLimit` hooks and obeys
+  session — it only calls the host `authorize`/`getCheckoutAmount`/`rateLimit` hooks and obeys
   their return values (inversion of control).
 - Three tiers: Tier 1 anonymous-capable (checkout.create, rates); Tier 2 capability-token
   scoped (order/checkout reads, swap actions on your own order); Tier 3 privileged and
   **fails closed** (invoice.sweep) — with no `authorize` policy, Tier 3 returns 403.
 - The create-checkout route MUST NOT trust a client-supplied price. The host
-  `resolveOrder` / `resolve_order` hook is **required** at handler construction;
+  `getCheckoutAmount` / `get_checkout_amount` hook is **required** at handler construction;
   omitting it throws. Client `amount` / `sats` / `usd` on the create body are
   rejected with 400. The route obtains the price ONLY from the hook (`null` → 404).
 - Capability tokens are per-order, ≥128-bit, URL-safe, returned once as `order_access_token`.

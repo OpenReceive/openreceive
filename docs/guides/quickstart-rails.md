@@ -4,7 +4,7 @@ The `openreceive-rails` gem is a mountable Rails engine that ships OpenReceive's
 your app. Your app keeps 100% of authentication: the engine controllers inherit from your
 `ApplicationController`, so they automatically get your CSRF protection, `authenticate_user!`,
 and `current_user`. OpenReceive never inspects your session — it calls the `authorize` and
-`resolve_order` hooks you configure and obeys them.
+`get_checkout_amount` hooks you configure and obeys them.
 
 The engine builds on two gems you also depend on: `openreceive` (the dependency-free core:
 money math, settlement detection, NWC parsing, idempotency, capability-token hashing) and
@@ -42,7 +42,22 @@ per-order capability-token column. The migration superclass is resolved to your 
 at generate time (floor: Rails 7.1). Rails records applied migrations in its own
 `schema_migrations`; the engine does not ship its own runner.
 
-## 3. Configure the hooks
+## 3. Price the order
+
+`get_checkout_amount` runs on **create checkout** only — not on GET order status. It is
+required: the create body never carries a client price.
+
+```ruby
+get_checkout_amount = lambda do |ctx|
+  order = Order.find_by(id: ctx[:order_id])
+  return nil if order.nil? # → 404
+  { amount: { currency: "USD", value: order.total_usd.to_s } }
+end
+```
+
+## 4. Configure and mount
+
+Wire pricing (and auth) into the engine, then mount it:
 
 ```ruby
 # config/initializers/openreceive.rb
@@ -63,19 +78,13 @@ OpenReceive.configure do |config|
     end
   end
 
-  # Amount authority — REQUIRED. Create body has no client price; return payment terms or nil (404).
-  config.resolve_order = lambda do |ctx|
-    order = Order.find_by(id: ctx[:order_id])
-    return nil if order.nil?
-    { usd: order.total_usd.to_s }
-  end
+  # Amount authority — REQUIRED (see §3).
+  config.get_checkout_amount = get_checkout_amount
 end
 ```
 
-You mount the engine (the generator does this for you):
-
 ```ruby
-# config/routes.rb
+# config/routes.rb — the generator adds this for you
 mount OpenReceive::Engine => "/openreceive"
 ```
 
@@ -85,7 +94,7 @@ Instead of the `authorize` proc you can include `OpenReceive::Authorization` in 
 controller and implement `openreceive_authorize(context)` there, giving you full access to your
 app's auth helpers (`current_user`, Pundit/CanCanCan policies, etc.).
 
-## 4. The routes you now have
+## 5. The routes you now have
 
 All under the mount prefix (`/openreceive`):
 
@@ -108,6 +117,6 @@ plain Rack hosts get the identical contract.
 
 ```ruby
 service = OpenReceive::Server::Service.new(nwc_client:, store:, namespace: "default")
-app = OpenReceive::Server::RackApp.new(service:, authorize:, resolve_order:, prefix: "/openreceive")
+app = OpenReceive::Server::RackApp.new(service:, authorize:, get_checkout_amount:, prefix: "/openreceive")
 run app
 ```

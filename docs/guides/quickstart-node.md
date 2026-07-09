@@ -1,8 +1,9 @@
 # Node Quickstart
 
 OpenReceive is the payment layer. Your app owns orders, carts, sessions, and
-fulfillment. You create an order, mount OpenReceive's routes with a
-`resolveOrder` hook that prices it server-side, and drop in `<Checkout orderId />`.
+fulfillment. Define how orders are priced (`getCheckoutAmount`), what happens
+when they settle (`onPaid`), mount the routes, create the order in your app,
+then drop in `<Checkout orderId />`.
 
 ## 1. Install
 
@@ -10,10 +11,19 @@ fulfillment. You create an order, mount OpenReceive's routes with a
 npm install openreceive @openreceive/express express react react-dom
 ```
 
-`@openreceive/express` is an optional peer of the umbrella package (so a
-React-only install never pulls the server graph). Checkout components for Vue,
-Svelte, and Angular, and adapters for Fastify / Next.js, work the same way —
-see [Frontend Checkout](frontend-checkout.md) and [Shipped Routes](routes.md).
+Install only what you use:
+
+| Stack | Package |
+| --- | --- |
+| Express | `@openreceive/express` |
+| Fastify | `@openreceive/fastify` |
+| Next.js | `@openreceive/next` |
+| React | `@openreceive/react` |
+| Vue | `@openreceive/vue` |
+| Svelte | `@openreceive/svelte` |
+| Angular | `@openreceive/angular` |
+
+See [Frontend Checkout](frontend-checkout.md) and [Shipped Routes](routes.md).
 
 ## 2. Configure
 
@@ -29,13 +39,64 @@ Defaults (override only when you need to):
 | --- | --- |
 | store | SQLite under `.openreceive/` (`local-sqlite`) |
 | route prefix | `/openreceive` |
-| capability tokens | minted automatically on create |
 | price currencies | `USD` |
 
 Optional: add a FixedFloat `swap:` block to let payers pay with crypto while you
 still settle to Lightning — see [Automated Swaps](automated-swaps.md).
 
-## 3. Your app creates the order
+## 3. Price the order
+
+`getCheckoutAmount` runs on **create checkout** only (`POST /checkouts`) — not on
+GET order status. It is required: the create body never carries a client price.
+
+```ts
+const getCheckoutAmount = async ({ orderId }) => {
+  const order = await db.orders.find(orderId);
+  if (!order) return null; // → 404
+  return { amount: { currency: "USD", value: order.total_usd } };
+};
+```
+
+## 4. Handle payment
+
+`onPaid` fires when a checkout settles. Call YOUR app's fulfillment here
+(`fulfillPaidCheckout` is your function — OpenReceive does not provide it).
+May fire more than once: make it idempotent on `checkoutId` / `orderId`.
+
+```ts
+const onPaid = async ({ orderId, checkoutId, metadata }) => {
+  await fulfillPaidCheckout({ orderId, checkoutId, metadata });
+};
+```
+
+`onPaid` gives you:
+
+- `orderId` — your order (look it up and fulfill it)
+- `checkoutId` — this payment attempt. Prefer it for dedupe: `onPaid` can fire
+  more than once for the same payment, and a retry after expiry mints a new
+  checkout under the same `orderId`
+- `metadata` — optional JSON you attached at create time, returned as-is
+
+## 5. Mount the routes
+
+Wire those two hooks into the service and Express adapter:
+
+```ts
+import express from "express";
+import { createOpenReceive, openReceiveExpress } from "openreceive/express";
+
+const service = await createOpenReceive({ onPaid });
+
+const app = express();
+app.use(express.json());
+app.use(openReceiveExpress({ service, getCheckoutAmount }));
+```
+
+That mounts create checkout, order status, swap options/actions, and rates under
+`/openreceive`. Reads are gated by a per-order capability token — you never
+manage it. See [Shipped Routes](routes.md) for auth presets and other adapters.
+
+## 6. Your app creates the order
 
 OpenReceive ships **no** create-order route. Persist the order in your own DB
 first, then pass its id into checkout:
@@ -49,41 +110,7 @@ const order = await db.orders.create({
 });
 ```
 
-## 4. Mount the routes
-
-```ts
-import express from "express";
-import { createOpenReceive, openReceiveExpress } from "openreceive/express";
-
-const service = await createOpenReceive({
-  // Fires when a checkout settles. Call YOUR app's fulfillment here
-  // (fulfillPaidCheckout is your function — OpenReceive does not provide it).
-  // May fire more than once: make it idempotent on checkoutId / orderId.
-  onPaid: async ({ orderId, checkoutId, metadata }) => {
-    await fulfillPaidCheckout({ orderId, checkoutId, metadata });
-  },
-});
-
-const app = express();
-app.use(express.json());
-app.use(
-  openReceiveExpress({
-    service,
-    // Required. The create-checkout route never trusts a client price.
-    resolveOrder: async ({ orderId }) => {
-      const order = await db.orders.find(orderId);
-      if (!order) return null; // → 404
-      return { amount: { currency: "USD", value: order.total_usd } };
-    },
-  }),
-);
-```
-
-That mounts create checkout, order status, swap options/actions, and rates under
-`/openreceive`. Reads are gated by a per-order capability token — you never
-manage it. See [Shipped Routes](routes.md) for auth presets and other adapters.
-
-## 5. Render checkout
+## 7. Render checkout
 
 ```tsx
 import { Checkout } from "openreceive/react";
@@ -95,7 +122,7 @@ import "@openreceive/react/styles.css";
 The component creates the checkout, renders the invoice + QR, polls status, and
 shows the crypto wizard when swaps are configured.
 
-## 6. Fulfill idempotently
+## 8. Fulfill idempotently
 
 `onPaid` may fire more than once. Deduplicate on `checkoutId` (or your order id)
 and fulfill from the paid checkout snapshot, not the live cart. Backend status

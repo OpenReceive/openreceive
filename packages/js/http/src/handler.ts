@@ -4,8 +4,8 @@ import type {
   OpenReceive,
   CheckoutAmountSource,
   CreateCheckoutRequest,
+  GetCheckoutAmount,
   OrderStatus,
-  ResolveOrder,
   SwapAttempt,
   SwapQuoteResponse,
 } from "@openreceive/node";
@@ -47,15 +47,16 @@ function applyOrderAmount(
   return { ...base, amount: resolved.amount };
 }
 
-/** Options for {@link createOpenReceiveHttpHandler}. `service` and `resolveOrder` are required. */
+/** Options for {@link createOpenReceiveHttpHandler}. `service` and `getCheckoutAmount` are required. */
 export interface CreateOpenReceiveHttpHandlerOptions {
   /** The host's already-constructed OpenReceive service (created with the host's DB + wallet). */
   readonly service: OpenReceive;
   /**
-   * Host server-side pricing hook. Required: the create-checkout route obtains the price ONLY
-   * from this hook. Omitting it throws at construction.
+   * Host server-side pricing hook for POST create-checkout only (not GET order status).
+   * Required: the create-checkout route obtains the price ONLY from this hook.
+   * Omitting it throws at construction.
    */
-  readonly resolveOrder: ResolveOrder;
+  readonly getCheckoutAmount: GetCheckoutAmount;
   /** Host authorization policy. Defaults to the token-gated Tier policy (Tier 3 denied). */
   readonly authorize?: OpenReceiveAuthorize;
   /** Host rate-limit hook. When omitted, no rate limiting is applied. */
@@ -80,7 +81,7 @@ interface HandlerRuntime {
   readonly tokens: OrderAccessTokenManager;
   readonly authorize: OpenReceiveAuthorize;
   readonly rateLimit?: OpenReceiveRateLimit;
-  readonly resolveOrder: ResolveOrder;
+  readonly getCheckoutAmount: GetCheckoutAmount;
   readonly prefix: string;
 }
 
@@ -104,13 +105,13 @@ export function createOpenReceiveHttpHandler(
     throw new TypeError("createOpenReceiveHttpHandler requires a `service`.");
   }
 
-  if (options.resolveOrder === undefined) {
+  if (options.getCheckoutAmount === undefined) {
     throw new TypeError(
-      "createOpenReceiveHttpHandler requires a `resolveOrder` hook — the create-checkout route " +
+      "createOpenReceiveHttpHandler requires a `getCheckoutAmount` hook — the create-checkout route " +
         "never trusts a client-supplied price.",
     );
   }
-  const resolveOrder = options.resolveOrder;
+  const getCheckoutAmount = options.getCheckoutAmount;
 
   const prefix = normalizePrefix(options.prefix ?? "/openreceive");
   const tokens =
@@ -129,7 +130,7 @@ export function createOpenReceiveHttpHandler(
     tokens,
     authorize,
     rateLimit: options.rateLimit,
-    resolveOrder,
+    getCheckoutAmount,
     prefix,
   };
 
@@ -192,20 +193,20 @@ async function handleCreateCheckout(
 
   // Client prices are never trusted on this route. `amount` is rejected so a tampered
   // client cannot quietly underpay; tip-jar / donation hosts honor a payer-chosen amount inside
-  // resolveOrder (typically via metadata) and return it explicitly.
+  // getCheckoutAmount (typically via metadata) and return it explicitly.
   rejectClientAmountFields(body);
 
   const metadata = readMetadata(body);
   let resolved: CheckoutAmountSource | null;
   try {
-    resolved = await runtime.resolveOrder({
+    resolved = await runtime.getCheckoutAmount({
       orderId,
       metadata,
       request,
     });
   } catch (error) {
     if (error instanceof OpenReceiveHttpError) throw error;
-    const message = error instanceof Error ? error.message : "resolveOrder rejected the request.";
+    const message = error instanceof Error ? error.message : "getCheckoutAmount rejected the request.";
     throw new OpenReceiveHttpError(400, "INVALID_REQUEST", message);
   }
 
@@ -216,7 +217,7 @@ async function handleCreateCheckout(
     throw new OpenReceiveHttpError(
       400,
       "INVALID_REQUEST",
-      "resolveOrder must return { amount: { sats } | { currency, value } } (or null for not found).",
+      "getCheckoutAmount must return { amount: { sats } | { currency, value } } (or null for not found).",
     );
   }
 
@@ -575,7 +576,7 @@ function rejectClientAmountFields(body: Record<string, unknown>): void {
       throw new OpenReceiveHttpError(
         400,
         "INVALID_REQUEST",
-        `Create checkout does not accept client-supplied '${key}'. Provide the price via resolveOrder.`,
+        `Create checkout does not accept client-supplied '${key}'. Provide the price via getCheckoutAmount.`,
       );
     }
   }

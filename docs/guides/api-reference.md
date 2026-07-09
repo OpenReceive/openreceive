@@ -3,7 +3,7 @@
 OpenReceive ships HTTP routes you can mount (see [Shipped Routes](routes.md)), and
 also exposes service methods for hosts that call them from their own controllers.
 Your app still owns sessions, CSRF/CORS, and fulfillment. Amounts on the
-**HTTP** create-checkout body are never trusted — use the required `resolveOrder`
+**HTTP** create-checkout body are never trusted — use the required `getCheckoutAmount`
 hook there. Amounts passed to `getOrCreateCheckout` below are trusted because they
 come from your server.
 

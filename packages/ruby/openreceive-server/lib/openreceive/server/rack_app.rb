@@ -12,7 +12,7 @@ module OpenReceive
     # RackApp is a THIN Rack adapter: it parses `env` into (method, path, query, headers, raw body,
     # token), routes to the matching Server::RequestHandler method, and converts the returned
     # `[status, headers, body]` triple into a Rack response. ALL request -> response logic (tiers,
-    # authorize, token extraction, resolve_order, error mapping) lives in Server::RequestHandler,
+    # authorize, token extraction, get_checkout_amount, error mapping) lives in Server::RequestHandler,
     # which the openreceive-rails controllers also delegate to — so the two adapters cannot drift.
     #
     # Routes (mounted under `prefix`, default /openreceive):
@@ -27,22 +27,22 @@ module OpenReceive
     #   Tier 1 → allow. Tier 2 → allow iff a valid per-order capability token is presented.
     #   Tier 3 → DENY (host must supply an authorize hook that opts in).
     #
-    # The host supplies `authorize` and a required `resolve_order`. The create route uses
-    # resolve_order for the authoritative amount and NEVER trusts a client-supplied price.
+    # The host supplies `authorize` and a required `get_checkout_amount`. The create route uses
+    # get_checkout_amount for the authoritative amount and NEVER trusts a client-supplied price.
     class RackApp
       DEFAULT_PREFIX = "/openreceive"
 
       # authorize      : ->(context) { boolean }  — context = { action:, request: env, resource:, token:, token_valid: }
-      # resolve_order  : REQUIRED ->(context) { amount_source } — { "amount" => { "sats" } | { "currency", "value" } } | nil
+      # get_checkout_amount  : REQUIRED ->(context) { amount_source } — { "amount" => { "sats" } | { "currency", "value" } } | nil
       # rate_limit     : ->(context) { allowed_boolean } — returning false yields 429 (optional)
       # tokens         : Tokens::Manager
-      def initialize(service:, tokens:, resolve_order:, authorize: nil, rate_limit: nil, prefix: DEFAULT_PREFIX)
+      def initialize(service:, tokens:, get_checkout_amount:, authorize: nil, rate_limit: nil, prefix: DEFAULT_PREFIX)
         @prefix = normalize_prefix(prefix)
         @handler = RequestHandler.new(
           service: service,
           tokens: tokens,
           authorize: authorize,
-          resolve_order: resolve_order,
+          get_checkout_amount: get_checkout_amount,
           rate_limit: rate_limit,
           prefix: @prefix
         )

@@ -140,13 +140,23 @@ test("shipped route adapters exist and wrap @openreceive/http", () => {
 
 test("Node quickstart mounts the shipped router around host-owned orders", () => {
   const quickstart = readFileSync(nodeQuickstartDocs, "utf8");
-  // One story: host creates order → resolveOrder → <Checkout orderId>.
+  // Chronological story: price → onPaid → mount → create order → <Checkout orderId>.
+  assert.match(quickstart, /## 3\. Price the order/);
+  assert.match(quickstart, /## 4\. Handle payment/);
+  assert.match(quickstart, /## 5\. Mount the routes/);
   assert.match(quickstart, /openReceiveExpress/);
   assert.match(quickstart, /createOpenReceive/);
-  assert.match(quickstart, /resolveOrder/);
+  assert.match(quickstart, /getCheckoutAmount/);
+  assert.match(quickstart, /onPaid/);
+  assert.match(quickstart, /amount:\s*\{\s*currency:\s*"USD"/);
   assert.match(quickstart, /from "openreceive\/express"/);
   assert.match(quickstart, /<Checkout orderId=/);
   assert.match(quickstart, /Your app creates the order/);
+  // Price and onPaid are defined before the mount step.
+  const priceIdx = quickstart.indexOf("## 3. Price the order");
+  const paidIdx = quickstart.indexOf("## 4. Handle payment");
+  const mountIdx = quickstart.indexOf("## 5. Mount the routes");
+  assert.ok(priceIdx >= 0 && paidIdx > priceIdx && mountIdx > paidIdx);
   // No hand-written checkout/order/status route handlers or manual action routing.
   assert.doesNotMatch(quickstart, /app\.post\(\s*["'`]\/(order|create_order)\b/);
   assert.doesNotMatch(quickstart, /openreceive\.order\(/);
@@ -177,7 +187,7 @@ test("authorization guide shows app boundary service error handling", () => {
   assert.match(source, /from "@openreceive\/node";/);
   // Points hosts at the shipped-router happy path first.
   assert.match(source, /Shipped Routes/);
-  assert.match(source, /resolveOrder/);
+  assert.match(source, /getCheckoutAmount/);
 });
 
 test("Node quickstart shows a checkout component and points to the frontend guide", () => {

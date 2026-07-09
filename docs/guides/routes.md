@@ -3,7 +3,7 @@
 OpenReceive ships the HTTP routes so you do not hand-write controllers. You mount them
 under a prefix you choose (default `/openreceive`) and keep 100% of authentication in your
 app. OpenReceive never inspects your session, cookie, JWT, or header — it calls the hooks
-you provide (`authorize`, `resolveOrder`, `rateLimit`) and obeys their return values. This
+you provide (`authorize`, `getCheckoutAmount`, `rateLimit`) and obeys their return values. This
 is inversion of control: the host hooks into OpenReceive, not the reverse.
 
 The canonical contract is `spec/openapi/openreceive-http.v1.yaml`. Every Node adapter and the
@@ -13,7 +13,7 @@ Rails engine implement it identically and are held byte-equal by HTTP golden vec
 
 | Method + path | Tier | action | Body / response |
 | --- | --- | --- | --- |
-| `POST {prefix}/checkouts` | 1 | `checkout.create` | `{ order_id, memo?, description_hash?, metadata? }` → `201 { checkout, order_access_token? }` (price from `resolveOrder` only; client `amount`/`sats`/`usd` → 400) |
+| `POST {prefix}/checkouts` | 1 | `checkout.create` | `{ order_id, memo?, description_hash?, metadata? }` → `201 { checkout, order_access_token? }` (price from `getCheckoutAmount` only; client `amount`/`sats`/`usd` → 400) |
 | `POST {prefix}/orders/{order_id}` | 2 | `order.read` / `swap.*` | `{ order_id, action? }` → `200` OrderStatus / `{quote}` / `{attempt}` |
 | `GET {prefix}/checkouts/{checkout_id}` | 2 | `checkout.read` | → `200` Checkout |
 | `GET {prefix}/orders/{order_id}/swap-options` | 2 | `swap.options` | → `200 { enabled, options[] }` |
@@ -32,7 +32,7 @@ enum in `spec/schemas/error.schema.json`. Status mapping: `INVALID_REQUEST`→40
 ## Three security tiers
 
 - **Tier 1 — anonymous-capable** (`checkout.create`, `rates`): open by default; protected by
-  your `rateLimit` hook, your `authorize` hook, and your `resolveOrder` hook so the price
+  your `rateLimit` hook, your `authorize` hook, and your `getCheckoutAmount` hook so the price
   cannot be forged.
 - **Tier 2 — capability-token scoped** (order/checkout reads, swap actions on your own order):
   requires a valid per-order capability token **or** an allow decision from `authorize`.
@@ -98,19 +98,19 @@ for you. Token hashing is identical across the Node and Ruby engines
 
 ## Amount authority
 
-The create-checkout route MUST NOT trust a client-supplied price. `resolveOrder` is
+The create-checkout route MUST NOT trust a client-supplied price. `getCheckoutAmount` is
 **required** at handler construction — omitting it throws. The create body is
 `{ order_id, memo?, description_hash?, metadata? }`; a client-supplied `amount` /
 `sats` / `usd` is rejected with 400. The route obtains the price ONLY from the hook:
 
 ```ts
-resolveOrder = ({ orderId, request }) => ({ amount: { currency: "USD", value: priceForOrder(orderId) } });
+getCheckoutAmount = ({ orderId, request }) => ({ amount: { currency: "USD", value: priceForOrder(orderId) } });
 // or { amount: { sats: 21000 } } or { amount: { currency: "EUR", value: "9.99" } }
 // return null → 404 (order not found); throw → 400 (validation)
 ```
 
 Client-priced / tip-jar checkouts are still possible: honor a payer-chosen amount
-**inside** `resolveOrder` (for example from `metadata` or your own session), validate
+**inside** `getCheckoutAmount` (for example from `metadata` or your own session), validate
 it, and return it. That makes "trust the client" an explicit host decision, not a
 framework default.
 
@@ -120,7 +120,7 @@ framework default.
 
 ```ts
 import { createOpenReceiveHttpHandler } from "@openreceive/http";
-const handler = createOpenReceiveHttpHandler({ service, authorize, resolveOrder, prefix: "/openreceive" });
+const handler = createOpenReceiveHttpHandler({ service, authorize, getCheckoutAmount, prefix: "/openreceive" });
 const response = await handler(request); // (Request) => Promise<Response>
 ```
 
@@ -129,7 +129,7 @@ const response = await handler(request); // (Request) => Promise<Response>
 ```ts
 import { createOpenReceive, openReceiveExpress } from "openreceive/express";
 // or: import { openReceiveExpress } from "@openreceive/express";
-app.use(openReceiveExpress({ service, authorize, resolveOrder }));
+app.use(openReceiveExpress({ service, authorize, getCheckoutAmount }));
 ```
 
 ### Fastify
@@ -137,7 +137,7 @@ app.use(openReceiveExpress({ service, authorize, resolveOrder }));
 ```ts
 import { openReceiveFastify } from "openreceive/fastify";
 // or: import { openReceiveFastify } from "@openreceive/fastify";
-await fastify.register(openReceiveFastify, { service, authorize, resolveOrder, prefix: "/openreceive" });
+await fastify.register(openReceiveFastify, { service, authorize, getCheckoutAmount, prefix: "/openreceive" });
 ```
 
 ### Next.js (App Router)
@@ -146,7 +146,7 @@ await fastify.register(openReceiveFastify, { service, authorize, resolveOrder, p
 // app/openreceive/[...openreceive]/route.ts
 import { openReceiveNextHandlers } from "openreceive/next";
 // or: import { openReceiveNextHandlers } from "@openreceive/next";
-export const { GET, POST } = openReceiveNextHandlers({ service, authorize, resolveOrder });
+export const { GET, POST } = openReceiveNextHandlers({ service, authorize, getCheckoutAmount });
 ```
 
 ### Rails
@@ -164,7 +164,9 @@ and `current_user`. Configure the hooks in an initializer:
 OpenReceive.configure do |config|
   config.parent_controller = "ApplicationController"
   config.authorize = ->(ctx) { ctx[:action] == "checkout.create" || current_user_owns?(ctx) }
-  config.resolve_order = ->(ctx) { { usd: price_for_order(ctx[:order_id]) } }
+  config.get_checkout_amount = ->(ctx) {
+    { amount: { currency: "USD", value: price_for_order(ctx[:order_id]) } }
+  }
 end
 ```
 

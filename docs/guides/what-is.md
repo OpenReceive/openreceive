@@ -28,7 +28,7 @@ through third-party services outside OpenReceive.
 ## Runtime Model
 
 OpenReceive runs inside your normal web process. Your app creates and persists
-an order, mounts OpenReceive's routes with a required `resolveOrder` hook that
+an order, mounts OpenReceive's routes with a required `getCheckoutAmount` hook that
 prices that order server-side, and renders `<Checkout orderId />`. The component
 creates the checkout against the mounted routes and polls order status there.
 Checkout creation, order-status reads, admin pages, or background tasks may
@@ -37,7 +37,7 @@ global sweep.
 
 ```text
 your app           creates/persists the order (OpenReceive never mints orders)
-mounted routes     POST /openreceive/checkouts (price from resolveOrder only)
+mounted routes     POST /openreceive/checkouts (price from getCheckoutAmount only)
 browser checkout   <Checkout orderId> polls /openreceive/orders/{id}
 wallet scan        happens only inside server-side OpenReceive calls
 ```

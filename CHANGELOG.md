@@ -2,6 +2,12 @@
 
 ## 0.1.1 - Unreleased
 
+### Rename amount-authority hook
+
+- Renamed `resolveOrder` / `resolve_order` → `getCheckoutAmount` / `get_checkout_amount`.
+  The hook runs only on POST create-checkout (pricing), never on GET order status.
+  Deprecated JS aliases `ResolveOrder` / `GetOrderAmount` remain for one release.
+
 ### Global FixedFloat rates cache
 
 - Display quotes and catalog min/max now come from FixedFloat's public XML rates

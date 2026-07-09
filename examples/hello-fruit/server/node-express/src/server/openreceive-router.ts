@@ -2,15 +2,15 @@ import { openReceiveExpress } from "@openreceive/express";
 import {
   guestCheckout,
   type OpenReceiveAuthorize,
-  type ResolveOrder,
+  type GetCheckoutAmount,
 } from "@openreceive/http";
 import type { OrderAccessTokenManager } from "@openreceive/node";
 import type { Express } from "express";
-import { resolveHelloFruitOrder } from "../../../../shared/demo-order.ts";
+import { getHelloFruitCheckoutAmount } from "../../../../shared/demo-order.ts";
 
 // This module wires the SHIPPED OpenReceive routes into the demo instead of hand-writing them.
 // It shows the whole re-architecture in one place: mount the router, keep the app's own auth via
-// the `authorize` hook, keep prices honest via `resolveOrder`, and gate reads with per-order
+// the `authorize` hook, keep prices honest via `getCheckoutAmount`, and gate reads with per-order
 // capability tokens. The demo's own `/prepare_order` still owns cart -> amount (that is the
 // amount-authority example); these routes are the production-grade surface a real app would use.
 
@@ -74,10 +74,10 @@ function demoUserFromRequest(request: unknown): HelloFruitDemoUser | undefined {
  * Required amount-authority hook. `/prepare_order` persisted the order under `demo_order:${orderId}`;
  * this looks it up and returns payment terms (or null → 404). The create body has no client price.
  */
-export function createHelloFruitResolveOrder(
+export function createHelloFruitGetCheckoutAmount(
   openreceive: OpenReceiveService,
-): ResolveOrder {
-  return ({ orderId }) => resolveHelloFruitOrder(openreceive, orderId);
+): GetCheckoutAmount {
+  return ({ orderId }) => getHelloFruitCheckoutAmount(openreceive, orderId);
 }
 
 /** Mount the shipped OpenReceive routes at /openreceive with the demo's chosen auth + pricing. */
@@ -98,7 +98,7 @@ export function mountHelloFruitOpenReceiveRouter(
     openReceiveExpress({
       service: openreceive,
       authorize,
-      resolveOrder: createHelloFruitResolveOrder(openreceive),
+      getCheckoutAmount: createHelloFruitGetCheckoutAmount(openreceive),
       tokens,
     }),
   );

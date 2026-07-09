@@ -4,7 +4,7 @@ Start here when you are integrating OpenReceive into an app.
 
 1. [What Is OpenReceive](what-is.md) - product boundary and runtime model.
 2. [Node Framework Quickstart](quickstart-node.md) - working backend and checkout path.
-3. [Shipped Routes](routes.md) - route contract, tiers, `resolveOrder`, capability tokens.
+3. [Shipped Routes](routes.md) - route contract, tiers, `getCheckoutAmount`, capability tokens.
 4. [Checkout Retries](checkout-retries.md) - expired invoices, order ids, and amount changes.
 5. [Settlement Sweeps](settlement-sweeps.md) - how reconciliation runs and how to drive it on low-traffic sites.
 6. [Frontend Checkout](frontend-checkout.md) - browser helpers, React, and web components.

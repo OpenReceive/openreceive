@@ -3,7 +3,7 @@
 Prefer mounting OpenReceive's shipped routes (see [Shipped Routes](routes.md) and the
 [Node](quickstart-node.md) / [Rails](quickstart-rails.md) quickstarts). With that path,
 OpenReceive owns create/status/swap HTTP; your app keeps auth via `authorize` and pricing
-via the required `resolveOrder` hook. You never hand-write payment endpoints.
+via the required `getCheckoutAmount` hook. You never hand-write payment endpoints.
 
 This page covers the **advanced** path: calling `createOpenReceive()` service methods from
 your own controllers (for example when you create a checkout server-side and pass the
@@ -104,7 +104,7 @@ checkoutRoutes.post("/order", async (req, res, next) => {
 ```
 
 Mount `checkoutRoutes` wherever your app already mounts checkout controllers. For the
-recommended mounted-router path, use `openReceiveExpress({ service, resolveOrder, authorize })`
+recommended mounted-router path, use `openReceiveExpress({ service, getCheckoutAmount, authorize })`
 instead — see [Shipped Routes](routes.md).
 
 ## Next.js (direct service methods)
@@ -142,7 +142,7 @@ export async function POST(request: Request) {
 }
 ```
 
-For App Router mounts of the shipped routes, use `openReceiveNextHandlers({ service, resolveOrder })`
+For App Router mounts of the shipped routes, use `openReceiveNextHandlers({ service, getCheckoutAmount })`
 under `app/openreceive/[...openreceive]/route.ts`.
 
 ## Controllers

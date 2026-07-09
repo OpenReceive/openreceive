@@ -51,7 +51,7 @@ below.
 - `requestCheckout(options)` posts to a checkout-creation URL. Against the
   **mounted** OpenReceive create route, pass `{ prefix, orderId }` (and optional
   `memo` / `metadata`) — the body is `{ order_id }` only; the server's
-  `resolveOrder` sets the price. Trusted service/library calls use
+  `getCheckoutAmount` sets the price. Trusted service/library calls use
   `{ amount: { currency, value } }` or `{ amount: { sats } }`. Top-level
   `usd`/`sats` shortcuts are gone. Those shapes are for posting to **your own**
   create URL that then calls `getOrCreateCheckout` with a trusted server-side

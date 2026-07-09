@@ -11,6 +11,8 @@ export type {
   Checkout,
   CheckoutAmountSource,
   OrderStatus,
+  GetCheckoutAmount,
+  GetCheckoutAmountContext,
   GetOrderAmount,
   GetOrderAmountContext,
   ResolveOrder,

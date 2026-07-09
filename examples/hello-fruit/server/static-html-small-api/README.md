@@ -2,7 +2,7 @@
 
 This v0.1 demo keeps the checkout page static and mounts OpenReceive's shipped
 routes for the shared Hello Fruit sticker product. `/prepare_order` persists the
-authoritative order; `resolveOrder` prices checkout create; the static client
+authoritative order; `getCheckoutAmount` prices checkout create; the static client
 renders `<openreceive-checkout order-id>` (no client price on the wire).
 
 The browser never receives `OPENRECEIVE_NWC`.

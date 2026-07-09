@@ -34,8 +34,8 @@ async function makeService(overrides = {}) {
   });
 }
 
-// Default pricing for tests: 200 sats unless a test supplies its own resolveOrder.
-const defaultResolveOrder = () => ({ amount: { sats: 200 } });
+// Default pricing for tests: 200 sats unless a test supplies its own getCheckoutAmount.
+const defaultGetCheckoutAmount = () => ({ amount: { sats: 200 } });
 
 // Handlers warn when authorize is omitted; silence that noise here.
 function createHandlerSilently(options) {
@@ -43,7 +43,7 @@ function createHandlerSilently(options) {
   console.warn = () => {};
   try {
     return createOpenReceiveHttpHandler({
-      resolveOrder: defaultResolveOrder,
+      getCheckoutAmount: defaultGetCheckoutAmount,
       ...options,
     });
   } finally {
@@ -189,11 +189,11 @@ test("a custom authorize policy governs order.read (deny -> 403, allow -> 200)",
   assert.equal((await allowed.json()).order_id, "order-custom-allow");
 });
 
-test("resolveOrder is the sole price authority; client amount fields are rejected", async () => {
+test("getCheckoutAmount is the sole price authority; client amount fields are rejected", async () => {
   const service = await makeService();
   const handler = createHandlerSilently({
     service,
-    resolveOrder: () => ({ amount: { currency: "USD", value: "1.00" } }),
+    getCheckoutAmount: () => ({ amount: { currency: "USD", value: "1.00" } }),
   });
 
   const rejected = await handler(
@@ -217,10 +217,10 @@ test("resolveOrder is the sole price authority; client amount fields are rejecte
   assert.equal(checkout.fiat.value, "1.00");
 });
 
-test("resolveOrder null returns 404 and throw returns 400", async () => {
+test("getCheckoutAmount null returns 404 and throw returns 400", async () => {
   const missing = createHandlerSilently({
     service: await makeService(),
-    resolveOrder: () => null,
+    getCheckoutAmount: () => null,
   });
   const notFound = await missing(
     jsonRequest("POST", "/openreceive/checkouts", { body: { order_id: "missing" } }),
@@ -230,7 +230,7 @@ test("resolveOrder null returns 404 and throw returns 400", async () => {
 
   const invalid = createHandlerSilently({
     service: await makeService(),
-    resolveOrder: () => {
+    getCheckoutAmount: () => {
       throw new Error("bad tip");
     },
   });
@@ -296,11 +296,11 @@ test("swap-options and order swap actions expose the disabled-swap shape", async
   assert.equal((await denied.json()).code, "UNAUTHORIZED");
 });
 
-test("the handler requires resolveOrder and warns only about missing authorize", async () => {
+test("the handler requires getCheckoutAmount and warns only about missing authorize", async () => {
   const service = await makeService();
   assert.throws(
     () => createOpenReceiveHttpHandler({ service }),
-    /resolveOrder/,
+    /getCheckoutAmount/,
   );
 
   const warnings = [];
@@ -308,7 +308,7 @@ test("the handler requires resolveOrder and warns only about missing authorize",
   console.warn = (message) => warnings.push(message);
   let handler;
   try {
-    handler = createOpenReceiveHttpHandler({ service, resolveOrder: defaultResolveOrder });
+    handler = createOpenReceiveHttpHandler({ service, getCheckoutAmount: defaultGetCheckoutAmount });
   } finally {
     console.warn = original;
   }

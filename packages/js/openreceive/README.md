@@ -13,19 +13,26 @@ npm install openreceive @openreceive/express express react react-dom
 import { createOpenReceive, openReceiveExpress } from "openreceive/express";
 import { Checkout } from "openreceive/react";
 
-const service = await createOpenReceive({ onPaid: fulfill });
-app.use(openReceiveExpress({
-  service,
-  resolveOrder: async ({ orderId }) => {
-    const order = await loadOrder(orderId);
-    return order ? { usd: order.total_usd } : null;
-  },
-}));
+// 1. Price the order (create-checkout only — never trusts a client price)
+const getCheckoutAmount = async ({ orderId }) => {
+  const order = await loadOrder(orderId);
+  if (!order) return null; // → 404
+  return { amount: { currency: "USD", value: order.total_usd } };
+};
+
+// 2. Handle payment (settlement → your fulfillment)
+const onPaid = async ({ orderId, checkoutId, metadata }) => {
+  await fulfill({ orderId, checkoutId, metadata });
+};
+
+// 3. Mount
+const service = await createOpenReceive({ onPaid });
+app.use(openReceiveExpress({ service, getCheckoutAmount }));
 
 // <Checkout orderId={order.id} />
 ```
 
-`resolveOrder` is **required**. The create-checkout HTTP body never carries a
+`getCheckoutAmount` is **required**. The create-checkout HTTP body never carries a
 client price. See `docs/guides/quickstart-node.md` and `docs/guides/routes.md`.
 
 ## Subpath exports

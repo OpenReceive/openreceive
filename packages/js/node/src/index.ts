@@ -160,10 +160,12 @@ export type {
 } from "./tokens.ts";
 export type {
   CheckoutAmountSource,
+  GetCheckoutAmount,
+  GetCheckoutAmountContext,
   GetOrderAmount,
   GetOrderAmountContext,
   ResolveOrder,
   ResolveOrderContext,
-} from "./resolve-order.ts";
+} from "./get-checkout-amount.ts";
 export { startSweeper } from "./start-sweeper.ts";
 export type { StartSweeperOptions, SweeperHandle } from "./start-sweeper.ts";

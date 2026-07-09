@@ -20,7 +20,7 @@ import {
 import {
   HelloFruitDemoOrderError,
   prepareHelloFruitOrder,
-  resolveHelloFruitOrder,
+  getHelloFruitCheckoutAmount,
 } from "../../../../shared/demo-order.ts";
 import { mountHelloFruitHostedDemoRoutes } from "../../../../shared/hosted-demo-routes.ts";
 import {
@@ -88,13 +88,13 @@ export async function createHelloFruitStaticServer(options: HelloFruitOpenReceiv
   const { openreceive } = await createHelloFruitOpenReceive(options);
 
   // Mount the SHIPPED OpenReceive routes at /openreceive (POST /checkouts, POST /orders/:id, ...).
-  // guestCheckout() gates reads on the per-order capability token; resolveOrder is required and
+  // guestCheckout() gates reads on the per-order capability token; getCheckoutAmount is required and
   // looks the persisted order up by id (null → 404). The create body never carries a client price.
   app.use(
     openReceiveExpress({
       service: openreceive,
       authorize: guestCheckout(),
-      resolveOrder: ({ orderId }) => resolveHelloFruitOrder(openreceive, orderId),
+      getCheckoutAmount: ({ orderId }) => getHelloFruitCheckoutAmount(openreceive, orderId),
     }),
   );
 

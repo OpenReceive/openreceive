@@ -589,7 +589,7 @@ function normalizeRequestCheckoutOptions(
   const metadata = optionalRecord(record.metadata);
   const amount = normalizeRequestCheckoutAmount(record);
   // Mounted-router creates (`prefix` without an explicit `checkoutUrl`) never send a client
-  // amount — resolveOrder is the sole price authority and the body is `{ order_id }` only.
+  // amount — getCheckoutAmount is the sole price authority and the body is `{ order_id }` only.
   // Custom `checkoutUrl` posts may include the flat amount shape for app-owned create routes.
   const usesMountedRouter =
     options.checkoutUrl === undefined && optionalString(options.prefix) !== undefined;
@@ -643,7 +643,7 @@ function normalizeRequestCheckoutAmount(
   }
 
   // No amount is valid for a prefix create against the mounted router: the server's
-  // resolveOrder sets the authoritative price and the client POSTs { order_id }.
+  // getCheckoutAmount sets the authoritative price and the client POSTs { order_id }.
   if (options.amount === undefined) {
     return undefined;
   }

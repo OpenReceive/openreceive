@@ -37,24 +37,27 @@ The v0.1 reference path is contract-first and server-owned:
 
 Instead of hand-writing controllers, mount OpenReceive's routes and keep 100% of
 authentication in your app. OpenReceive never inspects your session — it calls
-your `authorize` and `resolveOrder` hooks and obeys them.
+your `authorize` and `getCheckoutAmount` hooks and obeys them.
 
 ```ts
 import express from "express";
 import { createOpenReceive, openReceiveExpress } from "openreceive/express";
 
+// 1. Price the order (create-checkout only — never trusts a client price)
+const getCheckoutAmount = ({ orderId }) => ({
+  amount: { currency: "USD", value: priceForOrder(orderId) },
+});
+
+// 2. Mount (add onPaid on createOpenReceive when you need fulfillment)
 const service = await createOpenReceive();
 const app = express();
 app.use(express.json());
 app.use(openReceiveExpress({
   service,
+  getCheckoutAmount,
   // Tier 2 reads require the per-order capability token; Tier 3 (sweep) fails closed.
   authorize: ({ action, token, resource }) =>
     action === "checkout.create" || validToken(token, resource.order_id),
-  // Required: the create route never trusts a client price.
-  resolveOrder: ({ orderId }) => ({
-    amount: { currency: "USD", value: priceForOrder(orderId) },
-  }),
 }));
 ```
 

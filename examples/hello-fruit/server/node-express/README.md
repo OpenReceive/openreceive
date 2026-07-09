@@ -1,6 +1,6 @@
 # Hello Fruit: Express + React/Vue/Svelte/Angular
 
-This v0.1 demo mounts OpenReceive's shipped routes (`resolveOrder` prices from
+This v0.1 demo mounts OpenReceive's shipped routes (`getCheckoutAmount` prices from
 the order your `/prepare_order` persisted) and renders React, Vue, Svelte, and
 Angular checkout tabs for the shared Hello Fruit sticker product.
 

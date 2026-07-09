@@ -37,7 +37,7 @@ async function makeService() {
 }
 
 // Default pricing for adapter parity (golden vectors do not exercise create pricing).
-const defaultResolveOrder = () => ({ amount: { sats: 200 } });
+const defaultGetCheckoutAmount = () => ({ amount: { sats: 200 } });
 
 // The golden vectors were authored against the DEFAULT authorize policy (no authorize hook), which
 // warns on construction. Silence that noise here.
@@ -69,7 +69,7 @@ test("Express adapter serves the HTTP golden vectors identically", async () => {
   const app = express();
   app.use(express.json());
   withSilencedWarnings(() => {
-    app.use(openReceiveExpress({ service, resolveOrder: defaultResolveOrder }));
+    app.use(openReceiveExpress({ service, getCheckoutAmount: defaultGetCheckoutAmount }));
   });
 
   const server = http.createServer(app);
@@ -98,7 +98,7 @@ test("Express adapter serves the HTTP golden vectors identically", async () => {
 test("Next.js adapter serves the HTTP golden vectors identically", async () => {
   const service = await makeService();
   const { GET, POST } = withSilencedWarnings(() =>
-    openReceiveNextHandlers({ service, resolveOrder: defaultResolveOrder }),
+    openReceiveNextHandlers({ service, getCheckoutAmount: defaultGetCheckoutAmount }),
   );
 
   try {
