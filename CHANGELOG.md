@@ -2,6 +2,18 @@
 
 ## 0.1.1 - Unreleased
 
+### Global FixedFloat rates cache
+
+- Display quotes and catalog min/max now come from FixedFloat's public XML rates
+  export (`/rates/fixed.xml`), cached in `openreceive_meta` under
+  `swap_rates:<provider>:fixed` via the same durable single-flight pattern as the
+  fiat price feed and `/ccies` catalog. Default refresh is 15s (stale OK to 60s
+  on refresh failure). Concurrent checkouts share one blob — no per-user
+  authenticated `/price`. The XML export is public (no weight budget), so a
+  short TTL is safe.
+- `/create` remains the binding rate. Removed the old per-asset `/price` probe
+  cache (`swap_pair_limits:*`).
+
 ### Swap FixedFloat stress hardening
 
 - Monotonic refund poll merge: `refund_pending` cannot demote to `refund_required`

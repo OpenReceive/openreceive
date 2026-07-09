@@ -284,11 +284,15 @@ test("createOpenReceive loads ordered FixedFloat-compatible swaps from YAML conf
     const fetchCalls = [];
     await withGlobalFetch(
       async (url, options) => {
+        const href = String(url);
         fetchCalls.push({
-          url: String(url),
-          body: JSON.parse(String(options.body)),
+          url: href,
+          body:
+            options?.body === undefined || options.body === null || options.body === ""
+              ? undefined
+              : JSON.parse(String(options.body)),
         });
-        if (String(url).endsWith("/api/v2/ccies")) {
+        if (href.endsWith("/api/v2/ccies")) {
           return jsonResponse({
             code: 0,
             data: [
@@ -303,17 +307,21 @@ test("createOpenReceive loads ordered FixedFloat-compatible swaps from YAML conf
             ],
           });
         }
-        if (String(url) === "https://otherfloat.example/api/v2/price") {
-          return jsonResponse({
-            code: 0,
-            data: {
-              from: {
-                amount: "1.04",
-                min: "1",
-                max: "5000",
-              },
-            },
-          });
+        if (href.endsWith("/rates/fixed.xml")) {
+          // Reference rate: 1.04 USDT pays for 0.000002 BTC (200 sats) — matches the
+          // checkout amount so the indicative quote equals the old /price fixture.
+          return xmlResponse(`<?xml version="1.0"?>
+<rates>
+  <item>
+    <from>USDTTRC</from>
+    <to>BTCLN</to>
+    <in>1.04</in>
+    <out>0.000002</out>
+    <amount>1</amount>
+    <minamount>1</minamount>
+    <maxamount>5000</maxamount>
+  </item>
+</rates>`);
         }
         throw new Error(`unexpected fetch ${url}`);
       },
@@ -346,15 +354,15 @@ test("createOpenReceive loads ordered FixedFloat-compatible swaps from YAML conf
         assert.equal(quote.provider, "otherfloat");
         assert.equal(quote.available, true);
         assert.equal(quote.payAmount, "1.04");
-        // swapOptions probes /price once to cache the pair limits (14-day cache), and
-        // the interactive swapQuote issues a second /price for the live rate.
+        // Catalog warms /ccies + global XML rates per provider. Quote reuses the
+        // cached rates blob — no authenticated /price calls for display quotes.
         assert.deepEqual(
           fetchCalls.map((call) => call.url),
           [
             "https://otherfloat.example/api/v2/ccies",
+            "https://otherfloat.example/rates/fixed.xml",
             "https://fixedfloat.example/api/v2/ccies",
-            "https://otherfloat.example/api/v2/price",
-            "https://otherfloat.example/api/v2/price",
+            "https://fixedfloat.example/rates/fixed.xml",
           ],
         );
       },
@@ -502,7 +510,7 @@ test("FixedFloat rejects invoice expiry configs shorter than its payout window",
   );
 });
 
-test("FixedFloat quote treats data.errors as unavailable with provider limits", async () => {
+test("FixedFloat quote treats XML min below invoice as unavailable with provider limits", async () => {
   const provider = fixedFloatProvider({
     key: "fixed-float-key",
     secret: "fixed-float-secret",
@@ -517,17 +525,20 @@ test("FixedFloat quote treats data.errors as unavailable with provider limits", 
           ],
         });
       }
-      if (String(url) === "https://fixedfloat.example/api/v2/price") {
-        return jsonResponse({
-          code: 0,
-          data: {
-            errors: [{ code: "LIMIT_MIN", msg: "minimum amount" }],
-            from: {
-              min: "10",
-              max: "5000",
-            },
-          },
-        });
+      if (String(url) === "https://fixedfloat.example/rates/fixed.xml") {
+        // 10 USDT min at 315 USDT per 0.005 BTC → ~15_874 sats floor; 200-sat invoice is below.
+        return xmlResponse(`<?xml version="1.0"?>
+<rates>
+  <item>
+    <from>USDTTRC</from>
+    <to>BTCLN</to>
+    <in>315</in>
+    <out>0.005</out>
+    <amount>1000</amount>
+    <minamount>10</minamount>
+    <maxamount>5000</maxamount>
+  </item>
+</rates>`);
       }
       throw new Error(`unexpected fetch ${url}`);
     },
@@ -545,10 +556,8 @@ test("FixedFloat quote treats data.errors as unavailable with provider limits", 
 });
 
 test("FixedFloat quote folds the pay-in floor into the invoice-side minimum", async () => {
-  // data.to (BTC Lightning) reports a ~1609 sat floor for every pair, but this pair's
-  // real floor is the pay-in side: 10 USDT at the quoted rate (~315 USDT per 0.005 BTC)
-  // is ~15,873 sats, well above the Lightning floor. The reported invoice-side minimum
-  // must reflect the binding pay-in floor so the catalog greys sub-minimum invoices.
+  // XML minamount is 10 USDT; at 315 USDT per 0.005 BTC that is ~15,873 sats.
+  // The reported invoice-side minimum must reflect the binding pay-in floor.
   const provider = fixedFloatProvider({
     key: "fixed-float-key",
     secret: "fixed-float-secret",
@@ -563,15 +572,19 @@ test("FixedFloat quote folds the pay-in floor into the invoice-side minimum", as
           ],
         });
       }
-      if (String(url) === "https://fixedfloat.example/api/v2/price") {
-        return jsonResponse({
-          code: 0,
-          data: {
-            errors: [],
-            from: { amount: "315", min: "10", max: "11340" },
-            to: { amount: "0.005", min: "0.00001609", max: "0.1799895" },
-          },
-        });
+      if (String(url) === "https://fixedfloat.example/rates/fixed.xml") {
+        return xmlResponse(`<?xml version="1.0"?>
+<rates>
+  <item>
+    <from>USDTTRC</from>
+    <to>BTCLN</to>
+    <in>315</in>
+    <out>0.005</out>
+    <amount>1000</amount>
+    <minamount>10</minamount>
+    <maxamount>11340</maxamount>
+  </item>
+</rates>`);
       }
       throw new Error(`unexpected fetch ${url}`);
     },
@@ -584,11 +597,12 @@ test("FixedFloat quote folds the pay-in floor into the invoice-side minimum", as
 
   assert.equal(quote.available, true);
   assert.equal(quote.minimum_pay_amount, "10");
-  // ceil(10 / (315 / 500000)) = ceil(15873.01) = 15874 sats -> 15,874,000 msats,
-  // taken over the ~1,609,000 msat Lightning floor.
+  // ceil(10 / (315 / 500000)) = ceil(15873.01) = 15874 sats -> 15,874,000 msats
   assert.equal(quote.minimum_invoice_amount_msats, 15_874_000);
-  // maximum stays the tighter of the two sides (to.max here).
-  assert.equal(quote.maximum_invoice_amount_msats, 17_998_950_000);
+  // floor(11340 / (315 / 500000)) = floor(18,000,000) sats
+  assert.equal(quote.maximum_invoice_amount_msats, 18_000_000_000);
+  // 0.005 BTC invoice at this rate → 315 USDT
+  assert.equal(quote.pay_amount, "315");
 });
 
 test("FixedFloat create rejects payout amount mismatches before returning a deposit", async () => {
@@ -992,18 +1006,14 @@ test("swapOptions catalogs assets and swapQuote quotes one selected asset", asyn
   const usdt = options.options.find((option) => option.payInAsset === "USDT_TRON");
   assert.equal(usdt.available, true);
   assert.equal(usdt.unavailableReason, undefined);
-  // The catalog listing gates on cached per-pair limits and does not quote for display,
-  // so it carries the catalog's min/max pay amounts but no live pay_amount.
+  // The catalog listing gates on provider catalog min/max (from the global rates
+  // cache for FixedFloat) and does not quote for display.
   assert.equal(usdt.payAmount, undefined);
   assert.equal(usdt.minimumPayAmount, "1");
   assert.equal(swapProvider.catalogCalls, 1);
-  // Each supported asset (USDT_TRON, SOL_SOL, ETH_ETH) is probed once to populate its
-  // 14-day per-pair limits cache.
-  assert.equal(swapProvider.quoteInputs.length, 3);
-  assert.deepEqual(
-    swapProvider.quoteInputs.map((input) => input.payInAsset).sort(),
-    ["ETH_ETH", "SOL_SOL", "USDT_TRON"],
-  );
+  // Fake providers that embed limits in payInAssetCatalog need no quote probes.
+  assert.equal(swapProvider.quoteInputs.length, 0);
+
   const resolvedLog = logs.find((entry) => entry.event === "swap.options.resolved");
   assert.notEqual(resolvedLog, undefined);
   assert.equal(resolvedLog.level, "debug");
@@ -1018,18 +1028,19 @@ test("swapOptions catalogs assets and swapQuote quotes one selected asset", asyn
     options.options.map((option) => option.payInAsset).sort(),
   );
 
-  // A second listing serves limits from the durable cache — no new probes.
+  // A second listing reuses the catalog — still no quotes.
   await openreceive.swapOptions({ orderId: "order-swap-region" });
-  assert.equal(swapProvider.quoteInputs.length, 3);
+  assert.equal(swapProvider.quoteInputs.length, 0);
+  assert.equal(swapProvider.catalogCalls, 2);
 
-  // Selecting an asset issues a fresh interactive quote at the real invoice amount.
+  // Selecting an asset issues an interactive quote at the real invoice amount.
   const quote = await openreceive.swapQuote({
     orderId: "order-swap-region",
     payInAsset: "USDT_TRON",
   });
   assert.equal(quote.payAmount, "1.05");
-  assert.equal(swapProvider.quoteInputs.length, 4);
-  assert.deepEqual(swapProvider.quoteInputs[3], {
+  assert.equal(swapProvider.quoteInputs.length, 1);
+  assert.deepEqual(swapProvider.quoteInputs[0], {
     payInAsset: "USDT_TRON",
     invoiceAmountMsats: 200000,
   });
@@ -1040,7 +1051,7 @@ test("swapOptions catalogs assets and swapQuote quotes one selected asset", asyn
     payInAsset: "USDT_TRON",
   });
   assert.equal(cachedQuote.payAmount, "1.05");
-  assert.equal(swapProvider.quoteInputs.length, 4);
+  assert.equal(swapProvider.quoteInputs.length, 1);
 
   const invoice = await openreceive.startSwap({
     orderId: "order-swap-region",
@@ -1796,6 +1807,14 @@ function jsonResponse(body, status = 200) {
     ok: status >= 200 && status < 300,
     status,
     text: async () => JSON.stringify(body),
+  };
+}
+
+function xmlResponse(body, status = 200) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    text: async () => body,
   };
 }
 

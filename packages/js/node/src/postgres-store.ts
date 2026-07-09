@@ -101,28 +101,8 @@ export function createOpenReceivePostgresKvStore(
 export function createOpenReceivePostgresKvStoreFromPool(
   options: OpenReceivePostgresKvStoreFromPoolOptions
 ): OpenReceivePostgresKvStore {
-  const store = createOpenReceivePostgresKvStore({
+  return createOpenReceivePostgresKvStore({
     client: options.pool,
-    ...(options.tableName === undefined ? {} : { tableName: options.tableName }),
-    ...(options.metaTableName === undefined ? {} : { metaTableName: options.metaTableName }),
-    ...(options.namespace === undefined ? {} : { namespace: options.namespace })
-  });
-  const ready = store.ensureSchema()
-    .then(() => {
-      options.onReady?.(OPENRECEIVE_DATABASE_SCHEMA_VERSION);
-    });
-
-  void ready.catch((error) => {
-    options.onMigrationError?.(error);
-  });
-
-  return new OpenReceivePostgresKvStore({
-    client: {
-      async query(sql, values) {
-        await ready;
-        return await options.pool.query(sql, values);
-      }
-    },
     ...(options.tableName === undefined ? {} : { tableName: options.tableName }),
     ...(options.metaTableName === undefined ? {} : { metaTableName: options.metaTableName }),
     ...(options.namespace === undefined ? {} : { namespace: options.namespace })
@@ -151,6 +131,21 @@ export class OpenReceivePostgresKvStore implements OpenReceiveInvoiceKvStore {
     await this.#claimMeta("owner", "openreceive");
     await this.#claimMeta("schema_version", OPENRECEIVE_DATABASE_SCHEMA_VERSION);
     await this.#claimMeta("namespace", this.#namespace);
+  }
+
+  async assertSchemaReady(): Promise<void> {
+    try {
+      await this.#client.query(`SELECT 1 FROM ${this.#tableName} LIMIT 1`);
+      await this.#assertMeta("owner", "openreceive");
+      await this.#assertMeta("schema_version", OPENRECEIVE_DATABASE_SCHEMA_VERSION);
+      await this.#assertMeta("namespace", this.#namespace);
+    } catch (error) {
+      if (error instanceof OpenReceivePostgresStoreSchemaError) throw error;
+      throw new OpenReceivePostgresStoreSchemaError(
+        "OpenReceive Postgres store schema is not ready.",
+        { cause: error }
+      );
+    }
   }
 
   async putIfAbsent(record: StoredRecord): Promise<OpenReceivePutIfAbsentResult> {
@@ -445,6 +440,29 @@ export class OpenReceivePostgresKvStore implements OpenReceiveInvoiceKvStore {
     if (existing.value !== value) throw metaMismatchError(key);
   }
 
+  async #assertMeta(key: string, value: string): Promise<void> {
+    const existing = await this.getMeta(key);
+    if (existing === undefined) {
+      throw new OpenReceivePostgresStoreSchemaError(
+        `OpenReceive Postgres store schema is missing metadata key ${key}.`
+      );
+    }
+    if (key === "schema_version") {
+      if (existing.value > OPENRECEIVE_DATABASE_SCHEMA_VERSION) {
+        throw new OpenReceivePostgresStoreSchemaError(
+          "OpenReceive store schema is newer than this package."
+        );
+      }
+      if (existing.value !== OPENRECEIVE_DATABASE_SCHEMA_VERSION) {
+        throw new OpenReceivePostgresStoreSchemaError(
+          "OpenReceive store schema is older than this package."
+        );
+      }
+      return;
+    }
+    if (existing.value !== value) throw metaMismatchError(key);
+  }
+
   #migrationSql(): string {
     return `
 CREATE TABLE IF NOT EXISTS ${this.#tableName} (
@@ -482,9 +500,18 @@ export const createOpenReceivePostgresInvoiceStore = createOpenReceivePostgresKv
 export const createOpenReceivePostgresInvoiceStoreFromPool = createOpenReceivePostgresKvStoreFromPool;
 export const OpenReceivePostgresInvoiceStore = OpenReceivePostgresKvStore;
 
+export class OpenReceivePostgresStoreSchemaError extends Error {
+  override readonly cause?: unknown;
+
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message);
+    this.name = "OpenReceivePostgresStoreSchemaError";
+    this.cause = options?.cause;
+  }
+}
+
 function metaMismatchError(key: string): Error {
   return new Error(
     `OpenReceive store metadata ${key} does not belong to this OpenReceive namespace.`
   );
 }
-

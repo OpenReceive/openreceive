@@ -8,6 +8,15 @@ import {
   openReceiveSwapNetworkMatches,
 } from "./assets.ts";
 import {
+  deserializeFixedFloatRatesIndex,
+  fetchFixedFloatRatesIndex,
+  fixedFloatRatesPairKey,
+  invoiceLimitsFromFixedFloatRate,
+  quotePayAmountFromFixedFloatRate,
+  serializeFixedFloatRatesIndex,
+  type FixedFloatRatesIndex,
+} from "./fixedfloat-rates.ts";
+import {
   type StoreBackedSwapCache,
   SWAP_LIMITS_MAX_STALE_SECONDS,
   swapLimitsMetaKey,
@@ -24,6 +33,11 @@ import type {
   SwapProviderApiRequestLog,
   SwapProviderApiResponseLog,
 } from "./provider.ts";
+import {
+  SWAP_RATES_MAX_STALE_SECONDS,
+  SWAP_RATES_REFRESH_SECONDS,
+  swapRatesMetaKey,
+} from "./rates-cache.ts";
 import { isSwapProviderWeightBudgetError } from "./weight-budget.ts";
 
 export interface FixedFloatProviderOptions {
@@ -33,7 +47,13 @@ export interface FixedFloatProviderOptions {
   readonly lightningCcy?: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly now?: () => number;
+  /** TTL for the durable `/ccies` currency catalog cache. */
   readonly cacheSeconds?: number;
+  /**
+   * TTL for the durable public XML rates cache (`/rates/fixed.xml`). Defaults to
+   * {@link SWAP_RATES_REFRESH_SECONDS}. Shared globally via openreceive_meta.
+   */
+  readonly ratesCacheSeconds?: number;
   readonly requestTimeoutMs?: number;
   readonly invoiceExpirySeconds?: number;
   readonly depositWindowSeconds?: number;
@@ -63,11 +83,6 @@ interface FixedFloatEnvelope {
   readonly code?: unknown;
   readonly msg?: unknown;
   readonly data?: unknown;
-}
-
-interface FixedFloatDataError {
-  readonly code: string;
-  readonly message?: string;
 }
 
 class FixedFloatApiError extends Error {
@@ -112,6 +127,7 @@ class FixedFloatApiError extends Error {
 
 const DEFAULT_FIXED_FLOAT_BASE_URL = "https://ff.io";
 const DEFAULT_CCIES_CACHE_SECONDS = 24 * 60 * 60;
+const DEFAULT_RATES_CACHE_SECONDS = SWAP_RATES_REFRESH_SECONDS;
 const DEFAULT_FIXED_FLOAT_REQUEST_TIMEOUT_MS = 10_000;
 const DEFAULT_FIXED_FLOAT_DEPOSIT_WINDOW_SECONDS = 10 * 60;
 const DEFAULT_FIXED_FLOAT_SETTLEMENT_SLA_SECONDS = 15 * 60;
@@ -144,6 +160,7 @@ class FixedFloatProvider implements SwapProvider {
   private readonly fetcher: typeof globalThis.fetch;
   private readonly now: () => number;
   private readonly cacheSeconds: number;
+  private readonly ratesCacheSeconds: number;
   private readonly requestTimeoutMs: number;
   private readonly invoiceExpirySecondsValue: number;
   private cache: StoreBackedSwapCache | undefined;
@@ -179,6 +196,10 @@ class FixedFloatProvider implements SwapProvider {
     this.fetcher = fetcher;
     this.now = options.now ?? (() => Math.floor(Date.now() / 1000));
     this.cacheSeconds = options.cacheSeconds ?? DEFAULT_CCIES_CACHE_SECONDS;
+    this.ratesCacheSeconds = options.ratesCacheSeconds ?? DEFAULT_RATES_CACHE_SECONDS;
+    if (!Number.isSafeInteger(this.ratesCacheSeconds) || this.ratesCacheSeconds <= 0) {
+      throw new TypeError("FixedFloat ratesCacheSeconds must be a positive safe integer.");
+    }
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_FIXED_FLOAT_REQUEST_TIMEOUT_MS;
     if (!Number.isSafeInteger(this.requestTimeoutMs) || this.requestTimeoutMs <= 0) {
       throw new TypeError("FixedFloat requestTimeoutMs must be a positive safe integer.");
@@ -248,12 +269,24 @@ class FixedFloatProvider implements SwapProvider {
   async payInAssetCatalog(): Promise<readonly SwapProviderAsset[]> {
     const resolution = await this.resolveCurrencies();
     // /ccies reports only availability and display metadata per currency — it carries
-    // no amount limits (data[].recv/.send are booleans, not min/max objects). Per-pair
-    // limits come from a /price quote and are cached by the service layer, so the
-    // catalog just enumerates which pay-in assets this provider supports.
-    return Array.from(resolution.pay_in.keys(), (payInAsset) => ({
-      pay_asset: payInAsset,
-    }));
+    // no amount limits. Per-pair min/max come from the public XML rates export, cached
+    // globally in openreceive_meta so the payment-method screen never hits /price.
+    const rates = await this.resolveRatesIndex();
+    return Array.from(resolution.pay_in.entries(), ([payInAsset, currency]) => {
+      const pair = rates.pairs[fixedFloatRatesPairKey(currency.code, resolution.lightning.code)];
+      if (pair === undefined) {
+        return {
+          pay_asset: payInAsset,
+          available: false,
+          unavailable_reason: "pair_temporarily_unavailable" as const,
+          unavailable_message: fixedFloatAvailabilityMessage("pair_temporarily_unavailable"),
+        };
+      }
+      return {
+        pay_asset: payInAsset,
+        ...invoiceLimitsFromFixedFloatRate(pair),
+      };
+    });
   }
 
   invoiceExpirySeconds(): number {
@@ -264,20 +297,46 @@ class FixedFloatProvider implements SwapProvider {
     readonly payInAsset: SwapPayInAsset;
     readonly invoiceAmountMsats: number;
   }): Promise<SwapQuote> {
+    // Indicative quote from the durable global XML rates cache. `/create` is still the
+    // binding rate — this keeps concurrent checkouts from each burning a /price weight
+    // unit (same pattern as the fiat price feed / NWC settlement sweep gate).
     const resolution = await this.resolveCurrencies();
     const fromCcy = requiredCurrency(resolution, input.payInAsset);
     try {
-      const data = await this.post("price", {
-        type: "fixed",
-        fromCcy,
-        toCcy: resolution.lightning.code,
-        direction: "to",
-        amount: amountMsatsToBtcString(input.invoiceAmountMsats),
+      const rates = await this.resolveRatesIndex();
+      const pair = rates.pairs[fixedFloatRatesPairKey(fromCcy, resolution.lightning.code)];
+      if (pair === undefined) {
+        return {
+          pay_asset: input.payInAsset,
+          available: false,
+          unavailable_reason: "pair_temporarily_unavailable",
+          unavailable_message: fixedFloatAvailabilityMessage("pair_temporarily_unavailable"),
+          provider: this.name,
+        };
+      }
+      const limits = invoiceLimitsFromFixedFloatRate(pair);
+      const payAmount = quotePayAmountFromFixedFloatRate({
+        pair,
+        invoiceAmountMsats: input.invoiceAmountMsats,
       });
-      const limits = readFixedFloatQuoteLimits(data);
-      const dataErrors = readFixedFloatDataErrors(data);
-      if (dataErrors.length > 0) {
-        const reason = classifyFixedFloatDataErrors(dataErrors);
+      if (payAmount === undefined) {
+        return {
+          pay_asset: input.payInAsset,
+          available: false,
+          unavailable_reason: "pair_temporarily_unavailable",
+          unavailable_message: fixedFloatAvailabilityMessage("pair_temporarily_unavailable"),
+          provider: this.name,
+          ...limits,
+        };
+      }
+      const amountTooSmall =
+        limits.minimum_invoice_amount_msats !== undefined &&
+        input.invoiceAmountMsats < limits.minimum_invoice_amount_msats;
+      const amountTooLarge =
+        limits.maximum_invoice_amount_msats !== undefined &&
+        input.invoiceAmountMsats > limits.maximum_invoice_amount_msats;
+      if (amountTooSmall || amountTooLarge) {
+        const reason = amountTooSmall ? "amount_too_small" : "amount_too_large";
         return {
           pay_asset: input.payInAsset,
           available: false,
@@ -288,8 +347,7 @@ class FixedFloatProvider implements SwapProvider {
         };
       }
       return {
-        pay_amount:
-          readNestedString(data, ["from", "amount"]) ?? readStringField(asRecord(data), "amount"),
+        pay_amount: payAmount,
         pay_asset: input.payInAsset,
         available: true,
         provider: this.name,
@@ -480,6 +538,30 @@ class FixedFloatProvider implements SwapProvider {
     });
   }
 
+  private async resolveRatesIndex(): Promise<FixedFloatRatesIndex> {
+    const cache = this.cache;
+    if (cache === undefined) {
+      return await this.fetchRatesIndex();
+    }
+    return await cache.resolve(swapRatesMetaKey(this.name, "fixed"), {
+      refreshSeconds: this.ratesCacheSeconds,
+      maxStaleSeconds: Math.max(SWAP_RATES_MAX_STALE_SECONDS, this.ratesCacheSeconds),
+      fetch: () => this.fetchRatesIndex(),
+      serialize: serializeFixedFloatRatesIndex,
+      deserialize: deserializeFixedFloatRatesIndex,
+    });
+  }
+
+  private async fetchRatesIndex(): Promise<FixedFloatRatesIndex> {
+    return await fetchFixedFloatRatesIndex({
+      baseUrl: this.baseUrl,
+      rateType: "fixed",
+      fetch: this.fetcher,
+      now: this.now,
+      requestTimeoutMs: this.requestTimeoutMs,
+    });
+  }
+
   private async fetchCurrencyResolution(): Promise<FixedFloatCurrencyResolution> {
     const now = this.now();
     const data = await this.post("ccies", {});
@@ -610,14 +692,6 @@ function classifyFixedFloatQuoteError(error: unknown): SwapAvailabilityReason {
   return "pair_temporarily_unavailable";
 }
 
-function classifyFixedFloatDataErrors(
-  errors: readonly FixedFloatDataError[],
-): SwapAvailabilityReason {
-  if (errors.some((error) => error.code === "LIMIT_MIN")) return "amount_too_small";
-  if (errors.some((error) => error.code === "LIMIT_MAX")) return "amount_too_large";
-  return "pair_temporarily_unavailable";
-}
-
 function fixedFloatAvailabilityMessage(reason: SwapAvailabilityReason): string {
   if (reason === "amount_too_small") return "This invoice is below the provider minimum.";
   if (reason === "amount_too_large") return "This invoice is above the provider maximum.";
@@ -631,114 +705,6 @@ function formatFixedFloatApiErrorMessage(path: string, status: number, msg: unkn
   return fixedFloatMessage === undefined
     ? `FixedFloat ${path} failed with HTTP ${status}.`
     : `FixedFloat ${path} failed with HTTP ${status}: ${fixedFloatMessage}`;
-}
-
-function readFixedFloatQuoteLimits(data: unknown): {
-  readonly minimum_pay_amount?: string;
-  readonly maximum_pay_amount?: string;
-  readonly minimum_invoice_amount_msats?: number;
-  readonly maximum_invoice_amount_msats?: number;
-} {
-  const minimumPayAmount = readNestedString(data, ["from", "min"]);
-  const maximumPayAmount = readNestedString(data, ["from", "max"]);
-  // The payout (to) side is always BTC on Lightning, so data.to.min/max are that one
-  // currency's own network floor/ceiling — identical for every pair, and NOT the
-  // effective per-pair limit. The binding per-pair limit lives on the pay-in (from)
-  // side: e.g. Ethereum-network assets carry a ~$10 minimum from gas that dwarfs the
-  // ~$1 Lightning floor. Fold the from-side limits into the invoice-side window using
-  // this quote's own implied rate (from.amount pays for to.amount received), so the
-  // reported minimum_invoice_amount_msats is max(to.min, from.min) and the maximum is
-  // min(to.max, from.max) — whichever side actually binds. Present them in msats so the
-  // checkout can render a fiat figure. Not all /price responses include every field;
-  // any missing input simply drops out of the reconciliation.
-  const invoiceMinFromInvoiceSide = btcAmountStringToMsats(
-    readNestedString(data, ["to", "min"]) ?? "",
-  );
-  const invoiceMaxFromInvoiceSide = btcAmountStringToMsats(
-    readNestedString(data, ["to", "max"]) ?? "",
-  );
-  const payUnitsPerSat = readFixedFloatQuoteRate(data);
-  const invoiceMinFromPaySide = payAmountToInvoiceMsats(minimumPayAmount, payUnitsPerSat, "ceil");
-  const invoiceMaxFromPaySide = payAmountToInvoiceMsats(maximumPayAmount, payUnitsPerSat, "floor");
-  const minimumInvoiceAmountMsats = maxDefined(invoiceMinFromInvoiceSide, invoiceMinFromPaySide);
-  const maximumInvoiceAmountMsats = minDefined(invoiceMaxFromInvoiceSide, invoiceMaxFromPaySide);
-  return {
-    ...(minimumPayAmount === undefined ? {} : { minimum_pay_amount: minimumPayAmount }),
-    ...(maximumPayAmount === undefined ? {} : { maximum_pay_amount: maximumPayAmount }),
-    ...(minimumInvoiceAmountMsats === undefined
-      ? {}
-      : { minimum_invoice_amount_msats: minimumInvoiceAmountMsats }),
-    ...(maximumInvoiceAmountMsats === undefined
-      ? {}
-      : { maximum_invoice_amount_msats: maximumInvoiceAmountMsats }),
-  };
-}
-
-/**
- * The pay-in units this quote spends per invoice sat, derived from the quote's own
- * amounts (data.from.amount pays for data.to.amount received). Returns undefined when
- * either amount is missing or non-positive, so callers keep only the raw invoice-side
- * limits rather than inventing a rate.
- */
-function readFixedFloatQuoteRate(data: unknown): number | undefined {
-  const payAmount = Number(readNestedString(data, ["from", "amount"]));
-  const receiveSats = btcAmountStringToSats(readNestedString(data, ["to", "amount"]) ?? "");
-  if (!Number.isFinite(payAmount) || payAmount <= 0) return undefined;
-  if (receiveSats === undefined || receiveSats <= 0) return undefined;
-  return payAmount / receiveSats;
-}
-
-/**
- * Converts a pay-in-side amount (e.g. FixedFloat data.from.min) into the equivalent
- * invoice-side amount in msats at the given rate. Rounds the invoice-side minimum up
- * and the maximum down so a borderline invoice is never reported as inside a range the
- * provider would reject.
- */
-function payAmountToInvoiceMsats(
-  payAmount: string | undefined,
-  payUnitsPerSat: number | undefined,
-  rounding: "ceil" | "floor",
-): number | undefined {
-  if (payAmount === undefined || payUnitsPerSat === undefined) return undefined;
-  const value = Number(payAmount);
-  if (!Number.isFinite(value) || value <= 0) return undefined;
-  const invoiceSats = value / payUnitsPerSat;
-  if (!Number.isFinite(invoiceSats) || invoiceSats <= 0) return undefined;
-  const roundedSats = rounding === "ceil" ? Math.ceil(invoiceSats) : Math.floor(invoiceSats);
-  const msats = roundedSats * 1000;
-  return Number.isSafeInteger(msats) ? msats : undefined;
-}
-
-function maxDefined(left: number | undefined, right: number | undefined): number | undefined {
-  if (left === undefined) return right;
-  if (right === undefined) return left;
-  return Math.max(left, right);
-}
-
-function minDefined(left: number | undefined, right: number | undefined): number | undefined {
-  if (left === undefined) return right;
-  if (right === undefined) return left;
-  return Math.min(left, right);
-}
-
-function readFixedFloatDataErrors(data: unknown): FixedFloatDataError[] {
-  const errors = asRecord(data).errors;
-  if (!Array.isArray(errors)) return [];
-  return errors.flatMap((item): FixedFloatDataError[] => {
-    if (typeof item === "string" && item.trim().length > 0) {
-      return [{ code: item.trim().toUpperCase() }];
-    }
-    const record = asRecord(item);
-    const code = readStringField(record, "code") ?? readStringField(record, "type");
-    if (code === undefined) return [];
-    const message = readStringField(record, "msg") ?? readStringField(record, "message");
-    return [
-      {
-        code: code.toUpperCase(),
-        ...(message === undefined ? {} : { message }),
-      },
-    ];
-  });
 }
 
 function assertFixedFloatPayoutAmountMatchesInvoice(
@@ -762,13 +728,6 @@ function btcAmountStringToSats(value: string): number | undefined {
   if (fractionalPart.length > 8) return undefined;
   const sats = BigInt(wholePart) * 100_000_000n + BigInt(fractionalPart.padEnd(8, "0"));
   return sats <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(sats) : undefined;
-}
-
-function btcAmountStringToMsats(value: string): number | undefined {
-  const sats = btcAmountStringToSats(value);
-  if (sats === undefined) return undefined;
-  const msats = sats * 1000;
-  return Number.isSafeInteger(msats) ? msats : undefined;
 }
 
 function normalizeFixedFloatOrder(

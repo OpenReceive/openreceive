@@ -199,6 +199,7 @@ async function resolveStoreForCli(
   return await resolveOpenReceiveStore(uri, {
     cwd: input.cwd,
     namespace,
+    schemaMode: "auto",
     loadSqlite: input.loadSqlite,
     loadPostgres: input.loadPostgres
   });

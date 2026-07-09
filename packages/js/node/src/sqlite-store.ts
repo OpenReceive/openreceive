@@ -157,6 +157,21 @@ export class OpenReceiveSqliteKvStore implements OpenReceiveInvoiceKvStore {
     await this.#claimMeta("namespace", this.#namespace);
   }
 
+  async assertSchemaReady(): Promise<void> {
+    try {
+      await this.#client.execute(`SELECT 1 FROM ${this.#tableName} LIMIT 1`);
+      await this.#assertMeta("owner", "openreceive");
+      await this.#assertMeta("schema_version", OPENRECEIVE_DATABASE_SCHEMA_VERSION);
+      await this.#assertMeta("namespace", this.#namespace);
+    } catch (error) {
+      if (error instanceof OpenReceiveSqliteStoreSchemaError) throw error;
+      throw new OpenReceiveSqliteStoreSchemaError(
+        "OpenReceive SQLite store schema is not ready.",
+        { cause: error }
+      );
+    }
+  }
+
   async putIfAbsent(record: StoredRecord): Promise<OpenReceivePutIfAbsentResult> {
     validateStoredRecord(record);
     const result = await this.#client.execute(
@@ -444,6 +459,29 @@ export class OpenReceiveSqliteKvStore implements OpenReceiveInvoiceKvStore {
     if (existing.value !== value) throw metaMismatchError(key);
   }
 
+  async #assertMeta(key: string, value: string): Promise<void> {
+    const existing = await this.getMeta(key);
+    if (existing === undefined) {
+      throw new OpenReceiveSqliteStoreSchemaError(
+        `OpenReceive SQLite store schema is missing metadata key ${key}.`
+      );
+    }
+    if (key === "schema_version") {
+      if (existing.value > OPENRECEIVE_DATABASE_SCHEMA_VERSION) {
+        throw new OpenReceiveSqliteStoreSchemaError(
+          "OpenReceive store schema is newer than this package."
+        );
+      }
+      if (existing.value !== OPENRECEIVE_DATABASE_SCHEMA_VERSION) {
+        throw new OpenReceiveSqliteStoreSchemaError(
+          "OpenReceive store schema is older than this package."
+        );
+      }
+      return;
+    }
+    if (existing.value !== value) throw metaMismatchError(key);
+  }
+
   #migrationSql(): string {
     return `
 CREATE TABLE IF NOT EXISTS ${this.#tableName} (
@@ -480,6 +518,16 @@ CREATE TABLE IF NOT EXISTS ${this.#metaTableName} (
 export const createOpenReceiveSqliteInvoiceStore = createOpenReceiveSqliteKvStore;
 export const OpenReceiveSqliteInvoiceStore = OpenReceiveSqliteKvStore;
 
+export class OpenReceiveSqliteStoreSchemaError extends Error {
+  override readonly cause?: unknown;
+
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message);
+    this.name = "OpenReceiveSqliteStoreSchemaError";
+    this.cause = options?.cause;
+  }
+}
+
 function splitSqlStatements(sql: string): string[] {
   return sql
     .split(/;\s*(?:\n|$)/)
@@ -496,4 +544,3 @@ function metaMismatchError(key: string): Error {
     `OpenReceive store metadata ${key} does not belong to this OpenReceive namespace.`
   );
 }
-

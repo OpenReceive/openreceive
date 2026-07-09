@@ -107,6 +107,7 @@ export {
   createOpenReceivePostgresInvoiceStore,
   createOpenReceivePostgresInvoiceStoreFromPool,
   OpenReceivePostgresInvoiceStore,
+  OpenReceivePostgresStoreSchemaError,
 } from "./postgres-store.ts";
 export type {
   OpenReceivePostgresQueryResult,
@@ -127,6 +128,7 @@ export {
   OpenReceiveSqliteKvStore,
   createOpenReceiveSqliteInvoiceStore,
   OpenReceiveSqliteInvoiceStore,
+  OpenReceiveSqliteStoreSchemaError,
 } from "./sqlite-store.ts";
 export type {
   OpenReceiveSqliteQueryResult,
@@ -135,8 +137,9 @@ export type {
   OpenReceiveSqliteDatabase,
   OpenReceiveSqliteKvStoreOptions,
 } from "./sqlite-store.ts";
-export { resolveOpenReceiveStore } from "./store-uri.ts";
+export { applyStoreSchemaMode, defaultSchemaMode, resolveOpenReceiveStore } from "./store-uri.ts";
 export type {
+  OpenReceiveSchemaMode,
   ResolveOpenReceiveStoreOptions,
   OpenReceiveResolvedStore,
 } from "./store-uri.ts";

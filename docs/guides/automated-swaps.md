@@ -237,7 +237,7 @@ unrecognized `action` is rejected with a 400 rather than silently treated as sta
 | `action` (HTTP) | routes to | returns |
 | --- | --- | --- |
 | omitted / `"status"` | `getOrder` + `swapOptions` | `OrderStatus` (order + `swaps_enabled` + `swap_pay_options`) |
-| `"swap_quote"` | `swapQuote` | `{ quote }` — one live estimate |
+| `"swap_quote"` | `swapQuote` | `{ quote }` — indicative estimate from the durable global rates cache |
 | `"start_swap"` | `startSwap` | `{ attempt }` — the swap attempt |
 | `"refund_swap"` | `refundSwap` | `{ attempt }` |
 
@@ -382,5 +382,7 @@ const openreceive = await createOpenReceive({
 
 For a provider with a different API, implement `SwapProvider` directly; the
 interface owns cached asset catalog data, quote, create, status, refund, and supported asset
-behavior. A common pattern is "fake in dev, FixedFloat in prod" keyed on `NODE_ENV`, using
+behavior. FixedFloat-compatible providers attach a durable store cache for `/ccies` and the
+public XML rates export so catalog/quote traffic does not burn authenticated API weight.
+A common pattern is "fake in dev, FixedFloat in prod" keyed on `NODE_ENV`, using
 `createTestkitSwapProvider()` for the dev branch.

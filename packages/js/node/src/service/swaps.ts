@@ -12,7 +12,6 @@ import {
   isOpenReceiveSwapTerminalState,
   isValidSwapAddressForNetwork,
   listOpenReceiveSwapAssetInfo,
-  StoreBackedSwapCache,
   isSwapProviderWeightBudgetError,
   type SwapOrder,
   type SwapPayInAsset,
@@ -106,62 +105,18 @@ export async function getSwapOptions(
   }
 
   const providerCatalog = await resolveSwapProviderCatalog(providers);
-  const providerByName = new Map(providers.map((provider) => [provider.name, provider]));
   const amountMsats = roundMsatsUpToWholeSats(checkout.amountMsats);
 
-  // The /ccies catalog carries no amount limits; a provider only exposes per-pair
-  // min/max via a /price quote (FixedFloat: data.to.min/max, the invoice-side BTC
-  // limits). Those limits are slow-changing (fee/dust driven), so they're cached in
-  // the durable store per (provider, pay-in asset) for 14 days and the fixed invoice
-  // amount is gated LOCALLY. This keeps the payment-method screen off /price entirely
-  // once the cache is warm — only a cold/expired pair triggers a single quote, shared
-  // across every checkout and instance via the store.
-  const pairLimitsCache = new StoreBackedSwapCache(context.store, context.clock, {
-    warn: (message, fields) =>
-      emitLog(context.options, "warn", "swap.pair_limits.stale", message, fields),
-  });
+  // Catalog entries already carry per-pair min/max from the provider's durable global
+  // rates cache (FixedFloat: public XML export in openreceive_meta). Gate the fixed
+  // invoice amount locally — no per-asset /price probes on the payment-method screen.
   const options = await Promise.all(
     listOpenReceiveSwapAssetInfo().map(async (asset) => {
       const providerAsset = providerCatalog.get(asset.pay_in_asset);
-      if (providerAsset === undefined) {
-        return swapCatalogOption({ asset, amountMsats, providerAsset: undefined });
-      }
-      const provider = providerByName.get(providerAsset.provider);
-      let limits: SwapPairLimits = {};
-      if (provider !== undefined) {
-        try {
-          limits = await pairLimitsCache.resolve(
-            swapPairLimitsKey(provider.name, asset.pay_in_asset),
-            {
-              refreshSeconds: SWAP_PAIR_LIMITS_REFRESH_SECONDS,
-              maxStaleSeconds: SWAP_PAIR_LIMITS_MAX_STALE_SECONDS,
-              fetch: () => fetchSwapPairLimits(provider, asset.pay_in_asset),
-              serialize: (value) => JSON.stringify(value),
-              deserialize: parseSwapPairLimits,
-            },
-          );
-        } catch (error) {
-          // Fail open: an unreachable provider or an unlimited pair leaves the asset
-          // selectable rather than greying it out on a soft error.
-          emitLog(
-            context.options,
-            "warn",
-            "swap.pair_limits.failed",
-            "Swap pair limits lookup failed; leaving asset available.",
-            {
-              order_id: orderId,
-              pay_in_asset: asset.pay_in_asset,
-              provider: provider.name,
-              error_message: error instanceof Error ? error.message : String(error),
-            },
-          );
-        }
-      }
-      // Gate the fixed invoice amount against the cached per-pair limits locally.
       return swapCatalogOption({
         asset,
         amountMsats,
-        providerAsset: { ...providerAsset, ...limits },
+        providerAsset,
       });
     }),
   );
@@ -230,9 +185,9 @@ export async function quoteSwap(
   return await resolveCachedSwapQuote(context, checkout.checkoutId, provider, payInAsset, amountMsats);
 }
 
-// Quotes a pay-in asset at the invoice amount, served from a short-lived durable
-// (store-backed, not process memory) cache so repeated status polls and the catalog
-// screen don't re-hit the provider's /price endpoint within the cache window.
+// Quotes a pay-in asset at the invoice amount. FixedFloat serves this from the
+// durable global XML rates cache (shared across checkouts); the short per-checkout
+// cache below still collapses repeated status polls within the same order.
 async function resolveCachedSwapQuote(
   context: OpenReceiveServiceContext,
   checkoutId: string,
@@ -302,74 +257,6 @@ function parseCachedSwapQuote(value: string | undefined): CachedSwapQuoteEntry |
     amountMsats: record.amountMsats,
     expiresAt: record.expiresAt,
     quote: record.quote as SwapQuoteResponse,
-  };
-}
-
-// Per-pair min/max limits change slowly (fee/dust driven), so cache them for 14 days
-// and serve them stale up to 30 days if the provider is briefly unreachable.
-const SWAP_PAIR_LIMITS_REFRESH_SECONDS = 14 * 24 * 60 * 60;
-const SWAP_PAIR_LIMITS_MAX_STALE_SECONDS = 30 * 24 * 60 * 60;
-// Nominal in-range probe amount (0.005 BTC) used only to read a pair's static limits;
-// the provider returns min/max regardless of the probe amount.
-const SWAP_PAIR_LIMITS_PROBE_MSATS = 500_000_000;
-
-interface SwapPairLimits {
-  readonly minimum_invoice_amount_msats?: number;
-  readonly maximum_invoice_amount_msats?: number;
-  readonly minimum_pay_amount?: string;
-  readonly maximum_pay_amount?: string;
-}
-
-function swapPairLimitsKey(providerName: string, payInAsset: SwapPayInAsset): string {
-  return `swap_pair_limits:${providerName}:${payInAsset}`;
-}
-
-async function fetchSwapPairLimits(
-  provider: SwapProvider,
-  payInAsset: SwapPayInAsset,
-): Promise<SwapPairLimits> {
-  const quote = await provider.quote({
-    payInAsset,
-    invoiceAmountMsats: SWAP_PAIR_LIMITS_PROBE_MSATS,
-  });
-  return {
-    ...(quote.minimum_invoice_amount_msats === undefined
-      ? {}
-      : { minimum_invoice_amount_msats: quote.minimum_invoice_amount_msats }),
-    ...(quote.maximum_invoice_amount_msats === undefined
-      ? {}
-      : { maximum_invoice_amount_msats: quote.maximum_invoice_amount_msats }),
-    ...(quote.minimum_pay_amount === undefined
-      ? {}
-      : { minimum_pay_amount: quote.minimum_pay_amount }),
-    ...(quote.maximum_pay_amount === undefined
-      ? {}
-      : { maximum_pay_amount: quote.maximum_pay_amount }),
-  };
-}
-
-function parseSwapPairLimits(value: string): SwapPairLimits {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(value);
-  } catch {
-    return {};
-  }
-  if (parsed === null || typeof parsed !== "object") return {};
-  const record = parsed as Record<string, unknown>;
-  return {
-    ...(typeof record.minimum_invoice_amount_msats === "number"
-      ? { minimum_invoice_amount_msats: record.minimum_invoice_amount_msats }
-      : {}),
-    ...(typeof record.maximum_invoice_amount_msats === "number"
-      ? { maximum_invoice_amount_msats: record.maximum_invoice_amount_msats }
-      : {}),
-    ...(typeof record.minimum_pay_amount === "string"
-      ? { minimum_pay_amount: record.minimum_pay_amount }
-      : {}),
-    ...(typeof record.maximum_pay_amount === "string"
-      ? { maximum_pay_amount: record.maximum_pay_amount }
-      : {}),
   };
 }
 

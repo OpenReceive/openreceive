@@ -11,7 +11,7 @@ import { createNwcReceiveClient } from "../alby-nwc.ts";
 import { type OpenReceiveFileConfig, readOpenReceiveConfigFile } from "../config.ts";
 import { OpenReceiveConfigError } from "../config-error.ts";
 import { assertOpenReceiveStoreConfiguration } from "../storage-guard.ts";
-import { resolveOpenReceiveStore } from "../store-uri.ts";
+import { applyStoreSchemaMode, resolveOpenReceiveStore } from "../store-uri.ts";
 import type { SwapProvider } from "../swap/index.ts";
 import { isRecord, OpenReceiveServiceError } from "./core-utils.ts";
 import { createNwcEndpointLogger, emitLog } from "./logging.ts";
@@ -94,10 +94,13 @@ export async function resolveConfiguredStore(
       (await resolveOpenReceiveStore(options.storeUri, {
         cwd: options.cwd,
         namespace,
+        schemaMode: options.schemaMode,
         loadSqlite: options.loadSqlite,
         loadPostgres: options.loadPostgres,
       }));
-    await ensureOpenReceiveStoreSchema(store);
+    if (options.store !== undefined) {
+      await ensureOpenReceiveStoreSchema(store, options.schemaMode ?? "check", namespace);
+    }
     return store;
   } catch (error) {
     if (error instanceof OpenReceiveConfigError) throw error;
@@ -238,11 +241,11 @@ export function resolveConfiguredSwapProviders(
 
 export async function ensureOpenReceiveStoreSchema(
   store: OpenReceiveInvoiceKvStore,
+  schemaMode: "auto" | "check" | "skip" = "check",
+  namespace = "default",
 ): Promise<void> {
-  const ensureSchema = isRecord(store) ? store.ensureSchema : undefined;
-  if (typeof ensureSchema === "function") {
-    await ensureSchema.call(store);
-  }
+  if (!isRecord(store)) return;
+  await applyStoreSchemaMode(store, schemaMode, "custom", namespace);
 }
 
 export async function closeOpenReceiveResource(resource: unknown): Promise<void> {

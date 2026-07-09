@@ -94,6 +94,7 @@ export interface CreateOpenReceiveOptions
   nwc?: string;
   store?: OpenReceiveInvoiceKvStore;
   storeUri?: string;
+  schemaMode?: ResolveOpenReceiveStoreOptions["schemaMode"];
   namespace?: string;
   configPath?: string | false;
   cwd?: string;

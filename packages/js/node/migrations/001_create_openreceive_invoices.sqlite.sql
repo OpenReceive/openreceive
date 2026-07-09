@@ -62,6 +62,12 @@ CREATE INDEX IF NOT EXISTS openreceive_invoices_order_idx
 CREATE INDEX IF NOT EXISTS openreceive_invoices_checkout_idx
   ON openreceive_invoices (checkout_id, created_at);
 
+CREATE TABLE IF NOT EXISTS openreceive_meta (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  rev INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS openreceive_schema_migrations (
   version TEXT PRIMARY KEY,
   applied_at INTEGER NOT NULL DEFAULT (unixepoch())

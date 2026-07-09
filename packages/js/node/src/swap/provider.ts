@@ -137,8 +137,8 @@ export interface SwapProvider {
   readonly name: string;
   /**
    * Attach the durable store-backed cache used for slow-changing provider data
-   * (currency catalog, min/max limits). Called once after the service store is
-   * resolved, since providers are constructed before the store exists. Providers
+   * (currency catalog, global rates snapshot). Called once after the service store
+   * is resolved, since providers are constructed before the store exists. Providers
    * that don't cache remote data may omit this.
    */
   attachSwapCache?(cache: StoreBackedSwapCache): void;

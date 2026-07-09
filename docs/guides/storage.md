@@ -25,6 +25,27 @@ Supported v0.1 store values:
 Use this store only for OpenReceive invoice state. App migrations should stay
 focused on your own app tables.
 
+## Schema Setup
+
+For local development, `local-sqlite` creates its `.openreceive/<namespace>.sqlite3`
+database and OpenReceive tables automatically.
+
+For Postgres, run the migration step before booting the app:
+
+```sh
+openreceive migrate --store "$OPENRECEIVE_STORE" --namespace prod
+```
+
+To inspect the SQL first:
+
+```sh
+openreceive migrate --store "$OPENRECEIVE_STORE" --print
+```
+
+At runtime, Postgres startup checks that OpenReceive tables and metadata already
+exist. If migrations have not been run, OpenReceive refuses to boot with a
+`STORE_MIGRATIONS_REQUIRED` error and the command to run.
+
 ## Production Storage
 
 Postgres works anywhere and is the recommended default. Most apps already run a

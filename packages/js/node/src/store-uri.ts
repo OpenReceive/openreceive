@@ -8,6 +8,7 @@ import path from "node:path";
 import type {
   OpenReceiveInvoiceKvStore
 } from "@openreceive/core";
+import { OpenReceiveConfigError } from "./config-error.ts";
 import {
   createOpenReceivePostgresKvStore,
   type OpenReceivePostgresQueryClient
@@ -25,6 +26,7 @@ import {
 export interface ResolveOpenReceiveStoreOptions {
   namespace?: string;
   cwd?: string;
+  schemaMode?: OpenReceiveSchemaMode;
   loadSqlite?: () => Promise<{
     DatabaseSync: new (filename: string) => OpenReceiveSqliteDatabase & {
       close?: () => void | Promise<void>;
@@ -39,8 +41,11 @@ export interface ResolveOpenReceiveStoreOptions {
 
 export type OpenReceiveResolvedStore = OpenReceiveInvoiceKvStore & {
   ensureSchema?: () => Promise<void>;
+  assertSchemaReady?: () => Promise<void>;
   close?: () => Promise<void> | void;
 };
+
+export type OpenReceiveSchemaMode = "auto" | "check" | "skip";
 
 const DEFAULT_NAMESPACE = "default";
 const DEFAULT_STORE_URI = "local-sqlite";
@@ -54,6 +59,7 @@ export async function resolveOpenReceiveStore(
   const cwd = options.cwd ?? process.cwd();
   assertOpenReceiveStoreConfiguration({ storeUri: uri });
   const storeUri = uri?.trim() || DEFAULT_STORE_URI;
+  const schemaMode = options.schemaMode ?? defaultSchemaMode(storeUri);
 
   if (storeUri === "local-sqlite") {
     const root = path.resolve(cwd, ".openreceive");
@@ -64,7 +70,7 @@ export async function resolveOpenReceiveStore(
       client: createOpenReceiveSqliteQueryClient(database),
       namespace
     });
-    await store.ensureSchema();
+    await applyStoreSchemaMode(store, schemaMode, storeUri, namespace);
     return Object.assign(store, {
       close: () => database.close?.()
     });
@@ -81,7 +87,7 @@ export async function resolveOpenReceiveStore(
       client: createOpenReceiveSqliteQueryClient(database),
       namespace
     });
-    await store.ensureSchema();
+    await applyStoreSchemaMode(store, schemaMode, storeUri, namespace);
     return Object.assign(store, {
       close: () => database.close?.()
     });
@@ -94,13 +100,61 @@ export async function resolveOpenReceiveStore(
       client: pool,
       namespace
     });
-    await store.ensureSchema();
+    try {
+      await applyStoreSchemaMode(store, schemaMode, storeUri, namespace);
+    } catch (error) {
+      await pool.end?.();
+      throw error;
+    }
     return Object.assign(store, {
       close: () => pool.end?.()
     });
   }
 
   throw new Error(`Unsupported OPENRECEIVE_STORE URI: ${storeUri}`);
+}
+
+export function defaultSchemaMode(storeUri: string): OpenReceiveSchemaMode {
+  return storeUri === "local-sqlite" ? "auto" : "check";
+}
+
+export async function applyStoreSchemaMode(
+  store: OpenReceiveResolvedStore,
+  schemaMode: OpenReceiveSchemaMode,
+  storeUri: string,
+  namespace: string
+): Promise<void> {
+  if (schemaMode === "skip") return;
+  if (schemaMode === "auto") {
+    await store.ensureSchema?.();
+    return;
+  }
+  try {
+    await store.assertSchemaReady?.();
+  } catch (error) {
+    throw migrationsRequiredError(storeUri, namespace, error);
+  }
+}
+
+function migrationsRequiredError(
+  storeUri: string,
+  namespace: string,
+  cause: unknown
+): OpenReceiveConfigError {
+  const storeName = /^postgres(?:ql)?:\/\//.test(storeUri)
+    ? "Postgres"
+    : storeUri.startsWith("sqlite:")
+      ? "SQLite"
+      : "SQL";
+  return new OpenReceiveConfigError({
+    code: "STORE_MIGRATIONS_REQUIRED",
+    message: `OpenReceive ${storeName} store schema is not ready; refusing to boot without migrations.`,
+    hint: [
+      `Run \`openreceive migrate --store "$OPENRECEIVE_STORE" --namespace ${namespace}\` before starting the app.`,
+      "To review the SQL first, run `openreceive migrate --store \"$OPENRECEIVE_STORE\" --print`."
+    ].join(" "),
+    cause
+  });
 }
 
 async function loadSqlite(

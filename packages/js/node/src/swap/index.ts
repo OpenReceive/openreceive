@@ -33,6 +33,22 @@ export type {
   StoreBackedSwapCacheOptions,
 } from "./limits-cache.ts";
 
+export {
+  SWAP_RATES_REFRESH_SECONDS,
+  SWAP_RATES_MAX_STALE_SECONDS,
+  swapRatesMetaKey,
+} from "./rates-cache.ts";
+export type { SwapRateType } from "./rates-cache.ts";
+
+export {
+  parseFixedFloatRatesXml,
+  quotePayAmountFromFixedFloatRate,
+  invoiceLimitsFromFixedFloatRate,
+  fixedFloatRatesPairKey,
+  fixedFloatRatesXmlPath,
+} from "./fixedfloat-rates.ts";
+export type { FixedFloatRatePair, FixedFloatRatesIndex } from "./fixedfloat-rates.ts";
+
 export { isOpenReceiveSwapTerminalState } from "./provider.ts";
 export type {
   SwapProviderState,

@@ -12,6 +12,7 @@ import {
   OPENRECEIVE_SQLITE_MIGRATION_SQL,
   createNwcReceiveClient,
   createOpenReceive,
+  createOpenReceivePostgresKvStoreFromPool,
   createOpenReceiveSqliteKvStore,
   createOpenReceiveSqliteQueryClient,
   migrateOpenReceiveSqlite,
@@ -500,6 +501,50 @@ test("resolveOpenReceiveStore rejects Redis as permanently unsupported", async (
     () => resolveOpenReceiveStore("rediss://localhost:6379/0"),
     "UNSUPPORTED_STORE_REDIS",
   );
+});
+
+test("resolveOpenReceiveStore refuses Postgres boot when migrations are missing", async () => {
+  let closed = false;
+  class MissingSchemaPool {
+    async query() {
+      throw new Error("relation openreceive_invoices does not exist");
+    }
+
+    async end() {
+      closed = true;
+    }
+  }
+
+  await assert.rejects(
+    () =>
+      resolveOpenReceiveStore("postgres://openreceive:secret@example.test/openreceive", {
+        namespace: "prod",
+        loadPostgres: async () => ({ Pool: MissingSchemaPool }),
+      }),
+    (error) => {
+      assert.equal(error instanceof OpenReceiveConfigError, true);
+      assert.equal(error.code, "STORE_MIGRATIONS_REQUIRED");
+      assert.match(error.message, /refusing to boot without migrations/);
+      assert.match(error.hint, /openreceive migrate --store "\$OPENRECEIVE_STORE" --namespace prod/);
+      return true;
+    },
+  );
+  assert.equal(closed, true);
+});
+
+test("Postgres pool helper does not run hidden migrations on construction", () => {
+  const queries = [];
+  const store = createOpenReceivePostgresKvStoreFromPool({
+    pool: {
+      async query(sql, values) {
+        queries.push({ sql, values });
+        return { rows: [] };
+      },
+    },
+  });
+
+  assert.equal(typeof store.ensureSchema, "function");
+  assert.deepEqual(queries, []);
 });
 
 sqliteTest(
