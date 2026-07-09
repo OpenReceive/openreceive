@@ -8,13 +8,13 @@
 // @openreceive/node directly.
 export type {
   OpenReceive,
-  OpenReceiveCheckout,
-  OpenReceiveCheckoutAmountSource,
-  OpenReceiveOrderStatus,
-  OpenReceiveGetOrderAmount,
-  OpenReceiveGetOrderAmountContext,
-  OpenReceiveResolveOrder,
-  OpenReceiveResolveOrderContext,
+  Checkout,
+  CheckoutAmountSource,
+  OrderStatus,
+  GetOrderAmount,
+  GetOrderAmountContext,
+  ResolveOrder,
+  ResolveOrderContext,
 } from "@openreceive/node";
 export {
   createDefaultAuthorize,
@@ -38,6 +38,24 @@ export {
   type WithUserOptions,
   withUser,
 } from "./presets.ts";
+export type {
+  HttpCheckout,
+  HttpInvoice,
+  HttpOrder,
+  HttpOrderStatus,
+  HttpPublicSwap,
+  HttpSwapAttempt,
+  HttpSwapOption,
+} from "./serialize.ts";
+export {
+  toHttpCheckout,
+  toHttpInvoice,
+  toHttpOrder,
+  toHttpOrderStatus,
+  toHttpPublicSwap,
+  toHttpSwapAttempt,
+  toHttpSwapOption,
+} from "./serialize.ts";
 export type {
   OrderAccessTokenManager,
   OrderAccessTokenManagerOptions,

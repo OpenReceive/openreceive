@@ -10,25 +10,29 @@
     "openreceive": "./bin/openreceive.mjs"
   },
   "dependencies": {
-    "@openreceive/angular": "0.1.1",
     "@openreceive/browser": "0.1.1",
     "@openreceive/core": "0.1.1",
     "@openreceive/elements": "0.1.1",
     "@openreceive/node": "0.1.1",
-    "@openreceive/provider-data": "0.1.1",
+    "@openreceive/provider-data": "0.1.1"
+  },
+  "peerDependencies": {
+    "@openreceive/angular": "0.1.1",
+    "@openreceive/express": "0.1.1",
+    "@openreceive/fastify": "0.1.1",
+    "@openreceive/next": "0.1.1",
     "@openreceive/react": "0.1.1",
     "@openreceive/svelte": "0.1.1",
     "@openreceive/vue": "0.1.1"
   },
-  "peerDependencies": {
-    "@openreceive/express": "0.1.1",
-    "@openreceive/fastify": "0.1.1",
-    "@openreceive/next": "0.1.1"
-  },
   "peerDependenciesMeta": {
+    "@openreceive/angular": { "optional": true },
     "@openreceive/express": { "optional": true },
     "@openreceive/fastify": { "optional": true },
-    "@openreceive/next": { "optional": true }
+    "@openreceive/next": { "optional": true },
+    "@openreceive/react": { "optional": true },
+    "@openreceive/svelte": { "optional": true },
+    "@openreceive/vue": { "optional": true }
   },
   "exports": {
     ".": {

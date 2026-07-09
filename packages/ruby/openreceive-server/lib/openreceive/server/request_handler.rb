@@ -25,7 +25,7 @@ module OpenReceive
     # is by the callable's parameters. See #call_resolve_order. `resolve_order` is REQUIRED.
     class RequestHandler
       TIER_1_ACTIONS = %w[checkout.create rate.list].freeze
-      TIER_2_ACTIONS = %w[order.read checkout.read swap.options swap.quote swap.start swap.refund].freeze
+      TIER_2_ACTIONS = %w[order.read checkout.read swap.options swap.quote swap.start swap.refund swap.refresh].freeze
       TIER_3_ACTIONS = %w[invoice.sweep].freeze
 
       DEFAULT_PREFIX = "/openreceive"
@@ -64,7 +64,7 @@ module OpenReceive
 
       # authorize      : ->(context) { boolean } — context = { action:, request:, resource:, token:, token_valid:, order_id? }
       # resolve_order  : REQUIRED. keyword form ->(order_id:, client_amount:, metadata:, request:) OR
-      #                  single-context form ->(ctx) — returns { "amount"|"sats"|"usd" => ... } or nil (404)
+      #                  single-context form ->(ctx) — returns { "amount" => { "sats" } | { "currency", "value" } } or nil (404)
       # rate_limit     : ->(context) { allowed_boolean } — returning false yields 429 (optional)
       # tokens         : Tokens::Manager
       # prefix         : mount prefix used to path-scope the order-token cookie set on create
@@ -121,14 +121,56 @@ module OpenReceive
       end
 
       # POST {prefix}/orders/{order_id} — Tier 2 action multiplexer (status | swap.*).
+      # Mirrors packages/js/http/src/handler.ts handleOrderAction: call typed service methods
+      # directly — there is no parallel `order()` dispatcher on the service.
       def order_action(order_id:, raw_body:, request:, token:, request_id:, authorize: nil)
         handle(request_id) do
           body = parse_json_body(raw_body)
-          action_label = order_action_label(body["action"])
-          resource = { order_id: order_id, attempt_id: body["attempt_id"] }
+          action = body["action"].nil? ? "status" : body["action"]
+          unless %w[status swap_quote start_swap refund_swap refresh_swap].include?(action)
+            raise ValidationError,
+                  "Unknown order action: #{action.inspect}. " \
+                  'Expected "status", "swap_quote", "start_swap", "refund_swap", or "refresh_swap".'
+          end
+
+          action_label = order_action_label(action)
+          resource = { order_id: order_id }
+          if %w[refund_swap refresh_swap].include?(action) && body["attempt_id"].is_a?(String)
+            resource[:attempt_id] = body["attempt_id"]
+          end
           context = build_context(action_label, request, resource, token)
           guard(context, request_id, authorize) do
-            result = @service.order(body.merge("order_id" => order_id))
+            result =
+              case action
+              when "status"
+                order = @service.get_order(order_id: order_id)
+                swap = @service.swap_options(order_id: order_id)
+                order.merge(
+                  "swaps_enabled" => swap.fetch("enabled"),
+                  "swap_pay_options" => (swap.fetch("enabled") ? swap.fetch("options") : [])
+                )
+              when "swap_quote"
+                pay_in_asset = required_string(body["pay_in_asset"], "pay_in_asset")
+                { "quote" => @service.swap_quote(order_id: order_id, pay_in_asset: pay_in_asset) }
+              when "start_swap"
+                pay_in_asset = required_string(body["pay_in_asset"], "pay_in_asset")
+                { "attempt" => @service.start_swap(order_id: order_id, pay_in_asset: pay_in_asset) }
+              when "refresh_swap"
+                {
+                  "attempt" => @service.refresh_swap(
+                    attempt_id: required_string(body["attempt_id"], "attempt_id")
+                  )
+                }
+              else # refund_swap
+                {
+                  "attempt" => @service.refund_swap(
+                    attempt_id: required_string(body["attempt_id"], "attempt_id"),
+                    refund_address: required_string(body["refund_address"], "refund_address"),
+                    refund_nonce: required_string(body["refund_nonce"], "refund_nonce"),
+                    confirm: body["confirm"] == true
+                  )
+                }
+              end
             success(200, result, request_id)
           end
         end
@@ -241,6 +283,7 @@ module OpenReceive
         when "swap_quote" then "swap.quote"
         when "start_swap" then "swap.start"
         when "refund_swap" then "swap.refund"
+        when "refresh_swap" then "swap.refresh"
         else "order.read"
         end
       end
@@ -312,15 +355,12 @@ module OpenReceive
 
       def apply_order_amount(base, resolved)
         record = stringify_keys(resolved)
-        if record.key?("amount")
-          base["amount"] = record["amount"]
-        elsif record.key?("sats")
-          base["sats"] = record["sats"]
-        elsif record.key?("usd")
-          base["usd"] = record["usd"]
-        else
-          raise ValidationError, "resolve_order must return one of amount, sats, or usd."
+        unless record.key?("amount") && record["amount"].is_a?(Hash)
+          raise ValidationError,
+                "resolve_order must return { amount: { sats } | { currency, value } } (or nil for not found)."
         end
+
+        base["amount"] = record["amount"]
         base
       end
 
@@ -432,6 +472,13 @@ module OpenReceive
         headers = { "Content-Type" => "application/json" }
         headers["X-Request-Id"] = request_id unless request_id.nil?
         headers
+      end
+
+      def required_string(value, field)
+        text = optional_string(value)
+        raise ValidationError, "#{field} is required." if text.nil?
+
+        text
       end
 
       def optional_string(value)

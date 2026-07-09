@@ -1676,11 +1676,16 @@ export function defineOpenReceiveElements(
       if (url === null || orderId === null || orderId.length === 0) return;
 
       try {
-        const body = await postOpenReceiveJson(globalThis.fetch, url, {
-          order_id: orderId,
-          action: "start_swap",
-          pay_in_asset: payInAsset
-        });
+        const body = await postOpenReceiveJson(
+          globalThis.fetch,
+          url,
+          {
+            order_id: orderId,
+            action: "start_swap",
+            pay_in_asset: payInAsset
+          },
+          { logger: options.logger }
+        );
         this.startedSwapInvoice = normalizeSwapStartInvoice(body);
         this.dismissedSwapInvoiceId = null;
         this.render();
@@ -1700,14 +1705,19 @@ export function defineOpenReceiveElements(
       if (url === null) return;
 
       try {
-        const body = await postOpenReceiveJson(globalThis.fetch, url, {
-          ...(orderId === null ? {} : { order_id: orderId }),
-          action: "refund_swap",
-          attempt_id: attemptId,
-          refund_address: refundAddress,
-          refund_nonce: refundNonce,
-          confirm
-        });
+        const body = await postOpenReceiveJson(
+          globalThis.fetch,
+          url,
+          {
+            ...(orderId === null ? {} : { order_id: orderId }),
+            action: "refund_swap",
+            attempt_id: attemptId,
+            refund_address: refundAddress,
+            refund_nonce: refundNonce,
+            confirm
+          },
+          { logger: options.logger }
+        );
         this.startedSwapInvoice = normalizeSwapStartInvoice(body);
         this.dismissedSwapInvoiceId = null;
         this.render();

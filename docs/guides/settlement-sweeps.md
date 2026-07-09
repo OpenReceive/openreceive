@@ -21,7 +21,7 @@ settlement decision, and fulfillment hook all stay on your backend.
 OpenReceive advances sweeps from normal app traffic:
 
 - `getOrder(...)` awaits one sweep before returning the requested order.
-- `getOrCreateCheckout(...)` and `createCheckout(...)` schedule a best-effort
+- `getOrCreateCheckout(...)` schedule a best-effort
   sweep after creating an invoice.
 - `sweepPendingInvoices()` lets your backend ask for one sweep directly.
 

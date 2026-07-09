@@ -63,7 +63,7 @@ export interface NwcEndpointLogEntry {
 /**
  * Server-side hook invoked every time the receive client hits an NWC wallet
  * endpoint (get_info / make_invoice / list_transactions). Structurally
- * compatible with the node service's OpenReceiveLogger so the same sink can be
+ * compatible with the node service's Logger so the same sink can be
  * reused. The hook must never throw — failures are swallowed so diagnostics can
  * never change receive-checkout behavior.
  */

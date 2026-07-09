@@ -33,7 +33,7 @@ service = OpenReceive::Server::Service.new(
   price_provider: my_price_provider               # optional; required for fiat + /rates
 )
 
-checkout = service.get_or_create_checkout("order_id" => "order-123", "sats" => 2100)
+checkout = service.get_or_create_checkout("order_id" => "order-123", "amount" => { "sats" => 2100 })
 order    = service.get_order(order_id: "order-123")
 ```
 
@@ -44,7 +44,7 @@ for you) or an already-constructed `OpenReceive::NwcRubyReceiveClient`.
 
 **Fully implemented (Lightning / checkout path):**
 
-- `get_or_create_checkout`, `get_checkout`, `get_order`, `order` (status action)
+- `get_or_create_checkout`, `get_checkout`, `get_order`
 - Per-order idempotency (`invoice.create`, key `"<order>:super:<supersededId|none>:amt:<amountKey>"`)
 - Checkout supersede + replay
 - The bounded, cursor-gated pending-invoice transaction scan (`sweep_pending_invoices`),
@@ -52,14 +52,16 @@ for you) or an already-constructed `OpenReceive::NwcRubyReceiveClient`.
   durable gate claim, 60 s overlap, default limit 25, cursor in meta via `cas_meta`, cursor stable
   on wallet error/timeout). Settlement authority is this backend status refresh — never a
   notification.
-- BTC/SATS amount resolution, and fiat resolution through an injected `price_provider`.
+- BTC/SATS amount resolution (`amount: { sats }` or `amount: { currency, value }` with BTC/SAT/SATS),
+  and fiat resolution through an injected `price_provider`.
 - Per-order capability tokens (`Tokens`) — `hash_token` is byte-for-byte the JS
   `hashOrderAccessToken` (`sha256:<64 hex>` of the raw token).
 
 **Scaffolded — raise `NotImplementedError` with a clear message (the Node engine is the reference):**
 
 - **Swaps.** `swap_options` returns `{ "enabled" => false, "options" => [] }`; `swap_quote`,
-  `start_swap`, `refund_swap`, and the `swap_quote`/`start_swap`/`refund_swap` order actions raise.
+  `start_swap`, and `refund_swap` raise. The HTTP order-action handler calls these methods
+  directly (no `service.order` router).
 - **Live price feeds.** `list_rates` / `quote_rates` require an injected `price_provider`; without
   one they raise. No live price fetching is implemented here.
 
@@ -89,7 +91,7 @@ app = OpenReceive::Server::RackApp.new(
   # REQUIRED. Create body never carries a client price (amount/sats/usd → 400).
   # Return payment terms, or nil for 404. Tip-jar hosts may honor metadata inside this hook.
   resolve_order: ->(order_id:, client_amount:, metadata:, request:) {
-    { "sats" => MyCart.total_sats(order_id) }
+    { "amount" => { "sats" => MyCart.total_sats(order_id) } }
   },
   authorize: ->(context) { my_policy.allow?(context) }, # optional; see tiers below
   prefix: "/openreceive"

@@ -1,4 +1,4 @@
-import type { OpenReceiveSwapProviderState } from "./provider.ts";
+import type { SwapProviderState } from "./provider.ts";
 
 /**
  * Coarse lifecycle bucket for a swap attempt's `provider_state`. Twelve provider
@@ -15,7 +15,7 @@ import type { OpenReceiveSwapProviderState } from "./provider.ts";
  * - `attention`        — needs operator/support review (funds may be stuck).
  * - `terminal`         — the attempt is over and will not change (expired/refunded/failed).
  */
-export type OpenReceiveSwapPhase =
+export type SwapPhase =
   | "preparing"
   | "awaiting_deposit"
   | "processing"
@@ -24,15 +24,15 @@ export type OpenReceiveSwapPhase =
   | "attention"
   | "terminal";
 
-export interface OpenReceiveSwapStateInfo {
+export interface SwapStateInfo {
   /** The provider state this describes. */
-  readonly state: OpenReceiveSwapProviderState;
+  readonly state: SwapProviderState;
   /** Short, payer-facing status label, e.g. "Waiting for your payment". */
   readonly label: string;
   /** One-sentence payer-facing explanation of what is happening. */
   readonly detail: string;
   /** Coarse lifecycle bucket for UI branching. */
-  readonly phase: OpenReceiveSwapPhase;
+  readonly phase: SwapPhase;
   /**
    * Whether the attempt is over and will not transition again. Terminal states stop
    * being polled by the backend; a UI should stop refreshing this attempt.
@@ -42,7 +42,7 @@ export interface OpenReceiveSwapStateInfo {
 
 /**
  * The canonical catalog of every swap `provider_state`, its payer-facing copy, its
- * coarse {@link OpenReceiveSwapPhase}, and whether it is terminal. This is the single
+ * coarse {@link SwapPhase}, and whether it is terminal. This is the single
  * source of truth the built-in checkout element and custom UIs should both read from.
  *
  * Settlement-safety invariant: `completed` is deliberately NON-terminal and lives in
@@ -50,7 +50,7 @@ export interface OpenReceiveSwapStateInfo {
  * order paid when the wallet sweep sees a settled transaction.
  */
 export const OPENRECEIVE_SWAP_STATES: Readonly<
-  Record<OpenReceiveSwapProviderState, OpenReceiveSwapStateInfo>
+  Record<SwapProviderState, SwapStateInfo>
 > = {
   creating_provider_order: {
     state: "creating_provider_order",
@@ -143,13 +143,13 @@ export const OPENRECEIVE_SWAP_STATES: Readonly<
  * `phase`, and whether it is `terminal`. Accepts an unknown string defensively (returns
  * a safe fallback) so a UI never throws on an unexpected value from an older payload.
  */
-export function describeSwapState(state: string): OpenReceiveSwapStateInfo {
-  const info = (OPENRECEIVE_SWAP_STATES as Record<string, OpenReceiveSwapStateInfo | undefined>)[
+export function describeSwapState(state: string): SwapStateInfo {
+  const info = (OPENRECEIVE_SWAP_STATES as Record<string, SwapStateInfo | undefined>)[
     state
   ];
   if (info !== undefined) return info;
   return {
-    state: state as OpenReceiveSwapProviderState,
+    state: state as SwapProviderState,
     label: state,
     detail: state,
     phase: "attention",

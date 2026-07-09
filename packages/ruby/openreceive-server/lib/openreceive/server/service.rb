@@ -114,29 +114,6 @@ module OpenReceive
         )
       end
 
-      # --- Order action router -------------------------------------------------------------------
-
-      def order(body)
-        data = stringify_keys(body)
-        order_id = optional_string(data["order_id"] || data["orderId"])
-        action = data["action"]
-
-        case action
-        when nil, "status"
-          raise ValidationError, "order_id is required." if order_id.nil?
-
-          status = get_order(order_id: order_id)
-          # Swaps are scaffolded; advertise them as disabled with no pay options.
-          status.merge("swaps_enabled" => false, "swap_pay_options" => [])
-        when "swap_quote", "start_swap", "refund_swap"
-          raise NotImplementedError, swap_not_implemented_message
-        else
-          raise ValidationError,
-                "Unknown order action: #{action.inspect}. " \
-                'Expected "status", "swap_quote", "start_swap", or "refund_swap".'
-        end
-      end
-
       # --- Swaps (scaffold) ----------------------------------------------------------------------
 
       # TODO(swaps): port the Node swap providers. Until then swaps are advertised as unavailable.
@@ -154,6 +131,10 @@ module OpenReceive
       end
 
       def refund_swap(*)
+        raise NotImplementedError, swap_not_implemented_message
+      end
+
+      def refresh_swap(*)
         raise NotImplementedError, swap_not_implemented_message
       end
 
@@ -342,11 +323,12 @@ module OpenReceive
       end
 
       def amount_matches?(amount, checkout, now)
-        if amount.key?("fiat") || checkout.key?("fiat")
-          return false unless amount.key?("fiat") && checkout.key?("fiat")
+        fiat = fiat_from_create_amount(amount)
+        if !fiat.nil? || checkout.key?("fiat")
+          return false if fiat.nil? || !checkout.key?("fiat")
 
-          return amount["fiat"]["currency"] == checkout["fiat"]["currency"] &&
-                 amount["fiat"]["value"] == checkout["fiat"]["value"]
+          return fiat["currency"] == checkout["fiat"]["currency"] &&
+                 fiat["value"] == checkout["fiat"]["value"]
         end
 
         resolve_create_amount(amount, now).fetch(:amount_msats) == checkout["amount_msats"]
@@ -361,16 +343,38 @@ module OpenReceive
       # --- amount resolution ---------------------------------------------------------------------
 
       def resolve_create_amount(amount, now)
-        if amount.key?("btc")
-          { amount_msats: quote_bitcoin_amount_to_msats(amount.fetch("btc")), amount_source: "amount", fiat_quote: nil }
+        kind = read_amount_kind(amount)
+        if kind == "sats"
+          {
+            amount_msats: quote_bitcoin_amount_to_msats("currency" => "SATS", "value" => normalize_sats_value(amount["sats"])),
+            amount_source: "amount",
+            fiat_quote: nil
+          }
+        elsif bitcoin_amount_currency?(amount["currency"])
+          {
+            amount_msats: quote_bitcoin_amount_to_msats("currency" => amount["currency"], "value" => amount["value"]),
+            amount_source: "amount",
+            fiat_quote: nil
+          }
         else
-          quote = quote_fiat_amount(amount.fetch("fiat"), now)
+          quote = quote_fiat_amount({ "currency" => amount["currency"], "value" => amount["value"] }, now)
           { amount_msats: quote.fetch("amount_msats"), amount_source: "fiat", fiat_quote: quote }
         end
       end
 
+      def fiat_from_create_amount(amount)
+        return nil unless read_amount_kind(amount) == "currency"
+        return nil if bitcoin_amount_currency?(amount["currency"])
+
+        { "currency" => amount["currency"], "value" => amount["value"] }
+      end
+
+      def bitcoin_amount_currency?(currency)
+        %w[BTC SAT SATS].include?(currency.to_s.upcase)
+      end
+
       def quote_bitcoin_amount_to_msats(btc)
-        currency = btc["currency"]
+        currency = btc["currency"].to_s.upcase
         value = OpenReceive::Money.parse_decimal(btc["value"])
 
         case currency
@@ -599,46 +603,66 @@ module OpenReceive
       end
 
       def normalize_create_checkout_amount(body)
-        sources = [
-          body.key?("amount") && !body["amount"].nil?,
-          body.key?("usd") && !body["usd"].nil?,
-          body.key?("sats") && !body["sats"].nil?
-        ].count(true)
-        raise ValidationError, "Create checkout request requires exactly one of amount, usd, or sats." unless sources == 1
-
-        if body.key?("amount") && !body["amount"].nil?
-          amount = deep_stringify(body["amount"])
-          read_amount_kind(amount)
-          return amount
+        if body.key?("usd") || body.key?("sats")
+          raise ValidationError,
+                "Create checkout request no longer accepts top-level usd or sats; " \
+                "use amount: { currency, value } or amount: { sats }."
         end
 
-        if body.key?("usd") && !body["usd"].nil?
-          value = optional_string(body["usd"])
-          if value.nil? || !value.match?(/\A[0-9]+(?:\.[0-9]+)?\z/) || value.match?(/\A0+(?:\.0+)?\z/)
-            raise ValidationError, "usd must be a positive decimal string."
-          end
+        raise ValidationError,
+              "Create checkout request requires amount: { sats } or amount: { currency, value }." unless body.key?("amount") && !body["amount"].nil?
 
-          return { "fiat" => { "currency" => "USD", "value" => value } }
+        amount = deep_stringify(body["amount"])
+        kind = read_amount_kind(amount)
+        if kind == "sats"
+          return { "sats" => normalize_sats_value(amount["sats"]) }
         end
 
-        { "btc" => { "currency" => "SATS", "value" => normalize_sats_shortcut(body["sats"]) } }
+        currency = optional_string(amount["currency"])
+        value = optional_string(amount["value"])
+        if currency.nil? || value.nil?
+          raise ValidationError, "Create checkout amount must be { sats } or { currency, value }."
+        end
+
+        if bitcoin_amount_currency?(currency)
+          return { "currency" => currency.upcase, "value" => value }
+        end
+
+        unless currency.match?(/\A[A-Z]{3}\z/)
+          raise ValidationError, "amount.currency must be an ISO 4217 uppercase code, or BTC/SAT/SATS."
+        end
+        if !value.match?(/\A[0-9]+(?:\.[0-9]+)?\z/) || value.match?(/\A0+(?:\.0+)?\z/)
+          raise ValidationError, "amount.value must be a positive decimal string."
+        end
+
+        { "currency" => currency, "value" => value }
       end
 
       def read_amount_kind(amount)
-        raise ValidationError, "Create checkout request requires exactly one of amount.btc or amount.fiat." unless amount.is_a?(Hash)
+        raise ValidationError, "Create checkout amount must be { sats } or { currency, value }." unless amount.is_a?(Hash)
 
         keys = amount.keys.map(&:to_s)
-        unsupported = keys - %w[btc fiat]
-        has_btc = amount.key?("btc") && !amount["btc"].nil?
-        has_fiat = amount.key?("fiat") && !amount["fiat"].nil?
-        if !unsupported.empty? || [has_btc, has_fiat].count(true) != 1
-          raise ValidationError, "Create checkout request requires exactly one of amount.btc or amount.fiat."
+        unsupported = keys - %w[sats currency value]
+        has_sats = amount.key?("sats") && !amount["sats"].nil?
+        has_currency = amount.key?("currency") && !amount["currency"].nil?
+        has_value = amount.key?("value") && !amount["value"].nil?
+
+        if !unsupported.empty?
+          raise ValidationError, "Create checkout amount must be { sats } or { currency, value }."
         end
 
-        has_btc ? "btc" : "fiat"
+        if has_sats && !has_currency && !has_value
+          return "sats"
+        end
+
+        if !has_sats && has_currency && has_value
+          return "currency"
+        end
+
+        raise ValidationError, "Create checkout amount must be { sats } or { currency, value }."
       end
 
-      def normalize_sats_shortcut(value)
+      def normalize_sats_value(value)
         if value.is_a?(Integer)
           raise ValidationError, "sats must be a positive integer." unless value.positive?
 
@@ -650,10 +674,13 @@ module OpenReceive
       end
 
       def amount_key_from(amount)
-        if amount.key?("fiat")
-          "fiat:#{amount['fiat']['currency']}:#{amount['fiat']['value']}"
+        kind = read_amount_kind(amount)
+        if kind == "sats"
+          "btc:SATS:#{normalize_sats_value(amount['sats'])}"
+        elsif bitcoin_amount_currency?(amount["currency"])
+          "btc:#{amount['currency']}:#{amount['value']}"
         else
-          "btc:#{amount['btc']['currency']}:#{amount['btc']['value']}"
+          "fiat:#{amount['currency']}:#{amount['value']}"
         end
       end
 

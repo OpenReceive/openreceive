@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { InMemoryInvoiceKvStore } from "../../packages/js/core/src/index.ts";
 import {
   CachedPriceFeed,
   HttpSimplePriceProvider,
-  InMemoryInvoiceKvStore,
   OPENRECEIVE_FALLBACK_PRICE_FEED_URL,
   OPENRECEIVE_PRICE_FEED_PRIMARY_TIMEOUT_MS,
   OPENRECEIVE_PRIMARY_PRICE_FEED_URL,
@@ -16,8 +16,8 @@ import {
   isResolvedPriceProvider,
   parseSimplePriceResponse,
   quoteFiatToMsatsWithPrice,
-  quoteFiatToMsatsWithProvider
-} from "@openreceive/core";
+  quoteFiatToMsatsWithProvider,
+} from "../../packages/js/core/src/rates/index.ts";
 
 const PRIMARY_URL = "https://primary.test/simple/price";
 const FALLBACK_URL = "https://fallback.test/simple/price";

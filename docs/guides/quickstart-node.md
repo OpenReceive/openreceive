@@ -73,7 +73,7 @@ app.use(
     resolveOrder: async ({ orderId }) => {
       const order = await db.orders.find(orderId);
       if (!order) return null; // → 404
-      return { usd: order.total_usd };
+      return { amount: { currency: "USD", value: order.total_usd } };
     },
   }),
 );

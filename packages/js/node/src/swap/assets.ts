@@ -8,10 +8,10 @@ export const OPENRECEIVE_SWAP_PAY_IN_ASSETS = [
   "USDC_ETH",
 ] as const;
 
-export type OpenReceiveSwapPayInAsset = (typeof OPENRECEIVE_SWAP_PAY_IN_ASSETS)[number];
+export type SwapPayInAsset = (typeof OPENRECEIVE_SWAP_PAY_IN_ASSETS)[number];
 
 export interface OpenReceiveSwapAssetInfo {
-  readonly pay_in_asset: OpenReceiveSwapPayInAsset;
+  readonly pay_in_asset: SwapPayInAsset;
   readonly label: string;
   readonly network_label: string;
   readonly coin: string;
@@ -19,7 +19,7 @@ export interface OpenReceiveSwapAssetInfo {
   readonly expiry_seconds: number;
 }
 
-const ASSET_INFO: Readonly<Record<OpenReceiveSwapPayInAsset, OpenReceiveSwapAssetInfo>> = {
+const ASSET_INFO: Readonly<Record<SwapPayInAsset, OpenReceiveSwapAssetInfo>> = {
   SOL_SOL: {
     pay_in_asset: "SOL_SOL",
     label: "SOL",
@@ -78,7 +78,7 @@ const ASSET_INFO: Readonly<Record<OpenReceiveSwapPayInAsset, OpenReceiveSwapAsse
   },
 } as const;
 
-export function isOpenReceiveSwapPayInAsset(value: unknown): value is OpenReceiveSwapPayInAsset {
+export function isOpenReceiveSwapPayInAsset(value: unknown): value is SwapPayInAsset {
   return (
     typeof value === "string" &&
     (OPENRECEIVE_SWAP_PAY_IN_ASSETS as readonly string[]).includes(value)
@@ -86,7 +86,7 @@ export function isOpenReceiveSwapPayInAsset(value: unknown): value is OpenReceiv
 }
 
 export function getOpenReceiveSwapAssetInfo(
-  payInAsset: OpenReceiveSwapPayInAsset,
+  payInAsset: SwapPayInAsset,
 ): OpenReceiveSwapAssetInfo {
   return ASSET_INFO[payInAsset];
 }
@@ -95,7 +95,7 @@ export function listOpenReceiveSwapAssetInfo(): readonly OpenReceiveSwapAssetInf
   return OPENRECEIVE_SWAP_PAY_IN_ASSETS.map((asset) => ASSET_INFO[asset]);
 }
 
-export function formatOpenReceiveSwapAssetLabel(payInAsset: OpenReceiveSwapPayInAsset): string {
+export function formatOpenReceiveSwapAssetLabel(payInAsset: SwapPayInAsset): string {
   const info = getOpenReceiveSwapAssetInfo(payInAsset);
   return `${info.label} (${info.network_label})`;
 }
@@ -138,7 +138,7 @@ export function isOpenReceiveLightningNetwork(value: string): boolean {
  * caller so on-chain address rules live in one place; callers throw their own error.
  */
 export function isValidSwapAddressForNetwork(
-  payInAsset: OpenReceiveSwapPayInAsset,
+  payInAsset: SwapPayInAsset,
   address: string,
 ): boolean {
   if (address.length > 200 || /\s/.test(address)) return false;

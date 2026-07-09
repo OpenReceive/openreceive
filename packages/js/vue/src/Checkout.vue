@@ -8,7 +8,7 @@ import {
 } from "./index.js";
 
 defineOptions({
-  name: "OpenReceiveCheckout"
+  name: "Checkout"
 });
 
 const props = withDefaults(

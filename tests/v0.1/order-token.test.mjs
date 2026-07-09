@@ -74,7 +74,7 @@ test("requestCheckout with prefix stores the per-order token and it rides status
   const checkout = await requestCheckout({
     prefix: "/openreceive",
     orderId,
-    usd: "10.00",
+    amount: { currency: "USD", value: "10.00" },
     fetch: async (url, init) => {
       createRequests.push({ url, init });
       return mountedCreateResponse(orderId, "tok_abc");
@@ -214,7 +214,7 @@ test("prefix derives the checkout URL (trailing slash stripped) and explicit che
   await requestCheckout({
     prefix: "/openreceive/",
     orderId: "order-derive",
-    usd: "5.00",
+    amount: { currency: "USD", value: "5.00" },
     fetch: async (url) => {
       derived.push(url);
       return mountedCreateResponse("order-derive", undefined);
@@ -227,7 +227,7 @@ test("prefix derives the checkout URL (trailing slash stripped) and explicit che
     prefix: "/openreceive",
     checkoutUrl: "/custom/create",
     orderId: "order-explicit",
-    usd: "5.00",
+    amount: { currency: "USD", value: "5.00" },
     fetch: async (url) => {
       explicit.push(url);
       return mountedCreateResponse("order-explicit", undefined);

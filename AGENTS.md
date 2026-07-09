@@ -108,4 +108,4 @@ Before declaring work done, report exactly which checks were run. If you skip
 
 Do not add private openreceive.org app code, private infrastructure inventory,
 host IPs, deployment credentials, analytics code, product landing pages, or
-private business logic to this public repository.
+private business logic to this public repository. Keep those outside the repo.

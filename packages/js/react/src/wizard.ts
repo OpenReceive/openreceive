@@ -111,7 +111,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
           order_id: orderId,
           action: "start_swap",
           pay_in_asset: payInAsset,
-        });
+        }, { logger: props.logger });
         const invoice = normalizeSwapStartInvoice(body);
         setStartedSwapInvoice(invoice);
         setDismissedSwapInvoiceId(null);
@@ -121,7 +121,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
         setSwapStartingAsset(null);
       }
     },
-    [props.orderUrl, orderId, fetcher, props.onError],
+    [props.orderUrl, orderId, fetcher, props.onError, props.logger],
   );
   const quoteSwap = React.useCallback(
     async (payInAsset: string): Promise<OpenReceiveSwapOptionDisplay | undefined> => {
@@ -169,7 +169,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
           refund_address: refundAddress,
           refund_nonce: refundNonce,
           confirm,
-        });
+        }, { logger: props.logger });
         const invoice = normalizeSwapStartInvoice(body);
         setStartedSwapInvoice(invoice);
         setDismissedSwapInvoiceId(null);
@@ -177,7 +177,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
         props.onError?.(error);
       }
     },
-    [props.orderUrl, orderId, fetcher, props.onError],
+    [props.orderUrl, orderId, fetcher, props.onError, props.logger],
   );
   const updateWizardSelection = React.useCallback(
     (
@@ -222,6 +222,9 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
         `${option.pay_in_asset}:${option.available}:${option.unavailable_reason ?? ""}:${option.minimum_invoice_amount_msats ?? ""}`,
     )
     .join("|");
+  // Diagnostic only: intentionally keyed on swapOptionsSignature so availability
+  // changes log once. checkout fields are snapshot context, not effect triggers.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: signature is the intentional dep
   React.useEffect(() => {
     if (props.logger === undefined || swapAssetOptions.length === 0) return;
     props.logger({
@@ -241,7 +244,6 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
         maximum_pay_amount: option.maximum_pay_amount,
       })),
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [swapOptionsSignature, props.logger]);
   const activeSwapForAsset =
     selectedSwapAsset === null

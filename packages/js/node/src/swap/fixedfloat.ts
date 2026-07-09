@@ -4,7 +4,7 @@ import {
   isOpenReceiveLightningNetwork,
   isValidSwapAddressForNetwork,
   listOpenReceiveSwapAssetInfo,
-  type OpenReceiveSwapPayInAsset,
+  type SwapPayInAsset,
   openReceiveSwapNetworkMatches,
 } from "./assets.ts";
 import {
@@ -13,17 +13,18 @@ import {
   swapLimitsMetaKey,
 } from "./limits-cache.ts";
 import type {
-  OpenReceiveSwapAttentionReason,
-  OpenReceiveSwapAvailabilityReason,
-  OpenReceiveSwapFee,
-  OpenReceiveSwapOrder,
-  OpenReceiveSwapProvider,
-  OpenReceiveSwapProviderAsset,
-  OpenReceiveSwapProviderState,
-  OpenReceiveSwapQuote,
+  SwapAttentionReason,
+  SwapAvailabilityReason,
+  SwapFee,
+  SwapOrder,
+  SwapProvider,
+  SwapProviderAsset,
+  SwapProviderState,
+  SwapQuote,
   SwapProviderApiRequestLog,
   SwapProviderApiResponseLog,
 } from "./provider.ts";
+import { isSwapProviderWeightBudgetError } from "./weight-budget.ts";
 
 export interface FixedFloatProviderOptions {
   readonly key: string;
@@ -48,11 +49,13 @@ interface FixedFloatCurrency {
   readonly code: string;
   readonly coin: string;
   readonly network: string;
+  readonly recv?: boolean;
+  readonly send?: boolean;
 }
 
 interface FixedFloatCurrencyResolution {
   readonly fetched_at: number;
-  readonly pay_in: ReadonlyMap<OpenReceiveSwapPayInAsset, FixedFloatCurrency>;
+  readonly pay_in: ReadonlyMap<SwapPayInAsset, FixedFloatCurrency>;
   readonly lightning: FixedFloatCurrency;
 }
 
@@ -112,9 +115,14 @@ const DEFAULT_CCIES_CACHE_SECONDS = 24 * 60 * 60;
 const DEFAULT_FIXED_FLOAT_REQUEST_TIMEOUT_MS = 10_000;
 const DEFAULT_FIXED_FLOAT_DEPOSIT_WINDOW_SECONDS = 10 * 60;
 const DEFAULT_FIXED_FLOAT_SETTLEMENT_SLA_SECONDS = 15 * 60;
-const DEFAULT_FIXED_FLOAT_INVOICE_EXPIRY_MARGIN_SECONDS = 2 * 60;
+/**
+ * Margin above deposit_window + settlement_sla. FixedFloat order examples show
+ * ~1800s deposit windows; the previous 120s margin left shadow invoices at 1620s
+ * — shorter than a plausible FF order. 300s yields a 1800s default floor.
+ */
+const DEFAULT_FIXED_FLOAT_INVOICE_EXPIRY_MARGIN_SECONDS = 5 * 60;
 
-export function fixedFloatProvider(options: FixedFloatProviderOptions): OpenReceiveSwapProvider {
+export function fixedFloatProvider(options: FixedFloatProviderOptions): SwapProvider {
   return fixedFloatCompatibleSwapProvider({
     ...options,
     id: "fixedfloat",
@@ -123,11 +131,11 @@ export function fixedFloatProvider(options: FixedFloatProviderOptions): OpenRece
 
 export function fixedFloatCompatibleSwapProvider(
   options: FixedFloatCompatibleSwapProviderOptions,
-): OpenReceiveSwapProvider {
+): SwapProvider {
   return new FixedFloatProvider(options);
 }
 
-class FixedFloatProvider implements OpenReceiveSwapProvider {
+class FixedFloatProvider implements SwapProvider {
   readonly name: string;
   private readonly key: string;
   private readonly secret: string;
@@ -141,6 +149,13 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
   private cache: StoreBackedSwapCache | undefined;
   private apiRequestLogger: ((entry: SwapProviderApiRequestLog) => void) | undefined;
   private apiResponseLogger: ((entry: SwapProviderApiResponseLog) => void) | undefined;
+  private weightBudget:
+    | {
+        reserve(path: string): Promise<void>;
+        markRateLimited(): Promise<void>;
+        canReserve(path: string): Promise<boolean>;
+      }
+    | undefined;
 
   constructor(options: FixedFloatCompatibleSwapProviderOptions) {
     this.name = readFixedFloatCompatibleProviderId(options.id);
@@ -212,12 +227,25 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
     this.apiResponseLogger = log;
   }
 
-  async supportedPayInAssets(): Promise<Set<OpenReceiveSwapPayInAsset>> {
+  attachWeightBudget(budget: {
+    reserve(path: string): Promise<void>;
+    markRateLimited(): Promise<void>;
+    canReserve(path: string): Promise<boolean>;
+  }): void {
+    this.weightBudget = budget;
+  }
+
+  async canAcceptRequest(path: string): Promise<boolean> {
+    if (this.weightBudget === undefined) return true;
+    return await this.weightBudget.canReserve(path);
+  }
+
+  async supportedPayInAssets(): Promise<Set<SwapPayInAsset>> {
     const resolution = await this.resolveCurrencies();
     return new Set(resolution.pay_in.keys());
   }
 
-  async payInAssetCatalog(): Promise<readonly OpenReceiveSwapProviderAsset[]> {
+  async payInAssetCatalog(): Promise<readonly SwapProviderAsset[]> {
     const resolution = await this.resolveCurrencies();
     // /ccies reports only availability and display metadata per currency — it carries
     // no amount limits (data[].recv/.send are booleans, not min/max objects). Per-pair
@@ -233,9 +261,9 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
   }
 
   async quote(input: {
-    readonly payInAsset: OpenReceiveSwapPayInAsset;
+    readonly payInAsset: SwapPayInAsset;
     readonly invoiceAmountMsats: number;
-  }): Promise<OpenReceiveSwapQuote> {
+  }): Promise<SwapQuote> {
     const resolution = await this.resolveCurrencies();
     const fromCcy = requiredCurrency(resolution, input.payInAsset);
     try {
@@ -280,10 +308,10 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
   }
 
   async createSwap(input: {
-    readonly payInAsset: OpenReceiveSwapPayInAsset;
+    readonly payInAsset: SwapPayInAsset;
     readonly bolt11: string;
     readonly invoiceAmountMsats: number;
-  }): Promise<OpenReceiveSwapOrder> {
+  }): Promise<SwapOrder> {
     const resolution = await this.resolveCurrencies();
     const fromCcy = requiredCurrency(resolution, input.payInAsset);
     const data = await this.post("create", {
@@ -316,7 +344,7 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
     fromCcy: string,
     toCcy: string,
     invoiceAmountMsats: number,
-  ): Promise<OpenReceiveSwapFee | undefined> {
+  ): Promise<SwapFee | undefined> {
     try {
       const data = await this.post("price", {
         type: "fixed",
@@ -331,7 +359,7 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
     }
   }
 
-  async getStatus(order: OpenReceiveSwapOrder): Promise<OpenReceiveSwapOrder> {
+  async getStatus(order: SwapOrder): Promise<SwapOrder> {
     const data = await this.post("order", {
       id: order.provider_order_id,
       token: order.provider_token,
@@ -346,7 +374,7 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
     };
   }
 
-  async requestRefund(order: OpenReceiveSwapOrder, refundAddress: string): Promise<void> {
+  async requestRefund(order: SwapOrder, refundAddress: string): Promise<void> {
     await this.post("emergency", {
       id: order.provider_order_id,
       token: order.provider_token,
@@ -356,6 +384,9 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
   }
 
   private async post(path: string, body: Record<string, unknown>): Promise<unknown> {
+    if (this.weightBudget !== undefined) {
+      await this.weightBudget.reserve(path);
+    }
     const bodyString = JSON.stringify(body);
     // Surface every outbound request before the call. The service sink sanitizes
     // nested secrets (e.g. the order token on status/refund bodies); the API key
@@ -410,6 +441,9 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
       data: parsed.data,
     });
     if (!response.ok) {
+      if (response.status === 429 && this.weightBudget !== undefined) {
+        await this.weightBudget.markRateLimited();
+      }
       throw new FixedFloatApiError({
         path,
         kind: response.status === 429 ? "rate_limited" : "http",
@@ -450,12 +484,15 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
     const now = this.now();
     const data = await this.post("ccies", {});
     const currencies = readFixedFloatCurrencies(data);
-    const payIn = new Map<OpenReceiveSwapPayInAsset, FixedFloatCurrency>();
+    const payIn = new Map<SwapPayInAsset, FixedFloatCurrency>();
     for (const asset of listOpenReceiveSwapAssetInfo()) {
       const found = currencies.find(
         (currency) =>
           currency.coin.toUpperCase() === asset.coin &&
-          openReceiveSwapNetworkMatches(asset.network, currency.network),
+          openReceiveSwapNetworkMatches(asset.network, currency.network) &&
+          // /ccies recv=false means FixedFloat will not accept deposits for this
+          // currency — omit it from the catalog rather than failing at /create.
+          currency.recv !== false,
       );
       if (found !== undefined) payIn.set(asset.pay_in_asset, found);
     }
@@ -465,9 +502,13 @@ class FixedFloatProvider implements OpenReceiveSwapProvider {
         ? currencies.find(
             (currency) =>
               currency.coin.toUpperCase() === "BTC" &&
-              isOpenReceiveLightningNetwork(currency.network),
+              isOpenReceiveLightningNetwork(currency.network) &&
+              // Payout side must be sendable to the merchant's bolt11.
+              currency.send !== false,
           )
-        : currencies.find((currency) => currency.code === this.lightningCcy);
+        : currencies.find(
+            (currency) => currency.code === this.lightningCcy && currency.send !== false,
+          );
     if (lightningCurrency === undefined) {
       throw new Error("FixedFloat /ccies did not include a BTC Lightning payout currency.");
     }
@@ -491,7 +532,7 @@ function serializeCurrencyResolution(resolution: FixedFloatCurrencyResolution): 
 function deserializeCurrencyResolution(value: string): FixedFloatCurrencyResolution {
   const parsed = JSON.parse(value) as {
     readonly fetched_at: number;
-    readonly pay_in: readonly (readonly [OpenReceiveSwapPayInAsset, FixedFloatCurrency])[];
+    readonly pay_in: readonly (readonly [SwapPayInAsset, FixedFloatCurrency])[];
     readonly lightning: FixedFloatCurrency;
   };
   return {
@@ -513,7 +554,7 @@ function readFixedFloatCompatibleProviderId(id: string): string {
 
 function requiredCurrency(
   resolution: FixedFloatCurrencyResolution,
-  payInAsset: OpenReceiveSwapPayInAsset,
+  payInAsset: SwapPayInAsset,
 ): string {
   const currency = resolution.pay_in.get(payInAsset);
   if (currency === undefined) {
@@ -535,7 +576,8 @@ function amountMsatsToBtcString(amountMsats: number): string {
   return fractional.length === 0 ? String(wholeBtc) : `${wholeBtc}.${fractional}`;
 }
 
-function classifyFixedFloatQuoteError(error: unknown): OpenReceiveSwapAvailabilityReason {
+function classifyFixedFloatQuoteError(error: unknown): SwapAvailabilityReason {
+  if (isSwapProviderWeightBudgetError(error)) return "provider_rate_limited";
   if (error instanceof FixedFloatApiError) {
     if (error.kind === "rate_limited" || error.status === 429) return "provider_rate_limited";
     if (
@@ -553,7 +595,13 @@ function classifyFixedFloatQuoteError(error: unknown): OpenReceiveSwapAvailabili
   }
   const message =
     error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
-  if (message.includes("rate") || message.includes("429")) return "provider_rate_limited";
+  if (
+    message.includes("rate") ||
+    message.includes("429") ||
+    message.includes("weight budget")
+  ) {
+    return "provider_rate_limited";
+  }
   if (message.includes("fetch") || message.includes("network") || message.includes("timeout")) {
     return "provider_unreachable";
   }
@@ -564,13 +612,13 @@ function classifyFixedFloatQuoteError(error: unknown): OpenReceiveSwapAvailabili
 
 function classifyFixedFloatDataErrors(
   errors: readonly FixedFloatDataError[],
-): OpenReceiveSwapAvailabilityReason {
+): SwapAvailabilityReason {
   if (errors.some((error) => error.code === "LIMIT_MIN")) return "amount_too_small";
   if (errors.some((error) => error.code === "LIMIT_MAX")) return "amount_too_large";
   return "pair_temporarily_unavailable";
 }
 
-function fixedFloatAvailabilityMessage(reason: OpenReceiveSwapAvailabilityReason): string {
+function fixedFloatAvailabilityMessage(reason: SwapAvailabilityReason): string {
   if (reason === "amount_too_small") return "This invoice is below the provider minimum.";
   if (reason === "amount_too_large") return "This invoice is above the provider maximum.";
   if (reason === "provider_rate_limited") return "The swap provider is rate limited.";
@@ -727,10 +775,10 @@ function normalizeFixedFloatOrder(
   data: unknown,
   input: {
     readonly provider: string;
-    readonly payInAsset: OpenReceiveSwapPayInAsset;
-    readonly fallback?: OpenReceiveSwapOrder;
+    readonly payInAsset: SwapPayInAsset;
+    readonly fallback?: SwapOrder;
   },
-): OpenReceiveSwapOrder {
+): SwapOrder {
   const record = asRecord(data);
   const from = asRecord(record.from);
   const time = asRecord(record.time);
@@ -751,6 +799,7 @@ function normalizeFixedFloatOrder(
     requiredString(from.address, "from.address");
   assertFixedFloatDepositAddressShape(input.payInAsset, depositAddress);
   const fee = readFixedFloatOrderFee(record) ?? input.fallback?.fee;
+  const emergencyRepeat = readEmergencyRepeat(emergency);
 
   return {
     provider: input.provider,
@@ -781,6 +830,11 @@ function normalizeFixedFloatOrder(
     ...(normalizedStatus.attention_reason === undefined
       ? {}
       : { attention_reason: normalizedStatus.attention_reason }),
+    ...(emergencyRepeat === undefined
+      ? input.fallback?.emergency_repeat === undefined
+        ? {}
+        : { emergency_repeat: input.fallback.emergency_repeat }
+      : { emergency_repeat: emergencyRepeat }),
     ...(fee === undefined ? {} : { fee }),
     raw: data,
   };
@@ -789,7 +843,7 @@ function normalizeFixedFloatOrder(
 // FixedFloat reports the USD equivalents of both sides of the exchange (from.usd is the
 // value of the crypto the payer sends, to.usd the value delivered to the merchant). Their
 // gap is the swap fee the payer absorbs, so we surface both to explain the price.
-function readFixedFloatOrderFee(record: Record<string, unknown>): OpenReceiveSwapFee | undefined {
+function readFixedFloatOrderFee(record: Record<string, unknown>): SwapFee | undefined {
   const payInFiat = readNestedString(record, ["from", "usd"]);
   const payoutFiat = readNestedString(record, ["to", "usd"]);
   if (payInFiat === undefined || payoutFiat === undefined) return undefined;
@@ -797,7 +851,7 @@ function readFixedFloatOrderFee(record: Record<string, unknown>): OpenReceiveSwa
 }
 
 function assertFixedFloatDepositAddressShape(
-  payInAsset: OpenReceiveSwapPayInAsset,
+  payInAsset: SwapPayInAsset,
   depositAddress: string,
 ): void {
   if (!isValidSwapAddressForNetwork(payInAsset, depositAddress)) {
@@ -810,9 +864,9 @@ function normalizeFixedFloatStatus(
   emergency: Record<string, unknown> | undefined,
   refundTxId: string | undefined,
 ): {
-  readonly state: OpenReceiveSwapProviderState;
+  readonly state: SwapProviderState;
   readonly attention?: boolean;
-  readonly attention_reason?: OpenReceiveSwapAttentionReason;
+  readonly attention_reason?: SwapAttentionReason;
 } {
   const normalized = status.toUpperCase();
   if (refundTxId !== undefined && (normalized === "DONE" || normalized === "FINISHED")) {
@@ -882,10 +936,21 @@ function readFixedFloatCurrencies(data: unknown): FixedFloatCurrency[] {
         code,
         coin: coin.toUpperCase(),
         network,
+        ...(typeof record.recv === "boolean" ? { recv: record.recv } : {}),
+        ...(typeof record.send === "boolean" ? { send: record.send } : {}),
       });
     }
   }
   return currencies;
+}
+
+function readEmergencyRepeat(emergency: Record<string, unknown> | undefined): boolean | undefined {
+  if (emergency === undefined) return undefined;
+  const value = emergency.repeat;
+  if (typeof value === "boolean") return value;
+  if (value === 0 || value === "0") return false;
+  if (value === 1 || value === "1") return true;
+  return undefined;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

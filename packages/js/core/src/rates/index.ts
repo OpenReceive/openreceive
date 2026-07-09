@@ -18,7 +18,7 @@ export type OpenReceivePriceSourceId = (typeof OPENRECEIVE_PRICE_SOURCE_IDS)[num
 
 export type OpenReceiveLivePriceSourceId = Exclude<OpenReceivePriceSourceId, "static_mock">;
 
-export const OPENRECEIVE_STATIC_PRICE_SOURCE_ID = "static_mock" as const;
+const OPENRECEIVE_STATIC_PRICE_SOURCE_ID = "static_mock" as const;
 
 export const OPENRECEIVE_STATIC_BTC_FIAT_RATES = {
   bitcoin: {
@@ -50,7 +50,7 @@ export const OPENRECEIVE_PRICE_FEED_FALLBACK_URL_ENV =
   "OPENRECEIVE_PRICE_FEED_FALLBACK_URL" as const;
 
 // Meta-store key the cached feed reads/writes the JSON rate blob under.
-export const OPENRECEIVE_PRICE_FEED_CACHE_META_KEY = "price_feed:bitcoin" as const;
+const OPENRECEIVE_PRICE_FEED_CACHE_META_KEY = "price_feed:bitcoin" as const;
 
 export const OPENRECEIVE_SATS_PER_BTC = 100_000_000n;
 export const OPENRECEIVE_MSATS_PER_SAT = 1000n;

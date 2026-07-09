@@ -5,6 +5,7 @@ import {
   putCreatedInvoiceRecord,
   type StoredRecord,
   sweepPendingInvoicesOnce,
+  isOpenReceiveBitcoinAmountCurrency,
 } from "@openreceive/core";
 import {
   createCheckoutId,
@@ -37,12 +38,12 @@ import {
 import { advanceSwapsForOrder, advanceSwapsForRecords } from "./swaps.ts";
 import type {
   NormalizedCreateCheckoutRequest,
-  OpenReceiveCheckoutModel,
-  OpenReceiveCreateCheckoutAmount,
-  OpenReceiveCreateCheckoutRequest,
-  OpenReceiveGetCheckoutRequest,
-  OpenReceiveGetOrderRequest,
-  OpenReceiveOrderModel,
+  Checkout,
+  CreateCheckoutAmount,
+  CreateCheckoutRequest,
+  GetCheckoutRequest,
+  GetOrderRequest,
+  Order,
   OpenReceiveServiceContext,
 } from "./types.ts";
 
@@ -63,8 +64,8 @@ export const RESERVED_CHECKOUT_METADATA_KEYS = new Set([
 
 export async function createCheckout(
   context: OpenReceiveServiceContext,
-  input: OpenReceiveCreateCheckoutRequest,
-): Promise<OpenReceiveCheckoutModel> {
+  input: CreateCheckoutRequest,
+): Promise<Checkout> {
   const createInput = normalizeCreateCheckoutRequest(input);
   const orderId = createInput.order_id;
   readCreateAmountKind(createInput.amount);
@@ -116,8 +117,8 @@ export async function createCheckout(
 
 export async function getOrder(
   context: OpenReceiveServiceContext,
-  input: OpenReceiveGetOrderRequest,
-): Promise<OpenReceiveOrderModel> {
+  input: GetOrderRequest,
+): Promise<Order> {
   const orderId = parseGetOrderId(input);
   const records = await context.store.listByOrderId(orderId);
   if (records.length === 0) {
@@ -157,8 +158,8 @@ export async function getOrder(
 
 export async function getCheckout(
   context: OpenReceiveServiceContext,
-  input: OpenReceiveGetCheckoutRequest,
-): Promise<OpenReceiveCheckoutModel> {
+  input: GetCheckoutRequest,
+): Promise<Checkout> {
   const checkoutId = parseGetCheckoutId(input);
   const records = await context.store.listByCheckoutId(checkoutId);
   if (records.length === 0) {
@@ -316,16 +317,23 @@ export function checkoutPassthroughMetadata(
 
 export async function amountMatches(
   context: OpenReceiveServiceContext,
-  amount: OpenReceiveCreateCheckoutAmount,
-  checkout: OpenReceiveCheckoutModel,
+  amount: CreateCheckoutAmount,
+  checkout: Checkout,
   now: number,
 ): Promise<boolean> {
-  if ("fiat" in amount || checkout.fiat !== undefined) {
+  const fiat =
+    "currency" in amount &&
+    amount.currency !== undefined &&
+    !isOpenReceiveBitcoinAmountCurrency(amount.currency)
+      ? { currency: amount.currency, value: amount.value }
+      : undefined;
+
+  if (fiat !== undefined || checkout.fiat !== undefined) {
     return (
-      "fiat" in amount &&
+      fiat !== undefined &&
       checkout.fiat !== undefined &&
-      amount.fiat.currency === checkout.fiat.currency &&
-      amount.fiat.value === checkout.fiat.value
+      fiat.currency === checkout.fiat.currency &&
+      fiat.value === checkout.fiat.value
     );
   }
 
@@ -352,7 +360,7 @@ export function createCheckoutRequestHashBody(
 
 export async function supersedeCheckout(
   context: OpenReceiveServiceContext,
-  checkout: OpenReceiveCheckoutModel,
+  checkout: Checkout,
 ): Promise<void> {
   const records = await context.store.listByCheckoutId(checkout.checkoutId);
   for (const record of records) {

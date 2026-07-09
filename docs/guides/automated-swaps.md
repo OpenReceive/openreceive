@@ -34,15 +34,26 @@ swap:
 ```
 
 `providers` order is priority order. `id` must be unique and becomes the public
-`swap.provider` value. `protocol: fixedfloat` means the service uses the
-FixedFloat-compatible API shape for currency discovery, quotes, order creation, status,
-and refunds. Leave `swap.providers` empty or leave provider keys blank to keep automated
-swaps disabled.
+`swap.provider` value. Quote and start always try the first provider that supports the
+pay-in asset; if that provider's shared weight budget is exhausted (or in backoff after
+a 429), selection fails over to the next entry that still supports the asset. Each
+provider has its own durable ledger (`swap_provider_weight:<id>`) assuming
+FixedFloat-compatible limits (250 weight/min, `/create` = 50). Status and refund for an
+existing attempt stay pinned to the provider that created it.
+
+`protocol: fixedfloat` means the service uses the FixedFloat-compatible API shape for
+currency discovery, quotes, order creation, status, and refunds. Leave `swap.providers`
+empty or leave provider keys blank to keep automated swaps disabled.
 
 `invoice_expiry_seconds` is optional. It auto-derives from
 `deposit_window_seconds + settlement_sla_seconds + invoice_expiry_margin_seconds` (default
-`600 + 900 + 120 = 1620`). Set it only to lengthen the window; a value below that floor is
-rejected at startup with an error that states the offending value and the required minimum.
+`600 + 900 + 300 = 1800`). The margin is sized so the shadow Lightning invoice outlives
+plausible FixedFloat deposit windows (their API examples show ~1800s). Set
+`invoice_expiry_seconds` only to lengthen the window; a value below that floor is rejected
+at startup with an error that states the offending value and the required minimum. After
+`/create`, if the provider order still expires after the shadow invoice, the attempt is
+marked `attention` (`provider_order_expires_after_shadow_invoice`) rather than racing a
+dead bolt11 at payout time.
 
 Never send provider keys, provider secrets, or `openreceive.yml` to browser code, mobile
 apps, source maps, fixtures, or logs. Commit `openreceive.yml.example`, not the real file.
@@ -54,23 +65,53 @@ loaded (or noting that swaps are disabled), so "off on purpose" is distinguishab
 ## Payer Flow
 
 The whole payer experience is one backend route plus one checkout attribute. Your
-route authorizes the order its own way, then forwards the request body to
-`openreceive.order(body)`:
+route authorizes the order its own way, then calls the typed camelCase service
+methods (or mounts the shipped HTTP handler, which does the same):
 
 ```ts
-// app-owned route — you authorize, OpenReceive routes the rest
+// app-owned route — you authorize, then call typed methods
 export async function POST(request: Request): Promise<Response> {
   const body = await request.json();
-  await authorizeOrderAccess(request, body.order_id); // your own session/ownership check
-  return Response.json(await openreceive.order(body));
+  const orderId = body.order_id;
+  await authorizeOrderAccess(request, orderId); // your own session/ownership check
+
+  const action = body.action ?? "status";
+  if (action === "status") {
+    const order = await openreceive.getOrder({ orderId });
+    const swap = await openreceive.swapOptions({ orderId });
+    return Response.json({
+      ...order,
+      swaps_enabled: swap.enabled,
+      swap_pay_options: swap.enabled ? swap.options : [],
+    });
+  }
+  if (action === "swap_quote") {
+    const quote = await openreceive.swapQuote({ orderId, payInAsset: body.pay_in_asset });
+    return Response.json({ quote });
+  }
+  if (action === "start_swap") {
+    const attempt = await openreceive.startSwap({ orderId, payInAsset: body.pay_in_asset });
+    return Response.json({ attempt });
+  }
+  if (action === "refund_swap") {
+    const attempt = await openreceive.refundSwap({
+      attemptId: body.attempt_id,
+      refundAddress: body.refund_address,
+      refundNonce: body.refund_nonce,
+      confirm: body.confirm === true,
+    });
+    return Response.json({ attempt });
+  }
+  return Response.json({ code: "INVALID_REQUEST", message: "Unknown order action." }, { status: 400 });
 }
 ```
 
 OpenReceive performs no authentication or authorization. Treat `order_id` and
 `attempt_id` as non-secret identifiers, not capabilities — authorize the caller in
-your route before forwarding. `order()` takes no auth callback and adds no new
-payment logic; it is a thin, typed router over the existing server behavior. This one
-route serves both plain Lightning status polling and every swap action.
+your route before calling the service. Prefer mounting the shipped routes
+(`openReceiveExpress` / `createOpenReceiveHttpHandler`) so you do not hand-write
+this multiplexer. This one route serves both plain Lightning status polling and
+every swap action.
 
 Point the checkout element at that one route with `order-url` (or the `orderUrl`
 prop on the framework components):
@@ -126,15 +167,16 @@ and your custom UI then read the same source of truth:
 ```ts
 import { describeSwapState, OPENRECEIVE_SWAP_STATES } from "@openreceive/node";
 
-const { label, detail, phase, terminal } = describeSwapState(attempt.provider_state);
+const { label, detail, phase, terminal } = describeSwapState(attempt.providerState);
 if (phase === "awaiting_deposit") renderDepositBox(attempt);
-if (terminal) stopPolling(attempt.attempt_id);
+if (terminal) stopPolling(attempt.attemptId);
 ```
 
 `describeSwapState(state)` returns `{ label, detail, phase, terminal }`. `phase` is a coarse
-bucket for UI branching; `OPENRECEIVE_SWAP_STATES` is the full catalog.
+bucket for UI branching; `OPENRECEIVE_SWAP_STATES` is the full catalog. HTTP wire fields stay
+snake_case (`provider_state`); the JS service uses camelCase (`providerState`).
 
-| `provider_state` | phase | terminal | meaning for the payer |
+| `provider_state` (HTTP) / `providerState` (SDK) | phase | terminal | meaning for the payer |
 | --- | --- | --- | --- |
 | `creating_provider_order` | `preparing` | no | The deposit address is still being created. |
 | `awaiting_deposit` | `awaiting_deposit` | no | Show the deposit address/amount; the payer must send funds. |
@@ -174,11 +216,12 @@ Refunds ride the same route with no extra wiring. When the provider reports
 network, shows it back for explicit confirmation, and submits the confirmed
 refund — all through `order-url`.
 
-Refund confirmation is two-phase and nonce-guarded. The attempt carries a `refund_nonce`
-and its `refund_nonce_expires_at` (unix seconds). Submit the address once to stage it
-(`confirm` omitted/false), show it back, then submit again with `confirm: true`. Show a
-countdown from `refund_nonce_expires_at`: a confirm submitted after it lapses is rejected
-and the staged address is lost, so re-fetch status to get a fresh nonce before it expires.
+Refund confirmation is two-phase and nonce-guarded. The attempt carries a `refundNonce`
+(HTTP: `refund_nonce`) and its `refundNonceExpiresAt` / `refund_nonce_expires_at` (unix
+seconds). Submit the address once to stage it (`confirm` omitted/false), show it back,
+then submit again with `confirm: true`. Show a countdown from the expiry: a confirm
+submitted after it lapses is rejected and the staged address is lost, so re-fetch status
+to get a fresh nonce before it expires.
 
 Warn payers to use an address they control and not to paste the deposit address.
 Shape validation catches obvious mistakes, but it cannot prove that an address
@@ -186,35 +229,33 @@ belongs to the intended wallet or network.
 
 ## Custom UIs
 
-The single route covers the built-in checkout. To build a fully custom UI,
-`openreceive.order(body)` is a thin router over four lower-level methods that stay
-available as escape hatches. Call them only from backend routes where you have
-already authorized the caller. The `action` in the forwarded body selects one; an
+The single HTTP route covers the built-in checkout. To build a fully custom UI, call
+the typed camelCase service methods directly from backend routes where you have already
+authorized the caller. The shipped HTTP handler maps `action` the same way; an
 unrecognized `action` is rejected with a 400 rather than silently treated as status:
 
-| `action` | routes to | returns |
+| `action` (HTTP) | routes to | returns |
 | --- | --- | --- |
-| omitted / `"status"` | `getOrder` + `swapOptions` | `OpenReceiveOrderStatus` (order + `swaps_enabled` + `swap_pay_options`) |
+| omitted / `"status"` | `getOrder` + `swapOptions` | `OrderStatus` (order + `swaps_enabled` + `swap_pay_options`) |
 | `"swap_quote"` | `swapQuote` | `{ quote }` — one live estimate |
 | `"start_swap"` | `startSwap` | `{ attempt }` — the swap attempt |
 | `"refund_swap"` | `refundSwap` | `{ attempt }` |
 
-`order()` is fully typed: its return narrows on the request's `action`, so the recommended
-route is also the type-safe one. The wire body uses snake_case (`order_id`, `pay_in_asset`,
-`attempt_id`, `refund_address`, `refund_nonce`); the SDK methods take camelCase inputs
+The wire body uses snake_case (`order_id`, `pay_in_asset`, `attempt_id`,
+`refund_address`, `refund_nonce`); the SDK methods take camelCase inputs
 (`orderId`, `payInAsset`, `attemptId`, `refundAddress`, `refundNonce`).
 
-`startSwap` and `refundSwap` return a first-class `OpenReceiveSwapAttempt`: the deposit
+`startSwap` and `refundSwap` return a first-class `SwapAttempt`: the deposit
 fields the payer needs are top-level and guaranteed present, and the backing shadow
-Lightning invoice is `shadow_invoice`:
+Lightning invoice is `shadowInvoice`:
 
 ```ts
 const attempt = await openreceive.startSwap({ orderId, payInAsset: "USDT_TRON" });
-attempt.deposit_address;     // top-level — no optional `.swap` to unwrap
-attempt.deposit_amount;      // exact amount to send
-attempt.provider_state;      // feed to describeSwapState()
-attempt.refund_nonce;        // present once a refund is required
-attempt.shadow_invoice;      // the OpenReceiveInvoice this attempt is racing
+attempt.depositAddress;     // top-level — no optional `.swap` to unwrap
+attempt.depositAmount;      // exact amount to send
+attempt.providerState;      // feed to describeSwapState()
+attempt.refundNonce;        // present once a refund is required
+attempt.shadowInvoice;      // the Invoice this attempt is racing
 ```
 
 Refund is two-phase: submit with `confirm: false` to stage and echo the address while the
@@ -233,16 +274,20 @@ the attempt is marked for attention.
 
 ## Operating Swaps: The Attention State
 
-When an attempt enters `attention`, funds may be in limbo and polling stops (it is terminal).
-The attempt exposes `attention_reason` so a dashboard or on-call runbook can branch on the
-cause:
+When an attempt enters `attention`, automatic polling stops (it is terminal for the
+background poller). The attempt exposes `attention_reason` so a dashboard or on-call
+runbook can branch on the cause. For `provider_reported_emergency` only, call
+`refreshSwap` / HTTP `refresh_swap` after acting in the FixedFloat dashboard — do not
+auto-poll every attention record (that burns the shared API weight budget).
 
 | `attention_reason` | what happened | what to do |
 | --- | --- | --- |
 | `provider_completed_without_wallet_settlement` | Provider reported the Lightning payout as done, but no wallet settlement arrived within `settlement_attention_seconds`. | Reconcile against the wallet's `list_transactions` and the provider's payout tx. If the payout truly never landed, escalate to the provider with `payout_tx_id`. |
 | `provider_order_creation_stale` | A reserved attempt never received a provider order id (create hung). No deposit address was ever shown, so no payer funds are at risk. | Safe to ignore; the payer can start a fresh attempt. |
 | `provider_order_creation_failed` | The provider rejected order creation. `provider_error` records why. No deposit address was shown. | Safe to ignore for that attempt; check `provider_error` if it recurs across payers. |
-| `provider_reported_emergency` | The provider flagged an emergency (e.g. overpayment/underpayment or a manual exchange choice) that OpenReceive could not resolve automatically. | Inspect the provider order; it may require a manual refund or top-up through the provider. |
+| `provider_order_creation_needs_reconcile` | Create timed out or was interrupted after the request may have reached FixedFloat. FixedFloat has no client idempotency key, so a live order may exist without a stored token. | Reconcile in the FixedFloat dashboard before starting another attempt for this asset — OpenReceive blocks auto-mint of attempt N+1. |
+| `provider_reported_emergency` | The provider flagged an emergency (e.g. overpayment or a manual exchange choice) that OpenReceive could not resolve automatically. | Act in the provider dashboard, then `refresh_swap` to pull the new state. |
+| `provider_order_expires_after_shadow_invoice` | Provider order `expires_at` outlives the shadow bolt11 minted before `/create`. | Raise `invoice_expiry_seconds` / margin; do not expect LN payout on this attempt. |
 
 Alert on `attention` and route each reason to the right response. Do not auto-refund on
 `attention` — only `refund_required` carries a nonce and a safe refund path.
@@ -269,6 +314,49 @@ swap.forceAttention("USDT_TRON", "provider_completed_without_wallet_settlement")
 swap.forceCreateError();
 ```
 
+## Auditing Swap Stress Tests
+
+Wire a `logger` (and optional file logging at `debug`) so you can follow each attempt without
+scraping provider response blobs. Server events never include `refund_nonce`, refund
+addresses, or provider tokens — only `refund_nonce_present` / expiry timestamps.
+
+| Event | Level | When |
+| --- | --- | --- |
+| `swap.created` | info | Provider order created |
+| `swap.state.changed` | debug→warn | `provider_state` moved (poll, confirm, etc.) |
+| `swap.attention.raised` | warn | Attention reason set (settlement SLA, create fail/stale, …) |
+| `swap.refund.submitted` | info/warn | Refund address staged (`confirm: false`) |
+| `swap.refund.confirmed` | info | Provider `/emergency` REFUND accepted |
+| `swap.refund.rejected` | warn | Stale nonce, address mismatch, wrong state, double-confirm, … |
+| `swap.refund.rate_limited` | warn | >5 address submissions → 429 |
+| `swap.refund.nonce_issued` | debug | Fresh nonce minted (stage or poll) |
+| `swap.refund.provider_failed` | warn | Provider refund call failed; rolled back to `refund_required` |
+| `swap.provider.request` / `.response` | info | Raw FixedFloat-compatible traffic (token redacted) |
+| `invoice.settled` | info | Wallet sweep — settlement authority |
+
+Browser (pass `logger` to checkout / elements):
+
+| Event | When |
+| --- | --- |
+| `checkout.state.created` | Initial state |
+| `checkout.state.refreshed` | Status poll (debug; includes swap audit fields) |
+| `swap.state.changed` | `provider_state` / nonce / attention / wallet settlement flipped |
+| `swap.start.*` / `swap.refund.*` | Start or refund HTTP request lifecycle |
+
+Useful greps while live-testing:
+
+```sh
+# Underpay → refund path
+rg 'swap\.(state\.changed|refund\.|attention\.raised)' logs/openreceive.log
+# Finalizing vs Paid: provider completed without settled_at
+rg 'provider_completed_without_wallet_settlement|invoice\.settled' logs/openreceive.log
+# Abuse: stale nonce / mismatch / spam
+rg 'swap\.refund\.(rejected|rate_limited)' logs/openreceive.log
+```
+
+Set `logging.level: debug` in `openreceive.yml` (or pass `logger` that keeps debug) so
+`order.status.*`, `swap.refund.nonce_issued`, and poll transitions are retained.
+
 ## Adding Providers
 
 Use `protocol: fixedfloat` for providers that implement the same API shape as FixedFloat.
@@ -285,14 +373,14 @@ import { createOpenReceive, fixedFloatCompatibleSwapProvider } from "@openreceiv
 const openreceive = await createOpenReceive({
   swap: {
     providers: [
-      myCustomProvider, // implements OpenReceiveSwapProvider
+      myCustomProvider, // implements SwapProvider
       fixedFloatCompatibleSwapProvider({ id: "ff", key, secret, baseUrl: "https://ff.io" }),
     ],
   },
 });
 ```
 
-For a provider with a different API, implement `OpenReceiveSwapProvider` directly; the
+For a provider with a different API, implement `SwapProvider` directly; the
 interface owns cached asset catalog data, quote, create, status, refund, and supported asset
 behavior. A common pattern is "fake in dev, FixedFloat in prod" keyed on `NODE_ENV`, using
 `createTestkitSwapProvider()` for the dev branch.

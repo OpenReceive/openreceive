@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { OpenReceive, OpenReceiveCheckoutAmountSource } from "@openreceive/node";
+import type { OpenReceive, CheckoutAmountSource } from "@openreceive/node";
 import {
   createHelloFruitOrderInvoiceDescription,
   type HelloFruitFiatAmount,
@@ -51,13 +51,8 @@ export interface HelloFruitCreateOrderResult {
   readonly invoiceRequest: {
     readonly orderId: string;
     readonly amount:
-      | {
-          readonly btc: {
-            readonly currency: "BTC" | "SATS";
-            readonly value: string;
-          };
-        }
-      | { readonly fiat: HelloFruitFiatAmount };
+      | { readonly sats: string }
+      | { readonly currency: string; readonly value: string };
     readonly memo: string;
   };
 }
@@ -113,7 +108,7 @@ export async function prepareHelloFruitOrder(
 export async function resolveHelloFruitOrder(
   openreceive: Pick<OpenReceive, "store">,
   orderId: string,
-): Promise<OpenReceiveCheckoutAmountSource | null> {
+): Promise<CheckoutAmountSource | null> {
   const row = await openreceive.store.getMeta(`${HELLO_FRUIT_ORDER_META_PREFIX}${orderId}`);
   if (row === undefined) {
     return null;
@@ -195,22 +190,12 @@ function createOpenReceiveCheckoutAmount(
   currency: string,
 ): HelloFruitCreateOrderResult["invoiceRequest"]["amount"] {
   if (!isHelloFruitDirectAmountCurrency(currency)) {
-    return { fiat: total_amount };
+    return { currency: total_amount.currency, value: total_amount.value };
   }
   if (currency === "BTC") {
-    return {
-      btc: {
-        currency,
-        value: total_amount.value,
-      },
-    };
+    return { currency: "BTC", value: total_amount.value };
   }
-  return {
-    btc: {
-      currency: "SATS",
-      value: total_amount.value,
-    },
-  };
+  return { sats: total_amount.value };
 }
 
 function createHelloFruitOrderItems(

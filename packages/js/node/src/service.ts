@@ -13,11 +13,10 @@ import { createCheckout, getCheckout, getOrder } from "./service/checkouts.ts";
 import {
   currentUnixSeconds,
   readOpenReceiveNamespace,
-  serviceError,
 } from "./service/core-utils.ts";
 import { attachOpenReceiveFileLogging } from "./service/file-logger.ts";
 import { emitLog } from "./service/logging.ts";
-import { toWireCheckout, toWireOrder, toWireSwapAttempt } from "./service/models.ts";
+import { toSwapAttempt } from "./service/models.ts";
 import {
   createOpenReceivePriceFeed,
   listRates,
@@ -25,57 +24,59 @@ import {
   readOpenReceivePriceCurrencies,
 } from "./service/pricing.ts";
 import { reconcileOptions } from "./service/reconcile.ts";
-import { getSwapOptions, quoteSwap, refundSwap, startSwap } from "./service/swaps.ts";
-import { StoreBackedSwapCache } from "./swap/index.ts";
+import {
+  getSwapOptions,
+  quoteSwap,
+  refreshSwap,
+  refundSwap,
+  startSwap,
+} from "./service/swaps.ts";
+import { StoreBackedSwapCache, SwapProviderWeightBudget } from "./swap/index.ts";
 import type {
   CreateOpenReceiveOptions,
   OpenReceive,
-  OpenReceiveCheckout,
-  OpenReceiveGetOrCreateCheckoutRequest,
-  OpenReceiveNodeOptions,
-  OpenReceiveOrderRequest,
-  OpenReceiveOrderResult,
-  OpenReceiveOrderStatus,
+  Checkout,
+  GetOrCreateCheckoutRequest,
+  NodeOptions,
   OpenReceiveServiceContext,
 } from "./service/types.ts";
 
-export type { OpenReceivePendingSweepResult } from "@openreceive/core";
+export type { OpenReceivePendingSweepResult as PendingSweepResult } from "@openreceive/core";
 export type { OpenReceiveConfigErrorCode } from "./config-error.ts";
 export { OpenReceiveConfigError } from "./config-error.ts";
 export { OpenReceiveServiceError } from "./service/core-utils.ts";
 export type {
   CreateOpenReceiveOptions,
   OpenReceive,
-  OpenReceiveCheckout,
-  OpenReceiveCreateCheckoutAmount,
-  OpenReceiveCreateCheckoutRequest,
-  OpenReceiveEvent,
-  OpenReceiveEventHandler,
-  OpenReceiveGetCheckoutRequest,
-  OpenReceiveGetOrCreateCheckoutRequest,
-  OpenReceiveGetOrderRequest,
-  OpenReceiveInvoice,
-  OpenReceiveListRatesRequest,
-  OpenReceiveLogEntry,
-  OpenReceiveLogger,
-  OpenReceiveLoggingOptions,
-  OpenReceiveNodeOptions,
-  OpenReceiveNodeSettlementActionHook,
-  OpenReceiveNodeSettlementActionInput,
-  OpenReceiveOrder,
-  OpenReceiveOrderRequest,
-  OpenReceiveOrderResult,
-  OpenReceiveOrderStatus,
-  OpenReceivePublicSwap,
-  OpenReceiveSwapAttempt,
-  OpenReceiveSwapOption,
-  OpenReceiveSwapOptions,
-  OpenReceiveSwapOptionsRequest,
-  OpenReceiveSwapOptionsResponse,
-  OpenReceiveSwapQuoteRequest,
-  OpenReceiveSwapQuoteResponse,
-  OpenReceiveSwapRefundRequest,
-  OpenReceiveSwapStartRequest,
+  Checkout,
+  CreateCheckoutAmount,
+  CreateCheckoutRequest,
+  Event,
+  EventHandler,
+  GetCheckoutRequest,
+  GetOrCreateCheckoutRequest,
+  GetOrderRequest,
+  Invoice,
+  ListRatesRequest,
+  LogEntry,
+  Logger,
+  LoggingOptions,
+  NodeOptions,
+  NodeSettlementActionHook,
+  NodeSettlementActionInput,
+  Order,
+  OrderStatus,
+  PublicSwap,
+  SwapAttempt,
+  SwapOption,
+  SwapOptions,
+  SwapOptionsRequest,
+  SwapOptionsResponse,
+  SwapQuoteRequest,
+  SwapQuoteResponse,
+  SwapRefreshRequest,
+  SwapRefundRequest,
+  SwapStartRequest,
 } from "./service/types.ts";
 export { createOpenReceivePriceFeed };
 
@@ -95,7 +96,7 @@ export async function createOpenReceive(
 
   const store = await resolveConfiguredStore(configuredOptions, namespace);
 
-  const nodeOptions: OpenReceiveNodeOptions = {
+  const nodeOptions: NodeOptions = {
     ...configuredOptions,
     client,
     store,
@@ -136,6 +137,10 @@ export async function createOpenReceive(
     });
     for (const provider of swapProviders) {
       provider.attachSwapCache?.(swapCache);
+      // Shared durable weight ledger so multi-dyno deploys cannot each burn a
+      // provider's 250/min budget independently. Per-provider keys enable failover
+      // to the next entry in swap.providers when the preferred one is limited.
+      provider.attachWeightBudget?.(new SwapProviderWeightBudget(store, provider.name, clock));
       provider.attachApiRequestLogger?.((entry) =>
         emitLog(nodeOptions, "info", "swap.provider.request", "Swap provider API request.", {
           provider: entry.provider,
@@ -167,27 +172,20 @@ export async function createOpenReceive(
   };
 
   const getOrCreateCheckout = async (
-    input: OpenReceiveGetOrCreateCheckoutRequest,
-  ): Promise<OpenReceiveCheckout> =>
-    await runOpenReceiveOperation(context, async () =>
-      toWireCheckout(await createCheckout(context, input)),
-    );
+    input: GetOrCreateCheckoutRequest,
+  ): Promise<Checkout> =>
+    await runOpenReceiveOperation(context, async () => await createCheckout(context, input));
 
   const service: OpenReceive = {
     store,
     namespace,
     priceCurrencies,
-    createCheckout: getOrCreateCheckout,
     getOrCreateCheckout,
     async getOrder(input) {
-      return await runOpenReceiveOperation(context, async () =>
-        toWireOrder(await getOrder(context, input)),
-      );
+      return await runOpenReceiveOperation(context, async () => await getOrder(context, input));
     },
     async getCheckout(input) {
-      return await runOpenReceiveOperation(context, async () =>
-        toWireCheckout(await getCheckout(context, input)),
-      );
+      return await runOpenReceiveOperation(context, async () => await getCheckout(context, input));
     },
     async sweepPendingInvoices() {
       return await runOpenReceiveOperation(
@@ -203,53 +201,18 @@ export async function createOpenReceive(
     },
     async startSwap(input) {
       return await runOpenReceiveOperation(context, async () =>
-        toWireSwapAttempt(await startSwap(context, input)),
+        toSwapAttempt(await startSwap(context, input)),
       );
     },
     async refundSwap(input) {
       return await runOpenReceiveOperation(context, async () =>
-        toWireSwapAttempt(await refundSwap(context, input)),
+        toSwapAttempt(await refundSwap(context, input)),
       );
     },
-    async order<A extends OpenReceiveOrderRequest>(input: A): Promise<OpenReceiveOrderResult<A>> {
-      const request = input as OpenReceiveOrderRequest;
-      const orderId = request.order_id;
-      switch (request.action) {
-        case undefined:
-        case "status": {
-          const order = await service.getOrder({ orderId });
-          const swap = await service.swapOptions({ orderId });
-          const status: OpenReceiveOrderStatus = {
-            ...order,
-            swaps_enabled: swap.enabled,
-            swap_pay_options: swap.enabled ? swap.options : [],
-          };
-          return status as OpenReceiveOrderResult<A>;
-        }
-        case "swap_quote":
-          return {
-            quote: await service.swapQuote({ orderId, payInAsset: request.pay_in_asset }),
-          } as OpenReceiveOrderResult<A>;
-        case "start_swap":
-          return {
-            attempt: await service.startSwap({ orderId, payInAsset: request.pay_in_asset }),
-          } as OpenReceiveOrderResult<A>;
-        case "refund_swap":
-          return {
-            attempt: await service.refundSwap({
-              attemptId: request.attempt_id,
-              refundAddress: request.refund_address,
-              refundNonce: request.refund_nonce,
-              confirm: request.confirm === true,
-            }),
-          } as OpenReceiveOrderResult<A>;
-        default:
-          throw serviceError(
-            400,
-            "INVALID_REQUEST",
-            `Unknown order action: ${JSON.stringify((request as { action?: unknown }).action)}. Expected "status", "swap_quote", "start_swap", or "refund_swap".`,
-          );
-      }
+    async refreshSwap(input) {
+      return await runOpenReceiveOperation(context, async () =>
+        toSwapAttempt(await refreshSwap(context, input)),
+      );
     },
     async listRates(input) {
       return await runOpenReceiveOperation(context, () => listRates(context, input));

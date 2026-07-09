@@ -104,8 +104,8 @@ The create-checkout route MUST NOT trust a client-supplied price. `resolveOrder`
 `sats` / `usd` is rejected with 400. The route obtains the price ONLY from the hook:
 
 ```ts
-resolveOrder = ({ orderId, request }) => ({ usd: priceForOrder(orderId) });
-// or { sats: 21000 } or { amount: { fiat: { currency: "EUR", value: "9.99" } } }
+resolveOrder = ({ orderId, request }) => ({ amount: { currency: "USD", value: priceForOrder(orderId) } });
+// or { amount: { sats: 21000 } } or { amount: { currency: "EUR", value: "9.99" } }
 // return null → 404 (order not found); throw → 400 (validation)
 ```
 

@@ -1,7 +1,7 @@
-import type { OpenReceiveSwapPayInAsset } from "./assets.ts";
+import type { SwapPayInAsset } from "./assets.ts";
 import type { StoreBackedSwapCache } from "./limits-cache.ts";
 
-export type OpenReceiveSwapProviderState =
+export type SwapProviderState =
   | "creating_provider_order"
   | "awaiting_deposit"
   | "confirming"
@@ -15,7 +15,7 @@ export type OpenReceiveSwapProviderState =
   | "attention"
   | "failed";
 
-export type OpenReceiveSwapAvailabilityReason =
+export type SwapAvailabilityReason =
   | "provider_unconfigured"
   | "amount_too_small"
   | "amount_too_large"
@@ -30,30 +30,32 @@ export type OpenReceiveSwapAvailabilityReason =
  * runbook can branch on the cause instead of a bare boolean. See the "Attention"
  * section of docs/guides/automated-swaps.md for the per-reason operator runbook.
  */
-export type OpenReceiveSwapAttentionReason =
+export type SwapAttentionReason =
   | "provider_completed_without_wallet_settlement"
   | "provider_order_creation_stale"
   | "provider_order_creation_failed"
-  | "provider_reported_emergency";
+  | "provider_order_creation_needs_reconcile"
+  | "provider_reported_emergency"
+  | "provider_order_expires_after_shadow_invoice";
 
-export interface OpenReceiveSwapQuote {
+export interface SwapQuote {
   readonly pay_amount?: string;
   readonly minimum_pay_amount?: string;
   readonly maximum_pay_amount?: string;
   /** Invoice-side (Lightning receive) limits in msats, when the provider reports them. */
   readonly minimum_invoice_amount_msats?: number;
   readonly maximum_invoice_amount_msats?: number;
-  readonly pay_asset: OpenReceiveSwapPayInAsset;
+  readonly pay_asset: SwapPayInAsset;
   readonly available: boolean;
-  readonly unavailable_reason?: OpenReceiveSwapAvailabilityReason;
+  readonly unavailable_reason?: SwapAvailabilityReason;
   readonly unavailable_message?: string;
   readonly provider: string;
 }
 
-export interface OpenReceiveSwapProviderAsset {
-  readonly pay_asset: OpenReceiveSwapPayInAsset;
+export interface SwapProviderAsset {
+  readonly pay_asset: SwapPayInAsset;
   readonly available?: boolean;
-  readonly unavailable_reason?: OpenReceiveSwapAvailabilityReason;
+  readonly unavailable_reason?: SwapAvailabilityReason;
   readonly unavailable_message?: string;
   readonly minimum_pay_amount?: string;
   readonly maximum_pay_amount?: string;
@@ -68,7 +70,7 @@ export interface OpenReceiveSwapProviderAsset {
  * network fees, which the provider bakes into the deposit amount). All values are
  * decimal strings so they round-trip through storage unchanged.
  */
-export interface OpenReceiveSwapFee {
+export interface SwapFee {
   /** Fiat currency the equivalents are expressed in, e.g. "USD". */
   readonly currency: string;
   /** Fiat value of the crypto the payer must send (provider `from.usd`). */
@@ -77,22 +79,28 @@ export interface OpenReceiveSwapFee {
   readonly payout_fiat: string;
 }
 
-export interface OpenReceiveSwapOrder {
+export interface SwapOrder {
   readonly provider: string;
   readonly provider_order_id: string;
   readonly provider_token: string;
-  readonly pay_in_asset: OpenReceiveSwapPayInAsset;
+  readonly pay_in_asset: SwapPayInAsset;
   readonly deposit_address: string;
   readonly deposit_memo?: string;
   readonly deposit_amount: string;
   readonly expires_at: number;
-  readonly state: OpenReceiveSwapProviderState;
+  readonly state: SwapProviderState;
   readonly deposit_tx_id?: string;
   readonly payout_tx_id?: string;
   readonly refund_tx_id?: string;
   readonly attention?: boolean;
-  readonly attention_reason?: OpenReceiveSwapAttentionReason;
-  readonly fee?: OpenReceiveSwapFee;
+  readonly attention_reason?: SwapAttentionReason;
+  /**
+   * FixedFloat `emergency.repeat`: a second deposit hit the same provider order.
+   * Extra funds may sit at the provider while the attempt looks like a normal
+   * refund/attention path — surface this so operators can reconcile.
+   */
+  readonly emergency_repeat?: boolean;
+  readonly fee?: SwapFee;
   readonly raw?: unknown;
 }
 
@@ -125,7 +133,7 @@ export interface SwapProviderApiRequestLog {
   readonly body: unknown;
 }
 
-export interface OpenReceiveSwapProvider {
+export interface SwapProvider {
   readonly name: string;
   /**
    * Attach the durable store-backed cache used for slow-changing provider data
@@ -148,20 +156,37 @@ export interface OpenReceiveSwapProvider {
    * remote calls may omit this.
    */
   attachApiResponseLogger?(log: (entry: SwapProviderApiResponseLog) => void): void;
-  supportedPayInAssets(): Promise<Set<OpenReceiveSwapPayInAsset>>;
-  payInAssetCatalog?(): Promise<readonly OpenReceiveSwapProviderAsset[]>;
-  invoiceExpirySeconds?(input: { readonly payInAsset: OpenReceiveSwapPayInAsset }): number;
+  /**
+   * Attach a durable shared weight ledger for this provider. Called once after
+   * the service store is resolved (same lifecycle as {@link attachSwapCache}).
+   * Providers that do not hit a weight-budgeted API may omit this.
+   */
+  attachWeightBudget?(budget: {
+    reserve(path: string): Promise<void>;
+    markRateLimited(): Promise<void>;
+    canReserve(path: string): Promise<boolean>;
+  }): void;
+  /**
+   * Whether this provider can accept an outbound API call of the given path
+   * without exceeding its shared weight budget. Used by provider selection to
+   * fail over to the next configured provider when the preferred one is limited.
+   * When omitted, the provider is treated as always available.
+   */
+  canAcceptRequest?(path: string): Promise<boolean>;
+  supportedPayInAssets(): Promise<Set<SwapPayInAsset>>;
+  payInAssetCatalog?(): Promise<readonly SwapProviderAsset[]>;
+  invoiceExpirySeconds?(input: { readonly payInAsset: SwapPayInAsset }): number;
   quote(input: {
-    readonly payInAsset: OpenReceiveSwapPayInAsset;
+    readonly payInAsset: SwapPayInAsset;
     readonly invoiceAmountMsats: number;
-  }): Promise<OpenReceiveSwapQuote>;
+  }): Promise<SwapQuote>;
   createSwap(input: {
-    readonly payInAsset: OpenReceiveSwapPayInAsset;
+    readonly payInAsset: SwapPayInAsset;
     readonly bolt11: string;
     readonly invoiceAmountMsats: number;
-  }): Promise<OpenReceiveSwapOrder>;
-  getStatus(order: OpenReceiveSwapOrder): Promise<OpenReceiveSwapOrder>;
-  requestRefund(order: OpenReceiveSwapOrder, refundAddress: string): Promise<void>;
+  }): Promise<SwapOrder>;
+  getStatus(order: SwapOrder): Promise<SwapOrder>;
+  requestRefund(order: SwapOrder, refundAddress: string): Promise<void>;
 }
 
 export function isOpenReceiveSwapTerminalState(state: string | undefined): boolean {

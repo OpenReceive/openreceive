@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { fixedFloatCompatibleSwapProvider } from "./swap/fixedfloat.ts";
-import type { OpenReceiveSwapProvider } from "./swap/provider.ts";
+import type { SwapProvider } from "./swap/provider.ts";
 
 export const OPENRECEIVE_CONFIG_FILE = "openreceive.yml";
 
@@ -36,7 +36,7 @@ export interface OpenReceiveFileOperationConfig {
 }
 
 export interface OpenReceiveFileSwapConfig {
-  readonly providers?: readonly OpenReceiveSwapProvider[];
+  readonly providers?: readonly SwapProvider[];
   readonly settlementAttentionSeconds?: number;
 }
 
@@ -229,13 +229,13 @@ function readSwapProviders(
   swap: Record<string, unknown>,
   label: string,
   options: ReadOpenReceiveConfigFileOptions,
-): readonly OpenReceiveSwapProvider[] | undefined {
+): readonly SwapProvider[] | undefined {
   if (swap.providers === undefined) return undefined;
   if (!Array.isArray(swap.providers)) {
     throw new TypeError(`${label}.providers must be an array.`);
   }
   const seenIds = new Set<string>();
-  return swap.providers.flatMap((item, index): OpenReceiveSwapProvider[] => {
+  return swap.providers.flatMap((item, index): SwapProvider[] => {
     const providerLabel = `${label}.providers[${index}]`;
     const provider = readRecord(item, providerLabel);
     if (provider.enabled === false) return [];

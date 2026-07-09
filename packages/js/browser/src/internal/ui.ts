@@ -377,7 +377,7 @@ export type CheckoutPhase =
   | "failed"
   | "cancelled";
 
-export type OpenReceiveSwapProviderState =
+export type SwapProviderState =
   | "creating_provider_order"
   | "awaiting_deposit"
   | "confirming"
@@ -410,14 +410,16 @@ export interface CheckoutInvoiceSwapSnapshot {
   readonly deposit_address: string;
   readonly deposit_memo?: string;
   readonly deposit_amount: string;
-  readonly provider_state: OpenReceiveSwapProviderState;
+  readonly provider_state: SwapProviderState;
   readonly provider_expires_at: number;
   readonly deposit_tx_id?: string;
   readonly payout_tx_id?: string;
   readonly refund_address?: string;
   readonly refund_nonce?: string;
+  readonly refund_nonce_expires_at?: number;
   readonly refund_tx_id?: string;
   readonly attention?: boolean;
+  readonly attention_reason?: string;
   readonly fee?: CheckoutInvoiceSwapFee;
 }
 
@@ -744,44 +746,24 @@ export interface CheckoutStatusModel {
 
 export type CheckoutStatusRefresh = (orderId: string) => Promise<CheckoutSnapshot | null>;
 
+/**
+ * Trusted create-checkout amount for custom `checkoutUrl` posts. Matches Node's
+ * `CreateCheckoutAmount`: exactly one of `{ sats }` or `{ currency, value }`.
+ */
 export type RequestCheckoutAmount =
-  | {
-      readonly btc: {
-        readonly currency: "BTC" | "SAT" | "SATS";
-        readonly value: string;
-      };
-    }
-  | {
-      readonly fiat: {
-        readonly currency: string;
-        readonly value: string;
-      };
-    };
+  | { readonly sats: number | string; readonly currency?: never; readonly value?: never }
+  | { readonly currency: string; readonly value: string; readonly sats?: never };
 
 export type RequestCheckoutOptions = RequestCheckoutBaseOptions &
   (
     | {
         readonly amount: RequestCheckoutAmount;
-        readonly sats?: never;
-        readonly usd?: never;
-      }
-    | {
-        readonly amount?: never;
-        readonly sats: number | string;
-        readonly usd?: never;
-      }
-    | {
-        readonly amount?: never;
-        readonly sats?: never;
-        readonly usd: string;
       }
     // Amount-less create: `{ prefix, orderId }` (or `{ checkoutUrl, orderId }`) with no amount.
     // The mounted server's resolveOrder sets the authoritative price; the client POSTs a body
     // of only `{ order_id }`.
     | {
         readonly amount?: never;
-        readonly sats?: never;
-        readonly usd?: never;
       }
   );
 
@@ -862,8 +844,6 @@ export interface CreateOpenReceiveCheckoutSessionOptions
   /** Extra headers for the create POST (status polls use `statusHeaders`). */
   readonly headers?: Readonly<Record<string, string>>;
   readonly amount?: RequestCheckoutAmount;
-  readonly sats?: number | string;
-  readonly usd?: string;
 }
 
 /** A created checkout paired with the order route it polls and a ready-to-start controller. */
@@ -876,6 +856,15 @@ export interface OpenReceiveCheckoutSession {
 export interface CreateCheckoutStateOptions {
   readonly now?: number;
   readonly logger?: OpenReceiveBrowserLogger;
+  /**
+   * How this state was produced. Controls which browser log events fire:
+   * - `create` (default): `checkout.state.created`
+   * - `refresh`: `checkout.state.refreshed` plus `swap.state.changed` when swap fields move
+   * - `countdown`: no log (avoids per-second spam from the expiry ticker)
+   */
+  readonly source?: "create" | "refresh" | "countdown";
+  /** Prior checkout state; used with `source: "refresh"` to emit swap transition audits. */
+  readonly previousState?: CheckoutState;
 }
 
 export type OpenReceivePaymentMethod = "card" | "bank" | "bitcoin" | "crypto";

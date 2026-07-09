@@ -12,12 +12,12 @@ import { type OpenReceiveFileConfig, readOpenReceiveConfigFile } from "../config
 import { OpenReceiveConfigError } from "../config-error.ts";
 import { assertOpenReceiveStoreConfiguration } from "../storage-guard.ts";
 import { resolveOpenReceiveStore } from "../store-uri.ts";
-import type { OpenReceiveSwapProvider } from "../swap/index.ts";
+import type { SwapProvider } from "../swap/index.ts";
 import { isRecord, OpenReceiveServiceError } from "./core-utils.ts";
 import { createNwcEndpointLogger, emitLog } from "./logging.ts";
 import type {
   CreateOpenReceiveOptions,
-  OpenReceiveLoggingOptions,
+  LoggingOptions,
   OpenReceiveServiceContext,
 } from "./types.ts";
 
@@ -166,7 +166,7 @@ export function mergeSwapConfig(
   if (fileSwap === undefined) return optionSwap;
   if (optionSwap === undefined) return fileSwap;
 
-  const byName = new Map<string, OpenReceiveSwapProvider>();
+  const byName = new Map<string, SwapProvider>();
   for (const provider of fileSwap.providers ?? []) byName.set(provider.name, provider);
   for (const provider of optionSwap.providers ?? []) byName.set(provider.name, provider);
   const providers = [...byName.values()];
@@ -190,7 +190,7 @@ export function openReceiveConfigToOptions(
     ...(config.swap === undefined ? {} : { swap: config.swap }),
     ...(config.logging === undefined
       ? {}
-      : { logging: config.logging as OpenReceiveLoggingOptions }),
+      : { logging: config.logging as LoggingOptions }),
     ...(config.operation?.actionLeaseTtlSeconds === undefined
       ? {}
       : { actionLeaseTtlSeconds: config.operation.actionLeaseTtlSeconds }),
@@ -232,7 +232,7 @@ export function readOpenReceiveNwc(configured: string | undefined): string {
 
 export function resolveConfiguredSwapProviders(
   options: CreateOpenReceiveOptions,
-): readonly OpenReceiveSwapProvider[] {
+): readonly SwapProvider[] {
   return options.swap?.providers ?? [];
 }
 

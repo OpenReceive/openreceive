@@ -10,7 +10,7 @@ them as private server-only configuration.
 - Do not commit swap provider credentials.
 - Do not put receive-only NWC codes in browser code, mobile apps, fixtures,
   screenshots, source maps, docs, logs, or error payloads.
-- Keep `private/` for local-only launcher scripts and notes.
+- Keep local-only launcher scripts and notes outside the repo (or gitignored).
 
 `npm run scan:secrets` rejects likely NWC strings and tracked local config
 files. `npm run scan:client-bundles` scans generated demo bundles after

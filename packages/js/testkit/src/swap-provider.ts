@@ -1,15 +1,15 @@
 import type {
-  OpenReceiveSwapAttentionReason,
-  OpenReceiveSwapOrder,
-  OpenReceiveSwapPayInAsset,
-  OpenReceiveSwapProvider,
-  OpenReceiveSwapProviderAsset,
-  OpenReceiveSwapProviderState,
-  OpenReceiveSwapQuote,
+  SwapAttentionReason,
+  SwapOrder,
+  SwapPayInAsset,
+  SwapProvider,
+  SwapProviderAsset,
+  SwapProviderState,
+  SwapQuote,
 } from "@openreceive/node";
 
 /**
- * An in-memory, fully scriptable {@link OpenReceiveSwapProvider} for building and
+ * An in-memory, fully scriptable {@link SwapProvider} for building and
  * testing automated-swap flows offline — no live FixedFloat keys and no real crypto.
  * Drive an attempt through its lifecycle with {@link TestkitSwapProvider.script}, or
  * jump straight to an edge case with `forceRefundRequired`, `forceAttention`, and
@@ -26,7 +26,7 @@ import type {
  * ```
  */
 
-const DEFAULT_SUPPORTED_ASSETS: readonly OpenReceiveSwapPayInAsset[] = [
+const DEFAULT_SUPPORTED_ASSETS: readonly SwapPayInAsset[] = [
   "USDT_TRON",
   "USDT_SOL",
   "USDC_SOL",
@@ -37,7 +37,7 @@ const DEFAULT_SUPPORTED_ASSETS: readonly OpenReceiveSwapPayInAsset[] = [
 ];
 
 /** The on-chain network each pay-in asset settles on (mirrors @openreceive/node assets). */
-const ASSET_NETWORK: Readonly<Record<OpenReceiveSwapPayInAsset, "TRX" | "SOL" | "ETH">> = {
+const ASSET_NETWORK: Readonly<Record<SwapPayInAsset, "TRX" | "SOL" | "ETH">> = {
   USDT_TRON: "TRX",
   USDT_SOL: "SOL",
   USDC_SOL: "SOL",
@@ -57,29 +57,29 @@ export interface TestkitSwapProviderOptions {
   /** Provider id/name. Must match the provider you register with; defaults to "fixedfloat". */
   readonly name?: string;
   /** Pay-in assets this provider supports. Defaults to all seven built-in assets. */
-  readonly supportedAssets?: readonly OpenReceiveSwapPayInAsset[];
+  readonly supportedAssets?: readonly SwapPayInAsset[];
   /** Clock in unix seconds. Defaults to a fixed 1000 so tests are deterministic. */
   readonly now?: () => number;
-  /** Shadow-invoice expiry the provider requests, in seconds. Defaults to 1620. */
+  /** Shadow-invoice expiry the provider requests, in seconds. Defaults to 1800. */
   readonly invoiceExpirySeconds?: number;
   /** Deposit-window length used for provider_expires_at, in seconds. Defaults to 900. */
   readonly depositExpirySeconds?: number;
   /** Per-asset deposit amount the payer must send. Falls back to "1.05". */
-  readonly payAmounts?: Partial<Record<OpenReceiveSwapPayInAsset, string>>;
+  readonly payAmounts?: Partial<Record<SwapPayInAsset, string>>;
 }
 
 /** Selector for scripting/forcing a swap: an asset string, or a specific stored attempt. */
 export type TestkitSwapSelector =
-  | OpenReceiveSwapPayInAsset
-  | { readonly payInAsset?: OpenReceiveSwapPayInAsset; readonly providerOrderId?: string };
+  | SwapPayInAsset
+  | { readonly payInAsset?: SwapPayInAsset; readonly providerOrderId?: string };
 
 interface StoredSwap {
-  order: OpenReceiveSwapOrder;
-  steps: OpenReceiveSwapProviderState[];
+  order: SwapOrder;
+  steps: SwapProviderState[];
   next: number;
 }
 
-export class TestkitSwapProvider implements OpenReceiveSwapProvider {
+export class TestkitSwapProvider implements SwapProvider {
   readonly name: string;
 
   createCalls = 0;
@@ -90,29 +90,29 @@ export class TestkitSwapProvider implements OpenReceiveSwapProvider {
   readonly quoteInputs: unknown[] = [];
   readonly refundCalls: { readonly providerOrderId: string; readonly refundAddress: string }[] = [];
 
-  readonly #supported: Set<OpenReceiveSwapPayInAsset>;
+  readonly #supported: Set<SwapPayInAsset>;
   readonly #now: () => number;
   readonly #invoiceExpirySeconds: number;
   readonly #depositExpirySeconds: number;
-  readonly #payAmounts: Partial<Record<OpenReceiveSwapPayInAsset, string>>;
+  readonly #payAmounts: Partial<Record<SwapPayInAsset, string>>;
   readonly #orders = new Map<string, StoredSwap>();
-  readonly #pendingScripts = new Map<OpenReceiveSwapPayInAsset, OpenReceiveSwapProviderState[]>();
+  readonly #pendingScripts = new Map<SwapPayInAsset, SwapProviderState[]>();
   #nextCreateError: Error | undefined;
 
   constructor(options: TestkitSwapProviderOptions = {}) {
     this.name = options.name ?? "fixedfloat";
     this.#supported = new Set(options.supportedAssets ?? DEFAULT_SUPPORTED_ASSETS);
     this.#now = options.now ?? (() => 1000);
-    this.#invoiceExpirySeconds = options.invoiceExpirySeconds ?? 1620;
+    this.#invoiceExpirySeconds = options.invoiceExpirySeconds ?? 1800;
     this.#depositExpirySeconds = options.depositExpirySeconds ?? 900;
     this.#payAmounts = options.payAmounts ?? {};
   }
 
-  async supportedPayInAssets(): Promise<Set<OpenReceiveSwapPayInAsset>> {
+  async supportedPayInAssets(): Promise<Set<SwapPayInAsset>> {
     return new Set(this.#supported);
   }
 
-  async payInAssetCatalog(): Promise<readonly OpenReceiveSwapProviderAsset[]> {
+  async payInAssetCatalog(): Promise<readonly SwapProviderAsset[]> {
     this.catalogCalls += 1;
     return Array.from(this.#supported, (payInAsset) => ({
       pay_asset: payInAsset,
@@ -127,9 +127,9 @@ export class TestkitSwapProvider implements OpenReceiveSwapProvider {
   }
 
   async quote(input: {
-    readonly payInAsset: OpenReceiveSwapPayInAsset;
+    readonly payInAsset: SwapPayInAsset;
     readonly invoiceAmountMsats: number;
-  }): Promise<OpenReceiveSwapQuote> {
+  }): Promise<SwapQuote> {
     this.quoteCalls += 1;
     this.quoteInputs.push(input);
     return {
@@ -143,10 +143,10 @@ export class TestkitSwapProvider implements OpenReceiveSwapProvider {
   }
 
   async createSwap(input: {
-    readonly payInAsset: OpenReceiveSwapPayInAsset;
+    readonly payInAsset: SwapPayInAsset;
     readonly bolt11: string;
     readonly invoiceAmountMsats: number;
-  }): Promise<OpenReceiveSwapOrder> {
+  }): Promise<SwapOrder> {
     this.createCalls += 1;
     this.createSwapInputs.push(input);
     if (this.#nextCreateError !== undefined) {
@@ -157,7 +157,7 @@ export class TestkitSwapProvider implements OpenReceiveSwapProvider {
 
     const network = ASSET_NETWORK[input.payInAsset];
     const providerOrderId = `testkit-swap-${this.createCalls}`;
-    const order: OpenReceiveSwapOrder = {
+    const order: SwapOrder = {
       provider: this.name,
       provider_order_id: providerOrderId,
       provider_token: `testkit-token-${this.createCalls}`,
@@ -176,7 +176,7 @@ export class TestkitSwapProvider implements OpenReceiveSwapProvider {
     return order;
   }
 
-  async getStatus(order: OpenReceiveSwapOrder): Promise<OpenReceiveSwapOrder> {
+  async getStatus(order: SwapOrder): Promise<SwapOrder> {
     this.statusCalls += 1;
     const stored = this.#orders.get(order.provider_order_id);
     if (stored === undefined) return order;
@@ -188,7 +188,7 @@ export class TestkitSwapProvider implements OpenReceiveSwapProvider {
     return stored.order;
   }
 
-  async requestRefund(order: OpenReceiveSwapOrder, refundAddress: string): Promise<void> {
+  async requestRefund(order: SwapOrder, refundAddress: string): Promise<void> {
     this.refundCalls.push({ providerOrderId: order.provider_order_id, refundAddress });
     const stored = this.#orders.get(order.provider_order_id);
     if (stored !== undefined) {
@@ -201,7 +201,7 @@ export class TestkitSwapProvider implements OpenReceiveSwapProvider {
    * then holds on the last state. Scripting an asset before a swap is started attaches
    * the sequence to the next attempt created for that asset.
    */
-  script(selector: TestkitSwapSelector, states: readonly OpenReceiveSwapProviderState[]): void {
+  script(selector: TestkitSwapSelector, states: readonly SwapProviderState[]): void {
     if (states.length === 0) {
       throw new RangeError("swap script must include at least one state");
     }
@@ -224,7 +224,7 @@ export class TestkitSwapProvider implements OpenReceiveSwapProvider {
   /** Force the selected attempt(s) into the `attention` state with a recorded reason. */
   forceAttention(
     selector: TestkitSwapSelector,
-    reason: OpenReceiveSwapAttentionReason = "provider_reported_emergency",
+    reason: SwapAttentionReason = "provider_reported_emergency",
   ): void {
     for (const stored of this.#match(selector)) {
       stored.steps = [];
@@ -238,7 +238,7 @@ export class TestkitSwapProvider implements OpenReceiveSwapProvider {
     this.#nextCreateError = error;
   }
 
-  #force(selector: TestkitSwapSelector, state: OpenReceiveSwapProviderState): void {
+  #force(selector: TestkitSwapSelector, state: SwapProviderState): void {
     for (const stored of this.#match(selector)) {
       stored.steps = [];
       stored.next = 0;
@@ -258,7 +258,7 @@ export class TestkitSwapProvider implements OpenReceiveSwapProvider {
     });
   }
 
-  #payAmountFor(payInAsset: OpenReceiveSwapPayInAsset): string {
+  #payAmountFor(payInAsset: SwapPayInAsset): string {
     return this.#payAmounts[payInAsset] ?? "1.05";
   }
 }
@@ -269,14 +269,14 @@ export function createTestkitSwapProvider(
   return new TestkitSwapProvider(options);
 }
 
-function selectorAsset(selector: TestkitSwapSelector): OpenReceiveSwapPayInAsset | undefined {
+function selectorAsset(selector: TestkitSwapSelector): SwapPayInAsset | undefined {
   return typeof selector === "string" ? selector : selector.payInAsset;
 }
 
 function applyState(
-  order: OpenReceiveSwapOrder,
-  state: OpenReceiveSwapProviderState,
-): OpenReceiveSwapOrder {
+  order: SwapOrder,
+  state: SwapProviderState,
+): SwapOrder {
   const attention = state === "attention";
   return {
     ...order,
@@ -288,7 +288,7 @@ function applyState(
   };
 }
 
-const PROGRESS_ORDER: readonly OpenReceiveSwapProviderState[] = [
+const PROGRESS_ORDER: readonly SwapProviderState[] = [
   "creating_provider_order",
   "awaiting_deposit",
   "confirming",
@@ -299,8 +299,8 @@ const PROGRESS_ORDER: readonly OpenReceiveSwapProviderState[] = [
 
 /** True once the payer's deposit has been detected (confirming or later progress state). */
 function atOrAfter(
-  state: OpenReceiveSwapProviderState,
-  floor: OpenReceiveSwapProviderState,
+  state: SwapProviderState,
+  floor: SwapProviderState,
 ): boolean {
   const stateIndex = PROGRESS_ORDER.indexOf(state);
   const floorIndex = PROGRESS_ORDER.indexOf(floor);

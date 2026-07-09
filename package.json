@@ -38,12 +38,14 @@
     "validate": "node tools/validate/validate-v0.1.mjs",
     "scan:secrets": "node tools/validate/scan-secrets.mjs",
     "test": "npm run validate && npm run scan:secrets",
-    "test:ci": "npm test && npm run lint && npm run check:generated && npm run typecheck && npm run test:js && npm run test:package-smoke && npm run test:ruby && npm run check:demo-containers && npm run check:demo-deploy && npm run check:release && npm run check:workflows && npm run build:demo && npm run scan:client-bundles && npm run build:docs && npm run test:live:nwc",
+    "test:ci:core": "npm test && npm run lint && npm run check:generated && npm run typecheck && npm run test:js && npm run test:package-smoke",
+    "test:ci:release": "npm run test:ruby && npm run check:demo-containers && npm run check:demo-deploy && npm run check:release && npm run check:workflows && npm run build:demo && npm run scan:client-bundles && npm run build:docs && npm run test:live:nwc",
+    "test:ci": "npm run test:ci:core && npm run test:ci:release",
     "test:vectors": "node tools/validate/validate-v0.1.mjs --vectors",
     "test:live:nwc": "node tools/live-nwc-test/index.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "overrides": {
     "@angular/common": "22.0.3",

@@ -1,4 +1,4 @@
-import type { OpenReceiveCreateCheckoutAmount } from "./service.ts";
+import type { CreateCheckoutAmount } from "./service.ts";
 
 // Amount authority.
 //
@@ -9,21 +9,18 @@ import type { OpenReceiveCreateCheckoutAmount } from "./service.ts";
 // returned amount into the create request.
 //
 // Omitting the hook is a construction error. The HTTP create body never carries a price
-// (amount/sats/usd are rejected). Client-priced / tip-jar checkouts remain possible: the host
+// (amount is rejected). Client-priced / tip-jar checkouts remain possible: the host
 // reads a payer-chosen amount from `metadata` (or its own session) inside `resolveOrder`,
 // validates it, and returns it — an explicit host-owned decision, not a framework default.
 
-/** The amount source a client may send / a host may authoritatively return. Exactly one key. */
-export type OpenReceiveCheckoutAmountSource =
-  | { readonly amount: OpenReceiveCreateCheckoutAmount }
-  | { readonly sats: number | string }
-  | { readonly usd: string };
+/** The amount a host may authoritatively return from `resolveOrder`. */
+export type CheckoutAmountSource = {
+  readonly amount: CreateCheckoutAmount;
+};
 
-export interface OpenReceiveResolveOrderContext {
+export interface ResolveOrderContext {
   /** The order the checkout belongs to. */
   readonly orderId: string;
-  /** The amount the client sent — UNTRUSTED. Present only if the client sent one. */
-  readonly clientAmount?: OpenReceiveCheckoutAmountSource;
   /** Metadata the client attached to the create request (untrusted). */
   readonly metadata?: Record<string, unknown>;
   /** The raw framework request, so the host can read its own cart/session/db. */
@@ -35,19 +32,19 @@ export interface OpenReceiveResolveOrderContext {
  * final create-checkout request from this value, discarding any client-supplied price unless
  * the host explicitly returns it.
  *
- * - return `{ usd }` | `{ sats }` | `{ amount: {...} }` → authoritative price
+ * - return `{ amount: { currency, value } }` or `{ amount: { sats } }` → authoritative price
  * - return `null` → 404 (order not found / rejected)
  * - throw → 400 (validation)
  */
-export type OpenReceiveResolveOrder = (
-  context: OpenReceiveResolveOrderContext,
+export type ResolveOrder = (
+  context: ResolveOrderContext,
 ) =>
-  | OpenReceiveCheckoutAmountSource
+  | CheckoutAmountSource
   | null
-  | Promise<OpenReceiveCheckoutAmountSource | null>;
+  | Promise<CheckoutAmountSource | null>;
 
-/** @deprecated Use {@link OpenReceiveResolveOrderContext}. */
-export type OpenReceiveGetOrderAmountContext = OpenReceiveResolveOrderContext;
+/** @deprecated Use {@link ResolveOrderContext}. */
+export type GetOrderAmountContext = ResolveOrderContext;
 
-/** @deprecated Use {@link OpenReceiveResolveOrder}. */
-export type OpenReceiveGetOrderAmount = OpenReceiveResolveOrder;
+/** @deprecated Use {@link ResolveOrder}. */
+export type GetOrderAmount = ResolveOrder;

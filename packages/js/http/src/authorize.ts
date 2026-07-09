@@ -16,6 +16,7 @@ export type OpenReceiveAuthorizeAction =
   | "swap.quote"
   | "swap.start"
   | "swap.refund"
+  | "swap.refresh"
   | "invoice.sweep";
 
 /** The resource an action touches, filled in from the request path/body as far as it is known. */

@@ -1,7 +1,7 @@
-import type { OpenReceiveLogEntry, OpenReceiveLogger } from "@openreceive/node";
+import type { LogEntry, Logger } from "@openreceive/node";
 
-export function createHelloFruitOpenReceiveLogger(demoId: string): OpenReceiveLogger {
-  return (entry: OpenReceiveLogEntry) => {
+export function createHelloFruitOpenReceiveLogger(demoId: string): Logger {
+  return (entry: LogEntry) => {
     const { level, event, message, ...fields } = entry;
     if (level === "debug") return;
 

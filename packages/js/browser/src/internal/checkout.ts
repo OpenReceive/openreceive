@@ -588,13 +588,18 @@ function normalizeRequestCheckoutOptions(
   const descriptionHash = optionalString(record.descriptionHash ?? record.description_hash);
   const metadata = optionalRecord(record.metadata);
   const amount = normalizeRequestCheckoutAmount(record);
+  // Mounted-router creates (`prefix` without an explicit `checkoutUrl`) never send a client
+  // amount — resolveOrder is the sole price authority and the body is `{ order_id }` only.
+  // Custom `checkoutUrl` posts may include the flat amount shape for app-owned create routes.
+  const usesMountedRouter =
+    options.checkoutUrl === undefined && optionalString(options.prefix) !== undefined;
 
   return {
     checkoutUrl: resolveRequestCheckoutTarget(options),
     orderId: orderId ?? "",
     fetch: options.fetch,
     headers: options.headers,
-    ...(amount === undefined ? {} : { amount }),
+    ...(amount === undefined || usesMountedRouter ? {} : { amount }),
     ...(options.memo === undefined ? {} : { memo: options.memo }),
     ...(descriptionHash === undefined ? {} : { descriptionHash }),
     ...(metadata === undefined ? {} : { metadata }),
@@ -631,75 +636,68 @@ export function resolveOrderUrlFromPrefix(prefix: string, orderId: string): stri
 function normalizeRequestCheckoutAmount(
   options: Record<string, unknown>,
 ): RequestCheckoutAmount | undefined {
-  const sourceCount = [
-    options.amount !== undefined,
-    options.usd !== undefined,
-    options.sats !== undefined,
-  ].filter(Boolean).length;
-  // No amount source is valid for a prefix/checkoutUrl create against the mounted router:
-  // the server's resolveOrder sets the authoritative price and the client POSTs { order_id }.
-  if (sourceCount === 0) {
+  if (options.usd !== undefined || options.sats !== undefined) {
+    throw new Error(
+      "OpenReceive checkout creation no longer accepts top-level usd or sats; use amount: { currency, value } or amount: { sats }.",
+    );
+  }
+
+  // No amount is valid for a prefix create against the mounted router: the server's
+  // resolveOrder sets the authoritative price and the client POSTs { order_id }.
+  if (options.amount === undefined) {
     return undefined;
   }
-  if (sourceCount > 1) {
-    throw new Error("OpenReceive checkout creation requires at most one of amount, usd, or sats.");
-  }
 
-  if (options.amount !== undefined) {
-    return normalizeExplicitRequestCheckoutAmount(options.amount);
-  }
-
-  if (options.usd !== undefined) {
-    const value = optionalString(options.usd);
-    if (
-      value === undefined ||
-      !/^[0-9]+(?:\.[0-9]+)?$/.test(value) ||
-      /^0+(?:\.0+)?$/.test(value)
-    ) {
-      throw new Error("OpenReceive usd must be a positive decimal string.");
-    }
-    return {
-      fiat: {
-        currency: "USD",
-        value,
-      },
-    };
-  }
-
-  return {
-    btc: {
-      currency: "SATS",
-      value: normalizeRequestCheckoutSats(options.sats),
-    },
-  };
+  return normalizeExplicitRequestCheckoutAmount(options.amount);
 }
 
 function normalizeExplicitRequestCheckoutAmount(value: unknown): RequestCheckoutAmount {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error(
-      "OpenReceive checkout creation requires exactly one of amount.btc or amount.fiat.",
+      "OpenReceive checkout creation requires amount: { sats } or amount: { currency, value }.",
     );
   }
 
-  const amount = value as RequestCheckoutAmount & Record<string, unknown>;
+  const amount = value as Record<string, unknown>;
   const unsupportedAmountKeys = Object.keys(amount).filter(
-    (key) => key !== "btc" && key !== "fiat",
+    (key) => key !== "sats" && key !== "currency" && key !== "value",
   );
-  const amountSourceCount = ["btc" in amount, "fiat" in amount].filter(Boolean).length;
-  if (unsupportedAmountKeys.length > 0 || amountSourceCount !== 1) {
+  if (unsupportedAmountKeys.length > 0) {
     throw new Error(
-      "OpenReceive checkout creation requires exactly one of amount.btc or amount.fiat.",
+      "OpenReceive checkout creation requires amount: { sats } or amount: { currency, value }.",
     );
   }
-  return structuredClone(amount) as RequestCheckoutAmount;
+
+  const hasSats = amount.sats !== undefined;
+  const hasCurrency = amount.currency !== undefined;
+  const hasValue = amount.value !== undefined;
+
+  if (hasSats && !hasCurrency && !hasValue) {
+    return { sats: normalizeRequestCheckoutSats(amount.sats) };
+  }
+
+  if (!hasSats && hasCurrency && hasValue) {
+    const currency = optionalString(amount.currency);
+    const valueText = optionalString(amount.value);
+    if (currency === undefined || valueText === undefined) {
+      throw new Error(
+        "OpenReceive checkout creation requires amount: { sats } or amount: { currency, value }.",
+      );
+    }
+    return { currency, value: valueText };
+  }
+
+  throw new Error(
+    "OpenReceive checkout creation requires amount: { sats } or amount: { currency, value }.",
+  );
 }
 
-function normalizeRequestCheckoutSats(value: unknown): string {
+function normalizeRequestCheckoutSats(value: unknown): number | string {
   if (typeof value === "number") {
     if (!Number.isSafeInteger(value) || value <= 0) {
       throw new Error("OpenReceive sats must be a positive integer.");
     }
-    return String(value);
+    return value;
   }
 
   if (typeof value === "string" && /^[0-9]+$/.test(value) && BigInt(value) > 0n) {
@@ -1078,12 +1076,18 @@ function normalizeCheckoutInvoiceSwapSnapshot(
     ...(optionalString(input.refund_nonce) === undefined
       ? {}
       : { refund_nonce: optionalString(input.refund_nonce) }),
+    ...(optionalSafeInteger(input.refund_nonce_expires_at) === undefined
+      ? {}
+      : { refund_nonce_expires_at: optionalSafeInteger(input.refund_nonce_expires_at) }),
     ...(optionalString(input.refund_tx_id) === undefined
       ? {}
       : { refund_tx_id: optionalString(input.refund_tx_id) }),
     ...(optionalBoolean(input.attention) === undefined
       ? {}
       : { attention: optionalBoolean(input.attention) }),
+    ...(optionalString(input.attention_reason) === undefined
+      ? {}
+      : { attention_reason: optionalString(input.attention_reason) }),
     ...(normalizeCheckoutInvoiceSwapFee(input.fee) === undefined
       ? {}
       : { fee: normalizeCheckoutInvoiceSwapFee(input.fee) }),
@@ -1173,13 +1177,25 @@ export function createCheckoutState(
     },
     options.now ?? currentUnixSeconds(),
   );
-  emitBrowserLog(
-    options.logger,
-    "info",
-    "checkout.state.created",
-    "Created checkout state from order snapshot.",
-    checkoutLogFields(state),
-  );
+  const source = options.source ?? "create";
+  if (source === "create") {
+    emitBrowserLog(
+      options.logger,
+      "info",
+      "checkout.state.created",
+      "Created checkout state from order snapshot.",
+      checkoutLogFields(state),
+    );
+  } else if (source === "refresh") {
+    emitBrowserLog(
+      options.logger,
+      "debug",
+      "checkout.state.refreshed",
+      "Refreshed checkout state from order status.",
+      checkoutLogFields(state),
+    );
+    emitBrowserSwapTransition(options.logger, options.previousState, state);
+  }
   return state;
 }
 
@@ -1223,7 +1239,11 @@ export function refreshCheckoutState(
   state: CheckoutState,
   options: CreateCheckoutStateOptions = {},
 ): CheckoutState {
-  return createCheckoutState(snapshotFromCheckoutState(state), options);
+  return createCheckoutState(snapshotFromCheckoutState(state), {
+    ...options,
+    source: options.source ?? "countdown",
+    previousState: options.previousState ?? state,
+  });
 }
 
 export function shouldCheckoutShowWaiting(
@@ -1327,6 +1347,8 @@ export class CheckoutWatcher {
       const nextState = createCheckoutState(next, {
         now: this.now(),
         logger: this.options.logger,
+        source: "refresh",
+        previousState: current,
       });
       if (this.running) {
         this.applyState(nextState);
@@ -1366,6 +1388,7 @@ export class CheckoutWatcher {
           refreshCheckoutState(current, {
             now: this.now(),
             logger: this.options.logger,
+            source: "countdown",
           }),
         );
       }, 1000);
@@ -1398,6 +1421,8 @@ export class CheckoutWatcher {
         createCheckoutState(next, {
           now: this.now(),
           logger: this.options.logger,
+          source: "refresh",
+          previousState: this.state,
         }),
       );
     } catch (error) {
@@ -1561,8 +1586,6 @@ export async function createOpenReceiveCheckoutSession(
     ...(options.memo === undefined ? {} : { memo: options.memo }),
     ...(options.metadata === undefined ? {} : { metadata: options.metadata }),
     ...(options.amount === undefined ? {} : { amount: options.amount }),
-    ...(options.sats === undefined ? {} : { sats: options.sats }),
-    ...(options.usd === undefined ? {} : { usd: options.usd }),
   } as RequestCheckoutOptions;
 
   const checkout = await requestCheckout(createOptions);
@@ -1834,6 +1857,23 @@ function checkoutLogFields(state: {
   readonly workflow_state?: string;
   readonly phase?: string;
   readonly expires_in_seconds?: number;
+  readonly settled?: boolean;
+  readonly paid?: boolean;
+  readonly rail?: string;
+  readonly swap?: {
+    readonly attempt_id?: string;
+    readonly provider?: string;
+    readonly provider_order_id?: string;
+    readonly pay_in_asset?: string;
+    readonly provider_state?: string;
+    readonly attention?: boolean;
+    readonly attention_reason?: string;
+    readonly refund_nonce?: string;
+    readonly refund_nonce_expires_at?: number;
+    readonly refund_tx_id?: string;
+    readonly deposit_tx_id?: string;
+    readonly payout_tx_id?: string;
+  };
 }): Record<string, unknown> {
   return {
     ...(state.checkout_id === undefined ? {} : { checkout_id: state.checkout_id }),
@@ -1849,7 +1889,101 @@ function checkoutLogFields(state: {
     ...(state.expires_in_seconds === undefined
       ? {}
       : { expires_in_seconds: state.expires_in_seconds }),
+    ...(state.settled === undefined ? {} : { settled: state.settled }),
+    ...(state.paid === undefined ? {} : { paid: state.paid }),
+    ...(state.rail === undefined ? {} : { rail: state.rail }),
+    ...swapAuditLogFields(state.swap),
   };
+}
+
+function swapAuditLogFields(
+  swap:
+    | {
+        readonly attempt_id?: string;
+        readonly provider?: string;
+        readonly provider_order_id?: string;
+        readonly pay_in_asset?: string;
+        readonly provider_state?: string;
+        readonly attention?: boolean;
+        readonly attention_reason?: string;
+        readonly refund_nonce?: string;
+        readonly refund_nonce_expires_at?: number;
+        readonly refund_tx_id?: string;
+        readonly deposit_tx_id?: string;
+        readonly payout_tx_id?: string;
+      }
+    | undefined,
+): Record<string, unknown> {
+  if (swap === undefined) return {};
+  return {
+    ...(swap.attempt_id === undefined ? {} : { attempt_id: swap.attempt_id }),
+    ...(swap.provider === undefined ? {} : { provider: swap.provider }),
+    ...(swap.provider_order_id === undefined
+      ? {}
+      : { provider_order_id: swap.provider_order_id }),
+    ...(swap.pay_in_asset === undefined ? {} : { pay_in_asset: swap.pay_in_asset }),
+    ...(swap.provider_state === undefined ? {} : { provider_state: swap.provider_state }),
+    ...(swap.attention === undefined ? {} : { attention: swap.attention }),
+    ...(swap.attention_reason === undefined
+      ? {}
+      : { attention_reason: swap.attention_reason }),
+    refund_nonce_present: swap.refund_nonce !== undefined,
+    ...(swap.refund_nonce_expires_at === undefined
+      ? {}
+      : { refund_nonce_expires_at: swap.refund_nonce_expires_at }),
+    ...(swap.refund_tx_id === undefined ? {} : { refund_tx_id: swap.refund_tx_id }),
+    ...(swap.deposit_tx_id === undefined ? {} : { deposit_tx_id: swap.deposit_tx_id }),
+    ...(swap.payout_tx_id === undefined ? {} : { payout_tx_id: swap.payout_tx_id }),
+  };
+}
+
+function emitBrowserSwapTransition(
+  logger: OpenReceiveBrowserLogger | undefined,
+  previous: CheckoutState | undefined,
+  next: CheckoutState,
+): void {
+  if (logger === undefined) return;
+  const previousSwap = previous?.swap;
+  const nextSwap = next.swap;
+  if (nextSwap === undefined) return;
+
+  const previousState = previousSwap?.provider_state;
+  const nextState = nextSwap.provider_state;
+  const previousNonce = previousSwap?.refund_nonce !== undefined;
+  const nextNonce = nextSwap.refund_nonce !== undefined;
+  const previousAttention = previousSwap?.attention_reason;
+  const nextAttention = nextSwap.attention_reason;
+  const previousSettled = previous?.settled === true || previous?.paid === true;
+  const nextSettled = next.settled === true || next.paid === true;
+
+  const stateChanged = previousState !== nextState;
+  const nonceChanged = previousNonce !== nextNonce;
+  const attentionChanged = previousAttention !== nextAttention;
+  const settlementChanged = previousSettled !== nextSettled;
+  if (!stateChanged && !nonceChanged && !attentionChanged && !settlementChanged) return;
+
+  const level: OpenReceiveBrowserLogLevel =
+    nextState === "attention" || nextSwap.attention === true
+      ? "warn"
+      : nextState === "refund_required" ||
+          nextState === "refund_pending" ||
+          nextState === "refunded" ||
+          nextState === "failed" ||
+          nextState === "expired" ||
+          settlementChanged
+        ? "info"
+        : "debug";
+
+  emitBrowserLog(logger, level, "swap.state.changed", "Swap attempt state changed in checkout UI.", {
+    ...checkoutLogFields(next),
+    previous_provider_state: previousState,
+    previous_settled: previousSettled,
+    wallet_settled: nextSettled,
+    ui_label:
+      nextSettled
+        ? "Payment complete"
+        : getOpenReceiveSwapProviderStateLabel(nextState),
+  });
 }
 
 function emitBrowserLog(

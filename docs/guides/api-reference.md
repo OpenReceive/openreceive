@@ -10,8 +10,8 @@ come from your server.
 App-facing packages:
 
 - `openreceive` / `@openreceive/node`: `createOpenReceive(options)` returns a
-  server-only service with `getOrCreateCheckout`, `createCheckout`, `getOrder`,
-  `getCheckout`, `order`, `swapOptions`, `swapQuote`, `startSwap`, `refundSwap`,
+  server-only service with `getOrCreateCheckout`, `getOrder`, `getCheckout`,
+  `swapOptions`, `swapQuote`, `startSwap`, `refundSwap`,
   `sweepPendingInvoices`, `listRates`, `quoteRates`, and `close`, plus
   `startSweeper`, the resolved `namespace` and `priceCurrencies`, and the
   swap-state helpers `describeSwapState` / `OPENRECEIVE_SWAP_STATES`.
@@ -32,13 +32,14 @@ not part of the supported app surface.
 ## `getOrCreateCheckout`
 
 Create, reuse, or renew one immutable priced checkout under your app's order id.
-SDK inputs are camelCase; OpenReceive checkout and order payloads remain
-snake_case so your controllers can return them over HTTP:
+The JS SDK is camelCase end-to-end (`amountMsats`, `checkoutId`,
+`displayCheckout`). The HTTP/OpenAPI layer still serializes snake_case at the
+wire boundary.
 
 ```ts
 const checkout = await openreceive.getOrCreateCheckout({
   orderId: order.uuid,
-  usd: order.total_amount.value,
+  amount: { currency: "USD", value: order.total_amount.value },
   memo: `Order ${order.number}`,
   // Optional app-owned JSON. OpenReceive stores and returns it to your
   // settlement hook without interpreting non-reserved keys.
@@ -51,19 +52,13 @@ const checkout = await openreceive.getOrCreateCheckout({
 });
 ```
 
-Use exactly one amount source. The common shortcuts are:
+Amount is always nested under `amount`, with exactly one shape:
 
-- `usd: "9.99"`
-- `sats: 1000`
+- `{ amount: { currency: "USD", value: "9.99" } }` — fiat (ISO 4217) or `BTC`/`SAT`/`SATS`
+- `{ amount: { sats: 1000 } }` — integer sats shortcut
 
-The explicit form is still available:
-
-- `{ fiat: { currency: "USD", value: "0.10" } }`
-- `{ btc: { currency: "BTC", value: "0.005" } }`
-
-`fiat.currency` must be one of the server's configured `priceCurrencies`.
-Direct bitcoin amounts do not use price feeds. If your product is denominated
-in sats, use the `btc` amount object with `currency: "SATS"`.
+`amount.currency` for fiat must be one of the server's configured
+`priceCurrencies`. Direct bitcoin amounts do not use price feeds.
 
 `getOrCreateCheckout` has idempotent order semantics:
 
@@ -76,11 +71,9 @@ in sats, use the `btc` amount object with `currency: "SATS"`.
 - If the amount changes, it supersedes the prior open checkout and creates a new
   checkout for the new amount.
 
-`createCheckout` remains as an alias for existing integrations, but
-`getOrCreateCheckout` names the behavior more directly. Paying any invoice in
-any checkout settles the order.
+Paying any invoice in any checkout settles the order.
 
-Render `checkout.active.invoice` when present. The full invoice chain is in
+Render `checkout.active.bolt11` when present. The full invoice chain is in
 `checkout.invoices`.
 
 ## `getOrder`
@@ -123,7 +116,7 @@ Organic checkout creation and `getOrder` traffic already drive sweeps. Use this
 optional method from a cron, worker, or interval when you want settlement latency
 that does not depend on user traffic.
 
-`createCheckout` schedules its sweep as best-effort background work. On a
+`getOrCreateCheckout` schedules its sweep as best-effort background work. On a
 long-lived Node server, fire-and-forget is fine. In serverless handlers, pass a
 platform `waitUntil(promise)` hook to `createOpenReceive` so the platform can
 keep that sweep alive. `getOrder` awaits its sweep and remains the reliable
@@ -148,65 +141,68 @@ Automated swaps are optional and auto-load providers from a backend YAML config
 with secret env references. See [Automated Swaps](automated-swaps.md) for setup,
 the payer flow, the state lifecycle, and offline testing.
 
-Most apps only need the single typed router `openreceive.order(body)`; its return
-type narrows on the request's `action`:
+Call the typed camelCase service methods directly. HTTP `POST /orders/:id` still
+accepts a snake_case body with `action` and composes status for you; the SDK does
+not expose a parallel `order()` router.
 
 ```ts
-const status = await openreceive.order({ order_id: order.uuid });
-// -> OpenReceiveOrderStatus: order fields + swaps_enabled + swap_pay_options
+const order = await openreceive.getOrder({ orderId: order.uuid });
+const swap = await openreceive.swapOptions({ orderId: order.uuid });
+const status = {
+  ...order,
+  swapsEnabled: swap.enabled,
+  swapPayOptions: swap.enabled ? swap.options : [],
+};
 
-const { quote } = await openreceive.order({
-  order_id: order.uuid,
-  action: "swap_quote",
-  pay_in_asset: "USDT_TRON"
+const quote = await openreceive.swapQuote({
+  orderId: order.uuid,
+  payInAsset: "USDT_TRON",
 });
 
-const { attempt } = await openreceive.order({
-  order_id: order.uuid,
-  action: "start_swap",
-  pay_in_asset: "USDT_TRON"
+const attempt = await openreceive.startSwap({
+  orderId: order.uuid,
+  payInAsset: "USDT_TRON",
 });
 ```
 
-The four lower-level methods stay available as escape hatches for custom UIs
-(camelCase SDK inputs). `startSwap` and `refundSwap` return a first-class
-`OpenReceiveSwapAttempt` — deposit fields top-level, shadow invoice under
-`shadow_invoice`:
+`startSwap` and `refundSwap` return a first-class `SwapAttempt` — deposit fields
+top-level, shadow invoice under `shadowInvoice`:
 
 ```ts
 const options = await openreceive.swapOptions({ orderId: order.uuid });
 const quote = await openreceive.swapQuote({ orderId: order.uuid, payInAsset: "USDT_TRON" });
 
 const attempt = await openreceive.startSwap({ orderId: order.uuid, payInAsset: "USDT_TRON" });
-attempt.deposit_address; // no optional `.swap` to unwrap
+attempt.depositAddress; // no optional `.swap` to unwrap
 
 await openreceive.refundSwap({
-  attemptId: attempt.attempt_id,
+  attemptId: attempt.attemptId,
   refundAddress: "...",
-  refundNonce: attempt.refund_nonce,
+  refundNonce: attempt.refundNonce,
   confirm: false // stage
 });
 
 await openreceive.refundSwap({
-  attemptId: attempt.attempt_id,
+  attemptId: attempt.attemptId,
   refundAddress: "...",
-  refundNonce: attempt.refund_nonce,
+  refundNonce: attempt.refundNonce,
   confirm: true // dispatch
 });
 ```
 
 Refunds target `attemptId`, not order id plus asset. Public swap payloads expose
-support fields such as `attempt_id`, `provider_order_id`, transaction ids,
-`provider_state`, `attention_reason`, and `refund_nonce_expires_at`. Refunds require
-the current `refund_nonce` and an explicit confirmation call from an
-application-authorized order context. Provider tokens remain private.
+support fields such as `attemptId`, `providerOrderId`, transaction ids,
+`providerState`, `attentionReason`, and `refundNonceExpiresAt`. Refunds require
+the current `refundNonce` and an explicit confirmation call from an
+application-authorized order context. Provider tokens remain private. HTTP wire
+payloads stay snake_case (`attempt_id`, `provider_state`, …).
 
-Classify a `provider_state` for display with the exported helpers:
+Classify a `providerState` for display with the exported helpers:
 
 ```ts
 import { describeSwapState, OPENRECEIVE_SWAP_STATES } from "@openreceive/node";
 
-const { label, detail, phase, terminal } = describeSwapState(attempt.provider_state);
+const { label, detail, phase, terminal } = describeSwapState(attempt.providerState);
 ```
 
 ## Errors

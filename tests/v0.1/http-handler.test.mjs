@@ -35,7 +35,7 @@ async function makeService(overrides = {}) {
 }
 
 // Default pricing for tests: 200 sats unless a test supplies its own resolveOrder.
-const defaultResolveOrder = () => ({ sats: 200 });
+const defaultResolveOrder = () => ({ amount: { sats: 200 } });
 
 // Handlers warn when authorize is omitted; silence that noise here.
 function createHandlerSilently(options) {
@@ -193,7 +193,7 @@ test("resolveOrder is the sole price authority; client amount fields are rejecte
   const service = await makeService();
   const handler = createHandlerSilently({
     service,
-    resolveOrder: () => ({ usd: "1.00" }),
+    resolveOrder: () => ({ amount: { currency: "USD", value: "1.00" } }),
   });
 
   const rejected = await handler(

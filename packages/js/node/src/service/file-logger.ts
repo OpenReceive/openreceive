@@ -2,10 +2,10 @@ import { appendFileSync, existsSync, mkdirSync, renameSync, statSync, unlinkSync
 import path from "node:path";
 import type {
   CreateOpenReceiveOptions,
-  OpenReceiveLogEntry,
+  LogEntry,
   OpenReceiveLogLevel,
-  OpenReceiveLogger,
-  OpenReceiveLoggingOptions,
+  Logger,
+  LoggingOptions,
 } from "./types.ts";
 
 const LOG_LEVEL_ORDER: Record<OpenReceiveLogLevel, number> = {
@@ -48,7 +48,7 @@ function normalizeLogLevel(value: string | undefined): OpenReceiveLogLevel | und
  * `emitOpenReceiveEvent`, so no further redaction happens here. Every filesystem
  * interaction is wrapped so logging can never throw into payment/settlement code.
  */
-export function createOpenReceiveFileLogger(config: ResolvedFileLoggerConfig): OpenReceiveLogger {
+export function createOpenReceiveFileLogger(config: ResolvedFileLoggerConfig): Logger {
   const logPath = path.join(config.directory, config.filename);
   let initialized = false;
   let currentBytes = 0;
@@ -79,7 +79,7 @@ export function createOpenReceiveFileLogger(config: ResolvedFileLoggerConfig): O
     currentBytes = 0;
   };
 
-  return (entry: OpenReceiveLogEntry) => {
+  return (entry: LogEntry) => {
     const level = LOG_LEVEL_ORDER[entry.level] ?? LOG_LEVEL_ORDER.info;
     if (level < LOG_LEVEL_ORDER[config.minLevel]) return;
     try {
@@ -107,8 +107,8 @@ export function createOpenReceiveFileLogger(config: ResolvedFileLoggerConfig): O
  * when file logging is explicitly disabled (`enabled: false`).
  */
 export function createOpenReceiveFileLoggerFromConfig(
-  config: OpenReceiveLoggingOptions | undefined,
-): OpenReceiveLogger | undefined {
+  config: LoggingOptions | undefined,
+): Logger | undefined {
   if (config?.enabled === false) return undefined;
   const defaults = OPENRECEIVE_LOGGING_DEFAULTS;
   const maxFileSizeMb = config?.maxFileSizeMb ?? defaults.maxFileSizeMb;
@@ -128,9 +128,9 @@ export function createOpenReceiveFileLoggerFromConfig(
  * the others.
  */
 export function composeOpenReceiveLoggers(
-  ...loggers: readonly (OpenReceiveLogger | undefined)[]
-): OpenReceiveLogger | undefined {
-  const active = loggers.filter((logger): logger is OpenReceiveLogger => logger !== undefined);
+  ...loggers: readonly (Logger | undefined)[]
+): Logger | undefined {
+  const active = loggers.filter((logger): logger is Logger => logger !== undefined);
   if (active.length === 0) return undefined;
   if (active.length === 1) return active[0];
   return (entry) => {

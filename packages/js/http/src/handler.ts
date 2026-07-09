@@ -2,10 +2,12 @@
 // tsup never bundles node's runtime graph (pg/yaml/wallet SDKs) into this runtime-agnostic package.
 import type {
   OpenReceive,
-  OpenReceiveCheckoutAmountSource,
-  OpenReceiveCreateCheckoutRequest,
-  OpenReceiveOrderRequest,
-  OpenReceiveResolveOrder,
+  CheckoutAmountSource,
+  CreateCheckoutRequest,
+  OrderStatus,
+  ResolveOrder,
+  SwapAttempt,
+  SwapQuoteResponse,
 } from "@openreceive/node";
 import {
   createDefaultAuthorize,
@@ -16,6 +18,12 @@ import {
 } from "./authorize.ts";
 import { createRequestId, errorResponse, jsonResponse, OpenReceiveHttpError } from "./errors.ts";
 import { type MatchedRoute, matchRoute, normalizePrefix } from "./router.ts";
+import {
+  toHttpCheckout,
+  toHttpOrderStatus,
+  toHttpSwapAttempt,
+  toHttpSwapOption,
+} from "./serialize.ts";
 import { createOrderAccessTokenManager, type OrderAccessTokenManager } from "./tokens.ts";
 
 /**
@@ -33,16 +41,10 @@ const ORDER_TOKEN_COOKIE_MAX_AGE = 86400;
  * Mirrors `applyOrderAmount` in @openreceive/node; inlined here to avoid a value import from node.
  */
 function applyOrderAmount(
-  base: Omit<OpenReceiveCreateCheckoutRequest, "amount" | "sats" | "usd">,
-  resolved: OpenReceiveCheckoutAmountSource,
-): OpenReceiveCreateCheckoutRequest {
-  if ("amount" in resolved) {
-    return { ...base, amount: resolved.amount } as OpenReceiveCreateCheckoutRequest;
-  }
-  if ("sats" in resolved) {
-    return { ...base, sats: resolved.sats } as OpenReceiveCreateCheckoutRequest;
-  }
-  return { ...base, usd: resolved.usd } as OpenReceiveCreateCheckoutRequest;
+  base: Omit<CreateCheckoutRequest, "amount">,
+  resolved: CheckoutAmountSource,
+): CreateCheckoutRequest {
+  return { ...base, amount: resolved.amount };
 }
 
 /** Options for {@link createOpenReceiveHttpHandler}. `service` and `resolveOrder` are required. */
@@ -53,7 +55,7 @@ export interface CreateOpenReceiveHttpHandlerOptions {
    * Host server-side pricing hook. Required: the create-checkout route obtains the price ONLY
    * from this hook. Omitting it throws at construction.
    */
-  readonly resolveOrder: OpenReceiveResolveOrder;
+  readonly resolveOrder: ResolveOrder;
   /** Host authorization policy. Defaults to the token-gated Tier policy (Tier 3 denied). */
   readonly authorize?: OpenReceiveAuthorize;
   /** Host rate-limit hook. When omitted, no rate limiting is applied. */
@@ -78,7 +80,7 @@ interface HandlerRuntime {
   readonly tokens: OrderAccessTokenManager;
   readonly authorize: OpenReceiveAuthorize;
   readonly rateLimit?: OpenReceiveRateLimit;
-  readonly resolveOrder: OpenReceiveResolveOrder;
+  readonly resolveOrder: ResolveOrder;
   readonly prefix: string;
 }
 
@@ -87,6 +89,7 @@ const ORDER_ACTION_TO_AUTHORIZE: Record<string, OpenReceiveAuthorizeAction> = {
   swap_quote: "swap.quote",
   start_swap: "swap.start",
   refund_swap: "swap.refund",
+  refresh_swap: "swap.refresh",
 };
 
 /**
@@ -187,13 +190,13 @@ async function handleCreateCheckout(
 
   await guard(runtime, "checkout.create", request, { order_id: orderId }, token);
 
-  // Client prices are never trusted on this route. amount/sats/usd are rejected so a tampered
+  // Client prices are never trusted on this route. `amount` is rejected so a tampered
   // client cannot quietly underpay; tip-jar / donation hosts honor a payer-chosen amount inside
   // resolveOrder (typically via metadata) and return it explicitly.
   rejectClientAmountFields(body);
 
   const metadata = readMetadata(body);
-  let resolved: OpenReceiveCheckoutAmountSource | null;
+  let resolved: CheckoutAmountSource | null;
   try {
     resolved = await runtime.resolveOrder({
       orderId,
@@ -213,7 +216,7 @@ async function handleCreateCheckout(
     throw new OpenReceiveHttpError(
       400,
       "INVALID_REQUEST",
-      "resolveOrder must return one of amount, sats, or usd (or null for not found).",
+      "resolveOrder must return { amount: { sats } | { currency, value } } (or null for not found).",
     );
   }
 
@@ -224,10 +227,10 @@ async function handleCreateCheckout(
     ...(memo === undefined ? {} : { memo }),
     ...(descriptionHash === undefined ? {} : { descriptionHash }),
     ...(metadata === undefined ? {} : { metadata }),
-  } satisfies Omit<OpenReceiveCreateCheckoutRequest, "amount" | "sats" | "usd">;
+  } satisfies Omit<CreateCheckoutRequest, "amount">;
 
   const createRequest = applyOrderAmount(base, resolved);
-  const checkout = await runtime.service.getOrCreateCheckout(createRequest);
+  const checkout = toHttpCheckout(await runtime.service.getOrCreateCheckout(createRequest));
 
   // Mint the per-order capability token. It is only returned on the first checkout for an order;
   // later checkouts replay the same order and get no token (`created: false`).
@@ -303,7 +306,7 @@ async function handleGetCheckout(
   const checkout = await runtime.service.getCheckout({ checkoutId });
   const resource: OpenReceiveAuthorizeResource = {
     checkout_id: checkoutId,
-    order_id: checkout.order_id,
+    order_id: checkout.orderId,
   };
   const tokenValid = await computeTokenValid(runtime, resource, token);
   const allowed = await runtime.authorize({
@@ -317,7 +320,7 @@ async function handleGetCheckout(
     throw new OpenReceiveHttpError(403, "UNAUTHORIZED", "Not authorized to read this checkout.");
   }
 
-  return jsonResponse(200, checkout, requestId);
+  return jsonResponse(200, toHttpCheckout(checkout), requestId);
 }
 
 async function handleOrderAction(
@@ -329,32 +332,70 @@ async function handleOrderAction(
   const body = await readJsonBody(request);
   const orderId = route.orderId;
   const action = body.action === undefined ? "status" : body.action;
-
-  const authorizeAction =
-    typeof action === "string" ? ORDER_ACTION_TO_AUTHORIZE[action] : undefined;
-  if (authorizeAction === undefined) {
+  if (typeof action !== "string" || !(action in ORDER_ACTION_TO_AUTHORIZE)) {
     // Unknown action fails loud with a 400 and is never silently treated as `status`. Rejected
     // before the service is called (and before authorize, since there is no valid action to gate).
     throw new OpenReceiveHttpError(
       400,
       "INVALID_REQUEST",
-      `Unknown order action: ${JSON.stringify(action)}. Expected "status", "swap_quote", "start_swap", or "refund_swap".`,
+      `Unknown order action: ${JSON.stringify(action)}. Expected "status", "swap_quote", "start_swap", "refund_swap", or "refresh_swap".`,
     );
   }
+  const authorizeAction = ORDER_ACTION_TO_AUTHORIZE[action];
 
   const token = extractToken(request);
   const resource: OpenReceiveAuthorizeResource = { order_id: orderId };
-  if (action === "refund_swap" && typeof body.attempt_id === "string") {
+  if (
+    (action === "refund_swap" || action === "refresh_swap") &&
+    typeof body.attempt_id === "string"
+  ) {
     resource.attempt_id = body.attempt_id;
   }
 
   await guard(runtime, authorizeAction, request, resource, token);
 
-  // The service's `order` router action-routes the snake_case body and returns the correct envelope
-  // (OrderStatus for status; { quote } / { attempt } for swaps). The path order id is authoritative.
-  const serviceBody = { ...body, order_id: orderId } as unknown as OpenReceiveOrderRequest;
-  const result = await runtime.service.order(serviceBody);
-  return jsonResponse(200, result, requestId);
+  // Path order id is authoritative. Call the typed camelCase service methods directly —
+  // there is no parallel snake_case `order()` dispatcher on the SDK.
+  if (action === "status") {
+    const order = await runtime.service.getOrder({ orderId });
+    const swap = await runtime.service.swapOptions({ orderId });
+    const status: OrderStatus = {
+      ...order,
+      swapsEnabled: swap.enabled,
+      swapPayOptions: swap.enabled ? swap.options : [],
+    };
+    return jsonResponse(200, toHttpOrderStatus(status), requestId);
+  }
+
+  if (action === "swap_quote") {
+    const payInAsset = requiredString(body.pay_in_asset, "pay_in_asset");
+    const quote: SwapQuoteResponse = await runtime.service.swapQuote({ orderId, payInAsset });
+    return jsonResponse(200, { quote: toHttpSwapOption(quote) }, requestId);
+  }
+
+  if (action === "start_swap") {
+    const payInAsset = requiredString(body.pay_in_asset, "pay_in_asset");
+    const attempt: SwapAttempt = await runtime.service.startSwap({ orderId, payInAsset });
+    return jsonResponse(200, { attempt: toHttpSwapAttempt(attempt) }, requestId);
+  }
+
+  if (action === "refresh_swap") {
+    const attemptId = requiredString(body.attempt_id, "attempt_id");
+    const attempt: SwapAttempt = await runtime.service.refreshSwap({ attemptId });
+    return jsonResponse(200, { attempt: toHttpSwapAttempt(attempt) }, requestId);
+  }
+
+  // refund_swap
+  const attemptId = requiredString(body.attempt_id, "attempt_id");
+  const refundAddress = requiredString(body.refund_address, "refund_address");
+  const refundNonce = requiredString(body.refund_nonce, "refund_nonce");
+  const attempt: SwapAttempt = await runtime.service.refundSwap({
+    attemptId,
+    refundAddress,
+    refundNonce,
+    confirm: body.confirm === true,
+  });
+  return jsonResponse(200, { attempt: toHttpSwapAttempt(attempt) }, requestId);
 }
 
 async function handleSwapOptions(
@@ -366,7 +407,14 @@ async function handleSwapOptions(
   const token = extractToken(request);
   await guard(runtime, "swap.options", request, { order_id: route.orderId }, token);
   const result = await runtime.service.swapOptions({ orderId: route.orderId });
-  return jsonResponse(200, result, requestId);
+  return jsonResponse(
+    200,
+    {
+      enabled: result.enabled,
+      options: result.options.map(toHttpSwapOption),
+    },
+    requestId,
+  );
 }
 
 async function handleRates(
@@ -533,11 +581,16 @@ function rejectClientAmountFields(body: Record<string, unknown>): void {
   }
 }
 
-function isAmountSource(value: unknown): value is OpenReceiveCheckoutAmountSource {
+function isAmountSource(value: unknown): value is CheckoutAmountSource {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
-  const keys = ["amount", "sats", "usd"].filter((key) => key in record);
-  return keys.length === 1;
+  if (!("amount" in record) || record.amount === null || typeof record.amount !== "object") {
+    return false;
+  }
+  const amount = record.amount as Record<string, unknown>;
+  const hasSats = "sats" in amount;
+  const hasCurrencyValue = "currency" in amount && "value" in amount;
+  return (hasSats && !hasCurrencyValue) || (!hasSats && hasCurrencyValue);
 }
 
 function readMetadata(body: Record<string, unknown>): Record<string, unknown> | undefined {
@@ -551,4 +604,12 @@ function readMetadata(body: Record<string, unknown>): Record<string, unknown> | 
 
 function readString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function requiredString(value: unknown, field: string): string {
+  const text = readString(value);
+  if (text === undefined) {
+    throw new OpenReceiveHttpError(400, "INVALID_REQUEST", `${field} is required.`);
+  }
+  return text;
 }

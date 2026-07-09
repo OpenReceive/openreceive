@@ -10,7 +10,7 @@ import { createOpenReceive, openReceiveFastify } from "openreceive/fastify";
 const service = await createOpenReceive();
 await fastify.register(openReceiveFastify, {
   service,
-  resolveOrder: async ({ orderId }) => ({ usd: await priceForOrder(orderId) }),
+  resolveOrder: async ({ orderId }) => ({ amount: { currency: "USD", value: await priceForOrder(orderId) } }),
   prefix: "/openreceive",
 });
 ```

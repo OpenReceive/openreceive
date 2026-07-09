@@ -71,9 +71,9 @@ paths:
       description: >
         The `action` field multiplexes: absent/"status" -> order.read (OrderStatus);
         "swap_quote" -> swap.quote ({quote}); "start_swap" -> swap.start ({attempt});
-        "refund_swap" -> swap.refund ({attempt}). Unknown action -> 400 (never silently
-        treated as status). Requires a valid per-order capability token or an allow from
-        the host authorize hook.
+        "refund_swap" -> swap.refund ({attempt}); "refresh_swap" -> swap.refresh ({attempt}).
+        Unknown action -> 400 (never silently treated as status). Requires a valid
+        per-order capability token or an allow from the host authorize hook.
       parameters:
         - $ref: "#/components/parameters/OrderId"
       requestBody:
@@ -242,29 +242,40 @@ components:
           - memo
           - description_hash
     # Authoritative checkout amounts are resolved server-side by the host `resolveOrder` hook.
-    # The create-checkout HTTP body never carries a client price (amount/sats/usd are rejected).
+    # The create-checkout HTTP body never carries a client price (amount is rejected).
     # This schema remains for service-level / library create requests (trusted entry points).
     CreateCheckoutAmount:
       type: object
       additionalProperties: false
       properties:
-        btc:
-          $ref: "#/components/schemas/BitcoinAmount"
-        fiat:
-          $ref: "#/components/schemas/FiatAmount"
+        sats:
+          oneOf:
+            - type: integer
+              minimum: 1
+            - type: string
+              pattern: "^[1-9][0-9]*$"
+        currency:
+          type: string
+          description: ISO 4217 fiat code, or BTC / SAT / SATS.
+        value:
+          type: string
+          pattern: "^[0-9]+(?:\\.[0-9]+)?$"
       oneOf:
         - required:
-            - btc
+            - sats
           not:
             anyOf:
               - required:
-                  - fiat
+                  - currency
+              - required:
+                  - value
         - required:
-            - fiat
+            - currency
+            - value
           not:
             anyOf:
               - required:
-                  - btc
+                  - sats
     QuoteRateRequest:
       type: object
       additionalProperties: false
@@ -438,7 +449,14 @@ components:
             - provider_completed_without_wallet_settlement
             - provider_order_creation_stale
             - provider_order_creation_failed
+            - provider_order_creation_needs_reconcile
             - provider_reported_emergency
+            - provider_order_expires_after_shadow_invoice
+        emergency_repeat:
+          type: boolean
+          description: >
+            Provider reported a repeated deposit on the same order (FixedFloat
+            emergency.repeat). Extra funds may sit at the provider.
     SwapOption:
       type: object
       additionalProperties: false
@@ -702,6 +720,7 @@ components:
         - $ref: "#/components/schemas/SwapQuoteRequest"
         - $ref: "#/components/schemas/StartSwapRequest"
         - $ref: "#/components/schemas/RefundSwapRequest"
+        - $ref: "#/components/schemas/RefreshSwapRequest"
     OrderStatusRequest:
       type: object
       additionalProperties: false
@@ -775,6 +794,23 @@ components:
           pattern: "^or_ref_[a-f0-9]{32}$"
         confirm:
           type: boolean
+    RefreshSwapRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - order_id
+        - action
+        - attempt_id
+      properties:
+        order_id:
+          type: string
+          minLength: 1
+          maxLength: 200
+        action:
+          const: refresh_swap
+        attempt_id:
+          type: string
+          pattern: "^or_inv_[a-z0-9_]+$"
     SwapOptionsResponse:
       type: object
       additionalProperties: false

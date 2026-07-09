@@ -13,7 +13,9 @@ module OpenReceive
   #     config.nwc               = ENV.fetch("OPENRECEIVE_NWC")
   #     config.namespace         = "default"
   #     config.authorize         = ->(ctx) { ... }
-  #     config.resolve_order       = ->(ctx) { { usd: Order.find(ctx[:order_id]).total_usd.to_s } }
+  #     config.resolve_order       = ->(ctx) {
+  #       { amount: { currency: "USD", value: Order.find(ctx[:order_id]).total_usd.to_s } }
+  #     }
   #   end
   #
   # The Configuration lazily builds — and memoizes — a single `OpenReceive::Server::Service`, a

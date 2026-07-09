@@ -141,19 +141,19 @@ order). Checkout creation quotes internally from the configured `priceProviders`
 The same currency list is the checkout-creation allowlist. A backend configured
 with `priceCurrencies: ["USD", "EUR"]` may create fiat checkouts only for those
 explicit uppercase currency codes. The browser can localize display however it
-wants, but the server must pass the actual order currency in `fiat.currency`.
+wants, but the server must pass the actual order currency in `amount.currency`.
 
 `BTC`, `SAT`, and `SATS` are not fiat price-feed currencies. For
-Bitcoin-denominated products, pass one bitcoin amount object such as
-`amount: { btc: { currency: "BTC", value: "0.005" } }` or
-`amount: { btc: { currency: "SATS", value: "7000" } }` to
-`getOrCreateCheckout`. For the common sats case, `sats: 7000` is equivalent.
+Bitcoin-denominated products, pass one amount object such as
+`amount: { currency: "BTC", value: "0.005" }` or
+`amount: { sats: 7000 }` to
+`getOrCreateCheckout`.
 Those amounts convert directly to `amount_msats` and never call a price provider.
 
 ## Quote Rules
 
-- `fiat.currency` is an uppercase allowlisted currency code.
-- `fiat.value` is a decimal string.
+- Fiat `amount.currency` is an uppercase allowlisted currency code.
+- Fiat `amount.value` is a decimal string.
 - `btc_fiat_price` is stored as a decimal string.
 - Amounts round up to a whole sat.
 - `amount_msats` is `amount_sats * 1000`.

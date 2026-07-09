@@ -2,6 +2,53 @@
 
 ## 0.1.1 - Unreleased
 
+### Swap FixedFloat stress hardening
+
+- Monotonic refund poll merge: `refund_pending` cannot demote to `refund_required`
+  (closes double-`/emergency` on read-after-write lag / timeout rollback thrash).
+- Durable store-backed per-provider weight ledger (`swap_provider_weight:<id>`)
+  shared across dynos; soft-cap 200/min with create gate at 150; backoff on HTTP 429.
+  Assumes FixedFloat-compatible limits for every provider. When the preferred
+  entry in `swap.providers` is rate-limited, quote/start fail over to the next
+  provider that still supports the pay-in asset.
+- Create timeout/network → `provider_order_creation_needs_reconcile` and blocks
+  auto-mint of attempt N+1 (FixedFloat has no client idempotency key).
+- Shadow invoice default floor raised to `600+900+300=1800`; post-create guard if
+  provider `expires_at` outlives the bolt11 → `provider_order_expires_after_shadow_invoice`.
+- Operator `refreshSwap` / HTTP `refresh_swap` for `attention` +
+  `provider_reported_emergency` (no unbounded auto-poll of attention).
+- Bounded grace poll after top-level `expired` until `provider_expires_at + 900s`
+  (still not reusable as a deposit address).
+- `/ccies` filters `recv`/`send`; surface `emergency_repeat`; stress docs aligned.
+
+### API surface simplification
+
+- Removed the snake_case `order()` dispatcher from the JS/Ruby SDKs. HTTP handlers
+  call typed camelCase methods (`getOrder`, `swapOptions`, `swapQuote`, `startSwap`,
+  `refundSwap`) directly; OpenAPI wire stays snake_case.
+- `SwapOption` / `PublicSwap` / `SwapAttempt` are camelCase end-to-end in the JS SDK
+  (`payInAsset`, `depositAddress`, `attemptId`, …). HTTP serialization maps at the
+  boundary via `toHttpSwapOption` / `toHttpPublicSwap`.
+- Trusted create-checkout amount is one shape only: `{ amount: { sats } }` or
+  `{ amount: { currency, value } }`. Top-level `usd`/`sats` and nested
+  `amount.btc`/`amount.fiat` are rejected in Node, browser `requestCheckout`, and Ruby.
+- Deleted dead browser asset copies (`pay_tutorials`, `provider-icons`), Claude project
+  memory, and FixedFloat scrape junk. Package-smoke CSS assertion updated for daisyUI.
+  `engines.node` aligned to `>=22` with `.nvmrc`.
+
+### Swap stress-test audit logging
+
+- Server: `swap.state.changed`, `swap.attention.raised`, `swap.refund.rejected`,
+  `swap.refund.nonce_issued`, and `swap.refund.provider_failed` for poll-driven
+  transitions, settlement-attention flips, and refund abuse (stale nonce, address
+  mismatch, double-confirm, wrong state). Refund addresses and nonces stay out of
+  logs (`refund_nonce_present` only).
+- Browser: status polls emit `checkout.state.refreshed` + `swap.state.changed` (with
+  `wallet_settled` / UI label); swap start/refund HTTP emits `swap.start.*` /
+  `swap.refund.*`. Checkout swap snapshots now carry `attention_reason` and
+  `refund_nonce_expires_at` for client-side audit.
+- Docs: `docs/guides/automated-swaps.md` → "Auditing Swap Stress Tests".
+
 ### Route-shipping re-architecture (ship the routes, host keeps auth)
 
 - OpenReceive now **ships HTTP routes** (rodauth-style) instead of leaving every host to
@@ -81,8 +128,8 @@
   swap providers from `OPENRECEIVE_SWAP_*` env variables, and exposes service
   methods. Host apps own route protection, settlement uses backend
   settlement hooks, browser checkout creation uses `requestCheckout`, Node
-  checkout creation uses `orderId`, `idempotencyKey`, nested `amount`,
-  `memo`, and `expiresInSeconds`, and app routes call those service methods
+  checkout creation uses `orderId` plus `usd`/`sats`/`amount`, `memo`,
+  `descriptionHash`, and `metadata`, and app routes call those service methods
   from app-owned controllers. Added `openreceive` plus public
   `@openreceive/core` and `@openreceive/node` package surfaces while keeping
   `@openreceive/testkit` private. Removed Node `init`, built-in

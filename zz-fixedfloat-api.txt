@@ -5,7 +5,21 @@ FAQ
 API
 Support
 Account
+API FixedFloat
+Introduction
+Getting the API key
+Request and example
+Request limits
+Official Libraries
+Methods
+XML export file of rates
 Available currencies
+Exchange rate
+Create order
+Get order details
+Emergency Action Choice
+Subscribe to notification
+Images of QR codes
 Introduction
 The FixedFloat API allows you to automate the receipt of information about the exchange rates of currencies, created orders, presented on the FixedFloat service, create orders and manage them using it.
 

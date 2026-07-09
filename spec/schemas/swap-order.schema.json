@@ -104,8 +104,13 @@
         "provider_completed_without_wallet_settlement",
         "provider_order_creation_stale",
         "provider_order_creation_failed",
-        "provider_reported_emergency"
+        "provider_order_creation_needs_reconcile",
+        "provider_reported_emergency",
+        "provider_order_expires_after_shadow_invoice"
       ]
+    },
+    "emergency_repeat": {
+      "type": "boolean"
     }
   },
   "x-openreceive-private-fields": [

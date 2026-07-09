@@ -2,10 +2,26 @@ import type { StoredRecord } from "../storage/kv.ts";
 import {
   refreshStoredInvoiceStatus,
   type OpenReceiveReconcileOptions,
-  type OpenReceiveStatusRefreshResult
+  type OpenReceiveStatusRefreshResult,
 } from "./reconcile.ts";
 
-export * from "./reconcile.ts";
+export {
+  refreshStoredInvoiceStatus,
+  refreshStoredInvoiceRecordsStatus,
+  sweepPendingInvoicesOnce,
+  runSettlementAction,
+} from "./reconcile.ts";
+export type {
+  OpenReceiveReconcileEventName,
+  OpenReceiveReconcileEvent,
+  OpenReceiveSettlementActionInput,
+  OpenReceiveReconcileOptions,
+  OpenReceiveStatusRefreshStatus,
+  OpenReceiveStatusRefreshResult,
+  OpenReceiveOrderStatusRefreshResult,
+  OpenReceivePendingSweepReason,
+  OpenReceivePendingSweepResult,
+} from "./reconcile.ts";
 
 export interface OpenReceiveReconciler {
   refreshStoredInvoiceStatus(input: {
@@ -14,14 +30,14 @@ export interface OpenReceiveReconciler {
 }
 
 export function createOpenReceiveReconciler(
-  options: OpenReceiveReconcileOptions
+  options: OpenReceiveReconcileOptions,
 ): OpenReceiveReconciler {
   return {
     refreshStoredInvoiceStatus(input) {
       return refreshStoredInvoiceStatus({
         ...options,
-        ...input
+        ...input,
       });
-    }
+    },
   };
 }

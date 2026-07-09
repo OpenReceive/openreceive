@@ -33,7 +33,7 @@ module OpenReceive
       DEFAULT_PREFIX = "/openreceive"
 
       # authorize      : ->(context) { boolean }  — context = { action:, request: env, resource:, token:, token_valid: }
-      # resolve_order  : REQUIRED ->(context) { amount_source } — { "amount" => ... } | { "sats" => ... } | { "usd" => ... } | nil
+      # resolve_order  : REQUIRED ->(context) { amount_source } — { "amount" => { "sats" } | { "currency", "value" } } | nil
       # rate_limit     : ->(context) { allowed_boolean } — returning false yields 429 (optional)
       # tokens         : Tokens::Manager
       def initialize(service:, tokens:, resolve_order:, authorize: nil, rate_limit: nil, prefix: DEFAULT_PREFIX)

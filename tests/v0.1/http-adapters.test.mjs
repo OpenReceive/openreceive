@@ -37,7 +37,7 @@ async function makeService() {
 }
 
 // Default pricing for adapter parity (golden vectors do not exercise create pricing).
-const defaultResolveOrder = () => ({ sats: 200 });
+const defaultResolveOrder = () => ({ amount: { sats: 200 } });
 
 // The golden vectors were authored against the DEFAULT authorize policy (no authorize hook), which
 // warns on construction. Silence that noise here.

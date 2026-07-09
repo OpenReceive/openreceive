@@ -24,14 +24,14 @@ import {
   serviceError,
 } from "./core-utils.ts";
 import type {
-  OpenReceiveListRatesRequest,
+  ListRatesRequest,
   OpenReceiveServiceContext,
   ResolvedCreateAmount,
 } from "./types.ts";
 
 export async function listRates(
   context: OpenReceiveServiceContext,
-  input: OpenReceiveListRatesRequest = {},
+  input: ListRatesRequest = {},
 ): Promise<OpenReceiveBtcFiatRateMapWithSource["rates"]> {
   try {
     const currencies =
@@ -117,7 +117,7 @@ export async function resolveCreateAmount(input: {
     throw serviceError(
       400,
       "INVALID_REQUEST",
-      "Create checkout request requires exactly one of amount.btc or amount.fiat.",
+      "Create checkout request requires exactly one of amount or fiat.",
     );
   }
 

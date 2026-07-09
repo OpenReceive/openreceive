@@ -96,7 +96,9 @@ class OpenReceiveRailsTest < Minitest::Test
       c.nwc_client = FakeWallet.new
       c.store = OpenReceive::Server::InMemoryInvoiceStore.new
       c.namespace = "default"
-      c.resolve_order = ->(order_id:, client_amount:, metadata:, request:) { { "sats" => 1000 } }
+      c.resolve_order = ->(order_id:, client_amount:, metadata:, request:) {
+        { "amount" => { "sats" => 1000 } }
+      }
     end
     OpenReceive.config.request_handler
   end
@@ -166,7 +168,9 @@ class OpenReceiveRailsTest < Minitest::Test
       c.nwc_client = FakeWallet.new
       c.store = OpenReceive::Server::InMemoryInvoiceStore.new
       # Quickstart form: a single ctx hash carrying :order_id.
-      c.resolve_order = ->(ctx) { { usd: nil } && { "sats" => (ctx[:order_id] == "vip" ? 2000 : 1000) } }
+      c.resolve_order = ->(ctx) {
+        { "amount" => { "sats" => (ctx[:order_id] == "vip" ? 2000 : 1000) } }
+      }
     end
     status, _, body = OpenReceive.config.request_handler.create_checkout(
       raw_body: JSON.generate("order_id" => "vip"),
@@ -183,7 +187,9 @@ class OpenReceiveRailsTest < Minitest::Test
     OpenReceive.configure do |c|
       c.nwc_client = FakeWallet.new
       c.store = OpenReceive::Server::InMemoryInvoiceStore.new
-      c.resolve_order = ->(order_id:, client_amount:, metadata:, request:) { { "sats" => 1000 } }
+      c.resolve_order = ->(order_id:, client_amount:, metadata:, request:) {
+        { "amount" => { "sats" => 1000 } }
+      }
       c.authorize = OpenReceive::Server::Presets.guest_checkout
     end
     handler = OpenReceive.config.request_handler
@@ -212,7 +218,9 @@ class OpenReceiveRailsTest < Minitest::Test
     OpenReceive.configure do |c|
       c.nwc_client = FakeWallet.new
       c.store = OpenReceive::Server::InMemoryInvoiceStore.new
-      c.resolve_order = ->(order_id:, client_amount:, metadata:, request:) { { "sats" => 1000 } }
+      c.resolve_order = ->(order_id:, client_amount:, metadata:, request:) {
+        { "amount" => { "sats" => 1000 } }
+      }
       c.authorize = ->(ctx) { seen[ctx[:action]] = ctx[:token_valid]; true }
     end
     handler = OpenReceive.config.request_handler

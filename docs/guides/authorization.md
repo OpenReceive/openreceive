@@ -31,7 +31,7 @@ checkoutRoutes.post("/create_order", async (req, res, next) => {
     const order = await createOrderFromCart(req.user, req.body.cart);
     const checkout = await openreceive.getOrCreateCheckout({
       orderId: order.uuid,
-      usd: order.total_amount.value,
+      amount: { currency: "USD", value: order.total_amount.value },
       memo: `Order ${order.number}`
     });
     res.status(201).json({ order, checkout });
@@ -47,8 +47,52 @@ checkoutRoutes.post("/create_order", async (req, res, next) => {
 checkoutRoutes.post("/order", async (req, res, next) => {
   try {
     // Authorize the caller for req.body.order_id here (session or ownership
-    // check) before forwarding. order_id is an identifier, not a capability.
-    res.json(await openreceive.order(req.body));
+    // check) before calling the service. order_id is an identifier, not a capability.
+    const orderId = req.body.order_id;
+    const action = req.body.action ?? "status";
+    if (action === "status") {
+      const order = await openreceive.getOrder({ orderId });
+      const swap = await openreceive.swapOptions({ orderId });
+      res.json({
+        ...order,
+        swapsEnabled: swap.enabled,
+        swapPayOptions: swap.enabled ? swap.options : [],
+      });
+      return;
+    }
+    if (action === "swap_quote") {
+      res.json({
+        quote: await openreceive.swapQuote({
+          orderId,
+          payInAsset: req.body.pay_in_asset,
+        }),
+      });
+      return;
+    }
+    if (action === "start_swap") {
+      res.json({
+        attempt: await openreceive.startSwap({
+          orderId,
+          payInAsset: req.body.pay_in_asset,
+        }),
+      });
+      return;
+    }
+    if (action === "refund_swap") {
+      res.json({
+        attempt: await openreceive.refundSwap({
+          attemptId: req.body.attempt_id,
+          refundAddress: req.body.refund_address,
+          refundNonce: req.body.refund_nonce,
+          confirm: req.body.confirm === true,
+        }),
+      });
+      return;
+    }
+    res.status(400).json({
+      code: "INVALID_REQUEST",
+      message: 'Unknown order action. Expected "status", "swap_quote", "start_swap", or "refund_swap".',
+    });
   } catch (error) {
     if (error instanceof OpenReceiveServiceError) {
       res.status(error.status).json(error.body);
@@ -85,7 +129,7 @@ export async function POST(request: Request) {
     const order = await createOrderFromCart(body.cart);
     const checkout = await openreceive.getOrCreateCheckout({
       orderId: order.uuid,
-      usd: order.total_amount.value,
+      amount: { currency: "USD", value: order.total_amount.value },
       memo: `Order ${order.number}`
     });
     return Response.json({ order, checkout }, { status: 201 });
@@ -112,7 +156,7 @@ export async function createOrder(req, res, next) {
     const order = await createOrderFromCart(req.user, req.body.cart);
     const checkout = await openreceive.getOrCreateCheckout({
       orderId: order.uuid,
-      usd: order.total_amount.value,
+      amount: { currency: "USD", value: order.total_amount.value },
       memo: `Order ${order.number}`
     });
     res.status(201).json({ order, checkout });

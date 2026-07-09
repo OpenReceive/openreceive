@@ -1012,18 +1012,23 @@ function validateOpenApi() {
     "OpenAPI create checkout request must use SDK order_id",
   );
   assert(
-    createCheckoutRequest?.properties?.amount?.$ref === "#/components/schemas/CreateCheckoutAmount",
-    "OpenAPI create checkout request must use the SDK amount wrapper",
+    createCheckoutRequest?.properties?.amount === undefined &&
+      createCheckoutRequest?.properties?.sats === undefined &&
+      createCheckoutRequest?.properties?.usd === undefined,
+    "OpenAPI HTTP create checkout request must not accept client price fields",
   );
   assert(
-    createCheckoutAmount?.properties?.btc?.$ref === "#/components/schemas/BitcoinAmount" &&
-      createCheckoutAmount?.properties?.fiat?.$ref === "#/components/schemas/FiatAmount",
-    "OpenAPI create checkout amount must expose btc and fiat sources",
+    createCheckoutAmount?.properties?.sats !== undefined &&
+      createCheckoutAmount?.properties?.currency !== undefined &&
+      createCheckoutAmount?.properties?.value !== undefined,
+    "OpenAPI CreateCheckoutAmount must expose sats and currency/value sources",
   );
   assert(
-    createCheckoutAmount?.properties?.sats === undefined &&
-      createCheckoutAmount?.properties?.msats === undefined,
-    "OpenAPI create checkout amount must not expose direct sats or msats sources",
+    createCheckoutAmount?.properties?.btc === undefined &&
+      createCheckoutAmount?.properties?.fiat === undefined &&
+      createCheckoutAmount?.properties?.msats === undefined &&
+      createCheckoutAmount?.properties?.usd === undefined,
+    "OpenAPI CreateCheckoutAmount must not expose nested btc/fiat or usd/msats shortcuts",
   );
   assert(
     JSON.stringify(openapi.components?.schemas?.BitcoinAmount?.properties?.currency?.enum) ===

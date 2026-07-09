@@ -7,51 +7,108 @@ import {
 } from "./core-utils.ts";
 import type {
   NormalizedCreateCheckoutRequest,
-  OpenReceiveCreateCheckoutAmount,
-  OpenReceiveCreateCheckoutRequest,
-  OpenReceiveGetCheckoutRequest,
-  OpenReceiveGetOrderRequest,
+  CreateCheckoutAmount,
+  CreateCheckoutRequest,
+  GetCheckoutRequest,
+  GetOrderRequest,
 } from "./types.ts";
 import { HEX_64 } from "../hex.ts";
+import { isOpenReceiveBitcoinAmountCurrency } from "@openreceive/core";
 
 export function createAmountRequest(
-  amount: OpenReceiveCreateCheckoutAmount,
+  amount: CreateCheckoutAmount,
 ): Record<string, unknown> {
-  readCreateAmountKind(amount);
+  const kind = readCreateAmountKind(amount);
+  if (kind === "sats") {
+    return {
+      amount: {
+        currency: "SATS",
+        value: normalizeSatsValue(amount.sats),
+      },
+    };
+  }
+  const currency = amount.currency;
+  const value = amount.value;
+  if (currency === undefined || value === undefined) {
+    throw serviceError(
+      400,
+      "INVALID_REQUEST",
+      "Create checkout amount must be { sats } or { currency, value }.",
+    );
+  }
+  if (isOpenReceiveBitcoinAmountCurrency(currency)) {
+    return {
+      amount: {
+        currency,
+        value,
+      },
+    };
+  }
   return {
-    ...("btc" in amount ? { amount: amount.btc } : {}),
-    ...("fiat" in amount ? { fiat: amount.fiat } : {}),
+    fiat: {
+      currency,
+      value,
+    },
   };
 }
 
-export function amountKeyFromCreateAmount(amount: OpenReceiveCreateCheckoutAmount): string {
-  readCreateAmountKind(amount);
-  if ("fiat" in amount) {
-    return `fiat:${amount.fiat.currency}:${amount.fiat.value}`;
+export function amountKeyFromCreateAmount(amount: CreateCheckoutAmount): string {
+  const kind = readCreateAmountKind(amount);
+  if (kind === "sats") {
+    return `btc:SATS:${normalizeSatsValue(amount.sats)}`;
   }
-  return `btc:${amount.btc.currency}:${amount.btc.value}`;
+  const currency = amount.currency;
+  const value = amount.value;
+  if (currency === undefined || value === undefined) {
+    throw serviceError(
+      400,
+      "INVALID_REQUEST",
+      "Create checkout amount must be { sats } or { currency, value }.",
+    );
+  }
+  if (isOpenReceiveBitcoinAmountCurrency(currency)) {
+    return `btc:${currency}:${value}`;
+  }
+  return `fiat:${currency}:${value}`;
 }
 
-export function readCreateAmountKind(amount: OpenReceiveCreateCheckoutAmount): "btc" | "fiat" {
+export function readCreateAmountKind(amount: CreateCheckoutAmount): "sats" | "currency" {
   if (!isRecord(amount)) {
     throw serviceError(
       400,
       "INVALID_REQUEST",
-      "Create checkout request requires exactly one of amount.btc or amount.fiat.",
+      "Create checkout amount must be { sats } or { currency, value }.",
     );
   }
 
-  const unsupportedKeys = Object.keys(amount).filter((key) => key !== "btc" && key !== "fiat");
-  const hasBtc = "btc" in amount && amount.btc !== undefined;
-  const hasFiat = "fiat" in amount && amount.fiat !== undefined;
-  if (unsupportedKeys.length > 0 || [hasBtc, hasFiat].filter(Boolean).length !== 1) {
+  const hasSats = "sats" in amount && amount.sats !== undefined;
+  const hasCurrency = "currency" in amount && amount.currency !== undefined;
+  const hasValue = "value" in amount && amount.value !== undefined;
+  const unsupportedKeys = Object.keys(amount).filter(
+    (key) => key !== "sats" && key !== "currency" && key !== "value",
+  );
+
+  if (unsupportedKeys.length > 0) {
     throw serviceError(
       400,
       "INVALID_REQUEST",
-      "Create checkout request requires exactly one of amount.btc or amount.fiat.",
+      "Create checkout amount must be { sats } or { currency, value }.",
     );
   }
-  return hasBtc ? "btc" : "fiat";
+
+  if (hasSats && !hasCurrency && !hasValue) {
+    return "sats";
+  }
+
+  if (!hasSats && hasCurrency && hasValue) {
+    return "currency";
+  }
+
+  throw serviceError(
+    400,
+    "INVALID_REQUEST",
+    "Create checkout amount must be { sats } or { currency, value }.",
+  );
 }
 
 export function getCreateDescriptionFields(input: {
@@ -87,7 +144,7 @@ export function getCreateDescriptionFields(input: {
 }
 
 export function normalizeCreateCheckoutRequest(
-  input: OpenReceiveCreateCheckoutRequest,
+  input: CreateCheckoutRequest,
 ): NormalizedCreateCheckoutRequest {
   const body = asRecord(input);
   const orderId = parseOrderId(body);
@@ -107,52 +164,54 @@ export function normalizeCreateCheckoutRequest(
 
 export function normalizeCreateCheckoutAmount(
   body: Record<string, unknown>,
-): OpenReceiveCreateCheckoutAmount {
-  const sourceCount = [
-    body.amount !== undefined,
-    body.usd !== undefined,
-    body.sats !== undefined,
-  ].filter(Boolean).length;
-
-  if (sourceCount !== 1) {
+): CreateCheckoutAmount {
+  if (body.usd !== undefined || body.sats !== undefined) {
     throw serviceError(
       400,
       "INVALID_REQUEST",
-      "Create checkout request requires exactly one of amount, usd, or sats.",
+      "Create checkout request no longer accepts top-level usd or sats; use amount: { currency, value } or amount: { sats }.",
     );
   }
 
-  if (body.amount !== undefined) {
-    readCreateAmountKind(body.amount as OpenReceiveCreateCheckoutAmount);
-    return structuredClone(body.amount) as OpenReceiveCreateCheckoutAmount;
+  if (body.amount === undefined) {
+    throw serviceError(
+      400,
+      "INVALID_REQUEST",
+      "Create checkout request requires amount: { sats } or amount: { currency, value }.",
+    );
   }
 
-  if (body.usd !== undefined) {
-    const value = optionalString(body.usd);
-    if (
-      value === undefined ||
-      !/^[0-9]+(?:\.[0-9]+)?$/.test(value) ||
-      /^0+(?:\.0+)?$/.test(value)
-    ) {
-      throw serviceError(400, "INVALID_REQUEST", "usd must be a positive decimal string.");
-    }
-    return {
-      fiat: {
-        currency: "USD",
-        value,
-      },
-    };
+  const amount = body.amount as CreateCheckoutAmount;
+  readCreateAmountKind(amount);
+  if ("sats" in amount && amount.sats !== undefined) {
+    return { sats: normalizeSatsValue(amount.sats) };
   }
-
-  return {
-    btc: {
-      currency: "SATS",
-      value: normalizeSatsShortcut(body.sats),
-    },
-  };
+  const currency = optionalString((amount as { currency?: unknown }).currency);
+  const value = optionalString((amount as { value?: unknown }).value);
+  if (currency === undefined || value === undefined) {
+    throw serviceError(
+      400,
+      "INVALID_REQUEST",
+      "Create checkout amount must be { sats } or { currency, value }.",
+    );
+  }
+  if (isOpenReceiveBitcoinAmountCurrency(currency)) {
+    return { currency, value };
+  }
+  if (!/^[A-Z]{3}$/.test(currency)) {
+    throw serviceError(
+      400,
+      "INVALID_REQUEST",
+      "amount.currency must be an ISO 4217 uppercase code, or BTC/SAT/SATS.",
+    );
+  }
+  if (!/^[0-9]+(?:\.[0-9]+)?$/.test(value) || /^0+(?:\.0+)?$/.test(value)) {
+    throw serviceError(400, "INVALID_REQUEST", "amount.value must be a positive decimal string.");
+  }
+  return { currency, value };
 }
 
-export function normalizeSatsShortcut(value: unknown): string {
+export function normalizeSatsValue(value: unknown): string {
   if (typeof value === "number") {
     if (!Number.isSafeInteger(value) || value <= 0) {
       throw serviceError(400, "INVALID_REQUEST", "sats must be a positive integer.");
@@ -178,7 +237,7 @@ export function parseOrderId(body: Record<string, unknown>): string {
   return orderId;
 }
 
-export function parseGetCheckoutId(input: OpenReceiveGetCheckoutRequest): string {
+export function parseGetCheckoutId(input: GetCheckoutRequest): string {
   const body = asRecord(input);
   const checkoutId = optionalString(body.checkoutId ?? body.checkout_id);
   if (checkoutId === undefined) {
@@ -190,6 +249,6 @@ export function parseGetCheckoutId(input: OpenReceiveGetCheckoutRequest): string
   return checkoutId;
 }
 
-export function parseGetOrderId(input: OpenReceiveGetOrderRequest): string {
+export function parseGetOrderId(input: GetOrderRequest): string {
   return parseOrderId(asRecord(input));
 }

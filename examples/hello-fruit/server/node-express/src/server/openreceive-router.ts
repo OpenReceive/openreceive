@@ -2,7 +2,7 @@ import { openReceiveExpress } from "@openreceive/express";
 import {
   guestCheckout,
   type OpenReceiveAuthorize,
-  type OpenReceiveResolveOrder,
+  type ResolveOrder,
 } from "@openreceive/http";
 import type { OrderAccessTokenManager } from "@openreceive/node";
 import type { Express } from "express";
@@ -76,7 +76,7 @@ function demoUserFromRequest(request: unknown): HelloFruitDemoUser | undefined {
  */
 export function createHelloFruitResolveOrder(
   openreceive: OpenReceiveService,
-): OpenReceiveResolveOrder {
+): ResolveOrder {
   return ({ orderId }) => resolveHelloFruitOrder(openreceive, orderId);
 }
 

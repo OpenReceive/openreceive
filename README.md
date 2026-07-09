@@ -52,7 +52,9 @@ app.use(openReceiveExpress({
   authorize: ({ action, token, resource }) =>
     action === "checkout.create" || validToken(token, resource.order_id),
   // Required: the create route never trusts a client price.
-  resolveOrder: ({ orderId }) => ({ usd: priceForOrder(orderId) }),
+  resolveOrder: ({ orderId }) => ({
+    amount: { currency: "USD", value: priceForOrder(orderId) },
+  }),
 }));
 ```
 
@@ -107,7 +109,13 @@ schemas, vectors, generated contracts, package artifacts, demos, secret scans,
 release metadata, deployment templates, and docs aligned before broader SDK
 work proceeds.
 
-Run the full local gate:
+Run the fast day-to-day gate (validate, lint, typecheck, JS tests, package smoke):
+
+```sh
+npm run test:ci:core
+```
+
+Run the full gate (core + Ruby, demos, release/workflow checks, live NWC):
 
 ```sh
 npm run test:ci

@@ -32,9 +32,9 @@ demos/deploy/**/id_*
 demos/deploy/**/wg*.conf
 
 .DS_Store
-/private/*
-!/private/.keep
-private_private_infra_details.txt
+
+# Local Claude Code project memory (path-leaking, machine-specific).
+.claude/projects/
 
 # Tooling output.
 node_modules/

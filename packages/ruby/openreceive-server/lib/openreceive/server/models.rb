@@ -128,17 +128,33 @@ module OpenReceive
           "status" => status,
           "amount_msats" => base["amount_msats"]
         }
-        if amount_spec.is_a?(Hash) && amount_spec["fiat"].is_a?(Hash)
-          checkout["fiat"] = {
-            "currency" => amount_spec["fiat"]["currency"],
-            "value" => amount_spec["fiat"]["value"]
-          }
-        end
+        fiat = fiat_from_amount_spec(amount_spec)
+        checkout["fiat"] = fiat unless fiat.nil?
         checkout["active"] = active if active
         checkout["invoices"] = invoices
         checkout["paid_at"] = paid_invoice["settled_at"] if paid_invoice && paid_invoice["settled_at"]
         checkout["created_at"] = sorted.map { |row| integer(row["created_at"]) }.min
         checkout
+      end
+
+      def fiat_from_amount_spec(amount_spec)
+        return nil unless amount_spec.is_a?(Hash)
+
+        # Legacy nested shape (pre-flat amount).
+        if amount_spec["fiat"].is_a?(Hash)
+          return {
+            "currency" => amount_spec["fiat"]["currency"],
+            "value" => amount_spec["fiat"]["value"]
+          }
+        end
+
+        # Flat CreateCheckoutAmount: { "currency", "value" } for fiat ISO codes.
+        currency = amount_spec["currency"]
+        value = amount_spec["value"]
+        return nil unless currency.is_a?(String) && value.is_a?(String)
+        return nil if %w[BTC SAT SATS].include?(currency.upcase)
+
+        { "currency" => currency, "value" => value }
       end
 
       def build_order(rows, scan_meta, now)

@@ -11,10 +11,15 @@
       "!**/.next",
       "!**/.vite",
       "!**/.openreceive",
-      "!**/private",
       "!**/building",
-      "!**/*.svg"
+      "!**/*.svg",
+      "!**/*.css"
     ]
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
   },
   "formatter": {
     "enabled": true,

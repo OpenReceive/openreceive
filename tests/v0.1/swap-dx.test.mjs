@@ -12,7 +12,7 @@ import {
   createTestkitSwapProvider,
 } from "../../packages/js/testkit/src/index.ts";
 
-async function harness(swapProvider) {
+async function harness(swapProvider, { logger } = {}) {
   let now = 1000;
   const wallet = createTestkitReceiveClient({ now: () => now });
   const openreceive = await createOpenReceive({
@@ -23,6 +23,7 @@ async function harness(swapProvider) {
     clock: () => now,
     priceProviders: [new StaticPriceProvider()],
     swap: { providers: swapProvider === undefined ? [] : [swapProvider] },
+    ...(logger === undefined ? {} : { logger }),
   });
   return {
     openreceive,
@@ -35,9 +36,9 @@ async function harness(swapProvider) {
 test("createTestkitSwapProvider drives a scripted swap lifecycle offline", async () => {
   const swap = createTestkitSwapProvider({ now: () => 1000 });
   const { openreceive, advance } = await harness(swap);
-  await openreceive.createCheckout({
+  await openreceive.getOrCreateCheckout({
     orderId: "order-testkit",
-    amount: { btc: { currency: "SATS", value: "200" } },
+    amount: { sats: "200" },
   });
 
   swap.script("USDT_TRON", ["confirming", "exchanging", "completed"]);
@@ -46,17 +47,17 @@ test("createTestkitSwapProvider drives a scripted swap lifecycle offline", async
     payInAsset: "USDT_TRON",
   });
   // First-class attempt: deposit fields are top-level, invoice is nested.
-  assert.equal(attempt.provider_state, "awaiting_deposit");
-  assert.equal(attempt.deposit_address, "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb");
-  assert.equal(attempt.pay_in_asset, "USDT_TRON");
-  assert.equal(attempt.shadow_invoice.rail, "swap");
+  assert.equal(attempt.providerState, "awaiting_deposit");
+  assert.equal(attempt.depositAddress, "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb");
+  assert.equal(attempt.payInAsset, "USDT_TRON");
+  assert.equal(attempt.shadowInvoice.rail, "swap");
   assert.equal("provider_token" in attempt, false);
 
   const readState = async () => {
     advance(11);
     const order = await openreceive.getOrder({ orderId: "order-testkit" });
-    return order.active_checkout.invoices.find((invoice) => invoice.rail === "swap").swap
-      .provider_state;
+    return order.activeCheckout.invoices.find((invoice) => invoice.rail === "swap").swap
+      .providerState;
   };
 
   assert.equal(await readState(), "confirming");
@@ -69,11 +70,14 @@ test("createTestkitSwapProvider drives a scripted swap lifecycle offline", async
 });
 
 test("createTestkitSwapProvider forces refund_required and attention with a reason", async () => {
+  const logs = [];
   const swap = createTestkitSwapProvider({ now: () => 1000 });
-  const { openreceive, advance } = await harness(swap);
-  await openreceive.createCheckout({
+  const { openreceive, advance } = await harness(swap, {
+    logger: (entry) => logs.push(entry),
+  });
+  await openreceive.getOrCreateCheckout({
     orderId: "order-testkit-refund",
-    amount: { btc: { currency: "SATS", value: "200" } },
+    amount: { sats: "200" },
   });
   const attempt = await openreceive.startSwap({
     orderId: "order-testkit-refund",
@@ -83,45 +87,80 @@ test("createTestkitSwapProvider forces refund_required and attention with a reas
   swap.forceRefundRequired("ETH_ETH");
   advance(11);
   const refreshed = await openreceive.getOrder({ orderId: "order-testkit-refund" });
-  const swapInvoice = refreshed.active_checkout.invoices.find((invoice) => invoice.rail === "swap");
-  assert.equal(swapInvoice.swap.provider_state, "refund_required");
-  assert.match(swapInvoice.swap.refund_nonce, /^or_ref_[a-f0-9]{32}$/);
-  assert.equal(typeof swapInvoice.swap.refund_nonce_expires_at, "number");
+  const swapInvoice = refreshed.activeCheckout.invoices.find((invoice) => invoice.rail === "swap");
+  assert.equal(swapInvoice.swap.providerState, "refund_required");
+  assert.match(swapInvoice.swap.refundNonce, /^or_ref_[a-f0-9]{32}$/);
+  assert.equal(typeof swapInvoice.swap.refundNonceExpiresAt, "number");
+
+  const stateChanged = logs.find(
+    (entry) =>
+      entry.event === "swap.state.changed" && entry.provider_state === "refund_required",
+  );
+  assert.ok(stateChanged);
+  assert.equal(stateChanged.previous_state, "awaiting_deposit");
+  assert.equal(stateChanged.refund_nonce_present, true);
+  assert.doesNotMatch(JSON.stringify(logs), /or_ref_[a-f0-9]{32}/);
 
   const staged = await openreceive.refundSwap({
-    attemptId: attempt.attempt_id,
+    attemptId: attempt.attemptId,
     refundAddress: "0x2222222222222222222222222222222222222222",
-    refundNonce: swapInvoice.swap.refund_nonce,
+    refundNonce: swapInvoice.swap.refundNonce,
   });
-  assert.equal(staged.provider_state, "refund_required");
+  assert.equal(staged.providerState, "refund_required");
   assert.deepEqual(swap.refundCalls, []);
+  assert.ok(logs.some((entry) => entry.event === "swap.refund.submitted"));
 
   const confirmed = await openreceive.refundSwap({
-    attemptId: attempt.attempt_id,
+    attemptId: attempt.attemptId,
     refundAddress: "0x2222222222222222222222222222222222222222",
-    refundNonce: staged.refund_nonce,
+    refundNonce: staged.refundNonce,
     confirm: true,
   });
-  assert.equal(confirmed.provider_state, "refund_pending");
+  assert.equal(confirmed.providerState, "refund_pending");
   assert.equal(swap.refundCalls.length, 1);
+  assert.ok(
+    logs.some(
+      (entry) =>
+        entry.event === "swap.state.changed" && entry.provider_state === "refund_pending",
+    ),
+  );
+  assert.ok(logs.some((entry) => entry.event === "swap.refund.confirmed"));
+
+  await assert.rejects(
+    () =>
+      openreceive.refundSwap({
+        attemptId: attempt.attemptId,
+        refundAddress: "0x2222222222222222222222222222222222222222",
+        refundNonce: staged.refundNonce,
+        confirm: true,
+      }),
+    /already confirmed|does not require a refund/i,
+  );
+  assert.ok(
+    logs.some(
+      (entry) =>
+        entry.event === "swap.refund.rejected" &&
+        (entry.reason === "wrong_state" || entry.reason === "already_confirmed"),
+    ),
+  );
 });
 
 test("createTestkitSwapProvider surfaces an attention reason on the payload", async () => {
   const swap = createTestkitSwapProvider({ now: () => 1000 });
   const { openreceive, advance } = await harness(swap);
-  await openreceive.createCheckout({
+  await openreceive.getOrCreateCheckout({
     orderId: "order-testkit-attention",
-    amount: { btc: { currency: "SATS", value: "200" } },
+    amount: { sats: "200" },
   });
   await openreceive.startSwap({ orderId: "order-testkit-attention", payInAsset: "SOL_SOL" });
 
   swap.forceAttention("SOL_SOL", "provider_completed_without_wallet_settlement");
   advance(11);
   const order = await openreceive.getOrder({ orderId: "order-testkit-attention" });
-  const swapInvoice = order.active_checkout.invoices.find((invoice) => invoice.rail === "swap");
-  assert.equal(swapInvoice.swap.provider_state, "attention");
+  const swapInvoice = order.activeCheckout.invoices.find((invoice) => invoice.rail === "swap");
+  assert.equal(swapInvoice.swap.providerState, "attention");
   assert.equal(swapInvoice.swap.attention, true);
-  assert.equal(swapInvoice.swap.attention_reason, "provider_completed_without_wallet_settlement");
+  assert.equal(swapInvoice.swap.attentionReason, "provider_completed_without_wallet_settlement");
 });
 
 test("describeSwapState maps every provider state and keeps completed non-terminal", () => {

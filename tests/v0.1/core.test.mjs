@@ -154,6 +154,7 @@ function checkoutSnapshot(invoiceOverrides = {}, checkoutOverrides = {}) {
     ...(invoiceOverrides.fiat_quote === undefined
       ? {}
       : { fiat_quote: invoiceOverrides.fiat_quote }),
+    ...(invoiceOverrides.swap === undefined ? {} : { swap: invoiceOverrides.swap }),
   };
   const status =
     checkoutOverrides.status ?? (invoice.transaction_state === "settled" ? "paid" : "open");
@@ -1189,7 +1190,7 @@ test("browser request checkout helper posts SDK-shaped data to an app-owned URL"
   const checkout = await requestCheckout({
     checkoutUrl: "/create_order",
     orderId: "order-browser-create",
-    usd: "10.00",
+    amount: { currency: "USD", value: "10.00" },
     memo: "Browser helper invoice",
     fetch: async (url, init) => {
       requests.push({ url, init });
@@ -1226,10 +1227,8 @@ test("browser request checkout helper posts SDK-shaped data to an app-owned URL"
   assert.deepEqual(JSON.parse(requests[0].init.body), {
     order_id: "order-browser-create",
     amount: {
-      fiat: {
-        currency: "USD",
-        value: "10.00",
-      },
+      currency: "USD",
+      value: "10.00",
     },
     memo: "Browser helper invoice",
   });
@@ -1238,10 +1237,8 @@ test("browser request checkout helper posts SDK-shaped data to an app-owned URL"
     checkoutUrl: (orderId) => `/checkout/${orderId}`,
     orderId: "order-browser-btc",
     amount: {
-      btc: {
-        currency: "BTC",
-        value: "0.005",
-      },
+      currency: "BTC",
+      value: "0.005",
     },
     fetch: async (url, init) => {
       requests.push({ url, init });
@@ -1271,17 +1268,15 @@ test("browser request checkout helper posts SDK-shaped data to an app-owned URL"
   assert.deepEqual(JSON.parse(requests[1].init.body), {
     order_id: "order-browser-btc",
     amount: {
-      btc: {
-        currency: "BTC",
-        value: "0.005",
-      },
+      currency: "BTC",
+      value: "0.005",
     },
   });
 
   await requestCheckout({
     checkoutUrl: "/checkout/{orderId}",
     orderId: "order-browser-sats",
-    sats: 500,
+    amount: { sats: 500 },
     fetch: async (url, init) => {
       requests.push({ url, init });
       return {
@@ -1310,10 +1305,7 @@ test("browser request checkout helper posts SDK-shaped data to an app-owned URL"
   assert.deepEqual(JSON.parse(requests[2].init.body), {
     order_id: "order-browser-sats",
     amount: {
-      btc: {
-        currency: "SATS",
-        value: "500",
-      },
+      sats: 500,
     },
   });
 
@@ -1322,7 +1314,7 @@ test("browser request checkout helper posts SDK-shaped data to an app-owned URL"
       requestCheckout({
         checkoutUrl: "/create_order",
         orderId: "",
-        amount: { btc: { currency: "BTC", value: "0.000002" } },
+        amount: { currency: "BTC", value: "0.000002" },
         fetch: async () => ({
           ok: true,
           json: async () => ({}),
@@ -1334,14 +1326,14 @@ test("browser request checkout helper posts SDK-shaped data to an app-owned URL"
     () =>
       requestCheckout({
         checkoutUrl: "/create_order",
-        orderId: "old-direct-sats",
-        amount: { sats: "200" },
+        orderId: "old-nested-btc",
+        amount: { btc: { currency: "SATS", value: "200" } },
         fetch: async () => ({
           ok: true,
           json: async () => ({}),
         }),
       }),
-    /amount\.btc or amount\.fiat/,
+    /amount: \{ sats \} or amount: \{ currency, value \}/,
   );
   await assert.rejects(
     () =>
@@ -1354,14 +1346,27 @@ test("browser request checkout helper posts SDK-shaped data to an app-owned URL"
           json: async () => ({}),
         }),
       }),
-    /amount\.btc or amount\.fiat/,
+    /amount: \{ sats \} or amount: \{ currency, value \}/,
+  );
+  await assert.rejects(
+    () =>
+      requestCheckout({
+        checkoutUrl: "/create_order",
+        orderId: "old-top-level-usd",
+        usd: "10.00",
+        fetch: async () => ({
+          ok: true,
+          json: async () => ({}),
+        }),
+      }),
+    /top-level usd or sats/,
   );
   await assert.rejects(
     () =>
       requestCheckout({
         checkoutUrl: "/create_order",
         orderId: "bad-nwc",
-        amount: { btc: { currency: "BTC", value: "0.000002" } },
+        amount: { currency: "BTC", value: "0.000002" },
         memo: `nostr+walletconnect://${"a".repeat(64)}?secret=${"b".repeat(64)}`,
         fetch: async () => ({
           ok: true,
@@ -1375,7 +1380,7 @@ test("browser request checkout helper posts SDK-shaped data to an app-owned URL"
       requestCheckout({
         checkoutUrl: "/create_order",
         orderId: "server-error",
-        amount: { btc: { currency: "BTC", value: "0.000002" } },
+        amount: { currency: "BTC", value: "0.000002" },
         fetch: async () => ({
           ok: false,
           json: async () => ({
@@ -1488,6 +1493,69 @@ test("browser checkout state ignores passive event and route URLs", () => {
   );
   assert.equal(logs[0].invoice_id, "or_inv_browser");
   assert.doesNotMatch(JSON.stringify(logs), /nostr\+walletconnect:\/\//);
+});
+
+test("browser checkout refresh logs swap state transitions without refund secrets", () => {
+  const logs = [];
+  const logger = (entry) => logs.push(entry);
+  const previous = createCheckoutState(
+    checkoutSnapshot({
+      invoice_id: "or_inv_swap_audit",
+      invoice: "lnbc-swap-audit",
+      payment_hash: PAYMENT_HASH,
+      amount_msats: 200000,
+      transaction_state: "pending",
+      workflow_state: "invoice_created",
+      expires_at: 2000,
+      rail: "swap",
+      swap: {
+        attempt_id: "or_inv_swap_audit",
+        provider: "testkit",
+        pay_in_asset: "USDT_TRON",
+        deposit_address: "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
+        deposit_amount: "10.5",
+        provider_state: "awaiting_deposit",
+        provider_expires_at: 2000,
+      },
+    }),
+    { now: 1000 },
+  );
+
+  createCheckoutState(
+    checkoutSnapshot({
+      invoice_id: "or_inv_swap_audit",
+      invoice: "lnbc-swap-audit",
+      payment_hash: PAYMENT_HASH,
+      amount_msats: 200000,
+      transaction_state: "pending",
+      workflow_state: "invoice_created",
+      expires_at: 2000,
+      rail: "swap",
+      swap: {
+        attempt_id: "or_inv_swap_audit",
+        provider: "testkit",
+        pay_in_asset: "USDT_TRON",
+        deposit_address: "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
+        deposit_amount: "10.5",
+        provider_state: "refund_required",
+        provider_expires_at: 2000,
+        refund_nonce: "or_ref_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        refund_nonce_expires_at: 1600,
+        attention: false,
+      },
+    }),
+    { logger, now: 1011, source: "refresh", previousState: previous },
+  );
+
+  assert.deepEqual(
+    logs.map((entry) => entry.event),
+    ["checkout.state.refreshed", "swap.state.changed"],
+  );
+  assert.equal(logs[1].provider_state, "refund_required");
+  assert.equal(logs[1].previous_provider_state, "awaiting_deposit");
+  assert.equal(logs[1].refund_nonce_present, true);
+  assert.equal(logs[1].ui_label, "Refund needed");
+  assert.doesNotMatch(JSON.stringify(logs), /or_ref_aaaaaaaa/);
 });
 
 test("browser checkout watcher owns countdown and status refresh polling", async () => {

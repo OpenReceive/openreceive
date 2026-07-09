@@ -11,7 +11,7 @@ import { createOpenReceive, openReceiveNextHandlers } from "openreceive/next";
 const service = await createOpenReceive();
 export const { GET, POST } = openReceiveNextHandlers({
   service,
-  resolveOrder: async ({ orderId }) => ({ usd: await priceForOrder(orderId) }),
+  resolveOrder: async ({ orderId }) => ({ amount: { currency: "USD", value: await priceForOrder(orderId) } }),
 });
 ```
 

@@ -48,7 +48,8 @@ const importChecks = {
   "@openreceive/testkit": "typeof mod.createTestkitReceiveClient === 'function'",
   "@openreceive/vue":
     "typeof mod.createOpenReceiveVueCheckoutBinding === 'function' && typeof mod.createOpenReceiveVueCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveVueCheckoutComponentModel === 'function' && typeof mod.createOpenReceiveVueCheckoutController === 'function' && typeof mod.createOpenReceiveVueThemeBinding === 'function' && typeof mod.createOpenReceiveVueStoredThemeBinding === 'function' && typeof mod.createOpenReceiveVueThemeToggleBinding === 'function' && typeof mod.createCheckoutElement === 'function' && typeof mod.createOpenReceiveThemeToggleElement === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.syncOpenReceiveStoredThemeControls === 'function' && typeof mod.applyOpenReceiveThemeAttributes === 'function'",
-  openreceive: "Object.keys(mod).length === 0",
+  openreceive:
+    "typeof mod.createOpenReceive === 'function' && typeof mod.OpenReceiveServiceError === 'function'",
 };
 
 function writeInstallProject(installDir, tarballs) {
@@ -203,8 +204,9 @@ for (const item of checks) {
 const browserStylesPath = "node_modules/@openreceive/browser/dist/styles.css";
 assert(existsSync(browserStylesPath), "@openreceive/browser: styles.css export must be packaged");
 assert(
-  readFileSync(browserStylesPath, "utf8").includes("[data-openreceive-checkout]"),
-  "@openreceive/browser: styles.css must contain checkout styles"
+  readFileSync(browserStylesPath, "utf8").includes(".btn") &&
+    readFileSync(browserStylesPath, "utf8").includes("--color-base-100"),
+  "@openreceive/browser: styles.css must contain daisyUI checkout styles"
 );
 for (const packageName of ["elements", "react", "vue", "svelte", "angular"]) {
   const stylesPath = \`node_modules/@openreceive/\${packageName}/dist/styles.css\`;

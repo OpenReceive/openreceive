@@ -45,7 +45,7 @@ These should land in `refund_required` → two-phase refund → `refunded`.
 | 2 | Tiny dust underpay | Send exact amount minus 1 unit (e.g. 1 sat-equivalent / 1 lamport / 1 sun) | Same refund path if provider treats it as LESS |
 | 3 | Full refund UX | From `refund_required`: stage address (`confirm: false`), confirm (`confirm: true`), wait for `refund_tx_id` | `refund_pending` → `refunded`; order stays unpaid |
 | 4 | Wrong-network refund address | Stage a Solana address on a Tron attempt (or ETH on SOL) | Rejected at validation; stays `refund_required` |
-| 5 | Stale refund nonce | Stage address, wait **>10 min**, then confirm | 409; refresh status for new nonce; staged address cleared |
+| 5 | Stale refund nonce | Stage address, wait **>10 min**, then confirm | 409; refresh status for a new nonce; staged address is retained |
 | 6 | Address mismatch on confirm | Stage addr A, confirm with addr B | Rejected; no provider `/emergency` call |
 | 7 | Double-confirm spam | Confirm refund twice quickly | Second should no-op / stay `refund_pending` (CAS on `refund_dispatch_id`) |
 | 8 | Refund address spam | Submit stage >5 times | 429 after 5 submissions |
@@ -70,7 +70,7 @@ easy). ETH underpay is messier because gas floors are higher.
 |---|----------|------------|--------|
 | 9 | Classic overpay | Send 110–200% of deposit | `MORE`/`OVER`/`OVERPAID` → `attention` + `provider_reported_emergency` |
 | 10 | Huge overpay | Send 10× deposit | Same; polling stops; **no** `refund_nonce` |
-| 11 | Manual recovery | In FixedFloat dashboard: refund or continue exchange | OpenReceive only reflects what provider reports on next poll — until then stuck in `attention` |
+| 11 | Manual recovery | In FixedFloat dashboard: refund or continue exchange, then call `refresh_swap` | `attention` does **not** auto-poll (by design). Operator `refresh_swap` (scoped to `provider_reported_emergency`) pulls the latest provider state once. |
 
 Do **not** expect the in-app refund form here. That is intentional.
 `attention` is terminal; do not auto-refund — only `refund_required` carries a
@@ -181,11 +181,14 @@ FixedFloat emergency reasons include: `EXPIRED` (tx after order expiry), `LESS`
 |----------|---------|-------|
 | Deposit window | 600s | Provider config `deposit_window_seconds` |
 | Settlement SLA | 900s | `settlement_sla_seconds` |
+| Invoice expiry margin | 300s | Default floor `600+900+300=1800` |
+| Expired grace poll | 900s | Keep polling top-level `expired` until `provider_expires_at + 900` |
 | Settlement attention | 60s | `swap.settlement_attention_seconds` |
-| Refund nonce TTL | 600s (10 min) | Confirm after this → 409 |
-| Status poll interval | ≥10s | While non-terminal |
+| Refund nonce TTL | 600s (10 min) | Confirm after this → 409; staged address retained |
+| Status poll interval | ≥10s | While non-terminal (plus expired grace) |
 | Max active attempts | 3 | Per checkout |
 | Max refund address submissions | 5 | Then 429 |
+| Provider weight soft cap | 200/min | Per-provider durable ledger; create gate at 150; failover to next `swap.providers` entry |
 
 ---
 
@@ -196,13 +199,15 @@ FixedFloat emergency reasons include: `EXPIRED` (tx after order expiry), `LESS`
 | `provider_completed_without_wallet_settlement` | Provider done, no LN settlement | Reconcile wallet + `payout_tx_id` |
 | `provider_order_creation_stale` | Hung create; no deposit address shown | Safe to retry |
 | `provider_order_creation_failed` | Provider rejected create | Check `provider_error` |
-| `provider_reported_emergency` | Over/underpay or manual exchange | Provider dashboard / manual refund |
+| `provider_order_creation_needs_reconcile` | Create timeout; FF may have an orphan order | Reconcile in FF dashboard before retry |
+| `provider_reported_emergency` | Overpay / manual exchange | Dashboard action, then `refresh_swap` |
+| `provider_order_expires_after_shadow_invoice` | FF window > shadow bolt11 | Raise invoice expiry; abandon attempt |
 
 ---
 
 ## Related docs
 
 - `docs/guides/automated-swaps.md` — lifecycle, refund flow, attention runbook
-- `zz-fixed-float-api-reference.txt` — FixedFloat EMERGENCY statuses and `/emergency` API
+- `zz-fixedfloat-api.txt` — FixedFloat EMERGENCY statuses and `/emergency` API
 - `spec/test-vectors/swap-emergency-refund.json` — conformance vector for emergency → refund
 - `packages/js/testkit/src/swap-provider.ts` — local force/script helpers

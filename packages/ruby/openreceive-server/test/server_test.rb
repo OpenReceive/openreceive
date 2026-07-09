@@ -98,7 +98,7 @@ class OpenReceiveServerTest < Minitest::Test
 
   def test_get_or_create_checkout_returns_checkout_snapshot
     service = build_service
-    checkout = service.get_or_create_checkout("order_id" => "order-1", "sats" => 1000)
+    checkout = service.get_or_create_checkout("order_id" => "order-1", "amount" => { "sats" => 1000 })
 
     assert_match(/\Aor_chk_[a-z0-9]+\z/, checkout.fetch("checkout_id"))
     assert_equal "order-1", checkout.fetch("order_id")
@@ -120,8 +120,8 @@ class OpenReceiveServerTest < Minitest::Test
     wallet = FakeWallet.new
     service = build_service(wallet: wallet)
 
-    first = service.get_or_create_checkout("order_id" => "order-2", "sats" => 1000)
-    second = service.get_or_create_checkout("order_id" => "order-2", "sats" => 1000)
+    first = service.get_or_create_checkout("order_id" => "order-2", "amount" => { "sats" => 1000 })
+    second = service.get_or_create_checkout("order_id" => "order-2", "amount" => { "sats" => 1000 })
 
     assert_equal first.fetch("checkout_id"), second.fetch("checkout_id")
     assert_equal first.fetch("amount_msats"), second.fetch("amount_msats")
@@ -131,7 +131,10 @@ class OpenReceiveServerTest < Minitest::Test
 
   def test_fiat_checkout_uses_injected_price_provider
     service = build_service(price_provider: StaticPriceProvider.new("100000"))
-    checkout = service.get_or_create_checkout("order_id" => "fiat-order", "usd" => "5.00")
+    checkout = service.get_or_create_checkout(
+      "order_id" => "fiat-order",
+      "amount" => { "currency" => "USD", "value" => "5.00" }
+    )
 
     assert_equal "open", checkout.fetch("status")
     assert_equal({ "currency" => "USD", "value" => "5.00" }, checkout.fetch("fiat"))
@@ -142,7 +145,36 @@ class OpenReceiveServerTest < Minitest::Test
   def test_fiat_checkout_without_price_provider_is_scaffolded
     service = build_service # no price provider
     assert_raises(NotImplementedError) do
-      service.get_or_create_checkout("order_id" => "fiat-order", "usd" => "5.00")
+      service.get_or_create_checkout(
+        "order_id" => "fiat-order",
+        "amount" => { "currency" => "USD", "value" => "5.00" }
+      )
+    end
+  end
+
+  def test_create_checkout_rejects_top_level_usd_and_sats
+    service = build_service
+    assert_raises(OpenReceive::Server::ValidationError) do
+      service.get_or_create_checkout("order_id" => "legacy-usd", "usd" => "5.00")
+    end
+    assert_raises(OpenReceive::Server::ValidationError) do
+      service.get_or_create_checkout("order_id" => "legacy-sats", "sats" => 1000)
+    end
+  end
+
+  def test_create_checkout_rejects_nested_btc_fiat_amount
+    service = build_service
+    assert_raises(OpenReceive::Server::ValidationError) do
+      service.get_or_create_checkout(
+        "order_id" => "legacy-btc",
+        "amount" => { "btc" => { "currency" => "SATS", "value" => "1000" } }
+      )
+    end
+    assert_raises(OpenReceive::Server::ValidationError) do
+      service.get_or_create_checkout(
+        "order_id" => "legacy-fiat",
+        "amount" => { "fiat" => { "currency" => "USD", "value" => "5.00" } }
+      )
     end
   end
 
@@ -196,7 +228,7 @@ class OpenReceiveServerTest < Minitest::Test
     store = OpenReceive::Server::InMemoryInvoiceStore.new
     service = build_service(wallet: FakeWallet.new(auto_settle: true), store: store)
 
-    checkout = service.get_or_create_checkout("order_id" => "paid-order", "sats" => 1000)
+    checkout = service.get_or_create_checkout("order_id" => "paid-order", "amount" => { "sats" => 1000 })
     assert_equal "paid", checkout.fetch("status")
 
     order = service.get_order(order_id: "paid-order")
@@ -237,14 +269,69 @@ class OpenReceiveServerTest < Minitest::Test
     assert_raises(NotImplementedError) { service.start_swap(order_id: "x") }
     assert_raises(NotImplementedError) { service.swap_quote(order_id: "x") }
     assert_raises(NotImplementedError) { service.refund_swap(attempt_id: "x") }
-    assert_raises(NotImplementedError) { service.order("order_id" => "x", "action" => "swap_quote") }
+    assert_raises(NotImplementedError) { service.refresh_swap(attempt_id: "x") }
+  end
+
+  def test_order_action_status_merges_swap_options
+    store = OpenReceive::Server::InMemoryInvoiceStore.new
+    payment_hash = "d" * 64
+    store.put_invoice_record(
+      "invoice_id" => "or_inv_status1",
+      "namespace" => "default",
+      "operation" => "invoice.create",
+      "idempotency_key" => "status-key",
+      "idempotency_request_hash" => "sha256:#{'b' * 64}",
+      "order_id" => "status-order",
+      "checkout_id" => "or_chk_status1",
+      "payment_hash" => payment_hash,
+      "invoice" => "lnbc-status",
+      "amount_msats" => 200_000,
+      "transaction_state" => "pending",
+      "workflow_state" => "invoice_created",
+      "settlement_action_state" => "pending",
+      "created_at" => FIXED_NOW,
+      "expires_at" => FIXED_NOW + 600,
+      "metadata" => {}
+    )
+    service = build_service(store: store)
+    tokens = OpenReceive::Server::Tokens::Manager.new(store: store, namespace: "default")
+    handler = OpenReceive::Server::RequestHandler.new(
+      service: service,
+      tokens: tokens,
+      resolve_order: ->(**) { { "amount" => { "sats" => 200 } } }
+    )
+    minted = tokens.mint("status-order")
+    status, _headers, body = handler.order_action(
+      order_id: "status-order",
+      raw_body: JSON.generate({}),
+      request: {},
+      token: minted[:token],
+      request_id: "req-status"
+    )
+    assert_equal 200, status
+    assert_equal false, body.fetch("swaps_enabled")
+    assert_equal [], body.fetch("swap_pay_options")
+    assert_equal "status-order", body.fetch("order_id")
   end
 
   def test_unknown_order_action_is_validation_error
-    service = build_service
-    assert_raises(OpenReceive::Server::ValidationError) do
-      service.order("order_id" => "x", "action" => "teleport")
-    end
+    store = OpenReceive::Server::InMemoryInvoiceStore.new
+    service = build_service(store: store)
+    tokens = OpenReceive::Server::Tokens::Manager.new(store: store, namespace: "default")
+    handler = OpenReceive::Server::RequestHandler.new(
+      service: service,
+      tokens: tokens,
+      resolve_order: ->(**) { { "amount" => { "sats" => 200 } } }
+    )
+    status, _headers, body = handler.order_action(
+      order_id: "x",
+      raw_body: JSON.generate({ "action" => "teleport" }),
+      request: {},
+      token: nil,
+      request_id: "req-bad-action"
+    )
+    assert_equal 400, status
+    assert_equal "INVALID_REQUEST", body.fetch("code")
   end
 
   # --- Tokens ---------------------------------------------------------------------------------
@@ -280,7 +367,7 @@ class OpenReceiveServerTest < Minitest::Test
     tokens = OpenReceive::Server::Tokens::Manager.new(store: store, namespace: "default")
     resolve_order = ->(order_id:, client_amount:, metadata:, request:) do
       _ = [order_id, client_amount, metadata, request]
-      { "sats" => 1000 } # authoritative amount, ignores the untrusted client amount
+      { "amount" => { "sats" => 1000 } } # authoritative amount, ignores the untrusted client amount
     end
     app = OpenReceive::Server::RackApp.new(
       service: service,
@@ -364,7 +451,7 @@ class OpenReceiveServerTest < Minitest::Test
     app = OpenReceive::Server::RackApp.new(
       service: service,
       tokens: tokens,
-      resolve_order: ->(order_id:, client_amount:, metadata:, request:) { { "sats" => 1000 } },
+      resolve_order: ->(order_id:, client_amount:, metadata:, request:) { { "amount" => { "sats" => 1000 } } },
       authorize: ->(context) { context[:action] == "invoice.sweep" }
     )
     env = rack_env(method: "POST", path: "/openreceive/admin/sweep", body: {})
@@ -407,7 +494,7 @@ class OpenReceiveServerTest < Minitest::Test
     OpenReceive::Server::RackApp.new(
       service: service,
       tokens: tokens,
-      resolve_order: ->(order_id:, client_amount:, metadata:, request:) { { "sats" => 1000 } },
+      resolve_order: ->(order_id:, client_amount:, metadata:, request:) { { "amount" => { "sats" => 1000 } } },
       authorize: authorize
     )
   end

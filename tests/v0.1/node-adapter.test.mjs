@@ -639,13 +639,13 @@ test("createOpenReceive builds service methods from a client and store", async (
     swap: { providers: [] },
   });
 
-  const body = await openreceive.createCheckout({
+  const body = await openreceive.getOrCreateCheckout({
     orderId: "create-openreceive-order",
-    amount: { btc: { currency: "BTC", value: "0.000002" } },
+    amount: { currency: "BTC", value: "0.000002" },
     memo: "Factory invoice",
   });
 
-  assert.equal(body.active.invoice, "lnbc-create-openreceive");
+  assert.equal(body.active.bolt11, "lnbc-create-openreceive");
   assert.equal(typeof openreceive.getOrder, "function");
 });
 

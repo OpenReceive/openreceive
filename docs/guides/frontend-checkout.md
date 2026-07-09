@@ -51,9 +51,11 @@ below.
 - `requestCheckout(options)` posts to a checkout-creation URL. Against the
   **mounted** OpenReceive create route, pass `{ prefix, orderId }` (and optional
   `memo` / `metadata`) — the body is `{ order_id }` only; the server's
-  `resolveOrder` sets the price. Amount shortcuts such as `usd` / `sats` are for
-  posting to **your own** create URL that then calls `getOrCreateCheckout` with a
-  trusted server-side amount; they are rejected by the shipped create route.
+  `resolveOrder` sets the price. Trusted service/library calls use
+  `{ amount: { currency, value } }` or `{ amount: { sats } }`. Top-level
+  `usd`/`sats` shortcuts are gone. Those shapes are for posting to **your own**
+  create URL that then calls `getOrCreateCheckout` with a trusted server-side
+  amount; they are rejected by the shipped create route.
 - `lightningUri(invoice)`, `qrSvg(invoice)`, and `qrPngDataUrl(invoice)` render
   BOLT11 payment data.
 - `copyInvoice({ invoice })` copies the BOLT11 string.
@@ -96,9 +98,10 @@ import "@openreceive/react/styles.css";
 />;
 ```
 
-`orderUrl` is the single app route that authorizes the order and forwards the
-body to `openreceive.order(body)`. The component polls it for status and drives
-any automated-swap payment methods through it — see
+`orderUrl` is the single app route that authorizes the order and calls
+`getOrder` / `swapOptions` / `swapQuote` / `startSwap` / `refundSwap` (or mounts
+the shipped HTTP handler, which does the same). The component polls it for status
+and drives any automated-swap payment methods through it — see
 [Automated Swaps](./automated-swaps.md).
 
 `onSettled` is a UI hint from status refresh. It is useful for showing a thank-you panel,
@@ -209,20 +212,20 @@ display hints.
 Automated swap payment methods ride the same `order-url`: the element lists
 payable assets, creates deposit addresses, and drives refunds through that one
 route, and provider credentials and tokens stay server-side. Your route must
-authorize the caller before forwarding to `openreceive.order(body)` —
-`order_id`, `attempt_id`, and refund nonces are not authentication credentials.
-See [Automated Swaps](./automated-swaps.md) for the backend route and refund
-flow.
+authorize the caller before calling the typed service methods (or the mounted
+handler) — `order_id`, `attempt_id`, and refund nonces are not authentication
+credentials. See [Automated Swaps](./automated-swaps.md) for the backend route
+and refund flow.
 
 ## Vue
 
 ```vue
 <script setup lang="ts">
 import Checkout from "@openreceive/vue/checkout.vue";
-import type { Checkout as OpenReceiveCheckout } from "@openreceive/vue";
+import type { Checkout as Checkout } from "@openreceive/vue";
 import "@openreceive/vue/styles.css";
 
-defineProps<{ checkout: OpenReceiveCheckout }>();
+defineProps<{ checkout: Checkout }>();
 </script>
 
 <template>
@@ -295,10 +298,17 @@ live checkout authority.
 
 Checkout helpers accept an optional `logger(entry)` callback. Log entries are
 display-safe and omit BOLT11 strings, NWC connection strings, signed status or
-refresh tokens, cookies, authorization headers, and request bodies.
+refresh tokens, cookies, authorization headers, request bodies, refund addresses,
+and refund nonces (`refund_nonce_present` is logged instead).
 
 ```ts
 const logger = (entry) => console[entry.level]("[openreceive]", entry);
 
 <Checkout checkout={checkout} logger={logger} />;
 ```
+
+On status polls the client emits `checkout.state.refreshed` (debug) and, when swap
+fields move, `swap.state.changed` with `provider_state`, `attention_reason`,
+`refund_nonce_present`, and `wallet_settled` / `ui_label` so you can audit
+"Finalizing" vs "Payment complete" without server access. Swap start/refund HTTP
+calls emit `swap.start.*` / `swap.refund.*` when the same `logger` is wired.

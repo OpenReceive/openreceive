@@ -3,11 +3,11 @@ import type { NwcEndpointLogger } from "../alby-nwc.ts";
 import { isRecord } from "./core-utils.ts";
 import type {
   CreateOpenReceiveOptions,
-  OpenReceiveEvent,
-  OpenReceiveEventHandler,
-  OpenReceiveLogger,
+  Event,
+  EventHandler,
+  Logger,
   OpenReceiveLogLevel,
-  OpenReceiveNodeOptions,
+  NodeOptions,
 } from "./types.ts";
 
 export function invoiceLogFields(row: InvoiceStorageRow): Record<string, unknown> {
@@ -28,8 +28,57 @@ export function invoiceLogFields(row: InvoiceStorageRow): Record<string, unknown
   };
 }
 
+/** Audit fields for swap attempt transitions — never includes refund_nonce or addresses. */
+export function swapAttemptLogFields(input: {
+  readonly invoice_id?: string;
+  readonly order_id?: string;
+  readonly provider?: string;
+  readonly provider_order_id?: string;
+  readonly pay_in_asset?: string;
+  readonly previous_state?: string;
+  readonly provider_state?: string;
+  readonly attention?: boolean;
+  readonly attention_reason?: string;
+  readonly refund_nonce_present?: boolean;
+  readonly refund_nonce_expires_at?: number;
+  readonly refund_tx_id?: string;
+  readonly deposit_tx_id?: string;
+  readonly payout_tx_id?: string;
+  readonly transaction_state?: string;
+  readonly settled_at?: number;
+}): Record<string, unknown> {
+  return {
+    ...(input.invoice_id === undefined ? {} : { invoice_id: input.invoice_id }),
+    ...(input.order_id === undefined ? {} : { order_id: input.order_id }),
+    ...(input.provider === undefined ? {} : { provider: input.provider }),
+    ...(input.provider_order_id === undefined
+      ? {}
+      : { provider_order_id: input.provider_order_id }),
+    ...(input.pay_in_asset === undefined ? {} : { pay_in_asset: input.pay_in_asset }),
+    ...(input.previous_state === undefined ? {} : { previous_state: input.previous_state }),
+    ...(input.provider_state === undefined ? {} : { provider_state: input.provider_state }),
+    ...(input.attention === undefined ? {} : { attention: input.attention }),
+    ...(input.attention_reason === undefined
+      ? {}
+      : { attention_reason: input.attention_reason }),
+    ...(input.refund_nonce_present === undefined
+      ? {}
+      : { refund_nonce_present: input.refund_nonce_present }),
+    ...(input.refund_nonce_expires_at === undefined
+      ? {}
+      : { refund_nonce_expires_at: input.refund_nonce_expires_at }),
+    ...(input.refund_tx_id === undefined ? {} : { refund_tx_id: input.refund_tx_id }),
+    ...(input.deposit_tx_id === undefined ? {} : { deposit_tx_id: input.deposit_tx_id }),
+    ...(input.payout_tx_id === undefined ? {} : { payout_tx_id: input.payout_tx_id }),
+    ...(input.transaction_state === undefined
+      ? {}
+      : { transaction_state: input.transaction_state }),
+    ...(input.settled_at === undefined ? {} : { settled_at: input.settled_at }),
+  };
+}
+
 export function emitLog(
-  options: OpenReceiveNodeOptions,
+  options: NodeOptions,
   level: OpenReceiveLogLevel,
   event: string,
   message: string,
@@ -45,10 +94,10 @@ export function emitLog(
 
 export function emitOpenReceiveEvent(
   options: {
-    readonly onEvent?: OpenReceiveEventHandler;
-    readonly logger?: OpenReceiveLogger;
+    readonly onEvent?: EventHandler;
+    readonly logger?: Logger;
   },
-  event: OpenReceiveEvent,
+  event: Event,
 ): void {
   if (options.onEvent === undefined && options.logger === undefined) return;
 
@@ -78,7 +127,7 @@ export function createNwcEndpointLogger(
   return (entry) => emitOpenReceiveEvent(options, entry);
 }
 
-export function sanitizeOpenReceiveEvent(entry: OpenReceiveEvent): OpenReceiveEvent {
+export function sanitizeOpenReceiveEvent(entry: Event): Event {
   const clean: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(entry)) {
     if (isSensitiveLogKey(key)) {
@@ -87,7 +136,7 @@ export function sanitizeOpenReceiveEvent(entry: OpenReceiveEvent): OpenReceiveEv
       clean[key] = sanitizeLogValue(value);
     }
   }
-  return clean as OpenReceiveEvent;
+  return clean as Event;
 }
 
 export function publicSettlementMetadata(

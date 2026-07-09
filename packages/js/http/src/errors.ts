@@ -34,7 +34,7 @@ export class OpenReceiveHttpError extends Error {
   }
 }
 
-/** Shape a `service.order`-style error carries: a numeric status and an OpenReceive error body. */
+/** Shape a service error carries: a numeric status and an OpenReceive error body. */
 interface ServiceErrorShape {
   readonly status: number;
   readonly body: OpenReceiveErrorBody;

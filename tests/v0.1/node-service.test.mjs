@@ -114,6 +114,12 @@ class FakeSwapProvider {
     this.name = name;
   }
 
+  invoiceExpirySeconds() {
+    // Keep the shadow bolt11 ahead of createSwap's provider expires_at (4600 with
+    // harness now=1000 → need ≥3600s expiry).
+    return 3600;
+  }
+
   async supportedPayInAssets() {
     return new Set(this.supported);
   }
@@ -159,7 +165,9 @@ class FakeSwapProvider {
             ? "0x1111111111111111111111111111111111111111"
             : "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
       deposit_amount: payInAsset === "ETH_ETH" ? "0.0008" : "1.05",
-      expires_at: 1600,
+      // Far enough past harness `now` (1000) that post-create shadow-invoice
+      // guards and expired-grace polls stay out of the way unless a test overrides.
+      expires_at: 4600,
       state: "awaiting_deposit",
     };
     this.orders.set(order.provider_order_id, order);
@@ -218,29 +226,29 @@ test("createCheckout mints once and replays the live invoice for the same amount
   const { wallet, openreceive } = await createHarness();
   const request = {
     orderId: "order-1",
-    amount: { btc: { currency: "BTC", value: "0.000002" } },
+    amount: { currency: "BTC", value: "0.000002" },
     memo: "Fruit sticker",
   };
 
-  const first = await openreceive.createCheckout(request);
-  assert.equal(first.checkout_id.startsWith("or_chk_"), true);
-  assert.equal(first.order_id, "order-1");
+  const first = await openreceive.getOrCreateCheckout(request);
+  assert.equal(first.checkoutId.startsWith("or_chk_"), true);
+  assert.equal(first.orderId, "order-1");
   assert.equal(first.status, "open");
-  assert.equal(first.active.invoice, "lnbc-demo-1");
-  assert.equal(first.amount_msats, 200000);
+  assert.equal(first.active.bolt11, "lnbc-demo-1");
+  assert.equal(first.amountMsats, 200000);
   assert.equal(first.invoices.length, 1);
 
-  const second = await openreceive.createCheckout(request);
-  assert.equal(second.checkout_id, first.checkout_id);
-  assert.equal(second.active.invoice_id, first.active.invoice_id);
+  const second = await openreceive.getOrCreateCheckout(request);
+  assert.equal(second.checkoutId, first.checkoutId);
+  assert.equal(second.active.invoiceId, first.active.invoiceId);
   assert.equal(wallet.makeInvoiceCalls, 1);
 });
 
 test("swapOptions are disabled unless a swap provider is configured", async () => {
   const { openreceive } = await createHarness();
-  await openreceive.createCheckout({
+  await openreceive.getOrCreateCheckout({
     orderId: "order-swap-disabled",
-    amount: { btc: { currency: "SATS", value: "200" } },
+    amount: { sats: "200" },
   });
 
   assert.deepEqual(await openreceive.swapOptions({ orderId: "order-swap-disabled" }), {
@@ -262,13 +270,13 @@ test("createOpenReceive loads ordered FixedFloat-compatible swaps from YAML conf
         "      base_url: https://otherfloat.example",
         "      key: otherfloat-key",
         "      secret: otherfloat-secret",
-        "      invoice_expiry_seconds: 1620",
+        "      invoice_expiry_seconds: 1800",
         "    - id: fixedfloat",
         "      protocol: fixedfloat",
         "      base_url: https://fixedfloat.example",
         "      key: fixed-float-key",
         "      secret: fixed-float-secret",
-        "      invoice_expiry_seconds: 1620",
+        "      invoice_expiry_seconds: 1800",
         "",
       ].join("\n"),
     );
@@ -319,17 +327,17 @@ test("createOpenReceive loads ordered FixedFloat-compatible swaps from YAML conf
           priceProviders: [new StaticPriceProvider()],
         });
 
-        await openreceive.createCheckout({
+        await openreceive.getOrCreateCheckout({
           orderId: "order-swap-yaml",
-          amount: { btc: { currency: "SATS", value: "200" } },
+          amount: { sats: "200" },
         });
 
         const options = await openreceive.swapOptions({ orderId: "order-swap-yaml" });
-        const usdtTron = options.options.find((option) => option.pay_in_asset === "USDT_TRON");
+        const usdtTron = options.options.find((option) => option.payInAsset === "USDT_TRON");
         assert.equal(options.enabled, true);
         assert.equal(usdtTron?.provider, "otherfloat");
-        assert.equal(usdtTron?.minimum_pay_amount, "1");
-        assert.equal(usdtTron?.maximum_pay_amount, "5000");
+        assert.equal(usdtTron?.minimumPayAmount, "1");
+        assert.equal(usdtTron?.maximumPayAmount, "5000");
 
         const quote = await openreceive.swapQuote({
           orderId: "order-swap-yaml",
@@ -337,7 +345,7 @@ test("createOpenReceive loads ordered FixedFloat-compatible swaps from YAML conf
         });
         assert.equal(quote.provider, "otherfloat");
         assert.equal(quote.available, true);
-        assert.equal(quote.pay_amount, "1.04");
+        assert.equal(quote.payAmount, "1.04");
         // swapOptions probes /price once to cache the pair limits (14-day cache), and
         // the interactive swapQuote issues a second /price for the live rate.
         assert.deepEqual(
@@ -464,9 +472,9 @@ test("createOpenReceive skips blank YAML swap provider secrets", async () => {
       priceProviders: [new StaticPriceProvider()],
     });
 
-    await openreceive.createCheckout({
+    await openreceive.getOrCreateCheckout({
       orderId: "order-swap-yaml-blank",
-      amount: { btc: { currency: "SATS", value: "200" } },
+      amount: { sats: "200" },
     });
 
     assert.deepEqual(await openreceive.swapOptions({ orderId: "order-swap-yaml-blank" }), {
@@ -748,16 +756,16 @@ test("startSwap creates an idempotent shadow invoice without replacing active Li
   const { wallet, store, openreceive } = await createHarness({
     swap: { providers: [swapProvider] },
   });
-  const checkout = await openreceive.createCheckout({
+  const checkout = await openreceive.getOrCreateCheckout({
     orderId: "order-swap-start",
-    amount: { btc: { currency: "SATS", value: "200" } },
+    amount: { sats: "200" },
     memo: "Fruit sticker",
   });
 
   const options = await openreceive.swapOptions({ orderId: "order-swap-start" });
   assert.equal(options.enabled, true);
   assert.equal(
-    options.options.some((option) => option.pay_in_asset === "USDT_TRON"),
+    options.options.some((option) => option.payInAsset === "USDT_TRON"),
     true,
   );
 
@@ -770,14 +778,14 @@ test("startSwap creates an idempotent shadow invoice without replacing active Li
     payInAsset: "USDT_TRON",
   });
 
-  assert.equal(first.attempt_id, second.attempt_id);
-  assert.equal(first.shadow_invoice.rail, "swap");
-  assert.equal(first.shadow_invoice.amount_msats, checkout.amount_msats);
+  assert.equal(first.attemptId, second.attemptId);
+  assert.equal(first.shadowInvoice.rail, "swap");
+  assert.equal(first.shadowInvoice.amountMsats, checkout.amountMsats);
   assert.equal(first.provider, "fixedfloat");
-  assert.equal(first.attempt_id, first.shadow_invoice.invoice_id);
-  assert.equal(first.pay_in_asset, "USDT_TRON");
-  assert.equal(first.deposit_address, "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb");
-  assert.equal(first.shadow_invoice.invoice, null);
+  assert.equal(first.attemptId, first.shadowInvoice.invoiceId);
+  assert.equal(first.payInAsset, "USDT_TRON");
+  assert.equal(first.depositAddress, "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb");
+  assert.equal(typeof first.shadowInvoice.bolt11, "string");
   assert.equal("provider_token" in first, false);
   assert.equal(wallet.makeInvoiceCalls, 2);
   assert.equal(swapProvider.createCalls, 1);
@@ -791,128 +799,102 @@ test("startSwap creates an idempotent shadow invoice without replacing active Li
   );
 
   const order = await openreceive.getOrder({ orderId: "order-swap-start" });
-  assert.equal(order.active_checkout.active.invoice_id, checkout.active.invoice_id);
-  assert.equal(order.active_checkout.invoices.length, 2);
+  assert.equal(order.activeCheckout.active.invoiceId, checkout.active.invoiceId);
+  assert.equal(order.activeCheckout.invoices.length, 2);
   assert.equal(
-    order.active_checkout.invoices.some((invoice) => invoice.rail === "swap"),
+    order.activeCheckout.invoices.some((invoice) => invoice.rail === "swap"),
     true,
   );
 
-  const stored = await store.get(first.attempt_id);
+  const stored = await store.get(first.attemptId);
   assert.equal(stored.row.metadata.swap.provider_token, undefined);
   assert.equal(stored.row.metadata.swap_private.provider_token, "ff-token-1");
 });
 
-test("openreceive.order routes each action and rides swap_pay_options on the order", async () => {
+test("typed swap methods compose order status and reuse startSwap protection", async () => {
   const swapProvider = new FakeSwapProvider();
   const { openreceive } = await createHarness({
     swap: { providers: [swapProvider] },
   });
-  const checkout = await openreceive.createCheckout({
+  const checkout = await openreceive.getOrCreateCheckout({
     orderId: "order-dispatch",
-    amount: { btc: { currency: "SATS", value: "200" } },
+    amount: { sats: "200" },
     memo: "Fruit sticker",
   });
 
-  // Status action (action omitted) returns the order object plus the payable
-  // swap assets on swap_pay_options, so listing methods costs no extra call.
-  const status = await openreceive.order({ order_id: "order-dispatch" });
-  assert.equal(status.order_id, "order-dispatch");
-  assert.equal(status.status, "pending");
-  assert.equal(status.swaps_enabled, true);
-  assert.equal(Array.isArray(status.swap_pay_options), true);
+  const order = await openreceive.getOrder({ orderId: "order-dispatch" });
+  const swap = await openreceive.swapOptions({ orderId: "order-dispatch" });
+  assert.equal(order.orderId, "order-dispatch");
+  assert.equal(order.status, "pending");
+  assert.equal(swap.enabled, true);
   assert.equal(
-    status.swap_pay_options.some((method) => method.pay_in_asset === "USDT_TRON"),
+    swap.options.some((method) => method.payInAsset === "USDT_TRON"),
     true,
   );
 
-  // Quote action routes to swapQuote and returns the { quote } envelope.
-  const quoted = await openreceive.order({
-    order_id: "order-dispatch",
-    action: "swap_quote",
-    pay_in_asset: "USDT_TRON",
+  const quote = await openreceive.swapQuote({
+    orderId: "order-dispatch",
+    payInAsset: "USDT_TRON",
   });
-  assert.equal(quoted.quote.provider, "fixedfloat");
-  assert.equal(quoted.quote.pay_amount, "1.05");
+  assert.equal(quote.provider, "fixedfloat");
+  assert.equal(quote.payAmount, "1.05");
 
-  // Start action routes to startSwap and returns the { attempt } envelope. It
-  // reuses startSwap's duplicate protection: two starts share one shadow
-  // invoice and one provider order, and provider tokens never leak.
-  const started = await openreceive.order({
-    order_id: "order-dispatch",
-    action: "start_swap",
-    pay_in_asset: "USDT_TRON",
+  const started = await openreceive.startSwap({
+    orderId: "order-dispatch",
+    payInAsset: "USDT_TRON",
   });
-  const restarted = await openreceive.order({
-    order_id: "order-dispatch",
-    action: "start_swap",
-    pay_in_asset: "USDT_TRON",
+  const restarted = await openreceive.startSwap({
+    orderId: "order-dispatch",
+    payInAsset: "USDT_TRON",
   });
-  assert.equal(started.attempt.shadow_invoice.rail, "swap");
-  assert.equal(started.attempt.pay_in_asset, "USDT_TRON");
-  assert.equal(started.attempt.deposit_address, "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb");
-  assert.equal(started.attempt.shadow_invoice.invoice, null);
-  assert.equal(started.attempt.attempt_id, restarted.attempt.attempt_id);
-  assert.equal("provider_token" in started.attempt, false);
+  assert.equal(started.shadowInvoice.rail, "swap");
+  assert.equal(started.payInAsset, "USDT_TRON");
+  assert.equal(started.depositAddress, "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb");
+  assert.equal(typeof started.shadowInvoice.bolt11, "string");
+  assert.equal(started.attemptId, restarted.attemptId);
+  assert.equal("provider_token" in started, false);
   assert.equal(swapProvider.createCalls, 1);
 
-  // The started swap now shows up on the order object without replacing the
-  // active Lightning invoice.
-  const afterStart = await openreceive.order({ order_id: "order-dispatch" });
-  assert.equal(afterStart.active_checkout.active.invoice_id, checkout.active.invoice_id);
+  const afterStart = await openreceive.getOrder({ orderId: "order-dispatch" });
+  assert.equal(afterStart.activeCheckout.active.invoiceId, checkout.active.invoiceId);
   assert.equal(
-    afterStart.active_checkout.invoices.some((invoice) => invoice.rail === "swap"),
+    afterStart.activeCheckout.invoices.some((invoice) => invoice.rail === "swap"),
     true,
   );
 });
 
-test("openreceive.order propagates OpenReceiveServiceError status codes (404/409/400)", async () => {
+test("typed swap methods propagate OpenReceiveServiceError status codes (404/409/400)", async () => {
   const swapProvider = new FakeSwapProvider();
   const harness = await createHarness({
     swap: { providers: [swapProvider] },
   });
   const { openreceive } = harness;
 
-  // 404: no order exists for the id.
   await assert.rejects(
-    () => openreceive.order({ order_id: "order-dispatch-missing" }),
+    () => openreceive.getOrder({ orderId: "order-dispatch-missing" }),
     (error) => error instanceof OpenReceiveServiceError && error.status === 404,
   );
 
-  await openreceive.createCheckout({
+  await openreceive.getOrCreateCheckout({
     orderId: "order-dispatch-errors",
-    amount: { btc: { currency: "SATS", value: "200" } },
+    amount: { sats: "200" },
   });
 
-  // 400: unsupported pay-in asset is rejected by the shared parser.
   await assert.rejects(
     () =>
-      openreceive.order({
-        order_id: "order-dispatch-errors",
-        action: "swap_quote",
-        pay_in_asset: "NOT_AN_ASSET",
+      openreceive.swapQuote({
+        orderId: "order-dispatch-errors",
+        payInAsset: "NOT_AN_ASSET",
       }),
     (error) => error instanceof OpenReceiveServiceError && error.status === 400,
   );
 
-  // 400: an unrecognized action fails loud instead of silently returning status.
-  await assert.rejects(
-    () =>
-      openreceive.order({
-        order_id: "order-dispatch-errors",
-        action: "cancel",
-      }),
-    (error) => error instanceof OpenReceiveServiceError && error.status === 400,
-  );
-
-  // 409: after the only checkout expires there is no open checkout to start.
   harness.setNow(5000);
   await assert.rejects(
     () =>
-      openreceive.order({
-        order_id: "order-dispatch-errors",
-        action: "start_swap",
-        pay_in_asset: "USDT_TRON",
+      openreceive.startSwap({
+        orderId: "order-dispatch-errors",
+        payInAsset: "USDT_TRON",
       }),
     (error) => error instanceof OpenReceiveServiceError && error.status === 409,
   );
@@ -930,9 +912,9 @@ test("startSwap reserves the attempt before provider create to avoid duplicate o
   const { openreceive } = await createHarness({
     swap: { providers: [swapProvider] },
   });
-  await openreceive.createCheckout({
+  await openreceive.getOrCreateCheckout({
     orderId: "order-swap-reserve-first",
-    amount: { btc: { currency: "SATS", value: "200" } },
+    amount: { sats: "200" },
   });
 
   const first = openreceive.startSwap({
@@ -953,7 +935,7 @@ test("startSwap reserves the attempt before provider create to avoid duplicate o
 
   releaseCreate();
   const invoice = await first;
-  assert.equal(invoice.provider_order_id, "ff-order-1");
+  assert.equal(invoice.providerOrderId, "ff-order-1");
   assert.equal(swapProvider.createCalls, 1);
 });
 
@@ -968,9 +950,9 @@ test("startSwap surfaces a 409 (not a 500) when a stale reserved attempt is repl
   });
   const harness = await createHarness({ swap: { providers: [swapProvider] } });
   const { openreceive } = harness;
-  await openreceive.createCheckout({
+  await openreceive.getOrCreateCheckout({
     orderId: "order-swap-stale",
-    amount: { btc: { currency: "SATS", value: "200" } },
+    amount: { sats: "200" },
   });
 
   // First start reserves the record, then hangs inside provider.createSwap, so the
@@ -999,21 +981,21 @@ test("swapOptions catalogs assets and swapQuote quotes one selected asset", asyn
     swap: { providers: [swapProvider] },
     logger: (entry) => logs.push(entry),
   });
-  await openreceive.createCheckout({
+  await openreceive.getOrCreateCheckout({
     orderId: "order-swap-region",
-    amount: { btc: { currency: "SATS", value: "200" } },
+    amount: { sats: "200" },
   });
 
   const options = await openreceive.swapOptions({
     orderId: "order-swap-region",
   });
-  const usdt = options.options.find((option) => option.pay_in_asset === "USDT_TRON");
+  const usdt = options.options.find((option) => option.payInAsset === "USDT_TRON");
   assert.equal(usdt.available, true);
-  assert.equal(usdt.unavailable_reason, undefined);
+  assert.equal(usdt.unavailableReason, undefined);
   // The catalog listing gates on cached per-pair limits and does not quote for display,
   // so it carries the catalog's min/max pay amounts but no live pay_amount.
-  assert.equal(usdt.pay_amount, undefined);
-  assert.equal(usdt.minimum_pay_amount, "1");
+  assert.equal(usdt.payAmount, undefined);
+  assert.equal(usdt.minimumPayAmount, "1");
   assert.equal(swapProvider.catalogCalls, 1);
   // Each supported asset (USDT_TRON, SOL_SOL, ETH_ETH) is probed once to populate its
   // 14-day per-pair limits cache.
@@ -1033,7 +1015,7 @@ test("swapOptions catalogs assets and swapQuote quotes one selected asset", asyn
   );
   assert.deepEqual(
     [...resolvedLog.pay_in_assets].sort(),
-    options.options.map((option) => option.pay_in_asset).sort(),
+    options.options.map((option) => option.payInAsset).sort(),
   );
 
   // A second listing serves limits from the durable cache — no new probes.
@@ -1045,7 +1027,7 @@ test("swapOptions catalogs assets and swapQuote quotes one selected asset", asyn
     orderId: "order-swap-region",
     payInAsset: "USDT_TRON",
   });
-  assert.equal(quote.pay_amount, "1.05");
+  assert.equal(quote.payAmount, "1.05");
   assert.equal(swapProvider.quoteInputs.length, 4);
   assert.deepEqual(swapProvider.quoteInputs[3], {
     payInAsset: "USDT_TRON",
@@ -1057,14 +1039,14 @@ test("swapOptions catalogs assets and swapQuote quotes one selected asset", asyn
     orderId: "order-swap-region",
     payInAsset: "USDT_TRON",
   });
-  assert.equal(cachedQuote.pay_amount, "1.05");
+  assert.equal(cachedQuote.payAmount, "1.05");
   assert.equal(swapProvider.quoteInputs.length, 4);
 
   const invoice = await openreceive.startSwap({
     orderId: "order-swap-region",
     payInAsset: "USDT_TRON",
   });
-  assert.equal(invoice.pay_in_asset, "USDT_TRON");
+  assert.equal(invoice.payInAsset, "USDT_TRON");
   assert.equal(
     swapProvider.createSwapInputs.every(
       (input) => Object.keys(input).sort().join(",") === "bolt11,invoiceAmountMsats,payInAsset",
@@ -1078,25 +1060,25 @@ test("settling a shadow swap invoice pays the checkout", async () => {
   const { wallet, openreceive, setNow } = await createHarness({
     swap: { providers: [swapProvider] },
   });
-  await openreceive.createCheckout({
+  await openreceive.getOrCreateCheckout({
     orderId: "order-swap-settle",
-    amount: { btc: { currency: "SATS", value: "200" } },
+    amount: { sats: "200" },
   });
   const swapInvoice = await openreceive.startSwap({
     orderId: "order-swap-settle",
     payInAsset: "SOL_SOL",
   });
 
-  wallet.settlePaymentHash(swapInvoice.shadow_invoice.payment_hash, 1200);
+  wallet.settlePaymentHash(swapInvoice.shadowInvoice.paymentHash, 1200);
   setNow(1015);
   const order = await openreceive.getOrder({ orderId: "order-swap-settle" });
 
   assert.equal(order.status, "paid");
   assert.equal(
-    order.paid_checkout.invoices.some((invoice) => invoice.invoice_id === swapInvoice.attempt_id),
+    order.paidCheckout.invoices.some((invoice) => invoice.invoiceId === swapInvoice.attemptId),
     true,
   );
-  assert.equal(order.paid_at, 1200);
+  assert.equal(order.paidAt, 1200);
 });
 
 test("settling a shadow swap invoice does not expose provider tokens to onPaid", async () => {
@@ -1108,16 +1090,16 @@ test("settling a shadow swap invoice does not expose provider tokens to onPaid",
       paidMetadata = metadata;
     },
   });
-  await openreceive.createCheckout({
+  await openreceive.getOrCreateCheckout({
     orderId: "order-swap-onpaid-private",
-    amount: { btc: { currency: "SATS", value: "200" } },
+    amount: { sats: "200" },
   });
   const swapInvoice = await openreceive.startSwap({
     orderId: "order-swap-onpaid-private",
     payInAsset: "SOL_SOL",
   });
 
-  wallet.settlePaymentHash(swapInvoice.shadow_invoice.payment_hash, 1200);
+  wallet.settlePaymentHash(swapInvoice.shadowInvoice.paymentHash, 1200);
   setNow(1015);
   await openreceive.getOrder({ orderId: "order-swap-onpaid-private" });
 
@@ -1135,9 +1117,9 @@ test("provider completion exposes payout details but does not mark paid without 
       background.push(promise);
     },
   });
-  await openreceive.createCheckout({
+  await openreceive.getOrCreateCheckout({
     orderId: "order-swap-provider-done",
-    amount: { btc: { currency: "SATS", value: "200" } },
+    amount: { sats: "200" },
   });
   await Promise.all(background.splice(0));
   await openreceive.startSwap({
@@ -1149,14 +1131,14 @@ test("provider completion exposes payout details but does not mark paid without 
   setNow(1015);
   const walletCallsBefore = wallet.listTransactionsCalls;
   const order = await openreceive.getOrder({ orderId: "order-swap-provider-done" });
-  const expectedGlobalSweepCalls = order.wallet_scan_performed ? 1 : 0;
-  const swapInvoice = order.active_checkout.invoices.find((invoice) => invoice.rail === "swap");
+  const expectedGlobalSweepCalls = order.walletScanPerformed ? 1 : 0;
+  const swapInvoice = order.activeCheckout.invoices.find((invoice) => invoice.rail === "swap");
 
   assert.equal(wallet.listTransactionsCalls - walletCallsBefore, expectedGlobalSweepCalls);
   assert.equal(order.status, "pending");
-  assert.equal(swapInvoice.swap.provider_state, "completed");
-  assert.equal(swapInvoice.swap.provider_order_id, "ff-order-1");
-  assert.equal(swapInvoice.swap.payout_tx_id, "ln-payout-1");
+  assert.equal(swapInvoice.swap.providerState, "completed");
+  assert.equal(swapInvoice.swap.providerOrderId, "ff-order-1");
+  assert.equal(swapInvoice.swap.payoutTxId, "ln-payout-1");
 });
 
 test("completed provider orders become attention when wallet settlement never arrives", async () => {
@@ -1167,9 +1149,9 @@ test("completed provider orders become attention when wallet settlement never ar
       settlementAttentionSeconds: 10,
     },
   });
-  await openreceive.createCheckout({
+  await openreceive.getOrCreateCheckout({
     orderId: "order-swap-attention",
-    amount: { btc: { currency: "SATS", value: "200" } },
+    amount: { sats: "200" },
   });
   await openreceive.startSwap({
     orderId: "order-swap-attention",
@@ -1181,9 +1163,9 @@ test("completed provider orders become attention when wallet settlement never ar
   await openreceive.getOrder({ orderId: "order-swap-attention" });
   setNow(1026);
   const order = await openreceive.getOrder({ orderId: "order-swap-attention" });
-  const swapInvoice = order.active_checkout.invoices.find((invoice) => invoice.rail === "swap");
+  const swapInvoice = order.activeCheckout.invoices.find((invoice) => invoice.rail === "swap");
 
-  assert.equal(swapInvoice.swap.provider_state, "attention");
+  assert.equal(swapInvoice.swap.providerState, "attention");
   assert.equal(swapInvoice.swap.attention, true);
 });
 
@@ -1192,9 +1174,9 @@ test("expired local swap invoices still poll provider lifecycle states", async (
   const { openreceive, setNow } = await createHarness({
     swap: { providers: [swapProvider] },
   });
-  await openreceive.createCheckout({
+  await openreceive.getOrCreateCheckout({
     orderId: "order-swap-expired-local-poll",
-    amount: { btc: { currency: "SATS", value: "200" } },
+    amount: { sats: "200" },
   });
   const swapInvoice = await openreceive.startSwap({
     orderId: "order-swap-expired-local-poll",
@@ -1202,16 +1184,16 @@ test("expired local swap invoices still poll provider lifecycle states", async (
   });
 
   swapProvider.nextState = "refund_required";
-  setNow(swapInvoice.shadow_invoice.expires_at + 20);
+  setNow(swapInvoice.shadowInvoice.expiresAt + 20);
   const order = await openreceive.getOrder({ orderId: "order-swap-expired-local-poll" });
   const refreshed = order.checkouts
     .flatMap((checkout) => checkout.invoices)
-    .find((invoice) => invoice.invoice_id === swapInvoice.attempt_id);
+    .find((invoice) => invoice.invoiceId === swapInvoice.attemptId);
 
   assert.equal(swapProvider.statusCalls, 1);
-  assert.equal(refreshed.swap.provider_state, "refund_required");
-  assert.equal(refreshed.swap.deposit_tx_id, "deposit-tx-1");
-  assert.match(refreshed.swap.refund_nonce, /^or_ref_[a-f0-9]{32}$/);
+  assert.equal(refreshed.swap.providerState, "refund_required");
+  assert.equal(refreshed.swap.depositTxId, "deposit-tx-1");
+  assert.match(refreshed.swap.refundNonce, /^or_ref_[a-f0-9]{32}$/);
 });
 
 test("a superseded checkout is still paid when its shadow invoice settles later", async () => {
@@ -1219,28 +1201,28 @@ test("a superseded checkout is still paid when its shadow invoice settles later"
   const { wallet, openreceive, setNow } = await createHarness({
     swap: { providers: [swapProvider] },
   });
-  await openreceive.createCheckout({
+  await openreceive.getOrCreateCheckout({
     orderId: "order-swap-supersede",
-    amount: { btc: { currency: "SATS", value: "200" } },
+    amount: { sats: "200" },
   });
   const swapInvoice = await openreceive.startSwap({
     orderId: "order-swap-supersede",
     payInAsset: "USDT_TRON",
   });
-  const replacement = await openreceive.createCheckout({
+  const replacement = await openreceive.getOrCreateCheckout({
     orderId: "order-swap-supersede",
-    amount: { btc: { currency: "SATS", value: "300" } },
+    amount: { sats: "300" },
   });
 
-  wallet.settlePaymentHash(swapInvoice.shadow_invoice.payment_hash, 1210);
+  wallet.settlePaymentHash(swapInvoice.shadowInvoice.paymentHash, 1210);
   setNow(1015);
   const order = await openreceive.getOrder({ orderId: "order-swap-supersede" });
 
   assert.equal(order.status, "paid");
-  assert.equal(order.paid_checkout.checkout_id !== replacement.checkout_id, true);
-  assert.equal(order.paid_checkout.status, "paid");
+  assert.equal(order.paidCheckout.checkoutId !== replacement.checkoutId, true);
+  assert.equal(order.paidCheckout.status, "paid");
   assert.equal(
-    order.paid_checkout.invoices.some((invoice) => invoice.invoice_id === swapInvoice.attempt_id),
+    order.paidCheckout.invoices.some((invoice) => invoice.invoiceId === swapInvoice.attemptId),
     true,
   );
 });
@@ -1250,9 +1232,9 @@ test("refundSwap requests a provider refund only for refund-required swaps", asy
   const { openreceive, setNow } = await createHarness({
     swap: { providers: [swapProvider] },
   });
-  await openreceive.createCheckout({
+  await openreceive.getOrCreateCheckout({
     orderId: "order-swap-refund",
-    amount: { btc: { currency: "SATS", value: "200" } },
+    amount: { sats: "200" },
   });
   const swapAttempt = await openreceive.startSwap({
     orderId: "order-swap-refund",
@@ -1263,36 +1245,36 @@ test("refundSwap requests a provider refund only for refund-required swaps", asy
   swapProvider.nextState = "refund_required";
   setNow(1015);
   const refreshed = await openreceive.getOrder({ orderId: "order-swap-refund" });
-  const refundRequired = refreshed.active_checkout.invoices.find(
+  const refundRequired = refreshed.activeCheckout.invoices.find(
     (invoice) => invoice.rail === "swap",
   );
-  assert.equal(refundRequired.swap.provider_state, "refund_required");
+  assert.equal(refundRequired.swap.providerState, "refund_required");
   assert.equal(refundRequired.swap.provider, "otherfloat");
-  assert.equal(refundRequired.swap.deposit_tx_id, "deposit-tx-1");
-  assert.match(refundRequired.swap.refund_nonce, /^or_ref_[a-f0-9]{32}$/);
+  assert.equal(refundRequired.swap.depositTxId, "deposit-tx-1");
+  assert.match(refundRequired.swap.refundNonce, /^or_ref_[a-f0-9]{32}$/);
   // The refund nonce expiry is now surfaced alongside the nonce for countdown UIs.
-  assert.equal(refundRequired.swap.refund_nonce_expires_at, 1015 + 10 * 60);
+  assert.equal(refundRequired.swap.refundNonceExpiresAt, 1015 + 10 * 60);
 
   const submitted = await openreceive.refundSwap({
-    attemptId: swapAttempt.attempt_id,
+    attemptId: swapAttempt.attemptId,
     refundAddress: "0x2222222222222222222222222222222222222222",
-    refundNonce: refundRequired.swap.refund_nonce,
+    refundNonce: refundRequired.swap.refundNonce,
   });
 
-  assert.equal(submitted.provider_state, "refund_required");
-  assert.equal(submitted.refund_address, "0x2222222222222222222222222222222222222222");
+  assert.equal(submitted.providerState, "refund_required");
+  assert.equal(submitted.refundAddress, "0x2222222222222222222222222222222222222222");
   assert.deepEqual(swapProvider.refundCalls, []);
 
   const refunded = await openreceive.refundSwap({
-    attemptId: swapAttempt.attempt_id,
+    attemptId: swapAttempt.attemptId,
     refundAddress: "0x2222222222222222222222222222222222222222",
-    refundNonce: submitted.refund_nonce,
+    refundNonce: submitted.refundNonce,
     confirm: true,
   });
 
-  assert.equal(refunded.provider_state, "refund_pending");
-  assert.equal(refunded.refund_address, "0x2222222222222222222222222222222222222222");
-  assert.equal(refunded.refund_nonce, undefined);
+  assert.equal(refunded.providerState, "refund_pending");
+  assert.equal(refunded.refundAddress, "0x2222222222222222222222222222222222222222");
+  assert.equal(refunded.refundNonce, undefined);
   assert.deepEqual(swapProvider.refundCalls, [
     {
       provider_order_id: "ff-order-1",
@@ -1304,73 +1286,73 @@ test("refundSwap requests a provider refund only for refund-required swaps", asy
 test("createCheckout creates a new checkout and supersedes the open checkout for a different amount", async () => {
   const { wallet, openreceive } = await createHarness();
 
-  const first = await openreceive.createCheckout({
+  const first = await openreceive.getOrCreateCheckout({
     orderId: "order-conflict",
-    amount: { btc: { currency: "BTC", value: "0.000002" } },
+    amount: { currency: "BTC", value: "0.000002" },
   });
 
-  const second = await openreceive.createCheckout({
+  const second = await openreceive.getOrCreateCheckout({
     orderId: "order-conflict",
-    amount: { btc: { currency: "BTC", value: "0.000003" } },
+    amount: { currency: "BTC", value: "0.000003" },
   });
-  assert.notEqual(second.checkout_id, first.checkout_id);
+  assert.notEqual(second.checkoutId, first.checkoutId);
   assert.equal(second.status, "open");
-  assert.equal(second.amount_msats, 300000);
+  assert.equal(second.amountMsats, 300000);
   assert.equal(wallet.makeInvoiceCalls, 2);
 
   const order = await openreceive.getOrder({ orderId: "order-conflict" });
   assert.equal(order.status, "pending");
-  assert.equal(order.active_checkout.checkout_id, second.checkout_id);
-  assert.equal(order.display_checkout.checkout_id, second.checkout_id);
+  assert.equal(order.activeCheckout.checkoutId, second.checkoutId);
+  assert.equal(order.displayCheckout.checkoutId, second.checkoutId);
   assert.equal(order.checkouts.length, 2);
   assert.equal(
-    order.checkouts.find((checkout) => checkout.checkout_id === first.checkout_id).status,
+    order.checkouts.find((checkout) => checkout.checkoutId === first.checkoutId).status,
     "superseded",
   );
 });
 
 test("createCheckout creates a new checkout after expiry when called again", async () => {
   const { wallet, store, openreceive, setNow } = await createHarness();
-  const first = await openreceive.createCheckout({
+  const first = await openreceive.getOrCreateCheckout({
     orderId: "order-retry",
-    amount: { btc: { currency: "SATS", value: "200" } },
+    amount: { sats: "200" },
     memo: "Fruit sticker",
   });
 
   setNow(1700);
   const expiredOrder = await openreceive.getOrder({ orderId: "order-retry" });
   assert.equal(expiredOrder.status, "expired");
-  assert.equal(expiredOrder.active_checkout, undefined);
-  assert.equal(expiredOrder.display_checkout.checkout_id, first.checkout_id);
-  assert.equal(expiredOrder.checkouts[0].checkout_id, first.checkout_id);
+  assert.equal(expiredOrder.activeCheckout, undefined);
+  assert.equal(expiredOrder.displayCheckout.checkoutId, first.checkoutId);
+  assert.equal(expiredOrder.checkouts[0].checkoutId, first.checkoutId);
   assert.equal(expiredOrder.checkouts[0].status, "expired");
   assert.equal(wallet.makeInvoiceCalls, 1);
 
-  const retried = await openreceive.createCheckout({
+  const retried = await openreceive.getOrCreateCheckout({
     orderId: "order-retry",
-    amount: { btc: { currency: "SATS", value: "200" } },
+    amount: { sats: "200" },
     memo: "Fruit sticker",
   });
-  const replayed = await openreceive.createCheckout({
+  const replayed = await openreceive.getOrCreateCheckout({
     orderId: "order-retry",
-    amount: { btc: { currency: "SATS", value: "200" } },
+    amount: { sats: "200" },
     memo: "Fruit sticker",
   });
 
-  assert.notEqual(retried.checkout_id, first.checkout_id);
-  assert.notEqual(retried.active.invoice_id, first.active.invoice_id);
-  assert.equal(replayed.checkout_id, retried.checkout_id);
-  assert.equal(replayed.active.invoice_id, retried.active.invoice_id);
+  assert.notEqual(retried.checkoutId, first.checkoutId);
+  assert.notEqual(retried.active.invoiceId, first.active.invoiceId);
+  assert.equal(replayed.checkoutId, retried.checkoutId);
+  assert.equal(replayed.active.invoiceId, retried.active.invoiceId);
   assert.equal(retried.invoices.length, 1);
-  assert.equal(retried.invoices[0].refreshed_from_invoice_id, undefined);
+  assert.equal(retried.invoices[0].refreshedFromInvoiceId, undefined);
   assert.equal(wallet.makeInvoiceCalls, 2);
 
-  const storedRetry = (await store.get(retried.active.invoice_id)).row;
+  const storedRetry = (await store.get(retried.active.invoiceId)).row;
   assert.equal(storedRetry.operation, "invoice.create");
   assert.equal(storedRetry.metadata.order_id, "order-retry");
-  assert.equal(storedRetry.metadata.checkout_id, retried.checkout_id);
+  assert.equal(storedRetry.metadata.checkout_id, retried.checkoutId);
   assert.deepEqual(storedRetry.metadata.amount_spec, {
-    btc: { currency: "SATS", value: "200" },
+    sats: "200",
   });
   assert.equal(storedRetry.metadata.expires_in_seconds, undefined);
 });
@@ -1392,43 +1374,33 @@ test("expiry retry re-quotes fiat orders and reuses fixed bitcoin amounts", asyn
     priceProviders: [provider],
     priceCurrencies: ["USD"],
   });
-  const fiatFirst = await fiatHarness.openreceive.createCheckout({
+  const fiatFirst = await fiatHarness.openreceive.getOrCreateCheckout({
     orderId: "order-fiat-retry",
-    amount: {
-      fiat: {
-        currency: "USD",
-        value: "0.05",
-      },
-    },
+    amount: { currency: "USD", value: "0.05" },
   });
-  assert.equal(fiatFirst.amount_msats, 50000);
+  assert.equal(fiatFirst.amountMsats, 50000);
 
   btcUsd = "50000.00";
   fiatHarness.setNow(1700);
-  const fiatRenewed = await fiatHarness.openreceive.createCheckout({
+  const fiatRenewed = await fiatHarness.openreceive.getOrCreateCheckout({
     orderId: "order-fiat-retry",
-    amount: {
-      fiat: {
-        currency: "USD",
-        value: "0.05",
-      },
-    },
+    amount: { currency: "USD", value: "0.05" },
   });
-  assert.equal(fiatRenewed.amount_msats, 100000);
-  assert.notEqual(fiatRenewed.checkout_id, fiatFirst.checkout_id);
+  assert.equal(fiatRenewed.amountMsats, 100000);
+  assert.notEqual(fiatRenewed.checkoutId, fiatFirst.checkoutId);
 
   const fixedHarness = await createHarness();
-  const fixedFirst = await fixedHarness.openreceive.createCheckout({
+  const fixedFirst = await fixedHarness.openreceive.getOrCreateCheckout({
     orderId: "order-fixed-retry",
-    amount: { btc: { currency: "SATS", value: "7000" } },
+    amount: { sats: "7000" },
   });
   fixedHarness.setNow(1700);
-  const fixedRenewed = await fixedHarness.openreceive.createCheckout({
+  const fixedRenewed = await fixedHarness.openreceive.getOrCreateCheckout({
     orderId: "order-fixed-retry",
-    amount: { btc: { currency: "SATS", value: "7000" } },
+    amount: { sats: "7000" },
   });
-  assert.equal(fixedRenewed.amount_msats, fixedFirst.amount_msats);
-  assert.notEqual(fixedRenewed.checkout_id, fixedFirst.checkout_id);
+  assert.equal(fixedRenewed.amountMsats, fixedFirst.amountMsats);
+  assert.notEqual(fixedRenewed.checkoutId, fixedFirst.checkoutId);
 });
 
 test("getOrder settles a late payment on any invoice in any checkout history", async () => {
@@ -1445,29 +1417,29 @@ test("getOrder settles a late payment on any invoice in any checkout history", a
     }) => {
       onPaidCalls += 1;
       assert.equal(orderId, "order-late-paid");
-      assert.equal(checkoutId, first.checkout_id);
-      assert.equal(invoiceId, first.active.invoice_id);
-      assert.equal(paymentHash, first.active.payment_hash);
+      assert.equal(checkoutId, first.checkoutId);
+      assert.equal(invoiceId, first.active.invoiceId);
+      assert.equal(paymentHash, first.active.paymentHash);
       assert.equal(amountMsats, 200000);
       assert.equal(metadata.cart_id, "cart-123");
-      assert.equal(metadata.checkout_id, first.checkout_id);
+      assert.equal(metadata.checkout_id, first.checkoutId);
       assert.equal(invoice.transaction_state, "settled");
     },
   });
-  const first = await openreceive.createCheckout({
+  const first = await openreceive.getOrCreateCheckout({
     orderId: "order-late-paid",
-    amount: { btc: { currency: "BTC", value: "0.000002" } },
+    amount: { currency: "BTC", value: "0.000002" },
     metadata: {
       cart_id: "cart-123",
       checkout_id: "must-not-overwrite",
     },
   });
-  const superseding = await openreceive.createCheckout({
+  const superseding = await openreceive.getOrCreateCheckout({
     orderId: "order-late-paid",
-    amount: { btc: { currency: "BTC", value: "0.000003" } },
+    amount: { currency: "BTC", value: "0.000003" },
   });
 
-  wallet.settlePaymentHash(first.active.payment_hash, 1200);
+  wallet.settlePaymentHash(first.active.paymentHash, 1200);
   setNow(1002);
   const order = await openreceive.getOrder({
     orderId: "order-late-paid",
@@ -1475,17 +1447,17 @@ test("getOrder settles a late payment on any invoice in any checkout history", a
 
   assert.equal(order.paid, true);
   assert.equal(order.status, "paid");
-  assert.equal(order.paid_at, 1200);
-  assert.equal(order.paid_checkout.checkout_id, first.checkout_id);
-  assert.equal(order.display_checkout.checkout_id, first.checkout_id);
-  assert.equal(order.paid_checkout.amount_msats, 200000);
+  assert.equal(order.paidAt, 1200);
+  assert.equal(order.paidCheckout.checkoutId, first.checkoutId);
+  assert.equal(order.displayCheckout.checkoutId, first.checkoutId);
+  assert.equal(order.paidCheckout.amountMsats, 200000);
   assert.equal(order.checkouts.length, 2);
   assert.equal(
-    order.checkouts.some((checkout) => checkout.checkout_id === superseding.checkout_id),
+    order.checkouts.some((checkout) => checkout.checkoutId === superseding.checkoutId),
     true,
   );
-  assert.equal(order.wallet_scan_performed, true);
-  assert.equal(order.transactions_checked, 2);
+  assert.equal(order.walletScanPerformed, true);
+  assert.equal(order.transactionsChecked, 2);
   assert.equal(onPaidCalls, 1);
 
   setNow(1004);
@@ -1508,52 +1480,52 @@ test("getOrder on one order settles another order's closed-browser payment", asy
     },
   });
 
-  const orderA = await openreceive.createCheckout({
+  const orderA = await openreceive.getOrCreateCheckout({
     orderId: "order-closed-a",
-    amount: { btc: { currency: "BTC", value: "0.000002" } },
+    amount: { currency: "BTC", value: "0.000002" },
   });
   await Promise.all(background.splice(0));
   setNow(1003);
-  const orderB = await openreceive.createCheckout({
+  const orderB = await openreceive.getOrCreateCheckout({
     orderId: "order-active-b",
-    amount: { btc: { currency: "BTC", value: "0.000003" } },
+    amount: { currency: "BTC", value: "0.000003" },
   });
   await Promise.all(background.splice(0));
 
-  wallet.settlePaymentHash(orderA.active.payment_hash, 1200);
+  wallet.settlePaymentHash(orderA.active.paymentHash, 1200);
   setNow(1005);
   const bStatus = await openreceive.getOrder({ orderId: "order-active-b" });
-  const aStored = await store.get(orderA.active.invoice_id);
+  const aStored = await store.get(orderA.active.invoiceId);
 
-  assert.equal(bStatus.order_id, "order-active-b");
+  assert.equal(bStatus.orderId, "order-active-b");
   assert.equal(bStatus.paid, false);
-  assert.equal(bStatus.active_checkout.checkout_id, orderB.checkout_id);
-  assert.equal(bStatus.wallet_scan_performed, true);
+  assert.equal(bStatus.activeCheckout.checkoutId, orderB.checkoutId);
+  assert.equal(bStatus.walletScanPerformed, true);
   assert.equal(aStored.row.transaction_state, "settled");
   assert.equal(aStored.row.workflow_state, "settlement_action_completed");
   assert.equal(aStored.row.settled_at, 1200);
   assert.equal(paid.length, 1);
   assert.equal(paid[0].orderId, "order-closed-a");
-  assert.equal(paid[0].checkoutId, orderA.checkout_id);
-  assert.equal(paid[0].invoiceId, orderA.active.invoice_id);
+  assert.equal(paid[0].checkoutId, orderA.checkoutId);
+  assert.equal(paid[0].invoiceId, orderA.active.invoiceId);
 });
 
 test("createCheckout is a no-op for paid orders", async () => {
   const { wallet, openreceive, setNow } = await createHarness();
-  const created = await openreceive.createCheckout({
+  const created = await openreceive.getOrCreateCheckout({
     orderId: "order-paid-noop",
-    amount: { btc: { currency: "BTC", value: "0.000002" } },
+    amount: { currency: "BTC", value: "0.000002" },
   });
-  wallet.settlePaymentHash(created.active.payment_hash, 1200);
+  wallet.settlePaymentHash(created.active.paymentHash, 1200);
   setNow(1002);
   await openreceive.getOrder({ orderId: "order-paid-noop" });
 
   const before = wallet.makeInvoiceCalls;
-  const paid = await openreceive.createCheckout({
+  const paid = await openreceive.getOrCreateCheckout({
     orderId: "order-paid-noop",
-    amount: { btc: { currency: "BTC", value: "0.000003" } },
+    amount: { currency: "BTC", value: "0.000003" },
   });
-  assert.equal(paid.checkout_id, created.checkout_id);
+  assert.equal(paid.checkoutId, created.checkoutId);
   assert.equal(paid.status, "paid");
   assert.equal(wallet.makeInvoiceCalls, before);
 });
@@ -1573,57 +1545,55 @@ test("service errors surface as OpenReceiveServiceError with status and body", a
 
   await assertServiceError(
     () =>
-      openreceive.createCheckout({
+      openreceive.getOrCreateCheckout({
         orderId: "order-invalid-fiat",
         amount: {
-          fiat: {
-            currency: "usd",
-            value: "0.10",
-          },
+          currency: "usd",
+          value: "0.10",
         },
       }),
     {
       status: 400,
       code: "INVALID_REQUEST",
-      message: "fiat.currency must be an ISO 4217 uppercase code",
+      message: "amount.currency must be an ISO 4217 uppercase code, or BTC/SAT/SATS.",
     },
   );
   assert.equal(wallet.makeInvoiceCalls, 0);
 });
 
-test("createCheckout accepts usd and sats amount shortcuts", async () => {
+test("getOrCreateCheckout accepts amount.currency and amount.sats shapes", async () => {
   const { wallet, openreceive } = await createHarness();
 
   const usd = await openreceive.getOrCreateCheckout({
-    orderId: "order-shortcut-usd",
-    usd: "0.10",
+    orderId: "order-amount-usd",
+    amount: { currency: "USD", value: "0.10" },
   });
-  const sats = await openreceive.createCheckout({
-    orderId: "order-shortcut-sats",
-    sats: 200,
+  const sats = await openreceive.getOrCreateCheckout({
+    orderId: "order-amount-sats",
+    amount: { sats: 200 },
   });
 
-  assert.equal(usd.amount_msats, 200000);
+  assert.equal(usd.amountMsats, 200000);
   assert.deepEqual(usd.fiat, { currency: "USD", value: "0.10" });
-  assert.equal(sats.amount_msats, 200000);
-  assert.deepEqual(sats.invoices[0].fiat_quote, null);
+  assert.equal(sats.amountMsats, 200000);
+  assert.deepEqual(sats.invoices[0].fiatQuote, null);
   assert.equal(wallet.makeInvoiceCalls, 2);
 });
 
-test("createCheckout rejects invalid explicit amount shapes", async () => {
+test("getOrCreateCheckout rejects invalid explicit amount shapes", async () => {
   const { wallet, openreceive } = await createHarness();
 
-  for (const amount of [{ sats: "200" }, { msats: "200000" }]) {
+  for (const amount of [{ msats: "200000" }, { currency: "USD" }, { value: "1.00" }]) {
     await assertServiceError(
       () =>
-        openreceive.createCheckout({
-          orderId: `order-invalid-${Object.keys(amount)[0]}`,
+        openreceive.getOrCreateCheckout({
+          orderId: `order-invalid-${Object.keys(amount).join("-")}`,
           amount,
         }),
       {
         status: 400,
         code: "INVALID_REQUEST",
-        message: "Create checkout request requires exactly one of amount.btc or amount.fiat.",
+        message: "Create checkout amount must be { sats } or { currency, value }.",
       },
     );
   }
@@ -1648,9 +1618,9 @@ test("diagnostic events and logger entries are sanitized and non-blocking", asyn
 
   await assert.rejects(
     () =>
-      openreceive.createCheckout({
+      openreceive.getOrCreateCheckout({
         orderId: "order-diagnostics",
-        amount: { btc: { currency: "BTC", value: "0.000002" } },
+        amount: { currency: "BTC", value: "0.000002" },
         memo: "Fruit sticker",
       }),
     /token=abc123/,
@@ -1730,23 +1700,18 @@ test("createOpenReceive fetches default live price data only when rates are need
 
   assert.equal(fetchCalls, 0);
 
-  const btcCheckout = await openreceive.createCheckout({
+  const btcCheckout = await openreceive.getOrCreateCheckout({
     orderId: "order-live-btc",
-    amount: { btc: { currency: "SATS", value: "200" } },
+    amount: { sats: "200" },
   });
-  assert.equal(btcCheckout.amount_msats, 200000);
+  assert.equal(btcCheckout.amountMsats, 200000);
   assert.equal(fetchCalls, 0);
 
   await assertServiceError(
     () =>
-      openreceive.createCheckout({
+      openreceive.getOrCreateCheckout({
         orderId: "order-live-fiat",
-        amount: {
-          fiat: {
-            currency: "USD",
-            value: "0.10",
-          },
-        },
+        amount: { currency: "USD", value: "0.10" },
       }),
     {
       status: 503,
@@ -1758,14 +1723,9 @@ test("createOpenReceive fetches default live price data only when rates are need
 
   await assertServiceError(
     () =>
-      openreceive.createCheckout({
+      openreceive.getOrCreateCheckout({
         orderId: "order-live-fiat-retry",
-        amount: {
-          fiat: {
-            currency: "USD",
-            value: "0.10",
-          },
-        },
+        amount: { currency: "USD", value: "0.10" },
       }),
     {
       status: 503,
@@ -1838,3 +1798,255 @@ function jsonResponse(body, status = 200) {
     text: async () => JSON.stringify(body),
   };
 }
+
+test("provider poll does not demote refund_pending back to refund_required", async () => {
+  const swapProvider = new FakeSwapProvider(["USDT_TRON"]);
+  const { openreceive, setNow } = await createHarness({
+    swap: { providers: [swapProvider] },
+  });
+  await openreceive.getOrCreateCheckout({
+    orderId: "order-swap-monotonic-refund",
+    amount: { sats: "200" },
+  });
+  const attempt = await openreceive.startSwap({
+    orderId: "order-swap-monotonic-refund",
+    payInAsset: "USDT_TRON",
+  });
+
+  swapProvider.nextState = "refund_required";
+  setNow(1015);
+  const before = await openreceive.getOrder({ orderId: "order-swap-monotonic-refund" });
+  const refundRequired = before.activeCheckout.invoices.find((invoice) => invoice.rail === "swap");
+  assert.equal(refundRequired.swap.providerState, "refund_required");
+
+  await openreceive.refundSwap({
+    attemptId: attempt.attemptId,
+    refundAddress: "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
+    refundNonce: refundRequired.swap.refundNonce,
+  });
+  await openreceive.refundSwap({
+    attemptId: attempt.attemptId,
+    refundAddress: "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
+    refundNonce: refundRequired.swap.refundNonce,
+    confirm: true,
+  });
+
+  // Provider still reports EMERGENCY/NONE (maps to refund_required) — must not demote.
+  swapProvider.nextState = "refund_required";
+  setNow(1030);
+  const after = await openreceive.getOrder({ orderId: "order-swap-monotonic-refund" });
+  const pending = after.activeCheckout.invoices.find((invoice) => invoice.rail === "swap");
+  assert.equal(pending.swap.providerState, "refund_pending");
+  assert.equal(pending.swap.refundNonce, undefined);
+});
+
+test("create timeout marks needs_reconcile and blocks another start for the asset", async () => {
+  const swapProvider = new FakeSwapProvider(["USDT_TRON"]);
+  swapProvider.createSwap = async () => {
+    const error = new Error("FixedFloat create request timed out.");
+    error.name = "FixedFloatApiError";
+    error.kind = "timeout";
+    throw error;
+  };
+  const { openreceive } = await createHarness({
+    swap: { providers: [swapProvider] },
+  });
+  await openreceive.getOrCreateCheckout({
+    orderId: "order-swap-create-timeout",
+    amount: { sats: "200" },
+  });
+
+  await assert.rejects(
+    () =>
+      openreceive.startSwap({
+        orderId: "order-swap-create-timeout",
+        payInAsset: "USDT_TRON",
+      }),
+    (error) =>
+      error instanceof OpenReceiveServiceError &&
+      error.status === 409 &&
+      /timed out|reconcile/i.test(error.message),
+  );
+
+  await assert.rejects(
+    () =>
+      openreceive.startSwap({
+        orderId: "order-swap-create-timeout",
+        payInAsset: "USDT_TRON",
+      }),
+    (error) =>
+      error instanceof OpenReceiveServiceError &&
+      error.status === 409 &&
+      /reconcile/i.test(error.message),
+  );
+});
+
+test("refreshSwap pulls provider state for provider_reported_emergency attention", async () => {
+  const swapProvider = new FakeSwapProvider(["USDT_TRON"]);
+  const { openreceive, setNow } = await createHarness({
+    swap: { providers: [swapProvider] },
+  });
+  await openreceive.getOrCreateCheckout({
+    orderId: "order-swap-refresh",
+    amount: { sats: "200" },
+  });
+  const attempt = await openreceive.startSwap({
+    orderId: "order-swap-refresh",
+    payInAsset: "USDT_TRON",
+  });
+
+  swapProvider.nextState = "attention";
+  // Fake getStatus does not set attention_reason; force via a custom getStatus once.
+  const originalGetStatus = swapProvider.getStatus.bind(swapProvider);
+  swapProvider.getStatus = async (order) => {
+    const updated = await originalGetStatus(order);
+    if (updated.state === "attention") {
+      return {
+        ...updated,
+        attention: true,
+        attention_reason: "provider_reported_emergency",
+      };
+    }
+    return updated;
+  };
+
+  setNow(1015);
+  await openreceive.getOrder({ orderId: "order-swap-refresh" });
+
+  swapProvider.nextState = "refunded";
+  setNow(1030);
+  const refreshed = await openreceive.refreshSwap({ attemptId: attempt.attemptId });
+  assert.equal(refreshed.providerState, "refunded");
+});
+
+test("FixedFloat weight budget refuses creates once the soft create gate is hit", async () => {
+  const {
+    SwapProviderWeightBudget,
+    SWAP_PROVIDER_CREATE_WEIGHT_GATE,
+    SWAP_PROVIDER_CREATE_WEIGHT,
+  } = await import("../../packages/js/node/src/swap/weight-budget.ts");
+  const store = new InMemoryInvoiceKvStore();
+  let now = 1_000;
+  const budget = new SwapProviderWeightBudget(store, "fixedfloat", () => now);
+
+  // Fill up to the create gate with create reservations.
+  let reserved = 0;
+  while (reserved + SWAP_PROVIDER_CREATE_WEIGHT <= SWAP_PROVIDER_CREATE_WEIGHT_GATE) {
+    await budget.reserve("create");
+    reserved += SWAP_PROVIDER_CREATE_WEIGHT;
+  }
+  await assert.rejects(() => budget.reserve("create"), /weight budget/);
+  // Status calls still have headroom under the overall soft cap.
+  await budget.reserve("order");
+});
+
+test("startSwap fails over to the next provider when the first is rate-limited", async () => {
+  const primary = new FakeSwapProvider(["USDT_TRON"], "primary");
+  const secondary = new FakeSwapProvider(["USDT_TRON"], "secondary");
+  primary.canAcceptRequest = async () => false;
+  const { openreceive } = await createHarness({
+    swap: { providers: [primary, secondary] },
+  });
+  await openreceive.getOrCreateCheckout({
+    orderId: "order-swap-failover",
+    amount: { sats: "200" },
+  });
+
+  const attempt = await openreceive.startSwap({
+    orderId: "order-swap-failover",
+    payInAsset: "USDT_TRON",
+  });
+
+  assert.equal(attempt.provider, "secondary");
+  assert.equal(primary.createCalls, 0);
+  assert.equal(secondary.createCalls, 1);
+});
+
+test("selectSwapProvider prefers the first provider that still has create budget", async () => {
+  const { selectSwapProvider } = await import("../../packages/js/node/src/service/swaps.ts");
+  const primary = new FakeSwapProvider(["USDT_TRON"], "primary");
+  const secondary = new FakeSwapProvider(["USDT_TRON"], "secondary");
+  primary.canAcceptRequest = async (path) => path !== "create";
+  secondary.canAcceptRequest = async () => true;
+
+  const chosen = await selectSwapProvider([primary, secondary], "USDT_TRON", "create");
+  assert.equal(chosen?.name, "secondary");
+
+  const forPrice = await selectSwapProvider([primary, secondary], "USDT_TRON", "price");
+  assert.equal(forPrice?.name, "primary");
+});
+
+test("FixedFloat /ccies omits currencies with recv=false", async () => {
+  const provider = fixedFloatProvider({
+    key: "fixed-float-key",
+    secret: "fixed-float-secret",
+    baseUrl: "https://fixedfloat.example",
+    fetch: async (url) => {
+      assert.match(String(url), /\/api\/v2\/ccies$/);
+      return jsonResponse({
+        code: 0,
+        data: [
+          {
+            code: "USDTTRC",
+            coin: "USDT",
+            network: "TRX",
+            recv: false,
+            send: true,
+          },
+          {
+            code: "BTCLN",
+            coin: "BTC",
+            network: "Lightning",
+            recv: true,
+            send: true,
+          },
+        ],
+      });
+    },
+  });
+
+  const assets = await provider.supportedPayInAssets();
+  assert.equal(assets.has("USDT_TRON"), false);
+});
+
+test("FixedFloat status surfaces emergency.repeat", async () => {
+  const provider = fixedFloatProvider({
+    key: "fixed-float-key",
+    secret: "fixed-float-secret",
+    baseUrl: "https://fixedfloat.example",
+    fetch: async () =>
+      jsonResponse({
+        code: 0,
+        data: {
+          id: "ff-order-repeat",
+          token: "ff-token-repeat",
+          status: "EMERGENCY",
+          emergency: {
+            status: ["LESS"],
+            choice: "NONE",
+            repeat: true,
+          },
+          from: {
+            address: "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
+            amount: "1.05",
+          },
+          time: { expiration: 4600 },
+        },
+      }),
+  });
+
+  const order = await provider.getStatus({
+    provider: "fixedfloat",
+    provider_order_id: "ff-order-repeat",
+    provider_token: "ff-token-repeat",
+    pay_in_asset: "USDT_TRON",
+    deposit_address: "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
+    deposit_amount: "1.05",
+    expires_at: 4600,
+    state: "awaiting_deposit",
+  });
+
+  assert.equal(order.state, "refund_required");
+  assert.equal(order.emergency_repeat, true);
+});
+

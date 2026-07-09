@@ -19,6 +19,8 @@ swap:
   # Seconds before a completed provider order needs support attention if the
   # wallet has not reported settlement.
   settlement_attention_seconds: 60
+  # Provider list is priority order. Quote/start try the first entry that supports
+  # the asset; if that provider is rate-limited, fail over to the next.
   providers:
     - id: fixedfloat
       protocol: fixedfloat
