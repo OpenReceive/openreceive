@@ -4,12 +4,14 @@ import {
   createOpenReceiveSwapDisplayModel,
   createQrPayloadSvg,
   formatOpenReceiveSwapLimit,
+  openReceiveCheckoutLabels,
   type OpenReceiveBrowserLogger,
   type OpenReceiveQrEncoder,
   orClasses,
 } from "@openreceive/browser/internal";
 import * as React from "react";
 import { WaitingState } from "./components.ts";
+import { useOpenReceiveTransientValue } from "./hooks.ts";
 import type { OpenReceiveSwapOptionDisplay } from "./types.ts";
 import { copyOpenReceiveText, joinClassNames } from "./utils.ts";
 
@@ -212,11 +214,13 @@ export function renderSwapDepositPanel(options: {
   );
   // The "still waiting" states borrow the Lightning section's status card (spinner +
   // title + detail) so the swap panel that replaces it reads the same.
-  const waitingCard = React.createElement(WaitingState, {
-    waiting: true,
-    statusTitle: display.providerStateLabel,
-    statusDetail: display.providerStateDetail,
-  });
+  const waitingCard = (countdownLabel?: string) =>
+    React.createElement(WaitingState, {
+      waiting: true,
+      statusTitle: display.providerStateLabel,
+      statusDetail: display.providerStateDetail,
+      ...(countdownLabel === undefined ? {} : { countdownLabel }),
+    });
 
   if (display.state === "creating") {
     return React.createElement(
@@ -224,7 +228,7 @@ export function renderSwapDepositPanel(options: {
       {
         className: orClasses.swapPanel,
       },
-      waitingCard,
+      waitingCard(),
       backButton,
     );
   }
@@ -373,36 +377,40 @@ export function renderSwapDepositPanel(options: {
       React.createElement("strong", null, `${display.depositAmount} ${display.assetLabel}`),
       " to this address",
     ),
-    React.createElement(SwapPayloadQRCode, {
-      payload: display.qrPayload,
-      encoder: options.encoder,
-      onError: options.onError,
-    }),
     React.createElement(
-      "dl",
+      "div",
       {
-        className: orClasses.swapDetails,
+        className: orClasses.swapDepositLayout,
       },
-      renderSwapCopyRow("Address", display.depositAddress, options),
-      memo === undefined ? null : renderSwapCopyRow("Memo", memo, options),
-      renderSwapCopyRow("Amount", display.depositAmount, options),
+      React.createElement(SwapPayloadQRCode, {
+        payload: display.qrPayload,
+        encoder: options.encoder,
+        onError: options.onError,
+      }),
+      React.createElement(
+        "div",
+        {
+          className: orClasses.swapDepositSide,
+        },
+        React.createElement(
+          "dl",
+          {
+            className: orClasses.swapDetails,
+          },
+          renderSwapCopyRow("Address", display.depositAddress, options),
+          memo === undefined ? null : renderSwapCopyRow("Memo", memo, options),
+          renderSwapCopyRow("Amount", display.depositAmount, options),
+        ),
+        waitingCard(display.countdownLabel),
+        renderSwapFeeBreakdown(display.feeBreakdown),
+      ),
     ),
-    waitingCard,
-    renderSwapFeeBreakdown(display.feeBreakdown),
     React.createElement(
       "p",
       {
         className: orClasses.swapWarning,
       },
       display.networkWarning,
-    ),
-    React.createElement(
-      "p",
-      {
-        className: orClasses.swapCountdown,
-      },
-      "Payment window ",
-      React.createElement("strong", null, display.countdownLabel),
     ),
     React.createElement(
       "p",
@@ -466,19 +474,34 @@ function renderSwapCopyRow(
       "dd",
       { key: `${label}-value`, className: orClasses.swapDetailsDd },
       React.createElement("code", { className: orClasses.swapDetailsCode }, value),
-      React.createElement(
-        "button",
-        {
-          className: orClasses.btn,
-          onClick: () => {
-            void copyOpenReceiveText(value, options.clipboard).catch(options.onError);
-          },
-          type: "button",
-        },
-        "Copy",
-      ),
+      React.createElement(SwapCopyButton, {
+        value,
+        clipboard: options.clipboard,
+        onError: options.onError,
+      }),
     ),
   ];
+}
+
+function SwapCopyButton(props: {
+  readonly value: string;
+  readonly clipboard?: Pick<Clipboard, "writeText">;
+  readonly onError?: (error: unknown) => void;
+}): React.ReactElement {
+  const [copied, showCopied] = useOpenReceiveTransientValue<boolean>(false);
+  return React.createElement(
+    "button",
+    {
+      className: orClasses.btnSm,
+      onClick: () => {
+        void copyOpenReceiveText(props.value, props.clipboard)
+          .then(() => showCopied(true))
+          .catch(props.onError);
+      },
+      type: "button",
+    },
+    copied ? openReceiveCheckoutLabels.copied : "Copy",
+  );
 }
 
 function renderSwapSupportDetails(

@@ -626,19 +626,34 @@ function renderElementSwapPanelHtml(invoice: CheckoutInvoiceSnapshot): string {
 
   if (display.state === "deposit") {
     const feeBreakdown = renderElementSwapFeeBreakdownHtml(display.feeBreakdown);
+    const waitingStatus = `
+      <div part="status" class="${orClasses.paymentStatus}">
+        <span part="spinner" class="${orClasses.spinner}" aria-hidden="true"></span>
+        <div class="${orClasses.paymentStatusBody}">
+          <div class="${orClasses.swapWaitingTitle}">
+            <strong class="${orClasses.paymentStatusTitle}">${escapeHtml(display.providerStateLabel)}</strong>
+            <strong part="swap-countdown" class="${orClasses.swapCountdown}">${escapeHtml(display.countdownLabel)}</strong>
+          </div>
+          <p class="${orClasses.paymentStatusDetail}">${escapeHtml(display.providerStateDetail)}</p>
+        </div>
+      </div>
+    `;
     return `
       <section part="swap-panel" class="${orClasses.swapPanel}">
         <p part="swap-instruction" class="${orClasses.swapInstruction}">Pay <strong>${escapeHtml(display.depositAmount)} ${escapeHtml(display.assetLabel)}</strong> to this address</p>
-        <div part="swap-qr" class="${orClasses.swapQr}" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapQr}="${escapeHtml(display.qrPayload)}"></div>
-        <dl part="swap-details" class="${orClasses.swapDetails}">
-          ${renderElementSwapCopyDetailHtml("Address", display.depositAddress)}
-          ${display.depositMemo === undefined ? "" : renderElementSwapCopyDetailHtml("Memo", display.depositMemo)}
-          ${renderElementSwapCopyDetailHtml("Amount", display.depositAmount)}
-        </dl>
-        ${heading}
-        ${feeBreakdown}
+        <div part="swap-deposit-layout" class="${orClasses.swapDepositLayout}">
+          <div part="swap-qr" class="${orClasses.swapQr}" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapQr}="${escapeHtml(display.qrPayload)}"></div>
+          <div part="swap-deposit-side" class="${orClasses.swapDepositSide}">
+            <dl part="swap-details" class="${orClasses.swapDetails}">
+              ${renderElementSwapCopyDetailHtml("Address", display.depositAddress)}
+              ${display.depositMemo === undefined ? "" : renderElementSwapCopyDetailHtml("Memo", display.depositMemo)}
+              ${renderElementSwapCopyDetailHtml("Amount", display.depositAmount)}
+            </dl>
+            ${waitingStatus}
+            ${feeBreakdown}
+          </div>
+        </div>
         <p part="swap-warning" class="${orClasses.swapWarning}">${escapeHtml(display.networkWarning)}</p>
-        <p part="swap-countdown" class="${orClasses.swapCountdown}">Payment window <strong>${escapeHtml(display.countdownLabel)}</strong></p>
         <p part="swap-warning" class="${orClasses.swapWarning}">Pay with one method only. If you already sent ${escapeHtml(display.assetLabel)}, do not also pay the Lightning invoice.</p>
         ${backButton}
       </section>
@@ -1788,8 +1803,10 @@ function showElementCopyFeedback(button: Element | null): void {
   if (button === null) return;
   let controller = elementCopyFeedbackControllers.get(button);
   if (controller === undefined) {
+    const resetValue =
+      button.textContent?.trim() || openReceiveCheckoutLabels.copyInvoice;
     controller = createOpenReceiveTransientFeedbackController({
-      resetValue: openReceiveCheckoutLabels.copyInvoice,
+      resetValue,
       onValue: (label) => {
         if (button.isConnected) button.textContent = label;
       }

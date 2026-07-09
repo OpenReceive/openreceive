@@ -193,6 +193,7 @@ export function WaitingState(props: {
   readonly status?: CheckoutStatusModel;
   readonly statusTitle?: string;
   readonly statusDetail?: string;
+  readonly countdownLabel?: string;
   readonly className?: string;
 }): React.ReactElement {
   const status =
@@ -201,6 +202,20 @@ export function WaitingState(props: {
       phase: props.phase,
       waiting: props.waiting ?? false,
     });
+  const title = props.statusTitle ?? status.title;
+  const titleRow =
+    props.countdownLabel === undefined
+      ? React.createElement("strong", { className: orClasses.paymentStatusTitle }, title)
+      : React.createElement(
+          "div",
+          { className: orClasses.swapWaitingTitle },
+          React.createElement("strong", { className: orClasses.paymentStatusTitle }, title),
+          React.createElement(
+            "strong",
+            { className: orClasses.swapCountdown },
+            props.countdownLabel,
+          ),
+        );
 
   return React.createElement(
     "div",
@@ -218,11 +233,7 @@ export function WaitingState(props: {
       {
         className: orClasses.paymentStatusBody,
       },
-      React.createElement(
-        "strong",
-        { className: orClasses.paymentStatusTitle },
-        props.statusTitle ?? status.title,
-      ),
+      titleRow,
       React.createElement(
         "span",
         { className: orClasses.paymentStatusDetail },
