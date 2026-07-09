@@ -128,7 +128,7 @@ test("elements render payment wizard route choices and providers from browser st
   assert.match(cardStep, /Credit \/ debit card/);
   assert.doesNotMatch(cardStep, />USD<\/p>/);
   assert.match(cardStep, /part="country-select"/);
-  assert.match(cardStep, /<select data-or-country="US">/);
+  assert.match(cardStep, /<select data-or-country="US"[^>]*>/);
   assert.match(cardStep, />United States<\/option>/);
   assert.match(cardStep, /data-or-provider-tutorial="strike"/);
   assert.doesNotMatch(cardStep, /href="https:\/\/docs\.strike\.me/);

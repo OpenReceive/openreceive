@@ -216,7 +216,7 @@ test("React checkout default UI server-renders display-safe invoice data", () =>
   assert.match(html, /data-openreceive-checkout/);
   assert.match(html, /data-openreceive-theme="light"/);
   assert.match(html, /1 sat/);
-  assert.match(html, /or-sats-detail/);
+  assert.match(html, /text-base-content\/60 text-sm leading-snug/);
   assert.match(html, /pending/);
   assert.doesNotMatch(html, /bbbbbbbb\.\.\.bbbbbbbb/);
   assert.doesNotMatch(html, /textarea/);
@@ -685,15 +685,15 @@ test("React checkout supports design-system component and class slots", () => {
     })
   );
 
-  assert.match(html, /class="app-root"/);
+  assert.match(html, /app-root/);
   assert.match(html, /data-slot-qr="lnbc-slot-test"/);
-  assert.match(html, /class="app-qr"/);
+  assert.match(html, /app-qr/);
   assert.match(html, /data-slot-summary=""/);
-  assert.match(html, /class="app-summary"/);
+  assert.match(html, /app-summary/);
   assert.match(html, /data-slot-state="pending"/);
-  assert.match(html, /class="app-state"/);
+  assert.match(html, /app-state/);
   assert.match(html, /data-slot-button=""/);
-  assert.match(html, /class="app-copy"/);
+  assert.match(html, /app-copy/);
   assert.match(html, />Copy invoice</);
   assert.doesNotMatch(html, /class="app-open"/);
   assert.doesNotMatch(html, />Open Wallet</);
@@ -874,7 +874,7 @@ test("React package exposes shared browser-owned checkout styles", () => {
   );
 
   assert.equal(manifest.exports["./styles.css"], "./dist/styles.css");
-  assert.match(browserStyles, /\[data-openreceive-checkout\]/);
+  assert.match(browserStyles, /\.btn|@layer/);
   assert.match(reactStyles, /@openreceive\/browser\/styles\.css/);
 });
 

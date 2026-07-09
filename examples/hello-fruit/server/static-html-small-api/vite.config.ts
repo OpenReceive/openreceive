@@ -1,3 +1,4 @@
+import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 import { createHelloFruitStaticServer } from "./src/server/create-server.ts";
 
@@ -8,6 +9,7 @@ export default defineConfig({
     }
   },
   plugins: [
+    tailwindcss(),
     {
       name: "openreceive-hello-fruit-static-api",
       async configureServer(server) {

@@ -1,3 +1,4 @@
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import vue from "@vitejs/plugin-vue";
@@ -15,6 +16,7 @@ export default defineConfig({
     }
   },
   plugins: [
+    tailwindcss(),
     vue({ compiler: vueCompiler }),
     svelte(),
     react(),

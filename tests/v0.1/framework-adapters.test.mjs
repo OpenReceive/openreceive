@@ -600,7 +600,7 @@ test("Vue, Svelte, and Angular packages ship component entry files", () => {
   assert.equal(browserManifest.exports["./styles.css"], "./dist/styles.css");
   assert.equal(browserManifest.exports["./country-map"].import, "./dist/country-map.js");
   assert.equal(existsSync(browserStylesPath), true, "browser shared styles exist");
-  assert.match(readFileSync(browserStylesPath, "utf8"), /\[data-openreceive-checkout\]/);
+  assert.match(readFileSync(browserStylesPath, "utf8"), /\.btn|@layer/);
 
   const packages = [
     {

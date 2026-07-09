@@ -9,7 +9,7 @@ export default function Page() {
   const fruits = readHelloFruits();
 
   return (
-    <main className="page">
+    <main className="page min-h-screen grid justify-items-center content-start p-4 md:p-10 gap-4">
       <CheckoutClient product={product} fruits={fruits.fruits} />
     </main>
   );

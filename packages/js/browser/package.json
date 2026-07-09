@@ -26,8 +26,11 @@
     "topojson-client": "^3.1.0"
   },
   "devDependencies": {
+    "@tailwindcss/cli": "^4.3.2",
     "@types/d3-geo": "^3.1.0",
     "@types/topojson-client": "^3.1.5",
+    "daisyui": "^5.6.16",
+    "tailwindcss": "^4.3.2",
     "world-atlas": "^2.0.2"
   },
   "files": [
@@ -36,6 +39,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup src/index.ts src/internal.ts src/country-map.ts --format esm --dts --clean --target es2022 --out-dir dist && node ../../../tools/package/copy-static.mjs src dist styles.css assets"
+    "build:css": "node ../../../tools/package/build-browser-css.mjs",
+    "build": "npm run build:css && tsup src/index.ts src/internal.ts src/country-map.ts --format esm --dts --clean --target es2022 --out-dir dist && npm run build:css && node ../../../tools/package/copy-static.mjs src dist assets"
   }
 }

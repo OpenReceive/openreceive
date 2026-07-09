@@ -245,14 +245,27 @@ function App(): React.ReactElement {
     completedCheckoutRef.current = "";
   }
 
+  const fruitCardClass = (selected: boolean) =>
+    [
+      "card card-border bg-base-100 p-3 grid gap-2 text-left cursor-pointer hover:border-primary",
+      selected ? "border-primary ring-2 ring-primary/30" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
   return (
-    <ThemeScope as="main" className="page" themeToggle topbarClassName="topbar">
-      <section className="checkout">
-        <div className="framework-tabs" role="tablist" aria-label="Checkout framework">
+    <ThemeScope
+      as="main"
+      className="page min-h-screen grid justify-items-center content-start p-4 md:p-10 gap-4"
+      themeToggle
+      topbarClassName="topbar w-full max-w-5xl flex justify-end"
+    >
+      <section className="checkout w-full max-w-5xl grid gap-4">
+        <div className="tabs tabs-box" role="tablist" aria-label="Checkout framework">
           {checkoutFrameworks.map((item) => (
             <button
               aria-selected={framework === item.id}
-              className={framework === item.id ? "selected" : ""}
+              className={framework === item.id ? "tab tab-active" : "tab"}
               key={item.id}
               onClick={() => {
                 logDemo("checkout.framework_click", "Framework tab clicked.", {
@@ -268,17 +281,18 @@ function App(): React.ReactElement {
           ))}
         </div>
 
-        <div className="product">
-          <img src={`/${selectedFruit?.sticker}`} alt="" />
+        <div className="flex gap-4 items-center">
+          <img className="w-24 aspect-square" src={`/${selectedFruit?.sticker}`} alt="" />
           <div>
-            <h1>{product.name}</h1>
-            <p>{product.description}</p>
+            <h1 className="text-3xl font-bold">{product.name}</h1>
+            <p className="text-base-content/70">{product.description}</p>
           </div>
         </div>
 
-        <label className="currency-picker">
-          <span>Currency</span>
+        <label className="form-control w-full">
+          <span className="label-text mb-1">Currency</span>
           <select
+            className="select select-bordered w-full"
             value={currency}
             onChange={(event) => {
               logDemo("currency.change", "Currency changed.", {
@@ -298,10 +312,10 @@ function App(): React.ReactElement {
 
         {order === null ? (
           <>
-            <div className="fruit-grid">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               {fruits.map((fruit) => (
                 <button
-                  className={fruit.id === fruitId ? "selected" : ""}
+                  className={fruitCardClass(fruit.id === fruitId)}
                   key={fruit.id}
                   onClick={() => {
                     logDemo("fruit.select", "Fruit selected.", {
@@ -312,29 +326,35 @@ function App(): React.ReactElement {
                   }}
                   type="button"
                 >
-                  <img src={`/${fruit.sticker}`} alt="" />
+                  <img className="w-full aspect-square" src={`/${fruit.sticker}`} alt="" />
                   <span>{fruit.name}</span>
-                  <small>{formatHelloFruitDisplayPrice(fruit.fiat, currency, rates)}</small>
+                  <small className="text-base-content/70">
+                    {formatHelloFruitDisplayPrice(fruit.fiat, currency, rates)}
+                  </small>
                 </button>
               ))}
             </div>
 
-            <button className="primary" onClick={addSelectedFruitToCart} type="button">
+            <button className="btn" onClick={addSelectedFruitToCart} type="button">
               {createCheckoutLabel}
             </button>
 
             {cartItems.length === 0 ? null : (
-              <section className="cart" aria-label="Cart">
-                <div className="cart-heading">
+              <section className="card card-border bg-base-100 p-4 grid gap-2" aria-label="Cart">
+                <div className="flex justify-between items-center">
                   <strong>Cart</strong>
                   <span>
                     {cartQuantity} item{cartQuantity === 1 ? "" : "s"}
                   </span>
                 </div>
                 {cartItems.map((item) => (
-                  <div className="cart-row" key={item.fruit.id}>
-                    <span className="cart-item">
-                      <img className="cart-item-sticker" src={`/${item.fruit.sticker}`} alt="" />
+                  <div className="flex justify-between items-center gap-2" key={item.fruit.id}>
+                    <span className="flex items-center gap-2 min-w-0">
+                      <img
+                        className="w-8 h-8 shrink-0"
+                        src={`/${item.fruit.sticker}`}
+                        alt=""
+                      />
                       {item.fruit.name}
                     </span>
                     <span>
@@ -342,7 +362,7 @@ function App(): React.ReactElement {
                       {item.quantity}
                     </span>
                     <button
-                      className="secondary"
+                      className="btn btn-ghost btn-sm"
                       onClick={() => removeFruitFromCart(item.fruit.id)}
                       type="button"
                     >
@@ -354,7 +374,7 @@ function App(): React.ReactElement {
             )}
 
             <button
-              className="primary"
+              className="btn"
               disabled={creating || cartItems.length === 0}
               onClick={createOrder}
               type="button"
@@ -365,13 +385,13 @@ function App(): React.ReactElement {
         ) : (
           <>
             {order === null ? null : (
-              <section className="cart" aria-label="Order">
-                <div className="cart-heading">
+              <section className="card card-border bg-base-100 p-4 grid gap-2" aria-label="Order">
+                <div className="flex justify-between items-center">
                   <strong>Order</strong>
                   <span>{formatHelloFruitFiat(order.total_amount)}</span>
                 </div>
                 {order.items.map((item) => (
-                  <div className="cart-row" key={item.product_id}>
+                  <div className="flex justify-between items-center gap-2" key={item.product_id}>
                     <span>{item.name}</span>
                     <span>x{item.quantity}</span>
                     <span>
@@ -384,7 +404,7 @@ function App(): React.ReactElement {
               </section>
             )}
             <button
-              className="secondary reset-demo"
+              className="btn btn-ghost w-full"
               disabled={creating}
               onClick={startOver}
               type="button"
@@ -410,22 +430,27 @@ function App(): React.ReactElement {
           />
         )}
 
-        {error === "" ? null : <p className="error">{error}</p>}
+        {error === "" ? null : <p className="alert alert-error">{error}</p>}
       </section>
       {purchasedItems.length === 0 || !stickerModalOpen ? null : (
-        <div className="sticker-modal-backdrop">
+        <div className="modal modal-open">
           <section
             aria-labelledby="sticker-modal-title"
             aria-modal="true"
-            className="sticker-modal"
+            className="modal-box"
             role="dialog"
           >
-            <div className="sticker-preview-grid">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 justify-items-center">
               {purchasedItems.map((item) => (
-                <img key={item.product_id} src={`/${item.sticker}`} alt="" />
+                <img
+                  className="w-full max-w-[180px] aspect-square"
+                  key={item.product_id}
+                  src={`/${item.sticker}`}
+                  alt=""
+                />
               ))}
             </div>
-            <h2 id="sticker-modal-title">
+            <h2 className="text-2xl font-bold" id="sticker-modal-title">
               {purchasedStickerQuantity === 1
                 ? "You just got a sticker"
                 : "Your stickers are ready"}
@@ -435,10 +460,10 @@ function App(): React.ReactElement {
                 ? `${purchasedItems[0]?.name ?? "Sticker"} is ready.`
                 : `${purchasedStickerQuantity} stickers are ready.`}
             </p>
-            <div className="sticker-downloads">
+            <div className="grid gap-2">
               {purchasedItems.map((item) => (
                 <a
-                  className="secondary sticker-download"
+                  className="btn btn-soft justify-between"
                   download={`${item.product_id}-sticker.svg`}
                   href={`/${item.sticker}`}
                   key={item.product_id}
@@ -448,8 +473,8 @@ function App(): React.ReactElement {
                 </a>
               ))}
             </div>
-            <div className="sticker-modal-actions">
-              <button className="primary" onClick={() => setStickerModalOpen(false)} type="button">
+            <div className="modal-action">
+              <button className="btn" onClick={() => setStickerModalOpen(false)} type="button">
                 Close
               </button>
             </div>

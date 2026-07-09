@@ -40,6 +40,7 @@ import {
   createQrSvg,
   escapeOpenReceiveHtml,
   formatOpenReceiveMsats,
+  formatOpenReceiveAmountCaption,
   getOpenReceiveDefaultCountryCode,
   getOpenReceivePaymentMethodIcon,
   getOpenReceiveRegionForCountry,
@@ -53,6 +54,7 @@ import {
   openReceivePaymentMethods,
   openReceiveSwapAssetMatchesRoute,
   normalizeSwapStartInvoice,
+  orClasses,
   postOpenReceiveJson,
   openReceiveThemeToggleElementStyles,
   parseOpenReceiveBooleanAttribute,
@@ -134,6 +136,8 @@ export interface DefineOpenReceiveElementsOptions {
 const DEFAULT_TAG_NAME = "openreceive-checkout";
 export { OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME } from "@openreceive/browser/internal";
 
+const COPY_INVOICE_ICON = `<svg class="${orClasses.copyIcon}" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false"><rect x="5" y="5" width="8" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M3.5 11V3.5A1.5 1.5 0 0 1 5 2h5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+
 export function renderCheckoutHtml(view: CheckoutView): string {
   const display = createCheckoutDisplayModel({
     ...view,
@@ -144,22 +148,29 @@ export function renderCheckoutHtml(view: CheckoutView): string {
   const amountLabel =
     summaryAmountLabel === undefined
       ? ""
-      : `<span part="amount">${escapeHtml(summaryAmountLabel)}</span>`;
+      : `<span part="amount" class="${orClasses.metaItem}">${escapeHtml(summaryAmountLabel)}</span>`;
+  const amountCaption = formatOpenReceiveAmountCaption({
+    amountLabel: display.amountLabel,
+    fiatLabel: display.fiatLabel,
+    fiatCurrency: display.fiat_quote?.fiat?.currency,
+  });
   const satsDetail =
-    display.amountLabel === undefined
+    amountCaption === undefined
       ? ""
-      : `<div part="sats-detail">${escapeHtml(display.amountLabel)}</div>`;
+      : `<div part="sats-detail" class="${orClasses.satsDetail}">${escapeHtml(amountCaption)}</div>`;
   const fiatLabel =
     display.fiatLabel === undefined
       ? ""
-      : `<span part="amount">${escapeHtml(display.fiatLabel)}</span>`;
+      : `<span part="amount" class="${orClasses.metaItem}">${escapeHtml(display.fiatLabel)}</span>`;
   const statusLabel = view.status ?? (
     checkoutState === undefined
       ? deriveStatus(view)
       : deriveStatus(checkoutState)
   );
+  const stateClass =
+    statusLabel === "settled" ? orClasses.stateSettled : orClasses.statePending;
   const stateLabel =
-    `<span part="state" data-state="${escapeHtml(statusLabel)}">${escapeHtml(statusLabel)}</span>`;
+    `<span part="state" class="${stateClass}" data-state="${escapeHtml(statusLabel)}">${escapeHtml(statusLabel)}</span>`;
   const status = checkoutState === undefined
     ? ""
     : renderElementPaymentStatusHtml(checkoutState);
@@ -172,19 +183,33 @@ export function renderCheckoutHtml(view: CheckoutView): string {
     expired || view.payment_wizard === false
       ? ""
       : renderOpenReceivePaymentWizardHtml(view.wizard);
+  const copyButton = `<button part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.copy}" class="${orClasses.btn}" type="button">${COPY_INVOICE_ICON}${escapeHtml(openReceiveCheckoutLabels.copyInvoice)}</button>`;
+  const startOverButton = `<button part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.startOver}" class="${orClasses.btn}" type="button">${escapeHtml(openReceiveCheckoutLabels.startOver)}</button>`;
+  const lightningPane =
+    hideLightning || expired
+      ? ""
+      : `<div part="lightning-pane" class="${orClasses.lightningPaneDesktop}">
+          <div part="qr" class="${orClasses.qr}" ${OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.qr}></div>
+          ${satsDetail}
+          <div part="actions" class="${orClasses.actions}">${copyButton}</div>
+        </div>`;
+  const paymentLayoutClass = expired
+    ? orClasses.paymentLayoutExpired
+    : orClasses.paymentLayout;
 
   return `
     <style>${openReceiveCheckoutElementStyles}</style>
-    <section part="root"${view.theme === undefined ? "" : ` data-theme="${escapeHtml(view.theme)}"`}>
-      ${hideLightning || expired ? "" : `<div part="qr" ${OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.qr}></div>`}
-      ${hideLightning || expired ? "" : satsDetail}
-      ${hideLightning ? "" : status}
-      ${hideLightning ? "" : `<div part="meta">${amountLabel}${fiatLabel}${stateLabel}</div>`}
-      ${hideLightning ? "" : `<div part="actions">
-        ${expired
-          ? `<button part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.startOver}" type="button">${escapeHtml(openReceiveCheckoutLabels.startOver)}</button>`
-          : `<button part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.copy}" type="button">${escapeHtml(openReceiveCheckoutLabels.copyInvoice)}</button>`}
-      </div>`}
+    <section part="root"${view.theme === undefined ? "" : ` data-theme="${escapeHtml(view.theme)}"`} class="${orClasses.root}">
+      ${hideLightning
+        ? ""
+        : `<div part="payment-layout" class="${paymentLayoutClass}">
+            ${lightningPane}
+            <div part="payment-info" class="${orClasses.paymentInfo}">
+              ${status}
+              <div part="meta" class="${orClasses.meta}">${amountLabel}${fiatLabel}${stateLabel}</div>
+              ${expired ? `<div part="actions" class="${orClasses.actions}">${startOverButton}</div>` : ""}
+            </div>
+          </div>`}
       ${wizard}
     </section>
   `;
@@ -196,9 +221,9 @@ export function renderCheckoutHtml(view: CheckoutView): string {
 export function renderCheckoutCreatingHtml(theme?: "light" | "dark"): string {
   return `
     <style>${openReceiveCheckoutElementStyles}</style>
-    <section part="root"${theme === undefined ? "" : ` data-theme="${escapeHtml(theme)}"`} data-openreceive-creating>
-      <div part="status">
-        <span part="spinner" aria-hidden="true"></span>
+    <section part="root"${theme === undefined ? "" : ` data-theme="${escapeHtml(theme)}"`} class="${orClasses.root}" data-openreceive-creating>
+      <div part="status" class="${orClasses.creating}">
+        <span part="spinner" class="${orClasses.spinner}" aria-hidden="true"></span>
         <div><strong>Creating checkout…</strong></div>
       </div>
     </section>
@@ -209,21 +234,17 @@ export function renderOpenReceiveThemeToggleHtml(
   label: string,
   resolvedTheme: "light" | "dark" = label.toLowerCase().includes("dark") ? "dark" : "light"
 ): string {
+  void resolvedTheme;
   return `
     <style>${openReceiveThemeToggleElementStyles}</style>
     <button
       aria-label="${escapeHtml(label)}"
-      class="or-theme-toggle-${escapeHtml(resolvedTheme)}"
+      class="${orClasses.themeToggle}"
       part="${OPENRECEIVE_THEME_TOGGLE_ELEMENT_PARTS.button}"
       title="${escapeHtml(label)}"
       type="button"
       ${OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.themeToggle}
-    >
-      <span class="or-theme-toggle-track" aria-hidden="true">
-        <span class="or-theme-toggle-icon or-theme-toggle-icon-light"></span>
-      </span>
-      <span class="or-theme-toggle-label">${escapeHtml(label)}</span>
-    </button>
+    >${escapeHtml(label)}</button>
   `;
 }
 
@@ -275,25 +296,26 @@ export function renderOpenReceivePaymentWizardHtml(
         ? view.swapInvoice
         : undefined;
     return `
-      <section part="wizard" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.root}>
-        <div part="wizard-breadcrumbs">
+      <section part="wizard" class="${orClasses.wizard}" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.root}>
+        <div part="wizard-breadcrumbs" class="${orClasses.breadcrumbs}">
           <button
             part="wizard-breadcrumb"
+            class="${orClasses.btnGhost}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.breadcrumb}="swap-asset"
             type="button"
           >${escapeHtml(openReceiveCheckoutLabels.paymentMethod)}</button>
           <span aria-hidden="true">/</span>
-          <span part="wizard-breadcrumb-current">${escapeHtml(label)}</span>
+          <span part="wizard-breadcrumb-current" class="${orClasses.breadcrumbCurrent}">${escapeHtml(label)}</span>
         </div>
-        <div part="wizard-results">
+        <div part="wizard-results" class="${orClasses.wizardResults}">
           ${
             activeSwap === undefined
-              ? `<section part="swap-panel">
-                  <div part="swap-heading">
-                    <strong>Preparing payment address</strong>
-                    <span>One moment</span>
+              ? `<section part="swap-panel" class="${orClasses.swapPanel}">
+                  <div part="swap-heading" class="${orClasses.swapHeading}">
+                    <strong class="${orClasses.swapHeadingTitle}">Preparing payment address</strong>
+                    <span class="${orClasses.swapHeadingDetail}">One moment</span>
                   </div>
-                  <p part="swap-progress">Getting your ${escapeHtml(
+                  <p part="swap-progress" class="${orClasses.swapProgress}">Getting your ${escapeHtml(
                     selectedSwapOption?.label ?? "coin",
                   )} payment address…</p>
                 </section>`
@@ -305,23 +327,24 @@ export function renderOpenReceivePaymentWizardHtml(
   }
   const methodPicker = selection.selectedMethod === null
     ? `
-      <div>
-        <h2>${escapeHtml(openReceiveCheckoutLabels.wizardTitle)}</h2>
-        <p>${escapeHtml(openReceiveCheckoutLabels.wizardSubtitle)}</p>
+      <div class="${orClasses.wizardHeader}">
+        <h2 class="${orClasses.wizardHeaderTitle}">${escapeHtml(openReceiveCheckoutLabels.wizardTitle)}</h2>
+        <p class="${orClasses.wizardHeaderSubtitle}">${escapeHtml(openReceiveCheckoutLabels.wizardSubtitle)}</p>
       </div>
-      <div part="method-grid">
+      <div part="method-grid" class="${orClasses.methodGrid}">
         ${(swapAssetOptions.length > 0
           ? openReceivePaymentMethods.filter((method) => method.id !== "crypto")
           : openReceivePaymentMethods
         ).map((method) => `
           <button
             part="method"
+            class="${orClasses.methodCard}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.method}="${escapeHtml(method.id)}"
             type="button"
           >
-            <img alt="" src="${escapeHtml(getOpenReceivePaymentMethodIcon(method.id))}">
-            <strong>${escapeHtml(method.title)}</strong>
-            <small>${escapeHtml(method.detail)}</small>
+            <img class="${orClasses.methodIcon}" alt="" src="${escapeHtml(getOpenReceivePaymentMethodIcon(method.id))}">
+            <strong class="${orClasses.methodTitle}">${escapeHtml(method.title)}</strong>
+            <small class="${orClasses.methodDetail}">${escapeHtml(method.detail)}</small>
           </button>
         `).join("")}
         ${renderElementSwapMethodCardsHtml(swapAssetOptions, view)}
@@ -330,28 +353,29 @@ export function renderOpenReceivePaymentWizardHtml(
     : "";
 
   return `
-    <section part="wizard" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.root}>
+    <section part="wizard" class="${orClasses.wizard}" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.root}>
       ${methodPicker}
       ${breadcrumbs}
       ${showRoutePicker ? `
-        <div part="route-picker">
+        <div part="route-picker" class="${orClasses.routePicker}">
           ${routeAssetDisplays.map((asset) => `
               <button
                 part="route${asset.selected ? " selected" : ""}"
+                class="${asset.selected ? orClasses.routeButtonSelected : orClasses.routeButton}"
                 ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.route}="${escapeHtml(asset.id)}"
                 type="button"
               >
-                <img alt="" src="${escapeHtml(asset.icon)}">
-                <strong>${escapeHtml(asset.label)}</strong>
-                <small>${escapeHtml(asset.subtitle)}</small>
+                <img class="${orClasses.methodIcon}" alt="" src="${escapeHtml(asset.icon)}">
+                <strong class="${orClasses.methodTitle}">${escapeHtml(asset.label)}</strong>
+                <small class="${orClasses.methodDetail}">${escapeHtml(asset.subtitle)}</small>
               </button>
             `).join("")}
         </div>
       ` : ""}
       ${selection.selectedMethod === null ? "" : `
-        <div part="wizard-results">
+        <div part="wizard-results" class="${orClasses.wizardResults}">
           ${routeDisplays.length === 0 ? `
-            <p part="wizard-empty">${
+            <p part="wizard-empty" class="${orClasses.wizardEmpty}">${
               escapeHtml(getOpenReceiveWizardEmptyMessage(selection.selectedMethod))
             }</p>
 	          ` : routeDisplays.map((route) => {
@@ -361,8 +385,8 @@ export function renderOpenReceivePaymentWizardHtml(
                   ? view.swapInvoice
                   : undefined;
               return `
-	            <section part="wizard-route">
-                <h3>
+	            <section part="wizard-route" class="${orClasses.wizardRoute}">
+                <h3 class="${orClasses.wizardRouteHeading}">
                   ${escapeHtml(route.title)}
                   ${wizard.selectedRail === null ? "" : renderCountrySelectHtml({
                     countries: model.countryDisplays,
@@ -372,16 +396,16 @@ export function renderOpenReceivePaymentWizardHtml(
               ${activeSwap === undefined
                 ? renderElementSwapActionsHtml(route.key, view.swapOptions ?? [], view)
                 : renderElementSwapPanelHtml(activeSwap)}
-              ${activeSwap === undefined ? `<div part="provider-grid">
+              ${activeSwap === undefined ? `<div part="provider-grid" class="${orClasses.providerGrid}">
                 ${route.providers.map((provider) => `
-                  <article part="provider${provider.recommended ? " selected" : ""}">
-                    <div part="provider-heading">
-                      <img alt="" src="${escapeHtml(provider.icon)}">
-                      <h4>${escapeHtml(provider.name)}</h4>
-                      ${provider.recommendedLabel === null ? "" : `<span part="recommended">${escapeHtml(provider.recommendedLabel)}</span>`}
+                  <article part="provider${provider.recommended ? " selected" : ""}" class="${provider.recommended ? orClasses.providerCardRecommended : orClasses.providerCard}">
+                    <div part="provider-heading" class="${orClasses.providerHeading}">
+                      <img class="${orClasses.providerIcon}" alt="" src="${escapeHtml(provider.icon)}">
+                      <h4 class="${orClasses.providerName}">${escapeHtml(provider.name)}</h4>
+                      ${provider.recommendedLabel === null ? "" : `<span part="recommended" class="${orClasses.providerBadge}">${escapeHtml(provider.recommendedLabel)}</span>`}
 	                    </div>
-                    <p part="provider-kind">${escapeHtml(provider.kind)}</p>
-	                    <div part="provider-actions">
+                    <p part="provider-kind" class="${orClasses.providerKind}">${escapeHtml(provider.kind)}</p>
+	                    <div part="provider-actions" class="${orClasses.providerActions}">
                       ${renderProviderOpenActionHtml(provider)}
                     </div>
                   </article>
@@ -415,25 +439,28 @@ function renderElementSwapActionsHtml(
   if (shown.length === 0) return "";
 
   return `
-    <div part="swap-actions">
+    <div part="swap-actions" class="${orClasses.swapActions}">
       ${shown.map((option) => {
         const disabled = option.available === false;
         const limitMessage = elementsSwapLimitMessage(option, view);
         const info = disabled
           ? limitMessage === undefined
             ? ""
-            : `<p part="swap-warning">${escapeHtml(limitMessage)}</p>`
+            : `<p part="swap-warning" class="${orClasses.swapWarning}">${escapeHtml(limitMessage)}</p>`
           : option.pay_amount === undefined
             ? ""
-            : `<p part="swap-estimate">Estimated ${escapeHtml(option.pay_amount)} ${escapeHtml(option.label)} to settle this checkout.</p>`;
+            : `<p part="swap-estimate" class="${orClasses.swapEstimate}">Estimated ${escapeHtml(option.pay_amount)} ${escapeHtml(option.label)} to settle this checkout.</p>`;
         return `
+        <div class="${orClasses.swapAction}">
         ${info}
         <button
           part="swap-start"
+          class="${orClasses.swapStart}"
           ${disabled ? "" : `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapStart}="${escapeHtml(option.pay_in_asset)}"`}
           ${disabled ? "disabled aria-disabled=\"true\"" : ""}
           type="button"
         >Create ${escapeHtml(option.label)} (${escapeHtml(option.network_label)}) payment address</button>
+        </div>
       `;
       }).join("")}
     </div>
@@ -462,25 +489,27 @@ function renderElementSwapMethodCardsHtml(
         return `
           <button
             part="method"
+            class="${disabled ? orClasses.methodCardUnavailable : orClasses.methodCardReady}"
             ${disabled ? "" : `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapStart}="${escapeHtml(selectedOption.pay_in_asset)}"`}
             ${disabled ? "disabled aria-disabled=\"true\"" : ""}
             type="button"
           >
-            <img alt="" src="${escapeHtml(getOpenReceiveSwapOptionIcon(selectedOption))}">
-            <strong>${escapeHtml(group.label)}</strong>
-            <small>${escapeHtml(
+            <img class="${orClasses.methodIcon}" alt="" src="${escapeHtml(getOpenReceiveSwapOptionIcon(selectedOption))}">
+            <strong class="${orClasses.methodTitle}">${escapeHtml(group.label)}</strong>
+            <small class="${orClasses.methodDetail}">${escapeHtml(
               disabled && limitMessage !== undefined ? limitMessage : selectedOption.network_label,
             )}</small>
           </button>
         `;
       }
       return `
-        <div part="method-card"${disabled ? ' class="or-method-unavailable"' : ' class="or-method-ready"'}>
-          <img alt="" src="${escapeHtml(getOpenReceiveSwapOptionIcon(selectedOption))}">
-          <strong>${escapeHtml(group.label)}</strong>
+        <div part="method-card" class="${disabled ? orClasses.methodCardUnavailable : orClasses.methodCardReady}">
+          <img class="${orClasses.methodIcon}" alt="" src="${escapeHtml(getOpenReceiveSwapOptionIcon(selectedOption))}">
+          <strong class="${orClasses.methodTitle}">${escapeHtml(group.label)}</strong>
           <label part="method-network">
-            <span class="or-method-network-label">${escapeHtml(group.label)} network</span>
+            <span class="${orClasses.methodNetworkLabel}">${escapeHtml(group.label)} network</span>
             <select
+              class="${orClasses.methodNetwork}"
               aria-label="${escapeHtml(group.label)} network"
               ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapNetwork}="${escapeHtml(groupKey)}"
             >
@@ -502,6 +531,7 @@ function renderElementSwapMethodCardsHtml(
           </label>
           <button
             part="method-confirm"
+            class="${orClasses.methodConfirm}"
             ${disabled ? "" : `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapStart}="${escapeHtml(selectedOption.pay_in_asset)}"`}
             ${disabled ? "disabled aria-disabled=\"true\"" : ""}
             type="button"
@@ -555,21 +585,21 @@ function renderElementSwapPanelHtml(invoice: CheckoutInvoiceSnapshot): string {
   const display = createOpenReceiveSwapDisplayModel(invoice);
   if (display === undefined) return "";
   const backButton = `
-    <button part="swap-back" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapBack} type="button">Pay with Lightning instead</button>
+    <button part="swap-back" class="${orClasses.swapBack}" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapBack} type="button">Pay with Lightning instead</button>
   `;
   const supportDetails = renderElementSwapSupportDetailsHtml(display);
   const heading = `
-    <div part="swap-heading">
-      <strong>${escapeHtml(display.providerStateLabel)}</strong>
-      <span>${escapeHtml(display.providerStateDetail)}</span>
+    <div part="swap-heading" class="${orClasses.swapHeading}">
+      <strong class="${orClasses.swapHeadingTitle}">${escapeHtml(display.providerStateLabel)}</strong>
+      <span class="${orClasses.swapHeadingDetail}">${escapeHtml(display.providerStateDetail)}</span>
     </div>
   `;
 
   if (display.state === "creating") {
     return `
-      <section part="swap-panel">
+      <section part="swap-panel" class="${orClasses.swapPanel}">
         ${heading}
-        <p part="swap-progress">Preparing payment address.</p>
+        <p part="swap-progress" class="${orClasses.swapProgress}">Preparing payment address.</p>
         ${backButton}
       </section>
     `;
@@ -578,19 +608,19 @@ function renderElementSwapPanelHtml(invoice: CheckoutInvoiceSnapshot): string {
   if (display.state === "deposit") {
     const feeBreakdown = renderElementSwapFeeBreakdownHtml(display.feeBreakdown);
     return `
-      <section part="swap-panel">
-        <p part="swap-instruction">Pay <strong>${escapeHtml(display.depositAmount)} ${escapeHtml(display.assetLabel)}</strong> to this address</p>
-        <div part="swap-qr" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapQr}="${escapeHtml(display.qrPayload)}"></div>
-        <dl part="swap-details">
+      <section part="swap-panel" class="${orClasses.swapPanel}">
+        <p part="swap-instruction" class="${orClasses.swapInstruction}">Pay <strong>${escapeHtml(display.depositAmount)} ${escapeHtml(display.assetLabel)}</strong> to this address</p>
+        <div part="swap-qr" class="${orClasses.swapQr}" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapQr}="${escapeHtml(display.qrPayload)}"></div>
+        <dl part="swap-details" class="${orClasses.swapDetails}">
           ${renderElementSwapCopyDetailHtml("Address", display.depositAddress)}
           ${display.depositMemo === undefined ? "" : renderElementSwapCopyDetailHtml("Memo", display.depositMemo)}
           ${renderElementSwapCopyDetailHtml("Amount", display.depositAmount)}
         </dl>
         ${heading}
         ${feeBreakdown}
-        <p part="swap-warning">${escapeHtml(display.networkWarning)}</p>
-        <p part="swap-countdown">Payment window <strong>${escapeHtml(display.countdownLabel)}</strong></p>
-        <p part="swap-warning">Pay with one method only. If you already sent ${escapeHtml(display.assetLabel)}, do not also pay the Lightning invoice.</p>
+        <p part="swap-warning" class="${orClasses.swapWarning}">${escapeHtml(display.networkWarning)}</p>
+        <p part="swap-countdown" class="${orClasses.swapCountdown}">Payment window <strong>${escapeHtml(display.countdownLabel)}</strong></p>
+        <p part="swap-warning" class="${orClasses.swapWarning}">Pay with one method only. If you already sent ${escapeHtml(display.assetLabel)}, do not also pay the Lightning invoice.</p>
         ${backButton}
       </section>
     `;
@@ -598,9 +628,9 @@ function renderElementSwapPanelHtml(invoice: CheckoutInvoiceSnapshot): string {
 
   if (display.state === "settled") {
     return `
-      <section part="swap-panel">
+      <section part="swap-panel" class="${orClasses.swapPanel}">
         ${heading}
-        <dl part="swap-details">
+        <dl part="swap-details" class="${orClasses.swapDetails}">
           ${display.depositTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Deposit transaction", display.depositTxId)}
           ${display.payoutTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Lightning payout", display.payoutTxId)}
           ${display.providerOrderId === undefined ? "" : renderElementSwapCopyDetailHtml("Provider order", display.providerOrderId)}
@@ -611,9 +641,9 @@ function renderElementSwapPanelHtml(invoice: CheckoutInvoiceSnapshot): string {
 
   if (display.state === "progress") {
     return `
-      <section part="swap-panel">
+      <section part="swap-panel" class="${orClasses.swapPanel}">
         ${heading}
-        <dl part="swap-details">
+        <dl part="swap-details" class="${orClasses.swapDetails}">
           ${display.depositTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Deposit transaction", display.depositTxId)}
           ${display.payoutTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Lightning payout", display.payoutTxId)}
         </dl>
@@ -624,9 +654,9 @@ function renderElementSwapPanelHtml(invoice: CheckoutInvoiceSnapshot): string {
 
   if (display.state === "expired") {
     return `
-      <section part="swap-panel">
+      <section part="swap-panel" class="${orClasses.swapPanel}">
         ${heading}
-        <p part="swap-warning">This payment address expired without a detected payment. Create a new payment address to try again.</p>
+        <p part="swap-warning" class="${orClasses.swapWarning}">This payment address expired without a detected payment. Create a new payment address to try again.</p>
         ${supportDetails}
         ${backButton}
       </section>
@@ -636,16 +666,18 @@ function renderElementSwapPanelHtml(invoice: CheckoutInvoiceSnapshot): string {
   if (display.state === "refund_required") {
     const stagedRefundAddress = display.refundAddress;
     return `
-      <section part="swap-panel">
+      <section part="swap-panel" class="${orClasses.swapPanel}">
         ${heading}
-        <p part="swap-warning">Use a ${escapeHtml(display.networkLabel)} address you control. Do not paste the deposit address.</p>
+        <p part="swap-warning" class="${orClasses.swapWarning}">Use a ${escapeHtml(display.networkLabel)} address you control. Do not paste the deposit address.</p>
         ${stagedRefundAddress === undefined ? `
           <form
             part="swap-refund"
+            class="${orClasses.swapRefund}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundForm}="${escapeHtml(display.attemptId)}"
             ${display.refundNonce === undefined ? "" : `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundNonce}="${escapeHtml(display.refundNonce)}"`}
           >
             <input
+              class="${orClasses.swapRefundInput}"
               ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundAddress}
               name="refund_address"
               placeholder="${escapeHtml(display.networkLabel)} refund address"
@@ -653,23 +685,24 @@ function renderElementSwapPanelHtml(invoice: CheckoutInvoiceSnapshot): string {
               autocomplete="off"
               required
             >
-            <button type="submit">Review refund address</button>
+            <button class="${orClasses.btn}" type="submit">Review refund address</button>
           </form>
         ` : `
           <form
             part="swap-refund"
+            class="${orClasses.swapRefund}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundForm}="${escapeHtml(display.attemptId)}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundConfirm}="true"
             ${display.refundNonce === undefined ? "" : `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundNonce}="${escapeHtml(display.refundNonce)}"`}
           >
-            <p part="swap-warning">Confirm refund to ${escapeHtml(stagedRefundAddress)}.</p>
+            <p part="swap-warning" class="${orClasses.swapWarning}">Confirm refund to ${escapeHtml(stagedRefundAddress)}.</p>
             <input
               ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundAddress}
               name="refund_address"
               type="hidden"
               value="${escapeHtml(stagedRefundAddress)}"
             >
-            <button type="submit">Confirm refund</button>
+            <button class="${orClasses.btn}" type="submit">Confirm refund</button>
           </form>
         `}
         ${supportDetails}
@@ -679,9 +712,9 @@ function renderElementSwapPanelHtml(invoice: CheckoutInvoiceSnapshot): string {
 
   if (display.state === "refund_pending" || display.state === "refunded") {
     return `
-      <section part="swap-panel">
+      <section part="swap-panel" class="${orClasses.swapPanel}">
         ${heading}
-        <dl part="swap-details">
+        <dl part="swap-details" class="${orClasses.swapDetails}">
           ${display.refundAddress === undefined ? "" : renderElementSwapCopyDetailHtml("Refund address", display.refundAddress)}
           ${display.refundTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Refund transaction", display.refundTxId)}
         </dl>
@@ -691,9 +724,9 @@ function renderElementSwapPanelHtml(invoice: CheckoutInvoiceSnapshot): string {
   }
 
   return `
-    <section part="swap-panel">
+    <section part="swap-panel" class="${orClasses.swapPanel}">
       ${heading}
-      <p part="swap-warning">This payment needs support review.</p>
+      <p part="swap-warning" class="${orClasses.swapWarning}">This payment needs support review.</p>
       ${supportDetails}
       ${backButton}
     </section>
@@ -702,11 +735,12 @@ function renderElementSwapPanelHtml(invoice: CheckoutInvoiceSnapshot): string {
 
 function renderElementSwapCopyDetailHtml(label: string, value: string): string {
   return `
-    <dt>${escapeHtml(label)}</dt>
-    <dd>
-      <code>${escapeHtml(value)}</code>
+    <dt class="${orClasses.swapDetailsDt}">${escapeHtml(label)}</dt>
+    <dd class="${orClasses.swapDetailsDd}">
+      <code class="${orClasses.swapDetailsCode}">${escapeHtml(value)}</code>
       <button
         part="swap-copy"
+        class="${orClasses.btnSm}"
         ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapCopy}="${escapeHtml(value)}"
         type="button"
       >Copy</button>
@@ -723,9 +757,9 @@ function renderElementSwapFeeBreakdownHtml(
       ? breakdown.fee
       : `${breakdown.fee} (${breakdown.feePercent})`;
   return `
-    <div part="swap-breakdown">
-      <p part="swap-breakdown-title">Payment breakdown</p>
-      <dl part="swap-details" class="or-swap-breakdown-rows">
+    <div part="swap-breakdown" class="${orClasses.swapBreakdown}">
+      <p part="swap-breakdown-title" class="${orClasses.swapBreakdownTitle}">Payment breakdown</p>
+      <dl part="swap-details" class="${orClasses.swapBreakdownRows}">
         <dt>Cart total</dt>
         <dd>${escapeHtml(breakdown.cartTotal)}</dd>
         <dt>You send</dt>
@@ -733,7 +767,7 @@ function renderElementSwapFeeBreakdownHtml(
         <dt>Swap + network fees</dt>
         <dd>${escapeHtml(feeValue)}</dd>
       </dl>
-      <p part="swap-breakdown-note">The swap provider's exchange rate and network fees are included in the amount above.</p>
+      <p part="swap-breakdown-note" class="${orClasses.swapBreakdownNote}">The swap provider's exchange rate and network fees are included in the amount above.</p>
     </div>
   `;
 }
@@ -750,14 +784,16 @@ function renderElementSwapSupportDetailsHtml(
     return "";
   }
   return `
-    <details part="swap-support">
-      <summary>Payment details</summary>
-      <dl part="swap-details">
-        ${display.depositTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Deposit transaction", display.depositTxId)}
-        ${display.payoutTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Lightning payout", display.payoutTxId)}
-        ${display.refundTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Refund transaction", display.refundTxId)}
-        ${display.providerOrderId === undefined ? "" : renderElementSwapCopyDetailHtml("Provider order", display.providerOrderId)}
-      </dl>
+    <details part="swap-support" class="${orClasses.swapSupport}">
+      <summary class="${orClasses.swapSupportTitle}">Payment details</summary>
+      <div class="${orClasses.swapSupportContent}">
+        <dl part="swap-details" class="${orClasses.swapDetails}">
+          ${display.depositTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Deposit transaction", display.depositTxId)}
+          ${display.payoutTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Lightning payout", display.payoutTxId)}
+          ${display.refundTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Refund transaction", display.refundTxId)}
+          ${display.providerOrderId === undefined ? "" : renderElementSwapCopyDetailHtml("Provider order", display.providerOrderId)}
+        </dl>
+      </div>
     </details>
   `;
 }
@@ -774,9 +810,10 @@ function renderWizardBreadcrumbsHtml(options: {
     : options.routeAssets.find((asset) => asset.id === options.selectedRoute)?.label ?? options.selectedRoute;
 
   return `
-    <nav part="wizard-breadcrumbs" aria-label="Payment path">
+    <nav part="wizard-breadcrumbs" class="${orClasses.breadcrumbs}" aria-label="Payment path">
       <button
         part="wizard-breadcrumb"
+        class="${orClasses.btnGhost}"
         ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.breadcrumb}="method"
         type="button"
       >
@@ -784,17 +821,18 @@ function renderWizardBreadcrumbsHtml(options: {
       </button>
       <span part="wizard-breadcrumb-separator" aria-hidden="true">/</span>
       ${routeLabel === null
-        ? `<span part="wizard-breadcrumb-current">${escapeHtml(methodLabel)}</span>`
+        ? `<span part="wizard-breadcrumb-current" class="${orClasses.breadcrumbCurrent}">${escapeHtml(methodLabel)}</span>`
         : `
           <button
             part="wizard-breadcrumb"
+            class="${orClasses.btnGhost}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.breadcrumb}="route"
             type="button"
           >
             <span>${escapeHtml(methodLabel)}</span>
           </button>
           <span part="wizard-breadcrumb-separator" aria-hidden="true">/</span>
-          <span part="wizard-breadcrumb-current">${escapeHtml(routeLabel)}</span>
+          <span part="wizard-breadcrumb-current" class="${orClasses.breadcrumbCurrent}">${escapeHtml(routeLabel)}</span>
         `}
     </nav>
   `;
@@ -802,12 +840,13 @@ function renderWizardBreadcrumbsHtml(options: {
 
 function renderProviderOpenActionHtml(provider: OpenReceiveWizardProviderDisplay): string {
   if (provider.tutorials.length === 0) {
-    return `<a href="${escapeHtml(provider.url)}" rel="noreferrer" target="_blank">${escapeHtml(provider.openLabel)}</a>`;
+    return `<a class="${orClasses.providerOpen}" href="${escapeHtml(provider.url)}" rel="noreferrer" target="_blank">${escapeHtml(provider.openLabel)}</a>`;
   }
 
   return `
     <button
       part="provider-open"
+      class="${orClasses.providerOpen}"
       ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}="${escapeHtml(provider.id)}"
       ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex}="0"
       type="button"
@@ -835,48 +874,50 @@ function renderTutorialModalHtml(
   const isFinalStep = stepIndex === provider.tutorials.length;
   const body = stepIndex === 0
     ? `
-        <div part="tutorial-intro">
-          <img part="tutorial-provider-logo" alt="" src="${escapeHtml(provider.icon)}">
+        <div part="tutorial-intro" class="${orClasses.tutorialIntro}">
+          <img part="tutorial-provider-logo" alt="" src="${escapeHtml(provider.icon)}" class="${orClasses.tutorialProviderLogo}">
           <p>${escapeHtml(openReceiveCheckoutLabels.tutorialIntroPrefix)} ${escapeHtml(provider.name)}.</p>
           <p>${escapeHtml(openReceiveCheckoutLabels.tutorialIntroCopy)}</p>
-          <button part="tutorial-copy" type="button">${escapeHtml(openReceiveCheckoutLabels.copyInvoice)}</button>
+          <button part="tutorial-copy" class="${orClasses.tutorialCopy}" type="button">${escapeHtml(openReceiveCheckoutLabels.copyInvoice)}</button>
           ${copied
-            ? `<p part="tutorial-copy-message">${escapeHtml(openReceiveCheckoutLabels.tutorialCopiedContinue)}</p>`
+            ? `<p part="tutorial-copy-message" class="${orClasses.tutorialCopyMessage}">${escapeHtml(openReceiveCheckoutLabels.tutorialCopiedContinue)}</p>`
             : ""}
         </div>
       `
     : `
-        <div part="tutorial-frame">
-          <img part="tutorial-image" alt="${escapeHtml(tutorial?.caption ?? "")}" src="${escapeHtml(tutorial?.image ?? "")}">
+        <div part="tutorial-frame" class="${orClasses.tutorialFrame}">
+          <img part="tutorial-image" class="${orClasses.tutorialImage}" alt="${escapeHtml(tutorial?.caption ?? "")}" src="${escapeHtml(tutorial?.image ?? "")}">
         </div>
-        <p part="tutorial-caption">${escapeHtml(tutorial?.caption ?? "")}</p>
+        <p part="tutorial-caption" class="${orClasses.tutorialCaption}">${escapeHtml(tutorial?.caption ?? "")}</p>
       `;
 
   return `
-    <div part="tutorial" role="dialog" aria-modal="true" aria-label="${escapeHtml(openReceiveCheckoutLabels.tutorialTitlePrefix)} ${escapeHtml(provider.name)}" tabindex="-1">
-      <div part="tutorial-dialog">
-        <div part="tutorial-header">
-          <div part="tutorial-title">
-            <img part="tutorial-header-logo" alt="" src="${escapeHtml(provider.icon)}">
+    <div part="tutorial" class="${orClasses.tutorialModal}" role="dialog" aria-modal="true" aria-label="${escapeHtml(openReceiveCheckoutLabels.tutorialTitlePrefix)} ${escapeHtml(provider.name)}" tabindex="-1">
+      <div part="tutorial-dialog" class="${orClasses.tutorialBox}">
+        <div part="tutorial-header" class="${orClasses.tutorialHeader}">
+          <div part="tutorial-title" class="${orClasses.tutorialTitle}">
+            <img part="tutorial-header-logo" alt="" src="${escapeHtml(provider.icon)}" class="${orClasses.tutorialHeaderLogo}">
             <h3>${escapeHtml(openReceiveCheckoutLabels.tutorialTitlePrefix)} ${escapeHtml(provider.name)}</h3>
           </div>
           <button
             part="tutorial-close"
+            class="${orClasses.tutorialClose}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}=""
             type="button"
             aria-label="Close"
           >X</button>
         </div>
         ${body}
-        <div part="tutorial-steps" aria-hidden="true">
+        <div part="tutorial-steps" class="${orClasses.tutorialSteps}" aria-hidden="true">
           ${Array.from({ length: totalSteps }, (_, index) => `
-            <span part="${index === stepIndex ? "tutorial-step-active" : "tutorial-step"}"></span>
+            <span part="${index === stepIndex ? "tutorial-step-active" : "tutorial-step"}" class="${index === stepIndex ? orClasses.tutorialStepActive : orClasses.tutorialStep}"></span>
           `).join("")}
         </div>
-        <p part="tutorial-progress">Step ${stepIndex + 1} of ${totalSteps}</p>
-        <div part="tutorial-controls">
+        <p part="tutorial-progress" class="${orClasses.tutorialProgress}">Step ${stepIndex + 1} of ${totalSteps}</p>
+        <div part="tutorial-controls" class="${orClasses.tutorialControls}">
           <button
             part="tutorial-nav"
+            class="${orClasses.btn}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}="${escapeHtml(provider.id)}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex}="${previousIndex}"
             type="button"
@@ -884,6 +925,7 @@ function renderTutorialModalHtml(
           >Back</button>
           <button
             part="tutorial-nav"
+            class="${orClasses.btn}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}="${isFinalStep ? "" : escapeHtml(provider.id)}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex}="${nextIndex}"
             type="button"
@@ -899,9 +941,9 @@ function renderCountrySelectHtml(options: {
   readonly selectedCountryCode: string;
 }): string {
   return `
-    <label part="country-select">
-      <span>${escapeHtml(openReceiveCheckoutLabels.chooseCountry)}</span>
-      <select ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.country}="${escapeHtml(options.selectedCountryCode)}">
+    <label part="country-select" class="${orClasses.countrySelect}">
+      <span class="${orClasses.countrySelectLabel}">${escapeHtml(openReceiveCheckoutLabels.chooseCountry)}</span>
+      <select ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.country}="${escapeHtml(options.selectedCountryCode)}" class="${orClasses.countrySelectControl}">
         ${options.countries.map((country) => `
           <option
             value="${escapeHtml(country.code)}"
@@ -950,14 +992,14 @@ function renderElementPaymentStatusHtml(state: CheckoutState): string {
   const countdown =
     status.countdownLabel === undefined
       ? ""
-      : `<small part="countdown">${escapeHtml(status.countdownPrefix)} <strong>${escapeHtml(status.countdownLabel)}</strong></small>`;
+      : `<small part="countdown" class="${orClasses.countdown}">${escapeHtml(status.countdownPrefix)} <strong class="${orClasses.countdownStrong}">${escapeHtml(status.countdownLabel)}</strong></small>`;
 
   return `
-    <div part="status">
-      ${status.waiting ? `<span part="spinner" aria-hidden="true"></span>` : ""}
-      <div>
-        <strong>${escapeHtml(status.title)}</strong>
-        <p>${escapeHtml(status.detail)}</p>
+    <div part="status" class="${orClasses.paymentStatus}">
+      ${status.waiting ? `<span part="spinner" class="${orClasses.spinner}" aria-hidden="true"></span>` : ""}
+      <div class="${orClasses.paymentStatusBody}">
+        <strong class="${orClasses.paymentStatusTitle}">${escapeHtml(status.title)}</strong>
+        <p class="${orClasses.paymentStatusDetail}">${escapeHtml(status.detail)}</p>
         ${countdown}
       </div>
     </div>

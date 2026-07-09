@@ -6,33 +6,33 @@
     <title>OpenReceive Hello Fruit Static</title>
   </head>
   <body>
-    <main class="page">
-      <section class="checkout" aria-labelledby="product-title">
-        <div class="topbar" id="topbar"></div>
+    <main class="page min-h-screen grid justify-items-center content-start p-4 md:p-10 gap-4">
+      <section class="checkout w-full max-w-5xl grid gap-4" aria-labelledby="product-title">
+        <div class="topbar w-full max-w-5xl flex justify-end" id="topbar"></div>
 
-        <div class="product">
-          <img id="product-sticker" alt="" />
+        <div class="flex gap-4 items-center">
+          <img class="w-24 aspect-square" id="product-sticker" alt="" />
           <div>
-            <h1 id="product-title">Hello Fruit</h1>
-            <p id="product-description"></p>
+            <h1 class="text-3xl font-bold" id="product-title">Hello Fruit</h1>
+            <p class="text-base-content/70" id="product-description"></p>
           </div>
         </div>
 
         <div id="currency-panel"></div>
 
-        <div class="fruit-grid" id="fruit-grid"></div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2" id="fruit-grid"></div>
 
-        <button class="primary" id="add-to-cart" type="button">
+        <button class="btn" id="add-to-cart" type="button">
           Add to cart ($2.00)
         </button>
 
         <div id="cart-panel"></div>
-        <button class="primary" disabled id="create-order" type="button">
+        <button class="btn" disabled id="create-order" type="button">
           Create order
         </button>
 
         <div id="checkout-panel"></div>
-        <p class="error" id="error" role="status"></p>
+        <p class="alert alert-error hidden" id="error" role="status"></p>
       </section>
     </main>
     <script type="module" src="/src/client/main.ts"></script>

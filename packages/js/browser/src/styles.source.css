@@ -1,0 +1,18 @@
+@import "tailwindcss";
+@plugin "daisyui" {
+  themes: light --default, dark --prefersdark;
+}
+
+@source "./ui-classes.ts";
+@source "./internal/**/*.{ts,tsx}";
+@source "../react/src/**/*.{ts,tsx}";
+@source "../elements/src/**/*.{ts,tsx,js,mjs}";
+
+/* Shadow-DOM / host bridge for web components */
+:host {
+  display: block;
+}
+
+:host([hidden]) {
+  display: none;
+}

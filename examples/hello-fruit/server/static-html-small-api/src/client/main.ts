@@ -131,7 +131,12 @@ function renderFruitGrid(): void {
   for (const fruit of fruits) {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = fruit.id === selectedFruit.id ? "selected" : "";
+    button.className = [
+      "card card-border bg-base-100 p-3 grid gap-2 text-left cursor-pointer hover:border-primary",
+      fruit.id === selectedFruit.id ? "border-primary ring-2 ring-primary/30" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
     button.addEventListener("click", () => {
       logDemo("fruit.select", "Fruit selected.", {
         fruitId: fruit.id,
@@ -144,6 +149,7 @@ function renderFruitGrid(): void {
     });
 
     const image = document.createElement("img");
+    image.className = "w-full aspect-square";
     image.src = `/${fruit.sticker}`;
     image.alt = "";
 
@@ -151,6 +157,7 @@ function renderFruitGrid(): void {
     label.textContent = fruit.name;
 
     const price = document.createElement("small");
+    price.className = "text-base-content/70";
     price.textContent = formatHelloFruitDisplayPrice(fruit.fiat, selectedCurrency, displayRates);
 
     button.append(image, label, price);
@@ -161,10 +168,12 @@ function renderFruitGrid(): void {
 function renderCurrencyPicker(): void {
   const panel = requireElement("currency-panel");
   const label = document.createElement("label");
-  label.className = "currency-picker";
+  label.className = "form-control w-full";
   const text = document.createElement("span");
+  text.className = "label-text mb-1";
   text.textContent = "Currency";
   const select = document.createElement("select");
+  select.className = "select select-bordered w-full";
   select.value = selectedCurrency;
   select.addEventListener("change", () => {
     logDemo("currency.change", "Currency changed.", {
@@ -246,11 +255,11 @@ function renderCart(): void {
   });
 
   const section = document.createElement("section");
-  section.className = "cart";
+  section.className = "card card-border bg-base-100 p-4 grid gap-2";
   section.setAttribute("aria-label", "Cart");
 
   const heading = document.createElement("div");
-  heading.className = "cart-heading";
+  heading.className = "flex justify-between items-center";
   const title = document.createElement("strong");
   title.textContent = "Cart";
   const count = document.createElement("span");
@@ -261,13 +270,13 @@ function renderCart(): void {
 
   for (const item of items) {
     const row = document.createElement("div");
-    row.className = "cart-row";
+    row.className = "flex justify-between items-center gap-2";
     const name = document.createElement("span");
     name.textContent = item.fruit.name;
     const amount = document.createElement("span");
     amount.textContent = `x${item.quantity}`;
     const remove = document.createElement("button");
-    remove.className = "secondary";
+    remove.className = "btn btn-ghost btn-sm";
     remove.type = "button";
     remove.textContent = "Remove";
     remove.addEventListener("click", () => removeFruitFromCart(item.fruit.id));
@@ -289,11 +298,11 @@ function renderOrder(order: DemoOrder): void {
   });
 
   const section = document.createElement("section");
-  section.className = "cart";
+  section.className = "card card-border bg-base-100 p-4 grid gap-2";
   section.setAttribute("aria-label", "Order");
 
   const heading = document.createElement("div");
-  heading.className = "cart-heading";
+  heading.className = "flex justify-between items-center";
   const title = document.createElement("strong");
   title.textContent = "Order";
   const total = document.createElement("span");
@@ -303,7 +312,7 @@ function renderOrder(order: DemoOrder): void {
 
   for (const item of order.items) {
     const row = document.createElement("div");
-    row.className = "cart-row";
+    row.className = "flex justify-between items-center gap-2";
     const name = document.createElement("span");
     name.textContent = item.name;
     const quantity = document.createElement("span");
@@ -433,7 +442,9 @@ function setError(message: string): void {
       message,
     });
   }
-  requireElement("error").textContent = message;
+  const errorEl = requireElement("error");
+  errorEl.textContent = message;
+  errorEl.classList.toggle("hidden", message === "");
 }
 
 function showStickerModal(fruit: Fruit): void {
@@ -444,20 +455,22 @@ function showStickerModal(fruit: Fruit): void {
   });
 
   const backdrop = document.createElement("div");
-  backdrop.className = "sticker-modal-backdrop";
+  backdrop.className = "modal modal-open";
   backdrop.id = "sticker-modal-backdrop";
 
   const modal = document.createElement("section");
-  modal.className = "sticker-modal";
+  modal.className = "modal-box";
   modal.setAttribute("role", "dialog");
   modal.setAttribute("aria-modal", "true");
   modal.setAttribute("aria-labelledby", "sticker-modal-title");
 
   const image = document.createElement("img");
+  image.className = "w-full max-w-[180px] aspect-square mx-auto";
   image.src = `/${fruit.sticker}`;
   image.alt = "";
 
   const title = document.createElement("h2");
+  title.className = "text-2xl font-bold";
   title.id = "sticker-modal-title";
   title.textContent = "You just got a sticker";
 
@@ -465,16 +478,16 @@ function showStickerModal(fruit: Fruit): void {
   detail.textContent = `${fruit.name} is ready.`;
 
   const actions = document.createElement("div");
-  actions.className = "sticker-modal-actions";
+  actions.className = "modal-action";
 
   const download = document.createElement("a");
-  download.className = "primary sticker-download";
+  download.className = "btn";
   download.href = `/${fruit.sticker}`;
   download.download = `${fruit.id}-sticker.svg`;
   download.textContent = "Download sticker";
 
   const close = document.createElement("button");
-  close.className = "secondary";
+  close.className = "btn btn-ghost";
   close.type = "button";
   close.textContent = "Close";
   close.addEventListener("click", closeStickerModal);

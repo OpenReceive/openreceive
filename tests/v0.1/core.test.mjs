@@ -867,6 +867,7 @@ test("browser owns checkout display-safe labels", () => {
 
   assert.equal(model.lightning_uri, "lightning:lnbc-display");
   assert.equal(model.amountLabel, "200 sats");
+  // Larger amounts use thousands separators (e.g. "19,174 sats").
   assert.equal(model.fiatLabel, "$0.05");
   assert.equal(model.paymentHashLabel, "aaaaaaaa...aaaaaaaa");
   assert.equal(model.transactionStateLabel, "pending");
@@ -1178,9 +1179,9 @@ test("browser owns shared country map geometry", () => {
 
 test("browser owns web-component shadow styles", () => {
   assert.match(openReceiveCheckoutElementStyles, /:host/);
-  assert.match(openReceiveCheckoutElementStyles, /part="wizard"/);
-  assert.match(openReceiveCheckoutElementStyles, /openreceive-spin/);
-  assert.match(openReceiveThemeToggleElementStyles, /data-openreceive-theme-toggle|min-height/);
+  assert.match(openReceiveCheckoutElementStyles, /\.btn/);
+  assert.match(openReceiveCheckoutElementStyles, /loading-spinner|@keyframes/);
+  assert.equal(openReceiveThemeToggleElementStyles, openReceiveCheckoutElementStyles);
 });
 
 test("browser request checkout helper posts SDK-shaped data to an app-owned URL", async () => {
@@ -1895,6 +1896,7 @@ test("browser owns payment wizard DOM contract", () => {
     swapBack: "data-or-swap-back",
     swapQr: "data-or-swap-qr",
     swapCopy: "data-or-swap-copy",
+    swapNetwork: "data-or-swap-network",
     swapRefundForm: "data-or-swap-refund-form",
     swapRefundAddress: "data-or-swap-refund-address",
     swapRefundNonce: "data-or-swap-refund-nonce",

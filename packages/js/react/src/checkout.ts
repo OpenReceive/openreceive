@@ -3,6 +3,7 @@ import {
   OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES,
   OPENRECEIVE_DEFAULT_PREFIX,
   openReceiveCheckoutLabels,
+  orClasses,
   requestCheckout,
   resolveOrderUrlFromPrefix,
   type CheckoutSnapshot,
@@ -120,7 +121,12 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
     return React.createElement(
       "section",
       {
-        className: joinClassNames(className, classNames?.root, "openreceive-checkout-error"),
+        className: joinClassNames(
+          className,
+          classNames?.root,
+          orClasses.creating,
+          "openreceive-checkout-error",
+        ),
         [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.root]: "",
       },
       React.createElement("p", null, "Could not start checkout."),
@@ -128,6 +134,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
         "button",
         {
           type: "button",
+          className: orClasses.btn,
           onClick: () => setAttempt((count) => count + 1),
         },
         "Try again",
@@ -138,11 +145,16 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
   return React.createElement(
     "section",
     {
-      className: joinClassNames(className, classNames?.root, "openreceive-checkout-creating"),
+      className: joinClassNames(
+        className,
+        classNames?.root,
+        orClasses.creating,
+        "openreceive-checkout-creating",
+      ),
       [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.root]: "",
     },
     React.createElement("span", {
-      className: "or-spinner",
+      className: orClasses.spinner,
       "aria-hidden": "true",
     }),
     React.createElement("p", null, "Creating checkout…"),
@@ -218,14 +230,14 @@ function CheckoutView(props: CheckoutProps & { readonly checkout: CheckoutSnapsh
           "div",
           {
             key: "lightning-pane",
-            className: joinClassNames("or-lightning-pane", classNames?.lightningPane),
+            className: joinClassNames(orClasses.lightningPaneDesktop, classNames?.lightningPane),
           },
           React.createElement(QRCodeComponent, {
             key: "qr",
             invoice: checkoutModel.invoice,
             encoder: qrEncoder,
             onError,
-            className: classNames?.qr,
+            className: joinClassNames(orClasses.qr, classNames?.qr),
           }),
           React.createElement(SatsDetail, {
             key: "sats-detail",
@@ -238,7 +250,7 @@ function CheckoutView(props: CheckoutProps & { readonly checkout: CheckoutSnapsh
             "div",
             {
               key: "actions",
-              className: joinClassNames("or-lightning-actions", classNames?.actions),
+              className: joinClassNames(orClasses.actions, classNames?.actions),
               [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.actions]: "",
             },
             React.createElement(CopyButton, {
@@ -256,7 +268,7 @@ function CheckoutView(props: CheckoutProps & { readonly checkout: CheckoutSnapsh
     "section",
     {
       ...sectionProps,
-      className: joinClassNames(className, classNames?.root),
+      className: joinClassNames(className, orClasses.root, classNames?.root),
       [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.root]: "",
       ...theme.attributes,
     },
@@ -278,14 +290,14 @@ function CheckoutView(props: CheckoutProps & { readonly checkout: CheckoutSnapsh
                 "div",
                 {
                   key: "payment-layout",
-                  className: "or-payment-layout",
+                  className: expired ? orClasses.paymentLayoutExpired : orClasses.paymentLayout,
                 },
                 lightningPane,
                 React.createElement(
                   "div",
                   {
                     key: "payment-info",
-                    className: "or-payment-info",
+                    className: orClasses.paymentInfo,
                   },
                   React.createElement(WaitingState, {
                     key: "waiting",
@@ -300,11 +312,15 @@ function CheckoutView(props: CheckoutProps & { readonly checkout: CheckoutSnapsh
                         "div",
                         {
                           key: "countdown",
-                          className: joinClassNames("or-countdown", classNames?.countdown),
+                          className: joinClassNames(orClasses.countdown, classNames?.countdown),
                         },
                         checkoutModel.countdownPrefix,
                         " ",
-                        React.createElement("strong", null, checkoutModel.countdownLabel),
+                        React.createElement(
+                          "strong",
+                          { className: orClasses.countdownStrong },
+                          checkoutModel.countdownLabel,
+                        ),
                       ),
                   React.createElement(InvoiceSummaryComponent, {
                     key: "summary",
@@ -320,13 +336,14 @@ function CheckoutView(props: CheckoutProps & { readonly checkout: CheckoutSnapsh
                         "div",
                         {
                           key: "expired-actions",
-                          className: joinClassNames("or-lightning-actions", classNames?.actions),
+                          className: joinClassNames(orClasses.actions, classNames?.actions),
                           [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.actions]: "",
                         },
                         React.createElement(
                           ButtonComponent ?? "button",
                           {
                             type: "button",
+                            className: orClasses.btn,
                             onClick: startOver,
                           },
                           openReceiveCheckoutLabels.startOver,

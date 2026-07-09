@@ -3,6 +3,7 @@ import {
   OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES,
   OPENRECEIVE_THEME_STORAGE_KEY,
   createOpenReceiveThemeModel,
+  orClasses,
   readOpenReceiveThemePreference,
   writeOpenReceiveThemePreference,
   type OpenReceiveThemePreference,
@@ -86,11 +87,7 @@ export function ThemeToggle(props: ThemeToggleProps): React.ReactElement {
   const componentProps: React.ButtonHTMLAttributes<HTMLButtonElement> & Record<string, unknown> = {
     ...buttonProps,
     "aria-label": themeModel.toggleLabel,
-    className: joinClassNames(
-      "or-theme-toggle-button",
-      `or-theme-toggle-${themeModel.resolvedTheme}`,
-      buttonProps.className,
-    ),
+    className: joinClassNames(orClasses.themeToggle, buttonProps.className),
     title: themeModel.toggleLabel,
     type,
     [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.themeToggle]: "",
@@ -102,29 +99,11 @@ export function ThemeToggle(props: ThemeToggleProps): React.ReactElement {
     },
   };
 
-  const defaultChildren = React.createElement(
-    React.Fragment,
-    null,
-    React.createElement(
-      "span",
-      {
-        "aria-hidden": true,
-        className: "or-theme-toggle-track",
-      },
-      React.createElement("span", {
-        className: "or-theme-toggle-icon or-theme-toggle-icon-light",
-      }),
-    ),
-    React.createElement(
-      "span",
-      {
-        className: "or-theme-toggle-label",
-      },
-      themeModel.toggleLabel,
-    ),
+  return React.createElement(
+    ButtonComponent,
+    componentProps,
+    children ?? themeModel.toggleLabel,
   );
-
-  return React.createElement(ButtonComponent, componentProps, children ?? defaultChildren);
 }
 
 export function ThemeScope(props: ThemeScopeProps): React.ReactElement {

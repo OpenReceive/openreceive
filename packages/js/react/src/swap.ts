@@ -6,11 +6,12 @@ import {
   formatOpenReceiveSwapLimit,
   type OpenReceiveBrowserLogger,
   type OpenReceiveQrEncoder,
+  orClasses,
 } from "@openreceive/browser/internal";
 import * as React from "react";
 import { WaitingState } from "./components.ts";
 import type { OpenReceiveSwapOptionDisplay } from "./types.ts";
-import { copyOpenReceiveText } from "./utils.ts";
+import { copyOpenReceiveText, joinClassNames } from "./utils.ts";
 
 // Short reason to show for an out-of-range swap asset. Prefers a fiat figure
 // ("Minimum payment $10.00") converted from the invoice-side limit using the
@@ -60,7 +61,7 @@ export function renderSwapActions(options: {
   return React.createElement(
     "div",
     {
-      className: "or-swap-actions",
+      className: orClasses.swapActions,
     },
     shown.map((option) => {
       const disabled = option.available === false;
@@ -68,26 +69,26 @@ export function renderSwapActions(options: {
       return React.createElement(
         "div",
         {
-          className: "or-swap-action",
+          className: orClasses.swapAction,
           key: option.pay_in_asset,
         },
         disabled
           ? limitMessage === undefined
             ? null
-            : React.createElement("p", { className: "or-swap-warning" }, limitMessage)
+            : React.createElement("p", { className: orClasses.swapWarning }, limitMessage)
           : option.pay_amount === undefined
             ? null
             : React.createElement(
                 "p",
                 {
-                  className: "or-swap-estimate",
+                  className: orClasses.swapEstimate,
                 },
                 `Estimated ${option.pay_amount} ${option.label} to settle this checkout.`,
               ),
         React.createElement(
           "button",
           {
-            className: "or-swap-start",
+            className: orClasses.swapStart,
             disabled: disabled || options.startingAsset !== null,
             onClick: disabled
               ? undefined
@@ -109,20 +110,20 @@ export function renderSwapPreparing(assetLabel: string): React.ReactElement {
   return React.createElement(
     "section",
     {
-      className: "or-swap-panel",
+      className: orClasses.swapPanel,
     },
     React.createElement(
       "div",
       {
-        className: "or-swap-heading",
+        className: orClasses.swapHeading,
       },
-      React.createElement("strong", null, "Preparing payment address"),
-      React.createElement("span", null, "One moment"),
+      React.createElement("strong", { className: orClasses.swapHeadingTitle }, "Preparing payment address"),
+      React.createElement("span", { className: orClasses.swapHeadingDetail }, "One moment"),
     ),
     React.createElement(
       "p",
       {
-        className: "or-swap-progress",
+        className: orClasses.swapProgress,
       },
       `Getting your ${assetLabel} payment address…`,
     ),
@@ -146,21 +147,25 @@ export function renderSwapUnavailable(
   return React.createElement(
     "section",
     {
-      className: "or-swap-panel",
+      className: orClasses.swapPanel,
     },
     React.createElement(
       "div",
       {
-        className: "or-swap-heading",
+        className: orClasses.swapHeading,
       },
-      React.createElement("strong", null, `${quote.label} unavailable`),
+      React.createElement(
+        "strong",
+        { className: orClasses.swapHeadingTitle },
+        `${quote.label} unavailable`,
+      ),
     ),
-    React.createElement("p", { className: "or-swap-warning" }, detail),
-    range === undefined ? null : React.createElement("p", { className: "or-swap-warning" }, range),
+    React.createElement("p", { className: orClasses.swapWarning }, detail),
+    range === undefined ? null : React.createElement("p", { className: orClasses.swapWarning }, range),
     React.createElement(
       "p",
       {
-        className: "or-swap-progress",
+        className: orClasses.swapProgress,
       },
       "Choose another asset above, or pay the Lightning invoice at the top of this page.",
     ),
@@ -191,7 +196,7 @@ export function renderSwapDepositPanel(options: {
   const backButton = React.createElement(
     "button",
     {
-      className: "or-swap-back",
+      className: orClasses.swapBack,
       onClick: options.onBackToLightning,
       type: "button",
     },
@@ -200,10 +205,10 @@ export function renderSwapDepositPanel(options: {
   const heading = React.createElement(
     "div",
     {
-      className: "or-swap-heading",
+      className: orClasses.swapHeading,
     },
-    React.createElement("strong", null, display.providerStateLabel),
-    React.createElement("span", null, display.providerStateDetail),
+    React.createElement("strong", { className: orClasses.swapHeadingTitle }, display.providerStateLabel),
+    React.createElement("span", { className: orClasses.swapHeadingDetail }, display.providerStateDetail),
   );
   // The "still waiting" states borrow the Lightning section's status card (spinner +
   // title + detail) so the swap panel that replaces it reads the same.
@@ -217,7 +222,7 @@ export function renderSwapDepositPanel(options: {
     return React.createElement(
       "section",
       {
-        className: "or-swap-panel",
+        className: orClasses.swapPanel,
       },
       waitingCard,
       backButton,
@@ -239,7 +244,7 @@ export function renderSwapDepositPanel(options: {
     return React.createElement(
       "section",
       {
-        className: "or-swap-panel",
+        className: orClasses.swapPanel,
       },
       React.createElement(WaitingState, {
         waiting: false,
@@ -251,7 +256,7 @@ export function renderSwapDepositPanel(options: {
         : React.createElement(
             "dl",
             {
-              className: "or-swap-details",
+              className: orClasses.swapDetails,
             },
             detailRows,
           ),
@@ -262,7 +267,7 @@ export function renderSwapDepositPanel(options: {
     return React.createElement(
       "section",
       {
-        className: "or-swap-panel",
+        className: orClasses.swapPanel,
       },
       heading,
       renderSwapSupportDetails(display, options),
@@ -273,13 +278,13 @@ export function renderSwapDepositPanel(options: {
     return React.createElement(
       "section",
       {
-        className: "or-swap-panel",
+        className: orClasses.swapPanel,
       },
       heading,
       React.createElement(
         "p",
         {
-          className: "or-swap-warning",
+          className: orClasses.swapWarning,
         },
         "This payment address expired without a detected payment. Create a new payment address to try again.",
       ),
@@ -292,13 +297,13 @@ export function renderSwapDepositPanel(options: {
     return React.createElement(
       "section",
       {
-        className: "or-swap-panel",
+        className: orClasses.swapPanel,
       },
       heading,
       React.createElement(
         "p",
         {
-          className: "or-swap-warning",
+          className: orClasses.swapWarning,
         },
         `Use a ${display.networkLabel} address you control. Do not paste the deposit address.`,
       ),
@@ -318,13 +323,13 @@ export function renderSwapDepositPanel(options: {
     return React.createElement(
       "section",
       {
-        className: "or-swap-panel",
+        className: orClasses.swapPanel,
       },
       heading,
       React.createElement(
         "dl",
         {
-          className: "or-swap-details",
+          className: orClasses.swapDetails,
         },
         display.refundAddress === undefined
           ? null
@@ -341,12 +346,12 @@ export function renderSwapDepositPanel(options: {
     return React.createElement(
       "section",
       {
-        className: "or-swap-panel",
+        className: orClasses.swapPanel,
       },
       heading,
       React.createElement(
         "p",
-        { className: "or-swap-warning" },
+        { className: orClasses.swapWarning },
         "This payment needs support review.",
       ),
       renderSwapSupportDetails(display, options),
@@ -357,12 +362,12 @@ export function renderSwapDepositPanel(options: {
   return React.createElement(
     "section",
     {
-      className: "or-swap-panel",
+      className: orClasses.swapPanel,
     },
     React.createElement(
       "p",
       {
-        className: "or-swap-instruction",
+        className: orClasses.swapInstruction,
       },
       "Pay ",
       React.createElement("strong", null, `${display.depositAmount} ${display.assetLabel}`),
@@ -376,7 +381,7 @@ export function renderSwapDepositPanel(options: {
     React.createElement(
       "dl",
       {
-        className: "or-swap-details",
+        className: orClasses.swapDetails,
       },
       renderSwapCopyRow("Address", display.depositAddress, options),
       memo === undefined ? null : renderSwapCopyRow("Memo", memo, options),
@@ -387,14 +392,14 @@ export function renderSwapDepositPanel(options: {
     React.createElement(
       "p",
       {
-        className: "or-swap-warning",
+        className: orClasses.swapWarning,
       },
       display.networkWarning,
     ),
     React.createElement(
       "p",
       {
-        className: "or-swap-countdown",
+        className: orClasses.swapCountdown,
       },
       "Payment window ",
       React.createElement("strong", null, display.countdownLabel),
@@ -402,7 +407,7 @@ export function renderSwapDepositPanel(options: {
     React.createElement(
       "p",
       {
-        className: "or-swap-warning",
+        className: orClasses.swapWarning,
       },
       `Pay with one method only. If you already sent ${display.assetLabel}, do not also pay the Lightning invoice.`,
     ),
@@ -423,21 +428,25 @@ function renderSwapFeeBreakdown(
       : `${breakdown.fee} (${breakdown.feePercent})`;
   return React.createElement(
     "div",
-    { className: "or-swap-breakdown" },
-    React.createElement("p", { className: "or-swap-breakdown-title" }, "Payment breakdown"),
+    { className: orClasses.swapBreakdown },
+    React.createElement("p", { className: orClasses.swapBreakdownTitle }, "Payment breakdown"),
     React.createElement(
       "dl",
-      { className: "or-swap-details or-swap-breakdown-rows" },
-      React.createElement("dt", { key: "cart-label" }, "Cart total"),
+      { className: joinClassNames(orClasses.swapDetails, orClasses.swapBreakdownRows) },
+      React.createElement("dt", { key: "cart-label", className: orClasses.swapDetailsDt }, "Cart total"),
       React.createElement("dd", { key: "cart-value" }, breakdown.cartTotal),
-      React.createElement("dt", { key: "send-label" }, "You send"),
+      React.createElement("dt", { key: "send-label", className: orClasses.swapDetailsDt }, "You send"),
       React.createElement("dd", { key: "send-value" }, breakdown.youSend),
-      React.createElement("dt", { key: "fee-label" }, "Swap + network fees"),
+      React.createElement(
+        "dt",
+        { key: "fee-label", className: orClasses.swapDetailsDt },
+        "Swap + network fees",
+      ),
       React.createElement("dd", { key: "fee-value" }, feeValue),
     ),
     React.createElement(
       "p",
-      { className: "or-swap-breakdown-note" },
+      { className: orClasses.swapBreakdownNote },
       "The swap provider's exchange rate and network fees are included in the amount above.",
     ),
   );
@@ -452,14 +461,15 @@ function renderSwapCopyRow(
   },
 ): readonly React.ReactElement[] {
   return [
-    React.createElement("dt", { key: `${label}-label` }, label),
+    React.createElement("dt", { key: `${label}-label`, className: orClasses.swapDetailsDt }, label),
     React.createElement(
       "dd",
-      { key: `${label}-value` },
-      React.createElement("code", null, value),
+      { key: `${label}-value`, className: orClasses.swapDetailsDd },
+      React.createElement("code", { className: orClasses.swapDetailsCode }, value),
       React.createElement(
         "button",
         {
+          className: orClasses.btn,
           onClick: () => {
             void copyOpenReceiveText(value, options.clipboard).catch(options.onError);
           },
@@ -496,10 +506,14 @@ function renderSwapSupportDetails(
   return React.createElement(
     "details",
     {
-      className: "or-swap-support",
+      className: orClasses.swapSupport,
     },
-    React.createElement("summary", null, "Payment details"),
-    React.createElement("dl", { className: "or-swap-details" }, rows),
+    React.createElement("summary", { className: orClasses.swapSupportTitle }, "Payment details"),
+    React.createElement(
+      "div",
+      { className: orClasses.swapSupportContent },
+      React.createElement("dl", { className: orClasses.swapDetails }, rows),
+    ),
   );
 }
 
@@ -527,7 +541,7 @@ function SwapRefundForm(props: {
   return React.createElement(
     "form",
     {
-      className: "or-swap-refund",
+      className: orClasses.swapRefund,
       onSubmit: (event) => {
         event.preventDefault();
         if (address.length === 0 || props.refundNonce === undefined) return;
@@ -543,12 +557,13 @@ function SwapRefundForm(props: {
       : React.createElement(
           "p",
           {
-            className: "or-swap-warning",
+            className: orClasses.swapWarning,
           },
           `Confirm refund to ${props.submittedRefundAddress}.`,
         ),
     React.createElement("input", {
       autoComplete: "off",
+      className: orClasses.swapRefundInput,
       onChange: (event) => setRefundAddress(event.currentTarget.value),
       placeholder: `${props.networkLabel} refund address`,
       required: true,
@@ -558,6 +573,7 @@ function SwapRefundForm(props: {
     React.createElement(
       "button",
       {
+        className: orClasses.btn,
         disabled,
         type: "submit",
       },
@@ -591,7 +607,7 @@ function SwapPayloadQRCode(props: {
 
   return React.createElement("img", {
     alt: "",
-    className: "or-swap-qr",
+    className: orClasses.swapQr,
     src: imageSource,
   });
 }

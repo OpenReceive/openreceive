@@ -8,7 +8,8 @@
     "@openreceive/browser": "0.1.1"
   },
   "peerDependencies": {
-    "react": ">=18.0.0"
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
   },
   "exports": {
     ".": {
@@ -23,6 +24,6 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --clean --target es2022 --out-dir dist --external react && node ../../../tools/package/copy-static.mjs src dist styles.css"
+    "build": "tsup src/index.ts --format esm --dts --clean --target es2022 --out-dir dist --external react --external react-dom && node ../../../tools/package/copy-static.mjs src dist styles.css"
   }
 }

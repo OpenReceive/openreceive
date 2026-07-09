@@ -7,6 +7,7 @@ import {
   formatOpenReceiveAmountCaption,
   openReceiveCheckoutLabels,
   openWallet as openWalletHelper,
+  orClasses,
   type CheckoutPhase,
   type CheckoutStatusModel,
 } from "@openreceive/browser/internal";
@@ -25,7 +26,7 @@ function ClipboardIcon(): React.ReactElement {
   return React.createElement(
     "svg",
     {
-      className: "or-copy-icon",
+      className: orClasses.copyIcon,
       width: 16,
       height: 16,
       viewBox: "0 0 16 16",
@@ -92,6 +93,7 @@ export function CopyInvoiceButton(props: CopyInvoiceButtonProps): React.ReactEle
     ButtonComponent = "button",
     children,
     type = "button",
+    className,
     ...buttonProps
   } = props;
   const [copied, showCopied] = useOpenReceiveTransientValue<boolean>(false);
@@ -100,6 +102,7 @@ export function CopyInvoiceButton(props: CopyInvoiceButtonProps): React.ReactEle
     ButtonComponent,
     {
       ...buttonProps,
+      className: joinClassNames(orClasses.btn, className),
       type,
       onClick: async (event: React.MouseEvent<HTMLButtonElement>) => {
         onClick?.(event);
@@ -140,6 +143,7 @@ export function OpenWalletButton(props: OpenWalletButtonProps): React.ReactEleme
     ButtonComponent = "button",
     children = openReceiveCheckoutLabels.openWallet,
     type = "button",
+    className,
     ...buttonProps
   } = props;
 
@@ -147,6 +151,7 @@ export function OpenWalletButton(props: OpenWalletButtonProps): React.ReactEleme
     ButtonComponent,
     {
       ...buttonProps,
+      className: joinClassNames(orClasses.btn, className),
       type,
       onClick: (event: React.MouseEvent<HTMLButtonElement>) => {
         onClick?.(event);
@@ -166,12 +171,16 @@ export function OpenWalletButton(props: OpenWalletButtonProps): React.ReactEleme
 }
 
 export function PaymentState(props: PaymentStateProps): React.ReactElement {
-  const { state = "pending", ...spanProps } = props;
+  const { state = "pending", className, ...spanProps } = props;
 
   return React.createElement(
     "span",
     {
       ...spanProps,
+      className: joinClassNames(
+        state === "settled" ? orClasses.stateSettled : orClasses.statePending,
+        className,
+      ),
       [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.state]: state,
     },
     state,
@@ -196,19 +205,29 @@ export function WaitingState(props: {
   return React.createElement(
     "div",
     {
-      className: joinClassNames("or-payment-status", props.className),
+      className: joinClassNames(orClasses.paymentStatus, props.className),
     },
     status.waiting
       ? React.createElement("span", {
-          className: "or-spinner",
+          className: orClasses.spinner,
           "aria-hidden": "true",
         })
       : null,
     React.createElement(
       "div",
-      null,
-      React.createElement("strong", null, props.statusTitle ?? status.title),
-      React.createElement("span", null, props.statusDetail ?? status.detail),
+      {
+        className: orClasses.paymentStatusBody,
+      },
+      React.createElement(
+        "strong",
+        { className: orClasses.paymentStatusTitle },
+        props.statusTitle ?? status.title,
+      ),
+      React.createElement(
+        "span",
+        { className: orClasses.paymentStatusDetail },
+        props.statusDetail ?? status.detail,
+      ),
     ),
   );
 }
@@ -228,7 +247,7 @@ export function InvoiceSummary(props: InvoiceSummaryProps): React.ReactElement {
     "div",
     {
       ...divProps,
-      className,
+      className: joinClassNames(orClasses.meta, className),
       [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.meta]: "",
     },
     amountLabel === undefined
@@ -236,7 +255,7 @@ export function InvoiceSummary(props: InvoiceSummaryProps): React.ReactElement {
       : React.createElement(
           "span",
           {
-            className: classNames?.amount,
+            className: joinClassNames(orClasses.metaItem, classNames?.amount),
           },
           amountLabel,
         ),
@@ -245,7 +264,7 @@ export function InvoiceSummary(props: InvoiceSummaryProps): React.ReactElement {
       : React.createElement(
           "span",
           {
-            className: classNames?.fiat,
+            className: joinClassNames(orClasses.metaItem, classNames?.fiat),
           },
           fiatLabel,
         ),
@@ -268,7 +287,7 @@ export function SatsDetail(props: SatsDetailProps): React.ReactElement | null {
     "div",
     {
       ...divProps,
-      className: joinClassNames("or-sats-detail", className),
+      className: joinClassNames(orClasses.satsDetail, className),
     },
     caption,
   );
