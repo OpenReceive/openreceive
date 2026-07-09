@@ -423,7 +423,6 @@ export function buildOpenReceiveMethodGridEntries<T extends { readonly label: st
 
   for (const slot of OPENRECEIVE_METHOD_GRID_ORDER) {
     if (slot.kind === "method") {
-      if (slot.id === "crypto") continue;
       const method = methodsById.get(slot.id);
       if (method === undefined) continue;
       usedMethodIds.add(method.id);
