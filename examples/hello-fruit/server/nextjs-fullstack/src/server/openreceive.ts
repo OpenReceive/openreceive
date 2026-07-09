@@ -162,9 +162,15 @@ export async function prepareOrderResponse(request: Request): Promise<Response> 
 }
 
 /**
- * Options for the mounted OpenReceive router (the app/openreceive/[...openreceive] catch-all).
- * guestCheckout() gates reads on the per-order token; getCheckoutAmount is required and looks the
- * persisted order up by id (null → 404). The create body never carries a client price.
+ * Options for the mounted OpenReceive router (app/openreceive/[...openreceive] catch-all).
+ * Same shape as docs/guides/quickstart-node.md (Next adapter): service + getCheckoutAmount.
+ * guestCheckout(): anonymous create, Tier-2 reads gated by the per-order capability token.
+ * For a signed-in app, swap authorize for withUser instead, e.g.:
+ *   import { withUser } from "@openreceive/http";
+ *   authorize: withUser((request) => currentUserFromMySession(request), {
+ *     ownsOrder: (user, ctx) => orderBelongsTo(user, ctx.resource.order_id),
+ *     isAdmin: (user) => user.admin,
+ *   }),
  */
 export async function openReceiveHttpOptions(): Promise<CreateOpenReceiveHttpHandlerOptions> {
   const { openreceive } = await getOpenReceive();
@@ -247,6 +253,8 @@ export async function createHelloFruitOpenReceive(
     priceCurrencyCount: priceCurrencies.length,
   });
 
+  // Quickstart shape: createOpenReceive({ onPaid }) + mount with getCheckoutAmount.
+  // onPaid may fire more than once — dedupe on checkoutId in a real app.
   const openreceive = await createOpenReceive({
     ...(overrides.client === undefined ? {} : { client: overrides.client }),
     ...(overrides.store === undefined ? {} : { store: overrides.store }),
@@ -255,6 +263,12 @@ export async function createHelloFruitOpenReceive(
     namespace: config?.namespace ?? "hello_fruit",
     priceCurrencies,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
+    onPaid: async ({ orderId, checkoutId }) => {
+      logDemo("openreceive.on_paid", "Checkout settled — fulfill your order here.", {
+        orderId,
+        checkoutId,
+      });
+    },
   });
   logDemo("openreceive.ready", "OpenReceive demo service is ready.", {
     priceCurrencyCount: openreceive.priceCurrencies.length,

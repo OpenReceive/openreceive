@@ -52,6 +52,6 @@ git SHA, image digest, and `deployed_at` metadata for hosted-demo smoke checks.
 Hosted-demo helpers expose `/source`, `/docs`, `/robots.txt`, and
 `/sitemap.xml`.
 
-This demo is a public guest checkout. Production apps that require signed-in or
-session-bound checkout should use their normal app middleware for private
-checkout routes.
+This demo mounts with `guestCheckout()` (anonymous create; reads gated by the
+per-order capability token). For a signed-in app, swap `authorize` for
+`withUser(...)` — see the comment in `src/server/create-server.ts`.

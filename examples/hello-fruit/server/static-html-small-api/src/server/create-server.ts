@@ -58,6 +58,8 @@ export async function createHelloFruitOpenReceive(options: HelloFruitOpenReceive
     priceCurrencyCount: priceCurrencies.length,
   });
 
+  // Quickstart shape: createOpenReceive({ onPaid }) + mount with getCheckoutAmount.
+  // onPaid may fire more than once — dedupe on checkoutId in a real app.
   const openreceive = await createOpenReceive({
     ...(options.client === undefined ? {} : { client: options.client }),
     ...(options.store === undefined ? {} : { store: options.store }),
@@ -66,6 +68,12 @@ export async function createHelloFruitOpenReceive(options: HelloFruitOpenReceive
     namespace: config?.namespace ?? "hello_fruit",
     priceCurrencies,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
+    onPaid: async ({ orderId, checkoutId }) => {
+      logDemo("openreceive.on_paid", "Checkout settled — fulfill your order here.", {
+        orderId,
+        checkoutId,
+      });
+    },
   });
   logDemo("openreceive.ready", "OpenReceive demo service is ready.", {
     priceCurrencyCount: openreceive.priceCurrencies.length,
@@ -87,9 +95,14 @@ export async function createHelloFruitStaticServer(options: HelloFruitOpenReceiv
 
   const { openreceive } = await createHelloFruitOpenReceive(options);
 
-  // Mount the SHIPPED OpenReceive routes at /openreceive (POST /checkouts, POST /orders/:id, ...).
-  // guestCheckout() gates reads on the per-order capability token; getCheckoutAmount is required and
-  // looks the persisted order up by id (null → 404). The create body never carries a client price.
+  // Mount the shipped OpenReceive routes (same shape as docs/guides/quickstart-node.md).
+  // guestCheckout(): anonymous create, Tier-2 reads gated by the per-order capability token.
+  // For a signed-in app, swap authorize for withUser instead, e.g.:
+  //   import { withUser } from "@openreceive/http";
+  //   authorize: withUser((request) => currentUserFromMySession(request), {
+  //     ownsOrder: (user, ctx) => orderBelongsTo(user, ctx.resource.order_id),
+  //     isAdmin: (user) => user.admin,
+  //   }),
   app.use(
     openReceiveExpress({
       service: openreceive,

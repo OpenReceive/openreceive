@@ -41,5 +41,6 @@ the local override is used.
 `/demo-metadata.json` exposes non-secret build metadata for hosted-demo smoke
 checks. It never includes wallet connection strings or NWC query secrets.
 
-Production apps that require signed-in or session-bound checkout should use
-their normal app middleware for private checkout routes.
+This demo mounts with `guestCheckout()` (anonymous create; reads gated by the
+per-order capability token). For a signed-in app, swap `authorize` for
+`withUser(...)` — see the comment in `src/server/openreceive.ts`.

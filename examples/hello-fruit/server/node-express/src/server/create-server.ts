@@ -4,9 +4,10 @@ import type {
   OpenReceiveReceiveNwcClient,
   OpenReceiveSourcedPriceProvider,
 } from "@openreceive/core";
+import { openReceiveExpress } from "@openreceive/express";
+import { guestCheckout } from "@openreceive/http";
 import {
   createOpenReceive,
-  createOrderAccessTokenManager,
   OpenReceiveServiceError,
   readOpenReceiveConfigFile,
 } from "@openreceive/node";
@@ -22,10 +23,10 @@ import {
 import { createHelloFruitDemoMetadata } from "../../../../shared/demo-metadata.ts";
 import {
   HelloFruitDemoOrderError,
+  getHelloFruitCheckoutAmount,
   prepareHelloFruitOrder,
 } from "../../../../shared/demo-order.ts";
 import { mountHelloFruitHostedDemoRoutes } from "../../../../shared/hosted-demo-routes.ts";
-import { mountHelloFruitOpenReceiveRouter } from "./openreceive-router.ts";
 
 const DEMO_ID = "node-express";
 const logDemo = createHelloFruitDemoServerLogger(DEMO_ID);
@@ -57,6 +58,8 @@ export async function createHelloFruitOpenReceive(options: HelloFruitOpenReceive
     priceCurrencyCount: priceCurrencies.length,
   });
 
+  // Quickstart shape: createOpenReceive({ onPaid }) + mount with getCheckoutAmount.
+  // onPaid may fire more than once — dedupe on checkoutId in a real app.
   const openreceive = await createOpenReceive({
     ...(options.client === undefined ? {} : { client: options.client }),
     ...(options.store === undefined ? {} : { store: options.store }),
@@ -65,6 +68,12 @@ export async function createHelloFruitOpenReceive(options: HelloFruitOpenReceive
     namespace: config?.namespace ?? "hello_fruit",
     priceCurrencies,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
+    onPaid: async ({ orderId, checkoutId }) => {
+      logDemo("openreceive.on_paid", "Checkout settled — fulfill your order here.", {
+        orderId,
+        checkoutId,
+      });
+    },
   });
   logDemo("openreceive.ready", "OpenReceive demo service is ready.", {
     priceCurrencyCount: openreceive.priceCurrencies.length,
@@ -86,16 +95,21 @@ export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptio
 
   const { openreceive } = await createHelloFruitOpenReceive(options);
 
-  // Per-order capability tokens are minted here and verified on reads. The same manager backs the
-  // mounted router and the legacy /order route so their tokens agree.
-  const tokens = createOrderAccessTokenManager(openreceive.store, {
-    namespace: openreceive.namespace,
-  });
-
-  // Mount the SHIPPED OpenReceive routes at /openreceive (POST /checkouts, POST /orders/:id, ...).
-  // This is the production-grade surface: real authorize + getCheckoutAmount + capability tokens, with
-  // no hand-written invoice plumbing. See ./openreceive-router.ts for the two authorize examples.
-  mountHelloFruitOpenReceiveRouter(app, openreceive, tokens);
+  // Mount the shipped OpenReceive routes (same shape as docs/guides/quickstart-node.md).
+  // guestCheckout(): anonymous create, Tier-2 reads gated by the per-order capability token.
+  // For a signed-in app, swap authorize for withUser instead, e.g.:
+  //   import { withUser } from "@openreceive/http";
+  //   authorize: withUser((request) => currentUserFromMySession(request), {
+  //     ownsOrder: (user, ctx) => orderBelongsTo(user, ctx.resource.order_id),
+  //     isAdmin: (user) => user.admin,
+  //   }),
+  app.use(
+    openReceiveExpress({
+      service: openreceive,
+      authorize: guestCheckout(),
+      getCheckoutAmount: ({ orderId }) => getHelloFruitCheckoutAmount(openreceive, orderId),
+    }),
+  );
 
   logDemo("server.routes", "Mounting demo routes.", {
     staticStickers: "/stickers",
@@ -152,9 +166,8 @@ export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptio
   });
 
   // App order step (NOT an OpenReceive route): validate the cart, compute the authoritative total,
-  // and PERSIST the order so the mounted router's getCheckoutAmount can look it up. It no longer calls
-  // getOrCreateCheckout — POST /openreceive/checkouts does that, and the self-contained <Checkout
-  // orderId> component drives it.
+  // and PERSIST the order so getCheckoutAmount can look it up. POST /openreceive/checkouts creates
+  // the checkout; <Checkout orderId> drives it.
   app.post("/prepare_order", async (req, res, next) => {
     const startedAt = Date.now();
     try {
