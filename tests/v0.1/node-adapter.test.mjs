@@ -291,7 +291,7 @@ test("receive client logs every NWC endpoint hit through the logger hook", async
   }
 
   const makeInvoiceRequested = entries.find((e) => e.event === "nwc.make_invoice.requested");
-  assert.equal(makeInvoiceRequested.level, "info");
+  assert.equal(makeInvoiceRequested.level, "debug");
   assert.equal(makeInvoiceRequested.method, "make_invoice");
   assert.equal(makeInvoiceRequested.amount_msats, 200000);
 

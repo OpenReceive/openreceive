@@ -147,7 +147,7 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
 
   async preflight(): Promise<WalletCapabilitySummary> {
     const client = await this.getClient();
-    this.#log("info", "nwc.get_info.requested", "Calling NWC wallet get_info.", {
+    this.#log("debug", "nwc.get_info.requested", "Calling NWC wallet get_info.", {
       method: "get_info"
     });
     const startedAt = Date.now();
@@ -169,7 +169,7 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
     }
     const summary = summarizeWalletCapabilities(this.connection, rawInfo);
 
-    this.#log("info", "nwc.get_info.completed", "NWC wallet get_info completed.", {
+    this.#log("debug", "nwc.get_info.completed", "NWC wallet get_info completed.", {
       method: "get_info",
       duration_ms: Date.now() - startedAt,
       methods: summary.methods,
@@ -209,7 +209,7 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
     await this.ensurePreflight();
     validateMakeInvoiceRequest(request);
 
-    this.#log("info", "nwc.make_invoice.requested", "Calling NWC wallet make_invoice.", {
+    this.#log("debug", "nwc.make_invoice.requested", "Calling NWC wallet make_invoice.", {
       method: "make_invoice",
       amount_msats: Number(request.amount_msats),
       ...(request.expiry === undefined ? {} : { expiry: request.expiry }),
@@ -237,7 +237,7 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
     }
 
     const result = normalizeMakeInvoiceResult(rawResult);
-    this.#log("info", "nwc.make_invoice.completed", "NWC wallet make_invoice completed.", {
+    this.#log("debug", "nwc.make_invoice.completed", "NWC wallet make_invoice completed.", {
       method: "make_invoice",
       duration_ms: Date.now() - startedAt,
       payment_hash: result.payment_hash,
@@ -250,7 +250,7 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
     await this.ensurePreflight();
     validateListTransactionsRequest(request);
 
-    this.#log("info", "nwc.list_transactions.requested", "Calling NWC wallet list_transactions.", {
+    this.#log("debug", "nwc.list_transactions.requested", "Calling NWC wallet list_transactions.", {
       method: "list_transactions",
       ...(request.from === undefined ? {} : { from: request.from }),
       ...(request.until === undefined ? {} : { until: request.until }),
@@ -280,7 +280,7 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
     }
 
     const result = normalizeListTransactionsResult(rawResult);
-    this.#log("info", "nwc.list_transactions.completed", "NWC wallet list_transactions completed.", {
+    this.#log("debug", "nwc.list_transactions.completed", "NWC wallet list_transactions completed.", {
       method: "list_transactions",
       duration_ms: Date.now() - startedAt,
       transaction_count: result.transactions.length

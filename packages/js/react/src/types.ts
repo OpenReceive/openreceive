@@ -135,6 +135,7 @@ export interface CheckoutClassNames extends InvoiceSummaryClassNames {
   readonly qr?: string;
   readonly satsDetail?: string;
   readonly lightningPane?: string;
+  readonly invoiceTitle?: string;
   readonly details?: string;
   readonly waiting?: string;
   readonly countdown?: string;

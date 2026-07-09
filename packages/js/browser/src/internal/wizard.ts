@@ -335,18 +335,15 @@ export function getOpenReceiveNetworkIcon(networkLabel: string): string {
 }
 
 /**
- * Icon for a swap pay-in option. Multi-network assets (USDT) use the network icon so the
- * picker can show Tron/Solana/Ethereum instead of a generic coin mark.
+ * Icon for a swap pay-in option card. Always the token/coin mark (USDT, USDC, SOL, …).
+ * Network marks (Tron/Solana/Ethereum) belong only in the network dropdown via
+ * {@link getOpenReceiveNetworkIcon}.
  */
 export function getOpenReceiveSwapOptionIcon(option: {
   readonly label: string;
-  readonly network_label: string;
+  readonly network_label?: string;
 }): string {
-  const label = option.label.trim().toLowerCase();
-  if (label === "usdt" || label === "usdc") {
-    return getOpenReceiveNetworkIcon(option.network_label);
-  }
-  return getOpenReceiveAssetIcon(label);
+  return getOpenReceiveAssetIcon(option.label.trim().toLowerCase());
 }
 
 export interface OpenReceiveSwapMethodGroup<T extends { readonly label: string }> {

@@ -994,8 +994,10 @@ test("startSwap surfaces a 409 (not a 500) when a stale reserved attempt is repl
 
 test("swapOptions catalogs assets and swapQuote quotes one selected asset", async () => {
   const swapProvider = new FakeSwapProvider();
+  const logs = [];
   const { openreceive } = await createHarness({
     swap: { providers: [swapProvider] },
+    logger: (entry) => logs.push(entry),
   });
   await openreceive.createCheckout({
     orderId: "order-swap-region",
@@ -1019,6 +1021,19 @@ test("swapOptions catalogs assets and swapQuote quotes one selected asset", asyn
   assert.deepEqual(
     swapProvider.quoteInputs.map((input) => input.payInAsset).sort(),
     ["ETH_ETH", "SOL_SOL", "USDT_TRON"],
+  );
+  const resolvedLog = logs.find((entry) => entry.event === "swap.options.resolved");
+  assert.notEqual(resolvedLog, undefined);
+  assert.equal(resolvedLog.level, "debug");
+  assert.equal(resolvedLog.options, undefined);
+  assert.equal(resolvedLog.option_count, options.options.length);
+  assert.equal(
+    resolvedLog.available_count,
+    options.options.filter((option) => option.available).length,
+  );
+  assert.deepEqual(
+    [...resolvedLog.pay_in_assets].sort(),
+    options.options.map((option) => option.pay_in_asset).sort(),
   );
 
   // A second listing serves limits from the durable cache — no new probes.

@@ -231,127 +231,138 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
   return (
     <ThemeScope
       as="section"
-      className="checkout w-full max-w-5xl grid gap-4"
+      className="checkout w-full max-w-5xl grid gap-3"
       themeToggle
       topbarClassName="topbar w-full max-w-5xl flex justify-end"
     >
-      <div className="flex gap-4 items-center">
+      <div className="flex gap-3 items-center">
         {selectedFruit === undefined ? null : (
-          <img className="w-24 aspect-square" src={`/stickers/${selectedFruit.id}.svg`} alt="" />
+          <img className="w-16 aspect-square" src={`/stickers/${selectedFruit.id}.svg`} alt="" />
         )}
-        <div>
-          <h1 className="text-3xl font-bold">{product.name}</h1>
-          <p className="text-base-content/70">{product.description}</p>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold leading-tight">{product.name}</h1>
+          <p className="text-base-content/70 text-sm">{product.description}</p>
         </div>
       </div>
 
-      <label className="form-control w-full">
-        <span className="label-text mb-1">Currency</span>
-        <select
-          className="select select-bordered w-full"
-          value={currency}
-          onChange={(event) => {
-            logDemo("currency.change", "Currency changed.", {
-              from: currency,
-              to: event.target.value,
-            });
-            setCurrency(event.target.value);
-          }}
-        >
-          {currencyOptions.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
-      </label>
+      {order === undefined ? (
+        <>
+          <label className="form-control w-full max-w-xs">
+            <span className="label-text mb-1">Currency</span>
+            <select
+              className="select select-bordered w-full"
+              value={currency}
+              onChange={(event) => {
+                logDemo("currency.change", "Currency changed.", {
+                  from: currency,
+                  to: event.target.value,
+                });
+                setCurrency(event.target.value);
+              }}
+            >
+              {currencyOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        {fruits.map((fruit) => (
-          <button
-            className={fruitCardClass(fruit.id === fruitId)}
-            key={fruit.id}
-            onClick={() => {
-              logDemo("fruit.select", "Fruit selected.", {
-                fruitId: fruit.id,
-                fruitName: fruit.name,
-              });
-              setFruitId(fruit.id);
-            }}
-            type="button"
-          >
-            <img className="w-full aspect-square" src={`/stickers/${fruit.id}.svg`} alt="" />
-            <span>{fruit.name}</span>
-            <small className="text-base-content/70">
-              {formatHelloFruitDisplayPrice(fruit.fiat, currency, rates)}
-            </small>
-          </button>
-        ))}
-      </div>
-
-      <button className="btn" onClick={addSelectedFruitToCart} type="button">
-        {createCheckoutLabel}
-      </button>
-
-      {order !== undefined || cartItems.length === 0 ? null : (
-        <section className="card card-border bg-base-100 p-4 grid gap-2" aria-label="Cart">
-          <div className="flex justify-between items-center">
-            <strong>Cart</strong>
-            <span>
-              {cartQuantity} item{cartQuantity === 1 ? "" : "s"}
-            </span>
-          </div>
-          {cartItems.map((item) => (
-            <div className="flex justify-between items-center gap-2" key={item.fruit.id}>
-              <span>{item.fruit.name}</span>
-              <span>x{item.quantity}</span>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            {fruits.map((fruit) => (
               <button
-                className="btn btn-ghost btn-sm"
-                onClick={() => removeFruitFromCart(item.fruit.id)}
+                className={fruitCardClass(fruit.id === fruitId)}
+                key={fruit.id}
+                onClick={() => {
+                  logDemo("fruit.select", "Fruit selected.", {
+                    fruitId: fruit.id,
+                    fruitName: fruit.name,
+                  });
+                  setFruitId(fruit.id);
+                }}
                 type="button"
               >
-                Remove
+                <img className="w-full aspect-square" src={`/stickers/${fruit.id}.svg`} alt="" />
+                <span>{fruit.name}</span>
+                <small className="text-base-content/70">
+                  {formatHelloFruitDisplayPrice(fruit.fiat, currency, rates)}
+                </small>
               </button>
-            </div>
-          ))}
-        </section>
-      )}
+            ))}
+          </div>
 
-      {order === undefined ? (
-        <button
-          className="btn"
-          disabled={status === "creating" || cartItems.length === 0}
-          onClick={createOrder}
-          type="button"
-        >
-          {status === "creating"
-            ? helloFruitDemoLabels.creatingOrder
-            : helloFruitDemoLabels.createOrder}
-        </button>
+          <button className="btn" onClick={addSelectedFruitToCart} type="button">
+            {createCheckoutLabel}
+          </button>
+
+          {cartItems.length === 0 ? null : (
+            <>
+              <section className="card card-border bg-base-100 px-3 py-2.5 grid gap-1.5" aria-label="Cart">
+                <div className="flex justify-between items-center text-sm">
+                  <strong>Cart</strong>
+                  <span>
+                    {cartQuantity} item{cartQuantity === 1 ? "" : "s"}
+                  </span>
+                </div>
+                {cartItems.map((item) => (
+                  <div className="flex justify-between items-center gap-2 text-sm" key={item.fruit.id}>
+                    <span>
+                      {item.fruit.name} ×{item.quantity}
+                    </span>
+                    <button
+                      className="btn btn-ghost btn-xs"
+                      onClick={() => removeFruitFromCart(item.fruit.id)}
+                      type="button"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </section>
+
+              <button
+                className="btn"
+                disabled={status === "creating"}
+                onClick={createOrder}
+                type="button"
+              >
+                {status === "creating"
+                  ? helloFruitDemoLabels.creatingOrder
+                  : helloFruitDemoLabels.createOrder}
+              </button>
+            </>
+          )}
+        </>
       ) : (
-        <button className="btn btn-ghost" onClick={startOver} type="button">
-          Start over
-        </button>
-      )}
-
-      {order === undefined ? null : (
-        <div className="grid gap-4">
-          <section className="card card-border bg-base-100 p-4 grid gap-2" aria-label="Order">
-            <div className="flex justify-between items-center">
-              <strong>Order</strong>
-              <span>{formatHelloFruitFiat(order.total_amount)}</span>
+        <div className="grid gap-3">
+          <section className="card card-border bg-base-200 px-3 py-2.5 grid gap-1" aria-label="Order">
+            <div className="flex justify-between items-baseline gap-3">
+              <strong className="text-sm">Order</strong>
+              <span className="font-semibold">{formatHelloFruitFiat(order.total_amount)}</span>
             </div>
             {order.items.map((item) => (
-              <div className="flex justify-between items-center gap-2" key={item.product_id}>
-                <span>{item.name}</span>
-                <span>x{item.quantity}</span>
-                <span>{order.status === "paid" ? "Paid" : "Pending"}</span>
+              <div
+                className="flex justify-between items-baseline gap-3 text-sm text-base-content/80"
+                key={item.product_id}
+              >
+                <span>
+                  {item.name} ×{item.quantity}
+                </span>
+                <span className="text-base-content/60">
+                  {order.status === "paid" ? "Paid" : "Awaiting payment"}
+                </span>
               </div>
             ))}
+            <div className="card-actions pt-1">
+              <button className="btn btn-sm" onClick={startOver} type="button">
+                Start over
+              </button>
+            </div>
           </section>
           {/* Self-contained: given just orderId (prefix defaults to /openreceive) it creates the
               checkout, polls, and drives swaps itself — the app writes no OpenReceive routes. */}
           <Checkout
+            className="demo-checkout"
             orderId={order.uuid}
             logger={logOpenReceive}
             onError={(cause) => {
@@ -362,11 +373,6 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
             }}
             onSettled={onSettled}
             onStartOver={startOver}
-            classNames={{
-              root: "demo-checkout grid gap-4 md:grid-cols-[256px_minmax(0,1fr)] md:items-start",
-              actions: "flex flex-wrap gap-2",
-              invoice: "textarea textarea-bordered w-full min-h-[86px]",
-            }}
           />
         </div>
       )}

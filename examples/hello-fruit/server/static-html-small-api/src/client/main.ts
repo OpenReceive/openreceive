@@ -168,7 +168,7 @@ function renderFruitGrid(): void {
 function renderCurrencyPicker(): void {
   const panel = requireElement("currency-panel");
   const label = document.createElement("label");
-  label.className = "form-control w-full";
+  label.className = "form-control w-full max-w-xs";
   const text = document.createElement("span");
   text.className = "label-text mb-1";
   text.textContent = "Currency";
@@ -196,6 +196,26 @@ function renderCurrencyPicker(): void {
   panel.replaceChildren(label);
 }
 
+function setCheckoutMode(mode: "shop" | "pay"): void {
+  requireElement("shop-panel").classList.toggle("hidden", mode !== "shop");
+  requireElement("pay-panel").classList.toggle("hidden", mode !== "pay");
+}
+
+function startOver(): void {
+  logDemo("checkout.start_over", "Resetting static demo to shop mode.");
+  currentOrder = undefined;
+  purchasedFruit = undefined;
+  completedOrderId = "";
+  cart = {};
+  closeStickerModal();
+  setError("");
+  requireElement("order-panel").replaceChildren();
+  requireElement("checkout-panel").replaceChildren();
+  setCheckoutMode("shop");
+  renderFruitGrid();
+  renderCreateOrderControls();
+}
+
 function renderCreateOrderControls(): void {
   const addButton = requireElement<HTMLButtonElement>("add-to-cart");
   addButton.textContent = formatHelloFruitBuyNowLabel(
@@ -206,6 +226,7 @@ function renderCreateOrderControls(): void {
   const orderButton = requireElement<HTMLButtonElement>("create-order");
   const cartQuantity = cartItems().reduce((total, item) => total + item.quantity, 0);
   orderButton.disabled = cartQuantity === 0;
+  orderButton.classList.toggle("hidden", cartQuantity === 0);
   orderButton.textContent = helloFruitDemoLabels.createOrder;
   logDemo("controls.render", "Rendered cart and order controls.", {
     selectedFruitId: selectedFruit.id,
@@ -255,11 +276,11 @@ function renderCart(): void {
   });
 
   const section = document.createElement("section");
-  section.className = "card card-border bg-base-100 p-4 grid gap-2";
+  section.className = "card card-border bg-base-100 px-3 py-2.5 grid gap-1.5";
   section.setAttribute("aria-label", "Cart");
 
   const heading = document.createElement("div");
-  heading.className = "flex justify-between items-center";
+  heading.className = "flex justify-between items-center text-sm";
   const title = document.createElement("strong");
   title.textContent = "Cart";
   const count = document.createElement("span");
@@ -270,17 +291,15 @@ function renderCart(): void {
 
   for (const item of items) {
     const row = document.createElement("div");
-    row.className = "flex justify-between items-center gap-2";
+    row.className = "flex justify-between items-center gap-2 text-sm";
     const name = document.createElement("span");
-    name.textContent = item.fruit.name;
-    const amount = document.createElement("span");
-    amount.textContent = `x${item.quantity}`;
+    name.textContent = `${item.fruit.name} ×${item.quantity}`;
     const remove = document.createElement("button");
-    remove.className = "btn btn-ghost btn-sm";
+    remove.className = "btn btn-ghost btn-xs";
     remove.type = "button";
     remove.textContent = "Remove";
     remove.addEventListener("click", () => removeFruitFromCart(item.fruit.id));
-    row.append(name, amount, remove);
+    row.append(name, remove);
     section.append(row);
   }
 
@@ -288,7 +307,7 @@ function renderCart(): void {
 }
 
 function renderOrder(order: DemoOrder): void {
-  const panel = requireElement("cart-panel");
+  const panel = requireElement("order-panel");
   panel.replaceChildren();
   logDemo("order.render", "Rendering order summary.", {
     orderId: order.uuid,
@@ -298,32 +317,44 @@ function renderOrder(order: DemoOrder): void {
   });
 
   const section = document.createElement("section");
-  section.className = "card card-border bg-base-100 p-4 grid gap-2";
+  section.className = "card card-border bg-base-200 px-3 py-2.5 grid gap-1";
   section.setAttribute("aria-label", "Order");
 
   const heading = document.createElement("div");
-  heading.className = "flex justify-between items-center";
+  heading.className = "flex justify-between items-baseline gap-3";
   const title = document.createElement("strong");
+  title.className = "text-sm";
   title.textContent = "Order";
   const total = document.createElement("span");
+  total.className = "font-semibold";
   total.textContent = formatHelloFruitFiat(order.total_amount);
   heading.append(title, total);
   section.append(heading);
 
   for (const item of order.items) {
     const row = document.createElement("div");
-    row.className = "flex justify-between items-center gap-2";
+    row.className = "flex justify-between items-baseline gap-3 text-sm text-base-content/80";
     const name = document.createElement("span");
-    name.textContent = item.name;
-    const quantity = document.createElement("span");
-    quantity.textContent = `x${item.quantity}`;
+    name.textContent = `${item.name} ×${item.quantity}`;
     const state = document.createElement("span");
-    state.textContent = order.status === "paid" ? "Paid" : "Pending";
-    row.append(name, quantity, state);
+    state.className = "text-base-content/60";
+    state.textContent = order.status === "paid" ? "Paid" : "Awaiting payment";
+    row.append(name, state);
     section.append(row);
   }
 
+  const actions = document.createElement("div");
+  actions.className = "card-actions pt-1";
+  const startOverButton = document.createElement("button");
+  startOverButton.className = "btn btn-sm";
+  startOverButton.type = "button";
+  startOverButton.textContent = "Start over";
+  startOverButton.addEventListener("click", startOver);
+  actions.append(startOverButton);
+  section.append(actions);
+
   panel.append(section);
+  setCheckoutMode("pay");
 }
 
 function cartItems(): { fruit: Fruit; quantity: number }[] {
@@ -334,8 +365,9 @@ function cartItems(): { fruit: Fruit; quantity: number }[] {
 
 function setOrderButtonState(state: "idle" | "creating"): void {
   const button = requireElement<HTMLButtonElement>("create-order");
-  button.disabled = state === "creating" || cartItems().length === 0;
-  button.textContent = formatHelloFruitBuyNowLabel(selectedFruit.fiat);
+  const empty = cartItems().length === 0;
+  button.disabled = state === "creating" || empty;
+  button.classList.toggle("hidden", empty);
   button.textContent =
     state === "creating" ? helloFruitDemoLabels.creatingOrder : helloFruitDemoLabels.createOrder;
 }
@@ -431,6 +463,10 @@ function renderCheckout(orderId: string): void {
     currentOrder = { ...currentOrder, status: "paid" };
     renderOrder(currentOrder);
     showStickerModal(purchasedFruit);
+  });
+
+  checkoutElement.addEventListener(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.startOver, () => {
+    startOver();
   });
 
   panel.replaceChildren(checkoutElement);

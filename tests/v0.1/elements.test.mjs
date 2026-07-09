@@ -37,11 +37,14 @@ test("elements render display-safe checkout HTML", () => {
 
   assert.doesNotMatch(html, /lightning:lnbc-test/);
   assert.match(html, /data-theme="dark"/);
+  assert.match(html, /Bitcoin Lightning invoice/);
   assert.match(html, /Waiting for payment/);
-  assert.match(html, />\$0\.05</);
+  // Fiat amount lives under the QR caption (not a duplicate meta badge while pending).
+  assert.match(html, /\$0\.05/);
   assert.match(html, /Invoice expires in/);
   assert.match(html, /200 sats/);
-  assert.match(html, /pending/);
+  // Pending status is conveyed by WaitingState; avoid a redundant "pending" badge.
+  assert.doesNotMatch(html, /part="state"/);
   assert.doesNotMatch(html, /aaaaaaaa\.\.\.aaaaaaaa/);
   assert.doesNotMatch(html, /<textarea/);
   assert.doesNotMatch(html, /lnbc-test/);
@@ -245,7 +248,7 @@ function escapeRegExp(value) {
 test("elements format sat and msat amounts", () => {
   assert.equal(formatMsats(1000), "1 sat");
   assert.equal(formatMsats(2000), "2 sats");
-  assert.equal(formatMsats(1500), "1500 msats");
+  assert.equal(formatMsats(1500), "1,500 msats");
   assert.throws(() => formatMsats(-1), /non-negative safe integer/);
 });
 

@@ -6,6 +6,10 @@ export default defineConfig({
   server: {
     fs: {
       allow: ["../../../.."]
+    },
+    // SQLite WAL/SHM under .openreceive must not trigger full page reloads mid-checkout.
+    watch: {
+      ignored: ["**/.openreceive/**"]
     }
   },
   plugins: [

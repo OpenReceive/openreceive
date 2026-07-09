@@ -154,24 +154,22 @@ export async function getSwapOptions(
     }),
   );
 
-  // Diagnostic: how availability resolved per asset for this invoice amount. Remove
-  // once the disabled-asset behavior is confirmed against the live provider.
+  const unavailableOptions = options.filter((option) => !option.available);
   emitLog(
     context.options,
-    "info",
+    "debug",
     "swap.options.resolved",
     "Resolved swap pay options with availability.",
     {
       order_id: orderId,
       amount_msats: amountMsats,
-      options: options.map((option) => ({
+      option_count: options.length,
+      available_count: options.length - unavailableOptions.length,
+      unavailable_count: unavailableOptions.length,
+      pay_in_assets: options.map((option) => option.pay_in_asset),
+      unavailable: unavailableOptions.map((option) => ({
         pay_in_asset: option.pay_in_asset,
-        available: option.available,
-        unavailable_reason: option.unavailable_reason,
-        minimum_invoice_amount_msats: option.minimum_invoice_amount_msats,
-        maximum_invoice_amount_msats: option.maximum_invoice_amount_msats,
-        minimum_pay_amount: option.minimum_pay_amount,
-        maximum_pay_amount: option.maximum_pay_amount,
+        reason: option.unavailable_reason,
       })),
     },
   );

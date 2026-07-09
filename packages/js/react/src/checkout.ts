@@ -216,8 +216,10 @@ function CheckoutView(props: CheckoutProps & { readonly checkout: CheckoutSnapsh
   // section entirely, so hide the Lightning QR, status, countdown, summary, and copy
   // action. Never hide when expired — that path still shows the Lightning "Start over".
   const hideLightning = swapFocused && !expired;
-  const summaryAmountLabel =
-    checkoutModel.fiatLabel === undefined ? checkoutModel.amountLabel : undefined;
+  // Amount/fiat already appear under the QR; pending is covered by WaitingState.
+  // Keep the meta row only for terminal states that need a compact badge.
+  const showSummaryMeta =
+    checkoutModel.status === "settled" || checkoutModel.status === "expired";
   const fiatCurrency = checkoutModel.fiat_quote?.fiat?.currency;
   const startOver = () => {
     onStartOver?.();
@@ -230,7 +232,7 @@ function CheckoutView(props: CheckoutProps & { readonly checkout: CheckoutSnapsh
           "div",
           {
             key: "lightning-pane",
-            className: joinClassNames(orClasses.lightningPaneDesktop, classNames?.lightningPane),
+            className: joinClassNames(orClasses.lightningPane, classNames?.lightningPane),
           },
           React.createElement(QRCodeComponent, {
             key: "qr",
@@ -246,22 +248,6 @@ function CheckoutView(props: CheckoutProps & { readonly checkout: CheckoutSnapsh
             fiatCurrency,
             className: classNames?.satsDetail,
           }),
-          React.createElement(
-            "div",
-            {
-              key: "actions",
-              className: joinClassNames(orClasses.actions, classNames?.actions),
-              [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.actions]: "",
-            },
-            React.createElement(CopyButton, {
-              invoice: checkoutModel.invoice,
-              copyInvoice: checkoutModel.copyInvoice,
-              onError,
-              logger,
-              ButtonComponent,
-              className: classNames?.copyButton,
-            }),
-          ),
         );
 
   return React.createElement(
@@ -299,6 +285,19 @@ function CheckoutView(props: CheckoutProps & { readonly checkout: CheckoutSnapsh
                     key: "payment-info",
                     className: orClasses.paymentInfo,
                   },
+                  expired
+                    ? null
+                    : React.createElement(
+                        "p",
+                        {
+                          key: "invoice-title",
+                          className: joinClassNames(
+                            orClasses.invoiceTitle,
+                            classNames?.invoiceTitle,
+                          ),
+                        },
+                        openReceiveCheckoutLabels.bitcoinLightningInvoice,
+                      ),
                   React.createElement(WaitingState, {
                     key: "waiting",
                     waiting: checkoutModel.waiting,
@@ -322,15 +321,15 @@ function CheckoutView(props: CheckoutProps & { readonly checkout: CheckoutSnapsh
                           checkoutModel.countdownLabel,
                         ),
                       ),
-                  React.createElement(InvoiceSummaryComponent, {
-                    key: "summary",
-                    amountLabel: summaryAmountLabel,
-                    fiatLabel: checkoutModel.fiatLabel,
-                    status: checkoutModel.status,
-                    PaymentStateComponent,
-                    className: classNames?.summary,
-                    classNames,
-                  }),
+                  showSummaryMeta
+                    ? React.createElement(InvoiceSummaryComponent, {
+                        key: "summary",
+                        status: checkoutModel.status,
+                        PaymentStateComponent,
+                        className: classNames?.summary,
+                        classNames,
+                      })
+                    : null,
                   expired
                     ? React.createElement(
                         "div",
@@ -349,7 +348,22 @@ function CheckoutView(props: CheckoutProps & { readonly checkout: CheckoutSnapsh
                           openReceiveCheckoutLabels.startOver,
                         ),
                       )
-                    : null,
+                    : React.createElement(
+                        "div",
+                        {
+                          key: "actions",
+                          className: joinClassNames(orClasses.actions, classNames?.actions),
+                          [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.actions]: "",
+                        },
+                        React.createElement(CopyButton, {
+                          invoice: checkoutModel.invoice,
+                          copyInvoice: checkoutModel.copyInvoice,
+                          onError,
+                          logger,
+                          ButtonComponent,
+                          className: classNames?.copyButton,
+                        }),
+                      ),
                 ),
               ),
           paymentWizard && !expired

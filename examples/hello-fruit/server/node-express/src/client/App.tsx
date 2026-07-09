@@ -256,11 +256,11 @@ function App(): React.ReactElement {
   return (
     <ThemeScope
       as="main"
-      className="page min-h-screen grid justify-items-center content-start p-4 md:p-10 gap-4"
+      className="page min-h-screen grid justify-items-center content-start p-4 md:p-8 gap-3"
       themeToggle
       topbarClassName="topbar w-full max-w-5xl flex justify-end"
     >
-      <section className="checkout w-full max-w-5xl grid gap-4">
+      <section className="checkout w-full max-w-5xl grid gap-3">
         <div className="tabs tabs-box" role="tablist" aria-label="Checkout framework">
           {checkoutFrameworks.map((item) => (
             <button
@@ -281,37 +281,37 @@ function App(): React.ReactElement {
           ))}
         </div>
 
-        <div className="flex gap-4 items-center">
-          <img className="w-24 aspect-square" src={`/${selectedFruit?.sticker}`} alt="" />
-          <div>
-            <h1 className="text-3xl font-bold">{product.name}</h1>
-            <p className="text-base-content/70">{product.description}</p>
+        <div className="flex gap-3 items-center">
+          <img className="w-16 aspect-square" src={`/${selectedFruit?.sticker}`} alt="" />
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold leading-tight">{product.name}</h1>
+            <p className="text-base-content/70 text-sm">{product.description}</p>
           </div>
         </div>
 
-        <label className="form-control w-full">
-          <span className="label-text mb-1">Currency</span>
-          <select
-            className="select select-bordered w-full"
-            value={currency}
-            onChange={(event) => {
-              logDemo("currency.change", "Currency changed.", {
-                from: currency,
-                to: event.target.value,
-              });
-              setCurrency(event.target.value);
-            }}
-          >
-            {currencyOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </label>
-
         {order === null ? (
           <>
+            <label className="form-control w-full max-w-xs">
+              <span className="label-text mb-1">Currency</span>
+              <select
+                className="select select-bordered w-full"
+                value={currency}
+                onChange={(event) => {
+                  logDemo("currency.change", "Currency changed.", {
+                    from: currency,
+                    to: event.target.value,
+                  });
+                  setCurrency(event.target.value);
+                }}
+              >
+                {currencyOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               {fruits.map((fruit) => (
                 <button
@@ -340,94 +340,96 @@ function App(): React.ReactElement {
             </button>
 
             {cartItems.length === 0 ? null : (
-              <section className="card card-border bg-base-100 p-4 grid gap-2" aria-label="Cart">
-                <div className="flex justify-between items-center">
-                  <strong>Cart</strong>
-                  <span>
-                    {cartQuantity} item{cartQuantity === 1 ? "" : "s"}
-                  </span>
-                </div>
-                {cartItems.map((item) => (
-                  <div className="flex justify-between items-center gap-2" key={item.fruit.id}>
-                    <span className="flex items-center gap-2 min-w-0">
-                      <img
-                        className="w-8 h-8 shrink-0"
-                        src={`/${item.fruit.sticker}`}
-                        alt=""
-                      />
-                      {item.fruit.name}
-                    </span>
+              <>
+                <section className="card card-border bg-base-100 px-3 py-2.5 grid gap-1.5" aria-label="Cart">
+                  <div className="flex justify-between items-center text-sm">
+                    <strong>Cart</strong>
                     <span>
-                      {formatHelloFruitDisplayPrice(item.fruit.fiat, currency, rates)} x
-                      {item.quantity}
+                      {cartQuantity} item{cartQuantity === 1 ? "" : "s"}
                     </span>
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => removeFruitFromCart(item.fruit.id)}
-                      type="button"
-                    >
-                      Remove
-                    </button>
                   </div>
-                ))}
-              </section>
-            )}
+                  {cartItems.map((item) => (
+                    <div className="flex justify-between items-center gap-2 text-sm" key={item.fruit.id}>
+                      <span className="flex items-center gap-2 min-w-0">
+                        <img
+                          className="w-6 h-6 shrink-0"
+                          src={`/${item.fruit.sticker}`}
+                          alt=""
+                        />
+                        {item.fruit.name} ×{item.quantity}
+                      </span>
+                      <span className="text-base-content/70">
+                        {formatHelloFruitDisplayPrice(item.fruit.fiat, currency, rates)}
+                      </span>
+                      <button
+                        className="btn btn-ghost btn-xs"
+                        onClick={() => removeFruitFromCart(item.fruit.id)}
+                        type="button"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </section>
 
-            <button
-              className="btn"
-              disabled={creating || cartItems.length === 0}
-              onClick={createOrder}
-              type="button"
-            >
-              {creating ? helloFruitDemoLabels.creatingOrder : helloFruitDemoLabels.createOrder}
-            </button>
+                <button
+                  className="btn"
+                  disabled={creating}
+                  onClick={createOrder}
+                  type="button"
+                >
+                  {creating ? helloFruitDemoLabels.creatingOrder : helloFruitDemoLabels.createOrder}
+                </button>
+              </>
+            )}
           </>
         ) : (
           <>
-            {order === null ? null : (
-              <section className="card card-border bg-base-100 p-4 grid gap-2" aria-label="Order">
-                <div className="flex justify-between items-center">
-                  <strong>Order</strong>
-                  <span>{formatHelloFruitFiat(order.total_amount)}</span>
+            <section className="card card-border bg-base-200 px-3 py-2.5 grid gap-1" aria-label="Order">
+              <div className="flex justify-between items-baseline gap-3">
+                <strong className="text-sm">Order</strong>
+                <span className="font-semibold">{formatHelloFruitFiat(order.total_amount)}</span>
+              </div>
+              {order.items.map((item) => (
+                <div
+                  className="flex justify-between items-baseline gap-3 text-sm text-base-content/80"
+                  key={item.product_id}
+                >
+                  <span>
+                    {item.name} ×{item.quantity}
+                  </span>
+                  <span className="text-base-content/60">
+                    {formatHelloFruitFiat(item.line_amount)}
+                    {order.status === "paid" ? " · Paid" : ""}
+                  </span>
                 </div>
-                {order.items.map((item) => (
-                  <div className="flex justify-between items-center gap-2" key={item.product_id}>
-                    <span>{item.name}</span>
-                    <span>x{item.quantity}</span>
-                    <span>
-                      {`${formatHelloFruitFiat(item.line_amount)} (${
-                        order.status === "paid" ? "Paid" : "Pending"
-                      })`}
-                    </span>
-                  </div>
-                ))}
-              </section>
-            )}
-            <button
-              className="btn btn-ghost w-full"
-              disabled={creating}
-              onClick={startOver}
-              type="button"
-            >
-              Start over
-            </button>
-          </>
-        )}
+              ))}
+              <div className="card-actions pt-1">
+                <button
+                  className="btn btn-sm"
+                  disabled={creating}
+                  onClick={startOver}
+                  type="button"
+                >
+                  Start over
+                </button>
+              </div>
+            </section>
 
-        {order === null ? null : (
-          <FrameworkCheckout
-            framework={framework}
-            orderId={order.uuid}
-            onError={(cause) => {
-              logDemo("checkout.error", "Checkout component reported an error.", {
-                framework,
-                error: cause instanceof Error ? cause.message : String(cause),
-              });
-              setError(cause instanceof Error ? cause.message : String(cause));
-            }}
-            onSettled={onSettled}
-            onStartOver={startOver}
-          />
+            <FrameworkCheckout
+              framework={framework}
+              orderId={order.uuid}
+              onError={(cause) => {
+                logDemo("checkout.error", "Checkout component reported an error.", {
+                  framework,
+                  error: cause instanceof Error ? cause.message : String(cause),
+                });
+                setError(cause instanceof Error ? cause.message : String(cause));
+              }}
+              onSettled={onSettled}
+              onStartOver={startOver}
+            />
+          </>
         )}
 
         {error === "" ? null : <p className="alert alert-error">{error}</p>}

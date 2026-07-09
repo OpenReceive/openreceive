@@ -6,32 +6,37 @@
     <title>OpenReceive Hello Fruit Static</title>
   </head>
   <body>
-    <main class="page min-h-screen grid justify-items-center content-start p-4 md:p-10 gap-4">
-      <section class="checkout w-full max-w-5xl grid gap-4" aria-labelledby="product-title">
+    <main class="page min-h-screen grid justify-items-center content-start p-4 md:p-8 gap-3">
+      <section class="checkout w-full max-w-5xl grid gap-3" aria-labelledby="product-title">
         <div class="topbar w-full max-w-5xl flex justify-end" id="topbar"></div>
 
-        <div class="flex gap-4 items-center">
-          <img class="w-24 aspect-square" id="product-sticker" alt="" />
-          <div>
-            <h1 class="text-3xl font-bold" id="product-title">Hello Fruit</h1>
-            <p class="text-base-content/70" id="product-description"></p>
+        <div class="flex gap-3 items-center" id="product-header">
+          <img class="w-16 aspect-square" id="product-sticker" alt="" />
+          <div class="min-w-0">
+            <h1 class="text-2xl font-bold leading-tight" id="product-title">Hello Fruit</h1>
+            <p class="text-base-content/70 text-sm" id="product-description"></p>
           </div>
         </div>
 
-        <div id="currency-panel"></div>
+        <div id="shop-panel" class="grid gap-3">
+          <div id="currency-panel"></div>
 
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-2" id="fruit-grid"></div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-2" id="fruit-grid"></div>
 
-        <button class="btn" id="add-to-cart" type="button">
-          Add to cart ($2.00)
-        </button>
+          <button class="btn" id="add-to-cart" type="button">
+            Add to cart ($2.00)
+          </button>
 
-        <div id="cart-panel"></div>
-        <button class="btn" disabled id="create-order" type="button">
-          Create order
-        </button>
+          <div id="cart-panel"></div>
+          <button class="btn hidden" disabled id="create-order" type="button">
+            Create order
+          </button>
+        </div>
 
-        <div id="checkout-panel"></div>
+        <div id="pay-panel" class="grid gap-3 hidden">
+          <div id="order-panel"></div>
+          <div id="checkout-panel"></div>
+        </div>
         <p class="alert alert-error hidden" id="error" role="status"></p>
       </section>
     </main>

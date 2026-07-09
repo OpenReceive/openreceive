@@ -42,6 +42,7 @@ import {
   formatOpenReceiveMsats,
   formatOpenReceiveAmountCaption,
   getOpenReceiveDefaultCountryCode,
+  getOpenReceiveNetworkIcon,
   getOpenReceivePaymentMethodIcon,
   getOpenReceiveRegionForCountry,
   getOpenReceiveSwapOptionIcon,
@@ -144,11 +145,6 @@ export function renderCheckoutHtml(view: CheckoutView): string {
     rail: view.rail ?? "lightning"
   });
   const checkoutState = createElementCheckoutState(view);
-  const summaryAmountLabel = display.fiatLabel === undefined ? display.amountLabel : undefined;
-  const amountLabel =
-    summaryAmountLabel === undefined
-      ? ""
-      : `<span part="amount" class="${orClasses.metaItem}">${escapeHtml(summaryAmountLabel)}</span>`;
   const amountCaption = formatOpenReceiveAmountCaption({
     amountLabel: display.amountLabel,
     fiatLabel: display.fiatLabel,
@@ -158,19 +154,18 @@ export function renderCheckoutHtml(view: CheckoutView): string {
     amountCaption === undefined
       ? ""
       : `<div part="sats-detail" class="${orClasses.satsDetail}">${escapeHtml(amountCaption)}</div>`;
-  const fiatLabel =
-    display.fiatLabel === undefined
-      ? ""
-      : `<span part="amount" class="${orClasses.metaItem}">${escapeHtml(display.fiatLabel)}</span>`;
   const statusLabel = view.status ?? (
     checkoutState === undefined
       ? deriveStatus(view)
       : deriveStatus(checkoutState)
   );
+  // Amount/fiat already appear under the QR; pending is covered by WaitingState.
+  const showSummaryMeta = statusLabel === "settled" || statusLabel === "expired";
   const stateClass =
     statusLabel === "settled" ? orClasses.stateSettled : orClasses.statePending;
-  const stateLabel =
-    `<span part="state" class="${stateClass}" data-state="${escapeHtml(statusLabel)}">${escapeHtml(statusLabel)}</span>`;
+  const stateLabel = showSummaryMeta
+    ? `<span part="state" class="${stateClass}" data-state="${escapeHtml(statusLabel)}">${escapeHtml(statusLabel)}</span>`
+    : "";
   const status = checkoutState === undefined
     ? ""
     : renderElementPaymentStatusHtml(checkoutState);
@@ -188,14 +183,23 @@ export function renderCheckoutHtml(view: CheckoutView): string {
   const lightningPane =
     hideLightning || expired
       ? ""
-      : `<div part="lightning-pane" class="${orClasses.lightningPaneDesktop}">
+      : `<div part="lightning-pane" class="${orClasses.lightningPane}">
           <div part="qr" class="${orClasses.qr}" ${OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.qr}></div>
           ${satsDetail}
-          <div part="actions" class="${orClasses.actions}">${copyButton}</div>
         </div>`;
   const paymentLayoutClass = expired
     ? orClasses.paymentLayoutExpired
     : orClasses.paymentLayout;
+  const metaRow =
+    stateLabel === ""
+      ? ""
+      : `<div part="meta" class="${orClasses.meta}">${stateLabel}</div>`;
+  const invoiceTitle = expired
+    ? ""
+    : `<p part="invoice-title" class="${orClasses.invoiceTitle}">${escapeHtml(openReceiveCheckoutLabels.bitcoinLightningInvoice)}</p>`;
+  const actions = expired
+    ? `<div part="actions" class="${orClasses.actions}">${startOverButton}</div>`
+    : `<div part="actions" class="${orClasses.actions}">${copyButton}</div>`;
 
   return `
     <style>${openReceiveCheckoutElementStyles}</style>
@@ -205,9 +209,10 @@ export function renderCheckoutHtml(view: CheckoutView): string {
         : `<div part="payment-layout" class="${paymentLayoutClass}">
             ${lightningPane}
             <div part="payment-info" class="${orClasses.paymentInfo}">
+              ${invoiceTitle}
               ${status}
-              <div part="meta" class="${orClasses.meta}">${amountLabel}${fiatLabel}${stateLabel}</div>
-              ${expired ? `<div part="actions" class="${orClasses.actions}">${startOverButton}</div>` : ""}
+              ${metaRow}
+              ${actions}
             </div>
           </div>`}
       ${wizard}
@@ -506,13 +511,17 @@ function renderElementSwapMethodCardsHtml(
         <div part="method-card" class="${disabled ? orClasses.methodCardUnavailable : orClasses.methodCardReady}">
           <img class="${orClasses.methodIcon}" alt="" src="${escapeHtml(getOpenReceiveSwapOptionIcon(selectedOption))}">
           <strong class="${orClasses.methodTitle}">${escapeHtml(group.label)}</strong>
-          <label part="method-network">
-            <span class="${orClasses.methodNetworkLabel}">${escapeHtml(group.label)} network</span>
-            <select
-              class="${orClasses.methodNetwork}"
+          <details part="method-network" class="${orClasses.methodNetwork}">
+            <summary
+              class="${orClasses.methodNetworkTrigger}"
               aria-label="${escapeHtml(group.label)} network"
-              ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapNetwork}="${escapeHtml(groupKey)}"
             >
+              <span class="${orClasses.methodNetworkTriggerLabel}">
+                <img class="${orClasses.methodNetworkIcon}" alt="" src="${escapeHtml(getOpenReceiveNetworkIcon(selectedOption.network_label))}">
+                ${escapeHtml(selectedOption.network_label)}
+              </span>
+            </summary>
+            <ul class="${orClasses.methodNetworkMenu}" role="listbox">
               ${group.options
                 .map((option) => {
                   const optionLimit = elementsSwapLimitMessage(option, view);
@@ -520,15 +529,25 @@ function renderElementSwapMethodCardsHtml(
                     option.available === false && optionLimit !== undefined
                       ? `${option.network_label} · ${optionLimit}`
                       : option.network_label;
-                  return `<option
-                    value="${escapeHtml(option.pay_in_asset)}"
-                    ${option.pay_in_asset === selectedOption.pay_in_asset ? "selected" : ""}
-                    ${option.available === false ? "disabled" : ""}
-                  >${escapeHtml(label)}</option>`;
+                  const optionDisabled = option.available === false;
+                  return `<li${optionDisabled ? ' class="menu-disabled"' : ""}>
+                    <button
+                      type="button"
+                      role="option"
+                      class="${orClasses.methodNetworkOption}"
+                      aria-selected="${option.pay_in_asset === selectedOption.pay_in_asset ? "true" : "false"}"
+                      ${optionDisabled ? "disabled" : ""}
+                      ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapNetwork}="${escapeHtml(groupKey)}"
+                      ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapNetworkValue}="${escapeHtml(option.pay_in_asset)}"
+                    >
+                      <img class="${orClasses.methodNetworkIcon}" alt="" src="${escapeHtml(getOpenReceiveNetworkIcon(option.network_label))}">
+                      ${escapeHtml(label)}
+                    </button>
+                  </li>`;
                 })
                 .join("")}
-            </select>
-          </label>
+            </ul>
+          </details>
           <button
             part="method-confirm"
             class="${orClasses.methodConfirm}"
@@ -1448,14 +1467,19 @@ export function defineOpenReceiveElements(
         });
       });
 
-      root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapNetwork).forEach((select) => {
-        if (!(select instanceof HTMLSelectElement)) return;
-        select.addEventListener("change", () => {
-          const groupKey = select.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapNetwork);
-          if (groupKey === null || groupKey.length === 0) return;
+      root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapNetworkValue).forEach((button) => {
+        button.addEventListener("click", () => {
+          if (!(button instanceof HTMLButtonElement) || button.disabled) return;
+          const groupKey = button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapNetwork);
+          const payInAsset = button.getAttribute(
+            OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapNetworkValue,
+          );
+          if (groupKey === null || groupKey.length === 0 || payInAsset === null) return;
+          const details = button.closest("details");
+          if (details instanceof HTMLDetailsElement) details.open = false;
           this.selectedSwapNetworks = {
             ...this.selectedSwapNetworks,
-            [groupKey]: select.value,
+            [groupKey]: payInAsset,
           };
           this.render();
         });

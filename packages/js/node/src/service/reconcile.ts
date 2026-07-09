@@ -36,9 +36,7 @@ export function reconcileOptions(context: OpenReceiveServiceContext) {
     onEvent: (event: OpenReceiveReconcileEvent) => {
       emitLog(
         context.options,
-        event.event === "invoice.failed" || event.event === "transaction_scan.failed"
-          ? "warn"
-          : "info",
+        reconcileLogLevel(event),
         event.event,
         "OpenReceive refreshed invoice state.",
         {
@@ -48,4 +46,14 @@ export function reconcileOptions(context: OpenReceiveServiceContext) {
       );
     },
   };
+}
+
+function reconcileLogLevel(
+  event: OpenReceiveReconcileEvent
+): "debug" | "info" | "warn" {
+  if (event.event === "invoice.failed" || event.event === "transaction_scan.failed") {
+    return "warn";
+  }
+  if (event.event === "invoice.verifying") return "debug";
+  return "info";
 }

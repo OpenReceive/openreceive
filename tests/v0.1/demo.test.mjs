@@ -209,7 +209,7 @@ test("Hello Fruit demos share product display formatting", () => {
   );
 });
 
-test("Hello Fruit server loggers omit undefined fields", () => {
+test("Hello Fruit server loggers omit undefined fields and debug console noise", () => {
   const calls = [];
   const originalLog = console.log;
   const originalInfo = console.info;
@@ -230,6 +230,12 @@ test("Hello Fruit server loggers omit undefined fields", () => {
         },
       },
     );
+    createHelloFruitOpenReceiveLogger("node-express")({
+      level: "debug",
+      event: "order.status.requested",
+      message: "Refreshing order status.",
+      order_id: "order-1",
+    });
     createHelloFruitOpenReceiveLogger("node-express")({
       level: "info",
       event: "order.status.result",
@@ -611,7 +617,7 @@ test("Hello Fruit browser demos consume shared theme model", () => {
   ]) {
     assert.match(source, /ThemeScope/, `${name}: uses package theme scope`);
     assert.match(source, /themeToggle/, `${name}: enables package theme toggle`);
-    assert.match(source, /topbarClassName="topbar"/, `${name}: styles package theme toggle shell`);
+    assert.match(source, /topbarClassName="topbar[\s"]/, `${name}: styles package theme toggle shell`);
     assert.doesNotMatch(source, /useOpenReceiveTheme/, `${name}: must not wire theme hook locally`);
     assert.doesNotMatch(
       source,
@@ -761,6 +767,11 @@ test("Frontend UI packages consume shared checkout labels", () => {
     assert.doesNotMatch(source, /"Pay this invoice"/, `${name}: wizard title is package-shared`);
     assert.doesNotMatch(source, /"Copy BOLT11"/, `${name}: copy label is package-shared`);
     assert.doesNotMatch(source, /"Waiting for payment"/, `${name}: status label is package-shared`);
+    assert.doesNotMatch(
+      source,
+      /"Bitcoin Lightning invoice"/,
+      `${name}: lightning invoice title is package-shared`,
+    );
     assert.doesNotMatch(
       source,
       /"openreceive-provider-copy"/,
@@ -1434,7 +1445,7 @@ test("Next.js demo prepares orders and mounts the shipped OpenReceive router", (
   assert.match(source, /prepareOrderResponse/);
   assert.match(source, /prepareHelloFruitOrder/);
   assert.match(source, /openReceiveHttpOptions/);
-  assert.match(source, /getHelloFruitOrderAmount/);
+  assert.match(source, /resolveHelloFruitOrder/);
   assert.match(source, /guestCheckout\(\)/);
   assert.match(source, /readRequiredHelloFruitNwcConnectionString/);
   assert.doesNotMatch(source, /createHelloFruitCreateOrderResult/);

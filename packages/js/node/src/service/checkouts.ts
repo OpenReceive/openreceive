@@ -125,7 +125,7 @@ export async function getOrder(
   }
   emitLog(
     context.options,
-    "info",
+    "debug",
     "order.status.requested",
     "Refreshing order status through the transaction scan path.",
     {

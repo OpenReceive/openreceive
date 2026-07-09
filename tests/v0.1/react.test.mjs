@@ -42,6 +42,8 @@ import {
   getCheckoutProviderUsBadge,
   getOpenReceiveRouteIcon,
   getOpenReceiveRouteNetworkLabel,
+  getOpenReceiveNetworkIcon,
+  getOpenReceiveSwapOptionIcon,
   getOpenReceiveRegionForCountry,
   getOpenReceiveWizardEmptyMessage,
   openReceiveCheckoutLabels,
@@ -217,7 +219,10 @@ test("React checkout default UI server-renders display-safe invoice data", () =>
   assert.match(html, /data-openreceive-theme="light"/);
   assert.match(html, /1 sat/);
   assert.match(html, /text-base-content\/60 text-sm leading-snug/);
-  assert.match(html, /pending/);
+  assert.match(html, /Bitcoin Lightning invoice/);
+  assert.match(html, /Waiting for payment/);
+  // Pending status is conveyed by WaitingState; avoid a redundant "pending" badge.
+  assert.doesNotMatch(html, /data-openreceive-state="pending"/);
   assert.doesNotMatch(html, /bbbbbbbb\.\.\.bbbbbbbb/);
   assert.doesNotMatch(html, /textarea/);
   assert.doesNotMatch(html, /lnbc-test/);
@@ -357,6 +362,10 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   assert.equal(OPENRECEIVE_COPY_FEEDBACK_MS, 1800);
   assert.equal(OPENRECEIVE_PROVIDER_PREVIEW_LIMIT, 4);
   assert.equal(openReceiveCheckoutLabels.copyInvoice, "Copy invoice");
+  assert.equal(
+    openReceiveCheckoutLabels.bitcoinLightningInvoice,
+    "Bitcoin Lightning invoice",
+  );
   assert.equal(getOpenReceivePaymentStatusText("settled").title, "Payment received");
   assert.equal(getOpenReceiveWizardEmptyMessage("bitcoin"), "Choose Bitcoin Lightning.");
   assert.equal(getCheckoutProviderOpenLabel("Boltz"), "How To Pay");
@@ -385,6 +394,17 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   assert.match(getOpenReceivePaymentMethodIcon("card"), /assets\/icons\/card\.svg/);
   assert.match(getOpenReceiveRouteIcon({ symbol: "btc", route: "btc-lightning" }), /assets\/icons\/lightning\.svg/);
   assert.match(getOpenReceiveRouteIcon({ symbol: "usdt", route: "usdt-tron" }), /assets\/icons\/usdt\.svg/);
+  assert.match(
+    getOpenReceiveSwapOptionIcon({ label: "USDT", network_label: "Tron" }),
+    /assets\/icons\/usdt\.svg/,
+  );
+  assert.match(
+    getOpenReceiveSwapOptionIcon({ label: "USDC", network_label: "Solana" }),
+    /assets\/icons\/usdc\.svg/,
+  );
+  assert.match(getOpenReceiveNetworkIcon("Tron"), /assets\/icons\/trx\.svg/);
+  assert.match(getOpenReceiveNetworkIcon("Solana"), /assets\/icons\/sol\.svg/);
+  assert.match(getOpenReceiveNetworkIcon("Ethereum"), /assets\/icons\/eth\.svg/);
   assert.equal(resolveOpenReceiveTheme("system", { systemDark: true }), "dark");
   assert.deepEqual(createOpenReceiveThemeModel("system", { systemDark: true }), {
     theme: "system",
@@ -666,7 +686,11 @@ test("React checkout supports design-system component and class slots", () => {
         invoice: "lnbc-slot-test",
         payment_hash: "c".repeat(64),
         amount_msats: 200000,
-        fiat_quote: undefined
+        fiat_quote: undefined,
+        // Summary meta (and PaymentState slot) only render for terminal statuses.
+        transaction_state: "settled",
+        workflow_state: "settlement_action_completed",
+        settled_at: 1_700_000_000
       }),
       components: {
         Button: CustomButton,
@@ -690,7 +714,7 @@ test("React checkout supports design-system component and class slots", () => {
   assert.match(html, /app-qr/);
   assert.match(html, /data-slot-summary=""/);
   assert.match(html, /app-summary/);
-  assert.match(html, /data-slot-state="pending"/);
+  assert.match(html, /data-slot-state="settled"/);
   assert.match(html, /app-state/);
   assert.match(html, /data-slot-button=""/);
   assert.match(html, /app-copy/);

@@ -58,6 +58,7 @@ export const OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES = {
   swapQr: "data-or-swap-qr",
   swapCopy: "data-or-swap-copy",
   swapNetwork: "data-or-swap-network",
+  swapNetworkValue: "data-or-swap-network-value",
   swapRefundForm: "data-or-swap-refund-form",
   swapRefundAddress: "data-or-swap-refund-address",
   swapRefundNonce: "data-or-swap-refund-nonce",
@@ -80,6 +81,7 @@ export const OPENRECEIVE_PAYMENT_WIZARD_SELECTORS = {
   swapQr: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapQr}]`,
   swapCopy: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapCopy}]`,
   swapNetwork: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapNetwork}]`,
+  swapNetworkValue: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapNetworkValue}]`,
   swapRefundForm: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundForm}]`,
   swapRefundAddress: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundAddress}]`,
   swapRefundNonce: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundNonce}]`,
@@ -1121,6 +1123,7 @@ export const openReceiveCheckoutLabels = {
   copyInvoice: "Copy invoice",
   copied: "Copied!",
   openWallet: "Open Wallet",
+  bitcoinLightningInvoice: "Bitcoin Lightning invoice",
   paymentStatus: {
     waitingTitle: "Waiting for payment",
     waitingDetail: "Keep this page open while we verify settlement.",

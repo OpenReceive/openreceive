@@ -54,8 +54,8 @@ export async function createHelloFruitOpenReceive(options: HelloFruitOpenReceive
   const supportedCurrencies = readHelloFruitCheckoutCurrencies();
 
   logDemo("openreceive.price_currencies", "Loaded checkout and price feed currencies.", {
-    checkoutCurrencies: supportedCurrencies,
-    priceCurrencies,
+    checkoutCurrencyCount: supportedCurrencies.length,
+    priceCurrencyCount: priceCurrencies.length,
   });
 
   const openreceive = await createOpenReceive({
@@ -217,4 +217,3 @@ function asRequestBody(value: unknown): Record<string, unknown> {
     ? (value as Record<string, unknown>)
     : {};
 }
-
