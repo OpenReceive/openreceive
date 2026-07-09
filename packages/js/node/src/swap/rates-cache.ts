@@ -14,12 +14,12 @@
 export const SWAP_RATES_REFRESH_SECONDS = 15;
 
 /**
- * How long a stale rates blob may still be served when a refresh fails.
- * Past this window a failing provider surfaces the error instead of stale rates.
- * Kept only slightly above the fresh window so a brief outage does not freeze
- * an outdated crypto quote on the pay screen.
+ * Rates never serve past the fresh window on refresh failure — a dead feed must
+ * fail closed so OpenReceive can fail over to the next configured provider.
+ * Kept equal to {@link SWAP_RATES_REFRESH_SECONDS} for the cache API's required
+ * maxStaleSeconds field; `serveStaleOnFailure: false` is what enforces fail-closed.
  */
-export const SWAP_RATES_MAX_STALE_SECONDS = 60;
+export const SWAP_RATES_MAX_STALE_SECONDS = SWAP_RATES_REFRESH_SECONDS;
 
 export type SwapRateType = "fixed" | "float";
 

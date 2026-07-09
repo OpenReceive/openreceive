@@ -300,10 +300,12 @@ class FixedFloatProvider implements SwapProvider {
     // Indicative quote from the durable global XML rates cache. `/create` is still the
     // binding rate — this keeps concurrent checkouts from each burning a /price weight
     // unit (same pattern as the fiat price feed / NWC settlement sweep gate).
+    // Rates refresh failures throw (fail closed) so the service can skip this provider
+    // and try the next entry in swap.providers.
     const resolution = await this.resolveCurrencies();
     const fromCcy = requiredCurrency(resolution, input.payInAsset);
+    const rates = await this.resolveRatesIndex();
     try {
-      const rates = await this.resolveRatesIndex();
       const pair = rates.pairs[fixedFloatRatesPairKey(fromCcy, resolution.lightning.code)];
       if (pair === undefined) {
         return {
@@ -354,6 +356,8 @@ class FixedFloatProvider implements SwapProvider {
         ...limits,
       };
     } catch (error) {
+      // Pair-math / limit errors stay as unavailable quotes. Rates/network failures
+      // already threw above from resolveRatesIndex and must not be swallowed here.
       const reason = classifyFixedFloatQuoteError(error);
       return {
         pay_asset: input.payInAsset,
@@ -546,6 +550,9 @@ class FixedFloatProvider implements SwapProvider {
     return await cache.resolve(swapRatesMetaKey(this.name, "fixed"), {
       refreshSeconds: this.ratesCacheSeconds,
       maxStaleSeconds: Math.max(SWAP_RATES_MAX_STALE_SECONDS, this.ratesCacheSeconds),
+      // Crypto rates must not linger after a failed refresh — fail closed so the
+      // service can skip this provider and try the next entry in swap.providers.
+      serveStaleOnFailure: false,
       fetch: () => this.fetchRatesIndex(),
       serialize: serializeFixedFloatRatesIndex,
       deserialize: deserializeFixedFloatRatesIndex,

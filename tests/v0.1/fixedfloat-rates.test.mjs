@@ -93,14 +93,16 @@ test("swap rates cache is shared globally via openreceive_meta", async () => {
 
   const first = await cache.resolve(swapRatesMetaKey("fixedfloat", "fixed"), {
     refreshSeconds: 15,
-    maxStaleSeconds: 60,
+    maxStaleSeconds: 15,
+    serveStaleOnFailure: false,
     fetch,
     serialize: serializeFixedFloatRatesIndex,
     deserialize: deserializeFixedFloatRatesIndex,
   });
   const second = await cache.resolve(swapRatesMetaKey("fixedfloat", "fixed"), {
     refreshSeconds: 15,
-    maxStaleSeconds: 60,
+    maxStaleSeconds: 15,
+    serveStaleOnFailure: false,
     fetch,
     serialize: serializeFixedFloatRatesIndex,
     deserialize: deserializeFixedFloatRatesIndex,
@@ -112,4 +114,47 @@ test("swap rates cache is shared globally via openreceive_meta", async () => {
   const meta = await store.getMeta("swap_rates:fixedfloat:fixed");
   assert.notEqual(meta, undefined);
   assert.match(meta.value, /"fetched_at":1000/);
+});
+
+test("rates cache refresh failure does not serve stale rates", async () => {
+  const store = new InMemoryInvoiceKvStore();
+  let now = 1_000;
+  let shouldFail = false;
+  const cache = new StoreBackedSwapCache(store, () => now);
+  const fetch = async () => {
+    if (shouldFail) throw new Error("rates down");
+    return await fetchFixedFloatRatesIndex({
+      baseUrl: "https://ff.example",
+      fetch: async () => ({
+        ok: true,
+        status: 200,
+        text: async () => SAMPLE_XML,
+      }),
+      now: () => now,
+    });
+  };
+
+  await cache.resolve(swapRatesMetaKey("fixedfloat", "fixed"), {
+    refreshSeconds: 15,
+    maxStaleSeconds: 15,
+    serveStaleOnFailure: false,
+    fetch,
+    serialize: serializeFixedFloatRatesIndex,
+    deserialize: deserializeFixedFloatRatesIndex,
+  });
+
+  now = 1_020;
+  shouldFail = true;
+  await assert.rejects(
+    () =>
+      cache.resolve(swapRatesMetaKey("fixedfloat", "fixed"), {
+        refreshSeconds: 15,
+        maxStaleSeconds: 15,
+        serveStaleOnFailure: false,
+        fetch,
+        serialize: serializeFixedFloatRatesIndex,
+        deserialize: deserializeFixedFloatRatesIndex,
+      }),
+    /rates down/,
+  );
 });

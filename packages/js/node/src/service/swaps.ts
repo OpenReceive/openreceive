@@ -172,26 +172,19 @@ export async function quoteSwap(
     throw serviceError(409, "CONFLICT", "Order has no open checkout to quote a swap.");
   }
 
-  const provider = await selectSwapProvider(providers, payInAsset, "price");
-  if (provider === undefined) {
-    return swapCatalogOption({
-      asset: getOpenReceiveSwapAssetInfo(payInAsset),
-      amountMsats: roundMsatsUpToWholeSats(checkout.amountMsats),
-      providerAsset: undefined,
-    });
-  }
-
   const amountMsats = roundMsatsUpToWholeSats(checkout.amountMsats);
-  return await resolveCachedSwapQuote(context, checkout.checkoutId, provider, payInAsset, amountMsats);
+  return await resolveCachedSwapQuote(context, checkout.checkoutId, providers, payInAsset, amountMsats);
 }
 
 // Quotes a pay-in asset at the invoice amount. FixedFloat serves this from the
 // durable global XML rates cache (shared across checkouts); the short per-checkout
 // cache below still collapses repeated status polls within the same order.
+// When a provider's rates feed is unreachable, skip it and try the next entry in
+// swap.providers — same failover idea as the weight-budget gate on create.
 async function resolveCachedSwapQuote(
   context: OpenReceiveServiceContext,
   checkoutId: string,
-  provider: SwapProvider,
+  providers: readonly SwapProvider[],
   payInAsset: SwapPayInAsset,
   amountMsats: number,
 ): Promise<SwapOption> {
@@ -203,26 +196,74 @@ async function resolveCachedSwapQuote(
     return cached.quote;
   }
 
-  const quote = await provider.quote({
-    payInAsset,
-    invoiceAmountMsats: amountMsats,
-  });
-  const response = swapQuoteOption({
-    asset: getOpenReceiveSwapAssetInfo(payInAsset),
-    quote,
-  });
-  // Best-effort write: a concurrent writer winning the CAS just means another
-  // instance already cached an equivalent quote, so we still return ours.
-  await context.store.casMeta(
-    quoteCacheKey,
-    JSON.stringify({
+  const candidates = await listSwapProvidersForAsset(providers, payInAsset, "price");
+  if (candidates.length === 0) {
+    return swapCatalogOption({
+      asset: getOpenReceiveSwapAssetInfo(payInAsset),
       amountMsats,
-      expiresAt: now + OPENRECEIVE_SWAP_QUOTE_CACHE_SECONDS,
-      quote: response,
-    } satisfies CachedSwapQuoteEntry),
-    cachedMeta === undefined ? null : cachedMeta.rev,
+      providerAsset: undefined,
+    });
+  }
+
+  let lastFailure: SwapOption | undefined;
+  for (const provider of candidates) {
+    try {
+      const quote = await provider.quote({
+        payInAsset,
+        invoiceAmountMsats: amountMsats,
+      });
+      const response = swapQuoteOption({
+        asset: getOpenReceiveSwapAssetInfo(payInAsset),
+        quote,
+      });
+      // Soft unavailability (amount limits, pair down) is a real answer — cache and
+      // return it. Hard rates/network failures throw and fall through to the next
+      // provider below.
+      await context.store.casMeta(
+        quoteCacheKey,
+        JSON.stringify({
+          amountMsats,
+          expiresAt: now + OPENRECEIVE_SWAP_QUOTE_CACHE_SECONDS,
+          quote: response,
+        } satisfies CachedSwapQuoteEntry),
+        cachedMeta === undefined ? null : cachedMeta.rev,
+      );
+      return response;
+    } catch (error) {
+      emitLog(
+        context.options,
+        "warn",
+        "swap.quote.provider_failed",
+        "Swap quote failed for provider; trying next configured provider.",
+        {
+          checkout_id: checkoutId,
+          pay_in_asset: payInAsset,
+          provider: provider.name,
+          error_message: error instanceof Error ? error.message : String(error),
+        },
+      );
+      lastFailure = swapCatalogOption({
+        asset: getOpenReceiveSwapAssetInfo(payInAsset),
+        amountMsats,
+        providerAsset: {
+          pay_asset: payInAsset,
+          provider: provider.name,
+          available: false,
+          unavailable_reason: "provider_unreachable",
+          unavailable_message: "The swap provider is temporarily unreachable.",
+        },
+      });
+    }
+  }
+
+  return (
+    lastFailure ??
+    swapCatalogOption({
+      asset: getOpenReceiveSwapAssetInfo(payInAsset),
+      amountMsats,
+      providerAsset: undefined,
+    })
   );
-  return response;
 }
 
 interface CachedSwapQuoteEntry {
@@ -326,15 +367,6 @@ export async function startSwap(
     );
   }
 
-  const provider = await selectSwapProvider(context.swapProviders, payInAsset, "create");
-  if (provider === undefined) {
-    throw serviceError(
-      400,
-      "INVALID_REQUEST",
-      `${formatOpenReceiveSwapAssetLabel(payInAsset)} is not available for automated swaps.`,
-    );
-  }
-
   const displayRecord = checkoutRecords.find(
     (record) => record.row.invoice_id === checkout.active?.invoiceId,
   );
@@ -342,8 +374,35 @@ export async function startSwap(
     throw serviceError(500, "INTERNAL", "Active checkout invoice was not readable.");
   }
 
+  const amountMsats = roundMsatsUpToWholeSats(displayRecord.row.amount_msats);
+  const candidates = await listSwapProvidersForAsset(
+    context.swapProviders,
+    payInAsset,
+    "create",
+  );
+  if (candidates.length === 0) {
+    throw serviceError(
+      400,
+      "INVALID_REQUEST",
+      `${formatOpenReceiveSwapAssetLabel(payInAsset)} is not available for automated swaps.`,
+    );
+  }
+  const provider = await selectReadySwapProvider(
+    context,
+    candidates,
+    payInAsset,
+    amountMsats,
+  );
+  if (provider === undefined) {
+    throw serviceError(
+      503,
+      "INTERNAL",
+      `${formatOpenReceiveSwapAssetLabel(payInAsset)} swap rates are temporarily unavailable.`,
+    );
+  }
+
   const invoiceExpirySeconds = swapInvoiceExpirySeconds(provider, payInAsset);
-  const roundedAmountMsats = roundMsatsUpToWholeSats(displayRecord.row.amount_msats);
+  const roundedAmountMsats = amountMsats;
   const walletInvoice = await context.options.client.makeInvoice({
     amount_msats: BigInt(roundedAmountMsats),
     ...swapShadowDescriptionFields(displayRecord.row, provider.name, payInAsset),
@@ -901,12 +960,19 @@ export async function resolveSwapProviderCatalog(
     SwapProviderAsset & { readonly provider: string }
   >();
   for (const provider of providers) {
-    const catalog =
-      provider.payInAssetCatalog === undefined
-        ? Array.from(await provider.supportedPayInAssets(), (payInAsset) => ({
-            pay_asset: payInAsset,
-          }))
-        : await provider.payInAssetCatalog();
+    let catalog: readonly SwapProviderAsset[];
+    try {
+      catalog =
+        provider.payInAssetCatalog === undefined
+          ? Array.from(await provider.supportedPayInAssets(), (payInAsset) => ({
+              pay_asset: payInAsset,
+            }))
+          : await provider.payInAssetCatalog();
+    } catch {
+      // Rates/catalog feed down for this provider — skip it so a later entry in
+      // swap.providers can still offer the asset.
+      continue;
+    }
     for (const item of catalog) {
       if (!byAsset.has(item.pay_asset)) {
         byAsset.set(item.pay_asset, {
@@ -1026,17 +1092,101 @@ export async function selectSwapProvider(
   payInAsset: SwapPayInAsset,
   path: string = "create",
 ): Promise<SwapProvider | undefined> {
-  let firstSupported: SwapProvider | undefined;
+  const candidates = await listSwapProvidersForAsset(providers, payInAsset, path);
+  return candidates[0];
+}
+
+/**
+ * Providers that support `payInAsset`, in config order, preferring those that
+ * still have weight budget for `path`. When every supporting provider is
+ * rate-limited, returns them all anyway so the caller can attempt and surface
+ * a clear error (or try the next after a rates failure).
+ */
+export async function listSwapProvidersForAsset(
+  providers: readonly SwapProvider[],
+  payInAsset: SwapPayInAsset,
+  path: string = "create",
+): Promise<SwapProvider[]> {
+  const supported: SwapProvider[] = [];
   for (const provider of providers) {
-    if (!(await provider.supportedPayInAssets()).has(payInAsset)) continue;
-    firstSupported ??= provider;
-    if (provider.canAcceptRequest === undefined) return provider;
-    if (await provider.canAcceptRequest(path)) return provider;
+    try {
+      if (!(await provider.supportedPayInAssets()).has(payInAsset)) continue;
+    } catch {
+      // Provider catalog unreachable — skip; a later entry may still work.
+      continue;
+    }
+    supported.push(provider);
   }
-  // Every supporting provider is rate-limited. Return the first so the caller
-  // still attempts the call and surfaces a clear RATE_LIMITED / unavailable
-  // error rather than pretending the asset is unconfigured.
-  return firstSupported;
+  if (supported.length === 0) return [];
+
+  const withBudget: SwapProvider[] = [];
+  const withoutBudget: SwapProvider[] = [];
+  for (const provider of supported) {
+    if (provider.canAcceptRequest === undefined) {
+      withBudget.push(provider);
+      continue;
+    }
+    if (await provider.canAcceptRequest(path)) {
+      withBudget.push(provider);
+    } else {
+      withoutBudget.push(provider);
+    }
+  }
+  return withBudget.length > 0 ? withBudget : withoutBudget;
+}
+
+/**
+ * First provider among `candidates` that can produce a quote for this asset/amount.
+ * Probes with `quote()` so a dead rates feed fails over to the next entry before we
+ * mint a shadow invoice or call `/create`.
+ */
+async function selectReadySwapProvider(
+  context: OpenReceiveServiceContext,
+  candidates: readonly SwapProvider[],
+  payInAsset: SwapPayInAsset,
+  amountMsats: number,
+): Promise<SwapProvider | undefined> {
+  for (const provider of candidates) {
+    try {
+      const quote = await provider.quote({
+        payInAsset,
+        invoiceAmountMsats: amountMsats,
+      });
+      if (quote.available) return provider;
+      // Soft unavailability (limits / pair down) is definitive for this provider —
+      // do not silently hop to a secondary that may have different limits.
+      if (
+        quote.unavailable_reason === "amount_too_small" ||
+        quote.unavailable_reason === "amount_too_large"
+      ) {
+        return undefined;
+      }
+      emitLog(
+        context.options,
+        "warn",
+        "swap.start.provider_unavailable",
+        "Swap provider quote unavailable; trying next configured provider.",
+        {
+          pay_in_asset: payInAsset,
+          provider: provider.name,
+          unavailable_reason: quote.unavailable_reason,
+        },
+      );
+    } catch (error) {
+      emitLog(
+        context.options,
+        "warn",
+        "swap.start.provider_failed",
+        "Swap provider rates/quote failed; trying next configured provider.",
+        {
+          pay_in_asset: payInAsset,
+          provider: provider.name,
+          error_message: error instanceof Error ? error.message : String(error),
+        },
+      );
+    }
+  }
+  return undefined;
 }
 
 export async function readReservedSwapAttemptForStartReplay(

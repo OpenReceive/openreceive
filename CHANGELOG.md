@@ -7,10 +7,11 @@
 - Display quotes and catalog min/max now come from FixedFloat's public XML rates
   export (`/rates/fixed.xml`), cached in `openreceive_meta` under
   `swap_rates:<provider>:fixed` via the same durable single-flight pattern as the
-  fiat price feed and `/ccies` catalog. Default refresh is 15s (stale OK to 60s
-  on refresh failure). Concurrent checkouts share one blob — no per-user
-  authenticated `/price`. The XML export is public (no weight budget), so a
-  short TTL is safe.
+  fiat price feed and `/ccies` catalog. Default refresh is 15s. Concurrent
+  checkouts share one blob — no per-user authenticated `/price`. The XML export
+  is public (no weight budget), so a short TTL is safe. A failed rates refresh
+  fails closed (no stale serve) so quote/catalog/start skip that provider and
+  try the next entry in `swap.providers`.
 - `/create` remains the binding rate. Removed the old per-asset `/price` probe
   cache (`swap_pair_limits:*`).
 

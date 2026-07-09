@@ -1981,6 +1981,45 @@ test("startSwap fails over to the next provider when the first is rate-limited",
   assert.equal(secondary.createCalls, 1);
 });
 
+test("startSwap and swapQuote fail over when the first provider rates feed is down", async () => {
+  const primary = new FakeSwapProvider(["USDT_TRON"], "primary");
+  const secondary = new FakeSwapProvider(["USDT_TRON"], "secondary");
+  primary.quote = async () => {
+    throw new Error("FixedFloat rates fixed.xml request failed before a response was received.");
+  };
+  primary.payInAssetCatalog = async () => {
+    throw new Error("FixedFloat rates fixed.xml request failed before a response was received.");
+  };
+  const { openreceive } = await createHarness({
+    swap: { providers: [primary, secondary] },
+  });
+  await openreceive.getOrCreateCheckout({
+    orderId: "order-swap-rates-failover",
+    amount: { sats: "200" },
+  });
+
+  const options = await openreceive.swapOptions({ orderId: "order-swap-rates-failover" });
+  const usdt = options.options.find((option) => option.payInAsset === "USDT_TRON");
+  assert.equal(usdt?.provider, "secondary");
+  assert.equal(usdt?.available, true);
+
+  const quote = await openreceive.swapQuote({
+    orderId: "order-swap-rates-failover",
+    payInAsset: "USDT_TRON",
+  });
+  assert.equal(quote.provider, "secondary");
+  assert.equal(quote.available, true);
+  assert.equal(quote.payAmount, "1.05");
+
+  const attempt = await openreceive.startSwap({
+    orderId: "order-swap-rates-failover",
+    payInAsset: "USDT_TRON",
+  });
+  assert.equal(attempt.provider, "secondary");
+  assert.equal(primary.createCalls, 0);
+  assert.equal(secondary.createCalls, 1);
+});
+
 test("selectSwapProvider prefers the first provider that still has create budget", async () => {
   const { selectSwapProvider } = await import("../../packages/js/node/src/service/swaps.ts");
   const primary = new FakeSwapProvider(["USDT_TRON"], "primary");

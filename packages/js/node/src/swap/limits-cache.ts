@@ -50,6 +50,12 @@ export interface SwapCacheResolveOptions<T> {
   readonly refreshSeconds: number;
   readonly maxStaleSeconds: number;
   readonly claimSeconds?: number;
+  /**
+   * When false, a failed refresh throws instead of serving a stale blob.
+   * Use for fast-moving data (swap rates) where failover to the next provider
+   * is better than an outdated quote. Defaults to true (currency catalogs).
+   */
+  readonly serveStaleOnFailure?: boolean;
   readonly fetch: () => Promise<T>;
   readonly serialize: (value: T) => string;
   readonly deserialize: (value: string) => T;
@@ -85,6 +91,7 @@ export class StoreBackedSwapCache {
   async resolve<T>(key: string, options: SwapCacheResolveOptions<T>): Promise<T> {
     const now = this.#clock();
     const claimSeconds = options.claimSeconds ?? SWAP_LIMITS_REFRESH_CLAIM_SECONDS;
+    const serveStaleOnFailure = options.serveStaleOnFailure !== false;
     let meta = await this.#store.getMeta(key);
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -92,13 +99,24 @@ export class StoreBackedSwapCache {
       const fresh = freshValue(state, now, options.refreshSeconds);
       if (fresh !== undefined) return options.deserialize(fresh);
 
-      // Another instance is already refreshing (or just failed): serve its last
-      // good value rather than piling on a second provider call.
-      if (
-        state?.value !== undefined &&
-        (isRecent(state.refresh_started_at, now, claimSeconds) ||
-          isRecent(state.refresh_failed_at, now, claimSeconds))
-      ) {
+      // A recent failed refresh: either serve the last good value (catalogs) or
+      // surface the error so callers can fail over to the next provider (rates).
+      if (isRecent(state?.refresh_failed_at, now, claimSeconds)) {
+        if (
+          serveStaleOnFailure &&
+          state?.value !== undefined &&
+          state.fetched_at !== undefined &&
+          now - state.fetched_at < options.maxStaleSeconds
+        ) {
+          return options.deserialize(state.value);
+        }
+        throw new Error(state?.refresh_error ?? "Swap provider cache refresh failed.");
+      }
+
+      // Another instance is already refreshing: serve its last good value rather
+      // than piling on a second provider call (even for rates — the in-flight
+      // fetch is seconds away from completing).
+      if (state?.value !== undefined && isRecent(state.refresh_started_at, now, claimSeconds)) {
         return options.deserialize(state.value);
       }
 
@@ -132,6 +150,7 @@ export class StoreBackedSwapCache {
     previous: SwapCacheState | undefined,
     options: SwapCacheResolveOptions<T>,
   ): Promise<T> {
+    const serveStaleOnFailure = options.serveStaleOnFailure !== false;
     try {
       const value = await options.fetch();
       await this.#store.casMeta(
@@ -151,9 +170,10 @@ export class StoreBackedSwapCache {
         }),
         expectedRev,
       );
-      // Serve stale limits within the max-stale window instead of breaking the
-      // whole pay screen when the provider is briefly unreachable.
+      // Serve stale catalogs within the max-stale window. Rates opt out so a
+      // dead feed fails closed and the service can try the next provider.
       if (
+        serveStaleOnFailure &&
         previous?.value !== undefined &&
         previous.fetched_at !== undefined &&
         now - previous.fetched_at < options.maxStaleSeconds
