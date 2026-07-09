@@ -486,81 +486,99 @@ function renderElementSwapMethodCardsHtml(
   return groupOpenReceiveSwapOptionsByLabel(options)
     .map((group) => {
       const groupKey = group.label.trim().toUpperCase();
-      const selectedAsset =
-        selectedNetworks[groupKey] ??
-        group.options.find((option) => option.available !== false)?.pay_in_asset ??
-        group.options[0]?.pay_in_asset;
-      const selectedOption =
-        group.options.find((option) => option.pay_in_asset === selectedAsset) ?? group.options[0];
-      if (selectedOption === undefined) return "";
+      const displayOption =
+        group.options.find((option) => option.available !== false) ?? group.options[0];
+      if (displayOption === undefined) return "";
       const multiNetwork = group.options.length > 1;
-      const disabled = selectedOption.available === false;
-      const limitMessage = elementsSwapLimitMessage(selectedOption, view);
+      const selectedAsset = selectedNetworks[groupKey];
+      const selectedOption =
+        selectedAsset === undefined
+          ? undefined
+          : group.options.find((option) => option.pay_in_asset === selectedAsset);
+      const activeOption = selectedOption ?? displayOption;
+      const networkSelected = selectedOption !== undefined;
+      const disabled = activeOption.available === false;
+      const continueDisabled = multiNetwork ? !networkSelected || disabled : disabled;
+      const limitMessage = elementsSwapLimitMessage(activeOption, view);
       if (!multiNetwork) {
         return `
           <button
             part="method"
             class="${disabled ? orClasses.methodCardUnavailable : orClasses.methodCardReady}"
-            ${disabled ? "" : `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapStart}="${escapeHtml(selectedOption.pay_in_asset)}"`}
+            ${disabled ? "" : `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapStart}="${escapeHtml(displayOption.pay_in_asset)}"`}
             ${disabled ? "disabled aria-disabled=\"true\"" : ""}
             type="button"
           >
-            <img class="${orClasses.methodIcon}" alt="" src="${escapeHtml(getOpenReceiveSwapOptionIcon(selectedOption))}">
+            <img class="${orClasses.methodIcon}" alt="" src="${escapeHtml(getOpenReceiveSwapOptionIcon(displayOption))}">
             <strong class="${orClasses.methodTitle}">${escapeHtml(group.label)}</strong>
             <small class="${orClasses.methodDetail}">${escapeHtml(
-              disabled && limitMessage !== undefined ? limitMessage : selectedOption.network_label,
+              disabled && limitMessage !== undefined ? limitMessage : displayOption.network_label,
             )}</small>
           </button>
         `;
       }
+      const triggerLabel = networkSelected
+        ? `<img class="${orClasses.methodNetworkIcon}" alt="" src="${escapeHtml(getOpenReceiveNetworkIcon(selectedOption.network_label))}">
+                ${escapeHtml(selectedOption.network_label)}`
+        : escapeHtml(openReceiveCheckoutLabels.selectNetwork);
+      const triggerLabelClass = networkSelected
+        ? orClasses.methodNetworkTriggerLabel
+        : `${orClasses.methodNetworkTriggerLabel} ${orClasses.methodNetworkPlaceholder}`;
+      const continueLabel =
+        networkSelected && disabled && limitMessage !== undefined ? limitMessage : "Continue";
       return `
-        <div part="method-card" class="${disabled ? orClasses.methodCardUnavailable : orClasses.methodCardReady}">
-          <img class="${orClasses.methodIcon}" alt="" src="${escapeHtml(getOpenReceiveSwapOptionIcon(selectedOption))}">
+        <div part="method-card" class="${orClasses.methodCardReady}">
+          <img class="${orClasses.methodIcon}" alt="" src="${escapeHtml(getOpenReceiveSwapOptionIcon(displayOption))}">
           <strong class="${orClasses.methodTitle}">${escapeHtml(group.label)}</strong>
-          <details part="method-network" class="${orClasses.methodNetwork}">
-            <summary
-              class="${orClasses.methodNetworkTrigger}"
-              aria-label="${escapeHtml(group.label)} network"
-            >
-              <span class="${orClasses.methodNetworkTriggerLabel}">
-                <img class="${orClasses.methodNetworkIcon}" alt="" src="${escapeHtml(getOpenReceiveNetworkIcon(selectedOption.network_label))}">
-                ${escapeHtml(selectedOption.network_label)}
-              </span>
-            </summary>
-            <ul class="${orClasses.methodNetworkMenu}" role="listbox">
-              ${group.options
-                .map((option) => {
-                  const optionLimit = elementsSwapLimitMessage(option, view);
-                  const label =
-                    option.available === false && optionLimit !== undefined
-                      ? `${option.network_label} · ${optionLimit}`
-                      : option.network_label;
-                  const optionDisabled = option.available === false;
-                  return `<li${optionDisabled ? ' class="menu-disabled"' : ""}>
-                    <button
-                      type="button"
-                      role="option"
-                      class="${orClasses.methodNetworkOption}"
-                      aria-selected="${option.pay_in_asset === selectedOption.pay_in_asset ? "true" : "false"}"
-                      ${optionDisabled ? "disabled" : ""}
-                      ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapNetwork}="${escapeHtml(groupKey)}"
-                      ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapNetworkValue}="${escapeHtml(option.pay_in_asset)}"
-                    >
-                      <img class="${orClasses.methodNetworkIcon}" alt="" src="${escapeHtml(getOpenReceiveNetworkIcon(option.network_label))}">
-                      ${escapeHtml(label)}
-                    </button>
-                  </li>`;
-                })
-                .join("")}
-            </ul>
-          </details>
+          <div class="${orClasses.methodNetworkField}">
+            <span class="${orClasses.methodNetworkLabel}">${escapeHtml(openReceiveCheckoutLabels.chooseNetwork)}</span>
+            <details part="method-network" class="${orClasses.methodNetwork}">
+              <summary
+                class="${orClasses.methodNetworkTrigger}"
+                aria-label="${escapeHtml(openReceiveCheckoutLabels.chooseNetwork)}"
+              >
+                <span class="${triggerLabelClass}">
+                  ${triggerLabel}
+                </span>
+              </summary>
+              <ul class="${orClasses.methodNetworkMenu}" role="listbox">
+                ${group.options
+                  .map((option) => {
+                    const optionLimit = elementsSwapLimitMessage(option, view);
+                    const label =
+                      option.available === false && optionLimit !== undefined
+                        ? `${option.network_label} · ${optionLimit}`
+                        : option.network_label;
+                    const optionDisabled = option.available === false;
+                    return `<li${optionDisabled ? ' class="menu-disabled"' : ""}>
+                      <button
+                        type="button"
+                        role="option"
+                        class="${orClasses.methodNetworkOption}"
+                        aria-selected="${option.pay_in_asset === selectedOption?.pay_in_asset ? "true" : "false"}"
+                        ${optionDisabled ? "disabled" : ""}
+                        ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapNetwork}="${escapeHtml(groupKey)}"
+                        ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapNetworkValue}="${escapeHtml(option.pay_in_asset)}"
+                      >
+                        <img class="${orClasses.methodNetworkIcon}" alt="" src="${escapeHtml(getOpenReceiveNetworkIcon(option.network_label))}">
+                        ${escapeHtml(label)}
+                      </button>
+                    </li>`;
+                  })
+                  .join("")}
+              </ul>
+            </details>
+          </div>
           <button
             part="method-confirm"
             class="${orClasses.methodConfirm}"
-            ${disabled ? "" : `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapStart}="${escapeHtml(selectedOption.pay_in_asset)}"`}
-            ${disabled ? "disabled aria-disabled=\"true\"" : ""}
+            ${
+              continueDisabled || selectedOption === undefined
+                ? "disabled aria-disabled=\"true\""
+                : `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapStart}="${escapeHtml(selectedOption.pay_in_asset)}"`
+            }
             type="button"
-          >${escapeHtml(disabled && limitMessage !== undefined ? limitMessage : "Continue")}</button>
+          >${escapeHtml(continueLabel)}</button>
         </div>
       `;
     })

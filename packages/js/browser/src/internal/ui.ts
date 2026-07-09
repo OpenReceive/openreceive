@@ -1138,6 +1138,8 @@ export const openReceiveCheckoutLabels = {
   tutorialExit: "Exit",
   lightningNetwork: "Lightning Network",
   chooseCountry: "Choose a country",
+  chooseNetwork: "Choose network",
+  selectNetwork: "Select network",
   transactionDetails: "Transaction details",
 } as const;
 
@@ -1176,6 +1178,11 @@ export const openReceiveThemeToggleElementStyles = openReceiveCheckoutElementSty
 
 export const openReceivePaymentMethods: readonly OpenReceivePaymentMethodOption[] = [
   {
+    id: "bitcoin",
+    title: "Bitcoin",
+    detail: "Pay from Lightning or send on-chain into a swap.",
+  },
+  {
     id: "card",
     title: "Credit Card",
     detail: "Pick your country, then use a card-friendly provider.",
@@ -1184,11 +1191,6 @@ export const openReceivePaymentMethods: readonly OpenReceivePaymentMethodOption[
     id: "bank",
     title: "Bank Transfer",
     detail: "Choose a country for local bank rails and cash apps.",
-  },
-  {
-    id: "bitcoin",
-    title: "Bitcoin",
-    detail: "Pay from Lightning or send on-chain into a swap.",
   },
   {
     id: "crypto",

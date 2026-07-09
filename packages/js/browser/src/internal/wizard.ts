@@ -28,6 +28,7 @@ import {
   type OpenReceiveCountryPickerModel,
   type OpenReceiveCountryPickerModelRequest,
   type OpenReceivePaymentMethod,
+  type OpenReceivePaymentMethodOption,
   type OpenReceivePaymentWizardController,
   type OpenReceivePaymentWizardControllerOptions,
   type OpenReceivePaymentWizardModel,
@@ -373,6 +374,78 @@ export function groupOpenReceiveSwapOptionsByLabel<T extends { readonly label: s
     groups[existing] = { label: group.label, options: [...group.options, option] };
   }
   return groups;
+}
+
+/**
+ * Preferred checkout method-grid order when swap coins are present:
+ * Bitcoin → Credit Card → USDT → USDC → Bank Transfer → SOL → ETH, then leftovers.
+ */
+export const OPENRECEIVE_METHOD_GRID_ORDER = [
+  { kind: "method", id: "bitcoin" },
+  { kind: "method", id: "card" },
+  { kind: "swap", label: "USDT" },
+  { kind: "swap", label: "USDC" },
+  { kind: "method", id: "bank" },
+  { kind: "swap", label: "SOL" },
+  { kind: "swap", label: "ETH" },
+] as const;
+
+export type OpenReceiveMethodGridEntry<T extends { readonly label: string }> =
+  | {
+      readonly kind: "method";
+      readonly method: OpenReceivePaymentMethodOption;
+    }
+  | {
+      readonly kind: "swap";
+      readonly group: OpenReceiveSwapMethodGroup<T>;
+    };
+
+/**
+ * Interleave fiat payment methods with grouped swap coins in the preferred grid order.
+ * When no swap options are present, returns the fiat methods only (including crypto).
+ */
+export function buildOpenReceiveMethodGridEntries<T extends { readonly label: string }>(
+  paymentMethods: readonly OpenReceivePaymentMethodOption[],
+  swapOptions: readonly T[],
+): readonly OpenReceiveMethodGridEntry<T>[] {
+  const swapGroups = groupOpenReceiveSwapOptionsByLabel(swapOptions);
+  if (swapGroups.length === 0) {
+    return paymentMethods.map((method) => ({ kind: "method" as const, method }));
+  }
+
+  const methodsById = new Map(paymentMethods.map((method) => [method.id, method]));
+  const groupsByLabel = new Map(
+    swapGroups.map((group) => [group.label.trim().toUpperCase(), group] as const),
+  );
+  const usedMethodIds = new Set<string>();
+  const usedSwapLabels = new Set<string>();
+  const entries: OpenReceiveMethodGridEntry<T>[] = [];
+
+  for (const slot of OPENRECEIVE_METHOD_GRID_ORDER) {
+    if (slot.kind === "method") {
+      if (slot.id === "crypto") continue;
+      const method = methodsById.get(slot.id);
+      if (method === undefined) continue;
+      usedMethodIds.add(method.id);
+      entries.push({ kind: "method", method });
+      continue;
+    }
+    const group = groupsByLabel.get(slot.label);
+    if (group === undefined) continue;
+    usedSwapLabels.add(slot.label);
+    entries.push({ kind: "swap", group });
+  }
+
+  for (const method of paymentMethods) {
+    if (method.id === "crypto" || usedMethodIds.has(method.id)) continue;
+    entries.push({ kind: "method", method });
+  }
+  for (const group of swapGroups) {
+    const key = group.label.trim().toUpperCase();
+    if (usedSwapLabels.has(key)) continue;
+    entries.push({ kind: "swap", group });
+  }
+  return entries;
 }
 
 export function getOpenReceiveRouteIcon(asset: Pick<AssetIndexEntry, "route" | "symbol">): string {
