@@ -6,7 +6,7 @@ Fastify plugin for the OpenReceive shipped routes. A thin wrapper over
 ```ts
 import { openReceiveFastify } from "@openreceive/fastify";
 await fastify.register(openReceiveFastify, {
-  service, authorize, resolveAmount, prefix: "/openreceive",
+  service, authorize, getOrderAmount, prefix: "/openreceive",
 });
 ```
 

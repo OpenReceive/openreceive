@@ -7,7 +7,7 @@ require "uri"
 module OpenReceive
   module Server
     # Framework-neutral HTTP request handler — the single home of OpenReceive's request -> response
-    # logic (routing actions, security tiers/authorize, capability-token extraction, resolve_amount
+    # logic (routing actions, security tiers/authorize, capability-token extraction, get_order_amount
     # usage, and error mapping). It is the Ruby port of the shipped @openreceive/http contract
     # (spec/openapi/openreceive-http.v1.yaml).
     #
@@ -19,10 +19,10 @@ module OpenReceive
     # Because both adapters share this one implementation, the Rack app and the Rails controllers
     # cannot drift — the routing/authorize/error semantics live in exactly one place.
     #
-    # The one intentional superset over a bare keyword call: `resolve_amount` may be supplied either
+    # The one intentional superset over a bare keyword call: `get_order_amount` may be supplied either
     # in the keyword form `->(order_id:, client_amount:, metadata:, request:)` OR in the
     # single-context form `->(ctx) { ctx[:order_id] }` documented in the Rails quickstart. Dispatch
-    # is by the callable's parameters. See #call_resolve_amount.
+    # is by the callable's parameters. See #call_get_order_amount.
     class RequestHandler
       TIER_1_ACTIONS = %w[checkout.create rate.list].freeze
       TIER_2_ACTIONS = %w[order.read checkout.read swap.options swap.quote swap.start swap.refund].freeze
@@ -63,23 +63,23 @@ module OpenReceive
       end
 
       # authorize      : ->(context) { boolean } — context = { action:, request:, resource:, token:, token_valid:, order_id? }
-      # resolve_amount : keyword form ->(order_id:, client_amount:, metadata:, request:) OR
+      # get_order_amount : keyword form ->(order_id:, client_amount:, metadata:, request:) OR
       #                  single-context form ->(ctx) — returns { "amount"|"sats"|"usd" => ... }
       # rate_limit     : ->(context) { allowed_boolean } — returning false yields 429 (optional)
       # tokens         : Tokens::Manager
       # prefix         : mount prefix used to path-scope the order-token cookie set on create
-      def initialize(service:, tokens:, authorize: nil, resolve_amount: nil, rate_limit: nil, prefix: DEFAULT_PREFIX)
+      def initialize(service:, tokens:, authorize: nil, get_order_amount: nil, rate_limit: nil, prefix: DEFAULT_PREFIX)
         @service = service
         @tokens = tokens
-        @resolve_amount = resolve_amount
+        @get_order_amount = get_order_amount
         @rate_limit = rate_limit
         @prefix = normalize_prefix(prefix)
         @authorize = authorize || default_authorize
 
-        return unless resolve_amount.nil?
+        return unless get_order_amount.nil?
 
-        warn "[openreceive-server] request handler initialized without resolve_amount; the create " \
-             "route will fall back to the client-supplied amount. Provide resolve_amount so the " \
+        warn "[openreceive-server] request handler initialized without get_order_amount; the create " \
+             "route will fall back to the client-supplied amount. Provide get_order_amount so the " \
              "authoritative amount is computed server-side."
       end
 
@@ -268,27 +268,27 @@ module OpenReceive
         end
         base["metadata"] = body["metadata"] if body.key?("metadata")
 
-        if @resolve_amount
-          resolved = call_resolve_amount(
+        if @get_order_amount
+          resolved = call_get_order_amount(
             order_id: order_id,
             client_amount: client_amount(body),
             metadata: body["metadata"],
             request: context[:request]
           )
-          apply_resolved_amount(base, resolved)
+          apply_order_amount(base, resolved)
         else
           apply_client_amount(base, body)
         end
       end
 
-      # The keyword form calls resolve_amount with keyword args (byte-identical to a bare host hook).
+      # The keyword form calls get_order_amount with keyword args (byte-identical to a bare host hook).
       # The single-context form (documented in the Rails quickstart) receives one hash carrying
       # :order_id (and :action) so `ctx[:order_id]` works. Dispatch by the callable's parameters.
-      def call_resolve_amount(order_id:, client_amount:, metadata:, request:)
-        if keyword_hook?(@resolve_amount)
-          @resolve_amount.call(order_id: order_id, client_amount: client_amount, metadata: metadata, request: request)
+      def call_get_order_amount(order_id:, client_amount:, metadata:, request:)
+        if keyword_hook?(@get_order_amount)
+          @get_order_amount.call(order_id: order_id, client_amount: client_amount, metadata: metadata, request: request)
         else
-          @resolve_amount.call(
+          @get_order_amount.call(
             action: "checkout.create",
             order_id: order_id,
             client_amount: client_amount,
@@ -303,7 +303,7 @@ module OpenReceive
           callable.parameters.any? { |type, _name| %i[key keyreq keyrest].include?(type) }
       end
 
-      def apply_resolved_amount(base, resolved)
+      def apply_order_amount(base, resolved)
         record = stringify_keys(resolved)
         if record.key?("amount")
           base["amount"] = record["amount"]
@@ -312,7 +312,7 @@ module OpenReceive
         elsif record.key?("usd")
           base["usd"] = record["usd"]
         else
-          raise ValidationError, "resolve_amount must return one of amount, sats, or usd."
+          raise ValidationError, "get_order_amount must return one of amount, sats, or usd."
         end
         base
       end

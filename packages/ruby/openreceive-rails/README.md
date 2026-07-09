@@ -4,7 +4,7 @@ A mountable **Rails engine** that ships [OpenReceive](https://openreceive.org)'s
 checkout routes into a Rails app. Your app keeps 100% of its authentication: the engine controllers
 inherit from your `ApplicationController`, so they get your CSRF protection, `authenticate_user!`,
 and `current_user` for free. OpenReceive never inspects your session — it calls the `authorize` and
-`resolve_amount` hooks you configure and obeys them.
+`get_order_amount` hooks you configure and obeys them.
 
 This gem builds on two gems you also depend on:
 
@@ -90,7 +90,7 @@ OpenReceive.configure do |config|
   end
 
   # Amount authority — NEVER trust the client price. Return the authoritative amount.
-  config.resolve_amount = ->(ctx) { { usd: Order.find(ctx[:order_id]).total_usd.to_s } }
+  config.get_order_amount = ->(ctx) { { usd: Order.find(ctx[:order_id]).total_usd.to_s } }
 end
 ```
 
@@ -104,7 +104,7 @@ end
 | `namespace` | `"default"` | Store namespace (multi-tenant isolation). |
 | `store` | ActiveRecord store | Invoice store; override with any store object. |
 | `authorize` | `nil` → default policy | `->(context) { boolean }`. |
-| `resolve_amount` | `nil` | Authoritative amount hook (see below). |
+| `get_order_amount` | `nil` | Authoritative amount hook (see below). |
 | `rate_limit` | `nil` | `->(context) { allowed_boolean }`; `false` → 429. |
 | `prefix` | `"/openreceive"` | Informational (Rails owns routing via `mount`). |
 | `price_provider` | `nil` | Injected price feed (fiat + `/rates`). |
@@ -112,7 +112,7 @@ end
 | `price_currencies` | `nil` | Currencies for `/rates`. |
 | `logger` | `nil` | Optional logger (never receives the NWC secret). |
 
-`resolve_amount` accepts **either** the single-context form `->(ctx) { ctx[:order_id] }` (ctx has
+`get_order_amount` accepts **either** the single-context form `->(ctx) { ctx[:order_id] }` (ctx has
 `:order_id`, `:client_amount`, `:metadata`, `:request`, `:action`) **or** the keyword form
 `->(order_id:, client_amount:, metadata:, request:)` (identical to `RackApp`). It must return one of
 `{ amount: … }`, `{ sats: … }`, or `{ usd: … }`.

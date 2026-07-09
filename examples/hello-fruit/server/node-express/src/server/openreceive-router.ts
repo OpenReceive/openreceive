@@ -2,15 +2,15 @@ import { openReceiveExpress } from "@openreceive/express";
 import {
   guestCheckout,
   type OpenReceiveAuthorize,
-  type OpenReceiveResolveAmount,
+  type OpenReceiveGetOrderAmount,
 } from "@openreceive/http";
 import type { OrderAccessTokenManager } from "@openreceive/node";
 import type { Express } from "express";
-import { resolveHelloFruitOrderAmount } from "../../../../shared/demo-order.ts";
+import { getHelloFruitOrderAmount } from "../../../../shared/demo-order.ts";
 
 // This module wires the SHIPPED OpenReceive routes into the demo instead of hand-writing them.
 // It shows the whole re-architecture in one place: mount the router, keep the app's own auth via
-// the `authorize` hook, keep prices honest via `resolveAmount`, and gate reads with per-order
+// the `authorize` hook, keep prices honest via `getOrderAmount`, and gate reads with per-order
 // capability tokens. The demo's own `/prepare_order` still owns cart -> amount (that is the
 // amount-authority example); these routes are the production-grade surface a real app would use.
 
@@ -75,10 +75,10 @@ function demoUserFromRequest(request: unknown): HelloFruitDemoUser | undefined {
  * persisted the authoritative order under `demo_order:${orderId}`, so this just looks that order up
  * by id and returns its amount source.
  */
-export function createHelloFruitResolveAmount(
+export function createHelloFruitGetOrderAmount(
   openreceive: OpenReceiveService,
-): OpenReceiveResolveAmount {
-  return ({ orderId }) => resolveHelloFruitOrderAmount(openreceive, orderId);
+): OpenReceiveGetOrderAmount {
+  return ({ orderId }) => getHelloFruitOrderAmount(openreceive, orderId);
 }
 
 /** Mount the shipped OpenReceive routes at /openreceive with the demo's chosen auth + pricing. */
@@ -99,7 +99,7 @@ export function mountHelloFruitOpenReceiveRouter(
     openReceiveExpress({
       service: openreceive,
       authorize,
-      resolveAmount: createHelloFruitResolveAmount(openreceive),
+      getOrderAmount: createHelloFruitGetOrderAmount(openreceive),
       tokens,
     }),
   );

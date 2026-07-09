@@ -483,7 +483,7 @@ function normalizeRequestCheckoutAmount(
     options.sats !== undefined,
   ].filter(Boolean).length;
   // No amount source is valid for a prefix/checkoutUrl create against the mounted router:
-  // the server's resolveAmount sets the authoritative price and the client POSTs { order_id }.
+  // the server's getOrderAmount sets the authoritative price and the client POSTs { order_id }.
   if (sourceCount === 0) {
     return undefined;
   }

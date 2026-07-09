@@ -9,7 +9,7 @@
   (promoted from shared shapes to full paths) and is implemented identically by the Node
   adapters and the Ruby engine.
 - Added the framework-agnostic `@openreceive/http` handler `(Request) => Promise<Response>`
-  with three security tiers, an `authorize` hook, per-order capability tokens, a `resolveAmount`
+  with three security tiers, an `authorize` hook, per-order capability tokens, a `getOrderAmount`
   amount-authority hook, and error→status mapping. Thin adapters: `@openreceive/express`,
   `@openreceive/fastify`, `@openreceive/next`.
 - **Capability tokens (PART 2):** checkout creation mints a high-entropy per-order token
@@ -17,9 +17,9 @@
   KV stores; as `order_access_token_hash` in the normalized schema via migration 002). Tier-2
   reads present it as `Authorization: Bearer` / `X-OpenReceive-Order-Token`.
 - **Amount authority:** the create-checkout route never trusts a client-supplied price; the host
-  `resolveAmount` hook returns the authoritative amount.
+  `getOrderAmount` hook returns the authoritative amount.
 - `@openreceive/node`: added `createOrderAccessTokenManager`, `hashOrderAccessToken`, the
-  `resolveAmount` types, migration 002 (both dialects), and a `migrate` note that capability
+  `getOrderAmount` types, migration 002 (both dialects), and a `migrate` note that capability
   tokens are provisioned via the meta KV.
 - `@openreceive/browser`: `postOpenReceiveJson` now forwards custom headers so swap
   start/quote/refund reads can carry the order capability token (no wire break).

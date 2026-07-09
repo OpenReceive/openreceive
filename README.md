@@ -36,7 +36,7 @@ The v0.1 reference path is contract-first and server-owned:
 
 Instead of hand-writing controllers, mount OpenReceive's routes and keep 100% of
 authentication in your app. OpenReceive never inspects your session — it calls
-your `authorize` and `resolveAmount` hooks and obeys them.
+your `authorize` and `getOrderAmount` hooks and obeys them.
 
 ```ts
 import express from "express";
@@ -52,7 +52,7 @@ app.use(openReceiveExpress({
   authorize: ({ action, token, resource }) =>
     action === "checkout.create" || validToken(token, resource.order_id),
   // The client-supplied price is never trusted; you return the authoritative amount.
-  resolveAmount: ({ orderId }) => ({ usd: priceForOrder(orderId) }),
+  getOrderAmount: ({ orderId }) => ({ usd: priceForOrder(orderId) }),
 }));
 ```
 

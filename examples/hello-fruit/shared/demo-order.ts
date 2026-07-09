@@ -67,7 +67,7 @@ export interface HelloFruitCreateOrderResult {
  * Meta-store key prefix under which the app persists each prepared order. Persisting through the
  * OpenReceive store's KV (not an in-memory Map) keeps the amount authority durable and correct
  * across multiple instances (Heroku/Vercel), which is the whole point of the shipped-router model:
- * `/prepare_order` writes the order here, and the mounted create-checkout route's `resolveAmount`
+ * `/prepare_order` writes the order here, and the mounted create-checkout route's `getOrderAmount`
  * reads it back so the client-supplied price is never trusted.
  */
 export const HELLO_FRUIT_ORDER_META_PREFIX = "demo_order:";
@@ -79,7 +79,7 @@ interface StoredHelloFruitOrder {
 
 /**
  * App order step (NOT an OpenReceive route): validate the cart, compute items + the authoritative
- * total, assign an order id, and PERSIST the order keyed by that id so `resolveAmount` can look it
+ * total, assign an order id, and PERSIST the order keyed by that id so `getOrderAmount` can look it
  * up later. Returns just `{ order }` for display — creating the checkout is the mounted router's job.
  */
 export async function prepareHelloFruitOrder(
@@ -109,7 +109,7 @@ export async function prepareHelloFruitOrder(
  * The amount authority for the mounted create-checkout route: look the persisted order up by id and
  * return its authoritative amount source. The client's price is never consulted.
  */
-export async function resolveHelloFruitOrderAmount(
+export async function getHelloFruitOrderAmount(
   openreceive: Pick<OpenReceive, "store">,
   orderId: string,
 ): Promise<OpenReceiveCheckoutAmountSource> {

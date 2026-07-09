@@ -12,7 +12,7 @@ info:
     request or response. Three security tiers govern access: Tier 1 (anonymous-capable:
     create checkout, rates), Tier 2 (capability-token-scoped: order/checkout reads and
     swap actions on your own order), Tier 3 (privileged, fails closed: admin sweep). The
-    host supplies authorize + resolveAmount hooks; OpenReceive never inspects the host
+    host supplies authorize + getOrderAmount hooks; OpenReceive never inspects the host
     session. See docs/guides/routes.md.
   contact:
     name: OpenReceive
@@ -30,9 +30,9 @@ paths:
       operationId: createCheckout
       summary: Create or replay a checkout for an order (Tier 1, action=checkout.create).
       description: >
-        authorize(checkout.create) -> resolveAmount(order_id, client_amount) ->
+        authorize(checkout.create) -> getOrderAmount(order_id, client_amount) ->
         getOrCreateCheckout -> mint per-order capability token on first checkout.
-        The client-supplied amount is NOT trusted; the host resolveAmount hook returns the
+        The client-supplied amount is NOT trusted; the host getOrderAmount hook returns the
         authoritative amount. order_access_token is returned only on the first mint per order.
       security:
         - {}

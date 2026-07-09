@@ -121,6 +121,6 @@ export type {
 } from "./tokens.ts";
 export type {
   OpenReceiveCheckoutAmountSource,
-  OpenReceiveResolveAmount,
-  OpenReceiveResolveAmountContext,
-} from "./resolve-amount.ts";
+  OpenReceiveGetOrderAmount,
+  OpenReceiveGetOrderAmountContext,
+} from "./get-order-amount.ts";

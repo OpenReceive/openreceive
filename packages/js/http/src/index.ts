@@ -11,8 +11,8 @@ export type {
   OpenReceiveCheckout,
   OpenReceiveCheckoutAmountSource,
   OpenReceiveOrderStatus,
-  OpenReceiveResolveAmount,
-  OpenReceiveResolveAmountContext,
+  OpenReceiveGetOrderAmount,
+  OpenReceiveGetOrderAmountContext,
 } from "@openreceive/node";
 export {
   createDefaultAuthorize,

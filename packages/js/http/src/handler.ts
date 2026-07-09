@@ -5,7 +5,7 @@ import type {
   OpenReceiveCheckoutAmountSource,
   OpenReceiveCreateCheckoutRequest,
   OpenReceiveOrderRequest,
-  OpenReceiveResolveAmount,
+  OpenReceiveGetOrderAmount,
 } from "@openreceive/node";
 import {
   createDefaultAuthorize,
@@ -30,9 +30,9 @@ const ORDER_TOKEN_COOKIE_MAX_AGE = 86400;
 
 /**
  * Merge a host-resolved amount source with the base create request into a service-ready request.
- * Mirrors `applyResolvedAmount` in @openreceive/node; inlined here to avoid a value import from node.
+ * Mirrors `applyOrderAmount` in @openreceive/node; inlined here to avoid a value import from node.
  */
-function applyResolvedAmount(
+function applyOrderAmount(
   base: Omit<OpenReceiveCreateCheckoutRequest, "amount" | "sats" | "usd">,
   resolved: OpenReceiveCheckoutAmountSource,
 ): OpenReceiveCreateCheckoutRequest {
@@ -52,7 +52,7 @@ export interface CreateOpenReceiveHttpHandlerOptions {
   /** Host authorization policy. Defaults to the token-gated Tier policy (Tier 3 denied). */
   readonly authorize?: OpenReceiveAuthorize;
   /** Host server-side pricing hook. When omitted, the client-supplied amount is trusted. */
-  readonly resolveAmount?: OpenReceiveResolveAmount;
+  readonly getOrderAmount?: OpenReceiveGetOrderAmount;
   /** Host rate-limit hook. When omitted, no rate limiting is applied. */
   readonly rateLimit?: OpenReceiveRateLimit;
   /** Capability-token manager. Defaults to one backed by `service.store` / `service.namespace`. */
@@ -75,7 +75,7 @@ interface HandlerRuntime {
   readonly tokens: OrderAccessTokenManager;
   readonly authorize: OpenReceiveAuthorize;
   readonly rateLimit?: OpenReceiveRateLimit;
-  readonly resolveAmount?: OpenReceiveResolveAmount;
+  readonly getOrderAmount?: OpenReceiveGetOrderAmount;
   readonly prefix: string;
 }
 
@@ -109,9 +109,9 @@ export function createOpenReceiveHttpHandler(
       "OpenReceive: no authorize policy configured — Tier-3 admin routes (invoice.sweep) will always return 403.",
     );
   }
-  if (options.resolveAmount === undefined) {
+  if (options.getOrderAmount === undefined) {
     console.warn(
-      "OpenReceive: no resolveAmount hook — the client-supplied amount is trusted; set resolveAmount to enforce server-side pricing.",
+      "OpenReceive: no getOrderAmount hook — the client-supplied amount is trusted; set getOrderAmount to enforce server-side pricing.",
     );
   }
 
@@ -120,7 +120,7 @@ export function createOpenReceiveHttpHandler(
     tokens,
     authorize,
     rateLimit: options.rateLimit,
-    resolveAmount: options.resolveAmount,
+    getOrderAmount: options.getOrderAmount,
     prefix,
   };
 
@@ -185,8 +185,8 @@ async function handleCreateCheckout(
   const metadata = readMetadata(body);
 
   let resolved: OpenReceiveCheckoutAmountSource;
-  if (runtime.resolveAmount !== undefined) {
-    resolved = await runtime.resolveAmount({ orderId, clientAmount, metadata, request });
+  if (runtime.getOrderAmount !== undefined) {
+    resolved = await runtime.getOrderAmount({ orderId, clientAmount, metadata, request });
   } else if (clientAmount !== undefined) {
     // No server-side pricing hook: fall back to the (trusted) client amount source.
     resolved = clientAmount;
@@ -207,7 +207,7 @@ async function handleCreateCheckout(
     ...(metadata === undefined ? {} : { metadata }),
   } satisfies Omit<OpenReceiveCreateCheckoutRequest, "amount" | "sats" | "usd">;
 
-  const createRequest = applyResolvedAmount(base, resolved);
+  const createRequest = applyOrderAmount(base, resolved);
   const checkout = await runtime.service.getOrCreateCheckout(createRequest);
 
   // Mint the per-order capability token. It is only returned on the first checkout for an order;

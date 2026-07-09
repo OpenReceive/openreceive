@@ -13,7 +13,7 @@ module OpenReceive
   #     config.nwc               = ENV.fetch("OPENRECEIVE_NWC")
   #     config.namespace         = "default"
   #     config.authorize         = ->(ctx) { ... }
-  #     config.resolve_amount    = ->(ctx) { { usd: Order.find(ctx[:order_id]).total_usd.to_s } }
+  #     config.get_order_amount    = ->(ctx) { { usd: Order.find(ctx[:order_id]).total_usd.to_s } }
   #   end
   #
   # The Configuration lazily builds — and memoizes — a single `OpenReceive::Server::Service`, a
@@ -48,12 +48,12 @@ module OpenReceive
     # OpenReceive::Server::Presets.guest_checkout / .with_user policies can be assigned here directly.
     attr_accessor :authorize
 
-    # resolve_amount: called to compute the authoritative amount for a checkout (never trust the
+    # get_order_amount: called to compute the authoritative amount for a checkout (never trust the
     # client price). Accepts either the single-context form `->(ctx) { { usd: ... } }` (ctx has
     # :order_id, :client_amount, :metadata, :request, :action) or the keyword form
     # `->(order_id:, client_amount:, metadata:, request:) { ... }` (matching RackApp). Must return
     # one of { amount: }, { sats: }, or { usd: }.
-    attr_accessor :resolve_amount
+    attr_accessor :get_order_amount
 
     # rate_limit: ->(context) { allowed_boolean }. Returning false yields a 429. Optional.
     attr_accessor :rate_limit
@@ -82,7 +82,7 @@ module OpenReceive
       @namespace = "default"
       @store = nil
       @authorize = nil
-      @resolve_amount = nil
+      @get_order_amount = nil
       @rate_limit = nil
       @prefix = "/openreceive"
       @price_provider = nil
@@ -128,7 +128,7 @@ module OpenReceive
         service: service,
         tokens: tokens,
         authorize: @authorize,
-        resolve_amount: @resolve_amount,
+        get_order_amount: @get_order_amount,
         rate_limit: @rate_limit,
         prefix: @prefix
       )

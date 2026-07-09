@@ -34,7 +34,7 @@ async function makeService(overrides = {}) {
   });
 }
 
-// Handlers warn when authorize / resolveAmount are omitted; silence that noise here.
+// Handlers warn when authorize / getOrderAmount are omitted; silence that noise here.
 function createHandlerSilently(options) {
   const original = console.warn;
   console.warn = () => {};
@@ -182,12 +182,12 @@ test("a custom authorize policy governs order.read (deny -> 403, allow -> 200)",
   assert.equal((await allowed.json()).order_id, "order-custom-allow");
 });
 
-test("resolveAmount overrides a forged client amount", async () => {
+test("getOrderAmount overrides a forged client amount", async () => {
   const service = await makeService();
   const handler = createHandlerSilently({
     service,
     // Server-side authority: ignore whatever the client sent and price at exactly $1.00.
-    resolveAmount: () => ({ usd: "1.00" }),
+    getOrderAmount: () => ({ usd: "1.00" }),
   });
 
   const response = await handler(
@@ -271,7 +271,7 @@ test("the handler emits the missing-policy warnings and exposes prefix + handle"
   }
   assert.equal(warnings.length, 2);
   assert.ok(warnings.some((message) => /Tier-3 admin routes/.test(message)));
-  assert.ok(warnings.some((message) => /resolveAmount/.test(message)));
+  assert.ok(warnings.some((message) => /getOrderAmount/.test(message)));
 
   assert.equal(handler.prefix, "/openreceive");
   assert.equal(typeof handler.handle, "function");

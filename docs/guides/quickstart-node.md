@@ -75,10 +75,20 @@ app.use(express.json());
 app.use(
   openReceiveExpress({
     service: openreceive,
-    // The client can never set the price. You return the authoritative amount for an order.
-    resolveAmount: async ({ orderId }) => {
-      const order = await loadYourOrder(orderId);
-      return { usd: order.total_usd }; // or { sats } / { amount: { fiat: { currency, value } } }
+
+    // getOrderAmount is how OpenReceive learns what an order costs.
+    //
+    // When the frontend starts a checkout for `orderId`, the router calls this hook FIRST,
+    // then mints a Lightning invoice for exactly the amount you return. The browser never
+    // sends a price OpenReceive trusts — so a tampered client can't pay 1 sat for a $50 order.
+    // You look up the order YOU already created (from the cart, in your own database) and
+    // return its authoritative total. This is the whole "keep prices honest" story.
+    getOrderAmount: async ({ orderId }) => {
+      const order = await loadYourOrder(orderId); // your own DB lookup — OpenReceive never sees your cart
+      return { usd: order.total_usd }; // the price the payer must pay, in USD
+      // Other shapes you can return:
+      //   { sats: 21000 }                                  // a fixed sats amount
+      //   { amount: { fiat: { currency: "EUR", value: "9.99" } } }  // any configured fiat
     },
   }),
 );
@@ -106,6 +116,27 @@ import "@openreceive/react/styles.css";
 
 `prefix` defaults to `/openreceive` (where you mounted the router); pass `prefix="..."` if you
 mounted somewhere else. That is the entire frontend.
+
+## What is the order access token (and do I store it)?
+
+When a checkout is created, OpenReceive mints a **per-order access token**. It is a capability:
+whoever holds it can read *that one order's* status and run its swaps — and nothing else. On a
+site with no logins, this is what lets an anonymous payer poll their own order safely. (An order
+id alone isn't secret enough to gate reads on; the token is.)
+
+**Short answer: you don't store it and you don't pass it — everything above handles it for you.**
+
+- **Server:** OpenReceive stores only the token's SHA-256 *hash* in your store, automatically. You
+  never persist the raw token.
+- **Browser:** the `<Checkout>` component (via `@openreceive/browser`) keeps the raw token in the
+  browser and attaches it to every status/swap request. The create route also sets it as an
+  httpOnly cookie the browser sends automatically. So with the shipped component, there is nothing
+  to do.
+
+The **only** time you touch the token is a custom or mobile client that does *not* use the shipped
+component: read `order_access_token` from the checkout-create response and send it as
+`Authorization: Bearer <token>` on your reads. Treat it as short-lived — it lives with the open
+checkout, it is not a long-term secret to save in a database.
 
 ## 6. Fulfillment
 

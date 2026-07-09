@@ -3,7 +3,7 @@
 OpenReceive ships the HTTP routes so you do not hand-write controllers. You mount them
 under a prefix you choose (default `/openreceive`) and keep 100% of authentication in your
 app. OpenReceive never inspects your session, cookie, JWT, or header — it calls the hooks
-you provide (`authorize`, `resolveAmount`, `rateLimit`) and obeys their return values. This
+you provide (`authorize`, `getOrderAmount`, `rateLimit`) and obeys their return values. This
 is inversion of control: the host hooks into OpenReceive, not the reverse.
 
 The canonical contract is `spec/openapi/openreceive-http.v1.yaml`. Every Node adapter and the
@@ -32,7 +32,7 @@ enum in `spec/schemas/error.schema.json`. Status mapping: `INVALID_REQUEST`→40
 ## Three security tiers
 
 - **Tier 1 — anonymous-capable** (`checkout.create`, `rates`): open by default; protected by
-  your `rateLimit` hook, your `authorize` hook, and your `resolveAmount` hook so the price
+  your `rateLimit` hook, your `authorize` hook, and your `getOrderAmount` hook so the price
   cannot be forged.
 - **Tier 2 — capability-token scoped** (order/checkout reads, swap actions on your own order):
   requires a valid per-order capability token **or** an allow decision from `authorize`.
@@ -98,16 +98,16 @@ for you. Token hashing is identical across the Node and Ruby engines
 
 ## Amount authority
 
-The create-checkout route MUST NOT trust a client-supplied price. Provide a `resolveAmount`
+The create-checkout route MUST NOT trust a client-supplied price. Provide a `getOrderAmount`
 hook that returns the authoritative amount for an order; the route uses that, not the raw
 client amount:
 
 ```ts
-resolveAmount = ({ orderId, request }) => ({ usd: priceForOrder(orderId) });
+getOrderAmount = ({ orderId, request }) => ({ usd: priceForOrder(orderId) });
 // or { sats: 21000 } or { amount: { fiat: { currency: "EUR", value: "9.99" } } }
 ```
 
-If you omit `resolveAmount`, the route falls back to the client amount and logs a warning —
+If you omit `getOrderAmount`, the route falls back to the client amount and logs a warning —
 acceptable for local development, never for production.
 
 ## Mounting
@@ -116,7 +116,7 @@ acceptable for local development, never for production.
 
 ```ts
 import { createOpenReceiveHttpHandler } from "@openreceive/http";
-const handler = createOpenReceiveHttpHandler({ service, authorize, resolveAmount, prefix: "/openreceive" });
+const handler = createOpenReceiveHttpHandler({ service, authorize, getOrderAmount, prefix: "/openreceive" });
 const response = await handler(request); // (Request) => Promise<Response>
 ```
 
@@ -124,14 +124,14 @@ const response = await handler(request); // (Request) => Promise<Response>
 
 ```ts
 import { openReceiveExpress } from "@openreceive/express";
-app.use(openReceiveExpress({ service, authorize, resolveAmount }));
+app.use(openReceiveExpress({ service, authorize, getOrderAmount }));
 ```
 
 ### Fastify
 
 ```ts
 import { openReceiveFastify } from "@openreceive/fastify";
-await fastify.register(openReceiveFastify, { service, authorize, resolveAmount, prefix: "/openreceive" });
+await fastify.register(openReceiveFastify, { service, authorize, getOrderAmount, prefix: "/openreceive" });
 ```
 
 ### Next.js (App Router)
@@ -139,7 +139,7 @@ await fastify.register(openReceiveFastify, { service, authorize, resolveAmount, 
 ```ts
 // app/openreceive/[...openreceive]/route.ts
 import { openReceiveNextHandlers } from "@openreceive/next";
-export const { GET, POST } = openReceiveNextHandlers({ service, authorize, resolveAmount });
+export const { GET, POST } = openReceiveNextHandlers({ service, authorize, getOrderAmount });
 ```
 
 ### Rails
@@ -157,7 +157,7 @@ and `current_user`. Configure the hooks in an initializer:
 OpenReceive.configure do |config|
   config.parent_controller = "ApplicationController"
   config.authorize = ->(ctx) { ctx[:action] == "checkout.create" || current_user_owns?(ctx) }
-  config.resolve_amount = ->(ctx) { { usd: price_for_order(ctx[:order_id]) } }
+  config.get_order_amount = ->(ctx) { { usd: price_for_order(ctx[:order_id]) } }
 end
 ```
 

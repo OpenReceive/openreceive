@@ -143,7 +143,7 @@ test("Node quickstart mounts the shipped router and covers swaps without hand-wr
   // The recommended path mounts the router — the developer writes no payment endpoints.
   assert.match(quickstart, /openReceiveExpress/);
   assert.match(quickstart, /createOpenReceive/);
-  assert.match(quickstart, /resolveAmount/);
+  assert.match(quickstart, /getOrderAmount/);
   assert.match(quickstart, /from "@openreceive\/node";/);
   // No hand-written checkout/order/status route handlers or manual action routing.
   assert.doesNotMatch(quickstart, /app\.post\(\s*["'`]\/(order|create_order)\b/);

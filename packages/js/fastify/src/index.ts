@@ -8,7 +8,7 @@ import {
 // structurally with the minimum this adapter touches. All route/auth/token/error logic lives in
 // @openreceive/http; this only bridges Fastify's request/reply to Web Request/Response.
 //
-//   await fastify.register(openReceiveFastify, { service, authorize, resolveAmount, prefix: "/openreceive" });
+//   await fastify.register(openReceiveFastify, { service, authorize, getOrderAmount, prefix: "/openreceive" });
 //
 // Register `prefix` scopes the plugin's catch-all route to that path AND is passed to the handler
 // so both agree; request.raw.url carries the full path, so matching is exact.

@@ -12,7 +12,7 @@ import { openReceiveExpress } from "@openreceive/express";
 const service = await createOpenReceive();
 const app = express();
 app.use(express.json());
-app.use(openReceiveExpress({ service, authorize, resolveAmount }));
+app.use(openReceiveExpress({ service, authorize, getOrderAmount }));
 ```
 
 See `docs/guides/routes.md` for the route contract, tiers, and capability tokens.

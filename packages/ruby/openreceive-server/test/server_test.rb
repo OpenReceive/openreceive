@@ -278,14 +278,14 @@ class OpenReceiveServerTest < Minitest::Test
     store = OpenReceive::Server::InMemoryInvoiceStore.new
     service = build_service(store: store)
     tokens = OpenReceive::Server::Tokens::Manager.new(store: store, namespace: "default")
-    resolve_amount = ->(order_id:, client_amount:, metadata:, request:) do
+    get_order_amount = ->(order_id:, client_amount:, metadata:, request:) do
       _ = [order_id, client_amount, metadata, request]
       { "sats" => 1000 } # authoritative amount, ignores the untrusted client amount
     end
     app = OpenReceive::Server::RackApp.new(
       service: service,
       tokens: tokens,
-      resolve_amount: resolve_amount
+      get_order_amount: get_order_amount
     )
     [app, store, tokens]
   end
@@ -295,7 +295,7 @@ class OpenReceiveServerTest < Minitest::Test
     env = rack_env(
       method: "POST",
       path: "/openreceive/checkouts",
-      body: { "order_id" => "rack-order", "sats" => 50 } # client amount is ignored by resolve_amount
+      body: { "order_id" => "rack-order", "sats" => 50 } # client amount is ignored by get_order_amount
     )
     status, headers, body = app.call(env)
 
@@ -304,7 +304,7 @@ class OpenReceiveServerTest < Minitest::Test
     payload = JSON.parse(body.first)
     checkout = payload.fetch("checkout")
     assert_equal "rack-order", checkout.fetch("order_id")
-    # resolve_amount forced 1000 sats, NOT the client-supplied 50.
+    # get_order_amount forced 1000 sats, NOT the client-supplied 50.
     assert_equal 1_000_000, checkout.fetch("amount_msats")
     assert payload.fetch("order_access_token")
   end
@@ -352,7 +352,7 @@ class OpenReceiveServerTest < Minitest::Test
     app = OpenReceive::Server::RackApp.new(
       service: service,
       tokens: tokens,
-      resolve_amount: ->(order_id:, client_amount:, metadata:, request:) { { "sats" => 1000 } },
+      get_order_amount: ->(order_id:, client_amount:, metadata:, request:) { { "sats" => 1000 } },
       authorize: ->(context) { context[:action] == "invoice.sweep" }
     )
     env = rack_env(method: "POST", path: "/openreceive/admin/sweep", body: {})
@@ -395,7 +395,7 @@ class OpenReceiveServerTest < Minitest::Test
     OpenReceive::Server::RackApp.new(
       service: service,
       tokens: tokens,
-      resolve_amount: ->(order_id:, client_amount:, metadata:, request:) { { "sats" => 1000 } },
+      get_order_amount: ->(order_id:, client_amount:, metadata:, request:) { { "sats" => 1000 } },
       authorize: authorize
     )
   end

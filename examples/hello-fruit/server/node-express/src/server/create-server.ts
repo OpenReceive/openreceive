@@ -93,7 +93,7 @@ export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptio
   });
 
   // Mount the SHIPPED OpenReceive routes at /openreceive (POST /checkouts, POST /orders/:id, ...).
-  // This is the production-grade surface: real authorize + resolveAmount + capability tokens, with
+  // This is the production-grade surface: real authorize + getOrderAmount + capability tokens, with
   // no hand-written invoice plumbing. See ./openreceive-router.ts for the two authorize examples.
   mountHelloFruitOpenReceiveRouter(app, openreceive, tokens);
 
@@ -152,7 +152,7 @@ export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptio
   });
 
   // App order step (NOT an OpenReceive route): validate the cart, compute the authoritative total,
-  // and PERSIST the order so the mounted router's resolveAmount can look it up. It no longer calls
+  // and PERSIST the order so the mounted router's getOrderAmount can look it up. It no longer calls
   // getOrCreateCheckout — POST /openreceive/checkouts does that, and the self-contained <Checkout
   // orderId> component drives it.
   app.post("/prepare_order", async (req, res, next) => {

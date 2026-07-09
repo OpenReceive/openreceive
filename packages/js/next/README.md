@@ -9,7 +9,7 @@ import { createOpenReceive } from "@openreceive/node";
 import { openReceiveNextHandlers } from "@openreceive/next";
 
 const service = await createOpenReceive();
-export const { GET, POST } = openReceiveNextHandlers({ service, authorize, resolveAmount });
+export const { GET, POST } = openReceiveNextHandlers({ service, authorize, getOrderAmount });
 ```
 
 See `docs/guides/routes.md` for the route contract, tiers, and capability tokens.

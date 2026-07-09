@@ -9,7 +9,7 @@ The package exposes one factory:
 ```ts
 import { createOpenReceiveHttpHandler } from "@openreceive/http";
 
-const handler = createOpenReceiveHttpHandler({ service, authorize, resolveAmount });
+const handler = createOpenReceiveHttpHandler({ service, authorize, getOrderAmount });
 
 // `handler` is a Web-standard Fetch handler: (request: Request) => Promise<Response>.
 // It also carries `handler.prefix` and a `handler.handle` alias.

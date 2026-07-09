@@ -86,8 +86,8 @@ tokens = OpenReceive::Server::Tokens::Manager.new(store: store, namespace: "acme
 app = OpenReceive::Server::RackApp.new(
   service: service,
   tokens: tokens,
-  # The client amount is UNTRUSTED. resolve_amount returns the authoritative amount.
-  resolve_amount: ->(order_id:, client_amount:, metadata:, request:) {
+  # The client amount is UNTRUSTED. get_order_amount returns the authoritative amount.
+  get_order_amount: ->(order_id:, client_amount:, metadata:, request:) {
     { "sats" => MyCart.total_sats(order_id) }
   },
   authorize: ->(context) { my_policy.allow?(context) }, # optional; see tiers below

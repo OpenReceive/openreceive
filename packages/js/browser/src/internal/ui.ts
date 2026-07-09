@@ -771,7 +771,7 @@ export type RequestCheckoutOptions = RequestCheckoutBaseOptions &
         readonly usd: string;
       }
     // Amount-less create: `{ prefix, orderId }` (or `{ checkoutUrl, orderId }`) with no amount.
-    // The mounted server's resolveAmount sets the authoritative price; the client POSTs a body
+    // The mounted server's getOrderAmount sets the authoritative price; the client POSTs a body
     // of only `{ order_id }`.
     | {
         readonly amount?: never;
