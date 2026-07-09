@@ -1,7 +1,10 @@
 import * as React from "react";
 import {
   OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES,
+  OPENRECEIVE_DEFAULT_PREFIX,
   openReceiveCheckoutLabels,
+  requestCheckout,
+  resolveOrderUrlFromPrefix,
   type CheckoutSnapshot,
 } from "@openreceive/browser/internal";
 import {
@@ -20,9 +23,141 @@ import type { CheckoutProps } from "./types.ts";
 
 export type Checkout = CheckoutSnapshot;
 
+/**
+ * Self-contained checkout. Two modes:
+ *
+ * - Snapshot mode (`checkout` prop): renders that snapshot directly — unchanged, backward
+ *   compatible. When `prefix` is passed (and `orderUrl` is not), the order route is derived
+ *   from the prefix and the snapshot's order id so status polling works with just a prefix.
+ * - Create mode (`orderId` prop, no `checkout`): the component owns the whole lifecycle — on
+ *   mount it creates the checkout against `${prefix}/checkouts` (prefix defaults to
+ *   `/openreceive`), then hands the resulting snapshot to the same rendering path with
+ *   `orderUrl` defaulted to `${prefix}/orders/${orderId}`. The per-order capability token is
+ *   captured and attached to every poll/swap automatically.
+ */
 export function Checkout(props: CheckoutProps): React.ReactElement {
+  const { checkout, orderId } = props;
+  if (checkout !== undefined) {
+    // Derive the order URL from an explicit prefix only, so existing callers that never pass
+    // a prefix keep their current (no auto-polling-URL) behavior.
+    const orderUrl =
+      props.orderUrl ??
+      (props.prefix === undefined
+        ? undefined
+        : resolveOrderUrlFromPrefix(props.prefix, checkout.order_id));
+    return React.createElement(CheckoutView, {
+      ...props,
+      checkout,
+      ...(orderUrl === undefined ? {} : { orderUrl }),
+    });
+  }
+  if (orderId !== undefined) {
+    return React.createElement(CheckoutCreate, props);
+  }
+  throw new Error("<Checkout> requires a checkout snapshot or an orderId.");
+}
+
+/**
+ * Create-mode wrapper: creates the checkout on mount, renders a minimal placeholder while
+ * pending, an error placeholder with a retry on failure, and the normal checkout UI once the
+ * snapshot is ready. Recreates when the order id or prefix changes.
+ */
+function CheckoutCreate(props: CheckoutProps): React.ReactElement {
+  // orderId presence is guaranteed by the Checkout dispatcher's create-mode branch.
+  const orderId = props.orderId as string;
+  const resolvedPrefix = props.prefix ?? OPENRECEIVE_DEFAULT_PREFIX;
+  const { onError, metadata, createFetch, className, classNames } = props;
+
+  const [created, setCreated] = React.useState<{
+    readonly status: "pending" | "ready" | "error";
+    readonly checkout?: CheckoutSnapshot;
+  }>({ status: "pending" });
+  const [attempt, setAttempt] = React.useState(0);
+
+  const onErrorRef = React.useRef(onError);
+  onErrorRef.current = onError;
+  const metadataRef = React.useRef(metadata);
+  metadataRef.current = metadata;
+  const createFetchRef = React.useRef(createFetch);
+  createFetchRef.current = createFetch;
+
+  // Create on mount and whenever the order id / prefix changes (or a retry is requested).
+  // metadata/createFetch/onError are read from refs so passing an inline object/function does
+  // not retrigger the create on every render. `attempt` is an intentional retry trigger.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt is a deliberate retry trigger; metadata/createFetch/onError are read from refs.
+  React.useEffect(() => {
+    let cancelled = false;
+    setCreated({ status: "pending" });
+    requestCheckout({
+      prefix: resolvedPrefix,
+      orderId,
+      ...(metadataRef.current === undefined ? {} : { metadata: metadataRef.current }),
+      ...(createFetchRef.current === undefined ? {} : { fetch: createFetchRef.current }),
+    })
+      .then((checkout) => {
+        if (!cancelled) setCreated({ status: "ready", checkout });
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        onErrorRef.current?.(error);
+        setCreated({ status: "error" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [orderId, resolvedPrefix, attempt]);
+
+  if (created.status === "ready" && created.checkout !== undefined) {
+    const orderUrl = props.orderUrl ?? resolveOrderUrlFromPrefix(resolvedPrefix, orderId);
+    return React.createElement(CheckoutView, {
+      ...props,
+      checkout: created.checkout,
+      orderUrl,
+    });
+  }
+
+  if (created.status === "error") {
+    return React.createElement(
+      "section",
+      {
+        className: joinClassNames(className, classNames?.root, "openreceive-checkout-error"),
+        [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.root]: "",
+      },
+      React.createElement("p", null, "Could not start checkout."),
+      React.createElement(
+        "button",
+        {
+          type: "button",
+          onClick: () => setAttempt((count) => count + 1),
+        },
+        "Try again",
+      ),
+    );
+  }
+
+  return React.createElement(
+    "section",
+    {
+      className: joinClassNames(className, classNames?.root, "openreceive-checkout-creating"),
+      [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.root]: "",
+    },
+    React.createElement("span", {
+      className: "or-spinner",
+      "aria-hidden": "true",
+    }),
+    React.createElement("p", null, "Creating checkout…"),
+  );
+}
+
+function CheckoutView(props: CheckoutProps & { readonly checkout: CheckoutSnapshot }) {
   const {
     checkout,
+    // Create-mode props are consumed by the Checkout dispatcher / CheckoutCreate wrapper; drop
+    // them here so they never leak onto the rendered <section>.
+    orderId: _orderId,
+    prefix: _prefix,
+    metadata: _metadata,
+    createFetch: _createFetch,
     qrEncoder,
     logger,
     onError,

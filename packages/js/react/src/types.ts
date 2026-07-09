@@ -18,6 +18,20 @@ export interface CheckoutData {
   readonly checkout: CheckoutSnapshot;
 }
 
+/**
+ * Create-mode inputs. Pass an `orderId` (and optionally a mount `prefix`, defaulting to
+ * `/openreceive`) instead of a `checkout` snapshot and the component owns the whole
+ * lifecycle: it creates the checkout against `${prefix}/checkouts`, then polls status and
+ * drives swaps against `${prefix}/orders/${orderId}`. The per-order capability token is
+ * captured and attached automatically.
+ */
+export interface CheckoutCreateOptions {
+  readonly orderId?: string;
+  readonly prefix?: string;
+  readonly metadata?: Record<string, unknown>;
+  readonly createFetch?: typeof globalThis.fetch;
+}
+
 export interface CheckoutViewModel {
   readonly invoice_id?: string;
   readonly invoice: string;
@@ -33,7 +47,7 @@ export interface CheckoutViewModel {
   readonly status: Status;
 }
 
-export interface UseCheckoutOptions extends CheckoutData {
+export interface UseCheckoutOptions extends Partial<CheckoutData>, CheckoutCreateOptions {
   readonly clipboard?: Pick<Clipboard, "writeText">;
   readonly open?: (uri: string) => void;
   readonly logger?: OpenReceiveBrowserLogger;
@@ -144,8 +158,10 @@ export interface CheckoutComponents {
 export type CheckoutChildren = React.ReactNode | ((model: UseCheckoutResult) => React.ReactNode);
 
 export interface CheckoutProps
-  extends CheckoutData,
-    Omit<React.HTMLAttributes<HTMLElement>, "children"> {
+  extends Partial<CheckoutData>,
+    CheckoutCreateOptions,
+    // Omit the RDFa `prefix` attribute from HTMLAttributes so our create-mode `prefix` wins.
+    Omit<React.HTMLAttributes<HTMLElement>, "children" | "prefix"> {
   readonly qrEncoder?: OpenReceiveQrEncoder;
   readonly logger?: OpenReceiveBrowserLogger;
   readonly onError?: (error: unknown) => void;

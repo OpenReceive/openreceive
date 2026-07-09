@@ -160,7 +160,7 @@ export function createOpenReceiveAngularThemeToggleBinding(
 }
 
 export function createOpenReceiveAngularCheckoutShellBinding(
-  snapshot: CheckoutSnapshot,
+  snapshot: CheckoutSnapshot | null,
   options: CheckoutShellOptions = {}
 ): OpenReceiveAngularCheckoutShellBinding {
   const shell = createCheckoutShellModel(snapshot, options);

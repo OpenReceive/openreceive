@@ -1,6 +1,5 @@
 "use client";
 
-import type { Checkout as OpenReceiveCheckout } from "@openreceive/browser";
 import { Checkout, ThemeScope } from "@openreceive/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { HelloFruit, HelloFruitProduct } from "../server/shared-data.ts";
@@ -43,9 +42,8 @@ interface DemoOrder {
   };
 }
 
-interface CreateOrderResponse {
+interface PrepareOrderResponse {
   readonly order: DemoOrder;
-  readonly checkout: OpenReceiveCheckout;
 }
 
 export default function CheckoutClient({ product, fruits }: CheckoutClientProps) {
@@ -54,7 +52,6 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
   const [rates, setRates] = useState<HelloFruitBtcFiatRates | undefined>();
   const [cart, setCart] = useState<Record<string, number>>({});
   const [order, setOrder] = useState<DemoOrder | undefined>();
-  const [checkout, setCheckout] = useState<OpenReceiveCheckout | undefined>();
   const [purchasedFruit, setPurchasedFruit] = useState<HelloFruit | undefined>();
   const [stickerModalOpen, setStickerModalOpen] = useState(false);
   const [status, setStatus] = useState("idle");
@@ -109,16 +106,16 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
   }, []);
 
   const onSettled = useCallback(() => {
-    if (checkout !== undefined && completedCheckoutRef.current !== checkout.order_id) {
+    if (order !== undefined && completedCheckoutRef.current !== order.uuid) {
       logDemo("checkout.settled", "Checkout settled callback received.", {
-        orderId: checkout.order_id,
+        orderId: order.uuid,
         purchasedFruitId: purchasedFruit?.id,
       });
-      completedCheckoutRef.current = checkout.order_id;
+      completedCheckoutRef.current = order.uuid;
       setOrder((current) => (current === undefined ? current : { ...current, status: "paid" }));
       setStickerModalOpen(true);
     }
-  }, [checkout, purchasedFruit?.id]);
+  }, [order, purchasedFruit?.id]);
 
   function addSelectedFruitToCart() {
     if (selectedFruit === undefined) return;
@@ -148,7 +145,7 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
 
   async function createOrder() {
     if (cartItems.length === 0) {
-      logDemo("create_order.skipped", "Create order clicked with an empty cart.");
+      logDemo("prepare_order.skipped", "Prepare order clicked with an empty cart.");
       return;
     }
     const startedAt = Date.now();
@@ -159,13 +156,15 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
     completedCheckoutRef.current = "";
 
     try {
-      logDemo("create_order.request", "Posting create order request.", {
+      logDemo("prepare_order.request", "Posting prepare order request.", {
         currency,
         cartLineCount: cartItems.length,
         cartQuantity,
         productIds: cartItems.map((item) => item.fruit.id),
       });
-      const response = await fetch("/create_order", {
+      // App route: build + persist the order. The <Checkout orderId> component below creates the
+      // checkout against the mounted /openreceive/checkouts route and drives it end to end.
+      const response = await fetch("/prepare_order", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -179,32 +178,27 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
         }),
       });
       const body = (await response.json()) as unknown;
-      logDemo("create_order.response", "Received create order response.", {
+      logDemo("prepare_order.response", "Received prepare order response.", {
         ok: response.ok,
         status: response.status,
         elapsedMs: Date.now() - startedAt,
-        hasCheckout: isCreateOrderResponse(body),
+        hasOrder: isPrepareOrderResponse(body),
       });
-      if (!response.ok || !isCreateOrderResponse(body)) {
+      if (!response.ok || !isPrepareOrderResponse(body)) {
         throw new Error(readErrorMessage(body) ?? helloFruitDemoLabels.createOrderError);
       }
 
-      logDemo("create_order.ready", "Checkout payload accepted by browser app.", {
+      logDemo("prepare_order.ready", "Order accepted by browser app.", {
         orderId: body.order.uuid,
-        checkoutOrderId: body.checkout.order_id,
         orderStatus: body.order.status,
         itemCount: body.order.items.length,
         total: body.order.total_amount,
       });
       setOrder(body.order);
-      setCheckout({
-        ...body.checkout,
-        fiat: body.order.total_amount,
-      });
       setPurchasedFruit(cartItems[0]?.fruit);
       setStatus("invoice_created");
     } catch (cause: unknown) {
-      logDemo("create_order.error", "Create order failed in the browser.", {
+      logDemo("prepare_order.error", "Prepare order failed in the browser.", {
         error: cause instanceof Error ? cause.message : String(cause),
         elapsedMs: Date.now() - startedAt,
       });
@@ -215,12 +209,10 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
 
   function startOver() {
     logDemo("app.reset", "Resetting the demo state.", {
-      hadCheckout: checkout !== undefined,
       hadOrder: order !== undefined,
     });
     setCart({});
     setOrder(undefined);
-    setCheckout(undefined);
     setPurchasedFruit(undefined);
     setStickerModalOpen(false);
     setStatus("idle");
@@ -285,7 +277,7 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
         {createCheckoutLabel}
       </button>
 
-      {checkout !== undefined || cartItems.length === 0 ? null : (
+      {order !== undefined || cartItems.length === 0 ? null : (
         <section className="cart" aria-label="Cart">
           <div className="cart-heading">
             <strong>Cart</strong>
@@ -309,23 +301,7 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
         </section>
       )}
 
-      {checkout !== undefined || order === undefined ? null : (
-        <section className="cart" aria-label="Order">
-          <div className="cart-heading">
-            <strong>Order</strong>
-            <span>{formatHelloFruitFiat(order.total_amount)}</span>
-          </div>
-          {order.items.map((item) => (
-            <div className="cart-row" key={item.product_id}>
-              <span>{item.name}</span>
-              <span>x{item.quantity}</span>
-              <span>{order.status === "paid" ? "Paid" : "Pending"}</span>
-            </div>
-          ))}
-        </section>
-      )}
-
-      {checkout === undefined ? (
+      {order === undefined ? (
         <button
           className="primary"
           disabled={status === "creating" || cartItems.length === 0}
@@ -342,26 +318,25 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
         </button>
       )}
 
-      {checkout === undefined ? null : (
+      {order === undefined ? null : (
         <div className="invoice">
-          {order === undefined ? null : (
-            <section className="cart" aria-label="Order">
-              <div className="cart-heading">
-                <strong>Order</strong>
-                <span>{formatHelloFruitFiat(order.total_amount)}</span>
+          <section className="cart" aria-label="Order">
+            <div className="cart-heading">
+              <strong>Order</strong>
+              <span>{formatHelloFruitFiat(order.total_amount)}</span>
+            </div>
+            {order.items.map((item) => (
+              <div className="cart-row" key={item.product_id}>
+                <span>{item.name}</span>
+                <span>x{item.quantity}</span>
+                <span>{order.status === "paid" ? "Paid" : "Pending"}</span>
               </div>
-              {order.items.map((item) => (
-                <div className="cart-row" key={item.product_id}>
-                  <span>{item.name}</span>
-                  <span>x{item.quantity}</span>
-                  <span>{order.status === "paid" ? "Paid" : "Pending"}</span>
-                </div>
-              ))}
-            </section>
-          )}
+            ))}
+          </section>
+          {/* Self-contained: given just orderId (prefix defaults to /openreceive) it creates the
+              checkout, polls, and drives swaps itself — the app writes no OpenReceive routes. */}
           <Checkout
-            checkout={checkout}
-            orderUrl="/order"
+            orderId={order.uuid}
             logger={logOpenReceive}
             onError={(cause) => {
               logDemo("checkout.error", "Checkout component reported an error.", {
@@ -415,8 +390,8 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
   );
 }
 
-function isCreateOrderResponse(value: unknown): value is CreateOrderResponse {
-  return typeof value === "object" && value !== null && "order" in value && "checkout" in value;
+function isPrepareOrderResponse(value: unknown): value is PrepareOrderResponse {
+  return typeof value === "object" && value !== null && "order" in value;
 }
 
 function readErrorMessage(value: unknown): string | undefined {

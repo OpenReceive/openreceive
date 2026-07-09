@@ -4,6 +4,7 @@ import {
   OPENRECEIVE_CHECKOUT_DATA_SELECTORS,
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_COUNTRY_STORAGE_KEY,
+  OPENRECEIVE_DEFAULT_PREFIX,
   OPENRECEIVE_CHECKOUT_ELEMENT_PARTS,
   OPENRECEIVE_CHECKOUT_ELEMENT_PART_SELECTORS,
   OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES,
@@ -16,10 +17,12 @@ import {
   type OpenReceivePaymentMethod,
   type OpenReceiveQrEncoder,
   type OpenReceiveRegionId,
+  applyCheckoutElementAttributes,
   copyInvoice,
   createCheckoutActionEvent,
   createCheckoutDisplayModel,
   createCheckoutController,
+  createCheckoutElementAttributes,
   createCheckoutErrorEvent,
   createCheckoutStatusModel,
   createCheckoutSnapshotFromDisplayData,
@@ -57,6 +60,8 @@ import {
   parseOpenReceiveResolvedTheme,
   parseOpenReceiveThemePreference,
   readOpenReceiveStoredCountryCode,
+  requestCheckout,
+  resolveOrderUrlFromPrefix,
   status as deriveStatus,
   syncOpenReceiveStoredThemeControls,
   toggleOpenReceiveStoredThemeControls,
@@ -174,6 +179,21 @@ export function renderCheckoutHtml(view: CheckoutView): string {
           : `<button part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.copy}" type="button">${escapeHtml(openReceiveCheckoutLabels.copyInvoice)}</button>`}
       </div>
       ${wizard}
+    </section>
+  `;
+}
+
+// Minimal "creating checkout" placeholder shown by a create-mode element (`order-id` with no
+// `invoice`) while the checkout is being created, before the invoice/order-url attributes are
+// populated and the normal checkout UI takes over.
+export function renderCheckoutCreatingHtml(theme?: "light" | "dark"): string {
+  return `
+    <style>${openReceiveCheckoutElementStyles}</style>
+    <section part="root"${theme === undefined ? "" : ` data-theme="${escapeHtml(theme)}"`} data-openreceive-creating>
+      <div part="status">
+        <span part="spinner" aria-hidden="true"></span>
+        <div><strong>Creating checkout…</strong></div>
+      </div>
     </section>
   `;
 }
@@ -815,10 +835,18 @@ export function defineOpenReceiveElements(
     private dismissedSwapInvoiceId: string | null = null;
     private controller: CheckoutController | undefined;
     private announcedSettledOrderId: string | undefined;
+    // Create-mode bookkeeping: `createdKey` is `${prefix}::${orderId}` so a create runs once
+    // per order/prefix and re-runs when either changes; `creating` guards against overlap;
+    // `applyingCreatedAttributes` suppresses attributeChangedCallback while the created
+    // snapshot's attributes are applied in bulk.
+    private creating = false;
+    private createdKey: string | undefined;
+    private applyingCreatedAttributes = false;
 
     static get observedAttributes() {
       return [
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId,
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoiceId,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.rail,
@@ -836,11 +864,20 @@ export function defineOpenReceiveElements(
 
     connectedCallback() {
       this.render();
+      if (this.isCreateMode()) {
+        void this.createCheckout();
+        return;
+      }
       this.startCheckoutController();
     }
 
     attributeChangedCallback() {
-      if (!this.isConnected) return;
+      if (!this.isConnected || this.applyingCreatedAttributes) return;
+      if (this.isCreateMode()) {
+        this.render();
+        void this.createCheckout();
+        return;
+      }
       this.render();
       this.startCheckoutController();
     }
@@ -849,9 +886,71 @@ export function defineOpenReceiveElements(
       this.stopCheckoutController();
     }
 
+    // Create mode: an `order-id` is set but no `invoice` snapshot is provided. The element
+    // owns the whole lifecycle — it creates the checkout against `${prefix}/checkouts`, then
+    // polls status and drives swaps against `${prefix}/orders/${order-id}`.
+    private isCreateMode(): boolean {
+      const invoice = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice);
+      const orderId = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
+      return (invoice === null || invoice === "") && orderId !== null && orderId.length > 0;
+    }
+
+    private async createCheckout(): Promise<void> {
+      const orderId = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
+      if (orderId === null || orderId.length === 0) return;
+      const prefix =
+        this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix) ?? OPENRECEIVE_DEFAULT_PREFIX;
+      const key = `${prefix}::${orderId}`;
+      if (this.creating || this.createdKey === key) return;
+      this.creating = true;
+      this.createdKey = key;
+
+      try {
+        const checkout = await requestCheckout({ prefix, orderId, fetch: globalThis.fetch });
+        this.handleControllerSnapshot(checkout);
+        const orderUrl = resolveOrderUrlFromPrefix(prefix, orderId);
+        // Populate the invoice/order-url attributes from the created snapshot so the existing
+        // attribute-driven rendering + controller machinery takes over. Suppress
+        // attributeChangedCallback during the bulk apply, then render and start once.
+        this.applyingCreatedAttributes = true;
+        applyCheckoutElementAttributes(this, createCheckoutElementAttributes(checkout, { orderUrl }));
+        this.applyingCreatedAttributes = false;
+        this.render();
+        this.startCheckoutController();
+      } catch (error) {
+        // Allow a later attribute change (or reconnection) to retry the create.
+        this.createdKey = undefined;
+        this.dispatchError(error);
+      } finally {
+        this.creating = false;
+      }
+    }
+
+    private handleControllerSnapshot(snapshot: CheckoutSnapshot): void {
+      this.latestCheckoutSnapshot = snapshot;
+      // Payable assets ride on the order object itself (payment_methods).
+      this.swapOptions = snapshot.payment_methods ?? [];
+      const swapInvoice = snapshot.invoices.find(
+        (invoice) => invoice.rail === "swap" && invoice.swap !== undefined
+      );
+      if (swapInvoice !== undefined) {
+        this.startedSwapInvoice = swapInvoice;
+      }
+      this.render();
+    }
+
     render() {
       const invoice = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice);
       if (invoice === null || invoice === "") {
+        if (this.isCreateMode()) {
+          const root = this.shadowRoot ?? this.attachShadow({ mode: "open" });
+          root.innerHTML = renderCheckoutCreatingHtml(
+            parseOpenReceiveResolvedTheme(
+              this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme)
+            )
+          );
+          return;
+        }
         this.replaceChildren();
         return;
       }
@@ -961,18 +1060,7 @@ export function defineOpenReceiveElements(
         logger: options.logger,
         onError: (error) => this.dispatchError(error),
         onState: (nextState) => this.applyCheckoutState(nextState),
-        onSnapshot: (snapshot) => {
-          this.latestCheckoutSnapshot = snapshot;
-          // Payable assets ride on the order object itself (payment_methods).
-          this.swapOptions = snapshot.payment_methods ?? [];
-          const swapInvoice = snapshot.invoices.find((invoice) =>
-            invoice.rail === "swap" && invoice.swap !== undefined
-          );
-          if (swapInvoice !== undefined) {
-            this.startedSwapInvoice = swapInvoice;
-          }
-          this.render();
-        }
+        onSnapshot: (snapshot) => this.handleControllerSnapshot(snapshot)
       });
       this.controller.start();
       void this.controller.reloadState().catch((error) => this.dispatchError(error));

@@ -13,7 +13,13 @@ defineOptions({
 
 const props = withDefaults(
   defineProps<{
-    checkout: CheckoutSnapshot;
+    // Snapshot mode: pass a `checkout` to render it directly (backward compatible).
+    // Create mode: omit `checkout` and pass `orderId` (+ optional `prefix`); the underlying
+    // <openreceive-checkout> element creates the checkout, then renders and polls itself.
+    checkout?: CheckoutSnapshot;
+    orderId?: string;
+    prefix?: string;
+    metadata?: Record<string, unknown>;
     orderUrl?: string;
     onSettled?: (event: Event) => void;
     onStartOver?: (event: Event) => void;
@@ -29,8 +35,11 @@ onMounted(() => {
 });
 
 const shell = computed(() =>
-  createOpenReceiveVueCheckoutShellBinding(props.checkout, {
+  createOpenReceiveVueCheckoutShellBinding(props.checkout ?? null, {
     ...props.options,
+    ...(props.orderId === undefined ? {} : { orderId: props.orderId }),
+    ...(props.prefix === undefined ? {} : { prefix: props.prefix }),
+    ...(props.metadata === undefined ? {} : { metadata: props.metadata }),
     ...(props.orderUrl === undefined ? {} : { orderUrl: props.orderUrl }),
     ...(props.onSettled === undefined ? {} : { onSettled: props.onSettled }),
     ...(props.onStartOver === undefined ? {} : { onStartOver: props.onStartOver })

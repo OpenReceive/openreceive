@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { OpenReceive } from "@openreceive/node";
+import type { OpenReceive, OpenReceiveCheckoutAmountSource } from "@openreceive/node";
 import {
   createHelloFruitOrderInvoiceDescription,
   type HelloFruitFiatAmount,
@@ -62,6 +62,64 @@ export interface HelloFruitCreateOrderResult {
   };
 }
 
+
+/**
+ * Meta-store key prefix under which the app persists each prepared order. Persisting through the
+ * OpenReceive store's KV (not an in-memory Map) keeps the amount authority durable and correct
+ * across multiple instances (Heroku/Vercel), which is the whole point of the shipped-router model:
+ * `/prepare_order` writes the order here, and the mounted create-checkout route's `resolveAmount`
+ * reads it back so the client-supplied price is never trusted.
+ */
+export const HELLO_FRUIT_ORDER_META_PREFIX = "demo_order:";
+
+interface StoredHelloFruitOrder {
+  readonly order: HelloFruitDemoOrder;
+  readonly amount: HelloFruitCreateOrderResult["invoiceRequest"]["amount"];
+}
+
+/**
+ * App order step (NOT an OpenReceive route): validate the cart, compute items + the authoritative
+ * total, assign an order id, and PERSIST the order keyed by that id so `resolveAmount` can look it
+ * up later. Returns just `{ order }` for display — creating the checkout is the mounted router's job.
+ */
+export async function prepareHelloFruitOrder(
+  input: HelloFruitCreateOrderInput,
+  options: {
+    readonly demoId: string;
+    readonly openreceive: OpenReceive;
+    readonly demoName?: string;
+    readonly catalog?: readonly HelloFruitProduct[];
+  },
+): Promise<{ order: HelloFruitDemoOrder }> {
+  const result = await createHelloFruitCreateOrderResult(input, options);
+  const stored: StoredHelloFruitOrder = {
+    order: result.order,
+    amount: result.invoiceRequest.amount,
+  };
+  // casMeta(key, value, null) is insert-if-absent; the order id is a fresh UUID so it never conflicts.
+  await options.openreceive.store.casMeta(
+    `${HELLO_FRUIT_ORDER_META_PREFIX}${result.order.uuid}`,
+    JSON.stringify(stored),
+    null,
+  );
+  return { order: result.order };
+}
+
+/**
+ * The amount authority for the mounted create-checkout route: look the persisted order up by id and
+ * return its authoritative amount source. The client's price is never consulted.
+ */
+export async function resolveHelloFruitOrderAmount(
+  openreceive: Pick<OpenReceive, "store">,
+  orderId: string,
+): Promise<OpenReceiveCheckoutAmountSource> {
+  const row = await openreceive.store.getMeta(`${HELLO_FRUIT_ORDER_META_PREFIX}${orderId}`);
+  if (row === undefined) {
+    throw new HelloFruitDemoOrderError(`Unknown order: ${orderId}.`, 404);
+  }
+  const stored = JSON.parse(row.value) as StoredHelloFruitOrder;
+  return { amount: stored.amount };
+}
 
 export class HelloFruitDemoOrderError extends Error {
   readonly status: number;

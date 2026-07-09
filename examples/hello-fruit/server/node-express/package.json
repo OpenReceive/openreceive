@@ -13,6 +13,8 @@
     "@openreceive/browser": "0.1.1",
     "@openreceive/core": "0.1.1",
     "@openreceive/node": "0.1.1",
+    "@openreceive/http": "0.1.1",
+    "@openreceive/express": "0.1.1",
     "@openreceive/angular": "0.1.1",
     "@openreceive/react": "0.1.1",
     "@openreceive/svelte": "0.1.1",

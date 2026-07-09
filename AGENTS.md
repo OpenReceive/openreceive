@@ -24,6 +24,23 @@ contributors working in this repository.
 - Do not duplicate provider data, supported currencies, status refresh cadence,
   settlement rules, or demo product data.
 
+### Shipped routes, tiers, and capability tokens
+
+- OpenReceive ships the routes (`@openreceive/http` + adapters; `openreceive-rails`
+  engine). The host keeps 100% of authentication. OpenReceive NEVER inspects the host
+  session — it only calls the host `authorize`/`resolveAmount`/`rateLimit` hooks and obeys
+  their return values (inversion of control).
+- Three tiers: Tier 1 anonymous-capable (checkout.create, rates); Tier 2 capability-token
+  scoped (order/checkout reads, swap actions on your own order); Tier 3 privileged and
+  **fails closed** (invoice.sweep) — with no `authorize` policy, Tier 3 returns 403.
+- The create-checkout route MUST NOT trust a client-supplied price. Use the host
+  `resolveAmount` hook for the authoritative amount.
+- Capability tokens are per-order, ≥128-bit, URL-safe, returned once as `order_access_token`.
+  Store only the sha256 hash. Token hashing must be identical across ports (verified by
+  `spec/test-vectors/capability-token.json`).
+- The route contract is `spec/openapi/openreceive-http.v1.yaml`. Any change to a route or its
+  shapes must keep the Node adapters and the Rails engine byte-equal (HTTP golden vectors).
+
 ## Testing
 
 Prefer the smallest relevant check while iterating. Do not run slow full-suite
@@ -68,6 +85,19 @@ npm run test:live:nwc
 ```
 
 The live command must skip clearly when `OPENRECEIVE_NWC` is not configured.
+
+The Ruby port is a second settlement engine that must match the Node engine on the
+shared vectors. Run it with:
+
+```sh
+npm run test:ruby
+```
+
+The shared `spec/test-vectors/*` (including the cross-language
+`idempotency-canonical-json.crosslang.json` and `capability-token.json`) and the HTTP
+golden vectors (`spec/test-vectors/http-golden/*`) are the conformance oracle that keeps
+the two engines from silently diverging on money — run them in BOTH languages when
+touching settlement, money math, idempotency, tokens, or route behavior.
 
 Before declaring work done, report exactly which checks were run. If you skip
 `npm run test:ci`, say why the narrower checks were sufficient.

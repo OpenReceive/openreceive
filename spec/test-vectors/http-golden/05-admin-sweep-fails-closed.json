@@ -1,0 +1,13 @@
+{
+  "name": "admin sweep fails closed under the default policy (403 UNAUTHORIZED)",
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/admin/sweep",
+    "headers": { "content-type": "application/json" },
+    "body": {}
+  },
+  "expected": {
+    "status": 403,
+    "error_code": "UNAUTHORIZED"
+  }
+}

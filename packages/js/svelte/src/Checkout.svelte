@@ -7,14 +7,23 @@
     type CheckoutSnapshot
   } from "./index.js";
 
-  export let checkout: CheckoutSnapshot;
+  // Snapshot mode: pass a `checkout` to render it directly (backward compatible).
+  // Create mode: omit `checkout` and pass `orderId` (+ optional `prefix`); the underlying
+  // <openreceive-checkout> element creates the checkout, then renders and polls itself.
+  export let checkout: CheckoutSnapshot | undefined = undefined;
+  export let orderId: string | undefined = undefined;
+  export let prefix: string | undefined = undefined;
+  export let metadata: Record<string, unknown> | undefined = undefined;
   export let orderUrl: string | undefined = undefined;
   export let onSettled: ((event: Event) => void) | undefined = undefined;
   export let onStartOver: ((event: Event) => void) | undefined = undefined;
   export let options: CheckoutShellOptions = {};
 
-  $: shell = createOpenReceiveSvelteCheckoutShellBinding(checkout, {
+  $: shell = createOpenReceiveSvelteCheckoutShellBinding(checkout ?? null, {
     ...options,
+    ...(orderId === undefined ? {} : { orderId }),
+    ...(prefix === undefined ? {} : { prefix }),
+    ...(metadata === undefined ? {} : { metadata }),
     ...(orderUrl === undefined ? {} : { orderUrl }),
     ...(onSettled === undefined ? {} : { onSettled }),
     ...(onStartOver === undefined ? {} : { onStartOver })

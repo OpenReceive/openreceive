@@ -38,8 +38,8 @@ import { InMemoryInvoiceKvStore, StaticPriceProvider } from "../../packages/js/c
 import { setHelloFruitOpenReceiveTestOverrides } from "../../examples/hello-fruit/server/nextjs-fullstack/src/server/openreceive.ts";
 import { GET as getNextDemoMetadata } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/demo-metadata.json/route.ts";
 import { GET as getNextDocs } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/docs/route.ts";
-import { POST as postNextCreateOrder } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/create_order/route.ts";
-import { POST as postNextOrder } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/order/route.ts";
+import { POST as postNextPrepareOrder } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/prepare_order/route.ts";
+import { POST as postNextOpenReceive } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/openreceive/[...openreceive]/route.ts";
 import { GET as getNextSource } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/source/route.ts";
 import getNextRobots, {
   dynamic as nextRobotsDynamic,
@@ -60,6 +60,10 @@ const demoServerDirs = [
 
 class HelloFruitTestReceiveClient {
   count = 0;
+  // Track every invoice we mint so status polling can reconcile a real wallet payment and
+  // `settleAll()` can move money in the fake wallet (the settle-via-fake-wallet step the mounted
+  // order route needs to report a paid order).
+  invoices = [];
 
   async preflight() {
     return {
@@ -75,30 +79,53 @@ class HelloFruitTestReceiveClient {
 
   async makeInvoice(request) {
     this.count += 1;
-    const suffix = this.count.toString(16).padStart(64, "0");
+    const paymentHash = this.count.toString(16).padStart(64, "0");
     const createdAt = Math.floor(Date.now() / 1000);
-    return {
+    const invoice = {
       invoice: `lnbc-hello-fruit-test-${this.count}`,
-      payment_hash: suffix,
+      payment_hash: paymentHash,
       amount_msats: request.amount_msats,
       created_at: createdAt,
       expires_at: createdAt + 600,
+      transaction_state: "pending",
+      settled_at: undefined,
+    };
+    this.invoices.push(invoice);
+    return {
+      invoice: invoice.invoice,
+      payment_hash: invoice.payment_hash,
+      amount_msats: invoice.amount_msats,
+      created_at: invoice.created_at,
+      expires_at: invoice.expires_at,
     };
   }
 
   async listTransactions(request) {
+    if (request.type === "outgoing") return { transactions: [] };
+    const from = request.from ?? 0;
+    const until = request.until ?? Number.MAX_SAFE_INTEGER;
     return {
-      transactions: [
-        {
+      transactions: this.invoices
+        .filter((invoice) => invoice.created_at >= from && invoice.created_at <= until)
+        .map((invoice) => ({
           type: "incoming",
-          invoice: "lnbc-hello-fruit-test",
-          payment_hash: "f".repeat(64),
-          amount_msats: 200000n,
-          transaction_state: "pending",
-          created_at: request.from,
-        },
-      ],
+          invoice: invoice.invoice,
+          payment_hash: invoice.payment_hash,
+          amount_msats: invoice.amount_msats,
+          transaction_state: invoice.transaction_state,
+          created_at: invoice.created_at,
+          settled_at: invoice.transaction_state === "settled" ? invoice.settled_at : undefined,
+          preimage: invoice.transaction_state === "settled" ? "1".repeat(64) : undefined,
+        })),
     };
+  }
+
+  /** Settle every minted invoice, so the next order-status reconcile reports the order paid. */
+  settleAll(settledAt = Math.floor(Date.now() / 1000)) {
+    for (const invoice of this.invoices) {
+      invoice.transaction_state = "settled";
+      invoice.settled_at = settledAt;
+    }
   }
 }
 
@@ -109,6 +136,19 @@ function createHelloFruitTestOpenReceiveOptions() {
     priceProviders: [new StaticPriceProvider()],
     configPath: false,
   };
+}
+
+// Creating a checkout runs an initial wallet verify that claims the shared transaction-scan gate
+// (a ~2s throttle between full wallet scans). Reset it in the store so the very next order-status
+// poll performs a real scan and observes the fake-wallet settlement deterministically, rather than
+// the test having to sleep out the throttle.
+async function resetTransactionScanGate(store) {
+  const current = await store.getMeta("transaction_scan_gate");
+  await store.casMeta(
+    "transaction_scan_gate",
+    JSON.stringify({ claimed_at: 0 }),
+    current?.rev ?? null,
+  );
 }
 
 test("Hello Fruit shared product metadata stays stable", () => {
@@ -281,8 +321,12 @@ test("Hello Fruit React demos delegate checkout state to UI packages", () => {
   ]) {
     assert.match(source, /<Checkout/);
     assert.match(source, /onSettled=/);
-    assert.match(source, /orderUrl="\/order"/);
-    assert.match(source, /fetch\("\/create_order"/);
+    // Self-contained component: it receives an order id and derives its own routes; the app never
+    // hand-writes an /order (invoice/status/swap) handler or passes an orderUrl.
+    assert.match(source, /orderId=\{order\.uuid\}/);
+    assert.doesNotMatch(source, /orderUrl="\/order"/);
+    assert.match(source, /fetch\("\/prepare_order"/);
+    assert.doesNotMatch(source, /fetch\("\/create_order"/);
     assert.match(source, /readHelloFruitCheckoutCurrencies/);
     assert.match(source, /currency,/);
     assert.doesNotMatch(source, /createOpenReceiveStatusFetcher/);
@@ -402,17 +446,20 @@ test("Hello Fruit Node demo creates orders from cart before rendering checkout",
   assert.match(source, /function startOver\(\)/);
   assert.match(source, /addSelectedFruitToCart/);
   assert.match(source, /async function createOrder\(\)/);
-  assert.match(source, /fetch\("\/create_order"/);
-  assert.match(source, /orderUrl="\/order"/);
+  assert.match(source, /fetch\("\/prepare_order"/);
+  assert.doesNotMatch(source, /fetch\("\/create_order"/);
+  // The self-contained component receives the order id; no hand-written order URL.
+  assert.match(source, /orderId=\{order\.uuid\}/);
+  assert.doesNotMatch(source, /orderUrl="\/order"/);
   assert.match(source, /setPurchasedItems\(body\.order\.items\)/);
   assert.match(source, /formatHelloFruitFiat\(item\.line_amount\)/);
   assert.match(source, /purchasedItems\.map/);
   assert.match(source, /setCart\(\{\}\)/);
   assert.match(source, /setOrder\(null\)/);
-  assert.match(source, /setCheckout\(null\)/);
+  assert.doesNotMatch(source, /setCheckout\(null\)/);
   assert.match(source, /setPurchasedItems\(\[\]\)/);
   assert.match(source, /setFruitId\(initialFruitId\)/);
-  assert.match(source, /checkout === null \? \(/);
+  assert.match(source, /order === null \? \(/);
   assert.match(source, /onStartOver=\{startOver\}/);
   assert.match(source, />\s*Start over\s*</);
   assert.doesNotMatch(source, /crypto\?\.randomUUID/);
@@ -431,11 +478,13 @@ test("Hello Fruit Next.js demo resets expired checkout from Start over", () => {
 
   assert.match(source, /function startOver\(\)/);
   assert.match(source, /async function createOrder\(\)/);
-  assert.match(source, /fetch\("\/create_order"/);
-  assert.match(source, /orderUrl="\/order"/);
+  assert.match(source, /fetch\("\/prepare_order"/);
+  assert.doesNotMatch(source, /fetch\("\/create_order"/);
+  assert.match(source, /orderId=\{order\.uuid\}/);
+  assert.doesNotMatch(source, /orderUrl="\/order"/);
   assert.match(source, /setCart\(\{\}\)/);
   assert.match(source, /setOrder\(undefined\)/);
-  assert.match(source, /setCheckout\(undefined\)/);
+  assert.doesNotMatch(source, /setCheckout\(undefined\)/);
   assert.match(source, /setStatus\("idle"\)/);
   assert.match(source, /onStartOver=\{startOver\}/);
 });
@@ -503,7 +552,14 @@ test("Hello Fruit static demo delegates checkout state to the web component", ()
   );
 
   assert.match(source, /defineOpenReceiveElements/);
-  assert.match(source, /createCheckoutShell/);
+  // Self-contained: render the <openreceive-checkout> element with just an order id (prefix
+  // defaults to /openreceive); it creates the checkout, polls, and drives swaps itself. The app
+  // fetches /prepare_order (build + persist the order) and writes no invoice/status/swap routes.
+  assert.match(source, /fetch\("\/prepare_order"/);
+  assert.doesNotMatch(source, /fetch\("\/create_order"/);
+  assert.match(source, /OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME/);
+  assert.match(source, /setAttribute\("order-id"/);
+  assert.doesNotMatch(source, /createCheckoutShell/);
   assert.match(source, /createOpenReceiveThemeToggleElement/);
   assert.match(source, /@openreceive\/elements\/styles\.css/);
   assert.match(source, /rootSelector: "\.page"/);
@@ -1363,7 +1419,7 @@ test("Hello Fruit JS demos set up package-owned invoice persistence", () => {
   }
 });
 
-test("Next.js demo owns merchant route handling and calls OpenReceive service methods", () => {
+test("Next.js demo prepares orders and mounts the shipped OpenReceive router", () => {
   const source = readFileSync(
     path.join(
       process.cwd(),
@@ -1373,15 +1429,21 @@ test("Next.js demo owns merchant route handling and calls OpenReceive service me
   );
 
   assert.match(source, /createOpenReceive/);
-  assert.match(source, /createOrderResponse/);
-  assert.match(source, /orderResponse/);
-  assert.match(source, /createHelloFruitCreateOrderResult/);
-  assert.match(source, /openreceive\.getOrCreateCheckout/);
-  assert.match(source, /openreceive\.order/);
+  // The app owns cart -> order (prepare + persist) and the amount authority + auth policy for the
+  // mounted router; it no longer hand-writes checkout creation or order/status/swap handling.
+  assert.match(source, /prepareOrderResponse/);
+  assert.match(source, /prepareHelloFruitOrder/);
+  assert.match(source, /openReceiveHttpOptions/);
+  assert.match(source, /resolveHelloFruitOrderAmount/);
+  assert.match(source, /guestCheckout\(\)/);
   assert.match(source, /readRequiredHelloFruitNwcConnectionString/);
+  assert.doesNotMatch(source, /createHelloFruitCreateOrderResult/);
+  assert.doesNotMatch(source, /openreceive\.getOrCreateCheckout/);
+  assert.doesNotMatch(source, /openreceive\.order\(/);
+  // The @openreceive/next mount lives in the catch-all route file, not this app-service module.
+  assert.doesNotMatch(source, /@openreceive\/next/);
   assert.doesNotMatch(source, /dispatchOpenReceiveRoute/);
   assert.doesNotMatch(source, /matchOpenReceiveRoute/);
-  assert.doesNotMatch(source, /@openreceive\/next/);
   assert.doesNotMatch(source, /createNwcReceiveClient/);
   assert.doesNotMatch(source, /createOpenReceiveNextRuntime/);
   assert.doesNotMatch(source, /dispatchOpenReceiveNextNoWalletRoute/);
@@ -1390,6 +1452,32 @@ test("Next.js demo owns merchant route handling and calls OpenReceive service me
   assert.doesNotMatch(source, /ReadableStream<Uint8Array>/);
   assert.doesNotMatch(source, /formatSseEvent/);
   assert.doesNotMatch(source, /parseLastEventId/);
+
+  // The shipped router is mounted as an App Router catch-all — one file, no hand-written routes.
+  const mount = readFileSync(
+    path.join(
+      process.cwd(),
+      "examples/hello-fruit/server/nextjs-fullstack/src/app/openreceive/[...openreceive]/route.ts",
+    ),
+    "utf8",
+  );
+  assert.match(mount, /openReceiveNextHandlers/);
+  assert.match(mount, /@openreceive\/next/);
+  assert.match(mount, /openReceiveHttpOptions/);
+
+  // The old hand-written OpenReceive route handlers are gone.
+  assert.equal(
+    existsSync(
+      path.join(process.cwd(), "examples/hello-fruit/server/nextjs-fullstack/src/app/create_order"),
+    ),
+    false,
+  );
+  assert.equal(
+    existsSync(
+      path.join(process.cwd(), "examples/hello-fruit/server/nextjs-fullstack/src/app/order"),
+    ),
+    false,
+  );
 });
 
 test("Hello Fruit demos normalize OpenReceive service errors at app route boundaries", () => {
@@ -1550,7 +1638,7 @@ test("Hello Fruit metadata exposes only allowlisted build fields", async () => {
   );
 });
 
-test("Hello Fruit demos create app orders and refresh order status through merchant routes", async () => {
+test("Hello Fruit demos prepare app orders and settle through the mounted router", async () => {
   const orderRequest = {
     cart: [
       { product_id: "banana", quantity: 2 },
@@ -1568,61 +1656,101 @@ test("Hello Fruit demos create app orders and refresh order status through merch
       createApp: createHelloFruitStaticServer,
     },
   ]) {
-    const app = await demo.createApp(createHelloFruitTestOpenReceiveOptions());
-    const created = await dispatchJson(app, "POST", "/create_order", orderRequest);
-    assert.equal(created.status, 201, `${demo.name}: create_order status`);
-    assert.match(created.body.order.uuid, /^hello-fruit-/);
-    assert.equal(created.body.order.status, "pending_payment");
-    assert.equal(created.body.order.total_amount.currency, "USD");
-    assert.equal(created.body.order.total_amount.value, "10.00");
-    assert.equal(created.body.checkout.order_id, created.body.order.uuid);
+    const options = createHelloFruitTestOpenReceiveOptions();
+    const app = await demo.createApp(options);
+
+    // 1. App route: build + persist the order (no checkout yet, just { order }).
+    const prepared = await dispatchJson(app, "POST", "/prepare_order", orderRequest);
+    assert.equal(prepared.status, 201, `${demo.name}: prepare_order status`);
+    assert.match(prepared.body.order.uuid, /^hello-fruit-/);
+    assert.equal(prepared.body.order.status, "pending_payment");
+    assert.equal(prepared.body.order.total_amount.currency, "USD");
+    assert.equal(prepared.body.order.total_amount.value, "10.00");
+    assert.equal(prepared.body.order.items.length, 2);
+    assert.equal(prepared.body.checkout, undefined, `${demo.name}: prepare_order returns no checkout`);
+    const orderId = prepared.body.order.uuid;
+
+    // 2. Mounted router creates the checkout from just { order_id } (resolveAmount is the authority)
+    // and mints the per-order capability token, returned once.
+    const created = await dispatchJson(app, "POST", "/openreceive/checkouts", { order_id: orderId });
+    assert.equal(created.status, 201, `${demo.name}: create checkout status`);
+    assert.equal(created.body.checkout.order_id, orderId);
+    const token = created.body.order_access_token;
+    assert.equal(typeof token, "string", `${demo.name}: mints an order access token`);
     const createdInvoice = created.body.checkout.active ?? created.body.checkout.invoices[0];
     assert.equal(typeof createdInvoice.invoice, "string");
     assert.equal(JSON.stringify(created.body).includes("nostr+walletconnect://"), false);
 
-    const second = await dispatchJson(app, "POST", "/create_order", orderRequest);
-    assert.equal(second.status, 201, `${demo.name}: second create_order status`);
-    assert.notEqual(second.body.order.uuid, created.body.order.uuid);
+    // Idempotency: a second create for the same order replays the same checkout, no new token.
+    const second = await dispatchJson(app, "POST", "/openreceive/checkouts", { order_id: orderId });
+    assert.equal(second.status, 201, `${demo.name}: second create checkout status`);
+    assert.equal(second.body.checkout.order_id, orderId);
+    assert.equal(second.body.order_access_token, undefined, `${demo.name}: token minted once`);
 
-    const status = await dispatchJson(app, "POST", "/order", {
-      order_id: created.body.order.uuid,
-    });
+    // 3. Settle the invoice in the fake wallet, then poll order status with the capability token.
+    options.client.settleAll();
+    await resetTransactionScanGate(options.store);
+    const status = await dispatchJson(
+      app,
+      "POST",
+      `/openreceive/orders/${orderId}`,
+      {},
+      { authorization: `Bearer ${token}` },
+    );
     assert.equal(status.status, 200, `${demo.name}: order status`);
-    assert.equal(status.body.order_id, created.body.order.uuid);
-    assert.equal(status.body.status, "pending");
+    assert.equal(status.body.order_id, orderId);
+    assert.equal(status.body.status, "paid", `${demo.name}: settled order is paid`);
     // Payable swap assets ride on the order status itself (swap_pay_options).
     assert.ok(Array.isArray(status.body.swap_pay_options));
     const statusInvoice =
       status.body.display_checkout.active ?? status.body.display_checkout.invoices[0];
     assert.equal(statusInvoice.payment_hash, createdInvoice.payment_hash);
+
+    // Without the token, the per-order read is denied by the guestCheckout() policy.
+    const denied = await dispatchJson(app, "POST", `/openreceive/orders/${orderId}`, {});
+    assert.equal(denied.status, 403, `${demo.name}: read without token is forbidden`);
   }
 
-  setHelloFruitOpenReceiveTestOverrides(createHelloFruitTestOpenReceiveOptions());
+  const options = createHelloFruitTestOpenReceiveOptions();
+  setHelloFruitOpenReceiveTestOverrides(options);
   try {
-    const nextCreated = await responseJson(
-      postNextCreateOrder(jsonRequest("/create_order", orderRequest)),
+    const prepared = await responseJson(
+      postNextPrepareOrder(jsonRequest("/prepare_order", orderRequest)),
     );
-    assert.equal(nextCreated.status, 201, "nextjs-fullstack: create_order status");
-    assert.match(nextCreated.body.order.uuid, /^hello-fruit-/);
-    assert.equal(nextCreated.body.order.total_amount.value, "10.00");
-    assert.equal(nextCreated.body.checkout.order_id, nextCreated.body.order.uuid);
+    assert.equal(prepared.status, 201, "nextjs-fullstack: prepare_order status");
+    assert.match(prepared.body.order.uuid, /^hello-fruit-/);
+    assert.equal(prepared.body.order.total_amount.value, "10.00");
+    assert.equal(prepared.body.checkout, undefined);
+    const orderId = prepared.body.order.uuid;
 
-    const nextSecond = await responseJson(
-      postNextCreateOrder(jsonRequest("/create_order", orderRequest)),
+    const created = await responseJson(
+      postNextOpenReceive(jsonRequest("/openreceive/checkouts", { order_id: orderId })),
     );
-    assert.equal(nextSecond.status, 201, "nextjs-fullstack: second create_order status");
-    assert.notEqual(nextSecond.body.order.uuid, nextCreated.body.order.uuid);
+    assert.equal(created.status, 201, "nextjs-fullstack: create checkout status");
+    assert.equal(created.body.checkout.order_id, orderId);
+    const token = created.body.order_access_token;
+    assert.equal(typeof token, "string");
 
+    const second = await responseJson(
+      postNextOpenReceive(jsonRequest("/openreceive/checkouts", { order_id: orderId })),
+    );
+    assert.equal(second.status, 201, "nextjs-fullstack: second create checkout status");
+    assert.equal(second.body.order_access_token, undefined);
+
+    options.client.settleAll();
+    await resetTransactionScanGate(options.store);
     const nextStatus = await responseJson(
-      postNextOrder(
-        jsonRequest("/order", {
-          order_id: nextCreated.body.order.uuid,
-        }),
+      postNextOpenReceive(
+        jsonRequest(
+          `/openreceive/orders/${orderId}`,
+          {},
+          { authorization: `Bearer ${token}` },
+        ),
       ),
     );
     assert.equal(nextStatus.status, 200, "nextjs-fullstack: order status");
-    assert.equal(nextStatus.body.order_id, nextCreated.body.order.uuid);
-    assert.equal(nextStatus.body.status, "pending");
+    assert.equal(nextStatus.body.order_id, orderId);
+    assert.equal(nextStatus.body.status, "paid");
     assert.ok(Array.isArray(nextStatus.body.swap_pay_options));
   } finally {
     setHelloFruitOpenReceiveTestOverrides(undefined);
@@ -1649,10 +1777,16 @@ test("Hello Fruit demos create direct SATS orders from the currency switcher", a
     },
   ]) {
     const app = await demo.createApp(createHelloFruitTestOpenReceiveOptions());
-    const created = await dispatchJson(app, "POST", "/create_order", orderRequest);
-    assert.equal(created.status, 201, `${demo.name}: create_order status`);
-    assert.equal(created.body.order.total_amount.currency, "SATS");
-    assert.equal(created.body.order.total_amount.value, "20000");
+    const prepared = await dispatchJson(app, "POST", "/prepare_order", orderRequest);
+    assert.equal(prepared.status, 201, `${demo.name}: prepare_order status`);
+    assert.equal(prepared.body.order.total_amount.currency, "SATS");
+    assert.equal(prepared.body.order.total_amount.value, "20000");
+    const orderId = prepared.body.order.uuid;
+
+    // The SATS amount is the amount authority: resolveAmount looks the persisted order up by id, so
+    // the mounted create-checkout route mints a direct-sats invoice with no fiat quote.
+    const created = await dispatchJson(app, "POST", "/openreceive/checkouts", { order_id: orderId });
+    assert.equal(created.status, 201, `${demo.name}: create checkout status`);
     assert.equal(created.body.checkout.amount_msats, 20000000);
     const createdInvoice = created.body.checkout.active ?? created.body.checkout.invoices[0];
     assert.equal(createdInvoice.fiat_quote, null);
@@ -1763,11 +1897,12 @@ async function responseJson(responseOrPromise) {
   };
 }
 
-function jsonRequest(pathname, body) {
+function jsonRequest(pathname, body, headers = {}) {
   return new Request(`http://localhost${pathname}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
+      ...headers,
     },
     body: JSON.stringify(body),
   });
@@ -1777,12 +1912,13 @@ async function getJson(app, url) {
   return await dispatchJson(app, "GET", url);
 }
 
-async function dispatchJson(app, method, url, body) {
+async function dispatchJson(app, method, url, body, headers = {}) {
   const response = await dispatch(app, {
     method,
     url,
     headers: {
       ...(body === undefined ? {} : { "content-type": "application/json" }),
+      ...headers,
     },
     body,
   });

@@ -32,6 +32,11 @@ const importChecks = {
   "@openreceive/core": "typeof mod.createIdempotencyRequestHash === 'function'",
   "@openreceive/elements":
     "typeof mod.renderCheckoutHtml === 'function' && typeof mod.renderOpenReceiveThemeToggleHtml === 'function' && mod.OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME === 'openreceive-theme-toggle'",
+  "@openreceive/express": "typeof mod.openReceiveExpress === 'function'",
+  "@openreceive/fastify": "typeof mod.openReceiveFastify === 'function'",
+  "@openreceive/http":
+    "typeof mod.createOpenReceiveHttpHandler === 'function' && typeof mod.createDefaultAuthorize === 'function' && typeof mod.extractToken === 'function' && typeof mod.OpenReceiveHttpError === 'function' && typeof mod.createOrderAccessTokenManager === 'function'",
+  "@openreceive/next": "typeof mod.openReceiveNextHandlers === 'function'",
   "@openreceive/node":
     "typeof mod.createOpenReceive === 'function' && typeof mod.OpenReceiveServiceError === 'function' && typeof mod.OpenReceiveConfigError === 'function' && typeof mod.createNwcReceiveClient === 'function' && typeof mod.createOpenReceivePostgresInvoiceStore === 'function' && typeof mod.createOpenReceivePostgresInvoiceStoreFromPool === 'function' && typeof mod.createOpenReceiveSqliteInvoiceStore === 'function' && mod.OPENRECEIVE_DATABASE_SCHEMA_VERSION === 'v0.2' && typeof mod.OPENRECEIVE_SQLITE_MIGRATION_SQL === 'string'",
   "@openreceive/provider-data":

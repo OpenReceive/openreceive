@@ -16,6 +16,13 @@ export const OPENRECEIVE_COUNTRY_STORAGE_KEY = "openreceive.checkout.country" as
 export const OPENRECEIVE_LEGACY_DEMO_COUNTRY_STORAGE_KEY = "openreceive-demo.country" as const;
 export const OPENRECEIVE_THEME_STORAGE_KEY = "openreceive.theme" as const;
 export const OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS = 3000 as const;
+/**
+ * Default base path the shipped OpenReceive router is mounted at. When a developer passes
+ * only an order id (React `<Checkout orderId>` / `<openreceive-checkout order-id>`), this is
+ * the prefix used to derive the create route (`${prefix}/checkouts`) and the order route
+ * (`${prefix}/orders/${orderId}`).
+ */
+export const OPENRECEIVE_DEFAULT_PREFIX = "/openreceive" as const;
 export const OPENRECEIVE_COPY_FEEDBACK_MS = 1800 as const;
 export const OPENRECEIVE_PROVIDER_PREVIEW_LIMIT = 4 as const;
 export const OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME = "openreceive-checkout" as const;
@@ -542,6 +549,7 @@ export interface CheckoutDisplayModel extends CheckoutDisplayData {
 
 export const OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES = {
   orderId: "order-id",
+  prefix: "prefix",
   invoiceId: "invoice-id",
   invoice: "invoice",
   rail: "rail",
@@ -565,6 +573,25 @@ export const OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES = {
 
 export interface CheckoutElementAttributeOptions {
   readonly orderUrl?: string;
+  /**
+   * Order id for create mode. When no checkout snapshot is supplied, the element is rendered
+   * with this as its `order-id` attribute (paired with `prefix`) and owns the whole
+   * create/poll lifecycle itself. Ignored when a snapshot is supplied — the snapshot's
+   * `order_id` wins.
+   */
+  readonly orderId?: string;
+  /**
+   * Base path the shipped router is mounted at. Emitted as the element's `prefix` attribute
+   * so a create-mode element (`order-id` with no `invoice`) can derive its create/order
+   * routes without spelling them out.
+   */
+  readonly prefix?: string;
+  /**
+   * Optional create-time metadata, for parity with the React `<Checkout metadata>` prop. The
+   * custom element derives its create request from `order-id`/`prefix` and has no metadata
+   * attribute, so this is accepted on the wrapper API but not forwarded to the element.
+   */
+  readonly metadata?: Record<string, unknown>;
   readonly theme?: OpenReceiveResolvedTheme;
   readonly paymentWizard?: boolean;
 }
@@ -743,10 +770,30 @@ export type RequestCheckoutOptions = RequestCheckoutBaseOptions &
         readonly sats?: never;
         readonly usd: string;
       }
+    // Amount-less create: `{ prefix, orderId }` (or `{ checkoutUrl, orderId }`) with no amount.
+    // The mounted server's resolveAmount sets the authoritative price; the client POSTs a body
+    // of only `{ order_id }`.
+    | {
+        readonly amount?: never;
+        readonly sats?: never;
+        readonly usd?: never;
+      }
   );
 
 export interface RequestCheckoutBaseOptions {
-  readonly checkoutUrl: string | ((orderId: string) => string);
+  /**
+   * Absolute or app-relative URL of the checkout-create endpoint. Supports `{orderId}` /
+   * `{order_id}` templating and a `(orderId) => string` builder. Optional when `prefix` is
+   * given; `checkoutUrl` wins when both are set.
+   */
+  readonly checkoutUrl?: string | ((orderId: string) => string);
+  /**
+   * Base path the shipped router is mounted at (e.g. `/openreceive`). When set and
+   * `checkoutUrl` is not, the create URL is derived as `${prefix}/checkouts` (a trailing
+   * slash on the prefix is stripped). Lets a developer point the client at a mounted router
+   * without spelling out each route.
+   */
+  readonly prefix?: string;
   readonly orderId: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly headers?: Readonly<Record<string, string>>;
@@ -793,6 +840,32 @@ export interface CheckoutController {
   cancel(): CheckoutState;
   copyInvoice(): Promise<void>;
   openWallet(): string;
+}
+
+/**
+ * Options for {@link createOpenReceiveCheckoutSession}: everything a controller accepts (minus
+ * the fields the session derives itself — `snapshot`, `orderUrl`, `refreshStatus`) plus the
+ * create inputs. Amount is optional; omit it to let the mounted server set the price.
+ */
+export interface CreateOpenReceiveCheckoutSessionOptions
+  extends Omit<CheckoutControllerOptions, "snapshot" | "orderUrl" | "refreshStatus"> {
+  /** Base path the shipped router is mounted at; defaults to {@link OPENRECEIVE_DEFAULT_PREFIX}. */
+  readonly prefix?: string;
+  readonly orderId: string;
+  readonly metadata?: Record<string, unknown>;
+  readonly memo?: string;
+  /** Extra headers for the create POST (status polls use `statusHeaders`). */
+  readonly headers?: Readonly<Record<string, string>>;
+  readonly amount?: RequestCheckoutAmount;
+  readonly sats?: number | string;
+  readonly usd?: string;
+}
+
+/** A created checkout paired with the order route it polls and a ready-to-start controller. */
+export interface OpenReceiveCheckoutSession {
+  readonly checkout: CheckoutSnapshot;
+  readonly orderUrl: string;
+  readonly controller: CheckoutController;
 }
 
 export interface CreateCheckoutStateOptions {

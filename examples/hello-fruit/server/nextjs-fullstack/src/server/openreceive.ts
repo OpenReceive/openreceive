@@ -3,6 +3,7 @@ import type {
   OpenReceiveReceiveNwcClient,
   OpenReceiveSourcedPriceProvider,
 } from "@openreceive/core";
+import { guestCheckout, type CreateOpenReceiveHttpHandlerOptions } from "@openreceive/http";
 import {
   OpenReceiveServiceError,
   createOpenReceive,
@@ -15,7 +16,9 @@ import {
   createHelloFruitOpenReceiveLogger,
 } from "../../../../shared/demo-logging.ts";
 import {
-  createHelloFruitCreateOrderResult,
+  HelloFruitDemoOrderError,
+  prepareHelloFruitOrder,
+  resolveHelloFruitOrderAmount,
 } from "../../../../shared/demo-order.ts";
 import {
   readHelloFruitCheckoutCurrencies,
@@ -116,48 +119,41 @@ export function sitemapResponse(): string {
   ].join("\n");
 }
 
-export async function createOrderResponse(request: Request): Promise<Response> {
+// App order step (NOT an OpenReceive route): validate the cart, compute the authoritative total,
+// and PERSIST the order via the store's meta KV so `resolveAmount` can look it up. Creating the
+// checkout, polling, and swaps are all the mounted OpenReceive router's job (the catch-all route).
+export async function prepareOrderResponse(request: Request): Promise<Response> {
   const startedAt = Date.now();
   const { openreceive } = await getOpenReceive();
 
   try {
     const body = await readJsonBody(request);
-    logDemo("create_order.request", "Received create order request.", {
+    logDemo("prepare_order.request", "Received prepare order request.", {
       ...summarizeOrderRequest(body),
     });
-    const orderResult = await createHelloFruitCreateOrderResult(body, {
+    const { order } = await prepareHelloFruitOrder(body, {
       demoId: DEMO_ID,
       demoName: "Next.js",
       openreceive,
     });
-    logDemo("create_order.prepared", "Prepared demo order and invoice request.", {
-      orderId: orderResult.order.uuid,
-      orderStatus: orderResult.order.status,
-      total: orderResult.order.total_amount,
-      itemCount: orderResult.order.items.length,
-    });
-    const checkout = await openreceive.getOrCreateCheckout(orderResult.invoiceRequest);
-    logDemo("create_order.checkout_created", "Created or reused checkout.", {
-      orderId: checkout.order_id,
+    logDemo("prepare_order.prepared", "Prepared and persisted demo order.", {
+      orderId: order.uuid,
+      orderStatus: order.status,
+      total: order.total_amount,
+      itemCount: order.items.length,
       elapsedMs: Date.now() - startedAt,
     });
-    return jsonResponse(
-      {
-        order: orderResult.order,
-        checkout,
-      },
-      201,
-    );
+    return jsonResponse({ order }, 201);
   } catch (error) {
-    if (error instanceof OpenReceiveServiceError) {
-      logDemo("create_order.rejected", "Create order request returned a known error.", {
+    if (error instanceof OpenReceiveServiceError || error instanceof HelloFruitDemoOrderError) {
+      logDemo("prepare_order.rejected", "Prepare order request returned a known error.", {
         status: error.status,
         body: error.body,
         elapsedMs: Date.now() - startedAt,
       });
       return jsonResponse(error.body, error.status);
     }
-    logDemo("create_order.error", "Create order request failed unexpectedly.", {
+    logDemo("prepare_order.error", "Prepare order request failed unexpectedly.", {
       error: error instanceof Error ? error.message : String(error),
       elapsedMs: Date.now() - startedAt,
     });
@@ -165,44 +161,18 @@ export async function createOrderResponse(request: Request): Promise<Response> {
   }
 }
 
-export async function orderResponse(request: Request): Promise<Response> {
-  const startedAt = Date.now();
+/**
+ * Options for the mounted OpenReceive router (the app/openreceive/[...openreceive] catch-all).
+ * guestCheckout() gates reads on the per-order token; resolveAmount is the amount authority, looking
+ * the persisted order up by id so the client's price is never trusted.
+ */
+export async function openReceiveHttpOptions(): Promise<CreateOpenReceiveHttpHandlerOptions> {
   const { openreceive } = await getOpenReceive();
-
-  try {
-    const body = await readJsonBody(request);
-    const orderId = requireRequestString(body, "order_id");
-    logDemo("order.request", "Received order request.", {
-      orderId,
-      action: typeof body.action === "string" ? body.action : "status",
-    });
-    await authorizeOrderAccess(request, orderId);
-    const result = await openreceive.order(body as Parameters<typeof openreceive.order>[0]);
-    logDemo("order.response", "Served order request.", {
-      orderId,
-      elapsedMs: Date.now() - startedAt,
-    });
-    return jsonResponse(result);
-  } catch (error) {
-    if (error instanceof OpenReceiveServiceError) {
-      logDemo("order.rejected", "Order request returned a known error.", {
-        status: error.status,
-        body: error.body,
-        elapsedMs: Date.now() - startedAt,
-      });
-      return jsonResponse(error.body, error.status);
-    }
-    logDemo("order.error", "Order request failed unexpectedly.", {
-      error: error instanceof Error ? error.message : String(error),
-      elapsedMs: Date.now() - startedAt,
-    });
-    throw error;
-  }
-}
-
-async function authorizeOrderAccess(_request: Request, _orderId: string): Promise<void> {
-  // Demo seam: production apps should verify the signed-in/session caller owns
-  // this order before forwarding the request to openreceive.order(body).
+  return {
+    service: openreceive,
+    authorize: guestCheckout(),
+    resolveAmount: ({ orderId }) => resolveHelloFruitOrderAmount(openreceive, orderId),
+  };
 }
 
 export async function ratesResponse(): Promise<Response> {
@@ -313,17 +283,6 @@ function summarizeOrderRequest(body: Record<string, unknown>): Record<string, un
       )
       .filter((productId): productId is string => typeof productId === "string"),
   };
-}
-
-function requireRequestString(body: Record<string, unknown>, key: string): string {
-  const value = body[key];
-  if (typeof value !== "string" || value.length === 0) {
-    throw new OpenReceiveServiceError(400, {
-      code: "INVALID_REQUEST",
-      message: `${key} is required.`,
-    });
-  }
-  return value;
 }
 
 async function readJsonBody(request: Request): Promise<Record<string, unknown>> {

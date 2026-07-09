@@ -1,6 +1,7 @@
 /// <reference path="../qrcode.d.ts" />
 
 import * as defaultQrEncoder from "qrcode";
+import { orderAccessTokenHeaders, rememberOrderAccessToken } from "./order-token.ts";
 import {
   type CheckoutController,
   type CheckoutControllerOptions,
@@ -17,9 +18,11 @@ import {
   type CheckoutWatcherOptions,
   type CopyInvoiceOptions,
   type CreateCheckoutStateOptions,
+  type CreateOpenReceiveCheckoutSessionOptions,
   type CreateOpenReceiveStatusFetcherOptions,
   OPENRECEIVE_COPY_FEEDBACK_MS,
   OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS,
+  OPENRECEIVE_DEFAULT_PREFIX,
   OPENRECEIVE_QR_DARK_COLOR,
   OPENRECEIVE_QR_ERROR_CORRECTION,
   OPENRECEIVE_QR_LIGHT_COLOR,
@@ -28,6 +31,7 @@ import {
   type OpenReceiveBrowserLogger,
   type OpenReceiveBrowserLogLevel,
   type OpenReceiveCheckoutPaymentMethod,
+  type OpenReceiveCheckoutSession,
   type OpenReceiveQrEncoder,
   type OpenReceiveQrOptions,
   type OpenReceiveSwapDisplayModel,
@@ -416,7 +420,7 @@ interface NormalizedRequestCheckoutOptions {
   readonly orderId: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly headers?: Readonly<Record<string, string>>;
-  readonly amount: RequestCheckoutAmount;
+  readonly amount?: RequestCheckoutAmount;
   readonly memo?: string;
   readonly descriptionHash?: string;
   readonly metadata?: Record<string, unknown>;
@@ -429,27 +433,62 @@ function normalizeRequestCheckoutOptions(
   const orderId = optionalString(record.orderId ?? record.order_id);
   const descriptionHash = optionalString(record.descriptionHash ?? record.description_hash);
   const metadata = optionalRecord(record.metadata);
+  const amount = normalizeRequestCheckoutAmount(record);
 
   return {
-    checkoutUrl: options.checkoutUrl,
+    checkoutUrl: resolveRequestCheckoutTarget(options),
     orderId: orderId ?? "",
     fetch: options.fetch,
     headers: options.headers,
-    amount: normalizeRequestCheckoutAmount(record),
+    ...(amount === undefined ? {} : { amount }),
     ...(options.memo === undefined ? {} : { memo: options.memo }),
     ...(descriptionHash === undefined ? {} : { descriptionHash }),
     ...(metadata === undefined ? {} : { metadata }),
   };
 }
 
-function normalizeRequestCheckoutAmount(options: Record<string, unknown>): RequestCheckoutAmount {
+/**
+ * Resolve where a checkout is created. An explicit `checkoutUrl` always wins; otherwise a
+ * `prefix` (the base path the shipped router is mounted at) derives `${prefix}/checkouts`.
+ * This is what lets a developer pass `prefix: "/openreceive"` and never spell out routes.
+ */
+function resolveRequestCheckoutTarget(
+  options: RequestCheckoutOptions,
+): string | ((orderId: string) => string) {
+  if (options.checkoutUrl !== undefined) return options.checkoutUrl;
+  const prefix = optionalString(options.prefix);
+  if (prefix !== undefined) {
+    return `${prefix.replace(/\/+$/, "")}/checkouts`;
+  }
+  throw new Error("OpenReceive checkout creation requires checkoutUrl or prefix.");
+}
+
+/**
+ * Derive the order route URL from the base path the shipped router is mounted at:
+ * `resolveOrderUrlFromPrefix("/openreceive", "ord-1")` -> `/openreceive/orders/ord-1`.
+ * A trailing slash on the prefix is stripped; the order id is URL-encoded. This is the URL
+ * a created checkout polls for status (and drives swaps against) — the per-order token rides
+ * along automatically, keyed by the order id.
+ */
+export function resolveOrderUrlFromPrefix(prefix: string, orderId: string): string {
+  return `${prefix.replace(/\/+$/, "")}/orders/${encodeURIComponent(orderId)}`;
+}
+
+function normalizeRequestCheckoutAmount(
+  options: Record<string, unknown>,
+): RequestCheckoutAmount | undefined {
   const sourceCount = [
     options.amount !== undefined,
     options.usd !== undefined,
     options.sats !== undefined,
   ].filter(Boolean).length;
-  if (sourceCount !== 1) {
-    throw new Error("OpenReceive checkout creation requires exactly one of amount, usd, or sats.");
+  // No amount source is valid for a prefix/checkoutUrl create against the mounted router:
+  // the server's resolveAmount sets the authoritative price and the client POSTs { order_id }.
+  if (sourceCount === 0) {
+    return undefined;
+  }
+  if (sourceCount > 1) {
+    throw new Error("OpenReceive checkout creation requires at most one of amount, usd, or sats.");
   }
 
   if (options.amount !== undefined) {
@@ -541,7 +580,7 @@ export async function requestCheckout(options: RequestCheckoutOptions): Promise<
 
   const requestBody = {
     order_id: request.orderId,
-    amount: structuredClone(request.amount),
+    ...(request.amount === undefined ? {} : { amount: structuredClone(request.amount) }),
     ...(request.memo === undefined ? {} : { memo: request.memo }),
     ...(request.descriptionHash === undefined ? {} : { description_hash: request.descriptionHash }),
     ...(request.metadata === undefined ? {} : { metadata: structuredClone(request.metadata) }),
@@ -571,6 +610,17 @@ export async function requestCheckout(options: RequestCheckoutOptions): Promise<
     assertOpenReceiveDisplayInvoice(responseInvoice.invoice);
   }
 
+  // The mounted create route returns a one-time per-order capability token alongside the
+  // checkout. Remember it keyed by the order so status polls and swap actions attach it
+  // automatically — the developer never touches the token. The snapshot's order_id is the
+  // server's authority; fall back to the requested orderId if it were ever missing. The
+  // token is NOT returned to the caller (the return type stays CheckoutSnapshot) so it can
+  // never be logged through the snapshot.
+  const accessToken = optionalString(asRecord(body).order_access_token);
+  if (accessToken !== undefined) {
+    rememberOrderAccessToken(optionalString(snapshot.order_id) ?? request.orderId, accessToken);
+  }
+
   return snapshot;
 }
 
@@ -592,6 +642,10 @@ export function createOpenReceiveStatusFetcher(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        // Auto-attach the per-order capability token so every status poll carries it with
+        // no caller change. Placed before the caller's headers so an explicit Authorization
+        // still wins; omitted entirely when no token is stored for this order.
+        ...orderAccessTokenHeaders(order_id),
         ...headers,
       },
       body: JSON.stringify({
@@ -634,9 +688,21 @@ function resolveOrderUrl(orderUrl: string, orderId: string): string {
 
 function checkoutSnapshotFromResponseBody(body: unknown): CheckoutSnapshot {
   const record = asRecord(body);
+  // The mounted create route nests the snapshot under `checkout` (alongside
+  // `order_access_token`); direct callers post the snapshot at the top level. Accept both,
+  // then fall back to the shared status-body shapes (display_checkout, etc.).
   const wrapped = asRecord(record.checkout);
-  const candidate = typeof wrapped.checkout_id === "string" ? wrapped : record;
-  return normalizeCheckoutSnapshot(candidate);
+  if (typeof wrapped.checkout_id === "string") {
+    return normalizeCheckoutSnapshot(wrapped);
+  }
+  if (typeof record.checkout_id === "string") {
+    return normalizeCheckoutSnapshot(record);
+  }
+  const extracted = extractCheckoutSnapshotFromStatusBody(record);
+  if (extracted !== null) return extracted;
+  // No recognizable shape: normalize the record so its own validation raises the precise
+  // "requires checkout_id" error the original code path produced.
+  return normalizeCheckoutSnapshot(record);
 }
 
 function checkoutSnapshotFromStatusBody(body: unknown): CheckoutSnapshot | null {
@@ -1318,6 +1384,55 @@ export function createCheckoutController(options: CheckoutControllerOptions): Ch
   return new OpenReceiveBrowserCheckoutController(options);
 }
 
+/**
+ * One-call create-mode entry: given `{ prefix?, orderId, ...controllerOptions }`, create the
+ * checkout against the mounted router (`${prefix}/checkouts`) and return the resulting snapshot
+ * plus a ready-to-start controller wired to `${prefix}/orders/${orderId}`. The per-order
+ * capability token is captured by `requestCheckout` and rides every later status poll / swap
+ * call automatically. Amount is optional — omit it to let the server set the authoritative
+ * price. The returned controller is created but not started; call `controller.start()`.
+ *
+ * This is the framework-agnostic primitive the React `<Checkout orderId>` and
+ * `<openreceive-checkout order-id>` create modes are equivalent to.
+ */
+export async function createOpenReceiveCheckoutSession(
+  options: CreateOpenReceiveCheckoutSessionOptions,
+): Promise<OpenReceiveCheckoutSession> {
+  const prefix = options.prefix ?? OPENRECEIVE_DEFAULT_PREFIX;
+  const createOptions = {
+    prefix,
+    orderId: options.orderId,
+    ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+    ...(options.headers === undefined ? {} : { headers: options.headers }),
+    ...(options.memo === undefined ? {} : { memo: options.memo }),
+    ...(options.metadata === undefined ? {} : { metadata: options.metadata }),
+    ...(options.amount === undefined ? {} : { amount: options.amount }),
+    ...(options.sats === undefined ? {} : { sats: options.sats }),
+    ...(options.usd === undefined ? {} : { usd: options.usd }),
+  } as RequestCheckoutOptions;
+
+  const checkout = await requestCheckout(createOptions);
+  const orderUrl = resolveOrderUrlFromPrefix(prefix, options.orderId);
+  const controller = createCheckoutController({
+    snapshot: checkout,
+    orderUrl,
+    ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+    ...(options.statusHeaders === undefined ? {} : { statusHeaders: options.statusHeaders }),
+    ...(options.pollIntervalMs === undefined ? {} : { pollIntervalMs: options.pollIntervalMs }),
+    ...(options.logger === undefined ? {} : { logger: options.logger }),
+    ...(options.now === undefined ? {} : { now: options.now }),
+    ...(options.setInterval === undefined ? {} : { setInterval: options.setInterval }),
+    ...(options.clearInterval === undefined ? {} : { clearInterval: options.clearInterval }),
+    ...(options.clipboard === undefined ? {} : { clipboard: options.clipboard }),
+    ...(options.open === undefined ? {} : { open: options.open }),
+    ...(options.onState === undefined ? {} : { onState: options.onState }),
+    ...(options.onSnapshot === undefined ? {} : { onSnapshot: options.onSnapshot }),
+    ...(options.onError === undefined ? {} : { onError: options.onError }),
+  });
+
+  return { checkout, orderUrl, controller };
+}
+
 export async function createQrSvg(
   invoice: string,
   options: OpenReceiveQrOptions = {},
@@ -1606,7 +1721,17 @@ function emitBrowserLog(
   }
 }
 
-function sanitizeBrowserLogEntry(entry: OpenReceiveBrowserLogEntry): OpenReceiveBrowserLogEntry {
+/**
+ * Redact secrets from a browser log entry before it reaches a logger. Any field whose key
+ * looks like a secret (`secret`/`token`/`authorization`/`cookie`/`nwc`), at any nesting
+ * depth, is replaced with `[REDACTED]`; string values are additionally scrubbed of NWC URIs
+ * and `token=`/`secret=` query params. Exported so callers that log a request (including its
+ * headers) can guarantee the per-order capability token in `Authorization: Bearer <token>`
+ * never leaks.
+ */
+export function sanitizeBrowserLogEntry(
+  entry: OpenReceiveBrowserLogEntry,
+): OpenReceiveBrowserLogEntry {
   const clean: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(entry)) {
     if (/secret|token|authorization|cookie|nwc/i.test(key)) {

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import {
+  OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
   openReceiveCheckoutElementStyles,
   openReceiveThemeToggleElementStyles
 } from "@openreceive/browser/internal";
@@ -10,6 +11,7 @@ import {
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
   defineOpenReceiveElements,
   formatMsats,
+  renderCheckoutCreatingHtml,
   renderCheckoutHtml,
   renderOpenReceivePaymentWizardHtml,
   renderOpenReceiveThemeToggleHtml
@@ -245,6 +247,22 @@ test("elements format sat and msat amounts", () => {
   assert.equal(formatMsats(2000), "2 sats");
   assert.equal(formatMsats(1500), "1500 msats");
   assert.throws(() => formatMsats(-1), /non-negative safe integer/);
+});
+
+test("elements expose a create-mode prefix attribute and creating placeholder", () => {
+  // Create mode is driven by `order-id` (+ optional `prefix`) with no `invoice`.
+  assert.equal(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId, "order-id");
+  assert.equal(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix, "prefix");
+
+  const dark = renderCheckoutCreatingHtml("dark");
+  assert.match(dark, /data-openreceive-creating/);
+  assert.match(dark, /Creating checkout/);
+  // The theme lands on the root section tag (the <style> block itself mentions data-theme).
+  assert.match(dark, /part="root" data-theme="dark"/);
+  assert.match(dark, /part="spinner"/);
+
+  const noTheme = renderCheckoutCreatingHtml();
+  assert.doesNotMatch(noTheme, /part="root" data-theme/);
 });
 
 test("elements definition fails clearly without DOM custom elements", () => {

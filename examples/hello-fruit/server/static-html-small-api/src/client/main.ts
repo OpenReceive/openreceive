@@ -1,7 +1,7 @@
 import {
-  createCheckoutShell,
   createOpenReceiveThemeToggleElement,
-  type CheckoutSnapshot,
+  OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
+  OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
 } from "@openreceive/browser/internal";
 import { defineOpenReceiveElements } from "@openreceive/elements";
 import {
@@ -34,12 +34,6 @@ interface Fruit {
   };
 }
 
-interface CheckoutStateEventDetail {
-  state?: {
-    order_id?: string;
-  };
-}
-
 interface DemoOrder {
   uuid: string;
   status: "pending_payment" | "paid";
@@ -54,9 +48,8 @@ interface DemoOrder {
   };
 }
 
-interface CreateOrderResponse {
+interface PrepareOrderResponse {
   order: DemoOrder;
-  checkout: CheckoutSnapshot;
 }
 
 const fruits = fruitsData.fruits as Fruit[];
@@ -347,13 +340,15 @@ async function createOrder(): Promise<void> {
   try {
     const startedAt = Date.now();
     const items = cartItems();
-    logDemo("create_order.request", "Posting create order request.", {
+    logDemo("prepare_order.request", "Posting prepare order request.", {
       currency: selectedCurrency,
       cartLineCount: items.length,
       cartQuantity: items.reduce((total, item) => total + item.quantity, 0),
       productIds: items.map((item) => item.fruit.id),
     });
-    const response = await fetch("/create_order", {
+    // App route: build + persist the order. The <openreceive-checkout order-id> element below then
+    // creates the checkout against the mounted /openreceive/checkouts route and drives it itself.
+    const response = await fetch("/prepare_order", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -367,32 +362,28 @@ async function createOrder(): Promise<void> {
       }),
     });
     const body = (await response.json()) as unknown;
-    logDemo("create_order.response", "Received create order response.", {
+    logDemo("prepare_order.response", "Received prepare order response.", {
       ok: response.ok,
       status: response.status,
       elapsedMs: Date.now() - startedAt,
-      hasCheckout: isCreateOrderResponse(body),
+      hasOrder: isPrepareOrderResponse(body),
     });
-    if (!response.ok || !isCreateOrderResponse(body)) {
+    if (!response.ok || !isPrepareOrderResponse(body)) {
       throw new Error(readErrorMessage(body) ?? helloFruitDemoLabels.createOrderError);
     }
 
     currentOrder = body.order;
     purchasedFruit = items[0]?.fruit;
-    logDemo("create_order.ready", "Checkout payload accepted by browser app.", {
+    logDemo("prepare_order.ready", "Order accepted by browser app.", {
       orderId: body.order.uuid,
-      checkoutOrderId: body.checkout.order_id,
       orderStatus: body.order.status,
       itemCount: body.order.items.length,
       total: body.order.total_amount,
     });
     renderOrder(body.order);
-    renderCheckout({
-      ...body.checkout,
-      fiat: body.order.total_amount,
-    });
+    renderCheckout(body.order.uuid);
   } catch (error) {
-    logDemo("create_order.error", "Create order failed in the browser.", {
+    logDemo("prepare_order.error", "Prepare order failed in the browser.", {
       error: error instanceof Error ? error.message : String(error),
     });
     setError(error instanceof Error ? error.message : String(error));
@@ -401,48 +392,39 @@ async function createOrder(): Promise<void> {
   }
 }
 
-function renderCheckout(checkout: CheckoutSnapshot): void {
-  const topbar = requireElement("topbar");
+function renderCheckout(orderId: string): void {
   const panel = requireElement("checkout-panel");
-  logDemo("checkout.render", "Rendering OpenReceive checkout shell.", {
-    orderId: checkout.order_id,
+  logDemo("checkout.render", "Rendering self-contained OpenReceive checkout element.", {
+    orderId,
   });
-  const shell = createCheckoutShell(checkout, {
-    document,
-    root: document.querySelector(".page"),
-    orderUrl: "/order",
-    rootSelector: ".page",
-    defaultTheme: "light",
-    onError: (event) => {
-      const detail = (event as CustomEvent<{ error?: unknown }>).detail;
-      logDemo("checkout.error", "Checkout shell reported an error.", {
-        error: detail?.error instanceof Error ? detail.error.message : String(detail?.error),
-      });
-      setError(detail?.error instanceof Error ? detail.error.message : String(detail?.error));
-    },
-    onSettled: (event) => {
-      const state = (event as CustomEvent<CheckoutStateEventDetail>).detail?.state;
-      if (
-        state?.order_id !== undefined &&
-        state.order_id !== completedOrderId &&
-        purchasedFruit !== undefined
-      ) {
-        logDemo("checkout.settled", "Checkout settled callback received.", {
-          orderId: state.order_id,
-          purchasedFruitId: purchasedFruit.id,
-        });
-        completedOrderId = state.order_id;
-        if (currentOrder !== undefined) {
-          currentOrder = { ...currentOrder, status: "paid" };
-          renderOrder(currentOrder);
-        }
-        showStickerModal(purchasedFruit);
-      }
-    },
+  // The SELF-CONTAINED custom element: given just `order-id` (prefix defaults to /openreceive), it
+  // creates the checkout, polls, and drives swaps itself. No hand-written invoice/status/swap routes.
+  const checkoutElement = document.createElement(OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME);
+  checkoutElement.setAttribute("order-id", orderId);
+
+  checkoutElement.addEventListener(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.error, (event) => {
+    const detail = (event as CustomEvent<{ error?: unknown }>).detail;
+    logDemo("checkout.error", "Checkout element reported an error.", {
+      error: detail?.error instanceof Error ? detail.error.message : String(detail?.error),
+    });
+    setError(detail?.error instanceof Error ? detail.error.message : String(detail?.error));
   });
 
-  topbar.replaceChildren(shell.themeToggle);
-  panel.replaceChildren(shell.checkout);
+  checkoutElement.addEventListener(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.settled, () => {
+    if (currentOrder === undefined || completedOrderId === orderId || purchasedFruit === undefined) {
+      return;
+    }
+    logDemo("checkout.settled", "Checkout settled callback received.", {
+      orderId,
+      purchasedFruitId: purchasedFruit.id,
+    });
+    completedOrderId = orderId;
+    currentOrder = { ...currentOrder, status: "paid" };
+    renderOrder(currentOrder);
+    showStickerModal(purchasedFruit);
+  });
+
+  panel.replaceChildren(checkoutElement);
 }
 
 function setError(message: string): void {
@@ -537,8 +519,8 @@ function requireElement<T extends HTMLElement = HTMLElement>(id: string): T {
   return element as T;
 }
 
-function isCreateOrderResponse(value: unknown): value is CreateOrderResponse {
-  return typeof value === "object" && value !== null && "order" in value && "checkout" in value;
+function isPrepareOrderResponse(value: unknown): value is PrepareOrderResponse {
+  return typeof value === "object" && value !== null && "order" in value;
 }
 
 function readErrorMessage(value: unknown): string | undefined {

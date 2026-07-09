@@ -11,6 +11,8 @@
   "dependencies": {
     "@openreceive/browser": "0.1.1",
     "@openreceive/core": "0.1.1",
+    "@openreceive/http": "0.1.1",
+    "@openreceive/next": "0.1.1",
     "@openreceive/node": "0.1.1",
     "@openreceive/react": "0.1.1",
     "next": "^15.5.19",

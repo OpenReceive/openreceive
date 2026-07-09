@@ -3,20 +3,6 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import {
-  OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
-  OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
-  OPENRECEIVE_THEME_STORAGE_KEY,
-  OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
-  createCheckoutElement,
-  createCheckoutElementAttributes,
-  createCheckoutElementListeners,
-  createCheckoutShell,
-  createCheckoutShellModel,
-  createOpenReceiveThemeToggleElement,
-  createOpenReceiveThemeToggleElementAttributes,
-  createOpenReceiveThemeModel
-} from "@openreceive/browser/internal";
-import {
   createOpenReceiveAngularCheckoutBinding,
   createOpenReceiveAngularCheckoutComponentModel,
   createOpenReceiveAngularCheckoutController,
@@ -26,8 +12,22 @@ import {
   createOpenReceiveAngularThemeBinding,
   createOpenReceiveAngularThemeToggleBinding,
   toggleOpenReceiveStoredThemeControls as toggleAngularThemeControls,
-  toggleOpenReceiveStoredThemePreference as toggleAngularThemePreference
+  toggleOpenReceiveStoredThemePreference as toggleAngularThemePreference,
 } from "@openreceive/angular";
+import {
+  createCheckoutElement,
+  createCheckoutElementAttributes,
+  createCheckoutElementListeners,
+  createCheckoutShell,
+  createCheckoutShellModel,
+  createOpenReceiveThemeModel,
+  createOpenReceiveThemeToggleElement,
+  createOpenReceiveThemeToggleElementAttributes,
+  OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
+  OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
+  OPENRECEIVE_THEME_STORAGE_KEY,
+  OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
+} from "@openreceive/browser/internal";
 import {
   applyCheckoutThemeAttributes as applySvelteCheckoutThemeAttributes,
   createCheckoutBinding,
@@ -37,7 +37,7 @@ import {
   createOpenReceiveSvelteCheckoutShellBinding,
   createOpenReceiveSvelteStoredThemeBinding,
   createOpenReceiveSvelteThemeBinding,
-  createOpenReceiveSvelteThemeToggleBinding
+  createOpenReceiveSvelteThemeToggleBinding,
 } from "@openreceive/svelte";
 import {
   applyOpenReceiveThemeAttributes as applyVueThemeAttributes,
@@ -49,7 +49,7 @@ import {
   createOpenReceiveVueStoredThemeBinding,
   createOpenReceiveVueThemeBinding,
   createOpenReceiveVueThemeToggleBinding,
-  syncOpenReceiveStoredThemeControls as syncVueThemeControls
+  syncOpenReceiveStoredThemeControls as syncVueThemeControls,
 } from "@openreceive/vue";
 
 const snapshot = {
@@ -66,14 +66,14 @@ const snapshot = {
     fiat_quote: {
       fiat: {
         currency: "USD",
-        value: "0.05"
-      }
+        value: "0.05",
+      },
     },
     transaction_state: "pending",
     workflow_state: "invoice_created",
-    expires_at: 1999999999
+    expires_at: 1999999999,
   },
-  invoices: []
+  invoices: [],
 };
 
 test("browser owns custom-element checkout attributes and listeners", () => {
@@ -92,16 +92,16 @@ test("browser owns custom-element checkout attributes and listeners", () => {
         },
         addEventListener: (name, listener) => {
           listeners[name] = listener;
-        }
+        },
       };
       createdElements.push(element);
       return element;
-    }
+    },
   };
   const attributes = createCheckoutElementAttributes(snapshot, {
     orderUrl: "/order",
     theme: "dark",
-    paymentWizard: true
+    paymentWizard: true,
   });
 
   assert.deepEqual(attributes, {
@@ -117,7 +117,7 @@ test("browser owns custom-element checkout attributes and listeners", () => {
     "expires-at": "1999999999",
     "order-url": "/order",
     theme: "dark",
-    "payment-wizard": "true"
+    "payment-wizard": "true",
   });
 
   let copied = false;
@@ -132,7 +132,7 @@ test("browser owns custom-element checkout attributes and listeners", () => {
     },
     onProviderCopy: () => {
       receivedProviderCopy = true;
-    }
+    },
   });
   listeners[OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy]?.(new Event("copy"));
   listeners[OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.state]?.(new Event("state"));
@@ -146,19 +146,22 @@ test("browser owns custom-element checkout attributes and listeners", () => {
     document,
     orderUrl: "/order",
     theme: "dark",
-    onError: () => undefined
+    onError: () => undefined,
   });
   assert.equal(checkoutElement.tagName, OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME);
   assert.equal(checkoutElement.attributes["order-url"], "/order");
   assert.equal(checkoutElement.attributes.theme, "dark");
-  assert.equal(typeof checkoutElement.listeners[OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.error], "function");
+  assert.equal(
+    typeof checkoutElement.listeners[OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.error],
+    "function",
+  );
   assert.equal(createdElements.length, 1);
 
   const themeToggle = createOpenReceiveThemeToggleElement({
     document,
     rootSelector: ".page",
     checkoutSelector: "openreceive-checkout",
-    defaultTheme: "light"
+    defaultTheme: "light",
   });
   assert.equal(themeToggle.tagName, OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME);
   assert.equal(themeToggle.attributes["root-selector"], ".page");
@@ -170,16 +173,19 @@ test("browser owns custom-element checkout attributes and listeners", () => {
     root: {
       setAttribute: (name, value) => {
         rootAttrs[name] = value;
-      }
+      },
     },
     orderUrl: "/order",
     rootSelector: ".page",
-    defaultTheme: "light"
+    defaultTheme: "light",
   });
   assert.equal(shell.checkout.tagName, OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME);
   assert.equal(shell.checkout.attributes.theme, shell.theme.resolvedTheme);
   assert.equal(shell.themeToggle.tagName, OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME);
-  assert.equal(shell.themeToggle.attributes["checkout-selector"], OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME);
+  assert.equal(
+    shell.themeToggle.attributes["checkout-selector"],
+    OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
+  );
   assert.equal(rootAttrs["data-openreceive-theme"], shell.theme.resolvedTheme);
 
   assert.throws(
@@ -189,25 +195,95 @@ test("browser owns custom-element checkout attributes and listeners", () => {
         active: {
           ...snapshot.active,
           invoice_id: "or_inv_bad",
-          invoice: `nostr+walletconnect://${"a".repeat(64)}?secret=${"b".repeat(64)}`
-        }
+          invoice: `nostr+walletconnect://${"a".repeat(64)}?secret=${"b".repeat(64)}`,
+        },
       }),
-    /must not be an NWC/
+    /must not be an NWC/,
   );
 });
 
-test("browser owns custom-element theme-toggle attributes", () => {
-  assert.deepEqual(createOpenReceiveThemeToggleElementAttributes({
-    rootSelector: ".page",
-    checkoutSelector: "openreceive-checkout",
-    defaultTheme: "light",
-    storageKey: "demo.theme"
-  }), {
-    "root-selector": ".page",
-    "checkout-selector": "openreceive-checkout",
-    "default-theme": "light",
-    "storage-key": "demo.theme"
+test("create-mode element attributes carry the prefix (omitted when not set)", () => {
+  const withPrefix = createCheckoutElementAttributes(snapshot, {
+    orderUrl: "/order",
+    prefix: "/openreceive",
   });
+  assert.equal(withPrefix.prefix, "/openreceive");
+
+  const withoutPrefix = createCheckoutElementAttributes(snapshot, { orderUrl: "/order" });
+  assert.equal("prefix" in withoutPrefix, false);
+});
+
+test("create-mode element attributes emit order-id + prefix without a snapshot", () => {
+  // Create mode: pass no snapshot (null), just an order id (+ optional prefix). The element
+  // owns the create/poll lifecycle, so no invoice/rail/status attributes are emitted.
+  const attributes = createCheckoutElementAttributes(null, {
+    orderId: "order-create",
+    prefix: "/openreceive",
+  });
+  assert.deepEqual(attributes, {
+    "order-id": "order-create",
+    prefix: "/openreceive",
+  });
+
+  // Prefix is optional — omit it and the element falls back to its own default (/openreceive).
+  const withoutPrefix = createCheckoutElementAttributes(null, { orderId: "order-create" });
+  assert.deepEqual(withoutPrefix, { "order-id": "order-create" });
+  assert.equal("prefix" in withoutPrefix, false);
+
+  // Create mode with no order id (and no snapshot) is a usage error.
+  assert.throws(() => createCheckoutElementAttributes(null, {}), /orderId/);
+  assert.throws(() => createCheckoutElementAttributes(null, { orderId: "" }), /orderId/);
+});
+
+test("Vue, Svelte, and Angular shell bindings support create mode (order-id + prefix, no checkout)", () => {
+  const vue = createOpenReceiveVueCheckoutShellBinding(null, {
+    orderId: "order-create",
+    prefix: "/openreceive",
+  });
+  assert.equal(vue.checkout.tagName, OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME);
+  assert.equal(vue.checkout.attrs["order-id"], "order-create");
+  assert.equal(vue.checkout.attrs.prefix, "/openreceive");
+  assert.equal(vue.checkout.attrs.invoice, undefined);
+  assert.equal(vue.themeToggle.tagName, OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME);
+
+  const svelte = createOpenReceiveSvelteCheckoutShellBinding(null, {
+    orderId: "order-create",
+    prefix: "/openreceive",
+  });
+  assert.equal(svelte.checkout.props["order-id"], "order-create");
+  assert.equal(svelte.checkout.props.prefix, "/openreceive");
+  assert.equal(svelte.checkout.props.invoice, undefined);
+
+  const angular = createOpenReceiveAngularCheckoutShellBinding(null, {
+    orderId: "order-create",
+    prefix: "/openreceive",
+  });
+  assert.equal(angular.checkout.attributes["order-id"], "order-create");
+  assert.equal(angular.checkout.attributes.prefix, "/openreceive");
+  assert.equal(angular.checkout.attributes.invoice, undefined);
+
+  // Prefix stays optional in create mode: omit it and no prefix attribute is emitted, so the
+  // element applies its own default.
+  const vueNoPrefix = createOpenReceiveVueCheckoutShellBinding(null, { orderId: "order-create" });
+  assert.equal(vueNoPrefix.checkout.attrs["order-id"], "order-create");
+  assert.equal("prefix" in vueNoPrefix.checkout.attrs, false);
+});
+
+test("browser owns custom-element theme-toggle attributes", () => {
+  assert.deepEqual(
+    createOpenReceiveThemeToggleElementAttributes({
+      rootSelector: ".page",
+      checkoutSelector: "openreceive-checkout",
+      defaultTheme: "light",
+      storageKey: "demo.theme",
+    }),
+    {
+      "root-selector": ".page",
+      "checkout-selector": "openreceive-checkout",
+      "default-theme": "light",
+      "storage-key": "demo.theme",
+    },
+  );
   assert.equal(OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME, "openreceive-theme-toggle");
 });
 
@@ -221,7 +297,7 @@ test("browser owns full checkout shell binding model", () => {
     key: (index) => [...themeStore.keys()][index] ?? null,
     get length() {
       return themeStore.size;
-    }
+    },
   };
   let copied = false;
   const shell = createCheckoutShellModel(snapshot, {
@@ -231,7 +307,7 @@ test("browser owns full checkout shell binding model", () => {
     storage,
     onCopy: () => {
       copied = true;
-    }
+    },
   });
 
   assert.equal(shell.theme.resolvedTheme, "dark");
@@ -239,7 +315,10 @@ test("browser owns full checkout shell binding model", () => {
   assert.equal(shell.checkout.tagName, OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME);
   assert.equal(shell.checkout.attributes.theme, "dark");
   assert.equal(shell.checkout.attributes["order-url"], "/order");
-  assert.equal(typeof shell.checkout.listeners[OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy], "function");
+  assert.equal(
+    typeof shell.checkout.listeners[OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy],
+    "function",
+  );
   shell.checkout.listeners[OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy]?.(new Event("copy"));
   assert.equal(copied, true);
   assert.deepEqual(shell.themeToggle, {
@@ -247,8 +326,8 @@ test("browser owns full checkout shell binding model", () => {
     attributes: {
       "root-selector": ".page",
       "checkout-selector": OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
-      "default-theme": "light"
-    }
+      "default-theme": "light",
+    },
   });
 });
 
@@ -261,11 +340,11 @@ test("browser owns shared theme binding state", () => {
     toggleLabel: "light mode",
     attributes: {
       "data-theme": "light",
-      "data-openreceive-theme": "light"
+      "data-openreceive-theme": "light",
     },
     checkoutElementAttributes: {
-      theme: "light"
-    }
+      theme: "light",
+    },
   });
 
   const dark = createOpenReceiveThemeModel("dark");
@@ -284,78 +363,99 @@ test("Vue, Svelte, and Angular adapters expose thin custom-element bindings", ()
     key: (index) => [...themeStore.keys()][index] ?? null,
     get length() {
       return themeStore.size;
-    }
+    },
   };
   storage.setItem(OPENRECEIVE_THEME_STORAGE_KEY, "dark");
 
   const vue = createOpenReceiveVueCheckoutBinding(snapshot, {
     orderUrl: "/order",
-    theme: "light"
+    theme: "light",
   });
   assert.equal(vue.tagName, OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME);
   assert.equal(vue.attrs["order-url"], "/order");
   assert.equal(vue.attrs.theme, "light");
 
   const svelte = createCheckoutBinding(snapshot, {
-    paymentWizard: false
+    paymentWizard: false,
   });
   assert.equal(svelte.tagName, OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME);
   assert.equal(svelte.props["payment-wizard"], "false");
 
   const angular = createOpenReceiveAngularCheckoutBinding(snapshot, {
-    onError: () => undefined
+    onError: () => undefined,
   });
   assert.equal(angular.selector, OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME);
   assert.equal(angular.attributes.invoice, "lnbc-test");
   assert.equal(typeof angular.events[OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.error], "function");
 
   assert.equal(createOpenReceiveVueThemeBinding("dark").toggleLabel, "dark mode");
-  assert.equal(createOpenReceiveSvelteThemeBinding("system", { systemDark: false }).nextTheme, "dark");
+  assert.equal(
+    createOpenReceiveSvelteThemeBinding("system", { systemDark: false }).nextTheme,
+    "dark",
+  );
   assert.deepEqual(createOpenReceiveAngularThemeBinding("light").checkoutElementAttributes, {
-    theme: "light"
+    theme: "light",
   });
-  assert.deepEqual(createOpenReceiveVueThemeToggleBinding({
-    rootSelector: ".page",
-    checkoutSelector: "openreceive-checkout",
-    defaultTheme: "light"
-  }), {
-    tagName: OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
-    attrs: {
-      "root-selector": ".page",
-      "checkout-selector": "openreceive-checkout",
-      "default-theme": "light"
-    }
-  });
-  assert.equal(createOpenReceiveSvelteThemeToggleBinding().tagName, OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME);
-  assert.equal(createOpenReceiveAngularThemeToggleBinding().selector, OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME);
+  assert.deepEqual(
+    createOpenReceiveVueThemeToggleBinding({
+      rootSelector: ".page",
+      checkoutSelector: "openreceive-checkout",
+      defaultTheme: "light",
+    }),
+    {
+      tagName: OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
+      attrs: {
+        "root-selector": ".page",
+        "checkout-selector": "openreceive-checkout",
+        "default-theme": "light",
+      },
+    },
+  );
+  assert.equal(
+    createOpenReceiveSvelteThemeToggleBinding().tagName,
+    OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
+  );
+  assert.equal(
+    createOpenReceiveAngularThemeToggleBinding().selector,
+    OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
+  );
   assert.equal(createOpenReceiveVueStoredThemeBinding({ storage }).resolvedTheme, "dark");
   assert.equal(createOpenReceiveSvelteStoredThemeBinding({ storage }).toggleLabel, "dark mode");
-  assert.deepEqual(createOpenReceiveAngularStoredThemeBinding({ storage }).checkoutElementAttributes, {
-    theme: "dark"
-  });
+  assert.deepEqual(
+    createOpenReceiveAngularStoredThemeBinding({ storage }).checkoutElementAttributes,
+    {
+      theme: "dark",
+    },
+  );
 
   const vueShell = createOpenReceiveVueCheckoutShellBinding(snapshot, {
     orderUrl: "/order",
     rootSelector: ".page",
-    storage
+    storage,
   });
   assert.equal(vueShell.rootAttrs["data-theme"], "dark");
   assert.equal(vueShell.checkout.attrs.theme, "dark");
   assert.equal(vueShell.checkout.attrs["order-url"], "/order");
-  assert.equal(vueShell.themeToggle.attrs["checkout-selector"], OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME);
+  assert.equal(
+    vueShell.themeToggle.attrs["checkout-selector"],
+    OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
+  );
 
   const svelteShell = createOpenReceiveSvelteCheckoutShellBinding(snapshot, {
     paymentWizard: false,
-    storage
+    storage,
   });
   assert.equal(svelteShell.rootProps["data-openreceive-theme"], "dark");
   assert.equal(svelteShell.checkout.props.theme, "dark");
   assert.equal(svelteShell.checkout.props["payment-wizard"], "false");
-  assert.equal(svelteShell.themeToggle.props["checkout-selector"], OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME);
+  assert.equal(
+    svelteShell.themeToggle.props["checkout-selector"],
+    OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
+  );
 
   const angularShell = createOpenReceiveAngularCheckoutShellBinding(snapshot, {
     checkoutSelector: "#checkout",
-    storage
+    storage,
   });
   assert.equal(angularShell.rootAttributes["data-theme"], "dark");
   assert.equal(angularShell.checkout.attributes.theme, "dark");
@@ -371,19 +471,21 @@ test("Vue, Svelte, and Angular adapters expose thin custom-element bindings", ()
     onSettled: () => {
       vueSettled = true;
     },
-    defineElementsOptions: {}
+    defineElementsOptions: {},
   });
   assert.equal(vueComponent.componentName, "Checkout");
   assert.equal(typeof vueComponent.defineElements, "function");
   assert.equal(vueComponent.checkout.attrs["order-url"], "/order");
   assert.equal(vueComponent.checkout.attrs.theme, "light");
-  vueComponent.checkout.listeners[OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.settled]?.(new Event("settled"));
+  vueComponent.checkout.listeners[OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.settled]?.(
+    new Event("settled"),
+  );
   assert.equal(vueSettled, true);
   assert.equal(vueComponent.themeToggle.tagName, OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME);
 
   const svelteComponent = createOpenReceiveSvelteCheckoutComponentModel({
     checkout: snapshot,
-    paymentWizard: false
+    paymentWizard: false,
   });
   assert.equal(svelteComponent.componentName, "Checkout");
   assert.equal(typeof svelteComponent.defineElements, "function");
@@ -391,7 +493,7 @@ test("Vue, Svelte, and Angular adapters expose thin custom-element bindings", ()
 
   const angularComponent = createOpenReceiveAngularCheckoutComponentModel({
     checkout: snapshot,
-    checkoutSelector: "#checkout"
+    checkoutSelector: "#checkout",
   });
   assert.equal(angularComponent.componentName, "Checkout");
   assert.equal(typeof angularComponent.defineElements, "function");
@@ -412,23 +514,32 @@ test("Vue, Svelte, and Angular adapters expose thin custom-element bindings", ()
 
   const themeAttrs = {};
   const checkoutAttrs = {};
-  applyVueThemeAttributes({
-    setAttribute: (name, value) => {
-      themeAttrs[name] = value;
-    }
-  }, createOpenReceiveVueStoredThemeBinding({ storage }));
-  applySvelteCheckoutThemeAttributes({
-    setAttribute: (name, value) => {
-      checkoutAttrs[name] = value;
-    }
-  }, createOpenReceiveSvelteStoredThemeBinding({ storage }));
+  applyVueThemeAttributes(
+    {
+      setAttribute: (name, value) => {
+        themeAttrs[name] = value;
+      },
+    },
+    createOpenReceiveVueStoredThemeBinding({ storage }),
+  );
+  applySvelteCheckoutThemeAttributes(
+    {
+      setAttribute: (name, value) => {
+        checkoutAttrs[name] = value;
+      },
+    },
+    createOpenReceiveSvelteStoredThemeBinding({ storage }),
+  );
   assert.equal(themeAttrs["data-openreceive-theme"], "dark");
   assert.equal(checkoutAttrs.theme, "dark");
   assert.equal(toggleAngularThemePreference({ storage }).resolvedTheme, "light");
   const toggleTarget = { textContent: "" };
   assert.equal(syncVueThemeControls({ toggle: toggleTarget }, { storage }).resolvedTheme, "light");
   assert.equal(toggleTarget.textContent, "light mode");
-  assert.equal(toggleAngularThemeControls({ toggle: toggleTarget }, { storage }).resolvedTheme, "dark");
+  assert.equal(
+    toggleAngularThemeControls({ toggle: toggleTarget }, { storage }).resolvedTheme,
+    "dark",
+  );
   assert.equal(toggleTarget.textContent, "dark mode");
 });
 
@@ -447,17 +558,17 @@ test("Vue, Svelte, and Angular adapters expose full checkout shell creators", ()
         },
         addEventListener: (name, listener) => {
           listeners[name] = listener;
-        }
+        },
       };
       createdElements.push(element);
       return element;
-    }
+    },
   });
 
   const vue = createOpenReceiveVueCheckoutShell(snapshot, {
     document: createDocument(),
     orderUrl: "/order",
-    defaultTheme: "light"
+    defaultTheme: "light",
   });
   assert.equal(vue.checkout.tagName, OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME);
   assert.equal(vue.checkout.attributes["order-url"], "/order");
@@ -466,7 +577,7 @@ test("Vue, Svelte, and Angular adapters expose full checkout shell creators", ()
   const svelte = createOpenReceiveSvelteCheckoutShell(snapshot, {
     document: createDocument(),
     paymentWizard: false,
-    defaultTheme: "dark"
+    defaultTheme: "dark",
   });
   assert.equal(svelte.checkout.attributes["payment-wizard"], "false");
   assert.equal(svelte.checkout.attributes.theme, "dark");
@@ -474,7 +585,7 @@ test("Vue, Svelte, and Angular adapters expose full checkout shell creators", ()
   const angular = createOpenReceiveAngularCheckoutShell(snapshot, {
     document: createDocument(),
     checkoutSelector: "#checkout",
-    rootSelector: ".page"
+    rootSelector: ".page",
   });
   assert.equal(angular.themeToggle.attributes["checkout-selector"], "#checkout");
   assert.equal(angular.themeToggle.attributes["root-selector"], ".page");
@@ -482,10 +593,9 @@ test("Vue, Svelte, and Angular adapters expose full checkout shell creators", ()
 });
 
 test("Vue, Svelte, and Angular packages ship component entry files", () => {
-  const browserManifest = JSON.parse(readFileSync(
-    path.join(process.cwd(), "packages/js/browser/package.json"),
-    "utf8"
-  ));
+  const browserManifest = JSON.parse(
+    readFileSync(path.join(process.cwd(), "packages/js/browser/package.json"), "utf8"),
+  );
   const browserStylesPath = path.join(process.cwd(), "packages/js/browser/src/styles.css");
   assert.equal(browserManifest.exports["./styles.css"], "./dist/styles.css");
   assert.equal(browserManifest.exports["./country-map"].import, "./dist/country-map.js");
@@ -498,29 +608,26 @@ test("Vue, Svelte, and Angular packages ship component entry files", () => {
       exportName: "./checkout.vue",
       componentPath: "packages/js/vue/src/Checkout.vue",
       shellHelper: "createOpenReceiveVueCheckoutShellBinding",
-      peerDependency: "vue"
+      peerDependency: "vue",
     },
     {
       manifestPath: "packages/js/svelte/package.json",
       exportName: "./checkout.svelte",
       componentPath: "packages/js/svelte/src/Checkout.svelte",
       shellHelper: "createOpenReceiveSvelteCheckoutShellBinding",
-      peerDependency: "svelte"
+      peerDependency: "svelte",
     },
     {
       manifestPath: "packages/js/angular/package.json",
       exportName: "./checkout-component",
       componentPath: "packages/js/angular/src/openreceive-checkout.component.mjs",
       shellHelper: "createOpenReceiveAngularCheckoutShellBinding",
-      peerDependency: "@angular/core"
-    }
+      peerDependency: "@angular/core",
+    },
   ];
 
   for (const item of packages) {
-    const manifest = JSON.parse(readFileSync(
-      path.join(process.cwd(), item.manifestPath),
-      "utf8"
-    ));
+    const manifest = JSON.parse(readFileSync(path.join(process.cwd(), item.manifestPath), "utf8"));
     const componentPath = path.join(process.cwd(), item.componentPath);
     const source = readFileSync(componentPath, "utf8");
 
@@ -530,24 +637,35 @@ test("Vue, Svelte, and Angular packages ship component entry files", () => {
     assert.equal(typeof manifest.peerDependencies[item.peerDependency], "string");
     assert.equal(manifest.peerDependenciesMeta[item.peerDependency].optional, true);
     assert.match(
-      readFileSync(path.join(process.cwd(), path.dirname(item.componentPath), "styles.css"), "utf8"),
+      readFileSync(
+        path.join(process.cwd(), path.dirname(item.componentPath), "styles.css"),
+        "utf8",
+      ),
       /@openreceive\/browser\/styles\.css/,
-      `${item.manifestPath}: styles export delegates to browser styles`
+      `${item.manifestPath}: styles export delegates to browser styles`,
     );
-    assert.match(source, new RegExp(item.shellHelper),
-      `${item.componentPath}: delegates to shared shell binding`);
-    assert.match(source, /defineOpenReceiveElements/,
-      `${item.componentPath}: registers shared custom elements`);
-    assert.doesNotMatch(source, /nostr\+walletconnect/,
-      `${item.componentPath}: must not contain receive-only NWC codes`);
+    assert.match(
+      source,
+      new RegExp(item.shellHelper),
+      `${item.componentPath}: delegates to shared shell binding`,
+    );
+    assert.match(
+      source,
+      /defineOpenReceiveElements/,
+      `${item.componentPath}: registers shared custom elements`,
+    );
+    assert.match(source, /orderId/, `${item.componentPath}: exposes a create-mode orderId input`);
+    assert.match(source, /prefix/, `${item.componentPath}: exposes a create-mode prefix input`);
+    assert.doesNotMatch(
+      source,
+      /nostr\+walletconnect/,
+      `${item.componentPath}: must not contain receive-only NWC codes`,
+    );
   }
 });
 
 test("frontend checkout guide shows Angular helpers in the Angular section", () => {
-  const guide = readFileSync(
-    path.join(process.cwd(), "docs/guides/frontend-checkout.md"),
-    "utf8"
-  );
+  const guide = readFileSync(path.join(process.cwd(), "docs/guides/frontend-checkout.md"), "utf8");
   const angularSection = guide.slice(guide.indexOf("## Angular"), guide.indexOf("## Styling"));
 
   assert.match(angularSection, /@openreceive\/angular/);

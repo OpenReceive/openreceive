@@ -812,6 +812,35 @@ test("React checkout context fails clearly outside the provider", () => {
   );
 });
 
+test("React <Checkout orderId> enters create mode and renders the creating placeholder", () => {
+  // react-dom/server does not run effects, so the on-mount create POST is not observable from
+  // an SSR render; the create -> POST { order_id } -> poll /openreceive/orders/<id>-with-token
+  // lifecycle the component runs is verified end-to-end via createOpenReceiveCheckoutSession in
+  // tests/v0.1/order-token.test.mjs. Here we assert the component enters create mode and shows
+  // its minimal placeholder while pending.
+  const html = renderToStaticMarkup(
+    React.createElement(Checkout, { orderId: "ord-1", prefix: "/openreceive" })
+  );
+  assert.match(html, /openreceive-checkout-creating/);
+  assert.match(html, /Creating checkout/);
+  assert.doesNotMatch(html, />Copy invoice</);
+
+  // A create with the default prefix (no prefix prop) also enters create mode.
+  const defaultPrefixHtml = renderToStaticMarkup(
+    React.createElement(Checkout, { orderId: "ord-2" })
+  );
+  assert.match(defaultPrefixHtml, /openreceive-checkout-creating/);
+});
+
+test("React <Checkout checkout> snapshot mode is unchanged (backward compatible)", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(Checkout, { checkout: invoice(), orderUrl: "/order" })
+  );
+  assert.match(html, /data-openreceive-checkout/);
+  assert.match(html, />Copy invoice</);
+  assert.doesNotMatch(html, /openreceive-checkout-creating/);
+});
+
 test("React primitive aliases point to the stable components", () => {
   assert.equal(InvoiceSummary, InvoiceSummary);
   assert.equal(CopyInvoiceButton, CopyInvoiceButton);

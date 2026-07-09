@@ -3,6 +3,45 @@
 Frontend code receives display-safe checkout data only. Keep NWC connection
 strings, wallet clients, and fulfillment on the backend.
 
+## Self-contained component (recommended)
+
+If your backend mounts the shipped router (see [Shipped Routes](routes.md)), the checkout
+component owns its whole lifecycle — it creates the checkout, polls status, and drives swaps
+against the mounted routes. You pass only an order id; the per-order capability token is stored
+and attached for you (and same-origin browsers also carry it as a cookie), so there is no fetch
+to write and no token to manage.
+
+```tsx
+// React
+import { Checkout } from "@openreceive/react";
+import "@openreceive/react/styles.css";
+
+<Checkout orderId={order.id} onSettled={reloadOrder} onStartOver={returnToCart} />;
+```
+
+```html
+<!-- Web component (used directly, or via Vue/Svelte/Angular below) -->
+<openreceive-checkout order-id="order-123"></openreceive-checkout>
+```
+
+`prefix` defaults to `/openreceive` (where you mounted the router). Pass `prefix` /
+`order-id="…" prefix="…"` if you mounted elsewhere. Vue, Svelte, and Angular expose the same
+`orderId` + `prefix` inputs:
+
+```vue
+<Checkout :order-id="order.id" @settled="reloadOrder" />
+```
+```svelte
+<Checkout orderId={order.id} onSettled={reloadOrder} />
+```
+```html
+<openreceive-angular-checkout [orderId]="order.id" [onSettled]="reloadOrder"></openreceive-angular-checkout>
+```
+
+Prefer to create the checkout server-side and hand the snapshot to the component instead? Pass
+`checkout={snapshot}` (and an `orderUrl`) — that mode is unchanged and documented per framework
+below.
+
 ## Browser Helpers
 
 `@openreceive/browser` is the small app-facing browser entry:

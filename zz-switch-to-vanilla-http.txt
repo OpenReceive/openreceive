@@ -3,6 +3,7 @@ NO BACKWRAD COMAPATIBILTY NECESARY, U CAN CLEAR ANY EXISTING DB COMPLETELY AND S
 NOTE.. WE CAN'T USE IN MEMORY STORE BECAUSE OF ARCHITECTURE LIKE HEROKU AND VERCEL WITH MULTIPLE APP INSTNACES
 USE THE NWC-RUBY GEM https://github.com/MegalithicBTC/nwc-ruby
 make these changes and then delete all oprphan code!
+we are curretly on http branch, do all your owrk on this branch
 
 
 

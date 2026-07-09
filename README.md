@@ -17,14 +17,54 @@ invoices.
 The v0.1 reference path is contract-first and server-owned:
 
 - `spec/` is the source of truth for schemas, shared data, and test vectors.
-- `packages/js/` contains the core contracts, Node NWC service, browser
+  `spec/openapi/openreceive-http.v1.yaml` is the shipped route contract.
+- `packages/js/` contains the core contracts, Node NWC service, the shipped HTTP
+  routes (`@openreceive/http`) and thin framework adapters
+  (`@openreceive/express`, `@openreceive/fastify`, `@openreceive/next`), browser
   helpers, provider data, testkit, elements, and frontend framework packages.
+- `packages/ruby/` contains the dependency-free `openreceive` core plus the
+  `openreceive-server` (Service + store + Rack app) and `openreceive-rails`
+  (mountable engine) gems — a full second settlement engine.
 - `examples/hello-fruit/server/` contains the Express demo with React, Vue,
   Svelte, and Angular checkout tabs, plus static HTML + small API and Next.js
   fullstack Hello Fruit demos.
 - `demos/deploy/` contains public-safe hosted demo deployment templates.
 - `tools/` holds validation, conformance, package-smoke, docs, and live-wallet
   smoke helpers.
+
+## Ship The Routes, Keep Your Auth
+
+Instead of hand-writing controllers, mount OpenReceive's routes and keep 100% of
+authentication in your app. OpenReceive never inspects your session — it calls
+your `authorize` and `resolveAmount` hooks and obeys them.
+
+```ts
+import express from "express";
+import { createOpenReceive } from "@openreceive/node";
+import { openReceiveExpress } from "@openreceive/express";
+
+const service = await createOpenReceive();
+const app = express();
+app.use(express.json());
+app.use(openReceiveExpress({
+  service,
+  // Tier 2 reads require the per-order capability token; Tier 3 (sweep) fails closed.
+  authorize: ({ action, token, resource }) =>
+    action === "checkout.create" || validToken(token, resource.order_id),
+  // The client-supplied price is never trusted; you return the authoritative amount.
+  resolveAmount: ({ orderId }) => ({ usd: priceForOrder(orderId) }),
+}));
+```
+
+Rails hosts mount the engine and inherit their own CSRF/auth/current_user:
+
+```ruby
+# config/routes.rb
+mount OpenReceive::Engine => "/openreceive"
+```
+
+See `docs/guides/routes.md` for the full route contract, tiers, and capability
+tokens.
 
 ## Run A Demo
 
@@ -36,7 +76,6 @@ stack:
 npm run demo node      # Express + React/Vue/Svelte/Angular http://localhost:3000
 npm run demo static    # Static HTML + small API   http://localhost:3001
 npm run demo nextjs    # Next.js fullstack         http://localhost:3002
-npm run demo rails     # Rails + Hotwire skeleton  http://localhost:3003
 ```
 
 Each command creates a root `openreceive.yml` if missing, validates
@@ -44,9 +83,9 @@ Each command creates a root `openreceive.yml` if missing, validates
 demo stacks start a local Postgres container, run the OpenReceive invoice
 migration, and record the OpenReceive
 schema version before store queries. The JS local overrides run Vite or Next.js
-development servers inside Docker so browser errors stay readable. The Rails
-Hotwire demo is experimental skeleton work; its container runs
-`rails db:prepare` for its SQLite-backed ActiveRecord store before booting.
+development servers inside Docker so browser errors stay readable. The Ruby
+`openreceive-rails` engine is a separate mountable gem (see
+`docs/guides/quickstart-rails.md`), not a bundled demo stack.
 Buying fruit creates a live Lightning invoice through your own wallet, so set a
 valid receive-only NWC code (for example from Rizful or Alby Hub) in
 `openreceive.yml` before starting a demo. Demos need a valid receive-only NWC

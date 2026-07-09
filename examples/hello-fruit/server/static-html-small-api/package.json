@@ -13,6 +13,8 @@
     "@openreceive/browser": "0.1.1",
     "@openreceive/core": "0.1.1",
     "@openreceive/elements": "0.1.1",
+    "@openreceive/express": "0.1.1",
+    "@openreceive/http": "0.1.1",
     "@openreceive/node": "0.1.1",
     "express": "*",
     "pg": "^8.22.0",

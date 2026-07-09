@@ -1,14 +1,198 @@
 openapi: 3.1.0
 info:
-  title: OpenReceive component schemas
+  title: OpenReceive HTTP routes
   version: 0.1.0
-  summary: Shared receive-checkout shapes for app-owned controllers.
+  summary: Shipped receive-checkout routes (Node adapters + Rails engine implement identically).
   description: >
-    OpenReceive does not define application routes. Apps call the Node service
-    methods from their own controllers and may use these schemas as references
-    for their own payloads. Receive-only NWC codes remain server-side.
-paths: {}
+    OpenReceive ships these routes (rodauth-style). Every Node adapter
+    (@openreceive/http, express, fastify, next) and the Rails engine implement this
+    contract identically. Wire style: POST + JSON, snake_case bodies, an action
+    multiplexer on the order route. Mounted under a host-chosen prefix (default
+    /openreceive). Receive-only NWC codes remain server-side and never appear in any
+    request or response. Three security tiers govern access: Tier 1 (anonymous-capable:
+    create checkout, rates), Tier 2 (capability-token-scoped: order/checkout reads and
+    swap actions on your own order), Tier 3 (privileged, fails closed: admin sweep). The
+    host supplies authorize + resolveAmount hooks; OpenReceive never inspects the host
+    session. See docs/guides/routes.md.
+  contact:
+    name: OpenReceive
+    url: https://openreceive.org
+servers:
+  - url: /openreceive
+    description: Default mount prefix (host-configurable).
+security:
+  - orderAccessToken: []
+  - orderAccessTokenCookie: []
+  - {}
+paths:
+  /checkouts:
+    post:
+      operationId: createCheckout
+      summary: Create or replay a checkout for an order (Tier 1, action=checkout.create).
+      description: >
+        authorize(checkout.create) -> resolveAmount(order_id, client_amount) ->
+        getOrCreateCheckout -> mint per-order capability token on first checkout.
+        The client-supplied amount is NOT trusted; the host resolveAmount hook returns the
+        authoritative amount. order_access_token is returned only on the first mint per order.
+      security:
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCheckoutRequest"
+      responses:
+        "201":
+          description: Checkout created (or replayed idempotently).
+          headers:
+            Set-Cookie:
+              description: >
+                On the first checkout for an order, the per-order token is also set as an
+                httpOnly cookie `openreceive_order_token`, path-scoped to
+                `{prefix}/orders/{order_id}` (SameSite=Lax; Secure over https; Max-Age 86400),
+                so same-origin browsers authorize that order's reads with no client token code.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateCheckoutResponse"
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /orders/{order_id}:
+    post:
+      operationId: orderAction
+      summary: Read order status or run a swap action (Tier 2, action multiplexer).
+      description: >
+        The `action` field multiplexes: absent/"status" -> order.read (OrderStatus);
+        "swap_quote" -> swap.quote ({quote}); "start_swap" -> swap.start ({attempt});
+        "refund_swap" -> swap.refund ({attempt}). Unknown action -> 400 (never silently
+        treated as status). Requires a valid per-order capability token or an allow from
+        the host authorize hook.
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderActionRequest"
+      responses:
+        "200":
+          description: OrderStatus (status), or a swap quote/attempt.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/OrderStatus"
+                  - $ref: "#/components/schemas/SwapQuoteResponse"
+                  - $ref: "#/components/schemas/SwapAttemptResponse"
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /checkouts/{checkout_id}:
+    get:
+      operationId: getCheckout
+      summary: Read a checkout snapshot (Tier 2, action=checkout.read).
+      parameters:
+        - $ref: "#/components/parameters/CheckoutId"
+      responses:
+        "200":
+          description: Checkout snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Checkout"
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /orders/{order_id}/swap-options:
+    get:
+      operationId: getSwapOptions
+      summary: List automated-swap pay-in options for an order (Tier 2, action=swap.options).
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      responses:
+        "200":
+          description: Swap options.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SwapOptionsResponse"
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /rates:
+    get:
+      operationId: listRates
+      summary: List BTC/fiat rate quotes (Tier 1, public).
+      security:
+        - {}
+      parameters:
+        - name: base
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: currencies
+          in: query
+          required: false
+          description: Comma-separated ISO currency codes.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Rate quotes.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RateQuote"
+        "429": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /admin/sweep:
+    post:
+      operationId: sweepPendingInvoices
+      summary: Reconcile pending invoices (Tier 3, action=invoice.sweep, FAILS CLOSED).
+      description: >
+        Requires the host authorize hook to allow. If no authorize policy is configured,
+        this route returns 403 and a loud configuration error is logged at mount time.
+      responses:
+        "200":
+          description: Reconcile summary.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReconcileSummary"
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
 components:
+  securitySchemes:
+    orderAccessToken:
+      type: http
+      scheme: bearer
+      description: >
+        Per-order capability token minted at checkout creation (order_access_token). Present
+        it as `Authorization: Bearer <token>` or the `X-OpenReceive-Order-Token` header. Tokens
+        are per-order; all checkouts under an order share the order's token.
+    orderAccessTokenHeader:
+      type: apiKey
+      in: header
+      name: X-OpenReceive-Order-Token
+    orderAccessTokenCookie:
+      type: apiKey
+      in: cookie
+      name: openreceive_order_token
+      description: >
+        On checkout creation the server also sets the per-order token as an httpOnly cookie
+        (`openreceive_order_token`) path-scoped to `{prefix}/orders/{order_id}` (SameSite=Lax,
+        Secure over https). Same-origin browsers are then authorized for that order's reads with
+        no token handling in client code. API/mobile clients use the bearer header instead.
   parameters:
     OrderId:
       name: order_id
@@ -493,6 +677,174 @@ components:
         - expired_closed
         - failed_closed
         - cancelled
+    CreateCheckoutResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - checkout
+      properties:
+        checkout:
+          $ref: "#/components/schemas/Checkout"
+        order_access_token:
+          type: string
+          minLength: 16
+          description: >
+            The per-order capability token. Returned ONLY on the first checkout for an order
+            (first mint). Store it and present it on subsequent reads. Only its sha256 hash
+            is persisted server-side.
+    OrderActionRequest:
+      description: >
+        The action multiplexer body for POST /orders/{order_id}. Exactly one variant by the
+        optional `action` field; absent action means status.
+      oneOf:
+        - $ref: "#/components/schemas/OrderStatusRequest"
+        - $ref: "#/components/schemas/SwapQuoteRequest"
+        - $ref: "#/components/schemas/StartSwapRequest"
+        - $ref: "#/components/schemas/RefundSwapRequest"
+    OrderStatusRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - order_id
+      properties:
+        order_id:
+          type: string
+          minLength: 1
+          maxLength: 200
+        action:
+          const: status
+    SwapQuoteRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - order_id
+        - action
+        - pay_in_asset
+      properties:
+        order_id:
+          type: string
+          minLength: 1
+          maxLength: 200
+        action:
+          const: swap_quote
+        pay_in_asset:
+          type: string
+          enum: [SOL_SOL, USDT_TRON, USDT_SOL, USDC_SOL, ETH_ETH, USDT_ETH, USDC_ETH]
+    StartSwapRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - order_id
+        - action
+        - pay_in_asset
+      properties:
+        order_id:
+          type: string
+          minLength: 1
+          maxLength: 200
+        action:
+          const: start_swap
+        pay_in_asset:
+          type: string
+          enum: [SOL_SOL, USDT_TRON, USDT_SOL, USDC_SOL, ETH_ETH, USDT_ETH, USDC_ETH]
+    RefundSwapRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - order_id
+        - action
+        - attempt_id
+        - refund_address
+        - refund_nonce
+      properties:
+        order_id:
+          type: string
+          minLength: 1
+          maxLength: 200
+        action:
+          const: refund_swap
+        attempt_id:
+          type: string
+          pattern: "^or_inv_[a-z0-9_]+$"
+        refund_address:
+          type: string
+          minLength: 1
+        refund_nonce:
+          type: string
+          pattern: "^or_ref_[a-f0-9]{32}$"
+        confirm:
+          type: boolean
+    SwapOptionsResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - enabled
+        - options
+      properties:
+        enabled:
+          type: boolean
+        options:
+          type: array
+          items:
+            $ref: "#/components/schemas/SwapOption"
+    SwapQuoteResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - quote
+      properties:
+        quote:
+          $ref: "#/components/schemas/SwapOption"
+    SwapAttemptResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - attempt
+      properties:
+        attempt:
+          $ref: "#/components/schemas/SwapAttempt"
+    SwapAttempt:
+      description: >
+        A SwapOrder scoped to an order, plus the shadow Lightning invoice that backs it.
+      type: object
+      additionalProperties: true
+      required:
+        - attempt_id
+        - provider
+        - pay_in_asset
+        - deposit_address
+        - deposit_amount
+        - provider_state
+        - provider_expires_at
+        - order_id
+      properties:
+        order_id:
+          type: string
+          minLength: 1
+        shadow_invoice:
+          $ref: "#/components/schemas/Invoice"
+    ReconcileSummary:
+      type: object
+      additionalProperties: true
+      required:
+        - swept
+      properties:
+        swept:
+          type: boolean
+        reason:
+          type: string
+        page_count:
+          type: integer
+          minimum: 0
+        scanned:
+          type: integer
+          minimum: 0
+        settled:
+          type: integer
+          minimum: 0
+        expired:
+          type: integer
+          minimum: 0
     Error:
       type: object
       additionalProperties: false

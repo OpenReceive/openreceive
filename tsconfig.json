@@ -37,6 +37,18 @@
       "@openreceive/elements": [
         "packages/js/elements/src/index.ts"
       ],
+      "@openreceive/http": [
+        "packages/js/http/src/index.ts"
+      ],
+      "@openreceive/express": [
+        "packages/js/express/src/index.ts"
+      ],
+      "@openreceive/fastify": [
+        "packages/js/fastify/src/index.ts"
+      ],
+      "@openreceive/next": [
+        "packages/js/next/src/index.ts"
+      ],
       "@openreceive/node": [
         "packages/js/node/src/index.ts"
       ],

@@ -1,49 +1,41 @@
 # Node Quickstart
 
-OpenReceive runs server-side inside your app. Your app owns orders, carts,
-routes, sessions, and fulfillment; OpenReceive creates receive-only Lightning
-checkouts and refreshes their settlement state.
+OpenReceive runs server-side in your app. You own orders, carts, sessions, and
+fulfillment. You **mount OpenReceive's routes** and drop in a checkout component — you never
+write payment endpoints yourself. Optionally, payers can pay with crypto via automated
+swaps while you still settle to Lightning. This is the whole happy path.
 
-## Install And Configure
-
-Install the packages:
+## 1. Install
 
 ```sh
-npm install @openreceive/node @openreceive/react
+npm install @openreceive/node @openreceive/express @openreceive/react
 ```
 
-Configure OpenReceive with `openreceive.yml`. Copy the committed example, then
-put private values only in the ignored local file:
+React and Express are shown here; there are adapters for Fastify and Next.js, and checkout
+components for Vue, Svelte, and Angular — see [Frontend Checkout](frontend-checkout.md).
+
+## 2. Configure `openreceive.yml`
+
+Copy `openreceive.yml.example` to `openreceive.yml` (git-ignored — it holds secrets):
 
 ```yaml
-OPENRECEIVE_NWC: nostr+walletconnect://...
+OPENRECEIVE_NWC: nostr+walletconnect://...     # receive-only, server-only, never sent to the browser
 OPENRECEIVE_NAMESPACE: my_app
-OPENRECEIVE_STORE: local-sqlite
+OPENRECEIVE_STORE: local-sqlite                # or postgres://user:pass@host:5432/appdb in production
+OPENRECEIVE_PRICE_CURRENCIES: [USD, EUR, GBP]  # USD only by default
 ```
 
-`OPENRECEIVE_NWC` must be a receive-only NWC code and must stay server-side.
-OpenReceive uses USD fiat quotes by default. To allow more fiat checkout
-currencies, add:
+With no `OPENRECEIVE_STORE` locally, OpenReceive uses SQLite under `.openreceive/`; use
+Postgres for production.
 
-```yaml
-OPENRECEIVE_PRICE_CURRENCIES:
-  - USD
-  - EUR
-  - GBP
-```
+## 3. Add automated swaps (optional)
 
-For production, set a durable store:
+Let payers pay with USDT, SOL, ETH, or USDC while you keep settling to Lightning.
+**There is no swap-specific app code — just config:**
 
-```yaml
-OPENRECEIVE_STORE: postgres://user:pass@host:5432/appdb
-OPENRECEIVE_NAMESPACE: my_app
-```
-
-If `OPENRECEIVE_STORE` is omitted locally, OpenReceive uses local SQLite under
-`.openreceive/`. The default file is `./.openreceive/default.sqlite3`; use Postgres anywhere; use SQLite only on a durable single-machine filesystem.
-
-Optional automated swap providers live in the same file, and need no extra app
-code — `createOpenReceive()` auto-enables them:
+1. Create a FixedFloat account at <https://ff.io> and generate an **API key** and
+   **secret** in your account's API settings.
+2. Add a provider block to `openreceive.yml`:
 
 ```yaml
 swap:
@@ -51,185 +43,92 @@ swap:
     - id: fixedfloat
       protocol: fixedfloat
       base_url: https://ff.io
-      key: ...
-      secret: ...
+      key: YOUR_FIXEDFLOAT_KEY
+      secret: YOUR_FIXEDFLOAT_SECRET
 ```
 
-See [Automated Swaps](automated-swaps.md) for the provider fields, the payer
-flow, refunds, the state lifecycle, and how to test swaps offline with
-`@openreceive/testkit`'s in-memory provider.
+`createOpenReceive()` auto-enables the provider at startup, and the checkout component shows
+the "pay with crypto" wizard automatically. Leave `key`/`secret` blank (or omit the `swap`
+block) to keep swaps off. See [Automated Swaps](automated-swaps.md) for the supported assets,
+refunds, and the state lifecycle.
 
-## Server
+## 4. Server — mount the routes
+
+Create the service, then mount the router. That is the entire payment backend — no invoice,
+status, or swap endpoints to write.
 
 ```ts
+import express from "express";
 import { createOpenReceive } from "@openreceive/node";
+import { openReceiveExpress } from "@openreceive/express";
 
 const openreceive = await createOpenReceive({
-  // `fulfillPaidCheckout` is your own function. OpenReceive calls it when a
-  // checkout settles; you ship the product, grant access, etc.
+  // Your own function. OpenReceive calls it when a checkout settles — ship the product,
+  // grant access, etc. It may fire more than once, so make it idempotent (see step 6).
   onPaid: async ({ orderId, checkoutId, metadata }) => {
     await fulfillPaidCheckout({ orderId, checkoutId, metadata });
   },
 });
-```
 
-When you want to collect an inbound payment, create one checkout for an order you
-already own from a controller in your app. Replace `myOrder` with however your app
-loads its order:
-
-```ts
-// In your own controller / route handler.
-async function createCheckoutForCart(myOrder) {
-  return await openreceive.getOrCreateCheckout({
-    orderId: myOrder.id,
-    usd: myOrder.total_amount.value,
-    memo: `Order ${myOrder.number}`,
-    // Optional arbitrary app-owned JSON returned to your settlement hook.
-    metadata: {
-      app_context: {
-        fulfillment: "digital",
-        internal_order_number: myOrder.number,
-      },
+const app = express();
+app.use(express.json());
+app.use(
+  openReceiveExpress({
+    service: openreceive,
+    // The client can never set the price. You return the authoritative amount for an order.
+    resolveAmount: async ({ orderId }) => {
+      const order = await loadYourOrder(orderId);
+      return { usd: order.total_usd }; // or { sats } / { amount: { fiat: { currency, value } } }
     },
-  });
-}
+  }),
+);
 ```
 
-Invoices expire. OpenReceive does not create replacement invoices just because
-time passes or because the frontend polls status. When an invoice expires, show a
-try-again or start-over action and call `getOrCreateCheckout` again from that user
-action. See [Checkout Retries](checkout-retries.md) for the exact outcomes when
-the order id or amount changes.
+That mounts (under `/openreceive` by default): create checkout, read order status, list swap
+options, run swap quote/start/refund, list rates. Reads are protected automatically by a
+per-order capability token — you never manage it. The default policy allows anonymous checkout
+and gates reads by that token; to tie checkouts to your logged-in users instead, pass a preset:
+`authorize: withUser((req) => currentUser(req))`. See [Shipped Routes](routes.md).
 
-Add a status endpoint in a controller your app owns. It returns the order from
-`getOrder`; the frontend component reads `display_checkout`.
+## 5. Frontend — drop in the component
 
-```ts
-// In your own controller / route handler.
-export async function orderStatus(req, res) {
-  const order = await openreceive.getOrder({
-    orderId: req.body.order_id,
-  });
-
-  res.json({
-    ...order,
-    order_status: order.paid ? "paid" : "pending_payment",
-  });
-}
-```
-
-Organic traffic drives settlement sweeps automatically: checkout creation and
-`getOrder` each advance at most one globally gated wallet page. If you want
-settlement latency that does not depend on traffic, run the optional sweep in a
-background task:
-
-```ts
-setInterval(() => {
-  void openreceive.sweepPendingInvoices();
-}, 1000);
-```
-
-## React
+Pass the order id. The component creates the checkout against the mounted routes, renders the
+invoice + QR, polls status, and — when swap providers are configured — shows the "pay with
+crypto" wizard. The capability token is handled for you; there is no fetch to write and no token
+to pass.
 
 ```tsx
 import { Checkout } from "@openreceive/react";
 import "@openreceive/react/styles.css";
 
-export function CheckoutView({ checkout }) {
-  return (
-    <Checkout
-      checkout={checkout}
-      orderUrl="/order"
-      onSettled={reloadOrder}
-      onStartOver={returnToCart}
-    />
-  );
-}
+<Checkout orderId={order.id} onSettled={reloadOrder} onStartOver={returnToCart} />;
 ```
 
-## Vue
+`prefix` defaults to `/openreceive` (where you mounted the router); pass `prefix="..."` if you
+mounted somewhere else. That is the entire frontend.
 
-```vue
-<script setup lang="ts">
-import Checkout from "@openreceive/vue/checkout.vue";
-import "@openreceive/vue/styles.css";
+## 6. Fulfillment
 
-defineProps<{ checkout: unknown }>();
-</script>
-
-<template>
-  <Checkout
-    :checkout="checkout"
-    order-url="/order"
-    :on-settled="reloadOrder"
-    :on-start-over="returnToCart"
-  />
-</template>
-```
-
-## Svelte
-
-```svelte
-<script lang="ts">
-  import Checkout from "@openreceive/svelte/checkout.svelte";
-  import "@openreceive/svelte/styles.css";
-
-  export let checkout;
-</script>
-
-<Checkout
-  {checkout}
-  orderUrl="/order"
-  onSettled={reloadOrder}
-  onStartOver={returnToCart}
-/>
-```
-
-## Angular
+`onPaid` may fire more than once, so make fulfillment idempotent on `checkoutId` (or your own
+order id), and fulfill from the paid checkout snapshot and its metadata, not the live cart.
+Backend status refresh — not a frontend hint or a Lightning preimage — is the settlement
+authority. Organic traffic advances settlement automatically; for latency that does not depend
+on traffic, run the sweep on an interval:
 
 ```ts
-import { CheckoutComponent } from "@openreceive/angular/checkout-component";
-import "@openreceive/angular/styles.css";
+setInterval(() => void openreceive.sweepPendingInvoices(), 1000);
 ```
 
-```html
-<openreceive-angular-checkout
-  [checkout]="checkout"
-  orderUrl="/order"
-  [onSettled]="reloadOrder"
-  [onStartOver]="returnToCart"
-></openreceive-angular-checkout>
-```
+## What's next
 
-## How Settlement Works
+- [Shipped Routes](routes.md) — the full route contract, tying checkouts to your logged-in
+  users, and mounting on Fastify / Next.js / Rails.
+- [Automated Swaps](automated-swaps.md) · [Checkout Retries](checkout-retries.md) ·
+  [Frontend Checkout](frontend-checkout.md).
 
-Notifications and frontend events are passive hints. Backend status refresh is
-the settlement authority, and settlement requires `settled_at` or a settled
-transaction state.
+## Prefer to call the methods directly?
 
-`onPaid` may run more than once. Fulfillment must be idempotent on
-`checkoutId` or your own order id. Fulfill from the paid checkout snapshot and
-its metadata, not from the live cart.
-
-## Cart Changes
-
-When a cart changes, call `getOrCreateCheckout` again with the same order id and
-the new amount. OpenReceive returns the paid checkout if the order is already
-paid, reuses an unexpired open checkout when the amount matches, creates a fresh
-checkout when an expired checkout is retried, and supersedes the old open
-checkout when the amount changes.
-
-Old checkouts remain settlement-watchable. If a superseded checkout is later
-paid, `getOrder` exposes it as `paid_checkout` and `display_checkout`.
-
-## Advanced: Web-Component Bindings
-
-The framework packages also expose thin binding helpers for custom element
-bridges. Prefer the component examples above unless you need direct access to
-attributes and event listeners.
-
-```ts
-import { createOpenReceiveVueCheckoutBinding } from "@openreceive/vue";
-import { createCheckoutBinding } from "@openreceive/svelte";
-import { createOpenReceiveAngularCheckoutBinding } from "@openreceive/angular";
-```
+If you would rather not mount the router, `createOpenReceive()` also returns the service
+methods (`getOrCreateCheckout`, `getOrder`, `order`, `sweepPendingInvoices`, …) to call from
+your own controllers. The mounted router above is the recommended path because it ships those
+routes — and the capability-token protection — for you.

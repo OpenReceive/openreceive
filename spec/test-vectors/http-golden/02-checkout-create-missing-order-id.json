@@ -1,0 +1,13 @@
+{
+  "name": "checkout.create without order_id is a 400 INVALID_REQUEST",
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/checkouts",
+    "headers": { "content-type": "application/json" },
+    "body": { "usd": "1.00" }
+  },
+  "expected": {
+    "status": 400,
+    "error_code": "INVALID_REQUEST"
+  }
+}

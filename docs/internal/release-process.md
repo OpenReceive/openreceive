@@ -6,6 +6,10 @@ OpenReceive starts with a small v0.1 release surface:
 - `openreceive`
 - `@openreceive/core`
 - `@openreceive/node`
+- `@openreceive/http`
+- `@openreceive/express`
+- `@openreceive/fastify`
+- `@openreceive/next`
 - `@openreceive/browser`
 - `@openreceive/provider-data`
 - `@openreceive/elements`
@@ -16,9 +20,13 @@ OpenReceive starts with a small v0.1 release surface:
 
 Public package manifests are public while testkit stays private. The public
 surface includes the unscoped `openreceive` umbrella package, the Node service
-package, core contracts/helpers, browser checkout helpers, provider-data
-assets, elements, and frontend adapters. The root workspace and
-`@openreceive/testkit` stay private.
+package, the shipped HTTP route handler (`@openreceive/http`) and its framework
+adapters (`@openreceive/express`, `@openreceive/fastify`, `@openreceive/next`),
+core contracts/helpers, browser checkout helpers, provider-data assets,
+elements, and frontend adapters. The root workspace and `@openreceive/testkit`
+stay private. The Ruby gems (`openreceive`, `openreceive-server`,
+`openreceive-rails`) release on the RubyGems track, separate from this npm
+surface.
 
 ## Release Gate
 

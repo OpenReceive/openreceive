@@ -1,16 +1,11 @@
 import { status as deriveStatus } from "../status.ts";
-import { applyOpenReceiveThemeAttributes, createOpenReceiveStoredThemeModel } from "./theme.ts";
 import {
   assertOpenReceiveDisplayInvoice,
   checkoutInvoiceFromOrderSnapshot,
   isPaidCheckoutSnapshot,
 } from "./checkout.ts";
+import { applyOpenReceiveThemeAttributes, createOpenReceiveStoredThemeModel } from "./theme.ts";
 import {
-  OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
-  OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
-  OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
-  OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES,
-  OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
   type CheckoutElementAttributeOptions,
   type CheckoutElementAttributes,
   type CheckoutElementEventHandlers,
@@ -23,6 +18,11 @@ import {
   type CreateCheckoutElementOptions,
   type CreateCheckoutShellOptions,
   type CreateOpenReceiveThemeToggleElementOptions,
+  OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
+  OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
+  OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
+  OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES,
+  OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
   type OpenReceiveCheckoutShellProps,
   type OpenReceiveThemeAttributeTarget,
   type OpenReceiveThemeToggleElementAttributeOptions,
@@ -30,9 +30,39 @@ import {
 } from "./ui.ts";
 
 export function createCheckoutElementAttributes(
-  snapshot: CheckoutSnapshot,
+  snapshot: CheckoutSnapshot | null,
   options: CheckoutElementAttributeOptions = {},
 ): CheckoutElementAttributes {
+  // Create mode: no snapshot yet. The element owns the whole lifecycle from `order-id` (+
+  // optional `prefix`) — it creates the checkout, then renders and polls — so we emit just
+  // those routing attributes plus theme/order-url/wizard and let the element do the rest.
+  // `orderId` is required here because there is no snapshot to read the order id from.
+  if (snapshot === null) {
+    if (options.orderId === undefined || options.orderId.length === 0) {
+      throw new TypeError(
+        "OpenReceive checkout element create mode requires an orderId when no snapshot is given.",
+      );
+    }
+    const createAttributes: CheckoutElementAttributes = {
+      [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId]: options.orderId,
+    };
+    if (options.prefix !== undefined) {
+      createAttributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix] = options.prefix;
+    }
+    if (options.orderUrl !== undefined) {
+      createAttributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderUrl] = options.orderUrl;
+    }
+    if (options.theme !== undefined) {
+      createAttributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme] = options.theme;
+    }
+    if (options.paymentWizard !== undefined) {
+      createAttributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentWizard] = String(
+        options.paymentWizard,
+      );
+    }
+    return createAttributes;
+  }
+
   const invoice = checkoutInvoiceFromOrderSnapshot(snapshot);
   if (typeof invoice.invoice !== "string") {
     throw new TypeError("OpenReceive checkout element requires a display Lightning invoice.");
@@ -69,6 +99,9 @@ export function createCheckoutElementAttributes(
   }
   if (options.orderUrl !== undefined) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderUrl] = options.orderUrl;
+  }
+  if (options.prefix !== undefined) {
+    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix] = options.prefix;
   }
   if (options.theme !== undefined) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme] = options.theme;
@@ -132,7 +165,7 @@ export function createCheckoutElementListeners(
 }
 
 export function createCheckoutShellModel(
-  snapshot: CheckoutSnapshot,
+  snapshot: CheckoutSnapshot | null,
   options: CheckoutShellOptions = {},
 ): CheckoutShellModel {
   const theme = createOpenReceiveStoredThemeModel(options);
@@ -260,4 +293,3 @@ export function createCheckoutShell(
     themeToggle,
   };
 }
-

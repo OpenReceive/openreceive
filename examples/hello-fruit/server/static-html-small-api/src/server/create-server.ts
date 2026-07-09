@@ -5,6 +5,8 @@ import type {
   OpenReceiveReceiveNwcClient,
   OpenReceiveSourcedPriceProvider,
 } from "@openreceive/core";
+import { openReceiveExpress } from "@openreceive/express";
+import { guestCheckout } from "@openreceive/http";
 import {
   OpenReceiveServiceError,
   createOpenReceive,
@@ -16,8 +18,9 @@ import {
   createHelloFruitOpenReceiveLogger,
 } from "../../../../shared/demo-logging.ts";
 import {
-  createHelloFruitCreateOrderResult,
   HelloFruitDemoOrderError,
+  prepareHelloFruitOrder,
+  resolveHelloFruitOrderAmount,
 } from "../../../../shared/demo-order.ts";
 import { mountHelloFruitHostedDemoRoutes } from "../../../../shared/hosted-demo-routes.ts";
 import {
@@ -84,10 +87,21 @@ export async function createHelloFruitStaticServer(options: HelloFruitOpenReceiv
 
   const { openreceive } = await createHelloFruitOpenReceive(options);
 
+  // Mount the SHIPPED OpenReceive routes at /openreceive (POST /checkouts, POST /orders/:id, ...).
+  // guestCheckout() gates reads on the per-order capability token; resolveAmount is the amount
+  // authority — it looks the persisted order up by id, never trusting the client's price.
+  app.use(
+    openReceiveExpress({
+      service: openreceive,
+      authorize: guestCheckout(),
+      resolveAmount: ({ orderId }) => resolveHelloFruitOrderAmount(openreceive, orderId),
+    }),
+  );
+
   logDemo("server.routes", "Mounting demo routes.", {
     staticStickers: "/stickers",
-    createOrder: "/create_order",
-    order: "/order",
+    openReceiveRouter: "/openreceive",
+    prepareOrder: "/prepare_order",
     rates: "/rates",
   });
 
@@ -134,36 +148,32 @@ export async function createHelloFruitStaticServer(options: HelloFruitOpenReceiv
     }
   });
 
-  app.post("/create_order", async (req, res, next) => {
+  // App order step (NOT an OpenReceive route): validate the cart, compute the authoritative total,
+  // and PERSIST the order. The mounted /openreceive/checkouts route creates the checkout; the
+  // <openreceive-checkout order-id> element drives it.
+  app.post("/prepare_order", async (req, res, next) => {
     const startedAt = Date.now();
     try {
       const body = asRequestBody(req.body);
-      logDemo("create_order.request", "Received create order request.", {
+      logDemo("prepare_order.request", "Received prepare order request.", {
         ...summarizeOrderRequest(body),
       });
-      const orderResult = await createHelloFruitCreateOrderResult(body, {
+      const { order } = await prepareHelloFruitOrder(body, {
         demoId: DEMO_ID,
         demoName: "static",
         openreceive,
       });
-      logDemo("create_order.prepared", "Prepared demo order and invoice request.", {
-        orderId: orderResult.order.uuid,
-        orderStatus: orderResult.order.status,
-        total: orderResult.order.total_amount,
-        itemCount: orderResult.order.items.length,
-      });
-      const checkout = await openreceive.getOrCreateCheckout(orderResult.invoiceRequest);
-      logDemo("create_order.checkout_created", "Created or reused checkout.", {
-        orderId: checkout.order_id,
+      logDemo("prepare_order.prepared", "Prepared and persisted demo order.", {
+        orderId: order.uuid,
+        orderStatus: order.status,
+        total: order.total_amount,
+        itemCount: order.items.length,
         elapsedMs: Date.now() - startedAt,
       });
-      res.status(201).json({
-        order: orderResult.order,
-        checkout,
-      });
+      res.status(201).json({ order });
     } catch (error) {
       if (error instanceof OpenReceiveServiceError || error instanceof HelloFruitDemoOrderError) {
-        logDemo("create_order.rejected", "Create order request returned a known error.", {
+        logDemo("prepare_order.rejected", "Prepare order request returned a known error.", {
           status: error.status,
           body: error.body,
           elapsedMs: Date.now() - startedAt,
@@ -171,40 +181,7 @@ export async function createHelloFruitStaticServer(options: HelloFruitOpenReceiv
         res.status(error.status).json(error.body);
         return;
       }
-      logDemo("create_order.error", "Create order request failed unexpectedly.", {
-        error: error instanceof Error ? error.message : String(error),
-        elapsedMs: Date.now() - startedAt,
-      });
-      next(error);
-    }
-  });
-  app.post("/order", async (req, res, next) => {
-    const startedAt = Date.now();
-    try {
-      const body = asRequestBody(req.body);
-      const orderId = requireRequestString(body, "order_id");
-      logDemo("order.request", "Received order request.", {
-        orderId,
-        action: typeof body.action === "string" ? body.action : "status",
-      });
-      await authorizeOrderAccess(req, orderId);
-      const result = await openreceive.order(body as Parameters<typeof openreceive.order>[0]);
-      logDemo("order.response", "Served order request.", {
-        orderId,
-        elapsedMs: Date.now() - startedAt,
-      });
-      res.status(200).json(result);
-    } catch (error) {
-      if (error instanceof OpenReceiveServiceError || error instanceof HelloFruitDemoOrderError) {
-        logDemo("order.rejected", "Order request returned a known error.", {
-          status: error.status,
-          body: error.body,
-          elapsedMs: Date.now() - startedAt,
-        });
-        res.status(error.status).json(error.body);
-        return;
-      }
-      logDemo("order.error", "Order request failed unexpectedly.", {
+      logDemo("prepare_order.error", "Prepare order request failed unexpectedly.", {
         error: error instanceof Error ? error.message : String(error),
         elapsedMs: Date.now() - startedAt,
       });
@@ -213,11 +190,6 @@ export async function createHelloFruitStaticServer(options: HelloFruitOpenReceiv
   });
 
   return app;
-}
-
-async function authorizeOrderAccess(_req: express.Request, _orderId: string): Promise<void> {
-  // Demo seam: production apps should verify the signed-in/session caller owns
-  // this order before forwarding the request to openreceive.order(body).
 }
 
 function summarizeOrderRequest(body: Record<string, unknown>): Record<string, unknown> {
@@ -244,13 +216,5 @@ function asRequestBody(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
-}
-
-function requireRequestString(body: Record<string, unknown>, key: string): string {
-  const value = body[key];
-  if (typeof value !== "string" || value.length === 0) {
-    throw new HelloFruitDemoOrderError(`${key} is required.`);
-  }
-  return value;
 }
 

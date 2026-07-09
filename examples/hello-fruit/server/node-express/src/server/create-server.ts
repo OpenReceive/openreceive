@@ -1,4 +1,3 @@
-import express from "express";
 import { fileURLToPath } from "node:url";
 import type {
   OpenReceiveInvoiceKvStore,
@@ -6,24 +5,27 @@ import type {
   OpenReceiveSourcedPriceProvider,
 } from "@openreceive/core";
 import {
-  OpenReceiveServiceError,
   createOpenReceive,
+  createOrderAccessTokenManager,
+  OpenReceiveServiceError,
   readOpenReceiveConfigFile,
 } from "@openreceive/node";
-import { createHelloFruitDemoMetadata } from "../../../../shared/demo-metadata.ts";
-import {
-  createHelloFruitDemoServerLogger,
-  createHelloFruitOpenReceiveLogger,
-} from "../../../../shared/demo-logging.ts";
-import {
-  createHelloFruitCreateOrderResult,
-  HelloFruitDemoOrderError,
-} from "../../../../shared/demo-order.ts";
-import { mountHelloFruitHostedDemoRoutes } from "../../../../shared/hosted-demo-routes.ts";
+import express from "express";
 import {
   readHelloFruitCheckoutCurrencies,
   readHelloFruitPriceFeedCurrencies,
 } from "../../../../shared/demo-currencies.ts";
+import {
+  createHelloFruitDemoServerLogger,
+  createHelloFruitOpenReceiveLogger,
+} from "../../../../shared/demo-logging.ts";
+import { createHelloFruitDemoMetadata } from "../../../../shared/demo-metadata.ts";
+import {
+  HelloFruitDemoOrderError,
+  prepareHelloFruitOrder,
+} from "../../../../shared/demo-order.ts";
+import { mountHelloFruitHostedDemoRoutes } from "../../../../shared/hosted-demo-routes.ts";
+import { mountHelloFruitOpenReceiveRouter } from "./openreceive-router.ts";
 
 const DEMO_ID = "node-express";
 const logDemo = createHelloFruitDemoServerLogger(DEMO_ID);
@@ -84,10 +86,21 @@ export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptio
 
   const { openreceive } = await createHelloFruitOpenReceive(options);
 
+  // Per-order capability tokens are minted here and verified on reads. The same manager backs the
+  // mounted router and the legacy /order route so their tokens agree.
+  const tokens = createOrderAccessTokenManager(openreceive.store, {
+    namespace: openreceive.namespace,
+  });
+
+  // Mount the SHIPPED OpenReceive routes at /openreceive (POST /checkouts, POST /orders/:id, ...).
+  // This is the production-grade surface: real authorize + resolveAmount + capability tokens, with
+  // no hand-written invoice plumbing. See ./openreceive-router.ts for the two authorize examples.
+  mountHelloFruitOpenReceiveRouter(app, openreceive, tokens);
+
   logDemo("server.routes", "Mounting demo routes.", {
     staticStickers: "/stickers",
-    createOrder: "/create_order",
-    order: "/order",
+    openReceiveRouter: "/openreceive",
+    prepareOrder: "/prepare_order",
     rates: "/rates",
   });
 
@@ -138,35 +151,32 @@ export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptio
     }
   });
 
-  app.post("/create_order", async (req, res, next) => {
+  // App order step (NOT an OpenReceive route): validate the cart, compute the authoritative total,
+  // and PERSIST the order so the mounted router's resolveAmount can look it up. It no longer calls
+  // getOrCreateCheckout — POST /openreceive/checkouts does that, and the self-contained <Checkout
+  // orderId> component drives it.
+  app.post("/prepare_order", async (req, res, next) => {
     const startedAt = Date.now();
     try {
       const body = asRequestBody(req.body);
-      logDemo("create_order.request", "Received create order request.", {
+      logDemo("prepare_order.request", "Received prepare order request.", {
         ...summarizeOrderRequest(body),
       });
-      const orderResult = await createHelloFruitCreateOrderResult(body, {
+      const { order } = await prepareHelloFruitOrder(body, {
         demoId: DEMO_ID,
         openreceive,
       });
-      logDemo("create_order.prepared", "Prepared demo order and invoice request.", {
-        orderId: orderResult.order.uuid,
-        orderStatus: orderResult.order.status,
-        total: orderResult.order.total_amount,
-        itemCount: orderResult.order.items.length,
-      });
-      const checkout = await openreceive.getOrCreateCheckout(orderResult.invoiceRequest);
-      logDemo("create_order.checkout_created", "Created or reused checkout.", {
-        orderId: checkout.order_id,
+      logDemo("prepare_order.prepared", "Prepared and persisted demo order.", {
+        orderId: order.uuid,
+        orderStatus: order.status,
+        total: order.total_amount,
+        itemCount: order.items.length,
         elapsedMs: Date.now() - startedAt,
       });
-      res.status(201).json({
-        order: orderResult.order,
-        checkout,
-      });
+      res.status(201).json({ order });
     } catch (error) {
       if (error instanceof OpenReceiveServiceError || error instanceof HelloFruitDemoOrderError) {
-        logDemo("create_order.rejected", "Create order request returned a known error.", {
+        logDemo("prepare_order.rejected", "Prepare order request returned a known error.", {
           status: error.status,
           body: error.body,
           elapsedMs: Date.now() - startedAt,
@@ -174,40 +184,7 @@ export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptio
         res.status(error.status).json(error.body);
         return;
       }
-      logDemo("create_order.error", "Create order request failed unexpectedly.", {
-        error: error instanceof Error ? error.message : String(error),
-        elapsedMs: Date.now() - startedAt,
-      });
-      next(error);
-    }
-  });
-  app.post("/order", async (req, res, next) => {
-    const startedAt = Date.now();
-    try {
-      const body = asRequestBody(req.body);
-      const orderId = requireRequestString(body, "order_id");
-      logDemo("order.request", "Received order request.", {
-        orderId,
-        action: typeof body.action === "string" ? body.action : "status",
-      });
-      await authorizeOrderAccess(req, orderId);
-      const result = await openreceive.order(body as Parameters<typeof openreceive.order>[0]);
-      logDemo("order.response", "Served order request.", {
-        orderId,
-        elapsedMs: Date.now() - startedAt,
-      });
-      res.status(200).json(result);
-    } catch (error) {
-      if (error instanceof OpenReceiveServiceError || error instanceof HelloFruitDemoOrderError) {
-        logDemo("order.rejected", "Order request returned a known error.", {
-          status: error.status,
-          body: error.body,
-          elapsedMs: Date.now() - startedAt,
-        });
-        res.status(error.status).json(error.body);
-        return;
-      }
-      logDemo("order.error", "Order request failed unexpectedly.", {
+      logDemo("prepare_order.error", "Prepare order request failed unexpectedly.", {
         error: error instanceof Error ? error.message : String(error),
         elapsedMs: Date.now() - startedAt,
       });
@@ -216,11 +193,6 @@ export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptio
   });
 
   return app;
-}
-
-async function authorizeOrderAccess(_req: express.Request, _orderId: string): Promise<void> {
-  // Demo seam: production apps should verify the signed-in/session caller owns
-  // this order before forwarding the request to openreceive.order(body).
 }
 
 function summarizeOrderRequest(body: Record<string, unknown>): Record<string, unknown> {
@@ -248,12 +220,3 @@ function asRequestBody(value: unknown): Record<string, unknown> {
     ? (value as Record<string, unknown>)
     : {};
 }
-
-function requireRequestString(body: Record<string, unknown>, key: string): string {
-  const value = body[key];
-  if (typeof value !== "string" || value.length === 0) {
-    throw new HelloFruitDemoOrderError(`${key} is required.`);
-  }
-  return value;
-}
-

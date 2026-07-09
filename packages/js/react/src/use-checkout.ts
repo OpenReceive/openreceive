@@ -22,11 +22,20 @@ import {
 import type { CheckoutProviderProps, UseCheckoutOptions, UseCheckoutResult } from "./types.ts";
 
 export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
+  // The hook drives a concrete checkout snapshot. Create mode (passing only an orderId) is
+  // handled by the <Checkout> component wrapper, which creates the checkout and hands the
+  // resulting snapshot to this hook — so the hook/logic below stays untouched.
+  const checkout = options.checkout;
+  if (checkout === undefined) {
+    throw new Error(
+      "useCheckout requires a checkout snapshot. Pass orderId to <Checkout> for create mode.",
+    );
+  }
   const [copied, showCopied] = useOpenReceiveTransientValue<boolean>(false);
-  const [latestSnapshot, setLatestSnapshot] = React.useState<CheckoutSnapshot>(options.checkout);
+  const [latestSnapshot, setLatestSnapshot] = React.useState<CheckoutSnapshot>(checkout);
   React.useEffect(() => {
-    setLatestSnapshot(options.checkout);
-  }, [options.checkout]);
+    setLatestSnapshot(checkout);
+  }, [checkout]);
   const displayData = React.useMemo(() => toCheckoutDisplayData(latestSnapshot), [latestSnapshot]);
   const model = React.useMemo(
     () =>

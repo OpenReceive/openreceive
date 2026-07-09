@@ -1,0 +1,530 @@
+// Only TYPES are imported from @openreceive/node (erased at build): keeping value imports out means
+// tsup never bundles node's runtime graph (pg/yaml/wallet SDKs) into this runtime-agnostic package.
+import type {
+  OpenReceive,
+  OpenReceiveCheckoutAmountSource,
+  OpenReceiveCreateCheckoutRequest,
+  OpenReceiveOrderRequest,
+  OpenReceiveResolveAmount,
+} from "@openreceive/node";
+import {
+  createDefaultAuthorize,
+  type OpenReceiveAuthorize,
+  type OpenReceiveAuthorizeAction,
+  type OpenReceiveAuthorizeResource,
+  type OpenReceiveRateLimit,
+} from "./authorize.ts";
+import { createRequestId, errorResponse, jsonResponse, OpenReceiveHttpError } from "./errors.ts";
+import { type MatchedRoute, matchRoute, normalizePrefix } from "./router.ts";
+import { createOrderAccessTokenManager, type OrderAccessTokenManager } from "./tokens.ts";
+
+/**
+ * Name of the httpOnly cookie the create route sets with the minted per-order token, and which
+ * {@link extractToken} reads back on same-origin reads. Path-scoped to `{prefix}/orders/{orderId}`
+ * so the browser only ever sends an order's own token to that order's read route.
+ */
+export const ORDER_TOKEN_COOKIE_NAME = "openreceive_order_token";
+
+/** How long (seconds) the order-token cookie lives; matched to a typical checkout session window. */
+const ORDER_TOKEN_COOKIE_MAX_AGE = 86400;
+
+/**
+ * Merge a host-resolved amount source with the base create request into a service-ready request.
+ * Mirrors `applyResolvedAmount` in @openreceive/node; inlined here to avoid a value import from node.
+ */
+function applyResolvedAmount(
+  base: Omit<OpenReceiveCreateCheckoutRequest, "amount" | "sats" | "usd">,
+  resolved: OpenReceiveCheckoutAmountSource,
+): OpenReceiveCreateCheckoutRequest {
+  if ("amount" in resolved) {
+    return { ...base, amount: resolved.amount } as OpenReceiveCreateCheckoutRequest;
+  }
+  if ("sats" in resolved) {
+    return { ...base, sats: resolved.sats } as OpenReceiveCreateCheckoutRequest;
+  }
+  return { ...base, usd: resolved.usd } as OpenReceiveCreateCheckoutRequest;
+}
+
+/** Options for {@link createOpenReceiveHttpHandler}. Only `service` is required. */
+export interface CreateOpenReceiveHttpHandlerOptions {
+  /** The host's already-constructed OpenReceive service (created with the host's DB + wallet). */
+  readonly service: OpenReceive;
+  /** Host authorization policy. Defaults to the token-gated Tier policy (Tier 3 denied). */
+  readonly authorize?: OpenReceiveAuthorize;
+  /** Host server-side pricing hook. When omitted, the client-supplied amount is trusted. */
+  readonly resolveAmount?: OpenReceiveResolveAmount;
+  /** Host rate-limit hook. When omitted, no rate limiting is applied. */
+  readonly rateLimit?: OpenReceiveRateLimit;
+  /** Capability-token manager. Defaults to one backed by `service.store` / `service.namespace`. */
+  readonly tokens?: OrderAccessTokenManager;
+  /** Mount prefix for all routes. Defaults to `/openreceive`. */
+  readonly prefix?: string;
+}
+
+/** The framework-agnostic Fetch handler returned by {@link createOpenReceiveHttpHandler}. */
+export interface OpenReceiveHttpHandler {
+  (request: Request): Promise<Response>;
+  /** The normalized mount prefix all routes live under. */
+  readonly prefix: string;
+  /** Alias for calling the handler directly. */
+  handle(request: Request): Promise<Response>;
+}
+
+interface HandlerRuntime {
+  readonly service: OpenReceive;
+  readonly tokens: OrderAccessTokenManager;
+  readonly authorize: OpenReceiveAuthorize;
+  readonly rateLimit?: OpenReceiveRateLimit;
+  readonly resolveAmount?: OpenReceiveResolveAmount;
+  readonly prefix: string;
+}
+
+const ORDER_ACTION_TO_AUTHORIZE: Record<string, OpenReceiveAuthorizeAction> = {
+  status: "order.read",
+  swap_quote: "swap.quote",
+  start_swap: "swap.start",
+  refund_swap: "swap.refund",
+};
+
+/**
+ * Build a Web-standard Fetch handler that serves the OpenReceive routes on top of a host-provided
+ * `service`. The returned function is `(request: Request) => Promise<Response>` and also exposes
+ * `.prefix` and a `.handle` alias.
+ */
+export function createOpenReceiveHttpHandler(
+  options: CreateOpenReceiveHttpHandlerOptions,
+): OpenReceiveHttpHandler {
+  if (options === undefined || options.service === undefined) {
+    throw new TypeError("createOpenReceiveHttpHandler requires a `service`.");
+  }
+
+  const prefix = normalizePrefix(options.prefix ?? "/openreceive");
+  const tokens =
+    options.tokens ??
+    createOrderAccessTokenManager(options.service.store, { namespace: options.service.namespace });
+  const authorize = options.authorize ?? createDefaultAuthorize();
+
+  if (options.authorize === undefined) {
+    console.warn(
+      "OpenReceive: no authorize policy configured — Tier-3 admin routes (invoice.sweep) will always return 403.",
+    );
+  }
+  if (options.resolveAmount === undefined) {
+    console.warn(
+      "OpenReceive: no resolveAmount hook — the client-supplied amount is trusted; set resolveAmount to enforce server-side pricing.",
+    );
+  }
+
+  const runtime: HandlerRuntime = {
+    service: options.service,
+    tokens,
+    authorize,
+    rateLimit: options.rateLimit,
+    resolveAmount: options.resolveAmount,
+    prefix,
+  };
+
+  const handle = async (request: Request): Promise<Response> => {
+    const requestId = createRequestId();
+    try {
+      return await dispatch(runtime, request, requestId);
+    } catch (error) {
+      return errorResponse(error, requestId);
+    }
+  };
+
+  const handler = handle as OpenReceiveHttpHandler;
+  Object.defineProperty(handler, "prefix", { value: prefix, enumerable: true });
+  Object.defineProperty(handler, "handle", { value: handle, enumerable: true });
+  return handler;
+}
+
+async function dispatch(
+  runtime: HandlerRuntime,
+  request: Request,
+  requestId: string,
+): Promise<Response> {
+  const url = new URL(request.url);
+  const route = matchRoute(runtime.prefix, request.method, url.pathname);
+  if (route === null) {
+    throw new OpenReceiveHttpError(404, "NOT_FOUND", "No OpenReceive route matched this path.");
+  }
+
+  switch (route.kind) {
+    case "checkout.create":
+      return await handleCreateCheckout(runtime, request, requestId);
+    case "checkout.read":
+      return await handleGetCheckout(runtime, request, route, requestId);
+    case "order.action":
+      return await handleOrderAction(runtime, request, route, requestId);
+    case "swap.options":
+      return await handleSwapOptions(runtime, request, route, requestId);
+    case "rates":
+      return await handleRates(runtime, request, url, requestId);
+    case "invoice.sweep":
+      return await handleSweep(runtime, request, requestId);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Routes
+// ---------------------------------------------------------------------------
+
+async function handleCreateCheckout(
+  runtime: HandlerRuntime,
+  request: Request,
+  requestId: string,
+): Promise<Response> {
+  const body = await readJsonBody(request);
+  const orderId = readOrderId(body);
+  const token = extractToken(request);
+
+  await guard(runtime, "checkout.create", request, { order_id: orderId }, token);
+
+  const clientAmount = readClientAmountSource(body);
+  const metadata = readMetadata(body);
+
+  let resolved: OpenReceiveCheckoutAmountSource;
+  if (runtime.resolveAmount !== undefined) {
+    resolved = await runtime.resolveAmount({ orderId, clientAmount, metadata, request });
+  } else if (clientAmount !== undefined) {
+    // No server-side pricing hook: fall back to the (trusted) client amount source.
+    resolved = clientAmount;
+  } else {
+    throw new OpenReceiveHttpError(
+      400,
+      "INVALID_REQUEST",
+      "Create checkout request requires exactly one of amount, sats, or usd.",
+    );
+  }
+
+  const memo = readString(body.memo);
+  const descriptionHash = readString(body.description_hash ?? body.descriptionHash);
+  const base = {
+    orderId,
+    ...(memo === undefined ? {} : { memo }),
+    ...(descriptionHash === undefined ? {} : { descriptionHash }),
+    ...(metadata === undefined ? {} : { metadata }),
+  } satisfies Omit<OpenReceiveCreateCheckoutRequest, "amount" | "sats" | "usd">;
+
+  const createRequest = applyResolvedAmount(base, resolved);
+  const checkout = await runtime.service.getOrCreateCheckout(createRequest);
+
+  // Mint the per-order capability token. It is only returned on the first checkout for an order;
+  // later checkouts replay the same order and get no token (`created: false`).
+  const minted = await runtime.tokens.mint(orderId);
+  if (minted.created && minted.token !== undefined) {
+    // On the mint, also drop the token as an httpOnly cookie scoped to this order's read route, so a
+    // same-origin browser is auto-authorized for its own order with no client-side token handling.
+    const cookie = buildOrderTokenCookie(runtime.prefix, orderId, minted.token, request);
+    return jsonResponse(201, { checkout, order_access_token: minted.token }, requestId, [
+      ["set-cookie", cookie],
+    ]);
+  }
+
+  return jsonResponse(201, { checkout }, requestId);
+}
+
+/**
+ * Build the `Set-Cookie` value for the minted order token: httpOnly + SameSite=Lax, path-scoped to
+ * `{prefix}/orders/{orderId}` so the browser only sends it to that order's read route, and `Secure`
+ * only over https (so localhost http dev keeps working).
+ */
+function buildOrderTokenCookie(
+  prefix: string,
+  orderId: string,
+  token: string,
+  request: Request,
+): string {
+  const path = `${prefix}/orders/${encodeURIComponent(orderId)}`;
+  const attributes = [
+    `${ORDER_TOKEN_COOKIE_NAME}=${token}`,
+    `Path=${path}`,
+    "HttpOnly",
+    "SameSite=Lax",
+    `Max-Age=${ORDER_TOKEN_COOKIE_MAX_AGE}`,
+  ];
+  if (isHttpsRequest(request)) {
+    attributes.push("Secure");
+  }
+  return attributes.join("; ");
+}
+
+/** True when the request arrived over https, directly or via an `x-forwarded-proto: https` proxy. */
+function isHttpsRequest(request: Request): boolean {
+  return (
+    new URL(request.url).protocol === "https:" ||
+    request.headers.get("x-forwarded-proto") === "https"
+  );
+}
+
+async function handleGetCheckout(
+  runtime: HandlerRuntime,
+  request: Request,
+  route: Extract<MatchedRoute, { kind: "checkout.read" }>,
+  requestId: string,
+): Promise<Response> {
+  const token = extractToken(request);
+  const checkoutId = route.checkoutId;
+
+  // Rate-limit before touching the service. The order id needed to authorize is not known until the
+  // checkout is fetched, so authorize is applied after the lookup (below) rather than via `guard`.
+  // tokenValid is still unknown here (no order id yet), so it is false for the rate-limit context.
+  await enforceRateLimit(
+    runtime,
+    "checkout.read",
+    request,
+    { checkout_id: checkoutId },
+    token,
+    false,
+  );
+
+  // Fetch first to learn the owning order id for the default token gate (404 if the checkout is
+  // unknown). A denied authorize returns 403 without leaking the fetched checkout body.
+  const checkout = await runtime.service.getCheckout({ checkoutId });
+  const resource: OpenReceiveAuthorizeResource = {
+    checkout_id: checkoutId,
+    order_id: checkout.order_id,
+  };
+  const tokenValid = await computeTokenValid(runtime, resource, token);
+  const allowed = await runtime.authorize({
+    action: "checkout.read",
+    request,
+    resource,
+    token,
+    tokenValid,
+  });
+  if (!allowed) {
+    throw new OpenReceiveHttpError(403, "UNAUTHORIZED", "Not authorized to read this checkout.");
+  }
+
+  return jsonResponse(200, checkout, requestId);
+}
+
+async function handleOrderAction(
+  runtime: HandlerRuntime,
+  request: Request,
+  route: Extract<MatchedRoute, { kind: "order.action" }>,
+  requestId: string,
+): Promise<Response> {
+  const body = await readJsonBody(request);
+  const orderId = route.orderId;
+  const action = body.action === undefined ? "status" : body.action;
+
+  const authorizeAction =
+    typeof action === "string" ? ORDER_ACTION_TO_AUTHORIZE[action] : undefined;
+  if (authorizeAction === undefined) {
+    // Unknown action fails loud with a 400 and is never silently treated as `status`. Rejected
+    // before the service is called (and before authorize, since there is no valid action to gate).
+    throw new OpenReceiveHttpError(
+      400,
+      "INVALID_REQUEST",
+      `Unknown order action: ${JSON.stringify(action)}. Expected "status", "swap_quote", "start_swap", or "refund_swap".`,
+    );
+  }
+
+  const token = extractToken(request);
+  const resource: OpenReceiveAuthorizeResource = { order_id: orderId };
+  if (action === "refund_swap" && typeof body.attempt_id === "string") {
+    resource.attempt_id = body.attempt_id;
+  }
+
+  await guard(runtime, authorizeAction, request, resource, token);
+
+  // The service's `order` router action-routes the snake_case body and returns the correct envelope
+  // (OrderStatus for status; { quote } / { attempt } for swaps). The path order id is authoritative.
+  const serviceBody = { ...body, order_id: orderId } as unknown as OpenReceiveOrderRequest;
+  const result = await runtime.service.order(serviceBody);
+  return jsonResponse(200, result, requestId);
+}
+
+async function handleSwapOptions(
+  runtime: HandlerRuntime,
+  request: Request,
+  route: Extract<MatchedRoute, { kind: "swap.options" }>,
+  requestId: string,
+): Promise<Response> {
+  const token = extractToken(request);
+  await guard(runtime, "swap.options", request, { order_id: route.orderId }, token);
+  const result = await runtime.service.swapOptions({ orderId: route.orderId });
+  return jsonResponse(200, result, requestId);
+}
+
+async function handleRates(
+  runtime: HandlerRuntime,
+  _request: Request,
+  url: URL,
+  requestId: string,
+): Promise<Response> {
+  // Public Tier-1 read: no authorize / rate-limit gate. `base` is accepted for wire parity but only
+  // Bitcoin is supported as the base asset, so it is not forwarded.
+  const currenciesParam = url.searchParams.get("currencies");
+  const currencies =
+    currenciesParam === null
+      ? undefined
+      : currenciesParam
+          .split(",")
+          .map((currency) => currency.trim())
+          .filter((currency) => currency.length > 0);
+
+  const rates = await runtime.service.listRates(
+    currencies === undefined ? undefined : { currencies },
+  );
+  return jsonResponse(200, rates, requestId);
+}
+
+async function handleSweep(
+  runtime: HandlerRuntime,
+  request: Request,
+  requestId: string,
+): Promise<Response> {
+  // Tier-3 admin, fails closed: the default policy denies invoice.sweep, so a host must opt in with
+  // its own `authorize` for this to reach the service.
+  const token = extractToken(request);
+  await guard(runtime, "invoice.sweep", request, {}, token);
+  const result = await runtime.service.sweepPendingInvoices();
+  return jsonResponse(200, result, requestId);
+}
+
+// ---------------------------------------------------------------------------
+// Guards + parsing
+// ---------------------------------------------------------------------------
+
+async function guard(
+  runtime: HandlerRuntime,
+  action: OpenReceiveAuthorizeAction,
+  request: Request,
+  resource: OpenReceiveAuthorizeResource,
+  token: string | null,
+): Promise<void> {
+  // Precompute token validity once so both rate-limit and authorize see the same `ctx.tokenValid`,
+  // and policies never have to reach for the token manager themselves.
+  const tokenValid = await computeTokenValid(runtime, resource, token);
+  await enforceRateLimit(runtime, action, request, resource, token, tokenValid);
+  const allowed = await runtime.authorize({ action, request, resource, token, tokenValid });
+  if (!allowed) {
+    throw new OpenReceiveHttpError(403, "UNAUTHORIZED", "Not authorized for this action.");
+  }
+}
+
+/** Verify the presented token against the resource's order, or false when either is absent. */
+async function computeTokenValid(
+  runtime: HandlerRuntime,
+  resource: OpenReceiveAuthorizeResource,
+  token: string | null,
+): Promise<boolean> {
+  return resource.order_id && token ? await runtime.tokens.verify(resource.order_id, token) : false;
+}
+
+async function enforceRateLimit(
+  runtime: HandlerRuntime,
+  action: OpenReceiveAuthorizeAction,
+  request: Request,
+  resource: OpenReceiveAuthorizeResource,
+  token: string | null,
+  tokenValid: boolean,
+): Promise<void> {
+  if (runtime.rateLimit === undefined) return;
+  const allowed = await runtime.rateLimit({ action, request, resource, token, tokenValid });
+  if (!allowed) {
+    throw new OpenReceiveHttpError(429, "RATE_LIMITED", "Too many requests.", { retryable: true });
+  }
+}
+
+/**
+ * Prefer `Authorization: Bearer <t>` (scheme case-insensitive), then `X-OpenReceive-Order-Token`,
+ * then the path-scoped `openreceive_order_token` cookie. A header token always wins over the cookie;
+ * because the cookie is scoped to `{prefix}/orders/{orderId}`, the value the browser sends to that
+ * read route is exactly that order's token.
+ */
+export function extractToken(request: Request): string | null {
+  const authorization = request.headers.get("authorization");
+  if (authorization !== null) {
+    const match = /^bearer\s+(.+)$/i.exec(authorization.trim());
+    if (match !== null && match[1].trim().length > 0) {
+      return match[1].trim();
+    }
+  }
+  const header = request.headers.get("x-openreceive-order-token");
+  if (header !== null && header.trim().length > 0) {
+    return header.trim();
+  }
+  const cookieHeader = request.headers.get("cookie");
+  if (cookieHeader !== null) {
+    const cookieToken = readCookie(cookieHeader, ORDER_TOKEN_COOKIE_NAME);
+    if (cookieToken !== undefined && cookieToken.length > 0) {
+      return cookieToken;
+    }
+  }
+  return null;
+}
+
+/** Read a single cookie value by name from a `Cookie` request header (`name=value; name2=value2`). */
+function readCookie(header: string, name: string): string | undefined {
+  for (const part of header.split(";")) {
+    const eq = part.indexOf("=");
+    if (eq === -1) continue;
+    if (part.slice(0, eq).trim() === name) {
+      return part.slice(eq + 1).trim();
+    }
+  }
+  return undefined;
+}
+
+async function readJsonBody(request: Request): Promise<Record<string, unknown>> {
+  let text: string;
+  try {
+    text = await request.text();
+  } catch {
+    throw new OpenReceiveHttpError(400, "INVALID_REQUEST", "Unable to read request body.");
+  }
+  if (text.trim().length === 0) {
+    return {};
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new OpenReceiveHttpError(400, "INVALID_REQUEST", "Request body must be valid JSON.");
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new OpenReceiveHttpError(400, "INVALID_REQUEST", "Request body must be a JSON object.");
+  }
+  return parsed as Record<string, unknown>;
+}
+
+function readOrderId(body: Record<string, unknown>): string {
+  const orderId = readString(body.order_id ?? body.orderId);
+  if (orderId === undefined) {
+    throw new OpenReceiveHttpError(400, "INVALID_REQUEST", "order_id is required.");
+  }
+  return orderId;
+}
+
+function readClientAmountSource(
+  body: Record<string, unknown>,
+): OpenReceiveCheckoutAmountSource | undefined {
+  if (body.amount !== undefined) {
+    return { amount: body.amount } as OpenReceiveCheckoutAmountSource;
+  }
+  if (body.sats !== undefined) {
+    return { sats: body.sats } as OpenReceiveCheckoutAmountSource;
+  }
+  if (body.usd !== undefined) {
+    return { usd: body.usd } as OpenReceiveCheckoutAmountSource;
+  }
+  return undefined;
+}
+
+function readMetadata(body: Record<string, unknown>): Record<string, unknown> | undefined {
+  const metadata = body.metadata;
+  if (metadata === undefined) return undefined;
+  if (metadata === null || typeof metadata !== "object" || Array.isArray(metadata)) {
+    throw new OpenReceiveHttpError(400, "INVALID_REQUEST", "metadata must be a JSON object.");
+  }
+  return metadata as Record<string, unknown>;
+}
+
+function readString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}

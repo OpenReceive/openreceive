@@ -170,7 +170,7 @@ export function createOpenReceiveSvelteThemeToggleBinding(
 }
 
 export function createOpenReceiveSvelteCheckoutShellBinding(
-  checkout: CheckoutSnapshot,
+  checkout: CheckoutSnapshot | null,
   options: CheckoutShellOptions = {}
 ): OpenReceiveSvelteCheckoutShellBinding {
   const shell = createCheckoutShellModel(checkout, options);

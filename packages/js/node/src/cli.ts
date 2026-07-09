@@ -140,6 +140,10 @@ async function runMigrate(input: {
     await store.close?.();
   }
   input.stdout.write(`OpenReceive store schema ready (${OPENRECEIVE_DATABASE_SCHEMA_VERSION}).\n`);
+  // Capability tokens (route-shipping spec PART 2) persist the per-order token hash in the
+  // store's meta KV, which ensureSchema provisions — nothing further to migrate on the KV
+  // path. Hosts running the fully normalized schema apply migrations/002 for the column.
+  input.stdout.write("Capability tokens ready (order_access_token stored in meta KV).\n");
   return 0;
 }
 

@@ -6,7 +6,13 @@ import {
 } from "./index.js";
 
 export class CheckoutComponent {
+  // Snapshot mode: bind a `checkout` to render it directly (backward compatible).
+  // Create mode: omit `checkout` and bind `orderId` (+ optional `prefix`); the underlying
+  // <openreceive-checkout> element creates the checkout, then renders and polls itself.
   checkout;
+  orderId;
+  prefix;
+  metadata;
   orderUrl;
   onSettled;
   onStartOver;
@@ -19,12 +25,15 @@ export class CheckoutComponent {
   get shell() {
     const options = {
       ...this.options,
+      ...(this.orderId === undefined ? {} : { orderId: this.orderId }),
+      ...(this.prefix === undefined ? {} : { prefix: this.prefix }),
+      ...(this.metadata === undefined ? {} : { metadata: this.metadata }),
       ...(this.orderUrl === undefined ? {} : { orderUrl: this.orderUrl }),
       ...(this.onSettled === undefined ? {} : { onSettled: this.onSettled }),
       ...(this.onStartOver === undefined ? {} : { onStartOver: this.onStartOver })
     };
     return createOpenReceiveAngularCheckoutShellBinding(
-      this.checkout,
+      this.checkout ?? null,
       options
     );
   }
@@ -46,7 +55,10 @@ export class CheckoutComponent {
   }
 }
 
-Input({ required: true })(CheckoutComponent.prototype, "checkout");
+Input()(CheckoutComponent.prototype, "checkout");
+Input()(CheckoutComponent.prototype, "orderId");
+Input()(CheckoutComponent.prototype, "prefix");
+Input()(CheckoutComponent.prototype, "metadata");
 Input()(CheckoutComponent.prototype, "orderUrl");
 Input()(CheckoutComponent.prototype, "onSettled");
 Input()(CheckoutComponent.prototype, "onStartOver");
@@ -69,6 +81,7 @@ Component({
       ></openreceive-theme-toggle>
       <openreceive-checkout
         [attr.order-id]="checkoutAttributes['order-id']"
+        [attr.prefix]="checkoutAttributes.prefix"
         [attr.invoice-id]="checkoutAttributes['invoice-id']"
         [attr.invoice]="checkoutAttributes.invoice"
         [attr.payment-hash]="checkoutAttributes['payment-hash']"

@@ -1,0 +1,10 @@
+{
+  "name": "rates is a public Tier-1 GET returning 200",
+  "request": {
+    "method": "GET",
+    "path": "/openreceive/rates"
+  },
+  "expected": {
+    "status": 200
+  }
+}

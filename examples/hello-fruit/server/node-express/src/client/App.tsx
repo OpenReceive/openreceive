@@ -1,7 +1,6 @@
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import type { Checkout as OpenReceiveCheckout } from "@openreceive/browser";
 import { Checkout, ThemeScope } from "@openreceive/react";
 import "@openreceive/angular/styles.css";
 import "@openreceive/react/styles.css";
@@ -63,9 +62,8 @@ interface DemoMoneyAmount {
   readonly value: string;
 }
 
-interface CreateOrderResponse {
+interface PrepareOrderResponse {
   readonly order: DemoOrder;
-  readonly checkout: OpenReceiveCheckout;
 }
 
 function App(): React.ReactElement {
@@ -75,7 +73,6 @@ function App(): React.ReactElement {
   const [rates, setRates] = useState<HelloFruitBtcFiatRates | undefined>(undefined);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [order, setOrder] = useState<DemoOrder | null>(null);
-  const [checkout, setCheckout] = useState<OpenReceiveCheckout | null>(null);
   const [purchasedItems, setPurchasedItems] = useState<readonly DemoOrderItem[]>([]);
   const [stickerModalOpen, setStickerModalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -133,16 +130,16 @@ function App(): React.ReactElement {
   }, [framework]);
 
   const onSettled = useCallback(() => {
-    if (checkout !== null && completedCheckoutRef.current !== checkout.order_id) {
+    if (order !== null && completedCheckoutRef.current !== order.uuid) {
       logDemo("checkout.settled", "Checkout settled callback received.", {
-        orderId: checkout.order_id,
+        orderId: order.uuid,
         purchasedItemCount: purchasedItems.length,
       });
-      completedCheckoutRef.current = checkout.order_id;
+      completedCheckoutRef.current = order.uuid;
       setOrder((current) => (current === null ? current : { ...current, status: "paid" }));
       setStickerModalOpen(true);
     }
-  }, [checkout, purchasedItems.length]);
+  }, [order, purchasedItems.length]);
 
   function addSelectedFruitToCart() {
     if (selectedFruit === undefined) return;
@@ -172,7 +169,7 @@ function App(): React.ReactElement {
 
   async function createOrder() {
     if (cartItems.length === 0) {
-      logDemo("create_order.skipped", "Create order clicked with an empty cart.");
+      logDemo("prepare_order.skipped", "Prepare order clicked with an empty cart.");
       return;
     }
     const startedAt = Date.now();
@@ -183,13 +180,15 @@ function App(): React.ReactElement {
     completedCheckoutRef.current = "";
 
     try {
-      logDemo("create_order.request", "Posting create order request.", {
+      logDemo("prepare_order.request", "Posting prepare order request.", {
         currency,
         cartLineCount: cartItems.length,
         cartQuantity: cartQuantity,
         productIds: cartItems.map((item) => item.fruit.id),
       });
-      const response = await fetch("/create_order", {
+      // App route: build + persist the order. The <Checkout orderId> component below then creates
+      // the checkout against the mounted /openreceive/checkouts route and drives it end to end.
+      const response = await fetch("/prepare_order", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -203,31 +202,26 @@ function App(): React.ReactElement {
         }),
       });
       const body = (await response.json()) as unknown;
-      logDemo("create_order.response", "Received create order response.", {
+      logDemo("prepare_order.response", "Received prepare order response.", {
         ok: response.ok,
         status: response.status,
         elapsedMs: Date.now() - startedAt,
-        hasCheckout: isCreateOrderResponse(body),
+        hasOrder: isPrepareOrderResponse(body),
       });
-      if (!response.ok || !isCreateOrderResponse(body)) {
+      if (!response.ok || !isPrepareOrderResponse(body)) {
         throw new Error(readErrorMessage(body) ?? helloFruitDemoLabels.createOrderError);
       }
 
-      logDemo("create_order.ready", "Checkout payload accepted by browser app.", {
+      logDemo("prepare_order.ready", "Order accepted by browser app.", {
         orderId: body.order.uuid,
-        checkoutOrderId: body.checkout.order_id,
         orderStatus: body.order.status,
         itemCount: body.order.items.length,
         total: body.order.total_amount,
       });
       setOrder(body.order);
-      setCheckout({
-        ...body.checkout,
-        fiat: body.order.total_amount,
-      });
       setPurchasedItems(body.order.items);
     } catch (cause: unknown) {
-      logDemo("create_order.error", "Create order failed in the browser.", {
+      logDemo("prepare_order.error", "Prepare order failed in the browser.", {
         error: cause instanceof Error ? cause.message : String(cause),
         elapsedMs: Date.now() - startedAt,
       });
@@ -239,13 +233,11 @@ function App(): React.ReactElement {
 
   function startOver() {
     logDemo("app.reset", "Resetting the demo state.", {
-      hadCheckout: checkout !== null,
       hadOrder: order !== null,
     });
     setFruitId(initialFruitId);
     setCart({});
     setOrder(null);
-    setCheckout(null);
     setPurchasedItems([]);
     setStickerModalOpen(false);
     setCreating(false);
@@ -304,7 +296,7 @@ function App(): React.ReactElement {
           </select>
         </label>
 
-        {checkout === null ? (
+        {order === null ? (
           <>
             <div className="fruit-grid">
               {fruits.map((fruit) => (
@@ -402,10 +394,10 @@ function App(): React.ReactElement {
           </>
         )}
 
-        {checkout === null ? null : (
+        {order === null ? null : (
           <FrameworkCheckout
             framework={framework}
-            checkout={checkout}
+            orderId={order.uuid}
             onError={(cause) => {
               logDemo("checkout.error", "Checkout component reported an error.", {
                 framework,
@@ -470,15 +462,18 @@ function App(): React.ReactElement {
 
 interface FrameworkCheckoutProps {
   readonly framework: CheckoutFramework;
-  readonly checkout: OpenReceiveCheckout;
+  readonly orderId: string;
   readonly onError: (error: unknown) => void;
   readonly onSettled: () => void;
   readonly onStartOver: () => void;
 }
 
+// Each framework mounts its SELF-CONTAINED <Checkout orderId>: the component creates the checkout
+// against the mounted router (prefix defaults to /openreceive), polls, and drives swaps itself, with
+// the per-order token handled invisibly. The app never writes an invoice/status/swap route handler.
 function FrameworkCheckout({
   framework,
-  checkout,
+  orderId,
   onError,
   onSettled,
   onStartOver,
@@ -493,7 +488,6 @@ function FrameworkCheckout({
     let cleanup: () => void = () => undefined;
 
     const options = {
-      orderUrl: "/order",
       rootSelector: ".page",
       defaultTheme: "light" as const,
       onError: (event: Event) => {
@@ -511,7 +505,7 @@ function FrameworkCheckout({
     async function mountFrameworkCheckout() {
       logDemo("checkout.embedded_mount_start", "Mounting embedded checkout framework.", {
         framework,
-        orderId: checkout.order_id,
+        orderId,
       });
       if (framework === "vue") {
         const [{ default: VueCheckout }, { createApp }] = await Promise.all([
@@ -521,8 +515,7 @@ function FrameworkCheckout({
         if (canceled) return;
 
         const app = createApp(VueCheckout, {
-          checkout,
-          orderUrl: options.orderUrl,
+          orderId,
           onSettled: options.onSettled,
           onStartOver,
           options: {
@@ -533,7 +526,7 @@ function FrameworkCheckout({
         });
         app.mount(mountTarget);
         logDemo("checkout.embedded_mount_ready", "Vue checkout mounted.", {
-          orderId: checkout.order_id,
+          orderId,
         });
         cleanup = () => app.unmount();
       }
@@ -558,8 +551,7 @@ function FrameworkCheckout({
           environmentInjector: application.injector,
           hostElement: mountTarget,
         });
-        component.setInput("checkout", checkout);
-        component.setInput("orderUrl", options.orderUrl);
+        component.setInput("orderId", orderId);
         component.setInput("onSettled", options.onSettled);
         component.setInput("onStartOver", onStartOver);
         component.setInput("options", {
@@ -570,7 +562,7 @@ function FrameworkCheckout({
         application.attachView(component.hostView);
         component.changeDetectorRef.detectChanges();
         logDemo("checkout.embedded_mount_ready", "Angular checkout mounted.", {
-          orderId: checkout.order_id,
+          orderId,
         });
         cleanup = () => {
           application.detachView(component.hostView);
@@ -589,8 +581,7 @@ function FrameworkCheckout({
         const component = mount(SvelteCheckout, {
           target: mountTarget,
           props: {
-            checkout,
-            orderUrl: options.orderUrl,
+            orderId,
             onSettled: options.onSettled,
             onStartOver,
             options: {
@@ -601,7 +592,7 @@ function FrameworkCheckout({
           },
         });
         logDemo("checkout.embedded_mount_ready", "Svelte checkout mounted.", {
-          orderId: checkout.order_id,
+          orderId,
         });
         cleanup = () => {
           void unmount(component);
@@ -614,20 +605,19 @@ function FrameworkCheckout({
     return () => {
       logDemo("checkout.embedded_unmount", "Unmounting embedded checkout framework.", {
         framework,
-        orderId: checkout.order_id,
+        orderId,
       });
       canceled = true;
       cleanup();
       host.replaceChildren();
     };
-  }, [framework, checkout, onError, onSettled, onStartOver]);
+  }, [framework, orderId, onError, onSettled, onStartOver]);
 
   if (framework === "react") {
     return (
       <Checkout
         className="demo-checkout"
-        checkout={checkout}
-        orderUrl="/order"
+        orderId={orderId}
         logger={logOpenReceive}
         onError={onError}
         onSettled={onSettled}
@@ -647,8 +637,8 @@ function FrameworkCheckout({
 
 createRoot(document.getElementById("root") as HTMLElement).render(<App />);
 
-function isCreateOrderResponse(value: unknown): value is CreateOrderResponse {
-  return typeof value === "object" && value !== null && "order" in value && "checkout" in value;
+function isPrepareOrderResponse(value: unknown): value is PrepareOrderResponse {
+  return typeof value === "object" && value !== null && "order" in value;
 }
 
 function readErrorMessage(value: unknown): string | undefined {

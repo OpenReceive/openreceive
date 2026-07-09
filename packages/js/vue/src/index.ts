@@ -160,7 +160,7 @@ export function createOpenReceiveVueThemeToggleBinding(
 }
 
 export function createOpenReceiveVueCheckoutShellBinding(
-  snapshot: CheckoutSnapshot,
+  snapshot: CheckoutSnapshot | null,
   options: CheckoutShellOptions = {}
 ): OpenReceiveVueCheckoutShellBinding {
   const shell = createCheckoutShellModel(snapshot, options);

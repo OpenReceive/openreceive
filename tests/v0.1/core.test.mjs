@@ -1940,6 +1940,7 @@ test("browser owns checkout data attribute contract", () => {
 test("browser owns custom-element attribute contracts", () => {
   assert.deepEqual(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES, {
     orderId: "order-id",
+    prefix: "prefix",
     invoiceId: "invoice-id",
     invoice: "invoice",
     rail: "rail",

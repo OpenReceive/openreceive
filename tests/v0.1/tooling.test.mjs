@@ -119,42 +119,45 @@ function runDemoDeployValidator() {
   });
 }
 
-test("workspace metadata does not reference removed express or next packages", () => {
-  assert.equal(existsSync(path.join(process.cwd(), "packages/js/express")), false);
-  assert.equal(existsSync(path.join(process.cwd(), "packages/js/next")), false);
-
-  for (const relativePath of [
-    "package.json",
-    "package-lock.json",
-    "packages/js/node/package.json",
-    "examples/hello-fruit/server/node-express/package.json",
-    "examples/hello-fruit/server/static-html-small-api/package.json",
-    "examples/hello-fruit/server/nextjs-fullstack/package.json",
-    "docs/internal/release-process.md",
-    "docs/internal/scope-lock.md",
-  ]) {
-    const text = readFileSync(path.join(process.cwd(), relativePath), "utf8");
-    assert.doesNotMatch(
-      text,
-      /@openreceive\/express|packages\/js\/express|@openreceive\/next|packages\/js\/next/,
-      relativePath,
-    );
+test("shipped route adapters exist and wrap @openreceive/http", () => {
+  // The route-shipping re-architecture (re)introduces framework adapters over the shared
+  // @openreceive/http handler. Each must exist, expose a root export, and depend on the handler.
+  for (const name of ["http", "express", "fastify", "next"]) {
+    const dir = path.join(process.cwd(), "packages/js", name);
+    assert.equal(existsSync(dir), true, `packages/js/${name} must exist`);
+    const manifest = JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8"));
+    assert.equal(manifest.name, `@openreceive/${name}`, `${name}: package name`);
+    assert.ok(manifest.exports?.["."], `${name}: must expose a root export`);
+    if (name !== "http") {
+      assert.equal(
+        manifest.dependencies?.["@openreceive/http"],
+        "0.1.1",
+        `${name}: adapter must depend on @openreceive/http`,
+      );
+    }
   }
 });
 
-test("Node quickstart shows service methods without framework route scaffolding", () => {
+test("Node quickstart mounts the shipped router and covers swaps without hand-written routes", () => {
   const quickstart = readFileSync(nodeQuickstartDocs, "utf8");
-  assert.match(quickstart, /createCheckoutForCart/);
-  assert.match(quickstart, /orderStatus/);
-  assert.match(quickstart, /orderId:/);
-  assert.match(quickstart, /getOrCreateCheckout/);
-  assert.match(quickstart, /memo:/);
-  assert.match(quickstart, /total_amount/);
+  // The recommended path mounts the router — the developer writes no payment endpoints.
+  assert.match(quickstart, /openReceiveExpress/);
   assert.match(quickstart, /createOpenReceive/);
+  assert.match(quickstart, /resolveAmount/);
   assert.match(quickstart, /from "@openreceive\/node";/);
+  // No hand-written checkout/order/status route handlers or manual action routing.
+  assert.doesNotMatch(quickstart, /app\.post\(\s*["'`]\/(order|create_order)\b/);
+  assert.doesNotMatch(quickstart, /openreceive\.order\(/);
   assert.doesNotMatch(quickstart, /OpenReceiveServiceError/);
-  assert.doesNotMatch(quickstart, /app\.post|Response\.json|Fastify|express/i);
-  assert.doesNotMatch(quickstart, /requestCheckout|checkoutUrl/);
+  // Everything needed to get swaps started: FixedFloat key/secret -> openreceive.yml.
+  assert.match(quickstart, /fixedfloat/);
+  assert.match(quickstart, /ff\.io/);
+  assert.match(quickstart, /base_url/);
+  assert.match(quickstart, /key:/);
+  assert.match(quickstart, /secret:/);
+  // Service methods stay available for hosts that prefer to call them directly.
+  assert.match(quickstart, /getOrCreateCheckout/);
+  assert.match(quickstart, /sweepPendingInvoices/);
 });
 
 test("quickstart and examples do not use OpenReceive HTTP converter helpers", () => {
@@ -176,23 +179,15 @@ test("authorization guide shows app boundary service error handling", () => {
   assert.match(source, /from "@openreceive\/node";/);
 });
 
-test("Node quickstart covers all shipped frontend framework adapters", () => {
+test("Node quickstart shows a checkout component and points to the frontend guide", () => {
   const source = readFileSync(nodeQuickstartDocs, "utf8");
-
-  for (const heading of ["## React", "## Vue", "## Svelte", "## Angular"]) {
-    assert.match(source, new RegExp(heading), `${heading}: quickstart section exists`);
+  // The quickstart stays simple: one React example, the other frameworks via the frontend guide.
+  assert.match(source, /@openreceive\/react/);
+  assert.match(source, /<Checkout/);
+  assert.match(source, /frontend-checkout\.md/);
+  for (const framework of ["Vue", "Svelte", "Angular"]) {
+    assert.match(source, new RegExp(framework), `quickstart mentions ${framework}`);
   }
-  assert.match(source, /@openreceive\/angular\/checkout-component/);
-  assert.match(source, /checkout=\{checkout\}/);
-  assert.match(source, /:checkout="checkout"/);
-  assert.match(source, /\{checkout\}/);
-  assert.match(source, /\[checkout\]="checkout"/);
-  assert.match(source, /orderUrl="\/order"/);
-  assert.match(source, /order-url="\/order"/);
-  assert.doesNotMatch(
-    source.slice(source.indexOf("## Angular"), source.indexOf("## How Settlement Works")),
-    /@openreceive\/vue|createOpenReceiveVue/,
-  );
 });
 
 function runReleaseReadinessValidator() {
@@ -276,7 +271,7 @@ test("demo deployment docs preserve public edge and runner boundaries", () => {
 test("release readiness validator accepts current v0.1 metadata", () => {
   assert.match(
     runReleaseReadinessValidator(),
-    /Release readiness validation passed for 11 package\(s\)\./,
+    /Release readiness validation passed for 15 package\(s\)\./,
   );
 });
 
@@ -340,7 +335,6 @@ test("workflow validator accepts safe public workflow skeletons", () => {
 
 test("supported database docs keep invoice storage boundaries narrow", () => {
   const docs = readFileSync(supportedDatabaseDocs, "utf8");
-  const quickstart = readFileSync(nodeQuickstartDocs, "utf8");
 
   assert.match(docs, /\| `postgres:\/\/\.\.\.` \| Supported for Node \|/);
   assert.match(
@@ -352,8 +346,8 @@ test("supported database docs keep invoice storage boundaries narrow", () => {
   assert.match(docs, /Cloudflare Workers KV/);
   assert.match(docs, /OpenReceive owns its invoice storage/);
   assert.match(docs, /Your app keeps orders, carts, users/);
-  assert.match(quickstart, /default file is `\.\/\.openreceive\/default\.sqlite3`/);
-  assert.match(quickstart, /use Postgres anywhere; use SQLite only on a/);
+  // Storage minutiae (default sqlite path, Postgres-vs-SQLite guidance) live in the storage
+  // doc, not the quickstart, which stays intentionally minimal.
 });
 
 test("storage schema and vectors cover KV coordination fields", () => {

@@ -982,9 +982,30 @@ function validateOpenApi() {
   const paths = openapi.paths || {};
   const createCheckoutRequest = openapi.components?.schemas?.CreateCheckoutRequest;
   const createCheckoutAmount = openapi.components?.schemas?.CreateCheckoutAmount;
+  // The route-shipping re-architecture promotes the OpenAPI file to the executable route
+  // contract both ports implement. These are the PART 3 routes.
+  for (const route of [
+    "/checkouts",
+    "/orders/{order_id}",
+    "/checkouts/{checkout_id}",
+    "/orders/{order_id}/swap-options",
+    "/rates",
+    "/admin/sweep",
+  ]) {
+    assert(paths[route] !== undefined, `OpenAPI must define the shipped route ${route}`);
+  }
   assert(
-    Object.keys(paths).length === 0,
-    "OpenAPI must not define OpenReceive-owned app routes",
+    paths["/checkouts"]?.post !== undefined && paths["/rates"]?.get !== undefined,
+    "OpenAPI checkouts/rates must expose the correct HTTP methods",
+  );
+  assert(
+    openapi.components?.securitySchemes?.orderAccessToken?.scheme === "bearer",
+    "OpenAPI must define the per-order capability-token security scheme",
+  );
+  assert(
+    openapi.components?.schemas?.CreateCheckoutResponse?.properties?.order_access_token !==
+      undefined,
+    "OpenAPI create checkout response must surface order_access_token",
   );
   assert(
     createCheckoutRequest?.properties?.order_id?.maxLength === 200,

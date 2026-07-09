@@ -27,6 +27,22 @@
       "public": true
     },
     {
+      "slug": "routes",
+      "title": "Shipped Routes",
+      "source_path": "docs/guides/routes.md",
+      "category": "guide",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "quickstart-rails",
+      "title": "Rails Quickstart",
+      "source_path": "docs/guides/quickstart-rails.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "checkout-retries",
       "title": "Checkout Retries",
       "source_path": "docs/guides/checkout-retries.md",
