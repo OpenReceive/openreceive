@@ -33,6 +33,20 @@ The v0.1 reference path is contract-first and server-owned:
 - `tools/` holds validation, conformance, package-smoke, docs, and live-wallet
   smoke helpers.
 
+## Design
+
+OpenReceive's design hinges on two things:
+
+- **The Lightning invoice.** BOLT11 has been a standard since 2018 and is widely
+  recognized across wallets, exchanges, and services. It gives you final,
+  fast, interoperable settlement — a single receive primitive that every route
+  (card → onramp → wallet → exchange → swap) can converge on.
+- **Separation of concerns.** OpenReceive securely talks to your receiving
+  wallet over NWC and gives your server definitive proof of settlement. That's
+  it. You are free to code (or vibe code!) your checkout, cart, pricing, and
+  fulfillment logic however you want — OpenReceive does not touch your session,
+  your database, or your business rules.
+
 ## Ship The Routes, Keep Your Auth
 
 Instead of hand-writing controllers, mount OpenReceive's routes and keep 100% of
