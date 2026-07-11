@@ -84,4 +84,8 @@ export {
   FIXED_FLOAT_WEIGHT_WINDOW_SECONDS,
   FIXED_FLOAT_WEIGHT_BACKOFF_SECONDS,
 } from "./weight-budget.ts";
-export type { SwapWeightBudgetStore } from "./weight-budget.ts";
+export type {
+  SwapWeightBudgetDenial,
+  SwapWeightBudgetDenialReason,
+  SwapWeightBudgetStore,
+} from "./weight-budget.ts";

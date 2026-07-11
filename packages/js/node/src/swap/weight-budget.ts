@@ -52,6 +52,21 @@ export interface SwapWeightBudgetStore {
     | { status: "ok" | "conflict"; row: { value: string; rev: number } };
 }
 
+/** Why an outbound provider call was refused by the local weight ledger. */
+export type SwapWeightBudgetDenialReason = "exhausted" | "backoff" | "cas_conflict";
+
+export interface SwapWeightBudgetDenial {
+  readonly provider: string;
+  readonly path: string;
+  readonly reason: SwapWeightBudgetDenialReason;
+  readonly message: string;
+  readonly used: number;
+  readonly cost: number;
+  readonly gate: number;
+  readonly window_start: number;
+  readonly backoff_until?: number;
+}
+
 interface WeightWindow {
   readonly window_start: number;
   readonly used: number;
@@ -63,6 +78,7 @@ export class SwapProviderWeightBudget {
     private readonly store: SwapWeightBudgetStore,
     private readonly providerId: string,
     private readonly now: () => number,
+    private readonly onDenied?: (denial: SwapWeightBudgetDenial) => void,
   ) {}
 
   metaKey(): string {
@@ -96,14 +112,32 @@ export class SwapProviderWeightBudget {
       const current = await this.store.getMeta(this.metaKey());
       const window = parseWeightWindow(current?.value, now);
       if (window.backoff_until !== undefined && window.backoff_until > now) {
-        throw weightBudgetError(
-          `Swap provider API weight budget in backoff until ${window.backoff_until}.`,
-        );
+        const message = `Swap provider API weight budget in backoff until ${window.backoff_until}.`;
+        this.emitDenied({
+          path,
+          reason: "backoff",
+          message,
+          used: window.used,
+          cost,
+          gate,
+          window_start: window.window_start,
+          backoff_until: window.backoff_until,
+        });
+        throw weightBudgetError(message);
       }
       if (window.used + cost > gate) {
-        throw weightBudgetError(
-          `Swap provider API weight budget exhausted (${window.used}+${cost} > ${gate}).`,
-        );
+        const message = `Swap provider API weight budget exhausted (${window.used}+${cost} > ${gate}).`;
+        this.emitDenied({
+          path,
+          reason: "exhausted",
+          message,
+          used: window.used,
+          cost,
+          gate,
+          window_start: window.window_start,
+          ...(window.backoff_until === undefined ? {} : { backoff_until: window.backoff_until }),
+        });
+        throw weightBudgetError(message);
       }
       const next: WeightWindow = {
         window_start: window.window_start,
@@ -117,7 +151,17 @@ export class SwapProviderWeightBudget {
       );
       if (result.status === "ok") return;
     }
-    throw weightBudgetError("Swap provider API weight budget could not be reserved.");
+    const message = "Swap provider API weight budget could not be reserved.";
+    this.emitDenied({
+      path,
+      reason: "cas_conflict",
+      message,
+      used: 0,
+      cost,
+      gate,
+      window_start: this.now(),
+    });
+    throw weightBudgetError(message);
   }
 
   /** Mark the shared window exhausted after the provider returns a rate-limit. */
@@ -137,6 +181,17 @@ export class SwapProviderWeightBudget {
         current === undefined ? null : current.rev,
       );
       if (result.status === "ok") return;
+    }
+  }
+
+  private emitDenied(
+    denial: Omit<SwapWeightBudgetDenial, "provider">,
+  ): void {
+    if (this.onDenied === undefined) return;
+    try {
+      this.onDenied({ provider: this.providerId, ...denial });
+    } catch {
+      // Diagnostics must never change payment or provider-call behavior.
     }
   }
 }

@@ -15,7 +15,11 @@ import {
   readOpenReceiveNamespace,
 } from "./service/core-utils.ts";
 import { attachOpenReceiveFileLogging } from "./service/file-logger.ts";
-import { emitLog } from "./service/logging.ts";
+import {
+  emitLog,
+  summarizeSwapProviderApiRequest,
+  summarizeSwapProviderApiResponse,
+} from "./service/logging.ts";
 import { toSwapAttempt } from "./service/models.ts";
 import {
   createOpenReceivePriceFeed,
@@ -140,24 +144,50 @@ export async function createOpenReceive(
       // Shared durable weight ledger so multi-dyno deploys cannot each burn a
       // provider's 250/min budget independently. Per-provider keys enable failover
       // to the next entry in swap.providers when the preferred one is limited.
-      provider.attachWeightBudget?.(new SwapProviderWeightBudget(store, provider.name, clock));
-      provider.attachApiRequestLogger?.((entry) =>
-        emitLog(nodeOptions, "info", "swap.provider.request", "Swap provider API request.", {
-          provider: entry.provider,
-          path: entry.path,
-          body: entry.body,
+      // Local soft-cap / backoff denials never hit the wire, so log them here —
+      // otherwise operators only see successful /order traffic and a client 429.
+      provider.attachWeightBudget?.(
+        new SwapProviderWeightBudget(store, provider.name, clock, (denial) => {
+          emitLog(
+            nodeOptions,
+            "warn",
+            "swap.provider.rate_budget_exhausted",
+            denial.reason === "backoff"
+              ? "Swap provider API weight budget in backoff; skipping outbound call."
+              : "Swap provider API rate budget exhausted; skipping outbound call.",
+            {
+              provider: denial.provider,
+              path: denial.path,
+              reason: denial.reason,
+              used: denial.used,
+              cost: denial.cost,
+              gate: denial.gate,
+              window_start: denial.window_start,
+              ...(denial.backoff_until === undefined
+                ? {}
+                : { backoff_until: denial.backoff_until }),
+              detail: denial.message,
+            },
+          );
         }),
       );
+      provider.attachApiRequestLogger?.((entry) =>
+        emitLog(
+          nodeOptions,
+          "info",
+          "swap.provider.request",
+          "Swap provider API request.",
+          summarizeSwapProviderApiRequest(entry),
+        ),
+      );
       provider.attachApiResponseLogger?.((entry) =>
-        emitLog(nodeOptions, "info", "swap.provider.response", "Swap provider API response.", {
-          provider: entry.provider,
-          path: entry.path,
-          status: entry.status,
-          ok: entry.ok,
-          code: entry.code,
-          msg: entry.msg,
-          data: entry.data,
-        }),
+        emitLog(
+          nodeOptions,
+          "info",
+          "swap.provider.response",
+          "Swap provider API response.",
+          summarizeSwapProviderApiResponse(entry),
+        ),
       );
     }
   }

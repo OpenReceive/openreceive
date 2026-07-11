@@ -529,6 +529,21 @@ export async function startSwap(
       );
     }
     if (isSwapProviderWeightBudgetError(error)) {
+      emitLog(
+        context.options,
+        "warn",
+        "swap.create.rate_budget_exhausted",
+        "Swap provider API rate budget exhausted. Retry shortly.",
+        {
+          ...swapAttemptAuditFields(failed.row),
+          order_id: orderId,
+          checkout_id: checkout.checkoutId,
+          provider: provider.name,
+          pay_in_asset: payInAsset,
+          path: "create",
+          error_message: error instanceof Error ? error.message : String(error),
+        },
+      );
       throw serviceError(
         429,
         "RATE_LIMITED",

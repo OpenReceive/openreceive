@@ -1946,7 +1946,10 @@ test("FixedFloat weight budget refuses creates once the soft create gate is hit"
   } = await import("../../packages/js/node/src/swap/weight-budget.ts");
   const store = new InMemoryInvoiceKvStore();
   let now = 1_000;
-  const budget = new SwapProviderWeightBudget(store, "fixedfloat", () => now);
+  const denials = [];
+  const budget = new SwapProviderWeightBudget(store, "fixedfloat", () => now, (denial) => {
+    denials.push(denial);
+  });
 
   // Fill up to the create gate with create reservations.
   let reserved = 0;
@@ -1955,8 +1958,68 @@ test("FixedFloat weight budget refuses creates once the soft create gate is hit"
     reserved += SWAP_PROVIDER_CREATE_WEIGHT;
   }
   await assert.rejects(() => budget.reserve("create"), /weight budget/);
+  assert.equal(denials.length, 1);
+  assert.equal(denials[0]?.reason, "exhausted");
+  assert.equal(denials[0]?.path, "create");
+  assert.equal(denials[0]?.provider, "fixedfloat");
   // Status calls still have headroom under the overall soft cap.
   await budget.reserve("order");
+});
+
+test("swap provider API logs summarize FixedFloat envelopes without dumping bolt11", async () => {
+  const {
+    summarizeSwapProviderApiRequest,
+    summarizeSwapProviderApiResponse,
+  } = await import("../../packages/js/node/src/service/logging.ts");
+
+  assert.deepEqual(
+    summarizeSwapProviderApiRequest({
+      provider: "fixedfloat",
+      path: "order",
+      body: { id: "P7XPEE", token: "secret-token" },
+    }),
+    { provider: "fixedfloat", path: "order", order_id: "P7XPEE" },
+  );
+
+  const summarized = summarizeSwapProviderApiResponse({
+    provider: "fixedfloat",
+    path: "order",
+    status: 200,
+    ok: true,
+    code: 0,
+    msg: "OK",
+    data: {
+      id: "P7XPEE",
+      status: "NEW",
+      time: { left: 348 },
+      from: {
+        code: "USDCSOL",
+        amount: "12.24550000",
+        address: "DNAW8HbXc9kjgVpg69usiAJLfMK1ZVGFusTCEHmGzcNL",
+      },
+      to: {
+        code: "BTCLN",
+        amount: "0.00018711",
+        address: "lnbc187110n1p49y04cpp5kcvasyqqrgxsvejm4rv98t90hwufhvmvek764xgvhhuly2wq5raq",
+      },
+      emergency: { status: [], choice: "NONE", repeat: "0" },
+      token: "secret-token",
+    },
+  });
+  assert.deepEqual(summarized, {
+    provider: "fixedfloat",
+    path: "order",
+    status: 200,
+    ok: true,
+    code: 0,
+    order_id: "P7XPEE",
+    order_status: "NEW",
+    from: "USDCSOL 12.24550000",
+    to: "BTCLN 0.00018711",
+    left: 348,
+  });
+  assert.equal(JSON.stringify(summarized).includes("lnbc"), false);
+  assert.equal(JSON.stringify(summarized).includes("secret-token"), false);
 });
 
 test("startSwap fails over to the next provider when the first is rate-limited", async () => {
