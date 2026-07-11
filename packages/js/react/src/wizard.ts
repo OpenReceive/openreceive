@@ -13,6 +13,17 @@ import {
   getOpenReceiveSwapOptionIcon,
   getOpenReceiveWizardEmptyMessage,
   buildOpenReceiveMethodGridEntries,
+  formatOpenReceiveChooseNetworkHeading,
+  formatOpenReceiveNetworkSummary,
+  openReceiveAssetButtonClasses,
+  openReceiveNetworkButtonClasses,
+  openReceiveNetworkCheckClasses,
+  openReceiveNetworkMobileRevealClasses,
+  openReceiveNetworkSummaryIconClasses,
+  openReceivePaymentAccentId,
+  openReceiveSwapPickerKey,
+  parseOpenReceiveSwapPickerKey,
+  resolveOpenReceivePreservedNetworkSelection,
   normalizeSwapStartInvoice,
   openReceiveCheckoutLabels,
   openReceivePaymentMethods,
@@ -72,7 +83,15 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
   const [selectedSwapNetworks, setSelectedSwapNetworks] = React.useState<Record<string, string>>(
     {},
   );
+  // Compact selector: which asset tile is currently selected (method:… or swap:…).
+  const [selectedPickerKey, setSelectedPickerKey] = React.useState<string | null>(null);
   const autoSwapAttemptedRef = React.useRef<Set<string>>(new Set());
+  // Leave the focused swap flow and restore the default method grid (nothing selected).
+  const clearSwapFocus = React.useCallback(() => {
+    setSelectedSwapAsset(null);
+    setSelectedPickerKey(null);
+    setSelectedSwapNetworks({});
+  }, []);
   // Tell the host (default Checkout) whether the payer is in the focused swap flow, so it
   // can hide the Lightning payment section while the swap deposit panel stands in for it.
   const onSwapFocusChange = props.onSwapFocusChange;
@@ -287,35 +306,39 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
       {
         className: joinClassNames(orClasses.wizard, props.className),
       },
-      renderWizardBackBreadcrumb(
-        selectedSwapOption === undefined
-          ? selectedSwapLabel
-          : `${selectedSwapOption.label} · ${selectedSwapOption.network_label}`,
-        () => setSelectedSwapAsset(null),
-      ),
       React.createElement(
         "div",
-        {
-          className: orClasses.wizardResults,
-        },
-        activeSwapForAsset !== undefined
-          ? renderSwapDepositPanel({
-              invoice: activeSwapForAsset,
-              checkout,
-              now,
-              encoder: props.qrEncoder,
-              clipboard: props.clipboard,
-              logger: props.logger,
-              onError: props.onError,
-              onRefund: refundSwap,
-              onBackToLightning: () => {
-                setDismissedSwapInvoiceId(activeSwapForAsset.invoice_id);
-                setSelectedSwapAsset(null);
-              },
-            })
-          : selectedSwapQuote !== undefined && !selectedSwapQuote.available
-            ? renderSwapUnavailable(selectedSwapQuote, checkout)
-            : renderSwapPreparing(selectedSwapLabel),
+        { className: orClasses.wizardBody },
+        renderWizardBackBreadcrumb(
+          selectedSwapOption === undefined
+            ? selectedSwapLabel
+            : `${selectedSwapOption.label} · ${selectedSwapOption.network_label}`,
+          clearSwapFocus,
+        ),
+        React.createElement(
+          "div",
+          {
+            className: orClasses.wizardResults,
+          },
+          activeSwapForAsset !== undefined
+            ? renderSwapDepositPanel({
+                invoice: activeSwapForAsset,
+                checkout,
+                now,
+                encoder: props.qrEncoder,
+                clipboard: props.clipboard,
+                logger: props.logger,
+                onError: props.onError,
+                onRefund: refundSwap,
+                onBackToLightning: () => {
+                  setDismissedSwapInvoiceId(activeSwapForAsset.invoice_id);
+                  clearSwapFocus();
+                },
+              })
+            : selectedSwapQuote !== undefined && !selectedSwapQuote.available
+              ? renderSwapUnavailable(selectedSwapQuote, checkout)
+              : renderSwapPreparing(selectedSwapLabel),
+        ),
       ),
     );
   }
@@ -326,261 +349,67 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
       className: joinClassNames(orClasses.wizard, props.className),
     },
     selection.selectedMethod === null
-      ? React.createElement(
-          React.Fragment,
-          null,
-          React.createElement(
-            "div",
-            {
-              className: orClasses.wizardHeader,
-            },
-            React.createElement(
-              "div",
-              null,
-              React.createElement(
-                "h2",
-                { className: orClasses.wizardHeaderTitle },
-                openReceiveCheckoutLabels.wizardTitle,
-              ),
-              React.createElement(
-                "p",
-                { className: orClasses.wizardHeaderSubtitle },
-                openReceiveCheckoutLabels.wizardSubtitle,
-              ),
-            ),
-          ),
-          React.createElement(
-            "div",
-            {
-              className: orClasses.methodGrid,
-            },
-            buildOpenReceiveMethodGridEntries(openReceivePaymentMethods, swapAssetOptions).map(
-              (entry) => {
-                if (entry.kind === "method") {
-                  const method = entry.method;
-                  return React.createElement(
-                    "button",
-                    {
-                      key: method.id,
-                      className: orClasses.methodCard,
-                      onClick: () => {
-                        updateWizardSelection((controller) => controller.selectMethod(method.id));
-                      },
-                      type: "button",
-                    },
-                    React.createElement("img", {
-                      alt: "",
-                      className: orClasses.methodIcon,
-                      src: getOpenReceivePaymentMethodIcon(method.id),
-                    }),
-                    React.createElement("span", { className: orClasses.methodTitle }, method.title),
-                    React.createElement("small", { className: orClasses.methodDetail }, method.detail),
-                  );
-                }
-                const group = entry.group;
-                const groupKey = group.label.trim().toUpperCase();
-                const displayOption =
-                  group.options.find((option) => option.available !== false) ?? group.options[0];
-                if (displayOption === undefined) return null;
-                const multiNetwork = group.options.length > 1;
-                const selectedAsset = selectedSwapNetworks[groupKey];
-                const selectedOption =
-                  selectedAsset === undefined
-                    ? undefined
-                    : group.options.find((option) => option.pay_in_asset === selectedAsset);
-                const activeOption = selectedOption ?? displayOption;
-                const networkSelected = selectedOption !== undefined;
-                const disabled = activeOption.available === false;
-                const continueDisabled = multiNetwork ? !networkSelected || disabled : disabled;
-                const limitMessage = swapOptionLimitMessage(activeOption, checkout);
-                const startSelected = () => {
-                  if (continueDisabled || selectedOption === undefined) {
-                    if (!multiNetwork && !disabled) {
-                      autoSwapAttemptedRef.current.delete(displayOption.pay_in_asset);
-                      setSelectedSwapAsset(displayOption.pay_in_asset);
-                    }
-                    return;
-                  }
-                  autoSwapAttemptedRef.current.delete(selectedOption.pay_in_asset);
-                  setSelectedSwapAsset(selectedOption.pay_in_asset);
-                };
-                if (!multiNetwork) {
-                  return React.createElement(
-                    "button",
-                    {
-                      key: groupKey,
-                      className: disabled
-                        ? orClasses.methodCardUnavailable
-                        : orClasses.methodCardReady,
-                      disabled,
-                      "aria-disabled": disabled ? "true" : undefined,
-                      onClick: disabled
-                        ? undefined
-                        : () => {
-                            autoSwapAttemptedRef.current.delete(displayOption.pay_in_asset);
-                            setSelectedSwapAsset(displayOption.pay_in_asset);
-                          },
-                      type: "button",
-                    },
-                    React.createElement("img", {
-                      alt: "",
-                      className: orClasses.methodIcon,
-                      src: getOpenReceiveSwapOptionIcon(displayOption),
-                    }),
-                    React.createElement("span", { className: orClasses.methodTitle }, group.label),
-                    React.createElement(
-                      "small",
-                      { className: orClasses.methodDetail },
-                      disabled && limitMessage !== undefined
-                        ? limitMessage
-                        : displayOption.network_label,
-                    ),
-                  );
-                }
-                return React.createElement(
-                  "div",
-                  {
-                    key: groupKey,
-                    className: orClasses.methodCardReady,
-                  },
-                  React.createElement("img", {
-                    alt: "",
-                    className: orClasses.methodIcon,
-                    src: getOpenReceiveSwapOptionIcon(displayOption),
-                  }),
-                  React.createElement("span", { className: orClasses.methodTitle }, group.label),
-                  React.createElement(
-                    "div",
-                    { className: orClasses.methodNetworkField },
-                    React.createElement(
-                      "span",
-                      { className: orClasses.methodNetworkLabel },
-                      openReceiveCheckoutLabels.chooseNetwork,
-                    ),
-                    React.createElement(
-                      "details",
-                      { className: orClasses.methodNetwork },
-                      React.createElement(
-                        "summary",
-                        {
-                          "aria-label": openReceiveCheckoutLabels.chooseNetwork,
-                          className: orClasses.methodNetworkTrigger,
-                        },
-                        React.createElement(
-                          "span",
-                          {
-                            className: networkSelected
-                              ? orClasses.methodNetworkTriggerLabel
-                              : `${orClasses.methodNetworkTriggerLabel} ${orClasses.methodNetworkPlaceholder}`,
-                          },
-                          networkSelected
-                            ? React.createElement("img", {
-                                alt: "",
-                                className: orClasses.methodNetworkIcon,
-                                src: getOpenReceiveNetworkIcon(selectedOption.network_label),
-                              })
-                            : null,
-                          networkSelected
-                            ? selectedOption.network_label
-                            : openReceiveCheckoutLabels.selectNetwork,
-                        ),
-                      ),
-                      React.createElement(
-                        "ul",
-                        { className: orClasses.methodNetworkMenu, role: "listbox" },
-                        group.options.map((option) => {
-                          const optionLimit = swapOptionLimitMessage(option, checkout);
-                          const optionDisabled = option.available === false;
-                          const optionLabel =
-                            optionDisabled && optionLimit !== undefined
-                              ? `${option.network_label} · ${optionLimit}`
-                              : option.network_label;
-                          return React.createElement(
-                            "li",
-                            {
-                              key: option.pay_in_asset,
-                              className: optionDisabled ? "menu-disabled" : undefined,
-                            },
-                            React.createElement(
-                              "button",
-                              {
-                                "aria-selected":
-                                  option.pay_in_asset === selectedOption?.pay_in_asset
-                                    ? "true"
-                                    : "false",
-                                className: orClasses.methodNetworkOption,
-                                disabled: optionDisabled,
-                                role: "option",
-                                type: "button",
-                                onClick: (event: React.MouseEvent<HTMLButtonElement>) => {
-                                  if (optionDisabled) return;
-                                  const details = event.currentTarget.closest("details");
-                                  if (details instanceof HTMLDetailsElement) details.open = false;
-                                  setSelectedSwapNetworks((current) => ({
-                                    ...current,
-                                    [groupKey]: option.pay_in_asset,
-                                  }));
-                                },
-                              },
-                              React.createElement("img", {
-                                alt: "",
-                                className: orClasses.methodNetworkIcon,
-                                src: getOpenReceiveNetworkIcon(option.network_label),
-                              }),
-                              optionLabel,
-                            ),
-                          );
-                        }),
-                      ),
-                    ),
-                  ),
-                  React.createElement(
-                    "button",
-                    {
-                      className: orClasses.methodConfirm,
-                      disabled: continueDisabled,
-                      "aria-disabled": continueDisabled ? "true" : undefined,
-                      onClick: continueDisabled ? undefined : startSelected,
-                      type: "button",
-                    },
-                    networkSelected && disabled && limitMessage !== undefined
-                      ? limitMessage
-                      : "Continue",
-                  ),
-                );
-              },
-            ),
-          ),
-        )
-      : null,
-    selection.selectedMethod === null
-      ? null
-      : renderWizardBreadcrumbs({
-          method: selection.selectedMethod,
-          selectedRoute: model.selectedRoute,
-          routeAssets: routeAssetDisplays,
-          onChangeMethod: () => {
-            updateWizardSelection((controller) => controller.changeMethod());
+      ? renderCompactPaymentMethodSelector({
+          swapAssetOptions,
+          checkout: checkout ?? undefined,
+          selectedPickerKey,
+          selectedSwapNetworks,
+          onSelectPicker: (key, previousKey) => {
+            setSelectedPickerKey(key);
+            const nextSwap = parseOpenReceiveSwapPickerKey(key);
+            if (nextSwap === null) return;
+            const entries = buildOpenReceiveMethodGridEntries(
+              openReceivePaymentMethods,
+              swapAssetOptions,
+            );
+            const nextEntry = entries.find(
+              (entry) =>
+                entry.kind === "swap" &&
+                entry.group.label.trim().toUpperCase() === nextSwap.label,
+            );
+            if (nextEntry === undefined || nextEntry.kind !== "swap") return;
+            if (nextEntry.group.options.length <= 1) return;
+            const previousGroup =
+              previousKey === null
+                ? undefined
+                : (() => {
+                    const previousSwap = parseOpenReceiveSwapPickerKey(previousKey);
+                    if (previousSwap === null) return undefined;
+                    const previousEntry = entries.find(
+                      (entry) =>
+                        entry.kind === "swap" &&
+                        entry.group.label.trim().toUpperCase() === previousSwap.label,
+                    );
+                    return previousEntry?.kind === "swap" ? previousEntry.group : undefined;
+                  })();
+            const preserved = resolveOpenReceivePreservedNetworkSelection({
+              previousGroup,
+              nextGroup: nextEntry.group,
+              selectedNetworks: selectedSwapNetworks,
+            });
+            setSelectedSwapNetworks((current) => {
+              const groupKey = nextEntry.group.label.trim().toUpperCase();
+              if (preserved === undefined) {
+                const { [groupKey]: _removed, ...rest } = current;
+                return rest;
+              }
+              return { ...current, [groupKey]: preserved };
+            });
           },
-          onChangeRoute: () => {
-            updateWizardSelection((controller) => controller.update({ type: "change_route" }));
+          onSelectNetwork: (groupKey, payInAsset) => {
+            setSelectedSwapNetworks((current) => ({
+              ...current,
+              [groupKey]: payInAsset,
+            }));
           },
-        }),
-    showRoutePicker && selection.selectedMethod === "bitcoin"
-      ? renderRoutePicker({
-          assets: routeAssetDisplays,
-          method: "bitcoin",
-          onSelectRoute: (route) => {
-            updateWizardSelection((controller) => controller.selectRoute(route));
+          onContinueMethod: (methodId) => {
+            updateWizardSelection((controller) =>
+              controller.selectMethod(methodId as OpenReceivePaymentMethod),
+            );
           },
-        })
-      : null,
-    showRoutePicker && selection.selectedMethod === "crypto"
-      ? renderRoutePicker({
-          assets: routeAssetDisplays,
-          method: "crypto",
-          onSelectRoute: (route) => {
-            updateWizardSelection((controller) => controller.selectRoute(route));
+          onContinueSwap: (payInAsset) => {
+            autoSwapAttemptedRef.current.delete(payInAsset);
+            setSelectedSwapAsset(payInAsset);
           },
         })
       : null,
@@ -588,141 +417,177 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
       ? null
       : React.createElement(
           "div",
-          {
-            className: orClasses.wizardResults,
-          },
-          routeDisplays.length === 0
-            ? React.createElement(
-                "p",
-                {
-                  className: orClasses.wizardEmpty,
+          { className: orClasses.wizardBody },
+          renderWizardBreadcrumbs({
+            method: selection.selectedMethod,
+            selectedRoute: model.selectedRoute,
+            routeAssets: routeAssetDisplays,
+            onChangeMethod: () => {
+              updateWizardSelection((controller) => controller.changeMethod());
+            },
+            onChangeRoute: () => {
+              updateWizardSelection((controller) => controller.update({ type: "change_route" }));
+            },
+          }),
+          showRoutePicker && selection.selectedMethod === "bitcoin"
+            ? renderRoutePicker({
+                assets: routeAssetDisplays,
+                method: "bitcoin",
+                onSelectRoute: (route) => {
+                  updateWizardSelection((controller) => controller.selectRoute(route));
                 },
-                getOpenReceiveWizardEmptyMessage(selection.selectedMethod),
-              )
-            : routeDisplays.map((route) => {
-                const routeSwapOptions = swapOptionsForRoute(route.key, swapOptions.options);
-                const activeSwapForRoute =
-                  currentSwapInvoice !== undefined &&
-                  openReceiveSwapAssetMatchesRoute(route.key, currentSwapInvoice.swap?.pay_in_asset)
-                    ? currentSwapInvoice
-                    : undefined;
-                return React.createElement(
-                  "section",
+              })
+            : null,
+          showRoutePicker && selection.selectedMethod === "crypto"
+            ? renderRoutePicker({
+                assets: routeAssetDisplays,
+                method: "crypto",
+                onSelectRoute: (route) => {
+                  updateWizardSelection((controller) => controller.selectRoute(route));
+                },
+              })
+            : null,
+          React.createElement(
+            "div",
+            {
+              className: orClasses.wizardResults,
+            },
+            routeDisplays.length === 0
+              ? React.createElement(
+                  "p",
                   {
-                    className: orClasses.wizardRoute,
-                    key: route.key,
+                    className: orClasses.wizardEmpty,
                   },
-                  React.createElement(
-                    "div",
+                  getOpenReceiveWizardEmptyMessage(selection.selectedMethod),
+                )
+              : routeDisplays.map((route) => {
+                  const routeSwapOptions = swapOptionsForRoute(route.key, swapOptions.options);
+                  const activeSwapForRoute =
+                    currentSwapInvoice !== undefined &&
+                    openReceiveSwapAssetMatchesRoute(
+                      route.key,
+                      currentSwapInvoice.swap?.pay_in_asset,
+                    )
+                      ? currentSwapInvoice
+                      : undefined;
+                  return React.createElement(
+                    "section",
                     {
-                      className: orClasses.wizardRouteHeading,
+                      className: orClasses.wizardRoute,
+                      key: route.key,
                     },
                     React.createElement(
                       "div",
-                      null,
+                      {
+                        className: orClasses.wizardRouteHeading,
+                      },
                       React.createElement(
-                        "h3",
+                        "div",
                         null,
-                        route.title,
-                        wizard.selectedRail === null
-                          ? null
-                          : renderCountrySelect({
-                              countries: model.countryDisplays,
-                              selectedCountryCode: selection.selectedCountryCode,
-                              onSelectCountry: (countryCode) => {
-                                updateWizardSelection((controller) =>
-                                  controller.selectCountry(countryCode),
-                                );
-                              },
-                            }),
+                        React.createElement(
+                          "h3",
+                          null,
+                          route.title,
+                          wizard.selectedRail === null
+                            ? null
+                            : renderCountrySelect({
+                                countries: model.countryDisplays,
+                                selectedCountryCode: selection.selectedCountryCode,
+                                onSelectCountry: (countryCode) => {
+                                  updateWizardSelection((controller) =>
+                                    controller.selectCountry(countryCode),
+                                  );
+                                },
+                              }),
+                        ),
                       ),
                     ),
-                  ),
-                  activeSwapForRoute === undefined
-                    ? renderSwapActions({
-                        options: routeSwapOptions,
-                        enabled: swapOptions.enabled,
-                        startingAsset: swapStartingAsset,
-                        onStart: startSwap,
-                        checkout,
-                      })
-                    : renderSwapDepositPanel({
-                        invoice: activeSwapForRoute,
-                        checkout,
-                        now,
-                        encoder: props.qrEncoder,
-                        clipboard: props.clipboard,
-                        logger: props.logger,
-                        onError: props.onError,
-                        onRefund: refundSwap,
-                        onBackToLightning: () => {
-                          setDismissedSwapInvoiceId(activeSwapForRoute.invoice_id);
-                        },
-                      }),
-                  activeSwapForRoute === undefined
-                    ? React.createElement(
-                        "div",
-                        {
-                          className: orClasses.providerGrid,
-                        },
-                        route.providers.map((provider) =>
-                          React.createElement(
-                            "article",
-                            {
-                              className: provider.recommended
-                                ? orClasses.providerCardRecommended
-                                : orClasses.providerCard,
-                              key: provider.id,
-                            },
+                    activeSwapForRoute === undefined
+                      ? renderSwapActions({
+                          options: routeSwapOptions,
+                          enabled: swapOptions.enabled,
+                          startingAsset: swapStartingAsset,
+                          onStart: startSwap,
+                          checkout,
+                        })
+                      : renderSwapDepositPanel({
+                          invoice: activeSwapForRoute,
+                          checkout,
+                          now,
+                          encoder: props.qrEncoder,
+                          clipboard: props.clipboard,
+                          logger: props.logger,
+                          onError: props.onError,
+                          onRefund: refundSwap,
+                          onBackToLightning: () => {
+                            setDismissedSwapInvoiceId(activeSwapForRoute.invoice_id);
+                          },
+                        }),
+                    activeSwapForRoute === undefined
+                      ? React.createElement(
+                          "div",
+                          {
+                            className: orClasses.providerGrid,
+                          },
+                          route.providers.map((provider) =>
                             React.createElement(
-                              "div",
+                              "article",
                               {
-                                className: orClasses.providerHeading,
+                                className: provider.recommended
+                                  ? orClasses.providerCardRecommended
+                                  : orClasses.providerCard,
+                                key: provider.id,
                               },
-                              React.createElement("img", {
-                                alt: "",
-                                className: orClasses.providerIcon,
-                                src: provider.icon,
-                              }),
                               React.createElement(
-                                "h4",
-                                { className: orClasses.providerName },
-                                provider.name,
-                              ),
-                              provider.recommendedLabel === null
-                                ? null
-                                : React.createElement(
-                                    "span",
-                                    { className: orClasses.providerBadge },
-                                    provider.recommendedLabel,
-                                  ),
-                            ),
-                            React.createElement(
-                              "p",
-                              {
-                                className: orClasses.providerKind,
-                              },
-                              provider.kind,
-                            ),
-                            React.createElement(
-                              "div",
-                              {
-                                className: orClasses.providerActions,
-                              },
-                              renderProviderOpenAction(provider, () =>
-                                setActiveTutorial({
-                                  providerId: provider.id,
-                                  index: 0,
-                                  copied: false,
+                                "div",
+                                {
+                                  className: orClasses.providerHeading,
+                                },
+                                React.createElement("img", {
+                                  alt: "",
+                                  className: orClasses.providerIcon,
+                                  src: provider.icon,
                                 }),
+                                React.createElement(
+                                  "h4",
+                                  { className: orClasses.providerName },
+                                  provider.name,
+                                ),
+                                provider.recommendedLabel === null
+                                  ? null
+                                  : React.createElement(
+                                      "span",
+                                      { className: orClasses.providerBadge },
+                                      provider.recommendedLabel,
+                                    ),
+                              ),
+                              React.createElement(
+                                "p",
+                                {
+                                  className: orClasses.providerKind,
+                                },
+                                provider.kind,
+                              ),
+                              React.createElement(
+                                "div",
+                                {
+                                  className: orClasses.providerActions,
+                                },
+                                renderProviderOpenAction(provider, () =>
+                                  setActiveTutorial({
+                                    providerId: provider.id,
+                                    index: 0,
+                                    copied: false,
+                                  }),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      )
-                    : null,
-                );
-              }),
+                        )
+                      : null,
+                  );
+                }),
+          ),
         ),
     activeTutorialProvider === undefined || activeTutorial === null
       ? null
@@ -757,6 +622,369 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
               copied: activeTutorial.copied,
             }),
         }),
+  );
+}
+
+function renderCompactPaymentMethodSelector(options: {
+  readonly swapAssetOptions: readonly OpenReceiveSwapOptionDisplay[];
+  readonly checkout: CheckoutSnapshot | undefined;
+  readonly selectedPickerKey: string | null;
+  readonly selectedSwapNetworks: Readonly<Record<string, string>>;
+  readonly onSelectPicker: (key: string, previousKey: string | null) => void;
+  readonly onSelectNetwork: (groupKey: string, payInAsset: string) => void;
+  readonly onContinueMethod: (methodId: string) => void;
+  readonly onContinueSwap: (payInAsset: string) => void;
+}): React.ReactElement {
+  const entries = buildOpenReceiveMethodGridEntries(
+    openReceivePaymentMethods,
+    options.swapAssetOptions,
+  );
+  const selectedKey = options.selectedPickerKey;
+  const selectedSwap = selectedKey === null ? null : parseOpenReceiveSwapPickerKey(selectedKey);
+  const selectedSwapEntry =
+    selectedSwap === null
+      ? undefined
+      : entries.find(
+          (entry) =>
+            entry.kind === "swap" &&
+            entry.group.label.trim().toUpperCase() === selectedSwap.label,
+        );
+  const selectedGroup =
+    selectedSwapEntry?.kind === "swap" ? selectedSwapEntry.group : undefined;
+  const networkRequired =
+    selectedGroup !== undefined && selectedGroup.options.length > 1;
+  const selectedGroupKey = selectedGroup?.label.trim().toUpperCase();
+  const selectedNetworkAsset =
+    selectedGroupKey === undefined
+      ? undefined
+      : options.selectedSwapNetworks[selectedGroupKey];
+  const selectedNetworkOption =
+    selectedGroup === undefined || selectedNetworkAsset === undefined
+      ? undefined
+      : selectedGroup.options.find((option) => option.pay_in_asset === selectedNetworkAsset);
+  const continueTarget =
+    selectedNetworkOption !== undefined
+      ? {
+          payInAsset: selectedNetworkOption.pay_in_asset,
+          disabled: selectedNetworkOption.available === false,
+          limitMessage: swapOptionLimitMessage(selectedNetworkOption, options.checkout),
+        }
+      : null;
+  const canContinue =
+    continueTarget !== null &&
+    !continueTarget.disabled &&
+    selectedNetworkOption !== undefined;
+
+  const continueButton = (className: string) =>
+    React.createElement(
+      "button",
+      {
+        type: "button",
+        className,
+        disabled: !canContinue,
+        "aria-disabled": canContinue ? undefined : "true",
+        onClick: !canContinue
+          ? undefined
+          : () => {
+              if (continueTarget === null) return;
+              options.onContinueSwap(continueTarget.payInAsset);
+            },
+      },
+      continueTarget !== null &&
+        continueTarget.disabled &&
+        continueTarget.limitMessage !== undefined
+        ? continueTarget.limitMessage
+        : openReceiveCheckoutLabels.continue,
+    );
+
+  const renderNetworkSelector = (group: (typeof selectedGroup & object), mobile: boolean) => {
+    const accent = openReceivePaymentAccentId(group.label);
+    const groupKey = group.label.trim().toUpperCase();
+    const selectedAsset = options.selectedSwapNetworks[groupKey];
+    const selectedOption =
+      selectedAsset === undefined
+        ? undefined
+        : group.options.find((option) => option.pay_in_asset === selectedAsset);
+    const panelId = `network-panel-${groupKey.toLowerCase()}`;
+    return React.createElement(
+      "div",
+      {
+        id: panelId,
+        role: "group",
+        "aria-labelledby": `network-heading-${groupKey.toLowerCase()}`,
+        className: mobile
+          ? openReceiveNetworkMobileRevealClasses(accent)
+          : orClasses.methodNetworkReveal,
+      },
+      React.createElement(
+        "div",
+        { className: orClasses.methodNetworkLayout },
+        React.createElement(
+          "div",
+          null,
+          React.createElement(
+            "h3",
+            {
+              id: `network-heading-${groupKey.toLowerCase()}`,
+              className: orClasses.methodNetworkHeading,
+            },
+            formatOpenReceiveChooseNetworkHeading(group.label),
+          ),
+          React.createElement(
+            "p",
+            { className: orClasses.methodNetworkHint },
+            openReceiveCheckoutLabels.selectNetworkToContinue,
+          ),
+        ),
+        React.createElement(
+          "div",
+          {
+            role: "radiogroup",
+            "aria-labelledby": `network-heading-${groupKey.toLowerCase()}`,
+            className: orClasses.methodNetworkGrid,
+          },
+          group.options.map((option) => {
+            const optionDisabled = option.available === false;
+            const optionSelected = option.pay_in_asset === selectedOption?.pay_in_asset;
+            const optionLimit = swapOptionLimitMessage(option, options.checkout);
+            return React.createElement(
+              "button",
+              {
+                key: option.pay_in_asset,
+                type: "button",
+                role: "radio",
+                "aria-checked": optionSelected,
+                disabled: optionDisabled,
+                className: openReceiveNetworkButtonClasses({
+                  accent,
+                  selected: optionSelected,
+                }),
+                onClick: optionDisabled
+                  ? undefined
+                  : () => options.onSelectNetwork(groupKey, option.pay_in_asset),
+              },
+              React.createElement(
+                "span",
+                { "aria-hidden": "true", className: "grid size-6 shrink-0 place-items-center" },
+                React.createElement("img", {
+                  alt: "",
+                  className: orClasses.methodNetworkIcon,
+                  src: getOpenReceiveNetworkIcon(option.network_label),
+                }),
+              ),
+              React.createElement(
+                "span",
+                { className: "truncate" },
+                optionDisabled && optionLimit !== undefined
+                  ? `${option.network_label} · ${optionLimit}`
+                  : option.network_label,
+              ),
+              optionSelected
+                ? React.createElement(
+                    "span",
+                    {
+                      "aria-hidden": "true",
+                      className: openReceiveNetworkCheckClasses(accent),
+                    },
+                    "✓",
+                  )
+                : null,
+            );
+          }),
+        ),
+        continueButton(orClasses.methodConfirmDesktop),
+      ),
+      selectedOption !== undefined
+        ? React.createElement(
+            "p",
+            {
+              "aria-live": "polite",
+              className: orClasses.methodNetworkSummary,
+            },
+            React.createElement(
+              "span",
+              {
+                "aria-hidden": "true",
+                className: openReceiveNetworkSummaryIconClasses(accent),
+              },
+              "✓",
+            ),
+            formatOpenReceiveNetworkSummary(group.label, selectedOption.network_label),
+          )
+        : null,
+    );
+  };
+
+  return React.createElement(
+    React.Fragment,
+    null,
+    React.createElement(
+      "header",
+      {
+        className: orClasses.wizardHeader,
+      },
+      React.createElement(
+        "h2",
+        {
+          id: "payment-method-heading",
+          className: orClasses.wizardHeaderTitle,
+        },
+        openReceiveCheckoutLabels.wizardTitle,
+      ),
+      React.createElement(
+        "p",
+        { className: orClasses.wizardHeaderSubtitle },
+        openReceiveCheckoutLabels.wizardSubtitle,
+      ),
+    ),
+    React.createElement(
+      "div",
+      {
+        className: orClasses.wizardBody,
+        "aria-labelledby": "payment-method-heading",
+      },
+      React.createElement(
+        "div",
+        {
+          role: "radiogroup",
+          "aria-label": openReceiveCheckoutLabels.paymentMethod,
+          className: orClasses.methodGrid,
+        },
+        entries.map((entry) => {
+          if (entry.kind === "method") {
+            const method = entry.method;
+            const accent = openReceivePaymentAccentId(method.id);
+            return React.createElement(
+              "button",
+              {
+                key: method.id,
+                type: "button",
+                role: "radio",
+                "aria-checked": false,
+                className: openReceiveAssetButtonClasses({ accent, selected: false }),
+                onClick: () => options.onContinueMethod(method.id),
+              },
+              React.createElement(
+                "span",
+                { "aria-hidden": "true", className: orClasses.methodIconWrap },
+                React.createElement("img", {
+                  alt: "",
+                  className: orClasses.methodIcon,
+                  src: getOpenReceivePaymentMethodIcon(method.id),
+                }),
+              ),
+              React.createElement(
+                "span",
+                { className: orClasses.methodTitleWrap },
+                React.createElement("span", { className: orClasses.methodTitle }, method.title),
+              ),
+            );
+          }
+
+          const group = entry.group;
+          const groupKey = group.label.trim().toUpperCase();
+          const pickerKey = openReceiveSwapPickerKey(group.label);
+          const selected = selectedKey === pickerKey;
+          const multiNetwork = group.options.length > 1;
+          const displayOption =
+            group.options.find((option) => option.available !== false) ?? group.options[0];
+          if (displayOption === undefined) return null;
+          const selectedAsset = options.selectedSwapNetworks[groupKey];
+          const selectedOption =
+            selectedAsset === undefined
+              ? undefined
+              : group.options.find((option) => option.pay_in_asset === selectedAsset);
+          const activeOption = selectedOption ?? displayOption;
+          const disabled = !multiNetwork && activeOption.available === false;
+          const accent = openReceivePaymentAccentId(group.label);
+          const limitMessage = swapOptionLimitMessage(activeOption, options.checkout);
+          const panelId = `network-panel-${groupKey.toLowerCase()}`;
+
+          return React.createElement(
+            "div",
+            { key: pickerKey, className: orClasses.methodTile },
+            React.createElement(
+              "button",
+              {
+                type: "button",
+                role: "radio",
+                "aria-checked": multiNetwork ? selected : false,
+                "aria-expanded": multiNetwork ? selected : undefined,
+                "aria-controls": multiNetwork ? panelId : undefined,
+                disabled,
+                "aria-disabled": disabled ? "true" : undefined,
+                className: openReceiveAssetButtonClasses({
+                  accent,
+                  selected: multiNetwork && selected,
+                  disabled,
+                }),
+                onClick: disabled
+                  ? undefined
+                  : multiNetwork
+                    ? () => options.onSelectPicker(pickerKey, selectedKey)
+                    : () => options.onContinueSwap(displayOption.pay_in_asset),
+              },
+              React.createElement(
+                "span",
+                { "aria-hidden": "true", className: orClasses.methodIconWrap },
+                React.createElement("img", {
+                  alt: "",
+                  className: orClasses.methodIcon,
+                  src: getOpenReceiveSwapOptionIcon(displayOption),
+                }),
+              ),
+              React.createElement(
+                "span",
+                { className: orClasses.methodTitleWrap },
+                React.createElement("span", { className: orClasses.methodTitle }, group.label),
+                multiNetwork
+                  ? React.createElement(
+                      "span",
+                      { className: orClasses.methodDetailMobile },
+                      selected && selectedOption !== undefined
+                        ? `${selectedOption.network_label} network`
+                        : disabled && limitMessage !== undefined
+                          ? limitMessage
+                          : openReceiveCheckoutLabels.selectNetwork,
+                    )
+                  : disabled && limitMessage !== undefined
+                    ? React.createElement(
+                        "span",
+                        { className: orClasses.methodDetailMobile },
+                        limitMessage,
+                      )
+                    : null,
+              ),
+            ),
+            multiNetwork
+              ? React.createElement(
+                  "div",
+                  {
+                    className: joinClassNames(
+                      orClasses.methodNetworkRevealAnim,
+                      selected
+                        ? orClasses.methodNetworkRevealAnimOpen
+                        : orClasses.methodNetworkRevealAnimClosed,
+                    ),
+                  },
+                  React.createElement(
+                    "div",
+                    { className: orClasses.methodNetworkRevealInner },
+                    selected ? renderNetworkSelector(group, true) : null,
+                  ),
+                )
+              : null,
+          );
+        }),
+      ),
+      networkRequired && selectedGroup !== undefined
+        ? React.createElement(
+            "div",
+            { className: orClasses.methodNetworkRevealDesktop },
+            renderNetworkSelector(selectedGroup, false),
+          )
+        : null,
+    ),
   );
 }
 

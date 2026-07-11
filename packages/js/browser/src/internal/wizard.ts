@@ -22,6 +22,7 @@ import {
   openReceivePaymentMethodIconIds,
   openReceiveRegionLabels,
   openReceiveRegionOrder,
+  orClasses,
   type CheckoutPhase,
   type OpenReceiveCountryDisplay,
   type OpenReceiveCountryMapPin,
@@ -337,7 +338,7 @@ export function getOpenReceiveNetworkIcon(networkLabel: string): string {
 
 /**
  * Icon for a swap pay-in option card. Always the token/coin mark (USDT, USDC, SOL, …).
- * Network marks (Tron/Solana/Ethereum) belong only in the network dropdown via
+ * Network marks (Tron/Solana/Ethereum) belong only in the network reveal via
  * {@link getOpenReceiveNetworkIcon}.
  */
 export function getOpenReceiveSwapOptionIcon(option: {
@@ -443,6 +444,154 @@ export function buildOpenReceiveMethodGridEntries<T extends { readonly label: st
     entries.push({ kind: "swap", group });
   }
   return entries;
+}
+
+export type OpenReceivePaymentAccentId =
+  | "bitcoin"
+  | "usdt"
+  | "usdc"
+  | "sol"
+  | "eth"
+  | "default";
+
+export function openReceiveMethodPickerKey(methodId: string): string {
+  return `method:${methodId}`;
+}
+
+export function openReceiveSwapPickerKey(label: string): string {
+  return `swap:${label.trim().toUpperCase()}`;
+}
+
+export function parseOpenReceiveMethodPickerKey(
+  key: string,
+): { readonly kind: "method"; readonly methodId: string } | null {
+  if (!key.startsWith("method:")) return null;
+  return { kind: "method", methodId: key.slice("method:".length) };
+}
+
+export function parseOpenReceiveSwapPickerKey(
+  key: string,
+): { readonly kind: "swap"; readonly label: string } | null {
+  if (!key.startsWith("swap:")) return null;
+  return { kind: "swap", label: key.slice("swap:".length) };
+}
+
+export function openReceivePaymentAccentId(labelOrMethodId: string): OpenReceivePaymentAccentId {
+  const key = labelOrMethodId.trim().toLowerCase();
+  if (key === "bitcoin" || key === "btc") return "bitcoin";
+  if (key === "usdt") return "usdt";
+  if (key === "usdc") return "usdc";
+  if (key === "sol" || key === "solana") return "sol";
+  if (key === "eth" || key === "ethereum") return "eth";
+  return "default";
+}
+
+const assetActiveClassByAccent: Readonly<Record<OpenReceivePaymentAccentId, string>> = {
+  bitcoin: orClasses.methodCardActiveBitcoin,
+  usdt: orClasses.methodCardActiveUsdt,
+  usdc: orClasses.methodCardActiveUsdc,
+  sol: orClasses.methodCardActiveSol,
+  eth: orClasses.methodCardActiveEth,
+  default: orClasses.methodCardActiveDefault,
+};
+
+const networkActiveClassByAccent: Readonly<
+  Record<"usdt" | "usdc" | "default", string>
+> = {
+  usdt: orClasses.methodNetworkButtonActiveUsdt,
+  usdc: orClasses.methodNetworkButtonActiveUsdc,
+  default: orClasses.methodNetworkButtonActiveDefault,
+};
+
+export function openReceiveAssetButtonClasses(options: {
+  readonly accent: OpenReceivePaymentAccentId;
+  readonly selected: boolean;
+  readonly disabled?: boolean;
+}): string {
+  const base = options.disabled ? orClasses.methodCardUnavailable : orClasses.methodCardReady;
+  if (!options.selected || options.disabled) return base;
+  return `${base} ${assetActiveClassByAccent[options.accent]}`;
+}
+
+export function openReceiveNetworkButtonClasses(options: {
+  readonly accent: OpenReceivePaymentAccentId;
+  readonly selected: boolean;
+}): string {
+  if (!options.selected) return orClasses.methodNetworkButton;
+  const accent =
+    options.accent === "usdt" || options.accent === "usdc" ? options.accent : "default";
+  return `${orClasses.methodNetworkButton} ${networkActiveClassByAccent[accent]}`;
+}
+
+export function openReceiveNetworkMobileRevealClasses(
+  accent: OpenReceivePaymentAccentId,
+): string {
+  if (accent === "usdt") return orClasses.methodNetworkRevealMobileUsdt;
+  if (accent === "usdc") return orClasses.methodNetworkRevealMobileUsdc;
+  return orClasses.methodNetworkRevealMobile;
+}
+
+export function openReceiveNetworkCheckClasses(accent: OpenReceivePaymentAccentId): string {
+  return accent === "usdc" ? orClasses.methodNetworkCheckUsdc : orClasses.methodNetworkCheck;
+}
+
+export function openReceiveNetworkSummaryIconClasses(
+  accent: OpenReceivePaymentAccentId,
+): string {
+  return accent === "usdc"
+    ? orClasses.methodNetworkSummaryIconUsdc
+    : orClasses.methodNetworkSummaryIcon;
+}
+
+export function formatOpenReceiveNetworkSummary(
+  assetLabel: string,
+  networkLabel: string,
+): string {
+  return openReceiveCheckoutLabels.networkSummary
+    .replace("{asset}", assetLabel)
+    .replace("{network}", networkLabel);
+}
+
+export function formatOpenReceiveChooseNetworkHeading(assetLabel: string): string {
+  return openReceiveCheckoutLabels.chooseAssetNetwork.replace("{asset}", assetLabel);
+}
+
+/**
+ * When switching between multi-network coins, reuse the prior network label if the
+ * newly selected coin supports it. Otherwise clear that coin's network selection.
+ */
+export function resolveOpenReceivePreservedNetworkSelection<
+  T extends { readonly pay_in_asset: string; readonly network_label: string; readonly available?: boolean },
+>(options: {
+  readonly previousGroup:
+    | { readonly label: string; readonly options: readonly T[] }
+    | undefined;
+  readonly nextGroup: { readonly label: string; readonly options: readonly T[] };
+  readonly selectedNetworks: Readonly<Record<string, string>>;
+}): string | undefined {
+  const nextKey = options.nextGroup.label.trim().toUpperCase();
+  const current = options.selectedNetworks[nextKey];
+  if (
+    current !== undefined &&
+    options.nextGroup.options.some(
+      (option) => option.pay_in_asset === current && option.available !== false,
+    )
+  ) {
+    return current;
+  }
+
+  const previous = options.previousGroup;
+  if (previous === undefined) return undefined;
+  const previousKey = previous.label.trim().toUpperCase();
+  const previousAsset = options.selectedNetworks[previousKey];
+  if (previousAsset === undefined) return undefined;
+  const previousOption = previous.options.find((option) => option.pay_in_asset === previousAsset);
+  if (previousOption === undefined) return undefined;
+  const match = options.nextGroup.options.find(
+    (option) =>
+      option.network_label === previousOption.network_label && option.available !== false,
+  );
+  return match?.pay_in_asset;
 }
 
 export function getOpenReceiveRouteIcon(asset: Pick<AssetIndexEntry, "route" | "symbol">): string {

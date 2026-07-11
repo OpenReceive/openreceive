@@ -117,21 +117,11 @@ export function renderSwapPreparing(assetLabel: string): React.ReactElement {
     {
       className: orClasses.swapPanel,
     },
-    React.createElement(
-      "div",
-      {
-        className: orClasses.swapHeading,
-      },
-      React.createElement("strong", { className: orClasses.swapHeadingTitle }, "Preparing payment address"),
-      React.createElement("span", { className: orClasses.swapHeadingDetail }, "One moment"),
-    ),
-    React.createElement(
-      "p",
-      {
-        className: orClasses.swapProgress,
-      },
-      `Getting your ${assetLabel} payment address…`,
-    ),
+    React.createElement(WaitingState, {
+      waiting: true,
+      statusTitle: "Preparing payment address",
+      statusDetail: `Getting your ${assetLabel} payment address…`,
+    }),
   );
 }
 
@@ -467,13 +457,6 @@ export function renderSwapDepositPanel(options: {
         className: orClasses.swapWarning,
       },
       display.networkWarning,
-    ),
-    React.createElement(
-      "p",
-      {
-        className: orClasses.swapWarning,
-      },
-      `Pay with one method only. If you already sent ${display.assetLabel}, do not also pay the Lightning invoice.`,
     ),
     backButton,
   );

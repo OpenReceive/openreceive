@@ -92,7 +92,7 @@
       "kind": "browser wallet",
       "url": "https://rizful.com",
       "us": null,
-      "lightning_docs_url": "https://docs.megalithic.me/the-lightning-network/send_and_receive_lightning_with_rizful/#person-b-pay-the-invoice",
+      "lightning_docs_url": "https://rizful.com/pay_lightning_invoice/rizful",
       "icon_path": "assets/provider-icons/rizful.png"
     },
     "boltz": {

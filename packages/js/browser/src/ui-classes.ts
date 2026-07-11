@@ -36,34 +36,83 @@ export const orClasses = {
   countdown: "text-base-content/60 text-sm",
   countdownStrong: "text-base-content font-semibold",
   creating: "grid gap-2 place-items-center p-4",
-  wizard: "card card-border bg-base-200 grid gap-3 p-3",
-  wizardHeader: "grid gap-0.5",
-  wizardHeaderTitle: "text-lg font-bold m-0",
-  wizardHeaderSubtitle: "text-base-content/60 text-sm m-0",
-  methodGrid: "grid grid-cols-2 md:grid-cols-4 gap-2",
+  wizard: "overflow-hidden rounded-box border border-base-300 bg-base-200 grid gap-0",
+  wizardHeader: "grid gap-0.5 px-4 py-4 sm:px-5",
+  wizardHeaderTitle: "text-lg font-bold m-0 sm:text-xl",
+  wizardHeaderSubtitle: "text-base-content/65 text-sm m-0 mt-0.5",
+  wizardBody: "border-t border-base-300 grid gap-3 p-4 sm:p-5",
+  methodSelector: "grid gap-3",
+  methodGrid:
+    "grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-5",
   methodCard:
-    "card card-border bg-base-100 grid gap-1.5 content-start min-h-[120px] p-2.5 text-left cursor-pointer hover:border-primary",
+    "flex min-h-14 w-full items-center justify-start gap-3 rounded-field border border-base-300 bg-base-100 px-3 py-2 text-left text-base-content shadow-none transition-colors hover:border-base-content/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:px-4 cursor-pointer",
   methodCardUnavailable:
-    "card card-border bg-base-100 grid gap-1.5 content-start min-h-[120px] p-2.5 text-left opacity-50 cursor-not-allowed",
+    "flex min-h-14 w-full items-center justify-start gap-3 rounded-field border border-base-300 bg-base-100 px-3 py-2 text-left text-base-content opacity-50 cursor-not-allowed shadow-none sm:px-4",
   methodCardStatic:
-    "card card-border bg-base-100 grid gap-1.5 content-start min-h-[120px] p-2.5 text-left",
+    "flex min-h-14 w-full items-center justify-start gap-3 rounded-field border border-base-300 bg-base-100 px-3 py-2 text-left text-base-content shadow-none sm:px-4",
   methodCardReady:
-    "card card-border bg-base-100 grid gap-1.5 content-start min-h-[120px] p-2.5 text-left cursor-pointer hover:border-primary",
-  methodIcon: "size-10 aspect-square",
-  methodTitle: "font-bold text-sm",
+    "flex min-h-14 w-full items-center justify-start gap-3 rounded-field border border-base-300 bg-base-100 px-3 py-2 text-left text-base-content shadow-none transition-colors hover:border-base-content/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:px-4 cursor-pointer",
+  methodCardActiveBitcoin:
+    "border-warning bg-warning/10 ring-1 ring-warning/50",
+  methodCardActiveUsdt:
+    "border-success bg-success/10 ring-1 ring-success/50",
+  methodCardActiveUsdc:
+    "border-info bg-info/10 ring-1 ring-info/50",
+  methodCardActiveSol:
+    "border-primary bg-primary/10 ring-1 ring-primary/50",
+  methodCardActiveEth:
+    "border-secondary bg-secondary/10 ring-1 ring-secondary/50",
+  methodCardActiveDefault:
+    "border-primary bg-primary/10 ring-1 ring-primary/50",
+  methodIconWrap:
+    "grid size-8 shrink-0 place-items-center overflow-hidden rounded-full sm:size-9",
+  methodIcon: "size-8 aspect-square sm:size-9",
+  methodTitle: "block truncate font-semibold text-sm sm:text-base",
+  methodTitleWrap: "min-w-0 flex-1 text-left",
   methodDetail: "text-base-content/60 text-xs leading-snug",
-  methodNetwork: "dropdown w-full",
-  methodNetworkField: "grid gap-1 w-full",
-  methodNetworkLabel: "text-xs font-medium text-base-content/70",
-  methodNetworkTrigger:
-    "btn btn-sm btn-block justify-between gap-2 font-normal border border-base-300 bg-base-100",
-  methodNetworkTriggerLabel: "inline-flex items-center gap-2 min-w-0",
-  methodNetworkPlaceholder: "text-base-content/60",
-  methodNetworkMenu:
-    "dropdown-content menu menu-sm bg-base-100 rounded-box z-10 w-full p-1 shadow border border-base-300",
-  methodNetworkOption: "gap-2",
-  methodNetworkIcon: "size-4 shrink-0 aspect-square",
-  methodConfirm: "btn btn-block btn-sm btn-soft",
+  methodDetailMobile: "block truncate text-xs text-base-content/55 sm:hidden",
+  methodDetailDesktop: "hidden",
+  methodNetworkReveal:
+    "rounded-box border border-base-300 bg-base-100/50 p-3",
+  methodNetworkRevealDesktop: "mt-3 hidden sm:block",
+  methodNetworkRevealMobile:
+    "ml-4 border-l border-base-content/20 pl-3 sm:hidden",
+  methodNetworkRevealMobileUsdt: "ml-4 border-l border-success/40 pl-3 sm:hidden",
+  methodNetworkRevealMobileUsdc: "ml-4 border-l border-info/40 pl-3 sm:hidden",
+  methodNetworkRevealAnim:
+    "grid overflow-hidden transition-[grid-template-rows,opacity,margin] duration-200 ease-out motion-reduce:transition-none sm:hidden",
+  methodNetworkRevealAnimOpen: "mt-2 grid-rows-[1fr] opacity-100",
+  methodNetworkRevealAnimClosed: "grid-rows-[0fr] opacity-0",
+  methodNetworkRevealInner: "min-h-0 overflow-hidden",
+  methodNetworkLayout:
+    "grid gap-3 lg:grid-cols-[9rem_minmax(0,1fr)_8rem] lg:items-center",
+  methodNetworkHeading: "text-sm font-semibold text-base-content m-0",
+  methodNetworkHint: "mt-0.5 text-xs text-base-content/55 m-0",
+  methodNetworkGrid:
+    "grid grid-cols-1 gap-2 min-[390px]:grid-cols-3",
+  methodNetworkButton:
+    "btn h-11 min-h-11 justify-start gap-2 rounded-field border-base-300 bg-base-200 px-3 text-sm text-base-content shadow-none hover:border-base-content/30 hover:bg-base-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+  methodNetworkButtonActiveUsdt:
+    "border-success bg-success/10 ring-1 ring-success/50",
+  methodNetworkButtonActiveUsdc:
+    "border-info bg-info/10 ring-1 ring-info/50",
+  methodNetworkButtonActiveDefault:
+    "border-primary bg-primary/10 ring-1 ring-primary/50",
+  methodNetworkIcon: "size-6 shrink-0 aspect-square",
+  methodNetworkCheck:
+    "ml-auto grid size-5 place-items-center rounded-full bg-success text-[0.65rem] text-success-content",
+  methodNetworkCheckUsdc:
+    "ml-auto grid size-5 place-items-center rounded-full bg-info text-[0.65rem] text-info-content",
+  methodNetworkSummary:
+    "mt-2 flex items-center gap-1.5 text-xs text-base-content/65 m-0",
+  methodNetworkSummaryIcon:
+    "grid size-4 place-items-center rounded-full bg-success text-[0.65rem] text-success-content",
+  methodNetworkSummaryIconUsdc:
+    "grid size-4 place-items-center rounded-full bg-info text-[0.65rem] text-info-content",
+  methodContinueRow: "mt-0 flex justify-end max-sm:block",
+  methodConfirm: "btn btn-primary w-full sm:w-auto sm:min-w-32",
+  methodConfirmDesktop: "btn btn-primary w-full",
+  methodTile: "contents max-sm:block",
   breadcrumbs: "breadcrumbs text-sm",
   breadcrumbCurrent: "font-bold",
   routePicker: "grid grid-cols-2 md:grid-cols-4 gap-2",

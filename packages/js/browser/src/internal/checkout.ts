@@ -175,7 +175,7 @@ export function createOpenReceiveSwapDisplayModel(
     payInAsset: swap.pay_in_asset,
     assetLabel: asset.assetLabel,
     networkLabel: asset.networkLabel,
-    networkWarning: `Only send ${asset.assetLabel} on ${asset.networkLabel} to this address.`,
+    networkWarning: `Only send ${asset.assetLabel} on ${asset.networkLabel} to this address. Pay with one method only — if you already sent ${asset.assetLabel}, do not also pay the Lightning invoice.`,
     depositAddress: swap.deposit_address,
     ...(swap.deposit_memo === undefined ? {} : { depositMemo: swap.deposit_memo }),
     depositAmount: formatOpenReceiveDepositAmount(swap.deposit_amount),
