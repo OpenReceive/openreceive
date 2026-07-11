@@ -51,10 +51,10 @@ test("elements render display-safe checkout HTML", () => {
   assert.match(html, />Copy invoice</);
   assert.doesNotMatch(html, />Open Wallet</);
   assert.match(html, /data-openreceive-wizard/);
-  assert.match(html, /Credit Card/);
-  assert.match(html, /Bank Transfer/);
   assert.match(html, /Bitcoin/);
   assert.match(html, /Crypto/);
+  assert.doesNotMatch(html, /Credit Card/);
+  assert.doesNotMatch(html, /Bank Transfer/);
 });
 
 test("elements derive waiting display from browser checkout state", () => {
@@ -79,12 +79,12 @@ test("elements derive waiting display from browser checkout state", () => {
 
 test("elements render payment wizard route choices and providers from browser state", () => {
   const firstStep = renderOpenReceivePaymentWizardHtml();
-  assert.match(firstStep, /Credit Card/);
-  assert.match(firstStep, /Bank Transfer/);
   assert.match(firstStep, /Bitcoin/);
   assert.match(firstStep, /Crypto/);
-  assert.match(firstStep, /assets\/icons\/card\.svg/);
+  assert.doesNotMatch(firstStep, /Credit Card/);
+  assert.doesNotMatch(firstStep, /Bank Transfer/);
   assert.match(firstStep, /assets\/icons\/btc\.svg/);
+  assert.doesNotMatch(firstStep, /assets\/icons\/card\.svg/);
   assert.doesNotMatch(firstStep, /change payment method/);
 
   const cryptoStep = renderOpenReceivePaymentWizardHtml({
@@ -118,30 +118,11 @@ test("elements render payment wizard route choices and providers from browser st
   assert.match(bitcoinStep, /browser wallet/);
   assert.match(bitcoinStep, /mobile wallet/);
   assert.match(bitcoinStep, /How To Pay/);
-
-  const cardStep = renderOpenReceivePaymentWizardHtml({
-    selectedMethod: "card",
-    selectedCountryCode: "US"
-  });
-  assert.match(cardStep, /data-or-breadcrumb="method"/);
-  assert.match(cardStep, />Payment method<\/span>/);
-  assert.match(cardStep, />Credit Card<\/span>/);
-  assert.doesNotMatch(cardStep, /part="method-grid"/);
-  assert.doesNotMatch(cardStep, /Pick your country/);
-  assert.match(cardStep, /Credit \/ debit card/);
-  assert.doesNotMatch(cardStep, />USD<\/p>/);
-  assert.match(cardStep, /part="country-select"/);
-  assert.match(cardStep, /<select data-or-country="US"[^>]*>/);
-  assert.match(cardStep, />United States<\/option>/);
-  assert.match(cardStep, /data-or-provider-tutorial="strike"/);
-  assert.doesNotMatch(cardStep, /href="https:\/\/docs\.strike\.me/);
-  assert.doesNotMatch(cardStep, /Switch country/);
-  assert.doesNotMatch(cardStep, /part="country-map"/);
-  assert.doesNotMatch(cardStep, /US supported|Not US/);
+  assert.doesNotMatch(bitcoinStep, /part="country-select"/);
+  assert.doesNotMatch(bitcoinStep, /Credit \/ debit card/);
 
   const tutorialIntro = renderOpenReceivePaymentWizardHtml({
-    selectedMethod: "card",
-    selectedCountryCode: "US",
+    selectedMethod: "bitcoin",
     activeTutorialProviderId: "strike",
     activeTutorialIndex: 0
   });
@@ -155,8 +136,7 @@ test("elements render payment wizard route choices and providers from browser st
   assert.doesNotMatch(tutorialIntro, /assets\/pay_tutorials\/strike-1\.webp/);
 
   const copiedTutorialIntro = renderOpenReceivePaymentWizardHtml({
-    selectedMethod: "card",
-    selectedCountryCode: "US",
+    selectedMethod: "bitcoin",
     activeTutorialProviderId: "strike",
     activeTutorialIndex: 0,
     activeTutorialCopied: true
@@ -164,8 +144,7 @@ test("elements render payment wizard route choices and providers from browser st
   assert.match(copiedTutorialIntro, /Copied! Click next below to continue with tutorial\./);
 
   const tutorialStep = renderOpenReceivePaymentWizardHtml({
-    selectedMethod: "card",
-    selectedCountryCode: "US",
+    selectedMethod: "bitcoin",
     activeTutorialProviderId: "strike",
     activeTutorialIndex: 2
   });
@@ -176,8 +155,7 @@ test("elements render payment wizard route choices and providers from browser st
   assert.match(tutorialStep, /Step 3 of 5/);
 
   const finalTutorialStep = renderOpenReceivePaymentWizardHtml({
-    selectedMethod: "card",
-    selectedCountryCode: "US",
+    selectedMethod: "bitcoin",
     activeTutorialProviderId: "strike",
     activeTutorialIndex: 4
   });

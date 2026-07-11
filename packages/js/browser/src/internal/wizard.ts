@@ -559,13 +559,6 @@ export function createOpenReceiveCountryPickerModel(
 export function createOpenReceivePaymentWizardState(
   request: OpenReceivePaymentWizardRequest,
 ): OpenReceivePaymentWizardState {
-  const selectedRail = getRailForPaymentMethod(request.selectedMethod);
-  const railCountries = selectedRail === null ? [] : getOpenReceiveCountriesForRail(selectedRail);
-  const selectedCountry =
-    request.selectedCountryCode === undefined
-      ? railCountries[0]
-      : (railCountries.find((country) => country.code === request.selectedCountryCode) ??
-        railCountries[0]);
   const selectedRouteId =
     request.selectedMethod === "bitcoin"
       ? (request.selectedBitcoinRoute ?? getOpenReceiveDefaultBitcoinRoute())
@@ -573,26 +566,14 @@ export function createOpenReceivePaymentWizardState(
         ? (request.selectedCryptoRoute ?? null)
         : null;
   const routes =
-    selectedRail !== null && selectedCountry !== undefined
-      ? getPaymentWizardRoutes({
-          country: selectedCountry.code,
-          rail: selectedRail,
-        })
-      : selectedRouteId === null
-        ? []
-        : getPaymentWizardRoutes({ route: selectedRouteId });
+    selectedRouteId === null ? [] : getPaymentWizardRoutes({ route: selectedRouteId });
 
   return {
-    selectedRail,
-    ...(selectedCountry === undefined ? {} : { selectedCountry }),
-    railCountries,
+    selectedRail: null,
+    railCountries: [],
     selectedRouteId,
     routes,
   };
-}
-
-function getRailForPaymentMethod(_method: OpenReceivePaymentMethod | null): FiatRailId | null {
-  return null;
 }
 
 export function createOpenReceivePaymentWizardSelection(

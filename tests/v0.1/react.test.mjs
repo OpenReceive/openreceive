@@ -16,14 +16,11 @@ function readReactSource() {
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
-  OPENRECEIVE_COUNTRY_MAP_HEIGHT,
-  OPENRECEIVE_COUNTRY_MAP_WIDTH,
   OPENRECEIVE_COPY_FEEDBACK_MS,
   OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS,
   OPENRECEIVE_PROVIDER_PREVIEW_LIMIT,
   applyCheckoutThemeAttributes,
   applyOpenReceiveThemeAttributes,
-  createOpenReceiveCountryPickerModel,
   createOpenReceivePaymentWizardModel,
   createOpenReceivePaymentWizardSelection,
   createOpenReceivePaymentWizardState,
@@ -44,7 +41,6 @@ import {
   getOpenReceiveRouteNetworkLabel,
   getOpenReceiveNetworkIcon,
   getOpenReceiveSwapOptionIcon,
-  getOpenReceiveRegionForCountry,
   getOpenReceiveWizardEmptyMessage,
   openReceiveCheckoutLabels,
   readOpenReceiveStoredCountryCode,
@@ -506,6 +502,7 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
     method: "bitcoin"
   });
   assert.equal(methodSelection.selectedMethod, "bitcoin");
+  assert.equal(methodSelection.selectedBitcoinRoute, "btc-lightning");
   assert.equal(methodSelection.countryPickerOpen, false);
 
   const changedMethodSelection = updateOpenReceivePaymentWizardSelection(methodSelection, {
@@ -515,35 +512,7 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   assert.equal(changedMethodSelection.selectedCountryCode, methodSelection.selectedCountryCode);
   assert.equal(changedMethodSelection.countryPickerOpen, false);
 
-  const europeSelection = updateOpenReceivePaymentWizardSelection(methodSelection, {
-    type: "select_region",
-    region: "europe"
-  });
-  assert.equal(europeSelection.selectedRegion, "europe");
-  assert.equal(
-    createOpenReceivePaymentWizardModel(europeSelection).visibleRegionCountries
-      .some((country) => country.code === europeSelection.selectedCountryCode),
-    true
-  );
-  const countryPickerModel = createOpenReceiveCountryPickerModel({
-    countries: createOpenReceivePaymentWizardModel(europeSelection).wizard.railCountries,
-    selectedCountryCode: europeSelection.selectedCountryCode,
-    selectedRegion: "europe",
-    hoveredCountryCode: "GB"
-  });
-  assert.equal(countryPickerModel.regions.some((region) => region.id === "europe" && region.count > 0), false);
-  assert.equal(countryPickerModel.visibleRegionCountries.length, 0);
-  assert.equal(countryPickerModel.hoveredCountry, undefined);
-  assert.equal(countryPickerModel.mapCountries.length, 0);
-
-  const countrySelection = updateOpenReceivePaymentWizardSelection(europeSelection, {
-    type: "select_country",
-    countryCode: "GB"
-  });
-  assert.equal(countrySelection.countryPickerOpen, false);
-  assert.equal(countrySelection.selectedRegion, "europe");
-
-  const bitcoinSelection = updateOpenReceivePaymentWizardSelection(countrySelection, {
+  const bitcoinSelection = updateOpenReceivePaymentWizardSelection(changedMethodSelection, {
     type: "select_method",
     method: "bitcoin"
   });
@@ -551,6 +520,7 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   const routeModel = createOpenReceivePaymentWizardModel(bitcoinSelection);
   assert.equal(routeModel.selectedRoute, "btc-lightning");
   assert.ok(routeModel.routeAssets.length > 0);
+  assert.equal(routeModel.wizard.railCountries.length, 0);
   const routeAssetDisplays = createOpenReceiveWizardRouteAssetDisplays(routeModel.routeAssets, {
     selectedRoute: routeModel.selectedRoute
   });
