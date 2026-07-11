@@ -870,7 +870,7 @@ function swapOptionsForRoute(
 }
 
 // The pay-in asset to auto-advance to a deposit address, or undefined when the payer
-// should still choose (fiat rails, multi-network stablecoins, no swap configured).
+// should still choose (multi-network stablecoins, no swap configured).
 function normalizeSwapQuote(body: unknown): OpenReceiveSwapOptionDisplay | undefined {
   const quote = reactRecord(reactRecord(body).quote ?? body);
   return typeof quote.pay_in_asset === "string"

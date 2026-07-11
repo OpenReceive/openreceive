@@ -248,10 +248,10 @@ test("React checkout default UI includes countdown, waiting state, and payment w
   assert.match(html, /Waiting for payment/);
   assert.match(html, /Invoice expires in/);
   assert.match(html, /Pay this invoice/);
-  assert.match(html, /Credit Card/);
-  assert.match(html, /Bank Transfer/);
   assert.match(html, /Bitcoin/);
   assert.match(html, /Crypto/);
+  assert.doesNotMatch(html, /Credit Card/);
+  assert.doesNotMatch(html, /Bank Transfer/);
   assert.doesNotMatch(html, /textarea/);
   assert.doesNotMatch(html, /lnbc-test/);
   assert.doesNotMatch(html, /or_inv_test/);
@@ -280,7 +280,7 @@ test("React checkout hides payable surfaces after invoice expiry", () => {
   assert.doesNotMatch(html, /Copy invoice/);
 });
 
-test("React payment wizard server-renders the four package-owned first choices", () => {
+test("React payment wizard server-renders the package-owned first choices", () => {
   const html = renderToStaticMarkup(
     React.createElement(PaymentWizard, {
       invoice: "lnbc-test"
@@ -288,10 +288,10 @@ test("React payment wizard server-renders the four package-owned first choices",
   );
 
   assert.match(html, /Pay this invoice/);
-  assert.match(html, /Credit Card/);
-  assert.match(html, /Bank Transfer/);
   assert.match(html, /Bitcoin/);
   assert.match(html, /Crypto/);
+  assert.doesNotMatch(html, /Credit Card/);
+  assert.doesNotMatch(html, /Bank Transfer/);
 });
 
 test("React theme toggle renders a package-owned light/dark switch", () => {
@@ -391,7 +391,7 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   assert.match(getCheckoutProviderTutorials(kraken)[3].image, /assets\/pay_tutorials\/kraken-4\.webp/);
   assert.equal(getOpenReceiveRouteNetworkLabel("btc-lightning"), "Lightning Network");
   assert.equal(getOpenReceiveRouteNetworkLabel("usdt-tron"), "usdt-tron");
-  assert.match(getOpenReceivePaymentMethodIcon("card"), /assets\/icons\/card\.svg/);
+  assert.match(getOpenReceivePaymentMethodIcon("bitcoin"), /assets\/icons\/btc\.svg/);
   assert.match(getOpenReceiveRouteIcon({ symbol: "btc", route: "btc-lightning" }), /assets\/icons\/lightning\.svg/);
   assert.match(getOpenReceiveRouteIcon({ symbol: "usdt", route: "usdt-tron" }), /assets\/icons\/usdt\.svg/);
   assert.match(
@@ -501,22 +501,21 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
     picker: false
   });
 
-  const bankSelection = updateOpenReceivePaymentWizardSelection(initialSelection, {
+  const methodSelection = updateOpenReceivePaymentWizardSelection(initialSelection, {
     type: "select_method",
-    method: "bank",
-    storedCountryCode: null
+    method: "bitcoin"
   });
-  assert.equal(bankSelection.selectedMethod, "bank");
-  assert.equal(bankSelection.countryPickerOpen, false);
+  assert.equal(methodSelection.selectedMethod, "bitcoin");
+  assert.equal(methodSelection.countryPickerOpen, false);
 
-  const changedMethodSelection = updateOpenReceivePaymentWizardSelection(bankSelection, {
+  const changedMethodSelection = updateOpenReceivePaymentWizardSelection(methodSelection, {
     type: "change_method"
   });
   assert.equal(changedMethodSelection.selectedMethod, null);
-  assert.equal(changedMethodSelection.selectedCountryCode, bankSelection.selectedCountryCode);
+  assert.equal(changedMethodSelection.selectedCountryCode, methodSelection.selectedCountryCode);
   assert.equal(changedMethodSelection.countryPickerOpen, false);
 
-  const europeSelection = updateOpenReceivePaymentWizardSelection(bankSelection, {
+  const europeSelection = updateOpenReceivePaymentWizardSelection(methodSelection, {
     type: "select_region",
     region: "europe"
   });
@@ -532,25 +531,10 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
     selectedRegion: "europe",
     hoveredCountryCode: "GB"
   });
-  assert.equal(countryPickerModel.regions.some((region) => region.id === "europe" && region.count > 0), true);
-  assert.equal(
-    countryPickerModel.visibleRegionCountries.every(
-      (country) => getOpenReceiveRegionForCountry(country.code) === "europe"
-    ),
-    true
-  );
-  assert.equal(countryPickerModel.hoveredCountry?.code, "GB");
-  assert.equal(
-    countryPickerModel.mapCountries.some(
-      (entry) =>
-        entry.country.code === countryPickerModel.selectedCountry?.code &&
-        entry.point[0] >= 0 &&
-        entry.point[0] <= OPENRECEIVE_COUNTRY_MAP_WIDTH &&
-        entry.point[1] >= 0 &&
-        entry.point[1] <= OPENRECEIVE_COUNTRY_MAP_HEIGHT
-    ),
-    true
-  );
+  assert.equal(countryPickerModel.regions.some((region) => region.id === "europe" && region.count > 0), false);
+  assert.equal(countryPickerModel.visibleRegionCountries.length, 0);
+  assert.equal(countryPickerModel.hoveredCountry, undefined);
+  assert.equal(countryPickerModel.mapCountries.length, 0);
 
   const countrySelection = updateOpenReceivePaymentWizardSelection(europeSelection, {
     type: "select_country",
@@ -575,38 +559,35 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   assert.equal(lightningRouteAsset?.subtitle, "Lightning Network");
   assert.match(lightningRouteAsset?.icon ?? "", /assets\/icons\/lightning\.svg/);
 
-  const cardState = createOpenReceivePaymentWizardState({
-    selectedMethod: "card",
-    selectedCountryCode: "US"
+  const bitcoinState = createOpenReceivePaymentWizardState({
+    selectedMethod: "bitcoin",
+    selectedBitcoinRoute: "btc-lightning"
   });
-  assert.equal(cardState.selectedRail, "card");
-  assert.equal(cardState.selectedCountry?.code, "US");
-  assert.ok(cardState.routes.length > 0);
-  const cardRouteDisplays = createOpenReceiveWizardRouteDisplays(cardState.routes);
-  assert.equal(cardRouteDisplays[0].title, "Credit / debit card");
-  assert.equal(cardRouteDisplays[0].subtitle, "USD");
-  assert.equal(cardRouteDisplays[0].providers.length, cardState.routes[0].providers.length);
+  assert.equal(bitcoinState.selectedRail, null);
+  assert.equal(bitcoinState.selectedRouteId, "btc-lightning");
+  assert.ok(bitcoinState.routes.length > 0);
+  const bitcoinRouteDisplays = createOpenReceiveWizardRouteDisplays(bitcoinState.routes);
+  assert.equal(bitcoinRouteDisplays[0].providers.length, bitcoinState.routes[0].providers.length);
   assert.equal(
-    createOpenReceiveWizardRouteDisplays(cardState.routes, {
+    createOpenReceiveWizardRouteDisplays(bitcoinState.routes, {
       providerPreviewLimit: OPENRECEIVE_PROVIDER_PREVIEW_LIMIT
     })[0].providers.length <= OPENRECEIVE_PROVIDER_PREVIEW_LIMIT,
     true
   );
-  assert.equal(cardRouteDisplays[0].providers[0].copyLabel, openReceiveCheckoutLabels.copyInvoice);
-  assert.equal(cardRouteDisplays[0].providers[0].copiedLabel, openReceiveCheckoutLabels.copied);
-  assert.equal(cardRouteDisplays[0].providers[0].openLabel, "How To Pay");
-  assert.equal(cardRouteDisplays[0].providers[0].kind, "payments app");
-
-  const bitcoinRouteDisplays = createOpenReceiveWizardRouteDisplays(routeModel.wizard.routes);
+  assert.equal(bitcoinRouteDisplays[0].providers[0].copyLabel, openReceiveCheckoutLabels.copyInvoice);
+  assert.equal(bitcoinRouteDisplays[0].providers[0].copiedLabel, openReceiveCheckoutLabels.copied);
+  assert.equal(bitcoinRouteDisplays[0].providers[0].openLabel, "How To Pay");
   assert.equal(bitcoinRouteDisplays[0].providers[0].kind, "browser wallet");
   assert.equal(
     bitcoinRouteDisplays[0].providers.find((provider) => provider.id === "zeus")?.kind,
     "mobile wallet"
   );
-  assert.match(cardRouteDisplays[0].providers[0].url, /^https:\/\/docs\.strike\.me/);
-  assert.match(cardRouteDisplays[0].providers[0].icon, /assets\/provider-icons\/strike\.png/);
-  assert.equal(cardRouteDisplays[0].providers[0].tutorials.length, 4);
-  assert.match(cardRouteDisplays[0].providers[0].tutorials[0].image, /assets\/pay_tutorials\/strike-1\.webp/);
+  const strikeProvider = bitcoinRouteDisplays[0].providers.find((provider) => provider.id === "strike");
+  assert.ok(strikeProvider);
+  assert.match(strikeProvider.url, /^https:\/\/docs\.strike\.me/);
+  assert.match(strikeProvider.icon, /assets\/provider-icons\/strike\.png/);
+  assert.equal(strikeProvider.tutorials.length, 4);
+  assert.match(strikeProvider.tutorials[0].image, /assets\/pay_tutorials\/strike-1\.webp/);
 
   const firstCrypto = getOpenReceiveAltcoinAssets().find((asset) => asset.route !== undefined);
   assert.ok(firstCrypto?.route);

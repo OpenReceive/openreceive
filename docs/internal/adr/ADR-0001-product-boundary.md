@@ -17,16 +17,16 @@ custodian, broker, or bank.
 OpenReceive creates one BOLT11 invoice through your backend and verifies
 settlement before an app-owned settlement action. It may
 display route guidance for third-party services that may help purchasers start
-from a credit card, bank account, Bitcoin wallet, stablecoin balance, exchange,
-onramp, or swap service and reach that invoice.
+from a Bitcoin wallet, stablecoin balance, exchange, or swap service and reach
+that invoice.
 
 OpenReceive does not custody funds, exchange assets, operate accounts, transmit
 money, or guarantee provider route availability.
 
 ## Consequences
 
-- Docs and UI may say purchasers can start from cards, bank accounts, Bitcoin,
-  stablecoins, exchanges, onramps, or swaps, but must not say OpenReceive
-  itself processes those payments.
+- Docs and UI may say purchasers can start from Bitcoin, stablecoins,
+  exchanges, or swaps, but must not say OpenReceive itself processes those
+  payments.
 - Provider registry claims need conservative wording and evidence.
 - The backend owns settlement verification and app settlement actions.

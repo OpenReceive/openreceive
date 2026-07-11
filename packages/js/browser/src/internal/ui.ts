@@ -304,8 +304,6 @@ export const openReceivePaymentIconUrls: Readonly<Record<OpenReceivePaymentIconI
 export const openReceivePaymentMethodIconIds: Readonly<
   Record<OpenReceivePaymentMethod, OpenReceivePaymentIconId>
 > = {
-  card: "card",
-  bank: "bank",
   bitcoin: "btc",
   crypto: "crypto",
 } as const;
@@ -867,7 +865,7 @@ export interface CreateCheckoutStateOptions {
   readonly previousState?: CheckoutState;
 }
 
-export type OpenReceivePaymentMethod = "card" | "bank" | "bitcoin" | "crypto";
+export type OpenReceivePaymentMethod = "bitcoin" | "crypto";
 export type OpenReceiveThemePreference = "light" | "dark" | "system";
 export type OpenReceiveResolvedTheme = "light" | "dark";
 export type OpenReceiveRegionId =
@@ -1006,7 +1004,6 @@ export type OpenReceivePaymentWizardSelectionAction =
   | {
       readonly type: "select_method";
       readonly method: OpenReceivePaymentMethod;
-      readonly storedCountryCode?: string | null;
     }
   | {
       readonly type: "change_method";
@@ -1183,16 +1180,6 @@ export const openReceivePaymentMethods: readonly OpenReceivePaymentMethodOption[
     detail: "Pay from Lightning or send on-chain into a swap.",
   },
   {
-    id: "card",
-    title: "Credit Card",
-    detail: "Pick your country, then use a card-friendly provider.",
-  },
-  {
-    id: "bank",
-    title: "Bank Transfer",
-    detail: "Choose a country for local bank rails and cash apps.",
-  },
-  {
     id: "crypto",
     title: "Crypto",
     detail: "Use stablecoins or altcoins through Lightning-capable services.",
@@ -1251,7 +1238,5 @@ export function parseOpenReceiveThemePreference(
 export function parseOpenReceivePaymentMethod(
   value: string | null,
 ): OpenReceivePaymentMethod | null {
-  return value === "card" || value === "bank" || value === "bitcoin" || value === "crypto"
-    ? value
-    : null;
+  return value === "bitcoin" || value === "crypto" ? value : null;
 }

@@ -1482,9 +1482,6 @@ export function defineOpenReceiveElements(
           this.selection = updateOpenReceivePaymentWizardSelection(this.selection, {
             type: "select_method",
             method,
-            storedCountryCode: method === "card" || method === "bank"
-              ? readOpenReceiveStoredCountryCode()
-              : undefined
           });
           this.render();
         });

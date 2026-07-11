@@ -8,9 +8,9 @@ custodian, broker, or money transmitter. It does not hold funds, exchange
 assets, route money, or operate customer accounts.
 
 OpenReceive's front end checkout helpers give purchasers friendly
-route guidance so they can start from a credit card, bank account, Bitcoin
-wallet, stablecoin balance, exchange, onramp, or swap service and complete an
-instant payment on your website or app.
+route guidance so they can start from a Bitcoin wallet, stablecoin balance,
+exchange, or swap service and complete an instant payment on your website or
+app.
 
 OpenReceive does three narrow things:
 
@@ -21,9 +21,9 @@ OpenReceive does three narrow things:
 3. Lets the backend verify payment before app-owned fulfillment runs.
 
 Provider routes are payer-side suggestions. A wallet, exchange, swap service,
-fiat onramp, card, bank account, Bitcoin wallet, or stablecoin balance may be
-the purchaser's starting point, but reaching the Lightning invoice happens
-through third-party services outside OpenReceive.
+Bitcoin wallet, or stablecoin balance may be the purchaser's starting point,
+but reaching the Lightning invoice happens through third-party services outside
+OpenReceive.
 
 ## Runtime Model
 

@@ -4,9 +4,8 @@ OpenReceive adds uncensorable, global, permissionless inbound payments to any
 website or app using open-source packages and decentralized protocols. A server
 in your application creates and verifies one Bitcoin Lightning BOLT11 invoice
 through a wallet you control, while the checkout gives purchasers friendly route
-guidance so they can start from a credit card, bank account, Bitcoin wallet,
-stablecoin balance, exchange, onramp, or swap service and complete an instant
-payment on your website or app.
+guidance so they can start from a Bitcoin wallet, stablecoin balance, exchange,
+or swap service and complete an instant payment on your website or app.
 
 OpenReceive is not a bank, exchange, wallet, broker, custodian, or payment
 processor. It does not transmit money or hold customer funds. Your app brings a
@@ -40,7 +39,7 @@ OpenReceive's design hinges on two things:
 - **The Lightning invoice.** BOLT11 has been a standard since 2018 and is widely
   recognized across wallets, exchanges, and services. It gives you final,
   fast, interoperable settlement — a single receive primitive that every route
-  (card → onramp → wallet → exchange → swap) can converge on.
+  (wallet → exchange → swap) can converge on.
 - **Separation of concerns.** OpenReceive securely talks to your receiving
   wallet over NWC and gives your server definitive proof of settlement. That's
   it. You are free to code (or vibe code!) your checkout, cart, pricing, and
@@ -175,9 +174,8 @@ when it is absent.
 ## Product Boundary
 
 OpenReceive creates a Lightning invoice for each checkout action and can show
-payer-side route guidance for wallets, exchanges, swap services, fiat onramps,
-cards, bank accounts, Bitcoin, or stablecoins that may be able to reach that
-invoice.
+payer-side route guidance for wallets, exchanges, swap services, Bitcoin, or
+stablecoins that may be able to reach that invoice.
 Provider routes are suggestions, not payment guarantees. The payer chooses and
 uses third-party services outside OpenReceive.
 

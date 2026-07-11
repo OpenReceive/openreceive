@@ -378,14 +378,12 @@ export function groupOpenReceiveSwapOptionsByLabel<T extends { readonly label: s
 
 /**
  * Preferred checkout method-grid order when swap coins are present:
- * Bitcoin → Credit Card → USDT → USDC → Bank Transfer → SOL → ETH, then leftovers.
+ * Bitcoin → USDT → USDC → SOL → ETH, then leftovers (including Crypto).
  */
 export const OPENRECEIVE_METHOD_GRID_ORDER = [
   { kind: "method", id: "bitcoin" },
-  { kind: "method", id: "card" },
   { kind: "swap", label: "USDT" },
   { kind: "swap", label: "USDC" },
-  { kind: "method", id: "bank" },
   { kind: "swap", label: "SOL" },
   { kind: "swap", label: "ETH" },
 ] as const;
@@ -401,8 +399,8 @@ export type OpenReceiveMethodGridEntry<T extends { readonly label: string }> =
     };
 
 /**
- * Interleave fiat payment methods with grouped swap coins in the preferred grid order.
- * When no swap options are present, returns the fiat methods only (including crypto).
+ * Interleave payment methods with grouped swap coins in the preferred grid order.
+ * When no swap options are present, returns the payment methods only.
  */
 export function buildOpenReceiveMethodGridEntries<T extends { readonly label: string }>(
   paymentMethods: readonly OpenReceivePaymentMethodOption[],
@@ -593,9 +591,7 @@ export function createOpenReceivePaymentWizardState(
   };
 }
 
-function getRailForPaymentMethod(method: OpenReceivePaymentMethod | null): FiatRailId | null {
-  if (method === "bank") return "bank";
-  if (method === "card") return "card";
+function getRailForPaymentMethod(_method: OpenReceivePaymentMethod | null): FiatRailId | null {
   return null;
 }
 
@@ -666,24 +662,13 @@ export function updateOpenReceivePaymentWizardSelection(
 ): OpenReceivePaymentWizardSelection {
   switch (action.type) {
     case "select_method": {
-      if (action.method !== "card" && action.method !== "bank") {
-        return {
-          ...selection,
-          selectedMethod: action.method,
-          selectedBitcoinRoute:
-            action.method === "bitcoin"
-              ? (selection.selectedBitcoinRoute ?? getOpenReceiveDefaultBitcoinRoute())
-              : selection.selectedBitcoinRoute,
-          countryPickerOpen: false,
-        };
-      }
-
-      const selectedCountryCode = action.storedCountryCode ?? selection.selectedCountryCode;
       return {
         ...selection,
         selectedMethod: action.method,
-        selectedCountryCode,
-        selectedRegion: getOpenReceiveRegionForCountry(selectedCountryCode),
+        selectedBitcoinRoute:
+          action.method === "bitcoin"
+            ? (selection.selectedBitcoinRoute ?? getOpenReceiveDefaultBitcoinRoute())
+            : selection.selectedBitcoinRoute,
         countryPickerOpen: false,
       };
     }
@@ -794,19 +779,7 @@ export class OpenReceiveBrowserPaymentWizardController
   }
 
   update(action: OpenReceivePaymentWizardSelectionAction): OpenReceivePaymentWizardSelection {
-    const normalizedAction =
-      action.type === "select_method" &&
-      (action.method === "card" || action.method === "bank") &&
-      action.storedCountryCode === undefined
-        ? {
-            ...action,
-            storedCountryCode: readOpenReceiveStoredCountryCode({
-              storage: this.options.storage,
-              storageKey: this.options.storageKey,
-            }),
-          }
-        : action;
-    const next = updateOpenReceivePaymentWizardSelection(this.selection, normalizedAction);
+    const next = updateOpenReceivePaymentWizardSelection(this.selection, action);
     if (action.type === "select_country") {
       writeOpenReceiveStoredCountryCode(action.countryCode, {
         storage: this.options.storage,
