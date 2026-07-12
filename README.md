@@ -1,11 +1,16 @@
 # OpenReceive
 
+Ship with a sensible payment default: accept Bitcoin. Your payouts always land
+in the most neutral, lowest-friction mutual currency on the internet — Bitcoin —
+while your customers can start from the balances they already hold: USDT, USDC,
+ETH, SOL, and more.
+
 OpenReceive adds uncensorable, global, permissionless inbound payments to any
-website or app using open-source packages and decentralized protocols. A server
-in your application creates and verifies one Bitcoin Lightning BOLT11 invoice
-through a wallet you control, while the checkout gives purchasers friendly route
-guidance so they can start from a Bitcoin wallet, stablecoin balance, exchange,
-or swap service and complete an instant payment on your website or app.
+website or app. Your server creates and verifies one Bitcoin Lightning BOLT11
+invoice through a wallet you control. Checkout can guide a Lightning wallet
+payment directly, or use automated swap services so payers feel like they are
+paying in familiar, centrally issued coins (Tether, USDC, Solana, Ethereum) —
+while the payment settles into Bitcoin, freedom money, on your terms.
 
 OpenReceive is not a bank, exchange, wallet, broker, custodian, or payment
 processor. It does not transmit money or hold customer funds. Your app brings a
