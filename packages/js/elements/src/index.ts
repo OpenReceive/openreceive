@@ -124,6 +124,11 @@ export interface OpenReceiveElementsWizardView {
   readonly selectedRegion?: OpenReceiveRegionId;
   readonly countryPickerOpen?: boolean;
   readonly swapOptions?: readonly OpenReceiveElementsSwapOption[];
+  /**
+   * True until the first order-status response supplies `payment_methods` /
+   * `swap_pay_options` (provider catalog warm-up). Shows a loader instead of Crypto.
+   */
+  readonly currenciesLoading?: boolean;
   /** Selected pay-in asset per multi-network coin label (e.g. USDT → USDT_TRON). */
   readonly selectedSwapNetworks?: Readonly<Record<string, string>>;
   /** Compact selector highlight: `method:bitcoin` or `swap:USDT`. */
@@ -482,6 +487,8 @@ function renderElementCompactPaymentSelectorHtml(
   view: OpenReceiveElementsWizardView,
 ): string {
   const entries = buildOpenReceiveMethodGridEntries(openReceivePaymentMethods, swapAssetOptions);
+  const currenciesLoading =
+    view.currenciesLoading === true && swapAssetOptions.length === 0;
   const selectedKey = view.selectedPickerKey ?? null;
   const selectedSwap = selectedKey === null ? null : parseOpenReceiveSwapPickerKey(selectedKey);
   const selectedSwapEntry =
@@ -555,6 +562,12 @@ function renderElementCompactPaymentSelectorHtml(
       return renderElementSwapMethodGroupHtml(entry.group, view, selectedKey);
     })
     .join("");
+  const loadingTile = currenciesLoading
+    ? `<div part="currencies-loading" role="status" aria-live="polite" class="${orClasses.methodCurrenciesLoading}">
+        <span part="spinner" class="${orClasses.spinner}" aria-hidden="true"></span>
+        <span class="${orClasses.methodTitle}">${escapeHtml(openReceiveCheckoutLabels.loadingCurrencies)}</span>
+      </div>`
+    : "";
 
   const desktopReveal =
     networkRequired && selectedGroup !== undefined
@@ -573,7 +586,7 @@ function renderElementCompactPaymentSelectorHtml(
       </header>
       <div class="${orClasses.wizardBody}" aria-labelledby="payment-method-heading">
         <div part="method-grid" role="radiogroup" aria-label="${escapeHtml(openReceiveCheckoutLabels.paymentMethod)}" class="${orClasses.methodGrid}">
-          ${tiles}
+          ${tiles}${loadingTile}
         </div>
         ${desktopReveal}
       </div>
@@ -893,11 +906,13 @@ function renderElementSwapPanelHtml(
   if (display.state === "progress") {
     return `
       <section part="swap-panel" class="${orClasses.swapPanel}">
-        ${heading}
-        <dl part="swap-details" class="${orClasses.swapDetails}">
-          ${display.depositTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Deposit transaction", display.depositTxId)}
-          ${display.payoutTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Lightning payout", display.payoutTxId)}
-        </dl>
+        <div part="status" class="${orClasses.paymentStatus}">
+          <span part="spinner" class="${orClasses.spinner}" aria-hidden="true"></span>
+          <div class="${orClasses.paymentStatusBody}">
+            <strong class="${orClasses.paymentStatusTitle}">${escapeHtml(display.providerStateLabel)}</strong>
+            <p class="${orClasses.paymentStatusDetail}">${escapeHtml(display.providerStateDetail)}</p>
+          </div>
+        </div>
         ${supportDetails}
       </section>
     `;
@@ -1337,6 +1352,7 @@ export function defineOpenReceiveElements(
     private activeTutorialIndex = 0;
     private activeTutorialCopied = false;
     private swapOptions: readonly OpenReceiveElementsSwapOption[] = [];
+    private swapOptionsLoaded = false;
     private selectedSwapNetworks: Record<string, string> = {};
     private selectedPickerKey: string | null = null;
     private selectedSwapAsset: string | null = null;
@@ -1439,7 +1455,11 @@ export function defineOpenReceiveElements(
     private handleControllerSnapshot(snapshot: CheckoutSnapshot): void {
       this.latestCheckoutSnapshot = snapshot;
       // Payable assets ride on the order object itself (payment_methods).
-      this.swapOptions = snapshot.payment_methods ?? [];
+      // Undefined means status has not returned yet (catalog may still be warming).
+      if (snapshot.payment_methods !== undefined) {
+        this.swapOptions = snapshot.payment_methods;
+        this.swapOptionsLoaded = true;
+      }
       const swapInvoice = snapshot.invoices.find(
         (invoice) => invoice.rail === "swap" && invoice.swap !== undefined
       );
@@ -1493,6 +1513,7 @@ export function defineOpenReceiveElements(
           selectedRegion: this.selection.selectedRegion,
           countryPickerOpen: this.selection.countryPickerOpen,
           swapOptions: this.swapOptions,
+          currenciesLoading: !this.swapOptionsLoaded,
           selectedSwapNetworks: this.selectedSwapNetworks,
           selectedPickerKey: this.selectedPickerKey,
           selectedSwapAsset: this.selectedSwapAsset,

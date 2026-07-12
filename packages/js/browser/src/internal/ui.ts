@@ -1127,6 +1127,7 @@ export const openReceiveCheckoutLabels = {
   wizardTitle: "Pay this invoice",
   wizardSubtitle: "Choose how you want to pay.",
   paymentMethod: "Payment method",
+  loadingCurrencies: "Loading currencies...",
   emptyBitcoin: "Choose Bitcoin Lightning.",
   emptyCrypto: "Choose an altcoin.",
   emptyFiat: "No providers found for this country yet.",

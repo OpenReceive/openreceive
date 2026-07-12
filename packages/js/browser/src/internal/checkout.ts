@@ -184,7 +184,7 @@ export function createOpenReceiveSwapDisplayModel(
       : getOpenReceiveSwapProviderStateLabel(swap.provider_state),
     providerStateDetail: settled
       ? "Your payment is confirmed and your order is complete."
-      : getOpenReceiveSwapProviderStateDetail(swap.provider_state),
+      : getOpenReceiveSwapProviderStateDetail(swap.provider_state, swap.pay_in_asset),
     state: settled ? "settled" : getOpenReceiveSwapPanelState(swap.provider_state),
     expiresInSeconds,
     countdownLabel: formatOpenReceiveCountdown(expiresInSeconds),
@@ -229,13 +229,18 @@ function getOpenReceiveSwapProviderStateLabel(state: string): string {
   return state;
 }
 
-function getOpenReceiveSwapProviderStateDetail(state: string): string {
+function getOpenReceiveSwapProviderStateDetail(state: string, payInAsset: string): string {
+  const { networkLabel } = getOpenReceiveSwapAssetDisplay(payInAsset);
   if (state === "creating_provider_order") return "Creating a payment address.";
   if (state === "awaiting_deposit") return "Send exactly the amount shown below.";
-  if (state === "confirming") return "Your payment was detected and is confirming.";
-  if (state === "exchanging") return "Your payment is being converted.";
+  if (state === "confirming") {
+    return `Your payment was detected on ${networkLabel}. ${getOpenReceiveSwapConfirmationWaitHint(payInAsset)}`;
+  }
+  if (state === "exchanging") {
+    return "Your payment is confirmed and being converted. This usually finishes within a minute.";
+  }
   if (state === "paying_invoice" || state === "completed") {
-    return "The provider is sending the Lightning payment.";
+    return "The provider is sending the Lightning payment. This usually takes a few seconds.";
   }
   if (state === "expired") return "No payment was received before the payment window closed.";
   if (state === "refund_required") return "Enter an address you control to request a refund.";
@@ -244,6 +249,20 @@ function getOpenReceiveSwapProviderStateDetail(state: string): string {
   if (state === "attention") return "This payment needs support review.";
   if (state === "failed") return "This payment address can no longer be used.";
   return state;
+}
+
+/**
+ * Rough payer-facing confirmation guidance by deposit network. Not a SLA —
+ * chain congestion and provider policy can take longer.
+ */
+export function getOpenReceiveSwapConfirmationWaitHint(payInAsset: string): string {
+  const network = payInAsset.includes("_")
+    ? (payInAsset.split("_").at(-1) ?? payInAsset)
+    : payInAsset;
+  if (network === "TRON") return "Confirmation usually takes 1–3 minutes.";
+  if (network === "SOL") return "Confirmation usually takes under a minute.";
+  if (network === "ETH") return "Confirmation often takes 5–15 minutes.";
+  return "Confirmation usually takes a few minutes.";
 }
 
 function getOpenReceiveSwapPanelState(state: string): OpenReceiveSwapDisplayModel["state"] {

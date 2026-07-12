@@ -50,6 +50,8 @@ export const orClasses = {
     "flex min-h-14 w-full items-center justify-start gap-3 rounded-field border border-base-300 bg-base-100 px-3 py-2 text-left text-base-content opacity-50 cursor-not-allowed shadow-none sm:px-4",
   methodCardStatic:
     "flex min-h-14 w-full items-center justify-start gap-3 rounded-field border border-base-300 bg-base-100 px-3 py-2 text-left text-base-content shadow-none sm:px-4",
+  methodCurrenciesLoading:
+    "flex min-h-14 w-full items-center justify-start gap-3 rounded-field border border-dashed border-base-300 bg-base-100 px-3 py-2 text-left text-base-content/70 shadow-none sm:px-4 sm:col-span-2 lg:col-span-4",
   methodCardReady:
     "flex min-h-14 w-full items-center justify-start gap-3 rounded-field border border-base-300 bg-base-100 px-3 py-2 text-left text-base-content shadow-none transition-colors hover:border-base-content/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:px-4 cursor-pointer",
   methodCardActiveBitcoin:

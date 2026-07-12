@@ -52,7 +52,7 @@ test("elements render display-safe checkout HTML", () => {
   assert.doesNotMatch(html, />Open Wallet</);
   assert.match(html, /data-openreceive-wizard/);
   assert.match(html, /Bitcoin/);
-  assert.match(html, /Crypto/);
+  assert.doesNotMatch(html, />Crypto</);
   assert.doesNotMatch(html, /Credit Card/);
   assert.doesNotMatch(html, /Bank Transfer/);
 });
@@ -80,12 +80,19 @@ test("elements derive waiting display from browser checkout state", () => {
 test("elements render payment wizard route choices and providers from browser state", () => {
   const firstStep = renderOpenReceivePaymentWizardHtml();
   assert.match(firstStep, /Bitcoin/);
-  assert.match(firstStep, /Crypto/);
+  assert.doesNotMatch(firstStep, />Crypto</);
   assert.doesNotMatch(firstStep, /Credit Card/);
   assert.doesNotMatch(firstStep, /Bank Transfer/);
   assert.match(firstStep, /assets\/icons\/btc\.svg/);
   assert.doesNotMatch(firstStep, /assets\/icons\/card\.svg/);
   assert.doesNotMatch(firstStep, /change payment method/);
+
+  const loadingStep = renderOpenReceivePaymentWizardHtml({
+    currenciesLoading: true,
+  });
+  assert.match(loadingStep, /Bitcoin/);
+  assert.match(loadingStep, /Loading currencies/);
+  assert.doesNotMatch(loadingStep, />Crypto</);
 
   const cryptoStep = renderOpenReceivePaymentWizardHtml({
     selectedMethod: "crypto",

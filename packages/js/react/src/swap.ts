@@ -319,7 +319,7 @@ export function renderSwapDepositPanel(options: {
       {
         className: orClasses.swapPanel,
       },
-      heading,
+      waitingCard(),
       renderSwapSupportDetails(display, options),
     );
   }

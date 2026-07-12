@@ -351,6 +351,9 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
     selection.selectedMethod === null
       ? renderCompactPaymentMethodSelector({
           swapAssetOptions,
+          // Create-checkout snapshot has no payment_methods yet; order status fills them
+          // after the provider catalog (ccies) warms. Show a loader instead of Crypto.
+          currenciesLoading: checkout?.payment_methods === undefined,
           checkout: checkout ?? undefined,
           selectedPickerKey,
           selectedSwapNetworks,
@@ -627,6 +630,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
 
 function renderCompactPaymentMethodSelector(options: {
   readonly swapAssetOptions: readonly OpenReceiveSwapOptionDisplay[];
+  readonly currenciesLoading?: boolean;
   readonly checkout: CheckoutSnapshot | undefined;
   readonly selectedPickerKey: string | null;
   readonly selectedSwapNetworks: Readonly<Record<string, string>>;
@@ -639,6 +643,8 @@ function renderCompactPaymentMethodSelector(options: {
     openReceivePaymentMethods,
     options.swapAssetOptions,
   );
+  const currenciesLoading =
+    options.currenciesLoading === true && options.swapAssetOptions.length === 0;
   const selectedKey = options.selectedPickerKey;
   const selectedSwap = selectedKey === null ? null : parseOpenReceiveSwapPickerKey(selectedKey);
   const selectedSwapEntry =
@@ -850,7 +856,7 @@ function renderCompactPaymentMethodSelector(options: {
           "aria-label": openReceiveCheckoutLabels.paymentMethod,
           className: orClasses.methodGrid,
         },
-        entries.map((entry) => {
+        ...entries.map((entry) => {
           if (entry.kind === "method") {
             const method = entry.method;
             const accent = openReceivePaymentAccentId(method.id);
@@ -976,6 +982,26 @@ function renderCompactPaymentMethodSelector(options: {
               : null,
           );
         }),
+        currenciesLoading
+          ? React.createElement(
+              "div",
+              {
+                key: "currencies-loading",
+                role: "status",
+                "aria-live": "polite",
+                className: orClasses.methodCurrenciesLoading,
+              },
+              React.createElement("span", {
+                className: orClasses.spinner,
+                "aria-hidden": "true",
+              }),
+              React.createElement(
+                "span",
+                { className: orClasses.methodTitle },
+                openReceiveCheckoutLabels.loadingCurrencies,
+              ),
+            )
+          : null,
       ),
       networkRequired && selectedGroup !== undefined
         ? React.createElement(

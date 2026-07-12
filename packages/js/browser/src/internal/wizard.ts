@@ -401,18 +401,20 @@ export type OpenReceiveMethodGridEntry<T extends { readonly label: string }> =
 
 /**
  * Interleave payment methods with grouped swap coins in the preferred grid order.
- * When no swap options are present, returns the payment methods only.
+ * The standalone "Crypto" method is never shown — swap coins replace it when present.
+ * When no swap options are present yet, returns Bitcoin (and any other non-crypto methods) only.
  */
 export function buildOpenReceiveMethodGridEntries<T extends { readonly label: string }>(
   paymentMethods: readonly OpenReceivePaymentMethodOption[],
   swapOptions: readonly T[],
 ): readonly OpenReceiveMethodGridEntry<T>[] {
+  const visibleMethods = paymentMethods.filter((method) => method.id !== "crypto");
   const swapGroups = groupOpenReceiveSwapOptionsByLabel(swapOptions);
   if (swapGroups.length === 0) {
-    return paymentMethods.map((method) => ({ kind: "method" as const, method }));
+    return visibleMethods.map((method) => ({ kind: "method" as const, method }));
   }
 
-  const methodsById = new Map(paymentMethods.map((method) => [method.id, method]));
+  const methodsById = new Map(visibleMethods.map((method) => [method.id, method]));
   const groupsByLabel = new Map(
     swapGroups.map((group) => [group.label.trim().toUpperCase(), group] as const),
   );
@@ -434,8 +436,8 @@ export function buildOpenReceiveMethodGridEntries<T extends { readonly label: st
     entries.push({ kind: "swap", group });
   }
 
-  for (const method of paymentMethods) {
-    if (method.id === "crypto" || usedMethodIds.has(method.id)) continue;
+  for (const method of visibleMethods) {
+    if (usedMethodIds.has(method.id)) continue;
     entries.push({ kind: "method", method });
   }
   for (const group of swapGroups) {

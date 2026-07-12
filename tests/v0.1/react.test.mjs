@@ -42,7 +42,11 @@ import {
   getOpenReceiveNetworkIcon,
   getOpenReceiveSwapOptionIcon,
   getOpenReceiveWizardEmptyMessage,
+  createOpenReceiveSwapDisplayModel,
+  getOpenReceiveSwapConfirmationWaitHint,
   openReceiveCheckoutLabels,
+  openReceivePaymentMethods,
+  buildOpenReceiveMethodGridEntries,
   readOpenReceiveStoredCountryCode,
   readOpenReceiveThemePreference,
   resolveOpenReceiveTheme,
@@ -245,7 +249,8 @@ test("React checkout default UI includes countdown, waiting state, and payment w
   assert.match(html, /Invoice expires in/);
   assert.match(html, /Pay this invoice/);
   assert.match(html, /Bitcoin/);
-  assert.match(html, /Crypto/);
+  assert.match(html, /Loading currencies/);
+  assert.doesNotMatch(html, />Crypto</);
   assert.doesNotMatch(html, /Credit Card/);
   assert.doesNotMatch(html, /Bank Transfer/);
   assert.doesNotMatch(html, /textarea/);
@@ -285,9 +290,89 @@ test("React payment wizard server-renders the package-owned first choices", () =
 
   assert.match(html, /Pay this invoice/);
   assert.match(html, /Bitcoin/);
-  assert.match(html, /Crypto/);
+  assert.match(html, /Loading currencies/);
+  assert.doesNotMatch(html, />Crypto</);
   assert.doesNotMatch(html, /Credit Card/);
   assert.doesNotMatch(html, /Bank Transfer/);
+});
+
+test("method grid never includes the standalone Crypto button", () => {
+  const empty = buildOpenReceiveMethodGridEntries(openReceivePaymentMethods, []);
+  assert.deepEqual(
+    empty.map((entry) => (entry.kind === "method" ? entry.method.id : entry.group.label)),
+    ["bitcoin"],
+  );
+
+  const withUsdt = buildOpenReceiveMethodGridEntries(openReceivePaymentMethods, [
+    {
+      label: "USDT",
+      pay_in_asset: "USDT_TRON",
+      network_label: "Tron",
+      provider: "fixedfloat",
+      available: true,
+    },
+  ]);
+  assert.deepEqual(
+    withUsdt.map((entry) => (entry.kind === "method" ? entry.method.id : entry.group.label)),
+    ["bitcoin", "USDT"],
+  );
+  assert.equal(
+    withUsdt.some((entry) => entry.kind === "method" && entry.method.id === "crypto"),
+    false,
+  );
+});
+
+test("swap confirming copy includes network-specific wait guidance", () => {
+  assert.equal(
+    getOpenReceiveSwapConfirmationWaitHint("USDT_TRON"),
+    "Confirmation usually takes 1–3 minutes.",
+  );
+  assert.equal(
+    getOpenReceiveSwapConfirmationWaitHint("SOL_SOL"),
+    "Confirmation usually takes under a minute.",
+  );
+  assert.equal(
+    getOpenReceiveSwapConfirmationWaitHint("ETH_ETH"),
+    "Confirmation often takes 5–15 minutes.",
+  );
+
+  const tron = createOpenReceiveSwapDisplayModel({
+    invoice_id: "or_inv_swap",
+    rail: "swap",
+    transaction_state: "pending",
+    swap: {
+      attempt_id: "or_swp_1",
+      provider: "fixedfloat",
+      provider_order_id: "FSMRBN",
+      pay_in_asset: "USDT_TRON",
+      deposit_address: "TTestAddress",
+      deposit_amount: "12.00",
+      provider_state: "confirming",
+      provider_expires_at: Math.floor(Date.now() / 1000) + 600,
+      deposit_tx_id: "0xabc",
+    },
+  });
+  assert.equal(tron?.state, "progress");
+  assert.equal(tron?.providerStateLabel, "Confirming payment");
+  assert.match(tron?.providerStateDetail ?? "", /Tron/);
+  assert.match(tron?.providerStateDetail ?? "", /1–3 minutes/);
+
+  const eth = createOpenReceiveSwapDisplayModel({
+    invoice_id: "or_inv_swap_eth",
+    rail: "swap",
+    transaction_state: "pending",
+    swap: {
+      attempt_id: "or_swp_2",
+      provider: "fixedfloat",
+      pay_in_asset: "ETH_ETH",
+      deposit_address: "0xabc",
+      deposit_amount: "0.01",
+      provider_state: "confirming",
+      provider_expires_at: Math.floor(Date.now() / 1000) + 600,
+    },
+  });
+  assert.match(eth?.providerStateDetail ?? "", /Ethereum/);
+  assert.match(eth?.providerStateDetail ?? "", /5–15 minutes/);
 });
 
 test("React theme toggle renders a package-owned light/dark switch", () => {
