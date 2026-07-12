@@ -126,7 +126,7 @@ config = OpenReceive::Server::Config.load(path: "openreceive.yml", env: ENV)
 ```
 
 Reads the same keys as the Node config (`OPENRECEIVE_NWC` / `_NAMESPACE` / `_STORE` /
-`_PRICE_CURRENCIES`, plus nested `operation`, `swap`, `logging`). The NWC secret is stored but never
+`_PRICE_CURRENCIES`, plus nested `operation`, `swap`, `logging`, `sentry`). The NWC secret is stored but never
 exposed by `#inspect` / `#to_s`.
 
 ## Tests

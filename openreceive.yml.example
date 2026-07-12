@@ -41,3 +41,10 @@ logging:
   max_file_size_mb: 10   # rotate once the active file would exceed this size
   max_files: 5           # log files kept (active file plus rotated backups)
   level: debug           # minimum level written: debug | info | warn | error
+
+sentry:
+  # Optional. Host apps can read this and call Sentry.init themselves.
+  # Omit the block or leave dsn blank to skip. Never commit a real DSN.
+  dsn: ""
+  # environment: production
+  # release: openreceive@0.1.1

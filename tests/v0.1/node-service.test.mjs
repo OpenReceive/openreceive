@@ -2171,3 +2171,30 @@ test("FixedFloat status surfaces emergency.repeat", async () => {
   assert.equal(order.emergency_repeat, true);
 });
 
+test("readOpenReceiveConfigFile parses optional sentry fields", async () => {
+  const { readOpenReceiveConfigFile } = await import("../../packages/js/node/src/config.ts");
+  const dir = mkdtempSync(path.join(tmpdir(), "openreceive-sentry-config-"));
+  try {
+    writeFileSync(
+      path.join(dir, "openreceive.yml"),
+      [
+        "sentry:",
+        '  dsn: "https://public@o0.ingest.sentry.io/1"',
+        "  environment: staging",
+        "  release: openreceive@0.1.1",
+        "",
+      ].join("\n"),
+    );
+
+    assert.deepEqual(readOpenReceiveConfigFile({ cwd: dir }), {
+      sentry: {
+        dsn: "https://public@o0.ingest.sentry.io/1",
+        environment: "staging",
+        release: "openreceive@0.1.1",
+      },
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+

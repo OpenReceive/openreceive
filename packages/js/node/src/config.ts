@@ -14,6 +14,7 @@ export interface OpenReceiveFileConfig {
   readonly operation?: OpenReceiveFileOperationConfig;
   readonly swap?: OpenReceiveFileSwapConfig;
   readonly logging?: OpenReceiveFileLoggingConfig;
+  readonly sentry?: OpenReceiveFileSentryConfig;
 }
 
 export interface OpenReceiveFileLoggingConfig {
@@ -23,6 +24,12 @@ export interface OpenReceiveFileLoggingConfig {
   readonly maxFileSizeMb?: number;
   readonly maxFiles?: number;
   readonly level?: string;
+}
+
+export interface OpenReceiveFileSentryConfig {
+  readonly dsn?: string;
+  readonly environment?: string;
+  readonly release?: string;
 }
 
 export interface OpenReceiveFileOperationConfig {
@@ -78,6 +85,7 @@ export function readOpenReceiveConfigFile(
     ...readOperationConfig(root, sourcePath),
     ...readSwapConfig(root, sourcePath, options),
     ...readLoggingConfig(root, sourcePath),
+    ...readSentryConfig(root, sourcePath),
   };
 }
 
@@ -203,6 +211,24 @@ function readLoggingConfig(
     ...(level === undefined ? {} : { level }),
   };
   return Object.keys(result).length === 0 ? {} : { logging: result };
+}
+
+function readSentryConfig(
+  root: Record<string, unknown>,
+  sourcePath: string,
+): Pick<OpenReceiveFileConfig, "sentry"> {
+  const sentry = readOptionalRecord(root.sentry, `${sourcePath}.sentry`);
+  if (sentry === undefined) return {};
+  const label = `${sourcePath}.sentry`;
+  const dsn = readOptionalString(sentry.dsn, `${label}.dsn`);
+  const environment = readOptionalString(sentry.environment, `${label}.environment`);
+  const release = readOptionalString(sentry.release, `${label}.release`);
+  const result: OpenReceiveFileSentryConfig = {
+    ...(dsn === undefined ? {} : { dsn }),
+    ...(environment === undefined ? {} : { environment }),
+    ...(release === undefined ? {} : { release }),
+  };
+  return Object.keys(result).length === 0 ? {} : { sentry: result };
 }
 
 function readSwapConfig(

@@ -27,6 +27,7 @@ export type {
   OpenReceiveFileConfig,
   OpenReceiveFileLoggingConfig,
   OpenReceiveFileOperationConfig,
+  OpenReceiveFileSentryConfig,
   OpenReceiveFileSwapConfig,
   ReadOpenReceiveConfigFileOptions,
 } from "./config.ts";

@@ -1546,6 +1546,8 @@ test("Hello Fruit server demos keep secret-safe local setup docs", () => {
   assert.match(openReceiveExample, /^OPENRECEIVE_STORE:\s+local-sqlite$/m);
   assert.match(openReceiveExample, /^\s+key:\s*""$/m);
   assert.match(openReceiveExample, /^\s+secret:\s*""$/m);
+  assert.match(openReceiveExample, /^sentry:\s*$/m);
+  assert.match(openReceiveExample, /^\s+dsn:\s*""$/m);
   assert.doesNotMatch(openReceiveExample, /nostr\+walletconnect:\/\//);
 
   for (const demoDir of demoServerDirs) {

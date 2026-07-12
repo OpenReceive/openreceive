@@ -169,7 +169,7 @@ export function sanitizeLogValue(value: unknown): unknown {
 }
 
 export function isSensitiveLogKey(key: string): boolean {
-  return /secret|token|authorization|cookie|nwc/i.test(key);
+  return /secret|token|authorization|cookie|nwc|dsn/i.test(key);
 }
 
 export function redactSecrets(value: string): string {

@@ -6,7 +6,7 @@ module OpenReceive
   module Server
     # Configuration loader — reads the SAME keys as the Node config (packages/js/node/config.ts):
     # OPENRECEIVE_NWC / _NAMESPACE / _STORE / _PRICE_CURRENCIES plus the nested `operation`,
-    # `swap`, and `logging` blocks. YAML file first, then env-var overrides.
+    # `swap`, `logging`, and `sentry` blocks. YAML file first, then env-var overrides.
     #
     # The NWC connection string is a secret: it is stored but NEVER exposed by #inspect / #to_s.
     class Config
@@ -20,7 +20,7 @@ module OpenReceive
         "transaction_scan_timeout_ms" => "OPENRECEIVE_TRANSACTION_SCAN_TIMEOUT_MS"
       }.freeze
 
-      attr_reader :nwc, :namespace, :store, :price_currencies, :operation, :swap, :logging
+      attr_reader :nwc, :namespace, :store, :price_currencies, :operation, :swap, :logging, :sentry
 
       def self.load(path: "openreceive.yml", env: ENV)
         file = read_yaml(path)
@@ -52,6 +52,7 @@ module OpenReceive
         @operation = read_operation(file, env)
         @swap = read_record(file["swap"])
         @logging = read_record(file["logging"])
+        @sentry = read_record(file["sentry"])
         freeze
       end
 
@@ -63,7 +64,8 @@ module OpenReceive
           "price_currencies" => @price_currencies,
           "operation" => @operation,
           "swap" => @swap,
-          "logging" => @logging
+          "logging" => @logging,
+          "sentry" => redacted_sentry
         }
       end
 
@@ -132,6 +134,13 @@ module OpenReceive
 
       def read_record(value)
         value.is_a?(Hash) ? value : {}
+      end
+
+      def redacted_sentry
+        return @sentry if @sentry.nil? || @sentry.empty?
+        return @sentry unless @sentry.key?("dsn")
+
+        @sentry.merge("dsn" => "[REDACTED]")
       end
 
       def env_value(env, key)
