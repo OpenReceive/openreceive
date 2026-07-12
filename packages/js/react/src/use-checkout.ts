@@ -57,6 +57,13 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
   onStateRef.current = options.onState;
   const onSettledRef = React.useRef(options.onSettled);
   onSettledRef.current = options.onSettled;
+  // Hosts commonly pass inline logger/onError. Those must not recreate the poll
+  // controller — after settlement, onState often setStates the parent, which would
+  // mint a new onError every render and loop: recreate → reloadState → onState → …
+  const loggerRef = React.useRef(options.logger);
+  loggerRef.current = options.logger;
+  const onErrorRef = React.useRef(options.onError);
+  onErrorRef.current = options.onError;
   const settledAnnouncementRef = React.useRef<{
     readonly orderId: string;
     readonly fired: boolean;
@@ -79,15 +86,19 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
   const snapshotRef = React.useRef(snapshot);
   snapshotRef.current = snapshot;
   const checkoutIdentity = `${snapshot.checkout_id} ${snapshot.order_id}`;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: checkoutIdentity is an intentional recreate trigger — the effect seeds from snapshotRef, not from checkoutIdentity directly.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: checkoutIdentity is an intentional recreate trigger — the effect seeds from snapshotRef, not from checkoutIdentity directly. logger/onError are read from refs so inline host callbacks cannot restart polling.
   React.useEffect(() => {
     const controller = createCheckoutController({
       snapshot: snapshotRef.current,
       ...(refreshStatus === undefined ? {} : { refreshStatus }),
       ...(orderUrl === undefined ? {} : { orderUrl }),
       pollIntervalMs: options.pollIntervalMs,
-      logger: options.logger,
-      onError: options.onError,
+      logger: (entry) => {
+        loggerRef.current?.(entry);
+      },
+      onError: (error) => {
+        onErrorRef.current?.(error);
+      },
       clipboard: options.clipboard,
       open: options.open,
       onState: (nextState) => {
@@ -106,16 +117,7 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
       controller.stop();
       if (controllerRef.current === controller) controllerRef.current = null;
     };
-  }, [
-    checkoutIdentity,
-    refreshStatus,
-    orderUrl,
-    options.pollIntervalMs,
-    options.logger,
-    options.onError,
-    options.clipboard,
-    options.open,
-  ]);
+  }, [checkoutIdentity, refreshStatus, orderUrl, options.pollIntervalMs]);
   const publicStatus = deriveStatus(state);
   const richStatus = createCheckoutStatusModel(state);
 
@@ -155,17 +157,10 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
       }
       showCopied(true);
     } catch (error) {
-      options.onError?.(error);
+      onErrorRef.current?.(error);
       throw error;
     }
-  }, [
-    logContext,
-    displayData.invoice,
-    options.clipboard,
-    options.logger,
-    options.onError,
-    showCopied,
-  ]);
+  }, [logContext, displayData.invoice, options.clipboard, options.logger, showCopied]);
 
   const openWallet = React.useCallback(() => {
     try {
@@ -179,30 +174,30 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
           })
         : controller.openWallet();
     } catch (error) {
-      options.onError?.(error);
+      onErrorRef.current?.(error);
       throw error;
     }
-  }, [logContext, displayData.invoice, options.open, options.logger, options.onError]);
+  }, [logContext, displayData.invoice, options.open, options.logger]);
 
   const reloadState = React.useCallback(async () => {
     try {
       const next = await controllerRef.current?.reloadState();
       if (next !== undefined) setState(next);
     } catch (error) {
-      options.onError?.(error);
+      onErrorRef.current?.(error);
       throw error;
     }
-  }, [options.onError]);
+  }, []);
 
   const retry = React.useCallback(async () => {
     try {
       const next = await controllerRef.current?.retry();
       if (next !== undefined) setState(next);
     } catch (error) {
-      options.onError?.(error);
+      onErrorRef.current?.(error);
       throw error;
     }
-  }, [options.onError]);
+  }, []);
 
   const cancel = React.useCallback(() => {
     const next = controllerRef.current?.cancel();

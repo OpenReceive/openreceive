@@ -880,6 +880,9 @@ test("React checkout recreates its poll controller only on checkout identity cha
   // snapshot, each poll result tears the controller down and recreates it, which
   // immediately re-polls in a tight loop. It must key on a stable identity and
   // seed from a ref instead, while still feeding poll results to the display.
+  // Inline host logger/onError must also stay out of that dependency list — after
+  // settlement, onState often setStates the parent, minting a new onError each
+  // render and looping recreate → reloadState → ERR_INSUFFICIENT_RESOURCES.
   const source = readReactSource();
 
   assert.match(
@@ -889,8 +892,15 @@ test("React checkout recreates its poll controller only on checkout identity cha
   assert.match(source, /snapshotRef\.current = snapshot/);
   assert.match(source, /snapshot: snapshotRef\.current/);
   assert.match(source, /onSnapshot: setLatestSnapshot/);
+  assert.match(source, /loggerRef\.current = options\.logger/);
+  assert.match(source, /onErrorRef\.current = options\.onError/);
   // The controller-creation effect's dependency list keys on the identity, not
-  // the mutable snapshot the controller itself replaces on every poll.
-  assert.match(source, /\}, \[\s*checkoutIdentity,\s*refreshStatus,\s*orderUrl,/);
+  // the mutable snapshot the controller itself replaces on every poll, and not
+  // unstable host callbacks.
+  assert.match(source, /\}, \[checkoutIdentity, refreshStatus, orderUrl, options\.pollIntervalMs\]/);
   assert.doesNotMatch(source, /\}, \[\s*snapshot,\s*refreshStatus,\s*orderUrl,/);
+  assert.doesNotMatch(
+    source,
+    /options\.pollIntervalMs,\s*options\.logger,\s*options\.onError/,
+  );
 });
