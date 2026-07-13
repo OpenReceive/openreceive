@@ -3,7 +3,7 @@
 How OpenReceive discovers wallet settlement and how to drive sweeps on
 low-traffic sites. Integrators only need: mount routes, fulfill in `onPaid`, and
 optionally call `startSweeper` on long-lived idle deployments (see
-[Node Quickstart](../guides/quickstart-node.md) §7).
+[Node Quickstart](../guides/quickstart-node.md) — What `onPaid` does).
 
 ## How a sweep works
 

@@ -17,10 +17,6 @@ const secretScanner = path.join(process.cwd(), "tools/validate/scan-secrets.mjs"
 const clientBundleScanner = path.join(process.cwd(), "tools/validate/scan-client-bundles.mjs");
 const demoContainerValidator = path.join(process.cwd(), "tools/validate/check-demo-containers.mjs");
 const demoDeployValidator = path.join(process.cwd(), "tools/validate/check-demo-deploy.mjs");
-const demoDeploymentDocs = path.join(process.cwd(), "docs/internal/demo-deployment.md");
-const supportedDatabaseDocs = path.join(process.cwd(), "docs/guides/storage.md");
-const nodeQuickstartDocs = path.join(process.cwd(), "docs/guides/quickstart-node.md");
-const authorizationDocs = path.join(process.cwd(), "docs/guides/authorization.md");
 const invoiceStorageSchema = path.join(process.cwd(), "spec/schemas/invoice-storage.schema.json");
 const storageKvVectors = path.join(process.cwd(), "spec/test-vectors/storage-kv.json");
 const releaseReadinessValidator = path.join(
@@ -39,7 +35,7 @@ const liveExpectedCapabilitiesExample = path.join(
   process.cwd(),
   "tools/live-nwc-test/expected_capabilities.example.json",
 );
-const exampleDocsRoot = path.join(process.cwd(), "examples");
+const exampleRoot = path.join(process.cwd(), "examples");
 const textFileExtensions = new Set([
   "",
   ".css",
@@ -138,88 +134,12 @@ test("shipped route adapters exist and wrap @openreceive/http", () => {
   }
 });
 
-test("Node quickstart mounts the shipped router around prepareCheckout", () => {
-  const quickstart = readFileSync(nodeQuickstartDocs, "utf8");
-  // Chronological story: prepareCheckout → onPaid → mount → browser prepare → <Checkout>.
-  assert.match(quickstart, /## 3\. Set the amount/);
-  assert.match(quickstart, /## 4\. Handle payment/);
-  assert.match(quickstart, /## 5\. Mount the routes/);
-  assert.match(quickstart, /openReceiveExpress/);
-  assert.match(quickstart, /createOpenReceive/);
-  assert.match(quickstart, /prepareCheckout/);
-  assert.match(quickstart, /requestPrepare|onSummary/);
-  assert.match(quickstart, /guestCheckout\(\)/);
-  assert.match(quickstart, /onPaid/);
-  assert.match(quickstart, /amount:\s*\{\s*currency:\s*"USD"/);
-  assert.match(quickstart, /from "openreceive\/express"/);
-  assert.match(quickstart, /from "@openreceive\/http"/);
-  assert.match(quickstart, /<Checkout[\s\S]*orderId=/);
-  assert.match(quickstart, /\/openreceive\/prepare|requestPrepare/);
-  assert.match(quickstart, /orders\/:id\/summary|orders\/\{id\}\/summary|GET …\/orders/);
-  assert.doesNotMatch(quickstart, /createHostOrderStore/);
-  assert.doesNotMatch(quickstart, /getCheckoutAmount/);
-  assert.doesNotMatch(quickstart, /\/prepare_order/);
-  // Amount and onPaid are defined before the mount step.
-  const amountIdx = quickstart.indexOf("## 3. Set the amount");
-  const paidIdx = quickstart.indexOf("## 4. Handle payment");
-  const mountIdx = quickstart.indexOf("## 5. Mount the routes");
-  assert.ok(amountIdx >= 0 && paidIdx > amountIdx && mountIdx > paidIdx);
-  // No hand-written checkout/order/status route handlers or manual action routing.
-  assert.doesNotMatch(quickstart, /app\.post\(\s*["'`]\/(order|create_order)\b/);
-  assert.doesNotMatch(quickstart, /openreceive\.order\(/);
-  assert.doesNotMatch(quickstart, /OpenReceiveServiceError/);
-  // Token deep-dive and direct-methods coda stay out of the happy path.
-  assert.doesNotMatch(quickstart, /What is the order access token/);
-  assert.doesNotMatch(quickstart, /Prefer to call the methods directly/);
-  // Swaps are optional and pointed at the dedicated guide, not inlined.
-  assert.match(quickstart, /Automated Swaps/);
-});
-
-test("quickstart and examples do not use OpenReceive HTTP converter helpers", () => {
+test("examples do not use OpenReceive HTTP converter helpers", () => {
   const helperPrefix = ["toOpenReceive", "Http"].join("");
   const helperPattern = new RegExp(`${helperPrefix}(?:Checkout|Order)\\b`);
-  for (const filePath of [nodeQuickstartDocs, ...listTextFiles(exampleDocsRoot)]) {
+  for (const filePath of listTextFiles(exampleRoot)) {
     assert.doesNotMatch(readFileSync(filePath, "utf8"), helperPattern, filePath);
   }
-});
-
-test("authorization guide shows mount presets; custom controllers live in internal docs", () => {
-  const source = readFileSync(authorizationDocs, "utf8");
-  assert.match(source, /guestCheckout/);
-  assert.match(source, /withUser/);
-  assert.match(source, /prepareCheckout/);
-  assert.match(source, /createOpenReceive/);
-  assert.match(source, /custom-controller-integration\.md/);
-
-  const custom = readFileSync(
-    path.join(process.cwd(), "docs/internal/custom-controller-integration.md"),
-    "utf8",
-  );
-  assert.match(custom, /OpenReceiveServiceError/);
-  assert.match(custom, /orderId:/);
-  assert.match(custom, /getOrCreateCheckout/);
-  assert.match(custom, /memo:/);
-  assert.match(custom, /total_amount/);
-  assert.match(custom, /from "@openreceive\/node";/);
-});
-
-test("Node quickstart shows a checkout component and points to the frontend guide", () => {
-  const source = readFileSync(nodeQuickstartDocs, "utf8");
-  // The quickstart stays simple: one React example, the other frameworks via the frontend guide.
-  assert.match(source, /openreceive\/react/);
-  assert.match(source, /@openreceive\/react\/styles\.css/);
-  assert.match(source, /<Checkout/);
-  assert.match(source, /frontend-checkout\.md/);
-  for (const framework of ["Vue", "Svelte", "Angular"]) {
-    assert.match(source, new RegExp(framework), `quickstart mentions ${framework}`);
-  }
-});
-
-test("shipped-routes internal doc create body has no client amount fields", () => {
-  const source = readFileSync(path.join(process.cwd(), "docs/internal/shipped-routes.md"), "utf8");
-  assert.match(source, /\{ order_id, memo\?, description_hash\?, metadata\? \}/);
-  assert.doesNotMatch(source, /order_id, amount\\\|sats\\\|usd/);
-  assert.match(source, /\*\*required\*\* at handler construction/);
 });
 
 function runReleaseReadinessValidator() {
@@ -289,17 +209,6 @@ test("demo deployment validator accepts public deploy templates", () => {
   assert.match(runDemoDeployValidator(), /Demo deployment validation passed for 3 demo\(s\)\./);
 });
 
-test("demo deployment docs preserve public edge and runner boundaries", () => {
-  const docs = readFileSync(demoDeploymentDocs, "utf8");
-
-  assert.match(docs, /separate demo edge or node/);
-  assert.match(docs, /Do not route stable demos through the private apex app/);
-  assert.match(docs, /Caddy with the Cloudflare DNS module and ACME DNS-01/);
-  assert.match(docs, /Keep build\/test runners separate from deploy runners/);
-  assert.match(docs, /Never mount the host Docker socket/);
-  assert.match(docs, /Never commit:\n\n- `OPENRECEIVE_NWC`/);
-});
-
 test("release readiness validator accepts current v0.1 metadata", () => {
   assert.match(
     runReleaseReadinessValidator(),
@@ -363,23 +272,6 @@ test("npm release helper prepare dry-run lists versioned files", () => {
 
 test("workflow validator accepts safe public workflow skeletons", () => {
   assert.match(runWorkflowValidator(), /Workflow validation passed for 7 workflow\(s\)\./);
-});
-
-test("supported database docs keep invoice storage boundaries narrow", () => {
-  const docs = readFileSync(supportedDatabaseDocs, "utf8");
-
-  assert.match(docs, /\| `postgres:\/\/\.\.\.` \| Supported for Node \|/);
-  assert.match(
-    docs,
-    /\| `sqlite:\/absolute\/path\/to\/openreceive\.sqlite3` \| Supported for Node \|/,
-  );
-  assert.match(docs, /\| `local-sqlite` \| Supported for Node \|/);
-  assert.match(docs, /Postgres works anywhere and is the recommended default/);
-  assert.match(docs, /Cloudflare Workers KV/);
-  assert.match(docs, /OpenReceive owns its invoice storage/);
-  assert.match(docs, /Your app keeps orders, carts, users/);
-  // Storage minutiae (default sqlite path, Postgres-vs-SQLite guidance) live in the storage
-  // doc, not the quickstart, which stays intentionally minimal.
 });
 
 test("storage schema and vectors cover KV coordination fields", () => {

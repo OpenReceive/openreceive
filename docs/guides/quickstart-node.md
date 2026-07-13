@@ -1,10 +1,9 @@
 # Node Quickstart
 
-OpenReceive is the payment layer. Your app returns the amount to charge in
-`prepareCheckout`, fulfills in `onPaid`, and mounts the routes. Your frontend
-renders `<Checkout orderId={…} />`: pass the order id from prepare. Summary
-restore on refresh is automatic; add `syncUrl` only if you want Checkout to
-push `/checkout/:orderId` itself.
+OpenReceive is the payment layer. On the server you mount its routes and supply
+two callbacks: `prepareCheckout` (how much to charge) and `onPaid` (what to do
+after settlement). Your frontend POSTs the cart to `/prepare`, then renders
+`<Checkout orderId={…} />` with the returned order id.
 
 The Hello Fruit Express demo
 (`examples/hello-fruit/server/node-express`) follows this same shape.
@@ -17,14 +16,14 @@ npm install openreceive @openreceive/express @openreceive/http express react rea
 
 Install only what you use:
 
-| Stack | Package |
-| --- | --- |
+| Stack   | Package                |
+| ------- | ---------------------- |
 | Express | `@openreceive/express` |
 | Fastify | `@openreceive/fastify` |
-| Next.js | `@openreceive/next` |
-| React | `@openreceive/react` |
-| Vue | `@openreceive/vue` |
-| Svelte | `@openreceive/svelte` |
+| Next.js | `@openreceive/next`    |
+| React   | `@openreceive/react`   |
+| Vue     | `@openreceive/vue`     |
+| Svelte  | `@openreceive/svelte`  |
 | Angular | `@openreceive/angular` |
 
 See [Frontend Checkout](frontend-checkout.md) and [Authorization](authorization.md).
@@ -34,57 +33,62 @@ See [Frontend Checkout](frontend-checkout.md) and [Authorization](authorization.
 Copy `openreceive.yml.example` to `openreceive.yml` (git-ignored — it holds secrets):
 
 ```yaml
-OPENRECEIVE_NWC: nostr+walletconnect://...     # receive-only, server-only, never sent to the browser
+OPENRECEIVE_NWC: nostr+walletconnect://... # receive-only, server-only, never sent to the browser
 ```
 
 Defaults (override only when you need to):
 
-| Setting | Default |
-| --- | --- |
-| store | SQLite under `.openreceive/` (`local-sqlite`) |
-| route prefix | `/openreceive` |
-| price currencies | `USD` |
+| Setting          | Default                                       |
+| ---------------- | --------------------------------------------- |
+| store            | SQLite under `.openreceive/` (`local-sqlite`) |
+| route prefix     | `/openreceive`                                |
+| price currencies | `USD`                                         |
 
-Optional: add a FixedFloat `swap:` block to let payers pay with crypto while you
-still settle to Lightning — see [Automated Swaps](automated-swaps.md).
+## 3. Configure payment with altcoins
 
-## 3. Set the amount (`prepareCheckout`)
+You always settle to Lightning. Many payers cannot (or will not) pay Lightning
+directly — they need Solana, Ethereum, Tether, or another asset your swap
+provider supports (you can still price the order in USD). Add a swap provider
+under `swap:` in the same server-only `openreceive.yml`:
 
-`prepareCheckout` runs on **POST `/prepare`** only. Validate the cart (or look
-up your order), return the amount to charge, and OpenReceive persists it.
-Create-checkout never trusts an amount from the browser.
+```yaml
+OPENRECEIVE_NWC: nostr+walletconnect://...
 
-```ts
-const prepareCheckout = async ({ body }) => {
-  const cart = validateCart(body); // your domain
-  return {
-    amount: { currency: "USD", value: cart.totalUsd },
-    summary: { id: cart.id, lines: cart.lines }, // optional; returned by GET …/orders/:id/summary
-  };
-};
+swap:
+  providers:
+    - id: primary
+      protocol: ... # swap provider protocol id
+      base_url: ...
+      key: ...
+      secret: ...
 ```
 
-Return `null` → 404. Throw → 400. Omit `orderId` and OpenReceive mints a UUID.
+No extra app code: once credentials are set, `<Checkout>` lists payable assets
+and the mounted routes handle quotes, deposits, and refunds. Leave `key` /
+`secret` blank to keep swaps disabled. Never send provider keys to the browser.
 
-## 4. Handle payment
+Details, lifecycle states, and refunds: [Automated Swaps](automated-swaps.md).
 
-`onPaid` fires when a checkout settles. Call YOUR app's fulfillment here.
-May fire more than once: make it idempotent on `checkoutId` / `orderId`.
+## 4. Add OpenReceive to your server
 
-```ts
-const onPaid = async ({ orderId, checkoutId, metadata }) => {
-  await fulfillPaidCheckout({ orderId, checkoutId, metadata });
-};
-```
-
-## 5. Mount the routes
+One Express file: create the service with `onPaid`, mount the shipped router,
+and pass `prepareCheckout`. That is the whole server integration.
 
 ```ts
 import express from "express";
 import { createOpenReceive, openReceiveExpress } from "openreceive/express";
+// guestCheckout() — anonymous / no-account sites: anyone can prepare and create;
+// Logged-in sites: use withUser(currentUserFromSession, { ownsOrder, isAdmin })
+// instead so your session owns the order
 import { guestCheckout } from "@openreceive/http";
+// fulfillPaidCheckout is a function you define to mark the order paid, ship, email, etc.
+import { fulfillPaidCheckout } from "./fulfill-paid-checkout";
 
-const service = await createOpenReceive({ onPaid });
+const service = await createOpenReceive({
+  onPaid: async ({ orderId, checkoutId, metadata }) => {
+    await fulfillPaidCheckout({ orderId, checkoutId, metadata });
+  },
+});
 
 const app = express();
 app.use(express.json());
@@ -92,36 +96,75 @@ app.use(
   openReceiveExpress({
     service,
     authorize: guestCheckout(),
-    prepareCheckout,
+    prepareCheckout: async ({ body }) => {
+      const cart = validateCart(body); // your domain
+      return {
+        amount: { currency: "USD", value: cart.totalUsd },
+        summary: { id: cart.id, lines: cart.lines }, // optional; returned by GET …/orders/:id/summary
+      };
+    },
   }),
 );
 ```
 
 That mounts payment HTTP under `/openreceive`, including:
 
-- `POST /openreceive/prepare` — your amount hook
-- `POST /openreceive/checkouts` — create/replay checkout from prepared amount
-- `GET /openreceive/orders/:id/summary` — guest resume display payload
+- `POST /openreceive/prepare` — calls your `prepareCheckout`, persists amount + order id
+- `POST /openreceive/checkouts` — create/replay checkout from the prepared amount
+- `GET /openreceive/orders/:id/summary` — cart/order summary so host UI can redraw after refresh
 
-For a signed-in app, swap `authorize` for `withUser` instead. See
-[Authorization](authorization.md).
+### What `onPaid` does
 
-## 6. Prepare from the browser, then render checkout
+`onPaid` is your fulfillment hook. OpenReceive calls it after the payment has
+settled.
 
-```ts
-const { order_id, summary } = await (
-  await fetch("/openreceive/prepare", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ cart }),
-  })
-).json();
+It may fire more than once (retries, sweeps, concurrent status polls). Deduplicate
+on `checkoutId` (or your order id) and fulfill from the paid checkout snapshot,
+not the live cart.
+
+### What `prepareCheckout` does
+
+`prepareCheckout` is a **server callback** you pass into `openReceiveExpress`.
+It is not a route you write yourself. The mounted `POST /prepare` invokes it
+when the browser submits cart/order context.
+
+Validate the cart (or look up your order), return the amount to charge, and
+OpenReceive persists it. Create-checkout never trusts an amount from the browser.
+
+- Return `null` → 404
+- Throw → 400
+- Omit `orderId` and OpenReceive mints a UUID
+
+### Request flow
+
+```text
+browser POST /openreceive/prepare  { cart }
+        → mounted route
+        → prepareCheckout({ body })
+        → persist amount + order_id (+ optional summary)
+        → response { order_id, summary? }
+
+browser renders <Checkout orderId={order_id} />
+        → create/replay checkout from the prepared amount
+        → poll status until settled → onPaid
 ```
 
+## 5. Prepare from the browser, then render checkout
+
+`<Checkout>` does not send the cart or pick the price. Your app calls prepare
+first (that hits your `prepareCheckout` hook), then mounts Checkout with the
+returned `order_id`:
+
 ```tsx
+import { requestPrepare } from "@openreceive/browser";
 import { Checkout } from "openreceive/react";
 import "@openreceive/react/styles.css";
 
+// 1. Price the cart on the server → get a stable order id
+const { order_id, summary } = await requestPrepare({ body: { cart } });
+setOrder(summary);
+
+// 2. Checkout creates/polls the payment for that order
 <Checkout
   orderId={order_id}
   onSummary={(summary) => setOrder(summary)}
@@ -130,21 +173,13 @@ import "@openreceive/react/styles.css";
 />;
 ```
 
-Create mode always fetches `GET /openreceive/orders/:id/summary` after refresh
-so host UI can redraw. Pass `syncUrl` (and optional `resumePathPrefix`) only if
-you want History API URL sync — many apps own routing themselves. Capability
-tokens are minted and attached for you — no token to manage.
-
-## 7. Fulfill idempotently
-
-`onPaid` may fire more than once. Deduplicate on `checkoutId` (or your order id)
-and fulfill from the paid checkout snapshot, not the live cart. Backend status
-refresh — not a frontend hint or a Lightning preimage — is the settlement
-authority.
-
-Organic traffic advances settlement automatically. Fully idle deployments can
-opt into `startSweeper` — see
-[Settlement Sweeps](../internal/settlement-sweeps.md).
+After a page refresh, Checkout re-fetches
+`GET /openreceive/orders/:id/summary` and calls `onSummary` so your host UI can
+redraw the cart/total. That does not change the browser URL. If you also want
+Checkout to write `/checkout/:orderId` into the address bar (History API), pass
+`syncUrl` (optional `resumePathPrefix`, default `/checkout`) — many apps already
+own routing and skip this. Capability tokens are minted and attached for you —
+no token to manage.
 
 ## Retries and order ids
 
