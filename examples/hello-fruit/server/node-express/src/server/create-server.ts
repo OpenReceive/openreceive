@@ -20,7 +20,7 @@ import {
   createHelloFruitOpenReceiveLogger,
 } from "../../../../shared/demo-logging.ts";
 import { createHelloFruitDemoMetadata } from "../../../../shared/demo-metadata.ts";
-import { createHelloFruitPrepareCheckout } from "../../../../shared/demo-order.ts";
+import { createHelloFruitPrepareCheckout } from "../../../../shared/demo-prepare-checkout.ts";
 import { mountHelloFruitHostedDemoRoutes } from "../../../../shared/hosted-demo-routes.ts";
 
 const DEMO_ID = "node-express";

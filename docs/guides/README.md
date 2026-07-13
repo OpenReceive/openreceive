@@ -5,7 +5,7 @@ Start here when you are integrating OpenReceive into an app.
 1. [What Is OpenReceive](what-is.md) - product boundary and runtime model.
 2. [Node Framework Quickstart](quickstart-node.md) - working backend and checkout path.
 3. [Rails Quickstart](quickstart-rails.md) - mountable engine walkthrough.
-4. [Authorization](authorization.md) - `authorize` presets, `getCheckoutAmount`, CSRF/CORS.
+4. [Authorization](authorization.md) - `authorize` presets, `prepareCheckout`, CSRF/CORS.
 5. [Frontend Checkout](frontend-checkout.md) - browser helpers, React, and web components.
 6. [Checkout Retries](checkout-retries.md) - expired invoices, order ids, and amount changes.
 7. [Settlement Sweeps](settlement-sweeps.md) - how reconciliation runs and how to drive it on low-traffic sites.

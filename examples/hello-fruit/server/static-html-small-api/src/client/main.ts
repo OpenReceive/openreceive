@@ -1,7 +1,9 @@
 import {
   createOpenReceiveThemeToggleElement,
+  OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
   OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
+  requestOrderSummary,
   type CheckoutState,
 } from "@openreceive/browser/internal";
 import { defineOpenReceiveElements, createTransactionDetailsElement } from "@openreceive/elements";
@@ -13,10 +15,10 @@ import {
   enterHelloFruitCheckout,
   forgetHelloFruitOrder,
   leaveHelloFruitCheckout,
-  loadHelloFruitOrderForResume,
   parseHelloFruitCheckoutOrderId,
   rememberHelloFruitOrder,
 } from "../../../../shared/demo-checkout-resume.ts";
+import { isHelloFruitDemoOrder } from "../../../../shared/demo-order.ts";
 import type { HelloFruitDemoOrder } from "../../../../shared/demo-order.ts";
 import { readHelloFruitCheckoutCurrencies } from "../../../../shared/demo-currencies.ts";
 import {
@@ -52,7 +54,8 @@ interface DemoOrder {
 }
 
 interface PrepareOrderResponse {
-  order: DemoOrder;
+  order_id: string;
+  summary?: DemoOrder;
 }
 
 const fruits = fruitsData.fruits as Fruit[];
@@ -116,17 +119,18 @@ async function resumeCheckoutFromUrl(): Promise<void> {
   }
   logDemo("checkout.resume", "Resuming checkout from URL.", { orderId });
   setError("");
-  const resumed = await loadHelloFruitOrderForResume(orderId);
+  const result = await requestOrderSummary({ orderId });
   if (parseHelloFruitCheckoutOrderId(globalThis.location.pathname) !== orderId) {
     return;
   }
-  if (resumed === undefined) {
+  if (result === undefined || !("summary" in result) || !isHelloFruitDemoOrder(result.summary)) {
     logDemo("checkout.resume_miss", "Checkout resume order not found.", { orderId });
     leaveHelloFruitCheckout();
     startOver({ preserveUrl: true });
     setError("This checkout link is no longer available. Start a new order.");
     return;
   }
+  const resumed = result.summary;
   currentOrder = resumed;
   purchasedFruit = fruits.find((fruit) => fruit.id === resumed.items[0]?.product_id);
   renderOrder(resumed);
@@ -457,22 +461,27 @@ async function createOrder(): Promise<void> {
       elapsedMs: Date.now() - startedAt,
       hasOrder: isPrepareOrderResponse(body),
     });
-    if (!response.ok || !isPrepareOrderResponse(body)) {
+    if (
+      !response.ok ||
+      !isPrepareOrderResponse(body) ||
+      !isHelloFruitDemoOrder(body.summary)
+    ) {
       throw new Error(readErrorMessage(body) ?? helloFruitDemoLabels.createOrderError);
     }
 
-    currentOrder = body.order;
+    const order = body.summary;
+    currentOrder = order;
     purchasedFruit = items[0]?.fruit;
     logDemo("prepare_order.ready", "Order accepted by browser app.", {
-      orderId: body.order.uuid,
-      orderStatus: body.order.status,
-      itemCount: body.order.items.length,
-      total: body.order.total_amount,
+      orderId: order.uuid,
+      orderStatus: order.status,
+      itemCount: order.items.length,
+      total: order.total_amount,
     });
-    rememberHelloFruitOrder(body.order);
-    enterHelloFruitCheckout(body.order.uuid);
-    renderOrder(body.order);
-    renderCheckout(body.order.uuid);
+    rememberHelloFruitOrder(order);
+    enterHelloFruitCheckout(order.uuid);
+    renderOrder(order);
+    renderCheckout(order.uuid);
   } catch (error) {
     logDemo("prepare_order.error", "Prepare order failed in the browser.", {
       error: error instanceof Error ? error.message : String(error),
@@ -488,10 +497,24 @@ function renderCheckout(orderId: string): void {
   logDemo("checkout.render", "Rendering self-contained OpenReceive checkout element.", {
     orderId,
   });
-  // The SELF-CONTAINED custom element: given just `order-id` (prefix defaults to /openreceive), it
-  // creates the checkout, polls, and drives swaps itself. No hand-written invoice/status/swap routes.
+  // Self-contained: order-id + resume restores summary and syncs /checkout/:id.
   const checkoutElement = document.createElement(OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME);
-  checkoutElement.setAttribute("order-id", orderId);
+  checkoutElement.setAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId, orderId);
+  checkoutElement.setAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resume, "");
+  checkoutElement.setAttribute(
+    OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePathPrefix,
+    "/checkout",
+  );
+  checkoutElement.setAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeOrderId, orderId);
+
+  checkoutElement.addEventListener(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.summary, (event) => {
+    const detail = (event as CustomEvent<{ summary?: unknown }>).detail;
+    const summary = detail?.summary;
+    if (!isHelloFruitDemoOrder(summary)) return;
+    currentOrder = summary;
+    purchasedFruit = fruits.find((fruit) => fruit.id === summary.items[0]?.product_id);
+    renderOrder(summary);
+  });
 
   checkoutElement.addEventListener(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.error, (event) => {
     const detail = (event as CustomEvent<{ error?: unknown }>).detail;
@@ -635,7 +658,7 @@ function requireElement<T extends HTMLElement = HTMLElement>(id: string): T {
 }
 
 function isPrepareOrderResponse(value: unknown): value is PrepareOrderResponse {
-  return typeof value === "object" && value !== null && "order" in value;
+  return typeof value === "object" && value !== null && "order_id" in value;
 }
 
 function readErrorMessage(value: unknown): string | undefined {

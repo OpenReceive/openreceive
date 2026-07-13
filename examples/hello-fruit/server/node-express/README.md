@@ -1,11 +1,12 @@
 # Hello Fruit: Express + React/Vue/Svelte/Angular
 
-This v0.1 demo mounts OpenReceive's shipped routes (`getCheckoutAmount` prices from
-the order your `/prepare_order` persisted) and renders React, Vue, Svelte, and
-Angular checkout tabs for the shared Hello Fruit sticker product.
+This v0.1 demo mounts OpenReceive with required `prepareCheckout` (POST
+`/openreceive/prepare` is the sole price authority) and renders React, Vue,
+Svelte, and Angular checkout tabs for the shared Hello Fruit sticker product.
 
-The browser never receives `OPENRECEIVE_NWC`. Checkout is `<Checkout orderId />`
-against `/openreceive` — the client does not post a price.
+The browser never receives `OPENRECEIVE_NWC`. Checkout is
+`<Checkout orderId resume />` against `/openreceive` — the client does not post
+a price on create.
 
 ## Run
 
@@ -56,8 +57,8 @@ This demo mounts with `guestCheckout()` (anonymous create; reads gated by the
 per-order capability token). For a signed-in app, swap `authorize` for
 `withUser(...)` — see the comment in `src/server/create-server.ts`.
 
-Guest checkout resume: after `/prepare_order`, the app navigates to
-`/checkout/:orderId`. Refresh keeps the same payment/refund UI while the
-OpenReceive capability cookie (and `sessionStorage` mirror) remain valid. The
-public order summary is restored from `sessionStorage` or `GET /orders/:orderId`.
-Never put the capability token in the URL.
+Guest checkout resume: after POST `/openreceive/prepare`, the app navigates to
+`/checkout/:orderId`. Refresh keeps the same payment UI while the OpenReceive
+capability cookie remains valid. `<Checkout resume />` restores the host display
+from `GET /openreceive/orders/:orderId/summary`. Never put the capability token
+in the URL.

@@ -12,8 +12,9 @@ Node is the v0.1 supported path:
 - `@openreceive/node` / `openreceive/node` exposes the server-only service
   (`createOpenReceive`, `startSweeper`, …).
 - `@openreceive/http` plus `@openreceive/express` | `fastify` | `next` (also
-  `openreceive/express|fastify|next`) ship the HTTP routes. `getCheckoutAmount` is
-  required; the create body never carries a client price.
+  `openreceive/express|fastify|next`) ship the HTTP routes. `prepareCheckout` is
+  required; POST `/prepare` is the sole price authority and the create body
+  never carries a client price.
 - `@openreceive/browser` creates display-safe invoices and browser helpers.
 - `@openreceive/react` and `@openreceive/elements` (also `openreceive/react`)
   render checkout UI.
@@ -23,8 +24,8 @@ Node is the v0.1 supported path:
 Ruby is a full second settlement engine:
 
 - `openreceive` — core money math and settlement.
-- `openreceive-server` — Service, stores, Rack app (`get_checkout_amount` required).
-- `openreceive-rails` — mountable engine; configure `get_checkout_amount` in the
+- `openreceive-server` — Service, stores, Rack app (`prepare_checkout` required).
+- `openreceive-rails` — mountable engine; configure `prepare_checkout` in the
   initializer. Controllers inherit your `parent_controller`.
 
 Node and Rails stay on the same payment contract for hosts.
@@ -33,7 +34,7 @@ Node and Rails stay on the same payment contract for hosts.
 
 There is no Python package yet. Future FastAPI, Django, Flask, or Starlette
 work should keep `OPENRECEIVE_NWC` server-side, mount or mirror the same host
-model (host-owned orders + `getCheckoutAmount`-equivalent pricing), use
+model (`prepareCheckout`-equivalent pricing on prepare + create from persist), use
 OpenReceive invoice storage, and run fulfillment only from a server-side
 payment-verified hook.
 

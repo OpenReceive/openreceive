@@ -88,10 +88,10 @@ tokens = OpenReceive::Server::Tokens::Manager.new(store: store, namespace: "acme
 app = OpenReceive::Server::RackApp.new(
   service: service,
   tokens: tokens,
-  # REQUIRED. Create body never carries a client price (amount/sats/usd → 400).
-  # Return payment terms, or nil for 404. Tip-jar hosts may honor metadata inside this hook.
-  get_checkout_amount: ->(order_id:, client_amount:, metadata:, request:) {
-    { "amount" => { "sats" => MyCart.total_sats(order_id) } }
+  # REQUIRED. POST /prepare is the sole price authority; create body never carries a client price.
+  prepare_checkout: ->(body:, request:) {
+    cart = MyCart.validate(body)
+    { "amount" => { "sats" => cart.total_sats }, "summary" => cart.as_json }
   },
   authorize: ->(context) { my_policy.allow?(context) }, # optional; see tiers below
   prefix: "/openreceive"
@@ -102,8 +102,10 @@ Routes (mounted under `prefix`):
 
 | Method | Path                                 | Tier | Action           |
 |--------|--------------------------------------|------|------------------|
+| POST   | `/prepare`                           | 1    | `checkout.prepare` |
 | POST   | `/checkouts`                         | 1    | `checkout.create`|
 | POST   | `/orders/{order_id}`                 | 2    | `order.read` / `swap.*` |
+| GET    | `/orders/{order_id}/summary`         | 1    | `order.summary`  |
 | GET    | `/checkouts/{checkout_id}`           | 2    | `checkout.read`  |
 | GET    | `/orders/{order_id}/swap-options`    | 2    | `swap.options`   |
 | GET    | `/rates`                             | 1    | `rate.list`      |

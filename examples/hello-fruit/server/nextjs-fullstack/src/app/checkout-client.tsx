@@ -3,7 +3,7 @@
 import type { CheckoutState } from "@openreceive/browser/internal";
 import { Checkout, ThemeScope, TransactionDetails } from "@openreceive/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, type ReactElement } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { HelloFruit, HelloFruitProduct } from "../server/shared-data.ts";
 import {
   createHelloFruitDemoBrowserConsoleLogger,
@@ -288,9 +288,7 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
         </div>
       </div>
 
-      {resuming ? (
-        <p className="text-base-content/70 text-sm">Restoring checkout…</p>
-      ) : order === undefined ? (
+      {order === undefined && resumeOrderId === undefined ? (
         <>
           <label className="form-control w-full max-w-xs">
             <span className="label-text mb-1">Currency</span>
@@ -380,35 +378,42 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
         </>
       ) : (
         <div className="grid gap-3">
-          <section className="card card-border bg-base-200 px-3 py-2.5 grid gap-1" aria-label="Order">
-            <div className="flex justify-between items-baseline gap-3">
-              <strong className="text-sm">Order</strong>
-              <span className="font-semibold">{formatHelloFruitFiat(order.total_amount)}</span>
-            </div>
-            {order.items.map((item) => (
-              <div
-                className="flex justify-between items-baseline gap-3 text-sm text-base-content/80"
-                key={item.product_id}
-              >
-                <span>
-                  {item.name} ×{item.quantity}
-                </span>
-                <span className="text-base-content/60">
-                  {order.status === "paid" ? "Paid" : "Awaiting payment"}
-                </span>
+          {order === undefined ? (
+            <p className="text-base-content/70 text-sm">
+              {resuming ? "Restoring checkout…" : "Loading order…"}
+            </p>
+          ) : (
+            <section className="card card-border bg-base-200 px-3 py-2.5 grid gap-1" aria-label="Order">
+              <div className="flex justify-between items-baseline gap-3">
+                <strong className="text-sm">Order</strong>
+                <span className="font-semibold">{formatHelloFruitFiat(order.total_amount)}</span>
               </div>
-            ))}
-            <div className="card-actions pt-1">
-              <button className="btn btn-sm btn-soft" onClick={startOver} type="button">
-                Start over
-              </button>
-            </div>
-          </section>
-          {/* Self-contained: given just orderId (prefix defaults to /openreceive) it creates the
-              checkout, polls, and drives swaps itself — the app writes no OpenReceive routes. */}
+              {order.items.map((item) => (
+                <div
+                  className="flex justify-between items-baseline gap-3 text-sm text-base-content/80"
+                  key={item.product_id}
+                >
+                  <span>
+                    {item.name} ×{item.quantity}
+                  </span>
+                  <span className="text-base-content/60">
+                    {order.status === "paid" ? "Paid" : "Awaiting payment"}
+                  </span>
+                </div>
+              ))}
+              <div className="card-actions pt-1">
+                <button className="btn btn-sm btn-soft" onClick={startOver} type="button">
+                  Start over
+                </button>
+              </div>
+            </section>
+          )}
+          {/* Self-contained: orderId + resume restores summary and syncs /checkout/:id. */}
           <Checkout
             className="demo-checkout"
-            orderId={order.uuid}
+            orderId={(order?.uuid ?? resumeOrderId) as string}
+            resume
+            routeOrderId={resumeOrderId}
             logger={logOpenReceive}
             onError={(cause) => {
               logDemo("checkout.error", "Checkout component reported an error.", {
@@ -419,6 +424,8 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
             onSettled={onSettled}
             onState={onCheckoutState}
             onStartOver={startOver}
+            onSummary={onSummary}
+            onResumeMiss={onResumeMiss}
           />
         </div>
       )}

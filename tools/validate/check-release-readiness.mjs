@@ -79,7 +79,13 @@ const releaseVersion = rootPackage.version;
 expect(rootPackage.name === "openreceive-workspace", "package.json: root package name must be openreceive-workspace");
 expect(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)/.test(releaseVersion), "package.json: root version must be semver");
 expect(rootPackage.private === true, "package.json: root package must stay private before explicit publishing approval");
-expect(rootPackage.scripts?.["test:ci"]?.includes("npm run check:release"), "package.json: test:ci must include check:release");
+const testCi = rootPackage.scripts?.["test:ci"] ?? "";
+const testCiRelease = rootPackage.scripts?.["test:ci:release"] ?? "";
+expect(
+  testCi.includes("npm run check:release") ||
+    (testCi.includes("test:ci:release") && testCiRelease.includes("npm run check:release")),
+  "package.json: test:ci must include check:release",
+);
 expect(rootPackage.scripts?.["check:release"] === "node tools/validate/check-release-readiness.mjs", "package.json: missing check:release script");
 expect(rootPackage.scripts?.["build:packages"]?.includes("-w openreceive"), "package.json: build:packages must build every JS workspace package");
 expect(rootPackage.scripts?.["test:package-smoke"], "package.json: release gate must keep package smoke script");

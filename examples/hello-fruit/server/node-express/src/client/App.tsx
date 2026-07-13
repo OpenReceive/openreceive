@@ -15,6 +15,7 @@ import {
   enterHelloFruitCheckout,
   forgetHelloFruitOrder,
   leaveHelloFruitCheckout,
+  parseHelloFruitCheckoutOrderId,
   rememberHelloFruitOrder,
 } from "../../../../shared/demo-checkout-resume.ts";
 import { isHelloFruitDemoOrder } from "../../../../shared/demo-order.ts";
@@ -87,7 +88,12 @@ function App(): React.ReactElement {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   const [settledCheckoutState, setSettledCheckoutState] = useState<CheckoutState | null>(null);
-  const [resuming, setResuming] = useState(false);
+  const [resumeOrderId, setResumeOrderId] = useState(
+    () => parseHelloFruitCheckoutOrderId(globalThis.location.pathname),
+  );
+  const [resuming, setResuming] = useState(() =>
+    Boolean(parseHelloFruitCheckoutOrderId(globalThis.location.pathname)),
+  );
   const [resumeError, setResumeError] = useState<string | null>(null);
   const displayError = error === "" ? (resumeError ?? "") : error;
 
@@ -124,11 +130,31 @@ function App(): React.ReactElement {
   function onResumeMiss(orderId: string): void {
     logDemo("checkout.resume_miss", "Checkout resume order not found.", { orderId });
     leaveHelloFruitCheckout();
+    setResumeOrderId(undefined);
     setOrder(null);
     setPurchasedItems([]);
     setResuming(false);
     setResumeError("Order not found.");
   }
+
+  useEffect(() => {
+    function onPopState(): void {
+      const next = parseHelloFruitCheckoutOrderId(globalThis.location.pathname);
+      setResumeOrderId(next);
+      if (next === undefined) {
+        setOrder(null);
+        setPurchasedItems([]);
+        setResuming(false);
+        return;
+      }
+      if (order?.uuid === next) return;
+      setOrder(null);
+      setPurchasedItems([]);
+      setResuming(true);
+    }
+    globalThis.addEventListener("popstate", onPopState);
+    return () => globalThis.removeEventListener("popstate", onPopState);
+  }, [order?.uuid]);
   const selectedFruit = fruits.find((fruit) => fruit.id === fruitId) ?? fruits[0];
   const createCheckoutLabel =
     selectedFruit === undefined
@@ -264,6 +290,7 @@ function App(): React.ReactElement {
       });
       rememberHelloFruitOrder(order);
       enterHelloFruitCheckout(order.uuid);
+      setResumeOrderId(order.uuid);
       setOrder(order);
       setPurchasedItems(order.items);
     } catch (cause: unknown) {
@@ -283,6 +310,7 @@ function App(): React.ReactElement {
     });
     forgetHelloFruitOrder(order?.uuid);
     leaveHelloFruitCheckout();
+    setResumeOrderId(undefined);
     setFruitId(initialFruitId);
     setCart({});
     setOrder(null);
@@ -337,9 +365,7 @@ function App(): React.ReactElement {
           </div>
         </div>
 
-        {resuming ? (
-          <p className="text-base-content/70 text-sm">Restoring checkout…</p>
-        ) : order === null ? (
+        {order === null && resumeOrderId === undefined ? (
           <>
             <label className="form-control w-full max-w-xs">
               <span className="label-text mb-1">Currency</span>
@@ -435,40 +461,47 @@ function App(): React.ReactElement {
           </>
         ) : (
           <>
-            <section className="card card-border bg-base-200 px-3 py-2.5 grid gap-1" aria-label="Order">
-              <div className="flex justify-between items-baseline gap-3">
-                <strong className="text-sm">Order</strong>
-                <span className="font-semibold">{formatHelloFruitFiat(order.total_amount)}</span>
-              </div>
-              {order.items.map((item) => (
-                <div
-                  className="flex justify-between items-baseline gap-3 text-sm text-base-content/80"
-                  key={item.product_id}
-                >
-                  <span>
-                    {item.name} ×{item.quantity}
-                  </span>
-                  <span className="text-base-content/60">
-                    {formatHelloFruitFiat(item.line_amount)}
-                    {order.status === "paid" ? " · Paid" : ""}
-                  </span>
+            {order === null ? (
+              <p className="text-base-content/70 text-sm">
+                {resuming ? "Restoring checkout…" : "Loading order…"}
+              </p>
+            ) : (
+              <section className="card card-border bg-base-200 px-3 py-2.5 grid gap-1" aria-label="Order">
+                <div className="flex justify-between items-baseline gap-3">
+                  <strong className="text-sm">Order</strong>
+                  <span className="font-semibold">{formatHelloFruitFiat(order.total_amount)}</span>
                 </div>
-              ))}
-              <div className="card-actions pt-1">
-                <button
-                  className="btn btn-sm btn-soft"
-                  disabled={creating}
-                  onClick={startOver}
-                  type="button"
-                >
-                  Start over
-                </button>
-              </div>
-            </section>
+                {order.items.map((item) => (
+                  <div
+                    className="flex justify-between items-baseline gap-3 text-sm text-base-content/80"
+                    key={item.product_id}
+                  >
+                    <span>
+                      {item.name} ×{item.quantity}
+                    </span>
+                    <span className="text-base-content/60">
+                      {formatHelloFruitFiat(item.line_amount)}
+                      {order.status === "paid" ? " · Paid" : ""}
+                    </span>
+                  </div>
+                ))}
+                <div className="card-actions pt-1">
+                  <button
+                    className="btn btn-sm btn-soft"
+                    disabled={creating}
+                    onClick={startOver}
+                    type="button"
+                  >
+                    Start over
+                  </button>
+                </div>
+              </section>
+            )}
 
             <FrameworkCheckout
               framework={framework}
-              orderId={order.uuid}
+              orderId={(order?.uuid ?? resumeOrderId) as string}
+              routeOrderId={resumeOrderId}
               onError={(cause) => {
                 logDemo("checkout.error", "Checkout component reported an error.", {
                   framework,
@@ -544,6 +577,7 @@ function App(): React.ReactElement {
 interface FrameworkCheckoutProps {
   readonly framework: CheckoutFramework;
   readonly orderId: string;
+  readonly routeOrderId?: string;
   readonly onError: (error: unknown) => void;
   readonly onSettled: () => void;
   readonly onState: (state: CheckoutState) => void;
@@ -557,6 +591,7 @@ interface FrameworkCheckoutProps {
 function FrameworkCheckout({
   framework,
   orderId,
+  routeOrderId,
   onError,
   onSettled,
   onState,
@@ -612,6 +647,7 @@ function FrameworkCheckout({
           orderId,
           resume: true,
           resumePathPrefix: "/checkout",
+          ...(routeOrderId === undefined ? {} : { routeOrderId }),
           onSettled: options.onSettled,
           onStartOver,
           onSummary,
@@ -651,6 +687,7 @@ function FrameworkCheckout({
         });
         component.setInput("orderId", orderId);
         component.setInput("resume", true);
+        if (routeOrderId !== undefined) component.setInput("routeOrderId", routeOrderId);
         component.setInput("onSettled", options.onSettled);
         component.setInput("onStartOver", onStartOver);
         component.setInput("onSummary", onSummary);
@@ -686,6 +723,7 @@ function FrameworkCheckout({
             orderId,
             resume: true,
             resumePathPrefix: "/checkout",
+            ...(routeOrderId === undefined ? {} : { routeOrderId }),
             onSettled: options.onSettled,
             onStartOver,
             onSummary,
@@ -717,7 +755,7 @@ function FrameworkCheckout({
       cleanup();
       host.replaceChildren();
     };
-  }, [framework, orderId, onError, onSettled, onState, onStartOver]);
+  }, [framework, orderId, routeOrderId, onError, onSettled, onState, onStartOver, onSummary, onResumeMiss]);
 
   if (framework === "react") {
     return (
@@ -726,6 +764,7 @@ function FrameworkCheckout({
         orderId={orderId}
         resume
         resumePathPrefix="/checkout"
+        routeOrderId={routeOrderId}
         logger={logOpenReceive}
         onError={onError}
         onSettled={onSettled}

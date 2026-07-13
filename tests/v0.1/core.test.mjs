@@ -1899,6 +1899,7 @@ test("browser custom-element event map covers checkout lifecycle events", () => 
     providerCopy: "openreceive-provider-copy",
     startOver: "openreceive-start-over",
     error: "openreceive-error",
+    summary: "openreceive-summary",
   });
   const providerCopyEvent = createCheckoutProviderCopyEvent("boltz");
   assert.equal(providerCopyEvent.type, OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.providerCopy);
@@ -2026,6 +2027,9 @@ test("browser owns custom-element attribute contracts", () => {
     orderUrl: "order-url",
     theme: "theme",
     paymentWizard: "payment-wizard",
+    resume: "resume",
+    resumePathPrefix: "resume-path-prefix",
+    routeOrderId: "route-order-id",
   });
   assert.deepEqual(OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES, {
     rootSelector: "root-selector",

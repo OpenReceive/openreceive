@@ -57,7 +57,7 @@ export function isServiceErrorShape(error: unknown): error is ServiceErrorShape 
 /**
  * Host-route control-flow error with the same `{ status, body }` shape as
  * {@link OpenReceiveServiceError}. Use for cart/validation failures on app routes
- * (`/prepare_order`, etc.) so {@link mapHostRouteError} / Express helpers can map them.
+ * (`/prepare`, etc.) so {@link mapHostRouteError} / Express helpers can map them.
  */
 export class OpenReceiveHostError extends Error {
   readonly status: number;

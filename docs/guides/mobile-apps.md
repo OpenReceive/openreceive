@@ -36,7 +36,7 @@ The backend owns:
 
 - receive-only NWC code
 - wallet setup
-- host order creation + required `getCheckoutAmount` pricing
+- host prepare via required `prepareCheckout` pricing (POST `/prepare`)
 - invoice creation (via mounted routes or service methods)
 - idempotency
 - payment status refresh

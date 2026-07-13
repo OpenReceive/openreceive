@@ -16,7 +16,7 @@ import {
   type OpenReceiveRateLimit,
 } from "./authorize.ts";
 import { createRequestId, errorResponse, jsonResponse, OpenReceiveHttpError } from "./errors.ts";
-import type { PrepareCheckout } from "./prepare-checkout.ts";
+import type { PrepareCheckout, PrepareCheckoutResult } from "./prepare-checkout.ts";
 import { createPreparedOrderStore, type PreparedOrderStore } from "./prepared-order-store.ts";
 import { type MatchedRoute, matchRoute, normalizePrefix } from "./router.ts";
 import {
@@ -198,7 +198,7 @@ async function handlePrepareCheckout(
 
   await guard(runtime, "checkout.prepare", request, {}, token);
 
-  let prepared;
+  let prepared: PrepareCheckoutResult | null;
   try {
     prepared = await runtime.prepareCheckout({ body, request });
   } catch (error) {

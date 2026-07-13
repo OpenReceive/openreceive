@@ -138,28 +138,27 @@ test("shipped route adapters exist and wrap @openreceive/http", () => {
   }
 });
 
-test("Node quickstart mounts the shipped router around host-owned orders", () => {
+test("Node quickstart mounts the shipped router around prepareCheckout", () => {
   const quickstart = readFileSync(nodeQuickstartDocs, "utf8");
-  // Chronological story: price → onPaid → mount → create order → <Checkout orderId>.
-  // Shape matches examples/hello-fruit/server/node-express (guestCheckout + host order store).
+  // Chronological story: prepareCheckout → onPaid → mount → browser prepare → <Checkout resume>.
   assert.match(quickstart, /## 3\. Price the order/);
   assert.match(quickstart, /## 4\. Handle payment/);
   assert.match(quickstart, /## 5\. Mount the routes/);
   assert.match(quickstart, /openReceiveExpress/);
   assert.match(quickstart, /createOpenReceive/);
   assert.match(quickstart, /prepareCheckout/);
-  assert.match(quickstart, /createHostOrderStore/);
   assert.match(quickstart, /requestPrepare|resume/);
   assert.match(quickstart, /guestCheckout\(\)/);
   assert.match(quickstart, /onPaid/);
   assert.match(quickstart, /amount:\s*\{\s*currency:\s*"USD"/);
   assert.match(quickstart, /from "openreceive\/express"/);
-  assert.match(quickstart, /from "openreceive\/node"/);
   assert.match(quickstart, /from "@openreceive\/http"/);
-  assert.match(quickstart, /<Checkout orderId=/);
-  assert.match(quickstart, /Your app creates the order/);
+  assert.match(quickstart, /<Checkout[\s\S]*orderId=/);
   assert.match(quickstart, /\/openreceive\/prepare|requestPrepare/);
-  assert.match(quickstart, /orders\.persist/);
+  assert.match(quickstart, /orders\/:id\/summary|orders\/\{id\}\/summary|GET …\/orders/);
+  assert.doesNotMatch(quickstart, /createHostOrderStore/);
+  assert.doesNotMatch(quickstart, /getCheckoutAmount/);
+  assert.doesNotMatch(quickstart, /\/prepare_order/);
   // Price and onPaid are defined before the mount step.
   const priceIdx = quickstart.indexOf("## 3. Price the order");
   const paidIdx = quickstart.indexOf("## 4. Handle payment");

@@ -16,7 +16,7 @@ import {
   createHelloFruitDemoServerLogger,
   createHelloFruitOpenReceiveLogger,
 } from "../../../../shared/demo-logging.ts";
-import { createHelloFruitPrepareCheckout } from "../../../../shared/demo-order.ts";
+import { createHelloFruitPrepareCheckout } from "../../../../shared/demo-prepare-checkout.ts";
 import { mountHelloFruitHostedDemoRoutes } from "../../../../shared/hosted-demo-routes.ts";
 import {
   readHelloFruitCheckoutCurrencies,

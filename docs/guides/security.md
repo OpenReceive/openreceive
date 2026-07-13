@@ -22,9 +22,10 @@ for any checkout or status route that should not be public.
 
 With the mounted routes (recommended):
 
-- Your app creates and persists the order; OpenReceive never mints orders.
-- `getCheckoutAmount` is required and is the sole price authority on create.
-  Client `amount` / `sats` / `usd` on the create body are rejected.
+- `prepareCheckout` / `prepare_checkout` is required and is the sole price
+  authority on **POST `/prepare`**. OpenReceive persists the amount; create
+  reads that persist. Client `amount` / `sats` / `usd` on the create body are
+  rejected.
 - Order status and swap reads are gated for you (and/or your `authorize` hook).
 - Admin sweep fails closed unless `authorize` opts in — see
   [Authorization](authorization.md).

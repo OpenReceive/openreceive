@@ -30,6 +30,7 @@ demos/deploy/**/*.p12
 demos/deploy/**/*.pfx
 demos/deploy/**/id_*
 demos/deploy/**/wg*.conf
+private_private_infra_details.txt
 
 .DS_Store
 

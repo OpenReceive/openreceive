@@ -669,7 +669,8 @@ test("frontend checkout guide shows Angular helpers in the Angular section", () 
   const angularSection = guide.slice(guide.indexOf("## Angular"), guide.indexOf("## Styling"));
 
   assert.match(angularSection, /@openreceive\/angular/);
-  assert.match(angularSection, /createOpenReceiveAngularCheckoutShellBinding/);
+  assert.match(angularSection, /orderId/);
+  assert.match(angularSection, /resume/);
   assert.doesNotMatch(angularSection, /@openreceive\/vue/);
   assert.doesNotMatch(angularSection, /createOpenReceiveVueCheckoutShellBinding/);
 });

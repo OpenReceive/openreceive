@@ -27,19 +27,19 @@ OpenReceive.
 
 ## Runtime Model
 
-OpenReceive runs inside your normal web process. Your app creates and persists
-an order, mounts OpenReceive's routes with a required `getCheckoutAmount` hook that
-prices that order server-side, and renders `<Checkout orderId />`. The component
+OpenReceive runs inside your normal web process. Your app mounts OpenReceive's
+routes with a required `prepareCheckout` hook that prices orders on
+**POST `/prepare`**, then renders `<Checkout orderId resume />`. The component
 creates the checkout against the mounted routes and polls order status there.
 Checkout creation, order-status reads, admin pages, or background tasks may
 advance at most one bounded server-side `list_transactions` page through the
 global sweep.
 
 ```text
-your app           creates/persists the order (OpenReceive never mints orders)
-mounted OpenReceive  prices via getCheckoutAmount; never trusts a client price
-browser checkout   <Checkout orderId> creates + polls through the mount
-wallet scan        happens only inside server-side OpenReceive calls
+your app             prepareCheckout validates cart / returns amount (+ optional summary)
+mounted OpenReceive  POST /prepare persists amount; create never trusts a client price
+browser checkout     <Checkout orderId resume> creates + polls + restores summary
+wallet scan          happens only inside server-side OpenReceive calls
 ```
 
 The OpenReceive store is the only thing coordinating payment state across

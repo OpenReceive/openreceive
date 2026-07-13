@@ -3,7 +3,7 @@ import type {
   OpenReceiveReceiveNwcClient,
   OpenReceiveSourcedPriceProvider,
 } from "@openreceive/core";
-import { guestCheckout, hostError, type CreateOpenReceiveHttpHandlerOptions } from "@openreceive/http";
+import { guestCheckout, type CreateOpenReceiveHttpHandlerOptions } from "@openreceive/http";
 import {
   createOpenReceive,
   readOpenReceiveConfigFile,
@@ -14,7 +14,7 @@ import {
   createHelloFruitDemoServerLogger,
   createHelloFruitOpenReceiveLogger,
 } from "../../../../shared/demo-logging.ts";
-import { createHelloFruitPrepareCheckout } from "../../../../shared/demo-order.ts";
+import { createHelloFruitPrepareCheckout } from "../../../../shared/demo-prepare-checkout.ts";
 import {
   readHelloFruitCheckoutCurrencies,
   readHelloFruitPriceFeedCurrencies,
@@ -229,17 +229,6 @@ export async function createHelloFruitOpenReceive(
   } satisfies HelloFruitOpenReceiveBundle;
 }
 
-
-async function readJsonBody(request: Request): Promise<Record<string, unknown>> {
-  if (request.method === "GET" || request.method === "HEAD") return {};
-  const text = await request.text();
-  if (text.length === 0) return {};
-  const body = JSON.parse(text) as unknown;
-  if (body === null || typeof body !== "object" || Array.isArray(body)) {
-    throw hostError("JSON request body must be an object.");
-  }
-  return body as Record<string, unknown>;
-}
 
 function currentStoreCacheKey(): string {
   const config = readOpenReceiveConfigFile({

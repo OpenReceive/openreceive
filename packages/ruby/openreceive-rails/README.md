@@ -4,7 +4,7 @@ A mountable **Rails engine** that ships [OpenReceive](https://openreceive.org)'s
 checkout routes into a Rails app. Your app keeps 100% of its authentication: the engine controllers
 inherit from your `ApplicationController`, so they get your CSRF protection, `authenticate_user!`,
 and `current_user` for free. OpenReceive never inspects your session — it calls the `authorize` and
-`get_checkout_amount` hooks you configure and obeys them.
+`prepare_checkout` hooks you configure and obeys them.
 
 This gem builds on two gems you also depend on:
 
@@ -89,11 +89,14 @@ OpenReceive.configure do |config|
     end
   end
 
-  # Amount authority — REQUIRED. NEVER trust a client price. Create body has no amount.
-  config.get_checkout_amount = ->(ctx) {
-    order = Order.find_by(id: ctx[:order_id])
-    return nil if order.nil? # → 404
-    { amount: { currency: "USD", value: order.total_usd.to_s } }
+  # Amount authority — REQUIRED. NEVER trust a client price on create.
+  # POST /prepare calls this hook; OpenReceive persists amount (+ optional summary).
+  config.prepare_checkout = ->(ctx) {
+    cart = Cart.validate(ctx[:body] || {})
+    {
+      amount: { currency: "USD", value: cart.total_usd.to_s },
+      summary: cart.as_json,
+    }
   }
 end
 ```
@@ -108,7 +111,7 @@ end
 | `namespace` | `"default"` | Store namespace (multi-tenant isolation). |
 | `store` | ActiveRecord store | Invoice store; override with any store object. |
 | `authorize` | `nil` → default policy | `->(context) { boolean }`. |
-| `get_checkout_amount` | **required** | Authoritative payment-terms hook (see below). |
+| `prepare_checkout` | **required** | Authoritative payment-terms hook on POST `/prepare` (see below). |
 | `rate_limit` | `nil` | `->(context) { allowed_boolean }`; `false` → 429. |
 | `prefix` | `"/openreceive"` | Informational (Rails owns routing via `mount`). |
 | `price_provider` | `nil` | Injected price feed (fiat + `/rates`). |
@@ -116,13 +119,12 @@ end
 | `price_currencies` | `nil` | Currencies for `/rates`. |
 | `logger` | `nil` | Optional logger (never receives the NWC secret). |
 
-`get_checkout_amount` is **required** (building the request handler without it raises). It accepts
-**either** the single-context form `->(ctx) { ctx[:order_id] }` (ctx has `:order_id`,
-`:client_amount`, `:metadata`, `:request`, `:action`) **or** the keyword form
-`->(order_id:, client_amount:, metadata:, request:)` (identical to `RackApp`). Return one of
-`{ amount: { currency:, value: } }` or `{ amount: { sats: } }`, or `nil` for 404. Client
-`amount` / `sats` / `usd` on the create body are rejected with 400 — honor a payer-chosen
-amount inside the hook (e.g. from `metadata`) if you need tip-jar / donation pricing.
+`prepare_checkout` is **required** (building the request handler without it raises). It accepts
+**either** the single-context form `->(ctx) { … }` (ctx has `:body`, `:request`, `:action`) **or**
+the keyword form `->(body:, request:)`. Return
+`{ amount: { currency:, value: } | { sats: }, order_id?, summary?, metadata? }`, or `nil` for 404.
+Client `amount` / `sats` / `usd` on the create body are rejected with 400 — honor a payer-chosen
+amount inside the hook (e.g. from the prepare body) if you need tip-jar / donation pricing.
 
 ### Ready-made policies (presets)
 
@@ -179,9 +181,11 @@ All under the mount prefix:
 
 | Method | Path | Tier | Controller#action |
 |--------|------|------|-------------------|
+| POST | `/prepare` | 1 | `prepare#create` |
 | POST | `/checkouts` | 1 | `checkouts#create` |
 | GET  | `/checkouts/:checkout_id` | 2 | `checkouts#show` |
 | POST | `/orders/:order_id` | 2 | `orders#perform` |
+| GET  | `/orders/:order_id/summary` | 1 | `orders#summary` |
 | GET  | `/orders/:order_id/swap-options` | 2 | `orders#swap_options` |
 | GET  | `/rates` | 1 | `rates#index` |
 | POST | `/admin/sweep` | 3 | `admin#sweep` |

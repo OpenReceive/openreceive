@@ -79,10 +79,13 @@ Resolution that honors the "single token per order, no extra table" intent witho
     `Server::Presets.guest_checkout` / `.with_user` in Ruby.
 12. **Default mount prefix (#6).** Components default `prefix` to `/openreceive` and derive the
     order URL from it, so mounting at the default needs no `orderUrl`/`prefix` wiring.
-13. **Required `getCheckoutAmount` / `get_checkout_amount` (2026-07-09).** Handler construction throws if the
-    pricing hook is omitted. Create body is `{ order_id, memo?, description_hash?, metadata? }`;
-    client `amount`/`sats`/`usd` → 400. Hook `null` → 404. Tip-jar hosts honor payer amounts inside
-    the hook. Umbrella subpaths `openreceive/express|fastify|next`; opt-in `startSweeper`.
+13. **Required `getCheckoutAmount` / `get_checkout_amount` (2026-07-09).** Superseded by #14.
+    Handler construction threw if the pricing hook was omitted. Create body was
+    `{ order_id, memo?, description_hash?, metadata? }`; client `amount`/`sats`/`usd` → 400.
+14. **Required `prepareCheckout` / `prepare_checkout` (2026-07-13).** POST `/prepare` is the sole
+    price authority. OpenReceive persists amount (+ optional `summary`/`metadata`); create reads
+    that persist only. `GET /orders/{id}/summary` is Tier 1 public-if-exists for guest resume.
+    Frontend: `<Checkout orderId resume />`. No dual-path `getCheckoutAmount` mount API.
 
 ## Notes carried from ground-truth mapping
 

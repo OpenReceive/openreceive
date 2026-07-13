@@ -2,10 +2,22 @@
 
 ## 0.1.1 - Unreleased
 
+### Own prepare + guest resume
+
+- Replaced public `getCheckoutAmount` / `get_checkout_amount` with required
+  `prepareCheckout` / `prepare_checkout`. POST `/prepare` is the sole price
+  authority; OpenReceive persists amount (+ optional `summary`) and create-checkout
+  reads that persist only.
+- Added `GET /orders/{order_id}/summary` (Tier 1, public-if-exists) for guest
+  resume display redraw.
+- Frontend: `<Checkout orderId resume />` fetches summary and optionally syncs
+  `/checkout/:orderId`. Browser helpers: `requestPrepare`, `requestOrderSummary`.
+
 ### Rename amount-authority hook
 
-- Renamed `resolveOrder` / `resolve_order` → `getCheckoutAmount` / `get_checkout_amount`.
-  The hook runs only on POST create-checkout (pricing), never on GET order status.
+- Renamed `resolveOrder` / `resolve_order` → `getCheckoutAmount` / `get_checkout_amount`
+  (superseded by `prepareCheckout` above).
+  The hook ran only on POST create-checkout (pricing), never on GET order status.
   Deprecated JS aliases `ResolveOrder` / `GetOrderAmount` remain for one release.
 
 ### Global FixedFloat rates cache
