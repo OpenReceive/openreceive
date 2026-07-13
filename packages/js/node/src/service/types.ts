@@ -18,6 +18,7 @@ import type {
   SwapPayInAsset,
   SwapProvider,
   SwapProviderState,
+  SwapRefundReason,
 } from "../swap/index.ts";
 
 export type OpenReceiveLogLevel = "debug" | "info" | "warn" | "error";
@@ -223,6 +224,15 @@ export interface PublicSwap {
   readonly attention?: boolean;
   /** Why this attempt needs review, when `attention` is true. See automated-swaps.md. */
   readonly attentionReason?: SwapAttentionReason;
+  /**
+   * Why a refund is needed (`underpaid` / `late_deposit` / `underpaid_and_late`),
+   * when the attempt is on the refund path.
+   */
+  readonly refundReason?: SwapRefundReason;
+  /** Amount received on the deposit tx, when the provider reports it. */
+  readonly depositReceivedAmount?: string;
+  /** Expected refund amount excluding network fees, when the provider reports it. */
+  readonly refundAmount?: string;
   /**
    * Provider reported a repeated deposit on the same order (`emergency.repeat`).
    * Extra funds may sit at the provider — reconcile manually.

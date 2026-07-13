@@ -1,3 +1,5 @@
+import { isValidAddressForSwapNetwork } from "@openreceive/core/swap-address";
+
 export const OPENRECEIVE_SWAP_PAY_IN_ASSETS = [
   "SOL_SOL",
   "USDT_TRON",
@@ -134,17 +136,16 @@ export function isOpenReceiveLightningNetwork(value: string): boolean {
 
 /**
  * Coarse shape-check of a deposit/refund address against the pay-in asset's
- * network (format guard, not full checksum validation). Shared by every swap
- * caller so on-chain address rules live in one place; callers throw their own error.
+ * network (format guard, not full checksum validation). Delegates to
+ * `@openreceive/core` so browser refund UI and the settlement engine share
+ * one rule set; callers throw their own error.
  */
 export function isValidSwapAddressForNetwork(
   payInAsset: SwapPayInAsset,
   address: string,
 ): boolean {
-  if (address.length > 200 || /\s/.test(address)) return false;
-  const network = getOpenReceiveSwapAssetInfo(payInAsset).network;
-  if (network === "ETH") return /^0x[0-9a-fA-F]{40}$/.test(address);
-  if (network === "SOL") return /^[1-9A-HJ-NP-Za-km-z]{32,64}$/.test(address);
-  if (network === "TRX") return /^T[1-9A-HJ-NP-Za-km-z]{20,60}$/.test(address);
-  return address.length >= 5;
+  return isValidAddressForSwapNetwork(
+    getOpenReceiveSwapAssetInfo(payInAsset).network,
+    address,
+  );
 }

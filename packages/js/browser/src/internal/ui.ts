@@ -73,6 +73,9 @@ export const OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES = {
   swapRefundAddress: "data-or-swap-refund-address",
   swapRefundNonce: "data-or-swap-refund-nonce",
   swapRefundConfirm: "data-or-swap-refund-confirm",
+  swapRefundPayInAsset: "data-or-swap-refund-pay-in-asset",
+  swapRefundNetworkLabel: "data-or-swap-refund-network-label",
+  swapRefundError: "data-or-swap-refund-error",
   providerCopy: "data-or-provider-copy",
   providerTutorial: "data-or-provider-tutorial",
   providerTutorialIndex: "data-or-provider-tutorial-index",
@@ -98,6 +101,9 @@ export const OPENRECEIVE_PAYMENT_WIZARD_SELECTORS = {
   swapRefundAddress: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundAddress}]`,
   swapRefundNonce: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundNonce}]`,
   swapRefundConfirm: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundConfirm}]`,
+  swapRefundPayInAsset: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundPayInAsset}]`,
+  swapRefundNetworkLabel: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundNetworkLabel}]`,
+  swapRefundError: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundError}]`,
   providerCopy: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerCopy}]`,
   providerTutorial: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorial}]`,
   providerTutorialIndex: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.providerTutorialIndex}]`,
@@ -442,6 +448,9 @@ export interface CheckoutInvoiceSwapSnapshot {
   readonly refund_tx_id?: string;
   readonly attention?: boolean;
   readonly attention_reason?: string;
+  readonly refund_reason?: string;
+  readonly deposit_received_amount?: string;
+  readonly refund_amount?: string;
   readonly fee?: CheckoutInvoiceSwapFee;
 }
 
@@ -493,6 +502,9 @@ export interface OpenReceiveSwapDisplayModel {
   readonly refundAddress?: string;
   readonly refundNonce?: string;
   readonly refundTxId?: string;
+  readonly refundReason?: string;
+  readonly depositReceivedAmount?: string;
+  readonly refundAmount?: string;
   readonly providerOrderId?: string;
 }
 

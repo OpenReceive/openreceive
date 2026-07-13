@@ -189,7 +189,12 @@ export function createOpenReceiveSwapDisplayModel(
       : getOpenReceiveSwapProviderStateLabel(swap.provider_state),
     providerStateDetail: settled
       ? "Your payment is confirmed and your order is complete."
-      : getOpenReceiveSwapProviderStateDetail(swap.provider_state, swap.pay_in_asset),
+      : getOpenReceiveSwapProviderStateDetail(swap.provider_state, swap.pay_in_asset, {
+          refundReason: swap.refund_reason,
+          depositAmount: swap.deposit_amount,
+          depositReceivedAmount: swap.deposit_received_amount,
+          refundAmount: swap.refund_amount,
+        }),
     state: settled ? "settled" : getOpenReceiveSwapPanelState(swap.provider_state),
     expiresInSeconds,
     countdownLabel: formatOpenReceiveCountdown(expiresInSeconds),
@@ -202,6 +207,15 @@ export function createOpenReceiveSwapDisplayModel(
     ...(swap.refund_address === undefined ? {} : { refundAddress: swap.refund_address }),
     ...(swap.refund_nonce === undefined ? {} : { refundNonce: swap.refund_nonce }),
     ...(swap.refund_tx_id === undefined ? {} : { refundTxId: swap.refund_tx_id }),
+    ...(swap.refund_reason === undefined ? {} : { refundReason: swap.refund_reason }),
+    ...(swap.deposit_received_amount === undefined
+      ? {}
+      : {
+          depositReceivedAmount: formatOpenReceiveDepositAmount(swap.deposit_received_amount),
+        }),
+    ...(swap.refund_amount === undefined
+      ? {}
+      : { refundAmount: formatOpenReceiveDepositAmount(swap.refund_amount) }),
     ...(swap.provider_order_id === undefined ? {} : { providerOrderId: swap.provider_order_id }),
   };
 }
@@ -234,8 +248,17 @@ function getOpenReceiveSwapProviderStateLabel(state: string): string {
   return state;
 }
 
-function getOpenReceiveSwapProviderStateDetail(state: string, payInAsset: string): string {
-  const { networkLabel } = getOpenReceiveSwapAssetDisplay(payInAsset);
+function getOpenReceiveSwapProviderStateDetail(
+  state: string,
+  payInAsset: string,
+  refundContext: {
+    readonly refundReason?: string;
+    readonly depositAmount?: string;
+    readonly depositReceivedAmount?: string;
+    readonly refundAmount?: string;
+  } = {},
+): string {
+  const { networkLabel, assetLabel } = getOpenReceiveSwapAssetDisplay(payInAsset);
   if (state === "creating_provider_order") return "Creating a payment address.";
   if (state === "awaiting_deposit") return "Send exactly the amount shown below.";
   if (state === "confirming") {
@@ -248,12 +271,77 @@ function getOpenReceiveSwapProviderStateDetail(state: string, payInAsset: string
     return "The provider is sending the Lightning payment. This usually takes a few seconds.";
   }
   if (state === "expired") return "No payment was received before the payment window closed.";
-  if (state === "refund_required") return "Enter an address you control to request a refund.";
-  if (state === "refund_pending") return "Your refund request has been sent.";
-  if (state === "refunded") return "The provider reports the refund was sent.";
+  if (state === "refund_required" || state === "refund_pending" || state === "refunded") {
+    return getOpenReceiveSwapRefundDetail(state, assetLabel, refundContext);
+  }
   if (state === "attention") return "This payment needs support review.";
   if (state === "failed") return "This payment address can no longer be used.";
   return state;
+}
+
+function getOpenReceiveSwapRefundDetail(
+  state: string,
+  assetLabel: string,
+  refundContext: {
+    readonly refundReason?: string;
+    readonly depositAmount?: string;
+    readonly depositReceivedAmount?: string;
+    readonly refundAmount?: string;
+  },
+): string {
+  const reasonDetail = getOpenReceiveSwapRefundReasonDetail(refundContext, assetLabel);
+  const refundAmountDetail =
+    refundContext.refundAmount === undefined
+      ? undefined
+      : `Estimated refund: ${formatOpenReceiveDepositAmount(refundContext.refundAmount)} ${assetLabel} before network fees.`;
+
+  if (state === "refund_required") {
+    const action = "Enter an address you control to request a refund.";
+    return [reasonDetail, action, refundAmountDetail].filter(Boolean).join(" ");
+  }
+  if (state === "refund_pending") {
+    return [reasonDetail, "Your refund request has been sent.", refundAmountDetail]
+      .filter(Boolean)
+      .join(" ");
+  }
+  return [reasonDetail, "The provider reports the refund was sent.", refundAmountDetail]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function getOpenReceiveSwapRefundReasonDetail(
+  refundContext: {
+    readonly refundReason?: string;
+    readonly depositAmount?: string;
+    readonly depositReceivedAmount?: string;
+  },
+  assetLabel: string,
+): string | undefined {
+  const expected =
+    refundContext.depositAmount === undefined
+      ? undefined
+      : formatOpenReceiveDepositAmount(refundContext.depositAmount);
+  const received =
+    refundContext.depositReceivedAmount === undefined
+      ? undefined
+      : formatOpenReceiveDepositAmount(refundContext.depositReceivedAmount);
+
+  if (refundContext.refundReason === "underpaid") {
+    if (expected !== undefined && received !== undefined) {
+      return `You sent ${received} ${assetLabel} but ${expected} ${assetLabel} was required.`;
+    }
+    return "The amount received was less than required.";
+  }
+  if (refundContext.refundReason === "late_deposit") {
+    return "Your payment arrived after the payment window closed.";
+  }
+  if (refundContext.refundReason === "underpaid_and_late") {
+    if (expected !== undefined && received !== undefined) {
+      return `You sent ${received} ${assetLabel} but ${expected} ${assetLabel} was required, and it arrived after the payment window closed.`;
+    }
+    return "Your payment was under the required amount and arrived after the window closed.";
+  }
+  return undefined;
 }
 
 /**
@@ -620,7 +708,19 @@ export function createOpenReceiveTransactionDetails(
     push("Deposit address", swap.deposit_address);
     push("Deposit memo", swap.deposit_memo);
     push("Deposit amount", formatOpenReceiveDepositAmount(swap.deposit_amount));
+    if (swap.deposit_received_amount !== undefined) {
+      push(
+        "Amount received",
+        formatOpenReceiveDepositAmount(swap.deposit_received_amount),
+      );
+    }
     push("Provider state", swap.provider_state);
+    if (swap.refund_reason !== undefined) {
+      push("Refund reason", swap.refund_reason);
+    }
+    if (swap.refund_amount !== undefined) {
+      push("Estimated refund", formatOpenReceiveDepositAmount(swap.refund_amount));
+    }
     if (swap.provider_expires_at !== undefined) {
       push("Provider expires at", formatOpenReceiveUnixTime(swap.provider_expires_at));
     }
@@ -1322,6 +1422,15 @@ function normalizeCheckoutInvoiceSwapSnapshot(
     ...(optionalString(input.attention_reason) === undefined
       ? {}
       : { attention_reason: optionalString(input.attention_reason) }),
+    ...(optionalString(input.refund_reason) === undefined
+      ? {}
+      : { refund_reason: optionalString(input.refund_reason) }),
+    ...(optionalString(input.deposit_received_amount) === undefined
+      ? {}
+      : { deposit_received_amount: optionalString(input.deposit_received_amount) }),
+    ...(optionalString(input.refund_amount) === undefined
+      ? {}
+      : { refund_amount: optionalString(input.refund_amount) }),
     ...(normalizeCheckoutInvoiceSwapFee(input.fee) === undefined
       ? {}
       : { fee: normalizeCheckoutInvoiceSwapFee(input.fee) }),
@@ -2181,6 +2290,7 @@ function swapAuditLogFields(
         readonly provider_state?: string;
         readonly attention?: boolean;
         readonly attention_reason?: string;
+        readonly refund_reason?: string;
         readonly refund_nonce?: string;
         readonly refund_nonce_expires_at?: number;
         readonly refund_tx_id?: string;
@@ -2202,6 +2312,7 @@ function swapAuditLogFields(
     ...(swap.attention_reason === undefined
       ? {}
       : { attention_reason: swap.attention_reason }),
+    ...(swap.refund_reason === undefined ? {} : { refund_reason: swap.refund_reason }),
     refund_nonce_present: swap.refund_nonce !== undefined,
     ...(swap.refund_nonce_expires_at === undefined
       ? {}

@@ -109,6 +109,22 @@
         "provider_order_expires_after_shadow_invoice"
       ]
     },
+    "refund_reason": {
+      "type": "string",
+      "enum": [
+        "underpaid",
+        "late_deposit",
+        "underpaid_and_late"
+      ]
+    },
+    "deposit_received_amount": {
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)?$"
+    },
+    "refund_amount": {
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)?$"
+    },
     "emergency_repeat": {
       "type": "boolean"
     }

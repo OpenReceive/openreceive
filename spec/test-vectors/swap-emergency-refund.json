@@ -10,6 +10,9 @@
     "provider_state": "refund_required",
     "provider_expires_at": 1783361130,
     "deposit_tx_id": "0xdeposit",
+    "deposit_received_amount": "0.0005",
+    "refund_reason": "underpaid",
+    "refund_amount": "0.00048",
     "refund_nonce": "or_ref_11111111111111111111111111111111"
   },
   "refund_submit_request": {

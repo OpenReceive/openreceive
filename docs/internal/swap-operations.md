@@ -49,7 +49,7 @@ const { label, detail, phase, terminal } = describeSwapState(attempt.providerSta
 | `paying_invoice` | `processing` | no | The provider is paying the Lightning invoice. |
 | `completed` | `settling` | no | Provider reports done — **not paid yet**. Render "Finalizing", never "Paid". |
 | `expired` | `terminal` | yes | No deposit arrived before the window closed. |
-| `refund_required` | `refund` | no | Collect a refund address. |
+| `refund_required` | `refund` | no | Collect a refund address. May include `refund_reason`, `deposit_received_amount`, and `refund_amount`. |
 | `refund_pending` | `refund` | no | A refund has been requested from the provider. |
 | `refunded` | `terminal` | yes | The provider reports the refund was sent. |
 | `attention` | `attention` | yes | Needs operator review — see below. |

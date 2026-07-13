@@ -3,6 +3,7 @@ import test from "node:test";
 import { InMemoryInvoiceKvStore, StaticPriceProvider } from "../../packages/js/core/src/index.ts";
 import {
   createOpenReceive,
+  describeSwapRefundReason,
   describeSwapState,
   OPENRECEIVE_SWAP_STATES,
 } from "../../packages/js/node/src/index.ts";
@@ -207,6 +208,16 @@ test("describeSwapState maps every provider state and keeps completed non-termin
   const unknown = describeSwapState("some_future_state");
   assert.equal(unknown.phase, "attention");
   assert.equal(unknown.label, "some_future_state");
+});
+
+test("describeSwapRefundReason maps underpay and late deposit causes", () => {
+  assert.equal(describeSwapRefundReason("underpaid")?.label, "Underpaid");
+  assert.equal(
+    describeSwapRefundReason("late_deposit")?.detail,
+    "Your payment arrived after the payment window closed.",
+  );
+  assert.equal(describeSwapRefundReason("underpaid_and_late")?.reason, "underpaid_and_late");
+  assert.equal(describeSwapRefundReason("unknown"), undefined);
 });
 
 test("mergeSwapConfig combines file and programmatic providers instead of replacing", () => {

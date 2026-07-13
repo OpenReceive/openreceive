@@ -150,6 +150,7 @@ assert(
 
 const coreRoot = await import("@openreceive/core");
 const scopedContracts = await import("@openreceive/core/contracts");
+const scopedSwapAddress = await import("@openreceive/core/swap-address");
 assert.equal(
   coreRoot.OPENRECEIVE_ERROR_CODES,
   undefined,
@@ -158,6 +159,11 @@ assert.equal(
 assert(
   Array.isArray(scopedContracts.OPENRECEIVE_ERROR_CODES),
   "@openreceive/core/contracts: generated contracts must be importable"
+);
+assert.equal(
+  typeof scopedSwapAddress.isValidSwapAddressForPayInAsset,
+  "function",
+  "@openreceive/core/swap-address: address validation must be importable"
 );
 
 const umbrellaChecks = [

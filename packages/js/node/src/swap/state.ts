@@ -1,4 +1,4 @@
-import type { SwapProviderState } from "./provider.ts";
+import type { SwapProviderState, SwapRefundReason } from "./provider.ts";
 
 /**
  * Coarse lifecycle bucket for a swap attempt's `provider_state`. Twelve provider
@@ -155,4 +155,42 @@ export function describeSwapState(state: string): SwapStateInfo {
     phase: "attention",
     terminal: false,
   };
+}
+
+export interface SwapRefundReasonInfo {
+  readonly reason: SwapRefundReason;
+  /** Short payer-facing cause, e.g. "Underpaid". */
+  readonly label: string;
+  /** One-sentence payer-facing explanation of why a refund is needed. */
+  readonly detail: string;
+}
+
+const OPENRECEIVE_SWAP_REFUND_REASONS: Readonly<
+  Record<SwapRefundReason, SwapRefundReasonInfo>
+> = {
+  underpaid: {
+    reason: "underpaid",
+    label: "Underpaid",
+    detail: "The amount received was less than required.",
+  },
+  late_deposit: {
+    reason: "late_deposit",
+    label: "Late payment",
+    detail: "Your payment arrived after the payment window closed.",
+  },
+  underpaid_and_late: {
+    reason: "underpaid_and_late",
+    label: "Underpaid and late",
+    detail: "Your payment was under the required amount and arrived after the window closed.",
+  },
+};
+
+/**
+ * Describe a swap `refund_reason` for payer-facing copy. Accepts an unknown string
+ * defensively so a UI never throws on an unexpected value from an older payload.
+ */
+export function describeSwapRefundReason(reason: string): SwapRefundReasonInfo | undefined {
+  return (OPENRECEIVE_SWAP_REFUND_REASONS as Record<string, SwapRefundReasonInfo | undefined>)[
+    reason
+  ];
 }

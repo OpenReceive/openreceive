@@ -20,6 +20,7 @@
     "./styles.css": "./dist/styles.css"
   },
   "dependencies": {
+    "@openreceive/core": "0.1.1",
     "@openreceive/provider-data": "0.1.1",
     "d3-geo": "^3.1.1",
     "qrcode": "^1.5.4",

@@ -57,6 +57,7 @@ import {
   formatOpenReceiveChooseNetworkHeading,
   formatOpenReceiveNetworkSummary,
   formatOpenReceiveSwapLimit,
+  getSwapRefundAddressError,
   openReceiveAssetButtonClasses,
   openReceiveCheckoutLabels,
   openReceiveCheckoutElementStyles,
@@ -101,6 +102,7 @@ import {
   type OpenReceivePaymentWizardSelection,
   type OpenReceiveTransactionDetailRow,
   type OpenReceiveTransactionDetailsInput,
+  type OpenReceiveSwapDisplayModel,
   type OpenReceiveWizardProviderDisplay,
   type OpenReceiveWizardRouteAssetDisplay,
   type OpenReceiveWizardRouteDisplay,
@@ -1065,15 +1067,20 @@ function renderElementSwapPanelHtml(
 
   if (display.state === "refund_required") {
     const stagedRefundAddress = display.refundAddress;
+    const refundFacts = renderElementSwapRefundFactsHtml(display);
     return `
       <section part="swap-panel" class="${orClasses.swapPanel}">
         ${heading}
+        ${refundFacts}
         <p part="swap-warning" class="${orClasses.swapWarning}">Use a ${escapeHtml(display.networkLabel)} address you control. Do not paste the deposit address.</p>
         ${stagedRefundAddress === undefined ? `
           <form
             part="swap-refund"
             class="${orClasses.swapRefund}"
+            novalidate
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundForm}="${escapeHtml(display.attemptId)}"
+            ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundPayInAsset}="${escapeHtml(display.payInAsset)}"
+            ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundNetworkLabel}="${escapeHtml(display.networkLabel)}"
             ${display.refundNonce === undefined ? "" : `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundNonce}="${escapeHtml(display.refundNonce)}"`}
           >
             <input
@@ -1085,6 +1092,13 @@ function renderElementSwapPanelHtml(
               autocomplete="off"
               required
             >
+            <p
+              part="swap-refund-error"
+              class="${orClasses.swapRefundError}"
+              ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundError}
+              hidden
+              role="alert"
+            ></p>
             <button class="${orClasses.btn}" type="submit">Review refund address</button>
           </form>
         ` : `
@@ -1092,6 +1106,8 @@ function renderElementSwapPanelHtml(
             part="swap-refund"
             class="${orClasses.swapRefund}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundForm}="${escapeHtml(display.attemptId)}"
+            ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundPayInAsset}="${escapeHtml(display.payInAsset)}"
+            ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundNetworkLabel}="${escapeHtml(display.networkLabel)}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundConfirm}="true"
             ${display.refundNonce === undefined ? "" : `${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundNonce}="${escapeHtml(display.refundNonce)}"`}
           >
@@ -1111,9 +1127,11 @@ function renderElementSwapPanelHtml(
   }
 
   if (display.state === "refund_pending" || display.state === "refunded") {
+    const refundFacts = renderElementSwapRefundFactsHtml(display);
     return `
       <section part="swap-panel" class="${orClasses.swapPanel}">
         ${heading}
+        ${refundFacts}
         <dl part="swap-details" class="${orClasses.swapDetails}">
           ${display.refundAddress === undefined ? "" : renderElementSwapCopyDetailHtml("Refund address", display.refundAddress, display.refundAddress, display.payInAsset)}
           ${display.refundTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Refund transaction", display.refundTxId, display.refundTxId, display.payInAsset)}
@@ -1131,6 +1149,35 @@ function renderElementSwapPanelHtml(
       ${backButton}
     </section>
   `;
+}
+
+function renderElementSwapRefundFactsHtml(
+  display: OpenReceiveSwapDisplayModel,
+  options: { readonly wrap?: boolean } = {},
+): string {
+  const rows = [
+    display.depositReceivedAmount === undefined
+      ? ""
+      : renderElementSwapCopyDetailHtml(
+          "Amount received",
+          `${display.depositReceivedAmount} ${display.assetLabel}`,
+        ),
+    display.depositReceivedAmount === undefined
+      ? ""
+      : renderElementSwapCopyDetailHtml(
+          "Amount required",
+          `${display.depositAmount} ${display.assetLabel}`,
+        ),
+    display.refundAmount === undefined
+      ? ""
+      : renderElementSwapCopyDetailHtml(
+          "Estimated refund",
+          `${display.refundAmount} ${display.assetLabel}`,
+        ),
+  ].join("");
+  if (rows.length === 0) return "";
+  if (options.wrap === false) return rows;
+  return `<dl part="swap-details" class="${orClasses.swapDetails}">${rows}</dl>`;
 }
 
 function renderElementSwapCopyDetailHtml(
@@ -2206,15 +2253,63 @@ export function defineOpenReceiveElements(
       });
 
       root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapRefundForm).forEach((form) => {
+        const input = form.querySelector(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapRefundAddress);
+        const errorEl = form.querySelector(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapRefundError);
+        const payInAsset = form.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundPayInAsset) ?? "";
+        const networkLabel =
+          form.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundNetworkLabel) ?? "refund";
+        const setRefundAddressError = (message: string | undefined) => {
+          if (input instanceof HTMLInputElement) {
+            input.className =
+              message === undefined ? orClasses.swapRefundInput : orClasses.swapRefundInputInvalid;
+            if (message === undefined) input.removeAttribute("aria-invalid");
+            else input.setAttribute("aria-invalid", "true");
+          }
+          if (errorEl instanceof HTMLElement) {
+            if (message === undefined) {
+              errorEl.textContent = "";
+              errorEl.hidden = true;
+            } else {
+              errorEl.textContent = message;
+              errorEl.hidden = false;
+            }
+          }
+        };
+        const validateRefundAddress = (address: string, showEmpty: boolean): string | undefined => {
+          if (address.length === 0) {
+            return showEmpty ? "Enter a refund address." : undefined;
+          }
+          return getSwapRefundAddressError(payInAsset, address, networkLabel);
+        };
+        if (input instanceof HTMLInputElement && input.type !== "hidden") {
+          input.addEventListener("input", () => {
+            const address = input.value.trim();
+            if (address.length === 0) {
+              setRefundAddressError(undefined);
+              return;
+            }
+            setRefundAddressError(validateRefundAddress(address, false));
+          });
+          input.addEventListener("blur", () => {
+            const address = input.value.trim();
+            if (address.length === 0) return;
+            setRefundAddressError(validateRefundAddress(address, false));
+          });
+        }
         form.addEventListener("submit", (event) => {
           event.preventDefault();
           const attemptId = form.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundForm);
           const refundNonce = form.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundNonce);
           const confirm =
             form.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapRefundConfirm) === "true";
-          const input = form.querySelector(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapRefundAddress);
           const refundAddress = input instanceof HTMLInputElement ? input.value.trim() : "";
-          if (attemptId === null || refundNonce === null || refundAddress.length === 0) return;
+          if (attemptId === null || refundNonce === null) return;
+          const error = validateRefundAddress(refundAddress, true);
+          if (error !== undefined) {
+            setRefundAddressError(error);
+            return;
+          }
+          setRefundAddressError(undefined);
           void this.refundSwap(attemptId, refundAddress, refundNonce, confirm);
         });
       });

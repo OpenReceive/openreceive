@@ -45,6 +45,9 @@ export interface HttpPublicSwap {
   readonly refund_tx_id?: string;
   readonly attention?: boolean;
   readonly attention_reason?: PublicSwap["attentionReason"];
+  readonly refund_reason?: PublicSwap["refundReason"];
+  readonly deposit_received_amount?: string;
+  readonly refund_amount?: string;
   readonly emergency_repeat?: boolean;
   readonly fee?: PublicSwap["fee"];
 }
@@ -164,6 +167,11 @@ export function toHttpPublicSwap(swap: PublicSwap): HttpPublicSwap {
     ...(swap.attentionReason === undefined
       ? {}
       : { attention_reason: swap.attentionReason }),
+    ...(swap.refundReason === undefined ? {} : { refund_reason: swap.refundReason }),
+    ...(swap.depositReceivedAmount === undefined
+      ? {}
+      : { deposit_received_amount: swap.depositReceivedAmount }),
+    ...(swap.refundAmount === undefined ? {} : { refund_amount: swap.refundAmount }),
     ...(swap.emergencyRepeat === undefined
       ? {}
       : { emergency_repeat: swap.emergencyRepeat }),

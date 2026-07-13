@@ -32,6 +32,7 @@ import type {
   SwapQuote,
   SwapProviderApiRequestLog,
   SwapProviderApiResponseLog,
+  SwapRefundReason,
 } from "./provider.ts";
 import {
   SWAP_RATES_MAX_STALE_SECONDS,
@@ -766,6 +767,15 @@ function normalizeFixedFloatOrder(
   assertFixedFloatDepositAddressShape(input.payInAsset, depositAddress);
   const fee = readFixedFloatOrderFee(record) ?? input.fallback?.fee;
   const emergencyRepeat = readEmergencyRepeat(emergency);
+  const depositReceivedAmount =
+    readDecimalAmountString(readNestedString(record, ["from", "tx", "amount"])) ??
+    input.fallback?.deposit_received_amount;
+  const refundAmount =
+    readDecimalAmountString(readNestedString(record, ["back", "amount"])) ??
+    input.fallback?.refund_amount;
+  const refundReason =
+    normalizedStatus.refund_reason ??
+    (isRefundPathState(normalizedStatus.state) ? input.fallback?.refund_reason : undefined);
 
   return {
     provider: input.provider,
@@ -796,6 +806,11 @@ function normalizeFixedFloatOrder(
     ...(normalizedStatus.attention_reason === undefined
       ? {}
       : { attention_reason: normalizedStatus.attention_reason }),
+    ...(refundReason === undefined ? {} : { refund_reason: refundReason }),
+    ...(depositReceivedAmount === undefined
+      ? {}
+      : { deposit_received_amount: depositReceivedAmount }),
+    ...(refundAmount === undefined ? {} : { refund_amount: refundAmount }),
     ...(emergencyRepeat === undefined
       ? input.fallback?.emergency_repeat === undefined
         ? {}
@@ -833,6 +848,7 @@ function normalizeFixedFloatStatus(
   readonly state: SwapProviderState;
   readonly attention?: boolean;
   readonly attention_reason?: SwapAttentionReason;
+  readonly refund_reason?: SwapRefundReason;
 } {
   const normalized = status.toUpperCase();
   if (refundTxId !== undefined && (normalized === "DONE" || normalized === "FINISHED")) {
@@ -849,8 +865,19 @@ function normalizeFixedFloatStatus(
     const emergencyStatuses = readStringArrayField(emergency, "status").map((item) =>
       item.toUpperCase(),
     );
-    if (choice === "REFUND" && refundTxId !== undefined) return { state: "refunded" };
-    if (choice === "REFUND") return { state: "refund_pending" };
+    const refundReason = refundReasonFromEmergencyStatuses(emergencyStatuses);
+    if (choice === "REFUND" && refundTxId !== undefined) {
+      return {
+        state: "refunded",
+        ...(refundReason === undefined ? {} : { refund_reason: refundReason }),
+      };
+    }
+    if (choice === "REFUND") {
+      return {
+        state: "refund_pending",
+        ...(refundReason === undefined ? {} : { refund_reason: refundReason }),
+      };
+    }
     if (choice === "EXCHANGE") {
       return {
         state: "attention",
@@ -869,10 +896,33 @@ function normalizeFixedFloatStatus(
         attention_reason: "provider_reported_emergency",
       };
     }
-    return { state: "refund_required" };
+    return {
+      state: "refund_required",
+      ...(refundReason === undefined ? {} : { refund_reason: refundReason }),
+    };
   }
   if (normalized.includes("FAIL")) return { state: "failed" };
   return { state: "attention", attention: true, attention_reason: "provider_reported_emergency" };
+}
+
+function refundReasonFromEmergencyStatuses(
+  statuses: readonly string[],
+): SwapRefundReason | undefined {
+  const less = statuses.includes("LESS");
+  const expired = statuses.includes("EXPIRED");
+  if (less && expired) return "underpaid_and_late";
+  if (less) return "underpaid";
+  if (expired) return "late_deposit";
+  return undefined;
+}
+
+function isRefundPathState(state: SwapProviderState): boolean {
+  return state === "refund_required" || state === "refund_pending" || state === "refunded";
+}
+
+function readDecimalAmountString(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  return /^[0-9]+(\.[0-9]+)?$/.test(value) ? value : undefined;
 }
 
 function readFixedFloatCurrencies(data: unknown): FixedFloatCurrency[] {

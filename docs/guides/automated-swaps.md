@@ -67,6 +67,14 @@ When the provider reports `refund_required`, the checkout element collects a
 refund address for the same network, shows it back for confirmation, then
 submits — all through the mounted routes.
 
+Checkout also surfaces why the refund is needed when the provider reports it:
+
+| Field | Meaning |
+| --- | --- |
+| `refund_reason` | `underpaid`, `late_deposit`, or `underpaid_and_late` (from FixedFloat `emergency.status`) |
+| `deposit_received_amount` | Amount actually received on the deposit tx |
+| `refund_amount` | Estimated refund excluding network fees |
+
 Refund confirmation is two-phase and nonce-guarded. Stage the address
 (`confirm` omitted/false), show it back, then submit again with `confirm: true`
 before `refund_nonce_expires_at`. Warn payers to use an address they control and

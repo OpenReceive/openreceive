@@ -511,6 +511,27 @@ components:
             - provider_order_creation_needs_reconcile
             - provider_reported_emergency
             - provider_order_expires_after_shadow_invoice
+        refund_reason:
+          type: string
+          enum:
+            - underpaid
+            - late_deposit
+            - underpaid_and_late
+          description: >
+            Why a refund is needed, when the attempt is on the refund path.
+            Mapped from FixedFloat emergency.status (LESS / EXPIRED).
+        deposit_received_amount:
+          type: string
+          pattern: "^[0-9]+(\\.[0-9]+)?$"
+          description: >
+            Amount actually received on the deposit transaction (FixedFloat
+            from.tx.amount), when known.
+        refund_amount:
+          type: string
+          pattern: "^[0-9]+(\\.[0-9]+)?$"
+          description: >
+            Provider-reported refund amount excluding network fees (FixedFloat
+            back.amount), when known.
         emergency_repeat:
           type: boolean
           description: >

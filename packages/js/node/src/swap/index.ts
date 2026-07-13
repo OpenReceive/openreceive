@@ -54,6 +54,7 @@ export type {
   SwapProviderState,
   SwapAvailabilityReason,
   SwapAttentionReason,
+  SwapRefundReason,
   SwapQuote,
   SwapProviderAsset,
   SwapFee,
@@ -63,8 +64,8 @@ export type {
   SwapProvider,
 } from "./provider.ts";
 
-export { OPENRECEIVE_SWAP_STATES, describeSwapState } from "./state.ts";
-export type { SwapPhase, SwapStateInfo } from "./state.ts";
+export { OPENRECEIVE_SWAP_STATES, describeSwapState, describeSwapRefundReason } from "./state.ts";
+export type { SwapPhase, SwapStateInfo, SwapRefundReasonInfo } from "./state.ts";
 
 export {
   SwapProviderWeightBudget,

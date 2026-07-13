@@ -1580,6 +1580,7 @@ function swapAttemptAuditFields(row: InvoiceStorageRow): Record<string, unknown>
     provider_state: optionalString(swap.provider_state),
     attention: typeof swap.attention === "boolean" ? swap.attention : undefined,
     attention_reason: optionalString(swap.attention_reason),
+    refund_reason: optionalString(swap.refund_reason),
     refund_nonce_present: optionalString(swap.refund_nonce) !== undefined,
     refund_nonce_expires_at: optionalSafeInteger(swap.refund_nonce_expires_at),
     refund_tx_id: optionalString(swap.refund_tx_id),

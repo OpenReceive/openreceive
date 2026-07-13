@@ -2,6 +2,13 @@
 
 ## 0.1.1 - Unreleased
 
+### Swap refund UX
+
+- Surface FixedFloat emergency details on the public swap payload and checkout UI:
+  `refund_reason` (`underpaid` / `late_deposit` / `underpaid_and_late`),
+  `deposit_received_amount` (`from.tx.amount`), and `refund_amount` (`back.amount`).
+  Checkout copy explains why a refund is needed and shows amount received vs required.
+
 ### Docs
 
 - Slimmed `docs/guides/` for day-one integrators; moved swap runbooks, custom

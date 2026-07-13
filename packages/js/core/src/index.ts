@@ -194,3 +194,12 @@ export type {
   OpenReceivePendingSweepResult,
   OpenReceiveReconciler,
 } from "./runner/index.ts";
+
+// Swap address shape checks (deposit + refund)
+export {
+  isValidAddressForSwapNetwork,
+  openReceiveSwapAddressNetworkForPayInAsset,
+  isValidSwapAddressForPayInAsset,
+  getSwapRefundAddressError,
+} from "./swap/address.ts";
+export type { OpenReceiveSwapAddressNetwork } from "./swap/address.ts";

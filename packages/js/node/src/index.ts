@@ -53,6 +53,7 @@ export {
   createOpenReceivePriceFeed,
 } from "./service.ts";
 export {
+  describeSwapRefundReason,
   describeSwapState,
   fixedFloatCompatibleSwapProvider,
   fixedFloatProvider,
@@ -107,6 +108,8 @@ export type {
   SwapProviderAsset,
   SwapProviderState,
   SwapQuote,
+  SwapRefundReason,
+  SwapRefundReasonInfo,
   SwapStateInfo,
 } from "./swap/index.ts";
 export {

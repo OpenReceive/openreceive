@@ -6,10 +6,12 @@ import {
   createOpenReceiveTransactionDetails,
   createQrPayloadSvg,
   formatOpenReceiveSwapLimit,
+  getSwapRefundAddressError,
   openReceiveCheckoutLabels,
   selectCheckoutDisplayInvoice,
   type OpenReceiveBrowserLogger,
   type OpenReceiveQrEncoder,
+  type OpenReceiveSwapDisplayModel,
   orClasses,
 } from "@openreceive/browser/internal";
 import * as React from "react";
@@ -355,6 +357,7 @@ export function renderSwapDepositPanel(options: {
         className: orClasses.swapPanel,
       },
       heading,
+      renderSwapRefundFacts(display, options),
       React.createElement(
         "p",
         {
@@ -364,6 +367,7 @@ export function renderSwapDepositPanel(options: {
       ),
       React.createElement(SwapRefundForm, {
         attemptId: display.attemptId,
+        payInAsset: display.payInAsset,
         networkLabel: display.networkLabel,
         submittedRefundAddress: display.refundAddress,
         refundNonce: display.refundNonce,
@@ -381,6 +385,7 @@ export function renderSwapDepositPanel(options: {
         className: orClasses.swapPanel,
       },
       heading,
+      renderSwapRefundFacts(display, options),
       React.createElement(
         "dl",
         {
@@ -476,11 +481,45 @@ export function renderSwapDepositPanel(options: {
   );
 }
 
+function renderSwapRefundFacts(
+  display: OpenReceiveSwapDisplayModel,
+  options: {
+    readonly clipboard?: Pick<Clipboard, "writeText">;
+    readonly onError?: (error: unknown) => void;
+  },
+): React.ReactElement | null {
+  const rows = [
+    ...(display.depositReceivedAmount === undefined
+      ? []
+      : renderSwapCopyRow(
+          "Amount received",
+          `${display.depositReceivedAmount} ${display.assetLabel}`,
+          options,
+        )),
+    ...(display.depositReceivedAmount === undefined
+      ? []
+      : renderSwapCopyRow(
+          "Amount required",
+          `${display.depositAmount} ${display.assetLabel}`,
+          options,
+        )),
+    ...(display.refundAmount === undefined
+      ? []
+      : renderSwapCopyRow(
+          "Estimated refund",
+          `${display.refundAmount} ${display.assetLabel}`,
+          options,
+        )),
+  ];
+  if (rows.length === 0) return null;
+  return React.createElement("dl", { className: orClasses.swapDetails }, rows);
+}
+
 // Explains why the payer sends more crypto than the cart total: the swap provider's
 // exchange rate and network fees are baked into the deposit amount. Renders nothing
 // when the provider did not report fiat equivalents.
 function renderSwapFeeBreakdown(
-  breakdown: NonNullable<ReturnType<typeof createOpenReceiveSwapDisplayModel>>["feeBreakdown"],
+  breakdown: OpenReceiveSwapDisplayModel["feeBreakdown"],
 ): React.ReactElement | null {
   if (breakdown === undefined) return null;
   const feeValue =
@@ -627,6 +666,7 @@ function renderSwapSupportDetails(
 
 function SwapRefundForm(props: {
   readonly attemptId: string;
+  readonly payInAsset: string;
   readonly networkLabel: string;
   readonly submittedRefundAddress?: string;
   readonly refundNonce?: string;
@@ -640,19 +680,32 @@ function SwapRefundForm(props: {
 }): React.ReactElement {
   const [refundAddress, setRefundAddress] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
+  const [showAddressError, setShowAddressError] = React.useState(false);
   const address = refundAddress.trim();
+  const formatError = getSwapRefundAddressError(
+    props.payInAsset,
+    address,
+    props.networkLabel,
+  );
+  const addressError =
+    address.length === 0 ? "Enter a refund address." : formatError;
   const confirm =
     address.length > 0 &&
     props.submittedRefundAddress !== undefined &&
     props.submittedRefundAddress === address;
   const disabled = submitting || props.refundNonce === undefined;
+  const showError = showAddressError && addressError !== undefined;
   return React.createElement(
     "form",
     {
       className: orClasses.swapRefund,
+      noValidate: true,
       onSubmit: (event) => {
         event.preventDefault();
-        if (address.length === 0 || props.refundNonce === undefined) return;
+        if (addressError !== undefined || props.refundNonce === undefined) {
+          setShowAddressError(true);
+          return;
+        }
         setSubmitting(true);
         void props
           .onRefund(props.attemptId, address, props.refundNonce, confirm)
@@ -671,13 +724,30 @@ function SwapRefundForm(props: {
         ),
     React.createElement("input", {
       autoComplete: "off",
-      className: orClasses.swapRefundInput,
-      onChange: (event) => setRefundAddress(event.currentTarget.value),
+      "aria-invalid": showError ? true : undefined,
+      className: showError ? orClasses.swapRefundInputInvalid : orClasses.swapRefundInput,
+      onChange: (event) => {
+        setRefundAddress(event.currentTarget.value);
+        if (showAddressError) setShowAddressError(true);
+      },
+      onBlur: () => {
+        if (refundAddress.trim().length > 0) setShowAddressError(true);
+      },
       placeholder: `${props.networkLabel} refund address`,
       required: true,
       type: "text",
       value: refundAddress,
     }),
+    showError
+      ? React.createElement(
+          "p",
+          {
+            className: orClasses.swapRefundError,
+            role: "alert",
+          },
+          addressError,
+        )
+      : null,
     React.createElement(
       "button",
       {

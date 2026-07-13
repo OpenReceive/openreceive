@@ -12,6 +12,7 @@ import {
   type SwapOrder,
   type SwapPayInAsset,
   type SwapProviderState,
+  type SwapRefundReason,
 } from "../swap/index.ts";
 import {
   isRecord,
@@ -258,6 +259,11 @@ export function swapMetadataFromProviderOrder(
     ...(order.refund_tx_id === undefined ? {} : { refund_tx_id: order.refund_tx_id }),
     ...(order.attention === undefined ? {} : { attention: order.attention }),
     ...(order.attention_reason === undefined ? {} : { attention_reason: order.attention_reason }),
+    ...(order.refund_reason === undefined ? {} : { refund_reason: order.refund_reason }),
+    ...(order.deposit_received_amount === undefined
+      ? {}
+      : { deposit_received_amount: order.deposit_received_amount }),
+    ...(order.refund_amount === undefined ? {} : { refund_amount: order.refund_amount }),
     ...(order.emergency_repeat === undefined
       ? {}
       : { emergency_repeat: order.emergency_repeat }),
@@ -394,6 +400,15 @@ export function readPublicSwap(row: InvoiceStorageRow): PublicSwap | undefined {
     ...(readSwapAttentionReason(swap.attention_reason) === undefined
       ? {}
       : { attentionReason: readSwapAttentionReason(swap.attention_reason) }),
+    ...(readSwapRefundReason(swap.refund_reason) === undefined
+      ? {}
+      : { refundReason: readSwapRefundReason(swap.refund_reason) }),
+    ...(optionalString(swap.deposit_received_amount) === undefined
+      ? {}
+      : { depositReceivedAmount: optionalString(swap.deposit_received_amount) }),
+    ...(optionalString(swap.refund_amount) === undefined
+      ? {}
+      : { refundAmount: optionalString(swap.refund_amount) }),
     ...(typeof swap.emergency_repeat === "boolean"
       ? { emergencyRepeat: swap.emergency_repeat }
       : {}),
@@ -425,6 +440,19 @@ function readSwapAttentionReason(value: unknown): SwapAttentionReason | undefine
   const reason = optionalString(value);
   return reason !== undefined && SWAP_ATTENTION_REASONS.has(reason)
     ? (reason as SwapAttentionReason)
+    : undefined;
+}
+
+const SWAP_REFUND_REASONS: ReadonlySet<string> = new Set<SwapRefundReason>([
+  "underpaid",
+  "late_deposit",
+  "underpaid_and_late",
+]);
+
+function readSwapRefundReason(value: unknown): SwapRefundReason | undefined {
+  const reason = optionalString(value);
+  return reason !== undefined && SWAP_REFUND_REASONS.has(reason)
+    ? (reason as SwapRefundReason)
     : undefined;
 }
 
@@ -480,6 +508,22 @@ export function readStoredSwapOrder(row: InvoiceStorageRow): SwapOrder {
       ? {}
       : { refund_tx_id: optionalString(swap.refund_tx_id) }),
     ...(typeof swap.attention === "boolean" ? { attention: swap.attention } : {}),
+    ...(readSwapAttentionReason(swap.attention_reason) === undefined
+      ? {}
+      : { attention_reason: readSwapAttentionReason(swap.attention_reason) }),
+    ...(readSwapRefundReason(swap.refund_reason) === undefined
+      ? {}
+      : { refund_reason: readSwapRefundReason(swap.refund_reason) }),
+    ...(optionalString(swap.deposit_received_amount) === undefined
+      ? {}
+      : { deposit_received_amount: optionalString(swap.deposit_received_amount) }),
+    ...(optionalString(swap.refund_amount) === undefined
+      ? {}
+      : { refund_amount: optionalString(swap.refund_amount) }),
+    ...(typeof swap.emergency_repeat === "boolean"
+      ? { emergency_repeat: swap.emergency_repeat }
+      : {}),
+    ...(readStoredSwapFee(swap.fee) === undefined ? {} : { fee: readStoredSwapFee(swap.fee) }),
   };
 }
 

@@ -39,6 +39,7 @@ export function swapAttemptLogFields(input: {
   readonly provider_state?: string;
   readonly attention?: boolean;
   readonly attention_reason?: string;
+  readonly refund_reason?: string;
   readonly refund_nonce_present?: boolean;
   readonly refund_nonce_expires_at?: number;
   readonly refund_tx_id?: string;
@@ -61,6 +62,7 @@ export function swapAttemptLogFields(input: {
     ...(input.attention_reason === undefined
       ? {}
       : { attention_reason: input.attention_reason }),
+    ...(input.refund_reason === undefined ? {} : { refund_reason: input.refund_reason }),
     ...(input.refund_nonce_present === undefined
       ? {}
       : { refund_nonce_present: input.refund_nonce_present }),
@@ -252,8 +254,23 @@ export function summarizeSwapProviderApiResponse(entry: {
   if (isRecord(data.emergency)) {
     const choice = optionalLogString(data.emergency.choice);
     if (choice !== undefined && choice !== "NONE") summary.emergency = choice;
+    const statuses = Array.isArray(data.emergency.status)
+      ? data.emergency.status
+          .filter((item): item is string => typeof item === "string" && item.length > 0)
+          .map((item) => item.toUpperCase())
+      : [];
+    if (statuses.length > 0) summary.emergency_status = statuses.join(",");
     const repeat = data.emergency.repeat;
     if (repeat === true || repeat === "1" || repeat === 1) summary.emergency_repeat = true;
+  }
+
+  if (isRecord(data.from) && isRecord(data.from.tx)) {
+    const received = optionalLogString(data.from.tx.amount);
+    if (received !== undefined) summary.deposit_received = received;
+  }
+  if (isRecord(data.back)) {
+    const refundAmount = optionalLogString(data.back.amount);
+    if (refundAmount !== undefined) summary.refund_amount = refundAmount;
   }
 
   // /price quotes carry from/to amounts without an order id.

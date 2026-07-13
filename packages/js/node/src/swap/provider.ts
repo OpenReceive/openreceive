@@ -38,6 +38,13 @@ export type SwapAttentionReason =
   | "provider_reported_emergency"
   | "provider_order_expires_after_shadow_invoice";
 
+/**
+ * Why a swap attempt entered the refund path (`refund_required` → `refunded`).
+ * Mapped from FixedFloat `emergency.status` (LESS / EXPIRED). Overpay (MORE/OVER)
+ * goes to `attention`, not here.
+ */
+export type SwapRefundReason = "underpaid" | "late_deposit" | "underpaid_and_late";
+
 export interface SwapQuote {
   readonly pay_amount?: string;
   readonly minimum_pay_amount?: string;
@@ -94,6 +101,20 @@ export interface SwapOrder {
   readonly refund_tx_id?: string;
   readonly attention?: boolean;
   readonly attention_reason?: SwapAttentionReason;
+  /**
+   * Why a refund is needed, when the attempt is on the refund path. Mapped from
+   * FixedFloat `emergency.status` (LESS / EXPIRED).
+   */
+  readonly refund_reason?: SwapRefundReason;
+  /**
+   * Amount actually received on the deposit tx (`from.tx.amount`), when known.
+   * Compared with `deposit_amount` to explain underpayment.
+   */
+  readonly deposit_received_amount?: string;
+  /**
+   * Provider-reported refund amount excluding the network fee (`back.amount`).
+   */
+  readonly refund_amount?: string;
   /**
    * FixedFloat `emergency.repeat`: a second deposit hit the same provider order.
    * Extra funds may sit at the provider while the attempt looks like a normal

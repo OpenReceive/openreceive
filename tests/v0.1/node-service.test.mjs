@@ -1344,6 +1344,44 @@ test("refundSwap requests a provider refund only for refund-required swaps", asy
   ]);
 });
 
+test("refundSwap rejects refund addresses that do not match the pay-in network", async () => {
+  const swapProvider = new FakeSwapProvider(["ETH_ETH"], "otherfloat");
+  const { openreceive, setNow } = await createHarness({
+    swap: { providers: [swapProvider] },
+  });
+  await openreceive.getOrCreateCheckout({
+    orderId: "order-swap-refund-bad-address",
+    amount: { sats: "200" },
+  });
+  const swapAttempt = await openreceive.startSwap({
+    orderId: "order-swap-refund-bad-address",
+    payInAsset: "ETH_ETH",
+  });
+
+  swapProvider.nextState = "refund_required";
+  setNow(1015);
+  const refreshed = await openreceive.getOrder({ orderId: "order-swap-refund-bad-address" });
+  const refundRequired = refreshed.activeCheckout.invoices.find(
+    (invoice) => invoice.rail === "swap",
+  );
+  assert.match(refundRequired.swap.refundNonce, /^or_ref_[a-f0-9]{32}$/);
+
+  await assert.rejects(
+    () =>
+      openreceive.refundSwap({
+        attemptId: swapAttempt.attemptId,
+        refundAddress: "7EqQdEULxWcraVQ3XXtK5nGJm6tQ3nqJkGqZQ6c8bqKx",
+        refundNonce: refundRequired.swap.refundNonce,
+      }),
+    (error) =>
+      error instanceof OpenReceiveServiceError &&
+      error.status === 400 &&
+      error.code === "INVALID_REQUEST" &&
+      /refund_address is not valid/.test(error.message),
+  );
+  assert.deepEqual(swapProvider.refundCalls, []);
+});
+
 test("createCheckout creates a new checkout and supersedes the open checkout for a different amount", async () => {
   const { wallet, openreceive } = await createHarness();
 
@@ -2219,6 +2257,98 @@ test("FixedFloat status surfaces emergency.repeat", async () => {
 
   assert.equal(order.state, "refund_required");
   assert.equal(order.emergency_repeat, true);
+});
+
+test("FixedFloat status maps emergency LESS to underpaid refund details", async () => {
+  const provider = fixedFloatProvider({
+    key: "fixed-float-key",
+    secret: "fixed-float-secret",
+    baseUrl: "https://fixedfloat.example",
+    fetch: async () =>
+      jsonResponse({
+        code: 0,
+        data: {
+          id: "ff-order-less",
+          token: "ff-token-less",
+          status: "EMERGENCY",
+          emergency: {
+            status: ["LESS"],
+            choice: "NONE",
+          },
+          from: {
+            address: "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
+            amount: "1.05",
+            tx: {
+              id: "txid-underpay",
+              amount: "0.80",
+            },
+          },
+          back: {
+            amount: "0.79",
+          },
+          time: { expiration: 4600 },
+        },
+      }),
+  });
+
+  const order = await provider.getStatus({
+    provider: "fixedfloat",
+    provider_order_id: "ff-order-less",
+    provider_token: "ff-token-less",
+    pay_in_asset: "USDT_TRON",
+    deposit_address: "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
+    deposit_amount: "1.05",
+    expires_at: 4600,
+    state: "awaiting_deposit",
+  });
+
+  assert.equal(order.state, "refund_required");
+  assert.equal(order.refund_reason, "underpaid");
+  assert.equal(order.deposit_received_amount, "0.80");
+  assert.equal(order.refund_amount, "0.79");
+  assert.equal(order.deposit_tx_id, "txid-underpay");
+});
+
+test("FixedFloat status maps emergency EXPIRED+LESS to underpaid_and_late", async () => {
+  const provider = fixedFloatProvider({
+    key: "fixed-float-key",
+    secret: "fixed-float-secret",
+    baseUrl: "https://fixedfloat.example",
+    fetch: async () =>
+      jsonResponse({
+        code: 0,
+        data: {
+          id: "ff-order-late",
+          token: "ff-token-late",
+          status: "EMERGENCY",
+          emergency: {
+            status: ["EXPIRED", "LESS"],
+            choice: "NONE",
+          },
+          from: {
+            address: "0x1111111111111111111111111111111111111111",
+            amount: "0.0008",
+            tx: { id: "0xlate", amount: "0.0005" },
+          },
+          time: { expiration: 1600 },
+        },
+      }),
+  });
+
+  const order = await provider.getStatus({
+    provider: "fixedfloat",
+    provider_order_id: "ff-order-late",
+    provider_token: "ff-token-late",
+    pay_in_asset: "ETH_ETH",
+    deposit_address: "0x1111111111111111111111111111111111111111",
+    deposit_amount: "0.0008",
+    expires_at: 1600,
+    state: "awaiting_deposit",
+  });
+
+  assert.equal(order.state, "refund_required");
+  assert.equal(order.refund_reason, "underpaid_and_late");
+  assert.equal(order.deposit_received_amount, "0.0005");
 });
 
 test("readOpenReceiveConfigFile parses optional sentry fields", async () => {

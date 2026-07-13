@@ -7,4 +7,11 @@ export * from "./internal/order-token.ts";
 export * from "./internal/guest-resume.ts";
 export * from "./internal/console-logger.ts";
 export * from "./internal/swap-http.ts";
+export {
+  isValidAddressForSwapNetwork,
+  openReceiveSwapAddressNetworkForPayInAsset,
+  isValidSwapAddressForPayInAsset,
+  getSwapRefundAddressError,
+} from "@openreceive/core/swap-address";
+export type { OpenReceiveSwapAddressNetwork } from "@openreceive/core/swap-address";
 export { status, type Status, type StatusInvoiceLike } from "./status.ts";
