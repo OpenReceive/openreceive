@@ -9,6 +9,15 @@ import {
   createHelloFruitDemoBrowserConsoleLogger,
   createHelloFruitBrowserLogger,
 } from "../../../../shared/demo-browser-logging.ts";
+import {
+  enterHelloFruitCheckout,
+  forgetHelloFruitOrder,
+  leaveHelloFruitCheckout,
+  loadHelloFruitOrderForResume,
+  parseHelloFruitCheckoutOrderId,
+  rememberHelloFruitOrder,
+} from "../../../../shared/demo-checkout-resume.ts";
+import type { HelloFruitDemoOrder } from "../../../../shared/demo-order.ts";
 import { readHelloFruitCheckoutCurrencies } from "../../../../shared/demo-currencies.ts";
 import {
   formatHelloFruitBuyNowLabel,
@@ -39,15 +48,8 @@ interface Fruit {
 interface DemoOrder {
   uuid: string;
   status: "pending_payment" | "paid";
-  items: {
-    product_id: string;
-    name: string;
-    quantity: number;
-  }[];
-  total_amount: {
-    currency: string;
-    value: string;
-  };
+  items: HelloFruitDemoOrder["items"];
+  total_amount: HelloFruitDemoOrder["total_amount"];
 }
 
 interface PrepareOrderResponse {
@@ -88,6 +90,10 @@ renderFruitGrid();
 renderCreateOrderControls();
 logDemo("app.ready", "Static HTML demo app mounted.");
 void loadDisplayRates();
+void resumeCheckoutFromUrl();
+globalThis.addEventListener("popstate", () => {
+  void resumeCheckoutFromUrl();
+});
 
 document.getElementById("add-to-cart")?.addEventListener("click", () => {
   addSelectedFruitToCart();
@@ -95,6 +101,38 @@ document.getElementById("add-to-cart")?.addEventListener("click", () => {
 document.getElementById("create-order")?.addEventListener("click", () => {
   void createOrder();
 });
+
+async function resumeCheckoutFromUrl(): Promise<void> {
+  const orderId = parseHelloFruitCheckoutOrderId(globalThis.location.pathname);
+  if (orderId === undefined) {
+    if (currentOrder !== undefined) {
+      startOver({ preserveUrl: true });
+    }
+    return;
+  }
+  if (currentOrder?.uuid === orderId) {
+    renderOrder(currentOrder);
+    renderCheckout(orderId);
+    return;
+  }
+  logDemo("checkout.resume", "Resuming checkout from URL.", { orderId });
+  setError("");
+  const resumed = await loadHelloFruitOrderForResume(orderId);
+  if (parseHelloFruitCheckoutOrderId(globalThis.location.pathname) !== orderId) {
+    return;
+  }
+  if (resumed === undefined) {
+    logDemo("checkout.resume_miss", "Checkout resume order not found.", { orderId });
+    leaveHelloFruitCheckout();
+    startOver({ preserveUrl: true });
+    setError("This checkout link is no longer available. Start a new order.");
+    return;
+  }
+  currentOrder = resumed;
+  purchasedFruit = fruits.find((fruit) => fruit.id === resumed.items[0]?.product_id);
+  renderOrder(resumed);
+  renderCheckout(resumed.uuid);
+}
 
 function renderThemeToggle(): void {
   const topbar = requireElement("topbar");
@@ -204,8 +242,12 @@ function setCheckoutMode(mode: "shop" | "pay"): void {
   requireElement("pay-panel").classList.toggle("hidden", mode !== "pay");
 }
 
-function startOver(): void {
+function startOver(options: { readonly preserveUrl?: boolean } = {}): void {
   logDemo("checkout.start_over", "Resetting static demo to shop mode.");
+  forgetHelloFruitOrder(currentOrder?.uuid);
+  if (options.preserveUrl !== true) {
+    leaveHelloFruitCheckout();
+  }
   currentOrder = undefined;
   purchasedFruit = undefined;
   completedOrderId = "";
@@ -353,7 +395,9 @@ function renderOrder(order: DemoOrder): void {
   startOverButton.className = "btn btn-sm btn-soft";
   startOverButton.type = "button";
   startOverButton.textContent = "Start over";
-  startOverButton.addEventListener("click", startOver);
+  startOverButton.addEventListener("click", () => {
+    startOver();
+  });
   actions.append(startOverButton);
   section.append(actions);
 
@@ -426,6 +470,8 @@ async function createOrder(): Promise<void> {
       itemCount: body.order.items.length,
       total: body.order.total_amount,
     });
+    rememberHelloFruitOrder(body.order);
+    enterHelloFruitCheckout(body.order.uuid);
     renderOrder(body.order);
     renderCheckout(body.order.uuid);
   } catch (error) {

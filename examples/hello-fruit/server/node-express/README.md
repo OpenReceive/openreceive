@@ -55,3 +55,9 @@ Hosted-demo helpers expose `/source`, `/docs`, `/robots.txt`, and
 This demo mounts with `guestCheckout()` (anonymous create; reads gated by the
 per-order capability token). For a signed-in app, swap `authorize` for
 `withUser(...)` — see the comment in `src/server/create-server.ts`.
+
+Guest checkout resume: after `/prepare_order`, the app navigates to
+`/checkout/:orderId`. Refresh keeps the same payment/refund UI while the
+OpenReceive capability cookie (and `sessionStorage` mirror) remain valid. The
+public order summary is restored from `sessionStorage` or `GET /orders/:orderId`.
+Never put the capability token in the URL.

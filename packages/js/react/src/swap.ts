@@ -1,6 +1,7 @@
 import {
   type CheckoutInvoiceSnapshot,
   type CheckoutSnapshot,
+  createOpenReceiveDetailExternalLink,
   createOpenReceiveSwapDisplayModel,
   createOpenReceiveTransactionDetails,
   createQrPayloadSvg,
@@ -231,7 +232,10 @@ export function renderSwapDepositPanel(options: {
     const highlightRows = [
       ...(display.depositTxId === undefined
         ? []
-        : renderSwapCopyRow("Deposit transaction", display.depositTxId, options)),
+        : renderSwapCopyRow("Deposit transaction", display.depositTxId, {
+            ...options,
+            payInAsset: display.payInAsset,
+          })),
       ...(display.payoutTxId === undefined
         ? []
         : renderSwapCopyRow("Lightning payout", display.payoutTxId, options)),
@@ -383,10 +387,16 @@ export function renderSwapDepositPanel(options: {
         },
         display.refundAddress === undefined
           ? null
-          : renderSwapCopyRow("Refund address", display.refundAddress, options),
+          : renderSwapCopyRow("Refund address", display.refundAddress, {
+              ...options,
+              payInAsset: display.payInAsset,
+            }),
         display.refundTxId === undefined
           ? null
-          : renderSwapCopyRow("Refund transaction", display.refundTxId, options),
+          : renderSwapCopyRow("Refund transaction", display.refundTxId, {
+              ...options,
+              payInAsset: display.payInAsset,
+            }),
       ),
       renderSwapSupportDetails(display, options),
     );
@@ -443,7 +453,10 @@ export function renderSwapDepositPanel(options: {
           {
             className: orClasses.swapDetails,
           },
-          renderSwapCopyRow("Address", display.depositAddress, options),
+          renderSwapCopyRow("Address", display.depositAddress, {
+            ...options,
+            payInAsset: display.payInAsset,
+          }),
           memo === undefined ? null : renderSwapCopyRow("Memo", memo, options),
           renderSwapCopyRow("Amount", display.depositAmount, options),
         ),
@@ -505,20 +518,50 @@ function renderSwapCopyRow(
   options: {
     readonly clipboard?: Pick<Clipboard, "writeText">;
     readonly onError?: (error: unknown) => void;
+    readonly payInAsset?: string;
+    readonly href?: string;
+    readonly hrefLabel?: string;
   },
   displayValue: string = value,
 ): readonly React.ReactElement[] {
+  const link =
+    options.href === undefined
+      ? createOpenReceiveDetailExternalLink({
+          label,
+          value,
+          ...(options.payInAsset === undefined ? {} : { payInAsset: options.payInAsset }),
+        })
+      : {
+          href: options.href,
+          hrefLabel: options.hrefLabel ?? openReceiveCheckoutLabels.viewOnExplorer,
+        };
   return [
     React.createElement("dt", { key: `${label}-label`, className: orClasses.swapDetailsDt }, label),
     React.createElement(
       "dd",
       { key: `${label}-value`, className: orClasses.swapDetailsDd },
       React.createElement("code", { className: orClasses.swapDetailsCode }, displayValue),
-      React.createElement(SwapCopyButton, {
-        value,
-        clipboard: options.clipboard,
-        onError: options.onError,
-      }),
+      React.createElement(
+        "div",
+        { className: orClasses.swapDetailsActions },
+        React.createElement(SwapCopyButton, {
+          value,
+          clipboard: options.clipboard,
+          onError: options.onError,
+        }),
+        link === undefined
+          ? null
+          : React.createElement(
+              "a",
+              {
+                className: orClasses.swapDetailsLink,
+                href: link.href,
+                rel: "noreferrer",
+                target: "_blank",
+              },
+              link.hrefLabel,
+            ),
+      ),
     ),
   ];
 }
@@ -551,16 +594,17 @@ function renderSwapSupportDetails(
     readonly onError?: (error: unknown) => void;
   },
 ): React.ReactElement | null {
+  const rowOptions = { ...options, payInAsset: display.payInAsset };
   const rows = [
     ...(display.depositTxId === undefined
       ? []
-      : renderSwapCopyRow("Deposit transaction", display.depositTxId, options)),
+      : renderSwapCopyRow("Deposit transaction", display.depositTxId, rowOptions)),
     ...(display.payoutTxId === undefined
       ? []
       : renderSwapCopyRow("Lightning payout", display.payoutTxId, options)),
     ...(display.refundTxId === undefined
       ? []
-      : renderSwapCopyRow("Refund transaction", display.refundTxId, options)),
+      : renderSwapCopyRow("Refund transaction", display.refundTxId, rowOptions)),
     ...(display.providerOrderId === undefined
       ? []
       : renderSwapCopyRow("Provider order", display.providerOrderId, options)),
@@ -605,7 +649,20 @@ function renderTransactionDetailsCollapse(
         "dl",
         { className: orClasses.swapDetails },
         rows.flatMap((row) =>
-          renderSwapCopyRow(row.label, row.copyValue ?? row.value, options, row.value),
+          renderSwapCopyRow(
+            row.label,
+            row.copyValue ?? row.value,
+            {
+              ...options,
+              ...(row.href === undefined
+                ? {}
+                : {
+                    href: row.href,
+                    hrefLabel: row.hrefLabel ?? openReceiveCheckoutLabels.viewOnExplorer,
+                  }),
+            },
+            row.value,
+          ),
         ),
       ),
     ),

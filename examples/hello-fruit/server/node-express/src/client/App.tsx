@@ -11,6 +11,14 @@ import {
   createHelloFruitDemoBrowserConsoleLogger,
   createHelloFruitBrowserLogger,
 } from "../../../../shared/demo-browser-logging.ts";
+import {
+  enterHelloFruitCheckout,
+  forgetHelloFruitOrder,
+  leaveHelloFruitCheckout,
+  loadHelloFruitOrderForResume,
+  parseHelloFruitCheckoutOrderId,
+  rememberHelloFruitOrder,
+} from "../../../../shared/demo-checkout-resume.ts";
 import { readHelloFruitCheckoutCurrencies } from "../../../../shared/demo-currencies.ts";
 import {
   formatHelloFruitBuyNowLabel,
@@ -81,6 +89,9 @@ function App(): React.ReactElement {
   const [purchasedItems, setPurchasedItems] = useState<readonly DemoOrderItem[]>([]);
   const [stickerModalOpen, setStickerModalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [resuming, setResuming] = useState(
+    () => parseHelloFruitCheckoutOrderId(globalThis.location.pathname) !== undefined,
+  );
   const [error, setError] = useState("");
   const [settledCheckoutState, setSettledCheckoutState] = useState<CheckoutState | null>(null);
   const completedCheckoutRef = useRef("");
@@ -104,6 +115,48 @@ function App(): React.ReactElement {
       framework,
     });
   }, [framework]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function resumeFromUrl(orderId: string): Promise<void> {
+      setResuming(true);
+      setError("");
+      logDemo("checkout.resume", "Resuming checkout from URL.", { orderId });
+      const resumed = await loadHelloFruitOrderForResume(orderId);
+      if (cancelled) return;
+      if (resumed === undefined) {
+        logDemo("checkout.resume_miss", "Checkout resume order not found.", { orderId });
+        leaveHelloFruitCheckout();
+        setOrder(null);
+        setPurchasedItems([]);
+        setError("This checkout link is no longer available. Start a new order.");
+        setResuming(false);
+        return;
+      }
+      setOrder(resumed);
+      setPurchasedItems(resumed.items);
+      setResuming(false);
+    }
+
+    function onPathChange(): void {
+      const orderId = parseHelloFruitCheckoutOrderId(globalThis.location.pathname);
+      if (orderId === undefined) {
+        setOrder(null);
+        setPurchasedItems([]);
+        setResuming(false);
+        return;
+      }
+      void resumeFromUrl(orderId);
+    }
+
+    onPathChange();
+    globalThis.addEventListener("popstate", onPathChange);
+    return () => {
+      cancelled = true;
+      globalThis.removeEventListener("popstate", onPathChange);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -235,6 +288,8 @@ function App(): React.ReactElement {
         itemCount: body.order.items.length,
         total: body.order.total_amount,
       });
+      rememberHelloFruitOrder(body.order);
+      enterHelloFruitCheckout(body.order.uuid);
       setOrder(body.order);
       setPurchasedItems(body.order.items);
     } catch (cause: unknown) {
@@ -252,6 +307,8 @@ function App(): React.ReactElement {
     logDemo("app.reset", "Resetting the demo state.", {
       hadOrder: order !== null,
     });
+    forgetHelloFruitOrder(order?.uuid);
+    leaveHelloFruitCheckout();
     setFruitId(initialFruitId);
     setCart({});
     setOrder(null);
@@ -260,6 +317,7 @@ function App(): React.ReactElement {
     setSettledCheckoutState(null);
     latestCheckoutStateRef.current = null;
     setCreating(false);
+    setResuming(false);
     setError("");
     completedCheckoutRef.current = "";
   }
@@ -308,7 +366,9 @@ function App(): React.ReactElement {
           </div>
         </div>
 
-        {order === null ? (
+        {resuming ? (
+          <p className="text-base-content/70 text-sm">Restoring checkout…</p>
+        ) : order === null ? (
           <>
             <label className="form-control w-full max-w-xs">
               <span className="label-text mb-1">Currency</span>
@@ -534,6 +594,8 @@ function HelloFruitTransactionDetailRow(props: {
     readonly label: string;
     readonly value: string;
     readonly copyValue?: string;
+    readonly href?: string;
+    readonly hrefLabel?: string;
   };
 }): React.ReactElement {
   const [copied, setCopied] = useState(false);
@@ -543,18 +605,30 @@ function HelloFruitTransactionDetailRow(props: {
       <dt className="text-base-content/60 text-xs font-bold uppercase">{props.row.label}</dt>
       <dd className="grid gap-2 grid-cols-[minmax(0,1fr)_auto] items-center m-0">
         <code className="min-w-0 break-all font-mono text-sm">{props.row.value}</code>
-        <button
-          className="btn btn-sm btn-soft"
-          onClick={() => {
-            void navigator.clipboard.writeText(copyValue).then(() => {
-              setCopied(true);
-              globalThis.setTimeout(() => setCopied(false), 1500);
-            });
-          }}
-          type="button"
-        >
-          {copied ? openReceiveCheckoutLabels.copied : "Copy"}
-        </button>
+        <div className="flex flex-wrap gap-2 justify-end">
+          <button
+            className="btn btn-sm btn-soft"
+            onClick={() => {
+              void navigator.clipboard.writeText(copyValue).then(() => {
+                setCopied(true);
+                globalThis.setTimeout(() => setCopied(false), 1500);
+              });
+            }}
+            type="button"
+          >
+            {copied ? openReceiveCheckoutLabels.copied : "Copy"}
+          </button>
+          {props.row.href === undefined ? null : (
+            <a
+              className="btn btn-sm btn-soft"
+              href={props.row.href}
+              rel="noreferrer"
+              target="_blank"
+            >
+              {props.row.hrefLabel ?? openReceiveCheckoutLabels.viewOnExplorer}
+            </a>
+          )}
+        </div>
       </dd>
     </>
   );

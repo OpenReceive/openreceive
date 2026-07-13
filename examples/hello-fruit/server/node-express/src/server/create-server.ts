@@ -24,6 +24,7 @@ import { createHelloFruitDemoMetadata } from "../../../../shared/demo-metadata.t
 import {
   HelloFruitDemoOrderError,
   getHelloFruitCheckoutAmount,
+  getHelloFruitDemoOrder,
   prepareHelloFruitOrder,
 } from "../../../../shared/demo-order.ts";
 import { mountHelloFruitHostedDemoRoutes } from "../../../../shared/hosted-demo-routes.ts";
@@ -115,6 +116,7 @@ export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptio
     staticStickers: "/stickers",
     openReceiveRouter: "/openreceive",
     prepareOrder: "/prepare_order",
+    orders: "/orders/:orderId",
     rates: "/rates",
   });
 
@@ -198,6 +200,42 @@ export async function createHelloFruitServer(options: HelloFruitOpenReceiveOptio
         return;
       }
       logDemo("prepare_order.error", "Prepare order request failed unexpectedly.", {
+        error: error instanceof Error ? error.message : String(error),
+        elapsedMs: Date.now() - startedAt,
+      });
+      next(error);
+    }
+  });
+
+  // Guest resume: public order summary for `/checkout/:orderId` when sessionStorage is empty.
+  // Capability tokens stay out of this response — OpenReceive cookie/sessionStorage authorize polls.
+  app.get("/orders/:orderId", async (req, res, next) => {
+    const startedAt = Date.now();
+    const orderId = typeof req.params.orderId === "string" ? req.params.orderId : "";
+    try {
+      const order = orderId.length === 0 ? null : await getHelloFruitDemoOrder(openreceive, orderId);
+      if (order === null) {
+        logDemo("orders.not_found", "Order summary lookup missed.", {
+          orderId,
+          elapsedMs: Date.now() - startedAt,
+        });
+        res.status(404).json({
+          code: "NOT_FOUND",
+          message: "Order not found.",
+          retryable: false,
+        });
+        return;
+      }
+      logDemo("orders.response", "Served order summary for checkout resume.", {
+        orderId: order.uuid,
+        orderStatus: order.status,
+        itemCount: order.items.length,
+        elapsedMs: Date.now() - startedAt,
+      });
+      res.status(200).json({ order });
+    } catch (error) {
+      logDemo("orders.error", "Order summary lookup failed.", {
+        orderId,
         error: error instanceof Error ? error.message : String(error),
         elapsedMs: Date.now() - startedAt,
       });

@@ -19,6 +19,7 @@ import {
   HelloFruitDemoOrderError,
   prepareHelloFruitOrder,
   getHelloFruitCheckoutAmount,
+  getHelloFruitDemoOrder,
 } from "../../../../shared/demo-order.ts";
 import {
   readHelloFruitCheckoutCurrencies,
@@ -159,6 +160,34 @@ export async function prepareOrderResponse(request: Request): Promise<Response> 
     });
     throw error;
   }
+}
+
+/** Guest resume: public order summary for `/checkout/:orderId` when sessionStorage is empty. */
+export async function orderSummaryResponse(orderId: string): Promise<Response> {
+  const startedAt = Date.now();
+  const { openreceive } = await getOpenReceive();
+  const order = orderId.length === 0 ? null : await getHelloFruitDemoOrder(openreceive, orderId);
+  if (order === null) {
+    logDemo("orders.not_found", "Order summary lookup missed.", {
+      orderId,
+      elapsedMs: Date.now() - startedAt,
+    });
+    return jsonResponse(
+      {
+        code: "NOT_FOUND",
+        message: "Order not found.",
+        retryable: false,
+      },
+      404,
+    );
+  }
+  logDemo("orders.response", "Served order summary for checkout resume.", {
+    orderId: order.uuid,
+    orderStatus: order.status,
+    itemCount: order.items.length,
+    elapsedMs: Date.now() - startedAt,
+  });
+  return jsonResponse({ order });
 }
 
 /**

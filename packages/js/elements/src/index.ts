@@ -33,6 +33,8 @@ import {
   createCheckoutProviderCopyEvent,
   createOpenReceiveThemeChangeEvent,
   createOpenReceiveTransientFeedbackController,
+  createOpenReceiveDetailExternalLink,
+  createOpenReceiveLightningInvoiceDecodeUrl,
   createOpenReceiveSwapDisplayModel,
   createOpenReceiveTransactionDetails,
   createQrPayloadSvg,
@@ -204,6 +206,21 @@ export function renderCheckoutHtml(view: CheckoutView): string {
       ? ""
       : renderOpenReceivePaymentWizardHtml(view.wizard);
   const copyButton = `<button part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.copy}" class="${orClasses.btn}" type="button">${COPY_INVOICE_ICON}${escapeHtml(openReceiveCheckoutLabels.copyInvoice)}</button>`;
+  const decodeInvoice =
+    view.invoice.trim() !== ""
+      ? view.invoice
+      : typeof view.wizard?.lightningInvoice === "string" &&
+          view.wizard.lightningInvoice.trim() !== ""
+        ? view.wizard.lightningInvoice
+        : undefined;
+  const decodeHref =
+    decodeInvoice === undefined
+      ? undefined
+      : createOpenReceiveLightningInvoiceDecodeUrl(decodeInvoice);
+  const decodeButton =
+    decodeHref === undefined
+      ? ""
+      : `<a part="decode-invoice" class="${orClasses.btn}" href="${escapeHtml(decodeHref)}" rel="noreferrer" target="_blank">${escapeHtml(openReceiveCheckoutLabels.decodeInvoice)}</a>`;
   const startOverButton = `<button part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.startOver}" class="${orClasses.btn}" type="button">${escapeHtml(openReceiveCheckoutLabels.startOver)}</button>`;
   const lightningPane =
     hideLightning || expired
@@ -224,7 +241,7 @@ export function renderCheckoutHtml(view: CheckoutView): string {
     : `<p part="invoice-title" class="${orClasses.invoiceTitle}">${escapeHtml(openReceiveCheckoutLabels.bitcoinLightningInvoice)}</p>`;
   const actions = expired
     ? `<div part="actions" class="${orClasses.actions}">${startOverButton}</div>`
-    : `<div part="actions" class="${orClasses.actions}">${copyButton}</div>`;
+    : `<div part="actions" class="${orClasses.actions}">${copyButton}${decodeButton}</div>`;
 
   return `
     <style>${openReceiveCheckoutElementStyles}</style>
@@ -435,7 +452,8 @@ export function renderOpenReceivePaymentWizardHtml(
         routeDisplays,
         view.activeTutorialProviderId ?? null,
         view.activeTutorialIndex ?? 0,
-        view.activeTutorialCopied ?? false
+        view.activeTutorialCopied ?? false,
+        view.lightningInvoice,
       )}
     </section>
   `;
@@ -875,7 +893,7 @@ function renderElementSwapPanelHtml(
           <div part="swap-qr" class="${orClasses.swapQr}" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapQr}="${escapeHtml(display.qrPayload)}"></div>
           <div part="swap-deposit-side" class="${orClasses.swapDepositSide}">
             <dl part="swap-details" class="${orClasses.swapDetails}">
-              ${renderElementSwapCopyDetailHtml("Address", display.depositAddress)}
+              ${renderElementSwapCopyDetailHtml("Address", display.depositAddress, display.depositAddress, display.payInAsset)}
               ${display.depositMemo === undefined ? "" : renderElementSwapCopyDetailHtml("Memo", display.depositMemo)}
               ${renderElementSwapCopyDetailHtml("Amount", display.depositAmount)}
             </dl>
@@ -894,7 +912,7 @@ function renderElementSwapPanelHtml(
       <section part="swap-panel" class="${orClasses.swapPanel}">
         ${heading}
         <dl part="swap-details" class="${orClasses.swapDetails}">
-          ${display.depositTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Deposit transaction", display.depositTxId)}
+          ${display.depositTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Deposit transaction", display.depositTxId, display.depositTxId, display.payInAsset)}
           ${display.payoutTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Lightning payout", display.payoutTxId)}
           ${display.providerOrderId === undefined ? "" : renderElementSwapCopyDetailHtml("Provider order", display.providerOrderId)}
         </dl>
@@ -981,8 +999,8 @@ function renderElementSwapPanelHtml(
       <section part="swap-panel" class="${orClasses.swapPanel}">
         ${heading}
         <dl part="swap-details" class="${orClasses.swapDetails}">
-          ${display.refundAddress === undefined ? "" : renderElementSwapCopyDetailHtml("Refund address", display.refundAddress)}
-          ${display.refundTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Refund transaction", display.refundTxId)}
+          ${display.refundAddress === undefined ? "" : renderElementSwapCopyDetailHtml("Refund address", display.refundAddress, display.refundAddress, display.payInAsset)}
+          ${display.refundTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Refund transaction", display.refundTxId, display.refundTxId, display.payInAsset)}
         </dl>
         ${supportDetails}
       </section>
@@ -1003,17 +1021,44 @@ function renderElementSwapCopyDetailHtml(
   label: string,
   value: string,
   displayValue: string = value,
+  payInAsset?: string,
+  href?: string,
+  hrefLabel?: string,
 ): string {
+  const link =
+    href === undefined
+      ? createOpenReceiveDetailExternalLink({
+          label,
+          value,
+          ...(payInAsset === undefined ? {} : { payInAsset }),
+        })
+      : {
+          href,
+          hrefLabel: hrefLabel ?? openReceiveCheckoutLabels.viewOnExplorer,
+        };
+  const external =
+    link === undefined
+      ? ""
+      : `<a
+        part="swap-external"
+        class="${orClasses.swapDetailsLink}"
+        href="${escapeHtml(link.href)}"
+        rel="noreferrer"
+        target="_blank"
+      >${escapeHtml(link.hrefLabel)}</a>`;
   return `
     <dt class="${orClasses.swapDetailsDt}">${escapeHtml(label)}</dt>
     <dd class="${orClasses.swapDetailsDd}">
       <code class="${orClasses.swapDetailsCode}">${escapeHtml(displayValue)}</code>
-      <button
-        part="swap-copy"
-        class="${orClasses.btnSm}"
-        ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapCopy}="${escapeHtml(value)}"
-        type="button"
-      >Copy</button>
+      <div class="${orClasses.swapDetailsActions}">
+        <button
+          part="swap-copy"
+          class="${orClasses.btnSm}"
+          ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapCopy}="${escapeHtml(value)}"
+          type="button"
+        >Copy</button>
+        ${external}
+      </div>
     </dd>
   `;
 }
@@ -1063,7 +1108,14 @@ function renderElementTransactionDetailsHtml(
         <dl part="swap-details" class="${orClasses.swapDetails}">
           ${rows
             .map((row) =>
-              renderElementSwapCopyDetailHtml(row.label, row.copyValue ?? row.value, row.value),
+              renderElementSwapCopyDetailHtml(
+                row.label,
+                row.copyValue ?? row.value,
+                row.value,
+                undefined,
+                row.href,
+                row.hrefLabel,
+              ),
             )
             .join("")}
         </dl>
@@ -1112,9 +1164,9 @@ function renderElementSwapSupportDetailsHtml(
       <summary class="${orClasses.swapSupportTitle}">Payment details</summary>
       <div class="${orClasses.swapSupportContent}">
         <dl part="swap-details" class="${orClasses.swapDetails}">
-          ${display.depositTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Deposit transaction", display.depositTxId)}
+          ${display.depositTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Deposit transaction", display.depositTxId, display.depositTxId, display.payInAsset)}
           ${display.payoutTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Lightning payout", display.payoutTxId)}
-          ${display.refundTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Refund transaction", display.refundTxId)}
+          ${display.refundTxId === undefined ? "" : renderElementSwapCopyDetailHtml("Refund transaction", display.refundTxId, display.refundTxId, display.payInAsset)}
           ${display.providerOrderId === undefined ? "" : renderElementSwapCopyDetailHtml("Provider order", display.providerOrderId)}
         </dl>
       </div>
@@ -1182,7 +1234,8 @@ function renderTutorialModalHtml(
   routes: readonly OpenReceiveWizardRouteDisplay[],
   activeProviderId: string | null,
   activeTutorialIndex: number,
-  copied: boolean
+  copied: boolean,
+  lightningInvoice?: string,
 ): string {
   if (activeProviderId === null) return "";
   const provider = routes
@@ -1196,6 +1249,14 @@ function renderTutorialModalHtml(
   const previousIndex = Math.max(0, stepIndex - 1);
   const nextIndex = Math.min(provider.tutorials.length, stepIndex + 1);
   const isFinalStep = stepIndex === provider.tutorials.length;
+  const decodeHref =
+    lightningInvoice === undefined || lightningInvoice.trim() === ""
+      ? undefined
+      : createOpenReceiveLightningInvoiceDecodeUrl(lightningInvoice);
+  const decodeButton =
+    decodeHref === undefined
+      ? ""
+      : `<a part="tutorial-decode" class="${orClasses.tutorialCopy}" href="${escapeHtml(decodeHref)}" rel="noreferrer" target="_blank">${escapeHtml(openReceiveCheckoutLabels.decodeInvoice)}</a>`;
   const body = stepIndex === 0
     ? `
         <div part="tutorial-intro" class="${orClasses.tutorialIntro}">
@@ -1203,6 +1264,7 @@ function renderTutorialModalHtml(
           <p>${escapeHtml(openReceiveCheckoutLabels.tutorialIntroPrefix)} ${escapeHtml(provider.name)}.</p>
           <p>${escapeHtml(openReceiveCheckoutLabels.tutorialIntroCopy)}</p>
           <button part="tutorial-copy" class="${orClasses.tutorialCopy}" type="button">${escapeHtml(openReceiveCheckoutLabels.copyInvoice)}</button>
+          ${decodeButton}
           ${copied
             ? `<p part="tutorial-copy-message" class="${orClasses.tutorialCopyMessage}">${escapeHtml(openReceiveCheckoutLabels.tutorialCopiedContinue)}</p>`
             : ""}

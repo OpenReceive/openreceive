@@ -40,6 +40,12 @@ With no `authorize` at all, the default is already safe for guest checkout:
 anonymous create is allowed, order reads require the per-order token the
 checkout component carries, and admin sweep is denied.
 
+`guestCheckout()` authorizes polls and swap/refund actions for whoever holds the
+per-order capability token. It does **not** remember which order the browser should
+open after a refresh — your app must keep `order_id` (URL resume is the usual
+pattern on content sites without accounts). See
+[Guest checkout resume](frontend-checkout.md#guest-checkout-resume).
+
 ### Rails
 
 Engine controllers inherit your `ApplicationController`, so CSRF,

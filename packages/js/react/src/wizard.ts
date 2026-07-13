@@ -2,6 +2,7 @@ import * as React from "react";
 import {
   OPENRECEIVE_COUNTRY_STORAGE_KEY,
   createCheckoutProviderCopyEvent,
+  createOpenReceiveLightningInvoiceDecodeUrl,
   createOpenReceivePaymentWizardController,
   createOpenReceivePaymentWizardModel,
   createOpenReceiveWizardRouteAssetDisplays,
@@ -598,6 +599,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
           provider: activeTutorialProvider,
           index: activeTutorial.index,
           copied: activeTutorial.copied,
+          invoice: props.invoice,
           onClose: () => setActiveTutorial(null),
           onCopy: async () => {
             try {
@@ -1179,6 +1181,7 @@ function renderProviderTutorialModal(options: {
   readonly provider: OpenReceiveWizardProviderDisplay;
   readonly index: number;
   readonly copied: boolean;
+  readonly invoice: string;
   readonly onClose: () => void;
   readonly onCopy: () => Promise<void>;
   readonly onStep: (index: number) => void;
@@ -1191,6 +1194,7 @@ function renderProviderTutorialModal(options: {
   const previousIndex = Math.max(0, stepIndex - 1);
   const nextIndex = Math.min(provider.tutorials.length, stepIndex + 1);
   const isFinalStep = stepIndex === provider.tutorials.length;
+  const decodeHref = createOpenReceiveLightningInvoiceDecodeUrl(options.invoice);
 
   return React.createElement(
     "div",
@@ -1270,6 +1274,18 @@ function renderProviderTutorialModal(options: {
               },
               openReceiveCheckoutLabels.copyInvoice,
             ),
+            decodeHref === undefined
+              ? null
+              : React.createElement(
+                  "a",
+                  {
+                    className: orClasses.tutorialCopy,
+                    href: decodeHref,
+                    rel: "noreferrer",
+                    target: "_blank",
+                  },
+                  openReceiveCheckoutLabels.decodeInvoice,
+                ),
             options.copied
               ? React.createElement(
                   "p",

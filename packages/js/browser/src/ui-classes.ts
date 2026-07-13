@@ -161,6 +161,8 @@ export const orClasses = {
   swapDetailsDt: "text-base-content/60 text-xs font-bold uppercase",
   swapDetailsDd: "grid gap-2 grid-cols-[minmax(0,1fr)_auto] items-center m-0",
   swapDetailsCode: "min-w-0 break-all font-mono text-sm",
+  swapDetailsActions: "flex flex-wrap gap-2 justify-end",
+  swapDetailsLink: "btn btn-sm btn-soft",
   swapBreakdown: "grid gap-2 py-2 border-t border-base-300",
   swapBreakdownTitle: "m-0 text-base-content/60 text-xs font-bold uppercase",
   swapBreakdownRows: "grid grid-cols-[1fr_auto] gap-x-3 gap-y-1.5 items-baseline m-0",

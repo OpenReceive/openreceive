@@ -2,6 +2,7 @@ import * as React from "react";
 import {
   OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES,
   OPENRECEIVE_DEFAULT_PREFIX,
+  createOpenReceiveLightningInvoiceDecodeUrl,
   openReceiveCheckoutLabels,
   orClasses,
   requestCheckout,
@@ -221,6 +222,7 @@ function CheckoutView(props: CheckoutProps & { readonly checkout: CheckoutSnapsh
   const showSummaryMeta =
     checkoutModel.status === "settled" || checkoutModel.status === "expired";
   const fiatCurrency = checkoutModel.fiat_quote?.fiat?.currency;
+  const decodeInvoiceHref = createOpenReceiveLightningInvoiceDecodeUrl(checkoutModel.invoice);
   const startOver = () => {
     onStartOver?.();
   };
@@ -364,6 +366,19 @@ function CheckoutView(props: CheckoutProps & { readonly checkout: CheckoutSnapsh
                           ButtonComponent,
                           className: classNames?.copyButton,
                         }),
+                        decodeInvoiceHref === undefined
+                          ? null
+                          : React.createElement(
+                              "a",
+                              {
+                                key: "decode-invoice",
+                                className: orClasses.btn,
+                                href: decodeInvoiceHref,
+                                rel: "noreferrer",
+                                target: "_blank",
+                              },
+                              openReceiveCheckoutLabels.decodeInvoice,
+                            ),
                       ),
                 ),
               ),

@@ -47,11 +47,23 @@ export function renderHelloFruitTransactionDetailsHtml(
             <dt class="text-base-content/60 text-xs font-bold uppercase">${escapeHtml(row.label)}</dt>
             <dd class="grid gap-2 grid-cols-[minmax(0,1fr)_auto] items-center m-0">
               <code class="min-w-0 break-all font-mono text-sm">${escapeHtml(row.value)}</code>
-              <button
-                class="btn btn-sm btn-soft"
-                type="button"
-                data-hello-fruit-copy="${escapeHtml(row.copyValue ?? row.value)}"
-              >Copy</button>
+              <div class="flex flex-wrap gap-2 justify-end">
+                <button
+                  class="btn btn-sm btn-soft"
+                  type="button"
+                  data-hello-fruit-copy="${escapeHtml(row.copyValue ?? row.value)}"
+                >Copy</button>
+                ${
+                  row.href === undefined
+                    ? ""
+                    : `<a
+                  class="btn btn-sm btn-soft"
+                  href="${escapeHtml(row.href)}"
+                  rel="noreferrer"
+                  target="_blank"
+                >${escapeHtml(row.hrefLabel ?? openReceiveCheckoutLabels.viewOnExplorer)}</a>`
+                }
+              </div>
             </dd>
           `,
             )

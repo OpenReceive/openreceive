@@ -43,6 +43,11 @@ import {
   getOpenReceiveSwapOptionIcon,
   getOpenReceiveWizardEmptyMessage,
   createOpenReceiveSwapDisplayModel,
+  createOpenReceiveTransactionDetails,
+  createOpenReceiveBlockExplorerUrl,
+  createOpenReceiveLightningInvoiceDecodeUrl,
+  createOpenReceiveDetailExternalLink,
+  getOpenReceiveExplorerNetwork,
   getOpenReceiveSwapConfirmationWaitHint,
   openReceiveCheckoutLabels,
   openReceivePaymentMethods,
@@ -71,6 +76,7 @@ import {
   ThemeToggle,
   OpenWalletButton,
   createCheckoutViewModel,
+  renderSwapDepositPanel,
   useCheckoutContext
 } from "@openreceive/react";
 
@@ -225,8 +231,14 @@ test("React checkout default UI server-renders display-safe invoice data", () =>
   assert.doesNotMatch(html, /data-openreceive-state="pending"/);
   assert.doesNotMatch(html, /bbbbbbbb\.\.\.bbbbbbbb/);
   assert.doesNotMatch(html, /textarea/);
-  assert.doesNotMatch(html, /lnbc-test/);
+  // BOLT11 may appear only in the Decode href — never as visible invoice text.
+  assert.doesNotMatch(
+    html.replace(/https:\/\/rizful\.com\/decode_invoice\?invoice=[^"'\s>]*/g, ""),
+    /lnbc-test/,
+  );
   assert.match(html, /Copy invoice/);
+  assert.match(html, />Decode</);
+  assert.match(html, /rizful\.com\/decode_invoice\?invoice=lnbc-test/);
   assert.doesNotMatch(html, /Open Wallet/);
   assert.doesNotMatch(html, /nostr\+walletconnect/);
 });
@@ -254,7 +266,10 @@ test("React checkout default UI includes countdown, waiting state, and payment w
   assert.doesNotMatch(html, /Credit Card/);
   assert.doesNotMatch(html, /Bank Transfer/);
   assert.doesNotMatch(html, /textarea/);
-  assert.doesNotMatch(html, /lnbc-test/);
+  assert.doesNotMatch(
+    html.replace(/https:\/\/rizful\.com\/decode_invoice\?invoice=[^"'\s>]*/g, ""),
+    /lnbc-test/,
+  );
   assert.doesNotMatch(html, /or_inv_test/);
 });
 
@@ -373,6 +388,138 @@ test("swap confirming copy includes network-specific wait guidance", () => {
   });
   assert.match(eth?.providerStateDetail ?? "", /Ethereum/);
   assert.match(eth?.providerStateDetail ?? "", /5–15 minutes/);
+});
+
+test("browser builds block explorer and Lightning decode links for transaction details", () => {
+  assert.equal(getOpenReceiveExplorerNetwork("USDT_ETH"), "ETH");
+  assert.equal(getOpenReceiveExplorerNetwork("SOL_SOL"), "SOL");
+  assert.equal(getOpenReceiveExplorerNetwork("USDT_TRON"), "TRON");
+  assert.equal(getOpenReceiveExplorerNetwork("lightning"), undefined);
+
+  assert.equal(
+    createOpenReceiveBlockExplorerUrl({
+      payInAsset: "ETH_ETH",
+      kind: "tx",
+      value: "0xabc",
+    }),
+    "https://etherscan.io/tx/0xabc",
+  );
+  assert.equal(
+    createOpenReceiveBlockExplorerUrl({
+      payInAsset: "USDC_ETH",
+      kind: "address",
+      value: "0xdef",
+    }),
+    "https://etherscan.io/address/0xdef",
+  );
+  assert.equal(
+    createOpenReceiveBlockExplorerUrl({
+      payInAsset: "SOL_SOL",
+      kind: "tx",
+      value: "sig123",
+    }),
+    "https://solscan.io/tx/sig123",
+  );
+  assert.equal(
+    createOpenReceiveBlockExplorerUrl({
+      payInAsset: "USDT_SOL",
+      kind: "address",
+      value: "SoLAddr",
+    }),
+    "https://solscan.io/account/SoLAddr",
+  );
+  assert.equal(
+    createOpenReceiveBlockExplorerUrl({
+      payInAsset: "USDT_TRON",
+      kind: "tx",
+      value: "trx123",
+    }),
+    "https://tronscan.org/#/transaction/trx123",
+  );
+  assert.equal(
+    createOpenReceiveBlockExplorerUrl({
+      payInAsset: "USDT_TRON",
+      kind: "address",
+      value: "TAddr",
+    }),
+    "https://tronscan.org/#/address/TAddr",
+  );
+
+  const invoice =
+    "lnbc330n1p498rfepp5xdd2gx39pz59rh0uaqgnvnxgkcfl337vq3x7up478krszyllmlzqdqqcqzysxqyz5vqrzjqv3dpepm8kfdxrk3sl6wzqdf49s9c0h9ljtjrek6c08r6aejlwcnur0dwyqqvaqqqyqqqqlgqqqq86qqjqsp5l6z5cvzu7xdv0tjgu6890lxytmx6ecfua9x4pfvh567try3zynjq9qxpqysgqesq6nsr2snzzsrz9vvpnypf5q00w3c72ul02jex9qcpxkw3u63rq2ystseqkh26plwvaz6mwp2qawadp453m5veur4vytcqfhfqnsmsp957mtd";
+  assert.equal(
+    createOpenReceiveLightningInvoiceDecodeUrl(invoice),
+    `https://rizful.com/decode_invoice?invoice=${encodeURIComponent(invoice)}`,
+  );
+  assert.equal(
+    createOpenReceiveLightningInvoiceDecodeUrl(`lightning:${invoice}`),
+    `https://rizful.com/decode_invoice?invoice=${encodeURIComponent(invoice)}`,
+  );
+
+  const addressLink = createOpenReceiveDetailExternalLink({
+    label: "Refund address",
+    value: "0x019a427c0080c402e6B311B2D2A3538BEE4fc743",
+    payInAsset: "ETH_ETH",
+  });
+  assert.equal(addressLink?.hrefLabel, openReceiveCheckoutLabels.viewOnExplorer);
+  assert.equal(
+    addressLink?.href,
+    "https://etherscan.io/address/0x019a427c0080c402e6B311B2D2A3538BEE4fc743",
+  );
+
+  const decodeLink = createOpenReceiveDetailExternalLink({
+    label: "Lightning invoice",
+    value: invoice,
+  });
+  assert.equal(decodeLink?.hrefLabel, openReceiveCheckoutLabels.decodeInvoice);
+  assert.match(decodeLink?.href ?? "", /rizful\.com\/decode_invoice\?invoice=/);
+
+  const rows = createOpenReceiveTransactionDetails({
+    invoice,
+    rail: "swap",
+    swap: {
+      provider: "fixedfloat",
+      pay_in_asset: "ETH_ETH",
+      deposit_address: "0xdeposit",
+      deposit_amount: "0.01",
+      provider_state: "refunded",
+      provider_expires_at: 1,
+      deposit_tx_id: "0xdeposittx",
+      refund_address: "0xrefund",
+      refund_tx_id: "0xrefundtx",
+      payout_tx_id: "ln-payout-ref",
+      provider_order_id: "SVFBQ6",
+    },
+  });
+  const byLabel = Object.fromEntries(rows.map((row) => [row.label, row]));
+  assert.equal(byLabel["Deposit address"]?.href, "https://etherscan.io/address/0xdeposit");
+  assert.equal(byLabel["Deposit transaction"]?.href, "https://etherscan.io/tx/0xdeposittx");
+  assert.equal(byLabel["Refund address"]?.href, "https://etherscan.io/address/0xrefund");
+  assert.equal(byLabel["Refund transaction"]?.href, "https://etherscan.io/tx/0xrefundtx");
+  assert.equal(byLabel["Lightning invoice"]?.hrefLabel, openReceiveCheckoutLabels.decodeInvoice);
+  assert.equal(byLabel["Lightning payout"]?.href, undefined);
+  assert.equal(byLabel["Provider order"]?.href, undefined);
+
+  const depositHtml = renderToStaticMarkup(
+    renderSwapDepositPanel({
+      invoice: {
+        invoice_id: "or_inv_explorer",
+        rail: "swap",
+        swap: {
+          provider: "fixedfloat",
+          pay_in_asset: "ETH_ETH",
+          deposit_address: "0xdepositaddr",
+          deposit_amount: "0.01",
+          provider_state: "awaiting_deposit",
+          provider_expires_at: Math.floor(Date.now() / 1000) + 600,
+        },
+      },
+      onBack: () => undefined,
+      onRefund: async () => undefined,
+    }),
+  );
+  assert.match(depositHtml, /etherscan\.io\/address\/0xdepositaddr/);
+  assert.match(depositHtml, />Explorer</);
 });
 
 test("React theme toggle renders a package-owned light/dark switch", () => {

@@ -2,12 +2,20 @@
 
 import type { CheckoutState } from "@openreceive/browser/internal";
 import { Checkout, ThemeScope } from "@openreceive/react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import type { HelloFruit, HelloFruitProduct } from "../server/shared-data.ts";
 import {
   createHelloFruitDemoBrowserConsoleLogger,
   createHelloFruitBrowserLogger,
 } from "../../../../shared/demo-browser-logging.ts";
+import {
+  forgetHelloFruitOrder,
+  helloFruitCheckoutPath,
+  loadHelloFruitOrderForResume,
+  rememberHelloFruitOrder,
+} from "../../../../shared/demo-checkout-resume.ts";
+import type { HelloFruitDemoOrder } from "../../../../shared/demo-order.ts";
 import { readHelloFruitCheckoutCurrencies } from "../../../../shared/demo-currencies.ts";
 import {
   formatHelloFruitBuyNowLabel,
@@ -31,27 +39,23 @@ const currencyOptions = readHelloFruitCheckoutCurrencies();
 interface CheckoutClientProps {
   readonly product: HelloFruitProduct;
   readonly fruits: readonly HelloFruit[];
+  /** When set (from `/checkout/[orderId]`), restore that guest checkout instead of the shop. */
+  readonly resumeOrderId?: string;
 }
 
 interface DemoOrder {
   readonly uuid: string;
   readonly status: "pending_payment" | "paid";
-  readonly items: readonly {
-    readonly product_id: string;
-    readonly name: string;
-    readonly quantity: number;
-  }[];
-  readonly total_amount: {
-    readonly currency: string;
-    readonly value: string;
-  };
+  readonly items: HelloFruitDemoOrder["items"];
+  readonly total_amount: HelloFruitDemoOrder["total_amount"];
 }
 
 interface PrepareOrderResponse {
   readonly order: DemoOrder;
 }
 
-export default function CheckoutClient({ product, fruits }: CheckoutClientProps) {
+export default function CheckoutClient({ product, fruits, resumeOrderId }: CheckoutClientProps) {
+  const router = useRouter();
   const [fruitId, setFruitId] = useState(fruits[1]?.id ?? fruits[0]?.id ?? "");
   const [currency, setCurrency] = useState("USD");
   const [rates, setRates] = useState<HelloFruitBtcFiatRates | undefined>();
@@ -60,6 +64,7 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
   const [purchasedFruit, setPurchasedFruit] = useState<HelloFruit | undefined>();
   const [stickerModalOpen, setStickerModalOpen] = useState(false);
   const [status, setStatus] = useState("idle");
+  const [resuming, setResuming] = useState(resumeOrderId !== undefined);
   const [error, setError] = useState("");
   const [settledCheckoutState, setSettledCheckoutState] = useState<CheckoutState | null>(null);
   const completedCheckoutRef = useRef("");
@@ -84,8 +89,47 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
       currencyOptions,
       initialFruitId: fruitId,
       selectedCurrency: currency,
+      resumeOrderId,
     });
-  }, [currency, fruitId, fruits.length]);
+  }, [currency, fruitId, fruits.length, resumeOrderId]);
+
+  useEffect(() => {
+    if (resumeOrderId === undefined) {
+      setResuming(false);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      setResuming(true);
+      setError("");
+      logDemo("checkout.resume", "Resuming checkout from URL.", { orderId: resumeOrderId });
+      const resumed = await loadHelloFruitOrderForResume(resumeOrderId);
+      if (cancelled) return;
+      if (resumed === undefined) {
+        logDemo("checkout.resume_miss", "Checkout resume order not found.", {
+          orderId: resumeOrderId,
+        });
+        setOrder(undefined);
+        setPurchasedFruit(undefined);
+        setResuming(false);
+        setError("This checkout link is no longer available. Start a new order.");
+        router.replace("/");
+        return;
+      }
+      setOrder(resumed);
+      const firstItem = resumed.items[0];
+      setPurchasedFruit(
+        firstItem === undefined
+          ? undefined
+          : fruits.find((fruit) => fruit.id === firstItem.product_id),
+      );
+      setStatus("invoice_created");
+      setResuming(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fruits, resumeOrderId, router]);
 
   useEffect(() => {
     let cancelled = false;
@@ -211,9 +255,8 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
         itemCount: body.order.items.length,
         total: body.order.total_amount,
       });
-      setOrder(body.order);
-      setPurchasedFruit(cartItems[0]?.fruit);
-      setStatus("invoice_created");
+      rememberHelloFruitOrder(body.order);
+      router.push(helloFruitCheckoutPath(body.order.uuid));
     } catch (cause: unknown) {
       logDemo("prepare_order.error", "Prepare order failed in the browser.", {
         error: cause instanceof Error ? cause.message : String(cause),
@@ -228,6 +271,7 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
     logDemo("app.reset", "Resetting the demo state.", {
       hadOrder: order !== undefined,
     });
+    forgetHelloFruitOrder(order?.uuid);
     setCart({});
     setOrder(undefined);
     setPurchasedFruit(undefined);
@@ -235,8 +279,10 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
     setSettledCheckoutState(null);
     latestCheckoutStateRef.current = null;
     setStatus("idle");
+    setResuming(false);
     setError("");
     completedCheckoutRef.current = "";
+    router.push("/");
   }
 
   const fruitCardClass = (selected: boolean) =>
@@ -264,7 +310,9 @@ export default function CheckoutClient({ product, fruits }: CheckoutClientProps)
         </div>
       </div>
 
-      {order === undefined ? (
+      {resuming ? (
+        <p className="text-base-content/70 text-sm">Restoring checkout…</p>
+      ) : order === undefined ? (
         <>
           <label className="form-control w-full max-w-xs">
             <span className="label-text mb-1">Currency</span>
@@ -465,6 +513,8 @@ function HelloFruitTransactionDetailRow(props: {
     readonly label: string;
     readonly value: string;
     readonly copyValue?: string;
+    readonly href?: string;
+    readonly hrefLabel?: string;
   };
 }): ReactElement {
   const [copied, setCopied] = useState(false);
@@ -474,18 +524,30 @@ function HelloFruitTransactionDetailRow(props: {
       <dt className="text-base-content/60 text-xs font-bold uppercase">{props.row.label}</dt>
       <dd className="grid gap-2 grid-cols-[minmax(0,1fr)_auto] items-center m-0">
         <code className="min-w-0 break-all font-mono text-sm">{props.row.value}</code>
-        <button
-          className="btn btn-sm btn-soft"
-          onClick={() => {
-            void navigator.clipboard.writeText(copyValue).then(() => {
-              setCopied(true);
-              globalThis.setTimeout(() => setCopied(false), 1500);
-            });
-          }}
-          type="button"
-        >
-          {copied ? openReceiveCheckoutLabels.copied : "Copy"}
-        </button>
+        <div className="flex flex-wrap gap-2 justify-end">
+          <button
+            className="btn btn-sm btn-soft"
+            onClick={() => {
+              void navigator.clipboard.writeText(copyValue).then(() => {
+                setCopied(true);
+                globalThis.setTimeout(() => setCopied(false), 1500);
+              });
+            }}
+            type="button"
+          >
+            {copied ? openReceiveCheckoutLabels.copied : "Copy"}
+          </button>
+          {props.row.href === undefined ? null : (
+            <a
+              className="btn btn-sm btn-soft"
+              href={props.row.href}
+              rel="noreferrer"
+              target="_blank"
+            >
+              {props.row.hrefLabel ?? openReceiveCheckoutLabels.viewOnExplorer}
+            </a>
+          )}
+        </div>
       </dd>
     </>
   );

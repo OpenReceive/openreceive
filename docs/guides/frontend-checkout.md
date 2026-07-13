@@ -42,6 +42,35 @@ Prefer to create the checkout server-side and hand the snapshot to the component
 `checkout={snapshot}` (and an `orderUrl`) — that mode is unchanged and documented per framework
 below.
 
+## Guest checkout resume
+
+`<Checkout orderId>` resumes Lightning status, swaps, and refunds from the server — but only if
+your app still knows which `orderId` to pass after a refresh. OpenReceive does **not** invent a
+host session for you.
+
+On content sites and other **no-account** flows, persist the public order id in the URL (recommended)
+or in host-owned storage:
+
+```text
+/prepare_order  →  /checkout/:orderId  →  <Checkout orderId={orderId} />
+```
+
+| Persist | Role |
+| --- | --- |
+| `order_id` in the URL (e.g. `/checkout/:orderId`) | Public handle; refreshable, shareable, emailable |
+| OpenReceive capability token | Secret; httpOnly cookie + `sessionStorage` on same-origin mounts — **never** put it in the URL |
+| Optional host order summary | `sessionStorage` or a host `GET /orders/:id` so your cart/total UI can redraw |
+
+Without that resume URL (or equivalent), a full page reload drops the payer back to the shop even
+though payment or a swap refund may still be in progress. Refunds are the sharp edge: a late or
+underpaid deposit can leave the attempt in `refund_required`, and the payer needs the same checkout
+surface to submit an address.
+
+Logged-in apps can instead reload “open orders” from the user session (`withUser`); guest sites
+should treat the checkout URL as the resume key. Hello Fruit demos follow this pattern — see
+[Authorization](authorization.md) for `guestCheckout()` and [Automated Swaps](automated-swaps.md)
+for the refund UI.
+
 ## Browser Helpers
 
 `@openreceive/browser` is the small app-facing browser entry:

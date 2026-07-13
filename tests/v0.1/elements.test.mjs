@@ -47,8 +47,14 @@ test("elements render display-safe checkout HTML", () => {
   assert.doesNotMatch(html, /part="state"/);
   assert.doesNotMatch(html, /aaaaaaaa\.\.\.aaaaaaaa/);
   assert.doesNotMatch(html, /<textarea/);
-  assert.doesNotMatch(html, /lnbc-test/);
+  // BOLT11 may appear only in the Decode href — never as visible invoice text.
+  assert.doesNotMatch(
+    html.replace(/https:\/\/rizful\.com\/decode_invoice\?invoice=[^"'\s>]*/g, ""),
+    /lnbc-test/,
+  );
   assert.match(html, />Copy invoice</);
+  assert.match(html, />Decode</);
+  assert.match(html, /rizful\.com\/decode_invoice\?invoice=lnbc-test/);
   assert.doesNotMatch(html, />Open Wallet</);
   assert.match(html, /data-openreceive-wizard/);
   assert.match(html, /Bitcoin/);
@@ -215,7 +221,11 @@ test("elements hide invoice text and reject NWC strings", () => {
     invoice: "lnbc-test<&"
   });
 
-  assert.doesNotMatch(html, /lnbc-test/);
+  assert.doesNotMatch(
+    html.replace(/https:\/\/rizful\.com\/decode_invoice\?invoice=[^"'\s>]*/g, ""),
+    /lnbc-test/,
+  );
+  assert.match(html, /rizful\.com\/decode_invoice\?invoice=/);
   assert.doesNotMatch(html, /<textarea/);
   assert.throws(
     () =>

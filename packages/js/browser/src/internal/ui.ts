@@ -1148,17 +1148,22 @@ export const openReceiveCheckoutLabels = {
   chooseAssetNetwork: "Choose {asset} network",
   selectNetworkToContinue: "Select a network to continue",
   transactionDetails: "Transaction details",
+  viewOnExplorer: "Explorer",
+  decodeInvoice: "Decode",
 } as const;
 
 /**
  * One display row for post-settlement transaction details. Values are already
  * formatted for UI; `copyValue` is the full string when the display value is truncated.
  * Never includes NWC secrets — those are not part of checkout public state.
+ * Optional `href` is a block-explorer or Lightning invoice decode link.
  */
 export interface OpenReceiveTransactionDetailRow {
   readonly label: string;
   readonly value: string;
   readonly copyValue?: string;
+  readonly href?: string;
+  readonly hrefLabel?: string;
 }
 
 export interface OpenReceiveTransactionDetailsInput {

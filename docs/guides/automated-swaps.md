@@ -221,6 +221,11 @@ Refunds ride the same route with no extra wiring. When the provider reports
 network, shows it back for explicit confirmation, and submits the confirmed
 refund — all through `order-url`.
 
+On guest / no-account sites, keep the public `order_id` in the URL (or other host
+storage) so a refresh remounts `<Checkout orderId>` and the refund form comes back.
+The capability token stays in the cookie/`sessionStorage`; do not put it in the URL.
+See [Guest checkout resume](frontend-checkout.md#guest-checkout-resume).
+
 Refund confirmation is two-phase and nonce-guarded. The attempt carries a `refundNonce`
 (HTTP: `refund_nonce`) and its `refundNonceExpiresAt` / `refund_nonce_expires_at` (unix
 seconds). Submit the address once to stage it (`confirm` omitted/false), show it back,

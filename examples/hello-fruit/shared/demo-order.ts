@@ -109,12 +109,30 @@ export async function getHelloFruitCheckoutAmount(
   openreceive: Pick<OpenReceive, "store">,
   orderId: string,
 ): Promise<CheckoutAmountSource | null> {
+  const stored = await readStoredHelloFruitOrder(openreceive, orderId);
+  return stored === null ? null : { amount: stored.amount };
+}
+
+/**
+ * Host display lookup for guest checkout resume (`GET /orders/:orderId`). Returns the public order
+ * summary only — never OpenReceive capability tokens or amount-authority internals beyond what the
+ * prepare response already showed the payer.
+ */
+export async function getHelloFruitDemoOrder(
+  openreceive: Pick<OpenReceive, "store">,
+  orderId: string,
+): Promise<HelloFruitDemoOrder | null> {
+  const stored = await readStoredHelloFruitOrder(openreceive, orderId);
+  return stored === null ? null : stored.order;
+}
+
+async function readStoredHelloFruitOrder(
+  openreceive: Pick<OpenReceive, "store">,
+  orderId: string,
+): Promise<StoredHelloFruitOrder | null> {
   const row = await openreceive.store.getMeta(`${HELLO_FRUIT_ORDER_META_PREFIX}${orderId}`);
-  if (row === undefined) {
-    return null;
-  }
-  const stored = JSON.parse(row.value) as StoredHelloFruitOrder;
-  return { amount: stored.amount };
+  if (row === undefined) return null;
+  return JSON.parse(row.value) as StoredHelloFruitOrder;
 }
 
 export class HelloFruitDemoOrderError extends Error {
