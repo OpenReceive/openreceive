@@ -80,6 +80,45 @@ duplicate provider refs inside routes, and ranked route order. Provider claims
 require evidence URLs or conservative caveats. Do not add new claims by editing
 package code; update the canonical registry and validation in the same change.
 
+## Price feed cache
+
+`createOpenReceive()` defaults to a live cached price feed. It reads rates from
+two hard-coded Simple Price endpoints — a primary and a fallback — only when a
+fiat quote is actually needed, then caches the result in the OpenReceive
+database. Internal tests and deterministic fixtures can pass an explicit
+`StaticPriceProvider`.
+
+Both endpoints return Simple Price compatible JSON (`bitcoin.usd`, …). Numbers
+and decimal strings are accepted; OpenReceive converts the selected BTC fiat
+price to a decimal string before final quote math and does not use binary
+floating point for fiat-to-sat conversion.
+
+On each demanded rate read:
+
+1. **Read the cache.** If the stored rate map is younger than **60 seconds**,
+   use it and skip the network.
+2. **Claim the refresh in the database.** If stale/missing, write a short
+   refresh marker so other processes do not also call providers.
+3. **Refresh from the primary URL** (5s timeout), then the **fallback** if
+   needed.
+4. **Write the cache** (or record failure for the same 60s window so retries
+   fail fast).
+
+Override URLs with `OPENRECEIVE_PRICE_FEED_PRIMARY_URL` /
+`OPENRECEIVE_PRICE_FEED_FALLBACK_URL`. The cache row key is
+`price_feed:bitcoin` in the store meta table. Source order:
+`static_mock` → `primary` → `fallback`. Canonical constants live in
+`spec/data/rates/price-sources.json`.
+
+Direct BTC / SAT / SATS checkouts never call a price provider. Quote rules and
+`amount_msats` contract: [ADR-0004](adr/ADR-0004-amount-msats-and-fiat-quote-contract.md).
+App-facing wiring: [Price Feeds](../guides/price-feeds.md).
+
+`@openreceive/node` also exposes `createOpenReceivePriceFeed({ store, currencies })`
+for custom runtimes. Most apps should let `createOpenReceive()` do this.
+`@openreceive/core` exposes lower-level pieces (`createCachedLivePriceFeed`,
+`createLivePriceFeedProviders`, `getBtcFiatRatesWithFallback`).
+
 ## Wire Contracts
 
 The HTTP and event contracts live under `spec/`. If a wire payload or error

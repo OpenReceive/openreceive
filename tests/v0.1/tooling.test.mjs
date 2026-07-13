@@ -183,18 +183,24 @@ test("quickstart and examples do not use OpenReceive HTTP converter helpers", ()
   }
 });
 
-test("authorization guide shows mount presets and advanced service error handling", () => {
+test("authorization guide shows mount presets; custom controllers live in internal docs", () => {
   const source = readFileSync(authorizationDocs, "utf8");
   assert.match(source, /guestCheckout/);
   assert.match(source, /withUser/);
   assert.match(source, /prepareCheckout/);
-  assert.match(source, /OpenReceiveServiceError/);
-  assert.match(source, /orderId:/);
-  assert.match(source, /getOrCreateCheckout/);
-  assert.match(source, /memo:/);
-  assert.match(source, /total_amount/);
   assert.match(source, /createOpenReceive/);
-  assert.match(source, /from "@openreceive\/node";/);
+  assert.match(source, /custom-controller-integration\.md/);
+
+  const custom = readFileSync(
+    path.join(process.cwd(), "docs/internal/custom-controller-integration.md"),
+    "utf8",
+  );
+  assert.match(custom, /OpenReceiveServiceError/);
+  assert.match(custom, /orderId:/);
+  assert.match(custom, /getOrCreateCheckout/);
+  assert.match(custom, /memo:/);
+  assert.match(custom, /total_amount/);
+  assert.match(custom, /from "@openreceive\/node";/);
 });
 
 test("Node quickstart shows a checkout component and points to the frontend guide", () => {

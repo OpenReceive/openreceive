@@ -2,6 +2,14 @@
 
 ## 0.1.1 - Unreleased
 
+### Docs
+
+- Slimmed `docs/guides/` for day-one integrators; moved swap runbooks, custom
+  controller examples, settlement sweeps, deployment storage matrix, and price
+  feed cache detail into `docs/internal/`. Merged secret management into
+  Security, retries into the Node Quickstart, and mobile notes into Frontend
+  Checkout.
+
 ### Own prepare + guest resume
 
 - Replaced public `getCheckoutAmount` / `get_checkout_amount` with required

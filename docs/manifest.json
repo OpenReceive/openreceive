@@ -43,22 +43,6 @@
       "public": true
     },
     {
-      "slug": "checkout-retries",
-      "title": "Checkout Retries",
-      "source_path": "docs/guides/checkout-retries.md",
-      "category": "guide",
-      "audience": "developer",
-      "public": true
-    },
-    {
-      "slug": "settlement-sweeps",
-      "title": "Settlement Sweeps",
-      "source_path": "docs/guides/settlement-sweeps.md",
-      "category": "operations",
-      "audience": "developer",
-      "public": true
-    },
-    {
       "slug": "frontend-checkout",
       "title": "Frontend Checkout",
       "source_path": "docs/guides/frontend-checkout.md",
@@ -99,14 +83,6 @@
       "public": true
     },
     {
-      "slug": "secret-management",
-      "title": "Secret Management",
-      "source_path": "docs/guides/secret-management.md",
-      "category": "security",
-      "audience": "developer",
-      "public": true
-    },
-    {
       "slug": "provider-registry",
       "title": "Provider Registry",
       "source_path": "docs/guides/provider-registry.md",
@@ -119,22 +95,6 @@
       "title": "Price Feeds",
       "source_path": "docs/guides/price-feeds.md",
       "category": "reference",
-      "audience": "developer",
-      "public": true
-    },
-    {
-      "slug": "mobile-apps",
-      "title": "Mobile Apps",
-      "source_path": "docs/guides/mobile-apps.md",
-      "category": "guide",
-      "audience": "developer",
-      "public": true
-    },
-    {
-      "slug": "language-support",
-      "title": "Language Support",
-      "source_path": "docs/guides/language-support.md",
-      "category": "guide",
       "audience": "developer",
       "public": true
     },
@@ -167,6 +127,38 @@
       "title": "Shipped Routes",
       "source_path": "docs/internal/shipped-routes.md",
       "category": "architecture",
+      "audience": "contributor",
+      "public": false
+    },
+    {
+      "slug": "custom-controller-integration",
+      "title": "Custom Controller Integration",
+      "source_path": "docs/internal/custom-controller-integration.md",
+      "category": "architecture",
+      "audience": "contributor",
+      "public": false
+    },
+    {
+      "slug": "swap-operations",
+      "title": "Swap Operations",
+      "source_path": "docs/internal/swap-operations.md",
+      "category": "operations",
+      "audience": "contributor",
+      "public": false
+    },
+    {
+      "slug": "settlement-sweeps",
+      "title": "Settlement Sweeps",
+      "source_path": "docs/internal/settlement-sweeps.md",
+      "category": "operations",
+      "audience": "contributor",
+      "public": false
+    },
+    {
+      "slug": "deployment-storage",
+      "title": "Deployment Storage",
+      "source_path": "docs/internal/deployment-storage.md",
+      "category": "operations",
       "audience": "contributor",
       "public": false
     },

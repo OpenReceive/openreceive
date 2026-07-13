@@ -196,12 +196,12 @@ Live checkout always needs a backend component controlled by your application.
 
 ## Docs
 
-Developer docs start at `docs/guides/README.md` and are indexed by
-`docs/manifest.json`.
+Developer docs start at `docs/guides/README.md` (day-one integration) and are
+indexed by `docs/manifest.json`.
 
 - `docs/guides/quickstart-node.md` is the current working backend quickstart.
 - `docs/guides/frontend-checkout.md` covers browser helpers and UI packages.
-- Status refreshes are request-driven; OpenReceive does not run background
-  settlement tasks.
-- `docs/internal/README.md` is the contributor entry point for architecture,
-  conformance, release, package ownership, and ADR docs.
+- Status refreshes are request-driven; idle sites can opt into `startSweeper`
+  (see `docs/internal/settlement-sweeps.md`).
+- `docs/internal/README.md` is the contributor/operator entry point for
+  architecture, swap runbooks, conformance, release, and ADRs.

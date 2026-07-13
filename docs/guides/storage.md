@@ -25,10 +25,10 @@ Supported v0.1 store values:
 Use this store only for OpenReceive invoice state. App migrations should stay
 focused on your own app tables.
 
-## Schema Setup
+## Schema setup
 
-For local development, `local-sqlite` creates its `.openreceive/<namespace>.sqlite3`
-database and OpenReceive tables automatically.
+For local development, `local-sqlite` creates its database and OpenReceive
+tables automatically.
 
 For Postgres, run the migration step before booting the app:
 
@@ -46,70 +46,36 @@ At runtime, Postgres startup checks that OpenReceive tables and metadata already
 exist. If migrations have not been run, OpenReceive refuses to boot with a
 `STORE_MIGRATIONS_REQUIRED` error and the command to run.
 
-## Production Storage
+## Production
 
-Postgres works anywhere and is the recommended default. Most apps already run a
-database for orders, customers, or fulfillment, so point `OPENRECEIVE_STORE` at
-that durable Postgres database:
+Postgres works anywhere and is the recommended default:
 
 ```yaml
 OPENRECEIVE_STORE: postgres://USER:PASS@HOST:5432/DB
 ```
 
-SQLite is only for one durable machine, such as a raw VPS/Droplet/Hetzner host,
-or one PaaS instance with a real mounted volume. It is never safe on ephemeral
-serverless filesystems. On mounted-volume platforms, use an explicit absolute
-path:
+SQLite is only for one durable machine, or one PaaS instance with a real mounted
+volume — never on ephemeral serverless filesystems:
 
 ```yaml
 OPENRECEIVE_STORE: sqlite:/absolute/mounted/volume/openreceive.sqlite3
 ```
 
-Platform defaults:
+Platform matrix and multi-instance rules:
+[Deployment Storage](../internal/deployment-storage.md).
 
-| Platform | Store guidance |
-| --- | --- |
-| Vercel, Heroku, Cloud Run, AWS Lambda, DigitalOcean App Platform, Netlify, Cloudflare | Use Postgres. On Vercel, install a Neon Postgres integration from the Vercel Marketplace and use the injected connection string. |
-| Render, Railway, Fly.io, Azure App Service, Kubernetes, Dokku, Coolify, CapRover | Use Postgres, or an explicit absolute SQLite path on a durable mounted volume for a single instance. Prefer Postgres on Azure because `/home` is SMB-backed. |
-| Raw VPS, Droplet, Hetzner, bare metal | `local-sqlite` is acceptable when the disk is durable and the checkout runs as one instance. |
-
-For platforms without reliable runtime signatures, declare the host with runtime
-`OPENRECEIVE_PLATFORM`; it does not select storage by itself. Keep the store URI
-in `openreceive.yml`:
-
-```yaml
-OPENRECEIVE_STORE: postgres://USER:PASS@HOST:5432/DB
-```
+Do not point OpenReceive at arbitrary app tables, MySQL, remote SQLite, or
+platform KV such as Cloudflare Workers KV unless this package ships an adapter
+for that backend. The store contains wallet-derived payment state and must stay
+server-side.
 
 ## Namespaces
 
 `OPENRECEIVE_NAMESPACE` separates independent OpenReceive installations that
 share the same physical store. Use a short, lowercase value such as `default`,
-`prod`, or `acme_shop`.
-
-Changing the namespace points OpenReceive at a different logical store inside
-the same backend.
+`prod`, or `acme_shop`. Changing the namespace points OpenReceive at a different
+logical store inside the same backend.
 
 OpenReceive uses the namespace as part of the idempotency scope for checkout
 invoice rows. Use separate namespaces or separate OpenReceive instances when
 two apps should not share replay keys.
-
-## Multi-Instance Choices
-
-Use one shared durable OpenReceive store before adding more than one web
-process, serverless instance, or any deployment with an ephemeral filesystem.
-In v0.1 Node, that shared store is Postgres:
-
-```yaml
-OPENRECEIVE_STORE: postgres://openreceive:password@db.example.com:5432/openreceive
-OPENRECEIVE_NAMESPACE: prod
-```
-
-Do not use a per-instance SQLite file when multiple servers run the same
-checkout code.
-
-Do not point OpenReceive at arbitrary app tables, ORM models, object storage,
-browser-accessible storage, MySQL, remote SQLite, or platform KV such as
-Cloudflare Workers KV unless this package explicitly ships an OpenReceive store
-adapter for that backend. The store contains wallet-derived payment state and
-must stay server-side.

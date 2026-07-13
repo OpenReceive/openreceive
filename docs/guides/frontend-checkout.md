@@ -10,12 +10,6 @@ If your backend mounts OpenReceive (see the [Node](quickstart-node.md) /
 lifecycle — it creates the checkout, polls status, and drives swaps. You pass
 only an order id; auth for those polls is handled for you.
 
-Create-mode checkout (`orderId` / `order-id`) **defers the payer Lightning invoice**
-until the visitor selects Bitcoin. On mount it locks the amount (`mint_lightning: false`)
-so the method grid can load; altcoin swaps mint only their shadow invoice. Choosing
-Bitcoin (or returning from a swap) mints or reuses the payable bolt11 — reuse requires
-more than 60 seconds remaining before expiry.
-
 ```tsx
 // React
 import { Checkout } from "@openreceive/react";
@@ -35,16 +29,16 @@ import "@openreceive/react/styles.css";
 <openreceive-checkout order-id="order-123" resume></openreceive-checkout>
 ```
 
-`prefix` defaults to `/openreceive` (where you mounted the router). Pass `prefix` /
-`order-id="…" prefix="…"` if you mounted elsewhere. Vue, Svelte, and Angular expose the same
-`orderId` + `prefix` + `resume` inputs.
+`prefix` defaults to `/openreceive`. Pass `prefix` if you mounted elsewhere.
+Create-mode checkout defers the Lightning invoice until the visitor selects
+Bitcoin; altcoin swaps mint only their shadow invoice.
 
 ### Guest resume
 
-`resume` fetches `GET {prefix}/orders/{orderId}/summary` (no capability token) so a
-refresh can redraw your cart/total UI, and optionally syncs `/checkout/:orderId` via
-the History API (`resumePathPrefix`, default `/checkout`). On Next.js, pass
-`routeOrderId` from the page param instead of History API sync.
+`resume` fetches `GET {prefix}/orders/{orderId}/summary` (no capability token)
+so a refresh can redraw your cart/total UI, and optionally syncs
+`/checkout/:orderId` via the History API (`resumePathPrefix`, default
+`/checkout`). On Next.js, pass `routeOrderId` from the page param instead.
 
 Prepare first (server-priced), then navigate:
 
@@ -59,45 +53,24 @@ const { order_id, summary } = await requestPrepare({
 Without a stable public `orderId` after refresh, the payer can lose the checkout
 surface even though payment or a swap refund may still be in progress.
 
-Prefer to create the checkout server-side and hand the snapshot to the component instead? Pass
-`checkout={snapshot}` (and an `orderUrl`) — that mode is unchanged and documented per framework
-below.
+Prefer to create the checkout server-side and hand the snapshot to the component?
+Pass `checkout={snapshot}` and an `orderUrl` — see
+[Custom Controller Integration](../internal/custom-controller-integration.md).
 
-## Browser Helpers
+## Browser helpers
 
 `@openreceive/browser` is the small app-facing browser entry:
 
-- `requestPrepare({ prefix, body })` — `POST {prefix}/prepare` → `{ order_id, summary? }`.
-- `requestOrderSummary({ prefix, orderId })` — `GET {prefix}/orders/{orderId}/summary`.
-- `status(invoiceLike)` returns `"pending"`, `"settled"`, `"expired"`, or
-  `"failed"` from display-safe fields.
-- `requestCheckout(options)` posts to a checkout-creation URL. Against the
-  **mounted** OpenReceive create route, pass `{ prefix, orderId }` (and optional
-  `memo` / `metadata`) — the body is `{ order_id }` only; the server's prepared
-  amount sets the price.
-- `lightningUri(invoice)`, `qrSvg(invoice)`, and `qrPngDataUrl(invoice)` render
-  BOLT11 payment data.
-- `copyInvoice({ invoice })` copies the BOLT11 string.
-- `openWallet({ invoice })` launches the visitor's installed Lightning wallet
-  app with this invoice prefilled.
-- `createCheckoutController(options)` powers advanced headless checkout flows.
+- `requestPrepare({ prefix, body })` — `POST {prefix}/prepare`
+- `requestOrderSummary({ prefix, orderId })` — guest resume summary
+- `status(invoiceLike)` — display helper (`pending` / `settled` / `expired` / `failed`)
+- `lightningUri` / `qrSvg` / `qrPngDataUrl` / `copyInvoice` / `openWallet`
 
-These helpers reject NWC connection strings. They work with display-safe BOLT11
-invoice data only.
-
-```ts
-import { requestPrepare, status } from "@openreceive/browser";
-
-const { order_id } = await requestPrepare({ body: { cart } });
-// <Checkout orderId={order_id} resume /> creates + polls; status() is for custom UIs.
-```
-
-`status()` is a display helper. Your product still unlocks only after the
-backend settlement hook runs.
+These helpers reject NWC connection strings. `status()` is a display helper —
+fulfillment stays in the backend settlement hook. Full package list:
+[API Reference](api-reference.md).
 
 ## React
-
-The default checkout is one prop (plus `resume` for guest sites):
 
 ```tsx
 import { Checkout } from "@openreceive/react";
@@ -120,17 +93,9 @@ Or pass a pre-built snapshot:
 />;
 ```
 
-`onSettled` is a UI hint from status refresh. It is useful for showing a thank-you panel,
-but fulfillment stays in the backend settlement hook.
+`onSettled` is a UI hint. Fulfillment stays in the backend settlement hook.
 
-`orderUrl` is optional when using a snapshot. If omitted, React does not invent an order route.
-Apps without one can render a static checkout surface without status refresh:
-
-```tsx
-<Checkout checkout={checkout} polling={false} />;
-```
-
-For app-wide theme attributes and the packaged light/dark toggle:
+For app-wide theme attributes:
 
 ```tsx
 import { Checkout, ThemeScope } from "@openreceive/react";
@@ -140,52 +105,23 @@ import { Checkout, ThemeScope } from "@openreceive/react";
 </ThemeScope>
 ```
 
-To build your own checkout layout from the individual pieces (QR code, invoice
-summary, copy button, open-wallet button) instead of using the default
-`<Checkout>`:
+For a fully custom layout, use `useCheckout({ checkout })` with the packaged
+pieces (`QRCode`, `InvoiceSummary`, `CopyInvoiceButton`, `OpenWalletButton`), or
+pass `components` / `classNames` / `children` to `Checkout`.
 
-```tsx
-import {
-  CopyInvoiceButton,
-  InvoiceSummary,
-  OpenWalletButton,
-  QRCode,
-  useCheckout
-} from "@openreceive/react";
+## Framework bindings
 
-function CustomCheckout({ checkout }) {
-  const model = useCheckout({ checkout });
+| Package | Entry |
+| --- | --- |
+| `@openreceive/react` | `<Checkout orderId resume />` |
+| `@openreceive/elements` | `<openreceive-checkout order-id resume>` after `defineOpenReceiveElements()` |
+| `@openreceive/vue` | `<Checkout :order-id resume />` |
+| `@openreceive/svelte` | `<Checkout {orderId} resume />` |
+| `@openreceive/angular` | typed shell around the web component; pass `orderId`, `resume` |
 
-  return (
-    <section>
-      <QRCode invoice={model.invoice} />
-      <InvoiceSummary
-        amountLabel={model.amountLabel}
-        fiatLabel={model.fiatLabel}
-        paymentHashLabel={model.paymentHashLabel}
-        status={model.status}
-      />
-      <CopyInvoiceButton
-        invoice={model.invoice}
-        copyInvoice={model.copyInvoice}
-      />
-      <OpenWalletButton
-        invoice={model.invoice}
-        openWallet={model.openWallet}
-      />
-    </section>
-  );
-}
-```
+Each package exposes `styles.css` — import the one for your stack.
 
-For a fully headless checkout, use `useCheckout({ checkout })` and render your
-own markup. Apps with design systems can also pass `components`, `classNames`, or a render
-function as `children` to `Checkout`.
-
-## Web Components
-
-`@openreceive/elements` registers `<openreceive-checkout>` and
-`<openreceive-theme-toggle>` for no-framework pages.
+### Web Components
 
 ```ts
 import { defineOpenReceiveElements } from "@openreceive/elements";
@@ -202,12 +138,9 @@ defineOpenReceiveElements();
 ></openreceive-checkout>
 ```
 
-The element dispatches UI events such as
-`openreceive-copy`, `openreceive-open-wallet`, `openreceive-state`,
-`openreceive-settled`, `openreceive-summary`, and `openreceive-error`. Treat all frontend events as
-display hints.
+Events such as `openreceive-settled` are display hints only.
 
-## Vue
+### Vue
 
 ```vue
 <script setup lang="ts">
@@ -218,15 +151,11 @@ defineProps<{ orderId: string }>();
 </script>
 
 <template>
-  <Checkout
-    :order-id="orderId"
-    resume
-    :on-settled="showThankYou"
-  />
+  <Checkout :order-id="orderId" resume :on-settled="showThankYou" />
 </template>
 ```
 
-## Svelte
+### Svelte
 
 ```svelte
 <script lang="ts">
@@ -236,21 +165,16 @@ defineProps<{ orderId: string }>();
   export let orderId;
 </script>
 
-<Checkout
-  {orderId}
-  resume
-  onSettled={showThankYou}
-/>
+<Checkout {orderId} resume onSettled={showThankYou} />
 ```
 
-## Angular
+### Angular
 
 `@openreceive/angular` provides a thin typed binding around the shared web
-component. Pass `orderId`, `resume`, and optional `onSummary` / `onSettled` through the shell options.
+component. Pass `orderId`, `resume`, and optional `onSummary` / `onSettled`
+through the shell options.
 
-## Styling
-
-Each frontend package exposes a `styles.css` wrapper:
+### Styling
 
 ```ts
 import "@openreceive/react/styles.css";
@@ -260,15 +184,11 @@ import "@openreceive/svelte/styles.css";
 import "@openreceive/angular/styles.css";
 ```
 
-## Browser Logs
+## Mobile apps
 
-Checkout helpers accept an optional `logger(entry)` callback. Log entries are
-display-safe and omit BOLT11 strings, NWC connection strings, signed status or
-refresh tokens, cookies, authorization headers, request bodies, refund addresses,
-and refund nonces (`refund_nonce_present` is logged instead).
-
-```ts
-const logger = (entry) => console[entry.level]("[openreceive]", entry);
-
-<Checkout orderId={order.id} resume logger={logger} />;
-```
+Mobile apps are checkout clients, not NWC wallet backends. They may create an
+order through your backend, display BOLT11/QR/status, copy the invoice, open a
+Lightning wallet via deep link, and poll status. They must leave
+`OPENRECEIVE_NWC`, invoice creation, idempotency, payment verification, and
+`onPaid` on the server. Native UI kits, when shipped, stay on the same
+display-safe side of that boundary.

@@ -128,7 +128,7 @@ swap.script("USDT_TRON", ["confirming", "exchanging", "paying_invoice", "complet
 
 That covers refund UI, nonce flow, and attention without FixedFloat.
 
-See also `docs/guides/automated-swaps.md` → "Testing Swaps Locally".
+See also `docs/internal/swap-operations.md` → "Testing swaps locally".
 
 ---
 
@@ -207,7 +207,8 @@ FixedFloat emergency reasons include: `EXPIRED` (tx after order expiry), `LESS`
 
 ## Related docs
 
-- `docs/guides/automated-swaps.md` — lifecycle, refund flow, attention runbook
+- `docs/guides/automated-swaps.md` — integrator setup and payer flow
+- `docs/internal/swap-operations.md` — lifecycle, attention runbook, audit events
 - `zz-fixedfloat-api.txt` — FixedFloat EMERGENCY statuses and `/emergency` API
 - `spec/test-vectors/swap-emergency-refund.json` — conformance vector for emergency → refund
 - `packages/js/testkit/src/swap-provider.ts` — local force/script helpers

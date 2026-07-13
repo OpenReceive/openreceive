@@ -47,7 +47,8 @@ processes.
 
 Local invoice expiry is not a payment decision. If no browser, admin, cron,
 worker, or app request calls OpenReceive, no settlement scan runs (opt into
-`startSweeper` on long-lived idle deployments — see [Settlement Sweeps](settlement-sweeps.md)).
+`startSweeper` on long-lived idle deployments — see
+[Settlement Sweeps](../internal/settlement-sweeps.md)).
 
 OpenReceive packages provide their own invoice storage, selected with
 `OPENRECEIVE_STORE`. Your app keeps its own orders, carts, users, and

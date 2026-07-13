@@ -140,10 +140,28 @@ refresh — not a frontend hint or a Lightning preimage — is the settlement
 authority.
 
 Organic traffic advances settlement automatically. Fully idle deployments can
-opt into `startSweeper` — see [Settlement Sweeps](settlement-sweeps.md).
+opt into `startSweeper` — see
+[Settlement Sweeps](../internal/settlement-sweeps.md).
+
+## Retries and order ids
+
+Invoices expire. OpenReceive does not mint a replacement just because time
+passes or the frontend polls. Show try-again / start-over, then create again
+from that user action (mounted create, or `getOrCreateCheckout`).
+
+- Same order id, already paid → returns the paid checkout (no new invoice).
+- Same order id, same amount, unexpired open checkout → returns that checkout.
+- Same order id, amount changed → supersedes and creates a new checkout.
+- Same order id, only expired checkouts left → mints a fresh checkout (fiat
+  re-quoted at current rates).
+- Different order id → different order; late payment to an old invoice still
+  belongs to the old order.
+
+Status polling never mints invoices. Fulfillment must be idempotent on
+`checkoutId` or your own order id.
 
 ## What's next
 
 - [Authorization](authorization.md) — presets, prepareCheckout, Fastify / Next / Rails.
-- [Automated Swaps](automated-swaps.md) · [Checkout Retries](checkout-retries.md) ·
-  [Frontend Checkout](frontend-checkout.md) · [Security](security.md).
+- [Frontend Checkout](frontend-checkout.md) · [Automated Swaps](automated-swaps.md) ·
+  [Security](security.md).

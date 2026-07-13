@@ -18,7 +18,7 @@ export interface SweeperHandle {
  * it as an adapter default — serverless / Next have no long-lived process, and
  * active sites do not need the extra DB/wallet load.
  *
- * Keep it out of the quickstart happy path; see docs/guides/settlement-sweeps.md.
+ * Keep it out of the quickstart happy path; see docs/internal/settlement-sweeps.md.
  */
 export function startSweeper(
   service: Pick<OpenReceive, "sweepPendingInvoices">,

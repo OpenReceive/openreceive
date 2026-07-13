@@ -28,7 +28,7 @@ export type SwapAvailabilityReason =
  * Why a swap attempt entered the `attention` state and needs human/support review.
  * Every code path that sets `attention: true` records one of these so a dashboard or
  * runbook can branch on the cause instead of a bare boolean. See the "Attention"
- * section of docs/guides/automated-swaps.md for the per-reason operator runbook.
+ * section of docs/internal/swap-operations.md for the per-reason operator runbook.
  */
 export type SwapAttentionReason =
   | "provider_completed_without_wallet_settlement"

@@ -1,5 +1,12 @@
 # Settlement Sweeps
 
+How OpenReceive discovers wallet settlement and how to drive sweeps on
+low-traffic sites. Integrators only need: mount routes, fulfill in `onPaid`, and
+optionally call `startSweeper` on long-lived idle deployments (see
+[Node Quickstart](../guides/quickstart-node.md) §7).
+
+## How a sweep works
+
 OpenReceive settles invoices by running a server-side sweep over your receive
 wallet's incoming transactions. A sweep calls `list_transactions` with
 `unpaid: true`, checks one bounded page, matches transactions to stored invoices
@@ -16,28 +23,28 @@ OpenReceive settles User A's stored invoice and runs `onPaid` for User A.
 The browser never needs the receive-only NWC code for this. The wallet scan,
 settlement decision, and fulfillment hook all stay on your backend.
 
-## Automatic Triggers
+## Automatic triggers
 
 OpenReceive advances sweeps from normal app traffic:
 
 - `getOrder(...)` awaits one sweep before returning the requested order.
-- `getOrCreateCheckout(...)` schedule a best-effort
-  sweep after creating an invoice.
+- `getOrCreateCheckout(...)` schedules a best-effort sweep after creating an
+  invoice.
 - `sweepPendingInvoices()` lets your backend ask for one sweep directly.
 
 All three paths share the same durable global gate. Calling the sweep often is
 safe: rapid calls collapse to at most one real wallet scan per configured
 interval.
 
-## Low-Traffic Sites
+## Low-traffic sites
 
 Organic traffic is enough for many demos and active stores. It can be risky for
 a low-traffic website with high-value orders.
 
-The risk is simple: User A pays an invoice after closing the browser, then no
-other visitor, admin, cron, worker, or app route calls OpenReceive for 48 hours.
-During that quiet period, no new sweep runs, so your `onPaid` hook does not run
-until something touches OpenReceive again.
+The risk: User A pays an invoice after closing the browser, then no other
+visitor, admin, cron, worker, or app route calls OpenReceive for a long quiet
+period. During that quiet period, no new sweep runs, so your `onPaid` hook does
+not run until something touches OpenReceive again.
 
 For high-value or operationally sensitive orders, add one of these drivers:
 
@@ -48,10 +55,7 @@ For high-value or operationally sensitive orders, add one of these drivers:
 These do not replace app-owned order authorization or idempotent fulfillment.
 They only make sure settlement discovery does not depend on shopper traffic.
 
-## Admin Page Example
-
-If your admin order dashboard already loads server-side data, run one sweep
-before reading the orders you display:
+### Admin page example
 
 ```ts
 export async function adminOrders(req, res) {
@@ -67,14 +71,13 @@ export async function adminOrders(req, res) {
 The method is globally gated, so refreshing the admin page repeatedly does not
 fan out one wallet request per order.
 
-## Background Task Example
+### Background task example
 
 On a long-lived Node process, prefer the opt-in helper (keeps the interval out of
 adapters and off serverless):
 
 ```ts
 import { startSweeper } from "@openreceive/node";
-// or: import { startSweeper } from "openreceive/node";
 
 const sweeper = startSweeper(openreceive, { intervalMs: 3000 });
 // on shutdown:
@@ -89,14 +92,15 @@ setInterval(() => {
 }, 3000);
 ```
 
-Do **not** hide a sweeper inside every adapter by default — organic traffic already
-covers the tab-close case, and serverless / Next have no long-lived process.
+Do **not** hide a sweeper inside every adapter by default — organic traffic
+already covers the tab-close case, and serverless / Next have no long-lived
+process.
 
 On serverless platforms, use the platform's cron, scheduled function, queue, or
 worker mechanism. The job should call your server-side OpenReceive instance and
 must keep the receive-only NWC code out of browser code.
 
-## What To Expect
+## What to expect
 
 When the open transaction window fits in one page, a payment is usually noticed
 on the next trigger. When the window spans multiple pages, settlement is found
