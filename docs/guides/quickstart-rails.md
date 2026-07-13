@@ -36,11 +36,11 @@ Migration 001 creates OpenReceive invoice storage; migration 002 adds the
 per-order access column used by the engine. The migration superclass is resolved
 to your Rails version at generate time (floor: Rails 7.1).
 
-## 3. Price the order (`prepare_checkout`)
+## 3. Set the amount (`prepare_checkout`)
 
-`prepare_checkout` runs on **POST `/prepare`** only. It validates the cart (or
-looks up your order), returns the authoritative amount, and OpenReceive persists
-it. Create-checkout never trusts a client price.
+`prepare_checkout` runs on **POST `/prepare`** only. Validate the cart (or look
+up your order), return the amount to charge, and OpenReceive persists it.
+Create-checkout never trusts an amount from the browser.
 
 ```ruby
 prepare_checkout = lambda do |ctx|
@@ -79,7 +79,7 @@ mount OpenReceive::Engine => "/openreceive"
 Prepare from the browser (`POST /openreceive/prepare`), then:
 
 ```tsx
-<Checkout orderId={orderId} resume onSettled={reloadOrder} />
+<Checkout orderId={orderId} onSettled={reloadOrder} />
 ```
 
 See [Frontend Checkout](frontend-checkout.md) and [Authorization](authorization.md).

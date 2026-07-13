@@ -18,8 +18,10 @@
   reads that persist only.
 - Added `GET /orders/{order_id}/summary` (Tier 1, public-if-exists) for guest
   resume display redraw.
-- Frontend: `<Checkout orderId resume />` fetches summary and optionally syncs
-  `/checkout/:orderId`. Browser helpers: `requestPrepare`, `requestOrderSummary`.
+- Frontend: `<Checkout orderId />` always fetches summary; opt into
+  `/checkout/:orderId` History API sync with `syncUrl` (replaces the old `resume`
+  boolean that bundled both). Browser helpers: `requestPrepare`,
+  `requestOrderSummary`.
 
 ### Rename amount-authority hook
 

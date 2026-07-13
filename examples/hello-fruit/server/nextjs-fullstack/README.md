@@ -4,7 +4,7 @@ This demo runs the Hello Fruit checkout in a Next.js App Router application.
 The browser never receives `OPENRECEIVE_NWC`. App Router catch-all handlers mount
 OpenReceive via `openReceiveNextHandlers` with required `prepareCheckout`. POST
 `/openreceive/prepare` is the sole price authority. The client uses
-`<Checkout orderId resume />` and never posts a price on create.
+`<Checkout orderId />` and never posts a price on create.
 
 ## Local Setup
 
@@ -47,6 +47,6 @@ per-order capability token). For a signed-in app, swap `authorize` for
 
 Guest checkout resume: after POST `/openreceive/prepare`, the app navigates to
 `/checkout/:orderId`. Refresh keeps the same payment UI while the OpenReceive
-capability cookie remains valid. `<Checkout resume />` restores the host display
+capability cookie remains valid. `<Checkout orderId />` restores the host display
 from `GET /openreceive/orders/:orderId/summary`. Never put the capability token
 in the URL.

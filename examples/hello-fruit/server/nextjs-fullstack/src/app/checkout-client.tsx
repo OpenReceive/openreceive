@@ -408,11 +408,10 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
               </div>
             </section>
           )}
-          {/* Self-contained: orderId + resume restores summary and syncs /checkout/:id. */}
+          {/* Self-contained: orderId restores summary after refresh; app router owns the URL. */}
           <Checkout
             className="demo-checkout"
             orderId={(order?.uuid ?? resumeOrderId) as string}
-            resume
             routeOrderId={resumeOrderId}
             logger={logOpenReceive}
             onError={(cause) => {

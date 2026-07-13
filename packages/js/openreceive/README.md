@@ -35,7 +35,7 @@ app.use(
 );
 
 // Browser: POST /openreceive/prepare → then
-// <Checkout orderId={orderId} resume onSummary={…} onSettled={…} />
+// <Checkout orderId={orderId} onSummary={…} onSettled={…} />
 ```
 
 `prepareCheckout` is **required**. POST `/prepare` is the sole price authority;

@@ -25,8 +25,8 @@ export interface CheckoutData {
  * drives swaps against `${prefix}/orders/${orderId}`. The per-order capability token is
  * captured and attached automatically.
  *
- * With `resume`, also fetches `GET {prefix}/orders/{orderId}/summary` for host display
- * redraw (`onSummary`) and optionally syncs `/checkout/:orderId` via the History API.
+ * Create mode always fetches `GET {prefix}/orders/{orderId}/summary` for host display
+ * redraw (`onSummary`). Opt into `/checkout/:orderId` History API sync with `syncUrl`.
  */
 export interface CheckoutCreateOptions {
   readonly orderId?: string;
@@ -34,11 +34,12 @@ export interface CheckoutCreateOptions {
   readonly metadata?: Record<string, unknown>;
   readonly createFetch?: typeof globalThis.fetch;
   /**
-   * Guest resume: fetch order summary for display redraw and optionally sync the URL.
-   * Pair with `orderId` — Checkout still creates/polls as usual.
+   * Opt into History API URL sync to `{resumePathPrefix}/{orderId}` (default `/checkout/:id`).
+   * Off by default — many hosts own routing or other state themselves. Skipped when
+   * `routeOrderId` is set.
    */
-  readonly resume?: boolean;
-  /** History API path prefix for resume URL sync. Default `/checkout`. */
+  readonly syncUrl?: boolean;
+  /** History API path prefix when `syncUrl` is set. Default `/checkout`. */
   readonly resumePathPrefix?: string;
   /**
    * Order id from the app router (e.g. Next.js). When set, Checkout does not push/replace
@@ -189,10 +190,10 @@ export interface CheckoutProps
   readonly onStartOver?: () => void;
   /**
    * Guest resume: opaque `summary` from `GET {prefix}/orders/{orderId}/summary`.
-   * Called when `resume` is set and the summary fetch succeeds.
+   * Called in create mode when the summary fetch succeeds (always attempted with `orderId`).
    */
   readonly onSummary?: (summary: unknown) => void;
-  /** Called when `resume` is set and the summary fetch misses (404 / not OK). */
+  /** Called in create mode when the summary fetch misses (404 / not OK). */
   readonly onResumeMiss?: (orderId: string) => void;
   readonly polling?: boolean;
   readonly paymentWizard?: boolean;

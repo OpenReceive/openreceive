@@ -1,7 +1,10 @@
 # Node Quickstart
 
-OpenReceive is the payment layer. You price orders with `prepareCheckout`, fulfill
-with `onPaid`, mount the routes, then drop in `<Checkout orderId resume />`.
+OpenReceive is the payment layer. Your app returns the amount to charge in
+`prepareCheckout`, fulfills in `onPaid`, and mounts the routes. Your frontend
+renders `<Checkout orderId={…} />`: pass the order id from prepare. Summary
+restore on refresh is automatic; add `syncUrl` only if you want Checkout to
+push `/checkout/:orderId` itself.
 
 The Hello Fruit Express demo
 (`examples/hello-fruit/server/node-express`) follows this same shape.
@@ -45,11 +48,11 @@ Defaults (override only when you need to):
 Optional: add a FixedFloat `swap:` block to let payers pay with crypto while you
 still settle to Lightning — see [Automated Swaps](automated-swaps.md).
 
-## 3. Price the order (`prepareCheckout`)
+## 3. Set the amount (`prepareCheckout`)
 
-`prepareCheckout` runs on **POST `/prepare`** only. It validates the cart (or
-looks up your order), returns the authoritative amount, and OpenReceive persists
-it. Create-checkout never trusts a client price.
+`prepareCheckout` runs on **POST `/prepare`** only. Validate the cart (or look
+up your order), return the amount to charge, and OpenReceive persists it.
+Create-checkout never trusts an amount from the browser.
 
 ```ts
 const prepareCheckout = async ({ body }) => {
@@ -96,7 +99,7 @@ app.use(
 
 That mounts payment HTTP under `/openreceive`, including:
 
-- `POST /openreceive/prepare` — your pricing hook
+- `POST /openreceive/prepare` — your amount hook
 - `POST /openreceive/checkouts` — create/replay checkout from prepared amount
 - `GET /openreceive/orders/:id/summary` — guest resume display payload
 
@@ -121,16 +124,16 @@ import "@openreceive/react/styles.css";
 
 <Checkout
   orderId={order_id}
-  resume
   onSummary={(summary) => setOrder(summary)}
   onSettled={reloadOrder}
   onStartOver={returnToCart}
 />;
 ```
 
-`resume` fetches `GET /openreceive/orders/:id/summary` after refresh and optionally
-syncs `/checkout/:orderId` via the History API. Capability tokens are minted and
-attached for you — no token to manage.
+Create mode always fetches `GET /openreceive/orders/:id/summary` after refresh
+so host UI can redraw. Pass `syncUrl` (and optional `resumePathPrefix`) only if
+you want History API URL sync — many apps own routing themselves. Capability
+tokens are minted and attached for you — no token to manage.
 
 ## 7. Fulfill idempotently
 

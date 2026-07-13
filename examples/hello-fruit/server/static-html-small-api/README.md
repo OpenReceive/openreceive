@@ -3,7 +3,7 @@
 This v0.1 demo keeps the checkout page static and mounts OpenReceive with
 required `prepareCheckout` for the shared Hello Fruit sticker product. POST
 `/openreceive/prepare` is the sole price authority; the static client renders
-`<openreceive-checkout order-id resume>` (no client price on create).
+`<openreceive-checkout order-id>` (no client price on create).
 
 The browser never receives `OPENRECEIVE_NWC`.
 
@@ -58,6 +58,6 @@ per-order capability token). For a signed-in app, swap `authorize` for
 
 Guest checkout resume: after POST `/openreceive/prepare`, the app navigates to
 `/checkout/:orderId`. Refresh keeps the same payment UI while the OpenReceive
-capability cookie remains valid. The element’s `resume` attribute restores host
-display from `GET /openreceive/orders/:orderId/summary`. Never put the capability
-token in the URL.
+capability cookie remains valid. Create-mode checkout restores host display from
+`GET /openreceive/orders/:orderId/summary`. Never put the capability token in the
+URL.

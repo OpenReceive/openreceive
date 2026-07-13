@@ -2027,7 +2027,7 @@ test("browser owns custom-element attribute contracts", () => {
     orderUrl: "order-url",
     theme: "theme",
     paymentWizard: "payment-wizard",
-    resume: "resume",
+    syncUrl: "sync-url",
     resumePathPrefix: "resume-path-prefix",
     routeOrderId: "route-order-id",
   });

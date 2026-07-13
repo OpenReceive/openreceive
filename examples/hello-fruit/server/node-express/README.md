@@ -5,7 +5,7 @@ This v0.1 demo mounts OpenReceive with required `prepareCheckout` (POST
 Svelte, and Angular checkout tabs for the shared Hello Fruit sticker product.
 
 The browser never receives `OPENRECEIVE_NWC`. Checkout is
-`<Checkout orderId resume />` against `/openreceive` — the client does not post
+`<Checkout orderId />` against `/openreceive` — the client does not post
 a price on create.
 
 ## Run
@@ -59,6 +59,6 @@ per-order capability token). For a signed-in app, swap `authorize` for
 
 Guest checkout resume: after POST `/openreceive/prepare`, the app navigates to
 `/checkout/:orderId`. Refresh keeps the same payment UI while the OpenReceive
-capability cookie remains valid. `<Checkout resume />` restores the host display
+capability cookie remains valid. `<Checkout orderId />` restores the host display
 from `GET /openreceive/orders/:orderId/summary`. Never put the capability token
 in the URL.

@@ -9,13 +9,18 @@ export class CheckoutComponent {
   // Snapshot mode: bind a `checkout` to render it directly (backward compatible).
   // Create mode: omit `checkout` and bind `orderId` (+ optional `prefix`); the underlying
   // <openreceive-checkout> element creates the checkout, then renders and polls itself.
+  // Summary restore is always on; pass `syncUrl` to opt into History API URL sync.
   checkout;
   orderId;
   prefix;
   metadata;
   orderUrl;
+  syncUrl;
+  resumePathPrefix;
+  routeOrderId;
   onSettled;
   onStartOver;
+  onSummary;
   options = {};
 
   ngOnInit() {
@@ -29,8 +34,12 @@ export class CheckoutComponent {
       ...(this.prefix === undefined ? {} : { prefix: this.prefix }),
       ...(this.metadata === undefined ? {} : { metadata: this.metadata }),
       ...(this.orderUrl === undefined ? {} : { orderUrl: this.orderUrl }),
+      ...(this.syncUrl === undefined ? {} : { syncUrl: this.syncUrl }),
+      ...(this.resumePathPrefix === undefined ? {} : { resumePathPrefix: this.resumePathPrefix }),
+      ...(this.routeOrderId === undefined ? {} : { routeOrderId: this.routeOrderId }),
       ...(this.onSettled === undefined ? {} : { onSettled: this.onSettled }),
-      ...(this.onStartOver === undefined ? {} : { onStartOver: this.onStartOver })
+      ...(this.onStartOver === undefined ? {} : { onStartOver: this.onStartOver }),
+      ...(this.onSummary === undefined ? {} : { onSummary: this.onSummary })
     };
     return createOpenReceiveAngularCheckoutShellBinding(
       this.checkout ?? null,
@@ -60,8 +69,12 @@ Input()(CheckoutComponent.prototype, "orderId");
 Input()(CheckoutComponent.prototype, "prefix");
 Input()(CheckoutComponent.prototype, "metadata");
 Input()(CheckoutComponent.prototype, "orderUrl");
+Input()(CheckoutComponent.prototype, "syncUrl");
+Input()(CheckoutComponent.prototype, "resumePathPrefix");
+Input()(CheckoutComponent.prototype, "routeOrderId");
 Input()(CheckoutComponent.prototype, "onSettled");
 Input()(CheckoutComponent.prototype, "onStartOver");
+Input()(CheckoutComponent.prototype, "onSummary");
 Input()(CheckoutComponent.prototype, "options");
 
 Component({
@@ -91,6 +104,9 @@ Component({
         [attr.order-url]="checkoutAttributes['order-url']"
         [attr.theme]="checkoutAttributes.theme"
         [attr.payment-wizard]="checkoutAttributes['payment-wizard']"
+        [attr.sync-url]="checkoutAttributes['sync-url']"
+        [attr.resume-path-prefix]="checkoutAttributes['resume-path-prefix']"
+        [attr.route-order-id]="checkoutAttributes['route-order-id']"
         (openreceive-copy)="onCheckoutEvent(openReceiveEvents.copy, $event)"
         (openreceive-open-wallet)="onCheckoutEvent(openReceiveEvents.openWallet, $event)"
         (openreceive-state)="onCheckoutEvent(openReceiveEvents.state, $event)"
@@ -98,6 +114,7 @@ Component({
         (openreceive-start-over)="onCheckoutEvent(openReceiveEvents.startOver, $event)"
         (openreceive-error)="onCheckoutEvent(openReceiveEvents.error, $event)"
         (openreceive-provider-copy)="onCheckoutEvent(openReceiveEvents.providerCopy, $event)"
+        (openreceive-summary)="onCheckoutEvent(openReceiveEvents.summary, $event)"
       ></openreceive-checkout>
     </section>
   `

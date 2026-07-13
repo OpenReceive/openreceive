@@ -1544,7 +1544,7 @@ export function defineOpenReceiveElements(
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderUrl,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentWizard,
-        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resume,
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.syncUrl,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePathPrefix,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeOrderId,
       ];
@@ -1619,21 +1619,21 @@ export function defineOpenReceiveElements(
       }
     }
 
-    /** Guest resume: fetch summary + optional History API URL sync when `resume` is set. */
+    /** Guest resume: always fetch summary; History API URL sync only when `sync-url` is set. */
     private async resumeGuestSummary(prefix: string, orderId: string): Promise<void> {
-      const resume = parseOpenReceiveBooleanAttribute(
-        this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resume),
+      const syncUrl = parseOpenReceiveBooleanAttribute(
+        this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.syncUrl),
       );
-      if (!resume) return;
-
-      const resumePathPrefix =
-        this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePathPrefix) ?? "/checkout";
-      const routeOrderId =
-        this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeOrderId) ?? undefined;
-      enterCheckoutResumePath(orderId, {
-        pathPrefix: resumePathPrefix,
-        ...(routeOrderId === undefined || routeOrderId.length === 0 ? {} : { routeOrderId }),
-      });
+      if (syncUrl) {
+        const resumePathPrefix =
+          this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePathPrefix) ?? "/checkout";
+        const routeOrderId =
+          this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeOrderId) ?? undefined;
+        enterCheckoutResumePath(orderId, {
+          pathPrefix: resumePathPrefix,
+          ...(routeOrderId === undefined || routeOrderId.length === 0 ? {} : { routeOrderId }),
+        });
+      }
 
       try {
         const result = await requestOrderSummary({

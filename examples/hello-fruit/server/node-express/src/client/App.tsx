@@ -252,7 +252,7 @@ function App(): React.ReactElement {
         productIds: cartItems.map((item) => item.fruit.id),
       });
       // POST /openreceive/prepare validates the cart and persists amount authority.
-      // <Checkout orderId resume> creates the checkout and restores summary after refresh.
+      // <Checkout orderId> creates the checkout and restores summary after refresh.
       const response = await fetch("/openreceive/prepare", {
         method: "POST",
         headers: {
@@ -586,8 +586,9 @@ interface FrameworkCheckoutProps {
   readonly onResumeMiss: (orderId: string) => void;
 }
 
-// Each framework mounts its SELF-CONTAINED <Checkout orderId resume>: the component creates the
+// Each framework mounts its SELF-CONTAINED <Checkout orderId>: the component creates the
 // checkout against the mounted router, polls, restores guest summary, and drives swaps itself.
+// Pass `syncUrl` only when you want Checkout to push `/checkout/:orderId` (this demo owns that).
 function FrameworkCheckout({
   framework,
   orderId,
@@ -645,8 +646,6 @@ function FrameworkCheckout({
 
         const app = createApp(VueCheckout, {
           orderId,
-          resume: true,
-          resumePathPrefix: "/checkout",
           ...(routeOrderId === undefined ? {} : { routeOrderId }),
           onSettled: options.onSettled,
           onStartOver,
@@ -686,7 +685,6 @@ function FrameworkCheckout({
           hostElement: mountTarget,
         });
         component.setInput("orderId", orderId);
-        component.setInput("resume", true);
         if (routeOrderId !== undefined) component.setInput("routeOrderId", routeOrderId);
         component.setInput("onSettled", options.onSettled);
         component.setInput("onStartOver", onStartOver);
@@ -696,7 +694,6 @@ function FrameworkCheckout({
           rootSelector: options.rootSelector,
           defaultTheme: options.defaultTheme,
           onError: options.onError,
-          resumePathPrefix: "/checkout",
         });
         application.attachView(component.hostView);
         component.changeDetectorRef.detectChanges();
@@ -721,8 +718,6 @@ function FrameworkCheckout({
           target: mountTarget,
           props: {
             orderId,
-            resume: true,
-            resumePathPrefix: "/checkout",
             ...(routeOrderId === undefined ? {} : { routeOrderId }),
             onSettled: options.onSettled,
             onStartOver,
@@ -762,8 +757,6 @@ function FrameworkCheckout({
       <Checkout
         className="demo-checkout"
         orderId={orderId}
-        resume
-        resumePathPrefix="/checkout"
         routeOrderId={routeOrderId}
         logger={logOpenReceive}
         onError={onError}

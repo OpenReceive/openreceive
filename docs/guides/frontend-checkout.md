@@ -17,7 +17,6 @@ import "@openreceive/react/styles.css";
 
 <Checkout
   orderId={order.id}
-  resume
   onSummary={setOrder}
   onSettled={reloadOrder}
   onStartOver={returnToCart}
@@ -26,7 +25,7 @@ import "@openreceive/react/styles.css";
 
 ```html
 <!-- Web component -->
-<openreceive-checkout order-id="order-123" resume></openreceive-checkout>
+<openreceive-checkout order-id="order-123"></openreceive-checkout>
 ```
 
 `prefix` defaults to `/openreceive`. Pass `prefix` if you mounted elsewhere.
@@ -35,10 +34,13 @@ Bitcoin; altcoin swaps mint only their shadow invoice.
 
 ### Guest resume
 
-`resume` fetches `GET {prefix}/orders/{orderId}/summary` (no capability token)
-so a refresh can redraw your cart/total UI, and optionally syncs
-`/checkout/:orderId` via the History API (`resumePathPrefix`, default
-`/checkout`). On Next.js, pass `routeOrderId` from the page param instead.
+Create mode always fetches `GET {prefix}/orders/{orderId}/summary` (no
+capability token) so a refresh can redraw your cart/total UI via `onSummary`.
+
+URL sync is separate and off by default — many hosts own routing or other state
+themselves. Pass `syncUrl` to push `/checkout/:orderId` via the History API
+(`resumePathPrefix`, default `/checkout`). On Next.js, pass `routeOrderId` from
+the page param instead (Checkout will not mutate the URL).
 
 Prepare first (server-priced), then navigate:
 
@@ -78,7 +80,6 @@ import "@openreceive/react/styles.css";
 
 <Checkout
   orderId={order.id}
-  resume
   onSettled={() => showThankYou()}
 />;
 ```
@@ -101,7 +102,7 @@ For app-wide theme attributes:
 import { Checkout, ThemeScope } from "@openreceive/react";
 
 <ThemeScope as="main" className="page" themeToggle>
-  <Checkout orderId={order.id} resume />
+  <Checkout orderId={order.id} />
 </ThemeScope>
 ```
 
@@ -113,11 +114,11 @@ pass `components` / `classNames` / `children` to `Checkout`.
 
 | Package | Entry |
 | --- | --- |
-| `@openreceive/react` | `<Checkout orderId resume />` |
-| `@openreceive/elements` | `<openreceive-checkout order-id resume>` after `defineOpenReceiveElements()` |
-| `@openreceive/vue` | `<Checkout :order-id resume />` |
-| `@openreceive/svelte` | `<Checkout {orderId} resume />` |
-| `@openreceive/angular` | typed shell around the web component; pass `orderId`, `resume` |
+| `@openreceive/react` | `<Checkout orderId />` |
+| `@openreceive/elements` | `<openreceive-checkout order-id>` after `defineOpenReceiveElements()` |
+| `@openreceive/vue` | `<Checkout :order-id />` |
+| `@openreceive/svelte` | `<Checkout {orderId} />` |
+| `@openreceive/angular` | typed shell around the web component; pass `orderId` |
 
 Each package exposes `styles.css` — import the one for your stack.
 
@@ -133,12 +134,14 @@ defineOpenReceiveElements();
 ```html
 <openreceive-checkout
   order-id="order-123"
-  resume
+  sync-url
   resume-path-prefix="/checkout"
 ></openreceive-checkout>
 ```
 
-Events such as `openreceive-settled` are display hints only.
+`sync-url` is optional — only set it when you want the element to push
+`/checkout/:orderId`. Events such as `openreceive-settled` are display hints
+only.
 
 ### Vue
 
@@ -151,7 +154,7 @@ defineProps<{ orderId: string }>();
 </script>
 
 <template>
-  <Checkout :order-id="orderId" resume :on-settled="showThankYou" />
+  <Checkout :order-id="orderId" :on-settled="showThankYou" />
 </template>
 ```
 
@@ -165,13 +168,13 @@ defineProps<{ orderId: string }>();
   export let orderId;
 </script>
 
-<Checkout {orderId} resume onSettled={showThankYou} />
+<Checkout {orderId} onSettled={showThankYou} />
 ```
 
 ### Angular
 
 `@openreceive/angular` provides a thin typed binding around the shared web
-component. Pass `orderId`, `resume`, and optional `onSummary` / `onSettled`
+component. Pass `orderId` and optional `onSummary` / `onSettled` / `syncUrl`
 through the shell options.
 
 ### Styling

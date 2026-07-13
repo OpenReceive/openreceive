@@ -497,14 +497,9 @@ function renderCheckout(orderId: string): void {
   logDemo("checkout.render", "Rendering self-contained OpenReceive checkout element.", {
     orderId,
   });
-  // Self-contained: order-id + resume restores summary and syncs /checkout/:id.
+  // Self-contained: order-id restores summary after refresh; host owns /checkout/:id.
   const checkoutElement = document.createElement(OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME);
   checkoutElement.setAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId, orderId);
-  checkoutElement.setAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resume, "");
-  checkoutElement.setAttribute(
-    OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePathPrefix,
-    "/checkout",
-  );
   checkoutElement.setAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeOrderId, orderId);
 
   checkoutElement.addEventListener(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.summary, (event) => {

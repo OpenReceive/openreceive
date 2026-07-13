@@ -85,7 +85,7 @@ Resolution that honors the "single token per order, no extra table" intent witho
 14. **Required `prepareCheckout` / `prepare_checkout` (2026-07-13).** POST `/prepare` is the sole
     price authority. OpenReceive persists amount (+ optional `summary`/`metadata`); create reads
     that persist only. `GET /orders/{id}/summary` is Tier 1 public-if-exists for guest resume.
-    Frontend: `<Checkout orderId resume />`. No dual-path `getCheckoutAmount` mount API.
+    Frontend: `<Checkout orderId />` (summary always; `syncUrl` for History API). No dual-path `getCheckoutAmount` mount API.
 
 ## Notes carried from ground-truth mapping
 

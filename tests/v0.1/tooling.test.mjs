@@ -140,14 +140,14 @@ test("shipped route adapters exist and wrap @openreceive/http", () => {
 
 test("Node quickstart mounts the shipped router around prepareCheckout", () => {
   const quickstart = readFileSync(nodeQuickstartDocs, "utf8");
-  // Chronological story: prepareCheckout → onPaid → mount → browser prepare → <Checkout resume>.
-  assert.match(quickstart, /## 3\. Price the order/);
+  // Chronological story: prepareCheckout → onPaid → mount → browser prepare → <Checkout>.
+  assert.match(quickstart, /## 3\. Set the amount/);
   assert.match(quickstart, /## 4\. Handle payment/);
   assert.match(quickstart, /## 5\. Mount the routes/);
   assert.match(quickstart, /openReceiveExpress/);
   assert.match(quickstart, /createOpenReceive/);
   assert.match(quickstart, /prepareCheckout/);
-  assert.match(quickstart, /requestPrepare|resume/);
+  assert.match(quickstart, /requestPrepare|onSummary/);
   assert.match(quickstart, /guestCheckout\(\)/);
   assert.match(quickstart, /onPaid/);
   assert.match(quickstart, /amount:\s*\{\s*currency:\s*"USD"/);
@@ -159,11 +159,11 @@ test("Node quickstart mounts the shipped router around prepareCheckout", () => {
   assert.doesNotMatch(quickstart, /createHostOrderStore/);
   assert.doesNotMatch(quickstart, /getCheckoutAmount/);
   assert.doesNotMatch(quickstart, /\/prepare_order/);
-  // Price and onPaid are defined before the mount step.
-  const priceIdx = quickstart.indexOf("## 3. Price the order");
+  // Amount and onPaid are defined before the mount step.
+  const amountIdx = quickstart.indexOf("## 3. Set the amount");
   const paidIdx = quickstart.indexOf("## 4. Handle payment");
   const mountIdx = quickstart.indexOf("## 5. Mount the routes");
-  assert.ok(priceIdx >= 0 && paidIdx > priceIdx && mountIdx > paidIdx);
+  assert.ok(amountIdx >= 0 && paidIdx > amountIdx && mountIdx > paidIdx);
   // No hand-written checkout/order/status route handlers or manual action routing.
   assert.doesNotMatch(quickstart, /app\.post\(\s*["'`]\/(order|create_order)\b/);
   assert.doesNotMatch(quickstart, /openreceive\.order\(/);

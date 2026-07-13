@@ -1,7 +1,8 @@
 /**
  * Hello Fruit guest checkout URL helpers (`/checkout/:orderId`).
- * Prefer `<Checkout orderId resume />` for summary fetch + URL sync; these helpers
- * remain for SPA navigation around prepare and start-over.
+ * Prefer `<Checkout orderId />` for summary restore (always on in create mode); add `syncUrl`
+ * when you want History API URL sync. These helpers remain for custom storage keys / URL
+ * shapes and for SPA navigation around prepare and start-over.
  */
 
 import {

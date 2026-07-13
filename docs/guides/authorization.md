@@ -4,7 +4,7 @@ Mount OpenReceive's routes and keep auth in your app. OpenReceive never inspects
 your session, cookie, JWT, or header — it calls the `authorize` hook you provide
 and obeys the return value.
 
-You almost never need to know the path table. Price orders with
+You almost never need to know the path table. Return the amount to charge from
 `prepareCheckout`, fulfill with `onPaid`, and render `<Checkout orderId />`.
 Capability tokens are minted and attached for you.
 
@@ -41,8 +41,9 @@ anonymous create is allowed, order reads require the per-order token the
 checkout component carries, and admin sweep is denied.
 
 `guestCheckout()` authorizes polls and swap/refund actions for whoever holds the
-per-order capability token. For guest resume after refresh, pass `resume` on
-`<Checkout orderId />` — see [Frontend Checkout](frontend-checkout.md).
+per-order capability token. Create-mode `<Checkout orderId />` restores the
+guest summary after refresh automatically — see
+[Frontend Checkout](frontend-checkout.md).
 
 ### Rails
 

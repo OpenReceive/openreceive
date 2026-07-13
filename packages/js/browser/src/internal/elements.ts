@@ -60,8 +60,8 @@ export function createCheckoutElementAttributes(
         options.paymentWizard,
       );
     }
-    if (options.resume === true) {
-      createAttributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resume] = "";
+    if (options.syncUrl === true) {
+      createAttributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.syncUrl] = "";
     }
     if (options.resumePathPrefix !== undefined) {
       createAttributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePathPrefix] =

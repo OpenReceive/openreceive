@@ -591,9 +591,12 @@ export const OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES = {
   orderUrl: "order-url",
   theme: "theme",
   paymentWizard: "payment-wizard",
-  /** Guest resume: fetch `GET …/orders/{id}/summary` and optionally sync the URL. */
-  resume: "resume",
-  /** History API path prefix for resume URL sync. Default `/checkout`. */
+  /**
+   * Opt into History API URL sync to `{resume-path-prefix}/{order-id}`.
+   * Summary fetch always runs in create mode; this only controls URL mutation.
+   */
+  syncUrl: "sync-url",
+  /** History API path prefix when `sync-url` is set. Default `/checkout`. */
   resumePathPrefix: "resume-path-prefix",
   /**
    * Order id owned by the app router (e.g. Next.js). When set, the element does not
@@ -633,11 +636,11 @@ export interface CheckoutElementAttributeOptions {
   readonly theme?: OpenReceiveResolvedTheme;
   readonly paymentWizard?: boolean;
   /**
-   * Guest resume: fetch `GET {prefix}/orders/{orderId}/summary` for display redraw and
-   * optionally sync `/checkout/:orderId` via the History API.
+   * Opt into History API URL sync to `{resumePathPrefix}/{orderId}` (default `/checkout/:id`).
+   * Create mode always fetches the order summary; this only controls URL mutation.
    */
-  readonly resume?: boolean;
-  /** History API path prefix for resume URL sync. Default `/checkout`. */
+  readonly syncUrl?: boolean;
+  /** History API path prefix when `syncUrl` is set. Default `/checkout`. */
   readonly resumePathPrefix?: string;
   /**
    * Order id from the app router (e.g. Next.js). When set, skip History API URL sync.

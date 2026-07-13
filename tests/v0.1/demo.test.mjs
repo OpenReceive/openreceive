@@ -326,8 +326,8 @@ test("Hello Fruit demos share transaction details helper on success UI", () => {
   for (const relativePath of reactSources) {
     const source = readFileSync(path.join(process.cwd(), relativePath), "utf8");
     assert.match(source, /TransactionDetails/, `${relativePath}: uses package TransactionDetails`);
-    assert.match(source, /\bresume\b/, `${relativePath}: uses Checkout resume`);
     assert.match(source, /onSummary/, `${relativePath}: handles summary redraw`);
+    assert.match(source, /routeOrderId/, `${relativePath}: passes route order id for app-owned URL`);
     assert.doesNotMatch(source, /nwc/i, `${relativePath}: must not expose NWC in browser UI`);
   }
 
@@ -336,7 +336,7 @@ test("Hello Fruit demos share transaction details helper on success UI", () => {
     "utf8",
   );
   assert.match(vanilla, /createTransactionDetailsElement/);
-  assert.match(vanilla, /OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES\.resume/);
+  assert.match(vanilla, /OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES\.routeOrderId/);
   assert.match(vanilla, /openreceive-summary|OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS\.summary/);
   assert.doesNotMatch(vanilla, /nwc/i);
 });
@@ -528,7 +528,6 @@ test("Hello Fruit Next.js demo resets expired checkout from Start over", () => {
   assert.match(source, /onStartOver=\{startOver\}/);
   assert.match(source, /helloFruitCheckoutPath/);
   assert.match(source, /rememberHelloFruitOrder/);
-  assert.match(source, /\bresume\b/);
   assert.match(source, /onSummary/);
   assert.match(source, /resumeOrderId/);
 });
@@ -547,11 +546,11 @@ test("Hello Fruit demos resume guest checkout from /checkout/:orderId", () => {
   for (const [relativePath, patterns] of [
     [
       "examples/hello-fruit/server/node-express/src/client/App.tsx",
-      [/\bresume\b/, /onSummary/, /enterHelloFruitCheckout/, /parseHelloFruitCheckoutOrderId/],
+      [/onSummary/, /enterHelloFruitCheckout/, /parseHelloFruitCheckoutOrderId/, /routeOrderId/],
     ],
     [
       "examples/hello-fruit/server/nextjs-fullstack/src/app/checkout-client.tsx",
-      [/helloFruitCheckoutPath/, /\bresume\b/, /onSummary/, /resumeOrderId/],
+      [/helloFruitCheckoutPath/, /onSummary/, /resumeOrderId/, /routeOrderId/],
     ],
     [
       "examples/hello-fruit/server/static-html-small-api/src/client/main.ts",
@@ -664,7 +663,7 @@ test("Hello Fruit static demo delegates checkout state to the web component", ()
   assert.doesNotMatch(source, /fetch\("\/create_order"/);
   assert.match(source, /OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME/);
   assert.match(source, /OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES\.orderId|setAttribute\("order-id"/);
-  assert.match(source, /OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES\.resume/);
+  assert.match(source, /OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES\.routeOrderId/);
   assert.doesNotMatch(source, /createCheckoutShell/);
   assert.match(source, /createOpenReceiveThemeToggleElement/);
   assert.match(source, /@openreceive\/elements\/styles\.css/);

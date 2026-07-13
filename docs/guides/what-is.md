@@ -28,9 +28,18 @@ OpenReceive.
 ## Runtime Model
 
 OpenReceive runs inside your normal web process. Your app mounts OpenReceive's
-routes with a required `prepareCheckout` hook that prices orders on
-**POST `/prepare`**, then renders `<Checkout orderId resume />`. The component
-creates the checkout against the mounted routes and polls order status there.
+routes with a required `prepareCheckout` hook that returns the amount to charge
+on **POST `/prepare`**. Your frontend then renders the checkout UI:
+
+```tsx
+<Checkout orderId={order.id} onSummary={setOrder} />
+```
+
+Pass the order id from prepare. Create mode always reloads that order's summary
+(cart/total) from `GET /openreceive/orders/:id/summary` so a refresh can redraw
+host UI. Opt into `/checkout/:orderId` History API sync with `syncUrl` only if
+you want Checkout to own the address bar. The component creates the checkout
+against the mounted routes and polls order status there.
 Checkout creation, order-status reads, admin pages, or background tasks may
 advance at most one bounded server-side `list_transactions` page through the
 global sweep.
@@ -38,7 +47,7 @@ global sweep.
 ```text
 your app             prepareCheckout validates cart / returns amount (+ optional summary)
 mounted OpenReceive  POST /prepare persists amount; create never trusts a client price
-browser checkout     <Checkout orderId resume> creates + polls + restores summary
+browser checkout     <Checkout orderId> creates, polls, restores summary on refresh
 wallet scan          happens only inside server-side OpenReceive calls
 ```
 

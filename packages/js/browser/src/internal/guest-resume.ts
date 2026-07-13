@@ -8,8 +8,10 @@
  *   fall back to `GET {prefix}/orders/{orderId}/summary` (or a host `fetchOrder`) when
  *   storage is empty (new tab with the same link).
  *
- * Prefer baking resume into `<Checkout resume>` / `<openreceive-checkout resume>` when that
- * is enough. Keep this module for hosts that need custom storage keys or URL shapes.
+ * Prefer baking summary restore into `<Checkout orderId>` / `<openreceive-checkout order-id>`
+ * (always on in create mode). Opt into History API URL sync with `syncUrl` / `sync-url` when
+ * the host wants `/checkout/:orderId` in the address bar. Keep this module for hosts that
+ * need custom storage keys or URL shapes.
  *
  * The capability token store (`order-token.ts`) is separate and already automatic.
  */
@@ -175,7 +177,7 @@ export function createGuestCheckoutResume<TOrder>(
 
 /**
  * Push `/checkout/:orderId` (or a custom path prefix) via the History API when not already
- * there. Used by `<Checkout resume>` and hosts that sync the URL after prepare.
+ * there. Used by `<Checkout syncUrl>` and hosts that sync the URL after prepare.
  * No-ops when `routeOrderId` is provided (app router already owns the URL).
  */
 export function enterCheckoutResumePath(

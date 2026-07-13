@@ -40,9 +40,9 @@ export type Checkout = CheckoutSnapshot;
  *   `/openreceive`), then hands the resulting snapshot to the same rendering path with
  *   `orderUrl` defaulted to `${prefix}/orders/${orderId}`. The per-order capability token is
  *   captured and attached to every poll/swap automatically.
- * - With `resume`, also fetches `GET {prefix}/orders/{orderId}/summary` (`onSummary`) and
- *   optionally syncs `/checkout/:orderId` via the History API (skipped when `routeOrderId`
- *   is set — e.g. Next.js already owns the route).
+ * - Create mode always fetches `GET {prefix}/orders/{orderId}/summary` (`onSummary`).
+ *   Opt into `/checkout/:orderId` History API sync with `syncUrl` (skipped when
+ *   `routeOrderId` is set — e.g. Next.js already owns the route).
  */
 export function Checkout(props: CheckoutProps): React.ReactElement {
   const { checkout, orderId } = props;
@@ -73,7 +73,7 @@ export function Checkout(props: CheckoutProps): React.ReactElement {
  * calls `ensureLightning`, which mints (or reuses) the bolt11 and transitions to the full
  * checkout view. Altcoin swaps proceed without ever minting a payer Lightning invoice.
  *
- * When `resume` is set, also loads the guest summary and optionally syncs the URL.
+ * Always loads the guest summary; syncs the URL only when `syncUrl` is set.
  */
 function CheckoutCreate(props: CheckoutProps): React.ReactElement {
   // orderId presence is guaranteed by the Checkout dispatcher's create-mode branch.
@@ -87,7 +87,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
     createFetch,
     className,
     classNames,
-    resume = false,
+    syncUrl = false,
     resumePathPrefix = "/checkout",
     routeOrderId,
   } = props;
@@ -114,17 +114,18 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
   const createdCheckoutRef = React.useRef(created.checkout);
   createdCheckoutRef.current = created.checkout;
 
-  // Guest resume: fetch summary for host display redraw + optional History API URL sync.
+  // Guest resume: always fetch summary for host display redraw; History API URL sync is opt-in.
   // Runs alongside create; does not block checkout creation.
   // biome-ignore lint/correctness/useExhaustiveDependencies: attempt retries create+resume together.
   React.useEffect(() => {
-    if (!resume) return;
     let cancelled = false;
 
-    enterCheckoutResumePath(orderId, {
-      pathPrefix: resumePathPrefix,
-      ...(routeOrderId === undefined ? {} : { routeOrderId }),
-    });
+    if (syncUrl) {
+      enterCheckoutResumePath(orderId, {
+        pathPrefix: resumePathPrefix,
+        ...(routeOrderId === undefined ? {} : { routeOrderId }),
+      });
+    }
 
     void requestOrderSummary({
       prefix: resolvedPrefix,
@@ -142,7 +143,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
     return () => {
       cancelled = true;
     };
-  }, [resume, orderId, resolvedPrefix, resumePathPrefix, routeOrderId, attempt]);
+  }, [syncUrl, orderId, resolvedPrefix, resumePathPrefix, routeOrderId, attempt]);
 
   // Create on mount and whenever the order id / prefix changes (or a retry is requested).
   // Uses mintLightning: false to defer the LN mint — the payer sees the method grid first.
@@ -359,7 +360,7 @@ function CheckoutView(
     prefix: _prefix,
     metadata: _metadata,
     createFetch: _createFetch,
-    resume: _resume,
+    syncUrl: _syncUrl,
     resumePathPrefix: _resumePathPrefix,
     routeOrderId: _routeOrderId,
     onSummary: _onSummary,
