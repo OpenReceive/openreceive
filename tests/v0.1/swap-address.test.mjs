@@ -10,6 +10,8 @@ import { isValidSwapAddressForNetwork } from "../../packages/js/node/src/swap/as
 
 const ETH = "0x2222222222222222222222222222222222222222";
 const SOL = "7EqQdEULxWcraVQ3XXtK5nGJm6tQ3nqJkGqZQ6c8bqKx";
+const SOL_FULL = "BfMe1deFYJwaSeD9XoN1X8xw1PtcYjginrbvkQjS9w9U";
+const SOL_TRUNCATED = "BfMe1deFYJwaSeD9XoN1X8xw1PtcYjginrbvkQjS9";
 const TRX = "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf";
 
 test("openReceiveSwapAddressNetworkForPayInAsset maps every shipped pay-in asset", () => {
@@ -26,8 +28,20 @@ test("openReceiveSwapAddressNetworkForPayInAsset maps every shipped pay-in asset
 test("isValidAddressForSwapNetwork accepts well-formed ETH / SOL / TRX addresses", () => {
   assert.equal(isValidAddressForSwapNetwork("ETH", ETH), true);
   assert.equal(isValidAddressForSwapNetwork("SOL", SOL), true);
+  assert.equal(isValidAddressForSwapNetwork("SOL", SOL_FULL), true);
   assert.equal(isValidAddressForSwapNetwork("TRX", TRX), true);
   assert.equal(isValidAddressForSwapNetwork("TRON", TRX), true);
+});
+
+test("isValidAddressForSwapNetwork rejects truncated Solana addresses", () => {
+  assert.equal(SOL_TRUNCATED.length >= 32, true);
+  assert.equal(isValidAddressForSwapNetwork("SOL", SOL_TRUNCATED), false);
+  assert.equal(isValidSwapAddressForPayInAsset("SOL_SOL", SOL_TRUNCATED), false);
+  assert.equal(isValidSwapAddressForNetwork("SOL_SOL", SOL_TRUNCATED), false);
+  assert.match(
+    getSwapRefundAddressError("SOL_SOL", SOL_TRUNCATED, "Solana") ?? "",
+    /full address/,
+  );
 });
 
 test("isValidAddressForSwapNetwork rejects wrong-network and malformed addresses", () => {

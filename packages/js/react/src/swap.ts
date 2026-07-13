@@ -748,6 +748,15 @@ function SwapRefundForm(props: {
           addressError,
         )
       : null,
+    props.submittedRefundAddress === undefined
+      ? React.createElement(
+          "p",
+          {
+            className: orClasses.swapRefundHint,
+          },
+          `Make sure you control this ${props.networkLabel} address. Refunds sent to the wrong address usually cannot be recovered.`,
+        )
+      : null,
     React.createElement(
       "button",
       {

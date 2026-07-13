@@ -1099,6 +1099,7 @@ function renderElementSwapPanelHtml(
               hidden
               role="alert"
             ></p>
+            <p part="swap-refund-hint" class="${orClasses.swapRefundHint}">Make sure you control this ${escapeHtml(display.networkLabel)} address. Refunds sent to the wrong address usually cannot be recovered.</p>
             <button class="${orClasses.btn}" type="submit">Review refund address</button>
           </form>
         ` : `

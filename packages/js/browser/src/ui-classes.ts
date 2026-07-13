@@ -180,6 +180,7 @@ export const orClasses = {
   swapRefundInput: "input input-bordered w-full",
   swapRefundInputInvalid: "input input-bordered input-error w-full",
   swapRefundError: "m-0 text-error text-sm",
+  swapRefundHint: "m-0 text-warning text-sm",
   tutorialModal: "modal modal-open",
   tutorialBox: "modal-box grid gap-3 max-w-[min(440px,100%)]",
   tutorialHeader: "flex gap-2 items-center justify-between",
