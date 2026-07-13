@@ -18,6 +18,12 @@ export const OPENRECEIVE_LEGACY_DEMO_COUNTRY_STORAGE_KEY = "openreceive-demo.cou
 export const OPENRECEIVE_THEME_STORAGE_KEY = "openreceive.theme" as const;
 export const OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS = 3000 as const;
 /**
+ * Minimum remaining seconds a Lightning invoice must have before it is considered
+ * reusable. Matches the server-side guard in `mintInvoiceForCheckout`. Invoices with
+ * fewer remaining seconds than this will be re-minted rather than reused.
+ */
+export const OPENRECEIVE_LIGHTNING_REUSE_BUFFER_SECONDS = 60 as const;
+/**
  * Default base path the shipped OpenReceive router is mounted at. When a developer passes
  * only an order id (React `<Checkout orderId>` / `<openreceive-checkout order-id>`), this is
  * the prefix used to derive the create route (`${prefix}/checkouts`) and the order route
@@ -479,7 +485,7 @@ export interface OpenReceiveSwapDisplayModel {
 export interface CheckoutInvoiceSnapshot {
   readonly invoice_id: string;
   readonly invoice?: string | null;
-  readonly rail: "lightning" | "swap";
+  readonly rail: "lightning" | "swap" | "checkout_lock";
   readonly payment_hash?: string;
   readonly amount_msats?: number;
   readonly fiat_quote?: {
@@ -532,7 +538,7 @@ export interface CheckoutDisplayData {
   readonly order_id?: string;
   readonly invoice_id?: string;
   readonly invoice: string;
-  readonly rail: "lightning" | "swap";
+  readonly rail: "lightning" | "swap" | "checkout_lock";
   readonly payment_hash?: string;
   readonly amount_msats?: number;
   readonly fiat_quote?: {
@@ -713,7 +719,7 @@ export interface CheckoutState {
   readonly order_id: string;
   readonly invoice_id: string;
   readonly invoice: string;
-  readonly rail: "lightning" | "swap";
+  readonly rail: "lightning" | "swap" | "checkout_lock";
   readonly lightning_uri: string;
   readonly payment_hash?: string;
   readonly amount_msats?: number;
@@ -789,6 +795,13 @@ export interface RequestCheckoutBaseOptions {
   readonly memo?: string;
   readonly descriptionHash?: string;
   readonly metadata?: Record<string, unknown>;
+  /**
+   * When `false`, the server creates a `checkout_lock` placeholder without calling
+   * `makeInvoice`, deferring the actual Lightning mint until the payer selects Bitcoin.
+   * Omit or pass `true` to mint immediately (server default). The mounted create route
+   * requires `getCheckoutAmount` regardless of this flag.
+   */
+  readonly mintLightning?: boolean;
 }
 
 export interface CreateOpenReceiveStatusFetcherOptions {
@@ -1171,7 +1184,7 @@ export interface OpenReceiveTransactionDetailsInput {
   readonly checkout_id?: string;
   readonly invoice_id?: string;
   readonly invoice?: string | null;
-  readonly rail?: "lightning" | "swap";
+  readonly rail?: "lightning" | "swap" | "checkout_lock";
   readonly payment_hash?: string;
   readonly amount_msats?: number;
   readonly fiat_quote?: CheckoutInvoiceSnapshot["fiat_quote"];

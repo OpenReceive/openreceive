@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   createIdempotencyRequestHash,
   getIdempotentRecord,
@@ -49,6 +50,9 @@ import type {
 
 export const OPENRECEIVE_INVOICE_EXPIRY_SECONDS = 600;
 
+/** Reuse a payer Lightning invoice only when more than this many seconds remain. */
+export const OPENRECEIVE_LIGHTNING_REUSE_BUFFER_SECONDS = 60;
+
 export const RESERVED_CHECKOUT_METADATA_KEYS = new Set([
   "order_id",
   "checkout_id",
@@ -80,7 +84,28 @@ export async function createCheckout(
 
   const open = currentOpenCheckout(checkouts);
   if (open !== undefined && (await amountMatches(context, createInput.amount, open, now))) {
-    return open;
+    if (!createInput.mint_lightning) {
+      return open;
+    }
+    if (open.active !== undefined && isReusableLightningInvoice(open.active.expiresAt, now)) {
+      return open;
+    }
+    if (open.active === undefined) {
+      const minted = await mintInvoiceForCheckout(context, {
+        existingCheckout: {
+          orderId,
+          checkoutId: open.checkoutId,
+          input: createInput,
+        },
+        now,
+      });
+      scheduleBestEffortSweep(context);
+      return requireCheckout(
+        groupCheckouts(await context.store.listByOrderId(orderId), now),
+        readStoredCheckoutId(minted.row),
+      );
+    }
+    // Active invoice is within the reuse buffer — supersede and mint a fresh one below.
   }
 
   const supersededId = open?.checkoutId ?? retryBaseCheckout(checkouts)?.checkoutId;
@@ -89,15 +114,23 @@ export async function createCheckout(
   }
 
   const checkoutId = createCheckoutId();
-  const minted = await mintInvoiceForCheckout(context, {
-    newCheckout: {
-      orderId,
-      checkoutId,
-      input: createInput,
-      supersededId,
-    },
-    now,
-  });
+  const minted = createInput.mint_lightning
+    ? await mintInvoiceForCheckout(context, {
+        newCheckout: {
+          orderId,
+          checkoutId,
+          input: createInput,
+          supersededId,
+        },
+        now,
+      })
+    : await mintCheckoutLock(context, {
+        orderId,
+        checkoutId,
+        input: createInput,
+        supersededId,
+        now,
+      });
 
   // User A creates an invoice, closes the browser, then pays. A's own frontend
   // is gone, so nothing polls A's order. Later, User B takes any action: B
@@ -113,6 +146,10 @@ export async function createCheckout(
     groupCheckouts(await context.store.listByOrderId(orderId), now),
     readStoredCheckoutId(minted.row),
   );
+}
+
+export function isReusableLightningInvoice(expiresAt: number, now: number): boolean {
+  return expiresAt - now > OPENRECEIVE_LIGHTNING_REUSE_BUFFER_SECONDS;
 }
 
 export async function getOrder(
@@ -174,21 +211,37 @@ export async function getCheckout(
 export async function mintInvoiceForCheckout(
   context: OpenReceiveServiceContext,
   input: {
-    readonly newCheckout: {
+    readonly newCheckout?: {
       readonly orderId: string;
       readonly checkoutId: string;
       readonly input: NormalizedCreateCheckoutRequest;
       readonly supersededId?: string;
     };
+    readonly existingCheckout?: {
+      readonly orderId: string;
+      readonly checkoutId: string;
+      readonly input: NormalizedCreateCheckoutRequest;
+    };
     readonly now: number;
   },
 ): Promise<StoredRecord> {
-  const createInput = input.newCheckout.input;
-  const orderId = input.newCheckout.orderId;
-  const checkoutId = input.newCheckout.checkoutId;
-  const requestHashBody = createCheckoutRequestHashBody(createInput);
+  const target = input.newCheckout ?? input.existingCheckout;
+  if (target === undefined) {
+    throw serviceError(500, "INTERNAL", "mintInvoiceForCheckout requires a checkout target.");
+  }
+  const createInput = target.input;
+  const orderId = target.orderId;
+  const checkoutId = target.checkoutId;
+  const requestHashBody = {
+    ...createCheckoutRequestHashBody(createInput),
+    mint_lightning: true,
+    checkout_id: checkoutId,
+  };
   const operation = "invoice.create";
-  const idempotencyKey = `${orderId}:super:${input.newCheckout.supersededId ?? "none"}:amt:${amountKeyFromCreateAmount(createInput.amount)}`;
+  const idempotencyKey =
+    input.existingCheckout !== undefined
+      ? `${orderId}:checkout:${checkoutId}:lightning:amt:${amountKeyFromCreateAmount(createInput.amount)}`
+      : `${orderId}:super:${input.newCheckout?.supersededId ?? "none"}:amt:${amountKeyFromCreateAmount(createInput.amount)}`;
   const namespaceScope = context.options.namespace ?? readOpenReceiveNamespace(undefined);
   const scope: OpenReceiveIdempotencyScope = {
     namespace: namespaceScope,
@@ -280,6 +333,105 @@ export async function mintInvoiceForCheckout(
     checkout_id: checkoutId,
   });
 
+  return createResult.record;
+}
+
+/**
+ * Lock a checkout amount without minting a payer-facing Lightning invoice. Used so altcoin
+ * swaps can start (and mint only their shadow bolt11) before the payer ever chooses Bitcoin.
+ */
+export async function mintCheckoutLock(
+  context: OpenReceiveServiceContext,
+  input: {
+    readonly orderId: string;
+    readonly checkoutId: string;
+    readonly input: NormalizedCreateCheckoutRequest;
+    readonly supersededId?: string;
+    readonly now: number;
+  },
+): Promise<StoredRecord> {
+  const createInput = input.input;
+  const orderId = input.orderId;
+  const checkoutId = input.checkoutId;
+  const requestHashBody = {
+    ...createCheckoutRequestHashBody(createInput),
+    mint_lightning: false,
+  };
+  const operation = "checkout.lock";
+  const idempotencyKey = `${orderId}:super:${input.supersededId ?? "none"}:lock:amt:${amountKeyFromCreateAmount(createInput.amount)}`;
+  const namespaceScope = context.options.namespace ?? readOpenReceiveNamespace(undefined);
+  const scope: OpenReceiveIdempotencyScope = {
+    namespace: namespaceScope,
+    operation,
+    idempotency_key: idempotencyKey,
+  };
+  const requestHash = await createIdempotencyRequestHash(requestHashBody);
+  const existing = await getIdempotentRecord({
+    store: context.store,
+    scope,
+    idempotency_request_hash: requestHash,
+  });
+  if (existing !== undefined) {
+    emitLog(
+      context.options,
+      "info",
+      "checkout.lock.replayed",
+      "Replayed existing checkout amount lock.",
+      invoiceLogFields(existing.record.row),
+    );
+    return existing.record;
+  }
+
+  const resolved = await resolveCreateAmount({
+    body: createAmountRequest(createInput.amount),
+    now: input.now,
+    priceProviders: context.priceProviders,
+    priceCurrencies: context.priceCurrencies,
+  });
+  const createdAt = input.now;
+  const expiresAt = createdAt + OPENRECEIVE_INVOICE_EXPIRY_SECONDS;
+  const paymentHash = createHash("sha256")
+    .update(`openreceive:checkout_lock:${checkoutId}`)
+    .digest("hex");
+  const lockInvoice = `openreceive:checkout_lock:${checkoutId}`;
+  const metadata = {
+    ...checkoutMetadata(createInput, orderId, checkoutId),
+    rail: "checkout_lock",
+  };
+  emitLog(context.options, "info", "checkout.lock.requested", "Locking checkout amount without Lightning invoice.", {
+    order_id: orderId,
+    checkout_id: checkoutId,
+    amount_msats: resolved.amount_msats,
+  });
+  const createResult = await putCreatedInvoiceRecord({
+    store: context.store,
+    createStoredInvoiceId,
+    record: {
+      rev: 0,
+      row: {
+        invoice_id: createStoredInvoiceId(),
+        namespace: namespaceScope,
+        operation,
+        idempotency_key: idempotencyKey,
+        idempotency_request_hash: requestHash,
+        payment_hash: paymentHash,
+        invoice: lockInvoice,
+        amount_msats: resolved.amount_msats,
+        transaction_state: "pending",
+        workflow_state: "invoice_created",
+        settlement_action_state: "pending",
+        created_at: createdAt,
+        expires_at: expiresAt,
+        metadata,
+        fiat_quote: resolved.fiat_quote === null ? null : { ...resolved.fiat_quote },
+      },
+    },
+  });
+  emitLog(context.options, "info", "checkout.locked", "Locked checkout amount without Lightning invoice.", {
+    ...invoiceLogFields(createResult.record.row),
+    order_id: orderId,
+    checkout_id: checkoutId,
+  });
   return createResult.record;
 }
 

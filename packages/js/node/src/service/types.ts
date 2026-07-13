@@ -110,6 +110,12 @@ export interface CreateCheckoutRequest {
   readonly memo?: string;
   readonly descriptionHash?: string;
   readonly metadata?: Record<string, unknown>;
+  /**
+   * When false, lock the checkout amount without minting a payer-facing Lightning invoice.
+   * Altcoin swaps can then start against the locked amount; Bitcoin selection calls create again
+   * with `mintLightning: true` (default) to mint or reuse the payable bolt11.
+   */
+  readonly mintLightning?: boolean;
 }
 
 export type GetOrCreateCheckoutRequest = CreateCheckoutRequest;
@@ -243,7 +249,7 @@ export interface Invoice {
   readonly refreshedFromInvoiceId?: string;
   readonly fiatQuote: OpenReceiveRateQuote | null;
   readonly settlementActionState: string;
-  readonly rail: "lightning" | "swap";
+  readonly rail: "lightning" | "swap" | "checkout_lock";
   readonly swap?: PublicSwap;
 }
 
@@ -348,4 +354,5 @@ export interface NormalizedCreateCheckoutRequest {
   readonly memo?: string;
   readonly description_hash?: string;
   readonly metadata?: Record<string, unknown>;
+  readonly mint_lightning: boolean;
 }

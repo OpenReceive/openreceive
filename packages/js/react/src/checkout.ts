@@ -3,10 +3,12 @@ import {
   OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES,
   OPENRECEIVE_DEFAULT_PREFIX,
   createOpenReceiveLightningInvoiceDecodeUrl,
+  isReusableLightningInvoice,
   openReceiveCheckoutLabels,
   orClasses,
   requestCheckout,
   resolveOrderUrlFromPrefix,
+  selectCheckoutDisplayInvoice,
   type CheckoutSnapshot,
 } from "@openreceive/browser/internal";
 import {
@@ -60,9 +62,11 @@ export function Checkout(props: CheckoutProps): React.ReactElement {
 }
 
 /**
- * Create-mode wrapper: creates the checkout on mount, renders a minimal placeholder while
- * pending, an error placeholder with a retry on failure, and the normal checkout UI once the
- * snapshot is ready. Recreates when the order id or prefix changes.
+ * Create-mode wrapper: creates the checkout on mount with `mintLightning: false` so the
+ * server locks the amount via a checkout_lock record without calling `makeInvoice`. The
+ * Lightning invoice is deferred until the payer selects Bitcoin — at that point the wizard
+ * calls `ensureLightning`, which mints (or reuses) the bolt11 and transitions to the full
+ * checkout view. Altcoin swaps proceed without ever minting a payer Lightning invoice.
  */
 function CheckoutCreate(props: CheckoutProps): React.ReactElement {
   // orderId presence is guaranteed by the Checkout dispatcher's create-mode branch.
@@ -74,6 +78,8 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
     readonly status: "pending" | "ready" | "error";
     readonly checkout?: CheckoutSnapshot;
   }>({ status: "pending" });
+  const [lightningRequested, setLightningRequested] = React.useState(false);
+  const [mintingLightning, setMintingLightning] = React.useState(false);
   const [attempt, setAttempt] = React.useState(0);
 
   const onErrorRef = React.useRef(onError);
@@ -82,17 +88,21 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
   metadataRef.current = metadata;
   const createFetchRef = React.useRef(createFetch);
   createFetchRef.current = createFetch;
+  // Ref so ensureLightning always reads the latest checkout without being a dep.
+  const createdCheckoutRef = React.useRef(created.checkout);
+  createdCheckoutRef.current = created.checkout;
 
   // Create on mount and whenever the order id / prefix changes (or a retry is requested).
-  // metadata/createFetch/onError are read from refs so passing an inline object/function does
-  // not retrigger the create on every render. `attempt` is an intentional retry trigger.
+  // Uses mintLightning: false to defer the LN mint — the payer sees the method grid first.
   // biome-ignore lint/correctness/useExhaustiveDependencies: attempt is a deliberate retry trigger; metadata/createFetch/onError are read from refs.
   React.useEffect(() => {
     let cancelled = false;
     setCreated({ status: "pending" });
+    setLightningRequested(false);
     requestCheckout({
       prefix: resolvedPrefix,
       orderId,
+      mintLightning: false,
       ...(metadataRef.current === undefined ? {} : { metadata: metadataRef.current }),
       ...(createFetchRef.current === undefined ? {} : { fetch: createFetchRef.current }),
     })
@@ -109,12 +119,57 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
     };
   }, [orderId, resolvedPrefix, attempt]);
 
+  // Called by PaymentWizard when Bitcoin is selected or when returning from a swap.
+  // Reuses an existing bolt11 when it has >60 s left; otherwise mints a fresh one.
+  const ensureLightning = React.useCallback(async () => {
+    const current = createdCheckoutRef.current;
+    if (current !== undefined) {
+      const displayInvoice = selectCheckoutDisplayInvoice(current);
+      if (
+        displayInvoice !== undefined &&
+        typeof displayInvoice.invoice === "string" &&
+        displayInvoice.expires_at !== undefined &&
+        isReusableLightningInvoice(displayInvoice.expires_at)
+      ) {
+        setLightningRequested(true);
+        return;
+      }
+    }
+    setMintingLightning(true);
+    try {
+      const checkout = await requestCheckout({
+        prefix: resolvedPrefix,
+        orderId,
+        mintLightning: true,
+        ...(createFetchRef.current === undefined ? {} : { fetch: createFetchRef.current }),
+      });
+      setCreated({ status: "ready", checkout });
+      setLightningRequested(true);
+    } catch (error) {
+      onErrorRef.current?.(error);
+    } finally {
+      setMintingLightning(false);
+    }
+  }, [resolvedPrefix, orderId]);
+
   if (created.status === "ready" && created.checkout !== undefined) {
     const orderUrl = props.orderUrl ?? resolveOrderUrlFromPrefix(resolvedPrefix, orderId);
-    return React.createElement(CheckoutView, {
+    if (lightningRequested) {
+      return React.createElement(CheckoutView, {
+        ...props,
+        checkout: created.checkout,
+        orderUrl,
+        onRequestLightning: ensureLightning,
+      });
+    }
+    // Deferred: Lightning not yet requested — show wizard-only shell. The PaymentWizard
+    // fires onRequestLightning when Bitcoin is selected or when returning from a swap.
+    return React.createElement(CheckoutDeferredShell, {
       ...props,
       checkout: created.checkout,
       orderUrl,
+      mintingLightning,
+      onRequestLightning: ensureLightning,
     });
   }
 
@@ -162,7 +217,77 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
   );
 }
 
-function CheckoutView(props: CheckoutProps & { readonly checkout: CheckoutSnapshot }) {
+/**
+ * Wizard-only shell shown during the deferred phase of create-mode — before Bitcoin has been
+ * selected and the Lightning invoice has been minted. Renders just the payment method grid
+ * (and any swap deposit panel the payer enters) without the LN QR/copy/status pane. When
+ * the payer selects Bitcoin (or returns from a swap), the wizard fires `onRequestLightning`
+ * which mints the bolt11 and causes the parent to switch to the full `CheckoutView`.
+ */
+function CheckoutDeferredShell(
+  props: CheckoutProps & {
+    readonly checkout: CheckoutSnapshot;
+    readonly orderUrl: string;
+    readonly mintingLightning: boolean;
+    readonly onRequestLightning: () => Promise<void>;
+  },
+): React.ReactElement {
+  const {
+    checkout,
+    orderUrl,
+    mintingLightning,
+    onRequestLightning,
+    paymentWizard = true,
+    themeSwitcher = false,
+    defaultTheme,
+    themeStorageKey,
+    countryStorageKey,
+    className,
+    classNames,
+    logger,
+    onError,
+    qrEncoder,
+  } = props;
+  const theme = useTheme({ defaultTheme, storageKey: themeStorageKey });
+
+  return React.createElement(
+    "section",
+    {
+      className: joinClassNames(className, orClasses.root, classNames?.root),
+      [OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.root]: "",
+      ...(theme.fromScope && !themeSwitcher ? {} : theme.attributes),
+    },
+    mintingLightning
+      ? React.createElement(
+          "div",
+          { className: orClasses.creating },
+          React.createElement("span", { className: orClasses.spinner, "aria-hidden": "true" }),
+          React.createElement("p", null, openReceiveCheckoutLabels.preparingPayment),
+        )
+      : null,
+    paymentWizard
+      ? React.createElement(PaymentWizard, {
+          key: "wizard",
+          invoice: undefined,
+          checkout,
+          className: classNames?.wizard,
+          logger,
+          onError,
+          countryStorageKey,
+          orderUrl,
+          qrEncoder,
+          onRequestLightning,
+        })
+      : null,
+  );
+}
+
+function CheckoutView(
+  props: CheckoutProps & {
+    readonly checkout: CheckoutSnapshot;
+    readonly onRequestLightning?: () => Promise<void>;
+  },
+) {
   const {
     checkout,
     // Create-mode props are consumed by the Checkout dispatcher / CheckoutCreate wrapper; drop
@@ -171,6 +296,7 @@ function CheckoutView(props: CheckoutProps & { readonly checkout: CheckoutSnapsh
     prefix: _prefix,
     metadata: _metadata,
     createFetch: _createFetch,
+    onRequestLightning,
     qrEncoder,
     logger,
     onError,
@@ -213,10 +339,11 @@ function CheckoutView(props: CheckoutProps & { readonly checkout: CheckoutSnapsh
   const PaymentStateComponent = components?.PaymentState ?? PaymentState;
   const customChildren = typeof children === "function" ? children(checkoutModel) : children;
   const expired = checkoutModel.status === "expired";
-  // While the payer is completing a swap, its deposit panel replaces the Lightning
-  // section entirely, so hide the Lightning QR, status, countdown, summary, and copy
-  // action. Never hide when expired — that path still shows the Lightning "Start over".
-  const hideLightning = swapFocused && !expired;
+  // Hide the Lightning pane when: a swap deposit panel is focused, no bolt11 has been
+  // minted yet (deferred create-mode or checkout_lock snapshot), or the invoice expired.
+  // Never hide when expired — the "Start over" button still lives in the LN section.
+  const showLightning = !!checkoutModel.invoice && !swapFocused && !expired;
+  const hideLightning = !showLightning && !expired;
   // Amount/fiat already appear under the QR; pending is covered by WaitingState.
   // Keep the meta row only for terminal states that need a compact badge.
   const showSummaryMeta =
@@ -385,7 +512,8 @@ function CheckoutView(props: CheckoutProps & { readonly checkout: CheckoutSnapsh
           paymentWizard && !expired
             ? React.createElement(PaymentWizard, {
                 key: "wizard",
-                invoice: checkoutModel.invoice,
+                // Only pass invoice when it's a real bolt11 (non-empty, non-deferred).
+                invoice: checkoutModel.invoice || undefined,
                 checkout: checkoutModel.checkout,
                 className: classNames?.wizard,
                 logger,
@@ -399,6 +527,7 @@ function CheckoutView(props: CheckoutProps & { readonly checkout: CheckoutSnapsh
                   payment_hash: checkoutModel.payment_hash,
                   amount_msats: checkoutModel.amount_msats,
                 }),
+                onRequestLightning,
               })
             : null,
         ]

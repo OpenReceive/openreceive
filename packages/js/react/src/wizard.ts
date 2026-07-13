@@ -334,6 +334,8 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
                 onBackToLightning: () => {
                   setDismissedSwapInvoiceId(activeSwapForAsset.invoice_id);
                   clearSwapFocus();
+                  // Ensure the Lightning invoice is ready (reuse or remint).
+                  void props.onRequestLightning?.();
                 },
               })
             : selectedSwapQuote !== undefined && !selectedSwapQuote.available
@@ -410,6 +412,12 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
             updateWizardSelection((controller) =>
               controller.selectMethod(methodId as OpenReceivePaymentMethod),
             );
+            // Trigger LN mint when Bitcoin is selected. Fire-and-forget: the host
+            // (CheckoutCreate) decides whether to reuse an existing invoice or mint a
+            // new one. Safe to call even when already minted (idempotent reuse check).
+            if (methodId === "bitcoin") {
+              void props.onRequestLightning?.();
+            }
           },
           onContinueSwap: (payInAsset) => {
             autoSwapAttemptedRef.current.delete(payInAsset);
@@ -599,10 +607,11 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
           provider: activeTutorialProvider,
           index: activeTutorial.index,
           copied: activeTutorial.copied,
-          invoice: props.invoice,
+          invoice: props.invoice ?? "",
           onClose: () => setActiveTutorial(null),
           onCopy: async () => {
             try {
+              if (!props.invoice) return;
               await copyInvoiceHelper({
                 invoice: props.invoice,
                 logger: props.logger,

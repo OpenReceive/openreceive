@@ -136,32 +136,60 @@ export function buildCheckout(
       ? right.row.invoice_id.localeCompare(left.row.invoice_id)
       : right.row.created_at - left.row.created_at,
   );
-  const invoices = sortedRecords.map((record) => serializeInvoice(record.row, now));
+  const lockRecords = sortedRecords.filter((record) => isCheckoutLockRecord(record.row));
+  const publicRecords = sortedRecords.filter((record) => !isCheckoutLockRecord(record.row));
+  const invoices = publicRecords.map((record) => serializeInvoice(record.row, now));
   const paidInvoice = invoices.find((invoice) => invoice.status === "settled");
   const superseded = sortedRecords.some((record) => record.row.metadata.superseded === true);
+  const openLock = lockRecords.find(
+    (record) =>
+      record.row.metadata.superseded !== true &&
+      record.row.expires_at > now &&
+      record.row.transaction_state === "pending",
+  );
   const status: Checkout["status"] =
     paidInvoice !== undefined
       ? "paid"
       : superseded
         ? "superseded"
-        : invoices.every((invoice) => invoice.status === "expired" || invoice.status === "failed")
-          ? "expired"
-          : "open";
+        : invoices.length === 0 && openLock !== undefined
+          ? "open"
+          : invoices.length === 0
+            ? "expired"
+            : invoices.every((invoice) => invoice.status === "expired" || invoice.status === "failed")
+              ? openLock !== undefined
+                ? "open"
+                : "expired"
+              : "open";
   const active =
     status === "open"
       ? invoices.find(
           (invoice) =>
-            invoice.rail !== "swap" && invoice.status === "pending" && invoice.expiresAt > now,
+            invoice.rail === "lightning" && invoice.status === "pending" && invoice.expiresAt > now,
         )
       : undefined;
-  const amountSpec = readStoredAmountSpec(sortedRecords[0].row);
-  const base = active ?? paidInvoice ?? requiredValue(invoices[0]);
+  const amountSourceRow =
+    (active === undefined
+      ? undefined
+      : publicRecords.find((record) => record.row.invoice_id === active.invoiceId)?.row) ??
+    (paidInvoice === undefined
+      ? undefined
+      : publicRecords.find((record) => record.row.invoice_id === paidInvoice.invoiceId)?.row) ??
+    openLock?.row ??
+    sortedRecords[0]?.row;
+  const amountSpec = readStoredAmountSpec(amountSourceRow ?? sortedRecords[0].row);
+  const amountMsats =
+    active?.amountMsats ??
+    paidInvoice?.amountMsats ??
+    openLock?.row.amount_msats ??
+    invoices[0]?.amountMsats ??
+    sortedRecords[0].row.amount_msats;
 
   return {
     checkoutId,
     orderId: readStoredOrderId(sortedRecords[0].row),
     status,
-    amountMsats: base.amountMsats,
+    amountMsats,
     ...(amountSpec !== undefined &&
     "currency" in amountSpec &&
     amountSpec.currency !== undefined &&
@@ -298,8 +326,14 @@ export function createSwapRefundNonce(): string {
   return `or_ref_${randomBytes(16).toString("hex")}`;
 }
 
-export function readInvoiceRail(row: InvoiceStorageRow): "lightning" | "swap" {
-  return row.metadata.rail === "swap" ? "swap" : "lightning";
+export function readInvoiceRail(row: InvoiceStorageRow): "lightning" | "swap" | "checkout_lock" {
+  if (row.metadata.rail === "swap") return "swap";
+  if (row.metadata.rail === "checkout_lock") return "checkout_lock";
+  return "lightning";
+}
+
+export function isCheckoutLockRecord(row: InvoiceStorageRow): boolean {
+  return row.metadata.rail === "checkout_lock";
 }
 
 export function readPublicSwap(row: InvoiceStorageRow): PublicSwap | undefined {

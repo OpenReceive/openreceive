@@ -53,7 +53,7 @@ export interface HttpPublicSwap {
 export interface HttpInvoice {
   readonly invoice_id: string;
   readonly type: "incoming";
-  readonly rail: "lightning" | "swap";
+  readonly rail: "lightning" | "swap" | "checkout_lock";
   readonly status: Invoice["status"];
   readonly transaction_state: string;
   readonly workflow_state: string;

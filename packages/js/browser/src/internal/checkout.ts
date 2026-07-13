@@ -23,6 +23,7 @@ import {
   OPENRECEIVE_COPY_FEEDBACK_MS,
   OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS,
   OPENRECEIVE_DEFAULT_PREFIX,
+  OPENRECEIVE_LIGHTNING_REUSE_BUFFER_SECONDS,
   OPENRECEIVE_QR_DARK_COLOR,
   OPENRECEIVE_QR_ERROR_CORRECTION,
   OPENRECEIVE_QR_LIGHT_COLOR,
@@ -685,7 +686,8 @@ export function assertOpenReceiveDisplayInvoice(invoice: string): void {
 export function createCheckoutDisplayModel(data: CheckoutDisplayData): CheckoutDisplayModel {
   return {
     ...data,
-    lightning_uri: createLightningUri(data.invoice),
+    // Deferred checkout (checkout_lock) has no bolt11 yet — use empty URI as placeholder.
+    lightning_uri: data.rail === "checkout_lock" || !data.invoice ? "" : createLightningUri(data.invoice),
     ...(data.amount_msats === undefined
       ? {}
       : { amountLabel: formatOpenReceiveMsats(data.amount_msats) }),
@@ -715,6 +717,7 @@ interface NormalizedRequestCheckoutOptions {
   readonly memo?: string;
   readonly descriptionHash?: string;
   readonly metadata?: Record<string, unknown>;
+  readonly mintLightning?: boolean;
 }
 
 function normalizeRequestCheckoutOptions(
@@ -740,6 +743,7 @@ function normalizeRequestCheckoutOptions(
     ...(options.memo === undefined ? {} : { memo: options.memo }),
     ...(descriptionHash === undefined ? {} : { descriptionHash }),
     ...(metadata === undefined ? {} : { metadata }),
+    ...(options.mintLightning === false ? { mintLightning: false } : {}),
   };
 }
 
@@ -873,6 +877,8 @@ export async function requestCheckout(options: RequestCheckoutOptions): Promise<
     ...(request.memo === undefined ? {} : { memo: request.memo }),
     ...(request.descriptionHash === undefined ? {} : { description_hash: request.descriptionHash }),
     ...(request.metadata === undefined ? {} : { metadata: structuredClone(request.metadata) }),
+    // Only include when explicitly false to defer Lightning mint on the server.
+    ...(request.mintLightning === false ? { mint_lightning: false } : {}),
   };
   assertOpenReceiveBrowserPayloadSafe(requestBody);
 
@@ -1124,7 +1130,8 @@ function normalizeCheckoutInvoiceSnapshot(input: unknown): CheckoutInvoiceSnapsh
   const record = asRecord(input);
   const rail = requiredInvoiceRail(record.rail);
   const invoice = optionalString(record.invoice);
-  if (rail !== "swap" && invoice === undefined) {
+  // checkout_lock is a deferred placeholder — no bolt11 until the payer selects Bitcoin.
+  if (rail !== "swap" && rail !== "checkout_lock" && invoice === undefined) {
     throw new TypeError("OpenReceive checkout response requires invoice.");
   }
   const swap = normalizeCheckoutInvoiceSwapSnapshot(record.swap);
@@ -1158,8 +1165,8 @@ function normalizeCheckoutInvoiceSnapshot(input: unknown): CheckoutInvoiceSnapsh
 }
 
 function requiredInvoiceRail(value: unknown): CheckoutInvoiceSnapshot["rail"] {
-  if (value === "lightning" || value === "swap") return value;
-  throw new TypeError("OpenReceive invoice rail must be lightning or swap.");
+  if (value === "lightning" || value === "swap" || value === "checkout_lock") return value;
+  throw new TypeError("OpenReceive invoice rail must be lightning, swap, or checkout_lock.");
 }
 
 function normalizeCheckoutInvoiceSwapSnapshot(
@@ -1250,21 +1257,29 @@ function normalizeCheckoutInvoiceSwapFee(input: unknown): CheckoutInvoiceSwapFee
  * actually paid. This matters after a swap: a swap-paid checkout's newest invoice is the
  * settled swap shadow (rail "swap", no bolt11 for the payer), so `invoices[0]` is not
  * renderable as a Lightning invoice. The payable Lightning invoice the swap was started
- * from is still present, and is what the checkout displays. Falls back to `invoices[0]`
- * only when no invoice carries a bolt11 (a broken snapshot), leaving the caller's own
- * guard to report it.
+ * from is still present, and is what the checkout displays.
+ *
+ * `checkout_lock` rails are deferred placeholders that carry no bolt11 and are skipped.
+ * Returns `undefined` when the checkout is deferred (only a checkout_lock) or genuinely
+ * has no displayable invoice — callers should render a pending/deferred state in that case.
  */
 export function selectCheckoutDisplayInvoice(
   snapshot: CheckoutSnapshot,
 ): CheckoutInvoiceSnapshot | undefined {
-  if (snapshot.active !== undefined) return snapshot.active;
+  // Skip checkout_lock (deferred placeholder) — it has no bolt11 to display.
+  if (snapshot.active !== undefined && snapshot.active.rail !== "checkout_lock") {
+    return snapshot.active;
+  }
   const displayable = snapshot.invoices.filter(
-    (invoice) => typeof invoice.invoice === "string" && invoice.invoice.length > 0,
+    (invoice) =>
+      invoice.rail !== "checkout_lock" &&
+      typeof invoice.invoice === "string" &&
+      invoice.invoice.length > 0,
   );
   const settled = displayable.find(
     (invoice) => invoice.transaction_state === "settled" || invoice.settled_at !== undefined,
   );
-  return settled ?? displayable[0] ?? snapshot.invoices[0];
+  return settled ?? displayable[0];
 }
 
 export function checkoutInvoiceFromOrderSnapshot(
@@ -1281,12 +1296,45 @@ export function isPaidCheckoutSnapshot(snapshot: CheckoutSnapshot): boolean {
   return snapshot.status === "paid";
 }
 
+/**
+ * True when the given Lightning invoice has more than {@link OPENRECEIVE_LIGHTNING_REUSE_BUFFER_SECONDS}
+ * seconds remaining. Pass an optional `now` (Unix seconds) for deterministic tests; defaults to the
+ * current clock. Matches the server-side reuse guard in `mintInvoiceForCheckout`.
+ */
+export function isReusableLightningInvoice(expiresAt: number, now?: number): boolean {
+  return expiresAt - (now ?? currentUnixSeconds()) > OPENRECEIVE_LIGHTNING_REUSE_BUFFER_SECONDS;
+}
+
 export function createCheckoutState(
   snapshot: CheckoutSnapshot,
   options: CreateCheckoutStateOptions = {},
 ): CheckoutState {
-  const invoice = checkoutInvoiceFromOrderSnapshot(snapshot);
-  const bolt11 = requiredString(invoice.invoice, "invoice");
+  const invoiceRecord = selectCheckoutDisplayInvoice(snapshot);
+
+  if (invoiceRecord === undefined) {
+    // Deferred checkout — no bolt11 minted yet. Return a minimal open/pending state so
+    // callers (useCheckout, CheckoutWatcher) don't throw. The invoice fields are empty
+    // strings; callers MUST gate any bolt11-dependent UI on the lightning pane being shown.
+    return {
+      checkout_id: snapshot.checkout_id,
+      order_id: snapshot.order_id,
+      invoice_id: "",
+      invoice: "",
+      rail: "checkout_lock",
+      lightning_uri: "",
+      ...(snapshot.amount_msats === undefined ? {} : { amount_msats: snapshot.amount_msats }),
+      ...(snapshot.fiat !== undefined ? { fiat_quote: { fiat: snapshot.fiat } } : {}),
+      transaction_state: "pending",
+      workflow_state: "invoice_created",
+      phase: "invoice_created",
+      settled: false,
+      terminal: false,
+      paid: false,
+    };
+  }
+
+  const invoice = invoiceRecord;
+  const bolt11 = typeof invoice.invoice === "string" ? invoice.invoice : requiredString(invoice.invoice, "invoice");
   const paid = isPaidCheckoutSnapshot(snapshot);
   const settledAt = snapshot.paid_at ?? invoice.settled_at;
   const transactionState = paid ? "settled" : (invoice.transaction_state ?? "pending");
@@ -1301,7 +1349,7 @@ export function createCheckoutState(
       invoice_id: invoice.invoice_id,
       invoice: bolt11,
       rail: invoice.rail,
-      lightning_uri: createLightningUri(bolt11),
+      lightning_uri: invoice.rail === "checkout_lock" ? "" : createLightningUri(bolt11),
       ...(invoice.payment_hash === undefined ? {} : { payment_hash: invoice.payment_hash }),
       amount_msats: invoice.amount_msats ?? snapshot.amount_msats,
       ...(invoice.fiat_quote === undefined ? {} : { fiat_quote: invoice.fiat_quote }),

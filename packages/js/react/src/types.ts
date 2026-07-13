@@ -225,7 +225,12 @@ export interface ThemeScopeProps extends Omit<React.HTMLAttributes<HTMLElement>,
 }
 
 export interface PaymentWizardProps {
-  readonly invoice: string;
+  /**
+   * The active Lightning bolt11 invoice. Optional: omit (or pass `undefined`) in
+   * create-mode deferred flows where the Lightning invoice has not been minted yet.
+   * The wizard will disable invoice-copy actions until a non-empty invoice is provided.
+   */
+  readonly invoice?: string;
   readonly checkout?: CheckoutSnapshot;
   readonly className?: string;
   readonly logger?: OpenReceiveBrowserLogger;
@@ -242,6 +247,13 @@ export interface PaymentWizardProps {
    * so the swap deposit panel fully replaces it.
    */
   readonly onSwapFocusChange?: (focused: boolean) => void;
+  /**
+   * Called when the wizard needs a Lightning invoice to be ready — e.g. when the payer
+   * selects Bitcoin from the method grid or navigates back from a swap to the Lightning
+   * pane. The host should mint (or reuse) a bolt11 and update the checkout snapshot.
+   * Used by the create-mode deferred flow; safe to omit in snapshot mode.
+   */
+  readonly onRequestLightning?: () => void | Promise<void>;
 }
 
 export type OpenReceiveSwapOptionDisplay = OpenReceiveCheckoutPaymentMethod;

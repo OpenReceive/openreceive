@@ -153,9 +153,11 @@ export function normalizeCreateCheckoutRequest(
   const descriptionHash = optionalString(body.descriptionHash ?? body.description_hash);
   const metadata = parseOptionalRecord(body.metadata, "metadata");
 
+  const mintLightning = body.mintLightning ?? body.mint_lightning;
   return {
     order_id: orderId,
     amount,
+    mint_lightning: mintLightning === false ? false : true,
     ...(memo === undefined ? {} : { memo }),
     ...(descriptionHash === undefined ? {} : { description_hash: descriptionHash }),
     ...(metadata === undefined ? {} : { metadata }),

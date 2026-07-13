@@ -223,8 +223,10 @@ async function handleCreateCheckout(
 
   const memo = readString(body.memo);
   const descriptionHash = readString(body.description_hash ?? body.descriptionHash);
+  const mintLightning = body.mint_lightning === false || body.mintLightning === false ? false : true;
   const base = {
     orderId,
+    mintLightning,
     ...(memo === undefined ? {} : { memo }),
     ...(descriptionHash === undefined ? {} : { descriptionHash }),
     ...(metadata === undefined ? {} : { metadata }),

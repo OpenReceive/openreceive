@@ -327,9 +327,6 @@ export async function startSwap(
   if (checkout === undefined) {
     throw serviceError(409, "CONFLICT", "Order has no open checkout to start a swap.");
   }
-  if (checkout.active === undefined) {
-    throw serviceError(409, "CONFLICT", "Open checkout has no Lightning invoice to swap.");
-  }
 
   const checkoutRecords = await context.store.listByCheckoutId(checkout.checkoutId);
   const existing = findReusableSwapRecord(checkoutRecords, payInAsset, now);
@@ -367,14 +364,19 @@ export async function startSwap(
     );
   }
 
-  const displayRecord = checkoutRecords.find(
-    (record) => record.row.invoice_id === checkout.active?.invoiceId,
-  );
-  if (displayRecord === undefined) {
-    throw serviceError(500, "INTERNAL", "Active checkout invoice was not readable.");
+  const displayRecord =
+    checkout.active === undefined
+      ? undefined
+      : checkoutRecords.find((record) => record.row.invoice_id === checkout.active?.invoiceId);
+  const amountSourceRecord =
+    displayRecord ??
+    checkoutRecords.find((record) => record.row.metadata.rail !== "swap") ??
+    checkoutRecords[0];
+  if (amountSourceRecord === undefined) {
+    throw serviceError(500, "INTERNAL", "Open checkout has no amount source for a swap.");
   }
 
-  const amountMsats = roundMsatsUpToWholeSats(displayRecord.row.amount_msats);
+  const amountMsats = roundMsatsUpToWholeSats(amountSourceRecord.row.amount_msats);
   const candidates = await listSwapProvidersForAsset(
     context.swapProviders,
     payInAsset,
@@ -405,7 +407,7 @@ export async function startSwap(
   const roundedAmountMsats = amountMsats;
   const walletInvoice = await context.options.client.makeInvoice({
     amount_msats: BigInt(roundedAmountMsats),
-    ...swapShadowDescriptionFields(displayRecord.row, provider.name, payInAsset),
+    ...swapShadowDescriptionFields(amountSourceRecord.row, provider.name, payInAsset),
     expiry: invoiceExpirySeconds,
   });
   const createdAt = walletInvoice.created_at ?? context.clock();

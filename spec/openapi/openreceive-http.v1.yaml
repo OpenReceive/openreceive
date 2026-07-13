@@ -238,6 +238,12 @@ components:
         metadata:
           type: object
           additionalProperties: true
+        mint_lightning:
+          type: boolean
+          description: >
+            When false, lock the checkout amount without minting a payer-facing Lightning
+            invoice. Defaults to true. Browser create-mode checkout sends false until the
+            payer selects Bitcoin.
       not:
         required:
           - memo
@@ -325,6 +331,7 @@ components:
           enum:
             - lightning
             - swap
+            - checkout_lock
         transaction_state:
           $ref: "#/components/schemas/TransactionState"
         workflow_state:

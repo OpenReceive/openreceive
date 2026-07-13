@@ -11,8 +11,19 @@ import type { CheckoutData, CheckoutViewModel } from "./types.ts";
 
 export function toCheckoutDisplayData(snapshot: CheckoutSnapshot): CheckoutDisplayData {
   const invoice = selectCheckoutDisplayInvoice(snapshot);
+  // Deferred checkout (checkout_lock with no bolt11 minted yet) — return a minimal stub
+  // with an empty invoice string. Callers must gate all bolt11-dependent UI on lightning
+  // actually being requested/visible (rail === "checkout_lock" or invoice === "").
   if (invoice === undefined) {
-    throw new TypeError("OpenReceive checkout requires active or invoices[0].");
+    return {
+      checkout_id: snapshot.checkout_id,
+      order_id: snapshot.order_id,
+      invoice_id: "",
+      invoice: "",
+      rail: "checkout_lock",
+      ...(snapshot.amount_msats !== undefined ? { amount_msats: snapshot.amount_msats } : {}),
+      ...(snapshot.fiat !== undefined ? { fiat_quote: { fiat: snapshot.fiat } } : {}),
+    };
   }
   if (typeof invoice.invoice !== "string") {
     throw new TypeError("OpenReceive checkout requires a display Lightning invoice.");

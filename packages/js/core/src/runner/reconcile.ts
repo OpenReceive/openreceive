@@ -197,10 +197,10 @@ export async function sweepPendingInvoicesOnce(
   input: OpenReceiveReconcileOptions
 ): Promise<OpenReceivePendingSweepResult> {
   const now = getNow(input);
-  const open = await input.store.listOpen({
+  const open = (await input.store.listOpen({
     now,
     limit: sweepOpenInvoiceCap(input.sweepOpenInvoiceCap)
-  });
+  })).filter((record) => record.row.metadata.rail !== "checkout_lock");
 
   if (open.length === 0) {
     return {
