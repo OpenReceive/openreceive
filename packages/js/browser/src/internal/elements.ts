@@ -60,13 +60,24 @@ export function createCheckoutElementAttributes(
         options.paymentWizard,
       );
     }
+    if (options.resume === true) {
+      createAttributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resume] = "";
+    }
+    if (options.resumePathPrefix !== undefined) {
+      createAttributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePathPrefix] =
+        options.resumePathPrefix;
+    }
+    if (options.routeOrderId !== undefined) {
+      createAttributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeOrderId] = options.routeOrderId;
+    }
     return createAttributes;
   }
 
   // Deferred checkout (amount locked, no payer Lightning invoice yet): emit routing
   // attributes only. The element keeps rendering the method grid until Bitcoin is selected.
   const displayInvoice = selectCheckoutDisplayInvoice(snapshot);
-  if (displayInvoice === undefined || typeof displayInvoice.invoice !== "string") {
+  const bolt11 = displayInvoice?.invoice;
+  if (displayInvoice === undefined || typeof bolt11 !== "string") {
     const deferred: CheckoutElementAttributes = {
       [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId]: snapshot.order_id,
     };
@@ -88,11 +99,11 @@ export function createCheckoutElementAttributes(
     return deferred;
   }
   const invoice = displayInvoice;
-  assertOpenReceiveDisplayInvoice(invoice.invoice);
+  assertOpenReceiveDisplayInvoice(bolt11);
   const attributes: CheckoutElementAttributes = {
     [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId]: snapshot.order_id,
     [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoiceId]: invoice.invoice_id,
-    [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice]: invoice.invoice,
+    [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice]: bolt11,
     [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.rail]: invoice.rail,
   };
 
@@ -182,6 +193,9 @@ export function createCheckoutElementListeners(
     ...(handlers.onError === undefined
       ? {}
       : { [OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.error]: handlers.onError }),
+    ...(handlers.onSummary === undefined
+      ? {}
+      : { [OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.summary]: handlers.onSummary }),
   };
 }
 

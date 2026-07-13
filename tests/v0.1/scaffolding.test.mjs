@@ -54,7 +54,7 @@ test("core money math converts fiat ↔ sats and across BTC prices", () => {
   );
 });
 
-test("createHostOrderStore persists amount authority and builds getCheckoutAmount", async () => {
+test("createHostOrderStore persists amount authority for prepared orders", async () => {
   const meta = new Map();
   const store = {
     async getMeta(key) {
@@ -72,20 +72,16 @@ test("createHostOrderStore persists amount authority and builds getCheckoutAmoun
   const orders = createHostOrderStore(store, { prefix: "demo_order:" });
   await orders.persist("ord_1", {
     amount: { currency: "USD", value: "9.99" },
-    order: { id: "ord_1" },
+    summary: { id: "ord_1" },
   });
   assert.deepEqual(await orders.read("ord_1"), {
     amount: { currency: "USD", value: "9.99" },
-    order: { id: "ord_1" },
+    summary: { id: "ord_1" },
   });
-  assert.deepEqual(await orders.getCheckoutAmount("ord_1"), {
+  assert.deepEqual(await orders.getAmount("ord_1"), {
     amount: { currency: "USD", value: "9.99" },
   });
-  assert.equal(await orders.getCheckoutAmount("missing"), null);
-  const getCheckoutAmount = orders.createGetCheckoutAmount();
-  assert.deepEqual(await getCheckoutAmount({ orderId: "ord_1", request: {} }), {
-    amount: { currency: "USD", value: "9.99" },
-  });
+  assert.equal(await orders.getAmount("missing"), null);
 });
 
 test("console loggers write OpenReceive and host events", () => {

@@ -23,7 +23,7 @@ OpenReceive.configure do |config|
   # inside a request you can also reach your app's auth via the OpenReceive::Authorization concern.
   config.authorize = lambda do |context|
     case context[:action]
-    when "checkout.create", "rate.list"
+    when "checkout.prepare", "checkout.create", "order.summary", "rate.list"
       true                                              # Tier 1 — public
     when "invoice.sweep"
       false                                             # Tier 3 — set your admin check to enable
@@ -33,11 +33,11 @@ OpenReceive.configure do |config|
     end
   end
 
-  # Amount authority — REQUIRED. NEVER trust a client price. Return payment terms for the order,
-  # or nil for 404. Return { amount: { currency: "USD", value: "9.99" } } or
-  # { amount: { sats: 21_000 } }.
-  config.get_checkout_amount = lambda do |context|
-    raise "OpenReceive: implement config.get_checkout_amount to return the authoritative amount " \
-          "for order #{context[:order_id].inspect}."
+  # Price authority — REQUIRED. NEVER trust a client price. Called on POST /prepare; create-checkout
+  # reads the persisted amount. Return { amount: { currency: "USD", value: "9.99" }, order_id: "..." }
+  # or { amount: { sats: 21_000 }, order_id: "..." }, plus optional summary/metadata; or nil for 404.
+  config.prepare_checkout = lambda do |context|
+    raise "OpenReceive: implement config.prepare_checkout to return the authoritative amount " \
+          "from POST /prepare (body=#{context[:body].inspect})."
   end
 end

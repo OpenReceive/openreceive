@@ -10,6 +10,9 @@ import {
   postOpenReceiveJson,
   rememberOrderAccessToken,
   requestCheckout,
+  requestOrderSummary,
+  requestPrepare,
+  resolveOrderSummaryUrlFromPrefix,
   resolveOrderUrlFromPrefix,
   sanitizeBrowserLogEntry,
 } from "../../packages/js/browser/src/internal.ts";
@@ -131,12 +134,71 @@ test("requestCheckout with just { prefix, orderId } POSTs only { order_id } (no 
     },
   });
 
-  // The mounted server's getCheckoutAmount owns the price, so the body is order_id only — no amount.
+  // The mounted server's prepareCheckout persist owns the price, so the body is order_id only — no amount.
   assert.equal(requests[0].url, "/openreceive/checkouts");
   assert.deepEqual(JSON.parse(requests[0].init.body), { order_id: "ord-1" });
   assert.equal(checkout.order_id, orderId);
 
   clearOrderAccessTokens();
+});
+
+test("requestPrepare POSTs to {prefix}/prepare and returns order_id + summary", async () => {
+  const requests = [];
+  const result = await requestPrepare({
+    prefix: "/openreceive",
+    body: { cart: { sku: "demo" } },
+    fetch: async (url, init) => {
+      requests.push({ url, init });
+      return {
+        ok: true,
+        json: async () => ({
+          order_id: "ord-prep-1",
+          summary: { title: "Demo" },
+        }),
+      };
+    },
+  });
+
+  assert.equal(requests[0].url, "/openreceive/prepare");
+  assert.equal(requests[0].init.method, "POST");
+  assert.deepEqual(JSON.parse(requests[0].init.body), { cart: { sku: "demo" } });
+  assert.deepEqual(result, { order_id: "ord-prep-1", summary: { title: "Demo" } });
+});
+
+test("requestOrderSummary GETs {prefix}/orders/{id}/summary", async () => {
+  const requests = [];
+  const result = await requestOrderSummary({
+    prefix: "/openreceive",
+    orderId: "ord-sum-1",
+    fetch: async (url, init) => {
+      requests.push({ url, init });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          order_id: "ord-sum-1",
+          summary: { items: [] },
+        }),
+      };
+    },
+  });
+
+  assert.equal(requests[0].url, "/openreceive/orders/ord-sum-1/summary");
+  assert.equal(requests[0].init.method, "GET");
+  assert.deepEqual(result, { order_id: "ord-sum-1", summary: { items: [] } });
+
+  const missing = await requestOrderSummary({
+    orderId: "missing",
+    fetch: async () => ({ ok: false, status: 404, json: async () => ({}) }),
+  });
+  assert.equal(missing, undefined);
+});
+
+test("resolveOrderSummaryUrlFromPrefix derives the summary route", () => {
+  assert.equal(
+    resolveOrderSummaryUrlFromPrefix("/openreceive", "ord-1"),
+    "/openreceive/orders/ord-1/summary",
+  );
 });
 
 test("resolveOrderUrlFromPrefix derives the order route and OPENRECEIVE_DEFAULT_PREFIX is /openreceive", () => {

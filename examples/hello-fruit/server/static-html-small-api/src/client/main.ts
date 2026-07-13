@@ -437,7 +437,7 @@ async function createOrder(): Promise<void> {
     });
     // App route: build + persist the order. The <openreceive-checkout order-id> element below then
     // creates the checkout against the mounted /openreceive/checkouts route and drives it itself.
-    const response = await fetch("/prepare_order", {
+    const response = await fetch("/openreceive/prepare", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

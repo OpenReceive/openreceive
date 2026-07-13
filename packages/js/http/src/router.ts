@@ -2,9 +2,11 @@ import { OpenReceiveHttpError } from "./errors.ts";
 
 /** A route matched under the mount prefix: its kind plus any decoded path parameters. */
 export type MatchedRoute =
+  | { readonly kind: "checkout.prepare" }
   | { readonly kind: "checkout.create" }
   | { readonly kind: "checkout.read"; readonly checkoutId: string }
   | { readonly kind: "order.action"; readonly orderId: string }
+  | { readonly kind: "order.summary"; readonly orderId: string }
   | { readonly kind: "swap.options"; readonly orderId: string }
   | { readonly kind: "rates" }
   | { readonly kind: "invoice.sweep" };
@@ -36,6 +38,10 @@ export function matchRoute(prefix: string, method: string, pathname: string): Ma
   const upperMethod = method.toUpperCase();
   const segments = path.split("/").filter((segment) => segment.length > 0);
 
+  if (segments[0] === "prepare" && segments.length === 1 && upperMethod === "POST") {
+    return { kind: "checkout.prepare" };
+  }
+
   if (segments[0] === "checkouts") {
     if (segments.length === 1 && upperMethod === "POST") {
       return { kind: "checkout.create" };
@@ -49,6 +55,9 @@ export function matchRoute(prefix: string, method: string, pathname: string): Ma
   if (segments[0] === "orders") {
     if (segments.length === 2 && upperMethod === "POST") {
       return { kind: "order.action", orderId: decodeURIComponent(segments[1]) };
+    }
+    if (segments.length === 3 && segments[2] === "summary" && upperMethod === "GET") {
+      return { kind: "order.summary", orderId: decodeURIComponent(segments[1]) };
     }
     if (segments.length === 3 && segments[2] === "swap-options" && upperMethod === "GET") {
       return { kind: "swap.options", orderId: decodeURIComponent(segments[1]) };

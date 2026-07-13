@@ -1,0 +1,11 @@
+{
+  "name": "order-summary-not-found",
+  "request": {
+    "method": "GET",
+    "path": "/openreceive/orders/unknown-order/summary"
+  },
+  "expected": {
+    "status": 404,
+    "error_code": "NOT_FOUND"
+  }
+}

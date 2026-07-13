@@ -2,7 +2,7 @@ import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { CheckoutState } from "@openreceive/browser/internal";
-import { Checkout, ThemeScope, TransactionDetails, useCheckoutResume } from "@openreceive/react";
+import { Checkout, ThemeScope, TransactionDetails } from "@openreceive/react";
 import "@openreceive/angular/styles.css";
 import "@openreceive/react/styles.css";
 import "@openreceive/vue/styles.css";
@@ -14,10 +14,10 @@ import {
 import {
   enterHelloFruitCheckout,
   forgetHelloFruitOrder,
-  helloFruitCheckoutResume,
   leaveHelloFruitCheckout,
   rememberHelloFruitOrder,
 } from "../../../../shared/demo-checkout-resume.ts";
+import { isHelloFruitDemoOrder } from "../../../../shared/demo-order.ts";
 import { readHelloFruitCheckoutCurrencies } from "../../../../shared/demo-currencies.ts";
 import {
   formatHelloFruitBuyNowLabel,
@@ -71,7 +71,8 @@ interface DemoMoneyAmount {
 }
 
 interface PrepareOrderResponse {
-  readonly order: DemoOrder;
+  readonly order_id: string;
+  readonly summary?: DemoOrder;
 }
 
 function App(): React.ReactElement {
@@ -85,42 +86,49 @@ function App(): React.ReactElement {
   const [stickerModalOpen, setStickerModalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
-  const {
-    settledState: settledCheckoutState,
-    resuming,
-    resumeError,
-    onState: onCheckoutState,
-    onSettled,
-    reset: resetCheckoutResume,
-  } = useCheckoutResume({
-    orderId: order?.uuid,
-    guest: helloFruitCheckoutResume,
-    syncUrl: true,
-    onResumed: (resumed) => {
-      logDemo("checkout.resume", "Resuming checkout from URL.", { orderId: resumed.uuid });
-      setOrder(resumed);
-      setPurchasedItems(resumed.items);
-    },
-    onResumeMiss: (orderId) => {
-      logDemo("checkout.resume_miss", "Checkout resume order not found.", { orderId });
-      leaveHelloFruitCheckout();
-      setOrder(null);
-      setPurchasedItems([]);
-    },
-    onResumeClear: () => {
-      setOrder(null);
-      setPurchasedItems([]);
-    },
-    onSettled: () => {
-      logDemo("checkout.settled", "Checkout settled callback received.", {
-        orderId: order?.uuid,
-        purchasedItemCount: purchasedItems.length,
-      });
-      setOrder((current) => (current === null ? current : { ...current, status: "paid" }));
-      setStickerModalOpen(true);
-    },
-  });
+  const [settledCheckoutState, setSettledCheckoutState] = useState<CheckoutState | null>(null);
+  const [resuming, setResuming] = useState(false);
+  const [resumeError, setResumeError] = useState<string | null>(null);
   const displayError = error === "" ? (resumeError ?? "") : error;
+
+  function onCheckoutState(state: CheckoutState): void {
+    if (state.settled) {
+      setSettledCheckoutState(state);
+    }
+  }
+
+  function onSettled(): void {
+    logDemo("checkout.settled", "Checkout settled callback received.", {
+      orderId: order?.uuid,
+      purchasedItemCount: purchasedItems.length,
+    });
+    setOrder((current) => (current === null ? current : { ...current, status: "paid" }));
+    setStickerModalOpen(true);
+  }
+
+  function resetCheckoutResume(): void {
+    setSettledCheckoutState(null);
+    setResumeError(null);
+    setResuming(false);
+  }
+
+  function onSummary(summary: unknown): void {
+    if (!isHelloFruitDemoOrder(summary)) return;
+    logDemo("checkout.resume", "Resuming checkout from summary.", { orderId: summary.uuid });
+    setOrder(summary);
+    setPurchasedItems(summary.items);
+    setResuming(false);
+    setResumeError(null);
+  }
+
+  function onResumeMiss(orderId: string): void {
+    logDemo("checkout.resume_miss", "Checkout resume order not found.", { orderId });
+    leaveHelloFruitCheckout();
+    setOrder(null);
+    setPurchasedItems([]);
+    setResuming(false);
+    setResumeError("Order not found.");
+  }
   const selectedFruit = fruits.find((fruit) => fruit.id === fruitId) ?? fruits[0];
   const createCheckoutLabel =
     selectedFruit === undefined
@@ -217,9 +225,9 @@ function App(): React.ReactElement {
         cartQuantity: cartQuantity,
         productIds: cartItems.map((item) => item.fruit.id),
       });
-      // App route: build + persist the order. The <Checkout orderId> component below then creates
-      // the checkout against the mounted /openreceive/checkouts route and drives it end to end.
-      const response = await fetch("/prepare_order", {
+      // POST /openreceive/prepare validates the cart and persists amount authority.
+      // <Checkout orderId resume> creates the checkout and restores summary after refresh.
+      const response = await fetch("/openreceive/prepare", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -239,20 +247,25 @@ function App(): React.ReactElement {
         elapsedMs: Date.now() - startedAt,
         hasOrder: isPrepareOrderResponse(body),
       });
-      if (!response.ok || !isPrepareOrderResponse(body)) {
+      if (
+        !response.ok ||
+        !isPrepareOrderResponse(body) ||
+        !isHelloFruitDemoOrder(body.summary)
+      ) {
         throw new Error(readErrorMessage(body) ?? helloFruitDemoLabels.createOrderError);
       }
 
+      const order = body.summary;
       logDemo("prepare_order.ready", "Order accepted by browser app.", {
-        orderId: body.order.uuid,
-        orderStatus: body.order.status,
-        itemCount: body.order.items.length,
-        total: body.order.total_amount,
+        orderId: order.uuid,
+        orderStatus: order.status,
+        itemCount: order.items.length,
+        total: order.total_amount,
       });
-      rememberHelloFruitOrder(body.order);
-      enterHelloFruitCheckout(body.order.uuid);
-      setOrder(body.order);
-      setPurchasedItems(body.order.items);
+      rememberHelloFruitOrder(order);
+      enterHelloFruitCheckout(order.uuid);
+      setOrder(order);
+      setPurchasedItems(order.items);
     } catch (cause: unknown) {
       logDemo("prepare_order.error", "Prepare order failed in the browser.", {
         error: cause instanceof Error ? cause.message : String(cause),
@@ -466,6 +479,8 @@ function App(): React.ReactElement {
               onSettled={onSettled}
               onState={onCheckoutState}
               onStartOver={startOver}
+              onSummary={onSummary}
+              onResumeMiss={onResumeMiss}
             />
           </>
         )}
@@ -533,11 +548,12 @@ interface FrameworkCheckoutProps {
   readonly onSettled: () => void;
   readonly onState: (state: CheckoutState) => void;
   readonly onStartOver: () => void;
+  readonly onSummary: (summary: unknown) => void;
+  readonly onResumeMiss: (orderId: string) => void;
 }
 
-// Each framework mounts its SELF-CONTAINED <Checkout orderId>: the component creates the checkout
-// against the mounted router (prefix defaults to /openreceive), polls, and drives swaps itself, with
-// the per-order token handled invisibly. The app never writes an invoice/status/swap route handler.
+// Each framework mounts its SELF-CONTAINED <Checkout orderId resume>: the component creates the
+// checkout against the mounted router, polls, restores guest summary, and drives swaps itself.
 function FrameworkCheckout({
   framework,
   orderId,
@@ -545,6 +561,8 @@ function FrameworkCheckout({
   onSettled,
   onState,
   onStartOver,
+  onSummary,
+  onResumeMiss,
 }: FrameworkCheckoutProps): React.ReactElement {
   const hostRef = useRef<HTMLDivElement | null>(null);
 
@@ -592,8 +610,12 @@ function FrameworkCheckout({
 
         const app = createApp(VueCheckout, {
           orderId,
+          resume: true,
+          resumePathPrefix: "/checkout",
           onSettled: options.onSettled,
           onStartOver,
+          onSummary,
+          onResumeMiss,
           options: {
             rootSelector: options.rootSelector,
             defaultTheme: options.defaultTheme,
@@ -628,12 +650,16 @@ function FrameworkCheckout({
           hostElement: mountTarget,
         });
         component.setInput("orderId", orderId);
+        component.setInput("resume", true);
         component.setInput("onSettled", options.onSettled);
         component.setInput("onStartOver", onStartOver);
+        component.setInput("onSummary", onSummary);
+        component.setInput("onResumeMiss", onResumeMiss);
         component.setInput("options", {
           rootSelector: options.rootSelector,
           defaultTheme: options.defaultTheme,
           onError: options.onError,
+          resumePathPrefix: "/checkout",
         });
         application.attachView(component.hostView);
         component.changeDetectorRef.detectChanges();
@@ -658,8 +684,12 @@ function FrameworkCheckout({
           target: mountTarget,
           props: {
             orderId,
+            resume: true,
+            resumePathPrefix: "/checkout",
             onSettled: options.onSettled,
             onStartOver,
+            onSummary,
+            onResumeMiss,
             options: {
               rootSelector: options.rootSelector,
               defaultTheme: options.defaultTheme,
@@ -694,11 +724,15 @@ function FrameworkCheckout({
       <Checkout
         className="demo-checkout"
         orderId={orderId}
+        resume
+        resumePathPrefix="/checkout"
         logger={logOpenReceive}
         onError={onError}
         onSettled={onSettled}
         onState={onState}
         onStartOver={onStartOver}
+        onSummary={onSummary}
+        onResumeMiss={onResumeMiss}
       />
     );
   }
@@ -715,7 +749,7 @@ function FrameworkCheckout({
 createRoot(document.getElementById("root") as HTMLElement).render(<App />);
 
 function isPrepareOrderResponse(value: unknown): value is PrepareOrderResponse {
-  return typeof value === "object" && value !== null && "order" in value;
+  return typeof value === "object" && value !== null && "order_id" in value;
 }
 
 function readErrorMessage(value: unknown): string | undefined {

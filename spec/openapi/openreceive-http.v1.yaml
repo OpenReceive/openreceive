@@ -12,7 +12,7 @@ info:
     request or response. Three security tiers govern access: Tier 1 (anonymous-capable:
     create checkout, rates), Tier 2 (capability-token-scoped: order/checkout reads and
     swap actions on your own order), Tier 3 (privileged, fails closed: admin sweep). The
-    host supplies authorize + getCheckoutAmount hooks; OpenReceive never inspects the host
+    host supplies authorize + prepareCheckout hooks; OpenReceive never inspects the host
     session. See docs/internal/shipped-routes.md (contributors) and
     docs/guides/authorization.md (integrators).
   contact:
@@ -26,16 +26,46 @@ security:
   - orderAccessTokenCookie: []
   - {}
 paths:
+  /prepare:
+    post:
+      operationId: prepareCheckout
+      summary: Prepare an order amount for a later checkout (Tier 1, action=checkout.prepare).
+      description: >
+        authorize(checkout.prepare) -> prepareCheckout(body) -> persist amount (+ optional summary)
+        under the order id. Returns `{ order_id, summary? }`. Create-checkout later reads the
+        persisted amount; the prepare body never sets a trusted client price on create.
+        Return null from the hook → 404.
+      security:
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              description: Host-defined cart / product payload (untrusted; validated inside prepareCheckout).
+      responses:
+        "201":
+          description: Order prepared; amount persisted for create-checkout.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrepareCheckoutResponse"
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
   /checkouts:
     post:
       operationId: createCheckout
       summary: Create or replay a checkout for an order (Tier 1, action=checkout.create).
       description: >
-        authorize(checkout.create) -> getCheckoutAmount(order_id, metadata) ->
+        authorize(checkout.create) -> read amount persisted by POST /prepare ->
         getOrCreateCheckout -> mint per-order capability token on first checkout.
         The create body never carries a client price (amount/sats/usd are rejected with 400);
-        the required host getCheckoutAmount hook returns the authoritative amount (or null → 404).
-        order_access_token is returned only on the first mint per order.
+        create without a prior prepare → 404. order_access_token is returned only on the first
+        mint per order.
       security:
         - {}
       requestBody:
@@ -98,6 +128,27 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
         "429": { $ref: "#/components/responses/Error" }
+  /orders/{order_id}/summary:
+    get:
+      operationId: getOrderSummary
+      summary: Read the display summary persisted at prepare (Tier 1, action=order.summary).
+      description: >
+        Public-if-exists guest resume helper. Returns `{ order_id, summary? }` from the row
+        written by POST /prepare. No capability token required. Does not return amount
+        authority beyond what the host put in `summary`.
+      security:
+        - {}
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      responses:
+        "200":
+          description: Order summary.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderSummaryResponse"
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
   /checkouts/{checkout_id}:
     get:
       operationId: getCheckout
@@ -248,8 +299,8 @@ components:
         required:
           - memo
           - description_hash
-    # Authoritative checkout amounts are resolved server-side by the host `getCheckoutAmount` hook.
-    # The create-checkout HTTP body never carries a client price (amount is rejected).
+    # Authoritative checkout amounts are persisted by POST /prepare via the host `prepareCheckout`
+    # hook. The create-checkout HTTP body never carries a client price (amount is rejected).
     # This schema remains for service-level / library create requests (trusted entry points).
     CreateCheckoutAmount:
       type: object
@@ -719,6 +770,32 @@ components:
             The per-order capability token. Returned ONLY on the first checkout for an order
             (first mint). Store it and present it on subsequent reads. Only its sha256 hash
             is persisted server-side.
+    PrepareCheckoutResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - order_id
+      properties:
+        order_id:
+          type: string
+          minLength: 1
+          maxLength: 200
+        summary:
+          description: Opaque host display payload for guest resume UI.
+          additionalProperties: true
+    OrderSummaryResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - order_id
+      properties:
+        order_id:
+          type: string
+          minLength: 1
+          maxLength: 200
+        summary:
+          description: Opaque host display payload persisted at prepare.
+          additionalProperties: true
     OrderActionRequest:
       description: >
         The action multiplexer body for POST /orders/{order_id}. Exactly one variant by the

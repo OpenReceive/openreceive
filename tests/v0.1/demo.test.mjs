@@ -38,7 +38,7 @@ import { InMemoryInvoiceKvStore, StaticPriceProvider } from "../../packages/js/c
 import { setHelloFruitOpenReceiveTestOverrides } from "../../examples/hello-fruit/server/nextjs-fullstack/src/server/openreceive.ts";
 import { GET as getNextDemoMetadata } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/demo-metadata.json/route.ts";
 import { GET as getNextDocs } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/docs/route.ts";
-import { POST as postNextPrepareOrder } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/prepare_order/route.ts";
+import { POST as postNextPrepareOrder } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/openreceive/prepare/route.ts";
 import { GET as getNextOrderSummary } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/orders/[orderId]/route.ts";
 import { POST as postNextOpenReceive } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/openreceive/[...openreceive]/route.ts";
 import { GET as getNextSource } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/source/route.ts";
@@ -363,7 +363,7 @@ test("Hello Fruit React demos delegate checkout state to UI packages", () => {
     // hand-writes an /order (invoice/status/swap) handler or passes an orderUrl.
     assert.match(source, /orderId=\{order\.uuid\}/);
     assert.doesNotMatch(source, /orderUrl="\/order"/);
-    assert.match(source, /fetch\("\/prepare_order"/);
+    assert.match(source, /fetch\("\/openreceive/prepare"/);
     assert.doesNotMatch(source, /fetch\("\/create_order"/);
     assert.match(source, /readHelloFruitCheckoutCurrencies/);
     assert.match(source, /currency,/);
@@ -484,7 +484,7 @@ test("Hello Fruit Node demo creates orders from cart before rendering checkout",
   assert.match(source, /function startOver\(\)/);
   assert.match(source, /addSelectedFruitToCart/);
   assert.match(source, /async function createOrder\(\)/);
-  assert.match(source, /fetch\("\/prepare_order"/);
+  assert.match(source, /fetch\("\/openreceive/prepare"/);
   assert.doesNotMatch(source, /fetch\("\/create_order"/);
   // The self-contained component receives the order id; no hand-written order URL.
   assert.match(source, /orderId=\{order\.uuid\}/);
@@ -516,7 +516,7 @@ test("Hello Fruit Next.js demo resets expired checkout from Start over", () => {
 
   assert.match(source, /function startOver\(\)/);
   assert.match(source, /async function createOrder\(\)/);
-  assert.match(source, /fetch\("\/prepare_order"/);
+  assert.match(source, /fetch\("\/openreceive/prepare"/);
   assert.doesNotMatch(source, /fetch\("\/create_order"/);
   assert.match(source, /orderId=\{order\.uuid\}/);
   assert.doesNotMatch(source, /orderUrl="\/order"/);
@@ -659,8 +659,8 @@ test("Hello Fruit static demo delegates checkout state to the web component", ()
   assert.match(source, /defineOpenReceiveElements/);
   // Self-contained: render the <openreceive-checkout> element with just an order id (prefix
   // defaults to /openreceive); it creates the checkout, polls, and drives swaps itself. The app
-  // fetches /prepare_order (build + persist the order) and writes no invoice/status/swap routes.
-  assert.match(source, /fetch\("\/prepare_order"/);
+  // fetches /openreceive/prepare (build + persist the order) and writes no invoice/status/swap routes.
+  assert.match(source, /fetch\("\/openreceive/prepare"/);
   assert.doesNotMatch(source, /fetch\("\/create_order"/);
   assert.match(source, /OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME/);
   assert.match(source, /setAttribute\("order-id"/);
@@ -1545,7 +1545,7 @@ test("Next.js demo prepares orders and mounts the shipped OpenReceive router", (
   assert.match(source, /prepareHelloFruitOrder/);
   assert.match(source, /openReceiveHttpOptions/);
   assert.match(source, /createHelloFruitOrderStore/);
-  assert.match(source, /createGetCheckoutAmount/);
+  assert.match(source, /prepareCheckout/);
   assert.match(source, /mapHostRouteError/);
   assert.match(source, /guestCheckout\(\)/);
   assert.match(source, /readRequiredHelloFruitNwcConnectionString/);
@@ -1783,7 +1783,7 @@ test("Hello Fruit demos prepare app orders and settle through the mounted router
     const app = await demo.createApp(options);
 
     // 1. App route: build + persist the order (no checkout yet, just { order }).
-    const prepared = await dispatchJson(app, "POST", "/prepare_order", orderRequest);
+    const prepared = await dispatchJson(app, "POST", "/openreceive/prepare", orderRequest);
     assert.equal(prepared.status, 201, `${demo.name}: prepare_order status`);
     assert.match(prepared.body.order.uuid, /^hello-fruit-/);
     assert.equal(prepared.body.order.status, "pending_payment");
@@ -1802,7 +1802,7 @@ test("Hello Fruit demos prepare app orders and settle through the mounted router
     const missing = await dispatchJson(app, "GET", "/orders/does-not-exist");
     assert.equal(missing.status, 404, `${demo.name}: missing order summary`);
 
-    // 2. Mounted router creates the checkout from just { order_id } (getCheckoutAmount is the authority)
+    // 2. Mounted router creates the checkout from just { order_id } (prepareCheckout is the authority)
     // and mints the per-order capability token, returned once.
     const created = await dispatchJson(app, "POST", "/openreceive/checkouts", { order_id: orderId });
     assert.equal(created.status, 201, `${demo.name}: create checkout status`);
@@ -1847,7 +1847,7 @@ test("Hello Fruit demos prepare app orders and settle through the mounted router
   setHelloFruitOpenReceiveTestOverrides(options);
   try {
     const prepared = await responseJson(
-      postNextPrepareOrder(jsonRequest("/prepare_order", orderRequest)),
+      postNextPrepareOrder(jsonRequest("/openreceive/prepare", orderRequest)),
     );
     assert.equal(prepared.status, 201, "nextjs-fullstack: prepare_order status");
     assert.match(prepared.body.order.uuid, /^hello-fruit-/);
@@ -1918,13 +1918,13 @@ test("Hello Fruit demos create direct SATS orders from the currency switcher", a
     },
   ]) {
     const app = await demo.createApp(createHelloFruitTestOpenReceiveOptions());
-    const prepared = await dispatchJson(app, "POST", "/prepare_order", orderRequest);
+    const prepared = await dispatchJson(app, "POST", "/openreceive/prepare", orderRequest);
     assert.equal(prepared.status, 201, `${demo.name}: prepare_order status`);
     assert.equal(prepared.body.order.total_amount.currency, "SATS");
     assert.equal(prepared.body.order.total_amount.value, "20000");
     const orderId = prepared.body.order.uuid;
 
-    // The SATS amount is the amount authority: getCheckoutAmount looks the persisted order up by id, so
+    // The SATS amount is the amount authority: prepareCheckout looks the persisted order up by id, so
     // the mounted create-checkout route mints a direct-sats invoice with no fiat quote.
     const created = await dispatchJson(app, "POST", "/openreceive/checkouts", { order_id: orderId });
     assert.equal(created.status, 201, `${demo.name}: create checkout status`);

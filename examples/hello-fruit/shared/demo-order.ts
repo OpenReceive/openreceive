@@ -1,8 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type { OpenReceive, CheckoutAmountSource } from "@openreceive/node";
-import { createHostOrderStore, type HostOrderStore } from "@openreceive/node";
+import type { OpenReceive } from "@openreceive/node";
+import type { PrepareCheckout, PrepareCheckoutResult } from "@openreceive/http";
 import { hostError, OpenReceiveHostError } from "@openreceive/http";
-import { OpenReceiveDecimalError } from "@openreceive/core";
 import {
   createHelloFruitOrderInvoiceDescription,
   type HelloFruitFiatAmount,
@@ -59,9 +58,6 @@ export interface HelloFruitCreateOrderResult {
   };
 }
 
-/** @deprecated Prefer {@link HOST_ORDER_META_PREFIX} from `@openreceive/node` with a demo namespace. */
-export const HELLO_FRUIT_ORDER_META_PREFIX = "demo_order:" as const;
-
 /** @deprecated Prefer {@link OpenReceiveHostError} / {@link hostError} from `@openreceive/http`. */
 export class HelloFruitDemoOrderError extends OpenReceiveHostError {
   constructor(message: string, status = 400) {
@@ -74,58 +70,29 @@ export class HelloFruitDemoOrderError extends OpenReceiveHostError {
   }
 }
 
-export function createHelloFruitOrderStore(
-  openreceive: Pick<OpenReceive, "store">,
-): HostOrderStore<HelloFruitDemoOrder> {
-  return createHostOrderStore(openreceive.store, {
-    prefix: HELLO_FRUIT_ORDER_META_PREFIX,
-  });
-}
-
 /**
- * App order step (NOT an OpenReceive route): validate the cart, compute items + the authoritative
- * total, assign an order id, and PERSIST the order keyed by that id so `getCheckoutAmount` can look it
- * up later. Returns just `{ order }` for display — creating the checkout is the mounted router's job.
+ * Mount hook for OpenReceive `prepareCheckout`: validate the cart, compute the authoritative
+ * total, and return amount + display summary. OpenReceive persists the amount and serves
+ * summary via GET /openreceive/orders/:id/summary.
  */
-export async function prepareHelloFruitOrder(
-  input: HelloFruitCreateOrderInput,
-  options: {
-    readonly demoId: string;
-    readonly openreceive: OpenReceive;
-    readonly demoName?: string;
-    readonly catalog?: readonly HelloFruitProduct[];
-    readonly orders?: HostOrderStore<HelloFruitDemoOrder>;
-  },
-): Promise<{ order: HelloFruitDemoOrder }> {
-  const result = await createHelloFruitCreateOrderResult(input, options);
-  const orders = options.orders ?? createHelloFruitOrderStore(options.openreceive);
-  await orders.persist(result.order.uuid, {
-    order: result.order,
-    amount: result.invoiceRequest.amount,
-  });
-  return { order: result.order };
-}
-
-/**
- * The amount authority for the mounted create-checkout route: look the persisted order up by id and
- * return its authoritative amount source. Returns `null` when the order is unknown (HTTP → 404).
- */
-export async function getHelloFruitCheckoutAmount(
-  openreceive: Pick<OpenReceive, "store">,
-  orderId: string,
-): Promise<CheckoutAmountSource | null> {
-  return createHelloFruitOrderStore(openreceive).getCheckoutAmount(orderId);
-}
-
-/**
- * Host display lookup for guest checkout resume (`GET /orders/:orderId`).
- */
-export async function getHelloFruitDemoOrder(
-  openreceive: Pick<OpenReceive, "store">,
-  orderId: string,
-): Promise<HelloFruitDemoOrder | null> {
-  const stored = await createHelloFruitOrderStore(openreceive).read(orderId);
-  return stored?.order ?? null;
+export function createHelloFruitPrepareCheckout(options: {
+  readonly demoId: string;
+  readonly openreceive: Pick<OpenReceive, "listRates" | "priceCurrencies">;
+  readonly demoName?: string;
+  readonly catalog?: readonly HelloFruitProduct[];
+}): PrepareCheckout {
+  return async ({ body }): Promise<PrepareCheckoutResult | null> => {
+    const input =
+      body !== null && typeof body === "object" && !Array.isArray(body)
+        ? (body as HelloFruitCreateOrderInput)
+        : {};
+    const result = await createHelloFruitCreateOrderResult(input, options);
+    return {
+      orderId: result.order.uuid,
+      amount: result.invoiceRequest.amount,
+      summary: result.order,
+    };
+  };
 }
 
 export async function createHelloFruitCreateOrderResult(
@@ -219,60 +186,62 @@ function createHelloFruitOrderItems(
     if (product === undefined) {
       throw hostError(`Unknown product: ${productId}.`);
     }
-    const unit_amount = withHelloFruitPricing(() =>
-      convertHelloFruitUsdAmount(product.fiat, currency, rates),
-    );
+    const unit_amount = convertHelloFruitUsdAmount(product.fiat, currency, rates);
     return {
-      product_id: product.id,
+      product_id: productId,
       name: product.name,
       sticker: product.sticker,
       quantity,
       unit_amount,
-      line_amount: withHelloFruitPricing(() => multiplyHelloFruitAmount(unit_amount, quantity)),
+      line_amount: multiplyHelloFruitAmount(unit_amount, quantity),
     };
   });
 }
 
 function totalHelloFruitAmount(items: readonly HelloFruitOrderItem[]): HelloFruitFiatAmount {
-  if (items.length === 0) {
-    throw hostError("Cart must include at least one item.");
-  }
-  return withHelloFruitPricing(() => sumHelloFruitAmounts(items.map((item) => item.line_amount)));
+  return sumHelloFruitAmounts(items.map((item) => item.line_amount));
 }
 
-function withHelloFruitPricing<T>(compute: () => T): T {
-  try {
-    return compute();
-  } catch (error) {
-    if (error instanceof OpenReceiveDecimalError) {
-      throw hostError(error.message, error.status);
-    }
-    throw error;
-  }
+function createHelloFruitOrderId(demoId: string): string {
+  return `${demoId}_${randomUUID().replaceAll("-", "")}`;
 }
 
 function asCartItem(value: unknown): HelloFruitCartItemInput {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (typeof value !== "object" || value === null) {
     throw hostError("Cart items must be objects.");
   }
   return value as HelloFruitCartItemInput;
 }
 
 function requireProductId(item: HelloFruitCartItemInput): string {
-  const productId = typeof item.product_id === "string" ? item.product_id : item.id;
-  if (typeof productId !== "string" || productId.length === 0) {
-    throw hostError("Cart items require product_id.");
+  const productId =
+    typeof item.product_id === "string"
+      ? item.product_id
+      : typeof item.id === "string"
+        ? item.id
+        : "";
+  if (productId.length === 0) {
+    throw hostError("Cart items require a product_id.");
   }
   return productId;
 }
 
 function requireQuantity(value: unknown): number {
-  if (!Number.isInteger(value) || typeof value !== "number" || value < 1 || value > 9) {
-    throw hostError("Cart item quantity must be an integer from 1 through 9.");
+  const quantity = typeof value === "number" ? value : Number(value);
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99) {
+    throw hostError("Cart item quantity must be an integer from 1 to 99.");
   }
-  return value;
+  return quantity;
 }
 
-function createHelloFruitOrderId(demoId: string): string {
-  return `hello-fruit-${demoId}-${randomUUID()}`;
+export function isHelloFruitDemoOrder(value: unknown): value is HelloFruitDemoOrder {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.uuid === "string" &&
+    (record.status === "pending_payment" || record.status === "paid") &&
+    Array.isArray(record.items) &&
+    typeof record.total_amount === "object" &&
+    record.total_amount !== null
+  );
 }

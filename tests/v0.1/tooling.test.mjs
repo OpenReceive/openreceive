@@ -141,17 +141,25 @@ test("shipped route adapters exist and wrap @openreceive/http", () => {
 test("Node quickstart mounts the shipped router around host-owned orders", () => {
   const quickstart = readFileSync(nodeQuickstartDocs, "utf8");
   // Chronological story: price → onPaid → mount → create order → <Checkout orderId>.
+  // Shape matches examples/hello-fruit/server/node-express (guestCheckout + host order store).
   assert.match(quickstart, /## 3\. Price the order/);
   assert.match(quickstart, /## 4\. Handle payment/);
   assert.match(quickstart, /## 5\. Mount the routes/);
   assert.match(quickstart, /openReceiveExpress/);
   assert.match(quickstart, /createOpenReceive/);
-  assert.match(quickstart, /getCheckoutAmount/);
+  assert.match(quickstart, /prepareCheckout/);
+  assert.match(quickstart, /createHostOrderStore/);
+  assert.match(quickstart, /requestPrepare|resume/);
+  assert.match(quickstart, /guestCheckout\(\)/);
   assert.match(quickstart, /onPaid/);
   assert.match(quickstart, /amount:\s*\{\s*currency:\s*"USD"/);
   assert.match(quickstart, /from "openreceive\/express"/);
+  assert.match(quickstart, /from "openreceive\/node"/);
+  assert.match(quickstart, /from "@openreceive\/http"/);
   assert.match(quickstart, /<Checkout orderId=/);
   assert.match(quickstart, /Your app creates the order/);
+  assert.match(quickstart, /\/openreceive\/prepare|requestPrepare/);
+  assert.match(quickstart, /orders\.persist/);
   // Price and onPaid are defined before the mount step.
   const priceIdx = quickstart.indexOf("## 3. Price the order");
   const paidIdx = quickstart.indexOf("## 4. Handle payment");
@@ -180,7 +188,7 @@ test("authorization guide shows mount presets and advanced service error handlin
   const source = readFileSync(authorizationDocs, "utf8");
   assert.match(source, /guestCheckout/);
   assert.match(source, /withUser/);
-  assert.match(source, /getCheckoutAmount/);
+  assert.match(source, /prepareCheckout/);
   assert.match(source, /OpenReceiveServiceError/);
   assert.match(source, /orderId:/);
   assert.match(source, /getOrCreateCheckout/);

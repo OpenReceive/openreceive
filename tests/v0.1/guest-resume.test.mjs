@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   createGuestCheckoutResume,
   createGuestOrderFetcher,
+  enterCheckoutResumePath,
 } from "../../packages/js/browser/src/internal.ts";
 
 /** @typedef {{ id: string; total: string }} DemoOrder */
@@ -62,19 +63,58 @@ test("createGuestCheckoutResume remembers and loads host orders from sessionStor
   delete globalThis.sessionStorage;
 });
 
-test("createGuestOrderFetcher reads { order } JSON from host GET", async () => {
+test("createGuestOrderFetcher reads { summary } JSON from shipped summary route", async () => {
   const fetchOrder = createGuestOrderFetcher({
     parseOrder,
     fetch: async (url) => {
-      assert.equal(url, "/orders/ord_2");
+      assert.equal(url, "/openreceive/orders/ord_2/summary");
       return {
         ok: true,
         status: 200,
-        json: async () => ({ order: { id: "ord_2", total: "1.00" } }),
+        json: async () => ({ order_id: "ord_2", summary: { id: "ord_2", total: "1.00" } }),
       };
     },
   });
   assert.deepEqual(await fetchOrder("ord_2"), { id: "ord_2", total: "1.00" });
+});
+
+test("createGuestOrderFetcher still accepts legacy { order } JSON", async () => {
+  const fetchOrder = createGuestOrderFetcher({
+    parseOrder,
+    orderUrl: (orderId) => `/orders/${encodeURIComponent(orderId)}`,
+    fetch: async (url) => {
+      assert.equal(url, "/orders/ord_legacy");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ order: { id: "ord_legacy", total: "3.00" } }),
+      };
+    },
+  });
+  assert.deepEqual(await fetchOrder("ord_legacy"), { id: "ord_legacy", total: "3.00" });
+});
+
+test("enterCheckoutResumePath pushes /checkout/:orderId unless routeOrderId is set", () => {
+  const pushes = [];
+  globalThis.location = { pathname: "/" };
+  globalThis.history = {
+    pushState: (_state, _title, path) => {
+      pushes.push(path);
+      globalThis.location.pathname = path;
+    },
+  };
+
+  enterCheckoutResumePath("ord_push");
+  assert.deepEqual(pushes, ["/checkout/ord_push"]);
+
+  enterCheckoutResumePath("ord_push");
+  assert.deepEqual(pushes, ["/checkout/ord_push"]);
+
+  enterCheckoutResumePath("ord_next", { routeOrderId: "ord_next" });
+  assert.deepEqual(pushes, ["/checkout/ord_push"]);
+
+  delete globalThis.location;
+  delete globalThis.history;
 });
 
 test("createGuestCheckoutResume loadOrderForResume falls back to fetchOrder", async () => {

@@ -5,7 +5,7 @@ your session, cookie, JWT, or header — it calls the `authorize` hook you provi
 and obeys the return value.
 
 You almost never need to know the path table. Price orders with
-`getCheckoutAmount`, fulfill with `onPaid`, and render `<Checkout orderId />`.
+`prepareCheckout`, fulfill with `onPaid`, and render `<Checkout orderId />`.
 Capability tokens are minted and attached for you.
 
 ## Recommended: mount + a preset
@@ -19,7 +19,7 @@ const service = await createOpenReceive({ onPaid });
 // Guest checkout (no accounts): anonymous create; reads gated for you.
 app.use(openReceiveExpress({
   service,
-  getCheckoutAmount,
+  prepareCheckout,
   authorize: guestCheckout(),
   // optional admin sweep:
   // authorize: guestCheckout({ allowSweep: (ctx) => isAdmin(ctx.request) }),
@@ -28,7 +28,7 @@ app.use(openReceiveExpress({
 // Or a logged-in app: your session owns the order.
 app.use(openReceiveExpress({
   service,
-  getCheckoutAmount,
+  prepareCheckout,
   authorize: withUser((request) => currentUserFromMySession(request), {
     ownsOrder: (user, ctx) => orderBelongsTo(user, ctx.resource.order_id),
     isAdmin: (user) => user.admin,
@@ -41,10 +41,8 @@ anonymous create is allowed, order reads require the per-order token the
 checkout component carries, and admin sweep is denied.
 
 `guestCheckout()` authorizes polls and swap/refund actions for whoever holds the
-per-order capability token. It does **not** remember which order the browser should
-open after a refresh — your app must keep `order_id` (URL resume is the usual
-pattern on content sites without accounts). See
-[Guest checkout resume](frontend-checkout.md#guest-checkout-resume).
+per-order capability token. For guest resume after refresh, pass `resume` on
+`<Checkout orderId />` — see [Frontend Checkout](frontend-checkout.md).
 
 ### Rails
 
@@ -55,7 +53,7 @@ hooks in the initializer:
 ```ruby
 OpenReceive.configure do |config|
   config.parent_controller = "ApplicationController"
-  config.get_checkout_amount = get_checkout_amount
+  config.prepare_checkout = prepare_checkout
   config.authorize = OpenReceive::Server::Presets.guest_checkout
   # or: OpenReceive::Server::Presets.with_user(...)
 end
@@ -74,12 +72,12 @@ directly.
 
 | Hook | Required? | Job |
 | --- | --- | --- |
-| `getCheckoutAmount` / `get_checkout_amount` | **Yes** | Sole price authority on create. Return `{ amount: … }` or `null` → 404. Client `amount`/`sats`/`usd` on the create body are rejected. |
+| `prepareCheckout` / `prepare_checkout` | **Yes** | Sole price authority on POST `/prepare`. Return `{ amount, orderId?, summary?, metadata? }` or `null` → 404. Create-checkout reads the persisted amount; client `amount`/`sats`/`usd` on the create body are rejected. |
 | `authorize` | No (safe default) | Allow/deny by action. Use a preset unless you have a custom policy. |
 | `onPaid` | Recommended | Idempotent fulfillment after backend-verified settlement. |
 | `rateLimit` | Optional | Extra protection on anonymous create. |
 
-Tip-jar / payer-chosen amounts still go **through** `getCheckoutAmount` (read
+Tip-jar / payer-chosen amounts still go **through** `prepareCheckout` (read
 `metadata` or your session, validate, return). That keeps "trust the client" an
 explicit host decision.
 
@@ -249,6 +247,6 @@ export async function POST(request: Request) {
 ```
 
 For App Router mounts of the shipped routes, use
-`openReceiveNextHandlers({ service, getCheckoutAmount })` under
+`openReceiveNextHandlers({ service, prepareCheckout })` under
 `app/openreceive/[...openreceive]/route.ts` — see the
 [Node Quickstart](quickstart-node.md).

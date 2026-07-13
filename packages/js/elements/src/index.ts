@@ -28,6 +28,7 @@ import {
   createCheckoutSnapshotFromDisplayData,
   createCheckoutStateFromDisplayData,
   createCheckoutStateEvent,
+  createCheckoutSummaryEvent,
   createOpenReceivePaymentWizardModel,
   createOpenReceivePaymentWizardSelection,
   createCheckoutProviderCopyEvent,
@@ -43,6 +44,7 @@ import {
   createOpenReceiveWizardRouteDisplays,
   createQrSvg,
   escapeOpenReceiveHtml,
+  enterCheckoutResumePath,
   formatOpenReceiveMsats,
   formatOpenReceiveAmountCaption,
   getOpenReceiveDefaultCountryCode,
@@ -82,6 +84,7 @@ import {
   parseOpenReceiveThemePreference,
   readOpenReceiveStoredCountryCode,
   requestCheckout,
+  requestOrderSummary,
   resolveOrderUrlFromPrefix,
   selectCheckoutDisplayInvoice,
   isReusableLightningInvoice,
@@ -1540,7 +1543,10 @@ export function defineOpenReceiveElements(
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.expiresAt,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderUrl,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme,
-        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentWizard
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentWizard,
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resume,
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePathPrefix,
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeOrderId,
       ];
     }
 
@@ -1589,6 +1595,7 @@ export function defineOpenReceiveElements(
       this.lightningRequested = false;
 
       try {
+        void this.resumeGuestSummary(prefix, orderId);
         // Lock amount without minting a payer Lightning invoice. Bitcoin selection mints later.
         const checkout = await requestCheckout({
           prefix,
@@ -1609,6 +1616,40 @@ export function defineOpenReceiveElements(
         this.dispatchError(error);
       } finally {
         this.creating = false;
+      }
+    }
+
+    /** Guest resume: fetch summary + optional History API URL sync when `resume` is set. */
+    private async resumeGuestSummary(prefix: string, orderId: string): Promise<void> {
+      const resume = parseOpenReceiveBooleanAttribute(
+        this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resume),
+      );
+      if (!resume) return;
+
+      const resumePathPrefix =
+        this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePathPrefix) ?? "/checkout";
+      const routeOrderId =
+        this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeOrderId) ?? undefined;
+      enterCheckoutResumePath(orderId, {
+        pathPrefix: resumePathPrefix,
+        ...(routeOrderId === undefined || routeOrderId.length === 0 ? {} : { routeOrderId }),
+      });
+
+      try {
+        const result = await requestOrderSummary({
+          prefix,
+          orderId,
+          fetch: globalThis.fetch,
+        });
+        if (result === undefined || !("summary" in result)) return;
+        this.dispatchEvent(
+          createCheckoutSummaryEvent({
+            order_id: result.order_id,
+            summary: result.summary,
+          }),
+        );
+      } catch {
+        // Resume is best-effort; create-checkout remains the settlement path.
       }
     }
 

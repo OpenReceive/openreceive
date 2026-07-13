@@ -7,7 +7,8 @@ export type MaybePromise<T> = T | Promise<T>;
 
 export type OpenReceiveIdempotencyOperation =
   | "invoice.create"
-  | "invoice.renew";
+  | "invoice.renew"
+  | "checkout.lock";
 
 export type OpenReceiveSettlementActionState =
   | "pending"

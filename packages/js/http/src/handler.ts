@@ -4,7 +4,6 @@ import type {
   OpenReceive,
   CheckoutAmountSource,
   CreateCheckoutRequest,
-  GetCheckoutAmount,
   OrderStatus,
   SwapAttempt,
   SwapQuoteResponse,
@@ -17,6 +16,8 @@ import {
   type OpenReceiveRateLimit,
 } from "./authorize.ts";
 import { createRequestId, errorResponse, jsonResponse, OpenReceiveHttpError } from "./errors.ts";
+import type { PrepareCheckout } from "./prepare-checkout.ts";
+import { createPreparedOrderStore, type PreparedOrderStore } from "./prepared-order-store.ts";
 import { type MatchedRoute, matchRoute, normalizePrefix } from "./router.ts";
 import {
   toHttpCheckout,
@@ -47,16 +48,16 @@ function applyOrderAmount(
   return { ...base, amount: resolved.amount };
 }
 
-/** Options for {@link createOpenReceiveHttpHandler}. `service` and `getCheckoutAmount` are required. */
+/** Options for {@link createOpenReceiveHttpHandler}. `service` and `prepareCheckout` are required. */
 export interface CreateOpenReceiveHttpHandlerOptions {
   /** The host's already-constructed OpenReceive service (created with the host's DB + wallet). */
   readonly service: OpenReceive;
   /**
-   * Host server-side pricing hook for POST create-checkout only (not GET order status).
-   * Required: the create-checkout route obtains the price ONLY from this hook.
-   * Omitting it throws at construction.
+   * Host hook for POST /prepare. Validates the cart / looks up orders and returns the authoritative
+   * amount (and optional summary). Required: create-checkout reads that amount from prepare persist
+   * and never trusts a client-supplied price.
    */
-  readonly getCheckoutAmount: GetCheckoutAmount;
+  readonly prepareCheckout: PrepareCheckout;
   /** Host authorization policy. Defaults to the token-gated Tier policy (Tier 3 denied). */
   readonly authorize?: OpenReceiveAuthorize;
   /** Host rate-limit hook. When omitted, no rate limiting is applied. */
@@ -81,7 +82,8 @@ interface HandlerRuntime {
   readonly tokens: OrderAccessTokenManager;
   readonly authorize: OpenReceiveAuthorize;
   readonly rateLimit?: OpenReceiveRateLimit;
-  readonly getCheckoutAmount: GetCheckoutAmount;
+  readonly prepareCheckout: PrepareCheckout;
+  readonly preparedOrders: PreparedOrderStore;
   readonly prefix: string;
 }
 
@@ -105,19 +107,20 @@ export function createOpenReceiveHttpHandler(
     throw new TypeError("createOpenReceiveHttpHandler requires a `service`.");
   }
 
-  if (options.getCheckoutAmount === undefined) {
+  if (options.prepareCheckout === undefined) {
     throw new TypeError(
-      "createOpenReceiveHttpHandler requires a `getCheckoutAmount` hook — the create-checkout route " +
-        "never trusts a client-supplied price.",
+      "createOpenReceiveHttpHandler requires a `prepareCheckout` hook — POST /prepare is the " +
+        "sole price authority; create-checkout never trusts a client-supplied price.",
     );
   }
-  const getCheckoutAmount = options.getCheckoutAmount;
+  const prepareCheckout = options.prepareCheckout;
 
   const prefix = normalizePrefix(options.prefix ?? "/openreceive");
   const tokens =
     options.tokens ??
     createOrderAccessTokenManager(options.service.store, { namespace: options.service.namespace });
   const authorize = options.authorize ?? createDefaultAuthorize();
+  const preparedOrders = createPreparedOrderStore(options.service.store);
 
   if (options.authorize === undefined) {
     console.warn(
@@ -130,7 +133,8 @@ export function createOpenReceiveHttpHandler(
     tokens,
     authorize,
     rateLimit: options.rateLimit,
-    getCheckoutAmount,
+    prepareCheckout,
+    preparedOrders,
     prefix,
   };
 
@@ -161,12 +165,16 @@ async function dispatch(
   }
 
   switch (route.kind) {
+    case "checkout.prepare":
+      return await handlePrepareCheckout(runtime, request, requestId);
     case "checkout.create":
       return await handleCreateCheckout(runtime, request, requestId);
     case "checkout.read":
       return await handleGetCheckout(runtime, request, route, requestId);
     case "order.action":
       return await handleOrderAction(runtime, request, route, requestId);
+    case "order.summary":
+      return await handleOrderSummary(runtime, request, route, requestId);
     case "swap.options":
       return await handleSwapOptions(runtime, request, route, requestId);
     case "rates":
@@ -179,6 +187,57 @@ async function dispatch(
 // ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
+
+async function handlePrepareCheckout(
+  runtime: HandlerRuntime,
+  request: Request,
+  requestId: string,
+): Promise<Response> {
+  const body = await readJsonBody(request);
+  const token = extractToken(request);
+
+  await guard(runtime, "checkout.prepare", request, {}, token);
+
+  let prepared;
+  try {
+    prepared = await runtime.prepareCheckout({ body, request });
+  } catch (error) {
+    if (error instanceof OpenReceiveHttpError) throw error;
+    const message = error instanceof Error ? error.message : "prepareCheckout rejected the request.";
+    throw new OpenReceiveHttpError(400, "INVALID_REQUEST", message);
+  }
+
+  if (prepared === null) {
+    throw new OpenReceiveHttpError(404, "NOT_FOUND", "Order not found.");
+  }
+  if (!isPrepareResult(prepared)) {
+    throw new OpenReceiveHttpError(
+      400,
+      "INVALID_REQUEST",
+      "prepareCheckout must return { amount: { sats } | { currency, value } } (or null for not found).",
+    );
+  }
+
+  const orderId =
+    typeof prepared.orderId === "string" && prepared.orderId.length > 0
+      ? prepared.orderId
+      : crypto.randomUUID();
+
+  await runtime.preparedOrders.persist(orderId, {
+    amount: prepared.amount,
+    ...(prepared.summary === undefined ? {} : { summary: prepared.summary }),
+    ...(prepared.metadata === undefined ? {} : { metadata: prepared.metadata }),
+  });
+
+  return jsonResponse(
+    201,
+    {
+      order_id: orderId,
+      ...(prepared.summary === undefined ? {} : { summary: prepared.summary }),
+    },
+    requestId,
+  );
+}
 
 async function handleCreateCheckout(
   runtime: HandlerRuntime,
@@ -193,34 +252,18 @@ async function handleCreateCheckout(
 
   // Client prices are never trusted on this route. `amount` is rejected so a tampered
   // client cannot quietly underpay; tip-jar / donation hosts honor a payer-chosen amount inside
-  // getCheckoutAmount (typically via metadata) and return it explicitly.
+  // prepareCheckout (typically via the prepare body) and persist it explicitly.
   rejectClientAmountFields(body);
 
-  const metadata = readMetadata(body);
-  let resolved: CheckoutAmountSource | null;
-  try {
-    resolved = await runtime.getCheckoutAmount({
-      orderId,
-      metadata,
-      request,
-    });
-  } catch (error) {
-    if (error instanceof OpenReceiveHttpError) throw error;
-    const message = error instanceof Error ? error.message : "getCheckoutAmount rejected the request.";
-    throw new OpenReceiveHttpError(400, "INVALID_REQUEST", message);
-  }
-
-  if (resolved === null) {
+  const stored = await runtime.preparedOrders.read(orderId);
+  if (stored === null) {
     throw new OpenReceiveHttpError(404, "NOT_FOUND", "Order not found.");
   }
-  if (!isAmountSource(resolved)) {
-    throw new OpenReceiveHttpError(
-      400,
-      "INVALID_REQUEST",
-      "getCheckoutAmount must return { amount: { sats } | { currency, value } } (or null for not found).",
-    );
-  }
+  const resolved: CheckoutAmountSource = {
+    amount: stored.amount as CheckoutAmountSource["amount"],
+  };
 
+  const metadata = readMetadata(body);
   const memo = readString(body.memo);
   const descriptionHash = readString(body.description_hash ?? body.descriptionHash);
   const mintLightning = body.mint_lightning === false || body.mintLightning === false ? false : true;
@@ -248,6 +291,31 @@ async function handleCreateCheckout(
   }
 
   return jsonResponse(201, { checkout }, requestId);
+}
+
+async function handleOrderSummary(
+  runtime: HandlerRuntime,
+  request: Request,
+  route: Extract<MatchedRoute, { kind: "order.summary" }>,
+  requestId: string,
+): Promise<Response> {
+  const token = extractToken(request);
+  const orderId = route.orderId;
+  await guard(runtime, "order.summary", request, { order_id: orderId }, token);
+
+  const stored = await runtime.preparedOrders.read(orderId);
+  if (stored === null) {
+    throw new OpenReceiveHttpError(404, "NOT_FOUND", "Order not found.");
+  }
+
+  return jsonResponse(
+    200,
+    {
+      order_id: orderId,
+      ...(stored.summary === undefined ? {} : { summary: stored.summary }),
+    },
+    requestId,
+  );
 }
 
 /**
@@ -578,13 +646,18 @@ function rejectClientAmountFields(body: Record<string, unknown>): void {
       throw new OpenReceiveHttpError(
         400,
         "INVALID_REQUEST",
-        `Create checkout does not accept client-supplied '${key}'. Provide the price via getCheckoutAmount.`,
+        `Create checkout does not accept client-supplied '${key}'. Provide the price via prepareCheckout.`,
       );
     }
   }
 }
 
-function isAmountSource(value: unknown): value is CheckoutAmountSource {
+function isPrepareResult(value: unknown): value is {
+  amount: CheckoutAmountSource["amount"];
+  orderId?: string;
+  summary?: unknown;
+  metadata?: Record<string, unknown>;
+} {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
   if (!("amount" in record) || record.amount === null || typeof record.amount !== "object") {

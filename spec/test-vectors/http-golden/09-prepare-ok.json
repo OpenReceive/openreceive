@@ -1,0 +1,12 @@
+{
+  "name": "prepare-ok",
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/prepare",
+    "headers": { "content-type": "application/json" },
+    "body": { "cart": { "sku": "demo" } }
+  },
+  "expected": {
+    "status": 201
+  }
+}

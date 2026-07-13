@@ -5,10 +5,16 @@
  * - Put the public `order_id` in the URL (`/checkout/:orderId`) so refresh/share works.
  * - Keep the OpenReceive capability token out of the URL (cookie + sessionStorage handle it).
  * - Mirror an optional host order summary in sessionStorage for instant same-tab restore;
- *   fall back to a host `fetchOrder` when storage is empty (new tab with the same link).
+ *   fall back to `GET {prefix}/orders/{orderId}/summary` (or a host `fetchOrder`) when
+ *   storage is empty (new tab with the same link).
+ *
+ * Prefer baking resume into `<Checkout resume>` / `<openreceive-checkout resume>` when that
+ * is enough. Keep this module for hosts that need custom storage keys or URL shapes.
  *
  * The capability token store (`order-token.ts`) is separate and already automatic.
  */
+
+import { OPENRECEIVE_DEFAULT_PREFIX } from "./ui.ts";
 
 export interface GuestCheckoutResumeOptions<TOrder> {
   /**
@@ -131,10 +137,7 @@ export function createGuestCheckoutResume<TOrder>(
   }
 
   function enterCheckout(orderId: string): void {
-    const path = checkoutPath(orderId);
-    if (typeof globalThis.location === "undefined") return;
-    if (globalThis.location.pathname === path) return;
-    globalThis.history.pushState({ openreceiveCheckout: orderId }, "", path);
+    enterCheckoutResumePath(orderId, { pathPrefix });
   }
 
   function leaveCheckout(): void {
@@ -171,24 +174,58 @@ export function createGuestCheckoutResume<TOrder>(
 }
 
 /**
- * Common host shape: `GET /orders/:orderId` → `{ order: TOrder }`.
+ * Push `/checkout/:orderId` (or a custom path prefix) via the History API when not already
+ * there. Used by `<Checkout resume>` and hosts that sync the URL after prepare.
+ * No-ops when `routeOrderId` is provided (app router already owns the URL).
+ */
+export function enterCheckoutResumePath(
+  orderId: string,
+  options: {
+    readonly pathPrefix?: string;
+    /** When set, skip History API sync (Next.js / file-based routes own the URL). */
+    readonly routeOrderId?: string;
+  } = {},
+): void {
+  if (options.routeOrderId !== undefined) return;
+  if (orderId.length === 0) return;
+  const pathPrefix = normalizePathPrefix(options.pathPrefix ?? "/checkout");
+  const path = `${pathPrefix}/${encodeURIComponent(orderId)}`;
+  if (typeof globalThis.location === "undefined") return;
+  if (globalThis.location.pathname === path) return;
+  globalThis.history.pushState({ openreceiveCheckout: orderId }, "", path);
+}
+
+/**
+ * Default guest resume fetch: `GET {prefix}/orders/:orderId/summary` → `{ order_id, summary? }`.
+ * Also accepts a legacy host shape `{ order: TOrder }` for custom summary routes.
  * Pass the result as `fetchOrder` to {@link createGuestCheckoutResume}.
  */
 export function createGuestOrderFetcher<TOrder>(options: {
   readonly parseOrder: (value: unknown) => TOrder | undefined;
-  /** Build the fetch URL. Default: `/orders/${encodeURIComponent(orderId)}`. */
+  /**
+   * Build the fetch URL. Default:
+   * `{prefix}/orders/${encodeURIComponent(orderId)}/summary`
+   * with `prefix` defaulting to {@link OPENRECEIVE_DEFAULT_PREFIX}.
+   */
   readonly orderUrl?: (orderId: string) => string;
+  /** Mount prefix used when `orderUrl` is omitted. Default `/openreceive`. */
+  readonly prefix?: string;
   readonly fetch?: typeof globalThis.fetch;
 }): (orderId: string) => Promise<TOrder | undefined> {
   const fetchFn = options.fetch ?? globalThis.fetch;
+  const mountPrefix = (options.prefix ?? OPENRECEIVE_DEFAULT_PREFIX).replace(/\/+$/, "");
   const orderUrl =
-    options.orderUrl ?? ((orderId: string) => `/orders/${encodeURIComponent(orderId)}`);
+    options.orderUrl ??
+    ((orderId: string) => `${mountPrefix}/orders/${encodeURIComponent(orderId)}/summary`);
   return async (orderId: string): Promise<TOrder | undefined> => {
     const response = await fetchFn(orderUrl(orderId));
     if (response.status === 404 || !response.ok) return undefined;
     const body = (await response.json()) as unknown;
-    if (typeof body !== "object" || body === null || !("order" in body)) return undefined;
-    return options.parseOrder((body as { order: unknown }).order);
+    if (typeof body !== "object" || body === null) return undefined;
+    const record = body as Record<string, unknown>;
+    if ("summary" in record) return options.parseOrder(record.summary);
+    if ("order" in record) return options.parseOrder(record.order);
+    return undefined;
   };
 }
 

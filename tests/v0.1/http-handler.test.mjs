@@ -34,8 +34,21 @@ async function makeService(overrides = {}) {
   });
 }
 
-// Default pricing for tests: 200 sats unless a test supplies its own getCheckoutAmount.
-const defaultGetCheckoutAmount = () => ({ amount: { sats: 200 } });
+// Default prepare for tests: 200 sats; honor body.order_id when provided.
+const defaultPrepareCheckout = ({ body }) => {
+  const record = body !== null && typeof body === "object" && !Array.isArray(body) ? body : {};
+  const orderId =
+    typeof record.order_id === "string" && record.order_id.length > 0
+      ? record.order_id
+      : typeof record.orderId === "string" && record.orderId.length > 0
+        ? record.orderId
+        : undefined;
+  return {
+    amount: { sats: 200 },
+    ...(orderId === undefined ? {} : { orderId }),
+    ...(record.summary === undefined ? {} : { summary: record.summary }),
+  };
+};
 
 // Handlers warn when authorize is omitted; silence that noise here.
 function createHandlerSilently(options) {
@@ -43,7 +56,7 @@ function createHandlerSilently(options) {
   console.warn = () => {};
   try {
     return createOpenReceiveHttpHandler({
-      getCheckoutAmount: defaultGetCheckoutAmount,
+      prepareCheckout: defaultPrepareCheckout,
       ...options,
     });
   } finally {
@@ -65,7 +78,21 @@ function jsonRequest(method, path, { body, headers } = {}) {
   return new Request(`${BASE}${path}`, init);
 }
 
+async function prepareOrder(handler, { orderId, body } = {}) {
+  const response = await handler(
+    jsonRequest("POST", "/openreceive/prepare", {
+      body: {
+        ...(body ?? {}),
+        ...(orderId === undefined ? {} : { order_id: orderId }),
+      },
+    }),
+  );
+  assert.equal(response.status, 201, "prepare should return 201");
+  return await response.json();
+}
+
 async function createCheckout(handler, { orderId, token } = {}) {
+  await prepareOrder(handler, { orderId });
   const response = await handler(
     jsonRequest("POST", "/openreceive/checkouts", {
       body: { order_id: orderId },
@@ -88,7 +115,11 @@ test("checkout.create returns 201 with a checkout and a one-time order_access_to
   assert.ok(first.order_access_token.length > 0);
 
   // A second checkout for the SAME order replays the order and returns no token.
-  const second = await createCheckout(handler, { orderId: "order-token-1" });
+  const secondResponse = await handler(
+    jsonRequest("POST", "/openreceive/checkouts", { body: { order_id: "order-token-1" } }),
+  );
+  assert.equal(secondResponse.status, 201);
+  const second = await secondResponse.json();
   assert.equal(second.order_access_token, undefined);
   assert.equal(second.checkout.checkout_id, first.checkout.checkout_id);
 });
@@ -189,13 +220,20 @@ test("a custom authorize policy governs order.read (deny -> 403, allow -> 200)",
   assert.equal((await allowed.json()).order_id, "order-custom-allow");
 });
 
-test("getCheckoutAmount is the sole price authority; client amount fields are rejected", async () => {
+test("prepareCheckout is the sole price authority; client amount fields are rejected", async () => {
   const service = await makeService();
   const handler = createHandlerSilently({
     service,
-    getCheckoutAmount: () => ({ amount: { currency: "USD", value: "1.00" } }),
+    prepareCheckout: ({ body }) => {
+      const record = body !== null && typeof body === "object" ? body : {};
+      return {
+        orderId: typeof record.order_id === "string" ? record.order_id : "order-priced",
+        amount: { currency: "USD", value: "1.00" },
+      };
+    },
   });
 
+  await prepareOrder(handler, { orderId: "order-forged" });
   const rejected = await handler(
     jsonRequest("POST", "/openreceive/checkouts", {
       body: { order_id: "order-forged", usd: "999999" },
@@ -204,6 +242,7 @@ test("getCheckoutAmount is the sole price authority; client amount fields are re
   assert.equal(rejected.status, 400);
   assert.equal((await rejected.json()).code, "INVALID_REQUEST");
 
+  await prepareOrder(handler, { orderId: "order-priced" });
   const response = await handler(
     jsonRequest("POST", "/openreceive/checkouts", {
       body: { order_id: "order-priced" },
@@ -217,28 +256,52 @@ test("getCheckoutAmount is the sole price authority; client amount fields are re
   assert.equal(checkout.fiat.value, "1.00");
 });
 
-test("getCheckoutAmount null returns 404 and throw returns 400", async () => {
+test("prepareCheckout null returns 404 and throw returns 400; create without prepare is 404", async () => {
   const missing = createHandlerSilently({
     service: await makeService(),
-    getCheckoutAmount: () => null,
+    prepareCheckout: () => null,
   });
   const notFound = await missing(
-    jsonRequest("POST", "/openreceive/checkouts", { body: { order_id: "missing" } }),
+    jsonRequest("POST", "/openreceive/prepare", { body: { cart: {} } }),
   );
   assert.equal(notFound.status, 404);
   assert.equal((await notFound.json()).code, "NOT_FOUND");
 
   const invalid = createHandlerSilently({
     service: await makeService(),
-    getCheckoutAmount: () => {
+    prepareCheckout: () => {
       throw new Error("bad tip");
     },
   });
   const bad = await invalid(
-    jsonRequest("POST", "/openreceive/checkouts", { body: { order_id: "bad" } }),
+    jsonRequest("POST", "/openreceive/prepare", { body: { cart: {} } }),
   );
   assert.equal(bad.status, 400);
   assert.equal((await bad.json()).code, "INVALID_REQUEST");
+
+  const unprepared = createHandlerSilently({ service: await makeService() });
+  const createMissing = await unprepared(
+    jsonRequest("POST", "/openreceive/checkouts", { body: { order_id: "never-prepared" } }),
+  );
+  assert.equal(createMissing.status, 404);
+  assert.equal((await createMissing.json()).code, "NOT_FOUND");
+});
+
+test("order.summary returns prepare summary without a capability token", async () => {
+  const handler = await buildHandler();
+  const prepared = await prepareOrder(handler, {
+    orderId: "order-summary-1",
+    body: { summary: { label: "fruit" } },
+  });
+  assert.equal(prepared.order_id, "order-summary-1");
+  assert.deepEqual(prepared.summary, { label: "fruit" });
+
+  const summary = await handler(jsonRequest("GET", "/openreceive/orders/order-summary-1/summary"));
+  assert.equal(summary.status, 200);
+  assert.deepEqual(await summary.json(), {
+    order_id: "order-summary-1",
+    summary: { label: "fruit" },
+  });
 });
 
 test("error responses conform to the shared shape (enum code, non-empty message, request id)", async () => {
@@ -296,11 +359,11 @@ test("swap-options and order swap actions expose the disabled-swap shape", async
   assert.equal((await denied.json()).code, "UNAUTHORIZED");
 });
 
-test("the handler requires getCheckoutAmount and warns only about missing authorize", async () => {
+test("the handler requires prepareCheckout and warns only about missing authorize", async () => {
   const service = await makeService();
   assert.throws(
     () => createOpenReceiveHttpHandler({ service }),
-    /getCheckoutAmount/,
+    /prepareCheckout/,
   );
 
   const warnings = [];
@@ -308,7 +371,7 @@ test("the handler requires getCheckoutAmount and warns only about missing author
   console.warn = (message) => warnings.push(message);
   let handler;
   try {
-    handler = createOpenReceiveHttpHandler({ service, getCheckoutAmount: defaultGetCheckoutAmount });
+    handler = createOpenReceiveHttpHandler({ service, prepareCheckout: defaultPrepareCheckout });
   } finally {
     console.warn = original;
   }
@@ -467,6 +530,7 @@ test("withUser gates sweep on isAdmin", async () => {
 
 test("checkout.create sets a path-scoped httpOnly order-token cookie", async () => {
   const handler = await buildHandler();
+  await prepareOrder(handler, { orderId: "order-cookie-1" });
   const response = await handler(
     jsonRequest("POST", "/openreceive/checkouts", {
       body: { order_id: "order-cookie-1" },
@@ -511,6 +575,9 @@ test("a same-origin read authorizes via the order-token cookie alone (no Authori
 
 test("the order-token cookie is Secure over https (direct or forwarded) and not over http", async () => {
   const handler = await buildHandler();
+  await prepareOrder(handler, { orderId: "order-cookie-https" });
+  await prepareOrder(handler, { orderId: "order-cookie-fwd" });
+  await prepareOrder(handler, { orderId: "order-cookie-http" });
 
   const httpsResponse = await handler(
     new Request("https://openreceive.test/openreceive/checkouts", {

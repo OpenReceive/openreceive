@@ -11,8 +11,8 @@ module OpenReceive
   #
   #     def openreceive_authorize(context)
   #       case context[:action]
-  #       when "checkout.create" then true
-  #       when "invoice.sweep"   then current_user&.admin?
+#       when "checkout.prepare", "checkout.create", "order.summary" then true
+#       when "invoice.sweep"   then current_user&.admin?
   #       else current_user&.owns_order?(context[:order_id])
   #       end
   #     end

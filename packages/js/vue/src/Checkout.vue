@@ -16,13 +16,18 @@ const props = withDefaults(
     // Snapshot mode: pass a `checkout` to render it directly (backward compatible).
     // Create mode: omit `checkout` and pass `orderId` (+ optional `prefix`); the underlying
     // <openreceive-checkout> element creates the checkout, then renders and polls itself.
+    // With `resume`, also fetches GET …/orders/{id}/summary and emits `openreceive-summary`.
     checkout?: CheckoutSnapshot;
     orderId?: string;
     prefix?: string;
     metadata?: Record<string, unknown>;
     orderUrl?: string;
+    resume?: boolean;
+    resumePathPrefix?: string;
+    routeOrderId?: string;
     onSettled?: (event: Event) => void;
     onStartOver?: (event: Event) => void;
+    onSummary?: (event: Event) => void;
     options?: CheckoutShellOptions;
   }>(),
   {
@@ -41,8 +46,12 @@ const shell = computed(() =>
     ...(props.prefix === undefined ? {} : { prefix: props.prefix }),
     ...(props.metadata === undefined ? {} : { metadata: props.metadata }),
     ...(props.orderUrl === undefined ? {} : { orderUrl: props.orderUrl }),
+    ...(props.resume === undefined ? {} : { resume: props.resume }),
+    ...(props.resumePathPrefix === undefined ? {} : { resumePathPrefix: props.resumePathPrefix }),
+    ...(props.routeOrderId === undefined ? {} : { routeOrderId: props.routeOrderId }),
     ...(props.onSettled === undefined ? {} : { onSettled: props.onSettled }),
-    ...(props.onStartOver === undefined ? {} : { onStartOver: props.onStartOver })
+    ...(props.onStartOver === undefined ? {} : { onStartOver: props.onStartOver }),
+    ...(props.onSummary === undefined ? {} : { onSummary: props.onSummary })
   })
 );
 </script>

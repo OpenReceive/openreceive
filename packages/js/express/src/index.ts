@@ -19,7 +19,7 @@ import type {
 // next() for everything else, so it composes with the rest of your app:
 //
 //   app.use(express.json());
-//   app.use(openReceiveExpress({ service, authorize, getCheckoutAmount }));
+//   app.use(openReceiveExpress({ service, authorize, prepareCheckout }));
 
 export type { CreateOpenReceiveHttpHandlerOptions } from "@openreceive/http";
 export {

@@ -8,8 +8,7 @@ strings, wallet clients, and fulfillment on the backend.
 If your backend mounts OpenReceive (see the [Node](quickstart-node.md) /
 [Rails](quickstart-rails.md) quickstarts), the checkout component owns its whole
 lifecycle — it creates the checkout, polls status, and drives swaps. You pass
-only an order id; auth for those polls is handled for you, so there is no fetch
-to write and no token to manage.
+only an order id; auth for those polls is handled for you.
 
 Create-mode checkout (`orderId` / `order-id`) **defers the payer Lightning invoice**
 until the visitor selects Bitcoin. On mount it locks the amount (`mint_lightning: false`)
@@ -22,146 +21,75 @@ more than 60 seconds remaining before expiry.
 import { Checkout } from "@openreceive/react";
 import "@openreceive/react/styles.css";
 
-<Checkout orderId={order.id} onSettled={reloadOrder} onStartOver={returnToCart} />;
+<Checkout
+  orderId={order.id}
+  resume
+  onSummary={setOrder}
+  onSettled={reloadOrder}
+  onStartOver={returnToCart}
+/>;
 ```
 
 ```html
-<!-- Web component (used directly, or via Vue/Svelte/Angular below) -->
-<openreceive-checkout order-id="order-123"></openreceive-checkout>
+<!-- Web component -->
+<openreceive-checkout order-id="order-123" resume></openreceive-checkout>
 ```
 
 `prefix` defaults to `/openreceive` (where you mounted the router). Pass `prefix` /
 `order-id="…" prefix="…"` if you mounted elsewhere. Vue, Svelte, and Angular expose the same
-`orderId` + `prefix` inputs:
+`orderId` + `prefix` + `resume` inputs.
 
-```vue
-<Checkout :order-id="order.id" @settled="reloadOrder" />
+### Guest resume
+
+`resume` fetches `GET {prefix}/orders/{orderId}/summary` (no capability token) so a
+refresh can redraw your cart/total UI, and optionally syncs `/checkout/:orderId` via
+the History API (`resumePathPrefix`, default `/checkout`). On Next.js, pass
+`routeOrderId` from the page param instead of History API sync.
+
+Prepare first (server-priced), then navigate:
+
+```ts
+import { requestPrepare } from "@openreceive/browser";
+
+const { order_id, summary } = await requestPrepare({
+  body: { cart },
+});
 ```
-```svelte
-<Checkout orderId={order.id} onSettled={reloadOrder} />
-```
-```html
-<openreceive-angular-checkout [orderId]="order.id" [onSettled]="reloadOrder"></openreceive-angular-checkout>
-```
+
+Without a stable public `orderId` after refresh, the payer can lose the checkout
+surface even though payment or a swap refund may still be in progress.
 
 Prefer to create the checkout server-side and hand the snapshot to the component instead? Pass
 `checkout={snapshot}` (and an `orderUrl`) — that mode is unchanged and documented per framework
 below.
 
-## Host scaffolding
-
-Beyond the checkout widget, these helpers cover the usual app glue:
-
-| Concern | Package | API |
-| --- | --- | --- |
-| Guest resume URL + storage | `@openreceive/browser` | `createGuestCheckoutResume`, `useCheckoutResume` (React) |
-| Transaction details panel | `@openreceive/react` / `@openreceive/elements` | `<TransactionDetails>`, `createTransactionDetailsElement` |
-| Order amount persistence | `@openreceive/node` | `createHostOrderStore(service.store)` → `persist` / `createGetCheckoutAmount` |
-| Decimal money math | `@openreceive/core` | `parseDecimal`, `multiplyAmount`, `sumAmounts`, `fiatValueToSats`, `satsToFiatValue`, `convertAmountViaBtcRates` |
-| Console loggers | `@openreceive/node` / `@openreceive/browser` | `createOpenReceiveConsoleLogger`, `createOpenReceiveBrowserConsoleLogger` |
-| Host route errors | `@openreceive/http` / `@openreceive/express` | `mapHostRouteError`, `sendHostRouteError`, `hostError` |
-| NWC boot gate | `@openreceive/node` | `requireNwcFromConfig`, `readNwcFromConfig` |
-
-## Guest checkout resume
-
-`<Checkout orderId>` resumes Lightning status, swaps, and refunds from the server — but only if
-your app still knows which `orderId` to pass after a refresh. OpenReceive does **not** invent a
-host session for you.
-
-On content sites and other **no-account** flows, persist the public order id in the URL (recommended)
-or in host-owned storage:
-
-```text
-/prepare_order  →  /checkout/:orderId  →  <Checkout orderId={orderId} />
-```
-
-| Persist | Role |
-| --- | --- |
-| `order_id` in the URL (e.g. `/checkout/:orderId`) | Public handle; refreshable, shareable, emailable |
-| OpenReceive capability token | Secret; httpOnly cookie + `sessionStorage` on same-origin mounts — **never** put it in the URL |
-| Optional host order summary | `sessionStorage` or a host `GET /orders/:id` so your cart/total UI can redraw |
-
-Use the package helpers instead of copy-pasting URL + storage glue:
-
-```ts
-import { createGuestCheckoutResume, createGuestOrderFetcher } from "@openreceive/browser";
-import { useCheckoutResume, TransactionDetails, Checkout } from "@openreceive/react";
-
-const resume = createGuestCheckoutResume({
-  pathPrefix: "/checkout",
-  storageKeyPrefix: "myapp.order.",
-  orderIdOf: (order) => order.id,
-  parseOrder: parseMyOrder,
-  fetchOrder: createGuestOrderFetcher({ parseOrder: parseMyOrder }),
-});
-
-const { settledState, resuming, onState, onSettled, reset } = useCheckoutResume({
-  orderId: order?.id,
-  guest: resume,
-  syncUrl: true, // History API SPA; or pass routeOrderId for Next.js
-  onResumed: setOrder,
-  onSettled: () => markPaid(),
-});
-
-return (
-  <>
-    <Checkout orderId={order.id} onState={onState} onSettled={onSettled} />
-    <TransactionDetails state={settledState} />
-  </>
-);
-```
-
-Vanilla / elements hosts can use `createTransactionDetailsElement(state)` from
-`@openreceive/elements` for the same collapse-with-copy panel.
-
-Without that resume URL (or equivalent), a full page reload drops the payer back to the shop even
-though payment or a swap refund may still be in progress. Refunds are the sharp edge: a late or
-underpaid deposit can leave the attempt in `refund_required`, and the payer needs the same checkout
-surface to submit an address.
-
-Logged-in apps can instead reload “open orders” from the user session (`withUser`); guest sites
-should treat the checkout URL as the resume key. Hello Fruit demos follow this pattern — see
-[Authorization](authorization.md) for `guestCheckout()` and [Automated Swaps](automated-swaps.md)
-for the refund UI.
-
 ## Browser Helpers
 
 `@openreceive/browser` is the small app-facing browser entry:
 
-- `createGuestCheckoutResume(options)` / `createGuestOrderFetcher(options)` —
-  URL + sessionStorage glue for guest checkout resume (`/checkout/:orderId`).
+- `requestPrepare({ prefix, body })` — `POST {prefix}/prepare` → `{ order_id, summary? }`.
+- `requestOrderSummary({ prefix, orderId })` — `GET {prefix}/orders/{orderId}/summary`.
 - `status(invoiceLike)` returns `"pending"`, `"settled"`, `"expired"`, or
   `"failed"` from display-safe fields.
 - `requestCheckout(options)` posts to a checkout-creation URL. Against the
   **mounted** OpenReceive create route, pass `{ prefix, orderId }` (and optional
-  `memo` / `metadata`) — the body is `{ order_id }` only; the server's
-  `getCheckoutAmount` sets the price. Trusted service/library calls use
-  `{ amount: { currency, value } }` or `{ amount: { sats } }`. Top-level
-  `usd`/`sats` shortcuts are gone. Those shapes are for posting to **your own**
-  create URL that then calls `getOrCreateCheckout` with a trusted server-side
-  amount; they are rejected by the shipped create route.
+  `memo` / `metadata`) — the body is `{ order_id }` only; the server's prepared
+  amount sets the price.
 - `lightningUri(invoice)`, `qrSvg(invoice)`, and `qrPngDataUrl(invoice)` render
   BOLT11 payment data.
 - `copyInvoice({ invoice })` copies the BOLT11 string.
 - `openWallet({ invoice })` launches the visitor's installed Lightning wallet
-  app with this invoice prefilled. Call it from your own "Open in wallet"
-  button's click handler.
+  app with this invoice prefilled.
 - `createCheckoutController(options)` powers advanced headless checkout flows.
 
 These helpers reject NWC connection strings. They work with display-safe BOLT11
 invoice data only.
 
 ```ts
-import { status } from "@openreceive/browser";
+import { requestPrepare, status } from "@openreceive/browser";
 
-const response = await fetch("/create_order", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ cart })
-});
-const { order, checkout } = await response.json();
-
-console.log(status(checkout));
+const { order_id } = await requestPrepare({ body: { cart } });
+// <Checkout orderId={order_id} resume /> creates + polls; status() is for custom UIs.
 ```
 
 `status()` is a display helper. Your product still unlocks only after the
@@ -169,12 +97,22 @@ backend settlement hook runs.
 
 ## React
 
-The default checkout is one prop:
+The default checkout is one prop (plus `resume` for guest sites):
 
 ```tsx
 import { Checkout } from "@openreceive/react";
 import "@openreceive/react/styles.css";
 
+<Checkout
+  orderId={order.id}
+  resume
+  onSettled={() => showThankYou()}
+/>;
+```
+
+Or pass a pre-built snapshot:
+
+```tsx
 <Checkout
   checkout={checkout}
   orderUrl="/order"
@@ -182,24 +120,15 @@ import "@openreceive/react/styles.css";
 />;
 ```
 
-`orderUrl` is the single app route that authorizes the order and calls
-`getOrder` / `swapOptions` / `swapQuote` / `startSwap` / `refundSwap` (or mounts
-the shipped HTTP handler, which does the same). The component polls it for status
-and drives any automated-swap payment methods through it — see
-[Automated Swaps](./automated-swaps.md).
-
 `onSettled` is a UI hint from status refresh. It is useful for showing a thank-you panel,
 but fulfillment stays in the backend settlement hook.
 
-`orderUrl` is optional. If omitted, React does not invent an order route.
+`orderUrl` is optional when using a snapshot. If omitted, React does not invent an order route.
 Apps without one can render a static checkout surface without status refresh:
 
 ```tsx
 <Checkout checkout={checkout} polling={false} />;
 ```
-
-Use `orderUrl={false}` to disable URL-based status refresh while still
-allowing a custom `refreshStatus` function.
 
 For app-wide theme attributes and the packaged light/dark toggle:
 
@@ -207,7 +136,7 @@ For app-wide theme attributes and the packaged light/dark toggle:
 import { Checkout, ThemeScope } from "@openreceive/react";
 
 <ThemeScope as="main" className="page" themeToggle>
-  <Checkout checkout={checkout} />
+  <Checkout orderId={order.id} resume />
 </ThemeScope>
 ```
 
@@ -250,10 +179,7 @@ function CustomCheckout({ checkout }) {
 ```
 
 For a fully headless checkout, use `useCheckout({ checkout })` and render your
-own markup. The hook owns status refresh, countdown state, copy/open-wallet
-actions, retry, refresh, cancel, and the public `status` string.
-
-Apps with design systems can also pass `components`, `classNames`, or a render
+own markup. Apps with design systems can also pass `components`, `classNames`, or a render
 function as `children` to `Checkout`.
 
 ## Web Components
@@ -269,53 +195,32 @@ defineOpenReceiveElements();
 ```
 
 ```html
-<openreceive-theme-toggle
-  root-selector=".page"
-  checkout-selector="openreceive-checkout"
-  default-theme="light"
-></openreceive-theme-toggle>
-
 <openreceive-checkout
-  invoice-id="or_inv_..."
-  invoice="lnbc..."
-  payment-hash="..."
-  amount-msats="200000"
-  status="pending"
-  expires-at="1781943000"
-  order-url="/order"
-  theme="dark"
+  order-id="order-123"
+  resume
+  resume-path-prefix="/checkout"
 ></openreceive-checkout>
 ```
 
-The element renders QR, copy, open-wallet, waiting, countdown, and payment
-wizard UI from display-safe data. It dispatches UI events such as
+The element dispatches UI events such as
 `openreceive-copy`, `openreceive-open-wallet`, `openreceive-state`,
-`openreceive-settled`, and `openreceive-error`. Treat all frontend events as
+`openreceive-settled`, `openreceive-summary`, and `openreceive-error`. Treat all frontend events as
 display hints.
-
-Automated swap payment methods ride the same `order-url`: the element lists
-payable assets, creates deposit addresses, and drives refunds through that one
-route, and provider credentials and tokens stay server-side. Your route must
-authorize the caller before calling the typed service methods (or the mounted
-handler) — `order_id`, `attempt_id`, and refund nonces are not authentication
-credentials. See [Automated Swaps](./automated-swaps.md) for the backend route
-and refund flow.
 
 ## Vue
 
 ```vue
 <script setup lang="ts">
 import Checkout from "@openreceive/vue/checkout.vue";
-import type { Checkout as Checkout } from "@openreceive/vue";
 import "@openreceive/vue/styles.css";
 
-defineProps<{ checkout: Checkout }>();
+defineProps<{ orderId: string }>();
 </script>
 
 <template>
   <Checkout
-    :checkout="checkout"
-    order-url="/order"
+    :order-id="orderId"
+    resume
     :on-settled="showThankYou"
   />
 </template>
@@ -328,12 +233,12 @@ defineProps<{ checkout: Checkout }>();
   import Checkout from "@openreceive/svelte/checkout.svelte";
   import "@openreceive/svelte/styles.css";
 
-  export let checkout;
+  export let orderId;
 </script>
 
 <Checkout
-  {checkout}
-  orderUrl="/order"
+  {orderId}
+  resume
   onSettled={showThankYou}
 />
 ```
@@ -341,27 +246,7 @@ defineProps<{ checkout: Checkout }>();
 ## Angular
 
 `@openreceive/angular` provides a thin typed binding around the shared web
-component:
-
-- `@openreceive/angular/checkout-component`
-
-The common binding path creates the checkout element attributes and listeners
-from the same checkout object:
-
-```ts
-import {
-  createOpenReceiveAngularCheckoutShellBinding,
-  defineOpenReceiveElements
-} from "@openreceive/angular";
-
-defineOpenReceiveElements();
-
-const shell = createOpenReceiveAngularCheckoutShellBinding(checkout, {
-  rootSelector: ".page",
-  orderUrl: "/order",
-  onSettled: () => showThankYou()
-});
-```
+component. Pass `orderId`, `resume`, and optional `onSummary` / `onSettled` through the shell options.
 
 ## Styling
 
@@ -375,9 +260,6 @@ import "@openreceive/svelte/styles.css";
 import "@openreceive/angular/styles.css";
 ```
 
-Use the package you installed. The CSS does not contain receive-only NWC codes or
-live checkout authority.
-
 ## Browser Logs
 
 Checkout helpers accept an optional `logger(entry)` callback. Log entries are
@@ -388,11 +270,5 @@ and refund nonces (`refund_nonce_present` is logged instead).
 ```ts
 const logger = (entry) => console[entry.level]("[openreceive]", entry);
 
-<Checkout checkout={checkout} logger={logger} />;
+<Checkout orderId={order.id} resume logger={logger} />;
 ```
-
-On status polls the client emits `checkout.state.refreshed` (debug) and, when swap
-fields move, `swap.state.changed` with `provider_state`, `attention_reason`,
-`refund_nonce_present`, and `wallet_settled` / `ui_label` so you can audit
-"Finalizing" vs "Payment complete" without server access. Swap start/refund HTTP
-calls emit `swap.start.*` / `swap.refund.*` when the same `logger` is wired.

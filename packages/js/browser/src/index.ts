@@ -9,9 +9,12 @@ export {
   createHostBrowserConsoleLogger,
   createQrPngDataUrl as qrPngDataUrl,
   createQrSvg as qrSvg,
+  enterCheckoutResumePath,
   getOrderAccessToken,
   openWallet,
-  requestCheckout
+  requestCheckout,
+  requestOrderSummary,
+  requestPrepare
 } from "./internal.ts";
 
 export type {
@@ -29,7 +32,11 @@ export type {
   OpenReceiveQrOptions as QrOptions,
   OpenWalletOptions,
   RequestCheckoutAmount,
-  RequestCheckoutOptions
+  RequestCheckoutOptions,
+  RequestOrderSummaryOptions,
+  RequestOrderSummaryResult,
+  RequestPrepareOptions,
+  RequestPrepareResult
 } from "./internal.ts";
 
 export {

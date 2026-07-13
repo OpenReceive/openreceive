@@ -298,7 +298,7 @@ class OpenReceiveServerTest < Minitest::Test
     handler = OpenReceive::Server::RequestHandler.new(
       service: service,
       tokens: tokens,
-      get_checkout_amount: ->(**) { { "amount" => { "sats" => 200 } } }
+      prepare_checkout: ->(body:, request:) { { "amount" => { "sats" => 200 }, "order_id" => (body.is_a?(Hash) ? (body["order_id"] || body["orderId"]) : nil) }.compact }
     )
     minted = tokens.mint("status-order")
     status, _headers, body = handler.order_action(
@@ -321,7 +321,7 @@ class OpenReceiveServerTest < Minitest::Test
     handler = OpenReceive::Server::RequestHandler.new(
       service: service,
       tokens: tokens,
-      get_checkout_amount: ->(**) { { "amount" => { "sats" => 200 } } }
+      prepare_checkout: ->(body:, request:) { { "amount" => { "sats" => 200 }, "order_id" => (body.is_a?(Hash) ? (body["order_id"] || body["orderId"]) : nil) }.compact }
     )
     status, _headers, body = handler.order_action(
       order_id: "x",
@@ -365,20 +365,45 @@ class OpenReceiveServerTest < Minitest::Test
     store = OpenReceive::Server::InMemoryInvoiceStore.new
     service = build_service(store: store)
     tokens = OpenReceive::Server::Tokens::Manager.new(store: store, namespace: "default")
-    get_checkout_amount = ->(order_id:, client_amount:, metadata:, request:) do
-      _ = [order_id, client_amount, metadata, request]
-      { "amount" => { "sats" => 1000 } } # authoritative amount, ignores the untrusted client amount
+    prepare_checkout = ->(body:, request:) do
+      order_id = body.is_a?(Hash) ? (body["order_id"] || body["orderId"]) : nil
+      result = { "amount" => { "sats" => 1000 } }
+      result["order_id"] = order_id if order_id
+      result["summary"] = body["summary"] if body.is_a?(Hash) && body.key?("summary")
+      result
     end
     app = OpenReceive::Server::RackApp.new(
       service: service,
       tokens: tokens,
-      get_checkout_amount: get_checkout_amount
+      prepare_checkout: prepare_checkout
     )
     [app, store, tokens]
   end
 
+  def prepare_order(app, order_id, summary: nil)
+    body = { "order_id" => order_id }
+    body["summary"] = summary unless summary.nil?
+    env = rack_env(method: "POST", path: "/openreceive/prepare", body: body)
+    status, _, resp = app.call(env)
+    assert_equal 201, status
+    JSON.parse(resp.first)
+  end
+
+  def test_rack_post_prepare_and_summary
+    app, = build_app
+    prepared = prepare_order(app, "prep-order", summary: { "label" => "fruit" })
+    assert_equal "prep-order", prepared.fetch("order_id")
+    assert_equal({ "label" => "fruit" }, prepared.fetch("summary"))
+
+    env = rack_env(method: "GET", path: "/openreceive/orders/prep-order/summary")
+    status, _, body = app.call(env)
+    assert_equal 200, status
+    assert_equal({ "order_id" => "prep-order", "summary" => { "label" => "fruit" } }, JSON.parse(body.first))
+  end
+
   def test_rack_post_checkouts_returns_201_and_order_access_token
     app, = build_app
+    prepare_order(app, "rack-order")
     env = rack_env(
       method: "POST",
       path: "/openreceive/checkouts",
@@ -391,13 +416,14 @@ class OpenReceiveServerTest < Minitest::Test
     payload = JSON.parse(body.first)
     checkout = payload.fetch("checkout")
     assert_equal "rack-order", checkout.fetch("order_id")
-    # get_checkout_amount is the sole price authority (1000 sats).
+    # prepare_checkout is the sole price authority (1000 sats).
     assert_equal 1_000_000, checkout.fetch("amount_msats")
     assert payload.fetch("order_access_token")
   end
 
   def test_rack_post_checkouts_rejects_client_amount
     app, = build_app
+    prepare_order(app, "rack-order")
     env = rack_env(
       method: "POST",
       path: "/openreceive/checkouts",
@@ -408,9 +434,22 @@ class OpenReceiveServerTest < Minitest::Test
     assert_equal "INVALID_REQUEST", JSON.parse(body.first).fetch("code")
   end
 
+  def test_rack_post_checkouts_without_prepare_is_404
+    app, = build_app
+    env = rack_env(
+      method: "POST",
+      path: "/openreceive/checkouts",
+      body: { "order_id" => "never-prepared" }
+    )
+    status, _, body = app.call(env)
+    assert_equal 404, status
+    assert_equal "NOT_FOUND", JSON.parse(body.first).fetch("code")
+  end
+
   def test_rack_order_route_requires_token
     app, = build_app
     # Seed an order so the route has something to read.
+    prepare_order(app, "rack-order")
     create_env = rack_env(method: "POST", path: "/openreceive/checkouts", body: { "order_id" => "rack-order" })
     create_status, _, create_body = app.call(create_env)
     assert_equal 201, create_status
@@ -451,7 +490,7 @@ class OpenReceiveServerTest < Minitest::Test
     app = OpenReceive::Server::RackApp.new(
       service: service,
       tokens: tokens,
-      get_checkout_amount: ->(order_id:, client_amount:, metadata:, request:) { { "amount" => { "sats" => 1000 } } },
+      prepare_checkout: ->(body:, request:) { { "amount" => { "sats" => 1000 }, "order_id" => (body["order_id"] || body["orderId"] || "order-1") } },
       authorize: ->(context) { context[:action] == "invoice.sweep" }
     )
     env = rack_env(method: "POST", path: "/openreceive/admin/sweep", body: {})
@@ -463,6 +502,7 @@ class OpenReceiveServerTest < Minitest::Test
 
   def test_rack_scaffolded_swap_action_maps_to_500_not_implemented
     app, = build_app
+    prepare_order(app, "swap-order")
     create = rack_env(method: "POST", path: "/openreceive/checkouts", body: { "order_id" => "swap-order" })
     _, _, create_body = app.call(create)
     token = JSON.parse(create_body.first).fetch("order_access_token")
@@ -494,12 +534,14 @@ class OpenReceiveServerTest < Minitest::Test
     OpenReceive::Server::RackApp.new(
       service: service,
       tokens: tokens,
-      get_checkout_amount: ->(order_id:, client_amount:, metadata:, request:) { { "amount" => { "sats" => 1000 } } },
+      prepare_checkout: ->(body:, request:) { { "amount" => { "sats" => 1000 }, "order_id" => (body["order_id"] || body["orderId"] || "order-1") } },
       authorize: authorize
     )
   end
 
   def create_and_token(app, order_id, headers: {})
+    prepare_env = rack_env(method: "POST", path: "/openreceive/prepare", body: { "order_id" => order_id }, headers: headers)
+    assert_equal 201, app.call(prepare_env)[0]
     env = rack_env(method: "POST", path: "/openreceive/checkouts", body: { "order_id" => order_id }, headers: headers)
     status, resp_headers, body = app.call(env)
     assert_equal 201, status
@@ -536,7 +578,9 @@ class OpenReceiveServerTest < Minitest::Test
 
   def test_preset_guest_checkout_unit_reads_token_valid
     policy = OpenReceive::Server::Presets.guest_checkout
+    assert_equal true, policy.call({ action: "checkout.prepare", token_valid: false })
     assert_equal true, policy.call({ action: "checkout.create", token_valid: false })
+    assert_equal true, policy.call({ action: "order.summary", token_valid: false })
     assert_equal false, policy.call({ action: "invoice.sweep", token_valid: true })
     assert_equal true, policy.call({ action: "order.read", token_valid: true })
     assert_equal false, policy.call({ action: "order.read", token_valid: false })

@@ -1,17 +1,15 @@
 /**
- * Host order amount-authority persistence backed by the OpenReceive store meta KV.
+ * Prepared-order amount-authority persistence backed by the OpenReceive store meta KV.
  *
  * Pattern (shipped-router model):
- * - Host `/prepare_order` validates the cart, computes the price, and persists
- *   `{ amount, … }` under `host_order:<orderId>` via `casMeta(..., null)`.
- * - Mounted create-checkout calls `getCheckoutAmount`, which reads that row back.
+ * - POST /prepare calls the host `prepareCheckout` hook, then persists
+ *   `{ amount, summary?, metadata? }` under `host_order:<orderId>` via `casMeta(..., null)`.
+ * - POST /checkouts reads that row back for the authoritative price.
+ * - GET /orders/{id}/summary returns the persisted `summary`.
  * - The create body never carries a client price.
- *
- * Hosts keep cart validation / catalog / display order shapes in app code; this
- * module owns only the durable persist-and-read-back plumbing.
  */
 
-import type { CheckoutAmountSource, GetCheckoutAmount } from "./get-checkout-amount.ts";
+import type { CheckoutAmountSource } from "./get-checkout-amount.ts";
 import type { CreateCheckoutAmount } from "./service/types.ts";
 
 export const HOST_ORDER_META_PREFIX = "host_order:" as const;
@@ -34,12 +32,12 @@ export interface HostOrderMetaStore {
 }
 
 /**
- * Durable record written by the host prepare step. `amount` is the authority for
- * `getCheckoutAmount`. Optional `order` holds a host display summary for guest resume.
+ * Durable record written by POST /prepare. `amount` is the authority for create-checkout.
+ * Optional `summary` is returned by the order-summary route for guest resume UI.
  */
-export interface StoredHostOrder<TOrder = unknown> {
+export interface StoredHostOrder<TSummary = unknown> {
   readonly amount: CreateCheckoutAmount;
-  readonly order?: TOrder;
+  readonly summary?: TSummary;
   readonly metadata?: Record<string, unknown>;
 }
 
@@ -48,33 +46,22 @@ export interface HostOrderStoreOptions {
   readonly prefix?: string;
 }
 
-export interface HostOrderStore<TOrder = unknown> {
+export interface HostOrderStore<TSummary = unknown> {
   readonly prefix: string;
   metaKey(orderId: string): string;
-  persist(orderId: string, stored: StoredHostOrder<TOrder>): Promise<void>;
-  read(orderId: string): Promise<StoredHostOrder<TOrder> | null>;
-  getCheckoutAmount(orderId: string): Promise<CheckoutAmountSource | null>;
-  /** Bound hook for `createOpenReceiveHttpHandler({ getCheckoutAmount })`. */
-  createGetCheckoutAmount(): GetCheckoutAmount;
+  persist(orderId: string, stored: StoredHostOrder<TSummary>): Promise<void>;
+  read(orderId: string): Promise<StoredHostOrder<TSummary> | null>;
+  getAmount(orderId: string): Promise<CheckoutAmountSource | null>;
 }
 
 /**
- * Create a host order store over `service.store` (or any getMeta/casMeta surface).
- *
- * @example
- * ```ts
- * const orders = createHostOrderStore(service.store);
- * await orders.persist(orderId, { amount: { currency: "USD", value: "9.99" }, order });
- * app.use(openReceiveExpress({
- *   service,
- *   getCheckoutAmount: orders.createGetCheckoutAmount(),
- * }));
- * ```
+ * Create a prepared-order store over `service.store` (or any getMeta/casMeta surface).
+ * Used internally by the HTTP handler; hosts normally only implement `prepareCheckout`.
  */
-export function createHostOrderStore<TOrder = unknown>(
+export function createHostOrderStore<TSummary = unknown>(
   store: HostOrderMetaStore,
   options: HostOrderStoreOptions = {},
-): HostOrderStore<TOrder> {
+): HostOrderStore<TSummary> {
   const prefix = options.prefix ?? HOST_ORDER_META_PREFIX;
   if (prefix.length === 0) {
     throw new Error("createHostOrderStore: prefix must be non-empty");
@@ -87,29 +74,34 @@ export function createHostOrderStore<TOrder = unknown>(
     return `${prefix}${orderId}`;
   }
 
-  async function persist(orderId: string, stored: StoredHostOrder<TOrder>): Promise<void> {
-    await store.casMeta(metaKey(orderId), JSON.stringify(stored), null);
+  async function persist(orderId: string, stored: StoredHostOrder<TSummary>): Promise<void> {
+    const key = metaKey(orderId);
+    const payload = JSON.stringify(stored);
+    const current = await store.getMeta(key);
+    const first = await store.casMeta(key, payload, current === undefined ? null : current.rev);
+    if (first.status === "ok") return;
+    const again = await store.getMeta(key);
+    const second = await store.casMeta(key, payload, again === undefined ? null : again.rev);
+    if (second.status !== "ok") {
+      throw new Error("createHostOrderStore: failed to persist prepared order");
+    }
   }
 
-  async function read(orderId: string): Promise<StoredHostOrder<TOrder> | null> {
+  async function read(orderId: string): Promise<StoredHostOrder<TSummary> | null> {
     const row = await store.getMeta(metaKey(orderId));
     if (row === undefined) return null;
     try {
       const parsed = JSON.parse(row.value) as unknown;
       if (!isStoredHostOrder(parsed)) return null;
-      return parsed as StoredHostOrder<TOrder>;
+      return parsed as StoredHostOrder<TSummary>;
     } catch {
       return null;
     }
   }
 
-  async function getCheckoutAmount(orderId: string): Promise<CheckoutAmountSource | null> {
+  async function getAmount(orderId: string): Promise<CheckoutAmountSource | null> {
     const stored = await read(orderId);
     return stored === null ? null : { amount: stored.amount };
-  }
-
-  function createGetCheckoutAmount(): GetCheckoutAmount {
-    return ({ orderId }) => getCheckoutAmount(orderId);
   }
 
   return {
@@ -117,8 +109,7 @@ export function createHostOrderStore<TOrder = unknown>(
     metaKey,
     persist,
     read,
-    getCheckoutAmount,
-    createGetCheckoutAmount,
+    getAmount,
   };
 }
 
@@ -127,6 +118,6 @@ function isStoredHostOrder(value: unknown): value is StoredHostOrder {
   const record = value as Record<string, unknown>;
   if (typeof record.amount !== "object" || record.amount === null) return false;
   const amount = record.amount as Record<string, unknown>;
-  if (typeof amount.sats === "string") return true;
+  if (typeof amount.sats === "string" || typeof amount.sats === "number") return true;
   return typeof amount.currency === "string" && typeof amount.value === "string";
 }

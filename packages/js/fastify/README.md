@@ -4,22 +4,22 @@ Fastify plugin for the OpenReceive shipped routes. A thin wrapper over
 [`@openreceive/http`](../http).
 
 ```ts
+import Fastify from "fastify";
 import { createOpenReceive, openReceiveFastify } from "openreceive/fastify";
-// or scoped: @openreceive/node + @openreceive/fastify
+import { guestCheckout } from "@openreceive/http";
 
-// 1. Price the order (create-checkout only)
-const getCheckoutAmount = async ({ orderId }) => ({
-  amount: { currency: "USD", value: await priceForOrder(orderId) },
-});
+const service = await createOpenReceive({ onPaid });
+const fastify = Fastify();
 
-// 2. Mount (add onPaid on createOpenReceive when you need fulfillment)
-const service = await createOpenReceive();
 await fastify.register(openReceiveFastify, {
   service,
-  getCheckoutAmount,
+  authorize: guestCheckout(),
+  prepareCheckout: async ({ body }) => {
+    const cart = validateCart(body);
+    return { amount: { currency: "USD", value: cart.totalUsd }, summary: cart.summary };
+  },
   prefix: "/openreceive",
 });
 ```
 
-`getCheckoutAmount` is required. See `docs/guides/authorization.md` for auth
-presets. Contributor route contract: `docs/internal/shipped-routes.md`.
+`prepareCheckout` is required. See `docs/guides/authorization.md`.

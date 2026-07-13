@@ -3,10 +3,12 @@ import {
   OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES,
   OPENRECEIVE_DEFAULT_PREFIX,
   createOpenReceiveLightningInvoiceDecodeUrl,
+  enterCheckoutResumePath,
   isReusableLightningInvoice,
   openReceiveCheckoutLabels,
   orClasses,
   requestCheckout,
+  requestOrderSummary,
   resolveOrderUrlFromPrefix,
   selectCheckoutDisplayInvoice,
   type CheckoutSnapshot,
@@ -38,6 +40,9 @@ export type Checkout = CheckoutSnapshot;
  *   `/openreceive`), then hands the resulting snapshot to the same rendering path with
  *   `orderUrl` defaulted to `${prefix}/orders/${orderId}`. The per-order capability token is
  *   captured and attached to every poll/swap automatically.
+ * - With `resume`, also fetches `GET {prefix}/orders/{orderId}/summary` (`onSummary`) and
+ *   optionally syncs `/checkout/:orderId` via the History API (skipped when `routeOrderId`
+ *   is set — e.g. Next.js already owns the route).
  */
 export function Checkout(props: CheckoutProps): React.ReactElement {
   const { checkout, orderId } = props;
@@ -67,12 +72,25 @@ export function Checkout(props: CheckoutProps): React.ReactElement {
  * Lightning invoice is deferred until the payer selects Bitcoin — at that point the wizard
  * calls `ensureLightning`, which mints (or reuses) the bolt11 and transitions to the full
  * checkout view. Altcoin swaps proceed without ever minting a payer Lightning invoice.
+ *
+ * When `resume` is set, also loads the guest summary and optionally syncs the URL.
  */
 function CheckoutCreate(props: CheckoutProps): React.ReactElement {
   // orderId presence is guaranteed by the Checkout dispatcher's create-mode branch.
   const orderId = props.orderId as string;
   const resolvedPrefix = props.prefix ?? OPENRECEIVE_DEFAULT_PREFIX;
-  const { onError, metadata, createFetch, className, classNames } = props;
+  const {
+    onError,
+    onSummary,
+    onResumeMiss,
+    metadata,
+    createFetch,
+    className,
+    classNames,
+    resume = false,
+    resumePathPrefix = "/checkout",
+    routeOrderId,
+  } = props;
 
   const [created, setCreated] = React.useState<{
     readonly status: "pending" | "ready" | "error";
@@ -84,6 +102,10 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
 
   const onErrorRef = React.useRef(onError);
   onErrorRef.current = onError;
+  const onSummaryRef = React.useRef(onSummary);
+  onSummaryRef.current = onSummary;
+  const onResumeMissRef = React.useRef(onResumeMiss);
+  onResumeMissRef.current = onResumeMiss;
   const metadataRef = React.useRef(metadata);
   metadataRef.current = metadata;
   const createFetchRef = React.useRef(createFetch);
@@ -91,6 +113,36 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
   // Ref so ensureLightning always reads the latest checkout without being a dep.
   const createdCheckoutRef = React.useRef(created.checkout);
   createdCheckoutRef.current = created.checkout;
+
+  // Guest resume: fetch summary for host display redraw + optional History API URL sync.
+  // Runs alongside create; does not block checkout creation.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt retries create+resume together.
+  React.useEffect(() => {
+    if (!resume) return;
+    let cancelled = false;
+
+    enterCheckoutResumePath(orderId, {
+      pathPrefix: resumePathPrefix,
+      ...(routeOrderId === undefined ? {} : { routeOrderId }),
+    });
+
+    void requestOrderSummary({
+      prefix: resolvedPrefix,
+      orderId,
+      ...(createFetchRef.current === undefined ? {} : { fetch: createFetchRef.current }),
+    }).then((result) => {
+      if (cancelled) return;
+      if (result === undefined || !("summary" in result)) {
+        onResumeMissRef.current?.(orderId);
+        return;
+      }
+      onSummaryRef.current?.(result.summary);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resume, orderId, resolvedPrefix, resumePathPrefix, routeOrderId, attempt]);
 
   // Create on mount and whenever the order id / prefix changes (or a retry is requested).
   // Uses mintLightning: false to defer the LN mint — the payer sees the method grid first.
@@ -227,7 +279,7 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
 function CheckoutDeferredShell(
   props: CheckoutProps & {
     readonly checkout: CheckoutSnapshot;
-    readonly orderUrl: string;
+    readonly orderUrl: string | false;
     readonly mintingLightning: boolean;
     readonly onRequestLightning: () => Promise<void>;
   },
@@ -307,6 +359,11 @@ function CheckoutView(
     prefix: _prefix,
     metadata: _metadata,
     createFetch: _createFetch,
+    resume: _resume,
+    resumePathPrefix: _resumePathPrefix,
+    routeOrderId: _routeOrderId,
+    onSummary: _onSummary,
+    onResumeMiss: _onResumeMiss,
     onRequestLightning,
     qrEncoder,
     logger,

@@ -9,54 +9,45 @@ The package exposes one factory:
 ```ts
 import { createOpenReceiveHttpHandler } from "@openreceive/http";
 
-// `service` and `getCheckoutAmount` are required. The create body never carries a client price.
-const getCheckoutAmount = async ({ orderId }) => {
-  const order = await loadOrder(orderId);
-  if (!order) return null; // → 404
-  return { amount: { currency: "USD", value: order.total_usd } };
+// `service` and `prepareCheckout` are required. POST /prepare is the sole price authority.
+const prepareCheckout = async ({ body }) => {
+  const cart = validateCart(body);
+  return {
+    amount: { currency: "USD", value: cart.totalUsd },
+    summary: cart.summary,
+  };
 };
 
 const handler = createOpenReceiveHttpHandler({
   service,
   authorize, // optional; default gates Tier 2 on the order token and fails Tier 3 closed
-  getCheckoutAmount,
+  prepareCheckout,
 });
 
 // `handler` is a Web-standard Fetch handler: (request: Request) => Promise<Response>.
-// It also carries `handler.prefix` and a `handler.handle` alias.
 const response = await handler(request);
 ```
 
-`POST {prefix}/checkouts` accepts `{ order_id, memo?, description_hash?, metadata? }` only —
-client `amount` / `sats` / `usd` are rejected with 400. Pricing comes solely from `getCheckoutAmount`.
+`POST {prefix}/prepare` calls your hook and persists the amount. `POST {prefix}/checkouts`
+accepts `{ order_id, memo?, description_hash?, metadata? }` only — client `amount` / `sats` /
+`usd` are rejected with 400. Create without prepare → 404.
 
 Any runtime with the Fetch `Request`/`Response` globals (Node 20+, Deno, Bun, edge functions) can
 mount it; the framework adapters (Express, Fastify, Next, …) and the Ruby engine are thin wrappers
-over this same handler. Umbrella imports: `openreceive/express`, `openreceive/fastify`,
-`openreceive/next`.
+over this same handler.
 
 ## Routes (mounted under `prefix`, default `/openreceive`)
 
 | Method | Path | Tier | Action |
 | --- | --- | --- | --- |
+| POST | `/prepare` | 1 | `checkout.prepare` |
 | POST | `/checkouts` | 1 | `checkout.create` |
-| POST | `/orders/{order_id}` | 2/3 | `order.read` / `swap.*` by body `action` |
 | GET | `/checkouts/{checkout_id}` | 2 | `checkout.read` |
+| POST | `/orders/{order_id}` | 2 | `order.read` / `swap.*` |
+| GET | `/orders/{order_id}/summary` | 1 | `order.summary` |
 | GET | `/orders/{order_id}/swap-options` | 2 | `swap.options` |
 | GET | `/rates` | 1 | public |
 | POST | `/admin/sweep` | 3 | `invoice.sweep` (fails closed) |
 
-Bodies are POST + JSON with snake_case fields; the order route is an action multiplexer. Errors are
-JSON `{ code, message, retryable?, request_id?, details? }` with `code` drawn from the shared
-`OpenReceiveErrorCode` enum. Every response also carries an `X-Request-Id` header.
-
-## Golden test vectors
-
-`spec/test-vectors/http-golden/*.json` are the cross-adapter / cross-language parity oracle. Each
-vector is `{ name, request: { method, path, headers?, body? }, expected: { status, body_includes?,
-error_code? } }`. Expectations are pinned to HTTP status, stable fields, and error codes only —
-never volatile ids or timestamps.
-
-This handler's test suite (`tests/v0.1/http-handler.test.mjs`) loads and asserts every vector, and
-the framework adapters and the Ruby engine are expected to run the same vectors so that all
-implementations stay behaviorally identical on the wire.
+See `docs/guides/quickstart-node.md` and `docs/guides/authorization.md`.
+Contributor route contract: `docs/internal/shipped-routes.md`.

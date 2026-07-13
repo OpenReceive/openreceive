@@ -9,16 +9,17 @@
 
 /** The set of guarded actions a route can ask the host to authorize. */
 export type OpenReceiveAuthorizeAction =
+  | "checkout.prepare"
   | "checkout.create"
   | "order.read"
   | "checkout.read"
+  | "order.summary"
   | "swap.options"
   | "swap.quote"
   | "swap.start"
   | "swap.refund"
   | "swap.refresh"
   | "invoice.sweep";
-
 /** The resource an action touches, filled in from the request path/body as far as it is known. */
 export interface OpenReceiveAuthorizeResource {
   order_id?: string;
@@ -53,14 +54,17 @@ export type OpenReceiveRateLimit = (
 ) => boolean | Promise<boolean>;
 
 /**
- * The built-in policy used when the host does not supply `authorize`. Tier 1 (checkout.create, and
- * the public /rates read that never reaches authorize) is open, Tier 2 requires a valid per-order
- * token — surfaced by the handler as `ctx.tokenValid` — and Tier 3 (invoice.sweep) is denied. It no
- * longer needs the token manager: the handler precomputes token validity before calling authorize.
+ * The built-in policy used when the host does not supply `authorize`. Tier 1 (checkout.prepare,
+ * checkout.create, order.summary, and the public /rates read that never reaches authorize) is open,
+ * Tier 2 requires a valid per-order token — surfaced by the handler as `ctx.tokenValid` — and Tier 3
+ * (invoice.sweep) is denied. It no longer needs the token manager: the handler precomputes token
+ * validity before calling authorize.
  */
 export function createDefaultAuthorize(): OpenReceiveAuthorize {
   return (ctx: OpenReceiveAuthorizeContext): boolean =>
-    ctx.action === "checkout.create"
+    ctx.action === "checkout.prepare" ||
+    ctx.action === "checkout.create" ||
+    ctx.action === "order.summary"
       ? true
       : ctx.action === "invoice.sweep"
         ? false

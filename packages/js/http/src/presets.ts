@@ -20,7 +20,11 @@ export interface GuestCheckoutOptions {
  */
 export function guestCheckout(options?: GuestCheckoutOptions): OpenReceiveAuthorize {
   return async (ctx: OpenReceiveAuthorizeContext): Promise<boolean> => {
-    if (ctx.action === "checkout.create") {
+    if (
+      ctx.action === "checkout.prepare" ||
+      ctx.action === "checkout.create" ||
+      ctx.action === "order.summary"
+    ) {
       return true;
     }
     if (ctx.action === "invoice.sweep") {
@@ -57,7 +61,10 @@ export function withUser<U>(
     if (!user) {
       return false;
     }
-    if (ctx.action === "checkout.create") {
+    if (ctx.action === "checkout.prepare" || ctx.action === "checkout.create") {
+      return true;
+    }
+    if (ctx.action === "order.summary") {
       return true;
     }
     if (ctx.action === "invoice.sweep") {

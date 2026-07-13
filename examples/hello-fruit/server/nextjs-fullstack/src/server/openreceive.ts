@@ -3,7 +3,7 @@ import type {
   OpenReceiveReceiveNwcClient,
   OpenReceiveSourcedPriceProvider,
 } from "@openreceive/core";
-import { guestCheckout, hostError, mapHostRouteError, type CreateOpenReceiveHttpHandlerOptions } from "@openreceive/http";
+import { guestCheckout, hostError, type CreateOpenReceiveHttpHandlerOptions } from "@openreceive/http";
 import {
   createOpenReceive,
   readOpenReceiveConfigFile,
@@ -14,11 +14,7 @@ import {
   createHelloFruitDemoServerLogger,
   createHelloFruitOpenReceiveLogger,
 } from "../../../../shared/demo-logging.ts";
-import {
-  createHelloFruitOrderStore,
-  prepareHelloFruitOrder,
-  getHelloFruitDemoOrder,
-} from "../../../../shared/demo-order.ts";
+import { createHelloFruitPrepareCheckout } from "../../../../shared/demo-order.ts";
 import {
   readHelloFruitCheckoutCurrencies,
   readHelloFruitPriceFeedCurrencies,
@@ -118,97 +114,20 @@ export function sitemapResponse(): string {
   ].join("\n");
 }
 
-// App order step (NOT an OpenReceive route): validate the cart, compute the authoritative total,
-// and PERSIST the order via the store's meta KV so `getCheckoutAmount` can look it up. Creating the
-// checkout, polling, and swaps are all the mounted OpenReceive router's job (the catch-all route).
-export async function prepareOrderResponse(request: Request): Promise<Response> {
-  const startedAt = Date.now();
-  const { openreceive } = await getOpenReceive();
-  const orders = createHelloFruitOrderStore(openreceive);
-
-  try {
-    const body = await readJsonBody(request);
-    logDemo("prepare_order.request", "Received prepare order request.", {
-      ...summarizeOrderRequest(body),
-    });
-    const { order } = await prepareHelloFruitOrder(body, {
-      demoId: DEMO_ID,
-      demoName: "Next.js",
-      openreceive,
-      orders,
-    });
-    logDemo("prepare_order.prepared", "Prepared and persisted demo order.", {
-      orderId: order.uuid,
-      orderStatus: order.status,
-      total: order.total_amount,
-      itemCount: order.items.length,
-      elapsedMs: Date.now() - startedAt,
-    });
-    return jsonResponse({ order }, 201);
-  } catch (error) {
-    const mapped = mapHostRouteError(error);
-    if (mapped !== null) {
-      logDemo("prepare_order.rejected", "Prepare order request returned a known error.", {
-        status: mapped.status,
-        body: mapped.body,
-        elapsedMs: Date.now() - startedAt,
-      });
-      return jsonResponse(mapped.body, mapped.status);
-    }
-    logDemo("prepare_order.error", "Prepare order request failed unexpectedly.", {
-      error: error instanceof Error ? error.message : String(error),
-      elapsedMs: Date.now() - startedAt,
-    });
-    throw error;
-  }
-}
-
-/** Guest resume: public order summary for `/checkout/:orderId` when sessionStorage is empty. */
-export async function orderSummaryResponse(orderId: string): Promise<Response> {
-  const startedAt = Date.now();
-  const { openreceive } = await getOpenReceive();
-  const order = orderId.length === 0 ? null : await getHelloFruitDemoOrder(openreceive, orderId);
-  if (order === null) {
-    logDemo("orders.not_found", "Order summary lookup missed.", {
-      orderId,
-      elapsedMs: Date.now() - startedAt,
-    });
-    return jsonResponse(
-      {
-        code: "NOT_FOUND",
-        message: "Order not found.",
-        retryable: false,
-      },
-      404,
-    );
-  }
-  logDemo("orders.response", "Served order summary for checkout resume.", {
-    orderId: order.uuid,
-    orderStatus: order.status,
-    itemCount: order.items.length,
-    elapsedMs: Date.now() - startedAt,
-  });
-  return jsonResponse({ order });
-}
-
 /**
  * Options for the mounted OpenReceive router (app/openreceive/[...openreceive] catch-all).
- * Same shape as docs/guides/quickstart-node.md (Next adapter): service + getCheckoutAmount.
- * guestCheckout(): anonymous create, Tier-2 reads gated by the per-order capability token.
- * For a signed-in app, swap authorize for withUser instead, e.g.:
- *   import { withUser } from "@openreceive/http";
- *   authorize: withUser((request) => currentUserFromMySession(request), {
- *     ownsOrder: (user, ctx) => orderBelongsTo(user, ctx.resource.order_id),
- *     isAdmin: (user) => user.admin,
- *   }),
+ * Same shape as docs/guides/quickstart-node.md (Next adapter): service + prepareCheckout.
  */
 export async function openReceiveHttpOptions(): Promise<CreateOpenReceiveHttpHandlerOptions> {
   const { openreceive } = await getOpenReceive();
-  const orders = createHelloFruitOrderStore(openreceive);
   return {
     service: openreceive,
     authorize: guestCheckout(),
-    getCheckoutAmount: orders.createGetCheckoutAmount(),
+    prepareCheckout: createHelloFruitPrepareCheckout({
+      demoId: DEMO_ID,
+      demoName: "Next.js",
+      openreceive,
+    }),
   };
 }
 
@@ -284,7 +203,7 @@ export async function createHelloFruitOpenReceive(
     priceCurrencyCount: priceCurrencies.length,
   });
 
-  // Quickstart shape: createOpenReceive({ onPaid }) + mount with getCheckoutAmount.
+  // Quickstart shape: createOpenReceive({ onPaid }) + mount with prepareCheckout.
   // onPaid may fire more than once — dedupe on checkoutId in a real app.
   const openreceive = await createOpenReceive({
     ...(overrides.client === undefined ? {} : { client: overrides.client }),
@@ -310,25 +229,6 @@ export async function createHelloFruitOpenReceive(
   } satisfies HelloFruitOpenReceiveBundle;
 }
 
-function summarizeOrderRequest(body: Record<string, unknown>): Record<string, unknown> {
-  const cart = Array.isArray(body.cart) ? body.cart : [];
-  return {
-    currency: body.currency,
-    cartLineCount: cart.length,
-    cartQuantity: cart.reduce((total, item) => {
-      if (typeof item !== "object" || item === null || Array.isArray(item)) return total;
-      const quantity = (item as Record<string, unknown>).quantity;
-      return total + (typeof quantity === "number" && Number.isFinite(quantity) ? quantity : 0);
-    }, 0),
-    productIds: cart
-      .map((item) =>
-        typeof item === "object" && item !== null && !Array.isArray(item)
-          ? (item as Record<string, unknown>).product_id
-          : undefined,
-      )
-      .filter((productId): productId is string => typeof productId === "string"),
-  };
-}
 
 async function readJsonBody(request: Request): Promise<Record<string, unknown>> {
   if (request.method === "GET" || request.method === "HEAD") return {};

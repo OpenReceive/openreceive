@@ -36,8 +36,18 @@ async function makeService() {
   });
 }
 
-// Default pricing for adapter parity (golden vectors do not exercise create pricing).
-const defaultGetCheckoutAmount = () => ({ amount: { sats: 200 } });
+// Default prepare for adapter parity (golden vectors exercise prepare + summary, not create pricing).
+const defaultPrepareCheckout = ({ body }) => {
+  const record = body !== null && typeof body === "object" && !Array.isArray(body) ? body : {};
+  const orderId =
+    typeof record.order_id === "string" && record.order_id.length > 0
+      ? record.order_id
+      : undefined;
+  return {
+    amount: { sats: 200 },
+    ...(orderId === undefined ? {} : { orderId }),
+  };
+};
 
 // The golden vectors were authored against the DEFAULT authorize policy (no authorize hook), which
 // warns on construction. Silence that noise here.
@@ -69,7 +79,7 @@ test("Express adapter serves the HTTP golden vectors identically", async () => {
   const app = express();
   app.use(express.json());
   withSilencedWarnings(() => {
-    app.use(openReceiveExpress({ service, getCheckoutAmount: defaultGetCheckoutAmount }));
+    app.use(openReceiveExpress({ service, prepareCheckout: defaultPrepareCheckout }));
   });
 
   const server = http.createServer(app);
@@ -98,7 +108,7 @@ test("Express adapter serves the HTTP golden vectors identically", async () => {
 test("Next.js adapter serves the HTTP golden vectors identically", async () => {
   const service = await makeService();
   const { GET, POST } = withSilencedWarnings(() =>
-    openReceiveNextHandlers({ service, getCheckoutAmount: defaultGetCheckoutAmount }),
+    openReceiveNextHandlers({ service, prepareCheckout: defaultPrepareCheckout }),
   );
 
   try {

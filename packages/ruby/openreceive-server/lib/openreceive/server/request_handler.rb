@@ -2,12 +2,15 @@
 
 require "cgi"
 require "json"
+require "securerandom"
 require "uri"
+
+require "openreceive/server/prepared_order_store"
 
 module OpenReceive
   module Server
     # Framework-neutral HTTP request handler — the single home of OpenReceive's request -> response
-    # logic (routing actions, security tiers/authorize, capability-token extraction, get_checkout_amount
+    # logic (routing actions, security tiers/authorize, capability-token extraction, prepare_checkout
     # usage, and error mapping). It is the Ruby port of the shipped @openreceive/http contract
     # (spec/openapi/openreceive-http.v1.yaml).
     #
@@ -19,12 +22,11 @@ module OpenReceive
     # Because both adapters share this one implementation, the Rack app and the Rails controllers
     # cannot drift — the routing/authorize/error semantics live in exactly one place.
     #
-    # The one intentional superset over a bare keyword call: `get_checkout_amount` may be supplied either
-    # in the keyword form `->(order_id:, client_amount:, metadata:, request:)` OR in the
-    # single-context form `->(ctx) { ctx[:order_id] }` documented in the Rails quickstart. Dispatch
-    # is by the callable's parameters. See #call_get_checkout_amount. `get_checkout_amount` is REQUIRED.
+    # `prepare_checkout` is REQUIRED. It may be supplied either in the single-context form
+    # `->(ctx) { ctx[:body]; ctx[:request] }` OR the keyword form `->(body:, request:)`. Dispatch
+    # is by the callable's parameters. See #call_prepare_checkout.
     class RequestHandler
-      TIER_1_ACTIONS = %w[checkout.create rate.list].freeze
+      TIER_1_ACTIONS = %w[checkout.prepare checkout.create order.summary rate.list].freeze
       TIER_2_ACTIONS = %w[order.read checkout.read swap.options swap.quote swap.start swap.refund swap.refresh].freeze
       TIER_3_ACTIONS = %w[invoice.sweep].freeze
 
@@ -62,20 +64,22 @@ module OpenReceive
         nil
       end
 
-      # authorize      : ->(context) { boolean } — context = { action:, request:, resource:, token:, token_valid:, order_id? }
-      # get_checkout_amount  : REQUIRED. keyword form ->(order_id:, client_amount:, metadata:, request:) OR
-      #                  single-context form ->(ctx) — returns { "amount" => { "sats" } | { "currency", "value" } } or nil (404)
-      # rate_limit     : ->(context) { allowed_boolean } — returning false yields 429 (optional)
-      # tokens         : Tokens::Manager
-      # prefix         : mount prefix used to path-scope the order-token cookie set on create
-      def initialize(service:, tokens:, get_checkout_amount:, authorize: nil, rate_limit: nil, prefix: DEFAULT_PREFIX)
+      # authorize         : ->(context) { boolean } — context = { action:, request:, resource:, token:, token_valid:, order_id? }
+      # prepare_checkout  : REQUIRED. single-context ->(ctx) OR keyword ->(body:, request:) —
+      #                     returns { "amount" => { "sats" } | { "currency", "value" }, "order_id"?, "summary"?, "metadata"? }
+      #                     or nil (404). POST /prepare is the sole price authority.
+      # rate_limit        : ->(context) { allowed_boolean } — returning false yields 429 (optional)
+      # tokens            : Tokens::Manager
+      # prefix            : mount prefix used to path-scope the order-token cookie set on create
+      def initialize(service:, tokens:, prepare_checkout:, authorize: nil, rate_limit: nil, prefix: DEFAULT_PREFIX)
         raise ArgumentError,
-              "RequestHandler requires a `get_checkout_amount` hook — the create-checkout route " \
-              "never trusts a client-supplied price." if get_checkout_amount.nil?
+              "RequestHandler requires a `prepare_checkout` hook — POST /prepare is the sole " \
+              "price authority; the create-checkout route never trusts a client-supplied price." if prepare_checkout.nil?
 
         @service = service
         @tokens = tokens
-        @get_checkout_amount = get_checkout_amount
+        @prepare_checkout = prepare_checkout
+        @prepared_orders = PreparedOrderStore.new(service.store)
         @rate_limit = rate_limit
         @prefix = normalize_prefix(prefix)
         @authorize = authorize || default_authorize
@@ -95,14 +99,48 @@ module OpenReceive
       # through its own controller (with current_user etc.); when nil, the handler falls back to the
       # authorize hook / default policy captured at build time — matching the Rack app.
 
-      # POST {prefix}/checkouts — Tier 1. Mints the per-order token on the first checkout.
+      # POST {prefix}/prepare — Tier 1. Persist amount under host_order:<order_id>; return order_id + summary?.
+      def prepare_checkout(raw_body:, request:, token:, request_id:, authorize: nil)
+        handle(request_id) do
+          body = parse_json_body(raw_body)
+          context = build_context("checkout.prepare", request, {}, token)
+          guard(context, request_id, authorize) do
+            prepared =
+              begin
+                call_prepare_checkout(body: body, request: request)
+              rescue StandardError => e
+                raise ValidationError, e.message
+              end
+            raise NotFoundError, "Order not found." if prepared.nil?
+            raise ValidationError,
+                  "prepare_checkout must return { amount: { sats } | { currency, value } } (or nil for not found)." unless prepare_result?(prepared)
+
+            record = stringify_keys(prepared)
+            order_id = optional_string(record["order_id"] || record["orderId"]) || SecureRandom.uuid
+
+            stored = { "amount" => record["amount"] }
+            stored["summary"] = record["summary"] if record.key?("summary")
+            stored["metadata"] = record["metadata"] if record.key?("metadata")
+            @prepared_orders.persist(order_id, stored)
+
+            response = { "order_id" => order_id }
+            response["summary"] = record["summary"] if record.key?("summary")
+            success(201, response, request_id)
+          end
+        end
+      end
+
+      # POST {prefix}/checkouts — Tier 1. Reads amount from prepare persist (NOT from a price hook).
+      # Mints the per-order token on the first checkout.
       def create_checkout(raw_body:, request:, token:, request_id:, authorize: nil)
         handle(request_id) do
           body = parse_json_body(raw_body)
           order_id = optional_string(body["order_id"] || body["orderId"])
+          raise ValidationError, "order_id is required." if order_id.nil?
+
           context = build_context("checkout.create", request, { order_id: order_id }, token)
           guard(context, request_id, authorize) do
-            create_request = build_create_request(order_id, body, context)
+            create_request = build_create_request(order_id, body)
             checkout = @service.get_or_create_checkout(create_request)
             minted_order_id = checkout.fetch("order_id")
             minted = @tokens.mint(minted_order_id)
@@ -116,6 +154,21 @@ module OpenReceive
               extra_headers["Set-Cookie"] = build_order_token_cookie(minted_order_id, minted[:token], request)
             end
             success(201, response, request_id, extra_headers)
+          end
+        end
+      end
+
+      # GET {prefix}/orders/{order_id}/summary — Tier 1. Return persisted summary; no token required.
+      def read_order_summary(order_id:, request:, token:, request_id:, authorize: nil)
+        handle(request_id) do
+          context = build_context("order.summary", request, { order_id: order_id }, token)
+          guard(context, request_id, authorize) do
+            stored = @prepared_orders.read(order_id)
+            raise NotFoundError, "Order not found." if stored.nil?
+
+            response = { "order_id" => order_id }
+            response["summary"] = stored["summary"] if stored.key?("summary")
+            success(200, response, request_id)
           end
         end
       end
@@ -256,9 +309,10 @@ module OpenReceive
 
       def default_authorize
         # guest_checkout-style policy sourced from the handler-precomputed context[:token_valid]:
-        #   Tier 1 (checkout.create + the public rate.list) allow, Tier 2 iff a valid per-order token
-        #   (token_valid), Tier 3 (invoice.sweep) + anything unrecognized fail closed. The policy no
-        #   longer touches the token manager — token_valid is computed once in build_context.
+        #   Tier 1 (checkout.prepare / checkout.create / order.summary / rate.list) allow,
+        #   Tier 2 iff a valid per-order token (token_valid), Tier 3 (invoice.sweep) + anything
+        #   unrecognized fail closed. The policy no longer touches the token manager —
+        #   token_valid is computed once in build_context.
         lambda do |context|
           case tier_for(context[:action])
           when 1
@@ -301,13 +355,16 @@ module OpenReceive
 
       # --- create-request assembly -----------------------------------------------------------------
 
-      def build_create_request(order_id, body, context)
+      def build_create_request(order_id, body)
         # Client prices are never trusted on this route. amount/sats/usd are rejected so a tampered
         # client cannot quietly underpay; tip-jar / donation hosts honor a payer-chosen amount inside
-        # get_checkout_amount (typically via metadata) and return it explicitly.
+        # prepare_checkout (typically via the prepare body) and persist it explicitly.
         reject_client_amount_fields!(body)
 
-        base = { "order_id" => order_id }
+        stored = @prepared_orders.read(order_id)
+        raise NotFoundError, "Order not found." if stored.nil?
+
+        base = { "order_id" => order_id, "amount" => stored["amount"] }
         base["memo"] = body["memo"] if body.key?("memo")
         if body.key?("description_hash") || body.key?("descriptionHash")
           base["description_hash"] = body["description_hash"] || body["descriptionHash"]
@@ -315,38 +372,17 @@ module OpenReceive
         base["metadata"] = body["metadata"] if body.key?("metadata")
         mint_lightning = body.key?("mint_lightning") ? body["mint_lightning"] : body["mintLightning"]
         base["mint_lightning"] = mint_lightning == false ? false : true
-
-        resolved =
-          begin
-            call_get_checkout_amount(
-              order_id: order_id,
-              client_amount: nil,
-              metadata: body["metadata"],
-              request: context[:request]
-            )
-          rescue StandardError => e
-            # Host get_checkout_amount throws map to 400 (validation), matching the JS handler.
-            raise ValidationError, e.message
-          end
-        raise NotFoundError, "Order not found." if resolved.nil?
-
-        apply_order_amount(base, resolved)
+        base
       end
 
-      # The keyword form calls get_checkout_amount with keyword args (byte-identical to a bare host hook).
-      # The single-context form (documented in the Rails quickstart) receives one hash carrying
-      # :order_id (and :action) so `ctx[:order_id]` works. Dispatch by the callable's parameters.
-      def call_get_checkout_amount(order_id:, client_amount:, metadata:, request:)
-        if keyword_hook?(@get_checkout_amount)
-          @get_checkout_amount.call(order_id: order_id, client_amount: client_amount, metadata: metadata, request: request)
+      # The keyword form calls prepare_checkout with keyword args. The single-context form
+      # (documented in the Rails quickstart) receives one hash carrying :body and :request.
+      # Dispatch by the callable's parameters.
+      def call_prepare_checkout(body:, request:)
+        if keyword_hook?(@prepare_checkout)
+          @prepare_checkout.call(body: body, request: request)
         else
-          @get_checkout_amount.call(
-            action: "checkout.create",
-            order_id: order_id,
-            client_amount: client_amount,
-            metadata: metadata,
-            request: request
-          )
+          @prepare_checkout.call({ body: body, request: request, action: "checkout.prepare" })
         end
       end
 
@@ -355,15 +391,16 @@ module OpenReceive
           callable.parameters.any? { |type, _name| %i[key keyreq keyrest].include?(type) }
       end
 
-      def apply_order_amount(base, resolved)
-        record = stringify_keys(resolved)
-        unless record.key?("amount") && record["amount"].is_a?(Hash)
-          raise ValidationError,
-                "get_checkout_amount must return { amount: { sats } | { currency, value } } (or nil for not found)."
-        end
+      def prepare_result?(value)
+        return false unless value.respond_to?(:each_pair)
 
-        base["amount"] = record["amount"]
-        base
+        record = stringify_keys(value)
+        amount = record["amount"]
+        return false unless amount.is_a?(Hash)
+
+        has_sats = amount.key?("sats")
+        has_currency_value = amount.key?("currency") && amount.key?("value")
+        (has_sats && !has_currency_value) || (!has_sats && has_currency_value)
       end
 
       def reject_client_amount_fields!(body)
@@ -371,7 +408,7 @@ module OpenReceive
           next unless body.key?(key)
 
           raise ValidationError,
-                "Create checkout does not accept client-supplied '#{key}'. Provide the price via get_checkout_amount."
+                "Create checkout does not accept client-supplied '#{key}'. Provide the price via prepare_checkout."
         end
       end
 

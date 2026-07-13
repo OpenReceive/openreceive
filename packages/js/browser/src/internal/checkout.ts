@@ -47,6 +47,10 @@ import {
   openReceiveCheckoutLabels,
   type RequestCheckoutAmount,
   type RequestCheckoutOptions,
+  type RequestOrderSummaryOptions,
+  type RequestOrderSummaryResult,
+  type RequestPrepareOptions,
+  type RequestPrepareResult,
 } from "./ui.ts";
 import { getOpenReceivePaymentStatusText } from "./wizard.ts";
 
@@ -729,7 +733,7 @@ function normalizeRequestCheckoutOptions(
   const metadata = optionalRecord(record.metadata);
   const amount = normalizeRequestCheckoutAmount(record);
   // Mounted-router creates (`prefix` without an explicit `checkoutUrl`) never send a client
-  // amount — getCheckoutAmount is the sole price authority and the body is `{ order_id }` only.
+  // amount — prepareCheckout persist is the sole price authority and the body is `{ order_id }` only.
   // Custom `checkoutUrl` posts may include the flat amount shape for app-owned create routes.
   const usesMountedRouter =
     options.checkoutUrl === undefined && optionalString(options.prefix) !== undefined;
@@ -774,6 +778,15 @@ export function resolveOrderUrlFromPrefix(prefix: string, orderId: string): stri
   return `${prefix.replace(/\/+$/, "")}/orders/${encodeURIComponent(orderId)}`;
 }
 
+/**
+ * Derive the guest-resume summary URL:
+ * `resolveOrderSummaryUrlFromPrefix("/openreceive", "ord-1")` ->
+ * `/openreceive/orders/ord-1/summary`.
+ */
+export function resolveOrderSummaryUrlFromPrefix(prefix: string, orderId: string): string {
+  return `${resolveOrderUrlFromPrefix(prefix, orderId)}/summary`;
+}
+
 function normalizeRequestCheckoutAmount(
   options: Record<string, unknown>,
 ): RequestCheckoutAmount | undefined {
@@ -784,7 +797,7 @@ function normalizeRequestCheckoutAmount(
   }
 
   // No amount is valid for a prefix create against the mounted router: the server's
-  // getCheckoutAmount sets the authoritative price and the client POSTs { order_id }.
+  // prepareCheckout persist sets the authoritative price and the client POSTs { order_id }.
   if (options.amount === undefined) {
     return undefined;
   }
@@ -917,6 +930,83 @@ export async function requestCheckout(options: RequestCheckoutOptions): Promise<
   }
 
   return snapshot;
+}
+
+/**
+ * `POST {prefix}/prepare` with an opaque JSON body. Returns `{ order_id, summary? }` from the
+ * host `prepareCheckout` hook (amount is persisted server-side for a later create-checkout).
+ */
+export async function requestPrepare(options: RequestPrepareOptions): Promise<RequestPrepareResult> {
+  const prefix = (optionalString(options.prefix) ?? OPENRECEIVE_DEFAULT_PREFIX).replace(/\/+$/, "");
+  const fetcher = options.fetch ?? globalThis.fetch;
+  if (fetcher === undefined) {
+    throw new Error("OpenReceive prepare requires fetch.");
+  }
+
+  assertOpenReceiveBrowserPayloadSafe(options.body);
+
+  const headers = options.headers === undefined ? {} : options.headers;
+  const response = await fetcher(`${prefix}/prepare`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
+    body: JSON.stringify(options.body),
+  });
+  const body = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      typeof body?.message === "string" ? body.message : "Could not prepare checkout.",
+    );
+  }
+
+  const record = asRecord(body);
+  const orderId = optionalString(record.order_id ?? record.orderId);
+  if (orderId === undefined || orderId.length === 0) {
+    throw new Error("OpenReceive prepare response requires order_id.");
+  }
+
+  return {
+    order_id: orderId,
+    ...("summary" in record ? { summary: record.summary } : {}),
+  };
+}
+
+/**
+ * `GET {prefix}/orders/{orderId}/summary` for guest resume display redraw.
+ * Returns `undefined` when the order is missing (404) or the response is not OK.
+ */
+export async function requestOrderSummary(
+  options: RequestOrderSummaryOptions,
+): Promise<RequestOrderSummaryResult | undefined> {
+  const orderId = optionalString(options.orderId);
+  if (orderId === undefined || orderId.length === 0) {
+    throw new Error("OpenReceive order summary requires orderId.");
+  }
+
+  const prefix = (optionalString(options.prefix) ?? OPENRECEIVE_DEFAULT_PREFIX).replace(/\/+$/, "");
+  const fetcher = options.fetch ?? globalThis.fetch;
+  if (fetcher === undefined) {
+    throw new Error("OpenReceive order summary requires fetch.");
+  }
+
+  const headers = options.headers === undefined ? {} : options.headers;
+  const response = await fetcher(resolveOrderSummaryUrlFromPrefix(prefix, orderId), {
+    method: "GET",
+    headers: { ...headers },
+  });
+
+  if (response.status === 404 || !response.ok) return undefined;
+
+  const body = await response.json();
+  const record = asRecord(body);
+  const responseOrderId = optionalString(record.order_id ?? record.orderId) ?? orderId;
+  return {
+    order_id: responseOrderId,
+    ...("summary" in record ? { summary: record.summary } : {}),
+  };
 }
 
 export function createOpenReceiveStatusFetcher(

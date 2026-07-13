@@ -5,7 +5,7 @@ import type {
   OpenReceiveReceiveNwcClient,
   OpenReceiveSourcedPriceProvider,
 } from "@openreceive/core";
-import { openReceiveExpress, sendHostRouteError } from "@openreceive/express";
+import { openReceiveExpress } from "@openreceive/express";
 import { guestCheckout } from "@openreceive/http";
 import {
   createOpenReceive,
@@ -16,11 +16,7 @@ import {
   createHelloFruitDemoServerLogger,
   createHelloFruitOpenReceiveLogger,
 } from "../../../../shared/demo-logging.ts";
-import {
-  createHelloFruitOrderStore,
-  prepareHelloFruitOrder,
-  getHelloFruitDemoOrder,
-} from "../../../../shared/demo-order.ts";
+import { createHelloFruitPrepareCheckout } from "../../../../shared/demo-order.ts";
 import { mountHelloFruitHostedDemoRoutes } from "../../../../shared/hosted-demo-routes.ts";
 import {
   readHelloFruitCheckoutCurrencies,
@@ -57,7 +53,7 @@ export async function createHelloFruitOpenReceive(options: HelloFruitOpenReceive
     priceCurrencyCount: priceCurrencies.length,
   });
 
-  // Quickstart shape: createOpenReceive({ onPaid }) + mount with getCheckoutAmount.
+  // Quickstart shape: createOpenReceive({ onPaid }) + mount with prepareCheckout.
   // onPaid may fire more than once — dedupe on checkoutId in a real app.
   const openreceive = await createOpenReceive({
     ...(options.client === undefined ? {} : { client: options.client }),
@@ -102,20 +98,18 @@ export async function createHelloFruitStaticServer(options: HelloFruitOpenReceiv
   //     ownsOrder: (user, ctx) => orderBelongsTo(user, ctx.resource.order_id),
   //     isAdmin: (user) => user.admin,
   //   }),
-  const orders = createHelloFruitOrderStore(openreceive);
   app.use(
     openReceiveExpress({
       service: openreceive,
       authorize: guestCheckout(),
-      getCheckoutAmount: orders.createGetCheckoutAmount(),
+      prepareCheckout: createHelloFruitPrepareCheckout({ demoId: DEMO_ID, openreceive }),
     }),
   );
 
   logDemo("server.routes", "Mounting demo routes.", {
     staticStickers: "/stickers",
     openReceiveRouter: "/openreceive",
-    prepareOrder: "/prepare_order",
-    orders: "/orders/:orderId",
+    prepare: "/openreceive/prepare",
     rates: "/rates",
   });
 
@@ -162,106 +156,5 @@ export async function createHelloFruitStaticServer(options: HelloFruitOpenReceiv
     }
   });
 
-  // App order step (NOT an OpenReceive route): validate the cart, compute the authoritative total,
-  // and PERSIST the order. The mounted /openreceive/checkouts route creates the checkout; the
-  // <openreceive-checkout order-id> element drives it.
-  app.post("/prepare_order", async (req, res, next) => {
-    const startedAt = Date.now();
-    try {
-      const body = asRequestBody(req.body);
-      logDemo("prepare_order.request", "Received prepare order request.", {
-        ...summarizeOrderRequest(body),
-      });
-      const { order } = await prepareHelloFruitOrder(body, {
-        demoId: DEMO_ID,
-        demoName: "static",
-        openreceive,
-        orders,
-      });
-      logDemo("prepare_order.prepared", "Prepared and persisted demo order.", {
-        orderId: order.uuid,
-        orderStatus: order.status,
-        total: order.total_amount,
-        itemCount: order.items.length,
-        elapsedMs: Date.now() - startedAt,
-      });
-      res.status(201).json({ order });
-    } catch (error) {
-      if (sendHostRouteError(res, error)) {
-        logDemo("prepare_order.rejected", "Prepare order request returned a known error.", {
-          status: res.statusCode,
-          elapsedMs: Date.now() - startedAt,
-        });
-        return;
-      }
-      logDemo("prepare_order.error", "Prepare order request failed unexpectedly.", {
-        error: error instanceof Error ? error.message : String(error),
-        elapsedMs: Date.now() - startedAt,
-      });
-      next(error);
-    }
-  });
-
-  // Guest resume: public order summary for `/checkout/:orderId` when sessionStorage is empty.
-  app.get("/orders/:orderId", async (req, res, next) => {
-    const startedAt = Date.now();
-    const orderId = typeof req.params.orderId === "string" ? req.params.orderId : "";
-    try {
-      const order = orderId.length === 0 ? null : await getHelloFruitDemoOrder(openreceive, orderId);
-      if (order === null) {
-        logDemo("orders.not_found", "Order summary lookup missed.", {
-          orderId,
-          elapsedMs: Date.now() - startedAt,
-        });
-        res.status(404).json({
-          code: "NOT_FOUND",
-          message: "Order not found.",
-          retryable: false,
-        });
-        return;
-      }
-      logDemo("orders.response", "Served order summary for checkout resume.", {
-        orderId: order.uuid,
-        orderStatus: order.status,
-        itemCount: order.items.length,
-        elapsedMs: Date.now() - startedAt,
-      });
-      res.status(200).json({ order });
-    } catch (error) {
-      logDemo("orders.error", "Order summary lookup failed.", {
-        orderId,
-        error: error instanceof Error ? error.message : String(error),
-        elapsedMs: Date.now() - startedAt,
-      });
-      next(error);
-    }
-  });
-
   return app;
-}
-
-function summarizeOrderRequest(body: Record<string, unknown>): Record<string, unknown> {
-  const cart = Array.isArray(body.cart) ? body.cart : [];
-  return {
-    currency: body.currency,
-    cartLineCount: cart.length,
-    cartQuantity: cart.reduce((total, item) => {
-      if (typeof item !== "object" || item === null || Array.isArray(item)) return total;
-      const quantity = (item as Record<string, unknown>).quantity;
-      return total + (typeof quantity === "number" && Number.isFinite(quantity) ? quantity : 0);
-    }, 0),
-    productIds: cart
-      .map((item) =>
-        typeof item === "object" && item !== null && !Array.isArray(item)
-          ? (item as Record<string, unknown>).product_id
-          : undefined,
-      )
-      .filter((productId): productId is string => typeof productId === "string"),
-  };
-}
-
-function asRequestBody(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
 }

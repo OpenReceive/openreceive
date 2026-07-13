@@ -6,29 +6,31 @@ contracts, and CLI.
 ## Happy path (Node + Express + React)
 
 ```sh
-npm install openreceive @openreceive/express express react react-dom
+npm install openreceive @openreceive/express @openreceive/http express react react-dom
 ```
 
 ```ts
 import { createOpenReceive, openReceiveExpress } from "openreceive/express";
+import { createHostOrderStore } from "openreceive/node";
+import { guestCheckout } from "@openreceive/http";
 import { Checkout } from "openreceive/react";
 
-// 1. Price the order (create-checkout only — never trusts a client price)
-const getCheckoutAmount = async ({ orderId }) => {
-  const order = await loadOrder(orderId);
-  if (!order) return null; // → 404
-  return { amount: { currency: "USD", value: order.total_usd } };
-};
-
-// 2. Handle payment (settlement → your fulfillment)
 const onPaid = async ({ orderId, checkoutId, metadata }) => {
   await fulfill({ orderId, checkoutId, metadata });
 };
 
-// 3. Mount
 const service = await createOpenReceive({ onPaid });
-app.use(openReceiveExpress({ service, getCheckoutAmount }));
+const orders = createHostOrderStore(service.store);
 
+app.use(
+  openReceiveExpress({
+    service,
+    authorize: guestCheckout(),
+    getCheckoutAmount: orders.createGetCheckoutAmount(),
+  }),
+);
+
+// Your /prepare_order persists amount authority, then:
 // <Checkout orderId={order.id} />
 ```
 

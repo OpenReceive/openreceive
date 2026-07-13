@@ -44,6 +44,11 @@ export {
   type OpenReceiveHttpHandler,
   ORDER_TOKEN_COOKIE_NAME,
 } from "./handler.ts";
+export type {
+  PrepareCheckout,
+  PrepareCheckoutContext,
+  PrepareCheckoutResult,
+} from "./prepare-checkout.ts";
 export {
   type GuestCheckoutOptions,
   guestCheckout,

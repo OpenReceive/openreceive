@@ -46,6 +46,8 @@ export const OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS = {
   providerCopy: "openreceive-provider-copy",
   startOver: "openreceive-start-over",
   error: "openreceive-error",
+  /** Guest resume: opaque `summary` from `GET …/orders/{id}/summary`. */
+  summary: "openreceive-summary",
 } as const;
 export const OPENRECEIVE_THEME_TOGGLE_ELEMENT_EVENTS = {
   change: "openreceive-theme-change",
@@ -145,6 +147,10 @@ export interface CheckoutStateEventDetail {
 export interface CheckoutErrorEventDetail {
   readonly error: unknown;
 }
+export interface CheckoutSummaryEventDetail {
+  readonly order_id: string;
+  readonly summary?: unknown;
+}
 export interface OpenReceiveThemeChangeEventDetail {
   readonly theme: OpenReceiveThemePreference;
   readonly resolvedTheme: OpenReceiveResolvedTheme;
@@ -190,6 +196,14 @@ export function createCheckoutErrorEvent(error: unknown): CustomEvent<CheckoutEr
     detail: {
       error,
     },
+  });
+}
+
+export function createCheckoutSummaryEvent(
+  detail: CheckoutSummaryEventDetail,
+): CustomEvent<CheckoutSummaryEventDetail> {
+  return new CustomEvent<CheckoutSummaryEventDetail>(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.summary, {
+    detail,
   });
 }
 
@@ -577,6 +591,15 @@ export const OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES = {
   orderUrl: "order-url",
   theme: "theme",
   paymentWizard: "payment-wizard",
+  /** Guest resume: fetch `GET …/orders/{id}/summary` and optionally sync the URL. */
+  resume: "resume",
+  /** History API path prefix for resume URL sync. Default `/checkout`. */
+  resumePathPrefix: "resume-path-prefix",
+  /**
+   * Order id owned by the app router (e.g. Next.js). When set, the element does not
+   * push/replace the URL via the History API.
+   */
+  routeOrderId: "route-order-id",
 } as const;
 
 export const OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES = {
@@ -609,6 +632,17 @@ export interface CheckoutElementAttributeOptions {
   readonly metadata?: Record<string, unknown>;
   readonly theme?: OpenReceiveResolvedTheme;
   readonly paymentWizard?: boolean;
+  /**
+   * Guest resume: fetch `GET {prefix}/orders/{orderId}/summary` for display redraw and
+   * optionally sync `/checkout/:orderId` via the History API.
+   */
+  readonly resume?: boolean;
+  /** History API path prefix for resume URL sync. Default `/checkout`. */
+  readonly resumePathPrefix?: string;
+  /**
+   * Order id from the app router (e.g. Next.js). When set, skip History API URL sync.
+   */
+  readonly routeOrderId?: string;
 }
 
 export interface OpenReceiveThemeToggleElementAttributeOptions {
@@ -638,6 +672,8 @@ export interface CheckoutElementEventHandlers {
   readonly onProviderCopy?: (event: Event) => void;
   readonly onStartOver?: (event: Event) => void;
   readonly onError?: (event: Event) => void;
+  /** Guest resume summary from `GET …/orders/{id}/summary` (`detail.summary`). */
+  readonly onSummary?: (event: Event) => void;
 }
 
 export type CheckoutElementListeners = Partial<
@@ -768,8 +804,8 @@ export type RequestCheckoutOptions = RequestCheckoutBaseOptions &
         readonly amount: RequestCheckoutAmount;
       }
     // Amount-less create: `{ prefix, orderId }` (or `{ checkoutUrl, orderId }`) with no amount.
-    // The mounted server's getCheckoutAmount sets the authoritative price; the client POSTs a body
-    // of only `{ order_id }`.
+    // The mounted server's prepareCheckout persist is the sole price authority; the client
+    // POSTs a body of only `{ order_id }`.
     | {
         readonly amount?: never;
       }
@@ -799,9 +835,44 @@ export interface RequestCheckoutBaseOptions {
    * When `false`, the server creates a `checkout_lock` placeholder without calling
    * `makeInvoice`, deferring the actual Lightning mint until the payer selects Bitcoin.
    * Omit or pass `true` to mint immediately (server default). The mounted create route
-   * requires `getCheckoutAmount` regardless of this flag.
+   * requires a prior `prepareCheckout` persist regardless of this flag.
    */
   readonly mintLightning?: boolean;
+}
+
+/**
+ * Options for {@link requestPrepare}: `POST {prefix}/prepare` with an opaque JSON body.
+ * The host `prepareCheckout` hook validates the cart and returns the authoritative amount
+ * (and optional summary) that create-checkout later reads from prepare persist.
+ */
+export interface RequestPrepareOptions {
+  /** Base path the shipped router is mounted at. Default {@link OPENRECEIVE_DEFAULT_PREFIX}. */
+  readonly prefix?: string;
+  /** Opaque prepare body (cart / SKU / tip amount — host-defined). */
+  readonly body: unknown;
+  readonly fetch?: typeof globalThis.fetch;
+  readonly headers?: Readonly<Record<string, string>>;
+}
+
+export interface RequestPrepareResult {
+  readonly order_id: string;
+  readonly summary?: unknown;
+}
+
+/**
+ * Options for {@link requestOrderSummary}: `GET {prefix}/orders/{orderId}/summary`.
+ */
+export interface RequestOrderSummaryOptions {
+  /** Base path the shipped router is mounted at. Default {@link OPENRECEIVE_DEFAULT_PREFIX}. */
+  readonly prefix?: string;
+  readonly orderId: string;
+  readonly fetch?: typeof globalThis.fetch;
+  readonly headers?: Readonly<Record<string, string>>;
+}
+
+export interface RequestOrderSummaryResult {
+  readonly order_id: string;
+  readonly summary?: unknown;
 }
 
 export interface CreateOpenReceiveStatusFetcherOptions {

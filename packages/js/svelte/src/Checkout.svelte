@@ -10,13 +10,18 @@
   // Snapshot mode: pass a `checkout` to render it directly (backward compatible).
   // Create mode: omit `checkout` and pass `orderId` (+ optional `prefix`); the underlying
   // <openreceive-checkout> element creates the checkout, then renders and polls itself.
+  // With `resume`, also fetches GET …/orders/{id}/summary and emits `openreceive-summary`.
   export let checkout: CheckoutSnapshot | undefined = undefined;
   export let orderId: string | undefined = undefined;
   export let prefix: string | undefined = undefined;
   export let metadata: Record<string, unknown> | undefined = undefined;
   export let orderUrl: string | undefined = undefined;
+  export let resume: boolean | undefined = undefined;
+  export let resumePathPrefix: string | undefined = undefined;
+  export let routeOrderId: string | undefined = undefined;
   export let onSettled: ((event: Event) => void) | undefined = undefined;
   export let onStartOver: ((event: Event) => void) | undefined = undefined;
+  export let onSummary: ((event: Event) => void) | undefined = undefined;
   export let options: CheckoutShellOptions = {};
 
   $: shell = createOpenReceiveSvelteCheckoutShellBinding(checkout ?? null, {
@@ -25,8 +30,12 @@
     ...(prefix === undefined ? {} : { prefix }),
     ...(metadata === undefined ? {} : { metadata }),
     ...(orderUrl === undefined ? {} : { orderUrl }),
+    ...(resume === undefined ? {} : { resume }),
+    ...(resumePathPrefix === undefined ? {} : { resumePathPrefix }),
+    ...(routeOrderId === undefined ? {} : { routeOrderId }),
     ...(onSettled === undefined ? {} : { onSettled }),
-    ...(onStartOver === undefined ? {} : { onStartOver })
+    ...(onStartOver === undefined ? {} : { onStartOver }),
+    ...(onSummary === undefined ? {} : { onSummary })
   });
 
   if (typeof window !== "undefined") {

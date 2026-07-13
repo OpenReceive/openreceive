@@ -24,12 +24,27 @@ export interface CheckoutData {
  * lifecycle: it creates the checkout against `${prefix}/checkouts`, then polls status and
  * drives swaps against `${prefix}/orders/${orderId}`. The per-order capability token is
  * captured and attached automatically.
+ *
+ * With `resume`, also fetches `GET {prefix}/orders/{orderId}/summary` for host display
+ * redraw (`onSummary`) and optionally syncs `/checkout/:orderId` via the History API.
  */
 export interface CheckoutCreateOptions {
   readonly orderId?: string;
   readonly prefix?: string;
   readonly metadata?: Record<string, unknown>;
   readonly createFetch?: typeof globalThis.fetch;
+  /**
+   * Guest resume: fetch order summary for display redraw and optionally sync the URL.
+   * Pair with `orderId` — Checkout still creates/polls as usual.
+   */
+  readonly resume?: boolean;
+  /** History API path prefix for resume URL sync. Default `/checkout`. */
+  readonly resumePathPrefix?: string;
+  /**
+   * Order id from the app router (e.g. Next.js). When set, Checkout does not push/replace
+   * the URL via the History API.
+   */
+  readonly routeOrderId?: string;
 }
 
 export interface CheckoutViewModel {
@@ -172,6 +187,13 @@ export interface CheckoutProps
   readonly onState?: (state: CheckoutState) => void;
   readonly onSettled?: () => void;
   readonly onStartOver?: () => void;
+  /**
+   * Guest resume: opaque `summary` from `GET {prefix}/orders/{orderId}/summary`.
+   * Called when `resume` is set and the summary fetch succeeds.
+   */
+  readonly onSummary?: (summary: unknown) => void;
+  /** Called when `resume` is set and the summary fetch misses (404 / not OK). */
+  readonly onResumeMiss?: (orderId: string) => void;
   readonly polling?: boolean;
   readonly paymentWizard?: boolean;
   readonly themeSwitcher?: boolean;

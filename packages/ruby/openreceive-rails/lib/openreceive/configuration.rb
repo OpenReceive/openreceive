@@ -13,8 +13,10 @@ module OpenReceive
   #     config.nwc               = ENV.fetch("OPENRECEIVE_NWC")
   #     config.namespace         = "default"
   #     config.authorize         = ->(ctx) { ... }
-  #     config.get_checkout_amount       = ->(ctx) {
-  #       { amount: { currency: "USD", value: Order.find(ctx[:order_id]).total_usd.to_s } }
+  #     config.prepare_checkout  = ->(ctx) {
+  #       order = Order.find_by(id: ctx[:body]["order_id"])
+  #       return nil if order.nil?
+  #       { amount: { currency: "USD", value: order.total_usd.to_s }, order_id: order.id.to_s }
   #     }
   #   end
   #
@@ -50,12 +52,12 @@ module OpenReceive
     # OpenReceive::Server::Presets.guest_checkout / .with_user policies can be assigned here directly.
     attr_accessor :authorize
 
-    # get_checkout_amount: REQUIRED. Called on create-checkout only to return payment terms (never
-    # trust a client price). Accepts either the single-context form `->(ctx) { ... }` (ctx has
-    # :order_id, :client_amount, :metadata, :request, :action) or the keyword form
-    # `->(order_id:, client_amount:, metadata:, request:) { ... }` (matching RackApp). Must return
-    # { amount: { currency:, value: } } or { amount: { sats: } }, or nil for 404 (order not found).
-    attr_accessor :get_checkout_amount
+    # prepare_checkout: REQUIRED. Called on POST /prepare to return payment terms (never trust a
+    # client price). Accepts either the single-context form `->(ctx) { ... }` (ctx has :body,
+    # :request, :action) or the keyword form `->(body:, request:) { ... }` (matching RackApp). Must
+    # return { amount: { currency:, value: } | { sats: }, order_id?, summary?, metadata? }, or nil
+    # for 404. Create-checkout reads the amount persisted by prepare.
+    attr_accessor :prepare_checkout
 
     # rate_limit: ->(context) { allowed_boolean }. Returning false yields a 429. Optional.
     attr_accessor :rate_limit
@@ -84,7 +86,7 @@ module OpenReceive
       @namespace = "default"
       @store = nil
       @authorize = nil
-      @get_checkout_amount = nil
+      @prepare_checkout = nil
       @rate_limit = nil
       @prefix = "/openreceive"
       @price_provider = nil
@@ -126,16 +128,16 @@ module OpenReceive
     # app) delegate to. Passing `authorize: @authorize` (which may be nil) means the default
     # fail-closed policy is used when the host did not supply one.
     def request_handler
-      if @get_checkout_amount.nil?
+      if @prepare_checkout.nil?
         raise ConfigurationError,
-              "OpenReceive.config.get_checkout_amount is required — the create-checkout route " \
-              "never trusts a client-supplied price."
+              "OpenReceive.config.prepare_checkout is required — POST /prepare is the sole " \
+              "price authority; the create-checkout route never trusts a client-supplied price."
       end
       @request_handler ||= OpenReceive::Server::RequestHandler.new(
         service: service,
         tokens: tokens,
         authorize: @authorize,
-        get_checkout_amount: @get_checkout_amount,
+        prepare_checkout: @prepare_checkout,
         rate_limit: @rate_limit,
         prefix: @prefix
       )
