@@ -247,8 +247,19 @@ function CheckoutDeferredShell(
     logger,
     onError,
     qrEncoder,
+    polling,
+    refreshStatus,
   } = props;
   const theme = useTheme({ defaultTheme, storageKey: themeStorageKey });
+  // Poll so payment_methods (swap coins) arrive even before Lightning is minted.
+  const checkoutModel = useCheckout({
+    checkout,
+    logger,
+    onError,
+    refreshStatus,
+    orderUrl,
+    polling,
+  });
 
   return React.createElement(
     "section",
@@ -269,7 +280,7 @@ function CheckoutDeferredShell(
       ? React.createElement(PaymentWizard, {
           key: "wizard",
           invoice: undefined,
-          checkout,
+          checkout: checkoutModel.checkout,
           className: classNames?.wizard,
           logger,
           onError,

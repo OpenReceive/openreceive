@@ -3,9 +3,8 @@ import type {
   OpenReceiveReceiveNwcClient,
   OpenReceiveSourcedPriceProvider,
 } from "@openreceive/core";
-import { guestCheckout, type CreateOpenReceiveHttpHandlerOptions } from "@openreceive/http";
+import { guestCheckout, hostError, mapHostRouteError, type CreateOpenReceiveHttpHandlerOptions } from "@openreceive/http";
 import {
-  OpenReceiveServiceError,
   createOpenReceive,
   readOpenReceiveConfigFile,
 } from "@openreceive/node";
@@ -16,9 +15,8 @@ import {
   createHelloFruitOpenReceiveLogger,
 } from "../../../../shared/demo-logging.ts";
 import {
-  HelloFruitDemoOrderError,
+  createHelloFruitOrderStore,
   prepareHelloFruitOrder,
-  getHelloFruitCheckoutAmount,
   getHelloFruitDemoOrder,
 } from "../../../../shared/demo-order.ts";
 import {
@@ -126,6 +124,7 @@ export function sitemapResponse(): string {
 export async function prepareOrderResponse(request: Request): Promise<Response> {
   const startedAt = Date.now();
   const { openreceive } = await getOpenReceive();
+  const orders = createHelloFruitOrderStore(openreceive);
 
   try {
     const body = await readJsonBody(request);
@@ -136,6 +135,7 @@ export async function prepareOrderResponse(request: Request): Promise<Response> 
       demoId: DEMO_ID,
       demoName: "Next.js",
       openreceive,
+      orders,
     });
     logDemo("prepare_order.prepared", "Prepared and persisted demo order.", {
       orderId: order.uuid,
@@ -146,13 +146,14 @@ export async function prepareOrderResponse(request: Request): Promise<Response> 
     });
     return jsonResponse({ order }, 201);
   } catch (error) {
-    if (error instanceof OpenReceiveServiceError || error instanceof HelloFruitDemoOrderError) {
+    const mapped = mapHostRouteError(error);
+    if (mapped !== null) {
       logDemo("prepare_order.rejected", "Prepare order request returned a known error.", {
-        status: error.status,
-        body: error.body,
+        status: mapped.status,
+        body: mapped.body,
         elapsedMs: Date.now() - startedAt,
       });
-      return jsonResponse(error.body, error.status);
+      return jsonResponse(mapped.body, mapped.status);
     }
     logDemo("prepare_order.error", "Prepare order request failed unexpectedly.", {
       error: error instanceof Error ? error.message : String(error),
@@ -203,10 +204,11 @@ export async function orderSummaryResponse(orderId: string): Promise<Response> {
  */
 export async function openReceiveHttpOptions(): Promise<CreateOpenReceiveHttpHandlerOptions> {
   const { openreceive } = await getOpenReceive();
+  const orders = createHelloFruitOrderStore(openreceive);
   return {
     service: openreceive,
     authorize: guestCheckout(),
-    getCheckoutAmount: ({ orderId }) => getHelloFruitCheckoutAmount(openreceive, orderId),
+    getCheckoutAmount: orders.createGetCheckoutAmount(),
   };
 }
 
@@ -334,10 +336,7 @@ async function readJsonBody(request: Request): Promise<Record<string, unknown>> 
   if (text.length === 0) return {};
   const body = JSON.parse(text) as unknown;
   if (body === null || typeof body !== "object" || Array.isArray(body)) {
-    throw new OpenReceiveServiceError(400, {
-      code: "INVALID_REQUEST",
-      message: "JSON request body must be an object.",
-    });
+    throw hostError("JSON request body must be an object.");
   }
   return body as Record<string, unknown>;
 }

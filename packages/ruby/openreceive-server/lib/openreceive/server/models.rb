@@ -33,7 +33,15 @@ module OpenReceive
       end
 
       def invoice_rail(row)
-        dig_metadata(row, "rail") == "swap" ? "swap" : "lightning"
+        rail = dig_metadata(row, "rail")
+        return "swap" if rail == "swap"
+        return "checkout_lock" if rail == "checkout_lock"
+
+        "lightning"
+      end
+
+      def checkout_lock_row?(row)
+        dig_metadata(row, "rail") == "checkout_lock"
       end
 
       def derive_invoice_status(row, now)
@@ -54,7 +62,7 @@ module OpenReceive
           "status" => derive_invoice_status(row, now),
           "transaction_state" => row["transaction_state"],
           "workflow_state" => row["workflow_state"],
-          "invoice" => rail == "swap" ? nil : row["invoice"],
+          "invoice" => %w[swap checkout_lock].include?(rail) ? nil : row["invoice"],
           "payment_hash" => row["payment_hash"],
           "amount_msats" => integer(row["amount_msats"]),
           "order_id" => stored_order_id(row),
@@ -100,33 +108,57 @@ module OpenReceive
           end
         end
 
-        invoices = sorted.map { |row| serialize_invoice(row, now) }
+        lock_rows = sorted.select { |row| checkout_lock_row?(row) }
+        public_rows = sorted.reject { |row| checkout_lock_row?(row) }
+        invoices = public_rows.map { |row| serialize_invoice(row, now) }
         paid_invoice = invoices.find { |invoice| invoice["status"] == "settled" }
         superseded = sorted.any? { |row| dig_metadata(row, "superseded") == true }
+        open_lock = lock_rows.find do |row|
+          dig_metadata(row, "superseded") != true &&
+            integer(row["expires_at"]) > now &&
+            row["transaction_state"] == "pending"
+        end
         status =
           if paid_invoice
             "paid"
           elsif superseded
             "superseded"
-          elsif invoices.all? { |invoice| %w[expired failed].include?(invoice["status"]) }
+          elsif invoices.empty? && open_lock
+            "open"
+          elsif invoices.empty?
             "expired"
+          elsif invoices.all? { |invoice| %w[expired failed].include?(invoice["status"]) }
+            open_lock ? "open" : "expired"
           else
             "open"
           end
         active =
           if status == "open"
             invoices.find do |invoice|
-              invoice["rail"] != "swap" && invoice["status"] == "pending" && invoice["expires_at"] > now
+              invoice["rail"] == "lightning" && invoice["status"] == "pending" && invoice["expires_at"] > now
             end
           end
-        amount_spec = dig_metadata(sorted.first, "amount_spec")
-        base = active || paid_invoice || invoices.first
+        amount_source =
+          if active
+            public_rows.find { |row| row["invoice_id"] == active["invoice_id"] }
+          elsif paid_invoice
+            public_rows.find { |row| row["invoice_id"] == paid_invoice["invoice_id"] }
+          else
+            open_lock || sorted.first
+          end
+        amount_spec = dig_metadata(amount_source || sorted.first, "amount_spec")
+        amount_msats =
+          (active && active["amount_msats"]) ||
+          (paid_invoice && paid_invoice["amount_msats"]) ||
+          (open_lock && integer(open_lock["amount_msats"])) ||
+          (invoices.first && invoices.first["amount_msats"]) ||
+          integer(sorted.first["amount_msats"])
 
         checkout = {
           "checkout_id" => checkout_id,
           "order_id" => stored_order_id(sorted.first),
           "status" => status,
-          "amount_msats" => base["amount_msats"]
+          "amount_msats" => amount_msats
         }
         fiat = fiat_from_amount_spec(amount_spec)
         checkout["fiat"] = fiat unless fiat.nil?

@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { OpenReceive, CheckoutAmountSource } from "@openreceive/node";
+import { createHostOrderStore, type HostOrderStore } from "@openreceive/node";
+import { hostError, OpenReceiveHostError } from "@openreceive/http";
+import { OpenReceiveDecimalError } from "@openreceive/core";
 import {
   createHelloFruitOrderInvoiceDescription,
   type HelloFruitFiatAmount,
@@ -13,7 +16,6 @@ import {
 import { readHelloFruitOrderRates } from "./demo-price-feeds.ts";
 import {
   convertHelloFruitUsdAmount,
-  HelloFruitPricingError,
   multiplyHelloFruitAmount,
   sumHelloFruitAmounts,
   type HelloFruitBtcFiatRates,
@@ -57,19 +59,27 @@ export interface HelloFruitCreateOrderResult {
   };
 }
 
+/** @deprecated Prefer {@link HOST_ORDER_META_PREFIX} from `@openreceive/node` with a demo namespace. */
+export const HELLO_FRUIT_ORDER_META_PREFIX = "demo_order:" as const;
 
-/**
- * Meta-store key prefix under which the app persists each prepared order. Persisting through the
- * OpenReceive store's KV (not an in-memory Map) keeps the amount authority durable and correct
- * across multiple instances (Heroku/Vercel), which is the whole point of the shipped-router model:
- * `/prepare_order` writes the order here, and the mounted create-checkout route's `getCheckoutAmount`
- * reads it back. The create body never carries a client price.
- */
-export const HELLO_FRUIT_ORDER_META_PREFIX = "demo_order:";
+/** @deprecated Prefer {@link OpenReceiveHostError} / {@link hostError} from `@openreceive/http`. */
+export class HelloFruitDemoOrderError extends OpenReceiveHostError {
+  constructor(message: string, status = 400) {
+    super(status, {
+      code: "INVALID_REQUEST",
+      message,
+      retryable: false,
+    });
+    this.name = "HelloFruitDemoOrderError";
+  }
+}
 
-interface StoredHelloFruitOrder {
-  readonly order: HelloFruitDemoOrder;
-  readonly amount: HelloFruitCreateOrderResult["invoiceRequest"]["amount"];
+export function createHelloFruitOrderStore(
+  openreceive: Pick<OpenReceive, "store">,
+): HostOrderStore<HelloFruitDemoOrder> {
+  return createHostOrderStore(openreceive.store, {
+    prefix: HELLO_FRUIT_ORDER_META_PREFIX,
+  });
 }
 
 /**
@@ -84,75 +94,38 @@ export async function prepareHelloFruitOrder(
     readonly openreceive: OpenReceive;
     readonly demoName?: string;
     readonly catalog?: readonly HelloFruitProduct[];
+    readonly orders?: HostOrderStore<HelloFruitDemoOrder>;
   },
 ): Promise<{ order: HelloFruitDemoOrder }> {
   const result = await createHelloFruitCreateOrderResult(input, options);
-  const stored: StoredHelloFruitOrder = {
+  const orders = options.orders ?? createHelloFruitOrderStore(options.openreceive);
+  await orders.persist(result.order.uuid, {
     order: result.order,
     amount: result.invoiceRequest.amount,
-  };
-  // casMeta(key, value, null) is insert-if-absent; the order id is a fresh UUID so it never conflicts.
-  await options.openreceive.store.casMeta(
-    `${HELLO_FRUIT_ORDER_META_PREFIX}${result.order.uuid}`,
-    JSON.stringify(stored),
-    null,
-  );
+  });
   return { order: result.order };
 }
 
 /**
  * The amount authority for the mounted create-checkout route: look the persisted order up by id and
  * return its authoritative amount source. Returns `null` when the order is unknown (HTTP → 404).
- * The create body never carries a client price.
  */
 export async function getHelloFruitCheckoutAmount(
   openreceive: Pick<OpenReceive, "store">,
   orderId: string,
 ): Promise<CheckoutAmountSource | null> {
-  const stored = await readStoredHelloFruitOrder(openreceive, orderId);
-  return stored === null ? null : { amount: stored.amount };
+  return createHelloFruitOrderStore(openreceive).getCheckoutAmount(orderId);
 }
 
 /**
- * Host display lookup for guest checkout resume (`GET /orders/:orderId`). Returns the public order
- * summary only — never OpenReceive capability tokens or amount-authority internals beyond what the
- * prepare response already showed the payer.
+ * Host display lookup for guest checkout resume (`GET /orders/:orderId`).
  */
 export async function getHelloFruitDemoOrder(
   openreceive: Pick<OpenReceive, "store">,
   orderId: string,
 ): Promise<HelloFruitDemoOrder | null> {
-  const stored = await readStoredHelloFruitOrder(openreceive, orderId);
-  return stored === null ? null : stored.order;
-}
-
-async function readStoredHelloFruitOrder(
-  openreceive: Pick<OpenReceive, "store">,
-  orderId: string,
-): Promise<StoredHelloFruitOrder | null> {
-  const row = await openreceive.store.getMeta(`${HELLO_FRUIT_ORDER_META_PREFIX}${orderId}`);
-  if (row === undefined) return null;
-  return JSON.parse(row.value) as StoredHelloFruitOrder;
-}
-
-export class HelloFruitDemoOrderError extends Error {
-  readonly status: number;
-  readonly body: {
-    readonly code: "INVALID_REQUEST";
-    readonly message: string;
-    readonly retryable: false;
-  };
-
-  constructor(message: string, status = 400) {
-    super(message);
-    this.name = "HelloFruitDemoOrderError";
-    this.status = status;
-    this.body = {
-      code: "INVALID_REQUEST",
-      message,
-      retryable: false,
-    };
-  }
+  const stored = await createHelloFruitOrderStore(openreceive).read(orderId);
+  return stored?.order ?? null;
 }
 
 export async function createHelloFruitCreateOrderResult(
@@ -223,10 +196,10 @@ function createHelloFruitOrderItems(
   rates: HelloFruitBtcFiatRates | undefined,
 ): HelloFruitOrderItem[] {
   if (!Array.isArray(cart) || cart.length === 0) {
-    throw new HelloFruitDemoOrderError("Cart must include at least one item.");
+    throw hostError("Cart must include at least one item.");
   }
   if (cart.length > 12) {
-    throw new HelloFruitDemoOrderError("Cart can include at most 12 items.");
+    throw hostError("Cart can include at most 12 items.");
   }
 
   const products = new Map(catalog.map((product) => [product.id, product]));
@@ -236,7 +209,7 @@ function createHelloFruitOrderItems(
     const productId = requireProductId(item);
     const quantity = requireQuantity(item.quantity);
     if (!products.has(productId)) {
-      throw new HelloFruitDemoOrderError(`Unknown product: ${productId}.`);
+      throw hostError(`Unknown product: ${productId}.`);
     }
     quantities.set(productId, (quantities.get(productId) ?? 0) + quantity);
   }
@@ -244,7 +217,7 @@ function createHelloFruitOrderItems(
   return [...quantities.entries()].map(([productId, quantity]) => {
     const product = products.get(productId);
     if (product === undefined) {
-      throw new HelloFruitDemoOrderError(`Unknown product: ${productId}.`);
+      throw hostError(`Unknown product: ${productId}.`);
     }
     const unit_amount = withHelloFruitPricing(() =>
       convertHelloFruitUsdAmount(product.fiat, currency, rates),
@@ -262,7 +235,7 @@ function createHelloFruitOrderItems(
 
 function totalHelloFruitAmount(items: readonly HelloFruitOrderItem[]): HelloFruitFiatAmount {
   if (items.length === 0) {
-    throw new HelloFruitDemoOrderError("Cart must include at least one item.");
+    throw hostError("Cart must include at least one item.");
   }
   return withHelloFruitPricing(() => sumHelloFruitAmounts(items.map((item) => item.line_amount)));
 }
@@ -271,8 +244,8 @@ function withHelloFruitPricing<T>(compute: () => T): T {
   try {
     return compute();
   } catch (error) {
-    if (error instanceof HelloFruitPricingError) {
-      throw new HelloFruitDemoOrderError(error.message, error.status);
+    if (error instanceof OpenReceiveDecimalError) {
+      throw hostError(error.message, error.status);
     }
     throw error;
   }
@@ -280,7 +253,7 @@ function withHelloFruitPricing<T>(compute: () => T): T {
 
 function asCartItem(value: unknown): HelloFruitCartItemInput {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new HelloFruitDemoOrderError("Cart items must be objects.");
+    throw hostError("Cart items must be objects.");
   }
   return value as HelloFruitCartItemInput;
 }
@@ -288,14 +261,14 @@ function asCartItem(value: unknown): HelloFruitCartItemInput {
 function requireProductId(item: HelloFruitCartItemInput): string {
   const productId = typeof item.product_id === "string" ? item.product_id : item.id;
   if (typeof productId !== "string" || productId.length === 0) {
-    throw new HelloFruitDemoOrderError("Cart items require product_id.");
+    throw hostError("Cart items require product_id.");
   }
   return productId;
 }
 
 function requireQuantity(value: unknown): number {
   if (!Number.isInteger(value) || typeof value !== "number" || value < 1 || value > 9) {
-    throw new HelloFruitDemoOrderError("Cart item quantity must be an integer from 1 through 9.");
+    throw hostError("Cart item quantity must be an integer from 1 through 9.");
   }
   return value;
 }

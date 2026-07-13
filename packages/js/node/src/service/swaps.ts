@@ -453,7 +453,7 @@ export async function startSwap(
         created_at: createdAt,
         expires_at: normalizedExpiresAt,
         metadata: {
-          ...swapBaseMetadata(displayRecord.row),
+          ...swapBaseMetadata(amountSourceRecord.row),
           rail: "swap",
           swap_attempt_key: swapAttemptKey,
           swap: {
@@ -466,9 +466,9 @@ export async function startSwap(
           },
         },
         fiat_quote:
-          displayRecord.row.fiat_quote === undefined
+          amountSourceRecord.row.fiat_quote === undefined
             ? null
-            : structuredClone(displayRecord.row.fiat_quote),
+            : structuredClone(amountSourceRecord.row.fiat_quote),
       },
     },
   });

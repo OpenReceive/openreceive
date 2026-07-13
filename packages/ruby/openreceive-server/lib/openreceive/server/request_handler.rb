@@ -313,6 +313,8 @@ module OpenReceive
           base["description_hash"] = body["description_hash"] || body["descriptionHash"]
         end
         base["metadata"] = body["metadata"] if body.key?("metadata")
+        mint_lightning = body.key?("mint_lightning") ? body["mint_lightning"] : body["mintLightning"]
+        base["mint_lightning"] = mint_lightning == false ? false : true
 
         resolved =
           begin

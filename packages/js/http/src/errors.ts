@@ -35,7 +35,7 @@ export class OpenReceiveHttpError extends Error {
 }
 
 /** Shape a service error carries: a numeric status and an OpenReceive error body. */
-interface ServiceErrorShape {
+export interface ServiceErrorShape {
   readonly status: number;
   readonly body: OpenReceiveErrorBody;
 }
@@ -45,13 +45,57 @@ interface ServiceErrorShape {
  * handler stays runtime-agnostic and never breaks on cross-module `instanceof` identity mismatches
  * (source vs. built dist, or two copies of @openreceive/node).
  */
-function isServiceErrorShape(error: unknown): error is ServiceErrorShape {
+export function isServiceErrorShape(error: unknown): error is ServiceErrorShape {
   if (typeof error !== "object" || error === null) return false;
   const candidate = error as { status?: unknown; body?: unknown };
   if (typeof candidate.status !== "number") return false;
   if (typeof candidate.body !== "object" || candidate.body === null) return false;
   const body = candidate.body as { code?: unknown; message?: unknown };
   return isOpenReceiveErrorCode(body.code) && typeof body.message === "string";
+}
+
+/**
+ * Host-route control-flow error with the same `{ status, body }` shape as
+ * {@link OpenReceiveServiceError}. Use for cart/validation failures on app routes
+ * (`/prepare_order`, etc.) so {@link mapHostRouteError} / Express helpers can map them.
+ */
+export class OpenReceiveHostError extends Error {
+  readonly status: number;
+  readonly body: OpenReceiveErrorBody;
+
+  constructor(status: number, body: OpenReceiveErrorBody) {
+    super(body.message);
+    this.name = "OpenReceiveHostError";
+    this.status = status;
+    this.body = body;
+  }
+}
+
+/** Convenience factory for a host validation error (default 400 INVALID_REQUEST). */
+export function hostError(
+  message: string,
+  status = 400,
+  code: OpenReceiveErrorCode = "INVALID_REQUEST",
+): OpenReceiveHostError {
+  return new OpenReceiveHostError(status, {
+    code,
+    message,
+    retryable: false,
+  });
+}
+
+/**
+ * Map a thrown host/service error to `{ status, body }` for app routes outside the
+ * mounted OpenReceive handler. Returns `null` when the value is not a known shape
+ * (caller should rethrow / pass to `next(error)`).
+ */
+export function mapHostRouteError(
+  error: unknown,
+): { readonly status: number; readonly body: OpenReceiveErrorBody } | null {
+  if (error instanceof OpenReceiveHostError || isServiceErrorShape(error)) {
+    return { status: error.status, body: error.body };
+  }
+  return null;
 }
 
 /** Generate a per-response request id used in both the body and the `X-Request-Id` header. */

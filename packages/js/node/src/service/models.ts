@@ -17,7 +17,6 @@ import {
   isRecord,
   optionalSafeInteger,
   optionalString,
-  requiredValue,
   serviceError,
 } from "./core-utils.ts";
 import type {

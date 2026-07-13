@@ -1,14 +1,6 @@
-import {
-  readRequiredHelloFruitNwcConnectionString
-} from "./demo-nwc.ts";
+import { requireNwcFromConfig } from "@openreceive/node";
 
-try {
-  readRequiredHelloFruitNwcConnectionString();
-} catch (error) {
-  console.error([
-    "",
-    error instanceof Error ? error.message : String(error),
-    ""
-  ].join("\n"));
-  process.exit(1);
-}
+requireNwcFromConfig({
+  cwd: process.cwd(),
+  subject: "The Hello Fruit demo",
+});

@@ -40,7 +40,6 @@ test("createTestkitSwapProvider drives a scripted swap lifecycle offline", async
     orderId: "order-testkit",
     amount: { sats: "200" },
   });
-
   swap.script("USDT_TRON", ["confirming", "exchanging", "completed"]);
   const attempt = await openreceive.startSwap({
     orderId: "order-testkit",
@@ -67,6 +66,32 @@ test("createTestkitSwapProvider drives a scripted swap lifecycle offline", async
   // Provider "completed" must NOT mark the order paid (wallet sweep is authority).
   const order = await openreceive.getOrder({ orderId: "order-testkit" });
   assert.equal(order.status, "pending");
+});
+
+test("startSwap works after mintLightning:false without ever minting a payer Lightning invoice", async () => {
+  const swap = createTestkitSwapProvider({ now: () => 1000 });
+  const { openreceive } = await harness(swap);
+  const locked = await openreceive.getOrCreateCheckout({
+    orderId: "order-swap-deferred",
+    amount: { sats: "200" },
+    mintLightning: false,
+  });
+  assert.equal(locked.active, undefined);
+  assert.equal(locked.invoices.length, 0);
+
+  const attempt = await openreceive.startSwap({
+    orderId: "order-swap-deferred",
+    payInAsset: "ETH_ETH",
+  });
+  assert.equal(attempt.providerState, "awaiting_deposit");
+  assert.equal(attempt.shadowInvoice.rail, "swap");
+
+  const order = await openreceive.getOrder({ orderId: "order-swap-deferred" });
+  assert.equal(order.activeCheckout?.active, undefined);
+  assert.equal(
+    order.activeCheckout?.invoices.every((invoice) => invoice.rail === "swap"),
+    true,
+  );
 });
 
 test("createTestkitSwapProvider forces refund_required and attention with a reason", async () => {

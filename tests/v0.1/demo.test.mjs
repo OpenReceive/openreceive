@@ -316,30 +316,28 @@ test("Hello Fruit demos share transaction details helper on success UI", () => {
   );
   assert.match(helper, /createOpenReceiveTransactionDetails/);
   assert.match(helper, /createOpenReceiveTransactionDetailsFromState/);
-  assert.match(helper, /openReceiveCheckoutLabels\.transactionDetails/);
-  assert.match(helper, /data-hello-fruit-copy/);
+  assert.match(helper, /@openreceive\/elements/);
+  assert.match(helper, /createTransactionDetailsElement/);
   assert.doesNotMatch(helper, /nwc/i);
   assert.doesNotMatch(helper, /nostr\+walletconnect/i);
 
-  const sources = [
+  const reactSources = [
     "examples/hello-fruit/server/node-express/src/client/App.tsx",
     "examples/hello-fruit/server/nextjs-fullstack/src/app/checkout-client.tsx",
-    "examples/hello-fruit/server/static-html-small-api/src/client/main.ts",
   ];
-  for (const relativePath of sources) {
+  for (const relativePath of reactSources) {
     const source = readFileSync(path.join(process.cwd(), relativePath), "utf8");
-    assert.match(
-      source,
-      /demo-transaction-details/,
-      `${relativePath}: uses shared transaction details helper`,
-    );
-    assert.match(
-      source,
-      /Transaction details|transactionDetails|createHelloFruitTransactionDetailsElement/,
-      `${relativePath}: surfaces transaction details on success UI`,
-    );
+    assert.match(source, /TransactionDetails/, `${relativePath}: uses package TransactionDetails`);
+    assert.match(source, /useCheckoutResume/, `${relativePath}: uses package useCheckoutResume`);
     assert.doesNotMatch(source, /nwc/i, `${relativePath}: must not expose NWC in browser UI`);
   }
+
+  const vanilla = readFileSync(
+    path.join(process.cwd(), "examples/hello-fruit/server/static-html-small-api/src/client/main.ts"),
+    "utf8",
+  );
+  assert.match(vanilla, /createTransactionDetailsElement/);
+  assert.doesNotMatch(vanilla, /nwc/i);
 });
 
 test("Hello Fruit React demos delegate checkout state to UI packages", () => {
@@ -529,7 +527,8 @@ test("Hello Fruit Next.js demo resets expired checkout from Start over", () => {
   assert.match(source, /onStartOver=\{startOver\}/);
   assert.match(source, /helloFruitCheckoutPath/);
   assert.match(source, /rememberHelloFruitOrder/);
-  assert.match(source, /loadHelloFruitOrderForResume/);
+  assert.match(source, /useCheckoutResume/);
+  assert.match(source, /helloFruitCheckoutResume/);
   assert.match(source, /resumeOrderId/);
 });
 
@@ -538,21 +537,22 @@ test("Hello Fruit demos resume guest checkout from /checkout/:orderId", () => {
     path.join(process.cwd(), "examples/hello-fruit/shared/demo-checkout-resume.ts"),
     "utf8",
   );
+  assert.match(resumeHelper, /createGuestCheckoutResume/);
+  assert.match(resumeHelper, /createGuestOrderFetcher/);
   assert.match(resumeHelper, /HELLO_FRUIT_CHECKOUT_PATH_PREFIX = "\/checkout"/);
   assert.match(resumeHelper, /parseHelloFruitCheckoutOrderId/);
   assert.match(resumeHelper, /rememberHelloFruitOrder/);
   assert.match(resumeHelper, /loadHelloFruitOrderForResume/);
-  assert.match(resumeHelper, /\/orders\//);
   assert.doesNotMatch(resumeHelper, /order_access_token/);
 
   for (const [relativePath, patterns] of [
     [
       "examples/hello-fruit/server/node-express/src/client/App.tsx",
-      [/enterHelloFruitCheckout/, /loadHelloFruitOrderForResume/, /leaveHelloFruitCheckout/],
+      [/helloFruitCheckoutResume/, /useCheckoutResume/, /enterHelloFruitCheckout/],
     ],
     [
       "examples/hello-fruit/server/nextjs-fullstack/src/app/checkout-client.tsx",
-      [/helloFruitCheckoutPath/, /loadHelloFruitOrderForResume/, /resumeOrderId/],
+      [/helloFruitCheckoutPath/, /useCheckoutResume/, /resumeOrderId/],
     ],
     [
       "examples/hello-fruit/server/static-html-small-api/src/client/main.ts",
@@ -1544,7 +1544,9 @@ test("Next.js demo prepares orders and mounts the shipped OpenReceive router", (
   assert.match(source, /prepareOrderResponse/);
   assert.match(source, /prepareHelloFruitOrder/);
   assert.match(source, /openReceiveHttpOptions/);
-  assert.match(source, /getHelloFruitCheckoutAmount/);
+  assert.match(source, /createHelloFruitOrderStore/);
+  assert.match(source, /createGetCheckoutAmount/);
+  assert.match(source, /mapHostRouteError/);
   assert.match(source, /guestCheckout\(\)/);
   assert.match(source, /readRequiredHelloFruitNwcConnectionString/);
   assert.doesNotMatch(source, /createHelloFruitCreateOrderResult/);
@@ -1591,13 +1593,22 @@ test("Next.js demo prepares orders and mounts the shipped OpenReceive router", (
 });
 
 test("Hello Fruit demos normalize OpenReceive service errors at app route boundaries", () => {
-  for (const sourcePath of [
-    "examples/hello-fruit/server/node-express/src/server/create-server.ts",
-    "examples/hello-fruit/server/static-html-small-api/src/server/create-server.ts",
-    "examples/hello-fruit/server/nextjs-fullstack/src/server/openreceive.ts",
+  for (const [sourcePath, pattern] of [
+    [
+      "examples/hello-fruit/server/node-express/src/server/create-server.ts",
+      /sendHostRouteError/,
+    ],
+    [
+      "examples/hello-fruit/server/static-html-small-api/src/server/create-server.ts",
+      /sendHostRouteError/,
+    ],
+    [
+      "examples/hello-fruit/server/nextjs-fullstack/src/server/openreceive.ts",
+      /mapHostRouteError/,
+    ],
   ]) {
     const source = readFileSync(path.join(process.cwd(), sourcePath), "utf8");
-    assert.match(source, /OpenReceiveServiceError/, sourcePath);
+    assert.match(source, pattern, sourcePath);
     assert.match(source, /createOpenReceive/, sourcePath);
   }
 });

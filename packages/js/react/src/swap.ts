@@ -10,12 +10,12 @@ import {
   selectCheckoutDisplayInvoice,
   type OpenReceiveBrowserLogger,
   type OpenReceiveQrEncoder,
-  type OpenReceiveTransactionDetailRow,
   orClasses,
 } from "@openreceive/browser/internal";
 import * as React from "react";
 import { WaitingState } from "./components.ts";
 import { useOpenReceiveTransientValue } from "./hooks.ts";
+import { TransactionDetails } from "./transaction-details.ts";
 import type { OpenReceiveSwapOptionDisplay } from "./types.ts";
 import { copyOpenReceiveText, joinClassNames } from "./utils.ts";
 
@@ -270,8 +270,8 @@ export function renderSwapDepositPanel(options: {
             },
             highlightRows,
           ),
-      renderTransactionDetailsCollapse(
-        createOpenReceiveTransactionDetails({
+      React.createElement(TransactionDetails, {
+        state: createOpenReceiveTransactionDetails({
           ...(options.checkout === undefined
             ? {}
             : {
@@ -312,8 +312,9 @@ export function renderSwapDepositPanel(options: {
             : { settled_at: options.checkout?.paid_at ?? options.invoice.settled_at }),
           ...(options.invoice.swap === undefined ? {} : { swap: options.invoice.swap }),
         }),
-        options,
-      ),
+        clipboard: options.clipboard,
+        onError: options.onError,
+      }),
     );
   }
 
@@ -620,51 +621,6 @@ function renderSwapSupportDetails(
       "div",
       { className: orClasses.swapSupportContent },
       React.createElement("dl", { className: orClasses.swapDetails }, rows),
-    ),
-  );
-}
-
-function renderTransactionDetailsCollapse(
-  rows: readonly OpenReceiveTransactionDetailRow[],
-  options: {
-    readonly clipboard?: Pick<Clipboard, "writeText">;
-    readonly onError?: (error: unknown) => void;
-  },
-): React.ReactElement | null {
-  if (rows.length === 0) return null;
-  return React.createElement(
-    "details",
-    {
-      className: orClasses.transactionDetails,
-    },
-    React.createElement(
-      "summary",
-      { className: orClasses.transactionDetailsTitle },
-      openReceiveCheckoutLabels.transactionDetails,
-    ),
-    React.createElement(
-      "div",
-      { className: orClasses.transactionDetailsContent },
-      React.createElement(
-        "dl",
-        { className: orClasses.swapDetails },
-        rows.flatMap((row) =>
-          renderSwapCopyRow(
-            row.label,
-            row.copyValue ?? row.value,
-            {
-              ...options,
-              ...(row.href === undefined
-                ? {}
-                : {
-                    href: row.href,
-                    hrefLabel: row.hrefLabel ?? openReceiveCheckoutLabels.viewOnExplorer,
-                  }),
-            },
-            row.value,
-          ),
-        ),
-      ),
     ),
   );
 }

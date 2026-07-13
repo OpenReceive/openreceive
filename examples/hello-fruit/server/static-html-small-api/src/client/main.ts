@@ -4,7 +4,7 @@ import {
   OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
   type CheckoutState,
 } from "@openreceive/browser/internal";
-import { defineOpenReceiveElements } from "@openreceive/elements";
+import { defineOpenReceiveElements, createTransactionDetailsElement } from "@openreceive/elements";
 import {
   createHelloFruitDemoBrowserConsoleLogger,
   createHelloFruitBrowserLogger,
@@ -29,7 +29,6 @@ import {
   toHelloFruitDisplayAmount,
   type HelloFruitBtcFiatRates,
 } from "../../../../shared/demo-pricing.ts";
-import { createHelloFruitTransactionDetailsElement } from "../../../../shared/demo-transaction-details.ts";
 import fruitsData from "../../../../shared/fruits.json" with { type: "json" };
 import product from "../../../../shared/product.json" with { type: "json" };
 import "@openreceive/elements/styles.css";
@@ -591,7 +590,7 @@ function showStickerModal(fruit: Fruit): void {
   close.addEventListener("click", closeStickerModal);
 
   actions.append(download, close);
-  const transactionDetails = createHelloFruitTransactionDetailsElement(settledCheckoutState);
+  const transactionDetails = createTransactionDetailsElement(settledCheckoutState);
   if (transactionDetails === null) {
     modal.append(image, title, detail, actions);
   } else {

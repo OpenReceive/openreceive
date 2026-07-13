@@ -74,6 +74,7 @@ import {
   CheckoutProvider,
   ThemeScope,
   ThemeToggle,
+  TransactionDetails,
   OpenWalletButton,
   createCheckoutViewModel,
   renderSwapDepositPanel,
@@ -520,6 +521,30 @@ test("browser builds block explorer and Lightning decode links for transaction d
   );
   assert.match(depositHtml, /etherscan\.io\/address\/0xdepositaddr/);
   assert.match(depositHtml, />Explorer</);
+
+  const detailsHtml = renderToStaticMarkup(
+    React.createElement(TransactionDetails, {
+      state: {
+        order_id: "ord_tx",
+        checkout_id: "chk_tx",
+        invoice_id: "inv_tx",
+        invoice: "lnbc-tx-detail",
+        rail: "lightning",
+        payment_hash: "ab".repeat(32),
+        amount_msats: 1000,
+        transaction_state: "settled",
+        workflow_state: "settled",
+        phase: "settled",
+        settled: true,
+        terminal: true,
+        paid: true,
+        lightning_uri: "lightning:lnbc-tx-detail",
+      },
+    }),
+  );
+  assert.match(detailsHtml, /Transaction details/);
+  assert.match(detailsHtml, /lnbc-tx-detail/);
+  assert.match(detailsHtml, />Copy</);
 });
 
 test("React theme toggle renders a package-owned light/dark switch", () => {

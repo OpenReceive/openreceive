@@ -11,6 +11,12 @@ lifecycle — it creates the checkout, polls status, and drives swaps. You pass
 only an order id; auth for those polls is handled for you, so there is no fetch
 to write and no token to manage.
 
+Create-mode checkout (`orderId` / `order-id`) **defers the payer Lightning invoice**
+until the visitor selects Bitcoin. On mount it locks the amount (`mint_lightning: false`)
+so the method grid can load; altcoin swaps mint only their shadow invoice. Choosing
+Bitcoin (or returning from a swap) mints or reuses the payable bolt11 — reuse requires
+more than 60 seconds remaining before expiry.
+
 ```tsx
 // React
 import { Checkout } from "@openreceive/react";
@@ -42,6 +48,20 @@ Prefer to create the checkout server-side and hand the snapshot to the component
 `checkout={snapshot}` (and an `orderUrl`) — that mode is unchanged and documented per framework
 below.
 
+## Host scaffolding
+
+Beyond the checkout widget, these helpers cover the usual app glue:
+
+| Concern | Package | API |
+| --- | --- | --- |
+| Guest resume URL + storage | `@openreceive/browser` | `createGuestCheckoutResume`, `useCheckoutResume` (React) |
+| Transaction details panel | `@openreceive/react` / `@openreceive/elements` | `<TransactionDetails>`, `createTransactionDetailsElement` |
+| Order amount persistence | `@openreceive/node` | `createHostOrderStore(service.store)` → `persist` / `createGetCheckoutAmount` |
+| Decimal money math | `@openreceive/core` | `parseDecimal`, `multiplyAmount`, `sumAmounts`, `fiatValueToSats`, `satsToFiatValue`, `convertAmountViaBtcRates` |
+| Console loggers | `@openreceive/node` / `@openreceive/browser` | `createOpenReceiveConsoleLogger`, `createOpenReceiveBrowserConsoleLogger` |
+| Host route errors | `@openreceive/http` / `@openreceive/express` | `mapHostRouteError`, `sendHostRouteError`, `hostError` |
+| NWC boot gate | `@openreceive/node` | `requireNwcFromConfig`, `readNwcFromConfig` |
+
 ## Guest checkout resume
 
 `<Checkout orderId>` resumes Lightning status, swaps, and refunds from the server — but only if
@@ -61,6 +81,39 @@ or in host-owned storage:
 | OpenReceive capability token | Secret; httpOnly cookie + `sessionStorage` on same-origin mounts — **never** put it in the URL |
 | Optional host order summary | `sessionStorage` or a host `GET /orders/:id` so your cart/total UI can redraw |
 
+Use the package helpers instead of copy-pasting URL + storage glue:
+
+```ts
+import { createGuestCheckoutResume, createGuestOrderFetcher } from "@openreceive/browser";
+import { useCheckoutResume, TransactionDetails, Checkout } from "@openreceive/react";
+
+const resume = createGuestCheckoutResume({
+  pathPrefix: "/checkout",
+  storageKeyPrefix: "myapp.order.",
+  orderIdOf: (order) => order.id,
+  parseOrder: parseMyOrder,
+  fetchOrder: createGuestOrderFetcher({ parseOrder: parseMyOrder }),
+});
+
+const { settledState, resuming, onState, onSettled, reset } = useCheckoutResume({
+  orderId: order?.id,
+  guest: resume,
+  syncUrl: true, // History API SPA; or pass routeOrderId for Next.js
+  onResumed: setOrder,
+  onSettled: () => markPaid(),
+});
+
+return (
+  <>
+    <Checkout orderId={order.id} onState={onState} onSettled={onSettled} />
+    <TransactionDetails state={settledState} />
+  </>
+);
+```
+
+Vanilla / elements hosts can use `createTransactionDetailsElement(state)` from
+`@openreceive/elements` for the same collapse-with-copy panel.
+
 Without that resume URL (or equivalent), a full page reload drops the payer back to the shop even
 though payment or a swap refund may still be in progress. Refunds are the sharp edge: a late or
 underpaid deposit can leave the attempt in `refund_required`, and the payer needs the same checkout
@@ -75,6 +128,8 @@ for the refund UI.
 
 `@openreceive/browser` is the small app-facing browser entry:
 
+- `createGuestCheckoutResume(options)` / `createGuestOrderFetcher(options)` —
+  URL + sessionStorage glue for guest checkout resume (`/checkout/:orderId`).
 - `status(invoiceLike)` returns `"pending"`, `"settled"`, `"expired"`, or
   `"failed"` from display-safe fields.
 - `requestCheckout(options)` posts to a checkout-creation URL. Against the

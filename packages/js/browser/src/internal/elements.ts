@@ -1,7 +1,7 @@
 import { status as deriveStatus } from "../status.ts";
 import {
   assertOpenReceiveDisplayInvoice,
-  checkoutInvoiceFromOrderSnapshot,
+  selectCheckoutDisplayInvoice,
   isPaidCheckoutSnapshot,
 } from "./checkout.ts";
 import { applyOpenReceiveThemeAttributes, createOpenReceiveStoredThemeModel } from "./theme.ts";
@@ -63,10 +63,31 @@ export function createCheckoutElementAttributes(
     return createAttributes;
   }
 
-  const invoice = checkoutInvoiceFromOrderSnapshot(snapshot);
-  if (typeof invoice.invoice !== "string") {
-    throw new TypeError("OpenReceive checkout element requires a display Lightning invoice.");
+  // Deferred checkout (amount locked, no payer Lightning invoice yet): emit routing
+  // attributes only. The element keeps rendering the method grid until Bitcoin is selected.
+  const displayInvoice = selectCheckoutDisplayInvoice(snapshot);
+  if (displayInvoice === undefined || typeof displayInvoice.invoice !== "string") {
+    const deferred: CheckoutElementAttributes = {
+      [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId]: snapshot.order_id,
+    };
+    if (options.prefix !== undefined) {
+      deferred[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix] = options.prefix;
+    }
+    if (options.orderUrl !== undefined) {
+      deferred[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderUrl] = options.orderUrl;
+    }
+    if (options.theme !== undefined) {
+      deferred[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme] = options.theme;
+    }
+    if (options.paymentWizard !== undefined) {
+      deferred[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentWizard] = String(options.paymentWizard);
+    }
+    if (snapshot.amount_msats !== undefined) {
+      deferred[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.amountMsats] = String(snapshot.amount_msats);
+    }
+    return deferred;
   }
+  const invoice = displayInvoice;
   assertOpenReceiveDisplayInvoice(invoice.invoice);
   const attributes: CheckoutElementAttributes = {
     [OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId]: snapshot.order_id,

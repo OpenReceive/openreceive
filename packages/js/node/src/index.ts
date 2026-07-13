@@ -36,6 +36,15 @@ export {
   createOpenReceiveFileLoggerFromConfig,
   OPENRECEIVE_LOGGING_DEFAULTS,
 } from "./service/file-logger.ts";
+export {
+  createOpenReceiveConsoleLogger,
+  createHostConsoleLogger,
+} from "./console-logger.ts";
+export type {
+  CreateOpenReceiveConsoleLoggerOptions,
+  CreateHostConsoleLoggerOptions,
+  HostConsoleLogger,
+} from "./console-logger.ts";
 export type { LoggingOptions } from "./service/types.ts";
 export {
   OpenReceiveConfigError,
@@ -168,5 +177,21 @@ export type {
   ResolveOrder,
   ResolveOrderContext,
 } from "./get-checkout-amount.ts";
+export {
+  createHostOrderStore,
+  HOST_ORDER_META_PREFIX,
+} from "./host-order-store.ts";
+export type {
+  HostOrderMetaRow,
+  HostOrderMetaStore,
+  HostOrderStore,
+  HostOrderStoreOptions,
+  StoredHostOrder,
+} from "./host-order-store.ts";
+export {
+  readNwcFromConfig,
+  requireNwcFromConfig,
+} from "./require-nwc.ts";
+export type { RequireNwcFromConfigOptions } from "./require-nwc.ts";
 export { startSweeper } from "./start-sweeper.ts";
 export type { StartSweeperOptions, SweeperHandle } from "./start-sweeper.ts";

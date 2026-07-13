@@ -5,10 +5,9 @@ import type {
   OpenReceiveReceiveNwcClient,
   OpenReceiveSourcedPriceProvider,
 } from "@openreceive/core";
-import { openReceiveExpress } from "@openreceive/express";
+import { openReceiveExpress, sendHostRouteError } from "@openreceive/express";
 import { guestCheckout } from "@openreceive/http";
 import {
-  OpenReceiveServiceError,
   createOpenReceive,
   readOpenReceiveConfigFile,
 } from "@openreceive/node";
@@ -18,9 +17,8 @@ import {
   createHelloFruitOpenReceiveLogger,
 } from "../../../../shared/demo-logging.ts";
 import {
-  HelloFruitDemoOrderError,
+  createHelloFruitOrderStore,
   prepareHelloFruitOrder,
-  getHelloFruitCheckoutAmount,
   getHelloFruitDemoOrder,
 } from "../../../../shared/demo-order.ts";
 import { mountHelloFruitHostedDemoRoutes } from "../../../../shared/hosted-demo-routes.ts";
@@ -104,11 +102,12 @@ export async function createHelloFruitStaticServer(options: HelloFruitOpenReceiv
   //     ownsOrder: (user, ctx) => orderBelongsTo(user, ctx.resource.order_id),
   //     isAdmin: (user) => user.admin,
   //   }),
+  const orders = createHelloFruitOrderStore(openreceive);
   app.use(
     openReceiveExpress({
       service: openreceive,
       authorize: guestCheckout(),
-      getCheckoutAmount: ({ orderId }) => getHelloFruitCheckoutAmount(openreceive, orderId),
+      getCheckoutAmount: orders.createGetCheckoutAmount(),
     }),
   );
 
@@ -177,6 +176,7 @@ export async function createHelloFruitStaticServer(options: HelloFruitOpenReceiv
         demoId: DEMO_ID,
         demoName: "static",
         openreceive,
+        orders,
       });
       logDemo("prepare_order.prepared", "Prepared and persisted demo order.", {
         orderId: order.uuid,
@@ -187,13 +187,11 @@ export async function createHelloFruitStaticServer(options: HelloFruitOpenReceiv
       });
       res.status(201).json({ order });
     } catch (error) {
-      if (error instanceof OpenReceiveServiceError || error instanceof HelloFruitDemoOrderError) {
+      if (sendHostRouteError(res, error)) {
         logDemo("prepare_order.rejected", "Prepare order request returned a known error.", {
-          status: error.status,
-          body: error.body,
+          status: res.statusCode,
           elapsedMs: Date.now() - startedAt,
         });
-        res.status(error.status).json(error.body);
         return;
       }
       logDemo("prepare_order.error", "Prepare order request failed unexpectedly.", {

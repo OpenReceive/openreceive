@@ -1,6 +1,7 @@
 import {
   type CreateOpenReceiveHttpHandlerOptions,
   createOpenReceiveHttpHandler,
+  mapHostRouteError,
   type OpenReceiveHttpHandler,
 } from "@openreceive/http";
 import type {
@@ -21,6 +22,12 @@ import type {
 //   app.use(openReceiveExpress({ service, authorize, getCheckoutAmount }));
 
 export type { CreateOpenReceiveHttpHandlerOptions } from "@openreceive/http";
+export {
+  mapHostRouteError,
+  OpenReceiveHostError,
+  hostError,
+  isServiceErrorShape,
+} from "@openreceive/http";
 
 export interface OpenReceiveExpressMiddleware extends RequestHandler {
   /** The normalized mount prefix the middleware handles. */
@@ -47,6 +54,17 @@ export function openReceiveExpress(
   }) as OpenReceiveExpressMiddleware;
   Object.defineProperty(middleware, "prefix", { value: handler.prefix, enumerable: true });
   return middleware;
+}
+
+/**
+ * Map a host/service error onto an Express JSON response.
+ * Returns `true` when handled; `false` when the caller should `next(error)`.
+ */
+export function sendHostRouteError(res: ExpressResponse, error: unknown): boolean {
+  const mapped = mapHostRouteError(error);
+  if (mapped === null) return false;
+  res.status(mapped.status).json(mapped.body);
+  return true;
 }
 
 function isUnderPrefix(pathname: string, prefix: string): boolean {

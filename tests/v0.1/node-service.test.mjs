@@ -244,6 +244,56 @@ test("createCheckout mints once and replays the live invoice for the same amount
   assert.equal(wallet.makeInvoiceCalls, 1);
 });
 
+test("createCheckout with mintLightning:false locks amount without calling makeInvoice", async () => {
+  const { wallet, openreceive } = await createHarness();
+  const locked = await openreceive.getOrCreateCheckout({
+    orderId: "order-deferred",
+    amount: { sats: "200" },
+    mintLightning: false,
+  });
+  assert.equal(locked.status, "open");
+  assert.equal(locked.active, undefined);
+  assert.equal(locked.invoices.length, 0);
+  assert.equal(locked.amountMsats, 200_000);
+  assert.equal(wallet.makeInvoiceCalls, 0);
+
+  const minted = await openreceive.getOrCreateCheckout({
+    orderId: "order-deferred",
+    amount: { sats: "200" },
+    mintLightning: true,
+  });
+  assert.equal(minted.checkoutId, locked.checkoutId);
+  assert.equal(minted.active?.bolt11.startsWith("lnbc"), true);
+  assert.equal(wallet.makeInvoiceCalls, 1);
+
+  const reused = await openreceive.getOrCreateCheckout({
+    orderId: "order-deferred",
+    amount: { sats: "200" },
+    mintLightning: true,
+  });
+  assert.equal(reused.active?.invoiceId, minted.active?.invoiceId);
+  assert.equal(wallet.makeInvoiceCalls, 1);
+});
+
+test("createCheckout remints Lightning when the active invoice is within the reuse buffer", async () => {
+  const { wallet, openreceive, setNow } = await createHarness();
+  const first = await openreceive.getOrCreateCheckout({
+    orderId: "order-near-expiry",
+    amount: { sats: "200" },
+  });
+  assert.equal(wallet.makeInvoiceCalls, 1);
+  // Default expiry is 600s from created_at (~1000). Jump to within the 60s reuse buffer.
+  setNow(first.active.expiresAt - 30);
+  const reminted = await openreceive.getOrCreateCheckout({
+    orderId: "order-near-expiry",
+    amount: { sats: "200" },
+    mintLightning: true,
+  });
+  assert.notEqual(reminted.checkoutId, first.checkoutId);
+  assert.notEqual(reminted.active?.invoiceId, first.active.invoiceId);
+  assert.equal(wallet.makeInvoiceCalls, 2);
+});
+
 test("swapOptions are disabled unless a swap provider is configured", async () => {
   const { openreceive } = await createHarness();
   await openreceive.getOrCreateCheckout({

@@ -3,6 +3,7 @@
 require "json"
 require "securerandom"
 require "bigdecimal"
+require "digest"
 
 module OpenReceive
   module Server
@@ -21,6 +22,7 @@ module OpenReceive
     # The NWC secret is never logged and never placed in a wire payload.
     class Service
       INVOICE_EXPIRY_SECONDS = 600
+      LIGHTNING_REUSE_BUFFER_SECONDS = 60
       SWEEP_OPEN_INVOICE_CAP = 1000
       TRANSACTION_SCAN_PAGE_LIMIT = 25
       MAX_TRANSACTION_SCAN_PAGE_LIMIT = 50
@@ -60,6 +62,7 @@ module OpenReceive
         input = normalize_create_checkout_request(request)
         order_id = input.fetch("order_id")
         read_amount_kind(input.fetch("amount"))
+        mint_lightning = input.fetch("mint_lightning")
         current = now
 
         checkouts = Models.group_checkouts(@store.list_by_order_id(order_id), current)
@@ -67,19 +70,51 @@ module OpenReceive
         return paid unless paid.nil?
 
         open = checkouts.find { |checkout| checkout["status"] == "open" }
-        return open if !open.nil? && amount_matches?(input.fetch("amount"), open, current)
+        if !open.nil? && amount_matches?(input.fetch("amount"), open, current)
+          return open unless mint_lightning
+
+          if open["active"] && reusable_lightning_invoice?(open["active"]["expires_at"], current)
+            return open
+          end
+
+          if open["active"].nil?
+            minted = mint_invoice_for_checkout(
+              order_id: order_id,
+              checkout_id: open["checkout_id"],
+              input: input,
+              superseded_id: nil,
+              now: current,
+              existing: true
+            )
+            best_effort_sweep
+            fresh = Models.group_checkouts(@store.list_by_order_id(order_id), now)
+            return require_checkout(fresh, Models.stored_checkout_id(minted))
+          end
+          # Active invoice is within the reuse buffer — supersede and mint fresh below.
+        end
 
         superseded_id = open ? open["checkout_id"] : checkouts.find { |c| c["status"] == "expired" }&.fetch("checkout_id", nil)
         supersede_checkout(open) unless open.nil?
 
         checkout_id = generate_checkout_id
-        minted = mint_invoice_for_checkout(
-          order_id: order_id,
-          checkout_id: checkout_id,
-          input: input,
-          superseded_id: superseded_id,
-          now: current
-        )
+        minted =
+          if mint_lightning
+            mint_invoice_for_checkout(
+              order_id: order_id,
+              checkout_id: checkout_id,
+              input: input,
+              superseded_id: superseded_id,
+              now: current
+            )
+          else
+            mint_checkout_lock(
+              order_id: order_id,
+              checkout_id: checkout_id,
+              input: input,
+              superseded_id: superseded_id,
+              now: current
+            )
+          end
 
         # A settled payment for an abandoned invoice is only discovered by a scan. Any subsequent
         # action triggers the global sweep, so kick one here (best-effort, never fatal).
@@ -87,6 +122,10 @@ module OpenReceive
 
         fresh = Models.group_checkouts(@store.list_by_order_id(order_id), now)
         require_checkout(fresh, Models.stored_checkout_id(minted))
+      end
+
+      def reusable_lightning_invoice?(expires_at, now)
+        expires_at - now > LIGHTNING_REUSE_BUFFER_SECONDS
       end
 
       def get_checkout(checkout_id:)
@@ -225,19 +264,29 @@ module OpenReceive
 
       # --- create-checkout internals -------------------------------------------------------------
 
-      def mint_invoice_for_checkout(order_id:, checkout_id:, input:, superseded_id:, now:)
+      def mint_invoice_for_checkout(order_id:, checkout_id:, input:, superseded_id:, now:, existing: false)
         operation = "invoice.create"
         amount_key = amount_key_from(input.fetch("amount"))
-        idempotency_key = "#{order_id}:super:#{superseded_id || 'none'}:amt:#{amount_key}"
-        request_hash = OpenReceive::Idempotency.request_hash(create_checkout_request_hash_body(input))
+        idempotency_key =
+          if existing
+            "#{order_id}:checkout:#{checkout_id}:lightning:amt:#{amount_key}"
+          else
+            "#{order_id}:super:#{superseded_id || 'none'}:amt:#{amount_key}"
+          end
+        request_hash = OpenReceive::Idempotency.request_hash(
+          create_checkout_request_hash_body(input).merge(
+            "mint_lightning" => true,
+            "checkout_id" => checkout_id
+          )
+        )
         scope = {
           "namespace" => @namespace,
           "operation" => operation,
           "idempotency_key" => idempotency_key
         }
 
-        existing = @store.check_idempotency(scope: scope, idempotency_request_hash: request_hash)
-        return existing.fetch("row") unless existing.nil?
+        existing_record = @store.check_idempotency(scope: scope, idempotency_request_hash: request_hash)
+        return existing_record.fetch("row") unless existing_record.nil?
 
         resolved = resolve_create_amount(input.fetch("amount"), now)
         description_fields = description_fields(input)
@@ -273,6 +322,54 @@ module OpenReceive
         }
 
         log(:info, "checkout.created", "order=#{order_id} checkout=#{checkout_id}")
+        @store.put_invoice_record(row).fetch("row")
+      end
+
+      def mint_checkout_lock(order_id:, checkout_id:, input:, superseded_id:, now:)
+        operation = "checkout.lock"
+        amount_key = amount_key_from(input.fetch("amount"))
+        idempotency_key = "#{order_id}:super:#{superseded_id || 'none'}:lock:amt:#{amount_key}"
+        request_hash = OpenReceive::Idempotency.request_hash(
+          create_checkout_request_hash_body(input).merge("mint_lightning" => false)
+        )
+        scope = {
+          "namespace" => @namespace,
+          "operation" => operation,
+          "idempotency_key" => idempotency_key
+        }
+
+        existing = @store.check_idempotency(scope: scope, idempotency_request_hash: request_hash)
+        return existing.fetch("row") unless existing.nil?
+
+        resolved = resolve_create_amount(input.fetch("amount"), now)
+        created_at = now
+        expires_at = created_at + INVOICE_EXPIRY_SECONDS
+        payment_hash = Digest::SHA256.hexdigest("openreceive:checkout_lock:#{checkout_id}")
+        lock_invoice = "openreceive:checkout_lock:#{checkout_id}"
+        metadata = checkout_metadata(input, order_id, checkout_id)
+        metadata["rail"] = "checkout_lock"
+
+        row = {
+          "invoice_id" => generate_invoice_id,
+          "namespace" => @namespace,
+          "operation" => operation,
+          "idempotency_key" => idempotency_key,
+          "idempotency_request_hash" => request_hash,
+          "order_id" => order_id,
+          "checkout_id" => checkout_id,
+          "payment_hash" => payment_hash,
+          "invoice" => lock_invoice,
+          "amount_msats" => resolved.fetch(:amount_msats),
+          "transaction_state" => "pending",
+          "workflow_state" => "invoice_created",
+          "settlement_action_state" => "pending",
+          "created_at" => created_at,
+          "expires_at" => expires_at,
+          "metadata" => metadata,
+          "fiat_quote" => resolved.fetch(:fiat_quote)
+        }
+
+        log(:info, "checkout.locked", "order=#{order_id} checkout=#{checkout_id}")
         @store.put_invoice_record(row).fetch("row")
       end
 
@@ -596,6 +693,8 @@ module OpenReceive
         metadata = optional_record(body["metadata"], "metadata")
 
         result = { "order_id" => order_id, "amount" => amount }
+        mint_lightning = body.key?("mint_lightning") ? body["mint_lightning"] : body["mintLightning"]
+        result["mint_lightning"] = mint_lightning == false ? false : true
         result["memo"] = memo unless memo.nil?
         result["description_hash"] = description_hash unless description_hash.nil?
         result["metadata"] = metadata unless metadata.nil?

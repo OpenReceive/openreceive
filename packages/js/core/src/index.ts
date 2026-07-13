@@ -37,6 +37,27 @@ export {
 } from "./errors/index.ts";
 export type { OpenReceiveErrorCode, OpenReceiveErrorBody } from "./errors/index.ts";
 
+// Exact integer/decimal money math (bigint — never binary floats)
+export {
+  OpenReceiveDecimalError,
+  parseDecimal,
+  formatDecimal,
+  ceilDiv,
+  formatBtcFromSats,
+  multiplyAmount,
+  sumAmounts,
+  requiredBtcFiatRate,
+  fiatValueToSats,
+  satsToFiatValue,
+  convertFiatViaBtcPrices,
+  convertAmountViaBtcRates,
+} from "./money/decimal.ts";
+export type {
+  OpenReceiveDecimal,
+  OpenReceiveMoneyAmount,
+  OpenReceiveBtcPriceRates,
+} from "./money/decimal.ts";
+
 // Rates — public quoting / provider surface (HTTP Simple Price helpers stay module-local)
 export {
   OPENRECEIVE_PRICE_FEED_CACHE_SECONDS,

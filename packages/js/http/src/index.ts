@@ -28,6 +28,16 @@ export {
 } from "./authorize.ts";
 export { OpenReceiveHttpError } from "./errors.ts";
 export {
+  OpenReceiveHostError,
+  createRequestId,
+  errorResponse,
+  hostError,
+  isServiceErrorShape,
+  jsonResponse,
+  mapHostRouteError,
+} from "./errors.ts";
+export type { ServiceErrorShape } from "./errors.ts";
+export {
   type CreateOpenReceiveHttpHandlerOptions,
   createOpenReceiveHttpHandler,
   extractToken,

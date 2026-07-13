@@ -1,9 +1,8 @@
 "use client";
 
-import type { CheckoutState } from "@openreceive/browser/internal";
-import { Checkout, ThemeScope } from "@openreceive/react";
+import { Checkout, ThemeScope, TransactionDetails, useCheckoutResume } from "@openreceive/react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { useEffect, useMemo, useState, type ReactElement } from "react";
 import type { HelloFruit, HelloFruitProduct } from "../server/shared-data.ts";
 import {
   createHelloFruitDemoBrowserConsoleLogger,
@@ -12,7 +11,7 @@ import {
 import {
   forgetHelloFruitOrder,
   helloFruitCheckoutPath,
-  loadHelloFruitOrderForResume,
+  helloFruitCheckoutResume,
   rememberHelloFruitOrder,
 } from "../../../../shared/demo-checkout-resume.ts";
 import type { HelloFruitDemoOrder } from "../../../../shared/demo-order.ts";
@@ -27,10 +26,6 @@ import {
   toHelloFruitDisplayAmount,
   type HelloFruitBtcFiatRates,
 } from "../../../../shared/demo-pricing.ts";
-import {
-  buildHelloFruitTransactionDetailRows,
-  openReceiveCheckoutLabels,
-} from "../../../../shared/demo-transaction-details.ts";
 
 const logOpenReceive = createHelloFruitBrowserLogger("nextjs-fullstack");
 const logDemo = createHelloFruitDemoBrowserConsoleLogger("nextjs-fullstack");
@@ -64,11 +59,49 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
   const [purchasedFruit, setPurchasedFruit] = useState<HelloFruit | undefined>();
   const [stickerModalOpen, setStickerModalOpen] = useState(false);
   const [status, setStatus] = useState("idle");
-  const [resuming, setResuming] = useState(resumeOrderId !== undefined);
   const [error, setError] = useState("");
-  const [settledCheckoutState, setSettledCheckoutState] = useState<CheckoutState | null>(null);
-  const completedCheckoutRef = useRef("");
-  const latestCheckoutStateRef = useRef<CheckoutState | null>(null);
+  const {
+    settledState: settledCheckoutState,
+    resuming,
+    resumeError,
+    onState: onCheckoutState,
+    onSettled,
+    reset: resetCheckoutResume,
+  } = useCheckoutResume({
+    orderId: order?.uuid,
+    guest: helloFruitCheckoutResume,
+    routeOrderId: resumeOrderId,
+    onResumed: (resumed) => {
+      logDemo("checkout.resume", "Resuming checkout from URL.", { orderId: resumed.uuid });
+      setOrder(resumed);
+      const firstItem = resumed.items[0];
+      setPurchasedFruit(
+        firstItem === undefined
+          ? undefined
+          : fruits.find((fruit) => fruit.id === firstItem.product_id),
+      );
+      setStatus("invoice_created");
+    },
+    onResumeMiss: (orderId) => {
+      logDemo("checkout.resume_miss", "Checkout resume order not found.", { orderId });
+      setOrder(undefined);
+      setPurchasedFruit(undefined);
+      router.replace("/");
+    },
+    onResumeClear: () => {
+      setOrder(undefined);
+      setPurchasedFruit(undefined);
+    },
+    onSettled: () => {
+      logDemo("checkout.settled", "Checkout settled callback received.", {
+        orderId: order?.uuid,
+        purchasedFruitId: purchasedFruit?.id,
+      });
+      setOrder((current) => (current === undefined ? current : { ...current, status: "paid" }));
+      setStickerModalOpen(true);
+    },
+  });
+  const displayError = error === "" ? (resumeError ?? "") : error;
 
   const selectedFruit = useMemo(
     () => fruits.find((fruit) => fruit.id === fruitId) ?? fruits[0],
@@ -94,44 +127,6 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
   }, [currency, fruitId, fruits.length, resumeOrderId]);
 
   useEffect(() => {
-    if (resumeOrderId === undefined) {
-      setResuming(false);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      setResuming(true);
-      setError("");
-      logDemo("checkout.resume", "Resuming checkout from URL.", { orderId: resumeOrderId });
-      const resumed = await loadHelloFruitOrderForResume(resumeOrderId);
-      if (cancelled) return;
-      if (resumed === undefined) {
-        logDemo("checkout.resume_miss", "Checkout resume order not found.", {
-          orderId: resumeOrderId,
-        });
-        setOrder(undefined);
-        setPurchasedFruit(undefined);
-        setResuming(false);
-        setError("This checkout link is no longer available. Start a new order.");
-        router.replace("/");
-        return;
-      }
-      setOrder(resumed);
-      const firstItem = resumed.items[0];
-      setPurchasedFruit(
-        firstItem === undefined
-          ? undefined
-          : fruits.find((fruit) => fruit.id === firstItem.product_id),
-      );
-      setStatus("invoice_created");
-      setResuming(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [fruits, resumeOrderId, router]);
-
-  useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
@@ -155,26 +150,6 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
       cancelled = true;
     };
   }, []);
-
-  const onCheckoutState = useCallback((state: CheckoutState) => {
-    latestCheckoutStateRef.current = state;
-    if (state.settled) {
-      setSettledCheckoutState(state);
-    }
-  }, []);
-
-  const onSettled = useCallback(() => {
-    if (order !== undefined && completedCheckoutRef.current !== order.uuid) {
-      logDemo("checkout.settled", "Checkout settled callback received.", {
-        orderId: order.uuid,
-        purchasedFruitId: purchasedFruit?.id,
-      });
-      completedCheckoutRef.current = order.uuid;
-      setSettledCheckoutState(latestCheckoutStateRef.current);
-      setOrder((current) => (current === undefined ? current : { ...current, status: "paid" }));
-      setStickerModalOpen(true);
-    }
-  }, [order, purchasedFruit?.id]);
 
   function addSelectedFruitToCart() {
     if (selectedFruit === undefined) return;
@@ -212,9 +187,7 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
     setStatus("creating");
     setError("");
     setStickerModalOpen(false);
-    setSettledCheckoutState(null);
-    latestCheckoutStateRef.current = null;
-    completedCheckoutRef.current = "";
+    resetCheckoutResume();
 
     try {
       logDemo("prepare_order.request", "Posting prepare order request.", {
@@ -276,12 +249,9 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
     setOrder(undefined);
     setPurchasedFruit(undefined);
     setStickerModalOpen(false);
-    setSettledCheckoutState(null);
-    latestCheckoutStateRef.current = null;
+    resetCheckoutResume();
     setStatus("idle");
-    setResuming(false);
     setError("");
-    completedCheckoutRef.current = "";
     router.push("/");
   }
 
@@ -445,7 +415,7 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
         </div>
       )}
 
-      {error === "" ? null : <p className="alert alert-error">{error}</p>}
+      {displayError === "" ? null : <p className="alert alert-error">{displayError}</p>}
       {purchasedFruit === undefined || !stickerModalOpen ? null : (
         <div className="modal modal-open">
           <section
@@ -463,7 +433,7 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
               You just got a sticker
             </h2>
             <p>{purchasedFruit.name} is ready.</p>
-            <HelloFruitTransactionDetailsPanel source={settledCheckoutState} />
+            <TransactionDetails state={settledCheckoutState} />
             <div className="modal-action">
               <a
                 className="btn"
@@ -484,72 +454,6 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
         </div>
       )}
     </ThemeScope>
-  );
-}
-
-function HelloFruitTransactionDetailsPanel(props: {
-  readonly source: CheckoutState | null;
-}): ReactElement | null {
-  const rows = buildHelloFruitTransactionDetailRows(props.source);
-  if (rows.length === 0) return null;
-  return (
-    <details className="collapse collapse-arrow bg-base-200">
-      <summary className="collapse-title font-bold min-h-0 py-2">
-        {openReceiveCheckoutLabels.transactionDetails}
-      </summary>
-      <div className="collapse-content">
-        <dl className="grid gap-2 m-0">
-          {rows.map((row) => (
-            <HelloFruitTransactionDetailRow key={row.label} row={row} />
-          ))}
-        </dl>
-      </div>
-    </details>
-  );
-}
-
-function HelloFruitTransactionDetailRow(props: {
-  readonly row: {
-    readonly label: string;
-    readonly value: string;
-    readonly copyValue?: string;
-    readonly href?: string;
-    readonly hrefLabel?: string;
-  };
-}): ReactElement {
-  const [copied, setCopied] = useState(false);
-  const copyValue = props.row.copyValue ?? props.row.value;
-  return (
-    <>
-      <dt className="text-base-content/60 text-xs font-bold uppercase">{props.row.label}</dt>
-      <dd className="grid gap-2 grid-cols-[minmax(0,1fr)_auto] items-center m-0">
-        <code className="min-w-0 break-all font-mono text-sm">{props.row.value}</code>
-        <div className="flex flex-wrap gap-2 justify-end">
-          <button
-            className="btn btn-sm btn-soft"
-            onClick={() => {
-              void navigator.clipboard.writeText(copyValue).then(() => {
-                setCopied(true);
-                globalThis.setTimeout(() => setCopied(false), 1500);
-              });
-            }}
-            type="button"
-          >
-            {copied ? openReceiveCheckoutLabels.copied : "Copy"}
-          </button>
-          {props.row.href === undefined ? null : (
-            <a
-              className="btn btn-sm btn-soft"
-              href={props.row.href}
-              rel="noreferrer"
-              target="_blank"
-            >
-              {props.row.hrefLabel ?? openReceiveCheckoutLabels.viewOnExplorer}
-            </a>
-          )}
-        </div>
-      </dd>
-    </>
   );
 }
 

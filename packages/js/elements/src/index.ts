@@ -37,6 +37,7 @@ import {
   createOpenReceiveLightningInvoiceDecodeUrl,
   createOpenReceiveSwapDisplayModel,
   createOpenReceiveTransactionDetails,
+  createOpenReceiveTransactionDetailsFromState,
   createQrPayloadSvg,
   createOpenReceiveWizardRouteAssetDisplays,
   createOpenReceiveWizardRouteDisplays,
@@ -82,6 +83,8 @@ import {
   readOpenReceiveStoredCountryCode,
   requestCheckout,
   resolveOrderUrlFromPrefix,
+  selectCheckoutDisplayInvoice,
+  isReusableLightningInvoice,
   status as deriveStatus,
   syncOpenReceiveStoredThemeControls,
   toggleOpenReceiveStoredThemeControls,
@@ -93,6 +96,8 @@ import {
   type CheckoutState,
   type OpenReceiveCheckoutPaymentMethod,
   type OpenReceivePaymentWizardSelection,
+  type OpenReceiveTransactionDetailRow,
+  type OpenReceiveTransactionDetailsInput,
   type OpenReceiveWizardProviderDisplay,
   type OpenReceiveWizardRouteAssetDisplay,
   type OpenReceiveWizardRouteDisplay,
@@ -102,7 +107,7 @@ import {
 export interface CheckoutView {
   readonly invoice_id?: string;
   readonly invoice: string;
-  readonly rail?: "lightning" | "swap";
+  readonly rail?: "lightning" | "swap" | "checkout_lock";
   readonly payment_hash?: string;
   readonly amount_msats?: number;
   readonly fiat_quote?: {
@@ -115,6 +120,8 @@ export interface CheckoutView {
   readonly expires_at?: number;
   readonly theme?: "light" | "dark";
   readonly payment_wizard?: boolean;
+  /** False until the payer selects Bitcoin in create-mode (deferred Lightning mint). */
+  readonly lightningRequested?: boolean;
   readonly wizard?: OpenReceiveElementsWizardView;
 }
 
@@ -200,7 +207,9 @@ export function renderCheckoutHtml(view: CheckoutView): string {
     ? undefined
     : createCheckoutStatusModel(checkoutState);
   const expired = statusModel?.phase === "expired";
-  const hideLightning = (view.wizard?.selectedSwapAsset ?? null) !== null && !expired;
+  const hideLightning =
+    view.lightningRequested === false ||
+    ((view.wizard?.selectedSwapAsset ?? null) !== null && !expired);
   const wizard =
     expired || view.payment_wizard === false
       ? ""
@@ -293,6 +302,110 @@ export function renderOpenReceiveThemeToggleHtml(
       ${OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES.themeToggle}
     >${escapeHtml(label)}</button>
   `;
+}
+
+export type TransactionDetailsSource =
+  | CheckoutState
+  | OpenReceiveTransactionDetailsInput
+  | readonly OpenReceiveTransactionDetailRow[]
+  | null
+  | undefined;
+
+/**
+ * Collapsible transaction-details panel as an HTML string (vanilla / elements hosts).
+ * Uses the same row builder as React `<TransactionDetails>`.
+ */
+export function renderTransactionDetailsHtml(
+  source: TransactionDetailsSource,
+  options: {
+    readonly open?: boolean;
+    readonly className?: string;
+  } = {},
+): string {
+  const rows = resolveElementTransactionDetailRows(source);
+  if (rows.length === 0) return "";
+  const openAttr = options.open === true ? " open" : "";
+  const className = options.className ?? orClasses.transactionDetails;
+  return `
+    <details part="transaction-details" class="${escapeHtml(className)}"${openAttr}>
+      <summary class="${orClasses.transactionDetailsTitle}">${escapeHtml(openReceiveCheckoutLabels.transactionDetails)}</summary>
+      <div class="${orClasses.transactionDetailsContent}">
+        <dl part="swap-details" class="${orClasses.swapDetails}">
+          ${rows
+            .map((row) =>
+              renderElementSwapCopyDetailHtml(
+                row.label,
+                row.copyValue ?? row.value,
+                row.value,
+                undefined,
+                row.href,
+                row.hrefLabel,
+              ),
+            )
+            .join("")}
+        </dl>
+      </div>
+    </details>
+  `;
+}
+
+export function createTransactionDetailsElement(
+  source: TransactionDetailsSource,
+  options: {
+    readonly open?: boolean;
+    readonly className?: string;
+    readonly onCopyError?: (error: unknown) => void;
+    readonly document?: Document;
+  } = {},
+): HTMLElement | null {
+  const html = renderTransactionDetailsHtml(source, options);
+  if (html === "") return null;
+  const doc = options.document ?? globalThis.document;
+  const host = doc.createElement("div");
+  host.innerHTML = html.trim();
+  const details = host.firstElementChild;
+  if (!(details instanceof HTMLElement)) return null;
+  wireTransactionDetailsCopy(details, options.onCopyError);
+  return details;
+}
+
+export function wireTransactionDetailsCopy(
+  root: ParentNode,
+  onCopyError?: (error: unknown) => void,
+): void {
+  for (const button of root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapCopy)) {
+    if (!(button instanceof HTMLButtonElement)) continue;
+    button.addEventListener("click", () => {
+      const value = button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapCopy);
+      if (value === null || value === "") return;
+      void globalThis.navigator?.clipboard
+        ?.writeText(value)
+        .then(() => showElementCopyFeedback(button))
+        .catch((error) => onCopyError?.(error));
+    });
+  }
+}
+
+function resolveElementTransactionDetailRows(
+  source: TransactionDetailsSource,
+): OpenReceiveTransactionDetailRow[] {
+  if (source === null || source === undefined) return [];
+  if (Array.isArray(source)) return [...source];
+  if (isElementCheckoutState(source)) {
+    return createOpenReceiveTransactionDetailsFromState(source);
+  }
+  return createOpenReceiveTransactionDetails(source as OpenReceiveTransactionDetailsInput);
+}
+
+function isElementCheckoutState(value: object): value is CheckoutState {
+  return (
+    "checkout_id" in value &&
+    "order_id" in value &&
+    "invoice_id" in value &&
+    "invoice" in value &&
+    "transaction_state" in value &&
+    "phase" in value
+  );
 }
 
 export function renderOpenReceivePaymentWizardHtml(
@@ -1071,7 +1184,7 @@ function renderElementTransactionDetailsHtml(
     typeof invoice.invoice === "string"
       ? invoice.invoice
       : view.lightningInvoice;
-  const rows = createOpenReceiveTransactionDetails({
+  return renderTransactionDetailsHtml({
     ...(view.orderId === undefined ? {} : { order_id: view.orderId }),
     ...(view.checkoutId === undefined ? {} : { checkout_id: view.checkoutId }),
     invoice_id: invoice.invoice_id,
@@ -1100,28 +1213,6 @@ function renderElementTransactionDetailsHtml(
     ...(invoice.settled_at === undefined ? {} : { settled_at: invoice.settled_at }),
     ...(invoice.swap === undefined ? {} : { swap: invoice.swap }),
   });
-  if (rows.length === 0) return "";
-  return `
-    <details part="transaction-details" class="${orClasses.transactionDetails}">
-      <summary class="${orClasses.transactionDetailsTitle}">${escapeHtml(openReceiveCheckoutLabels.transactionDetails)}</summary>
-      <div class="${orClasses.transactionDetailsContent}">
-        <dl part="swap-details" class="${orClasses.swapDetails}">
-          ${rows
-            .map((row) =>
-              renderElementSwapCopyDetailHtml(
-                row.label,
-                row.copyValue ?? row.value,
-                row.value,
-                undefined,
-                row.href,
-                row.hrefLabel,
-              ),
-            )
-            .join("")}
-        </dl>
-      </div>
-    </details>
-  `;
 }
 
 function renderElementSwapFeeBreakdownHtml(
@@ -1430,6 +1521,9 @@ export function defineOpenReceiveElements(
     private creating = false;
     private createdKey: string | undefined;
     private applyingCreatedAttributes = false;
+    /** Create-mode: Lightning QR is deferred until the payer selects Bitcoin. */
+    private lightningRequested = false;
+    private mintingLightning = false;
 
     static get observedAttributes() {
       return [
@@ -1492,25 +1586,86 @@ export function defineOpenReceiveElements(
       if (this.creating || this.createdKey === key) return;
       this.creating = true;
       this.createdKey = key;
+      this.lightningRequested = false;
 
       try {
-        const checkout = await requestCheckout({ prefix, orderId, fetch: globalThis.fetch });
+        // Lock amount without minting a payer Lightning invoice. Bitcoin selection mints later.
+        const checkout = await requestCheckout({
+          prefix,
+          orderId,
+          mintLightning: false,
+          fetch: globalThis.fetch,
+        });
         this.handleControllerSnapshot(checkout);
         const orderUrl = resolveOrderUrlFromPrefix(prefix, orderId);
-        // Populate the invoice/order-url attributes from the created snapshot so the existing
-        // attribute-driven rendering + controller machinery takes over. Suppress
-        // attributeChangedCallback during the bulk apply, then render and start once.
+        // Apply routing attrs only (no invoice) so render stays in deferred wizard mode.
         this.applyingCreatedAttributes = true;
         applyCheckoutElementAttributes(this, createCheckoutElementAttributes(checkout, { orderUrl }));
         this.applyingCreatedAttributes = false;
         this.render();
         this.startCheckoutController();
       } catch (error) {
-        // Allow a later attribute change (or reconnection) to retry the create.
         this.createdKey = undefined;
         this.dispatchError(error);
       } finally {
         this.creating = false;
+      }
+    }
+
+    private async ensureLightning(): Promise<void> {
+      const orderId = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
+      if (orderId === null || orderId.length === 0) return;
+      const prefix =
+        this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix) ?? OPENRECEIVE_DEFAULT_PREFIX;
+      const current = this.latestCheckoutSnapshot;
+      if (current !== undefined) {
+        const display = selectCheckoutDisplayInvoice(current);
+        if (
+          display !== undefined &&
+          typeof display.invoice === "string" &&
+          display.expires_at !== undefined &&
+          isReusableLightningInvoice(display.expires_at)
+        ) {
+          this.lightningRequested = true;
+          this.applyingCreatedAttributes = true;
+          applyCheckoutElementAttributes(
+            this,
+            createCheckoutElementAttributes(current, {
+              orderUrl: resolveOrderUrlFromPrefix(prefix, orderId),
+            }),
+          );
+          this.applyingCreatedAttributes = false;
+          this.render();
+          this.startCheckoutController();
+          return;
+        }
+      }
+      this.mintingLightning = true;
+      this.render();
+      try {
+        const checkout = await requestCheckout({
+          prefix,
+          orderId,
+          mintLightning: true,
+          fetch: globalThis.fetch,
+        });
+        this.handleControllerSnapshot(checkout);
+        this.lightningRequested = true;
+        this.applyingCreatedAttributes = true;
+        applyCheckoutElementAttributes(
+          this,
+          createCheckoutElementAttributes(checkout, {
+            orderUrl: resolveOrderUrlFromPrefix(prefix, orderId),
+          }),
+        );
+        this.applyingCreatedAttributes = false;
+        this.render();
+        this.startCheckoutController();
+      } catch (error) {
+        this.dispatchError(error);
+      } finally {
+        this.mintingLightning = false;
+        this.render();
       }
     }
 
@@ -1532,8 +1687,12 @@ export function defineOpenReceiveElements(
     }
 
     render() {
-      const invoice = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice);
-      if (invoice === null || invoice === "") {
+      const invoiceAttr = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice);
+      const deferredReady =
+        this.isCreateMode() &&
+        this.latestCheckoutSnapshot !== undefined &&
+        (invoiceAttr === null || invoiceAttr === "");
+      if ((invoiceAttr === null || invoiceAttr === "") && !deferredReady) {
         if (this.isCreateMode()) {
           const root = this.shadowRoot ?? this.attachShadow({ mode: "open" });
           root.innerHTML = renderCheckoutCreatingHtml(
@@ -1547,6 +1706,9 @@ export function defineOpenReceiveElements(
         return;
       }
 
+      const invoice = invoiceAttr ?? "";
+      const lightningRequested =
+        !this.isCreateMode() || this.lightningRequested || invoice.length > 0;
       const root = this.shadowRoot ?? this.attachShadow({ mode: "open" });
       root.innerHTML = renderCheckoutHtml({
         invoice_id: this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoiceId) ?? undefined,
@@ -1567,6 +1729,7 @@ export function defineOpenReceiveElements(
         ),
         theme: parseOpenReceiveResolvedTheme(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme)),
         payment_wizard: parseOpenReceiveBooleanAttribute(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentWizard)),
+        lightningRequested: this.mintingLightning ? false : lightningRequested,
         wizard: {
           selectedMethod: this.selection.selectedMethod,
           selectedCountryCode: this.selection.selectedCountryCode,
@@ -1607,28 +1770,30 @@ export function defineOpenReceiveElements(
       });
 
       const copyButton = root.querySelector(OPENRECEIVE_CHECKOUT_ELEMENT_PART_SELECTORS.copy);
-      copyButton?.addEventListener("click", () => {
-        void (this.controller?.copyInvoice() ?? copyInvoice({ invoice, logger: options.logger }))
-          .then(() => {
-            showElementCopyFeedback(copyButton);
-            this.dispatchEvent(
-              createCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy)
-            );
-          })
-          .catch((error) => this.dispatchError(error));
-      });
+      if (invoice.length > 0) {
+        copyButton?.addEventListener("click", () => {
+          void (this.controller?.copyInvoice() ?? copyInvoice({ invoice, logger: options.logger }))
+            .then(() => {
+              showElementCopyFeedback(copyButton);
+              this.dispatchEvent(
+                createCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy)
+              );
+            })
+            .catch((error) => this.dispatchError(error));
+        });
 
-      root.querySelector(OPENRECEIVE_CHECKOUT_ELEMENT_PART_SELECTORS.open)?.addEventListener("click", (event) => {
-        event.preventDefault();
-        try {
-          this.controller?.openWallet() ?? openWallet({ invoice, logger: options.logger });
-          this.dispatchEvent(
-            createCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.openWallet)
-          );
-        } catch (error) {
-          this.dispatchError(error);
-        }
-      });
+        root.querySelector(OPENRECEIVE_CHECKOUT_ELEMENT_PART_SELECTORS.open)?.addEventListener("click", (event) => {
+          event.preventDefault();
+          try {
+            this.controller?.openWallet() ?? openWallet({ invoice, logger: options.logger });
+            this.dispatchEvent(
+              createCheckoutActionEvent(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.openWallet)
+            );
+          } catch (error) {
+            this.dispatchError(error);
+          }
+        });
+      }
 
       root.querySelector(OPENRECEIVE_CHECKOUT_ELEMENT_PART_SELECTORS.startOver)?.addEventListener("click", () => {
         this.dispatchEvent(
@@ -1637,7 +1802,7 @@ export function defineOpenReceiveElements(
       });
 
       const qrTarget = root.querySelector(OPENRECEIVE_CHECKOUT_DATA_SELECTORS.qr);
-      if (qrTarget !== null) {
+      if (qrTarget !== null && invoice.length > 0) {
         void createQrSvg(invoice, {
           encoder: options.qrEncoder,
           width: 256
@@ -1654,7 +1819,7 @@ export function defineOpenReceiveElements(
     }
 
     private startCheckoutController(): void {
-      const snapshot = this.currentCheckoutSnapshot();
+      const snapshot = this.currentCheckoutSnapshot() ?? this.latestCheckoutSnapshot;
       const orderUrl = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderUrl);
       if (snapshot === undefined) {
         this.stopCheckoutController();
@@ -1758,6 +1923,9 @@ export function defineOpenReceiveElements(
             type: "select_method",
             method,
           });
+          if (method === "bitcoin") {
+            void this.ensureLightning();
+          }
           this.render();
         });
       });
@@ -1776,6 +1944,9 @@ export function defineOpenReceiveElements(
               type: "select_method",
               method,
             });
+            if (method === "bitcoin") {
+              void this.ensureLightning();
+            }
             this.render();
             return;
           }
@@ -1979,6 +2150,7 @@ export function defineOpenReceiveElements(
         this.selectedSwapAsset = null;
         this.selectedPickerKey = null;
         this.selectedSwapNetworks = {};
+        void this.ensureLightning();
         this.render();
       });
 
@@ -2279,8 +2451,9 @@ function readElementFiatQuote(element: Element) {
   };
 }
 
-function parseElementRail(value: string | null): "lightning" | "swap" {
+function parseElementRail(value: string | null): "lightning" | "swap" | "checkout_lock" {
   if (value === "swap") return "swap";
+  if (value === "checkout_lock") return "checkout_lock";
   return "lightning";
 }
 
