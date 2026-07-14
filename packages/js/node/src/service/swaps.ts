@@ -389,13 +389,35 @@ export async function startSwap(
       `${formatOpenReceiveSwapAssetLabel(payInAsset)} is not available for automated swaps.`,
     );
   }
-  const provider = await selectReadySwapProvider(
+  const ready = await selectReadySwapProvider(
     context,
     candidates,
     payInAsset,
     amountMsats,
   );
+  if (ready === undefined) {
+    throw serviceError(
+      503,
+      "INTERNAL",
+      `${formatOpenReceiveSwapAssetLabel(payInAsset)} swap rates are temporarily unavailable.`,
+    );
+  }
+  const provider = ready.provider;
   if (provider === undefined) {
+    if (ready.unavailableReason === "amount_too_small") {
+      throw serviceError(
+        400,
+        "INVALID_REQUEST",
+        `${formatOpenReceiveSwapAssetLabel(payInAsset)} is below the provider minimum for this amount.`,
+      );
+    }
+    if (ready.unavailableReason === "amount_too_large") {
+      throw serviceError(
+        400,
+        "INVALID_REQUEST",
+        `${formatOpenReceiveSwapAssetLabel(payInAsset)} is above the provider maximum for this amount.`,
+      );
+    }
     throw serviceError(
       503,
       "INTERNAL",
@@ -1156,27 +1178,37 @@ export async function listSwapProvidersForAsset(
  * First provider among `candidates` that can produce a quote for this asset/amount.
  * Probes with `quote()` so a dead rates feed fails over to the next entry before we
  * mint a shadow invoice or call `/create`.
+ *
+ * Amount-limit failures are returned as `{ unavailableReason }` (no provider) so
+ * startSwap can 400 instead of pretending rates are down.
  */
 async function selectReadySwapProvider(
   context: OpenReceiveServiceContext,
   candidates: readonly SwapProvider[],
   payInAsset: SwapPayInAsset,
   amountMsats: number,
-): Promise<SwapProvider | undefined> {
+): Promise<
+  | { readonly provider: SwapProvider; readonly unavailableReason?: undefined }
+  | {
+      readonly provider?: undefined;
+      readonly unavailableReason: "amount_too_small" | "amount_too_large";
+    }
+  | undefined
+> {
   for (const provider of candidates) {
     try {
       const quote = await provider.quote({
         payInAsset,
         invoiceAmountMsats: amountMsats,
       });
-      if (quote.available) return provider;
+      if (quote.available) return { provider };
       // Soft unavailability (limits / pair down) is definitive for this provider —
       // do not silently hop to a secondary that may have different limits.
       if (
         quote.unavailable_reason === "amount_too_small" ||
         quote.unavailable_reason === "amount_too_large"
       ) {
-        return undefined;
+        return { unavailableReason: quote.unavailable_reason };
       }
       emitLog(
         context.options,

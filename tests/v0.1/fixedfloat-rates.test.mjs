@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  compareFixedFloatDecimalAmounts,
   invoiceLimitsFromFixedFloatRate,
   parseFixedFloatRatesXml,
   quotePayAmountFromFixedFloatRate,
@@ -72,6 +73,43 @@ test("invoiceLimitsFromFixedFloatRate maps from-side min/max into invoice msats"
   assert.equal(limits.maximum_pay_amount, "11340");
   assert.equal(limits.minimum_invoice_amount_msats, 15_874_000);
   assert.equal(limits.maximum_invoice_amount_msats, 18_000_000_000);
+});
+
+test("invoiceLimitsFromFixedFloatRate handles FixedFloat out amounts padded past 8 decimals", () => {
+  // Live FixedFloat XML pads BTC amounts like 0.028314000000 (12 fractional digits).
+  // The old Number/8-dp path dropped invoice-side limits and left ETH selectable at $2.
+  const pairs = parseFixedFloatRatesXml(`<?xml version="1.0"?>
+<rates>
+  <item>
+    <from>ETH</from>
+    <to>BTCLN</to>
+    <in>1</in>
+    <out>0.028314000000</out>
+    <amount>207.22797276</amount>
+    <tofee>0.0000016000 BTCLN</tofee>
+    <minamount>0.0083927593</minamount>
+    <maxamount>6.2933949000</maxamount>
+  </item>
+</rates>`);
+  const pair = pairs["ETH:BTCLN"];
+  assert.notEqual(pair, undefined);
+  const limits = invoiceLimitsFromFixedFloatRate(pair);
+  assert.equal(limits.minimum_pay_amount, "0.0083927593");
+  assert.notEqual(limits.minimum_invoice_amount_msats, undefined);
+  // Exact: ceil(0.0083927593 × 0.028314000000 × 1e8 / 1) = 23,764 sats
+  assert.equal(limits.minimum_invoice_amount_msats, 23_764_000);
+  const pay = quotePayAmountFromFixedFloatRate({
+    pair,
+    invoiceAmountMsats: 3_185_000,
+  });
+  assert.equal(pay, "0.00112489");
+  assert.ok(3_185_000 < limits.minimum_invoice_amount_msats);
+});
+
+test("compareFixedFloatDecimalAmounts orders positive decimals without floats", () => {
+  assert.equal(compareFixedFloatDecimalAmounts("0.00112489", "0.0083927593"), -1);
+  assert.equal(compareFixedFloatDecimalAmounts("10", "10.000"), 0);
+  assert.equal(compareFixedFloatDecimalAmounts("2", "1.5"), 1);
 });
 
 test("swap rates cache is shared globally via openreceive_meta", async () => {

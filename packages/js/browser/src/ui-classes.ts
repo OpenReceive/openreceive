@@ -73,6 +73,8 @@ export const orClasses = {
   methodTitleWrap: "min-w-0 flex-1 text-left",
   methodDetail: "text-base-content/60 text-xs leading-snug",
   methodDetailMobile: "block truncate text-xs text-base-content/55 sm:hidden",
+  /** Limit / unavailable hint under a payment tile — visible at all breakpoints. */
+  methodLimitHint: "mt-0.5 block text-xs leading-snug text-base-content/55",
   methodDetailDesktop: "hidden",
   methodNetworkReveal:
     "rounded-box border border-base-300 bg-base-100/50 p-3",

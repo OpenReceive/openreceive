@@ -187,6 +187,10 @@ export function quotePayAmountFromFixedFloatRate(input: {
  * Maps XML from-side min/max into invoice-side msats using the pair's reference rate.
  * Minimum rounds up, maximum rounds down, so borderline invoices are never reported
  * as inside a range the provider would reject.
+ *
+ * Uses the same exact decimal math as {@link quotePayAmountFromFixedFloatRate}. FixedFloat
+ * often pads `<out>` past 8 fractional digits (e.g. `0.028314000000`); binary-float or
+ * "max 8 dp" helpers silently dropped invoice limits and left below-min assets selectable.
  */
 export function invoiceLimitsFromFixedFloatRate(pair: FixedFloatRatePair): {
   readonly minimum_pay_amount: string;
@@ -196,63 +200,67 @@ export function invoiceLimitsFromFixedFloatRate(pair: FixedFloatRatePair): {
 } {
   const minimumPayAmount = pair.minamount;
   const maximumPayAmount = pair.maxamount;
-  const payUnitsPerSat = payUnitsPerInvoiceSat(pair);
   return {
     minimum_pay_amount: minimumPayAmount,
     maximum_pay_amount: maximumPayAmount,
-    ...(payUnitsPerSat === undefined
+    ...(payAmountToInvoiceMsats(pair, minimumPayAmount, "ceil") === undefined
       ? {}
       : {
-          ...(payAmountToInvoiceMsats(minimumPayAmount, payUnitsPerSat, "ceil") === undefined
-            ? {}
-            : {
-                minimum_invoice_amount_msats: payAmountToInvoiceMsats(
-                  minimumPayAmount,
-                  payUnitsPerSat,
-                  "ceil",
-                ),
-              }),
-          ...(payAmountToInvoiceMsats(maximumPayAmount, payUnitsPerSat, "floor") === undefined
-            ? {}
-            : {
-                maximum_invoice_amount_msats: payAmountToInvoiceMsats(
-                  maximumPayAmount,
-                  payUnitsPerSat,
-                  "floor",
-                ),
-              }),
+          minimum_invoice_amount_msats: payAmountToInvoiceMsats(pair, minimumPayAmount, "ceil"),
+        }),
+    ...(payAmountToInvoiceMsats(pair, maximumPayAmount, "floor") === undefined
+      ? {}
+      : {
+          maximum_invoice_amount_msats: payAmountToInvoiceMsats(pair, maximumPayAmount, "floor"),
         }),
   };
 }
 
-function payUnitsPerInvoiceSat(pair: FixedFloatRatePair): number | undefined {
-  const rateIn = Number(pair.in);
-  const outSats = btcAmountStringToSats(pair.out);
-  if (!Number.isFinite(rateIn) || rateIn <= 0) return undefined;
-  if (outSats === undefined || outSats <= 0) return undefined;
-  return rateIn / outSats;
+/**
+ * Compare two positive decimal strings. Returns negative when `left < right`,
+ * zero when equal, positive when `left > right`. Undefined when either is not a
+ * positive decimal (caller treats that as "cannot compare").
+ */
+export function compareFixedFloatDecimalAmounts(
+  left: string,
+  right: string,
+): number | undefined {
+  const a = parsePositiveDecimal(left);
+  const b = parsePositiveDecimal(right);
+  if (a === undefined || b === undefined) return undefined;
+  const leftScaled = a.integer * b.scale;
+  const rightScaled = b.integer * a.scale;
+  if (leftScaled < rightScaled) return -1;
+  if (leftScaled > rightScaled) return 1;
+  return 0;
 }
 
+/**
+ * Inverse of the direction=to quote (ignoring tofee so the reported invoice floor
+ * is conservative): invoice_sats = pay_from × out × 1e8 / in.
+ */
 function payAmountToInvoiceMsats(
+  pair: FixedFloatRatePair,
   payAmount: string,
-  payUnitsPerSat: number,
   rounding: "ceil" | "floor",
 ): number | undefined {
-  const value = Number(payAmount);
-  if (!Number.isFinite(value) || value <= 0) return undefined;
-  const invoiceSats = value / payUnitsPerSat;
-  if (!Number.isFinite(invoiceSats) || invoiceSats <= 0) return undefined;
-  const roundedSats = rounding === "ceil" ? Math.ceil(invoiceSats) : Math.floor(invoiceSats);
-  const msats = roundedSats * 1000;
-  return Number.isSafeInteger(msats) ? msats : undefined;
-}
+  const pay = parsePositiveDecimal(payAmount);
+  const rateIn = parsePositiveDecimal(pair.in);
+  const rateOut = parsePositiveDecimal(pair.out);
+  if (pay === undefined || rateIn === undefined || rateOut === undefined) return undefined;
+  if (rateIn.integer <= 0n) return undefined;
 
-function btcAmountStringToSats(value: string): number | undefined {
-  if (!DECIMAL_PATTERN.test(value)) return undefined;
-  const [wholePart, fractionalPart = ""] = value.split(".");
-  if (fractionalPart.length > 8) return undefined;
-  const sats = BigInt(wholePart) * SATS_PER_BTC + BigInt(fractionalPart.padEnd(8, "0"));
-  return sats <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(sats) : undefined;
+  // invoice_sats = pay * out * 1e8 / in
+  // = pay.integer/pay.scale * rateOut.integer/rateOut.scale * SATS / (rateIn.integer/rateIn.scale)
+  const numerator = pay.integer * rateOut.integer * SATS_PER_BTC * rateIn.scale;
+  const denominator = pay.scale * rateOut.scale * rateIn.integer;
+  if (denominator <= 0n) return undefined;
+  const invoiceSats =
+    rounding === "ceil" ? ceilDiv(numerator, denominator) : numerator / denominator;
+  if (invoiceSats <= 0n) return undefined;
+  if (invoiceSats > BigInt(Number.MAX_SAFE_INTEGER)) return undefined;
+  const msats = Number(invoiceSats) * 1000;
+  return Number.isSafeInteger(msats) ? msats : undefined;
 }
 
 function parseToFeeBtcSats(tofee: string | undefined): bigint | undefined {

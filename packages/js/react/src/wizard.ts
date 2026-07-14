@@ -912,7 +912,7 @@ function renderCompactPaymentMethodSelector(options: {
               ? undefined
               : group.options.find((option) => option.pay_in_asset === selectedAsset);
           const activeOption = selectedOption ?? displayOption;
-          const disabled = !multiNetwork && activeOption.available === false;
+          const disabled = group.options.every((option) => option.available === false);
           const accent = openReceivePaymentAccentId(group.label);
           const limitMessage = swapOptionLimitMessage(activeOption, options.checkout);
           const panelId = `network-panel-${groupKey.toLowerCase()}`;
@@ -954,21 +954,19 @@ function renderCompactPaymentMethodSelector(options: {
                 "span",
                 { className: orClasses.methodTitleWrap },
                 React.createElement("span", { className: orClasses.methodTitle }, group.label),
-                multiNetwork
+                disabled && limitMessage !== undefined
                   ? React.createElement(
                       "span",
-                      { className: orClasses.methodDetailMobile },
-                      selected && selectedOption !== undefined
-                        ? `${selectedOption.network_label} network`
-                        : disabled && limitMessage !== undefined
-                          ? limitMessage
-                          : openReceiveCheckoutLabels.selectNetwork,
+                      { className: orClasses.methodLimitHint },
+                      limitMessage,
                     )
-                  : disabled && limitMessage !== undefined
+                  : multiNetwork
                     ? React.createElement(
                         "span",
                         { className: orClasses.methodDetailMobile },
-                        limitMessage,
+                        selected && selectedOption !== undefined
+                          ? `${selectedOption.network_label} network`
+                          : openReceiveCheckoutLabels.selectNetwork,
                       )
                     : null,
               ),

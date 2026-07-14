@@ -835,19 +835,22 @@ function renderElementSwapMethodGroupHtml(
       ? undefined
       : group.options.find((option) => option.pay_in_asset === selectedAsset);
   const activeOption = selectedOption ?? displayOption;
-  const disabled = !multiNetwork && activeOption.available === false;
+  const disabled = group.options.every((option) => option.available === false);
   const accent = openReceivePaymentAccentId(group.label);
   const limitMessage = elementsSwapLimitMessage(activeOption, view);
   const panelId = `network-panel-${groupKey.toLowerCase()}`;
-  const detail = multiNetwork
-    ? selected && selectedOption !== undefined
-      ? `${escapeHtml(selectedOption.network_label)} network`
-      : disabled && limitMessage !== undefined
-        ? escapeHtml(limitMessage)
-        : escapeHtml(openReceiveCheckoutLabels.selectNetwork)
-    : disabled && limitMessage !== undefined
-      ? escapeHtml(limitMessage)
-      : "";
+  const detail =
+    disabled && limitMessage !== undefined
+      ? { className: orClasses.methodLimitHint, text: escapeHtml(limitMessage) }
+      : multiNetwork
+        ? {
+            className: orClasses.methodDetailMobile,
+            text:
+              selected && selectedOption !== undefined
+                ? `${escapeHtml(selectedOption.network_label)} network`
+                : escapeHtml(openReceiveCheckoutLabels.selectNetwork),
+          }
+        : undefined;
   const mobileReveal = multiNetwork
     ? `
       <div class="${orClasses.methodNetworkRevealAnim} ${
@@ -911,7 +914,11 @@ function renderElementSwapMethodGroupHtml(
         </span>
         <span class="${orClasses.methodTitleWrap}">
           <span class="${orClasses.methodTitle}">${escapeHtml(group.label)}</span>
-          ${detail ? `<span class="${orClasses.methodDetailMobile}">${detail}</span>` : ""}
+          ${
+            detail === undefined
+              ? ""
+              : `<span class="${detail.className}">${detail.text}</span>`
+          }
         </span>
       </button>
       ${mobileReveal}

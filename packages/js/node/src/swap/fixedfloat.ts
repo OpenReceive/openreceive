@@ -11,6 +11,7 @@ import {
   deserializeFixedFloatRatesIndex,
   fetchFixedFloatRatesIndex,
   fixedFloatRatesPairKey,
+  compareFixedFloatDecimalAmounts,
   invoiceLimitsFromFixedFloatRate,
   quotePayAmountFromFixedFloatRate,
   serializeFixedFloatRatesIndex,
@@ -332,12 +333,21 @@ class FixedFloatProvider implements SwapProvider {
           ...limits,
         };
       }
+      // Prefer invoice-side limits when conversion succeeded; also compare the
+      // indicative pay amount to XML min/max so padded `<out>` decimals (or any
+      // future conversion miss) cannot leave a below-min asset selectable.
+      const payBelowMin =
+        compareFixedFloatDecimalAmounts(payAmount, limits.minimum_pay_amount) === -1;
+      const payAboveMax =
+        compareFixedFloatDecimalAmounts(payAmount, limits.maximum_pay_amount) === 1;
       const amountTooSmall =
-        limits.minimum_invoice_amount_msats !== undefined &&
-        input.invoiceAmountMsats < limits.minimum_invoice_amount_msats;
+        payBelowMin ||
+        (limits.minimum_invoice_amount_msats !== undefined &&
+          input.invoiceAmountMsats < limits.minimum_invoice_amount_msats);
       const amountTooLarge =
-        limits.maximum_invoice_amount_msats !== undefined &&
-        input.invoiceAmountMsats > limits.maximum_invoice_amount_msats;
+        payAboveMax ||
+        (limits.maximum_invoice_amount_msats !== undefined &&
+          input.invoiceAmountMsats > limits.maximum_invoice_amount_msats);
       if (amountTooSmall || amountTooLarge) {
         const reason = amountTooSmall ? "amount_too_small" : "amount_too_large";
         return {
@@ -679,8 +689,21 @@ function classifyFixedFloatQuoteError(error: unknown): SwapAvailabilityReason {
       return "provider_unreachable";
     }
     const message = error.fixedFloatMessage?.toLowerCase() ?? error.message.toLowerCase();
-    if (message.includes("min") || message.includes("small")) return "amount_too_small";
-    if (message.includes("max") || message.includes("large")) return "amount_too_large";
+    if (
+      message.includes("min") ||
+      message.includes("small") ||
+      message.includes("out of limits") ||
+      message.includes("limit_min")
+    ) {
+      return "amount_too_small";
+    }
+    if (
+      message.includes("max") ||
+      message.includes("large") ||
+      message.includes("limit_max")
+    ) {
+      return "amount_too_large";
+    }
     return "pair_temporarily_unavailable";
   }
   const message =
@@ -695,8 +718,17 @@ function classifyFixedFloatQuoteError(error: unknown): SwapAvailabilityReason {
   if (message.includes("fetch") || message.includes("network") || message.includes("timeout")) {
     return "provider_unreachable";
   }
-  if (message.includes("min") || message.includes("small")) return "amount_too_small";
-  if (message.includes("max") || message.includes("large")) return "amount_too_large";
+  if (
+    message.includes("min") ||
+    message.includes("small") ||
+    message.includes("out of limits") ||
+    message.includes("limit_min")
+  ) {
+    return "amount_too_small";
+  }
+  if (message.includes("max") || message.includes("large") || message.includes("limit_max")) {
+    return "amount_too_large";
+  }
   return "pair_temporarily_unavailable";
 }
 

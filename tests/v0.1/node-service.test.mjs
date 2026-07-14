@@ -605,6 +605,57 @@ test("FixedFloat quote treats XML min below invoice as unavailable with provider
   assert.equal(quote.maximum_pay_amount, "5000");
 });
 
+test("FixedFloat quote and catalog gate ETH when XML out is padded past 8 decimals", async () => {
+  // Live FixedFloat pads <out> like 0.028314000000. Invoice-side conversion must still
+  // produce minimum_invoice_amount_msats so a $2-class invoice is marked unavailable
+  // before /create returns "Out of limits".
+  const provider = fixedFloatProvider({
+    key: "fixed-float-key",
+    secret: "fixed-float-secret",
+    baseUrl: "https://fixedfloat.example",
+    fetch: async (url) => {
+      if (String(url) === "https://fixedfloat.example/api/v2/ccies") {
+        return jsonResponse({
+          code: 0,
+          data: [
+            { code: "ETH", coin: "ETH", network: "ERC20" },
+            { code: "BTCLN", coin: "BTC", network: "Lightning" },
+          ],
+        });
+      }
+      if (String(url) === "https://fixedfloat.example/rates/fixed.xml") {
+        return xmlResponse(`<?xml version="1.0"?>
+<rates>
+  <item>
+    <from>ETH</from>
+    <to>BTCLN</to>
+    <in>1</in>
+    <out>0.028314000000</out>
+    <amount>207.22797276</amount>
+    <tofee>0.0000016000 BTCLN</tofee>
+    <minamount>0.0083927593</minamount>
+    <maxamount>6.2933949000</maxamount>
+  </item>
+</rates>`);
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    },
+  });
+
+  const catalog = await provider.payInAssetCatalog();
+  const eth = catalog.find((item) => item.pay_asset === "ETH_ETH");
+  assert.equal(eth?.minimum_pay_amount, "0.0083927593");
+  assert.equal(eth?.minimum_invoice_amount_msats, 23_764_000);
+
+  const quote = await provider.quote({
+    payInAsset: "ETH_ETH",
+    invoiceAmountMsats: 3_185_000,
+  });
+  assert.equal(quote.available, false);
+  assert.equal(quote.unavailable_reason, "amount_too_small");
+  assert.equal(quote.minimum_invoice_amount_msats, 23_764_000);
+});
+
 test("FixedFloat quote folds the pay-in floor into the invoice-side minimum", async () => {
   // XML minamount is 10 USDT; at 315 USDT per 0.005 BTC that is ~15,873 sats.
   // The reported invoice-side minimum must reflect the binding pay-in floor.

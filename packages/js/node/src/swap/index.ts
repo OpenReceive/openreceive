@@ -44,6 +44,7 @@ export {
   parseFixedFloatRatesXml,
   quotePayAmountFromFixedFloatRate,
   invoiceLimitsFromFixedFloatRate,
+  compareFixedFloatDecimalAmounts,
   fixedFloatRatesPairKey,
   fixedFloatRatesXmlPath,
 } from "./fixedfloat-rates.ts";
