@@ -1,4 +1,3 @@
-import express from "express";
 import { fileURLToPath } from "node:url";
 import type {
   OpenReceiveInvoiceKvStore,
@@ -7,29 +6,21 @@ import type {
 } from "@openreceive/core";
 import { openReceiveExpress } from "@openreceive/express";
 import { guestCheckout } from "@openreceive/http";
-import {
-  createOpenReceive,
-  readOpenReceiveConfigFile,
-} from "@openreceive/node";
-import { createHelloFruitDemoMetadata } from "../../../../shared/demo-metadata.ts";
+import { createOpenReceive } from "@openreceive/node";
+import express from "express";
+import { readHelloFruitPriceFeedCurrencies } from "../../../../shared/demo-currencies.ts";
 import {
   createHelloFruitDemoServerLogger,
   createHelloFruitOpenReceiveLogger,
 } from "../../../../shared/demo-logging.ts";
+import { createHelloFruitDemoMetadata } from "../../../../shared/demo-metadata.ts";
 import { createHelloFruitPrepareCheckout } from "../../../../shared/demo-prepare-checkout.ts";
 import { mountHelloFruitHostedDemoRoutes } from "../../../../shared/hosted-demo-routes.ts";
-import {
-  readHelloFruitCheckoutCurrencies,
-  readHelloFruitPriceFeedCurrencies,
-} from "../../../../shared/demo-currencies.ts";
 
 const DEMO_ID = "static-html-small-api";
 const logDemo = createHelloFruitDemoServerLogger(DEMO_ID);
 
-interface HelloFruitOpenReceiveBundle {
-  readonly openreceive: Awaited<ReturnType<typeof createOpenReceive>>;
-}
-
+/** Test-only overrides (fake wallet / in-memory store). Omit in real apps. */
 export interface HelloFruitOpenReceiveOptions {
   readonly client?: OpenReceiveReceiveNwcClient;
   readonly store?: OpenReceiveInvoiceKvStore;
@@ -37,50 +28,7 @@ export interface HelloFruitOpenReceiveOptions {
   readonly configPath?: string | false;
 }
 
-export async function createHelloFruitOpenReceive(options: HelloFruitOpenReceiveOptions = {}) {
-  const config = readOpenReceiveConfigFile({ cwd: process.cwd(), configPath: options.configPath });
-  logDemo("openreceive.configure", "Preparing OpenReceive demo service.", {
-    namespace: config?.namespace ?? "hello_fruit",
-    customClient: options.client !== undefined,
-    customStore: options.store !== undefined,
-    customPriceProviders: options.priceProviders !== undefined,
-  });
-  const priceCurrencies = readHelloFruitPriceFeedCurrencies();
-  const supportedCurrencies = readHelloFruitCheckoutCurrencies();
-
-  logDemo("openreceive.price_currencies", "Loaded checkout and price feed currencies.", {
-    checkoutCurrencyCount: supportedCurrencies.length,
-    priceCurrencyCount: priceCurrencies.length,
-  });
-
-  // Quickstart shape: createOpenReceive({ onPaid }) + mount with prepareCheckout.
-  // onPaid may fire more than once — dedupe on checkoutId in a real app.
-  const openreceive = await createOpenReceive({
-    ...(options.client === undefined ? {} : { client: options.client }),
-    ...(options.store === undefined ? {} : { store: options.store }),
-    ...(options.priceProviders === undefined ? {} : { priceProviders: options.priceProviders }),
-    ...(options.configPath === undefined ? {} : { configPath: options.configPath }),
-    namespace: config?.namespace ?? "hello_fruit",
-    priceCurrencies,
-    logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
-    onPaid: async ({ orderId, checkoutId }) => {
-      logDemo("openreceive.on_paid", "Checkout settled — fulfill your order here.", {
-        orderId,
-        checkoutId,
-      });
-    },
-  });
-  logDemo("openreceive.ready", "OpenReceive demo service is ready.", {
-    priceCurrencyCount: openreceive.priceCurrencies.length,
-    checkoutCurrencyCount: supportedCurrencies.length,
-  });
-  return {
-    openreceive,
-  } satisfies HelloFruitOpenReceiveBundle;
-}
-
 export async function createHelloFruitStaticServer(options: HelloFruitOpenReceiveOptions = {}) {
-  logDemo("server.create", "Creating static HTML demo server.");
   const app = express();
   app.use(express.json());
   app.use(
@@ -88,9 +36,21 @@ export async function createHelloFruitStaticServer(options: HelloFruitOpenReceiv
     express.static(fileURLToPath(new URL("../../../../shared/stickers/", import.meta.url))),
   );
 
-  const { openreceive } = await createHelloFruitOpenReceive(options);
+  // Same shape as docs/guides/quickstart-node.md:
+  // createOpenReceive({ onPaid }) + mount with prepareCheckout.
+  // onPaid may fire more than once — dedupe on checkoutId in a real app.
+  const service = await createOpenReceive({
+    priceCurrencies: readHelloFruitPriceFeedCurrencies(),
+    logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
+    onPaid: async ({ orderId, checkoutId }) => {
+      logDemo("openreceive.on_paid", "Checkout settled — fulfill your order here.", {
+        orderId,
+        checkoutId,
+      });
+    },
+    ...options,
+  });
 
-  // Mount the shipped OpenReceive routes (same shape as docs/guides/quickstart-node.md).
   // guestCheckout(): anonymous create, Tier-2 reads gated by the per-order capability token.
   // For a signed-in app, swap authorize for withUser instead, e.g.:
   //   import { withUser } from "@openreceive/http";
@@ -100,18 +60,11 @@ export async function createHelloFruitStaticServer(options: HelloFruitOpenReceiv
   //   }),
   app.use(
     openReceiveExpress({
-      service: openreceive,
+      service,
       authorize: guestCheckout(),
-      prepareCheckout: createHelloFruitPrepareCheckout({ demoId: DEMO_ID, openreceive }),
+      prepareCheckout: createHelloFruitPrepareCheckout({ demoId: DEMO_ID, openreceive: service }),
     }),
   );
-
-  logDemo("server.routes", "Mounting demo routes.", {
-    staticStickers: "/stickers",
-    openReceiveRouter: "/openreceive",
-    prepare: "/openreceive/prepare",
-    rates: "/rates",
-  });
 
   mountHelloFruitHostedDemoRoutes(app, {
     id: DEMO_ID,
@@ -122,7 +75,6 @@ export async function createHelloFruitStaticServer(options: HelloFruitOpenReceiv
   });
 
   app.get("/demo-metadata.json", (_req, res) => {
-    logDemo("metadata.request", "Serving demo metadata.");
     res.status(200).json(
       createHelloFruitDemoMetadata({
         id: DEMO_ID,
@@ -139,19 +91,9 @@ export async function createHelloFruitStaticServer(options: HelloFruitOpenReceiv
   });
 
   app.get("/rates", async (_req, res, next) => {
-    const startedAt = Date.now();
     try {
-      const rates = await openreceive.listRates();
-      logDemo("rates.response", "Served BTC fiat display rates.", {
-        rateCurrencies: Object.keys(rates.bitcoin),
-        elapsedMs: Date.now() - startedAt,
-      });
-      res.status(200).json({ rates });
+      res.status(200).json({ rates: await service.listRates() });
     } catch (error) {
-      logDemo("rates.error", "Failed to load display rates.", {
-        error: error instanceof Error ? error.message : String(error),
-        elapsedMs: Date.now() - startedAt,
-      });
       next(error);
     }
   });

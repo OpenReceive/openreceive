@@ -15,31 +15,29 @@ import {
   createHelloFruitOpenReceiveLogger,
 } from "../../../../shared/demo-logging.ts";
 import { createHelloFruitPrepareCheckout } from "../../../../shared/demo-prepare-checkout.ts";
-import {
-  readHelloFruitCheckoutCurrencies,
-  readHelloFruitPriceFeedCurrencies,
-} from "../../../../shared/demo-currencies.ts";
+import { readHelloFruitPriceFeedCurrencies } from "../../../../shared/demo-currencies.ts";
 
 const DEMO_ID = "nextjs-fullstack";
 const DEFAULT_PORT = "3002";
 const GITHUB_REPOSITORY_URL = "https://github.com/openreceive/openreceive";
 const logDemo = createHelloFruitDemoServerLogger(DEMO_ID);
 
-interface NextDemoOpenReceiveCache {
-  readonly walletCacheKey: string;
-  readonly storeCacheKey: string;
-  readonly server: ReturnType<typeof createHelloFruitOpenReceive>;
+/** Test-only overrides (fake wallet / in-memory store). Omit in real apps. */
+export interface HelloFruitOpenReceiveTestOverrides {
+  readonly client?: OpenReceiveReceiveNwcClient;
+  readonly store?: OpenReceiveInvoiceKvStore;
+  readonly priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
+  readonly configPath?: string | false;
 }
 
 interface HelloFruitOpenReceiveBundle {
   readonly openreceive: Awaited<ReturnType<typeof createOpenReceive>>;
 }
 
-export interface HelloFruitOpenReceiveTestOverrides {
-  readonly client?: OpenReceiveReceiveNwcClient;
-  readonly store?: OpenReceiveInvoiceKvStore;
-  readonly priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
-  readonly configPath?: string | false;
+interface NextDemoOpenReceiveCache {
+  readonly walletCacheKey: string;
+  readonly storeCacheKey: string;
+  readonly server: Promise<HelloFruitOpenReceiveBundle>;
 }
 
 let openreceiveCache: NextDemoOpenReceiveCache | undefined;
@@ -48,11 +46,6 @@ let testOverrides: HelloFruitOpenReceiveTestOverrides | undefined;
 export function setHelloFruitOpenReceiveTestOverrides(
   overrides: HelloFruitOpenReceiveTestOverrides | undefined,
 ): void {
-  logDemo("test_overrides.set", "Resetting OpenReceive cache for test overrides.", {
-    hasClient: overrides?.client !== undefined,
-    hasStore: overrides?.store !== undefined,
-    hasPriceProviders: overrides?.priceProviders !== undefined,
-  });
   openreceiveCache = undefined;
   testOverrides = overrides;
 }
@@ -64,7 +57,6 @@ export function isWalletConfigured(): boolean {
 }
 
 export function demoMetadataResponse(): Response {
-  logDemo("metadata.request", "Serving demo metadata.");
   return jsonResponse(
     createHelloFruitDemoMetadata({
       id: DEMO_ID,
@@ -119,54 +111,39 @@ export function sitemapResponse(): string {
  * Same shape as docs/guides/quickstart-node.md (Next adapter): service + prepareCheckout.
  */
 export async function openReceiveHttpOptions(): Promise<CreateOpenReceiveHttpHandlerOptions> {
-  const { openreceive } = await getOpenReceive();
+  const { openreceive: service } = await getOpenReceive();
   return {
-    service: openreceive,
+    service,
     authorize: guestCheckout(),
     prepareCheckout: createHelloFruitPrepareCheckout({
       demoId: DEMO_ID,
       demoName: "Next.js",
-      openreceive,
+      openreceive: service,
     }),
   };
 }
 
 export async function ratesResponse(): Promise<Response> {
-  const startedAt = Date.now();
-  const { openreceive } = await getOpenReceive();
-  const rates = await openreceive.listRates();
-  logDemo("rates.response", "Served BTC fiat display rates.", {
-    rateCurrencies: Object.keys(rates.bitcoin),
-    elapsedMs: Date.now() - startedAt,
-  });
-  return jsonResponse({ rates });
+  const { openreceive: service } = await getOpenReceive();
+  return jsonResponse({ rates: await service.listRates() });
 }
 
 async function getOpenReceive(): Promise<HelloFruitOpenReceiveBundle> {
   const walletCacheKey = testOverrides?.client === undefined ? "env" : "openreceive-test-client";
   const storeCacheKey = currentStoreCacheKey();
-  const cachedOpenReceive = openreceiveCache;
-  if (cachedOpenReceive !== undefined) {
+  const cached = openreceiveCache;
+  if (
+    cached !== undefined &&
+    cached.walletCacheKey === walletCacheKey &&
+    cached.storeCacheKey === storeCacheKey
+  ) {
     try {
-      if (
-        cachedOpenReceive.walletCacheKey === walletCacheKey &&
-        cachedOpenReceive.storeCacheKey === storeCacheKey
-      ) {
-        logDemo("openreceive.cache_hit", "Reusing cached OpenReceive demo service.", {
-          storeCacheKey,
-        });
-        return await cachedOpenReceive.server;
-      }
+      return await cached.server;
     } catch {
-      logDemo("openreceive.cache_stale", "Discarding cached OpenReceive demo service.");
-      if (openreceiveCache === cachedOpenReceive) openreceiveCache = undefined;
+      if (openreceiveCache === cached) openreceiveCache = undefined;
     }
   }
 
-  logDemo("openreceive.cache_miss", "Creating OpenReceive demo service.", {
-    storeCacheKey,
-    usingTestClient: testOverrides?.client !== undefined,
-  });
   const nextServer = createHelloFruitOpenReceive();
   openreceiveCache = {
     walletCacheKey,
@@ -177,41 +154,19 @@ async function getOpenReceive(): Promise<HelloFruitOpenReceiveBundle> {
   try {
     return await nextServer;
   } catch (error) {
-    logDemo("openreceive.create_failed", "OpenReceive demo service failed to initialize.", {
-      error: error instanceof Error ? error.message : String(error),
-    });
     if (openreceiveCache?.server === nextServer) openreceiveCache = undefined;
     throw error;
   }
 }
 
-export async function createHelloFruitOpenReceive(
-  overrides: HelloFruitOpenReceiveTestOverrides = testOverrides === undefined ? {} : testOverrides,
-) {
-  const config = readOpenReceiveConfigFile({ cwd: process.cwd(), configPath: overrides.configPath });
-  logDemo("openreceive.configure", "Preparing OpenReceive demo service.", {
-    namespace: config?.namespace ?? "hello_fruit",
-    customClient: overrides.client !== undefined,
-    customStore: overrides.store !== undefined,
-    customPriceProviders: overrides.priceProviders !== undefined,
-  });
-  const priceCurrencies = readHelloFruitPriceFeedCurrencies();
-  const supportedCurrencies = readHelloFruitCheckoutCurrencies();
-
-  logDemo("openreceive.price_currencies", "Loaded checkout and price feed currencies.", {
-    checkoutCurrencyCount: supportedCurrencies.length,
-    priceCurrencyCount: priceCurrencies.length,
-  });
-
-  // Quickstart shape: createOpenReceive({ onPaid }) + mount with prepareCheckout.
+async function createHelloFruitOpenReceive(
+  overrides: HelloFruitOpenReceiveTestOverrides = testOverrides ?? {},
+): Promise<HelloFruitOpenReceiveBundle> {
+  // Same shape as docs/guides/quickstart-node.md:
+  // createOpenReceive({ onPaid }) — Next mounts via openReceiveNextHandlers + openReceiveHttpOptions.
   // onPaid may fire more than once — dedupe on checkoutId in a real app.
-  const openreceive = await createOpenReceive({
-    ...(overrides.client === undefined ? {} : { client: overrides.client }),
-    ...(overrides.store === undefined ? {} : { store: overrides.store }),
-    ...(overrides.priceProviders === undefined ? {} : { priceProviders: overrides.priceProviders }),
-    ...(overrides.configPath === undefined ? {} : { configPath: overrides.configPath }),
-    namespace: config?.namespace ?? "hello_fruit",
-    priceCurrencies,
+  const service = await createOpenReceive({
+    priceCurrencies: readHelloFruitPriceFeedCurrencies(),
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
     onPaid: async ({ orderId, checkoutId }) => {
       logDemo("openreceive.on_paid", "Checkout settled — fulfill your order here.", {
@@ -219,16 +174,10 @@ export async function createHelloFruitOpenReceive(
         checkoutId,
       });
     },
+    ...overrides,
   });
-  logDemo("openreceive.ready", "OpenReceive demo service is ready.", {
-    priceCurrencyCount: openreceive.priceCurrencies.length,
-    checkoutCurrencyCount: supportedCurrencies.length,
-  });
-  return {
-    openreceive,
-  } satisfies HelloFruitOpenReceiveBundle;
+  return { openreceive: service };
 }
-
 
 function currentStoreCacheKey(): string {
   const config = readOpenReceiveConfigFile({
