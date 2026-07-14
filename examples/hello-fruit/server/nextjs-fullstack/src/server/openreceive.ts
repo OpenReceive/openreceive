@@ -1,57 +1,31 @@
-import type {
-  OpenReceiveInvoiceKvStore,
-  OpenReceiveReceiveNwcClient,
-  OpenReceiveSourcedPriceProvider,
-} from "@openreceive/core";
 import { guestCheckout, type CreateOpenReceiveHttpHandlerOptions } from "@openreceive/http";
 import {
   createOpenReceive,
   readOpenReceiveConfigFile,
 } from "@openreceive/node";
-import { readRequiredHelloFruitNwcConnectionString } from "../../../../shared/demo-nwc.ts";
+import { helloFruitDeliveryFetchResponse } from "../../../../shared/demo-delivery.ts";
+import { fulfillHelloFruitOrder } from "../../../../shared/demo-fulfillment.ts";
 import {
   createHelloFruitDemoServerLogger,
   createHelloFruitOpenReceiveLogger,
 } from "../../../../shared/demo-logging.ts";
 import { createHelloFruitPrepareCheckout } from "../../../../shared/demo-prepare-checkout.ts";
-import { readHelloFruitPriceFeedCurrencies } from "../../../../shared/demo-currencies.ts";
+import { helloFruitSharedFile } from "./shared-data.ts";
 
 const DEMO_ID = "nextjs-fullstack";
 const logDemo = createHelloFruitDemoServerLogger(DEMO_ID);
-
-/** Test-only overrides (fake wallet / in-memory store). Omit in real apps. */
-export interface HelloFruitOpenReceiveTestOverrides {
-  readonly client?: OpenReceiveReceiveNwcClient;
-  readonly store?: OpenReceiveInvoiceKvStore;
-  readonly priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
-  readonly configPath?: string | false;
-}
+const STICKERS_DIR = helloFruitSharedFile("stickers");
 
 interface HelloFruitOpenReceiveBundle {
   readonly openreceive: Awaited<ReturnType<typeof createOpenReceive>>;
 }
 
 interface NextDemoOpenReceiveCache {
-  readonly walletCacheKey: string;
   readonly storeCacheKey: string;
   readonly server: Promise<HelloFruitOpenReceiveBundle>;
 }
 
 let openreceiveCache: NextDemoOpenReceiveCache | undefined;
-let testOverrides: HelloFruitOpenReceiveTestOverrides | undefined;
-
-export function setHelloFruitOpenReceiveTestOverrides(
-  overrides: HelloFruitOpenReceiveTestOverrides | undefined,
-): void {
-  openreceiveCache = undefined;
-  testOverrides = overrides;
-}
-
-export function isWalletConfigured(): boolean {
-  if (testOverrides?.client !== undefined) return true;
-  readRequiredHelloFruitNwcConnectionString();
-  return true;
-}
 
 /**
  * Options for the mounted OpenReceive router (app/openreceive/[...openreceive] catch-all).
@@ -75,15 +49,26 @@ export async function ratesResponse(): Promise<Response> {
   return jsonResponse({ rates: await service.listRates() });
 }
 
+/** Gated post-pay sticker download (`GET /delivery/:orderId/:productId`). */
+export async function deliveryResponse(
+  request: Request,
+  orderId: string,
+  productId: string,
+): Promise<Response> {
+  const { openreceive: service } = await getOpenReceive();
+  return helloFruitDeliveryFetchResponse({
+    store: service.store,
+    stickersDir: STICKERS_DIR,
+    orderId,
+    productId,
+    request,
+  });
+}
+
 async function getOpenReceive(): Promise<HelloFruitOpenReceiveBundle> {
-  const walletCacheKey = testOverrides?.client === undefined ? "env" : "openreceive-test-client";
   const storeCacheKey = currentStoreCacheKey();
   const cached = openreceiveCache;
-  if (
-    cached !== undefined &&
-    cached.walletCacheKey === walletCacheKey &&
-    cached.storeCacheKey === storeCacheKey
-  ) {
+  if (cached !== undefined && cached.storeCacheKey === storeCacheKey) {
     try {
       return await cached.server;
     } catch {
@@ -93,7 +78,6 @@ async function getOpenReceive(): Promise<HelloFruitOpenReceiveBundle> {
 
   const nextServer = createHelloFruitOpenReceive();
   openreceiveCache = {
-    walletCacheKey,
     storeCacheKey,
     server: nextServer,
   };
@@ -106,22 +90,27 @@ async function getOpenReceive(): Promise<HelloFruitOpenReceiveBundle> {
   }
 }
 
-async function createHelloFruitOpenReceive(
-  overrides: HelloFruitOpenReceiveTestOverrides = testOverrides ?? {},
-): Promise<HelloFruitOpenReceiveBundle> {
+async function createHelloFruitOpenReceive(): Promise<HelloFruitOpenReceiveBundle> {
   // Same shape as docs/guides/quickstart-node.md:
   // createOpenReceive({ onPaid }) — Next mounts via openReceiveNextHandlers + openReceiveHttpOptions.
-  // onPaid may fire more than once — dedupe on checkoutId in a real app.
-  const service = await createOpenReceive({
-    priceCurrencies: readHelloFruitPriceFeedCurrencies(),
+  // onPaid may fire more than once — fulfillHelloFruitOrder dedupes on checkoutId.
+  // NWC + price currencies come from openreceive.yml (defaults: local-sqlite, USD).
+  let service: Awaited<ReturnType<typeof createOpenReceive>>;
+  service = await createOpenReceive({
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
     onPaid: async ({ orderId, checkoutId }) => {
-      logDemo("openreceive.on_paid", "Checkout settled — fulfill your order here.", {
+      const result = await fulfillHelloFruitOrder({
+        store: service.store,
         orderId,
         checkoutId,
       });
+      logDemo("openreceive.on_paid", "Checkout settled — order fulfillment ran.", {
+        orderId,
+        checkoutId,
+        fulfilled: result.fulfilled,
+        ...(result.fulfilled ? {} : { reason: result.reason }),
+      });
     },
-    ...overrides,
   });
   return { openreceive: service };
 }
@@ -129,7 +118,6 @@ async function createHelloFruitOpenReceive(
 function currentStoreCacheKey(): string {
   const config = readOpenReceiveConfigFile({
     cwd: process.cwd(),
-    configPath: testOverrides?.configPath,
   });
   return JSON.stringify(config ?? {});
 }

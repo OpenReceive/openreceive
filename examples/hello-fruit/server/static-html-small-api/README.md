@@ -7,6 +7,11 @@ required `prepareCheckout` for the shared Hello Fruit sticker product. POST
 
 The browser never receives `OPENRECEIVE_NWC`.
 
+Settlement fulfillment is server-side: `onPaid` marks the order summary
+`paid`, and sticker downloads go through gated `GET /delivery/:orderId/:productId`
+(capability token required). Browser `onSettled` only refreshes UI after that
+server state is visible.
+
 ## Run
 
 ```sh

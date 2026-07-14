@@ -18,6 +18,10 @@ import {
   parseHelloFruitCheckoutOrderId,
   rememberHelloFruitOrder,
 } from "../../../../shared/demo-checkout-resume.ts";
+import {
+  fetchHelloFruitDeliveryObjectUrl,
+  waitForHelloFruitPaidSummary,
+} from "../../../../shared/demo-delivery-client.ts";
 import { isHelloFruitDemoOrder } from "../../../../shared/demo-order.ts";
 import type { HelloFruitDemoOrder } from "../../../../shared/demo-order.ts";
 import { readHelloFruitCheckoutCurrencies } from "../../../../shared/demo-currencies.ts";
@@ -72,6 +76,7 @@ let cart: Record<string, number> = {};
 let currentOrder: DemoOrder | undefined;
 let purchasedFruit: Fruit | undefined;
 let completedOrderId = "";
+let deliveryObjectUrl: string | undefined;
 let settledCheckoutState: CheckoutState | undefined;
 const logOpenReceive = createHelloFruitBrowserLogger("static-html-small-api");
 const logDemo = createHelloFruitDemoBrowserConsoleLogger("static-html-small-api");
@@ -135,6 +140,12 @@ async function resumeCheckoutFromUrl(): Promise<void> {
   purchasedFruit = fruits.find((fruit) => fruit.id === resumed.items[0]?.product_id);
   renderOrder(resumed);
   renderCheckout(resumed.uuid);
+  if (resumed.status === "paid") {
+    completedOrderId = resumed.uuid;
+    void revealFulfilledDelivery(resumed.uuid).catch((cause: unknown) => {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    });
+  }
 }
 
 function renderThemeToggle(): void {
@@ -509,6 +520,12 @@ function renderCheckout(orderId: string): void {
     currentOrder = summary;
     purchasedFruit = fruits.find((fruit) => fruit.id === summary.items[0]?.product_id);
     renderOrder(summary);
+    if (summary.status === "paid" && completedOrderId !== summary.uuid) {
+      completedOrderId = summary.uuid;
+      void revealFulfilledDelivery(summary.uuid).catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : String(cause));
+      });
+    }
   });
 
   checkoutElement.addEventListener(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.error, (event) => {
@@ -534,14 +551,14 @@ function renderCheckout(orderId: string): void {
     if (detail?.state !== undefined) {
       settledCheckoutState = detail.state;
     }
-    logDemo("checkout.settled", "Checkout settled callback received.", {
+    logDemo("checkout.settled", "Checkout settled callback received — waiting for server fulfillment.", {
       orderId,
       purchasedFruitId: purchasedFruit.id,
     });
     completedOrderId = orderId;
-    currentOrder = { ...currentOrder, status: "paid" };
-    renderOrder(currentOrder);
-    showStickerModal(purchasedFruit);
+    void revealFulfilledDelivery(orderId).catch((cause: unknown) => {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    });
   });
 
   checkoutElement.addEventListener(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.startOver, () => {
@@ -549,6 +566,24 @@ function renderCheckout(orderId: string): void {
   });
 
   panel.replaceChildren(checkoutElement);
+}
+
+async function revealFulfilledDelivery(orderId: string): Promise<void> {
+  const paid = await waitForHelloFruitPaidSummary({ orderId });
+  const firstItem = paid.items[0];
+  const fruit =
+    firstItem === undefined
+      ? undefined
+      : fruits.find((entry) => entry.id === firstItem.product_id);
+  logDemo("fulfillment.summary_paid", "Server marked order paid; loading delivery.", {
+    orderId,
+    productId: firstItem?.product_id,
+  });
+  currentOrder = paid;
+  purchasedFruit = fruit;
+  renderOrder(paid);
+  if (fruit === undefined) return;
+  await showStickerModal(orderId, fruit);
 }
 
 function setError(message: string): void {
@@ -562,12 +597,15 @@ function setError(message: string): void {
   errorEl.classList.toggle("hidden", message === "");
 }
 
-function showStickerModal(fruit: Fruit): void {
+async function showStickerModal(orderId: string, fruit: Fruit): Promise<void> {
   closeStickerModal();
   logDemo("sticker_modal.show", "Showing sticker download modal.", {
     fruitId: fruit.id,
     fruitName: fruit.name,
   });
+
+  const objectUrl = await fetchHelloFruitDeliveryObjectUrl(orderId, fruit.id);
+  deliveryObjectUrl = objectUrl;
 
   const backdrop = document.createElement("div");
   backdrop.className = "modal modal-open";
@@ -581,7 +619,7 @@ function showStickerModal(fruit: Fruit): void {
 
   const image = document.createElement("img");
   image.className = "w-full max-w-[180px] aspect-square mx-auto";
-  image.src = `/${fruit.sticker}`;
+  image.src = objectUrl;
   image.alt = "";
 
   const title = document.createElement("h2");
@@ -597,7 +635,7 @@ function showStickerModal(fruit: Fruit): void {
 
   const download = document.createElement("a");
   download.className = "btn";
-  download.href = `/${fruit.sticker}`;
+  download.href = objectUrl;
   download.download = `${fruit.id}-sticker.svg`;
   download.textContent = "Download sticker";
 
@@ -623,6 +661,10 @@ function closeStickerModal(): void {
     logDemo("sticker_modal.close", "Closing sticker download modal.");
   }
   document.getElementById("sticker-modal-backdrop")?.remove();
+  if (deliveryObjectUrl !== undefined) {
+    URL.revokeObjectURL(deliveryObjectUrl);
+    deliveryObjectUrl = undefined;
+  }
 }
 
 async function loadDisplayRates(): Promise<void> {

@@ -18,6 +18,10 @@ import {
   parseHelloFruitCheckoutOrderId,
   rememberHelloFruitOrder,
 } from "../../../../shared/demo-checkout-resume.ts";
+import {
+  fetchHelloFruitDeliveryObjectUrl,
+  waitForHelloFruitPaidSummary,
+} from "../../../../shared/demo-delivery-client.ts";
 import { isHelloFruitDemoOrder } from "../../../../shared/demo-order.ts";
 import { readHelloFruitCheckoutCurrencies } from "../../../../shared/demo-currencies.ts";
 import {
@@ -84,6 +88,9 @@ function App(): React.ReactElement {
   const [cart, setCart] = useState<Record<string, number>>({});
   const [order, setOrder] = useState<DemoOrder | null>(null);
   const [purchasedItems, setPurchasedItems] = useState<readonly DemoOrderItem[]>([]);
+  const [deliveryObjectUrls, setDeliveryObjectUrls] = useState<Readonly<Record<string, string>>>(
+    {},
+  );
   const [stickerModalOpen, setStickerModalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
@@ -103,13 +110,54 @@ function App(): React.ReactElement {
     }
   }
 
+  function revokeDeliveryObjectUrls(urls: Readonly<Record<string, string>>): void {
+    for (const url of Object.values(urls)) {
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  function closeStickerModal(): void {
+    setStickerModalOpen(false);
+    setDeliveryObjectUrls((current) => {
+      revokeDeliveryObjectUrls(current);
+      return {};
+    });
+  }
+
+  /** onSettled is a display hint — wait for server onPaid to mark the summary paid. */
+  async function revealFulfilledDelivery(orderId: string): Promise<void> {
+    const paid = await waitForHelloFruitPaidSummary({ orderId });
+    logDemo("fulfillment.summary_paid", "Server marked order paid; loading delivery.", {
+      orderId,
+      itemCount: paid.items.length,
+    });
+    setOrder(paid);
+    setPurchasedItems(paid.items);
+    const nextUrls: Record<string, string> = {};
+    for (const item of paid.items) {
+      nextUrls[item.product_id] = await fetchHelloFruitDeliveryObjectUrl(orderId, item.product_id);
+    }
+    setDeliveryObjectUrls((current) => {
+      revokeDeliveryObjectUrls(current);
+      return nextUrls;
+    });
+    setStickerModalOpen(true);
+  }
+
   function onSettled(): void {
-    logDemo("checkout.settled", "Checkout settled callback received.", {
-      orderId: order?.uuid,
+    const orderId = order?.uuid ?? resumeOrderId;
+    logDemo("checkout.settled", "Checkout settled callback received — waiting for server fulfillment.", {
+      orderId,
       purchasedItemCount: purchasedItems.length,
     });
-    setOrder((current) => (current === null ? current : { ...current, status: "paid" }));
-    setStickerModalOpen(true);
+    if (orderId === undefined) return;
+    void revealFulfilledDelivery(orderId).catch((cause: unknown) => {
+      logDemo("fulfillment.error", "Failed to load server fulfillment.", {
+        orderId,
+        error: cause instanceof Error ? cause.message : String(cause),
+      });
+      setError(cause instanceof Error ? cause.message : String(cause));
+    });
   }
 
   function resetCheckoutResume(): void {
@@ -125,6 +173,11 @@ function App(): React.ReactElement {
     setPurchasedItems(summary.items);
     setResuming(false);
     setResumeError(null);
+    if (summary.status === "paid") {
+      void revealFulfilledDelivery(summary.uuid).catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : String(cause));
+      });
+    }
   }
 
   function onResumeMiss(orderId: string): void {
@@ -241,7 +294,7 @@ function App(): React.ReactElement {
 
     setCreating(true);
     setError("");
-    setStickerModalOpen(false);
+    closeStickerModal();
     resetCheckoutResume();
 
     try {
@@ -315,7 +368,7 @@ function App(): React.ReactElement {
     setCart({});
     setOrder(null);
     setPurchasedItems([]);
-    setStickerModalOpen(false);
+    closeStickerModal();
     resetCheckoutResume();
     setCreating(false);
     setError("");
@@ -533,7 +586,7 @@ function App(): React.ReactElement {
                 <img
                   className="w-full max-w-[180px] aspect-square"
                   key={item.product_id}
-                  src={`/${item.sticker}`}
+                  src={deliveryObjectUrls[item.product_id] ?? ""}
                   alt=""
                 />
               ))}
@@ -553,7 +606,7 @@ function App(): React.ReactElement {
                 <a
                   className="btn btn-soft justify-between"
                   download={`${item.product_id}-sticker.svg`}
-                  href={`/${item.sticker}`}
+                  href={deliveryObjectUrls[item.product_id] ?? "#"}
                   key={item.product_id}
                 >
                   <span>Download {item.name}</span>
@@ -563,7 +616,7 @@ function App(): React.ReactElement {
             </div>
             <TransactionDetails state={settledCheckoutState} />
             <div className="modal-action">
-              <button className="btn" onClick={() => setStickerModalOpen(false)} type="button">
+              <button className="btn" onClick={closeStickerModal} type="button">
                 Close
               </button>
             </div>

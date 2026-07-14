@@ -6,6 +6,11 @@ OpenReceive via `openReceiveNextHandlers` with required `prepareCheckout`. POST
 `/openreceive/prepare` is the sole price authority. The client uses
 `<Checkout orderId />` and never posts a price on create.
 
+Settlement fulfillment is server-side: `onPaid` marks the order summary
+`paid`, and sticker downloads go through gated `GET /delivery/:orderId/:productId`
+(capability token required). Browser `onSettled` only refreshes UI after that
+server state is visible.
+
 ## Local Setup
 
 ```sh

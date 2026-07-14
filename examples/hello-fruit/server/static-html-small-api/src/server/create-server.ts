@@ -1,14 +1,10 @@
 import { fileURLToPath } from "node:url";
-import type {
-  OpenReceiveInvoiceKvStore,
-  OpenReceiveReceiveNwcClient,
-  OpenReceiveSourcedPriceProvider,
-} from "@openreceive/core";
 import { openReceiveExpress } from "@openreceive/express";
 import { guestCheckout } from "@openreceive/http";
 import { createOpenReceive } from "@openreceive/node";
 import express from "express";
-import { readHelloFruitPriceFeedCurrencies } from "../../../../shared/demo-currencies.ts";
+import { mountHelloFruitDelivery } from "../../../../shared/demo-delivery.ts";
+import { fulfillHelloFruitOrder } from "../../../../shared/demo-fulfillment.ts";
 import {
   createHelloFruitDemoServerLogger,
   createHelloFruitOpenReceiveLogger,
@@ -17,37 +13,37 @@ import { createHelloFruitPrepareCheckout } from "../../../../shared/demo-prepare
 
 const DEMO_ID = "static-html-small-api";
 const logDemo = createHelloFruitDemoServerLogger(DEMO_ID);
+const STICKERS_DIR = fileURLToPath(new URL("../../../../shared/stickers/", import.meta.url));
 
-/** Test-only overrides (fake wallet / in-memory store). Omit in real apps. */
-export interface HelloFruitOpenReceiveOptions {
-  readonly client?: OpenReceiveReceiveNwcClient;
-  readonly store?: OpenReceiveInvoiceKvStore;
-  readonly priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
-  readonly configPath?: string | false;
-}
-
-export async function createHelloFruitStaticServer(options: HelloFruitOpenReceiveOptions = {}) {
+export async function createHelloFruitStaticServer() {
   const app = express();
   app.use(express.json());
-  app.use(
-    "/stickers",
-    express.static(fileURLToPath(new URL("../../../../shared/stickers/", import.meta.url))),
-  );
+  // Catalog thumbnails stay public; purchased downloads go through /delivery (onPaid gate).
+  app.use("/stickers", express.static(STICKERS_DIR));
 
   // Same shape as docs/guides/quickstart-node.md:
   // createOpenReceive({ onPaid }) + mount with prepareCheckout.
-  // onPaid may fire more than once — dedupe on checkoutId in a real app.
-  const service = await createOpenReceive({
-    priceCurrencies: readHelloFruitPriceFeedCurrencies(),
+  // onPaid may fire more than once — fulfillHelloFruitOrder dedupes on checkoutId.
+  // NWC + price currencies come from openreceive.yml (defaults: local-sqlite, USD).
+  let service: Awaited<ReturnType<typeof createOpenReceive>>;
+  service = await createOpenReceive({
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
     onPaid: async ({ orderId, checkoutId }) => {
-      logDemo("openreceive.on_paid", "Checkout settled — fulfill your order here.", {
+      const result = await fulfillHelloFruitOrder({
+        store: service.store,
         orderId,
         checkoutId,
       });
+      logDemo("openreceive.on_paid", "Checkout settled — order fulfillment ran.", {
+        orderId,
+        checkoutId,
+        fulfilled: result.fulfilled,
+        ...(result.fulfilled ? {} : { reason: result.reason }),
+      });
     },
-    ...options,
   });
+
+  mountHelloFruitDelivery(app, { store: service.store, stickersDir: STICKERS_DIR });
 
   // guestCheckout(): anonymous create, Tier-2 reads gated by the per-order capability token.
   // For a signed-in app, swap authorize for withUser instead, e.g.:

@@ -14,6 +14,10 @@ import {
   helloFruitCheckoutPath,
   rememberHelloFruitOrder,
 } from "../../../../shared/demo-checkout-resume.ts";
+import {
+  fetchHelloFruitDeliveryObjectUrl,
+  waitForHelloFruitPaidSummary,
+} from "../../../../shared/demo-delivery-client.ts";
 import type { HelloFruitDemoOrder } from "../../../../shared/demo-order.ts";
 import { isHelloFruitDemoOrder } from "../../../../shared/demo-order.ts";
 import { readHelloFruitCheckoutCurrencies } from "../../../../shared/demo-currencies.ts";
@@ -59,6 +63,7 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
   const [cart, setCart] = useState<Record<string, number>>({});
   const [order, setOrder] = useState<DemoOrder | undefined>();
   const [purchasedFruit, setPurchasedFruit] = useState<HelloFruit | undefined>();
+  const [deliveryObjectUrl, setDeliveryObjectUrl] = useState<string | undefined>();
   const [stickerModalOpen, setStickerModalOpen] = useState(false);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
@@ -71,13 +76,55 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
     if (state.settled) setSettledCheckoutState(state);
   }
 
+  function revokeDeliveryObjectUrl(url: string | undefined): void {
+    if (url !== undefined) URL.revokeObjectURL(url);
+  }
+
+  function closeStickerModal(): void {
+    setStickerModalOpen(false);
+    setDeliveryObjectUrl((current) => {
+      revokeDeliveryObjectUrl(current);
+      return undefined;
+    });
+  }
+
+  /** onSettled is a display hint — wait for server onPaid to mark the summary paid. */
+  async function revealFulfilledDelivery(orderId: string): Promise<void> {
+    const paid = await waitForHelloFruitPaidSummary({ orderId });
+    const firstItem = paid.items[0];
+    const fruit =
+      firstItem === undefined
+        ? undefined
+        : fruits.find((entry) => entry.id === firstItem.product_id);
+    logDemo("fulfillment.summary_paid", "Server marked order paid; loading delivery.", {
+      orderId,
+      productId: firstItem?.product_id,
+    });
+    setOrder(paid);
+    setPurchasedFruit(fruit);
+    if (fruit === undefined) return;
+    const objectUrl = await fetchHelloFruitDeliveryObjectUrl(orderId, fruit.id);
+    setDeliveryObjectUrl((current) => {
+      revokeDeliveryObjectUrl(current);
+      return objectUrl;
+    });
+    setStickerModalOpen(true);
+  }
+
   function onSettled(): void {
-    logDemo("checkout.settled", "Checkout settled callback received.", {
-      orderId: order?.uuid,
+    const orderId = order?.uuid ?? resumeOrderId;
+    logDemo("checkout.settled", "Checkout settled callback received — waiting for server fulfillment.", {
+      orderId,
       purchasedFruitId: purchasedFruit?.id,
     });
-    setOrder((current) => (current === undefined ? current : { ...current, status: "paid" }));
-    setStickerModalOpen(true);
+    if (orderId === undefined) return;
+    void revealFulfilledDelivery(orderId).catch((cause: unknown) => {
+      logDemo("fulfillment.error", "Failed to load server fulfillment.", {
+        orderId,
+        error: cause instanceof Error ? cause.message : String(cause),
+      });
+      setError(cause instanceof Error ? cause.message : String(cause));
+    });
   }
 
   function resetCheckoutResume(): void {
@@ -99,6 +146,11 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
     setStatus("invoice_created");
     setResuming(false);
     setResumeError(null);
+    if (summary.status === "paid") {
+      void revealFulfilledDelivery(summary.uuid).catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : String(cause));
+      });
+    }
   }
 
   function onResumeMiss(orderId: string): void {
@@ -193,7 +245,7 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
 
     setStatus("creating");
     setError("");
-    setStickerModalOpen(false);
+    closeStickerModal();
     resetCheckoutResume();
 
     try {
@@ -256,7 +308,7 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
     setCart({});
     setOrder(undefined);
     setPurchasedFruit(undefined);
-    setStickerModalOpen(false);
+    closeStickerModal();
     resetCheckoutResume();
     setStatus("idle");
     setError("");
@@ -430,7 +482,7 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
       )}
 
       {displayError === "" ? null : <p className="alert alert-error">{displayError}</p>}
-      {purchasedFruit === undefined || !stickerModalOpen ? null : (
+      {purchasedFruit === undefined || !stickerModalOpen || deliveryObjectUrl === undefined ? null : (
         <div className="modal modal-open">
           <section
             aria-labelledby="sticker-modal-title"
@@ -440,7 +492,7 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
           >
             <img
               className="w-full max-w-[180px] aspect-square mx-auto"
-              src={`/stickers/${purchasedFruit.id}.svg`}
+              src={deliveryObjectUrl}
               alt=""
             />
             <h2 className="text-2xl font-bold" id="sticker-modal-title">
@@ -452,13 +504,13 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
               <a
                 className="btn"
                 download={`${purchasedFruit.id}-sticker.svg`}
-                href={`/stickers/${purchasedFruit.id}.svg`}
+                href={deliveryObjectUrl}
               >
                 Download sticker
               </a>
               <button
                 className="btn btn-ghost"
-                onClick={() => setStickerModalOpen(false)}
+                onClick={closeStickerModal}
                 type="button"
               >
                 Close
