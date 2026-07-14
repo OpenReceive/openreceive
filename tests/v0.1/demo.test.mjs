@@ -35,17 +35,11 @@ import {
 } from "../../examples/hello-fruit/shared/demo-pricing.ts";
 import { readHelloFruitCheckoutCurrencies } from "../../examples/hello-fruit/shared/demo-currencies.ts";
 import { InMemoryInvoiceKvStore, StaticPriceProvider } from "../../packages/js/core/src/index.ts";
-import { setHelloFruitOpenReceiveTestOverrides } from "../../examples/hello-fruit/server/nextjs-fullstack/src/server/openreceive.ts";
-import { GET as getNextDemoMetadata } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/demo-metadata.json/route.ts";
-import { GET as getNextDocs } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/docs/route.ts";
+import {
+  isWalletConfigured,
+  setHelloFruitOpenReceiveTestOverrides,
+} from "../../examples/hello-fruit/server/nextjs-fullstack/src/server/openreceive.ts";
 import { GET as getNextOpenReceive, POST as postNextOpenReceive } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/openreceive/[...openreceive]/route.ts";
-import { GET as getNextSource } from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/source/route.ts";
-import getNextRobots, {
-  dynamic as nextRobotsDynamic,
-} from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/robots.ts";
-import getNextSitemap, {
-  dynamic as nextSitemapDynamic,
-} from "../../examples/hello-fruit/server/nextjs-fullstack/src/app/sitemap.ts";
 
 const productPath = path.join(process.cwd(), "examples/hello-fruit/shared/product.json");
 const fruitsPath = path.join(process.cwd(), "examples/hello-fruit/shared/fruits.json");
@@ -1639,9 +1633,10 @@ test("Hello Fruit server demos keep secret-safe local setup docs", () => {
     assert.match(readme, /The browser never receives `OPENRECEIVE_NWC`\./);
     assert.match(readme, /valid receive-only `OPENRECEIVE_NWC`/);
     assert.match(readme, /openreceive\.yml\.example/);
-    assert.match(readme, /\/demo-metadata\.json/);
     assert.match(readme, /compose\.override\.yml\.example up --build/);
     assert.doesNotMatch(readme, /--profile openreceive-worker/);
+    assert.doesNotMatch(readme, /\/demo-metadata\.json/);
+    assert.doesNotMatch(readme, /hosted-demo/);
     assert.match(dockerfile, /CMD \["npm", "start"\]/);
     assert.doesNotMatch(compose, /env_file:/);
     assert.match(compose, /openreceive\.yml:.+openreceive\.yml:ro/);
@@ -1675,9 +1670,9 @@ test("Hello Fruit demos refuse to boot without OPENRECEIVE_NWC", async () => {
       }
 
       assert.throws(
-        () => getNextDemoMetadata(),
+        () => isWalletConfigured(),
         /needs a receive-only NWC code to receive payments\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
-        "nextjs-fullstack: metadata requires NWC",
+        "nextjs-fullstack: wallet check requires NWC",
       );
     });
   });
@@ -1696,62 +1691,11 @@ test("Hello Fruit demos refuse malformed OPENRECEIVE_NWC before serving", async 
         /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
       );
       assert.throws(
-        () => getNextDemoMetadata(),
+        () => isWalletConfigured(),
         /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
       );
     });
   });
-});
-
-test("Hello Fruit metadata exposes only allowlisted build fields", async () => {
-  await withEnv(
-    {
-      OPENRECEIVE_DEMO_MODE: "production",
-      OPENRECEIVE_GIT_SHA: "0123456789abcdef",
-      OPENRECEIVE_IMAGE_DIGEST: `sha256:${"c".repeat(64)}`,
-      OPENRECEIVE_DEPLOYED_AT: "2026-06-20T12:34:56Z",
-    },
-    async () => {
-      for (const demo of [
-        {
-          name: "node-express",
-          createApp: createHelloFruitServer,
-        },
-        {
-          name: "static-html-small-api",
-          createApp: createHelloFruitStaticServer,
-        },
-      ]) {
-        const metadata = await getJson(
-          await demo.createApp(createHelloFruitTestOpenReceiveOptions()),
-          "/demo-metadata.json",
-        );
-        assert.equal(metadata.status, 200, `${demo.name}: metadata status`);
-        assert.equal(metadata.body.mode, "production");
-        assert.equal(metadata.body.build.git_sha, "0123456789abcdef");
-        assert.equal(metadata.body.build.image_digest, `sha256:${"c".repeat(64)}`);
-        assert.equal(metadata.body.build.deployed_at, "2026-06-20T12:34:56Z");
-        assert.equal(JSON.stringify(metadata.body).includes("OPENRECEIVE_NWC"), false);
-        assert.equal(JSON.stringify(metadata.body).includes("nostr+walletconnect://"), false);
-        assert.equal(JSON.stringify(metadata.body).includes("secret="), false);
-      }
-
-      setHelloFruitOpenReceiveTestOverrides(createHelloFruitTestOpenReceiveOptions());
-      try {
-        const nextMetadata = await responseJson(getNextDemoMetadata());
-        assert.equal(nextMetadata.status, 200, "nextjs-fullstack: metadata status");
-        assert.equal(nextMetadata.body.mode, "production");
-        assert.equal(nextMetadata.body.build.git_sha, "0123456789abcdef");
-        assert.equal(nextMetadata.body.build.image_digest, `sha256:${"c".repeat(64)}`);
-        assert.equal(nextMetadata.body.build.deployed_at, "2026-06-20T12:34:56Z");
-        assert.equal(JSON.stringify(nextMetadata.body).includes("OPENRECEIVE_NWC"), false);
-        assert.equal(JSON.stringify(nextMetadata.body).includes("nostr+walletconnect://"), false);
-        assert.equal(JSON.stringify(nextMetadata.body).includes("secret="), false);
-      } finally {
-        setHelloFruitOpenReceiveTestOverrides(undefined);
-      }
-    },
-  );
 });
 
 test("Hello Fruit demos prepare app orders and settle through the mounted router", async () => {
@@ -1929,102 +1873,6 @@ test("Hello Fruit demos create direct SATS orders from the currency switcher", a
     const createdInvoice = created.body.checkout.active ?? created.body.checkout.invoices[0];
     assert.equal(createdInvoice.fiat_quote, null);
   }
-});
-
-test("Hello Fruit hosted demo routes expose source, docs, robots, and sitemap", async () => {
-  await withEnv(
-    {
-      OPENRECEIVE_PUBLIC_URL: "https://demo.example.test",
-      OPENRECEIVE_DEMO_NOINDEX: undefined,
-    },
-    async () => {
-      for (const demo of [
-        {
-          name: "node-express",
-          sourcePath: "examples/hello-fruit/server/node-express",
-          createApp: createHelloFruitServer,
-        },
-        {
-          name: "static-html-small-api",
-          sourcePath: "examples/hello-fruit/server/static-html-small-api",
-          createApp: createHelloFruitStaticServer,
-        },
-      ]) {
-        const app = await demo.createApp(createHelloFruitTestOpenReceiveOptions());
-        const source = await dispatch(app, {
-          method: "GET",
-          url: "/source",
-          headers: {},
-        });
-        assert.equal(source.status, 302, `${demo.name}: source status`);
-        assert.equal(
-          source.headers.get("location"),
-          `https://github.com/openreceive/openreceive/tree/main/${demo.sourcePath}`,
-        );
-
-        const docs = await dispatch(app, {
-          method: "GET",
-          url: "/docs",
-          headers: {},
-        });
-        assert.equal(docs.status, 302, `${demo.name}: docs status`);
-        assert.equal(
-          docs.headers.get("location"),
-          "https://github.com/openreceive/openreceive/blob/main/docs/guides/quickstart-node.md",
-        );
-
-        const robots = await dispatch(app, {
-          method: "GET",
-          url: "/robots.txt",
-          headers: {},
-        });
-        assert.equal(robots.status, 200, `${demo.name}: robots status`);
-        assert.match(robots.text, /Allow: \//);
-        assert.match(robots.text, /Sitemap: https:\/\/demo\.example\.test\/sitemap\.xml/);
-
-        const sitemap = await dispatch(app, {
-          method: "GET",
-          url: "/sitemap.xml",
-          headers: {},
-        });
-        assert.equal(sitemap.status, 200, `${demo.name}: sitemap status`);
-        assert.match(sitemap.text, /<loc>https:\/\/demo\.example\.test\/<\/loc>/);
-
-        for (const response of [source.text, docs.text, robots.text, sitemap.text]) {
-          assert.equal(JSON.stringify(response).includes("OPENRECEIVE_NWC"), false);
-          assert.equal(JSON.stringify(response).includes("nostr+walletconnect://"), false);
-        }
-      }
-
-      const nextSource = getNextSource();
-      assert.equal(nextSource.status, 302, "nextjs-fullstack: source status");
-      assert.equal(
-        nextSource.headers.get("location"),
-        "https://github.com/openreceive/openreceive/tree/main/examples/hello-fruit/server/nextjs-fullstack",
-      );
-
-      const nextDocs = getNextDocs();
-      assert.equal(nextDocs.status, 302, "nextjs-fullstack: docs status");
-      assert.equal(
-        nextDocs.headers.get("location"),
-        "https://github.com/openreceive/openreceive/blob/main/docs/guides/frontend-checkout.md",
-      );
-
-      assert.equal(nextRobotsDynamic, "force-dynamic");
-      const nextRobots = getNextRobots();
-      assert.deepEqual(nextRobots.rules, {
-        userAgent: "*",
-        allow: "/",
-      });
-      assert.equal(nextRobots.sitemap, "https://demo.example.test/sitemap.xml");
-
-      assert.equal(nextSitemapDynamic, "force-dynamic");
-      const nextSitemap = getNextSitemap();
-      assert.equal(nextSitemap[0]?.url, "https://demo.example.test");
-      assert.equal(JSON.stringify(nextRobots).includes("OPENRECEIVE_NWC"), false);
-      assert.equal(JSON.stringify(nextSitemap).includes("nostr+walletconnect://"), false);
-    },
-  );
 });
 
 async function responseJson(responseOrPromise) {

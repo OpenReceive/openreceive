@@ -1,5 +1,5 @@
 IMAGE ?= ghcr.io/openreceive/demo-nextjs:local
-SMOKE_URL ?= http://127.0.0.1:3002/demo-metadata.json
+SMOKE_URL ?= http://127.0.0.1:3002/
 COMPOSE ?= docker compose -f compose.yml -f compose.override.yml.example
 
 .PHONY: setup dev test demo-test-nwc demo-production docker-build docker-run docker-smoke

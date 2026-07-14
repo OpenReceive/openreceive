@@ -13,9 +13,7 @@ import {
   createHelloFruitDemoServerLogger,
   createHelloFruitOpenReceiveLogger,
 } from "../../../../shared/demo-logging.ts";
-import { createHelloFruitDemoMetadata } from "../../../../shared/demo-metadata.ts";
 import { createHelloFruitPrepareCheckout } from "../../../../shared/demo-prepare-checkout.ts";
-import { mountHelloFruitHostedDemoRoutes } from "../../../../shared/hosted-demo-routes.ts";
 
 const DEMO_ID = "static-html-small-api";
 const logDemo = createHelloFruitDemoServerLogger(DEMO_ID);
@@ -65,30 +63,6 @@ export async function createHelloFruitStaticServer(options: HelloFruitOpenReceiv
       prepareCheckout: createHelloFruitPrepareCheckout({ demoId: DEMO_ID, openreceive: service }),
     }),
   );
-
-  mountHelloFruitHostedDemoRoutes(app, {
-    id: DEMO_ID,
-    sourcePath: "examples/hello-fruit/server/static-html-small-api",
-    docsPath: "docs/guides/quickstart-node.md",
-    walletConfigured: true,
-    defaultPort: "3001",
-  });
-
-  app.get("/demo-metadata.json", (_req, res) => {
-    res.status(200).json(
-      createHelloFruitDemoMetadata({
-        id: DEMO_ID,
-        walletConfigured: true,
-        requestedMode: process.env.OPENRECEIVE_DEMO_MODE,
-        gitSha: process.env.OPENRECEIVE_GIT_SHA,
-        imageDigest: process.env.OPENRECEIVE_IMAGE_DIGEST,
-        deployedAt: process.env.OPENRECEIVE_DEPLOYED_AT,
-        packages: {
-          "@openreceive/elements": "0.1.0",
-        },
-      }),
-    );
-  });
 
   app.get("/rates", async (_req, res, next) => {
     try {

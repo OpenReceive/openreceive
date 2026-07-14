@@ -203,14 +203,6 @@
       "public": false
     },
     {
-      "slug": "demo-deployment",
-      "title": "Demo Deployment",
-      "source_path": "docs/internal/demo-deployment.md",
-      "category": "operations",
-      "audience": "contributor",
-      "public": false
-    },
-    {
       "slug": "forbidden-without-approval",
       "title": "Forbidden Without Approval",
       "source_path": "docs/internal/forbidden-without-approval.md",

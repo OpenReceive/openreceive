@@ -5,9 +5,6 @@ services:
       dockerfile: examples/hello-fruit/server/static-html-small-api/Dockerfile
     environment:
       OPENRECEIVE_DEMO_MODE: ${OPENRECEIVE_DEMO_MODE:-test_nwc}
-      OPENRECEIVE_DEPLOYED_AT: ${OPENRECEIVE_DEPLOYED_AT:-}
-      OPENRECEIVE_GIT_SHA: ${OPENRECEIVE_GIT_SHA:-}
-      OPENRECEIVE_IMAGE_DIGEST: ${OPENRECEIVE_IMAGE_DIGEST:-}
       PORT: "3001"
     expose:
       - "3001"

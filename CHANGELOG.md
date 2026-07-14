@@ -2,6 +2,12 @@
 
 ## 0.1.1 - Unreleased
 
+### Hosted demos removed
+
+- Removed `demos/deploy/` hosted-demo deployment templates, validators, and
+  smoke/SEO helper routes. Hello Fruit stacks remain as local `examples/`;
+  public demos live on openreceive.org outside this repository.
+
 ### Swap refund UX
 
 - Surface FixedFloat emergency details on the public swap payload and checkout UI:

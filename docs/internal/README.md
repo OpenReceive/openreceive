@@ -14,6 +14,5 @@ swaps / settlement beyond the integrator happy path.
 9. [Test Command Map](test-command-map.md) - focused validation commands.
 10. [Package Ownership Map](package-ownership.md) - package ownership lanes.
 11. [Release Process](release-process.md) - release gate, workflow skeletons, and tags.
-12. [Demo Deployment](demo-deployment.md) - public demo deployment boundary.
-13. [Forbidden Without Approval](forbidden-without-approval.md) - changes that need explicit approval.
-14. [ADRs](adr/) - durable architecture decisions.
+12. [Forbidden Without Approval](forbidden-without-approval.md) - changes that need explicit approval.
+13. [ADRs](adr/) - durable architecture decisions.

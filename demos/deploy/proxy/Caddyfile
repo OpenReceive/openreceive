@@ -1,5 +1,0 @@
-{
-	email ops@example.invalid
-}
-
-import /etc/caddy/sites/*.caddy

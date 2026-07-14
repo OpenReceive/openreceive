@@ -33,7 +33,6 @@ The v0.1 reference path is contract-first and server-owned:
 - `examples/hello-fruit/server/` contains the Express demo with React, Vue,
   Svelte, and Angular checkout tabs, plus static HTML + small API and Next.js
   fullstack Hello Fruit demos.
-- `demos/deploy/` contains public-safe hosted demo deployment templates.
 - `tools/` holds validation, conformance, package-smoke, docs, and live-wallet
   smoke helpers.
 
@@ -154,12 +153,6 @@ Run only the contract and secret checks when iterating quickly:
 
 ```sh
 npm test
-```
-
-Validate hosted-demo deployment templates:
-
-```sh
-npm run check:demo-deploy
 ```
 
 Validate release-readiness metadata:

@@ -18,14 +18,3 @@ openreceive.yml
 private
 building
 private_private_infra_details.txt
-
-# Demo deployment runtime-only material.
-demos/deploy/secrets
-demos/deploy/certs
-demos/deploy/wireguard
-demos/deploy/.ssh
-demos/deploy/.runtime
-demos/deploy/.state
-demos/deploy/.cache
-demos/deploy/.locks
-demos/deploy/bundles

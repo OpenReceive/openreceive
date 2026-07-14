@@ -86,8 +86,8 @@ enabled:
 - `.github/workflows/ci.yml` runs the full local gate.
 - `.github/workflows/conformance.yml` runs contract, generated-model, JS, and
   internal testkit checks.
-- `.github/workflows/demos.yml` validates and builds demo artifacts without
-  injecting receive-only NWC codes.
+- `.github/workflows/demos.yml` validates and builds Hello Fruit example
+  artifacts without injecting receive-only NWC codes.
 - `.github/workflows/provider-registry.yml` validates canonical provider data.
 - `.github/workflows/security.yml` runs secret and client-bundle boundary
   checks.
@@ -118,8 +118,8 @@ avoid confusing SDK consumers.
 
 ## Notes
 
-Release notes should name which demos were rebuilt, which package versions they
-run, and whether the live wallet smoke was skipped or paid manually.
+Release notes should name which examples were rebuilt, which package versions
+they run, and whether the live wallet smoke was skipped or paid manually.
 
 Do not publish package tarballs from automation until the disabled publish
 workflow is explicitly enabled by a maintainer. Do not expand new SDKs,

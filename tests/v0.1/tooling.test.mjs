@@ -16,7 +16,6 @@ import test from "node:test";
 const secretScanner = path.join(process.cwd(), "tools/validate/scan-secrets.mjs");
 const clientBundleScanner = path.join(process.cwd(), "tools/validate/scan-client-bundles.mjs");
 const demoContainerValidator = path.join(process.cwd(), "tools/validate/check-demo-containers.mjs");
-const demoDeployValidator = path.join(process.cwd(), "tools/validate/check-demo-deploy.mjs");
 const invoiceStorageSchema = path.join(process.cwd(), "spec/schemas/invoice-storage.schema.json");
 const storageKvVectors = path.join(process.cwd(), "spec/test-vectors/storage-kv.json");
 const releaseReadinessValidator = path.join(
@@ -101,14 +100,6 @@ function listTextFiles(root) {
 
 function runDemoContainerValidator() {
   return execFileSync(process.execPath, [demoContainerValidator], {
-    cwd: process.cwd(),
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-}
-
-function runDemoDeployValidator() {
-  return execFileSync(process.execPath, [demoDeployValidator], {
     cwd: process.cwd(),
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
@@ -203,10 +194,6 @@ function runRubyLiveNwcSmoke(env, options = {}) {
 
 test("demo container validator accepts current Hello Fruit templates", () => {
   assert.match(runDemoContainerValidator(), /Demo container validation passed for 3 demo\(s\)\./);
-});
-
-test("demo deployment validator accepts public deploy templates", () => {
-  assert.match(runDemoDeployValidator(), /Demo deployment validation passed for 3 demo\(s\)\./);
 });
 
 test("release readiness validator accepts current v0.1 metadata", () => {
@@ -395,18 +382,13 @@ test("secret scanner rejects force-added root env files without echoing secrets"
 
 test("secret scanner rejects tracked env-like deployment filenames", () => {
   withGitRepo((dir) => {
-    const deployDir = path.join(dir, "demos", "deploy");
-    mkdirSync(deployDir, { recursive: true });
-    writeFileSync(path.join(deployDir, "prod.env.local"), "OPENRECEIVE_NWC=replace-me\n");
-    execFileSync("git", ["add", "demos/deploy/prod.env.local"], { cwd: dir, stdio: "ignore" });
+    writeFileSync(path.join(dir, "prod.env.local"), "OPENRECEIVE_NWC=replace-me\n");
+    execFileSync("git", ["add", "prod.env.local"], { cwd: dir, stdio: "ignore" });
 
     assert.throws(
       () => runSecretScanner(dir),
       (error) => {
-        assert.match(
-          String(error.stderr),
-          /demos\/deploy\/prod\.env\.local: tracked env file is forbidden/,
-        );
+        assert.match(String(error.stderr), /prod\.env\.local: tracked env file is forbidden/);
         return true;
       },
     );

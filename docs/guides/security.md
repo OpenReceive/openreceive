@@ -72,8 +72,8 @@ same way you authorize any other private order route — see
 - Avoid logging signed status or refresh URLs.
 - Keep private wallet details out of public checkout responses.
 
-## Demos
+## Examples
 
-Public demos must use low invoice amounts, rate limits, separate receive-only NWC
-codes, and logs that redact those codes. Demo metadata allowlists and deploy
-boundary: [Demo Deployment](../internal/demo-deployment.md).
+Local Hello Fruit examples must use low invoice amounts, rate limits, separate
+receive-only NWC codes, and logs that redact those codes. Public product demos
+live on openreceive.org outside this repository.

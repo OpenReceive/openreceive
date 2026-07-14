@@ -7,7 +7,6 @@ import { parse as parseYaml } from "yaml";
 const root = process.cwd();
 const NEXT_PORT_DEFAULT = "$" + "{PORT:-3002}";
 const DEMO_MODE_DEFAULT = "$" + "{OPENRECEIVE_DEMO_MODE:-test_nwc}";
-const DEPLOYED_AT_DEFAULT = "$" + "{OPENRECEIVE_DEPLOYED_AT:-}";
 
 const demoContainers = [
   {
@@ -149,7 +148,6 @@ function validateCompose(demo) {
   expect(service.environment?.OPENRECEIVE_STORE === undefined, `${relativePath}: OpenReceive store must come from openreceive.yml`);
   expect(service.environment?.OPENRECEIVE_NAMESPACE === undefined, `${relativePath}: OpenReceive namespace must come from openreceive.yml`);
   expect(service.environment?.OPENRECEIVE_DEMO_MODE === DEMO_MODE_DEFAULT, `${relativePath}: demo mode must default to test_nwc`);
-  expect(service.environment?.OPENRECEIVE_DEPLOYED_AT === DEPLOYED_AT_DEFAULT, `${relativePath}: deployed_at metadata env must be pass-through`);
   expect(service.environment?.PORT === demo.port, `${relativePath}: PORT must be ${demo.port}`);
   expect((service.expose ?? []).length === 1 && service.expose[0] === demo.port, `${relativePath}: must expose only ${demo.port}`);
   expect(ports.length === 0, `${relativePath}: stable compose must not publish host ports`);
@@ -213,7 +211,6 @@ function validateReadme(demo) {
   expect(!text.includes("npm run openreceive:poll"), `${relativePath}: must not document removed status command scripts`);
   expect(!text.includes("openreceive:worker"), `${relativePath}: must not document a worker script`);
   expect(!text.includes("--profile openreceive-worker"), `${relativePath}: must not document worker profiles`);
-  expect(text.includes("/demo-metadata.json"), `${relativePath}: must document demo metadata`);
 }
 
 function validateMakefile(demo) {
@@ -236,7 +233,7 @@ function validateMakefile(demo) {
 
   forbidSecrets(relativePath, text);
   expect(text.includes(`IMAGE ?= ${demo.image}`), `${relativePath}: image must default to ${demo.image}`);
-  expect(text.includes(`SMOKE_URL ?= http://127.0.0.1:${demo.port}/demo-metadata.json`), `${relativePath}: smoke URL must target demo metadata on ${demo.port}`);
+  expect(text.includes(`SMOKE_URL ?= http://127.0.0.1:${demo.port}/`), `${relativePath}: smoke URL must target the demo root on ${demo.port}`);
   expect(text.includes("COMPOSE ?= docker compose -f compose.yml -f compose.override.yml.example"), `${relativePath}: local compose command must include override example`);
   expect(text.includes("OPENRECEIVE_DEMO_MODE=test_nwc $(COMPOSE) up --build"), `${relativePath}: demo-test-nwc must use compose test_nwc mode`);
   expect(text.includes("OPENRECEIVE_DEMO_MODE=production $(COMPOSE) up --build"), `${relativePath}: demo-production must use compose production mode`);
@@ -249,15 +246,7 @@ function validateDockerignore() {
   const relativePath = ".dockerignore";
   const text = read(relativePath);
 
-  for (const entry of [
-    ".env",
-    ".env.*",
-    "openreceive.yml",
-    "private",
-    "building",
-    "demos/deploy/secrets",
-    "demos/deploy/.ssh"
-  ]) {
+  for (const entry of [".env", ".env.*", "openreceive.yml", "private", "building"]) {
     expect(text.split(/\r?\n/).includes(entry), `${relativePath}: must ignore ${entry}`);
   }
 }

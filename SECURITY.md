@@ -18,8 +18,8 @@ GitHub or contact the maintainers through the repository owner.
 - Settlement is verified by backend status refresh using NWC `list_transactions`.
 - Settlement action transitions must be idempotent.
 - Invoice creation must use idempotency keys.
-- Public demos must use low amounts, rate limits, and separate receive-only NWC
-  codes.
+- Public product demos (on openreceive.org) must use low amounts, rate limits,
+  and separate receive-only NWC codes.
 
 ## Secret Scanning
 

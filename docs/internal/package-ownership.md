@@ -21,7 +21,7 @@ parallel work. Shared contract files still need lead coordination.
 | Testkit package | `packages/js/testkit` | Implemented | Conformance lane |
 | Ruby core package | `packages/ruby/openreceive` | Implemented (vector-backed) | Ecosystem lane |
 | Ruby server + Rails | `packages/ruby/openreceive-server`, `openreceive-rails` | Implemented | Ecosystem lane |
-| Hello Fruit demos | `examples/hello-fruit/**` | Implemented | Demo lane |
+| Hello Fruit examples | `examples/hello-fruit/**` | Implemented | Example lane |
 | Other non-JS SDKs | `packages/python`, `packages/php`, etc. | Deferred | Ecosystem lanes |
 
 Safe post-reference parallel lanes:

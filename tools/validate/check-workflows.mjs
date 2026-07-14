@@ -15,7 +15,7 @@ const requiredWorkflows = {
     "npm run test:js"
   ],
   [`${workflowDirectory}/conformance.yml`]: ["npm run validate", "npm run check:generated", "npm run test:js"],
-  [`${workflowDirectory}/demos.yml`]: ["npm run check:demo-containers", "npm run check:demo-deploy", "npm run build:demo", "npm run scan:client-bundles"],
+  [`${workflowDirectory}/demos.yml`]: ["npm run check:demo-containers", "npm run build:demo", "npm run scan:client-bundles"],
   [`${workflowDirectory}/provider-registry.yml`]: ["npm run validate", "tests/v0.1/provider-data.test.mjs"],
   [`${workflowDirectory}/security.yml`]: ["npm run scan:secrets", "npm run check:workflows", "npm run scan:client-bundles"],
   [`${workflowDirectory}/release.yml`]: ["npm run check:release", "npm run test:package-smoke", "Release dry run complete"],

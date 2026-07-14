@@ -36,11 +36,6 @@ extra OpenReceive command is required.
 The production container exposes only port `3002` to the Docker network unless
 the local override is used.
 
-## Metadata
-
-`/demo-metadata.json` exposes non-secret build metadata for hosted-demo smoke
-checks. It never includes wallet connection strings or NWC query secrets.
-
 This demo mounts with `guestCheckout()` (anonymous create; reads gated by the
 per-order capability token). For a signed-in app, swap `authorize` for
 `withUser(...)` — see the comment in `src/server/openreceive.ts`.

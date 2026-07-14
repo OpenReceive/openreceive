@@ -8,7 +8,6 @@ import {
   createOpenReceive,
   readOpenReceiveConfigFile,
 } from "@openreceive/node";
-import { createHelloFruitDemoMetadata } from "../../../../shared/demo-metadata.ts";
 import { readRequiredHelloFruitNwcConnectionString } from "../../../../shared/demo-nwc.ts";
 import {
   createHelloFruitDemoServerLogger,
@@ -18,8 +17,6 @@ import { createHelloFruitPrepareCheckout } from "../../../../shared/demo-prepare
 import { readHelloFruitPriceFeedCurrencies } from "../../../../shared/demo-currencies.ts";
 
 const DEMO_ID = "nextjs-fullstack";
-const DEFAULT_PORT = "3002";
-const GITHUB_REPOSITORY_URL = "https://github.com/openreceive/openreceive";
 const logDemo = createHelloFruitDemoServerLogger(DEMO_ID);
 
 /** Test-only overrides (fake wallet / in-memory store). Omit in real apps. */
@@ -54,56 +51,6 @@ export function isWalletConfigured(): boolean {
   if (testOverrides?.client !== undefined) return true;
   readRequiredHelloFruitNwcConnectionString();
   return true;
-}
-
-export function demoMetadataResponse(): Response {
-  return jsonResponse(
-    createHelloFruitDemoMetadata({
-      id: DEMO_ID,
-      walletConfigured: isWalletConfigured(),
-      requestedMode: process.env.OPENRECEIVE_DEMO_MODE,
-      gitSha: process.env.OPENRECEIVE_GIT_SHA,
-      imageDigest: process.env.OPENRECEIVE_IMAGE_DIGEST,
-      deployedAt: process.env.OPENRECEIVE_DEPLOYED_AT,
-      packages: {
-        "@openreceive/browser": "0.1.0",
-        "@openreceive/react": "0.1.0",
-        next: "0.1.0-demo",
-      },
-    }),
-  );
-}
-
-export function sourceRedirectResponse(): Response {
-  return Response.redirect(
-    `${GITHUB_REPOSITORY_URL}/tree/main/examples/hello-fruit/server/nextjs-fullstack`,
-    302,
-  );
-}
-
-export function docsRedirectResponse(): Response {
-  return Response.redirect(
-    `${GITHUB_REPOSITORY_URL}/blob/main/docs/guides/frontend-checkout.md`,
-    302,
-  );
-}
-
-export function robotsResponse(): string {
-  if (process.env.OPENRECEIVE_DEMO_NOINDEX === "1") {
-    return "User-agent: *\nDisallow: /\n";
-  }
-
-  return `User-agent: *\nAllow: /\nSitemap: ${publicUrl()}/sitemap.xml\n`;
-}
-
-export function sitemapResponse(): string {
-  return [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-    `  <url><loc>${escapeXml(publicUrl())}/</loc></url>`,
-    "</urlset>",
-    "",
-  ].join("\n");
 }
 
 /**
@@ -185,32 +132,6 @@ function currentStoreCacheKey(): string {
     configPath: testOverrides?.configPath,
   });
   return JSON.stringify(config ?? {});
-}
-
-function publicUrl(): string {
-  const configured = process.env.OPENRECEIVE_PUBLIC_URL;
-  if (configured !== undefined) {
-    try {
-      const parsed = new URL(configured);
-      if (parsed.protocol === "https:" || parsed.protocol === "http:") {
-        parsed.hash = "";
-        parsed.search = "";
-        return parsed.toString().replace(/\/$/, "");
-      }
-    } catch {
-      return `http://localhost:${DEFAULT_PORT}`;
-    }
-  }
-
-  return `http://localhost:${DEFAULT_PORT}`;
-}
-
-function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
