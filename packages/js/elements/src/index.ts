@@ -837,20 +837,17 @@ function renderElementSwapMethodGroupHtml(
   const activeOption = selectedOption ?? displayOption;
   const disabled = group.options.every((option) => option.available === false);
   const accent = openReceivePaymentAccentId(group.label);
-  const limitMessage = elementsSwapLimitMessage(activeOption, view);
+  const limitOption = disabled
+    ? (elementsSwapGroupLimitOption(group.options) ?? activeOption)
+    : activeOption;
+  const limitMessage = elementsSwapLimitMessage(limitOption, view);
   const panelId = `network-panel-${groupKey.toLowerCase()}`;
-  const detail =
-    disabled && limitMessage !== undefined
-      ? { className: orClasses.methodLimitHint, text: escapeHtml(limitMessage) }
-      : multiNetwork
-        ? {
-            className: orClasses.methodDetailMobile,
-            text:
-              selected && selectedOption !== undefined
-                ? `${escapeHtml(selectedOption.network_label)} network`
-                : escapeHtml(openReceiveCheckoutLabels.selectNetwork),
-          }
-        : undefined;
+  const networkDetail =
+    !disabled && multiNetwork
+      ? selected && selectedOption !== undefined
+        ? `${escapeHtml(selectedOption.network_label)} network`
+        : escapeHtml(openReceiveCheckoutLabels.selectNetwork)
+      : undefined;
   const mobileReveal = multiNetwork
     ? `
       <div class="${orClasses.methodNetworkRevealAnim} ${
@@ -915,14 +912,45 @@ function renderElementSwapMethodGroupHtml(
         <span class="${orClasses.methodTitleWrap}">
           <span class="${orClasses.methodTitle}">${escapeHtml(group.label)}</span>
           ${
-            detail === undefined
+            networkDetail === undefined
               ? ""
-              : `<span class="${detail.className}">${detail.text}</span>`
+              : `<span class="${orClasses.methodDetailMobile}">${networkDetail}</span>`
           }
         </span>
       </button>
+      ${
+        disabled && limitMessage !== undefined
+          ? `<span class="${orClasses.methodLimitHint}">${escapeHtml(limitMessage)}</span>`
+          : ""
+      }
       ${mobileReveal}
     </div>`;
+}
+
+function elementsSwapGroupLimitOption<
+  T extends {
+    readonly available?: boolean;
+    readonly unavailable_reason?: string;
+    readonly minimum_invoice_amount_msats?: number;
+  },
+>(options: readonly T[]): T | undefined {
+  if (options.length === 0) return undefined;
+  const unavailable = options.filter((option) => option.available === false);
+  const tooSmall = unavailable.filter((option) => option.unavailable_reason === "amount_too_small");
+  const candidates =
+    tooSmall.length > 0 ? tooSmall : unavailable.length > 0 ? unavailable : options;
+  let best = candidates[0];
+  for (const option of candidates) {
+    if (best === undefined) {
+      best = option;
+      continue;
+    }
+    const bestMin = best.minimum_invoice_amount_msats;
+    const optionMin = option.minimum_invoice_amount_msats;
+    if (optionMin === undefined) continue;
+    if (bestMin === undefined || optionMin < bestMin) best = option;
+  }
+  return best;
 }
 
 
@@ -946,8 +974,8 @@ function elementsSwapLimitMessage(
     const fiat =
       checkout === undefined
         ? undefined
-        : formatOpenReceiveSwapLimit(checkout, option.minimum_invoice_amount_msats);
-    if (fiat !== undefined) return `Minimum payment ${fiat}`;
+        : formatOpenReceiveSwapLimit(checkout, option.minimum_invoice_amount_msats, "ceil");
+    if (fiat !== undefined) return `Minimum amount ${fiat}`;
     if (option.minimum_pay_amount !== undefined) {
       return `Minimum ${option.minimum_pay_amount} ${option.label}`;
     }
@@ -956,8 +984,8 @@ function elementsSwapLimitMessage(
     const fiat =
       checkout === undefined
         ? undefined
-        : formatOpenReceiveSwapLimit(checkout, option.maximum_invoice_amount_msats);
-    if (fiat !== undefined) return `Maximum payment ${fiat}`;
+        : formatOpenReceiveSwapLimit(checkout, option.maximum_invoice_amount_msats, "floor");
+    if (fiat !== undefined) return `Maximum amount ${fiat}`;
     if (option.maximum_pay_amount !== undefined) {
       return `Maximum ${option.maximum_pay_amount} ${option.label}`;
     }

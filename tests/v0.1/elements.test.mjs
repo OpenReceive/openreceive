@@ -100,6 +100,30 @@ test("elements render payment wizard route choices and providers from browser st
   assert.match(loadingStep, /Loading currencies/);
   assert.doesNotMatch(loadingStep, />Crypto</);
 
+  const belowMin = renderOpenReceivePaymentWizardHtml({
+    amountMsats: 3_000_000,
+    fiat: { currency: "USD", value: "2.00" },
+    swapOptions: [
+      {
+        pay_in_asset: "ETH_ETH",
+        label: "ETH",
+        network_label: "Ethereum",
+        provider: "fixedfloat",
+        available: false,
+        unavailable_reason: "amount_too_small",
+        minimum_invoice_amount_msats: 25_425_000,
+      },
+    ],
+  });
+  assert.match(belowMin, /Bitcoin/);
+  assert.match(belowMin, /ETH/);
+  assert.match(belowMin, /Minimum amount \$16\.95/);
+  assert.doesNotMatch(belowMin, /Minimum payment/);
+  assert.match(
+    belowMin,
+    /aria-disabled="true"[\s\S]*?<\/button>\s*<span class="[^"]*text-base-content\/55[^"]*">Minimum amount/,
+  );
+
   const cryptoStep = renderOpenReceivePaymentWizardHtml({
     selectedMethod: "crypto",
     selectedCryptoRoute: "usdt"

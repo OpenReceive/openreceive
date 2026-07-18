@@ -43,7 +43,7 @@ export const orClasses = {
   wizardBody: "border-t border-base-300 grid gap-3 p-4 sm:p-5",
   methodSelector: "grid gap-3",
   methodGrid:
-    "grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-5",
+    "grid grid-cols-1 items-start gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-5",
   methodCard:
     "flex min-h-14 w-full items-center justify-start gap-3 rounded-field border border-base-300 bg-base-100 px-3 py-2 text-left text-base-content shadow-none transition-colors hover:border-base-content/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:px-4 cursor-pointer",
   methodCardUnavailable:
@@ -74,7 +74,7 @@ export const orClasses = {
   methodDetail: "text-base-content/60 text-xs leading-snug",
   methodDetailMobile: "block truncate text-xs text-base-content/55 sm:hidden",
   /** Limit / unavailable hint under a payment tile — visible at all breakpoints. */
-  methodLimitHint: "mt-0.5 block text-xs leading-snug text-base-content/55",
+  methodLimitHint: "block px-1 text-xs leading-snug text-base-content/55",
   methodDetailDesktop: "hidden",
   methodNetworkReveal:
     "rounded-box border border-base-300 bg-base-100/50 p-3",
@@ -116,7 +116,7 @@ export const orClasses = {
   methodContinueRow: "mt-0 flex justify-end max-sm:block",
   methodConfirm: "btn btn-primary w-full sm:w-auto sm:min-w-32",
   methodConfirmDesktop: "btn btn-primary w-full",
-  methodTile: "contents max-sm:block",
+  methodTile: "grid min-w-0 content-start gap-0.5",
   breadcrumbs: "breadcrumbs text-sm",
   breadcrumbCurrent: "font-bold",
   routePicker: "grid grid-cols-2 md:grid-cols-4 gap-2",

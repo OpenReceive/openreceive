@@ -312,6 +312,66 @@ test("React payment wizard server-renders the package-owned first choices", () =
   assert.doesNotMatch(html, /Bank Transfer/);
 });
 
+test("React payment wizard greys under-minimum swaps with rounded minimum amount notes", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(PaymentWizard, {
+      invoice: undefined,
+      orderUrl: false,
+      checkout: {
+        checkout_id: "or_chk_min",
+        order_id: "order-min",
+        status: "open",
+        amount_msats: 3_000_000,
+        fiat: { currency: "USD", value: "2.00" },
+        invoices: [],
+        payment_methods: [
+          {
+            pay_in_asset: "USDC_SOL",
+            label: "USDC",
+            network_label: "Solana",
+            provider: "fixedfloat",
+            available: false,
+            unavailable_reason: "amount_too_small",
+            minimum_invoice_amount_msats: 3_225_000,
+            minimum_pay_amount: "2.15",
+          },
+          {
+            pay_in_asset: "ETH_ETH",
+            label: "ETH",
+            network_label: "Ethereum",
+            provider: "fixedfloat",
+            available: false,
+            unavailable_reason: "amount_too_small",
+            minimum_invoice_amount_msats: 25_425_000,
+            minimum_pay_amount: "0.01",
+          },
+          {
+            pay_in_asset: "SOL_SOL",
+            label: "SOL",
+            network_label: "Solana",
+            provider: "fixedfloat",
+            available: true,
+            minimum_invoice_amount_msats: 2_800_000,
+          },
+        ],
+      },
+    }),
+  );
+
+  assert.match(html, /Bitcoin/);
+  assert.match(html, /USDC/);
+  assert.match(html, /SOL/);
+  assert.match(html, /ETH/);
+  assert.match(html, /Minimum amount \$2\.15/);
+  assert.match(html, /Minimum amount \$16\.95/);
+  assert.doesNotMatch(html, /Minimum payment/);
+  // Limit notes sit under the greyed tiles (sibling of the disabled button).
+  assert.match(
+    html,
+    /aria-disabled="true"[\s\S]*?<\/button><span class="[^"]*text-base-content\/55[^"]*">Minimum amount/,
+  );
+});
+
 test("method grid never includes the standalone Crypto button", () => {
   const empty = buildOpenReceiveMethodGridEntries(openReceivePaymentMethods, []);
   assert.deepEqual(

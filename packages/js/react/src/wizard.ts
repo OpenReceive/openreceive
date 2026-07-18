@@ -46,6 +46,7 @@ import {
   renderSwapDepositPanel,
   renderSwapPreparing,
   renderSwapUnavailable,
+  swapGroupLimitOption,
   swapOptionLimitMessage,
 } from "./swap.ts";
 import { joinClassNames, reactRecord } from "./utils.ts";
@@ -914,7 +915,10 @@ function renderCompactPaymentMethodSelector(options: {
           const activeOption = selectedOption ?? displayOption;
           const disabled = group.options.every((option) => option.available === false);
           const accent = openReceivePaymentAccentId(group.label);
-          const limitMessage = swapOptionLimitMessage(activeOption, options.checkout);
+          const limitOption = disabled
+            ? (swapGroupLimitOption(group.options) ?? activeOption)
+            : activeOption;
+          const limitMessage = swapOptionLimitMessage(limitOption, options.checkout);
           const panelId = `network-panel-${groupKey.toLowerCase()}`;
 
           return React.createElement(
@@ -954,23 +958,24 @@ function renderCompactPaymentMethodSelector(options: {
                 "span",
                 { className: orClasses.methodTitleWrap },
                 React.createElement("span", { className: orClasses.methodTitle }, group.label),
-                disabled && limitMessage !== undefined
+                !disabled && multiNetwork
                   ? React.createElement(
                       "span",
-                      { className: orClasses.methodLimitHint },
-                      limitMessage,
+                      { className: orClasses.methodDetailMobile },
+                      selected && selectedOption !== undefined
+                        ? `${selectedOption.network_label} network`
+                        : openReceiveCheckoutLabels.selectNetwork,
                     )
-                  : multiNetwork
-                    ? React.createElement(
-                        "span",
-                        { className: orClasses.methodDetailMobile },
-                        selected && selectedOption !== undefined
-                          ? `${selectedOption.network_label} network`
-                          : openReceiveCheckoutLabels.selectNetwork,
-                      )
-                    : null,
+                  : null,
               ),
             ),
+            disabled && limitMessage !== undefined
+              ? React.createElement(
+                  "span",
+                  { className: orClasses.methodLimitHint },
+                  limitMessage,
+                )
+              : null,
             multiNetwork
               ? React.createElement(
                   "div",

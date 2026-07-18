@@ -480,9 +480,12 @@ function formatOpenReceiveInteger(value: number): string {
 
 /**
  * Renders an invoice-side (Lightning receive) msat limit as a short amount for
- * display next to a disabled swap asset, e.g. "$10.00". Converts to the
+ * display under a disabled swap asset, e.g. "$10.00". Converts to the
  * checkout's own fiat currency using its rate; falls back to a sats figure when
  * the checkout is sats/BTC-denominated or no usable rate is available.
+ *
+ * Minimums ceil and maximums floor to the display scale so the note never
+ * understates a floor or overstates a ceiling.
  */
 export function formatOpenReceiveSwapLimit(
   checkout: {
@@ -490,33 +493,62 @@ export function formatOpenReceiveSwapLimit(
     readonly fiat?: { readonly currency: string; readonly value: string };
   },
   limitMsats: number | undefined,
+  rounding: "ceil" | "floor" = "ceil",
 ): string | undefined {
-  if (limitMsats === undefined || !Number.isFinite(limitMsats) || limitMsats < 0) return undefined;
-  const fiat = checkout.fiat;
   if (
-    fiat !== undefined &&
-    fiat.currency !== "SATS" &&
-    fiat.currency !== "BTC" &&
-    checkout.amount_msats > 0
+    limitMsats === undefined ||
+    !Number.isSafeInteger(limitMsats) ||
+    limitMsats < 0 ||
+    !Number.isSafeInteger(checkout.amount_msats) ||
+    checkout.amount_msats <= 0
   ) {
-    const invoiceFiat = Number(fiat.value);
-    if (Number.isFinite(invoiceFiat) && invoiceFiat > 0) {
-      const limitFiat = (invoiceFiat / checkout.amount_msats) * limitMsats;
+    return undefined;
+  }
+  const fiat = checkout.fiat;
+  if (fiat !== undefined && fiat.currency !== "SATS" && fiat.currency !== "BTC") {
+    const scaled = scaleFiatLimitExact({
+      fiatValue: fiat.value,
+      amountMsats: checkout.amount_msats,
+      limitMsats,
+      rounding,
+    });
+    if (scaled !== undefined) {
       const formatted = formatOpenReceiveFiatAmount({
         currency: fiat.currency,
-        value: limitFiat.toFixed(fiatFractionDigits(fiat.value)),
+        value: scaled,
       });
       if (formatted !== undefined) return formatted;
     }
   }
-  const sats = Math.round(limitMsats / 1000);
+  const sats =
+    rounding === "floor" ? Math.floor(limitMsats / 1000) : Math.ceil(limitMsats / 1000);
   return `${sats} ${sats === 1 ? "sat" : "sats"}`;
 }
 
-function fiatFractionDigits(value: string): number {
-  const dot = value.indexOf(".");
-  if (dot === -1) return 2;
-  return Math.min(value.length - dot - 1, 8);
+/**
+ * Exact `invoice_fiat * limit_msats / amount_msats` at two decimal places.
+ * Uses bigint only — never binary floats.
+ */
+function scaleFiatLimitExact(input: {
+  readonly fiatValue: string;
+  readonly amountMsats: number;
+  readonly limitMsats: number;
+  readonly rounding: "ceil" | "floor";
+}): string | undefined {
+  if (!/^\d+(?:\.\d+)?$/.test(input.fiatValue)) return undefined;
+  const [integer, fraction = ""] = input.fiatValue.split(".");
+  const fiatScale = fraction.length;
+  const fiatUnits = BigInt(`${integer}${fraction}`);
+  if (fiatUnits <= 0n) return undefined;
+  const outScale = 2;
+  // result_units_at_2dp = round(fiat_units * limit / amount * 10^(2 - fiatScale))
+  const numerator = fiatUnits * BigInt(input.limitMsats) * 10n ** BigInt(outScale);
+  const denominator = BigInt(input.amountMsats) * 10n ** BigInt(fiatScale);
+  if (denominator <= 0n) return undefined;
+  const units =
+    input.rounding === "floor" ? numerator / denominator : (numerator + denominator - 1n) / denominator;
+  const raw = units.toString().padStart(outScale + 1, "0");
+  return `${raw.slice(0, -outScale)}.${raw.slice(-outScale)}`;
 }
 
 export function formatOpenReceivePaymentHashLabel(hash: string): string {

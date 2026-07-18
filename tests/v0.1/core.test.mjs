@@ -55,6 +55,7 @@ import {
   escapeOpenReceiveHtml,
   formatOpenReceiveCountryMetaLabel,
   formatOpenReceivePaymentHashLabel,
+  formatOpenReceiveSwapLimit,
   CheckoutWatcher,
   createOpenReceiveThemeModel,
   openReceiveCheckoutElementStyles,
@@ -877,6 +878,20 @@ test("browser owns checkout display-safe labels", () => {
     () => assertOpenReceiveDisplayInvoice("nostr+walletconnect://secret"),
     /must not be an NWC/,
   );
+});
+
+test("swap limit fiat notes ceil minimums and floor maximums without binary floats", () => {
+  const checkout = {
+    amount_msats: 3_000_000,
+    fiat: { currency: "USD", value: "2.00" },
+  };
+  // 2.00 * 3_225_001 / 3_000_000 = 2.150000666… → ceil to $2.16
+  assert.equal(formatOpenReceiveSwapLimit(checkout, 3_225_001, "ceil"), "$2.16");
+  assert.equal(formatOpenReceiveSwapLimit(checkout, 3_225_000, "ceil"), "$2.15");
+  // 2.00 * 25_425_000 / 3_000_000 = 16.95 exactly
+  assert.equal(formatOpenReceiveSwapLimit(checkout, 25_425_000, "ceil"), "$16.95");
+  // Floor must not round a just-under ceiling up.
+  assert.equal(formatOpenReceiveSwapLimit(checkout, 3_224_999, "floor"), "$2.14");
 });
 
 test("browser owns display HTML escaping for string-rendered adapters", () => {
