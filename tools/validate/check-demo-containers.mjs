@@ -177,9 +177,26 @@ function validateOpenReceiveExample() {
   const text = read(relativePath);
 
   expect(/^OPENRECEIVE_NWC:\s*""$/m.test(text), `${relativePath}: OPENRECEIVE_NWC must be an empty YAML placeholder`);
-  expect(/^OPENRECEIVE_NAMESPACE:\s+default$/m.test(text), `${relativePath}: namespace must default to default`);
-  expect(/^OPENRECEIVE_STORE:\s+local-sqlite$/m.test(text), `${relativePath}: store must default to local-sqlite`);
-  expect(/providers:\n\s+- id: fixedfloat/m.test(text), `${relativePath}: must include a FixedFloat-compatible provider example`);
+  expect(
+    !/^OPENRECEIVE_NAMESPACE:/m.test(text),
+    `${relativePath}: OPENRECEIVE_NAMESPACE must stay in the optional commented section`,
+  );
+  expect(
+    !/^OPENRECEIVE_STORE:/m.test(text),
+    `${relativePath}: OPENRECEIVE_STORE must stay in the optional commented section`,
+  );
+  expect(
+    /^# OPENRECEIVE_NAMESPACE:\s+default$/m.test(text),
+    `${relativePath}: optional section must document namespace default`,
+  );
+  expect(
+    /^# OPENRECEIVE_STORE:\s+local-sqlite$/m.test(text),
+    `${relativePath}: optional section must document store default`,
+  );
+  expect(
+    /providers:\n(?:\s*#[^\n]*\n)*\s+- base_url:\s+https:\/\/ff\.io/m.test(text),
+    `${relativePath}: must include a FixedFloat-compatible provider example`,
+  );
   expect(/^\s+key:\s*""$/m.test(text), `${relativePath}: provider key must be an empty YAML placeholder`);
   expect(/^\s+secret:\s*""$/m.test(text), `${relativePath}: provider secret must be an empty YAML placeholder`);
   expect(!/nostr\+walletconnect:\/\//.test(text), `${relativePath}: must not contain an NWC URI`);

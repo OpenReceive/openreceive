@@ -22,6 +22,7 @@ import {
 } from "./service/logging.ts";
 import {
   resolveOpenReceiveStore,
+  resolveOpenReceiveStoreUri,
   type OpenReceiveResolvedStore,
   type ResolveOpenReceiveStoreOptions
 } from "./store-uri.ts";
@@ -112,7 +113,7 @@ async function runMigrate(input: {
   loadPostgres?: OpenReceiveCliOptions["loadPostgres"];
 }): Promise<number> {
   const config = readCliFileConfig(input.args, input.cwd);
-  const storeUri = detectStoreUri(input.args, config);
+  const storeUri = detectStoreUri(input.args, config, input.env);
   const namespace = detectNamespace(input.args, config);
   assertOpenReceiveStoreConfiguration({
     storeUri,
@@ -162,7 +163,8 @@ async function runDiagnostics(input: {
     configError = error;
   }
 
-  const storeUri = configError === undefined ? detectStoreUri(input.args, config) : "local-sqlite";
+  const storeUri =
+    configError === undefined ? detectStoreUri(input.args, config, input.env) : "local-sqlite";
   const namespace = configError === undefined ? detectNamespace(input.args, config) : "default";
   const nwc = configError === undefined ? config?.nwc : undefined;
   const lines: string[] = [
@@ -212,10 +214,15 @@ function readCliFileConfig(args: readonly string[], cwd: string): OpenReceiveFil
   });
 }
 
-function detectStoreUri(args: readonly string[], config: OpenReceiveFileConfig | undefined): string {
-  const storeUri = readFlag(args, "--store") ?? config?.storeUri;
-  if (storeUri !== undefined && storeUri.trim().length > 0) return storeUri;
-  return "local-sqlite";
+function detectStoreUri(
+  args: readonly string[],
+  config: OpenReceiveFileConfig | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  return resolveOpenReceiveStoreUri({
+    storeUri: readFlag(args, "--store") ?? config?.storeUri,
+    env,
+  }).storeUri;
 }
 
 function detectNamespace(args: readonly string[], config: OpenReceiveFileConfig | undefined): string {

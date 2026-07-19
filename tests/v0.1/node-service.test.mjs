@@ -315,18 +315,12 @@ test("createOpenReceive loads ordered FixedFloat-compatible swaps from YAML conf
       [
         "swap:",
         "  providers:",
-        "    - id: otherfloat",
-        "      protocol: fixedfloat",
-        "      base_url: https://otherfloat.example",
+        "    - base_url: https://otherfloat.example",
         "      key: otherfloat-key",
         "      secret: otherfloat-secret",
-        "      invoice_expiry_seconds: 1800",
-        "    - id: fixedfloat",
-        "      protocol: fixedfloat",
-        "      base_url: https://fixedfloat.example",
+        "    - base_url: https://fixedfloat.example",
         "      key: fixed-float-key",
         "      secret: fixed-float-secret",
-        "      invoice_expiry_seconds: 1800",
         "",
       ].join("\n"),
     );
@@ -393,7 +387,7 @@ test("createOpenReceive loads ordered FixedFloat-compatible swaps from YAML conf
         const options = await openreceive.swapOptions({ orderId: "order-swap-yaml" });
         const usdtTron = options.options.find((option) => option.payInAsset === "USDT_TRON");
         assert.equal(options.enabled, true);
-        assert.equal(usdtTron?.provider, "otherfloat");
+        assert.equal(usdtTron?.provider, "otherfloat-example");
         assert.equal(usdtTron?.minimumPayAmount, "1");
         assert.equal(usdtTron?.maximumPayAmount, "5000");
 
@@ -401,7 +395,7 @@ test("createOpenReceive loads ordered FixedFloat-compatible swaps from YAML conf
           orderId: "order-swap-yaml",
           payInAsset: "USDT_TRON",
         });
-        assert.equal(quote.provider, "otherfloat");
+        assert.equal(quote.provider, "otherfloat-example");
         assert.equal(quote.available, true);
         assert.equal(quote.payAmount, "1.04");
         // Catalog warms /ccies + global XML rates per provider. Quote reuses the
@@ -430,9 +424,7 @@ test("createOpenReceive rejects YAML config with partially configured provider s
       [
         "swap:",
         "  providers:",
-        "    - id: otherfloat",
-        "      protocol: fixedfloat",
-        "      base_url: https://otherfloat.example",
+        "    - base_url: https://otherfloat.example",
         "      key: otherfloat-key",
         "",
       ].join("\n"),
@@ -468,14 +460,10 @@ test("createOpenReceive rejects duplicate YAML swap provider ids", async () => {
       [
         "swap:",
         "  providers:",
-        "    - id: otherfloat",
-        "      protocol: fixedfloat",
-        "      base_url: https://otherfloat-a.example",
+        "    - base_url: https://otherfloat.example",
         "      key: otherfloat-a-key",
         "      secret: otherfloat-a-secret",
-        "    - id: otherfloat",
-        "      protocol: fixedfloat",
-        "      base_url: https://otherfloat-b.example",
+        "    - base_url: https://otherfloat.example/",
         "      key: otherfloat-b-key",
         "      secret: otherfloat-b-secret",
         "",
@@ -495,8 +483,85 @@ test("createOpenReceive rejects duplicate YAML swap provider ids", async () => {
       (error) => {
         assert.equal(error instanceof OpenReceiveConfigError, true);
         assert.equal(error.code, "INVALID_CONFIG_FILE");
-        assert.match(String(error.cause?.message), /duplicates swap provider id/);
+        assert.match(String(error.cause?.message), /duplicates swap provider id "otherfloat-example"/);
+        assert.match(String(error.cause?.message), /derived from base_url/);
         return true;
+      },
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("createOpenReceive accepts explicit YAML swap provider id override", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "openreceive-swap-config-"));
+  try {
+    writeFileSync(
+      path.join(dir, "openreceive.yml"),
+      [
+        "swap:",
+        "  providers:",
+        "    - id: primary",
+        "      base_url: https://ff.io",
+        "      key: ff-key",
+        "      secret: ff-secret",
+        "",
+      ].join("\n"),
+    );
+
+    await withGlobalFetch(
+      async (url) => {
+        const href = String(url);
+        if (href.endsWith("/api/v2/ccies")) {
+          return jsonResponse({
+            code: 0,
+            data: [
+              {
+                code: "USDTTRC",
+                coin: "USDT",
+                network: "TRC20",
+                recv: true,
+                send: true,
+              },
+              { code: "BTCLN", coin: "BTC", network: "Lightning" },
+            ],
+          });
+        }
+        if (href.endsWith("/rates/fixed.xml")) {
+          return xmlResponse(`<?xml version="1.0"?>
+<rates>
+  <item>
+    <from>USDTTRC</from>
+    <to>BTCLN</to>
+    <in>1.04</in>
+    <out>0.000002</out>
+    <amount>1</amount>
+    <minamount>1</minamount>
+    <maxamount>5000</maxamount>
+  </item>
+</rates>`);
+        }
+        throw new Error(`unexpected fetch ${url}`);
+      },
+      async () => {
+        const openreceive = await createOpenReceive({
+          client: new FakeWallet(() => 1000),
+          store: new InMemoryInvoiceKvStore(),
+          namespace: "swap_yaml_explicit_id",
+          cwd: dir,
+          clock: () => 1000,
+          priceProviders: [new StaticPriceProvider()],
+        });
+
+        await openreceive.getOrCreateCheckout({
+          orderId: "order-swap-explicit-id",
+          amount: { sats: "200" },
+        });
+        const options = await openreceive.swapOptions({ orderId: "order-swap-explicit-id" });
+        assert.equal(
+          options.options.find((option) => option.payInAsset === "USDT_TRON")?.provider,
+          "primary",
+        );
       },
     );
   } finally {
@@ -512,9 +577,7 @@ test("createOpenReceive skips blank YAML swap provider secrets", async () => {
       [
         "swap:",
         "  providers:",
-        "    - id: otherfloat",
-        "      protocol: fixedfloat",
-        "      base_url: https://otherfloat.example",
+        "    - base_url: https://otherfloat.example",
         '      key: ""',
         '      secret: ""',
         "",
@@ -2400,6 +2463,15 @@ test("FixedFloat status maps emergency EXPIRED+LESS to underpaid_and_late", asyn
   assert.equal(order.state, "refund_required");
   assert.equal(order.refund_reason, "underpaid_and_late");
   assert.equal(order.deposit_received_amount, "0.0005");
+});
+
+test("swapProviderIdFromBaseUrl derives stable ids from hostnames", async () => {
+  const { swapProviderIdFromBaseUrl } = await import("../../packages/js/node/src/config.ts");
+  assert.equal(swapProviderIdFromBaseUrl("https://ff.io"), "ff-io");
+  assert.equal(swapProviderIdFromBaseUrl("https://ff.io/"), "ff-io");
+  assert.equal(swapProviderIdFromBaseUrl("https://FixedFloat.example"), "fixedfloat-example");
+  assert.equal(swapProviderIdFromBaseUrl("https://ff.io:8443"), "ff-io-8443");
+  assert.throws(() => swapProviderIdFromBaseUrl("not-a-url"), /valid absolute URL/);
 });
 
 test("readOpenReceiveConfigFile parses optional sentry fields", async () => {

@@ -1,0 +1,434 @@
+FixedFloat API — OpenReceive subset
+====================================
+
+Source: zz-fixedfloat-api.txt (FixedFloat public API docs)
+Implementation: packages/js/node/src/swap/fixedfloat.ts
+                packages/js/node/src/swap/fixedfloat-rates.ts
+                packages/js/node/src/swap/weight-budget.ts
+
+This file keeps only the FixedFloat surfaces OpenReceive actually calls or
+reads. Affiliate params, float rates, setEmail, QR images, and official
+libraries are omitted on purpose.
+
+
+What OpenReceive uses
+---------------------
+
+| Surface                         | OpenReceive role                                      |
+|---------------------------------|-------------------------------------------------------|
+| Auth headers + HMAC-SHA256      | Every signed POST                                     |
+| Weight limits (250 / min)       | Durable per-provider weight ledger                    |
+| GET  /rates/fixed.xml           | Indicative quotes + min/max (cached; not binding)     |
+| POST /api/v2/ccies              | Pay-in catalog + Lightning payout currency            |
+| POST /api/v2/price              | Best-effort USD fee backfill after create             |
+| POST /api/v2/create             | Binding order create (shadow bolt11 payout)           |
+| POST /api/v2/order              | Status refresh                                        |
+| POST /api/v2/emergency          | Refund path only (choice=REFUND + address)            |
+
+OpenReceive always uses rate type `fixed` and direction `to` (amount is the
+Lightning payout in BTC). `/create` is authoritative; XML rates and `/price`
+are not.
+
+
+Not used (intentionally omitted)
+--------------------------------
+
+- GET /rates/float.xml
+- Affiliate params: refcode, afftax
+- POST /api/v2/setEmail
+- POST /api/v2/qr
+- Emergency choice EXCHANGE (OpenReceive only sends REFUND)
+- Official PHP/Python libraries
+- price params: ccies, usd
+
+
+1. Authentication
+-----------------
+
+Base URL (default): https://ff.io
+
+Requires an API Key and API Secret from FixedFloat (Account → API management).
+
+Signed POSTs send JSON (UTF-8) with:
+
+  Content-Type: application/json; charset=UTF-8
+  X-API-KEY:    <API Key>
+  X-API-SIGN:   HMAC-SHA256(secret, request body string) as hex
+
+X-API-SIGN is HMAC-SHA256 over the exact JSON body string. For empty-body
+calls (OpenReceive posts `{}` to /ccies), sign that body string.
+
+Example (body = DATA_JSON):
+
+  echo -n 'DATA_JSON' | openssl dgst -sha256 -hmac "YOUR_API_SECRET"
+
+  curl -X POST \
+    -H "Accept: application/json" \
+    -H "X-API-KEY: YOUR_API_KEY" \
+    -H "X-API-SIGN: GENERATED_SIGN" \
+    -H "Content-Type: application/json; charset=UTF-8" \
+    -d 'DATA_JSON' \
+    "https://ff.io/api/v2/METHOD" -L
+
+OpenReceive never logs X-API-KEY or X-API-SIGN. Order tokens in bodies/responses
+are sanitized by the service logger.
+
+
+2. Request weight limits
+------------------------
+
+Limit: 250 weight units per minute.
+
+  /api/v2/create  → 50 weight units
+  all other API   → 1 weight unit each
+
+Exceeding the limit temporarily blocks the token; repeated exceedances increase
+block time.
+
+OpenReceive soft-caps below 250 (see weight-budget.ts) so /order and /emergency
+keep headroom. Public XML rates do not consume weight and need no auth.
+
+
+3. XML rates export (fixed)
+---------------------------
+
+GET https://ff.io/rates/fixed.xml
+
+No API key, no signature, no weight cost.
+
+Bulk feed of all pairs: rate, reserve hint, min/max for create. OpenReceive
+caches the parsed index and derives indicative pay amounts / invoice limits
+locally. `/create` remains the binding rate.
+
+OpenReceive does not fetch float.xml.
+
+Parameters: none.
+
+Fields used per <item>:
+
+  Field       Type     Description
+  <from>      string   Currency code sent by the payer
+  <to>        string   Currency code received (Lightning BTC for OpenReceive)
+  <in>        number   Reference send amount (with <out> defines the rate)
+  <out>       number   Reference receive amount
+  <amount>    number   Reserve availability hint for <to> (not a max)
+  <tofee>     string   Network fee on <to>, not included in <out>
+  <minamount> string   Minimum <from> amount the service can exchange
+  <maxamount> string   Maximum <from> amount the service can exchange
+
+Example:
+
+  <rates>
+    <item>
+      <from>BTC</from>
+      <to>ETH</to>
+      <in>1</in>
+      <out>17.720391807658</out>
+      <amount>191.11148571181</amount>
+      <tofee>0.0004967000 ETH</tofee>
+      <minamount>0.0004896204 BTC</minamount>
+      <maxamount>1.5160672800 BTC</maxamount>
+    </item>
+  </rates>
+
+OpenReceive quote math (direction=to, Lightning payout):
+
+  pay_from ≈ (invoice_btc + tofee_btc) × (in / out)
+
+tofee is folded in only when it is BTC / BTCLN. Min rounds up / max rounds down
+when mapped to invoice msats.
+
+
+4. Available currencies
+-----------------------
+
+POST https://ff.io/api/v2/ccies
+
+List of currencies plus recv/send availability. OpenReceive caches this (~24h)
+and maps OpenReceive pay-in assets by coin + network. Pay-in requires recv≠false;
+Lightning payout requires send≠false (BTC on a Lightning network, or an
+explicit lightningCcy override).
+
+Parameters: none. OpenReceive posts `{}`.
+
+Response envelope:
+
+  Field              Type     Description
+  code               number   0 = success
+  msg                string   Status message
+  data               Array    Currencies
+
+Fields OpenReceive reads per currency:
+
+  Field              Type     Description
+  data[].code        string   Unique FixedFloat currency code (used as fromCcy/toCcy)
+  data[].coin        string   Common asset ticker
+  data[].network     string   Blockchain / Lightning network
+  data[].recv        boolean  Accepts deposits from client
+  data[].send        boolean  Can send to client
+
+Other display fields (name, logo, color, priority, contract, tag) exist in the
+full API but are unused by OpenReceive.
+
+Example:
+
+  {
+    "code": 0,
+    "msg": "",
+    "data": [
+      {
+        "code": "BTC",
+        "coin": "BTC",
+        "network": "BTC",
+        "name": "Bitcoin",
+        "recv": true,
+        "send": true,
+        "tag": null
+      }
+    ]
+  }
+
+
+5. Exchange rate (fee backfill only)
+------------------------------------
+
+POST https://ff.io/api/v2/price
+
+OpenReceive does not use /price for checkout quotes (XML rates cover that).
+After a successful /create, if the order object lacks from.usd / to.usd, it
+best-effort calls /price with the same trade params to compute the displayed
+swap fee (pay_in_fiat − payout_fiat in USD). Failures leave fee unset.
+
+OpenReceive request body:
+
+  {
+    "type": "fixed",
+    "fromCcy": "<pay-in FixedFloat code>",
+    "toCcy": "<Lightning BTC code>",
+    "direction": "to",
+    "amount": "<invoice BTC decimal string>"
+  }
+
+Parameters used:
+
+  Name       Required  Type     Description
+  type       true      string   Always "fixed" in OpenReceive
+  fromCcy    true      string   Pay-in currency code
+  toCcy      true      string   Payout currency code (Lightning)
+  direction  true      string   Always "to" — amount is what the client receives
+  amount     true      numeric  BTC amount of the shadow invoice (direction=to)
+
+Parameters not sent: ccies, usd, refcode, afftax.
+
+Response fields OpenReceive may read for fee:
+
+  Field              Type     Description
+  code               number   0 = success
+  msg                string   Status message
+  data.from.usd      number   USD equivalent of pay-in side
+  data.to.usd        number   USD equivalent of payout side
+
+Other /price fields (rates, mins/maxes, errors[], ccies[]) are unused for this
+backfill path. Checkout limits come from XML, not from data.errors.
+
+
+6. Create order
+---------------
+
+POST https://ff.io/api/v2/create
+
+Binding create. Cost: 50 weight units.
+
+OpenReceive request body:
+
+  {
+    "type": "fixed",
+    "fromCcy": "<pay-in FixedFloat code>",
+    "toCcy": "<Lightning BTC code>",
+    "direction": "to",
+    "amount": "<invoice BTC decimal string>",
+    "toAddress": "<bolt11>"
+  }
+
+Parameters used:
+
+  Name       Required  Type     Description
+  type       true      string   Always "fixed"
+  fromCcy    true      string   Pay-in currency code
+  toCcy      true      string   Lightning payout currency code
+  direction  true      string   Always "to"
+  amount     true      numeric  BTC amount the merchant invoice should receive
+  toAddress  true      string   Destination — OpenReceive passes the bolt11
+
+Optional tag / refcode / afftax are not sent. Memo/tag for pay-in (if any)
+comes back on the order as from.tag.
+
+OpenReceive asserts create response to.amount (in sats) matches the shadow
+invoice; mismatch fails the create.
+
+Response fields OpenReceive normalizes (create + order share this shape):
+
+  Field                         Type     Description
+  code                          number   0 = success
+  msg                           string   Status message
+  data.token                    string   Order access token (store; needed for order/emergency)
+  data.id                       string   Order ID (~6 chars)
+  data.type                     string   "fixed" | "float"
+  data.status                   string   See status table below
+  data.time.expiration          number   Unix expiry (OpenReceive expires_at)
+  data.from.code                string   Pay-in currency code
+  data.from.amount              string   Amount payer must send
+  data.from.address             string   Deposit address
+  data.from.tag                 string   MEMO / destination tag if required
+  data.from.tx.id               string   Deposit tx hash (when present)
+  data.from.tx.amount           string   Amount actually received on deposit
+  data.to.amount                string   Payout amount (must match invoice sats)
+  data.to.address               string   Payout destination (bolt11)
+  data.to.tx.id                 string   Payout tx / payment id when present
+  data.to.usd / data.from.usd   number   Optional USD sides for fee display
+  data.back.amount              string   Estimated refund amount (ex miner fee)
+  data.back.tx.id               string   Refund tx when present
+  data.emergency.status         Array    Emergency reasons (see below)
+  data.emergency.choice         string   NONE | EXCHANGE | REFUND
+  data.emergency.repeat         boolean  Repeat deposit received (0/1 also seen)
+
+Order statuses (API → OpenReceive state mapping lives in fixedfloat.ts):
+
+  NEW        — awaiting deposit
+  PENDING    — deposit seen, confirming
+  EXCHANGE   — exchanging
+  WITHDRAW   — paying out (paying invoice)
+  DONE       — provider completed (not merchant settled)
+  EXPIRED    — expired
+  EMERGENCY  — needs choice / refund path
+
+Emergency status values OpenReceive maps to refund_reason:
+
+  EXPIRED — late deposit
+  LESS    — underpaid
+  MORE    — overpaid / attention (not auto-refunded by OpenReceive)
+  LIMIT   — used with LESS or MORE
+
+Example create response (trimmed to fields that matter):
+
+  {
+    "code": 0,
+    "msg": "",
+    "data": {
+      "id": "TESTID",
+      "type": "fixed",
+      "status": "NEW",
+      "time": {
+        "reg": 1676458603,
+        "expiration": 1676460403,
+        "left": 1800
+      },
+      "from": {
+        "code": "ETH",
+        "amount": "0.04029700",
+        "address": "0x…",
+        "tag": null,
+        "tx": { "id": null, "amount": null }
+      },
+      "to": {
+        "code": "BTCLN",
+        "amount": "0.00010000",
+        "address": "lnbc…",
+        "tx": { "id": null }
+      },
+      "back": {
+        "amount": null,
+        "tx": { "id": null }
+      },
+      "emergency": {
+        "status": [],
+        "choice": "NONE",
+        "repeat": 0
+      },
+      "token": "TESTTOKENvRB90NOtr397kHY3PJ1VRy2p29HHaN7"
+    }
+  }
+
+
+7. Get order details
+--------------------
+
+POST https://ff.io/api/v2/order
+
+Status refresh. Same order object shape as create (token may be absent on
+refresh responses; OpenReceive keeps the token from create).
+
+Request:
+
+  {
+    "id": "<order id>",
+    "token": "<order token from create>"
+  }
+
+Parameters:
+
+  Name   Required  Type    Description
+  id     true      string  Order ID
+  token  true      string  data.token from create
+
+Response: same fields as §6. OpenReceive merges into the stored SwapOrder
+(deposit/payout/refund tx ids, emergency, amounts, state).
+
+
+8. Emergency action (refund only)
+---------------------------------
+
+POST https://ff.io/api/v2/emergency
+
+OpenReceive only uses this for the payer refund path when status is EMERGENCY
+and the product maps to refund_required / refund_pending.
+
+OpenReceive request body:
+
+  {
+    "id": "<order id>",
+    "token": "<order token>",
+    "choice": "REFUND",
+    "address": "<payer refund address on same network>"
+  }
+
+Parameters used:
+
+  Name     Required  Type    Description
+  id       true      string  Order ID
+  token    true      string  Order token
+  choice   true      string  Always "REFUND" from OpenReceive
+  address  true*     string  Required for REFUND — destination for returned funds
+
+Optional tag is not sent today (memo/tag networks may need it later).
+
+Not used: choice=EXCHANGE.
+
+Response:
+
+  Field  Type     Description
+  code   number   0 = success
+  msg    string   Status message
+  data   boolean  true if choice was set
+
+Example:
+
+  {
+    "code": 0,
+    "msg": "",
+    "data": true
+  }
+
+
+Quick reference — OpenReceive call sequence
+-------------------------------------------
+
+  1. GET  /rates/fixed.xml     → cache pairs (quotes + limits)
+  2. POST /api/v2/ccies        → cache currencies (recv/send map)
+  3. POST /api/v2/create       → start swap (type=fixed, direction=to, bolt11)
+  4. POST /api/v2/price        → optional USD fee backfill
+  5. POST /api/v2/order        → poll until terminal / emergency
+  6. POST /api/v2/emergency    → REFUND + address when payer confirms refund
+
+Provider completion (DONE) never marks the merchant order paid. Settlement
+authority remains the NWC status refresh (settled_at / transaction_state).

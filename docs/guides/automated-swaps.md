@@ -12,17 +12,17 @@ code — put provider credentials only in the ignored backend `openreceive.yml`:
 
 ```yaml
 OPENRECEIVE_NWC: nostr+walletconnect://...
-OPENRECEIVE_NAMESPACE: my_app
 
 swap:
   providers:
-    - id: fixedfloat
-      protocol: fixedfloat
-      base_url: https://ff.io
+    - base_url: https://ff.io
       key: ...
       secret: ...
 ```
 
+`protocol` defaults to `fixedfloat`. `id` defaults from the `base_url` host
+(`https://ff.io` → `ff-io`); set `id` only to override. Store/namespace defaults
+apply as in [Storage](storage.md) (Postgres `DATABASE_URL` when present).
 `providers` order is priority order. Leave `swap.providers` empty or leave
 provider keys blank to keep automated swaps disabled. Never send provider keys
 or `openreceive.yml` to browser code, mobile apps, source maps, fixtures, or

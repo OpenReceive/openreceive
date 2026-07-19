@@ -7,7 +7,16 @@ Link app records to OpenReceive invoices through your app records or invoice
 
 ## Store URI
 
-Set `OPENRECEIVE_STORE` in `openreceive.yml`:
+Store selection when `OPENRECEIVE_STORE` is omitted:
+
+1. `DATABASE_PRIVATE_URL` if it is a `postgres://` / `postgresql://` URI
+2. else `DATABASE_URL` if it is a Postgres URI
+3. else `local-sqlite` (only where the platform allows durable local files)
+
+Explicit `OPENRECEIVE_STORE` always wins. Non-Postgres `DATABASE_URL` values
+(mysql, redis, sqlite, …) are ignored so OpenReceive does not mis-adopt them.
+
+Override in `openreceive.yml` only when you need to:
 
 ```yaml
 OPENRECEIVE_STORE: local-sqlite
@@ -20,35 +29,42 @@ Supported v0.1 store values:
 | --- | --- | --- |
 | `local-sqlite` | Supported for Node | Creates `./.openreceive/<namespace>.sqlite3`; with the default namespace this is `./.openreceive/default.sqlite3`. Use for local development and raw single-machine self-hosting. |
 | `sqlite:/absolute/path/to/openreceive.sqlite3` | Supported for Node | Uses an explicit SQLite file on one durable machine or one PaaS instance with a real mounted volume. |
-| `postgres://...` | Supported for Node | Recommended for production, serverless, managed platforms, and multi-instance deployments. |
+| `postgres://...` | Supported for Node | Recommended for production, serverless, managed platforms, and multi-instance deployments. Also adopted automatically from `DATABASE_URL` / `DATABASE_PRIVATE_URL`. |
 
-Use this store only for OpenReceive invoice state. App migrations should stay
-focused on your own app tables.
+OpenReceive uses its own namespaced tables inside the chosen database. App
+migrations should stay focused on your own app tables.
 
 ## Schema setup
 
 For local development, `local-sqlite` creates its database and OpenReceive
 tables automatically.
 
-For Postgres, run the migration step before booting the app:
+For Postgres, run the migration step before booting the app. When
+`OPENRECEIVE_STORE` is omitted, `openreceive migrate` uses the same
+`DATABASE_PRIVATE_URL` / `DATABASE_URL` precedence as runtime:
 
 ```sh
+openreceive migrate --namespace prod
+# or explicitly:
 openreceive migrate --store "$OPENRECEIVE_STORE" --namespace prod
 ```
 
 To inspect the SQL first:
 
 ```sh
-openreceive migrate --store "$OPENRECEIVE_STORE" --print
+openreceive migrate --print
 ```
 
 At runtime, Postgres startup checks that OpenReceive tables and metadata already
 exist. If migrations have not been run, OpenReceive refuses to boot with a
-`STORE_MIGRATIONS_REQUIRED` error and the command to run.
+`STORE_MIGRATIONS_REQUIRED` error and the command to run. It does **not**
+auto-migrate into a host Postgres database.
 
 ## Production
 
-Postgres works anywhere and is the recommended default:
+Postgres works anywhere and is the recommended default. On Heroku, Railway,
+Render, and similar hosts, a Postgres `DATABASE_URL` is enough — omit
+`OPENRECEIVE_STORE`. To set the store explicitly:
 
 ```yaml
 OPENRECEIVE_STORE: postgres://USER:PASS@HOST:5432/DB

@@ -1,50 +1,50 @@
-# Copy to openreceive.yml for local development.
-# Do not commit openreceive.yml; it contains receive-only NWC and provider secrets.
+# Copy to openreceive.yml (git-ignored). Holds receive-only NWC and provider secrets.
+# Only OPENRECEIVE_NWC and swap.providers are required; everything else has defaults.
 
 OPENRECEIVE_NWC: ""
-OPENRECEIVE_NAMESPACE: default
-OPENRECEIVE_STORE: local-sqlite
-
-OPENRECEIVE_PRICE_CURRENCIES:
-  - USD
-
-operation:
-  action_lease_ttl_seconds: 60
-  transaction_scan_interval_seconds: 2
-  transaction_scan_page_limit: 25
-  transaction_scan_window_padding_seconds: 0
-  transaction_scan_timeout_ms: 9000
 
 swap:
-  # Seconds before a completed provider order needs support attention if the
-  # wallet has not reported settlement.
-  settlement_attention_seconds: 60
-  # Provider list is priority order. Quote/start try the first entry that supports
-  # the asset; if that provider is rate-limited, fail over to the next.
   providers:
-    - id: fixedfloat
-      protocol: fixedfloat
-      base_url: https://ff.io
+    - base_url: https://ff.io
       key: ""
       secret: ""
-      # invoice_expiry_seconds auto-derives from
-      # deposit_window_seconds + settlement_sla_seconds + invoice_expiry_margin_seconds.
-      # Omit it (as here) to use the derived floor; set it only to lengthen the window.
 
-logging:
-  # Rotating file logs. Every emitted event is written to ./logs as a single
-  # timestamped JSON line (secrets are redacted before logging). The whole block
-  # can be omitted to use these defaults.
-  enabled: true
-  directory: ./logs
-  filename: openreceive.log
-  max_file_size_mb: 10   # rotate once the active file would exceed this size
-  max_files: 5           # log files kept (active file plus rotated backups)
-  level: debug           # minimum level written: debug | info | warn | error
-
-sentry:
-  # Optional. Host apps can read this and call Sentry.init themselves.
-  # Omit the block or leave dsn blank to skip. Never commit a real DSN.
-  dsn: ""
-  # environment: production
-  # release: openreceive@0.1.1
+# -----------------------------------------------------------------------------
+# Optional overrides (defaults shown). Omit this whole section unless you need it.
+# -----------------------------------------------------------------------------
+#
+# OPENRECEIVE_NAMESPACE: default
+# # Store precedence when OPENRECEIVE_STORE is omitted:
+# #   1) DATABASE_PRIVATE_URL if postgres://
+# #   2) DATABASE_URL if postgres://
+# #   3) local-sqlite under .openreceive/ (refused on Heroku/Vercel/etc.)
+# OPENRECEIVE_STORE: local-sqlite
+# # Or: OPENRECEIVE_STORE: postgres://USER:PASS@HOST:5432/DB
+#
+# OPENRECEIVE_PRICE_CURRENCIES:
+#   - USD
+#
+# operation:
+#   action_lease_ttl_seconds: 60
+#   transaction_scan_interval_seconds: 2
+#   transaction_scan_page_limit: 25
+#   transaction_scan_window_padding_seconds: 0
+#   transaction_scan_timeout_ms: 9000
+#
+# # Also under swap: (alongside providers above)
+# #   settlement_attention_seconds: 60
+# # Provider id defaults from base_url host (https://ff.io → ff-io).
+# # protocol defaults to fixedfloat.
+#
+# logging:
+#   enabled: true
+#   directory: ./logs
+#   filename: openreceive.log
+#   max_file_size_mb: 10
+#   max_files: 5
+#   level: debug
+#
+# sentry:
+#   dsn: ""
+#   # environment: production
+#   # release: openreceive@0.1.1

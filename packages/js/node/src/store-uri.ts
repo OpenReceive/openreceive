@@ -27,6 +27,7 @@ export interface ResolveOpenReceiveStoreOptions {
   namespace?: string;
   cwd?: string;
   schemaMode?: OpenReceiveSchemaMode;
+  env?: NodeJS.ProcessEnv | Record<string, string | undefined>;
   loadSqlite?: () => Promise<{
     DatabaseSync: new (filename: string) => OpenReceiveSqliteDatabase & {
       close?: () => void | Promise<void>;
@@ -47,9 +48,54 @@ export type OpenReceiveResolvedStore = OpenReceiveInvoiceKvStore & {
 
 export type OpenReceiveSchemaMode = "auto" | "check" | "skip";
 
+export type OpenReceiveStoreUriSource =
+  | "explicit"
+  | "database_private_url"
+  | "database_url"
+  | "local-sqlite";
+
+export interface ResolvedOpenReceiveStoreUri {
+  readonly storeUri: string;
+  readonly source: OpenReceiveStoreUriSource;
+}
+
 const DEFAULT_NAMESPACE = "default";
 const DEFAULT_STORE_URI = "local-sqlite";
 const require = createRequire(import.meta.url);
+
+/**
+ * Resolve which store URI to use.
+ *
+ * Precedence: explicit OPENRECEIVE_STORE → postgres DATABASE_PRIVATE_URL →
+ * postgres DATABASE_URL → local-sqlite. Non-postgres DATABASE_* values are ignored.
+ */
+export function resolveOpenReceiveStoreUri(input: {
+  readonly storeUri?: string;
+  readonly env?: NodeJS.ProcessEnv | Record<string, string | undefined>;
+} = {}): ResolvedOpenReceiveStoreUri {
+  const explicit = input.storeUri?.trim();
+  if (explicit !== undefined && explicit.length > 0) {
+    return { storeUri: explicit, source: "explicit" };
+  }
+  const env = input.env ?? globalThis.process?.env ?? {};
+  const privateUrl = readPostgresDatabaseEnv(env.DATABASE_PRIVATE_URL);
+  if (privateUrl !== undefined) {
+    return { storeUri: privateUrl, source: "database_private_url" };
+  }
+  const databaseUrl = readPostgresDatabaseEnv(env.DATABASE_URL);
+  if (databaseUrl !== undefined) {
+    return { storeUri: databaseUrl, source: "database_url" };
+  }
+  return { storeUri: DEFAULT_STORE_URI, source: "local-sqlite" };
+}
+
+function readPostgresDatabaseEnv(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return undefined;
+  if (!/^postgres(?:ql)?:\/\//i.test(trimmed)) return undefined;
+  return trimmed;
+}
 
 export async function resolveOpenReceiveStore(
   uri?: string,
@@ -57,8 +103,9 @@ export async function resolveOpenReceiveStore(
 ): Promise<OpenReceiveResolvedStore> {
   const namespace = options.namespace ?? DEFAULT_NAMESPACE;
   const cwd = options.cwd ?? process.cwd();
-  assertOpenReceiveStoreConfiguration({ storeUri: uri });
-  const storeUri = uri?.trim() || DEFAULT_STORE_URI;
+  const resolved = resolveOpenReceiveStoreUri({ storeUri: uri, env: options.env });
+  assertOpenReceiveStoreConfiguration({ storeUri: resolved.storeUri, env: options.env });
+  const storeUri = resolved.storeUri;
   const schemaMode = options.schemaMode ?? defaultSchemaMode(storeUri);
 
   if (storeUri === "local-sqlite") {
@@ -151,7 +198,8 @@ function migrationsRequiredError(
     message: `OpenReceive ${storeName} store schema is not ready; refusing to boot without migrations.`,
     hint: [
       `Run \`openreceive migrate --store "$OPENRECEIVE_STORE" --namespace ${namespace}\` before starting the app.`,
-      "To review the SQL first, run `openreceive migrate --store \"$OPENRECEIVE_STORE\" --print`."
+      "If OPENRECEIVE_STORE is omitted, migrate uses DATABASE_PRIVATE_URL / DATABASE_URL when they are Postgres URIs.",
+      "To review the SQL first, run `openreceive migrate --store \"$OPENRECEIVE_STORE\" --print`.",
     ].join(" "),
     cause
   });

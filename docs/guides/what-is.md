@@ -59,9 +59,11 @@ worker, or app request calls OpenReceive, no settlement scan runs (opt into
 `startSweeper` on long-lived idle deployments — see
 [Settlement Sweeps](../internal/settlement-sweeps.md)).
 
-OpenReceive packages provide their own invoice storage, selected with
-`OPENRECEIVE_STORE`. Your app keeps its own orders, carts, users, and
-fulfillment tables.
+OpenReceive packages provide their own invoice storage (namespaced tables, not
+your ORM models). When `OPENRECEIVE_STORE` is omitted, a Postgres
+`DATABASE_URL` / `DATABASE_PRIVATE_URL` is adopted automatically; otherwise
+local development falls back to `local-sqlite`. Your app keeps its own orders,
+carts, users, and fulfillment tables. See [Storage](storage.md).
 
 - Express / Fastify / Next adapters (or `openreceive/express|fastify|next`).
 - Rails engine (`openreceive-rails`).

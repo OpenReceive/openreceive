@@ -35,7 +35,9 @@ import {
   refundSwap,
   startSwap,
 } from "./service/swaps.ts";
+import { classifyOpenReceiveStore } from "./storage-guard.ts";
 import { StoreBackedSwapCache, SwapProviderWeightBudget } from "./swap/index.ts";
+import { resolveOpenReceiveStoreUri } from "./store-uri.ts";
 import type {
   CreateOpenReceiveOptions,
   OpenReceive,
@@ -91,6 +93,10 @@ export async function createOpenReceive(
   // NWC endpoint bridge and every service event write to ./logs as well as any caller logger.
   const configuredOptions = attachOpenReceiveFileLogging(mergeOpenReceiveConfigFile(options));
   const namespace = readOpenReceiveNamespace(configuredOptions.namespace);
+  const resolvedStoreUri =
+    configuredOptions.store === undefined
+      ? resolveOpenReceiveStoreUri({ storeUri: configuredOptions.storeUri })
+      : undefined;
   assertDurableStoreConfiguration({
     configuredStoreUri: configuredOptions.storeUri,
     store: configuredOptions.store,
@@ -98,7 +104,13 @@ export async function createOpenReceive(
   const client = createConfiguredClient(configuredOptions);
   await preflightConfiguredClient(client);
 
-  const store = await resolveConfiguredStore(configuredOptions, namespace);
+  const store = await resolveConfiguredStore(
+    {
+      ...configuredOptions,
+      ...(resolvedStoreUri === undefined ? {} : { storeUri: resolvedStoreUri.storeUri }),
+    },
+    namespace,
+  );
 
   const nodeOptions: NodeOptions = {
     ...configuredOptions,
@@ -107,6 +119,18 @@ export async function createOpenReceive(
     namespace,
     onPaid: configuredOptions.onPaid,
   };
+  emitLog(
+    nodeOptions,
+    "info",
+    "store.resolved",
+    "Resolved OpenReceive store.",
+    resolvedStoreUri === undefined
+      ? { source: "injected" }
+      : {
+          source: resolvedStoreUri.source,
+          store_kind: classifyOpenReceiveStore(resolvedStoreUri.storeUri),
+        },
+  );
   const priceCurrencies = readOpenReceivePriceCurrencies(configuredOptions.priceCurrencies);
   const priceProviders = configuredOptions.priceProviders ?? [
     createOpenReceivePriceFeed({

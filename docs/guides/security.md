@@ -21,13 +21,15 @@ configuration:
 - Use separate credentials for demos/staging vs production. Rotate after
   accidental exposure, staff changes, and before going live.
 
-Local YAML (gitignored):
+Local YAML (gitignored) — NWC is required; store/namespace have defaults:
 
 ```yaml
 OPENRECEIVE_NWC: nostr+walletconnect://...
-OPENRECEIVE_NAMESPACE: default
-OPENRECEIVE_STORE: local-sqlite
 ```
+
+Omit `OPENRECEIVE_STORE` to adopt a Postgres `DATABASE_URL` when present, or
+fall back to `local-sqlite` on durable single-machine hosts. Details:
+[Storage](storage.md).
 
 `npm run scan:secrets` rejects likely NWC strings and tracked local config.
 `npm run scan:client-bundles` scans demo bundles after `npm run build:demo`.

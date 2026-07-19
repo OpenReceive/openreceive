@@ -265,16 +265,26 @@ function readSwapProviders(
     const providerLabel = `${label}.providers[${index}]`;
     const provider = readRecord(item, providerLabel);
     if (provider.enabled === false) return [];
-    const id = readRequiredString(provider, "id", providerLabel);
+
+    const protocol =
+      readOptionalString(provider.protocol, `${providerLabel}.protocol`) ?? "fixedfloat";
+    if (protocol !== "fixedfloat") {
+      throw new TypeError(
+        `${providerLabel}.protocol must be "fixedfloat" (or omitted; that is the default).`,
+      );
+    }
+
+    const baseUrl = readRequiredString(provider, "base_url", providerLabel);
+    const explicitId = readOptionalString(provider.id, `${providerLabel}.id`);
+    const id = explicitId ?? swapProviderIdFromBaseUrl(baseUrl, providerLabel);
     if (seenIds.has(id)) {
-      throw new TypeError(`${providerLabel}.id duplicates swap provider id ${JSON.stringify(id)}.`);
+      throw new TypeError(
+        `${providerLabel}.id duplicates swap provider id ${JSON.stringify(id)}` +
+          (explicitId === undefined ? ` (derived from base_url ${JSON.stringify(baseUrl)})` : "") +
+          ".",
+      );
     }
     seenIds.add(id);
-
-    const protocol = readRequiredString(provider, "protocol", providerLabel);
-    if (protocol !== "fixedfloat") {
-      throw new TypeError(`${providerLabel}.protocol must be "fixedfloat".`);
-    }
 
     const key = readOptionalString(provider.key, `${providerLabel}.key`);
     const secret = readOptionalString(provider.secret, `${providerLabel}.secret`);
@@ -288,7 +298,7 @@ function readSwapProviders(
         id,
         key,
         secret,
-        baseUrl: readRequiredString(provider, "base_url", providerLabel),
+        baseUrl,
         ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
         ...(options.now === undefined ? {} : { now: options.now }),
         ...readOptionalStringConfig(provider, ["lightning_ccy"], "lightningCcy"),
@@ -325,6 +335,33 @@ function readSwapProviders(
       }),
     ];
   });
+}
+
+/** Derive a stable provider id from `base_url` hostname (+ non-default port). */
+export function swapProviderIdFromBaseUrl(baseUrl: string, label = "base_url"): string {
+  let url: URL;
+  try {
+    url = new URL(baseUrl);
+  } catch (error) {
+    throw new TypeError(`${label} must be a valid absolute URL.`, { cause: error });
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new TypeError(`${label} must be an http(s) URL.`);
+  }
+  const host = url.hostname.trim().toLowerCase();
+  const portSuffix =
+    url.port.length > 0 && url.port !== "80" && url.port !== "443" ? `-${url.port}` : "";
+  const id = `${host}${portSuffix}`
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64)
+    .replace(/-+$/g, "");
+  if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(id)) {
+    throw new TypeError(
+      `${label} hostname could not be converted into a provider id; set id explicitly.`,
+    );
+  }
+  return id;
 }
 
 function readOptionalStringConfig<TargetField extends string>(

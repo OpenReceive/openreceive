@@ -1531,12 +1531,14 @@ test("Hello Fruit server demos keep secret-safe local setup docs", () => {
 
   const openReceiveExample = readFileSync(openReceiveExamplePath, "utf8");
   assert.match(openReceiveExample, /^OPENRECEIVE_NWC:\s*""$/m, "placeholder NWC");
-  assert.match(openReceiveExample, /^OPENRECEIVE_NAMESPACE:\s+default$/m);
-  assert.match(openReceiveExample, /^OPENRECEIVE_STORE:\s+local-sqlite$/m);
+  assert.doesNotMatch(openReceiveExample, /^OPENRECEIVE_NAMESPACE:/m);
+  assert.doesNotMatch(openReceiveExample, /^OPENRECEIVE_STORE:/m);
+  assert.match(openReceiveExample, /^# OPENRECEIVE_NAMESPACE:\s+default$/m);
+  assert.match(openReceiveExample, /^# OPENRECEIVE_STORE:\s+local-sqlite$/m);
   assert.match(openReceiveExample, /^\s+key:\s*""$/m);
   assert.match(openReceiveExample, /^\s+secret:\s*""$/m);
-  assert.match(openReceiveExample, /^sentry:\s*$/m);
-  assert.match(openReceiveExample, /^\s+dsn:\s*""$/m);
+  assert.match(openReceiveExample, /^# sentry:\s*$/m);
+  assert.match(openReceiveExample, /^#\s+dsn:\s*""$/m);
   assert.doesNotMatch(openReceiveExample, /nostr\+walletconnect:\/\//);
 
   for (const demoDir of demoServerDirs) {

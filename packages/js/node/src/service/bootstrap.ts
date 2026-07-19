@@ -11,7 +11,11 @@ import { createNwcReceiveClient } from "../alby-nwc.ts";
 import { type OpenReceiveFileConfig, readOpenReceiveConfigFile } from "../config.ts";
 import { OpenReceiveConfigError } from "../config-error.ts";
 import { assertOpenReceiveStoreConfiguration } from "../storage-guard.ts";
-import { applyStoreSchemaMode, resolveOpenReceiveStore } from "../store-uri.ts";
+import {
+  applyStoreSchemaMode,
+  resolveOpenReceiveStore,
+  resolveOpenReceiveStoreUri,
+} from "../store-uri.ts";
 import type { SwapProvider } from "../swap/index.ts";
 import { isRecord, OpenReceiveServiceError } from "./core-utils.ts";
 import { createNwcEndpointLogger, emitLog } from "./logging.ts";
@@ -258,10 +262,23 @@ export async function closeOpenReceiveResource(resource: unknown): Promise<void>
 export function assertDurableStoreConfiguration(input: {
   readonly configuredStoreUri: string | undefined;
   readonly store: OpenReceiveInvoiceKvStore | undefined;
+  readonly env?: NodeJS.ProcessEnv | Record<string, string | undefined>;
 }): void {
-  assertOpenReceiveStoreConfiguration({
+  if (input.store !== undefined) {
+    assertOpenReceiveStoreConfiguration({
+      store: input.store,
+      env: input.env,
+      emitWarning: false,
+    });
+    return;
+  }
+  const resolved = resolveOpenReceiveStoreUri({
     storeUri: input.configuredStoreUri,
-    store: input.store,
+    env: input.env,
+  });
+  assertOpenReceiveStoreConfiguration({
+    storeUri: resolved.storeUri,
+    env: input.env,
     emitWarning: false,
   });
 }

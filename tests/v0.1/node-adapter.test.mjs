@@ -19,6 +19,7 @@ import {
   normalizeNwcWalletError,
   OpenReceiveConfigError,
   resolveOpenReceiveStore,
+  resolveOpenReceiveStoreUri,
   summarizeWalletCapabilities,
 } from "../../packages/js/node/src/index.ts";
 import { runOpenReceiveCli } from "../../packages/js/node/src/cli.ts";
@@ -552,20 +553,101 @@ sqliteTest(
   async () => {
     const tempRoot = mkdtempSync(path.join(tmpdir(), "openreceive-store-default-"));
     try {
-      const store = await resolveOpenReceiveStore(undefined, {
-        cwd: tempRoot,
-        namespace: "defaulted",
-      });
-      try {
-        assert.equal(existsSync(path.join(tempRoot, ".openreceive", "defaulted.sqlite3")), true);
-      } finally {
-        await store.close?.();
-      }
+      await withEnv(
+        {
+          DATABASE_URL: undefined,
+          DATABASE_PRIVATE_URL: undefined,
+          OPENRECEIVE_PLATFORM: undefined,
+          VERCEL: undefined,
+          DYNO: undefined,
+        },
+        async () => {
+          const store = await resolveOpenReceiveStore(undefined, {
+            cwd: tempRoot,
+            namespace: "defaulted",
+          });
+          try {
+            assert.equal(existsSync(path.join(tempRoot, ".openreceive", "defaulted.sqlite3")), true);
+          } finally {
+            await store.close?.();
+          }
+        },
+      );
     } finally {
       rmSync(tempRoot, { force: true, recursive: true });
     }
   },
 );
+
+test("resolveOpenReceiveStoreUri adopts Postgres DATABASE_URL when store is omitted", () => {
+  assert.deepEqual(
+    resolveOpenReceiveStoreUri({
+      env: { DATABASE_URL: "postgres://user:pass@db.example/app" },
+    }),
+    {
+      storeUri: "postgres://user:pass@db.example/app",
+      source: "database_url",
+    },
+  );
+  assert.deepEqual(
+    resolveOpenReceiveStoreUri({
+      env: {
+        DATABASE_PRIVATE_URL: "postgres://private@db.example/app",
+        DATABASE_URL: "postgres://public@db.example/app",
+      },
+    }),
+    {
+      storeUri: "postgres://private@db.example/app",
+      source: "database_private_url",
+    },
+  );
+  assert.deepEqual(
+    resolveOpenReceiveStoreUri({
+      storeUri: "local-sqlite",
+      env: { DATABASE_URL: "postgres://user:pass@db.example/app" },
+    }),
+    { storeUri: "local-sqlite", source: "explicit" },
+  );
+  assert.deepEqual(
+    resolveOpenReceiveStoreUri({
+      env: { DATABASE_URL: "mysql://user:pass@db.example/app" },
+    }),
+    { storeUri: "local-sqlite", source: "local-sqlite" },
+  );
+  assert.deepEqual(
+    resolveOpenReceiveStoreUri({
+      env: { DATABASE_URL: "  postgresql://user:pass@db.example/app  " },
+    }),
+    {
+      storeUri: "postgresql://user:pass@db.example/app",
+      source: "database_url",
+    },
+  );
+});
+
+test("Heroku accepts resolved DATABASE_URL Postgres and still fails closed without it", () => {
+  const postgres = "postgres://user:pass@db.example/app";
+  const resolved = resolveOpenReceiveStoreUri({
+    env: { DYNO: "web.1", DATABASE_URL: postgres },
+  });
+  assert.equal(resolved.source, "database_url");
+  assert.doesNotThrow(() =>
+    assertOpenReceiveStoreConfiguration({
+      storeUri: resolved.storeUri,
+      env: { DYNO: "web.1", DATABASE_URL: postgres },
+    }),
+  );
+  assertConfigErrorSync(
+    () =>
+      assertOpenReceiveStoreConfiguration({
+        storeUri: resolveOpenReceiveStoreUri({
+          env: { DYNO: "web.1", DATABASE_URL: undefined, DATABASE_PRIVATE_URL: undefined },
+        }).storeUri,
+        env: { DYNO: "web.1" },
+      }),
+    "EPHEMERAL_STORE_UNSAFE",
+  );
+});
 
 test("managed platform storage guard rejects unsafe local SQLite before disk writes", async () => {
   const tempRoot = mkdtempSync(path.join(tmpdir(), "openreceive-platform-"));
@@ -574,6 +656,8 @@ test("managed platform storage guard rejects unsafe local SQLite before disk wri
       {
         OPENRECEIVE_STORE: undefined,
         OPENRECEIVE_PLATFORM: undefined,
+        DATABASE_URL: undefined,
+        DATABASE_PRIVATE_URL: undefined,
         VERCEL: "1",
         NODE_ENV: undefined,
       },
@@ -602,7 +686,9 @@ test("managed platform storage guard follows canonical platform policies", () =>
   assertConfigErrorSync(
     () =>
       assertOpenReceiveStoreConfiguration({
-        storeUri: undefined,
+        storeUri: resolveOpenReceiveStoreUri({
+          env: { DYNO: "web.1", DATABASE_URL: undefined, DATABASE_PRIVATE_URL: undefined },
+        }).storeUri,
         env: { DYNO: "web.1" },
       }),
     "EPHEMERAL_STORE_UNSAFE",

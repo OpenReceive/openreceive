@@ -40,7 +40,7 @@ Defaults (override only when you need to):
 
 | Setting          | Default                                       |
 | ---------------- | --------------------------------------------- |
-| store            | SQLite under `.openreceive/` (`local-sqlite`) |
+| store            | Postgres `DATABASE_URL` if set, else `local-sqlite` under `.openreceive/` |
 | route prefix     | `/openreceive`                                |
 | price currencies | `USD`                                         |
 
@@ -56,9 +56,7 @@ OPENRECEIVE_NWC: nostr+walletconnect://...
 
 swap:
   providers:
-    - id: primary
-      protocol: ... # swap provider protocol id
-      base_url: ...
+    - base_url: https://ff.io
       key: ...
       secret: ...
 ```

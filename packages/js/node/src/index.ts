@@ -22,7 +22,11 @@ export type {
   NwcEndpointLogger,
   WalletPreflightErrorCode,
 } from "./alby-nwc.ts";
-export { OPENRECEIVE_CONFIG_FILE, readOpenReceiveConfigFile } from "./config.ts";
+export {
+  OPENRECEIVE_CONFIG_FILE,
+  readOpenReceiveConfigFile,
+  swapProviderIdFromBaseUrl,
+} from "./config.ts";
 export type {
   OpenReceiveFileConfig,
   OpenReceiveFileLoggingConfig,
@@ -150,11 +154,18 @@ export type {
   OpenReceiveSqliteDatabase,
   OpenReceiveSqliteKvStoreOptions,
 } from "./sqlite-store.ts";
-export { applyStoreSchemaMode, defaultSchemaMode, resolveOpenReceiveStore } from "./store-uri.ts";
+export {
+  applyStoreSchemaMode,
+  defaultSchemaMode,
+  resolveOpenReceiveStore,
+  resolveOpenReceiveStoreUri,
+} from "./store-uri.ts";
 export type {
   OpenReceiveSchemaMode,
+  OpenReceiveStoreUriSource,
   ResolveOpenReceiveStoreOptions,
   OpenReceiveResolvedStore,
+  ResolvedOpenReceiveStoreUri,
 } from "./store-uri.ts";
 export {
   createOrderAccessTokenManager,

@@ -166,8 +166,10 @@ retained.
 
 ## Registering providers
 
-Use `protocol: fixedfloat` for providers that implement the same API shape as
-FixedFloat.
+YAML swap providers default to `protocol: fixedfloat` (the only supported
+protocol today). Omit `id` to derive it from the `base_url` host
+(`https://ff.io` → `ff-io`); set `id` only when you need a custom label or two
+entries would otherwise collide.
 
 To register a provider from code — a custom one, or a FixedFloat-compatible one
 you build yourself — pass it to `createOpenReceive`. Programmatic providers
