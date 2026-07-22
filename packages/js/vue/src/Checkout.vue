@@ -59,6 +59,7 @@ const shell = computed(() =>
 <template>
   <section v-bind="shell.rootAttrs">
     <component
+      v-if="shell.themeToggle"
       :is="shell.themeToggle.tagName"
       v-bind="shell.themeToggle.attrs"
     />

@@ -710,6 +710,12 @@ export interface CheckoutShellOptions
     OpenReceiveStoredThemeModelOptions {
   readonly rootSelector?: string;
   readonly checkoutSelector?: string;
+  /**
+   * When false, omit the package theme toggle and do not stamp `data-theme` on the
+   * shell root or checkout. The checkout inherits from an ancestor `[data-theme]`
+   * (e.g. React `ThemeScope`). Default true for standalone embeds.
+   */
+  readonly themeToggle?: boolean;
 }
 
 export interface OpenReceiveCheckoutProps extends CheckoutElementEventHandlers {
@@ -740,7 +746,7 @@ export interface CheckoutShellModel {
   readonly theme: OpenReceiveThemeModel;
   readonly rootAttributes: OpenReceiveThemeModel["attributes"];
   readonly checkout: CheckoutShellCheckoutBinding;
-  readonly themeToggle: CheckoutShellThemeToggleBinding;
+  readonly themeToggle: CheckoutShellThemeToggleBinding | null;
 }
 
 export interface CheckoutElementTarget extends OpenReceiveThemeAttributeTarget {
@@ -771,7 +777,7 @@ export interface CheckoutShellElements {
   readonly theme: OpenReceiveThemeModel;
   readonly rootAttributes: OpenReceiveThemeModel["attributes"];
   readonly checkout: HTMLElement;
-  readonly themeToggle: HTMLElement;
+  readonly themeToggle: HTMLElement | null;
 }
 
 export interface CheckoutState {

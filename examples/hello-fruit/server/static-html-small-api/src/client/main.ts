@@ -406,7 +406,7 @@ function renderOrder(order: DemoOrder): void {
   const actions = document.createElement("div");
   actions.className = "card-actions pt-1";
   const startOverButton = document.createElement("button");
-  startOverButton.className = "btn btn-sm btn-soft";
+  startOverButton.className = "btn btn-sm btn-outline";
   startOverButton.type = "button";
   startOverButton.textContent = "Start over";
   startOverButton.addEventListener("click", () => {

@@ -19,14 +19,14 @@ export const orClasses = {
   stateSettled: "badge badge-success badge-sm",
   statePending: "badge badge-ghost badge-sm",
   actions: "flex flex-wrap gap-2 justify-start",
-  btn: "btn btn-soft",
+  btn: "btn btn-outline",
   btnGhost: "btn btn-ghost",
-  btnSoft: "btn btn-soft",
-  btnBlock: "btn btn-block btn-soft",
-  btnSm: "btn btn-sm btn-soft",
-  btnSquare: "btn btn-square btn-sm btn-soft",
+  btnSoft: "btn btn-outline",
+  btnBlock: "btn btn-block btn-outline",
+  btnSm: "btn btn-sm btn-outline",
+  btnSquare: "btn btn-square btn-sm btn-outline",
   copyIcon: "shrink-0 size-4",
-  themeToggle: "btn btn-ghost btn-sm gap-2 justify-self-end",
+  themeToggle: "btn btn-outline btn-sm gap-2 justify-self-end",
   textarea: "textarea textarea-bordered w-full font-mono text-sm min-h-[86px]",
   paymentStatus: "flex items-center gap-2.5 min-w-0",
   paymentStatusBody: "grid gap-0.5 min-w-0 flex-1",
@@ -36,24 +36,24 @@ export const orClasses = {
   countdown: "text-base-content/60 text-sm",
   countdownStrong: "text-base-content font-semibold",
   creating: "grid gap-2 place-items-center p-4",
-  wizard: "overflow-hidden rounded-box border border-base-300 bg-base-200 grid gap-0",
+  wizard: "overflow-hidden rounded-box border border-base-content/20 bg-base-200 grid gap-0",
   wizardHeader: "grid gap-0.5 px-4 py-4 sm:px-5",
   wizardHeaderTitle: "text-lg font-bold m-0 sm:text-xl",
   wizardHeaderSubtitle: "text-base-content/65 text-sm m-0 mt-0.5",
-  wizardBody: "border-t border-base-300 grid gap-3 p-4 sm:p-5",
+  wizardBody: "border-t border-base-content/15 grid gap-3 p-4 sm:p-5",
   methodSelector: "grid gap-3",
   methodGrid:
     "grid grid-cols-1 items-start gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-5",
   methodCard:
-    "flex min-h-14 w-full items-center justify-start gap-3 rounded-field border border-base-300 bg-base-100 px-3 py-2 text-left text-base-content shadow-none transition-colors hover:border-base-content/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:px-4 cursor-pointer",
+    "flex min-h-14 w-full items-center justify-start gap-3 rounded-field border border-base-content/25 bg-base-100 px-3 py-2 text-left text-base-content shadow-sm transition-colors hover:border-base-content/45 hover:bg-base-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:px-4 cursor-pointer",
   methodCardUnavailable:
-    "flex min-h-14 w-full items-center justify-start gap-3 rounded-field border border-base-300 bg-base-100 px-3 py-2 text-left text-base-content opacity-50 cursor-not-allowed shadow-none sm:px-4",
+    "flex min-h-14 w-full items-center justify-start gap-3 rounded-field border border-base-content/20 bg-base-100 px-3 py-2 text-left text-base-content opacity-50 cursor-not-allowed shadow-sm sm:px-4",
   methodCardStatic:
-    "flex min-h-14 w-full items-center justify-start gap-3 rounded-field border border-base-300 bg-base-100 px-3 py-2 text-left text-base-content shadow-none sm:px-4",
+    "flex min-h-14 w-full items-center justify-start gap-3 rounded-field border border-base-content/25 bg-base-100 px-3 py-2 text-left text-base-content shadow-sm sm:px-4",
   methodCurrenciesLoading:
-    "flex min-h-14 w-full items-center justify-start gap-3 rounded-field border border-dashed border-base-300 bg-base-100 px-3 py-2 text-left text-base-content/70 shadow-none sm:px-4 sm:col-span-2 lg:col-span-4",
+    "flex min-h-14 w-full items-center justify-start gap-3 rounded-field border border-dashed border-base-content/25 bg-base-100 px-3 py-2 text-left text-base-content/70 shadow-sm sm:px-4 sm:col-span-2 lg:col-span-4",
   methodCardReady:
-    "flex min-h-14 w-full items-center justify-start gap-3 rounded-field border border-base-300 bg-base-100 px-3 py-2 text-left text-base-content shadow-none transition-colors hover:border-base-content/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:px-4 cursor-pointer",
+    "flex min-h-14 w-full items-center justify-start gap-3 rounded-field border border-base-content/25 bg-base-100 px-3 py-2 text-left text-base-content shadow-sm transition-colors hover:border-base-content/45 hover:bg-base-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:px-4 cursor-pointer",
   methodCardActiveBitcoin:
     "border-warning bg-warning/10 ring-1 ring-warning/50",
   methodCardActiveUsdt:
@@ -77,10 +77,10 @@ export const orClasses = {
   methodLimitHint: "block px-1 text-xs leading-snug text-base-content/55",
   methodDetailDesktop: "hidden",
   methodNetworkReveal:
-    "rounded-box border border-base-300 bg-base-100/50 p-3",
+    "rounded-box border border-base-content/20 bg-base-100 p-3",
   methodNetworkRevealDesktop: "mt-3 hidden sm:block",
   methodNetworkRevealMobile:
-    "ml-4 border-l border-base-content/20 pl-3 sm:hidden",
+    "ml-4 border-l border-base-content/30 pl-3 sm:hidden",
   methodNetworkRevealMobileUsdt: "ml-4 border-l border-success/40 pl-3 sm:hidden",
   methodNetworkRevealMobileUsdc: "ml-4 border-l border-info/40 pl-3 sm:hidden",
   methodNetworkRevealAnim:
@@ -95,9 +95,9 @@ export const orClasses = {
   methodNetworkGrid:
     "grid grid-cols-1 gap-2 min-[390px]:grid-cols-3 items-start",
   methodNetworkButton:
-    "btn h-11 min-h-11 w-full justify-start gap-2 rounded-field border-base-300 bg-base-200 px-3 text-sm text-base-content shadow-none hover:border-base-content/30 hover:bg-base-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+    "btn h-11 min-h-11 w-full justify-start gap-2 rounded-field border border-base-content/25 bg-base-100 px-3 text-sm text-base-content shadow-sm hover:border-base-content/45 hover:bg-base-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
   methodNetworkButtonUnavailable:
-    "btn h-11 min-h-11 w-full justify-start gap-2 rounded-field border-base-300 bg-base-200 px-3 text-sm text-base-content opacity-50 cursor-not-allowed shadow-none pointer-events-none",
+    "btn h-11 min-h-11 w-full justify-start gap-2 rounded-field border border-base-content/20 bg-base-100 px-3 text-sm text-base-content opacity-50 cursor-not-allowed shadow-sm pointer-events-none",
   methodNetworkButtonActiveUsdt:
     "border-success bg-success/10 ring-1 ring-success/50",
   methodNetworkButtonActiveUsdc:
@@ -144,7 +144,7 @@ export const orClasses = {
   providerBadge: "badge badge-ghost badge-sm whitespace-nowrap",
   providerKind: "text-base-content/60 text-sm m-0 justify-self-end text-right",
   providerActions: "col-span-2 flex w-full md:col-span-1 md:w-auto md:justify-self-end",
-  providerOpen: "btn btn-soft btn-sm w-full md:w-auto",
+  providerOpen: "btn btn-outline btn-sm w-full md:w-auto",
   swapActions: "grid gap-2.5 grid-cols-1 md:grid-cols-3",
   swapAction: "grid gap-2",
   swapEstimate: "text-base-content/60 m-0 text-sm",
@@ -157,7 +157,7 @@ export const orClasses = {
   swapNetworkWarningEmphasis: "font-bold underline",
   swapProgress: "text-base-content/60 m-0",
   swapInstruction: "m-0 text-base-content text-base font-bold text-center md:text-left",
-  swapStart: "btn btn-soft",
+  swapStart: "btn btn-outline",
   swapPanel: "grid gap-3",
   swapDepositLayout:
     "grid gap-3 md:grid-cols-[auto_minmax(0,1fr)] md:gap-x-5 md:items-start min-w-0",
@@ -176,13 +176,13 @@ export const orClasses = {
   swapDetailsInput:
     "input input-sm w-full min-w-0 font-mono text-sm outline-none! focus:outline-none! focus:outline-offset-0!",
   swapDetailsActions: "flex flex-wrap gap-2 justify-end",
-  swapDetailsLink: "btn btn-sm btn-soft",
-  swapBreakdown: "grid gap-2 py-2 border-t border-base-300",
+  swapDetailsLink: "btn btn-sm btn-outline",
+  swapBreakdown: "grid gap-2 py-2 border-t border-base-content/15",
   swapBreakdownTitle: "m-0 text-base-content/60 text-xs font-bold uppercase",
   swapBreakdownRows: "grid grid-cols-[1fr_auto] gap-x-3 gap-y-1.5 items-baseline m-0",
   swapWaitingTitle: "flex items-baseline justify-between gap-3 min-w-0",
   swapCountdown: "shrink-0 text-base-content font-semibold tabular-nums",
-  swapBack: "btn btn-sm btn-soft justify-self-start",
+  swapBack: "btn btn-sm btn-outline justify-self-start",
   swapSupport: "collapse collapse-arrow bg-base-200",
   swapSupportTitle: "collapse-title font-bold min-h-0 py-2",
   swapSupportContent: "collapse-content",
@@ -200,12 +200,12 @@ export const orClasses = {
   tutorialTitle: "flex items-center gap-2.5 min-w-0",
   tutorialHeaderLogo: "size-9 rounded shrink-0",
   tutorialClose: "btn btn-sm btn-square btn-ghost",
-  tutorialFrame: "flex items-center justify-center min-h-0 overflow-hidden rounded-box border border-base-300 bg-base-200",
+  tutorialFrame: "flex items-center justify-center min-h-0 overflow-hidden rounded-box border border-base-content/20 bg-base-200",
   tutorialImage: "block w-auto max-w-full h-auto max-h-[min(66vh,720px)] object-contain",
   tutorialCaption: "m-0 text-base font-bold text-center",
   tutorialIntro: "grid gap-3 p-4 text-center",
   tutorialProviderLogo: "justify-self-center size-[52px] rounded",
-  tutorialCopy: "btn btn-soft justify-self-center min-w-[min(240px,100%)]",
+  tutorialCopy: "btn btn-outline justify-self-center min-w-[min(240px,100%)]",
   tutorialCopyMessage: "text-success font-bold",
   tutorialProgress: "m-0 text-base-content/60 text-xs text-center",
   tutorialSteps: "flex gap-1.5 justify-center",

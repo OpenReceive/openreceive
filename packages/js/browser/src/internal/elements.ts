@@ -204,26 +204,30 @@ export function createCheckoutShellModel(
   options: CheckoutShellOptions = {},
 ): CheckoutShellModel {
   const theme = createOpenReceiveStoredThemeModel(options);
+  // themeToggle: false → host (e.g. ThemeScope) owns theming; don't stamp a conflicting theme.
+  const ownTheme = options.themeToggle !== false;
   return {
     theme,
-    rootAttributes: theme.attributes,
+    rootAttributes: ownTheme ? theme.attributes : {},
     checkout: {
       tagName: OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
       attributes: createCheckoutElementAttributes(snapshot, {
         ...options,
-        theme: theme.resolvedTheme,
+        ...(ownTheme ? { theme: theme.resolvedTheme } : {}),
       }),
       listeners: createCheckoutElementListeners(options),
     },
-    themeToggle: {
-      tagName: OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
-      attributes: createOpenReceiveThemeToggleElementAttributes({
-        rootSelector: options.rootSelector,
-        checkoutSelector: options.checkoutSelector ?? OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
-        defaultTheme: options.defaultTheme,
-        storageKey: options.storageKey,
-      }),
-    },
+    themeToggle: ownTheme
+      ? {
+          tagName: OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
+          attributes: createOpenReceiveThemeToggleElementAttributes({
+            rootSelector: options.rootSelector,
+            checkoutSelector: options.checkoutSelector ?? OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
+            defaultTheme: options.defaultTheme,
+            storageKey: options.storageKey,
+          }),
+        }
+      : null,
   };
 }
 
@@ -312,14 +316,19 @@ export function createCheckoutShell(
   }
 
   const shell = createCheckoutShellModel(snapshot, options);
-  applyOpenReceiveThemeAttributes(options.root, shell.theme);
+  if (shell.themeToggle !== null) {
+    applyOpenReceiveThemeAttributes(options.root, shell.theme);
+  }
 
   const checkout = ownerDocument.createElement(shell.checkout.tagName);
   applyCheckoutElementAttributes(checkout, shell.checkout.attributes);
   applyCheckoutElementListeners(checkout, shell.checkout.listeners);
 
-  const themeToggle = ownerDocument.createElement(shell.themeToggle.tagName);
-  applyOpenReceiveThemeToggleElementAttributes(themeToggle, shell.themeToggle.attributes);
+  let themeToggle: HTMLElement | null = null;
+  if (shell.themeToggle !== null) {
+    themeToggle = ownerDocument.createElement(shell.themeToggle.tagName);
+    applyOpenReceiveThemeToggleElementAttributes(themeToggle, shell.themeToggle.attributes);
+  }
 
   return {
     theme: shell.theme,

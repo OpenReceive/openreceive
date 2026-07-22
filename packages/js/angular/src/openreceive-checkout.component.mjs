@@ -56,7 +56,11 @@ export class CheckoutComponent {
   }
 
   get themeToggleAttributes() {
-    return this.shell.themeToggle.attributes;
+    return this.shell.themeToggle?.attributes;
+  }
+
+  get showThemeToggle() {
+    return this.shell.themeToggle !== null;
   }
 
   onCheckoutEvent(eventName, event) {
@@ -86,12 +90,14 @@ Component({
       [attr.data-theme]="rootAttributes['data-theme']"
       [attr.data-openreceive-theme]="rootAttributes['data-openreceive-theme']"
     >
-      <openreceive-theme-toggle
-        [attr.root-selector]="themeToggleAttributes['root-selector']"
-        [attr.checkout-selector]="themeToggleAttributes['checkout-selector']"
-        [attr.default-theme]="themeToggleAttributes['default-theme']"
-        [attr.storage-key]="themeToggleAttributes['storage-key']"
-      ></openreceive-theme-toggle>
+      @if (showThemeToggle) {
+        <openreceive-theme-toggle
+          [attr.root-selector]="themeToggleAttributes['root-selector']"
+          [attr.checkout-selector]="themeToggleAttributes['checkout-selector']"
+          [attr.default-theme]="themeToggleAttributes['default-theme']"
+          [attr.storage-key]="themeToggleAttributes['storage-key']"
+        ></openreceive-theme-toggle>
+      }
       <openreceive-checkout
         [attr.order-id]="checkoutAttributes['order-id']"
         [attr.prefix]="checkoutAttributes.prefix"

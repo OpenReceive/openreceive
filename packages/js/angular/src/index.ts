@@ -111,7 +111,7 @@ export interface OpenReceiveAngularCheckoutShellBinding {
   readonly theme: OpenReceiveThemeModel;
   readonly rootAttributes: OpenReceiveThemeModel["attributes"];
   readonly checkout: OpenReceiveAngularCheckoutBinding;
-  readonly themeToggle: OpenReceiveAngularThemeToggleBinding;
+  readonly themeToggle: OpenReceiveAngularThemeToggleBinding | null;
 }
 
 export interface OpenReceiveAngularCheckoutComponentProps
@@ -172,10 +172,13 @@ export function createOpenReceiveAngularCheckoutShellBinding(
       attributes: shell.checkout.attributes,
       events: shell.checkout.listeners
     },
-    themeToggle: {
-      selector: shell.themeToggle.tagName,
-      attributes: shell.themeToggle.attributes
-    }
+    themeToggle:
+      shell.themeToggle === null
+        ? null
+        : {
+            selector: shell.themeToggle.tagName,
+            attributes: shell.themeToggle.attributes
+          }
   };
 }
 
@@ -192,10 +195,13 @@ export function createOpenReceiveAngularCheckoutComponentModel(
       attributes: shellModel.checkout.attributes,
       events: shellModel.checkout.listeners
     },
-    themeToggle: {
-      selector: shellModel.themeToggle.tagName,
-      attributes: shellModel.themeToggle.attributes
-    }
+    themeToggle:
+      shellModel.themeToggle === null
+        ? null
+        : {
+            selector: shellModel.themeToggle.tagName,
+            attributes: shellModel.themeToggle.attributes
+          }
   };
   return {
     componentName: "Checkout",

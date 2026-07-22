@@ -181,9 +181,9 @@ test("browser owns custom-element checkout attributes and listeners", () => {
   });
   assert.equal(shell.checkout.tagName, OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME);
   assert.equal(shell.checkout.attributes.theme, shell.theme.resolvedTheme);
-  assert.equal(shell.themeToggle.tagName, OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME);
+  assert.equal(shell.themeToggle?.tagName, OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME);
   assert.equal(
-    shell.themeToggle.attributes["checkout-selector"],
+    shell.themeToggle?.attributes["checkout-selector"],
     OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
   );
   assert.equal(rootAttrs["data-openreceive-theme"], shell.theme.resolvedTheme);
@@ -437,9 +437,20 @@ test("Vue, Svelte, and Angular adapters expose thin custom-element bindings", ()
   assert.equal(vueShell.checkout.attrs.theme, "dark");
   assert.equal(vueShell.checkout.attrs["order-url"], "/order");
   assert.equal(
-    vueShell.themeToggle.attrs["checkout-selector"],
+    vueShell.themeToggle?.attrs["checkout-selector"],
     OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
   );
+
+  // Host ThemeScope owns theming: no nested toggle, no stamped theme (inherit ancestor).
+  const vueHostTheme = createOpenReceiveVueCheckoutShellBinding(snapshot, {
+    orderUrl: "/order",
+    rootSelector: ".page",
+    themeToggle: false,
+    storage,
+  });
+  assert.equal(vueHostTheme.themeToggle, null);
+  assert.deepEqual(vueHostTheme.rootAttrs, {});
+  assert.equal(vueHostTheme.checkout.attrs.theme, undefined);
 
   const svelteShell = createOpenReceiveSvelteCheckoutShellBinding(snapshot, {
     paymentWizard: false,
@@ -449,7 +460,7 @@ test("Vue, Svelte, and Angular adapters expose thin custom-element bindings", ()
   assert.equal(svelteShell.checkout.props.theme, "dark");
   assert.equal(svelteShell.checkout.props["payment-wizard"], "false");
   assert.equal(
-    svelteShell.themeToggle.props["checkout-selector"],
+    svelteShell.themeToggle?.props["checkout-selector"],
     OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
   );
 
@@ -459,7 +470,7 @@ test("Vue, Svelte, and Angular adapters expose thin custom-element bindings", ()
   });
   assert.equal(angularShell.rootAttributes["data-theme"], "dark");
   assert.equal(angularShell.checkout.attributes.theme, "dark");
-  assert.equal(angularShell.themeToggle.attributes["checkout-selector"], "#checkout");
+  assert.equal(angularShell.themeToggle?.attributes["checkout-selector"], "#checkout");
 
   let vueSettled = false;
   const vueComponent = createOpenReceiveVueCheckoutComponentModel({
@@ -481,7 +492,7 @@ test("Vue, Svelte, and Angular adapters expose thin custom-element bindings", ()
     new Event("settled"),
   );
   assert.equal(vueSettled, true);
-  assert.equal(vueComponent.themeToggle.tagName, OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME);
+  assert.equal(vueComponent.themeToggle?.tagName, OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME);
 
   const svelteComponent = createOpenReceiveSvelteCheckoutComponentModel({
     checkout: snapshot,
@@ -497,7 +508,7 @@ test("Vue, Svelte, and Angular adapters expose thin custom-element bindings", ()
   });
   assert.equal(angularComponent.componentName, "Checkout");
   assert.equal(typeof angularComponent.defineElements, "function");
-  assert.equal(angularComponent.themeToggle.attributes["checkout-selector"], "#checkout");
+  assert.equal(angularComponent.themeToggle?.attributes["checkout-selector"], "#checkout");
 
   const vueController = createOpenReceiveVueCheckoutController({ snapshot });
   const svelteController = createOpenReceiveSvelteCheckoutController({ snapshot });
@@ -572,7 +583,7 @@ test("Vue, Svelte, and Angular adapters expose full checkout shell creators", ()
   });
   assert.equal(vue.checkout.tagName, OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME);
   assert.equal(vue.checkout.attributes["order-url"], "/order");
-  assert.equal(vue.themeToggle.tagName, OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME);
+  assert.equal(vue.themeToggle?.tagName, OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME);
 
   const svelte = createOpenReceiveSvelteCheckoutShell(snapshot, {
     document: createDocument(),
@@ -587,9 +598,17 @@ test("Vue, Svelte, and Angular adapters expose full checkout shell creators", ()
     checkoutSelector: "#checkout",
     rootSelector: ".page",
   });
-  assert.equal(angular.themeToggle.attributes["checkout-selector"], "#checkout");
-  assert.equal(angular.themeToggle.attributes["root-selector"], ".page");
+  assert.equal(angular.themeToggle?.attributes["checkout-selector"], "#checkout");
+  assert.equal(angular.themeToggle?.attributes["root-selector"], ".page");
   assert.equal(createdElements.length, 6);
+
+  const hostThemed = createOpenReceiveVueCheckoutShell(snapshot, {
+    document: createDocument(),
+    themeToggle: false,
+    defaultTheme: "light",
+  });
+  assert.equal(hostThemed.themeToggle, null);
+  assert.equal(hostThemed.checkout.attributes.theme, undefined);
 });
 
 test("Vue, Svelte, and Angular packages ship component entry files", () => {

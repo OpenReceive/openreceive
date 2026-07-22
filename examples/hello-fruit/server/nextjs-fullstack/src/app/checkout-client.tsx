@@ -457,7 +457,7 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
                 </div>
               ))}
               <div className="card-actions pt-1">
-                <button className="btn btn-sm btn-soft" onClick={startOver} type="button">
+                <button className="btn btn-sm btn-outline" onClick={startOver} type="button">
                   Start over
                 </button>
               </div>

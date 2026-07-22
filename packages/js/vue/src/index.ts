@@ -111,7 +111,7 @@ export interface OpenReceiveVueCheckoutShellBinding {
   readonly theme: OpenReceiveThemeModel;
   readonly rootAttrs: OpenReceiveThemeModel["attributes"];
   readonly checkout: OpenReceiveVueCheckoutBinding;
-  readonly themeToggle: OpenReceiveVueThemeToggleBinding;
+  readonly themeToggle: OpenReceiveVueThemeToggleBinding | null;
 }
 
 export interface OpenReceiveVueCheckoutComponentProps
@@ -172,10 +172,13 @@ export function createOpenReceiveVueCheckoutShellBinding(
       attrs: shell.checkout.attributes,
       listeners: shell.checkout.listeners
     },
-    themeToggle: {
-      tagName: shell.themeToggle.tagName,
-      attrs: shell.themeToggle.attributes
-    }
+    themeToggle:
+      shell.themeToggle === null
+        ? null
+        : {
+            tagName: shell.themeToggle.tagName,
+            attrs: shell.themeToggle.attributes
+          }
   };
 }
 
@@ -192,10 +195,13 @@ export function createOpenReceiveVueCheckoutComponentModel(
       attrs: shellModel.checkout.attributes,
       listeners: shellModel.checkout.listeners
     },
-    themeToggle: {
-      tagName: shellModel.themeToggle.tagName,
-      attrs: shellModel.themeToggle.attributes
-    }
+    themeToggle:
+      shellModel.themeToggle === null
+        ? null
+        : {
+            tagName: shellModel.themeToggle.tagName,
+            attrs: shellModel.themeToggle.attributes
+          }
   };
   return {
     componentName: "Checkout",

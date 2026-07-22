@@ -1667,6 +1667,9 @@ export function defineOpenReceiveElements(
     /** Create-mode: Lightning QR is deferred until the payer selects Bitcoin. */
     private lightningRequested = false;
     private mintingLightning = false;
+    /** When `theme` is unset, follow the nearest ancestor `[data-theme]` (e.g. ThemeScope). */
+    private themeAncestorObserver: MutationObserver | undefined;
+    private observedThemeAncestor: Element | null = null;
 
     static get observedAttributes() {
       return [
@@ -1692,6 +1695,7 @@ export function defineOpenReceiveElements(
 
     connectedCallback() {
       this.render();
+      this.syncThemeAncestorObserver();
       if (this.isCreateMode()) {
         void this.createCheckout();
         return;
@@ -1703,15 +1707,18 @@ export function defineOpenReceiveElements(
       if (!this.isConnected || this.applyingCreatedAttributes) return;
       if (this.isCreateMode()) {
         this.render();
+        this.syncThemeAncestorObserver();
         void this.createCheckout();
         return;
       }
       this.render();
+      this.syncThemeAncestorObserver();
       this.startCheckoutController();
     }
 
     disconnectedCallback() {
       this.stopCheckoutController();
+      this.stopThemeAncestorObserver();
     }
 
     // Create mode: an `order-id` is set but no `invoice` snapshot is provided. The element
@@ -1885,11 +1892,7 @@ export function defineOpenReceiveElements(
       if ((invoiceAttr === null || invoiceAttr === "") && !deferredReady) {
         if (this.isCreateMode()) {
           const root = this.shadowRoot ?? this.attachShadow({ mode: "open" });
-          root.innerHTML = renderCheckoutCreatingHtml(
-            parseOpenReceiveResolvedTheme(
-              this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme)
-            )
-          );
+          root.innerHTML = renderCheckoutCreatingHtml(this.resolveTheme());
           return;
         }
         this.replaceChildren();
@@ -1917,7 +1920,7 @@ export function defineOpenReceiveElements(
           this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.expiresAt),
           { label: "expires-at" }
         ),
-        theme: parseOpenReceiveResolvedTheme(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme)),
+        theme: this.resolveTheme(),
         payment_wizard: parseOpenReceiveBooleanAttribute(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentWizard)),
         lightningRequested: this.mintingLightning ? false : lightningRequested,
         wizard: {
@@ -2560,6 +2563,52 @@ export function defineOpenReceiveElements(
         this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme),
       );
       return theme === undefined ? {} : { theme };
+    }
+
+    /** Explicit `theme` attr wins; otherwise inherit nearest ancestor `[data-theme]`. */
+    private resolveTheme(): "light" | "dark" {
+      const attr = parseOpenReceiveResolvedTheme(
+        this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme),
+      );
+      if (attr !== undefined) return attr;
+      const ancestor = this.closest("[data-theme]");
+      const inherited = parseOpenReceiveResolvedTheme(ancestor?.getAttribute("data-theme"));
+      if (inherited !== undefined) return inherited;
+      return "light";
+    }
+
+    private syncThemeAncestorObserver(): void {
+      const hasOwnTheme =
+        parseOpenReceiveResolvedTheme(
+          this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme),
+        ) !== undefined;
+      if (hasOwnTheme) {
+        this.stopThemeAncestorObserver();
+        return;
+      }
+      const ancestor = this.closest("[data-theme]");
+      if (ancestor === this.observedThemeAncestor && this.themeAncestorObserver !== undefined) {
+        return;
+      }
+      this.stopThemeAncestorObserver();
+      if (ancestor === null) return;
+      const MutationObserverCtor = globalThis.MutationObserver;
+      if (MutationObserverCtor === undefined) return;
+      this.observedThemeAncestor = ancestor;
+      this.themeAncestorObserver = new MutationObserverCtor(() => {
+        this.render();
+        this.syncThemeAncestorObserver();
+      });
+      this.themeAncestorObserver.observe(ancestor, {
+        attributes: true,
+        attributeFilter: ["data-theme"],
+      });
+    }
+
+    private stopThemeAncestorObserver(): void {
+      this.themeAncestorObserver?.disconnect();
+      this.themeAncestorObserver = undefined;
+      this.observedThemeAncestor = null;
     }
 
     private dispatchError(error: unknown): void {

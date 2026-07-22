@@ -543,7 +543,7 @@ function App(): React.ReactElement {
                 ))}
                 <div className="card-actions pt-1">
                   <button
-                    className="btn btn-sm btn-soft"
+                    className="btn btn-sm btn-outline"
                     disabled={creating}
                     onClick={startOver}
                     type="button"
@@ -607,7 +607,7 @@ function App(): React.ReactElement {
             <div className="grid gap-2">
               {purchasedItems.map((item) => (
                 <a
-                  className="btn btn-soft justify-between"
+                  className="btn btn-outline justify-between"
                   download={`${item.product_id}-sticker.svg`}
                   href={deliveryObjectUrls[item.product_id] ?? "#"}
                   key={item.product_id}
@@ -665,9 +665,11 @@ function FrameworkCheckout({
     let canceled = false;
     let cleanup: () => void = () => undefined;
 
+    // ThemeScope on `.page` owns the toggle; frameworks inherit via ancestor data-theme.
     const options = {
       rootSelector: ".page",
       defaultTheme: "light" as const,
+      themeToggle: false as const,
       onError: (event: Event) => {
         const detail = (event as CustomEvent<{ error?: unknown }>).detail;
         logDemo("checkout.embedded_error", "Embedded framework checkout reported an error.", {
@@ -710,6 +712,7 @@ function FrameworkCheckout({
           options: {
             rootSelector: options.rootSelector,
             defaultTheme: options.defaultTheme,
+            themeToggle: options.themeToggle,
             onError: options.onError,
           },
         });
@@ -749,6 +752,7 @@ function FrameworkCheckout({
         component.setInput("options", {
           rootSelector: options.rootSelector,
           defaultTheme: options.defaultTheme,
+          themeToggle: options.themeToggle,
           onError: options.onError,
         });
         application.attachView(component.hostView);
@@ -782,6 +786,7 @@ function FrameworkCheckout({
             options: {
               rootSelector: options.rootSelector,
               defaultTheme: options.defaultTheme,
+              themeToggle: options.themeToggle,
               onError: options.onError,
             },
           },

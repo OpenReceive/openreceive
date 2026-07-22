@@ -114,7 +114,7 @@ export interface OpenReceiveSvelteCheckoutShellBinding {
   readonly theme: OpenReceiveThemeModel;
   readonly rootProps: OpenReceiveThemeModel["attributes"];
   readonly checkout: OpenReceiveSvelteCheckoutBinding;
-  readonly themeToggle: OpenReceiveSvelteThemeToggleBinding;
+  readonly themeToggle: OpenReceiveSvelteThemeToggleBinding | null;
 }
 
 export interface OpenReceiveSvelteCheckoutComponentProps
@@ -182,10 +182,13 @@ export function createOpenReceiveSvelteCheckoutShellBinding(
       props: shell.checkout.attributes,
       events: shell.checkout.listeners
     },
-    themeToggle: {
-      tagName: shell.themeToggle.tagName,
-      props: shell.themeToggle.attributes
-    }
+    themeToggle:
+      shell.themeToggle === null
+        ? null
+        : {
+            tagName: shell.themeToggle.tagName,
+            props: shell.themeToggle.attributes
+          }
   };
 }
 
@@ -202,10 +205,13 @@ export function createOpenReceiveSvelteCheckoutComponentModel(
       props: shellModel.checkout.attributes,
       events: shellModel.checkout.listeners
     },
-    themeToggle: {
-      tagName: shellModel.themeToggle.tagName,
-      props: shellModel.themeToggle.attributes
-    }
+    themeToggle:
+      shellModel.themeToggle === null
+        ? null
+        : {
+            tagName: shellModel.themeToggle.tagName,
+            props: shellModel.themeToggle.attributes
+          }
   };
   return {
     componentName: "Checkout",

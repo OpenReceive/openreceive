@@ -76,10 +76,12 @@
 </script>
 
 <section {...shell.rootProps}>
-  <svelte:element
-    this={shell.themeToggle.tagName}
-    {...shell.themeToggle.props}
-  />
+  {#if shell.themeToggle}
+    <svelte:element
+      this={shell.themeToggle.tagName}
+      {...shell.themeToggle.props}
+    />
+  {/if}
   <svelte:element
     this={shell.checkout.tagName}
     {...shell.checkout.props}
