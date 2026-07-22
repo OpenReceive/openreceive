@@ -1,40 +1,26 @@
-# Copy to openreceive.yml (git-ignored). Holds receive-only NWC and provider secrets.
-# Only OPENRECEIVE_NWC and swap.providers are required; everything else has defaults.
+## OPENRECEIVE_NWC is required. It's how you receive payments.
+## Get a NWC Code: https://openreceive.org/get_a_nwc_code_to_receive_payments
+OPENRECEIVE_NWC: 
 
-OPENRECEIVE_NWC: ""
+## Swap providers is recommended. Enables customer payments with USDT, USDC, SOL, or ETH
+## Set up swap providers: https://openreceive.org/set_up_swap_provider
 
-swap:
-  providers:
-    - base_url: https://ff.io
-      key: ""
-      secret: ""
+# swap:
+#  providers:
+#   - base_url: 
+#     key: 
+#     secret: 
 
 # -----------------------------------------------------------------------------
 # Optional overrides (defaults shown). Omit this whole section unless you need it.
 # -----------------------------------------------------------------------------
-#
-# OPENRECEIVE_NAMESPACE: default
-# # Store precedence when OPENRECEIVE_STORE is omitted:
-# #   1) DATABASE_PRIVATE_URL if postgres://
-# #   2) DATABASE_URL if postgres://
-# #   3) local-sqlite under .openreceive/ (refused on Heroku/Vercel/etc.)
+
 # OPENRECEIVE_STORE: local-sqlite
 # # Or: OPENRECEIVE_STORE: postgres://USER:PASS@HOST:5432/DB
 #
 # OPENRECEIVE_PRICE_CURRENCIES:
 #   - USD
 #
-# operation:
-#   action_lease_ttl_seconds: 60
-#   transaction_scan_interval_seconds: 2
-#   transaction_scan_page_limit: 25
-#   transaction_scan_window_padding_seconds: 0
-#   transaction_scan_timeout_ms: 9000
-#
-# # Also under swap: (alongside providers above)
-# #   settlement_attention_seconds: 60
-# # Provider id defaults from base_url host (https://ff.io → ff-io).
-# # protocol defaults to fixedfloat.
 #
 # logging:
 #   enabled: true

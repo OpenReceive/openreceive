@@ -416,8 +416,11 @@ test("createOpenReceive loads ordered FixedFloat-compatible swaps from YAML conf
   }
 });
 
-test("createOpenReceive rejects YAML config with partially configured provider secrets", async () => {
+test("createOpenReceive warns and ignores YAML providers with incomplete secrets", async () => {
   const dir = mkdtempSync(path.join(tmpdir(), "openreceive-swap-config-"));
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (message) => warnings.push(String(message));
   try {
     writeFileSync(
       path.join(dir, "openreceive.yml"),
@@ -430,24 +433,29 @@ test("createOpenReceive rejects YAML config with partially configured provider s
       ].join("\n"),
     );
 
-    await assert.rejects(
-      () =>
-        createOpenReceive({
-          client: new FakeWallet(() => 1000),
-          store: new InMemoryInvoiceKvStore(),
-          namespace: "swap_yaml_missing_secret",
-          cwd: dir,
-          clock: () => 1000,
-          priceProviders: [new StaticPriceProvider()],
-        }),
-      (error) => {
-        assert.equal(error instanceof OpenReceiveConfigError, true);
-        assert.equal(error.code, "INVALID_CONFIG_FILE");
-        assert.match(String(error.cause?.message), /key and .*secret must be set together/);
-        return true;
-      },
-    );
+    const openreceive = await createOpenReceive({
+      client: new FakeWallet(() => 1000),
+      store: new InMemoryInvoiceKvStore(),
+      namespace: "swap_yaml_missing_secret",
+      cwd: dir,
+      clock: () => 1000,
+      priceProviders: [new StaticPriceProvider()],
+    });
+
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /ignoring swap provider "otherfloat-example"/);
+    assert.match(warnings[0], /secret is not set/);
+
+    await openreceive.getOrCreateCheckout({
+      orderId: "order-swap-yaml-partial",
+      amount: { sats: "200" },
+    });
+    assert.deepEqual(await openreceive.swapOptions({ orderId: "order-swap-yaml-partial" }), {
+      enabled: false,
+      options: [],
+    });
   } finally {
+    console.warn = originalWarn;
     rmSync(dir, { recursive: true, force: true });
   }
 });
@@ -571,6 +579,9 @@ test("createOpenReceive accepts explicit YAML swap provider id override", async 
 
 test("createOpenReceive skips blank YAML swap provider secrets", async () => {
   const dir = mkdtempSync(path.join(tmpdir(), "openreceive-swap-config-"));
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (message) => warnings.push(String(message));
   try {
     writeFileSync(
       path.join(dir, "openreceive.yml"),
@@ -593,6 +604,10 @@ test("createOpenReceive skips blank YAML swap provider secrets", async () => {
       priceProviders: [new StaticPriceProvider()],
     });
 
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /ignoring swap provider "otherfloat-example"/);
+    assert.match(warnings[0], /key and secret are not set/);
+
     await openreceive.getOrCreateCheckout({
       orderId: "order-swap-yaml-blank",
       amount: { sats: "200" },
@@ -603,8 +618,26 @@ test("createOpenReceive skips blank YAML swap provider secrets", async () => {
       options: [],
     });
   } finally {
+    console.warn = originalWarn;
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("createOpenReceive refuses to boot without OPENRECEIVE_NWC", async () => {
+  await assert.rejects(
+    () =>
+      createOpenReceive({
+        store: new InMemoryInvoiceKvStore(),
+        namespace: "missing_nwc",
+        configPath: false,
+        priceProviders: [new StaticPriceProvider()],
+      }),
+    (error) => {
+      assert.equal(error instanceof OpenReceiveConfigError, true);
+      assert.equal(error.code, "MISSING_NWC");
+      return true;
+    },
+  );
 });
 
 test("FixedFloat rejects invoice expiry configs shorter than its payout window", () => {

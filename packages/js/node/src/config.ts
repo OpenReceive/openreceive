@@ -52,6 +52,8 @@ export interface ReadOpenReceiveConfigFileOptions {
   readonly configPath?: string | false;
   readonly now?: () => number;
   readonly fetch?: typeof globalThis.fetch;
+  /** Override for incomplete swap-provider warnings. Defaults to `console.warn`. */
+  readonly emitWarning?: (message: string) => void;
 }
 
 export function readOpenReceiveConfigFile(
@@ -284,14 +286,23 @@ function readSwapProviders(
           ".",
       );
     }
-    seenIds.add(id);
 
     const key = readOptionalString(provider.key, `${providerLabel}.key`);
     const secret = readOptionalString(provider.secret, `${providerLabel}.secret`);
-    if (key === undefined && secret === undefined) return [];
     if (key === undefined || secret === undefined) {
-      throw new TypeError(`${providerLabel}.key and ${providerLabel}.secret must be set together.`);
+      const missing =
+        key === undefined && secret === undefined
+          ? "key and secret are not set"
+          : key === undefined
+            ? "key is not set"
+            : "secret is not set";
+      emitSwapProviderConfigWarning(
+        options,
+        `OpenReceive: ignoring swap provider ${JSON.stringify(id)} (${providerLabel}): ${missing}.`,
+      );
+      return [];
     }
+    seenIds.add(id);
 
     return [
       fixedFloatCompatibleSwapProvider({
@@ -335,6 +346,14 @@ function readSwapProviders(
       }),
     ];
   });
+}
+
+function emitSwapProviderConfigWarning(
+  options: ReadOpenReceiveConfigFileOptions,
+  message: string,
+): void {
+  const emitWarning = options.emitWarning ?? ((text: string) => console.warn(text));
+  emitWarning(message);
 }
 
 /** Derive a stable provider id from `base_url` hostname (+ non-default port). */

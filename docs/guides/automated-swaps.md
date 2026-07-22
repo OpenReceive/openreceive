@@ -23,10 +23,11 @@ swap:
 `protocol` defaults to `fixedfloat`. `id` defaults from the `base_url` host
 (`https://ff.io` → `ff-io`); set `id` only to override. Store/namespace defaults
 apply as in [Storage](storage.md) (Postgres `DATABASE_URL` when present).
-`providers` order is priority order. Leave `swap.providers` empty or leave
-provider keys blank to keep automated swaps disabled. Never send provider keys
-or `openreceive.yml` to browser code, mobile apps, source maps, fixtures, or
-logs. Commit `openreceive.yml.example`, not the real file.
+`providers` order is priority order. Leave `swap.providers` empty to keep
+automated swaps disabled. Entries with a missing `key` and/or `secret` warn on
+boot and are ignored. Never send provider keys or `openreceive.yml` to browser
+code, mobile apps, source maps, fixtures, or logs. Commit
+`openreceive.yml.example`, not the real file.
 
 Weight budgets, expiry floors, and failover math live in
 [Swap Operations](../internal/swap-operations.md).
