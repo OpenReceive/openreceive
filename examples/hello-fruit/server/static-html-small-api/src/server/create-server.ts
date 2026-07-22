@@ -43,7 +43,11 @@ export async function createHelloFruitStaticServer() {
     },
   });
 
-  mountHelloFruitDelivery(app, { store: service.store, stickersDir: STICKERS_DIR });
+  mountHelloFruitDelivery(app, {
+    store: service.store,
+    namespace: service.namespace,
+    stickersDir: STICKERS_DIR,
+  });
 
   // guestCheckout(): anonymous create, Tier-2 reads gated by the per-order capability token.
   // For a signed-in app, swap authorize for withUser instead, e.g.:

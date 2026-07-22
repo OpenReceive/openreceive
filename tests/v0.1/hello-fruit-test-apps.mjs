@@ -149,6 +149,7 @@ export async function createHelloFruitNextHandlersForTest(
     delivery: (request, orderId, productId) =>
       helloFruitDeliveryFetchResponse({
         store: service.store,
+        namespace: service.namespace,
         stickersDir: STICKERS_DIR,
         orderId,
         productId,
@@ -183,7 +184,11 @@ async function createHelloFruitExpressAppForTest(demoId, options) {
     },
   });
 
-  mountHelloFruitDelivery(app, { store: service.store, stickersDir: STICKERS_DIR });
+  mountHelloFruitDelivery(app, {
+    store: service.store,
+    namespace: service.namespace,
+    stickersDir: STICKERS_DIR,
+  });
 
   app.use(
     openReceiveExpress({

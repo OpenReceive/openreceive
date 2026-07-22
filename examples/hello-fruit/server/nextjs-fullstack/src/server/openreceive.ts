@@ -58,6 +58,7 @@ export async function deliveryResponse(
   const { openreceive: service } = await getOpenReceive();
   return helloFruitDeliveryFetchResponse({
     store: service.store,
+    namespace: service.namespace,
     stickersDir: STICKERS_DIR,
     orderId,
     productId,

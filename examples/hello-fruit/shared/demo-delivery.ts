@@ -19,6 +19,11 @@ const PRODUCT_ID_PATTERN = /^[a-z][a-z0-9_-]{0,31}$/;
 
 export interface ResolveHelloFruitDeliveryInput {
   readonly store: HostOrderMetaStore;
+  /**
+   * Same OpenReceive namespace the HTTP handler used when minting the capability
+   * token. Must match `service.namespace` or verify looks up the wrong meta key.
+   */
+  readonly namespace?: string;
   readonly stickersDir: string;
   readonly orderId: string;
   readonly productId: string;
@@ -53,7 +58,9 @@ export async function resolveHelloFruitDelivery(
     return { ok: false, status: 401, message: "Order access token required." };
   }
 
-  const tokens = createOrderAccessTokenManager(input.store);
+  const tokens = createOrderAccessTokenManager(input.store, {
+    ...(input.namespace === undefined ? {} : { namespace: input.namespace }),
+  });
   const tokenValid = await tokens.verify(orderId, token);
   if (!tokenValid) {
     return { ok: false, status: 403, message: "Not authorized to download this order." };
@@ -116,6 +123,8 @@ export async function helloFruitDeliveryFetchResponse(
 
 export interface MountHelloFruitDeliveryOptions {
   readonly store: HostOrderMetaStore;
+  /** Must match `service.namespace` used by the mounted OpenReceive router. */
+  readonly namespace?: string;
   readonly stickersDir: string;
 }
 
@@ -145,6 +154,7 @@ async function sendHelloFruitDeliveryExpress(
   });
   const result = await resolveHelloFruitDelivery({
     store: options.store,
+    ...(options.namespace === undefined ? {} : { namespace: options.namespace }),
     stickersDir: options.stickersDir,
     orderId,
     productId,

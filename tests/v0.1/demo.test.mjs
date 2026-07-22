@@ -1770,6 +1770,72 @@ test("Hello Fruit demos prepare app orders and settle through the mounted router
     assert.equal(deliveryPending.status, 403, "node-express: delivery before onPaid is forbidden");
   }
 
+  // Non-default namespaces scope capability-token meta keys; delivery must use the same
+  // namespace as the mounted router or verify misses the hash (HTTP 403 after paid).
+  for (const demo of [
+    { name: "node-express", createApp: createHelloFruitServerForTest },
+    { name: "static-html-small-api", createApp: createHelloFruitStaticServerForTest },
+  ]) {
+    const options = { ...createHelloFruitTestOpenReceiveOptions(), namespace: "my_app" };
+    const app = await demo.createApp(options);
+    const prepared = await dispatchJson(app, "POST", "/openreceive/prepare", orderRequest);
+    const orderId = prepared.body.order_id;
+    const created = await dispatchJson(app, "POST", "/openreceive/checkouts", { order_id: orderId });
+    const token = created.body.order_access_token;
+    assert.equal(typeof token, "string", `${demo.name} namespaced: mints order access token`);
+    options.client.settleAll();
+    await resetTransactionScanGate(options.store);
+    const status = await dispatchJson(
+      app,
+      "POST",
+      `/openreceive/orders/${orderId}`,
+      {},
+      { authorization: `Bearer ${token}` },
+    );
+    assert.equal(status.status, 200, `${demo.name} namespaced: settle status`);
+    assert.equal(status.body.status, "paid", `${demo.name} namespaced: settled order is paid`);
+    const deliveryOk = await dispatch(app, {
+      method: "GET",
+      url: `/delivery/${encodeURIComponent(orderId)}/banana`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(deliveryOk.status, 200, `${demo.name} namespaced: delivery after onPaid`);
+    assert.match(String(deliveryOk.headers.get("content-type") ?? ""), /image\/svg\+xml/);
+  }
+
+  {
+    const options = { ...createHelloFruitTestOpenReceiveOptions(), namespace: "my_app" };
+    const { POST: postNextOpenReceive, delivery: nextDelivery } =
+      await createHelloFruitNextHandlersForTest(options);
+    const prepared = await responseJson(
+      postNextOpenReceive(jsonRequest("/openreceive/prepare", orderRequest)),
+    );
+    const orderId = prepared.body.order_id;
+    const created = await responseJson(
+      postNextOpenReceive(jsonRequest("/openreceive/checkouts", { order_id: orderId })),
+    );
+    const token = created.body.order_access_token;
+    assert.equal(typeof token, "string", "nextjs-fullstack namespaced: mints order access token");
+    options.client.settleAll();
+    await resetTransactionScanGate(options.store);
+    const status = await responseJson(
+      postNextOpenReceive(
+        jsonRequest(`/openreceive/orders/${orderId}`, {}, { authorization: `Bearer ${token}` }),
+      ),
+    );
+    assert.equal(status.status, 200, "nextjs-fullstack namespaced: settle status");
+    assert.equal(status.body.status, "paid", "nextjs-fullstack namespaced: settled order is paid");
+    const deliveryOk = await nextDelivery(
+      new Request(`http://localhost/delivery/${encodeURIComponent(orderId)}/banana`, {
+        headers: { authorization: `Bearer ${token}` },
+      }),
+      orderId,
+      "banana",
+    );
+    assert.equal(deliveryOk.status, 200, "nextjs-fullstack namespaced: delivery after onPaid");
+    assert.match(deliveryOk.headers.get("content-type") ?? "", /image\/svg\+xml/);
+  }
+
   const options = createHelloFruitTestOpenReceiveOptions();
   const {
     GET: getNextOpenReceive,
