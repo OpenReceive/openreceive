@@ -856,11 +856,11 @@ export interface RequestCheckoutBaseOptions {
 }
 
 /**
- * Options for {@link requestPrepare}: `POST {prefix}/prepare` with an opaque JSON body.
+ * Options for {@link requestPrepareCheckout}: `POST {prefix}/prepare` with an opaque JSON body.
  * The host `prepareCheckout` hook validates the cart and returns the authoritative amount
  * (and optional summary) that create-checkout later reads from prepare persist.
  */
-export interface RequestPrepareOptions {
+export interface RequestPrepareCheckoutOptions {
   /** Base path the shipped router is mounted at. Default {@link OPENRECEIVE_DEFAULT_PREFIX}. */
   readonly prefix?: string;
   /** Opaque prepare body (cart / SKU / tip amount — host-defined). */
@@ -869,7 +869,7 @@ export interface RequestPrepareOptions {
   readonly headers?: Readonly<Record<string, string>>;
 }
 
-export interface RequestPrepareResult {
+export interface RequestPrepareCheckoutResult {
   readonly order_id: string;
   readonly summary?: unknown;
 }

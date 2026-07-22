@@ -33,8 +33,8 @@
   resume display redraw.
 - Frontend: `<Checkout orderId />` always fetches summary; opt into
   `/checkout/:orderId` History API sync with `syncUrl` (replaces the old `resume`
-  boolean that bundled both). Browser helpers: `requestPrepare`,
-  `requestOrderSummary`.
+  boolean that bundled both). Browser helpers: `requestPrepareCheckout`
+  (was `beginCheckout`), `requestOrderSummary`.
 
 ### Rename amount-authority hook
 

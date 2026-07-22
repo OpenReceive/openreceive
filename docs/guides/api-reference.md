@@ -20,7 +20,7 @@ Calling service methods from your own controllers:
   swap-state helpers `describeSwapState` / `OPENRECEIVE_SWAP_STATES`.
 - `openreceive/express` | `fastify` | `next` (optional peers): mount the shipped
   routes with `createOpenReceive` + the adapter in one import.
-- `@openreceive/browser`: `requestPrepare`, `requestOrderSummary`,
+- `@openreceive/browser`: `requestPrepareCheckout`, `requestOrderSummary`,
   `requestCheckout`, `status`, `lightningUri`, `qrSvg`, `qrPngDataUrl`,
   `copyInvoice`, `openWallet`, and `createCheckoutController`.
 - `@openreceive/react` (also `openreceive/react`): `Checkout`, `useCheckout`,

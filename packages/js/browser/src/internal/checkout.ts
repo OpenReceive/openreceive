@@ -49,8 +49,8 @@ import {
   type RequestCheckoutOptions,
   type RequestOrderSummaryOptions,
   type RequestOrderSummaryResult,
-  type RequestPrepareOptions,
-  type RequestPrepareResult,
+  type RequestPrepareCheckoutOptions,
+  type RequestPrepareCheckoutResult,
 } from "./ui.ts";
 import { getOpenReceivePaymentStatusText } from "./wizard.ts";
 
@@ -1068,7 +1068,9 @@ export async function requestCheckout(options: RequestCheckoutOptions): Promise<
  * `POST {prefix}/prepare` with an opaque JSON body. Returns `{ order_id, summary? }` from the
  * host `prepareCheckout` hook (amount is persisted server-side for a later create-checkout).
  */
-export async function requestPrepare(options: RequestPrepareOptions): Promise<RequestPrepareResult> {
+export async function requestPrepareCheckout(
+  options: RequestPrepareCheckoutOptions,
+): Promise<RequestPrepareCheckoutResult> {
   const prefix = (optionalString(options.prefix) ?? OPENRECEIVE_DEFAULT_PREFIX).replace(/\/+$/, "");
   const fetcher = options.fetch ?? globalThis.fetch;
   if (fetcher === undefined) {

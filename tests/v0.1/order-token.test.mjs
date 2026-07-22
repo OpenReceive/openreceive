@@ -11,7 +11,7 @@ import {
   rememberOrderAccessToken,
   requestCheckout,
   requestOrderSummary,
-  requestPrepare,
+  requestPrepareCheckout,
   resolveOrderSummaryUrlFromPrefix,
   resolveOrderUrlFromPrefix,
   sanitizeBrowserLogEntry,
@@ -142,9 +142,9 @@ test("requestCheckout with just { prefix, orderId } POSTs only { order_id } (no 
   clearOrderAccessTokens();
 });
 
-test("requestPrepare POSTs to {prefix}/prepare and returns order_id + summary", async () => {
+test("requestPrepareCheckout POSTs to {prefix}/prepare and returns order_id + summary", async () => {
   const requests = [];
-  const result = await requestPrepare({
+  const result = await requestPrepareCheckout({
     prefix: "/openreceive",
     body: { cart: { sku: "demo" } },
     fetch: async (url, init) => {

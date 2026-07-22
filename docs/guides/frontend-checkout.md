@@ -45,9 +45,9 @@ the page param instead (Checkout will not mutate the URL).
 Prepare first (server-priced), then navigate:
 
 ```ts
-import { requestPrepare } from "@openreceive/browser";
+import { requestPrepareCheckout } from "@openreceive/browser";
 
-const { order_id, summary } = await requestPrepare({
+const { order_id, summary } = await requestPrepareCheckout({
   body: { cart },
 });
 ```
@@ -63,7 +63,7 @@ Pass `checkout={snapshot}` and an `orderUrl` — see
 
 `@openreceive/browser` is the small app-facing browser entry:
 
-- `requestPrepare({ prefix, body })` — `POST {prefix}/prepare`
+- `requestPrepareCheckout({ prefix, body })` — `POST {prefix}/prepare`
 - `requestOrderSummary({ prefix, orderId })` — guest resume summary
 - `status(invoiceLike)` — display helper (`pending` / `settled` / `expired` / `failed`)
 - `lightningUri` / `qrSvg` / `qrPngDataUrl` / `copyInvoice` / `openWallet`

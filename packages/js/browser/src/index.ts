@@ -14,7 +14,7 @@ export {
   openWallet,
   requestCheckout,
   requestOrderSummary,
-  requestPrepare
+  requestPrepareCheckout
 } from "./internal.ts";
 
 export type {
@@ -35,8 +35,8 @@ export type {
   RequestCheckoutOptions,
   RequestOrderSummaryOptions,
   RequestOrderSummaryResult,
-  RequestPrepareOptions,
-  RequestPrepareResult
+  RequestPrepareCheckoutOptions,
+  RequestPrepareCheckoutResult
 } from "./internal.ts";
 
 export {

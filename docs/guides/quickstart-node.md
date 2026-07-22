@@ -62,7 +62,7 @@ comes from OpenReceive.
 | ---------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | `prepareCheckout` — validate cart / order, return the amount to charge | `createOpenReceive`, `openReceiveExpress`, mounted `/openreceive/*` routes |
 | `onPaid` — fulfill after settlement (mark paid, ship, email)           | `guestCheckout()` / `withUser()` auth presets                              |
-| (browser) call `requestPrepare` then render UI around `<Checkout>`     | `<Checkout>` component                                                     |
+| (browser) call `requestPrepareCheckout` then render UI around `<Checkout>` | `<Checkout>` component                                                  |
 
 ```ts
 import express from "express";
@@ -132,48 +132,120 @@ browser renders <Checkout orderId={order_id} />
 
 ## 5. Prepare from the browser, then render checkout
 
-Call `requestPrepare` (runs your `prepareCheckout` on the server), then pass the
-returned `order_id` to `<Checkout>`:
+Call `requestPrepareCheckout` (runs your `prepareCheckout` on the server), then
+pass the returned `order_id` to `<Checkout>`:
 
 ```tsx
-import { requestPrepare } from "@openreceive/browser";
+import { requestPrepareCheckout } from "@openreceive/browser";
 import { Checkout } from "openreceive/react";
 import "@openreceive/react/styles.css";
 
 // YOU: price the cart (hits your prepareCheckout). `cart` is your payload.
-const { order_id, summary } = await requestPrepare({ body: { cart } });
-setOrder(summary); // your UI state
+const { order_id } = await requestPrepareCheckout({ body: { cart } });
 
 // OpenReceive: invoice + poll for that order
+<Checkout orderId={order_id} />
+```
+
+Everything below is optional.
+
+### Optional: redraw your cart/total UI (`onSummary`)
+
+`requestPrepareCheckout` may return a `summary` (whatever your `prepareCheckout`
+returned). On refresh, Checkout also loads `GET /openreceive/orders/:id/summary`
+and calls `onSummary` again so your host UI can redraw:
+
+```tsx
+import { useState } from "react";
+
+// YOU: your own React state for the cart/total UI
+const [order, setOrder] = useState(null);
+
+const { order_id, summary } = await requestPrepareCheckout({ body: { cart } });
+setOrder(summary);
+
 <Checkout
   orderId={order_id}
-  onSummary={(summary) => setOrder(summary)} // YOU: redraw host cart/total
-  onSettled={() => {/* YOU: optional UI refresh; fulfillment is onPaid */}}
-  onStartOver={() => {/* YOU: send buyer back to cart */}}
+  onSummary={(summary) => setOrder(summary)} // YOU: redraw from `order`
 />
 ```
 
-On refresh, Checkout loads `GET /openreceive/orders/:id/summary` and calls
-`onSummary` so your host UI can redraw the cart/total. To also sync the address
-bar to `/checkout/:orderId` (History API), pass `syncUrl` (optional
-`resumePathPrefix`, default `/checkout`). Capability tokens are minted and
-attached for you.
+### Optional: UI after paid (`onSettled`)
+
+Called with no arguments when the frontend sees settlement. Use it for thank-you
+UI or a reload — **fulfillment still belongs in server `onPaid`**:
+
+```tsx
+<Checkout
+  orderId={order_id}
+  onSettled={() => {
+    // YOU: show thank-you, navigate, reload order — not ship/fulfill
+  }}
+/>
+```
+
+### Optional: send the buyer back to the cart (`onStartOver`)
+
+```tsx
+<Checkout
+  orderId={order_id}
+  onStartOver={() => {
+    // YOU: navigate back to cart / clear checkout UI
+  }}
+/>
+```
+
+### Optional: write `/checkout/:orderId` into the address bar (`syncUrl`)
+
+By default the browser URL stays wherever you already were (e.g. `/cart`).
+Checkout still works; you just may not have a shareable `/checkout/…` URL.
+
+Pass `syncUrl` if you want Checkout to update the address bar with the History
+API when checkout starts:
+
+```tsx
+<Checkout
+  orderId={order_id}
+  syncUrl // → history.pushState(…, "/checkout/" + order_id)
+/>
+```
+
+What that does:
+
+- When `<Checkout orderId={…} />` mounts, OpenReceive runs `history.pushState` so
+  the address bar becomes `/checkout/<order_id>`
+- A full page reload at that URL can show the same checkout again **if your app
+  also routes `/checkout/:orderId` to a page that renders `<Checkout orderId={…} />`**
+  (`syncUrl` only changes the URL string; it does not register a router route)
+- Default path prefix is `/checkout`. Override with `resumePathPrefix`:
+
+```tsx
+<Checkout
+  orderId={order_id}
+  syncUrl
+  resumePathPrefix="/pay" // → "/pay/<order_id>"
+/>
+```
+
+Skip `syncUrl` on Next.js (or any file-based router): pass `routeOrderId` from
+the page param instead. Checkout will not call `pushState` when `routeOrderId`
+is set — your router already owns the URL.
 
 ## Retries and order ids
 
-Invoices expire. OpenReceive does not mint a replacement just because time
-passes or the frontend polls. Show try-again / start-over, then create again
-from that user action (mounted create, or `getOrCreateCheckout`).
+Payment checkouts can expire. OpenReceive does not silently start a new one
+just because time passed or the UI is polling. Show try-again / start-over, then
+create again from that user action (Checkout create, or `getOrCreateCheckout`).
 
-- Same order id, already paid → returns the paid checkout (no new invoice).
-- Same order id, same amount, unexpired open checkout → returns that checkout.
-- Same order id, amount changed → supersedes and creates a new checkout.
-- Same order id, only expired checkouts left → mints a fresh checkout (fiat
+- Same order id, already paid → returns the paid checkout.
+- Same order id, same amount, still-open checkout → returns that checkout.
+- Same order id, amount changed → replaces it with a new checkout.
+- Same order id, only expired checkouts left → creates a fresh checkout (fiat
   re-quoted at current rates).
-- Different order id → different order; late payment to an old invoice still
+- Different order id → different order; a late payment on an old checkout still
   belongs to the old order.
 
-Status polling never mints invoices. Fulfillment must be idempotent on
+Status polling never creates checkouts. Fulfillment must be idempotent on
 `checkoutId` or your own order id.
 
 ## What's next
