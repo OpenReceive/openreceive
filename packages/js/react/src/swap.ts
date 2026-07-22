@@ -15,11 +15,15 @@ import {
   orClasses,
 } from "@openreceive/browser/internal";
 import * as React from "react";
-import { WaitingState } from "./components.ts";
+import { ClipboardIcon, WaitingState } from "./components.ts";
 import { useOpenReceiveTransientValue } from "./hooks.ts";
 import { TransactionDetails } from "./transaction-details.ts";
 import type { OpenReceiveSwapOptionDisplay } from "./types.ts";
-import { copyOpenReceiveText, joinClassNames } from "./utils.ts";
+import {
+  copyOpenReceiveText,
+  joinClassNames,
+  openReceiveSelectAllInputHandlers,
+} from "./utils.ts";
 
 // Short reason to show for an out-of-range swap asset. Prefers a fiat figure
 // ("Minimum amount $10.00") converted from the invoice-side limit using the
@@ -468,6 +472,7 @@ export function renderSwapDepositPanel(options: {
       React.createElement("strong", null, `${display.depositAmount} ${display.assetLabel}`),
       " to this address",
     ),
+    renderSwapNetworkWarning(display),
     React.createElement(
       "div",
       {
@@ -488,10 +493,8 @@ export function renderSwapDepositPanel(options: {
           {
             className: orClasses.swapDetails,
           },
-          renderSwapCopyRow("Address", display.depositAddress, {
-            ...options,
-            payInAsset: display.payInAsset,
-          }),
+          // Explorer stays hidden until payment completes (tx ids / settled details).
+          renderSwapCopyRow("Address", display.depositAddress, options),
           memo === undefined ? null : renderSwapCopyRow("Memo", memo, options),
           renderSwapCopyRow("Amount", display.depositAmount, options),
         ),
@@ -499,14 +502,67 @@ export function renderSwapDepositPanel(options: {
         renderSwapFeeBreakdown(display.feeBreakdown),
       ),
     ),
-    React.createElement(
-      "p",
-      {
-        className: orClasses.swapWarning,
-      },
-      display.networkWarning,
-    ),
     backButton,
+  );
+}
+
+function renderSwapNetworkWarning(
+  display: Pick<
+    OpenReceiveSwapDisplayModel,
+    "networkWarningTitle" | "networkWarningEmphasis" | "networkWarning"
+  >,
+): React.ReactElement {
+  const emphasisStart = display.networkWarning.indexOf(display.networkWarningEmphasis);
+  const before =
+    emphasisStart === -1 ? display.networkWarning : display.networkWarning.slice(0, emphasisStart);
+  const after =
+    emphasisStart === -1
+      ? ""
+      : display.networkWarning.slice(emphasisStart + display.networkWarningEmphasis.length);
+  return React.createElement(
+    "div",
+    {
+      role: "alert",
+      className: orClasses.swapNetworkWarning,
+    },
+    React.createElement(
+      "svg",
+      {
+        xmlns: "http://www.w3.org/2000/svg",
+        fill: "none",
+        viewBox: "0 0 24 24",
+        className: orClasses.swapNetworkWarningIcon,
+        "aria-hidden": "true",
+      },
+      React.createElement("path", {
+        strokeLinecap: "round",
+        strokeLinejoin: "round",
+        strokeWidth: 2,
+        d: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z",
+      }),
+    ),
+    React.createElement(
+      "div",
+      { className: orClasses.swapNetworkWarningContent },
+      React.createElement(
+        "p",
+        { className: orClasses.swapNetworkWarningTitle },
+        display.networkWarningTitle,
+      ),
+      React.createElement(
+        "p",
+        { className: orClasses.swapNetworkWarningBody },
+        before,
+        emphasisStart === -1
+          ? null
+          : React.createElement(
+              "strong",
+              { className: orClasses.swapNetworkWarningEmphasis },
+              display.networkWarningEmphasis,
+            ),
+        after,
+      ),
+    ),
   );
 }
 
@@ -573,11 +629,6 @@ function renderSwapFeeBreakdown(
       ),
       React.createElement("dd", { key: "fee-value" }, feeValue),
     ),
-    React.createElement(
-      "p",
-      { className: orClasses.swapBreakdownNote },
-      "The swap provider's exchange rate and network fees are included in the amount above.",
-    ),
   );
 }
 
@@ -604,12 +655,23 @@ function renderSwapCopyRow(
           href: options.href,
           hrefLabel: options.hrefLabel ?? openReceiveCheckoutLabels.viewOnExplorer,
         };
+  const valueField =
+    label === "Address" || label === "Amount"
+      ? React.createElement("input", {
+          className: orClasses.swapDetailsInput,
+          type: "text",
+          readOnly: true,
+          value: displayValue,
+          "aria-label": label,
+          ...openReceiveSelectAllInputHandlers(),
+        })
+      : React.createElement("code", { className: orClasses.swapDetailsCode }, displayValue);
   return [
     React.createElement("dt", { key: `${label}-label`, className: orClasses.swapDetailsDt }, label),
     React.createElement(
       "dd",
       { key: `${label}-value`, className: orClasses.swapDetailsDd },
-      React.createElement("code", { className: orClasses.swapDetailsCode }, displayValue),
+      valueField,
       React.createElement(
         "div",
         { className: orClasses.swapDetailsActions },
@@ -652,6 +714,7 @@ function SwapCopyButton(props: {
       },
       type: "button",
     },
+    React.createElement(ClipboardIcon),
     copied ? openReceiveCheckoutLabels.copied : "Copy",
   );
 }

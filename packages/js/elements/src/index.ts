@@ -76,6 +76,7 @@ import {
   parseOpenReceiveSwapPickerKey,
   resolveOpenReceivePreservedNetworkSelection,
   postOpenReceiveJson,
+  startOpenReceiveSwapRequest,
   openReceiveThemeToggleElementStyles,
   parseOpenReceiveBooleanAttribute,
   parseOpenReceiveOptionalInteger,
@@ -219,7 +220,7 @@ export function renderCheckoutHtml(view: CheckoutView): string {
     expired || view.payment_wizard === false
       ? ""
       : renderOpenReceivePaymentWizardHtml(view.wizard);
-  const copyButton = `<button part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.copy}" class="${orClasses.btn}" type="button">${COPY_INVOICE_ICON}${escapeHtml(openReceiveCheckoutLabels.copyInvoice)}</button>`;
+  const copyButton = `<button part="${OPENRECEIVE_CHECKOUT_ELEMENT_PARTS.copy}" class="${orClasses.btn}" type="button">${COPY_INVOICE_ICON}<span ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapCopyLabel}>${escapeHtml(openReceiveCheckoutLabels.copyInvoice)}</span></button>`;
   const decodeInvoice =
     view.invoice.trim() !== ""
       ? view.invoice
@@ -257,9 +258,10 @@ export function renderCheckoutHtml(view: CheckoutView): string {
     ? `<div part="actions" class="${orClasses.actions}">${startOverButton}</div>`
     : `<div part="actions" class="${orClasses.actions}">${copyButton}${decodeButton}</div>`;
 
+  const resolvedTheme = view.theme ?? "light";
   return `
     <style>${openReceiveCheckoutElementStyles}</style>
-    <section part="root"${view.theme === undefined ? "" : ` data-theme="${escapeHtml(view.theme)}"`} class="${orClasses.root}">
+    <section part="root" data-theme="${escapeHtml(resolvedTheme)}" class="${orClasses.root}">
       ${hideLightning
         ? ""
         : `<div part="payment-layout" class="${paymentLayoutClass}">
@@ -280,9 +282,10 @@ export function renderCheckoutHtml(view: CheckoutView): string {
 // `invoice`) while the checkout is being created, before the invoice/order-url attributes are
 // populated and the normal checkout UI takes over.
 export function renderCheckoutCreatingHtml(theme?: "light" | "dark"): string {
+  const resolvedTheme = theme ?? "light";
   return `
     <style>${openReceiveCheckoutElementStyles}</style>
-    <section part="root"${theme === undefined ? "" : ` data-theme="${escapeHtml(theme)}"`} class="${orClasses.root}" data-openreceive-creating>
+    <section part="root" data-theme="${escapeHtml(resolvedTheme)}" class="${orClasses.root}" data-openreceive-creating>
       <div part="status" class="${orClasses.creating}">
         <span part="spinner" class="${orClasses.spinner}" aria-hidden="true"></span>
         <div><strong>Creating checkout…</strong></div>
@@ -378,6 +381,7 @@ export function wireTransactionDetailsCopy(
   root: ParentNode,
   onCopyError?: (error: unknown) => void,
 ): void {
+  wireSwapSelectAllInputs(root);
   for (const button of root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapCopy)) {
     if (!(button instanceof HTMLButtonElement)) continue;
     button.addEventListener("click", () => {
@@ -469,7 +473,7 @@ export function renderOpenReceivePaymentWizardHtml(
             class="${orClasses.btnGhost}"
             ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.breadcrumb}="swap-asset"
             type="button"
-          >${escapeHtml(openReceiveCheckoutLabels.paymentMethod)}</button>
+          >${escapeHtml(openReceiveCheckoutLabels.switchPaymentMethod)}</button>
           <span aria-hidden="true">/</span>
           <span part="wizard-breadcrumb-current" class="${orClasses.breadcrumbCurrent}">${escapeHtml(label)}</span>
         </div>
@@ -753,30 +757,37 @@ function renderElementNetworkSelectorHtml(
       const optionDisabled = option.available === false;
       const optionSelected = option.pay_in_asset === selectedOption?.pay_in_asset;
       const optionLimit = elementsSwapLimitMessage(option, view);
-      const label =
-        optionDisabled && optionLimit !== undefined
-          ? `${option.network_label} · ${optionLimit}`
-          : option.network_label;
       return `
-        <button
-          type="button"
-          role="radio"
-          aria-checked="${optionSelected ? "true" : "false"}"
-          class="${openReceiveNetworkButtonClasses({ accent, selected: optionSelected })}"
-          ${optionDisabled ? "disabled" : ""}
-          ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapNetwork}="${escapeHtml(groupKey)}"
-          ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapNetworkValue}="${escapeHtml(option.pay_in_asset)}"
-        >
-          <span aria-hidden="true" class="grid size-6 shrink-0 place-items-center">
-            <img class="${orClasses.methodNetworkIcon}" alt="" src="${escapeHtml(getOpenReceiveNetworkIcon(option.network_label))}">
-          </span>
-          <span class="truncate">${escapeHtml(label)}</span>
+        <div class="${orClasses.methodTile}">
+          <button
+            type="button"
+            role="radio"
+            aria-checked="${optionSelected ? "true" : "false"}"
+            class="${openReceiveNetworkButtonClasses({
+              accent,
+              selected: optionSelected,
+              disabled: optionDisabled,
+            })}"
+            ${optionDisabled ? 'disabled aria-disabled="true"' : ""}
+            ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapNetwork}="${escapeHtml(groupKey)}"
+            ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapNetworkValue}="${escapeHtml(option.pay_in_asset)}"
+          >
+            <span aria-hidden="true" class="grid size-6 shrink-0 place-items-center">
+              <img class="${orClasses.methodNetworkIcon}" alt="" src="${escapeHtml(getOpenReceiveNetworkIcon(option.network_label))}">
+            </span>
+            <span class="truncate">${escapeHtml(option.network_label)}</span>
+            ${
+              optionSelected
+                ? `<span aria-hidden="true" class="${openReceiveNetworkCheckClasses(accent)}">✓</span>`
+                : ""
+            }
+          </button>
           ${
-            optionSelected
-              ? `<span aria-hidden="true" class="${openReceiveNetworkCheckClasses(accent)}">✓</span>`
+            optionDisabled && optionLimit !== undefined
+              ? `<span class="${orClasses.methodLimitHint}">${escapeHtml(optionLimit)}</span>`
               : ""
           }
-        </button>`;
+        </div>`;
     })
     .join("");
 
@@ -1042,11 +1053,12 @@ function renderElementSwapPanelHtml(
     return `
       <section part="swap-panel" class="${orClasses.swapPanel}">
         <p part="swap-instruction" class="${orClasses.swapInstruction}">Pay <strong>${escapeHtml(display.depositAmount)} ${escapeHtml(display.assetLabel)}</strong> to this address</p>
+        ${renderElementSwapNetworkWarningHtml(display)}
         <div part="swap-deposit-layout" class="${orClasses.swapDepositLayout}">
           <div part="swap-qr" class="${orClasses.swapQr}" ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapQr}="${escapeHtml(display.qrPayload)}"></div>
           <div part="swap-deposit-side" class="${orClasses.swapDepositSide}">
             <dl part="swap-details" class="${orClasses.swapDetails}">
-              ${renderElementSwapCopyDetailHtml("Address", display.depositAddress, display.depositAddress, display.payInAsset)}
+              ${renderElementSwapCopyDetailHtml("Address", display.depositAddress)}
               ${display.depositMemo === undefined ? "" : renderElementSwapCopyDetailHtml("Memo", display.depositMemo)}
               ${renderElementSwapCopyDetailHtml("Amount", display.depositAmount)}
             </dl>
@@ -1054,7 +1066,6 @@ function renderElementSwapPanelHtml(
             ${feeBreakdown}
           </div>
         </div>
-        <p part="swap-warning" class="${orClasses.swapWarning}">${escapeHtml(display.networkWarning)}</p>
         ${backButton}
       </section>
     `;
@@ -1216,6 +1227,42 @@ function renderElementSwapRefundFactsHtml(
   return `<dl part="swap-details" class="${orClasses.swapDetails}">${rows}</dl>`;
 }
 
+function renderElementSwapNetworkWarningHtml(
+  display: Pick<
+    NonNullable<ReturnType<typeof createOpenReceiveSwapDisplayModel>>,
+    "networkWarningTitle" | "networkWarningEmphasis" | "networkWarning"
+  >,
+): string {
+  const emphasisStart = display.networkWarning.indexOf(display.networkWarningEmphasis);
+  const before =
+    emphasisStart === -1
+      ? escapeHtml(display.networkWarning)
+      : escapeHtml(display.networkWarning.slice(0, emphasisStart));
+  const after =
+    emphasisStart === -1
+      ? ""
+      : escapeHtml(
+          display.networkWarning.slice(
+            emphasisStart + display.networkWarningEmphasis.length,
+          ),
+        );
+  const emphasis =
+    emphasisStart === -1
+      ? ""
+      : `<strong class="${orClasses.swapNetworkWarningEmphasis}">${escapeHtml(display.networkWarningEmphasis)}</strong>`;
+  return `
+    <div part="swap-network-warning" role="alert" class="${orClasses.swapNetworkWarning}">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="${orClasses.swapNetworkWarningIcon}" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
+      <div class="${orClasses.swapNetworkWarningContent}">
+        <p class="${orClasses.swapNetworkWarningTitle}">${escapeHtml(display.networkWarningTitle)}</p>
+        <p class="${orClasses.swapNetworkWarningBody}">${before}${emphasis}${after}</p>
+      </div>
+    </div>
+  `;
+}
+
 function renderElementSwapCopyDetailHtml(
   label: string,
   value: string,
@@ -1245,17 +1292,28 @@ function renderElementSwapCopyDetailHtml(
         rel="noreferrer"
         target="_blank"
       >${escapeHtml(link.hrefLabel)}</a>`;
+  const valueField =
+    label === "Address" || label === "Amount"
+      ? `<input
+          class="${orClasses.swapDetailsInput}"
+          type="text"
+          readonly
+          value="${escapeHtml(displayValue)}"
+          aria-label="${escapeHtml(label)}"
+          ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapSelectAll}
+        />`
+      : `<code class="${orClasses.swapDetailsCode}">${escapeHtml(displayValue)}</code>`;
   return `
     <dt class="${orClasses.swapDetailsDt}">${escapeHtml(label)}</dt>
     <dd class="${orClasses.swapDetailsDd}">
-      <code class="${orClasses.swapDetailsCode}">${escapeHtml(displayValue)}</code>
+      ${valueField}
       <div class="${orClasses.swapDetailsActions}">
         <button
           part="swap-copy"
           class="${orClasses.btnSm}"
           ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapCopy}="${escapeHtml(value)}"
           type="button"
-        >Copy</button>
+        >${COPY_INVOICE_ICON}<span ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapCopyLabel}>Copy</span></button>
         ${external}
       </div>
     </dd>
@@ -1320,7 +1378,6 @@ function renderElementSwapFeeBreakdownHtml(
         <dt>Swap + network fees</dt>
         <dd>${escapeHtml(feeValue)}</dd>
       </dl>
-      <p part="swap-breakdown-note" class="${orClasses.swapBreakdownNote}">The swap provider's exchange rate and network fees are included in the amount above.</p>
     </div>
   `;
 }
@@ -1370,7 +1427,7 @@ function renderWizardBreadcrumbsHtml(options: {
         ${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.breadcrumb}="method"
         type="button"
       >
-        <span>${escapeHtml(openReceiveCheckoutLabels.paymentMethod)}</span>
+        <span>${escapeHtml(openReceiveCheckoutLabels.switchPaymentMethod)}</span>
       </button>
       <span part="wizard-breadcrumb-separator" aria-hidden="true">/</span>
       ${routeLabel === null
@@ -1689,8 +1746,15 @@ export function defineOpenReceiveElements(
         this.handleControllerSnapshot(checkout);
         const orderUrl = resolveOrderUrlFromPrefix(prefix, orderId);
         // Apply routing attrs only (no invoice) so render stays in deferred wizard mode.
+        // Preserve the host theme attribute so shadow data-theme cannot fall through.
         this.applyingCreatedAttributes = true;
-        applyCheckoutElementAttributes(this, createCheckoutElementAttributes(checkout, { orderUrl }));
+        applyCheckoutElementAttributes(
+          this,
+          createCheckoutElementAttributes(checkout, {
+            orderUrl,
+            ...this.currentThemeOption(),
+          }),
+        );
         this.applyingCreatedAttributes = false;
         this.render();
         this.startCheckoutController();
@@ -1756,6 +1820,7 @@ export function defineOpenReceiveElements(
             this,
             createCheckoutElementAttributes(current, {
               orderUrl: resolveOrderUrlFromPrefix(prefix, orderId),
+              ...this.currentThemeOption(),
             }),
           );
           this.applyingCreatedAttributes = false;
@@ -1780,6 +1845,7 @@ export function defineOpenReceiveElements(
           this,
           createCheckoutElementAttributes(checkout, {
             orderUrl: resolveOrderUrlFromPrefix(prefix, orderId),
+            ...this.currentThemeOption(),
           }),
         );
         this.applyingCreatedAttributes = false;
@@ -2278,6 +2344,7 @@ export function defineOpenReceiveElements(
         this.render();
       });
 
+      wireSwapSelectAllInputs(root);
       root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapCopy).forEach((button) => {
         button.addEventListener("click", () => {
           const value = button.getAttribute(OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapCopy);
@@ -2413,17 +2480,13 @@ export function defineOpenReceiveElements(
       if (url === null || orderId === null || orderId.length === 0) return;
 
       try {
-        const body = await postOpenReceiveJson(
+        this.startedSwapInvoice = await startOpenReceiveSwapRequest(
           globalThis.fetch,
           url,
-          {
-            order_id: orderId,
-            action: "start_swap",
-            pay_in_asset: payInAsset
-          },
-          { logger: options.logger }
+          orderId,
+          payInAsset,
+          { logger: options.logger },
         );
-        this.startedSwapInvoice = normalizeSwapStartInvoice(body);
         this.dismissedSwapInvoiceId = null;
         this.render();
       } catch (error) {
@@ -2490,6 +2553,13 @@ export function defineOpenReceiveElements(
           })
           .catch((error) => this.dispatchError(error));
       });
+    }
+
+    private currentThemeOption(): { readonly theme?: "light" | "dark" } {
+      const theme = parseOpenReceiveResolvedTheme(
+        this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme),
+      );
+      return theme === undefined ? {} : { theme };
     }
 
     private dispatchError(error: unknown): void {
@@ -2633,15 +2703,42 @@ function showElementCopyFeedback(button: Element | null): void {
   if (button === null) return;
   let controller = elementCopyFeedbackControllers.get(button);
   if (controller === undefined) {
+    const labelEl = button.querySelector(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapCopyLabel);
     const resetValue =
-      button.textContent?.trim() || openReceiveCheckoutLabels.copyInvoice;
+      labelEl?.textContent?.trim() ||
+      button.textContent?.trim() ||
+      openReceiveCheckoutLabels.copyInvoice;
     controller = createOpenReceiveTransientFeedbackController({
       resetValue,
       onValue: (label) => {
-        if (button.isConnected) button.textContent = label;
-      }
+        if (!button.isConnected) return;
+        if (labelEl instanceof HTMLElement) {
+          labelEl.textContent = label;
+          return;
+        }
+        button.textContent = label;
+      },
     });
     elementCopyFeedbackControllers.set(button, controller);
   }
   controller.show(openReceiveCheckoutLabels.copied);
+}
+
+function wireSwapSelectAllInputs(root: ParentNode): void {
+  for (const input of root.querySelectorAll(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapSelectAll)) {
+    if (!(input instanceof HTMLInputElement)) continue;
+    const selectAll = () => {
+      input.select();
+    };
+    input.addEventListener("focus", selectAll);
+    input.addEventListener("click", selectAll);
+    input.addEventListener("mouseup", (event) => {
+      event.preventDefault();
+    });
+    input.addEventListener("select", () => {
+      if (input.selectionStart !== 0 || input.selectionEnd !== input.value.length) {
+        input.setSelectionRange(0, input.value.length);
+      }
+    });
+  }
 }

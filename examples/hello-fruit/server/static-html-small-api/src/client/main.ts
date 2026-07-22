@@ -541,6 +541,11 @@ function renderCheckout(orderId: string): void {
     if (detail?.state !== undefined) {
       settledCheckoutState = detail.state;
     }
+    // Soft swap-preparing conflicts are not sticky once checkout is progressing again.
+    const errorEl = requireElement("error");
+    if (errorEl.textContent?.includes("still being prepared")) {
+      setError("");
+    }
   });
 
   checkoutElement.addEventListener(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.settled, (event) => {

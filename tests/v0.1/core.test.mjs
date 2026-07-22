@@ -1049,6 +1049,66 @@ test("browser displays the Lightning invoice after a swap payment settles", () =
   assert.equal(state.paid, true);
 });
 
+test("browser marks swap-only deferred checkouts settled without a bolt11", () => {
+  // Deferred Lightning + swap: no bolt11 is ever minted. Settlement must still produce a
+  // settled checkout state so hosts (hello-fruit sticker modal) receive onSettled.
+  const lock = {
+    invoice_id: "or_inv_lock",
+    rail: "checkout_lock",
+    amount_msats: 3023000,
+    transaction_state: "pending",
+    workflow_state: "invoice_created",
+  };
+  const settledSwap = {
+    invoice_id: "or_inv_99f01dfb3ba6e5f17215911613577de7",
+    rail: "swap",
+    invoice: null,
+    payment_hash: "413f5a27f0a01f8d4d533e2564cd55a7fade9c98232420c750a0111a7ba4423b",
+    amount_msats: 3023000,
+    transaction_state: "settled",
+    workflow_state: "settlement_action_completed",
+    settled_at: 1784740424,
+    swap: {
+      provider: "lightning-swap-com",
+      provider_order_id: "8UUXMZ",
+      pay_in_asset: "SOL_SOL",
+      deposit_address: "SoLAddress",
+      deposit_amount: "0.027461",
+      provider_state: "completed",
+      provider_expires_at: 1784741000,
+    },
+  };
+
+  const withLockActive = {
+    checkout_id: "or_chk_670eee1ce7ffcccb76b0df8ad9ac0249",
+    order_id: "node-express_0301b320cc684c089b144bf1949a9e14",
+    status: "paid",
+    paid_at: 1784740424,
+    amount_msats: 3023000,
+    active: lock,
+    invoices: [settledSwap, lock],
+  };
+  assert.equal(selectCheckoutDisplayInvoice(withLockActive)?.invoice_id, settledSwap.invoice_id);
+  const settledFromLock = createCheckoutState(withLockActive, { now: 1784740500 });
+  assert.equal(settledFromLock.settled, true);
+  assert.equal(settledFromLock.paid, true);
+  assert.equal(settledFromLock.rail, "swap");
+  assert.equal(settledFromLock.invoice, "");
+  assert.equal(settledFromLock.lightning_uri, "");
+
+  const swapActive = {
+    ...withLockActive,
+    status: "open",
+    paid_at: undefined,
+    active: settledSwap,
+    invoices: [settledSwap, lock],
+  };
+  const settledFromActive = createCheckoutState(swapActive, { now: 1784740500 });
+  assert.equal(settledFromActive.settled, true);
+  assert.equal(settledFromActive.rail, "swap");
+  assert.equal(settledFromActive.invoice, "");
+});
+
 test("browser owns checkout payment status display model", () => {
   const state = createCheckoutState(
     {
@@ -1197,6 +1257,11 @@ test("browser owns web-component shadow styles", () => {
   assert.match(openReceiveCheckoutElementStyles, /:host/);
   assert.match(openReceiveCheckoutElementStyles, /\.btn/);
   assert.match(openReceiveCheckoutElementStyles, /loading-spinner|@keyframes/);
+  // OS dark must not restyle the shadow tree on its own — theme is data-theme only.
+  assert.doesNotMatch(
+    openReceiveCheckoutElementStyles,
+    /prefers-color-scheme:dark\)\{:root:not\(\[data-theme\]\)/,
+  );
   assert.equal(openReceiveThemeToggleElementStyles, openReceiveCheckoutElementStyles);
 });
 
@@ -1980,6 +2045,8 @@ test("browser owns payment wizard DOM contract", () => {
     swapBack: "data-or-swap-back",
     swapQr: "data-or-swap-qr",
     swapCopy: "data-or-swap-copy",
+    swapCopyLabel: "data-or-swap-copy-label",
+    swapSelectAll: "data-or-swap-select-all",
     swapNetwork: "data-or-swap-network",
     swapNetworkValue: "data-or-swap-network-value",
     pickerSelect: "data-or-picker-select",
@@ -1999,6 +2066,8 @@ test("browser owns payment wizard DOM contract", () => {
   assert.equal(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.method, "[data-or-method]");
   assert.equal(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapStart, "[data-or-swap-start]");
   assert.equal(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapCopy, "[data-or-swap-copy]");
+  assert.equal(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapCopyLabel, "[data-or-swap-copy-label]");
+  assert.equal(OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapSelectAll, "[data-or-swap-select-all]");
   assert.equal(
     OPENRECEIVE_PAYMENT_WIZARD_SELECTORS.swapRefundForm,
     "[data-or-swap-refund-form]",

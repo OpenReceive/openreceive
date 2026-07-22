@@ -89,13 +89,15 @@ export const orClasses = {
   methodNetworkRevealAnimClosed: "grid-rows-[0fr] opacity-0",
   methodNetworkRevealInner: "min-h-0 overflow-hidden",
   methodNetworkLayout:
-    "grid gap-3 lg:grid-cols-[9rem_minmax(0,1fr)_8rem] lg:items-center",
+    "grid gap-3 lg:grid-cols-[9rem_minmax(0,1fr)_8rem] lg:items-start",
   methodNetworkHeading: "text-sm font-semibold text-base-content m-0",
   methodNetworkHint: "mt-0.5 text-xs text-base-content/55 m-0",
   methodNetworkGrid:
-    "grid grid-cols-1 gap-2 min-[390px]:grid-cols-3",
+    "grid grid-cols-1 gap-2 min-[390px]:grid-cols-3 items-start",
   methodNetworkButton:
-    "btn h-11 min-h-11 justify-start gap-2 rounded-field border-base-300 bg-base-200 px-3 text-sm text-base-content shadow-none hover:border-base-content/30 hover:bg-base-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+    "btn h-11 min-h-11 w-full justify-start gap-2 rounded-field border-base-300 bg-base-200 px-3 text-sm text-base-content shadow-none hover:border-base-content/30 hover:bg-base-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+  methodNetworkButtonUnavailable:
+    "btn h-11 min-h-11 w-full justify-start gap-2 rounded-field border-base-300 bg-base-200 px-3 text-sm text-base-content opacity-50 cursor-not-allowed shadow-none pointer-events-none",
   methodNetworkButtonActiveUsdt:
     "border-success bg-success/10 ring-1 ring-success/50",
   methodNetworkButtonActiveUsdc:
@@ -135,7 +137,7 @@ export const orClasses = {
   providerCard:
     "card card-border bg-base-100 p-3 grid gap-2 items-center grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_auto_auto] md:gap-x-2 md:gap-y-1",
   providerCardRecommended:
-    "card card-border bg-base-100 p-3 grid gap-2 items-center grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_auto_auto] md:gap-x-2 md:gap-y-1 border-warning ring-2 ring-warning/30",
+    "card card-border bg-base-100 p-3 grid gap-2 items-center grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_auto_auto] md:gap-x-2 md:gap-y-1",
   providerHeading: "flex gap-2 items-center min-w-0",
   providerIcon: "rounded size-7 shrink-0",
   providerName: "font-semibold truncate m-0 min-w-0",
@@ -147,6 +149,12 @@ export const orClasses = {
   swapAction: "grid gap-2",
   swapEstimate: "text-base-content/60 m-0 text-sm",
   swapWarning: "alert alert-warning text-sm",
+  swapNetworkWarning: "alert alert-error alert-soft text-sm items-start gap-3",
+  swapNetworkWarningIcon: "size-6 shrink-0 stroke-current",
+  swapNetworkWarningContent: "grid gap-1 min-w-0",
+  swapNetworkWarningTitle: "font-bold m-0",
+  swapNetworkWarningBody: "m-0",
+  swapNetworkWarningEmphasis: "font-bold underline",
   swapProgress: "text-base-content/60 m-0",
   swapInstruction: "m-0 text-base-content text-base font-bold text-center md:text-left",
   swapStart: "btn btn-soft",
@@ -163,12 +171,15 @@ export const orClasses = {
   swapDetailsDt: "text-base-content/60 text-xs font-bold uppercase",
   swapDetailsDd: "grid gap-2 grid-cols-[minmax(0,1fr)_auto] items-center m-0",
   swapDetailsCode: "min-w-0 break-all font-mono text-sm",
+  // Readonly select-all fields: keep the quiet resting border, suppress daisyUI's
+  // focus outline+offset which otherwise reads as a double ring around selected text.
+  swapDetailsInput:
+    "input input-sm w-full min-w-0 font-mono text-sm outline-none! focus:outline-none! focus:outline-offset-0!",
   swapDetailsActions: "flex flex-wrap gap-2 justify-end",
   swapDetailsLink: "btn btn-sm btn-soft",
   swapBreakdown: "grid gap-2 py-2 border-t border-base-300",
   swapBreakdownTitle: "m-0 text-base-content/60 text-xs font-bold uppercase",
   swapBreakdownRows: "grid grid-cols-[1fr_auto] gap-x-3 gap-y-1.5 items-baseline m-0",
-  swapBreakdownNote: "m-0 text-base-content/60 text-xs",
   swapWaitingTitle: "flex items-baseline justify-between gap-3 min-w-0",
   swapCountdown: "shrink-0 text-base-content font-semibold tabular-nums",
   swapBack: "btn btn-sm btn-soft justify-self-start",

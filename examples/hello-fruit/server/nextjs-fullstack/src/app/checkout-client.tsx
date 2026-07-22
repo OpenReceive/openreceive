@@ -74,6 +74,8 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
 
   function onCheckoutState(state: CheckoutState): void {
     if (state.settled) setSettledCheckoutState(state);
+    // Soft swap-preparing conflicts are not sticky once checkout is progressing again.
+    setError((current) => (current.includes("still being prepared") ? "" : current));
   }
 
   function revokeDeliveryObjectUrl(url: string | undefined): void {
@@ -327,6 +329,7 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
     <ThemeScope
       as="section"
       className="checkout w-full max-w-5xl grid gap-3"
+      defaultTheme="light"
       themeToggle
       topbarClassName="topbar w-full max-w-5xl flex justify-end"
     >

@@ -22,7 +22,7 @@ import type {
   SatsDetailProps,
 } from "./types.ts";
 
-function ClipboardIcon(): React.ReactElement {
+export function ClipboardIcon(): React.ReactElement {
   return React.createElement(
     "svg",
     {

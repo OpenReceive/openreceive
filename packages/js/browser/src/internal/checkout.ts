@@ -168,6 +168,8 @@ export function createOpenReceiveSwapDisplayModel(
   );
   const expiresInSeconds = Math.max(0, expiresAt - (options.now ?? currentUnixSeconds()));
   const asset = getOpenReceiveSwapAssetDisplay(swap.pay_in_asset);
+  const depositAmount = formatOpenReceiveDepositAmount(swap.deposit_amount);
+  const networkWarningEmphasis = `${depositAmount} ${asset.assetLabel} on the ${asset.networkLabel} network`;
   // Settlement authority is OpenReceive's own wallet sweep, surfaced as the shadow
   // invoice's settled transaction_state — never the provider's `completed` state (see
   // OPENRECEIVE_SWAP_STATES). Once the order is paid the panel shows a final
@@ -180,10 +182,12 @@ export function createOpenReceiveSwapDisplayModel(
     payInAsset: swap.pay_in_asset,
     assetLabel: asset.assetLabel,
     networkLabel: asset.networkLabel,
-    networkWarning: `Only send ${asset.assetLabel} on ${asset.networkLabel} to this address. Pay with one method only — if you already sent ${asset.assetLabel}, do not also pay the Lightning invoice.`,
+    networkWarningTitle: openReceiveCheckoutLabels.wrongCurrencyOrNetworkTitle,
+    networkWarningEmphasis,
+    networkWarning: `Be sure you are sending exactly ${networkWarningEmphasis}. If you send the wrong currency or send on the wrong network, your funds will be lost! Pay with one method only — if you already sent ${asset.assetLabel}, do not also pay the Lightning invoice.`,
     depositAddress: swap.deposit_address,
     ...(swap.deposit_memo === undefined ? {} : { depositMemo: swap.deposit_memo }),
-    depositAmount: formatOpenReceiveDepositAmount(swap.deposit_amount),
+    depositAmount,
     providerStateLabel: settled
       ? "Payment complete"
       : getOpenReceiveSwapProviderStateLabel(swap.provider_state),
@@ -1483,18 +1487,18 @@ function normalizeCheckoutInvoiceSwapFee(input: unknown): CheckoutInvoiceSwapFee
 }
 
 /**
- * Choose the invoice a checkout should DISPLAY as a Lightning invoice.
+ * Choose the invoice the checkout UI should treat as primary.
  *
- * Prefers the active payable invoice; otherwise the most relevant invoice that carries
- * a bolt11, preferring one that has settled so a paid view reflects the invoice that was
- * actually paid. This matters after a swap: a swap-paid checkout's newest invoice is the
- * settled swap shadow (rail "swap", no bolt11 for the payer), so `invoices[0]` is not
- * renderable as a Lightning invoice. The payable Lightning invoice the swap was started
- * from is still present, and is what the checkout displays.
+ * Prefers the active payable invoice; otherwise a bolt11-bearing invoice (Lightning),
+ * preferring one that has settled. After a swap settles alongside a Lightning invoice,
+ * the newest entry is often the settled swap shadow (rail "swap", no public bolt11) —
+ * fall back to the payable Lightning invoice for QR/copy display.
  *
- * `checkout_lock` rails are deferred placeholders that carry no bolt11 and are skipped.
- * Returns `undefined` when the checkout is deferred (only a checkout_lock) or genuinely
- * has no displayable invoice — callers should render a pending/deferred state in that case.
+ * When Lightning was never minted (deferred create + swap-only), return the swap invoice
+ * so settlement still drives paid/`onSettled` UI even though bolt11 is omitted.
+ *
+ * `checkout_lock` rails are deferred placeholders and are skipped. Returns `undefined`
+ * only when the checkout still has only a checkout_lock (or no invoices).
  */
 export function selectCheckoutDisplayInvoice(
   snapshot: CheckoutSnapshot,
@@ -1503,16 +1507,22 @@ export function selectCheckoutDisplayInvoice(
   if (snapshot.active !== undefined && snapshot.active.rail !== "checkout_lock") {
     return snapshot.active;
   }
-  const displayable = snapshot.invoices.filter(
-    (invoice) =>
-      invoice.rail !== "checkout_lock" &&
-      typeof invoice.invoice === "string" &&
-      invoice.invoice.length > 0,
+  const nonLock = snapshot.invoices.filter((invoice) => invoice.rail !== "checkout_lock");
+  const withBolt11 = nonLock.filter(
+    (invoice) => typeof invoice.invoice === "string" && invoice.invoice.length > 0,
   );
-  const settled = displayable.find(
+  const settledBolt11 = withBolt11.find(
     (invoice) => invoice.transaction_state === "settled" || invoice.settled_at !== undefined,
   );
-  return settled ?? displayable[0];
+  if (settledBolt11 !== undefined) return settledBolt11;
+  // Prefer a payable Lightning invoice for QR/copy when one exists (even next to a
+  // settled swap shadow).
+  if (withBolt11[0] !== undefined) return withBolt11[0];
+  // Swap-only checkout: surface the swap invoice (null bolt11) so settlement is visible.
+  const settledSwap = nonLock.find(
+    (invoice) => invoice.transaction_state === "settled" || invoice.settled_at !== undefined,
+  );
+  return settledSwap ?? nonLock[0];
 }
 
 export function checkoutInvoiceFromOrderSnapshot(
@@ -1567,7 +1577,13 @@ export function createCheckoutState(
   }
 
   const invoice = invoiceRecord;
-  const bolt11 = typeof invoice.invoice === "string" ? invoice.invoice : requiredString(invoice.invoice, "invoice");
+  // Swap shadows intentionally omit bolt11 from public payloads; checkout_lock has none yet.
+  const bolt11 =
+    typeof invoice.invoice === "string" && invoice.invoice.length > 0
+      ? invoice.invoice
+      : invoice.rail === "swap" || invoice.rail === "checkout_lock"
+        ? ""
+        : requiredString(invoice.invoice, "invoice");
   const paid = isPaidCheckoutSnapshot(snapshot);
   const settledAt = snapshot.paid_at ?? invoice.settled_at;
   const transactionState = paid ? "settled" : (invoice.transaction_state ?? "pending");
@@ -1582,7 +1598,10 @@ export function createCheckoutState(
       invoice_id: invoice.invoice_id,
       invoice: bolt11,
       rail: invoice.rail,
-      lightning_uri: invoice.rail === "checkout_lock" ? "" : createLightningUri(bolt11),
+      lightning_uri:
+        invoice.rail === "checkout_lock" || invoice.rail === "swap" || bolt11 === ""
+          ? ""
+          : createLightningUri(bolt11),
       ...(invoice.payment_hash === undefined ? {} : { payment_hash: invoice.payment_hash }),
       amount_msats: invoice.amount_msats ?? snapshot.amount_msats,
       ...(invoice.fiat_quote === undefined ? {} : { fiat_quote: invoice.fiat_quote }),

@@ -31,6 +31,7 @@ import {
   openReceiveSwapAssetMatchesRoute,
   orClasses,
   postOpenReceiveJson,
+  startOpenReceiveSwapRequest,
   type CheckoutInvoiceSnapshot,
   type CheckoutSnapshot,
   type OpenReceivePaymentMethod,
@@ -128,12 +129,13 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
       }
       setSwapStartingAsset(payInAsset);
       try {
-        const body = await postOpenReceiveJson(fetcher, props.orderUrl, {
-          order_id: orderId,
-          action: "start_swap",
-          pay_in_asset: payInAsset,
-        }, { logger: props.logger });
-        const invoice = normalizeSwapStartInvoice(body);
+        const invoice = await startOpenReceiveSwapRequest(
+          fetcher,
+          props.orderUrl,
+          orderId,
+          payInAsset,
+          { logger: props.logger },
+        );
         setStartedSwapInvoice(invoice);
         setDismissedSwapInvoiceId(null);
       } catch (error) {
@@ -766,45 +768,51 @@ function renderCompactPaymentMethodSelector(options: {
             const optionSelected = option.pay_in_asset === selectedOption?.pay_in_asset;
             const optionLimit = swapOptionLimitMessage(option, options.checkout);
             return React.createElement(
-              "button",
-              {
-                key: option.pay_in_asset,
-                type: "button",
-                role: "radio",
-                "aria-checked": optionSelected,
-                disabled: optionDisabled,
-                className: openReceiveNetworkButtonClasses({
-                  accent,
-                  selected: optionSelected,
-                }),
-                onClick: optionDisabled
-                  ? undefined
-                  : () => options.onSelectNetwork(groupKey, option.pay_in_asset),
-              },
+              "div",
+              { key: option.pay_in_asset, className: orClasses.methodTile },
               React.createElement(
-                "span",
-                { "aria-hidden": "true", className: "grid size-6 shrink-0 place-items-center" },
-                React.createElement("img", {
-                  alt: "",
-                  className: orClasses.methodNetworkIcon,
-                  src: getOpenReceiveNetworkIcon(option.network_label),
-                }),
+                "button",
+                {
+                  type: "button",
+                  role: "radio",
+                  "aria-checked": optionSelected,
+                  disabled: optionDisabled,
+                  "aria-disabled": optionDisabled ? "true" : undefined,
+                  className: openReceiveNetworkButtonClasses({
+                    accent,
+                    selected: optionSelected,
+                    disabled: optionDisabled,
+                  }),
+                  onClick: optionDisabled
+                    ? undefined
+                    : () => options.onSelectNetwork(groupKey, option.pay_in_asset),
+                },
+                React.createElement(
+                  "span",
+                  { "aria-hidden": "true", className: "grid size-6 shrink-0 place-items-center" },
+                  React.createElement("img", {
+                    alt: "",
+                    className: orClasses.methodNetworkIcon,
+                    src: getOpenReceiveNetworkIcon(option.network_label),
+                  }),
+                ),
+                React.createElement("span", { className: "truncate" }, option.network_label),
+                optionSelected
+                  ? React.createElement(
+                      "span",
+                      {
+                        "aria-hidden": "true",
+                        className: openReceiveNetworkCheckClasses(accent),
+                      },
+                      "✓",
+                    )
+                  : null,
               ),
-              React.createElement(
-                "span",
-                { className: "truncate" },
-                optionDisabled && optionLimit !== undefined
-                  ? `${option.network_label} · ${optionLimit}`
-                  : option.network_label,
-              ),
-              optionSelected
+              optionDisabled && optionLimit !== undefined
                 ? React.createElement(
                     "span",
-                    {
-                      "aria-hidden": "true",
-                      className: openReceiveNetworkCheckClasses(accent),
-                    },
-                    "✓",
+                    { className: orClasses.methodLimitHint },
+                    optionLimit,
                   )
                 : null,
             );
@@ -1047,7 +1055,7 @@ function renderWizardBackBreadcrumb(currentLabel: string, onBack: () => void): R
             onClick: onBack,
             type: "button",
           },
-          openReceiveCheckoutLabels.paymentMethod,
+          openReceiveCheckoutLabels.switchPaymentMethod,
         ),
       ),
       React.createElement(
@@ -1093,7 +1101,7 @@ function renderWizardBreadcrumbs(options: {
             onClick: options.onChangeMethod,
             type: "button",
           },
-          openReceiveCheckoutLabels.paymentMethod,
+          openReceiveCheckoutLabels.switchPaymentMethod,
         ),
       ),
       routeLabel === null

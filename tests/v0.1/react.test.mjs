@@ -211,6 +211,83 @@ test("React checkout displays the Lightning invoice after a swap payment settles
   assert.match(html, /data-openreceive-checkout/);
 });
 
+test("React checkout renders swap-only deferred checkouts without a Lightning invoice", () => {
+  // Deferred Lightning + active/pending swap: public swap payloads omit bolt11. The
+  // React view model must not throw; Lightning UI stays hidden until a bolt11 exists.
+  const swapOnlyCheckout = {
+    checkout_id: "or_chk_swap_only",
+    order_id: "order-swap-only",
+    status: "open",
+    amount_msats: 3028000,
+    active: {
+      invoice_id: "or_inv_swap_only",
+      rail: "swap",
+      invoice: null,
+      payment_hash: "f".repeat(64),
+      amount_msats: 3028000,
+      transaction_state: "pending",
+      workflow_state: "invoice_created",
+      swap: {
+        provider: "lightning-swap-com",
+        provider_order_id: "2WGWRH",
+        pay_in_asset: "SOL_SOL",
+        deposit_address: "SoLAddress",
+        deposit_amount: "0.027479",
+        provider_state: "awaiting_deposit",
+        provider_expires_at: Math.floor(Date.now() / 1000) + 600,
+      },
+    },
+    invoices: [
+      {
+        invoice_id: "or_inv_swap_only",
+        rail: "swap",
+        invoice: null,
+        payment_hash: "f".repeat(64),
+        amount_msats: 3028000,
+        transaction_state: "pending",
+        workflow_state: "invoice_created",
+        swap: {
+          provider: "lightning-swap-com",
+          provider_order_id: "2WGWRH",
+          pay_in_asset: "SOL_SOL",
+          deposit_address: "SoLAddress",
+          deposit_amount: "0.027479",
+          provider_state: "awaiting_deposit",
+          provider_expires_at: Math.floor(Date.now() / 1000) + 600,
+        },
+      },
+    ],
+  };
+
+  const model = createCheckoutViewModel({ checkout: swapOnlyCheckout });
+  assert.equal(model.invoice, "");
+  assert.equal(model.status, "pending");
+
+  const settledCheckout = {
+    ...swapOnlyCheckout,
+    status: "paid",
+    paid_at: 1784740424,
+    active: undefined,
+    invoices: [
+      {
+        ...swapOnlyCheckout.invoices[0],
+        transaction_state: "settled",
+        workflow_state: "settlement_action_completed",
+        settled_at: 1784740424,
+      },
+    ],
+  };
+  const settledModel = createCheckoutViewModel({ checkout: settledCheckout });
+  assert.equal(settledModel.status, "settled");
+  assert.equal(settledModel.invoice, "");
+
+  const html = renderToStaticMarkup(
+    React.createElement(Checkout, { checkout: swapOnlyCheckout, polling: false }),
+  );
+  assert.match(html, /data-openreceive-checkout/);
+  assert.doesNotMatch(html, /Bitcoin Lightning invoice/);
+});
+
 test("React checkout default UI server-renders display-safe invoice data", () => {
   const html = renderToStaticMarkup(
     React.createElement(Checkout, {
@@ -451,6 +528,49 @@ test("swap confirming copy includes network-specific wait guidance", () => {
   assert.match(eth?.providerStateDetail ?? "", /5–15 minutes/);
 });
 
+test("swap deposit warning stresses exact asset and network", () => {
+  const deposit = createOpenReceiveSwapDisplayModel({
+    invoice_id: "or_inv_warn",
+    rail: "swap",
+    transaction_state: "pending",
+    swap: {
+      provider: "fixedfloat",
+      pay_in_asset: "USDT_SOL",
+      deposit_address: "SoLAddress",
+      deposit_amount: "15.01",
+      provider_state: "awaiting_deposit",
+      provider_expires_at: Math.floor(Date.now() / 1000) + 600,
+    },
+  });
+  assert.equal(deposit?.networkWarningTitle, "Wrong currency or network = lost funds");
+  assert.equal(deposit?.networkWarningEmphasis, "15.01 USDT on the Solana network");
+  assert.match(deposit?.networkWarning ?? "", /funds will be lost/);
+  assert.match(deposit?.networkWarning ?? "", /Lightning invoice/);
+
+  const html = renderToStaticMarkup(
+    renderSwapDepositPanel({
+      invoice: {
+        invoice_id: "or_inv_warn_ui",
+        rail: "swap",
+        swap: {
+          provider: "fixedfloat",
+          pay_in_asset: "USDT_SOL",
+          deposit_address: "SoLAddress",
+          deposit_amount: "15.01",
+          provider_state: "awaiting_deposit",
+          provider_expires_at: Math.floor(Date.now() / 1000) + 600,
+        },
+      },
+      onBack: () => undefined,
+      onRefund: async () => undefined,
+    }),
+  );
+  assert.match(html, /Wrong currency or network = lost funds/);
+  assert.match(html, /15\.01 USDT on the Solana network/);
+  assert.match(html, /role="alert"/);
+  assert.match(html, /alert-error/);
+});
+
 test("browser builds block explorer and Lightning decode links for transaction details", () => {
   assert.equal(getOpenReceiveExplorerNetwork("USDT_ETH"), "ETH");
   assert.equal(getOpenReceiveExplorerNetwork("SOL_SOL"), "SOL");
@@ -579,8 +699,12 @@ test("browser builds block explorer and Lightning decode links for transaction d
       onRefund: async () => undefined,
     }),
   );
-  assert.match(depositHtml, /etherscan\.io\/address\/0xdepositaddr/);
-  assert.match(depositHtml, />Explorer</);
+  assert.doesNotMatch(depositHtml, /etherscan\.io\/address\/0xdepositaddr/);
+  assert.doesNotMatch(depositHtml, />Explorer</);
+  assert.match(depositHtml, /readOnly/);
+  assert.match(depositHtml, /aria-label="Address"/);
+  assert.match(depositHtml, /aria-label="Amount"/);
+  assert.match(depositHtml, /viewBox="0 0 16 16"/);
 
   const detailsHtml = renderToStaticMarkup(
     React.createElement(TransactionDetails, {
@@ -1122,6 +1246,16 @@ test("React <Checkout orderId> enters create mode and renders the creating place
     React.createElement(Checkout, { orderId: "ord-2" })
   );
   assert.match(defaultPrefixHtml, /openreceive-checkout-creating/);
+});
+
+test("React create-mode keeps one CheckoutView across deferred Lightning mint", () => {
+  // Switching DeferredShell -> CheckoutView remounted PaymentWizard and wiped
+  // selectedMethod, so Bitcoin providers vanished when the invoice QR appeared.
+  const source = readReactSource();
+  assert.doesNotMatch(source, /CheckoutDeferredShell/);
+  assert.doesNotMatch(source, /lightningRequested/);
+  assert.match(source, /mintingLightning/);
+  assert.match(source, /switchPaymentMethod/);
 });
 
 test("React <Checkout checkout> snapshot mode is unchanged (backward compatible)", () => {

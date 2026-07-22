@@ -8,6 +8,7 @@ import {
   type OpenReceiveTransactionDetailsInput,
 } from "@openreceive/browser/internal";
 import * as React from "react";
+import { ClipboardIcon } from "./components.ts";
 import { useOpenReceiveTransientValue } from "./hooks.ts";
 import { copyOpenReceiveText, joinClassNames } from "./utils.ts";
 
@@ -133,6 +134,7 @@ function TransactionDetailCopyButton(props: {
           .catch((error) => props.onError?.(error));
       },
     },
+    React.createElement(ClipboardIcon),
     copied ? openReceiveCheckoutLabels.copied : "Copy",
   );
 }

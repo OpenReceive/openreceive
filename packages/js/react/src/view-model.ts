@@ -25,7 +25,12 @@ export function toCheckoutDisplayData(snapshot: CheckoutSnapshot): CheckoutDispl
       ...(snapshot.fiat !== undefined ? { fiat_quote: { fiat: snapshot.fiat } } : {}),
     };
   }
-  if (typeof invoice.invoice !== "string") {
+  const bolt11 =
+    typeof invoice.invoice === "string" && invoice.invoice.length > 0 ? invoice.invoice : "";
+  // Swap shadows omit bolt11 from public payloads; checkout_lock has none yet. Preserve
+  // rail/swap/settlement with an empty invoice so swap-only checkouts don't crash and
+  // still announce settlement via useCheckout.
+  if (bolt11 === "" && invoice.rail !== "swap" && invoice.rail !== "checkout_lock") {
     throw new TypeError("OpenReceive checkout requires a display Lightning invoice.");
   }
   const fiatQuote =
@@ -37,7 +42,7 @@ export function toCheckoutDisplayData(snapshot: CheckoutSnapshot): CheckoutDispl
     checkout_id: snapshot.checkout_id,
     order_id: snapshot.order_id,
     invoice_id: invoice.invoice_id,
-    invoice: invoice.invoice,
+    invoice: bolt11,
     rail: invoice.rail,
     ...(invoice.payment_hash === undefined ? {} : { payment_hash: invoice.payment_hash }),
     ...(invoice.amount_msats === undefined ? {} : { amount_msats: invoice.amount_msats }),

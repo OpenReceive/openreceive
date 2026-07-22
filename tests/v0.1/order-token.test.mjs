@@ -15,6 +15,8 @@ import {
   resolveOrderSummaryUrlFromPrefix,
   resolveOrderUrlFromPrefix,
   sanitizeBrowserLogEntry,
+  startOpenReceiveSwapRequest,
+  isOpenReceiveSwapAddressPreparingError,
 } from "../../packages/js/browser/src/internal.ts";
 
 const PAYMENT_HASH = "a".repeat(64);
@@ -383,4 +385,53 @@ test("the per-order token never appears in a sanitized log entry (redaction)", a
   assert.equal(JSON.stringify(sanitized).includes("tok_secret_value"), false);
 
   clearOrderAccessTokens();
+});
+
+test("swap start silently retries soft address-preparing conflicts", async () => {
+  assert.equal(
+    isOpenReceiveSwapAddressPreparingError(
+      new Error("Swap payment address is still being prepared. Retry this swap start shortly."),
+    ),
+    true,
+  );
+  assert.equal(isOpenReceiveSwapAddressPreparingError(new Error("Order is already paid.")), false);
+
+  let calls = 0;
+  const invoice = await startOpenReceiveSwapRequest(
+    async () => {
+      calls += 1;
+      if (calls < 3) {
+        return {
+          ok: false,
+          status: 409,
+          json: async () => ({
+            message: "Swap payment address is still being prepared. Retry this swap start shortly.",
+          }),
+        };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          attempt: {
+            shadow_invoice: {
+              invoice_id: "or_inv_swap",
+              rail: "swap",
+              swap: {
+                provider: "fixedfloat",
+                pay_in_asset: "SOL_SOL",
+                provider_state: "waiting_for_deposit",
+              },
+            },
+          },
+        }),
+      };
+    },
+    "/openreceive/orders/order-swap",
+    "order-swap",
+    "SOL_SOL",
+  );
+
+  assert.equal(calls, 3);
+  assert.equal(invoice.invoice_id, "or_inv_swap");
+  assert.equal(invoice.swap?.pay_in_asset, "SOL_SOL");
 });

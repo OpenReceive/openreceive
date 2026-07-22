@@ -124,12 +124,61 @@ test("elements render payment wizard route choices and providers from browser st
     /aria-disabled="true"[\s\S]*?<\/button>\s*<span class="[^"]*text-base-content\/55[^"]*">Minimum amount/,
   );
 
+  const usdtNetworksBelowMin = renderOpenReceivePaymentWizardHtml({
+    amountMsats: 3_000_000,
+    fiat: { currency: "USD", value: "2.00" },
+    selectedPickerKey: "swap:USDT",
+    swapOptions: [
+      {
+        pay_in_asset: "USDT_TRON",
+        label: "USDT",
+        network_label: "Tron",
+        provider: "fixedfloat",
+        available: false,
+        unavailable_reason: "amount_too_small",
+        minimum_invoice_amount_msats: 25_425_000,
+      },
+      {
+        pay_in_asset: "USDT_SOL",
+        label: "USDT",
+        network_label: "Solana",
+        provider: "fixedfloat",
+        available: true,
+        minimum_invoice_amount_msats: 2_800_000,
+      },
+      {
+        pay_in_asset: "USDT_ETH",
+        label: "USDT",
+        network_label: "Ethereum",
+        provider: "fixedfloat",
+        available: false,
+        unavailable_reason: "amount_too_small",
+        minimum_invoice_amount_msats: 25_425_000,
+      },
+    ],
+  });
+  assert.match(usdtNetworksBelowMin, /Choose USDT network/);
+  assert.match(usdtNetworksBelowMin, />Tron</);
+  assert.match(usdtNetworksBelowMin, />Solana</);
+  assert.match(usdtNetworksBelowMin, />Ethereum</);
+  // Limit notes sit under greyed network tiles — not concatenated into the button label.
+  assert.doesNotMatch(usdtNetworksBelowMin, /Tron · Minimum/);
+  assert.doesNotMatch(usdtNetworksBelowMin, /Ethereum · Minimum/);
+  assert.match(
+    usdtNetworksBelowMin,
+    /aria-disabled="true"[\s\S]*?>Tron<\/span>[\s\S]*?<\/button>\s*<span class="[^"]*text-base-content\/55[^"]*">Minimum amount/,
+  );
+  assert.match(
+    usdtNetworksBelowMin,
+    /aria-disabled="true"[\s\S]*?>Ethereum<\/span>[\s\S]*?<\/button>\s*<span class="[^"]*text-base-content\/55[^"]*">Minimum amount/,
+  );
+
   const cryptoStep = renderOpenReceivePaymentWizardHtml({
     selectedMethod: "crypto",
     selectedCryptoRoute: "usdt"
   });
   assert.match(cryptoStep, /data-or-breadcrumb="method"/);
-  assert.match(cryptoStep, />Payment method<\/span>/);
+  assert.match(cryptoStep, />Switch payment method<\/span>/);
   assert.match(cryptoStep, /data-or-breadcrumb="route"/);
   assert.match(cryptoStep, />Crypto<\/span>/);
   assert.doesNotMatch(cryptoStep, /part="method-grid"/);
@@ -145,7 +194,7 @@ test("elements render payment wizard route choices and providers from browser st
     selectedMethod: "bitcoin"
   });
   assert.match(bitcoinStep, /data-or-breadcrumb="method"/);
-  assert.match(bitcoinStep, />Payment method<\/span>/);
+  assert.match(bitcoinStep, />Switch payment method<\/span>/);
   assert.match(bitcoinStep, />Bitcoin<\/span>/);
   assert.doesNotMatch(bitcoinStep, /data-or-breadcrumb="route"/);
   assert.doesNotMatch(bitcoinStep, /data-or-route="btc-lightning"/);
@@ -284,7 +333,8 @@ test("elements expose a create-mode prefix attribute and creating placeholder", 
   assert.match(dark, /part="spinner"/);
 
   const noTheme = renderCheckoutCreatingHtml();
-  assert.doesNotMatch(noTheme, /part="root" data-theme/);
+  // Unset theme defaults to light so shadow DOM never inherits OS dark via :root.
+  assert.match(noTheme, /part="root" data-theme="light"/);
 });
 
 test("elements definition fails clearly without DOM custom elements", () => {

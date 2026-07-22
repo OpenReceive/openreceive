@@ -1,6 +1,9 @@
 @import "tailwindcss";
+/* Theme is JS-driven via data-theme (including "system" → resolved light/dark).
+   Do not use --prefersdark: inside shadow DOM :root cannot carry data-theme, so a
+   media-query dark theme would paint the checkout dark while the host page stays light. */
 @plugin "daisyui" {
-  themes: light --default, dark --prefersdark;
+  themes: light --default, dark;
 }
 
 @source "./ui-classes.ts";

@@ -108,6 +108,8 @@ function App(): React.ReactElement {
     if (state.settled) {
       setSettledCheckoutState(state);
     }
+    // Soft swap-preparing conflicts are not sticky once checkout is progressing again.
+    setError((current) => (current.includes("still being prepared") ? "" : current));
   }
 
   function revokeDeliveryObjectUrls(urls: Readonly<Record<string, string>>): void {
@@ -386,6 +388,7 @@ function App(): React.ReactElement {
     <ThemeScope
       as="main"
       className="page min-h-screen grid justify-items-center content-start p-4 md:p-8 gap-3"
+      defaultTheme="light"
       themeToggle
       topbarClassName="topbar w-full max-w-5xl flex justify-end"
     >

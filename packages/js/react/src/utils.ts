@@ -1,8 +1,39 @@
 import type { OpenReceiveBrowserLogContext } from "@openreceive/browser/internal";
+import type * as React from "react";
 
 export function joinClassNames(...values: readonly (string | undefined)[]): string | undefined {
   const joined = values.filter(Boolean).join(" ");
   return joined === "" ? undefined : joined;
+}
+
+/** Readonly value fields: click/focus selects all; block partial selection. */
+export function openReceiveSelectAllInputHandlers(): {
+  readonly onFocus: (event: React.FocusEvent<HTMLInputElement>) => void;
+  readonly onClick: (event: React.MouseEvent<HTMLInputElement>) => void;
+  readonly onMouseUp: (event: React.MouseEvent<HTMLInputElement>) => void;
+  readonly onSelect: (event: React.SyntheticEvent<HTMLInputElement>) => void;
+} {
+  const selectAll = (input: HTMLInputElement) => {
+    input.select();
+  };
+  return {
+    onFocus: (event) => {
+      selectAll(event.currentTarget);
+    },
+    onClick: (event) => {
+      selectAll(event.currentTarget);
+    },
+    onMouseUp: (event) => {
+      // Keep the focus-driven full selection; otherwise the click collapses it.
+      event.preventDefault();
+    },
+    onSelect: (event) => {
+      const input = event.currentTarget;
+      if (input.selectionStart !== 0 || input.selectionEnd !== input.value.length) {
+        input.setSelectionRange(0, input.value.length);
+      }
+    },
+  };
 }
 
 export async function copyOpenReceiveText(

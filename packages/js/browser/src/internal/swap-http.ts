@@ -94,6 +94,65 @@ export function normalizeSwapStartInvoice(body: unknown): CheckoutInvoiceSnapsho
   return invoice as unknown as CheckoutInvoiceSnapshot;
 }
 
+/** Soft 409 while the provider order (deposit address) is still being created. */
+export const OPENRECEIVE_SWAP_ADDRESS_PREPARING_MESSAGE =
+  "Swap payment address is still being prepared. Retry this swap start shortly.";
+
+const SWAP_START_PREPARING_RETRY_DELAYS_MS = [
+  400, 800, 1_200, 1_600, 2_000, 2_000, 2_000, 2_000, 2_000, 2_000,
+] as const;
+
+export function isOpenReceiveSwapAddressPreparingError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("still being prepared");
+}
+
+/**
+ * Start a swap and silently retry the soft "address still being prepared" conflict
+ * until the deposit address is ready. Avoids sticky host `onError` banners for a
+ * condition the UI already shows as "Preparing payment address".
+ */
+export async function startOpenReceiveSwapRequest(
+  fetcher: typeof globalThis.fetch,
+  url: string,
+  orderId: string,
+  payInAsset: string,
+  options?: PostOpenReceiveJsonOptions,
+): Promise<CheckoutInvoiceSnapshot> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= SWAP_START_PREPARING_RETRY_DELAYS_MS.length; attempt += 1) {
+    try {
+      const body = await postOpenReceiveJson(
+        fetcher,
+        url,
+        {
+          order_id: orderId,
+          action: "start_swap",
+          pay_in_asset: payInAsset,
+        },
+        options,
+      );
+      return normalizeSwapStartInvoice(body);
+    } catch (error) {
+      lastError = error;
+      if (
+        !isOpenReceiveSwapAddressPreparingError(error) ||
+        attempt >= SWAP_START_PREPARING_RETRY_DELAYS_MS.length
+      ) {
+        throw error;
+      }
+      await sleepMs(SWAP_START_PREPARING_RETRY_DELAYS_MS[attempt] ?? 2_000);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    globalThis.setTimeout(resolve, ms);
+  });
+}
+
 function normalizePostOptions(
   headersOrOptions: Readonly<Record<string, string>> | PostOpenReceiveJsonOptions | undefined,
 ): PostOpenReceiveJsonOptions {

@@ -518,7 +518,9 @@ export function openReceiveAssetButtonClasses(options: {
 export function openReceiveNetworkButtonClasses(options: {
   readonly accent: OpenReceivePaymentAccentId;
   readonly selected: boolean;
+  readonly disabled?: boolean;
 }): string {
+  if (options.disabled) return orClasses.methodNetworkButtonUnavailable;
   if (!options.selected) return orClasses.methodNetworkButton;
   const accent =
     options.accent === "usdt" || options.accent === "usdc" ? options.accent : "default";

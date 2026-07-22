@@ -65,6 +65,8 @@ export const OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES = {
   swapBack: "data-or-swap-back",
   swapQr: "data-or-swap-qr",
   swapCopy: "data-or-swap-copy",
+  swapCopyLabel: "data-or-swap-copy-label",
+  swapSelectAll: "data-or-swap-select-all",
   swapNetwork: "data-or-swap-network",
   swapNetworkValue: "data-or-swap-network-value",
   pickerSelect: "data-or-picker-select",
@@ -93,6 +95,8 @@ export const OPENRECEIVE_PAYMENT_WIZARD_SELECTORS = {
   swapBack: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapBack}]`,
   swapQr: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapQr}]`,
   swapCopy: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapCopy}]`,
+  swapCopyLabel: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapCopyLabel}]`,
+  swapSelectAll: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapSelectAll}]`,
   swapNetwork: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapNetwork}]`,
   swapNetworkValue: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.swapNetworkValue}]`,
   pickerSelect: `[${OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES.pickerSelect}]`,
@@ -475,6 +479,11 @@ export interface OpenReceiveSwapDisplayModel {
   readonly payInAsset: string;
   readonly assetLabel: string;
   readonly networkLabel: string;
+  /** Strong deposit-panel alert title, e.g. "Wrong currency or network = lost funds". */
+  readonly networkWarningTitle: string;
+  /** Exact amount + asset + network to emphasize, e.g. "15.01 USDT on the Solana network". */
+  readonly networkWarningEmphasis: string;
+  /** Full plain-text network warning (accessible / non-HTML consumers). */
   readonly networkWarning: string;
   readonly depositAddress: string;
   readonly depositMemo?: string;
@@ -1226,6 +1235,8 @@ export const openReceiveCheckoutLabels = {
   wizardTitle: "Pay this invoice",
   wizardSubtitle: "Choose how you want to pay.",
   paymentMethod: "Payment method",
+  /** Breadcrumb back-link once a method (or swap) is already selected. */
+  switchPaymentMethod: "Switch payment method",
   loadingCurrencies: "Loading currencies...",
   emptyBitcoin: "Choose Bitcoin Lightning.",
   emptyCrypto: "Choose an altcoin.",
@@ -1249,6 +1260,7 @@ export const openReceiveCheckoutLabels = {
   transactionDetails: "Transaction details",
   viewOnExplorer: "Explorer",
   decodeInvoice: "Decode",
+  wrongCurrencyOrNetworkTitle: "Wrong currency or network = lost funds",
 } as const;
 
 /**
