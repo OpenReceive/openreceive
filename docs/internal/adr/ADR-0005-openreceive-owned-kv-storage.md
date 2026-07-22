@@ -13,8 +13,8 @@ coordination point that works across web processes and replicas.
 ## Decision
 
 OpenReceive owns its invoice storage through a 9-method KV contract. Apps
-select a transport with `OPENRECEIVE_STORE` and optionally isolate instances
-with `OPENRECEIVE_NAMESPACE`.
+select a transport with `store` and optionally isolate instances
+with `namespace`.
 
 OpenReceive self-initializes supported stores. SQL adapters use OpenReceive
 tables with uniqueness/recovery control columns and an opaque record blob. Apps
@@ -23,7 +23,7 @@ records.
 
 ### Amendment (DATABASE_URL auto-adopt)
 
-When `OPENRECEIVE_STORE` is omitted, Node resolves a Postgres
+When `store` is omitted, Node resolves a Postgres
 `DATABASE_PRIVATE_URL` or `DATABASE_URL` before falling back to `local-sqlite`.
 This does not change ownership of the KV contract or allow framework ORM invoice
 models — it only picks the transport URI. Postgres still requires an explicit
@@ -39,4 +39,4 @@ models — it only picks the transport URI. Postgres still requires an explicit
   ActiveRecord invoice models, and similar framework-native storage are outside
   the v0.1 contract.
 - Hosts that already inject `DATABASE_URL` (Heroku, Railway, Render, Neon on
-  Vercel, …) need not duplicate that URI as `OPENRECEIVE_STORE`.
+  Vercel, …) need not duplicate that URI as `store`.

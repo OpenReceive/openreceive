@@ -109,7 +109,7 @@ npm run demo nextjs    # Next.js fullstack         http://localhost:3002
 ```
 
 Each command creates a root `openreceive.yml` if missing, validates
-`OPENRECEIVE_NWC`, and then runs that demo's Docker Compose stack with local port publishing. The JS
+`nwc`, and then runs that demo's Docker Compose stack with local port publishing. The JS
 demo stacks start a local Postgres container, run the OpenReceive invoice
 migration, and record the OpenReceive
 schema version before store queries. The JS local overrides run Vite or Next.js
@@ -173,7 +173,7 @@ Run the live-wallet smoke harness:
 npm run test:live:nwc
 ```
 
-The live smoke command reads `OPENRECEIVE_NWC` from `openreceive.yml` and skips
+The live smoke command reads `nwc` from `openreceive.yml` and skips
 when it is absent.
 
 ## Product Boundary

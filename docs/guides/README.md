@@ -14,7 +14,7 @@ Start here when you are integrating OpenReceive into an app.
 ## When you need it
 
 7. [Automated Swaps](automated-swaps.md) — provider YAML, payer flow, refunds.
-8. [Storage](storage.md) — `DATABASE_URL` auto-adopt, `OPENRECEIVE_STORE`, namespaces.
+8. [Storage](storage.md) — `DATABASE_URL` auto-adopt, `store`, namespaces.
 9. [API Reference](api-reference.md) — service methods and app-facing packages.
 10. [Provider Registry](provider-registry.md) — payment-route suggestions.
 11. [Price Feeds](price-feeds.md) — fiat quotes and `amount_msats`.

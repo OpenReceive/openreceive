@@ -66,7 +66,7 @@ const require = createRequire(import.meta.url);
 /**
  * Resolve which store URI to use.
  *
- * Precedence: explicit OPENRECEIVE_STORE → postgres DATABASE_PRIVATE_URL →
+ * Precedence: explicit `store` → postgres DATABASE_PRIVATE_URL →
  * postgres DATABASE_URL → local-sqlite. Non-postgres DATABASE_* values are ignored.
  */
 export function resolveOpenReceiveStoreUri(input: {
@@ -158,7 +158,7 @@ export async function resolveOpenReceiveStore(
     });
   }
 
-  throw new Error(`Unsupported OPENRECEIVE_STORE URI: ${storeUri}`);
+  throw new Error(`Unsupported store URI: ${storeUri}`);
 }
 
 export function defaultSchemaMode(storeUri: string): OpenReceiveSchemaMode {
@@ -197,9 +197,9 @@ function migrationsRequiredError(
     code: "STORE_MIGRATIONS_REQUIRED",
     message: `OpenReceive ${storeName} store schema is not ready; refusing to boot without migrations.`,
     hint: [
-      `Run \`openreceive migrate --store "$OPENRECEIVE_STORE" --namespace ${namespace}\` before starting the app.`,
-      "If OPENRECEIVE_STORE is omitted, migrate uses DATABASE_PRIVATE_URL / DATABASE_URL when they are Postgres URIs.",
-      "To review the SQL first, run `openreceive migrate --store \"$OPENRECEIVE_STORE\" --print`.",
+      `Run \`openreceive migrate --store <uri> --namespace ${namespace}\` before starting the app.`,
+      "If `store` is omitted, migrate uses DATABASE_PRIVATE_URL / DATABASE_URL when they are Postgres URIs.",
+      "To review the SQL first, run `openreceive migrate --store <uri> --print`.",
     ].join(" "),
     cause
   });

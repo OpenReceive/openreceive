@@ -176,29 +176,26 @@ function validateOpenReceiveExample() {
   const relativePath = "openreceive.yml.example";
   const text = read(relativePath);
 
-  expect(/^OPENRECEIVE_NWC:\s*""$/m.test(text), `${relativePath}: OPENRECEIVE_NWC must be an empty YAML placeholder`);
+  expect(/^nwc:\s*$/m.test(text), `${relativePath}: nwc must be an empty YAML placeholder`);
   expect(
-    !/^OPENRECEIVE_NAMESPACE:/m.test(text),
-    `${relativePath}: OPENRECEIVE_NAMESPACE must stay in the optional commented section`,
+    !/^namespace:/m.test(text),
+    `${relativePath}: namespace must stay in the optional commented section or be omitted`,
   );
   expect(
-    !/^OPENRECEIVE_STORE:/m.test(text),
-    `${relativePath}: OPENRECEIVE_STORE must stay in the optional commented section`,
+    !/^store:/m.test(text),
+    `${relativePath}: store must stay in the optional commented section`,
   );
   expect(
-    /^# OPENRECEIVE_NAMESPACE:\s+default$/m.test(text),
-    `${relativePath}: optional section must document namespace default`,
-  );
-  expect(
-    /^# OPENRECEIVE_STORE:\s+local-sqlite$/m.test(text),
+    /^# store:\s+local-sqlite$/m.test(text),
     `${relativePath}: optional section must document store default`,
   );
   expect(
-    /providers:\n(?:\s*#[^\n]*\n)*\s+- base_url:\s+https:\/\/ff\.io/m.test(text),
-    `${relativePath}: must include a FixedFloat-compatible provider example`,
+    /^#\s+providers:\s*$/m.test(text),
+    `${relativePath}: must include a commented swap providers example`,
   );
-  expect(/^\s+key:\s*""$/m.test(text), `${relativePath}: provider key must be an empty YAML placeholder`);
-  expect(/^\s+secret:\s*""$/m.test(text), `${relativePath}: provider secret must be an empty YAML placeholder`);
+  expect(/^#\s+- base_url:\s*$/m.test(text), `${relativePath}: provider base_url must be a commented placeholder`);
+  expect(/^#\s+key:\s*$/m.test(text), `${relativePath}: provider key must be a commented placeholder`);
+  expect(/^#\s+secret:\s*$/m.test(text), `${relativePath}: provider secret must be a commented placeholder`);
   expect(!/nostr\+walletconnect:\/\//.test(text), `${relativePath}: must not contain an NWC URI`);
 }
 
@@ -220,10 +217,10 @@ function validateReadme(demo) {
   const relativePath = `${demo.dir}/README.md`;
   const text = read(relativePath);
 
-  expect(text.includes("The browser never receives `OPENRECEIVE_NWC`."), `${relativePath}: must state browser NWC boundary`);
-  expect(text.includes("valid receive-only `OPENRECEIVE_NWC`"), `${relativePath}: must state demos need a valid receive-only OPENRECEIVE_NWC`);
+  expect(text.includes("The browser never receives your NWC code."), `${relativePath}: must state browser NWC boundary`);
+  expect(text.includes("valid receive-only `nwc`"), `${relativePath}: must state demos need a valid receive-only nwc`);
   expect(text.includes("docker compose -f compose.yml -f compose.override.yml.example up --build"), `${relativePath}: must document compose startup without a worker profile`);
-  expect(text.includes("uses `local-sqlite` by default"), `${relativePath}: must document the local-sqlite default`);
+  expect(text.includes("falls back to `local-sqlite`"), `${relativePath}: must document the local-sqlite default`);
   expect(text.includes("named `.openreceive` volume"), `${relativePath}: must document persistent OpenReceive SQLite storage`);
   expect(!text.includes("npm run openreceive:poll"), `${relativePath}: must not document removed status command scripts`);
   expect(!text.includes("openreceive:worker"), `${relativePath}: must not document a worker script`);

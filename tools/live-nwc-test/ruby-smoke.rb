@@ -17,13 +17,13 @@ def read_openreceive_config_nwc
   return nil unless File.file?(path)
 
   config = YAML.safe_load(File.read(path), aliases: false) || {}
-  value = config["OPENRECEIVE_NWC"] || config["nwc"]
+  value = config["nwc"]
   value.is_a?(String) ? value.strip : nil
 end
 
 nwc = read_openreceive_config_nwc
 if nwc.nil? || nwc.empty?
-  puts "OPENRECEIVE_NWC is not set in openreceive.yml; skipping Ruby live NWC smoke test."
+  puts "`nwc` is not set in openreceive.yml; skipping Ruby live NWC smoke test."
   exit 0
 end
 

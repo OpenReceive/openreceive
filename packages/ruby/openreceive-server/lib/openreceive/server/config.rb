@@ -5,8 +5,9 @@ require "yaml"
 module OpenReceive
   module Server
     # Configuration loader — reads the SAME keys as the Node config (packages/js/node/config.ts):
-    # OPENRECEIVE_NWC / _NAMESPACE / _STORE / _PRICE_CURRENCIES plus the nested `operation`,
-    # `swap`, `logging`, and `sentry` blocks. YAML file first, then env-var overrides.
+    # lowercase YAML keys `nwc` / `namespace` / `store` / `price_currencies` plus nested
+    # `operation`, `swap`, `logging`, and `sentry` blocks. YAML file first, then optional
+    # OPENRECEIVE_* env-var overrides.
     #
     # The NWC connection string is a secret: it is stored but NEVER exposed by #inspect / #to_s.
     class Config
@@ -45,9 +46,9 @@ module OpenReceive
       end
 
       def initialize(file: {}, env: ENV)
-        @nwc = pick_string(file, env, %w[nwc OPENRECEIVE_NWC], "OPENRECEIVE_NWC")
-        @namespace = pick_string(file, env, %w[namespace OPENRECEIVE_NAMESPACE], "OPENRECEIVE_NAMESPACE")
-        @store = pick_string(file, env, %w[store OPENRECEIVE_STORE], "OPENRECEIVE_STORE")
+        @nwc = pick_string(file, env, %w[nwc], "OPENRECEIVE_NWC")
+        @namespace = pick_string(file, env, %w[namespace], "OPENRECEIVE_NAMESPACE")
+        @store = pick_string(file, env, %w[store], "OPENRECEIVE_STORE")
         @price_currencies = read_price_currencies(file, env)
         @operation = read_operation(file, env)
         @swap = read_record(file["swap"])
@@ -103,8 +104,7 @@ module OpenReceive
       end
 
       def read_price_currencies(file, env)
-        raw = env_value(env, "OPENRECEIVE_PRICE_CURRENCIES") ||
-              file["price_currencies"] || file["priceCurrencies"] || file["OPENRECEIVE_PRICE_CURRENCIES"]
+        raw = env_value(env, "OPENRECEIVE_PRICE_CURRENCIES") || file["price_currencies"]
         list =
           case raw
           when nil then nil

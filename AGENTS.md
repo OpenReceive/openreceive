@@ -86,7 +86,7 @@ When touching live wallet behavior, also run:
 npm run test:live:nwc
 ```
 
-The live command must skip clearly when `OPENRECEIVE_NWC` is not configured.
+The live command must skip clearly when `nwc` is not configured in openreceive.yml.
 
 The Ruby port is a second settlement engine that must match the Node engine on the
 shared vectors. Run it with:

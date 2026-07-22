@@ -38,7 +38,7 @@ export function formatOpenReceiveMissingNwcMessage(input: {
   const subject = input.subject ?? "OpenReceive";
   return [
     `${subject} needs a receive-only NWC code to receive payments.`,
-    "Set OPENRECEIVE_NWC to your receive-only Nostr Wallet Connect connection string.",
+    "Set `nwc` in openreceive.yml to your receive-only Nostr Wallet Connect connection string.",
     `Get one here: ${OPENRECEIVE_NWC_CODE_HELP_URL}`
   ].join("\n");
 }
@@ -47,7 +47,7 @@ export function formatOpenReceiveInvalidNwcMessage(input: {
   readonly reason?: string;
 } = {}): string {
   return [
-    "OPENRECEIVE_NWC is set, but it is not a valid NWC code.",
+    "`nwc` is set, but it is not a valid NWC code.",
     input.reason === undefined ? undefined : `Reason: ${input.reason}`,
     `Get a receive-only NWC code here: ${OPENRECEIVE_NWC_CODE_HELP_URL}`
   ].filter((line): line is string => line !== undefined).join("\n");

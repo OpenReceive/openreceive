@@ -79,7 +79,7 @@ using the headless actions as shown above.
 
 ## Integration Notes
 
-- Do not pass `OPENRECEIVE_NWC` or any receive-only NWC code into React.
+- Do not pass `nwc` or any receive-only NWC code into React.
 - Create invoices through your backend.
 - Treat client polling as UI state only.
 - Fulfill products only from your backend `onPaid` path.

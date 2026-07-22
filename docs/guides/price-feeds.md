@@ -18,7 +18,7 @@ const openreceive = await createOpenReceive({
 console.log(openreceive.priceCurrencies); // ["USD", "EUR"]
 ```
 
-If `priceCurrencies` is omitted, OpenReceive reads `OPENRECEIVE_PRICE_CURRENCIES`
+If `priceCurrencies` is omitted, OpenReceive reads `price_currencies`
 from `openreceive.yml`; if that field is absent, it falls back to `["USD"]`.
 
 The same currency list is the checkout-creation allowlist. Pass the actual order

@@ -192,6 +192,6 @@ import "@openreceive/angular/styles.css";
 Mobile apps are checkout clients, not NWC wallet backends. They may create an
 order through your backend, display BOLT11/QR/status, copy the invoice, open a
 Lightning wallet via deep link, and poll status. They must leave
-`OPENRECEIVE_NWC`, invoice creation, idempotency, payment verification, and
+`nwc`, invoice creation, idempotency, payment verification, and
 `onPaid` on the server. Native UI kits, when shipped, stay on the same
 display-safe side of that boundary.

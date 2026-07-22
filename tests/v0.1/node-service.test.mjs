@@ -1904,7 +1904,7 @@ test("createOpenReceive exposes normalized price currency configuration", async 
   try {
     writeFileSync(
       path.join(dir, "openreceive.yml"),
-      ["OPENRECEIVE_PRICE_CURRENCIES:", "  - eur", "  - usd", "  - EUR", ""].join("\n"),
+      ["price_currencies:", "  - eur", "  - usd", "  - EUR", ""].join("\n"),
     );
 
     const openreceive = await createOpenReceive({

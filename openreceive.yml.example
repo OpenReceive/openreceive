@@ -1,36 +1,176 @@
-## OPENRECEIVE_NWC is required. It's how you receive payments.
-## Get a NWC Code: https://openreceive.org/get_a_nwc_code_to_receive_payments
-OPENRECEIVE_NWC: 
+## OpenReceive server config (openreceive.yml)
+##
+## Copy this file to `openreceive.yml` next to your app (or repo root for demos):
+##   cp openreceive.yml.example openreceive.yml
+##
+## Rules:
+## - Keep this file server-side only. Never ship it to browsers, mobile apps,
+##   source maps, logs, screenshots, or demo assets.
+## - Commit `openreceive.yml.example`, not a real `openreceive.yml`.
+## - Uncomment only what you need. Defaults below match the Node/Ruby loaders.
+## - Guides: docs/guides/quickstart-node.md, storage.md, automated-swaps.md,
+##   price-feeds.md, security.md
+##
+## -----------------------------------------------------------------------------
+## Required
+## -----------------------------------------------------------------------------
 
-## Swap providers is recommended. Enables customer payments with USDT, USDC, SOL, or ETH
-## Set up swap providers: https://openreceive.org/set_up_swap_provider
+## Receive-only NWC connection string. Used to create invoices and settle.
+## Get one: https://openreceive.org/get_a_nwc_code_to_receive_payments
+nwc:
 
+## -----------------------------------------------------------------------------
+## Recommended — automated swaps (USDT / USDC / SOL / ETH → Lightning)
+## -----------------------------------------------------------------------------
+## Enables customer crypto deposits while you still settle on Lightning.
+## Setup: https://openreceive.org/set_up_swap_provider
+## Docs: docs/guides/automated-swaps.md
+##
+##
 # swap:
-#  providers:
-#   - base_url: 
-#     key: 
-#     secret: 
+#   providers:
+#     - base_url:
+#       key:
+#       secret:
 
-# -----------------------------------------------------------------------------
-# Optional overrides (defaults shown). Omit this whole section unless you need it.
-# -----------------------------------------------------------------------------
-
-# OPENRECEIVE_STORE: local-sqlite
-# # Or: OPENRECEIVE_STORE: postgres://USER:PASS@HOST:5432/DB
+## -----------------------------------------------------------------------------
+## Optional — storage & quoting
+## -----------------------------------------------------------------------------
+## Docs: docs/guides/storage.md, docs/internal/deployment-storage.md,
+##       docs/guides/price-feeds.md
+##
+## How `store` is chosen when you omit it (explicit `store:` always wins):
+##   1. DATABASE_PRIVATE_URL — if it is a postgres:// or postgresql:// URI
+##   2. else DATABASE_URL — same Postgres URI check
+##   3. else local-sqlite — creates ./.openreceive/<namespace>.sqlite3
+##
+## Non-Postgres DATABASE_URL values (mysql, redis, sqlite, …) are ignored so
+## OpenReceive does not mis-adopt them. On Heroku/Railway/Render/etc, a Postgres
+## addon usually injects DATABASE_URL — leave `store` unset and OpenReceive uses
+## that automatically (no need to copy the URI into this file).
+##
+## Local default: SQLite is fine for a single durable machine (laptop, VPS).
+## Platform guard: on hosts with ephemeral disks, OpenReceive refuses implicit
+## SQLite and boots with EPHEMERAL_STORE_UNSAFE instead of silently losing
+## invoice state on the next deploy/cold start. Detected "never SQLite"
+## platforms include Heroku (DYNO), Vercel, Netlify, Cloud Run, Lambda,
+## App Runner, DigitalOcean App Platform, and Cloudflare. Fix: attach Postgres
+## (DATABASE_URL is enough) or set store: to a postgres:// URI.
+##
+## Some hosts (Render, Railway, Fly, Kubernetes, Dokku, …) allow an explicit
+## absolute sqlite:/… path on a mounted volume for one instance only; Postgres
+## is still the recommended production default. Multi-instance always needs
+## shared Postgres. Run `openreceive migrate` before first Postgres boot.
+##
+## Supported store values:
+##   - local-sqlite
+##   - sqlite:/absolute/path/to/openreceive.sqlite3
+##   - postgres://USER:PASS@HOST:5432/DB
+##
+# store: local-sqlite
+# # Or: store: postgres://USER:PASS@HOST:5432/DB
+# # Or: store: sqlite:/absolute/mounted/volume/openreceive.sqlite3
 #
-# OPENRECEIVE_PRICE_CURRENCIES:
+## namespace: logical store partition inside the same backend (default: default).
+## Use short lowercase values like default, prod, staging. Changing it points
+## OpenReceive at a different table set / SQLite file and idempotency scope.
+#
+# namespace: default
+#
+## Fiat currencies allowed for checkout quotes (default: USD only).
+## Uncomment the ones your checkout can price in. Also accepts a comma string:
+##   price_currencies: "USD,EUR,GBP"
+## BTC / sats amounts never need a feed.
+#
+# price_currencies:
 #   - USD
+#   - EUR
+#   - GBP
+#   - CAD
+#   - AUD
+#   - JPY
+#   - CHF
+#   - CNY
+#   - INR
+#   - BRL
+#   - MXN
+#   - KRW
+#   - SGD
+#   - HKD
+#   - SEK
+#   - NOK
+#   - DKK
+#   - NZD
+#   - PLN
+#   - TRY
+#   - ZAR
+#   - AED
+#   - SAR
+#   - THB
+#   - TWD
+#   - PHP
+#   - IDR
+#   - MYR
+#   - VND
+#   - ARS
+#   - CLP
+#   - CZK
+#   - HUF
+#   - ILS
+#   - RUB
+#   - NGN
+
+## -----------------------------------------------------------------------------
+## Optional — settlement / wallet scan (operation)
+## -----------------------------------------------------------------------------
+## Tune only if you know why. Keys may live under `operation:` (preferred) or
+## at the root with the same names. Defaults match packages/js/core reconcile.
+## WARNING: tuning these settings may cause your NWC provider to rate-limit you.
+##
+# operation:
+#   # How long a settlement-action lease is held (seconds). Default: 60
+#   action_lease_ttl_seconds: 60
 #
+#   # Minimum seconds between wallet transaction scans. Default floor: 2
+#   # (actual interval can be higher based on invoice age).
+#   transaction_scan_interval_seconds: 2
 #
+#   # Max transactions fetched per scan page (1–50). Default: 25
+#   transaction_scan_page_limit: 25
+#
+#   # Overlap when advancing the scan cursor (seconds). Default: 60
+#   transaction_scan_overlap_seconds: 60
+#
+#   # Legacy alias for transaction_scan_overlap_seconds (used only if overlap
+#   # is omitted). Prefer transaction_scan_overlap_seconds.
+#   # transaction_scan_window_padding_seconds: 60
+#
+#   # Max open invoices considered in one pending sweep. Default: 1000
+#   sweep_open_invoice_cap: 1000
+#
+#   # Wallet list-transactions call timeout (ms). Default: 9000
+#   transaction_scan_timeout_ms: 9000
+
+## -----------------------------------------------------------------------------
+## Optional — rotating file logs
+## -----------------------------------------------------------------------------
+## File logging is on by default even if this block is omitted. Set
+## `enabled: false` to turn it off. Secrets (NWC, provider keys) are redacted
+## before write. Docs mirror OPENRECEIVE_LOGGING_DEFAULTS in the Node package.
+##
 # logging:
 #   enabled: true
 #   directory: ./logs
 #   filename: openreceive.log
 #   max_file_size_mb: 10
 #   max_files: 5
-#   level: debug
-#
+#   level: debug   # debug | info | warn | error
+
+## -----------------------------------------------------------------------------
+## Optional — Sentry
+## -----------------------------------------------------------------------------
+## Parsed by the config loaders. Leave empty / omit unless your host wires it.
+##
 # sentry:
 #   dsn: ""
 #   # environment: production
-#   # release: openreceive@0.1.1

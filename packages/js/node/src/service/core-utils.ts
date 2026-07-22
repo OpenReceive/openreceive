@@ -24,8 +24,8 @@ export function readOpenReceiveNamespace(configured: string | undefined): string
   if (namespace.trim().length === 0) {
     throw new OpenReceiveConfigError({
       code: "STORE_UNAVAILABLE",
-      message: "OPENRECEIVE_NAMESPACE must not be empty.",
-      hint: "Set OPENRECEIVE_NAMESPACE in openreceive.yml to a stable non-empty app namespace, or omit it to use default.",
+      message: "`namespace` must not be empty.",
+      hint: "Set `namespace` in openreceive.yml to a stable non-empty app namespace, or omit it to use default.",
     });
   }
   return namespace;

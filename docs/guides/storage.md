@@ -7,20 +7,20 @@ Link app records to OpenReceive invoices through your app records or invoice
 
 ## Store URI
 
-Store selection when `OPENRECEIVE_STORE` is omitted:
+Store selection when `store` is omitted:
 
 1. `DATABASE_PRIVATE_URL` if it is a `postgres://` / `postgresql://` URI
 2. else `DATABASE_URL` if it is a Postgres URI
 3. else `local-sqlite` (only where the platform allows durable local files)
 
-Explicit `OPENRECEIVE_STORE` always wins. Non-Postgres `DATABASE_URL` values
+Explicit `store` always wins. Non-Postgres `DATABASE_URL` values
 (mysql, redis, sqlite, …) are ignored so OpenReceive does not mis-adopt them.
 
 Override in `openreceive.yml` only when you need to:
 
 ```yaml
-OPENRECEIVE_STORE: local-sqlite
-OPENRECEIVE_NAMESPACE: default
+store: local-sqlite
+namespace: default
 ```
 
 Supported v0.1 store values:
@@ -40,13 +40,13 @@ For local development, `local-sqlite` creates its database and OpenReceive
 tables automatically.
 
 For Postgres, run the migration step before booting the app. When
-`OPENRECEIVE_STORE` is omitted, `openreceive migrate` uses the same
+`store` is omitted, `openreceive migrate` uses the same
 `DATABASE_PRIVATE_URL` / `DATABASE_URL` precedence as runtime:
 
 ```sh
 openreceive migrate --namespace prod
-# or explicitly:
-openreceive migrate --store "$OPENRECEIVE_STORE" --namespace prod
+# or explicitly, using the same store URI as `store` in openreceive.yml:
+openreceive migrate --store "postgres://USER:PASS@HOST:5432/DB" --namespace prod
 ```
 
 To inspect the SQL first:
@@ -64,17 +64,17 @@ auto-migrate into a host Postgres database.
 
 Postgres works anywhere and is the recommended default. On Heroku, Railway,
 Render, and similar hosts, a Postgres `DATABASE_URL` is enough — omit
-`OPENRECEIVE_STORE`. To set the store explicitly:
+`store`. To set the store explicitly:
 
 ```yaml
-OPENRECEIVE_STORE: postgres://USER:PASS@HOST:5432/DB
+store: postgres://USER:PASS@HOST:5432/DB
 ```
 
 SQLite is only for one durable machine, or one PaaS instance with a real mounted
 volume — never on ephemeral serverless filesystems:
 
 ```yaml
-OPENRECEIVE_STORE: sqlite:/absolute/mounted/volume/openreceive.sqlite3
+store: sqlite:/absolute/mounted/volume/openreceive.sqlite3
 ```
 
 Platform matrix and multi-instance rules:
@@ -87,7 +87,7 @@ server-side.
 
 ## Namespaces
 
-`OPENRECEIVE_NAMESPACE` separates independent OpenReceive installations that
+`namespace` separates independent OpenReceive installations that
 share the same physical store. Use a short, lowercase value such as `default`,
 `prod`, or `acme_shop`. Changing the namespace points OpenReceive at a different
 logical store inside the same backend.

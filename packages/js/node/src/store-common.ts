@@ -58,7 +58,7 @@ export function namespacedIdentifier(namespace: string, base: string): string {
 
 export function normalizeNamespace(namespace: string): string {
   if (!/^[a-z0-9_]{1,40}$/.test(namespace)) {
-    throw new TypeError("OPENRECEIVE_NAMESPACE must match ^[a-z0-9_]{1,40}$");
+    throw new TypeError("`namespace` must match ^[a-z0-9_]{1,40}$");
   }
   return namespace;
 }

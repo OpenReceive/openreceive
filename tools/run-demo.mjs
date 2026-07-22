@@ -6,7 +6,7 @@
 //   npm run demo static    -> Static HTML + small API (http://localhost:3001)
 //   npm run demo nextjs    -> Next.js fullstack       (http://localhost:3002)
 //
-// It ensures the repo-root openreceive.yml exists, validates OPENRECEIVE_NWC,
+// It ensures the repo-root openreceive.yml exists, validates `nwc`,
 // and runs the compose stack with the local port-publishing override.
 
 import { spawn } from "node:child_process";
@@ -67,7 +67,7 @@ if (demo === undefined) {
 }
 
 // Compose mounts the repo-root openreceive.yml into the selected demo. Create it
-// from the committed example so OPENRECEIVE_NWC has a home before the user fills it in.
+// from the committed example so `nwc` has a home before the user fills it in.
 const configPath = path.join(root, "openreceive.yml");
 if (!existsSync(configPath)) {
   copyFileSync(path.join(root, "openreceive.yml.example"), configPath);

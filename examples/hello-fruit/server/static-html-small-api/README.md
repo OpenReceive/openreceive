@@ -5,7 +5,7 @@ required `prepareCheckout` for the shared Hello Fruit sticker product. POST
 `/openreceive/prepare` is the sole price authority; the static client renders
 `<openreceive-checkout order-id>` (no client price on create).
 
-The browser never receives `OPENRECEIVE_NWC`.
+The browser never receives your NWC code.
 
 Settlement fulfillment is server-side: `onPaid` marks the order summary
 `paid`, and sticker downloads go through gated `GET /delivery/:orderId/:productId`
@@ -20,7 +20,7 @@ npm run dev
 ```
 
 Open the Vite URL and create a tiny fruit-sticker invoice.
-Set a valid receive-only `OPENRECEIVE_NWC` in the repository root
+Set a valid receive-only `nwc` in the repository root
 `openreceive.yml` before starting the dev server.
 
 For a production-style local run, build the client and start the Express server:
@@ -34,14 +34,14 @@ To run the container template locally:
 
 ```sh
 cp ../../../../openreceive.yml.example ../../../../openreceive.yml
-# Set OPENRECEIVE_NWC in the repository root openreceive.yml file.
+# Set `nwc` in the repository root openreceive.yml file.
 docker compose -f compose.yml -f compose.override.yml.example up --build
 ```
 
 Docker mounts the repository root `openreceive.yml` file, so the same
-`OPENRECEIVE_NWC` value can be shared across all local Hello Fruit demos
+`nwc` value can be shared across all local Hello Fruit demos
 without demo-local config files. Set it before running Compose; the web container
-validates it at startup. The compose stack omits `OPENRECEIVE_STORE`, so Node
+validates it at startup. The compose stack omits `store`, so Node
 falls back to `local-sqlite` (or adopts Postgres `DATABASE_URL` when set) and
 stores OpenReceive state in a named `.openreceive` volume for the SQLite path.
 

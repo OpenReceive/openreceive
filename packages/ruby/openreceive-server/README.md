@@ -127,8 +127,8 @@ Error bodies are `{ "code", "message", "retryable"?, "request_id"? }` with `code
 config = OpenReceive::Server::Config.load(path: "openreceive.yml", env: ENV)
 ```
 
-Reads the same keys as the Node config (`OPENRECEIVE_NWC` / `_NAMESPACE` / `_STORE` /
-`_PRICE_CURRENCIES`, plus nested `operation`, `swap`, `logging`, `sentry`). The NWC secret is stored but never
+Reads the same keys as the Node config (`nwc` / `namespace` / `store` /
+`price_currencies`, plus nested `operation`, `swap`, `logging`, `sentry`). The NWC secret is stored but never
 exposed by `#inspect` / `#to_s`.
 
 ## Tests

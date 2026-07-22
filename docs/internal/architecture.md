@@ -43,7 +43,7 @@ Every NWC client or adapter needs URI parsing and redaction, capability
 preflight, NIP-04 compatibility, NIP-44 v2 support where practical, request and
 response event shape tests, settlement normalization, error normalization,
 metadata size enforcement, and live wallet smoke tests that skip without
-`OPENRECEIVE_NWC`.
+`nwc` in openreceive.yml.
 
 Crypto dependencies must be documented before an SDK is published. Do not
 claim edge, serverless, or mobile-secret support until the crypto and refresh

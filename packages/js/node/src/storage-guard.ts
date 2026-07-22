@@ -32,9 +32,9 @@ interface StoreConfigurationInput {
 
 const DOCS_LINK = "See docs/guides/storage.md.";
 const POSTGRES_STEP =
-  "Set OPENRECEIVE_STORE: postgres://USER:PASS@HOST:5432/DB in openreceive.yml, or omit it when DATABASE_URL (or DATABASE_PRIVATE_URL) is already a Postgres URI.";
+  "Set `store: postgres://USER:PASS@HOST:5432/DB` in openreceive.yml, or omit it when DATABASE_URL (or DATABASE_PRIVATE_URL) is already a Postgres URI.";
 const MOUNTED_SQLITE_STEP =
-  "Or set OPENRECEIVE_STORE: sqlite:/absolute/mounted/volume/openreceive.sqlite3 in openreceive.yml on a single instance with durable mounted storage.";
+  "Or set `store: sqlite:/absolute/mounted/volume/openreceive.sqlite3` in openreceive.yml on a single instance with durable mounted storage.";
 const EMPTY_ENV: Env = Object.freeze({});
 
 export function policyForOpenReceivePlatform(id: string): OpenReceiveSqlitePolicy {
@@ -202,7 +202,7 @@ function unsupportedStoreUriError(
   const normalized = storeUri?.trim();
   return new OpenReceiveConfigError({
     code: "UNSUPPORTED_STORE_URI",
-    message: `${platformLine(platform)} Unsupported OPENRECEIVE_STORE URI: ${redactStoreUri(normalized ?? "")}.`,
+    message: `${platformLine(platform)} Unsupported store URI: ${redactStoreUri(normalized ?? "")}.`,
     hint: `${POSTGRES_STEP} ${DOCS_LINK}`
   });
 }

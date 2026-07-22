@@ -526,7 +526,7 @@ test("resolveOpenReceiveStore refuses Postgres boot when migrations are missing"
       assert.equal(error instanceof OpenReceiveConfigError, true);
       assert.equal(error.code, "STORE_MIGRATIONS_REQUIRED");
       assert.match(error.message, /refusing to boot without migrations/);
-      assert.match(error.hint, /openreceive migrate --store "\$OPENRECEIVE_STORE" --namespace prod/);
+      assert.match(error.hint, /openreceive migrate --store <uri> --namespace prod/);
       return true;
     },
   );
@@ -818,9 +818,9 @@ sqliteTest("Node CLI keeps init removed while migrate and doctor remain", async 
     writeFileSync(
       path.join(tempRoot, "openreceive.yml"),
       [
-        `OPENRECEIVE_NWC: "${NWC_URI}"`,
-        "OPENRECEIVE_NAMESPACE: cli_test",
-        "OPENRECEIVE_STORE: local-sqlite",
+        `nwc: "${NWC_URI}"`,
+        "namespace: cli_test",
+        "store: local-sqlite",
         "",
       ].join("\n"),
     );

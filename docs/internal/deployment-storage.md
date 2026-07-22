@@ -5,7 +5,7 @@ page is the platform matrix and multi-instance guidance for operators.
 
 ## Store resolution
 
-When `OPENRECEIVE_STORE` is omitted at runtime / CLI:
+When `store` is omitted at runtime / CLI:
 
 1. Postgres `DATABASE_PRIVATE_URL` (if set)
 2. else Postgres `DATABASE_URL` (if set)
@@ -14,10 +14,10 @@ When `OPENRECEIVE_STORE` is omitted at runtime / CLI:
 Heroku, Vercel, Cloud Run, Lambda, and similar hosts refuse implicit SQLite with
 `EPHEMERAL_STORE_UNSAFE`. On those platforms, a Postgres `DATABASE_URL` (addon /
 Marketplace injection) is enough; you do not need to duplicate it as
-`OPENRECEIVE_STORE`. Boot logs `store.resolved` with `source` /
+`store`. Boot logs `store.resolved` with `source` /
 `store_kind` so operators can confirm what was chosen.
 
-Explicit `OPENRECEIVE_STORE` always wins. Non-Postgres `DATABASE_URL` values are
+Explicit `store` always wins. Non-Postgres `DATABASE_URL` values are
 ignored.
 
 ## Platform defaults
@@ -33,7 +33,7 @@ For platforms without reliable runtime signatures, declare the host with runtime
 only when you need a URI other than `DATABASE_URL`:
 
 ```yaml
-OPENRECEIVE_STORE: postgres://USER:PASS@HOST:5432/DB
+store: postgres://USER:PASS@HOST:5432/DB
 ```
 
 ## Multi-instance
@@ -45,9 +45,9 @@ In v0.1 Node, that shared store is Postgres — typically the same
 do not replace app migrations):
 
 ```yaml
-# Optional: omit OPENRECEIVE_STORE when DATABASE_URL is already Postgres.
-OPENRECEIVE_STORE: postgres://openreceive:password@db.example.com:5432/openreceive
-OPENRECEIVE_NAMESPACE: prod
+# Optional: omit store when DATABASE_URL is already Postgres.
+store: postgres://openreceive:password@db.example.com:5432/openreceive
+namespace: prod
 ```
 
 Run `openreceive migrate` once against that store before boot. OpenReceive does

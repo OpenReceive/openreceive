@@ -67,7 +67,7 @@ export function createConfiguredClient(
     throw new OpenReceiveConfigError({
       code: "INVALID_NWC",
       message: formatOpenReceiveInvalidNwcMessage({ reason }),
-      hint: "Set OPENRECEIVE_NWC in openreceive.yml to a receive-only nostr+walletconnect URI from your wallet.",
+      hint: "Set `nwc` in openreceive.yml to a receive-only nostr+walletconnect URI from your wallet.",
       cause: error,
     });
   }
@@ -82,7 +82,7 @@ export async function preflightConfiguredClient(
     throw new OpenReceiveConfigError({
       code: "WALLET_PREFLIGHT_FAILED",
       message: "OpenReceive wallet preflight failed.",
-      hint: "Check that OPENRECEIVE_NWC in openreceive.yml is receive-only, reachable, and advertises make_invoice plus list_transactions.",
+      hint: "Check that `nwc` in openreceive.yml is receive-only, reachable, and advertises make_invoice plus list_transactions.",
       cause: error,
     });
   }
@@ -230,7 +230,7 @@ export function readOpenReceiveNwc(configured: string | undefined): string {
     throw new OpenReceiveConfigError({
       code: "MISSING_NWC",
       message: formatOpenReceiveMissingNwcMessage(),
-      hint: "Create a receive-only NWC connection in your wallet and set OPENRECEIVE_NWC in openreceive.yml.",
+      hint: "Create a receive-only NWC connection in your wallet and set `nwc` in openreceive.yml.",
     });
   }
 

@@ -15,7 +15,7 @@ Treat NWC codes and swap provider credentials as private server-only
 configuration:
 
 - Commit `openreceive.yml.example`, not real `openreceive.yml` files.
-- Do not commit `OPENRECEIVE_NWC` or swap provider credentials.
+- Do not commit `nwc` or swap provider credentials.
 - Mount or inject `openreceive.yml` at runtime from the host or platform secret
   store. Do not bake it into build artifacts or demo images.
 - Use separate credentials for demos/staging vs production. Rotate after
@@ -24,10 +24,10 @@ configuration:
 Local YAML (gitignored) — NWC is required; store/namespace have defaults:
 
 ```yaml
-OPENRECEIVE_NWC: nostr+walletconnect://...
+nwc: nostr+walletconnect://...
 ```
 
-Omit `OPENRECEIVE_STORE` to adopt a Postgres `DATABASE_URL` when present, or
+Omit `store` to adopt a Postgres `DATABASE_URL` when present, or
 fall back to `local-sqlite` on durable single-machine hosts. Details:
 [Storage](storage.md).
 

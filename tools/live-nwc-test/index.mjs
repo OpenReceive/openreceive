@@ -51,7 +51,7 @@ function readOpenReceiveConfigNwc(cwd) {
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error("openreceive.yml must be a YAML object.");
   }
-  const value = parsed.OPENRECEIVE_NWC ?? parsed.nwc;
+  const value = parsed.nwc;
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 
@@ -128,7 +128,7 @@ async function renderTerminalQr(invoice) {
 }
 
 if (!nwc) {
-  console.log("OPENRECEIVE_NWC is not set in openreceive.yml; skipping live NWC smoke test.");
+  console.log("`nwc` is not set in openreceive.yml; skipping live NWC smoke test.");
   process.exit(0);
 }
 

@@ -11,7 +11,7 @@ You create the OpenReceive server instance exactly as in the
 code — put provider credentials only in the ignored backend `openreceive.yml`:
 
 ```yaml
-OPENRECEIVE_NWC: nostr+walletconnect://...
+nwc: nostr+walletconnect://...
 
 swap:
   providers:

@@ -651,14 +651,14 @@ module OpenReceive
   def missing_nwc_message(subject: "OpenReceive")
     [
       "#{subject} needs a receive-only NWC code to receive payments.",
-      "Set OPENRECEIVE_NWC to your receive-only Nostr Wallet Connect connection string.",
+      "Set `nwc` in openreceive.yml to your receive-only Nostr Wallet Connect connection string.",
       "Get one here: #{NWC_CODE_HELP_URL}"
     ].join("\n")
   end
 
   def invalid_nwc_message(reason: nil)
     [
-      "OPENRECEIVE_NWC is set, but it is not a valid NWC code.",
+      "`nwc` is set, but it is not a valid NWC code.",
       (reason.nil? ? nil : "Reason: #{reason}"),
       "Get a receive-only NWC code here: #{NWC_CODE_HELP_URL}"
     ].compact.join("\n")

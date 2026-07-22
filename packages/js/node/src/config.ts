@@ -80,9 +80,9 @@ export function readOpenReceiveConfigFile(
 
   const root = readRecord(parsed, sourcePath);
   return {
-    ...readOptionalStringConfig(root, ["nwc", "OPENRECEIVE_NWC"], "nwc"),
-    ...readOptionalStringConfig(root, ["namespace", "OPENRECEIVE_NAMESPACE"], "namespace"),
-    ...readOptionalStringConfig(root, ["store", "OPENRECEIVE_STORE"], "storeUri"),
+    ...readOptionalStringConfig(root, ["nwc"], "nwc"),
+    ...readOptionalStringConfig(root, ["namespace"], "namespace"),
+    ...readOptionalStringConfig(root, ["store"], "storeUri"),
     ...readPriceCurrencies(root, sourcePath),
     ...readOperationConfig(root, sourcePath),
     ...readSwapConfig(root, sourcePath, options),
@@ -109,7 +109,7 @@ function readPriceCurrencies(
   root: Record<string, unknown>,
   sourcePath: string,
 ): Pick<OpenReceiveFileConfig, "priceCurrencies"> {
-  const value = root.price_currencies ?? root.priceCurrencies ?? root.OPENRECEIVE_PRICE_CURRENCIES;
+  const value = root.price_currencies;
   if (value === undefined) return {};
   if (typeof value === "string") {
     return { priceCurrencies: value.split(",") };
@@ -129,52 +129,49 @@ function readOperationConfig(
     ...readOptionalPositiveIntegerConfig(
       operation,
       root,
-      ["action_lease_ttl_seconds", "OPENRECEIVE_ACTION_LEASE_TTL_SEC"],
+      ["action_lease_ttl_seconds"],
       "actionLeaseTtlSeconds",
       sourcePath,
     ),
     ...readOptionalPositiveIntegerConfig(
       operation,
       root,
-      ["transaction_scan_interval_seconds", "OPENRECEIVE_TRANSACTION_SCAN_INTERVAL_SEC"],
+      ["transaction_scan_interval_seconds"],
       "transactionScanIntervalSeconds",
       sourcePath,
     ),
     ...readOptionalPositiveIntegerConfig(
       operation,
       root,
-      ["transaction_scan_page_limit", "OPENRECEIVE_TRANSACTION_SCAN_PAGE_LIMIT"],
+      ["transaction_scan_page_limit"],
       "transactionScanPageLimit",
       sourcePath,
     ),
     ...readOptionalNonNegativeIntegerConfig(
       operation,
       root,
-      [
-        "transaction_scan_window_padding_seconds",
-        "OPENRECEIVE_TRANSACTION_SCAN_WINDOW_PADDING_SEC",
-      ],
+      ["transaction_scan_window_padding_seconds"],
       "transactionScanWindowPaddingSeconds",
       sourcePath,
     ),
     ...readOptionalNonNegativeIntegerConfig(
       operation,
       root,
-      ["transaction_scan_overlap_seconds", "OPENRECEIVE_TRANSACTION_SCAN_OVERLAP_SEC"],
+      ["transaction_scan_overlap_seconds"],
       "transactionScanOverlapSeconds",
       sourcePath,
     ),
     ...readOptionalPositiveIntegerConfig(
       operation,
       root,
-      ["sweep_open_invoice_cap", "OPENRECEIVE_SWEEP_OPEN_INVOICE_CAP"],
+      ["sweep_open_invoice_cap"],
       "sweepOpenInvoiceCap",
       sourcePath,
     ),
     ...readOptionalPositiveIntegerConfig(
       operation,
       root,
-      ["transaction_scan_timeout_ms", "OPENRECEIVE_TRANSACTION_SCAN_TIMEOUT_MS"],
+      ["transaction_scan_timeout_ms"],
       "transactionScanTimeoutMs",
       sourcePath,
     ),

@@ -1,7 +1,7 @@
 # Hello Fruit Next.js Fullstack Demo
 
 This demo runs the Hello Fruit checkout in a Next.js App Router application.
-The browser never receives `OPENRECEIVE_NWC`. App Router catch-all handlers mount
+The browser never receives your NWC code. App Router catch-all handlers mount
 OpenReceive via `openReceiveNextHandlers` with required `prepareCheckout`. POST
 `/openreceive/prepare` is the sole price authority. The client uses
 `<Checkout orderId />` and never posts a price on create.
@@ -18,21 +18,21 @@ npm install
 npm run dev
 ```
 
-Set a valid receive-only `OPENRECEIVE_NWC` in the repository root
+Set a valid receive-only `nwc` in the repository root
 `openreceive.yml` before starting the dev server.
 
 ## Container
 
 ```sh
 cp ../../../../openreceive.yml.example ../../../../openreceive.yml
-# Set OPENRECEIVE_NWC in the repository root openreceive.yml file.
+# Set `nwc` in the repository root openreceive.yml file.
 docker compose -f compose.yml -f compose.override.yml.example up --build
 ```
 
 Docker mounts the repository root `openreceive.yml` file, so the same
-`OPENRECEIVE_NWC` value can be shared across all local Hello Fruit demos
+`nwc` value can be shared across all local Hello Fruit demos
 without demo-local config files. Set it before running Compose; the web container
-validates it at startup. The compose stack omits `OPENRECEIVE_STORE`, so Node
+validates it at startup. The compose stack omits `store`, so Node
 falls back to `local-sqlite` (or adopts Postgres `DATABASE_URL` when set) and
 stores OpenReceive state in a named `.openreceive` volume for the SQLite path.
 

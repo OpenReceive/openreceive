@@ -129,7 +129,7 @@ for (const phrase of [
   "Package artifact dry run passes through `npm run build:packages`.",
   ".github/workflows/release.yml",
   ".github/workflows/publish.yml",
-  "Live wallet smoke passes when a trusted `OPENRECEIVE_NWC` is available.",
+  "Live wallet smoke passes when a trusted `nwc` is available in openreceive.yml.",
   "Do not publish"
 ]) {
   expect(releaseDocs.includes(phrase), `${releaseDocsPath}: missing ${phrase}`);

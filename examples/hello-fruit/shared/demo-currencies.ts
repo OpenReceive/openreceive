@@ -29,7 +29,7 @@ export function readHelloFruitPriceFeedCurrencies(): string[] {
 /**
  * Currencies the Hello Fruit UI offers. Matches createOpenReceive defaults /
  * openreceive.yml (`USD`) plus direct bitcoin units. Extra fiat belongs in
- * OPENRECEIVE_PRICE_CURRENCIES — see docs/guides/price-feeds.md.
+ * `price_currencies` — see docs/guides/price-feeds.md.
  */
 export function readHelloFruitCheckoutCurrencies(): string[] {
   return ["USD", ...HELLO_FRUIT_DIRECT_AMOUNT_CURRENCIES];

@@ -397,7 +397,7 @@ test("secret scanner rejects tracked env-like deployment filenames", () => {
 
 test("secret scanner allows tracked openreceive.yml examples", () => {
   withGitRepo((dir) => {
-    writeFileSync(path.join(dir, "openreceive.yml.example"), 'OPENRECEIVE_NWC: ""\n');
+    writeFileSync(path.join(dir, "openreceive.yml.example"), "nwc:\n");
     execFileSync("git", ["add", "openreceive.yml.example"], { cwd: dir, stdio: "ignore" });
 
     assert.match(runSecretScanner(dir), /Secret scan passed\./);
@@ -532,7 +532,7 @@ test("live NWC smoke reports canonical URI parse errors before wallet calls", ()
     "?relay=wss%3A%2F%2Frelay.example.com&secret=not-secret";
 
   try {
-    writeFileSync(path.join(dir, "openreceive.yml"), `OPENRECEIVE_NWC: ${JSON.stringify(badNwc)}\n`);
+    writeFileSync(path.join(dir, "openreceive.yml"), `nwc: ${JSON.stringify(badNwc)}\n`);
 
     assert.throws(
       () => runLiveNwcSmoke({}, { cwd: dir }),
@@ -555,7 +555,7 @@ test("live NWC smoke loads openreceive.yml without leaking parse secrets", () =>
     "?relay=wss%3A%2F%2Frelay.example.com&secret=not-secret";
 
   try {
-    writeFileSync(path.join(dir, "openreceive.yml"), `OPENRECEIVE_NWC: ${JSON.stringify(badNwc)}\n`);
+    writeFileSync(path.join(dir, "openreceive.yml"), `nwc: ${JSON.stringify(badNwc)}\n`);
 
     assert.throws(
       () =>
@@ -581,7 +581,7 @@ test("Ruby live NWC smoke skips clearly when unset", () => {
   try {
     assert.match(
       runRubyLiveNwcSmoke({}, { cwd: dir }),
-      /OPENRECEIVE_NWC is not set in openreceive\.yml; skipping Ruby live NWC smoke test\./,
+      /`nwc` is not set in openreceive\.yml; skipping Ruby live NWC smoke test\./,
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -592,7 +592,7 @@ test("Ruby live NWC smoke redacts fake URI before skipping wallet calls", () => 
   const dir = mkdtempSync(path.join(tmpdir(), "openreceive-ruby-live-yml-"));
   const uri = `nostr+walletconnect://${"a".repeat(64)}?relay=wss%3A%2F%2Frelay.example.com&secret=${"b".repeat(64)}`;
   try {
-    writeFileSync(path.join(dir, "openreceive.yml"), `OPENRECEIVE_NWC: ${JSON.stringify(uri)}\n`);
+    writeFileSync(path.join(dir, "openreceive.yml"), `nwc: ${JSON.stringify(uri)}\n`);
     const output = runRubyLiveNwcSmoke(
       {
         OPENRECEIVE_RUBY_NWC_DISABLE_GEM: "1",

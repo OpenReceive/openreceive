@@ -1530,13 +1530,13 @@ test("Hello Fruit server demos keep secret-safe local setup docs", () => {
   assert.equal(existsSync(openReceiveExamplePath), true, "openreceive.yml.example");
 
   const openReceiveExample = readFileSync(openReceiveExamplePath, "utf8");
-  assert.match(openReceiveExample, /^OPENRECEIVE_NWC:\s*""$/m, "placeholder NWC");
-  assert.doesNotMatch(openReceiveExample, /^OPENRECEIVE_NAMESPACE:/m);
-  assert.doesNotMatch(openReceiveExample, /^OPENRECEIVE_STORE:/m);
-  assert.match(openReceiveExample, /^# OPENRECEIVE_NAMESPACE:\s+default$/m);
-  assert.match(openReceiveExample, /^# OPENRECEIVE_STORE:\s+local-sqlite$/m);
-  assert.match(openReceiveExample, /^\s+key:\s*""$/m);
-  assert.match(openReceiveExample, /^\s+secret:\s*""$/m);
+  assert.match(openReceiveExample, /^nwc:\s*$/m, "placeholder NWC");
+  assert.doesNotMatch(openReceiveExample, /^namespace:/m);
+  assert.doesNotMatch(openReceiveExample, /^store:/m);
+  assert.match(openReceiveExample, /^# store:\s+local-sqlite$/m);
+  assert.match(openReceiveExample, /^#\s+- base_url:\s*$/m);
+  assert.match(openReceiveExample, /^#\s+key:\s*$/m);
+  assert.match(openReceiveExample, /^#\s+secret:\s*$/m);
   assert.match(openReceiveExample, /^# sentry:\s*$/m);
   assert.match(openReceiveExample, /^#\s+dsn:\s*""$/m);
   assert.doesNotMatch(openReceiveExample, /nostr\+walletconnect:\/\//);
@@ -1557,8 +1557,8 @@ test("Hello Fruit server demos keep secret-safe local setup docs", () => {
     const compose = readFileSync(composePath, "utf8");
     const composeOverride = readFileSync(composeOverridePath, "utf8");
 
-    assert.match(readme, /The browser never receives `OPENRECEIVE_NWC`\./);
-    assert.match(readme, /valid receive-only `OPENRECEIVE_NWC`/);
+    assert.match(readme, /The browser never receives your NWC code\./);
+    assert.match(readme, /valid receive-only `nwc`/);
     assert.match(readme, /openreceive\.yml\.example/);
     assert.match(readme, /compose\.override\.yml\.example up --build/);
     assert.doesNotMatch(readme, /--profile openreceive-worker/);
@@ -1614,18 +1614,18 @@ test("Hello Fruit demos refuse malformed OPENRECEIVE_NWC before serving", async 
   );
   await withEnv({ OPENRECEIVE_NWC: undefined }, async () => {
     await withTempCwd(async (dir) => {
-      writeFileSync(path.join(dir, "openreceive.yml"), 'OPENRECEIVE_NWC: "https://example.com"\n');
+      writeFileSync(path.join(dir, "openreceive.yml"), 'nwc: "https://example.com"\n');
       await assert.rejects(
         () => createHelloFruitServer(),
-        /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
+        /`nwc` is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
       );
       await assert.rejects(
         () => createHelloFruitStaticServer(),
-        /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
+        /`nwc` is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
       );
       assert.throws(
         () => readRequiredHelloFruitNwcConnectionString(),
-        /OPENRECEIVE_NWC is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
+        /`nwc` is set, but it is not a valid NWC code\.[\s\S]+NWC URI must use nostr\+walletconnect\.[\s\S]+https:\/\/openreceive\.org\/get_a_nwc_code_to_receive_payments/,
       );
     });
   });

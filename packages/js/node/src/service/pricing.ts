@@ -87,7 +87,7 @@ export function normalizeOpenReceivePriceCurrencies(
     throw new OpenReceiveConfigError({
       code: "INVALID_PRICE_CURRENCIES",
       message: `${label} must include at least one currency.`,
-      hint: "Set OPENRECEIVE_PRICE_CURRENCIES in openreceive.yml to fiat codes like USD and EUR, or omit it to use USD.",
+      hint: "Set `price_currencies` in openreceive.yml to fiat codes like USD and EUR, or omit it to use USD.",
     });
   }
   for (const currency of currencies) {
