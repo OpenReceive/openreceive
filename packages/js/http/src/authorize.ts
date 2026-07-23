@@ -8,6 +8,7 @@ export type OpenReceiveAuthorizeAction =
 
 export interface OpenReceiveAuthorizeResource {
   order_id?: string;
+  payment_hash?: string;
 }
 
 export interface OpenReceiveAuthorizeContext {

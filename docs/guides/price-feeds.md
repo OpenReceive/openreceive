@@ -18,8 +18,9 @@ const openreceive = await createOpenReceive({
 console.log(openreceive.priceCurrencies); // ["USD", "EUR"]
 ```
 
-If `priceCurrencies` is omitted, OpenReceive reads `price_currencies`
-from `openreceive.yml`; if that field is absent, it falls back to `["USD"]`.
+If `priceCurrencies` is omitted, OpenReceive falls back to `["USD"]`. Keep this
+non-secret allowlist in the host's normal Node configuration module or Rails
+initializer.
 
 The same currency list is the checkout-creation allowlist. Pass the actual order
 currency in `amount.currency` (uppercase). For Bitcoin-denominated products, use
@@ -34,6 +35,5 @@ those convert directly to `amount_msats` and never call a price provider.
 - Override feed URLs only if needed: `OPENRECEIVE_PRICE_FEED_PRIMARY_URL` /
   `OPENRECEIVE_PRICE_FEED_FALLBACK_URL` (must still serve Simple Price JSON).
 
-Cache behavior, source order, and quote math internals:
-[Architecture](../internal/architecture.md) § Price feed cache and
-[ADR-0004](../internal/adr/ADR-0004-amount-msats-and-fiat-quote-contract.md).
+Cache behavior, source order, and quote math internals are documented in
+[Architecture](../internal/architecture.md) § Price feed cache.

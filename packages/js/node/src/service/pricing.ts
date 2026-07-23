@@ -22,11 +22,7 @@ import {
   parseOptionalRecord,
   serviceError,
 } from "./core-utils.ts";
-import type {
-  ListRatesRequest,
-  OpenReceiveServiceContext,
-  ResolvedCreateAmount,
-} from "./types.ts";
+import type { ListRatesRequest, OpenReceiveServiceContext, ResolvedCreateAmount } from "./types.ts";
 
 export async function listRates(
   context: OpenReceiveServiceContext,
@@ -72,7 +68,7 @@ export function readOpenReceivePriceCurrencies(
   configured: readonly string[] | undefined,
 ): readonly string[] {
   const rawCurrencies = configured ?? ["USD"];
-  return normalizeOpenReceivePriceCurrencies(rawCurrencies, "openreceive.yml price currencies");
+  return normalizeOpenReceivePriceCurrencies(rawCurrencies, "OpenReceive price currencies");
 }
 
 export function normalizeOpenReceivePriceCurrencies(
@@ -86,7 +82,7 @@ export function normalizeOpenReceivePriceCurrencies(
     throw new OpenReceiveConfigError({
       code: "INVALID_PRICE_CURRENCIES",
       message: `${label} must include at least one currency.`,
-      hint: "Set `price_currencies` in openreceive.yml to fiat codes like USD and EUR, or omit it to use USD.",
+      hint: "Set priceCurrencies to fiat codes like USD and EUR, or omit it to use USD.",
     });
   }
   for (const currency of currencies) {

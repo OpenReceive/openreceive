@@ -6,7 +6,7 @@ services:
     environment:
       OPENRECEIVE_DEMO_MODE: ${OPENRECEIVE_DEMO_MODE:-test_nwc}
       PORT: "3002"
+    env_file:
+      - ../../../../.env
     expose:
       - "3002"
-    volumes:
-      - ../../../../openreceive.yml:/app/examples/hello-fruit/server/nextjs-fullstack/openreceive.yml:ro

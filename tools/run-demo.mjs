@@ -6,16 +6,14 @@
 //   npm run demo static    -> Static HTML + small API (http://localhost:3001)
 //   npm run demo nextjs    -> Next.js fullstack       (http://localhost:3002)
 //
-// It ensures the repo-root openreceive.yml exists, validates `nwc`,
+// It ensures the repo-root .env exists, validates NWC_URI,
 // and runs the compose stack with the local port-publishing override.
 
 import { spawn } from "node:child_process";
 import { copyFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  readRequiredHelloFruitNwcConnectionString
-} from "../examples/hello-fruit/shared/demo-nwc.ts";
+import { readRequiredHelloFruitNwcConnectionString } from "../examples/hello-fruit/shared/demo-nwc.ts";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 
@@ -24,31 +22,31 @@ const DEMOS = [
     keys: ["node", "node-express", "express"],
     dir: "examples/hello-fruit/server/node-express",
     port: 3000,
-    label: "Express + React/Vue/Svelte/Angular"
+    label: "Express + React/Vue/Svelte/Angular",
   },
   {
     keys: ["static", "static-html-small-api", "html"],
     dir: "examples/hello-fruit/server/static-html-small-api",
     port: 3001,
-    label: "Static HTML + small API"
+    label: "Static HTML + small API",
   },
   {
     keys: ["nextjs", "next", "nextjs-fullstack"],
     dir: "examples/hello-fruit/server/nextjs-fullstack",
     port: 3002,
-    label: "Next.js fullstack"
-  }
+    label: "Next.js fullstack",
+  },
 ];
 
 function usage() {
   const targets = DEMOS.map(
-    (demo) => `  ${demo.keys[0].padEnd(8)} ${demo.label.padEnd(24)} http://localhost:${demo.port}`
+    (demo) => `  ${demo.keys[0].padEnd(8)} ${demo.label.padEnd(24)} http://localhost:${demo.port}`,
   ).join("\n");
   console.log(
     `Usage: npm run demo <target> [-- extra docker compose args]\n\n` +
       `Targets:\n${targets}\n\n` +
       `Extra args after -- are forwarded to "docker compose up", e.g. detached:\n` +
-      `  npm run demo node -- -d\n`
+      `  npm run demo node -- -d\n`,
   );
 }
 
@@ -66,23 +64,26 @@ if (demo === undefined) {
   process.exit(1);
 }
 
-// Compose mounts the repo-root openreceive.yml into the selected demo. Create it
-// from the committed example so `nwc` has a home before the user fills it in.
-const configPath = path.join(root, "openreceive.yml");
-if (!existsSync(configPath)) {
-  copyFileSync(path.join(root, "openreceive.yml.example"), configPath);
-  console.log("Created openreceive.yml from openreceive.yml.example.");
+// Compose reads the repo-root .env. Create it from the safe committed template
+// so the credential variables have a home before the user fills them in.
+const envPath = path.join(root, ".env");
+if (!existsSync(envPath)) {
+  copyFileSync(path.join(root, ".env.example"), envPath);
+  console.log("Created .env from .env.example.");
 }
+process.loadEnvFile(envPath);
 
 try {
   readRequiredHelloFruitNwcConnectionString();
 } catch (error) {
-  console.error([
-    "",
-    "Cannot start the Hello Fruit demo.",
-    error instanceof Error ? error.message : String(error),
-    ""
-  ].join("\n"));
+  console.error(
+    [
+      "",
+      "Cannot start the Hello Fruit demo.",
+      error instanceof Error ? error.message : String(error),
+      "",
+    ].join("\n"),
+  );
   process.exit(1);
 }
 
@@ -94,14 +95,14 @@ const composeArgs = [
   "compose.override.yml.example",
   "up",
   "--build",
-  ...extra
+  ...extra,
 ];
 
 console.log(`Starting ${demo.label} demo -> http://localhost:${demo.port}\n`);
 
 const child = spawn("docker", composeArgs, {
   cwd: path.join(root, demo.dir),
-  stdio: "inherit"
+  stdio: "inherit",
 });
 
 child.on("error", (error) => {
@@ -114,5 +115,5 @@ child.on("error", (error) => {
 });
 
 child.on("exit", (code, signal) => {
-  process.exit(signal ? 1 : code ?? 0);
+  process.exit(signal ? 1 : (code ?? 0));
 });

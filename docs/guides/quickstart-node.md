@@ -6,15 +6,16 @@ database transactions, and fulfillment.
 
 The integration has one important rule: **create and price the host order before
 starting OpenReceive checkout**. The browser sends only that order's ID.
-OpenReceive asks your server to authorize the request and load the trusted order
-row; it never accepts a price from the browser.
+OpenReceive asks your server to authorize the request and load the trusted order;
+it never accepts a price from the browser.
 
 ```text
-your order row
-    ├── amount / currency     authoritative price
-    ├── payment_hash         Lightning invoice identity
-    ├── paid_at              write-once settlement marker
-    └── swap_data            optional, server-only provider recovery data
+your order                       openreceive_payments
+    └── amount / currency           ├── order_id
+        authoritative price         ├── payment_hash
+                                    ├── paid_at
+                                    ├── expires_at
+                                    └── swap_data (server-only)
 ```
 
 ## 1. Install the server packages
@@ -38,59 +39,100 @@ Install a frontend package only if you use it:
 Fastify and Next.js use the same host hooks described below; replace
 `@openreceive/express` with `@openreceive/fastify` or `@openreceive/next`.
 
-## 2. Add payment fields to your existing order model
+## 2. Add the payment-attempt model
 
-OpenReceive does not create a database or migration. Add these fields to the
-order model your application already owns:
+Do not modify the host order table. Add one `openreceive_payments` model to the
+database and ORM the application already owns:
 
 ```text
-payment_hash  nullable string, unique
+order_id      required, indexed; multiple rows per order
+payment_hash  required string, unique
 paid_at       nullable timestamp
+expires_at    required timestamp
 swap_data     nullable JSON/text, server-only
 ```
 
-`payment_hash` identifies the invoice in your receive wallet and is also the
-checkout-creation idempotency guard. `paid_at` must transition from null only
-once. `swap_data` is needed only when automated swaps are enabled.
+Each row is one invoice or swap attempt. An order may accumulate expired unpaid
+rows before one attempt settles. `paid_at` transitions from null only once per
+attempt; host fulfillment runs only for the first settled attempt on the order.
 
 Do not return `swap_data` from your application API. It may contain a provider
 credential. OpenReceive passes it only between server-side hooks and never puts
 it in a mounted HTTP response.
 
-## 3. Configure the receive wallet
+Copy-ready schemas and transaction patterns for Prisma, Drizzle, TypeORM,
+Sequelize, and Knex are in [Node ORM Recipes](node-orms.md).
 
-Create `openreceive.yml` in the root of the application:
+## 3. Separate credentials from ordinary configuration
 
-```yaml
-nwc: nostr+walletconnect://...
+OpenReceive has three secret environment variables:
+
+```dotenv
+NWC_URI=nostr+walletconnect://...
+LSC_URI_PRIMARY=
+LSC_URI_BACKUP=
 ```
 
-The NWC connection must be receive-only and server-only. Never place it in
-browser code, a public environment variable, logs, screenshots, or committed
-fixtures.
+`NWC_URI` is required and must be a receive-only Nostr Wallet Connect
+connection. The two LSC variables are optional swap-provider connections.
+Leave both empty if the application accepts direct Lightning only.
 
-`createOpenReceive()` reads this file automatically. You normally do not pass an
-`nwc` option in application code. That option exists for an intentional runtime
-override, such as an isolated test.
+Copy [`.env.example`](../../.env.example) to `.env` for local development. The
+OpenReceive library deliberately does not search for `.env`; the application
+entry point owns environment loading. With Node 22:
 
-To accept supported swap assets such as USDT, USDC, SOL, and ETH while still
-settling into Bitcoin, add a provider:
-
-```yaml
-nwc: nostr+walletconnect://...
-
-swap:
-  providers:
-    - id: primary
-      protocol: fixedfloat
-      base_url: https://ff.io
-      key: ...
-      secret: ...
+```ts
+// First lines of the local-development server entry point.
+try {
+  process.loadEnvFile();
+} catch (error) {
+  // A production deployment may inject variables without a .env file.
+  if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
+    throw error;
+  }
+}
 ```
 
-Swap configuration is optional. See
-[`openreceive.yml.example`](../../openreceive.yml.example) for the other
-settings and [Automated Swaps](automated-swaps.md) for the provider lifecycle.
+Never put `NWC_URI` or an LSC URI in browser code, a public-prefixed variable,
+logs, screenshots, committed fixtures, or a tracked configuration module.
+Production should inject them with its normal secret manager.
+
+To enable automated swaps, store a complete
+[Lightning Swap Connect URI](lightning-swap-connect.md) in the primary LSC
+variable:
+
+```dotenv
+LSC_URI_PRIMARY=lightning+swapconnect://swap.example/?key=...&secret=...
+```
+
+LSC is optional. When configured and quoted by the provider, it lets customers
+start with the swap assets listed in
+[What can customers pay with?](../../README.md#what-can-customers-pay-with)
+while the merchant still receives Bitcoin over Lightning.
+
+Keep non-secret settings in an ordinary tracked Node module:
+
+```ts
+// config/openreceive.ts
+import type { CreateOpenReceiveOptions } from "@openreceive/node";
+
+export const openReceiveConfig = {
+  priceCurrencies: ["USD"],
+  logging: {
+    enabled: true,
+    directory: "./logs",
+    filename: "openreceive.log",
+    maxFileSizeMb: 10,
+    maxFiles: 5,
+    level: "debug",
+  },
+} satisfies Pick<CreateOpenReceiveOptions, "priceCurrencies" | "logging">;
+```
+
+`priceCurrencies` controls which fiat currencies the host may use to price
+orders; fiat is not a payment or settlement asset. Direct BTC and sats pricing
+also works. The full built-in fiat list is maintained in
+[What can customers pay with?](../../README.md#what-can-customers-pay-with).
 
 ## 4. Create the host order first
 
@@ -108,9 +150,6 @@ app.post("/orders", async (request, response, next) => {
       userId: viewer.id,
       currency: "USD",
       total: cart.totalUsd, // Store an exact decimal value, never a binary float.
-      paymentHash: null,
-      paidAt: null,
-      swapData: null,
     });
 
     response.status(201).json({ order_id: order.id });
@@ -125,16 +164,18 @@ This route is the price authority. The later OpenReceive request contains
 
 ## 5. Create the OpenReceive service
 
-`onPaid` receives wallet-verified settlement. Look up the host order by payment
-hash, set `paid_at` only when it is still null, and perform fulfillment in the
-same replay-safe application transaction.
+`onPaid` receives wallet-verified settlement. Look up the payment attempt by
+hash, set its `paid_at` only when null, lock the related order, and perform
+fulfillment only when no sibling attempt was already paid.
 
 ```ts
 import { createOpenReceive } from "@openreceive/node";
+import { openReceiveConfig } from "./config/openreceive.ts";
 
 const service = await createOpenReceive({
+  ...openReceiveConfig,
   onPaid: async ({ paymentHash, paidAt }) => {
-    await orders.markPaidOnce({
+    await payments.markPaidOnce({
       paymentHash,
       paidAt,
     });
@@ -153,7 +194,7 @@ Mounted browser routes require three application callbacks:
 | Hook | Your application answers |
 | --- | --- |
 | `authorize` | May this request act on this order? |
-| `resolveCheckout` | What amount and existing payment state are stored on the order? |
+| `resolveCheckout` | What is the order amount and which payment attempt was selected? |
 | `onCheckoutCreated` | Did the host atomically commit this new payment attempt? |
 
 Defining them as named functions keeps the middleware configuration small and
@@ -192,96 +233,37 @@ const authorizeOpenReceive: OpenReceiveAuthorize = async ({
 Knowing an order ID is not authentication. Anonymous checkout applications can
 use their own signed guest cookie or another host-owned access mechanism.
 
-### `resolveCheckout`: load trusted state from the order row
+### Build both persistence hooks
 
-This hook runs after authorization. It receives the untrusted order ID from the
-request, looks up the host row, and returns only server-owned values.
-
-The explicit branches below are intentional. They show the three possible
-database states without hiding the behavior inside conditional object spreads.
+The shared helper selects the exact historical attempt requested by status or
+refund calls, reuses one live attempt on create, and allows a new row after all
+older attempts expire:
 
 ```ts
-import {
-  hostError,
-  type ResolveCheckoutHook,
-} from "@openreceive/http";
+import { createOpenReceivePaymentHooks } from "@openreceive/http";
 
-const resolveOpenReceiveCheckout: ResolveCheckoutHook = async ({ orderId }) => {
-  const order = await orders.find(orderId);
-
-  if (!order) {
-    throw hostError("Order not found.", 404, "NOT_FOUND");
-  }
-
-  // Always derive the amount from the trusted database row.
-  const amount = {
+const paymentHooks = createOpenReceivePaymentHooks({
+  loadOrder: (orderId) => orders.find(orderId),
+  amountForOrder: (order) => ({
     currency: order.currency,
     value: order.total.toString(),
-  };
+  }),
+  payments: paymentRepository,
+});
 
-  // State 1: no checkout has been committed yet.
-  // OpenReceive may create an invoice, then call onCheckoutCreated.
-  if (!order.paymentHash) {
-    return { amount };
-  }
-
-  // State 2: a Lightning checkout already exists.
-  // Returning paymentHash makes a retry recover that checkout instead of
-  // silently minting another invoice.
-  if (!order.swapData) {
-    return {
-      amount,
-      paymentHash: order.paymentHash,
-    };
-  }
-
-  // State 3: this is a swap-backed checkout.
-  // swapData remains server-only and lets OpenReceive refresh provider state.
-  return {
-    amount,
-    paymentHash: order.paymentHash,
-    swapData: order.swapData,
-  };
-};
+const resolveOpenReceiveCheckout = paymentHooks.resolveCheckout;
+const commitOpenReceiveCheckout = paymentHooks.onCheckoutCreated;
 ```
 
-The resolver is also called for payment checks, swap status, and refunds. Those
-browser requests still contain only `order_id`; the host loads `paymentHash`
-and `swapData` after authorization.
+`paymentRepository` implements `listForOrder(orderId)` and
+`commitAttempt(input)`. The commit transaction locks the existing order row,
+rejects another paid or live attempt, and inserts the new payment row. If it
+throws, OpenReceive returns `409` and withholds the new payer instructions.
+See [Node ORM Recipes](node-orms.md) for complete schemas and lock queries.
 
-### `onCheckoutCreated`: commit before payer instructions escape
-
-OpenReceive calls this hook after creating an invoice or provider order but
-before returning the invoice or swap deposit address to the payer.
-
-```ts
-import type { CheckoutCreatedHook } from "@openreceive/http";
-
-const commitOpenReceiveCheckout: CheckoutCreatedHook = async ({
-  orderId,
-  paymentHash,
-  swapData,
-}) => {
-  await orders.commitPaymentAttempt({
-    orderId,
-    paymentHash,
-    swapData,
-  });
-};
-```
-
-`commitPaymentAttempt` must use a row lock or compare-and-set transaction:
-
-1. If `payment_hash` is null, store the new hash and optional `swap_data`.
-2. If the same hash is already stored, treat the operation as an idempotent
-   retry.
-3. If a different hash won a concurrent request, throw and let the caller
-   retry from the winning row.
-4. Never overwrite a committed payment hash with a different one.
-
-If this hook throws, OpenReceive returns `409` and withholds the new payer
-instructions. That prevents an invoice unknown to the host database from being
-shown.
+Payment checks, swap status, and refunds carry `order_id` plus the displayed
+`payment_hash`. The helper verifies that the selected attempt belongs to that
+order before returning server-only `swapData`.
 
 ## 7. Mount the Express routes
 
@@ -345,9 +327,10 @@ import "@openreceive/react/styles.css";
 />
 ```
 
-`<Checkout>` sends only `order_id` to the mounted routes. It never receives the
-NWC connection, provider credentials, or `swap_data`, and it never selects the
-amount charged.
+`<Checkout>` sends only `order_id` when creating. Status/refund requests also
+carry the displayed `payment_hash` so the host can select that exact attempt.
+It never receives the NWC connection, provider credentials, or `swap_data`, and
+it never selects the amount charged.
 
 Fetch order summaries and build resume pages through your own application API.
 OpenReceive does not own order display data or host routing.
@@ -369,7 +352,7 @@ browser renders <Checkout orderId={order_id} />
 POST /openreceive/checkouts { order_id }
       │
       ├── authorize(request, action, order_id)
-      ├── resolveCheckout(order_id) → amount / paymentHash / swapData
+      ├── resolveCheckout(order_id) → amount + live payment attempt, if any
       ├── create or recover wallet invoice
       ├── onCheckoutCreated(...) → atomic host database commit
       └── response exposes payer instructions only after commit succeeds
@@ -377,27 +360,24 @@ POST /openreceive/checkouts { order_id }
 later status refresh
       │
       ├── authorize again
-      ├── host reloads payment_hash
+      ├── host verifies { order_id, payment_hash } selects its payment row
       ├── OpenReceive verifies the receive wallet
       └── settled payment → onPaid({ paymentHash, paidAt })
 ```
 
 ## 10. Retries, concurrency, and expired invoices
 
-- If the order has no `payment_hash`, OpenReceive creates a payment attempt and
-  asks the host to commit it.
-- If the order already has a live `payment_hash`, returning it from
-  `resolveCheckout` makes retries recover the same checkout.
+- If the order has no live payment row, OpenReceive creates an attempt and asks
+  the host to commit it.
+- If the order already has one live attempt, retries recover that checkout.
 - If concurrent requests create different invoices, only the transaction that
-  wins the host row may expose its invoice. The losing request receives `409`.
+  first locks the host order and inserts its row may expose its invoice. The
+  losing request receives `409`.
 - Status polling never creates a new invoice.
-- If the stored invoice can no longer be recovered as a live pending checkout,
-  the mounted create route returns `409`. Your application decides whether to
-  create a new order/payment attempt; OpenReceive does not silently replace the
-  host's committed hash.
-- A late settlement still belongs to the payment hash originally stored on the
-  order, so never discard old hashes without an application-level recovery
-  policy.
+- When all unpaid attempts are expired or terminal, a create request may append
+  another row for the same order.
+- Keep historical hashes: a late settlement always updates the exact attempt
+  originally exposed.
 
 ## 11. Direct server-side checkout
 
@@ -413,16 +393,17 @@ const checkout = await service.createCheckout({
   },
 });
 
-await orders.commitPaymentAttempt({
+await payments.commitAttempt({
   orderId: order.id,
   paymentHash: checkout.paymentHash,
+  checkout,
 });
 
 return checkout;
 ```
 
 The same commit-before-display rule applies. For retry recovery, call
-`recoverCheckout({ orderId, paymentHash })` with the hash stored on the order.
+`recoverCheckout({ orderId, paymentHash })` with the selected live attempt.
 
 ## 12. Verify the setup
 
@@ -432,9 +413,9 @@ Run:
 npx openreceive doctor
 ```
 
-The command checks the storage-free configuration and required receive-wallet
-capabilities. There is no OpenReceive migration command, token-key generator,
-or signing-key configuration.
+The command checks server configuration and required receive-wallet
+capabilities. Node applications run their normal ORM migration command; the
+OpenReceive runtime still receives no database URL.
 
 ## What to read next
 
@@ -442,5 +423,6 @@ or signing-key configuration.
 - [Frontend Checkout](frontend-checkout.md) covers browser responsibilities.
 - [Automated Swaps](automated-swaps.md) covers `swap_data`, provider state, and
   refund safety.
-- [Storage](storage.md) describes the minimal host-order fields.
+- [Node ORM Recipes](node-orms.md) provides ready-to-adapt schemas.
+- [Storage](storage.md) describes the host-owned payment table.
 - [Security](security.md) lists the server-only secret boundaries.

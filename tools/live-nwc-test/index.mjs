@@ -4,26 +4,27 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { lightningUri } from "@openreceive/browser";
-import { parse as parseYaml } from "yaml";
 import {
   OPENRECEIVE_NWC_METADATA_MAX_BYTES,
   classifyTransactionSettlement,
   parseNwcConnectionUri,
   quoteFiatToMsats,
-  redactNwcConnectionUri
+  redactNwcConnectionUri,
 } from "@openreceive/core";
-import {
-  ReceiveCheckoutValidationError,
-  createNwcReceiveClient
-} from "@openreceive/node";
+import { ReceiveCheckoutValidationError, createNwcReceiveClient } from "@openreceive/node";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(currentDir, "../..");
+try {
+  process.loadEnvFile(path.join(repoRoot, ".env"));
+} catch (error) {
+  if (error?.code !== "ENOENT") throw error;
+}
 
 process.on("uncaughtException", handleFatalError);
 process.on("unhandledRejection", handleFatalError);
 
-const nwc = readOpenReceiveConfigNwc(process.cwd());
+const nwc = process.env.NWC_URI?.trim();
 const profile = process.env.OPENRECEIVE_WALLET_PROFILE || "rizful";
 const expectedCapabilitiesPath =
   process.env.OPENRECEIVE_EXPECTED_CAPABILITIES ??
@@ -42,17 +43,6 @@ function handleFatalError(error) {
 function loadExpectedCapabilities(filePath) {
   if (!existsSync(filePath)) return null;
   return JSON.parse(readFileSync(filePath, "utf8"));
-}
-
-function readOpenReceiveConfigNwc(cwd) {
-  const configPath = path.join(cwd, "openreceive.yml");
-  if (!existsSync(configPath)) return undefined;
-  const parsed = parseYaml(readFileSync(configPath, "utf8"));
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("openreceive.yml must be a YAML object.");
-  }
-  const value = parsed.nwc;
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 
 function formatErrorMessage(error) {
@@ -81,34 +71,25 @@ function redactPotentialSecrets(message) {
 function assertCapabilities(summary, expected, walletProfile) {
   if (!expected) return;
 
-  if (
-    expected.wallet_profile &&
-    expected.wallet_profile !== walletProfile
-  ) {
+  if (expected.wallet_profile && expected.wallet_profile !== walletProfile) {
     throw new Error(
-      `Expected capabilities are for '${expected.wallet_profile}', but OPENRECEIVE_WALLET_PROFILE is '${walletProfile}'.`
+      `Expected capabilities are for '${expected.wallet_profile}', but OPENRECEIVE_WALLET_PROFILE is '${walletProfile}'.`,
     );
   }
 
   const methods = new Set(summary.methods ?? []);
-  const missing = (expected.required_methods ?? []).filter(
-    (method) => !methods.has(method)
-  );
+  const missing = (expected.required_methods ?? []).filter((method) => !methods.has(method));
 
   if (missing.length > 0) {
     throw new Error(`Wallet is missing required methods: ${missing.join(", ")}`);
   }
 
-  const allowedEncryption = [
-    expected.preferred_encryption,
-    expected.fallback_encryption
-  ].filter(Boolean);
-  if (
-    allowedEncryption.length > 0 &&
-    !allowedEncryption.includes(summary.encryption)
-  ) {
+  const allowedEncryption = [expected.preferred_encryption, expected.fallback_encryption].filter(
+    Boolean,
+  );
+  if (allowedEncryption.length > 0 && !allowedEncryption.includes(summary.encryption)) {
     throw new Error(
-      `Wallet encryption '${summary.encryption}' does not match expected ${allowedEncryption.join(" or ")}.`
+      `Wallet encryption '${summary.encryption}' does not match expected ${allowedEncryption.join(" or ")}.`,
     );
   }
 }
@@ -120,7 +101,7 @@ async function renderTerminalQr(invoice) {
       type: "terminal",
       small: true,
       errorCorrectionLevel: "M",
-      margin: 4
+      margin: 4,
     });
   } catch {
     return null;
@@ -128,14 +109,12 @@ async function renderTerminalQr(invoice) {
 }
 
 if (!nwc) {
-  console.log("`nwc` is not set in openreceive.yml; skipping live NWC smoke test.");
+  console.log("NWC_URI is not set; skipping live NWC smoke test.");
   process.exit(0);
 }
 
 if (!supportedProfiles.has(profile)) {
-  console.error(
-    "OPENRECEIVE_WALLET_PROFILE must be rizful, alby, zeus, or custom."
-  );
+  console.error("OPENRECEIVE_WALLET_PROFILE must be rizful, alby, zeus, or custom.");
   process.exit(1);
 }
 
@@ -164,7 +143,7 @@ if (expectedCapabilities) {
 }
 
 const client = createNwcReceiveClient({
-  connectionString: nwc
+  connectionString: nwc,
 });
 
 console.log("Running wallet preflight...");
@@ -173,7 +152,9 @@ assertCapabilities(summary, expectedCapabilities, profile);
 console.log(`Receive checkout ready: ${summary.receiveCheckoutReady}`);
 console.log(`Encryption: ${summary.encryption}`);
 if (summary.spendCapabilityAdvertised) {
-  console.log("Warning: wallet advertises spend methods; OpenReceive checkout will not expose them.");
+  console.log(
+    "Warning: wallet advertises spend methods; OpenReceive checkout will not expose them.",
+  );
 }
 
 if (!shouldRequestLiveInvoice) {
@@ -201,8 +182,8 @@ const invoice = await client.makeInvoice({
     fruit: liveFruit.id,
     fiat: liveFruit.fiat,
     smoke_test: true,
-    wallet_profile: profile
-  }
+    wallet_profile: profile,
+  },
 });
 
 console.log(`Invoice: ${invoice.invoice}`);
@@ -213,10 +194,14 @@ if (qr) console.log(qr);
 
 console.log("Running initial transaction scan before manual payment...");
 const initialTransaction = await findInvoiceTransaction(client, invoice);
-console.log(`Initial wallet state: ${initialTransaction?.state ?? initialTransaction?.transaction_state ?? "unknown"}`);
+console.log(
+  `Initial wallet state: ${initialTransaction?.state ?? initialTransaction?.transaction_state ?? "unknown"}`,
+);
 
 if (!waitForPayment) {
-  console.log("Set OPENRECEIVE_LIVE_WAIT_FOR_PAYMENT=1 to refresh status until manual payment settles.");
+  console.log(
+    "Set OPENRECEIVE_LIVE_WAIT_FOR_PAYMENT=1 to refresh status until manual payment settles.",
+  );
   process.exit(0);
 }
 
@@ -226,7 +211,7 @@ const expiresAt = invoice.expires_at ?? createdAt + product.invoice_expiry_secon
 const outcome = await waitForListTransactionsFinalState({
   client,
   invoice,
-  expiresAt
+  expiresAt,
 });
 
 console.log(`Final outcome: ${outcome.status} (${outcome.reason})`);
@@ -240,11 +225,17 @@ async function waitForListTransactionsFinalState({ client, invoice, expiresAt })
     const settlement = transaction
       ? classifyTransactionSettlement(transaction)
       : { status: "pending", settled: false };
-    console.log(`Workflow transition: ${settlement.status} (${transaction ? "wallet_match" : "wallet_no_match"})`);
-    if (settlement.status === "settled" || settlement.status === "expired" || settlement.status === "failed") {
+    console.log(
+      `Workflow transition: ${settlement.status} (${transaction ? "wallet_match" : "wallet_no_match"})`,
+    );
+    if (
+      settlement.status === "settled" ||
+      settlement.status === "expired" ||
+      settlement.status === "failed"
+    ) {
       return {
         status: settlement.status,
-        reason: transaction ? "wallet_match" : "wallet_no_match"
+        reason: transaction ? "wallet_match" : "wallet_no_match",
       };
     }
 
@@ -253,7 +244,7 @@ async function waitForListTransactionsFinalState({ client, invoice, expiresAt })
 
   return {
     status: "expired",
-    reason: "local_expiry_elapsed"
+    reason: "local_expiry_elapsed",
   };
 }
 
@@ -265,11 +256,11 @@ async function findInvoiceTransaction(client, invoice) {
     from: createdAt,
     until: createdAt,
     limit: 25,
-    offset: 0
+    offset: 0,
   });
-  return response.transactions.find((transaction) =>
-    transaction.payment_hash === invoice.payment_hash ||
-    transaction.invoice === invoice.invoice
+  return response.transactions.find(
+    (transaction) =>
+      transaction.payment_hash === invoice.payment_hash || transaction.invoice === invoice.invoice,
   );
 }
 
@@ -279,8 +270,8 @@ async function assertMetadataGuard(client, amountMsats) {
       amount_msats: amountMsats,
       description: "OpenReceive metadata guard probe",
       metadata: {
-        probe: "x".repeat(OPENRECEIVE_NWC_METADATA_MAX_BYTES + 1)
-      }
+        probe: "x".repeat(OPENRECEIVE_NWC_METADATA_MAX_BYTES + 1),
+      },
     });
   } catch (error) {
     if (

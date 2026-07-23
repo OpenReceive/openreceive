@@ -1,8 +1,9 @@
 import {
-  hostError,
+  createOpenReceivePaymentHooks,
   type CreateOpenReceiveHttpHandlerOptions,
 } from "@openreceive/http";
 import { createOpenReceive } from "@openreceive/node";
+import { openReceiveConfig } from "../../../../../../config/openreceive.ts";
 import { helloFruitDeliveryFetchResponse } from "../../../../shared/demo-delivery.ts";
 import { fulfillHelloFruitOrder } from "../../../../shared/demo-fulfillment.ts";
 import {
@@ -11,10 +12,9 @@ import {
 } from "../../../../shared/demo-logging.ts";
 import { createHelloFruitCreateOrderResult } from "../../../../shared/demo-prepare-checkout.ts";
 import {
-  commitHelloFruitCheckout,
   createHelloFruitHostOrder,
+  helloFruitPaymentRepository,
   readHelloFruitHostOrder,
-  resolveHelloFruitHostCheckout,
 } from "../../../../shared/openreceive-store.ts";
 import { helloFruitSharedFile } from "./shared-data.ts";
 
@@ -26,16 +26,17 @@ let servicePromise: Promise<Awaited<ReturnType<typeof createOpenReceive>>> | und
 
 export async function openReceiveHttpOptions(): Promise<CreateOpenReceiveHttpHandlerOptions> {
   const service = await getOpenReceive();
+  const paymentHooks = createOpenReceivePaymentHooks({
+    loadOrder: (orderId) => readHelloFruitHostOrder(orderId),
+    amountForOrder: (order) => order.amount,
+    payments: helloFruitPaymentRepository,
+  });
   return {
     service,
     authorize: ({ resource }) =>
       resource.order_id !== undefined && readHelloFruitHostOrder(resource.order_id) !== null,
-    resolveCheckout: ({ orderId }) => {
-      const order = resolveHelloFruitHostCheckout(orderId);
-      if (order === null) throw hostError("Order not found.", 404, "NOT_FOUND");
-      return order;
-    },
-    onCheckoutCreated: commitHelloFruitCheckout,
+    resolveCheckout: paymentHooks.resolveCheckout,
+    onCheckoutCreated: paymentHooks.onCheckoutCreated,
   };
 }
 
@@ -50,7 +51,10 @@ export async function createOrderResponse(request: Request): Promise<Response> {
     createHelloFruitHostOrder(result.order, result.invoiceRequest.amount);
     return jsonResponse({ order_id: result.order.uuid, summary: result.order }, 201);
   } catch (error) {
-    return jsonResponse({ message: error instanceof Error ? error.message : "Invalid order." }, 400);
+    return jsonResponse(
+      { message: error instanceof Error ? error.message : "Invalid order." },
+      400,
+    );
   }
 }
 
@@ -90,6 +94,7 @@ async function getOpenReceive() {
 
 async function createHelloFruitOpenReceive() {
   return await createOpenReceive({
+    ...openReceiveConfig,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
     onPaid: async ({ paymentHash, paidAt }) => {
       const result = await fulfillHelloFruitOrder({ paymentHash, paidAt });

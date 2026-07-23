@@ -16,8 +16,19 @@ GitHub or contact the maintainers through the repository owner.
   codes.
 - Frontends never run merchant settlement actions by themselves.
 - Settlement is verified by backend status refresh using NWC `list_transactions`.
-- Settlement action transitions must be idempotent.
-- Invoice creation must use idempotency keys.
+- Each checkout is persisted as one host-owned `openreceive_payments` row before
+  payer instructions are exposed. A row represents one direct payment attempt
+  or one provider swap attempt, never several provider orders.
+- Checkout creation locks the host order, reuses its one live attempt, and
+  rejects creation after any sibling attempt has settled.
+- Payment, swap-status, and refund requests include the displayed
+  `payment_hash`; the host verifies that the selected attempt belongs to the
+  authorized order.
+- Each attempt's `paid_at` transition is write-once. The host fulfills the
+  order only for its first settled attempt, so replay and late settlement are
+  harmless.
+- `swap_data` remains server-only and is excluded from serialization, logs,
+  errors, and browser responses.
 - Public product demos (on openreceive.org) must use low amounts, rate limits,
   and separate receive-only NWC codes.
 

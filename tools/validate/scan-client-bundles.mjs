@@ -9,21 +9,25 @@ const ignoredDirs = new Set([".git", "node_modules"]);
 
 const forbiddenPatterns = [
   {
-    name: "OPENRECEIVE_NWC marker",
-    pattern: /OPENRECEIVE_NWC/
+    name: "NWC_URI marker",
+    pattern: /NWC_URI/,
+  },
+  {
+    name: "LSC_URI marker",
+    pattern: /LSC_URI_(?:PRIMARY|BACKUP)/,
   },
   {
     name: "NWC connection URI",
-    pattern: /nostr\+walletconnect:\/\/[0-9a-fA-F]{64}/
+    pattern: /nostr\+walletconnect:\/\/[0-9a-fA-F]{64}/,
   },
   {
     name: "NWC code query value",
-    pattern: /[?&]secret=[0-9a-fA-F]{16,}/
+    pattern: /[?&]secret=[0-9a-fA-F]{16,}/,
   },
   {
     name: "FixedFloat secret marker",
-    pattern: /FIXED_FLOAT_SECRET/
-  }
+    pattern: /FIXED_FLOAT_SECRET/,
+  },
 ];
 
 function collectClientBundleDirs(dir) {
@@ -103,5 +107,7 @@ if (findings.length > 0) {
 if (bundleDirs.length === 0) {
   console.log("No client bundles found; skipping client bundle secret scan.");
 } else {
-  console.log(`Client bundle secret scan passed for ${bundleDirs.length} generated client bundle director${bundleDirs.length === 1 ? "y" : "ies"}.`);
+  console.log(
+    `Client bundle secret scan passed for ${bundleDirs.length} generated client bundle director${bundleDirs.length === 1 ? "y" : "ies"}.`,
+  );
 }

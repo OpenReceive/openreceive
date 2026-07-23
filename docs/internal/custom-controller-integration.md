@@ -9,33 +9,35 @@ OpenReceive service methods do not authenticate callers and never read a host se
 | Method | Responsibility |
 | --- | --- |
 | `createCheckout({ orderId, amount })` | Normalize the host price and mint a wallet invoice. |
-| `recoverCheckout({ orderId, paymentHash })` | Reconstruct a still-live checkout for host-row retry reuse. |
+| `recoverCheckout({ orderId, paymentHash })` | Reconstruct a still-live checkout for attempt retry reuse. |
 | `checkPayment({ paymentHash })` | Verify one payment against wallet authority. |
 | `reconcilePayments({ paymentHashes })` | Verify the host's unresolved hashes. |
 | `watchPayments({ onPaid })` | Scan and deliver verified settlements at least once. |
 | `quoteSwap`, `createSwap`, `getSwap`, `refundSwap` | Create, inspect, and refund host-persisted provider workflows. |
 | `listRates`, `quoteRates` | Resolve exact fiat quotes. |
 
-There is no order read, checkout history, migration, sweep cursor, or OpenReceive persistence API.
+There is no order read, checkout history route, migration runner, sweep cursor, or runtime
+persistence API.
 
 ## Safe checkout route
 
-The host row is the idempotency guard. A controller must reuse a live recorded hash, and must
-commit a new hash before sending its BOLT11 to the payer.
+The host order lock is the serialization guard. A controller reuses one live payment row and
+commits a new row before sending its BOLT11 to the payer.
 
 ```ts
 app.post("/checkout", async (request, response) => {
   const order = await orders.authorizedForCheckout(request.user, request.body.order_id);
 
-  if (order.paid_at) {
+  if (await payments.anyPaid(order.id)) {
     response.status(409).json({ message: "Order is already paid." });
     return;
   }
 
-  if (order.payment_hash) {
+  const payment = await payments.findLiveForOrder(order.id);
+  if (payment) {
     const existing = await openreceive.recoverCheckout({
       orderId: order.id,
-      paymentHash: order.payment_hash,
+      paymentHash: payment.payment_hash,
     });
     if (existing) {
       response.json(existing);
@@ -48,8 +50,9 @@ app.post("/checkout", async (request, response) => {
     amount: { currency: "USD", value: order.price_usd },
   });
 
-  const committed = await orders.setPaymentHashIfEmpty(order.id, checkout.paymentHash);
-  if (!committed) {
+  try {
+    await payments.commitWhileLockingOrder({ order, checkout });
+  } catch {
     // Never expose the losing invoice from a concurrent create.
     response.status(409).json({ message: "Checkout changed; retry." });
     return;
@@ -59,22 +62,22 @@ app.post("/checkout", async (request, response) => {
 });
 ```
 
-`setPaymentHashIfEmpty` must be a transaction or compare-and-set on the host order. If the host
-write fails, withhold the invoice. If the recorded invoice is no longer live, the host decides
-when and how its row may be replaced.
+`commitWhileLockingOrder` inserts into `openreceive_payments` while holding the host order lock.
+If the write fails, withhold the invoice. Expired attempts remain as history and a later request
+may append a new row.
 
 ## Settlement callback
 
 ```ts
 const openreceive = await createOpenReceive({
   onPaid: async ({ paymentHash, paidAt }) => {
-    await orders.setPaidAtOnce(paymentHash, paidAt);
+    await payments.markPaidOnceAndFulfillFirst(paymentHash, paidAt);
   },
 });
 ```
 
-Delivery is at least once. `setPaidAtOnce` must match the host order by payment hash, update only
-when `paid_at IS NULL`, and make fulfillment idempotent. Notifications are wake-up hints; wallet
+Delivery is at least once. The host matches the attempt by payment hash, updates only when its
+`paid_at IS NULL`, and fulfills only when no sibling attempt was already paid. Notifications are wake-up hints; wallet
 lookup or scanning remains settlement authority.
 
 ## Custom swap routes
@@ -86,8 +89,8 @@ any deposit address or amount. Subsequent status calls use the host-loaded data:
 ```ts
 const current = await openreceive.getSwap({
   orderId: order.id,
-  paymentHash: order.payment_hash,
-  swapData: order.swap_data,
+  paymentHash: payment.payment_hash,
+  swapData: payment.swap_data,
 });
 ```
 

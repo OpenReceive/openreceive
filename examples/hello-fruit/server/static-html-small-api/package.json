@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx ../../shared/require-openreceive-nwc.ts && vite --host 127.0.0.1 --configLoader runner",
+    "dev": "node ../../../../tools/run-with-root-env.mjs vite --host 127.0.0.1 --configLoader runner",
     "build": "vite build --configLoader runner",
-    "preview": "tsx ../../shared/require-openreceive-nwc.ts && vite preview --host 127.0.0.1 --configLoader runner",
-    "start": "tsx ../../shared/require-openreceive-nwc.ts && tsx src/server/production.ts"
+    "preview": "node ../../../../tools/run-with-root-env.mjs vite preview --host 127.0.0.1 --configLoader runner",
+    "start": "node ../../../../tools/run-with-root-env.mjs tsx src/server/production.ts"
   },
   "dependencies": {
     "@openreceive/browser": "0.1.1",

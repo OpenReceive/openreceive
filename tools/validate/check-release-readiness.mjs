@@ -36,12 +36,12 @@ function workspacePackages() {
       const relativePath = path.relative(root, path.join(entryPath, "package.json"));
       return {
         relativePath,
-        manifest: readJson(relativePath)
+        manifest: readJson(relativePath),
       };
     })
-    .filter(({ manifest }) =>
-      manifest.name === "openreceive" ||
-      manifest.name?.startsWith("@openreceive/")
+    .filter(
+      ({ manifest }) =>
+        manifest.name === "openreceive" || manifest.name?.startsWith("@openreceive/"),
     )
     .sort((left, right) => left.manifest.name.localeCompare(right.manifest.name));
 }
@@ -49,7 +49,8 @@ function workspacePackages() {
 function hasRootExport(manifest) {
   const rootExport = manifest.exports?.["."];
   if (typeof rootExport === "string") return true;
-  if (rootExport === null || typeof rootExport !== "object" || Array.isArray(rootExport)) return false;
+  if (rootExport === null || typeof rootExport !== "object" || Array.isArray(rootExport))
+    return false;
   return typeof rootExport.import === "string" || typeof rootExport.require === "string";
 }
 
@@ -72,13 +73,22 @@ const publicPackages = new Set([
   "@openreceive/provider-data",
   "@openreceive/react",
   "@openreceive/svelte",
-  "@openreceive/vue"
+  "@openreceive/vue",
 ]);
 const releaseVersion = rootPackage.version;
 
-expect(rootPackage.name === "openreceive-workspace", "package.json: root package name must be openreceive-workspace");
-expect(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)/.test(releaseVersion), "package.json: root version must be semver");
-expect(rootPackage.private === true, "package.json: root package must stay private before explicit publishing approval");
+expect(
+  rootPackage.name === "openreceive-workspace",
+  "package.json: root package name must be openreceive-workspace",
+);
+expect(
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)/.test(releaseVersion),
+  "package.json: root version must be semver",
+);
+expect(
+  rootPackage.private === true,
+  "package.json: root package must stay private before explicit publishing approval",
+);
 const testCi = rootPackage.scripts?.["test:ci"] ?? "";
 const testCiRelease = rootPackage.scripts?.["test:ci:release"] ?? "";
 expect(
@@ -86,15 +96,36 @@ expect(
     (testCi.includes("test:ci:release") && testCiRelease.includes("npm run check:release")),
   "package.json: test:ci must include check:release",
 );
-expect(rootPackage.scripts?.["check:release"] === "node tools/validate/check-release-readiness.mjs", "package.json: missing check:release script");
-expect(rootPackage.scripts?.["build:packages"]?.includes("-w openreceive"), "package.json: build:packages must build every JS workspace package");
-expect(rootPackage.scripts?.["test:package-smoke"], "package.json: release gate must keep package smoke script");
-expect(rootPackage.scripts?.["release:plan"] === "node tools/release/npm-release.mjs plan", "package.json: missing release:plan script");
-expect(rootPackage.scripts?.["release:prepare"] === "node tools/release/npm-release.mjs prepare", "package.json: missing release:prepare script");
-expect(rootPackage.scripts?.["release:publish"] === "node tools/release/npm-release.mjs publish", "package.json: missing release:publish script");
+expect(
+  rootPackage.scripts?.["check:release"] === "node tools/validate/check-release-readiness.mjs",
+  "package.json: missing check:release script",
+);
+expect(
+  rootPackage.scripts?.["build:packages"]?.includes("-w openreceive"),
+  "package.json: build:packages must build every JS workspace package",
+);
+expect(
+  rootPackage.scripts?.["test:package-smoke"],
+  "package.json: release gate must keep package smoke script",
+);
+expect(
+  rootPackage.scripts?.["release:plan"] === "node tools/release/npm-release.mjs plan",
+  "package.json: missing release:plan script",
+);
+expect(
+  rootPackage.scripts?.["release:prepare"] === "node tools/release/npm-release.mjs prepare",
+  "package.json: missing release:prepare script",
+);
+expect(
+  rootPackage.scripts?.["release:publish"] === "node tools/release/npm-release.mjs publish",
+  "package.json: missing release:publish script",
+);
 
 for (const { relativePath, manifest } of packages) {
-  expect(manifest.version === releaseVersion, `${relativePath}: package version must match ${releaseVersion}`);
+  expect(
+    manifest.version === releaseVersion,
+    `${relativePath}: package version must match ${releaseVersion}`,
+  );
   if (publicPackages.has(manifest.name)) {
     expect(manifest.private !== true, `${relativePath}: public package must not be private`);
   } else {
@@ -104,12 +135,15 @@ for (const { relativePath, manifest } of packages) {
 }
 
 expect(/^# Changelog/m.test(changelog), "CHANGELOG.md: missing top-level heading");
-expect(new RegExp(`^## ${releaseVersion.replace(/\./g, "\\.")} - Unreleased$`, "m").test(changelog), `CHANGELOG.md: missing ${releaseVersion} unreleased section`);
+expect(
+  new RegExp(`^## ${releaseVersion.replace(/\./g, "\\.")} - Unreleased$`, "m").test(changelog),
+  `CHANGELOG.md: missing ${releaseVersion} unreleased section`,
+);
 for (const phrase of [
   "demo deployment templates",
   "public demo deployment docs",
   "internal testkit",
-  "workflow safety validation"
+  "workflow safety validation",
 ]) {
   expect(changelog.includes(phrase), `CHANGELOG.md: missing ${phrase} entry`);
 }
@@ -117,7 +151,7 @@ for (const phrase of [
 for (const { manifest } of packages) {
   expect(
     releaseDocs.includes(`\`${manifest.name}\``),
-    `${releaseDocsPath}: missing ${manifest.name}`
+    `${releaseDocsPath}: missing ${manifest.name}`,
   );
 }
 for (const phrase of [
@@ -129,8 +163,8 @@ for (const phrase of [
   "Package artifact dry run passes through `npm run build:packages`.",
   ".github/workflows/release.yml",
   ".github/workflows/publish.yml",
-  "Live wallet smoke passes when a trusted `nwc` is available in openreceive.yml.",
-  "Do not publish"
+  "Live wallet smoke passes when a trusted `NWC_URI` is available in the environment.",
+  "Do not publish",
 ]) {
   expect(releaseDocs.includes(phrase), `${releaseDocsPath}: missing ${phrase}`);
 }

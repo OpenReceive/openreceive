@@ -2,7 +2,6 @@
 
 require "json"
 require "openreceive"
-require "yaml"
 
 ROOT = File.expand_path("../..", __dir__)
 DEFAULT_EXPECTED_CAPABILITIES = File.join(ROOT, "tools/live-nwc-test/expected_capabilities.json")
@@ -12,18 +11,23 @@ def read_expected_capabilities
   JSON.parse(File.read(path))
 end
 
-def read_openreceive_config_nwc
-  path = File.join(Dir.pwd, "openreceive.yml")
-  return nil unless File.file?(path)
+def load_root_dotenv
+  path = File.join(ROOT, ".env")
+  return unless File.file?(path)
 
-  config = YAML.safe_load(File.read(path), aliases: false) || {}
-  value = config["nwc"]
-  value.is_a?(String) ? value.strip : nil
+  File.foreach(path) do |line|
+    name, value = line.strip.split("=", 2)
+    next unless %w[NWC_URI LSC_URI_PRIMARY LSC_URI_BACKUP].include?(name)
+    next if ENV.key?(name)
+
+    ENV[name] = value.to_s
+  end
 end
 
-nwc = read_openreceive_config_nwc
+load_root_dotenv
+nwc = ENV["NWC_URI"]&.strip
 if nwc.nil? || nwc.empty?
-  puts "`nwc` is not set in openreceive.yml; skipping Ruby live NWC smoke test."
+  puts "NWC_URI is not set; skipping Ruby live NWC smoke test."
   exit 0
 end
 

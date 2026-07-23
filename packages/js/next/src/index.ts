@@ -18,6 +18,17 @@ import {
 //   });
 
 export type { CreateOpenReceiveHttpHandlerOptions } from "@openreceive/http";
+export {
+  createOpenReceivePaymentHooks,
+  openReceivePaymentInsert,
+} from "@openreceive/http";
+export type {
+  CreateOpenReceivePaymentHooksOptions,
+  OpenReceivePaymentHooks,
+  OpenReceivePaymentInsert,
+  OpenReceivePaymentRecord,
+  OpenReceivePaymentRepository,
+} from "@openreceive/http";
 
 export type OpenReceiveNextRouteHandler = (request: Request) => Promise<Response>;
 

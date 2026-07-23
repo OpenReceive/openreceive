@@ -43,9 +43,10 @@ module OpenReceive
         handle(request_id) do
           body = parse(raw_body)
           order_id = required(body["order_id"] || body["orderId"], "order_id")
-          guard("payment.check", request, { order_id: order_id })
+          requested_hash = required(body["payment_hash"] || body["paymentHash"], "payment_hash").downcase
+          guard("payment.check", request, { order_id: order_id, payment_hash: requested_hash })
           resolved = resolve_host("payment.check", request, order_id, body)
-          hash = required(resolved["payment_hash"], "payment_hash").downcase
+          hash = selected_payment_hash(resolved, requested_hash)
           success(200, @service.check_payment("payment_hash" => hash), request_id)
         end
       end
@@ -126,9 +127,10 @@ module OpenReceive
         handle(request_id) do
           body = parse(raw_body)
           order_id = required(body["order_id"] || body["orderId"], "order_id")
-          guard(action, request, { order_id: order_id })
+          requested_hash = required(body["payment_hash"] || body["paymentHash"], "payment_hash").downcase
+          guard(action, request, { order_id: order_id, payment_hash: requested_hash })
           resolved = resolve_host(action, request, order_id, body)
-          hash = required(resolved["payment_hash"], "payment_hash").downcase
+          hash = selected_payment_hash(resolved, requested_hash)
           success(200, yield(order_id, hash, required_swap_data(resolved["swap_data"]), body), request_id)
         end
       end
@@ -191,6 +193,13 @@ module OpenReceive
         value
       end
 
+      def selected_payment_hash(resolved, requested_hash)
+        selected = required(resolved["payment_hash"], "payment_hash").downcase
+        return selected if selected == requested_hash
+
+        raise NotFoundError, "The selected payment attempt does not belong to this order."
+      end
+
       def reject_payer_amount(body)
         return unless body.key?("amount") || body.key?("amount_msats")
         raise ValidationError, "This route does not accept a payer-supplied amount; the host resolves its order price."
@@ -207,7 +216,7 @@ module OpenReceive
           order_id: order_id, payment_hash: payment_hash, expires_at: expires_at
         )
         return checkout unless checkout.nil?
-        raise ConflictError, "The host order has a payment hash that is not a reusable pending checkout."
+        raise ConflictError, "The selected payment attempt is not a reusable pending checkout."
       end
 
       def success(status, body, request_id)

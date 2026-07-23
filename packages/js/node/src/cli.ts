@@ -1,4 +1,9 @@
-import { readOpenReceiveConfigFile, type OpenReceiveFileConfig } from "./config.ts";
+import {
+  formatOpenReceiveInvalidNwcMessage,
+  NwcUriParseError,
+  parseNwcUri,
+} from "@openreceive/core";
+import { readLscConnectionsFromEnvironment } from "./lsc-uri.ts";
 import { redactSecrets } from "./service/logging.ts";
 
 export interface OpenReceiveCliIo {
@@ -21,7 +26,7 @@ Commands:
   debug-report        Print a redacted local support report.
 
 Options:
-  --config <path>      YAML config file. Defaults to openreceive.yml.
+  -h, --help           Show this help.
 `.trim();
 
 export async function runOpenReceiveCli(options: OpenReceiveCliOptions): Promise<number> {
@@ -36,7 +41,8 @@ export async function runOpenReceiveCli(options: OpenReceiveCliOptions): Promise
       return 0;
     }
     if (command === "doctor" || command === "debug-report") {
-      return runDiagnostics({ command, args, env, cwd, stdout });
+      if (args.length > 0) throw new Error(`Unexpected option: ${args[0]}`);
+      return runDiagnostics({ command, env, cwd, stdout });
     }
     stderr.write(`Unknown OpenReceive command: ${command}\n\n${HELP}\n`);
     return 1;
@@ -48,41 +54,37 @@ export async function runOpenReceiveCli(options: OpenReceiveCliOptions): Promise
 
 function runDiagnostics(input: {
   readonly command: "doctor" | "debug-report";
-  readonly args: readonly string[];
   readonly env: NodeJS.ProcessEnv;
   readonly cwd: string;
   readonly stdout: OpenReceiveCliIo;
 }): number {
-  let config: OpenReceiveFileConfig | undefined;
-  let configError: unknown;
+  const nwc = input.env.NWC_URI?.trim();
+  let nwcError: unknown;
   try {
-    config = readOpenReceiveConfigFile({
-      cwd: input.cwd,
-      configPath: readFlag(input.args, "--config"),
-    });
+    if (nwc) parseNwcUri(nwc);
   } catch (error) {
-    configError = error;
+    nwcError =
+      error instanceof NwcUriParseError
+        ? new Error(formatOpenReceiveInvalidNwcMessage({ reason: error.description }))
+        : error;
   }
-  const nwc = configError === undefined ? config?.nwc : undefined;
+  let lscConnections = 0;
+  let lscError: unknown;
+  try {
+    lscConnections = readLscConnectionsFromEnvironment(input.env).length;
+  } catch (error) {
+    lscError = error;
+  }
   const lines = [
     `OpenReceive ${input.command}`,
     `node: ${process.version}`,
     `cwd: ${input.cwd}`,
     "storage: none (by design)",
-    `nwc: ${nwc === undefined || nwc.trim() === "" ? "missing" : "present-redacted"}`,
-    `config: ${configError === undefined ? (config === undefined ? "missing" : "loaded") : safeErrorMessage(configError)}`,
-    `swap_providers: ${config?.swap?.providers?.length ?? 0}`,
+    `NWC_URI: ${nwcError === undefined ? (nwc ? "present-redacted" : "missing") : safeErrorMessage(nwcError)}`,
+    `LSC_URI connections: ${lscError === undefined ? lscConnections : safeErrorMessage(lscError)}`,
   ];
   input.stdout.write(`${lines.join("\n")}\n`);
-  return configError !== undefined || nwc === undefined || nwc.trim() === "" ? 1 : 0;
-}
-
-function readFlag(args: readonly string[], flag: string): string | undefined {
-  const index = args.indexOf(flag);
-  if (index === -1) return undefined;
-  const value = args[index + 1];
-  if (value === undefined || value.startsWith("--")) throw new Error(`${flag} requires a value.`);
-  return value;
+  return nwcError !== undefined || !nwc || lscError !== undefined ? 1 : 0;
 }
 
 function safeErrorMessage(error: unknown): string {

@@ -12,27 +12,50 @@ const requiredWorkflows = {
     "npm run lint",
     "npm run check:generated",
     "npm run typecheck",
-    "npm run test:js"
+    "npm run test:js",
   ],
-  [`${workflowDirectory}/conformance.yml`]: ["npm run validate", "npm run check:generated", "npm run test:js"],
-  [`${workflowDirectory}/demos.yml`]: ["npm run check:demo-containers", "npm run build:demo", "npm run scan:client-bundles"],
-  [`${workflowDirectory}/provider-registry.yml`]: ["npm run validate", "tests/v0.1/provider-data.test.mjs"],
-  [`${workflowDirectory}/security.yml`]: ["npm run scan:secrets", "npm run check:workflows", "npm run scan:client-bundles"],
-  [`${workflowDirectory}/release.yml`]: ["npm run check:release", "npm run test:package-smoke", "Release dry run complete"],
-  [`${workflowDirectory}/publish.yml`]: ["npm run check:release", "Publishing is disabled"]
+  [`${workflowDirectory}/conformance.yml`]: [
+    "npm run validate",
+    "npm run check:generated",
+    "npm run test:js",
+  ],
+  [`${workflowDirectory}/demos.yml`]: [
+    "npm run check:demo-containers",
+    "npm run build:demo",
+    "npm run scan:client-bundles",
+  ],
+  [`${workflowDirectory}/provider-registry.yml`]: [
+    "npm run validate",
+    "tests/v0.1/provider-data.test.mjs",
+  ],
+  [`${workflowDirectory}/security.yml`]: [
+    "npm run scan:secrets",
+    "npm run check:workflows",
+    "npm run scan:client-bundles",
+  ],
+  [`${workflowDirectory}/release.yml`]: [
+    "npm run check:release",
+    "npm run test:package-smoke",
+    "Release dry run complete",
+  ],
+  [`${workflowDirectory}/publish.yml`]: ["npm run check:release", "Publishing is disabled"],
 };
 
 const forbiddenText = [
   "pull_request_target",
-  "OPENRECEIVE_NWC: $",
-  "OPENRECEIVE_NWC: ${{",
-  "secrets.OPENRECEIVE_NWC",
+  "NWC_URI: $",
+  "NWC_URI: ${{",
+  "secrets.NWC_URI",
+  "LSC_URI_PRIMARY: $",
+  "LSC_URI_BACKUP: $",
+  "secrets.LSC_URI_PRIMARY",
+  "secrets.LSC_URI_BACKUP",
   "secrets.CLOUDFLARE_API_TOKEN",
   "secrets.DEPLOY_SSH_KEY",
   "secrets.WIREGUARD",
   "npm publish",
   "docker push",
-  "gh release create"
+  "gh release create",
 ];
 
 const findings = [];
@@ -53,7 +76,7 @@ function readWorkflow(relativePath) {
     const workflow = parseYaml(text);
     return {
       text,
-      workflow: workflow === null ? {} : workflow
+      workflow: workflow === null ? {} : workflow,
     };
   } catch (error) {
     fail(`${relativePath}: ${error.message}`);
@@ -81,12 +104,21 @@ for (const [relativePath, requiredCommands] of Object.entries(requiredWorkflows)
   const commands = workflowCommands(workflow);
   const allCommands = commands.join("\n");
 
-  expect(typeof workflow.name === "string" && workflow.name.length > 0, `${relativePath}: missing workflow name`);
+  expect(
+    typeof workflow.name === "string" && workflow.name.length > 0,
+    `${relativePath}: missing workflow name`,
+  );
   expect(workflow.on !== undefined, `${relativePath}: missing triggers`);
-  expect(workflow.permissions?.contents === "read", `${relativePath}: contents permission must be read-only`);
+  expect(
+    workflow.permissions?.contents === "read",
+    `${relativePath}: contents permission must be read-only`,
+  );
   const permissions = workflow.permissions === undefined ? {} : workflow.permissions;
   const jobs = workflow.jobs === undefined ? {} : workflow.jobs;
-  expect(Object.keys(permissions).length === 1, `${relativePath}: workflow must not request extra permissions`);
+  expect(
+    Object.keys(permissions).length === 1,
+    `${relativePath}: workflow must not request extra permissions`,
+  );
   expect(workflow.concurrency !== undefined, `${relativePath}: missing concurrency group`);
   expect(Object.keys(jobs).length > 0, `${relativePath}: missing jobs`);
 
@@ -100,16 +132,25 @@ for (const [relativePath, requiredCommands] of Object.entries(requiredWorkflows)
 }
 
 const ciWorkflow = readWorkflow(`${workflowDirectory}/ci.yml`).workflow;
-expect(ciWorkflow.on?.pull_request !== undefined, `${workflowDirectory}/ci.yml: missing pull_request trigger`);
+expect(
+  ciWorkflow.on?.pull_request !== undefined,
+  `${workflowDirectory}/ci.yml: missing pull_request trigger`,
+);
 expect(ciWorkflow.on?.push !== undefined, `${workflowDirectory}/ci.yml: missing push trigger`);
 
 for (const scheduled of ["conformance.yml", "demos.yml", "provider-registry.yml", "security.yml"]) {
   const workflow = readWorkflow(`${workflowDirectory}/${scheduled}`).workflow;
-  expect(workflow.on?.schedule !== undefined, `${workflowDirectory}/${scheduled}: missing scheduled slow-lane trigger`);
+  expect(
+    workflow.on?.schedule !== undefined,
+    `${workflowDirectory}/${scheduled}: missing scheduled slow-lane trigger`,
+  );
 }
 
 const releaseWorkflow = readWorkflow(`${workflowDirectory}/release.yml`).workflow;
-expect(releaseWorkflow.on?.push?.tags !== undefined, `${workflowDirectory}/release.yml: missing tag pre-release trigger`);
+expect(
+  releaseWorkflow.on?.push?.tags !== undefined,
+  `${workflowDirectory}/release.yml: missing tag pre-release trigger`,
+);
 
 if (findings.length > 0) {
   console.error("Workflow validation failed:");

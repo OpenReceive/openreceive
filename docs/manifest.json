@@ -35,6 +35,14 @@
       "public": true
     },
     {
+      "slug": "node-orms",
+      "title": "Node ORM Recipes",
+      "source_path": "docs/guides/node-orms.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
       "slug": "authorization",
       "title": "Authorization",
       "source_path": "docs/guides/authorization.md",
@@ -55,6 +63,14 @@
       "title": "Automated Swaps",
       "source_path": "docs/guides/automated-swaps.md",
       "category": "guide",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "lightning-swap-connect",
+      "title": "Lightning Swap Connect URI",
+      "source_path": "docs/guides/lightning-swap-connect.md",
+      "category": "reference",
       "audience": "developer",
       "public": true
     },
@@ -164,7 +180,7 @@
     },
     {
       "slug": "scope-lock",
-      "title": "Storage-free Release Boundary",
+      "title": "Host-owned Persistence Boundary",
       "source_path": "docs/internal/scope-lock.md",
       "category": "internal",
       "audience": "contributor",
@@ -207,54 +223,6 @@
       "title": "Forbidden Without Approval",
       "source_path": "docs/internal/forbidden-without-approval.md",
       "category": "internal",
-      "audience": "contributor",
-      "public": false
-    },
-    {
-      "slug": "adr-0001-product-boundary",
-      "title": "ADR-0001: Product Boundary",
-      "source_path": "docs/internal/adr/ADR-0001-product-boundary.md",
-      "category": "adr",
-      "audience": "contributor",
-      "public": false
-    },
-    {
-      "slug": "adr-0002-no-frontend-nwc",
-      "title": "ADR-0002: No Frontend NWC",
-      "source_path": "docs/internal/adr/ADR-0002-no-frontend-nwc.md",
-      "category": "adr",
-      "audience": "contributor",
-      "public": false
-    },
-    {
-      "slug": "adr-0003-invoice-idempotency-storage-invariants",
-      "title": "ADR-0003: Host-row Invoice Idempotency",
-      "source_path": "docs/internal/adr/ADR-0003-invoice-idempotency-storage-invariants.md",
-      "category": "adr",
-      "audience": "contributor",
-      "public": false
-    },
-    {
-      "slug": "adr-0004-amount-msats-and-fiat-quote-contract",
-      "title": "ADR-0004: amount_msats And Fiat Quote Contract",
-      "source_path": "docs/internal/adr/ADR-0004-amount-msats-and-fiat-quote-contract.md",
-      "category": "adr",
-      "audience": "contributor",
-      "public": false
-    },
-    {
-      "slug": "adr-0005-openreceive-owned-kv-storage",
-      "title": "ADR-0005: No OpenReceive-owned Storage",
-      "source_path": "docs/internal/adr/ADR-0005-openreceive-owned-kv-storage.md",
-      "category": "adr",
-      "audience": "contributor",
-      "public": false
-    },
-    {
-      "slug": "adr-0007-settlement-action-delivery",
-      "title": "ADR-0007: At-least-once Verified Payment Delivery",
-      "source_path": "docs/internal/adr/ADR-0007-settlement-action-delivery.md",
-      "category": "adr",
       "audience": "contributor",
       "public": false
     }

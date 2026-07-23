@@ -7,6 +7,7 @@ export {
   NwcUriParseError,
   formatOpenReceiveMissingNwcMessage,
   formatOpenReceiveInvalidNwcMessage,
+  formatOpenReceiveSpendCapabilityWarningMessage,
   isTransactionSettled,
   parseNwcUri,
   parseNwcConnectionUri,

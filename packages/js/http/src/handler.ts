@@ -18,7 +18,7 @@ export interface CheckoutCreatedInput {
   readonly orderId: string;
   readonly paymentHash: string;
   readonly checkout: Checkout;
-  /** Sensitive server-only provider state. Persist it on the host order; never send it to a browser. */
+  /** Sensitive server-only provider state. Persist it on the payment attempt; never send it to a browser. */
   readonly swapData?: SwapData;
 }
 
@@ -36,7 +36,7 @@ export interface ResolveCheckoutContext {
 export interface ResolvedHostCheckout {
   /** Required for checkout/swap quote or creation; optional for status/refund actions. */
   readonly amount?: CreateCheckoutAmount;
-  /** Return the host row's hash to reuse or inspect its committed checkout. */
+  /** Return the selected host payment attempt's hash to reuse or inspect its checkout. */
   readonly paymentHash?: string;
   /** Server-only structured provider state loaded from the host database. */
   readonly swapData?: SwapData;
@@ -53,9 +53,9 @@ export interface CreateOpenReceiveHttpHandlerOptions {
   readonly service: OpenReceive;
   /** Host authentication and authorization policy. OpenReceive never inspects host sessions. */
   readonly authorize: OpenReceiveAuthorize;
-  /** Loads authoritative order amount, payment_hash, and optional swap_data from the host. */
+  /** Loads the authoritative order amount and selected host payment attempt. */
   readonly resolveCheckout: ResolveCheckoutHook;
-  /** Persists payment_hash and optional swap_data before payer instructions are exposed. */
+  /** Persists a payment attempt before payer instructions are exposed. */
   readonly onCheckoutCreated: CheckoutCreatedHook;
   readonly rateLimit?: OpenReceiveRateLimit;
   readonly prefix?: string;
@@ -82,7 +82,7 @@ export function createOpenReceiveHttpHandler(
     throw new TypeError("HTTP handler requires resolveCheckout; payer input is not a price authority.");
   }
   if (options.onCheckoutCreated === undefined) {
-    throw new TypeError("HTTP handler requires onCheckoutCreated to persist payment_hash before responding.");
+    throw new TypeError("HTTP handler requires onCheckoutCreated to persist a payment attempt before responding.");
   }
   const runtime: Runtime = { ...options, prefix: normalizePrefix(options.prefix ?? "/openreceive") };
   const handle = async (request: Request): Promise<Response> => {
@@ -132,9 +132,15 @@ async function dispatch(runtime: Runtime, request: Request, requestId: string): 
   }
 
   if (route.kind === "payment.check") {
-    await guard(runtime, "payment.check", request, { order_id: orderId });
+    const requestedPaymentHash = requiredPaymentHash(
+      requiredString(body.payment_hash ?? body.paymentHash, "payment_hash"),
+    );
+    await guard(runtime, "payment.check", request, {
+      order_id: orderId,
+      payment_hash: requestedPaymentHash,
+    });
     const resolved = await resolveHost(runtime, "payment.check", request, orderId, body);
-    const paymentHash = requiredPaymentHash(resolved.paymentHash);
+    const paymentHash = selectedPaymentHash(resolved, requestedPaymentHash);
     return jsonResponse(200, toSnakeCase(await runtime.service.checkPayment({ paymentHash })), requestId);
   }
 
@@ -174,10 +180,16 @@ async function dispatch(runtime: Runtime, request: Request, requestId: string): 
   }
 
   const action: OpenReceiveAuthorizeAction = route.kind === "swap.read" ? "swap.read" : "swap.refund";
-  await guard(runtime, action, request, { order_id: orderId });
+  const requestedPaymentHash = requiredPaymentHash(
+    requiredString(body.payment_hash ?? body.paymentHash, "payment_hash"),
+  );
+  await guard(runtime, action, request, {
+    order_id: orderId,
+    payment_hash: requestedPaymentHash,
+  });
   const resolved = await resolveHost(runtime, action, request, orderId, body);
   const swapData = requiredSwapData(resolved.swapData);
-  const paymentHash = requiredPaymentHash(resolved.paymentHash);
+  const paymentHash = selectedPaymentHash(resolved, requestedPaymentHash);
   if (route.kind === "swap.read") {
     return jsonResponse(200, toSnakeCase(await runtime.service.getSwap({
       orderId,
@@ -279,6 +291,21 @@ function normalizeResolvedCheckout(
   return value;
 }
 
+function selectedPaymentHash(
+  resolved: ResolvedHostCheckout,
+  requestedPaymentHash: string,
+): string {
+  const selected = requiredPaymentHash(resolved.paymentHash);
+  if (selected !== requestedPaymentHash) {
+    throw new OpenReceiveHttpError(
+      404,
+      "NOT_FOUND",
+      "The selected payment attempt does not belong to this order.",
+    );
+  }
+  return selected;
+}
+
 function requiredAmount(value: ResolvedHostCheckout): CreateCheckoutAmount {
   if (value.amount === undefined) {
     throw new OpenReceiveHttpError(404, "NOT_FOUND", "The host order has no payable amount.");
@@ -308,7 +335,7 @@ async function recoverCommittedCheckout(
   throw new OpenReceiveHttpError(
     409,
     "CONFLICT",
-    "The host order has a payment hash that is not a reusable pending checkout.",
+    "The selected payment attempt is not a reusable pending checkout.",
   );
 }
 

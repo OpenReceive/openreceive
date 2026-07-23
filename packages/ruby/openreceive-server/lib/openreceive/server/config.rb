@@ -1,38 +1,24 @@
 # frozen_string_literal: true
 
-require "yaml"
-
 module OpenReceive
   module Server
     class Config
-      attr_reader :nwc, :price_currencies, :swap, :logging
+      attr_reader :nwc, :lsc_connections
 
-      def self.load(path: "openreceive.yml", env: ENV)
-        file = path && File.exist?(path) ? YAML.safe_load(File.read(path)) || {} : {}
-        new(file: file.transform_keys(&:to_s), env: env)
+      def self.load(env: ENV)
+        new(env: env)
       end
 
-      def initialize(file: {}, env: ENV)
-        obsolete_token_key = %w[token_keys tokenKeys].find { |key| file.key?(key) }
-        unless obsolete_token_key.nil?
-          raise ArgumentError, "#{obsolete_token_key} is obsolete; the host stores server-only swap_data directly"
-        end
-        removed = %w[store storage database_url redis_url namespace].find { |key| file.key?(key) }
-        raise ArgumentError, "#{removed} is not supported; OpenReceive has no storage configuration" unless removed.nil?
-        @nwc = clean(env["OPENRECEIVE_NWC"]) || clean(file["nwc"])
-        raw_currencies = file["price_currencies"] || ["USD"]
-        @price_currencies = (raw_currencies.is_a?(String) ? raw_currencies.split(",") : Array(raw_currencies)).map { |item| item.to_s.strip.upcase }.reject(&:empty?).uniq
-        @swap = file["swap"].is_a?(Hash) ? file["swap"] : {}
-        @logging = file["logging"].is_a?(Hash) ? file["logging"] : {}
+      def initialize(env: ENV)
+        @nwc = clean(env["NWC_URI"])
+        @lsc_connections = OpenReceive::Server::LscUri.read_environment(env)
         freeze
       end
 
       def to_h
         {
-          "nwc" => @nwc.nil? ? nil : "[REDACTED]",
-          "price_currencies" => @price_currencies,
-          "swap" => @swap,
-          "logging" => @logging
+          "NWC_URI" => @nwc.nil? ? nil : "[REDACTED]",
+          "LSC_URI_connections" => @lsc_connections.length
         }
       end
 

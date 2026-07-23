@@ -84,6 +84,30 @@ class StorageFreeServerTest < Minitest::Test
     )
   end
 
+  def test_lsc_uri_shared_vectors
+    vectors = JSON.parse(File.read("spec/test-vectors/lsc-uri.json"))
+    vectors.fetch("valid").each do |vector|
+      assert_equal vector.fetch("expected"), OpenReceive::Server::LscUri.parse(vector.fetch("uri")), vector.fetch("name")
+    end
+    vectors.fetch("invalid").each do |vector|
+      assert_raises(ArgumentError, vector.fetch("name")) do
+        OpenReceive::Server::LscUri.parse(vector.fetch("uri"))
+      end
+    end
+  end
+
+  def test_config_reads_only_secret_environment_variables
+    env = {
+      "NWC_URI" => "nostr+walletconnect://example",
+      "LSC_URI_PRIMARY" => "lightning+swapconnect://ff.example/?key=k&secret=s"
+    }
+    config = OpenReceive::Server::Config.load(env: env)
+    assert_equal env.fetch("NWC_URI"), config.nwc
+    assert_equal 1, config.lsc_connections.length
+    refute_includes config.inspect, env.fetch("NWC_URI")
+    refute_includes config.to_h.to_s, "secret=s"
+  end
+
   def test_checkout_and_payment_check_are_storage_free
     checkout = @service.create_checkout("order_id" => "ruby-1", "amount" => { "sats" => 1000 })
     refute_respond_to @service, :store
@@ -127,6 +151,32 @@ class StorageFreeServerTest < Minitest::Test
     assert_equal 201, second.first
     assert_equal first.last.dig("checkout", "payment_hash"), second.last.dig("checkout", "payment_hash")
     assert_equal 1, @wallet.transactions.length
+  end
+
+  def test_handler_checks_the_exact_host_owned_payment_attempt
+    checkout = @service.create_checkout("order_id" => "ruby-check", "amount" => { "sats" => 5 })
+    selected_hash = checkout.fetch("payment_hash")
+    handler = OpenReceive::Server::RequestHandler.new(
+      service: @service,
+      authorize: ->(context) { context.dig(:resource, :payment_hash) == selected_hash },
+      resolve_checkout: lambda do |input:, **|
+        {
+          "amount" => { "sats" => 5 },
+          "payment_hash" => input.fetch("payment_hash")
+        }
+      end,
+      on_checkout_created: ->(**_payment) {}
+    )
+    status, _headers, body = handler.check_payment(
+      raw_body: JSON.generate(
+        "order_id" => "ruby-check",
+        "payment_hash" => selected_hash
+      ),
+      request: {},
+      request_id: "req-check"
+    )
+    assert_equal 200, status
+    assert_equal selected_hash, body.fetch("payment_hash")
   end
 
   def test_watch_payments_retries_failed_callback

@@ -24,7 +24,7 @@ jobs:
         node-version:
           - 22
     env:
-      OPENRECEIVE_NWC: ""
+      NWC_URI: ""
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

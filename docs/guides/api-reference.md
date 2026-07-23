@@ -14,5 +14,5 @@ Fiat conversion uses exact decimal/integer math.
 The mounted HTTP routes are defined normatively in
 [`spec/openapi/openreceive-http.v1.yaml`](../../spec/openapi/openreceive-http.v1.yaml). Create
 routes reject payer amounts and call the required host resolver. Payment and swap reads send
-`order_id`; after host authorization the resolver supplies `payment_hash` / server-only
-`swap_data`.
+`order_id` plus `payment_hash`; after host authorization the resolver verifies that exact attempt
+belongs to the order and supplies server-only `swap_data`.

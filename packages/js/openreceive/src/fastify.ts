@@ -1,3 +1,15 @@
 export { createOpenReceive } from "@openreceive/node";
-export { openReceiveFastify } from "@openreceive/fastify";
-export type { CreateOpenReceiveHttpHandlerOptions, OpenReceiveFastifyOptions } from "@openreceive/fastify";
+export {
+  createOpenReceivePaymentHooks,
+  openReceiveFastify,
+  openReceivePaymentInsert,
+} from "@openreceive/fastify";
+export type {
+  CreateOpenReceiveHttpHandlerOptions,
+  CreateOpenReceivePaymentHooksOptions,
+  OpenReceiveFastifyOptions,
+  OpenReceivePaymentHooks,
+  OpenReceivePaymentInsert,
+  OpenReceivePaymentRecord,
+  OpenReceivePaymentRepository,
+} from "@openreceive/fastify";

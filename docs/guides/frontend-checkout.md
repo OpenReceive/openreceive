@@ -9,8 +9,10 @@ return <Checkout orderId={order.id} prefix="/openreceive" />;
 ```
 
 `requestCheckout({ orderId, prefix })` posts the order ID to the mounted create route. The host
-resolves the order price and commits its payment hash before the browser receives the invoice.
-Later payment/swap requests send the same order ID and rely on the host's normal authorization.
+resolves the order price and commits its payment-attempt row before the browser receives the
+invoice. Later payment/swap requests send the same order ID plus the displayed `payment_hash`
+and rely on the host's normal authorization.
 
 Order summaries and resume pages are host concerns; fetch them from your application API, not
-from OpenReceive. Status polling posts `order_id` to `/payments/check`; the host loads the hash.
+from OpenReceive. Status polling posts `{ order_id, payment_hash }` to `/payments/check`; the
+host verifies that exact attempt belongs to the order.

@@ -303,7 +303,7 @@ class FixedFloatProvider implements SwapProvider {
     // binding rate — this keeps concurrent checkouts from each burning a /price weight
     // unit (same pattern as the fiat price feed / NWC settlement sweep gate).
     // Rates refresh failures throw (fail closed) so the service can skip this provider
-    // and try the next entry in swap.providers.
+    // and try the next configured LSC connection.
     const resolution = await this.resolveCurrencies();
     const fromCcy = requiredCurrency(resolution, input.payInAsset);
     const rates = await this.resolveRatesIndex();
@@ -562,7 +562,7 @@ class FixedFloatProvider implements SwapProvider {
       refreshSeconds: this.ratesCacheSeconds,
       maxStaleSeconds: Math.max(SWAP_RATES_MAX_STALE_SECONDS, this.ratesCacheSeconds),
       // Crypto rates must not linger after a failed refresh — fail closed so the
-      // service can skip this provider and try the next entry in swap.providers.
+      // service can skip this provider and try the next configured LSC connection.
       serveStaleOnFailure: false,
       fetch: () => this.fetchRatesIndex(),
       serialize: serializeFixedFloatRatesIndex,
@@ -697,22 +697,14 @@ function classifyFixedFloatQuoteError(error: unknown): SwapAvailabilityReason {
     ) {
       return "amount_too_small";
     }
-    if (
-      message.includes("max") ||
-      message.includes("large") ||
-      message.includes("limit_max")
-    ) {
+    if (message.includes("max") || message.includes("large") || message.includes("limit_max")) {
       return "amount_too_large";
     }
     return "pair_temporarily_unavailable";
   }
   const message =
     error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
-  if (
-    message.includes("rate") ||
-    message.includes("429") ||
-    message.includes("weight budget")
-  ) {
+  if (message.includes("rate") || message.includes("429") || message.includes("weight budget")) {
     return "provider_rate_limited";
   }
   if (message.includes("fetch") || message.includes("network") || message.includes("timeout")) {

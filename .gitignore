@@ -3,7 +3,7 @@
 # Local environment and deployment secrets.
 .env
 .env.*
-openreceive.yml
+!.env.example
 .openreceive/
 
 private_private_infra_details.txt

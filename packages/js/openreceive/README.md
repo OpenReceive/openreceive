@@ -1,5 +1,6 @@
 # openreceive
 
-Convenience package re-exporting OpenReceive's storage-free Node, browser, framework, and
-contract packages. Configure receive-only NWC plus a token keyring; store `payment_hash` and
-write-once `paid_at` on your own order. See the repository README.
+Convenience package re-exporting OpenReceive's Node, browser, framework, and
+contract packages. Configure receive-only NWC and keep host orders separate
+from `openreceive_payments`, with one row per attempt. The runtime accepts no
+database configuration. See the repository README.

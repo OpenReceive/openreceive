@@ -188,8 +188,17 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
         return;
       }
       try {
+        const payment = [startedSwapInvoice, ...(checkout?.invoices ?? [])].find(
+          (invoice) =>
+            invoice != null &&
+            (invoice.swap?.attempt_id ?? invoice.invoice_id) === attemptId,
+        );
+        if (payment?.payment_hash === undefined) {
+          throw new Error("Swap refund requires the original payment hash.");
+        }
         const body = await postOpenReceiveJson(fetcher, props.orderUrl, {
           order_id: orderId,
+          payment_hash: payment.payment_hash,
           action: "refund_swap",
           attempt_id: attemptId,
           refund_address: refundAddress,
@@ -203,7 +212,15 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
         props.onError?.(error);
       }
     },
-    [props.orderUrl, orderId, fetcher, props.onError, props.logger],
+    [
+      props.orderUrl,
+      orderId,
+      fetcher,
+      props.onError,
+      props.logger,
+      startedSwapInvoice,
+      checkout?.invoices,
+    ],
   );
   const updateWizardSelection = React.useCallback(
     (

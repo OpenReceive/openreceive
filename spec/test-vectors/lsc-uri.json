@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "valid": [
+    {
+      "name": "root endpoint",
+      "uri": "lightning+swapconnect://ff.example/?key=example-key&secret=example-secret",
+      "expected": {
+        "uri_protocol": "lightning+swapconnect:",
+        "base_url": "https://ff.example/",
+        "provider_id": "ff-example",
+        "key": "example-key",
+        "secret": "example-secret"
+      }
+    },
+    {
+      "name": "path endpoint and percent encoded credentials",
+      "uri": "lightning+swapconnect://swap.example/v1?key=key%2Bone&secret=secret%2Ftwo",
+      "expected": {
+        "uri_protocol": "lightning+swapconnect:",
+        "base_url": "https://swap.example/v1/",
+        "provider_id": "swap-example-v1",
+        "key": "key+one",
+        "secret": "secret/two"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "wrong scheme",
+      "uri": "https://ff.example/?key=k&secret=s"
+    },
+    {
+      "name": "missing hostname",
+      "uri": "lightning+swapconnect:?key=k&secret=s"
+    },
+    {
+      "name": "missing key",
+      "uri": "lightning+swapconnect://ff.example/?secret=s"
+    },
+    {
+      "name": "duplicate secret",
+      "uri": "lightning+swapconnect://ff.example/?key=k&secret=s&secret=t"
+    },
+    {
+      "name": "unknown query parameter",
+      "uri": "lightning+swapconnect://ff.example/?key=k&secret=s&extra=x"
+    },
+    {
+      "name": "malformed percent encoding",
+      "uri": "lightning+swapconnect://ff.example/?key=k&secret=%ZZ"
+    },
+    {
+      "name": "fragment",
+      "uri": "lightning+swapconnect://ff.example/?key=k&secret=s#fragment"
+    },
+    {
+      "name": "userinfo",
+      "uri": "lightning+swapconnect://user@ff.example/?key=k&secret=s"
+    }
+  ]
+}

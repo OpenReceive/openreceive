@@ -14,7 +14,6 @@ coverage
 # Local-only secrets and notes.
 .env
 .env.*
-openreceive.yml
 private
 building
 private_private_infra_details.txt

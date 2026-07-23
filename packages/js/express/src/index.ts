@@ -23,10 +23,19 @@ import type {
 
 export type { CreateOpenReceiveHttpHandlerOptions } from "@openreceive/http";
 export {
+  createOpenReceivePaymentHooks,
   mapHostRouteError,
+  openReceivePaymentInsert,
   OpenReceiveHostError,
   hostError,
   isServiceErrorShape,
+} from "@openreceive/http";
+export type {
+  CreateOpenReceivePaymentHooksOptions,
+  OpenReceivePaymentHooks,
+  OpenReceivePaymentInsert,
+  OpenReceivePaymentRecord,
+  OpenReceivePaymentRepository,
 } from "@openreceive/http";
 
 export interface OpenReceiveExpressMiddleware extends RequestHandler {

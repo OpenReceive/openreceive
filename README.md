@@ -57,32 +57,38 @@ OpenReceive hinges on three ideas:
   create and inspect invoices. Receive-only NWC codes never belong in browser
   code, mobile apps, logs, screenshots, documentation examples, or demo assets.
 - **Your app owns business state.** You keep authentication, carts, pricing,
-  orders, idempotency, and fulfillment. OpenReceive does not need a database,
-  Redis instance, migration, table, storage adapter, or durable worker state.
+  orders, payment-attempt rows, and fulfillment. OpenReceive's runtime accepts
+  no database/Redis connection or storage adapter.
 
 ## The host contract
 
-Add two fields to the order model you already have:
+Keep the order model unchanged. Add one host-owned table to the application's
+existing database:
 
 ```text
-payment_hash  nullable, unique
-paid_at       nullable timestamp
+openreceive_payments
+  order_id      required, indexed; many attempts may belong to one order
+  payment_hash  required, unique
+  paid_at       nullable timestamp
+  expires_at    required timestamp
+  swap_data     nullable JSON/text, server-only
 ```
 
-For swaps, optionally add one server-only JSON/text `swap_data` field. It holds
-the provider order ID and credential needed to inspect an unresolved swap. It
-must never be returned to browser code or written to logs.
+Each row represents one invoice or swap attempt. `swap_data` holds the provider
+credential needed to inspect that attempt and must never reach browser code or
+logs.
+
 The required sequence is:
 
 1. Your app creates and prices its order.
 2. OpenReceive creates a checkout for that exact amount.
-3. Your app stores `payment_hash` before returning the checkout to the payer.
+3. Your app appends the payment row before returning the checkout to the payer.
 4. OpenReceive verifies wallet settlement and calls `onPaid` at least once.
-5. Your app finds the order by `payment_hash` and sets `paid_at` only when it is
-   null.
+5. Your app finds the attempt by `payment_hash`, sets its `paid_at` once, and
+   fulfills the order only for its first settled attempt.
 
-The order row is also the invoice-creation idempotency guard. Concurrent or
-retried create calls must converge on that row. Never display an invoice whose
+The commit transaction locks the existing order row, allowing multiple
+historical attempts but only one live attempt. Never display an invoice whose
 hash the host did not commit.
 
 ## Direct Node API
@@ -92,14 +98,15 @@ import { createOpenReceive } from "@openreceive/node";
 
 const openreceive = await createOpenReceive({
   onPaid: async ({ paymentHash, paidAt }) => {
-    await orders.markPaidOnce({ paymentHash, paidAt });
+    await payments.markPaidOnce({ paymentHash, paidAt });
   },
 });
 
-const existing = order.paymentHash
+const liveAttempt = await payments.findLiveForOrder(order.id);
+const existing = liveAttempt
   ? await openreceive.recoverCheckout({
       orderId: order.id,
-      paymentHash: order.paymentHash,
+      paymentHash: liveAttempt.paymentHash,
     })
   : null;
 
@@ -110,18 +117,19 @@ const checkout = await openreceive.createCheckout({
   amount: { currency: "USD", value: order.total.toString() },
 });
 
-if (!(await orders.storePaymentHashIfEmpty(order.id, checkout.paymentHash))) {
-  throw new Error("Concurrent checkout won; retry without exposing this invoice.");
-}
+await payments.commitAttemptWhileLockingOrder({ order, checkout });
 return checkout;
 ```
 
-`createOpenReceive()` reads `nwc` from the root `openreceive.yml` by default.
-Pass `nwc` explicitly only when you intentionally want to override the file
-configuration, such as in a test.
+`createOpenReceive()` reads the receive-only wallet connection from `NWC_URI`.
+Optional swap connections come from `LSC_URI_PRIMARY` and `LSC_URI_BACKUP`.
+These are the only OpenReceive secret environment variables.
+The library does not load `.env` itself; the host entry point or deployment
+platform supplies the environment. Pass `nwc` explicitly only for an
+intentional runtime override, such as an isolated test.
 
-`checkPayment({ paymentHash })` verifies a known order. `reconcilePayments`
-checks unresolved host rows. `watchPayments({ onPaid })` scans overlapping
+`checkPayment({ paymentHash })` verifies a known attempt. `reconcilePayments`
+checks unresolved payment rows. `watchPayments({ onPaid })` scans overlapping
 NIP-47 creation-time windows and delivers verified settlements at least once.
 
 ## Ship the routes, keep your auth
@@ -135,6 +143,17 @@ A create request supplies an order ID, never its own price. The host resolves
 the authoritative amount from its order:
 
 ```ts
+import { createOpenReceivePaymentHooks } from "@openreceive/http";
+
+const paymentHooks = createOpenReceivePaymentHooks({
+  loadOrder: (orderId) => orders.find(orderId),
+  amountForOrder: (order) => ({
+    currency: order.currency,
+    value: order.total.toString(),
+  }),
+  payments: paymentRepository,
+});
+
 app.use(openReceiveExpress({
   // The configured OpenReceive service holds the receive-only wallet connection.
   // Keep this object on the server; never expose its NWC configuration to clients.
@@ -151,50 +170,8 @@ app.use(openReceiveExpress({
     });
   },
 
-  // This hook runs after authorization. Load the order from your database and
-  // return its server-owned payment state. Browser input is never the price
-  // authority: the amount must come from your trusted order row.
-  resolveCheckout: async ({ orderId }) => {
-    const order = await orders.find(orderId);
-    if (!order) {
-      throw hostError("Order not found.", 404, "NOT_FOUND");
-    }
-
-    return {
-      // OpenReceive uses this authoritative amount when creating an invoice or swap.
-      amount: { currency: order.currency, value: order.total.toString() },
-
-      // When present, the existing hash tells OpenReceive to recover the live
-      // checkout instead of creating another invoice during a retry.
-      ...(order.paymentHash ? { paymentHash: order.paymentHash } : {}),
-
-      // swapData contains sensitive provider recovery credentials. Load it only
-      // on the server. OpenReceive never includes it in the HTTP response.
-      ...(order.swapData
-        ? { swapData: order.swapData }
-        : {}),
-    };
-  },
-
-  // OpenReceive calls this before returning an invoice or swap deposit address
-  // to the payer. Persist both values in the same database transaction.
-  onCheckoutCreated: async ({
-    orderId,
-    paymentHash,
-    swapData,
-  }) => {
-    // This operation must use a row lock or compare-and-set:
-    // - store paymentHash only when the column is empty;
-    // - accept the same hash on a retry;
-    // - reject a different hash already committed by a concurrent request;
-    // - store swapData only in a server-only JSON/text field.
-    // Throwing here makes OpenReceive return 409 without exposing payer instructions.
-    await orders.commitPaymentAttempt({
-      orderId,
-      paymentHash,
-      swapData,
-    });
-  },
+  resolveCheckout: paymentHooks.resolveCheckout,
+  onCheckoutCreated: paymentHooks.onCheckoutCreated,
 }));
 ```
 
@@ -209,7 +186,7 @@ settlement requires `settled_at` or a wallet transaction state of `settled`; a
 preimage alone is not final proof.
 
 Swap recovery is independent of wallet settlement. The payment hash proves
-that the merchant wallet was paid. The host's server-only `swap_data` field
+that the merchant wallet was paid. The payment attempt's server-only `swap_data`
 contains the provider workflow details needed to query an unresolved swap
 after a process restart. OpenReceive never exposes that field through its HTTP
 routes. Refund calls are host-authorized and refresh provider state immediately
@@ -245,11 +222,11 @@ npm run demo static    # Static HTML + small API             http://localhost:30
 npm run demo nextjs    # Next.js fullstack                   http://localhost:3002
 ```
 
-Each command creates a root `openreceive.yml` if missing, validates `nwc`, and
-runs that demo's Docker Compose stack. Set a valid receive-only NWC code from a
-compatible wallet before checkout creation. Optional automated swaps are
-configured server-side under `swap.providers`; provider credentials never
-reach the browser.
+Each command creates a root `.env` from `.env.example` if missing, validates
+`NWC_URI`, and runs that demo's Docker Compose stack. Set a valid receive-only
+NWC URI from a compatible wallet before checkout creation. Optional automated
+swaps use `LSC_URI_PRIMARY` and `LSC_URI_BACKUP`; provider
+credentials never reach the browser.
 
 Arguments after `--` are forwarded to `docker compose up`, for example:
 
@@ -290,6 +267,7 @@ Start with the [developer guides](docs/guides/README.md):
 - [Frontend checkout](docs/guides/frontend-checkout.md)
 - [Price feeds](docs/guides/price-feeds.md)
 - [Automated swaps](docs/guides/automated-swaps.md)
+- [Lightning Swap Connect](docs/guides/lightning-swap-connect.md)
 - [Authorization](docs/guides/authorization.md)
 - [Normative HTTP contract](spec/openapi/openreceive-http.v1.yaml)
 - [Contributor and operator docs](docs/internal/README.md)

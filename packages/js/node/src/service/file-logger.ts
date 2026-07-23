@@ -16,8 +16,8 @@ const LOG_LEVEL_ORDER: Record<OpenReceiveLogLevel, number> = {
 };
 
 /**
- * Default rotating-file logging configuration. Mirrored in `openreceive.yml.example`
- * under the `logging:` block. Writes every emitted event (down to `debug`) as a
+ * Default rotating-file logging configuration. Applications may override these
+ * non-secret settings in their normal Node configuration module. Writes every emitted event (down to `debug`) as a
  * timestamped JSON line to `./logs/openreceive.log`, keeping 5 files of up to 10 MB.
  */
 export const OPENRECEIVE_LOGGING_DEFAULTS = {
@@ -103,7 +103,7 @@ export function createOpenReceiveFileLogger(config: ResolvedFileLoggerConfig): L
 }
 
 /**
- * Resolve a `logging:` config block (with defaults) into a file logger, or `undefined`
+ * Resolve the tracked `logging` options (with defaults) into a file logger, or `undefined`
  * when file logging is explicitly disabled (`enabled: false`).
  */
 export function createOpenReceiveFileLoggerFromConfig(

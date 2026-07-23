@@ -7,7 +7,7 @@ swaps / settlement beyond the integrator happy path.
 2. [Shipped Routes](shipped-routes.md) - OpenAPI route contract and host-hook boundary.
 3. [Custom Controller Integration](custom-controller-integration.md) - escape hatch when not mounting shipped routes.
 4. [Swap Operations](swap-operations.md) - host swap data, provider state, and refunds.
-5. [Settlement Sweeps](settlement-sweeps.md) - storage-free reconciliation and low-traffic drivers.
+5. [Settlement Sweeps](settlement-sweeps.md) - host-payment reconciliation and low-traffic drivers.
 6. [Deployment State](deployment-storage.md) - host-row guarantees and multi-instance rules.
 7. [Scope Lock](scope-lock.md) - v0.1 release boundary.
 8. [Conformance](conformance.md) - schemas, vectors, gates, mock wallet, and live wallet smoke.

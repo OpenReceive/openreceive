@@ -25,6 +25,17 @@ export {
 } from "./errors.ts";
 export type { ServiceErrorShape } from "./errors.ts";
 export {
+  createOpenReceivePaymentHooks,
+  openReceivePaymentInsert,
+} from "./host-payments.ts";
+export type {
+  CreateOpenReceivePaymentHooksOptions,
+  OpenReceivePaymentHooks,
+  OpenReceivePaymentInsert,
+  OpenReceivePaymentRecord,
+  OpenReceivePaymentRepository,
+} from "./host-payments.ts";
+export {
   createOpenReceiveHttpHandler,
 } from "./handler.ts";
 export type {

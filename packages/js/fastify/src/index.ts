@@ -16,6 +16,17 @@ import {
 // so both agree; request.raw.url carries the full path, so matching is exact.
 
 export type { CreateOpenReceiveHttpHandlerOptions } from "@openreceive/http";
+export {
+  createOpenReceivePaymentHooks,
+  openReceivePaymentInsert,
+} from "@openreceive/http";
+export type {
+  CreateOpenReceivePaymentHooksOptions,
+  OpenReceivePaymentHooks,
+  OpenReceivePaymentInsert,
+  OpenReceivePaymentRecord,
+  OpenReceivePaymentRepository,
+} from "@openreceive/http";
 
 /** Minimal structural view of the Fastify surface this adapter uses. */
 interface FastifyRequestLike {

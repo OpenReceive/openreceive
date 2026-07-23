@@ -64,7 +64,7 @@ The release owner also checks:
 - Package artifact dry run passes through `npm run build:packages`.
 - Local package artifact smoke passes.
 - Demo build passes.
-- Live wallet smoke passes when a trusted `nwc` is available in openreceive.yml.
+- Live wallet smoke passes when a trusted `NWC_URI` is available in the environment.
 
 For a prepare preview without editing files:
 

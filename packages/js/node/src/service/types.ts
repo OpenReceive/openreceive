@@ -9,12 +9,7 @@ import type {
   PaymentCheck,
   SimplePriceFetch,
 } from "@openreceive/core";
-import type {
-  SwapPayInAsset,
-  SwapOrder,
-  SwapProvider,
-  SwapProviderState,
-} from "../swap/index.ts";
+import type { SwapPayInAsset, SwapOrder, SwapProvider, SwapProviderState } from "../swap/index.ts";
 
 export type OpenReceiveLogLevel = "debug" | "info" | "warn" | "error";
 
@@ -53,9 +48,10 @@ export interface NodeOptions {
 
 export interface CreateOpenReceiveOptions extends Omit<NodeOptions, "client"> {
   readonly client?: OpenReceiveReceiveNwcClient;
+  /** Explicit override. Normal applications read the receive-only URI from NWC_URI. */
   readonly nwc?: string;
-  readonly configPath?: string | false;
-  readonly cwd?: string;
+  /** Environment source for NWC_URI, LSC_URI_PRIMARY, and LSC_URI_BACKUP. Defaults to process.env. */
+  readonly env?: Readonly<Record<string, string | undefined>>;
   readonly priceFetch?: SimplePriceFetch;
 }
 
@@ -117,9 +113,7 @@ export interface PaymentWatcher {
 }
 
 export type NodeSettlementActionInput = PaidPayment;
-export type NodeSettlementActionHook = (
-  input: NodeSettlementActionInput,
-) => Promise<void> | void;
+export type NodeSettlementActionHook = (input: NodeSettlementActionInput) => Promise<void> | void;
 
 export interface SwapOptions {
   readonly providers?: readonly SwapProvider[];

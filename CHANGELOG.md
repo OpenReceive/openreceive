@@ -2,17 +2,21 @@
 
 ## 0.1.1 - Unreleased
 
-### Storage-free redesign
+### Host-owned payment attempts
 
-- Removed every OpenReceive database, Redis, migration, table, persistence adapter, and
-  durable worker. The host order stores `payment_hash`, write-once `paid_at`, and optional
-  server-only `swap_data` when swaps are enabled.
-- Replaced prepare/order persistence routes with storage-free checkout creation, payment
+- The runtime still accepts no database/Redis connection or storage adapter. Rails now generates
+  a host-owned `OpenReceivePayment` model/migration; Node ships shared hooks plus Prisma, Drizzle,
+  TypeORM, Sequelize, and Knex recipes.
+- Replaced payment fields on the host order with one `openreceive_payments` row per invoice/swap
+  attempt. Orders can retain multiple expired or settled attempts without schema changes.
+- Attempt insertion serializes on the host order row, so only one live attempt can escape while
+  historical `payment_hash` values remain available for late settlement.
+- Replaced prepare/order persistence routes with stateless runtime checkout creation, payment
   verification, reconciliation, rates, and swap recovery primitives. The host is the sole
-  price authority and must commit the payment hash before payer instructions are returned.
-- Removed OpenReceive authentication/recovery/refund tokens and their keyring. The host
-  authorizes by `order_id`, loads its own `payment_hash` / `swap_data`, and never exposes
-  provider credentials to the browser.
+  price authority and must commit its payment-attempt row before payer instructions are returned.
+- Removed OpenReceive authentication/recovery/refund tokens and their keyring. Reads carry
+  `order_id` plus `payment_hash`; the host authorizes the order and verifies the attempt before
+  loading `swap_data`. Provider credentials never reach the browser.
 
 ### Hosted demos removed
 
@@ -189,7 +193,7 @@
 - Added OpenReceive Node Postgres pool setup for Hello Fruit demos and removed
   the unfinished Rails adapter/demo lane before release.
 - Simplified the app-facing API before release: `createOpenReceive()` now
-  reads `OPENRECEIVE_NWC`, validates receive-only wallet access at boot,
+  reads `NWC_URI`, validates receive-only wallet access at boot,
   initializes storage, defaults to live cached price data, auto-loads configured
   swap providers from `OPENRECEIVE_SWAP_*` env variables, and exposes service
   methods. Host apps own route protection, settlement uses backend

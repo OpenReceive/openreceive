@@ -4,8 +4,8 @@ import {
   StaticPriceProvider,
 } from "@openreceive/core";
 import { createNwcReceiveClient } from "./alby-nwc.ts";
-import { readOpenReceiveConfigFile } from "./config.ts";
 import { OpenReceiveConfigError } from "./config-error.ts";
+import { createLscSwapProvidersFromEnvironment } from "./lsc-uri.ts";
 import { attachOpenReceiveFileLogging } from "./service/file-logger.ts";
 import { createCheckout } from "./service/checkouts.ts";
 import { currentUnixSeconds } from "./service/core-utils.ts";
@@ -15,12 +15,7 @@ import {
   quoteRates,
   readOpenReceivePriceCurrencies,
 } from "./service/pricing.ts";
-import {
-  createSwap,
-  getSwap,
-  quoteSwap,
-  refundSwap,
-} from "./service/swaps.ts";
+import { createSwap, getSwap, quoteSwap, refundSwap } from "./service/swaps.ts";
 import type {
   CreateOpenReceiveOptions,
   OpenReceive,
@@ -38,9 +33,14 @@ export { createOpenReceivePriceFeed };
 export async function createOpenReceive(
   supplied: CreateOpenReceiveOptions = {},
 ): Promise<OpenReceive> {
-  const options = attachOpenReceiveFileLogging(mergeFileConfig(supplied));
+  const environment = supplied.env ?? process.env;
+  const options = attachOpenReceiveFileLogging(supplied);
   const clock = options.clock ?? currentUnixSeconds;
-  const client = options.client ?? createNwcReceiveClient({ connectionString: requireNwc(options.nwc) });
+  const client =
+    options.client ??
+    createNwcReceiveClient({
+      connectionString: requireNwc(options.nwc ?? environment.NWC_URI),
+    });
   await preflight(client);
 
   const priceCurrencies = readOpenReceivePriceCurrencies(options.priceCurrencies);
@@ -55,13 +55,12 @@ export async function createOpenReceive(
             clock,
           }),
         ]);
-  const swapProviders = options.swap?.providers ?? [];
+  const swapProviders =
+    options.swap?.providers ?? createLscSwapProvidersFromEnvironment(environment, { now: clock });
   const swapCache = new TransientSwapCache(clock);
   for (const provider of swapProviders) {
     provider.attachSwapCache?.(swapCache);
-    provider.attachWeightBudget?.(
-      new SwapProviderWeightBudget(provider.name, clock),
-    );
+    provider.attachWeightBudget?.(new SwapProviderWeightBudget(provider.name, clock));
   }
 
   const context: OpenReceiveServiceContext = {
@@ -89,7 +88,8 @@ export async function createOpenReceive(
         transaction.amount_msats === undefined ||
         transaction.created_at === undefined ||
         (input.expiresAt ?? transaction.expires_at ?? transaction.created_at + 600) <= clock()
-      ) return null;
+      )
+        return null;
       const amountMsats = Number(transaction.amount_msats);
       if (!Number.isSafeInteger(amountMsats)) return null;
       return {
@@ -186,28 +186,12 @@ function startPaymentWatcher(
   return { stop, done };
 }
 
-function mergeFileConfig(options: CreateOpenReceiveOptions): CreateOpenReceiveOptions {
-  const file = readOpenReceiveConfigFile({
-    cwd: options.cwd,
-    configPath: options.configPath,
-    now: options.clock,
-  });
-  if (file === undefined) return options;
-  return {
-    ...(file.nwc === undefined ? {} : { nwc: file.nwc }),
-    ...(file.priceCurrencies === undefined ? {} : { priceCurrencies: file.priceCurrencies }),
-    ...(file.swap === undefined ? {} : { swap: { providers: file.swap.providers } }),
-    ...(file.logging === undefined ? {} : { logging: file.logging }),
-    ...options,
-  } as CreateOpenReceiveOptions;
-}
-
 function requireNwc(value: string | undefined): string {
   if (value === undefined || value.trim().length === 0) {
     throw new OpenReceiveConfigError({
       code: "MISSING_NWC",
       message: "OpenReceive requires a receive-only NWC connection string.",
-      hint: "Set nwc in openreceive.yml or pass it to createOpenReceive().",
+      hint: "Set the receive-only connection in NWC_URI or pass nwc explicitly.",
     });
   }
   return value;

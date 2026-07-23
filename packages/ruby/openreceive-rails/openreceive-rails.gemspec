@@ -5,14 +5,14 @@ require_relative "lib/openreceive/rails/version"
 Gem::Specification.new do |spec|
   spec.name = "openreceive-rails"
   spec.version = OpenReceive::Rails::VERSION
-  spec.summary = "Storage-free OpenReceive mountable Rails engine."
+  spec.summary = "OpenReceive mountable Rails engine with host-owned payment scaffolding."
   spec.description =
     "A mountable Rails engine that ships OpenReceive's receive-only checkout routes into a " \
     "Rails app. Engine controllers inherit from the host's ApplicationController (keeping its " \
     "CSRF, authentication, and current_user), delegate to the openreceive-server Service, and " \
     "obey host-supplied authorization, amount-resolution, and " \
-    "payment-hash commit hooks. It has no OpenReceive tables or migrations. Receive-only: it " \
-    "never exposes a spend path."
+    "payment-attempt commit hooks. Its install generator creates a host-owned model and migration; " \
+    "the runtime accepts no database configuration. Receive-only: it never exposes a spend path."
   spec.authors = ["OpenReceive"]
   spec.homepage = "https://openreceive.org"
   spec.license = "MIT"

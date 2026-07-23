@@ -1,8 +1,13 @@
 # Automated swaps
 
 A swap creates a shadow Lightning invoice in the merchant wallet, then asks a configured
-provider for deposit instructions. The host commits both `payment_hash` and server-only
-`swap_data` before those instructions reach the payer.
+provider for deposit instructions. The host commits both values on one payment-attempt row
+before those instructions reach the payer.
+
+Node hosts configure provider credentials with optional `LSC_URI_PRIMARY` and
+`LSC_URI_BACKUP` environment variables. See
+[Lightning Swap Connect](lightning-swap-connect.md) for the URI grammar and
+security requirements.
 
 The two recovery planes are independent:
 

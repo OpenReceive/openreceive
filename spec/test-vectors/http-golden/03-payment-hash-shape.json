@@ -1,5 +1,5 @@
 {
-  "name": "payment check requires a payment hash on the host order",
+  "name": "payment check requires an exact payment-attempt selector",
   "request": {
     "method": "POST",
     "path": "/openreceive/payments/check",

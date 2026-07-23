@@ -21,7 +21,7 @@ export interface PostOpenReceiveJsonOptions {
 }
 
 /**
- * POST JSON through the storage-free swap route set. Legacy UI action names are translated
+ * POST JSON through the mounted swap route set. Legacy UI action names are translated
  * internally so framework packages do not expose the old order multiplexer on the wire.
  */
 export async function postOpenReceiveJson(
@@ -125,16 +125,20 @@ async function refundRequest(
   if (orderId === undefined) throw new Error("Swap refund requires order_id.");
   const refundAddress = nonEmptyString(body.refund_address);
   if (refundAddress === undefined) throw new Error("Swap refund requires refund_address.");
+  const paymentHash = nonEmptyString(body.payment_hash);
+  if (paymentHash === undefined) throw new Error("Swap refund requires payment_hash.");
   const prefix = routePrefix(url);
   if (body.confirm === true) {
     const status = asRecord(await requestJson(fetcher, `${prefix}/swaps/refunds`, {
       order_id: orderId,
+      payment_hash: paymentHash,
       refund_address: refundAddress,
     }, options));
     return { swap: status };
   }
   const status = asRecord(await requestJson(fetcher, `${prefix}/swaps/status`, {
     order_id: orderId,
+    payment_hash: paymentHash,
   }, options));
   return {
     swap: {

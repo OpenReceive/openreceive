@@ -2488,11 +2488,22 @@ export function defineOpenReceiveElements(
       if (url === null) return;
 
       try {
+        const payment = [
+          this.startedSwapInvoice,
+          ...(this.latestCheckoutSnapshot?.invoices ?? [])
+        ].find((invoice) =>
+          invoice != null &&
+          (invoice.swap?.attempt_id ?? invoice.invoice_id) === attemptId
+        );
+        if (payment?.payment_hash === undefined) {
+          throw new Error("Swap refund requires the original payment hash.");
+        }
         const body = await postOpenReceiveJson(
           globalThis.fetch,
           url,
           {
             ...(orderId === null ? {} : { order_id: orderId }),
+            payment_hash: payment.payment_hash,
             action: "refund_swap",
             attempt_id: attemptId,
             refund_address: refundAddress,

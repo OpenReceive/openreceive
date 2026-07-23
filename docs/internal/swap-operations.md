@@ -1,7 +1,7 @@
 # Swap operations
 
-OpenReceive keeps no swap row. The host stores one optional server-only `swap_data` JSON/text
-field alongside `payment_hash`. Wallet settlement and provider workflow recovery remain
+The host stores each swap attempt in `openreceive_payments`, with optional server-only
+`swap_data` beside its `payment_hash`. Wallet settlement and provider workflow recovery remain
 independent:
 
 | Question | Authority | Host data |
@@ -42,14 +42,14 @@ Common normalized states are `awaiting_deposit`, `confirming`, `exchanging`,
 
 ## Refund safety
 
-The browser sends `order_id` and `refund_address`. The host authorizes order access, loads
-`swap_data`, and then calls:
+The browser sends `order_id`, `payment_hash`, and `refund_address`. The host authorizes order
+access, verifies that attempt belongs to it, loads `swap_data`, and then calls:
 
 ```ts
 await openreceive.refundSwap({
   orderId: order.id,
-  paymentHash: order.paymentHash,
-  swapData: order.swapData,
+  paymentHash: payment.paymentHash,
+  swapData: payment.swapData,
   refundAddress,
 });
 ```
@@ -70,6 +70,6 @@ refund recovery then require provider dashboard/support access.
 ## Multi-instance behavior
 
 No OpenReceive coordination service is required. Each process may poll the provider or wallet
-independently; callbacks can repeat. The host's write-once `paid_at` and fulfillment transaction
-absorb duplicate delivery. Process-local rate/catalog caches and request-weight guards are
+independently; callbacks can repeat. Write-once attempt `paid_at` and first-settlement host
+fulfillment absorb duplicate delivery. Process-local rate/catalog caches and request-weight guards are
 performance aids, not durable correctness state.

@@ -52,8 +52,16 @@ const forbidSecrets = (relativePath, text) => {
   expect(!/[?&]secret=[0-9a-fA-F]{16,}/.test(text), `${relativePath}: contains an NWC secret`);
 };
 const forbidOpenReceivePersistence = (relativePath, text) => {
-  expect(!/local-sqlite|sqlite3|libsqlite|\bpostgres\b|OPENRECEIVE_STORE|OPENRECEIVE_NAMESPACE/i.test(text), `${relativePath}: contains OpenReceive persistence configuration`);
-  expect(!/\.openreceive/.test(text), `${relativePath}: mounts or references an OpenReceive state directory`);
+  expect(
+    !/local-sqlite|sqlite3|libsqlite|\bpostgres\b|OPENRECEIVE_STORE|OPENRECEIVE_NAMESPACE/i.test(
+      text,
+    ),
+    `${relativePath}: contains OpenReceive persistence configuration`,
+  );
+  expect(
+    !/\.openreceive/.test(text),
+    `${relativePath}: mounts or references an OpenReceive state directory`,
+  );
 };
 
 for (const demo of demos) {
@@ -69,8 +77,14 @@ for (const demo of demos) {
   forbidOpenReceivePersistence(dockerfilePath, dockerfile);
   expect(/^FROM node:22-bookworm-slim$/m.test(dockerfile), `${dockerfilePath}: must use Node 22`);
   expect(dockerfile.includes("npm ci --no-audit"), `${dockerfilePath}: must use npm ci`);
-  expect(dockerfile.includes("RUN npm run build:packages"), `${dockerfilePath}: must build packages`);
-  expect(dockerfile.includes(`RUN npm run build -w ${demo.packageName}`), `${dockerfilePath}: must build the demo`);
+  expect(
+    dockerfile.includes("RUN npm run build:packages"),
+    `${dockerfilePath}: must build packages`,
+  );
+  expect(
+    dockerfile.includes(`RUN npm run build -w ${demo.packageName}`),
+    `${dockerfilePath}: must build the demo`,
+  );
   expect(dockerfile.includes(`EXPOSE ${demo.port}`), `${dockerfilePath}: must expose ${demo.port}`);
 
   const composePath = `${demo.dir}/compose.yml`;
@@ -79,12 +93,22 @@ for (const demo of demos) {
   const service = compose.services?.[demo.service] ?? {};
   forbidSecrets(composePath, composeText);
   forbidOpenReceivePersistence(composePath, composeText);
-  expect(Object.keys(compose.services ?? {}).length === 1, `${composePath}: must define one app service`);
-  expect(service.build?.context === "../../../..", `${composePath}: build context must be the repo root`);
+  expect(
+    Object.keys(compose.services ?? {}).length === 1,
+    `${composePath}: must define one app service`,
+  );
+  expect(
+    service.build?.context === "../../../..",
+    `${composePath}: build context must be the repo root`,
+  );
   expect(service.depends_on === undefined, `${composePath}: must not depend on a database`);
   expect(compose.volumes === undefined, `${composePath}: must not declare OpenReceive volumes`);
-  expect(service.volumes?.length === 1, `${composePath}: must only mount openreceive.yml`);
-  expect(service.volumes?.[0]?.endsWith("openreceive.yml:ro"), `${composePath}: config mount must be read-only`);
+  expect(service.volumes === undefined, `${composePath}: must not mount configuration files`);
+  expect(service.env_file?.length === 1, `${composePath}: must load one environment file`);
+  expect(
+    service.env_file?.[0] === "../../../../.env",
+    `${composePath}: must load the repo-root .env`,
+  );
   expect(service.environment?.PORT === demo.port, `${composePath}: wrong PORT`);
 
   const overridePath = `${demo.dir}/compose.override.yml.example`;
@@ -92,19 +116,33 @@ for (const demo of demos) {
   const override = parse(overridePath, parseYaml);
   forbidSecrets(overridePath, overrideText);
   forbidOpenReceivePersistence(overridePath, overrideText);
-  expect(override.services?.[demo.service]?.ports?.[0] === `${demo.port}:${demo.port}`, `${overridePath}: wrong published port`);
+  expect(
+    override.services?.[demo.service]?.ports?.[0] === `${demo.port}:${demo.port}`,
+    `${overridePath}: wrong published port`,
+  );
 
   const readmePath = `${demo.dir}/README.md`;
   const readme = read(readmePath);
   forbidSecrets(readmePath, readme);
   forbidOpenReceivePersistence(readmePath, readme);
-  expect(readme.includes("The browser never receives your NWC code."), `${readmePath}: missing NWC boundary`);
+  expect(
+    readme.includes("The browser never receives your NWC code."),
+    `${readmePath}: missing NWC boundary`,
+  );
 }
 
-const configPath = "openreceive.yml.example";
-const config = read(configPath);
-forbidSecrets(configPath, config);
-expect(!/^\s*(store|namespace):/m.test(config), `${configPath}: must not configure storage`);
+const envExamplePath = ".env.example";
+const envExample = read(envExamplePath);
+const envNames = [...envExample.matchAll(/^([A-Z][A-Z0-9_]*)=/gm)].map((match) => match[1]);
+expect(
+  JSON.stringify(envNames) ===
+    JSON.stringify(["NWC_URI", "LSC_URI_PRIMARY", "LSC_URI_BACKUP"]),
+  `${envExamplePath}: must define only the three server-secret URI variables`,
+);
+expect(
+  !/[?&]secret=[0-9a-fA-F]{64}/.test(envExample),
+  `${envExamplePath}: contains a real-looking secret`,
+);
 
 if (findings.length > 0) {
   console.error("Demo container validation failed:");

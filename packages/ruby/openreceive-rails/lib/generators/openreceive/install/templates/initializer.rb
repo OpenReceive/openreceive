@@ -2,27 +2,74 @@
 
 OpenReceive.configure do |config|
   config.parent_controller = "ApplicationController"
-  # nwc loads from the root openreceive.yml. Set config.nwc only for an explicit override.
+  # Secrets load from NWC_URI, LSC_URI_PRIMARY, and LSC_URI_BACKUP.
+  # Keep ordinary settings here in the Rails initializer.
+  config.price_currencies = ["USD"]
   # Validate the host-owned order price for checkout.create / swap.create.
   config.authorize = ->(context) { OpenReceiveOrderPolicy.authorized?(context) }
 
   config.resolve_checkout = lambda do |action:, request:, order_id:, input:, pay_in_asset: nil|
-    order = Order.find(order_id)
+    order = <%= order_model_name %>.find(order_id)
+    requested_hash = input["payment_hash"] || input[:payment_hash]
+    payment =
+      if action == "swap.quote"
+        nil
+      else
+        OpenReceivePayment.selected_for(
+          order_id: order.id,
+          action: action,
+          payment_hash: requested_hash
+        )
+      end
+    if requested_hash.present? && payment.nil?
+      raise OpenReceive::Server::NotFoundError, "Payment attempt not found for this order."
+    end
+    if payment && action == "checkout.create" && payment.swap_data.present?
+      raise OpenReceive::Server::ConflictError, "This order already has a live swap attempt."
+    end
+    if payment && action == "swap.create" && payment.swap_data.blank?
+      raise OpenReceive::Server::ConflictError, "This order already has a live Lightning attempt."
+    end
+    if payment && action == "swap.create" && pay_in_asset.present?
+      stored_asset =
+        payment.swap_data&.dig("providerOrder", "pay_in_asset") ||
+        payment.swap_data&.dig("provider_order", "pay_in_asset")
+      if stored_asset.present? && stored_asset != pay_in_asset
+        raise OpenReceive::Server::ConflictError,
+              "This order already has a live swap attempt for another asset."
+      end
+    end
+
     {
       amount: { currency: "USD", value: order.total.to_s },
-      payment_hash: order.payment_hash,
-      swap_data: order.swap_data
+      payment_hash: payment&.payment_hash,
+      swap_data: payment&.swap_data
     }.compact
   end
 
-  # Atomically store payment_hash (and server-only swap_data when present) on your order.
-  # Raise if persistence fails: OpenReceive will withhold payer instructions.
-  config.on_checkout_created = lambda do |order_id:, payment_hash:, swap_data: nil, **|
-    order = Order.lock.find(order_id)
-    raise "order already has a different payment hash" if order.payment_hash.present? && order.payment_hash != payment_hash
-    order.update!(
+  # Atomically append one payment-attempt row. OpenReceivePayment locks the
+  # existing order row so concurrent creates cannot expose two live invoices.
+  config.on_checkout_created = lambda do |order_id:, payment_hash:, checkout:, swap_data: nil, **|
+    order = <%= order_model_name %>.find(order_id)
+    OpenReceivePayment.commit_attempt!(
+      order: order,
       payment_hash: payment_hash,
+      checkout: checkout,
       swap_data: swap_data
     )
   end
 end
+
+# Run wallet reconciliation from the host's normal job/process system. Couple
+# fulfillment to first_for_order inside this same transaction:
+#
+# OpenReceive.config.service.watch_payments(
+#   on_paid: lambda do |event|
+#     OpenReceivePayment.mark_paid_once!(
+#       payment_hash: event.fetch("payment_hash"),
+#       paid_at: event.fetch("paid_at")
+#     ) do |order, payment, first_for_order|
+#       FulfillOrder.call(order, payment: payment) if first_for_order
+#     end
+#   end
+# )

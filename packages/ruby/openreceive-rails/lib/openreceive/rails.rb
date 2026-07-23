@@ -10,10 +10,10 @@
 #
 # Layering:
 #   openreceive         — dependency-free core (money, settlement, NWC normalization)
-#   openreceive-server  — storage-free Service, token keyring, the shared
+#   openreceive-server  — storage-agnostic Service, the shared
 #                         framework-neutral RequestHandler, and the RackApp adapter over it
 #   openreceive-rails   — this gem: Configuration, the Engine, controllers (thin adapters that
-#                         delegate to Server::RequestHandler), and an initializer generator.
+#                         delegate to Server::RequestHandler), and host payment scaffolding.
 
 require "openreceive"
 require "openreceive/server"

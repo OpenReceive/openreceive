@@ -2,7 +2,7 @@
 
 There is no OpenReceive sweep table or privileged sweep route. Recovery has two forms:
 
-1. The host selects orders where `payment_hash IS NOT NULL AND paid_at IS NULL` and calls
+1. The host selects `openreceive_payments` rows where `paid_at IS NULL` and calls
    `reconcilePayments`.
 2. `watchPayments` scans overlapping wallet creation-time windows and invokes `onPaid`; the
    host ignores unknown hashes.

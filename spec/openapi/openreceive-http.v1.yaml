@@ -1,10 +1,10 @@
 openapi: 3.1.0
 info:
-  title: OpenReceive storage-free HTTP API
-  version: 0.3.0
+  title: OpenReceive host-owned payment HTTP API
+  version: 0.4.0
   description: >
-    Mounted receive-checkout routes. OpenReceive owns no payment persistence. The host
-    resolves every checkout amount and stores payment_hash before a payer response is sent.
+    Mounted receive-checkout routes. The host owns orders and openreceive_payments rows.
+    It resolves every checkout amount and stores each payment attempt before a payer response.
 servers:
   - url: /openreceive
 paths:
@@ -35,7 +35,7 @@ paths:
   /payments/check:
     post:
       operationId: checkPayment
-      summary: Verify the host order's payment hash against the receive wallet.
+      summary: Verify one host-owned payment attempt against the receive wallet.
       requestBody:
         required: true
         content:
@@ -114,9 +114,10 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [order_id, refund_address]
+              required: [order_id, payment_hash, refund_address]
               properties:
                 order_id: { type: string, minLength: 1, maxLength: 200 }
+                payment_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
                 refund_address: { type: string, minLength: 1 }
       responses:
         '200':
@@ -195,9 +196,10 @@ components:
     PaymentCheckRequest:
       type: object
       additionalProperties: false
-      required: [order_id]
+      required: [order_id, payment_hash]
       properties:
         order_id: { type: string, minLength: 1, maxLength: 200 }
+        payment_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
     PaymentStatus:
       type: string
       enum: [pending, settled, expired, failed, not_found]
@@ -235,9 +237,10 @@ components:
     OrderRequest:
       type: object
       additionalProperties: false
-      required: [order_id]
+      required: [order_id, payment_hash]
       properties:
         order_id: { type: string, minLength: 1, maxLength: 200 }
+        payment_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
     Error:
       type: object
       additionalProperties: false

@@ -1,8 +1,9 @@
 import { fileURLToPath } from "node:url";
 import { openReceiveExpress } from "@openreceive/express";
-import { hostError } from "@openreceive/http";
+import { createOpenReceivePaymentHooks } from "@openreceive/http";
 import { createOpenReceive } from "@openreceive/node";
 import express from "express";
+import { openReceiveConfig } from "../../../../../../config/openreceive.ts";
 import { mountHelloFruitDelivery } from "../../../../shared/demo-delivery.ts";
 import { fulfillHelloFruitOrder } from "../../../../shared/demo-fulfillment.ts";
 import {
@@ -11,10 +12,9 @@ import {
 } from "../../../../shared/demo-logging.ts";
 import { createHelloFruitCreateOrderResult } from "../../../../shared/demo-prepare-checkout.ts";
 import {
-  commitHelloFruitCheckout,
   createHelloFruitHostOrder,
+  helloFruitPaymentRepository,
   readHelloFruitHostOrder,
-  resolveHelloFruitHostCheckout,
 } from "../../../../shared/openreceive-store.ts";
 
 const DEMO_ID = "static-html-small-api";
@@ -28,9 +28,10 @@ export async function createHelloFruitStaticServer() {
   app.use("/stickers", express.static(STICKERS_DIR));
 
   // Same shape as docs/guides/quickstart-node.md:
-  // onPaid may fire more than once; the host order's paid_at transition is write-once.
+  // onPaid may fire more than once; each payment attempt's paid_at is write-once.
   let service: Awaited<ReturnType<typeof createOpenReceive>>;
   service = await createOpenReceive({
+    ...openReceiveConfig,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
     onPaid: async ({ paymentHash, paidAt }) => {
       const result = await fulfillHelloFruitOrder({
@@ -47,6 +48,11 @@ export async function createHelloFruitStaticServer() {
 
   mountHelloFruitDelivery(app, {
     stickersDir: STICKERS_DIR,
+  });
+  const paymentHooks = createOpenReceivePaymentHooks({
+    loadOrder: (orderId) => readHelloFruitHostOrder(orderId),
+    amountForOrder: (order) => order.amount,
+    payments: helloFruitPaymentRepository,
   });
 
   app.post("/orders", async (req, res, next) => {
@@ -73,12 +79,8 @@ export async function createHelloFruitStaticServer() {
       service,
       authorize: ({ resource }) =>
         resource.order_id !== undefined && readHelloFruitHostOrder(resource.order_id) !== null,
-      resolveCheckout: ({ orderId }) => {
-        const order = resolveHelloFruitHostCheckout(orderId);
-        if (order === null) throw hostError("Order not found.", 404, "NOT_FOUND");
-        return order;
-      },
-      onCheckoutCreated: commitHelloFruitCheckout,
+      resolveCheckout: paymentHooks.resolveCheckout,
+      onCheckoutCreated: paymentHooks.onCheckoutCreated,
     }),
   );
 

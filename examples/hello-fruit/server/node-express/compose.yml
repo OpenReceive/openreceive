@@ -6,7 +6,7 @@ services:
     environment:
       OPENRECEIVE_DEMO_MODE: ${OPENRECEIVE_DEMO_MODE:-test_nwc}
       PORT: "3000"
+    env_file:
+      - ../../../../.env
     expose:
       - "3000"
-    volumes:
-      - ../../../../openreceive.yml:/app/examples/hello-fruit/server/node-express/openreceive.yml:ro

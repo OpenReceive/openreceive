@@ -1,5 +1,6 @@
 # @openreceive/fastify
 
-Fastify adapter for the storage-free `@openreceive/http` handler. Register it with `service`,
-host `authorize`, `resolveCheckout`, and `onCheckoutCreated` hooks. The host commits the
-payment hash before payer instructions are returned.
+Fastify adapter for `@openreceive/http`. Register it with `service`, host
+`authorize`, and the hooks returned by `createOpenReceivePaymentHooks`. The
+host-owned repository commits a payment-attempt row before payer instructions
+are returned; the runtime has no database configuration.

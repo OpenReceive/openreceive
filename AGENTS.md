@@ -5,21 +5,24 @@ small, honest API and a good developer experience.
 
 ## Non-negotiables
 
-- OpenReceive has no persistence configuration: no database/Redis URLs, migrations, storage
-  adapters, internal payment rows, or durable workflow cursors.
+- OpenReceive runtime has no persistence configuration: no database/Redis URLs, storage adapters,
+  migration runner, or durable workflow cursors. Framework generators may scaffold the host-owned
+  `openreceive_payments` model/migration inside the application's existing database.
 - The host owns orders and prices. Direct server code passes `{ orderId, amount }`; mounted
   HTTP handlers resolve the amount from host-owned data and reject payer-supplied amounts.
-- The host stores `payment_hash` before payer instructions are exposed and sets nullable
-  `paid_at` once. Duplicate `onPaid` delivery must be harmless.
-- A retry or concurrent create must be guarded by the host order row. Do not add an
-  OpenReceive idempotency store.
+- The host stores one `openreceive_payments` row per attempt before payer instructions are
+  exposed. An order may have multiple historical attempts; `payment_hash` is globally unique,
+  `paid_at` is write-once per attempt, and fulfillment runs only for the first settled attempt.
+- A retry or concurrent create must serialize on the host order row and permit only one live
+  attempt. Do not add a separately configured OpenReceive idempotency store.
 - Receive-only NWC codes must never reach browser/mobile code, logs, tests, screenshots,
   docs, source maps, or demo assets. Receive APIs never expose send-payment methods.
 - Notifications are passive hints. Settlement requires `settled_at` or
   `transaction_state/state == "settled"`; a preimage alone is corroborating evidence.
 - Use `amount_msats` for millisatoshi values in public results and exact integer/decimal money
   math. Never use binary floats for fiat math.
-- Swap provider credentials live only in the host's optional server-only `swap_data` field.
+- Swap provider credentials live only in the host payment attempt's optional server-only
+  `swap_data` field.
   They never appear in browser responses or logs. Provider completion is not wallet
   settlement; refund decisions refresh provider state.
 - Do not duplicate provider data, supported currencies, settlement rules, polling cadence, or
@@ -35,7 +38,8 @@ small, honest API and a good developer experience.
   `resolveCheckout` / `resolve_checkout`, optional `rateLimit`, and required
   `onCheckoutCreated` / `on_checkout_created` hooks.
 - OpenReceive mints no authentication, recovery, or refund tokens. The host authorizes every
-  request and resolves `payment_hash` / `swap_data` from its own order.
+  request and verifies the requested `payment_hash` belongs to the order before resolving
+  server-only `swap_data`.
 - `onCheckoutCreated` runs before a create response. Failure returns 409 and withholds the
   invoice or swap instructions.
 

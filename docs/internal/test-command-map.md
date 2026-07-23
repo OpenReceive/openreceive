@@ -11,13 +11,13 @@
 | `npm run typecheck` | Typecheck all JS/TS packages and Hello Fruit server/demo TypeScript. | No |
 | `npm run test:js` | Run the v0.1 Node test suite, including browser/react/elements/framework adapter contract tests. | No |
 | `npm run test:ruby` | Run the Ruby core-helper tests against shared vectors and receive-only behavior. | No |
-| `npm run test:live:ruby:nwc` | Optional Ruby live-wallet smoke. Reads `nwc` from `openreceive.yml`, redacts the connection string, runs `get_info` when `nwc-ruby` is installed, and creates an invoice only with `OPENRECEIVE_LIVE_CREATE_INVOICE=1`. | Optional |
+| `npm run test:live:ruby:nwc` | Optional Ruby live-wallet smoke. Reads `NWC_URI` from the environment or root `.env`, redacts the connection string, runs `get_info` when `nwc-ruby` is installed, and creates an invoice only with `OPENRECEIVE_LIVE_CREATE_INVOICE=1`. | Optional |
 | `npm run check:generated` | Fail when generated TypeScript contract constants are stale. | No |
-| `npm run check:demo-containers` | Validate Hello Fruit Dockerfiles, compose templates, `openreceive.yml` mounts, ports, and secret boundaries. | No |
+| `npm run check:demo-containers` | Validate Hello Fruit Dockerfiles, compose templates, root `.env` loading, ports, and secret boundaries. | No |
 | `npm run check:release` | Validate v0.1 release-readiness metadata, package versions, private package status, and changelog coverage. | No |
 | `npm run check:workflows` | Validate GitHub workflow shape, read-only permissions, safe commands, and disabled publish path. | No |
 | `npm run build:docs` | Validate the docs manifest and build the docs import/search artifact under `dist/docs`. | No |
 | `npm run build:demo` | Build the Hello Fruit demos. | No |
 | `npm run test:package-smoke` | Pack every JS workspace package into local tarballs, assemble an offline temporary project, and import each package. | No |
 | `npm run test:vectors` | Run vector validation. | No |
-| `npm run test:live:nwc` | Live wallet smoke harness. Reads `nwc` from `openreceive.yml`, checks `tools/live-nwc-test/expected_capabilities.json` by default, then skips clearly when unset. | Optional |
+| `npm run test:live:nwc` | Live wallet smoke harness. Reads `NWC_URI` from the environment or root `.env`, checks `tools/live-nwc-test/expected_capabilities.json` by default, then skips clearly when unset. | Optional |

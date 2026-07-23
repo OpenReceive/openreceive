@@ -12,7 +12,6 @@ test("Node service creates without persistence and verifies by payment_hash", as
   const openreceive = await createOpenReceive({
     client: wallet,
     clock: () => now,
-    configPath: false,
   });
 
   const first = await openreceive.createCheckout({
@@ -23,8 +22,11 @@ test("Node service creates without persistence and verifies by payment_hash", as
     orderId: "order-1",
     amount: { currency: "USD", value: "10.00" },
   });
-  assert.notEqual(first.paymentHash, second.paymentHash, "host row is the idempotency guard");
-  assert.equal((await openreceive.checkPayment({ paymentHash: first.paymentHash })).status, "pending");
+  assert.notEqual(first.paymentHash, second.paymentHash, "host payment repository is the guard");
+  assert.equal(
+    (await openreceive.checkPayment({ paymentHash: first.paymentHash })).status,
+    "pending",
+  );
 
   now = 1100;
   wallet.settleInvoice({ payment_hash: first.paymentHash }, { settled_at: now });
@@ -40,7 +42,6 @@ test("watchPayments retries a failed callback and delivers settlement at least o
   const openreceive = await createOpenReceive({
     client: wallet,
     clock: () => 1000,
-    configPath: false,
   });
   const checkout = await openreceive.createCheckout({
     orderId: "retry-paid",
@@ -71,7 +72,6 @@ test("host-serialized swap data recovers provider state and provider state contr
     client: wallet,
     swap: { providers: [provider] },
     clock: () => 1000,
-    configPath: false,
   });
   const swap = await openreceive.createSwap({
     orderId: "swap-1",

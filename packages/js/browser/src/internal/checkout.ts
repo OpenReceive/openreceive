@@ -965,6 +965,9 @@ export function createOpenReceiveStatusFetcher(
     }
 
     const headers = options.headers === undefined ? {} : options.headers;
+    const activePaymentHash =
+      optionalString(options.snapshot.active?.payment_hash) ??
+      optionalString(options.snapshot.active?.invoice_id);
     const response = await fetcher(options.orderUrl, {
       method: "POST",
       headers: {
@@ -973,6 +976,7 @@ export function createOpenReceiveStatusFetcher(
       },
       body: JSON.stringify({
         order_id,
+        ...(activePaymentHash === undefined ? {} : { payment_hash: activePaymentHash }),
       }),
     });
     const body = await response.json();
@@ -1787,7 +1791,8 @@ export function createCheckoutController(options: CheckoutControllerOptions): Ch
  * One-call create-mode entry: given `{ prefix?, orderId, ...controllerOptions }`, create the
  * checkout against the mounted router (`${prefix}/checkouts`) and return the resulting snapshot
  * plus a ready-to-start controller wired to `${prefix}/payments/check`. Later requests send
- * `order_id`; the host applies its normal authorization and resolves the stored payment hash.
+ * `order_id` plus the displayed `payment_hash`; the host authorizes the order and verifies that
+ * the selected attempt belongs to it.
  * The returned controller is created but not started; call `controller.start()`.
  *
  * This is the framework-agnostic primitive the React `<Checkout orderId>` and

@@ -3,14 +3,20 @@
 Express adapter for `@openreceive/http`.
 
 ```ts
+const paymentHooks = createOpenReceivePaymentHooks({
+  loadOrder: (orderId) => orders.find(orderId),
+  amountForOrder: (order) => order.amount,
+  payments,
+});
+
 app.use(openReceiveExpress({
   service,
   authorize,
-  resolveCheckout: ({ orderId }) => orders.checkoutStateFor(orderId),
-  onCheckoutCreated: ({ orderId, paymentHash }) => orders.commitHash(orderId, paymentHash),
+  resolveCheckout: paymentHooks.resolveCheckout,
+  onCheckoutCreated: paymentHooks.onCheckoutCreated,
 }));
 ```
 
-OpenReceive has no storage or migrations.
-`checkoutStateFor` returns `{ amount?, paymentHash?, swapData? }`, so retries and reads use the
-host row. `swapData` stays server-only. The commit must be an atomic compare-and-set.
+The runtime has no storage configuration. The host-owned payment repository
+stores multiple attempts per order and locks the order while committing one
+live attempt. `swapData` stays server-only.

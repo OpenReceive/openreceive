@@ -59,7 +59,7 @@ module OpenReceive
         raise ConfigurationError, "OpenReceive.config.resolve_checkout is required; payer input is not a price authority."
       end
       if @on_checkout_created.nil?
-        raise ConfigurationError, "OpenReceive.config.on_checkout_created is required to persist payment_hash before responding."
+        raise ConfigurationError, "OpenReceive.config.on_checkout_created is required to persist a payment attempt before responding."
       end
       resolved_nwc_client
       true
@@ -70,9 +70,9 @@ module OpenReceive
     def resolved_nwc_client
       @resolved_nwc_client ||= begin
         return @nwc_client unless @nwc_client.nil?
-        connection = @nwc || OpenReceive::Server::Config.load.nwc
+        connection = @nwc || ENV["NWC_URI"]&.strip
         if connection.nil?
-          raise ConfigurationError, "Set nwc in openreceive.yml, or configure OpenReceive.config.nwc/nwc_client explicitly."
+          raise ConfigurationError, "Set NWC_URI, or configure OpenReceive.config.nwc/nwc_client explicitly."
         end
         return connection if connection.respond_to?(:make_invoice) || connection.respond_to?(:makeInvoice)
         require "nwc"

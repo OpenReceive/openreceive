@@ -19,13 +19,20 @@ export type {
   NwcEndpointLogger,
   WalletPreflightErrorCode,
 } from "./alby-nwc.ts";
-export { OPENRECEIVE_CONFIG_FILE, readOpenReceiveConfigFile } from "./config.ts";
+export {
+  LSC_ENV_NAMES,
+  LSC_URI_PROTOCOL,
+  createLscSwapProvidersFromEnvironment,
+  formatLscUri,
+  parseLscUri,
+  readLscConnectionsFromEnvironment,
+} from "./lsc-uri.ts";
 export type {
-  OpenReceiveFileConfig,
-  OpenReceiveFileLoggingConfig,
-  OpenReceiveFileSwapConfig,
-  ReadOpenReceiveConfigFileOptions,
-} from "./config.ts";
+  CreateLscSwapProvidersOptions,
+  FormatLscUriInput,
+  LscConnection,
+  LscEnvironmentName,
+} from "./lsc-uri.ts";
 export {
   OpenReceiveConfigError,
   OpenReceiveServiceError,
@@ -51,7 +58,8 @@ export type {
   SwapProviderState,
   SwapQuote,
 } from "./swap/index.ts";
-export { readNwcFromConfig, requireNwcFromConfig } from "./require-nwc.ts";
+export { readNwcFromEnvironment, requireNwcFromEnvironment } from "./require-nwc.ts";
+export type { RequireNwcFromEnvironmentOptions } from "./require-nwc.ts";
 export {
   createHostConsoleLogger,
   createOpenReceiveConsoleLogger,

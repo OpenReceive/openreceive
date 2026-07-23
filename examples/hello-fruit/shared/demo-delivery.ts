@@ -45,7 +45,7 @@ export async function resolveHelloFruitDelivery(
   if (stored === null) {
     return { ok: false, status: 404, message: "Order not found." };
   }
-  if (stored.paidAt === null) {
+  if (stored.summary.status !== "paid") {
     return { ok: false, status: 403, message: "Order is not fulfilled yet." };
   }
 

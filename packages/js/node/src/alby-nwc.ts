@@ -9,6 +9,7 @@ import {
   OPENRECEIVE_MIN_AMOUNT_MSATS,
   OPENRECEIVE_NWC_METADATA_MAX_BYTES,
   OpenReceiveError,
+  formatOpenReceiveSpendCapabilityWarningMessage,
   type ListTransactionsRequest,
   type ListTransactionsResult,
   type LookupInvoiceRequest,
@@ -36,6 +37,8 @@ const SPEND_METHODS = [
   "pay_keysend",
   "multi_pay_keysend"
 ] as const;
+/** Default pause after a spend-capability warning so operators can read it. */
+export const SPEND_CAPABILITY_WARNING_DELAY_MS = 5_000;
 
 export interface AlbyNwcCompatibleClient {
   getInfo?: () => Promise<unknown>;
@@ -78,6 +81,13 @@ export interface AlbyNwcReceiveClientOptions {
   clientFactory?: AlbyNwcClientFactory;
   requirePreflight?: boolean;
   logger?: NwcEndpointLogger;
+  /**
+   * Pause after warning that the info event advertises spend methods.
+   * Defaults to {@link SPEND_CAPABILITY_WARNING_DELAY_MS}. Set `0` in tests.
+   */
+  spendCapabilityWarningDelayMs?: number;
+  /** Sink for the spend-capability warning. Defaults to `console.error`. */
+  spendCapabilityWarning?: (message: string) => void;
 }
 
 export type WalletPreflightErrorCode =

@@ -32,33 +32,53 @@ export class NwcUriParseError extends Error {
   }
 }
 
-export function formatOpenReceiveMissingNwcMessage(input: {
-  readonly subject?: string;
-} = {}): string {
+export function formatOpenReceiveMissingNwcMessage(
+  input: { readonly subject?: string } = {},
+): string {
   const subject = input.subject ?? "OpenReceive";
   return [
     `${subject} needs a receive-only NWC code to receive payments.`,
-    "Set `nwc` in openreceive.yml to your receive-only Nostr Wallet Connect connection string.",
-    `Get one here: ${OPENRECEIVE_NWC_CODE_HELP_URL}`
+    "Set NWC_URI to your receive-only Nostr Wallet Connect connection string.",
+    `Get one here: ${OPENRECEIVE_NWC_CODE_HELP_URL}`,
   ].join("\n");
 }
 
-export function formatOpenReceiveInvalidNwcMessage(input: {
-  readonly reason?: string;
-} = {}): string {
+export function formatOpenReceiveInvalidNwcMessage(
+  input: { readonly reason?: string } = {},
+): string {
   return [
     "`nwc` is set, but it is not a valid NWC code.",
     input.reason === undefined ? undefined : `Reason: ${input.reason}`,
-    `Get a receive-only NWC code here: ${OPENRECEIVE_NWC_CODE_HELP_URL}`
-  ].filter((line): line is string => line !== undefined).join("\n");
+    `Get a receive-only NWC code here: ${OPENRECEIVE_NWC_CODE_HELP_URL}`,
+  ]
+    .filter((line): line is string => line !== undefined)
+    .join("\n");
 }
 
-export type OpenReceiveTransactionState =
-  | "pending"
-  | "settled"
-  | "expired"
-  | "failed"
-  | "accepted";
+/**
+ * Loud console warning when the NIP-47 info event advertises send-payment methods
+ * such as `pay_invoice`. OpenReceive still boots after this message.
+ */
+export function formatOpenReceiveSpendCapabilityWarningMessage(
+  input: { readonly spendMethods?: readonly string[] } = {},
+): string {
+  const methods =
+    input.spendMethods === undefined || input.spendMethods.length === 0
+      ? ["pay_invoice"]
+      : [...input.spendMethods];
+  const listed = methods.join(", ");
+  return [
+    "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
+    "ERROR: This NWC connection is NOT receive-only.",
+    `The wallet info event advertises spend method(s): ${listed}.`,
+    "OpenReceive must use a receive-only NWC code (no pay_invoice).",
+    `Get a receive-only NWC code here: ${OPENRECEIVE_NWC_CODE_HELP_URL}`,
+    "Continuing to boot in 5 seconds so you can read this...",
+    "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
+  ].join("\n");
+}
+
+export type OpenReceiveTransactionState = "pending" | "settled" | "expired" | "failed" | "accepted";
 
 export type OpenReceiveWorkflowState =
   | "draft"
@@ -151,7 +171,11 @@ export interface StandaloneNwcClient extends OpenReceiveReceiveNwcClient {
 }
 
 export function isTransactionSettled(result: NwcTransaction): boolean {
-  return (result.settled_at !== undefined && result.settled_at > 0) || result.transaction_state === "settled" || result.state === "settled";
+  return (
+    (result.settled_at !== undefined && result.settled_at > 0) ||
+    result.transaction_state === "settled" ||
+    result.state === "settled"
+  );
 }
 
 export function parseNwcUri(uri: string): ParsedNwcConnection {
@@ -168,10 +192,18 @@ export function parseNwcUri(uri: string): ParsedNwcConnection {
 
   const walletPubkey = parsed.hostname || parsed.pathname.replace(/^\/+/, "");
   if (!walletPubkey) {
-    throw new NwcUriParseError("missing_wallet_pubkey", "NWC URI is missing the wallet public key.", uri);
+    throw new NwcUriParseError(
+      "missing_wallet_pubkey",
+      "NWC URI is missing the wallet public key.",
+      uri,
+    );
   }
   if (!HEX_64.test(walletPubkey)) {
-    throw new NwcUriParseError("invalid_wallet_pubkey", "NWC wallet public key must be 64 hex characters.", uri);
+    throw new NwcUriParseError(
+      "invalid_wallet_pubkey",
+      "NWC wallet public key must be 64 hex characters.",
+      uri,
+    );
   }
 
   const relays = parsed.searchParams.getAll("relay");
@@ -189,7 +221,11 @@ export function parseNwcUri(uri: string): ParsedNwcConnection {
     throw new NwcUriParseError("missing_secret", "NWC URI is missing the client secret.", uri);
   }
   if (secrets.length !== 1 || !HEX_64.test(secrets[0])) {
-    throw new NwcUriParseError("invalid_secret", "NWC client secret must be 64 hex characters.", uri);
+    throw new NwcUriParseError(
+      "invalid_secret",
+      "NWC client secret must be 64 hex characters.",
+      uri,
+    );
   }
 
   const lud16 = parsed.searchParams.get("lud16") || undefined;
@@ -199,7 +235,7 @@ export function parseNwcUri(uri: string): ParsedNwcConnection {
     relays,
     clientSecret: secrets[0],
     lud16,
-    redacted: redactNwcUri(uri)
+    redacted: redactNwcUri(uri),
   };
 }
 
