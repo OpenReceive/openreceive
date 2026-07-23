@@ -10,6 +10,7 @@ import {
   createHelloFruitDemoServerLogger,
   createHelloFruitOpenReceiveLogger,
 } from "../../../../shared/demo-logging.ts";
+import { readRequiredHelloFruitNwcConnectionString } from "../../../../shared/demo-nwc.ts";
 import { createHelloFruitCreateOrderResult } from "../../../../shared/demo-prepare-checkout.ts";
 import {
   createHelloFruitHostOrder,
@@ -93,8 +94,11 @@ async function getOpenReceive() {
 }
 
 async function createHelloFruitOpenReceive() {
+  // Boot refuses missing/invalid NWC; createOpenReceive then loads the NIP-47 info event.
+  const nwc = readRequiredHelloFruitNwcConnectionString();
   return await createOpenReceive({
     ...openReceiveConfig,
+    nwc,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
     onPaid: async ({ paymentHash, paidAt }) => {
       const result = await fulfillHelloFruitOrder({ paymentHash, paidAt });

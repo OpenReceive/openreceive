@@ -1,0 +1,211 @@
+import { nextStepsMarkdown, typeOrmOrderIdColumn } from "../shared.ts";
+import { attemptConflictClass, hooksStubContents, recordMapperHelper } from "../snippets.ts";
+import type { ScaffoldFile, ScaffoldPaymentsOptions } from "../types.ts";
+
+export function renderTypeOrmFiles(options: ScaffoldPaymentsOptions): ScaffoldFile[] {
+  const relation = options.skipForeignKey
+    ? ""
+    : `
+  @ManyToOne(() => ${options.orderModel}, { onDelete: "RESTRICT" })
+  @JoinColumn({ name: "order_id" })
+  order!: ${options.orderModel};
+`;
+
+  const orderImport = options.skipForeignKey
+    ? ""
+    : `import { ${options.orderModel} } from "../${kebab(options.orderModel)}.ts"; // TODO: point at your host order entity\n`;
+  const relationImports = options.skipForeignKey
+    ? ""
+    : `\n  JoinColumn,\n  ManyToOne,`;
+
+  const entity = `${orderImport}import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,${relationImports}
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from "typeorm";
+
+@Entity({ name: "openreceive_payments" })
+@Index(["orderId", "createdAt"])
+@Index(["paidAt", "createdAt"])
+export class OpenReceivePayment {
+  @PrimaryGeneratedColumn()
+  id!: number;
+
+  @Column(${typeOrmOrderIdColumn(options.orderIdType)})
+  orderId!: string | number;
+${relation}
+  @Column({ name: "payment_hash", length: 64, unique: true })
+  paymentHash!: string;
+
+  @Column({ name: "paid_at", type: "timestamptz", nullable: true })
+  paidAt!: Date | null;
+
+  @Column({ name: "expires_at", type: "timestamptz" })
+  expiresAt!: Date;
+
+  @Column({ name: "swap_data", type: "jsonb", nullable: true, select: false })
+  swapData!: unknown | null;
+
+  @CreateDateColumn({ name: "created_at", type: "timestamptz" })
+  createdAt!: Date;
+
+  @UpdateDateColumn({ name: "updated_at", type: "timestamptz" })
+  updatedAt!: Date;
+}
+`;
+
+  const repository = `import {
+  openReceivePaymentInsert,
+  type OpenReceivePaymentRecord,
+  type OpenReceivePaymentRepository,
+} from "@openreceive/http";
+import type { DataSource } from "typeorm";
+import { OpenReceivePayment } from "../entities/open-receive-payment.ts";
+${attemptConflictClass()}
+${recordMapperHelper()}
+export function createOpenReceivePaymentsRepository(
+  dataSource: DataSource,
+): OpenReceivePaymentRepository {
+  return {
+    async listForOrder(orderId) {
+      const rows = await dataSource.getRepository(OpenReceivePayment).find({
+        where: { orderId: orderId as never },
+        order: { createdAt: "DESC", paymentHash: "DESC" },
+        select: {
+          orderId: true,
+          paymentHash: true,
+          paidAt: true,
+          expiresAt: true,
+          createdAt: true,
+          swapData: true,
+        },
+      });
+      return rows.map(toPaymentRecord);
+    },
+
+    async commitAttempt(input) {
+      const values = openReceivePaymentInsert(input);
+      await dataSource.transaction(async (manager) => {
+        await manager
+          .getRepository("${options.orderModel}")
+          .createQueryBuilder("order")
+          .setLock("pessimistic_write")
+          .where("order.id = :id", { id: values.orderId })
+          .getOne();
+
+        const same = await manager.findOne(OpenReceivePayment, {
+          where: { paymentHash: values.paymentHash },
+        });
+        if (same) {
+          if (String(same.orderId) !== values.orderId) {
+            throw new OpenReceiveAttemptConflict("payment hash belongs to another order");
+          }
+          return;
+        }
+
+        const paid = await manager
+          .createQueryBuilder(OpenReceivePayment, "payment")
+          .where("payment.order_id = :orderId", { orderId: values.orderId })
+          .andWhere("payment.paid_at IS NOT NULL")
+          .getOne();
+        if (paid) {
+          throw new OpenReceiveAttemptConflict("Order already has a paid payment attempt.");
+        }
+
+        const live = await manager
+          .createQueryBuilder(OpenReceivePayment, "payment")
+          .where("payment.order_id = :orderId", { orderId: values.orderId })
+          .andWhere("payment.paid_at IS NULL")
+          .andWhere("payment.expires_at > :now", { now: new Date() })
+          .getOne();
+        if (live) {
+          throw new OpenReceiveAttemptConflict("Order already has a live payment attempt.");
+        }
+
+        await manager.save(
+          manager.create(OpenReceivePayment, {
+            orderId: values.orderId as never,
+            paymentHash: values.paymentHash,
+            expiresAt: new Date(values.expiresAt * 1000),
+            swapData: values.swapData ?? null,
+          }),
+        );
+      });
+    },
+  };
+}
+`;
+
+  const markPaid = `import type { DataSource } from "typeorm";
+import { OpenReceivePayment } from "../entities/open-receive-payment.ts";
+
+export interface MarkPaidOnceResult {
+  readonly firstForOrder: boolean;
+  readonly paymentHash: string;
+  readonly orderId: string;
+}
+
+export async function markOpenReceivePaidOnce(
+  dataSource: DataSource,
+  input: { paymentHash: string; paidAt: number },
+): Promise<MarkPaidOnceResult> {
+  return dataSource.transaction(async (manager) => {
+    const payment = await manager.findOneOrFail(OpenReceivePayment, {
+      where: { paymentHash: input.paymentHash.toLowerCase() },
+    });
+
+    await manager
+      .getRepository("${options.orderModel}")
+      .createQueryBuilder("order")
+      .setLock("pessimistic_write")
+      .where("order.id = :id", { id: payment.orderId })
+      .getOne();
+
+    const locked = await manager.findOneOrFail(OpenReceivePayment, {
+      where: { paymentHash: payment.paymentHash },
+    });
+    if (locked.paidAt) {
+      return {
+        firstForOrder: false,
+        paymentHash: locked.paymentHash,
+        orderId: String(locked.orderId),
+      };
+    }
+
+    const siblingPaid = await manager
+      .createQueryBuilder(OpenReceivePayment, "payment")
+      .where("payment.order_id = :orderId", { orderId: locked.orderId })
+      .andWhere("payment.paid_at IS NOT NULL")
+      .andWhere("payment.payment_hash <> :hash", { hash: locked.paymentHash })
+      .getOne();
+
+    locked.paidAt = new Date(input.paidAt * 1000);
+    await manager.save(locked);
+
+    return {
+      firstForOrder: siblingPaid === null,
+      paymentHash: locked.paymentHash,
+      orderId: String(locked.orderId),
+    };
+  });
+}
+`;
+
+  return [
+    { path: "src/entities/open-receive-payment.ts", contents: entity },
+    { path: "src/openreceive/payments-repository.ts", contents: repository },
+    { path: "src/openreceive/mark-paid-once.ts", contents: markPaid },
+    { path: "src/openreceive/hooks.stub.ts", contents: hooksStubContents() },
+    { path: "OPENRECEIVE_PAYMENTS.md", contents: nextStepsMarkdown(options) },
+  ];
+}
+
+function kebab(name: string): string {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
+    .toLowerCase();
+}

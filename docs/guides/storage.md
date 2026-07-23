@@ -35,5 +35,6 @@ On settlement, find the row by `payment_hash`, lock its order, set that row's
 an accidental second settlement without repeating fulfillment.
 
 Rails users receive model and migration scaffolding from
-`openreceive:install`. Node users use their existing ORM; see
-[Node ORM Recipes](node-orms.md).
+`openreceive:install`. Node users run
+`npx openreceive scaffold payments` (Prisma, Drizzle, TypeORM, Sequelize, or
+Knex). See [Node ORM Recipes](node-orms.md).

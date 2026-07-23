@@ -9,11 +9,13 @@ export type {
 export {
   ReceiveCheckoutValidationError,
   WalletPreflightError,
+  SPEND_CAPABILITY_WARNING_DELAY_MS,
   createNwcReceiveClient,
   normalizeNwcWalletError,
   summarizeWalletCapabilities,
 } from "./alby-nwc.ts";
 export type {
+  AlbyNwcReceiveClientOptions,
   NwcEndpointLogEntry,
   NwcEndpointLogLevel,
   NwcEndpointLogger,

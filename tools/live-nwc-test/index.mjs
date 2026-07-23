@@ -153,7 +153,7 @@ console.log(`Receive checkout ready: ${summary.receiveCheckoutReady}`);
 console.log(`Encryption: ${summary.encryption}`);
 if (summary.spendCapabilityAdvertised) {
   console.log(
-    "Warning: wallet advertises spend methods; OpenReceive checkout will not expose them.",
+    "Spend capability was advertised on the info event; OpenReceive warned and continued.",
   );
 }
 

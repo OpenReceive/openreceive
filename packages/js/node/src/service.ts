@@ -1,5 +1,10 @@
 import {
   checkPayment as checkPaymentWithClient,
+  formatOpenReceiveInvalidNwcMessage,
+  formatOpenReceiveMissingNwcMessage,
+  NwcUriParseError,
+  OPENRECEIVE_NWC_CODE_HELP_URL,
+  parseNwcUri,
   scanSettledPayments,
   StaticPriceProvider,
 } from "@openreceive/core";
@@ -190,21 +195,35 @@ function requireNwc(value: string | undefined): string {
   if (value === undefined || value.trim().length === 0) {
     throw new OpenReceiveConfigError({
       code: "MISSING_NWC",
-      message: "OpenReceive requires a receive-only NWC connection string.",
+      message: formatOpenReceiveMissingNwcMessage(),
       hint: "Set the receive-only connection in NWC_URI or pass nwc explicitly.",
     });
   }
-  return value;
+  try {
+    parseNwcUri(value.trim());
+  } catch (error) {
+    const reason =
+      error instanceof NwcUriParseError ? error.description : "Invalid NWC URI.";
+    throw new OpenReceiveConfigError({
+      code: "INVALID_NWC",
+      message: formatOpenReceiveInvalidNwcMessage({ reason }),
+      hint: "Use a receive-only nostr+walletconnect URI from a trusted wallet.",
+      cause: error,
+    });
+  }
+  return value.trim();
 }
 
 async function preflight(client: OpenReceiveServiceContext["options"]["client"]): Promise<void> {
   try {
+    // Always fetches the NIP-47 info event (kind 13194) when the wallet client supports it.
+    // Spend methods (e.g. pay_invoice) warn and pause inside preflight, then boot continues.
     await client.preflight();
   } catch (cause) {
     throw new OpenReceiveConfigError({
       code: "WALLET_PREFLIGHT_FAILED",
       message: "OpenReceive wallet preflight failed.",
-      hint: "Use a receive-only NWC connection advertising make_invoice and list_transactions.",
+      hint: `Use a receive-only NWC connection advertising make_invoice and list_transactions. Get one at ${OPENRECEIVE_NWC_CODE_HELP_URL}`,
       cause,
     });
   }

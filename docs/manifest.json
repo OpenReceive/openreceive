@@ -147,6 +147,14 @@
       "public": false
     },
     {
+      "slug": "node-integration",
+      "title": "Node Integration Details",
+      "source_path": "docs/internal/node-integration.md",
+      "category": "architecture",
+      "audience": "contributor",
+      "public": false
+    },
+    {
       "slug": "custom-controller-integration",
       "title": "Custom Controller Integration",
       "source_path": "docs/internal/custom-controller-integration.md",

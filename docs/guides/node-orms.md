@@ -1,5 +1,19 @@
 # Node ORM recipes
 
+Prefer the scaffolder when starting from scratch:
+
+```sh
+npx openreceive scaffold payments
+npx openreceive scaffold payments --orm prisma
+npx openreceive scaffold payments --orm drizzle
+npx openreceive scaffold payments --orm typeorm
+npx openreceive scaffold payments --orm sequelize
+npx openreceive scaffold payments --orm knex
+```
+
+That writes the host-owned schema plus repository, settlement, and hook stubs.
+The recipes below are the same shapes for hand edits or review.
+
 OpenReceive does not need its own database connection. Add one host-owned
 `openreceive_payments` model to the ORM your application already uses. Each row
 is one invoice or swap attempt, so `order_id` is indexed but deliberately not

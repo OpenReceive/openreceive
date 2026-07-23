@@ -128,6 +128,8 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
   #preflightSummary?: WalletCapabilitySummary;
   #requirePreflight: boolean;
   #logger?: NwcEndpointLogger;
+  #spendCapabilityWarningDelayMs: number;
+  #spendCapabilityWarning: (message: string) => void;
 
   constructor(options: AlbyNwcReceiveClientOptions) {
     this.#connectionString = options.connectionString;
@@ -136,6 +138,10 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
     this.#clientFactory = options.clientFactory;
     this.#requirePreflight = options.requirePreflight ?? true;
     this.#logger = options.logger;
+    this.#spendCapabilityWarningDelayMs =
+      options.spendCapabilityWarningDelayMs ?? SPEND_CAPABILITY_WARNING_DELAY_MS;
+    this.#spendCapabilityWarning =
+      options.spendCapabilityWarning ?? ((message) => console.error(message));
   }
 
   #log(
@@ -160,34 +166,56 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
 
   async preflight(): Promise<WalletCapabilitySummary> {
     const client = await this.getClient();
-    this.#log("debug", "nwc.get_info.requested", "Calling NWC wallet get_info.", {
-      method: "get_info"
-    });
+    // Prefer the NIP-47 info event (kind 13194) via getWalletServiceInfo when available.
+    const usesInfoEvent = typeof client.getWalletServiceInfo === "function";
+    const infoMethod = usesInfoEvent ? "getWalletServiceInfo" : "get_info";
+    this.#log(
+      "debug",
+      usesInfoEvent ? "nwc.info_event.requested" : "nwc.get_info.requested",
+      usesInfoEvent
+        ? "Fetching NWC wallet info event (kind 13194)."
+        : "Calling NWC wallet get_info.",
+      { method: infoMethod }
+    );
     const startedAt = Date.now();
     let rawInfo: unknown;
     try {
-      rawInfo =
-        typeof client.getWalletServiceInfo === "function"
-          ? await client.getWalletServiceInfo()
-          : await callRequiredMethod(client, ["getInfo", "get_info"], {});
+      rawInfo = usesInfoEvent
+        ? await client.getWalletServiceInfo!()
+        : await callRequiredMethod(client, ["getInfo", "get_info"], {});
     } catch (error) {
       const normalized = normalizeNwcWalletError(error);
-      this.#log("error", "nwc.get_info.failed", "NWC wallet get_info failed.", {
-        method: "get_info",
-        duration_ms: Date.now() - startedAt,
-        error_code: normalized.code,
-        error_message: normalized.message
-      });
+      this.#log(
+        "error",
+        usesInfoEvent ? "nwc.info_event.failed" : "nwc.get_info.failed",
+        usesInfoEvent
+          ? "NWC wallet info event (kind 13194) fetch failed."
+          : "NWC wallet get_info failed.",
+        {
+          method: infoMethod,
+          duration_ms: Date.now() - startedAt,
+          error_code: normalized.code,
+          error_message: normalized.message
+        }
+      );
       throw normalized;
     }
     const summary = summarizeWalletCapabilities(this.connection, rawInfo);
 
-    this.#log("debug", "nwc.get_info.completed", "NWC wallet get_info completed.", {
-      method: "get_info",
-      duration_ms: Date.now() - startedAt,
-      methods: summary.methods,
-      receive_checkout_ready: summary.receiveCheckoutReady
-    });
+    this.#log(
+      "debug",
+      usesInfoEvent ? "nwc.info_event.completed" : "nwc.get_info.completed",
+      usesInfoEvent
+        ? "NWC wallet info event (kind 13194) loaded."
+        : "NWC wallet get_info completed.",
+      {
+        method: infoMethod,
+        duration_ms: Date.now() - startedAt,
+        methods: summary.methods,
+        receive_checkout_ready: summary.receiveCheckoutReady,
+        spend_capability_advertised: summary.spendCapabilityAdvertised
+      }
+    );
 
     this.#preflightSummary = summary;
 
@@ -207,12 +235,29 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
       );
     }
 
+    // Spend methods on the info event are a serious misconfiguration, but do not
+    // block boot: warn loudly, pause so the operator can read it, then continue.
     if (summary.spendCapabilityAdvertised) {
-      throw new WalletPreflightError(
-        "spend_capability_advertised",
-        "NWC wallet must not advertise send-payment methods for receive checkout.",
-        summary
+      const spendMethods = summary.methods.filter((method) =>
+        SPEND_METHODS.includes(method as (typeof SPEND_METHODS)[number])
       );
+      const warning = formatOpenReceiveSpendCapabilityWarningMessage({
+        spendMethods
+      });
+      this.#log(
+        "error",
+        "nwc.spend_capability_advertised",
+        "NWC info event advertises send-payment methods; OpenReceive will continue after a pause.",
+        { methods: spendMethods }
+      );
+      try {
+        this.#spendCapabilityWarning(warning);
+      } catch {
+        // Warning sinks must never change receive-checkout behavior.
+      }
+      if (this.#spendCapabilityWarningDelayMs > 0) {
+        await delay(this.#spendCapabilityWarningDelayMs);
+      }
     }
 
     return summary;
@@ -980,4 +1025,10 @@ function asRecord(value: unknown): Record<string, unknown> {
 function unwrapNwcResult(value: unknown): unknown {
   const record = asRecord(value);
   return record.result ?? value;
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
 }

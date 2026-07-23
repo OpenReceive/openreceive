@@ -299,6 +299,12 @@ assert(
   execFileSync(process.execPath, [umbrellaCliPath, "help"], { encoding: "utf8" }).includes("doctor"),
   "openreceive: CLI bin must advertise doctor"
 );
+assert(
+  execFileSync(process.execPath, [umbrellaCliPath, "help"], { encoding: "utf8" }).includes(
+    "scaffold payments",
+  ),
+  "openreceive: CLI bin must advertise scaffold payments"
+);
 
 console.log(\`Imported \${checks.length} OpenReceive package tarballs.\`);
 `,

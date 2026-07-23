@@ -10,6 +10,7 @@ import {
   createHelloFruitDemoServerLogger,
   createHelloFruitOpenReceiveLogger,
 } from "../../../../shared/demo-logging.ts";
+import { readRequiredHelloFruitNwcConnectionString } from "../../../../shared/demo-nwc.ts";
 import { createHelloFruitCreateOrderResult } from "../../../../shared/demo-prepare-checkout.ts";
 import {
   createHelloFruitHostOrder,
@@ -29,9 +30,12 @@ export async function createHelloFruitServer() {
 
   // Same shape as docs/guides/quickstart-node.md:
   // onPaid may fire more than once; each payment attempt's paid_at is write-once.
+  // Boot refuses missing/invalid NWC; createOpenReceive then loads the NIP-47 info event.
+  const nwc = readRequiredHelloFruitNwcConnectionString();
   let service: Awaited<ReturnType<typeof createOpenReceive>>;
   service = await createOpenReceive({
     ...openReceiveConfig,
+    nwc,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
     onPaid: async ({ paymentHash, paidAt }) => {
       const result = await fulfillHelloFruitOrder({
