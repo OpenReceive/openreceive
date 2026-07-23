@@ -32,20 +32,42 @@ export function assertOrderTableName(value: string): string {
   return trimmed;
 }
 
-export function prismaOrderIdField(orderIdType: OrderIdType): string {
+export function isSqlite(options: ScaffoldPaymentsOptions): boolean {
+  return options.dialect === "sqlite";
+}
+
+export function prismaOrderIdField(
+  orderIdType: OrderIdType,
+  dialect: ScaffoldPaymentsOptions["dialect"],
+): string {
   switch (orderIdType) {
     case "bigint":
       return `BigInt  @map("order_id")`;
     case "integer":
       return `Int     @map("order_id")`;
     case "uuid":
-      return `String  @map("order_id") @db.Uuid`;
+      return dialect === "sqlite"
+        ? `String  @map("order_id")`
+        : `String  @map("order_id") @db.Uuid`;
     case "string":
       return `String  @map("order_id")`;
   }
 }
 
-export function drizzleOrderIdColumn(orderIdType: OrderIdType): string {
+export function drizzleOrderIdColumn(
+  orderIdType: OrderIdType,
+  dialect: ScaffoldPaymentsOptions["dialect"],
+): string {
+  if (dialect === "sqlite") {
+    switch (orderIdType) {
+      case "bigint":
+      case "integer":
+        return `integer("order_id").notNull()`;
+      case "uuid":
+      case "string":
+        return `text("order_id").notNull()`;
+    }
+  }
   switch (orderIdType) {
     case "bigint":
       return `bigint("order_id", { mode: "number" }).notNull()`;
@@ -58,7 +80,21 @@ export function drizzleOrderIdColumn(orderIdType: OrderIdType): string {
   }
 }
 
-export function typeOrmOrderIdColumn(orderIdType: OrderIdType): string {
+export function typeOrmOrderIdColumn(
+  orderIdType: OrderIdType,
+  dialect: ScaffoldPaymentsOptions["dialect"],
+): string {
+  if (dialect === "sqlite") {
+    switch (orderIdType) {
+      case "bigint":
+        return `{ name: "order_id", type: "integer" }`;
+      case "integer":
+        return `{ name: "order_id", type: "integer" }`;
+      case "uuid":
+      case "string":
+        return `{ name: "order_id", type: "varchar", length: 191 }`;
+    }
+  }
   switch (orderIdType) {
     case "bigint":
       return `{ name: "order_id", type: "bigint" }`;
@@ -109,11 +145,18 @@ export function tsOrderIdType(orderIdType: OrderIdType): string {
 }
 
 export function nextStepsMarkdown(options: ScaffoldPaymentsOptions): string {
+  const dialectNote =
+    options.dialect === "sqlite"
+      ? "Generated for **SQLite**: use a single-writer transaction (no `SELECT … FOR UPDATE`). Local demos commonly wipe the SQLite file on boot and re-run migrations."
+      : "Generated for **PostgreSQL**: lock the host order row with `SELECT … FOR UPDATE` (or your ORM's equivalent) inside the attempt transaction.";
+
   const migrate =
     options.orm === "prisma"
       ? "Merge `prisma/schema.openreceive.prisma` into your Prisma schema, then run `npx prisma migrate dev`."
       : options.orm === "drizzle"
-        ? "Export `openReceivePayments` from your Drizzle schema entrypoint, then run your usual `drizzle-kit generate` / migrate."
+        ? options.dialect === "sqlite"
+          ? "Export `openReceivePayments` from your Drizzle schema entrypoint (sqlite-core), then run your usual `drizzle-kit generate` / migrate."
+          : "Export `openReceivePayments` from your Drizzle schema entrypoint, then run your usual `drizzle-kit generate` / migrate."
         : options.orm === "typeorm"
           ? "Register `OpenReceivePayment` with your TypeORM `entities` list and run your usual migration generate/run."
           : options.orm === "sequelize"
@@ -122,7 +165,9 @@ export function nextStepsMarkdown(options: ScaffoldPaymentsOptions): string {
 
   return `# OpenReceive payment attempts
 
-Host-owned scaffolding for \`${options.orm}\`.
+Host-owned scaffolding for \`${options.orm}\` (${options.dialect}).
+
+${dialectNote}
 
 ## Next steps
 

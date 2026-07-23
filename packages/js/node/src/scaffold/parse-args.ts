@@ -4,8 +4,10 @@ import {
   defaultOrderTable,
 } from "./shared.ts";
 import {
+  OPENRECEIVE_DIALECTS,
   OPENRECEIVE_ORMS,
   ORDER_ID_TYPES,
+  type OpenReceiveDialect,
   type OpenReceiveOrm,
   type OrderIdType,
   type ScaffoldPaymentsOptions,
@@ -25,6 +27,7 @@ export function parseScaffoldPaymentsArgv(argv: readonly string[]): ParsedScaffo
   let help = false;
   let interactive = false;
   let orm: OpenReceiveOrm | undefined;
+  let dialect: OpenReceiveDialect | undefined;
   let orderModel: string | undefined;
   let orderTable: string | undefined;
   let orderIdType: OrderIdType | undefined;
@@ -57,6 +60,14 @@ export function parseScaffoldPaymentsArgv(argv: readonly string[]): ParsedScaffo
     }
     if (arg.startsWith("--orm=")) {
       orm = readEnum(arg.slice("--orm=".length), OPENRECEIVE_ORMS, "--orm");
+      continue;
+    }
+    if (arg === "--dialect") {
+      dialect = readEnum(argv[++index], OPENRECEIVE_DIALECTS, "--dialect");
+      continue;
+    }
+    if (arg.startsWith("--dialect=")) {
+      dialect = readEnum(arg.slice("--dialect=".length), OPENRECEIVE_DIALECTS, "--dialect");
       continue;
     }
     if (arg === "--order-model") {
@@ -100,6 +111,7 @@ export function parseScaffoldPaymentsArgv(argv: readonly string[]): ParsedScaffo
     interactive,
     partial: {
       ...(orm === undefined ? {} : { orm }),
+      ...(dialect === undefined ? {} : { dialect }),
       ...(orderModel === undefined ? {} : { orderModel }),
       ...(orderTable === undefined ? {} : { orderTable }),
       ...(orderIdType === undefined ? {} : { orderIdType }),
@@ -125,6 +137,7 @@ export function finalizeScaffoldOptions(
   const orderIdType = partial.orderIdType ?? defaultOrderIdType(partial.orm);
   return {
     orm: partial.orm,
+    dialect: partial.dialect ?? "postgres",
     orderModel,
     orderTable,
     orderIdType,

@@ -8,7 +8,7 @@ import { renderScaffoldPaymentsFiles } from "./render.ts";
 import type { ScaffoldPrompt } from "./wizard.ts";
 import { resolveScaffoldPaymentsOptions } from "./wizard.ts";
 import { writeScaffoldFiles } from "./write-files.ts";
-import type { ScaffoldResult } from "./types.ts";
+import type { ScaffoldPaymentsOptions, ScaffoldResult } from "./types.ts";
 
 export const SCAFFOLD_PAYMENTS_HELP = `
 Usage: openreceive scaffold payments [options]
@@ -18,6 +18,7 @@ OpenReceive never opens a database connection or runs migrations.
 
 Options:
   --orm <name>              prisma | drizzle | typeorm | sequelize | knex
+  --dialect <name>          postgres | sqlite (default: postgres)
   --order-model <Name>      Host order model/class (default: Order)
   --order-table <name>      Host order table (default: derived)
   --order-id-type <type>    bigint | integer | uuid | string
@@ -30,8 +31,9 @@ Options:
 Examples:
   npx openreceive scaffold payments
   npx openreceive scaffold payments --orm prisma
+  npx openreceive scaffold payments --orm knex --dialect sqlite
   npx openreceive scaffold payments --orm sequelize --order-model Purchase --order-id-type uuid
-  npx openreceive scaffold payments --orm knex --skip-foreign-key --out-dir ./backend
+  npx openreceive scaffold payments --orm drizzle --dialect sqlite --skip-foreign-key --out-dir ./backend
 `.trim();
 
 export interface RunScaffoldPaymentsInput {
@@ -69,6 +71,8 @@ export async function runScaffoldPayments(
   // re-validate for consistent errors when flags alone are used without TTY.
   finalizeScaffoldOptions(options);
 
+  printPlan(input.stdout, options);
+
   const files = renderScaffoldPaymentsFiles(options);
   const result = await writeScaffoldFiles({
     cwd: input.cwd,
@@ -77,20 +81,50 @@ export async function runScaffoldPayments(
     files,
   });
 
-  printSummary(input.stdout, options.orm, result);
+  printSummary(input.stdout, options, result);
   return 0;
+}
+
+function printPlan(
+  stdout: { write(message: string): void },
+  options: ScaffoldPaymentsOptions,
+): void {
+  stdout.write("OpenReceive scaffold payments\n");
+  stdout.write(`  orm:          ${options.orm}\n`);
+  stdout.write(`  dialect:      ${options.dialect}\n`);
+  stdout.write(
+    `  order:        ${options.orderModel} → ${options.orderTable} (${options.orderIdType})\n`,
+  );
+  stdout.write(`  out-dir:      ${options.outDir}\n`);
+  stdout.write(
+    `  foreign-key:  ${options.skipForeignKey ? "no" : `yes → ${options.orderTable}.id`}\n`,
+  );
+  if (options.dialect === "sqlite") {
+    stdout.write(
+      "  note:         SQLite uses a single-writer transaction (no FOR UPDATE)\n",
+    );
+  }
+  stdout.write("\nWriting files…\n");
 }
 
 function printSummary(
   stdout: { write(message: string): void },
-  orm: string,
+  options: ScaffoldPaymentsOptions,
   result: ScaffoldResult,
 ): void {
-  stdout.write(`OpenReceive scaffold payments (${orm})\n`);
   for (const file of result.written) {
     stdout.write(`  wrote ${file}\n`);
   }
-  stdout.write("Next: read OPENRECEIVE_PAYMENTS.md, merge/migrate, then fill hooks.stub.ts.\n");
+  stdout.write("\nDone.\n");
+  stdout.write("Next:\n");
+  stdout.write("  1. Read OPENRECEIVE_PAYMENTS.md\n");
+  stdout.write("  2. Merge/migrate the schema into your host database\n");
+  stdout.write("  3. Fill loadOrder / amountForOrder in hooks.stub.ts\n");
+  if (options.dialect === "sqlite") {
+    stdout.write(
+      "  4. For local demos, wipe the SQLite file on boot and re-run migrations\n",
+    );
+  }
 }
 
 function createReadlinePrompt(input: RunScaffoldPaymentsInput): ScaffoldPrompt {
@@ -114,6 +148,7 @@ export {
 } from "./parse-args.ts";
 export { renderScaffoldPaymentsFiles } from "./render.ts";
 export type {
+  OpenReceiveDialect,
   OpenReceiveOrm,
   OrderIdType,
   ScaffoldFile,

@@ -5,8 +5,10 @@ import {
 } from "./shared.ts";
 import { defaultOrderIdType, finalizeScaffoldOptions } from "./parse-args.ts";
 import {
+  OPENRECEIVE_DIALECTS,
   OPENRECEIVE_ORMS,
   ORDER_ID_TYPES,
+  type OpenReceiveDialect,
   type OpenReceiveOrm,
   type OrderIdType,
   type ScaffoldPaymentsOptions,
@@ -41,6 +43,15 @@ export async function resolveScaffoldPaymentsOptions(input: {
       "ORM",
       OPENRECEIVE_ORMS,
       undefined,
+    ));
+
+  const dialect =
+    partial.dialect ??
+    (await promptChoice(
+      input.prompt,
+      "SQL dialect",
+      OPENRECEIVE_DIALECTS,
+      "postgres",
     ));
 
   const orderModel = assertOrderModelName(
@@ -81,6 +92,7 @@ export async function resolveScaffoldPaymentsOptions(input: {
 
   return {
     orm,
+    dialect,
     orderModel,
     orderTable,
     orderIdType,
@@ -128,4 +140,4 @@ async function promptChoice<T extends string>(
   throw new Error(`${label} must be one of: ${listed}.`);
 }
 
-export type { OpenReceiveOrm, OrderIdType };
+export type { OpenReceiveDialect, OpenReceiveOrm, OrderIdType };

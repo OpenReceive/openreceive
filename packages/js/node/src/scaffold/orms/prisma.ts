@@ -1,4 +1,4 @@
-import { nextStepsMarkdown, prismaOrderIdField } from "../shared.ts";
+import { isSqlite, nextStepsMarkdown, prismaOrderIdField } from "../shared.ts";
 import { attemptConflictClass, hooksStubContents, recordMapperHelper } from "../snippets.ts";
 import type { ScaffoldFile, ScaffoldPaymentsOptions } from "../types.ts";
 
@@ -10,12 +10,13 @@ export function renderPrismaFiles(options: ScaffoldPaymentsOptions): ScaffoldFil
   const schema = `// Merge this model into your Prisma schema, then run:
 //   npx prisma migrate dev --name create_openreceive_payments
 //
+// Dialect: ${options.dialect}
 // Do not alter the host ${options.orderModel} / ${options.orderTable} table.
 // orderId is indexed but not unique: one order may have many attempts.
 
 model OpenReceivePayment {
   id          String    @id @default(cuid())
-  orderId     ${prismaOrderIdField(options.orderIdType)}
+  orderId     ${prismaOrderIdField(options.orderIdType, options.dialect)}
 ${relation}  paymentHash String    @unique @db.VarChar(64) @map("payment_hash")
   paidAt      DateTime? @map("paid_at")
   expiresAt   DateTime  @map("expires_at")
@@ -29,6 +30,27 @@ ${relation}  paymentHash String    @unique @db.VarChar(64) @map("payment_hash")
 }
 `;
 
+  const lockOrder = isSqlite(options)
+    ? `        // SQLite serializes writers; a Prisma interactive transaction is enough.
+        await tx.$queryRawUnsafe(
+          \`SELECT id FROM "${options.orderTable}" WHERE id = ?\`,
+          values.orderId,
+        );`
+    : `        await tx.$queryRawUnsafe(
+          \`SELECT id FROM "${options.orderTable}" WHERE id = $1 FOR UPDATE\`,
+          values.orderId,
+        );`;
+
+  const lockPaid = isSqlite(options)
+    ? `    await tx.$queryRawUnsafe(
+      \`SELECT id FROM "${options.orderTable}" WHERE id = ?\`,
+      payment.orderId,
+    );`
+    : `    await tx.$queryRawUnsafe(
+      \`SELECT id FROM "${options.orderTable}" WHERE id = $1 FOR UPDATE\`,
+      payment.orderId,
+    );`;
+
   const repository = `import {
   openReceivePaymentInsert,
   type OpenReceivePaymentRecord,
@@ -38,7 +60,7 @@ import type { PrismaClient } from "@prisma/client";
 ${attemptConflictClass()}
 ${recordMapperHelper()}
 /**
- * Host-owned OpenReceive payment repository for Prisma.
+ * Host-owned OpenReceive payment repository for Prisma (${options.dialect}).
  * commitAttempt locks ${options.orderTable} before inserting a new attempt.
  */
 export function createOpenReceivePaymentsRepository(
@@ -56,10 +78,7 @@ export function createOpenReceivePaymentsRepository(
     async commitAttempt(input) {
       const values = openReceivePaymentInsert(input);
       await prisma.$transaction(async (tx) => {
-        await tx.$queryRawUnsafe(
-          \`SELECT id FROM "${options.orderTable}" WHERE id = $1 FOR UPDATE\`,
-          values.orderId,
-        );
+${lockOrder}
 
         const same = await tx.openReceivePayment.findUnique({
           where: { paymentHash: values.paymentHash },
@@ -121,10 +140,7 @@ export async function markOpenReceivePaidOnce(
       where: { paymentHash: input.paymentHash.toLowerCase() },
     });
 
-    await tx.$queryRawUnsafe(
-      \`SELECT id FROM "${options.orderTable}" WHERE id = $1 FOR UPDATE\`,
-      payment.orderId,
-    );
+${lockPaid}
 
     const locked = await tx.openReceivePayment.findUniqueOrThrow({
       where: { paymentHash: payment.paymentHash },

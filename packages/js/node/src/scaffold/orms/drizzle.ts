@@ -1,17 +1,50 @@
-import { drizzleOrderIdColumn, nextStepsMarkdown } from "../shared.ts";
+import { drizzleOrderIdColumn, isSqlite, nextStepsMarkdown } from "../shared.ts";
 import { attemptConflictClass, hooksStubContents, recordMapperHelper } from "../snippets.ts";
 import type { ScaffoldFile, ScaffoldPaymentsOptions } from "../types.ts";
 
 export function renderDrizzleFiles(options: ScaffoldPaymentsOptions): ScaffoldFile[] {
+  const sqlite = isSqlite(options);
   const ordersImportNote = options.skipForeignKey
     ? ""
     : `// TODO: import your host orders table and rename \`${camel(options.orderTable)}\` if needed.\n`;
 
   const orderIdLine = options.skipForeignKey
-    ? `orderId: ${drizzleOrderIdColumn(options.orderIdType)},`
-    : `orderId: ${drizzleOrderIdColumn(options.orderIdType)}.references(() => ${camel(options.orderTable)}.id, { onDelete: "restrict" }),`;
+    ? `orderId: ${drizzleOrderIdColumn(options.orderIdType, options.dialect)},`
+    : `orderId: ${drizzleOrderIdColumn(options.orderIdType, options.dialect)}.references(() => ${camel(options.orderTable)}.id, { onDelete: "restrict" }),`;
 
-  const schema = `import {
+  const schema = sqlite
+    ? `import {
+  index,
+  integer,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
+${ordersImportNote}
+export const openReceivePayments = sqliteTable(
+  "openreceive_payments",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    ${orderIdLine}
+    paymentHash: text("payment_hash", { length: 64 }).notNull(),
+    paidAt: integer("paid_at", { mode: "timestamp" }),
+    expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+    swapData: text("swap_data", { mode: "json" }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    uniqueIndex("openreceive_payments_hash_uidx").on(table.paymentHash),
+    index("openreceive_payments_order_created_idx").on(table.orderId, table.createdAt),
+    index("openreceive_payments_paid_created_idx").on(table.paidAt, table.createdAt),
+  ],
+);
+`
+    : `import {
   bigint,
   index,
   integer,
@@ -43,17 +76,41 @@ export const openReceivePayments = pgTable(
 );
 `;
 
+  const dbImport = sqlite
+    ? `import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";`
+    : `import type { NodePgDatabase } from "drizzle-orm/node-postgres";`;
+  const dbType = sqlite
+    ? `type Db = BetterSQLite3Database<Record<string, never>>;`
+    : `type Db = NodePgDatabase<Record<string, never>>;`;
+
+  const lockCommit = sqlite
+    ? `        // SQLite: single-writer transaction; no FOR UPDATE.
+        await tx.run(
+          sql\`select id from \${sql.raw('"${options.orderTable}"')} where id = \${values.orderId}\`,
+        );`
+    : `        await tx.execute(
+          sql\`select id from \${sql.raw('"${options.orderTable}"')} where id = \${values.orderId} for update\`,
+        );`;
+
+  const lockPaid = sqlite
+    ? `    await tx.run(
+      sql\`select id from \${sql.raw('"${options.orderTable}"')} where id = \${payment.orderId}\`,
+    );`
+    : `    await tx.execute(
+      sql\`select id from \${sql.raw('"${options.orderTable}"')} where id = \${payment.orderId} for update\`,
+    );`;
+
   const repository = `import {
   openReceivePaymentInsert,
   type OpenReceivePaymentRecord,
   type OpenReceivePaymentRepository,
 } from "@openreceive/http";
 import { and, desc, eq, gt, isNotNull, isNull, or, sql } from "drizzle-orm";
-import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+${dbImport}
 import { openReceivePayments } from "../db/openreceive-payments.ts";
 ${attemptConflictClass()}
 ${recordMapperHelper()}
-type Db = NodePgDatabase<Record<string, never>>;
+${dbType}
 
 export function createOpenReceivePaymentsRepository(db: Db): OpenReceivePaymentRepository {
   return {
@@ -69,9 +126,7 @@ export function createOpenReceivePaymentsRepository(db: Db): OpenReceivePaymentR
     async commitAttempt(input) {
       const values = openReceivePaymentInsert(input);
       await db.transaction(async (tx) => {
-        await tx.execute(
-          sql\`select id from \${sql.raw('"${options.orderTable}"')} where id = \${values.orderId} for update\`,
-        );
+${lockCommit}
 
         const sameRows = await tx
           .select()
@@ -121,10 +176,10 @@ export function createOpenReceivePaymentsRepository(db: Db): OpenReceivePaymentR
 `;
 
   const markPaid = `import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
-import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+${dbImport}
 import { openReceivePayments } from "../db/openreceive-payments.ts";
 
-type Db = NodePgDatabase<Record<string, never>>;
+${dbType}
 
 export interface MarkPaidOnceResult {
   readonly firstForOrder: boolean;
@@ -145,9 +200,7 @@ export async function markOpenReceivePaidOnce(
     const payment = rows[0];
     if (!payment) throw new Error("OpenReceive payment attempt not found.");
 
-    await tx.execute(
-      sql\`select id from \${sql.raw('"${options.orderTable}"')} where id = \${payment.orderId} for update\`,
-    );
+${lockPaid}
 
     const lockedRows = await tx
       .select()

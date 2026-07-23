@@ -8,12 +8,17 @@ export const OPENRECEIVE_ORMS = [
 
 export type OpenReceiveOrm = (typeof OPENRECEIVE_ORMS)[number];
 
+export const OPENRECEIVE_DIALECTS = ["postgres", "sqlite"] as const;
+
+export type OpenReceiveDialect = (typeof OPENRECEIVE_DIALECTS)[number];
+
 export const ORDER_ID_TYPES = ["bigint", "integer", "uuid", "string"] as const;
 
 export type OrderIdType = (typeof ORDER_ID_TYPES)[number];
 
 export interface ScaffoldPaymentsOptions {
   readonly orm: OpenReceiveOrm;
+  readonly dialect: OpenReceiveDialect;
   readonly orderModel: string;
   readonly orderTable: string;
   readonly orderIdType: OrderIdType;

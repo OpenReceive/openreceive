@@ -1,20 +1,22 @@
-import { knexOrderIdColumn, nextStepsMarkdown } from "../shared.ts";
+import { isSqlite, knexOrderIdColumn, nextStepsMarkdown } from "../shared.ts";
 import { attemptConflictClass, hooksStubContents, recordMapperHelper } from "../snippets.ts";
 import type { ScaffoldFile, ScaffoldPaymentsOptions } from "../types.ts";
 
 export function renderKnexFiles(options: ScaffoldPaymentsOptions): ScaffoldFile[] {
+  const sqlite = isSqlite(options);
   const fk = options.skipForeignKey
     ? ""
     : `\n      .references("id").inTable("${options.orderTable}").onDelete("RESTRICT")`;
 
+  const useTz = sqlite ? "false" : "true";
   const migration = `/** @param {import("knex").Knex} knex */
 export async function up(knex) {
   await knex.schema.createTable("openreceive_payments", (table) => {
     table.bigIncrements("id").primary();
     ${knexOrderIdColumn(options.orderIdType)}${fk};
     table.string("payment_hash", 64).notNullable().unique();
-    table.timestamp("paid_at", { useTz: true }).nullable();
-    table.timestamp("expires_at", { useTz: true }).notNullable();
+    table.timestamp("paid_at", { useTz: ${useTz} }).nullable();
+    table.timestamp("expires_at", { useTz: ${useTz} }).notNullable();
     table.json("swap_data").nullable();
     table.timestamps(true, true);
     table.index(["order_id", "created_at"]);
@@ -27,6 +29,15 @@ export async function down(knex) {
   await knex.schema.dropTable("openreceive_payments");
 }
 `;
+
+  const lockCommit = sqlite
+    ? `        // SQLite: single-writer transaction; FOR UPDATE is unavailable.
+        await trx("${options.orderTable}").where({ id: values.orderId }).first();`
+    : `        await trx("${options.orderTable}").where({ id: values.orderId }).forUpdate().first();`;
+
+  const lockPaid = sqlite
+    ? `    await trx("${options.orderTable}").where({ id: payment.order_id }).first();`
+    : `    await trx("${options.orderTable}").where({ id: payment.order_id }).forUpdate().first();`;
 
   const repository = `import {
   openReceivePaymentInsert,
@@ -64,14 +75,14 @@ export function createOpenReceivePaymentsRepository(knex: Knex): OpenReceivePaym
         .orderBy([
           { column: "created_at", order: "desc" },
           { column: "payment_hash", order: "desc" },
-        });
+        ]);
       return rows.map(mapRow);
     },
 
     async commitAttempt(input) {
       const values = openReceivePaymentInsert(input);
       await knex.transaction(async (trx) => {
-        await trx("${options.orderTable}").where({ id: values.orderId }).forUpdate().first();
+${lockCommit}
 
         const same = await trx<PaymentRow>("openreceive_payments")
           .where({ payment_hash: values.paymentHash })
@@ -129,7 +140,7 @@ export async function markOpenReceivePaidOnce(
       .first();
     if (!payment) throw new Error("OpenReceive payment attempt not found.");
 
-    await trx("${options.orderTable}").where({ id: payment.order_id }).forUpdate().first();
+${lockPaid}
 
     const locked = await trx("openreceive_payments")
       .where({ payment_hash: payment.payment_hash })
