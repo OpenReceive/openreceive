@@ -7,8 +7,7 @@ import {
   quotePayAmountFromFixedFloatRate,
   swapRatesMetaKey,
 } from "../../packages/js/node/src/swap/index.ts";
-import { InMemoryInvoiceKvStore } from "../../packages/js/core/src/storage/memory-kv.ts";
-import { StoreBackedSwapCache } from "../../packages/js/node/src/swap/limits-cache.ts";
+import { TransientSwapCache } from "../../packages/js/node/src/swap/limits-cache.ts";
 import {
   deserializeFixedFloatRatesIndex,
   fetchFixedFloatRatesIndex,
@@ -112,10 +111,9 @@ test("compareFixedFloatDecimalAmounts orders positive decimals without floats", 
   assert.equal(compareFixedFloatDecimalAmounts("2", "1.5"), 1);
 });
 
-test("swap rates cache is shared globally via openreceive_meta", async () => {
-  const store = new InMemoryInvoiceKvStore();
+test("swap rates cache is reused inside one process", async () => {
   let fetches = 0;
-  const cache = new StoreBackedSwapCache(store, () => 1_000);
+  const cache = new TransientSwapCache(() => 1_000);
   const fetch = async () => {
     fetches += 1;
     return await fetchFixedFloatRatesIndex({
@@ -149,16 +147,12 @@ test("swap rates cache is shared globally via openreceive_meta", async () => {
   assert.equal(fetches, 1);
   assert.equal(first.pairs["USDTTRC:BTCLN"]?.in, "315");
   assert.equal(second.pairs["USDTTRC:BTCLN"]?.in, "315");
-  const meta = await store.getMeta("swap_rates:fixedfloat:fixed");
-  assert.notEqual(meta, undefined);
-  assert.match(meta.value, /"fetched_at":1000/);
 });
 
 test("rates cache refresh failure does not serve stale rates", async () => {
-  const store = new InMemoryInvoiceKvStore();
   let now = 1_000;
   let shouldFail = false;
-  const cache = new StoreBackedSwapCache(store, () => now);
+  const cache = new TransientSwapCache(() => now);
   const fetch = async () => {
     if (shouldFail) throw new Error("rates down");
     return await fetchFixedFloatRatesIndex({

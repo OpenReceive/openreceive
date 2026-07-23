@@ -187,7 +187,7 @@ test("React checkout displays the Lightning invoice after a swap payment settles
     payment_hash: "e".repeat(64),
     amount_msats: 19450000,
     transaction_state: "settled",
-    workflow_state: "settlement_action_completed",
+    workflow_state: "paid",
     settled_at: 1783518782,
     fiat_quote: null
   };
@@ -272,7 +272,7 @@ test("React checkout renders swap-only deferred checkouts without a Lightning in
       {
         ...swapOnlyCheckout.invoices[0],
         transaction_state: "settled",
-        workflow_state: "settlement_action_completed",
+        workflow_state: "paid",
         settled_at: 1784740424,
       },
     ],
@@ -717,7 +717,7 @@ test("browser builds block explorer and Lightning decode links for transaction d
         payment_hash: "ab".repeat(32),
         amount_msats: 1000,
         transaction_state: "settled",
-        workflow_state: "settled",
+        workflow_state: "paid",
         phase: "settled",
         settled: true,
         terminal: true,
@@ -1081,7 +1081,7 @@ test("React checkout supports design-system component and class slots", () => {
         fiat_quote: undefined,
         // Summary meta (and PaymentState slot) only render for terminal statuses.
         transaction_state: "settled",
-        workflow_state: "settlement_action_completed",
+        workflow_state: "paid",
         settled_at: 1_700_000_000
       }),
       components: {

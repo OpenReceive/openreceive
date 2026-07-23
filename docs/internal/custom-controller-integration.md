@@ -1,200 +1,97 @@
-# Custom Controller Integration
+# Custom controller integration
 
-**99% of apps should mount the shipped routes** — see the
-[Node](../guides/quickstart-node.md) / [Rails](../guides/quickstart-rails.md)
-quickstarts and [Authorization](../guides/authorization.md).
+Most applications should mount the shipped HTTP handler. Use a custom controller only when the
+host needs to own the complete route surface or creates checkouts directly from server code.
+OpenReceive service methods do not authenticate callers and never read a host session or order.
 
-Use this escape hatch only when you create a checkout server-side and pass the
-snapshot into `<Checkout checkout={…} />`, or when you must own the HTTP surface
-yourself. Prefer `openReceiveExpress` / `createOpenReceiveHttpHandler` /
-`openReceiveNextHandlers` so you do not hand-write a multiplexer.
+## Service surface
 
-OpenReceive performs no authentication on service method calls. Treat
-`order_id` and `attempt_id` as non-secret identifiers, not capabilities —
-authorize the caller in your route before calling the service. Amounts you pass
-to `getOrCreateCheckout` are trusted because they come from your server, not
-from a public create body. The mounted create route never trusts a client price.
-
-## Service method surface
-
-| Method | Job |
+| Method | Responsibility |
 | --- | --- |
-| `getOrCreateCheckout` | Create / reuse / renew a priced checkout under your order id |
-| `getOrder` | Refresh settlement + read stored order |
-| `getCheckout` | Read one checkout by id |
-| `swapOptions` / `swapQuote` / `startSwap` / `refundSwap` | Swap actions |
-| `sweepPendingInvoices` | Explicit global settlement sweep |
-| `listRates` / `quoteRates` | Fiat quotes |
+| `createCheckout({ orderId, amount })` | Normalize the host price and mint a wallet invoice. |
+| `recoverCheckout({ orderId, paymentHash })` | Reconstruct a still-live checkout for host-row retry reuse. |
+| `checkPayment({ paymentHash })` | Verify one payment against wallet authority. |
+| `reconcilePayments({ paymentHashes })` | Verify the host's unresolved hashes. |
+| `watchPayments({ onPaid })` | Scan and deliver verified settlements at least once. |
+| `quoteSwap`, `createSwap`, `getSwap` | Create and recover stateless provider workflows. |
+| `createSwapRefundConfirmation`, `refundSwap` | Run the two-step refund flow. |
+| `listRates`, `quoteRates` | Resolve exact fiat quotes. |
 
-Wire fields stay snake_case on HTTP; the JS SDK is camelCase. Full signatures:
-[API Reference](../guides/api-reference.md). Route contract:
-[Shipped Routes](shipped-routes.md).
+There is no order read, checkout history, migration, sweep cursor, or OpenReceive persistence API.
 
-## Express: create + order multiplexer
+## Safe checkout route
+
+The host row is the idempotency guard. A controller must reuse a live recorded hash, and must
+commit a new hash before sending its BOLT11 to the payer.
 
 ```ts
-import express from "express";
-import { createOpenReceive, OpenReceiveServiceError } from "@openreceive/node";
+app.post("/checkout", async (request, response) => {
+  const order = await orders.authorizedForCheckout(request.user, request.body.order_id);
 
-const checkoutRoutes = express.Router();
-checkoutRoutes.use(express.json());
+  if (order.paid_at) {
+    response.status(409).json({ message: "Order is already paid." });
+    return;
+  }
 
+  if (order.payment_hash) {
+    const existing = await openreceive.recoverCheckout({
+      orderId: order.id,
+      paymentHash: order.payment_hash,
+    });
+    if (existing) {
+      response.json(existing);
+      return;
+    }
+  }
+
+  const checkout = await openreceive.createCheckout({
+    orderId: order.id,
+    amount: { currency: "USD", value: order.price_usd },
+  });
+
+  const committed = await orders.setPaymentHashIfEmpty(order.id, checkout.paymentHash);
+  if (!committed) {
+    // Never expose the losing invoice from a concurrent create.
+    response.status(409).json({ message: "Checkout changed; retry." });
+    return;
+  }
+
+  response.status(201).json(checkout);
+});
+```
+
+`setPaymentHashIfEmpty` must be a transaction or compare-and-set on the host order. If the host
+write fails, withhold the invoice. If the recorded invoice is no longer live, the host decides
+when and how its row may be replaced.
+
+## Settlement callback
+
+```ts
 const openreceive = await createOpenReceive({
-  onPaid: async ({ orderId }) => {
-    await markOrderPaidInYourApp(orderId);
-  }
-});
-
-// Your app's order route — not OpenReceive's create-checkout HTTP body.
-checkoutRoutes.post("/create_order", async (req, res, next) => {
-  try {
-    const order = await createOrderFromCart(req.user, req.body.cart);
-    const checkout = await openreceive.getOrCreateCheckout({
-      orderId: order.uuid,
-      amount: { currency: "USD", value: order.total_amount.value },
-      memo: `Order ${order.number}`
-    });
-    res.status(201).json({ order, checkout });
-  } catch (error) {
-    if (error instanceof OpenReceiveServiceError) {
-      res.status(error.status).json(error.body);
-      return;
-    }
-    next(error);
-  }
-});
-
-checkoutRoutes.post("/order", async (req, res, next) => {
-  try {
-    // Authorize the caller for req.body.order_id here (session or ownership
-    // check) before calling the service. order_id is an identifier, not a capability.
-    const orderId = req.body.order_id;
-    const action = req.body.action ?? "status";
-    if (action === "status") {
-      const order = await openreceive.getOrder({ orderId });
-      const swap = await openreceive.swapOptions({ orderId });
-      res.json({
-        ...order,
-        swapsEnabled: swap.enabled,
-        swapPayOptions: swap.enabled ? swap.options : [],
-      });
-      return;
-    }
-    if (action === "swap_quote") {
-      res.json({
-        quote: await openreceive.swapQuote({
-          orderId,
-          payInAsset: req.body.pay_in_asset,
-        }),
-      });
-      return;
-    }
-    if (action === "start_swap") {
-      res.json({
-        attempt: await openreceive.startSwap({
-          orderId,
-          payInAsset: req.body.pay_in_asset,
-        }),
-      });
-      return;
-    }
-    if (action === "refund_swap") {
-      res.json({
-        attempt: await openreceive.refundSwap({
-          attemptId: req.body.attempt_id,
-          refundAddress: req.body.refund_address,
-          refundNonce: req.body.refund_nonce,
-          confirm: req.body.confirm === true,
-        }),
-      });
-      return;
-    }
-    res.status(400).json({
-      code: "INVALID_REQUEST",
-      message: 'Unknown order action. Expected "status", "swap_quote", "start_swap", or "refund_swap".',
-    });
-  } catch (error) {
-    if (error instanceof OpenReceiveServiceError) {
-      res.status(error.status).json(error.body);
-      return;
-    }
-    next(error);
-  }
+  onPaid: async ({ paymentHash, paidAt }) => {
+    await orders.setPaidAtOnce(paymentHash, paidAt);
+  },
 });
 ```
 
-Point the checkout element at your route with `order-url` / `orderUrl`:
+Delivery is at least once. `setPaidAtOnce` must match the host order by payment hash, update only
+when `paid_at IS NULL`, and make fulfillment idempotent. Notifications are wake-up hints; wallet
+lookup or scanning remains settlement authority.
 
-```html
-<openreceive-checkout order-id="order_123" order-url="/order"></openreceive-checkout>
-```
+## Custom swap routes
 
-## Next.js: server-side create
+The host price is still authoritative. `createSwap` returns a payment hash, an opaque recovery
+token, and deposit instructions. Store the hash and token atomically before returning any deposit
+address or amount. Subsequent status calls take only the stored recovery token:
 
 ```ts
-// app/create_order/route.ts
-import { createOpenReceive, OpenReceiveServiceError } from "@openreceive/node";
-
-export const runtime = "nodejs";
-
-const openreceiveReady = createOpenReceive({
-  onPaid: async ({ orderId }) => {
-    await markOrderPaidInYourApp(orderId);
-  }
-});
-
-export async function POST(request: Request) {
-  const openreceive = await openreceiveReady;
-
-  try {
-    const body = await request.json();
-    const order = await createOrderFromCart(body.cart);
-    const checkout = await openreceive.getOrCreateCheckout({
-      orderId: order.uuid,
-      amount: { currency: "USD", value: order.total_amount.value },
-      memo: `Order ${order.number}`
-    });
-    return Response.json({ order, checkout }, { status: 201 });
-  } catch (error) {
-    if (error instanceof OpenReceiveServiceError) {
-      return Response.json(error.body, { status: error.status });
-    }
-    throw error;
-  }
-}
+const current = await openreceive.getSwap({ recoveryToken: order.swap_recovery_token });
 ```
 
-For App Router mounts of the shipped routes, use
-`openReceiveNextHandlers({ service, prepareCheckout })` under
-`app/openreceive/[...openreceive]/route.ts` — see the
-[Node Quickstart](../guides/quickstart-node.md).
+Refunds first mint a short-lived confirmation bound to the recovery token and refund address,
+then call `refundSwap`. That final call refreshes the provider ledger before acting. Do not log or
+decode recovery/confirmation tokens.
 
-## Swap actions on a custom route
-
-When you own the route, the HTTP `action` maps to service methods the same way
-the shipped handler does; an unrecognized `action` is rejected with 400:
-
-| `action` (HTTP) | routes to | returns |
-| --- | --- | --- |
-| omitted / `"status"` | `getOrder` + `swapOptions` | order + `swaps_enabled` + `swap_pay_options` |
-| `"swap_quote"` | `swapQuote` | `{ quote }` |
-| `"start_swap"` | `startSwap` | `{ attempt }` |
-| `"refund_swap"` | `refundSwap` | `{ attempt }` |
-
-`startSwap` and `refundSwap` return a first-class `SwapAttempt`: deposit fields
-are top-level; the backing shadow Lightning invoice is `shadowInvoice`. Refunds
-target `attemptId`, not order id plus asset. Operator lifecycle detail:
-[Swap Operations](swap-operations.md).
-
-## Checkout component snapshot mode
-
-```tsx
-<Checkout
-  checkout={checkout}
-  orderUrl="/order"
-  onSettled={() => showThankYou()}
-/>
-```
-
-`orderUrl` is optional. Apps without a status route can render a static surface
-with `polling={false}`. See [Frontend Checkout](../guides/frontend-checkout.md).
+For normative HTTP shapes, use the
+[OpenAPI contract](../../spec/openapi/openreceive-http.v1.yaml) and
+[Shipped Routes](shipped-routes.md).

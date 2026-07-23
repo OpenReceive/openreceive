@@ -8,7 +8,6 @@ import {
   type OpenReceiveBitcoinAmount,
   type OpenReceiveBtcFiatRateMapWithSource,
   type OpenReceiveFiatAmount,
-  type OpenReceivePriceFeedCacheStore,
   type OpenReceiveRateQuote,
   type OpenReceiveSourcedPriceProvider,
   quoteBitcoinAmountToMsats,
@@ -211,11 +210,9 @@ export async function getBtcFiatRatesForProviders(input: {
   });
 }
 
-// Builds the database-cached live price feed (primary first, fallback second),
-// honoring the OPENRECEIVE_PRICE_FEED_PRIMARY_URL / _FALLBACK_URL dev overrides.
-// Pass the same OpenReceive store the service uses so the 60s cache is durable.
+// Builds the live price feed with a process-local TTL cache. This cache is an
+// optimization only: no payment truth or workflow state depends on it.
 export function createOpenReceivePriceFeed(options: {
-  store: OpenReceivePriceFeedCacheStore;
   currencies: readonly string[];
   fetch?: SimplePriceFetch;
   clock?: () => number;
@@ -223,7 +220,6 @@ export function createOpenReceivePriceFeed(options: {
 }): CachedPriceFeed {
   const overrides = readPriceFeedUrlOverrides();
   return createCachedLivePriceFeed({
-    store: options.store,
     currencies: options.currencies,
     fetch: options.fetch,
     clock: options.clock,

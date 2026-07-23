@@ -1,5 +1,4 @@
 import type { OpenReceiveErrorBody, OpenReceiveErrorCode } from "@openreceive/core";
-import { OpenReceiveConfigError } from "../config-error.ts";
 
 export class OpenReceiveServiceError extends Error {
   readonly status: number;
@@ -13,22 +12,6 @@ export class OpenReceiveServiceError extends Error {
     this.code = body.code;
     this.body = body;
   }
-}
-
-export function optionalSafeInteger(value: unknown): number | undefined {
-  return Number.isSafeInteger(value) ? (value as number) : undefined;
-}
-
-export function readOpenReceiveNamespace(configured: string | undefined): string {
-  const namespace = configured ?? "default";
-  if (namespace.trim().length === 0) {
-    throw new OpenReceiveConfigError({
-      code: "STORE_UNAVAILABLE",
-      message: "`namespace` must not be empty.",
-      hint: "Set `namespace` in openreceive.yml to a stable non-empty app namespace, or omit it to use default.",
-    });
-  }
-  return namespace;
 }
 
 export function asRecord(value: unknown): Record<string, unknown> {
@@ -58,31 +41,12 @@ export function parseOptionalRecord(
   return value as Record<string, unknown>;
 }
 
-export function requiredValue<T>(value: T | undefined): T {
-  if (value === undefined) {
-    throw new Error("required value was missing");
-  }
-  return value;
-}
-
 export function toSafeInteger(value: bigint | number, field: string): number {
   const numberValue = typeof value === "bigint" ? Number(value) : value;
   if (!Number.isSafeInteger(numberValue)) {
     throw serviceError(500, "INTERNAL", `${field} is outside JavaScript safe integer bounds.`);
   }
   return numberValue;
-}
-
-export function createStoredInvoiceId(): string {
-  const bytes = new Uint8Array(16);
-  globalThis.crypto.getRandomValues(bytes);
-  return `or_inv_${[...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
-}
-
-export function createCheckoutId(): string {
-  const bytes = new Uint8Array(16);
-  globalThis.crypto.getRandomValues(bytes);
-  return `or_chk_${[...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
 }
 
 export function currentUnixSeconds(): number {

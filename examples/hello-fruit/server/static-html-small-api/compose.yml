@@ -10,7 +10,3 @@ services:
       - "3001"
     volumes:
       - ../../../../openreceive.yml:/app/examples/hello-fruit/server/static-html-small-api/openreceive.yml:ro
-      - openreceive-static-html-small-api-openreceive:/app/examples/hello-fruit/server/static-html-small-api/.openreceive
-
-volumes:
-  openreceive-static-html-small-api-openreceive:

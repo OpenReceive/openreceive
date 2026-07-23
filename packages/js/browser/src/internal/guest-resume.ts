@@ -16,8 +16,6 @@
  * The capability token store (`order-token.ts`) is separate and already automatic.
  */
 
-import { OPENRECEIVE_DEFAULT_PREFIX } from "./ui.ts";
-
 export interface GuestCheckoutResumeOptions<TOrder> {
   /**
    * URL path prefix before the order id. Default `"/checkout"` → `/checkout/:orderId`.
@@ -198,27 +196,19 @@ export function enterCheckoutResumePath(
 }
 
 /**
- * Default guest resume fetch: `GET {prefix}/orders/:orderId/summary` → `{ order_id, summary? }`.
- * Also accepts a legacy host shape `{ order: TOrder }` for custom summary routes.
+ * Guest resume fetch for a host-owned order endpoint. OpenReceive ships no order-read route.
  * Pass the result as `fetchOrder` to {@link createGuestCheckoutResume}.
  */
 export function createGuestOrderFetcher<TOrder>(options: {
   readonly parseOrder: (value: unknown) => TOrder | undefined;
   /**
-   * Build the fetch URL. Default:
-   * `{prefix}/orders/${encodeURIComponent(orderId)}/summary`
-   * with `prefix` defaulting to {@link OPENRECEIVE_DEFAULT_PREFIX}.
+   * Build the host application's order URL.
    */
-  readonly orderUrl?: (orderId: string) => string;
-  /** Mount prefix used when `orderUrl` is omitted. Default `/openreceive`. */
-  readonly prefix?: string;
+  readonly orderUrl: (orderId: string) => string;
   readonly fetch?: typeof globalThis.fetch;
 }): (orderId: string) => Promise<TOrder | undefined> {
   const fetchFn = options.fetch ?? globalThis.fetch;
-  const mountPrefix = (options.prefix ?? OPENRECEIVE_DEFAULT_PREFIX).replace(/\/+$/, "");
-  const orderUrl =
-    options.orderUrl ??
-    ((orderId: string) => `${mountPrefix}/orders/${encodeURIComponent(orderId)}/summary`);
+  const orderUrl = options.orderUrl;
   return async (orderId: string): Promise<TOrder | undefined> => {
     const response = await fetchFn(orderUrl(orderId));
     if (response.status === 404 || !response.ok) return undefined;

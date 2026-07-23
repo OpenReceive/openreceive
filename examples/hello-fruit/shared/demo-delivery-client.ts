@@ -6,7 +6,6 @@
 
 import {
   getOrderAccessToken,
-  requestOrderSummary,
 } from "@openreceive/browser";
 import { isHelloFruitDemoOrder, type HelloFruitDemoOrder } from "./demo-order.ts";
 
@@ -40,17 +39,15 @@ export async function waitForHelloFruitPaidSummary(
       await sleep(delayMs);
     }
     try {
-      const result = await requestOrderSummary({
-        orderId: options.orderId,
-        ...(options.prefix === undefined ? {} : { prefix: options.prefix }),
-        ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
-      });
-      if (result === undefined || !isHelloFruitDemoOrder(result.summary)) {
+      const fetcher = options.fetch ?? globalThis.fetch;
+      const response = await fetcher(`/orders/${encodeURIComponent(options.orderId)}`);
+      const result = response.ok ? await response.json() : undefined;
+      if (!isHelloFruitDemoOrder(result)) {
         lastError = new Error("Order summary not found.");
         continue;
       }
-      if (result.summary.status === "paid") {
-        return result.summary;
+      if (result.status === "paid") {
+        return result;
       }
       lastError = new Error("Order is not fulfilled yet.");
     } catch (error) {

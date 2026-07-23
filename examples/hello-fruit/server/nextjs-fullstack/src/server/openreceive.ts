@@ -1,64 +1,78 @@
-import { guestCheckout, type CreateOpenReceiveHttpHandlerOptions } from "@openreceive/http";
 import {
-  createOpenReceive,
-  readOpenReceiveConfigFile,
-} from "@openreceive/node";
+  createDefaultAuthorize,
+  hostError,
+  type CreateOpenReceiveHttpHandlerOptions,
+} from "@openreceive/http";
+import { createOpenReceive } from "@openreceive/node";
 import { helloFruitDeliveryFetchResponse } from "../../../../shared/demo-delivery.ts";
 import { fulfillHelloFruitOrder } from "../../../../shared/demo-fulfillment.ts";
 import {
   createHelloFruitDemoServerLogger,
   createHelloFruitOpenReceiveLogger,
 } from "../../../../shared/demo-logging.ts";
-import { createHelloFruitPrepareCheckout } from "../../../../shared/demo-prepare-checkout.ts";
+import { createHelloFruitCreateOrderResult } from "../../../../shared/demo-prepare-checkout.ts";
+import {
+  commitHelloFruitCheckout,
+  createHelloFruitHostOrder,
+  readHelloFruitHostOrder,
+  resolveHelloFruitHostCheckout,
+} from "../../../../shared/openreceive-store.ts";
 import { helloFruitSharedFile } from "./shared-data.ts";
 
 const DEMO_ID = "nextjs-fullstack";
 const logDemo = createHelloFruitDemoServerLogger(DEMO_ID);
 const STICKERS_DIR = helloFruitSharedFile("stickers");
 
-interface HelloFruitOpenReceiveBundle {
-  readonly openreceive: Awaited<ReturnType<typeof createOpenReceive>>;
-}
+let servicePromise: Promise<Awaited<ReturnType<typeof createOpenReceive>>> | undefined;
 
-interface NextDemoOpenReceiveCache {
-  readonly storeCacheKey: string;
-  readonly server: Promise<HelloFruitOpenReceiveBundle>;
-}
-
-let openreceiveCache: NextDemoOpenReceiveCache | undefined;
-
-/**
- * Options for the mounted OpenReceive router (app/openreceive/[...openreceive] catch-all).
- * Same shape as docs/guides/quickstart-node.md (Next adapter): service + prepareCheckout.
- */
 export async function openReceiveHttpOptions(): Promise<CreateOpenReceiveHttpHandlerOptions> {
-  const { openreceive: service } = await getOpenReceive();
+  const service = await getOpenReceive();
   return {
     service,
-    authorize: guestCheckout(),
-    prepareCheckout: createHelloFruitPrepareCheckout({
-      demoId: DEMO_ID,
-      demoName: "Next.js",
-      openreceive: service,
-    }),
+    authorize: createDefaultAuthorize(),
+    resolveCheckoutAmount: ({ orderId }) => {
+      const order = resolveHelloFruitHostCheckout(orderId);
+      if (order === null) throw hostError("Order not found.", 404, "NOT_FOUND");
+      return order;
+    },
+    onCheckoutCreated: commitHelloFruitCheckout,
   };
 }
 
-export async function ratesResponse(): Promise<Response> {
-  const { openreceive: service } = await getOpenReceive();
-  return jsonResponse({ rates: await service.listRates() });
+export async function createOrderResponse(request: Request): Promise<Response> {
+  try {
+    const service = await getOpenReceive();
+    const result = await createHelloFruitCreateOrderResult(await request.json(), {
+      demoId: DEMO_ID,
+      demoName: "Next.js",
+      openreceive: service,
+    });
+    createHelloFruitHostOrder(result.order, result.invoiceRequest.amount);
+    return jsonResponse({ order_id: result.order.uuid, summary: result.order }, 201);
+  } catch (error) {
+    return jsonResponse({ message: error instanceof Error ? error.message : "Invalid order." }, 400);
+  }
 }
 
-/** Gated post-pay sticker download (`GET /delivery/:orderId/:productId`). */
+export function readOrderResponse(orderId: string): Response {
+  const order = readHelloFruitHostOrder(orderId);
+  return order === null
+    ? jsonResponse({ message: "Order not found." }, 404)
+    : jsonResponse(order.summary);
+}
+
+export async function ratesResponse(): Promise<Response> {
+  return jsonResponse({ rates: await (await getOpenReceive()).listRates() });
+}
+
 export async function deliveryResponse(
   request: Request,
   orderId: string,
   productId: string,
 ): Promise<Response> {
-  const { openreceive: service } = await getOpenReceive();
+  const service = await getOpenReceive();
   return helloFruitDeliveryFetchResponse({
-    store: service.store,
-    namespace: service.namespace,
+    verifyCapabilityToken: service.verifyCapabilityToken,
     stickersDir: STICKERS_DIR,
     orderId,
     productId,
@@ -66,69 +80,33 @@ export async function deliveryResponse(
   });
 }
 
-async function getOpenReceive(): Promise<HelloFruitOpenReceiveBundle> {
-  const storeCacheKey = currentStoreCacheKey();
-  const cached = openreceiveCache;
-  if (cached !== undefined && cached.storeCacheKey === storeCacheKey) {
-    try {
-      return await cached.server;
-    } catch {
-      if (openreceiveCache === cached) openreceiveCache = undefined;
-    }
-  }
-
-  const nextServer = createHelloFruitOpenReceive();
-  openreceiveCache = {
-    storeCacheKey,
-    server: nextServer,
-  };
-
+async function getOpenReceive() {
+  servicePromise ??= createHelloFruitOpenReceive();
   try {
-    return await nextServer;
+    return await servicePromise;
   } catch (error) {
-    if (openreceiveCache?.server === nextServer) openreceiveCache = undefined;
+    servicePromise = undefined;
     throw error;
   }
 }
 
-async function createHelloFruitOpenReceive(): Promise<HelloFruitOpenReceiveBundle> {
-  // Same shape as docs/guides/quickstart-node.md:
-  // createOpenReceive({ onPaid }) — Next mounts via openReceiveNextHandlers + openReceiveHttpOptions.
-  // onPaid may fire more than once — fulfillHelloFruitOrder dedupes on checkoutId.
-  // NWC + price currencies come from openreceive.yml (defaults: local-sqlite, USD).
-  let service: Awaited<ReturnType<typeof createOpenReceive>>;
-  service = await createOpenReceive({
+async function createHelloFruitOpenReceive() {
+  return await createOpenReceive({
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
-    onPaid: async ({ orderId, checkoutId }) => {
-      const result = await fulfillHelloFruitOrder({
-        store: service.store,
-        orderId,
-        checkoutId,
-      });
-      logDemo("openreceive.on_paid", "Checkout settled — order fulfillment ran.", {
-        orderId,
-        checkoutId,
+    onPaid: async ({ paymentHash, paidAt }) => {
+      const result = await fulfillHelloFruitOrder({ paymentHash, paidAt });
+      logDemo("openreceive.on_paid", "Verified payment marked host order paid.", {
+        paymentHash,
+        orderId: result.orderId,
         fulfilled: result.fulfilled,
-        ...(result.fulfilled ? {} : { reason: result.reason }),
       });
     },
   });
-  return { openreceive: service };
-}
-
-function currentStoreCacheKey(): string {
-  const config = readOpenReceiveConfigFile({
-    cwd: process.cwd(),
-  });
-  return JSON.stringify(config ?? {});
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: {
-      "Cache-Control": "no-store",
-      "Content-Type": "application/json",
-    },
+    headers: { "Cache-Control": "no-store", "Content-Type": "application/json" },
   });
 }

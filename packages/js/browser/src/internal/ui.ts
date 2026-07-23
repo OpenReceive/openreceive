@@ -744,7 +744,7 @@ export interface CheckoutShellThemeToggleBinding {
 
 export interface CheckoutShellModel {
   readonly theme: OpenReceiveThemeModel;
-  readonly rootAttributes: OpenReceiveThemeModel["attributes"];
+  readonly rootAttributes: Partial<OpenReceiveThemeModel["attributes"]>;
   readonly checkout: CheckoutShellCheckoutBinding;
   readonly themeToggle: CheckoutShellThemeToggleBinding | null;
 }
@@ -775,7 +775,7 @@ export interface CreateCheckoutShellOptions extends CheckoutShellOptions {
 
 export interface CheckoutShellElements {
   readonly theme: OpenReceiveThemeModel;
-  readonly rootAttributes: OpenReceiveThemeModel["attributes"];
+  readonly rootAttributes: Partial<OpenReceiveThemeModel["attributes"]>;
   readonly checkout: HTMLElement;
   readonly themeToggle: HTMLElement | null;
 }
@@ -820,26 +820,7 @@ export interface CheckoutStatusModel {
 
 export type CheckoutStatusRefresh = (orderId: string) => Promise<CheckoutSnapshot | null>;
 
-/**
- * Trusted create-checkout amount for custom `checkoutUrl` posts. Matches Node's
- * `CreateCheckoutAmount`: exactly one of `{ sats }` or `{ currency, value }`.
- */
-export type RequestCheckoutAmount =
-  | { readonly sats: number | string; readonly currency?: never; readonly value?: never }
-  | { readonly currency: string; readonly value: string; readonly sats?: never };
-
-export type RequestCheckoutOptions = RequestCheckoutBaseOptions &
-  (
-    | {
-        readonly amount: RequestCheckoutAmount;
-      }
-    // Amount-less create: `{ prefix, orderId }` (or `{ checkoutUrl, orderId }`) with no amount.
-    // The mounted server's prepareCheckout persist is the sole price authority; the client
-    // POSTs a body of only `{ order_id }`.
-    | {
-        readonly amount?: never;
-      }
-  );
+export type RequestCheckoutOptions = RequestCheckoutBaseOptions;
 
 export interface RequestCheckoutBaseOptions {
   /**
@@ -861,52 +842,12 @@ export interface RequestCheckoutBaseOptions {
   readonly memo?: string;
   readonly descriptionHash?: string;
   readonly metadata?: Record<string, unknown>;
-  /**
-   * When `false`, the server creates a `checkout_lock` placeholder without calling
-   * `makeInvoice`, deferring the actual Lightning mint until the payer selects Bitcoin.
-   * Omit or pass `true` to mint immediately (server default). The mounted create route
-   * requires a prior `prepareCheckout` persist regardless of this flag.
-   */
-  readonly mintLightning?: boolean;
 }
 
-/**
- * Options for {@link requestPrepareCheckout}: `POST {prefix}/prepare` with an opaque JSON body.
- * The host `prepareCheckout` hook validates the cart and returns the authoritative amount
- * (and optional summary) that create-checkout later reads from prepare persist.
- */
-export interface RequestPrepareCheckoutOptions {
-  /** Base path the shipped router is mounted at. Default {@link OPENRECEIVE_DEFAULT_PREFIX}. */
-  readonly prefix?: string;
-  /** Opaque prepare body (cart / SKU / tip amount — host-defined). */
-  readonly body: unknown;
-  readonly fetch?: typeof globalThis.fetch;
-  readonly headers?: Readonly<Record<string, string>>;
-}
-
-export interface RequestPrepareCheckoutResult {
-  readonly order_id: string;
-  readonly summary?: unknown;
-}
-
-/**
- * Options for {@link requestOrderSummary}: `GET {prefix}/orders/{orderId}/summary`.
- */
-export interface RequestOrderSummaryOptions {
-  /** Base path the shipped router is mounted at. Default {@link OPENRECEIVE_DEFAULT_PREFIX}. */
-  readonly prefix?: string;
-  readonly orderId: string;
-  readonly fetch?: typeof globalThis.fetch;
-  readonly headers?: Readonly<Record<string, string>>;
-}
-
-export interface RequestOrderSummaryResult {
-  readonly order_id: string;
-  readonly summary?: unknown;
-}
 
 export interface CreateOpenReceiveStatusFetcherOptions {
   readonly orderUrl: string;
+  readonly snapshot: CheckoutSnapshot;
   readonly fetch?: typeof globalThis.fetch;
   readonly headers?: Readonly<Record<string, string>>;
 }
@@ -948,7 +889,7 @@ export interface CheckoutController {
 /**
  * Options for {@link createOpenReceiveCheckoutSession}: everything a controller accepts (minus
  * the fields the session derives itself — `snapshot`, `orderUrl`, `refreshStatus`) plus the
- * create inputs. Amount is optional; omit it to let the mounted server set the price.
+ * create inputs. The mounted server resolves the amount from host-owned data.
  */
 export interface CreateOpenReceiveCheckoutSessionOptions
   extends Omit<CheckoutControllerOptions, "snapshot" | "orderUrl" | "refreshStatus"> {
@@ -959,7 +900,6 @@ export interface CreateOpenReceiveCheckoutSessionOptions
   readonly memo?: string;
   /** Extra headers for the create POST (status polls use `statusHeaders`). */
   readonly headers?: Readonly<Record<string, string>>;
-  readonly amount?: RequestCheckoutAmount;
 }
 
 /** A created checkout paired with the order route it polls and a ready-to-start controller. */

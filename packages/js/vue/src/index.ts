@@ -109,7 +109,7 @@ export interface OpenReceiveVueThemeToggleBinding {
 
 export interface OpenReceiveVueCheckoutShellBinding {
   readonly theme: OpenReceiveThemeModel;
-  readonly rootAttrs: OpenReceiveThemeModel["attributes"];
+  readonly rootAttrs: Partial<OpenReceiveThemeModel["attributes"]>;
   readonly checkout: OpenReceiveVueCheckoutBinding;
   readonly themeToggle: OpenReceiveVueThemeToggleBinding | null;
 }

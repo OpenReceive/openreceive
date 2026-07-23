@@ -3,7 +3,6 @@ import {
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
   OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
-  requestOrderSummary,
   type CheckoutState,
 } from "@openreceive/browser/internal";
 import { defineOpenReceiveElements, createTransactionDetailsElement } from "@openreceive/elements";
@@ -124,18 +123,19 @@ async function resumeCheckoutFromUrl(): Promise<void> {
   }
   logDemo("checkout.resume", "Resuming checkout from URL.", { orderId });
   setError("");
-  const result = await requestOrderSummary({ orderId });
+  const response = await fetch(`/orders/${encodeURIComponent(orderId)}`);
+  const result = response.ok ? await response.json() : undefined;
   if (parseHelloFruitCheckoutOrderId(globalThis.location.pathname) !== orderId) {
     return;
   }
-  if (result === undefined || !("summary" in result) || !isHelloFruitDemoOrder(result.summary)) {
+  if (!isHelloFruitDemoOrder(result)) {
     logDemo("checkout.resume_miss", "Checkout resume order not found.", { orderId });
     leaveHelloFruitCheckout();
     startOver({ preserveUrl: true });
     setError("This checkout link is no longer available. Start a new order.");
     return;
   }
-  const resumed = result.summary;
+  const resumed = result;
   currentOrder = resumed;
   purchasedFruit = fruits.find((fruit) => fruit.id === resumed.items[0]?.product_id);
   renderOrder(resumed);
@@ -452,7 +452,7 @@ async function createOrder(): Promise<void> {
     });
     // App route: build + persist the order. The <openreceive-checkout order-id> element below then
     // creates the checkout against the mounted /openreceive/checkouts route and drives it itself.
-    const response = await fetch("/openreceive/prepare", {
+    const response = await fetch("/orders", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

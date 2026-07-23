@@ -1,15 +1,11 @@
 /**
- * Meta-key helpers and TTL defaults for the durable global swap-rates cache.
- *
- * Rates live in `openreceive_meta` (same KV as fiat price feed and `/ccies`
- * limits) — not a separate SQL table. One blob per provider + rate type is
- * shared across every checkout and process via {@link StoreBackedSwapCache}.
+ * Process-local key helpers and TTL defaults for the disposable swap-rates cache.
  */
 
 /**
  * How often a warm rates blob is refreshed from the provider bulk feed.
  * Crypto pairs move fast; keep this short. The FixedFloat XML export is public
- * (no API key, no weight budget), so frequent global refreshes are fine.
+ * (no API key, no weight budget), so frequent refreshes are fine.
  */
 export const SWAP_RATES_REFRESH_SECONDS = 15;
 
@@ -24,7 +20,7 @@ export const SWAP_RATES_MAX_STALE_SECONDS = SWAP_RATES_REFRESH_SECONDS;
 export type SwapRateType = "fixed" | "float";
 
 /**
- * Durable meta key for a provider's bulk rates snapshot.
+ * Process-local key for a provider's bulk rates snapshot.
  * Example: `swap_rates:fixedfloat:fixed`.
  */
 export function swapRatesMetaKey(

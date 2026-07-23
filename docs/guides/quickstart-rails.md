@@ -1,85 +1,33 @@
-# Rails Quickstart
+# Rails quickstart
 
-The `openreceive-rails` gem is a mountable Rails engine. Your app keeps 100% of
-authentication: engine controllers inherit from your `ApplicationController`, so
-they get your CSRF protection, `authenticate_user!`, and `current_user`.
-OpenReceive never inspects your session — it calls the `authorize` and
-`prepare_checkout` hooks you configure and obeys them.
+Add `payment_hash` (unique, nullable), `paid_at` (nullable), and optionally
+`openreceive_swap_recovery_token` to your existing order model. These are host migrations, not
+OpenReceive migrations.
 
-## 1. Install
+Configure the engine with receive-only NWC, a token keyring, and host hooks:
 
 ```ruby
-# Gemfile
-gem "openreceive"
-gem "openreceive-server"
-gem "openreceive-rails"
-gem "nwc-ruby"
-```
-
-```sh
-bundle install
-bin/rails generate openreceive:install
-```
-
-The `openreceive:install` generator writes `config/initializers/openreceive.rb`,
-adds the `mount` line to `config/routes.rb`, and copies the OpenReceive
-migrations into `db/migrate/` with fresh timestamps.
-
-## 2. Migrate
-
-```sh
-bin/rails openreceive:install:migrations   # copies the canonical SQL with fresh timestamps
-bin/rails db:migrate
-```
-
-Migration 001 creates OpenReceive invoice storage; migration 002 adds the
-per-order access column used by the engine. The migration superclass is resolved
-to your Rails version at generate time (floor: Rails 7.1).
-
-## 3. Set the amount (`prepare_checkout`)
-
-`prepare_checkout` runs on **POST `/prepare`** only. Validate the cart (or look
-up your order), return the amount to charge, and OpenReceive persists it.
-Create-checkout never trusts an amount from the browser.
-
-```ruby
-prepare_checkout = lambda do |ctx|
-  body = ctx[:body] || {}
-  cart = Cart.validate(body)
-  {
-    amount: { currency: "USD", value: cart.total_usd.to_s },
-    order_id: cart.order_id,
-    summary: cart.as_json
-  }
-end
-```
-
-Return `nil` → 404.
-
-## 4. Configure and mount
-
-```ruby
-# config/initializers/openreceive.rb
 OpenReceive.configure do |config|
-  config.parent_controller = "ApplicationController"
   config.nwc = ENV.fetch("OPENRECEIVE_NWC")
-  config.namespace = "default"
-  config.authorize = OpenReceive::Server::Presets.guest_checkout
-  config.prepare_checkout = prepare_checkout
+  config.token_keys = OpenReceive::Server::Tokens.parse_keyring(
+    ENV.fetch("OPENRECEIVE_TOKEN_KEYS")
+  )
+  config.authorize = ->(context) { context[:token_valid] || context[:action] == "checkout.create" }
+  config.resolve_checkout_amount = lambda do |order_id:, **|
+    order = Order.find(order_id)
+    {
+      amount: { currency: order.currency, value: order.total.to_s },
+      payment_hash: order.payment_hash,
+      swap_recovery_token: order.openreceive_swap_recovery_token
+    }.compact
+  end
+  config.on_checkout_created = lambda do |order_id:, payment_hash:, swap_recovery_token: nil, **|
+    Order.find(order_id).commit_payment_attempt!(payment_hash, swap_recovery_token)
+  end
 end
 ```
 
-```ruby
-# config/routes.rb — the generator adds this for you
-mount OpenReceive::Engine => "/openreceive"
-```
-
-## 5. Render checkout
-
-Prepare from the browser (`POST /openreceive/prepare`), then:
-
-```tsx
-<Checkout orderId={orderId} onSettled={reloadOrder} />
-```
-
-See [Frontend Checkout](frontend-checkout.md) and [Authorization](authorization.md).
+Reconciliation calls the host by verified payment hash. Set `paid_at` only if it is null and
+make fulfillment replay-safe.
+Returning an existing live `payment_hash` is what makes create retries reuse the same wallet
+checkout. `commit_payment_attempt!` must use a row lock or compare-and-set.

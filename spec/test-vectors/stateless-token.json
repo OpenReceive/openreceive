@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "keyring": [
+    { "id": "current", "key": "0707070707070707070707070707070707070707070707070707070707070707" },
+    { "id": "previous", "key": "0808080808080808080808080808080808080808080808080808080808080808" }
+  ],
+  "cross_language": {
+    "clock": 1000,
+    "purpose": "cap",
+    "token": "or_cap_v1.current.AQEBAQEBAQEBAQEBAQEBAQ.Zwad0sUqUh2iowh4Dz_TbaTVK-WT5rxbDPzsWwpZBv6fdu7N9Ttlt7UBI6JllOM34HYS2LnEtc4tzQJNzQp-ldBKh69S0QnGvZdAUK1sDU-EUv_gpZI0JN93-GU2ZFKrt1n9n0OVf7epz4qj76fjMTFEK6tMem1kZPZFA2qf8frbxg3enoJHhx_2CFRuyoA626GCNL2_qQvpUws0nWIPPFFBbIeIEwpKpkLkX5CvvLQ.O7RSWr2nGxZ9e3MThSq8vykiu9sT5gKExR-kCDa_XF8",
+    "payload": {
+      "orderId": "crosslang",
+      "paymentHash": "abababababababababababababababababababababababababababababababab",
+      "expiresAt": 2000
+    }
+  },
+  "invariants": [
+    "new tokens use the first key id",
+    "tokens opened with the wrong purpose fail",
+    "ciphertext, iv, header, and authentication tag tampering fail",
+    "an expired token fails",
+    "plaintext payload and provider credentials do not appear in the token"
+  ]
+}

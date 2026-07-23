@@ -22,6 +22,7 @@ export type {
   WalletCapabilitySummary,
   MakeInvoiceRequest,
   MakeInvoiceResult,
+  LookupInvoiceRequest,
   ListTransactionsRequest,
   NwcTransaction,
   ListTransactionsResult,
@@ -106,7 +107,6 @@ export type {
   SimplePriceFetch,
   OpenReceiveResolvedPriceProvider,
   OpenReceivePriceFeedHealthCheck,
-  OpenReceivePriceFeedCacheStore,
   CachedPriceFeedOptions,
 } from "./rates/index.ts";
 
@@ -123,77 +123,23 @@ export type {
   TransactionSettlementDetection,
 } from "./settlement/index.ts";
 
-// Storage / idempotency
+// Storage-free payment verification and reconciliation.
 export {
-  IdempotencyConflictError,
-  InvoiceStorageConflictError,
-  InvoiceNotFoundError,
-  idempotencyScopeKey,
-  createIdempotencyRequestHash,
-  canonicalJson,
-  validateInvoiceStorageRow,
-  cloneInvoiceStorageRow,
-  isTerminalInvoiceStorageRow,
-  readInvoiceStorageOrderId,
-  readInvoiceStorageCheckoutId,
-} from "./storage/index.ts";
+  OPENRECEIVE_TRANSACTION_PAGE_LIMIT,
+  checkPayment,
+  findTransactionByPaymentHash,
+  listIncomingTransactions,
+  paymentCheckFromTransaction,
+  scanSettledPayments,
+} from "./payments.ts";
 export type {
-  MaybePromise,
-  OpenReceiveIdempotencyOperation,
-  OpenReceiveSettlementActionState,
-  OpenReceiveIdempotencyScope,
-  InvoiceStorageRow,
-} from "./storage/index.ts";
-export {
-  getIdempotentRecord,
-  putCreatedInvoiceRecord,
-  cloneStoredRecord,
-  validateStoredRecord,
-} from "./storage/kv.ts";
-export type {
-  StoredRecord,
-  MetaRow,
-  OpenReceiveKvConflictKey,
-  OpenReceivePutIfAbsentResult,
-  OpenReceiveInvoiceKvStore,
-  PutCreatedInvoiceRecordOptions,
-  PutCreatedInvoiceRecordResult,
-} from "./storage/kv.ts";
-export { InMemoryInvoiceKvStore } from "./storage/memory-kv.ts";
-
-// Workflow state transitions
-export {
-  applySettled,
-  applyExpiredClosed,
-  applyFailedClosed,
-  applyVerifying,
-  applyExpiryPendingVerification,
-  markTransactionScanAttempted,
-  claimSettlementAction,
-  clearSettlementActionClaim,
-  applySettlementActionCompleted,
-} from "./state/transitions.ts";
-
-// Settlement runner
-export {
-  refreshStoredInvoiceStatus,
-  refreshStoredInvoiceRecordsStatus,
-  sweepPendingInvoicesOnce,
-  runSettlementAction,
-  createOpenReceiveReconciler,
-} from "./runner/index.ts";
-export type {
-  OpenReceiveReconcileEventName,
-  OpenReceiveReconcileEvent,
-  OpenReceiveSettlementActionInput,
-  OpenReceiveReconcileOptions,
-  OpenReceiveStatusRefreshStatus,
-  OpenReceiveStatusRefreshResult,
-  OpenReceiveOrderStatusRefreshResult,
-  OpenReceivePendingSweepReason,
-  OpenReceivePendingSweepResult,
-  OpenReceiveReconciler,
-} from "./runner/index.ts";
+  CheckPaymentOptions,
+  PaidPayment,
+  PaymentCheck,
+  PaymentDetails,
+  PaymentStatus,
+  ScanPaymentsOptions,
+} from "./payments.ts";
 
 // Swap address shape checks (deposit + refund)
 export {

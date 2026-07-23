@@ -1,1027 +1,280 @@
 openapi: 3.1.0
 info:
-  title: OpenReceive HTTP routes
-  version: 0.1.0
-  summary: Shipped receive-checkout routes (Node adapters + Rails engine implement identically).
+  title: OpenReceive storage-free HTTP API
+  version: 0.2.0
   description: >
-    OpenReceive ships these routes (rodauth-style). Every Node adapter
-    (@openreceive/http, express, fastify, next) and the Rails engine implement this
-    contract identically. Wire style: POST + JSON, snake_case bodies, an action
-    multiplexer on the order route. Mounted under a host-chosen prefix (default
-    /openreceive). Receive-only NWC codes remain server-side and never appear in any
-    request or response. Three security tiers govern access: Tier 1 (anonymous-capable:
-    create checkout, rates), Tier 2 (capability-token-scoped: order/checkout reads and
-    swap actions on your own order), Tier 3 (privileged, fails closed: admin sweep). The
-    host supplies authorize + prepareCheckout hooks; OpenReceive never inspects the host
-    session. See docs/internal/shipped-routes.md (contributors) and
-    docs/guides/authorization.md (integrators).
-  contact:
-    name: OpenReceive
-    url: https://openreceive.org
+    Mounted receive-checkout routes. OpenReceive owns no payment persistence. The host
+    resolves every checkout amount and stores payment_hash before a payer response is sent.
 servers:
   - url: /openreceive
-    description: Default mount prefix (host-configurable).
-security:
-  - orderAccessToken: []
-  - orderAccessTokenCookie: []
-  - {}
 paths:
-  /prepare:
-    post:
-      operationId: prepareCheckout
-      summary: Prepare an order amount for a later checkout (Tier 1, action=checkout.prepare).
-      description: >
-        authorize(checkout.prepare) -> prepareCheckout(body) -> persist amount (+ optional summary)
-        under the order id. Returns `{ order_id, summary? }`. Create-checkout later reads the
-        persisted amount; the prepare body never sets a trusted client price on create.
-        Return null from the hook → 404.
-      security:
-        - {}
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: true
-              description: Host-defined cart / product payload (untrusted; validated inside prepareCheckout).
-      responses:
-        "201":
-          description: Order prepared; amount persisted for create-checkout.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PrepareCheckoutResponse"
-        "400": { $ref: "#/components/responses/Error" }
-        "403": { $ref: "#/components/responses/Error" }
-        "404": { $ref: "#/components/responses/Error" }
-        "429": { $ref: "#/components/responses/Error" }
   /checkouts:
     post:
       operationId: createCheckout
-      summary: Create or replay a checkout for an order (Tier 1, action=checkout.create).
+      summary: Mint an invoice using the host-resolved order price.
       description: >
-        authorize(checkout.create) -> read amount persisted by POST /prepare ->
-        getOrCreateCheckout -> mint per-order capability token on first checkout.
-        The create body never carries a client price (amount/sats/usd are rejected with 400);
-        create without a prior prepare → 404. order_access_token is returned only on the first
-        mint per order.
-      security:
-        - {}
+        The request cannot supply an amount. The mounted handler calls the required
+        resolveCheckoutAmount host hook, mints an invoice, calls onCheckoutCreated, and
+        returns payer instructions only after that hook persists payment_hash.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateCheckoutRequest"
+              $ref: '#/components/schemas/CreateCheckoutRequest'
       responses:
-        "201":
-          description: Checkout created (or replayed idempotently).
-          headers:
-            Set-Cookie:
-              description: >
-                On the first checkout for an order, the per-order token is also set as an
-                httpOnly cookie `openreceive_order_token`, path-scoped to
-                `{prefix}/orders/{order_id}` (SameSite=Lax; Secure over https; Max-Age 86400),
-                so same-origin browsers authorize that order's reads with no client token code.
-              schema:
-                type: string
+        '201':
+          description: Checkout committed by the host.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CreateCheckoutResponse"
-        "400": { $ref: "#/components/responses/Error" }
-        "403": { $ref: "#/components/responses/Error" }
-        "409": { $ref: "#/components/responses/Error" }
-        "429": { $ref: "#/components/responses/Error" }
-        "503": { $ref: "#/components/responses/Error" }
-  /orders/{order_id}:
+                $ref: '#/components/schemas/CreateCheckoutResponse'
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /payments/check:
     post:
-      operationId: orderAction
-      summary: Read order status or run a swap action (Tier 2, action multiplexer).
-      description: >
-        The `action` field multiplexes: absent/"status" -> order.read (OrderStatus);
-        "swap_quote" -> swap.quote ({quote}); "start_swap" -> swap.start ({attempt});
-        "refund_swap" -> swap.refund ({attempt}); "refresh_swap" -> swap.refresh ({attempt}).
-        Unknown action -> 400 (never silently treated as status). Requires a valid
-        per-order capability token or an allow from the host authorize hook.
-      parameters:
-        - $ref: "#/components/parameters/OrderId"
+      operationId: checkPayment
+      summary: Verify one payment hash against the receive wallet.
+      security:
+        - paymentCapability: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/OrderActionRequest"
+              $ref: '#/components/schemas/PaymentCheckRequest'
       responses:
-        "200":
-          description: OrderStatus (status), or a swap quote/attempt.
+        '200':
+          description: Current wallet-derived payment state.
           content:
             application/json:
               schema:
-                oneOf:
-                  - $ref: "#/components/schemas/OrderStatus"
-                  - $ref: "#/components/schemas/SwapQuoteResponse"
-                  - $ref: "#/components/schemas/SwapAttemptResponse"
-        "400": { $ref: "#/components/responses/Error" }
-        "403": { $ref: "#/components/responses/Error" }
-        "404": { $ref: "#/components/responses/Error" }
-        "409": { $ref: "#/components/responses/Error" }
-        "429": { $ref: "#/components/responses/Error" }
-  /orders/{order_id}/summary:
-    get:
-      operationId: getOrderSummary
-      summary: Read the display summary persisted at prepare (Tier 1, action=order.summary).
-      description: >
-        Public-if-exists guest resume helper. Returns `{ order_id, summary? }` from the row
-        written by POST /prepare. No capability token required. Does not return amount
-        authority beyond what the host put in `summary`.
-      security:
-        - {}
-      parameters:
-        - $ref: "#/components/parameters/OrderId"
+                $ref: '#/components/schemas/PaymentCheck'
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+  /swaps/quote:
+    post:
+      operationId: quoteSwap
+      summary: Obtain a non-binding swap quote.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SwapQuoteRequest'
       responses:
-        "200":
-          description: Order summary.
+        '200':
+          description: Provider quote.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        '400': { $ref: '#/components/responses/Error' }
+  /swaps:
+    post:
+      operationId: createSwap
+      summary: Create a swap using the host-resolved order price.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSwapRequest'
+      responses:
+        '201':
+          description: Swap committed by the host.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OrderSummaryResponse"
-        "403": { $ref: "#/components/responses/Error" }
-        "404": { $ref: "#/components/responses/Error" }
-  /checkouts/{checkout_id}:
-    get:
-      operationId: getCheckout
-      summary: Read a checkout snapshot (Tier 2, action=checkout.read).
-      parameters:
-        - $ref: "#/components/parameters/CheckoutId"
+                $ref: '#/components/schemas/CreateSwapResponse'
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /swaps/status:
+    post:
+      operationId: getSwap
+      summary: Refresh provider state using the encrypted recovery capability.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SwapRecoveryRequest'
       responses:
-        "200":
-          description: Checkout snapshot.
+        '200':
+          description: Provider-derived swap state.
           content:
             application/json:
-              schema:
-                $ref: "#/components/schemas/Checkout"
-        "403": { $ref: "#/components/responses/Error" }
-        "404": { $ref: "#/components/responses/Error" }
-  /orders/{order_id}/swap-options:
-    get:
-      operationId: getSwapOptions
-      summary: List automated-swap pay-in options for an order (Tier 2, action=swap.options).
-      parameters:
-        - $ref: "#/components/parameters/OrderId"
+              schema: { type: object, additionalProperties: true }
+  /swaps/refund-confirmations:
+    post:
+      operationId: createSwapRefundConfirmation
+      summary: Bind a short-lived confirmation to a recovery token and refund address.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/SwapRecoveryRequest'
+                - type: object
+                  required: [refund_address]
+                  properties:
+                    refund_address: { type: string, minLength: 1 }
       responses:
-        "200":
-          description: Swap options.
+        '201':
+          description: Short-lived confirmation token.
           content:
             application/json:
-              schema:
-                $ref: "#/components/schemas/SwapOptionsResponse"
-        "403": { $ref: "#/components/responses/Error" }
-        "404": { $ref: "#/components/responses/Error" }
+              schema: { type: object, additionalProperties: true }
+  /swaps/refunds:
+    post:
+      operationId: refundSwap
+      summary: Refresh provider state, then request an eligible refund.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/SwapRecoveryRequest'
+                - type: object
+                  required: [refund_address, confirmation_token]
+                  properties:
+                    refund_address: { type: string, minLength: 1 }
+                    confirmation_token: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: Provider-derived refund state.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
   /rates:
     get:
       operationId: listRates
-      summary: List BTC/fiat rate quotes (Tier 1, public).
-      security:
-        - {}
       parameters:
-        - name: base
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: currencies
-          in: query
-          required: false
-          description: Comma-separated ISO currency codes.
-          schema:
-            type: string
+        - in: query
+          name: currencies
+          schema: { type: string }
       responses:
-        "200":
-          description: Rate quotes.
+        '200':
+          description: Current process-cached BTC/fiat rates.
           content:
             application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/RateQuote"
-        "429": { $ref: "#/components/responses/Error" }
-        "503": { $ref: "#/components/responses/Error" }
-  /admin/sweep:
-    post:
-      operationId: sweepPendingInvoices
-      summary: Reconcile pending invoices (Tier 3, action=invoice.sweep, FAILS CLOSED).
-      description: >
-        Requires the host authorize hook to allow. If no authorize policy is configured,
-        this route returns 403 and a loud configuration error is logged at mount time.
-      responses:
-        "200":
-          description: Reconcile summary.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ReconcileSummary"
-        "403": { $ref: "#/components/responses/Error" }
-        "429": { $ref: "#/components/responses/Error" }
+              schema: { type: object, additionalProperties: true }
 components:
   securitySchemes:
-    orderAccessToken:
+    paymentCapability:
       type: http
       scheme: bearer
-      description: >
-        Per-order capability token minted at checkout creation (order_access_token). Present
-        it as `Authorization: Bearer <token>` or the `X-OpenReceive-Order-Token` header. Tokens
-        are per-order; all checkouts under an order share the order's token.
-    orderAccessTokenHeader:
-      type: apiKey
-      in: header
-      name: X-OpenReceive-Order-Token
-    orderAccessTokenCookie:
-      type: apiKey
-      in: cookie
-      name: openreceive_order_token
-      description: >
-        On checkout creation the server also sets the per-order token as an httpOnly cookie
-        (`openreceive_order_token`) path-scoped to `{prefix}/orders/{order_id}` (SameSite=Lax,
-        Secure over https). Same-origin browsers are then authorized for that order's reads with
-        no token handling in client code. API/mobile clients use the bearer header instead.
-  parameters:
-    OrderId:
-      name: order_id
-      in: path
-      required: true
-      schema:
-        type: string
-        minLength: 1
-        maxLength: 200
-    CheckoutId:
-      name: checkout_id
-      in: path
-      required: true
-      schema:
-        type: string
-        pattern: "^or_chk_[a-z0-9_]+$"
+      description: Opaque authenticated token bound to order_id and payment_hash.
   responses:
     Error:
       description: OpenReceive error.
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/Error"
+            $ref: '#/components/schemas/Error'
   schemas:
+    Amount:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [sats]
+          properties:
+            sats:
+              oneOf:
+                - { type: integer, minimum: 1, maximum: 9007199254740 }
+                - { type: string, pattern: '^[1-9][0-9]*$' }
+        - type: object
+          additionalProperties: false
+          required: [currency, value]
+          properties:
+            currency: { type: string, pattern: '^[A-Z]{3}$' }
+            value: { type: string, pattern: '^[0-9]+(\.[0-9]+)?$' }
     CreateCheckoutRequest:
       type: object
       additionalProperties: false
-      required:
-        - order_id
+      required: [order_id]
       properties:
-        order_id:
-          type: string
-          minLength: 1
-          maxLength: 200
-        memo:
-          type: string
-          maxLength: 500
-        description_hash:
-          type: string
-          pattern: "^[0-9a-fA-F]{64}$"
-        metadata:
-          type: object
-          additionalProperties: true
-        mint_lightning:
-          type: boolean
-          description: >
-            When false, lock the checkout amount without minting a payer-facing Lightning
-            invoice. Defaults to true. Browser create-mode checkout sends false until the
-            payer selects Bitcoin.
-      not:
-        required:
-          - memo
-          - description_hash
-    # Authoritative checkout amounts are persisted by POST /prepare via the host `prepareCheckout`
-    # hook. The create-checkout HTTP body never carries a client price (amount is rejected).
-    # This schema remains for service-level / library create requests (trusted entry points).
-    CreateCheckoutAmount:
-      type: object
-      additionalProperties: false
-      properties:
-        sats:
-          oneOf:
-            - type: integer
-              minimum: 1
-            - type: string
-              pattern: "^[1-9][0-9]*$"
-        currency:
-          type: string
-          description: ISO 4217 fiat code, or BTC / SAT / SATS.
-        value:
-          type: string
-          pattern: "^[0-9]+(?:\\.[0-9]+)?$"
-      oneOf:
-        - required:
-            - sats
-          not:
-            anyOf:
-              - required:
-                  - currency
-              - required:
-                  - value
-        - required:
-            - currency
-            - value
-          not:
-            anyOf:
-              - required:
-                  - sats
-    QuoteRateRequest:
-      type: object
-      additionalProperties: false
-      required:
-        - fiat
-      properties:
-        fiat:
-          $ref: "#/components/schemas/FiatAmount"
-    BtcFiatRateMap:
-      type: object
-      additionalProperties: false
-      required:
-        - bitcoin
-      properties:
-        bitcoin:
-          type: object
-          additionalProperties:
-            oneOf:
-              - type: number
-              - type: string
-                pattern: "^[0-9]+(\\.[0-9]+)?$"
-    Invoice:
-      type: object
-      additionalProperties: true
-      required:
-        - invoice_id
-        - type
-        - rail
-        - transaction_state
-        - workflow_state
-        - invoice
-        - payment_hash
-        - amount_msats
-        - order_id
-        - created_at
-        - expires_at
-        - settlement_action_state
-      properties:
-        invoice_id:
-          type: string
-          pattern: "^or_inv_[a-z0-9_]+$"
-        type:
-          const: incoming
-        rail:
-          type: string
-          enum:
-            - lightning
-            - swap
-            - checkout_lock
-        transaction_state:
-          $ref: "#/components/schemas/TransactionState"
-        workflow_state:
-          $ref: "#/components/schemas/WorkflowState"
-        invoice:
-          type:
-            - string
-            - "null"
-        payment_hash:
-          type: string
-          pattern: "^[0-9a-fA-F]{64}$"
-        amount_msats:
-          type: integer
-          minimum: 1000
-          maximum: 9007199254740991
-        order_id:
-          type: string
-          minLength: 1
-        created_at:
-          type: integer
-          minimum: 0
-        expires_at:
-          type: integer
-          minimum: 0
-        refreshed_from_invoice_id:
-          type: string
-          pattern: "^or_inv_[a-z0-9_]+$"
-        settled_at:
-          type: integer
-          minimum: 0
-        settlement_action_state:
-          type: string
-          enum:
-            - pending
-            - completed
-            - failed
-        settlement_action_completed_at:
-          type: integer
-          minimum: 0
-        fiat_quote:
-          oneOf:
-            - $ref: "#/components/schemas/RateQuote"
-            - type: "null"
-        swap:
-          $ref: "#/components/schemas/SwapOrder"
-    SwapOrder:
-      type: object
-      additionalProperties: false
-      required:
-        - attempt_id
-        - provider
-        - pay_in_asset
-        - deposit_address
-        - deposit_amount
-        - provider_state
-        - provider_expires_at
-      properties:
-        attempt_id:
-          type: string
-          pattern: "^or_inv_[a-z0-9_]+$"
-        provider:
-          type: string
-          minLength: 1
-        provider_order_id:
-          type: string
-          minLength: 1
-        pay_in_asset:
-          type: string
-          enum:
-            - SOL_SOL
-            - USDT_TRON
-            - USDT_SOL
-            - USDC_SOL
-            - ETH_ETH
-            - USDT_ETH
-            - USDC_ETH
-        deposit_address:
-          type: string
-          minLength: 1
-        deposit_memo:
-          type: string
-          minLength: 1
-        deposit_amount:
-          type: string
-          pattern: "^[0-9]+(\\.[0-9]+)?$"
-        provider_state:
-          type: string
-          enum:
-            - creating_provider_order
-            - awaiting_deposit
-            - confirming
-            - exchanging
-            - paying_invoice
-            - completed
-            - expired
-            - refund_required
-            - refund_pending
-            - refunded
-            - attention
-            - failed
-        provider_expires_at:
-          type: integer
-          minimum: 0
-        deposit_tx_id:
-          type: string
-        payout_tx_id:
-          type: string
-        refund_address:
-          type: string
-        refund_nonce:
-          type: string
-          pattern: "^or_ref_[a-f0-9]{32}$"
-        refund_nonce_expires_at:
-          type: integer
-          minimum: 0
-        refund_tx_id:
-          type: string
-        attention:
-          type: boolean
-        attention_reason:
-          type: string
-          enum:
-            - provider_completed_without_wallet_settlement
-            - provider_order_creation_stale
-            - provider_order_creation_failed
-            - provider_order_creation_needs_reconcile
-            - provider_reported_emergency
-            - provider_order_expires_after_shadow_invoice
-        refund_reason:
-          type: string
-          enum:
-            - underpaid
-            - late_deposit
-            - underpaid_and_late
-          description: >
-            Why a refund is needed, when the attempt is on the refund path.
-            Mapped from FixedFloat emergency.status (LESS / EXPIRED).
-        deposit_received_amount:
-          type: string
-          pattern: "^[0-9]+(\\.[0-9]+)?$"
-          description: >
-            Amount actually received on the deposit transaction (FixedFloat
-            from.tx.amount), when known.
-        refund_amount:
-          type: string
-          pattern: "^[0-9]+(\\.[0-9]+)?$"
-          description: >
-            Provider-reported refund amount excluding network fees (FixedFloat
-            back.amount), when known.
-        emergency_repeat:
-          type: boolean
-          description: >
-            Provider reported a repeated deposit on the same order (FixedFloat
-            emergency.repeat). Extra funds may sit at the provider.
-    SwapOption:
-      type: object
-      additionalProperties: false
-      required:
-        - pay_in_asset
-        - label
-        - network_label
-        - provider
-        - available
-      properties:
-        pay_in_asset:
-          type: string
-          enum:
-            - SOL_SOL
-            - USDT_TRON
-            - USDT_SOL
-            - USDC_SOL
-            - ETH_ETH
-            - USDT_ETH
-            - USDC_ETH
-        label:
-          type: string
-          minLength: 1
-        network_label:
-          type: string
-          minLength: 1
-        provider:
-          type: string
-        available:
-          type: boolean
-        unavailable_reason:
-          type: string
-        unavailable_message:
-          type: string
-        pay_amount:
-          type: string
-          pattern: "^[0-9]+(\\.[0-9]+)?$"
-        minimum_pay_amount:
-          type: string
-          pattern: "^[0-9]+(\\.[0-9]+)?$"
-        maximum_pay_amount:
-          type: string
-          pattern: "^[0-9]+(\\.[0-9]+)?$"
+        order_id: { type: string, minLength: 1, maxLength: 200 }
+        memo: { type: string, maxLength: 500 }
+        description_hash: { type: string }
+        metadata: { type: object, additionalProperties: true }
     Checkout:
       type: object
       additionalProperties: false
-      required:
-        - checkout_id
-        - order_id
-        - status
-        - amount_msats
-        - invoices
-        - created_at
+      required: [order_id, payment_hash, bolt11, amount_msats, created_at, expires_at]
       properties:
-        checkout_id:
-          type: string
-          pattern: "^or_chk_[a-z0-9_]+$"
-        order_id:
-          type: string
-          minLength: 1
-        status:
-          type: string
-          enum:
-            - open
-            - superseded
-            - paid
-            - expired
-        amount_msats:
-          type: integer
-          minimum: 1000
-          maximum: 9007199254740991
-        fiat:
-          $ref: "#/components/schemas/FiatAmount"
-        active:
-          $ref: "#/components/schemas/Invoice"
-        invoices:
-          type: array
-          items:
-            $ref: "#/components/schemas/Invoice"
-        paid_at:
-          type: integer
-          minimum: 0
-        created_at:
-          type: integer
-          minimum: 0
-    Order:
-      type: object
-      additionalProperties: false
-      required:
-        - order_id
-        - status
-        - paid
-        - checkouts
-        - wallet_scan_performed
-        - transactions_checked
-      properties:
-        order_id:
-          type: string
-          minLength: 1
-        status:
-          type: string
-          enum:
-            - pending
-            - paid
-            - expired
-        paid:
-          type: boolean
-        paid_at:
-          type: integer
-          minimum: 0
-        paid_checkout:
-          $ref: "#/components/schemas/Checkout"
-        active_checkout:
-          $ref: "#/components/schemas/Checkout"
-        display_checkout:
-          $ref: "#/components/schemas/Checkout"
-        checkouts:
-          type: array
-          items:
-            $ref: "#/components/schemas/Checkout"
-        wallet_scan_performed:
-          type: boolean
-        transactions_checked:
-          type: integer
-          minimum: 0
-    OrderStatus:
-      description: >-
-        An Order plus its available automated-swap pay-in options. Returned by the
-        default (status) action of POST /order. swap_pay_options holds only crypto swap
-        methods; Lightning is always available on the checkout invoice and is not listed.
-        Defined as a flat object (not an allOf over Order) because composing two
-        additionalProperties:false schemas is unsatisfiable under JSON Schema 2020-12.
-      type: object
-      additionalProperties: false
-      required:
-        - order_id
-        - status
-        - paid
-        - checkouts
-        - wallet_scan_performed
-        - transactions_checked
-        - swaps_enabled
-        - swap_pay_options
-      properties:
-        order_id:
-          type: string
-          minLength: 1
-        status:
-          type: string
-          enum:
-            - pending
-            - paid
-            - expired
-        paid:
-          type: boolean
-        paid_at:
-          type: integer
-          minimum: 0
-        paid_checkout:
-          $ref: "#/components/schemas/Checkout"
-        active_checkout:
-          $ref: "#/components/schemas/Checkout"
-        display_checkout:
-          $ref: "#/components/schemas/Checkout"
-        checkouts:
-          type: array
-          items:
-            $ref: "#/components/schemas/Checkout"
-        wallet_scan_performed:
-          type: boolean
-        transactions_checked:
-          type: integer
-          minimum: 0
-        swaps_enabled:
-          type: boolean
-        swap_pay_options:
-          type: array
-          items:
-            $ref: "#/components/schemas/SwapOption"
-    FiatAmount:
-      type: object
-      additionalProperties: false
-      required:
-        - currency
-        - value
-      properties:
-        currency:
-          type: string
-          pattern: "^[A-Z]{3}$"
-        value:
-          type: string
-          pattern: "^[0-9]+(\\.[0-9]+)?$"
-    BitcoinAmount:
-      type: object
-      additionalProperties: false
-      required:
-        - currency
-        - value
-      properties:
-        currency:
-          type: string
-          enum:
-            - BTC
-            - SAT
-            - SATS
-        value:
-          type: string
-          pattern: "^[0-9]+(\\.[0-9]+)?$"
-    RateQuote:
-      type: object
-      additionalProperties: true
-      required:
-        - fiat
-        - btc_fiat_price
-        - amount_sats
-        - amount_msats
-        - source
-        - as_of
-        - expires_at
-    TransactionState:
-      type: string
-      enum:
-        - pending
-        - settled
-        - expired
-        - failed
-        - accepted
-    WorkflowState:
-      type: string
-      enum:
-        - draft
-        - invoice_created
-        - verifying
-        - settlement_action_pending
-        - settlement_action_completed
-        - expiry_pending_verification
-        - expired_closed
-        - failed_closed
-        - cancelled
+        order_id: { type: string, minLength: 1, maxLength: 200 }
+        payment_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
+        bolt11: { type: string, minLength: 1 }
+        amount_msats: { type: integer, minimum: 1000, maximum: 9007199254740991 }
+        created_at: { type: integer, minimum: 0 }
+        expires_at: { type: integer, minimum: 0 }
+        fiat_quote:
+          oneOf:
+            - { type: 'null' }
+            - { type: object, additionalProperties: true }
     CreateCheckoutResponse:
       type: object
       additionalProperties: false
-      required:
-        - checkout
+      required: [checkout, order_access_token]
       properties:
-        checkout:
-          $ref: "#/components/schemas/Checkout"
-        order_access_token:
-          type: string
-          minLength: 16
-          description: >
-            The per-order capability token. Returned ONLY on the first checkout for an order
-            (first mint). Store it and present it on subsequent reads. Only its sha256 hash
-            is persisted server-side.
-    PrepareCheckoutResponse:
+        checkout: { $ref: '#/components/schemas/Checkout' }
+        order_access_token: { type: string, pattern: '^or_cap_v1\.' }
+    PaymentCheckRequest:
       type: object
       additionalProperties: false
-      required:
-        - order_id
+      required: [payment_hash]
       properties:
-        order_id:
-          type: string
-          minLength: 1
-          maxLength: 200
-        summary:
-          description: Opaque host display payload for guest resume UI.
-          additionalProperties: true
-    OrderSummaryResponse:
+        payment_hash: { type: string, pattern: '^[0-9a-fA-F]{64}$' }
+    PaymentStatus:
+      type: string
+      enum: [pending, settled, expired, failed, not_found]
+    PaymentCheck:
       type: object
       additionalProperties: false
-      required:
-        - order_id
+      required: [payment_hash, status]
       properties:
-        order_id:
-          type: string
-          minLength: 1
-          maxLength: 200
-        summary:
-          description: Opaque host display payload persisted at prepare.
-          additionalProperties: true
-    OrderActionRequest:
-      description: >
-        The action multiplexer body for POST /orders/{order_id}. Exactly one variant by the
-        optional `action` field; absent action means status.
-      oneOf:
-        - $ref: "#/components/schemas/OrderStatusRequest"
-        - $ref: "#/components/schemas/SwapQuoteRequest"
-        - $ref: "#/components/schemas/StartSwapRequest"
-        - $ref: "#/components/schemas/RefundSwapRequest"
-        - $ref: "#/components/schemas/RefreshSwapRequest"
-    OrderStatusRequest:
-      type: object
-      additionalProperties: false
-      required:
-        - order_id
-      properties:
-        order_id:
-          type: string
-          minLength: 1
-          maxLength: 200
-        action:
-          const: status
+        payment_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
+        status: { $ref: '#/components/schemas/PaymentStatus' }
+        paid_at: { type: integer, minimum: 0 }
+        details: { type: object, additionalProperties: true }
     SwapQuoteRequest:
       type: object
       additionalProperties: false
-      required:
-        - order_id
-        - action
-        - pay_in_asset
+      required: [amount, pay_in_asset]
       properties:
-        order_id:
-          type: string
-          minLength: 1
-          maxLength: 200
-        action:
-          const: swap_quote
-        pay_in_asset:
-          type: string
-          enum: [SOL_SOL, USDT_TRON, USDT_SOL, USDC_SOL, ETH_ETH, USDT_ETH, USDC_ETH]
-    StartSwapRequest:
+        amount: { $ref: '#/components/schemas/Amount' }
+        pay_in_asset: { type: string, minLength: 1 }
+    CreateSwapRequest:
       type: object
       additionalProperties: false
-      required:
-        - order_id
-        - action
-        - pay_in_asset
+      required: [order_id, pay_in_asset]
       properties:
-        order_id:
-          type: string
-          minLength: 1
-          maxLength: 200
-        action:
-          const: start_swap
-        pay_in_asset:
-          type: string
-          enum: [SOL_SOL, USDT_TRON, USDT_SOL, USDC_SOL, ETH_ETH, USDT_ETH, USDC_ETH]
-    RefundSwapRequest:
+        order_id: { type: string, minLength: 1, maxLength: 200 }
+        pay_in_asset: { type: string, minLength: 1 }
+        memo: { type: string, maxLength: 500 }
+        metadata: { type: object, additionalProperties: true }
+    CreateSwapResponse:
       type: object
       additionalProperties: false
-      required:
-        - order_id
-        - action
-        - attempt_id
-        - refund_address
-        - refund_nonce
+      required: [swap, order_access_token]
       properties:
-        order_id:
-          type: string
-          minLength: 1
-          maxLength: 200
-        action:
-          const: refund_swap
-        attempt_id:
-          type: string
-          pattern: "^or_inv_[a-z0-9_]+$"
-        refund_address:
-          type: string
-          minLength: 1
-        refund_nonce:
-          type: string
-          pattern: "^or_ref_[a-f0-9]{32}$"
-        confirm:
-          type: boolean
-    RefreshSwapRequest:
-      type: object
-      additionalProperties: false
-      required:
-        - order_id
-        - action
-        - attempt_id
-      properties:
-        order_id:
-          type: string
-          minLength: 1
-          maxLength: 200
-        action:
-          const: refresh_swap
-        attempt_id:
-          type: string
-          pattern: "^or_inv_[a-z0-9_]+$"
-    SwapOptionsResponse:
-      type: object
-      additionalProperties: false
-      required:
-        - enabled
-        - options
-      properties:
-        enabled:
-          type: boolean
-        options:
-          type: array
-          items:
-            $ref: "#/components/schemas/SwapOption"
-    SwapQuoteResponse:
-      type: object
-      additionalProperties: false
-      required:
-        - quote
-      properties:
-        quote:
-          $ref: "#/components/schemas/SwapOption"
-    SwapAttemptResponse:
-      type: object
-      additionalProperties: false
-      required:
-        - attempt
-      properties:
-        attempt:
-          $ref: "#/components/schemas/SwapAttempt"
-    SwapAttempt:
-      description: >
-        A SwapOrder scoped to an order, plus the shadow Lightning invoice that backs it.
+        swap: { type: object, additionalProperties: true }
+        order_access_token: { type: string, pattern: '^or_cap_v1\.' }
+    SwapRecoveryRequest:
       type: object
       additionalProperties: true
-      required:
-        - attempt_id
-        - provider
-        - pay_in_asset
-        - deposit_address
-        - deposit_amount
-        - provider_state
-        - provider_expires_at
-        - order_id
+      required: [swap_recovery_token]
       properties:
-        order_id:
-          type: string
-          minLength: 1
-        shadow_invoice:
-          $ref: "#/components/schemas/Invoice"
-    ReconcileSummary:
-      type: object
-      additionalProperties: true
-      required:
-        - swept
-      properties:
-        swept:
-          type: boolean
-        reason:
-          type: string
-        page_count:
-          type: integer
-          minimum: 0
-        scanned:
-          type: integer
-          minimum: 0
-        settled:
-          type: integer
-          minimum: 0
-        expired:
-          type: integer
-          minimum: 0
+        swap_recovery_token: { type: string, pattern: '^or_swap_v1\.' }
     Error:
       type: object
       additionalProperties: false
-      required:
-        - code
-        - message
+      required: [code, message]
       properties:
-        code:
-          type: string
-          enum:
-            - NOT_IMPLEMENTED
-            - RESTRICTED
-            - UNAUTHORIZED
-            - RATE_LIMITED
-            - QUOTA_EXCEEDED
-            - INTERNAL
-            - UNSUPPORTED_ENCRYPTION
-            - INSUFFICIENT_BALANCE
-            - PAYMENT_FAILED
-            - OTHER
-            - NOT_FOUND
-            - TIMEOUT
-            - INVALID_REQUEST
-            - WALLET_UNAVAILABLE
-            - INVOICE_EXPIRED
-            - UNSUPPORTED_METHOD
-            - CONFLICT
-        message:
-          type: string
-          minLength: 1
-        retryable:
-          type: boolean
-        request_id:
-          type: string
-        details:
-          type: object
-          additionalProperties: true
+        code: { type: string }
+        message: { type: string }
+        request_id: { type: string }
+        retryable: { type: boolean }

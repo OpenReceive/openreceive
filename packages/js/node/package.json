@@ -25,7 +25,6 @@
   "files": [
     "bin",
     "dist",
-    "migrations",
     "README.md",
     "LICENSE"
   ],

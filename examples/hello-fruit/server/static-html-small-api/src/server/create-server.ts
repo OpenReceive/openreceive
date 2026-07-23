@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { openReceiveExpress } from "@openreceive/express";
-import { guestCheckout } from "@openreceive/http";
+import { createDefaultAuthorize, hostError } from "@openreceive/http";
 import { createOpenReceive } from "@openreceive/node";
 import express from "express";
 import { mountHelloFruitDelivery } from "../../../../shared/demo-delivery.ts";
@@ -9,7 +9,13 @@ import {
   createHelloFruitDemoServerLogger,
   createHelloFruitOpenReceiveLogger,
 } from "../../../../shared/demo-logging.ts";
-import { createHelloFruitPrepareCheckout } from "../../../../shared/demo-prepare-checkout.ts";
+import { createHelloFruitCreateOrderResult } from "../../../../shared/demo-prepare-checkout.ts";
+import {
+  commitHelloFruitCheckout,
+  createHelloFruitHostOrder,
+  readHelloFruitHostOrder,
+  resolveHelloFruitHostCheckout,
+} from "../../../../shared/openreceive-store.ts";
 
 const DEMO_ID = "static-html-small-api";
 const logDemo = createHelloFruitDemoServerLogger(DEMO_ID);
@@ -22,45 +28,57 @@ export async function createHelloFruitStaticServer() {
   app.use("/stickers", express.static(STICKERS_DIR));
 
   // Same shape as docs/guides/quickstart-node.md:
-  // createOpenReceive({ onPaid }) + mount with prepareCheckout.
-  // onPaid may fire more than once — fulfillHelloFruitOrder dedupes on checkoutId.
-  // NWC + price currencies come from openreceive.yml (defaults: local-sqlite, USD).
+  // onPaid may fire more than once; the host order's paid_at transition is write-once.
   let service: Awaited<ReturnType<typeof createOpenReceive>>;
   service = await createOpenReceive({
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
-    onPaid: async ({ orderId, checkoutId }) => {
+    onPaid: async ({ paymentHash, paidAt }) => {
       const result = await fulfillHelloFruitOrder({
-        store: service.store,
-        orderId,
-        checkoutId,
+        paymentHash,
+        paidAt,
       });
       logDemo("openreceive.on_paid", "Checkout settled — order fulfillment ran.", {
-        orderId,
-        checkoutId,
+        paymentHash,
+        orderId: result.orderId,
         fulfilled: result.fulfilled,
-        ...(result.fulfilled ? {} : { reason: result.reason }),
       });
     },
   });
 
   mountHelloFruitDelivery(app, {
-    store: service.store,
-    namespace: service.namespace,
+    verifyCapabilityToken: service.verifyCapabilityToken,
     stickersDir: STICKERS_DIR,
   });
 
-  // guestCheckout(): anonymous create, Tier-2 reads gated by the per-order capability token.
-  // For a signed-in app, swap authorize for withUser instead, e.g.:
-  //   import { withUser } from "@openreceive/http";
-  //   authorize: withUser((request) => currentUserFromMySession(request), {
-  //     ownsOrder: (user, ctx) => orderBelongsTo(user, ctx.resource.order_id),
-  //     isAdmin: (user) => user.admin,
-  //   }),
+  app.post("/orders", async (req, res, next) => {
+    try {
+      const result = await createHelloFruitCreateOrderResult(req.body, {
+        demoId: DEMO_ID,
+        openreceive: service,
+      });
+      createHelloFruitHostOrder(result.order, result.invoiceRequest.amount);
+      res.status(201).json({ order_id: result.order.uuid, summary: result.order });
+    } catch (error) {
+      next(error);
+    }
+  });
+  app.get("/orders/:orderId", (req, res) => {
+    const stored = readHelloFruitHostOrder(String(req.params.orderId ?? ""));
+    if (stored === null) return void res.status(404).json({ message: "Order not found." });
+    res.status(200).json(stored.summary);
+  });
+
+  // Signed-in apps replace the default policy with their own session/ownership checks.
   app.use(
     openReceiveExpress({
       service,
-      authorize: guestCheckout(),
-      prepareCheckout: createHelloFruitPrepareCheckout({ demoId: DEMO_ID, openreceive: service }),
+      authorize: createDefaultAuthorize(),
+      resolveCheckoutAmount: ({ orderId }) => {
+        const order = resolveHelloFruitHostCheckout(orderId);
+        if (order === null) throw hostError("Order not found.", 404, "NOT_FOUND");
+        return order;
+      },
+      onCheckoutCreated: commitHelloFruitCheckout,
     }),
   );
 

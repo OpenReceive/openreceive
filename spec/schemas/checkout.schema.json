@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spec.openreceive.org/schemas/checkout.v2.json",
+  "title": "OpenReceive Checkout",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "order_id",
+    "payment_hash",
+    "bolt11",
+    "amount_msats",
+    "created_at",
+    "expires_at"
+  ],
+  "properties": {
+    "order_id": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "payment_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "bolt11": { "type": "string", "minLength": 1 },
+    "amount_msats": {
+      "type": "integer",
+      "minimum": 1000,
+      "maximum": 9007199254740991
+    },
+    "created_at": { "type": "integer", "minimum": 0 },
+    "expires_at": { "type": "integer", "minimum": 0 },
+    "fiat_quote": {
+      "type": ["object", "null"],
+      "additionalProperties": true
+    }
+  }
+}

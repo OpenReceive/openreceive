@@ -5,7 +5,7 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "attempt_id",
+    "payment_hash",
     "provider",
     "pay_in_asset",
     "deposit_address",
@@ -14,15 +14,11 @@
     "provider_expires_at"
   ],
   "properties": {
-    "attempt_id": {
+    "payment_hash": {
       "type": "string",
-      "pattern": "^or_inv_[a-z0-9_]+$"
+      "pattern": "^[0-9a-f]{64}$"
     },
     "provider": {
-      "type": "string",
-      "minLength": 1
-    },
-    "provider_order_id": {
       "type": "string",
       "minLength": 1
     },
@@ -83,14 +79,6 @@
       "type": "string",
       "minLength": 1
     },
-    "refund_nonce": {
-      "type": "string",
-      "pattern": "^or_ref_[a-f0-9]{32}$"
-    },
-    "refund_nonce_expires_at": {
-      "type": "integer",
-      "minimum": 0
-    },
     "refund_tx_id": {
       "type": "string",
       "minLength": 1
@@ -130,6 +118,6 @@
     }
   },
   "x-openreceive-private-fields": [
-    "provider_token never appears in this public schema"
+    "provider order credentials never appear in this public schema; they exist only inside swap_recovery_token"
   ]
 }

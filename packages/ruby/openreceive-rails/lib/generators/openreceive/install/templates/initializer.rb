@@ -1,43 +1,33 @@
 # frozen_string_literal: true
 
-# OpenReceive Rails engine configuration. See docs/guides/quickstart-rails.md.
-#
-# Receive-only: the NWC connection is a server-only secret — it is never sent to the browser and
-# never logged. Your app keeps 100% of its authentication; the engine controllers inherit from the
-# controller named below and obey the hooks configured here.
 OpenReceive.configure do |config|
-  # Engine controllers inherit from this — gives them your CSRF protection and current_user.
   config.parent_controller = "ApplicationController"
-
-  # Receive-only NWC connection string (or set config.nwc_client to a pre-built nwc-ruby client).
   config.nwc = ENV.fetch("OPENRECEIVE_NWC", nil)
+  raw_token_keys = ENV["OPENRECEIVE_TOKEN_KEYS"]
+  config.token_keys = raw_token_keys.to_s.empty? ? [] : OpenReceive::Server::Tokens.parse_keyring(raw_token_keys)
 
-  # Store namespace (multi-tenant isolation).
-  config.namespace = "default"
-
-  # Authorization policy. Context = { action:, request:, resource:, token:, order_id? }.
-  # Tiers: 1 = public, 2 = per-order capability token (owner), 3 = privileged (fails closed).
-  #
-  # This default keeps Tier 1 public, delegates Tier 2 to the built-in capability-token check, and
-  # FAILS CLOSED on Tier 3 (invoice.sweep). Replace the branches with your own checks as needed —
-  # inside a request you can also reach your app's auth via the OpenReceive::Authorization concern.
+  # Validate the host-owned order price for checkout.create / swap.create.
   config.authorize = lambda do |context|
-    case context[:action]
-    when "checkout.prepare", "checkout.create", "order.summary", "rate.list"
-      true                                              # Tier 1 — public
-    when "invoice.sweep"
-      false                                             # Tier 3 — set your admin check to enable
-    else
-      # Tier 2 — allow a valid per-order capability token (and/or add your own ownership check).
-      OpenReceive.config.default_authorize_decision(context)
-    end
+    context[:token_valid] == true || %w[checkout.create swap.quote swap.create].include?(context[:action])
   end
 
-  # Price authority — REQUIRED. NEVER trust a client price. Called on POST /prepare; create-checkout
-  # reads the persisted amount. Return { amount: { currency: "USD", value: "9.99" }, order_id: "..." }
-  # or { amount: { sats: 21_000 }, order_id: "..." }, plus optional summary/metadata; or nil for 404.
-  config.prepare_checkout = lambda do |context|
-    raise "OpenReceive: implement config.prepare_checkout to return the authoritative amount " \
-          "from POST /prepare (body=#{context[:body].inspect})."
+  config.resolve_checkout_amount = lambda do |action:, request:, order_id:, input:, pay_in_asset: nil|
+    order = Order.find(order_id)
+    {
+      amount: { currency: "USD", value: order.total.to_s },
+      payment_hash: order.payment_hash,
+      swap_recovery_token: order.openreceive_swap_recovery_token
+    }.compact
+  end
+
+  # Atomically store payment_hash (and swap_recovery_token when present) on your order.
+  # Raise if persistence fails: OpenReceive will withhold payer instructions.
+  config.on_checkout_created = lambda do |order_id:, payment_hash:, swap_recovery_token: nil, **|
+    order = Order.lock.find(order_id)
+    raise "order already has a different payment hash" if order.payment_hash.present? && order.payment_hash != payment_hash
+    order.update!(
+      payment_hash: payment_hash,
+      openreceive_swap_recovery_token: swap_recovery_token
+    )
   end
 end

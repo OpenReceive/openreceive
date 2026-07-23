@@ -259,7 +259,7 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
       });
       // App route: build + persist the order. The <Checkout orderId> component below creates the
       // checkout against the mounted /openreceive/checkouts route and drives it end to end.
-      const response = await fetch("/openreceive/prepare", {
+      const response = await fetch("/orders", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

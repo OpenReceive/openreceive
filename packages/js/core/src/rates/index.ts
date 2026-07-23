@@ -1,5 +1,10 @@
-import type { MaybePromise } from "../storage/index.ts";
-import type { MetaRow } from "../storage/kv.ts";
+type MaybePromise<T> = T | Promise<T>;
+
+interface MetaRow {
+  readonly key: string;
+  readonly value: string;
+  readonly rev: number;
+}
 
 // How long a cached price-feed read stays usable before a live refresh.
 export const OPENRECEIVE_PRICE_FEED_CACHE_SECONDS = 60 as const;
@@ -49,7 +54,7 @@ export const OPENRECEIVE_PRICE_FEED_PRIMARY_URL_ENV =
 export const OPENRECEIVE_PRICE_FEED_FALLBACK_URL_ENV =
   "OPENRECEIVE_PRICE_FEED_FALLBACK_URL" as const;
 
-// Meta-store key the cached feed reads/writes the JSON rate blob under.
+// Process-local key used by the disposable quote cache.
 const OPENRECEIVE_PRICE_FEED_CACHE_META_KEY = "price_feed:bitcoin" as const;
 
 export const OPENRECEIVE_SATS_PER_BTC = 100_000_000n;
@@ -509,9 +514,9 @@ export function createLivePriceFeedProviders(options: {
   };
 }
 
-// The subset of the KV store the cached feed needs: a single durable
-// key/value slot it reads and CAS-writes the rate blob into.
-export interface OpenReceivePriceFeedCacheStore {
+// Process-local cache surface. This is intentionally not injectable: price
+// caching is disposable and OpenReceive has no storage configuration.
+interface OpenReceivePriceFeedCacheMap {
   getMeta(key: string): MaybePromise<MetaRow | undefined>;
   casMeta(
     key: string,
@@ -545,28 +550,22 @@ type PriceFeedRefreshClaim =
     };
 
 export interface CachedPriceFeedOptions {
-  store: OpenReceivePriceFeedCacheStore;
   currencies: readonly string[];
   primary: OpenReceiveSourcedPriceProvider;
   fallback: OpenReceiveSourcedPriceProvider;
   cacheSeconds?: number;
-  cacheKey?: string;
   clock?: () => number;
 }
 
-// Serves BTC fiat rates from a database cache, refreshing from the primary feed
-// first and the fallback feed second. The whole rate map is stored as JSON
-// alongside the fetch time, so repeated orders inside the cache window never hit
-// the network. Refresh attempts are claimed in the same database row before any
-// provider call, which keeps concurrent processes from each calling CoinGecko or
-// a fallback when the cache goes stale.
+// Serves BTC fiat rates from a disposable process-local cache, refreshing from
+// the primary feed first and the fallback second.
 export class CachedPriceFeed
   implements OpenReceiveResolvedPriceProvider, OpenReceivePriceFeedHealthCheck
 {
   // Representative source for the bare OpenReceiveSourcedPriceProvider view;
   // the true origin is reported per-call by getBtcFiatRatesWithSource.
   readonly source: OpenReceiveLivePriceSourceId = "primary";
-  readonly #store: OpenReceivePriceFeedCacheStore;
+  readonly #cache: OpenReceivePriceFeedCacheMap;
   readonly #currencies: readonly string[];
   readonly #primary: OpenReceiveSourcedPriceProvider;
   readonly #fallback: OpenReceiveSourcedPriceProvider;
@@ -578,12 +577,12 @@ export class CachedPriceFeed
     if (options.currencies.length === 0) {
       throw new RangeError("CachedPriceFeed requires at least one currency");
     }
-    this.#store = options.store;
+    this.#cache = createTransientPriceFeedCache();
     this.#currencies = [...options.currencies];
     this.#primary = options.primary;
     this.#fallback = options.fallback;
     this.#cacheSeconds = options.cacheSeconds ?? OPENRECEIVE_PRICE_FEED_CACHE_SECONDS;
-    this.#cacheKey = options.cacheKey ?? OPENRECEIVE_PRICE_FEED_CACHE_META_KEY;
+    this.#cacheKey = OPENRECEIVE_PRICE_FEED_CACHE_META_KEY;
     this.#clock = options.clock ?? currentUnixSeconds;
   }
 
@@ -611,7 +610,7 @@ export class CachedPriceFeed
   // currency.
   async healthCheck(): Promise<OpenReceiveBtcFiatRateMapWithSource> {
     const now = this.#clock();
-    const meta = await this.#store.getMeta(this.#cacheKey);
+    const meta = await this.#cache.getMeta(this.#cacheKey);
     const previousEntry = parsePriceFeedCacheState(meta?.value)?.entry;
     const resolved = await this.#refresh(
       now,
@@ -625,7 +624,7 @@ export class CachedPriceFeed
   }
 
   async #readOrClaimRefresh(now: number): Promise<PriceFeedRefreshClaim> {
-    let meta = await this.#store.getMeta(this.#cacheKey);
+    let meta = await this.#cache.getMeta(this.#cacheKey);
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const state = parsePriceFeedCacheState(meta?.value);
@@ -657,7 +656,7 @@ export class CachedPriceFeed
         );
       }
 
-      const claim = await this.#store.casMeta(
+      const claim = await this.#cache.casMeta(
         this.#cacheKey,
         serializePriceFeedCacheState({
           entry: state?.entry,
@@ -741,10 +740,8 @@ export class CachedPriceFeed
     state: PriceFeedCacheState,
     expectedRev: number | null
   ): Promise<void> {
-    // A concurrent writer winning the CAS is fine: it prevents an extra network
-    // call for other readers, and they will observe the database state on their
-    // next read.
-    await this.#store.casMeta(
+    // A concurrent writer winning the CAS is fine; later callers observe it.
+    await this.#cache.casMeta(
       this.#cacheKey,
       serializePriceFeedCacheState(state),
       expectedRev
@@ -852,15 +849,12 @@ function isCacheTimestamp(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) >= 0;
 }
 
-// Wires the hard-coded (or overridden) primary/fallback feeds to a database
-// cache. Pass an OpenReceive store (or any meta-capable store) as `store`.
+// Wires the hard-coded (or overridden) feeds to a disposable local cache.
 export function createCachedLivePriceFeed(options: {
-  store: OpenReceivePriceFeedCacheStore;
   currencies: readonly string[];
   fetch?: SimplePriceFetch;
   clock?: () => number;
   cacheSeconds?: number;
-  cacheKey?: string;
   primaryUrl?: string;
   fallbackUrl?: string;
   primaryTimeoutMs?: number;
@@ -873,14 +867,32 @@ export function createCachedLivePriceFeed(options: {
   });
 
   return new CachedPriceFeed({
-    store: options.store,
     currencies: options.currencies,
     primary,
     fallback,
     cacheSeconds: options.cacheSeconds,
-    cacheKey: options.cacheKey,
     clock: options.clock
   });
+}
+
+function createTransientPriceFeedCache(): OpenReceivePriceFeedCacheMap {
+  let row: MetaRow | undefined;
+  return {
+    getMeta(key) {
+      return row?.key === key ? structuredClone(row) : undefined;
+    },
+    casMeta(key, value, expectedRev) {
+      const actualRev = row?.key === key ? row.rev : null;
+      if (actualRev !== expectedRev) {
+        return {
+          status: "conflict",
+          row: structuredClone(row ?? { key, value: "", rev: -1 }),
+        };
+      }
+      row = { key, value, rev: (actualRev ?? 0) + 1 };
+      return { status: "ok", row: structuredClone(row) };
+    },
+  };
 }
 
 export function isResolvedPriceProvider(

@@ -1,284 +1,289 @@
-import { sweepPendingInvoicesOnce } from "@openreceive/core";
 import {
-  assertDurableStoreConfiguration,
-  closeOpenReceiveResource,
-  createConfiguredClient,
-  mergeOpenReceiveConfigFile,
-  preflightConfiguredClient,
-  resolveConfiguredStore,
-  resolveConfiguredSwapProviders,
-  runOpenReceiveOperation,
-} from "./service/bootstrap.ts";
-import { createCheckout, getCheckout, getOrder } from "./service/checkouts.ts";
-import {
-  currentUnixSeconds,
-  readOpenReceiveNamespace,
-} from "./service/core-utils.ts";
+  checkPayment as checkPaymentWithClient,
+  scanSettledPayments,
+  StaticPriceProvider,
+} from "@openreceive/core";
+import { createNwcReceiveClient } from "./alby-nwc.ts";
+import { readOpenReceiveConfigFile } from "./config.ts";
+import { OpenReceiveConfigError } from "./config-error.ts";
 import { attachOpenReceiveFileLogging } from "./service/file-logger.ts";
-import {
-  emitLog,
-  summarizeSwapProviderApiRequest,
-  summarizeSwapProviderApiResponse,
-} from "./service/logging.ts";
-import { toSwapAttempt } from "./service/models.ts";
+import { createCheckout } from "./service/checkouts.ts";
+import { currentUnixSeconds } from "./service/core-utils.ts";
 import {
   createOpenReceivePriceFeed,
   listRates,
   quoteRates,
   readOpenReceivePriceCurrencies,
 } from "./service/pricing.ts";
-import { reconcileOptions } from "./service/reconcile.ts";
 import {
-  getSwapOptions,
+  createSwap,
+  createSwapRefundConfirmation,
+  getSwap,
   quoteSwap,
-  refreshSwap,
   refundSwap,
-  startSwap,
 } from "./service/swaps.ts";
-import { classifyOpenReceiveStore } from "./storage-guard.ts";
-import { StoreBackedSwapCache, SwapProviderWeightBudget } from "./swap/index.ts";
-import { resolveOpenReceiveStoreUri } from "./store-uri.ts";
 import type {
   CreateOpenReceiveOptions,
   OpenReceive,
-  Checkout,
-  GetOrCreateCheckoutRequest,
-  NodeOptions,
   OpenReceiveServiceContext,
+  PaymentWatcher,
 } from "./service/types.ts";
+import { TransientSwapCache, SwapProviderWeightBudget } from "./swap/index.ts";
+import {
+  createStatelessTokenManager,
+  parseTokenKeyring,
+} from "./tokens.ts";
 
-export type { OpenReceivePendingSweepResult as PendingSweepResult } from "@openreceive/core";
 export type { OpenReceiveConfigErrorCode } from "./config-error.ts";
 export { OpenReceiveConfigError } from "./config-error.ts";
 export { OpenReceiveServiceError } from "./service/core-utils.ts";
-export type {
-  CreateOpenReceiveOptions,
-  OpenReceive,
-  Checkout,
-  CreateCheckoutAmount,
-  CreateCheckoutRequest,
-  Event,
-  EventHandler,
-  GetCheckoutRequest,
-  GetOrCreateCheckoutRequest,
-  GetOrderRequest,
-  Invoice,
-  ListRatesRequest,
-  LogEntry,
-  Logger,
-  LoggingOptions,
-  NodeOptions,
-  NodeSettlementActionHook,
-  NodeSettlementActionInput,
-  Order,
-  OrderStatus,
-  PublicSwap,
-  SwapAttempt,
-  SwapOption,
-  SwapOptions,
-  SwapOptionsRequest,
-  SwapOptionsResponse,
-  SwapQuoteRequest,
-  SwapQuoteResponse,
-  SwapRefreshRequest,
-  SwapRefundRequest,
-  SwapStartRequest,
-} from "./service/types.ts";
+export type * from "./service/types.ts";
 export { createOpenReceivePriceFeed };
 
 export async function createOpenReceive(
-  options: CreateOpenReceiveOptions = {},
+  supplied: CreateOpenReceiveOptions = {},
 ): Promise<OpenReceive> {
-  // Attach the rotating file logger (unless disabled) before any sink is built so the
-  // NWC endpoint bridge and every service event write to ./logs as well as any caller logger.
-  const configuredOptions = attachOpenReceiveFileLogging(mergeOpenReceiveConfigFile(options));
-  const namespace = readOpenReceiveNamespace(configuredOptions.namespace);
-  const resolvedStoreUri =
-    configuredOptions.store === undefined
-      ? resolveOpenReceiveStoreUri({ storeUri: configuredOptions.storeUri })
-      : undefined;
-  assertDurableStoreConfiguration({
-    configuredStoreUri: configuredOptions.storeUri,
-    store: configuredOptions.store,
-  });
-  const client = createConfiguredClient(configuredOptions);
-  await preflightConfiguredClient(client);
+  const options = attachOpenReceiveFileLogging(mergeFileConfig(supplied));
+  const clock = options.clock ?? currentUnixSeconds;
+  const client = options.client ?? createNwcReceiveClient({ connectionString: requireNwc(options.nwc) });
+  await preflight(client);
 
-  const store = await resolveConfiguredStore(
-    {
-      ...configuredOptions,
-      ...(resolvedStoreUri === undefined ? {} : { storeUri: resolvedStoreUri.storeUri }),
-    },
-    namespace,
-  );
-
-  const nodeOptions: NodeOptions = {
-    ...configuredOptions,
-    client,
-    store,
-    namespace,
-    onPaid: configuredOptions.onPaid,
-  };
-  emitLog(
-    nodeOptions,
-    "info",
-    "store.resolved",
-    "Resolved OpenReceive store.",
-    resolvedStoreUri === undefined
-      ? { source: "injected" }
-      : {
-          source: resolvedStoreUri.source,
-          store_kind: classifyOpenReceiveStore(resolvedStoreUri.storeUri),
-        },
-  );
-  const priceCurrencies = readOpenReceivePriceCurrencies(configuredOptions.priceCurrencies);
-  const priceProviders = configuredOptions.priceProviders ?? [
-    createOpenReceivePriceFeed({
-      store,
-      currencies: priceCurrencies,
-      fetch: configuredOptions.priceFetch,
-      clock: configuredOptions.clock,
-    }),
-  ];
-  const swapProviders = resolveConfiguredSwapProviders(configuredOptions);
-  emitLog(
-    nodeOptions,
-    "info",
-    "swap.providers.resolved",
-    swapProviders.length === 0
-      ? "No swap providers configured; automated swaps are disabled."
-      : "Resolved automated swap providers.",
-    {
-      provider_count: swapProviders.length,
-      providers: swapProviders.map((provider) => provider.name),
-    },
-  );
-
-  const clock = configuredOptions.clock ?? currentUnixSeconds;
-  if (swapProviders.length > 0) {
-    // Providers are constructed before the store exists (config parse time / by
-    // the caller), so the durable limits cache is attached here once the store
-    // is available. This keeps slow-changing provider data out of process memory
-    // and shared across serverless instances.
-    const swapCache = new StoreBackedSwapCache(store, clock, {
-      warn: (message, fields) => emitLog(nodeOptions, "warn", "swap.limits.stale", message, fields),
+  const tokenKeys =
+    options.tokenKeys ??
+    tokenKeysFromEnvironment();
+  if (tokenKeys === undefined || tokenKeys.length === 0) {
+    throw new OpenReceiveConfigError({
+      code: "INVALID_CONFIG_FILE",
+      message: "OpenReceive requires a server-side token keyring.",
+      hint: "Set OPENRECEIVE_TOKEN_KEYS=k1:<32-byte-base64url-key> or pass tokenKeys.",
     });
-    for (const provider of swapProviders) {
-      provider.attachSwapCache?.(swapCache);
-      // Shared durable weight ledger so multi-dyno deploys cannot each burn a
-      // provider's 250/min budget independently. Per-provider keys enable failover
-      // to the next entry in swap.providers when the preferred one is limited.
-      // Local soft-cap / backoff denials never hit the wire, so log them here —
-      // otherwise operators only see successful /order traffic and a client 429.
-      provider.attachWeightBudget?.(
-        new SwapProviderWeightBudget(store, provider.name, clock, (denial) => {
-          emitLog(
-            nodeOptions,
-            "warn",
-            "swap.provider.rate_budget_exhausted",
-            denial.reason === "backoff"
-              ? "Swap provider API weight budget in backoff; skipping outbound call."
-              : "Swap provider API rate budget exhausted; skipping outbound call.",
-            {
-              provider: denial.provider,
-              path: denial.path,
-              reason: denial.reason,
-              used: denial.used,
-              cost: denial.cost,
-              gate: denial.gate,
-              window_start: denial.window_start,
-              ...(denial.backoff_until === undefined
-                ? {}
-                : { backoff_until: denial.backoff_until }),
-              detail: denial.message,
-            },
-          );
-        }),
-      );
-      provider.attachApiRequestLogger?.((entry) =>
-        emitLog(
-          nodeOptions,
-          "info",
-          "swap.provider.request",
-          "Swap provider API request.",
-          summarizeSwapProviderApiRequest(entry),
-        ),
-      );
-      provider.attachApiResponseLogger?.((entry) =>
-        emitLog(
-          nodeOptions,
-          "info",
-          "swap.provider.response",
-          "Swap provider API response.",
-          summarizeSwapProviderApiResponse(entry),
-        ),
-      );
-    }
+  }
+  const tokenManager = createStatelessTokenManager({ keys: tokenKeys, clock });
+  const priceCurrencies = readOpenReceivePriceCurrencies(options.priceCurrencies);
+  const priceProviders =
+    options.priceProviders ??
+    (options.priceFetch === undefined
+      ? [new StaticPriceProvider()]
+      : [
+          createOpenReceivePriceFeed({
+            currencies: priceCurrencies,
+            fetch: options.priceFetch,
+            clock,
+          }),
+        ]);
+  const swapProviders = options.swap?.providers ?? [];
+  const swapCache = new TransientSwapCache(clock);
+  for (const provider of swapProviders) {
+    provider.attachSwapCache?.(swapCache);
+    provider.attachWeightBudget?.(
+      new SwapProviderWeightBudget(provider.name, clock),
+    );
   }
 
   const context: OpenReceiveServiceContext = {
-    options: nodeOptions,
-    store,
+    options: { ...options, client },
     clock,
     priceProviders,
     priceCurrencies,
     swapProviders,
+    tokenManager,
   };
-
-  const getOrCreateCheckout = async (
-    input: GetOrCreateCheckoutRequest,
-  ): Promise<Checkout> =>
-    await runOpenReceiveOperation(context, async () => await createCheckout(context, input));
+  const watchers = new Set<PaymentWatcher>();
 
   const service: OpenReceive = {
-    store,
-    namespace,
     priceCurrencies,
-    getOrCreateCheckout,
-    async getOrder(input) {
-      return await runOpenReceiveOperation(context, async () => await getOrder(context, input));
+    createCheckout: (input) => createCheckout(context, input),
+    async recoverCheckout(input) {
+      const checked = await checkPaymentWithClient({
+        client,
+        clock,
+        paymentHash: input.paymentHash,
+      });
+      const transaction = checked.details?.transaction;
+      if (
+        checked.status !== "pending" ||
+        transaction?.invoice === undefined ||
+        transaction.amount_msats === undefined ||
+        transaction.created_at === undefined ||
+        (input.expiresAt ?? transaction.expires_at ?? transaction.created_at + 600) <= clock()
+      ) return null;
+      const amountMsats = Number(transaction.amount_msats);
+      if (!Number.isSafeInteger(amountMsats)) return null;
+      return {
+        orderId: input.orderId,
+        paymentHash: input.paymentHash.toLowerCase(),
+        bolt11: transaction.invoice,
+        amountMsats,
+        createdAt: transaction.created_at,
+        expiresAt: input.expiresAt ?? transaction.expires_at ?? transaction.created_at + 600,
+        fiatQuote: null,
+      };
     },
-    async getCheckout(input) {
-      return await runOpenReceiveOperation(context, async () => await getCheckout(context, input));
-    },
-    async sweepPendingInvoices() {
-      return await runOpenReceiveOperation(
-        context,
-        async () => await sweepPendingInvoicesOnce(reconcileOptions(context)),
+    checkPayment: (input) =>
+      checkPaymentWithClient({
+        client,
+        clock,
+        paymentHash: input.paymentHash,
+        from: input.from,
+        until: input.until,
+      }),
+    async reconcilePayments(input) {
+      return await Promise.all(
+        input.paymentHashes.map((paymentHash) =>
+          checkPaymentWithClient({
+            client,
+            clock,
+            paymentHash,
+            from: input.from,
+            until: input.until,
+          }),
+        ),
       );
     },
-    async swapOptions(input) {
-      return await runOpenReceiveOperation(context, () => getSwapOptions(context, input));
+    watchPayments(input) {
+      const watcher = startPaymentWatcher(context, input);
+      watchers.add(watcher);
+      void watcher.done.finally(() => watchers.delete(watcher));
+      return watcher;
     },
-    async swapQuote(input) {
-      return await runOpenReceiveOperation(context, () => quoteSwap(context, input));
+    async mintCapabilityToken(input) {
+      return tokenManager.seal("cap", input);
     },
-    async startSwap(input) {
-      return await runOpenReceiveOperation(context, async () =>
-        toSwapAttempt(await startSwap(context, input)),
-      );
+    async verifyCapabilityToken(token) {
+      try {
+        const payload = tokenManager.open<{
+          version: 1;
+          issuedAt: number;
+          orderId: string;
+          paymentHash: string;
+          expiresAt: number;
+        }>("cap", token);
+        if (
+          typeof payload.orderId !== "string" ||
+          !/^[0-9a-f]{64}$/.test(payload.paymentHash) ||
+          !Number.isSafeInteger(payload.expiresAt)
+        ) return null;
+        return {
+          orderId: payload.orderId,
+          paymentHash: payload.paymentHash,
+          expiresAt: payload.expiresAt,
+        };
+      } catch {
+        return null;
+      }
     },
-    async refundSwap(input) {
-      return await runOpenReceiveOperation(context, async () =>
-        toSwapAttempt(await refundSwap(context, input)),
-      );
-    },
-    async refreshSwap(input) {
-      return await runOpenReceiveOperation(context, async () =>
-        toSwapAttempt(await refreshSwap(context, input)),
-      );
-    },
-    async listRates(input) {
-      return await runOpenReceiveOperation(context, () => listRates(context, input));
-    },
-    async quoteRates(input) {
-      return await runOpenReceiveOperation(context, () => quoteRates(context, input));
-    },
+    quoteSwap: (input) => quoteSwap(context, input),
+    createSwap: (input) => createSwap(context, input),
+    getSwap: (input) => getSwap(context, input),
+    createSwapRefundConfirmation: (input) => createSwapRefundConfirmation(context, input),
+    refundSwap: (input) => refundSwap(context, input),
+    listRates: (input) => listRates(context, input),
+    quoteRates: (input) => quoteRates(context, input),
     async close() {
-      await closeOpenReceiveResource(store);
-      await closeOpenReceiveResource(client);
+      for (const watcher of watchers) watcher.stop();
+      await Promise.all([...watchers].map((watcher) => watcher.done));
+      await client.close?.();
     },
   };
-
   return service;
+}
+
+function startPaymentWatcher(
+  context: OpenReceiveServiceContext,
+  input: Parameters<OpenReceive["watchPayments"]>[0],
+): PaymentWatcher {
+  const controller = new AbortController();
+  const pollIntervalMs = input.pollIntervalMs ?? 5_000;
+  if (!Number.isSafeInteger(pollIntervalMs) || pollIntervalMs < 250) {
+    throw new RangeError("pollIntervalMs must be a safe integer of at least 250");
+  }
+  const from = input.from ?? Math.max(0, context.clock() - 60 * 60);
+  const delivered = new Set<string>();
+  const onPaid = input.onPaid ?? context.options.onPaid;
+  const stop = () => controller.abort();
+  input.signal?.addEventListener("abort", stop, { once: true });
+
+  const done = (async () => {
+    try {
+      while (!controller.signal.aborted) {
+        try {
+          const settled = await scanSettledPayments({
+            client: context.options.client,
+            clock: context.clock,
+            from,
+            until: context.clock(),
+          });
+          for (const payment of settled) {
+            if (delivered.has(payment.paymentHash)) continue;
+            await onPaid?.(payment);
+            delivered.add(payment.paymentHash);
+          }
+        } catch {
+          // Wallet and callback failures are retried by the next overlapping scan.
+        }
+        await abortableDelay(pollIntervalMs, controller.signal);
+      }
+    } finally {
+      input.signal?.removeEventListener("abort", stop);
+    }
+  })();
+  return { stop, done };
+}
+
+function mergeFileConfig(options: CreateOpenReceiveOptions): CreateOpenReceiveOptions {
+  const file = readOpenReceiveConfigFile({
+    cwd: options.cwd,
+    configPath: options.configPath,
+    now: options.clock,
+  });
+  if (file === undefined) return options;
+  return {
+    ...(file.nwc === undefined ? {} : { nwc: file.nwc }),
+    ...(file.priceCurrencies === undefined ? {} : { priceCurrencies: file.priceCurrencies }),
+    ...(file.swap === undefined ? {} : { swap: { providers: file.swap.providers } }),
+    ...(file.logging === undefined ? {} : { logging: file.logging }),
+    ...options,
+  } as CreateOpenReceiveOptions;
+}
+
+function requireNwc(value: string | undefined): string {
+  if (value === undefined || value.trim().length === 0) {
+    throw new OpenReceiveConfigError({
+      code: "MISSING_NWC",
+      message: "OpenReceive requires a receive-only NWC connection string.",
+      hint: "Set nwc in openreceive.yml or pass it to createOpenReceive().",
+    });
+  }
+  return value;
+}
+
+async function preflight(client: OpenReceiveServiceContext["options"]["client"]): Promise<void> {
+  try {
+    await client.preflight();
+  } catch (cause) {
+    throw new OpenReceiveConfigError({
+      code: "WALLET_PREFLIGHT_FAILED",
+      message: "OpenReceive wallet preflight failed.",
+      hint: "Use a receive-only NWC connection advertising make_invoice and list_transactions.",
+      cause,
+    });
+  }
+}
+
+function tokenKeysFromEnvironment() {
+  const raw = globalThis.process?.env?.OPENRECEIVE_TOKEN_KEYS;
+  return raw === undefined || raw.trim() === "" ? undefined : parseTokenKeyring(raw);
+}
+
+function abortableDelay(milliseconds: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.resolve();
+  return new Promise((resolve) => {
+    const timer = setTimeout(done, milliseconds);
+    signal.addEventListener("abort", done, { once: true });
+    function done() {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", done);
+      resolve();
+    }
+  });
 }

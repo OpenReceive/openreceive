@@ -45,12 +45,7 @@ import {
   type OpenReceiveTransientFeedbackOptions,
   type OpenWalletOptions,
   openReceiveCheckoutLabels,
-  type RequestCheckoutAmount,
   type RequestCheckoutOptions,
-  type RequestOrderSummaryOptions,
-  type RequestOrderSummaryResult,
-  type RequestPrepareCheckoutOptions,
-  type RequestPrepareCheckoutResult,
 } from "./ui.ts";
 import { getOpenReceivePaymentStatusText } from "./wizard.ts";
 
@@ -853,11 +848,9 @@ interface NormalizedRequestCheckoutOptions {
   readonly orderId: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly headers?: Readonly<Record<string, string>>;
-  readonly amount?: RequestCheckoutAmount;
   readonly memo?: string;
   readonly descriptionHash?: string;
   readonly metadata?: Record<string, unknown>;
-  readonly mintLightning?: boolean;
 }
 
 function normalizeRequestCheckoutOptions(
@@ -867,23 +860,14 @@ function normalizeRequestCheckoutOptions(
   const orderId = optionalString(record.orderId ?? record.order_id);
   const descriptionHash = optionalString(record.descriptionHash ?? record.description_hash);
   const metadata = optionalRecord(record.metadata);
-  const amount = normalizeRequestCheckoutAmount(record);
-  // Mounted-router creates (`prefix` without an explicit `checkoutUrl`) never send a client
-  // amount — prepareCheckout persist is the sole price authority and the body is `{ order_id }` only.
-  // Custom `checkoutUrl` posts may include the flat amount shape for app-owned create routes.
-  const usesMountedRouter =
-    options.checkoutUrl === undefined && optionalString(options.prefix) !== undefined;
-
   return {
     checkoutUrl: resolveRequestCheckoutTarget(options),
     orderId: orderId ?? "",
     fetch: options.fetch,
     headers: options.headers,
-    ...(amount === undefined || usesMountedRouter ? {} : { amount }),
     ...(options.memo === undefined ? {} : { memo: options.memo }),
     ...(descriptionHash === undefined ? {} : { descriptionHash }),
     ...(metadata === undefined ? {} : { metadata }),
-    ...(options.mintLightning === false ? { mintLightning: false } : {}),
   };
 }
 
@@ -904,97 +888,12 @@ function resolveRequestCheckoutTarget(
 }
 
 /**
- * Derive the order route URL from the base path the shipped router is mounted at:
- * `resolveOrderUrlFromPrefix("/openreceive", "ord-1")` -> `/openreceive/orders/ord-1`.
- * A trailing slash on the prefix is stripped; the order id is URL-encoded. This is the URL
- * a created checkout polls for status (and drives swaps against) — the per-order token rides
- * along automatically, keyed by the order id.
+ * Derive the payment-check URL from the base path the shipped router is mounted at.
+ * The order id argument is retained because session/controller APIs are order-oriented.
  */
 export function resolveOrderUrlFromPrefix(prefix: string, orderId: string): string {
-  return `${prefix.replace(/\/+$/, "")}/orders/${encodeURIComponent(orderId)}`;
-}
-
-/**
- * Derive the guest-resume summary URL:
- * `resolveOrderSummaryUrlFromPrefix("/openreceive", "ord-1")` ->
- * `/openreceive/orders/ord-1/summary`.
- */
-export function resolveOrderSummaryUrlFromPrefix(prefix: string, orderId: string): string {
-  return `${resolveOrderUrlFromPrefix(prefix, orderId)}/summary`;
-}
-
-function normalizeRequestCheckoutAmount(
-  options: Record<string, unknown>,
-): RequestCheckoutAmount | undefined {
-  if (options.usd !== undefined || options.sats !== undefined) {
-    throw new Error(
-      "OpenReceive checkout creation no longer accepts top-level usd or sats; use amount: { currency, value } or amount: { sats }.",
-    );
-  }
-
-  // No amount is valid for a prefix create against the mounted router: the server's
-  // prepareCheckout persist sets the authoritative price and the client POSTs { order_id }.
-  if (options.amount === undefined) {
-    return undefined;
-  }
-
-  return normalizeExplicitRequestCheckoutAmount(options.amount);
-}
-
-function normalizeExplicitRequestCheckoutAmount(value: unknown): RequestCheckoutAmount {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error(
-      "OpenReceive checkout creation requires amount: { sats } or amount: { currency, value }.",
-    );
-  }
-
-  const amount = value as Record<string, unknown>;
-  const unsupportedAmountKeys = Object.keys(amount).filter(
-    (key) => key !== "sats" && key !== "currency" && key !== "value",
-  );
-  if (unsupportedAmountKeys.length > 0) {
-    throw new Error(
-      "OpenReceive checkout creation requires amount: { sats } or amount: { currency, value }.",
-    );
-  }
-
-  const hasSats = amount.sats !== undefined;
-  const hasCurrency = amount.currency !== undefined;
-  const hasValue = amount.value !== undefined;
-
-  if (hasSats && !hasCurrency && !hasValue) {
-    return { sats: normalizeRequestCheckoutSats(amount.sats) };
-  }
-
-  if (!hasSats && hasCurrency && hasValue) {
-    const currency = optionalString(amount.currency);
-    const valueText = optionalString(amount.value);
-    if (currency === undefined || valueText === undefined) {
-      throw new Error(
-        "OpenReceive checkout creation requires amount: { sats } or amount: { currency, value }.",
-      );
-    }
-    return { currency, value: valueText };
-  }
-
-  throw new Error(
-    "OpenReceive checkout creation requires amount: { sats } or amount: { currency, value }.",
-  );
-}
-
-function normalizeRequestCheckoutSats(value: unknown): number | string {
-  if (typeof value === "number") {
-    if (!Number.isSafeInteger(value) || value <= 0) {
-      throw new Error("OpenReceive sats must be a positive integer.");
-    }
-    return value;
-  }
-
-  if (typeof value === "string" && /^[0-9]+$/.test(value) && BigInt(value) > 0n) {
-    return value;
-  }
-
-  throw new Error("OpenReceive sats must be a positive integer.");
+  void orderId;
+  return `${prefix.replace(/\/+$/, "")}/payments/check`;
 }
 
 function optionalRecord(value: unknown): Record<string, unknown> | undefined {
@@ -1022,12 +921,9 @@ export async function requestCheckout(options: RequestCheckoutOptions): Promise<
 
   const requestBody = {
     order_id: request.orderId,
-    ...(request.amount === undefined ? {} : { amount: structuredClone(request.amount) }),
     ...(request.memo === undefined ? {} : { memo: request.memo }),
     ...(request.descriptionHash === undefined ? {} : { description_hash: request.descriptionHash }),
     ...(request.metadata === undefined ? {} : { metadata: structuredClone(request.metadata) }),
-    // Only include when explicitly false to defer Lightning mint on the server.
-    ...(request.mintLightning === false ? { mint_lightning: false } : {}),
   };
   assertOpenReceiveBrowserPayloadSafe(requestBody);
 
@@ -1068,85 +964,6 @@ export async function requestCheckout(options: RequestCheckoutOptions): Promise<
   return snapshot;
 }
 
-/**
- * `POST {prefix}/prepare` with an opaque JSON body. Returns `{ order_id, summary? }` from the
- * host `prepareCheckout` hook (amount is persisted server-side for a later create-checkout).
- */
-export async function requestPrepareCheckout(
-  options: RequestPrepareCheckoutOptions,
-): Promise<RequestPrepareCheckoutResult> {
-  const prefix = (optionalString(options.prefix) ?? OPENRECEIVE_DEFAULT_PREFIX).replace(/\/+$/, "");
-  const fetcher = options.fetch ?? globalThis.fetch;
-  if (fetcher === undefined) {
-    throw new Error("OpenReceive prepare requires fetch.");
-  }
-
-  assertOpenReceiveBrowserPayloadSafe(options.body);
-
-  const headers = options.headers === undefined ? {} : options.headers;
-  const response = await fetcher(`${prefix}/prepare`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...headers,
-    },
-    body: JSON.stringify(options.body),
-  });
-  const body = await response.json();
-
-  if (!response.ok) {
-    throw new Error(
-      typeof body?.message === "string" ? body.message : "Could not prepare checkout.",
-    );
-  }
-
-  const record = asRecord(body);
-  const orderId = optionalString(record.order_id ?? record.orderId);
-  if (orderId === undefined || orderId.length === 0) {
-    throw new Error("OpenReceive prepare response requires order_id.");
-  }
-
-  return {
-    order_id: orderId,
-    ...("summary" in record ? { summary: record.summary } : {}),
-  };
-}
-
-/**
- * `GET {prefix}/orders/{orderId}/summary` for guest resume display redraw.
- * Returns `undefined` when the order is missing (404) or the response is not OK.
- */
-export async function requestOrderSummary(
-  options: RequestOrderSummaryOptions,
-): Promise<RequestOrderSummaryResult | undefined> {
-  const orderId = optionalString(options.orderId);
-  if (orderId === undefined || orderId.length === 0) {
-    throw new Error("OpenReceive order summary requires orderId.");
-  }
-
-  const prefix = (optionalString(options.prefix) ?? OPENRECEIVE_DEFAULT_PREFIX).replace(/\/+$/, "");
-  const fetcher = options.fetch ?? globalThis.fetch;
-  if (fetcher === undefined) {
-    throw new Error("OpenReceive order summary requires fetch.");
-  }
-
-  const headers = options.headers === undefined ? {} : options.headers;
-  const response = await fetcher(resolveOrderSummaryUrlFromPrefix(prefix, orderId), {
-    method: "GET",
-    headers: { ...headers },
-  });
-
-  if (response.status === 404 || !response.ok) return undefined;
-
-  const body = await response.json();
-  const record = asRecord(body);
-  const responseOrderId = optionalString(record.order_id ?? record.orderId) ?? orderId;
-  return {
-    order_id: responseOrderId,
-    ...("summary" in record ? { summary: record.summary } : {}),
-  };
-}
-
 export function createOpenReceiveStatusFetcher(
   options: CreateOpenReceiveStatusFetcherOptions,
 ): CheckoutStatusRefresh {
@@ -1161,7 +978,11 @@ export function createOpenReceiveStatusFetcher(
     }
 
     const headers = options.headers === undefined ? {} : options.headers;
-    const response = await fetcher(resolveOrderUrl(options.orderUrl, order_id), {
+    const paymentHash = options.snapshot.active?.payment_hash;
+    if (paymentHash === undefined) {
+      throw new Error("OpenReceive status refresh requires payment_hash.");
+    }
+    const response = await fetcher(options.orderUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1172,7 +993,7 @@ export function createOpenReceiveStatusFetcher(
         ...headers,
       },
       body: JSON.stringify({
-        order_id,
+        payment_hash: paymentHash,
       }),
     });
     const body = await response.json();
@@ -1183,7 +1004,27 @@ export function createOpenReceiveStatusFetcher(
       );
     }
 
-    return checkoutSnapshotFromStatusBody(body);
+    const payment = asRecord(body);
+    const next = structuredClone(options.snapshot);
+    if (next.active === undefined) return next;
+    const state = optionalString(payment.status) ?? "pending";
+    const active = {
+      ...next.active,
+      transaction_state: state === "not_found" ? "pending" : state,
+      ...(optionalSafeInteger(payment.paid_at) === undefined
+        ? {}
+        : { settled_at: optionalSafeInteger(payment.paid_at) }),
+    };
+    return {
+      ...next,
+      active,
+      invoices: [active],
+      status: state === "settled"
+        ? "paid"
+        : state === "expired" || state === "failed"
+          ? "expired"
+          : "open",
+    };
   };
 }
 
@@ -1215,6 +1056,13 @@ function checkoutSnapshotFromResponseBody(body: unknown): CheckoutSnapshot {
   // `order_access_token`); direct callers post the snapshot at the top level. Accept both,
   // then fall back to the shared status-body shapes (display_checkout, etc.).
   const wrapped = asRecord(record.checkout);
+  if (
+    typeof wrapped.payment_hash === "string" &&
+    typeof wrapped.bolt11 === "string" &&
+    typeof wrapped.order_id === "string"
+  ) {
+    return storageFreeCheckoutSnapshot(wrapped);
+  }
   if (typeof wrapped.checkout_id === "string") {
     return normalizeCheckoutSnapshot(wrapped);
   }
@@ -1226,6 +1074,33 @@ function checkoutSnapshotFromResponseBody(body: unknown): CheckoutSnapshot {
   // No recognizable shape: normalize the record so its own validation raises the precise
   // "requires checkout_id" error the original code path produced.
   return normalizeCheckoutSnapshot(record);
+}
+
+function storageFreeCheckoutSnapshot(checkout: Record<string, unknown>): CheckoutSnapshot {
+  const paymentHash = requiredString(checkout.payment_hash, "payment_hash");
+  const orderId = requiredString(checkout.order_id, "order_id");
+  const amountMsats = requiredSafeInteger(checkout.amount_msats, "amount_msats");
+  const invoice: CheckoutInvoiceSnapshot = {
+    invoice_id: paymentHash,
+    rail: "lightning",
+    invoice: requiredString(checkout.bolt11, "bolt11"),
+    payment_hash: paymentHash,
+    amount_msats: amountMsats,
+    transaction_state: "pending",
+    workflow_state: "invoice_created",
+    expires_at: requiredSafeInteger(checkout.expires_at, "expires_at"),
+    ...(isRecord(checkout.fiat_quote) || checkout.fiat_quote === null
+      ? { fiat_quote: checkout.fiat_quote as CheckoutInvoiceSnapshot["fiat_quote"] }
+      : {}),
+  };
+  return {
+    checkout_id: paymentHash,
+    order_id: orderId,
+    status: "open",
+    amount_msats: amountMsats,
+    active: invoice,
+    invoices: [invoice],
+  };
 }
 
 function checkoutSnapshotFromStatusBody(body: unknown): CheckoutSnapshot | null {
@@ -1588,7 +1463,7 @@ export function createCheckoutState(
   const settledAt = snapshot.paid_at ?? invoice.settled_at;
   const transactionState = paid ? "settled" : (invoice.transaction_state ?? "pending");
   const workflowState = paid
-    ? "settlement_action_completed"
+    ? "paid"
     : (invoice.workflow_state ?? "invoice_created");
 
   const state = normalizeCheckoutState(
@@ -1970,6 +1845,7 @@ export class OpenReceiveBrowserCheckoutController implements CheckoutController 
         ? undefined
         : createOpenReceiveStatusFetcher({
             orderUrl: options.orderUrl,
+            snapshot: options.snapshot,
             fetch: options.fetch,
             headers: options.statusHeaders,
           }));
@@ -2003,10 +1879,9 @@ export function createCheckoutController(options: CheckoutControllerOptions): Ch
 /**
  * One-call create-mode entry: given `{ prefix?, orderId, ...controllerOptions }`, create the
  * checkout against the mounted router (`${prefix}/checkouts`) and return the resulting snapshot
- * plus a ready-to-start controller wired to `${prefix}/orders/${orderId}`. The per-order
- * capability token is captured by `requestCheckout` and rides every later status poll / swap
- * call automatically. Amount is optional — omit it to let the server set the authoritative
- * price. The returned controller is created but not started; call `controller.start()`.
+ * plus a ready-to-start controller wired to `${prefix}/payments/check`. The stateless
+ * capability token is captured by `requestCheckout` and rides every later status poll.
+ * The returned controller is created but not started; call `controller.start()`.
  *
  * This is the framework-agnostic primitive the React `<Checkout orderId>` and
  * `<openreceive-checkout order-id>` create modes are equivalent to.
@@ -2022,7 +1897,6 @@ export async function createOpenReceiveCheckoutSession(
     ...(options.headers === undefined ? {} : { headers: options.headers }),
     ...(options.memo === undefined ? {} : { memo: options.memo }),
     ...(options.metadata === undefined ? {} : { metadata: options.metadata }),
-    ...(options.amount === undefined ? {} : { amount: options.amount }),
   } as RequestCheckoutOptions;
 
   const checkout = await requestCheckout(createOptions);
@@ -2239,13 +2113,13 @@ function normalizeCheckoutState(
 function getCheckoutPhase(transactionState: string, workflowState: string): CheckoutPhase {
   if (workflowState === "cancelled") return "cancelled";
   if (transactionState === "settled") return "settled";
-  if (transactionState === "expired" || workflowState === "expired_closed") {
+  if (transactionState === "expired" || workflowState === "expired") {
     return "expired";
   }
-  if (transactionState === "failed" || workflowState === "failed_closed") {
+  if (transactionState === "failed" || workflowState === "failed") {
     return "failed";
   }
-  if (workflowState === "verifying" || workflowState === "expiry_pending_verification") {
+  if (workflowState === "verifying") {
     return "verifying";
   }
   return "invoice_created";

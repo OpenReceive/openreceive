@@ -11,6 +11,7 @@ import {
   OpenReceiveError,
   type ListTransactionsRequest,
   type ListTransactionsResult,
+  type LookupInvoiceRequest,
   type MakeInvoiceRequest,
   type MakeInvoiceResult,
   type NwcTransaction,
@@ -44,6 +45,8 @@ export interface AlbyNwcCompatibleClient {
   make_invoice?: (request: Record<string, unknown>) => Promise<unknown>;
   listTransactions?: (request: Record<string, unknown>) => Promise<unknown>;
   list_transactions?: (request: Record<string, unknown>) => Promise<unknown>;
+  lookupInvoice?: (request: Record<string, unknown>) => Promise<unknown>;
+  lookup_invoice?: (request: Record<string, unknown>) => Promise<unknown>;
   close?: () => Promise<void> | void;
 }
 
@@ -286,6 +289,34 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
       transaction_count: result.transactions.length
     });
     return result;
+  }
+
+  async lookupInvoice(request: LookupInvoiceRequest): Promise<NwcTransaction> {
+    await this.ensurePreflight();
+    const paymentHash = request.payment_hash;
+    const invoice = request.invoice;
+    if ((paymentHash === undefined) === (invoice === undefined)) {
+      throw new ReceiveCheckoutValidationError(
+        "lookup_invoice requires exactly one of payment_hash or invoice",
+      );
+    }
+    if (paymentHash !== undefined && !HEX_64.test(paymentHash)) {
+      throw new ReceiveCheckoutValidationError("payment_hash must be 64 hex characters");
+    }
+    const params = {
+      ...(paymentHash === undefined ? {} : { payment_hash: paymentHash }),
+      ...(invoice === undefined ? {} : { invoice }),
+    };
+    this.#log("debug", "nwc.lookup_invoice.requested", "Calling NWC wallet lookup_invoice.", {
+      method: "lookup_invoice",
+      ...(paymentHash === undefined ? {} : { payment_hash: paymentHash }),
+    });
+    const raw = await callRequiredMethod(
+      await this.getClient(),
+      ["lookupInvoice", "lookup_invoice"],
+      params,
+    );
+    return normalizeNwcTransaction(unwrapNwcResult(raw));
   }
 
   async close(): Promise<void> {
@@ -614,20 +645,10 @@ async function createDefaultAlbyNwcClient(
 
 function ensureNodeWebSocket(): void {
   if (globalThis.WebSocket !== undefined) return;
-  try {
-    const namespace = require("ws") as {
-      default?: typeof WebSocket;
-      WebSocket?: typeof WebSocket;
-    } | typeof WebSocket;
-    const Constructor = typeof namespace === "function"
-      ? namespace
-      : namespace.WebSocket ?? namespace.default;
-    if (Constructor !== undefined) {
-      globalThis.WebSocket = Constructor;
-    }
-  } catch {
-    // The SDK reports the missing WebSocket in its own preflight path.
-  }
+  throw new WalletPreflightError(
+    "wallet_unavailable",
+    "OpenReceive requires Node 22 or newer with the built-in WebSocket API.",
+  );
 }
 
 const NWC_ERROR_CODE_ALIASES: Readonly<Record<string, OpenReceiveErrorCode>> = {

@@ -28,7 +28,6 @@ import {
   createCheckoutSnapshotFromDisplayData,
   createCheckoutStateFromDisplayData,
   createCheckoutStateEvent,
-  createCheckoutSummaryEvent,
   createOpenReceivePaymentWizardModel,
   createOpenReceivePaymentWizardSelection,
   createCheckoutProviderCopyEvent,
@@ -86,7 +85,6 @@ import {
   parseOpenReceiveThemePreference,
   readOpenReceiveStoredCountryCode,
   requestCheckout,
-  requestOrderSummary,
   resolveOrderUrlFromPrefix,
   selectCheckoutDisplayInvoice,
   isReusableLightningInvoice,
@@ -1742,12 +1740,11 @@ export function defineOpenReceiveElements(
       this.lightningRequested = false;
 
       try {
-        void this.resumeGuestSummary(prefix, orderId);
+        this.syncResumePath(orderId);
         // Lock amount without minting a payer Lightning invoice. Bitcoin selection mints later.
         const checkout = await requestCheckout({
           prefix,
           orderId,
-          mintLightning: false,
           fetch: globalThis.fetch,
         });
         this.handleControllerSnapshot(checkout);
@@ -1773,8 +1770,8 @@ export function defineOpenReceiveElements(
       }
     }
 
-    /** Guest resume: always fetch summary; History API URL sync only when `sync-url` is set. */
-    private async resumeGuestSummary(prefix: string, orderId: string): Promise<void> {
+    /** Order data belongs to the host; this only performs optional History API sync. */
+    private syncResumePath(orderId: string): void {
       const syncUrl = parseOpenReceiveBooleanAttribute(
         this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.syncUrl),
       );
@@ -1789,22 +1786,6 @@ export function defineOpenReceiveElements(
         });
       }
 
-      try {
-        const result = await requestOrderSummary({
-          prefix,
-          orderId,
-          fetch: globalThis.fetch,
-        });
-        if (result === undefined || !("summary" in result)) return;
-        this.dispatchEvent(
-          createCheckoutSummaryEvent({
-            order_id: result.order_id,
-            summary: result.summary,
-          }),
-        );
-      } catch {
-        // Resume is best-effort; create-checkout remains the settlement path.
-      }
     }
 
     private async ensureLightning(): Promise<void> {
@@ -1842,7 +1823,6 @@ export function defineOpenReceiveElements(
         const checkout = await requestCheckout({
           prefix,
           orderId,
-          mintLightning: true,
           fetch: globalThis.fetch,
         });
         this.handleControllerSnapshot(checkout);

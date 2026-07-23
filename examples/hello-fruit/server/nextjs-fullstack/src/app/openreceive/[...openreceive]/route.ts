@@ -4,7 +4,7 @@ import { openReceiveHttpOptions } from "../../../server/openreceive.ts";
 // Mount the SHIPPED OpenReceive routes as a Next.js App Router catch-all. The app writes NO
 // invoice/status/swap handlers: this one catch-all serves POST /openreceive/checkouts,
 // POST /openreceive/orders/:id, GET /openreceive/rates, etc. Handlers are built per request from
-// the cached OpenReceive service (requires OPENRECEIVE_NWC; defaults to local-sqlite).
+// the cached storage-free OpenReceive service.
 
 export const runtime = "nodejs";
 

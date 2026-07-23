@@ -1,26 +1,10 @@
-# ADR-0007: Settlement Action Delivery
+# ADR-0007: At-least-once verified payment delivery
 
-## Status
+Status: Accepted (supersedes persisted settlement-action leases)
 
-Accepted for v0.1-v2.
+OpenReceive emits `{ paymentHash, paidAt, details? }` after wallet verification. Delivery is
+at-least-once and may repeat after callback failure, restart, overlapping scans, or multiple
+instances.
 
-## Context
-
-OpenReceive cannot atomically commit both its invoice state and arbitrary app
-fulfillment state. A process can crash after the app hook succeeds and before
-OpenReceive records completion.
-
-## Decision
-
-Settlement actions are delivered at least once. OpenReceive records a
-store-backed claim on the invoice before running the app hook so two processes
-do not run the same hook at the same time, and so crashed claims can be retried.
-Host apps must make settlement hooks idempotent, usually by deduplicating on
-`payment_hash` or by using a conditional app-store update.
-
-## Consequences
-
-- Hooks may replay after lease expiry.
-- Hooks should not rely on frontend state.
-- Documentation and tests must describe duplicate/replay-safe settlement
-  behavior.
+The host sets `paid_at` only when null and couples fulfillment to its own idempotent transaction
+or job. OpenReceive does not persist callback state or claim leases.

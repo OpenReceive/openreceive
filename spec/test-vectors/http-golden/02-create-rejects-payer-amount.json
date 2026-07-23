@@ -1,0 +1,9 @@
+{
+  "name": "create checkout rejects payer amount",
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/checkouts",
+    "body": { "order_id": "ord-1", "amount": { "sats": 1000 } }
+  },
+  "expected": { "status": 400, "code": "INVALID_REQUEST" }
+}

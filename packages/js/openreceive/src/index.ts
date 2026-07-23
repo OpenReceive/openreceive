@@ -12,6 +12,7 @@ export type {
   OpenReceive,
   Checkout,
   CreateCheckoutRequest,
-  Order,
+  PaymentCheck,
+  SwapCheckout,
 } from "@openreceive/node";
 export { createOpenReceive, OpenReceiveConfigError, OpenReceiveServiceError } from "@openreceive/node";

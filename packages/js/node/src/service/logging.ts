@@ -1,4 +1,3 @@
-import type { InvoiceStorageRow } from "@openreceive/core";
 import type { NwcEndpointLogger } from "../alby-nwc.ts";
 import { isRecord } from "./core-utils.ts";
 import type {
@@ -9,24 +8,6 @@ import type {
   OpenReceiveLogLevel,
   NodeOptions,
 } from "./types.ts";
-
-export function invoiceLogFields(row: InvoiceStorageRow): Record<string, unknown> {
-  return {
-    invoice_id: row.invoice_id,
-    payment_hash: row.payment_hash,
-    amount_msats: row.amount_msats,
-    transaction_state: row.transaction_state,
-    workflow_state: row.workflow_state,
-    settlement_action_state: row.settlement_action_state,
-    ...(row.settled_at === undefined ? {} : { settled_at: row.settled_at }),
-    ...(row.settlement_action_completed_at === undefined
-      ? {}
-      : { settlement_action_completed_at: row.settlement_action_completed_at }),
-    ...(row.refreshed_from_invoice_id === undefined
-      ? {}
-      : { refreshed_from_invoice_id: row.refreshed_from_invoice_id }),
-  };
-}
 
 /** Audit fields for swap attempt transitions — never includes refund_nonce or addresses. */
 export function swapAttemptLogFields(input: {

@@ -64,11 +64,9 @@ export type OpenReceiveWorkflowState =
   | "draft"
   | "invoice_created"
   | "verifying"
-  | "settlement_action_pending"
-  | "settlement_action_completed"
-  | "expiry_pending_verification"
-  | "expired_closed"
-  | "failed_closed"
+  | "paid"
+  | "expired"
+  | "failed"
   | "cancelled";
 
 export interface ParsedNwcConnection {
@@ -134,10 +132,18 @@ export interface ListTransactionsResult {
   transactions: NwcTransaction[];
 }
 
+export interface LookupInvoiceRequest {
+  payment_hash?: string;
+  invoice?: string;
+}
+
 export interface OpenReceiveReceiveNwcClient {
   preflight(): Promise<WalletCapabilitySummary>;
   makeInvoice(request: MakeInvoiceRequest): Promise<MakeInvoiceResult>;
+  /** Optional NIP-47 fast path. OpenReceive falls back to list_transactions. */
+  lookupInvoice?(request: LookupInvoiceRequest): Promise<NwcTransaction>;
   listTransactions(request: ListTransactionsRequest): Promise<ListTransactionsResult>;
+  close?(): Promise<void> | void;
 }
 
 export interface StandaloneNwcClient extends OpenReceiveReceiveNwcClient {

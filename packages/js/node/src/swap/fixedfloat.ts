@@ -18,7 +18,7 @@ import {
   type FixedFloatRatesIndex,
 } from "./fixedfloat-rates.ts";
 import {
-  type StoreBackedSwapCache,
+  type TransientSwapCache,
   SWAP_LIMITS_MAX_STALE_SECONDS,
   swapLimitsMetaKey,
 } from "./limits-cache.ts";
@@ -49,11 +49,11 @@ export interface FixedFloatProviderOptions {
   readonly lightningCcy?: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly now?: () => number;
-  /** TTL for the durable `/ccies` currency catalog cache. */
+  /** TTL for the disposable `/ccies` currency catalog cache. */
   readonly cacheSeconds?: number;
   /**
-   * TTL for the durable public XML rates cache (`/rates/fixed.xml`). Defaults to
-   * {@link SWAP_RATES_REFRESH_SECONDS}. Shared globally via openreceive_meta.
+   * TTL for the process-local public XML rates cache (`/rates/fixed.xml`). Defaults to
+   * {@link SWAP_RATES_REFRESH_SECONDS}. Shared only within the current process.
    */
   readonly ratesCacheSeconds?: number;
   readonly requestTimeoutMs?: number;
@@ -165,7 +165,7 @@ class FixedFloatProvider implements SwapProvider {
   private readonly ratesCacheSeconds: number;
   private readonly requestTimeoutMs: number;
   private readonly invoiceExpirySecondsValue: number;
-  private cache: StoreBackedSwapCache | undefined;
+  private cache: TransientSwapCache | undefined;
   private apiRequestLogger: ((entry: SwapProviderApiRequestLog) => void) | undefined;
   private apiResponseLogger: ((entry: SwapProviderApiResponseLog) => void) | undefined;
   private weightBudget:
@@ -238,7 +238,7 @@ class FixedFloatProvider implements SwapProvider {
     }
   }
 
-  attachSwapCache(cache: StoreBackedSwapCache): void {
+  attachSwapCache(cache: TransientSwapCache): void {
     this.cache = cache;
   }
 
@@ -272,7 +272,7 @@ class FixedFloatProvider implements SwapProvider {
     const resolution = await this.resolveCurrencies();
     // /ccies reports only availability and display metadata per currency — it carries
     // no amount limits. Per-pair min/max come from the public XML rates export, cached
-    // globally in openreceive_meta so the payment-method screen never hits /price.
+    // in this process so the payment-method screen never hits /price.
     const rates = await this.resolveRatesIndex();
     return Array.from(resolution.pay_in.entries(), ([payInAsset, currency]) => {
       const pair = rates.pairs[fixedFloatRatesPairKey(currency.code, resolution.lightning.code)];
@@ -299,7 +299,7 @@ class FixedFloatProvider implements SwapProvider {
     readonly payInAsset: SwapPayInAsset;
     readonly invoiceAmountMsats: number;
   }): Promise<SwapQuote> {
-    // Indicative quote from the durable global XML rates cache. `/create` is still the
+    // Indicative quote from the process-local XML rates cache. `/create` is still the
     // binding rate — this keeps concurrent checkouts from each burning a /price weight
     // unit (same pattern as the fiat price feed / NWC settlement sweep gate).
     // Rates refresh failures throw (fail closed) so the service can skip this provider
@@ -540,7 +540,7 @@ class FixedFloatProvider implements SwapProvider {
   private async resolveCurrencies(): Promise<FixedFloatCurrencyResolution> {
     const cache = this.cache;
     if (cache === undefined) {
-      // No durable cache attached (e.g. tests / standalone use): fetch fresh
+      // No transient cache attached (e.g. tests / standalone use): fetch fresh
       // each call. The resolution is never retained in process memory.
       return await this.fetchCurrencyResolution();
     }

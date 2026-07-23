@@ -1,0 +1,5 @@
+{
+  "name": "create checkout requires order_id",
+  "request": { "method": "POST", "path": "/openreceive/checkouts", "body": {} },
+  "expected": { "status": 400, "code": "INVALID_REQUEST" }
+}

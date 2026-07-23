@@ -1,200 +1,104 @@
 # OpenReceive
 
-Ship with a sensible payment default: accept Bitcoin. Your payouts always land
-in the most neutral, lowest-friction mutual currency on the internet — Bitcoin —
-while your customers can start from the balances they already hold: USDT, USDC,
-ETH, SOL, and more.
+OpenReceive is a storage-free receive-checkout toolkit for Nostr Wallet Connect. It creates
+Lightning invoices, verifies settlement, and drives optional swap-provider workflows. Your
+application owns orders and payment records.
 
-OpenReceive adds uncensorable, global, permissionless inbound payments to any
-website or app. Your server creates and verifies one Bitcoin Lightning BOLT11
-invoice through a wallet you control. Checkout can guide a Lightning wallet
-payment directly, or use automated swap services so payers feel like they are
-paying in familiar, centrally issued coins (Tether, USDC, Solana, Ethereum) —
-while the payment settles into Bitcoin, freedom money, on your terms.
+There is no OpenReceive database, Redis instance, migration, table, storage adapter, or
+durable worker state to configure.
 
-OpenReceive is not a bank, exchange, wallet, broker, custodian, or payment
-processor. It does not transmit money or hold customer funds. Your app brings a
-server-side Nostr Wallet Connect (NWC / NIP-47) connection to a wallet you
-control, and OpenReceive helps your backend create and verify receive-only
-invoices.
+## The host contract
 
-The v0.1 reference path is contract-first and server-owned:
+Add two fields to the order model you already have:
 
-- `spec/` is the source of truth for schemas, shared data, and test vectors.
-  `spec/openapi/openreceive-http.v1.yaml` is the shipped route contract.
-- `packages/js/` contains the core contracts, Node NWC service, the shipped HTTP
-  routes (`@openreceive/http`) and thin framework adapters
-  (`@openreceive/express`, `@openreceive/fastify`, `@openreceive/next`), the
-  `openreceive` umbrella (`openreceive/express|fastify|next|react|…`), browser
-  helpers, provider data, testkit, elements, and frontend framework packages.
-- `packages/ruby/` contains the dependency-free `openreceive` core plus the
-  `openreceive-server` (Service + store + Rack app) and `openreceive-rails`
-  (mountable engine) gems — a full second settlement engine.
-- `examples/hello-fruit/server/` contains the Express demo with React, Vue,
-  Svelte, and Angular checkout tabs, plus static HTML + small API and Next.js
-  fullstack Hello Fruit demos.
-- `tools/` holds validation, conformance, package-smoke, docs, and live-wallet
-  smoke helpers.
+```text
+payment_hash  nullable, unique
+paid_at       nullable timestamp
+```
 
-## Design
+For swaps, optionally add one opaque `openreceive_swap_recovery_token` field. The required
+sequence is:
 
-OpenReceive's design hinges on two things:
+1. Your app creates/prices its order.
+2. OpenReceive creates a checkout for that exact amount.
+3. Your app stores `payment_hash` before returning the checkout to the payer.
+4. OpenReceive verifies wallet settlement and calls `onPaid` at least once.
+5. Your app finds the order by `payment_hash` and sets `paid_at` only when it is null.
 
-- **The Lightning invoice.** BOLT11 has been a standard since 2018 and is widely
-  recognized across wallets, exchanges, and services. It gives you final,
-  fast, interoperable settlement — a single receive primitive that every route
-  (wallet → exchange → swap) can converge on.
-- **Separation of concerns.** OpenReceive securely talks to your receiving
-  wallet over NWC and gives your server definitive proof of settlement. That's
-  it. You are free to code (or vibe code!) your checkout, cart, pricing, and
-  fulfillment logic however you want — OpenReceive does not touch your session,
-  your database, or your business rules.
+The order row is also the invoice-creation idempotency guard. Concurrent/retried create calls
+must converge on that row; never display an invoice whose hash the host did not commit.
 
-## Ship The Routes, Keep Your Auth
-
-Instead of hand-writing controllers, mount OpenReceive's routes and keep 100% of
-authentication in your app. OpenReceive never inspects your session — it calls
-your `authorize` and `prepareCheckout` hooks and obeys them.
+## Direct Node API
 
 ```ts
-import express from "express";
-import { createOpenReceive, openReceiveExpress } from "openreceive/express";
-import { guestCheckout } from "@openreceive/http";
+import { createOpenReceive } from "@openreceive/node";
 
-const service = await createOpenReceive({
-  onPaid: async ({ orderId, checkoutId }) => {
-    await fulfill(orderId, checkoutId);
+const openreceive = await createOpenReceive({
+  nwc: process.env.OPENRECEIVE_NWC,
+  tokenKeys: [{ id: "2026-07", key: process.env.OPENRECEIVE_TOKEN_KEY }],
+  onPaid: async ({ paymentHash, paidAt }) => {
+    await orders.markPaidOnce({ paymentHash, paidAt });
   },
 });
 
-const app = express();
-app.use(express.json());
-app.use(
-  openReceiveExpress({
-    service,
-    authorize: guestCheckout(),
-    // Sole price authority — POST /prepare; create never trusts a client price.
-    prepareCheckout: async ({ body }) => {
-      const cart = validateCart(body);
-      return {
-        amount: { currency: "USD", value: cart.totalUsd },
-        summary: cart.summary, // optional guest-resume display payload
-      };
-    },
-  }),
-);
+const existing = order.paymentHash
+  ? await openreceive.recoverCheckout({ orderId: order.id, paymentHash: order.paymentHash })
+  : null;
+
+if (existing) return existing;
+
+const checkout = await openreceive.createCheckout({
+  orderId: order.id,
+  amount: { currency: "USD", value: order.total.toString() },
+});
+
+if (!(await orders.storePaymentHashIfEmpty(order.id, checkout.paymentHash))) {
+  throw new Error("Concurrent checkout won; retry without exposing this invoice.");
+}
+return checkout;
 ```
 
-Rails hosts mount the engine and inherit their own CSRF/auth/current_user:
+`checkPayment({ paymentHash })` verifies a known order. `reconcilePayments` checks unresolved
+host rows, and `watchPayments({ onPaid })` scans overlapping NIP-47 creation-time windows and
+delivers verified settlements at least once.
 
-```ruby
-# config/routes.rb
-mount OpenReceive::Engine => "/openreceive"
+## Mounted HTTP routes
+
+Browser integrations mount `@openreceive/http` through Express, Fastify, Next, or Rails. A
+create request never supplies its own amount; the required host hook resolves it from the
+order:
+
+```ts
+app.use(openReceiveExpress({
+  service: openreceive,
+  authorize: createDefaultAuthorize(),
+  resolveCheckoutAmount: async ({ orderId }) => {
+    const order = await orders.find(orderId);
+    if (!order) throw hostError("Order not found.", 404, "NOT_FOUND");
+    return {
+      amount: { currency: order.currency, value: order.total.toString() },
+      ...(order.paymentHash ? { paymentHash: order.paymentHash } : {}),
+      ...(order.swapRecoveryToken ? { swapRecoveryToken: order.swapRecoveryToken } : {}),
+    };
+  },
+  onCheckoutCreated: async ({ orderId, paymentHash, swapRecoveryToken }) => {
+    await orders.commitPaymentAttempt({ orderId, paymentHash, swapRecoveryToken });
+  },
+}));
 ```
 
-See [Authorization](docs/guides/authorization.md) for auth presets and amount
-authority. The OpenAPI route contract for contributors is
-`docs/internal/shipped-routes.md`.
+`onCheckoutCreated` completes before the payer receives the invoice. A failed host write gets
+a 409 response with no payer instructions.
 
-## Run A Demo
+## Settlement and swaps
 
-The dockerized Hello Fruit demos serve a small store UI where you can add fruit
-stickers to a cart, create an app order, and pay its Lightning invoice. Pick a
-stack:
+Wallet notifications only wake reconciliation. Final settlement requires `settled_at` or a
+wallet transaction state of `settled`; a preimage alone is insufficient.
 
-```sh
-npm run demo node      # Express + React/Vue/Svelte/Angular http://localhost:3000
-npm run demo static    # Static HTML + small API   http://localhost:3001
-npm run demo nextjs    # Next.js fullstack         http://localhost:3002
-```
+Swap recovery is independent of wallet settlement. The payment hash proves that the merchant
+wallet was paid. The opaque recovery token contains authenticated encrypted provider workflow
+credentials so an unresolved swap can be queried after restart. Refund calls refresh provider
+state and require a short-lived confirmation token.
 
-Each command creates a root `openreceive.yml` if missing, validates
-`nwc`, and then runs that demo's Docker Compose stack with local port publishing. The JS
-demo stacks start a local Postgres container, run the OpenReceive invoice
-migration, and record the OpenReceive
-schema version before store queries. The JS local overrides run Vite or Next.js
-development servers inside Docker so browser errors stay readable. The Ruby
-`openreceive-rails` engine is a separate mountable gem (see
-`docs/guides/quickstart-rails.md`), not a bundled demo stack.
-Buying fruit creates a live Lightning invoice through your own wallet, so set a
-valid receive-only NWC code (for example from Rizful or Alby Hub) in
-`openreceive.yml` before starting a demo. Demos need a valid receive-only NWC
-code before startup.
-The JS demos let the browser choose any configured price-feed currency, BTC, or
-sats; `/create_order` builds the order, quotes or converts the total, and
-returns the order and checkout to the browser.
-Optional automated swaps live in the same server-only `openreceive.yml` under
-`swap.providers`. When provider `key` and `secret` are present,
-`createOpenReceive()` loads those providers automatically.
-
-Extra arguments after `--` are forwarded to `docker compose up`, for example to
-run detached: `npm run demo node -- -d`.
-
-## Current Status
-
-This repository has the v0.1 JS reference path in place. The current gate keeps
-schemas, vectors, generated contracts, package artifacts, demos, secret scans,
-release metadata, deployment templates, and docs aligned before broader SDK
-work proceeds.
-
-Run the fast day-to-day gate (validate, lint, typecheck, JS tests, package smoke):
-
-```sh
-npm run test:ci:core
-```
-
-Run the full gate (core + Ruby, demos, release/workflow checks, live NWC):
-
-```sh
-npm run test:ci
-```
-
-Run only the contract and secret checks when iterating quickly:
-
-```sh
-npm test
-```
-
-Validate release-readiness metadata:
-
-```sh
-npm run check:release
-```
-
-Validate public workflow skeletons:
-
-```sh
-npm run check:workflows
-```
-
-Run the live-wallet smoke harness:
-
-```sh
-npm run test:live:nwc
-```
-
-The live smoke command reads `nwc` from `openreceive.yml` and skips
-when it is absent.
-
-## Product Boundary
-
-OpenReceive creates a Lightning invoice for each checkout action and can show
-payer-side route guidance for wallets, exchanges, swap services, Bitcoin, or
-stablecoins that may be able to reach that invoice.
-Provider routes are suggestions, not payment guarantees. The payer chooses and
-uses third-party services outside OpenReceive.
-
-Browser, mobile, and static frontend code never get the receive-only NWC code.
-Live checkout always needs a backend component controlled by your application.
-
-## Docs
-
-Developer docs start at `docs/guides/README.md` (day-one integration) and are
-indexed by `docs/manifest.json`.
-
-- `docs/guides/quickstart-node.md` is the current working backend quickstart.
-- `docs/guides/frontend-checkout.md` covers browser helpers and UI packages.
-- Status refreshes are request-driven; idle sites can opt into `startSweeper`
-  (see `docs/internal/settlement-sweeps.md`).
-- `docs/internal/README.md` is the contributor/operator entry point for
-  architecture, swap runbooks, conformance, release, and ADRs.
+See [the Node quickstart](docs/guides/quickstart-node.md), [Rails quickstart](docs/guides/quickstart-rails.md),
+and the normative [HTTP contract](spec/openapi/openreceive-http.v1.yaml).

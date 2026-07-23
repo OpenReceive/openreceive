@@ -6,24 +6,15 @@
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import {
-  createHostOrderStore,
-  createOrderAccessTokenManager,
-  type HostOrderMetaStore,
-} from "@openreceive/node";
+import type { OpenReceive } from "@openreceive/node";
 import { extractToken } from "@openreceive/http";
 import type { Request as ExpressRequest, Response as ExpressResponse, Express } from "express";
-import { isHelloFruitDemoOrder, type HelloFruitDemoOrder } from "./demo-order.ts";
+import { readHelloFruitHostOrder } from "./openreceive-store.ts";
 
 const PRODUCT_ID_PATTERN = /^[a-z][a-z0-9_-]{0,31}$/;
 
 export interface ResolveHelloFruitDeliveryInput {
-  readonly store: HostOrderMetaStore;
-  /**
-   * Same OpenReceive namespace the HTTP handler used when minting the capability
-   * token. Must match `service.namespace` or verify looks up the wrong meta key.
-   */
-  readonly namespace?: string;
+  readonly verifyCapabilityToken: OpenReceive["verifyCapabilityToken"];
   readonly stickersDir: string;
   readonly orderId: string;
   readonly productId: string;
@@ -58,20 +49,16 @@ export async function resolveHelloFruitDelivery(
     return { ok: false, status: 401, message: "Order access token required." };
   }
 
-  const tokens = createOrderAccessTokenManager(input.store, {
-    ...(input.namespace === undefined ? {} : { namespace: input.namespace }),
-  });
-  const tokenValid = await tokens.verify(orderId, token);
-  if (!tokenValid) {
+  const capability = await input.verifyCapabilityToken(token);
+  if (capability === null || capability.orderId !== orderId) {
     return { ok: false, status: 403, message: "Not authorized to download this order." };
   }
 
-  const hostOrders = createHostOrderStore<HelloFruitDemoOrder>(input.store);
-  const stored = await hostOrders.read(orderId);
-  if (stored === null || !isHelloFruitDemoOrder(stored.summary)) {
+  const stored = readHelloFruitHostOrder(orderId);
+  if (stored === null) {
     return { ok: false, status: 404, message: "Order not found." };
   }
-  if (stored.summary.status !== "paid") {
+  if (stored.paidAt === null) {
     return { ok: false, status: 403, message: "Order is not fulfilled yet." };
   }
 
@@ -122,9 +109,7 @@ export async function helloFruitDeliveryFetchResponse(
 }
 
 export interface MountHelloFruitDeliveryOptions {
-  readonly store: HostOrderMetaStore;
-  /** Must match `service.namespace` used by the mounted OpenReceive router. */
-  readonly namespace?: string;
+  readonly verifyCapabilityToken: OpenReceive["verifyCapabilityToken"];
   readonly stickersDir: string;
 }
 
@@ -153,8 +138,7 @@ async function sendHelloFruitDeliveryExpress(
     headers: expressHeadersToFetch(req),
   });
   const result = await resolveHelloFruitDelivery({
-    store: options.store,
-    ...(options.namespace === undefined ? {} : { namespace: options.namespace }),
+    verifyCapabilityToken: options.verifyCapabilityToken,
     stickersDir: options.stickersDir,
     orderId,
     productId,

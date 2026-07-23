@@ -1,5 +1,5 @@
 import type { SwapPayInAsset } from "./assets.ts";
-import type { StoreBackedSwapCache } from "./limits-cache.ts";
+import type { TransientSwapCache } from "./limits-cache.ts";
 
 export type SwapProviderState =
   | "creating_provider_order"
@@ -75,7 +75,7 @@ export interface SwapProviderAsset {
  * Sourced from the provider's own quote (e.g. FixedFloat `from.usd` / `to.usd`). The
  * swap fee the payer absorbs is `pay_in_fiat` − `payout_fiat` (exchange spread plus
  * network fees, which the provider bakes into the deposit amount). All values are
- * decimal strings so they round-trip through storage unchanged.
+ * decimal strings so hosts can round-trip them exactly when retaining an audit snapshot.
  */
 export interface SwapFee {
   /** Fiat currency the equivalents are expressed in, e.g. "USD". */
@@ -157,29 +157,24 @@ export interface SwapProviderApiRequestLog {
 export interface SwapProvider {
   readonly name: string;
   /**
-   * Attach the durable store-backed cache used for slow-changing provider data
-   * (currency catalog, global rates snapshot). Called once after the service store
-   * is resolved, since providers are constructed before the store exists. Providers
-   * that don't cache remote data may omit this.
+   * Attach a disposable process-local cache for provider catalogs and quotes.
    */
-  attachSwapCache?(cache: StoreBackedSwapCache): void;
+  attachSwapCache?(cache: TransientSwapCache): void;
   /**
    * Attach a sink for outbound provider API requests, mirroring
-   * {@link attachApiResponseLogger}. Called once after the store is resolved. The
+   * {@link attachApiResponseLogger}. The
    * service routes entries through its sanitizing log sink, so secrets in the body
    * are redacted. Providers that make no remote calls may omit this.
    */
   attachApiRequestLogger?(log: (entry: SwapProviderApiRequestLog) => void): void;
   /**
-   * Attach a sink for raw provider API responses. Called once after the store is
-   * resolved, alongside {@link attachSwapCache}. The service routes entries through
+   * Attach a sink for raw provider API responses. The service routes entries through
    * its sanitizing log sink, so nested secrets are redacted. Providers that make no
    * remote calls may omit this.
    */
   attachApiResponseLogger?(log: (entry: SwapProviderApiResponseLog) => void): void;
   /**
-   * Attach a durable shared weight ledger for this provider. Called once after
-   * the service store is resolved (same lifecycle as {@link attachSwapCache}).
+   * Attach a process-local request weight guard for this provider.
    * Providers that do not hit a weight-budgeted API may omit this.
    */
   attachWeightBudget?(budget: {

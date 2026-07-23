@@ -5,147 +5,54 @@ require "openreceive/server/request_handler"
 
 module OpenReceive
   module Server
-    # Framework-agnostic HTTP routes — the Ruby port of the shipped @openreceive/http contract
-    # (spec/openapi/openreceive-http.v1.yaml). Implemented against the bare Rack `call(env)`
-    # contract; it does NOT require the `rack` gem so it can run in any Rack-compatible host.
-    #
-    # RackApp is a THIN Rack adapter: it parses `env` into (method, path, query, headers, raw body,
-    # token), routes to the matching Server::RequestHandler method, and converts the returned
-    # `[status, headers, body]` triple into a Rack response. ALL request -> response logic (tiers,
-    # authorize, token extraction, prepare_checkout, error mapping) lives in Server::RequestHandler,
-    # which the openreceive-rails controllers also delegate to — so the two adapters cannot drift.
-    #
-    # Routes (mounted under `prefix`, default /openreceive):
-    #   POST {prefix}/prepare                      Tier 1  action=checkout.prepare
-    #   POST {prefix}/checkouts                    Tier 1  action=checkout.create
-    #   GET  {prefix}/orders/{order_id}/summary    Tier 1  action=order.summary
-    #   POST {prefix}/orders/{order_id}            Tier 2  action=order.read | swap.*
-    #   GET  {prefix}/checkouts/{checkout_id}      Tier 2  action=checkout.read
-    #   GET  {prefix}/orders/{order_id}/swap-options Tier 2 action=swap.options
-    #   GET  {prefix}/rates                        Tier 1  action=rate.list (public)
-    #   POST {prefix}/admin/sweep                  Tier 3  action=invoice.sweep (FAILS CLOSED)
-    #
-    # Security tiers (default authorize):
-    #   Tier 1 → allow. Tier 2 → allow iff a valid per-order capability token is presented.
-    #   Tier 3 → DENY (host must supply an authorize hook that opts in).
-    #
-    # The host supplies `authorize` and a required `prepare_checkout`. POST /prepare persists the
-    # authoritative amount; create-checkout reads that persist and NEVER trusts a client price.
     class RackApp
-      DEFAULT_PREFIX = "/openreceive"
-
-      # authorize         : ->(context) { boolean }  — context = { action:, request: env, resource:, token:, token_valid: }
-      # prepare_checkout  : REQUIRED ->(ctx) { result } — { "amount" => ..., "order_id"?, "summary"?, "metadata"? } | nil
-      # rate_limit        : ->(context) { allowed_boolean } — returning false yields 429 (optional)
-      # tokens            : Tokens::Manager
-      def initialize(service:, tokens:, prepare_checkout:, authorize: nil, rate_limit: nil, prefix: DEFAULT_PREFIX)
-        @prefix = normalize_prefix(prefix)
+      def initialize(service:, authorize:, resolve_checkout_amount:, on_checkout_created:, rate_limit: nil, prefix: "/openreceive")
+        @prefix = prefix.to_s.chomp("/")
         @handler = RequestHandler.new(
           service: service,
-          tokens: tokens,
           authorize: authorize,
-          prepare_checkout: prepare_checkout,
+          resolve_checkout_amount: resolve_checkout_amount,
+          on_checkout_created: on_checkout_created,
           rate_limit: rate_limit,
           prefix: @prefix
         )
       end
 
       def call(env)
-        request_id = env["HTTP_X_REQUEST_ID"]
-        route = strip_prefix(env["PATH_INFO"].to_s)
-        return not_found(request_id) if route.nil?
-
-        dispatch(env["REQUEST_METHOD"], segments(route), env, request_id)
-      rescue StandardError, NotImplementedError => e
-        # NotImplementedError (scaffolded swaps / live price feeds) is a ScriptError, not a
-        # StandardError, so it must be named explicitly to be mapped instead of crashing the host.
-        rack_response(@handler.error_response(e, request_id))
+        request_id = env["HTTP_X_REQUEST_ID"] || "req_#{SecureRandom.uuid}"
+        path = env["PATH_INFO"].to_s
+        return response(@handler.error_response(NotFoundError.new("Route not found."), request_id)) unless path.start_with?(@prefix)
+        relative = path.delete_prefix(@prefix).sub(%r{/\z}, "")
+        token = RequestHandler.extract_token(env["HTTP_AUTHORIZATION"], env["HTTP_X_OPENRECEIVE_ORDER_TOKEN"], env["HTTP_COOKIE"])
+        raw = read_body(env)
+        triple = case [env["REQUEST_METHOD"], relative]
+                 when ["POST", "/checkouts"] then @handler.create_checkout(raw_body: raw, request: env, token: token, request_id: request_id)
+                 when ["POST", "/payments/check"] then @handler.check_payment(raw_body: raw, request: env, token: token, request_id: request_id)
+                 when ["POST", "/swaps/quote"] then @handler.quote_swap(raw_body: raw, request: env, token: token, request_id: request_id)
+                 when ["POST", "/swaps"] then @handler.create_swap(raw_body: raw, request: env, token: token, request_id: request_id)
+                 when ["POST", "/swaps/status"] then @handler.get_swap(raw_body: raw, request: env, token: token, request_id: request_id)
+                 when ["POST", "/swaps/refund-confirmations"] then @handler.create_refund_confirmation(raw_body: raw, request: env, token: token, request_id: request_id)
+                 when ["POST", "/swaps/refunds"] then @handler.refund_swap(raw_body: raw, request: env, token: token, request_id: request_id)
+                 when ["GET", "/rates"] then @handler.read_rates(query_string: env["QUERY_STRING"], request: env, token: token, request_id: request_id)
+                 else @handler.error_response(NotFoundError.new("Route not found."), request_id)
+                 end
+        response(triple)
+      rescue StandardError => e
+        response(@handler.error_response(e, request_id))
       end
 
       private
 
-      # Route method + path segments to the matching handler call, then wrap the triple for Rack.
-      def dispatch(method, parts, env, request_id)
-        if method == "POST" && parts == %w[prepare]
-          rack_response(@handler.prepare_checkout(
-            raw_body: raw_body(env), request: env, token: token_from(env), request_id: request_id
-          ))
-        elsif method == "POST" && parts == %w[checkouts]
-          rack_response(@handler.create_checkout(
-            raw_body: raw_body(env), request: env, token: token_from(env), request_id: request_id
-          ))
-        elsif method == "GET" && parts.length == 3 && parts[0] == "orders" && parts[2] == "summary"
-          rack_response(@handler.read_order_summary(
-            order_id: parts[1], request: env, token: token_from(env), request_id: request_id
-          ))
-        elsif method == "POST" && parts.length == 2 && parts[0] == "orders"
-          rack_response(@handler.order_action(
-            order_id: parts[1], raw_body: raw_body(env), request: env, token: token_from(env), request_id: request_id
-          ))
-        elsif method == "GET" && parts.length == 2 && parts[0] == "checkouts"
-          rack_response(@handler.read_checkout(
-            checkout_id: parts[1], request: env, token: token_from(env), request_id: request_id
-          ))
-        elsif method == "GET" && parts.length == 3 && parts[0] == "orders" && parts[2] == "swap-options"
-          rack_response(@handler.read_swap_options(
-            order_id: parts[1], request: env, token: token_from(env), request_id: request_id
-          ))
-        elsif method == "GET" && parts == %w[rates]
-          rack_response(@handler.read_rates(
-            query_string: env["QUERY_STRING"], request: env, token: token_from(env), request_id: request_id
-          ))
-        elsif method == "POST" && parts == %w[admin sweep]
-          rack_response(@handler.admin_sweep(request: env, token: token_from(env), request_id: request_id))
-        else
-          not_found(request_id)
-        end
-      end
-
-      # --- env parsing (Rack concern) --------------------------------------------------------------
-
-      def token_from(env)
-        RequestHandler.extract_token(
-          env["HTTP_AUTHORIZATION"], env["HTTP_X_OPENRECEIVE_ORDER_TOKEN"], env["HTTP_COOKIE"]
-        )
-      end
-
-      def raw_body(env)
+      def read_body(env)
         input = env["rack.input"]
-        raw = input.nil? ? "" : input.read
+        value = input.nil? ? "" : input.read
         input.rewind if input.respond_to?(:rewind)
-        raw
+        value
       end
 
-      def normalize_prefix(prefix)
-        value = prefix.to_s
-        value = "/#{value}" unless value.start_with?("/")
-        value = value.chomp("/")
-        value.empty? ? "" : value
-      end
-
-      def strip_prefix(path)
-        return path if @prefix.empty?
-        return "" if path == @prefix
-        return path[@prefix.length..] if path.start_with?("#{@prefix}/")
-
-        nil
-      end
-
-      def segments(route)
-        route.split("/").reject(&:empty?)
-      end
-
-      # --- Rack response plumbing ------------------------------------------------------------------
-
-      # Convert the handler's [status, headers, body-object] triple into a Rack triple by JSON-encoding
-      # the body into the single-element body array Rack expects.
-      def rack_response(triple)
+      def response(triple)
         status, headers, body = triple
         [status, headers, [JSON.generate(body)]]
-      end
-
-      def not_found(request_id)
-        rack_response(@handler.error_response(NotFoundError.new("Route not found."), request_id))
       end
     end
   end

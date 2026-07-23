@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "generated_at": "2026-06-19T00:00:00Z",
   "docs": [
     {
@@ -60,7 +60,7 @@
     },
     {
       "slug": "storage",
-      "title": "Storage",
+      "title": "Host Storage",
       "source_path": "docs/guides/storage.md",
       "category": "operations",
       "audience": "developer",
@@ -156,7 +156,7 @@
     },
     {
       "slug": "deployment-storage",
-      "title": "Deployment Storage",
+      "title": "Deployment State",
       "source_path": "docs/internal/deployment-storage.md",
       "category": "operations",
       "audience": "contributor",
@@ -164,7 +164,7 @@
     },
     {
       "slug": "scope-lock",
-      "title": "v0.1 Release Boundary",
+      "title": "Storage-free Release Boundary",
       "source_path": "docs/internal/scope-lock.md",
       "category": "internal",
       "audience": "contributor",
@@ -228,7 +228,7 @@
     },
     {
       "slug": "adr-0003-invoice-idempotency-storage-invariants",
-      "title": "ADR-0003: Invoice, Idempotency, And Storage Invariants",
+      "title": "ADR-0003: Host-row Invoice Idempotency",
       "source_path": "docs/internal/adr/ADR-0003-invoice-idempotency-storage-invariants.md",
       "category": "adr",
       "audience": "contributor",
@@ -244,7 +244,7 @@
     },
     {
       "slug": "adr-0005-openreceive-owned-kv-storage",
-      "title": "ADR-0005: OpenReceive-Owned KV Storage",
+      "title": "ADR-0005: No OpenReceive-owned Storage",
       "source_path": "docs/internal/adr/ADR-0005-openreceive-owned-kv-storage.md",
       "category": "adr",
       "audience": "contributor",
@@ -252,7 +252,7 @@
     },
     {
       "slug": "adr-0007-settlement-action-delivery",
-      "title": "ADR-0007: Settlement Action Delivery",
+      "title": "ADR-0007: At-least-once Verified Payment Delivery",
       "source_path": "docs/internal/adr/ADR-0007-settlement-action-delivery.md",
       "category": "adr",
       "audience": "contributor",

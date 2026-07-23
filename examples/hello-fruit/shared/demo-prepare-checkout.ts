@@ -1,10 +1,9 @@
 /**
- * Server-only Hello Fruit prepareCheckout hook. Do not import from browser clients.
+ * Server-only Hello Fruit order pricing. Do not import from browser clients.
  */
 
 import { randomUUID } from "node:crypto";
 import type { OpenReceive } from "@openreceive/node";
-import type { PrepareCheckout, PrepareCheckoutResult } from "@openreceive/http";
 import { hostError, OpenReceiveHostError } from "@openreceive/http";
 import {
   createHelloFruitOrderInvoiceDescription,
@@ -51,31 +50,6 @@ export class HelloFruitDemoOrderError extends OpenReceiveHostError {
     });
     this.name = "HelloFruitDemoOrderError";
   }
-}
-
-/**
- * Mount hook for OpenReceive `prepareCheckout`: validate the cart, compute the authoritative
- * total, and return amount + display summary. OpenReceive persists the amount and serves
- * summary via GET /openreceive/orders/:id/summary.
- */
-export function createHelloFruitPrepareCheckout(options: {
-  readonly demoId: string;
-  readonly openreceive: Pick<OpenReceive, "listRates" | "priceCurrencies">;
-  readonly demoName?: string;
-  readonly catalog?: readonly HelloFruitProduct[];
-}): PrepareCheckout {
-  return async ({ body }): Promise<PrepareCheckoutResult | null> => {
-    const input =
-      body !== null && typeof body === "object" && !Array.isArray(body)
-        ? (body as HelloFruitCreateOrderInput)
-        : {};
-    const result = await createHelloFruitCreateOrderResult(input, options);
-    return {
-      orderId: result.order.uuid,
-      amount: result.invoiceRequest.amount,
-      summary: result.order,
-    };
-  };
 }
 
 export async function createHelloFruitCreateOrderResult(

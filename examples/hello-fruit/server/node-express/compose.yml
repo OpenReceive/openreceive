@@ -10,7 +10,3 @@ services:
       - "3000"
     volumes:
       - ../../../../openreceive.yml:/app/examples/hello-fruit/server/node-express/openreceive.yml:ro
-      - openreceive-node-express-openreceive:/app/examples/hello-fruit/server/node-express/.openreceive
-
-volumes:
-  openreceive-node-express-openreceive:

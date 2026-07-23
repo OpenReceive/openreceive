@@ -1,42 +1,10 @@
-# ADR-0005: OpenReceive-Owned KV Storage
+# ADR-0005: No OpenReceive-owned storage
 
-## Status
+Status: Superseded
 
-Accepted for v0.1-v2.
+The former KV/SQLite/Postgres design is retired. OpenReceive accepts no database connection,
+ships no migration, and persists no invoice, meta, cursor, token-hash, or workflow row.
 
-## Context
-
-Framework ORM models make invoice lifecycle logic multiply across adapters and
-make correctness depend on app migrations. OpenReceive needs one durable
-coordination point that works across web processes and replicas.
-
-## Decision
-
-OpenReceive owns its invoice storage through a 9-method KV contract. Apps
-select a transport with `store` and optionally isolate instances
-with `namespace`.
-
-OpenReceive self-initializes supported stores. SQL adapters use OpenReceive
-tables with uniqueness/recovery control columns and an opaque record blob. Apps
-keep business data in app-owned tables and link through metadata or their own
-records.
-
-### Amendment (DATABASE_URL auto-adopt)
-
-When `store` is omitted, Node resolves a Postgres
-`DATABASE_PRIVATE_URL` or `DATABASE_URL` before falling back to `local-sqlite`.
-This does not change ownership of the KV contract or allow framework ORM invoice
-models — it only picks the transport URI. Postgres still requires an explicit
-`openreceive migrate` (schema mode `check` at boot). See
-[Storage](../../guides/storage.md) and
-[Deployment Storage](../deployment-storage.md).
-
-## Consequences
-
-- Framework packages do not ship app ORM invoice models.
-- Store adapters do not implement lifecycle transitions.
-- Unsupported user tables, Prisma-native models, Drizzle-native models,
-  ActiveRecord invoice models, and similar framework-native storage are outside
-  the v0.1 contract.
-- Hosts that already inject `DATABASE_URL` (Heroku, Railway, Render, Neon on
-  Vercel, …) need not duplicate that URI as `store`.
+Wallet facts are recoverable from NWC by payment hash/range scan. Swap provider workflow facts
+are recoverable with a host-carried authenticated encrypted recovery token. Host order and
+fulfillment state stay in the host database.

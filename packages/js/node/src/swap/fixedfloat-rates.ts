@@ -2,8 +2,8 @@
  * FixedFloat public XML rates export — the bulk feed for all pairs.
  *
  * Docs: GET https://ff.io/rates/fixed.xml (and float.xml). No API key, no
- * weight budget. OpenReceive caches the parsed index in openreceive_meta and
- * derives indicative quotes / min-max locally. `/create` remains authoritative.
+ * weight budget. OpenReceive keeps the parsed index in disposable process memory
+ * and derives indicative quotes / min-max locally. `/create` remains authoritative.
  */
 
 import type { SwapRateType } from "./rates-cache.ts";

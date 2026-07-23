@@ -12,9 +12,7 @@ export {
   enterCheckoutResumePath,
   getOrderAccessToken,
   openWallet,
-  requestCheckout,
-  requestOrderSummary,
-  requestPrepareCheckout
+  requestCheckout
 } from "./internal.ts";
 
 export type {
@@ -31,12 +29,7 @@ export type {
   OpenReceiveBrowserLogger,
   OpenReceiveQrOptions as QrOptions,
   OpenWalletOptions,
-  RequestCheckoutAmount,
-  RequestCheckoutOptions,
-  RequestOrderSummaryOptions,
-  RequestOrderSummaryResult,
-  RequestPrepareCheckoutOptions,
-  RequestPrepareCheckoutResult
+  RequestCheckoutOptions
 } from "./internal.ts";
 
 export {

@@ -1,111 +1,76 @@
-# IMPORTAT NOTE
-
-this is a brand-new project, we don't yet have users, it's ok to make breaking api changes, we want to maximize user ease and developer experience..
-
 # OpenReceive Agent Rules
 
-These rules apply to Codex, Claude Code, Copilot coding agents, and human
-contributors working in this repository.
+This is a greenfield project with no compatibility or migration constraint. Optimize for a
+small, honest API and a good developer experience.
 
-## Non-Negotiables
+## Non-negotiables
 
-- Do not expose receive-only NWC codes to browser code, mobile apps, logs, tests,
-  screenshots, docs, source maps, or demo assets.
-- OpenReceive receive-checkout APIs never expose send-payment methods.
-- Notifications are passive hints. Backend status refresh is the settlement authority.
-- Settlement requires `settled_at` or `transaction_state/state == "settled"`.
-  A preimage alone is corroborating proof, not final proof.
-- Use `amount_msats` for millisatoshis in OpenReceive public payloads. Do not
-  use ambiguous `amount` outside raw NIP-47 request/response handling.
-- Use exact integer/decimal money math. Do not use binary floats for fiat math.
-- If changing a schema, update the relevant test vectors in the same change.
-- If adding invoice creation behavior, include idempotency tests.
-- If adding settlement behavior, include duplicate/replay-safe tests.
-- Do not duplicate provider data, supported currencies, status refresh cadence,
-  settlement rules, or demo product data.
+- OpenReceive has no persistence configuration: no database/Redis URLs, migrations, storage
+  adapters, internal payment rows, or durable workflow cursors.
+- The host owns orders and prices. Direct server code passes `{ orderId, amount }`; mounted
+  HTTP handlers resolve the amount from host-owned data and reject payer-supplied amounts.
+- The host stores `payment_hash` before payer instructions are exposed and sets nullable
+  `paid_at` once. Duplicate `onPaid` delivery must be harmless.
+- A retry or concurrent create must be guarded by the host order row. Do not add an
+  OpenReceive idempotency store.
+- Receive-only NWC codes must never reach browser/mobile code, logs, tests, screenshots,
+  docs, source maps, or demo assets. Receive APIs never expose send-payment methods.
+- Notifications are passive hints. Settlement requires `settled_at` or
+  `transaction_state/state == "settled"`; a preimage alone is corroborating evidence.
+- Use `amount_msats` for millisatoshi values in public results and exact integer/decimal money
+  math. Never use binary floats for fiat math.
+- Swap provider credentials exist only inside an authenticated encrypted recovery token.
+  Provider completion is not wallet settlement; refund decisions refresh provider state.
+- Token configuration is a keyring. The first key seals new tokens and retained old keys only
+  open tokens during rotation.
+- Do not duplicate provider data, supported currencies, settlement rules, polling cadence, or
+  demo product data.
+- Schema or route changes update their vectors in the same change. Invoice behavior needs
+  host-row retry/concurrency tests; settlement behavior needs replay-safe tests.
 
-### Shipped routes, tiers, and capability tokens
+## Shipped routes and hooks
 
-- OpenReceive ships the routes (`@openreceive/http` + adapters; `openreceive-rails`
-  engine). The host keeps 100% of authentication. OpenReceive NEVER inspects the host
-  session — it only calls the host `authorize`/`prepareCheckout`/`rateLimit` hooks and obeys
-  their return values (inversion of control).
-- Three tiers: Tier 1 anonymous-capable (checkout.create, rates); Tier 2 capability-token
-  scoped (order/checkout reads, swap actions on your own order); Tier 3 privileged and
-  **fails closed** (invoice.sweep) — with no `authorize` policy, Tier 3 returns 403.
-- POST `/prepare` is the sole price authority. The host `prepareCheckout` /
-  `prepare_checkout` hook is **required** at handler construction; omitting it throws.
-  Client `amount` / `sats` / `usd` on the create body are rejected with 400. Create-checkout
-  reads the amount persisted by prepare (`null`/missing → 404).
-- Capability tokens are per-order, ≥128-bit, URL-safe, returned once as `order_access_token`.
-  Store only the sha256 hash. Token hashing must be identical across ports (verified by
-  `spec/test-vectors/capability-token.json`).
-- The route contract is `spec/openapi/openreceive-http.v1.yaml`. Any change to a route or its
-  shapes must keep the Node adapters and the Rails engine byte-equal (HTTP golden vectors).
+- `@openreceive/http` adapters and the Rails engine ship the route set in
+  `spec/openapi/openreceive-http.v1.yaml`.
+- The host keeps authentication. OpenReceive calls required `authorize`, required
+  `resolveCheckoutAmount` / `resolve_checkout_amount`, optional `rateLimit`, and required
+  `onCheckoutCreated` / `on_checkout_created` hooks.
+- Capability, swap-recovery, and refund-confirmation tokens are stateless authenticated
+  encrypted envelopes. OpenReceive stores no token hash.
+- `onCheckoutCreated` runs before a create response. Failure returns 409 and withholds the
+  invoice or swap instructions.
 
 ## Testing
 
-Prefer the smallest relevant check while iterating. Do not run slow full-suite
-commands after every code change unless the change is broad, risky,
-release-like, or the user explicitly asks for it.
-
-Fast/default checks:
+Use the smallest relevant test while iterating. The default contract/secret check is:
 
 ```sh
 npm test
 ```
 
-Use this for schema/docs/secret-safety/tooling validation, or as a quick repo
-sanity check.
-
-For most JS/TS code changes, run the narrowest relevant test file first, then at
-minimum:
+For JS/TS changes, run a focused test first and then at minimum:
 
 ```sh
 npm run typecheck && npm run test:js
 ```
 
-If the change only touches a small area, it is okay to run a focused test command
-instead of all JS tests while iterating, for example:
-
-```sh
-node --import tsx --test tests/v0.1/node-service.test.mjs
-```
-
-Run the full local gate only when the change has broad blast radius, touches
-release/deployment/package surfaces, changes generated contracts or schemas, or
-the user asks for final full verification:
+For broad route, package, contract, schema, release, or deployment changes, run:
 
 ```sh
 npm run test:ci
 ```
 
-When touching live wallet behavior, also run:
-
-```sh
-npm run test:live:nwc
-```
-
-The live command must skip clearly when `nwc` is not configured in openreceive.yml.
-
-The Ruby port is a second settlement engine that must match the Node engine on the
-shared vectors. Run it with:
+Wallet behavior also requires `npm run test:live:nwc`; it must skip clearly when `nwc` is not
+configured. Ruby is a second settlement engine and must match the shared money, settlement,
+token, and HTTP vectors:
 
 ```sh
 npm run test:ruby
 ```
 
-The shared `spec/test-vectors/*` (including the cross-language
-`idempotency-canonical-json.crosslang.json` and `capability-token.json`) and the HTTP
-golden vectors (`spec/test-vectors/http-golden/*`) are the conformance oracle that keeps
-the two engines from silently diverging on money — run them in BOTH languages when
-touching settlement, money math, idempotency, tokens, or route behavior.
+Before declaring work done, report the exact checks run and any intentional skip.
 
-Before declaring work done, report exactly which checks were run. If you skip
-`npm run test:ci`, say why the narrower checks were sufficient.
+## Private boundary
 
-## Private Boundary
-
-Do not add private openreceive.org app code, private infrastructure inventory,
-host IPs, deployment credentials, analytics code, product landing pages, or
-private business logic to this public repository. Keep those outside the repo.
+Do not add private openreceive.org application code, infrastructure inventory, host IPs,
+deployment credentials, analytics, landing pages, or business logic to this public repo.

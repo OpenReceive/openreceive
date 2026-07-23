@@ -9,11 +9,11 @@
 # present.
 #
 # Layering:
-#   openreceive         — dependency-free core (money, settlement, tokens hashing, NWC parsing)
-#   openreceive-server  — Service, ActiveRecord store, config loader, Tokens::Manager, the shared
+#   openreceive         — dependency-free core (money, settlement, NWC normalization)
+#   openreceive-server  — storage-free Service, token keyring, the shared
 #                         framework-neutral RequestHandler, and the RackApp adapter over it
 #   openreceive-rails   — this gem: Configuration, the Engine, controllers (thin adapters that
-#                         delegate to Server::RequestHandler), generators, and migration templates.
+#                         delegate to Server::RequestHandler), and an initializer generator.
 
 require "openreceive"
 require "openreceive/server"

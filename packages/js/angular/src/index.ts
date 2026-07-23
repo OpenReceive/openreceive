@@ -109,7 +109,7 @@ export interface OpenReceiveAngularThemeToggleBinding {
 
 export interface OpenReceiveAngularCheckoutShellBinding {
   readonly theme: OpenReceiveThemeModel;
-  readonly rootAttributes: OpenReceiveThemeModel["attributes"];
+  readonly rootAttributes: Partial<OpenReceiveThemeModel["attributes"]>;
   readonly checkout: OpenReceiveAngularCheckoutBinding;
   readonly themeToggle: OpenReceiveAngularThemeToggleBinding | null;
 }

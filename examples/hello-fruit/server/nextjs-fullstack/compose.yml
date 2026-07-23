@@ -10,7 +10,3 @@ services:
       - "3002"
     volumes:
       - ../../../../openreceive.yml:/app/examples/hello-fruit/server/nextjs-fullstack/openreceive.yml:ro
-      - openreceive-nextjs-fullstack-openreceive:/app/examples/hello-fruit/server/nextjs-fullstack/.openreceive
-
-volumes:
-  openreceive-nextjs-fullstack-openreceive:

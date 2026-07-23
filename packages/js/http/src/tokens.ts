@@ -1,121 +1,103 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-
-// Capability-token manager (PART 2). This is a self-contained copy of the manager in
-// @openreceive/node (src/tokens.ts): it only needs the store's structural getMeta/casMeta surface
-// and node:crypto, so implementing it here keeps @openreceive/http free of any runtime dependency
-// on @openreceive/node (whose graph pulls in pg/yaml/wallet SDKs). Token hashing is byte-identical
-// to the node manager and is pinned across engines by spec/test-vectors/capability-token.json.
-
-export const ORDER_ACCESS_TOKEN_META_PREFIX = "order_access_token:";
-export const ORDER_ACCESS_TOKEN_BYTES = 32;
-
-export interface OrderAccessTokenMetaRow {
-  readonly value: string;
-  readonly rev: number;
+export interface CapabilityTokenKey {
+  readonly id: string;
+  readonly key: string;
 }
 
-/** Minimal structural view of the meta KV surface a token manager needs. */
-export interface OrderAccessTokenMetaStore {
-  getMeta(
-    key: string,
-  ): OrderAccessTokenMetaRow | undefined | Promise<OrderAccessTokenMetaRow | undefined>;
-  casMeta(
-    key: string,
-    value: string,
-    expectedRev: number | null,
-  ):
-    | { status: "ok" | "conflict"; row: OrderAccessTokenMetaRow }
-    | Promise<{ status: "ok" | "conflict"; row: OrderAccessTokenMetaRow }>;
+export interface CapabilityTokenPayload {
+  readonly version: 1;
+  readonly orderId: string;
+  readonly paymentHash: string;
+  readonly issuedAt: number;
+  readonly expiresAt: number;
 }
 
-export interface OrderAccessTokenMintResult {
-  /** The raw token — present ONLY when this call minted it (first checkout for the order). */
-  readonly token?: string;
-  /** The stored sha256 hash (`sha256:<64hex>`). Always present. */
-  readonly token_hash: string;
-  /** True when this call minted a new token; false when an existing order token was replayed. */
-  readonly created: boolean;
+export interface CapabilityTokenManager {
+  mint(input: { readonly orderId: string; readonly paymentHash: string; readonly expiresAt: number }): Promise<string>;
+  verify(token: string | null | undefined): Promise<CapabilityTokenPayload | null>;
 }
 
-export interface OrderAccessTokenManager {
-  mint(orderId: string): Promise<OrderAccessTokenMintResult>;
-  verify(orderId: string, token: string | null | undefined): Promise<boolean>;
-  metaKey(orderId: string): string;
-}
-
-export interface OrderAccessTokenManagerOptions {
-  readonly namespace?: string;
-  readonly generateToken?: () => string;
-}
-
-/** Hash a raw capability token into the stored form (`sha256:<64hex>`). */
-export function hashOrderAccessToken(token: string): string {
-  return `sha256:${createHash("sha256").update(token, "utf8").digest("hex")}`;
-}
-
-/** Generate a fresh URL-safe capability token with >=128 bits of entropy (default 256). */
-export function generateOrderAccessToken(): string {
-  return randomBytes(ORDER_ACCESS_TOKEN_BYTES).toString("base64url");
-}
-
-/** Build the meta key for an order's stored token hash. */
-export function orderAccessTokenMetaKey(orderId: string, namespace?: string): string {
-  const scope = namespace && namespace !== "default" ? `${namespace}:` : "";
-  return `${ORDER_ACCESS_TOKEN_META_PREFIX}${scope}${orderId}`;
-}
-
-function assertOrderId(orderId: string): void {
-  if (typeof orderId !== "string" || orderId.length === 0) {
-    throw new TypeError("order access token orderId must be a non-empty string");
-  }
-}
-
-function constantTimeEquals(a: string, b: string): boolean {
-  const bufferA = Buffer.from(a, "utf8");
-  const bufferB = Buffer.from(b, "utf8");
-  if (bufferA.length !== bufferB.length) {
-    return false;
-  }
-  return timingSafeEqual(bufferA, bufferB);
-}
-
-/** Create a per-order capability-token manager backed by the store's meta KV. */
-export function createOrderAccessTokenManager(
-  store: OrderAccessTokenMetaStore,
-  options: OrderAccessTokenManagerOptions = {},
-): OrderAccessTokenManager {
-  const generate = options.generateToken ?? generateOrderAccessToken;
-  const metaKey = (orderId: string): string => {
-    assertOrderId(orderId);
-    return orderAccessTokenMetaKey(orderId, options.namespace);
-  };
-
+export function createCapabilityTokenManager(input: {
+  readonly keys: readonly CapabilityTokenKey[];
+  readonly clock?: () => number;
+}): CapabilityTokenManager {
+  if (input.keys.length === 0) throw new TypeError("HTTP capability tokens require a keyring.");
+  const clock = input.clock ?? (() => Math.floor(Date.now() / 1000));
+  const keys = new Map(input.keys.map((key) => [key.id, decodeKey(key.key)] as const));
+  const current = input.keys[0];
   return {
-    metaKey,
-    async mint(orderId: string): Promise<OrderAccessTokenMintResult> {
-      const key = metaKey(orderId);
-      const existing = await store.getMeta(key);
-      if (existing) {
-        return { token_hash: existing.value, created: false };
-      }
-      const token = generate();
-      const tokenHash = hashOrderAccessToken(token);
-      const result = await store.casMeta(key, tokenHash, null);
-      if (result.status === "ok") {
-        return { token, token_hash: tokenHash, created: true };
-      }
-      const winner = await store.getMeta(key);
-      return { token_hash: winner?.value ?? result.row.value, created: false };
+    async mint(value) {
+      const payload: CapabilityTokenPayload = {
+        version: 1,
+        orderId: value.orderId,
+        paymentHash: value.paymentHash,
+        issuedAt: clock(),
+        expiresAt: value.expiresAt,
+      };
+      const encoded = encodeBase64Url(new TextEncoder().encode(JSON.stringify(payload)));
+      const signature = await sign(keys.get(current.id) as Uint8Array, `${current.id}.${encoded}`);
+      return `or_cap_v1.${current.id}.${encoded}.${signature}`;
     },
-    async verify(orderId: string, token: string | null | undefined): Promise<boolean> {
-      if (typeof token !== "string" || token.length === 0) {
-        return false;
+    async verify(token) {
+      if (typeof token !== "string") return null;
+      try {
+        const [prefix, keyId, encoded, signature, extra] = token.split(".");
+        if (extra !== undefined || prefix !== "or_cap_v1") return null;
+        const key = keys.get(keyId);
+        if (key === undefined) return null;
+        const expected = await sign(key, `${keyId}.${encoded}`);
+        if (!constantTimeText(expected, signature)) return null;
+        const payload = JSON.parse(new TextDecoder().decode(decodeBase64Url(encoded))) as CapabilityTokenPayload;
+        if (
+          payload.version !== 1 ||
+          typeof payload.orderId !== "string" ||
+          !/^[0-9a-f]{64}$/.test(payload.paymentHash) ||
+          !Number.isSafeInteger(payload.expiresAt) ||
+          payload.expiresAt <= clock()
+        ) return null;
+        return payload;
+      } catch {
+        return null;
       }
-      const existing = await store.getMeta(metaKey(orderId));
-      if (!existing) {
-        return false;
-      }
-      return constantTimeEquals(hashOrderAccessToken(token), existing.value);
     },
   };
+}
+
+async function sign(keyBytes: Uint8Array, text: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    keyBytes as BufferSource,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  return encodeBase64Url(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(text))));
+}
+
+function decodeKey(value: string): Uint8Array {
+  const bytes = /^[0-9a-fA-F]{64}$/.test(value)
+    ? Uint8Array.from(value.match(/../g) as string[], (byte) => Number.parseInt(byte, 16))
+    : decodeBase64Url(value.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""));
+  if (bytes.length !== 32) throw new TypeError("Capability token keys must decode to 32 bytes.");
+  return bytes;
+}
+
+function constantTimeText(left: string, right: string): boolean {
+  let difference = left.length ^ right.length;
+  const length = Math.max(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    difference |= (left.charCodeAt(index) || 0) ^ (right.charCodeAt(index) || 0);
+  }
+  return difference === 0;
+}
+
+function encodeBase64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function decodeBase64Url(value: string): Uint8Array {
+  const base64 = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
+  const binary = atob(base64);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }

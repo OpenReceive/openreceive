@@ -306,9 +306,9 @@ function App(): React.ReactElement {
         cartQuantity: cartQuantity,
         productIds: cartItems.map((item) => item.fruit.id),
       });
-      // POST /openreceive/prepare validates the cart and persists amount authority.
-      // <Checkout orderId> creates the checkout and restores summary after refresh.
-      const response = await fetch("/openreceive/prepare", {
+      // The host creates its own order first. <Checkout orderId> then asks the mounted
+      // OpenReceive route to mint at the amount resolved from that host row.
+      const response = await fetch("/orders", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

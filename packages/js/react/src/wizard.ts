@@ -161,6 +161,9 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
           order_id: orderId,
           action: "swap_quote",
           pay_in_asset: payInAsset,
+          amount: checkout?.amount_msats === undefined
+            ? undefined
+            : { sats: Math.ceil(checkout.amount_msats / 1_000) },
         });
         const quote = normalizeSwapQuote(body);
         if (quote !== undefined) {
@@ -172,7 +175,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
         return undefined;
       }
     },
-    [props.orderUrl, orderId, fetcher, props.onError],
+    [props.orderUrl, orderId, fetcher, props.onError, checkout?.amount_msats],
   );
   const refundSwap = React.useCallback(
     async (attemptId: string, refundAddress: string, refundNonce: string, confirm: boolean) => {
@@ -1149,8 +1152,9 @@ function swapOptionsForRoute(
 // should still choose (multi-network stablecoins, no swap configured).
 function normalizeSwapQuote(body: unknown): OpenReceiveSwapOptionDisplay | undefined {
   const quote = reactRecord(reactRecord(body).quote ?? body);
-  return typeof quote.pay_in_asset === "string"
-    ? (quote as unknown as OpenReceiveSwapOptionDisplay)
+  const payInAsset = quote.pay_in_asset ?? quote.pay_asset;
+  return typeof payInAsset === "string"
+    ? ({ ...quote, pay_in_asset: payInAsset } as unknown as OpenReceiveSwapOptionDisplay)
     : undefined;
 }
 

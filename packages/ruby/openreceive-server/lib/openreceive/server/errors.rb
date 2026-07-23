@@ -2,9 +2,7 @@
 
 module OpenReceive
   module Server
-    # Server-layer errors. The core gem already ships IdempotencyConflictError (409/CONFLICT),
-    # InvoiceStorageConflictError (409/CONFLICT), InvoiceNotFoundError (404/NOT_FOUND), and
-    # WalletUnavailableError (503/WALLET_UNAVAILABLE). These fill the gaps. Every error carries
+    # Server-layer errors. Every error carries
     # #status and #code so the Rack layer can map to an error.schema.json body directly.
 
     # 400 — the request body/params were malformed or violated a contract rule.
@@ -37,6 +35,16 @@ module OpenReceive
         super(message)
         @status = 404
         @code = "NOT_FOUND"
+      end
+    end
+
+    class ConflictError < StandardError
+      attr_reader :status, :code
+
+      def initialize(message = "Conflict.")
+        super(message)
+        @status = 409
+        @code = "CONFLICT"
       end
     end
   end

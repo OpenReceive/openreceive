@@ -8,7 +8,6 @@ import {
   openReceiveCheckoutLabels,
   orClasses,
   requestCheckout,
-  requestOrderSummary,
   resolveOrderUrlFromPrefix,
   selectCheckoutDisplayInvoice,
   type CheckoutSnapshot,
@@ -67,12 +66,9 @@ export function Checkout(props: CheckoutProps): React.ReactElement {
 }
 
 /**
- * Create-mode wrapper: creates the checkout on mount with `mintLightning: false` so the
- * server locks the amount via a checkout_lock record without calling `makeInvoice`. The
- * Lightning invoice is deferred until the payer selects Bitcoin — at that point the wizard
- * calls `ensureLightning`, which mints (or reuses) the bolt11 in place on the same
- * `CheckoutView` (so wizard selection / providers stay mounted). Altcoin swaps proceed
- * without ever minting a payer Lightning invoice.
+ * Create-mode wrapper: creates the checkout on mount. The server recomputes the amount from
+ * host-owned order data and returns the newly minted invoice only after the host has stored
+ * its payment hash.
  *
  * Always loads the guest summary; syncs the URL only when `syncUrl` is set.
  */
@@ -82,8 +78,6 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
   const resolvedPrefix = props.prefix ?? OPENRECEIVE_DEFAULT_PREFIX;
   const {
     onError,
-    onSummary,
-    onResumeMiss,
     metadata,
     createFetch,
     className,
@@ -102,10 +96,6 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
 
   const onErrorRef = React.useRef(onError);
   onErrorRef.current = onError;
-  const onSummaryRef = React.useRef(onSummary);
-  onSummaryRef.current = onSummary;
-  const onResumeMissRef = React.useRef(onResumeMiss);
-  onResumeMissRef.current = onResumeMiss;
   const metadataRef = React.useRef(metadata);
   metadataRef.current = metadata;
   const createFetchRef = React.useRef(createFetch);
@@ -114,12 +104,8 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
   const createdCheckoutRef = React.useRef(created.checkout);
   createdCheckoutRef.current = created.checkout;
 
-  // Guest resume: always fetch summary for host display redraw; History API URL sync is opt-in.
-  // Runs alongside create; does not block checkout creation.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt retries create+resume together.
+  // The host owns order resume data; OpenReceive only owns optional URL synchronization.
   React.useEffect(() => {
-    let cancelled = false;
-
     if (syncUrl) {
       enterCheckoutResumePath(orderId, {
         pathPrefix: resumePathPrefix,
@@ -127,26 +113,9 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
       });
     }
 
-    void requestOrderSummary({
-      prefix: resolvedPrefix,
-      orderId,
-      ...(createFetchRef.current === undefined ? {} : { fetch: createFetchRef.current }),
-    }).then((result) => {
-      if (cancelled) return;
-      if (result === undefined || !("summary" in result)) {
-        onResumeMissRef.current?.(orderId);
-        return;
-      }
-      onSummaryRef.current?.(result.summary);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [syncUrl, orderId, resolvedPrefix, resumePathPrefix, routeOrderId, attempt]);
+  }, [syncUrl, orderId, resumePathPrefix, routeOrderId]);
 
   // Create on mount and whenever the order id / prefix changes (or a retry is requested).
-  // Uses mintLightning: false to defer the LN mint — the payer sees the method grid first.
   // biome-ignore lint/correctness/useExhaustiveDependencies: attempt is a deliberate retry trigger; metadata/createFetch/onError are read from refs.
   React.useEffect(() => {
     let cancelled = false;
@@ -155,7 +124,6 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
     requestCheckout({
       prefix: resolvedPrefix,
       orderId,
-      mintLightning: false,
       ...(metadataRef.current === undefined ? {} : { metadata: metadataRef.current }),
       ...(createFetchRef.current === undefined ? {} : { fetch: createFetchRef.current }),
     })
@@ -193,7 +161,6 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
       const checkout = await requestCheckout({
         prefix: resolvedPrefix,
         orderId,
-        mintLightning: true,
         ...(createFetchRef.current === undefined ? {} : { fetch: createFetchRef.current }),
       });
       setCreated({ status: "ready", checkout });

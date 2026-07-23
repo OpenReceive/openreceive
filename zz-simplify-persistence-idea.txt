@@ -6,6 +6,56 @@ OpenReceive has no storage configuration whatsoever. No database URL, Redis URL,
 migrations, tables, adapters, or internal persistence.
 
 
+GREENFIELD: NOTHING HERE IS BACKWARD-COMPATIBLE WITH ANYTHING
+============================================================
+
+This is a total greenfield redesign. OpenReceive has no users, no deployed
+integrations, and no data to migrate. There is no backward-compatibility
+constraint of any kind.
+
+That means everything is on the table and should be changed to fit this model,
+not worked around:
+
+  - The current OpenReceive-owned KV store (openreceive_invoices, openreceive_meta),
+    the Postgres/SQLite backends, storage adapters, migrations, and the storage
+    guard are deleted, not deprecated.
+  - The public API is redefined from scratch. getOrCreateCheckout (which requires
+    an amount and persists it) is replaced by the primitives below. The
+    /prepare-persists-the-amount price-authority model is removed (see AMOUNT
+    AUTHORITY).
+  - AGENTS.md, README.md, the docs/, the ADRs (notably ADR-0005 "OpenReceive-owned
+    KV storage", ADR-0003 idempotency invariants, ADR-0007 settlement-action
+    delivery), the OpenAPI route contract, and the Ruby port are all rewritten to
+    describe the storage-free model. Where an existing rule contradicts this
+    document, this document wins and the older rule is rewritten or retired.
+  - The capability-token / order_access_token / tier model is redesigned to be
+    fully stateless-signed (same envelope technique as the swap recovery token) or
+    removed, since there is no store to hold token hashes.
+
+Reviewers should not defend an existing structure on compatibility grounds. The
+only question is whether the storage-free model is correct, not whether it differs
+from what exists.
+
+
+SECRETS ARE NOT STORAGE
+=======================
+
+"No storage" means no database, no Redis, no migrations, no adapters, no rows
+OpenReceive must read back to function. It does NOT mean "no configuration."
+
+OpenReceive still requires:
+
+  - the receive-only NWC connection string, and
+  - one server-side signing/encryption key used to seal and open swap recovery
+    tokens (and any stateless confirmation/capability token).
+
+A single key held in an environment variable is configuration, not persistence.
+It is the same kind of secret every payment integration already holds. Rotation
+uses a small keyring: new tokens are sealed with the current key, old keys are
+retained only for decrypt so that tokens sealed before a rotation still open.
+This keeps in-flight swaps recoverable across a key rotation without any database.
+
+
 CORE IDEA
 =========
 
@@ -39,13 +89,69 @@ This makes the boundary simple:
     The host application manages orders and payment records.
 
 
+AMOUNT AUTHORITY: THE HOST OWNS THE PRICE
+=========================================
+
+Storage-free OpenReceive holds nothing, so it cannot look up an order's price.
+An invoice cannot be minted without an amount. Therefore the host is the price
+authority and passes the amount into checkout creation explicitly:
+
+    const checkout = await openreceive.createCheckout({
+      orderId,
+      amount: { currency: "USD", value: order.priceUsd }
+    });
+
+The host already knows its own price. Making it pass that price is simpler and
+more honest than a server-side prepare step that persists an amount for OpenReceive
+to read back. There is no such step in this model.
+
+Two consequences follow, and both belong to the host:
+
+  - OpenReceive can prove that the invoice it created for `amount` settled. It
+    cannot, by itself, prove "the correct amount for order Y" — only the host knows
+    order Y's price. The host is responsible for ensuring the amount it passes is
+    the amount it means to charge.
+
+  - Underpayment / overpayment / partial settlement judgment for plain Lightning
+    is the host's decision, made by comparing the settled amount in the settlement
+    event details against its own order price.
+
+OpenReceive normalizes fiat to exact millisatoshis, creates the invoice, and
+verifies settlement of THAT invoice. It does not decide what an order should cost.
+
+
+IDEMPOTENCY: THE HOST ORDER ROW IS THE GUARD
+============================================
+
+With no store, OpenReceive has no idempotency table. A naively retried
+createCheckout would mint a brand-new invoice (a new payment_hash) each time, and
+a payer could pay an invoice whose hash the host never stored. The fix does not
+require OpenReceive storage; the host's own per-order row is the idempotency guard.
+
+The contract rule is:
+
+  - createCheckout is conditioned on the order row. If the order already has a
+    non-expired payment_hash and paid_at is still null, the host REUSES that
+    checkout instead of creating a second one.
+  - A fresh invoice is minted only when the order has no live payment_hash.
+  - Callers may pass an idempotency key derived from (orderId, amount) so that
+    concurrent createCheckout calls for the same order collapse to one decision at
+    the host write.
+
+Because the host holds exactly one row per order, that row does the job the old
+idempotency_scope unique index used to do — for free, with no OpenReceive storage.
+This rule is load-bearing, not advisory: without it, retries diverge and payment
+correlation breaks.
+
+
 ORDINARY PAYMENT FLOW
 =====================
 
 Conceptually, checkout creation becomes:
 
     const checkout = await openreceive.createCheckout({
-      orderId
+      orderId,
+      amount
     });
 
     // Application code using its existing database/ORM:
@@ -222,7 +328,7 @@ SMALL PUBLIC PRIMITIVES
 
 The normal storage-free API should remain order/payment oriented:
 
-    createCheckout({ orderId })
+    createCheckout({ orderId, amount })   // host is the price authority
     checkPayment({ paymentHash })
     watchPayments({ onPaid })
 
@@ -437,6 +543,15 @@ Without persistence, strict single-use enforcement is not possible locally.
 Therefore repeated refund submissions must be handled safely against the provider's
 current order state, or the host must persist a one-time refund/fulfillment guard in
 its own order record.
+
+This is acceptable for refunds specifically because FixedFloat is the ledger, not
+OpenReceive. FixedFloat holds authoritative order state and will not refund an
+order that is already refunded, completed, or otherwise ineligible. OpenReceive
+should read the current provider order state and refuse a refund the provider would
+reject, so provider state — not a local nonce — is the primary single-use
+authority. A host that wants belt-and-suspenders protection stores one boolean
+refund/fulfillment guard on its order row; that is the host's choice, not an
+OpenReceive storage requirement.
 
 
 LOSS AND RECOVERY

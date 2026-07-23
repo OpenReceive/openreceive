@@ -1,0 +1,9 @@
+{
+  "name": "payment check validates payment_hash",
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/payments/check",
+    "body": { "payment_hash": "bad" }
+  },
+  "expected": { "status": 400, "code": "INVALID_REQUEST" }
+}

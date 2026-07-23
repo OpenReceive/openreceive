@@ -8,13 +8,9 @@ export const OPENRECEIVE_CONFIG_FILE = "openreceive.yml";
 
 export interface OpenReceiveFileConfig {
   readonly nwc?: string;
-  readonly namespace?: string;
-  readonly storeUri?: string;
   readonly priceCurrencies?: readonly string[];
-  readonly operation?: OpenReceiveFileOperationConfig;
   readonly swap?: OpenReceiveFileSwapConfig;
   readonly logging?: OpenReceiveFileLoggingConfig;
-  readonly sentry?: OpenReceiveFileSentryConfig;
 }
 
 export interface OpenReceiveFileLoggingConfig {
@@ -26,25 +22,8 @@ export interface OpenReceiveFileLoggingConfig {
   readonly level?: string;
 }
 
-export interface OpenReceiveFileSentryConfig {
-  readonly dsn?: string;
-  readonly environment?: string;
-  readonly release?: string;
-}
-
-export interface OpenReceiveFileOperationConfig {
-  readonly actionLeaseTtlSeconds?: number;
-  readonly transactionScanIntervalSeconds?: number;
-  readonly transactionScanPageLimit?: number;
-  readonly transactionScanWindowPaddingSeconds?: number;
-  readonly transactionScanOverlapSeconds?: number;
-  readonly sweepOpenInvoiceCap?: number;
-  readonly transactionScanTimeoutMs?: number;
-}
-
 export interface OpenReceiveFileSwapConfig {
   readonly providers?: readonly SwapProvider[];
-  readonly settlementAttentionSeconds?: number;
 }
 
 export interface ReadOpenReceiveConfigFileOptions {
@@ -79,16 +58,21 @@ export function readOpenReceiveConfigFile(
   }
 
   const root = readRecord(parsed, sourcePath);
+  rejectPersistenceConfig(root, sourcePath);
   return {
     ...readOptionalStringConfig(root, ["nwc"], "nwc"),
-    ...readOptionalStringConfig(root, ["namespace"], "namespace"),
-    ...readOptionalStringConfig(root, ["store"], "storeUri"),
     ...readPriceCurrencies(root, sourcePath),
-    ...readOperationConfig(root, sourcePath),
     ...readSwapConfig(root, sourcePath, options),
     ...readLoggingConfig(root, sourcePath),
-    ...readSentryConfig(root, sourcePath),
   };
+}
+
+function rejectPersistenceConfig(root: Record<string, unknown>, sourcePath: string): void {
+  const removed = ["store", "storage", "database_url", "redis_url", "namespace"];
+  const found = removed.find((key) => root[key] !== undefined);
+  if (found !== undefined) {
+    throw new TypeError(`${sourcePath}.${found} is not supported; OpenReceive has no storage configuration.`);
+  }
 }
 
 function resolveOpenReceiveConfigPath(
@@ -118,65 +102,6 @@ function readPriceCurrencies(
     return { priceCurrencies: value };
   }
   throw new TypeError(`${sourcePath}.price_currencies must be a string array or comma string.`);
-}
-
-function readOperationConfig(
-  root: Record<string, unknown>,
-  sourcePath: string,
-): Pick<OpenReceiveFileConfig, "operation"> {
-  const operation = readOptionalRecord(root.operation, `${sourcePath}.operation`) ?? {};
-  const result: OpenReceiveFileOperationConfig = {
-    ...readOptionalPositiveIntegerConfig(
-      operation,
-      root,
-      ["action_lease_ttl_seconds"],
-      "actionLeaseTtlSeconds",
-      sourcePath,
-    ),
-    ...readOptionalPositiveIntegerConfig(
-      operation,
-      root,
-      ["transaction_scan_interval_seconds"],
-      "transactionScanIntervalSeconds",
-      sourcePath,
-    ),
-    ...readOptionalPositiveIntegerConfig(
-      operation,
-      root,
-      ["transaction_scan_page_limit"],
-      "transactionScanPageLimit",
-      sourcePath,
-    ),
-    ...readOptionalNonNegativeIntegerConfig(
-      operation,
-      root,
-      ["transaction_scan_window_padding_seconds"],
-      "transactionScanWindowPaddingSeconds",
-      sourcePath,
-    ),
-    ...readOptionalNonNegativeIntegerConfig(
-      operation,
-      root,
-      ["transaction_scan_overlap_seconds"],
-      "transactionScanOverlapSeconds",
-      sourcePath,
-    ),
-    ...readOptionalPositiveIntegerConfig(
-      operation,
-      root,
-      ["sweep_open_invoice_cap"],
-      "sweepOpenInvoiceCap",
-      sourcePath,
-    ),
-    ...readOptionalPositiveIntegerConfig(
-      operation,
-      root,
-      ["transaction_scan_timeout_ms"],
-      "transactionScanTimeoutMs",
-      sourcePath,
-    ),
-  };
-  return Object.keys(result).length === 0 ? {} : { operation: result };
 }
 
 function readLoggingConfig(
@@ -212,24 +137,6 @@ function readLoggingConfig(
   return Object.keys(result).length === 0 ? {} : { logging: result };
 }
 
-function readSentryConfig(
-  root: Record<string, unknown>,
-  sourcePath: string,
-): Pick<OpenReceiveFileConfig, "sentry"> {
-  const sentry = readOptionalRecord(root.sentry, `${sourcePath}.sentry`);
-  if (sentry === undefined) return {};
-  const label = `${sourcePath}.sentry`;
-  const dsn = readOptionalString(sentry.dsn, `${label}.dsn`);
-  const environment = readOptionalString(sentry.environment, `${label}.environment`);
-  const release = readOptionalString(sentry.release, `${label}.release`);
-  const result: OpenReceiveFileSentryConfig = {
-    ...(dsn === undefined ? {} : { dsn }),
-    ...(environment === undefined ? {} : { environment }),
-    ...(release === undefined ? {} : { release }),
-  };
-  return Object.keys(result).length === 0 ? {} : { sentry: result };
-}
-
 function readSwapConfig(
   root: Record<string, unknown>,
   sourcePath: string,
@@ -238,14 +145,9 @@ function readSwapConfig(
   const swap = readOptionalRecord(root.swap, `${sourcePath}.swap`);
   if (swap === undefined) return {};
   const providers = readSwapProviders(swap, `${sourcePath}.swap`, options);
-  const settlementAttentionSeconds = readOptionalPositiveInteger(
-    swap.settlement_attention_seconds ?? swap.settlementAttentionSeconds,
-    `${sourcePath}.swap.settlement_attention_seconds`,
-  );
   return {
     swap: {
       ...(providers === undefined ? {} : { providers }),
-      ...(settlementAttentionSeconds === undefined ? {} : { settlementAttentionSeconds }),
     },
   };
 }
@@ -394,46 +296,6 @@ function readOptionalStringConfig<TargetField extends string>(
   return {};
 }
 
-function readOptionalPositiveIntegerConfig<TargetField extends string>(
-  nested: Record<string, unknown>,
-  root: Record<string, unknown>,
-  fields: readonly string[],
-  targetField: TargetField,
-  sourcePath: string,
-): { readonly [key in TargetField]?: number } {
-  return readOptionalIntegerConfig(nested, root, fields, targetField, sourcePath, false);
-}
-
-function readOptionalNonNegativeIntegerConfig<TargetField extends string>(
-  nested: Record<string, unknown>,
-  root: Record<string, unknown>,
-  fields: readonly string[],
-  targetField: TargetField,
-  sourcePath: string,
-): { readonly [key in TargetField]?: number } {
-  return readOptionalIntegerConfig(nested, root, fields, targetField, sourcePath, true);
-}
-
-function readOptionalIntegerConfig<TargetField extends string>(
-  nested: Record<string, unknown>,
-  root: Record<string, unknown>,
-  fields: readonly string[],
-  targetField: TargetField,
-  sourcePath: string,
-  allowZero: boolean,
-): { readonly [key in TargetField]?: number } {
-  for (const field of fields) {
-    const value = nested[field] ?? root[field];
-    const parsed = allowZero
-      ? readOptionalNonNegativeInteger(value, `${sourcePath}.${field}`)
-      : readOptionalPositiveInteger(value, `${sourcePath}.${field}`);
-    if (parsed !== undefined) {
-      return { [targetField]: parsed } as { readonly [key in TargetField]?: number };
-    }
-  }
-  return {};
-}
-
 function readOptionalPositiveIntegerField<TargetField extends string>(
   record: Record<string, unknown>,
   field: string,
@@ -488,15 +350,6 @@ function readOptionalPositiveInteger(value: unknown, label: string): number | un
   if (parsed === undefined) return undefined;
   if (parsed <= 0) {
     throw new TypeError(`${label} must be a positive safe integer.`);
-  }
-  return parsed;
-}
-
-function readOptionalNonNegativeInteger(value: unknown, label: string): number | undefined {
-  const parsed = readOptionalInteger(value, label);
-  if (parsed === undefined) return undefined;
-  if (parsed < 0) {
-    throw new TypeError(`${label} must be a non-negative safe integer.`);
   }
   return parsed;
 }

@@ -34,6 +34,17 @@ module OpenReceive
       OpenReceive.normalize_list_transactions_response(response)
     end
 
+    def lookup_invoice(request)
+      data = stringify_keys(request)
+      response = call_receive_method(
+        :lookup_invoice,
+        :lookupInvoice,
+        data,
+        keyword_params: symbolize_keys(data)
+      )
+      OpenReceive::Nwc.normalize_transaction(response.respond_to?(:fetch) ? response.fetch("result", response) : response)
+    end
+
     def preflight
       return {} unless @client.respond_to?(:get_info) || @client.respond_to?(:getInfo)
 

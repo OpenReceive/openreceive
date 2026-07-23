@@ -57,7 +57,7 @@ export function isServiceErrorShape(error: unknown): error is ServiceErrorShape 
 /**
  * Host-route control-flow error with the same `{ status, body }` shape as
  * {@link OpenReceiveServiceError}. Use for cart/validation failures on app routes
- * (`/prepare`, etc.) so {@link mapHostRouteError} / Express helpers can map them.
+ * (for example the host's `/orders` route) so framework helpers can map them.
  */
 export class OpenReceiveHostError extends Error {
   readonly status: number;
@@ -123,7 +123,10 @@ export function jsonResponse(
       headers.append(name, value);
     }
   }
-  return new Response(JSON.stringify(body), { status, headers });
+  return new Response(
+    JSON.stringify(body, (_key, value) => (typeof value === "bigint" ? Number(value) : value)),
+    { status, headers },
+  );
 }
 
 /**

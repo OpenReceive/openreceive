@@ -1,34 +1,24 @@
-// @openreceive/http — the framework-agnostic HTTP handler at the heart of the route-shipping
-// re-architecture. It exposes rodauth-style routes over a host-provided OpenReceive `service`
-// (which owns the host's DB + wallet) as a single Web-standard Fetch handler. Auth, pricing, and
-// rate limiting stay the host's, injected as hooks. Any runtime with Fetch `Request`/`Response`
-// (Node 20+, Deno, Bun, edge) can mount it; framework adapters wrap this one handler.
-
-// Re-exported host-facing types so adapters can type their glue without also depending on
-// @openreceive/node directly.
 export type {
-  OpenReceive,
   Checkout,
-  CheckoutAmountSource,
-  OrderStatus,
-  GetCheckoutAmount,
-  GetCheckoutAmountContext,
-  GetOrderAmount,
-  GetOrderAmountContext,
-  ResolveOrder,
-  ResolveOrderContext,
+  CreateCheckoutAmount,
+  OpenReceive,
+  PaymentCheck,
+  SwapCheckout,
+  SwapStatus,
 } from "@openreceive/node";
 export {
   createDefaultAuthorize,
-  type OpenReceiveAuthorize,
-  type OpenReceiveAuthorizeAction,
-  type OpenReceiveAuthorizeContext,
-  type OpenReceiveAuthorizeResource,
-  type OpenReceiveRateLimit,
 } from "./authorize.ts";
-export { OpenReceiveHttpError } from "./errors.ts";
+export type {
+  OpenReceiveAuthorize,
+  OpenReceiveAuthorizeAction,
+  OpenReceiveAuthorizeContext,
+  OpenReceiveAuthorizeResource,
+  OpenReceiveRateLimit,
+} from "./authorize.ts";
 export {
   OpenReceiveHostError,
+  OpenReceiveHttpError,
   createRequestId,
   errorResponse,
   hostError,
@@ -38,44 +28,22 @@ export {
 } from "./errors.ts";
 export type { ServiceErrorShape } from "./errors.ts";
 export {
-  type CreateOpenReceiveHttpHandlerOptions,
+  ORDER_TOKEN_COOKIE_NAME,
   createOpenReceiveHttpHandler,
   extractToken,
-  type OpenReceiveHttpHandler,
-  ORDER_TOKEN_COOKIE_NAME,
 } from "./handler.ts";
 export type {
-  PrepareCheckout,
-  PrepareCheckoutContext,
-  PrepareCheckoutResult,
-} from "./prepare-checkout.ts";
-export {
-  type GuestCheckoutOptions,
-  guestCheckout,
-  type WithUserOptions,
-  withUser,
-} from "./presets.ts";
+  CheckoutCreatedHook,
+  CheckoutCreatedInput,
+  CreateOpenReceiveHttpHandlerOptions,
+  OpenReceiveHttpHandler,
+  ResolveCheckoutAmountContext,
+  ResolveCheckoutAmountHook,
+  ResolvedHostCheckout,
+} from "./handler.ts";
+export { createCapabilityTokenManager } from "./tokens.ts";
 export type {
-  HttpCheckout,
-  HttpInvoice,
-  HttpOrder,
-  HttpOrderStatus,
-  HttpPublicSwap,
-  HttpSwapAttempt,
-  HttpSwapOption,
-} from "./serialize.ts";
-export {
-  toHttpCheckout,
-  toHttpInvoice,
-  toHttpOrder,
-  toHttpOrderStatus,
-  toHttpPublicSwap,
-  toHttpSwapAttempt,
-  toHttpSwapOption,
-} from "./serialize.ts";
-export type {
-  OrderAccessTokenManager,
-  OrderAccessTokenManagerOptions,
-  OrderAccessTokenMintResult,
+  CapabilityTokenKey,
+  CapabilityTokenManager,
+  CapabilityTokenPayload,
 } from "./tokens.ts";
-export { createOrderAccessTokenManager } from "./tokens.ts";

@@ -112,7 +112,7 @@ export interface OpenReceiveSvelteThemeToggleBinding {
 
 export interface OpenReceiveSvelteCheckoutShellBinding {
   readonly theme: OpenReceiveThemeModel;
-  readonly rootProps: OpenReceiveThemeModel["attributes"];
+  readonly rootProps: Partial<OpenReceiveThemeModel["attributes"]>;
   readonly checkout: OpenReceiveSvelteCheckoutBinding;
   readonly themeToggle: OpenReceiveSvelteThemeToggleBinding | null;
 }

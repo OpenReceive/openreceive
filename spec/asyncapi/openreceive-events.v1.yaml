@@ -1,126 +1,33 @@
 asyncapi: 3.0.0
 info:
-  title: OpenReceive Invoice Events
-  version: 0.1.0
-  summary: Internal lifecycle event payload names for route-driven reconciliation.
+  title: OpenReceive verified payment events
+  version: 0.2.0
   description: >
-    Events are emitted to server-side hooks and logs as passive hints. They are
-    not an HTTP stream, do not run merchant settlement actions by themselves,
-    and never replace backend status refresh as the settlement authority.
+    The server-side onPaid callback is at-least-once. Notifications are wake-up hints;
+    wallet lookup or transaction scans are always the settlement authority.
 channels:
-  invoiceLifecycleEvents:
-    address: openreceive://invoice-lifecycle
+  verifiedPayments:
+    address: openreceive://verified-payments
     messages:
-      invoiceCreated:
-        $ref: "#/components/messages/invoiceCreated"
-      invoiceVerifying:
-        $ref: "#/components/messages/invoiceVerifying"
-      invoiceSettled:
-        $ref: "#/components/messages/invoiceSettled"
-      invoiceSettlementActionCompleted:
-        $ref: "#/components/messages/invoiceSettlementActionCompleted"
-      invoiceExpired:
-        $ref: "#/components/messages/invoiceExpired"
-      invoiceFailed:
-        $ref: "#/components/messages/invoiceFailed"
-      invoiceCancelled:
-        $ref: "#/components/messages/invoiceCancelled"
+      paymentSettled:
+        $ref: '#/components/messages/paymentSettled'
 operations:
-  observeInvoiceLifecycle:
+  observeVerifiedPayments:
     action: receive
     channel:
-      $ref: "#/channels/invoiceLifecycleEvents"
+      $ref: '#/channels/verifiedPayments'
 components:
   messages:
-    invoiceCreated:
-      name: invoice.created
+    paymentSettled:
+      name: payment.settled
       payload:
-        $ref: "#/components/schemas/InvoiceEventPayload"
-    invoiceVerifying:
-      name: invoice.verifying
-      payload:
-        $ref: "#/components/schemas/InvoiceEventPayload"
-    invoiceSettled:
-      name: invoice.settled
-      payload:
-        allOf:
-          - $ref: "#/components/schemas/InvoiceEventPayload"
-          - type: object
-            required:
-              - settled_at
-    invoiceSettlementActionCompleted:
-      name: invoice.settlement_action_completed
-      payload:
-        allOf:
-          - $ref: "#/components/schemas/InvoiceEventPayload"
-          - type: object
-            required:
-              - settlement_action_state
-              - settlement_action_completed_at
-    invoiceExpired:
-      name: invoice.expired
-      payload:
-        $ref: "#/components/schemas/InvoiceEventPayload"
-    invoiceFailed:
-      name: invoice.failed
-      payload:
-        $ref: "#/components/schemas/InvoiceEventPayload"
-    invoiceCancelled:
-      name: invoice.cancelled
-      payload:
-        $ref: "#/components/schemas/InvoiceEventPayload"
+        $ref: '#/components/schemas/PaidPayment'
   schemas:
-    InvoiceEventPayload:
+    PaidPayment:
       type: object
-      additionalProperties: true
-      required:
-          - invoice_id
-          - type
-          - transaction_state
-          - workflow_state
-          - settlement_action_state
+      additionalProperties: false
+      required: [paymentHash, paidAt]
       properties:
-        invoice_id:
-          type: string
-          pattern: "^or_inv_[a-z0-9_]+$"
-        type:
-          const: incoming
-        transaction_state:
-          type: string
-          enum:
-            - pending
-            - settled
-            - expired
-            - failed
-            - accepted
-        workflow_state:
-          type: string
-          enum:
-            - draft
-            - invoice_created
-            - verifying
-            - settlement_action_pending
-            - settlement_action_completed
-            - expiry_pending_verification
-            - expired_closed
-            - failed_closed
-            - cancelled
-        settlement_action_state:
-          type: string
-          enum:
-            - pending
-            - completed
-            - failed
-        settlement_action_completed_at:
-          type: integer
-          minimum: 0
-        payment_hash:
-          type: string
-          pattern: "^[0-9a-fA-F]{64}$"
-        amount_msats:
-          type: integer
-          minimum: 1000
-          maximum: 9007199254740991
-        settled_at:
-          type: integer
-          minimum: 0
+        paymentHash: { type: string, pattern: '^[0-9a-f]{64}$' }
+        paidAt: { type: integer, minimum: 0 }
+        details: { type: object, additionalProperties: true }

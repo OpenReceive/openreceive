@@ -1,0 +1,5 @@
+{
+  "name": "unknown route",
+  "request": { "method": "GET", "path": "/openreceive/unknown" },
+  "expected": { "status": 404, "code": "NOT_FOUND" }
+}

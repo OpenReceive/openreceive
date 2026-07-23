@@ -1,25 +1,20 @@
 import type {
-  InvoiceStorageRow,
   NwcTransaction,
   OpenReceiveBtcFiatRateMapWithSource,
   OpenReceiveFiatAmount,
-  OpenReceiveInvoiceKvStore,
-  OpenReceivePendingSweepResult,
   OpenReceiveRateQuote,
   OpenReceiveReceiveNwcClient,
   OpenReceiveSourcedPriceProvider,
+  PaidPayment,
+  PaymentCheck,
   SimplePriceFetch,
 } from "@openreceive/core";
-import type { ResolveOpenReceiveStoreOptions } from "../store-uri.ts";
 import type {
-  SwapAttentionReason,
-  SwapAvailabilityReason,
-  SwapFee,
   SwapPayInAsset,
   SwapProvider,
   SwapProviderState,
-  SwapRefundReason,
 } from "../swap/index.ts";
+import type { StatelessTokenManager } from "../tokens.ts";
 
 export type OpenReceiveLogLevel = "debug" | "info" | "warn" | "error";
 
@@ -31,79 +26,50 @@ export interface Event {
 }
 
 export type EventHandler = (event: Event) => void;
-
-export interface LogEntry extends Event {}
-
+export type LogEntry = Event;
 export type Logger = (entry: LogEntry) => void;
 
 export interface LoggingOptions {
-  /** Set false to disable writing log files. Defaults to true. */
   readonly enabled?: boolean;
-  /** Directory the log files are written to. Defaults to "./logs". */
   readonly directory?: string;
-  /** Active log file name. Rotated backups append ".1", ".2", ... Defaults to "openreceive.log". */
   readonly filename?: string;
-  /** Rotate once the active file would exceed this size in megabytes. Defaults to 10. */
   readonly maxFileSizeMb?: number;
-  /** Number of log files to keep (active file plus rotated backups). Defaults to 5. */
   readonly maxFiles?: number;
-  /** Minimum level written to file. Defaults to "debug" (writes every emitted event). */
   readonly level?: OpenReceiveLogLevel;
 }
 
-export interface NodeSettlementActionInput {
-  invoice: InvoiceStorageRow;
-  orderId: string;
-  checkoutId: string;
-  invoiceId: string;
-  paymentHash: string;
-  amountMsats: number;
-  metadata: Record<string, unknown>;
-  source: "status";
-  transaction?: NwcTransaction;
+export interface TokenKey {
+  /** Stable, non-secret identifier included in sealed token headers. */
+  readonly id: string;
+  /** 32-byte master key encoded as base64url, base64, or 64 hexadecimal characters. */
+  readonly key: string;
 }
-
-export type NodeSettlementActionHook = (
-  input: NodeSettlementActionInput,
-) => Promise<void> | void;
 
 export interface NodeOptions {
-  client: OpenReceiveReceiveNwcClient;
-  store?: OpenReceiveInvoiceKvStore;
-  namespace?: string;
-  onPaid?: NodeSettlementActionHook;
-  priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
-  priceCurrencies?: readonly string[];
-  swap?: SwapOptions;
-  onEvent?: EventHandler;
-  logger?: Logger;
-  logging?: LoggingOptions;
-  clock?: () => number;
-  actionLeaseTtlSeconds?: number;
-  transactionScanIntervalSeconds?: number;
-  transactionScanPageLimit?: number;
-  transactionScanWindowPaddingSeconds?: number;
-  transactionScanOverlapSeconds?: number;
-  sweepOpenInvoiceCap?: number;
-  transactionScanTimeoutMs?: number;
-  waitUntil?: (promise: Promise<unknown>) => void;
+  readonly client: OpenReceiveReceiveNwcClient;
+  readonly onPaid?: NodeSettlementActionHook;
+  readonly priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
+  readonly priceCurrencies?: readonly string[];
+  readonly swap?: SwapOptions;
+  readonly tokenKeys?: readonly TokenKey[];
+  readonly onEvent?: EventHandler;
+  readonly logger?: Logger;
+  readonly logging?: LoggingOptions;
+  readonly clock?: () => number;
+  readonly waitUntil?: (promise: Promise<unknown>) => void;
 }
 
-export interface CreateOpenReceiveOptions
-  extends Omit<NodeOptions, "client" | "onPaid" | "store"> {
-  client?: OpenReceiveReceiveNwcClient;
-  nwc?: string;
-  store?: OpenReceiveInvoiceKvStore;
-  storeUri?: string;
-  schemaMode?: ResolveOpenReceiveStoreOptions["schemaMode"];
-  namespace?: string;
-  configPath?: string | false;
-  cwd?: string;
-  onPaid?: NodeSettlementActionHook;
-  loadSqlite?: ResolveOpenReceiveStoreOptions["loadSqlite"];
-  loadPostgres?: ResolveOpenReceiveStoreOptions["loadPostgres"];
-  priceFetch?: SimplePriceFetch;
+export interface CreateOpenReceiveOptions extends Omit<NodeOptions, "client"> {
+  readonly client?: OpenReceiveReceiveNwcClient;
+  readonly nwc?: string;
+  readonly configPath?: string | false;
+  readonly cwd?: string;
+  readonly priceFetch?: SimplePriceFetch;
 }
+
+export type CreateCheckoutAmount =
+  | { readonly sats: number | string; readonly currency?: never; readonly value?: never }
+  | { readonly currency: string; readonly value: string; readonly sats?: never };
 
 export interface CreateCheckoutRequest {
   readonly orderId: string;
@@ -111,99 +77,89 @@ export interface CreateCheckoutRequest {
   readonly memo?: string;
   readonly descriptionHash?: string;
   readonly metadata?: Record<string, unknown>;
-  /**
-   * When false, lock the checkout amount without minting a payer-facing Lightning invoice.
-   * Altcoin swaps can then start against the locked amount; Bitcoin selection calls create again
-   * with `mintLightning: true` (default) to mint or reuse the payable bolt11.
-   */
-  readonly mintLightning?: boolean;
+  /** Host-generated correlation only. OpenReceive never persists or deduplicates it. */
+  readonly idempotencyKey?: string;
+  /** Used for a longer-lived shadow invoice when creating a swap. */
+  readonly expirySeconds?: number;
 }
 
-export type GetOrCreateCheckoutRequest = CreateCheckoutRequest;
-
-/**
- * Trusted create-checkout amount. Exactly one shape:
- * - `{ sats }` — integer sats (number or decimal-free string)
- * - `{ currency, value }` — fiat ISO code, or `BTC` / `SAT` / `SATS`
- */
-export type CreateCheckoutAmount =
-  | { readonly sats: number | string; readonly currency?: never; readonly value?: never }
-  | {
-      readonly currency: string;
-      readonly value: string;
-      readonly sats?: never;
-    };
-
-export interface GetOrderRequest {
+export interface Checkout {
   readonly orderId: string;
+  readonly paymentHash: string;
+  readonly bolt11: string;
+  readonly amountMsats: number;
+  readonly createdAt: number;
+  readonly expiresAt: number;
+  readonly fiatQuote: OpenReceiveRateQuote | null;
 }
 
-export interface GetCheckoutRequest {
-  readonly checkoutId: string;
+export interface CheckPaymentRequest {
+  readonly paymentHash: string;
+  readonly from?: number;
+  readonly until?: number;
 }
+
+export interface RecoverCheckoutRequest {
+  readonly orderId: string;
+  readonly paymentHash: string;
+  /** Known provider expiry when reconstructing a swap shadow invoice. */
+  readonly expiresAt?: number;
+}
+
+export interface ReconcilePaymentsRequest {
+  readonly paymentHashes: readonly string[];
+  readonly from?: number;
+  readonly until?: number;
+}
+
+export interface WatchPaymentsRequest {
+  readonly onPaid?: NodeSettlementActionHook;
+  readonly from?: number;
+  readonly pollIntervalMs?: number;
+  readonly signal?: AbortSignal;
+}
+
+export interface PaymentWatcher {
+  stop(): void;
+  readonly done: Promise<void>;
+}
+
+export type NodeSettlementActionInput = PaidPayment;
+export type NodeSettlementActionHook = (
+  input: NodeSettlementActionInput,
+) => Promise<void> | void;
 
 export interface SwapOptions {
   readonly providers?: readonly SwapProvider[];
-  readonly settlementAttentionSeconds?: number;
-}
-
-export interface SwapOptionsRequest {
-  readonly orderId: string;
 }
 
 export interface SwapQuoteRequest {
-  readonly orderId: string;
+  readonly amount: CreateCheckoutAmount;
   readonly payInAsset: SwapPayInAsset | string;
 }
 
-export interface SwapStartRequest {
-  readonly orderId: string;
+export interface CreateSwapRequest extends CreateCheckoutRequest {
   readonly payInAsset: SwapPayInAsset | string;
 }
 
-export interface SwapRefundRequest {
-  readonly attemptId: string;
+export interface GetSwapRequest {
+  readonly recoveryToken: string;
+}
+
+export interface CreateSwapRefundConfirmationRequest extends GetSwapRequest {
   readonly refundAddress: string;
-  readonly refundNonce: string;
-  readonly confirm?: boolean;
+  readonly ttlSeconds?: number;
 }
 
-/**
- * Operator-driven provider status refresh for a single swap attempt. Used when
- * automatic polling has stopped (e.g. `attention` with `provider_reported_emergency`)
- * so a FixedFloat dashboard action can be reflected without unbounded auto-polls.
- */
-export interface SwapRefreshRequest {
-  readonly attemptId: string;
+export interface SwapRefundRequest extends GetSwapRequest {
+  readonly refundAddress: string;
+  readonly confirmationToken: string;
 }
-
-export interface SwapOption {
-  readonly payInAsset: SwapPayInAsset;
-  readonly label: string;
-  readonly networkLabel: string;
-  readonly provider: string;
-  readonly available: boolean;
-  readonly unavailableReason?: SwapAvailabilityReason;
-  readonly unavailableMessage?: string;
-  readonly payAmount?: string;
-  readonly minimumPayAmount?: string;
-  readonly maximumPayAmount?: string;
-  /** Invoice-side (Lightning receive) limits in msats, for rendering a fiat figure. */
-  readonly minimumInvoiceAmountMsats?: number;
-  readonly maximumInvoiceAmountMsats?: number;
-}
-
-export interface SwapOptionsResponse {
-  readonly enabled: boolean;
-  readonly options: readonly SwapOption[];
-}
-
-export type SwapQuoteResponse = SwapOption;
 
 export interface PublicSwap {
-  readonly attemptId: string;
+  readonly paymentHash: string;
+  readonly orderId: string;
   readonly provider: string;
-  readonly providerOrderId?: string;
   readonly payInAsset: SwapPayInAsset;
   readonly depositAddress: string;
   readonly depositMemo?: string;
@@ -212,150 +168,73 @@ export interface PublicSwap {
   readonly providerExpiresAt: number;
   readonly depositTxId?: string;
   readonly payoutTxId?: string;
-  readonly refundAddress?: string;
-  readonly refundNonce?: string;
-  /**
-   * Unix seconds when `refundNonce` expires. Present whenever `refundNonce` is.
-   * Show a countdown and re-fetch status before it lapses; a confirm submitted after
-   * this time is rejected. The staged refund address is retained across nonce rotation.
-   */
-  readonly refundNonceExpiresAt?: number;
   readonly refundTxId?: string;
-  readonly attention?: boolean;
-  /** Why this attempt needs review, when `attention` is true. See automated-swaps.md. */
-  readonly attentionReason?: SwapAttentionReason;
-  /**
-   * Why a refund is needed (`underpaid` / `late_deposit` / `underpaid_and_late`),
-   * when the attempt is on the refund path.
-   */
-  readonly refundReason?: SwapRefundReason;
-  /** Amount received on the deposit tx, when the provider reports it. */
-  readonly depositReceivedAmount?: string;
-  /** Expected refund amount excluding network fees, when the provider reports it. */
+  readonly refundReason?: string;
   readonly refundAmount?: string;
-  /**
-   * Provider reported a repeated deposit on the same order (`emergency.repeat`).
-   * Extra funds may sit at the provider — reconcile manually.
-   */
-  readonly emergencyRepeat?: boolean;
-  /** Fiat equivalents that explain the swap fee the payer absorbs, when the provider reports them. */
-  readonly fee?: SwapFee;
+  readonly attention?: boolean;
 }
 
-export interface Invoice {
-  readonly invoiceId: string;
-  readonly type: "incoming";
-  readonly status: "pending" | "settled" | "expired" | "failed";
-  readonly transactionState: string;
-  readonly workflowState: string;
-  readonly bolt11: string;
-  readonly paymentHash: string;
-  readonly amountMsats: number;
-  readonly orderId: string;
-  readonly createdAt: number;
+export interface SwapCheckout extends PublicSwap {
+  readonly checkout: Checkout;
+  readonly swapRecoveryToken: string;
+}
+
+export interface SwapStatus extends PublicSwap {
+  readonly swapRecoveryToken: string;
+}
+
+export interface SwapRefundConfirmation {
+  readonly confirmationToken: string;
   readonly expiresAt: number;
-  readonly settledAt?: number;
-  readonly settlementActionCompletedAt?: number;
-  readonly refreshedFromInvoiceId?: string;
-  readonly fiatQuote: OpenReceiveRateQuote | null;
-  readonly settlementActionState: string;
-  readonly rail: "lightning" | "swap" | "checkout_lock";
-  readonly swap?: PublicSwap;
-}
-
-/**
- * The result of starting or refunding an automated swap. The fields the payer needs —
- * deposit address, exact amount, asset, provider state, refund nonce — are top-level and
- * guaranteed present, instead of buried under an optional `.swap` on an invoice-shaped
- * type. The backing shadow Lightning invoice is available as `shadowInvoice`.
- */
-export interface SwapAttempt extends PublicSwap {
-  readonly orderId: string;
-  readonly shadowInvoice: Invoice;
-}
-
-export interface Checkout {
-  readonly checkoutId: string;
-  readonly orderId: string;
-  readonly status: "open" | "superseded" | "paid" | "expired";
-  readonly amountMsats: number;
-  readonly fiat?: {
-    readonly currency: string;
-    readonly value: string;
-  };
-  readonly active?: Invoice;
-  readonly invoices: readonly Invoice[];
-  readonly paidAt?: number;
-  readonly createdAt: number;
-}
-
-export interface Order {
-  readonly orderId: string;
-  readonly status: "pending" | "paid" | "expired";
-  readonly paid: boolean;
-  readonly paidAt?: number;
-  readonly displayCheckout?: Checkout;
-  readonly paidCheckout?: Checkout;
-  readonly activeCheckout?: Checkout;
-  readonly checkouts: readonly Checkout[];
-  readonly walletScanPerformed: boolean;
-  readonly transactionsChecked: number;
-}
-
-/**
- * An order plus its available automated-swap pay-in options. Built by the HTTP
- * order-status route (and available for hosts that compose the same shape).
- * `swapPayOptions` holds only crypto swap methods — Lightning is always available
- * on the order's checkout invoice and is not listed here. When swaps are not
- * configured, `swapsEnabled` is false and `swapPayOptions` is empty.
- */
-export interface OrderStatus extends Order {
-  readonly swapsEnabled: boolean;
-  readonly swapPayOptions: readonly SwapOption[];
-}
-
-export interface OpenReceive {
-  readonly store: OpenReceiveInvoiceKvStore;
-  readonly namespace: string;
-  readonly priceCurrencies: readonly string[];
-  getOrCreateCheckout(input: GetOrCreateCheckoutRequest): Promise<Checkout>;
-  getOrder(input: GetOrderRequest): Promise<Order>;
-  getCheckout(input: GetCheckoutRequest): Promise<Checkout>;
-  sweepPendingInvoices(): Promise<OpenReceivePendingSweepResult>;
-  swapOptions(input: SwapOptionsRequest): Promise<SwapOptionsResponse>;
-  swapQuote(input: SwapQuoteRequest): Promise<SwapQuoteResponse>;
-  startSwap(input: SwapStartRequest): Promise<SwapAttempt>;
-  refundSwap(input: SwapRefundRequest): Promise<SwapAttempt>;
-  refreshSwap(input: SwapRefreshRequest): Promise<SwapAttempt>;
-  listRates(
-    input?: ListRatesRequest,
-  ): Promise<OpenReceiveBtcFiatRateMapWithSource["rates"]>;
-  quoteRates(input: { readonly fiat: OpenReceiveFiatAmount }): Promise<OpenReceiveRateQuote>;
-  close(): Promise<void>;
 }
 
 export interface ListRatesRequest {
   readonly currencies?: readonly string[];
 }
 
-export interface OrderScanMeta {
-  readonly walletScanPerformed: boolean;
-  readonly transactionsChecked: number;
+export interface OpenReceive {
+  readonly priceCurrencies: readonly string[];
+  createCheckout(input: CreateCheckoutRequest): Promise<Checkout>;
+  /** Reconstruct a still-live checkout from wallet data for host-row retry reuse. */
+  recoverCheckout(input: RecoverCheckoutRequest): Promise<Checkout | null>;
+  checkPayment(input: CheckPaymentRequest): Promise<PaymentCheck>;
+  reconcilePayments(input: ReconcilePaymentsRequest): Promise<readonly PaymentCheck[]>;
+  watchPayments(input: WatchPaymentsRequest): PaymentWatcher;
+  mintCapabilityToken(input: {
+    readonly orderId: string;
+    readonly paymentHash: string;
+    readonly expiresAt: number;
+  }): Promise<string>;
+  verifyCapabilityToken(token: string): Promise<{
+    readonly orderId: string;
+    readonly paymentHash: string;
+    readonly expiresAt: number;
+  } | null>;
+  quoteSwap(input: SwapQuoteRequest): Promise<unknown>;
+  createSwap(input: CreateSwapRequest): Promise<SwapCheckout>;
+  getSwap(input: GetSwapRequest): Promise<SwapStatus>;
+  createSwapRefundConfirmation(
+    input: CreateSwapRefundConfirmationRequest,
+  ): Promise<SwapRefundConfirmation>;
+  refundSwap(input: SwapRefundRequest): Promise<SwapStatus>;
+  listRates(input?: ListRatesRequest): Promise<OpenReceiveBtcFiatRateMapWithSource["rates"]>;
+  quoteRates(input: { readonly fiat: OpenReceiveFiatAmount }): Promise<OpenReceiveRateQuote>;
+  close(): Promise<void>;
 }
 
 export interface OpenReceiveServiceContext {
   readonly options: NodeOptions;
-  readonly store: OpenReceiveInvoiceKvStore;
   readonly clock: () => number;
   readonly priceProviders: readonly OpenReceiveSourcedPriceProvider[];
   readonly priceCurrencies: readonly string[];
   readonly swapProviders: readonly SwapProvider[];
+  readonly tokenManager: StatelessTokenManager;
 }
 
 export interface ResolvedCreateAmount {
-  amount_msats: number;
-  amount_source: "amount" | "fiat";
-  fiat_quote: OpenReceiveRateQuote | null;
+  readonly amount_msats: number;
+  readonly amount_source: "amount" | "fiat";
+  readonly fiat_quote: OpenReceiveRateQuote | null;
 }
 
 export interface NormalizedCreateCheckoutRequest {
@@ -364,5 +243,8 @@ export interface NormalizedCreateCheckoutRequest {
   readonly memo?: string;
   readonly description_hash?: string;
   readonly metadata?: Record<string, unknown>;
-  readonly mint_lightning: boolean;
+  readonly idempotency_key?: string;
+  readonly expiry_seconds?: number;
 }
+
+export type { NwcTransaction };
