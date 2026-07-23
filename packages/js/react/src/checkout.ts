@@ -37,8 +37,8 @@ export type Checkout = CheckoutSnapshot;
  * - Create mode (`orderId` prop, no `checkout`): the component owns the whole lifecycle — on
  *   mount it creates the checkout against `${prefix}/checkouts` (prefix defaults to
  *   `/openreceive`), then hands the resulting snapshot to the same rendering path with
- *   `orderUrl` defaulted to `${prefix}/orders/${orderId}`. The per-order capability token is
- *   captured and attached to every poll/swap automatically.
+ *   `orderUrl` defaulted to the mounted payment-check route. Every poll/swap sends `order_id`
+ *   and is authorized by the host.
  * - Create mode always fetches `GET {prefix}/orders/{orderId}/summary` (`onSummary`).
  *   Opt into `/checkout/:orderId` History API sync with `syncUrl` (skipped when
  *   `routeOrderId` is set — e.g. Next.js already owns the route).

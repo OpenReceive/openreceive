@@ -34,17 +34,6 @@ export {
 } from "./service.ts";
 export type * from "./service/types.ts";
 export {
-  createStatelessTokenManager,
-  parseTokenKeyring,
-  InvalidOpenReceiveTokenError,
-} from "./tokens.ts";
-export type {
-  StatelessTokenManager,
-  StatelessTokenManagerOptions,
-  StatelessTokenPayload,
-  StatelessTokenPurpose,
-} from "./tokens.ts";
-export {
   fixedFloatCompatibleSwapProvider,
   fixedFloatProvider,
   isOpenReceiveSwapTerminalState,

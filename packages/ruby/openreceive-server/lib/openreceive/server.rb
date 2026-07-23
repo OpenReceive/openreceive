@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# OpenReceive::Server — storage-free receive checkout service, sealed tokens,
+# OpenReceive::Server — storage-free receive checkout service,
 # config loader, and framework-agnostic HTTP (Rack) routes.
 #
 # This gem builds on the dependency-free core gem (`openreceive`) and reuses its exact-money,
@@ -13,7 +13,6 @@ require "openreceive"
 
 require "openreceive/server/version"
 require "openreceive/server/errors"
-require "openreceive/server/tokens"
 require "openreceive/server/service"
 require "openreceive/server/config"
 require "openreceive/server/request_handler"

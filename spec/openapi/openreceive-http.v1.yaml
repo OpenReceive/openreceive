@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OpenReceive storage-free HTTP API
-  version: 0.2.0
+  version: 0.3.0
   description: >
     Mounted receive-checkout routes. OpenReceive owns no payment persistence. The host
     resolves every checkout amount and stores payment_hash before a payer response is sent.
@@ -14,7 +14,7 @@ paths:
       summary: Mint an invoice using the host-resolved order price.
       description: >
         The request cannot supply an amount. The mounted handler calls the required
-        resolveCheckoutAmount host hook, mints an invoice, calls onCheckoutCreated, and
+        resolveCheckout host hook, mints an invoice, calls onCheckoutCreated, and
         returns payer instructions only after that hook persists payment_hash.
       requestBody:
         required: true
@@ -35,9 +35,7 @@ paths:
   /payments/check:
     post:
       operationId: checkPayment
-      summary: Verify one payment hash against the receive wallet.
-      security:
-        - paymentCapability: []
+      summary: Verify the host order's payment hash against the receive wallet.
       requestBody:
         required: true
         content:
@@ -92,37 +90,16 @@ paths:
   /swaps/status:
     post:
       operationId: getSwap
-      summary: Refresh provider state using the encrypted recovery capability.
+      summary: Refresh provider state using server-only swap data loaded by the host.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SwapRecoveryRequest'
+              $ref: '#/components/schemas/OrderRequest'
       responses:
         '200':
           description: Provider-derived swap state.
-          content:
-            application/json:
-              schema: { type: object, additionalProperties: true }
-  /swaps/refund-confirmations:
-    post:
-      operationId: createSwapRefundConfirmation
-      summary: Bind a short-lived confirmation to a recovery token and refund address.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              allOf:
-                - $ref: '#/components/schemas/SwapRecoveryRequest'
-                - type: object
-                  required: [refund_address]
-                  properties:
-                    refund_address: { type: string, minLength: 1 }
-      responses:
-        '201':
-          description: Short-lived confirmation token.
           content:
             application/json:
               schema: { type: object, additionalProperties: true }
@@ -135,13 +112,12 @@ paths:
         content:
           application/json:
             schema:
-              allOf:
-                - $ref: '#/components/schemas/SwapRecoveryRequest'
-                - type: object
-                  required: [refund_address, confirmation_token]
-                  properties:
-                    refund_address: { type: string, minLength: 1 }
-                    confirmation_token: { type: string, minLength: 1 }
+              type: object
+              additionalProperties: false
+              required: [order_id, refund_address]
+              properties:
+                order_id: { type: string, minLength: 1, maxLength: 200 }
+                refund_address: { type: string, minLength: 1 }
       responses:
         '200':
           description: Provider-derived refund state.
@@ -162,11 +138,6 @@ paths:
             application/json:
               schema: { type: object, additionalProperties: true }
 components:
-  securitySchemes:
-    paymentCapability:
-      type: http
-      scheme: bearer
-      description: Opaque authenticated token bound to order_id and payment_hash.
   responses:
     Error:
       description: OpenReceive error.
@@ -218,16 +189,15 @@ components:
     CreateCheckoutResponse:
       type: object
       additionalProperties: false
-      required: [checkout, order_access_token]
+      required: [checkout]
       properties:
         checkout: { $ref: '#/components/schemas/Checkout' }
-        order_access_token: { type: string, pattern: '^or_cap_v1\.' }
     PaymentCheckRequest:
       type: object
       additionalProperties: false
-      required: [payment_hash]
+      required: [order_id]
       properties:
-        payment_hash: { type: string, pattern: '^[0-9a-fA-F]{64}$' }
+        order_id: { type: string, minLength: 1, maxLength: 200 }
     PaymentStatus:
       type: string
       enum: [pending, settled, expired, failed, not_found]
@@ -243,9 +213,9 @@ components:
     SwapQuoteRequest:
       type: object
       additionalProperties: false
-      required: [amount, pay_in_asset]
+      required: [order_id, pay_in_asset]
       properties:
-        amount: { $ref: '#/components/schemas/Amount' }
+        order_id: { type: string, minLength: 1, maxLength: 200 }
         pay_in_asset: { type: string, minLength: 1 }
     CreateSwapRequest:
       type: object
@@ -259,16 +229,15 @@ components:
     CreateSwapResponse:
       type: object
       additionalProperties: false
-      required: [swap, order_access_token]
+      required: [swap]
       properties:
         swap: { type: object, additionalProperties: true }
-        order_access_token: { type: string, pattern: '^or_cap_v1\.' }
-    SwapRecoveryRequest:
+    OrderRequest:
       type: object
-      additionalProperties: true
-      required: [swap_recovery_token]
+      additionalProperties: false
+      required: [order_id]
       properties:
-        swap_recovery_token: { type: string, pattern: '^or_swap_v1\.' }
+        order_id: { type: string, minLength: 1, maxLength: 200 }
     Error:
       type: object
       additionalProperties: false

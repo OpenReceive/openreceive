@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require "digest"
 require "openreceive"
 require "openreceive/server/errors"
 
@@ -12,9 +11,8 @@ module OpenReceive
 
       attr_reader :price_currencies
 
-      def initialize(nwc_client:, tokens:, price_provider: nil, swap_providers: [], price_currencies: ["USD"], clock: -> { Time.now.to_i })
+      def initialize(nwc_client:, price_provider: nil, swap_providers: [], price_currencies: ["USD"], clock: -> { Time.now.to_i })
         @nwc = nwc_client
-        @tokens = tokens
         @price_provider = price_provider
         @swap_providers = Array(swap_providers)
         @price_currencies = Array(price_currencies || ["USD"]).map { |value| value.to_s.upcase }
@@ -116,18 +114,6 @@ module OpenReceive
         end
       end
 
-      def mint_capability_token(order_id:, payment_hash:, expires_at:)
-        @tokens.seal("cap", "orderId" => order_id, "paymentHash" => payment_hash, "expiresAt" => expires_at)
-      end
-
-      def verify_capability_token(token)
-        payload = @tokens.open("cap", token)
-        return nil unless payload["orderId"].is_a?(String) && /\A[0-9a-f]{64}\z/.match?(payload["paymentHash"].to_s)
-        payload
-      rescue Tokens::InvalidToken
-        nil
-      end
-
       def quote_swap(input)
         data = stringify(input)
         amount_msats, = resolve_amount(data.fetch("amount"))
@@ -150,62 +136,40 @@ module OpenReceive
         if Integer(order.fetch("expires_at")) > checkout.fetch("expires_at")
           raise ValidationError, "swap provider order outlives its shadow Lightning invoice"
         end
-        recovery = @tokens.seal("swap", {
-          "provider" => provider_name(provider),
-          "providerOrder" => order.reject { |key, _| key == "raw" },
-          "paymentHash" => checkout.fetch("payment_hash"),
-          "orderId" => checkout.fetch("order_id")
-        })
+        swap_data = {
+          "version" => 1,
+          "provider_order" => order.reject { |key, _| key == "raw" }
+        }
         public_swap(order, checkout.fetch("payment_hash"), checkout.fetch("order_id")).merge(
           "checkout" => checkout,
-          "swap_recovery_token" => recovery
+          "swap_data" => swap_data
         )
       end
 
-      def get_swap(recovery_token:)
-        recovery = @tokens.open("swap", recovery_token)
-        provider = provider_by_name(recovery.fetch("provider"))
-        current = stringify(call_provider(provider, :get_status, recovery.fetch("providerOrder")))
-        assert_provider_identity(recovery.fetch("provider"), recovery.fetch("providerOrder").fetch("provider_order_id"), current)
-        public_swap(current, recovery.fetch("paymentHash"), recovery.fetch("orderId")).merge(
-          "swap_recovery_token" => recovery_token
-        )
-      rescue Tokens::InvalidToken, KeyError => e
+      def get_swap(order_id:, payment_hash:, swap_data:)
+        recovery = normalize_swap_data(swap_data)
+        provider_name = recovery.fetch("provider_order").fetch("provider")
+        provider = provider_by_name(provider_name)
+        current = stringify(call_provider(provider, :get_status, recovery.fetch("provider_order")))
+        assert_provider_identity(provider_name, recovery.fetch("provider_order").fetch("provider_order_id"), current)
+        public_swap(current, send(:payment_hash, payment_hash), required_string(order_id, "order_id"))
+      rescue KeyError => e
         raise ValidationError, e.message
       end
 
-      def create_swap_refund_confirmation(recovery_token:, refund_address:, ttl_seconds: 600)
-        recovery = @tokens.open("swap", recovery_token)
-        expires_at = @clock.call + Integer(ttl_seconds)
-        token = @tokens.seal("confirm", {
-          "recoveryDigest" => Digest::SHA256.hexdigest(recovery_token),
-          "paymentHash" => recovery.fetch("paymentHash"),
-          "providerOrderId" => recovery.fetch("providerOrder").fetch("provider_order_id"),
-          "refundAddress" => required_string(refund_address, "refund_address"),
-          "expiresAt" => expires_at
-        })
-        { "confirmation_token" => token, "expires_at" => expires_at }
-      rescue Tokens::InvalidToken, KeyError => e
-        raise ValidationError, e.message
-      end
-
-      def refund_swap(recovery_token:, refund_address:, confirmation_token:)
-        recovery = @tokens.open("swap", recovery_token)
-        confirmation = @tokens.open("confirm", confirmation_token)
+      def refund_swap(order_id:, payment_hash:, swap_data:, refund_address:)
+        recovery = normalize_swap_data(swap_data)
+        hash = send(:payment_hash, payment_hash)
+        host_order_id = required_string(order_id, "order_id")
         address = required_string(refund_address, "refund_address")
-        unless confirmation["recoveryDigest"] == Digest::SHA256.hexdigest(recovery_token) &&
-               confirmation["paymentHash"] == recovery["paymentHash"] &&
-               confirmation["providerOrderId"] == recovery.fetch("providerOrder").fetch("provider_order_id") &&
-               confirmation["refundAddress"] == address
-          raise ValidationError, "refund confirmation does not match"
-        end
-        provider = provider_by_name(recovery.fetch("provider"))
-        current = stringify(call_provider(provider, :get_status, recovery.fetch("providerOrder")))
-        assert_provider_identity(recovery.fetch("provider"), recovery.fetch("providerOrder").fetch("provider_order_id"), current)
+        provider_name = recovery.fetch("provider_order").fetch("provider")
+        provider = provider_by_name(provider_name)
+        current = stringify(call_provider(provider, :get_status, recovery.fetch("provider_order")))
+        assert_provider_identity(provider_name, recovery.fetch("provider_order").fetch("provider_order_id"), current)
         raise ValidationError, "swap is not refund eligible" unless current["state"] == "refund_required"
         call_provider(provider, :request_refund, current, address)
-        get_swap(recovery_token: recovery_token)
-      rescue Tokens::InvalidToken, KeyError => e
+        get_swap(order_id: host_order_id, payment_hash: hash, swap_data: recovery)
+      rescue KeyError => e
         raise ValidationError, e.message
       end
 
@@ -216,6 +180,16 @@ module OpenReceive
       end
 
       private
+
+      def normalize_swap_data(value)
+        data = stringify(value)
+        unless data["version"] == 1 && data["provider_order"].is_a?(Hash) &&
+               !data.dig("provider_order", "provider").to_s.empty? &&
+               !data.dig("provider_order", "provider_order_id").to_s.empty?
+          raise ValidationError, "swap_data is invalid"
+        end
+        data
+      end
 
       def resolve_amount(input)
         amount = stringify(input)

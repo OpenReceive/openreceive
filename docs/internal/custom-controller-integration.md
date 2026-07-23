@@ -13,8 +13,7 @@ OpenReceive service methods do not authenticate callers and never read a host se
 | `checkPayment({ paymentHash })` | Verify one payment against wallet authority. |
 | `reconcilePayments({ paymentHashes })` | Verify the host's unresolved hashes. |
 | `watchPayments({ onPaid })` | Scan and deliver verified settlements at least once. |
-| `quoteSwap`, `createSwap`, `getSwap` | Create and recover stateless provider workflows. |
-| `createSwapRefundConfirmation`, `refundSwap` | Run the two-step refund flow. |
+| `quoteSwap`, `createSwap`, `getSwap`, `refundSwap` | Create, inspect, and refund host-persisted provider workflows. |
 | `listRates`, `quoteRates` | Resolve exact fiat quotes. |
 
 There is no order read, checkout history, migration, sweep cursor, or OpenReceive persistence API.
@@ -80,17 +79,20 @@ lookup or scanning remains settlement authority.
 
 ## Custom swap routes
 
-The host price is still authoritative. `createSwap` returns a payment hash, an opaque recovery
-token, and deposit instructions. Store the hash and token atomically before returning any deposit
-address or amount. Subsequent status calls take only the stored recovery token:
+The host price is still authoritative. `createSwap` returns a payment hash, server-only
+`swapData`, and public deposit instructions. Store the hash and data atomically before returning
+any deposit address or amount. Subsequent status calls use the host-loaded data:
 
 ```ts
-const current = await openreceive.getSwap({ recoveryToken: order.swap_recovery_token });
+const current = await openreceive.getSwap({
+  orderId: order.id,
+  paymentHash: order.payment_hash,
+  swapData: order.swap_data,
+});
 ```
 
-Refunds first mint a short-lived confirmation bound to the recovery token and refund address,
-then call `refundSwap`. That final call refreshes the provider ledger before acting. Do not log or
-decode recovery/confirmation tokens.
+`refundSwap({ orderId, paymentHash, swapData, refundAddress })` refreshes the provider ledger before acting. Keep
+`swap_data` server-only and exclude it from logs and serializers.
 
 For normative HTTP shapes, use the
 [OpenAPI contract](../../spec/openapi/openreceive-http.v1.yaml) and

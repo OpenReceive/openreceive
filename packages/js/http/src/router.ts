@@ -6,7 +6,6 @@ export type MatchedRoute =
   | { readonly kind: "swap.quote" }
   | { readonly kind: "swap.create" }
   | { readonly kind: "swap.read" }
-  | { readonly kind: "swap.refund.confirm" }
   | { readonly kind: "swap.refund" }
   | { readonly kind: "rates" };
 
@@ -26,7 +25,6 @@ export function matchRoute(prefix: string, method: string, pathname: string): Ma
     "POST /swaps/quote": { kind: "swap.quote" },
     "POST /swaps": { kind: "swap.create" },
     "POST /swaps/status": { kind: "swap.read" },
-    "POST /swaps/refund-confirmations": { kind: "swap.refund.confirm" },
     "POST /swaps/refunds": { kind: "swap.refund" },
     "GET /rates": { kind: "rates" },
   };

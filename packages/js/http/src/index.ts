@@ -6,9 +6,6 @@ export type {
   SwapCheckout,
   SwapStatus,
 } from "@openreceive/node";
-export {
-  createDefaultAuthorize,
-} from "./authorize.ts";
 export type {
   OpenReceiveAuthorize,
   OpenReceiveAuthorizeAction,
@@ -28,22 +25,14 @@ export {
 } from "./errors.ts";
 export type { ServiceErrorShape } from "./errors.ts";
 export {
-  ORDER_TOKEN_COOKIE_NAME,
   createOpenReceiveHttpHandler,
-  extractToken,
 } from "./handler.ts";
 export type {
   CheckoutCreatedHook,
   CheckoutCreatedInput,
   CreateOpenReceiveHttpHandlerOptions,
   OpenReceiveHttpHandler,
-  ResolveCheckoutAmountContext,
-  ResolveCheckoutAmountHook,
+  ResolveCheckoutContext,
+  ResolveCheckoutHook,
   ResolvedHostCheckout,
 } from "./handler.ts";
-export { createCapabilityTokenManager } from "./tokens.ts";
-export type {
-  CapabilityTokenKey,
-  CapabilityTokenManager,
-  CapabilityTokenPayload,
-} from "./tokens.ts";

@@ -3,7 +3,7 @@
  * OpenReceive state. A real app replaces this module with its normal ORM.
  */
 
-import type { Checkout, CreateCheckoutAmount } from "@openreceive/node";
+import type { Checkout, CreateCheckoutAmount, SwapData } from "@openreceive/node";
 import type { HelloFruitDemoOrder } from "./demo-order.ts";
 
 export interface HelloFruitStoredOrder {
@@ -11,7 +11,7 @@ export interface HelloFruitStoredOrder {
   readonly amount: CreateCheckoutAmount;
   readonly paymentHash: string | null;
   readonly paidAt: number | null;
-  readonly swapRecoveryToken: string | null;
+  readonly swapData: SwapData | null;
 }
 
 const orders = new Map<string, HelloFruitStoredOrder>();
@@ -25,7 +25,7 @@ export function createHelloFruitHostOrder(
     amount,
     paymentHash: null,
     paidAt: null,
-    swapRecoveryToken: null,
+    swapData: null,
   };
   orders.set(summary.uuid, stored);
   return stored;
@@ -38,7 +38,7 @@ export function readHelloFruitHostOrder(orderId: string): HelloFruitStoredOrder 
 export function resolveHelloFruitHostCheckout(orderId: string): {
   readonly amount: CreateCheckoutAmount;
   readonly paymentHash?: string;
-  readonly swapRecoveryToken?: string;
+  readonly swapData?: SwapData;
 } | null {
   const current = orders.get(orderId);
   if (current === undefined) return null;
@@ -50,7 +50,7 @@ export function resolveHelloFruitHostCheckout(orderId: string): {
     return {
       amount: current.amount,
       paymentHash: current.paymentHash,
-      ...(current.swapRecoveryToken === null ? {} : { swapRecoveryToken: current.swapRecoveryToken }),
+      ...(current.swapData === null ? {} : { swapData: current.swapData }),
     };
   }
   return { amount: current.amount };
@@ -61,7 +61,7 @@ export function commitHelloFruitCheckout(input: {
   readonly orderId: string;
   readonly paymentHash: string;
   readonly checkout: Checkout;
-  readonly swapRecoveryToken?: string;
+  readonly swapData?: SwapData;
 }): void {
   const current = orders.get(input.orderId);
   if (current === undefined) throw new Error("Host order not found.");
@@ -71,7 +71,7 @@ export function commitHelloFruitCheckout(input: {
   orders.set(input.orderId, {
     ...current,
     paymentHash: input.paymentHash,
-    swapRecoveryToken: input.swapRecoveryToken ?? current.swapRecoveryToken,
+    swapData: input.swapData ?? current.swapData,
   });
 }
 

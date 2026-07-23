@@ -1,7 +1,6 @@
 /// <reference path="../qrcode.d.ts" />
 
 import * as defaultQrEncoder from "qrcode";
-import { orderAccessTokenHeaders, rememberOrderAccessToken } from "./order-token.ts";
 import {
   type CheckoutController,
   type CheckoutControllerOptions,
@@ -31,7 +30,6 @@ import {
   type OpenReceiveBrowserLogEntry,
   type OpenReceiveBrowserLogger,
   type OpenReceiveBrowserLogLevel,
-  type OpenReceiveCheckoutPaymentMethod,
   type OpenReceiveCheckoutSession,
   type OpenReceiveQrEncoder,
   type OpenReceiveQrOptions,
@@ -950,17 +948,6 @@ export async function requestCheckout(options: RequestCheckoutOptions): Promise<
     assertOpenReceiveDisplayInvoice(responseInvoice.invoice);
   }
 
-  // The mounted create route returns a one-time per-order capability token alongside the
-  // checkout. Remember it keyed by the order so status polls and swap actions attach it
-  // automatically — the developer never touches the token. The snapshot's order_id is the
-  // server's authority; fall back to the requested orderId if it were ever missing. The
-  // token is NOT returned to the caller (the return type stays CheckoutSnapshot) so it can
-  // never be logged through the snapshot.
-  const accessToken = optionalString(asRecord(body).order_access_token);
-  if (accessToken !== undefined) {
-    rememberOrderAccessToken(optionalString(snapshot.order_id) ?? request.orderId, accessToken);
-  }
-
   return snapshot;
 }
 
@@ -978,22 +965,14 @@ export function createOpenReceiveStatusFetcher(
     }
 
     const headers = options.headers === undefined ? {} : options.headers;
-    const paymentHash = options.snapshot.active?.payment_hash;
-    if (paymentHash === undefined) {
-      throw new Error("OpenReceive status refresh requires payment_hash.");
-    }
     const response = await fetcher(options.orderUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        // Auto-attach the per-order capability token so every status poll carries it with
-        // no caller change. Placed before the caller's headers so an explicit Authorization
-        // still wins; omitted entirely when no token is stored for this order.
-        ...orderAccessTokenHeaders(order_id),
         ...headers,
       },
       body: JSON.stringify({
-        payment_hash: paymentHash,
+        order_id,
       }),
     });
     const body = await response.json();
@@ -1041,19 +1020,10 @@ function resolveCheckoutUrl(
     : url;
 }
 
-function resolveOrderUrl(orderUrl: string, orderId: string): string {
-  if (orderUrl.includes("{orderId}")) {
-    return orderUrl.replaceAll("{orderId}", encodeURIComponent(orderId));
-  }
-  return orderUrl.includes("{order_id}")
-    ? orderUrl.replaceAll("{order_id}", encodeURIComponent(orderId))
-    : orderUrl;
-}
-
 function checkoutSnapshotFromResponseBody(body: unknown): CheckoutSnapshot {
   const record = asRecord(body);
-  // The mounted create route nests the snapshot under `checkout` (alongside
-  // `order_access_token`); direct callers post the snapshot at the top level. Accept both,
+  // The mounted create route nests the snapshot under `checkout`; direct callers post the
+  // snapshot at the top level. Accept both,
   // then fall back to the shared status-body shapes (display_checkout, etc.).
   const wrapped = asRecord(record.checkout);
   if (
@@ -1103,16 +1073,6 @@ function storageFreeCheckoutSnapshot(checkout: Record<string, unknown>): Checkou
   };
 }
 
-function checkoutSnapshotFromStatusBody(body: unknown): CheckoutSnapshot | null {
-  const record = asRecord(body);
-  const snapshot = extractCheckoutSnapshotFromStatusBody(record);
-  if (snapshot === null) return null;
-  // Payable swap assets ride on the order status itself (swap_pay_options), so the
-  // element lists methods without a second call.
-  const paymentMethods = normalizePaymentMethods(record.swap_pay_options);
-  return paymentMethods === undefined ? snapshot : { ...snapshot, payment_methods: paymentMethods };
-}
-
 function extractCheckoutSnapshotFromStatusBody(
   record: Record<string, unknown>,
 ): CheckoutSnapshot | null {
@@ -1143,59 +1103,6 @@ function extractCheckoutSnapshotFromStatusBody(
   }
 
   return null;
-}
-
-function normalizePaymentMethods(
-  value: unknown,
-): readonly OpenReceiveCheckoutPaymentMethod[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  return value
-    .map(normalizePaymentMethod)
-    .filter((method): method is OpenReceiveCheckoutPaymentMethod => method !== undefined);
-}
-
-function normalizePaymentMethod(input: unknown): OpenReceiveCheckoutPaymentMethod | undefined {
-  const record = asRecord(input);
-  const payInAsset = optionalString(record.pay_in_asset);
-  const label = optionalString(record.label);
-  const networkLabel = optionalString(record.network_label);
-  const provider = optionalString(record.provider);
-  if (
-    payInAsset === undefined ||
-    label === undefined ||
-    networkLabel === undefined ||
-    provider === undefined
-  ) {
-    return undefined;
-  }
-  return {
-    pay_in_asset: payInAsset,
-    label,
-    network_label: networkLabel,
-    provider,
-    available: record.available === true,
-    ...(optionalString(record.unavailable_reason) === undefined
-      ? {}
-      : { unavailable_reason: optionalString(record.unavailable_reason) }),
-    ...(optionalString(record.unavailable_message) === undefined
-      ? {}
-      : { unavailable_message: optionalString(record.unavailable_message) }),
-    ...(optionalString(record.pay_amount) === undefined
-      ? {}
-      : { pay_amount: optionalString(record.pay_amount) }),
-    ...(optionalString(record.minimum_pay_amount) === undefined
-      ? {}
-      : { minimum_pay_amount: optionalString(record.minimum_pay_amount) }),
-    ...(optionalString(record.maximum_pay_amount) === undefined
-      ? {}
-      : { maximum_pay_amount: optionalString(record.maximum_pay_amount) }),
-    ...(optionalSafeInteger(record.minimum_invoice_amount_msats) === undefined
-      ? {}
-      : { minimum_invoice_amount_msats: optionalSafeInteger(record.minimum_invoice_amount_msats) }),
-    ...(optionalSafeInteger(record.maximum_invoice_amount_msats) === undefined
-      ? {}
-      : { maximum_invoice_amount_msats: optionalSafeInteger(record.maximum_invoice_amount_msats) }),
-  };
 }
 
 function normalizeCheckoutSnapshot(input: unknown): CheckoutSnapshot {
@@ -1879,8 +1786,8 @@ export function createCheckoutController(options: CheckoutControllerOptions): Ch
 /**
  * One-call create-mode entry: given `{ prefix?, orderId, ...controllerOptions }`, create the
  * checkout against the mounted router (`${prefix}/checkouts`) and return the resulting snapshot
- * plus a ready-to-start controller wired to `${prefix}/payments/check`. The stateless
- * capability token is captured by `requestCheckout` and rides every later status poll.
+ * plus a ready-to-start controller wired to `${prefix}/payments/check`. Later requests send
+ * `order_id`; the host applies its normal authorization and resolves the stored payment hash.
  * The returned controller is created but not started; call `controller.start()`.
  *
  * This is the framework-agnostic primitive the React `<Checkout orderId>` and
@@ -2327,8 +2234,7 @@ function emitBrowserLog(
  * looks like a secret (`secret`/`token`/`authorization`/`cookie`/`nwc`), at any nesting
  * depth, is replaced with `[REDACTED]`; string values are additionally scrubbed of NWC URIs
  * and `token=`/`secret=` query params. Exported so callers that log a request (including its
- * headers) can guarantee the per-order capability token in `Authorization: Bearer <token>`
- * never leaks.
+ * headers) can guarantee ordinary application secrets never leak.
  */
 export function sanitizeBrowserLogEntry(
   entry: OpenReceiveBrowserLogEntry,

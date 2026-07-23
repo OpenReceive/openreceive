@@ -110,7 +110,7 @@ confirms, so the provider never sees it.
 |---|----------|------------|--------|
 | 21 | Confirm without stage | `refund_swap` with `confirm: true` and no prior stage | Rejected |
 | 22 | Refund while not in refund state | Call refund during `awaiting_deposit` | Rejected |
-| 23 | Lost capability token | Drop `order_access_token`, try refund | 401/403 |
+| 23 | Browser supplies provider state | Add `swap_data` to a refund request | Ignored/rejected; host resolves by `order_id` |
 | 24 | Cross-attempt refund | Use attempt A's nonce against attempt B | Rejected |
 
 ---

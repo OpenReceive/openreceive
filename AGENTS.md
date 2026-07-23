@@ -19,10 +19,9 @@ small, honest API and a good developer experience.
   `transaction_state/state == "settled"`; a preimage alone is corroborating evidence.
 - Use `amount_msats` for millisatoshi values in public results and exact integer/decimal money
   math. Never use binary floats for fiat math.
-- Swap provider credentials exist only inside an authenticated encrypted recovery token.
-  Provider completion is not wallet settlement; refund decisions refresh provider state.
-- Token configuration is a keyring. The first key seals new tokens and retained old keys only
-  open tokens during rotation.
+- Swap provider credentials live only in the host's optional server-only `swap_data` field.
+  They never appear in browser responses or logs. Provider completion is not wallet
+  settlement; refund decisions refresh provider state.
 - Do not duplicate provider data, supported currencies, settlement rules, polling cadence, or
   demo product data.
 - Schema or route changes update their vectors in the same change. Invoice behavior needs
@@ -33,10 +32,10 @@ small, honest API and a good developer experience.
 - `@openreceive/http` adapters and the Rails engine ship the route set in
   `spec/openapi/openreceive-http.v1.yaml`.
 - The host keeps authentication. OpenReceive calls required `authorize`, required
-  `resolveCheckoutAmount` / `resolve_checkout_amount`, optional `rateLimit`, and required
+  `resolveCheckout` / `resolve_checkout`, optional `rateLimit`, and required
   `onCheckoutCreated` / `on_checkout_created` hooks.
-- Capability, swap-recovery, and refund-confirmation tokens are stateless authenticated
-  encrypted envelopes. OpenReceive stores no token hash.
+- OpenReceive mints no authentication, recovery, or refund tokens. The host authorizes every
+  request and resolves `payment_hash` / `swap_data` from its own order.
 - `onCheckoutCreated` runs before a create response. Failure returns 409 and withholds the
   invoice or swap instructions.
 
@@ -62,7 +61,7 @@ npm run test:ci
 
 Wallet behavior also requires `npm run test:live:nwc`; it must skip clearly when `nwc` is not
 configured. Ruby is a second settlement engine and must match the shared money, settlement,
-token, and HTTP vectors:
+swap-data, and HTTP vectors:
 
 ```sh
 npm run test:ruby

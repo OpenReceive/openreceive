@@ -9,7 +9,7 @@ import {
 // @openreceive/http; this only bridges Fastify's request/reply to Web Request/Response.
 //
 //   await fastify.register(openReceiveFastify, {
-//     service, authorize, resolveCheckoutAmount, onCheckoutCreated, prefix: "/openreceive"
+//     service, authorize, resolveCheckout, onCheckoutCreated, prefix: "/openreceive"
 //   });
 //
 // Register `prefix` scopes the plugin's catch-all route to that path AND is passed to the handler

@@ -3,61 +3,61 @@ import type {
   CreateCheckoutAmount,
   OpenReceive,
   SwapCheckout,
+  SwapData,
 } from "@openreceive/node";
-import {
-  createDefaultAuthorize,
-  type OpenReceiveAuthorize,
-  type OpenReceiveAuthorizeAction,
-  type OpenReceiveAuthorizeResource,
-  type OpenReceiveRateLimit,
+import type {
+  OpenReceiveAuthorize,
+  OpenReceiveAuthorizeAction,
+  OpenReceiveAuthorizeResource,
+  OpenReceiveRateLimit,
 } from "./authorize.ts";
 import { createRequestId, errorResponse, jsonResponse, OpenReceiveHttpError } from "./errors.ts";
 import { matchRoute, normalizePrefix } from "./router.ts";
-import type { CapabilityTokenManager } from "./tokens.ts";
-
-export const ORDER_TOKEN_COOKIE_NAME = "openreceive_payment_capability";
 
 export interface CheckoutCreatedInput {
   readonly orderId: string;
   readonly paymentHash: string;
   readonly checkout: Checkout;
-  readonly swapRecoveryToken?: string;
+  /** Sensitive server-only provider state. Persist it on the host order; never send it to a browser. */
+  readonly swapData?: SwapData;
 }
 
-export type CheckoutCreatedHook = (
-  input: CheckoutCreatedInput,
-) => void | Promise<void>;
+export type CheckoutCreatedHook = (input: CheckoutCreatedInput) => void | Promise<void>;
 
-export interface ResolveCheckoutAmountContext {
-  readonly action: "checkout.create" | "swap.create";
+export interface ResolveCheckoutContext {
+  readonly action: OpenReceiveAuthorizeAction;
   readonly request: Request;
   readonly orderId: string;
   readonly payInAsset?: string;
-  /** Untrusted payer input. Use it only to locate/recompute the host-owned price. */
+  /** Untrusted payer input. Use it only to locate/recompute host-owned data. */
   readonly input: Readonly<Record<string, unknown>>;
 }
 
 export interface ResolvedHostCheckout {
-  readonly amount: CreateCheckoutAmount;
-  /** Return the host row's live hash to reuse a checkout instead of minting on retry. */
+  /** Required for checkout/swap quote or creation; optional for status/refund actions. */
+  readonly amount?: CreateCheckoutAmount;
+  /** Return the host row's hash to reuse or inspect its committed checkout. */
   readonly paymentHash?: string;
-  readonly swapRecoveryToken?: string;
+  /** Server-only structured provider state loaded from the host database. */
+  readonly swapData?: SwapData;
 }
 
-export type ResolveCheckoutAmountHook = (
-  context: ResolveCheckoutAmountContext,
-) => CreateCheckoutAmount | ResolvedHostCheckout | Promise<CreateCheckoutAmount | ResolvedHostCheckout>;
+export type ResolveCheckoutHook = (
+  context: ResolveCheckoutContext,
+) =>
+  | CreateCheckoutAmount
+  | ResolvedHostCheckout
+  | Promise<CreateCheckoutAmount | ResolvedHostCheckout>;
 
 export interface CreateOpenReceiveHttpHandlerOptions {
   readonly service: OpenReceive;
-  /** Host policy. Checkout creation should validate the host-owned order price. */
+  /** Host authentication and authorization policy. OpenReceive never inspects host sessions. */
   readonly authorize: OpenReceiveAuthorize;
-  /** Recomputes the price from host-owned order/catalog data for each create request. */
-  readonly resolveCheckoutAmount: ResolveCheckoutAmountHook;
-  /** Persists payment_hash (and swap token) before payer instructions are exposed. */
+  /** Loads authoritative order amount, payment_hash, and optional swap_data from the host. */
+  readonly resolveCheckout: ResolveCheckoutHook;
+  /** Persists payment_hash and optional swap_data before payer instructions are exposed. */
   readonly onCheckoutCreated: CheckoutCreatedHook;
   readonly rateLimit?: OpenReceiveRateLimit;
-  readonly capabilities?: CapabilityTokenManager;
   readonly prefix?: string;
 }
 
@@ -69,7 +69,6 @@ export interface OpenReceiveHttpHandler {
 
 interface Runtime extends CreateOpenReceiveHttpHandlerOptions {
   readonly prefix: string;
-  readonly capabilities: CapabilityTokenManager;
 }
 
 export function createOpenReceiveHttpHandler(
@@ -77,17 +76,15 @@ export function createOpenReceiveHttpHandler(
 ): OpenReceiveHttpHandler {
   if (options?.service === undefined) throw new TypeError("HTTP handler requires service.");
   if (options.authorize === undefined) {
-    throw new TypeError("HTTP handler requires authorize; checkout price authority belongs to the host.");
+    throw new TypeError("HTTP handler requires authorize; authentication belongs to the host.");
   }
-  if (options.resolveCheckoutAmount === undefined) {
-    throw new TypeError("HTTP handler requires resolveCheckoutAmount; payer input is not a price authority.");
+  if (options.resolveCheckout === undefined) {
+    throw new TypeError("HTTP handler requires resolveCheckout; payer input is not a price authority.");
   }
   if (options.onCheckoutCreated === undefined) {
     throw new TypeError("HTTP handler requires onCheckoutCreated to persist payment_hash before responding.");
   }
-  const prefix = normalizePrefix(options.prefix ?? "/openreceive");
-  const capabilities = options.capabilities ?? serviceCapabilities(options.service);
-  const runtime: Runtime = { ...options, prefix, capabilities };
+  const runtime: Runtime = { ...options, prefix: normalizePrefix(options.prefix ?? "/openreceive") };
   const handle = async (request: Request): Promise<Response> => {
     const requestId = createRequestId();
     try {
@@ -98,7 +95,7 @@ export function createOpenReceiveHttpHandler(
   };
   const handler = handle as OpenReceiveHttpHandler;
   Object.defineProperties(handler, {
-    prefix: { value: prefix, enumerable: true },
+    prefix: { value: runtime.prefix, enumerable: true },
     handle: { value: handle, enumerable: true },
   });
   return handler;
@@ -115,120 +112,103 @@ async function dispatch(runtime: Runtime, request: Request, requestId: string): 
   }
 
   const body = await readJsonBody(request);
+  const orderId = requiredString(body.order_id ?? body.orderId, "order_id");
+
   if (route.kind === "checkout.create") {
-    const orderId = requiredString(body.order_id ?? body.orderId, "order_id");
     rejectPayerAmount(body);
-    await guard(runtime, "checkout.create", request, { order_id: orderId }, null);
-    const resolved = normalizeResolvedCheckout(await runtime.resolveCheckoutAmount({
-      action: "checkout.create",
-      request,
-      orderId,
-      input: body,
-    }));
+    await guard(runtime, "checkout.create", request, { order_id: orderId });
+    const resolved = await resolveHost(runtime, "checkout.create", request, orderId, body);
     const checkout = resolved.paymentHash === undefined
       ? await runtime.service.createCheckout({
           orderId,
-          amount: resolved.amount,
+          amount: requiredAmount(resolved),
           ...optionalCheckoutFields(body),
         })
-      : await recoverCommittedCheckout(runtime, orderId, resolved.paymentHash);
-    const accessToken = await runtime.capabilities.mint({
-      orderId,
-      paymentHash: checkout.paymentHash,
-      expiresAt: Math.max(checkout.expiresAt, unixNow() + 86_400),
-    });
+      : await recoverCommittedCheckout(runtime, orderId, requiredPaymentHash(resolved.paymentHash));
     if (resolved.paymentHash === undefined) {
       await commit(runtime, { orderId, paymentHash: checkout.paymentHash, checkout });
     }
-    return jsonResponse(201, {
-      checkout: httpCheckout(checkout),
-      order_access_token: accessToken,
-    }, requestId, [["set-cookie", capabilityCookie(runtime.prefix, accessToken, request)]]);
+    return jsonResponse(201, { checkout: httpCheckout(checkout) }, requestId);
   }
 
   if (route.kind === "payment.check") {
-    const paymentHash = requiredPaymentHash(body.payment_hash ?? body.paymentHash);
-    await guard(runtime, "payment.check", request, { payment_hash: paymentHash }, extractToken(request));
+    await guard(runtime, "payment.check", request, { order_id: orderId });
+    const resolved = await resolveHost(runtime, "payment.check", request, orderId, body);
+    const paymentHash = requiredPaymentHash(resolved.paymentHash);
     return jsonResponse(200, toSnakeCase(await runtime.service.checkPayment({ paymentHash })), requestId);
   }
 
   if (route.kind === "swap.quote") {
-    await guard(runtime, "swap.quote", request, {}, extractToken(request));
+    rejectPayerAmount(body);
+    const payInAsset = requiredString(body.pay_in_asset ?? body.payInAsset, "pay_in_asset");
+    await guard(runtime, "swap.quote", request, { order_id: orderId });
+    const resolved = await resolveHost(runtime, "swap.quote", request, orderId, body, payInAsset);
     return jsonResponse(200, toSnakeCase(await runtime.service.quoteSwap({
-      amount: readAmount(body.amount),
-      payInAsset: requiredString(body.pay_in_asset ?? body.payInAsset, "pay_in_asset"),
+      amount: requiredAmount(resolved),
+      payInAsset,
     })), requestId);
   }
 
   if (route.kind === "swap.create") {
-    const orderId = requiredString(body.order_id ?? body.orderId, "order_id");
     rejectPayerAmount(body);
     const payInAsset = requiredString(body.pay_in_asset ?? body.payInAsset, "pay_in_asset");
-    await guard(runtime, "swap.create", request, { order_id: orderId }, extractToken(request));
-    const resolved = normalizeResolvedCheckout(await runtime.resolveCheckoutAmount({
-      action: "swap.create",
-      request,
-      orderId,
-      payInAsset,
-      input: body,
-    }));
+    await guard(runtime, "swap.create", request, { order_id: orderId });
+    const resolved = await resolveHost(runtime, "swap.create", request, orderId, body, payInAsset);
     const swap = resolved.paymentHash === undefined
       ? await runtime.service.createSwap({
           orderId,
-          amount: resolved.amount,
+          amount: requiredAmount(resolved),
           payInAsset,
           ...optionalCheckoutFields(body),
         })
       : await recoverCommittedSwap(runtime, orderId, resolved);
-    const accessToken = await runtime.capabilities.mint({
-      orderId,
-      paymentHash: swap.paymentHash,
-      expiresAt: Math.max(swap.providerExpiresAt, unixNow() + 86_400),
-    });
     if (resolved.paymentHash === undefined) {
       await commit(runtime, {
         orderId,
         paymentHash: swap.paymentHash,
         checkout: swap.checkout,
-        swapRecoveryToken: swap.swapRecoveryToken,
+        swapData: swap.swapData,
       });
     }
-    return jsonResponse(201, {
-      swap: httpSwap(swap),
-      order_access_token: accessToken,
-    }, requestId, [["set-cookie", capabilityCookie(runtime.prefix, accessToken, request)]]);
+    return jsonResponse(201, { swap: httpSwap(swap) }, requestId);
   }
 
-  const recoveryToken = requiredString(
-    body.swap_recovery_token ?? body.recovery_token ?? body.recoveryToken,
-    "swap_recovery_token",
-  );
-  const action: OpenReceiveAuthorizeAction =
-    route.kind === "swap.read"
-      ? "swap.read"
-      : route.kind === "swap.refund.confirm"
-        ? "swap.refund.confirm"
-        : "swap.refund";
-  await guard(runtime, action, request, { recovery_token_present: true }, extractToken(request), true);
-
+  const action: OpenReceiveAuthorizeAction = route.kind === "swap.read" ? "swap.read" : "swap.refund";
+  await guard(runtime, action, request, { order_id: orderId });
+  const resolved = await resolveHost(runtime, action, request, orderId, body);
+  const swapData = requiredSwapData(resolved.swapData);
+  const paymentHash = requiredPaymentHash(resolved.paymentHash);
   if (route.kind === "swap.read") {
-    return jsonResponse(200, toSnakeCase(await runtime.service.getSwap({ recoveryToken })), requestId);
-  }
-  const refundAddress = requiredString(body.refund_address ?? body.refundAddress, "refund_address");
-  if (route.kind === "swap.refund.confirm") {
-    return jsonResponse(201, toSnakeCase(await runtime.service.createSwapRefundConfirmation({
-      recoveryToken,
-      refundAddress,
+    return jsonResponse(200, toSnakeCase(await runtime.service.getSwap({
+      orderId,
+      paymentHash,
+      swapData,
     })), requestId);
   }
+  const refundAddress = requiredString(body.refund_address ?? body.refundAddress, "refund_address");
   return jsonResponse(200, toSnakeCase(await runtime.service.refundSwap({
-    recoveryToken,
+    orderId,
+    paymentHash,
+    swapData,
     refundAddress,
-    confirmationToken: requiredString(
-      body.confirmation_token ?? body.confirmationToken,
-      "confirmation_token",
-    ),
   })), requestId);
+}
+
+async function resolveHost(
+  runtime: Runtime,
+  action: OpenReceiveAuthorizeAction,
+  request: Request,
+  orderId: string,
+  input: Readonly<Record<string, unknown>>,
+  payInAsset?: string,
+): Promise<ResolvedHostCheckout> {
+  return normalizeResolvedCheckout(await runtime.resolveCheckout({
+    action,
+    request,
+    orderId,
+    ...(payInAsset === undefined ? {} : { payInAsset }),
+    input,
+  }));
 }
 
 async function guard(
@@ -236,32 +216,14 @@ async function guard(
   action: OpenReceiveAuthorizeAction,
   request: Request,
   resource: OpenReceiveAuthorizeResource,
-  token: string | null,
-  recoveryCapability = false,
 ): Promise<void> {
-  const capability = token === null ? null : await runtime.capabilities.verify(token);
-  const tokenValid = recoveryCapability || (
-    capability !== null &&
-    (resource.order_id === undefined || capability.orderId === resource.order_id) &&
-    (resource.payment_hash === undefined || capability.paymentHash === resource.payment_hash)
-  );
-  const context = { action, request, resource, token, tokenValid };
+  const context = { action, request, resource };
   if (runtime.rateLimit !== undefined && !(await runtime.rateLimit(context))) {
     throw new OpenReceiveHttpError(429, "RATE_LIMITED", "Too many requests.", { retryable: true });
   }
   if (!(await runtime.authorize(context))) {
     throw new OpenReceiveHttpError(403, "UNAUTHORIZED", "Not authorized for this action.");
   }
-}
-
-function serviceCapabilities(service: OpenReceive): CapabilityTokenManager {
-  return {
-    mint: (input) => service.mintCapabilityToken(input),
-    verify: (token) => token == null
-      ? Promise.resolve(null)
-      : service.verifyCapabilityToken(token).then((payload) =>
-          payload === null ? null : { version: 1 as const, issuedAt: 0, ...payload }),
-  };
 }
 
 async function commit(runtime: Runtime, input: CheckoutCreatedInput): Promise<void> {
@@ -272,7 +234,7 @@ async function commit(runtime: Runtime, input: CheckoutCreatedInput): Promise<vo
     throw new OpenReceiveHttpError(
       409,
       "CONFLICT",
-      "The host did not persist this payment hash; payer instructions were withheld.",
+      "The host did not persist this payment attempt; payer instructions were withheld.",
     );
   }
 }
@@ -290,11 +252,10 @@ function httpCheckout(checkout: Checkout): Record<string, unknown> {
 }
 
 function httpSwap(swap: SwapCheckout): Record<string, unknown> {
-  const { checkout, swapRecoveryToken, ...rest } = swap;
+  const { checkout, swapData: _swapData, ...rest } = swap;
   return {
     ...(toSnakeCase(rest) as Record<string, unknown>),
     checkout: httpCheckout(checkout),
-    swap_recovery_token: swapRecoveryToken,
   };
 }
 
@@ -311,28 +272,25 @@ function optionalCheckoutFields(body: Record<string, unknown>) {
   };
 }
 
-function readAmount(value: unknown): CreateCheckoutAmount {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    throw new OpenReceiveHttpError(400, "INVALID_REQUEST", "amount is required.");
-  }
-  const amount = value as Record<string, unknown>;
-  if (amount.sats !== undefined) {
-    if (typeof amount.sats !== "string" && typeof amount.sats !== "number") {
-      throw new OpenReceiveHttpError(400, "INVALID_REQUEST", "amount.sats is invalid.");
-    }
-    return { sats: amount.sats };
-  }
-  return {
-    currency: requiredString(amount.currency, "amount.currency"),
-    value: requiredString(amount.value, "amount.value"),
-  };
-}
-
 function normalizeResolvedCheckout(
   value: CreateCheckoutAmount | ResolvedHostCheckout,
 ): ResolvedHostCheckout {
-  if ("amount" in value) return value;
-  return { amount: value };
+  if ("sats" in value || ("currency" in value && "value" in value)) return { amount: value };
+  return value;
+}
+
+function requiredAmount(value: ResolvedHostCheckout): CreateCheckoutAmount {
+  if (value.amount === undefined) {
+    throw new OpenReceiveHttpError(404, "NOT_FOUND", "The host order has no payable amount.");
+  }
+  return value.amount;
+}
+
+function requiredSwapData(value: SwapData | undefined): SwapData {
+  if (value === undefined) {
+    throw new OpenReceiveHttpError(404, "NOT_FOUND", "The host order has no swap data.");
+  }
+  return value;
 }
 
 async function recoverCommittedCheckout(
@@ -359,20 +317,14 @@ async function recoverCommittedSwap(
   orderId: string,
   resolved: ResolvedHostCheckout,
 ): Promise<SwapCheckout> {
-  if (resolved.paymentHash === undefined || resolved.swapRecoveryToken === undefined) {
-    throw new OpenReceiveHttpError(409, "CONFLICT", "The host order is missing its swap recovery token.");
+  const paymentHash = requiredPaymentHash(resolved.paymentHash);
+  const swapData = requiredSwapData(resolved.swapData);
+  const status = await runtime.service.getSwap({ orderId, paymentHash, swapData });
+  const checkout = await recoverCommittedCheckout(runtime, orderId, paymentHash, status.providerExpiresAt);
+  if (status.orderId !== orderId || status.paymentHash !== paymentHash) {
+    throw new OpenReceiveHttpError(409, "CONFLICT", "The host swap data does not match its payment hash.");
   }
-  const status = await runtime.service.getSwap({ recoveryToken: resolved.swapRecoveryToken });
-  const checkout = await recoverCommittedCheckout(
-    runtime,
-    orderId,
-    resolved.paymentHash,
-    status.providerExpiresAt,
-  );
-  if (status.orderId !== orderId || status.paymentHash !== resolved.paymentHash.toLowerCase()) {
-    throw new OpenReceiveHttpError(409, "CONFLICT", "The host swap recovery token does not match its payment hash.");
-  }
-  return { ...status, checkout };
+  return { ...status, checkout, swapData };
 }
 
 function rejectPayerAmount(body: Record<string, unknown>): void {
@@ -380,25 +332,9 @@ function rejectPayerAmount(body: Record<string, unknown>): void {
     throw new OpenReceiveHttpError(
       400,
       "INVALID_REQUEST",
-      "Checkout create does not accept a payer-supplied amount; the host resolves its order price.",
+      "This route does not accept a payer-supplied amount; the host resolves its order price.",
     );
   }
-}
-
-export function extractToken(request: Request): string | null {
-  const authorization = request.headers.get("authorization")?.trim();
-  const match = authorization === undefined ? null : /^bearer\s+(.+)$/i.exec(authorization);
-  if (match?.[1]) return match[1].trim();
-  const header = request.headers.get("x-openreceive-order-token")?.trim();
-  if (header) return header;
-  const cookie = request.headers.get("cookie");
-  if (cookie !== null) {
-    for (const part of cookie.split(";")) {
-      const [name, ...value] = part.trim().split("=");
-      if (name === ORDER_TOKEN_COOKIE_NAME) return value.join("=");
-    }
-  }
-  return null;
 }
 
 async function readJsonBody(request: Request): Promise<Record<string, unknown>> {
@@ -410,17 +346,6 @@ async function readJsonBody(request: Request): Promise<Record<string, unknown>> 
   } catch {
     throw new OpenReceiveHttpError(400, "INVALID_REQUEST", "Request body must be a JSON object.");
   }
-}
-
-function capabilityCookie(prefix: string, token: string, request: Request): string {
-  return [
-    `${ORDER_TOKEN_COOKIE_NAME}=${token}`,
-    `Path=${prefix}`,
-    "HttpOnly",
-    "SameSite=Lax",
-    "Max-Age=86400",
-    ...(new URL(request.url).protocol === "https:" ? ["Secure"] : []),
-  ].join("; ");
 }
 
 function requiredPaymentHash(value: unknown): string {
@@ -458,9 +383,3 @@ function toSnakeCase(value: unknown): unknown {
     toSnakeCase(item),
   ]));
 }
-
-function unixNow(): number {
-  return Math.floor(Date.now() / 1000);
-}
-
-export { createDefaultAuthorize };

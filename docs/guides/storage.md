@@ -8,7 +8,7 @@ The host application stores, on its existing order row:
 ```text
 payment_hash                         nullable, unique
 paid_at                              nullable, write-once
-openreceive_swap_recovery_token      optional
+swap_data                            optional server-only JSON/text
 ```
 
 The order row guards invoice creation. Commit `payment_hash` before displaying the checkout.

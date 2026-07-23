@@ -68,6 +68,10 @@ export function readOpenReceiveConfigFile(
 }
 
 function rejectPersistenceConfig(root: Record<string, unknown>, sourcePath: string): void {
+  const obsoleteTokenKey = ["token_keys", "tokenKeys"].find((key) => root[key] !== undefined);
+  if (obsoleteTokenKey !== undefined) {
+    throw new TypeError(`${sourcePath}.${obsoleteTokenKey} is obsolete; the host stores server-only swap_data directly.`);
+  }
   const removed = ["store", "storage", "database_url", "redis_url", "namespace"];
   const found = removed.find((key) => root[key] !== undefined);
   if (found !== undefined) {

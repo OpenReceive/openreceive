@@ -5,8 +5,6 @@ require "openreceive/server"
 require "stringio"
 
 class StorageFreeServerTest < Minitest::Test
-  KEY = [{ id: "k1", key: ("07" * 32) }].freeze
-
   class Wallet
     attr_reader :transactions
 
@@ -33,12 +31,50 @@ class StorageFreeServerTest < Minitest::Test
     end
   end
 
+  class SwapProvider
+    attr_reader :order
+
+    def name
+      "test-swap"
+    end
+
+    def supported_pay_in_assets
+      ["USDT_TRON"]
+    end
+
+    def invoice_expiry_seconds(pay_in_asset:)
+      600
+    end
+
+    def create_swap(_input)
+      @order = {
+        "provider" => name,
+        "provider_order_id" => "ruby-swap-1",
+        "pay_in_asset" => "USDT_TRON",
+        "deposit_address" => "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
+        "deposit_amount" => "1.05",
+        "state" => "awaiting_deposit",
+        "expires_at" => 1500
+      }
+    end
+
+    def get_status(_stored_order)
+      @order.dup
+    end
+
+    def request_refund(_current_order, _address)
+      @order["state"] = "refund_pending"
+    end
+
+    def force_refund_required
+      @order["state"] = "refund_required"
+    end
+  end
+
   def setup
     @wallet = Wallet.new
-    @tokens = OpenReceive::Server::Tokens::Manager.new(keys: KEY, clock: -> { 1000 })
     @service = OpenReceive::Server::Service.new(
       nwc_client: @wallet,
-      tokens: @tokens,
       price_provider: Struct.new(:unused) do
         def btc_fiat_price(_currency)
           "50000.00"
@@ -62,16 +98,16 @@ class StorageFreeServerTest < Minitest::Test
     handler = OpenReceive::Server::RequestHandler.new(
       service: @service,
       authorize: ->(_context) { true },
-      resolve_checkout_amount: ->(**_context) { { "sats" => 5 } },
+      resolve_checkout: ->(**_context) { { "sats" => 5 } },
       on_checkout_created: ->(**payment) { committed << payment }
     )
     status, _headers, body = handler.create_checkout(
       raw_body: JSON.generate("order_id" => "ruby-http"),
-      request: {}, token: nil, request_id: "req-1"
+      request: {}, request_id: "req-1"
     )
     assert_equal 201, status
     assert_equal body.dig("checkout", "payment_hash"), committed.first.fetch(:payment_hash)
-    assert_match(/\Aor_cap_v1\./, body.fetch("order_access_token"))
+    refute body.key?("order_access_token")
   end
 
   def test_handler_reuses_host_rows_live_payment_hash
@@ -79,12 +115,12 @@ class StorageFreeServerTest < Minitest::Test
     handler = OpenReceive::Server::RequestHandler.new(
       service: @service,
       authorize: ->(_context) { true },
-      resolve_checkout_amount: lambda do |**_context|
+      resolve_checkout: lambda do |**_context|
         { "amount" => { "sats" => 5 }, "payment_hash" => committed }.compact
       end,
       on_checkout_created: ->(**payment) { committed = payment.fetch(:payment_hash) }
     )
-    request = { raw_body: JSON.generate("order_id" => "ruby-retry"), request: {}, token: nil }
+    request = { raw_body: JSON.generate("order_id" => "ruby-retry"), request: {} }
     first = handler.create_checkout(**request, request_id: "req-a")
     second = handler.create_checkout(**request, request_id: "req-b")
     assert_equal 201, first.first
@@ -113,11 +149,42 @@ class StorageFreeServerTest < Minitest::Test
     assert_equal 2, deliveries
   end
 
+  def test_host_serialized_swap_data_recovers_state_and_controls_refunds
+    provider = SwapProvider.new
+    service = OpenReceive::Server::Service.new(
+      nwc_client: @wallet,
+      price_provider: nil,
+      swap_providers: [provider],
+      clock: -> { 1000 }
+    )
+    swap = service.create_swap(
+      "order_id" => "ruby-swap",
+      "amount" => { "sats" => 20_000 },
+      "pay_in_asset" => "USDT_TRON"
+    )
+    stored = JSON.parse(JSON.generate(swap.fetch("swap_data")))
+    refute stored.key?("payment_hash")
+    refute stored.key?("order_id")
+
+    provider.force_refund_required
+    assert_equal "refund_required", service.get_swap(
+      order_id: swap.fetch("order_id"), payment_hash: swap.fetch("payment_hash"), swap_data: stored
+    ).fetch("provider_state")
+    refunded = service.refund_swap(
+      order_id: swap.fetch("order_id"),
+      payment_hash: swap.fetch("payment_hash"),
+      swap_data: stored,
+      refund_address: "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb"
+    )
+    assert_equal "refund_pending", refunded.fetch("provider_state")
+    refute refunded.key?("swap_data")
+  end
+
   def test_rack_handler_satisfies_http_golden_vectors
     app = OpenReceive::Server::RackApp.new(
       service: @service,
       authorize: ->(_context) { true },
-      resolve_checkout_amount: ->(**_context) { { "sats" => 1 } },
+      resolve_checkout: ->(**_context) { { "sats" => 1 } },
       on_checkout_created: ->(**_payment) {}
     )
     Dir["spec/test-vectors/http-golden/*.json"].sort.each do |path|

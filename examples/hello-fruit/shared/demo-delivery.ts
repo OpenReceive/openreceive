@@ -1,20 +1,17 @@
 /**
  * Server-only Hello Fruit delivery gate. Serves purchased sticker bytes only when
- * `onPaid` has marked the order summary paid and the caller presents a valid
- * per-order capability token. Do not import from browser clients.
+ * `onPaid` has marked the order summary paid. The demo uses its random guest order ID as
+ * the access handle; production hosts should apply their normal session/order policy.
  */
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import type { OpenReceive } from "@openreceive/node";
-import { extractToken } from "@openreceive/http";
 import type { Request as ExpressRequest, Response as ExpressResponse, Express } from "express";
 import { readHelloFruitHostOrder } from "./openreceive-store.ts";
 
 const PRODUCT_ID_PATTERN = /^[a-z][a-z0-9_-]{0,31}$/;
 
 export interface ResolveHelloFruitDeliveryInput {
-  readonly verifyCapabilityToken: OpenReceive["verifyCapabilityToken"];
   readonly stickersDir: string;
   readonly orderId: string;
   readonly productId: string;
@@ -42,16 +39,6 @@ export async function resolveHelloFruitDelivery(
   const productId = input.productId.trim();
   if (orderId.length === 0 || !PRODUCT_ID_PATTERN.test(productId)) {
     return { ok: false, status: 404, message: "Not found." };
-  }
-
-  const token = extractToken(input.request);
-  if (token === null) {
-    return { ok: false, status: 401, message: "Order access token required." };
-  }
-
-  const capability = await input.verifyCapabilityToken(token);
-  if (capability === null || capability.orderId !== orderId) {
-    return { ok: false, status: 403, message: "Not authorized to download this order." };
   }
 
   const stored = readHelloFruitHostOrder(orderId);
@@ -109,7 +96,6 @@ export async function helloFruitDeliveryFetchResponse(
 }
 
 export interface MountHelloFruitDeliveryOptions {
-  readonly verifyCapabilityToken: OpenReceive["verifyCapabilityToken"];
   readonly stickersDir: string;
 }
 
@@ -138,7 +124,6 @@ async function sendHelloFruitDeliveryExpress(
     headers: expressHeadersToFetch(req),
   });
   const result = await resolveHelloFruitDelivery({
-    verifyCapabilityToken: options.verifyCapabilityToken,
     stickersDir: options.stickersDir,
     orderId,
     productId,

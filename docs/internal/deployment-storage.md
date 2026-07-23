@@ -1,7 +1,7 @@
 # Deployment state
 
 OpenReceive has no deployment storage. Scaling web instances requires only the same receive-
-only NWC configuration and token keyring on each instance.
+only the same receive-only NWC configuration on each instance.
 
 The host database must provide a unique/compare-and-set payment-hash write and a write-once
 paid transition. Host jobs select unresolved rows and call reconciliation. A broad watcher can

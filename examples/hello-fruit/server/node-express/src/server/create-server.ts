@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { openReceiveExpress } from "@openreceive/express";
-import { createDefaultAuthorize, hostError } from "@openreceive/http";
+import { hostError } from "@openreceive/http";
 import { createOpenReceive } from "@openreceive/node";
 import express from "express";
 import { mountHelloFruitDelivery } from "../../../../shared/demo-delivery.ts";
@@ -46,7 +46,6 @@ export async function createHelloFruitServer() {
   });
 
   mountHelloFruitDelivery(app, {
-    verifyCapabilityToken: service.verifyCapabilityToken,
     stickersDir: STICKERS_DIR,
   });
 
@@ -72,8 +71,9 @@ export async function createHelloFruitServer() {
   app.use(
     openReceiveExpress({
       service,
-      authorize: createDefaultAuthorize(),
-      resolveCheckoutAmount: ({ orderId }) => {
+      authorize: ({ resource }) =>
+        resource.order_id !== undefined && readHelloFruitHostOrder(resource.order_id) !== null,
+      resolveCheckout: ({ orderId }) => {
         const order = resolveHelloFruitHostCheckout(orderId);
         if (order === null) throw hostError("Order not found.", 404, "NOT_FOUND");
         return order;

@@ -12,20 +12,9 @@ module OpenReceive
   class ApplicationController < OpenReceive.config.parent_controller.constantize
     private
 
-    # The memoized shared request handler (Service + Tokens + configured hooks).
+    # The memoized shared request handler (Service + configured host hooks).
     def openreceive_handler
       OpenReceive.config.request_handler
-    end
-
-    # Raw capability token (Bearer, then X-OpenReceive-Order-Token, then the path-scoped
-    # `openreceive_order_token` cookie) via the one shared extractor. The Cookie header is passed as
-    # the raw request header so the cookie parsing matches the Rack app exactly.
-    def openreceive_token
-      OpenReceive::Server::RequestHandler.extract_token(
-        request.get_header("HTTP_AUTHORIZATION"),
-        request.get_header("HTTP_X_OPENRECEIVE_ORDER_TOKEN"),
-        request.get_header("HTTP_COOKIE")
-      )
     end
 
     # Echo the incoming X-Request-Id (matches RackApp; nil when absent).
@@ -47,9 +36,7 @@ module OpenReceive
     # Render a [status, headers, body] triple with a byte-equal JSON body. `render body:` with an
     # explicit content_type avoids Rails appending a charset, keeping the wire body identical to the
     # Rack app; the JSON is generated exactly as RackApp generates it. Every non-Content-Type header
-    # from the shared handler is copied onto the Rails response verbatim — including the create route's
-    # capability `Set-Cookie` header, so the browser stores it just as it
-    # would from the Rack app.
+    # from the shared handler is copied onto the Rails response verbatim.
     def openreceive_respond(result)
       status, headers, body = result
       headers.each do |key, value|

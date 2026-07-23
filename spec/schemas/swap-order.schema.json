@@ -118,6 +118,6 @@
     }
   },
   "x-openreceive-private-fields": [
-    "provider order credentials never appear in this public schema; they exist only inside swap_recovery_token"
+    "provider order credentials never appear in this public schema; the host stores them server-side in swap_data"
   ]
 }

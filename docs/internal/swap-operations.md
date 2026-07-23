@@ -1,13 +1,13 @@
 # Swap operations
 
-OpenReceive keeps no swap row. Every unresolved provider workflow is recovered from the opaque,
-authenticated encrypted `swap_recovery_token` stored by the host. Wallet settlement and provider
-workflow recovery are intentionally independent:
+OpenReceive keeps no swap row. The host stores one optional server-only `swap_data` JSON/text
+field alongside `payment_hash`. Wallet settlement and provider workflow recovery remain
+independent:
 
-| Question | Authority | Recovery identifier |
+| Question | Authority | Host data |
 | --- | --- | --- |
 | Did the merchant receive Lightning? | NWC wallet | `payment_hash` |
-| What is the provider doing? | Swap provider | encrypted recovery token |
+| What is the provider doing? | Swap provider | `swap_data` |
 
 Provider `completed` is not payment. Fulfillment waits for NWC `settled_at` or transaction
 `state == "settled"`; a preimage alone is corroboration.
@@ -18,16 +18,16 @@ Creation order is fixed:
 
 1. Mint the shadow Lightning invoice.
 2. Create the provider order using that BOLT11.
-3. Seal provider identity, order credentials, payment hash, order id, asset, and expiry.
-4. Have the host commit `payment_hash` and `swap_recovery_token`.
-5. Only then return the deposit address and exact amount.
+3. Build JSON-serializable `swap_data` containing only the provider order recovery details.
+4. Have the host atomically commit `payment_hash` and `swap_data`.
+5. Only then return the public deposit address and exact amount. Never serialize `swap_data`.
 
 If provider creation times out without returning credentials, no deposit address was shown. The
 orphan may expire at the provider; OpenReceive has no local workflow row to reconcile.
 
-`getSwap({ recoveryToken })` decrypts the token, selects the named provider, calls its current
-status endpoint, verifies provider/order identity, and returns a normalized snapshot. Cached
-provider state is process-local and disposable.
+`getSwap({ orderId, paymentHash, swapData })` validates the stored object, selects the named provider, calls its current
+status endpoint, verifies provider/order identity, and returns a normalized public snapshot.
+Cached provider state is process-local and disposable.
 
 ## State handling
 
@@ -37,41 +37,39 @@ Common normalized states are `awaiting_deposit`, `confirming`, `exchanging`,
 
 - `completed` means finalizing until the wallet settles;
 - `refund_required` enables the refund flow;
-- `refunded`, `expired`, `attention`, and `failed` stop payer use of the deposit instructions;
+- `refunded`, `expired`, `attention`, and `failed` stop payer use of deposit instructions;
 - a late wallet settlement still wins and must be delivered to the host.
 
 ## Refund safety
 
-Refunds are two-step and stateless:
+The browser sends `order_id` and `refund_address`. The host authorizes order access, loads
+`swap_data`, and then calls:
 
 ```ts
-const confirmation = await openreceive.createSwapRefundConfirmation({
-  recoveryToken,
-  refundAddress,
-});
-
 await openreceive.refundSwap({
-  recoveryToken,
+  orderId: order.id,
+  paymentHash: order.paymentHash,
+  swapData: order.swapData,
   refundAddress,
-  confirmationToken: confirmation.confirmationToken,
 });
 ```
 
-The confirmation token binds the payment, provider order, refund address, and expiry. Strict
-local single-use enforcement is impossible without persistence, so `refundSwap` queries the
-provider immediately before acting and permits only `refund_required`. Repeated or stale calls
-therefore fail against provider authority. A host may add its own refund guard if desired.
+`refundSwap` queries the provider immediately before acting and permits only
+`refund_required`. Repeated or stale calls therefore fail against provider authority. The host
+may add its own approval or single-use guard when its product requires one.
 
-## Key rotation and loss
+## Storage and loss
 
-The first configured key seals new tokens; retained older keys only decrypt in-flight tokens.
-Removing an old key makes its unresolved swaps unrecoverable. Losing only a recovery token does
-not prevent wallet settlement by payment hash, but provider status/refunds require dashboard or
-support recovery. Never expose raw provider credentials or receive-only NWC secrets in logs.
+The provider token inside `swap_data` is sensitive. Keep it server-side and exclude it from
+logs, serializers, and browser bundles. Hosts may use Rails encrypted attributes, database
+encryption, or another at-rest policy; OpenReceive does not require a second key.
+
+Losing `swap_data` does not prevent wallet settlement by payment hash, but provider status and
+refund recovery then require provider dashboard/support access.
 
 ## Multi-instance behavior
 
-No coordination service is required. Each process may poll the provider or wallet independently;
-callbacks can repeat. The host's write-once `paid_at` and fulfillment transaction absorb duplicate
-delivery. Process-local rate/catalog caches and request-weight guards are performance aids, not
-durable correctness state.
+No OpenReceive coordination service is required. Each process may poll the provider or wallet
+independently; callbacks can repeat. The host's write-once `paid_at` and fulfillment transaction
+absorb duplicate delivery. Process-local rate/catalog caches and request-weight guards are
+performance aids, not durable correctness state.

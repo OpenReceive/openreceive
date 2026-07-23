@@ -1,12 +1,9 @@
 import { sanitizeBrowserLogEntry } from "./checkout.ts";
-import { orderAccessTokenHeaders } from "./order-token.ts";
 import type {
   CheckoutInvoiceSnapshot,
   OpenReceiveBrowserLogger,
   OpenReceiveBrowserLogLevel,
 } from "./ui.ts";
-
-const recoveryTokens = new Map<string, string>();
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -40,13 +37,13 @@ export async function postOpenReceiveJson(
 
   try {
     const result = action === "swap_quote"
-      ? await requestJson(fetcher, `${routePrefix(url)}/swaps/quote`, {
-          amount: body.amount,
+        ? await requestJson(fetcher, `${routePrefix(url)}/swaps/quote`, {
+          order_id: orderId,
           pay_in_asset: body.pay_in_asset,
-        }, orderId, options)
+        }, options)
       : action === "refund_swap"
         ? await refundRequest(fetcher, url, body, orderId, options)
-        : await requestJson(fetcher, url, body, orderId, options);
+        : await requestJson(fetcher, url, body, options);
     if (action === "start_swap" || action === "refund_swap") {
       emitSwapActionLog(options.logger, "succeeded", body, swapActionResultFields(result));
     }
@@ -64,9 +61,6 @@ export function normalizeSwapStartInvoice(body: unknown): CheckoutInvoiceSnapsho
   const swap = asRecord(outer.swap ?? body);
   const checkout = asRecord(swap.checkout);
   const paymentHash = nonEmptyString(swap.payment_hash ?? checkout.payment_hash);
-  const orderId = nonEmptyString(swap.order_id ?? checkout.order_id);
-  const recoveryToken = nonEmptyString(swap.swap_recovery_token ?? outer.swap_recovery_token);
-  if (orderId !== undefined && recoveryToken !== undefined) recoveryTokens.set(orderId, recoveryToken);
   if (
     paymentHash === undefined ||
     nonEmptyString(swap.provider) === undefined ||
@@ -116,7 +110,6 @@ export async function startOpenReceiveSwapRequest(
     fetcher,
     `${routePrefix(url)}/swaps`,
     { order_id: orderId, pay_in_asset: payInAsset },
-    orderId,
     options ?? {},
   );
   return normalizeSwapStartInvoice(body);
@@ -130,33 +123,25 @@ async function refundRequest(
   options: PostOpenReceiveJsonOptions,
 ): Promise<unknown> {
   if (orderId === undefined) throw new Error("Swap refund requires order_id.");
-  const recoveryToken = recoveryTokens.get(orderId);
-  if (recoveryToken === undefined) throw new Error("Swap recovery token is unavailable.");
   const refundAddress = nonEmptyString(body.refund_address);
   if (refundAddress === undefined) throw new Error("Swap refund requires refund_address.");
   const prefix = routePrefix(url);
   if (body.confirm === true) {
-    const confirmationToken = nonEmptyString(body.refund_nonce);
-    if (confirmationToken === undefined) throw new Error("Swap refund confirmation is unavailable.");
     const status = asRecord(await requestJson(fetcher, `${prefix}/swaps/refunds`, {
-      swap_recovery_token: recoveryToken,
+      order_id: orderId,
       refund_address: refundAddress,
-      confirmation_token: confirmationToken,
-    }, orderId, options));
+    }, options));
     return { swap: status };
   }
-  const confirmation = asRecord(await requestJson(fetcher, `${prefix}/swaps/refund-confirmations`, {
-    swap_recovery_token: recoveryToken,
-    refund_address: refundAddress,
-  }, orderId, options));
   const status = asRecord(await requestJson(fetcher, `${prefix}/swaps/status`, {
-    swap_recovery_token: recoveryToken,
-  }, orderId, options));
+    order_id: orderId,
+  }, options));
   return {
     swap: {
       ...status,
-      refund_nonce: confirmation.confirmation_token,
-      refund_nonce_expires_at: confirmation.expires_at,
+      // Confirmation is a browser UX step. Authorization and provider-state refresh
+      // happen on the host when the confirmed refund request is submitted.
+      refund_nonce: "confirm",
     },
   };
 }
@@ -165,14 +150,12 @@ async function requestJson(
   fetcher: typeof globalThis.fetch,
   url: string,
   body: Record<string, unknown>,
-  orderId: string | undefined,
   options: PostOpenReceiveJsonOptions,
 ): Promise<unknown> {
   const response = await fetcher(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...orderAccessTokenHeaders(orderId),
       ...options.headers,
     },
     body: JSON.stringify(body),

@@ -8,21 +8,21 @@ import {
   createTestkitSwapProvider,
 } from "../../packages/js/testkit/src/index.ts";
 
-const key = Buffer.alloc(32, 9).toString("base64url");
-
 test("HTTP commits payment hash before returning payer instructions", async () => {
   const wallet = createTestkitReceiveClient({ now: () => 1000 });
   const service = await createOpenReceive({
     client: wallet,
-    tokenKeys: [{ id: "k1", key }],
     clock: () => 1000,
     configPath: false,
   });
   const committed = [];
   const handler = createOpenReceiveHttpHandler({
     service,
-    authorize: (context) => context.action === "checkout.create" || context.tokenValid,
-    resolveCheckoutAmount: () => ({ sats: 1234 }),
+    authorize: () => true,
+    resolveCheckout: () => ({
+      amount: { sats: 1234 },
+      ...(committed[0] === undefined ? {} : { paymentHash: committed[0].paymentHash }),
+    }),
     onCheckoutCreated: (payment) => committed.push(payment),
   });
   const created = await handler(new Request("http://test/openreceive/checkouts", {
@@ -33,16 +33,13 @@ test("HTTP commits payment hash before returning payer instructions", async () =
   assert.equal(created.status, 201);
   const body = await created.json();
   assert.equal(committed[0].paymentHash, body.checkout.payment_hash);
-  assert.match(body.order_access_token, /^or_cap_v1\./);
+  assert.equal(body.order_access_token, undefined);
 
   wallet.settleInvoice({ payment_hash: body.checkout.payment_hash }, { settled_at: 1010 });
   const checked = await handler(new Request("http://test/openreceive/payments/check", {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${body.order_access_token}`,
-    },
-    body: JSON.stringify({ payment_hash: body.checkout.payment_hash }),
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ order_id: "order-http" }),
   }));
   assert.equal(checked.status, 200);
   assert.equal((await checked.json()).status, "settled");
@@ -51,13 +48,12 @@ test("HTTP commits payment hash before returning payer instructions", async () =
 test("HTTP withholds invoice when host persistence fails", async () => {
   const service = await createOpenReceive({
     client: createTestkitReceiveClient(),
-    tokenKeys: [{ id: "k1", key }],
     configPath: false,
   });
   const handler = createOpenReceiveHttpHandler({
     service,
     authorize: () => true,
-    resolveCheckoutAmount: () => ({ sats: 1 }),
+    resolveCheckout: () => ({ sats: 1 }),
     onCheckoutCreated: () => { throw new Error("database unavailable"); },
   });
   const response = await handler(new Request("http://test/openreceive/checkouts", {
@@ -74,7 +70,6 @@ test("HTTP retry reuses the live checkout recorded on the host order", async () 
   const wallet = createTestkitReceiveClient({ now: () => 1000 });
   const service = await createOpenReceive({
     client: wallet,
-    tokenKeys: [{ id: "k1", key }],
     clock: () => 1000,
     configPath: false,
   });
@@ -82,7 +77,7 @@ test("HTTP retry reuses the live checkout recorded on the host order", async () 
   const handler = createOpenReceiveHttpHandler({
     service,
     authorize: () => true,
-    resolveCheckoutAmount: () => ({
+    resolveCheckout: () => ({
       amount: { sats: 10 },
       ...(paymentHash === undefined ? {} : { paymentHash }),
     }),
@@ -103,14 +98,13 @@ test("HTTP retry reuses the live checkout recorded on the host order", async () 
 test("concurrent host-row loser receives no payer instructions", async () => {
   const service = await createOpenReceive({
     client: createTestkitReceiveClient(),
-    tokenKeys: [{ id: "k1", key }],
     configPath: false,
   });
   let committed;
   const handler = createOpenReceiveHttpHandler({
     service,
     authorize: () => true,
-    resolveCheckoutAmount: () => ({ sats: 2 }),
+    resolveCheckout: () => ({ sats: 2 }),
     onCheckoutCreated: ({ paymentHash }) => {
       if (committed !== undefined && committed !== paymentHash) throw new Error("compare-and-set lost");
       committed = paymentHash;
@@ -125,31 +119,30 @@ test("concurrent host-row loser receives no payer instructions", async () => {
   assert.equal(loser.checkout, undefined);
 });
 
-test("HTTP swap retry reuses the host-committed hash and opaque recovery token", async () => {
+test("HTTP swap retry reuses host-committed hash/data without exposing provider state", async () => {
   const wallet = createTestkitReceiveClient({ now: () => 1000 });
   const provider = createTestkitSwapProvider({ now: () => 1000 });
   const service = await createOpenReceive({
     client: wallet,
-    tokenKeys: [{ id: "k1", key }],
     swap: { providers: [provider] },
     clock: () => 1000,
     configPath: false,
   });
   let hostPaymentHash;
-  let hostRecoveryToken;
+  let hostSwapData;
   let commits = 0;
   const handler = createOpenReceiveHttpHandler({
     service,
     authorize: () => true,
-    resolveCheckoutAmount: () => ({
+    resolveCheckout: () => ({
       amount: { sats: 20_000 },
       ...(hostPaymentHash === undefined ? {} : { paymentHash: hostPaymentHash }),
-      ...(hostRecoveryToken === undefined ? {} : { swapRecoveryToken: hostRecoveryToken }),
+      ...(hostSwapData === undefined ? {} : { swapData: hostSwapData }),
     }),
-    onCheckoutCreated: ({ paymentHash, swapRecoveryToken }) => {
+    onCheckoutCreated: ({ paymentHash, swapData }) => {
       commits += 1;
       hostPaymentHash = paymentHash;
-      hostRecoveryToken = swapRecoveryToken;
+      hostSwapData = JSON.parse(JSON.stringify(swapData));
     },
   });
   const request = () => new Request("http://test/openreceive/swaps", {
@@ -163,22 +156,42 @@ test("HTTP swap retry reuses the host-committed hash and opaque recovery token",
   const firstBody = await first.json();
   const secondBody = await second.json();
   assert.equal(firstBody.swap.payment_hash, hostPaymentHash);
-  assert.equal(firstBody.swap.swap_recovery_token, hostRecoveryToken);
+  assert.equal(firstBody.swap.swap_data, undefined);
+  assert.doesNotMatch(JSON.stringify(firstBody), /testkit-token/);
   assert.equal(secondBody.swap.payment_hash, hostPaymentHash);
   assert.equal(commits, 1);
   assert.equal((await wallet.listTransactions({ type: "incoming", unpaid: true, limit: 20 })).transactions.length, 1);
+
+  provider.forceRefundRequired({ providerOrderId: "testkit-swap-1" });
+  const statusResponse = await handler(new Request("http://test/openreceive/swaps/status", {
+    method: "POST",
+    body: JSON.stringify({ order_id: "swap-http" }),
+  }));
+  assert.equal(statusResponse.status, 200);
+  assert.equal((await statusResponse.json()).provider_state, "refund_required");
+
+  const refundResponse = await handler(new Request("http://test/openreceive/swaps/refunds", {
+    method: "POST",
+    body: JSON.stringify({
+      order_id: "swap-http",
+      refund_address: "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
+    }),
+  }));
+  assert.equal(refundResponse.status, 200);
+  const refundBody = await refundResponse.json();
+  assert.equal(refundBody.provider_state, "refund_pending");
+  assert.equal(refundBody.swap_data, undefined);
 });
 
 test("Node handler satisfies storage-free HTTP golden vectors", async () => {
   const service = await createOpenReceive({
     client: createTestkitReceiveClient(),
-    tokenKeys: [{ id: "k1", key }],
     configPath: false,
   });
   const handler = createOpenReceiveHttpHandler({
     service,
     authorize: () => true,
-    resolveCheckoutAmount: () => ({ sats: 1 }),
+    resolveCheckout: () => ({ sats: 1 }),
     onCheckoutCreated: () => {},
   });
   for (const filename of readdirSync("spec/test-vectors/http-golden").sort()) {

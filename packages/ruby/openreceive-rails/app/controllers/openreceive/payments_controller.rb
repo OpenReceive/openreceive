@@ -6,7 +6,6 @@ module OpenReceive
       openreceive_respond(openreceive_handler.check_payment(
         raw_body: openreceive_raw_body,
         request: request,
-        token: openreceive_token,
         request_id: openreceive_request_id
       ))
     end

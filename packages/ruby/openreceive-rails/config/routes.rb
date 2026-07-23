@@ -11,7 +11,6 @@ OpenReceive::Engine.routes.draw do
   post "swaps/quote", to: "swaps#quote"
   post "swaps", to: "swaps#create"
   post "swaps/status", to: "swaps#status"
-  post "swaps/refund-confirmations", to: "swaps#refund_confirmation"
   post "swaps/refunds", to: "swaps#refund"
 
   get "rates", to: "rates#index"

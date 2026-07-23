@@ -8,9 +8,10 @@ The durable correlation key is `payment_hash`. Wallet settlement is reconstructe
 `lookup_invoice` or overlapping `list_transactions` scans, deduplicated by hash with pages no
 larger than 20. Creation time, not settlement time, defines scan ranges.
 
-Swap workflow recovery is separate. An authenticated encrypted recovery token contains the
-provider name/order credentials plus the bound order ID and payment hash. The host optionally
-stores that opaque token. Process caches only reduce calls and are never correctness state.
+Swap workflow recovery is separate. The host optionally stores a server-only `swap_data`
+object containing provider name/order credentials plus the bound order ID and payment hash.
+OpenReceive never serializes it to a browser. Process caches only reduce calls and are never
+correctness state.
 
 Callbacks are at-least-once. The host's write-once `paid_at` and fulfillment transaction are
 the replay guard.

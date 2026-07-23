@@ -1,12 +1,8 @@
 /**
  * Browser-safe Hello Fruit delivery helpers. Polls the server summary until
- * `onPaid` marks the order paid, then fetches gated sticker bytes with the
- * per-order capability token (cookie is path-scoped to OpenReceive routes).
+ * `onPaid` marks the order paid, then fetches host-gated sticker bytes.
  */
 
-import {
-  getOrderAccessToken,
-} from "@openreceive/browser";
 import { isHelloFruitDemoOrder, type HelloFruitDemoOrder } from "./demo-order.ts";
 
 export function helloFruitDeliveryPath(orderId: string, productId: string): string {
@@ -59,7 +55,7 @@ export async function waitForHelloFruitPaidSummary(
 }
 
 /**
- * Fetch a fulfilled sticker with the stored capability token and return an object URL.
+ * Fetch a fulfilled sticker through the host application and return an object URL.
  * Caller should `URL.revokeObjectURL` when done.
  */
 export async function fetchHelloFruitDeliveryObjectUrl(
@@ -67,14 +63,8 @@ export async function fetchHelloFruitDeliveryObjectUrl(
   productId: string,
   fetchImpl: typeof globalThis.fetch = globalThis.fetch,
 ): Promise<string> {
-  const token = getOrderAccessToken(orderId);
-  const headers: Record<string, string> = {};
-  if (token !== undefined) {
-    headers.Authorization = `Bearer ${token}`;
-  }
   const response = await fetchImpl(helloFruitDeliveryPath(orderId, productId), {
     method: "GET",
-    headers,
   });
   if (!response.ok) {
     throw new Error(`Delivery failed: HTTP ${response.status}`);

@@ -11,10 +11,10 @@ import type {
 } from "@openreceive/core";
 import type {
   SwapPayInAsset,
+  SwapOrder,
   SwapProvider,
   SwapProviderState,
 } from "../swap/index.ts";
-import type { StatelessTokenManager } from "../tokens.ts";
 
 export type OpenReceiveLogLevel = "debug" | "info" | "warn" | "error";
 
@@ -38,20 +38,12 @@ export interface LoggingOptions {
   readonly level?: OpenReceiveLogLevel;
 }
 
-export interface TokenKey {
-  /** Stable, non-secret identifier included in sealed token headers. */
-  readonly id: string;
-  /** 32-byte master key encoded as base64url, base64, or 64 hexadecimal characters. */
-  readonly key: string;
-}
-
 export interface NodeOptions {
   readonly client: OpenReceiveReceiveNwcClient;
   readonly onPaid?: NodeSettlementActionHook;
   readonly priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
   readonly priceCurrencies?: readonly string[];
   readonly swap?: SwapOptions;
-  readonly tokenKeys?: readonly TokenKey[];
   readonly onEvent?: EventHandler;
   readonly logger?: Logger;
   readonly logging?: LoggingOptions;
@@ -143,17 +135,19 @@ export interface CreateSwapRequest extends CreateCheckoutRequest {
 }
 
 export interface GetSwapRequest {
-  readonly recoveryToken: string;
-}
-
-export interface CreateSwapRefundConfirmationRequest extends GetSwapRequest {
-  readonly refundAddress: string;
-  readonly ttlSeconds?: number;
+  readonly orderId: string;
+  readonly paymentHash: string;
+  readonly swapData: SwapData;
 }
 
 export interface SwapRefundRequest extends GetSwapRequest {
   readonly refundAddress: string;
-  readonly confirmationToken: string;
+}
+
+/** Server-only provider recovery state persisted by the host application. */
+export interface SwapData {
+  readonly version: 1;
+  readonly providerOrder: SwapOrder;
 }
 
 export interface PublicSwap {
@@ -176,17 +170,11 @@ export interface PublicSwap {
 
 export interface SwapCheckout extends PublicSwap {
   readonly checkout: Checkout;
-  readonly swapRecoveryToken: string;
+  /** Sensitive host-only state. Never serialize this into a browser response. */
+  readonly swapData: SwapData;
 }
 
-export interface SwapStatus extends PublicSwap {
-  readonly swapRecoveryToken: string;
-}
-
-export interface SwapRefundConfirmation {
-  readonly confirmationToken: string;
-  readonly expiresAt: number;
-}
+export type SwapStatus = PublicSwap;
 
 export interface ListRatesRequest {
   readonly currencies?: readonly string[];
@@ -200,22 +188,9 @@ export interface OpenReceive {
   checkPayment(input: CheckPaymentRequest): Promise<PaymentCheck>;
   reconcilePayments(input: ReconcilePaymentsRequest): Promise<readonly PaymentCheck[]>;
   watchPayments(input: WatchPaymentsRequest): PaymentWatcher;
-  mintCapabilityToken(input: {
-    readonly orderId: string;
-    readonly paymentHash: string;
-    readonly expiresAt: number;
-  }): Promise<string>;
-  verifyCapabilityToken(token: string): Promise<{
-    readonly orderId: string;
-    readonly paymentHash: string;
-    readonly expiresAt: number;
-  } | null>;
   quoteSwap(input: SwapQuoteRequest): Promise<unknown>;
   createSwap(input: CreateSwapRequest): Promise<SwapCheckout>;
   getSwap(input: GetSwapRequest): Promise<SwapStatus>;
-  createSwapRefundConfirmation(
-    input: CreateSwapRefundConfirmationRequest,
-  ): Promise<SwapRefundConfirmation>;
   refundSwap(input: SwapRefundRequest): Promise<SwapStatus>;
   listRates(input?: ListRatesRequest): Promise<OpenReceiveBtcFiatRateMapWithSource["rates"]>;
   quoteRates(input: { readonly fiat: OpenReceiveFiatAmount }): Promise<OpenReceiveRateQuote>;
@@ -228,7 +203,6 @@ export interface OpenReceiveServiceContext {
   readonly priceProviders: readonly OpenReceiveSourcedPriceProvider[];
   readonly priceCurrencies: readonly string[];
   readonly swapProviders: readonly SwapProvider[];
-  readonly tokenManager: StatelessTokenManager;
 }
 
 export interface ResolvedCreateAmount {

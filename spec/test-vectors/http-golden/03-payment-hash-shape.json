@@ -1,9 +1,9 @@
 {
-  "name": "payment check validates payment_hash",
+  "name": "payment check requires a payment hash on the host order",
   "request": {
     "method": "POST",
     "path": "/openreceive/payments/check",
-    "body": { "payment_hash": "bad" }
+    "body": { "order_id": "ord-without-payment" }
   },
   "expected": { "status": 400, "code": "INVALID_REQUEST" }
 }

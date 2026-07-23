@@ -1,5 +1,4 @@
 export {
-  clearOrderAccessTokens,
   copyInvoice,
   createLightningUri as lightningUri,
   createCheckoutController,
@@ -10,7 +9,6 @@ export {
   createQrPngDataUrl as qrPngDataUrl,
   createQrSvg as qrSvg,
   enterCheckoutResumePath,
-  getOrderAccessToken,
   openWallet,
   requestCheckout
 } from "./internal.ts";

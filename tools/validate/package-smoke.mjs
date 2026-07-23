@@ -36,10 +36,10 @@ const importChecks = {
   "@openreceive/express": "typeof mod.openReceiveExpress === 'function'",
   "@openreceive/fastify": "typeof mod.openReceiveFastify === 'function'",
   "@openreceive/http":
-    "typeof mod.createOpenReceiveHttpHandler === 'function' && typeof mod.createDefaultAuthorize === 'function' && typeof mod.extractToken === 'function' && typeof mod.OpenReceiveHttpError === 'function' && typeof mod.createCapabilityTokenManager === 'function'",
+    "typeof mod.createOpenReceiveHttpHandler === 'function' && typeof mod.OpenReceiveHttpError === 'function'",
   "@openreceive/next": "typeof mod.openReceiveNextHandlers === 'function'",
   "@openreceive/node":
-    "typeof mod.createOpenReceive === 'function' && typeof mod.OpenReceiveServiceError === 'function' && typeof mod.OpenReceiveConfigError === 'function' && typeof mod.createNwcReceiveClient === 'function' && typeof mod.createStatelessTokenManager === 'function' && typeof mod.parseTokenKeyring === 'function'",
+    "typeof mod.createOpenReceive === 'function' && typeof mod.OpenReceiveServiceError === 'function' && typeof mod.OpenReceiveConfigError === 'function' && typeof mod.createNwcReceiveClient === 'function'",
   "@openreceive/provider-data":
     "typeof mod.getProviderRegistryMetadata === 'function' && typeof mod.providerIconUrl === 'function' && typeof mod.providerTutorialUrl === 'function' && mod.providerIconUrl(mod.providerRegistry.providers.strike).includes('assets/provider-icons/strike.png') && mod.providerTutorialUrl(mod.providerRegistry.providers.kraken.tutorials[3]).includes('assets/pay_tutorials/kraken-4.webp')",
   "@openreceive/react":

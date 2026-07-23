@@ -28,9 +28,8 @@ not worked around:
     delivery), the OpenAPI route contract, and the Ruby port are all rewritten to
     describe the storage-free model. Where an existing rule contradicts this
     document, this document wins and the older rule is rewritten or retired.
-  - The capability-token / order_access_token / tier model is redesigned to be
-    fully stateless-signed (same envelope technique as the swap recovery token) or
-    removed, since there is no store to hold token hashes.
+  - The capability-token / order_access_token / tier model is removed. The host
+    already owns authentication and resolves its order by order_id.
 
 Reviewers should not defend an existing structure on compatibility grounds. The
 only question is whether the storage-free model is correct, not whether it differs
@@ -43,17 +42,9 @@ SECRETS ARE NOT STORAGE
 "No storage" means no database, no Redis, no migrations, no adapters, no rows
 OpenReceive must read back to function. It does NOT mean "no configuration."
 
-OpenReceive still requires:
-
-  - the receive-only NWC connection string, and
-  - one server-side signing/encryption key used to seal and open swap recovery
-    tokens (and any stateless confirmation/capability token).
-
-A single key held in an environment variable is configuration, not persistence.
-It is the same kind of secret every payment integration already holds. Rotation
-uses a small keyring: new tokens are sealed with the current key, old keys are
-retained only for decrypt so that tokens sealed before a rotation still open.
-This keeps in-flight swaps recoverable across a key rotation without any database.
+OpenReceive still requires the receive-only NWC connection string and, when swaps
+are enabled, the configured provider credentials. It requires no separate signing
+key, encryption key, or token keyring.
 
 
 CORE IDEA
@@ -76,12 +67,13 @@ paid_at once and never changes it again. The integrating developer does not need
 store or understand BOLT11 invoices, millisatoshis, invoice creation times, invoice
 expiry times, wallet state, or settlement workflow state.
 
-For a swap, the host may additionally store one opaque swap recovery token:
+For a swap, the host may additionally store one server-only JSON/text field:
 
-    order.openreceive_swap_recovery_token
+    order.swap_data
 
 The payment hash lets the host recognize the order when OpenReceive reports it paid.
-The recovery token lets OpenReceive query an unresolved swap provider workflow.
+The swap data contains the provider order ID/token needed to query an unresolved
+provider workflow. It never goes to the browser or logs.
 
 This makes the boundary simple:
 
@@ -373,29 +365,22 @@ but it cannot reconstruct an unresolved FixedFloat order, refund, underpayment, 
 emergency workflow.
 
 
-OPAQUE SWAP RECOVERY TOKEN
-==========================
+SERVER-ONLY SWAP DATA
+=====================
 
-OpenReceive can avoid internal persistence by turning the provider credentials into
-one opaque recovery value for the host to store. The application-facing result is:
-
-    {
-      paymentHash: "...",
-      swapRecoveryToken: "or_swap_v1_..."
-    }
-
-The recovery token is an authenticated, server-encrypted envelope. Internally it
-contains approximately:
+OpenReceive can avoid internal persistence by returning one JSON-serializable
+provider recovery object for the host to store:
 
     {
       version: 1,
       provider: "fixedfloat",
-      providerOrderId: "TESTID",
-      providerToken: "TESTTOKEN...",
+      providerOrder: {
+        provider_order_id: "TESTID",
+        provider_token: "TESTTOKEN...",
+        ...
+      },
       paymentHash: "...",
-      orderId: "...",
-      payInAsset: "USDT_TRON",
-      expiresAt: 1234567890
+      orderId: "..."
     }
 
 Only these values are required to poll FixedFloat:
@@ -404,14 +389,13 @@ Only these values are required to poll FixedFloat:
     provider order ID
     provider order token
 
-The payment hash and order ID are included in the sealed envelope to bind the token
-to the intended payment/order and prevent substitution. They are not required by
-FixedFloat's /order endpoint itself.
+The payment hash and order ID bind the stored data to the intended payment/order.
+They are not required by FixedFloat's /order endpoint itself.
 
 The FixedFloat order token is sensitive and must never be exposed in plaintext to
-browser code, logs, screenshots, source maps, or public payloads. If an opaque
-recovery token is browser-carried, it must use authenticated encryption and be
-treated as a capability. Hosts may instead keep it entirely server-side.
+browser code, logs, screenshots, source maps, or public payloads. Therefore
+`swap_data` stays entirely server-side. Hosts may use framework/database field
+encryption, but OpenReceive does not require its own encryption layer or key.
 
 
 MINIMAL HOST RECORD WITH SWAPS
@@ -421,11 +405,11 @@ The host-facing order data remains very small:
 
     payment_hash
     paid_at
-    openreceive_swap_recovery_token   null when no swap is active
+    swap_data                         null when no swap is active
 
 The host already has its order ID, price, and any business status. It does not add wallet amounts,
 BOLT11 invoices, provider IDs, or provider tokens to its schema. For swaps it stores
-one extra opaque string rather than provider-specific columns.
+one extra JSON/text field rather than provider-specific columns.
 
 The two values cannot safely be collapsed with FixedFloat today:
 
@@ -433,7 +417,7 @@ The two values cannot safely be collapsed with FixedFloat today:
     back to the host order.
 
   - FixedFloat polling requires the independently generated order ID and token, so
-    their encrypted representation must be retained somewhere.
+    those generated values must be retained somewhere.
 
 No cryptographic transformation can recover independently generated FixedFloat
 credentials from the NWC payment hash. The FixedFloat token is created after the
@@ -441,16 +425,18 @@ shadow invoice, and FixedFloat does not accept a documented client-supplied
 idempotency/reference value that could bridge the two systems.
 
 
-STATELESS SWAP POLLING
-======================
+HOST-LOADED SWAP POLLING
+========================
 
 Polling becomes:
 
     const swap = await openreceive.getSwap({
-      recoveryToken: order.swapRecoveryToken
+      orderId: order.id,
+      paymentHash: order.paymentHash,
+      swapData: order.swapData
     });
 
-OpenReceive decrypts the recovery token, selects the named provider, extracts the
+OpenReceive validates the data, selects the named provider, extracts the
 provider order ID/token, calls FixedFloat /order, and returns the current normalized
 state.
 
@@ -480,8 +466,8 @@ A safe storage-free swap creation flow is:
   1. OpenReceive creates the shadow Lightning invoice.
   2. OpenReceive creates the FixedFloat order using that BOLT11 as toAddress.
   3. FixedFloat returns its order ID, token, deposit address, amount, and expiry.
-  4. OpenReceive seals the provider ID/token into swapRecoveryToken.
-  5. The host persists payment_hash and swapRecoveryToken.
+  4. OpenReceive returns the provider recovery details as server-only swapData.
+  5. The host persists payment_hash and swapData.
   6. Only after persistence succeeds are the deposit address and amount shown to
      the payer.
 
@@ -518,31 +504,24 @@ REFUNDS AND EMERGENCIES
 =======================
 
 Underpayments, late deposits, overpayments, and refund choices require the swap
-recovery token because they are provider workflows rather than wallet settlement.
+stored swap data because they are provider workflows rather than wallet settlement.
 
 A refund operation could be:
 
     openreceive.refundSwap({
-      recoveryToken,
-      refundAddress,
-      confirmationToken
+      orderId: order.id,
+      paymentHash: order.paymentHash,
+      swapData: order.swapData,
+      refundAddress
     })
 
-OpenReceive decrypts the recovery token and sends FixedFloat the order ID, order
+OpenReceive validates the swap data and sends FixedFloat the order ID, order
 token, refund choice, and address.
 
-A short-lived confirmation token can itself be cryptographically signed/sealed to
-avoid server-side nonce storage. It can bind:
-
-    payment hash
-    provider order identity
-    refund address
-    expiration timestamp
-
-Without persistence, strict single-use enforcement is not possible locally.
-Therefore repeated refund submissions must be handled safely against the provider's
-current order state, or the host must persist a one-time refund/fulfillment guard in
-its own order record.
+The host authorizes the refund request using its normal session/order policy. A UI
+confirmation is presentation, not a cryptographic OpenReceive capability. Repeated
+refund submissions must be handled safely against the provider's current order
+state, or the host may persist its own one-time refund/fulfillment guard.
 
 This is acceptable for refunds specifically because FixedFloat is the ledger, not
 OpenReceive. FixedFloat holds authoritative order state and will not refund an
@@ -557,7 +536,7 @@ OpenReceive storage requirement.
 LOSS AND RECOVERY
 =================
 
-If only the swap recovery token is lost:
+If only swap_data is lost:
 
   - NWC can still prove whether the shadow invoice settled.
   - A settled order can still be fulfilled by payment_hash.
@@ -567,19 +546,19 @@ If only the swap recovery token is lost:
 If only cached provider state is lost:
 
   - Nothing essential is lost.
-  - OpenReceive polls FixedFloat again using the recovery token.
+  - OpenReceive polls FixedFloat again using swap_data.
 
 If OpenReceive restarts:
 
   - It has no state to reload.
   - The host supplies stored payment hashes for reconciliation.
-  - The host supplies stored recovery tokens for swap polling.
+  - The host supplies stored swap_data for swap polling.
 
 If the host database is being backfilled:
 
   - NWC lookup/list can reconstruct settled invoice facts by payment_hash.
-  - FixedFloat unresolved state can be reconstructed only if the recovery token (or
-    raw provider ID and token) survived.
+  - FixedFloat unresolved state can be reconstructed only if swap_data (or the raw
+    provider ID and token) survived.
 
 
 
@@ -615,7 +594,7 @@ OpenReceive remains responsible for:
     lookup/range reconciliation primitives
     swap-provider API communication
     provider response normalization
-    sealing and opening swap recovery tokens
+    validating host-loaded swap data
     enforcing that provider completion is not wallet settlement
     emitting at-least-once onPaid events
 
@@ -628,7 +607,7 @@ The resulting developer proposition is:
     Configure a receive-only NWC connection.
     Do not configure storage for OpenReceive.
     Store payment_hash and nullable paid_at on your order.
-    If you enable swaps, also store one opaque swap_recovery_token.
+    If you enable swaps, also store one server-only swap_data JSON/text field.
     When onPaid reports paymentHash and paidAt, set paid_at once.
     A non-null paid_at is terminal and never changes.
 

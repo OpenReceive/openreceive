@@ -14,7 +14,7 @@ import {
 //   import { openReceiveNextHandlers } from "@openreceive/next";
 //   const service = await createOpenReceive();
 //   export const { GET, POST } = openReceiveNextHandlers({
-//     service, authorize, resolveCheckoutAmount, onCheckoutCreated
+//     service, authorize, resolveCheckout, onCheckoutCreated
 //   });
 
 export type { CreateOpenReceiveHttpHandlerOptions } from "@openreceive/http";

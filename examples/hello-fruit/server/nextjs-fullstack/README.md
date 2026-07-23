@@ -2,7 +2,8 @@
 
 The App Router owns `/orders` and durable order semantics; the catch-all `/openreceive` route
 only performs wallet/provider communication. The demo stores payment correlation in its host
-order repository, uses stateless capability tokens, and has no OpenReceive storage or migration.
+order repository, keeps optional swap provider data server-side, and has no OpenReceive storage
+or migration.
 
 The browser never receives your NWC code. Copy `openreceive.yml.example` to the repository-root
 `openreceive.yml`, set a valid receive-only `nwc`, then run:

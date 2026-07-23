@@ -1,46 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
-import { createOpenReceive, createStatelessTokenManager } from "../../packages/js/node/src/index.ts";
+import { createOpenReceive } from "../../packages/js/node/src/index.ts";
 import {
   createTestkitReceiveClient,
   createTestkitSwapProvider,
 } from "../../packages/js/testkit/src/index.ts";
-
-const key = Buffer.alloc(32, 7).toString("base64url");
-
-test("Node opens the shared authenticated token envelope", () => {
-  const vector = JSON.parse(readFileSync("spec/test-vectors/stateless-token.json", "utf8"));
-  const manager = createStatelessTokenManager({ keys: vector.keyring, clock: () => 1000 });
-  const opened = manager.open(vector.cross_language.purpose, vector.cross_language.token);
-  for (const [name, value] of Object.entries(vector.cross_language.payload)) {
-    assert.deepEqual(opened[name], value);
-  }
-  assert.throws(() => manager.open("swap", vector.cross_language.token));
-  const parts = vector.cross_language.token.split(".");
-  parts[4] = `${parts[4][0] === "A" ? "B" : "A"}${parts[4].slice(1)}`;
-  assert.throws(() => manager.open("cap", parts.join(".")));
-  assert.throws(() => createStatelessTokenManager({
-    keys: vector.keyring,
-    clock: () => vector.cross_language.payload.expiresAt,
-  }).open("cap", vector.cross_language.token));
-
-  const previousOnly = createStatelessTokenManager({
-    keys: [vector.keyring[1]],
-    clock: () => 1000,
-  });
-  const oldToken = previousOnly.seal("cap", vector.cross_language.payload);
-  assert.match(oldToken, /^or_cap_v1\.previous\./);
-  assert.equal(manager.open("cap", oldToken).orderId, "crosslang");
-  assert.match(manager.seal("cap", vector.cross_language.payload), /^or_cap_v1\.current\./);
-});
 
 test("Node service creates without persistence and verifies by payment_hash", async () => {
   let now = 1000;
   const wallet = createTestkitReceiveClient({ now: () => now });
   const openreceive = await createOpenReceive({
     client: wallet,
-    tokenKeys: [{ id: "current", key }],
     clock: () => now,
     configPath: false,
   });
@@ -62,13 +32,6 @@ test("Node service creates without persistence and verifies by payment_hash", as
   assert.equal(paid.status, "settled");
   assert.equal(paid.paidAt, 1100);
 
-  const capability = await openreceive.mintCapabilityToken({
-    orderId: "order-1",
-    paymentHash: first.paymentHash,
-    expiresAt: 1200,
-  });
-  assert.match(capability, /^or_cap_v1\./);
-  assert.equal((await openreceive.verifyCapabilityToken(capability)).paymentHash, first.paymentHash);
   await openreceive.close();
 });
 
@@ -76,7 +39,6 @@ test("watchPayments retries a failed callback and delivers settlement at least o
   const wallet = createTestkitReceiveClient({ now: () => 1000 });
   const openreceive = await createOpenReceive({
     client: wallet,
-    tokenKeys: [{ id: "current", key }],
     clock: () => 1000,
     configPath: false,
   });
@@ -102,12 +64,11 @@ test("watchPayments retries a failed callback and delivers settlement at least o
   await openreceive.close();
 });
 
-test("swap recovery token is opaque and provider state controls refunds", async () => {
+test("host-serialized swap data recovers provider state and provider state controls refunds", async () => {
   const wallet = createTestkitReceiveClient({ now: () => 1000 });
   const provider = createTestkitSwapProvider({ now: () => 1000 });
   const openreceive = await createOpenReceive({
     client: wallet,
-    tokenKeys: [{ id: "current", key }],
     swap: { providers: [provider] },
     clock: () => 1000,
     configPath: false,
@@ -117,20 +78,23 @@ test("swap recovery token is opaque and provider state controls refunds", async 
     amount: { sats: 20_000 },
     payInAsset: "USDT_TRON",
   });
-  assert.match(swap.swapRecoveryToken, /^or_swap_v1\./);
-  assert.doesNotMatch(swap.swapRecoveryToken, /testkit-token/);
+  assert.equal(swap.swapData.version, 1);
+  assert.equal(swap.swapData.paymentHash, undefined);
+  assert.equal(swap.swapData.orderId, undefined);
+  const storedSwapData = JSON.parse(JSON.stringify(swap.swapData));
 
   provider.forceRefundRequired({ providerOrderId: "testkit-swap-1" });
-  const status = await openreceive.getSwap({ recoveryToken: swap.swapRecoveryToken });
-  assert.equal(status.providerState, "refund_required");
-  const confirmation = await openreceive.createSwapRefundConfirmation({
-    recoveryToken: swap.swapRecoveryToken,
-    refundAddress: "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
+  const status = await openreceive.getSwap({
+    orderId: swap.orderId,
+    paymentHash: swap.paymentHash,
+    swapData: storedSwapData,
   });
+  assert.equal(status.providerState, "refund_required");
   const refunded = await openreceive.refundSwap({
-    recoveryToken: swap.swapRecoveryToken,
+    orderId: swap.orderId,
+    paymentHash: swap.paymentHash,
+    swapData: storedSwapData,
     refundAddress: "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
-    confirmationToken: confirmation.confirmationToken,
   });
   assert.equal(refunded.providerState, "refund_pending");
 });

@@ -1,5 +1,4 @@
 import {
-  createDefaultAuthorize,
   hostError,
   type CreateOpenReceiveHttpHandlerOptions,
 } from "@openreceive/http";
@@ -29,8 +28,9 @@ export async function openReceiveHttpOptions(): Promise<CreateOpenReceiveHttpHan
   const service = await getOpenReceive();
   return {
     service,
-    authorize: createDefaultAuthorize(),
-    resolveCheckoutAmount: ({ orderId }) => {
+    authorize: ({ resource }) =>
+      resource.order_id !== undefined && readHelloFruitHostOrder(resource.order_id) !== null,
+    resolveCheckout: ({ orderId }) => {
       const order = resolveHelloFruitHostCheckout(orderId);
       if (order === null) throw hostError("Order not found.", 404, "NOT_FOUND");
       return order;
@@ -70,9 +70,7 @@ export async function deliveryResponse(
   orderId: string,
   productId: string,
 ): Promise<Response> {
-  const service = await getOpenReceive();
   return helloFruitDeliveryFetchResponse({
-    verifyCapabilityToken: service.verifyCapabilityToken,
     stickersDir: STICKERS_DIR,
     orderId,
     productId,

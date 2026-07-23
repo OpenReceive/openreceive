@@ -22,8 +22,8 @@ export interface CheckoutData {
  * Create-mode inputs. Pass an `orderId` (and optionally a mount `prefix`, defaulting to
  * `/openreceive`) instead of a `checkout` snapshot and the component owns the whole
  * lifecycle: it creates the checkout against `${prefix}/checkouts`, then polls
- * `${prefix}/payments/check`. The stateless capability token is captured and attached
- * automatically. The host remains responsible for its own order display and routing.
+ * `${prefix}/payments/check`. Later requests carry only `order_id`; the host remains
+ * responsible for authorization, order display, and routing.
  */
 export interface CheckoutCreateOptions {
   readonly orderId?: string;

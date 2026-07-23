@@ -1,7 +1,5 @@
-import { randomBytes } from "node:crypto";
 import { readOpenReceiveConfigFile, type OpenReceiveFileConfig } from "./config.ts";
 import { redactSecrets } from "./service/logging.ts";
-import { parseTokenKeyring } from "./tokens.ts";
 
 export interface OpenReceiveCliIo {
   write(message: string): void;
@@ -21,7 +19,6 @@ Usage: openreceive <command> [options]
 Commands:
   doctor              Validate storage-free server configuration.
   debug-report        Print a redacted local support report.
-  generate-token-key  Print a new kid:key entry for OPENRECEIVE_TOKEN_KEYS.
 
 Options:
   --config <path>      YAML config file. Defaults to openreceive.yml.
@@ -36,10 +33,6 @@ export async function runOpenReceiveCli(options: OpenReceiveCliOptions): Promise
   try {
     if (["help", "--help", "-h"].includes(command)) {
       stdout.write(`${HELP}\n`);
-      return 0;
-    }
-    if (command === "generate-token-key") {
-      stdout.write(`k1:${randomBytes(32).toString("base64url")}\n`);
       return 0;
     }
     if (command === "doctor" || command === "debug-report") {
@@ -71,27 +64,17 @@ function runDiagnostics(input: {
     configError = error;
   }
   const nwc = configError === undefined ? config?.nwc : undefined;
-  const rawKeys = input.env.OPENRECEIVE_TOKEN_KEYS;
-  let keyStatus = "missing";
-  if (rawKeys !== undefined && rawKeys.trim() !== "") {
-    try {
-      keyStatus = `${parseTokenKeyring(rawKeys).length} configured`;
-    } catch {
-      keyStatus = "invalid";
-    }
-  }
   const lines = [
     `OpenReceive ${input.command}`,
     `node: ${process.version}`,
     `cwd: ${input.cwd}`,
     "storage: none (by design)",
     `nwc: ${nwc === undefined || nwc.trim() === "" ? "missing" : "present-redacted"}`,
-    `token_keys: ${keyStatus}`,
     `config: ${configError === undefined ? (config === undefined ? "missing" : "loaded") : safeErrorMessage(configError)}`,
     `swap_providers: ${config?.swap?.providers?.length ?? 0}`,
   ];
   input.stdout.write(`${lines.join("\n")}\n`);
-  return configError !== undefined || nwc === undefined || nwc.trim() === "" || keyStatus === "missing" || keyStatus === "invalid" ? 1 : 0;
+  return configError !== undefined || nwc === undefined || nwc.trim() === "" ? 1 : 0;
 }
 
 function readFlag(args: readonly string[], flag: string): string | undefined {

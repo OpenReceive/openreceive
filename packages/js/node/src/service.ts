@@ -17,7 +17,6 @@ import {
 } from "./service/pricing.ts";
 import {
   createSwap,
-  createSwapRefundConfirmation,
   getSwap,
   quoteSwap,
   refundSwap,
@@ -29,10 +28,6 @@ import type {
   PaymentWatcher,
 } from "./service/types.ts";
 import { TransientSwapCache, SwapProviderWeightBudget } from "./swap/index.ts";
-import {
-  createStatelessTokenManager,
-  parseTokenKeyring,
-} from "./tokens.ts";
 
 export type { OpenReceiveConfigErrorCode } from "./config-error.ts";
 export { OpenReceiveConfigError } from "./config-error.ts";
@@ -48,17 +43,6 @@ export async function createOpenReceive(
   const client = options.client ?? createNwcReceiveClient({ connectionString: requireNwc(options.nwc) });
   await preflight(client);
 
-  const tokenKeys =
-    options.tokenKeys ??
-    tokenKeysFromEnvironment();
-  if (tokenKeys === undefined || tokenKeys.length === 0) {
-    throw new OpenReceiveConfigError({
-      code: "INVALID_CONFIG_FILE",
-      message: "OpenReceive requires a server-side token keyring.",
-      hint: "Set OPENRECEIVE_TOKEN_KEYS=k1:<32-byte-base64url-key> or pass tokenKeys.",
-    });
-  }
-  const tokenManager = createStatelessTokenManager({ keys: tokenKeys, clock });
   const priceCurrencies = readOpenReceivePriceCurrencies(options.priceCurrencies);
   const priceProviders =
     options.priceProviders ??
@@ -86,7 +70,6 @@ export async function createOpenReceive(
     priceProviders,
     priceCurrencies,
     swapProviders,
-    tokenManager,
   };
   const watchers = new Set<PaymentWatcher>();
 
@@ -146,36 +129,9 @@ export async function createOpenReceive(
       void watcher.done.finally(() => watchers.delete(watcher));
       return watcher;
     },
-    async mintCapabilityToken(input) {
-      return tokenManager.seal("cap", input);
-    },
-    async verifyCapabilityToken(token) {
-      try {
-        const payload = tokenManager.open<{
-          version: 1;
-          issuedAt: number;
-          orderId: string;
-          paymentHash: string;
-          expiresAt: number;
-        }>("cap", token);
-        if (
-          typeof payload.orderId !== "string" ||
-          !/^[0-9a-f]{64}$/.test(payload.paymentHash) ||
-          !Number.isSafeInteger(payload.expiresAt)
-        ) return null;
-        return {
-          orderId: payload.orderId,
-          paymentHash: payload.paymentHash,
-          expiresAt: payload.expiresAt,
-        };
-      } catch {
-        return null;
-      }
-    },
     quoteSwap: (input) => quoteSwap(context, input),
     createSwap: (input) => createSwap(context, input),
     getSwap: (input) => getSwap(context, input),
-    createSwapRefundConfirmation: (input) => createSwapRefundConfirmation(context, input),
     refundSwap: (input) => refundSwap(context, input),
     listRates: (input) => listRates(context, input),
     quoteRates: (input) => quoteRates(context, input),
@@ -268,11 +224,6 @@ async function preflight(client: OpenReceiveServiceContext["options"]["client"])
       cause,
     });
   }
-}
-
-function tokenKeysFromEnvironment() {
-  const raw = globalThis.process?.env?.OPENRECEIVE_TOKEN_KEYS;
-  return raw === undefined || raw.trim() === "" ? undefined : parseTokenKeyring(raw);
 }
 
 function abortableDelay(milliseconds: number, signal: AbortSignal): Promise<void> {

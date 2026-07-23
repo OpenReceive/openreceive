@@ -12,14 +12,14 @@ import type {
 } from "express";
 
 // @openreceive/express — a thin adapter over @openreceive/http. All routing, authorization,
-// capability-token, and error-mapping logic lives in @openreceive/http; this only converts
+// host-hook authorization and error-mapping logic lives in @openreceive/http; this only converts
 // between Express req/res and the Web-standard Request/Response the handler speaks.
 //
 // Mount it at the root; it handles requests under its prefix (default /openreceive) and calls
 // next() for everything else, so it composes with the rest of your app:
 //
 //   app.use(express.json());
-//   app.use(openReceiveExpress({ service, authorize, resolveCheckoutAmount, onCheckoutCreated }));
+//   app.use(openReceiveExpress({ service, authorize, resolveCheckout, onCheckoutCreated }));
 
 export type { CreateOpenReceiveHttpHandlerOptions } from "@openreceive/http";
 export {

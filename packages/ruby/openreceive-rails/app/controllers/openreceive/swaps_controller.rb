@@ -14,10 +14,6 @@ module OpenReceive
       respond_with(:get_swap)
     end
 
-    def refund_confirmation
-      respond_with(:create_refund_confirmation)
-    end
-
     def refund
       respond_with(:refund_swap)
     end
@@ -29,7 +25,6 @@ module OpenReceive
         method,
         raw_body: openreceive_raw_body,
         request: request,
-        token: openreceive_token,
         request_id: openreceive_request_id
       ))
     end

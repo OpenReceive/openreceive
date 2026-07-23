@@ -60,6 +60,7 @@ function validateSchemas() {
     "error.schema.json",
     "provider-registry.schema.json",
     "swap-order.schema.json",
+    "swap-data.schema.json",
   ];
   for (const name of required) {
     assert(existsSync(path.join(root, "spec/schemas", name)), `missing schema ${name}`);
@@ -104,14 +105,13 @@ function validateSettlementVectors() {
 function validateContracts() {
   const openapi = readYaml("spec/openapi/openreceive-http.v1.yaml");
   assert(openapi.openapi === "3.1.0", "OpenAPI version must be 3.1.0");
-  assert(openapi.info?.version === "0.2.0", "storage-free HTTP contract version mismatch");
+  assert(openapi.info?.version === "0.3.0", "host-owned swap-data HTTP contract version mismatch");
   const expectedPaths = [
     "/checkouts",
     "/payments/check",
     "/swaps/quote",
     "/swaps",
     "/swaps/status",
-    "/swaps/refund-confirmations",
     "/swaps/refunds",
     "/rates",
   ];
@@ -120,7 +120,11 @@ function validateContracts() {
   assert(create.required.includes("order_id"), "checkout create requires order_id");
   assert(create.properties.amount === undefined && create.properties.amount_msats === undefined, "payer create request must not contain amount");
   assert(openapi.components.schemas.Checkout.required.includes("payment_hash"), "checkout response requires payment_hash");
-  assert(openapi.components.securitySchemes.paymentCapability.scheme === "bearer", "capability must use bearer transport");
+  assert(openapi.components.securitySchemes === undefined, "OpenReceive must not mint authentication capabilities");
+  assert(openapi.components.schemas.PaymentCheckRequest.required.includes("order_id"), "payment checks resolve host orders");
+  assert(openapi.components.schemas.CreateSwapResponse.properties.swap_data === undefined, "swap_data must not be public");
+  const serializedOpenapi = JSON.stringify(openapi);
+  assert(!/swap_recovery_token|order_access_token|confirmation_token|refund-confirmations/.test(serializedOpenapi), "removed browser token contracts must stay removed");
 
   const asyncapi = readYaml("spec/asyncapi/openreceive-events.v1.yaml");
   assert(asyncapi.asyncapi === "3.0.0", "AsyncAPI version must be 3.0.0");
@@ -138,7 +142,10 @@ function validateStorageFreeTree() {
     "packages/js/node/src/sqlite-store.ts",
     "packages/js/node/src/postgres-store.ts",
     "packages/js/node/src/migrations/001_init.sql",
+    "packages/js/node/src/tokens.ts",
+    "packages/js/http/src/tokens.ts",
     "packages/ruby/openreceive-server/lib/openreceive/server/active_record_store.rb",
+    "packages/ruby/openreceive-server/lib/openreceive/server/tokens.rb",
     "spec/test-vectors/storage-kv.json",
     "spec/test-vectors/managed-platform-storage.json",
   ];
@@ -153,7 +160,7 @@ function validateStorageFreeTree() {
   const config = readYaml("openreceive.yml.example");
   assert(config.store === undefined && config.storage === undefined && config.namespace === undefined, "openreceive.yml.example must not expose storage configuration");
   const nodeExports = readFileSync(path.join(root, "packages/js/node/src/index.ts"), "utf8");
-  assert(!/InvoiceStore|Sqlite|Postgres|Migration/.test(nodeExports), "Node public exports must not expose persistence adapters");
+  assert(!/InvoiceStore|Sqlite|Postgres|Migration|StatelessToken|TokenKey/.test(nodeExports), "Node public exports must not expose persistence or token infrastructure");
 }
 
 validateJson();

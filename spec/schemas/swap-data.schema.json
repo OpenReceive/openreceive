@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openreceive.dev/schemas/swap-data.schema.json",
+  "title": "OpenReceive host swap data",
+  "description": "Sensitive provider recovery state stored only by the host application. JavaScript uses providerOrder; Ruby uses provider_order. The order ID and payment hash stay in their own host columns.",
+  "type": "object",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "providerOrder"],
+      "properties": {
+        "version": { "const": 1 },
+        "providerOrder": { "$ref": "#/$defs/providerOrder" }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "provider_order"],
+      "properties": {
+        "version": { "const": 1 },
+        "provider_order": { "$ref": "#/$defs/providerOrder" }
+      }
+    }
+  ],
+  "$defs": {
+    "providerOrder": {
+      "type": "object",
+      "description": "Provider-specific order recovery object, including its bearer credential.",
+      "additionalProperties": true,
+      "required": ["provider", "provider_order_id"],
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "provider_order_id": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

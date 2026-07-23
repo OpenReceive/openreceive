@@ -3,7 +3,7 @@
  *
  * Pattern:
  * - Put the public `order_id` in the URL (`/checkout/:orderId`) so refresh/share works.
- * - Keep the OpenReceive capability token out of the URL (cookie + sessionStorage handle it).
+ * - Let the host authorize access to the order using its normal session or guest-order policy.
  * - Mirror an optional host order summary in sessionStorage for instant same-tab restore;
  *   fall back to `GET {prefix}/orders/{orderId}/summary` (or a host `fetchOrder`) when
  *   storage is empty (new tab with the same link).
@@ -13,7 +13,6 @@
  * the host wants `/checkout/:orderId` in the address bar. Keep this module for hosts that
  * need custom storage keys or URL shapes.
  *
- * The capability token store (`order-token.ts`) is separate and already automatic.
  */
 
 export interface GuestCheckoutResumeOptions<TOrder> {
@@ -128,7 +127,7 @@ export function createGuestCheckoutResume<TOrder>(
       const keys: string[] = [];
       for (let index = 0; index < store.length; index += 1) {
         const key = store.key(index);
-        if (key !== null && key.startsWith(storageKeyPrefix)) keys.push(key);
+        if (key?.startsWith(storageKeyPrefix)) keys.push(key);
       }
       for (const key of keys) store.removeItem(key);
     } catch {

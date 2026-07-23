@@ -5,13 +5,14 @@
 ### Storage-free redesign
 
 - Removed every OpenReceive database, Redis, migration, table, persistence adapter, and
-  durable worker. The host order stores `payment_hash`, write-once `paid_at`, and an opaque
-  swap recovery token when swaps are enabled.
+  durable worker. The host order stores `payment_hash`, write-once `paid_at`, and optional
+  server-only `swap_data` when swaps are enabled.
 - Replaced prepare/order persistence routes with storage-free checkout creation, payment
   verification, reconciliation, rates, and swap recovery primitives. The host is the sole
   price authority and must commit the payment hash before payer instructions are returned.
-- Capability, swap recovery, and refund confirmation tokens now use a rotating authenticated
-  encrypted keyring; Node and Ruby share fixed conformance vectors.
+- Removed OpenReceive authentication/recovery/refund tokens and their keyring. The host
+  authorizes by `order_id`, loads its own `payment_hash` / `swap_data`, and never exposes
+  provider credentials to the browser.
 
 ### Hosted demos removed
 
