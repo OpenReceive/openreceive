@@ -172,11 +172,12 @@ ${dialectNote}
 ## Next steps
 
 1. ${migrate}
-2. Fill in \`loadOrder\` and \`amountForOrder\` in \`src/openreceive/hooks.stub.ts\`.
-3. Pass the returned hooks to your mounted adapter (\`resolveCheckout\` / \`onCheckoutCreated\`).
-4. On settlement, call \`markOpenReceivePaidOnce\` and fulfill only when \`firstForOrder\` is true.
+2. Fill in \`loadOrder\` and \`amountForOrder\` in \`src/openreceive/host.stub.ts\`.
+3. Pass a transaction-safe \`onFirstSettlement\` to the generated \`createOpenReceiveHost\`; update the order or insert an outbox row there.
+4. Pass that one \`host\` object to both the mounted adapter and \`startOpenReceiveReconciler\`.
 5. Never return \`swap_data\` / \`swapData\` from application APIs, logs, or browser bundles.
 
-OpenReceive does not open a database connection and does not run migrations for you.
+Reconciliation reloads unsettled attempts from this table after every restart. OpenReceive does
+not need a cursor table, open a database connection, or run migrations for you.
 `;
 }

@@ -207,8 +207,6 @@ export function listProviders(filter: ProviderFilter = {}): readonly Provider[] 
     .sort(sortByProviderName);
 }
 
-export const getProviders = listProviders;
-
 export function getProvider(providerId: ProviderId): Provider | undefined {
   return registry.providers[providerId];
 }
@@ -217,19 +215,13 @@ export function providerIconUrl(provider: Pick<Provider, "icon_path">): string {
   return openReceiveProviderIconUrls[provider.icon_path] ?? provider.icon_path;
 }
 
-export const getProviderIconUrl = providerIconUrl;
-
 export function providerTutorialUrl(tutorial: Pick<ProviderTutorial, "path">): string {
   return openReceivePayTutorialUrls[tutorial.path] ?? tutorial.path;
 }
 
-export const getProviderTutorialUrl = providerTutorialUrl;
-
 export function listAssets(): readonly AssetIndexEntry[] {
   return registry.assets_index;
 }
-
-export const getAssets = listAssets;
 
 export function getAsset(symbol: string): AssetIndexEntry | undefined {
   const normalizedSymbol = normalizeAssetSymbol(symbol);
@@ -239,8 +231,6 @@ export function getAsset(symbol: string): AssetIndexEntry | undefined {
 export function listCryptoRoutes(): readonly CryptoRoute[] {
   return registry.crypto_routes;
 }
-
-export const getCryptoRoutes = listCryptoRoutes;
 
 export function getCryptoRoute(routeId: CryptoRouteId): CryptoRoute | undefined {
   const normalizedRouteId = normalizeRouteId(routeId);
@@ -260,8 +250,6 @@ export function listCountries(filter: CountryFilter = {}): readonly Country[] {
   });
 }
 
-export const getCountries = listCountries;
-
 export function getCountry(countryCode: CountryCode): Country | undefined {
   const normalizedCountryCode = normalizeCountryCode(countryCode);
   return registry.countries.find((country) => country.code === normalizedCountryCode);
@@ -273,8 +261,6 @@ export function listFiatRails(): readonly ResolvedFiatRail[] {
     ...rail
   }));
 }
-
-export const getFiatRails = listFiatRails;
 
 export function getFiatRail(railId: FiatRailId): FiatRail | undefined {
   return registry.fiat_rails[normalizeRailId(railId)];
@@ -344,8 +330,6 @@ export function listFiatProviders(options: {
 export function listDisqualifiedProviders(): readonly DisqualifiedProvider[] {
   return registry.disqualified_providers;
 }
-
-export const getDisqualifiedProviders = listDisqualifiedProviders;
 
 export function validateRegistry(input: ProviderRegistry = registry): ProviderRegistryValidationResult {
   const errors: string[] = [];

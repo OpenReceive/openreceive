@@ -513,21 +513,6 @@ function renderCheckout(orderId: string): void {
   checkoutElement.setAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId, orderId);
   checkoutElement.setAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeOrderId, orderId);
 
-  checkoutElement.addEventListener(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.summary, (event) => {
-    const detail = (event as CustomEvent<{ summary?: unknown }>).detail;
-    const summary = detail?.summary;
-    if (!isHelloFruitDemoOrder(summary)) return;
-    currentOrder = summary;
-    purchasedFruit = fruits.find((fruit) => fruit.id === summary.items[0]?.product_id);
-    renderOrder(summary);
-    if (summary.status === "paid" && completedOrderId !== summary.uuid) {
-      completedOrderId = summary.uuid;
-      void revealFulfilledDelivery(summary.uuid).catch((cause: unknown) => {
-        setError(cause instanceof Error ? cause.message : String(cause));
-      });
-    }
-  });
-
   checkoutElement.addEventListener(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.error, (event) => {
     const detail = (event as CustomEvent<{ error?: unknown }>).detail;
     logDemo("checkout.error", "Checkout element reported an error.", {

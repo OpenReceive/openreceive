@@ -1,5 +1,5 @@
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { CheckoutState } from "@openreceive/browser/internal";
 import { Checkout, ThemeScope, TransactionDetails } from "@openreceive/react";
@@ -15,6 +15,7 @@ import {
   enterHelloFruitCheckout,
   forgetHelloFruitOrder,
   leaveHelloFruitCheckout,
+  loadHelloFruitOrderForResume,
   parseHelloFruitCheckoutOrderId,
   rememberHelloFruitOrder,
 } from "../../../../shared/demo-checkout-resume.ts";
@@ -127,7 +128,7 @@ function App(): React.ReactElement {
   }
 
   /** onSettled is a display hint — wait for server onPaid to mark the summary paid. */
-  async function revealFulfilledDelivery(orderId: string): Promise<void> {
+  const revealFulfilledDelivery = useCallback(async (orderId: string): Promise<void> => {
     const paid = await waitForHelloFruitPaidSummary({ orderId });
     logDemo("fulfillment.summary_paid", "Server marked order paid; loading delivery.", {
       orderId,
@@ -140,11 +141,13 @@ function App(): React.ReactElement {
       nextUrls[item.product_id] = await fetchHelloFruitDeliveryObjectUrl(orderId, item.product_id);
     }
     setDeliveryObjectUrls((current) => {
-      revokeDeliveryObjectUrls(current);
+      for (const url of Object.values(current)) {
+        URL.revokeObjectURL(url);
+      }
       return nextUrls;
     });
     setStickerModalOpen(true);
-  }
+  }, []);
 
   function onSettled(): void {
     const orderId = order?.uuid ?? resumeOrderId;
@@ -168,29 +171,39 @@ function App(): React.ReactElement {
     setResuming(false);
   }
 
-  function onSummary(summary: unknown): void {
-    if (!isHelloFruitDemoOrder(summary)) return;
-    logDemo("checkout.resume", "Resuming checkout from summary.", { orderId: summary.uuid });
-    setOrder(summary);
-    setPurchasedItems(summary.items);
-    setResuming(false);
-    setResumeError(null);
-    if (summary.status === "paid") {
-      void revealFulfilledDelivery(summary.uuid).catch((cause: unknown) => {
-        setError(cause instanceof Error ? cause.message : String(cause));
-      });
-    }
-  }
-
-  function onResumeMiss(orderId: string): void {
-    logDemo("checkout.resume_miss", "Checkout resume order not found.", { orderId });
-    leaveHelloFruitCheckout();
-    setResumeOrderId(undefined);
-    setOrder(null);
-    setPurchasedItems([]);
-    setResuming(false);
-    setResumeError("Order not found.");
-  }
+  useEffect(() => {
+    if (resumeOrderId === undefined || order?.uuid === resumeOrderId) return;
+    let cancelled = false;
+    setResuming(true);
+    void loadHelloFruitOrderForResume(resumeOrderId).then((summary) => {
+      if (cancelled) return;
+      if (summary === undefined) {
+        logDemo("checkout.resume_miss", "Checkout resume order not found.", {
+          orderId: resumeOrderId,
+        });
+        leaveHelloFruitCheckout();
+        setResumeOrderId(undefined);
+        setOrder(null);
+        setPurchasedItems([]);
+        setResuming(false);
+        setResumeError("Order not found.");
+        return;
+      }
+      logDemo("checkout.resume", "Resuming checkout from summary.", { orderId: summary.uuid });
+      setOrder(summary);
+      setPurchasedItems(summary.items);
+      setResuming(false);
+      setResumeError(null);
+      if (summary.status === "paid") {
+        void revealFulfilledDelivery(summary.uuid).catch((cause: unknown) => {
+          setError(cause instanceof Error ? cause.message : String(cause));
+        });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [resumeOrderId, order?.uuid, revealFulfilledDelivery]);
 
   useEffect(() => {
     function onPopState(): void {
@@ -568,8 +581,6 @@ function App(): React.ReactElement {
               onSettled={onSettled}
               onState={onCheckoutState}
               onStartOver={startOver}
-              onSummary={onSummary}
-              onResumeMiss={onResumeMiss}
             />
           </>
         )}
@@ -638,12 +649,10 @@ interface FrameworkCheckoutProps {
   readonly onSettled: () => void;
   readonly onState: (state: CheckoutState) => void;
   readonly onStartOver: () => void;
-  readonly onSummary: (summary: unknown) => void;
-  readonly onResumeMiss: (orderId: string) => void;
 }
 
 // Each framework mounts its SELF-CONTAINED <Checkout orderId>: the component creates the
-// checkout against the mounted router, polls, restores guest summary, and drives swaps itself.
+// checkout against the mounted router, polls, and drives swaps itself.
 // Pass `syncUrl` only when you want Checkout to push `/checkout/:orderId` (this demo owns that).
 function FrameworkCheckout({
   framework,
@@ -653,8 +662,6 @@ function FrameworkCheckout({
   onSettled,
   onState,
   onStartOver,
-  onSummary,
-  onResumeMiss,
 }: FrameworkCheckoutProps): React.ReactElement {
   const hostRef = useRef<HTMLDivElement | null>(null);
 
@@ -707,8 +714,6 @@ function FrameworkCheckout({
           ...(routeOrderId === undefined ? {} : { routeOrderId }),
           onSettled: options.onSettled,
           onStartOver,
-          onSummary,
-          onResumeMiss,
           options: {
             rootSelector: options.rootSelector,
             defaultTheme: options.defaultTheme,
@@ -747,8 +752,6 @@ function FrameworkCheckout({
         if (routeOrderId !== undefined) component.setInput("routeOrderId", routeOrderId);
         component.setInput("onSettled", options.onSettled);
         component.setInput("onStartOver", onStartOver);
-        component.setInput("onSummary", onSummary);
-        component.setInput("onResumeMiss", onResumeMiss);
         component.setInput("options", {
           rootSelector: options.rootSelector,
           defaultTheme: options.defaultTheme,
@@ -781,8 +784,6 @@ function FrameworkCheckout({
             ...(routeOrderId === undefined ? {} : { routeOrderId }),
             onSettled: options.onSettled,
             onStartOver,
-            onSummary,
-            onResumeMiss,
             options: {
               rootSelector: options.rootSelector,
               defaultTheme: options.defaultTheme,
@@ -811,7 +812,7 @@ function FrameworkCheckout({
       cleanup();
       host.replaceChildren();
     };
-  }, [framework, orderId, routeOrderId, onError, onSettled, onState, onStartOver, onSummary, onResumeMiss]);
+  }, [framework, orderId, routeOrderId, onError, onSettled, onState, onStartOver]);
 
   if (framework === "react") {
     return (
@@ -824,8 +825,6 @@ function FrameworkCheckout({
         onSettled={onSettled}
         onState={onState}
         onStartOver={onStartOver}
-        onSummary={onSummary}
-        onResumeMiss={onResumeMiss}
       />
     );
   }

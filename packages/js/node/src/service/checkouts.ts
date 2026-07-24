@@ -25,7 +25,6 @@ export async function createCheckout(
   const expiry = input.expiry_seconds ?? OPENRECEIVE_INVOICE_EXPIRY_SECONDS;
   const metadata = {
     order_id: input.order_id,
-    ...(input.idempotency_key === undefined ? {} : { idempotency_key: input.idempotency_key }),
     ...(input.metadata ?? {}),
   };
   if (Buffer.byteLength(JSON.stringify(metadata), "utf8") > OPENRECEIVE_NWC_METADATA_MAX_BYTES) {

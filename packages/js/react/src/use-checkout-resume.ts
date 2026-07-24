@@ -59,11 +59,9 @@ export interface UseCheckoutResumeResult {
 /**
  * Settlement-capture + optional guest URL resume for host apps wrapping `<Checkout>`.
  *
- * Handles the once-per-order settled guard and latest-state ref that every React demo
- * previously copy-pasted. For the common case, prefer `<Checkout orderId onSummary={…} />`
- * (summary restore is automatic); add `syncUrl` only when you want History API URL sync.
- * Keep this hook when you need custom `createGuestCheckoutResume` storage keys or route
- * parsing.
+ * Handles the once-per-order settled guard and host-owned resume loading. Pass an explicit
+ * `createGuestCheckoutResume` controller when the application wants URL or session-storage
+ * resume behavior.
  */
 export function useCheckoutResume<TOrder = never>(
   options: UseCheckoutResumeOptions<TOrder> = {},

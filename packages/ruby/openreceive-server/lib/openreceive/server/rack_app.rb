@@ -6,13 +6,14 @@ require "openreceive/server/request_handler"
 module OpenReceive
   module Server
     class RackApp
-      def initialize(service:, authorize:, resolve_checkout:, on_checkout_created:, rate_limit: nil, prefix: "/openreceive")
+      def initialize(service:, authorize:, resolve_checkout:, on_checkout_created:, on_paid:, rate_limit: nil, prefix: "/openreceive")
         @prefix = prefix.to_s.chomp("/")
         @handler = RequestHandler.new(
           service: service,
           authorize: authorize,
           resolve_checkout: resolve_checkout,
           on_checkout_created: on_checkout_created,
+          on_paid: on_paid,
           rate_limit: rate_limit,
           prefix: @prefix
         )

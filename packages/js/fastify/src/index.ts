@@ -5,11 +5,11 @@ import {
 
 // @openreceive/fastify — a Fastify plugin over @openreceive/http. Fastify is not a build-time
 // dependency of this package (hosts bring their own), so the Fastify surface is typed
-// structurally with the minimum this adapter touches. All route/auth/token/error logic lives in
+// structurally with the minimum this adapter touches. All route/host/error logic lives in
 // @openreceive/http; this only bridges Fastify's request/reply to Web Request/Response.
 //
 //   await fastify.register(openReceiveFastify, {
-//     service, authorize, resolveCheckout, onCheckoutCreated, prefix: "/openreceive"
+//     service, authorize, host, prefix: "/openreceive"
 //   });
 //
 // Register `prefix` scopes the plugin's catch-all route to that path AND is passed to the handler
@@ -17,15 +17,15 @@ import {
 
 export type { CreateOpenReceiveHttpHandlerOptions } from "@openreceive/http";
 export {
-  createOpenReceivePaymentHooks,
+  createOpenReceiveHost,
   openReceivePaymentInsert,
 } from "@openreceive/http";
 export type {
-  CreateOpenReceivePaymentHooksOptions,
-  OpenReceivePaymentHooks,
+  CreateOpenReceiveHostOptions,
+  OpenReceiveHost,
+  OpenReceiveHostRepository,
   OpenReceivePaymentInsert,
   OpenReceivePaymentRecord,
-  OpenReceivePaymentRepository,
 } from "@openreceive/http";
 
 /** Minimal structural view of the Fastify surface this adapter uses. */

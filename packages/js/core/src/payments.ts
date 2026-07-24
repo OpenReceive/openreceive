@@ -31,14 +31,15 @@ export interface PaidPayment {
 export interface CheckPaymentOptions {
   readonly client: OpenReceiveReceiveNwcClient;
   readonly paymentHash: string;
+  /** Exact NIP-47 invoice creation time returned by make_invoice. */
+  readonly createdAt: number;
   readonly clock?: () => number;
-  /** Optional creation-time lower bound for wallets without lookup_invoice. */
-  readonly from?: number;
   readonly until?: number;
+  readonly overlapSeconds?: number;
   readonly maxPages?: number;
 }
 
-export interface ScanPaymentsOptions {
+interface ScanPaymentsOptions {
   readonly client: OpenReceiveReceiveNwcClient;
   readonly clock?: () => number;
   readonly from?: number;
@@ -47,73 +48,85 @@ export interface ScanPaymentsOptions {
   readonly includeUnpaid?: boolean;
 }
 
+export interface ReconcilePaymentAttempt {
+  readonly paymentHash: string;
+  /** Exact NIP-47 invoice creation time returned by make_invoice. */
+  readonly createdAt: number;
+}
+
+export interface ReconcilePaymentsOptions {
+  readonly client: OpenReceiveReceiveNwcClient;
+  readonly attempts: readonly ReconcilePaymentAttempt[];
+  readonly clock?: () => number;
+  readonly overlapSeconds?: number;
+  readonly until?: number;
+  readonly maxPages?: number;
+}
+
 export async function checkPayment(options: CheckPaymentOptions): Promise<PaymentCheck> {
-  const paymentHash = normalizePaymentHash(options.paymentHash);
-  const observedAt = (options.clock ?? currentUnixSeconds)();
-  let transaction: NwcTransaction | undefined;
-
-  if (options.client.lookupInvoice !== undefined) {
-    try {
-      transaction = await options.client.lookupInvoice({ payment_hash: paymentHash });
-    } catch {
-      // lookup_invoice is optional in NIP-47 and some wallets advertise it but reject
-      // particular requests. list_transactions remains the portable recovery path.
-    }
-  }
-
-  transaction ??= await findTransactionByPaymentHash({
+  const [checked] = await reconcilePaymentAttempts({
     client: options.client,
-    paymentHash,
-    from: options.from,
+    attempts: [{ paymentHash: options.paymentHash, createdAt: options.createdAt }],
+    clock: options.clock,
     until: options.until,
+    overlapSeconds: options.overlapSeconds,
     maxPages: options.maxPages,
   });
-
-  if (transaction === undefined) {
-    return { paymentHash, status: "not_found" };
-  }
-  return paymentCheckFromTransaction(paymentHash, transaction, observedAt);
+  if (checked === undefined) throw new Error("payment reconciliation returned no result");
+  return checked;
 }
 
-export async function scanSettledPayments(
-  options: ScanPaymentsOptions,
-): Promise<readonly PaidPayment[]> {
-  const transactions = await listIncomingTransactions(options);
-  const observedAt = (options.clock ?? currentUnixSeconds)();
-  const settled = new Map<string, PaidPayment>();
-  for (const transaction of transactions) {
-    if (transaction.payment_hash === undefined) continue;
-    const paymentHash = normalizePaymentHash(transaction.payment_hash);
-    const checked = paymentCheckFromTransaction(paymentHash, transaction, observedAt);
-    if (checked.status !== "settled" || checked.paidAt === undefined) continue;
-    settled.set(paymentHash, {
-      paymentHash,
-      paidAt: checked.paidAt,
-      details: checked.details,
+/**
+ * Reconcile many known host attempts with at most two wallet-history scans:
+ * settled/default results first, then the inclusive unpaid view for pending
+ * invoices. This avoids one complete list_transactions walk per payment hash.
+ */
+export async function reconcilePaymentAttempts(
+  options: ReconcilePaymentsOptions,
+): Promise<readonly PaymentCheck[]> {
+  if (options.attempts.length === 0) return [];
+  const overlapSeconds = options.overlapSeconds ?? 60;
+  if (!Number.isSafeInteger(overlapSeconds) || overlapSeconds < 0) {
+    throw new RangeError("overlapSeconds must be a non-negative safe integer");
+  }
+  const expected = new Map(
+    options.attempts.map((attempt) => [
+      normalizePaymentHash(attempt.paymentHash),
+      normalizeUnix(attempt.createdAt, "createdAt"),
+    ]),
+  );
+  const from = Math.max(0, Math.min(...expected.values()) - overlapSeconds);
+  const until = options.until ?? (options.clock ?? currentUnixSeconds)();
+  const settledRows = await listIncomingTransactions({
+    client: options.client,
+    from,
+    until,
+    maxPages: options.maxPages,
+  });
+  const byHash = transactionMap(settledRows);
+  const missing = [...expected.keys()].filter((paymentHash) => !byHash.has(paymentHash));
+  if (missing.length > 0) {
+    const inclusiveRows = await listIncomingTransactions({
+      client: options.client,
+      from,
+      until,
+      maxPages: options.maxPages,
+      includeUnpaid: true,
     });
+    for (const [paymentHash, transaction] of transactionMap(inclusiveRows)) {
+      if (!byHash.has(paymentHash)) byHash.set(paymentHash, transaction);
+    }
   }
-  return [...settled.values()];
+  const observedAt = (options.clock ?? currentUnixSeconds)();
+  return [...expected.keys()].map((paymentHash) => {
+    const transaction = byHash.get(paymentHash);
+    return transaction === undefined
+      ? { paymentHash, status: "not_found" }
+      : paymentCheckFromTransaction(paymentHash, transaction, observedAt);
+  });
 }
 
-export async function findTransactionByPaymentHash(
-  options: ScanPaymentsOptions & { readonly paymentHash: string },
-): Promise<NwcTransaction | undefined> {
-  const expected = normalizePaymentHash(options.paymentHash);
-  const transactions = await listIncomingTransactions(options);
-  const settled = transactions.find(
-    (transaction) => transaction.payment_hash?.toLowerCase() === expected,
-  );
-  if (settled !== undefined || options.includeUnpaid === true) return settled;
-  // NIP-47's `unpaid` filter is wallet-dependent: some implementations return
-  // only pending invoices when it is true. Search the settled/default view first,
-  // then the unpaid view so a known hash can be recovered in either state.
-  const unpaid = await listIncomingTransactions({ ...options, includeUnpaid: true });
-  return unpaid.find(
-    (transaction) => transaction.payment_hash?.toLowerCase() === expected,
-  );
-}
-
-export async function listIncomingTransactions(
+async function listIncomingTransactions(
   options: ScanPaymentsOptions,
 ): Promise<readonly NwcTransaction[]> {
   const maxPages = normalizeMaxPages(options.maxPages);
@@ -145,14 +158,14 @@ export async function listIncomingTransactions(
   return [...byPaymentHash.values(), ...withoutHash];
 }
 
-export function paymentCheckFromTransaction(
+function paymentCheckFromTransaction(
   paymentHash: string,
   transaction: NwcTransaction,
   observedAt: number,
 ): PaymentCheck {
   const detection = classifyTransactionSettlement(transaction);
   const status: PaymentStatus = detection.status;
-  const paidAt = status === "settled" ? transaction.settled_at ?? observedAt : undefined;
+  const paidAt = status === "settled" ? (transaction.settled_at ?? observedAt) : undefined;
   const details: PaymentDetails = {
     transaction: safeTransaction(transaction),
     observed_at: observedAt,
@@ -187,6 +200,15 @@ function normalizeMaxPages(value: number | undefined): number {
     throw new RangeError("maxPages must be a positive safe integer");
   }
   return value;
+}
+
+function transactionMap(transactions: readonly NwcTransaction[]): Map<string, NwcTransaction> {
+  const byHash = new Map<string, NwcTransaction>();
+  for (const transaction of transactions) {
+    if (transaction.payment_hash === undefined) continue;
+    byHash.set(normalizePaymentHash(transaction.payment_hash), transaction);
+  }
+  return byHash;
 }
 
 function normalizeUnix(value: number, field: string): number {

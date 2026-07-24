@@ -3,13 +3,17 @@
 The normal Node/Ruby service primitives are:
 
 - `createCheckout({ orderId, amount })`
-- `checkPayment({ paymentHash })`
-- `reconcilePayments({ paymentHashes })`
-- `watchPayments({ onPaid })`
+- `checkPayment({ paymentHash, createdAt })`
+- `reconcilePayments({ attempts: [{ paymentHash, createdAt }] })`
 - `quoteSwap`, `createSwap`, `getSwap`, `refundSwap`
 
 `amount` is exactly `{ sats }` or `{ currency, value }`; public results use `amount_msats`.
 Fiat conversion uses exact decimal/integer math.
+
+`checkPayment` and `reconcilePayments` are pure wallet reads. Mounted payment
+checks and `startOpenReceiveReconciler` deliver verified settlement through the
+host integration. The reconciler reloads unsettled host attempts after restart,
+so it needs no durable cursor.
 
 The mounted HTTP routes are defined normatively in
 [`spec/openapi/openreceive-http.v1.yaml`](../../spec/openapi/openreceive-http.v1.yaml). Create

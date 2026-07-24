@@ -122,15 +122,15 @@ function validateSettlementVectors() {
     cases.some((item) => item.transaction?.preimage && item.expected?.settled === false),
     "preimage-alone vector must remain unsettled",
   );
-  const pagination = readJson("spec/test-vectors/transaction-scan-pagination.json");
-  const serialized = JSON.stringify(pagination);
-  assert(serialized.includes("20"), "transaction scan vectors must cover NIP-47 page size 20");
 }
 
 function validateContracts() {
   const openapi = readYaml("spec/openapi/openreceive-http.v1.yaml");
   assert(openapi.openapi === "3.1.0", "OpenAPI version must be 3.1.0");
-  assert(openapi.info?.version === "0.4.0", "host-owned payment-attempt HTTP contract version mismatch");
+  assert(
+    openapi.info?.version === "0.4.0",
+    "host-owned payment-attempt HTTP contract version mismatch",
+  );
   const expectedPaths = [
     "/checkouts",
     "/payments/check",
@@ -226,8 +226,7 @@ function validateStorageFreeTree() {
   const envExample = readFileSync(path.join(root, ".env.example"), "utf8");
   const envNames = [...envExample.matchAll(/^([A-Z][A-Z0-9_]*)=/gm)].map((match) => match[1]);
   assert(
-    JSON.stringify(envNames) ===
-      JSON.stringify(["NWC_URI", "LSC_URI_PRIMARY", "LSC_URI_BACKUP"]),
+    JSON.stringify(envNames) === JSON.stringify(["NWC_URI", "LSC_URI_PRIMARY", "LSC_URI_BACKUP"]),
     ".env.example must contain only the three secret URI variables",
   );
   assert(
@@ -242,15 +241,18 @@ function validateStorageFreeTree() {
 
   const httpExports = readFileSync(path.join(root, "packages/js/http/src/index.ts"), "utf8");
   assert(
-    httpExports.includes("createOpenReceivePaymentHooks") &&
-      httpExports.includes("OpenReceivePaymentRepository"),
-    "@openreceive/http must expose ORM-neutral host payment hooks",
+    httpExports.includes("createOpenReceiveHost") &&
+      httpExports.includes("OpenReceiveHostRepository"),
+    "@openreceive/http must expose the ORM-neutral host integration",
   );
   for (const relative of [
     "packages/ruby/openreceive-rails/lib/generators/openreceive/install/templates/payment.rb",
     "packages/ruby/openreceive-rails/lib/generators/openreceive/install/templates/migration.rb",
   ]) {
-    assert(existsSync(path.join(root, relative)), `${relative}: Rails payment scaffold is required`);
+    assert(
+      existsSync(path.join(root, relative)),
+      `${relative}: Rails payment scaffold is required`,
+    );
   }
   const migration = readFileSync(
     path.join(

@@ -5,6 +5,7 @@ import type {
   SwapCheckout,
   SwapData,
 } from "@openreceive/node";
+import type { OpenReceiveHost } from "./host-payments.ts";
 import type {
   OpenReceiveAuthorize,
   OpenReceiveAuthorizeAction,
@@ -34,29 +35,26 @@ export interface ResolveCheckoutContext {
 }
 
 export interface ResolvedHostCheckout {
-  /** Required for checkout/swap quote or creation; optional for status/refund actions. */
-  readonly amount?: CreateCheckoutAmount;
+  /** Host-owned price. Payer input is never an amount authority. */
+  readonly amount: CreateCheckoutAmount;
   /** Return the selected host payment attempt's hash to reuse or inspect its checkout. */
   readonly paymentHash?: string;
+  /** Host-persisted safe checkout snapshot used for retry without a wallet read. */
+  readonly checkout?: Checkout;
   /** Server-only structured provider state loaded from the host database. */
   readonly swapData?: SwapData;
 }
 
 export type ResolveCheckoutHook = (
   context: ResolveCheckoutContext,
-) =>
-  | CreateCheckoutAmount
-  | ResolvedHostCheckout
-  | Promise<CreateCheckoutAmount | ResolvedHostCheckout>;
+) => ResolvedHostCheckout | Promise<ResolvedHostCheckout>;
 
 export interface CreateOpenReceiveHttpHandlerOptions {
   readonly service: OpenReceive;
   /** Host authentication and authorization policy. OpenReceive never inspects host sessions. */
   readonly authorize: OpenReceiveAuthorize;
-  /** Loads the authoritative order amount and selected host payment attempt. */
-  readonly resolveCheckout: ResolveCheckoutHook;
-  /** Persists a payment attempt before payer instructions are exposed. */
-  readonly onCheckoutCreated: CheckoutCreatedHook;
+  /** Host authentication-independent payment integration returned by createOpenReceiveHost. */
+  readonly host: OpenReceiveHost;
   readonly rateLimit?: OpenReceiveRateLimit;
   readonly prefix?: string;
 }
@@ -78,13 +76,11 @@ export function createOpenReceiveHttpHandler(
   if (options.authorize === undefined) {
     throw new TypeError("HTTP handler requires authorize; authentication belongs to the host.");
   }
-  if (options.resolveCheckout === undefined) {
-    throw new TypeError("HTTP handler requires resolveCheckout; payer input is not a price authority.");
-  }
-  if (options.onCheckoutCreated === undefined) {
-    throw new TypeError("HTTP handler requires onCheckoutCreated to persist a payment attempt before responding.");
-  }
-  const runtime: Runtime = { ...options, prefix: normalizePrefix(options.prefix ?? "/openreceive") };
+  if (options.host === undefined) throw new TypeError("HTTP handler requires host.");
+  const runtime: Runtime = {
+    ...options,
+    prefix: normalizePrefix(options.prefix ?? "/openreceive"),
+  };
   const handle = async (request: Request): Promise<Response> => {
     const requestId = createRequestId();
     try {
@@ -104,11 +100,20 @@ export function createOpenReceiveHttpHandler(
 async function dispatch(runtime: Runtime, request: Request, requestId: string): Promise<Response> {
   const url = new URL(request.url);
   const route = matchRoute(runtime.prefix, request.method, url.pathname);
-  if (route === null) throw new OpenReceiveHttpError(404, "NOT_FOUND", "No OpenReceive route matched.");
+  if (route === null)
+    throw new OpenReceiveHttpError(404, "NOT_FOUND", "No OpenReceive route matched.");
 
   if (route.kind === "rates") {
-    const currencies = url.searchParams.get("currencies")?.split(",").map((value) => value.trim()).filter(Boolean);
-    return jsonResponse(200, await runtime.service.listRates(currencies === undefined ? undefined : { currencies }), requestId);
+    const currencies = url.searchParams
+      .get("currencies")
+      ?.split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    return jsonResponse(
+      200,
+      await runtime.service.listRates(currencies === undefined ? undefined : { currencies }),
+      requestId,
+    );
   }
 
   const body = await readJsonBody(request);
@@ -118,13 +123,14 @@ async function dispatch(runtime: Runtime, request: Request, requestId: string): 
     rejectPayerAmount(body);
     await guard(runtime, "checkout.create", request, { order_id: orderId });
     const resolved = await resolveHost(runtime, "checkout.create", request, orderId, body);
-    const checkout = resolved.paymentHash === undefined
-      ? await runtime.service.createCheckout({
-          orderId,
-          amount: requiredAmount(resolved),
-          ...optionalCheckoutFields(body),
-        })
-      : await recoverCommittedCheckout(runtime, orderId, requiredPaymentHash(resolved.paymentHash));
+    const checkout =
+      resolved.paymentHash === undefined
+        ? await runtime.service.createCheckout({
+            orderId,
+            amount: requiredAmount(resolved),
+            ...optionalCheckoutFields(body),
+          })
+        : committedCheckout(orderId, resolved);
     if (resolved.paymentHash === undefined) {
       await commit(runtime, { orderId, paymentHash: checkout.paymentHash, checkout });
     }
@@ -141,7 +147,18 @@ async function dispatch(runtime: Runtime, request: Request, requestId: string): 
     });
     const resolved = await resolveHost(runtime, "payment.check", request, orderId, body);
     const paymentHash = selectedPaymentHash(resolved, requestedPaymentHash);
-    return jsonResponse(200, toSnakeCase(await runtime.service.checkPayment({ paymentHash })), requestId);
+    const checked = await runtime.service.checkPayment({
+      paymentHash,
+      createdAt: requiredCheckout(resolved).createdAt,
+    });
+    if (checked.status === "settled" && checked.paidAt !== undefined) {
+      await runtime.host.onPaid({
+        paymentHash: checked.paymentHash,
+        paidAt: checked.paidAt,
+        details: checked.details,
+      });
+    }
+    return jsonResponse(200, toSnakeCase(checked), requestId);
   }
 
   if (route.kind === "swap.quote") {
@@ -149,10 +166,16 @@ async function dispatch(runtime: Runtime, request: Request, requestId: string): 
     const payInAsset = requiredString(body.pay_in_asset ?? body.payInAsset, "pay_in_asset");
     await guard(runtime, "swap.quote", request, { order_id: orderId });
     const resolved = await resolveHost(runtime, "swap.quote", request, orderId, body, payInAsset);
-    return jsonResponse(200, toSnakeCase(await runtime.service.quoteSwap({
-      amount: requiredAmount(resolved),
-      payInAsset,
-    })), requestId);
+    return jsonResponse(
+      200,
+      toSnakeCase(
+        await runtime.service.quoteSwap({
+          amount: requiredAmount(resolved),
+          payInAsset,
+        }),
+      ),
+      requestId,
+    );
   }
 
   if (route.kind === "swap.create") {
@@ -160,14 +183,15 @@ async function dispatch(runtime: Runtime, request: Request, requestId: string): 
     const payInAsset = requiredString(body.pay_in_asset ?? body.payInAsset, "pay_in_asset");
     await guard(runtime, "swap.create", request, { order_id: orderId });
     const resolved = await resolveHost(runtime, "swap.create", request, orderId, body, payInAsset);
-    const swap = resolved.paymentHash === undefined
-      ? await runtime.service.createSwap({
-          orderId,
-          amount: requiredAmount(resolved),
-          payInAsset,
-          ...optionalCheckoutFields(body),
-        })
-      : await recoverCommittedSwap(runtime, orderId, resolved);
+    const swap =
+      resolved.paymentHash === undefined
+        ? await runtime.service.createSwap({
+            orderId,
+            amount: requiredAmount(resolved),
+            payInAsset,
+            ...optionalCheckoutFields(body),
+          })
+        : await recoverCommittedSwap(runtime, orderId, resolved);
     if (resolved.paymentHash === undefined) {
       await commit(runtime, {
         orderId,
@@ -179,7 +203,8 @@ async function dispatch(runtime: Runtime, request: Request, requestId: string): 
     return jsonResponse(201, { swap: httpSwap(swap) }, requestId);
   }
 
-  const action: OpenReceiveAuthorizeAction = route.kind === "swap.read" ? "swap.read" : "swap.refund";
+  const action: OpenReceiveAuthorizeAction =
+    route.kind === "swap.read" ? "swap.read" : "swap.refund";
   const requestedPaymentHash = requiredPaymentHash(
     requiredString(body.payment_hash ?? body.paymentHash, "payment_hash"),
   );
@@ -191,19 +216,31 @@ async function dispatch(runtime: Runtime, request: Request, requestId: string): 
   const swapData = requiredSwapData(resolved.swapData);
   const paymentHash = selectedPaymentHash(resolved, requestedPaymentHash);
   if (route.kind === "swap.read") {
-    return jsonResponse(200, toSnakeCase(await runtime.service.getSwap({
-      orderId,
-      paymentHash,
-      swapData,
-    })), requestId);
+    return jsonResponse(
+      200,
+      toSnakeCase(
+        await runtime.service.getSwap({
+          orderId,
+          paymentHash,
+          swapData,
+        }),
+      ),
+      requestId,
+    );
   }
   const refundAddress = requiredString(body.refund_address ?? body.refundAddress, "refund_address");
-  return jsonResponse(200, toSnakeCase(await runtime.service.refundSwap({
-    orderId,
-    paymentHash,
-    swapData,
-    refundAddress,
-  })), requestId);
+  return jsonResponse(
+    200,
+    toSnakeCase(
+      await runtime.service.refundSwap({
+        orderId,
+        paymentHash,
+        swapData,
+        refundAddress,
+      }),
+    ),
+    requestId,
+  );
 }
 
 async function resolveHost(
@@ -214,13 +251,13 @@ async function resolveHost(
   input: Readonly<Record<string, unknown>>,
   payInAsset?: string,
 ): Promise<ResolvedHostCheckout> {
-  return normalizeResolvedCheckout(await runtime.resolveCheckout({
+  return runtime.host.resolveCheckout({
     action,
     request,
     orderId,
     ...(payInAsset === undefined ? {} : { payInAsset }),
     input,
-  }));
+  });
 }
 
 async function guard(
@@ -240,7 +277,7 @@ async function guard(
 
 async function commit(runtime: Runtime, input: CheckoutCreatedInput): Promise<void> {
   try {
-    await runtime.onCheckoutCreated(input);
+    await runtime.host.onCheckoutCreated(input);
   } catch (error) {
     if (error instanceof OpenReceiveHttpError) throw error;
     throw new OpenReceiveHttpError(
@@ -275,26 +312,14 @@ function optionalCheckoutFields(body: Record<string, unknown>) {
   const memo = optionalString(body.memo);
   const descriptionHash = optionalString(body.description_hash ?? body.descriptionHash);
   const metadata = readRecord(body.metadata);
-  const idempotencyKey = optionalString(body.idempotency_key ?? body.idempotencyKey);
   return {
     ...(memo === undefined ? {} : { memo }),
     ...(descriptionHash === undefined ? {} : { descriptionHash }),
     ...(metadata === undefined ? {} : { metadata }),
-    ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
   };
 }
 
-function normalizeResolvedCheckout(
-  value: CreateCheckoutAmount | ResolvedHostCheckout,
-): ResolvedHostCheckout {
-  if ("sats" in value || ("currency" in value && "value" in value)) return { amount: value };
-  return value;
-}
-
-function selectedPaymentHash(
-  resolved: ResolvedHostCheckout,
-  requestedPaymentHash: string,
-): string {
+function selectedPaymentHash(resolved: ResolvedHostCheckout, requestedPaymentHash: string): string {
   const selected = requiredPaymentHash(resolved.paymentHash);
   if (selected !== requestedPaymentHash) {
     throw new OpenReceiveHttpError(
@@ -307,10 +332,18 @@ function selectedPaymentHash(
 }
 
 function requiredAmount(value: ResolvedHostCheckout): CreateCheckoutAmount {
-  if (value.amount === undefined) {
-    throw new OpenReceiveHttpError(404, "NOT_FOUND", "The host order has no payable amount.");
-  }
   return value.amount;
+}
+
+function requiredCheckout(value: ResolvedHostCheckout): Checkout {
+  if (value.checkout === undefined) {
+    throw new OpenReceiveHttpError(
+      409,
+      "CONFLICT",
+      "The host payment attempt has no checkout snapshot.",
+    );
+  }
+  return value.checkout;
 }
 
 function requiredSwapData(value: SwapData | undefined): SwapData {
@@ -320,23 +353,20 @@ function requiredSwapData(value: SwapData | undefined): SwapData {
   return value;
 }
 
-async function recoverCommittedCheckout(
-  runtime: Runtime,
+function committedCheckout(
   orderId: string,
-  paymentHash: string,
-  expiresAt?: number,
-): Promise<Checkout> {
-  const checkout = await runtime.service.recoverCheckout({
-    orderId,
-    paymentHash,
-    ...(expiresAt === undefined ? {} : { expiresAt }),
-  });
-  if (checkout !== null) return checkout;
-  throw new OpenReceiveHttpError(
-    409,
-    "CONFLICT",
-    "The selected payment attempt is not a reusable pending checkout.",
-  );
+  resolved: ResolvedHostCheckout,
+): Checkout {
+  const paymentHash = requiredPaymentHash(resolved.paymentHash);
+  const checkout = requiredCheckout(resolved);
+  if (checkout.orderId !== orderId || checkout.paymentHash.toLowerCase() !== paymentHash) {
+    throw new OpenReceiveHttpError(
+      409,
+      "CONFLICT",
+      "The selected payment attempt is not a reusable pending checkout.",
+    );
+  }
+  return structuredClone(checkout);
 }
 
 async function recoverCommittedSwap(
@@ -347,9 +377,13 @@ async function recoverCommittedSwap(
   const paymentHash = requiredPaymentHash(resolved.paymentHash);
   const swapData = requiredSwapData(resolved.swapData);
   const status = await runtime.service.getSwap({ orderId, paymentHash, swapData });
-  const checkout = await recoverCommittedCheckout(runtime, orderId, paymentHash, status.providerExpiresAt);
+  const checkout = committedCheckout(orderId, resolved);
   if (status.orderId !== orderId || status.paymentHash !== paymentHash) {
-    throw new OpenReceiveHttpError(409, "CONFLICT", "The host swap data does not match its payment hash.");
+    throw new OpenReceiveHttpError(
+      409,
+      "CONFLICT",
+      "The host swap data does not match its payment hash.",
+    );
   }
   return { ...status, checkout, swapData };
 }
@@ -378,14 +412,19 @@ async function readJsonBody(request: Request): Promise<Record<string, unknown>> 
 function requiredPaymentHash(value: unknown): string {
   const hash = requiredString(value, "payment_hash").toLowerCase();
   if (!/^[0-9a-f]{64}$/.test(hash)) {
-    throw new OpenReceiveHttpError(400, "INVALID_REQUEST", "payment_hash must be 64 hexadecimal characters.");
+    throw new OpenReceiveHttpError(
+      400,
+      "INVALID_REQUEST",
+      "payment_hash must be 64 hexadecimal characters.",
+    );
   }
   return hash;
 }
 
 function requiredString(value: unknown, field: string): string {
   const result = optionalString(value);
-  if (result === undefined) throw new OpenReceiveHttpError(400, "INVALID_REQUEST", `${field} is required.`);
+  if (result === undefined)
+    throw new OpenReceiveHttpError(400, "INVALID_REQUEST", `${field} is required.`);
   return result;
 }
 
@@ -405,8 +444,10 @@ function toSnakeCase(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(toSnakeCase);
   if (typeof value === "bigint") return Number(value);
   if (value === null || typeof value !== "object") return value;
-  return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [
-    key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`),
-    toSnakeCase(item),
-  ]));
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+      key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`),
+      toSnakeCase(item),
+    ]),
+  );
 }

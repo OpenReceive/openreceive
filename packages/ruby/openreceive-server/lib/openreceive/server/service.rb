@@ -49,68 +49,41 @@ module OpenReceive
       def check_payment(input)
         data = stringify(input)
         payment_hash = payment_hash(data["paymentHash"] || data["payment_hash"])
-        transaction = lookup_transaction(payment_hash, from: data["from"], until_time: data["until"])
+        created_at = Integer(data["createdAt"] || data.fetch("created_at"))
+        overlap = Integer(data["overlapSeconds"] || data.fetch("overlap_seconds", 60))
+        transaction = lookup_transaction(
+          payment_hash,
+          from: [created_at - overlap, 0].max,
+          until_time: data["until"]
+        )
         return { "payment_hash" => payment_hash, "status" => "not_found" } if transaction.nil?
 
-        status = OpenReceive::Settlement.status(transaction)
-        observed_at = @clock.call
-        paid_at = status == "settled" ? (transaction["settled_at"] || observed_at) : nil
-        details = {
-          "transaction" => transaction,
-          "observed_at" => observed_at
-        }
-        if status == "settled"
-          details["paid_at_source"] = transaction["settled_at"] ? "settled_at" : "observed_at"
-        end
-        {
-          "payment_hash" => payment_hash,
-          "status" => status,
-          "paid_at" => paid_at,
-          "details" => details
-        }.compact
-      end
-
-      def recover_checkout(order_id:, payment_hash:, expires_at: nil)
-        hash = send(:payment_hash, payment_hash)
-        transaction = lookup_transaction(hash, from: nil, until_time: nil)
-        return nil if transaction.nil? || OpenReceive::Settlement.status(transaction) != "pending"
-        return nil unless transaction["invoice"] && transaction["amount_msats"] && transaction["created_at"]
-        expiry = expires_at || transaction["expires_at"] || transaction["created_at"] + INVOICE_EXPIRY_SECONDS
-        return nil if expiry <= @clock.call
-        {
-          "order_id" => required_string(order_id, "order_id"),
-          "payment_hash" => hash,
-          "bolt11" => transaction["invoice"],
-          "amount_msats" => Integer(transaction["amount_msats"]),
-          "created_at" => transaction["created_at"],
-          "expires_at" => expiry,
-          "fiat_quote" => nil
-        }
+        payment_result(payment_hash, transaction)
       end
 
       def reconcile_payments(input)
         data = stringify(input)
-        Array(data.fetch("payment_hashes")).map do |hash|
-          check_payment("payment_hash" => hash, "from" => data["from"], "until" => data["until"])
-        end
-      end
+        attempts = Array(data.fetch("attempts"))
+        return [] if attempts.empty?
 
-      def watch_payments(from: [@clock.call - 3600, 0].max, interval: 5, on_paid:, stop: -> { false })
-        delivered = {}
-        until stop.call
-          begin
-            list_transactions(from: from, until_time: @clock.call).each do |transaction|
-              next unless OpenReceive.settled?(transaction)
-              hash = transaction["payment_hash"]
-              next if hash.nil? || delivered[hash]
-              paid_at = transaction["settled_at"] || @clock.call
-              on_paid.call("payment_hash" => hash, "paid_at" => paid_at, "details" => { "transaction" => transaction })
-              delivered[hash] = true
-            end
-          rescue StandardError
-            # Wallet and callback failures are retried by the next overlapping scan.
+        expected = attempts.to_h do |attempt|
+          row = stringify(attempt)
+          [payment_hash(row.fetch("payment_hash") { row.fetch("paymentHash") }),
+           Integer(row.fetch("created_at") { row.fetch("createdAt") })]
+        end
+        overlap = Integer(data.fetch("overlap_seconds", 60))
+        from = [expected.values.min - overlap, 0].max
+        until_time = Integer(data["until"] || @clock.call)
+        rows = list_transactions(from: from, until_time: until_time)
+        by_hash = rows.to_h { |row| [row["payment_hash"], row] }
+        if expected.keys.any? { |hash| !by_hash.key?(hash) }
+          list_transactions(from: from, until_time: until_time, unpaid: true).each do |row|
+            by_hash[row["payment_hash"]] ||= row
           end
-          sleep(interval)
+        end
+        expected.keys.map do |hash|
+          by_hash[hash] ? payment_result(hash, by_hash.fetch(hash)) :
+            { "payment_hash" => hash, "status" => "not_found" }
         end
       end
 
@@ -207,17 +180,24 @@ module OpenReceive
       end
 
       def lookup_transaction(hash, from:, until_time:)
-        if @nwc.respond_to?(:lookup_invoice)
-          begin
-            return OpenReceive::Nwc.normalize_transaction(@nwc.lookup_invoice("payment_hash" => hash))
-          rescue StandardError
-            # list_transactions is the portable fallback.
-          end
-        end
         transaction = list_transactions(from: from, until_time: until_time).find { |row| row["payment_hash"] == hash }
         return transaction unless transaction.nil?
 
         list_transactions(from: from, until_time: until_time, unpaid: true).find { |row| row["payment_hash"] == hash }
+      end
+
+      def payment_result(hash, transaction)
+        status = OpenReceive::Settlement.status(transaction)
+        observed_at = @clock.call
+        paid_at = status == "settled" ? (transaction["settled_at"] || observed_at) : nil
+        details = { "transaction" => transaction, "observed_at" => observed_at }
+        details["paid_at_source"] = transaction["settled_at"] ? "settled_at" : "observed_at" if status == "settled"
+        {
+          "payment_hash" => hash,
+          "status" => status,
+          "paid_at" => paid_at,
+          "details" => details
+        }.compact
       end
 
       def list_transactions(from:, until_time:, unpaid: false)

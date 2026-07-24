@@ -4,22 +4,13 @@ import path from "node:path";
 import test from "node:test";
 import {
   getAsset,
-  getAssets,
   getCountry,
-  getCountries,
   getCountryRoutes,
-  getCryptoRoutes,
-  getDisqualifiedProviders,
-  getFiatRails,
   getPaymentWizardRoutes,
   getProvider,
-  getProviders,
   getProviderRegistryMetadata,
-  listAssets,
   listCountries,
   listCryptoRouteProviders,
-  listCryptoRoutes,
-  listDisqualifiedProviders,
   listFiatProviders,
   listFiatRailCountries,
   listFiatRails,
@@ -45,15 +36,6 @@ test("provider-data exposes canonical registry metadata", () => {
     description: providerRegistry.description,
     filter: providerRegistry.filter
   });
-});
-
-test("provider-data exposes master-plan getter aliases", () => {
-  assert.equal(getAssets(), listAssets());
-  assert.deepEqual(getProviders(), listProviders());
-  assert.equal(getCryptoRoutes(), listCryptoRoutes());
-  assert.deepEqual(getFiatRails(), listFiatRails());
-  assert.deepEqual(getCountries(), listCountries());
-  assert.equal(getDisqualifiedProviders(), listDisqualifiedProviders());
 });
 
 test("provider-data v4 keeps wizard copy and icons local", () => {

@@ -1,4 +1,4 @@
-import type { LogEntry, Logger, OpenReceiveLogLevel } from "./service/types.ts";
+import type { Event, Logger, OpenReceiveLogLevel } from "./service/types.ts";
 
 const LOG_LEVEL_ORDER: Record<OpenReceiveLogLevel, number> = {
   debug: 10,
@@ -16,7 +16,7 @@ export interface CreateOpenReceiveConsoleLoggerOptions {
 }
 
 /**
- * Logger that writes OpenReceive {@link LogEntry} values to the console.
+ * Logger that writes OpenReceive {@link Event} values to the console.
  * Pair with the auto-attached file logger, or pass as `createOpenReceive({ logger })`.
  */
 export function createOpenReceiveConsoleLogger(
@@ -27,7 +27,7 @@ export function createOpenReceiveConsoleLogger(
   const minOrder = LOG_LEVEL_ORDER[minLevel];
   const target = options.console ?? console;
 
-  return (entry: LogEntry) => {
+  return (entry: Event) => {
     if (LOG_LEVEL_ORDER[entry.level] < minOrder) return;
     const { level, event, message, ...fields } = entry;
     const method =

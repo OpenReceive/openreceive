@@ -2,7 +2,7 @@ import { appendFileSync, existsSync, mkdirSync, renameSync, statSync, unlinkSync
 import path from "node:path";
 import type {
   CreateOpenReceiveOptions,
-  LogEntry,
+  Event,
   OpenReceiveLogLevel,
   Logger,
   LoggingOptions,
@@ -79,7 +79,7 @@ export function createOpenReceiveFileLogger(config: ResolvedFileLoggerConfig): L
     currentBytes = 0;
   };
 
-  return (entry: LogEntry) => {
+  return (entry: Event) => {
     const level = LOG_LEVEL_ORDER[entry.level] ?? LOG_LEVEL_ORDER.info;
     if (level < LOG_LEVEL_ORDER[config.minLevel]) return;
     try {

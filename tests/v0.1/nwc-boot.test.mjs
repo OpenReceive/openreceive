@@ -18,8 +18,7 @@ import {
 import { readRequiredHelloFruitNwcConnectionString } from "../../examples/hello-fruit/shared/demo-nwc.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const VALID_NWC =
-  "nostr+walletconnect://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?relay=wss%3A%2F%2Frelay.example.com&secret=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const VALID_NWC = `nostr+walletconnect://${"a".repeat(64)}?relay=wss%3A%2F%2Frelay.example.com&secret=${"b".repeat(64)}`;
 
 async function withEnv(overrides, run) {
   const previous = new Map();
@@ -46,7 +45,10 @@ test("createOpenReceive refuses a missing NWC_URI with the help URL", async () =
         assert.ok(error instanceof OpenReceiveConfigError);
         assert.equal(error.code, "MISSING_NWC");
         assert.match(error.message, /needs a receive-only NWC code/);
-        assert.match(error.message, new RegExp(OPENRECEIVE_NWC_CODE_HELP_URL.replace(/\./g, "\\.")));
+        assert.match(
+          error.message,
+          new RegExp(OPENRECEIVE_NWC_CODE_HELP_URL.replace(/\./g, "\\.")),
+        );
         return true;
       },
     );
@@ -62,7 +64,10 @@ test("createOpenReceive refuses an invalid NWC URI with the help URL", async () 
         assert.equal(error.code, "INVALID_NWC");
         assert.match(error.message, /not a valid NWC code/);
         assert.match(error.message, /nostr\+walletconnect/);
-        assert.match(error.message, new RegExp(OPENRECEIVE_NWC_CODE_HELP_URL.replace(/\./g, "\\.")));
+        assert.match(
+          error.message,
+          new RegExp(OPENRECEIVE_NWC_CODE_HELP_URL.replace(/\./g, "\\.")),
+        );
         return true;
       },
     );

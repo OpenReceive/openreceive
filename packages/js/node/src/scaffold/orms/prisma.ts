@@ -1,5 +1,5 @@
 import { isSqlite, nextStepsMarkdown, prismaOrderIdField } from "../shared.ts";
-import { attemptConflictClass, hooksStubContents, recordMapperHelper } from "../snippets.ts";
+import { attemptConflictClass, hostStubContents, recordMapperHelper } from "../snippets.ts";
 import type { ScaffoldFile, ScaffoldPaymentsOptions } from "../types.ts";
 
 export function renderPrismaFiles(options: ScaffoldPaymentsOptions): ScaffoldFile[] {
@@ -20,8 +20,9 @@ model OpenReceivePayment {
 ${relation}  paymentHash String    @unique @db.VarChar(64) @map("payment_hash")
   paidAt      DateTime? @map("paid_at")
   expiresAt   DateTime  @map("expires_at")
+  checkoutData Json     @map("checkout_data")
   swapData    Json?     @map("swap_data")
-  createdAt   DateTime  @default(now()) @map("created_at")
+  createdAt   DateTime  @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
   @@index([orderId, createdAt])
@@ -54,9 +55,9 @@ ${relation}  paymentHash String    @unique @db.VarChar(64) @map("payment_hash")
   const repository = `import {
   openReceivePaymentInsert,
   type OpenReceivePaymentRecord,
-  type OpenReceivePaymentRepository,
+  type OpenReceiveHostRepository,
 } from "@openreceive/http";
-import type { PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 ${attemptConflictClass()}
 ${recordMapperHelper()}
 /**
@@ -65,7 +66,7 @@ ${recordMapperHelper()}
  */
 export function createOpenReceivePaymentsRepository(
   prisma: PrismaClient,
-): OpenReceivePaymentRepository {
+): OpenReceiveHostRepository {
   return {
     async listForOrder(orderId) {
       const rows = await prisma.openReceivePayment.findMany({
@@ -110,10 +111,23 @@ ${lockOrder}
             orderId: values.orderId as never,
             paymentHash: values.paymentHash,
             expiresAt: new Date(values.expiresAt * 1000),
+            createdAt: new Date(values.createdAt * 1000),
+            checkoutData: values.checkout,
             swapData: values.swapData ?? undefined,
           },
         });
       });
+    },
+
+    async listUnsettledAttempts() {
+      const rows = await prisma.openReceivePayment.findMany({
+        where: { paidAt: null },
+        select: { paymentHash: true, createdAt: true },
+      });
+      return rows.map((row) => ({
+        paymentHash: row.paymentHash,
+        createdAt: Math.floor(row.createdAt.getTime() / 1000),
+      }));
     },
   };
 }
@@ -134,11 +148,16 @@ export interface MarkPaidOnceResult {
 export async function markOpenReceivePaidOnce(
   prisma: PrismaClient,
   input: { paymentHash: string; paidAt: number },
-): Promise<MarkPaidOnceResult> {
+  onFirstSettlement: (
+    tx: any,
+    settled: { orderId: string; paymentHash: string },
+  ) => Promise<void>,
+): Promise<MarkPaidOnceResult | null> {
   return prisma.$transaction(async (tx) => {
-    const payment = await tx.openReceivePayment.findUniqueOrThrow({
+    const payment = await tx.openReceivePayment.findUnique({
       where: { paymentHash: input.paymentHash.toLowerCase() },
     });
+    if (payment === null) return null;
 
 ${lockPaid}
 
@@ -165,6 +184,13 @@ ${lockPaid}
       where: { paymentHash: locked.paymentHash },
       data: { paidAt: new Date(input.paidAt * 1000) },
     });
+    if (siblingPaid === null) {
+      // Keep the host order transition or an outbox insert in this transaction.
+      await onFirstSettlement(tx, {
+        orderId: String(locked.orderId),
+        paymentHash: locked.paymentHash,
+      });
+    }
 
     return {
       firstForOrder: siblingPaid === null,
@@ -179,7 +205,7 @@ ${lockPaid}
     { path: "prisma/schema.openreceive.prisma", contents: schema },
     { path: "src/openreceive/payments-repository.ts", contents: repository },
     { path: "src/openreceive/mark-paid-once.ts", contents: markPaid },
-    { path: "src/openreceive/hooks.stub.ts", contents: hooksStubContents() },
+    { path: "src/openreceive/host.stub.ts", contents: hostStubContents() },
     { path: "OPENRECEIVE_PAYMENTS.md", contents: nextStepsMarkdown(options) },
   ];
 }

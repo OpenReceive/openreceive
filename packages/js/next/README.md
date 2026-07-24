@@ -3,20 +3,20 @@
 Next App Router adapter for the host-owned payment HTTP handler.
 
 ```ts
-const paymentHooks = createOpenReceivePaymentHooks({
+const host = createOpenReceiveHost({
   loadOrder: (orderId) => orders.find(orderId),
   amountForOrder: (order) => order.amount,
   payments,
+  onPaid,
 });
 
 export const { GET, POST } = openReceiveNextHandlers({
   service,
   authorize,
-  resolveCheckout: paymentHooks.resolveCheckout,
-  onCheckoutCreated: paymentHooks.onCheckoutCreated,
+  host,
 });
 ```
 
-Use `createOpenReceivePaymentHooks` with the host's ORM repository. It selects
+Use `createOpenReceiveHost` with the host's ORM repository. It selects
 the exact attempt for reads and appends attempts under an order lock before the
 public response. `swapData` stays server-only.

@@ -17,7 +17,6 @@ import type {
   SwapQuoteRequest,
   SwapRefundRequest,
   SwapData,
-  SwapStatus,
 } from "./types.ts";
 
 export async function quoteSwap(
@@ -69,7 +68,7 @@ export async function createSwap(
 export async function getSwap(
   context: OpenReceiveServiceContext,
   input: GetSwapRequest,
-): Promise<SwapStatus> {
+): Promise<PublicSwap> {
   const recovery = readSwapData(input.swapData);
   const paymentHash = normalizePaymentHash(input.paymentHash);
   const orderId = normalizeOrderId(input.orderId);
@@ -82,7 +81,7 @@ export async function getSwap(
 export async function refundSwap(
   context: OpenReceiveServiceContext,
   input: SwapRefundRequest,
-): Promise<SwapStatus> {
+): Promise<PublicSwap> {
   const recovery = readSwapData(input.swapData);
   const paymentHash = normalizePaymentHash(input.paymentHash);
   const orderId = normalizeOrderId(input.orderId);

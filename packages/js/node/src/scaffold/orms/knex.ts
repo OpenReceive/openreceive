@@ -1,5 +1,5 @@
 import { isSqlite, knexOrderIdColumn, nextStepsMarkdown } from "../shared.ts";
-import { attemptConflictClass, hooksStubContents, recordMapperHelper } from "../snippets.ts";
+import { attemptConflictClass, hostStubContents, recordMapperHelper } from "../snippets.ts";
 import type { ScaffoldFile, ScaffoldPaymentsOptions } from "../types.ts";
 
 export function renderKnexFiles(options: ScaffoldPaymentsOptions): ScaffoldFile[] {
@@ -17,6 +17,7 @@ export async function up(knex) {
     table.string("payment_hash", 64).notNullable().unique();
     table.timestamp("paid_at", { useTz: ${useTz} }).nullable();
     table.timestamp("expires_at", { useTz: ${useTz} }).notNullable();
+    table.json("checkout_data").notNullable();
     table.json("swap_data").nullable();
     table.timestamps(true, true);
     table.index(["order_id", "created_at"]);
@@ -31,7 +32,7 @@ export async function down(knex) {
 `;
 
   const lockCommit = sqlite
-    ? `        // SQLite: single-writer transaction; FOR UPDATE is unavailable.
+    ? `        // SQLite: single-writer transaction; skip Postgres row locks.
         await trx("${options.orderTable}").where({ id: values.orderId }).first();`
     : `        await trx("${options.orderTable}").where({ id: values.orderId }).forUpdate().first();`;
 
@@ -42,7 +43,7 @@ export async function down(knex) {
   const repository = `import {
   openReceivePaymentInsert,
   type OpenReceivePaymentRecord,
-  type OpenReceivePaymentRepository,
+  type OpenReceiveHostRepository,
 } from "@openreceive/http";
 import type { Knex } from "knex";
 ${attemptConflictClass()}
@@ -53,6 +54,7 @@ interface PaymentRow {
   paid_at: Date | null;
   expires_at: Date;
   created_at: Date;
+  checkout_data: unknown;
   swap_data?: unknown | null;
 }
 
@@ -63,11 +65,12 @@ function mapRow(row: PaymentRow): OpenReceivePaymentRecord {
     paidAt: row.paid_at,
     expiresAt: row.expires_at,
     createdAt: row.created_at,
+    checkoutData: row.checkout_data,
     swapData: row.swap_data,
   });
 }
 
-export function createOpenReceivePaymentsRepository(knex: Knex): OpenReceivePaymentRepository {
+export function createOpenReceivePaymentsRepository(knex: Knex): OpenReceiveHostRepository {
   return {
     async listForOrder(orderId) {
       const rows = await knex<PaymentRow>("openreceive_payments")
@@ -114,9 +117,21 @@ ${lockCommit}
           order_id: values.orderId,
           payment_hash: values.paymentHash,
           expires_at: new Date(values.expiresAt * 1000),
+          created_at: new Date(values.createdAt * 1000),
+          checkout_data: values.checkout,
           swap_data: values.swapData ?? null,
         });
       });
+    },
+
+    async listUnsettledAttempts() {
+      const rows = await knex<PaymentRow>("openreceive_payments")
+        .select("payment_hash", "created_at")
+        .whereNull("paid_at");
+      return rows.map((row) => ({
+        paymentHash: row.payment_hash,
+        createdAt: Math.floor(new Date(row.created_at).getTime() / 1000),
+      }));
     },
   };
 }
@@ -133,12 +148,16 @@ export interface MarkPaidOnceResult {
 export async function markOpenReceivePaidOnce(
   knex: Knex,
   input: { paymentHash: string; paidAt: number },
-): Promise<MarkPaidOnceResult> {
+  onFirstSettlement: (
+    trx: Knex.Transaction,
+    settled: { orderId: string; paymentHash: string },
+  ) => Promise<void>,
+): Promise<MarkPaidOnceResult | null> {
   return knex.transaction(async (trx) => {
     const payment = await trx("openreceive_payments")
       .where({ payment_hash: input.paymentHash.toLowerCase() })
       .first();
-    if (!payment) throw new Error("OpenReceive payment attempt not found.");
+    if (!payment) return null;
 
 ${lockPaid}
 
@@ -162,6 +181,12 @@ ${lockPaid}
     await trx("openreceive_payments")
       .where({ payment_hash: locked.payment_hash })
       .update({ paid_at: new Date(input.paidAt * 1000) });
+    if (siblingPaid === undefined) {
+      await onFirstSettlement(trx, {
+        orderId: String(locked.order_id),
+        paymentHash: locked.payment_hash,
+      });
+    }
 
     return {
       firstForOrder: siblingPaid === undefined,
@@ -179,7 +204,7 @@ ${lockPaid}
     },
     { path: "src/openreceive/payments-repository.ts", contents: repository },
     { path: "src/openreceive/mark-paid-once.ts", contents: markPaid },
-    { path: "src/openreceive/hooks.stub.ts", contents: hooksStubContents() },
+    { path: "src/openreceive/host.stub.ts", contents: hostStubContents() },
     { path: "OPENRECEIVE_PAYMENTS.md", contents: nextStepsMarkdown(options) },
   ];
 }

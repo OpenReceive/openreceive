@@ -13,9 +13,9 @@ paths:
       operationId: createCheckout
       summary: Mint an invoice using the host-resolved order price.
       description: >
-        The request cannot supply an amount. The mounted handler calls the required
-        resolveCheckout host hook, mints an invoice, calls onCheckoutCreated, and
-        returns payer instructions only after that hook persists payment_hash.
+        The request cannot supply an amount. The mounted handler asks the required
+        host integration for the trusted order price, mints an invoice, and returns
+        payer instructions only after the host persists payment_hash.
       requestBody:
         required: true
         content:

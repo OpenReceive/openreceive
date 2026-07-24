@@ -4,7 +4,7 @@
 2. [Node quickstart](quickstart-node.md)
 3. [Node ORM recipes](node-orms.md)
 4. [Rails quickstart](quickstart-rails.md)
-5. [Authorization and host hooks](authorization.md)
+5. [Authorization and host integration](authorization.md)
 6. [Frontend checkout](frontend-checkout.md)
 7. [Automated swaps](automated-swaps.md)
 8. [Lightning Swap Connect (LSC) URI](lightning-swap-connect.md)

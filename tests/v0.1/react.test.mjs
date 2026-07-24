@@ -66,8 +66,6 @@ import {
   getProvider,
 } from "@openreceive/provider-data";
 import {
-  CopyInvoiceButton,
-  InvoiceSummary,
   Checkout,
   PaymentWizard,
   PaymentState,
@@ -75,7 +73,6 @@ import {
   ThemeScope,
   ThemeToggle,
   TransactionDetails,
-  OpenWalletButton,
   createCheckoutViewModel,
   renderSwapDepositPanel,
   useCheckoutContext
@@ -1258,20 +1255,13 @@ test("React create-mode keeps one CheckoutView across deferred Lightning mint", 
   assert.match(source, /switchPaymentMethod/);
 });
 
-test("React <Checkout checkout> snapshot mode is unchanged (backward compatible)", () => {
+test("React <Checkout checkout> renders a supplied snapshot", () => {
   const html = renderToStaticMarkup(
     React.createElement(Checkout, { checkout: invoice(), orderUrl: "/order" })
   );
   assert.match(html, /data-openreceive-checkout/);
   assert.match(html, />Copy invoice</);
   assert.doesNotMatch(html, /openreceive-checkout-creating/);
-});
-
-test("React primitive aliases point to the stable components", () => {
-  assert.equal(InvoiceSummary, InvoiceSummary);
-  assert.equal(CopyInvoiceButton, CopyInvoiceButton);
-  assert.equal(OpenWalletButton, OpenWalletButton);
-  assert.equal(PaymentState, PaymentState);
 });
 
 test("React package centralizes transient copy feedback timing", () => {

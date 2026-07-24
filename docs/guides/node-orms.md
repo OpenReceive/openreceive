@@ -9,9 +9,12 @@ npx openreceive scaffold payments --orm drizzle
 npx openreceive scaffold payments --orm typeorm
 npx openreceive scaffold payments --orm sequelize
 npx openreceive scaffold payments --orm knex
+npx openreceive scaffold payments --orm knex --dialect sqlite
 ```
 
 That writes the host-owned schema plus repository, settlement, and hook stubs.
+Pass `--dialect sqlite` for local SQLite (single-writer transactions, no
+`SELECT … FOR UPDATE`); the default dialect is `postgres`.
 The recipes below are the same shapes for hand edits or review.
 
 OpenReceive does not need its own database connection. Add one host-owned
@@ -23,7 +26,7 @@ One row has at most one provider swap attempt. A swap retry inserts another row
 with a fresh `payment_hash`; do not attach several provider orders or deposit
 addresses to one Lightning invoice.
 
-Retrying a status lookup, recovery call, or refund call does not create another
+Retrying a status lookup, checkout read, or refund call does not create another
 attempt; those operations continue to use the same row and provider order.
 Only a newly created provider order requires a new payment row.
 
@@ -35,8 +38,9 @@ order_id      required, indexed, foreign key when practical
 payment_hash  required, unique, 64 lowercase hex characters
 paid_at       nullable timestamp
 expires_at    required timestamp
+checkout_data required JSON, safe payer response
 swap_data     nullable JSON/text, server-only
-created_at    required timestamp
+created_at    required exact wallet invoice creation timestamp
 updated_at    required timestamp
 ```
 
@@ -48,21 +52,21 @@ have not expired and whose refreshed wallet/provider state remains reusable.
 Never put `swap_data` in an API serializer, application log, error object,
 fixture, or browser bundle. It can contain a provider credential.
 
-## Shared hooks
+## Host integration
 
 `@openreceive/http` keeps selection logic independent of the ORM:
 
 ```ts
 import {
-  createOpenReceivePaymentHooks,
+  createOpenReceiveHost,
   openReceivePaymentInsert,
-  type OpenReceivePaymentRepository,
+  type OpenReceiveHostRepository,
 } from "@openreceive/http";
 
-const payments: OpenReceivePaymentRepository = {
+const payments: OpenReceiveHostRepository = {
   async listForOrder(orderId) {
     // Return all attempts for this order as:
-    // { orderId, paymentHash, paidAt, expiresAt, createdAt, swapData? }
+    // { orderId, paymentHash, paidAt, expiresAt, createdAt, checkout, swapData? }
     return paymentRepository.listForOrder(orderId);
   },
 
@@ -70,15 +74,19 @@ const payments: OpenReceivePaymentRepository = {
     const values = openReceivePaymentInsert(input);
     await paymentRepository.commitWhileLockingOrder(values);
   },
+
+  listUnsettledAttempts: () => paymentRepository.listUnsettledAttempts(),
 };
 
-export const paymentHooks = createOpenReceivePaymentHooks({
+export const host = createOpenReceiveHost({
   loadOrder: (orderId) => orderRepository.find(orderId),
   amountForOrder: (order) => ({
     currency: order.currency,
     value: order.total.toString(),
   }),
   payments,
+  onPaid: ({ paymentHash, paidAt }) =>
+    paymentRepository.markPaidOnceAndFulfillFirst(paymentHash, paidAt),
 });
 ```
 
@@ -88,8 +96,7 @@ Mount with:
 app.use(openReceiveExpress({
   service,
   authorize,
-  resolveCheckout: paymentHooks.resolveCheckout,
-  onCheckoutCreated: paymentHooks.onCheckoutCreated,
+  host,
 }));
 ```
 
@@ -107,6 +114,11 @@ Throwing causes the mounted handler to return `409` without exposing the losing
 invoice. PostgreSQL/MySQL applications normally use `SELECT ... FOR UPDATE`.
 SQLite applications use their ORM's serialized write transaction.
 
+Pass `--dialect sqlite` to the scaffolder for SQLite-safe schema types and
+locking (no `FOR UPDATE` / `pessimistic_write`). Local demos wipe a host-owned
+SQLite file on boot and recreate `orders` + `openreceive_payments`; that is
+ordinary host code, not OpenReceive runtime storage.
+
 ## Prisma
 
 Change the `orderId` type to match the host `Order` primary key:
@@ -119,8 +131,9 @@ model OpenReceivePayment {
   paymentHash String    @unique @db.VarChar(64) @map("payment_hash")
   paidAt      DateTime? @map("paid_at")
   expiresAt   DateTime  @map("expires_at")
+  checkoutData Json     @map("checkout_data")
   swapData    Json?     @map("swap_data")
-  createdAt   DateTime  @default(now()) @map("created_at")
+  createdAt   DateTime  @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
   @@index([orderId, createdAt])
@@ -158,6 +171,8 @@ await prisma.$transaction(async (tx) => {
       orderId: values.orderId,
       paymentHash: values.paymentHash,
       expiresAt: new Date(values.expiresAt * 1000),
+      createdAt: new Date(values.createdAt * 1000),
+      checkoutData: values.checkout,
       swapData: values.swapData,
     },
   });
@@ -192,8 +207,9 @@ export const openReceivePayments = pgTable(
     paymentHash: varchar("payment_hash", { length: 64 }).notNull(),
     paidAt: timestamp("paid_at", { withTimezone: true }),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    checkoutData: jsonb("checkout_data").notNull(),
     swapData: jsonb("swap_data"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
@@ -234,10 +250,13 @@ export class OpenReceivePayment {
   @Column({ name: "expires_at", type: "timestamp" })
   expiresAt!: Date;
 
+  @Column({ name: "checkout_data", type: "json" })
+  checkoutData!: unknown;
+
   @Column({ name: "swap_data", type: "json", nullable: true, select: false })
   swapData!: unknown | null;
 
-  @CreateDateColumn({ name: "created_at" })
+  @Column({ name: "created_at" })
   createdAt!: Date;
 
   @UpdateDateColumn({ name: "updated_at" })
@@ -264,7 +283,9 @@ OpenReceivePayment.init({
   },
   paidAt: { type: DataTypes.DATE, allowNull: true, field: "paid_at" },
   expiresAt: { type: DataTypes.DATE, allowNull: false, field: "expires_at" },
+  checkoutData: { type: DataTypes.JSON, allowNull: false, field: "checkout_data" },
   swapData: { type: DataTypes.JSON, allowNull: true, field: "swap_data" },
+  createdAt: { type: DataTypes.DATE, allowNull: false, field: "created_at" },
 }, {
   sequelize,
   tableName: "openreceive_payments",
@@ -292,6 +313,7 @@ export async function up(knex) {
     table.string("payment_hash", 64).notNullable().unique();
     table.timestamp("paid_at", { useTz: true }).nullable();
     table.timestamp("expires_at", { useTz: true }).notNullable();
+    table.json("checkout_data").notNullable();
     table.json("swap_data").nullable();
     table.timestamps(true, true);
     table.index(["order_id", "created_at"]);
@@ -320,9 +342,13 @@ load payment by payment_hash
 if this payment already has paid_at: return
 first_for_order = no sibling payment has paid_at
 set this payment.paid_at
-if first_for_order: perform idempotent host fulfillment
+if first_for_order: update the order or insert an outbox row
 commit
 ```
 
+The first-settlement action runs before commit. Do not return a boolean and
+perform it afterward: a crash in that gap can suppress fulfillment on replay.
 This makes repeated `onPaid` delivery harmless while preserving an accidental
-second settlement for support/reconciliation.
+second settlement for support/reconciliation. Wallet-wide reconciliation can
+also observe invoices created outside this host; return without error when no
+attempt matches the payment hash.

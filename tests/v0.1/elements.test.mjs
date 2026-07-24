@@ -4,8 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import {
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
-  openReceiveCheckoutElementStyles,
-  openReceiveThemeToggleElementStyles
+  openReceiveCheckoutElementStyles
 } from "@openreceive/browser/internal";
 import {
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
@@ -281,10 +280,10 @@ test("elements package exposes shared browser-owned checkout styles", () => {
   );
   assert.match(
     renderOpenReceiveThemeToggleHtml("dark mode"),
-    new RegExp(escapeRegExp(openReceiveThemeToggleElementStyles.trim().slice(0, 20)))
+    new RegExp(escapeRegExp(openReceiveCheckoutElementStyles.trim().slice(0, 20)))
   );
   assert.match(source, /openReceiveCheckoutElementStyles/);
-  assert.match(source, /openReceiveThemeToggleElementStyles/);
+  assert.doesNotMatch(source, /openReceiveThemeToggleElementStyles/);
   assert.doesNotMatch(source, /--or-good-bg/);
   assert.doesNotMatch(source, /--or-theme-toggle-bg/);
 });

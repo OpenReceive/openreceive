@@ -1,7 +1,6 @@
-import { getCountries } from "@openreceive/provider-data";
+import { listCountries } from "@openreceive/provider-data";
 import {
   OPENRECEIVE_COUNTRY_STORAGE_KEY,
-  OPENRECEIVE_LEGACY_DEMO_COUNTRY_STORAGE_KEY,
   OPENRECEIVE_THEME_STORAGE_KEY,
   type OpenReceiveReadThemePreferenceOptions,
   type OpenReceiveResolvedTheme,
@@ -18,14 +17,11 @@ export function readOpenReceiveStoredCountryCode(
   options: {
     readonly storage?: Storage;
     readonly storageKey?: string;
-    readonly legacyStorageKey?: string;
   } = {},
 ): string | null {
   const storage = options.storage ?? getBrowserStorage();
   const storageKey = options.storageKey ?? OPENRECEIVE_COUNTRY_STORAGE_KEY;
-  const legacyStorageKey = options.legacyStorageKey ?? OPENRECEIVE_LEGACY_DEMO_COUNTRY_STORAGE_KEY;
-  const countryCode =
-    readStorageValue(storage, storageKey) ?? readStorageValue(storage, legacyStorageKey);
+  const countryCode = readStorageValue(storage, storageKey);
 
   if (countryCode === null) return null;
 
@@ -179,7 +175,7 @@ export function toggleOpenReceiveStoredThemeControls(
 }
 
 function isKnownCountryCode(countryCode: string): boolean {
-  return getCountries().some((country) => country.code === countryCode);
+  return listCountries().some((country) => country.code === countryCode);
 }
 
 function readStorageValue(storage: Storage | undefined, key: string): string | null {

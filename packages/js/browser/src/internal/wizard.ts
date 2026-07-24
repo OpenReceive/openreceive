@@ -1,6 +1,6 @@
 import {
-  getAssets,
-  getCountries,
+  listAssets,
+  listCountries,
   getCountryRoutes,
   getPaymentWizardRoutes,
   openReceivePayTutorialUrls,
@@ -145,12 +145,14 @@ export const openReceiveCountryPins: Readonly<Record<string, OpenReceiveCountryM
 
 export function getOpenReceiveDefaultCountryCode(): string {
   return (
-    getCountries().find((country) => country.code === "US")?.code ?? getCountries()[0]?.code ?? ""
+    listCountries().find((country) => country.code === "US")?.code ??
+    listCountries()[0]?.code ??
+    ""
   );
 }
 
 export function getOpenReceiveBitcoinAssets(): readonly AssetIndexEntry[] {
-  return getAssets().filter((asset) => asset.symbol === "btc" && asset.route !== undefined);
+  return listAssets().filter((asset) => asset.symbol === "btc" && asset.route !== undefined);
 }
 
 function getOpenReceiveDefaultBitcoinRoute(): string | null {
@@ -165,7 +167,7 @@ function getOpenReceiveDefaultBitcoinRoute(): string | null {
 }
 
 export function getOpenReceiveAltcoinAssets(): readonly AssetIndexEntry[] {
-  return getAssets().filter(
+  return listAssets().filter(
     (asset) =>
       asset.route !== undefined &&
       asset.symbol !== "btc" &&
@@ -607,7 +609,7 @@ export function getOpenReceiveRouteIcon(asset: Pick<AssetIndexEntry, "route" | "
 }
 
 export function getOpenReceiveCountriesForRail(rail: FiatRailId): readonly Country[] {
-  return getCountries()
+  return listCountries()
     .filter(
       (country) =>
         openReceiveCountryPins[country.code] !== undefined &&

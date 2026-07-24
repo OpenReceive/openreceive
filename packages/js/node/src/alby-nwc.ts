@@ -12,7 +12,6 @@ import {
   formatOpenReceiveSpendCapabilityWarningMessage,
   type ListTransactionsRequest,
   type ListTransactionsResult,
-  type LookupInvoiceRequest,
   type MakeInvoiceRequest,
   type MakeInvoiceResult,
   type NwcTransaction,
@@ -48,8 +47,6 @@ export interface AlbyNwcCompatibleClient {
   make_invoice?: (request: Record<string, unknown>) => Promise<unknown>;
   listTransactions?: (request: Record<string, unknown>) => Promise<unknown>;
   list_transactions?: (request: Record<string, unknown>) => Promise<unknown>;
-  lookupInvoice?: (request: Record<string, unknown>) => Promise<unknown>;
-  lookup_invoice?: (request: Record<string, unknown>) => Promise<unknown>;
   close?: () => Promise<void> | void;
 }
 
@@ -346,34 +343,6 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
     return result;
   }
 
-  async lookupInvoice(request: LookupInvoiceRequest): Promise<NwcTransaction> {
-    await this.ensurePreflight();
-    const paymentHash = request.payment_hash;
-    const invoice = request.invoice;
-    if ((paymentHash === undefined) === (invoice === undefined)) {
-      throw new ReceiveCheckoutValidationError(
-        "lookup_invoice requires exactly one of payment_hash or invoice",
-      );
-    }
-    if (paymentHash !== undefined && !HEX_64.test(paymentHash)) {
-      throw new ReceiveCheckoutValidationError("payment_hash must be 64 hex characters");
-    }
-    const params = {
-      ...(paymentHash === undefined ? {} : { payment_hash: paymentHash }),
-      ...(invoice === undefined ? {} : { invoice }),
-    };
-    this.#log("debug", "nwc.lookup_invoice.requested", "Calling NWC wallet lookup_invoice.", {
-      method: "lookup_invoice",
-      ...(paymentHash === undefined ? {} : { payment_hash: paymentHash }),
-    });
-    const raw = await callRequiredMethod(
-      await this.getClient(),
-      ["lookupInvoice", "lookup_invoice"],
-      params,
-    );
-    return normalizeNwcTransaction(unwrapNwcResult(raw));
-  }
-
   async close(): Promise<void> {
     await this.#client?.close?.();
   }
@@ -610,10 +579,8 @@ function normalizeNwcTransaction(rawTransaction: unknown): NwcTransaction {
     );
   }
 
-  // Map NIP-47 result.state (and camelCase variants) to OpenReceive
-  // transaction_state at the adapter boundary so OpenReceive payloads never
-  // carry a bare NIP-47 `state` field. Also normalize legacy boolean variants
-  // such as settled === true / paid === true that some wallet libraries emit.
+  // Map common wallet-library field spellings to OpenReceive's normalized
+  // transaction_state at the adapter boundary.
   const transactionState =
     normalizeTransactionState(
       result.transaction_state ?? result.transactionState ?? result.state

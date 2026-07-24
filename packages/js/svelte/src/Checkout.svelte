@@ -7,7 +7,7 @@
     type CheckoutSnapshot
   } from "./index.js";
 
-  // Snapshot mode: pass a `checkout` to render it directly (backward compatible).
+  // Snapshot mode: pass a `checkout` to render it directly.
   // Create mode: omit `checkout` and pass `orderId` (+ optional `prefix`); the underlying
   // <openreceive-checkout> element creates the checkout, then renders and polls itself.
   // Summary is always fetched; pass `syncUrl` to opt into History API URL sync.
@@ -21,7 +21,6 @@
   export let routeOrderId: string | undefined = undefined;
   export let onSettled: ((event: Event) => void) | undefined = undefined;
   export let onStartOver: ((event: Event) => void) | undefined = undefined;
-  export let onSummary: ((event: Event) => void) | undefined = undefined;
   export let options: CheckoutShellOptions = {};
 
   $: shell = createOpenReceiveSvelteCheckoutShellBinding(checkout ?? null, {
@@ -35,7 +34,6 @@
     ...(routeOrderId === undefined ? {} : { routeOrderId }),
     ...(onSettled === undefined ? {} : { onSettled }),
     ...(onStartOver === undefined ? {} : { onStartOver }),
-    ...(onSummary === undefined ? {} : { onSummary })
   });
 
   if (typeof window !== "undefined") {

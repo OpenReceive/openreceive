@@ -71,6 +71,7 @@ openreceive_payments
   payment_hash  required, unique
   paid_at       nullable timestamp
   expires_at    required timestamp
+  checkout_data required safe JSON snapshot
   swap_data     nullable JSON/text, server-only
 ```
 
@@ -96,21 +97,10 @@ hash the host did not commit.
 ```ts
 import { createOpenReceive } from "@openreceive/node";
 
-const openreceive = await createOpenReceive({
-  onPaid: async ({ paymentHash, paidAt }) => {
-    await payments.markPaidOnce({ paymentHash, paidAt });
-  },
-});
+const openreceive = await createOpenReceive();
 
 const liveAttempt = await payments.findLiveForOrder(order.id);
-const existing = liveAttempt
-  ? await openreceive.recoverCheckout({
-      orderId: order.id,
-      paymentHash: liveAttempt.paymentHash,
-    })
-  : null;
-
-if (existing) return existing;
+if (liveAttempt) return liveAttempt.checkout;
 
 const checkout = await openreceive.createCheckout({
   orderId: order.id,
@@ -128,30 +118,35 @@ The library does not load `.env` itself; the host entry point or deployment
 platform supplies the environment. Pass `nwc` explicitly only for an
 intentional runtime override, such as an isolated test.
 
-`checkPayment({ paymentHash })` verifies a known attempt. `reconcilePayments`
-checks unresolved payment rows. `watchPayments({ onPaid })` scans overlapping
-NIP-47 creation-time windows and delivers verified settlements at least once.
+`checkPayment({ paymentHash, createdAt })` verifies a known attempt with bounded
+`list_transactions` scans. Mounted routes and the reconciler deliver settlement
+through the host integration.
+`reconcilePayments` batch-checks unresolved payment rows.
+`startOpenReceiveReconciler` reloads unresolved host rows on every pass and
+delivers verified settlements at least once.
 
 ## Ship the routes, keep your auth
 
 Browser integrations mount `@openreceive/http` through Express, Fastify, Next,
-or Rails. OpenReceive never inspects the host session. It calls your
-`authorize`, `resolveCheckout`, and `onCheckoutCreated` hooks and obeys
-their results.
+or Rails. OpenReceive never inspects the host session. The generated `host`
+integration resolves authoritative prices, selects committed attempts, and
+persists new ones; your application supplies authorization.
 
 A create request supplies an order ID, never its own price. The host resolves
 the authoritative amount from its order:
 
 ```ts
-import { createOpenReceivePaymentHooks } from "@openreceive/http";
+import { createOpenReceiveHost } from "@openreceive/http";
 
-const paymentHooks = createOpenReceivePaymentHooks({
+const host = createOpenReceiveHost({
   loadOrder: (orderId) => orders.find(orderId),
   amountForOrder: (order) => ({
     currency: order.currency,
     value: order.total.toString(),
   }),
   payments: paymentRepository,
+  onPaid: ({ paymentHash, paidAt }) =>
+    paymentRepository.markPaidOnceAndFulfillFirst(paymentHash, paidAt),
 });
 
 app.use(openReceiveExpress({
@@ -170,8 +165,7 @@ app.use(openReceiveExpress({
     });
   },
 
-  resolveCheckout: paymentHooks.resolveCheckout,
-  onCheckoutCreated: paymentHooks.onCheckoutCreated,
+  host,
 }));
 ```
 

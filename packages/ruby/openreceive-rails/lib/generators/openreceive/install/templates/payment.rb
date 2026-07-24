@@ -34,7 +34,7 @@ class OpenReceivePayment < ApplicationRecord
 
     if %w[checkout.create swap.create].include?(action)
       paid = attempts.where.not(paid_at: nil).newest_first.first
-      return paid unless paid.nil? # The handler will refuse to recover a settled invoice.
+      return paid unless paid.nil? # The handler will refuse to reuse a settled checkout.
 
       live = attempts.live_at(now).newest_first.limit(2).to_a
       raise AttemptConflict, "order has multiple live OpenReceive payments" if live.length > 1
@@ -68,6 +68,8 @@ class OpenReceivePayment < ApplicationRecord
         order: order,
         payment_hash: normalized_hash,
         expires_at: Time.at(attempt_expires_at(checkout, swap_data)).utc,
+        checkout_data: checkout,
+        created_at: Time.at(attempt_created_at(checkout)).utc,
         swap_data: swap_data
       )
     end
@@ -77,7 +79,9 @@ class OpenReceivePayment < ApplicationRecord
   # `first_for_order` is true exactly once under the order lock; couple host
   # fulfillment to that branch in the same transaction.
   def self.mark_paid_once!(payment_hash:, paid_at:)
-    payment = find_by!(payment_hash: payment_hash.to_s.downcase)
+    payment = find_by(payment_hash: payment_hash.to_s.downcase)
+    return nil if payment.nil?
+
     payment.order.with_lock do
       payment.reload
       return payment unless payment.paid_at.nil?
@@ -103,4 +107,14 @@ class OpenReceivePayment < ApplicationRecord
     Integer(provider_expiry || checkout_expiry)
   end
   private_class_method :attempt_expires_at
+
+  def self.attempt_created_at(checkout)
+    Integer(
+      checkout[:created_at] ||
+      checkout["created_at"] ||
+      checkout[:createdAt] ||
+      checkout["createdAt"]
+    )
+  end
+  private_class_method :attempt_created_at
 end

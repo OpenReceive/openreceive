@@ -1,8 +1,9 @@
-import { nextStepsMarkdown, typeOrmOrderIdColumn } from "../shared.ts";
-import { attemptConflictClass, hooksStubContents, recordMapperHelper } from "../snippets.ts";
+import { isSqlite, nextStepsMarkdown, typeOrmOrderIdColumn } from "../shared.ts";
+import { attemptConflictClass, hostStubContents, recordMapperHelper } from "../snippets.ts";
 import type { ScaffoldFile, ScaffoldPaymentsOptions } from "../types.ts";
 
 export function renderTypeOrmFiles(options: ScaffoldPaymentsOptions): ScaffoldFile[] {
+  const sqlite = isSqlite(options);
   const relation = options.skipForeignKey
     ? ""
     : `
@@ -14,13 +15,13 @@ export function renderTypeOrmFiles(options: ScaffoldPaymentsOptions): ScaffoldFi
   const orderImport = options.skipForeignKey
     ? ""
     : `import { ${options.orderModel} } from "../${kebab(options.orderModel)}.ts"; // TODO: point at your host order entity\n`;
-  const relationImports = options.skipForeignKey
-    ? ""
-    : `\n  JoinColumn,\n  ManyToOne,`;
+  const relationImports = options.skipForeignKey ? "" : `\n  JoinColumn,\n  ManyToOne,`;
+
+  const dateType = sqlite ? `"datetime"` : `"timestamptz"`;
+  const jsonType = sqlite ? `"simple-json"` : `"jsonb"`;
 
   const entity = `${orderImport}import {
   Column,
-  CreateDateColumn,
   Entity,
   Index,${relationImports}
   PrimaryGeneratedColumn,
@@ -34,41 +35,71 @@ export class OpenReceivePayment {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column(${typeOrmOrderIdColumn(options.orderIdType)})
+  @Column(${typeOrmOrderIdColumn(options.orderIdType, options.dialect)})
   orderId!: string | number;
 ${relation}
   @Column({ name: "payment_hash", length: 64, unique: true })
   paymentHash!: string;
 
-  @Column({ name: "paid_at", type: "timestamptz", nullable: true })
+  @Column({ name: "paid_at", type: ${dateType}, nullable: true })
   paidAt!: Date | null;
 
-  @Column({ name: "expires_at", type: "timestamptz" })
+  @Column({ name: "expires_at", type: ${dateType} })
   expiresAt!: Date;
 
-  @Column({ name: "swap_data", type: "jsonb", nullable: true, select: false })
+  @Column({ name: "checkout_data", type: ${jsonType} })
+  checkoutData!: unknown;
+
+  @Column({ name: "swap_data", type: ${jsonType}, nullable: true, select: false })
   swapData!: unknown | null;
 
-  @CreateDateColumn({ name: "created_at", type: "timestamptz" })
+  @Column({ name: "created_at", type: ${dateType} })
   createdAt!: Date;
 
-  @UpdateDateColumn({ name: "updated_at", type: "timestamptz" })
+  @UpdateDateColumn({ name: "updated_at", type: ${dateType} })
   updatedAt!: Date;
 }
 `;
 
+  const lockCommit = sqlite
+    ? `        // SQLite: single-writer transaction; pessimistic locks are unavailable.
+        await manager
+          .getRepository("${options.orderModel}")
+          .createQueryBuilder("order")
+          .where("order.id = :id", { id: values.orderId })
+          .getOne();`
+    : `        await manager
+          .getRepository("${options.orderModel}")
+          .createQueryBuilder("order")
+          .setLock("pessimistic_write")
+          .where("order.id = :id", { id: values.orderId })
+          .getOne();`;
+
+  const lockPaid = sqlite
+    ? `    await manager
+      .getRepository("${options.orderModel}")
+      .createQueryBuilder("order")
+      .where("order.id = :id", { id: payment.orderId })
+      .getOne();`
+    : `    await manager
+      .getRepository("${options.orderModel}")
+      .createQueryBuilder("order")
+      .setLock("pessimistic_write")
+      .where("order.id = :id", { id: payment.orderId })
+      .getOne();`;
+
   const repository = `import {
   openReceivePaymentInsert,
   type OpenReceivePaymentRecord,
-  type OpenReceivePaymentRepository,
+  type OpenReceiveHostRepository,
 } from "@openreceive/http";
-import type { DataSource } from "typeorm";
+import { IsNull, type DataSource } from "typeorm";
 import { OpenReceivePayment } from "../entities/open-receive-payment.ts";
 ${attemptConflictClass()}
 ${recordMapperHelper()}
 export function createOpenReceivePaymentsRepository(
   dataSource: DataSource,
-): OpenReceivePaymentRepository {
+): OpenReceiveHostRepository {
   return {
     async listForOrder(orderId) {
       const rows = await dataSource.getRepository(OpenReceivePayment).find({
@@ -80,6 +111,7 @@ export function createOpenReceivePaymentsRepository(
           paidAt: true,
           expiresAt: true,
           createdAt: true,
+          checkoutData: true,
           swapData: true,
         },
       });
@@ -89,12 +121,7 @@ export function createOpenReceivePaymentsRepository(
     async commitAttempt(input) {
       const values = openReceivePaymentInsert(input);
       await dataSource.transaction(async (manager) => {
-        await manager
-          .getRepository("${options.orderModel}")
-          .createQueryBuilder("order")
-          .setLock("pessimistic_write")
-          .where("order.id = :id", { id: values.orderId })
-          .getOne();
+${lockCommit}
 
         const same = await manager.findOne(OpenReceivePayment, {
           where: { paymentHash: values.paymentHash },
@@ -130,10 +157,23 @@ export function createOpenReceivePaymentsRepository(
             orderId: values.orderId as never,
             paymentHash: values.paymentHash,
             expiresAt: new Date(values.expiresAt * 1000),
+            createdAt: new Date(values.createdAt * 1000),
+            checkoutData: values.checkout,
             swapData: values.swapData ?? null,
           }),
         );
       });
+    },
+
+    async listUnsettledAttempts() {
+      const rows = await dataSource.getRepository(OpenReceivePayment).find({
+        where: { paidAt: IsNull() },
+        select: { paymentHash: true, createdAt: true },
+      });
+      return rows.map((row) => ({
+        paymentHash: row.paymentHash,
+        createdAt: Math.floor(row.createdAt.getTime() / 1000),
+      }));
     },
   };
 }
@@ -151,18 +191,18 @@ export interface MarkPaidOnceResult {
 export async function markOpenReceivePaidOnce(
   dataSource: DataSource,
   input: { paymentHash: string; paidAt: number },
-): Promise<MarkPaidOnceResult> {
+  onFirstSettlement: (
+    manager: unknown,
+    settled: { orderId: string; paymentHash: string },
+  ) => Promise<void>,
+): Promise<MarkPaidOnceResult | null> {
   return dataSource.transaction(async (manager) => {
-    const payment = await manager.findOneOrFail(OpenReceivePayment, {
+    const payment = await manager.findOne(OpenReceivePayment, {
       where: { paymentHash: input.paymentHash.toLowerCase() },
     });
+    if (payment === null) return null;
 
-    await manager
-      .getRepository("${options.orderModel}")
-      .createQueryBuilder("order")
-      .setLock("pessimistic_write")
-      .where("order.id = :id", { id: payment.orderId })
-      .getOne();
+${lockPaid}
 
     const locked = await manager.findOneOrFail(OpenReceivePayment, {
       where: { paymentHash: payment.paymentHash },
@@ -184,6 +224,12 @@ export async function markOpenReceivePaidOnce(
 
     locked.paidAt = new Date(input.paidAt * 1000);
     await manager.save(locked);
+    if (siblingPaid === null) {
+      await onFirstSettlement(manager, {
+        orderId: String(locked.orderId),
+        paymentHash: locked.paymentHash,
+      });
+    }
 
     return {
       firstForOrder: siblingPaid === null,
@@ -198,7 +244,7 @@ export async function markOpenReceivePaidOnce(
     { path: "src/entities/open-receive-payment.ts", contents: entity },
     { path: "src/openreceive/payments-repository.ts", contents: repository },
     { path: "src/openreceive/mark-paid-once.ts", contents: markPaid },
-    { path: "src/openreceive/hooks.stub.ts", contents: hooksStubContents() },
+    { path: "src/openreceive/host.stub.ts", contents: hostStubContents() },
     { path: "OPENRECEIVE_PAYMENTS.md", contents: nextStepsMarkdown(options) },
   ];
 }

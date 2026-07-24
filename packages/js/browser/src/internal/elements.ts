@@ -193,9 +193,6 @@ export function createCheckoutElementListeners(
     ...(handlers.onError === undefined
       ? {}
       : { [OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.error]: handlers.onError }),
-    ...(handlers.onSummary === undefined
-      ? {}
-      : { [OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.summary]: handlers.onSummary }),
   };
 }
 

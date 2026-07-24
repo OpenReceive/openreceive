@@ -26,28 +26,25 @@ import { getCheckoutLogContext, joinClassNames } from "./utils.ts";
 import { PaymentWizard } from "./wizard.ts";
 import type { CheckoutProps } from "./types.ts";
 
-export type Checkout = CheckoutSnapshot;
-
 /**
  * Self-contained checkout. Two modes:
  *
- * - Snapshot mode (`checkout` prop): renders that snapshot directly — unchanged, backward
- *   compatible. When `prefix` is passed (and `orderUrl` is not), the order route is derived
+ * - Snapshot mode (`checkout` prop): renders that snapshot directly. When `prefix` is passed
+ *   (and `orderUrl` is not), the order route is derived
  *   from the prefix and the snapshot's order id so status polling works with just a prefix.
  * - Create mode (`orderId` prop, no `checkout`): the component owns the whole lifecycle — on
  *   mount it creates the checkout against `${prefix}/checkouts` (prefix defaults to
  *   `/openreceive`), then hands the resulting snapshot to the same rendering path with
  *   `orderUrl` defaulted to the mounted payment-check route. Every poll/swap sends `order_id`
  *   and is authorized by the host.
- * - Create mode always fetches `GET {prefix}/orders/{orderId}/summary` (`onSummary`).
- *   Opt into `/checkout/:orderId` History API sync with `syncUrl` (skipped when
- *   `routeOrderId` is set — e.g. Next.js already owns the route).
+ * - Opt into `/checkout/:orderId` History API sync with `syncUrl` (skipped when
+ *   `routeOrderId` is set — e.g. Next.js already owns the route). Order resume data
+ *   remains owned by the host application.
  */
 export function Checkout(props: CheckoutProps): React.ReactElement {
   const { checkout, orderId } = props;
   if (checkout !== undefined) {
-    // Derive the order URL from an explicit prefix only, so existing callers that never pass
-    // a prefix keep their current (no auto-polling-URL) behavior.
+    // Derive the order URL only when the caller supplies a prefix.
     const orderUrl =
       props.orderUrl ??
       (props.prefix === undefined
@@ -70,7 +67,7 @@ export function Checkout(props: CheckoutProps): React.ReactElement {
  * host-owned order data and returns the newly minted invoice only after the host has stored
  * its payment hash.
  *
- * Always loads the guest summary; syncs the URL only when `syncUrl` is set.
+ * Syncs the URL only when `syncUrl` is set.
  */
 function CheckoutCreate(props: CheckoutProps): React.ReactElement {
   // orderId presence is guaranteed by the Checkout dispatcher's create-mode branch.
@@ -247,8 +244,6 @@ function CheckoutView(
     syncUrl: _syncUrl,
     resumePathPrefix: _resumePathPrefix,
     routeOrderId: _routeOrderId,
-    onSummary: _onSummary,
-    onResumeMiss: _onResumeMiss,
     onRequestLightning,
     mintingLightning = false,
     qrEncoder,

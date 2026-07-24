@@ -3,7 +3,7 @@
 import type { CheckoutState } from "@openreceive/browser/internal";
 import { Checkout, ThemeScope, TransactionDetails } from "@openreceive/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { HelloFruit, HelloFruitProduct } from "../server/shared-data.ts";
 import {
   createHelloFruitDemoBrowserConsoleLogger,
@@ -12,6 +12,7 @@ import {
 import {
   forgetHelloFruitOrder,
   helloFruitCheckoutPath,
+  loadHelloFruitOrderForResume,
   rememberHelloFruitOrder,
 } from "../../../../shared/demo-checkout-resume.ts";
 import {
@@ -91,7 +92,7 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
   }
 
   /** onSettled is a display hint — wait for server onPaid to mark the summary paid. */
-  async function revealFulfilledDelivery(orderId: string): Promise<void> {
+  const revealFulfilledDelivery = useCallback(async (orderId: string): Promise<void> => {
     const paid = await waitForHelloFruitPaidSummary({ orderId });
     const firstItem = paid.items[0];
     const fruit =
@@ -107,11 +108,11 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
     if (fruit === undefined) return;
     const objectUrl = await fetchHelloFruitDeliveryObjectUrl(orderId, fruit.id);
     setDeliveryObjectUrl((current) => {
-      revokeDeliveryObjectUrl(current);
+      if (current !== undefined) URL.revokeObjectURL(current);
       return objectUrl;
     });
     setStickerModalOpen(true);
-  }
+  }, [fruits]);
 
   function onSettled(): void {
     const orderId = order?.uuid ?? resumeOrderId;
@@ -135,34 +136,44 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
     setResuming(false);
   }
 
-  function onSummary(summary: unknown): void {
-    if (!isHelloFruitDemoOrder(summary)) return;
-    logDemo("checkout.resume", "Resuming checkout from summary.", { orderId: summary.uuid });
-    setOrder(summary);
-    const firstItem = summary.items[0];
-    setPurchasedFruit(
-      firstItem === undefined
-        ? undefined
-        : fruits.find((fruit) => fruit.id === firstItem.product_id),
-    );
-    setStatus("invoice_created");
-    setResuming(false);
-    setResumeError(null);
-    if (summary.status === "paid") {
-      void revealFulfilledDelivery(summary.uuid).catch((cause: unknown) => {
-        setError(cause instanceof Error ? cause.message : String(cause));
-      });
-    }
-  }
-
-  function onResumeMiss(orderId: string): void {
-    logDemo("checkout.resume_miss", "Checkout resume order not found.", { orderId });
-    setOrder(undefined);
-    setPurchasedFruit(undefined);
-    setResuming(false);
-    setResumeError("Order not found.");
-    router.replace("/");
-  }
+  useEffect(() => {
+    if (resumeOrderId === undefined || order?.uuid === resumeOrderId) return;
+    let cancelled = false;
+    setResuming(true);
+    void loadHelloFruitOrderForResume(resumeOrderId).then((summary) => {
+      if (cancelled) return;
+      if (summary === undefined) {
+        logDemo("checkout.resume_miss", "Checkout resume order not found.", {
+          orderId: resumeOrderId,
+        });
+        setOrder(undefined);
+        setPurchasedFruit(undefined);
+        setResuming(false);
+        setResumeError("Order not found.");
+        router.replace("/");
+        return;
+      }
+      logDemo("checkout.resume", "Resuming checkout from summary.", { orderId: summary.uuid });
+      setOrder(summary);
+      const firstItem = summary.items[0];
+      setPurchasedFruit(
+        firstItem === undefined
+          ? undefined
+          : fruits.find((fruit) => fruit.id === firstItem.product_id),
+      );
+      setStatus("invoice_created");
+      setResuming(false);
+      setResumeError(null);
+      if (summary.status === "paid") {
+        void revealFulfilledDelivery(summary.uuid).catch((cause: unknown) => {
+          setError(cause instanceof Error ? cause.message : String(cause));
+        });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [fruits, resumeOrderId, order?.uuid, router, revealFulfilledDelivery]);
 
   const selectedFruit = useMemo(
     () => fruits.find((fruit) => fruit.id === fruitId) ?? fruits[0],
@@ -463,7 +474,7 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
               </div>
             </section>
           )}
-          {/* Self-contained: orderId restores summary after refresh; app router owns the URL. */}
+          {/* The host restored the order; Checkout owns payment creation and polling. */}
           <Checkout
             className="demo-checkout"
             orderId={(order?.uuid ?? resumeOrderId) as string}
@@ -478,8 +489,6 @@ export default function CheckoutClient({ product, fruits, resumeOrderId }: Check
             onSettled={onSettled}
             onState={onCheckoutState}
             onStartOver={startOver}
-            onSummary={onSummary}
-            onResumeMiss={onResumeMiss}
           />
         </div>
       )}

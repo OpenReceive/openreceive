@@ -77,6 +77,8 @@
   },
   "include": [
     "packages/js/**/*.ts",
+    "examples/hello-fruit/shared/**/*.ts",
+    "examples/hello-fruit/shared/**/*.d.ts",
     "examples/hello-fruit/server/*/src/**/*.ts",
     "examples/hello-fruit/server/*/src/**/*.tsx",
     "examples/hello-fruit/server/*/vite.config.ts"

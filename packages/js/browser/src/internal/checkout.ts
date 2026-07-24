@@ -1026,31 +1026,11 @@ function resolveCheckoutUrl(
 
 function checkoutSnapshotFromResponseBody(body: unknown): CheckoutSnapshot {
   const record = asRecord(body);
-  // The mounted create route nests the snapshot under `checkout`; direct callers post the
-  // snapshot at the top level. Accept both,
-  // then fall back to the shared status-body shapes (display_checkout, etc.).
   const wrapped = asRecord(record.checkout);
-  if (
-    typeof wrapped.payment_hash === "string" &&
-    typeof wrapped.bolt11 === "string" &&
-    typeof wrapped.order_id === "string"
-  ) {
-    return storageFreeCheckoutSnapshot(wrapped);
-  }
-  if (typeof wrapped.checkout_id === "string") {
-    return normalizeCheckoutSnapshot(wrapped);
-  }
-  if (typeof record.checkout_id === "string") {
-    return normalizeCheckoutSnapshot(record);
-  }
-  const extracted = extractCheckoutSnapshotFromStatusBody(record);
-  if (extracted !== null) return extracted;
-  // No recognizable shape: normalize the record so its own validation raises the precise
-  // "requires checkout_id" error the original code path produced.
-  return normalizeCheckoutSnapshot(record);
+  return checkoutSnapshot(wrapped);
 }
 
-function storageFreeCheckoutSnapshot(checkout: Record<string, unknown>): CheckoutSnapshot {
+function checkoutSnapshot(checkout: Record<string, unknown>): CheckoutSnapshot {
   const paymentHash = requiredString(checkout.payment_hash, "payment_hash");
   const orderId = requiredString(checkout.order_id, "order_id");
   const amountMsats = requiredSafeInteger(checkout.amount_msats, "amount_msats");
@@ -1077,199 +1057,9 @@ function storageFreeCheckoutSnapshot(checkout: Record<string, unknown>): Checkou
   };
 }
 
-function extractCheckoutSnapshotFromStatusBody(
-  record: Record<string, unknown>,
-): CheckoutSnapshot | null {
-  if (typeof record.checkout_id === "string") {
-    return normalizeCheckoutSnapshot(record);
-  }
-
-  const displayCheckout = asRecord(record.display_checkout);
-  if (typeof displayCheckout.checkout_id === "string") {
-    return normalizeCheckoutSnapshot(displayCheckout);
-  }
-
-  const paidCheckout = asRecord(record.paid_checkout);
-  if (typeof paidCheckout.checkout_id === "string") {
-    return normalizeCheckoutSnapshot(paidCheckout);
-  }
-
-  const activeCheckout = asRecord(record.active_checkout);
-  if (typeof activeCheckout.checkout_id === "string") {
-    return normalizeCheckoutSnapshot(activeCheckout);
-  }
-
-  if (Array.isArray(record.checkouts)) {
-    const first = asRecord(record.checkouts[0]);
-    if (typeof first.checkout_id === "string") {
-      return normalizeCheckoutSnapshot(first);
-    }
-  }
-
-  return null;
-}
-
-function normalizeCheckoutSnapshot(input: unknown): CheckoutSnapshot {
-  const record = asRecord(input);
-  const active =
-    record.active === undefined ? undefined : normalizeCheckoutInvoiceSnapshot(record.active);
-  const rawInvoices = Array.isArray(record.invoices) ? record.invoices : [];
-  const invoices = rawInvoices.map(normalizeCheckoutInvoiceSnapshot);
-  const checkoutId = requiredString(record.checkout_id, "checkout_id");
-  const orderId = requiredString(record.order_id, "order_id");
-  const amountMsats = requiredSafeInteger(record.amount_msats, "amount_msats");
-  const status = requiredCheckoutStatus(record.status);
-
-  return {
-    checkout_id: checkoutId,
-    order_id: orderId,
-    status,
-    ...(optionalSafeInteger(record.paid_at) === undefined
-      ? {}
-      : { paid_at: optionalSafeInteger(record.paid_at) }),
-    amount_msats: amountMsats,
-    ...(normalizeFiat(record.fiat) === undefined ? {} : { fiat: normalizeFiat(record.fiat) }),
-    ...(active === undefined ? {} : { active }),
-    invoices,
-    ...(optionalBoolean(record.wallet_scan_performed) === undefined
-      ? {}
-      : { wallet_scan_performed: optionalBoolean(record.wallet_scan_performed) }),
-    ...(optionalSafeInteger(record.transactions_checked) === undefined
-      ? {}
-      : { transactions_checked: optionalSafeInteger(record.transactions_checked) }),
-  };
-}
-
-function normalizeCheckoutInvoiceSnapshot(input: unknown): CheckoutInvoiceSnapshot {
-  const record = asRecord(input);
-  const rail = requiredInvoiceRail(record.rail);
-  const invoice = optionalString(record.invoice);
-  // checkout_lock is a deferred placeholder — no bolt11 until the payer selects Bitcoin.
-  if (rail !== "swap" && rail !== "checkout_lock" && invoice === undefined) {
-    throw new TypeError("OpenReceive checkout response requires invoice.");
-  }
-  const swap = normalizeCheckoutInvoiceSwapSnapshot(record.swap);
-  return {
-    invoice_id: requiredString(record.invoice_id, "invoice_id"),
-    rail,
-    ...(invoice === undefined ? {} : { invoice }),
-    ...(optionalString(record.payment_hash) === undefined
-      ? {}
-      : { payment_hash: optionalString(record.payment_hash) }),
-    ...(optionalSafeInteger(record.amount_msats) === undefined
-      ? {}
-      : { amount_msats: optionalSafeInteger(record.amount_msats) }),
-    ...(isRecord(record.fiat_quote) || record.fiat_quote === null
-      ? { fiat_quote: record.fiat_quote as CheckoutInvoiceSnapshot["fiat_quote"] }
-      : {}),
-    ...(optionalString(record.transaction_state) === undefined
-      ? {}
-      : { transaction_state: optionalString(record.transaction_state) }),
-    ...(optionalString(record.workflow_state) === undefined
-      ? {}
-      : { workflow_state: optionalString(record.workflow_state) }),
-    ...(optionalSafeInteger(record.expires_at) === undefined
-      ? {}
-      : { expires_at: optionalSafeInteger(record.expires_at) }),
-    ...(optionalSafeInteger(record.settled_at) === undefined
-      ? {}
-      : { settled_at: optionalSafeInteger(record.settled_at) }),
-    ...(swap === undefined ? {} : { swap }),
-  };
-}
-
 function requiredInvoiceRail(value: unknown): CheckoutInvoiceSnapshot["rail"] {
   if (value === "lightning" || value === "swap" || value === "checkout_lock") return value;
   throw new TypeError("OpenReceive invoice rail must be lightning, swap, or checkout_lock.");
-}
-
-function normalizeCheckoutInvoiceSwapSnapshot(
-  input: unknown,
-): CheckoutInvoiceSnapshot["swap"] | undefined {
-  if (!isRecord(input)) return undefined;
-  const provider = optionalString(input.provider);
-  const payInAsset = optionalString(input.pay_in_asset);
-  const depositAddress = optionalString(input.deposit_address);
-  const depositAmount = optionalString(input.deposit_amount);
-  const providerState = optionalString(input.provider_state) as
-    | NonNullable<CheckoutInvoiceSnapshot["swap"]>["provider_state"]
-    | undefined;
-  const providerExpiresAt = optionalSafeInteger(input.provider_expires_at);
-  if (
-    provider === undefined ||
-    payInAsset === undefined ||
-    depositAddress === undefined ||
-    depositAmount === undefined ||
-    providerState === undefined ||
-    providerExpiresAt === undefined
-  ) {
-    return undefined;
-  }
-
-  return {
-    ...(optionalString(input.attempt_id) === undefined
-      ? {}
-      : { attempt_id: optionalString(input.attempt_id) }),
-    provider,
-    ...(optionalString(input.provider_order_id) === undefined
-      ? {}
-      : { provider_order_id: optionalString(input.provider_order_id) }),
-    pay_in_asset: payInAsset,
-    deposit_address: depositAddress,
-    ...(optionalString(input.deposit_memo) === undefined
-      ? {}
-      : { deposit_memo: optionalString(input.deposit_memo) }),
-    deposit_amount: depositAmount,
-    provider_state: providerState,
-    provider_expires_at: providerExpiresAt,
-    ...(optionalString(input.deposit_tx_id) === undefined
-      ? {}
-      : { deposit_tx_id: optionalString(input.deposit_tx_id) }),
-    ...(optionalString(input.payout_tx_id) === undefined
-      ? {}
-      : { payout_tx_id: optionalString(input.payout_tx_id) }),
-    ...(optionalString(input.refund_address) === undefined
-      ? {}
-      : { refund_address: optionalString(input.refund_address) }),
-    ...(optionalString(input.refund_nonce) === undefined
-      ? {}
-      : { refund_nonce: optionalString(input.refund_nonce) }),
-    ...(optionalSafeInteger(input.refund_nonce_expires_at) === undefined
-      ? {}
-      : { refund_nonce_expires_at: optionalSafeInteger(input.refund_nonce_expires_at) }),
-    ...(optionalString(input.refund_tx_id) === undefined
-      ? {}
-      : { refund_tx_id: optionalString(input.refund_tx_id) }),
-    ...(optionalBoolean(input.attention) === undefined
-      ? {}
-      : { attention: optionalBoolean(input.attention) }),
-    ...(optionalString(input.attention_reason) === undefined
-      ? {}
-      : { attention_reason: optionalString(input.attention_reason) }),
-    ...(optionalString(input.refund_reason) === undefined
-      ? {}
-      : { refund_reason: optionalString(input.refund_reason) }),
-    ...(optionalString(input.deposit_received_amount) === undefined
-      ? {}
-      : { deposit_received_amount: optionalString(input.deposit_received_amount) }),
-    ...(optionalString(input.refund_amount) === undefined
-      ? {}
-      : { refund_amount: optionalString(input.refund_amount) }),
-    ...(normalizeCheckoutInvoiceSwapFee(input.fee) === undefined
-      ? {}
-      : { fee: normalizeCheckoutInvoiceSwapFee(input.fee) }),
-  };
-}
-
-function normalizeCheckoutInvoiceSwapFee(input: unknown): CheckoutInvoiceSwapFee | undefined {
-  if (!isRecord(input)) return undefined;
-  const currency = optionalString(input.currency);
-  const payInFiat = optionalString(input.pay_in_fiat);
-  const payoutFiat = optionalString(input.payout_fiat);
-  if (currency === undefined || payInFiat === undefined || payoutFiat === undefined) {
-    return undefined;
-  }
-  return { currency, pay_in_fiat: payInFiat, payout_fiat: payoutFiat };
 }
 
 /**
@@ -1328,7 +1118,7 @@ export function isPaidCheckoutSnapshot(snapshot: CheckoutSnapshot): boolean {
 /**
  * True when the given Lightning invoice has more than {@link OPENRECEIVE_LIGHTNING_REUSE_BUFFER_SECONDS}
  * seconds remaining. Pass an optional `now` (Unix seconds) for deterministic tests; defaults to the
- * current clock. Matches the server-side reuse guard in `mintInvoiceForCheckout`.
+ * current clock.
  */
 export function isReusableLightningInvoice(expiresAt: number, now?: number): boolean {
   return expiresAt - (now ?? currentUnixSeconds()) > OPENRECEIVE_LIGHTNING_REUSE_BUFFER_SECONDS;
@@ -1883,11 +1673,6 @@ export async function createQrPngDataUrl(
   return String(png);
 }
 
-// Spec-named alias for the canonical QR helper trio
-// (createQrSvg / createQrPng / createLightningUri). createQrPng returns a
-// PNG data URL using the same safe quiet-zone, contrast, and payload defaults.
-export const createQrPng = createQrPngDataUrl;
-
 export async function copyInvoice(options: CopyInvoiceOptions): Promise<void> {
   assertInvoice(options.invoice);
   const clipboard = options.clipboard ?? globalThis.navigator?.clipboard;
@@ -2308,26 +2093,4 @@ function requiredSafeInteger(value: unknown, fieldName: string): number {
     throw new TypeError(`OpenReceive checkout response requires ${fieldName}.`);
   }
   return integer;
-}
-
-function optionalBoolean(value: unknown): boolean | undefined {
-  return typeof value === "boolean" ? value : undefined;
-}
-
-function requiredCheckoutStatus(value: unknown): CheckoutSnapshot["status"] {
-  if (value === "open" || value === "superseded" || value === "paid" || value === "expired") {
-    return value;
-  }
-  throw new TypeError("OpenReceive checkout response requires status.");
-}
-
-function normalizeFiat(value: unknown): CheckoutSnapshot["fiat"] | undefined {
-  const record = asRecord(value);
-  const currency = optionalString(record.currency);
-  const fiatValue = optionalString(record.value);
-  if (currency === undefined || fiatValue === undefined) return undefined;
-  return {
-    currency,
-    value: fiatValue,
-  };
 }

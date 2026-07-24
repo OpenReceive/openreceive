@@ -134,9 +134,8 @@ const DEFAULT_FIXED_FLOAT_REQUEST_TIMEOUT_MS = 10_000;
 const DEFAULT_FIXED_FLOAT_DEPOSIT_WINDOW_SECONDS = 10 * 60;
 const DEFAULT_FIXED_FLOAT_SETTLEMENT_SLA_SECONDS = 15 * 60;
 /**
- * Margin above deposit_window + settlement_sla. FixedFloat order examples show
- * ~1800s deposit windows; the previous 120s margin left shadow invoices at 1620s
- * — shorter than a plausible FF order. 300s yields a 1800s default floor.
+ * Margin above deposit_window + settlement_sla. Five minutes keeps the shadow
+ * invoice alive through a plausible 30-minute provider order.
  */
 const DEFAULT_FIXED_FLOAT_INVOICE_EXPIRY_MARGIN_SECONDS = 5 * 60;
 

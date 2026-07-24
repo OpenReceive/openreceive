@@ -35,8 +35,9 @@ bin/rails generate openreceive:install --skip-foreign-key
 
 Review the generated migration before running it. `order_id` is indexed but not
 unique; `payment_hash` is globally unique. The table also stores nullable
-write-once `paid_at`, required `expires_at`, and optional server-only
-`swap_data`.
+write-once `paid_at`, required `expires_at`, the safe `checkout_data` retry
+snapshot, and optional server-only `swap_data`. There is no workflow table or
+cursor; reconciliation reloads unsettled payment rows.
 
 One row represents at most one provider swap order. Retrying a terminal swap
 creates another payment row and a fresh Lightning invoice; it does not append
@@ -79,19 +80,17 @@ row for the same order.
 ## Reconciliation and fulfillment
 
 Run wallet reconciliation through the host application's normal job/process
-system. The generated initializer includes this copy-ready callback:
+system. The generated initializer configures the transaction-safe settlement
+callback once. Each job reloads unsettled attempts from the host ledger:
 
 ```ruby
-OpenReceive.config.service.watch_payments(
-  on_paid: lambda do |event|
-    OpenReceivePayment.mark_paid_once!(
-      payment_hash: event.fetch("payment_hash"),
-      paid_at: event.fetch("paid_at")
-    ) do |order, payment, first_for_order|
-      FulfillOrder.call(order, payment: payment) if first_for_order
-    end
-  end
-)
+attempts = OpenReceivePayment.where(paid_at: nil).pluck(:payment_hash, :created_at).map do |hash, created_at|
+  { payment_hash: hash, created_at: created_at.to_i }
+end
+
+OpenReceive.config.service.reconcile_payments(attempts: attempts).each do |payment|
+  OpenReceive.config.on_paid.call(payment) if payment["status"] == "settled"
+end
 ```
 
 The payment row and host fulfillment share one transaction. Duplicate `onPaid`

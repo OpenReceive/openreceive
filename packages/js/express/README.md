@@ -3,17 +3,17 @@
 Express adapter for `@openreceive/http`.
 
 ```ts
-const paymentHooks = createOpenReceivePaymentHooks({
+const host = createOpenReceiveHost({
   loadOrder: (orderId) => orders.find(orderId),
   amountForOrder: (order) => order.amount,
   payments,
+  onPaid,
 });
 
 app.use(openReceiveExpress({
   service,
   authorize,
-  resolveCheckout: paymentHooks.resolveCheckout,
-  onCheckoutCreated: paymentHooks.onCheckoutCreated,
+  host,
 }));
 ```
 

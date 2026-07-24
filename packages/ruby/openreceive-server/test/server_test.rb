@@ -111,10 +111,16 @@ class StorageFreeServerTest < Minitest::Test
   def test_checkout_and_payment_check_are_storage_free
     checkout = @service.create_checkout("order_id" => "ruby-1", "amount" => { "sats" => 1000 })
     refute_respond_to @service, :store
-    assert_equal "pending", @service.check_payment("payment_hash" => checkout["payment_hash"])["status"]
+    assert_equal "pending", @service.check_payment(
+      "payment_hash" => checkout["payment_hash"],
+      "created_at" => checkout["created_at"]
+    )["status"]
     @wallet.transactions.first["transaction_state"] = "settled"
     @wallet.transactions.first["settled_at"] = 1010
-    assert_equal 1010, @service.check_payment("payment_hash" => checkout["payment_hash"])["paid_at"]
+    assert_equal 1010, @service.check_payment(
+      "payment_hash" => checkout["payment_hash"],
+      "created_at" => checkout["created_at"]
+    )["paid_at"]
   end
 
   def test_handler_commits_before_returning_invoice
@@ -122,8 +128,9 @@ class StorageFreeServerTest < Minitest::Test
     handler = OpenReceive::Server::RequestHandler.new(
       service: @service,
       authorize: ->(_context) { true },
-      resolve_checkout: ->(**_context) { { "sats" => 5 } },
-      on_checkout_created: ->(**payment) { committed << payment }
+      resolve_checkout: ->(**_context) { { "amount" => { "sats" => 5 } } },
+      on_checkout_created: ->(**payment) { committed << payment },
+      on_paid: ->(_payment) {}
     )
     status, _headers, body = handler.create_checkout(
       raw_body: JSON.generate("order_id" => "ruby-http"),
@@ -140,9 +147,14 @@ class StorageFreeServerTest < Minitest::Test
       service: @service,
       authorize: ->(_context) { true },
       resolve_checkout: lambda do |**_context|
-        { "amount" => { "sats" => 5 }, "payment_hash" => committed }.compact
+        {
+          "amount" => { "sats" => 5 },
+          "payment_hash" => committed&.fetch(:payment_hash),
+          "checkout" => committed&.fetch(:checkout)
+        }.compact
       end,
-      on_checkout_created: ->(**payment) { committed = payment.fetch(:payment_hash) }
+      on_checkout_created: ->(**payment) { committed = payment },
+      on_paid: ->(_payment) {}
     )
     request = { raw_body: JSON.generate("order_id" => "ruby-retry"), request: {} }
     first = handler.create_checkout(**request, request_id: "req-a")
@@ -156,17 +168,22 @@ class StorageFreeServerTest < Minitest::Test
   def test_handler_checks_the_exact_host_owned_payment_attempt
     checkout = @service.create_checkout("order_id" => "ruby-check", "amount" => { "sats" => 5 })
     selected_hash = checkout.fetch("payment_hash")
+    delivered = []
     handler = OpenReceive::Server::RequestHandler.new(
       service: @service,
       authorize: ->(context) { context.dig(:resource, :payment_hash) == selected_hash },
       resolve_checkout: lambda do |input:, **|
         {
           "amount" => { "sats" => 5 },
-          "payment_hash" => input.fetch("payment_hash")
+          "payment_hash" => input.fetch("payment_hash"),
+          "checkout" => checkout
         }
       end,
-      on_checkout_created: ->(**_payment) {}
+      on_checkout_created: ->(**_payment) {},
+      on_paid: ->(payment) { delivered << payment }
     )
+    @wallet.transactions.first["transaction_state"] = "settled"
+    @wallet.transactions.first["settled_at"] = 1010
     status, _headers, body = handler.check_payment(
       raw_body: JSON.generate(
         "order_id" => "ruby-check",
@@ -177,26 +194,7 @@ class StorageFreeServerTest < Minitest::Test
     )
     assert_equal 200, status
     assert_equal selected_hash, body.fetch("payment_hash")
-  end
-
-  def test_watch_payments_retries_failed_callback
-    checkout = @service.create_checkout("order_id" => "ruby-retry-paid", "amount" => { "sats" => 10 })
-    @wallet.transactions.first["transaction_state"] = "settled"
-    @wallet.transactions.first["settled_at"] = 1010
-    deliveries = 0
-    stopped = false
-    @service.watch_payments(
-      from: 0,
-      interval: 0,
-      stop: -> { stopped },
-      on_paid: lambda do |payment|
-        deliveries += 1
-        assert_equal checkout["payment_hash"], payment["payment_hash"]
-        raise "host transaction rolled back" if deliveries == 1
-        stopped = true
-      end
-    )
-    assert_equal 2, deliveries
+    assert_equal selected_hash, delivered.first.fetch("payment_hash")
   end
 
   def test_host_serialized_swap_data_recovers_state_and_controls_refunds
@@ -234,8 +232,9 @@ class StorageFreeServerTest < Minitest::Test
     app = OpenReceive::Server::RackApp.new(
       service: @service,
       authorize: ->(_context) { true },
-      resolve_checkout: ->(**_context) { { "sats" => 1 } },
-      on_checkout_created: ->(**_payment) {}
+      resolve_checkout: ->(**_context) { { "amount" => { "sats" => 1 } } },
+      on_checkout_created: ->(**_payment) {},
+      on_paid: ->(_payment) {}
     )
     Dir["spec/test-vectors/http-golden/*.json"].sort.each do |path|
       vector = JSON.parse(File.read(path))

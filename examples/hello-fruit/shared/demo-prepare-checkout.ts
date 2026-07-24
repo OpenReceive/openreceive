@@ -4,7 +4,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { OpenReceive } from "@openreceive/node";
-import { hostError, OpenReceiveHostError } from "@openreceive/http";
+import { hostError } from "@openreceive/http";
 import {
   createHelloFruitOrderInvoiceDescription,
   type HelloFruitFiatAmount,
@@ -38,18 +38,6 @@ export interface HelloFruitCreateOrderResult {
       | { readonly currency: string; readonly value: string };
     readonly memo: string;
   };
-}
-
-/** @deprecated Prefer {@link OpenReceiveHostError} / {@link hostError} from `@openreceive/http`. */
-export class HelloFruitDemoOrderError extends OpenReceiveHostError {
-  constructor(message: string, status = 400) {
-    super(status, {
-      code: "INVALID_REQUEST",
-      message,
-      retryable: false,
-    });
-    this.name = "HelloFruitDemoOrderError";
-  }
 }
 
 export async function createHelloFruitCreateOrderResult(

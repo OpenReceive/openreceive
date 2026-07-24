@@ -1,15 +1,15 @@
 export { createOpenReceive } from "@openreceive/node";
 export {
-  createOpenReceivePaymentHooks,
+  createOpenReceiveHost,
   openReceiveExpress,
   openReceivePaymentInsert,
 } from "@openreceive/express";
 export type {
   CreateOpenReceiveHttpHandlerOptions,
-  CreateOpenReceivePaymentHooksOptions,
+  CreateOpenReceiveHostOptions,
   OpenReceiveExpressMiddleware,
-  OpenReceivePaymentHooks,
+  OpenReceiveHost,
+  OpenReceiveHostRepository,
   OpenReceivePaymentInsert,
   OpenReceivePaymentRecord,
-  OpenReceivePaymentRepository,
 } from "@openreceive/express";

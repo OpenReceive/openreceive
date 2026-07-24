@@ -5,11 +5,11 @@ with that order ID. The server resolves the host-owned price and commits an
 attempt row before returning the invoice. Orders and payment attempts remain
 separate.
 
-Both repositories are process-local maps for this disposable, single-instance
-demo. Restarting loses their contents, and multiple server instances would not
-share the order lock. The static UI is frontend-only; the API process is still
-trusted server code because it holds the receive credential and `swap_data`.
-Use the host application's existing database for a real deployment.
+Both live in a host-owned local SQLite database wiped and recreated on every
+demo boot (`examples/hello-fruit/.openreceive/`). The static UI is frontend-only;
+the API process is still trusted server code because it holds the receive
+credential and `swap_data`. Use the host application's existing database for a
+real deployment — see `npx openreceive scaffold payments --dialect sqlite`.
 
 The browser never receives your NWC code. Copy the repository-root `.env.example`
 to `.env`, set a valid receive-only `NWC_URI`, then run:

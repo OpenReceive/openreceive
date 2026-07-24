@@ -12,18 +12,18 @@ import type {
 } from "express";
 
 // @openreceive/express — a thin adapter over @openreceive/http. All routing, authorization,
-// host-hook authorization and error-mapping logic lives in @openreceive/http; this only converts
+// host integration and error-mapping logic lives in @openreceive/http; this only converts
 // between Express req/res and the Web-standard Request/Response the handler speaks.
 //
 // Mount it at the root; it handles requests under its prefix (default /openreceive) and calls
 // next() for everything else, so it composes with the rest of your app:
 //
 //   app.use(express.json());
-//   app.use(openReceiveExpress({ service, authorize, resolveCheckout, onCheckoutCreated }));
+//   app.use(openReceiveExpress({ service, authorize, host }));
 
 export type { CreateOpenReceiveHttpHandlerOptions } from "@openreceive/http";
 export {
-  createOpenReceivePaymentHooks,
+  createOpenReceiveHost,
   mapHostRouteError,
   openReceivePaymentInsert,
   OpenReceiveHostError,
@@ -31,11 +31,11 @@ export {
   isServiceErrorShape,
 } from "@openreceive/http";
 export type {
-  CreateOpenReceivePaymentHooksOptions,
-  OpenReceivePaymentHooks,
+  CreateOpenReceiveHostOptions,
+  OpenReceiveHost,
+  OpenReceiveHostRepository,
   OpenReceivePaymentInsert,
   OpenReceivePaymentRecord,
-  OpenReceivePaymentRepository,
 } from "@openreceive/http";
 
 export interface OpenReceiveExpressMiddleware extends RequestHandler {

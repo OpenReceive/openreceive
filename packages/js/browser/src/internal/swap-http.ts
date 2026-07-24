@@ -20,10 +20,7 @@ export interface PostOpenReceiveJsonOptions {
   readonly headers?: Readonly<Record<string, string>>;
 }
 
-/**
- * POST JSON through the mounted swap route set. Legacy UI action names are translated
- * internally so framework packages do not expose the old order multiplexer on the wire.
- */
+/** POST JSON through the mounted swap route set. */
 export async function postOpenReceiveJson(
   fetcher: typeof globalThis.fetch,
   url: string,

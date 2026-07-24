@@ -140,8 +140,8 @@ export const OPENRECEIVE_SWAP_STATES: Readonly<
 
 /**
  * Describe a swap `provider_state`: payer-facing label + detail, its coarse lifecycle
- * `phase`, and whether it is `terminal`. Accepts an unknown string defensively (returns
- * a safe fallback) so a UI never throws on an unexpected value from an older payload.
+ * `phase`, and whether it is `terminal`. Unknown provider values become an
+ * attention state so a provider rollout cannot break checkout rendering.
  */
 export function describeSwapState(state: string): SwapStateInfo {
   const info = (OPENRECEIVE_SWAP_STATES as Record<string, SwapStateInfo | undefined>)[
@@ -186,8 +186,8 @@ const OPENRECEIVE_SWAP_REFUND_REASONS: Readonly<
 };
 
 /**
- * Describe a swap `refund_reason` for payer-facing copy. Accepts an unknown string
- * defensively so a UI never throws on an unexpected value from an older payload.
+ * Describe a swap `refund_reason` for payer-facing copy. Unknown provider
+ * reasons deliberately have no specialized copy.
  */
 export function describeSwapRefundReason(reason: string): SwapRefundReasonInfo | undefined {
   return (OPENRECEIVE_SWAP_REFUND_REASONS as Record<string, SwapRefundReasonInfo | undefined>)[

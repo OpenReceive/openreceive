@@ -21,8 +21,7 @@ export interface Event {
 }
 
 export type EventHandler = (event: Event) => void;
-export type LogEntry = Event;
-export type Logger = (entry: LogEntry) => void;
+export type Logger = (entry: Event) => void;
 
 export interface LoggingOptions {
   readonly enabled?: boolean;
@@ -35,7 +34,6 @@ export interface LoggingOptions {
 
 export interface NodeOptions {
   readonly client: OpenReceiveReceiveNwcClient;
-  readonly onPaid?: NodeSettlementActionHook;
   readonly priceProviders?: readonly OpenReceiveSourcedPriceProvider[];
   readonly priceCurrencies?: readonly string[];
   readonly swap?: SwapOptions;
@@ -65,8 +63,6 @@ export interface CreateCheckoutRequest {
   readonly memo?: string;
   readonly descriptionHash?: string;
   readonly metadata?: Record<string, unknown>;
-  /** Host-generated correlation only. OpenReceive never persists or deduplicates it. */
-  readonly idempotencyKey?: string;
   /** Used for a longer-lived shadow invoice when creating a swap. */
   readonly expirySeconds?: number;
 }
@@ -83,33 +79,18 @@ export interface Checkout {
 
 export interface CheckPaymentRequest {
   readonly paymentHash: string;
-  readonly from?: number;
+  readonly createdAt: number;
   readonly until?: number;
-}
-
-export interface RecoverCheckoutRequest {
-  readonly orderId: string;
-  readonly paymentHash: string;
-  /** Known provider expiry when reconstructing a swap shadow invoice. */
-  readonly expiresAt?: number;
+  readonly overlapSeconds?: number;
 }
 
 export interface ReconcilePaymentsRequest {
-  readonly paymentHashes: readonly string[];
-  readonly from?: number;
+  readonly attempts: readonly {
+    readonly paymentHash: string;
+    readonly createdAt: number;
+  }[];
   readonly until?: number;
-}
-
-export interface WatchPaymentsRequest {
-  readonly onPaid?: NodeSettlementActionHook;
-  readonly from?: number;
-  readonly pollIntervalMs?: number;
-  readonly signal?: AbortSignal;
-}
-
-export interface PaymentWatcher {
-  stop(): void;
-  readonly done: Promise<void>;
+  readonly overlapSeconds?: number;
 }
 
 export type NodeSettlementActionInput = PaidPayment;
@@ -168,8 +149,6 @@ export interface SwapCheckout extends PublicSwap {
   readonly swapData: SwapData;
 }
 
-export type SwapStatus = PublicSwap;
-
 export interface ListRatesRequest {
   readonly currencies?: readonly string[];
 }
@@ -177,15 +156,12 @@ export interface ListRatesRequest {
 export interface OpenReceive {
   readonly priceCurrencies: readonly string[];
   createCheckout(input: CreateCheckoutRequest): Promise<Checkout>;
-  /** Reconstruct a still-live checkout from wallet data for host-row retry reuse. */
-  recoverCheckout(input: RecoverCheckoutRequest): Promise<Checkout | null>;
   checkPayment(input: CheckPaymentRequest): Promise<PaymentCheck>;
   reconcilePayments(input: ReconcilePaymentsRequest): Promise<readonly PaymentCheck[]>;
-  watchPayments(input: WatchPaymentsRequest): PaymentWatcher;
   quoteSwap(input: SwapQuoteRequest): Promise<unknown>;
   createSwap(input: CreateSwapRequest): Promise<SwapCheckout>;
-  getSwap(input: GetSwapRequest): Promise<SwapStatus>;
-  refundSwap(input: SwapRefundRequest): Promise<SwapStatus>;
+  getSwap(input: GetSwapRequest): Promise<PublicSwap>;
+  refundSwap(input: SwapRefundRequest): Promise<PublicSwap>;
   listRates(input?: ListRatesRequest): Promise<OpenReceiveBtcFiatRateMapWithSource["rates"]>;
   quoteRates(input: { readonly fiat: OpenReceiveFiatAmount }): Promise<OpenReceiveRateQuote>;
   close(): Promise<void>;
@@ -211,7 +187,6 @@ export interface NormalizedCreateCheckoutRequest {
   readonly memo?: string;
   readonly description_hash?: string;
   readonly metadata?: Record<string, unknown>;
-  readonly idempotency_key?: string;
   readonly expiry_seconds?: number;
 }
 

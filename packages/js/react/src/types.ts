@@ -186,13 +186,6 @@ export interface CheckoutProps
   readonly onState?: (state: CheckoutState) => void;
   readonly onSettled?: () => void;
   readonly onStartOver?: () => void;
-  /**
-   * Guest resume: opaque `summary` from `GET {prefix}/orders/{orderId}/summary`.
-   * Called in create mode when the summary fetch succeeds (always attempted with `orderId`).
-   */
-  readonly onSummary?: (summary: unknown) => void;
-  /** Called in create mode when the summary fetch misses (404 / not OK). */
-  readonly onResumeMiss?: (orderId: string) => void;
   readonly polling?: boolean;
   readonly paymentWizard?: boolean;
   readonly themeSwitcher?: boolean;

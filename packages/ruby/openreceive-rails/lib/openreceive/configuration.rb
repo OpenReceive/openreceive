@@ -8,7 +8,7 @@ module OpenReceive
   class Configuration
     attr_accessor :parent_controller, :nwc, :nwc_client, :authorize, :resolve_checkout,
                   :on_checkout_created, :rate_limit, :prefix, :price_provider,
-                  :swap_providers, :price_currencies
+                  :swap_providers, :price_currencies, :on_paid
 
     def initialize
       @parent_controller = "ActionController::Base"
@@ -22,6 +22,7 @@ module OpenReceive
       @price_provider = nil
       @swap_providers = []
       @price_currencies = ["USD"]
+      @on_paid = nil
     end
 
     def service
@@ -41,6 +42,7 @@ module OpenReceive
         authorize: @authorize,
         resolve_checkout: @resolve_checkout,
         on_checkout_created: @on_checkout_created,
+        on_paid: @on_paid,
         rate_limit: @rate_limit,
         prefix: @prefix
       )
@@ -60,6 +62,9 @@ module OpenReceive
       end
       if @on_checkout_created.nil?
         raise ConfigurationError, "OpenReceive.config.on_checkout_created is required to persist a payment attempt before responding."
+      end
+      if @on_paid.nil?
+        raise ConfigurationError, "OpenReceive.config.on_paid is required to durably record settlement."
       end
       resolved_nwc_client
       true

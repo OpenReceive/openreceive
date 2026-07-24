@@ -7,9 +7,9 @@ import { lightningUri } from "@openreceive/browser";
 import {
   OPENRECEIVE_NWC_METADATA_MAX_BYTES,
   classifyTransactionSettlement,
-  parseNwcConnectionUri,
+  parseNwcUri,
   quoteFiatToMsats,
-  redactNwcConnectionUri,
+  redactNwcUri,
 } from "@openreceive/core";
 import { ReceiveCheckoutValidationError, createNwcReceiveClient } from "@openreceive/node";
 
@@ -60,7 +60,7 @@ function redactPotentialSecrets(message) {
   return message
     .replace(/nostr\+walletconnect:\/\/[^\s"'`<>]+/g, (uri) => {
       try {
-        return redactNwcConnectionUri(uri);
+        return redactNwcUri(uri);
       } catch {
         return uri.replace(/([?&]secret=)[^&\s"'`<>]+/g, "$1[REDACTED]");
       }
@@ -122,7 +122,7 @@ let parsedNwc;
 let expectedCapabilities;
 
 try {
-  parsedNwc = parseNwcConnectionUri(nwc);
+  parsedNwc = parseNwcUri(nwc);
   expectedCapabilities = loadExpectedCapabilities(expectedCapabilitiesPath);
 } catch (error) {
   console.error(formatErrorMessage(error));

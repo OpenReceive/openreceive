@@ -16,7 +16,7 @@ module OpenReceive
       end
     end
 
-    # 403 — the caller is not authorized for this tier/resource (missing or invalid token).
+    # 403 — the host application did not authorize this request.
     class UnauthorizedError < StandardError
       attr_reader :status, :code
 

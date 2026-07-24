@@ -5,9 +5,10 @@ Rails engine expose checkout creation, payment checks, swap quote/create/status/
 rates. There are no prepare, order-storage, checkout-read, migration, admin-sweep, or internal
 workflow routes.
 
-Construction requires host `authorize`, amount resolution, and checkout-commit hooks. The
-amount resolver runs from host-owned data. The commit hook runs after external invoice/provider
-creation but before the response; failure returns 409 and withholds payer instructions.
+Construction requires host `authorize` plus one host integration containing trusted amount
+resolution, attempt persistence, and replay-safe settlement. Attempt persistence runs after
+external invoice/provider creation but before the response; failure returns 409 and withholds
+payer instructions.
 
 Payment/swap reads send `order_id` plus `payment_hash`. The host authorizes the request, verifies
 the selected attempt belongs to the order, and resolves its server-only `swap_data`;

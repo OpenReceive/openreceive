@@ -24,44 +24,57 @@ test("Node service creates without persistence and verifies by payment_hash", as
   });
   assert.notEqual(first.paymentHash, second.paymentHash, "host payment repository is the guard");
   assert.equal(
-    (await openreceive.checkPayment({ paymentHash: first.paymentHash })).status,
+    (
+      await openreceive.checkPayment({
+        paymentHash: first.paymentHash,
+        createdAt: first.createdAt,
+      })
+    ).status,
     "pending",
   );
 
   now = 1100;
   wallet.settleInvoice({ payment_hash: first.paymentHash }, { settled_at: now });
-  const paid = await openreceive.checkPayment({ paymentHash: first.paymentHash });
+  const paid = await openreceive.checkPayment({
+    paymentHash: first.paymentHash,
+    createdAt: first.createdAt,
+  });
   assert.equal(paid.status, "settled");
   assert.equal(paid.paidAt, 1100);
 
   await openreceive.close();
 });
 
-test("watchPayments retries a failed callback and delivers settlement at least once", async () => {
-  const wallet = createTestkitReceiveClient({ now: () => 1000 });
+test("reconcilePayments batches known attempts into shared list_transactions scans", async () => {
+  let now = 1000;
+  const wallet = createTestkitReceiveClient({ now: () => now });
+  const requests = [];
+  const originalList = wallet.listTransactions.bind(wallet);
+  wallet.listTransactions = async (request) => {
+    requests.push(request);
+    return originalList(request);
+  };
   const openreceive = await createOpenReceive({
     client: wallet,
-    clock: () => 1000,
+    clock: () => now,
   });
-  const checkout = await openreceive.createCheckout({
-    orderId: "retry-paid",
-    amount: { sats: 1000 },
+  const attempts = await Promise.all(
+    ["one", "two", "three"].map((orderId) =>
+      openreceive.createCheckout({ orderId, amount: { sats: 1000 } }),
+    ),
+  );
+  now = 1100;
+  wallet.settleInvoice({ payment_hash: attempts[1].paymentHash }, { settled_at: now });
+
+  const checked = await openreceive.reconcilePayments({
+    attempts: attempts.map((attempt) => ({
+      paymentHash: attempt.paymentHash,
+      createdAt: attempt.createdAt,
+    })),
   });
-  wallet.settleInvoice({ payment_hash: checkout.paymentHash }, { settled_at: 1010 });
-  let deliveries = 0;
-  let watcher;
-  watcher = openreceive.watchPayments({
-    from: 0,
-    pollIntervalMs: 250,
-    onPaid: async (payment) => {
-      deliveries += 1;
-      assert.equal(payment.paymentHash, checkout.paymentHash);
-      if (deliveries === 1) throw new Error("host transaction rolled back");
-      watcher.stop();
-    },
-  });
-  await watcher.done;
-  assert.equal(deliveries, 2);
+
+  assert.equal(checked.filter((payment) => payment.status === "settled").length, 1);
+  assert.ok(requests.length <= 2, "reconciliation scans history once per wallet view");
   await openreceive.close();
 });
 

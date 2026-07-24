@@ -2,14 +2,32 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { createOpenReceive } from "../../packages/js/node/src/index.ts";
-import { createOpenReceiveHttpHandler } from "../../packages/js/http/src/index.ts";
+import {
+  createOpenReceiveHttpHandler,
+  createOpenReceiveHost,
+  openReceivePaymentInsert,
+} from "../../packages/js/http/src/index.ts";
 import {
   createTestkitReceiveClient,
   createTestkitSwapProvider,
 } from "../../packages/js/testkit/src/index.ts";
 
+function testHost({ resolveCheckout, onCheckoutCreated, onPaid = async () => undefined }) {
+  return {
+    resolveCheckout,
+    onCheckoutCreated,
+    onPaid,
+    payments: {
+      listForOrder: async () => [],
+      commitAttempt: onCheckoutCreated,
+      listUnsettledAttempts: async () => [],
+    },
+  };
+}
+
 test("HTTP commits payment hash before returning payer instructions", async () => {
   const wallet = createTestkitReceiveClient({ now: () => 1000 });
+  const paid = [];
   const service = await createOpenReceive({
     client: wallet,
     clock: () => 1000,
@@ -18,11 +36,19 @@ test("HTTP commits payment hash before returning payer instructions", async () =
   const handler = createOpenReceiveHttpHandler({
     service,
     authorize: () => true,
-    resolveCheckout: () => ({
-      amount: { sats: 1234 },
-      ...(committed[0] === undefined ? {} : { paymentHash: committed[0].paymentHash }),
+    host: testHost({
+      resolveCheckout: () => ({
+        amount: { sats: 1234 },
+        ...(committed[0] === undefined
+          ? {}
+          : {
+              paymentHash: committed[0].paymentHash,
+              checkout: committed[0].checkout,
+            }),
+      }),
+      onCheckoutCreated: (payment) => committed.push(payment),
+      onPaid: (payment) => paid.push(payment),
     }),
-    onCheckoutCreated: (payment) => committed.push(payment),
   });
   const created = await handler(
     new Request("http://test/openreceive/checkouts", {
@@ -49,6 +75,8 @@ test("HTTP commits payment hash before returning payer instructions", async () =
   );
   assert.equal(checked.status, 200);
   assert.equal((await checked.json()).status, "settled");
+  assert.equal(paid.length, 1);
+  assert.equal(paid[0].paymentHash, body.checkout.payment_hash);
 });
 
 test("HTTP withholds invoice when host persistence fails", async () => {
@@ -58,10 +86,12 @@ test("HTTP withholds invoice when host persistence fails", async () => {
   const handler = createOpenReceiveHttpHandler({
     service,
     authorize: () => true,
-    resolveCheckout: () => ({ sats: 1 }),
-    onCheckoutCreated: () => {
-      throw new Error("database unavailable");
-    },
+    host: testHost({
+      resolveCheckout: () => ({ amount: { sats: 1 } }),
+      onCheckoutCreated: () => {
+        throw new Error("database unavailable");
+      },
+    }),
   });
   const response = await handler(
     new Request("http://test/openreceive/checkouts", {
@@ -81,17 +111,21 @@ test("HTTP retry reuses the live checkout recorded on the host order", async () 
     client: wallet,
     clock: () => 1000,
   });
-  let paymentHash;
+  let committed;
   const handler = createOpenReceiveHttpHandler({
     service,
     authorize: () => true,
-    resolveCheckout: () => ({
-      amount: { sats: 10 },
-      ...(paymentHash === undefined ? {} : { paymentHash }),
+    host: testHost({
+      resolveCheckout: () => ({
+        amount: { sats: 10 },
+        ...(committed === undefined
+          ? {}
+          : { paymentHash: committed.paymentHash, checkout: committed.checkout }),
+      }),
+      onCheckoutCreated: (payment) => {
+        committed = payment;
+      },
     }),
-    onCheckoutCreated: (payment) => {
-      paymentHash = payment.paymentHash;
-    },
   });
   const request = () =>
     new Request("http://test/openreceive/checkouts", {
@@ -113,6 +147,46 @@ test("HTTP retry reuses the live checkout recorded on the host order", async () 
   );
 });
 
+test("host checkout snapshot makes retry independent of wallet reads", async () => {
+  const wallet = createTestkitReceiveClient();
+  const service = await createOpenReceive({ client: wallet });
+  const rows = [];
+  const host = createOpenReceiveHost({
+    clock: () => 1000,
+    loadOrder: () => ({ total: 10 }),
+    amountForOrder: () => ({ sats: 10 }),
+    payments: {
+      listForOrder: async () => rows,
+      commitAttempt: (input) => {
+        rows.push({
+          ...openReceivePaymentInsert(input),
+          paidAt: null,
+        });
+      },
+      listUnsettledAttempts: async () => [],
+    },
+    onPaid: async () => undefined,
+  });
+  const handler = createOpenReceiveHttpHandler({
+    service,
+    authorize: () => true,
+    host,
+  });
+  const request = () =>
+    new Request("http://test/openreceive/checkouts", {
+      method: "POST",
+      body: JSON.stringify({ order_id: "snapshot-order" }),
+    });
+  const first = await handler(request());
+  wallet.listTransactions = async () => {
+    throw new Error("wallet unavailable");
+  };
+  const second = await handler(request());
+  assert.equal(first.status, 201);
+  assert.equal(second.status, 201);
+  assert.deepEqual(await second.json(), await first.json());
+});
+
 test("concurrent host-row loser receives no payer instructions", async () => {
   const service = await createOpenReceive({
     client: createTestkitReceiveClient(),
@@ -121,12 +195,14 @@ test("concurrent host-row loser receives no payer instructions", async () => {
   const handler = createOpenReceiveHttpHandler({
     service,
     authorize: () => true,
-    resolveCheckout: () => ({ sats: 2 }),
-    onCheckoutCreated: ({ paymentHash }) => {
-      if (committed !== undefined && committed !== paymentHash)
-        throw new Error("compare-and-set lost");
-      committed = paymentHash;
-    },
+    host: testHost({
+      resolveCheckout: () => ({ amount: { sats: 2 } }),
+      onCheckoutCreated: ({ paymentHash }) => {
+        if (committed !== undefined && committed !== paymentHash)
+          throw new Error("compare-and-set lost");
+        committed = paymentHash;
+      },
+    }),
   });
   const responses = await Promise.all(
     [1, 2].map(() =>
@@ -153,20 +229,29 @@ test("HTTP swap retry reuses host-committed hash/data without exposing provider 
   });
   let hostPaymentHash;
   let hostSwapData;
+  let hostCheckout;
   let commits = 0;
   const handler = createOpenReceiveHttpHandler({
     service,
     authorize: () => true,
-    resolveCheckout: () => ({
-      amount: { sats: 20_000 },
-      ...(hostPaymentHash === undefined ? {} : { paymentHash: hostPaymentHash }),
-      ...(hostSwapData === undefined ? {} : { swapData: hostSwapData }),
+    host: testHost({
+      resolveCheckout: () => ({
+        amount: { sats: 20_000 },
+        ...(hostPaymentHash === undefined
+          ? {}
+          : {
+              paymentHash: hostPaymentHash,
+              checkout: hostCheckout,
+            }),
+        ...(hostSwapData === undefined ? {} : { swapData: hostSwapData }),
+      }),
+      onCheckoutCreated: ({ paymentHash, checkout, swapData }) => {
+        commits += 1;
+        hostPaymentHash = paymentHash;
+        hostCheckout = JSON.parse(JSON.stringify(checkout));
+        hostSwapData = JSON.parse(JSON.stringify(swapData));
+      },
     }),
-    onCheckoutCreated: ({ paymentHash, swapData }) => {
-      commits += 1;
-      hostPaymentHash = paymentHash;
-      hostSwapData = JSON.parse(JSON.stringify(swapData));
-    },
   });
   const request = () =>
     new Request("http://test/openreceive/swaps", {
@@ -223,8 +308,10 @@ test("Node handler satisfies storage-free HTTP golden vectors", async () => {
   const handler = createOpenReceiveHttpHandler({
     service,
     authorize: () => true,
-    resolveCheckout: () => ({ sats: 1 }),
-    onCheckoutCreated: () => {},
+    host: testHost({
+      resolveCheckout: () => ({ amount: { sats: 1 } }),
+      onCheckoutCreated: () => {},
+    }),
   });
   for (const filename of readdirSync("spec/test-vectors/http-golden").sort()) {
     const vector = JSON.parse(readFileSync(`spec/test-vectors/http-golden/${filename}`, "utf8"));

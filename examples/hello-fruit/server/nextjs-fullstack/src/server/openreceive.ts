@@ -1,5 +1,5 @@
 import {
-  createOpenReceivePaymentHooks,
+  createOpenReceiveHost,
   type CreateOpenReceiveHttpHandlerOptions,
 } from "@openreceive/http";
 import { createOpenReceive } from "@openreceive/node";
@@ -13,6 +13,7 @@ import {
 import { readRequiredHelloFruitNwcConnectionString } from "../../../../shared/demo-nwc.ts";
 import { createHelloFruitCreateOrderResult } from "../../../../shared/demo-prepare-checkout.ts";
 import {
+  bootHelloFruitHostStore,
   createHelloFruitHostOrder,
   helloFruitPaymentRepository,
   readHelloFruitHostOrder,
@@ -24,25 +25,33 @@ const logDemo = createHelloFruitDemoServerLogger(DEMO_ID);
 const STICKERS_DIR = helloFruitSharedFile("stickers");
 
 let servicePromise: Promise<Awaited<ReturnType<typeof createOpenReceive>>> | undefined;
+let storePromise: Promise<string> | undefined;
+
+async function ensureHostStore(): Promise<void> {
+  storePromise ??= bootHelloFruitHostStore({ demoId: DEMO_ID, log: logDemo });
+  await storePromise;
+}
 
 export async function openReceiveHttpOptions(): Promise<CreateOpenReceiveHttpHandlerOptions> {
+  await ensureHostStore();
   const service = await getOpenReceive();
-  const paymentHooks = createOpenReceivePaymentHooks({
+  const host = createOpenReceiveHost({
     loadOrder: (orderId) => readHelloFruitHostOrder(orderId),
     amountForOrder: (order) => order.amount,
     payments: helloFruitPaymentRepository,
+    onPaid: settleHelloFruitPayment,
   });
   return {
     service,
     authorize: ({ resource }) =>
       resource.order_id !== undefined && readHelloFruitHostOrder(resource.order_id) !== null,
-    resolveCheckout: paymentHooks.resolveCheckout,
-    onCheckoutCreated: paymentHooks.onCheckoutCreated,
+    host,
   };
 }
 
 export async function createOrderResponse(request: Request): Promise<Response> {
   try {
+    await ensureHostStore();
     const service = await getOpenReceive();
     const result = await createHelloFruitCreateOrderResult(await request.json(), {
       demoId: DEMO_ID,
@@ -59,7 +68,8 @@ export async function createOrderResponse(request: Request): Promise<Response> {
   }
 }
 
-export function readOrderResponse(orderId: string): Response {
+export async function readOrderResponse(orderId: string): Promise<Response> {
+  await ensureHostStore();
   const order = readHelloFruitHostOrder(orderId);
   return order === null
     ? jsonResponse({ message: "Order not found." }, 404)
@@ -75,6 +85,7 @@ export async function deliveryResponse(
   orderId: string,
   productId: string,
 ): Promise<Response> {
+  await ensureHostStore();
   return helloFruitDeliveryFetchResponse({
     stickersDir: STICKERS_DIR,
     orderId,
@@ -100,14 +111,21 @@ async function createHelloFruitOpenReceive() {
     ...openReceiveConfig,
     nwc,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
-    onPaid: async ({ paymentHash, paidAt }) => {
-      const result = await fulfillHelloFruitOrder({ paymentHash, paidAt });
-      logDemo("openreceive.on_paid", "Verified payment marked host order paid.", {
-        paymentHash,
-        orderId: result.orderId,
-        fulfilled: result.fulfilled,
-      });
-    },
+  });
+}
+
+async function settleHelloFruitPayment({
+  paymentHash,
+  paidAt,
+}: {
+  paymentHash: string;
+  paidAt: number;
+}) {
+  const result = await fulfillHelloFruitOrder({ paymentHash, paidAt });
+  logDemo("openreceive.on_paid", "Verified payment marked host order paid.", {
+    paymentHash,
+    orderId: result.orderId,
+    fulfilled: result.fulfilled,
   });
 }
 

@@ -11,14 +11,6 @@ import {
 
 export type HelloFruitBtcFiatRates = OpenReceiveBtcPriceRates;
 
-/** @deprecated Prefer {@link OpenReceiveDecimalError} from `@openreceive/core`. */
-export class HelloFruitPricingError extends OpenReceiveDecimalError {
-  constructor(message: string, status = 400) {
-    super(message, status);
-    this.name = "HelloFruitPricingError";
-  }
-}
-
 /**
  * Converts a USD catalog amount into the selected display currency, falling
  * back to the base amount when rates are not loaded yet or a rate is missing.
@@ -80,13 +72,3 @@ export function requiredHelloFruitRate(
 ): string {
   return requiredBtcFiatRate(rates, currency);
 }
-
-export {
-  ceilDiv,
-  convertFiatViaBtcPrices as convertUsdToFiat,
-  fiatValueToSats as usdToSats,
-  formatBtcFromSats,
-  formatDecimal,
-  parseDecimal,
-  satsToFiatValue,
-} from "@openreceive/core";

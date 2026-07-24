@@ -12,7 +12,7 @@ module OpenReceive
   class ApplicationController < OpenReceive.config.parent_controller.constantize
     private
 
-    # The memoized shared request handler (Service + configured host hooks).
+    # The memoized shared request handler (Service + configured host callbacks).
     def openreceive_handler
       OpenReceive.config.request_handler
     end

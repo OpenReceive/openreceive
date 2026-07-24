@@ -10,9 +10,7 @@ export {
   formatOpenReceiveSpendCapabilityWarningMessage,
   isTransactionSettled,
   parseNwcUri,
-  parseNwcConnectionUri,
   redactNwcUri,
-  redactNwcConnectionUri,
 } from "./nwc/client.ts";
 export type {
   NwcEncryptionMode,
@@ -23,12 +21,10 @@ export type {
   WalletCapabilitySummary,
   MakeInvoiceRequest,
   MakeInvoiceResult,
-  LookupInvoiceRequest,
   ListTransactionsRequest,
   NwcTransaction,
   ListTransactionsResult,
   OpenReceiveReceiveNwcClient,
-  StandaloneNwcClient,
 } from "./nwc/client.ts";
 
 // Errors
@@ -128,10 +124,7 @@ export type {
 export {
   OPENRECEIVE_TRANSACTION_PAGE_LIMIT,
   checkPayment,
-  findTransactionByPaymentHash,
-  listIncomingTransactions,
-  paymentCheckFromTransaction,
-  scanSettledPayments,
+  reconcilePaymentAttempts,
 } from "./payments.ts";
 export type {
   CheckPaymentOptions,
@@ -139,7 +132,8 @@ export type {
   PaymentCheck,
   PaymentDetails,
   PaymentStatus,
-  ScanPaymentsOptions,
+  ReconcilePaymentAttempt,
+  ReconcilePaymentsOptions,
 } from "./payments.ts";
 
 // Swap address shape checks (deposit + refund)

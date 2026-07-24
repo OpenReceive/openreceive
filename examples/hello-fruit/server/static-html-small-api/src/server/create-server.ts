@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { openReceiveExpress } from "@openreceive/express";
-import { createOpenReceivePaymentHooks } from "@openreceive/http";
+import { createOpenReceiveHost } from "@openreceive/http";
 import { createOpenReceive } from "@openreceive/node";
 import express from "express";
 import { openReceiveConfig } from "../../../../../../config/openreceive.ts";
@@ -13,6 +13,7 @@ import {
 import { readRequiredHelloFruitNwcConnectionString } from "../../../../shared/demo-nwc.ts";
 import { createHelloFruitCreateOrderResult } from "../../../../shared/demo-prepare-checkout.ts";
 import {
+  bootHelloFruitHostStore,
   createHelloFruitHostOrder,
   helloFruitPaymentRepository,
   readHelloFruitHostOrder,
@@ -23,6 +24,8 @@ const logDemo = createHelloFruitDemoServerLogger(DEMO_ID);
 const STICKERS_DIR = fileURLToPath(new URL("../../../../shared/stickers/", import.meta.url));
 
 export async function createHelloFruitStaticServer() {
+  await bootHelloFruitHostStore({ demoId: DEMO_ID, log: logDemo });
+
   const app = express();
   app.use(express.json());
   // Catalog thumbnails stay public; purchased downloads go through /delivery (onPaid gate).
@@ -32,31 +35,28 @@ export async function createHelloFruitStaticServer() {
   // onPaid may fire more than once; each payment attempt's paid_at is write-once.
   // Boot refuses missing/invalid NWC; createOpenReceive then loads the NIP-47 info event.
   const nwc = readRequiredHelloFruitNwcConnectionString();
-  let service: Awaited<ReturnType<typeof createOpenReceive>>;
-  service = await createOpenReceive({
+  const onPaid = async ({ paymentHash, paidAt }: { paymentHash: string; paidAt: number }) => {
+    const result = await fulfillHelloFruitOrder({ paymentHash, paidAt });
+    logDemo("openreceive.on_paid", "Checkout settled — order fulfillment ran.", {
+      paymentHash,
+      orderId: result.orderId,
+      fulfilled: result.fulfilled,
+    });
+  };
+  const service = await createOpenReceive({
     ...openReceiveConfig,
     nwc,
     logger: createHelloFruitOpenReceiveLogger(DEMO_ID),
-    onPaid: async ({ paymentHash, paidAt }) => {
-      const result = await fulfillHelloFruitOrder({
-        paymentHash,
-        paidAt,
-      });
-      logDemo("openreceive.on_paid", "Checkout settled — order fulfillment ran.", {
-        paymentHash,
-        orderId: result.orderId,
-        fulfilled: result.fulfilled,
-      });
-    },
   });
 
   mountHelloFruitDelivery(app, {
     stickersDir: STICKERS_DIR,
   });
-  const paymentHooks = createOpenReceivePaymentHooks({
+  const host = createOpenReceiveHost({
     loadOrder: (orderId) => readHelloFruitHostOrder(orderId),
     amountForOrder: (order) => order.amount,
     payments: helloFruitPaymentRepository,
+    onPaid,
   });
 
   app.post("/orders", async (req, res, next) => {
@@ -83,8 +83,7 @@ export async function createHelloFruitStaticServer() {
       service,
       authorize: ({ resource }) =>
         resource.order_id !== undefined && readHelloFruitHostOrder(resource.order_id) !== null,
-      resolveCheckout: paymentHooks.resolveCheckout,
-      onCheckoutCreated: paymentHooks.onCheckoutCreated,
+      host,
     }),
   );
 

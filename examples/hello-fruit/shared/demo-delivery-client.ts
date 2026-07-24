@@ -20,7 +20,7 @@ export interface WaitForHelloFruitPaidSummaryOptions {
 }
 
 /**
- * Refetch `GET …/orders/:id/summary` until the host summary is `status: "paid"`.
+ * Refetch the host's `GET …/orders/:id` route until its summary is `status: "paid"`.
  * Handles the race where browser `onSettled` fires before server `onPaid` finishes.
  */
 export async function waitForHelloFruitPaidSummary(

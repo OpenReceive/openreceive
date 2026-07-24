@@ -31,7 +31,6 @@ export function normalizeCreateCheckoutRequest(
   const descriptionHash = optionalString(body.descriptionHash ?? body.description_hash);
   getCreateDescriptionFields({ memo, descriptionHash });
   const metadata = parseOptionalRecord(body.metadata, "metadata");
-  const idempotencyKey = optionalString(body.idempotencyKey ?? body.idempotency_key);
   const expirySeconds = body.expirySeconds ?? body.expiry_seconds;
   if (
     expirySeconds !== undefined &&
@@ -45,7 +44,6 @@ export function normalizeCreateCheckoutRequest(
     ...(memo === undefined ? {} : { memo }),
     ...(descriptionHash === undefined ? {} : { description_hash: descriptionHash }),
     ...(metadata === undefined ? {} : { metadata }),
-    ...(idempotencyKey === undefined ? {} : { idempotency_key: idempotencyKey }),
     ...(expirySeconds === undefined ? {} : { expiry_seconds: expirySeconds as number }),
   };
 }

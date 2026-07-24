@@ -1,7 +1,7 @@
 # Node quickstart
 
 Get Express + React receiving Lightning payments. Fastify and Next.js use the same host
-hooks; swap `@openreceive/express` for `@openreceive/fastify` or `@openreceive/next`.
+integration; swap `@openreceive/express` for `@openreceive/fastify` or `@openreceive/next`.
 
 ## 1. Install
 
@@ -23,9 +23,11 @@ Or non-interactive:
 
 ```sh
 npx openreceive scaffold payments --orm prisma
+npx openreceive scaffold payments --orm knex --dialect sqlite
 ```
 
-Follow the generated `OPENRECEIVE_PAYMENTS.md`, then fill `loadOrder` and `amountForOrder`.
+Follow the generated `OPENRECEIVE_PAYMENTS.md`, then finish the generated
+`createOpenReceiveHost` function. It is the only OpenReceive-specific database wiring.
 Manual recipes: [Node ORM Recipes](node-orms.md).
 
 ## 3. Add wallet credentials
@@ -74,15 +76,21 @@ app.post("/orders", async (request, response, next) => {
 ```ts
 import express from "express";
 import { createOpenReceive } from "@openreceive/node";
-import { createOpenReceivePaymentHooks } from "@openreceive/http";
+import { startOpenReceiveReconciler } from "@openreceive/http";
 import { openReceiveExpress } from "@openreceive/express";
 import type { OpenReceiveAuthorize } from "@openreceive/http";
+import { db } from "./db.ts";
+import { createOpenReceiveHost } from "./openreceive/host.stub.ts";
 
-const service = await createOpenReceive({
-  onPaid: async ({ paymentHash, paidAt }) => {
-    await payments.markPaidOnce({ paymentHash, paidAt });
+const host = createOpenReceiveHost(
+  db,
+  async (transaction, { orderId }) => {
+    // This runs in the paid_at transaction. Update the order or insert an outbox row.
+    await orders.markPaid(transaction, orderId);
   },
-});
+);
+
+const service = await createOpenReceive();
 
 const authorize: OpenReceiveAuthorize = async ({ action, request, resource }) => {
   const orderId = resource.order_id;
@@ -92,29 +100,19 @@ const authorize: OpenReceiveAuthorize = async ({ action, request, resource }) =>
   return orders.userMayPerform({ userId: viewer.id, orderId, action });
 };
 
-const { resolveCheckout, onCheckoutCreated } = createOpenReceivePaymentHooks({
-  loadOrder: (orderId) => orders.find(orderId),
-  amountForOrder: (order) => ({
-    currency: order.currency,
-    value: order.total.toString(),
-  }),
-  payments: paymentRepository,
-});
-
 const app = express();
 app.use(express.json());
-app.use(
-  openReceiveExpress({
-    service,
-    authorize,
-    resolveCheckout,
-    onCheckoutCreated,
-  }),
-);
+app.use(openReceiveExpress({ service, authorize, host }));
+
+// Browser status checks also settle orders. This bounded background pass covers
+// restarts and payers who close the page.
+const reconciler = await startOpenReceiveReconciler({ service, host });
 ```
 
-`paymentRepository` comes from the scaffolder. `markPaidOnce` must be idempotent —
-`onPaid` can fire more than once.
+Stop `reconciler` during graceful shutdown, then call `service.close()`. Settlement is
+at-least-once, but the generated transaction makes duplicates harmless. A restart simply reloads
+the unsettled attempt rows and scans their shared creation-time range; no workflow cursor is
+required.
 
 ## 6. Render checkout
 

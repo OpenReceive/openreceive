@@ -14,20 +14,19 @@ export const OPENRECEIVE_QR_DARK_COLOR = "#000000" as const;
 export const OPENRECEIVE_QR_LIGHT_COLOR = "#FFFFFFFF" as const;
 export const OPENRECEIVE_QR_ERROR_CORRECTION = "M" as const;
 export const OPENRECEIVE_COUNTRY_STORAGE_KEY = "openreceive.checkout.country" as const;
-export const OPENRECEIVE_LEGACY_DEMO_COUNTRY_STORAGE_KEY = "openreceive-demo.country" as const;
 export const OPENRECEIVE_THEME_STORAGE_KEY = "openreceive.theme" as const;
 export const OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS = 3000 as const;
 /**
  * Minimum remaining seconds a Lightning invoice must have before it is considered
- * reusable. Matches the server-side guard in `mintInvoiceForCheckout`. Invoices with
- * fewer remaining seconds than this will be re-minted rather than reused.
+ * reusable by the browser before asking the mounted create route for a stored
+ * or new attempt.
  */
 export const OPENRECEIVE_LIGHTNING_REUSE_BUFFER_SECONDS = 60 as const;
 /**
  * Default base path the shipped OpenReceive router is mounted at. When a developer passes
  * only an order id (React `<Checkout orderId>` / `<openreceive-checkout order-id>`), this is
- * the prefix used to derive the create route (`${prefix}/checkouts`) and the order route
- * (`${prefix}/orders/${orderId}`).
+ * the prefix used to derive the create route (`${prefix}/checkouts`) and payment-check
+ * route (`${prefix}/payments/check`).
  */
 export const OPENRECEIVE_DEFAULT_PREFIX = "/openreceive" as const;
 export const OPENRECEIVE_COPY_FEEDBACK_MS = 1800 as const;
@@ -46,8 +45,6 @@ export const OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS = {
   providerCopy: "openreceive-provider-copy",
   startOver: "openreceive-start-over",
   error: "openreceive-error",
-  /** Guest resume: opaque `summary` from `GET …/orders/{id}/summary`. */
-  summary: "openreceive-summary",
 } as const;
 export const OPENRECEIVE_THEME_TOGGLE_ELEMENT_EVENTS = {
   change: "openreceive-theme-change",
@@ -157,10 +154,6 @@ export interface CheckoutStateEventDetail {
 export interface CheckoutErrorEventDetail {
   readonly error: unknown;
 }
-export interface CheckoutSummaryEventDetail {
-  readonly order_id: string;
-  readonly summary?: unknown;
-}
 export interface OpenReceiveThemeChangeEventDetail {
   readonly theme: OpenReceiveThemePreference;
   readonly resolvedTheme: OpenReceiveResolvedTheme;
@@ -206,14 +199,6 @@ export function createCheckoutErrorEvent(error: unknown): CustomEvent<CheckoutEr
     detail: {
       error,
     },
-  });
-}
-
-export function createCheckoutSummaryEvent(
-  detail: CheckoutSummaryEventDetail,
-): CustomEvent<CheckoutSummaryEventDetail> {
-  return new CustomEvent<CheckoutSummaryEventDetail>(OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.summary, {
-    detail,
   });
 }
 
@@ -658,7 +643,7 @@ export interface CheckoutElementAttributeOptions {
   readonly paymentWizard?: boolean;
   /**
    * Opt into History API URL sync to `{resumePathPrefix}/{orderId}` (default `/checkout/:id`).
-   * Create mode always fetches the order summary; this only controls URL mutation.
+   * This controls URL mutation only; order-resume data remains a host concern.
    */
   readonly syncUrl?: boolean;
   /** History API path prefix when `syncUrl` is set. Default `/checkout`. */
@@ -696,8 +681,6 @@ export interface CheckoutElementEventHandlers {
   readonly onProviderCopy?: (event: Event) => void;
   readonly onStartOver?: (event: Event) => void;
   readonly onError?: (event: Event) => void;
-  /** Guest resume summary from `GET …/orders/{id}/summary` (`detail.summary`). */
-  readonly onSummary?: (event: Event) => void;
 }
 
 export type CheckoutElementListeners = Partial<
@@ -1243,7 +1226,6 @@ export { orClasses } from "../ui-classes.ts";
 export { openReceiveCompiledStyles };
 
 export const openReceiveCheckoutElementStyles = `:host{display:block}${openReceiveCompiledStyles}`;
-export const openReceiveThemeToggleElementStyles = openReceiveCheckoutElementStyles;
 
 export const openReceivePaymentMethods: readonly OpenReceivePaymentMethodOption[] = [
   {

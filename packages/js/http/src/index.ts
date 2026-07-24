@@ -4,7 +4,6 @@ export type {
   OpenReceive,
   PaymentCheck,
   SwapCheckout,
-  SwapStatus,
 } from "@openreceive/node";
 export type {
   OpenReceiveAuthorize,
@@ -25,19 +24,20 @@ export {
 } from "./errors.ts";
 export type { ServiceErrorShape } from "./errors.ts";
 export {
-  createOpenReceivePaymentHooks,
+  createOpenReceiveHost,
   openReceivePaymentInsert,
+  startOpenReceiveReconciler,
 } from "./host-payments.ts";
 export type {
-  CreateOpenReceivePaymentHooksOptions,
-  OpenReceivePaymentHooks,
+  CreateOpenReceiveHostOptions,
+  OpenReceiveHost,
+  OpenReceiveHostRepository,
   OpenReceivePaymentInsert,
   OpenReceivePaymentRecord,
   OpenReceivePaymentRepository,
+  OpenReceiveReconciler,
 } from "./host-payments.ts";
-export {
-  createOpenReceiveHttpHandler,
-} from "./handler.ts";
+export { createOpenReceiveHttpHandler } from "./handler.ts";
 export type {
   CheckoutCreatedHook,
   CheckoutCreatedInput,

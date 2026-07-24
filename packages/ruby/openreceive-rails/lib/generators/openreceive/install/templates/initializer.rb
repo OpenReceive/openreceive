@@ -43,6 +43,7 @@ OpenReceive.configure do |config|
     {
       amount: { currency: "USD", value: order.total.to_s },
       payment_hash: payment&.payment_hash,
+      checkout: payment&.checkout_data,
       swap_data: payment&.swap_data
     }.compact
   end
@@ -58,18 +59,18 @@ OpenReceive.configure do |config|
       swap_data: swap_data
     )
   end
+
+  config.on_paid = lambda do |event|
+    OpenReceivePayment.mark_paid_once!(
+      payment_hash: event.fetch("payment_hash"),
+      paid_at: event.fetch("paid_at")
+    ) do |order, payment, first_for_order|
+      # Replace with the host's in-transaction order transition or outbox insert.
+      FulfillOrder.call(order, payment: payment) if first_for_order
+    end
+  end
 end
 
-# Run wallet reconciliation from the host's normal job/process system. Couple
-# fulfillment to first_for_order inside this same transaction:
-#
-# OpenReceive.config.service.watch_payments(
-#   on_paid: lambda do |event|
-#     OpenReceivePayment.mark_paid_once!(
-#       payment_hash: event.fetch("payment_hash"),
-#       paid_at: event.fetch("paid_at")
-#     ) do |order, payment, first_for_order|
-#       FulfillOrder.call(order, payment: payment) if first_for_order
-#     end
-#   end
-# )
+# Run `reconcile_payments` from the host's normal job system with the currently
+# unsettled OpenReceivePayment hashes and created_at timestamps. Deliver each
+# settled result through OpenReceive.config.on_paid.

@@ -30,7 +30,7 @@ const importChecks = {
   "@openreceive/browser":
     "typeof mod.requestCheckout === 'function' && typeof mod.status === 'function' && typeof mod.lightningUri === 'function' && typeof mod.qrSvg === 'function' && typeof mod.qrPngDataUrl === 'function' && typeof mod.copyInvoice === 'function' && typeof mod.openWallet === 'function' && typeof mod.createCheckoutController === 'function'",
   "@openreceive/core":
-    "typeof mod.checkPayment === 'function' && typeof mod.scanSettledPayments === 'function' && typeof mod.isTransactionSettled === 'function'",
+    "typeof mod.checkPayment === 'function' && typeof mod.reconcilePaymentAttempts === 'function' && typeof mod.isTransactionSettled === 'function'",
   "@openreceive/elements":
     "typeof mod.renderCheckoutHtml === 'function' && typeof mod.renderOpenReceiveThemeToggleHtml === 'function' && mod.OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME === 'openreceive-theme-toggle'",
   "@openreceive/express": "typeof mod.openReceiveExpress === 'function'",

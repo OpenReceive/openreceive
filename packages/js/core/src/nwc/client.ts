@@ -152,22 +152,11 @@ export interface ListTransactionsResult {
   transactions: NwcTransaction[];
 }
 
-export interface LookupInvoiceRequest {
-  payment_hash?: string;
-  invoice?: string;
-}
-
 export interface OpenReceiveReceiveNwcClient {
   preflight(): Promise<WalletCapabilitySummary>;
   makeInvoice(request: MakeInvoiceRequest): Promise<MakeInvoiceResult>;
-  /** Optional NIP-47 fast path. OpenReceive falls back to list_transactions. */
-  lookupInvoice?(request: LookupInvoiceRequest): Promise<NwcTransaction>;
   listTransactions(request: ListTransactionsRequest): Promise<ListTransactionsResult>;
   close?(): Promise<void> | void;
-}
-
-export interface StandaloneNwcClient extends OpenReceiveReceiveNwcClient {
-  payInvoice(request: { invoice: string; amount_msats?: bigint }): Promise<unknown>;
 }
 
 export function isTransactionSettled(result: NwcTransaction): boolean {
@@ -239,8 +228,6 @@ export function parseNwcUri(uri: string): ParsedNwcConnection {
   };
 }
 
-export const parseNwcConnectionUri = parseNwcUri;
-
 export function redactNwcUri(uri: string): string {
   const queryStart = uri.indexOf("?");
   if (queryStart === -1) return uri;
@@ -253,8 +240,6 @@ export function redactNwcUri(uri: string): string {
 
   return `${beforeQuery}${redactNwcQuery(query)}${afterQuery}`;
 }
-
-export const redactNwcConnectionUri = redactNwcUri;
 
 function redactNwcQuery(query: string): string {
   return query

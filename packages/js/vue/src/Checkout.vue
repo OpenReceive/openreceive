@@ -13,10 +13,9 @@ defineOptions({
 
 const props = withDefaults(
   defineProps<{
-    // Snapshot mode: pass a `checkout` to render it directly (backward compatible).
+    // Snapshot mode: pass a `checkout` to render it directly.
     // Create mode: omit `checkout` and pass `orderId` (+ optional `prefix`); the underlying
     // <openreceive-checkout> element creates the checkout, then renders and polls itself.
-    // Summary is always fetched; pass `syncUrl` to opt into History API URL sync.
     checkout?: CheckoutSnapshot;
     orderId?: string;
     prefix?: string;
@@ -27,7 +26,6 @@ const props = withDefaults(
     routeOrderId?: string;
     onSettled?: (event: Event) => void;
     onStartOver?: (event: Event) => void;
-    onSummary?: (event: Event) => void;
     options?: CheckoutShellOptions;
   }>(),
   {
@@ -51,7 +49,6 @@ const shell = computed(() =>
     ...(props.routeOrderId === undefined ? {} : { routeOrderId: props.routeOrderId }),
     ...(props.onSettled === undefined ? {} : { onSettled: props.onSettled }),
     ...(props.onStartOver === undefined ? {} : { onStartOver: props.onStartOver }),
-    ...(props.onSummary === undefined ? {} : { onSummary: props.onSummary })
   })
 );
 </script>

@@ -5,13 +5,7 @@
  * - Put the public `order_id` in the URL (`/checkout/:orderId`) so refresh/share works.
  * - Let the host authorize access to the order using its normal session or guest-order policy.
  * - Mirror an optional host order summary in sessionStorage for instant same-tab restore;
- *   fall back to `GET {prefix}/orders/{orderId}/summary` (or a host `fetchOrder`) when
- *   storage is empty (new tab with the same link).
- *
- * Prefer baking summary restore into `<Checkout orderId>` / `<openreceive-checkout order-id>`
- * (always on in create mode). Opt into History API URL sync with `syncUrl` / `sync-url` when
- * the host wants `/checkout/:orderId` in the address bar. Keep this module for hosts that
- * need custom storage keys or URL shapes.
+ *   use the host-supplied `fetchOrder` when storage is empty.
  *
  */
 
@@ -174,7 +168,7 @@ export function createGuestCheckoutResume<TOrder>(
 
 /**
  * Push `/checkout/:orderId` (or a custom path prefix) via the History API when not already
- * there. Used by `<Checkout syncUrl>` and hosts that sync the URL after prepare.
+ * there. Used by `<Checkout syncUrl>` and hosts that sync the URL after creating an order.
  * No-ops when `routeOrderId` is provided (app router already owns the URL).
  */
 export function enterCheckoutResumePath(

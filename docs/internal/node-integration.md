@@ -2,7 +2,7 @@
 
 Use this when the [Node quickstart](../guides/quickstart-node.md) is not enough.
 Most apps should mount `@openreceive/express` (or Fastify/Next) and keep host policy in
-the three required hooks.
+one generated host integration plus the host's `authorize` policy.
 
 ## Request flow
 
@@ -22,7 +22,7 @@ POST /openreceive/checkouts { order_id }
       │
       ├── authorize(request, action, order_id)
       ├── resolveCheckout(order_id) → amount + live payment attempt, if any
-      ├── create or recover wallet invoice
+      ├── create or reuse the host-stored checkout snapshot
       ├── onCheckoutCreated(...) → atomic host database commit
       └── response exposes payer instructions only after commit succeeds
 
@@ -34,33 +34,36 @@ later status refresh
       └── settled payment → onPaid({ paymentHash, paidAt })
 ```
 
-## Host hooks
+## Host integration
 
-Mounted browser routes require:
+Mounted browser routes receive one `host` object containing:
 
 | Hook                | Host responsibility                                              |
 | ------------------- | ---------------------------------------------------------------- |
 | `authorize`         | May this request act on this order?                              |
 | `resolveCheckout`   | What is the order amount and which payment attempt was selected? |
 | `onCheckoutCreated` | Did the host atomically commit this new payment attempt?         |
+| `onPaid`            | Did the host durably record this verified settlement?            |
 
 OpenReceive does not inspect the host session. It passes the Web-standard `Request`,
 requested action, and order ID to `authorize`. Knowing an order ID is not authentication;
 anonymous checkout apps use their own signed guest cookie or another host-owned access
 mechanism.
 
-Build persistence hooks with `createOpenReceivePaymentHooks`:
+Build it with `createOpenReceiveHost`:
 
 ```ts
-import { createOpenReceivePaymentHooks } from "@openreceive/http";
+import { createOpenReceiveHost } from "@openreceive/http";
 
-const paymentHooks = createOpenReceivePaymentHooks({
+const host = createOpenReceiveHost({
   loadOrder: (orderId) => orders.find(orderId),
   amountForOrder: (order) => ({
     currency: order.currency,
     value: order.total.toString(),
   }),
   payments: paymentRepository,
+  onPaid: ({ paymentHash, paidAt }) =>
+    paymentRepository.markPaidOnceAndFulfillFirst(paymentHash, paidAt),
 });
 ```
 
@@ -82,15 +85,16 @@ schemas and lock queries. Policy detail lives in [Authorization](../guides/autho
 `paid_at` only when null, lock the related order, and fulfill only when no sibling attempt
 was already paid.
 
-`onPaid` may be delivered more than once. Host `markPaidOnce` must be idempotent. A wallet
-notification is only a hint to refresh state; final settlement requires `settled_at` or a
-wallet transaction state of `settled`.
+`onPaid` may be delivered more than once. Host `markPaidOnce` must be idempotent and return
+successfully for unknown hashes because a receive wallet may contain unrelated invoices. A
+wallet notification is only a hint to refresh state; final settlement requires `settled_at`
+or a wallet transaction state of `settled`.
 
 ## Retries, concurrency, and expired invoices
 
 - If the order has no live payment row, OpenReceive creates an attempt and asks the host to
   commit it.
-- If the order already has one live attempt, retries recover that checkout.
+- If the order already has one live attempt, retries reuse its stored checkout.
 - If concurrent requests create different invoices, only the transaction that first locks the
   host order and inserts its row may expose its invoice. The losing request receives `409`.
 - Status polling never creates a new invoice.
@@ -122,8 +126,8 @@ await payments.commitAttempt({
 return checkout;
 ```
 
-For retry recovery, call `recoverCheckout({ orderId, paymentHash })` with the selected live
-attempt. Full custom-controller patterns are in
+For retry recovery, return the selected attempt's required `checkout_data` snapshot. Full
+custom-controller patterns are in
 [Custom Controller Integration](custom-controller-integration.md).
 
 ## Mounted routes

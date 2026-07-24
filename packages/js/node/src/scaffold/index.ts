@@ -101,7 +101,7 @@ function printPlan(
   );
   if (options.dialect === "sqlite") {
     stdout.write(
-      "  note:         SQLite uses a single-writer transaction (no FOR UPDATE)\n",
+      "  note:         SQLite uses a single-writer transaction (no Postgres row locks)\n",
     );
   }
   stdout.write("\nWriting files…\n");
@@ -119,7 +119,7 @@ function printSummary(
   stdout.write("Next:\n");
   stdout.write("  1. Read OPENRECEIVE_PAYMENTS.md\n");
   stdout.write("  2. Merge/migrate the schema into your host database\n");
-  stdout.write("  3. Fill loadOrder / amountForOrder in hooks.stub.ts\n");
+  stdout.write("  3. Fill loadOrder / amountForOrder in host.stub.ts\n");
   if (options.dialect === "sqlite") {
     stdout.write(
       "  4. For local demos, wipe the SQLite file on boot and re-run migrations\n",

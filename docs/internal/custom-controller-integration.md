@@ -9,15 +9,13 @@ OpenReceive service methods do not authenticate callers and never read a host se
 | Method | Responsibility |
 | --- | --- |
 | `createCheckout({ orderId, amount })` | Normalize the host price and mint a wallet invoice. |
-| `recoverCheckout({ orderId, paymentHash })` | Reconstruct a still-live checkout for attempt retry reuse. |
-| `checkPayment({ paymentHash })` | Verify one payment against wallet authority. |
-| `reconcilePayments({ paymentHashes })` | Verify the host's unresolved hashes. |
-| `watchPayments({ onPaid })` | Scan and deliver verified settlements at least once. |
+| `checkPayment({ paymentHash, createdAt })` | Verify one payment with bounded wallet-history scans. |
+| `reconcilePayments({ attempts })` | Batch-verify the host's unresolved hashes and creation times. |
 | `quoteSwap`, `createSwap`, `getSwap`, `refundSwap` | Create, inspect, and refund host-persisted provider workflows. |
 | `listRates`, `quoteRates` | Resolve exact fiat quotes. |
 
-There is no order read, checkout history route, migration runner, sweep cursor, or runtime
-persistence API.
+There is no order read, checkout history route, migration runner, runtime persistence API, or
+durable workflow cursor.
 
 ## Safe checkout route
 
@@ -35,14 +33,8 @@ app.post("/checkout", async (request, response) => {
 
   const payment = await payments.findLiveForOrder(order.id);
   if (payment) {
-    const existing = await openreceive.recoverCheckout({
-      orderId: order.id,
-      paymentHash: payment.payment_hash,
-    });
-    if (existing) {
-      response.json(existing);
-      return;
-    }
+    response.json(payment.checkout_data);
+    return;
   }
 
   const checkout = await openreceive.createCheckout({
@@ -69,16 +61,20 @@ may append a new row.
 ## Settlement callback
 
 ```ts
-const openreceive = await createOpenReceive({
-  onPaid: async ({ paymentHash, paidAt }) => {
-    await payments.markPaidOnceAndFulfillFirst(paymentHash, paidAt);
-  },
+const openreceive = await createOpenReceive();
+
+const checked = await openreceive.checkPayment({
+  paymentHash: payment.payment_hash,
+  createdAt: payment.created_at,
 });
+if (checked.status === "settled") {
+  await payments.markPaidOnceAndFulfillFirst(checked.paymentHash, checked.paidAt);
+}
 ```
 
 Delivery is at least once. The host matches the attempt by payment hash, updates only when its
 `paid_at IS NULL`, and fulfills only when no sibling attempt was already paid. Notifications are wake-up hints; wallet
-lookup or scanning remains settlement authority.
+`list_transactions` scanning remains settlement authority.
 
 ## Custom swap routes
 

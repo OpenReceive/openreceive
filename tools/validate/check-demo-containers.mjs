@@ -51,16 +51,19 @@ const forbidSecrets = (relativePath, text) => {
   expect(!/nostr\+walletconnect:\/\//.test(text), `${relativePath}: contains an NWC URI`);
   expect(!/[?&]secret=[0-9a-fA-F]{16,}/.test(text), `${relativePath}: contains an NWC secret`);
 };
-const forbidOpenReceivePersistence = (relativePath, text) => {
+/** Compose/Dockerfile must not configure OpenReceive runtime persistence. */
+const forbidOpenReceiveRuntimePersistence = (relativePath, text) => {
   expect(
-    !/local-sqlite|sqlite3|libsqlite|\bpostgres\b|OPENRECEIVE_STORE|OPENRECEIVE_NAMESPACE/i.test(
-      text,
-    ),
-    `${relativePath}: contains OpenReceive persistence configuration`,
+    !/OPENRECEIVE_STORE|OPENRECEIVE_NAMESPACE|OPENRECEIVE_DATABASE/i.test(text),
+    `${relativePath}: contains OpenReceive runtime persistence configuration`,
+  );
+  expect(
+    !/\bpostgres\b/i.test(text),
+    `${relativePath}: must not wire a Postgres service into OpenReceive`,
   );
   expect(
     !/\.openreceive/.test(text),
-    `${relativePath}: mounts or references an OpenReceive state directory`,
+    `${relativePath}: must not mount an OpenReceive state directory`,
   );
 };
 
@@ -70,11 +73,15 @@ for (const demo of demos) {
   expect(pkg.name === demo.packageName, `${packagePath}: wrong package name`);
   expect(pkg.dependencies?.pg === undefined, `${packagePath}: must not depend on pg`);
   expect(pkg.dependencies?.sqlite3 === undefined, `${packagePath}: must not depend on sqlite3`);
+  expect(
+    pkg.dependencies?.["better-sqlite3"] === undefined,
+    `${packagePath}: must not depend on better-sqlite3`,
+  );
 
   const dockerfilePath = `${demo.dir}/Dockerfile`;
   const dockerfile = read(dockerfilePath);
   forbidSecrets(dockerfilePath, dockerfile);
-  forbidOpenReceivePersistence(dockerfilePath, dockerfile);
+  forbidOpenReceiveRuntimePersistence(dockerfilePath, dockerfile);
   expect(/^FROM node:22-bookworm-slim$/m.test(dockerfile), `${dockerfilePath}: must use Node 22`);
   expect(dockerfile.includes("npm ci --no-audit"), `${dockerfilePath}: must use npm ci`);
   expect(
@@ -92,7 +99,7 @@ for (const demo of demos) {
   const compose = parse(composePath, parseYaml);
   const service = compose.services?.[demo.service] ?? {};
   forbidSecrets(composePath, composeText);
-  forbidOpenReceivePersistence(composePath, composeText);
+  forbidOpenReceiveRuntimePersistence(composePath, composeText);
   expect(
     Object.keys(compose.services ?? {}).length === 1,
     `${composePath}: must define one app service`,
@@ -115,7 +122,7 @@ for (const demo of demos) {
   const overrideText = read(overridePath);
   const override = parse(overridePath, parseYaml);
   forbidSecrets(overridePath, overrideText);
-  forbidOpenReceivePersistence(overridePath, overrideText);
+  forbidOpenReceiveRuntimePersistence(overridePath, overrideText);
   expect(
     override.services?.[demo.service]?.ports?.[0] === `${demo.port}:${demo.port}`,
     `${overridePath}: wrong published port`,
@@ -124,10 +131,17 @@ for (const demo of demos) {
   const readmePath = `${demo.dir}/README.md`;
   const readme = read(readmePath);
   forbidSecrets(readmePath, readme);
-  forbidOpenReceivePersistence(readmePath, readme);
+  expect(
+    !/OPENRECEIVE_STORE|OPENRECEIVE_NAMESPACE|OPENRECEIVE_DATABASE/i.test(readme),
+    `${readmePath}: must not document OpenReceive runtime persistence`,
+  );
   expect(
     readme.includes("The browser never receives your NWC code."),
     `${readmePath}: missing NWC boundary`,
+  );
+  expect(
+    /host-owned|host owns|host SQLite|local SQLite/i.test(readme),
+    `${readmePath}: must describe host-owned persistence`,
   );
 }
 
@@ -150,4 +164,6 @@ if (findings.length > 0) {
   process.exit(1);
 }
 
-console.log(`Demo container validation passed for ${demos.length} storage-free demo(s).`);
+console.log(
+  `Demo container validation passed for ${demos.length} demo(s) without OpenReceive runtime persistence.`,
+);

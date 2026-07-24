@@ -7,6 +7,8 @@ class CreateOpenreceivePayments < ActiveRecord::Migration[<%= migration_version 
       t.string :payment_hash, null: false, limit: 64
       t.datetime :paid_at
       t.datetime :expires_at, null: false
+      # Safe checkout response used for retry without another wallet call.
+      t.json :checkout_data, null: false
       # Server-only provider recovery data. Never return or log this column.
       t.json :swap_data
       t.timestamps
@@ -18,5 +20,6 @@ class CreateOpenreceivePayments < ActiveRecord::Migration[<%= migration_version 
 <% if add_order_foreign_key? -%>
     add_foreign_key :openreceive_payments, :<%= order_table_name %>, column: :order_id
 <% end -%>
+
   end
 end

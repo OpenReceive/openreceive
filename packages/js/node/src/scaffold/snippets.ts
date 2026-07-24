@@ -16,6 +16,7 @@ export function recordMapperHelper(): string {
   paidAt: Date | null;
   expiresAt: Date;
   createdAt: Date;
+  checkoutData: unknown;
   swapData?: unknown | null;
 }): OpenReceivePaymentRecord {
   return {
@@ -24,6 +25,7 @@ export function recordMapperHelper(): string {
     paidAt: row.paidAt ? Math.floor(row.paidAt.getTime() / 1000) : null,
     expiresAt: Math.floor(row.expiresAt.getTime() / 1000),
     createdAt: Math.floor(row.createdAt.getTime() / 1000),
+    checkout: row.checkoutData as OpenReceivePaymentRecord["checkout"],
     ...(row.swapData === undefined || row.swapData === null
       ? {}
       : { swapData: row.swapData as never }),
@@ -32,16 +34,28 @@ export function recordMapperHelper(): string {
 `;
 }
 
-export function hooksStubContents(): string {
-  return `import { createOpenReceivePaymentHooks } from "@openreceive/http";
+export function hostStubContents(): string {
+  return `import {
+  createOpenReceiveHost as buildOpenReceiveHost,
+  type OpenReceiveHostRepository,
+} from "@openreceive/http";
+import { markOpenReceivePaidOnce } from "./mark-paid-once.ts";
 import { createOpenReceivePaymentsRepository } from "./payments-repository.ts";
 
 /**
- * Wire host order loading and trusted price resolution, then pass the returned
- * hooks to your Express/Fastify/Next adapter.
+ * Finish the two TODOs below once, then import this integration from app boot.
+ * onFirstSettlement runs inside the same transaction that records paid_at:
+ * update the host order or insert an outbox job there.
  */
-export function createHostPaymentHooks(db: never) {
-  return createOpenReceivePaymentHooks({
+export function createOpenReceiveHost(
+  db: never,
+  onFirstSettlement: (
+    transaction: unknown,
+    settled: { orderId: string; paymentHash: string },
+  ) => Promise<void>,
+) {
+  const payments = createOpenReceivePaymentsRepository(db) as OpenReceiveHostRepository;
+  return buildOpenReceiveHost({
     async loadOrder(orderId) {
       // TODO: load the host order by id. Return null to produce 404.
       void orderId;
@@ -53,7 +67,9 @@ export function createHostPaymentHooks(db: never) {
       void order;
       return { currency: "USD", value: "0.00" };
     },
-    payments: createOpenReceivePaymentsRepository(db),
+    payments,
+    onPaid: (payment) =>
+      markOpenReceivePaidOnce(db, payment, onFirstSettlement),
   });
 }
 `;

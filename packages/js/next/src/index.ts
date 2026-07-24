@@ -14,20 +14,20 @@ import {
 //   import { openReceiveNextHandlers } from "@openreceive/next";
 //   const service = await createOpenReceive();
 //   export const { GET, POST } = openReceiveNextHandlers({
-//     service, authorize, resolveCheckout, onCheckoutCreated
+//     service, authorize, host
 //   });
 
 export type { CreateOpenReceiveHttpHandlerOptions } from "@openreceive/http";
 export {
-  createOpenReceivePaymentHooks,
+  createOpenReceiveHost,
   openReceivePaymentInsert,
 } from "@openreceive/http";
 export type {
-  CreateOpenReceivePaymentHooksOptions,
-  OpenReceivePaymentHooks,
+  CreateOpenReceiveHostOptions,
+  OpenReceiveHost,
+  OpenReceiveHostRepository,
   OpenReceivePaymentInsert,
   OpenReceivePaymentRecord,
-  OpenReceivePaymentRepository,
 } from "@openreceive/http";
 
 export type OpenReceiveNextRouteHandler = (request: Request) => Promise<Response>;

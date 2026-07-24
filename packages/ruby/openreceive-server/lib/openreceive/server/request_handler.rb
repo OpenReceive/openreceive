@@ -6,14 +6,16 @@ require "securerandom"
 module OpenReceive
   module Server
     class RequestHandler
-      def initialize(service:, authorize:, resolve_checkout:, on_checkout_created:, rate_limit: nil, prefix: "/openreceive")
+      def initialize(service:, authorize:, resolve_checkout:, on_checkout_created:, on_paid:, rate_limit: nil, prefix: "/openreceive")
         raise ArgumentError, "authorize is required" if authorize.nil?
         raise ArgumentError, "resolve_checkout is required" if resolve_checkout.nil?
         raise ArgumentError, "on_checkout_created is required" if on_checkout_created.nil?
+        raise ArgumentError, "on_paid is required" if on_paid.nil?
         @service = service
         @authorize = authorize
         @resolve_checkout = resolve_checkout
         @on_checkout_created = on_checkout_created
+        @on_paid = on_paid
         @rate_limit = rate_limit
         @prefix = prefix
       end
@@ -26,7 +28,7 @@ module OpenReceive
           guard("checkout.create", request, { order_id: order_id })
           resolved = resolve_host("checkout.create", request, order_id, body)
           checkout = if resolved["payment_hash"]
-                       recover_checkout(order_id, resolved["payment_hash"])
+                       committed_checkout(order_id, resolved)
                      else
                        @service.create_checkout(
                          "order_id" => order_id, "amount" => required_amount(resolved),
@@ -47,7 +49,19 @@ module OpenReceive
           guard("payment.check", request, { order_id: order_id, payment_hash: requested_hash })
           resolved = resolve_host("payment.check", request, order_id, body)
           hash = selected_payment_hash(resolved, requested_hash)
-          success(200, @service.check_payment("payment_hash" => hash), request_id)
+          checkout = committed_checkout(order_id, resolved)
+          checked = @service.check_payment(
+            "payment_hash" => hash,
+            "created_at" => checkout.fetch("created_at")
+          )
+          if checked["status"] == "settled" && checked["paid_at"]
+            @on_paid.call(
+              "payment_hash" => checked.fetch("payment_hash"),
+              "paid_at" => checked.fetch("paid_at"),
+              "details" => checked["details"]
+            )
+          end
+          success(200, checked, request_id)
         end
       end
 
@@ -77,7 +91,7 @@ module OpenReceive
                      order_id: order_id, payment_hash: resolved["payment_hash"], swap_data: data
                    )
                    status.merge(
-                     "checkout" => recover_checkout(order_id, resolved["payment_hash"], status["provider_expires_at"]),
+                     "checkout" => committed_checkout(order_id, resolved),
                      "swap_data" => data
                    )
                  else
@@ -207,15 +221,24 @@ module OpenReceive
 
       def resolved_host_checkout(value)
         data = value.respond_to?(:each_pair) ? value.each_pair.to_h { |key, item| [key.to_s, item] } : {}
-        return { "amount" => value } if data.key?("sats") || (data.key?("currency") && data.key?("value"))
         data
       end
 
-      def recover_checkout(order_id, payment_hash, expires_at = nil)
-        checkout = @service.recover_checkout(
-          order_id: order_id, payment_hash: payment_hash, expires_at: expires_at
-        )
-        return checkout unless checkout.nil?
+      def committed_checkout(order_id, resolved)
+        checkout = resolved["checkout"]
+        unless checkout.is_a?(Hash)
+          raise ConflictError, "The host payment attempt has no checkout snapshot."
+        end
+
+        data = checkout.each_pair.to_h { |key, value| [key.to_s, value] }
+        hash = required(data["payment_hash"] || data["paymentHash"], "payment_hash").downcase
+        selected = required(resolved["payment_hash"], "payment_hash").downcase
+        checkout_order = required(data["order_id"] || data["orderId"], "order_id")
+        if hash != selected || checkout_order != order_id
+          raise ConflictError, "The selected payment attempt is not a reusable pending checkout."
+        end
+        data
+      rescue ArgumentError, TypeError
         raise ConflictError, "The selected payment attempt is not a reusable pending checkout."
       end
 

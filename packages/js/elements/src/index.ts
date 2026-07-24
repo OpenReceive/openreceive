@@ -76,7 +76,6 @@ import {
   resolveOpenReceivePreservedNetworkSelection,
   postOpenReceiveJson,
   startOpenReceiveSwapRequest,
-  openReceiveThemeToggleElementStyles,
   parseOpenReceiveBooleanAttribute,
   parseOpenReceiveOptionalInteger,
   parseOpenReceivePaymentMethod,
@@ -298,7 +297,7 @@ export function renderOpenReceiveThemeToggleHtml(
 ): string {
   void resolvedTheme;
   return `
-    <style>${openReceiveThemeToggleElementStyles}</style>
+    <style>${openReceiveCheckoutElementStyles}</style>
     <button
       aria-label="${escapeHtml(label)}"
       class="${orClasses.themeToggle}"

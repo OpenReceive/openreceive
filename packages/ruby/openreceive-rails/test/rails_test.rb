@@ -49,6 +49,7 @@ class OpenReceiveRailsGeneratorTemplateTest < Minitest::Test
     assert_includes rendered, "self.filter_attributes += [:swap_data]"
     assert_includes rendered, "order.with_lock"
     assert_includes rendered, "live_at(Time.current)"
+    assert_includes rendered, "checkout_data: checkout"
     assert_includes rendered, 'super.except("swap_data")'
     RubyVM::InstructionSequence.compile(rendered)
   end
@@ -57,6 +58,7 @@ class OpenReceiveRailsGeneratorTemplateTest < Minitest::Test
     rendered = @context.render(File.join(TEMPLATE_ROOT, "migration.rb"))
     assert_includes rendered, "t.bigint :order_id, null: false"
     assert_includes rendered, "add_index :openreceive_payments, :payment_hash, unique: true"
+    assert_includes rendered, "t.json :checkout_data, null: false"
     refute_includes rendered, "[:order_id], unique: true"
     assert_includes rendered, "add_foreign_key :openreceive_payments, :orders"
     RubyVM::InstructionSequence.compile(rendered)

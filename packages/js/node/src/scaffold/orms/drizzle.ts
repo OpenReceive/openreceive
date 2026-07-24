@@ -1,5 +1,5 @@
 import { drizzleOrderIdColumn, isSqlite, nextStepsMarkdown } from "../shared.ts";
-import { attemptConflictClass, hooksStubContents, recordMapperHelper } from "../snippets.ts";
+import { attemptConflictClass, hostStubContents, recordMapperHelper } from "../snippets.ts";
 import type { ScaffoldFile, ScaffoldPaymentsOptions } from "../types.ts";
 
 export function renderDrizzleFiles(options: ScaffoldPaymentsOptions): ScaffoldFile[] {
@@ -29,10 +29,9 @@ export const openReceivePayments = sqliteTable(
     paymentHash: text("payment_hash", { length: 64 }).notNull(),
     paidAt: integer("paid_at", { mode: "timestamp" }),
     expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+    checkoutData: text("checkout_data", { mode: "json" }).notNull(),
     swapData: text("swap_data", { mode: "json" }),
-    createdAt: integer("created_at", { mode: "timestamp" })
-      .notNull()
-      .$defaultFn(() => new Date()),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp" })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -64,8 +63,9 @@ export const openReceivePayments = pgTable(
     paymentHash: varchar("payment_hash", { length: 64 }).notNull(),
     paidAt: timestamp("paid_at", { withTimezone: true }),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    checkoutData: jsonb("checkout_data").notNull(),
     swapData: jsonb("swap_data"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
@@ -84,7 +84,7 @@ export const openReceivePayments = pgTable(
     : `type Db = NodePgDatabase<Record<string, never>>;`;
 
   const lockCommit = sqlite
-    ? `        // SQLite: single-writer transaction; no FOR UPDATE.
+    ? `        // SQLite: single-writer transaction; skip Postgres row locks.
         await tx.run(
           sql\`select id from \${sql.raw('"${options.orderTable}"')} where id = \${values.orderId}\`,
         );`
@@ -103,7 +103,7 @@ export const openReceivePayments = pgTable(
   const repository = `import {
   openReceivePaymentInsert,
   type OpenReceivePaymentRecord,
-  type OpenReceivePaymentRepository,
+  type OpenReceiveHostRepository,
 } from "@openreceive/http";
 import { and, desc, eq, gt, isNotNull, isNull, or, sql } from "drizzle-orm";
 ${dbImport}
@@ -112,7 +112,7 @@ ${attemptConflictClass()}
 ${recordMapperHelper()}
 ${dbType}
 
-export function createOpenReceivePaymentsRepository(db: Db): OpenReceivePaymentRepository {
+export function createOpenReceivePaymentsRepository(db: Db): OpenReceiveHostRepository {
   return {
     async listForOrder(orderId) {
       const rows = await db
@@ -167,9 +167,25 @@ ${lockCommit}
           orderId: values.orderId as never,
           paymentHash: values.paymentHash,
           expiresAt: new Date(values.expiresAt * 1000),
+          createdAt: new Date(values.createdAt * 1000),
+          checkoutData: values.checkout,
           swapData: values.swapData ?? null,
         });
       });
+    },
+
+    async listUnsettledAttempts() {
+      const rows = await db
+        .select({
+          paymentHash: openReceivePayments.paymentHash,
+          createdAt: openReceivePayments.createdAt,
+        })
+        .from(openReceivePayments)
+        .where(isNull(openReceivePayments.paidAt));
+      return rows.map((row) => ({
+        paymentHash: row.paymentHash,
+        createdAt: Math.floor(row.createdAt.getTime() / 1000),
+      }));
     },
   };
 }
@@ -190,7 +206,11 @@ export interface MarkPaidOnceResult {
 export async function markOpenReceivePaidOnce(
   db: Db,
   input: { paymentHash: string; paidAt: number },
-): Promise<MarkPaidOnceResult> {
+  onFirstSettlement: (
+    tx: unknown,
+    settled: { orderId: string; paymentHash: string },
+  ) => Promise<void>,
+): Promise<MarkPaidOnceResult | null> {
   return db.transaction(async (tx) => {
     const rows = await tx
       .select()
@@ -198,7 +218,7 @@ export async function markOpenReceivePaidOnce(
       .where(eq(openReceivePayments.paymentHash, input.paymentHash.toLowerCase()))
       .limit(1);
     const payment = rows[0];
-    if (!payment) throw new Error("OpenReceive payment attempt not found.");
+    if (!payment) return null;
 
 ${lockPaid}
 
@@ -232,6 +252,12 @@ ${lockPaid}
       .update(openReceivePayments)
       .set({ paidAt: new Date(input.paidAt * 1000) })
       .where(eq(openReceivePayments.paymentHash, locked.paymentHash));
+    if (siblings.length === 0) {
+      await onFirstSettlement(tx, {
+        orderId: String(locked.orderId),
+        paymentHash: locked.paymentHash,
+      });
+    }
 
     return {
       firstForOrder: siblings.length === 0,
@@ -246,7 +272,7 @@ ${lockPaid}
     { path: "src/db/openreceive-payments.ts", contents: schema },
     { path: "src/openreceive/payments-repository.ts", contents: repository },
     { path: "src/openreceive/mark-paid-once.ts", contents: markPaid },
-    { path: "src/openreceive/hooks.stub.ts", contents: hooksStubContents() },
+    { path: "src/openreceive/host.stub.ts", contents: hostStubContents() },
     { path: "OPENRECEIVE_PAYMENTS.md", contents: nextStepsMarkdown(options) },
   ];
 }

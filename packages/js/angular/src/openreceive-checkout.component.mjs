@@ -6,10 +6,9 @@ import {
 } from "./index.js";
 
 export class CheckoutComponent {
-  // Snapshot mode: bind a `checkout` to render it directly (backward compatible).
+  // Snapshot mode: bind a `checkout` to render it directly.
   // Create mode: omit `checkout` and bind `orderId` (+ optional `prefix`); the underlying
   // <openreceive-checkout> element creates the checkout, then renders and polls itself.
-  // Summary restore is always on; pass `syncUrl` to opt into History API URL sync.
   checkout;
   orderId;
   prefix;
@@ -20,7 +19,6 @@ export class CheckoutComponent {
   routeOrderId;
   onSettled;
   onStartOver;
-  onSummary;
   options = {};
 
   ngOnInit() {
@@ -39,7 +37,6 @@ export class CheckoutComponent {
       ...(this.routeOrderId === undefined ? {} : { routeOrderId: this.routeOrderId }),
       ...(this.onSettled === undefined ? {} : { onSettled: this.onSettled }),
       ...(this.onStartOver === undefined ? {} : { onStartOver: this.onStartOver }),
-      ...(this.onSummary === undefined ? {} : { onSummary: this.onSummary })
     };
     return createOpenReceiveAngularCheckoutShellBinding(
       this.checkout ?? null,
@@ -78,7 +75,6 @@ Input()(CheckoutComponent.prototype, "resumePathPrefix");
 Input()(CheckoutComponent.prototype, "routeOrderId");
 Input()(CheckoutComponent.prototype, "onSettled");
 Input()(CheckoutComponent.prototype, "onStartOver");
-Input()(CheckoutComponent.prototype, "onSummary");
 Input()(CheckoutComponent.prototype, "options");
 
 Component({
@@ -120,7 +116,6 @@ Component({
         (openreceive-start-over)="onCheckoutEvent(openReceiveEvents.startOver, $event)"
         (openreceive-error)="onCheckoutEvent(openReceiveEvents.error, $event)"
         (openreceive-provider-copy)="onCheckoutEvent(openReceiveEvents.providerCopy, $event)"
-        (openreceive-summary)="onCheckoutEvent(openReceiveEvents.summary, $event)"
       ></openreceive-checkout>
     </section>
   `
