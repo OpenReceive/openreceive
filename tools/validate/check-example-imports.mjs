@@ -8,10 +8,9 @@
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { root } from "../shared/root.mjs";
 import { walkFiles } from "../shared/walk-files.mjs";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const examplesRoot = path.join(root, "examples");
 const ignoredDirs = new Set([
   ".git",

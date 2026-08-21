@@ -2,11 +2,10 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
 import { OPENRECEIVE_DEMOS } from "../shared/demo-catalog.mjs";
+import { root } from "../shared/root.mjs";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const nodeDemos = OPENRECEIVE_DEMOS.filter((demo) => demo.kind === "node");
 const railsDemo = OPENRECEIVE_DEMOS.find((demo) => demo.kind === "rails");
 

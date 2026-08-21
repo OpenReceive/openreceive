@@ -13,10 +13,9 @@
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import ts from "typescript";
+import { root } from "../shared/root.mjs";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const snapshotPath = path.join(root, "tools", "validate", "public-api.snapshot.json");
 const update = process.argv.includes("--update");
 

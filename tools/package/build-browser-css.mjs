@@ -3,9 +3,8 @@
 import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { root } from "../shared/root.mjs";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const browserRoot = path.join(root, "packages/js/browser");
 const input = path.join(browserRoot, "src/styles.source.css");
 const distCss = path.join(browserRoot, "dist/styles.css");
