@@ -11,7 +11,12 @@ import {
   createOpenReceiveWrapperCheckoutShellBinding,
   validateOpenReceiveWrapperCheckoutProps,
 } from "../packages/js/elements/src/wrapper-shared.ts";
-import { OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS } from "../packages/js/browser/src/internal.ts";
+import {
+  OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
+  OPENRECEIVE_DEFAULT_PREFIX,
+  resolveOrderUrlFromPrefix,
+} from "../packages/js/browser/src/internal.ts";
+import { Checkout } from "../packages/js/react/src/index.ts";
 
 const PARITY_DOC = "docs/internal/wrapper-parity.md";
 const REACT_COMPONENT = "packages/js/react/src/checkout.ts";
@@ -136,6 +141,37 @@ test("create-mode props warn once per wrapper when passed in snapshot mode", () 
   assert.equal(warnings.length, 1);
   assert.match(warnings[0], /syncUrl/);
   assert.match(warnings[0], /snapshot mode/);
+});
+
+test("React snapshot mode with no prefix polls via the default prefix", () => {
+  // The element defaults `prefix` to /openreceive in snapshot mode, so a bare
+  // <openreceive-checkout> polls out of the box. React used to derive `orderUrl`
+  // only when the caller supplied a prefix — a bare <Checkout checkout={snapshot}>
+  // rendered but never polled. The dispatcher is a plain function, so calling it
+  // exposes the props it hands the snapshot-mode wrapper.
+  const snapshot = {
+    checkout_id: "or_chk_poll_parity",
+    order_id: "order-poll-parity",
+    status: "open",
+    amount_msats: 1000,
+    invoices: [],
+  };
+
+  const bare = Checkout({ checkout: snapshot });
+  assert.equal(
+    bare.props.orderUrl,
+    resolveOrderUrlFromPrefix(OPENRECEIVE_DEFAULT_PREFIX, snapshot.order_id),
+  );
+
+  const prefixed = Checkout({ checkout: snapshot, prefix: "/pay" });
+  assert.equal(prefixed.props.orderUrl, resolveOrderUrlFromPrefix("/pay", snapshot.order_id));
+
+  const explicit = Checkout({ checkout: snapshot, orderUrl: "/custom/payments/check" });
+  assert.equal(explicit.props.orderUrl, "/custom/payments/check");
+
+  // `orderUrl: false` still disables polling entirely (docs/internal/wrapper-parity.md).
+  const disabled = Checkout({ checkout: snapshot, orderUrl: false });
+  assert.equal(disabled.props.orderUrl, false);
 });
 
 test("the theme is resolved from the default until the wrapper mounts", () => {

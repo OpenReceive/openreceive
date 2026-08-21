@@ -121,6 +121,8 @@ class FailClosedPreflightTest < Minitest::Test
 end
 
 class StorageFreeServerTest < Minitest::Test
+  SPEC_DIR = File.expand_path("../../../../spec", __dir__)
+
   class Wallet
     attr_reader :transactions
 
@@ -201,7 +203,7 @@ class StorageFreeServerTest < Minitest::Test
   end
 
   def test_lsc_uri_shared_vectors
-    vectors = JSON.parse(File.read("spec/test-vectors/lsc-uri.json"))
+    vectors = JSON.parse(File.read(File.join(SPEC_DIR, "test-vectors/lsc-uri.json")))
     vectors.fetch("valid").each do |vector|
       assert_equal vector.fetch("expected"), OpenReceive::Server::LscUri.parse(vector.fetch("uri")), vector.fetch("name")
     end
@@ -716,7 +718,9 @@ class StorageFreeServerTest < Minitest::Test
       "rate_limited" => build_app.call(->(_context) { false }),
       "settled_check" => settled_app
     }
-    Dir["spec/test-vectors/http-golden/*.json"].sort.each do |path|
+    golden_paths = Dir[File.join(SPEC_DIR, "test-vectors/http-golden/*.json")].sort
+    refute_empty golden_paths
+    golden_paths.each do |path|
       vector = JSON.parse(File.read(path))
       assert_equal 2, vector["schema_version"], "#{path}: schema_version"
       request = vector.fetch("request")

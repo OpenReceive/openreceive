@@ -245,3 +245,16 @@ test("host-serialized swap data recovers provider state and provider state contr
   });
   assert.equal(refunded.providerState, "refund_pending");
 });
+
+test("default-constructed testkit swap provider mints orders that expire in the future", async () => {
+  const provider = createTestkitSwapProvider();
+  const order = await provider.createSwap({
+    payInAsset: "USDT_TRON",
+    bolt11: "lnbc1testkitswapclock",
+    invoiceAmountMsats: 20_000_000,
+  });
+  assert.ok(
+    order.expires_at > Math.floor(Date.now() / 1_000),
+    "swap deposit window must be in the future relative to the real clock",
+  );
+});

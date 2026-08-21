@@ -126,6 +126,36 @@ test("polling: false starts no status requests while polling: true does", async 
   }
 });
 
+test("a bare snapshot Checkout polls status via the default prefix", async () => {
+  // Parity with the element (docs/internal/wrapper-parity.md): `prefix` defaults to
+  // /openreceive, so <Checkout checkout={snapshot}> with no prefix and no orderUrl
+  // must still poll. It used to derive orderUrl only when a prefix was supplied and
+  // silently never polled.
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    requests.push(String(url));
+    return new Response(JSON.stringify({ status: "pending" }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  const handle = mount(
+    React.createElement(Checkout, {
+      checkout: invoice({ invoice_id: "or_inv_default_prefix_poll" }),
+      paymentWizard: false,
+      themeToggle: false,
+    }),
+  );
+  try {
+    await until(() => requests.some((url) => url.endsWith("/openreceive/payments/check")), {
+      label: "status poll against the default prefix",
+    });
+  } finally {
+    handle.unmount();
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("the default checkout wires controller actions into its buttons", async () => {
   const written = [];
   const opened = [];
@@ -163,7 +193,7 @@ test("copy feedback appears on click and resets itself", async () => {
   const snapshot = invoice({ invoice_id: "or_inv_copy_ui", invoice: "lnbc-copy-ui" });
   const written = [];
   globalThis.navigator.clipboard ??= { writeText: async (value) => void written.push(value) };
-  const handle = mount(React.createElement(Checkout, { checkout: snapshot }));
+  const handle = mount(React.createElement(Checkout, { checkout: snapshot, polling: false }));
   try {
     const copy = await until(() => handle.button(openReceiveCheckoutLabels.copyInvoice), {
       label: "copy button",
@@ -232,7 +262,7 @@ test("theme scope renders keyed children without React warnings", () => {
 test("a standalone checkout owns its theme toggle and flips data-theme", async () => {
   // Canonical default across the wrappers: themeToggle is on unless the host opts out.
   const snapshot = invoice({ invoice_id: "or_inv_theme_toggle", invoice: "lnbc-theme-toggle" });
-  const handle = mount(React.createElement(Checkout, { checkout: snapshot }));
+  const handle = mount(React.createElement(Checkout, { checkout: snapshot, polling: false }));
   try {
     const toggle = await until(
       () => handle.container.querySelector("[data-openreceive-theme-toggle]"),
@@ -254,7 +284,7 @@ test("the checkout theme survives hydration without a server/client mismatch", a
   // different data-theme than they served.
   globalThis.localStorage.setItem(OPENRECEIVE_THEME_STORAGE_KEY, "dark");
   const snapshot = invoice({ invoice_id: "or_inv_theme_ssr", invoice: "lnbc-theme-ssr" });
-  const element = React.createElement(Checkout, { checkout: snapshot });
+  const element = React.createElement(Checkout, { checkout: snapshot, polling: false });
   const serverHtml = renderToStaticMarkup(element);
   assert.match(serverHtml, /data-openreceive-theme="light"/);
 

@@ -48,16 +48,15 @@ export function Checkout(props: CheckoutProps): React.ReactElement {
   const { checkout, orderId } = props;
   warnIgnoredCreateModeProps(props);
   if (checkout !== undefined) {
-    // Derive the order URL only when the caller supplies a prefix.
+    // Derive the order URL from the prefix (default prefix when none is given),
+    // matching the element's snapshot-mode polling behavior.
     const orderUrl =
       props.orderUrl ??
-      (props.prefix === undefined
-        ? undefined
-        : resolveOrderUrlFromPrefix(props.prefix, checkout.order_id));
+      resolveOrderUrlFromPrefix(props.prefix ?? OPENRECEIVE_DEFAULT_PREFIX, checkout.order_id);
     return React.createElement(CheckoutSnapshotMode, {
       ...props,
       checkout,
-      ...(orderUrl === undefined ? {} : { orderUrl }),
+      orderUrl,
     });
   }
   if (orderId !== undefined) {

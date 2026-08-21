@@ -146,7 +146,7 @@ module OpenReceivePaymentTestHelpers
 end
 
 class ReconciliationDecisionTableTest < Minitest::Test
-  VECTORS = JSON.parse(File.read("spec/test-vectors/attempt-reconciliation.json"))
+  VECTORS = JSON.parse(File.read(File.expand_path("../../../../spec/test-vectors/attempt-reconciliation.json", __dir__)))
 
   def test_grace_matches_shared_vectors
     assert_equal VECTORS.fetch("expiry_grace_seconds"),

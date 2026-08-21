@@ -52,7 +52,7 @@ module OpenReceive
     end
 
     def preflight
-      return {} unless @client.respond_to?(:get_info) || @client.respond_to?(:getInfo)
+      return nil unless @client.respond_to?(:get_info) || @client.respond_to?(:getInfo)
 
       response = call_receive_method(:get_info, :getInfo)
       stringify_keys(response)

@@ -53,12 +53,21 @@ const NETWORK_DEPOSIT_ADDRESS: Readonly<Record<"TRX" | "SOL" | "ETH", string>> =
   ETH: "0x1111111111111111111111111111111111111111",
 };
 
+function currentUnixSeconds(): number {
+  return Math.floor(Date.now() / 1_000);
+}
+
 export interface TestkitSwapProviderOptions {
   /** Provider id/name. Must match the provider you register with; defaults to "fixedfloat". */
   readonly name?: string;
   /** Pay-in assets this provider supports. Defaults to all seven built-in assets. */
   readonly supportedAssets?: readonly SwapPayInAsset[];
-  /** Clock in unix seconds. Defaults to a fixed 1000 so tests are deterministic. */
+  /**
+   * Clock in unix seconds. Defaults to the real clock, matching
+   * TestkitReceiveClient: a fixed low value would mint every swap with a
+   * provider_expires_at already in the past. Pass one for deterministic
+   * timestamps.
+   */
   readonly now?: () => number;
   /** Shadow-invoice expiry the provider requests, in seconds. Defaults to 1800. */
   readonly invoiceExpirySeconds?: number;
@@ -102,7 +111,7 @@ export class TestkitSwapProvider implements SwapProvider {
   constructor(options: TestkitSwapProviderOptions = {}) {
     this.name = options.name ?? "fixedfloat";
     this.#supported = new Set(options.supportedAssets ?? DEFAULT_SUPPORTED_ASSETS);
-    this.#now = options.now ?? (() => 1000);
+    this.#now = options.now ?? currentUnixSeconds;
     this.#invoiceExpirySeconds = options.invoiceExpirySeconds ?? 1800;
     this.#depositExpirySeconds = options.depositExpirySeconds ?? 900;
     this.#payAmounts = options.payAmounts ?? {};

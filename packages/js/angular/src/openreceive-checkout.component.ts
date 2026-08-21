@@ -26,10 +26,10 @@ import { OpenReceiveElementBindingsDirective } from "./openreceive-element-bindi
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
   template: `
     <section
-      [attr.data-theme]="shell.rootAttributes['data-theme']"
-      [attr.data-openreceive-theme]="shell.rootAttributes['data-openreceive-theme']"
+      [attr.data-theme]="shell?.rootAttributes?.['data-theme']"
+      [attr.data-openreceive-theme]="shell?.rootAttributes?.['data-openreceive-theme']"
     >
-      @if (elementsReady) {
+      @if (elementsReady && shell; as shell) {
         @if (shell.themeToggle) {
           <openreceive-theme-toggle
             [openreceiveElementBindings]="shell.themeToggle"
@@ -82,7 +82,9 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
 
   // Rebuilt on input changes only. A getter would rebuild the whole binding
   // (storage reads, matchMedia, fresh objects) on every change-detection pass.
-  protected shellBinding: OpenReceiveAngularCheckoutShellBinding = this.buildShell();
+  // Null until the first `ngOnChanges`: inputs are not set yet at construction,
+  // so building (and validating) here would reject every instantiation.
+  protected shellBinding: OpenReceiveAngularCheckoutShellBinding | null = null;
 
   ngAfterViewInit(): void {
     // No-op during Angular Universal SSR: custom elements only exist in the
@@ -101,7 +103,7 @@ export class CheckoutComponent implements AfterViewInit, OnChanges {
     this.shellBinding = this.buildShell();
   }
 
-  get shell(): OpenReceiveAngularCheckoutShellBinding {
+  get shell(): OpenReceiveAngularCheckoutShellBinding | null {
     return this.shellBinding;
   }
 
