@@ -127,7 +127,7 @@ export function validateMakeInvoiceRequest(request: MakeInvoiceRequest): void {
 
   if (request.description !== undefined && request.description_hash !== undefined) {
     throw new ReceiveCheckoutValidationError(
-      "Exactly one of description or description_hash may be present",
+      "At most one of description or description_hash may be present",
     );
   }
 

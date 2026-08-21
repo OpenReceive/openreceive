@@ -343,11 +343,13 @@ test("create mode keeps one checkout view across the deferred Lightning mint", a
 
 test("a swap start failure is discarded when the payer leaves the focused flow", async () => {
   const stack = await createLifecycleStack();
-  // Every start fails: a single failure is auto-retried after the quote, which is the
-  // recovery path, not the state under test.
+  // Every start fails. The in-range quote runs BEFORE the first start, and the
+  // failed start must never be auto-retried — recovery is the explicit retry button.
+  let swapStartPosts = 0;
   globalThis.fetch = async (input, init) => {
     const url = new URL(typeof input === "string" ? input : input.url, "http://harness.local");
     if (url.pathname === "/openreceive/swaps") {
+      swapStartPosts += 1;
       return new Response(JSON.stringify({ message: "Swap provider is unavailable." }), {
         status: 503,
         headers: { "content-type": "application/json" },
@@ -372,6 +374,12 @@ test("a swap start failure is discarded when the payer leaves the focused flow",
     await until(() => handle.text().includes("Swap provider is unavailable."), {
       label: "swap start failure",
     });
+    assert.equal(
+      stack.requests.filter((entry) => entry.path.endsWith("/swaps/quote")).length > 0,
+      true,
+      "the pay-in asset is quoted before the first swap start",
+    );
+    assert.equal(swapStartPosts, 1, "a failed swap start must not be auto-retried");
 
     const back = await until(() => handle.button(openReceiveCheckoutLabels.switchPaymentMethod), {
       label: "back breadcrumb",

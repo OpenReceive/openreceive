@@ -514,11 +514,7 @@ const MethodRouteFlow: React.FC<{ checkout: CheckoutFlow }> = observer(({ checko
   const showRoutePicker =
     routeAssetDisplays.length > 0 && (model.selectedRoute === null || routeDisplays.length === 0);
   const methodLabel =
-    selection.selectedMethod === "bitcoin"
-      ? "Bitcoin"
-      : selection.selectedMethod === "crypto"
-        ? "Crypto"
-        : openReceiveCheckoutLabels.paymentMethod;
+    selection.selectedMethod === "bitcoin" ? "Bitcoin" : openReceiveCheckoutLabels.paymentMethod;
   const routeLabel =
     model.selectedRoute === null || routeAssetDisplays.length <= 1
       ? null
@@ -580,11 +576,7 @@ const MethodRouteFlow: React.FC<{ checkout: CheckoutFlow }> = observer(({ checko
       ) : null}
       <div className={orClasses.wizardResults}>
         {routeDisplays.length === 0 ? (
-          <p className={orClasses.wizardEmpty}>
-            {selection.selectedMethod === "bitcoin"
-              ? openReceiveCheckoutLabels.emptyBitcoin
-              : openReceiveCheckoutLabels.emptyCrypto}
-          </p>
+          <p className={orClasses.wizardEmpty}>{openReceiveCheckoutLabels.emptyBitcoin}</p>
         ) : (
           routeDisplays.map((route) => {
             const routeSwapOptions = swapOptions.filter((option) =>

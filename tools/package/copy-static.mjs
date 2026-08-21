@@ -20,7 +20,10 @@ for (const entry of entries) {
   const source = path.join(sourceRoot, sourceRelative);
   const target = path.join(distRoot, targetRelative);
 
-  if (!existsSync(source)) continue;
+  if (!existsSync(source)) {
+    console.error(`copy-static.mjs: missing source entry "${sourceRelative}" (resolved ${source})`);
+    process.exit(1);
+  }
   rmSync(target, { recursive: true, force: true });
   mkdirSync(path.dirname(target), { recursive: true });
 

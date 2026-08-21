@@ -43,6 +43,12 @@ Prefer a subpath for the surface you need:
 - `openreceive/provider-data` — Lightning provider registry
 - `openreceive/contracts` — generated contract constants
 
+The UI subpaths mirror the full per-framework surface, components and styles
+included: `openreceive/vue/checkout.vue`, `openreceive/svelte/checkout.svelte`,
+`openreceive/angular/checkout-component`, and
+`openreceive/{react,vue,svelte,angular,elements}/styles.css` resolve to the same
+files as their `@openreceive/*` counterparts.
+
 ```ts
 import express from "express";
 import { openReceiveExpress } from "openreceive/express";

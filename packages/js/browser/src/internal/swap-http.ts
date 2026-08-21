@@ -1,5 +1,5 @@
-import { readOpenReceiveJsonResponse, sanitizeBrowserLogEntry } from "./checkout.ts";
-import { resolveOpenReceiveBrowserLogger } from "./console-logger.ts";
+import { readOpenReceiveJsonResponse } from "./checkout.ts";
+import { resolveOpenReceiveBrowserLogger, sanitizeBrowserLogEntry } from "./console-logger.ts";
 import { openReceiveRoutePrefix as routePrefix } from "./routes.ts";
 import {
   type CheckoutInvoiceSnapshot,
@@ -129,6 +129,48 @@ export async function startOpenReceiveSwapRequest(
   return normalizeSwapStartInvoice(body);
 }
 
+/**
+ * Review-or-confirm a swap refund for one attempt: locates the attempt's
+ * payment hash among the known invoices, posts the refund action, and returns
+ * the normalized swap invoice (with the staged refund address/nonce on review).
+ */
+export async function requestOpenReceiveSwapRefund(
+  fetcher: typeof globalThis.fetch,
+  url: string,
+  options: {
+    readonly orderId?: string;
+    readonly invoices: readonly (CheckoutInvoiceSnapshot | null | undefined)[];
+    readonly attemptId: string;
+    readonly refundAddress: string;
+    readonly refundNonce: string;
+    readonly confirm: boolean;
+    readonly logger?: OpenReceiveBrowserLoggerOption;
+  },
+): Promise<CheckoutInvoiceSnapshot> {
+  const payment = options.invoices.find(
+    (invoice) =>
+      invoice != null && (invoice.swap?.attempt_id ?? invoice.invoice_id) === options.attemptId,
+  );
+  if (payment?.payment_hash === undefined) {
+    throw new Error("Swap refund requires the original payment hash.");
+  }
+  const body = await postOpenReceiveJson(
+    fetcher,
+    url,
+    {
+      ...(options.orderId === undefined ? {} : { order_id: options.orderId }),
+      payment_hash: payment.payment_hash,
+      action: "refund_swap",
+      attempt_id: options.attemptId,
+      refund_address: options.refundAddress,
+      refund_nonce: options.refundNonce,
+      confirm: options.confirm,
+    },
+    { logger: options.logger },
+  );
+  return normalizeSwapStartInvoice(body);
+}
+
 async function refundRequest(
   fetcher: typeof globalThis.fetch,
   url: string,
@@ -231,7 +273,13 @@ function normalizePostOptions(
   value: Readonly<Record<string, string>> | PostOpenReceiveJsonOptions | undefined,
 ): PostOpenReceiveJsonOptions {
   if (value === undefined) return {};
-  if ("logger" in value || "headers" in value) return value as PostOpenReceiveJsonOptions;
+  // A bare headers record is all string values, while an options object carries
+  // only `logger`/`headers` keys with non-string values — so a header literally
+  // named "logger" or "headers" still parses as a header.
+  const isOptions = Object.entries(value).every(
+    ([key, entry]) => (key === "logger" || key === "headers") && typeof entry !== "string",
+  );
+  if (isOptions) return value as PostOpenReceiveJsonOptions;
   return { headers: value as Readonly<Record<string, string>> };
 }
 

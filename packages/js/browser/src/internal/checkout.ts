@@ -2,6 +2,8 @@
 
 import { ceilDiv, formatDecimal, type OpenReceiveDecimal, parseDecimal } from "@openreceive/core";
 import * as defaultQrEncoder from "qrcode";
+import { resolveOpenReceiveBrowserLogger, sanitizeBrowserLogEntry } from "./console-logger.ts";
+import { openReceiveRoutePrefix } from "./routes.ts";
 import {
   type CheckoutController,
   type CheckoutControllerOptions,
@@ -22,14 +24,12 @@ import {
   type CreateOpenReceiveStatusFetcherOptions,
   OPENRECEIVE_COPY_FEEDBACK_MS,
   OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS,
-  OPENRECEIVE_DEFAULT_PREFIX,
   OPENRECEIVE_LIGHTNING_REUSE_BUFFER_SECONDS,
   OPENRECEIVE_QR_DARK_COLOR,
   OPENRECEIVE_QR_ERROR_CORRECTION,
   OPENRECEIVE_QR_LIGHT_COLOR,
   OPENRECEIVE_QR_QUIET_ZONE_MODULES,
   OPENRECEIVE_REFUND_REVIEW_NONCE,
-  type OpenReceiveBrowserLogEntry,
   type OpenReceiveBrowserLoggerOption,
   type OpenReceiveBrowserLogLevel,
   type OpenReceiveCheckoutPaymentMethod,
@@ -47,8 +47,6 @@ import {
   openReceiveCheckoutLabels,
   type RequestCheckoutOptions,
 } from "./ui.ts";
-import { resolveOpenReceiveBrowserLogger } from "./console-logger.ts";
-import { openReceiveRoutePrefix } from "./routes.ts";
 import { getOpenReceivePaymentStatusText } from "./wizard.ts";
 
 export function createOpenReceiveTransientFeedbackController<T>(
@@ -207,6 +205,7 @@ export function createOpenReceiveSwapDisplayModel(
   // OPENRECEIVE_SWAP_STATES). Once the order is paid the panel shows a final
   // confirmation, even if `provider_state` still lags on "confirming"/"exchanging".
   const settled = invoice.transaction_state === "settled" || invoice.settled_at !== undefined;
+  const feeBreakdown = createOpenReceiveSwapFeeBreakdown(swap.fee);
 
   return {
     provider: swap.provider,
@@ -235,9 +234,7 @@ export function createOpenReceiveSwapDisplayModel(
     expiresInSeconds,
     countdownLabel: formatOpenReceiveCountdown(expiresInSeconds),
     qrPayload: createOpenReceiveSwapQrPayload(swap),
-    ...(createOpenReceiveSwapFeeBreakdown(swap.fee) === undefined
-      ? {}
-      : { feeBreakdown: createOpenReceiveSwapFeeBreakdown(swap.fee) }),
+    ...(feeBreakdown === undefined ? {} : { feeBreakdown }),
     ...(swap.deposit_tx_id === undefined ? {} : { depositTxId: swap.deposit_tx_id }),
     ...(swap.payout_tx_id === undefined ? {} : { payoutTxId: swap.payout_tx_id }),
     ...(swap.refund_address === undefined ? {} : { refundAddress: swap.refund_address }),
@@ -1032,12 +1029,8 @@ function resolveRequestCheckoutTarget(
   throw new Error("OpenReceive checkout creation requires checkoutUrl or prefix.");
 }
 
-/**
- * Derive the payment-check URL from the base path the shipped router is mounted at.
- * The order id argument is retained because session/controller APIs are order-oriented.
- */
-export function resolveOrderUrlFromPrefix(prefix: string, orderId: string): string {
-  void orderId;
+/** Derive the payment-check URL from the base path the shipped router is mounted at. */
+export function resolveOrderUrlFromPrefix(prefix: string): string {
   return `${prefix.replace(/\/+$/, "")}/payments/check`;
 }
 
@@ -1126,6 +1119,11 @@ export async function prepareCheckout(options: RequestCheckoutOptions): Promise<
 export function createOpenReceiveStatusFetcher(
   options: CreateOpenReceiveStatusFetcherOptions,
 ): CheckoutStatusRefresh {
+  // Track the latest refreshed snapshot so repeated calls on the same fetcher
+  // (headless polling loops) see current swap state, not the creation snapshot —
+  // otherwise the terminal-state guard below never fires and every tick keeps
+  // hitting /swaps/status after the provider is already terminal.
+  let snapshot = options.snapshot;
   return async (order_id) => {
     if (order_id.length === 0) {
       throw new Error("OpenReceive status refresh requires order_id.");
@@ -1138,13 +1136,13 @@ export function createOpenReceiveStatusFetcher(
 
     const headers = options.headers === undefined ? {} : options.headers;
     const activePaymentHash =
-      optionalString(options.snapshot.active?.payment_hash) ??
-      (options.snapshot.active?.rail === "checkout_lock"
+      optionalString(snapshot.active?.payment_hash) ??
+      (snapshot.active?.rail === "checkout_lock"
         ? undefined
-        : optionalString(options.snapshot.active?.invoice_id));
+        : optionalString(snapshot.active?.invoice_id));
     // Deferred checkout_lock has no attempt yet — skip wallet status until Lightning or swap.
     if (activePaymentHash === undefined || !/^[0-9a-f]{64}$/i.test(activePaymentHash)) {
-      return options.snapshot;
+      return snapshot;
     }
     const response = await fetcher(options.orderUrl, {
       method: "POST",
@@ -1160,7 +1158,7 @@ export function createOpenReceiveStatusFetcher(
     const body = await readOpenReceiveJsonResponse(response, "Could not refresh invoice status.");
 
     const payment = asRecord(body);
-    const next = structuredClone(options.snapshot);
+    const next = structuredClone(snapshot);
     if (next.active === undefined) return next;
     const state = optionalString(payment.status) ?? "pending";
     let active = {
@@ -1206,7 +1204,7 @@ export function createOpenReceiveStatusFetcher(
     const others = next.invoices.filter(
       (entry) => entry.invoice_id !== active.invoice_id && entry.rail !== "checkout_lock",
     );
-    return {
+    snapshot = {
       ...next,
       active,
       invoices: [active, ...others],
@@ -1218,6 +1216,7 @@ export function createOpenReceiveStatusFetcher(
             : "open",
       ...(paymentMethods === undefined ? {} : { payment_methods: paymentMethods }),
     };
+    return snapshot;
   };
 }
 
@@ -1273,23 +1272,20 @@ function resolveCheckoutUrl(
 }
 
 function resolveCheckoutPrepareUrl(
-  checkoutUrl: string | ((orderId: string) => string) | undefined,
+  checkoutUrl: string | ((orderId: string) => string),
   orderId: string,
 ): string {
-  if (checkoutUrl !== undefined) {
-    const minted = resolveCheckoutUrl(checkoutUrl, orderId);
-    if (minted.endsWith("/checkouts")) return `${minted}/prepare`;
-    if (minted.includes("/checkouts?")) {
-      return minted.replace("/checkouts?", "/checkouts/prepare?");
-    }
-    // Silently falling back to the default prefix would split prepare and
-    // create across DIFFERENT endpoints — fail loudly instead.
-    throw new Error(
-      "OpenReceive cannot derive the prepare URL from this checkoutUrl (it does not end in " +
-        "/checkouts). Pass `prefix` instead, or point checkoutUrl at the mounted /checkouts route.",
-    );
+  const minted = resolveCheckoutUrl(checkoutUrl, orderId);
+  if (minted.endsWith("/checkouts")) return `${minted}/prepare`;
+  if (minted.includes("/checkouts?")) {
+    return minted.replace("/checkouts?", "/checkouts/prepare?");
   }
-  return `${OPENRECEIVE_DEFAULT_PREFIX}/checkouts/prepare`;
+  // Silently falling back to the default prefix would split prepare and
+  // create across DIFFERENT endpoints — fail loudly instead.
+  throw new Error(
+    "OpenReceive cannot derive the prepare URL from this checkoutUrl (it does not end in " +
+      "/checkouts). Pass `prefix` instead, or point checkoutUrl at the mounted /checkouts route.",
+  );
 }
 
 function checkoutLockSnapshotFromPrepareBody(
@@ -2001,7 +1997,7 @@ export async function createQrPayloadSvg(
   payload: string,
   options: OpenReceiveQrOptions = {},
 ): Promise<string> {
-  const encoder = await getQrEncoder(options.encoder);
+  const encoder = getQrEncoder(options.encoder);
   const svg = await encoder.toString(payload, {
     type: "svg",
     errorCorrectionLevel: OPENRECEIVE_QR_ERROR_CORRECTION,
@@ -2020,7 +2016,7 @@ export async function createQrPngDataUrl(
   invoice: string,
   options: OpenReceiveQrOptions = {},
 ): Promise<string> {
-  const encoder = await getQrEncoder(options.encoder);
+  const encoder = getQrEncoder(options.encoder);
 
   if (encoder.toDataURL === undefined) {
     throw new Error("QR encoder does not support PNG data URL output.");
@@ -2089,30 +2085,9 @@ export function openWallet(options: OpenWalletOptions): string {
   return uri;
 }
 
-async function getQrEncoder(
-  encoder: OpenReceiveQrEncoder | undefined,
-): Promise<OpenReceiveQrEncoder> {
+function getQrEncoder(encoder: OpenReceiveQrEncoder | undefined): OpenReceiveQrEncoder {
   if (encoder !== undefined) return encoder;
   if (isQrEncoder(defaultQrEncoder)) return defaultQrEncoder;
-
-  let dynamicImport: (specifier: string) => Promise<unknown>;
-  try {
-    // Indirection keeps bundlers from statically resolving the optional
-    // dependency; a strict CSP (no unsafe-eval) rejects Function construction.
-    dynamicImport = new Function("specifier", "return import(specifier)") as (
-      specifier: string,
-    ) => Promise<unknown>;
-  } catch {
-    throw new Error(
-      "QR encoding needs the optional qrcode package, and this page's Content-Security-Policy " +
-        'blocks dynamic loading. Pass a qrEncoder explicitly (e.g. import QRCode from "qrcode").',
-    );
-  }
-  const imported = asRecord(await dynamicImport("qrcode"));
-  const candidate = (imported.default ?? imported) as unknown;
-
-  if (isQrEncoder(candidate)) return candidate;
-
   throw new Error("qrcode package did not expose a compatible encoder.");
 }
 
@@ -2422,49 +2397,6 @@ function emitBrowserLog(
   } catch {
     // Checkout logs are diagnostic only and must not affect user actions.
   }
-}
-
-/**
- * Redact secrets from a browser log entry before it reaches a logger. Any field whose key
- * looks like a secret (`secret`/`token`/`authorization`/`cookie`/`nwc`), at any nesting
- * depth, is replaced with `[REDACTED]`; string values are additionally scrubbed of NWC URIs
- * and `token=`/`secret=` query params. Exported so callers that log a request (including its
- * headers) can guarantee ordinary application secrets never leak.
- */
-export function sanitizeBrowserLogEntry(
-  entry: OpenReceiveBrowserLogEntry,
-): OpenReceiveBrowserLogEntry {
-  const clean: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(entry)) {
-    if (/secret|token|authorization|cookie|nwc/i.test(key)) {
-      clean[key] = "[REDACTED]";
-    } else {
-      clean[key] = sanitizeBrowserLogValue(value);
-    }
-  }
-  return clean as OpenReceiveBrowserLogEntry;
-}
-
-function sanitizeBrowserLogValue(value: unknown): unknown {
-  if (typeof value === "string") return redactBrowserSecrets(value);
-  if (Array.isArray(value)) return value.map(sanitizeBrowserLogValue);
-  if (typeof value !== "object" || value === null) return value;
-
-  const clean: Record<string, unknown> = {};
-  for (const [key, nested] of Object.entries(value)) {
-    if (/secret|token|authorization|cookie|nwc/i.test(key)) {
-      clean[key] = "[REDACTED]";
-    } else {
-      clean[key] = sanitizeBrowserLogValue(nested);
-    }
-  }
-  return clean;
-}
-
-function redactBrowserSecrets(value: string): string {
-  return value
-    .replace(/nostr\+walletconnect:\/\/[^\s"'`<>]+/g, "[REDACTED_NWC]")
-    .replace(/([?&](?:_or_evt|token|secret)=)[^&\s"'`<>]+/gi, "$1[REDACTED]");
 }
 
 function normalizePaymentMethods(

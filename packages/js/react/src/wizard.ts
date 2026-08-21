@@ -1,44 +1,46 @@
-import * as React from "react";
 import {
+  buildOpenReceiveMethodGridEntries,
+  type CheckoutInvoiceSnapshot,
+  type CheckoutSnapshot,
+  copyInvoice as copyInvoiceHelper,
   createCheckoutProviderCopyEvent,
   createOpenReceiveLightningInvoiceDecodeUrl,
   createOpenReceivePaymentWizardController,
   createOpenReceivePaymentWizardModel,
   createOpenReceiveWizardRouteAssetDisplays,
   createOpenReceiveWizardRouteDisplays,
-  copyInvoice as copyInvoiceHelper,
+  findOpenReceiveSwapGridGroup,
+  formatOpenReceiveChooseNetworkHeading,
+  formatOpenReceiveNetworkSummary,
   getOpenReceiveNetworkIcon,
   getOpenReceivePaymentMethodIcon,
   getOpenReceiveSwapOptionIcon,
   getOpenReceiveWizardEmptyMessage,
-  buildOpenReceiveMethodGridEntries,
-  formatOpenReceiveChooseNetworkHeading,
-  formatOpenReceiveNetworkSummary,
-  openReceiveAssetButtonClasses,
-  openReceiveNetworkButtonClasses,
-  openReceiveNetworkCheckClasses,
-  openReceiveNetworkMobileRevealClasses,
-  openReceiveNetworkSummaryIconClasses,
-  openReceivePaymentAccentId,
-  openReceiveSwapPickerKey,
-  parseOpenReceiveSwapPickerKey,
-  resolveOpenReceivePreservedNetworkSelection,
-  normalizeSwapStartInvoice,
-  openReceiveCheckoutLabels,
-  openReceivePaymentMethods,
-  openReceiveSwapAssetMatchesRoute,
-  orClasses,
-  overlayOpenReceiveSwapRefundStaging,
-  postOpenReceiveJson,
-  startOpenReceiveSwapRequest,
-  type CheckoutInvoiceSnapshot,
-  type CheckoutSnapshot,
   type OpenReceivePaymentMethod,
   type OpenReceivePaymentWizardController,
   type OpenReceivePaymentWizardSelection,
   type OpenReceiveWizardProviderDisplay,
   type OpenReceiveWizardRouteAssetDisplay,
+  openReceiveAssetButtonClasses,
+  openReceiveCheckoutLabels,
+  openReceiveNetworkButtonClasses,
+  openReceiveNetworkCheckClasses,
+  openReceiveNetworkMobileRevealClasses,
+  openReceiveNetworkSummaryIconClasses,
+  openReceivePaymentAccentId,
+  openReceivePaymentMethods,
+  openReceiveSwapAssetMatchesRoute,
+  openReceiveSwapGroupLimitOption,
+  openReceiveSwapOptionLimitMessage,
+  openReceiveSwapPickerKey,
+  orClasses,
+  overlayOpenReceiveSwapRefundStaging,
+  postOpenReceiveJson,
+  requestOpenReceiveSwapRefund,
+  startOpenReceiveSwapRequest,
+  updateOpenReceiveSelectedSwapNetworks,
 } from "@openreceive/browser/internal";
+import * as React from "react";
 import { useOpenReceiveTickingUnixSeconds } from "./hooks.ts";
 import {
   renderSwapActions,
@@ -46,15 +48,13 @@ import {
   renderSwapPreparing,
   renderSwapStartError,
   renderSwapUnavailable,
-  swapGroupLimitOption,
-  swapOptionLimitMessage,
 } from "./swap.ts";
-import { joinClassNames, reactRecord } from "./utils.ts";
 import type {
   OpenReceiveSwapOptionDisplay,
   OpenReceiveSwapOptionsResult,
   PaymentWizardProps,
 } from "./types.ts";
+import { joinClassNames, reactRecord } from "./utils.ts";
 
 export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
   const [selection, setSelection] = React.useState<OpenReceivePaymentWizardSelection>(() =>
@@ -183,8 +183,9 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
         }
         return quote;
       } catch (error) {
-        // A failed quote must not strand the payer on the preparing spinner.
-        autoSwapAttemptedRef.current.delete(payInAsset);
+        // A failed quote must not strand the payer on the preparing spinner: it
+        // surfaces inline with the retry button, and only that explicit retry —
+        // never this effect — may attempt the swap again.
         setSwapStartError(
           error instanceof Error && error.message.length > 0
             ? error.message
@@ -195,6 +196,17 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
       }
     },
     [props.orderUrl, orderId, fetcher, props.onError],
+  );
+  // Enter the focused flow for a pay-in coin. The effect below quotes it first and only
+  // starts the swap when the quote confirms the amount is in range.
+  const selectSwapAsset = React.useCallback(
+    (payInAsset: string) => {
+      if (props.orderUrl === undefined || props.orderUrl === false) return;
+      autoSwapAttemptedRef.current.delete(payInAsset);
+      setSwapStartError(null);
+      setSelectedSwapAsset(payInAsset);
+    },
+    [props.orderUrl],
   );
   const refundSwap = React.useCallback(
     async (attemptId: string, refundAddress: string, refundNonce: string, confirm: boolean) => {
@@ -207,28 +219,15 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
         return;
       }
       try {
-        const payment = [startedSwapInvoice, ...(checkout?.invoices ?? [])].find(
-          (invoice) =>
-            invoice != null && (invoice.swap?.attempt_id ?? invoice.invoice_id) === attemptId,
-        );
-        if (payment?.payment_hash === undefined) {
-          throw new Error("Swap refund requires the original payment hash.");
-        }
-        const body = await postOpenReceiveJson(
-          fetcher,
-          props.orderUrl,
-          {
-            order_id: orderId,
-            payment_hash: payment.payment_hash,
-            action: "refund_swap",
-            attempt_id: attemptId,
-            refund_address: refundAddress,
-            refund_nonce: refundNonce,
-            confirm,
-          },
-          { logger: props.logger },
-        );
-        const invoice = normalizeSwapStartInvoice(body);
+        const invoice = await requestOpenReceiveSwapRefund(fetcher, props.orderUrl, {
+          orderId,
+          invoices: [startedSwapInvoice, ...(checkout?.invoices ?? [])],
+          attemptId,
+          refundAddress,
+          refundNonce,
+          confirm,
+          logger: props.logger,
+        });
         setStartedSwapInvoice(invoice);
         setDismissedSwapInvoiceId(null);
       } catch (error) {
@@ -293,8 +292,10 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
           ? stickySwapInvoiceRef.current
           : undefined;
 
-  // Selecting a top-level coin quotes it (to confirm the amount is in range) and, when
-  // available, starts the swap so the payer lands on the deposit address immediately.
+  // Selecting a top-level coin quotes it FIRST (to confirm the amount is in range) and,
+  // when available, starts the swap so the payer lands on the deposit address. A start
+  // that fails leaves its entry in the attempted set, so this effect never re-POSTs
+  // /swaps on its own — recovery is the payer's explicit retry button.
   React.useEffect(() => {
     if (selectedSwapAsset === null) return;
     if (props.orderUrl === undefined || props.orderUrl === false) return;
@@ -393,44 +394,18 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
           selectedSwapNetworks,
           onSelectPicker: (key, previousKey) => {
             setSelectedPickerKey(key);
-            const nextSwap = parseOpenReceiveSwapPickerKey(key);
-            if (nextSwap === null) return;
             const entries = buildOpenReceiveMethodGridEntries(
               openReceivePaymentMethods,
               swapAssetOptions,
             );
-            const nextEntry = entries.find(
-              (entry) =>
-                entry.kind === "swap" && entry.group.label.trim().toUpperCase() === nextSwap.label,
+            setSelectedSwapNetworks((current) =>
+              updateOpenReceiveSelectedSwapNetworks({
+                entries,
+                nextKey: key,
+                previousKey,
+                selectedNetworks: current,
+              }),
             );
-            if (nextEntry === undefined || nextEntry.kind !== "swap") return;
-            if (nextEntry.group.options.length <= 1) return;
-            const previousGroup =
-              previousKey === null
-                ? undefined
-                : (() => {
-                    const previousSwap = parseOpenReceiveSwapPickerKey(previousKey);
-                    if (previousSwap === null) return undefined;
-                    const previousEntry = entries.find(
-                      (entry) =>
-                        entry.kind === "swap" &&
-                        entry.group.label.trim().toUpperCase() === previousSwap.label,
-                    );
-                    return previousEntry?.kind === "swap" ? previousEntry.group : undefined;
-                  })();
-            const preserved = resolveOpenReceivePreservedNetworkSelection({
-              previousGroup,
-              nextGroup: nextEntry.group,
-              selectedNetworks: selectedSwapNetworks,
-            });
-            setSelectedSwapNetworks((current) => {
-              const groupKey = nextEntry.group.label.trim().toUpperCase();
-              if (preserved === undefined) {
-                const { [groupKey]: _removed, ...rest } = current;
-                return rest;
-              }
-              return { ...current, [groupKey]: preserved };
-            });
           },
           onSelectNetwork: (groupKey, payInAsset) => {
             setSelectedSwapNetworks((current) => ({
@@ -449,10 +424,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
               void props.onRequestLightning?.();
             }
           },
-          onContinueSwap: (payInAsset) => {
-            autoSwapAttemptedRef.current.delete(payInAsset);
-            void startSwap(payInAsset);
-          },
+          onContinueSwap: selectSwapAsset,
         })
       : null,
     selection.selectedMethod === null
@@ -480,15 +452,6 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
                 },
               })
             : null,
-          showRoutePicker && selection.selectedMethod === "crypto"
-            ? renderRoutePicker({
-                assets: routeAssetDisplays,
-                method: "crypto",
-                onSelectRoute: (route) => {
-                  updateWizardSelection((controller) => controller.selectRoute(route));
-                },
-              })
-            : null,
           React.createElement(
             "div",
             {
@@ -500,7 +463,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
                   {
                     className: orClasses.wizardEmpty,
                   },
-                  getOpenReceiveWizardEmptyMessage(selection.selectedMethod),
+                  getOpenReceiveWizardEmptyMessage(),
                 )
               : routeDisplays.map((route) => {
                   const routeSwapOptions = swapOptionsForRoute(route.key, swapOptions.options);
@@ -534,7 +497,7 @@ export function PaymentWizard(props: PaymentWizardProps): React.ReactElement {
                           options: routeSwapOptions,
                           enabled: swapOptions.enabled,
                           startingAsset: swapStartingAsset,
-                          onStart: startSwap,
+                          onStart: selectSwapAsset,
                           checkout,
                         })
                       : renderSwapDepositPanel({
@@ -669,15 +632,7 @@ function renderCompactPaymentMethodSelector(options: {
   const currenciesLoading =
     options.currenciesLoading === true && options.swapAssetOptions.length === 0;
   const selectedKey = options.selectedPickerKey;
-  const selectedSwap = selectedKey === null ? null : parseOpenReceiveSwapPickerKey(selectedKey);
-  const selectedSwapEntry =
-    selectedSwap === null
-      ? undefined
-      : entries.find(
-          (entry) =>
-            entry.kind === "swap" && entry.group.label.trim().toUpperCase() === selectedSwap.label,
-        );
-  const selectedGroup = selectedSwapEntry?.kind === "swap" ? selectedSwapEntry.group : undefined;
+  const selectedGroup = findOpenReceiveSwapGridGroup(entries, selectedKey);
   const networkRequired = selectedGroup !== undefined && selectedGroup.options.length > 1;
   const selectedGroupKey = selectedGroup?.label.trim().toUpperCase();
   const selectedNetworkAsset =
@@ -691,7 +646,7 @@ function renderCompactPaymentMethodSelector(options: {
       ? {
           payInAsset: selectedNetworkOption.pay_in_asset,
           disabled: selectedNetworkOption.available === false,
-          limitMessage: swapOptionLimitMessage(selectedNetworkOption, options.checkout),
+          limitMessage: openReceiveSwapOptionLimitMessage(selectedNetworkOption, options.checkout),
         }
       : null;
   const startingAsset = options.startingAsset;
@@ -783,7 +738,7 @@ function renderCompactPaymentMethodSelector(options: {
           group.options.map((option) => {
             const optionDisabled = option.available === false;
             const optionSelected = option.pay_in_asset === selectedOption?.pay_in_asset;
-            const optionLimit = swapOptionLimitMessage(option, options.checkout);
+            const optionLimit = openReceiveSwapOptionLimitMessage(option, options.checkout);
             return React.createElement(
               "div",
               { key: option.pay_in_asset, className: orClasses.methodTile },
@@ -941,9 +896,9 @@ function renderCompactPaymentMethodSelector(options: {
           const disabled = group.options.every((option) => option.available === false);
           const accent = openReceivePaymentAccentId(group.label);
           const limitOption = disabled
-            ? (swapGroupLimitOption(group.options) ?? activeOption)
+            ? (openReceiveSwapGroupLimitOption(group.options) ?? activeOption)
             : activeOption;
-          const limitMessage = swapOptionLimitMessage(limitOption, options.checkout);
+          const limitMessage = openReceiveSwapOptionLimitMessage(limitOption, options.checkout);
           const panelId = `network-panel-${groupKey.toLowerCase()}`;
 
           return React.createElement(
@@ -1459,7 +1414,7 @@ function ProviderTutorialModal(options: {
 
 function renderRoutePicker(options: {
   readonly assets: readonly OpenReceiveWizardRouteAssetDisplay[];
-  readonly method: "bitcoin" | "crypto";
+  readonly method: "bitcoin";
   readonly onSelectRoute: (route: string) => void;
 }): React.ReactElement {
   return React.createElement(

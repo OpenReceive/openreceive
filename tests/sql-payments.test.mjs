@@ -92,8 +92,7 @@ test("commitAttempt conflicts on a reusable same-rail attempt but keeps other ra
   await payments.commitAttempt(checkoutInput("order-1", "a")); // Lightning, 600s of life left
   await assert.rejects(
     payments.commitAttempt(checkoutInput("order-1", "b")),
-    (error) =>
-      error.status === 409 && /already in progress for this order/.test(error.message),
+    (error) => error.status === 409 && /already in progress for this order/.test(error.message),
   );
 
   // A swap on another asset may go live while Lightning stays live.

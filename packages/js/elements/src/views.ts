@@ -51,11 +51,10 @@ export interface CheckoutView {
 export interface OpenReceiveElementsWizardView {
   readonly selectedMethod?: OpenReceivePaymentMethod | null;
   readonly selectedBitcoinRoute?: string | null;
-  readonly selectedCryptoRoute?: string | null;
   readonly swapOptions?: readonly OpenReceiveElementsSwapOption[];
   /**
    * True until the first order-status response supplies `payment_methods` /
-   * `swap_pay_options` (provider catalog warm-up). Shows a loader instead of Crypto.
+   * `swap_pay_options` (provider catalog warm-up). Shows a loader tile.
    */
   readonly currenciesLoading?: boolean;
   /** Selected pay-in asset per multi-network coin label (e.g. USDT → USDT_TRON). */

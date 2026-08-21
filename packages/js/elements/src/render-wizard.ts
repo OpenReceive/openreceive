@@ -7,9 +7,9 @@ import {
   createOpenReceiveWizardRouteAssetDisplays,
   createOpenReceiveWizardRouteDisplays,
   escapeOpenReceiveHtml as escapeHtml,
+  findOpenReceiveSwapGridGroup,
   formatOpenReceiveChooseNetworkHeading,
   formatOpenReceiveNetworkSummary,
-  formatOpenReceiveSwapLimit,
   getOpenReceiveNetworkIcon,
   getOpenReceivePaymentMethodIcon,
   getOpenReceiveSwapOptionIcon,
@@ -30,9 +30,10 @@ import {
   openReceivePaymentAccentId,
   openReceivePaymentMethods,
   openReceiveSwapAssetMatchesRoute,
+  openReceiveSwapGroupLimitOption,
+  openReceiveSwapOptionLimitMessage,
   openReceiveSwapPickerKey,
   orClasses,
-  parseOpenReceiveSwapPickerKey,
 } from "@openreceive/browser/internal";
 
 import { renderElementSwapCopyDetailHtml } from "./dom-helpers.ts";
@@ -62,7 +63,6 @@ export function renderOpenReceivePaymentWizardHtml(
   const selection: OpenReceivePaymentWizardSelection = {
     selectedMethod: view.selectedMethod ?? null,
     selectedBitcoinRoute: view.selectedBitcoinRoute ?? null,
-    selectedCryptoRoute: view.selectedCryptoRoute ?? null,
   };
   const model = createOpenReceivePaymentWizardModel(selection);
   const { wizard } = model;
@@ -193,7 +193,7 @@ export function renderOpenReceivePaymentWizardHtml(
             routeDisplays.length === 0
               ? `
             <p part="wizard-empty" class="${orClasses.wizardEmpty}">${escapeHtml(
-              getOpenReceiveWizardEmptyMessage(selection.selectedMethod),
+              getOpenReceiveWizardEmptyMessage(),
             )}</p>
 	          `
               : routeDisplays
@@ -310,15 +310,7 @@ function renderElementCompactPaymentSelectorHtml(
   const entries = buildOpenReceiveMethodGridEntries(openReceivePaymentMethods, swapAssetOptions);
   const currenciesLoading = view.currenciesLoading === true && swapAssetOptions.length === 0;
   const selectedKey = view.selectedPickerKey ?? null;
-  const selectedSwap = selectedKey === null ? null : parseOpenReceiveSwapPickerKey(selectedKey);
-  const selectedSwapEntry =
-    selectedSwap === null
-      ? undefined
-      : entries.find(
-          (entry) =>
-            entry.kind === "swap" && entry.group.label.trim().toUpperCase() === selectedSwap.label,
-        );
-  const selectedGroup = selectedSwapEntry?.kind === "swap" ? selectedSwapEntry.group : undefined;
+  const selectedGroup = findOpenReceiveSwapGridGroup(entries, selectedKey);
   const networkRequired = selectedGroup !== undefined && selectedGroup.options.length > 1;
   const selectedNetworks = view.selectedSwapNetworks ?? {};
   const selectedGroupKey = selectedGroup?.label.trim().toUpperCase();
@@ -571,7 +563,7 @@ function renderElementSwapMethodGroupHtml(
   const disabled = group.options.every((option) => option.available === false);
   const accent = openReceivePaymentAccentId(group.label);
   const limitOption = disabled
-    ? (elementsSwapGroupLimitOption(group.options) ?? activeOption)
+    ? (openReceiveSwapGroupLimitOption(group.options) ?? activeOption)
     : activeOption;
   const limitMessage = elementsSwapLimitMessage(limitOption, view);
   const panelId = `network-panel-${groupKey.toLowerCase().replace(/[^a-z0-9_-]/g, "-")}`;
@@ -643,39 +635,12 @@ function renderElementSwapMethodGroupHtml(
     </div>`;
 }
 
-function elementsSwapGroupLimitOption<
-  T extends {
-    readonly available?: boolean;
-    readonly unavailable_reason?: string;
-    readonly minimum_invoice_amount_msats?: number;
-  },
->(options: readonly T[]): T | undefined {
-  if (options.length === 0) return undefined;
-  const unavailable = options.filter((option) => option.available === false);
-  const tooSmall = unavailable.filter((option) => option.unavailable_reason === "amount_too_small");
-  const candidates =
-    tooSmall.length > 0 ? tooSmall : unavailable.length > 0 ? unavailable : options;
-  let best = candidates[0];
-  for (const option of candidates) {
-    if (best === undefined) {
-      best = option;
-      continue;
-    }
-    const bestMin = best.minimum_invoice_amount_msats;
-    const optionMin = option.minimum_invoice_amount_msats;
-    if (optionMin === undefined) continue;
-    if (bestMin === undefined || optionMin < bestMin) best = option;
-  }
-  return best;
-}
-
 // Short reason for an out-of-range swap asset in the web-component surface,
-// mirroring the React wizard's fiat message.
+// sharing the React wizard's canonical message via the browser helper.
 function elementsSwapLimitMessage(
   option: OpenReceiveElementsSwapOption,
   view: OpenReceiveElementsWizardView,
 ): string | undefined {
-  if (option.available !== false) return undefined;
   const checkout =
     view.amountMsats === undefined
       ? undefined
@@ -685,27 +650,7 @@ function elementsSwapLimitMessage(
             ? {}
             : { fiat: { currency: view.fiat.currency, value: view.fiat.value } }),
         };
-  if (option.unavailable_reason === "amount_too_small") {
-    const fiat =
-      checkout === undefined
-        ? undefined
-        : formatOpenReceiveSwapLimit(checkout, option.minimum_invoice_amount_msats, "ceil");
-    if (fiat !== undefined) return `Minimum amount ${fiat}`;
-    if (option.minimum_pay_amount !== undefined) {
-      return `Minimum ${option.minimum_pay_amount} ${option.label}`;
-    }
-  }
-  if (option.unavailable_reason === "amount_too_large") {
-    const fiat =
-      checkout === undefined
-        ? undefined
-        : formatOpenReceiveSwapLimit(checkout, option.maximum_invoice_amount_msats, "floor");
-    if (fiat !== undefined) return `Maximum amount ${fiat}`;
-    if (option.maximum_pay_amount !== undefined) {
-      return `Maximum ${option.maximum_pay_amount} ${option.label}`;
-    }
-  }
-  return option.unavailable_message;
+  return openReceiveSwapOptionLimitMessage(option, checkout);
 }
 
 function renderElementSwapPanelHtml(

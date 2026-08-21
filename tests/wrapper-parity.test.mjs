@@ -76,11 +76,23 @@ test("the renamed theme props exist under one name across the wrappers", () => {
     );
   }
   assert.doesNotMatch(read(REACT_COMPONENT), /themeSwitcher|themeStorageKey/);
-  // Canonical default: the checkout owns its theme unless the host opts out.
+  // Canonical default: the checkout owns its theme unless the host opts out —
+  // through the prop or through the `options` escape hatch. The element wrappers
+  // used to spread a `true` prop default after `...options`, silently clobbering
+  // an options-supplied `themeToggle: false`.
   assert.match(read(REACT_COMPONENT), /themeToggle = true/);
-  assert.match(read(SOURCES.svelte), /export let themeToggle = true/);
-  assert.match(read(SOURCES.angular), /@Input\(\) themeToggle = true/);
-  assert.match(read(SOURCES.vue), /themeToggle: true/);
+  assert.match(
+    read(SOURCES.svelte),
+    /themeToggle: themeToggle \?\? options\.themeToggle \?\? true/,
+  );
+  assert.match(
+    read(SOURCES.angular),
+    /themeToggle: this\.themeToggle \?\? this\.options\.themeToggle \?\? true/,
+  );
+  assert.match(
+    read(SOURCES.vue),
+    /themeToggle: props\.themeToggle \?\? props\.options\.themeToggle \?\? true/,
+  );
 });
 
 test("every wrapper exposes all seven event handlers as first-class props", () => {
@@ -185,6 +197,10 @@ test("the theme is resolved from the default until the wrapper mounts", () => {
   };
   const deferred = createOpenReceiveWrapperCheckoutShellBinding(null, {
     orderId: "order-parity",
+    deferThemeResolution: true,
+  });
+  const deferredWithHostStorage = createOpenReceiveWrapperCheckoutShellBinding(null, {
+    orderId: "order-parity",
     storage,
     deferThemeResolution: true,
   });
@@ -194,6 +210,10 @@ test("the theme is resolved from the default until the wrapper mounts", () => {
   });
 
   assert.equal(deferred.rootAttributes["data-theme"], "light");
+  // A host-supplied storage is read on the server too: that is the documented way
+  // to server-render a chosen theme (docs/internal/wrapper-parity.md), and React
+  // honors it. Only the implicit browser localStorage waits for mount.
+  assert.equal(deferredWithHostStorage.rootAttributes["data-theme"], "dark");
   assert.equal(mounted.rootAttributes["data-theme"], "dark");
 
   for (const [name, file] of Object.entries({

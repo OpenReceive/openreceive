@@ -21,9 +21,12 @@ import {
   createQrSvg,
   status as deriveStatus,
   enterCheckoutResumePath,
-  getSwapRefundAddressError,
-  isReusableLightningInvoice,
-  normalizeSwapStartInvoice,
+  findOpenReceiveReusableLightningInvoice,
+  findOpenReceiveSwapGridGroup,
+  getOpenReceiveSwapRefundFormError,
+  mergeOpenReceiveAttemptIntoCheckout,
+  mergeOpenReceiveAttemptIntoSnapshot,
+  mergeOpenReceiveMintedCheckout,
   OPENRECEIVE_CHECKOUT_DATA_SELECTORS,
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
@@ -44,18 +47,16 @@ import {
   parseOpenReceiveOptionalInteger,
   parseOpenReceivePaymentMethod,
   parseOpenReceiveResolvedTheme,
-  parseOpenReceiveSwapPickerKey,
   parseOpenReceiveThemePreference,
-  postOpenReceiveJson,
   prepareCheckout,
   requestCheckout,
-  resolveOpenReceivePreservedNetworkSelection,
+  requestOpenReceiveSwapRefund,
   resolveOrderUrlFromPrefix,
-  selectCheckoutDisplayInvoice,
   startOpenReceiveSwapRequest,
   syncOpenReceiveStoredThemeControls,
   toggleOpenReceiveStoredThemeControls,
   updateOpenReceivePaymentWizardSelection,
+  updateOpenReceiveSelectedSwapNetworks,
 } from "@openreceive/browser/internal";
 import {
   parseElementRail,
@@ -91,51 +92,19 @@ function markElementConfirmButtonBusy(button: HTMLButtonElement): void {
   button.prepend(spinner);
 }
 
-/** Display-affecting snapshot fields only, so a poll that changes nothing visible skips a render. */
+/**
+ * Display-affecting snapshot fields only, so a poll that changes nothing visible skips a
+ * render. Everything is keyed verbatim except `active` (already one of `invoices`),
+ * `paid_at` (`status` flips whenever it appears), and each invoice's own amount/fiat
+ * quote (the rendered amount rides on the snapshot itself).
+ */
 function checkoutSnapshotDisplayKey(snapshot: CheckoutSnapshot): string {
+  const { active: _active, paid_at: _paidAt, invoices, ...display } = snapshot;
   return JSON.stringify({
-    checkout_id: snapshot.checkout_id,
-    order_id: snapshot.order_id,
-    status: snapshot.status,
-    amount_msats: snapshot.amount_msats,
-    fiat: snapshot.fiat,
-    payment_methods: snapshot.payment_methods,
-    invoices: snapshot.invoices.map((invoice) => ({
-      invoice_id: invoice.invoice_id,
-      invoice: invoice.invoice,
-      rail: invoice.rail,
-      payment_hash: invoice.payment_hash,
-      transaction_state: invoice.transaction_state,
-      workflow_state: invoice.workflow_state,
-      expires_at: invoice.expires_at,
-      settled_at: invoice.settled_at,
-      swap:
-        invoice.swap === undefined
-          ? undefined
-          : {
-              attempt_id: invoice.swap.attempt_id,
-              provider: invoice.swap.provider,
-              provider_order_id: invoice.swap.provider_order_id,
-              pay_in_asset: invoice.swap.pay_in_asset,
-              deposit_address: invoice.swap.deposit_address,
-              deposit_memo: invoice.swap.deposit_memo,
-              deposit_amount: invoice.swap.deposit_amount,
-              provider_state: invoice.swap.provider_state,
-              provider_expires_at: invoice.swap.provider_expires_at,
-              deposit_tx_id: invoice.swap.deposit_tx_id,
-              payout_tx_id: invoice.swap.payout_tx_id,
-              refund_address: invoice.swap.refund_address,
-              refund_nonce: invoice.swap.refund_nonce,
-              refund_nonce_expires_at: invoice.swap.refund_nonce_expires_at,
-              refund_tx_id: invoice.swap.refund_tx_id,
-              attention: invoice.swap.attention,
-              attention_reason: invoice.swap.attention_reason,
-              refund_reason: invoice.swap.refund_reason,
-              deposit_received_amount: invoice.swap.deposit_received_amount,
-              refund_amount: invoice.swap.refund_amount,
-              fee: invoice.swap.fee,
-            },
-    })),
+    ...display,
+    invoices: invoices.map(
+      ({ amount_msats: _amountMsats, fiat_quote: _fiatQuote, ...invoice }) => invoice,
+    ),
   });
 }
 
@@ -223,6 +192,8 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.syncUrl,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePathPrefix,
         OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeOrderId,
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.polling,
+        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.pollIntervalMs,
       ];
     }
 
@@ -239,6 +210,20 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
     attributeChangedCallback(name: string, oldValue: string | null, newValue: string | null) {
       if (!this.isConnected || this.applyingOwnAttributes > 0) return;
       if (oldValue === newValue) return;
+
+      // Display-only attributes (theme, the resume-path trio) never change what is
+      // polled: rebuilding the controller for them fired an extra POST
+      // /payments/check on every cosmetic theme flip.
+      const displayOnly =
+        name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme ||
+        name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.syncUrl ||
+        name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.resumePathPrefix ||
+        name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.routeOrderId;
+      if (displayOnly) {
+        this.render();
+        this.syncThemeAncestorObserver();
+        return;
+      }
 
       const createInputChanged =
         name === OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId ||
@@ -312,7 +297,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
         // the wrong order. The finally block re-runs for whatever is current.
         if (this.currentCreateKey() !== key) return;
         this.handleControllerSnapshot(checkout);
-        const orderUrl = resolveOrderUrlFromPrefix(prefix, orderId);
+        const orderUrl = resolveOrderUrlFromPrefix(prefix);
         // Apply routing attrs only (no invoice) so render stays in deferred wizard mode.
         // Preserve the host theme attribute so shadow data-theme cannot fall through.
         this.applyOwnAttributes(
@@ -406,30 +391,14 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
         OPENRECEIVE_DEFAULT_PREFIX;
       const current = this.latestCheckoutSnapshot;
       if (current !== undefined) {
-        const reusableLightning = current.invoices.find(
-          (invoice) =>
-            invoice.rail === "lightning" &&
-            typeof invoice.invoice === "string" &&
-            invoice.invoice.length > 0 &&
-            invoice.expires_at !== undefined &&
-            isReusableLightningInvoice(invoice.expires_at),
-        );
+        const reusableLightning = findOpenReceiveReusableLightningInvoice(current);
         if (reusableLightning !== undefined) {
-          const withoutSame = current.invoices.filter(
-            (entry) =>
-              entry.invoice_id !== reusableLightning.invoice_id && entry.rail !== "checkout_lock",
-          );
-          const focused: CheckoutSnapshot = {
-            ...current,
-            checkout_id: reusableLightning.invoice_id,
-            active: reusableLightning,
-            invoices: [reusableLightning, ...withoutSame],
-          };
+          const focused = mergeOpenReceiveAttemptIntoSnapshot(reusableLightning, current);
           this.handleControllerSnapshot(focused);
           this.lightningRequested = true;
           this.applyOwnAttributes(
             createCheckoutElementAttributes(focused, {
-              orderUrl: resolveOrderUrlFromPrefix(prefix, orderId),
+              orderUrl: resolveOrderUrlFromPrefix(prefix),
               prefix,
               ...this.currentThemeOption(),
             }),
@@ -443,41 +412,19 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
       this.wizardError = undefined;
       this.render();
       try {
+        const metadata = this.createMetadata();
         const checkout = await requestCheckout({
           prefix,
           orderId,
-          ...(this.createMetadata() === undefined ? {} : { metadata: this.createMetadata() }),
+          ...(metadata === undefined ? {} : { metadata }),
           fetch: globalThis.fetch,
         });
-        const previous = this.latestCheckoutSnapshot;
-        const minted = selectCheckoutDisplayInvoice(checkout) ?? checkout.active;
-        const merged =
-          minted === undefined
-            ? {
-                ...checkout,
-                ...(previous?.payment_methods === undefined
-                  ? {}
-                  : { payment_methods: previous.payment_methods }),
-              }
-            : {
-                ...(previous ?? checkout),
-                ...checkout,
-                checkout_id: minted.invoice_id,
-                active: minted,
-                invoices: [
-                  minted,
-                  ...(previous?.invoices ?? checkout.invoices).filter(
-                    (entry) =>
-                      entry.invoice_id !== minted.invoice_id && entry.rail !== "checkout_lock",
-                  ),
-                ],
-                payment_methods: previous?.payment_methods ?? checkout.payment_methods,
-              };
+        const merged = mergeOpenReceiveMintedCheckout(checkout, this.latestCheckoutSnapshot);
         this.handleControllerSnapshot(merged);
         this.lightningRequested = true;
         this.applyOwnAttributes(
           createCheckoutElementAttributes(merged, {
-            orderUrl: resolveOrderUrlFromPrefix(prefix, orderId),
+            orderUrl: resolveOrderUrlFromPrefix(prefix),
             prefix,
             ...this.currentThemeOption(),
           }),
@@ -586,7 +533,6 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
         wizard: {
           selectedMethod: this.selection.selectedMethod,
           selectedBitcoinRoute: this.selection.selectedBitcoinRoute,
-          selectedCryptoRoute: this.selection.selectedCryptoRoute,
           swapOptions: this.swapOptions,
           currenciesLoading: !this.swapOptionsLoaded,
           selectedSwapNetworks: this.selectedSwapNetworks,
@@ -723,10 +669,21 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
         return;
       }
 
+      // `polling="false"` renders the snapshot (countdown included) without ever
+      // POSTing /payments/check, matching React's `polling` prop.
+      const polling =
+        parseOpenReceiveBooleanAttribute(
+          this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.polling),
+        ) !== false;
+      const pollIntervalMs = parseOpenReceiveOptionalInteger(
+        this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.pollIntervalMs),
+        { label: "poll-interval-ms" },
+      );
       this.stopCheckoutController();
       this.controller = createCheckoutController({
         snapshot,
-        ...(orderUrl === null ? {} : { orderUrl }),
+        ...(orderUrl === null || !polling ? {} : { orderUrl }),
+        ...(pollIntervalMs === undefined ? {} : { pollIntervalMs }),
         logger: options.logger,
         onError: (error) => this.dispatchError(error),
         onState: (nextState) => this.applyCheckoutState(nextState),
@@ -753,7 +710,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
         OPENRECEIVE_DEFAULT_PREFIX;
       const id = orderId ?? this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderId);
       if (id === null || id === undefined || id.length === 0) return null;
-      return resolveOrderUrlFromPrefix(prefix, id);
+      return resolveOrderUrlFromPrefix(prefix);
     }
 
     private currentCheckoutSnapshot(): CheckoutSnapshot | undefined {
@@ -922,56 +879,25 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
           }
           const previousKey = this.selectedPickerKey;
           this.selectedPickerKey = key;
-          const nextSwap = parseOpenReceiveSwapPickerKey(key);
-          if (nextSwap !== null) {
-            const entries = buildOpenReceiveMethodGridEntries(
-              openReceivePaymentMethods,
-              this.swapOptions,
-            );
-            const nextEntry = entries.find(
-              (entry) =>
-                entry.kind === "swap" && entry.group.label.trim().toUpperCase() === nextSwap.label,
-            );
-            if (nextEntry?.kind === "swap" && nextEntry.group.options.length === 1) {
-              const option =
-                nextEntry.group.options.find((entry) => entry.available !== false) ??
-                nextEntry.group.options[0];
-              if (option === undefined || option.available === false) return;
-              this.selectedPickerKey = null;
-              void this.startSwap(option.pay_in_asset);
-              return;
-            }
-            if (nextEntry?.kind === "swap" && nextEntry.group.options.length > 1) {
-              const previousGroup =
-                previousKey === null
-                  ? undefined
-                  : (() => {
-                      const previousSwap = parseOpenReceiveSwapPickerKey(previousKey);
-                      if (previousSwap === null) return undefined;
-                      const previousEntry = entries.find(
-                        (entry) =>
-                          entry.kind === "swap" &&
-                          entry.group.label.trim().toUpperCase() === previousSwap.label,
-                      );
-                      return previousEntry?.kind === "swap" ? previousEntry.group : undefined;
-                    })();
-              const preserved = resolveOpenReceivePreservedNetworkSelection({
-                previousGroup,
-                nextGroup: nextEntry.group,
-                selectedNetworks: this.selectedSwapNetworks,
-              });
-              const groupKey = nextEntry.group.label.trim().toUpperCase();
-              if (preserved === undefined) {
-                const { [groupKey]: _removed, ...rest } = this.selectedSwapNetworks;
-                this.selectedSwapNetworks = rest;
-              } else {
-                this.selectedSwapNetworks = {
-                  ...this.selectedSwapNetworks,
-                  [groupKey]: preserved,
-                };
-              }
-            }
+          const entries = buildOpenReceiveMethodGridEntries(
+            openReceivePaymentMethods,
+            this.swapOptions,
+          );
+          const nextGroup = findOpenReceiveSwapGridGroup(entries, key);
+          if (nextGroup !== undefined && nextGroup.options.length === 1) {
+            const option =
+              nextGroup.options.find((entry) => entry.available !== false) ?? nextGroup.options[0];
+            if (option === undefined || option.available === false) return;
+            this.selectedPickerKey = null;
+            void this.startSwap(option.pay_in_asset);
+            return;
           }
+          this.selectedSwapNetworks = updateOpenReceiveSelectedSwapNetworks({
+            entries,
+            nextKey: key,
+            previousKey,
+            selectedNetworks: this.selectedSwapNetworks,
+          });
           this.render();
         });
       });
@@ -1118,10 +1044,8 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
           }
         };
         const validateRefundAddress = (address: string, showEmpty: boolean): string | undefined => {
-          if (address.length === 0) {
-            return showEmpty ? "Enter a refund address." : undefined;
-          }
-          return getSwapRefundAddressError(payInAsset, address, networkLabel);
+          if (address.length === 0 && !showEmpty) return undefined;
+          return getOpenReceiveSwapRefundFormError(payInAsset, address, networkLabel);
         };
         if (input instanceof HTMLInputElement && input.type !== "hidden") {
           if (this.refundAddressDraft.length > 0) {
@@ -1276,26 +1200,10 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
         // was told "Invoice expired".
         const invoice = this.startedSwapInvoice;
         if (invoice !== undefined) {
-          const previous =
-            this.latestCheckoutSnapshot ??
-            this.currentCheckoutSnapshot() ??
-            ({
-              checkout_id: invoice.invoice_id,
-              order_id: orderId,
-              status: "open" as const,
-              amount_msats: invoice.amount_msats ?? 0,
-              invoices: [],
-            } satisfies CheckoutSnapshot);
-          const withoutSame = previous.invoices.filter(
-            (entry) => entry.invoice_id !== invoice.invoice_id && entry.rail !== "checkout_lock",
+          const previous = this.latestCheckoutSnapshot ?? this.currentCheckoutSnapshot();
+          this.handleControllerSnapshot(
+            mergeOpenReceiveAttemptIntoCheckout(invoice, previous, orderId),
           );
-          this.handleControllerSnapshot({
-            ...previous,
-            checkout_id: invoice.invoice_id,
-            active: invoice,
-            invoices: [invoice, ...withoutSame],
-            ...(invoice.amount_msats === undefined ? {} : { amount_msats: invoice.amount_msats }),
-          });
           this.startCheckoutController();
         }
         this.selectedSwapAsset = payInAsset;
@@ -1333,31 +1241,15 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
       if (url === null) return;
 
       try {
-        const payment = [
-          this.startedSwapInvoice,
-          ...(this.latestCheckoutSnapshot?.invoices ?? []),
-        ].find(
-          (invoice) =>
-            invoice != null && (invoice.swap?.attempt_id ?? invoice.invoice_id) === attemptId,
-        );
-        if (payment?.payment_hash === undefined) {
-          throw new Error("Swap refund requires the original payment hash.");
-        }
-        const body = await postOpenReceiveJson(
-          globalThis.fetch,
-          url,
-          {
-            ...(orderId === null ? {} : { order_id: orderId }),
-            payment_hash: payment.payment_hash,
-            action: "refund_swap",
-            attempt_id: attemptId,
-            refund_address: refundAddress,
-            refund_nonce: refundNonce,
-            confirm,
-          },
-          { logger: options.logger },
-        );
-        this.startedSwapInvoice = normalizeSwapStartInvoice(body);
+        this.startedSwapInvoice = await requestOpenReceiveSwapRefund(globalThis.fetch, url, {
+          ...(orderId === null ? {} : { orderId }),
+          invoices: [this.startedSwapInvoice, ...(this.latestCheckoutSnapshot?.invoices ?? [])],
+          attemptId,
+          refundAddress,
+          refundNonce,
+          confirm,
+          logger: options.logger,
+        });
         this.dismissedSwapInvoiceId = null;
         this.render();
       } catch (error) {
@@ -1474,14 +1366,12 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
     connectedCallback() {
       this.render();
       this.startObserver();
-      this.syncTheme();
     }
 
     attributeChangedCallback() {
       if (!this.isConnected) return;
       this.render();
       this.startObserver();
-      this.syncTheme();
     }
 
     disconnectedCallback() {
@@ -1500,22 +1390,13 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
             this.themeTargets(),
             this.themeOptions(),
           );
-          this.setAttributeIfChanged(
-            OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme,
-            nextTheme.resolvedTheme,
-          );
           this.dispatchEvent(createOpenReceiveThemeChangeEvent(nextTheme));
           this.render();
         });
     }
 
     private syncTheme() {
-      const theme = syncOpenReceiveStoredThemeControls(this.themeTargets(), this.themeOptions());
-      this.setAttributeIfChanged(
-        OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.theme,
-        theme.resolvedTheme,
-      );
-      return theme;
+      return syncOpenReceiveStoredThemeControls(this.themeTargets(), this.themeOptions());
     }
 
     /**
@@ -1592,10 +1473,6 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
                 undefined,
             }),
       };
-    }
-
-    private setAttributeIfChanged(name: string, value: string): void {
-      if (this.getAttribute(name) !== value) this.setAttribute(name, value);
     }
   }
 

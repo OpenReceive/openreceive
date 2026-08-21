@@ -1,19 +1,21 @@
-import * as React from "react";
 import {
-  OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES,
-  OPENRECEIVE_DEFAULT_PREFIX,
+  type CheckoutInvoiceSnapshot,
+  type CheckoutSnapshot,
   createOpenReceiveLightningInvoiceDecodeUrl,
   enterCheckoutResumePath,
-  isReusableLightningInvoice,
+  findOpenReceiveReusableLightningInvoice,
+  mergeOpenReceiveAttemptIntoCheckout,
+  mergeOpenReceiveAttemptIntoSnapshot,
+  mergeOpenReceiveMintedCheckout,
+  OPENRECEIVE_CHECKOUT_DATA_ATTRIBUTES,
+  OPENRECEIVE_DEFAULT_PREFIX,
   openReceiveCheckoutLabels,
   orClasses,
   prepareCheckout,
   requestCheckout,
   resolveOrderUrlFromPrefix,
-  selectCheckoutDisplayInvoice,
-  type CheckoutInvoiceSnapshot,
-  type CheckoutSnapshot,
 } from "@openreceive/browser/internal";
+import * as React from "react";
 import {
   CopyInvoiceButton,
   InvoiceSummary,
@@ -24,11 +26,11 @@ import {
   WaitingState,
 } from "./components.ts";
 import { ThemeToggle, useTheme } from "./theme.ts";
-import { toCheckoutDisplayData } from "./view-model.ts";
+import type { CheckoutProps } from "./types.ts";
 import { useCheckout } from "./use-checkout.ts";
 import { getCheckoutLogContext, joinClassNames } from "./utils.ts";
+import { toCheckoutDisplayData } from "./view-model.ts";
 import { PaymentWizard } from "./wizard.ts";
-import type { CheckoutProps } from "./types.ts";
 
 /**
  * Self-contained checkout. Two modes:
@@ -51,8 +53,7 @@ export function Checkout(props: CheckoutProps): React.ReactElement {
     // Derive the order URL from the prefix (default prefix when none is given),
     // matching the element's snapshot-mode polling behavior.
     const orderUrl =
-      props.orderUrl ??
-      resolveOrderUrlFromPrefix(props.prefix ?? OPENRECEIVE_DEFAULT_PREFIX, checkout.order_id);
+      props.orderUrl ?? resolveOrderUrlFromPrefix(props.prefix ?? OPENRECEIVE_DEFAULT_PREFIX);
     return React.createElement(CheckoutSnapshotMode, {
       ...props,
       checkout,
@@ -82,24 +83,6 @@ function warnIgnoredCreateModeProps(props: CheckoutProps): void {
   );
 }
 
-/** Fold a started attempt (swap deposit or minted bolt11) into a snapshot. */
-function mergeAttemptIntoSnapshot(
-  invoice: CheckoutInvoiceSnapshot,
-  base: CheckoutSnapshot,
-): CheckoutSnapshot {
-  const withoutSame = base.invoices.filter(
-    (entry) => entry.invoice_id !== invoice.invoice_id && entry.rail !== "checkout_lock",
-  );
-  return {
-    ...base,
-    checkout_id: invoice.invoice_id,
-    active: invoice,
-    invoices: [invoice, ...withoutSame],
-    ...(base.payment_methods === undefined ? {} : { payment_methods: base.payment_methods }),
-    ...(invoice.amount_msats === undefined ? {} : { amount_msats: invoice.amount_msats }),
-  };
-}
-
 /**
  * Snapshot-mode wrapper. Holds the rendered snapshot in local state so a swap
  * start re-keys polling onto the swap's payment hash — without this, the
@@ -121,7 +104,7 @@ function CheckoutSnapshotMode(
     }
   }, [identity, checkout]);
   const onSwapStarted = React.useCallback((invoice: CheckoutInvoiceSnapshot) => {
-    setCurrent((previous) => mergeAttemptIntoSnapshot(invoice, previous));
+    setCurrent((previous) => mergeOpenReceiveAttemptIntoSnapshot(invoice, previous));
   }, []);
   return React.createElement(CheckoutView, {
     ...props,
@@ -208,43 +191,17 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
     };
   }, [orderId, resolvedPrefix, attempt]);
 
-  const mergeAttemptIntoCheckout = React.useCallback(
-    (
-      invoice: CheckoutInvoiceSnapshot,
-      previous: CheckoutSnapshot | undefined,
-    ): CheckoutSnapshot => {
-      const base =
-        previous ??
-        ({
-          checkout_id: invoice.invoice_id,
-          order_id: orderId,
-          status: "open" as const,
-          amount_msats: invoice.amount_msats ?? 0,
-          invoices: [],
-        } satisfies CheckoutSnapshot);
-      return mergeAttemptIntoSnapshot(invoice, base);
-    },
-    [orderId],
-  );
-
   // Called by PaymentWizard when Bitcoin is selected or when returning from a swap.
   // Reuses an existing bolt11 when it has >60 s left; otherwise mints a fresh one.
   // Keep a single CheckoutView mounted across mint so wizard selection (providers) is preserved.
   const ensureLightning = React.useCallback(async () => {
     const current = createdCheckoutRef.current;
     if (current !== undefined) {
-      const reusableLightning = current.invoices.find(
-        (invoice) =>
-          invoice.rail === "lightning" &&
-          typeof invoice.invoice === "string" &&
-          invoice.invoice.length > 0 &&
-          invoice.expires_at !== undefined &&
-          isReusableLightningInvoice(invoice.expires_at),
-      );
+      const reusableLightning = findOpenReceiveReusableLightningInvoice(current);
       if (reusableLightning !== undefined) {
         setCreated({
           status: "ready",
-          checkout: mergeAttemptIntoCheckout(reusableLightning, current),
+          checkout: mergeOpenReceiveAttemptIntoSnapshot(reusableLightning, current),
         });
         return;
       }
@@ -257,34 +214,16 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
         ...(metadataRef.current === undefined ? {} : { metadata: metadataRef.current }),
         ...(createFetchRef.current === undefined ? {} : { fetch: createFetchRef.current }),
       });
-      const previous = createdCheckoutRef.current;
-      const minted = selectCheckoutDisplayInvoice(checkout) ?? checkout.active;
       setCreated({
         status: "ready",
-        checkout:
-          minted === undefined
-            ? {
-                ...checkout,
-                ...(previous?.payment_methods === undefined
-                  ? {}
-                  : { payment_methods: previous.payment_methods }),
-              }
-            : mergeAttemptIntoCheckout(
-                minted,
-                previous === undefined
-                  ? checkout
-                  : {
-                      ...checkout,
-                      payment_methods: previous.payment_methods ?? checkout.payment_methods,
-                    },
-              ),
+        checkout: mergeOpenReceiveMintedCheckout(checkout, createdCheckoutRef.current),
       });
     } catch (error) {
       onErrorRef.current?.(error);
     } finally {
       setMintingLightning(false);
     }
-  }, [resolvedPrefix, orderId, mergeAttemptIntoCheckout]);
+  }, [resolvedPrefix, orderId]);
 
   const onSwapStarted = React.useCallback(
     (invoice: CheckoutInvoiceSnapshot) => {
@@ -292,15 +231,15 @@ function CheckoutCreate(props: CheckoutProps): React.ReactElement {
         if (current.status !== "ready") return current;
         return {
           status: "ready",
-          checkout: mergeAttemptIntoCheckout(invoice, current.checkout),
+          checkout: mergeOpenReceiveAttemptIntoCheckout(invoice, current.checkout, orderId),
         };
       });
     },
-    [mergeAttemptIntoCheckout],
+    [orderId],
   );
 
   if (created.status === "ready" && created.checkout !== undefined) {
-    const orderUrl = props.orderUrl ?? resolveOrderUrlFromPrefix(resolvedPrefix, orderId);
+    const orderUrl = props.orderUrl ?? resolveOrderUrlFromPrefix(resolvedPrefix);
     // One stable shell for deferred + minted Lightning. Switching shells remounted
     // PaymentWizard and wiped selectedMethod (providers vanished when the QR appeared).
     return React.createElement(CheckoutView, {

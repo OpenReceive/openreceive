@@ -23,14 +23,11 @@ import {
   createCheckoutElementListeners,
   createCheckoutShell,
   createCheckoutShellModel,
-  createCheckoutShellModelFromProps,
   createOpenReceiveStoredThemeModel,
   createOpenReceiveThemeModel,
   createOpenReceiveThemeToggleElementAttributes,
-  OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
   OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
-  type OpenReceiveCheckoutShellProps,
   type OpenReceiveStoredThemeModelOptions,
   type OpenReceiveThemeModel,
   type OpenReceiveThemeModelOptions,
@@ -38,7 +35,6 @@ import {
   type OpenReceiveThemeToggleElementAttributeOptions,
   type OpenReceiveThemeToggleElementAttributes,
 } from "@openreceive/browser/internal";
-import type { DefineOpenReceiveElementsOptions } from "./index.ts";
 
 export type {
   CheckoutController,
@@ -101,13 +97,10 @@ export { defineOpenReceiveElements } from "./index.ts";
 /**
  * Every event the checkout element dispatches, in one place. `docs/internal/wrapper-parity.md`
  * is the conformance table: each wrapper exposes all of these as first-class props.
- * `onOpenWallet` lives here rather than in `CheckoutElementEventHandlers` because the
- * element dispatches `openreceive-open-wallet` while the browser listener factory has
- * no slot for it.
+ * The browser listener factory covers the full set (including `openreceive-open-wallet`),
+ * so this is the base handler surface under a wrapper-facing name.
  */
-export interface OpenReceiveWrapperCheckoutEventHandlers extends CheckoutElementEventHandlers {
-  readonly onOpenWallet?: (event: Event) => void;
-}
+export type OpenReceiveWrapperCheckoutEventHandlers = CheckoutElementEventHandlers;
 
 export interface OpenReceiveWrapperCheckoutBindingOptions
   extends CheckoutElementAttributeOptions,
@@ -142,20 +135,37 @@ export interface OpenReceiveWrapperCheckoutShellBinding {
   readonly themeToggle: OpenReceiveWrapperThemeToggleBinding | null;
 }
 
-export interface OpenReceiveWrapperCheckoutComponentProps extends OpenReceiveCheckoutShellProps {
-  readonly defineElementsOptions?: DefineOpenReceiveElementsOptions;
-}
-
-/** Element listeners for every dispatched event, including the one the browser factory omits. */
-function createOpenReceiveWrapperListeners(
-  handlers: OpenReceiveWrapperCheckoutEventHandlers,
-): CheckoutElementListeners {
-  return {
-    ...createCheckoutElementListeners(handlers),
-    ...(handlers.onOpenWallet === undefined
-      ? {}
-      : { [OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.openWallet]: handlers.onOpenWallet }),
-  };
+/**
+ * The flat prop surface of every element wrapper component. The shipped SFC
+ * `.d.ts` files alias this type, so the props exist in exactly one place; prop
+ * names, defaults, and per-mode applicability are the shared contract in
+ * `docs/internal/wrapper-parity.md`.
+ */
+export interface OpenReceiveWrapperCheckoutComponentProps
+  extends OpenReceiveWrapperCheckoutEventHandlers {
+  /** Snapshot mode: render this checkout directly. */
+  readonly checkout?: CheckoutSnapshot;
+  /** Create mode: the element creates the checkout for this order, then renders and polls. */
+  readonly orderId?: string;
+  readonly prefix?: string;
+  readonly orderUrl?: string;
+  readonly paymentWizard?: boolean;
+  /** Base URL of an external bolt11 decoder; omitted, no "Decode" link is rendered. */
+  readonly decodeLinkUrl?: string;
+  /** Default true: the shell owns `data-theme` and renders the package theme toggle. */
+  readonly themeToggle?: boolean;
+  readonly defaultTheme?: OpenReceiveThemePreference;
+  readonly storageKey?: string;
+  /** Create mode only. */
+  readonly metadata?: Record<string, unknown>;
+  /** Create mode only. */
+  readonly syncUrl?: boolean;
+  /** Create mode only. */
+  readonly resumePathPrefix?: string;
+  /** Create mode only. */
+  readonly routeOrderId?: string;
+  /** Escape hatch for the rest of `CheckoutShellOptions`. */
+  readonly options?: CheckoutShellOptions;
 }
 
 export function createOpenReceiveWrapperCheckoutBinding(
@@ -165,7 +175,7 @@ export function createOpenReceiveWrapperCheckoutBinding(
   return {
     tagName: OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
     attributes: createCheckoutElementAttributes(snapshot, options),
-    listeners: createOpenReceiveWrapperListeners(options),
+    listeners: createCheckoutElementListeners(options),
   };
 }
 
@@ -231,13 +241,21 @@ export function createOpenReceiveWrapperCheckoutShellBinding(
   options: OpenReceiveWrapperCheckoutShellOptions = {},
 ): OpenReceiveWrapperCheckoutShellBinding {
   const { deferThemeResolution, ...shellOptions } = options;
+  // A host-supplied storage stays in place: it is readable on the server too, and
+  // reading it is the documented way to server-render a chosen theme
+  // (docs/internal/wrapper-parity.md). Only the implicit browser localStorage is
+  // stubbed out until mount.
   const shell = createCheckoutShellModel(
     snapshot,
     deferThemeResolution === true
-      ? { ...shellOptions, storage: NO_THEME_STORAGE, systemDark: false }
+      ? {
+          ...shellOptions,
+          ...(shellOptions.storage === undefined ? { storage: NO_THEME_STORAGE } : {}),
+          systemDark: false,
+        }
       : shellOptions,
   );
-  return toWrapperShellBinding(shell, createOpenReceiveWrapperListeners(options));
+  return toWrapperShellBinding(shell, createCheckoutElementListeners(options));
 }
 
 /** Which props only do something in create mode (no `checkout` snapshot). */

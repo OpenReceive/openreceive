@@ -16,7 +16,7 @@ const localSmokeDependencies = new Set(["@getalby/sdk", "commander", "qrcode", "
 
 const importChecks = {
   "@openreceive/angular":
-    "typeof mod.createOpenReceiveAngularCheckoutBinding === 'function' && typeof mod.createOpenReceiveAngularCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveAngularCheckoutController === 'function' && typeof mod.createOpenReceiveAngularThemeBinding === 'function' && typeof mod.createOpenReceiveAngularStoredThemeBinding === 'function' && typeof mod.createOpenReceiveAngularThemeToggleBinding === 'function' && typeof mod.createCheckoutElement === 'function' && typeof mod.createOpenReceiveThemeToggleElement === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.toggleOpenReceiveStoredThemeControls === 'function'",
+    "typeof mod.createOpenReceiveWrapperCheckoutBinding === 'function' && typeof mod.createOpenReceiveWrapperCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveWrapperCheckoutController === 'function' && typeof mod.createOpenReceiveWrapperThemeBinding === 'function' && typeof mod.createOpenReceiveWrapperStoredThemeBinding === 'function' && typeof mod.createOpenReceiveWrapperThemeToggleBinding === 'function' && typeof mod.createCheckoutElement === 'function' && typeof mod.createOpenReceiveThemeToggleElement === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.toggleOpenReceiveStoredThemeControls === 'function'",
   "@openreceive/browser":
     "typeof mod.requestCheckout === 'function' && typeof mod.status === 'function' && typeof mod.lightningUri === 'function' && typeof mod.qrSvg === 'function' && typeof mod.qrPngDataUrl === 'function' && typeof mod.copyInvoice === 'function' && typeof mod.openWallet === 'function' && typeof mod.createCheckoutController === 'function'",
   "@openreceive/core":
@@ -35,10 +35,10 @@ const importChecks = {
   "@openreceive/react":
     "typeof mod.createCheckoutViewModel === 'function' && typeof mod.ThemeScope === 'function' && typeof mod.ThemeToggle === 'function' && typeof mod.PaymentWizard === 'function' && typeof mod.WaitingState === 'function' && typeof mod.useTheme === 'function' && typeof mod.CheckoutProvider === 'function' && typeof mod.useCheckoutContext === 'function' && mod.OpenReceiveThemeToggle === undefined && mod.OpenReceivePaymentWizard === undefined && mod.OpenReceiveWaitingState === undefined && mod.useOpenReceiveTheme === undefined",
   "@openreceive/svelte":
-    "typeof mod.createOpenReceiveSvelteCheckoutBinding === 'function' && typeof mod.createOpenReceiveSvelteCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveSvelteCheckoutController === 'function' && typeof mod.createOpenReceiveSvelteThemeBinding === 'function' && typeof mod.createOpenReceiveSvelteStoredThemeBinding === 'function' && typeof mod.createOpenReceiveSvelteThemeToggleBinding === 'function' && typeof mod.createCheckoutElement === 'function' && typeof mod.createOpenReceiveThemeToggleElement === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.syncOpenReceiveStoredThemeControls === 'function' && typeof mod.applyCheckoutThemeAttributes === 'function'",
+    "typeof mod.createOpenReceiveWrapperCheckoutBinding === 'function' && typeof mod.createOpenReceiveWrapperCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveWrapperCheckoutController === 'function' && typeof mod.createOpenReceiveWrapperThemeBinding === 'function' && typeof mod.createOpenReceiveWrapperStoredThemeBinding === 'function' && typeof mod.createOpenReceiveWrapperThemeToggleBinding === 'function' && typeof mod.createCheckoutElement === 'function' && typeof mod.createOpenReceiveThemeToggleElement === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.syncOpenReceiveStoredThemeControls === 'function' && typeof mod.applyCheckoutThemeAttributes === 'function'",
   "@openreceive/testkit": "typeof mod.createTestkitReceiveClient === 'function'",
   "@openreceive/vue":
-    "typeof mod.createOpenReceiveVueCheckoutBinding === 'function' && typeof mod.createOpenReceiveVueCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveVueCheckoutController === 'function' && typeof mod.createOpenReceiveVueThemeBinding === 'function' && typeof mod.createOpenReceiveVueStoredThemeBinding === 'function' && typeof mod.createOpenReceiveVueThemeToggleBinding === 'function' && typeof mod.createCheckoutElement === 'function' && typeof mod.createOpenReceiveThemeToggleElement === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.syncOpenReceiveStoredThemeControls === 'function' && typeof mod.applyOpenReceiveThemeAttributes === 'function'",
+    "typeof mod.createOpenReceiveWrapperCheckoutBinding === 'function' && typeof mod.createOpenReceiveWrapperCheckoutShellBinding === 'function' && typeof mod.createOpenReceiveWrapperCheckoutController === 'function' && typeof mod.createOpenReceiveWrapperThemeBinding === 'function' && typeof mod.createOpenReceiveWrapperStoredThemeBinding === 'function' && typeof mod.createOpenReceiveWrapperThemeToggleBinding === 'function' && typeof mod.createCheckoutElement === 'function' && typeof mod.createOpenReceiveThemeToggleElement === 'function' && typeof mod.createCheckoutShell === 'function' && typeof mod.syncOpenReceiveStoredThemeControls === 'function' && typeof mod.applyOpenReceiveThemeAttributes === 'function'",
   openreceive:
     "typeof mod.createOpenReceive === 'function' && typeof mod.OpenReceiveServiceError === 'function'",
 };
@@ -123,7 +123,6 @@ assert(
   typeof browserInternal.CheckoutWatcher === "function" &&
     typeof browserInternal.createCheckoutElement === "function" &&
     typeof browserInternal.createCheckoutShell === "function" &&
-    typeof browserInternal.createCheckoutShellModelFromProps === "function" &&
     typeof browserInternal.createOpenReceiveStatusFetcher === "function" &&
     typeof browserInternal.openReceiveCheckoutElementStyles === "string",
   "@openreceive/browser/internal: framework adapter internals must be importable"
@@ -165,9 +164,9 @@ const umbrellaChecks = [
   ["openreceive/node", "createOpenReceive"],
   ["openreceive/browser", "requestCheckout"],
   ["openreceive/react", "Checkout"],
-  ["openreceive/vue", "createOpenReceiveVueCheckoutBinding"],
-  ["openreceive/svelte", "createOpenReceiveSvelteCheckoutBinding"],
-  ["openreceive/angular", "createOpenReceiveAngularCheckoutBinding"],
+  ["openreceive/vue", "createOpenReceiveWrapperCheckoutBinding"],
+  ["openreceive/svelte", "createOpenReceiveWrapperCheckoutBinding"],
+  ["openreceive/angular", "createOpenReceiveWrapperCheckoutBinding"],
   ["openreceive/elements", "renderCheckoutHtml"],
   ["openreceive/provider-data", "providerRegistry"],
   ["openreceive/contracts", "OPENRECEIVE_ERROR_CODES"]
@@ -209,7 +208,20 @@ assert(
     readFileSync(browserStylesPath, "utf8").includes("--color-base-100"),
   "@openreceive/browser: styles.css must contain daisyUI checkout styles"
 );
-for (const packageName of ["elements", "react", "vue", "svelte", "angular"]) {
+// elements/react ship self-contained compiled sheets (usable from a plain
+// <link>); the SFC wrappers stay bundler-consumed @import forwarders.
+for (const packageName of ["elements", "react"]) {
+  const stylesPath = \`node_modules/@openreceive/\${packageName}/dist/styles.css\`;
+  assert(existsSync(stylesPath), \`@openreceive/\${packageName}: styles.css export must be packaged\`);
+  const compiled = readFileSync(stylesPath, "utf8");
+  assert(
+    compiled.includes("Generated by tools/package/build-browser-css.mjs") &&
+      compiled.includes(".btn") &&
+      !compiled.includes('@import "@openreceive/browser/styles.css"'),
+    \`@openreceive/\${packageName}: styles.css must be the self-contained compiled sheet\`
+  );
+}
+for (const packageName of ["vue", "svelte", "angular"]) {
   const stylesPath = \`node_modules/@openreceive/\${packageName}/dist/styles.css\`;
   assert(existsSync(stylesPath), \`@openreceive/\${packageName}: styles.css export must be packaged\`);
   assert(
@@ -217,6 +229,32 @@ for (const packageName of ["elements", "react", "vue", "svelte", "angular"]) {
     \`@openreceive/\${packageName}: styles.css must import the shared browser styles\`
   );
 }
+// The umbrella's per-framework subpaths cover the full wrapper surface:
+// component subpaths and styles.css, not just the binding factories.
+for (const forwarder of [
+  "react-styles.css",
+  "vue-styles.css",
+  "svelte-styles.css",
+  "angular-styles.css",
+  "elements-styles.css",
+  "vue-checkout.js",
+  "vue-checkout.d.ts",
+  "svelte-checkout.js",
+  "svelte-checkout.d.ts",
+  "angular-checkout-component.js",
+  "angular-checkout-component.d.ts",
+]) {
+  assert(
+    existsSync(\`node_modules/openreceive/dist/\${forwarder}\`),
+    \`openreceive: dist/\${forwarder} must be packaged\`
+  );
+}
+assert(
+  JSON.parse(readFileSync("node_modules/openreceive/package.json", "utf8")).exports[
+    "./package.json"
+  ] === "./package.json",
+  "openreceive: the umbrella must export ./package.json"
+);
 assert(
   existsSync("node_modules/@openreceive/browser/dist/assets/icons/btc.svg"),
   "@openreceive/browser: checkout icon assets must be packaged"
@@ -251,8 +289,16 @@ assert(
   "@openreceive/vue: checkout Vue component must be packaged"
 );
 assert(
+  existsSync("node_modules/@openreceive/vue/dist/Checkout.vue.d.ts"),
+  "@openreceive/vue: checkout Vue component typings must be packaged"
+);
+assert(
   existsSync("node_modules/@openreceive/svelte/dist/Checkout.svelte"),
   "@openreceive/svelte: checkout Svelte component must be packaged"
+);
+assert(
+  existsSync("node_modules/@openreceive/svelte/dist/Checkout.svelte.d.ts"),
+  "@openreceive/svelte: checkout Svelte component typings must be packaged"
 );
 const angularComponentFesmPath =
   "node_modules/@openreceive/angular/dist/fesm2022/openreceive-angular-checkout-component.mjs";
@@ -293,9 +339,10 @@ assert(
 // PnP). It must stay a forwarder: a second CLI IMPLEMENTATION would drift.
 const umbrellaCliPath = "node_modules/openreceive/bin/openreceive.mjs";
 assert(existsSync(umbrellaCliPath), "openreceive: the umbrella must package its CLI bin");
+const umbrellaCli = readFileSync(umbrellaCliPath, "utf8");
 assert(
-  readFileSync(umbrellaCliPath, "utf8").includes('from "@openreceive/node/cli"'),
-  "openreceive: the umbrella bin must forward to @openreceive/node, not reimplement the CLI"
+  umbrellaCli.includes('"@openreceive/node/cli"') && !umbrellaCli.includes("runOpenReceiveCli"),
+  "openreceive: the umbrella bin must execute the @openreceive/node CLI, not carry a copy of it"
 );
 assert(
   execFileSync(process.execPath, [umbrellaCliPath, "help"], { encoding: "utf8" }).includes("Usage: openreceive"),

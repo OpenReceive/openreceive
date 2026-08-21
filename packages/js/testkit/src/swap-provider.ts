@@ -1,11 +1,16 @@
-import type {
-  SwapAttentionReason,
-  SwapOrder,
-  SwapPayInAsset,
-  SwapProvider,
-  SwapProviderAsset,
-  SwapProviderState,
-  SwapQuote,
+import {
+  type OpenReceiveSwapAddressNetwork,
+  openReceiveSwapAddressNetworkForPayInAsset,
+} from "@openreceive/core/swap-address";
+import {
+  OPENRECEIVE_SWAP_PAY_IN_ASSETS,
+  type SwapAttentionReason,
+  type SwapOrder,
+  type SwapPayInAsset,
+  type SwapProvider,
+  type SwapProviderAsset,
+  type SwapProviderState,
+  type SwapQuote,
 } from "@openreceive/node";
 
 /**
@@ -26,32 +31,19 @@ import type {
  * ```
  */
 
-const DEFAULT_SUPPORTED_ASSETS: readonly SwapPayInAsset[] = [
-  "USDT_TRON",
-  "USDT_SOL",
-  "USDC_SOL",
-  "SOL_SOL",
-  "ETH_ETH",
-  "USDT_ETH",
-  "USDC_ETH",
-];
-
-/** The on-chain network each pay-in asset settles on (mirrors @openreceive/node assets). */
-const ASSET_NETWORK: Readonly<Record<SwapPayInAsset, "TRX" | "SOL" | "ETH">> = {
-  USDT_TRON: "TRX",
-  USDT_SOL: "SOL",
-  USDC_SOL: "SOL",
-  SOL_SOL: "SOL",
-  ETH_ETH: "ETH",
-  USDT_ETH: "ETH",
-  USDC_ETH: "ETH",
-};
-
-const NETWORK_DEPOSIT_ADDRESS: Readonly<Record<"TRX" | "SOL" | "ETH", string>> = {
+const NETWORK_DEPOSIT_ADDRESS: Readonly<Record<OpenReceiveSwapAddressNetwork, string>> = {
   TRX: "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
   SOL: "So11111111111111111111111111111111111111112",
   ETH: "0x1111111111111111111111111111111111111111",
 };
+
+function depositAddressFor(payInAsset: SwapPayInAsset): string {
+  const network = openReceiveSwapAddressNetworkForPayInAsset(payInAsset);
+  if (network === undefined) {
+    throw new Error(`testkit swap provider has no deposit address for ${payInAsset}`);
+  }
+  return NETWORK_DEPOSIT_ADDRESS[network];
+}
 
 function currentUnixSeconds(): number {
   return Math.floor(Date.now() / 1_000);
@@ -60,7 +52,7 @@ function currentUnixSeconds(): number {
 export interface TestkitSwapProviderOptions {
   /** Provider id/name. Must match the provider you register with; defaults to "fixedfloat". */
   readonly name?: string;
-  /** Pay-in assets this provider supports. Defaults to all seven built-in assets. */
+  /** Pay-in assets this provider supports. Defaults to the full built-in catalog. */
   readonly supportedAssets?: readonly SwapPayInAsset[];
   /**
    * Clock in unix seconds. Defaults to the real clock, matching
@@ -86,6 +78,12 @@ interface StoredSwap {
   order: SwapOrder;
   steps: SwapProviderState[];
   next: number;
+  attentionReason?: SwapAttentionReason;
+}
+
+interface PendingSwapScript {
+  readonly steps: readonly SwapProviderState[];
+  readonly attentionReason?: SwapAttentionReason;
 }
 
 export class TestkitSwapProvider implements SwapProvider {
@@ -105,12 +103,12 @@ export class TestkitSwapProvider implements SwapProvider {
   readonly #depositExpirySeconds: number;
   readonly #payAmounts: Partial<Record<SwapPayInAsset, string>>;
   readonly #orders = new Map<string, StoredSwap>();
-  readonly #pendingScripts = new Map<SwapPayInAsset, SwapProviderState[]>();
+  readonly #pendingScripts = new Map<SwapPayInAsset, PendingSwapScript>();
   #nextCreateError: Error | undefined;
 
   constructor(options: TestkitSwapProviderOptions = {}) {
     this.name = options.name ?? "fixedfloat";
-    this.#supported = new Set(options.supportedAssets ?? DEFAULT_SUPPORTED_ASSETS);
+    this.#supported = new Set(options.supportedAssets ?? OPENRECEIVE_SWAP_PAY_IN_ASSETS);
     this.#now = options.now ?? currentUnixSeconds;
     this.#invoiceExpirySeconds = options.invoiceExpirySeconds ?? 1800;
     this.#depositExpirySeconds = options.depositExpirySeconds ?? 900;
@@ -164,14 +162,13 @@ export class TestkitSwapProvider implements SwapProvider {
       throw error;
     }
 
-    const network = ASSET_NETWORK[input.payInAsset];
     const providerOrderId = `testkit-swap-${this.createCalls}`;
     const order: SwapOrder = {
       provider: this.name,
       provider_order_id: providerOrderId,
       provider_token: `testkit-token-${this.createCalls}`,
       pay_in_asset: input.payInAsset,
-      deposit_address: NETWORK_DEPOSIT_ADDRESS[network],
+      deposit_address: depositAddressFor(input.payInAsset),
       deposit_amount: this.#payAmountFor(input.payInAsset),
       expires_at: this.#now() + this.#depositExpirySeconds,
       state: "awaiting_deposit",
@@ -179,8 +176,11 @@ export class TestkitSwapProvider implements SwapProvider {
     const pending = this.#pendingScripts.get(input.payInAsset);
     this.#orders.set(providerOrderId, {
       order,
-      steps: pending === undefined ? [] : [...pending],
+      steps: pending === undefined ? [] : [...pending.steps],
       next: 0,
+      ...(pending?.attentionReason === undefined
+        ? {}
+        : { attentionReason: pending.attentionReason }),
     });
     return order;
   }
@@ -193,6 +193,9 @@ export class TestkitSwapProvider implements SwapProvider {
       const nextState = stored.steps[stored.next];
       stored.next += 1;
       stored.order = applyState(stored.order, nextState);
+      if (nextState === "attention" && stored.attentionReason !== undefined) {
+        stored.order = { ...stored.order, attention_reason: stored.attentionReason };
+      }
     }
     return stored.order;
   }
@@ -218,28 +221,33 @@ export class TestkitSwapProvider implements SwapProvider {
     for (const stored of matched) {
       stored.steps = [...states];
       stored.next = 0;
+      delete stored.attentionReason;
     }
     const payInAsset = selectorAsset(selector);
     if (payInAsset !== undefined) {
-      this.#pendingScripts.set(payInAsset, [...states]);
+      this.#pendingScripts.set(payInAsset, { steps: [...states] });
     }
   }
 
-  /** Force the next `getStatus` for the selected attempt(s) to report `refund_required`. */
+  /**
+   * Force `refund_required`: existing selected attempts report it on their next
+   * `getStatus`, and like {@link script} an asset selector also queues it for
+   * attempts created later.
+   */
   forceRefundRequired(selector: TestkitSwapSelector): void {
     this.#force(selector, "refund_required");
   }
 
-  /** Force the selected attempt(s) into the `attention` state with a recorded reason. */
+  /**
+   * Force the `attention` state with a recorded reason: existing selected
+   * attempts move immediately, and like {@link script} an asset selector also
+   * queues it for attempts created later.
+   */
   forceAttention(
     selector: TestkitSwapSelector,
     reason: SwapAttentionReason = "provider_reported_emergency",
   ): void {
-    for (const stored of this.#match(selector)) {
-      stored.steps = [];
-      stored.next = 0;
-      stored.order = { ...applyState(stored.order, "attention"), attention_reason: reason };
-    }
+    this.#force(selector, "attention", reason);
   }
 
   /** Make the next `createSwap` call reject, simulating a provider order-creation failure. */
@@ -247,11 +255,26 @@ export class TestkitSwapProvider implements SwapProvider {
     this.#nextCreateError = error;
   }
 
-  #force(selector: TestkitSwapSelector, state: SwapProviderState): void {
+  #force(
+    selector: TestkitSwapSelector,
+    state: SwapProviderState,
+    attentionReason?: SwapAttentionReason,
+  ): void {
     for (const stored of this.#match(selector)) {
       stored.steps = [];
       stored.next = 0;
+      delete stored.attentionReason;
       stored.order = applyState(stored.order, state);
+      if (attentionReason !== undefined) {
+        stored.order = { ...stored.order, attention_reason: attentionReason };
+      }
+    }
+    const payInAsset = selectorAsset(selector);
+    if (payInAsset !== undefined) {
+      this.#pendingScripts.set(payInAsset, {
+        steps: [state],
+        ...(attentionReason === undefined ? {} : { attentionReason }),
+      });
     }
   }
 

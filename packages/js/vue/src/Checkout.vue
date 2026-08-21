@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import {
-  createOpenReceiveVueCheckoutShellBinding,
+  createOpenReceiveWrapperCheckoutShellBinding,
   defineOpenReceiveElements,
   validateOpenReceiveWrapperCheckoutProps,
   type CheckoutShellOptions,
@@ -45,7 +45,6 @@ const props = withDefaults(
   }>(),
   {
     options: () => ({}),
-    themeToggle: true,
   },
 );
 
@@ -67,9 +66,9 @@ const shell = computed(() => {
     resumePathPrefix: props.resumePathPrefix,
     routeOrderId: props.routeOrderId,
   });
-  return createOpenReceiveVueCheckoutShellBinding(props.checkout ?? null, {
+  return createOpenReceiveWrapperCheckoutShellBinding(props.checkout ?? null, {
     ...props.options,
-    themeToggle: props.themeToggle,
+    themeToggle: props.themeToggle ?? props.options.themeToggle ?? true,
     deferThemeResolution: !mounted.value,
     ...(props.orderId === undefined ? {} : { orderId: props.orderId }),
     ...(props.prefix === undefined ? {} : { prefix: props.prefix }),

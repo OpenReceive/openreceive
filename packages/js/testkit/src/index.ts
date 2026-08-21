@@ -1,16 +1,21 @@
 import {
-  OPENRECEIVE_MAX_AMOUNT_MSATS,
-  OPENRECEIVE_MIN_AMOUNT_MSATS,
-  OPENRECEIVE_NWC_METADATA_MAX_BYTES,
   type ListTransactionsRequest,
   type ListTransactionsResult,
   type MakeInvoiceRequest,
   type MakeInvoiceResult,
   type NwcTransaction,
+  OPENRECEIVE_MAX_AMOUNT_MSATS,
+  OPENRECEIVE_MIN_AMOUNT_MSATS,
+  OPENRECEIVE_NWC_METADATA_MAX_BYTES,
   type OpenReceiveReceiveNwcClient,
   type OpenReceiveTransactionState,
   type WalletCapabilitySummary,
 } from "@openreceive/core";
+import type {
+  NwcNotificationUnsubscribe,
+  OpenReceiveWalletNotification,
+  OpenReceiveWalletNotificationHandler,
+} from "@openreceive/node";
 
 export {
   createTestkitSwapProvider,
@@ -91,6 +96,7 @@ export class TestkitReceiveClient implements OpenReceiveReceiveNwcClient {
   #byPaymentHash = new Map<string, TestkitStoredInvoice>();
   #byInvoice = new Map<string, TestkitStoredInvoice>();
   #transactionScripts = new Map<TestkitStoredInvoice, TestkitTransactionScript>();
+  #notificationHandlers = new Set<OpenReceiveWalletNotificationHandler>();
 
   constructor(options: TestkitReceiveClientOptions = {}) {
     this.#now = options.now ?? currentUnixSeconds;
@@ -192,7 +198,12 @@ export class TestkitReceiveClient implements OpenReceiveReceiveNwcClient {
 
   settleInvoice(
     selector: TestkitInvoiceSelector,
-    options: { readonly settled_at?: number; readonly preimage?: string } = {},
+    options: {
+      readonly settled_at?: number;
+      readonly preimage?: string;
+      /** Also emit an NWC-02 `payment_received` notification for the settlement. */
+      readonly notify?: boolean;
+    } = {},
   ): NwcTransaction {
     const stored = this.#require(selector);
     const settledAt = options.settled_at ?? this.#now();
@@ -200,7 +211,15 @@ export class TestkitReceiveClient implements OpenReceiveReceiveNwcClient {
     stored.settled_at = settledAt;
     stored.preimage = options.preimage ?? TESTKIT_PREIMAGE;
 
-    return serializeTransaction(stored);
+    const transaction = serializeTransaction(stored);
+    if (options.notify === true) {
+      this.emitNotification({
+        type: "payment_received",
+        payment_hash: stored.payment_hash,
+        transaction,
+      });
+    }
+    return transaction;
   }
 
   expireInvoice(selector: TestkitInvoiceSelector): NwcTransaction {
@@ -217,6 +236,37 @@ export class TestkitReceiveClient implements OpenReceiveReceiveNwcClient {
 
   listInvoices(): readonly NwcTransaction[] {
     return [...this.#byPaymentHash.values()].map(serializeTransaction);
+  }
+
+  /**
+   * NWC-02 notification subscription with the same contract as the real
+   * client: the handler only ever receives `payment_received` notifications,
+   * and the returned function unsubscribes. Emit notifications from a test
+   * with {@link emitNotification} or `settleInvoice(selector, { notify: true })`.
+   */
+  async subscribeNotifications(
+    handler: OpenReceiveWalletNotificationHandler,
+  ): Promise<NwcNotificationUnsubscribe> {
+    this.#notificationHandlers.add(handler);
+    return () => {
+      this.#notificationHandlers.delete(handler);
+    };
+  }
+
+  /**
+   * Deliver a wallet notification to every active subscriber. Mirrors the real
+   * client: anything other than `payment_received` is filtered out, and a
+   * throwing handler never breaks the subscription.
+   */
+  emitNotification(notification: OpenReceiveWalletNotification): void {
+    if (notification.type !== "payment_received") return;
+    for (const handler of [...this.#notificationHandlers]) {
+      try {
+        handler(notification);
+      } catch {
+        // Notification hints must never break the subscription.
+      }
+    }
   }
 
   #store(invoice: TestkitStoredInvoice): TestkitStoredInvoice {
@@ -292,7 +342,7 @@ function validateMakeInvoiceRequest(request: MakeInvoiceRequest): void {
     throw new Error("amount_msats exceeds JSON safe integer boundary");
   }
   if (request.description !== undefined && request.description_hash !== undefined) {
-    throw new Error("Exactly one of description or description_hash may be present");
+    throw new Error("At most one of description or description_hash may be present");
   }
   if (request.description_hash !== undefined && !HEX_64.test(request.description_hash)) {
     throw new Error("description_hash must be 64 hex characters");

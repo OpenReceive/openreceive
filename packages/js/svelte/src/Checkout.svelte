@@ -1,7 +1,7 @@
 <script lang="ts">
 import { onMount } from "svelte";
 import {
-  createOpenReceiveSvelteCheckoutShellBinding,
+  createOpenReceiveWrapperCheckoutShellBinding,
   defineOpenReceiveElements,
   validateOpenReceiveWrapperCheckoutProps,
   type CheckoutElementListeners,
@@ -21,7 +21,7 @@ export let prefix: string | undefined = undefined;
 export let orderUrl: string | undefined = undefined;
 export let paymentWizard: boolean | undefined = undefined;
 export let decodeLinkUrl: string | undefined = undefined;
-export let themeToggle = true;
+export let themeToggle: boolean | undefined = undefined;
 export let defaultTheme: OpenReceiveThemePreference | undefined = undefined;
 export let storageKey: string | undefined = undefined;
 // Create mode only.
@@ -57,9 +57,9 @@ $: validateOpenReceiveWrapperCheckoutProps({
   routeOrderId,
 });
 
-$: shell = createOpenReceiveSvelteCheckoutShellBinding(checkout ?? null, {
+$: shell = createOpenReceiveWrapperCheckoutShellBinding(checkout ?? null, {
   ...options,
-  themeToggle,
+  themeToggle: themeToggle ?? options.themeToggle ?? true,
   deferThemeResolution: !mounted,
   ...(orderId === undefined ? {} : { orderId }),
   ...(prefix === undefined ? {} : { prefix }),

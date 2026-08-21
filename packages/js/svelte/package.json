@@ -24,7 +24,7 @@
     "@openreceive/elements": "0.1.1"
   },
   "peerDependencies": {
-    "svelte": ">=4.0.0"
+    "svelte": ">=5.0.0"
   },
   "exports": {
     ".": {

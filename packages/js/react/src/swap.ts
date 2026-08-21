@@ -5,14 +5,14 @@ import {
   createOpenReceiveSwapDisplayModel,
   createOpenReceiveTransactionDetails,
   createQrPayloadSvg,
-  formatOpenReceiveSwapLimit,
-  getSwapRefundAddressError,
-  openReceiveCheckoutLabels,
-  selectCheckoutDisplayInvoice,
+  getOpenReceiveSwapRefundFormError,
   type OpenReceiveBrowserLogger,
   type OpenReceiveQrEncoder,
   type OpenReceiveSwapDisplayModel,
+  openReceiveCheckoutLabels,
+  openReceiveSwapOptionLimitMessage,
   orClasses,
+  selectCheckoutDisplayInvoice,
 } from "@openreceive/browser/internal";
 import * as React from "react";
 import { ClipboardIcon, WaitingState } from "./components.ts";
@@ -21,73 +21,11 @@ import { TransactionDetails } from "./transaction-details.ts";
 import type { OpenReceiveSwapOptionDisplay } from "./types.ts";
 import { copyOpenReceiveText, joinClassNames, openReceiveSelectAllInputHandlers } from "./utils.ts";
 
-// Short reason to show for an out-of-range swap asset. Prefers a fiat figure
-// ("Minimum amount $10.00") converted from the invoice-side limit using the
-// checkout's own rate, falling back to the provider's generic message.
-export function swapOptionLimitMessage(
-  option: OpenReceiveSwapOptionDisplay,
-  checkout: CheckoutSnapshot | undefined,
-): string | undefined {
-  if (option.available !== false) return undefined;
-  // Prefer a fiat figure ("Minimum amount $10.00"); fall back to the pay-in asset's
-  // own units ("Minimum 5 USDT") when the provider only reports pay-side limits.
-  if (option.unavailable_reason === "amount_too_small") {
-    const fiat =
-      checkout === undefined
-        ? undefined
-        : formatOpenReceiveSwapLimit(checkout, option.minimum_invoice_amount_msats, "ceil");
-    if (fiat !== undefined) return `Minimum amount ${fiat}`;
-    if (option.minimum_pay_amount !== undefined) {
-      return `Minimum ${option.minimum_pay_amount} ${option.label}`;
-    }
-  }
-  if (option.unavailable_reason === "amount_too_large") {
-    const fiat =
-      checkout === undefined
-        ? undefined
-        : formatOpenReceiveSwapLimit(checkout, option.maximum_invoice_amount_msats, "floor");
-    if (fiat !== undefined) return `Maximum amount ${fiat}`;
-    if (option.maximum_pay_amount !== undefined) {
-      return `Maximum ${option.maximum_pay_amount} ${option.label}`;
-    }
-  }
-  return option.unavailable_message;
-}
-
-/** Prefer the lowest invoice-side floor when every network in a group is unavailable. */
-export function swapGroupLimitOption<
-  T extends {
-    readonly available?: boolean;
-    readonly unavailable_reason?: string;
-    readonly minimum_invoice_amount_msats?: number;
-  },
->(options: readonly T[]): T | undefined {
-  if (options.length === 0) return undefined;
-  const unavailable = options.filter((option) => option.available === false);
-  const pool =
-    unavailable.length === 0
-      ? options
-      : unavailable.filter((option) => option.unavailable_reason === "amount_too_small");
-  const candidates = pool.length > 0 ? pool : unavailable.length > 0 ? unavailable : options;
-  let best = candidates[0];
-  for (const option of candidates) {
-    if (best === undefined) {
-      best = option;
-      continue;
-    }
-    const bestMin = best.minimum_invoice_amount_msats;
-    const optionMin = option.minimum_invoice_amount_msats;
-    if (optionMin === undefined) continue;
-    if (bestMin === undefined || optionMin < bestMin) best = option;
-  }
-  return best;
-}
-
 export function renderSwapActions(options: {
   readonly enabled: boolean;
   readonly options: readonly OpenReceiveSwapOptionDisplay[];
   readonly startingAsset: string | null;
-  readonly onStart: (payInAsset: string) => Promise<void>;
+  readonly onStart: (payInAsset: string) => void;
   readonly checkout?: CheckoutSnapshot;
 }): React.ReactElement | null {
   // Out-of-range assets are kept in the list but rendered as a disabled button
@@ -102,7 +40,7 @@ export function renderSwapActions(options: {
     },
     shown.map((option) => {
       const disabled = option.available === false;
-      const limitMessage = swapOptionLimitMessage(option, options.checkout);
+      const limitMessage = openReceiveSwapOptionLimitMessage(option, options.checkout);
       return React.createElement(
         "div",
         {
@@ -127,11 +65,7 @@ export function renderSwapActions(options: {
           {
             className: orClasses.swapStart,
             disabled: disabled || options.startingAsset !== null,
-            onClick: disabled
-              ? undefined
-              : () => {
-                  void options.onStart(option.pay_in_asset);
-                },
+            onClick: disabled ? undefined : () => options.onStart(option.pay_in_asset),
             type: "button",
           },
           options.startingAsset === option.pay_in_asset
@@ -196,7 +130,7 @@ export function renderSwapUnavailable(
   checkout: CheckoutSnapshot | undefined,
 ): React.ReactElement {
   const detail =
-    swapOptionLimitMessage(quote, checkout) ??
+    openReceiveSwapOptionLimitMessage(quote, checkout) ??
     quote.unavailable_message ??
     `${quote.label} is not available for this amount.`;
   const range =
@@ -859,8 +793,11 @@ function SwapRefundForm(props: {
   const [submitting, setSubmitting] = React.useState(false);
   const [showAddressError, setShowAddressError] = React.useState(false);
   const address = refundAddress.trim();
-  const formatError = getSwapRefundAddressError(props.payInAsset, address, props.networkLabel);
-  const addressError = address.length === 0 ? "Enter a refund address." : formatError;
+  const addressError = getOpenReceiveSwapRefundFormError(
+    props.payInAsset,
+    address,
+    props.networkLabel,
+  );
   const confirm =
     address.length > 0 &&
     props.submittedRefundAddress !== undefined &&

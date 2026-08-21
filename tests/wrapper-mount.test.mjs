@@ -80,16 +80,15 @@ test("the Angular component drives attributes from the binding, not a hand-writt
     "packages/js/angular/src/openreceive-checkout.component.ts",
     "utf8",
   );
-  // Hand-transcribed [attr.*] bindings on the custom element are how the
-  // metadata input went missing; the element's attributes must come from the
-  // shared binding object instead.
-  const elementBlock = component.slice(component.indexOf("<openreceive-checkout"));
-  assert.doesNotMatch(
-    elementBlock.slice(0, elementBlock.indexOf("</openreceive-checkout>")),
-    /\[attr\./,
-    "the checkout element must not hand-list attributes",
-  );
+  // Hand-transcribed [attr.*] bindings are how the metadata input went missing
+  // (and how a third rootAttributes key would go missing on the shell root);
+  // every element's attributes must come from the shared binding object instead.
+  const templateStart = component.indexOf("template: `");
+  const template = component.slice(templateStart, component.indexOf("`,", templateStart));
+  assert.ok(templateStart !== -1, "the component must declare an inline template");
+  assert.doesNotMatch(template, /\[attr\./, "the template must not hand-list attributes");
   assert.match(component, /openreceiveElementBindings\]="shell\.checkout"/);
+  assert.match(component, /openreceiveElementBindings\]="rootBindings"/);
   assert.match(component, /@Input\(\) metadata\?/);
 });
 

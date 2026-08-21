@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
+import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const browserRoot = path.join(root, "packages/js/browser");
@@ -12,6 +12,13 @@ const distCss = path.join(browserRoot, "dist/styles.css");
 const srcCss = path.join(browserRoot, "src/styles.css");
 const generatedDir = path.join(browserRoot, "src/generated");
 const generatedTs = path.join(generatedDir, "compiled-styles.ts");
+// Wrapper packages ship the same compiled sheet as a real file: a runtime
+// `@import "@openreceive/browser/styles.css"` only resolves under a bundler,
+// so a plain <link> to the wrapper stylesheet would 404 the import.
+const wrapperCssTargets = [
+  path.join(root, "packages/js/elements/src/styles.css"),
+  path.join(root, "packages/js/react/src/styles.css"),
+];
 
 mkdirSync(path.dirname(distCss), { recursive: true });
 mkdirSync(generatedDir, { recursive: true });
@@ -36,6 +43,9 @@ const css = readFileSync(distCss, "utf8");
 // it from the committed src/styles.css.
 writeFileSync(distCss, `${header}\n${css}`);
 writeFileSync(srcCss, `${header}\n${css}`);
+for (const target of wrapperCssTargets) {
+  writeFileSync(target, `${header}\n${css}`);
+}
 // The repo is biome-formatted; format the generated module so a rebuild never
 // leaves the tree failing format:check.
 const generatedSource = `${header}\nexport const openReceiveCompiledStyles = ${JSON.stringify(css)};\n`;

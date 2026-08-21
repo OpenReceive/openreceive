@@ -41,6 +41,9 @@ test("ngOnChanges builds the shell binding once inputs are set", () => {
   assert.equal(shell.checkout.attributes["order-id"], "order-construct");
   assert.equal(shell.checkout.attributes.metadata, JSON.stringify({ sku: "sticker-1" }));
   assert.ok(shell.rootAttributes["data-openreceive-theme"]);
+  // The shell root is directive-driven: every rootAttributes key must reach the
+  // template's binding object, not a hand-transcribed [attr.*] subset.
+  assert.deepEqual(component.rootBindings.attributes, shell.rootAttributes);
 });
 
 test("subsequent input changes rebuild the shell binding", () => {

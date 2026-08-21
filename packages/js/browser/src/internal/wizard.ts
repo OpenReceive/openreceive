@@ -1,20 +1,18 @@
+import { getSwapRefundAddressError } from "@openreceive/core/swap-address";
 import {
-  listAssets,
+  type AssetIndexEntry,
   getPaymentWizardRoutes,
+  listAssets,
   openReceivePayTutorialUrls,
   openReceiveProviderIconUrls,
-  type AssetIndexEntry,
   type PaymentWizardRoute,
   type Provider,
   type ResolvedProviderRef,
 } from "@openreceive/provider-data";
+import { formatOpenReceiveSwapLimit } from "./checkout.ts";
 import {
-  openReceiveAssetIconIds,
-  openReceiveCheckoutLabels,
-  openReceivePaymentIconUrls,
-  openReceivePaymentMethodIconIds,
-  orClasses,
   type CheckoutPhase,
+  type OpenReceiveCheckoutPaymentMethod,
   type OpenReceivePaymentMethod,
   type OpenReceivePaymentMethodOption,
   type OpenReceivePaymentWizardController,
@@ -28,6 +26,11 @@ import {
   type OpenReceiveWizardProviderTutorialDisplay,
   type OpenReceiveWizardRouteAssetDisplay,
   type OpenReceiveWizardRouteDisplay,
+  openReceiveAssetIconIds,
+  openReceiveCheckoutLabels,
+  openReceivePaymentIconUrls,
+  openReceivePaymentMethodIconIds,
+  orClasses,
 } from "./ui.ts";
 
 export function getOpenReceiveBitcoinAssets(): readonly AssetIndexEntry[] {
@@ -43,15 +46,6 @@ function getOpenReceiveDefaultBitcoinRoute(): string | null {
     ),
   ];
   return routes.length === 1 ? (routes[0] ?? null) : null;
-}
-
-export function getOpenReceiveAltcoinAssets(): readonly AssetIndexEntry[] {
-  return listAssets().filter(
-    (asset) =>
-      asset.route !== undefined &&
-      asset.symbol !== "btc" &&
-      !["usd", "eur", "gbp"].includes(asset.symbol),
-  );
 }
 
 export function getOpenReceivePaymentStatusText(phase: CheckoutPhase): {
@@ -76,10 +70,8 @@ export function getOpenReceivePaymentStatusText(phase: CheckoutPhase): {
   };
 }
 
-export function getOpenReceiveWizardEmptyMessage(method: OpenReceivePaymentMethod | null): string {
-  return method === "crypto"
-    ? openReceiveCheckoutLabels.emptyCrypto
-    : openReceiveCheckoutLabels.emptyBitcoin;
+export function getOpenReceiveWizardEmptyMessage(): string {
+  return openReceiveCheckoutLabels.emptyBitcoin;
 }
 
 export function getCheckoutProviderOpenLabel(): string {
@@ -252,20 +244,18 @@ export type OpenReceiveMethodGridEntry<T extends { readonly label: string }> =
 
 /**
  * Interleave payment methods with grouped swap coins in the preferred grid order.
- * The standalone "Crypto" method is never shown — swap coins replace it when present.
- * When no swap options are present yet, returns Bitcoin (and any other non-crypto methods) only.
+ * When no swap options are present yet, returns the payment methods only.
  */
 export function buildOpenReceiveMethodGridEntries<T extends { readonly label: string }>(
   paymentMethods: readonly OpenReceivePaymentMethodOption[],
   swapOptions: readonly T[],
 ): readonly OpenReceiveMethodGridEntry<T>[] {
-  const visibleMethods = paymentMethods.filter((method) => method.id !== "crypto");
   const swapGroups = groupOpenReceiveSwapOptionsByLabel(swapOptions);
   if (swapGroups.length === 0) {
-    return visibleMethods.map((method) => ({ kind: "method" as const, method }));
+    return paymentMethods.map((method) => ({ kind: "method" as const, method }));
   }
 
-  const methodsById = new Map(visibleMethods.map((method) => [method.id, method]));
+  const methodsById = new Map(paymentMethods.map((method) => [method.id, method]));
   const groupsByLabel = new Map(
     swapGroups.map((group) => [group.label.trim().toUpperCase(), group] as const),
   );
@@ -287,7 +277,7 @@ export function buildOpenReceiveMethodGridEntries<T extends { readonly label: st
     entries.push({ kind: "swap", group });
   }
 
-  for (const method of visibleMethods) {
+  for (const method of paymentMethods) {
     if (usedMethodIds.has(method.id)) continue;
     entries.push({ kind: "method", method });
   }
@@ -435,6 +425,151 @@ export function resolveOpenReceivePreservedNetworkSelection<
   return match?.pay_in_asset;
 }
 
+/** The swap group a compact-selector picker key points at, when it is a swap key. */
+export function findOpenReceiveSwapGridGroup<T extends { readonly label: string }>(
+  entries: readonly OpenReceiveMethodGridEntry<T>[],
+  pickerKey: string | null | undefined,
+): OpenReceiveSwapMethodGroup<T> | undefined {
+  if (pickerKey === null || pickerKey === undefined) return undefined;
+  const parsed = parseOpenReceiveSwapPickerKey(pickerKey);
+  if (parsed === null) return undefined;
+  const entry = entries.find(
+    (entry) => entry.kind === "swap" && entry.group.label.trim().toUpperCase() === parsed.label,
+  );
+  return entry?.kind === "swap" ? entry.group : undefined;
+}
+
+/**
+ * Per-coin network selection after a picker tile is selected: keeps the coin's
+ * own prior pick when still available, otherwise carries the previously
+ * selected coin's network over when the new coin supports it (see
+ * {@link resolveOpenReceivePreservedNetworkSelection}), otherwise clears the
+ * coin's entry. Returns the map unchanged for non-swap keys and single-network
+ * groups.
+ */
+export function updateOpenReceiveSelectedSwapNetworks<
+  T extends {
+    readonly label: string;
+    readonly pay_in_asset: string;
+    readonly network_label: string;
+    readonly available?: boolean;
+  },
+>(options: {
+  readonly entries: readonly OpenReceiveMethodGridEntry<T>[];
+  readonly nextKey: string;
+  readonly previousKey: string | null;
+  readonly selectedNetworks: Readonly<Record<string, string>>;
+}): Record<string, string> {
+  const nextGroup = findOpenReceiveSwapGridGroup(options.entries, options.nextKey);
+  if (nextGroup === undefined || nextGroup.options.length <= 1) {
+    return options.selectedNetworks;
+  }
+  const previousGroup = findOpenReceiveSwapGridGroup(options.entries, options.previousKey);
+  const preserved = resolveOpenReceivePreservedNetworkSelection({
+    previousGroup,
+    nextGroup,
+    selectedNetworks: options.selectedNetworks,
+  });
+  const groupKey = nextGroup.label.trim().toUpperCase();
+  if (preserved === undefined) {
+    const { [groupKey]: _removed, ...rest } = options.selectedNetworks;
+    return rest;
+  }
+  return { ...options.selectedNetworks, [groupKey]: preserved };
+}
+
+/** Invoice-side amount context for fiat swap-limit notes. */
+export interface OpenReceiveSwapLimitContext {
+  readonly amount_msats: number;
+  readonly fiat?: { readonly currency: string; readonly value: string };
+}
+
+/**
+ * Short reason to show for an out-of-range swap asset. Prefers a fiat figure
+ * ("Minimum amount $10.00") converted from the invoice-side limit using the
+ * checkout's own rate, falling back to the pay-in asset's own units
+ * ("Minimum 5 USDT") when the provider only reports pay-side limits, then to
+ * the provider's generic message.
+ */
+export function openReceiveSwapOptionLimitMessage(
+  option: Pick<
+    OpenReceiveCheckoutPaymentMethod,
+    | "label"
+    | "available"
+    | "unavailable_reason"
+    | "unavailable_message"
+    | "minimum_invoice_amount_msats"
+    | "maximum_invoice_amount_msats"
+    | "minimum_pay_amount"
+    | "maximum_pay_amount"
+  >,
+  checkout: OpenReceiveSwapLimitContext | undefined,
+): string | undefined {
+  if (option.available !== false) return undefined;
+  if (option.unavailable_reason === "amount_too_small") {
+    const fiat =
+      checkout === undefined
+        ? undefined
+        : formatOpenReceiveSwapLimit(checkout, option.minimum_invoice_amount_msats, "ceil");
+    if (fiat !== undefined) return `Minimum amount ${fiat}`;
+    if (option.minimum_pay_amount !== undefined) {
+      return `Minimum ${option.minimum_pay_amount} ${option.label}`;
+    }
+  }
+  if (option.unavailable_reason === "amount_too_large") {
+    const fiat =
+      checkout === undefined
+        ? undefined
+        : formatOpenReceiveSwapLimit(checkout, option.maximum_invoice_amount_msats, "floor");
+    if (fiat !== undefined) return `Maximum amount ${fiat}`;
+    if (option.maximum_pay_amount !== undefined) {
+      return `Maximum ${option.maximum_pay_amount} ${option.label}`;
+    }
+  }
+  return option.unavailable_message;
+}
+
+/** Prefer the lowest invoice-side floor when every network in a group is unavailable. */
+export function openReceiveSwapGroupLimitOption<
+  T extends {
+    readonly available?: boolean;
+    readonly unavailable_reason?: string;
+    readonly minimum_invoice_amount_msats?: number;
+  },
+>(options: readonly T[]): T | undefined {
+  if (options.length === 0) return undefined;
+  const unavailable = options.filter((option) => option.available === false);
+  const tooSmall = unavailable.filter((option) => option.unavailable_reason === "amount_too_small");
+  const candidates =
+    tooSmall.length > 0 ? tooSmall : unavailable.length > 0 ? unavailable : options;
+  let best = candidates[0];
+  for (const option of candidates) {
+    if (best === undefined) {
+      best = option;
+      continue;
+    }
+    const bestMin = best.minimum_invoice_amount_msats;
+    const optionMin = option.minimum_invoice_amount_msats;
+    if (optionMin === undefined) continue;
+    if (bestMin === undefined || optionMin < bestMin) best = option;
+  }
+  return best;
+}
+
+/**
+ * Payer-facing validation for a swap refund address, shared by every refund
+ * form: an empty address prompts for one, anything else is checked against the
+ * pay-in asset's address format.
+ */
+export function getOpenReceiveSwapRefundFormError(
+  payInAsset: string,
+  address: string,
+  networkLabel: string,
+): string | undefined {
+  if (address.length === 0) return "Enter a refund address.";
+  return getSwapRefundAddressError(payInAsset, address, networkLabel);
+}
+
 export function getOpenReceiveRouteIcon(asset: Pick<AssetIndexEntry, "route" | "symbol">): string {
   const routeId = asset.route ?? asset.symbol;
   if (asset.symbol === "btc" && routeId.includes("lightning")) {
@@ -449,9 +584,7 @@ export function createOpenReceivePaymentWizardState(
   const selectedRouteId =
     request.selectedMethod === "bitcoin"
       ? (request.selectedBitcoinRoute ?? getOpenReceiveDefaultBitcoinRoute())
-      : request.selectedMethod === "crypto"
-        ? (request.selectedCryptoRoute ?? null)
-        : null;
+      : null;
   const routes = selectedRouteId === null ? [] : getPaymentWizardRoutes({ route: selectedRouteId });
 
   return {
@@ -464,7 +597,6 @@ export function createOpenReceivePaymentWizardSelection(): OpenReceivePaymentWiz
   return {
     selectedMethod: null,
     selectedBitcoinRoute: null,
-    selectedCryptoRoute: null,
   };
 }
 
@@ -474,14 +606,8 @@ export function createOpenReceivePaymentWizardModel(
   const wizard = createOpenReceivePaymentWizardState({
     selectedMethod: selection.selectedMethod,
     selectedBitcoinRoute: selection.selectedBitcoinRoute,
-    selectedCryptoRoute: selection.selectedCryptoRoute,
   });
-  const routeAssets =
-    selection.selectedMethod === "bitcoin"
-      ? getOpenReceiveBitcoinAssets()
-      : selection.selectedMethod === "crypto"
-        ? getOpenReceiveAltcoinAssets()
-        : [];
+  const routeAssets = selection.selectedMethod === "bitcoin" ? getOpenReceiveBitcoinAssets() : [];
   const selectedRoute = wizard.selectedRouteId;
 
   return {
@@ -512,7 +638,6 @@ export function updateOpenReceivePaymentWizardSelection(
         ...selection,
         selectedMethod: null,
         selectedBitcoinRoute: null,
-        selectedCryptoRoute: null,
       };
     }
     case "change_route": {
@@ -522,12 +647,6 @@ export function updateOpenReceivePaymentWizardSelection(
           selectedBitcoinRoute: null,
         };
       }
-      if (selection.selectedMethod === "crypto") {
-        return {
-          ...selection,
-          selectedCryptoRoute: null,
-        };
-      }
       return selection;
     }
     case "select_route": {
@@ -535,12 +654,6 @@ export function updateOpenReceivePaymentWizardSelection(
         return {
           ...selection,
           selectedBitcoinRoute: action.route,
-        };
-      }
-      if (selection.selectedMethod === "crypto") {
-        return {
-          ...selection,
-          selectedCryptoRoute: action.route,
         };
       }
       return selection;

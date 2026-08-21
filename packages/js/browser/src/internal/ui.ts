@@ -1,5 +1,4 @@
 import type { AssetIndexEntry, PaymentWizardRoute } from "@openreceive/provider-data";
-import type { Status } from "../status.ts";
 import { openReceiveCompiledStyles } from "../generated/compiled-styles.ts";
 
 export { type Status, type StatusInvoiceLike, status } from "../status.ts";
@@ -312,7 +311,6 @@ export const openReceivePaymentMethodIconIds: Readonly<
   Record<OpenReceivePaymentMethod, OpenReceivePaymentIconId>
 > = {
   bitcoin: "btc",
-  crypto: "crypto",
 } as const;
 
 export const openReceiveAssetIconIds: Readonly<Record<string, OpenReceivePaymentIconId>> = {
@@ -607,6 +605,10 @@ export const OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES = {
    * default), no decode link is rendered and the invoice never leaves the page.
    */
   decodeLinkUrl: "decode-link-url",
+  /** `polling="false"` renders the snapshot without status polling (no POST /payments/check). */
+  polling: "polling",
+  /** Status poll cadence in milliseconds; defaults to OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS. */
+  pollIntervalMs: "poll-interval-ms",
 } as const;
 
 export const OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES = {
@@ -655,6 +657,10 @@ export interface CheckoutElementAttributeOptions {
    * renders no "Decode" link and the invoice is never sent to a third party.
    */
   readonly decodeLinkUrl?: string;
+  /** False renders the snapshot without status polling (no POST /payments/check). */
+  readonly polling?: boolean;
+  /** Status poll cadence in milliseconds; defaults to OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS. */
+  readonly pollIntervalMs?: number;
 }
 
 export interface OpenReceiveThemeToggleElementAttributeOptions {
@@ -678,6 +684,7 @@ export type OpenReceiveThemeToggleElementAttributes = Partial<
 
 export interface CheckoutElementEventHandlers {
   readonly onCopy?: (event: Event) => void;
+  readonly onOpenWallet?: (event: Event) => void;
   readonly onState?: (event: Event) => void;
   readonly onSettled?: (event: Event) => void;
   readonly onProviderCopy?: (event: Event) => void;
@@ -705,8 +712,6 @@ export interface CheckoutShellOptions
 
 export interface OpenReceiveCheckoutProps extends CheckoutElementEventHandlers {
   readonly checkout: CheckoutSnapshot;
-  readonly status?: Status;
-  readonly providers?: readonly OpenReceiveWizardProviderDisplay[];
   readonly theme?: OpenReceiveThemePreference;
 }
 
@@ -895,7 +900,7 @@ export interface CreateCheckoutStateOptions {
   readonly previousState?: CheckoutState;
 }
 
-export type OpenReceivePaymentMethod = "bitcoin" | "crypto";
+export type OpenReceivePaymentMethod = "bitcoin";
 export type OpenReceiveThemePreference = "light" | "dark" | "system";
 export type OpenReceiveResolvedTheme = "light" | "dark";
 
@@ -958,13 +963,11 @@ export interface OpenReceiveThemeModel {
 export interface OpenReceivePaymentWizardRequest {
   readonly selectedMethod: OpenReceivePaymentMethod | null;
   readonly selectedBitcoinRoute?: string | null;
-  readonly selectedCryptoRoute?: string | null;
 }
 
 export interface OpenReceivePaymentWizardSelection {
   readonly selectedMethod: OpenReceivePaymentMethod | null;
   readonly selectedBitcoinRoute: string | null;
-  readonly selectedCryptoRoute: string | null;
 }
 
 export type OpenReceivePaymentWizardSelectionAction =
@@ -1065,7 +1068,6 @@ export const openReceiveCheckoutLabels = {
   switchPaymentMethod: "Switch payment method",
   loadingCurrencies: "Loading currencies...",
   emptyBitcoin: "Choose Bitcoin Lightning.",
-  emptyCrypto: "Choose an altcoin.",
   viewPaymentData: "View payment data",
   openProvider: "How To Pay",
   tutorialTitlePrefix: "Pay a Lightning invoice with",
@@ -1137,11 +1139,6 @@ export const openReceivePaymentMethods: readonly OpenReceivePaymentMethodOption[
     title: "Bitcoin",
     detail: "Pay from Lightning or send on-chain into a swap.",
   },
-  {
-    id: "crypto",
-    title: "Crypto",
-    detail: "Use stablecoins or altcoins through Lightning-capable services.",
-  },
 ];
 
 export function parseOpenReceiveOptionalInteger(
@@ -1178,5 +1175,5 @@ export function parseOpenReceiveThemePreference(
 export function parseOpenReceivePaymentMethod(
   value: string | null,
 ): OpenReceivePaymentMethod | null {
-  return value === "bitcoin" || value === "crypto" ? value : null;
+  return value === "bitcoin" ? value : null;
 }

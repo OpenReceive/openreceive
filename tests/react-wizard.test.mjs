@@ -22,7 +22,6 @@ import {
   createOpenReceiveWizardRouteDisplays,
   formatOpenReceiveCountdown,
   formatOpenReceiveDepositAmount,
-  getOpenReceiveAltcoinAssets,
   getOpenReceivePaymentMethodIcon,
   getOpenReceivePaymentStatusText,
   getCheckoutProviderIcon,
@@ -359,7 +358,6 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   const initialSelection = createOpenReceivePaymentWizardSelection();
   assert.equal(initialSelection.selectedMethod, null);
   assert.equal(initialSelection.selectedBitcoinRoute, null);
-  assert.equal(initialSelection.selectedCryptoRoute, null);
 
   const methodSelection = updateOpenReceivePaymentWizardSelection(initialSelection, {
     type: "select_method",
@@ -423,13 +421,4 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   assert.match(strikeProvider.icon, /assets\/provider-icons\/strike\.png/);
   assert.equal(strikeProvider.tutorials.length, 4);
   assert.match(strikeProvider.tutorials[0].image, /assets\/pay_tutorials\/strike-1\.webp/);
-
-  const firstCrypto = getOpenReceiveAltcoinAssets().find((asset) => asset.route !== undefined);
-  assert.ok(firstCrypto?.route);
-  const cryptoState = createOpenReceivePaymentWizardState({
-    selectedMethod: "crypto",
-    selectedCryptoRoute: firstCrypto.route,
-  });
-  assert.equal(cryptoState.selectedRouteId, firstCrypto.route);
-  assert.ok(cryptoState.routes.length > 0);
 });

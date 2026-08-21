@@ -5,9 +5,9 @@ import {
 } from "./log-level.ts";
 import type {
   OpenReceiveBrowserLogEntry,
-  OpenReceiveBrowserLogLevel,
   OpenReceiveBrowserLogger,
   OpenReceiveBrowserLoggerOption,
+  OpenReceiveBrowserLogLevel,
 } from "./ui.ts";
 
 type ConsoleTarget = Pick<Console, "debug" | "info" | "warn" | "error" | "log">;
@@ -54,12 +54,61 @@ function createConsoleWriter(
             ? "debug"
             : "info";
     const sink = target[method] ?? target.log;
+    const {
+      level: _level,
+      event: _event,
+      message: cleanMessage,
+      ...cleanFields
+    } = sanitizeBrowserLogEntry({ level, event, message, ...fields });
     sink.call(
       target,
-      `[${now().toISOString()}] ${level.toUpperCase()} [${prefix}] ${event}: ${message}`,
-      fields,
+      `[${now().toISOString()}] ${level.toUpperCase()} [${prefix}] ${event}: ${cleanMessage}`,
+      cleanFields,
     );
   };
+}
+
+/**
+ * Redact secrets from a browser log entry before it reaches a logger. Any field whose key
+ * looks like a secret (`secret`/`token`/`authorization`/`cookie`/`nwc`), at any nesting
+ * depth, is replaced with `[REDACTED]`; string values are additionally scrubbed of NWC URIs
+ * and `token=`/`secret=` query params. Exported so callers that log a request (including its
+ * headers) can guarantee ordinary application secrets never leak.
+ */
+export function sanitizeBrowserLogEntry(
+  entry: OpenReceiveBrowserLogEntry,
+): OpenReceiveBrowserLogEntry {
+  const clean: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(entry)) {
+    if (/secret|token|authorization|cookie|nwc/i.test(key)) {
+      clean[key] = "[REDACTED]";
+    } else {
+      clean[key] = sanitizeBrowserLogValue(value);
+    }
+  }
+  return clean as OpenReceiveBrowserLogEntry;
+}
+
+function sanitizeBrowserLogValue(value: unknown): unknown {
+  if (typeof value === "string") return redactBrowserSecrets(value);
+  if (Array.isArray(value)) return value.map(sanitizeBrowserLogValue);
+  if (typeof value !== "object" || value === null) return value;
+
+  const clean: Record<string, unknown> = {};
+  for (const [key, nested] of Object.entries(value)) {
+    if (/secret|token|authorization|cookie|nwc/i.test(key)) {
+      clean[key] = "[REDACTED]";
+    } else {
+      clean[key] = sanitizeBrowserLogValue(nested);
+    }
+  }
+  return clean;
+}
+
+function redactBrowserSecrets(value: string): string {
+  return value
+    .replace(/nostr\+walletconnect:\/\/[^\s"'`<>]+/g, "[REDACTED_NWC]")
+    .replace(/([?&](?:_or_evt|token|secret)=)[^&\s"'`<>]+/gi, "$1[REDACTED]");
 }
 
 export interface CreateOpenReceiveBrowserConsoleLoggerOptions {

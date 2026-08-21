@@ -1,7 +1,7 @@
 {
   "name": "@openreceive/testkit",
   "version": "0.1.1",
-  "description": "Fake NWC wallet and swap provider for testing OpenReceive integrations.",
+  "description": "Internal, unpublished fake NWC wallet and swap provider used by OpenReceive's own test suite.",
   "private": true,
   "type": "module",
   "sideEffects": false,

@@ -1,8 +1,8 @@
 import { status as deriveStatus } from "../status.ts";
 import {
   assertOpenReceiveDisplayInvoice,
-  selectCheckoutDisplayInvoice,
   isPaidCheckoutSnapshot,
+  selectCheckoutDisplayInvoice,
 } from "./checkout.ts";
 import { applyOpenReceiveThemeAttributes, createOpenReceiveStoredThemeModel } from "./theme.ts";
 import {
@@ -23,7 +23,6 @@ import {
   OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
-  type OpenReceiveCheckoutShellProps,
   type OpenReceiveThemeAttributeTarget,
   type OpenReceiveThemeToggleElementAttributeOptions,
   type OpenReceiveThemeToggleElementAttributes,
@@ -72,6 +71,14 @@ function sharedElementAttributes(
   }
   if (options.decodeLinkUrl !== undefined) {
     attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.decodeLinkUrl] = options.decodeLinkUrl;
+  }
+  if (options.polling !== undefined) {
+    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.polling] = String(options.polling);
+  }
+  if (options.pollIntervalMs !== undefined) {
+    attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.pollIntervalMs] = String(
+      options.pollIntervalMs,
+    );
   }
   return attributes;
 }
@@ -181,6 +188,9 @@ export function createCheckoutElementListeners(
     ...(handlers.onCopy === undefined
       ? {}
       : { [OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.copy]: handlers.onCopy }),
+    ...(handlers.onOpenWallet === undefined
+      ? {}
+      : { [OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.openWallet]: handlers.onOpenWallet }),
     ...(handlers.onState === undefined
       ? {}
       : { [OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.state]: handlers.onState }),
@@ -229,23 +239,6 @@ export function createCheckoutShellModel(
         }
       : null,
   };
-}
-
-export function createCheckoutShellModelFromProps(
-  props: OpenReceiveCheckoutShellProps,
-): CheckoutShellModel {
-  const {
-    checkout,
-    status: _status,
-    providers: _providers,
-    theme,
-    defaultTheme,
-    ...options
-  } = props;
-  return createCheckoutShellModel(checkout, {
-    ...options,
-    defaultTheme: defaultTheme ?? theme,
-  });
 }
 
 export function applyCheckoutElementAttributes(

@@ -289,3 +289,75 @@ test("checkout and theme-toggle shadow roots share one adopted stylesheet", asyn
     toggle.remove();
   }
 });
+
+test("a cosmetic theme flip re-renders without restarting the poll controller", async () => {
+  const fetchStub = createFetchStub({
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  globalThis.fetch = fetchStub;
+  const paymentHash = "a".repeat(64);
+  const element = mount({
+    "order-id": "order-theme-poll",
+    prefix: "/openreceive",
+    "invoice-id": paymentHash,
+    invoice: `lnbc-${paymentHash}`,
+    "payment-hash": paymentHash,
+    "amount-msats": "21000",
+    "expires-at": String(Math.floor(Date.now() / 1000) + 900),
+  });
+
+  try {
+    await until(() => fetchStub.pathCount("/payments/check") > 0, {
+      label: "initial status request",
+    });
+    await flush(4);
+    const before = fetchStub.pathCount("/payments/check");
+
+    element.setAttribute("theme", "dark");
+    await flush(4);
+    assert.match(
+      element.shadowRoot?.innerHTML ?? "",
+      /data-theme="dark"/,
+      "the theme change must still re-render the shadow tree",
+    );
+    assert.equal(
+      fetchStub.pathCount("/payments/check"),
+      before,
+      "a display-only attribute must not restart the controller (extra POST /payments/check)",
+    );
+  } finally {
+    element.remove();
+  }
+});
+
+test('polling="false" renders the snapshot without any status requests', async () => {
+  const fetchStub = createFetchStub({
+    "/payments/check": () => ({ status: "pending" }),
+  });
+  globalThis.fetch = fetchStub;
+  const paymentHash = "b".repeat(64);
+  const element = mount({
+    "order-id": "order-no-poll",
+    prefix: "/openreceive",
+    "invoice-id": paymentHash,
+    invoice: `lnbc-${paymentHash}`,
+    "payment-hash": paymentHash,
+    "amount-msats": "21000",
+    "expires-at": String(Math.floor(Date.now() / 1000) + 900),
+    polling: "false",
+  });
+
+  try {
+    await until(() => element.shadowRoot?.innerHTML.length > 0, { label: "snapshot render" });
+    await flush(6);
+    assert.equal(fetchStub.pathCount("/payments/check"), 0);
+
+    // Turning polling back on is a polling-affecting change: the controller restarts.
+    element.setAttribute("polling", "true");
+    await until(() => fetchStub.pathCount("/payments/check") > 0, {
+      label: "status request after enabling polling",
+    });
+  } finally {
+    element.remove();
+  }
+});
