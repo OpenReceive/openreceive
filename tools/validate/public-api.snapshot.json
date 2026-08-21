@@ -10,6 +10,8 @@
         "createOpenReceiveWrapperThemeBinding",
         "createOpenReceiveWrapperThemeToggleBinding",
         "defineOpenReceiveElements",
+        "OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME",
+        "OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME",
         "validateOpenReceiveWrapperCheckoutProps"
       ],
       "types": [
@@ -460,6 +462,7 @@
         "ceilDiv",
         "checkPayment",
         "classifyTransactionSettlement",
+        "compact",
         "convertAmountViaBtcRates",
         "createCachedLivePriceFeed",
         "decimalScaleFactor",
@@ -472,12 +475,14 @@
         "getSwapRefundAddressError",
         "isOpenReceiveBitcoinAmountCurrency",
         "isOpenReceiveErrorCode",
+        "isRecord",
         "isResolvedPriceProvider",
         "isRetryableOpenReceiveErrorCode",
         "isTransactionSettled",
         "isValidAddressForSwapNetwork",
         "isValidSwapAddressForPayInAsset",
         "multiplyAmount",
+        "nonEmptyString",
         "NwcUriParseError",
         "OPENRECEIVE_FALLBACK_PRICE_FEED_URL",
         "OPENRECEIVE_INVOICE_QUOTE_TTL_SECONDS",
@@ -512,9 +517,11 @@
         "quoteBitcoinAmountToMsats",
         "quoteFiatToMsatsWithPrice",
         "reconcilePaymentAttempts",
+        "recordOrEmpty",
         "redactNwcUri",
         "StaticPriceProvider",
-        "sumAmounts"
+        "sumAmounts",
+        "unixSeconds"
       ],
       "types": [
         "CachedPriceFeedOptions",
@@ -798,6 +805,7 @@
         "createOpenReceiveIpRateLimit",
         "createOpenReceiveSqlPayments",
         "createOpenReceiveStack",
+        "createProxyRateLimitingConfig",
         "createRequestId",
         "errorResponse",
         "hostError",
@@ -892,6 +900,62 @@
         "OpenReceiveWireSwapPayInAsset",
         "OpenReceiveWireSwapProviderState",
         "OpenReceiveWireSwapQuote",
+        "OpenReceiveWireSwapQuoteRequest",
+        "PaymentCheck",
+        "ResolveCheckoutContext",
+        "ResolveCheckoutHook",
+        "ResolvedHostCheckout",
+        "ServiceErrorShape",
+        "SwapCheckout"
+      ]
+    },
+    "./adapter-surface": {
+      "values": [
+        "createOpenReceiveHttpHandler",
+        "createOpenReceiveStack",
+        "hostError",
+        "isServiceErrorShape",
+        "mapHostRouteError",
+        "OpenReceiveHostError",
+        "OpenReceiveHttpError",
+        "startOpenReceiveNotificationWorker"
+      ],
+      "types": [
+        "Checkout",
+        "CheckoutCreatedHook",
+        "CheckoutCreatedInput",
+        "CreateCheckoutAmount",
+        "CreateOpenReceiveHttpHandlerOptions",
+        "CreateOpenReceiveStackOptions",
+        "OpenReceive",
+        "OpenReceiveAuthorize",
+        "OpenReceiveAuthorizeAction",
+        "OpenReceiveAuthorizeContext",
+        "OpenReceiveAuthorizeResource",
+        "OpenReceiveHost",
+        "OpenReceiveHttpHandler",
+        "OpenReceiveIpRateLimitConfig",
+        "OpenReceiveNotificationWorker",
+        "OpenReceiveOrderSettlement",
+        "OpenReceiveOrderSettlementHook",
+        "OpenReceivePaymentRepository",
+        "OpenReceiveRateLimit",
+        "OpenReceiveSettlementEvent",
+        "OpenReceiveSettlementEventHook",
+        "OpenReceiveStack",
+        "OpenReceiveWireCheckout",
+        "OpenReceiveWireCreateCheckoutRequest",
+        "OpenReceiveWireCreateCheckoutResponse",
+        "OpenReceiveWireCreateSwapRequest",
+        "OpenReceiveWireCreateSwapResponse",
+        "OpenReceiveWireError",
+        "OpenReceiveWireOrderRequest",
+        "OpenReceiveWirePaymentCheck",
+        "OpenReceiveWirePaymentCheckRequest",
+        "OpenReceiveWirePaymentStatus",
+        "OpenReceiveWirePrepareCheckoutRequest",
+        "OpenReceiveWirePrepareCheckoutResponse",
+        "OpenReceiveWireRefundSwapRequest",
         "OpenReceiveWireSwapQuoteRequest",
         "PaymentCheck",
         "ResolveCheckoutContext",
@@ -1106,6 +1170,8 @@
         "createOpenReceiveWrapperThemeBinding",
         "createOpenReceiveWrapperThemeToggleBinding",
         "defineOpenReceiveElements",
+        "OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME",
+        "OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME",
         "validateOpenReceiveWrapperCheckoutProps"
       ],
       "types": [
@@ -1366,6 +1432,7 @@
         "createOpenReceiveIpRateLimit",
         "createOpenReceiveSqlPayments",
         "createOpenReceiveStack",
+        "createProxyRateLimitingConfig",
         "createRequestId",
         "errorResponse",
         "hostError",
@@ -1733,6 +1800,8 @@
         "createOpenReceiveWrapperThemeBinding",
         "createOpenReceiveWrapperThemeToggleBinding",
         "defineOpenReceiveElements",
+        "OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME",
+        "OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME",
         "validateOpenReceiveWrapperCheckoutProps"
       ],
       "types": [
@@ -1781,6 +1850,8 @@
         "createOpenReceiveWrapperThemeBinding",
         "createOpenReceiveWrapperThemeToggleBinding",
         "defineOpenReceiveElements",
+        "OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME",
+        "OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME",
         "validateOpenReceiveWrapperCheckoutProps"
       ],
       "types": [
@@ -1926,6 +1997,8 @@
         "createOpenReceiveWrapperThemeBinding",
         "createOpenReceiveWrapperThemeToggleBinding",
         "defineOpenReceiveElements",
+        "OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME",
+        "OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME",
         "validateOpenReceiveWrapperCheckoutProps"
       ],
       "types": [
@@ -1976,6 +2049,8 @@
         "createOpenReceiveWrapperThemeBinding",
         "createOpenReceiveWrapperThemeToggleBinding",
         "defineOpenReceiveElements",
+        "OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME",
+        "OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME",
         "validateOpenReceiveWrapperCheckoutProps"
       ],
       "types": [
