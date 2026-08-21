@@ -4,12 +4,9 @@ import {
   type NwcTransaction,
 } from "@openreceive/core";
 import type { OpenReceive, OpenReceiveWalletNotification } from "@openreceive/node";
-import {
-  type OpenReceiveHost,
-  startOpenReceiveReconciler,
-  warnOpenReceiveFailure,
-} from "./host-payments.ts";
+import { type OpenReceiveHost, warnOpenReceiveFailure } from "./host-payments.ts";
 import { maybeReconcileOpenReceivePayments } from "./reconcile-gate.ts";
+import { startOpenReceiveReconciler } from "./reconcile-loop.ts";
 
 export interface OpenReceiveNotificationListener {
   /** Unsubscribe from wallet notifications and wait for any in-flight pass. */

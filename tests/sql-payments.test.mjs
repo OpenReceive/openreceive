@@ -14,7 +14,7 @@ import {
 } from "../packages/js/http/src/index.ts";
 // Internal decision table: imported from the module directly (it is
 // deliberately not on the public package surface).
-import { reconciliationTransition } from "../packages/js/http/src/host-payments.ts";
+import { reconciliationTransition } from "../packages/js/http/src/payment-repository.ts";
 
 const hash = (character) => character.repeat(64);
 

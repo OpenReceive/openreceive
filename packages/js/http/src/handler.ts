@@ -267,10 +267,10 @@ async function dispatch(
   const orderId = requiredString(body.order_id, "order_id", MAX_ORDER_ID_LENGTH);
 
   if (route.kind === "checkout.prepare") {
-    await guard(runtime, "checkout.prepare", request, { orderId }, native);
-    const resolved = await resolveHost(runtime, "checkout.prepare", request, orderId, body);
+    await authorizeAndRateLimit(runtime, "checkout.prepare", request, { orderId }, native);
+    const resolved = await resolveHostCheckout(runtime, "checkout.prepare", request, orderId, body);
     const prepared = await runtime.service.prepareCheckout({
-      amount: requiredAmount(resolved),
+      amount: requireResolvedAmount(resolved),
     });
     const swapOptions = await runtime.service.listSwapOptions({
       amountMsats: prepared.amountMsats,
@@ -289,35 +289,25 @@ async function dispatch(
 
   if (route.kind === "checkout.create") {
     await enforceAuthorize(runtime, "checkout.create", request, { orderId }, native);
-    const resolved = await resolveHost(runtime, "checkout.create", request, orderId, body);
-    // Rate limits meter minting only: re-serving the order's already-committed
-    // attempt costs no wallet call and no row, so a capped payer can still
-    // re-fetch instructions they were already given.
-    if (resolved.paymentHash === undefined) {
-      await enforceRateLimit(runtime, "checkout.create", request, { orderId }, native);
-    }
-    const checkout =
-      resolved.paymentHash === undefined
-        ? await runtime.service.createCheckout({
+    const resolved = await resolveHostCheckout(runtime, "checkout.create", request, orderId, body);
+    const checkout = await commitNewAttempt(
+      runtime,
+      "checkout.create",
+      request,
+      orderId,
+      resolved,
+      native,
+      {
+        mint: () =>
+          runtime.service.createCheckout({
             orderId,
-            amount: requiredAmount(resolved),
+            amount: requireResolvedAmount(resolved),
             ...optionalCheckoutFields(body),
-          })
-        : committedCheckout(orderId, resolved);
-    if (resolved.paymentHash === undefined) {
-      const clientIp = runtime.extractClientIp({
-        action: "checkout.create",
-        request,
-        resource: { orderId },
-        native,
-      });
-      await commit(runtime, {
-        orderId,
-        paymentHash: checkout.paymentHash,
-        checkout,
-        ...(clientIp === undefined ? {} : { clientIp }),
-      });
-    }
+          }),
+        recover: () => committedCheckout(orderId, resolved),
+        attempt: (minted) => ({ paymentHash: minted.paymentHash, checkout: minted }),
+      },
+    );
     return jsonResponse(201, { checkout: httpCheckout(checkout) }, requestId);
   }
 
@@ -325,14 +315,14 @@ async function dispatch(
     const requestedPaymentHash = requiredPaymentHash(
       requiredString(body.payment_hash, "payment_hash"),
     );
-    await guard(
+    await authorizeAndRateLimit(
       runtime,
       "payment.check",
       request,
       { orderId, paymentHash: requestedPaymentHash },
       native,
     );
-    const resolved = await resolveHost(runtime, "payment.check", request, orderId, body);
+    const resolved = await resolveHostCheckout(runtime, "payment.check", request, orderId, body);
     const paymentHash = selectedPaymentHash(resolved, requestedPaymentHash);
     // Status refresh never adds its own per-invoice wallet walk: the requested
     // hash is served from the dispatch-level gated pass when this request won
@@ -352,13 +342,13 @@ async function dispatch(
     // pass has already recorded any terminal transition on that row).
     const checkedBody =
       fromPass !== undefined && fromPass.status !== "not_found"
-        ? passCheckedBody(fromPass)
-        : await rowCheckedBody(runtime, orderId, paymentHash);
+        ? paymentCheckFromReconcilePass(fromPass)
+        : await paymentCheckFromStoredAttempt(runtime, orderId, paymentHash);
     // Catalog warms on the first check; clients keep "Loading currencies…" until
     // payment_methods is present (even as an empty Lightning-only list). Polls
     // inside the warm window reuse the cached catalog — a ~3s status poll must
     // not walk the provider catalog every time.
-    const checkout = requiredCheckout(resolved);
+    const checkout = requireResolvedCheckout(resolved);
     return jsonResponse(
       200,
       {
@@ -371,13 +361,20 @@ async function dispatch(
 
   if (route.kind === "swap.quote") {
     const payInAsset = requiredString(body.pay_in_asset, "pay_in_asset");
-    await guard(runtime, "swap.quote", request, { orderId }, native);
-    const resolved = await resolveHost(runtime, "swap.quote", request, orderId, body, payInAsset);
+    await authorizeAndRateLimit(runtime, "swap.quote", request, { orderId }, native);
+    const resolved = await resolveHostCheckout(
+      runtime,
+      "swap.quote",
+      request,
+      orderId,
+      body,
+      payInAsset,
+    );
     return jsonResponse(
       200,
       toSnakeCase(
         await runtime.service.quoteSwap({
-          amount: requiredAmount(resolved),
+          amount: requireResolvedAmount(resolved),
           payInAsset,
         }),
       ),
@@ -388,34 +385,37 @@ async function dispatch(
   if (route.kind === "swap.create") {
     const payInAsset = requiredString(body.pay_in_asset, "pay_in_asset");
     await enforceAuthorize(runtime, "swap.create", request, { orderId }, native);
-    const resolved = await resolveHost(runtime, "swap.create", request, orderId, body, payInAsset);
-    if (resolved.paymentHash === undefined) {
-      await enforceRateLimit(runtime, "swap.create", request, { orderId }, native);
-    }
-    const swap =
-      resolved.paymentHash === undefined
-        ? await runtime.service.createSwap({
+    const resolved = await resolveHostCheckout(
+      runtime,
+      "swap.create",
+      request,
+      orderId,
+      body,
+      payInAsset,
+    );
+    const swap = await commitNewAttempt(
+      runtime,
+      "swap.create",
+      request,
+      orderId,
+      resolved,
+      native,
+      {
+        mint: () =>
+          runtime.service.createSwap({
             orderId,
-            amount: requiredAmount(resolved),
+            amount: requireResolvedAmount(resolved),
             payInAsset,
             ...optionalCheckoutFields(body),
-          })
-        : await recoverCommittedSwap(runtime, orderId, resolved);
-    if (resolved.paymentHash === undefined) {
-      const clientIp = runtime.extractClientIp({
-        action: "swap.create",
-        request,
-        resource: { orderId },
-        native,
-      });
-      await commit(runtime, {
-        orderId,
-        paymentHash: swap.paymentHash,
-        checkout: swap.checkout,
-        swapData: swap.swapData,
-        ...(clientIp === undefined ? {} : { clientIp }),
-      });
-    }
+          }),
+        recover: () => recoverCommittedSwap(runtime, orderId, resolved),
+        attempt: (minted) => ({
+          paymentHash: minted.paymentHash,
+          checkout: minted.checkout,
+          swapData: minted.swapData,
+        }),
+      },
+    );
     return jsonResponse(201, { swap: httpSwap(swap) }, requestId);
   }
 
@@ -424,9 +424,15 @@ async function dispatch(
   const requestedPaymentHash = requiredPaymentHash(
     requiredString(body.payment_hash, "payment_hash"),
   );
-  await guard(runtime, action, request, { orderId, paymentHash: requestedPaymentHash }, native);
-  const resolved = await resolveHost(runtime, action, request, orderId, body);
-  const swapData = requiredSwapData(resolved.swapData);
+  await authorizeAndRateLimit(
+    runtime,
+    action,
+    request,
+    { orderId, paymentHash: requestedPaymentHash },
+    native,
+  );
+  const resolved = await resolveHostCheckout(runtime, action, request, orderId, body);
+  const swapData = requireResolvedSwapData(resolved.swapData);
   const paymentHash = selectedPaymentHash(resolved, requestedPaymentHash);
   if (route.kind === "swap.read") {
     return jsonResponse(
@@ -456,7 +462,58 @@ async function dispatch(
   );
 }
 
-async function resolveHost(
+/**
+ * The mint-or-recover half of a create route, holding the "only a minting
+ * request pays" rule ONCE for both `checkout.create` and `swap.create`.
+ *
+ * A request MINTS when the host resolver returned no payment hash for the order;
+ * otherwise it re-serves the order's already-committed attempt. Two separate,
+ * independently-reviewable controls hang off that one test, and they must never
+ * disagree about which request is which:
+ *
+ * - Billing/abuse: rate limits meter minting only. Re-serving the order's
+ *   already-committed attempt costs no wallet call and no row, so a capped payer
+ *   can still re-fetch instructions they were already given.
+ * - Settlement: the attempt row is written only by the request that minted the
+ *   invoice, and only after the mint. Persisting on a recovery path would write
+ *   a second row for an invoice that already has one; skipping the write on a
+ *   mint would leave an invoice the host never recorded, which settles against
+ *   no row (persistCheckoutAttempt turns a failed write into a 503 so the payer
+ *   instructions are withheld rather than orphaned).
+ *
+ * The two recovery arms are asymmetric — checkout re-serves the stored snapshot
+ * synchronously, swap must re-read the provider — so both arms stay in the
+ * caller's closures and only the rule lives here.
+ */
+async function commitNewAttempt<T>(
+  runtime: Runtime,
+  action: "checkout.create" | "swap.create",
+  request: Request,
+  orderId: string,
+  resolved: ResolvedHostCheckout,
+  native: unknown,
+  arms: {
+    /** Mint a fresh attempt: one wallet call, one new row. */
+    readonly mint: () => Promise<T>;
+    /** Re-serve the order's already-committed attempt: no wallet call, no row. */
+    readonly recover: () => T | Promise<T>;
+    /** The attempt fields to persist, from the freshly minted result. */
+    readonly attempt: (minted: T) => Omit<CheckoutCreatedInput, "orderId" | "clientIp">;
+  },
+): Promise<T> {
+  if (resolved.paymentHash !== undefined) return arms.recover();
+  await enforceRateLimit(runtime, action, request, { orderId }, native);
+  const minted = await arms.mint();
+  const clientIp = runtime.extractClientIp({ action, request, resource: { orderId }, native });
+  await persistCheckoutAttempt(runtime, {
+    orderId,
+    ...arms.attempt(minted),
+    ...(clientIp === undefined ? {} : { clientIp }),
+  });
+  return minted;
+}
+
+async function resolveHostCheckout(
   runtime: Runtime,
   action: OpenReceiveAuthorizeAction,
   request: Request,
@@ -495,7 +552,7 @@ function resolveRateLimiting(
   });
 }
 
-async function guard(
+async function authorizeAndRateLimit(
   runtime: Runtime,
   action: OpenReceiveAuthorizeAction,
   request: Request,
@@ -536,7 +593,10 @@ async function enforceAuthorize(
   }
 }
 
-async function commit(runtime: Runtime, input: CheckoutCreatedInput): Promise<void> {
+async function persistCheckoutAttempt(
+  runtime: Runtime,
+  input: CheckoutCreatedInput,
+): Promise<void> {
   try {
     await runtime.host.onCheckoutCreated(input);
   } catch (error) {
@@ -586,7 +646,7 @@ function currentUnixSeconds(): number {
 }
 
 /** `payments/check` body for the request that won the gate: straight from the pass. */
-function passCheckedBody(checked: PaymentCheck): Record<string, unknown> {
+function paymentCheckFromReconcilePass(checked: PaymentCheck): Record<string, unknown> {
   const { details, ...checkedPublic } = checked;
   return {
     ...(toSnakeCase(checkedPublic) as Record<string, unknown>),
@@ -601,7 +661,7 @@ function passCheckedBody(checked: PaymentCheck): Record<string, unknown> {
  * the row path never emits `not_found`. `details` stays contract-optional:
  * there is no persisted wallet snapshot, only the pass provides it.
  */
-async function rowCheckedBody(
+async function paymentCheckFromStoredAttempt(
   runtime: Runtime,
   orderId: string,
   paymentHash: string,
@@ -609,7 +669,7 @@ async function rowCheckedBody(
   const rows = await runtime.host.payments.listForOrder(orderId);
   const record = rows.find((row) => row.paymentHash.toLowerCase() === paymentHash.toLowerCase());
   if (record === undefined) {
-    // resolveHost selected this hash from the same repository moments ago.
+    // resolveHostCheckout selected this hash from the same repository moments ago.
     throw new OpenReceiveHttpError(404, "NOT_FOUND", "Payment attempt not found for this order.");
   }
   return {
@@ -687,7 +747,7 @@ function hostPaymentHash(value: unknown): string {
   );
 }
 
-function requiredAmount(value: ResolvedHostCheckout): CreateCheckoutAmount {
+function requireResolvedAmount(value: ResolvedHostCheckout): CreateCheckoutAmount {
   if (value.amount === undefined || value.amount === null) {
     throw new OpenReceiveHttpError(
       500,
@@ -698,7 +758,7 @@ function requiredAmount(value: ResolvedHostCheckout): CreateCheckoutAmount {
   return value.amount;
 }
 
-function requiredCheckout(value: ResolvedHostCheckout): Checkout {
+function requireResolvedCheckout(value: ResolvedHostCheckout): Checkout {
   if (value.checkout === undefined) {
     throw new OpenReceiveHttpError(
       409,
@@ -709,7 +769,7 @@ function requiredCheckout(value: ResolvedHostCheckout): Checkout {
   return value.checkout;
 }
 
-function requiredSwapData(value: SwapData | undefined): SwapData {
+function requireResolvedSwapData(value: SwapData | undefined): SwapData {
   if (value === undefined) {
     throw new OpenReceiveHttpError(404, "NOT_FOUND", "The host order has no swap data.");
   }
@@ -718,7 +778,7 @@ function requiredSwapData(value: SwapData | undefined): SwapData {
 
 function committedCheckout(orderId: string, resolved: ResolvedHostCheckout): Checkout {
   const paymentHash = hostPaymentHash(resolved.paymentHash);
-  const checkout = requiredCheckout(resolved);
+  const checkout = requireResolvedCheckout(resolved);
   if (checkout.orderId !== orderId || checkout.paymentHash.toLowerCase() !== paymentHash) {
     throw new OpenReceiveHttpError(
       409,
@@ -735,7 +795,7 @@ async function recoverCommittedSwap(
   resolved: ResolvedHostCheckout,
 ): Promise<SwapCheckout> {
   const paymentHash = hostPaymentHash(resolved.paymentHash);
-  const swapData = requiredSwapData(resolved.swapData);
+  const swapData = requireResolvedSwapData(resolved.swapData);
   const status = await runtime.service.getSwap({ orderId, paymentHash, swapData });
   const checkout = committedCheckout(orderId, resolved);
   if (status.orderId !== orderId || status.paymentHash !== paymentHash) {

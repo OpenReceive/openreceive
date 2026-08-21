@@ -4,10 +4,10 @@ import { createOpenReceiveHttpHandler } from "./handler.ts";
 import type {
   CreateOpenReceiveHostDbOptions,
   CreateOpenReceiveHostOptions,
-  OpenReceivePaymentRepository,
   OpenReceiveSettlementEventHook,
 } from "./host-payments.ts";
 import { createOpenReceiveHost } from "./host-payments.ts";
+import type { OpenReceivePaymentRepository } from "./payment-repository.ts";
 import { normalizePrefix } from "./router.ts";
 import type { OpenReceiveOrderSettlementHook } from "./sql-payments.ts";
 

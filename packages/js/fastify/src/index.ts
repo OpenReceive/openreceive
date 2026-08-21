@@ -3,11 +3,11 @@ import {
   type CreateOpenReceiveStackOptions,
   createOpenReceiveHttpHandler,
   createOpenReceiveStack,
+  createProxyRateLimitingConfig,
   createRequestId,
   errorResponse,
   isOpenReceiveStackOptions,
   mapHostRouteError,
-  type OpenReceiveAuthorizeContext,
   OpenReceiveHttpError,
   openReceiveIsUnderPrefix,
   openReceiveWebRequest,
@@ -34,69 +34,7 @@ import {
 // AND lands in these options; the plugin recognizes it as the mount itself, so the
 // OpenReceive routes live directly under it.
 
-// Curated adapter surface: the @openreceive/http pieces a host wires an adapter
-// with — the handler/stack factories, their options/context types, the error
-// classes, and the generated wire body types. Host-integration internals (the
-// SQL payment repository, reconcile gate, host factory plumbing) stay in
-// @openreceive/http; import them from there when composing your own host.
-// tools/validate/check-public-api.mjs pins this surface.
-export type {
-  Checkout,
-  CheckoutCreatedHook,
-  CheckoutCreatedInput,
-  CreateCheckoutAmount,
-  CreateOpenReceiveHttpHandlerOptions,
-  CreateOpenReceiveStackOptions,
-  OpenReceive,
-  OpenReceiveAuthorize,
-  OpenReceiveAuthorizeAction,
-  OpenReceiveAuthorizeContext,
-  OpenReceiveAuthorizeResource,
-  OpenReceiveHost,
-  OpenReceiveHttpHandler,
-  OpenReceiveIpRateLimitConfig,
-  OpenReceiveNotificationWorker,
-  OpenReceiveOrderSettlement,
-  OpenReceiveOrderSettlementHook,
-  OpenReceivePaymentRepository,
-  OpenReceiveRateLimit,
-  OpenReceiveSettlementEvent,
-  OpenReceiveSettlementEventHook,
-  OpenReceiveStack,
-  PaymentCheck,
-  ResolveCheckoutContext,
-  ResolveCheckoutHook,
-  ResolvedHostCheckout,
-  ServiceErrorShape,
-  SwapCheckout,
-} from "@openreceive/http";
-// Generated snake_case wire body types for the HTTP contract.
-export type {
-  OpenReceiveWireCheckout,
-  OpenReceiveWireCreateCheckoutRequest,
-  OpenReceiveWireCreateCheckoutResponse,
-  OpenReceiveWireCreateSwapRequest,
-  OpenReceiveWireCreateSwapResponse,
-  OpenReceiveWireError,
-  OpenReceiveWireOrderRequest,
-  OpenReceiveWirePaymentCheck,
-  OpenReceiveWirePaymentCheckRequest,
-  OpenReceiveWirePaymentStatus,
-  OpenReceiveWirePrepareCheckoutRequest,
-  OpenReceiveWirePrepareCheckoutResponse,
-  OpenReceiveWireRefundSwapRequest,
-  OpenReceiveWireSwapQuoteRequest,
-} from "@openreceive/http";
-export {
-  createOpenReceiveHttpHandler,
-  createOpenReceiveStack,
-  hostError,
-  isServiceErrorShape,
-  mapHostRouteError,
-  OpenReceiveHostError,
-  OpenReceiveHttpError,
-  startOpenReceiveNotificationWorker,
-} from "@openreceive/http";
+export * from "@openreceive/http/adapter-surface";
 
 /** Minimal structural view of the Fastify surface this adapter uses. */
 export interface FastifyRequestLike {
@@ -172,7 +110,7 @@ export function openReceiveFastify(
     const stack = createOpenReceiveStack({
       ...stackOptions,
       ...effectivePrefix,
-      ...resolveProxyRateLimiting(stackOptions.rateLimiting, trustProxyIpHeader),
+      ...createProxyRateLimitingConfig(stackOptions.rateLimiting, trustProxyIpHeader),
     });
     handler = stack.handler;
     fastify.addHook?.("onClose", () => stack.close());
@@ -181,7 +119,7 @@ export function openReceiveFastify(
     handler = createOpenReceiveHttpHandler({
       ...handlerOptions,
       ...effectivePrefix,
-      ...resolveProxyRateLimiting(handlerOptions.rateLimiting, trustProxyIpHeader),
+      ...createProxyRateLimitingConfig(handlerOptions.rateLimiting, trustProxyIpHeader),
     });
   }
   fastify.all("/*", async (request, reply) => {
@@ -262,29 +200,6 @@ function normalizeFastifyPrefix(prefix: string | undefined): string {
   const value = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
   const withoutTrailing = value.length > 1 && value.endsWith("/") ? value.slice(0, -1) : value;
   return withoutTrailing === "/" ? "" : withoutTrailing;
-}
-
-function resolveProxyRateLimiting(
-  rateLimiting: CreateOpenReceiveHttpHandlerOptions["rateLimiting"],
-  trustProxyIpHeader: boolean | string | undefined,
-): Pick<CreateOpenReceiveHttpHandlerOptions, "rateLimiting"> {
-  if (
-    rateLimiting === undefined ||
-    rateLimiting === false ||
-    trustProxyIpHeader === undefined ||
-    trustProxyIpHeader === false
-  ) {
-    return {};
-  }
-  const headerName =
-    trustProxyIpHeader === true ? "x-forwarded-for" : trustProxyIpHeader.toLowerCase();
-  const headerIp = (context: OpenReceiveAuthorizeContext): string | undefined => {
-    const value = context.request.headers.get(headerName);
-    const first = value?.split(",")[0]?.trim();
-    return first !== undefined && first.length > 0 ? first : undefined;
-  };
-  const config = rateLimiting === true ? {} : rateLimiting;
-  return { rateLimiting: { ...config, ip: config.ip ?? headerIp } };
 }
 
 async function respond(

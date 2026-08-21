@@ -1,10 +1,7 @@
 import type { OpenReceive, PaymentCheck } from "@openreceive/node";
-import {
-  type OpenReceiveHost,
-  type OpenReceiveReconcilableAttempt,
-  reconcileOpenReceivePayments,
-  warnOpenReceiveFailure,
-} from "./host-payments.ts";
+import { type OpenReceiveHost, warnOpenReceiveFailure } from "./host-payments.ts";
+import type { OpenReceiveReconcilableAttempt } from "./payment-repository.ts";
+import { reconcileOpenReceivePayments } from "./reconcile-loop.ts";
 
 /**
  * Floor for the durable reconcile-gate interval: at most one real wallet scan

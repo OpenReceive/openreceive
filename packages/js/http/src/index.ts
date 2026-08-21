@@ -41,31 +41,32 @@ export type {
   CreateOpenReceiveHostDbOptions,
   CreateOpenReceiveHostOptions,
   CreateOpenReceiveHostRepositoryOptions,
-  OpenReceiveAttemptStatus,
   OpenReceiveHost,
+  OpenReceiveSettlementEvent,
+  OpenReceiveSettlementEventHook,
+} from "./host-payments.ts";
+export { createOpenReceiveHost } from "./host-payments.ts";
+export type {
+  OpenReceiveAttemptStatus,
   OpenReceivePaymentInsert,
   OpenReceivePaymentRecord,
   OpenReceivePaymentRepository,
   OpenReceiveReconcilableAttempt,
-  OpenReceiveReconciler,
   OpenReceiveReconciliationTransition,
-  OpenReceiveSettlementEvent,
-  OpenReceiveSettlementEventHook,
   OpenReceiveSettlementRecord,
-} from "./host-payments.ts";
+} from "./payment-repository.ts";
 // The attempt decision machinery (liveAttemptCommitDecision,
 // isReusablePaymentAttempt, reconciliationTransition) is deliberately NOT
 // exported: hosts see "unpaid or paid", never the live/supersede vocabulary.
 // Custom repositories import the contract types below and implement against
 // the documented invariants instead.
 export {
-  createOpenReceiveHost,
   OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS,
   OPENRECEIVE_ATTEMPT_REUSE_BUFFER_SECONDS,
   openReceivePaymentInsert,
-  reconcileOpenReceivePayments,
-  startOpenReceiveReconciler,
-} from "./host-payments.ts";
+} from "./payment-repository.ts";
+export type { OpenReceiveReconciler } from "./reconcile-loop.ts";
+export { reconcileOpenReceivePayments, startOpenReceiveReconciler } from "./reconcile-loop.ts";
 export type {
   OpenReceiveNotificationListener,
   OpenReceiveNotificationWorker,
@@ -88,26 +89,29 @@ export {
 export type { OpenReceiveIpRateLimitConfig } from "./rate-limit.ts";
 export {
   createOpenReceiveIpRateLimit,
+  createProxyRateLimitingConfig,
   OPENRECEIVE_DEFAULT_IP_RATE_LIMIT_PER_HOUR,
   openReceiveClientIp,
   openReceiveClientIpBucket,
 } from "./rate-limit.ts";
 export type {
-  OpenReceiveOrderSettlement,
-  OpenReceiveOrderSettlementHook,
   OpenReceiveSqlAdapter,
   OpenReceiveSqlClient,
   OpenReceiveSqlDatabase,
+  OpenReceiveSqlQuery,
+} from "./sql-adapters.ts";
+export { resolveSqlAdapter } from "./sql-adapters.ts";
+export type {
+  OpenReceiveOrderSettlement,
+  OpenReceiveOrderSettlementHook,
   OpenReceiveSqlPaymentRepository,
   OpenReceiveSqlPaymentsOptions,
-  OpenReceiveSqlQuery,
 } from "./sql-payments.ts";
 export {
   createOpenReceiveSqlPayments,
   OPENRECEIVE_PAYMENTS_SCHEMA_VERSION,
   OPENRECEIVE_RECONCILE_BATCH_SIZE,
   openReceivePaymentsSchemaSql,
-  resolveSqlAdapter,
 } from "./sql-payments.ts";
 export type { CreateOpenReceiveStackOptions, OpenReceiveStack } from "./stack.ts";
 export { createOpenReceiveStack, isOpenReceiveStackOptions } from "./stack.ts";

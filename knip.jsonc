@@ -43,6 +43,11 @@
       "entry": ["src/index.ts", "src/contracts.ts", "src/swap-address.ts"],
       "project": ["src/**/*.{ts,tsx,mjs}"]
     },
+    "packages/js/http": {
+      // The curated adapter surface is a published subpath (./adapter-surface).
+      "entry": ["src/index.ts", "src/adapter-surface.ts"],
+      "project": ["src/**/*.{ts,tsx,mjs}"]
+    },
     "packages/js/node": {
       "entry": ["src/index.ts", "src/cli.ts", "bin/*.mjs"],
       "project": ["src/**/*.{ts,tsx,mjs}", "bin/**/*.mjs"]
