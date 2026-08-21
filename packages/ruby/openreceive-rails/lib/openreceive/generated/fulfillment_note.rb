@@ -1,0 +1,76 @@
+# frozen_string_literal: true
+
+# GENERATED FILE — DO NOT EDIT.
+# Source: spec/data/fulfillment-note.txt (npm run generate:models).
+# The JS twin is packages/js/core/src/generated/fulfillment-note-text.ts; both render the same text, so the
+# Rails install generator and the scaffold CLI cannot give different advice.
+
+module OpenReceive
+  module Generated
+    # The note's lines, with "{{table}}" awaiting the caller's table name.
+    FULFILLMENT_NOTE_TEMPLATE = [
+      "OpenReceive and your order table",
+      "",
+      "OpenReceive stores `order_id` as an opaque string. It never reads, writes,",
+      "locks, or joins your order table, and it does not need its name or its",
+      "primary-key type. Pass whatever your ids already are - bigint, uuid, ULID,",
+      "a Stripe-style prefixed string - stringified. Nothing here has to match.",
+      "",
+      "WHAT OPENRECEIVE GUARANTEES",
+      "",
+      "Across every settlement path OpenReceive itself owns (wallet notifications,",
+      "the opportunistic reconcile pass, an explicit reconcile job), the settlement",
+      "hook runs AT MOST ONCE per order. The library serializes on its own",
+      "`{{table}}` rows, decides the winner there, and runs your hook",
+      "inside that same transaction. A second payment to a second invoice for the",
+      "same order is still recorded - with `status_reason = 'duplicate_settlement'`",
+      "- but never fulfills a second time. You do not need to add a lock for this.",
+      "",
+      "WHAT YOU MUST GUARANTEE",
+      "",
+      "OpenReceive cannot see fulfillment that happens outside it. If ANY other",
+      "path can also mark this order fulfilled - an admin action, a second payment",
+      "processor, a support tool, a replayed webhook, a retried background job -",
+      "then those paths race each other, not OpenReceive, and you must make",
+      "fulfillment idempotent yourself.",
+      "",
+      "The usual way is to make the transition itself the lock: guard it with a",
+      "conditional write that only one transaction can win.",
+      "",
+      "  -- Idempotent by construction: the WHERE clause is the guard. Whoever",
+      "  -- flips 'awaiting_payment' -> 'paid' first is the only one who fulfills;",
+      "  -- every later attempt updates 0 rows and must do nothing.",
+      "  UPDATE orders",
+      "     SET state = 'paid', paid_at = :paid_at",
+      "   WHERE id = :order_id",
+      "     AND state = 'awaiting_payment';",
+      "  -- then: if 0 rows were affected, return without shipping anything.",
+      "",
+      "If your fulfillment is a read-modify-write that cannot be expressed as one",
+      "conditional UPDATE, take a row lock for the duration instead:",
+      "",
+      "  SELECT * FROM orders WHERE id = :order_id FOR UPDATE;  -- postgres/mysql",
+      "  -- ...check state, ship, write the new state, all before COMMIT.",
+      "",
+      "Run either one inside the transaction OpenReceive hands your settlement",
+      "hook, so the order transition and the payment record commit together.",
+      "",
+      "OPTIONAL: A FOREIGN KEY",
+      "",
+      "OpenReceive does not create one and does not want one - it would force",
+      "`order_id` to match your primary-key type and would couple this table's",
+      "migrations to yours. If you want the referential integrity anyway, and your",
+      "order ids really are text, add it yourself:",
+      "",
+      "  ALTER TABLE {{table}}",
+      "    ADD CONSTRAINT {{table}}_order_fk",
+      "    FOREIGN KEY (order_id) REFERENCES orders (id)",
+      "    ON DELETE RESTRICT;",
+      "",
+      "Cast in the REFERENCES clause if your key is not text, or add a generated",
+      "column and point the constraint at that. Use ON DELETE RESTRICT, never",
+      "CASCADE: deleting an order must not silently delete the record of money",
+      "that was actually paid.",
+    ].freeze
+  end
+end

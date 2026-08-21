@@ -17,16 +17,18 @@ payment-attempt repository logic (locking, settlement write-once,
 reconciliation) at runtime; the generated files never contain it.
 OpenReceive never opens a database connection or runs migrations.
 
+Nothing here asks about your order table. OpenReceive stores order_id as an
+opaque TEXT string and never reads, locks, or references that table, so its
+name and primary-key type are irrelevant. Every generated file carries a
+comment showing how to keep fulfillment exactly-once — and how to add a
+foreign key yourself, if you want one.
+
 Options:
   --orm <name>              prisma | drizzle | typeorm | sequelize | knex
   --dialect <name>          postgres | sqlite (default: postgres)
-  --order-model <Name>      Host order model/class (default: Order)
-  --order-table <name>      Host order table (default: derived)
-  --order-id-type <type>    bigint | integer | uuid | string
   --table-name <name>       Payment attempts table (default: openreceive_payments)
   --meta-table-name <name>  Reconcile-gate table (default: openreceive_meta)
   --out-dir <path>          Output root (default: .)
-  --skip-foreign-key        Do not emit a FK to the order table
   --force                   Overwrite existing generated files
   -i, --interactive         Ask for missing options (default on TTY when --orm omitted)
   -h, --help                Show this help
@@ -35,8 +37,7 @@ Examples:
   npx openreceive scaffold payments
   npx openreceive scaffold payments --orm prisma
   npx openreceive scaffold payments --orm knex --dialect sqlite
-  npx openreceive scaffold payments --orm sequelize --order-model Purchase --order-id-type uuid
-  npx openreceive scaffold payments --orm drizzle --dialect sqlite --skip-foreign-key --out-dir ./backend
+  npx openreceive scaffold payments --orm drizzle --dialect sqlite --out-dir ./backend
 `.trim();
 
 export interface RunScaffoldPaymentsInput {
@@ -95,13 +96,9 @@ function printPlan(
   stdout.write("OpenReceive scaffold payments\n");
   stdout.write(`  orm:          ${options.orm}\n`);
   stdout.write(`  dialect:      ${options.dialect}\n`);
-  stdout.write(
-    `  order:        ${options.orderModel} → ${options.orderTable} (${options.orderIdType})\n`,
-  );
+  stdout.write(`  tables:       ${options.tableName}, ${options.metaTableName}\n`);
   stdout.write(`  out-dir:      ${options.outDir}\n`);
-  stdout.write(
-    `  foreign-key:  ${options.skipForeignKey ? "no" : `yes → ${options.orderTable}.id`}\n`,
-  );
+  stdout.write("  order table:  untouched (order_id is opaque TEXT, no foreign key)\n");
   if (options.dialect === "sqlite") {
     stdout.write(
       "  note:         SQLite uses a single-writer transaction (no Postgres row locks)\n",
@@ -126,6 +123,10 @@ function printSummary(
     "  3. Wire createOpenReceiveHost({ db, loadOrder, amountForOrder, onPaid }) —\n" +
       "     OpenReceive owns the repository logic at runtime; settlement piggybacks\n" +
       "     on mounted routes by default (no background process needed)\n",
+  );
+  stdout.write(
+    "  4. Make onPaid idempotent if anything OTHER than OpenReceive can also\n" +
+      "     fulfill an order — the generated files show the guarded UPDATE\n",
   );
 }
 

@@ -32,7 +32,7 @@ module OpenReceive
     # resolve_checkout and on_checkout_created together; on_paid then receives
     # the raw settlement event and owns replay safety itself.
     attr_accessor :parent_controller, :nwc, :nwc_client, :authorize,
-                  :load_order, :amount_for_order, :on_paid, :order_model,
+                  :load_order, :amount_for_order, :on_paid,
                   :resolve_checkout, :on_checkout_created,
                   :rate_limit, :rate_limiting, :client_ip, :price_provider,
                   :swap_providers, :price_currencies, :allow_spend_capable_wallet,
@@ -46,7 +46,6 @@ module OpenReceive
       @load_order = nil
       @amount_for_order = nil
       @on_paid = nil
-      @order_model = "Order"
       @resolve_checkout = nil
       @on_checkout_created = nil
       @rate_limit = nil
@@ -282,12 +281,14 @@ module OpenReceive
 
     def engine_on_checkout_created
       lambda do |order_id:, payment_hash:, checkout:, swap_data: nil, client_ip: nil, **|
-        order = @load_order.call(order_id)
-        raise OpenReceive::Server::NotFoundError, "Order not found." if order.nil?
+        # load_order still gates on the order existing (an unknown id is a 404),
+        # but the engine does not touch the object it returns: commit_attempt!
+        # serializes on its own rows, keyed by the id alone.
+        raise OpenReceive::Server::NotFoundError, "Order not found." if @load_order.call(order_id).nil?
 
         begin
           OpenReceivePayment.commit_attempt!(
-            order: order,
+            order_id: order_id,
             payment_hash: payment_hash,
             checkout: checkout,
             swap_data: swap_data,
@@ -308,7 +309,7 @@ module OpenReceive
         OpenReceivePayment.mark_paid_once!(
           payment_hash: data.fetch("payment_hash"),
           paid_at: data.fetch("paid_at")
-        ) do |_order, payment|
+        ) do |payment|
           @on_paid.call(
             OrderSettlement.new(
               order_id: payment.order_id,

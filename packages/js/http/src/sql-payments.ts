@@ -133,6 +133,21 @@ export interface OpenReceiveOrderSettlement {
    * host order or insert a transactional outbox row. Write the placeholders
    * your database uses (`?` on sqlite, `$1`-style on postgres) — this SQL is
    * yours and reaches the driver exactly as written.
+   *
+   * OpenReceive already guarantees this hook fires at most once per order
+   * across its own settlement paths, and it never reads or locks the host's
+   * order table. It cannot see fulfillment triggered anywhere else, though —
+   * an admin action, a second processor, a replayed job — so if any of those
+   * exist, guard the transition here rather than assuming exclusivity:
+   *
+   * ```sql
+   * UPDATE orders SET state = 'paid'
+   *  WHERE id = $1 AND state = 'awaiting_payment' RETURNING id
+   * ```
+   *
+   * An empty result means someone else already fulfilled it; return without
+   * shipping. `openReceiveFulfillmentNote` in `@openreceive/core` is the full
+   * version, and is what the scaffold writes into every generated file.
    */
   readonly query: OpenReceiveSqlQuery;
 }

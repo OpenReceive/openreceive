@@ -37,8 +37,13 @@ and reconciles periodically; `OpenReceive::ReconcileJob` and
 unpaid attempt requires a successful wallet scan at or after expiry plus the
 shared grace window — a local clock alone never closes a row.
 
-Use `--order-model`, `--order-table`, and `--order-primary-key-type` to match
-the host schema. The receive-only wallet URI loads from `ENV["NWC_URI"]`; boot
+The engine never reads, writes, locks, or references the host's order table:
+`order_id` is an opaque string with no foreign key, and commit/settlement
+serialize on an OpenReceive-owned per-order lock. `--order-model` only names
+the model the generated initializer calls. Because the engine cannot see
+fulfillment that happens outside it, `config.on_paid` must be idempotent if any
+other path can also fulfill an order — the generated initializer shows the
+guarded transition. The receive-only wallet URI loads from `ENV["NWC_URI"]`; boot
 fails closed when the connection advertises spend methods unless
 `config.allow_spend_capable_wallet` or `OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC`
 overrides it. Keep ordinary settings such as `config.price_currencies` in

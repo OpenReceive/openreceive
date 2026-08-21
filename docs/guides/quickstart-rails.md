@@ -16,13 +16,12 @@ bin/rails db:migrate
 ```
 
 `openreceive:install` emits one migration for both engine tables, the
-initializer, and the engine mount; flags like `--order-model` and
-`--order-primary-key-type` adapt it to your schema. The migration adapts to
-the app's configured database adapter — PostgreSQL, SQLite, and MySQL
-(`mysql2`/`trilogy`) are supported. **Match
-`--order-primary-key-type` to your orders table's primary key** (`bigint`
-default; `uuid`/`string` for UUID-style ids like the example apps use) — a
-mismatched `openreceive_payments.order_id` type bites at foreign-key/join time.
+initializer, and the engine mount. The migration adapts to the app's configured
+database adapter — PostgreSQL, SQLite, and MySQL (`mysql2`/`trilogy`) are
+supported. There is nothing to match against your schema: `order_id` is stored
+as an opaque string with no foreign key, whatever your orders table's primary
+key looks like. `--order-model` only names the model the generated initializer
+calls (`load_order`, `amount_for_order`, the `on_paid` example).
 → [openreceive:install](api-reference.md#openreceiveinstall)
 
 The generator emits three things:
@@ -39,10 +38,37 @@ reconciliation state machine; the generator does not alter `orders`. Review the
 migration before running it: `order_id` is indexed but not unique (an order may
 have many historical attempts), `payment_hash` is globally unique.
 
-The default assumes an `Order` model with a bigint primary key. Adjust with
-`--order-model`, `--order-table`, `--order-primary-key-type=uuid`, or
-`--skip-foreign-key`, and set `config.order_model` when the host model is not
-`Order`.
+### Your order table stays yours
+
+The engine never reads, writes, locks, or references it. Commit and settlement
+serialize on an OpenReceive-owned per-order lock
+(`OpenReceivePayment.with_order_lock` — a Postgres advisory lock, a MySQL named
+lock, or SQLite's single writer), so there is no model to register and no
+foreign key to keep in step with your migrations.
+
+The flip side is one thing you own: **if anything other than OpenReceive can
+also fulfill an order** — an admin action, a second payment processor, a
+replayed job — those paths race each other, and `on_paid` must be idempotent.
+The generated initializer spells this out and shows the guarded transition:
+
+```ruby
+config.on_paid = lambda do |settlement|
+  claimed = Order
+              .where(id: settlement.order_id, state: "awaiting_payment")
+              .update_all(state: "paid", paid_at: Time.at(settlement.paid_at).utc)
+  next if claimed.zero? # someone else already fulfilled it
+
+  FulfillOrder.call(Order.find(settlement.order_id), payment_hash: settlement.payment_hash)
+end
+```
+
+Within OpenReceive's own settlement paths, `on_paid` already runs at most once
+per order: a second payment to a second invoice is recorded with
+`status_reason = "duplicate_settlement"` and never fulfills again.
+
+If you want referential integrity anyway, add the foreign key yourself in your
+own migration — the generated one shows the statement, `ON DELETE RESTRICT` so
+deleting an order cannot erase the record of money that was paid.
 
 A complete runnable host app is the Rails Hello Fruit demo, `npm run demo rails`
 ([`examples/hello-fruit/server/rails`](../../examples/hello-fruit/server/rails)).

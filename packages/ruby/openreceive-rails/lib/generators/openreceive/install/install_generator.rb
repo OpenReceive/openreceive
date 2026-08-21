@@ -3,6 +3,7 @@
 require "rails/generators/base"
 require "rails/generators/active_record"
 require "rails/generators/active_record/migration"
+require "openreceive/fulfillment_note"
 
 module OpenReceive
   module Generators
@@ -18,13 +19,12 @@ module OpenReceive
       class_option :skip_initializer, type: :boolean, default: false
       class_option :skip_route, type: :boolean, default: false
       class_option :skip_migration, type: :boolean, default: false
-      class_option :skip_foreign_key, type: :boolean, default: false
+      # Only the host model NAME, and only so the generated initializer can call
+      # your own code (load_order, amount_for_order, the on_paid example). The
+      # engine itself never touches that model or its table, so there is nothing
+      # to configure about its table name, its primary-key type, or a foreign
+      # key — order_id is opaque TEXT.
       class_option :order_model, type: :string, default: "Order"
-      class_option :order_table, type: :string
-      class_option :order_primary_key_type,
-                   type: :string,
-                   default: "bigint",
-                   enum: %w[bigint integer uuid string]
 
       def create_openreceive_migration
         return if options[:skip_migration]
@@ -46,20 +46,19 @@ module OpenReceive
         options[:order_model]
       end
 
-      def order_table_name
-        options[:order_table].presence || order_model_name.underscore.pluralize
-      end
-
-      def order_primary_key_type
-        options[:order_primary_key_type]
+      # The order-table boundary note, shared verbatim with the JS scaffold.
+      #
+      # Rails and Thor binread their templates, so ERB builds the output in
+      # ASCII-8BIT. The note is UTF-8 prose, and concatenating the two raises
+      # Encoding::CompatibilityError — so hand ERB the same bytes tagged the
+      # way it expects. Thor writes the result in binary mode, so the file on
+      # disk is still correct UTF-8.
+      def fulfillment_note(prefix)
+        OpenReceive::FulfillmentNote.render(prefix: prefix).dup.force_encoding(Encoding::BINARY)
       end
 
       def migration_version
         "#{::ActiveRecord::VERSION::MAJOR}.#{::ActiveRecord::VERSION::MINOR}"
-      end
-
-      def add_order_foreign_key?
-        !options[:skip_foreign_key]
       end
 
       # Mirrors the JS OPENRECEIVE_PAYMENTS_SCHEMA_VERSION.

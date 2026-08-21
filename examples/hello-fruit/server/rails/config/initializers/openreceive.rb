@@ -43,11 +43,10 @@ OpenReceive.configure do |config|
   # The host authorizes every request; OpenReceive mints no tokens.
   config.authorize = ->(context) { OpenReceiveOrderPolicy.authorized?(context) }
 
-  # The engine-owned OpenReceivePayment rows serialize per order by locking the
-  # host order row of this model.
-  config.order_model = "Order"
-
   # Load the host-owned order; nil for an unknown id (mapped to 404).
+  # OpenReceive only needs this to answer "does the order exist" and to ask
+  # amount_for_order for the price. It never locks, writes, or references the
+  # orders table — its own openreceive_payments rows are the lock.
   config.load_order = ->(order_id) { Order.find_by(id: order_id) }
 
   # The host order is the only price authority; payer input never carries an amount.
@@ -55,9 +54,12 @@ OpenReceive.configure do |config|
 
   # Runs inside the settlement transaction, only for the order's first settled
   # attempt. `settlement` exposes order_id, payment_hash, and paid_at.
+  # Runs inside the settlement transaction, and OpenReceive already guarantees
+  # it fires at most once per order across its own settlement paths. It is
+  # still written as a guarded transition, because that is the shape a real
+  # shop needs the moment anything else can also fulfill an order.
   config.on_paid = lambda do |settlement|
-    order = Order.find(settlement.order_id)
-    FulfillOrder.call(order, payment_hash: settlement.payment_hash)
+    FulfillOrder.call(settlement.order_id, payment_hash: settlement.payment_hash)
   end
 end
 

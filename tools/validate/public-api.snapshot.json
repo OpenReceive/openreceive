@@ -497,6 +497,8 @@
         "OPENRECEIVE_STATIC_BTC_FIAT_RATES",
         "OpenReceiveDecimalError",
         "OpenReceiveError",
+        "openReceiveFulfillmentNote",
+        "openReceiveFulfillmentNoteMarkdown",
         "openReceivePaymentsColumnNames",
         "openReceivePaymentsDdlStatements",
         "openReceivePaymentsHashCheckSql",

@@ -2,10 +2,14 @@
 
 # Both engine-owned tables, in one migration: the payment attempts and the
 # durable reconcile gate they share. Same host database, never a second one.
+#
+<%= fulfillment_note("# ") %>
 class CreateOpenreceiveTables < ActiveRecord::Migration[<%= migration_version %>]
   def change
     create_table :openreceive_payments do |t|
-      t.<%= order_primary_key_type %> :order_id, null: false
+      # Opaque host order id. Deliberately a string with no foreign key — see
+      # the note above if you want to add one yourself.
+      t.string :order_id, null: false
       t.string :payment_hash, null: false, limit: 64
       # Attempt lifecycle: pending | settled | expired | failed | attention.
       t.string :status, null: false, default: "pending"
@@ -31,9 +35,6 @@ class CreateOpenreceiveTables < ActiveRecord::Migration[<%= migration_version %>
     add_index :openreceive_payments, [:order_id, :created_at]
     add_index :openreceive_payments, [:status, :created_at]
     add_index :openreceive_payments, [:client_ip, :inserted_at]
-<% if add_order_foreign_key? -%>
-    add_foreign_key :openreceive_payments, :<%= order_table_name %>, column: :order_id
-<% end -%>
 
     # Engine-owned key/value/rev rows: the durable reconcile gate every worker
     # on this database shares, so settlement scans piggybacking on requests

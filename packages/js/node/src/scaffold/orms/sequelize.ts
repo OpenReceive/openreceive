@@ -1,3 +1,4 @@
+import { openReceiveFulfillmentNote } from "@openreceive/core";
 import { canonicalPaymentsDdlStatements } from "../shared.ts";
 import type { ScaffoldFile, ScaffoldPaymentsOptions } from "../types.ts";
 import { wiringGuideMarkdown } from "../wiring-guide.ts";
@@ -23,6 +24,8 @@ export function renderSequelizeFiles(options: ScaffoldPaymentsOptions): Scaffold
  * timestamps are unix-seconds integer columns, on purpose.
  *
  * Dialect: ${options.dialect}
+ *
+${openReceiveFulfillmentNote(" * ", options.tableName)}
  */
 module.exports = {
   async up(queryInterface) {

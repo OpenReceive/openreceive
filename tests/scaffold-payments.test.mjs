@@ -11,6 +11,7 @@ import {
 } from "../packages/js/node/src/cli.ts";
 import { OPENRECEIVE_DIALECTS, OPENRECEIVE_ORMS } from "../packages/js/node/src/scaffold/types.ts";
 import { canonicalPaymentsDdlStatements } from "../packages/js/node/src/scaffold/shared.ts";
+import { openReceiveFulfillmentNote } from "../packages/js/core/src/index.ts";
 import { openReceivePaymentsSchemaSql } from "../packages/js/http/src/sql-payments.ts";
 
 const SCHEMA_PATHS = {
@@ -41,11 +42,30 @@ function renderFor(orm, dialect, extra = {}) {
       orm,
       dialect,
       force: false,
-      skipForeignKey: false,
       outDir: ".",
       ...extra,
     }),
   );
+}
+
+/**
+ * The generated files carry the fulfillment note, which deliberately SHOWS
+ * host-side locking SQL and an opt-in foreign key. Those lines are guidance in
+ * a comment, not emitted logic, so assertions about what the scaffold emits
+ * must exclude them. Matching against the note's own lines keeps this exact:
+ * new note text is excluded automatically, anything else is not.
+ */
+function withoutFulfillmentNote(text, tableName = "openreceive_payments") {
+  const noteLines = new Set(
+    openReceiveFulfillmentNote("", tableName)
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line !== ""),
+  );
+  return text
+    .split("\n")
+    .filter((line) => !noteLines.has(line.replace(/^\s*(\/\/|\*|#)\s?/, "").trim()))
+    .join("\n");
 }
 
 function schemaFile(files, orm) {
@@ -104,7 +124,7 @@ test("scaffold payments requires --orm when not interactive", async () => {
   assert.match(errors.join(""), /Missing --orm|--orm/);
 });
 
-test("parseScaffoldPaymentsArgv accepts ORM, dialect, and order flags", () => {
+test("parseScaffoldPaymentsArgv accepts ORM, dialect, and table flags", () => {
   for (const orm of OPENRECEIVE_ORMS) {
     for (const dialect of OPENRECEIVE_DIALECTS) {
       const parsed = parseScaffoldPaymentsArgv([
@@ -112,31 +132,46 @@ test("parseScaffoldPaymentsArgv accepts ORM, dialect, and order flags", () => {
         orm,
         "--dialect",
         dialect,
-        "--order-model",
-        "Purchase",
-        "--order-table",
-        "purchases",
-        "--order-id-type",
-        "uuid",
         "--table-name",
         "shop_payment_attempts",
         "--meta-table-name",
         "shop_payment_meta",
-        "--skip-foreign-key",
         "--force",
         "--out-dir",
         "./backend",
       ]);
       assert.equal(parsed.partial.orm, orm);
       assert.equal(parsed.partial.dialect, dialect);
-      assert.equal(parsed.partial.orderModel, "Purchase");
-      assert.equal(parsed.partial.orderTable, "purchases");
-      assert.equal(parsed.partial.orderIdType, "uuid");
       assert.equal(parsed.partial.tableName, "shop_payment_attempts");
       assert.equal(parsed.partial.metaTableName, "shop_payment_meta");
-      assert.equal(parsed.partial.skipForeignKey, true);
       assert.equal(parsed.partial.force, true);
       assert.equal(parsed.partial.outDir, "./backend");
+    }
+  }
+});
+
+// The scaffold no longer asks about the host's order table, so a stale scripted
+// invocation must fail loudly and say why rather than reporting a bare
+// "unexpected option" that reads like a typo.
+test("removed order-table flags are rejected by name, in both spellings", () => {
+  const removed = [
+    ["--order-model", "Purchase"],
+    ["--order-table", "purchases"],
+    ["--order-id-type", "uuid"],
+    ["--skip-foreign-key"],
+  ];
+  for (const [flag, value] of removed) {
+    for (const argv of value === undefined ? [[flag]] : [[flag, value], [`${flag}=${value}`]]) {
+      assert.throws(
+        () => parseScaffoldPaymentsArgv(["--orm", "knex", ...argv]),
+        (error) => {
+          assert.match(error.message, new RegExp(flag.replace(/-/g, "\\-")));
+          assert.match(error.message, /was removed/);
+          assert.match(error.message, /order_id is always TEXT/);
+          return true;
+        },
+        `${argv.join(" ")} should be rejected by name`,
+      );
     }
   }
 });
@@ -203,12 +238,8 @@ test("scaffold DDL matches the repository's canonical schema, per dialect", () =
     const scaffold = canonicalPaymentsDdlStatements({
       orm: "typeorm",
       dialect,
-      orderModel: "Order",
-      orderTable: "orders",
-      orderIdType: "string",
       tableName: "openreceive_payments",
       metaTableName: "openreceive_meta",
-      skipForeignKey: true,
       outDir: ".",
       force: false,
     }).join("\n");
@@ -227,7 +258,6 @@ test("raw-DDL migrations embed every canonical statement verbatim", () => {
         orm,
         dialect,
         force: false,
-        skipForeignKey: false,
         outDir: ".",
       });
       const schema = schemaFile(renderScaffoldPaymentsFiles(options), orm).contents;
@@ -288,7 +318,7 @@ test("custom table names thread through every emitter", () => {
     assert.match(schema, /shop_payment_attempts/, `${orm} schema ignores --table-name`);
     assert.match(schema, /shop_payment_meta/, `${orm} schema ignores --meta-table-name`);
     assert.doesNotMatch(
-      schema,
+      withoutFulfillmentNote(schema, "shop_payment_attempts"),
       /\bopenreceive_payments\b|\bopenreceive_meta\b/,
       `${orm} schema still references the default table names`,
     );
@@ -300,7 +330,9 @@ test("no repository, settlement, or locking logic is emitted", () => {
   for (const orm of OPENRECEIVE_ORMS) {
     for (const dialect of OPENRECEIVE_DIALECTS) {
       const files = renderFor(orm, dialect);
-      const joined = files.map((file) => `${file.path}\n${file.contents}`).join("\n");
+      const joined = withoutFulfillmentNote(
+        files.map((file) => `${file.path}\n${file.contents}`).join("\n"),
+      );
       assert.doesNotMatch(
         joined,
         /commitAttempt|markPaidOnce|markOpenReceivePaidOnce|listUnsettledAttempts|listReconcilableAttempts|OpenReceiveHostRepository|payments-repository|host\.stub|OpenReceiveAttemptConflict|onFirstSettlement|liveAttemptCommitDecision|openReceivePaymentInsert/,
@@ -388,38 +420,47 @@ test("sqlite schemas use sqlite constructs", () => {
   assert.match(prisma, /Int\s+@id @default\(autoincrement\(\)\)/);
 });
 
-test("order-id typing and foreign keys follow the flags", () => {
-  const prismaUuid = schemaFile(
-    renderFor("prisma", "postgres", { orderIdType: "uuid" }),
-    "prisma",
-  ).contents;
-  assert.match(prismaUuid, /@db\.Uuid/);
-  assert.match(prismaUuid, /@relation\(fields: \[orderId\], references: \[id\]/);
-
-  const knexUuid = schemaFile(
-    renderFor("knex", "postgres", { orderIdType: "uuid" }),
-    "knex",
-  ).contents;
-  assert.match(knexUuid, /order_id UUID NOT NULL REFERENCES orders \(id\)/);
-
-  const typeormUuid = schemaFile(
-    renderFor("typeorm", "postgres", { orderIdType: "uuid" }),
-    "typeorm",
-  ).contents;
-  assert.match(typeormUuid, /order_id UUID NOT NULL REFERENCES orders \(id\)/);
-
+// The order table is out of scope entirely: order_id is opaque TEXT, no ORM
+// emits a relation or a REFERENCES clause, and no rendering varies by the
+// host's primary-key type.
+test("no ORM couples openreceive_payments to the host order table", () => {
   for (const orm of OPENRECEIVE_ORMS) {
-    const withFk = schemaFile(renderFor(orm, "postgres"), orm).contents;
-    assert.match(withFk, /references|REFERENCES|@relation/i, `${orm} default should emit a FK`);
-    const withoutFk = schemaFile(
-      renderFor(orm, "postgres", { skipForeignKey: true }),
-      orm,
-    ).contents;
-    assert.doesNotMatch(
-      withoutFk,
-      /references|REFERENCES|@relation/i,
-      `${orm} --skip-foreign-key should drop the FK`,
-    );
+    for (const dialect of OPENRECEIVE_DIALECTS) {
+      const schema = schemaFile(renderFor(orm, dialect), orm).contents;
+      // Strip the fulfillment note, which deliberately SHOWS an opt-in FK.
+      const generated = schema.replaceAll(/^.*(REFERENCES orders|ADD CONSTRAINT).*$/gm, "");
+      assert.doesNotMatch(
+        generated,
+        /@relation|\.references\(/,
+        `${orm}/${dialect} should not emit an ORM relation to the order table`,
+      );
+      assert.match(
+        schema,
+        /order_id TEXT NOT NULL|orderId\s+String\s+@map\("order_id"\)|orderId: text\("order_id"\)/,
+        `${orm}/${dialect} should type order_id as opaque text`,
+      );
+      assert.doesNotMatch(
+        schema,
+        /order_id (UUID|BIGINT|INTEGER)|@db\.Uuid/,
+        `${orm}/${dialect} should not type order_id from a host primary key`,
+      );
+    }
+  }
+});
+
+// Every generated file carries the note, and the note carries the two things a
+// host must actually do: guard the transition, and know where the guarantee
+// stops.
+test("every generated schema and the guide carry the fulfillment note", () => {
+  for (const orm of OPENRECEIVE_ORMS) {
+    const files = renderFor(orm, "postgres");
+    for (const contents of [schemaFile(files, orm).contents, guideFile(files).contents]) {
+      assert.match(contents, /WHAT OPENRECEIVE GUARANTEES|What openreceive guarantees/);
+      assert.match(contents, /WHAT YOU MUST GUARANTEE|What you must guarantee/);
+      assert.match(contents, /AND state = 'awaiting_payment'/);
+      assert.match(contents, /FOR UPDATE/);
+      assert.match(contents, /ON DELETE RESTRICT/);
+    }
   }
 });
 
@@ -450,7 +491,7 @@ test("scaffold logs plan details including dialect", async () => {
 
 test("interactive wizard fills missing options and writes files", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "openreceive-scaffold-"));
-  const answers = ["prisma", "sqlite", "Order", "orders", "string", "y", "."];
+  const answers = ["prisma", "sqlite", "."];
   try {
     const output = [];
     const code = await runOpenReceiveCli({

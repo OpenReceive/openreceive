@@ -954,15 +954,19 @@ Emits one schema/migration file for your ORM — `openreceive_payments` and the
 wiring guide, nothing else. Never opens a database connection or runs
 migrations.
 
+Nothing here asks about your order table: `order_id` is always `TEXT` with no
+foreign key, so its name and primary-key type are irrelevant. Every generated
+file carries the exactly-once fulfillment note. The removed `--order-model`,
+`--order-table`, `--order-id-type`, and `--skip-foreign-key` flags are rejected
+by name, so a stale scripted invocation says why.
+
 | Flag | Meaning |
 | --- | --- |
 | `--orm <name>` | `prisma \| drizzle \| typeorm \| sequelize \| knex`. |
 | `--dialect <name>` | `postgres \| sqlite` (default `postgres`). |
-| `--order-model <Name>` | Host order model/class (default `Order`). |
-| `--order-table <name>` | Host order table (default derived). |
-| `--order-id-type <type>` | `bigint \| integer \| uuid \| string`. |
+| `--table-name <name>` | Payment attempts table (default `openreceive_payments`). |
+| `--meta-table-name <name>` | Reconcile-gate table (default `openreceive_meta`). |
 | `--out-dir <path>` | Output root (default `.`). |
-| `--skip-foreign-key` | No FK to the order table. |
 | `--force` | Overwrite generated files. |
 | `-i, --interactive` | Prompt for missing options (default on TTY when `--orm` omitted). |
 
@@ -997,12 +1001,14 @@ generated initializer ships `config.on_paid = OpenReceive::LOGGING_ON_PAID`, a
 logging placeholder that fulfills nothing; the engine warns at every boot
 while it is still configured.
 
+The engine never reads, writes, locks, or references the host's order table:
+`order_id` is stored as a string with no foreign key, and commit/settlement
+serialize on an OpenReceive-owned per-order lock, so there is no primary-key
+type to match and no foreign key to keep in step with your migrations.
+
 | Flag | Meaning |
 | --- | --- |
-| `--order-model <Name>` | Host order model (default `Order`). |
-| `--order-table <name>` | Host order table. |
-| `--order-primary-key-type <type>` | e.g. `uuid` (default `bigint`). |
-| `--skip-foreign-key` | No FK to the order table. |
+| `--order-model <Name>` | Model the generated initializer calls (default `Order`). Only names host code — the engine never touches the model or its table. |
 | `--skip-migration` | Skip the migration (both tables). |
 | `--skip-initializer` / `--skip-route` | Skip those files. |
 
@@ -1020,7 +1026,6 @@ The quickstart host contract:
 | `config.load_order` | `->(order_id)` | yes | Load the host order; `nil` → 404. |
 | `config.amount_for_order` | `->(order)` | yes | The trusted price, `{ "sats" => }` or `{ "currency" =>, "value" => }`. |
 | `config.on_paid` | `->(settlement)` | yes | Fulfillment. Receives [OrderSettlement](#ordersettlement). |
-| `config.order_model` | `String` | no | Host order model name (default `"Order"`). |
 | `config.opportunistic_reconcile` | `false` or `{ min_interval_seconds: }` | no | Request-path settlement pass on every engine route; on by default through the durable `openreceive_meta` gate shared by all Puma workers. `false` disables (required with a custom repository that runs its own settlement worker). |
 | `config.rate_limiting` | `true` or `Hash` | no | Opt-in per-IP invoice cap, mirroring the JS `rateLimiting` option: off by default; `true` caps invoice creation at 60 per client IP per rolling hour, counted from the engine-owned `openreceive_payments` rows; or `{ limit_per_hour:, limit_per_day: }`. Mutually exclusive with `config.rate_limit`. See [Rate limiting](rate-limiting.md). |
 | `config.rate_limit` | `->(context)` | no | Custom rate-limit hook; same context as `config.authorize`. Return `false` (or raise the engine's rate-limited error) for `429`. |

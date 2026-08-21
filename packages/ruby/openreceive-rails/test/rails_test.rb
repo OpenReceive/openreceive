@@ -140,7 +140,7 @@ module OpenReceivePaymentTestHelpers
 
   def commit!(order, hash, expires_at: Time.now.to_i + 600, swap_data: nil)
     OpenReceivePayment.commit_attempt!(
-      order: order,
+      order_id: order.id,
       payment_hash: hash,
       checkout: build_checkout(order_id: order.id, hash: hash, expires_at: expires_at),
       swap_data: swap_data
@@ -282,8 +282,8 @@ class OpenReceivePaymentModelTest < Minitest::Test
     fulfilled = []
     paid_at = Time.now.to_i
 
-    OpenReceivePayment.mark_paid_once!(payment_hash: hash, paid_at: paid_at) do |paid_order, payment|
-      fulfilled << [paid_order.id, payment.payment_hash]
+    OpenReceivePayment.mark_paid_once!(payment_hash: hash, paid_at: paid_at) do |payment|
+      fulfilled << [payment.order_id, payment.payment_hash]
     end
     OpenReceivePayment.mark_paid_once!(payment_hash: hash, paid_at: paid_at + 99) do |*|
       fulfilled << :replayed
@@ -293,7 +293,7 @@ class OpenReceivePaymentModelTest < Minitest::Test
     assert_equal "settled", payment.status
     assert_nil payment.status_reason
     assert_equal paid_at, payment.paid_at.to_i
-    assert_equal [[order.id, hash]], fulfilled
+    assert_equal [[order.id.to_s, hash]], fulfilled
   end
 
   def test_mark_paid_once_records_a_sibling_duplicate_settlement_without_refulfilling
@@ -1275,15 +1275,18 @@ class OpenReceiveRailsGeneratorTemplateTest < Minitest::Test
 
   TemplateContext = Struct.new(
     :order_model_name,
-    :order_table_name,
-    :order_primary_key_type,
     :migration_version,
-    :add_order_foreign_key?,
     :schema_version,
     :payment_hash_check_sql,
     :mysql_adapter?,
     keyword_init: true
   ) do
+    # Mirrors InstallGenerator#fulfillment_note, minus the ASCII-8BIT tagging
+    # Thor's binread templates need; these tests read templates as UTF-8.
+    def fulfillment_note(prefix)
+      OpenReceive::FulfillmentNote.render(prefix: prefix)
+    end
+
     def render(path)
       ERB.new(File.read(path), trim_mode: "-").result(binding)
     end
@@ -1292,10 +1295,7 @@ class OpenReceiveRailsGeneratorTemplateTest < Minitest::Test
   def setup
     @context = TemplateContext.new(
       order_model_name: "Order",
-      order_table_name: "orders",
-      order_primary_key_type: "bigint",
       migration_version: "7.1",
-      add_order_foreign_key?: true,
       schema_version: OpenReceive::Server::PAYMENTS_SCHEMA_VERSION,
       payment_hash_check_sql: '"payment_hash ~ \'^[0-9a-f]{64}$\'"',
       mysql_adapter?: false
@@ -1307,13 +1307,19 @@ class OpenReceiveRailsGeneratorTemplateTest < Minitest::Test
     model = File.read(File.expand_path("../app/models/open_receive_payment.rb", __dir__))
     assert_includes model, 'self.table_name = "openreceive_payments"'
     assert_includes model, "self.filter_attributes += [:swap_data]"
-    assert_includes model, "order.with_lock"
     assert_includes model, 'super.except("swap_data")'
+    # The per-order lock is OpenReceive's own; the host order table is never
+    # loaded or locked, and there is no order_model to register.
+    assert_includes model, "def self.with_order_lock"
+    assert_includes model, "pg_advisory_xact_lock(hashtextextended(?, ?))"
+    refute_includes model, "order.with_lock"
+    refute_includes model, "order_class"
+    refute_includes model, "constantize"
   end
 
   def test_migration_has_status_columns_and_many_attempts_per_order
     rendered = @context.render(File.join(TEMPLATE_ROOT, "migration.rb"))
-    assert_includes rendered, "t.bigint :order_id, null: false"
+    assert_includes rendered, "t.string :order_id, null: false"
     assert_includes rendered, 't.string :status, null: false, default: "pending"'
     assert_includes rendered, "t.string :status_reason"
     assert_includes rendered, "add_index :openreceive_payments, :payment_hash, unique: true"
@@ -1325,7 +1331,10 @@ class OpenReceiveRailsGeneratorTemplateTest < Minitest::Test
     assert_includes rendered, "t.datetime :inserted_at, null: false"
     assert_includes rendered, "add_index :openreceive_payments, [:client_ip, :inserted_at]"
     refute_includes rendered, "[:order_id], unique: true"
-    assert_includes rendered, "add_foreign_key :openreceive_payments, :orders"
+    # The engine never references the host order table. The only REFERENCES in
+    # the file is the commented, opt-in example inside the fulfillment note.
+    refute_includes rendered, "add_foreign_key"
+    assert_includes rendered, "#     FOREIGN KEY (order_id) REFERENCES orders (id)"
     RubyVM::InstructionSequence.compile(rendered)
   end
 
@@ -1383,7 +1392,7 @@ class OpenReceiveRailsGeneratorTemplateTest < Minitest::Test
     assert_includes source, "eager-loads this class before after_initialize"
   end
 
-  def test_generator_exposes_order_key_and_skip_options_without_a_model_step
+  def test_generator_exposes_skip_options_and_no_order_table_coupling
     source = File.read(
       File.expand_path(
         "../lib/generators/openreceive/install/install_generator.rb",
@@ -1391,12 +1400,16 @@ class OpenReceiveRailsGeneratorTemplateTest < Minitest::Test
       )
     )
     assert_includes source, "migration_template"
-    assert_includes source, "order_primary_key_type"
     assert_includes source, "skip_migration"
-    assert_includes source, "skip_foreign_key"
     assert_includes source, "db/migrate/create_openreceive_tables.rb"
     refute_includes source, "skip_payment_model"
     refute_includes source, "payment.rb"
+    # The order table is out of scope: no key typing, no foreign key, no table
+    # name. Only the model NAME survives, and only to write host-side calls.
+    refute_includes source, "order_primary_key_type"
+    refute_includes source, "skip_foreign_key"
+    refute_includes source, "order_table"
+    assert_includes source, "class_option :order_model"
   end
 end
 
@@ -1613,10 +1626,10 @@ class OpenReceiveInstallGeneratorRunTest < Rails::Generators::TestCase
 
     assert_migration "db/migrate/create_openreceive_tables.rb" do |content|
       refute_includes content, "<%"
-      assert_includes content, "t.bigint :order_id, null: false"
+      assert_includes content, "t.string :order_id, null: false"
       assert_includes content, "t.datetime :inserted_at, null: false"
       assert_includes content, "add_index :openreceive_payments, [:client_ip, :inserted_at]"
-      assert_includes content, "add_foreign_key :openreceive_payments, :orders, column: :order_id"
+      refute_includes content, "add_foreign_key"
       assert_includes content, "status IN ('pending', 'settled', 'expired', 'failed', 'attention')"
       assert_includes content, "openreceive_payments_payment_hash_check"
       assert_includes content, "'schema_version', '#{OpenReceive::Server::PAYMENTS_SCHEMA_VERSION}'"
@@ -1628,6 +1641,12 @@ class OpenReceiveInstallGeneratorRunTest < Rails::Generators::TestCase
     assert_file "config/initializers/openreceive.rb" do |content|
       refute_includes content, "<%"
       assert_includes content, "config.load_order"
+      refute_includes content, "config.order_model"
+      # The fulfillment note and the guarded transition it describes.
+      assert_includes content, "WHAT YOU MUST GUARANTEE"
+      assert_includes content, "AND state = 'awaiting_payment'"
+      assert_includes content, 'state: "awaiting_payment"'
+      assert_includes content, "next if claimed.zero?"
       RubyVM::InstructionSequence.compile(content)
     end
 
@@ -1658,17 +1677,16 @@ class OpenReceiveInstallGeneratorRunTest < Rails::Generators::TestCase
     end
   end
 
-  def test_option_run_respects_key_type_and_skip_flags
+  def test_option_run_respects_skip_flags_and_never_types_order_id_from_the_host
     run_generator %w[
       --order-model=Purchase
-      --order-primary-key-type=uuid
-      --skip-foreign-key
       --skip-initializer
       --skip-route
     ]
 
     assert_migration "db/migrate/create_openreceive_tables.rb" do |content|
-      assert_includes content, "t.uuid :order_id, null: false"
+      # order_id is opaque text whatever the host's primary key looks like.
+      assert_includes content, "t.string :order_id, null: false"
       refute_includes content, "add_foreign_key"
       RubyVM::InstructionSequence.compile(content)
     end

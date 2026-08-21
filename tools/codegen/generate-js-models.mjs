@@ -8,6 +8,13 @@ import { parse as parseYaml } from "yaml";
 const root = process.cwd();
 const outputPath = "packages/js/core/src/generated/contracts.ts";
 const wireOutputPath = "packages/js/http/src/generated/wire.ts";
+// The order-table boundary note. One text file, rendered into both engines, so
+// the guidance the JS scaffold emits and the guidance the Rails generator emits
+// cannot drift apart.
+const fulfillmentNotePath = "spec/data/fulfillment-note.txt";
+const fulfillmentNoteTsPath = "packages/js/core/src/generated/fulfillment-note-text.ts";
+const fulfillmentNoteRbPath =
+  "packages/ruby/openreceive-rails/lib/openreceive/generated/fulfillment_note.rb";
 const check = process.argv.includes("--check");
 const EMPTY_OBJECT = Object.freeze({});
 
@@ -210,9 +217,72 @@ function formatGenerated(source, forPath) {
   );
 }
 
+/**
+ * The canonical note as an array of lines, with `{{table}}` left in place for
+ * each engine to substitute. Trailing whitespace is stripped so neither a
+ * biome-formatted TS file nor a Ruby heredoc carries it.
+ */
+function fulfillmentNoteLines() {
+  const text = readFileSync(path.join(root, fulfillmentNotePath), "utf8");
+  const lines = text
+    .replace(/\n+$/, "")
+    .split("\n")
+    .map((line) => line.trimEnd());
+  assert(lines.length > 0, `${fulfillmentNotePath} is empty`);
+  assert(
+    lines.some((line) => line.includes("{{table}}")),
+    `${fulfillmentNotePath} must reference {{table}} at least once`,
+  );
+  return lines;
+}
+
+function generateFulfillmentNoteTs() {
+  const lines = fulfillmentNoteLines()
+    .map((line) => `  ${JSON.stringify(line)},`)
+    .join("\n");
+  return `// GENERATED FILE — DO NOT EDIT.
+// Source: ${fulfillmentNotePath} (npm run generate:models).
+// The Ruby twin is ${fulfillmentNoteRbPath}; both render the same text, so the
+// scaffold CLI and the Rails install generator cannot give different advice.
+
+/** The note's lines, with \`{{table}}\` awaiting the caller's table name. */
+export const FULFILLMENT_NOTE_TEMPLATE: readonly string[] = [
+${lines}
+];
+`;
+}
+
+function generateFulfillmentNoteRb() {
+  const lines = fulfillmentNoteLines()
+    .map((line) => `      ${JSON.stringify(line)},`)
+    .join("\n");
+  return `# frozen_string_literal: true
+
+# GENERATED FILE — DO NOT EDIT.
+# Source: ${fulfillmentNotePath} (npm run generate:models).
+# The JS twin is ${fulfillmentNoteTsPath}; both render the same text, so the
+# Rails install generator and the scaffold CLI cannot give different advice.
+
+module OpenReceive
+  module Generated
+    # The note's lines, with "{{table}}" awaiting the caller's table name.
+    FULFILLMENT_NOTE_TEMPLATE = [
+${lines}
+    ].freeze
+  end
+end
+`;
+}
+
 const outputs = [
   { relativePath: outputPath, content: formatGenerated(generate(), outputPath) },
   { relativePath: wireOutputPath, content: formatGenerated(generateWire(), wireOutputPath) },
+  {
+    relativePath: fulfillmentNoteTsPath,
+    content: formatGenerated(generateFulfillmentNoteTs(), fulfillmentNoteTsPath),
+  },
+  // Ruby is not biome-formatted; the rendering above is already canonical.
+  { relativePath: fulfillmentNoteRbPath, content: generateFulfillmentNoteRb() },
 ];
 
 let stale = false;

@@ -20,13 +20,14 @@ The canonical DDL lives in `@openreceive/core` —
 of truth every rendering derives from:
 `openReceivePaymentsSchemaSql(dialect)` (`"postgres"` or `"sqlite"`) renders
 it as one executable script, and `npx openreceive scaffold payments` emits it
-as a migration for your ORM. You may adjust `order_id` typing or add a foreign
-key, but every column must stay:
+as a migration for your ORM. There is nothing to adjust — `order_id` is always
+`TEXT` and carries no foreign key, because OpenReceive never reads, writes,
+locks, or joins your order table. Every column must stay:
 
 ```text
 openreceive_payments
   id             primary key
-  order_id       required, indexed; many attempts may belong to one order
+  order_id       required, indexed, opaque TEXT (no FK); many attempts per order
   payment_hash   required, unique, 64 lowercase hex (CHECK)
   status         required, default 'pending' (CHECK: the five statuses below)
   status_reason  nullable operator-facing detail
