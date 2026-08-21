@@ -5,7 +5,7 @@ release narrative lives in the repository-root
 [CHANGELOG](https://github.com/openreceive/openreceive/blob/master/CHANGELOG.md);
 entries here are scoped to this gem.
 
-## 0.1.1 - Unreleased
+## 0.1.1 - 2026-08-18
 
 - First packaged release of `openreceive-server`: the storage-free Service
   mirroring the Node engine and the framework-agnostic Rack app implementing

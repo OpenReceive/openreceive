@@ -76,10 +76,23 @@ app.use(
 );
 ```
 
-Scaffold the payments table for your ORM with the bundled CLI:
+Before the first checkout, scaffold the payments migration for your ORM with
+the bundled CLI and run it through your normal migration workflow:
 
 ```sh
 npx openreceive scaffold payments --orm prisma   # or drizzle | typeorm | sequelize | knex
+# then run the emitted migration (e.g. npx prisma migrate dev)
+```
+
+On the browser side, mount the checkout and import its stylesheet once. The
+compiled `styles.css` sheets are self-contained — a plain `<link>` works with
+no build step:
+
+```tsx
+import { Checkout } from "openreceive/react";
+import "openreceive/react/styles.css";
+
+<Checkout orderId={order.id} />;
 ```
 
 ## Learn more

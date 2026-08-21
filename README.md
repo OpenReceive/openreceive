@@ -24,6 +24,14 @@ Node ≥ 22, plus a receive-only NWC connection string from your wallet.
 npm install openreceive @openreceive/express @openreceive/react
 ```
 
+Scaffold the payments migration for your ORM and run it through your normal
+migration workflow:
+
+```sh
+npx openreceive scaffold payments --orm prisma   # or drizzle | typeorm | sequelize | knex
+# then run the emitted migration (e.g. npx prisma migrate dev)
+```
+
 ```ts
 // server: mount the routes on your existing Express app
 import express from "express";
@@ -43,7 +51,7 @@ app.use(
       await query("UPDATE orders SET state = 'paid' WHERE id = ?", [orderId]);
     },
     authorize: async ({ action, request, resource }) =>
-      orders.viewerMay(await sessions.currentUser(request), resource.order_id, action),
+      orders.viewerMay(await sessions.currentUser(request), resource.orderId, action),
   }),
 );
 ```
@@ -51,9 +59,14 @@ app.use(
 ```tsx
 // browser: the checkout renders, polls, and settles itself
 import { Checkout } from "@openreceive/react";
+import "@openreceive/react/styles.css";
 
 <Checkout orderId={order.id} />;
 ```
+
+The compiled `styles.css` sheets (`@openreceive/react`,
+`@openreceive/elements`) are self-contained — a plain
+`<link rel="stylesheet">` works with no build step.
 
 That is the whole loop: your server owns the price and the order, the payer gets
 an invoice, and `onPaid` runs once inside the settlement transaction. Full
@@ -151,13 +164,25 @@ escape hatch, not the quickstart. See [Payment storage](docs/guides/storage.md).
 ## Direct Node API
 
 ```ts
+import { createOpenReceiveHost } from "@openreceive/http";
 import { createOpenReceive } from "@openreceive/node";
 
 const openreceive = await createOpenReceive();
+const host = createOpenReceiveHost({ db, loadOrder, amountForOrder, onPaid });
 
 const checkout = await openreceive.createCheckout({
   orderId: order.id,
   amount: { currency: "USD", value: order.total.toString() },
+});
+
+// Commit the attempt row BEFORE exposing payer instructions. The mounted
+// routes do this for you; a direct createCheckout call persists nothing on
+// its own, and an uncommitted invoice is invisible to reconciliation — it
+// could be paid and never settle the order.
+await host.onCheckoutCreated({
+  orderId: order.id,
+  paymentHash: checkout.paymentHash,
+  checkout,
 });
 ```
 
@@ -173,12 +198,17 @@ Boot preflight fails closed when the wallet advertises spend methods such as
 `OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC=true`. See
 [Security](docs/guides/security.md).
 
-`checkPayment({ paymentHash, createdAt })` verifies a known attempt with bounded
-`list_transactions` scans; reconciliation stays batched and never does one
-lookup per invoice. Settlement is opportunistic by default: every mounted route
+The service's `checkPayment({ paymentHash, createdAt })` is a pure wallet
+read: it verifies one known attempt with bounded `list_transactions` scans,
+and reconciliation stays batched — never one lookup per invoice. The mounted
+HTTP route `POST …/payments/check` is a different thing: it never runs its own
+per-invoice wallet walk, serving the requested hash from the request's gated
+reconcile pass (or from the stored attempt row when another worker holds the
+gate). Settlement is opportunistic by default: every mounted payment route
 runs one gated pass over `pending` attempts — the durable `openreceive_meta`
-gate collapses all instances to one wallet scan per interval — and delivers
-verified settlements at least once. No background process required.
+gate collapses all instances to one wallet scan per interval, and `GET …/rates`
+never triggers a scan — delivering verified settlements at least once. No
+background process required.
 
 ## Ship the routes, keep your auth
 
@@ -202,7 +232,7 @@ app.use(openReceiveExpress({
   authorize: async ({ action, request, resource }) => {
     return orders.authorize({
       request,
-      orderId: resource.order_id,
+      orderId: resource.orderId,
       action,
     });
   },
@@ -211,8 +241,10 @@ app.use(openReceiveExpress({
 }));
 ```
 
-The attempt row commits before the payer receives the invoice. A failed commit
-gets a `409` response with no payer instructions. Rails hosts mount
+The attempt row commits before the payer receives the invoice. A refused
+commit (already-paid order, competing live attempt) gets a `409` response — an
+infrastructure failure a retryable `503` — with no payer instructions either
+way. Rails hosts mount
 the engine and retain their own authentication and `current_user` logic. JSON
 checkout routes skip Rails form CSRF; host `authorize` is the auth boundary.
 
@@ -231,7 +263,8 @@ notifications missed while it was down. Direct settlement assumes the NWC client
 notification decryption to the connection's wallet pubkey (the bundled SDK
 does). Closing an unpaid attempt requires a successful
 wallet scan at or after its expiry plus a 900-second grace
-(`OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS`) — a local clock alone never closes
+(`OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS`, a constant exported by
+`@openreceive/http` — not an environment variable) — a local clock alone never closes
 a row, because a payment could have settled while the application was offline.
 OpenReceive also requires the wallet to honor the requested invoice expiry:
 checkout creation fails closed (beyond a small tolerance) when a wallet mints
@@ -299,9 +332,9 @@ templates, and documentation aligned:
 
 ```sh
 npm run test:ci:core   # fast JS/package gate
-npm run test:ci        # full gate, including Ruby, demos, and live NWC
+npm run test:ci        # full deterministic gate, including Ruby and demos
 npm test               # contracts and secret-safety checks
-npm run test:live:nwc  # live wallet smoke; skips when NWC is not configured
+npm run test:live      # live wallet smoke (Node + Ruby); separate from test:ci
 ```
 
 ## Product boundary
@@ -321,15 +354,20 @@ Start with the [developer guides](docs/guides/README.md):
 
 - [What is OpenReceive?](docs/guides/what-is.md)
 - [Node quickstart](docs/guides/quickstart-node.md)
+- [Node ORM recipes](docs/guides/node-orms.md)
 - [Rails quickstart](docs/guides/quickstart-rails.md)
 - [Frontend checkout](docs/guides/frontend-checkout.md)
+- [Headless checkout](docs/guides/headless-checkout.md)
 - [Price feeds](docs/guides/price-feeds.md)
 - [Automated swaps](docs/guides/automated-swaps.md)
 - [Lightning Swap Connect](docs/guides/lightning-swap-connect.md)
+- [Provider registry](docs/guides/provider-registry.md)
 - [Authorization](docs/guides/authorization.md)
 - [Rate limiting](docs/guides/rate-limiting.md)
 - [Payment storage](docs/guides/storage.md)
+- [Deploying OpenReceive](docs/guides/deploying.md)
 - [Security](docs/guides/security.md)
 - [API reference](docs/guides/api-reference.md)
+- [React + Material UI recipe](docs/recipes/react-material-ui.md)
 - [Normative HTTP contract](spec/openapi/openreceive-http.v1.yaml)
 - [Contributor and operator docs](docs/internal/README.md)

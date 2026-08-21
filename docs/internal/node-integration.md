@@ -19,7 +19,16 @@ host validates cart, calculates exact price, creates order row
 browser renders <Checkout orderId={order_id} />
       │
       ▼
-POST /openreceive/checkouts { order_id }
+POST /openreceive/checkouts/prepare { order_id }        (prepare: no invoice yet)
+      │
+      ├── authorize(request, action, order_id)
+      ├── loadOrder + amountForOrder → authoritative amount
+      └── response { amount_msats, fiat_quote?, payment_methods }
+
+payer picks a method (Bitcoin → mint; swap asset → POST /openreceive/swaps)
+      │
+      ▼
+POST /openreceive/checkouts { order_id }                (mint)
       │
       ├── authorize(request, action, order_id)
       ├── loadOrder + amountForOrder → authoritative amount
@@ -62,17 +71,19 @@ The advanced form replaces `db` with `payments: OpenReceivePaymentRepository`
 `recordSettlement`, plus `claimReconcileGate` unless the host passes
 `opportunisticReconcile: false`); the host then owns locking and the reconciliation
 transitions, while write-once settlement stays library-owned — `recordSettlement` is the
-claim, and `onSettlement` fires only when it is won. If `commitAttempt` throws, OpenReceive returns
-`409` and withholds the new payer instructions.
+claim, and repository-mode `onPaid` (context: `OpenReceiveSettlementEvent` — `paymentHash`,
+`paidAt`, `details?`; no `orderId` or transactional `query`) fires only when it is won. If
+`commitAttempt` refuses, OpenReceive returns
+`409` and withholds the new payer instructions (infrastructure failure: retryable `503`).
 
 See [Payment storage](../guides/storage.md), [Node ORM recipes](../guides/node-orms.md), and
 [Authorization](../guides/authorization.md).
 
 ## Settlement and reconciliation
 
-Opportunistic reconcile is the default: every mounted route runs one gated
+Opportunistic reconcile is the default: every mounted payment route runs one gated
 `reconcileOpenReceivePayments` pass when attempts are pending, serialized across instances by
-the durable `openreceive_meta` gate. `maybeReconcileOpenReceivePayments({ service, host })`
+the durable `openreceive_meta` gate (unauthenticated `GET /rates` never triggers it). `maybeReconcileOpenReceivePayments({ service, host })`
 exposes the same gated pass for host-owned routes and middleware; the optional
 `startOpenReceiveNotificationWorker` runs listening plus the periodic pass in one separate
 process. Each pass loads only `pending` attempts and issues one batched `list_transactions`

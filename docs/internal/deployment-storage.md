@@ -1,5 +1,9 @@
 # Deployment state
 
+The integrator-facing version of this material is the public
+[Deploying OpenReceive](../guides/deploying.md) guide; this page keeps the
+contributor-level invariants.
+
 OpenReceive has no separate deployment storage service. Scaling web instances requires the same
 receive-only NWC configuration and access to the host database on each instance.
 

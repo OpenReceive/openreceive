@@ -19,8 +19,9 @@ small, honest API and a good developer experience.
   attempt.
 - Attempts carry an explicit status (`pending`, `settled`, `expired`, `failed`, `attention`).
   Only `pending` attempts are reconciled; closure of an unpaid attempt requires a successful
-  wallet scan at or after expiry plus `OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS` — a local
-  clock alone never closes a row. A settled row is never overwritten.
+  wallet scan at or after expiry plus `OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS` (an exported
+  constant, 900 seconds — not an environment variable) — a local clock alone never closes a
+  row. A settled row is never overwritten.
 - Settlement discovery is opportunistic by default: every mounted OpenReceive route first runs
   one reconcile pass through the durable `openreceive_meta` gate (CAS in the host database,
   minimum 2 seconds between real wallet scans, stretched by invoice age), shared by every
@@ -58,8 +59,8 @@ small, honest API and a good developer experience.
   demo product data.
 - Schema or route changes update their vectors in the same change. Invoice behavior needs
   host-row retry/concurrency tests; settlement behavior needs replay-safe tests.
-- We should not worry about validating the NWC's responses or behavior... a user of OpenReceive implicitly
-  trusts his/her backing NWC service, becuase he/she will need to use the NWC service any to withdraw any funds.
+- We should not worry about validating the NWC's responses or behavior: a user of OpenReceive implicitly
+  trusts their backing NWC service, because they will need to use that NWC service anyway to withdraw any funds.
   OpenReceive users can also build their own fully self-custodial NWC service, or use a fully self-custodial NWC service
   like an Alby Hub instance running on their own hardware.
 

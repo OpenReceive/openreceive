@@ -39,6 +39,11 @@ gem "openreceive"
   (`OpenReceive::Nwc.normalize_wallet_error`,
   `OpenReceive::Nwc.normalize_transaction`).
 - Settlement-authority rules: what counts as settled, and what never does.
+- The built-in price feed (`OpenReceive::Rates`): a static provider and the
+  cached live feed with primary/fallback failover, fail-closed windows, and
+  the shared currency list.
+- Swap-address checksum validation (`OpenReceive::SwapAddress`): refund and
+  deposit addresses are checksum-verified, never shape-guessed.
 - `OpenReceive::NwcRubyReceiveClient`, a thin adapter over a host-supplied
   `nwc-ruby` client, including the optional NWC-02 notification subscription
   (`subscribe_notifications`, forwarded to that gem's

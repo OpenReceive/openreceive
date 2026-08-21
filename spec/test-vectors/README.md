@@ -8,12 +8,23 @@ A schema or route change must update its vector in the same change.
 Formats in use (one per file family):
 
 - **`schema_version` + `cases`** — most vectors. Each case has a `name`, an
-  input, and an `expected` result (or `expected_error` code):
+  input, and an `expected` result (or `expected_error` code); sibling top-level
+  keys (`rule`, `decision`, `algorithm`, …) document the behavior under test:
   `fiat-to-msats.usd`, `amount-boundaries`, `settlement-detection`,
   `make-invoice-validation`, `nwc-uri-parse`, `nwc-request-response`,
-  `error-normalization`, `lsc-uri`.
+  `error-normalization`, `swap-address` (checksum validation of refund/deposit
+  addresses), `rate-limit-window` (which timestamp column the per-IP budget
+  counts on — `inserted_at` — plus the `(client_ip, inserted_at)` index and
+  window-membership cases).
+- **`version` + `valid`/`invalid`** — `lsc-uri`: parse expectations for valid
+  `lightning+swapconnect://` URIs and a list of URIs that must be refused.
 - **`expiry_grace_seconds` + `vectors`** — `attempt-reconciliation`: the
   decision table for closing pending attempts, plus the shared grace constant.
+- **`page_limit` + `cases`** — `wallet-scan-truncation`: truncated
+  wallet-history walk semantics for `reconcilePaymentAttempts` /
+  `reconcile_payments`. A walk cut short (page cap, pass deadline, or a wallet
+  that ignores `offset`) must OMIT undecided hashes rather than report
+  `not_found`, so a truncated scan can never close a paid attempt.
 - **`http-golden/*.json`** (`schema_version: 2`) — one HTTP request/response
   expectation per file, run against the JS handler and the Ruby Rack app.
   `request` is the wire request; an optional `handler` selects a preconfigured
@@ -41,5 +52,5 @@ Formats in use (one per file family):
 - **Bare objects** — `nwc-info.json` (a sample NIP-47 info event payload
   consumed by the preflight tests).
 
-`provider-route.*.json` files describe provider wizard routes and are consumed
-by the provider-data tests.
+`provider-route.*.json` files (`request` + `expected`) describe provider wizard
+routes and are consumed by the provider-data tests.

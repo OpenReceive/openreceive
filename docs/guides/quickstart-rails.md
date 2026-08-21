@@ -17,7 +17,9 @@ bin/rails db:migrate
 
 `openreceive:install` emits one migration for both engine tables, the
 initializer, and the engine mount; flags like `--order-model` and
-`--order-primary-key-type` adapt it to your schema. **Match
+`--order-primary-key-type` adapt it to your schema. The migration adapts to
+the app's configured database adapter — PostgreSQL, SQLite, and MySQL
+(`mysql2`/`trilogy`) are supported. **Match
 `--order-primary-key-type` to your orders table's primary key** (`bigint`
 default; `uuid`/`string` for UUID-style ids like the example apps use) — a
 mismatched `openreceive_payments.order_id` type bites at foreign-key/join time.
@@ -65,7 +67,7 @@ OpenReceive.configure do |config|
   # Runs inside the settlement transaction, only for the order's first settled
   # attempt. Update the order or insert an outbox row here.
   config.on_paid = lambda do |settlement|
-    # settlement exposes order_id, payment_hash, and paid_at.
+    # settlement exposes order_id, payment_hash, paid_at, and details.
     Order.find(settlement.order_id).update!(status: "paid")
   end
 end
@@ -75,9 +77,52 @@ end
 inside the settlement transaction, only for the order's first settled attempt.
 → [OpenReceive.configure](api-reference.md#openreceiveconfigure)
 
+The generated initializer ships
+`config.on_paid = OpenReceive::LOGGING_ON_PAID` — a placeholder that only logs
+the settlement and fulfills nothing. Replace it with your real fulfillment (as
+above); the engine warns at every boot while the placeholder is still
+configured, because orders would otherwise be recorded as settled without ever
+being fulfilled.
+
 The amount always comes from the host-owned order; payer-supplied amounts are
 rejected. Advanced hooks (`resolve_checkout`, `on_checkout_created`) remain as
 overrides for custom-repository hosts and are not part of the quickstart.
+
+For public web shops, opt into the per-IP invoice cap with
+`config.rate_limiting = true`; leave it off (the default) when many payers
+share one IP. → [Rate limiting](rate-limiting.md#rails)
+
+In production the engine builds the wallet service — and runs its receive-only
+preflight — eagerly at boot, so a missing `NWC_URI`, a dead relay, or a
+spend-capable wallet stops the deploy instead of surfacing as customer-facing
+500s on the first checkout. Outside production (tests, consoles) boot stays
+lazy so no live wallet is needed.
+
+## Render the checkout
+
+The engine serves JSON checkout routes only — rendering is a host view. Any
+OpenReceive frontend package works against the `/openreceive` mount; the
+smallest is the custom element (its default `prefix` is already
+`/openreceive`, and the package ships a self-contained `styles.css` a plain
+stylesheet link can serve):
+
+```erb
+<%# app/views/orders/pay.html.erb %>
+<openreceive-checkout order-id="<%= @order.id %>"></openreceive-checkout>
+```
+
+```js
+// In your JS bundle (importmap/esbuild/webpacker):
+import { defineOpenReceiveElements } from "@openreceive/elements";
+import "@openreceive/elements/styles.css"; // or link the compiled styles.css
+defineOpenReceiveElements();
+```
+
+The element creates the checkout for `order-id`, then renders and polls
+itself. React/Vue/Svelte/Angular hosts use the matching wrapper package
+instead — same props and defaults ([Frontend checkout](frontend-checkout.md)).
+The Rails Hello Fruit demo renders a fully custom UI over
+`@openreceive/browser/headless` ([Headless checkout](headless-checkout.md)).
 
 ## Reconciliation
 
@@ -110,8 +155,10 @@ schedule. `reconcile!` now returns the per-hash check results of the pass.
 → [OpenReceive.reconcile!](api-reference.md#openreceivereconcile) ·
 [OpenReceive::ReconcileJob](api-reference.md#openreceivereconcilejob)
 
-Each pass reconciles only `pending` attempts with one batched wallet scan, so
-the window stays bounded. Settled rows are never overwritten; closing an unpaid
+Each pass reconciles only `pending` attempts — the oldest
+`OpenReceive::Server::RECONCILE_BATCH_SIZE` (200) per pass — with one batched
+wallet scan, so the window stays bounded and a backlog drains over successive
+passes. Settled rows are never overwritten; closing an unpaid
 attempt requires a successful wallet scan past expiry plus the 900-second
 grace, never the local clock alone. Duplicate delivery is harmless.
 

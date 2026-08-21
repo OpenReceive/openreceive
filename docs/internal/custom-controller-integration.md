@@ -12,11 +12,13 @@ OpenReceive service methods do not authenticate callers and never read a host se
 
 | Method | Responsibility |
 | --- | --- |
+| `prepareCheckout({ amount })` | Resolve the charged msats (and any fiat quote) without minting. |
 | `createCheckout({ orderId, amount })` | Normalize the host price and mint a wallet invoice. |
 | `checkPayment({ paymentHash, createdAt })` | Verify one payment with bounded wallet-history scans. |
 | `reconcilePayments({ attempts })` | Batch-verify the host's unresolved hashes and creation times. |
+| `listSwapOptions({ amountMsats })` | List configured swap pay-in methods for an invoice amount. |
 | `quoteSwap`, `createSwap`, `getSwap`, `refundSwap` | Create, inspect, and refund host-persisted provider workflows. |
-| `listRates`, `quoteRates` | Resolve exact fiat quotes. |
+| `listRates` | Read the cached BTC/fiat rates. (`quoteRates` also exists but is JS-internal plumbing — no HTTP route, no Ruby counterpart.) |
 
 There is no order read, checkout history route, migration runner, or durable workflow cursor.
 Attempt persistence lives in `@openreceive/http` (`createOpenReceiveSqlPayments`), not in the

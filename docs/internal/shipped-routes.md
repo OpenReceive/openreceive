@@ -25,8 +25,9 @@ Statuses, bodies, and error codes are in the
 
 Construction requires host `authorize` plus one host integration containing trusted amount
 resolution, attempt persistence, and replay-safe settlement. Attempt persistence runs after
-external invoice/provider creation but before the response; failure returns 409 and withholds
-payer instructions.
+external invoice/provider creation but before the response; a refused commit (already-paid
+order, competing live attempt) returns 409, an infrastructure failure returns a retryable 503,
+and payer instructions are withheld either way.
 
 Payment/swap reads send `order_id` plus `payment_hash`. The host authorizes the request, verifies
 the selected attempt belongs to the order, and resolves its server-only `swap_data`;

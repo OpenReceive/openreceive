@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
@@ -94,9 +94,25 @@ assert(
   typeof manifest.version === "string" && manifest.version !== "",
   "manifest version is required",
 );
-// generated_at is stamped at build time, never hand-maintained.
+// generated_at is stamped at build time into the dist copies only; the source
+// manifest must not hand-maintain one (it would always be stale).
+assert(
+  manifest.generated_at === undefined,
+  "docs/manifest.json must not contain generated_at; it is stamped at build time",
+);
 manifest.generated_at = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 assert(Array.isArray(manifest.docs), "manifest docs must be an array");
+
+// Coverage: every markdown doc under the indexed trees must be listed in the
+// manifest, so a new guide cannot ship invisible to the docs index.
+const listedPaths = new Set(manifest.docs.map((entry) => path.normalize(entry.source_path)));
+for (const tree of ["docs/guides", "docs/internal", "docs/recipes"]) {
+  for (const file of readdirSync(path.join(root, tree))) {
+    if (!file.endsWith(".md")) continue;
+    const relative = path.normalize(path.join(tree, file));
+    assert(listedPaths.has(relative), `${relative} is not listed in docs/manifest.json`);
+  }
+}
 
 const seenSlugs = new Set();
 const indexDocs = manifest.docs.map((entry, index) => {

@@ -34,7 +34,7 @@ Leave it **off** (the default) when many payers legitimately share one IP:
 This is why the option is opt-in rather than opt-out: a default cap would
 silently break exactly these deployments. If you need both — a public shop and
 a POS lane — mount two handlers with different `rateLimiting` settings, or
-supply a custom `rateLimit` hook that exempts authenticated terminals.
+supply a custom `rateLimitHook` that exempts authenticated terminals.
 
 ## Defaults
 
@@ -94,7 +94,7 @@ a load balancer, which silently weakens a security control. Hosts on the
 custom-repository escape hatch either implement the
 `countAttemptsFromIp(clientIp, sinceUnixSeconds)` repository method (one
 indexed `COUNT` over the `clientIp` the handler already passes with each
-commit) or disable `rateLimiting` and pass a custom `rateLimit` hook backed by
+commit) or disable `rateLimiting` and pass a custom `rateLimitHook` backed by
 their own store.
 
 ## Getting the client IP right
@@ -105,12 +105,16 @@ proxy's `X-Forwarded-For` (Express: `app.set("trust proxy", 1)`); otherwise
 every request appears to come from the proxy — or worse, from a spoofable
 header.
 
+All three adapters also accept `trustProxyIpHeader` as an alternative:
+`true` reads the first hop of `x-forwarded-for` (safe only when **your own**
+reverse proxy sets the header — a direct-to-origin client can forge it), and a
+string names another trusted header (e.g. `"cf-connecting-ip"`).
+
 **Next.js has no socket IP**: App Router handlers receive a web `Request`, so
 the Next adapter cannot read `native.ip`. Enabling `rateLimiting` there
 requires an explicit IP source — `openReceiveNextHandlers({ ...,
-trustProxyIpHeader: true })` reads the first hop of `x-forwarded-for` (safe
-only behind your own reverse proxy), a string names another trusted header
-(e.g. `"cf-connecting-ip"`), or pass your own `rateLimiting.ip` extractor.
+trustProxyIpHeader: true })`, a trusted-header name, or your own
+`rateLimiting.ip` extractor.
 Without one of these, the adapter refuses to construct rather than silently
 running an inactive limiter.
 
@@ -124,6 +128,32 @@ effectively inactive.
 like any other request log, and prune old rows if you retain attempts long
 term.
 
+## Rails
+
+The Rails engine ships the same control with the same semantics, configured in
+the initializer:
+
+```ruby
+OpenReceive.configure do |config|
+  # Recommended for public web shops; leave off for shared-IP deployments.
+  config.rate_limiting = true
+  # or: config.rate_limiting = { limit_per_hour: 60, limit_per_day: 300 }
+end
+```
+
+Off by default; `true` caps invoice creation at 60 per client IP per rolling
+hour, counted from the engine-owned `openreceive_payments` rows — the same
+persistent counting, minting-only scope, and fail-open missing-IP behavior
+(with a one-time warning) as the JS handler, and the same payer-facing `429`
+message. The client IP defaults to `ActionDispatch::Request#ip`, which honors
+Rails' trusted-proxy configuration; `config.client_ip` supplies a custom
+extractor (a proc receiving the request). For policies the built-in limiter
+cannot express, pass a custom `config.rate_limit` hook instead — it receives
+the same context as `config.authorize` and is mutually exclusive with
+`config.rate_limiting`, which the configuration also refuses to combine with
+the custom-repository hooks (`resolve_checkout`/`on_checkout_created`),
+because row counting needs the engine-owned model.
+
 ## Custom policies
 
 Scope note: the built-in limiter meters invoice **minting** only
@@ -131,12 +161,13 @@ Scope note: the built-in limiter meters invoice **minting** only
 `swap.quote` and `checkout.prepare` are not metered — a scripted client can
 call them freely, and each swap quote is a live outbound provider call. If
 that matters for your deployment, police those actions with a custom
-`rateLimit` hook backed by your own counter.
+`rateLimitHook` backed by your own counter.
 
-`rateLimiting` and the lower-level `rateLimit` hook are mutually exclusive.
+`rateLimiting` and the lower-level `rateLimitHook` are mutually exclusive.
 For policies the built-in limiter cannot express (per-session budgets,
-exempting signed-in users, an external limiter service), pass `rateLimit`
+exempting signed-in users, an external limiter service), pass `rateLimitHook`
 instead — same context as `authorize`; return `false` for a generic `429`, or
 throw an `OpenReceiveHttpError(429, "RATE_LIMITED", message, { retryable: true })`
 for a custom payer-facing message. `createOpenReceiveIpRateLimit(config)` is
-exported so a custom hook can compose the built-in behavior.
+exported from `@openreceive/http` so a custom hook can compose the built-in
+behavior.

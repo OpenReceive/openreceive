@@ -86,7 +86,9 @@ quotes, and creates. The backup is consulted only when the primary is down
 (network/API failure). A healthy primary that simply omits an asset does not
 fail over to the backup for that asset.
 
-An empty connection is ignored. The environment contains secrets only:
+An empty connection is ignored. Keep the secret environment small — the
+connection strings, plus at most a few non-secret operational toggles (log
+level, documented `OPENRECEIVE_*` overrides):
 
 ```dotenv
 NWC_URI=nostr+walletconnect://...

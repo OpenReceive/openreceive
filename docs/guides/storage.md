@@ -15,10 +15,13 @@ commit locking, write-once settlement, and the reconciliation state machine.
 
 ## Schema
 
-`openReceivePaymentsSchemaSql(dialect)` returns the canonical DDL
-(`"postgres"` or `"sqlite"`); `npx openreceive scaffold payments` emits it as a
-migration for your ORM. You may adjust `order_id` typing or add a foreign key,
-but every column must stay:
+The canonical DDL lives in `@openreceive/core` —
+`openReceivePaymentsDdlStatements` in `payments-ddl.ts` is the single source
+of truth every rendering derives from:
+`openReceivePaymentsSchemaSql(dialect)` (`"postgres"` or `"sqlite"`) renders
+it as one executable script, and `npx openreceive scaffold payments` emits it
+as a migration for your ORM. You may adjust `order_id` typing or add a foreign
+key, but every column must stay:
 
 ```text
 openreceive_payments
@@ -31,6 +34,7 @@ openreceive_payments
   expires_at     required
   created_at     required exact wallet invoice creation time
   updated_at     required
+  inserted_at    required local insertion time, stamped once and never changed
   checkout_data  required safe JSON snapshot (BOLT11, amount, timestamps)
   swap_data      nullable JSON/text, server-only provider credential
   client_ip      nullable client IP captured at invoice creation
@@ -88,9 +92,9 @@ working even while the wallet is unreachable. Never serialize or log
 
 `client_ip` is the adapter-attributed payer IP at invoice creation (null when
 none was attributable). It backs the opt-in per-IP
-[rate limiting](rate-limiting.md) — the limiter is a count over these rows, so
-no separate counter table exists. Treat it as request-log metadata under your
-privacy policy.
+[rate limiting](rate-limiting.md) — the limiter is a count over these rows
+through the `(client_ip, inserted_at)` index, so no separate counter table
+exists. Treat it as request-log metadata under your privacy policy.
 
 ## Attempt state machine
 
@@ -114,14 +118,17 @@ its invoice stays payable until it expires wallet-side, so it must stay in the
 scan set or a payer who pays it would deliver funds nothing could ever match.
 It is no longer offered to a payer, and it closes like any other pending row. Closing an unpaid attempt requires a
 successful wallet scan at or after `expires_at` plus the 900-second grace
-(`OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS`) — a local clock alone never closes
+(`OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS` — an exported constant, not an
+environment variable) — a local clock alone never closes
 a row, because a payment could have settled while the application was offline.
 A scan that ran out of pages before reaching an attempt is not a successful
 scan for that attempt: the pass reports nothing for it and the row stays
 pending, so a truncated walk can never close a paid invoice.
 Vectors: [`spec/test-vectors/attempt-reconciliation.json`](../../spec/test-vectors/attempt-reconciliation.json).
 
-Each pass reconciles the oldest `OPENRECEIVE_RECONCILE_BATCH_SIZE` (200)
+Each pass reconciles the oldest `OPENRECEIVE_RECONCILE_BATCH_SIZE` (200 — an
+exported constant in both implementations; Ruby:
+`OpenReceive::Server::RECONCILE_BATCH_SIZE`)
 pending attempts. The rows nearest their closure deadline are always covered,
 and a backlog drains over successive passes instead of loading every pending
 row into one wallet scan window.
@@ -152,9 +159,13 @@ reconciliation transitions (`recordReconciliation`), and `claimReconcileGate`,
 the `openreceive_meta` equivalent for your store; construction throws unless
 you implement the gate or pass `opportunisticReconcile: false`.
 
-The state machine itself stays library-owned in this mode too. OpenReceive
-calls `recordSettlement` for every observed settlement and runs your
-`onSettlement` only when that call reports it won the order's first-settlement
+The state machine itself stays library-owned in this mode too. The settlement
+hook is `onPaid` in this mode as well, but it receives the raw
+`OpenReceiveSettlementEvent` (`paymentHash`, `paidAt`, `details?`) instead of
+db mode's `OpenReceiveOrderSettlement` — no `orderId` and no transactional
+`query`, because your repository owns that mapping. OpenReceive calls
+`recordSettlement` for every observed settlement and runs your `onPaid` only
+when that call reports it won the order's first-settlement
 claim, so a redelivered settlement event fulfills exactly once. Return `true`
 only when the attempt was still unsettled and no sibling attempt on the order
 had settled; record a genuine second payment and return `false`, and never

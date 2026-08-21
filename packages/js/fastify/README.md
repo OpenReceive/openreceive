@@ -1,31 +1,74 @@
 # @openreceive/fastify
 
-Fastify adapter for `@openreceive/http`. Register it with `service`, host
-`authorize`, and the `host` integration returned by
-`createOpenReceiveHost({ db, loadOrder, amountForOrder, onPaid })`:
+Fastify adapter for `@openreceive/http`.
 
 This package is ESM-only and requires Node >= 22.
 
+The all-in-one form is the happy path: register the plugin with the order
+hooks and a database handle, and it builds the service and host itself.
+
 ```ts
-const host = createOpenReceiveHost({
+import { openReceiveFastify } from "@openreceive/fastify";
+
+await fastify.register(openReceiveFastify, {
+  nwc: process.env.NWC_URI!, // receive-only; boot fails closed otherwise
   db, // pg Pool/Client, node:sqlite, better-sqlite3, or a custom adapter
   loadOrder: (orderId) => orders.find(orderId),
   amountForOrder: (order) => order.amount,
-  onPaid: async ({ orderId }) => {
-    await prisma.order.update({ where: { id: orderId }, data: { state: "paid" } });
+  onPaid: async ({ orderId, query }) => {
+    await query("UPDATE orders SET state = 'paid' WHERE id = ?", [orderId]);
+  },
+  authorize: ({ resource }) => orders.viewerOwns(resource.orderId),
+  prefix: "/openreceive",
+});
+```
+
+`onPaid` runs inside the settlement transaction, only for the order's first
+settled attempt. Do the order update (or insert an outbox row) through the
+supplied `query`: a plain ORM call commits on its own connection, so it would
+survive a rolled-back settlement — settlement side effects belong on `query`.
+Delivery is at-least-once and retried until `onPaid` succeeds, so make it
+idempotent.
+
+The library-owned repository commits a payment-attempt row in the host's
+existing database before payer instructions are returned, and settlement
+piggybacks on the mounted routes by default through the durable
+`openreceive_meta` gate (`opportunisticReconcile` disables or tunes it);
+`startOpenReceiveNotificationWorker` is the optional worker process. Behind a
+reverse proxy, the `trustProxyIpHeader` option attributes `rateLimiting`
+client IPs from a proxy-set header. OpenReceive never requires a separate
+database or Redis.
+
+## Advanced: composed form
+
+Construct the pieces yourself (shared service, custom repository, tests) and
+pass them in. `createOpenReceiveHost` is the persistence step: it owns the
+`openreceive_payments` rows — per-order commit locking, write-once settlement,
+and the reconciliation state machine.
+
+```ts
+import { openReceiveFastify } from "@openreceive/fastify";
+import { createOpenReceiveHost } from "@openreceive/http";
+import { createOpenReceive } from "@openreceive/node";
+
+const service = await createOpenReceive(); // reads NWC_URI
+
+const host = createOpenReceiveHost({
+  db,
+  loadOrder: (orderId) => orders.find(orderId),
+  amountForOrder: (order) => order.amount,
+  onPaid: async ({ orderId, query }) => {
+    await query("UPDATE orders SET state = 'paid' WHERE id = ?", [orderId]);
   },
 });
 
 await fastify.register(openReceiveFastify, { service, authorize, host, prefix: "/openreceive" });
 ```
 
-`onPaid` also receives `query`, which runs inside the settlement transaction —
-use it for transactional outbox rows or to make the order update atomic with
-the payment record. Plain ORM calls are fine: delivery is at-least-once and
-retried until `onPaid` succeeds, so make it idempotent. The
-library-owned repository commits a payment-attempt row in the host's existing
-database before payer instructions are returned, and settlement piggybacks on
-the mounted routes by default through the durable `openreceive_meta` gate
-(`opportunisticReconcile` disables or tunes it);
-`startOpenReceiveNotificationWorker` is the optional worker process.
-OpenReceive never requires a separate database or Redis.
+This package re-exports only the curated `@openreceive/http` surface: the
+handler/stack factories, the error surface, the notification worker, the
+options/context/hook types, and the generated `OpenReceiveWire*` wire body
+types. Host-integration internals — `createOpenReceiveHost`, the SQL payment
+repository, the reconcile gate, the rate-limit helpers — live only in
+`@openreceive/http`; import them from there when composing your own host
+(`npm run check:public-api` pins both surfaces).

@@ -25,7 +25,7 @@ element cannot (component slots, class-name slots, render-prop children).
 | `decodeLinkUrl` | – (no decode link) | yes | yes | both |
 | `themeToggle` | `true` | yes | yes | both |
 | `defaultTheme` | `system` | yes | yes | both |
-| `storageKey` | `openreceive-theme` | yes | yes | both |
+| `storageKey` | `openreceive.theme` | yes | yes | both |
 | `metadata` | – | yes | yes | **create only** |
 | `syncUrl` | `false` | yes | yes | **create only** |
 | `resumePathPrefix` | `/checkout` | yes | yes | **create only** |
@@ -36,12 +36,22 @@ element cannot (component slots, class-name slots, render-prop children).
 | `components`, `classNames`, `children` | – | yes | not representable | both |
 | `options` | `{}` | – (props are flat) | yes (escape hatch for the rest of `CheckoutShellOptions`) | both |
 
+On the element itself the polling knobs are the `polling` / `poll-interval-ms`
+attributes: `polling="false"` renders the snapshot (countdown included)
+without ever POSTing `/payments/check`, matching React's `polling` prop;
+`poll-interval-ms` tunes the interval. The element wrappers thread them
+through the `options` escape hatch onto exactly those attributes.
+
 Mode rules:
 
 - Exactly one of `checkout` (snapshot) or `orderId` (create) is required. Passing
-  neither is a prop error raised at the boundary — `<Checkout>` in React,
-  `validateOpenReceiveWrapperCheckoutProps` in the element wrappers — never a
-  `TypeError` thrown out of a computed/reactive/change-detection read.
+  neither raises one clear boundary error (`validateOpenReceiveWrapperCheckoutProps`;
+  React validates in `<Checkout>` itself) naming the wrapper and the missing prop —
+  not the shared factory's bare `TypeError`. Where it surfaces follows each
+  framework's prop plumbing: Vue validates inside its `computed` shell binding and
+  Svelte inside its reactive statement, so the throw does come out of that read;
+  Angular validates in `ngOnChanges` — once per input change, never once per
+  change-detection pass.
 - The create-only props do nothing in snapshot mode. Each wrapper warns once when
   one is passed with a `checkout` present.
 - `themeToggle: false` means the host owns theming: no package toggle is rendered

@@ -43,11 +43,10 @@ LSC_URI_PRIMARY=
 LSC_URI_BACKUP=
 ```
 
-1. Get a receive-only NWC code from
-   [Get an NWC code](https://openreceive.org/get_a_nwc_code_to_receive_payments)
-   → `NWC_URI`.
-2. Optionally set a swap provider from
-   [Set up a swap provider](https://openreceive.org/set_up_swap_provider)
+1. Get a receive-only NWC code from a compatible wallet
+   (guides at [openreceive.org](https://openreceive.org)) → `NWC_URI`.
+2. Optionally set up a swap provider (also covered on
+   [openreceive.org](https://openreceive.org))
    → `LSC_URI_PRIMARY` (and `LSC_URI_BACKUP` if you have one).
 
 Never put these values in browser code. Boot fails closed if the NWC code also
@@ -77,7 +76,7 @@ const openreceive = openReceiveExpress({
     await query("UPDATE orders SET state = 'paid' WHERE id = ?", [orderId]);
   },
   authorize: async ({ action, request, resource }) =>
-    orders.viewerMay(await sessions.currentUser(request), resource.order_id, action),
+    orders.viewerMay(await sessions.currentUser(request), resource.orderId, action),
   // Recommended for public web shops: caps invoice creation at 60 per client IP
   // per hour. Leave it off (the default) for point-of-sale deployments, where
   // many payers share the terminal's IP.

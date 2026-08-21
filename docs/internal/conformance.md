@@ -4,5 +4,6 @@ Node and Ruby share exact-money, settlement-authority, NIP-47 paging, and HTTP v
 `spec/test-vectors`. The OpenAPI contract defines the public route shapes.
 
 Conformance requires: pages no larger than 20; dedupe by payment hash; creation-time scan
-ranges; preimage-alone rejection; create response only after host commit; and replay-safe paid
-delivery.
+ranges; preimage-alone rejection; create response only after host commit; replay-safe paid
+delivery; and truncated-scan safety (`wallet-scan-truncation` vectors: a scan that ran out of
+pages proves nothing about the attempts it never reached — they stay pending).

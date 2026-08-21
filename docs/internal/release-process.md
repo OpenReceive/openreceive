@@ -1,6 +1,6 @@
 # Release Process
 
-OpenReceive starts with a small v0.1 release surface:
+The npm release surface, all versioned in lockstep:
 
 - OpenReceive `0.1.1`
 - `openreceive`
@@ -70,8 +70,8 @@ npm run release:gem:publish -- --otp <code>
 
 `release:gem:plan` is read-only and reports version drift.
 `release:gem:build` builds all three `.gem` artifacts under
-`.release/gems/<version>` (CI runs the same build via `npm run build:gems` on
-every PR). `release:gem:publish` requires a clean worktree, runs
+`.release/gems/<version>` (CI builds the gems via `./tools/ci/ruby-gem-build.sh`
+on every push/PR). `release:gem:publish` requires a clean worktree, runs
 `npm run test:ruby`, checks the target versions are not already on RubyGems,
 rebuilds, and pushes in dependency order (`openreceive`,
 `openreceive-server`, `openreceive-rails`). The RubyGems account requires MFA
@@ -91,7 +91,7 @@ The release owner also checks:
 - Changelog updated.
 - Public package manifests are public while testkit stays private.
 - Package versions match the intended tag.
-- Ruby gem versions match the workspace version and `npm run build:gems` passes.
+- Ruby gem versions match the workspace version and `npm run release:gem:build` passes.
 - JSON schemas and test vectors pass.
 - OpenAPI and AsyncAPI validation passes through `npm run validate`.
 - Secret scan passes.
@@ -133,30 +133,13 @@ enabled:
 `npm run check:workflows` requires read-only workflow permissions, expected
 commands, concurrency groups, and the disabled publish path.
 
-## Suggested Tags
+## Tagging
 
-- `v0.1.1`
-- `js-openreceive-v0.1.1`
-- `js-core-v0.1.1`
-- `js-node-v0.1.1`
-- `js-browser-v0.1.1`
-- `js-provider-data-v0.1.1`
-- `js-testkit-v0.1.1`
-- `js-elements-v0.1.1`
-- `js-react-v0.1.1`
-- `js-vue-v0.1.1`
-- `js-svelte-v0.1.1`
-- `js-angular-v0.1.1`
-- `js-http-v0.1.1`
-- `js-express-v0.1.1`
-- `js-fastify-v0.1.1`
-- `js-next-v0.1.1`
-- `rb-openreceive-v0.1.1`
-- `rb-server-v0.1.1`
-- `rb-rails-v0.1.1`
-
-Use independent package versions later, after the contract is stable enough to
-avoid confusing SDK consumers.
+Tag the prepared release commit once, as `v0.1.1` — no release tags exist yet,
+and per-package tags are deliberately not used while every package and gem
+releases in lockstep with the workspace version. Introduce per-package tags
+only if versions ever diverge, after the contract is stable enough to avoid
+confusing SDK consumers.
 
 ## Notes
 

@@ -1,6 +1,5 @@
 {
   "version": "0.2.0",
-  "generated_at": "2026-06-19T00:00:00Z",
   "docs": [
     {
       "slug": "guides",
@@ -94,6 +93,14 @@
       "slug": "storage",
       "title": "Payment Storage",
       "source_path": "docs/guides/storage.md",
+      "category": "operations",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "deploying",
+      "title": "Deploying OpenReceive",
+      "source_path": "docs/guides/deploying.md",
       "category": "operations",
       "audience": "developer",
       "public": true

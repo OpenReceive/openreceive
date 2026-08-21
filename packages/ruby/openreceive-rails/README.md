@@ -12,11 +12,20 @@ bin/rails generate openreceive:install
 bin/rails db:migrate
 ```
 
+The generated migration supports PostgreSQL, SQLite, and MySQL, and seeds the
+shared `schema_version`; on its first database touch the engine refuses to
+operate a database whose stored schema version is newer than the gem.
+
 The quickstart host contract is `config.authorize`, `config.load_order`,
 `config.amount_for_order`, and `config.on_paid` (run inside the settlement
-transaction, only for the order's first settled attempt). Hosts with a custom
-repository may instead configure `resolve_checkout` and `on_checkout_created`
-together as the advanced escape hatch.
+transaction, only for the order's first settled attempt). The generated
+initializer starts with the `OpenReceive::LOGGING_ON_PAID` placeholder, which
+only logs settlements — the engine warns at every boot until it is replaced.
+Hosts with a custom repository may instead configure `resolve_checkout` and
+`on_checkout_created` together as the advanced escape hatch. In production the
+engine builds the service (and its wallet preflight) eagerly at boot, so a
+missing `NWC_URI` or a spend-capable wallet stops the deploy instead of
+surfacing as checkout-time 500s.
 
 Settlement runs on the request path by default: every engine route runs one
 opportunistic reconcile pass, serialized across all Puma workers by that

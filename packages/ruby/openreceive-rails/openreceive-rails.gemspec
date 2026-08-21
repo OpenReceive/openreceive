@@ -5,7 +5,7 @@ require_relative "lib/openreceive/rails/version"
 Gem::Specification.new do |spec|
   spec.name = "openreceive-rails"
   spec.version = OpenReceive::Rails::VERSION
-  spec.summary = "OpenReceive mountable Rails engine with host-owned payment scaffolding."
+  spec.summary = "OpenReceive mountable Rails engine with engine-owned payment attempts in the host database."
   spec.description =
     "A mountable Rails engine that ships OpenReceive's receive-only checkout routes into a " \
     "Rails app. Engine controllers inherit from the host's ApplicationController (keeping its " \

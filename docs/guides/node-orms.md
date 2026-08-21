@@ -109,17 +109,22 @@ export function openReceiveTypeOrmDb(
 
 ## Schema and `onPaid`
 
-The scaffolded migration matches `openReceivePaymentsSchemaSql(dialect)`:
-`order_id` indexed but not unique, `payment_hash` unique, `status` +
-`status_reason`, `paid_at`, `expires_at`, exact wallet `created_at`,
-locally-clocked `updated_at`, `checkout_data`, server-only `swap_data`, and
-nullable `client_ip` (with its `(client_ip, updated_at)` index — DB-backed
+The scaffolded migration renders the canonical DDL in `@openreceive/core`
+(`payments-ddl.ts` — the same source `openReceivePaymentsSchemaSql(dialect)`
+renders, so the two cannot drift): `order_id` indexed but not unique,
+`payment_hash` unique (64-lowercase-hex CHECK), `status` (CHECK over the five
+statuses) + `status_reason`, `paid_at`, `expires_at`, exact wallet
+`created_at`, locally-clocked `updated_at`, write-once `inserted_at`,
+`checkout_data`, server-only `swap_data`, and
+nullable `client_ip` (with its `(client_ip, inserted_at)` index — DB-backed
 rate limiting counts on it). Keep every column; adjust `order_id`
 typing or add a foreign key to your order table if you like. See
 [Payment storage](storage.md).
 
 The same file also creates `openreceive_meta` (`key`, `value`, `rev`) in the
-same database — one migration, both tables. Its `transaction_scan_gate` row is
+same database — one migration, both tables — and, where the ORM's migration
+format can seed rows, seeds its `schema_version` marker (see
+[Payment storage](storage.md#schema-version)). The `transaction_scan_gate` row is
 the durable claim that collapses the request-path reconcile passes of every
 instance into one wallet scan per interval, so keep it even though no host code
 touches it.

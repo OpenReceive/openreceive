@@ -3,8 +3,13 @@ info:
   title: OpenReceive verified payment events
   version: 0.2.0
   description: >
-    The server-side onPaid callback is at-least-once. Notifications are wake-up hints;
-    wallet lookup or transaction scans are always the settlement authority.
+    The server-side onPaid callback is at-least-once. NWC notifications are
+    authenticated wallet data: a payment_received payload that carries a
+    finality signal (settled_at or a settled transaction state; never a
+    preimage alone) settles the matching pending attempt directly, in both
+    engines. A payload without a finality signal or with an unknown payment
+    hash only wakes a bounded reconciliation scan, and the periodic poll pass
+    remains the safety net for notifications missed while offline.
 channels:
   verifiedPayments:
     address: openreceive://verified-payments

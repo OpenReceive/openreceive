@@ -1,7 +1,14 @@
 # Settlement reconciliation
 
-The default settlement driver is the request path: every mounted OpenReceive route runs one
-opportunistic reconcile pass when payment attempts are pending. A durable gate row —
+The integrator-facing version of this material is the public
+[Deploying OpenReceive](../guides/deploying.md) guide; this page keeps the
+contributor-level invariants.
+
+The default settlement driver is the request path: every mounted OpenReceive payment route
+(never `GET /rates`) runs one
+opportunistic reconcile pass when payment attempts are pending. Every scan entry point — this
+request-path pass, the notifications worker's periodic pass, and a directly driven
+reconciler — claims the gate first. A durable gate row —
 `openreceive_meta` key `transaction_scan_gate` in the host database, claimed by optimistic
 CAS — serializes passes across every instance and Puma worker, so rapid calls collapse to one
 real wallet scan per interval. The interval floors at 2 seconds

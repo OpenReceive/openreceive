@@ -33,5 +33,8 @@ run OpenReceive::Server::RackApp.new(
 
 Rack hosts own attempt persistence and replay-safe settlement (the Rails
 engine ships both; see `openreceive-rails`). Rack hosts that want opportunistic
-settlement call `OpenReceive.maybe_reconcile!` (or their own gated pass) from
-their middleware — `RackApp` deliberately has no built-in hook.
+settlement run their own gated pass from middleware: feed the pending attempts
+they store to `service.reconcile_payments({ attempts:, max_pages:, deadline: })`
+and apply the per-hash results through `on_paid` — `RackApp` deliberately has
+no built-in hook, and the durable-gate convenience (`OpenReceive.maybe_reconcile!`)
+ships only with the Rails engine.

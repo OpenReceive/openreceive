@@ -79,6 +79,7 @@
       "minLength": 1
     },
     "refund_address": {
+      "description": "Browser-local only: the payer's checkout keeps the refund address it collected in its own snapshot; neither engine emits this field in server responses.",
       "type": "string",
       "minLength": 1
     },

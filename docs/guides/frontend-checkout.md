@@ -26,11 +26,12 @@ Browser & React API surface (full reference in
   `metadata`.
 - `<Checkout>` props — `orderId` (create mode) or `checkout` (snapshot mode), `prefix`,
   `orderUrl`, the seven handlers (`onCopy`, `onOpenWallet`, `onState`, `onSettled`,
-  `onProviderCopy`, `onStartOver`, `onError`), `polling`, `paymentWizard`, `themeToggle`
-  (default `true`), `storageKey`, `decodeLinkUrl`, `components`, `classNames`, `syncUrl`,
-  `resumePathPrefix`, `routeOrderId`, `metadata`. The same names and defaults hold for the
-  Vue, Svelte and Angular wrappers — see
-  [wrapper parity](../internal/wrapper-parity.md).
+  `onProviderCopy`, `onStartOver`, `onError`), `polling`, `pollIntervalMs`, `paymentWizard`,
+  `themeToggle` (default `true`), `defaultTheme`, `storageKey`, `decodeLinkUrl`,
+  `components`, `classNames`, `syncUrl`,
+  `resumePathPrefix`, `routeOrderId`, `metadata`, `createFetch`. The same names and defaults
+  hold for the Vue, Svelte and Angular wrappers, which mount the same custom element
+  (`polling`/`pollIntervalMs` ride the `options` escape hatch there).
 - `useCheckout(options)` — the hook behind `<Checkout>` for custom layouts; returns the live
   snapshot, status/countdown labels, and `copyInvoice`/`openWallet`/`retry` actions.
 

@@ -1,6 +1,107 @@
 # Changelog
 
-## 0.1.1 - Unreleased
+## Unreleased
+
+OpenReceive is pre-release and has no compatibility or migration commitments;
+this is a breaking cleanup pass (a full audit-fix sweep) with no aliases left
+behind.
+
+### Naming: camelCase TypeScript, `Checkout` everywhere
+
+- Server-side TypeScript surfaces are all camelCase now: the `authorize`
+  resource carries `orderId`/`paymentHash`, and the rate quote carries
+  `btcFiatPrice`/`amountSats`/`amountMsats`/`asOf`/`expiresAt`. The wire
+  itself stays snake_case.
+- The minted invoice is `Checkout` at every layer: the service type `Checkout`
+  (was `CheckoutInvoice`), the generated wire body type
+  `OpenReceiveWireCheckout` (from the OpenAPI document, shipped by
+  `@openreceive/http`), and the browser's client-held snapshot type
+  `CheckoutSnapshot`.
+- The advanced rate-limit hook option is `rateLimitHook` (was `rateLimit`), so
+  it reads as what it is and composes with the boolean `rateLimiting`.
+
+### `onPaid` in both host modes (`onSettlement` removed)
+
+- The settlement hook is `onPaid` in BOTH host modes; `onSettlement` no longer
+  exists. db mode receives `OpenReceiveOrderSettlement` (`orderId` plus the
+  transactional `query`); custom-repository mode receives
+  `OpenReceiveSettlementEvent` (`paymentHash`/`paidAt`/`details`), with
+  write-once still enforced by the library.
+
+### Curated exports and the public-api gate
+
+- `@openreceive/express`, `@openreceive/fastify`, and `@openreceive/next`
+  re-export only the curated `@openreceive/http` surface: handler/stack
+  factories, the error surface, the notification worker, the
+  options/context/hook types, and the generated `OpenReceiveWire*` wire body
+  types. Host-integration internals — the SQL payment repository, the
+  reconcile gate, `createOpenReceiveHost`, the rate-limit helpers — live only
+  on `@openreceive/http` (and `openreceive/http`).
+- The UI wrappers export only the wrapper factories plus props/theme types,
+  and `@openreceive/core` no longer exports internal formatting helpers
+  (`satsToFiatValue`, `formatBtcFromSats`, …).
+- A new `npm run check:public-api` gate pins every public surface in CI.
+- `trustProxyIpHeader` (opt-in proxy-set client-IP header for `rateLimiting`)
+  now exists on all three adapters.
+
+### Scan topology
+
+- Every scan entry point — the opportunistic request-path pass, the
+  notification worker's periodic pass, and `startOpenReceiveReconciler` —
+  claims the durable `openreceive_meta` reconcile gate, so all of them share
+  the one NWC scan budget. Unauthenticated `GET /rates` never triggers a scan.
+- `payments/check` serves `payment_methods` from a 60-second per-amount warm
+  cache instead of one provider call per poll.
+- Superseded rows are excluded from live-attempt matching, and the 409 create
+  conflict no longer leaks the live/supersede vocabulary on the wire ("An
+  unpaid checkout for this payment method is already in progress for this
+  order.").
+
+### Frontend
+
+- The fiat/country wing and the crypto method tile are removed: the payment
+  method union is `"bitcoin"`, and the swap flow is unchanged behind it.
+- `@openreceive/elements` and `@openreceive/react` ship self-contained
+  compiled `styles.css` files — a plain `<link rel="stylesheet">` works.
+- React snapshot mode polls through the default `/openreceive` prefix like
+  create mode; `polling` and `poll-interval-ms` (`pollIntervalMs`) knobs exist
+  on the element and every wrapper.
+
+### Schema
+
+- `openreceive_payments` gains a locally clocked `inserted_at` column and
+  CHECK constraints, and the install migrations seed the shared
+  `schema_version` row in `openreceive_meta`. The per-IP rate-limit budget
+  counts on `inserted_at` with a `(client_ip, inserted_at)` index in both
+  engines (vector: `rate-limit-window.json`).
+
+### Ruby engine parity
+
+- Truncation-safe reconcile: a wallet-history walk cut short (page cap, pass
+  deadline, or a wallet that ignores `offset`) omits undecided hashes instead
+  of reporting `not_found`, so a truncated scan can never close a paid attempt
+  — pinned by the new cross-language `wallet-scan-truncation.json` vector
+  family. Each pass takes the oldest 200 pending attempts
+  (`RECONCILE_BATCH_SIZE`).
+- Schema-version refusal: the engine refuses to operate a database whose
+  stored `schema_version` is newer than the library.
+- The generated Rails migration supports MySQL alongside PostgreSQL and
+  SQLite.
+- Production boot builds the service (and its wallet preflight) eagerly, so a
+  bad deploy fails closed instead of surfacing checkout-time 500s. The
+  initializer template defaults `config.on_paid` to
+  `OpenReceive::LOGGING_ON_PAID`, and the engine warns at every boot until it
+  is replaced.
+- `rake test` works from each gem directory, and the Ruby suites use glob
+  test discovery.
+
+### CI
+
+- Per-push `rails-example` job; `check:example-imports` and `check:public-api`
+  run per push; wrapper type checks (`vue-tsc`, `svelte-check`) and real
+  wrapper mount tests.
+
+## 0.1.1 - 2026-08-18
 
 OpenReceive is pre-release and has no compatibility or migration commitments.
 
@@ -205,8 +306,9 @@ docs index; none of these three track the package release number.
 
 ### Developer experience
 
-- The Node quickstart has one service, one host integration, one framework
-  adapter, and one reconciliation startup call.
+- The Node quickstart has one service, one host integration, and one framework
+  adapter — and no reconciliation startup call: settlement rides the mounted
+  routes through the durable gate.
 - Removed superseded API aliases, historical response-shape normalization, and
   repository scratch documents.
 
