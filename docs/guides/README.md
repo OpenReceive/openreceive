@@ -3,7 +3,7 @@
 1. [What is OpenReceive?](what-is.md)
 2. [Node quickstart](quickstart-node.md)
 3. [Node ORM recipes](node-orms.md)
-4. [Rails quickstart](quickstart-rails.md) (see also `examples/hello-fruit-rails` and `npm run demo rails`)
+4. [Rails quickstart](quickstart-rails.md) (see also `npm run demo rails`)
 5. [Authorization and host integration](authorization.md)
 6. [Rate limiting](rate-limiting.md)
 7. [Frontend checkout](frontend-checkout.md)

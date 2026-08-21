@@ -259,7 +259,6 @@ settled transaction remains authoritative.
   against shared vectors.
 - `examples/hello-fruit/server/` contains Express, static HTML, Next.js, and
   Rails demos. Demo order models are ordinary host application code.
-  `examples/hello-fruit-rails/` is a minimal Rails install sample.
 - `tools/` contains validation, conformance, package-smoke, documentation, and
   live-wallet helpers.
 

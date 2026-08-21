@@ -1309,3 +1309,79 @@ class OpportunisticReconcileTest < Minitest::Test
     $stderr = original
   end
 end
+
+# Runs the actual generator (Thor option parsing, migration numbering, the
+# route injection) into a throwaway destination — the template-render tests
+# above cover content invariants; this covers the generator machinery itself,
+# which previously only the deleted examples/hello-fruit-rails app exercised.
+require "rails/generators"
+require "rails/generators/test_case"
+require "tmpdir"
+require "fileutils"
+require_relative "../lib/generators/openreceive/install/install_generator"
+
+class OpenReceiveInstallGeneratorRunTest < Rails::Generators::TestCase
+  tests OpenReceive::Generators::InstallGenerator
+  destination File.join(Dir.tmpdir, "openreceive-install-generator-test")
+  setup :prepare_destination
+
+  setup do
+    # The route action injects into an existing routes file, as in a real app.
+    FileUtils.mkdir_p(File.join(destination_root, "config"))
+    File.write(
+      File.join(destination_root, "config/routes.rb"),
+      "Rails.application.routes.draw do\nend\n"
+    )
+  end
+
+  teardown do
+    FileUtils.rm_rf(destination_root)
+  end
+
+  def test_default_run_emits_migration_initializer_and_route
+    run_generator
+
+    assert_migration "db/migrate/create_openreceive_tables.rb" do |content|
+      refute_includes content, "<%"
+      assert_includes content, "t.bigint :order_id, null: false"
+      assert_includes content, "t.datetime :inserted_at, null: false"
+      assert_includes content, "add_index :openreceive_payments, [:client_ip, :inserted_at]"
+      assert_includes content, "add_foreign_key :openreceive_payments, :orders, column: :order_id"
+      assert_includes content, "status IN ('pending', 'settled', 'expired', 'failed', 'attention')"
+      assert_includes content, "openreceive_payments_payment_hash_check"
+      assert_includes content, "'schema_version', '#{OpenReceive::Server::PAYMENTS_SCHEMA_VERSION}'"
+      RubyVM::InstructionSequence.compile(content)
+    end
+
+    assert_file "config/initializers/openreceive.rb" do |content|
+      refute_includes content, "<%"
+      assert_includes content, "config.load_order"
+      RubyVM::InstructionSequence.compile(content)
+    end
+
+    assert_file "config/routes.rb" do |content|
+      assert_includes content, %(mount OpenReceive::Engine => "/openreceive")
+    end
+  end
+
+  def test_option_run_respects_key_type_and_skip_flags
+    run_generator %w[
+      --order-model=Purchase
+      --order-primary-key-type=uuid
+      --skip-foreign-key
+      --skip-initializer
+      --skip-route
+    ]
+
+    assert_migration "db/migrate/create_openreceive_tables.rb" do |content|
+      assert_includes content, "t.uuid :order_id, null: false"
+      refute_includes content, "add_foreign_key"
+      RubyVM::InstructionSequence.compile(content)
+    end
+
+    assert_no_file "config/initializers/openreceive.rb"
+    assert_file "config/routes.rb" do |content|
+      refute_includes content, "OpenReceive::Engine"
+    end
+  end
+end

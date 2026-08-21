@@ -42,9 +42,7 @@ The default assumes an `Order` model with a bigint primary key. Adjust with
 `--skip-foreign-key`, and set `config.order_model` when the host model is not
 `Order`.
 
-A minimal runnable host app lives at
-[`examples/hello-fruit-rails`](../../examples/hello-fruit-rails). The fuller
-Docker demo is `npm run demo rails`
+A complete runnable host app is the Rails Hello Fruit demo, `npm run demo rails`
 ([`examples/hello-fruit/server/rails`](../../examples/hello-fruit/server/rails)).
 
 Supply the receive-only wallet connection as `ENV["NWC_URI"]`. Never put it in

@@ -58,6 +58,10 @@ small, honest API and a good developer experience.
   demo product data.
 - Schema or route changes update their vectors in the same change. Invoice behavior needs
   host-row retry/concurrency tests; settlement behavior needs replay-safe tests.
+- We should not worry about validating the NWC's responses or behavior... a user of OpenReceive implicitly
+  trusts his/her backing NWC service, becuase he/she will need to use the NWC service any to withdraw any funds.
+  OpenReceive users can also build their own fully self-custodial NWC service, or use a fully self-custodial NWC service
+  like an Alby Hub instance running on their own hardware.
 
 ## Shipped routes and hooks
 

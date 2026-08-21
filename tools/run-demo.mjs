@@ -38,8 +38,6 @@ const DEMOS = [
     label: "Next.js fullstack",
   },
   {
-    // No "hello-fruit-rails" alias: that is the separate quickstart at
-    // examples/hello-fruit-rails, which this launcher does not start.
     keys: ["rails", "rails-fullstack"],
     dir: "examples/hello-fruit/server/rails",
     port: 3003,

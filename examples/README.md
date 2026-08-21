@@ -1,14 +1,15 @@
 # OpenReceive examples
 
-Two apps live here, and they answer different questions.
+One app lives here: [`hello-fruit/`](hello-fruit), the full fruit-sticker shop,
+built four times over four server stacks. Start with it to see a complete
+checkout: catalog, cart, currency picker, Lightning + swap rails,
+resume-after-refresh, post-pay delivery.
 
-| Directory | What it is | Start with it when |
-| --- | --- | --- |
-| [`hello-fruit/`](hello-fruit) | The full fruit-sticker shop, built four times over four server stacks | You want to see a complete checkout: catalog, cart, currency picker, Lightning + swap rails, resume-after-refresh, post-pay delivery |
-| [`hello-fruit-rails/`](hello-fruit-rails) | A deliberately tiny Rails host | You want to check `bin/rails generate openreceive:install` against a real app, or read the smallest possible integration |
-
-The quickstart is Lightning-only and creates one $2.00 order from a Stimulus
-controller. It is not a smaller Hello Fruit — it shares no code with it.
+For the smallest possible integration, follow the
+[Node quickstart](../docs/guides/quickstart-node.md) or the
+[Rails quickstart](../docs/guides/quickstart-rails.md) — the Rails guide walks
+`bin/rails generate openreceive:install`, whose output is exercised by the
+engine gem's generator tests and by the Rails demo here.
 
 ## Running a demo
 
@@ -26,9 +27,6 @@ npm run demo rails           # Rails + Postgres                    :3003
 `compose.override.yml.example` each variant ships publishes the port and does
 nothing else. For an edit-reload loop, run the variant's own `npm run dev`
 (or `bin/dev` for Rails) outside Docker.
-
-The quickstart has no compose stack; see its
-[README](hello-fruit-rails/README.md).
 
 ## The boundary these examples exist to show
 

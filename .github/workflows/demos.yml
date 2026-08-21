@@ -31,23 +31,6 @@ jobs:
       - run: npm run build:demo
       - run: npm run scan:client-bundles
 
-  # Minimal Rails generator-install sample (SQLite, Lightning-only, no Docker).
-  # bin/ci runs setup (bundle install + db:prepare), the stubbed-wallet
-  # integration tests, and the gem/importmap audits.
-  hello-fruit-rails-quickstart:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      NWC_URI: ""
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
-        with:
-          working-directory: examples/hello-fruit-rails
-          bundler-cache: true
-      - run: bin/ci
-        working-directory: examples/hello-fruit-rails
-
   # Full Rails Hello Fruit demo (host-owned Postgres, like its compose stack).
   # bin/ci runs setup against the service database, the stubbed-wallet
   # integration tests, and the gem audit (no importmap audit: the browser

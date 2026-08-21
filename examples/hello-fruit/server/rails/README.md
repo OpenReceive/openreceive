@@ -134,5 +134,5 @@ Host-owned migrations ship with the demo:
    reconcile gate, one migration (from `rails generate openreceive:install`)
 5. `create_solid_cable_messages` (single-database solid_cable)
 
-For a smaller install-only sample, see
-[`../../../hello-fruit-rails`](../../../hello-fruit-rails).
+For the smallest install walkthrough, see the
+[Rails quickstart guide](../../../../docs/guides/quickstart-rails.md).
