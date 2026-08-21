@@ -1,0 +1,62 @@
+{
+  "name": "@openreceive/node",
+  "version": "0.1.1",
+  "description": "The OpenReceive Node service: receive-only NWC wallet client, checkout and swap service, pricing, and the openreceive CLI.",
+  "keywords": [
+    "bitcoin",
+    "lightning",
+    "payments",
+    "nwc",
+    "bolt11",
+    "openreceive",
+    "cli"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "dependencies": {
+    "@getalby/sdk": "^7.0.0",
+    "@openreceive/core": "0.1.1"
+  },
+  "bin": {
+    "openreceive": "./bin/openreceive.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./cli": {
+      "types": "./dist/cli.d.ts",
+      "import": "./dist/cli.js"
+    }
+  },
+  "files": [
+    "bin",
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts src/cli.ts --format esm --dts --clean --target es2022 --out-dir dist",
+    "prepack": "npm run build"
+  },
+  "license": "MIT",
+  "author": "OpenReceive <info@openreceive.org>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openreceive/openreceive.git",
+    "directory": "packages/js/node"
+  },
+  "bugs": {
+    "url": "https://github.com/openreceive/openreceive/issues"
+  },
+  "homepage": "https://openreceive.org",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

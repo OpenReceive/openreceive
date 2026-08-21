@@ -1,0 +1,22 @@
+{
+  "schema_version": 2,
+  "name": "request body over the 64KB cap",
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/checkouts",
+    "body_bytes": 65537
+  },
+  "expected": {
+    "status": 413,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "code": "INVALID_REQUEST",
+      "message": "Request body is too large.",
+      "request_id": "<request_id>"
+    }
+  },
+  "note": "body_bytes avoids inlining 64KB of JSON; runners synthesize a raw body of that size."
+}

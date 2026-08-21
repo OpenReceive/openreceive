@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Bank transfer">
+  <defs>
+    <linearGradient id="bank-g" x1="8" x2="56" y1="8" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38BDF8"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="#EFF6FF"/>
+  <path fill="url(#bank-g)" d="M32 10 9 23v5h46v-5L32 10Z"/>
+  <path fill="#172033" d="M14 32h7v15h-7V32Zm15 0h7v15h-7V32Zm15 0h7v15h-7V32ZM10 50h44v5H10v-5Z"/>
+  <circle cx="32" cy="23" r="4" fill="#FFFFFF"/>
+</svg>

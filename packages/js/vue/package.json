@@ -1,0 +1,65 @@
+{
+  "name": "@openreceive/vue",
+  "version": "0.1.1",
+  "description": "Vue wrapper for the OpenReceive checkout custom element.",
+  "keywords": [
+    "bitcoin",
+    "lightning",
+    "payments",
+    "nwc",
+    "bolt11",
+    "openreceive",
+    "vue",
+    "checkout"
+  ],
+  "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "dependencies": {
+    "@openreceive/browser": "0.1.1",
+    "@openreceive/elements": "0.1.1"
+  },
+  "peerDependencies": {
+    "vue": ">=3.4.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./checkout.vue": {
+      "types": "./dist/Checkout.vue.d.ts",
+      "default": "./dist/Checkout.vue"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean --target es2022 --out-dir dist && node ../../../tools/package/copy-static.mjs src dist styles.css Checkout.vue Checkout.vue.d.ts",
+    "prepack": "npm run build"
+  },
+  "license": "MIT",
+  "author": "OpenReceive <info@openreceive.org>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openreceive/openreceive.git",
+    "directory": "packages/js/vue"
+  },
+  "bugs": {
+    "url": "https://github.com/openreceive/openreceive/issues"
+  },
+  "homepage": "https://openreceive.org",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

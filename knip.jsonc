@@ -1,0 +1,58 @@
+{
+  "$schema": "./node_modules/knip/schema-jsonc.json",
+  // Dead-export gate (audit P5b). Scope is deliberately narrow: report only
+  // unused exports/exported types so the check stays a hard failure instead of
+  // a TODO list. Dependency/file/unresolved categories are noisy in this
+  // monorepo and stay disabled until they are clean.
+  "include": ["exports", "types"],
+  // An export that is consumed inside its own module is not dead.
+  "ignoreExportsUsedInFile": true,
+  "ignoreWorkspaces": [
+    // Example apps are demo code, not library surface.
+    "examples/**"
+  ],
+  "workspaces": {
+    // Root workspace: the test suite and repo tools are entry files so that
+    // exports used only by tests/tools still count as used.
+    ".": {
+      "entry": ["tests/*.test.mjs", "tools/**/*.mjs"],
+      "project": ["tests/**", "tools/**"]
+    },
+    // Every package's public surface (src/index.ts) is an *entry* file:
+    // exports from entries are not reported (includeEntryExports stays off),
+    // so a library's public API with no internal callers does not fail the
+    // check — only genuinely unreferenced internal exports do.
+    "packages/js/*": {
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.{ts,tsx,mjs}"]
+    },
+    // Packages with extra published subpath entries (see their package.json
+    // "exports" / tsconfig paths).
+    "packages/js/browser": {
+      "entry": ["src/index.ts", "src/headless.ts", "src/internal.ts"],
+      "project": ["src/**/*.{ts,tsx,mjs,css}"]
+    },
+    "packages/js/core": {
+      "entry": ["src/index.ts", "src/contracts.ts", "src/swap-address.ts"],
+      "project": ["src/**/*.{ts,tsx,mjs}"]
+    },
+    "packages/js/node": {
+      "entry": ["src/index.ts", "src/cli.ts", "bin/*.mjs"],
+      "project": ["src/**/*.{ts,tsx,mjs}", "bin/**/*.mjs"]
+    },
+    "packages/js/angular": {
+      // The component is a published subpath (./checkout-component).
+      "entry": ["src/index.ts", "src/openreceive-checkout.component.{ts,mjs}"],
+      "project": ["src/**/*.{ts,tsx,mjs}"]
+    },
+    // vue/svelte single-file components would need knip compilers; their
+    // index.ts is the only TS surface and all binding logic lives in
+    // @openreceive/elements/wrapper-shared, so .vue/.svelte files are not
+    // scanned here.
+    // The umbrella package: every src/*.ts file is a published subpath.
+    "packages/js/openreceive": {
+      "entry": ["src/*.ts"],
+      "project": ["src/**/*.{ts,tsx,mjs}"]
+    }
+  }
+}

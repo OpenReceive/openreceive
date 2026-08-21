@@ -1,0 +1,33 @@
+asyncapi: 3.0.0
+info:
+  title: OpenReceive verified payment events
+  version: 0.2.0
+  description: >
+    The server-side onPaid callback is at-least-once. Notifications are wake-up hints;
+    wallet lookup or transaction scans are always the settlement authority.
+channels:
+  verifiedPayments:
+    address: openreceive://verified-payments
+    messages:
+      paymentSettled:
+        $ref: '#/components/messages/paymentSettled'
+operations:
+  observeVerifiedPayments:
+    action: receive
+    channel:
+      $ref: '#/channels/verifiedPayments'
+components:
+  messages:
+    paymentSettled:
+      name: payment.settled
+      payload:
+        $ref: '#/components/schemas/PaidPayment'
+  schemas:
+    PaidPayment:
+      type: object
+      additionalProperties: false
+      required: [paymentHash, paidAt]
+      properties:
+        paymentHash: { type: string, pattern: '^[0-9a-f]{64}$' }
+        paidAt: { type: integer, minimum: 0 }
+        details: { type: object, additionalProperties: true }

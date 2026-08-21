@@ -1,0 +1,66 @@
+// Source-shape tripwires: rules about how the React package is written that no rendered
+// output can express. Behavior that CAN be rendered is asserted in
+// tests/react-checkout-behavior.test.mjs instead — regex-matching effect dependency
+// arrays passed while the behavior they claimed to protect was broken.
+import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
+import test from "node:test";
+
+const REACT_SRC_DIR = path.join(process.cwd(), "packages/js/react/src");
+// The react package source is split across logical modules; read them all so
+// structure assertions stay location-agnostic across future refactors.
+function readReactSource() {
+  return readdirSync(REACT_SRC_DIR)
+    .filter((file) => file.endsWith(".ts"))
+    .sort()
+    .map((file) => readFileSync(path.join(REACT_SRC_DIR, file), "utf8"))
+    .join("\n");
+}
+
+test("source-shape tripwire: transient copy feedback has one owner, not ad-hoc timers", () => {
+  // Every copy affordance must go through the shared feedback controller: hand-rolled
+  // timers drift apart and leak across unmounts. The behavior (label flips, then resets)
+  // is covered by the rendered copy-feedback test.
+  const source = readReactSource();
+
+  assert.match(source, /function useOpenReceiveTransientValue/);
+  assert.match(source, /createOpenReceiveTransientFeedbackController/);
+  assert.doesNotMatch(source, /globalThis\.setTimeout/);
+  assert.equal(source.match(/OPENRECEIVE_COPY_FEEDBACK_MS/g)?.length, 2);
+  assert.doesNotMatch(source, /setCopied\(false\)/);
+  assert.doesNotMatch(source, /setCopiedProviderId\(null\)/);
+});
+
+test("source-shape tripwire: unstable host callbacks are read through refs", () => {
+  // Hosts pass inline logger/onError/refreshStatus/onState. Anything the poll controller
+  // effect reads directly would restart polling on every parent render; the rendered
+  // regression test covers refreshStatus, and these keep the rest honest.
+  const source = readReactSource();
+
+  for (const name of ["logger", "onError", "onState", "onSettled", "refreshStatus"]) {
+    assert.match(
+      source,
+      new RegExp(`${name}Ref\\.current = `),
+      `${name} must be read through a ref, not captured by an effect dependency list`,
+    );
+  }
+});
+
+test("React package exposes shared browser-owned checkout styles", () => {
+  const manifest = JSON.parse(
+    readFileSync(path.join(process.cwd(), "packages/js/react/package.json"), "utf8"),
+  );
+  const browserStyles = readFileSync(
+    path.join(process.cwd(), "packages/js/browser/src/styles.css"),
+    "utf8",
+  );
+  const reactStyles = readFileSync(
+    path.join(process.cwd(), "packages/js/react/src/styles.css"),
+    "utf8",
+  );
+
+  assert.equal(manifest.exports["./styles.css"], "./dist/styles.css");
+  assert.match(browserStyles, /\.btn|@layer/);
+  assert.match(reactStyles, /@openreceive\/browser\/styles\.css/);
+});

@@ -1,0 +1,219 @@
+# Changelog
+
+## 0.1.1 - Unreleased
+
+OpenReceive is pre-release and has no compatibility or migration commitments.
+
+Version semantics: JS packages and Ruby gems share the workspace version
+(0.1.1). The OpenAPI (`spec/openapi`, 0.4.x) and AsyncAPI (0.2.x) documents
+version the wire contracts independently, and `docs/manifest.json` versions the
+docs index; none of these three track the package release number.
+
+### Opportunistic reconcile (no default long-running process)
+
+- Settlement of abandoned checkouts now piggybacks on OpenReceive API calls:
+  every mounted route (JS handler dispatch; Rails engine `around_action`) first
+  runs one reconcile pass gated by the restored durable `openreceive_meta`
+  key/value/rev table (CAS claim, `transaction_scan_gate`, minimum 2 seconds
+  between real wallet scans, stretched 2/6/12s by pending-invoice age). Every
+  worker sharing the host database races on the one gate row, so rapid calls
+  collapse to one `list_transactions` scan per interval — the gate is the NWC
+  scan budget. The awaited pass is time/page bounded (9s timeout, capped
+  pages); a failed or timed-out scan warns, never fails the user's request,
+  and leaves `claimed_at` so a broken wallet cannot stampede.
+- `openreceive_meta` ships in `openReceivePaymentsSchemaSql`, every scaffold
+  ORM template, and the Rails install migration — same host database as
+  `openreceive_payments`. One migration creates both tables everywhere, and it
+  is now named for what it does: `openreceive:install` writes
+  `db/migrate/*_create_openreceive_tables.rb` (`CreateOpenreceiveTables`, with
+  `--skip-migration` replacing `--skip-payment-migration`), and the JS scaffold
+  emits a per-ORM migration: knex `db/migrations/*_create_openreceive_tables.mjs`,
+  sequelize and typeorm `*-create-openreceive-tables.{cjs,ts}`, drizzle
+  `src/db/openreceive-tables.ts`, prisma `prisma/schema.openreceive.prisma`.
+  Custom repositories must implement
+  `claimReconcileGate({ now, intervalSeconds })` or pass
+  `opportunisticReconcile: false` (Rails: `config.opportunistic_reconcile`);
+  construction throws otherwise, like `rateLimiting`.
+- `reconcileOpenReceivePayments` / `OpenReceive.reconcile!` now return the
+  pass's per-hash check results. `POST /payments/check` consumes the
+  request-level pass instead of running its own per-invoice wallet walk: the
+  gate winner serves status/`paid_at`/`details` straight from the pass; on
+  `gate_busy` (or a hash outside the pending set) the host row serves
+  status/`paid_at` with `details` omitted, and row `attention` reads as
+  `pending` on the wire. Exactly one gate claim per request.
+- No web process starts a settlement timer anymore: `createOpenReceiveStack`
+  lost the `reconciler` option, the demos lost their reconciler
+  loops/Procfile entries, and the quickstarts no longer tell hosts to schedule
+  `OpenReceive::ReconcileJob`. The one optional worker does both listen and
+  reconcile: JS `startOpenReceiveNotificationWorker({ service, host })`
+  (wired from a host script; there is deliberately no host-aware CLI), Rails
+  `bin/rails openreceive:notifications` (now with a built-in periodic pass).
+  `startOpenReceiveReconciler`, `ReconcileJob`, and `openreceive:reconcile`
+  remain exported one-shot/loop primitives.
+
+### Headless browser surface (`@openreceive/browser/headless`)
+
+- New public, semver-guaranteed subpath for integrations that bring their own
+  UI: the checkout lifecycle (state machine, status model, poll fetcher),
+  payment-method/wizard models, swap display models, formatters, labels, and
+  the styling tokens that are the contract with the shipped stylesheet —
+  curated symbol-by-symbol (never `export *`), seeded from what the flagship
+  custom-UI rails example actually needs. `CheckoutState` (type) is promoted
+  to the main entry; element plumbing (`createOpenReceiveThemeToggleElement`,
+  checkout/theme-toggle tag, attribute, and event constants) moved to
+  `@openreceive/elements`.
+- No file under `examples/` imports any `@openreceive/*/internal` subpath
+  anymore; `npm run check:example-imports` (wired into `test:ci:release`)
+  fails CI if one comes back. `/internal` remains wrapper-only plumbing with
+  no stability guarantee, and the new
+  [headless checkout guide](docs/guides/headless-checkout.md) documents the
+  two supported integration styles.
+
+### Ruby engine parity
+
+- The Ruby core gem gains the built-in price feed (`OpenReceive::Rates`): a
+  static provider and the cached live feed with primary/fallback failover,
+  60-second caching, fail-closed windows, and the shared 46-currency list,
+  drift-checked against `spec/data/rates/price-sources.json`. The Rails engine
+  and Ruby Service default to it when the host injects no provider, matching
+  `createOpenReceive`.
+- The Ruby server gem gains the production FixedFloat swap provider (signed
+  API client, quote/create/status/refund, rates-index math, limits caching,
+  weight budgets, primary/backup failover) plus swap-address validation in the
+  core gem. Providers auto-build from `LSC_URI_PRIMARY`/`LSC_URI_BACKUP`
+  exactly like the Node engine, and `payment_methods` are amount-aware in both
+  engines.
+- Security: Ruby `payments/check` now whitelists the same public transaction
+  fields as the Node engine; the preimage and full invoice never reach the
+  payer. A new http-golden vector pins the settled check body in both engines.
+- Wire parity: known-path/wrong-method returns 405, unrecognized persistence
+  failures return 503 `INTERNAL` retryable, a host-resolved order without an
+  amount returns 500, payer input is validated before host hooks run, and the
+  rate limiter buckets IPv6 clients by /64 (with IPv4-mapped unwrap) in both
+  engines. The OpenAPI document now declares 405/500 on every route.
+
+### Packaging and release
+
+- npm: every public package now carries `publishConfig.access: "public"`, a
+  `prepack` build, and full registry metadata (description, keywords, author,
+  bugs, engines, sideEffects). The umbrella package no longer exports
+  `openreceive/testkit` (the testkit is internal), and the package graph
+  validator now rejects public packages with private peer dependencies.
+- RubyGems: the gems build again (the core gemspec no longer loads the full
+  library), release in lockstep with the workspace version (synced by
+  `release:prepare`, enforced by `check:release`), and ship LICENSE and
+  per-gem CHANGELOGs. Each gem dir gains a Gemfile and Rakefile; new
+  `release:gem:plan/build/publish` scripts and a CI `gem build` on Ruby
+  3.2/3.4 cover the RubyGems track, and `release:stamp` dates changelog
+  headings at release time.
+
+### Rate limiting
+
+- Opt-in per-IP invoice rate limiting (`rateLimiting` in JS,
+  `config.rate_limiting` in Rails): caps invoice creation per client IP per
+  rolling hour, counted from the `openreceive_payments` rows the host already
+  stores. Counting is repository-backed only (no in-memory fallback) and the
+  limit applies only when a new attempt would be minted — re-fetching an
+  already-committed attempt is never throttled.
+- Schema change: `openreceive_payments` gains a nullable `client_ip` column
+  with a `(client_ip, updated_at)` index (Rails: `(client_ip, created_at)` —
+  its `created_at` is locally clocked). Over-limit requests return
+  `429 RATE_LIMITED` with `retryable: true` and a `Retry-After` header, in
+  both engines.
+
+### Library-owned payment attempts
+
+- OpenReceive now owns the `openreceive_payments` logic inside the host's
+  existing database. The host passes a database handle (pg Pool/Client,
+  `node:sqlite`, better-sqlite3, or a custom `{dialect, query, transaction}`
+  adapter); the library owns the schema, per-order commit locking, write-once
+  settlement, and the reconciliation state machine. It still never owns orders,
+  users, prices, or fulfillment, and never requires a separate database or
+  Redis.
+- Simplified host contract: `authorize` plus
+  `createOpenReceiveHost({ db, loadOrder, amountForOrder, onPaid })`. `onPaid`
+  runs inside the settlement transaction, only for the order's first settled
+  attempt, with a transactional `query` for the order update or an outbox row.
+- Rails mirrors this: an engine-owned `OpenReceivePayment` model,
+  `openreceive:install` emitting migration + simplified initializer
+  (`authorize`, `load_order`, `amount_for_order`, `on_paid`) + route mount, and
+  a shipped `OpenReceive::ReconcileJob` / `openreceive:reconcile` rake task.
+- A custom `OpenReceivePaymentRepository` remains as a documented advanced
+  escape hatch, not the quickstart.
+- `npx openreceive scaffold payments` now emits only a migration/schema file
+  for the chosen ORM plus a wiring guide — no more generated repositories,
+  mark-paid logic, or host stubs. `openReceivePaymentsSchemaSql(dialect)`
+  returns the canonical DDL.
+
+### Attempt state machine and settlement
+
+- Every attempt carries `status`
+  (`pending | settled | expired | failed | attention`) plus `status_reason`.
+- Only `pending` attempts are reconciled, keeping the batched
+  `list_transactions` scan window bounded to roughly the active invoice window;
+  expired rows are no longer reconciled forever, and per-invoice lookups are
+  still never used.
+- Closing an unpaid attempt requires a successful wallet scan at or after
+  expiry plus the 900-second grace
+  (`OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS`); a local clock alone never
+  closes a row. Vectors: `spec/test-vectors/attempt-reconciliation.json`.
+- `attention` now requires the wallet's explicit in-flight claim (transaction
+  `state`/`transaction_state` of `pending` or `accepted`) after expiry plus
+  grace; a post-grace transaction with no finality signal closes as `expired`
+  (`no_finality_after_expiry`) instead of flagging every abandoned checkout on
+  wallets that never set NIP-47 state fields.
+- Settled rows are never overwritten; a duplicate sibling settlement is
+  recorded with `status_reason = 'duplicate_settlement'` and never fulfills
+  twice. An order has one live payment session with at most one live attempt
+  per rail/asset; the host only ever sees unpaid or paid.
+- Preimages alone are not settlement authority; every settlement path applies
+  the same finality rule (`settled_at` or a settled transaction state).
+- Checkout creation now fails closed when the wallet does not honor the
+  requested invoice expiry (beyond a small tolerance), so an attempt's
+  reconciliation window always matches its real payable window.
+- Opt-in NWC-02 notification listeners: Node
+  `startOpenReceiveNotificationListener({ service, host })` (over the new
+  `service.subscribeWalletNotifications`) and the Rails
+  `openreceive:notifications` rake task. NWC notifications are authenticated
+  wallet data: a settled `payment_received` payload settles the matching
+  pending attempt directly over that channel — under the same finality rule as
+  scans (`settled_at` or a settled transaction state; never a preimage alone)
+  — with no redundant wallet scan for that invoice. A payload without a
+  finality signal or with an unknown payment hash only wakes a bounded
+  reconciliation scan, and the poll loop remains the safety net for
+  notifications missed while offline. Direct settlement assumes the NWC client
+  binds notification decryption to the connection's wallet pubkey (the bundled
+  SDK does).
+- Removed: `listUnsettledAttempts`, `OpenReceiveHostRepository`, and the
+  generated payments-repository/mark-paid/host-stub files.
+
+### Wallet preflight
+
+- NWC preflight now fails closed when the wallet advertises spend methods such
+  as `pay_invoice`. Booting anyway requires the explicit
+  `allowSpendCapableWallet: true` / `config.allow_spend_capable_wallet` /
+  `OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC=true` override.
+
+### HTTP and security
+
+- Mounted routes implement `spec/openapi/openreceive-http.v1.yaml`.
+- The host authorizes each request and resolves prices from host-owned order
+  data; payer-supplied amounts are rejected.
+- OpenReceive mints no authentication, recovery, or refund tokens.
+- Receive-only NWC and swap-provider credentials remain server-only and are
+  excluded from public APIs and logs.
+
+### Developer experience
+
+- The Node quickstart has one service, one host integration, one framework
+  adapter, and one reconciliation startup call.
+- Removed superseded API aliases, historical response-shape normalization, and
+  repository scratch documents.
+
+### Release posture
+
+- Hosted demo deployment templates and public demo deployment docs remain
+  outside this public repository.
+- The deterministic internal testkit remains private and non-payable.
+- Release gates retain package, cross-language, secret, and bundle checks plus
+  workflow safety validation.

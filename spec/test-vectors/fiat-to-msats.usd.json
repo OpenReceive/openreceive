@@ -1,0 +1,127 @@
+{
+  "schema_version": "0.2.0",
+  "algorithm": "ceil_to_whole_sat",
+  "source": "static_mock",
+  "btc_fiat_price": "50000.00",
+  "cases": [
+    {
+      "name": "ten cents usd",
+      "fiat": {
+        "currency": "USD",
+        "value": "0.10"
+      },
+      "expected": {
+        "amount_sats": 200,
+        "amount_msats": 200000
+      }
+    },
+    {
+      "name": "one cent usd",
+      "fiat": {
+        "currency": "USD",
+        "value": "0.01"
+      },
+      "expected": {
+        "amount_sats": 20,
+        "amount_msats": 20000
+      }
+    },
+    {
+      "name": "round up to minimum sat",
+      "fiat": {
+        "currency": "USD",
+        "value": "0.000001"
+      },
+      "expected": {
+        "amount_sats": 1,
+        "amount_msats": 1000
+      }
+    },
+    {
+      "name": "decimal exactness without binary float",
+      "fiat": {
+        "currency": "USD",
+        "value": "1.23"
+      },
+      "expected": {
+        "amount_sats": 2460,
+        "amount_msats": 2460000
+      }
+    },
+    {
+      "name": "float trap: seven cents must not round up",
+      "note": "Math.ceil(0.07 / 50000 * 1e8) yields 141; exact decimal math yields 140.",
+      "fiat": {
+        "currency": "USD",
+        "value": "0.07"
+      },
+      "expected": {
+        "amount_sats": 140,
+        "amount_msats": 140000
+      }
+    },
+    {
+      "name": "float trap: a quarter must not round up",
+      "note": "Binary float yields 501; exact decimal math yields 500.",
+      "fiat": {
+        "currency": "USD",
+        "value": "0.25"
+      },
+      "expected": {
+        "amount_sats": 500,
+        "amount_msats": 500000
+      }
+    },
+    {
+      "name": "float trap: fifty cents must not round up",
+      "note": "Binary float yields 1001; exact decimal math yields 1000.",
+      "fiat": {
+        "currency": "USD",
+        "value": "0.50"
+      },
+      "expected": {
+        "amount_sats": 1000,
+        "amount_msats": 1000000
+      }
+    },
+    {
+      "name": "largest fiat value inside the safe msat ceiling",
+      "note": "amount_msats lands exactly on 9007199254740000, just under 2^53-1.",
+      "fiat": {
+        "currency": "USD",
+        "value": "4503599627.37"
+      },
+      "expected": {
+        "amount_sats": 9007199254740,
+        "amount_msats": 9007199254740000
+      }
+    }
+  ],
+  "invalid_cases": [
+    {
+      "name": "zero fiat resolves to no payable amount",
+      "fiat": {
+        "currency": "USD",
+        "value": "0.00"
+      },
+      "reason": "below_minimum"
+    },
+    {
+      "name": "negative fiat is not a payable amount",
+      "fiat": {
+        "currency": "USD",
+        "value": "-1.00"
+      },
+      "reason": "not_a_positive_decimal"
+    },
+    {
+      "name": "fiat large enough to exceed the safe msat ceiling",
+      "note": "Both engines must refuse rather than emit an amount_msats past 2^53-1.",
+      "fiat": {
+        "currency": "USD",
+        "value": "5000000000.00"
+      },
+      "reason": "above_maximum"
+    }
+  ]
+}

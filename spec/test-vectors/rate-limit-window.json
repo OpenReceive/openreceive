@@ -1,0 +1,43 @@
+{
+  "schema_version": "0.1.0",
+  "decision": "count_on_inserted_at",
+  "rationale": "The per-IP budget window is measured on an immutable stamp taken from the counting process's own clock at insert. created_at is the wallet-reported invoice time, so a skewed wallet clock would move the window; updated_at moves on every later status transition, which would re-enter an old attempt into the current window and throttle a payer for activity they did not cause.",
+  "column": "inserted_at",
+  "rejected_columns": [
+    { "column": "created_at", "reason": "wallet-reported clock" },
+    { "column": "updated_at", "reason": "moves on status transitions" }
+  ],
+  "index": ["client_ip", "inserted_at"],
+  "cases": [
+    {
+      "name": "an attempt inside the window counts",
+      "window_seconds": 3600,
+      "now": 13601,
+      "attempt": { "inserted_at": 10001, "created_at": 900, "updated_at": 10001 },
+      "expected": { "counted": true }
+    },
+    {
+      "name": "an attempt older than the window does not count",
+      "window_seconds": 3600,
+      "now": 13601,
+      "attempt": { "inserted_at": 10000, "created_at": 900, "updated_at": 10000 },
+      "expected": { "counted": false }
+    },
+    {
+      "name": "a later status transition must not re-enter an old attempt",
+      "note": "updated_at is inside the window; inserted_at is not.",
+      "window_seconds": 3600,
+      "now": 13601,
+      "attempt": { "inserted_at": 10000, "created_at": 900, "updated_at": 13600 },
+      "expected": { "counted": false }
+    },
+    {
+      "name": "a skewed wallet clock must not move the window",
+      "note": "created_at is far in the past; inserted_at is inside the window.",
+      "window_seconds": 3600,
+      "now": 13601,
+      "attempt": { "inserted_at": 13000, "created_at": 1, "updated_at": 13000 },
+      "expected": { "counted": true }
+    }
+  ]
+}

@@ -1,0 +1,270 @@
+#!/usr/bin/env node
+
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { parse as parseYaml } from "yaml";
+
+const root = process.cwd();
+const workflowDirectory = ".github/workflows";
+
+// Every workflow file must be listed here: the validator scans the directory
+// and fails on files it has no expectations for, so a new workflow cannot
+// land unvalidated.
+const requiredWorkflows = {
+  "ci.yml": [
+    "npm test",
+    "npm run lint",
+    "npm run format:check",
+    "npm run check:workflows",
+    "npm run check:generated",
+    "npm run typecheck",
+    "npm run check:dead-exports",
+    "npm run test:js",
+    "npm run test:package-smoke",
+    "tools/ci/ruby-tests.sh",
+    "tools/ci/ruby-gem-build.sh",
+  ],
+  "conformance.yml": [
+    "npm run validate",
+    "npm run check:generated",
+    "npm run test:js",
+    "tools/ci/ruby-tests.sh",
+  ],
+  "demos.yml": [
+    "npm run check:demo-containers",
+    "npm run build:packages",
+    "npm run build:demo",
+    "npm run scan:client-bundles",
+    "bin/ci",
+  ],
+  "provider-registry.yml": [
+    "npm run validate",
+    "node --import tsx --test tests/provider-data.test.mjs",
+  ],
+  "security.yml": ["npm run scan:secrets", "npm run check:workflows"],
+  "release.yml": [
+    "npm run check:release",
+    "npm run test:package-smoke",
+    "does not match package.json version",
+    "Release dry run complete",
+  ],
+  "publish.yml": ["npm run check:release", "Publishing is disabled"],
+};
+
+const forbiddenText = [
+  "pull_request_target",
+  "NWC_URI: $",
+  "NWC_URI: ${{",
+  "secrets.NWC_URI",
+  "LSC_URI_PRIMARY: $",
+  "LSC_URI_BACKUP: $",
+  "secrets.LSC_URI_PRIMARY",
+  "secrets.LSC_URI_BACKUP",
+  "secrets.CLOUDFLARE_API_TOKEN",
+  "secrets.DEPLOY_SSH_KEY",
+  "secrets.WIREGUARD",
+  "npm publish",
+  "docker push",
+  "gh release create",
+];
+
+// The Ruby engine lanes run only inside ruby:* containers; the entry scripts
+// must never run on the runner host (no gems or toolchains on the host).
+const containerOnlyCommands = ["tools/ci/ruby-tests.sh", "tools/ci/ruby-gem-build.sh"];
+
+const SHA_PINNED_USES = /^[\w.-]+\/[\w.-]+(?:\/[\w./-]+)?@[0-9a-f]{40}$/;
+
+const findings = [];
+
+function fail(message) {
+  findings.push(message);
+}
+
+function expect(condition, message) {
+  if (!condition) fail(message);
+}
+
+function readWorkflow(relativePath) {
+  const absolute = path.join(root, relativePath);
+  if (!existsSync(absolute)) {
+    fail(`${relativePath}: missing workflow`);
+    return { text: "", workflow: {} };
+  }
+
+  const text = readFileSync(absolute, "utf8");
+  try {
+    const workflow = parseYaml(text);
+    return {
+      text,
+      workflow: workflow === null ? {} : workflow,
+    };
+  } catch (error) {
+    fail(`${relativePath}: ${error.message}`);
+    return { text, workflow: {} };
+  }
+}
+
+function workflowCommands(workflow) {
+  const commands = [];
+  const jobs = workflow.jobs === undefined ? {} : workflow.jobs;
+  for (const job of Object.values(jobs)) {
+    for (const step of job.steps ?? []) {
+      if (typeof step.run === "string") commands.push(step.run);
+    }
+  }
+  return commands;
+}
+
+function containerImage(job) {
+  if (typeof job.container === "string") return job.container;
+  if (typeof job.container?.image === "string") return job.container.image;
+  return undefined;
+}
+
+function checkActionPins(relativePath, workflow, text) {
+  const jobs = workflow.jobs === undefined ? {} : workflow.jobs;
+  for (const [jobName, job] of Object.entries(jobs)) {
+    for (const step of job.steps ?? []) {
+      if (typeof step.uses !== "string") continue;
+      // Local composite actions have no remote ref to pin.
+      if (step.uses.startsWith("./")) continue;
+      expect(
+        SHA_PINNED_USES.test(step.uses),
+        `${relativePath}: ${jobName} uses ${step.uses} — actions must be pinned to a full commit SHA`,
+      );
+    }
+  }
+
+  // A pinned SHA is unreadable on its own: the source line must keep the
+  // resolved version as a trailing comment.
+  for (const line of text.split("\n")) {
+    const uses = line.match(/^\s*-?\s*uses:\s*(\S+)/);
+    if (uses === null || uses[1].startsWith("./")) continue;
+    expect(
+      /#\s*v\d/.test(line),
+      `${relativePath}: "${line.trim()}" must keep a "# vX" comment naming the pinned version`,
+    );
+  }
+}
+
+function checkContainerLanes(relativePath, workflow) {
+  const jobs = workflow.jobs === undefined ? {} : workflow.jobs;
+  for (const [jobName, job] of Object.entries(jobs)) {
+    const runsRubyLane = (job.steps ?? []).some(
+      (step) =>
+        typeof step.run === "string" &&
+        containerOnlyCommands.some((command) => step.run.includes(command)),
+    );
+    if (!runsRubyLane) continue;
+    const image = containerImage(job);
+    expect(
+      typeof image === "string" && image.startsWith("ruby:"),
+      `${relativePath}: ${jobName} runs the Ruby lane and must run inside a ruby:* container`,
+    );
+    const usesHostRubySetup = (job.steps ?? []).some(
+      (step) => typeof step.uses === "string" && step.uses.startsWith("ruby/setup-ruby"),
+    );
+    expect(
+      !usesHostRubySetup,
+      `${relativePath}: ${jobName} must not install Ruby on the runner host`,
+    );
+  }
+}
+
+function checkNodeSetup(relativePath, workflow) {
+  const jobs = workflow.jobs === undefined ? {} : workflow.jobs;
+  for (const [jobName, job] of Object.entries(jobs)) {
+    for (const step of job.steps ?? []) {
+      if (typeof step.uses !== "string" || !step.uses.startsWith("actions/setup-node")) continue;
+      expect(
+        step.with?.["node-version-file"] === ".nvmrc" && step.with?.["node-version"] === undefined,
+        `${relativePath}: ${jobName} setup-node must use node-version-file: .nvmrc (single source of truth)`,
+      );
+    }
+  }
+}
+
+const presentWorkflows = existsSync(path.join(root, workflowDirectory))
+  ? readdirSync(path.join(root, workflowDirectory)).filter(
+      (entry) => entry.endsWith(".yml") || entry.endsWith(".yaml"),
+    )
+  : [];
+
+for (const entry of presentWorkflows) {
+  expect(
+    requiredWorkflows[entry] !== undefined,
+    `${workflowDirectory}/${entry}: unknown workflow — add expectations for it in tools/validate/check-workflows.mjs`,
+  );
+}
+
+for (const [fileName, requiredCommands] of Object.entries(requiredWorkflows)) {
+  const relativePath = `${workflowDirectory}/${fileName}`;
+  const { text, workflow } = readWorkflow(relativePath);
+  const commands = workflowCommands(workflow);
+  const allCommands = commands.join("\n");
+
+  expect(
+    typeof workflow.name === "string" && workflow.name.length > 0,
+    `${relativePath}: missing workflow name`,
+  );
+  expect(workflow.on !== undefined, `${relativePath}: missing triggers`);
+  expect(
+    workflow.permissions?.contents === "read",
+    `${relativePath}: contents permission must be read-only`,
+  );
+  const permissions = workflow.permissions === undefined ? {} : workflow.permissions;
+  const jobs = workflow.jobs === undefined ? {} : workflow.jobs;
+  expect(
+    Object.keys(permissions).length === 1,
+    `${relativePath}: workflow must not request extra permissions`,
+  );
+  expect(workflow.concurrency !== undefined, `${relativePath}: missing concurrency group`);
+  expect(Object.keys(jobs).length > 0, `${relativePath}: missing jobs`);
+
+  for (const command of requiredCommands) {
+    expect(allCommands.includes(command), `${relativePath}: missing command ${command}`);
+  }
+
+  for (const forbidden of forbiddenText) {
+    expect(!text.includes(forbidden), `${relativePath}: forbidden workflow text ${forbidden}`);
+  }
+
+  checkActionPins(relativePath, workflow, text);
+  checkContainerLanes(relativePath, workflow);
+  checkNodeSetup(relativePath, workflow);
+}
+
+const ciWorkflow = readWorkflow(`${workflowDirectory}/ci.yml`).workflow;
+expect(
+  ciWorkflow.on?.pull_request !== undefined,
+  `${workflowDirectory}/ci.yml: missing pull_request trigger`,
+);
+expect(ciWorkflow.on?.push !== undefined, `${workflowDirectory}/ci.yml: missing push trigger`);
+// The push trigger must watch the repository's actual default branch — a
+// trigger on a nonexistent branch means push CI silently never runs.
+expect(
+  Array.isArray(ciWorkflow.on?.push?.branches) && ciWorkflow.on.push.branches.includes("master"),
+  `${workflowDirectory}/ci.yml: push trigger must include the default branch (master)`,
+);
+
+for (const scheduled of ["conformance.yml", "demos.yml", "provider-registry.yml", "security.yml"]) {
+  const workflow = readWorkflow(`${workflowDirectory}/${scheduled}`).workflow;
+  expect(
+    workflow.on?.schedule !== undefined,
+    `${workflowDirectory}/${scheduled}: missing scheduled slow-lane trigger`,
+  );
+}
+
+const releaseWorkflow = readWorkflow(`${workflowDirectory}/release.yml`).workflow;
+expect(
+  releaseWorkflow.on?.push?.tags !== undefined,
+  `${workflowDirectory}/release.yml: missing tag pre-release trigger`,
+);
+
+if (findings.length > 0) {
+  console.error("Workflow validation failed:");
+  for (const finding of findings) console.error(`- ${finding}`);
+  process.exit(1);
+}
+
+console.log(`Workflow validation passed for ${Object.keys(requiredWorkflows).length} workflow(s).`);

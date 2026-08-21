@@ -1,0 +1,43 @@
+# syntax=docker/dockerfile:1
+
+FROM node:22-bookworm-slim
+
+WORKDIR /app
+
+COPY package.json package-lock.json tsconfig.json ./
+COPY packages/js/angular/package.json ./packages/js/angular/package.json
+COPY packages/js/browser/package.json ./packages/js/browser/package.json
+COPY packages/js/core/package.json ./packages/js/core/package.json
+COPY packages/js/elements/package.json ./packages/js/elements/package.json
+COPY packages/js/express/package.json ./packages/js/express/package.json
+COPY packages/js/fastify/package.json ./packages/js/fastify/package.json
+COPY packages/js/http/package.json ./packages/js/http/package.json
+COPY packages/js/next/package.json ./packages/js/next/package.json
+COPY packages/js/node/package.json ./packages/js/node/package.json
+COPY packages/js/openreceive/package.json ./packages/js/openreceive/package.json
+COPY packages/js/provider-data/package.json ./packages/js/provider-data/package.json
+COPY packages/js/react/package.json ./packages/js/react/package.json
+COPY packages/js/svelte/package.json ./packages/js/svelte/package.json
+COPY packages/js/testkit/package.json ./packages/js/testkit/package.json
+COPY packages/js/vue/package.json ./packages/js/vue/package.json
+COPY examples/hello-fruit/server/nextjs-fullstack/package.json ./examples/hello-fruit/server/nextjs-fullstack/package.json
+COPY examples/hello-fruit/server/node-express/package.json ./examples/hello-fruit/server/node-express/package.json
+COPY examples/hello-fruit/server/static-html-small-api/package.json ./examples/hello-fruit/server/static-html-small-api/package.json
+COPY examples/hello-fruit/server/rails/package.json ./examples/hello-fruit/server/rails/package.json
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit
+
+COPY packages ./packages
+COPY tools/package ./tools/package
+COPY tools/run-with-root-env.mjs ./tools/run-with-root-env.mjs
+COPY spec/data/rates ./spec/data/rates
+COPY config ./config
+COPY examples/hello-fruit ./examples/hello-fruit
+RUN npm run build:packages
+RUN npm run build -w @openreceive/example-node-express
+
+WORKDIR /app/examples/hello-fruit/server/node-express
+ENV NODE_ENV=production
+ENV PORT=3000
+EXPOSE 3000
+
+CMD ["npm", "start"]

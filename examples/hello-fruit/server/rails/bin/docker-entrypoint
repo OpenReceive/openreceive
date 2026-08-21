@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Host Postgres only — OpenReceive itself has no database URL.
+# Worker containers (reconciler, notifications) set SKIP_DB_PREPARE=1 and wait
+# for the web container to have prepared the schema.
+if [[ -n "${DATABASE_URL:-}" && -z "${SKIP_DB_PREPARE:-}" ]]; then
+  bundle exec rails db:prepare db:seed
+fi
+
+exec "$@"

@@ -1,0 +1,98 @@
+{
+  "description": "What to do with a pending payment attempt after a wallet scan finds it was NOT paid: close it (mark it expired or failed, or flag it for operator attention) or leave it pending for the next scan. Each case gives the inputs — when the attempt's invoice expires (attempt.expires_at), what the wallet reported for it (status), the explicit state field on the wallet's transaction record if it carried one (transaction_state), and when the scan ran (observed_at) — and the expected outcome: the new status and reason to store, or null meaning keep waiting. 'attention' is reserved for an EXPLICIT wallet claim that a payment is still in flight: NIP-47 finality fields are optional and the unpaid scan lists unpaid invoices, so a transaction found with no state at all is indistinguishable from an ordinary abandoned invoice and closes as expired instead. Paid attempts never reach this decision; a payment marks the attempt settled instead. expiry_grace_seconds must match the OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS constant in the code.",
+  "expiry_grace_seconds": 900,
+  "how_to_read": [
+    "Background: OpenReceive periodically scans the merchant's wallet to check on unpaid invoices. Each vector below is one such check: 'the scan ran at this time, the wallet said this about the invoice — now what should we do with our database row for it?'",
+    "Times (expires_at, observed_at) are timestamps in seconds. The actual values are arbitrary; only their order and distances matter. In every case here the invoice stops being payable at time 2000, and with the 900-second grace period the earliest safe moment to give up on it is time 2900.",
+    "attempt.expires_at = when this attempt's invoice stops being payable, according to our records.",
+    "status = what the wallet scan reported about the invoice: 'pending' (wallet sees it, nobody has paid it yet), 'failed' (wallet says it failed), 'expired' (wallet says it already expired), 'not_found' (wallet has no record of it at all).",
+    "transaction_state = the explicit state field the wallet's own transaction record carried, when the scan found one ('pending', 'accepted', ...). Absent when the wallet's record carried no state field at all — NIP-47 state fields are optional, and many wallets never set them. Only consulted for a 'pending' result after expiry plus grace.",
+    "observed_at = the time the wallet scan ran.",
+    "expected = what OpenReceive must then write on its database row for the attempt: a new status plus a stored human-readable reason — or null, meaning 'change nothing, ask again on the next scan'.",
+    "Worked example (the first vector): the invoice is payable until time 2000. At time 1000 — half its life still ahead of it — a scan runs and the wallet reports the invoice failed. Since the wallet is the authority on its own invoices, waiting longer is pointless: mark our row failed right now, and store 'wallet_reported_failed' as the reason a human would see."
+  ],
+  "vectors": [
+    {
+      "name": "failed is terminal immediately",
+      "reasoning": "The wallet itself says this invoice failed, so there is nothing left to wait for. The wallet is the authority on its own invoices, and a failed invoice can never settle later — close the attempt right away, even though the invoice has not expired yet.",
+      "attempt": { "expires_at": 2000 },
+      "status": "failed",
+      "observed_at": 1000,
+      "expected": { "status": "failed", "reason": "wallet_reported_failed" }
+    },
+    {
+      "name": "wallet-reported expired is terminal immediately",
+      "reasoning": "The wallet says the invoice is already expired, even though our own clock has not reached expires_at yet (clocks can disagree, or the wallet minted a shorter-lived invoice than requested). Trust the wallet: an invoice it considers expired can never settle, so close the attempt now instead of rescanning it until our clock catches up.",
+      "attempt": { "expires_at": 2000 },
+      "status": "expired",
+      "observed_at": 1000,
+      "expected": { "status": "expired", "reason": "wallet_reported_expired" }
+    },
+    {
+      "name": "not_found before expiry stays pending",
+      "reasoning": "The wallet has no transaction for this hash, but the invoice is still live — the payer may simply not have paid yet. Keep waiting; the next scan may find the payment.",
+      "attempt": { "expires_at": 2000 },
+      "status": "not_found",
+      "observed_at": 1999,
+      "expected": null
+    },
+    {
+      "name": "not_found within the post-expiry grace stays pending",
+      "reasoning": "The invoice looks expired by our clock, but only just. Our clock and the wallet's can disagree by a little, and some wallets accept a payment moments after nominal expiry, so a payment could still land. Closing now could throw away a real settlement — keep waiting until the grace period has fully passed.",
+      "attempt": { "expires_at": 2000 },
+      "status": "not_found",
+      "observed_at": 2899,
+      "expected": null
+    },
+    {
+      "name": "not_found at expiry plus grace closes as expired",
+      "reasoning": "A successful wallet scan, run comfortably after the invoice expired, still shows no payment. At this point the invoice can no longer settle and the wallet confirms nothing arrived, so it is finally safe to close the attempt as expired. Note it takes this actual scan result to close it — the passage of time alone never does, because a payment could have settled while the application was offline.",
+      "attempt": { "expires_at": 2000 },
+      "status": "not_found",
+      "observed_at": 2900,
+      "expected": { "status": "expired", "reason": "not_found_after_expiry" }
+    },
+    {
+      "name": "pending transaction before expiry stays pending",
+      "reasoning": "The wallet sees the invoice and reports it as not yet settled — the normal state of an unpaid live invoice. Nothing is wrong; keep waiting.",
+      "attempt": { "expires_at": 2000 },
+      "status": "pending",
+      "observed_at": 1500,
+      "expected": null
+    },
+    {
+      "name": "pending transaction within grace stays pending",
+      "reasoning": "The invoice is past its nominal expiry but still inside the grace period, and the wallet still shows an unsettled transaction. Same caution as the not_found grace case: a late settlement is still possible, so do not close yet.",
+      "attempt": { "expires_at": 2000 },
+      "status": "pending",
+      "observed_at": 2899,
+      "expected": null
+    },
+    {
+      "name": "explicitly pending transaction after expiry plus grace needs attention",
+      "reasoning": "Long after expiry plus grace, the wallet STILL explicitly claims this transaction is in flight — its record carries state 'pending'. That is abnormal: an expired invoice should have failed or vanished, not kept an affirmative in-flight claim. Money may have arrived without settling cleanly. Do not keep rescanning it forever, but do not silently call it expired either — close it as 'attention' so a human opens the wallet and reviews it.",
+      "attempt": { "expires_at": 2000 },
+      "status": "pending",
+      "transaction_state": "pending",
+      "observed_at": 2900,
+      "expected": { "status": "attention", "reason": "unsettled_after_expiry" }
+    },
+    {
+      "name": "explicitly accepted transaction after expiry plus grace needs attention",
+      "reasoning": "The wallet explicitly claims it ACCEPTED a payment for this invoice (a hold-invoice style state) yet never settled it, even long after expiry plus grace. Money may literally be in flight or held. Same treatment as an explicit 'pending' claim: close it as 'attention' so a human opens the wallet and reviews it.",
+      "attempt": { "expires_at": 2000 },
+      "status": "pending",
+      "transaction_state": "accepted",
+      "observed_at": 2900,
+      "expected": { "status": "attention", "reason": "unsettled_after_expiry" }
+    },
+    {
+      "name": "pending with no wallet state after expiry plus grace closes as expired",
+      "reasoning": "The scan found a transaction record, but it carries no state field at all — and NIP-47 state fields are optional, so many wallets never set one. Since the unpaid scan lists unpaid invoices, such a record is indistinguishable from an ordinary abandoned invoice: this is exactly what every unpaid checkout looks like on a state-less wallet, and routing them all to a human would be pure noise. Close it as expired, like a not_found. And nothing real is lost: a wallet that never emits finality signals can never settle ANY payment, so its integration is visibly broken regardless — a stuck payment on it would surface immediately, not through this decision.",
+      "attempt": { "expires_at": 2000 },
+      "status": "pending",
+      "observed_at": 2900,
+      "expected": { "status": "expired", "reason": "no_finality_after_expiry" }
+    }
+  ]
+}

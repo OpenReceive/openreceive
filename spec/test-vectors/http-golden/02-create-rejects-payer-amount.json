@@ -1,0 +1,21 @@
+{
+  "schema_version": 2,
+  "name": "create checkout rejects payer amount",
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/checkouts",
+    "body": { "order_id": "ord-1", "amount": { "sats": 1000 } }
+  },
+  "expected": {
+    "status": 400,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "code": "INVALID_REQUEST",
+      "message": "This route does not accept a payer-supplied amount; the host resolves its order price.",
+      "request_id": "<request_id>"
+    }
+  }
+}

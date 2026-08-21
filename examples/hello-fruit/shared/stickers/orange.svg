@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Orange sticker</title>
+  <desc id="desc">An orange citrus sticker for the OpenReceive Hello Fruit demo.</desc>
+  <rect width="256" height="256" rx="32" fill="#fff7ed"/>
+  <circle cx="128" cy="137" r="77" fill="#f97316"/>
+  <path d="M83 90c28-26 77-29 108 5-28-17-68-14-93 8-24 22-31 57-19 88-29-30-27-73 4-101Z" fill="#fdba74"/>
+  <path d="M139 62c13-25 34-31 52-30-2 21-18 39-44 43l-8-13Z" fill="#16a34a"/>
+  <path d="M129 75c-2-19-9-31-17-40" stroke="#7c2d12" stroke-width="11" stroke-linecap="round"/>
+</svg>

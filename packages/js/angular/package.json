@@ -1,0 +1,66 @@
+{
+  "name": "@openreceive/angular",
+  "version": "0.1.1",
+  "description": "Angular wrapper for the OpenReceive checkout custom element.",
+  "keywords": [
+    "bitcoin",
+    "lightning",
+    "payments",
+    "nwc",
+    "bolt11",
+    "openreceive",
+    "angular",
+    "checkout"
+  ],
+  "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "main": "./dist/fesm2022/openreceive-angular.mjs",
+  "module": "./dist/fesm2022/openreceive-angular.mjs",
+  "types": "./dist/types/openreceive-angular.d.ts",
+  "dependencies": {
+    "@openreceive/browser": "0.1.1",
+    "@openreceive/elements": "0.1.1"
+  },
+  "peerDependencies": {
+    "@angular/core": ">=17.0.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/types/openreceive-angular.d.ts",
+      "default": "./dist/fesm2022/openreceive-angular.mjs"
+    },
+    "./checkout-component": {
+      "types": "./dist/types/openreceive-angular-checkout-component.d.ts",
+      "default": "./dist/fesm2022/openreceive-angular-checkout-component.mjs"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "ng-packagr -p ng-package.json -c tsconfig.lib.json && node ../../../tools/package/copy-static.mjs src dist styles.css && node -e \"const{rmSync}=require('node:fs');for(const p of['dist/package.json','dist/.npmignore','dist/checkout-component/package.json'])rmSync(p,{force:true})\"",
+    "prepack": "npm run build"
+  },
+  "license": "MIT",
+  "author": "OpenReceive <info@openreceive.org>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openreceive/openreceive.git",
+    "directory": "packages/js/angular"
+  },
+  "bugs": {
+    "url": "https://github.com/openreceive/openreceive/issues"
+  },
+  "homepage": "https://openreceive.org",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

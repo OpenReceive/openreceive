@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Pear sticker</title>
+  <desc id="desc">A green pear sticker for the OpenReceive Hello Fruit demo.</desc>
+  <rect width="256" height="256" rx="32" fill="#f7fee7"/>
+  <path d="M128 64c35 0 49 33 44 61 25 18 37 43 33 72-5 37-37 57-77 57s-72-20-77-57c-4-29 8-54 33-72-5-28 9-61 44-61Z" fill="#84cc16"/>
+  <path d="M95 87c-11 17-11 38-3 54-23 17-31 38-27 60 3 20 16 34 34 42-29-5-47-22-51-46-4-29 8-54 33-72-4-16 0-32 14-38Z" fill="#bef264"/>
+  <path d="M137 58c14-23 34-28 51-27-2 19-17 36-43 39l-8-12Z" fill="#16a34a"/>
+  <path d="M128 73c0-18-5-30-13-40" stroke="#713f12" stroke-width="11" stroke-linecap="round"/>
+</svg>

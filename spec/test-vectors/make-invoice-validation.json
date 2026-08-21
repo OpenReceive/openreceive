@@ -1,0 +1,60 @@
+{
+  "schema_version": "0.1.0",
+  "rule": "make_invoice requests validate amount, description fields, and metadata before wallet calls",
+  "cases": [
+    {
+      "name": "description only is valid",
+      "request": {
+        "amount_msats": 200000,
+        "description": "Fruit sticker"
+      },
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "name": "description hash only is valid",
+      "request": {
+        "amount_msats": 200000,
+        "description_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "name": "description and description hash conflict",
+      "request": {
+        "amount_msats": 200000,
+        "description": "Fruit sticker",
+        "description_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "expected": {
+        "valid": false,
+        "error": "description_conflict"
+      }
+    },
+    {
+      "name": "description hash must be 64 hex",
+      "request": {
+        "amount_msats": 200000,
+        "description_hash": "not-hex"
+      },
+      "expected": {
+        "valid": false,
+        "error": "invalid_description_hash"
+      }
+    },
+    {
+      "name": "metadata over NWC guard is invalid",
+      "request": {
+        "amount_msats": 200000,
+        "metadata_note_length": 3901
+      },
+      "expected": {
+        "valid": false,
+        "error": "metadata_too_large"
+      }
+    }
+  ]
+}

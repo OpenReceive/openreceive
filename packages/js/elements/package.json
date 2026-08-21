@@ -1,0 +1,62 @@
+{
+  "name": "@openreceive/elements",
+  "version": "0.1.1",
+  "description": "The OpenReceive checkout custom element (<openreceive-checkout>) and theme toggle.",
+  "keywords": [
+    "bitcoin",
+    "lightning",
+    "payments",
+    "nwc",
+    "bolt11",
+    "openreceive",
+    "web-components",
+    "custom-elements",
+    "checkout"
+  ],
+  "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "dependencies": {
+    "@openreceive/browser": "0.1.1"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./styles.css": "./dist/styles.css",
+    "./wrapper-shared": {
+      "types": "./dist/wrapper-shared.d.ts",
+      "import": "./dist/wrapper-shared.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts src/wrapper-shared.ts --format esm --dts --clean --target es2022 --out-dir dist && node ../../../tools/package/copy-static.mjs src dist styles.css",
+    "prepack": "npm run build"
+  },
+  "license": "MIT",
+  "author": "OpenReceive <info@openreceive.org>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openreceive/openreceive.git",
+    "directory": "packages/js/elements"
+  },
+  "bugs": {
+    "url": "https://github.com/openreceive/openreceive/issues"
+  },
+  "homepage": "https://openreceive.org",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

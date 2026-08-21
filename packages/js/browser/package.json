@@ -1,0 +1,74 @@
+{
+  "name": "@openreceive/browser",
+  "version": "0.1.1",
+  "description": "Framework-free browser helpers for OpenReceive checkout: prepare/create calls, status polling, QR and wallet helpers.",
+  "keywords": [
+    "bitcoin",
+    "lightning",
+    "payments",
+    "nwc",
+    "bolt11",
+    "openreceive",
+    "browser",
+    "checkout"
+  ],
+  "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./headless": {
+      "types": "./dist/headless.d.ts",
+      "import": "./dist/headless.js"
+    },
+    "./internal": {
+      "types": "./dist/internal.d.ts",
+      "import": "./dist/internal.js"
+    },
+    "./styles.css": "./dist/styles.css",
+    "./assets/*": "./dist/assets/*"
+  },
+  "dependencies": {
+    "@openreceive/core": "0.1.1",
+    "@openreceive/provider-data": "0.1.1",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.2",
+    "daisyui": "^5.6.16",
+    "tailwindcss": "^4.3.2"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build:css": "node ../../../tools/package/build-browser-css.mjs",
+    "build": "npm run build:css && tsup src/index.ts src/headless.ts src/internal.ts --format esm --dts --clean --target es2022 --out-dir dist && node ../../../tools/package/copy-static.mjs src dist styles.css assets",
+    "prepack": "npm run build"
+  },
+  "license": "MIT",
+  "author": "OpenReceive <info@openreceive.org>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openreceive/openreceive.git",
+    "directory": "packages/js/browser"
+  },
+  "bugs": {
+    "url": "https://github.com/openreceive/openreceive/issues"
+  },
+  "homepage": "https://openreceive.org",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

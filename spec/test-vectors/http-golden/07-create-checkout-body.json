@@ -1,0 +1,27 @@
+{
+  "schema_version": 2,
+  "name": "create returns the full payer checkout body",
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/checkouts",
+    "body": { "order_id": "order-golden-create" }
+  },
+  "expected": {
+    "status": 201,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "checkout": {
+        "order_id": "order-golden-create",
+        "payment_hash": "<payment_hash>",
+        "bolt11": "<bolt11>",
+        "amount_msats": 1000,
+        "created_at": "<unix_seconds>",
+        "expires_at": "<unix_seconds>",
+        "fiat_quote": null
+      }
+    }
+  }
+}

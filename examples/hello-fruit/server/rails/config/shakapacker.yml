@@ -1,0 +1,61 @@
+default: &default
+  source_path: app/javascript
+  source_entry_path: packs
+  nested_entries: true
+  css_extract_ignore_order_warnings: false
+  public_root_path: public
+  public_output_path: packs
+  cache_path: tmp/shakapacker
+  webpack_compile_output: true
+  shakapacker_precompile: true
+  # shared/: the Hello Fruit demo helpers imported by app/javascript.
+  # packages/js/browser/dist/assets: the payment SVG icons imported as webpack
+  # asset modules (see src/app/helpers/icons.ts).
+  additional_paths:
+    - "../../shared"
+    - "../../../../packages/js/browser/dist/assets"
+  cache_manifest: false
+  ensure_consistent_versioning: true
+  compiler_strategy: digest
+  useContentHash: true
+  integrity:
+    enabled: false
+    hash_functions: ["sha384"]
+    cross_origin: "anonymous"
+  early_hints:
+    enabled: false
+
+development:
+  <<: *default
+  compile: true
+  compiler_strategy: mtime
+  useContentHash: false
+  dev_server:
+    host: 127.0.0.1
+    port: 3036
+    hmr: false
+    inline_css: true
+    client:
+      overlay: true
+    compress: true
+    allowed_hosts: "auto"
+    pretty: true
+    headers:
+      "Access-Control-Allow-Origin": "*"
+    static:
+      watch:
+        ignored: "**/node_modules/**"
+
+test:
+  <<: *default
+  # Hermetic tests: the suite writes a stub manifest into public/packs-test
+  # (see test_helper.rb) so `bin/rails test` never shells out to webpack.
+  compile: false
+  public_output_path: packs-test
+
+production:
+  <<: *default
+  compile: false
+  cache_manifest: true
+  early_hints:
+    enabled: false

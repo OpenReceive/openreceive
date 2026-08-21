@@ -1,0 +1,48 @@
+name: Conformance
+
+on:
+  schedule:
+    - cron: "23 8 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: conformance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  js-conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NWC_URI: ""
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run validate
+      - run: npm run check:generated
+      - run: npm run test:js
+
+  ruby-conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Same containerized Ruby lane as CI: no gems installed on the runner host.
+    container:
+      image: ruby:3.3
+    env:
+      NWC_URI: ""
+      BUNDLE_PATH: vendor/bundle
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: vendor/bundle
+          key: gems-3.3-${{ hashFiles('Gemfile') }}
+      - run: bundle install --jobs 4
+      - run: bundle exec ./tools/ci/ruby-tests.sh

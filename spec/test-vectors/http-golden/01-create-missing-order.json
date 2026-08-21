@@ -1,0 +1,17 @@
+{
+  "schema_version": 2,
+  "name": "create checkout requires order_id",
+  "request": { "method": "POST", "path": "/openreceive/checkouts", "body": {} },
+  "expected": {
+    "status": 400,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "code": "INVALID_REQUEST",
+      "message": "order_id is required.",
+      "request_id": "<request_id>"
+    }
+  }
+}

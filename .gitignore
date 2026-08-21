@@ -1,0 +1,36 @@
+/building/*
+
+# Local environment and deployment secrets.
+.env
+.env.*
+!.env.example
+.openreceive/
+
+private_private_infra_details.txt
+
+.DS_Store
+
+# Local Claude Code project memory (path-leaking, machine-specific).
+.claude/projects/
+
+# Tooling output.
+*.gem
+packages/ruby/*/Gemfile.lock
+node_modules/
+coverage/
+dist/
+.turbo/
+.vite/
+.next/
+.cache/
+.release/
+*.tsbuildinfo
+tmp/*
+
+/logs/
+
+# Local audit scratch lists.
+zz-*.txt
+
+# Local live-test override; expected_capabilities.example.json is the tracked template.
+tools/live-nwc-test/expected_capabilities.json

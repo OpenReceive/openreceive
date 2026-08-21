@@ -1,0 +1,17 @@
+{
+  "schema_version": 2,
+  "name": "known route with the wrong method",
+  "request": { "method": "GET", "path": "/openreceive/checkouts" },
+  "expected": {
+    "status": 405,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "code": "INVALID_REQUEST",
+      "message": "This OpenReceive route does not support that HTTP method.",
+      "request_id": "<request_id>"
+    }
+  }
+}

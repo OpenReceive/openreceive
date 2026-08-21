@@ -1,0 +1,29 @@
+name: Provider Registry
+
+on:
+  schedule:
+    - cron: "51 8 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: provider-registry-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  registry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run validate
+      # tsx resolves the workspace packages from src via tsconfig paths, so no
+      # package build is needed on a clean runner.
+      - run: node --import tsx --test tests/provider-data.test.mjs

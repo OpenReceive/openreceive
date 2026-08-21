@@ -1,0 +1,10 @@
+# frozen_string_literal: true
+
+source "https://rubygems.org"
+
+gemspec
+
+# Monorepo sibling: resolve the core gem from the working tree, not RubyGems.
+gem "openreceive", path: "../openreceive"
+
+gem "rake", "~> 13.0"

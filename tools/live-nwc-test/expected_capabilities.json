@@ -1,0 +1,7 @@
+{
+  "wallet_profile": "rizful",
+  "required_methods": ["get_info", "make_invoice", "list_transactions"],
+  "optional_methods": ["get_balance"],
+  "preferred_encryption": "nip44_v2",
+  "fallback_encryption": "nip04"
+}

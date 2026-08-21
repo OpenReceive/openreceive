@@ -1,0 +1,6 @@
+# Local port publishing for `npm run demo` / `make docker-run`.
+# Ports only: the image's built production server is what the demo runs.
+services:
+  hello-fruit-static-html-small-api:
+    ports:
+      - "3001:3001"

@@ -1,0 +1,407 @@
+/**
+ * FixedFloat public XML rates export — the bulk feed for all pairs.
+ *
+ * Docs: GET https://ff.io/rates/fixed.xml (and float.xml). No API key, no
+ * weight budget. OpenReceive keeps only Lightning-payout pairs that match its
+ * small pay-in asset list in disposable process memory and derives indicative
+ * quotes / min-max locally. `/create` remains authoritative.
+ */
+
+import {
+  ceilDiv,
+  decimalScaleFactor,
+  formatDecimal,
+  OPENRECEIVE_SATS_PER_BTC,
+  parseDecimal,
+  type OpenReceiveDecimal,
+} from "@openreceive/core";
+import { isOpenReceiveLightningNetwork } from "./assets.ts";
+import type { SwapRateType } from "./rates-cache.ts";
+
+export interface FixedFloatRatePair {
+  readonly from: string;
+  readonly to: string;
+  /** Reference send amount in `from` (defines the rate with `out`). */
+  readonly in: string;
+  /** Reference receive amount in `to`. */
+  readonly out: string;
+  /** Reserve availability hint for `to` — not a max exchange amount. */
+  readonly amount: string;
+  readonly minamount: string;
+  readonly maxamount: string;
+  /** Network fee on the `to` side, excluded from `out` (e.g. "0.0005 BTC"). */
+  readonly tofee?: string;
+}
+
+export interface FixedFloatRatesIndex {
+  readonly fetched_at: number;
+  /** Keyed as `${from.toUpperCase()}:${to.toUpperCase()}`. */
+  readonly pairs: Readonly<Record<string, FixedFloatRatePair>>;
+}
+
+/** Fraction digits the indicative pay-in amount is reported at. */
+const PAY_AMOUNT_FRACTION_DIGITS = 8;
+
+export function fixedFloatRatesPairKey(from: string, to: string): string {
+  return `${from.trim().toUpperCase()}:${to.trim().toUpperCase()}`;
+}
+
+export function fixedFloatRatesXmlPath(rateType: SwapRateType = "fixed"): string {
+  return `/rates/${rateType}.xml`;
+}
+
+export async function fetchFixedFloatRatesIndex(input: {
+  readonly baseUrl: string;
+  readonly rateType?: SwapRateType;
+  readonly fetch: typeof globalThis.fetch;
+  readonly now: () => number;
+  readonly requestTimeoutMs?: number;
+}): Promise<FixedFloatRatesIndex> {
+  const rateType = input.rateType ?? "fixed";
+  const url = `${input.baseUrl.replace(/\/+$/, "")}${fixedFloatRatesXmlPath(rateType)}`;
+  const timeoutMs = input.requestTimeoutMs ?? 10_000;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let response: Response;
+  try {
+    response = await input.fetch(url, {
+      method: "GET",
+      redirect: "follow",
+      signal: controller.signal,
+      headers: { Accept: "application/xml, text/xml, */*" },
+    });
+  } catch (error) {
+    const aborted =
+      error instanceof Error &&
+      (error.name === "AbortError" || error.message.toLowerCase().includes("abort"));
+    throw new Error(
+      aborted
+        ? `FixedFloat rates ${rateType}.xml request timed out.`
+        : `FixedFloat rates ${rateType}.xml request failed before a response was received.`,
+      { cause: error },
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (!response.ok) {
+    throw new Error(`FixedFloat rates ${rateType}.xml failed with HTTP ${response.status}.`);
+  }
+  const xml = await response.text();
+  return {
+    fetched_at: input.now(),
+    // Provider dumps include thousands of non-LN market pairs; OpenReceive only
+    // ever pays out over Lightning, so drop everything else before caching.
+    pairs: retainFixedFloatLightningPayoutPairs(parseFixedFloatRatesXml(xml)),
+  };
+}
+
+/**
+ * Keep only pairs whose `to` side is a Lightning BTC payout code (BTCLN, …).
+ * FixedFloat's public XML is a full market dump; OpenReceive ignores the rest.
+ */
+export function retainFixedFloatLightningPayoutPairs(
+  pairs: Readonly<Record<string, FixedFloatRatePair>>,
+): Readonly<Record<string, FixedFloatRatePair>> {
+  const retained: Record<string, FixedFloatRatePair> = {};
+  for (const [key, pair] of Object.entries(pairs)) {
+    if (isOpenReceiveLightningNetwork(pair.to)) retained[key] = pair;
+  }
+  return retained;
+}
+
+/**
+ * Keep only the from→Lightning keys that match resolved OpenReceive pay-in
+ * currencies. Typically a handful of pairs out of the provider dump.
+ */
+export function retainFixedFloatRatePairsForKeys(
+  index: FixedFloatRatesIndex,
+  pairKeys: ReadonlySet<string>,
+): FixedFloatRatesIndex {
+  if (pairKeys.size === 0) {
+    return { fetched_at: index.fetched_at, pairs: {} };
+  }
+  const pairs: Record<string, FixedFloatRatePair> = {};
+  for (const key of pairKeys) {
+    const pair = index.pairs[key];
+    if (pair !== undefined) pairs[key] = pair;
+  }
+  return { fetched_at: index.fetched_at, pairs };
+}
+
+export function parseFixedFloatRatesXml(xml: string): Readonly<Record<string, FixedFloatRatePair>> {
+  const pairs: Record<string, FixedFloatRatePair> = {};
+  for (const itemXml of matchTags(xml, "item")) {
+    const from = readTagText(itemXml, "from");
+    const to = readTagText(itemXml, "to");
+    const inAmount = readTagText(itemXml, "in");
+    const outAmount = readTagText(itemXml, "out");
+    const amount = readTagText(itemXml, "amount");
+    const minamount = readTagText(itemXml, "minamount");
+    const maxamount = readTagText(itemXml, "maxamount");
+    if (
+      from === undefined ||
+      to === undefined ||
+      inAmount === undefined ||
+      outAmount === undefined ||
+      amount === undefined ||
+      minamount === undefined ||
+      maxamount === undefined
+    ) {
+      continue;
+    }
+    const tofee = readTagText(itemXml, "tofee");
+    const pair: FixedFloatRatePair = {
+      from: from.trim(),
+      to: to.trim(),
+      in: stripCurrencySuffix(inAmount),
+      out: stripCurrencySuffix(outAmount),
+      amount: stripCurrencySuffix(amount),
+      minamount: stripCurrencySuffix(minamount),
+      maxamount: stripCurrencySuffix(maxamount),
+      ...(tofee === undefined ? {} : { tofee: tofee.trim() }),
+    };
+    pairs[fixedFloatRatesPairKey(pair.from, pair.to)] = pair;
+  }
+  return pairs;
+}
+
+export function serializeFixedFloatRatesIndex(index: FixedFloatRatesIndex): string {
+  return JSON.stringify({
+    fetched_at: index.fetched_at,
+    pairs: index.pairs,
+  });
+}
+
+export function deserializeFixedFloatRatesIndex(value: string): FixedFloatRatesIndex {
+  const parsed = JSON.parse(value) as {
+    readonly fetched_at?: unknown;
+    readonly pairs?: unknown;
+  };
+  if (
+    typeof parsed.fetched_at !== "number" ||
+    !Number.isSafeInteger(parsed.fetched_at) ||
+    parsed.pairs === null ||
+    typeof parsed.pairs !== "object" ||
+    Array.isArray(parsed.pairs)
+  ) {
+    throw new Error("Invalid FixedFloat rates cache blob.");
+  }
+  const pairs: Record<string, FixedFloatRatePair> = {};
+  for (const [key, raw] of Object.entries(parsed.pairs as Record<string, unknown>)) {
+    const pair = readStoredPair(raw);
+    if (pair !== undefined) pairs[key] = pair;
+  }
+  return { fetched_at: parsed.fetched_at, pairs };
+}
+
+/**
+ * Indicative pay-in amount for a Lightning payout of `invoiceAmountMsats`,
+ * using the XML reference rate (`in`/`out`) and optional BTC `tofee`.
+ *
+ * Formula (direction=to): pay_from = (invoice_btc + tofee_btc) × (in / out).
+ * Rounds the pay-in amount up at 8 decimal places so the UI never understates
+ * what `/create` is likely to require.
+ */
+export function quotePayAmountFromFixedFloatRate(input: {
+  readonly pair: FixedFloatRatePair;
+  readonly invoiceAmountMsats: number;
+}): string | undefined {
+  if (!Number.isSafeInteger(input.invoiceAmountMsats) || input.invoiceAmountMsats <= 0) {
+    return undefined;
+  }
+  const rateIn = parsePositiveDecimal(input.pair.in);
+  const rateOut = parsePositiveDecimal(input.pair.out);
+  if (rateIn === undefined || rateOut === undefined) return undefined;
+
+  const invoiceSats = BigInt(Math.ceil(input.invoiceAmountMsats / 1000));
+  const tofeeSats = parseToFeeBtcSats(input.pair.tofee) ?? 0n;
+  const totalSats = invoiceSats + tofeeSats;
+
+  // pay_from = total_btc * (in/out) = total_sats * in / (out * 1e8).
+  // Compute ceil(total_sats * in / out) as an 8-decimal fixed-point integer of
+  // the from currency (i.e. units of 1e-8), then format — never binary floats.
+  const payAt8Dp = ceilDiv(
+    totalSats * rateIn.units * decimalScaleFactor(rateOut.scale),
+    decimalScaleFactor(rateIn.scale) * rateOut.units,
+  );
+  return formatPayAmount(payAt8Dp, PAY_AMOUNT_FRACTION_DIGITS, PAY_AMOUNT_FRACTION_DIGITS);
+}
+
+/**
+ * Maps XML from-side min/max into invoice-side msats using the pair's reference rate.
+ * Minimum rounds up, maximum rounds down, so borderline invoices are never reported
+ * as inside a range the provider would reject.
+ *
+ * Uses the same exact decimal math as {@link quotePayAmountFromFixedFloatRate}. FixedFloat
+ * often pads `<out>` past 8 fractional digits (e.g. `0.028314000000`); binary-float or
+ * "max 8 dp" helpers silently dropped invoice limits and left below-min assets selectable.
+ */
+export function invoiceLimitsFromFixedFloatRate(pair: FixedFloatRatePair): {
+  readonly minimum_pay_amount: string;
+  readonly maximum_pay_amount: string;
+  readonly minimum_invoice_amount_msats?: number;
+  readonly maximum_invoice_amount_msats?: number;
+} {
+  const minimumPayAmount = pair.minamount;
+  const maximumPayAmount = pair.maxamount;
+  return {
+    minimum_pay_amount: minimumPayAmount,
+    maximum_pay_amount: maximumPayAmount,
+    ...(payAmountToInvoiceMsats(pair, minimumPayAmount, "ceil") === undefined
+      ? {}
+      : {
+          minimum_invoice_amount_msats: payAmountToInvoiceMsats(pair, minimumPayAmount, "ceil"),
+        }),
+    ...(payAmountToInvoiceMsats(pair, maximumPayAmount, "floor") === undefined
+      ? {}
+      : {
+          maximum_invoice_amount_msats: payAmountToInvoiceMsats(pair, maximumPayAmount, "floor"),
+        }),
+  };
+}
+
+/**
+ * Compare two positive decimal strings. Returns negative when `left < right`,
+ * zero when equal, positive when `left > right`. Undefined when either is not a
+ * positive decimal (caller treats that as "cannot compare").
+ */
+export function compareFixedFloatDecimalAmounts(left: string, right: string): number | undefined {
+  const a = parsePositiveDecimal(left);
+  const b = parsePositiveDecimal(right);
+  if (a === undefined || b === undefined) return undefined;
+  const leftScaled = a.units * decimalScaleFactor(b.scale);
+  const rightScaled = b.units * decimalScaleFactor(a.scale);
+  if (leftScaled < rightScaled) return -1;
+  if (leftScaled > rightScaled) return 1;
+  return 0;
+}
+
+/**
+ * Inverse of the direction=to quote (ignoring tofee so the reported invoice floor
+ * is conservative): invoice_sats = pay_from × out × 1e8 / in.
+ */
+function payAmountToInvoiceMsats(
+  pair: FixedFloatRatePair,
+  payAmount: string,
+  rounding: "ceil" | "floor",
+): number | undefined {
+  const pay = parsePositiveDecimal(payAmount);
+  const rateIn = parsePositiveDecimal(pair.in);
+  const rateOut = parsePositiveDecimal(pair.out);
+  if (pay === undefined || rateIn === undefined || rateOut === undefined) return undefined;
+
+  // invoice_sats = pay * out * 1e8 / in
+  // = pay.units/10^pay.scale * rateOut.units/10^rateOut.scale * SATS / (rateIn.units/10^rateIn.scale)
+  const numerator =
+    pay.units * rateOut.units * OPENRECEIVE_SATS_PER_BTC * decimalScaleFactor(rateIn.scale);
+  const denominator =
+    decimalScaleFactor(pay.scale) * decimalScaleFactor(rateOut.scale) * rateIn.units;
+  if (denominator <= 0n) return undefined;
+  const invoiceSats =
+    rounding === "ceil" ? ceilDiv(numerator, denominator) : numerator / denominator;
+  if (invoiceSats <= 0n) return undefined;
+  if (invoiceSats > BigInt(Number.MAX_SAFE_INTEGER)) return undefined;
+  const msats = Number(invoiceSats) * 1000;
+  return Number.isSafeInteger(msats) ? msats : undefined;
+}
+
+function parseToFeeBtcSats(tofee: string | undefined): bigint | undefined {
+  if (tofee === undefined) return undefined;
+  // Examples: "0.0004967000 BTC", "0.0005 BTCLN". Non-BTC fees are ignored —
+  // we always pay out Lightning BTC, so only BTC network fees fold into pay-in.
+  const match = tofee.trim().match(/^([0-9]+(?:\.[0-9]+)?)\s*([A-Za-z]+)?$/);
+  if (match === null) return undefined;
+  const amount = match[1];
+  const unit = (match[2] ?? "BTC").toUpperCase();
+  if (unit !== "BTC" && unit !== "BTCLN") return undefined;
+  const parsed = parsePositiveDecimal(amount);
+  if (parsed === undefined) return undefined;
+  // Fees carrying more than 8 decimals (e.g. "0.0004967000 BTC") are reduced
+  // to whole sats with ceil rounding — rejecting them would silently treat a
+  // real network fee as zero and understate the indicative pay amount.
+  return ceilDiv(parsed.units * OPENRECEIVE_SATS_PER_BTC, decimalScaleFactor(parsed.scale));
+}
+
+/**
+ * Provider-data variant of the shared decimal parse: an unusable value is
+ * "cannot quote this pair" (undefined) rather than a thrown error, because a
+ * single malformed XML row must not fail the whole rates refresh.
+ */
+function parsePositiveDecimal(value: string): OpenReceiveDecimal | undefined {
+  let parsed: OpenReceiveDecimal;
+  try {
+    parsed = parseDecimal(value);
+  } catch {
+    return undefined;
+  }
+  return parsed.units > 0n ? parsed : undefined;
+}
+
+/**
+ * Render fixed-point `units` at `scale` with at most `maxFractionDigits`,
+ * rounding any discarded remainder up so the indicative pay amount is never
+ * understated, and trimming trailing zeros.
+ */
+function formatPayAmount(units: bigint, scale: number, maxFractionDigits: number): string {
+  const target = decimalScaleFactor(maxFractionDigits);
+  const current = decimalScaleFactor(scale);
+  const rescaled =
+    scale <= maxFractionDigits ? units * (target / current) : ceilDiv(units * target, current);
+  const text = formatDecimal(rescaled, maxFractionDigits);
+  return text.includes(".") ? text.replace(/0+$/, "").replace(/\.$/, "") : text;
+}
+
+function stripCurrencySuffix(value: string): string {
+  const match = value.trim().match(/^([0-9]+(?:\.[0-9]+)?)/);
+  return match?.[1] ?? value.trim();
+}
+
+function matchTags(xml: string, tag: string): string[] {
+  const pattern = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)</${tag}>`, "gi");
+  const matches: string[] = [];
+  for (const match of xml.matchAll(pattern)) {
+    matches.push(match[1] ?? "");
+  }
+  return matches;
+}
+
+function readTagText(xml: string, tag: string): string | undefined {
+  const pattern = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)</${tag}>`, "i");
+  const match = xml.match(pattern);
+  if (match === null) return undefined;
+  const text = (match[1] ?? "").trim();
+  return text.length === 0 ? undefined : text;
+}
+
+function readStoredPair(value: unknown): FixedFloatRatePair | undefined {
+  if (value === null || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  const from = typeof record.from === "string" ? record.from : undefined;
+  const to = typeof record.to === "string" ? record.to : undefined;
+  const inAmount = typeof record.in === "string" ? record.in : undefined;
+  const outAmount = typeof record.out === "string" ? record.out : undefined;
+  const amount = typeof record.amount === "string" ? record.amount : undefined;
+  const minamount = typeof record.minamount === "string" ? record.minamount : undefined;
+  const maxamount = typeof record.maxamount === "string" ? record.maxamount : undefined;
+  if (
+    from === undefined ||
+    to === undefined ||
+    inAmount === undefined ||
+    outAmount === undefined ||
+    amount === undefined ||
+    minamount === undefined ||
+    maxamount === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    from,
+    to,
+    in: inAmount,
+    out: outAmount,
+    amount,
+    minamount,
+    maxamount,
+    ...(typeof record.tofee === "string" ? { tofee: record.tofee } : {}),
+  };
+}

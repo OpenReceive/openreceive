@@ -1,0 +1,262 @@
+{
+  "version": "0.2.0",
+  "generated_at": "2026-06-19T00:00:00Z",
+  "docs": [
+    {
+      "slug": "guides",
+      "title": "OpenReceive Guides",
+      "source_path": "docs/guides/README.md",
+      "category": "guide",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "what-is-openreceive",
+      "title": "What Is OpenReceive",
+      "source_path": "docs/guides/what-is.md",
+      "category": "guide",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "quickstart-node",
+      "title": "Node Framework Quickstart",
+      "source_path": "docs/guides/quickstart-node.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "quickstart-rails",
+      "title": "Rails Quickstart",
+      "source_path": "docs/guides/quickstart-rails.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "node-orms",
+      "title": "Node ORM Recipes",
+      "source_path": "docs/guides/node-orms.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "authorization",
+      "title": "Authorization",
+      "source_path": "docs/guides/authorization.md",
+      "category": "security",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "rate-limiting",
+      "title": "Rate Limiting",
+      "source_path": "docs/guides/rate-limiting.md",
+      "category": "security",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "frontend-checkout",
+      "title": "Frontend Checkout",
+      "source_path": "docs/guides/frontend-checkout.md",
+      "category": "quickstart",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "headless-checkout",
+      "title": "Headless Checkout",
+      "source_path": "docs/guides/headless-checkout.md",
+      "category": "guide",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "automated-swaps",
+      "title": "Automated Swaps",
+      "source_path": "docs/guides/automated-swaps.md",
+      "category": "guide",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "lightning-swap-connect",
+      "title": "Lightning Swap Connect URI",
+      "source_path": "docs/guides/lightning-swap-connect.md",
+      "category": "reference",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "storage",
+      "title": "Payment Storage",
+      "source_path": "docs/guides/storage.md",
+      "category": "operations",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "api-reference",
+      "title": "API Reference",
+      "source_path": "docs/guides/api-reference.md",
+      "category": "reference",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "security",
+      "title": "Security",
+      "source_path": "docs/guides/security.md",
+      "category": "security",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "provider-registry",
+      "title": "Provider Registry",
+      "source_path": "docs/guides/provider-registry.md",
+      "category": "reference",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "price-feeds",
+      "title": "Price Feeds",
+      "source_path": "docs/guides/price-feeds.md",
+      "category": "reference",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "react-material-ui-recipe",
+      "title": "React Material UI Recipe",
+      "source_path": "docs/recipes/react-material-ui.md",
+      "category": "recipe",
+      "audience": "developer",
+      "public": true
+    },
+    {
+      "slug": "internal",
+      "title": "OpenReceive Internal Docs",
+      "source_path": "docs/internal/README.md",
+      "category": "internal",
+      "audience": "contributor",
+      "public": false
+    },
+    {
+      "slug": "architecture",
+      "title": "Architecture Notes",
+      "source_path": "docs/internal/architecture.md",
+      "category": "architecture",
+      "audience": "contributor",
+      "public": false
+    },
+    {
+      "slug": "shipped-routes",
+      "title": "Shipped Routes",
+      "source_path": "docs/internal/shipped-routes.md",
+      "category": "architecture",
+      "audience": "contributor",
+      "public": false
+    },
+    {
+      "slug": "node-integration",
+      "title": "Node Integration Details",
+      "source_path": "docs/internal/node-integration.md",
+      "category": "architecture",
+      "audience": "contributor",
+      "public": false
+    },
+    {
+      "slug": "custom-controller-integration",
+      "title": "Custom Controller Integration",
+      "source_path": "docs/internal/custom-controller-integration.md",
+      "category": "architecture",
+      "audience": "contributor",
+      "public": false
+    },
+    {
+      "slug": "swap-operations",
+      "title": "Swap Operations",
+      "source_path": "docs/internal/swap-operations.md",
+      "category": "operations",
+      "audience": "contributor",
+      "public": false
+    },
+    {
+      "slug": "settlement-sweeps",
+      "title": "Settlement Sweeps",
+      "source_path": "docs/internal/settlement-sweeps.md",
+      "category": "operations",
+      "audience": "contributor",
+      "public": false
+    },
+    {
+      "slug": "deployment-storage",
+      "title": "Deployment State",
+      "source_path": "docs/internal/deployment-storage.md",
+      "category": "operations",
+      "audience": "contributor",
+      "public": false
+    },
+    {
+      "slug": "scope-lock",
+      "title": "Library-owned Persistence Boundary",
+      "source_path": "docs/internal/scope-lock.md",
+      "category": "internal",
+      "audience": "contributor",
+      "public": false
+    },
+    {
+      "slug": "conformance",
+      "title": "Conformance",
+      "source_path": "docs/internal/conformance.md",
+      "category": "reference",
+      "audience": "contributor",
+      "public": false
+    },
+    {
+      "slug": "test-command-map",
+      "title": "Test Command Map",
+      "source_path": "docs/internal/test-command-map.md",
+      "category": "internal",
+      "audience": "contributor",
+      "public": false
+    },
+    {
+      "slug": "package-ownership",
+      "title": "Package Ownership Map",
+      "source_path": "docs/internal/package-ownership.md",
+      "category": "internal",
+      "audience": "contributor",
+      "public": false
+    },
+    {
+      "slug": "wrapper-parity",
+      "title": "Framework Wrapper Parity",
+      "source_path": "docs/internal/wrapper-parity.md",
+      "category": "internal",
+      "audience": "contributor",
+      "public": false
+    },
+    {
+      "slug": "release-process",
+      "title": "Release Process",
+      "source_path": "docs/internal/release-process.md",
+      "category": "reference",
+      "audience": "contributor",
+      "public": false
+    },
+    {
+      "slug": "forbidden-without-approval",
+      "title": "Forbidden Without Approval",
+      "source_path": "docs/internal/forbidden-without-approval.md",
+      "category": "internal",
+      "audience": "contributor",
+      "public": false
+    }
+  ]
+}

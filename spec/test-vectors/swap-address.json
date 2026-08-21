@@ -1,0 +1,60 @@
+{
+  "schema_version": "0.1.0",
+  "rule": "Refund and deposit addresses are checksum-verified, not shape-guarded: a transposed character must be refused before funds are sent somewhere unrecoverable.",
+  "cases": [
+    {
+      "name": "valid tron mainnet address",
+      "network": "TRX",
+      "address": "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf",
+      "expected": { "valid": true }
+    },
+    {
+      "name": "tron address with a broken base58check tail",
+      "network": "TRX",
+      "address": "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBg",
+      "expected": { "valid": false }
+    },
+    {
+      "name": "all-lowercase ethereum address has no checksum bits to verify",
+      "network": "ETH",
+      "address": "0x2222222222222222222222222222222222222222",
+      "expected": { "valid": true }
+    },
+    {
+      "name": "valid EIP-55 mixed-case ethereum address",
+      "network": "ETH",
+      "address": "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed",
+      "expected": { "valid": true }
+    },
+    {
+      "name": "mixed-case ethereum address failing EIP-55",
+      "network": "ETH",
+      "address": "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1Beaed",
+      "expected": { "valid": false }
+    },
+    {
+      "name": "valid solana address decodes to 32 bytes",
+      "network": "SOL",
+      "address": "So11111111111111111111111111111111111111112",
+      "expected": { "valid": true }
+    },
+    {
+      "name": "truncated solana address",
+      "network": "SOL",
+      "address": "So1111111111111111111111111111111111111",
+      "expected": { "valid": false }
+    },
+    {
+      "name": "the TRON alias resolves to the TRX rules",
+      "network": "TRON",
+      "address": "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf",
+      "expected": { "valid": true }
+    },
+    {
+      "name": "an unknown network accepts nothing",
+      "network": "XYZ",
+      "address": "anything-at-all",
+      "expected": { "valid": false }
+    }
+  ]
+}

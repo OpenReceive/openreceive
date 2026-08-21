@@ -1,0 +1,31 @@
+name: Security
+
+on:
+  schedule:
+    - cron: "9 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  public-secret-boundaries:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NWC_URI: ""
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run scan:secrets
+      - run: npm run check:workflows
+      # Client-bundle scanning runs in demos.yml, which builds the demos; this
+      # workflow stays focused on secret/workflow hygiene (no duplicate builds).

@@ -1,0 +1,109 @@
+# OpenReceive Agent Rules
+
+This is a greenfield project with no compatibility or migration constraint, and no current users. Optimize for a
+small, honest API and a good developer experience.
+
+## Non-negotiables
+
+- OpenReceive never owns orders, users, prices, or fulfillment, and never requires a separate
+  database, Redis, or migration runner. It MAY own payment-attempt rows (`openreceive_payments`)
+  inside the host application's existing database: the host passes its database handle and runs
+  the migration through its own workflow; the library owns the schema, locking, settlement
+  write-once, and reconciliation state machine. Implementing a custom
+  `OpenReceivePaymentRepository` is the documented escape hatch, never the quickstart.
+- The host owns orders and prices. Direct server code passes `{ orderId, amount }`; mounted
+  HTTP handlers resolve the amount from host-owned data and reject payer-supplied amounts.
+- One `openreceive_payments` row per attempt is committed before payer instructions are
+  exposed. An order may have multiple historical attempts; `payment_hash` is globally unique,
+  settlement is write-once per attempt, and fulfillment runs only for the order's first settled
+  attempt.
+- Attempts carry an explicit status (`pending`, `settled`, `expired`, `failed`, `attention`).
+  Only `pending` attempts are reconciled; closure of an unpaid attempt requires a successful
+  wallet scan at or after expiry plus `OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS` — a local
+  clock alone never closes a row. A settled row is never overwritten.
+- Settlement discovery is opportunistic by default: every mounted OpenReceive route first runs
+  one reconcile pass through the durable `openreceive_meta` gate (CAS in the host database,
+  minimum 2 seconds between real wallet scans, stretched by invoice age), shared by every
+  worker/process — the gate IS the NWC scan budget, and `payments/check` serves the requested
+  hash from that pass (or the host row on `gate_busy`), never a second per-invoice wallet
+  walk. No web process starts a settlement timer; the optional notifications worker
+  (NWC-02 listener + periodic pass) is a separate process. A custom repository without
+  `claimReconcileGate` must disable `opportunisticReconcile` explicitly — the default
+  settlement path never degrades silently, and process-local memory never backs the gate.
+- A retry or concurrent create serializes per order inside the library repository. An order has
+  one live payment session; within it, at most one live attempt per rail/asset so a payer can
+  switch methods. The host never sees the live/supersede/conflict vocabulary — it sees an order
+  as unpaid or paid. Do not add a separately configured OpenReceive idempotency store.
+- Receive-only NWC codes must never reach browser/mobile code, logs, tests, screenshots,
+  docs, source maps, or demo assets. Receive APIs never expose send-payment methods. Wallet
+  preflight fails closed when the connection advertises spend methods; booting anyway requires
+  the explicit `allowSpendCapableWallet` / `OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC` override.
+- NWC notifications are authenticated wallet data: a conforming client decrypts them with the
+  same key material that authenticates RPC responses. A `payment_received` payload that
+  satisfies the settlement rule (`settled_at` or `transaction_state/state == "settled"`; a
+  preimage alone is corroborating evidence) settles the matching pending attempt directly,
+  with no redundant wallet scan for that invoice. Anything less — a payload without a finality
+  signal, or an unknown payment hash — only triggers a bounded reconciliation scan. The
+  notifications worker's own periodic pass (plus request-path opportunistic reconcile) remains
+  the safety net for notifications missed while offline. Direct settlement
+  assumes the NWC client binds notification decryption to the connection's wallet pubkey (the
+  bundled SDK does); a custom client that skips author verification must not be granted it.
+- Use `amount_msats` for millisatoshi values in public results and exact integer/decimal money
+  math. Never use binary floats for fiat math.
+- Swap provider credentials live only in the host payment attempt's optional server-only
+  `swap_data` field.
+  They never appear in browser responses or logs. Provider completion is not wallet
+  settlement; refund decisions refresh provider state.
+- Do not duplicate provider data, supported currencies, settlement rules, polling cadence, or
+  demo product data.
+- Schema or route changes update their vectors in the same change. Invoice behavior needs
+  host-row retry/concurrency tests; settlement behavior needs replay-safe tests.
+
+## Shipped routes and hooks
+
+- `@openreceive/http` adapters and the Rails engine ship the route set in
+  `spec/openapi/openreceive-http.v1.yaml`.
+- The host keeps authentication. The quickstart host contract is `authorize`, `loadOrder`,
+  `amountForOrder`, and `onPaid` plus a database handle; the library derives
+  `resolveCheckout` / `onCheckoutCreated` and the reconciliation transitions from its own
+  repository. The advanced hook surface remains for custom-repository hosts.
+- OpenReceive mints no authentication, recovery, or refund tokens. The host authorizes every
+  request and verifies the requested `payment_hash` belongs to the order before resolving
+  server-only `swap_data`.
+- `onCheckoutCreated` runs before a create response. Failure returns 409 and withholds the
+  invoice or swap instructions.
+
+## Testing
+
+Use the smallest relevant test while iterating. The default contract/secret check is:
+
+```sh
+npm test
+```
+
+For JS/TS changes, run a focused test first and then at minimum:
+
+```sh
+npm run typecheck && npm run test:js
+```
+
+For broad route, package, contract, schema, release, or deployment changes, run:
+
+```sh
+npm run test:ci
+```
+
+Wallet behavior also requires `npm run test:live:nwc`; it must skip clearly when `nwc` is not
+configured. Ruby is a second settlement engine and must match the shared money, settlement,
+swap-data, and HTTP vectors:
+
+```sh
+npm run test:ruby
+```
+
+Before declaring work done, report the exact checks run and any intentional skip.
+
+## Private boundary
+
+Do not add private openreceive.org application code, infrastructure inventory, host IPs,
+deployment credentials, analytics, landing pages, or business logic to this public repo.

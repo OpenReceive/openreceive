@@ -1,0 +1,61 @@
+x-rails-app: &rails_app
+  build:
+    context: ../../../..
+    dockerfile: examples/hello-fruit/server/rails/Dockerfile
+    args:
+      CLIENT_BUILD_ID: "${CLIENT_BUILD_ID:-}"
+  depends_on:
+    db:
+      condition: service_healthy
+  environment: &rails_env
+    RAILS_ENV: production
+    # Host app database. Not an OpenReceive runtime persistence setting.
+    # solid_cable broadcasts also travel through this database.
+    DATABASE_URL: postgres://openreceive:openreceive@db:5432/hello_fruit_rails
+    SECRET_KEY_BASE: ${SECRET_KEY_BASE:-hello-fruit-rails-demo-secret-key-base-change-me}
+  env_file:
+    - ../../../../.env
+
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: openreceive
+      POSTGRES_PASSWORD: openreceive
+      POSTGRES_DB: hello_fruit_rails
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openreceive -d hello_fruit_rails"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+    # Ephemeral demo data — wipe with docker compose down -v
+    # Postgres 18+ expects the mount at /var/lib/postgresql (versioned PGDATA underneath).
+    tmpfs:
+      - /var/lib/postgresql
+
+  hello-fruit-rails:
+    <<: *rails_app
+    environment:
+      <<: *rails_env
+      PORT: "3003"
+    expose:
+      - "3003"
+
+  # No reconciler process: settlement of abandoned checkouts piggybacks on any
+  # later OpenReceive call through the durable openreceive_meta gate, then
+  # broadcasts the updated order over solid_cable.
+
+  # Long-running NWC-02 listener plus periodic reconcile safety net: settles
+  # orders the moment the wallet reports payment_received (or wakes reconcile),
+  # instead of waiting for the next OpenReceive call. This is optional.
+  notifications:
+    <<: *rails_app
+    depends_on:
+      db:
+        condition: service_healthy
+      hello-fruit-rails:
+        condition: service_started
+    environment:
+      <<: *rails_env
+      SKIP_DB_PREPARE: "1"
+    command: ["bundle", "exec", "rails", "openreceive:notifications"]

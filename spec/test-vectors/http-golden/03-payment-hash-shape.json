@@ -1,0 +1,21 @@
+{
+  "schema_version": 2,
+  "name": "payment check requires an exact payment-attempt selector",
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/payments/check",
+    "body": { "order_id": "ord-without-payment" }
+  },
+  "expected": {
+    "status": 400,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "code": "INVALID_REQUEST",
+      "message": "payment_hash is required.",
+      "request_id": "<request_id>"
+    }
+  }
+}

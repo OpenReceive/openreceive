@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  v0-1-foundation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NWC_URI: ""
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run check:workflows
+      - run: npm run check:generated
+      - run: npm run typecheck
+      - run: npm run check:dead-exports
+      - run: npm run test:js
+      - run: npm run test:package-smoke
+
+  ruby-engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # Oldest supported (gemspec required_ruby_version >= 3.2) and current.
+        ruby-version:
+          - "3.2"
+          - "3.4"
+    # The suites run inside the official Ruby image rather than on the runner:
+    # rails_test.rb needs activerecord and sqlite3, and CI must install those
+    # from the repo's Gemfile instead of relying on gems that happen to be
+    # present on the host.
+    container:
+      image: ruby:${{ matrix.ruby-version }}
+    env:
+      NWC_URI: ""
+      BUNDLE_PATH: vendor/bundle
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: vendor/bundle
+          key: gems-${{ matrix.ruby-version }}-${{ hashFiles('Gemfile') }}
+      - run: bundle install --jobs 4
+      # The second settlement engine and the cross-language conformance
+      # harness run on every PR, not only on developer machines. Driven by a
+      # shell entrypoint rather than npm so this container needs Ruby only.
+      - run: bundle exec ./tools/ci/ruby-tests.sh
+      # Catch gemspec regressions (a broken gemspec once shipped unnoticed
+      # because nothing ever ran `gem build`).
+      - run: ./tools/ci/ruby-gem-build.sh

@@ -1,0 +1,297 @@
+// The single shared surface behind the vue/svelte/angular wrappers. Each
+// wrapper package re-exports this module and aliases the factories under its
+// framework-prefixed names — the byte-identical ~200-line blocks that used to
+// live in all three packages (and had already drifted) live here once.
+//
+// Canonical binding contract (identical across frameworks): bindings expose
+// `tagName`, `attributes`, and `listeners`.
+
+import {
+  type CheckoutController,
+  type CheckoutControllerOptions,
+  type CheckoutElementAttributeOptions,
+  type CheckoutElementAttributes,
+  type CheckoutElementEventHandlers,
+  type CheckoutElementListeners,
+  type CheckoutShellElements,
+  type CheckoutShellModel,
+  type CheckoutShellOptions,
+  type CheckoutSnapshot,
+  type CreateCheckoutShellOptions,
+  createCheckoutController,
+  createCheckoutElementAttributes,
+  createCheckoutElementListeners,
+  createCheckoutShell,
+  createCheckoutShellModel,
+  createCheckoutShellModelFromProps,
+  createOpenReceiveStoredThemeModel,
+  createOpenReceiveThemeModel,
+  createOpenReceiveThemeToggleElementAttributes,
+  OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
+  OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
+  OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
+  type OpenReceiveCheckoutShellProps,
+  type OpenReceiveStoredThemeModelOptions,
+  type OpenReceiveThemeModel,
+  type OpenReceiveThemeModelOptions,
+  type OpenReceiveThemePreference,
+  type OpenReceiveThemeToggleElementAttributeOptions,
+  type OpenReceiveThemeToggleElementAttributes,
+} from "@openreceive/browser/internal";
+import type { DefineOpenReceiveElementsOptions } from "./index.ts";
+
+export type {
+  CheckoutController,
+  CheckoutControllerOptions,
+  CheckoutElementAttributeOptions,
+  CheckoutElementAttributes,
+  CheckoutElementDocument,
+  CheckoutElementEventHandlers,
+  CheckoutElementListeners,
+  CheckoutElementTarget,
+  CheckoutShellCheckoutBinding,
+  CheckoutShellElements,
+  CheckoutShellModel,
+  CheckoutShellOptions,
+  CheckoutShellThemeToggleBinding,
+  CheckoutSnapshot,
+  CreateCheckoutElementOptions,
+  CreateCheckoutShellOptions,
+  CreateOpenReceiveThemeToggleElementOptions,
+  OpenReceiveCheckoutProps,
+  OpenReceiveCheckoutShellProps,
+  OpenReceiveReadThemePreferenceOptions,
+  OpenReceiveStoredThemeModelOptions,
+  OpenReceiveThemeAttributeTarget,
+  OpenReceiveThemeControlTargets,
+  OpenReceiveThemeLabelTarget,
+  OpenReceiveThemeModel,
+  OpenReceiveThemeModelOptions,
+  OpenReceiveThemePreference,
+  OpenReceiveThemeStorageOptions,
+  OpenReceiveThemeToggleElementAttributeOptions,
+  OpenReceiveThemeToggleElementAttributes,
+} from "@openreceive/browser/internal";
+export {
+  applyCheckoutThemeAttributes,
+  applyOpenReceiveThemeAttributes,
+  createCheckoutController,
+  createCheckoutElement,
+  createCheckoutElementAttributes,
+  createCheckoutElementListeners,
+  createCheckoutShell,
+  createCheckoutShellModel,
+  createOpenReceiveStoredThemeModel,
+  createOpenReceiveThemeModel,
+  createOpenReceiveThemeToggleElement,
+  createOpenReceiveThemeToggleElementAttributes,
+  OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
+  OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
+  OPENRECEIVE_THEME_STORAGE_KEY,
+  OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
+  readOpenReceiveThemePreference,
+  syncOpenReceiveStoredThemeControls,
+  toggleOpenReceiveStoredThemeControls,
+  toggleOpenReceiveStoredThemePreference,
+  writeOpenReceiveThemePreference,
+} from "@openreceive/browser/internal";
+export type { DefineOpenReceiveElementsOptions } from "./index.ts";
+export { defineOpenReceiveElements } from "./index.ts";
+
+/**
+ * Every event the checkout element dispatches, in one place. `docs/internal/wrapper-parity.md`
+ * is the conformance table: each wrapper exposes all of these as first-class props.
+ * `onOpenWallet` lives here rather than in `CheckoutElementEventHandlers` because the
+ * element dispatches `openreceive-open-wallet` while the browser listener factory has
+ * no slot for it.
+ */
+export interface OpenReceiveWrapperCheckoutEventHandlers extends CheckoutElementEventHandlers {
+  readonly onOpenWallet?: (event: Event) => void;
+}
+
+export interface OpenReceiveWrapperCheckoutBindingOptions
+  extends CheckoutElementAttributeOptions,
+    OpenReceiveWrapperCheckoutEventHandlers {}
+
+export interface OpenReceiveWrapperCheckoutShellOptions
+  extends CheckoutShellOptions,
+    OpenReceiveWrapperCheckoutEventHandlers {
+  /**
+   * Resolve the theme from the deterministic default instead of reading storage and
+   * `matchMedia`. Wrappers pass this until they are mounted so a server-rendered shell
+   * and the first client render agree on `data-theme`.
+   */
+  readonly deferThemeResolution?: boolean;
+}
+
+export interface OpenReceiveWrapperCheckoutBinding {
+  readonly tagName: typeof OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME;
+  readonly attributes: CheckoutElementAttributes;
+  readonly listeners: CheckoutElementListeners;
+}
+
+export interface OpenReceiveWrapperThemeToggleBinding {
+  readonly tagName: typeof OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME;
+  readonly attributes: OpenReceiveThemeToggleElementAttributes;
+}
+
+export interface OpenReceiveWrapperCheckoutShellBinding {
+  readonly theme: OpenReceiveThemeModel;
+  readonly rootAttributes: Partial<OpenReceiveThemeModel["attributes"]>;
+  readonly checkout: OpenReceiveWrapperCheckoutBinding;
+  readonly themeToggle: OpenReceiveWrapperThemeToggleBinding | null;
+}
+
+export interface OpenReceiveWrapperCheckoutComponentProps extends OpenReceiveCheckoutShellProps {
+  readonly defineElementsOptions?: DefineOpenReceiveElementsOptions;
+}
+
+/** Element listeners for every dispatched event, including the one the browser factory omits. */
+function createOpenReceiveWrapperListeners(
+  handlers: OpenReceiveWrapperCheckoutEventHandlers,
+): CheckoutElementListeners {
+  return {
+    ...createCheckoutElementListeners(handlers),
+    ...(handlers.onOpenWallet === undefined
+      ? {}
+      : { [OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS.openWallet]: handlers.onOpenWallet }),
+  };
+}
+
+export function createOpenReceiveWrapperCheckoutBinding(
+  snapshot: CheckoutSnapshot,
+  options: OpenReceiveWrapperCheckoutBindingOptions = {},
+): OpenReceiveWrapperCheckoutBinding {
+  return {
+    tagName: OPENRECEIVE_CHECKOUT_ELEMENT_TAG_NAME,
+    attributes: createCheckoutElementAttributes(snapshot, options),
+    listeners: createOpenReceiveWrapperListeners(options),
+  };
+}
+
+export function createOpenReceiveWrapperThemeBinding(
+  theme: OpenReceiveThemePreference,
+  options: OpenReceiveThemeModelOptions = {},
+): OpenReceiveThemeModel {
+  return createOpenReceiveThemeModel(theme, options);
+}
+
+export function createOpenReceiveWrapperStoredThemeBinding(
+  options: OpenReceiveStoredThemeModelOptions = {},
+): OpenReceiveThemeModel {
+  return createOpenReceiveStoredThemeModel(options);
+}
+
+export function createOpenReceiveWrapperThemeToggleBinding(
+  options: OpenReceiveThemeToggleElementAttributeOptions = {},
+): OpenReceiveWrapperThemeToggleBinding {
+  return {
+    tagName: OPENRECEIVE_THEME_TOGGLE_ELEMENT_TAG_NAME,
+    attributes: createOpenReceiveThemeToggleElementAttributes(options),
+  };
+}
+
+/**
+ * Storage stub for `deferThemeResolution`: reads nothing, writes nothing, so the theme
+ * falls back to `defaultTheme` and the shell renders identically on server and client.
+ */
+const NO_THEME_STORAGE: Storage = {
+  length: 0,
+  clear() {},
+  getItem: () => null,
+  key: () => null,
+  removeItem() {},
+  setItem() {},
+};
+
+function toWrapperShellBinding(
+  shell: CheckoutShellModel,
+  listeners: CheckoutElementListeners,
+): OpenReceiveWrapperCheckoutShellBinding {
+  return {
+    theme: shell.theme,
+    rootAttributes: shell.rootAttributes,
+    checkout: {
+      tagName: shell.checkout.tagName,
+      attributes: shell.checkout.attributes,
+      listeners,
+    },
+    themeToggle:
+      shell.themeToggle === null
+        ? null
+        : {
+            tagName: shell.themeToggle.tagName,
+            attributes: shell.themeToggle.attributes,
+          },
+  };
+}
+
+export function createOpenReceiveWrapperCheckoutShellBinding(
+  snapshot: CheckoutSnapshot | null,
+  options: OpenReceiveWrapperCheckoutShellOptions = {},
+): OpenReceiveWrapperCheckoutShellBinding {
+  const { deferThemeResolution, ...shellOptions } = options;
+  const shell = createCheckoutShellModel(
+    snapshot,
+    deferThemeResolution === true
+      ? { ...shellOptions, storage: NO_THEME_STORAGE, systemDark: false }
+      : shellOptions,
+  );
+  return toWrapperShellBinding(shell, createOpenReceiveWrapperListeners(options));
+}
+
+/** Which props only do something in create mode (no `checkout` snapshot). */
+const CREATE_MODE_ONLY_PROPS = ["metadata", "syncUrl", "resumePathPrefix", "routeOrderId"] as const;
+
+const warnedSnapshotModeProps = new Set<string>();
+
+export interface OpenReceiveWrapperCheckoutPropsValidation {
+  readonly framework: string;
+  readonly checkout?: CheckoutSnapshot | null;
+  readonly orderId?: string;
+  readonly metadata?: Record<string, unknown>;
+  readonly syncUrl?: boolean;
+  readonly resumePathPrefix?: string;
+  readonly routeOrderId?: string;
+  readonly warn?: (message: string) => void;
+}
+
+/**
+ * Boundary check for the wrapper components: without it the missing-mode failure surfaces
+ * as a `TypeError` thrown from inside a computed/reactive statement (in Angular, on every
+ * change-detection pass) rather than as one clear error where the props are read.
+ */
+export function validateOpenReceiveWrapperCheckoutProps(
+  props: OpenReceiveWrapperCheckoutPropsValidation,
+): void {
+  const snapshot = props.checkout ?? null;
+  if (snapshot === null && (props.orderId === undefined || props.orderId.length === 0)) {
+    throw new TypeError(
+      `${props.framework} Checkout requires a checkout snapshot or an orderId (create mode).`,
+    );
+  }
+  if (snapshot === null) return;
+  const ignored = CREATE_MODE_ONLY_PROPS.filter((name) => props[name] !== undefined);
+  if (ignored.length === 0) return;
+  const key = `${props.framework}:${ignored.join(",")}`;
+  if (warnedSnapshotModeProps.has(key)) return;
+  warnedSnapshotModeProps.add(key);
+  const warn = props.warn ?? ((message: string) => globalThis.console?.warn?.(message));
+  warn(
+    `${props.framework} Checkout ignores ${ignored.join(", ")} in snapshot mode; ` +
+      "those props only apply when the component creates the checkout from an orderId.",
+  );
+}
+
+export function createOpenReceiveWrapperCheckoutController(
+  options: CheckoutControllerOptions,
+): CheckoutController {
+  return createCheckoutController(options);
+}
+
+export function createOpenReceiveWrapperCheckoutShell(
+  snapshot: CheckoutSnapshot,
+  options: CreateCheckoutShellOptions = {},
+): CheckoutShellElements {
+  return createCheckoutShell(snapshot, options);
+}

@@ -1,0 +1,218 @@
+import {
+  classifyTransactionSettlement,
+  OpenReceiveError,
+  type NwcTransaction,
+} from "@openreceive/core";
+import type { OpenReceive, OpenReceiveWalletNotification } from "@openreceive/node";
+import {
+  type OpenReceiveHost,
+  reconcileOpenReceivePayments,
+  startOpenReceiveReconciler,
+} from "./host-payments.ts";
+
+export interface OpenReceiveNotificationListener {
+  /** Unsubscribe from wallet notifications and wait for any in-flight pass. */
+  stop(): Promise<void> | void;
+}
+
+/**
+ * Opt-in NWC-02 notification listener. Notifications are authenticated wallet
+ * data: a `payment_received` payload that satisfies the settlement rule
+ * (`settled_at` or a settled transaction state — never a preimage alone) and
+ * matches a pending attempt settles that attempt directly through
+ * `host.onPaid`, with no redundant wallet scan for that invoice. Anything less
+ * — no payload, no finality signal, or an unknown/not-pending hash — wakes one
+ * `reconcileOpenReceivePayments` pass instead. Bursts coalesce: while a pass
+ * runs, at most one follow-up pass is queued. Errors go to `onError` (default:
+ * swallowed); a direct-settlement failure also falls back to a scan so the
+ * safety net covers it. The polling reconciler remains the safety net for
+ * notifications missed while offline. Direct settlement assumes the NWC client
+ * binds notification decryption to the connection's wallet pubkey (the bundled
+ * SDK does).
+ */
+export async function startOpenReceiveNotificationListener(input: {
+  readonly service: OpenReceive;
+  readonly host: OpenReceiveHost;
+  readonly overlapSeconds?: number;
+  readonly onError?: (error: unknown) => void;
+}): Promise<OpenReceiveNotificationListener> {
+  const subscribe = input.service.subscribeWalletNotifications?.bind(input.service);
+  if (subscribe === undefined) {
+    throw new OpenReceiveError({
+      code: "UNSUPPORTED_METHOD",
+      message:
+        "OpenReceive service does not support wallet notifications (subscribeWalletNotifications). Keep polling reconciliation.",
+      retryable: false,
+    });
+  }
+  const reportError = (error: unknown) => {
+    try {
+      input.onError?.(error);
+    } catch {
+      // The error sink must never break the listener; polling remains the safety net.
+    }
+  };
+
+  let stopped = false;
+  let running = false;
+  let queued = false;
+  let inFlight: Promise<void> = Promise.resolve();
+  let settling: Promise<void> = Promise.resolve();
+
+  const wakeReconciliation = () => {
+    if (stopped) return;
+    if (running) {
+      // Coalesce notification bursts into at most one queued follow-up pass.
+      queued = true;
+      return;
+    }
+    running = true;
+    inFlight = (async () => {
+      try {
+        do {
+          queued = false;
+          try {
+            await reconcileOpenReceivePayments({
+              service: input.service,
+              host: input.host,
+              ...(input.overlapSeconds === undefined
+                ? {}
+                : { overlapSeconds: input.overlapSeconds }),
+            });
+          } catch (error) {
+            reportError(error);
+          }
+        } while (queued && !stopped);
+      } finally {
+        running = false;
+      }
+    })();
+  };
+
+  /**
+   * Settle one notified payment directly when the payload proves finality and
+   * the hash is a known pending attempt; otherwise fall back to a bounded
+   * reconciliation scan. Settling removes the attempt from the pending set, so
+   * the poll loop never scans that invoice again.
+   */
+  const settleDirectly = async (
+    transaction: NwcTransaction,
+    notifiedHash: string | undefined,
+  ): Promise<void> => {
+    if (stopped) return;
+    try {
+      const detection = classifyTransactionSettlement(transaction);
+      const paymentHash = (transaction.payment_hash ?? notifiedHash)?.toLowerCase();
+      if (!detection.settled || paymentHash === undefined) {
+        wakeReconciliation();
+        return;
+      }
+      const attempts = await input.host.payments.listReconcilableAttempts();
+      if (!attempts.some((attempt) => attempt.paymentHash.toLowerCase() === paymentHash)) {
+        // Unknown or already-terminal hash: only a bounded scan may act on it.
+        wakeReconciliation();
+        return;
+      }
+      const observedAt = Math.floor(Date.now() / 1_000);
+      await input.host.onPaid({
+        paymentHash,
+        paidAt: transaction.settled_at ?? observedAt,
+        details: {
+          transaction,
+          observed_at: observedAt,
+          paid_at_source: transaction.settled_at === undefined ? "observed_at" : "settled_at",
+        },
+      });
+    } catch (error) {
+      reportError(error);
+      // Fall back to the scan so the safety net still delivers the settlement.
+      wakeReconciliation();
+    }
+  };
+
+  const unsubscribe = await subscribe((notification: OpenReceiveWalletNotification) => {
+    if (notification.type !== "payment_received") return;
+    const transaction = notification.transaction;
+    if (transaction === undefined) {
+      wakeReconciliation();
+      return;
+    }
+    // Serialize direct settlements so stop() can await them.
+    settling = settling.then(() => settleDirectly(transaction, notification.payment_hash));
+  });
+
+  return {
+    async stop() {
+      if (stopped) return;
+      stopped = true;
+      try {
+        await unsubscribe();
+      } catch (error) {
+        reportError(error);
+      }
+      await settling;
+      await inFlight;
+    },
+  };
+}
+
+export interface OpenReceiveNotificationWorker {
+  /** Unsubscribe, stop the periodic pass, and wait for in-flight work. */
+  stop(): Promise<void>;
+  /** Resolves after `stop()` once the periodic loop has drained. */
+  readonly done: Promise<void>;
+}
+
+/**
+ * The OPTIONAL case-2 worker: one separate long-lived process that both
+ * listens for NWC-02 `payment_received` notifications AND runs the same
+ * one-pass reconcile on an interval — the safety net for notifications missed
+ * while this worker was down. The web process never does this; its default is
+ * request-path opportunistic reconcile. A wallet without notification support
+ * degrades to the periodic pass alone (reported via `onError`).
+ *
+ * There is no host-aware CLI for this: wire it from a small host script that
+ * owns `service` and `host` (see the scaffold wiring guide).
+ */
+export async function startOpenReceiveNotificationWorker(input: {
+  readonly service: OpenReceive;
+  readonly host: OpenReceiveHost;
+  /** Periodic safety-net pass interval. Default 15 seconds. */
+  readonly pollIntervalMs?: number;
+  readonly overlapSeconds?: number;
+  readonly onError?: (error: unknown) => void;
+}): Promise<OpenReceiveNotificationWorker> {
+  const reconciler = await startOpenReceiveReconciler({
+    service: input.service,
+    host: input.host,
+    pollIntervalMs: input.pollIntervalMs ?? 15_000,
+    ...(input.overlapSeconds === undefined ? {} : { overlapSeconds: input.overlapSeconds }),
+    ...(input.onError === undefined ? {} : { onError: input.onError }),
+  });
+  let listener: OpenReceiveNotificationListener | undefined;
+  try {
+    listener = await startOpenReceiveNotificationListener({
+      service: input.service,
+      host: input.host,
+      ...(input.overlapSeconds === undefined ? {} : { overlapSeconds: input.overlapSeconds }),
+      ...(input.onError === undefined ? {} : { onError: input.onError }),
+    });
+  } catch (error) {
+    if (error instanceof OpenReceiveError && error.code === "UNSUPPORTED_METHOD") {
+      // Notifications are opt-in wallet capability; the periodic pass still runs.
+      input.onError?.(error);
+    } else {
+      reconciler.stop();
+      await reconciler.done;
+      throw error;
+    }
+  }
+  return {
+    async stop() {
+      await listener?.stop();
+      reconciler.stop();
+      await reconciler.done;
+    },
+    done: reconciler.done,
+  };
+}

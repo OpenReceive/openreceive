@@ -1,0 +1,139 @@
+# Node ORM recipes
+
+You never hand-write a payment repository. OpenReceive owns the
+`openreceive_payments` logic; your ORM contributes two things:
+
+1. **The migration.** `npx openreceive scaffold payments --orm prisma`
+   (or `drizzle | typeorm | sequelize | knex`, `--dialect postgres | sqlite`)
+   emits one migration/schema file — `openreceive_payments` and the sibling
+   `openreceive_meta` reconcile gate together — plus a wiring guide. Run it
+   through your normal migration workflow.
+2. **The `db` handle** passed to `createOpenReceiveHost({ db, ... })`.
+
+## What to pass as `db`
+
+| Stack                  | Pass                                                        |
+| ---------------------- | ----------------------------------------------------------- |
+| pg (node-postgres)     | the `Pool` or `Client` directly                             |
+| node:sqlite            | the `DatabaseSync` directly                                 |
+| better-sqlite3         | the `Database` directly                                     |
+| Drizzle                | the underlying driver (`pg` Pool or better-sqlite3) directly |
+| Prisma, Knex, TypeORM  | a small custom adapter (recipes below)                      |
+| Sequelize              | a separate `pg` Pool to the same database, or an adapter like TypeORM's |
+
+A custom adapter is `{ dialect, query, transaction }`
+(`OpenReceiveSqlAdapter`): `dialect` is `"postgres"` or `"sqlite"`, `query`
+runs one statement with `?` placeholders and returns SELECT rows (`[]`
+otherwise), and `transaction` runs a callback against a transactional client.
+Postgres drivers need `?` rewritten to `$1`-style.
+
+## Prisma
+
+```ts
+import type { PrismaClient } from "@prisma/client";
+import type { OpenReceiveSqlAdapter, OpenReceiveSqlQuery } from "@openreceive/http";
+
+type Tx = Pick<PrismaClient, "$queryRawUnsafe" | "$executeRawUnsafe">;
+
+export function openReceivePrismaDb(
+  prisma: PrismaClient,
+  dialect: "postgres" | "sqlite", // match your Prisma datasource provider
+): OpenReceiveSqlAdapter {
+  // SQL arrives already written for `dialect` — pass it through verbatim.
+  const queryOn = (tx: Tx): OpenReceiveSqlQuery => async (sql, params = []) => {
+    if (/^\s*select/i.test(sql)) {
+      return (await tx.$queryRawUnsafe(sql, ...params)) as Record<string, unknown>[];
+    }
+    await tx.$executeRawUnsafe(sql, ...params);
+    return [];
+  };
+  return {
+    dialect,
+    query: queryOn(prisma),
+    transaction: (run) => prisma.$transaction((tx) => run({ query: queryOn(tx) })),
+  };
+}
+```
+
+## Knex
+
+Knex already uses `?` bindings; only the result shape differs per driver.
+
+```ts
+import type { Knex } from "knex";
+import type { OpenReceiveSqlAdapter, OpenReceiveSqlQuery } from "@openreceive/http";
+
+export function openReceiveKnexDb(knex: Knex, dialect: "postgres" | "sqlite"): OpenReceiveSqlAdapter {
+  const queryOn = (executor: Knex | Knex.Transaction): OpenReceiveSqlQuery =>
+    async (sql, params = []) => {
+      // SQL arrives already written for `dialect`; only the RESULT shape differs.
+      const result = await executor.raw(sql, [...params] as Knex.RawBinding[]);
+      // The sqlite3 driver resolves the rows array itself; pg wraps them in
+      // `{ rows }`. Reaching into `result[0]` returns the first ROW on sqlite,
+      // which breaks every repository read.
+      return dialect === "sqlite"
+        ? (result as Record<string, unknown>[])
+        : ((result as { rows?: Record<string, unknown>[] }).rows ?? []);
+    };
+  return {
+    dialect,
+    query: queryOn(knex),
+    transaction: (run) => knex.transaction((trx) => run({ query: queryOn(trx) })),
+  };
+}
+```
+
+## TypeORM
+
+```ts
+import type { DataSource } from "typeorm";
+import type { OpenReceiveSqlAdapter, OpenReceiveSqlQuery } from "@openreceive/http";
+
+export function openReceiveTypeOrmDb(
+  dataSource: DataSource,
+  dialect: "postgres" | "sqlite",
+): OpenReceiveSqlAdapter {
+  // SQL arrives already written for `dialect` — pass it through verbatim.
+  const queryOn = (runner: { query(sql: string, params?: unknown[]): Promise<unknown> }): OpenReceiveSqlQuery =>
+    async (sql, params = []) =>
+      ((await runner.query(sql, [...params])) ?? []) as Record<string, unknown>[];
+  return {
+    dialect,
+    query: queryOn(dataSource),
+    // Run through the transaction's own manager. Falling back to `dataSource`
+    // would execute settlement statements outside the transaction.
+    transaction: (run) => dataSource.transaction((manager) => run({ query: queryOn(manager) })),
+  };
+}
+```
+
+## Schema and `onPaid`
+
+The scaffolded migration matches `openReceivePaymentsSchemaSql(dialect)`:
+`order_id` indexed but not unique, `payment_hash` unique, `status` +
+`status_reason`, `paid_at`, `expires_at`, exact wallet `created_at`,
+locally-clocked `updated_at`, `checkout_data`, server-only `swap_data`, and
+nullable `client_ip` (with its `(client_ip, updated_at)` index — DB-backed
+rate limiting counts on it). Keep every column; adjust `order_id`
+typing or add a foreign key to your order table if you like. See
+[Payment storage](storage.md).
+
+The same file also creates `openreceive_meta` (`key`, `value`, `rev`) in the
+same database — one migration, both tables. Its `transaction_scan_gate` row is
+the durable claim that collapses the request-path reconcile passes of every
+instance into one wallet scan per interval, so keep it even though no host code
+touches it.
+
+`onPaid({ orderId, paymentHash, paidAt, details?, query })` runs inside the
+library's settlement transaction, only for the order's first settled attempt.
+Use `query` (same `?` placeholders) to update your order or insert an outbox
+row transactionally — do not use your ORM's separate connection there. Never
+map `swap_data` into an API serializer, log, or browser bundle.
+
+Only if no supported handle or adapter can reach your persistence, implement
+the full `OpenReceivePaymentRepository` interface and pass it as `payments`
+instead of `db`; that advanced escape hatch makes you responsible for commit
+locking, write-once settlement, and reconciliation transitions. It must also
+implement `claimReconcileGate({ now, intervalSeconds })` — construction throws
+unless you do, or pass `opportunisticReconcile: false` because your own worker
+runs settlement.

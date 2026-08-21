@@ -1,0 +1,9 @@
+@import "tailwindcss";
+@plugin "daisyui" {
+  themes: light --default, dark;
+}
+/* Demo-owned markup (React components + stores). */
+@source "../src/**/*.{ts,tsx}";
+/* The OpenReceive checkout design system: every daisyUI/Tailwind class the
+   payment UI uses lives in this registry so Tailwind can scan it. */
+@source "../../../../../../../packages/js/browser/src/ui-classes.ts";

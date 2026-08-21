@@ -1,0 +1,24 @@
+{
+  "schema_version": 2,
+  "name": "capped payer minting a new attempt gets a retryable 429",
+  "handler": "rate_limited",
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/checkouts",
+    "body": { "order_id": "order-limited" }
+  },
+  "expected": {
+    "status": 429,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>",
+      "retry-after": "60"
+    },
+    "body": {
+      "code": "RATE_LIMITED",
+      "message": "Too many requests.",
+      "retryable": true,
+      "request_id": "<request_id>"
+    }
+  }
+}

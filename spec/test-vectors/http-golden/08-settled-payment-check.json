@@ -1,0 +1,38 @@
+{
+  "schema_version": 2,
+  "name": "settled payments/check exposes only public wallet transaction fields",
+  "handler": "settled_check",
+  "request": {
+    "method": "POST",
+    "path": "/openreceive/payments/check",
+    "body": {
+      "order_id": "order-golden-settled",
+      "payment_hash": "7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f"
+    }
+  },
+  "expected": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "payment_hash": "7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f",
+      "status": "settled",
+      "paid_at": 950,
+      "details": {
+        "transaction": {
+          "payment_hash": "7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f",
+          "transaction_state": "settled",
+          "amount_msats": 1000,
+          "created_at": 900,
+          "expires_at": 1500,
+          "settled_at": 950
+        },
+        "observed_at": 1000,
+        "paid_at_source": "settled_at"
+      },
+      "payment_methods": []
+    }
+  }
+}

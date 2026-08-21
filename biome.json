@@ -1,0 +1,73 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.1/schema.json",
+  "files": {
+    "includes": [
+      "**/*",
+      "!**/.git",
+      "!**/.claude",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/coverage",
+      "!**/.release",
+      "!**/.next",
+      "!**/.vite",
+      "!**/.openreceive",
+      "!**/vendor/bundle",
+      "!**/public/assets",
+      "!**/public/packs",
+      "!**/public/packs-test",
+      "!examples/*/public/*.html",
+      "!examples/*/server/*/public/*.html",
+      "!tmp",
+      "!**/building",
+      "!**/*.svg",
+      "!**/*.css"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "suspicious": {
+        "noConsole": "off"
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "always"
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.vue"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUnusedVariables": "off"
+          },
+          "style": {
+            "useVueMultiWordComponentNames": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["examples/**"],
+      "linter": {
+        "rules": {
+          "performance": {
+            "noImgElement": "off"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,388 @@
+openapi: 3.1.0
+info:
+  title: OpenReceive host-owned payment HTTP API
+  version: 0.4.0
+  description: >
+    Mounted receive-checkout routes. The host owns orders; the library owns the openreceive_payments rows (they live in the host's database).
+    It resolves every checkout amount and stores each payment attempt before a payer response.
+servers:
+  - url: /openreceive
+paths:
+  /checkouts/prepare:
+    post:
+      operationId: prepareCheckout
+      summary: Lock the host-resolved order amount without minting Lightning.
+      description: >
+        Resolves the trusted order price to amount_msats and returns swap
+        payment_methods. Does not mint a bolt11 or commit an openreceive_payments
+        row. Clients show the method picker first; POST /checkouts mints Lightning
+        only after the payer selects Bitcoin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrepareCheckoutRequest'
+      responses:
+        '200':
+          description: Amount lock and payment methods for the deferred checkout UI.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrepareCheckoutResponse'
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '405': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /checkouts:
+    post:
+      operationId: createCheckout
+      summary: Mint an invoice using the host-resolved order price.
+      description: >
+        The request cannot supply an amount. The mounted handler asks the required
+        host integration for the trusted order price, mints an invoice, and returns
+        payer instructions only after the host persists payment_hash.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCheckoutRequest'
+      responses:
+        '201':
+          description: Checkout committed by the host.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateCheckoutResponse'
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '405': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /payments/check:
+    post:
+      operationId: checkPayment
+      summary: Verify one host-owned payment attempt against the receive wallet.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentCheckRequest'
+      responses:
+        '200':
+          description: Current wallet-derived payment state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentCheck'
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '405': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /swaps/quote:
+    post:
+      operationId: quoteSwap
+      summary: Obtain a non-binding swap quote.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SwapQuoteRequest'
+      responses:
+        '200':
+          description: Provider quote.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '405': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /swaps:
+    post:
+      operationId: createSwap
+      summary: Create a swap using the host-resolved order price.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSwapRequest'
+      responses:
+        '201':
+          description: Swap committed by the host.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateSwapResponse'
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '405': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /swaps/status:
+    post:
+      operationId: getSwap
+      summary: Refresh provider state using server-only swap data loaded by the host.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderRequest'
+      responses:
+        '200':
+          description: Provider-derived swap state.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '405': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /swaps/refunds:
+    post:
+      operationId: refundSwap
+      summary: Refresh provider state, then request an eligible refund.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [order_id, payment_hash, refund_address]
+              properties:
+                order_id: { type: string, minLength: 1, maxLength: 200 }
+                payment_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
+                refund_address: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: Provider-derived refund state.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '405': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /rates:
+    get:
+      operationId: listRates
+      parameters:
+        - in: query
+          name: currencies
+          schema: { type: string }
+      responses:
+        '200':
+          description: Current process-cached BTC/fiat rates.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        '400': { $ref: '#/components/responses/Error' }
+        '405': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+        '501': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+components:
+  responses:
+    Error:
+      description: OpenReceive error.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    PrepareCheckoutRequest:
+      type: object
+      additionalProperties: false
+      required: [order_id]
+      properties:
+        order_id: { type: string, minLength: 1, maxLength: 200 }
+    PrepareCheckoutResponse:
+      type: object
+      additionalProperties: false
+      required: [order_id, amount_msats, payment_methods]
+      properties:
+        order_id: { type: string, minLength: 1, maxLength: 200 }
+        amount_msats: { type: integer, minimum: 1000, maximum: 9007199254740991 }
+        fiat_quote:
+          oneOf:
+            - { type: 'null' }
+            - { type: object, additionalProperties: true }
+        payment_methods:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+            required: [pay_in_asset, label, network_label, provider, available]
+    CreateCheckoutRequest:
+      type: object
+      additionalProperties: false
+      required: [order_id]
+      properties:
+        order_id: { type: string, minLength: 1, maxLength: 200 }
+        memo: { type: string, maxLength: 500 }
+        metadata: { type: object, additionalProperties: true }
+    Checkout:
+      type: object
+      additionalProperties: false
+      required: [order_id, payment_hash, bolt11, amount_msats, created_at, expires_at]
+      properties:
+        order_id: { type: string, minLength: 1, maxLength: 200 }
+        payment_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
+        bolt11: { type: string, minLength: 1 }
+        amount_msats: { type: integer, minimum: 1000, maximum: 9007199254740991 }
+        created_at: { type: integer, minimum: 0 }
+        expires_at: { type: integer, minimum: 0 }
+        fiat_quote:
+          oneOf:
+            - { type: 'null' }
+            - { type: object, additionalProperties: true }
+    CreateCheckoutResponse:
+      type: object
+      additionalProperties: false
+      required: [checkout]
+      properties:
+        checkout: { $ref: '#/components/schemas/Checkout' }
+    PaymentCheckRequest:
+      type: object
+      additionalProperties: false
+      required: [order_id, payment_hash]
+      properties:
+        order_id: { type: string, minLength: 1, maxLength: 200 }
+        payment_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
+    PaymentStatus:
+      type: string
+      enum: [pending, settled, expired, failed, not_found]
+    PaymentCheck:
+      type: object
+      additionalProperties: false
+      required: [payment_hash, status, payment_methods]
+      properties:
+        payment_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
+        status: { $ref: '#/components/schemas/PaymentStatus' }
+        paid_at: { type: integer, minimum: 0 }
+        details: { type: object, additionalProperties: true }
+        payment_methods:
+          type: array
+          description: >
+            Swap pay-in options for this invoice amount. Empty when no LSC
+            provider is configured. Present even while Lightning is the only rail
+            so clients can stop showing a currencies loader.
+          items:
+            type: object
+            additionalProperties: true
+            required: [pay_in_asset, label, network_label, provider, available]
+            properties:
+              pay_in_asset: { type: string, minLength: 1 }
+              label: { type: string, minLength: 1 }
+              network_label: { type: string, minLength: 1 }
+              provider: { type: string }
+              available: { type: boolean }
+              unavailable_reason: { type: string }
+              unavailable_message: { type: string }
+              pay_amount: { type: string }
+              minimum_pay_amount: { type: string }
+              maximum_pay_amount: { type: string }
+              minimum_invoice_amount_msats: { type: integer, minimum: 0 }
+              maximum_invoice_amount_msats: { type: integer, minimum: 0 }
+    SwapQuoteRequest:
+      type: object
+      additionalProperties: false
+      required: [order_id, pay_in_asset]
+      properties:
+        order_id: { type: string, minLength: 1, maxLength: 200 }
+        pay_in_asset: { type: string, minLength: 1 }
+    CreateSwapRequest:
+      type: object
+      additionalProperties: false
+      required: [order_id, pay_in_asset]
+      properties:
+        order_id: { type: string, minLength: 1, maxLength: 200 }
+        pay_in_asset: { type: string, minLength: 1 }
+        memo: { type: string, maxLength: 500 }
+        metadata: { type: object, additionalProperties: true }
+    CreateSwapResponse:
+      type: object
+      additionalProperties: false
+      required: [swap]
+      properties:
+        swap: { type: object, additionalProperties: true }
+    OrderRequest:
+      type: object
+      additionalProperties: false
+      required: [order_id, payment_hash]
+      properties:
+        order_id: { type: string, minLength: 1, maxLength: 200 }
+        payment_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
+    Error:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          # Kept in lockstep with spec/schemas/error.schema.json.
+          type: string
+          enum:
+            - NOT_IMPLEMENTED
+            - RESTRICTED
+            - UNAUTHORIZED
+            - RATE_LIMITED
+            - QUOTA_EXCEEDED
+            - INTERNAL
+            - UNSUPPORTED_ENCRYPTION
+            - INSUFFICIENT_BALANCE
+            - PAYMENT_FAILED
+            - OTHER
+            - NOT_FOUND
+            - TIMEOUT
+            - INVALID_REQUEST
+            - WALLET_UNAVAILABLE
+            - INVOICE_EXPIRED
+            - UNSUPPORTED_METHOD
+            - CONFLICT
+        message: { type: string, minLength: 1 }
+        request_id: { type: string }
+        retryable: { type: boolean }
+        details:
+          type: object
+          additionalProperties: true

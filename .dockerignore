@@ -1,0 +1,27 @@
+.git
+.gitignore
+.dockerignore
+node_modules
+**/node_modules
+**/vendor/bundle
+**/.bundle
+dist
+**/dist
+coverage
+.turbo
+.vite
+.cache
+*.tsbuildinfo
+**/storage/*.sqlite3
+**/config/master.key
+
+# Local Shakapacker output. The Rails image client stage always rebuilds these.
+**/public/packs*
+
+# Local-only secrets and notes.
+.env
+.env.*
+**/.openreceive/
+private
+building
+private_private_infra_details.txt

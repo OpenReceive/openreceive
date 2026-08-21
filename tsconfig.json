@@ -1,0 +1,49 @@
+{
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "ignoreDeprecations": "6.0",
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM"],
+    "baseUrl": ".",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2022",
+    "paths": {
+      "@openreceive/angular": ["packages/js/angular/src/index.ts"],
+      "@openreceive/browser": ["packages/js/browser/src/index.ts"],
+      "@openreceive/browser/headless": ["packages/js/browser/src/headless.ts"],
+      "@openreceive/browser/internal": ["packages/js/browser/src/internal.ts"],
+      "@openreceive/core": ["packages/js/core/src/index.ts"],
+      "@openreceive/core/contracts": ["packages/js/core/src/contracts.ts"],
+      "@openreceive/core/swap-address": ["packages/js/core/src/swap-address.ts"],
+      "@openreceive/elements": ["packages/js/elements/src/index.ts"],
+      "@openreceive/elements/wrapper-shared": ["packages/js/elements/src/wrapper-shared.ts"],
+      "@openreceive/http": ["packages/js/http/src/index.ts"],
+      "@openreceive/express": ["packages/js/express/src/index.ts"],
+      "@openreceive/fastify": ["packages/js/fastify/src/index.ts"],
+      "@openreceive/next": ["packages/js/next/src/index.ts"],
+      "@openreceive/node": ["packages/js/node/src/index.ts"],
+      "@openreceive/node/cli": ["packages/js/node/src/cli.ts"],
+      "@openreceive/provider-data": ["packages/js/provider-data/src/index.ts"],
+      "@openreceive/react": ["packages/js/react/src/index.ts"],
+      "@openreceive/svelte": ["packages/js/svelte/src/index.ts"],
+      "@openreceive/testkit": ["packages/js/testkit/src/index.ts"],
+      "@openreceive/vue": ["packages/js/vue/src/index.ts"]
+    },
+    "types": ["node"]
+  },
+  "include": [
+    "packages/js/**/*.ts",
+    "examples/hello-fruit/shared/**/*.ts",
+    "examples/hello-fruit/shared/**/*.d.ts",
+    "examples/hello-fruit/server/*/src/**/*.ts",
+    "examples/hello-fruit/server/*/src/**/*.tsx",
+    "examples/hello-fruit/server/*/vite.config.ts",
+    "examples/hello-fruit/server/rails/app/javascript/**/*.ts",
+    "examples/hello-fruit/server/rails/app/javascript/**/*.tsx"
+  ]
+}

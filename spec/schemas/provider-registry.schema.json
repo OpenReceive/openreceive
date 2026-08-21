@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spec.openreceive.org/schemas/provider-registry.v4.json",
+  "title": "OpenReceive Provider Registry v4",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated",
+    "description",
+    "filter",
+    "_meta",
+    "assets_index",
+    "providers",
+    "crypto_routes",
+    "countries",
+    "fiat_rails",
+    "disqualified_providers"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "4.0.0"
+    },
+    "generated": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "filter": {
+      "type": "string",
+      "minLength": 1
+    },
+    "_meta": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "assets_index": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["symbol", "label"],
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "route": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "providers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "kind", "url", "us", "lightning_docs_url", "icon_path"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "brokerage",
+              "browser wallet",
+              "exchange",
+              "mobile wallet",
+              "payments app",
+              "swap service"
+            ]
+          },
+          "url": {
+            "type": "string",
+            "pattern": "^https://"
+          },
+          "us": {
+            "type": ["boolean", "null"]
+          },
+          "lightning_docs_url": {
+            "type": ["string", "null"]
+          },
+          "icon_path": {
+            "type": "string",
+            "pattern": "^assets/provider-icons/[a-z0-9-]+\\.png$"
+          },
+          "tutorials": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["index", "path", "caption"],
+              "properties": {
+                "index": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "path": {
+                  "type": "string",
+                  "pattern": "^assets/pay_tutorials/"
+                },
+                "caption": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "crypto_routes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "symbol", "label", "providers"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "symbol": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "providers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/provider_ref"
+            }
+          }
+        }
+      }
+    },
+    "countries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "name", "currency", "coverage"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "coverage": {
+            "type": "string",
+            "enum": ["deep", "thin", "sparse"]
+          }
+        }
+      }
+    },
+    "fiat_rails": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "countries"],
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "countries": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/provider_ref"
+              }
+            }
+          }
+        }
+      }
+    },
+    "disqualified_providers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "url", "reason"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "url": {
+            "type": "string",
+            "pattern": "^https://"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "provider_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider"],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$"
+        },
+        "rank": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}

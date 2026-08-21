@@ -1,0 +1,99 @@
+{
+  "schema_version": "0.2.0",
+  "rule": "list_transactions settlement requires settled_at > 0 or state == settled; preimage alone is not final proof",
+  "statuses": ["settled", "expired", "failed", "pending"],
+  "cases": [
+    {
+      "name": "settled by state",
+      "transaction": {
+        "state": "settled",
+        "payment_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "settled": true,
+        "status": "settled"
+      }
+    },
+    {
+      "name": "settled by settled_at",
+      "transaction": {
+        "state": "pending",
+        "settled_at": 1781740990,
+        "payment_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "expected": {
+        "settled": true,
+        "status": "settled"
+      }
+    },
+    {
+      "name": "settled_at zero is not a finality signal",
+      "note": "Zero must read as unset, not as a settlement timestamp.",
+      "transaction": {
+        "state": "pending",
+        "settled_at": 0,
+        "payment_hash": "1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "expected": {
+        "settled": false,
+        "status": "pending"
+      }
+    },
+    {
+      "name": "preimage alone is not settled",
+      "transaction": {
+        "state": "pending",
+        "preimage": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "payment_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      },
+      "expected": {
+        "settled": false,
+        "status": "pending"
+      }
+    },
+    {
+      "name": "expired is not settled",
+      "transaction": {
+        "state": "expired",
+        "payment_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "expected": {
+        "settled": false,
+        "status": "expired"
+      }
+    },
+    {
+      "name": "failed is not settled",
+      "transaction": {
+        "state": "failed",
+        "payment_hash": "2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "expected": {
+        "settled": false,
+        "status": "failed"
+      }
+    },
+    {
+      "name": "a settled transaction_state settles like state",
+      "note": "Wallets differ on which key carries the state; both engines read both.",
+      "transaction": {
+        "transaction_state": "settled",
+        "payment_hash": "3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      "expected": {
+        "settled": true,
+        "status": "settled"
+      }
+    },
+    {
+      "name": "no state at all is pending",
+      "transaction": {
+        "payment_hash": "4444444444444444444444444444444444444444444444444444444444444444"
+      },
+      "expected": {
+        "settled": false,
+        "status": "pending"
+      }
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "schema_version": 2,
+  "name": "unknown route",
+  "request": { "method": "GET", "path": "/openreceive/unknown" },
+  "expected": {
+    "status": 404,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-request-id": "<request_id>"
+    },
+    "body": {
+      "code": "NOT_FOUND",
+      "message": "No OpenReceive route matched this method and path.",
+      "request_id": "<request_id>"
+    }
+  }
+}

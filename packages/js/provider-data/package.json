@@ -1,0 +1,62 @@
+{
+  "name": "@openreceive/provider-data",
+  "version": "0.1.1",
+  "description": "Curated, validated, zero-dependency registry of Lightning payment providers and pay-the-invoice route guidance.",
+  "license": "MIT",
+  "author": "OpenReceive <info@openreceive.org>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openreceive/openreceive.git",
+    "directory": "packages/js/provider-data"
+  },
+  "bugs": {
+    "url": "https://github.com/openreceive/openreceive/issues"
+  },
+  "keywords": [
+    "lightning",
+    "bitcoin",
+    "bolt11",
+    "payments",
+    "providers",
+    "openreceive"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./provider-icons": {
+      "types": "./dist/provider-icons.d.ts",
+      "import": "./dist/provider-icons.js"
+    },
+    "./pay-tutorials": {
+      "types": "./dist/pay-tutorials.d.ts",
+      "import": "./dist/pay-tutorials.js"
+    },
+    "./registry.json": "./dist/openreceive-providers.v4.json",
+    "./assets/provider-icons/*": "./dist/assets/provider-icons/*",
+    "./assets/pay_tutorials/*": "./dist/assets/pay_tutorials/*"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts src/provider-icons.ts src/pay-tutorials.ts --format esm --dts --clean --target es2022 --out-dir dist && node ../../../tools/package/copy-static.mjs src dist data/openreceive-providers.v4.json:openreceive-providers.v4.json assets",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run build"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {},
+  "homepage": "https://openreceive.org",
+  "publishConfig": {
+    "access": "public"
+  }
+}

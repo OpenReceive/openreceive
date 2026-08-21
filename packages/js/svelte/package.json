@@ -1,0 +1,68 @@
+{
+  "name": "@openreceive/svelte",
+  "version": "0.1.1",
+  "description": "Svelte wrapper for the OpenReceive checkout custom element.",
+  "keywords": [
+    "bitcoin",
+    "lightning",
+    "payments",
+    "nwc",
+    "bolt11",
+    "openreceive",
+    "svelte",
+    "checkout"
+  ],
+  "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "svelte": "./dist/index.js",
+  "dependencies": {
+    "@openreceive/browser": "0.1.1",
+    "@openreceive/elements": "0.1.1"
+  },
+  "peerDependencies": {
+    "svelte": ">=4.0.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "svelte": "./dist/index.js",
+      "import": "./dist/index.js"
+    },
+    "./checkout.svelte": {
+      "types": "./dist/Checkout.svelte.d.ts",
+      "svelte": "./dist/Checkout.svelte",
+      "default": "./dist/Checkout.svelte"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean --target es2022 --out-dir dist && node ../../../tools/package/copy-static.mjs src dist styles.css Checkout.svelte Checkout.svelte.d.ts",
+    "prepack": "npm run build"
+  },
+  "license": "MIT",
+  "author": "OpenReceive <info@openreceive.org>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openreceive/openreceive.git",
+    "directory": "packages/js/svelte"
+  },
+  "bugs": {
+    "url": "https://github.com/openreceive/openreceive/issues"
+  },
+  "homepage": "https://openreceive.org",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

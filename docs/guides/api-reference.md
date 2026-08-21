@@ -1,0 +1,1053 @@
+# API reference
+
+Per-function reference for the Node service, the host integration, the
+framework adapters, persistence, the CLI, and the Rails engine. `amount` is
+exactly `{ sats }` or `{ currency, value }`; public results use `amount_msats`
+and exact integer/decimal math — never binary floats. The mounted HTTP routes
+are defined normatively in
+[`spec/openapi/openreceive-http.v1.yaml`](../../spec/openapi/openreceive-http.v1.yaml).
+
+Node and TypeScript APIs return **camelCase** fields (`orderId`, `paymentHash`,
+`amountMsats`). Mounted HTTP JSON uses the same values in **snake_case**
+(`order_id`, `payment_hash`, `amount_msats`). Timestamps are integer Unix
+seconds. Money fields are integers or decimal strings — never binary floats.
+
+## Node service
+
+### createOpenReceive
+
+```ts
+const service = await createOpenReceive(options?: CreateOpenReceiveOptions): Promise<OpenReceive>
+```
+
+| Parameter | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `nwc` | `string` | no | Explicit receive-only NWC URI; normal applications read `NWC_URI` instead. |
+| `env` | `Record<string, string \| undefined>` | no | Environment source for `NWC_URI`, `LSC_URI_PRIMARY`, `LSC_URI_BACKUP`. Default `process.env`. |
+| `allowSpendCapableWallet` | `boolean` | no | Explicit override to boot on a wallet advertising spend methods. Default `false`; also settable via `OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC=true`. |
+| `priceFetch` | `SimplePriceFetch` | no | Fiat price fetch override for `{ currency, value }` amounts. Defaults to global `fetch` against the live feeds; when no sufficiently recent rate is available, fiat-priced creation refuses with a retryable 503 (no mock fallback). |
+| `clock` | `() => number` | no | Unix-seconds clock override (tests). |
+| `client`, `priceProviders`, `priceCurrencies`, `swap`, `logging`, `logger`, `onEvent` | — | no | Advanced overrides; see the type. |
+
+Returns the `OpenReceive` service. Wallet preflight runs before the promise
+resolves and **fails closed**: a missing/invalid NWC URI, a wallet without
+`make_invoice` + `list_transactions`, unsupported encryption, or an advertised
+spend method (without the override) throws `OpenReceiveConfigError`
+(`MISSING_NWC`, `INVALID_NWC`, `WALLET_PREFLIGHT_FAILED`). The connection
+string never appears in logs or errors.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `priceCurrencies` | `string[]` | Fiat currencies this service will quote. Default `["USD"]`. |
+| `prepareCheckout` | `function` | Resolve `{ amount }` to millisatoshis without minting an invoice. |
+| `createCheckout` | `function` | Mint a Lightning invoice for a host-owned order. |
+| `checkPayment` | `function` | Look up one known invoice in the wallet history. |
+| `reconcilePayments` | `function` | Batch-check many pending invoices in one wallet scan. |
+| `subscribeWalletNotifications` | `function?` | Opt-in NWC-02 `payment_received` subscription. Absent when the client cannot notify. |
+| `listSwapOptions` | `function` | List configured swap pay-in methods for an invoice amount. See [Automated swaps](automated-swaps.md). |
+| `createSwap` / `getSwap` / `refundSwap` | `function` | Create, refresh, or refund a swap attempt. See [Automated swaps](automated-swaps.md). |
+| `listRates` / `quoteRates` | `function` | Read BTC/fiat rates or quote one fiat amount. See [Price feeds](price-feeds.md). |
+| `close` | `function` | Close the wallet client. |
+
+### service.prepareCheckout
+
+```ts
+service.prepareCheckout(input: { amount: CreateCheckoutAmount }): Promise<PrepareCheckoutResult>
+```
+
+| Parameter | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `amount` | `{ sats } \| { currency, value }` | yes | Host-owned price. Never payer input. |
+
+Resolves the charged Lightning amount without minting an invoice or committing
+an attempt. Used by the HTTP prepare route so the UI can show the sats total
+and swap options before create.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `amountMsats` | `number` | Integer millisatoshis that will be charged (`sats × 1000`, or the fiat quote rounded up to a whole sat then × 1000). Minimum `1000` (1 sat). |
+| `fiatQuote` | `OpenReceiveRateQuote \| null` | The locked BTC/fiat quote when `amount` was `{ currency, value }`. `null` when `amount` was already `{ sats }` or Bitcoin-denominated. See [fiatQuote](#fiatquote). |
+
+### service.createCheckout
+
+```ts
+service.createCheckout(input: CreateCheckoutRequest): Promise<Checkout>
+```
+
+| Parameter | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `orderId` | `string` | yes | Host-owned order id. |
+| `amount` | `{ sats } \| { currency, value }` | yes | Host-owned price. Never payer input. |
+| `memo` | `string` | no | Invoice description (exclusive with `descriptionHash`). |
+| `descriptionHash` | `string` | no | 64-hex description hash. |
+| `metadata` | `Record<string, unknown>` | no | NIP-47 metadata, ≤ 3900 serialized bytes. |
+| `expirySeconds` | `number` | no | Requested invoice expiry. Default 600. |
+
+Returns a `CheckoutInvoice` — the payer-safe minted-invoice value (the browser's polled `CheckoutSnapshot` is a different, snake_case type). The wallet must honor
+the requested expiry: when the minted invoice's real payable window deviates
+from `expirySeconds` by more than 60 seconds, creation fails with a `502`
+service error instead of tracking a row whose reconciliation window is wrong.
+This is a pure wallet call — attempt persistence happens in the host
+integration ([createOpenReceiveHost](#createopenreceivehost)).
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `orderId` | `string` | The host-owned order this invoice was minted for. OpenReceive does not own the order. |
+| `paymentHash` | `string` | 64-character lowercase hex payment hash. Globally unique per attempt; the selector for later check, swap, and refund calls. |
+| `bolt11` | `string` | The Lightning invoice string the payer scans or pastes into a wallet. |
+| `amountMsats` | `number` | Integer millisatoshis encoded on the invoice. Same value the wallet must receive to settle. |
+| `createdAt` | `number` | Integer Unix seconds when the wallet minted the invoice (`make_invoice`'s `created_at`, else the service clock). Pass this exact value back to `checkPayment`. |
+| `expiresAt` | `number` | Integer Unix seconds after which the invoice is no longer payable. Taken from the wallet; must match the requested expiry within 60 seconds. |
+| `fiatQuote` | `OpenReceiveRateQuote \| null` | The BTC/fiat quote locked at mint time when the host priced in fiat. `null` for `{ sats }` amounts. See [fiatQuote](#fiatquote). |
+
+### fiatQuote
+
+Present on `prepareCheckout` and `createCheckout` when the host amount was
+`{ currency, value }` in a quoted fiat currency. `null` for `{ sats }` and for
+Bitcoin-denominated `{ currency: "BTC" \| "SAT" \| "SATS", value }`. The quote
+is locked onto the invoice; later price-feed moves do not change
+`amountMsats`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `fiat` | `{ currency, value }` | The fiat amount that was quoted. |
+| `fiat.currency` | `string` | Uppercase currency code from the host amount, e.g. `"USD"`. Must be in `priceCurrencies`. |
+| `fiat.value` | `string` | Decimal string of that fiat amount, e.g. `"12.50"`. Never a binary float. |
+| `btc_fiat_price` | `string` | Decimal string: units of fiat per 1 BTC at quote time, e.g. `"65000.12"`. |
+| `amount_sats` | `number` | Integer satoshis after rounding the fiat amount up to a whole sat. Minimum `1`. |
+| `amount_msats` | `number` | Integer millisatoshis (`amount_sats × 1000`). Same value as `Checkout.amountMsats`. |
+| `source` | `"static_mock" \| "primary" \| "fallback"` | Which price feed produced the rate. `static_mock` appears only with an explicit `priceProviders: [new StaticPriceProvider()]` opt-in (tests/offline dev). |
+| `as_of` | `number` | Integer Unix seconds when the rate was observed. |
+| `expires_at` | `number` | Integer Unix seconds when this quote is no longer considered fresh (quote TTL, default 600). |
+
+### service.checkPayment
+
+```ts
+service.checkPayment(input: CheckPaymentRequest): Promise<PaymentCheck>
+```
+
+| Parameter | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `paymentHash` | `string` | yes | 64-hex payment hash. |
+| `createdAt` | `number` | yes | Exact NIP-47 invoice creation time from `make_invoice`. |
+| `until` | `number` | no | Scan upper bound. Default now. |
+| `overlapSeconds` | `number` | no | Scan-window overlap. Default 60. |
+
+Returns a `PaymentCheck` — one wallet-history result for the requested hash.
+A pure batched wallet read — no persistence. `settled` requires `settled_at`
+or a wallet transaction state of `settled`; a preimage alone is never
+finality.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `paymentHash` | `string` | 64-character lowercase hex hash that was checked. |
+| `status` | `"pending" \| "settled" \| "expired" \| "failed" \| "not_found"` | Wallet outcome for this invoice. See [PaymentCheck status](#paymentcheck-status). |
+| `paidAt` | `number?` | Integer Unix seconds of settlement. Present only when `status` is `settled`. Taken from the wallet's `settled_at`, or the observation time if the wallet omitted it. |
+| `details` | `PaymentDetails?` | Corroborating wallet row from the scan. See [PaymentDetails](#paymentdetails). |
+
+#### PaymentCheck status
+
+| Value | Meaning |
+| --- | --- |
+| `pending` | The wallet still lists the invoice as unpaid and not terminal. |
+| `settled` | The wallet reports finality (`settled_at` or `transaction_state`/`state` of `"settled"`). This is the only status that fulfills an order. |
+| `expired` | The wallet reports the invoice expired without settlement. |
+| `failed` | The wallet reports the invoice failed without settlement. |
+| `not_found` | No matching incoming transaction in the scanned window. Not the same as expired — reconciliation keeps the row pending until a later scan at or after expiry plus grace. |
+
+#### PaymentDetails
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `transaction` | `NwcTransaction` | Clone of the wallet's `list_transactions` row. Contains no connection strings or provider secrets. |
+| `observed_at` | `number` | Integer Unix seconds when this scan observed the row. |
+| `paid_at_source` | `"settled_at" \| "observed_at"` | Present only when settled. `"settled_at"` means `paidAt` came from the wallet; `"observed_at"` means the wallet omitted `settled_at` and the service clock was used. |
+
+`transaction` fields that matter for settlement (all optional on the wire):
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `type` | `"incoming" \| "outgoing"?` | Direction. OpenReceive only settles `incoming`. |
+| `invoice` | `string?` | The bolt11 the wallet recorded. |
+| `payment_hash` | `string?` | Hash of this wallet row. |
+| `amount_msats` | `bigint?` | Amount the wallet recorded, in millisatoshis. |
+| `transaction_state` / `state` | `string?` | Wallet transaction state. `"settled"` is a finality signal. |
+| `created_at` | `number?` | Integer Unix seconds the wallet minted the invoice. |
+| `expires_at` | `number?` | Integer Unix seconds the wallet considers the invoice expired. |
+| `settled_at` | `number?` | Integer Unix seconds of wallet settlement. A positive value is a finality signal. |
+| `preimage` | `string?` | Payment preimage. Corroborating evidence only — never enough to settle. |
+| `fees_paid_msats` | `bigint?` | Routing fees the wallet reported, in millisatoshis. |
+| `description` | `string?` | Invoice memo the wallet stored. |
+| `description_hash` | `string?` | 64-hex description hash, when the invoice used one. |
+
+### service.reconcilePayments
+
+```ts
+service.reconcilePayments(input: ReconcilePaymentsRequest): Promise<readonly PaymentCheck[]>
+```
+
+| Parameter | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `attempts` | `{ paymentHash, createdAt }[]` | yes | Every pending attempt to check. |
+| `until` | `number` | no | Scan upper bound. Default now. |
+| `overlapSeconds` | `number` | no | Scan-window overlap. Default 60. |
+
+Returns `PaymentCheck[]` — one [PaymentCheck](#servicecheckpayment) per
+attempt, in the same order as `attempts` after hash normalization, using at
+most two paged `list_transactions` walks for the whole batch — never a
+per-invoice lookup. Pure wallet read; persistence and settlement delivery
+belong to [reconcileOpenReceivePayments](#reconcileopenreceivepayments).
+
+### service.subscribeWalletNotifications
+
+```ts
+service.subscribeWalletNotifications?(handler): Promise<() => Promise<void> | void>
+```
+
+| Parameter | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `handler` | `(notification) => void` | yes | Called for each `payment_received` notification. |
+
+The `notification` argument:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `type` | `string` | Notification type. The bundled subscription only delivers `payment_received`. |
+| `payment_hash` | `string?` | 64-hex hash when the payload includes one. Unknown or missing hashes only wake a scan. |
+| `transaction` | `NwcTransaction?` | Payload normalized like a `list_transactions` row. A row that satisfies the settlement rule may settle its matching pending attempt directly. |
+
+Returns `() => Promise<void> | void` — call it to unsubscribe. The promise
+rejects with `OpenReceiveError` code `UNSUPPORTED_METHOD` when the wallet
+client cannot notify. Notifications are authenticated wallet data; only the
+type and payment hash are ever logged. Direct-settlement semantics live in
+[startOpenReceiveNotificationListener](#startopenreceivenotificationlistener).
+
+### service.listSwapOptions
+
+```ts
+service.listSwapOptions(input: { amountMsats: number }): Promise<ListSwapOptionsResult>
+```
+
+| Parameter | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `amountMsats` | `number` | yes | Host-owned invoice amount in millisatoshis. |
+
+Returns whether swaps are configured and the pay-in methods for that amount.
+Behavior is in [Automated swaps](automated-swaps.md).
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `enabled` | `boolean` | `true` when at least one LSC provider is configured. |
+| `options` | `SwapPaymentMethod[]` | One entry per supported pay-in asset. Empty when swaps are off. |
+
+Each `options[]` entry:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `payInAsset` | `string` | Pay-in asset id, e.g. `"USDT_TRON"`. |
+| `label` | `string` | Asset ticker shown to the payer, e.g. `"USDT"`. |
+| `networkLabel` | `string` | Network name shown to the payer, e.g. `"Tron"`. |
+| `provider` | `string` | Provider that would quote this pair. |
+| `available` | `boolean` | `true` when this amount is inside the provider's limits right now. |
+| `unavailableReason` | `string?` | Machine reason when `available` is `false`, e.g. `"amount_too_small"`. |
+| `unavailableMessage` | `string?` | Payer-facing explanation when unavailable. |
+| `payAmount` | `string?` | Decimal string of crypto the payer would send, when a quote is available. |
+| `minimumPayAmount` | `string?` | Decimal string minimum deposit the provider accepts. |
+| `maximumPayAmount` | `string?` | Decimal string maximum deposit the provider accepts. |
+| `minimumInvoiceAmountMsats` | `number?` | Smallest Lightning invoice this pair will quote, in millisatoshis. |
+| `maximumInvoiceAmountMsats` | `number?` | Largest Lightning invoice this pair will quote, in millisatoshis. |
+
+### service.createSwap
+
+```ts
+service.createSwap(input: CreateSwapRequest): Promise<SwapCheckout>
+```
+
+Same parameters as [createCheckout](#servicecreatecheckout), plus `payInAsset`
+(`string`, required) — the pay-in asset id. Returns a `SwapCheckout`:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| *(PublicSwap fields)* | — | Deposit instructions and provider snapshot. See [PublicSwap](#publicswap). |
+| `checkout` | `Checkout` | The shadow Lightning invoice this swap pays. Same shape as [createCheckout](#servicecreatecheckout). |
+| `swapData` | `SwapData` | Server-only provider recovery state. Persist it on the attempt row; **never** serialize it into a browser response or log. |
+
+`swapData` is `{ version: 1, providerOrder: SwapOrder }`. `version` is the
+integer schema version (`1`). `providerOrder` holds provider credentials and
+must stay server-only.
+
+### service.getSwap / service.refundSwap
+
+```ts
+service.getSwap(input: { orderId, paymentHash, swapData }): Promise<PublicSwap>
+service.refundSwap(input: { orderId, paymentHash, swapData, refundAddress }): Promise<PublicSwap>
+```
+
+Both refresh provider state using the host-loaded `swapData`. `refundSwap`
+also requires `refundAddress` (`string`) — the on-chain address to return
+funds to — and refuses any provider state other than `refund_required`.
+
+#### PublicSwap
+
+Payer-safe swap snapshot. No provider tokens or credentials.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `paymentHash` | `string` | 64-character lowercase hex hash of the shadow Lightning invoice. |
+| `orderId` | `string` | Host-owned order this swap attempt belongs to. |
+| `provider` | `string` | Provider that issued the deposit address. |
+| `payInAsset` | `string` | Pay-in asset id, e.g. `"USDC_SOL"`. |
+| `depositAddress` | `string` | On-chain address the payer sends to. |
+| `depositMemo` | `string?` | Destination tag / memo the payer must include, when the network requires one. |
+| `depositAmount` | `string` | Decimal string of crypto the payer must send. Never a binary float. |
+| `providerState` | `string` | Provider lifecycle: `creating_provider_order`, `awaiting_deposit`, `confirming`, `exchanging`, `paying_invoice`, `completed`, `expired`, `refund_required`, `refund_pending`, `refunded`, `attention`, or `failed`. Provider `completed` is not wallet settlement. |
+| `providerExpiresAt` | `number` | Integer Unix seconds when the provider order expires. |
+| `depositTxId` | `string?` | Provider-reported deposit transaction id, when known. |
+| `payoutTxId` | `string?` | Provider-reported payout (Lightning pay) transaction id, when known. |
+| `refundTxId` | `string?` | Provider-reported refund transaction id, when a refund was sent. |
+| `refundReason` | `string?` | Why a refund is needed: `"underpaid"`, `"late_deposit"`, or `"underpaid_and_late"`. |
+| `refundAmount` | `string?` | Decimal string the provider will return, excluding its network fee. |
+| `attention` | `boolean?` | `true` when this attempt needs operator review. |
+
+### service.listRates
+
+```ts
+service.listRates(input?: { currencies?: string[] }): Promise<{ bitcoin: Record<string, string> }>
+```
+
+| Parameter | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `currencies` | `string[]` | no | Fiat codes to fetch. Default `priceCurrencies`. |
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `bitcoin` | `Record<string, string>` | Map of uppercase currency code → decimal string price of 1 BTC in that currency, e.g. `{ USD: "65000.12" }`. |
+
+### service.quoteRates
+
+```ts
+service.quoteRates(input: { fiat: { currency: string, value: string } }): Promise<OpenReceiveRateQuote>
+```
+
+Returns an [OpenReceiveRateQuote](#fiatquote) for that fiat amount — the same
+object `prepareCheckout` / `createCheckout` attach as `fiatQuote`.
+
+### service.close
+
+```ts
+service.close(): Promise<void>
+```
+
+Returns `Promise<void>`. Closes the underlying wallet client, releasing its
+relay connection. Stop the notifications worker first (if you run one).
+
+The wallet client is created lazily on the first wallet call, so `close()` is a
+no-op for a service that never minted or scanned.
+
+Call it in **scripts, one-shot jobs, and tests**: an open relay connection keeps
+the Node event loop alive, so a process that skips `close()` finishes its work
+and then hangs instead of exiting.
+
+A long-running server does not need it. No payment state lives in memory —
+settlement truth is the wallet plus the payments table, and there is no queue to
+drain — so a process being terminated loses nothing by skipping it. The Express
+middleware and the Next handler still expose `close()` if you want deterministic
+teardown on `SIGTERM`; the Fastify plugin registers an `onClose` hook and closes
+with the app.
+
+## Host integration (@openreceive/http)
+
+### createOpenReceiveHost
+
+```ts
+const host = createOpenReceiveHost(options: CreateOpenReceiveHostOptions<Order>): OpenReceiveHost
+```
+
+Default (`db`) mode — OpenReceive owns the `openreceive_payments` rows inside
+the host application's existing database:
+
+| Parameter | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `db` | `OpenReceiveSqlDatabase` | yes | pg Pool/Client, `node:sqlite` DatabaseSync, better-sqlite3, or a custom [OpenReceiveSqlAdapter](#openreceivesqladapter). |
+| `loadOrder` | `(orderId, context) => Order \| null` | yes | Load the host order; `null` → 404. |
+| `amountForOrder` | `(order, context) => amount` | yes | The trusted price from host data. |
+| `onPaid` | `OpenReceiveOrderSettlementHook` | yes | Fulfillment; see below. |
+| `tableName` | `string` | no | Default `openreceive_payments`. |
+| `clock` | `() => number` | no | Unix-seconds clock override. |
+
+`onPaid` receives an `OpenReceiveOrderSettlement`:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `orderId` | `string` | The host-owned order that just settled. |
+| `paymentHash` | `string` | 64-character lowercase hex hash of the settled attempt. |
+| `paidAt` | `number` | Integer Unix seconds of settlement (`settled_at`, else the observation time). |
+| `details` | `PaymentDetails?` | Wallet row that proved settlement. See [PaymentDetails](#paymentdetails). |
+| `query` | `(sql, params?) => Promise<rows>` | Runs SQL inside the settlement transaction (`?` placeholders). Use it for writes that must commit atomically with settlement (e.g. an outbox row). |
+
+It runs inside the settlement transaction, only for the order's first settled
+attempt (write-once; a duplicate sibling settlement records
+`duplicate_settlement` and never fulfills again). Delivery is at-least-once —
+if `onPaid` throws, the transaction rolls back and the next reconciliation
+pass retries.
+
+Write through the supplied `query`. It is the only handle inside the settlement
+transaction: an ORM call made here uses that ORM's own connection, so it commits
+separately and can survive a rolled-back settlement (or be lost when settlement
+commits and it does not).
+
+```ts
+onPaid: async ({ orderId, query }) => {
+  await query("UPDATE orders SET state = 'paid' WHERE id = ?", [orderId]);
+  // Same transaction: enqueue follow-up work here rather than doing it inline.
+  await query("INSERT INTO outbox (kind, order_id) VALUES (?, ?)", ["order_paid", orderId]);
+},
+```
+
+If your ORM can run statements on a connection you pass it, wrap `query`; a
+recipe per ORM is in [Node ORM recipes](node-orms.md).
+
+Advanced escape hatch — replace `db` with a full repository implementation:
+
+| Parameter | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `payments` | `OpenReceivePaymentRepository` | yes | Host-owned commit locking, settlement write-once, and reconciliation transitions. |
+| `onSettlement` | `NodeSettlementActionHook` | yes | Settlement event `{ paymentHash, paidAt, details? }`, delivered only when `payments.recordSettlement` won the write-once claim — so the library owns replay safety here too. Named differently from db-mode `onPaid` because the contract is different. |
+
+Returns an `OpenReceiveHost` for the framework adapters and reconcile passes. The
+attempt row commits before payer instructions are exposed. A commit the
+repository refuses (an already-paid order, a competing live attempt) returns
+`409`; a commit that fails on infrastructure returns a retryable `503`. Either
+way the invoice is withheld.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `resolveCheckout` | `function` | Looks up the host order and trusted price (and any live attempt) for create/check/swap routes. |
+| `onCheckoutCreated` | `function` | Commits the `openreceive_payments` row before the invoice or swap instructions are returned. Receives [CheckoutCreatedInput](#checkoutcreatedinput). |
+| `onPaid` | `function` | Settlement delivery. In `db` mode this is the write-once wrapper around your `onPaid` hook. |
+| `payments` | `OpenReceivePaymentRepository` | The attempt ledger: list, commit, settle, and record reconciliation transitions. |
+
+#### CheckoutCreatedInput
+
+Passed to `onCheckoutCreated` after the wallet mints and before the HTTP
+response is written. A refusal (throwing a `409`-shaped host error) becomes
+`409`; any other throw becomes a retryable `503`. Payer instructions are
+withheld in both cases.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `orderId` | `string` | Host-owned order this attempt belongs to. |
+| `paymentHash` | `string` | 64-character lowercase hex hash of the new attempt. |
+| `checkout` | `Checkout` | Payer-safe invoice snapshot to persist and later reuse. Same shape as [createCheckout](#servicecreatecheckout). |
+| `swapData` | `SwapData?` | Server-only provider recovery state. Persist it on the row; never send it to a browser. |
+| `clientIp` | `string?` | Client IP the adapter attributed to this request, when one was available. Backs opt-in per-IP rate limiting. |
+
+### The authorize context
+
+Every order-scoped route calls `authorize(context)` before any wallet or
+database work; returning `false` produces `403 UNAUTHORIZED`. The same shape is
+used by the optional `rateLimit` hook (`false` → `429`).
+
+Two deliberate exceptions: `GET …/rates` has no order to authorize and is never
+authorized, and the durably-gated opportunistic reconcile pass runs before
+authorization — it reads only OpenReceive's own attempt rows and the wallet, and
+the gate is what bounds it.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `action` | `OpenReceiveAuthorizeAction` | One of `checkout.prepare`, `checkout.create`, `payment.check`, `swap.quote`, `swap.create`, `swap.read`, `swap.refund`. |
+| `request` | `Request` | The Web-standard request (headers, URL). |
+| `resource` | `{ order_id?, payment_hash? }` | **Untrusted payer-supplied selectors.** Use them only to look up host-owned data; the library separately verifies a requested `payment_hash` belongs to the order. |
+| `native` | `unknown?` | The untouched framework request (Express `req`, Fastify request, `NextRequest`) for middleware-attached state. |
+
+Express session example:
+
+```ts
+authorize: ({ resource, native }) => {
+  const userId = (native as { session?: { userId?: string } }).session?.userId;
+  return userId !== undefined && orders.belongsTo(resource.order_id, userId);
+},
+```
+
+### startOpenReceiveReconciler
+
+```ts
+const reconciler = await startOpenReceiveReconciler(input): Promise<OpenReceiveReconciler>
+```
+
+A polling primitive: used internally by
+[startOpenReceiveNotificationWorker](#startopenreceivenotificationworker) and
+available directly, but not started by any adapter or stack. Most hosts rely on
+the default request-path opportunistic reconcile
+([maybeReconcileOpenReceivePayments](#maybereconcileopenreceivepayments)) and
+never call this.
+
+| Parameter | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `service` | `OpenReceive` | yes | The wallet service. |
+| `host` | `OpenReceiveHost` | yes | From [createOpenReceiveHost](#createopenreceivehost). |
+| `pollIntervalMs` | `number` | no | Default 5000; `RangeError` below 250. |
+| `overlapSeconds` | `number` | no | Scan overlap. Default 60. |
+| `signal` | `AbortSignal` | no | External stop signal. |
+| `clock` | `() => number` | no | Unix-seconds clock override. |
+| `onError` | `(error) => void` | no | Observes per-pass failures. Default: deduplicated `console.warn`. |
+
+Returns an `OpenReceiveReconciler`. Runs
+[reconcileOpenReceivePayments](#reconcileopenreceivepayments) forever; a
+failed pass is swallowed and retried from the ledger, so delivery is
+at-least-once. Only `pending` attempts are scanned — settled and closed rows
+leave the scan set, keeping the window bounded with no durable cursor.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `stop` | `() => void` | Stops scheduling further passes. In-flight work is not cancelled. |
+| `done` | `Promise<void>` | Resolves after `stop()` once the current pass (if any) finishes. |
+
+### reconcileOpenReceivePayments
+
+```ts
+await reconcileOpenReceivePayments(input: { service, host, overlapSeconds?, maxPages?, clock? }): Promise<readonly PaymentCheck[]>
+```
+
+One bounded pass: list the pending attempts, scan the wallet once for the
+batch (`maxPages` caps the paged walks), deliver settlements through
+`host.onPaid` (at least once; write-once in the repository), persist terminal
+transitions, and return the per-hash [PaymentCheck](#servicecheckpayment)
+results of the pass. Closing an unpaid attempt
+requires a successful wallet scan at or after expiry plus the 900-second grace
+(`OPENRECEIVE_ATTEMPT_EXPIRY_GRACE_SECONDS`) — a local clock alone never
+closes a row. A settled result without `paidAt` is retried next pass. Throws
+on wallet/repository failure, leaving every row pending for the next pass.
+
+### maybeReconcileOpenReceivePayments
+
+```ts
+const result = await maybeReconcileOpenReceivePayments(input): Promise<OpenReceiveOpportunisticReconcileResult>
+```
+
+| Parameter | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `service` | `OpenReceive` | yes | The wallet service. |
+| `host` | `OpenReceiveHost` | yes | From [createOpenReceiveHost](#createopenreceivehost). |
+| `minIntervalSeconds` | `number` | no | Gate interval floor. Default (and minimum) `OPENRECEIVE_MIN_RECONCILE_INTERVAL_SECONDS` (2); stretched by pending-invoice age — 2 s while any pending invoice is under 2 minutes old, 6 s under 5 minutes, else 12 s. |
+| `scanTimeoutMs` | `number` | no | Bound on the awaited pass. Default `OPENRECEIVE_RECONCILE_SCAN_TIMEOUT_MS` (9000). |
+| `maxPages` | `number` | no | Page cap per wallet walk. Default `OPENRECEIVE_RECONCILE_SCAN_MAX_PAGES` (50). |
+| `overlapSeconds` | `number` | no | Scan overlap. Default 60. |
+| `clock` | `() => number` | no | Unix-seconds clock override. |
+| `onError` | `(error) => void` | no | Observes failed scans. Default: `console.warn`. |
+
+The gated pass behind the handler's default request-path opportunistic
+reconcile, exported so hosts can drive settlement from their own routes or
+middleware (host-only routes never auto-run it). Skips with no wallet call when
+nothing is pending; claims the durable `openreceive_meta` gate (optimistic CAS,
+shared by every instance on the host database — `gate_busy` means another
+worker just scanned); otherwise awaits one bounded
+[reconcileOpenReceivePayments](#reconcileopenreceivepayments) pass. Never
+throws: a failed or timed-out scan reports to `onError` and returns
+`scan_failed`, and the gate's claim stays in place so a broken wallet cannot
+stampede. Returns `{ reason: "ran", checks }` (the per-hash
+[PaymentCheck](#servicecheckpayment) results) or
+`{ reason: "no_pending" | "gate_busy" | "scan_failed" }`.
+
+### startOpenReceiveNotificationListener
+
+```ts
+const listener = await startOpenReceiveNotificationListener(input): Promise<OpenReceiveNotificationListener>
+```
+
+| Parameter | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `service` | `OpenReceive` | yes | Must implement `subscribeWalletNotifications`, else rejects `UNSUPPORTED_METHOD`. |
+| `host` | `OpenReceiveHost` | yes | Settlement and pending-attempt source. |
+| `overlapSeconds` | `number` | no | Overlap for fallback scans. |
+| `onError` | `(error) => void` | no | Failure sink. Default: swallowed. |
+
+Returns an `OpenReceiveNotificationListener`:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `stop` | `() => Promise<void> \| void` | Unsubscribes from wallet notifications and waits for any in-flight reconcile pass. |
+
+Most hosts use
+[startOpenReceiveNotificationWorker](#startopenreceivenotificationworker)
+instead, which wraps this listener plus the periodic pass.
+
+Opt-in NWC-02 listener with direct settlement:
+notifications are authenticated wallet data, so a `payment_received` payload
+that satisfies the settlement rule (`settled_at` or a settled transaction
+state — never a preimage alone) and matches a pending attempt settles that
+attempt directly through `host.onPaid`, with no wallet scan for that invoice;
+settling removes it from the pending set, so no later pass scans it
+again. Anything less — no payload, no finality signal, an unknown or
+not-pending hash — wakes one `reconcileOpenReceivePayments` pass (bursts
+coalesce to at most one queued follow-up). A direct-settlement failure reports
+to `onError` **and** falls back to a scan. A periodic pass — the worker's, or
+the request-path opportunistic reconcile — remains the safety net for
+notifications missed while offline. Direct settlement assumes
+the NWC client binds notification decryption to the connection's wallet
+pubkey (the bundled SDK does); a custom client that skips author verification
+must not be granted it.
+
+### startOpenReceiveNotificationWorker
+
+```ts
+const worker = await startOpenReceiveNotificationWorker(input): Promise<OpenReceiveNotificationWorker>
+```
+
+| Parameter | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `service` | `OpenReceive` | yes | The wallet service. |
+| `host` | `OpenReceiveHost` | yes | From [createOpenReceiveHost](#createopenreceivehost). |
+| `pollIntervalMs` | `number` | no | Periodic safety-net pass interval. Default 15000. |
+| `overlapSeconds` | `number` | no | Scan overlap. Default 60. |
+| `onError` | `(error) => void` | no | Failure sink. Default: swallowed. |
+
+The optional worker: one separate long-lived process that both runs the
+[notification listener](#startopenreceivenotificationlistener) (direct
+settlement on finality, else one pass) and the periodic reconcile pass — the
+safety net for notifications missed while the worker was down. A wallet
+without notification support degrades to the periodic pass alone (reported via
+`onError`). There is deliberately no `npx openreceive notifications` CLI (the
+CLI cannot see the host's `onPaid`/db); wire it from a small host script.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `stop` | `() => Promise<void>` | Unsubscribes, stops the periodic pass, and waits for in-flight work. Call it before `service.close()`. |
+| `done` | `Promise<void>` | Resolves after `stop()` once the periodic loop has drained. |
+
+### Settlement entry points
+
+Settlement is delivered through the request-path opportunistic reconcile pass (the default —
+any mounted route runs it, gated by the durable `openreceive_meta` row) and the optional
+[notifications worker](#startopenreceivenotificationworker). `POST /payments/check` never
+runs its own per-invoice wallet walk: it consumes the request's pass result. The pass winner
+serves `status`/`paid_at`/`details` straight from the pass (settlement was already delivered
+inside it); on `gate_busy`, or with opportunistic reconcile disabled, it serves the host row
+with `details` omitted (row `attention` maps to wire `pending`). Both entry points are
+replay-safe through the same write-once path. `onPaid` still runs in request context for a
+winning pass, so fulfillment work must be safe to run inside a web request (keep it
+transactional or enqueue an outbox job).
+
+## Framework adapters
+
+All three adapters ship the route set in the OpenAPI spec and accept two
+option forms.
+
+**All-in-one form** (the happy path): order hooks plus a db handle. The
+adapter builds the service and host itself; boot is lazy (the first request
+awaits wallet preflight). The Express middleware and the Next handler expose
+`ready` (a promise) and `close()` (closes the owned service); the Fastify plugin
+exposes neither, because it registers an `onClose` hook that shuts the stack
+down with the app:
+
+| Parameter | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `nwc` | `string` | one of `nwc`/`service` | Receive-only NWC connection string; the adapter builds and owns the service. |
+| `service` | `OpenReceive \| Promise<OpenReceive>` | one of `nwc`/`service` | Prebuilt service for custom options; you own its lifecycle. |
+| `db` | `OpenReceiveSqlDatabase` | yes | Same handle [createOpenReceiveHost](#createopenreceivehost) takes. |
+| `loadOrder` / `amountForOrder` / `onPaid` | | yes | Same hooks as [createOpenReceiveHost](#createopenreceivehost). |
+| `authorize` | `OpenReceiveAuthorize` | yes | Host policy; see [the authorize context](#the-authorize-context). |
+| `opportunisticReconcile` | `false \| { minIntervalSeconds }` | no | Request-path settlement pass on every mounted route; on by default through the durable `openreceive_meta` gate. `false` disables; `{ minIntervalSeconds }` tunes. |
+| `clock` | `() => number` | no | Unix-seconds clock override. |
+| `rateLimiting` / `rateLimit` / `prefix` | | no | As below. |
+
+**Composed form** (`CreateOpenReceiveHttpHandlerOptions`) for shared services,
+custom repositories, and tests:
+
+| Parameter | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `service` | `OpenReceive` | yes | From [createOpenReceive](#createopenreceive). |
+| `authorize` | `OpenReceiveAuthorize` | yes | Host policy; see [the authorize context](#the-authorize-context). |
+| `host` | `OpenReceiveHost` | yes | From [createOpenReceiveHost](#createopenreceivehost). |
+| `opportunisticReconcile` | `false \| { minIntervalSeconds }` | no | As above. With a custom repository, on-by-default requires `payments.claimReconcileGate` — construction throws otherwise (same fail-at-construction idiom as `rateLimiting`). |
+| `rateLimit` | `OpenReceiveRateLimit` | no | Same context shape; `false` → `429`. |
+| `rateLimiting` | `boolean \| OpenReceiveIpRateLimitConfig` | no | Opt-in per-IP invoice cap (default off; `true` = 60/hour). Mutually exclusive with `rateLimit`. See [Rate limiting](rate-limiting.md). |
+| `prefix` | `string` | no | Mount prefix. Default `/openreceive`. |
+
+The same all-in-one form is available framework-free as
+`createOpenReceiveStack(options)` in `@openreceive/http`, returning
+`{ handler, ready, close }`.
+
+Create routes reject payer-supplied amounts and price from
+`loadOrder`/`amountForOrder`. Payment and swap reads take `order_id` plus
+`payment_hash`; after host authorization the library verifies that exact
+attempt belongs to the order and supplies server-only `swap_data`.
+
+HTTP JSON is snake_case. The values are the same as the Node objects above.
+The table below is generated from the normative
+[OpenAPI contract](../../spec/openapi/openreceive-http.v1.yaml); `…` is the
+mount prefix (default `/openreceive`).
+
+<!-- generated:routes -->
+<!-- Generated by tools/docs/generate-spec-tables.mjs from spec/. Edit the spec, then rerun the generator; never edit this block by hand. -->
+
+| Route | Status | Response body |
+| --- | --- | --- |
+| `POST …/checkouts/prepare` | 200 | `PrepareCheckoutResponse` `{ order_id, amount_msats, fiat_quote?, payment_methods }` |
+| `POST …/checkouts` | 201 | `CreateCheckoutResponse` `{ checkout: Checkout }` |
+| `POST …/payments/check` | 200 | `PaymentCheck` `{ payment_hash, status: PaymentStatus, paid_at?, details?, payment_methods }` |
+| `POST …/swaps/quote` | 200 | Untyped JSON object — Provider quote. |
+| `POST …/swaps` | 201 | `CreateSwapResponse` `{ swap }` |
+| `POST …/swaps/status` | 200 | Untyped JSON object — Provider-derived swap state. |
+| `POST …/swaps/refunds` | 200 | Untyped JSON object — Provider-derived refund state. |
+| `GET …/rates` | 200 | Untyped JSON object — Current process-cached BTC/fiat rates. |
+<!-- /generated:routes -->
+
+How the bodies map to the Node objects above: `POST …/checkouts` returns
+[CheckoutInvoice](#servicecreatecheckout) in snake_case; `POST …/checkouts/prepare`
+returns the prepare result plus [swap options](#servicelistswapoptions);
+`POST …/payments/check` returns [PaymentCheck](#servicecheckpayment) plus
+`payment_methods` (the same swap-option list; empty when Lightning is the only
+rail); `POST …/swaps/quote` returns the snake_case quote (`provider`,
+`pay_asset`, `available`, `pay_amount?`, limits); `POST …/swaps` returns
+[PublicSwap](#publicswap) plus nested `checkout`, with `swap_data` stripped;
+`…/swaps/status` and `…/swaps/refunds` return the bare snake_case
+[PublicSwap](#publicswap) object — no `{ swap }` wrapper (only `POST …/swaps`
+wraps); `GET …/rates` returns `{ bitcoin: { <currency>: "<price>" } }`.
+
+### Errors
+
+The error body and the per-route error statuses are generated from the spec.
+`429` responses also carry a `Retry-After` header.
+
+<!-- generated:error-codes -->
+<!-- Generated by tools/docs/generate-spec-tables.mjs from spec/. Edit the spec, then rerun the generator; never edit this block by hand. -->
+
+Every error status above returns the OpenReceive error body `{ code, message, retryable?, request_id?, details? }`
+(normative: [`spec/schemas/error.schema.json`](../../spec/schemas/error.schema.json)).
+`code` is one of:
+
+`NOT_IMPLEMENTED`, `RESTRICTED`, `UNAUTHORIZED`, `RATE_LIMITED`, `QUOTA_EXCEEDED`, `INTERNAL`, `UNSUPPORTED_ENCRYPTION`, `INSUFFICIENT_BALANCE`, `PAYMENT_FAILED`, `OTHER`, `NOT_FOUND`, `TIMEOUT`, `INVALID_REQUEST`, `WALLET_UNAVAILABLE`, `INVOICE_EXPIRED`, `UNSUPPORTED_METHOD`, `CONFLICT`
+<!-- /generated:error-codes -->
+
+<!-- generated:route-errors -->
+<!-- Generated by tools/docs/generate-spec-tables.mjs from spec/. Edit the spec, then rerun the generator; never edit this block by hand. -->
+
+| Route | Declared error statuses |
+| --- | --- |
+| `POST …/checkouts/prepare` | `400`, `403`, `404`, `405`, `413`, `429`, `500`, `503` |
+| `POST …/checkouts` | `400`, `403`, `404`, `405`, `409`, `413`, `429`, `500`, `502`, `503` |
+| `POST …/payments/check` | `400`, `403`, `404`, `405`, `409`, `413`, `429`, `500`, `502`, `503` |
+| `POST …/swaps/quote` | `400`, `403`, `404`, `405`, `413`, `429`, `500`, `503` |
+| `POST …/swaps` | `400`, `403`, `404`, `405`, `409`, `413`, `429`, `500`, `502`, `503` |
+| `POST …/swaps/status` | `400`, `403`, `404`, `405`, `413`, `429`, `500`, `502`, `503` |
+| `POST …/swaps/refunds` | `400`, `403`, `404`, `405`, `409`, `413`, `429`, `500`, `502`, `503` |
+| `GET …/rates` | `400`, `405`, `500`, `501`, `503` |
+<!-- /generated:route-errors -->
+
+### openReceiveExpress
+
+```ts
+app.use(openReceiveExpress(options)): OpenReceiveExpressMiddleware
+```
+
+Express middleware; handles requests under its prefix and calls `next()` for
+everything else. The untouched Express `req` is passed as `native`.
+
+### openReceiveFastify
+
+```ts
+await fastify.register(openReceiveFastify, options)
+```
+
+Fastify plugin; registers a catch-all under `prefix`. The untouched Fastify
+request is passed as `native`.
+
+### openReceiveNextHandlers
+
+```ts
+export const { GET, POST } = openReceiveNextHandlers(options)
+```
+
+Next.js App Router handlers; mount as a catch-all route
+(`app/openreceive/[...openreceive]/route.ts`). The incoming `NextRequest` is
+passed as `native`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `GET` | `(request) => Promise<Response>` | App Router GET export. Every shipped route is POST except `GET …/rates`; exporting both lets the catch-all module serve all of them. |
+| `POST` | `(request) => Promise<Response>` | App Router POST export. Dispatches the OpenReceive route set. |
+| `handler` | `(request) => Promise<Response>` | The same dispatcher, for tests or a custom method map. |
+| `ready` | `Promise<void>` | All-in-one form only: resolves when the service is up. |
+| `close` | `() => Promise<void>` | All-in-one form only: closes the owned service. |
+
+## Persistence
+
+### createOpenReceiveSqlPayments
+
+```ts
+const payments = createOpenReceiveSqlPayments(db, options?): OpenReceiveSqlPaymentRepository
+```
+
+| Parameter | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `db` | `OpenReceiveSqlDatabase` | yes | pg Pool/Client, SQLite handle, or an [OpenReceiveSqlAdapter](#openreceivesqladapter). |
+| `tableName` | `string` | no | Default `openreceive_payments`. |
+| `clock` | `() => number` | no | Unix-seconds clock override. |
+
+Returns an `OpenReceiveSqlPaymentRepository` — the library-owned repository
+behind `createOpenReceiveHost({ db })`, exposed for advanced hosts. Owns
+per-order commit locking (SQLite `BEGIN IMMEDIATE`, postgres advisory lock),
+live-attempt supersede/conflict decisions, the
+`pending → settled | expired | failed | attention` state machine, and
+`markPaidOnce` — the replay-safe settlement transaction that fulfills only the
+order's first settled attempt and never overwrites a settled row.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `listForOrder` | `(orderId) => Promise<OpenReceivePaymentRecord[]>` | Every attempt row for that order, newest first. Includes settled and closed history. |
+| `listReconcilableAttempts` | `() => Promise<OpenReceiveReconcilableAttempt[]>` | Every `pending` attempt. Terminal rows are omitted so the scan set stays bounded. |
+| `commitAttempt` | `(input) => void \| Promise<void>` | Serialize-and-insert one new attempt. Throws on a settled order or a reusable live attempt on the same rail. |
+| `recordReconciliation` | `(transition) => void \| Promise<void>` | Apply a terminal non-settled transition only while the row is still `pending`. Never overwrites a settled row. |
+| `recordSettlement` | `(settlement) => boolean \| Promise<boolean>` | The write-once settlement claim: record the attempt settled and return whether THIS call won the claim. `onSettlement` runs only when it returns `true`, so a redelivered event fulfills exactly once. Required. |
+| `countAttemptsFromIp` | `(clientIp, sinceUnixSeconds) => number \| Promise<number>` | Attempt rows for this IP at or after that time. Backs opt-in `rateLimiting`. |
+| `claimReconcileGate` | `({ now, intervalSeconds }) => boolean \| Promise<boolean>` | Atomically claim the durable `openreceive_meta` scan gate (optimistic CAS shared by every process on the database). `true` = run a wallet scan now; `false` = another worker scanned within the interval. |
+| `markPaidOnce` | `(input, fulfill) => Promise<void>` | Write-once settlement: set `paid_at` / `settled` once and run `fulfill` only for the order's first settled attempt. |
+
+`claimReconcileGate` is part of the custom-repository contract too: a custom
+`OpenReceivePaymentRepository` must implement it (as a durable CAS — never an
+in-process cooldown, since memory cannot coordinate workers) unless the host
+passes `opportunisticReconcile: false`; handler construction throws otherwise.
+
+### openReceivePaymentsSchemaSql
+
+```ts
+openReceivePaymentsSchemaSql(dialect: "postgres" | "sqlite", tableName?, metaTableName?): string
+```
+
+Returns a `string` — the canonical `openreceive_payments` `CREATE TABLE` /
+index DDL for that dialect, plus the sibling `openreceive_meta` gate table
+(`key TEXT PRIMARY KEY, value TEXT NOT NULL, rev` — the durable reconcile
+gate; `metaTableName` renames it). Run it through your own migration workflow;
+the scaffold CLI wraps it per ORM. Hosts may adjust `order_id` typing or add a
+foreign key but must keep every column. `payment_hash` is globally unique;
+`order_id` is indexed, not unique.
+
+### OpenReceiveSqlAdapter
+
+The escape-hatch database boundary when the built-in pg/SQLite bindings do not
+fit:
+
+```ts
+interface OpenReceiveSqlAdapter {
+  dialect: "postgres" | "sqlite";
+  query(sql: string, params?: readonly unknown[]): Promise<readonly Record<string, unknown>[]>;
+  transaction<T>(run: (tx: { query }) => Promise<T>): Promise<T>;
+}
+```
+
+`query` takes `?` placeholders and returns SELECT rows (`Record<string, unknown>[]`;
+`[]` for non-SELECT). `transaction` must provide real atomicity — settlement
+write-once and fulfillment both run inside it.
+
+### OpenReceivePaymentRecord
+
+One `openreceive_payments` row as returned by `payments.listForOrder`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `orderId` | `string` | Host-owned order this attempt belongs to. |
+| `paymentHash` | `string` | 64-character lowercase hex hash. Unique across all orders. |
+| `status` | `"pending" \| "settled" \| "expired" \| "failed" \| "attention"` | Attempt lifecycle. Only `pending` is scanned. `attention` means the wallet still reports an in-flight state long after expiry. |
+| `statusReason` | `string \| null` | Operator-facing detail for the current status, e.g. `"superseded"` or `"duplicate_settlement"`. Absent or `null` when there is nothing extra to say. |
+| `paidAt` | `number \| null` | Integer Unix seconds of settlement, or `null` if this attempt never settled. |
+| `expiresAt` | `number` | Integer Unix seconds after which these payer instructions must not be reused. |
+| `createdAt` | `number` | Integer Unix seconds used to order historical attempts deterministically. |
+| `checkout` | `Checkout` | Safe, replayable payer snapshot. Same shape as [createCheckout](#servicecreatecheckout). |
+| `swapData` | `SwapData \| null` | Server-only provider recovery state. `null` or omitted for Lightning-only attempts. Never serialize into a browser response. |
+
+## Browser & React
+
+The browser/React surface a host wires up (the vue/svelte/angular wrappers delegate to the
+same custom element and accept the same attributes):
+
+| Symbol | Package | What it does |
+| --- | --- | --- |
+| `prepareCheckout({ orderId, prefix \| checkoutUrl, fetch?, headers? })` | `@openreceive/browser` | POST `/checkouts/prepare`: locks the amount + returns payment methods without minting. |
+| `requestCheckout({ orderId, prefix \| checkoutUrl, fetch?, headers?, memo?, metadata? })` | `@openreceive/browser` | POST `/checkouts`: mints (or reuses) a bolt11 and returns the snapshot. |
+| `<Checkout>` | `@openreceive/react` | Self-contained checkout. Create mode: `orderId` + `prefix`. Snapshot mode: `checkout` (+ `prefix`/`orderUrl` for polling). Common props: the seven handlers (`onCopy`, `onOpenWallet`, `onState`, `onSettled`, `onProviderCopy`, `onStartOver`, `onError`), `polling`, `paymentWizard`, `themeToggle` (default `true`), `storageKey`, `decodeLinkUrl`, `components`, `classNames`, `syncUrl`, `resumePathPrefix`, `routeOrderId`, `metadata`, `createFetch`. `pollIntervalMs` is a `useCheckout` option, not a `<Checkout>` prop. Prop names and defaults are shared with the Vue, Svelte and Angular wrappers ([wrapper parity](../internal/wrapper-parity.md)). |
+| `useCheckout(options)` | `@openreceive/react` | The hook behind `<Checkout>` for custom layouts. Returns the live snapshot, `status`, countdown labels, `statusTitle`/`statusDetail`, and `copyInvoice`/`openWallet`/`reloadState`/`retry`/`cancel`. |
+| `PaymentWizard` | `@openreceive/react` | The method picker + swap deposit flow rendered inside `<Checkout>`; usable standalone with `checkout`, `orderUrl`, and `onSwapStarted`. |
+| `<openreceive-checkout>` | `@openreceive/elements` | The custom element behind the non-React wrappers. Create mode: `order-id` + `prefix` attributes. Snapshot mode: `invoice`/`invoice-id`/`payment-hash`/... attributes. Events: `openreceive-state`, `openreceive-settled`, `openreceive-error`. |
+
+Failed status polls back off exponentially (honoring the server's `Retry-After`), and
+transport failures are thrown as `OpenReceiveBrowserRequestError` carrying
+`status`/`code`/`retryable`/`retryAfterSeconds`.
+
+## CLI
+
+### openreceive scaffold payments
+
+```sh
+npx openreceive scaffold payments [options]
+```
+
+Emits one schema/migration file for your ORM — `openreceive_payments` and the
+`openreceive_meta` reconcile gate together — plus an `OPENRECEIVE_PAYMENTS.md`
+wiring guide, nothing else. Never opens a database connection or runs
+migrations.
+
+| Flag | Meaning |
+| --- | --- |
+| `--orm <name>` | `prisma \| drizzle \| typeorm \| sequelize \| knex`. |
+| `--dialect <name>` | `postgres \| sqlite` (default `postgres`). |
+| `--order-model <Name>` | Host order model/class (default `Order`). |
+| `--order-table <name>` | Host order table (default derived). |
+| `--order-id-type <type>` | `bigint \| integer \| uuid \| string`. |
+| `--out-dir <path>` | Output root (default `.`). |
+| `--skip-foreign-key` | No FK to the order table. |
+| `--force` | Overwrite generated files. |
+| `-i, --interactive` | Prompt for missing options (default on TTY when `--orm` omitted). |
+
+### openreceive doctor
+
+```sh
+npx openreceive doctor
+```
+
+Validates the storage-free server configuration: Node version, `NWC_URI`
+presence and parseability (printed redacted), and `LSC_URI_*` connections.
+Exit code `1` when `NWC_URI` is missing or invalid, or when a configured
+`LSC_URI_*` value fails to parse. `openreceive debug-report`
+prints the same as a redacted support report.
+
+## Rails
+
+### openreceive:install
+
+```sh
+bin/rails generate openreceive:install
+```
+
+Emits one migration — `db/migrate/*_create_openreceive_tables.rb`, creating
+both `openreceive_payments` and the `openreceive_meta` reconcile gate — a
+simplified `config/initializers/openreceive.rb`, and the engine route mount at
+`/openreceive`. The `OpenReceivePayment` model is engine-owned — no model file
+is generated.
+
+| Flag | Meaning |
+| --- | --- |
+| `--order-model <Name>` | Host order model (default `Order`). |
+| `--order-table <name>` | Host order table. |
+| `--order-primary-key-type <type>` | e.g. `uuid` (default `bigint`). |
+| `--skip-foreign-key` | No FK to the order table. |
+| `--skip-migration` | Skip the migration (both tables). |
+| `--skip-initializer` / `--skip-route` | Skip those files. |
+
+### OpenReceive.configure
+
+```ruby
+OpenReceive.configure do |config| ... end
+```
+
+The quickstart host contract:
+
+| Setting | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `config.authorize` | `->(context)` | yes | Host policy for every request; the context carries the action and untrusted selectors. |
+| `config.load_order` | `->(order_id)` | yes | Load the host order; `nil` → 404. |
+| `config.amount_for_order` | `->(order)` | yes | The trusted price, `{ "sats" => }` or `{ "currency" =>, "value" => }`. |
+| `config.on_paid` | `->(settlement)` | yes | Fulfillment. Receives [OrderSettlement](#ordersettlement). |
+| `config.order_model` | `String` | no | Host order model name (default `"Order"`). |
+| `config.opportunistic_reconcile` | `false` or `{ min_interval_seconds: }` | no | Request-path settlement pass on every engine route; on by default through the durable `openreceive_meta` gate shared by all Puma workers. `false` disables (required with a custom repository that runs its own settlement worker). |
+| `config.allow_spend_capable_wallet` | `Boolean` | no | Explicit override for a spend-capable NWC code; boot otherwise fails closed. Also `OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC=true`. |
+
+`on_paid` runs inside the settlement transaction through the engine's
+write-once `mark_paid_once!`, only for the order's first settled attempt;
+delivery is at-least-once, so a raise rolls back and the next pass retries.
+Advanced hooks (`resolve_checkout`, `on_checkout_created`) exist for
+custom-repository hosts.
+
+#### OrderSettlement
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `order_id` | `String` | The host-owned order that just settled. |
+| `payment_hash` | `String` | 64-character lowercase hex hash of the settled attempt. |
+| `paid_at` | `Integer` | Unix seconds of settlement (`settled_at`, else the observation time). |
+
+### OpenReceive::ReconcileJob
+
+```ruby
+OpenReceive::ReconcileJob.perform_later
+```
+
+One reconciliation pass wrapped for the host's ActiveJob backend — a one-shot
+primitive. Nothing to schedule: request-path opportunistic reconcile is the
+default settlement driver.
+
+### rake openreceive:reconcile
+
+```sh
+bin/rails openreceive:reconcile
+```
+
+Equivalent one-pass rake task — a one-shot primitive; prints the number of
+attempts scanned.
+
+### rake openreceive:notifications
+
+```sh
+bin/rails openreceive:notifications
+```
+
+The one documented worker: long-running opt-in NWC-02 listener with
+retry/backoff around
+[OpenReceive.listen_for_notifications!](#openreceivelisten_for_notifications),
+which also reconciles periodically
+(`OPENRECEIVE_NOTIFICATIONS_RECONCILE_INTERVAL_SECONDS`, default 15) — its own
+safety net for notifications missed while it was down.
+
+### OpenReceive.reconcile!
+
+```ruby
+OpenReceive.reconcile!(overlap_seconds: 60, now: nil) # => Array<Hash>
+```
+
+Returns the per-hash check results of the pass — an array of
+`{ "payment_hash", "status", "paid_at"?, "details"? }` hashes (`[]` when the
+ledger has no `pending` attempts). One bounded pass over the engine-owned
+ledger: scan the wallet for every `pending` attempt, deliver settlements
+through the write-once settlement hook, and persist terminal transitions.
+Closure requires a successful scan at or after expiry plus the 900-second
+grace — never the local clock alone. A wallet failure raises and leaves every
+row pending.
+
+### OpenReceive.maybe_reconcile!
+
+```ruby
+OpenReceive.maybe_reconcile!(now: nil) # => Hash
+```
+
+The gated pass behind the engine's request-path opportunistic reconcile (an
+`around_action` on the engine's controllers — exactly one gate claim per
+request), exported for host-owned routes and middleware: host-only routes
+never auto-run it, and Rack hosts call it themselves. Never raises — a failed
+or timed-out scan warns and returns `scan_failed`, leaving the gate claimed so
+a broken wallet cannot stampede. Returns
+`{ "reason" => "ran", "checks" => [...] }` (the per-hash check hashes) or
+`{ "reason" => "disabled" | "no_pending" | "gate_busy" | "scan_failed" }`.
+
+### OpenReceive.listen_for_notifications!
+
+```ruby
+OpenReceive.listen_for_notifications!(overlap_seconds: 60)
+```
+
+Subscribes to the configured NWC client's `payment_received` notifications.
+Same direct-settlement semantics as the Node listener: a payload satisfying
+the shared settlement rule that matches a pending attempt settles directly
+through the engine's `mark_paid_once!`/`on_paid` path with no wallet scan for
+that invoice; anything less (no finality signal, unknown hash, or a
+direct-settlement failure) falls back to one `OpenReceive.reconcile!` pass.
+The worker's periodic pass is the safety net for notifications missed while
+offline. Raises `OpenReceive::ConfigurationError` when the client cannot
+notify. Blocking clients do not return until the subscription ends.
+
+The built-in `nwc-ruby` client is wired up already:
+`OpenReceive::NwcRubyReceiveClient` forwards `subscribe_notifications` to that
+gem's `subscribe_to_notifications` and translates the notification object it
+yields back into the NWC-02 wire payload, so the settlement rule reads
+`state`/`settled_at` exactly as it does on a `list_transactions` row. A
+custom `config.nwc_client` supplies its own `subscribe_notifications`
+(or `subscribeNotifications`) to opt in.

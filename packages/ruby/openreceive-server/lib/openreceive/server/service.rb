@@ -1,0 +1,702 @@
+# frozen_string_literal: true
+
+require "openreceive"
+require "openreceive/server/errors"
+require "openreceive/server/wallet_info"
+
+module OpenReceive
+  module Server
+    class Service
+      PAGE_LIMIT = 20
+      # Upper bound on wallet history pages per scan (mirrors JS maxPages): a
+      # wallet/relay that keeps returning full pages must not hang the scan.
+      MAX_PAGES = 10_000
+      INVOICE_EXPIRY_SECONDS = 600
+      # Default shadow-invoice expiry when a swap provider does not report its
+      # own (mirrors the JS default).
+      SWAP_INVOICE_EXPIRY_SECONDS = 600
+      # Maximum seconds the wallet's returned expiry may deviate from the
+      # requested expiry before checkout creation fails closed.
+      INVOICE_EXPIRY_TOLERANCE_SECONDS = 60
+
+      # NIP-47 method names that let a connection move funds out of the wallet
+      # (mirrors the JS preflight, including the keysend variants). Preflight
+      # compares against already-normalized names from WalletInfo.summarize.
+      SPEND_METHODS = WalletInfo::SPEND_METHODS
+
+      attr_reader :price_currencies
+
+      # `swap_providers: nil` (the default) auto-builds FixedFloat-compatible
+      # providers from LSC_URI_PRIMARY / LSC_URI_BACKUP, exactly like the JS
+      # createOpenReceive. Pass an explicit array (possibly empty) to override.
+      # `price_provider: nil` (the default) uses the built-in cached live
+      # price feed (with OPENRECEIVE_PRICE_FEED_*_URL overrides), mirroring
+      # the JS default; pass a provider to override, or `false` to run
+      # without rates entirely (the JS `priceProviders: []`): fiat amounts
+      # and GET /rates then fail with their not-configured errors.
+      # `logger:` is an optional standard Logger-shaped sink (debug/info/
+      # warn/error) for operational events such as swap-provider API calls.
+      def initialize(nwc_client:, price_provider: nil, swap_providers: nil, price_currencies: ["USD"],
+                     clock: -> { Time.now.to_i }, allow_spend_capable_wallet: false, env: ENV,
+                     logger: nil)
+        @nwc = nwc_client
+        @clock = clock
+        @env = env
+        @logger = logger
+        @price_currencies = Array(price_currencies || ["USD"]).map { |value| value.to_s.upcase }
+        @price_provider = price_provider == false ? nil : price_provider || default_price_provider(env)
+        @swap_providers =
+          if swap_providers.nil?
+            Swap.providers_from_environment(env, now: @clock)
+          else
+            Array(swap_providers)
+          end
+        attach_swap_provider_runtime!
+        # The override relaxes only the spend refusal: receive-readiness and
+        # encryption are still enforced, exactly as in the JS preflight.
+        wallet_preflight!(
+          allow_spend_capable: allow_spend_capable_wallet || spend_override_from_env?
+        )
+      end
+
+      def prepare_checkout(input)
+        data = stringify(input)
+        amount_msats, fiat_quote = resolve_amount(data.fetch("amount"))
+        {
+          "amount_msats" => amount_msats,
+          "fiat_quote" => fiat_quote,
+          "payment_methods" => list_swap_options(amount_msats: amount_msats)
+        }
+      rescue KeyError, ArgumentError => e
+        raise ValidationError, e.message
+      end
+
+      # Amount-aware swap pay-in options for the shared browser widget
+      # (mirrors the JS service listSwapOptions + resolveSwapProviderCatalog):
+      # exactly one live provider's catalog — primary when healthy, otherwise
+      # the first backup that answers — mapped over the full OpenReceive asset
+      # list with amount-vs-limit availability.
+      def list_swap_options(amount_msats:)
+        return [] if @swap_providers.empty?
+
+        normalized_amount = normalize_swap_amount_msats(amount_msats)
+        catalog = resolve_swap_provider_catalog
+        Swap::Assets.list_info.map do |asset|
+          swap_catalog_option(asset, normalized_amount, catalog[asset.fetch("pay_in_asset")])
+        end
+      end
+
+      def create_checkout(input)
+        # Payer-input validation only: once the wallet has minted, a parse
+        # failure is the wallet's response violating the receive contract, not
+        # a 400 the payer caused — so this rescue must not cover the wallet
+        # call or its normalization.
+        begin
+          data = stringify(input)
+          order_id = required_string(data["orderId"] || data["order_id"], "orderId")
+          amount_msats, fiat_quote = resolve_amount(data.fetch("amount"))
+          expiry = Integer(data["expirySeconds"] || data["expiry_seconds"] || INVOICE_EXPIRY_SECONDS)
+          metadata = stringify(data["metadata"] || {}).merge("order_id" => order_id)
+          # NIP-47 caps invoice metadata; reject before any wallet call with
+          # the JS service's exact message instead of surfacing the wallet
+          # client's own failure as a 502.
+          if JSON.generate(metadata).bytesize > OpenReceive::NWC_METADATA_MAX_BYTES
+            raise ValidationError, "metadata is too large for NIP-47."
+          end
+          request = {
+            "amount_msats" => amount_msats,
+            "expiry" => expiry,
+            "metadata" => metadata
+          }
+          request["description"] = data["memo"] if data["memo"]
+          request["description_hash"] = data["descriptionHash"] || data["description_hash"] if data["descriptionHash"] || data["description_hash"]
+        rescue KeyError, ArgumentError => e
+          raise ValidationError, e.message
+        end
+        response = call_nwc(:make_invoice, request)
+        begin
+          wallet = OpenReceive.normalize_make_invoice_response(response)
+          created_at = wallet["created_at"] || @clock.call
+          # The wallet must honor the requested expiry. An invoice whose real
+          # payable window differs from our ledger row would either die under the
+          # payer early or stay payable after reconciliation closed the attempt,
+          # so a wallet that ignores `expiry` (beyond a small tolerance) fails
+          # checkout creation.
+          requested_expires_at = created_at + expiry
+          expires_at = wallet["expires_at"] || requested_expires_at
+          if (expires_at - requested_expires_at).abs > INVOICE_EXPIRY_TOLERANCE_SECONDS
+            raise WalletContractError,
+                  "The wallet did not honor the requested invoice expiry " \
+                  "(requested #{expiry}s, got #{expires_at - created_at}s). " \
+                  "Use a wallet whose make_invoice honors expiry."
+          end
+          {
+            "order_id" => order_id,
+            "payment_hash" => wallet.fetch("payment_hash"),
+            "bolt11" => wallet.fetch("invoice"),
+            "amount_msats" => wallet.fetch("amount_msats"),
+            "created_at" => created_at,
+            "expires_at" => expires_at,
+            "fiat_quote" => fiat_quote
+          }
+        rescue KeyError, ArgumentError, TypeError
+          # Never blames the payer, and never puts the raw parse failure
+          # (`key not found: "invoice"`) on the wire.
+          raise WalletContractError
+        end
+      end
+
+      def check_payment(input)
+        data = stringify(input)
+        payment_hash = normalize_payment_hash(data["paymentHash"] || data["payment_hash"])
+        created_at = Integer(data["createdAt"] || data.fetch("created_at"))
+        overlap = Integer(data["overlapSeconds"] || data.fetch("overlap_seconds", 60))
+        transaction = lookup_transaction(
+          payment_hash,
+          from: [created_at - overlap, 0].max,
+          until_time: data["until"]
+        )
+        return { "payment_hash" => payment_hash, "status" => "not_found" } if transaction.nil?
+
+        payment_result(payment_hash, transaction)
+      end
+
+      # Optional bounds for request-path passes: "max_pages" caps each
+      # wallet-history walk (the gated opportunistic pass sends 50, mirroring
+      # the JS OPENRECEIVE_RECONCILE_SCAN_MAX_PAGES; default MAX_PAGES), and
+      # "deadline" is a monotonic-clock instant checked between page fetches —
+      # never mid-request — so a slow wallet cannot hang user-facing requests.
+      def reconcile_payments(input)
+        data = stringify(input)
+        attempts = Array(data.fetch("attempts"))
+        return [] if attempts.empty?
+
+        expected = attempts.to_h do |attempt|
+          row = stringify(attempt)
+          [normalize_payment_hash(row.fetch("payment_hash") { row.fetch("paymentHash") }),
+           Integer(row.fetch("created_at") { row.fetch("createdAt") })]
+        end
+        overlap = Integer(data.fetch("overlap_seconds", 60))
+        from = [expected.values.min - overlap, 0].max
+        until_time = Integer(data["until"] || @clock.call)
+        bounds = { max_pages: data["max_pages"], deadline: data["deadline"] }.compact
+        rows = list_transactions(from: from, until_time: until_time, **bounds)
+        by_hash = rows.to_h { |row| [row["payment_hash"], row] }
+        if expected.keys.any? { |hash| !by_hash.key?(hash) }
+          list_transactions(from: from, until_time: until_time, unpaid: true, **bounds).each do |row|
+            by_hash[row["payment_hash"]] ||= row
+          end
+        end
+        expected.keys.map do |hash|
+          by_hash[hash] ? payment_result(hash, by_hash.fetch(hash)) :
+            { "payment_hash" => hash, "status" => "not_found" }
+        end
+      end
+
+      def quote_swap(input)
+        data = stringify(input)
+        asset = parse_pay_in_asset(data["payInAsset"] || data["pay_in_asset"])
+        amount_msats, = resolve_amount(data.fetch("amount"))
+        provider = select_provider(asset)
+        quote = stringify(call_provider(provider, :quote,
+          "pay_in_asset" => asset, "invoice_amount_msats" => amount_msats))
+        {
+          "provider" => quote["provider"] || provider_name(provider),
+          "pay_asset" => quote["pay_asset"] || asset,
+          "available" => quote.fetch("available"),
+          "pay_amount" => quote["pay_amount"],
+          "minimum_pay_amount" => quote["minimum_pay_amount"],
+          "maximum_pay_amount" => quote["maximum_pay_amount"],
+          "minimum_invoice_amount_msats" => quote["minimum_invoice_amount_msats"],
+          "maximum_invoice_amount_msats" => quote["maximum_invoice_amount_msats"],
+          "unavailable_reason" => quote["unavailable_reason"],
+          "unavailable_message" => quote["unavailable_message"]
+        }.compact
+      end
+
+      def create_swap(input)
+        data = stringify(input)
+        asset = parse_pay_in_asset(data["payInAsset"] || data["pay_in_asset"])
+        provider = select_provider(asset)
+        expiry = provider.respond_to?(:invoice_expiry_seconds) ? provider.invoice_expiry_seconds(pay_in_asset: asset) : SWAP_INVOICE_EXPIRY_SECONDS
+        # The shadow-invoice expiry is provider-mandated: build the checkout
+        # input explicitly from validated fields so no payer-supplied key (e.g.
+        # "expirySeconds") can override it or smuggle a different order id.
+        checkout = create_checkout(
+          "order_id" => data["order_id"] || data["orderId"],
+          "amount" => data.fetch("amount"),
+          "memo" => data["memo"],
+          "metadata" => data["metadata"],
+          "expiry_seconds" => expiry
+        )
+        order = stringify(call_provider(provider, :create_swap,
+          "pay_in_asset" => asset,
+          "bolt11" => checkout.fetch("bolt11"),
+          "invoice_amount_msats" => checkout.fetch("amount_msats")))
+        swap_data = {
+          "version" => 1,
+          "provider_order" => order.reject { |key, _| key == "raw" }
+        }
+        public_swap(order, checkout.fetch("payment_hash"), checkout.fetch("order_id")).merge(
+          "checkout" => checkout,
+          "swap_data" => swap_data
+        )
+      end
+
+      def get_swap(order_id:, payment_hash:, swap_data:)
+        recovery = normalize_swap_data(swap_data)
+        provider_name = recovery.fetch("provider_order").fetch("provider")
+        provider = provider_by_name(provider_name)
+        current = stringify(call_provider(provider, :get_status, recovery.fetch("provider_order")))
+        public_swap(current, normalize_payment_hash(payment_hash), required_string(order_id, "order_id"))
+      rescue KeyError => e
+        raise ValidationError, e.message
+      end
+
+      def refund_swap(order_id:, payment_hash:, swap_data:, refund_address:)
+        recovery = normalize_swap_data(swap_data)
+        hash = normalize_payment_hash(payment_hash)
+        host_order_id = required_string(order_id, "order_id")
+        address = required_string(refund_address, "refund_address")
+        provider_name = recovery.fetch("provider_order").fetch("provider")
+        provider = provider_by_name(provider_name)
+        current = stringify(call_provider(provider, :get_status, recovery.fetch("provider_order")))
+        unless current["state"] == "refund_required"
+          raise ConflictError, "Swap cannot be refunded from provider state #{current['state']}."
+        end
+        call_provider(provider, :request_refund, current, address)
+        get_swap(order_id: host_order_id, payment_hash: hash, swap_data: recovery)
+      rescue KeyError => e
+        raise ValidationError, e.message
+      end
+
+      def list_rates(input = {})
+        raise NotImplementedHttpError, "No price provider is configured for rates." if @price_provider.nil?
+        currencies = Array(stringify(input)["currencies"] || @price_currencies).map { |value| value.to_s.strip.upcase }
+        currencies.each do |currency|
+          unless /\A[A-Z]{3}\z/.match?(currency)
+            raise ValidationError, "currencies entries must be three-letter fiat codes"
+          end
+          unless @price_currencies.include?(currency)
+            raise ValidationError, "currency #{currency} is not in the configured price_currencies"
+          end
+        end
+        { "bitcoin" => currencies.to_h { |currency| [currency.downcase, btc_fiat_price_or_unavailable(currency)] } }
+      end
+
+      private
+
+      # EVERY feed-side failure (network, HTTP, malformed or incomplete
+      # response) maps to the payer-facing retryable 503, exactly like the JS
+      # service's ratesUnavailableError — the feed being unable to price a
+      # configured currency is an outage, never payer input.
+      def btc_fiat_price_or_unavailable(currency)
+        @price_provider.btc_fiat_price(currency).to_s
+      rescue ServiceError, ValidationError
+        raise
+      rescue StandardError
+        raise ServiceError.new(
+          503, "INTERNAL",
+          "Exchange rates are temporarily unavailable — please try again in a moment.",
+          retryable: true
+        )
+      end
+
+      # Fail-closed boot preflight, mirroring the JS client preflight: a
+      # connection that can report capabilities must be receive-ready and speak
+      # an encryption mode we implement, and — unless the host overrides —
+      # must not advertise spend methods.
+      #
+      # A read failure is NOT treated as transient. Booting blind only defers
+      # the failure to the first customer checkout, where it costs a lost sale
+      # instead of a loud boot error, so an info method that cannot answer
+      # fails the boot.
+      def wallet_preflight!(allow_spend_capable:)
+        raw_info = read_wallet_info
+        # The client exposes no info method at all: there is nothing to
+        # preflight, so custom NWC adapters keep booting as before.
+        return if raw_info.nil?
+
+        summary = WalletInfo.summarize(raw_info)
+        unless summary.fetch("receive_checkout_ready")
+          raise WalletPreflightError,
+                "the wallet does not advertise make_invoice and list_transactions."
+        end
+        if summary.fetch("encryption").nil?
+          raise WalletPreflightError,
+                "the wallet supports no encryption mode OpenReceive speaks (NIP-04 or NIP-44 v2)."
+        end
+        return if allow_spend_capable
+
+        spend = summary.fetch("methods").select { |method| SPEND_METHODS.include?(method) }
+        raise SpendCapableWalletError, spend unless spend.empty?
+      end
+
+      def read_wallet_info
+        if @nwc.respond_to?(:preflight)
+          @nwc.preflight
+        elsif @nwc.respond_to?(:get_info)
+          @nwc.get_info
+        elsif @nwc.respond_to?(:getInfo)
+          @nwc.getInfo
+        elsif @nwc.respond_to?(:get_wallet_service_info)
+          @nwc.get_wallet_service_info
+        elsif @nwc.respond_to?(:getWalletServiceInfo)
+          @nwc.getWalletServiceInfo
+        end
+      rescue OpenReceive::NwcUriParseError
+        # A malformed connection string is a config error in its own right;
+        # surface it as itself rather than as a preflight failure.
+        raise
+      rescue StandardError => e
+        raise WalletPreflightError, "could not read wallet info (#{e.class}: #{e.message})."
+      end
+
+      def spend_override_from_env?
+        raw = @env["OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC"].to_s.strip.downcase
+        return false if raw.empty?
+        return true if %w[1 true yes].include?(raw)
+        unless %w[0 false no].include?(raw)
+          # Fail closed (no override), but never silently: a typo like "truee"
+          # must not read as "unset".
+          warn "[openreceive] Unrecognized OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC value " \
+               "#{raw.inspect}; treating it as disabled. Use 1/true/yes to enable."
+        end
+        false
+      end
+
+      def normalize_swap_data(value)
+        data = stringify(value)
+        unless data["version"] == 1 && data["provider_order"].is_a?(Hash) &&
+               !data.dig("provider_order", "provider").to_s.empty? &&
+               !data.dig("provider_order", "provider_order_id").to_s.empty?
+          # Same wire message as the JS service's readSwapData.
+          raise ValidationError, "swapData is invalid."
+        end
+        data
+      end
+
+      def parse_pay_in_asset(value)
+        unless Swap::Assets.pay_in_asset?(value)
+          raise ValidationError, "payInAsset is not supported."
+        end
+        value
+      end
+
+      # Mirrors the JS service's normalizeAmountMsats: Lightning invoices are
+      # whole sats; round up so catalog limits match create.
+      def normalize_swap_amount_msats(value)
+        amount = begin
+          Integer(value)
+        rescue ArgumentError, TypeError
+          nil
+        end
+        if amount.nil? || amount < 1000
+          raise ValidationError, "amountMsats must be an integer >= 1000."
+        end
+        ((amount + 999) / 1000) * 1000
+      end
+
+      # Fiat pricing defaults to the LIVE feed with env URL overrides, exactly
+      # like the JS createOpenReceive default (there is deliberately no
+      # implicit static-mock fallback).
+      def default_price_provider(env)
+        overrides = OpenReceive::Rates.read_price_feed_url_overrides(env)
+        OpenReceive::Rates.create_cached_live_price_feed(
+          currencies: @price_currencies,
+          clock: @clock,
+          primary_url: overrides[:primary_url],
+          fallback_url: overrides[:fallback_url]
+        )
+      end
+
+      # Mirrors the JS createOpenReceive provider wiring: one shared transient
+      # cache and one per-provider weight budget, attached to every provider
+      # that supports them (host-supplied or auto-built).
+      def attach_swap_provider_runtime!
+        return if @swap_providers.empty?
+
+        cache = Swap::TransientSwapCache.new(@clock)
+        @swap_providers.each do |provider|
+          provider.attach_swap_cache(cache) if provider.respond_to?(:attach_swap_cache)
+          if provider.respond_to?(:attach_weight_budget)
+            provider.attach_weight_budget(
+              Swap::SwapProviderWeightBudget.new(provider_name(provider), @clock)
+            )
+          end
+        end
+      end
+
+      # Use exactly one live provider's catalog: primary when healthy,
+      # otherwise the first backup that answers. Never merge catalogs.
+      def resolve_swap_provider_catalog
+        @swap_providers.each do |provider|
+          begin
+            catalog =
+              if provider.respond_to?(:pay_in_asset_catalog)
+                Array(call_provider(provider, :pay_in_asset_catalog))
+              else
+                Array(call_provider(provider, :supported_pay_in_assets)).map do |asset|
+                  { "pay_asset" => asset.to_s }
+                end
+              end
+          rescue StandardError
+            # Catalog/rates feed down for this provider — try the next entry.
+            next
+          end
+          by_asset = {}
+          catalog.each do |item|
+            row = stringify(item)
+            by_asset[row["pay_asset"]] = row.merge("provider" => provider_name(provider))
+          end
+          return by_asset
+        end
+        {}
+      end
+
+      def swap_catalog_option(asset, amount_msats, provider_asset)
+        if provider_asset.nil?
+          return {
+            "pay_in_asset" => asset.fetch("pay_in_asset"),
+            "label" => asset.fetch("label"),
+            "network_label" => asset.fetch("network_label"),
+            "provider" => "",
+            "available" => false,
+            "unavailable_reason" => "provider_unconfigured",
+            "unavailable_message" => "Automated swaps are not configured for this asset."
+          }
+        end
+
+        minimum_msats = provider_asset["minimum_invoice_amount_msats"]
+        maximum_msats = provider_asset["maximum_invoice_amount_msats"]
+        limit_reason =
+          if amount_msats.positive? && !minimum_msats.nil? && amount_msats < minimum_msats
+            "amount_too_small"
+          elsif amount_msats.positive? && !maximum_msats.nil? && amount_msats > maximum_msats
+            "amount_too_large"
+          end
+        unavailable_reason =
+          limit_reason ||
+          (provider_asset["available"] == false ? provider_asset["unavailable_reason"] : nil)
+        unavailable_message =
+          case limit_reason
+          when "amount_too_small" then "This invoice is below the provider minimum."
+          when "amount_too_large" then "This invoice is above the provider maximum."
+          else
+            provider_asset["available"] == false ? provider_asset["unavailable_message"] : nil
+          end
+
+        option = {
+          "pay_in_asset" => asset.fetch("pay_in_asset"),
+          "label" => asset.fetch("label"),
+          "network_label" => asset.fetch("network_label"),
+          "provider" => provider_asset.fetch("provider"),
+          "available" => unavailable_reason.nil? && provider_asset["available"] != false
+        }
+        option["unavailable_reason"] = unavailable_reason unless unavailable_reason.nil?
+        option["unavailable_message"] = unavailable_message unless unavailable_message.nil?
+        unless provider_asset["minimum_pay_amount"].nil?
+          option["minimum_pay_amount"] = provider_asset["minimum_pay_amount"]
+        end
+        unless provider_asset["maximum_pay_amount"].nil?
+          option["maximum_pay_amount"] = provider_asset["maximum_pay_amount"]
+        end
+        option["minimum_invoice_amount_msats"] = minimum_msats unless minimum_msats.nil?
+        option["maximum_invoice_amount_msats"] = maximum_msats unless maximum_msats.nil?
+        option
+      end
+
+      def resolve_amount(input)
+        amount = stringify(input)
+        if amount.key?("sats")
+          return [OpenReceive::Money.direct_to_msats(currency: "SATS", value: amount.fetch("sats")), nil]
+        end
+        currency = required_string(amount["currency"], "amount.currency").upcase
+        value = required_string(amount["value"], "amount.value")
+        return [OpenReceive::Money.direct_to_msats(currency: currency, value: value), nil] if %w[BTC SAT SATS].include?(currency)
+        raise ValidationError, "price provider is not configured" if @price_provider.nil?
+        raise ValidationError, "unsupported fiat currency" unless @price_currencies.include?(currency)
+        price = btc_fiat_price_or_unavailable(currency)
+        msats = OpenReceive.quote_fiat_to_msats(fiat_value: value, btc_fiat_price: price)
+        [msats, { "fiat" => { "currency" => currency, "value" => value }, "btc_fiat_price" => price, "amount_msats" => msats, "as_of" => @clock.call }]
+      end
+
+      def lookup_transaction(hash, from:, until_time:)
+        transaction = list_transactions(from: from, until_time: until_time).find { |row| row["payment_hash"] == hash }
+        return transaction unless transaction.nil?
+
+        list_transactions(from: from, until_time: until_time, unpaid: true).find { |row| row["payment_hash"] == hash }
+      end
+
+      def payment_result(hash, transaction)
+        status = OpenReceive::Settlement.status(transaction)
+        observed_at = @clock.call
+        paid_at = status == "settled" ? (transaction["settled_at"] || observed_at) : nil
+        details = { "transaction" => transaction, "observed_at" => observed_at }
+        details["paid_at_source"] = transaction["settled_at"] ? "settled_at" : "observed_at" if status == "settled"
+        {
+          "payment_hash" => hash,
+          "status" => status,
+          "paid_at" => paid_at,
+          "details" => details
+        }.compact
+      end
+
+      def list_transactions(from:, until_time:, unpaid: false, max_pages: nil, deadline: nil)
+        offset = 0
+        result = {}
+        # Bounded like the JS scan: a wallet that keeps returning full pages
+        # must not hang payments/check, swap creation, or reconciliation.
+        pages = Integer(max_pages || MAX_PAGES)
+        pages.times do
+          request = { "type" => "incoming", "limit" => PAGE_LIMIT, "offset" => offset }
+          request["unpaid"] = true if unpaid
+          request["from"] = Integer(from) unless from.nil?
+          request["until"] = Integer(until_time) unless until_time.nil?
+          page = OpenReceive.normalize_list_transactions_response(call_nwc(:list_transactions, request)).fetch("transactions")
+          page.each do |row|
+            # Receive checkout only reconciles incoming payments.
+            next if row["type"] && row["type"] != "incoming"
+            # Mirrors the JS scan key normalization: a wallet emitting padded
+            # or upper-case hashes must key the same rows in both engines, and
+            # a malformed hash is dropped rather than keying a row nothing can
+            # ever match.
+            hash = normalize_scan_payment_hash(row["payment_hash"])
+            result[hash] = row.merge("payment_hash" => hash) unless hash.nil?
+          end
+          break if page.length < PAGE_LIMIT
+          # Checked only between page fetches, never mid-request: a slow wallet
+          # bounds the scan instead of interrupting work already in flight.
+          break if deadline && monotonic_now >= deadline
+          offset += PAGE_LIMIT
+        end
+        result.values
+      end
+
+      def normalize_scan_payment_hash(value)
+        normalized = value.to_s.strip.downcase
+        /\A[0-9a-f]{64}\z/.match?(normalized) ? normalized : nil
+      end
+
+      def monotonic_now
+        Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      end
+
+      def select_provider(asset)
+        # Primary-only while healthy. Backup is consulted only when primary is
+        # down (raises), never to fill gaps for assets the primary simply does
+        # not list. Status/code/message mirror the JS selectProvider exactly.
+        @swap_providers.each do |provider|
+          begin
+            supported = call_provider(provider, :supported_pay_in_assets)
+            return provider if provider_supports_asset?(supported, asset)
+
+            # Healthy provider that omits this asset — do not fall through.
+            raise unsupported_swap_asset_error(asset)
+          rescue ServiceError
+            raise
+          rescue StandardError
+            # Provider request failed — try the next configured LSC connection.
+            next
+          end
+        end
+        raise unsupported_swap_asset_error(asset)
+      end
+
+      def unsupported_swap_asset_error(asset)
+        ServiceError.new(503, "INTERNAL", "No configured swap provider supports #{asset}.")
+      end
+
+      def provider_supports_asset?(supported, asset)
+        Array(supported).include?(asset) || (supported.respond_to?(:include?) && supported.include?(asset))
+      end
+
+      def provider_by_name(name)
+        @swap_providers.find { |provider| provider_name(provider) == name } ||
+          raise(ServiceError.new(503, "INTERNAL", "Swap provider #{name} is not configured."))
+      end
+
+      def provider_name(provider)
+        provider.respond_to?(:name) ? provider.name : provider.class.name
+      end
+
+      def public_swap(order, hash, order_id)
+        {
+          "payment_hash" => hash,
+          "order_id" => order_id,
+          "provider" => order.fetch("provider"),
+          "pay_in_asset" => order.fetch("pay_in_asset"),
+          "deposit_address" => order.fetch("deposit_address"),
+          "deposit_memo" => order["deposit_memo"],
+          "deposit_amount" => order.fetch("deposit_amount"),
+          "provider_state" => order.fetch("state"),
+          "provider_expires_at" => order.fetch("expires_at"),
+          "deposit_tx_id" => order["deposit_tx_id"],
+          "payout_tx_id" => order["payout_tx_id"],
+          "refund_tx_id" => order["refund_tx_id"],
+          "refund_reason" => order["refund_reason"],
+          "refund_amount" => order["refund_amount"],
+          "attention" => order["attention"],
+          # Everything below explains the attempt to the payer: why they send
+          # more than the cart total, what actually landed on the deposit, and
+          # why an attempt needs an operator. `provider_token` stays server-only.
+          "attention_reason" => order["attention_reason"],
+          "deposit_received_amount" => order["deposit_received_amount"],
+          "emergency_repeat" => order["emergency_repeat"],
+          "provider_order_id" => order["provider_order_id"],
+          "fee" => order["fee"]
+        }.compact
+      end
+
+      # Positional-vs-keyword dispatch is decided from Method#parameters, never
+      # by rescuing ArgumentError and calling again: a retry after an
+      # ArgumentError raised INSIDE a state-changing RPC (make_invoice,
+      # create_swap) would invoke it a second time — two invoices for one
+      # attempt. Wallet failures normalize to the shared error vocabulary.
+      def call_nwc(method, input)
+        if keyword_style?(@nwc.method(method))
+          @nwc.public_send(method, **input.transform_keys(&:to_sym))
+        else
+          @nwc.public_send(method, input)
+        end
+      rescue ValidationError, WalletContractError, NotImplementedHttpError
+        raise
+      rescue StandardError => e
+        raise WalletFailureError, OpenReceive::Nwc.normalize_wallet_error(e)
+      end
+
+      def call_provider(provider, method, *args)
+        if args.length == 1 && args.first.is_a?(Hash) && keyword_style?(provider.method(method))
+          provider.public_send(method, **args.first.transform_keys(&:to_sym))
+        else
+          provider.public_send(method, *args)
+        end
+      end
+
+      def keyword_style?(callable)
+        parameters = callable.parameters
+        return false if parameters.any? { |type, _| %i[req opt rest].include?(type) }
+        parameters.any? { |type, _| %i[keyreq key keyrest].include?(type) }
+      rescue NameError
+        false
+      end
+
+      def stringify(value)
+        return {} unless value.respond_to?(:each_pair)
+        value.each_pair.to_h { |key, item| [key.to_s, item] }
+      end
+
+      def required_string(value, field)
+        text = value.to_s.strip
+        raise ValidationError, "#{field} is required" if text.empty?
+        text
+      end
+
+      def normalize_payment_hash(value)
+        hash = required_string(value, "payment_hash").downcase
+        raise ValidationError, "payment_hash must be 64 hexadecimal characters" unless /\A[0-9a-f]{64}\z/.match?(hash)
+        hash
+      end
+    end
+  end
+end

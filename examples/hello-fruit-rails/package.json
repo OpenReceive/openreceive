@@ -1,0 +1,8 @@
+{
+  "name": "@openreceive/example-hello-fruit-rails-quickstart",
+  "private": true,
+  "version": "0.1.0",
+  "dependencies": {
+    "daisyui": "^5.6.16"
+  }
+}

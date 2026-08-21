@@ -1,0 +1,47 @@
+{
+  "name": "@openreceive/testkit",
+  "version": "0.1.1",
+  "description": "Fake NWC wallet and swap provider for testing OpenReceive integrations.",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "dependencies": {
+    "@openreceive/core": "0.1.1"
+  },
+  "peerDependencies": {
+    "@openreceive/node": "0.1.1"
+  },
+  "devDependencies": {
+    "@openreceive/node": "0.1.1"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean --target es2022 --out-dir dist"
+  },
+  "license": "MIT",
+  "author": "OpenReceive <info@openreceive.org>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openreceive/openreceive.git",
+    "directory": "packages/js/testkit"
+  },
+  "bugs": {
+    "url": "https://github.com/openreceive/openreceive/issues"
+  },
+  "homepage": "https://openreceive.org",
+  "engines": {
+    "node": ">=22"
+  }
+}

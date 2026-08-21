@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spec.openreceive.org/schemas/swap-order.v1.json",
+  "title": "OpenReceive Public Swap Order",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "payment_hash",
+    "order_id",
+    "provider",
+    "pay_in_asset",
+    "deposit_address",
+    "deposit_amount",
+    "provider_state",
+    "provider_expires_at"
+  ],
+  "properties": {
+    "payment_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "order_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "provider": {
+      "type": "string",
+      "minLength": 1
+    },
+    "provider_order_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Provider-side order reference, shown to the payer for support. The provider TOKEN is server-only and never appears here."
+    },
+    "pay_in_asset": {
+      "type": "string",
+      "enum": ["SOL_SOL", "USDT_TRON", "USDT_SOL", "USDC_SOL", "ETH_ETH", "USDT_ETH", "USDC_ETH"]
+    },
+    "deposit_address": {
+      "type": "string",
+      "minLength": 1
+    },
+    "deposit_memo": {
+      "type": "string",
+      "minLength": 1
+    },
+    "deposit_amount": {
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)?$"
+    },
+    "provider_state": {
+      "type": "string",
+      "enum": [
+        "creating_provider_order",
+        "awaiting_deposit",
+        "confirming",
+        "exchanging",
+        "paying_invoice",
+        "completed",
+        "expired",
+        "refund_required",
+        "refund_pending",
+        "refunded",
+        "attention",
+        "failed"
+      ]
+    },
+    "provider_expires_at": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "deposit_tx_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "payout_tx_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "refund_address": {
+      "type": "string",
+      "minLength": 1
+    },
+    "refund_tx_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "attention": {
+      "type": "boolean"
+    },
+    "attention_reason": {
+      "type": "string",
+      "enum": [
+        "provider_completed_without_wallet_settlement",
+        "provider_order_creation_failed",
+        "provider_order_creation_needs_reconcile",
+        "provider_order_creation_stale",
+        "provider_order_expires_after_shadow_invoice",
+        "provider_reported_emergency",
+        "provider_status_unrecognized"
+      ]
+    },
+    "refund_reason": {
+      "type": "string",
+      "enum": ["underpaid", "late_deposit", "underpaid_and_late"]
+    },
+    "deposit_received_amount": {
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)?$"
+    },
+    "refund_amount": {
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)?$"
+    },
+    "emergency_repeat": {
+      "type": "boolean"
+    },
+    "fee": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["currency", "pay_in_fiat", "payout_fiat"],
+      "description": "Fiat equivalents explaining why the payer sends more than the cart total: pay_in_fiat is the value of the crypto they send, payout_fiat is what the merchant receives, and the gap is the swap fee. Display only \u2014 the Lightning invoice amount remains the price authority.",
+      "properties": {
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "pay_in_fiat": {
+          "type": "string",
+          "pattern": "^[0-9]+(\\.[0-9]+)?$"
+        },
+        "payout_fiat": {
+          "type": "string",
+          "pattern": "^[0-9]+(\\.[0-9]+)?$"
+        }
+      }
+    }
+  },
+  "x-openreceive-private-fields": [
+    "provider order credentials never appear in this public schema; the host stores them server-side in swap_data"
+  ]
+}

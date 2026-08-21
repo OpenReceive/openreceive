@@ -1,0 +1,11 @@
+services:
+  hello-fruit-static-html-small-api:
+    build:
+      context: ../../../..
+      dockerfile: examples/hello-fruit/server/static-html-small-api/Dockerfile
+    environment:
+      PORT: "3001"
+    env_file:
+      - ../../../../.env
+    expose:
+      - "3001"

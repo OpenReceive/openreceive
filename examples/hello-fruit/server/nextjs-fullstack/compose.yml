@@ -1,0 +1,11 @@
+services:
+  hello-fruit-nextjs-fullstack:
+    build:
+      context: ../../../..
+      dockerfile: examples/hello-fruit/server/nextjs-fullstack/Dockerfile
+    environment:
+      PORT: "3002"
+    env_file:
+      - ../../../../.env
+    expose:
+      - "3002"
