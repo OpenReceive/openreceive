@@ -1,6 +1,6 @@
-# Testing an OpenReceive host
+# Testing your OpenReceive integration
 
-How to test a host integration — your `loadOrder`, `amountForOrder`,
+How to test your integration — your `loadOrder`, `amountForOrder`,
 `authorize`, and `onPaid` wiring — without touching a real wallet or a swap
 provider.
 
@@ -21,7 +21,7 @@ const service = await createOpenReceive({
 
 Any object implementing `OpenReceiveReceiveNwcClient` works: mint
 deterministic invoices from `makeInvoice`, report settlement from
-`lookupInvoice`/`listTransactions`, and your whole host — HTTP routes,
+`lookupInvoice`/`listTransactions`, and your whole integration — HTTP routes,
 persistence, reconcile, `onPaid` — runs the production code paths against it.
 Settlement follows the real rule: a transaction settles on a finality signal
 (`settled_at`, a settled state, or a settled/paid boolean), never on the mere
@@ -29,7 +29,7 @@ presence of a preimage.
 
 For fiat pricing without a network, pass
 `priceProviders: [new StaticPriceProvider()]` (from `@openreceive/core`).
-There is deliberately no implicit static fallback: a service must refuse to
+There is deliberately no implicit static fallback: a wallet client must refuse to
 price invoices rather than silently quote a hard-coded rate, so tests opt in
 explicitly.
 

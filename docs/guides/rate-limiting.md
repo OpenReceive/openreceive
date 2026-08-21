@@ -51,7 +51,7 @@ supply a custom `rateLimitHook` that exempts authenticated terminals.
 | Reuse | never throttled: the limit applies only when a new attempt would be minted |
 
 The 60/hour default is deliberately generous: a genuine payer switching
-payment methods mints a handful of attempts, and the browser and host already
+payment methods mints a handful of attempts, and the browser and server already
 reuse open invoices where possible. The cap exists to stop farming, not to
 meter buyers.
 
@@ -90,7 +90,7 @@ Persistent counting is **required**. If the payment repository cannot count
 the handler throws at construction — your server fails at boot with a clear
 message instead of silently degrading. There is deliberately no in-memory
 fallback: per-process counts reset on restart and multiply per instance behind
-a load balancer, which silently weakens a security control. Hosts on the
+a load balancer, which silently weakens a security control. Applications on the
 custom-repository escape hatch either implement the
 `countAttemptsFromIp(clientIp, sinceUnixSeconds)` repository method (one
 indexed `COUNT` over the `clientIp` the handler already passes with each

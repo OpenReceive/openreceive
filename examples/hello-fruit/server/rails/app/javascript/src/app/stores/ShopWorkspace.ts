@@ -28,7 +28,10 @@ import {
 } from "../../../../../../../shared/demo-delivery-client.ts";
 import { helloFruitDemoLabels } from "../../../../../../../shared/demo-formatting.ts";
 import { isHelloFruitDemoOrder } from "../../../../../../../shared/demo-order.ts";
-import type { HelloFruitBtcFiatRates } from "../../../../../../../shared/demo-pricing.ts";
+import {
+  parseHelloFruitBtcFiatRates,
+  type HelloFruitBtcFiatRates,
+} from "../../../../../../../shared/demo-pricing.ts";
 import { getJsonFromRails, sendToRailsController } from "../../helpers/requests.ts";
 import { ORDERS_URL, RATES_URL, setOpenReceivePrefix } from "../helpers/constants.ts";
 import { logDemo } from "../helpers/logging.ts";
@@ -260,11 +263,19 @@ export class ShopWorkspace extends Model({
   @modelFlow
   loadRates = _async(function* (this: ShopWorkspace) {
     const body = yield* _await(getJsonFromRails(RATES_URL));
-    if (body.success === false || body.rates === undefined) {
+    if (body.success === false) {
       logDemo("rates.error", "Failed to load display exchange rates.", { message: body.message });
       return;
     }
-    this.rates = frozen(body.rates as HelloFruitBtcFiatRates);
+    // Parsed, never cast: ShopPanel is an observer that formats these rates
+    // inside render, so an unusable body must leave `rates` null and the shop
+    // priced in its USD catalog amounts.
+    const rates = parseHelloFruitBtcFiatRates(body.rates);
+    if (rates === undefined) {
+      logDemo("rates.error", "Rates response carried no usable exchange rates.");
+      return;
+    }
+    this.rates = frozen(rates);
     logDemo("rates.loaded", "Loaded display exchange rates.");
   });
 

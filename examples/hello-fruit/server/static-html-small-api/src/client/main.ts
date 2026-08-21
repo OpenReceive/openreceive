@@ -33,6 +33,7 @@ import {
 } from "../../../../shared/demo-formatting.ts";
 import {
   formatHelloFruitDisplayPrice,
+  parseHelloFruitBtcFiatRates,
   toHelloFruitDisplayAmount,
   type HelloFruitBtcFiatRates,
 } from "../../../../shared/demo-pricing.ts";
@@ -657,11 +658,17 @@ async function loadDisplayRates(): Promise<void> {
   try {
     const response = await fetch("/rates");
     if (!response.ok) throw new Error(`rates request failed: HTTP ${response.status}`);
-    const body = (await response.json()) as { rates?: HelloFruitBtcFiatRates };
-    if (body.rates === undefined) return;
-    displayRates = body.rates;
+    const body = (await response.json()) as { rates?: unknown };
+    // Parsed, never cast: `displayRates` is read by the price renderers below,
+    // so an unusable body must leave it alone and the grid priced in USD.
+    const rates = parseHelloFruitBtcFiatRates(body.rates);
+    if (rates === undefined) {
+      logDemo("rates.error", "Rates response carried no usable exchange rates.");
+      return;
+    }
+    displayRates = rates;
     logDemo("rates.loaded", "Loaded display exchange rates.", {
-      rateCurrencies: Object.keys(body.rates.bitcoin),
+      rateCurrencies: Object.keys(rates.bitcoin),
     });
     if (currentOrder === undefined) {
       renderFruitGrid();

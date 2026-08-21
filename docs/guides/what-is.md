@@ -1,6 +1,6 @@
 # What is OpenReceive?
 
-OpenReceive connects a host application to a receive-only NWC wallet and optional swap
+OpenReceive connects your application to a receive-only NWC wallet and optional swap
 providers. It creates invoices and verifies settlement.
 
 > **Terminology.** **NWC** (Nostr Wallet Connect, specified by **NIP-47**) is the protocol a

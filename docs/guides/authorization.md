@@ -1,9 +1,9 @@
-# Authorization and host integration
+# Authorization and the order bridge
 
 OpenReceive never inspects your session. The happy path is the all-in-one
 adapter factory: your order hooks plus a database handle, and your
-authorization policy. The adapter builds the wallet service and the payment
-host itself:
+authorization policy. The adapter builds the wallet client and the order
+bridge itself:
 
 ```ts
 import { openReceiveExpress } from "@openreceive/express";
@@ -24,7 +24,7 @@ app.use(openReceiveExpress({
 
 `authorize(context)` is your authentication/ownership policy and runs on every
 order-scoped request. OpenReceive does not ship a permissive authorization
-default. Supply the host application's normal session, account, or guest-order
+default. Supply your application's normal session, account, or guest-order
 ownership policy; return false when the authenticated caller does not own the
 requested order. The optional `rateLimitHook` receives the same context; for
 the common per-IP invoice cap prefer the one-line `rateLimiting` option
@@ -45,9 +45,9 @@ The context object:
     orders.ownedBy((native as { session?: { userId?: string } }).session?.userId, resource.orderId)
   ```
 
-`loadOrder` returns the host order (or `null` → 404). `amountForOrder` returns the
+`loadOrder` returns your order (or `null` → 404). `amountForOrder` returns the
 authoritative `{ sats }` or `{ currency, value }` price from that order. The create body cannot
-contain `amount` or `amount_msats` — pricing is host-resolved, so a payer-supplied amount
+contain `amount` or `amount_msats` — your application resolves the price, so a payer-supplied amount
 could only ever be an attempt to pay less (or trick support with an overpaid receipt); the
 route rejects it outright. A
 failed attempt commit withholds invoice and swap payer instructions.
@@ -58,7 +58,7 @@ server-only `swap_data`. The hash is an attempt selector, not an authorization c
 
 ## Advanced: composing the pieces
 
-When you need a shared service, a custom payments repository, or direct
+When you need a shared wallet client, a custom payments repository, or direct
 handler tests, build the pieces yourself and pass the composed form to the
 same adapter:
 

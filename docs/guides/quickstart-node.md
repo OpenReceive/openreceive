@@ -9,7 +9,7 @@ Express + React, receiving Lightning payments. Requires Node ≥ 22 (the workspa
 npm install openreceive @openreceive/express @openreceive/react
 ```
 
-`openreceive` is the umbrella package (service, HTTP handler, contracts, CLI);
+`openreceive` is the umbrella package (wallet client, HTTP handler, contracts, CLI);
 add the adapter and UI package for your stack. Different stack? Swap only the
 last two packages; the rest of this guide is identical.
 
@@ -29,8 +29,9 @@ npx openreceive scaffold payments --orm prisma   # or drizzle | typeorm | sequel
 and a wiring guide; it never touches a database.
 → [openreceive scaffold payments](api-reference.md#openreceive-scaffold-payments)
 
-Run the migration through your normal workflow. OpenReceive owns the tables'
-logic at runtime; there is nothing else to generate. Details:
+Then run the emitted migration through your normal workflow (for example
+`npx prisma migrate dev`). OpenReceive owns the tables' logic at runtime; there
+is nothing else to generate. Details:
 [Payment storage](storage.md), [Node ORM recipes](node-orms.md).
 
 ## 3. Add wallet credentials
@@ -44,7 +45,8 @@ LSC_URI_BACKUP=
 ```
 
 1. Get a receive-only NWC code from a compatible wallet
-   (guides at [openreceive.org](https://openreceive.org)) → `NWC_URI`.
+   ([get one here](https://openreceive.org/get_a_nwc_code_to_receive_payments))
+   → `NWC_URI`.
 2. Optionally set up a swap provider (also covered on
    [openreceive.org](https://openreceive.org))
    → `LSC_URI_PRIMARY` (and `LSC_URI_BACKUP` if you have one).
@@ -56,7 +58,7 @@ advertises spend methods such as `pay_invoice`; mint a receive-only code
 ## 4. Wire OpenReceive
 
 One factory: your order hooks plus a database handle. The adapter builds the
-wallet service and the payment host; there is no background reconciler —
+wallet client and the order bridge; there is no background reconciler —
 settlement piggybacks on requests through the durable gate.
 
 ```ts
@@ -69,12 +71,15 @@ app.use(express.json());
 const openreceive = openReceiveExpress({
   nwc: process.env.NWC_URI!, // receive-only NWC code; boot fails closed otherwise
   db, // pg Pool/Client, node:sqlite, better-sqlite3, or a custom adapter
+  // Look up one of your orders by id; return null when there is no such order.
   loadOrder: (orderId) => orders.find(orderId),
+  // Price that order; OpenReceive converts this into the Lightning invoice.
   amountForOrder: (order) => ({ currency: "USD", value: order.total.toString() }),
   onPaid: async ({ orderId, query }) => {
     // Settlement transaction; runs only for the order's first settled attempt.
     await query("UPDATE orders SET state = 'paid' WHERE id = ?", [orderId]);
   },
+  // Your own access check: may this caller do this action to this order?
   authorize: async ({ action, request, resource }) =>
     orders.viewerMay(await sessions.currentUser(request), resource.orderId, action),
   // Recommended for public web shops: caps invoice creation at 60 per client IP
@@ -100,7 +105,7 @@ settles their invoices. `authorize` runs on every request with
 leave it off for point-of-sale or any deployment where payers share one IP.
 Limits, custom messages, and how counting works: → [Rate limiting](rate-limiting.md)
 
-Composing the pieces yourself — a shared service, a custom payments
+Composing the pieces yourself — a shared wallet client, a custom payments
 repository, or direct handler tests — is fully supported: build them with
 `createOpenReceive` and `createOpenReceiveHost`, and pass
 `{ service, host, authorize }` to the same adapter.
@@ -135,6 +140,13 @@ import "@openreceive/react/styles.css";
 <Checkout orderId={order_id} prefix="/openreceive" />;
 ```
 
+The checkout renders, polls, and settles itself. The compiled `styles.css`
+sheets (`@openreceive/react`, `@openreceive/elements`) are self-contained — a
+plain `<link rel="stylesheet">` works with no build step.
+
+That is the whole loop: your server owns the price and the order, the payer gets
+an invoice, and `onPaid` runs once inside the settlement transaction.
+
 ## 6. Verify
 
 ```sh
@@ -146,7 +158,7 @@ without touching a database. → [openreceive doctor](api-reference.md#openrecei
 
 ## Next
 
-- [Authorization](authorization.md) — host policy boundary
+- [Authorization](authorization.md) — your policy boundary
 - [Payment storage](storage.md) — the library-owned table and state machine
 - [Frontend Checkout](frontend-checkout.md) — browser responsibilities
 - [Automated Swaps](automated-swaps.md) — `swap_data` and refunds

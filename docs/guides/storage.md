@@ -3,8 +3,8 @@
 The ownership rule, verbatim from the normative
 [HTTP contract](../../spec/openapi/openreceive-http.v1.yaml):
 
-> The host owns orders; the library owns the `openreceive_payments` rows (they
-> live in the host's database).
+> Your application owns orders; the library owns the `openreceive_payments`
+> rows (they live in your database).
 
 This page is the canonical home of that statement — other docs link here
 instead of restating it. OpenReceive never owns orders, users, prices, or
@@ -75,7 +75,7 @@ passes so rapid calls collapse to one wallet scan per interval, and its
 ### SQLite and Postgres notes
 
 On SQLite the library sets `PRAGMA busy_timeout` on the handle it is given, so a
-commit that races the host application's own write waits for the write lock
+commit that races your application's own write waits for the write lock
 instead of failing immediately with `SQLITE_BUSY`.
 
 SQL you write in `onPaid` — through the settlement transaction's `query` — is
@@ -174,6 +174,6 @@ overwrite a settled attempt. This is the advanced path, not the quickstart —
 see [Node ORM recipes](node-orms.md) and the interface docs in
 `@openreceive/http`.
 
-Rails hosts get the migration from `bin/rails generate openreceive:install`;
+Rails applications get the migration from `bin/rails generate openreceive:install`;
 the `OpenReceivePayment` model is engine-owned. See the
 [Rails quickstart](quickstart-rails.md).

@@ -127,7 +127,7 @@ same database — one migration, both tables — and, where the ORM's migration
 format can seed rows, seeds its `schema_version` marker (see
 [Payment storage](storage.md#schema-version)). The `transaction_scan_gate` row is
 the durable claim that collapses the request-path reconcile passes of every
-instance into one wallet scan per interval, so keep it even though no host code
+instance into one wallet scan per interval, so keep it even though no code of yours
 touches it.
 
 `onPaid({ orderId, paymentHash, paidAt, details?, query })` runs inside the

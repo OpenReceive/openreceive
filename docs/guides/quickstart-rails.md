@@ -70,7 +70,7 @@ If you want referential integrity anyway, add the foreign key yourself in your
 own migration — the generated one shows the statement, `ON DELETE RESTRICT` so
 deleting an order cannot erase the record of money that was paid.
 
-A complete runnable host app is the Rails Hello Fruit demo, `npm run demo rails`
+A complete runnable example app is the Rails Hello Fruit demo, `npm run demo rails`
 ([`examples/hello-fruit/server/rails`](../../examples/hello-fruit/server/rails)).
 
 Supply the receive-only wallet connection as `ENV["NWC_URI"]`. Never put it in
@@ -79,7 +79,7 @@ methods such as `pay_invoice`; the explicit override is
 `config.allow_spend_capable_wallet = true` or
 `OPENRECEIVE_ALLOW_SPEND_CAPABLE_NWC=true` ([Security](security.md)).
 
-## Configure the host contract
+## Configure the order bridge
 
 The initializer needs four things: authorization, order loading, the trusted
 price, and fulfillment.
@@ -99,7 +99,7 @@ OpenReceive.configure do |config|
 end
 ```
 
-`OpenReceive.configure` sets the four-part host contract; `on_paid` runs
+`OpenReceive.configure` sets the four-part order bridge; `on_paid` runs
 inside the settlement transaction, only for the order's first settled attempt.
 → [OpenReceive.configure](api-reference.md#openreceiveconfigure)
 
@@ -110,15 +110,15 @@ above); the engine warns at every boot while the placeholder is still
 configured, because orders would otherwise be recorded as settled without ever
 being fulfilled.
 
-The amount always comes from the host-owned order; payer-supplied amounts are
+The amount always comes from your own order record; payer-supplied amounts are
 rejected. Advanced hooks (`resolve_checkout`, `on_checkout_created`) remain as
-overrides for custom-repository hosts and are not part of the quickstart.
+overrides for custom-repository applications and are not part of the quickstart.
 
 For public web shops, opt into the per-IP invoice cap with
 `config.rate_limiting = true`; leave it off (the default) when many payers
 share one IP. → [Rate limiting](rate-limiting.md#rails)
 
-In production the engine builds the wallet service — and runs its receive-only
+In production the engine builds the wallet client — and runs its receive-only
 preflight — eagerly at boot, so a missing `NWC_URI`, a dead relay, or a
 spend-capable wallet stops the deploy instead of surfacing as customer-facing
 500s on the first checkout. Outside production (tests, consoles) boot stays
@@ -126,7 +126,7 @@ lazy so no live wallet is needed.
 
 ## Render the checkout
 
-The engine serves JSON checkout routes only — rendering is a host view. Any
+The engine serves JSON checkout routes only — rendering is your view. Any
 OpenReceive frontend package works against the `/openreceive` mount; the
 smallest is the custom element (its default `prefix` is already
 `/openreceive`, and the package ships a self-contained `styles.css` a plain
@@ -145,7 +145,7 @@ defineOpenReceiveElements();
 ```
 
 The element creates the checkout for `order-id`, then renders and polls
-itself. React/Vue/Svelte/Angular hosts use the matching wrapper package
+itself. React/Vue/Svelte/Angular apps use the matching wrapper package
 instead — same props and defaults ([Frontend checkout](frontend-checkout.md)).
 The Rails Hello Fruit demo renders a fully custom UI over
 `@openreceive/browser/headless` ([Headless checkout](headless-checkout.md)).
@@ -192,11 +192,11 @@ grace, never the local clock alone. Duplicate delivery is harmless.
 
 The Ruby server recognizes `LSC_URI_PRIMARY` and `LSC_URI_BACKUP` using the
 shared [Lightning Swap Connect](lightning-swap-connect.md) vectors: setting either one
-auto-builds the matching provider, so a host that wants swaps only supplies the
+auto-builds the matching provider, so an app that wants swaps only supplies the
 connection strings. `config.swap_providers` is the override knob — pass your own
 adapters to replace the auto-built set, or an empty array to disable swaps.
 
 One `openreceive_payments` row holds at most one provider order in its
 server-only `swap_data`. The engine filters `swap_data` from Active Record
 inspection and ordinary serialization. Do not explicitly serialize it, log it,
-or return it from a host API; it may contain a provider credential.
+or return it from your own API; it may contain a provider credential.

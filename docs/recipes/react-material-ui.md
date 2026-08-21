@@ -98,4 +98,4 @@ Everything above about `components` and `classNames` applies to both modes.
 - Create orders through your backend; the checkout mints from the order ID.
 - Treat client polling as UI state only.
 - Fulfill products only from your backend `onPaid` path.
-- Keep Material UI theme ownership in the host app.
+- Keep Material UI theme ownership in your app.

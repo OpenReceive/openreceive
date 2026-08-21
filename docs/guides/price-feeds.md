@@ -19,7 +19,7 @@ console.log(openreceive.priceCurrencies); // ["USD", "EUR"]
 ```
 
 If `priceCurrencies` is omitted, OpenReceive falls back to `["USD"]`. Keep this
-non-secret allowlist in the host's normal Node configuration module or Rails
+non-secret allowlist in your normal Node configuration module or Rails
 initializer.
 
 The same currency list is the checkout-creation allowlist. Pass the actual order
@@ -38,7 +38,7 @@ those convert directly to `amount_msats` and never call a price provider.
 - Fiat `amount.value` is a decimal string; amounts round up to a whole sat.
 - `amount_msats` is `amount_sats * 1000`. Public payloads use `amount_msats`.
 - Quotes expire after the fixed spec constant `invoice_quote_ttl_seconds`
-  (600s — not a host knob). Minimum invoice is one sat.
+  (600s — not a knob you set). Minimum invoice is one sat.
 - Override feed URLs only if needed: `OPENRECEIVE_PRICE_FEED_PRIMARY_URL` /
   `OPENRECEIVE_PRICE_FEED_FALLBACK_URL` (must still serve Simple Price JSON).
 
