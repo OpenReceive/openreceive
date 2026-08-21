@@ -16,6 +16,7 @@ import type {
   ResolveCheckoutHook,
   ResolvedHostCheckout,
 } from "./handler.ts";
+import { maybeReconcileOpenReceivePayments } from "./reconcile-gate.ts";
 import {
   createOpenReceiveSqlPayments,
   type OpenReceiveOrderSettlementHook,
@@ -143,7 +144,7 @@ export interface OpenReceivePaymentRepository {
    * Count attempt rows recorded for this client IP at or after `sinceUnixSeconds`.
    * Backs the handler's opt-in `rateLimiting` option; when a custom repository
    * omits it, enabling `rateLimiting` fails at construction (there is no
-   * in-memory fallback — use a custom `rateLimit` hook instead).
+   * in-memory fallback — use a custom `rateLimitHook` instead).
    */
   countAttemptsFromIp?(clientIp: string, sinceUnixSeconds: number): number | Promise<number>;
   /**
@@ -294,30 +295,46 @@ export async function reconcileOpenReceivePayments(input: {
     overlapSeconds: input.overlapSeconds,
     ...(input.maxPages === undefined ? {} : { maxPages: input.maxPages }),
   });
+  // One failing delivery or transition must not starve the rest of the pass:
+  // each check is isolated, and the failures surface together at the end so
+  // the caller's error path (reconciler warn, opportunistic report) sees them.
+  const failures: unknown[] = [];
   for (const checked of checks) {
-    const attempt = byHash.get(checked.paymentHash.toLowerCase());
-    if (attempt === undefined) continue;
-    if (checked.status === "settled") {
-      // A settled result without paidAt is malformed; retry it next pass.
-      if (checked.paidAt !== undefined) {
-        await input.host.onPaid({
-          paymentHash: checked.paymentHash,
-          paidAt: checked.paidAt,
-          details: checked.details,
-        });
+    try {
+      const attempt = byHash.get(checked.paymentHash.toLowerCase());
+      if (attempt === undefined) continue;
+      if (checked.status === "settled") {
+        // A settled result without paidAt is malformed; retry it next pass.
+        if (checked.paidAt !== undefined) {
+          await input.host.onPaid({
+            paymentHash: checked.paymentHash,
+            paidAt: checked.paidAt,
+            details: checked.details,
+          });
+        }
+        continue;
       }
-      continue;
+      const walletTransaction = checked.details?.transaction;
+      const transition = reconciliationTransition(
+        attempt,
+        checked.status,
+        scannedAt,
+        walletTransaction?.state ?? walletTransaction?.transaction_state,
+      );
+      if (transition !== null) {
+        await input.host.payments.recordReconciliation(transition);
+      }
+    } catch (error) {
+      failures.push(error);
     }
-    const walletTransaction = checked.details?.transaction;
-    const transition = reconciliationTransition(
-      attempt,
-      checked.status,
-      scannedAt,
-      walletTransaction?.state ?? walletTransaction?.transaction_state,
+  }
+  if (failures.length > 0) {
+    const first = failures[0];
+    throw new AggregateError(
+      failures,
+      `reconciliation failed for ${failures.length} of ${checks.length} checks: ` +
+        (first instanceof Error ? first.message : String(first)),
     );
-    if (transition !== null) {
-      await input.host.payments.recordReconciliation(transition);
-    }
   }
   return checks;
 }
@@ -358,7 +375,12 @@ export function reconciliationTransition(
   return { paymentHash, status: "expired", observedAt, reason: "no_finality_after_expiry" };
 }
 
-/** Poll and reconcile only the pending attempts in the ledger. */
+/**
+ * Poll and reconcile only the pending attempts in the ledger. Every pass goes
+ * through the durable `claimReconcileGate`, so N worker instances — and the
+ * request-path opportunistic reconcile — collapse to one real wallet scan per
+ * gate interval instead of each running its own.
+ */
 export async function startOpenReceiveReconciler(input: {
   readonly service: OpenReceive;
   readonly host: OpenReceiveHost;
@@ -377,6 +399,12 @@ export async function startOpenReceiveReconciler(input: {
   const pollIntervalMs = input.pollIntervalMs ?? 5_000;
   if (!Number.isSafeInteger(pollIntervalMs) || pollIntervalMs < 250) {
     throw new RangeError("pollIntervalMs must be a safe integer of at least 250");
+  }
+  if (typeof input.host.payments.claimReconcileGate !== "function") {
+    throw new TypeError(
+      "The reconciler requires payments.claimReconcileGate (a durable CAS gate shared by every " +
+        "worker); implement it on the repository so all scan entry points stay within one budget.",
+    );
   }
   const overlapSeconds = input.overlapSeconds ?? 60;
   const controller = new AbortController();
@@ -405,18 +433,16 @@ export async function startOpenReceiveReconciler(input: {
   const done = (async () => {
     try {
       while (!controller.signal.aborted) {
-        try {
-          await reconcileOpenReceivePayments({
-            service: input.service,
-            host: input.host,
-            overlapSeconds,
-            ...(input.clock === undefined ? {} : { clock: input.clock }),
-          });
-          lastWarnedMessage = undefined;
-        } catch (error) {
-          // Wallet, repository, and callback failures retry from the ledger.
-          reportError(error);
-        }
+        // The gated pass never throws: wallet, repository, and callback
+        // failures reach reportError and retry from the ledger next pass.
+        const result = await maybeReconcileOpenReceivePayments({
+          service: input.service,
+          host: input.host,
+          overlapSeconds,
+          onError: reportError,
+          ...(input.clock === undefined ? {} : { clock: input.clock }),
+        });
+        if (result.reason === "ran") lastWarnedMessage = undefined;
         await abortableDelay(pollIntervalMs, controller.signal);
       }
     } finally {
@@ -507,10 +533,14 @@ export function createOpenReceiveHost<Order>(
     const order = await options.loadOrder(context.orderId, context);
     if (order === null) throw hostError("Order not found.", 404, "NOT_FOUND");
 
-    const amount = await options.amountForOrder(order, context);
+    // Pricing runs only where a price is minted or quoted. Status polls and
+    // refund recovery for committed attempts must not depend on (or wait for)
+    // the host's pricing callback.
     if (context.action === "swap.quote" || context.action === "checkout.prepare") {
-      return { amount };
+      return { amount: await options.amountForOrder(order, context) };
     }
+    const isCreate = context.action === "checkout.create" || context.action === "swap.create";
+    const amount = isCreate ? await options.amountForOrder(order, context) : undefined;
 
     const attempts = normalizePayments(
       context.orderId,
@@ -532,7 +562,7 @@ export function createOpenReceiveHost<Order>(
         }
         const now = clock();
         if (
-          selected.status !== "pending" ||
+          !isLivePaymentAttempt(selected, now) ||
           !isReusablePaymentAttempt(selected.expiresAt, now) ||
           !matchesCreateAction(selected, context.action, context.payInAsset)
         ) {
@@ -554,13 +584,12 @@ export function createOpenReceiveHost<Order>(
       const now = clock();
       const matching = attempts.filter(
         (payment) =>
-          payment.status === "pending" &&
-          payment.expiresAt > now &&
+          isLivePaymentAttempt(payment, now) &&
           matchesCreateAction(payment, context.action, context.payInAsset),
       );
       if (matching.length > 1) {
         throw hostError(
-          "This order has multiple live payment attempts for the same method; reconcile them before creating another.",
+          "This order already has unpaid checkouts in progress for this payment method; wait for them to expire before creating another.",
           409,
           "CONFLICT",
         );
@@ -572,14 +601,9 @@ export function createOpenReceiveHost<Order>(
       return resolvedPayment(amount, selected);
     }
 
-    const selected =
-      context.action === "swap.read" || context.action === "swap.refund"
-        ? attempts.find((payment) => payment.swapData !== undefined && payment.swapData !== null)
-        : attempts[0];
-    if (selected === undefined) {
-      throw hostError("Payment attempt not found for this order.", 404, "NOT_FOUND");
-    }
-    return resolvedPayment(amount, selected);
+    // Every remaining action addresses one specific attempt; the HTTP routes
+    // all require payment_hash, so a hash-less call here is a caller bug.
+    throw hostError("payment_hash is required for this action.", 400, "INVALID_REQUEST");
   };
 
   return {
@@ -604,17 +628,27 @@ export function openReceivePaymentInsert(input: CheckoutCreatedInput): OpenRecei
 }
 
 function resolvedPayment(
-  amount: CreateCheckoutAmount,
+  amount: CreateCheckoutAmount | undefined,
   payment: OpenReceivePaymentRecord,
 ): ResolvedHostCheckout {
   return {
-    amount,
+    ...(amount === undefined ? {} : { amount }),
     paymentHash: payment.paymentHash,
     checkout: structuredClone(payment.checkout),
     ...(payment.swapData === undefined || payment.swapData === null
       ? {}
       : { swapData: payment.swapData }),
   };
+}
+
+/** The Ruby `live_at` model: pending, not superseded, and not yet expired. */
+function isLivePaymentAttempt(
+  payment: Pick<OpenReceivePaymentRecord, "status" | "statusReason" | "expiresAt">,
+  now: number,
+): boolean {
+  return (
+    payment.status === "pending" && payment.statusReason !== "superseded" && payment.expiresAt > now
+  );
 }
 
 function matchesCreateAction(

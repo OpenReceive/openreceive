@@ -196,7 +196,7 @@ test("rateLimiting does not throttle non-create actions", async () => {
   assert.equal(prepared.status, 200);
 });
 
-test("rateLimiting and a custom rateLimit hook are mutually exclusive", async () => {
+test("rateLimiting and a custom rateLimitHook are mutually exclusive", async () => {
   const service = await newService();
   assert.throws(
     () =>
@@ -205,9 +205,9 @@ test("rateLimiting and a custom rateLimit hook are mutually exclusive", async ()
         authorize: () => true,
         host: testHost(),
         rateLimiting: true,
-        rateLimit: () => true,
+        rateLimitHook: () => true,
       }),
-    /either rateLimiting or a custom rateLimit hook/,
+    /either rateLimiting or a custom rateLimitHook/,
   );
 });
 
@@ -334,14 +334,14 @@ test("429 responses carry a Retry-After header", async () => {
   assert.equal(body.retryable, true);
 });
 
-test("rateLimiting: false composes with a custom rateLimit hook", async () => {
+test("rateLimiting: false composes with a custom rateLimitHook", async () => {
   const service = await newService();
   const handler = createOpenReceiveHttpHandler({
     service,
     authorize: () => true,
     host: testHost(),
     rateLimiting: false,
-    rateLimit: () => false,
+    rateLimitHook: () => false,
   });
   const response = await handler(createRequest("order-hook"), {
     native: { ip: "203.0.113.21" },

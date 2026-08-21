@@ -16,6 +16,8 @@ export interface ScaffoldPaymentsOptions {
   readonly orderModel: string;
   readonly orderTable: string;
   readonly orderIdType: OrderIdType;
+  readonly tableName: string;
+  readonly metaTableName: string;
   readonly skipForeignKey: boolean;
   readonly outDir: string;
   readonly force: boolean;

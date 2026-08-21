@@ -59,8 +59,12 @@ export interface ResolveCheckoutContext {
 }
 
 export interface ResolvedHostCheckout {
-  /** Host-owned price. Payer input is never an amount authority. */
-  readonly amount: CreateCheckoutAmount;
+  /**
+   * Host-owned price. Payer input is never an amount authority. Required for
+   * prepare/create/quote actions; status and refund actions on a committed
+   * attempt never need (or wait for) host pricing.
+   */
+  readonly amount?: CreateCheckoutAmount;
   /** Return the selected host payment attempt's hash to reuse or inspect its checkout. */
   readonly paymentHash?: string;
   /** Host-persisted safe checkout snapshot used for retry without a wallet read. */
@@ -79,7 +83,7 @@ export interface CreateOpenReceiveHttpHandlerOptions {
   readonly authorize: OpenReceiveAuthorize;
   /** Host authentication-independent payment integration returned by createOpenReceiveHost. */
   readonly host: OpenReceiveHost;
-  readonly rateLimit?: OpenReceiveRateLimit;
+  readonly rateLimitHook?: OpenReceiveRateLimit;
   /**
    * Built-in per-IP invoice rate limiting. OFF by default: shared-IP deployments
    * (point-of-sale terminals, kiosks, NAT'd venues) mint many invoices from one
@@ -92,22 +96,24 @@ export interface CreateOpenReceiveHttpHandlerOptions {
    * would be minted — reuse of a committed attempt is never throttled — and fails
    * open per-request when no client IP is attributable. Pass a config object to
    * tune limits or the payer-facing message. Mutually exclusive with a custom
-   * `rateLimit` hook.
+   * `rateLimitHook`.
    */
   readonly rateLimiting?: boolean | OpenReceiveIpRateLimitConfig;
   /**
-   * Opportunistic settlement discovery, ON by default: every mounted route
-   * (including unauthenticated `GET /rates`) first runs one durably gated
-   * reconcile pass when payment attempts are pending, so abandoned checkouts
-   * settle on any later OpenReceive call with no long-running process. The
-   * durable `openreceive_meta` gate (min 2s, stretched by invoice age) is
+   * Opportunistic settlement discovery, ON by default: every mounted payment
+   * route first runs one durably gated reconcile pass when payment attempts
+   * are pending, so abandoned checkouts settle on any later OpenReceive call
+   * with no long-running process. Unauthenticated `GET /rates` never triggers
+   * it — crawlers and health checks must not consume the wallet-scan budget.
+   * The durable `openreceive_meta` gate (min 2s, stretched by invoice age) is
    * shared by every worker on the host database, so rapid calls collapse to
    * one real wallet scan per interval; `payments/check` serves the requested
    * hash from that same pass — one gate claim per request, never a second
    * per-invoice wallet walk. Requires `payments.claimReconcileGate` (the
    * built-in SQL repository has it); construction throws otherwise rather
-   * than degrading silently. Pass `false` to disable (e.g. when a dedicated
-   * notifications worker owns scanning) or `{ minIntervalSeconds }` to tune.
+   * than degrading silently. A dedicated notifications worker claims the same
+   * gate, so running both never double-scans. Pass `false` to disable or
+   * `{ minIntervalSeconds }` to tune.
    */
   readonly opportunisticReconcile?: boolean | { readonly minIntervalSeconds?: number };
   /** Clock override (unix seconds) for the opportunistic reconcile gate. */
@@ -123,6 +129,8 @@ export interface OpenReceiveHttpHandler {
 
 interface Runtime extends CreateOpenReceiveHttpHandlerOptions {
   readonly prefix: string;
+  /** The resolved limiter: the custom `rateLimitHook` or the built-in per-IP one. */
+  readonly rateLimit?: OpenReceiveRateLimit;
   /** Single client-IP resolution used for BOTH row stamping and limit counting. */
   readonly extractClientIp: (context: {
     readonly action: OpenReceiveAuthorizeAction;
@@ -132,6 +140,12 @@ interface Runtime extends CreateOpenReceiveHttpHandlerOptions {
   }) => string | undefined;
   /** Resolved opportunistic-reconcile tuning; undefined means disabled. */
   readonly reconcile: { readonly minIntervalSeconds?: number } | undefined;
+  /**
+   * Handler-local warm cache for `payments/check` payment_methods: the swap
+   * catalog is served from here while fresh, so ~3s status polls do not walk
+   * the provider catalog on every request.
+   */
+  readonly paymentMethods: Map<number, { readonly at: number; readonly methods: unknown }>;
 }
 
 export function createOpenReceiveHttpHandler(
@@ -142,15 +156,15 @@ export function createOpenReceiveHttpHandler(
     throw new TypeError("HTTP handler requires authorize; authentication belongs to the host.");
   }
   if (options.host === undefined) throw new TypeError("HTTP handler requires host.");
-  // rateLimiting: false means disabled, so it composes with a custom rateLimit hook.
+  // rateLimiting: false means disabled, so it composes with a custom rateLimitHook.
   if (
     options.rateLimiting !== undefined &&
     options.rateLimiting !== false &&
-    options.rateLimit !== undefined
+    options.rateLimitHook !== undefined
   ) {
-    throw new TypeError("Pass either rateLimiting or a custom rateLimit hook, not both.");
+    throw new TypeError("Pass either rateLimiting or a custom rateLimitHook, not both.");
   }
-  const rateLimit = options.rateLimit ?? resolveRateLimiting(options);
+  const rateLimit = options.rateLimitHook ?? resolveRateLimiting(options);
   // Opportunistic reconcile is the default settlement path; it needs the
   // durable CAS gate, so a custom repository without one must opt out
   // explicitly rather than silently degrade (same idiom as rateLimiting).
@@ -184,6 +198,7 @@ export function createOpenReceiveHttpHandler(
     ...(rateLimit === undefined ? {} : { rateLimit }),
     extractClientIp,
     reconcile,
+    paymentMethods: new Map(),
     prefix: normalizePrefix(options.prefix ?? "/openreceive"),
   };
   const handle = async (request: Request, extras?: { native?: unknown }): Promise<Response> => {
@@ -217,7 +232,18 @@ async function dispatch(
       "No OpenReceive route matched this method and path.",
     );
 
-  // Any OpenReceive call is a settlement trigger: after the route matches and
+  // Unauthenticated GET /rates never triggers the opportunistic pass:
+  // crawlers and health checks must not consume the wallet-scan budget.
+  if (route.kind === "rates") {
+    const currencies = ratesCurrencies(url.searchParams.get("currencies"));
+    return jsonResponse(
+      200,
+      await runtime.service.listRates(currencies === undefined ? undefined : { currencies }),
+      requestId,
+    );
+  }
+
+  // Any payment call is a settlement trigger: after the route matches and
   // before its own work, run one durably gated reconcile pass (never throws;
   // a failed scan must not fail this request). `payments/check` consumes this
   // pass result below — exactly one gate claim per request.
@@ -232,15 +258,6 @@ async function dispatch(
             : { minIntervalSeconds: runtime.reconcile.minIntervalSeconds }),
           ...(runtime.clock === undefined ? {} : { clock: runtime.clock }),
         });
-
-  if (route.kind === "rates") {
-    const currencies = ratesCurrencies(url.searchParams.get("currencies"));
-    return jsonResponse(
-      200,
-      await runtime.service.listRates(currencies === undefined ? undefined : { currencies }),
-      requestId,
-    );
-  }
 
   const body = await readJsonBody(request);
   // Before the generic field whitelist, so a payer pricing attempt is refused
@@ -338,16 +355,15 @@ async function dispatch(
         ? passCheckedBody(fromPass)
         : await rowCheckedBody(runtime, orderId, paymentHash);
     // Catalog warms on the first check; clients keep "Loading currencies…" until
-    // payment_methods is present (even as an empty Lightning-only list).
+    // payment_methods is present (even as an empty Lightning-only list). Polls
+    // inside the warm window reuse the cached catalog — a ~3s status poll must
+    // not walk the provider catalog every time.
     const checkout = requiredCheckout(resolved);
-    const swapOptions = await runtime.service.listSwapOptions({
-      amountMsats: checkout.amountMsats,
-    });
     return jsonResponse(
       200,
       {
         ...checkedBody,
-        payment_methods: toSnakeCase(swapOptions.options),
+        payment_methods: await checkPaymentMethods(runtime, checkout.amountMsats),
       },
       requestId,
     );
@@ -544,6 +560,37 @@ async function commit(runtime: Runtime, input: CheckoutCreatedInput): Promise<vo
   }
 }
 
+/** Seconds a `payments/check` payment_methods catalog stays warm per amount. */
+const PAYMENT_METHODS_CACHE_SECONDS = 60;
+
+/** Amount buckets kept warm before the oldest entries are dropped. */
+const PAYMENT_METHODS_CACHE_MAX_ENTRIES = 256;
+
+/**
+ * The `payments/check` payment_methods list, from the handler-local warm cache
+ * when fresh for this amount, otherwise from one `listSwapOptions` call. The
+ * first check (and any check after the TTL) warms the catalog; every poll in
+ * between serves the warmed copy.
+ */
+async function checkPaymentMethods(runtime: Runtime, amountMsats: number): Promise<unknown> {
+  const now = (runtime.clock ?? currentUnixSeconds)();
+  const cached = runtime.paymentMethods.get(amountMsats);
+  if (cached !== undefined && now - cached.at < PAYMENT_METHODS_CACHE_SECONDS) {
+    return cached.methods;
+  }
+  const swapOptions = await runtime.service.listSwapOptions({ amountMsats });
+  const methods = toSnakeCase(swapOptions.options);
+  if (runtime.paymentMethods.size >= PAYMENT_METHODS_CACHE_MAX_ENTRIES) {
+    runtime.paymentMethods.clear();
+  }
+  runtime.paymentMethods.set(amountMsats, { at: now, methods });
+  return methods;
+}
+
+function currentUnixSeconds(): number {
+  return Math.floor(Date.now() / 1_000);
+}
+
 /** `payments/check` body for the request that won the gate: straight from the pass. */
 function passCheckedBody(checked: PaymentCheck): Record<string, unknown> {
   const { details, ...checkedPublic } = checked;
@@ -618,7 +665,7 @@ function optionalCheckoutFields(body: Record<string, unknown>) {
 }
 
 function selectedPaymentHash(resolved: ResolvedHostCheckout, requestedPaymentHash: string): string {
-  const selected = requiredPaymentHash(resolved.paymentHash);
+  const selected = hostPaymentHash(resolved.paymentHash);
   if (selected !== requestedPaymentHash) {
     throw new OpenReceiveHttpError(
       404,
@@ -627,6 +674,23 @@ function selectedPaymentHash(resolved: ResolvedHostCheckout, requestedPaymentHas
     );
   }
   return selected;
+}
+
+/**
+ * A payment hash the HOST resolver returned. A missing or malformed value here
+ * is a host integration bug, never payer input: it must surface as a 500
+ * naming the host, not as a payer-blaming 400.
+ */
+function hostPaymentHash(value: unknown): string {
+  if (typeof value === "string") {
+    const hash = value.trim().toLowerCase();
+    if (/^[0-9a-f]{64}$/.test(hash)) return hash;
+  }
+  throw new OpenReceiveHttpError(
+    500,
+    "INTERNAL",
+    "The host resolver returned a missing or malformed payment hash for this order.",
+  );
 }
 
 function requiredAmount(value: ResolvedHostCheckout): CreateCheckoutAmount {
@@ -659,7 +723,7 @@ function requiredSwapData(value: SwapData | undefined): SwapData {
 }
 
 function committedCheckout(orderId: string, resolved: ResolvedHostCheckout): CheckoutInvoice {
-  const paymentHash = requiredPaymentHash(resolved.paymentHash);
+  const paymentHash = hostPaymentHash(resolved.paymentHash);
   const checkout = requiredCheckout(resolved);
   if (checkout.orderId !== orderId || checkout.paymentHash.toLowerCase() !== paymentHash) {
     throw new OpenReceiveHttpError(
@@ -676,7 +740,7 @@ async function recoverCommittedSwap(
   orderId: string,
   resolved: ResolvedHostCheckout,
 ): Promise<SwapCheckout> {
-  const paymentHash = requiredPaymentHash(resolved.paymentHash);
+  const paymentHash = hostPaymentHash(resolved.paymentHash);
   const swapData = requiredSwapData(resolved.swapData);
   const status = await runtime.service.getSwap({ orderId, paymentHash, swapData });
   const checkout = committedCheckout(orderId, resolved);

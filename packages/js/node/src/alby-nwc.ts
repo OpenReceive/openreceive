@@ -11,19 +11,20 @@
 import {
   formatOpenReceiveSpendCapabilityRefusedMessage,
   formatOpenReceiveSpendCapabilityWarningMessage,
-  OpenReceiveError,
-  parseNwcUri,
   type ListTransactionsRequest,
   type ListTransactionsResult,
   type MakeInvoiceRequest,
   type MakeInvoiceResult,
+  OpenReceiveError,
   type OpenReceiveReceiveNwcClient,
   type ParsedNwcConnection,
+  parseNwcUri,
   type RedactedNwcConnection,
   type WalletCapabilitySummary,
 } from "@openreceive/core";
 import { normalizeNwcWalletError, WalletPreflightError } from "./nwc/errors.ts";
 import {
+  type NormalizedListTransactions,
   normalizeListTransactionsResult,
   normalizeMakeInvoiceResult,
   normalizeNwcNotification,
@@ -33,24 +34,23 @@ import {
   toNip47MakeInvoiceParams,
   validateListTransactionsRequest,
   validateMakeInvoiceRequest,
-  type NormalizedListTransactions,
 } from "./nwc/normalize.ts";
 import {
+  type AlbyNwcCompatibleClient,
   callRequiredMethod,
   closeNwcNotificationSubscription,
   createDefaultAlbyNwcClient,
   delay,
-  type AlbyNwcCompatibleClient,
 } from "./nwc/transport.ts";
 
+export type { WalletPreflightErrorCode } from "./nwc/errors.ts";
 export {
   normalizeNwcWalletError,
   ReceiveCheckoutValidationError,
   WalletPreflightError,
 } from "./nwc/errors.ts";
-export type { WalletPreflightErrorCode } from "./nwc/errors.ts";
-export { summarizeWalletCapabilities } from "./nwc/normalize.ts";
 export type { NwcWalletNotification } from "./nwc/normalize.ts";
+export { summarizeWalletCapabilities } from "./nwc/normalize.ts";
 export type { AlbyNwcCompatibleClient } from "./nwc/transport.ts";
 
 import type { NwcWalletNotification } from "./nwc/normalize.ts";
@@ -117,8 +117,10 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
   #connection: ParsedNwcConnection;
   #connectionString: string;
   #client?: AlbyNwcCompatibleClient;
+  #clientPromise?: Promise<AlbyNwcCompatibleClient>;
   #clientFactory?: AlbyNwcClientFactory;
   #preflightSummary?: WalletCapabilitySummary;
+  #preflightPromise?: Promise<WalletCapabilitySummary>;
   #requirePreflight: boolean;
   #logger?: NwcEndpointLogger;
   #allowSpendCapableWallet: boolean;
@@ -312,7 +314,21 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
       throw normalized;
     }
 
-    const result = normalizeMakeInvoiceResult(rawResult);
+    let result: MakeInvoiceResult;
+    try {
+      result = normalizeMakeInvoiceResult(rawResult);
+    } catch (error) {
+      // Normalization failures (missing invoice, malformed payment_hash) take
+      // the same normalized + logged path as transport failures.
+      const normalized = normalizeNwcWalletError(error);
+      this.#log("error", "nwc.make_invoice.failed", "NWC wallet make_invoice failed.", {
+        method: "make_invoice",
+        duration_ms: Date.now() - startedAt,
+        error_code: normalized.code,
+        error_message: normalized.message,
+      });
+      throw normalized;
+    }
     this.#log("debug", "nwc.make_invoice.completed", "NWC wallet make_invoice completed.", {
       method: "make_invoice",
       duration_ms: Date.now() - startedAt,
@@ -487,19 +503,36 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
 
   private async ensurePreflight(): Promise<void> {
     if (!this.#requirePreflight || this.#preflightSummary !== undefined) return;
-    await this.preflight();
+    // Memoize the in-flight promise so concurrent first calls share one
+    // preflight; a failure clears it so the next call retries.
+    this.#preflightPromise ??= this.preflight();
+    try {
+      await this.#preflightPromise;
+    } catch (error) {
+      this.#preflightPromise = undefined;
+      throw error;
+    }
   }
 
   private async getClient(): Promise<AlbyNwcCompatibleClient> {
     if (this.#client !== undefined) return this.#client;
 
-    if (this.#clientFactory !== undefined) {
-      this.#client = await this.#clientFactory(this.#connection);
-      return this.#client;
+    // Memoize the in-flight promise so concurrent first calls share one client
+    // instead of constructing two and leaking the one that loses the race.
+    this.#clientPromise ??= (async () => {
+      const client =
+        this.#clientFactory !== undefined
+          ? await this.#clientFactory(this.#connection)
+          : await createDefaultAlbyNwcClient(this.#connectionString);
+      this.#client = client;
+      return client;
+    })();
+    try {
+      return await this.#clientPromise;
+    } catch (error) {
+      this.#clientPromise = undefined;
+      throw error;
     }
-
-    this.#client = await createDefaultAlbyNwcClient(this.#connectionString);
-    return this.#client;
   }
 }
 

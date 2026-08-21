@@ -1,28 +1,29 @@
 import { createHmac } from "node:crypto";
+import { ceilDiv, OPENRECEIVE_SATS_PER_BTC } from "@openreceive/core";
 import {
   getOpenReceiveSwapAssetInfo,
   isOpenReceiveLightningNetwork,
   isValidSwapAddressForNetwork,
   listOpenReceiveSwapAssetInfo,
-  type SwapPayInAsset,
   openReceiveSwapNetworkMatches,
+  type SwapPayInAsset,
 } from "./assets.ts";
 import {
+  compareFixedFloatDecimalAmounts,
   deserializeFixedFloatRatesIndex,
+  type FixedFloatRatesIndex,
   fetchFixedFloatRatesIndex,
   fixedFloatRatesPairKey,
   fixedFloatRatesXmlPath,
-  compareFixedFloatDecimalAmounts,
   invoiceLimitsFromFixedFloatRate,
   quotePayAmountFromFixedFloatRate,
   retainFixedFloatRatePairsForKeys,
   serializeFixedFloatRatesIndex,
-  type FixedFloatRatesIndex,
 } from "./fixedfloat-rates.ts";
 import {
-  type TransientSwapCache,
   SWAP_LIMITS_MAX_STALE_SECONDS,
   swapLimitsMetaKey,
+  type TransientSwapCache,
 } from "./limits-cache.ts";
 import type {
   SwapAttentionReason,
@@ -30,11 +31,11 @@ import type {
   SwapFee,
   SwapOrder,
   SwapProvider,
+  SwapProviderApiRequestLog,
+  SwapProviderApiResponseLog,
   SwapProviderAsset,
   SwapProviderState,
   SwapQuote,
-  SwapProviderApiRequestLog,
-  SwapProviderApiResponseLog,
   SwapRefundReason,
 } from "./provider.ts";
 import {
@@ -740,9 +741,9 @@ function amountMsatsToBtcString(amountMsats: number): string {
   if (!Number.isSafeInteger(amountMsats) || amountMsats <= 0) {
     throw new RangeError("invoiceAmountMsats must be a positive safe integer.");
   }
-  const sats = Math.ceil(amountMsats / 1000);
-  const wholeBtc = Math.floor(sats / 100_000_000);
-  const fractional = String(sats % 100_000_000)
+  const sats = ceilDiv(BigInt(amountMsats), 1000n);
+  const wholeBtc = sats / OPENRECEIVE_SATS_PER_BTC;
+  const fractional = String(sats % OPENRECEIVE_SATS_PER_BTC)
     .padStart(8, "0")
     .replace(/0+$/, "");
   return fractional.length === 0 ? String(wholeBtc) : `${wholeBtc}.${fractional}`;

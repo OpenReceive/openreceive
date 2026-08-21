@@ -1,3 +1,4 @@
+import { openReceivePaymentsColumnNames, openReceivePaymentsSeedSql } from "@openreceive/core";
 import { isSqlite } from "./shared.ts";
 import type { ScaffoldPaymentsOptions } from "./types.ts";
 
@@ -12,10 +13,13 @@ const PLACEHOLDER_NOTE =
  * scaffold emits no repository code — the library owns it at runtime.
  */
 export function wiringGuideMarkdown(options: ScaffoldPaymentsOptions): string {
+  const columnList = openReceivePaymentsColumnNames()
+    .map((name) => `\`${name}\``)
+    .join(", ");
   return `# OpenReceive payments wiring
 
 Generated for **${options.orm}** (${options.dialect}). This scaffold emits only the
-\`openreceive_payments\` + \`openreceive_meta\` schema/migration and this guide.
+\`${options.tableName}\` + \`${options.metaTableName}\` schema/migration and this guide.
 The OpenReceive library owns the payment-attempt repository at runtime — commit
 locking, settlement write-once, the durable reconcile gate, and reconciliation
 state transitions all run inside \`@openreceive/http\`, never in generated or
@@ -25,11 +29,12 @@ hand-written host code.
 
 ${migrationStep(options)}
 
-Keep every column: \`id\`, \`order_id\`, \`payment_hash\`, \`status\`,
-\`status_reason\`, \`paid_at\`, \`expires_at\`, \`created_at\`, \`updated_at\`,
-\`checkout_data\`, \`swap_data\`, \`client_ip\`. The timestamp columns (\`paid_at\`,
-\`expires_at\`, \`created_at\`, \`updated_at\`) are unix-seconds integers, never
-datetime columns. Keep the sibling \`openreceive_meta\` table (\`key\`, \`value\`,
+Keep every column: ${columnList}. The timestamp columns (\`paid_at\`,
+\`expires_at\`, \`created_at\`, \`updated_at\`, \`inserted_at\`) are
+unix-seconds integers, never datetime columns. \`inserted_at\` is stamped from the host's
+local clock and is what the per-IP rate limiter counts on
+(\`countAttemptsFromIp\`): dropping it silently disables DB-backed rate
+limiting. Keep the sibling \`${options.metaTableName}\` table (\`key\`, \`value\`,
 \`rev\`) too: it is the durable reconcile gate every worker on this database
 shares.
 
@@ -103,15 +108,29 @@ function onPaidUpdateLine(options: ScaffoldPaymentsOptions): string {
 function migrationStep(options: ScaffoldPaymentsOptions): string {
   switch (options.orm) {
     case "prisma":
-      return "Merge `prisma/schema.openreceive.prisma` (both models) into your Prisma schema, then run `npx prisma migrate dev --name create_openreceive_tables`.";
+      return `Merge \`prisma/schema.openreceive.prisma\` (both models) into your Prisma schema,
+then run \`npx prisma migrate dev --create-only --name create_openreceive_tables\`.
+Prisma's schema language cannot express the canonical CHECK constraints or the
+\`schema_version\` seed row, so before applying the draft migration, add the
+statements from \`prisma/openreceive-constraints.sql\` to it (the file says
+how), then run \`npx prisma migrate dev\`.`;
     case "drizzle":
-      return "Export `openReceivePayments` and `openReceiveMeta` from `src/db/openreceive-tables.ts` in your Drizzle schema entrypoint, then run `drizzle-kit generate` and your usual migrate step.";
+      return `Export \`openReceivePayments\` and \`openReceiveMeta\` from
+\`src/db/openreceive-tables.ts\` in your Drizzle schema entrypoint, then run
+\`drizzle-kit generate\` and your usual migrate step. The schema carries both
+canonical CHECK constraints; the \`schema_version\` seed row cannot be expressed
+in schema, so also create a custom migration for it —
+\`drizzle-kit generate --custom --name openreceive-seed\` — containing:
+
+\`\`\`sql
+${openReceivePaymentsSeedSql(options.dialect, options.metaTableName)};
+\`\`\``;
     case "typeorm":
       return "Register `src/migrations/20260101000000-create-openreceive-tables.ts` in your DataSource `migrations` list, then run migrations through your usual workflow (for example `npx typeorm migration:run`). The migration executes the canonical OpenReceive DDL directly; no entity class is needed.";
     case "sequelize":
-      return "Keep `migrations/20260101000000-create-openreceive-tables.cjs` in your sequelize-cli migrations folder, then run `npx sequelize-cli db:migrate`.";
+      return "Keep `migrations/20260101000000-create-openreceive-tables.cjs` in your sequelize-cli migrations folder, then run `npx sequelize-cli db:migrate`. The migration executes the canonical OpenReceive DDL directly; no model class is needed.";
     case "knex":
-      return "Keep `db/migrations/20260101000000_create_openreceive_tables.mjs` in your Knex migrations directory, then run `npx knex migrate:latest`.";
+      return "Keep `db/migrations/20260101000000_create_openreceive_tables.mjs` in your Knex migrations directory, then run `npx knex migrate:latest`. The migration executes the canonical OpenReceive DDL directly.";
   }
 }
 

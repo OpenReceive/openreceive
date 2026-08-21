@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   createOpenReceiveHost,
   openReceivePaymentInsert,
+  reconcileOpenReceivePayments,
   startOpenReceiveReconciler,
 } from "../packages/js/http/src/index.ts";
 import { createOpenReceiveStatusFetcher } from "../packages/js/browser/src/internal.ts";
@@ -114,11 +115,46 @@ test("payment status selects the exact attempt only after checking order ownersh
 });
 
 test("host integration fails closed when repository corruption exposes two live attempts", async () => {
+  const error = await host([payment("a", { createdAt: 800 }), payment("b", { createdAt: 900 })])
+    .resolveCheckout(context("checkout.create"))
+    .then(
+      () => assert.fail("two live attempts for one method must not resolve"),
+      (thrown) => thrown,
+    );
+  assert.equal(error.status, 409);
+  assert.match(error.message, /unpaid checkouts in progress/);
+  // The forbidden internal vocabulary never reaches the payer.
+  assert.doesNotMatch(error.message, /live|supersede/i);
+});
+
+test("a pending superseded row never blocks its live replacement from being reused", async () => {
+  // Supersede keeps the old row pending with a future expires_at; only the
+  // statusReason marks it dead. The newer sibling must be served without a 409.
+  const resolved = await host([
+    payment("a", { statusReason: "superseded" }),
+    payment("b", { createdAt: 950 }),
+  ]).resolveCheckout(context("checkout.create"));
+
+  assert.deepEqual(resolved, {
+    amount: { currency: "USD", value: "10.00" },
+    paymentHash: hash("b"),
+    checkout: payment("b").checkout,
+  });
+});
+
+test("a lone pending superseded row mints fresh instructions, never its stale ones", async () => {
+  const resolved = await host([payment("a", { statusReason: "superseded" })]).resolveCheckout(
+    context("checkout.create"),
+  );
+  assert.deepEqual(resolved, { amount: { currency: "USD", value: "10.00" } });
+});
+
+test("a hash-hinted create refuses a pending superseded attempt", async () => {
   await assert.rejects(
-    host([payment("a", { createdAt: 800 }), payment("b", { createdAt: 900 })]).resolveCheckout(
-      context("checkout.create"),
+    host([payment("a", { statusReason: "superseded" })]).resolveCheckout(
+      context("checkout.create", { payment_hash: hash("a") }),
     ),
-    /multiple live payment attempts/,
+    /not a reusable pending checkout/,
   );
 });
 
@@ -187,10 +223,43 @@ test("swap.read and swap.refund select the attempt carrying swap data", async ()
   };
   const rows = [payment("a"), payment("b", { createdAt: 800, swapData })];
   for (const action of ["swap.read", "swap.refund"]) {
-    const selected = await host(rows).resolveCheckout(context(action));
+    const selected = await host(rows).resolveCheckout(context(action, { payment_hash: hash("b") }));
     assert.equal(selected.paymentHash, hash("b"));
     assert.equal(selected.swapData, swapData);
   }
+});
+
+test("status and refund actions require a payment hash", async () => {
+  // Every HTTP route for these actions carries payment_hash; a hash-less call
+  // is a caller bug, not an invitation to guess an attempt.
+  for (const action of ["payment.check", "swap.read", "swap.refund"]) {
+    await assert.rejects(
+      host([payment("a")]).resolveCheckout(context(action)),
+      /payment_hash is required/,
+    );
+  }
+});
+
+test("host pricing runs only when minting or quoting, never on status or refund reads", async () => {
+  let priced = 0;
+  const paymentHost = createOpenReceiveHost({
+    clock: () => 1_000,
+    loadOrder: async () => ({ total: "10.00" }),
+    amountForOrder: () => {
+      priced += 1;
+      throw new Error("pricing service down");
+    },
+    payments: repository([payment("a")]),
+    onSettlement: async () => undefined,
+  });
+  for (const action of ["payment.check", "swap.read", "swap.refund"]) {
+    const selected = await paymentHost.resolveCheckout(
+      context(action, { payment_hash: hash("a") }),
+    );
+    assert.equal(selected.paymentHash, hash("a"));
+    assert.equal(selected.amount, undefined);
+  }
+  assert.equal(priced, 0, "a slow or broken pricing callback must not break status polls");
 });
 
 test("host integration reuses Lightning and allows a concurrent swap mint", async () => {
@@ -407,6 +476,7 @@ test("reconciler retries from the pending-attempt ledger without a cursor", asyn
   const controller = new AbortController();
   const inputs = [];
   const delivered = [];
+  const gateClaims = [];
   const returned = await startOpenReceiveReconciler({
     service: {
       async reconcilePayments(input) {
@@ -423,19 +493,74 @@ test("reconciler retries from the pending-attempt ledger without a cursor", asyn
       payments: {
         listReconcilableAttempts: async () => [{ paymentHash, createdAt: 800, expiresAt: 1_100 }],
         recordReconciliation: async () => undefined,
+        claimReconcileGate: async (input) => {
+          gateClaims.push(input);
+          return true;
+        },
       },
     },
     signal: controller.signal,
     pollIntervalMs: 250,
+    onError: () => undefined,
   });
   await returned.done;
   assert.equal(inputs.length, 2);
   assert.deepEqual(inputs[0], {
     attempts: [{ paymentHash, createdAt: 800, expiresAt: 1_100 }],
     overlapSeconds: 60,
+    maxPages: 50,
   });
   assert.deepEqual(
     delivered.map((settled) => settled.paymentHash),
     [paymentHash, paymentHash],
   );
+  // Every worker pass goes through the durable gate.
+  assert.equal(gateClaims.length, 2);
+});
+
+test("reconciler refuses a repository without the durable scan gate", async () => {
+  await assert.rejects(
+    startOpenReceiveReconciler({
+      service: { reconcilePayments: async () => [] },
+      host: {
+        onPaid: async () => undefined,
+        payments: {
+          listReconcilableAttempts: async () => [],
+          recordReconciliation: async () => undefined,
+        },
+      },
+    }),
+    /claimReconcileGate/,
+  );
+});
+
+test("one failing settlement delivery does not starve the rest of the pass", async () => {
+  const delivered = [];
+  const service = {
+    reconcilePayments: async () => [
+      { paymentHash: hash("a"), status: "settled", paidAt: 900 },
+      { paymentHash: hash("b"), status: "settled", paidAt: 901 },
+    ],
+  };
+  const failingHost = {
+    onPaid: async (settled) => {
+      delivered.push(settled.paymentHash);
+      if (settled.paymentHash === hash("a")) throw new Error("host transaction rolled back");
+    },
+    payments: {
+      listReconcilableAttempts: async () => [
+        { paymentHash: hash("a"), createdAt: 800, expiresAt: 1_100 },
+        { paymentHash: hash("b"), createdAt: 800, expiresAt: 1_100 },
+      ],
+      recordReconciliation: async () => undefined,
+    },
+  };
+  await assert.rejects(reconcileOpenReceivePayments({ service, host: failingHost }), (error) => {
+    assert.ok(error instanceof AggregateError);
+    assert.equal(error.errors.length, 1);
+    assert.match(error.errors[0].message, /host transaction rolled back/);
+    return true;
+  });
+  // The failure on the first check must not stop the second delivery.
+  assert.deepEqual(delivered, [hash("a"), hash("b")]);
 });

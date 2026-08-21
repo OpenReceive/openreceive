@@ -6,9 +6,10 @@ import {
 import type { OpenReceive, OpenReceiveWalletNotification } from "@openreceive/node";
 import {
   type OpenReceiveHost,
-  reconcileOpenReceivePayments,
   startOpenReceiveReconciler,
+  warnOpenReceiveFailure,
 } from "./host-payments.ts";
+import { maybeReconcileOpenReceivePayments } from "./reconcile-gate.ts";
 
 export interface OpenReceiveNotificationListener {
   /** Unsubscribe from wallet notifications and wait for any in-flight pass. */
@@ -22,10 +23,12 @@ export interface OpenReceiveNotificationListener {
  * matches a pending attempt settles that attempt directly through
  * `host.onPaid`, with no redundant wallet scan for that invoice. Anything less
  * — no payload, no finality signal, or an unknown/not-pending hash — wakes one
- * `reconcileOpenReceivePayments` pass instead. Bursts coalesce: while a pass
- * runs, at most one follow-up pass is queued. Errors go to `onError` (default:
- * swallowed); a direct-settlement failure also falls back to a scan so the
- * safety net covers it. The polling reconciler remains the safety net for
+ * reconcile pass instead, claimed through the durable scan gate so listeners,
+ * workers, and the request path share one wallet-scan budget. Bursts coalesce:
+ * while a pass runs, at most one follow-up pass is queued. Errors go to
+ * `onError` (default: a sanitized console.warn); a direct-settlement failure
+ * also falls back to a scan so the safety net covers it. The polling
+ * reconciler remains the safety net for
  * notifications missed while offline. Direct settlement assumes the NWC client
  * binds notification decryption to the connection's wallet pubkey (the bundled
  * SDK does).
@@ -45,9 +48,23 @@ export async function startOpenReceiveNotificationListener(input: {
       retryable: false,
     });
   }
+  if (typeof input.host.payments.claimReconcileGate !== "function") {
+    throw new TypeError(
+      "The notification listener requires payments.claimReconcileGate (a durable CAS gate shared " +
+        "by every worker); implement it on the repository so all scan entry points stay within one budget.",
+    );
+  }
   const reportError = (error: unknown) => {
+    if (input.onError === undefined) {
+      warnOpenReceiveFailure(
+        "payment.notification.failed",
+        "notification listener failed (polling remains the safety net)",
+        error,
+      );
+      return;
+    }
     try {
-      input.onError?.(error);
+      input.onError(error);
     } catch {
       // The error sink must never break the listener; polling remains the safety net.
     }
@@ -71,17 +88,14 @@ export async function startOpenReceiveNotificationListener(input: {
       try {
         do {
           queued = false;
-          try {
-            await reconcileOpenReceivePayments({
-              service: input.service,
-              host: input.host,
-              ...(input.overlapSeconds === undefined
-                ? {}
-                : { overlapSeconds: input.overlapSeconds }),
-            });
-          } catch (error) {
-            reportError(error);
-          }
+          // Durably gated: a pass another worker just ran (gate_busy) is not
+          // repeated, so notification bursts never exceed the scan budget.
+          await maybeReconcileOpenReceivePayments({
+            service: input.service,
+            host: input.host,
+            onError: reportError,
+            ...(input.overlapSeconds === undefined ? {} : { overlapSeconds: input.overlapSeconds }),
+          });
         } while (queued && !stopped);
       } finally {
         running = false;
@@ -168,8 +182,10 @@ export interface OpenReceiveNotificationWorker {
  * listens for NWC-02 `payment_received` notifications AND runs the same
  * one-pass reconcile on an interval — the safety net for notifications missed
  * while this worker was down. The web process never does this; its default is
- * request-path opportunistic reconcile. A wallet without notification support
- * degrades to the periodic pass alone (reported via `onError`).
+ * request-path opportunistic reconcile. Every pass — worker or web — claims
+ * the same durable scan gate, so running both never double-scans the wallet.
+ * A wallet without notification support degrades to the periodic pass alone
+ * (reported via `onError`).
  *
  * There is no host-aware CLI for this: wire it from a small host script that
  * owns `service` and `host` (see the scaffold wiring guide).
@@ -200,7 +216,15 @@ export async function startOpenReceiveNotificationWorker(input: {
   } catch (error) {
     if (error instanceof OpenReceiveError && error.code === "UNSUPPORTED_METHOD") {
       // Notifications are opt-in wallet capability; the periodic pass still runs.
-      input.onError?.(error);
+      if (input.onError === undefined) {
+        warnOpenReceiveFailure(
+          "payment.notification.unsupported",
+          "wallet lacks NWC notifications; running the periodic pass alone",
+          error,
+        );
+      } else {
+        input.onError(error);
+      }
     } else {
       reconciler.stop();
       await reconciler.done;

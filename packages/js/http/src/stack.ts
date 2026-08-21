@@ -128,6 +128,9 @@ export function createOpenReceiveStack<Order = unknown>(
     handler,
     ready: boot.then(() => undefined),
     async close() {
+      // An in-flight boot finishes constructing the service after a bare close
+      // would have returned; wait for it so the relay socket never leaks.
+      await boot.catch(() => {});
       await ownedService?.close();
     },
   };
@@ -136,10 +139,27 @@ export function createOpenReceiveStack<Order = unknown>(
 /**
  * True when adapter options are the flat all-in-one form (no prebuilt `host`).
  * The composed form always carries `host`; the flat form carries the order
- * hooks directly.
+ * hooks directly. Composed options that merely forgot `host` (e.g.
+ * `{ service, authorize }`) throw the missing-host error instead of entering
+ * the all-in-one path and blaming the caller for omitting nwc/db/onPaid.
  */
 export function isOpenReceiveStackOptions<Order>(
   options: CreateOpenReceiveHttpHandlerOptions | CreateOpenReceiveStackOptions<Order>,
 ): options is CreateOpenReceiveStackOptions<Order> {
-  return (options as { host?: unknown }).host === undefined;
+  if ((options as { host?: unknown }).host !== undefined) return false;
+  const flat = options as CreateOpenReceiveStackOptions<Order>;
+  if (
+    flat.nwc !== undefined ||
+    flat.db !== undefined ||
+    flat.payments !== undefined ||
+    flat.loadOrder !== undefined ||
+    flat.amountForOrder !== undefined ||
+    flat.onPaid !== undefined ||
+    flat.onSettlement !== undefined
+  ) {
+    return true;
+  }
+  throw new TypeError(
+    "OpenReceive composed options require host: pass { service, host, authorize }, or use the all-in-one form with db/loadOrder/amountForOrder/onPaid.",
+  );
 }

@@ -8,15 +8,15 @@
  */
 
 import {
-  OPENRECEIVE_MAX_AMOUNT_MSATS,
-  OPENRECEIVE_MIN_AMOUNT_MSATS,
-  OPENRECEIVE_NWC_METADATA_MAX_BYTES,
   type ListTransactionsRequest,
   type ListTransactionsResult,
   type MakeInvoiceRequest,
   type MakeInvoiceResult,
   type NwcEncryptionMode,
   type NwcTransaction,
+  OPENRECEIVE_MAX_AMOUNT_MSATS,
+  OPENRECEIVE_MIN_AMOUNT_MSATS,
+  OPENRECEIVE_NWC_METADATA_MAX_BYTES,
   type OpenReceiveTransactionState,
   type ParsedNwcConnection,
   type WalletCapabilitySummary,
@@ -171,6 +171,9 @@ export function normalizeMakeInvoiceResult(rawResult: unknown): MakeInvoiceResul
   const result = asRecord(unwrapNwcResult(rawResult));
   const invoice = requiredString(result.invoice, "invoice");
   const paymentHash = requiredString(result.payment_hash ?? result.paymentHash, "payment_hash");
+  if (!HEX_64.test(paymentHash)) {
+    throw new TypeError("payment_hash must be 64 hex characters");
+  }
   const rawAmount = result.amount_msats ?? result.amount;
 
   return {

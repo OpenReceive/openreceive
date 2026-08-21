@@ -86,9 +86,11 @@ function intervalForInvoiceAge(elapsedSeconds: number): number {
  * settlement sweep did. The gate's `claimed_at` is left in place on failure so
  * a broken wallet cannot stampede; the next interval retries.
  *
- * The HTTP handler calls this on every mounted route by default
- * (`opportunisticReconcile`); it is exported so hosts can also drive it from
- * their own routes or middleware (host-only routes never auto-run it).
+ * The HTTP handler calls this on every mounted payment route by default
+ * (`opportunisticReconcile`; unauthenticated `GET /rates` is excluded so
+ * crawlers and health checks cannot consume the scan budget); it is exported
+ * so hosts can also drive it from their own routes or middleware (host-only
+ * routes never auto-run it).
  */
 export async function maybeReconcileOpenReceivePayments(
   input: MaybeReconcileOpenReceivePaymentsOptions,
@@ -143,6 +145,12 @@ export async function maybeReconcileOpenReceivePayments(
 
 function withScanTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
+    // The timeout abandons the in-flight scan; it cannot cancel it. Nothing in
+    // the wallet path (`service.reconcilePayments` -> core reconcile ->
+    // `listTransactions` over the NWC relay round-trip) accepts an
+    // AbortSignal, so there is no plumbing to cancel into. The abandoned pass
+    // drains in the background and the gate's `claimed_at` stays in place, so
+    // a slow wallet is retried next interval instead of stampeding new scans.
     const timer = setTimeout(() => {
       reject(new Error(`reconcile scan exceeded ${timeoutMs}ms`));
     }, timeoutMs);

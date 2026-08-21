@@ -2,11 +2,11 @@ import type { NwcEndpointLogger } from "../alby-nwc.ts";
 import { isRecord } from "./core-utils.ts";
 import type {
   CreateOpenReceiveOptions,
-  OpenReceiveLogEvent,
   EventHandler,
   Logger,
-  OpenReceiveLogLevel,
   NodeOptions,
+  OpenReceiveLogEvent,
+  OpenReceiveLogLevel,
 } from "./types.ts";
 
 export function emitLog(
@@ -90,13 +90,14 @@ export function sanitizeLogValue(value: unknown): unknown {
 /**
  * Field names whose VALUE never belongs in a log line, whatever it holds:
  * wallet and provider credentials, the settlement preimage (proof of payment),
- * and the raw invoice (`bolt11` payloads carried inside provider errors).
+ * the raw invoice (`bolt11` payloads carried inside provider errors), and the
+ * server-only swap recovery blob (`swap_data` holds the provider order token).
  */
 export function isSensitiveLogKey(key: string): boolean {
   // `*_present` fields are deliberate presence flags (`preimage_present`) — the
   // safe thing to log instead of the value.
   if (/_present$/i.test(key)) return false;
-  return /secret|token|authorization|cookie|nwc|dsn|preimage|invoice|bolt11|(?:private|api)[_-]?key/i.test(
+  return /secret|token|authorization|cookie|nwc|dsn|preimage|invoice|bolt11|swap_?data|(?:private|api)[_-]?key|^key$|api[_-]?sign/i.test(
     key,
   );
 }

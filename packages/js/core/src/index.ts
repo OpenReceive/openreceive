@@ -129,6 +129,22 @@ export type {
   ReconcilePaymentsOptions,
 } from "./payments.ts";
 
+// Canonical openreceive_payments / openreceive_meta DDL — the ONE rendering
+// both @openreceive/http and the scaffold CLI build their migrations from.
+export {
+  OPENRECEIVE_PAYMENTS_SCHEMA_VERSION,
+  openReceivePaymentsColumnNames,
+  openReceivePaymentsDdlStatements,
+  openReceivePaymentsHashCheckSql,
+  openReceivePaymentsIndexName,
+  openReceivePaymentsSeedSql,
+  openReceivePaymentsStatusCheckSql,
+} from "./payments-ddl.ts";
+export type {
+  OpenReceivePaymentsDdlOptions,
+  OpenReceivePaymentsDialect,
+} from "./payments-ddl.ts";
+
 // Swap address validation (deposit + refund), checksum-aware per network
 export {
   isValidAddressForSwapNetwork,

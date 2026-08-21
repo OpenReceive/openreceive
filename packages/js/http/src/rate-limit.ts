@@ -27,7 +27,7 @@ export interface OpenReceiveIpRateLimitConfig {
    * Actions to throttle. Default: both invoice-minting actions. Only
    * `checkout.create` and `swap.create` are accepted — attempt-row counting counts
    * mints, so a throttle on any other action could never trigger. Police other
-   * actions with a custom `rateLimit` hook instead.
+   * actions with a custom `rateLimitHook` instead.
    */
   readonly actions?: readonly OpenReceiveAuthorizeAction[];
   /**
@@ -65,7 +65,7 @@ const DEFAULT_MESSAGE = "Too many payment attempts. Please try again later.";
 /**
  * Build the per-IP invoice rate limit behind the handler's `rateLimiting` option.
  * Hosts composing their own policy can call this directly and pass the result as
- * `rateLimit`. Over-limit requests fail with `429 RATE_LIMITED` and a retryable,
+ * `rateLimitHook`. Over-limit requests fail with `429 RATE_LIMITED` and a retryable,
  * payer-facing message; requests with no attributable IP are always allowed.
  * Fails closed at construction when no `countAttemptsFromIp` counter is supplied.
  */
@@ -87,7 +87,7 @@ export function createOpenReceiveIpRateLimit(
         `rateLimiting actions only accept the invoice-minting actions ` +
           `(checkout.create, swap.create); got "${action}". Attempt-row counting counts ` +
           `mints, so a throttle on other actions could never trigger. Use a custom ` +
-          `rateLimit hook to police other actions.`,
+          `rateLimitHook to police other actions.`,
       );
     }
   }
@@ -97,7 +97,7 @@ export function createOpenReceiveIpRateLimit(
       "rateLimiting requires persistent counting. Implement countAttemptsFromIp on the " +
         "payment repository (the built-in SQL repository already does), pass " +
         "countAttemptsFromIp in the rateLimiting config, or disable rateLimiting and use " +
-        "a custom rateLimit hook backed by your own store. There is deliberately no " +
+        "a custom rateLimitHook backed by your own store. There is deliberately no " +
         "in-memory fallback: per-process counts reset on restart and multiply per " +
         "instance behind a load balancer.",
     );

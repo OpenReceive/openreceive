@@ -118,6 +118,10 @@ test("parseScaffoldPaymentsArgv accepts ORM, dialect, and order flags", () => {
         "purchases",
         "--order-id-type",
         "uuid",
+        "--table-name",
+        "shop_payment_attempts",
+        "--meta-table-name",
+        "shop_payment_meta",
         "--skip-foreign-key",
         "--force",
         "--out-dir",
@@ -128,6 +132,8 @@ test("parseScaffoldPaymentsArgv accepts ORM, dialect, and order flags", () => {
       assert.equal(parsed.partial.orderModel, "Purchase");
       assert.equal(parsed.partial.orderTable, "purchases");
       assert.equal(parsed.partial.orderIdType, "uuid");
+      assert.equal(parsed.partial.tableName, "shop_payment_attempts");
+      assert.equal(parsed.partial.metaTableName, "shop_payment_meta");
       assert.equal(parsed.partial.skipForeignKey, true);
       assert.equal(parsed.partial.force, true);
       assert.equal(parsed.partial.outDir, "./backend");
@@ -135,14 +141,17 @@ test("parseScaffoldPaymentsArgv accepts ORM, dialect, and order flags", () => {
   }
 });
 
-test("each ORM emits exactly one schema/migration file plus the wiring guide", () => {
+test("each ORM emits its schema/migration files plus the wiring guide", () => {
+  // Prisma's schema language cannot express the CHECK constraints or the seed
+  // row, so it alone carries a raw-SQL companion file.
+  const extraPaths = { prisma: ["prisma/openreceive-constraints.sql"] };
   for (const orm of OPENRECEIVE_ORMS) {
     for (const dialect of OPENRECEIVE_DIALECTS) {
       const files = renderFor(orm, dialect);
-      assert.equal(files.length, 2, `${orm}/${dialect} should emit exactly two files`);
       assert.deepEqual(
         files.map((file) => file.path).sort(),
-        [SCHEMA_PATHS[orm], "OPENRECEIVE_PAYMENTS.md"].sort(),
+        [SCHEMA_PATHS[orm], ...(extraPaths[orm] ?? []), "OPENRECEIVE_PAYMENTS.md"].sort(),
+        `${orm}/${dialect} emitted an unexpected file set`,
       );
     }
   }
@@ -181,8 +190,8 @@ test("schema files carry every canonical column with unix-integer timestamps", (
 });
 
 test("scaffold DDL matches the repository's canonical schema, per dialect", () => {
-  // The scaffold and @openreceive/http each render the openreceive_payments
-  // DDL; this pins them to each other so a change to one cannot drift.
+  // The scaffold and @openreceive/http both render the shared canonical DDL
+  // from @openreceive/core; this pins the two entry points to each other.
   const normalize = (sql) =>
     sql
       .replaceAll(";", "\n")
@@ -197,6 +206,8 @@ test("scaffold DDL matches the repository's canonical schema, per dialect", () =
       orderModel: "Order",
       orderTable: "orders",
       orderIdType: "string",
+      tableName: "openreceive_payments",
+      metaTableName: "openreceive_meta",
       skipForeignKey: true,
       outDir: ".",
       force: false,
@@ -206,6 +217,82 @@ test("scaffold DDL matches the repository's canonical schema, per dialect", () =
       normalize(openReceivePaymentsSchemaSql(dialect)),
       `${dialect} scaffold DDL drifted from openReceivePaymentsSchemaSql`,
     );
+  }
+});
+
+test("raw-DDL migrations embed every canonical statement verbatim", () => {
+  for (const orm of ["typeorm", "sequelize", "knex"]) {
+    for (const dialect of OPENRECEIVE_DIALECTS) {
+      const options = finalizeScaffoldOptions({
+        orm,
+        dialect,
+        force: false,
+        skipForeignKey: false,
+        outDir: ".",
+      });
+      const schema = schemaFile(renderScaffoldPaymentsFiles(options), orm).contents;
+      for (const statement of canonicalPaymentsDdlStatements(options)) {
+        assert.ok(
+          schema.includes(statement),
+          `${orm}/${dialect} migration missing canonical statement: ${statement.split("\n")[0]}`,
+        );
+      }
+    }
+  }
+});
+
+test("every ORM emits both CHECK constraints and the schema_version seed row", () => {
+  for (const orm of OPENRECEIVE_ORMS) {
+    for (const dialect of OPENRECEIVE_DIALECTS) {
+      const files = renderFor(orm, dialect);
+      const emitted = files
+        .filter((file) => file.path !== "OPENRECEIVE_PAYMENTS.md")
+        .map((file) => file.contents)
+        .join("\n");
+      const guide = guideFile(files).contents;
+      assert.match(
+        emitted,
+        /status IN \('pending', 'settled', 'expired', 'failed', 'attention'\)/,
+        `${orm}/${dialect} missing the status CHECK`,
+      );
+      assert.match(
+        emitted,
+        dialect === "postgres"
+          ? /payment_hash ~ '\^\[0-9a-f\]\{64\}\$'/
+          : /length\(payment_hash\) = 64 AND payment_hash NOT GLOB '\*\[\^0-9a-f\]\*'/,
+        `${orm}/${dialect} missing the payment_hash CHECK`,
+      );
+      // The seed row is what lets the repository's newer-schema refusal probe
+      // engage. Drizzle's schema DSL cannot express it, so its wiring guide
+      // carries it as a custom migration instead.
+      const seed =
+        dialect === "postgres"
+          ? /INSERT INTO \w+ \(key, value, rev\) VALUES \('schema_version', '1', 0\) ON CONFLICT \(key\) DO NOTHING/
+          : /INSERT OR IGNORE INTO \w+ \(key, value, rev\) VALUES \('schema_version', '1', 0\)/;
+      assert.match(
+        orm === "drizzle" ? guide : emitted,
+        seed,
+        `${orm}/${dialect} missing the schema_version seed row`,
+      );
+    }
+  }
+});
+
+test("custom table names thread through every emitter", () => {
+  for (const orm of OPENRECEIVE_ORMS) {
+    const files = renderFor(orm, "postgres", {
+      tableName: "shop_payment_attempts",
+      metaTableName: "shop_payment_meta",
+    });
+    const schema = schemaFile(files, orm).contents;
+    assert.match(schema, /shop_payment_attempts/, `${orm} schema ignores --table-name`);
+    assert.match(schema, /shop_payment_meta/, `${orm} schema ignores --meta-table-name`);
+    assert.doesNotMatch(
+      schema,
+      /\bopenreceive_payments\b|\bopenreceive_meta\b/,
+      `${orm} schema still references the default table names`,
+    );
+    assert.match(guideFile(files).contents, /shop_payment_attempts/);
   }
 });
 
@@ -313,8 +400,7 @@ test("order-id typing and foreign keys follow the flags", () => {
     renderFor("knex", "postgres", { orderIdType: "uuid" }),
     "knex",
   ).contents;
-  assert.match(knexUuid, /table\.uuid\("order_id"\)/);
-  assert.match(knexUuid, /\.inTable\("orders"\)/);
+  assert.match(knexUuid, /order_id UUID NOT NULL REFERENCES orders \(id\)/);
 
   const typeormUuid = schemaFile(
     renderFor("typeorm", "postgres", { orderIdType: "uuid" }),

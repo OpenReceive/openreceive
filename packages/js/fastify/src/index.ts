@@ -6,6 +6,8 @@ import {
   createRequestId,
   errorResponse,
   isOpenReceiveStackOptions,
+  mapHostRouteError,
+  type OpenReceiveAuthorizeContext,
   OpenReceiveHttpError,
   openReceiveIsUnderPrefix,
   openReceiveWebRequest,
@@ -26,15 +28,18 @@ import {
 //   authorize: ({ native }) =>
 //     Boolean((native as { session?: { userId?: string } }).session?.userId)
 //
-// Register `prefix` scopes the plugin's catch-all route to that path AND is passed to the handler
-// so both agree; request.raw.url carries the full path, so matching is exact.
+// Prefixes: the plugin reads the instance's accumulated register prefix (fastify.prefix) and
+// matches the handler's own prefix against the path inside it, so registering the plugin
+// inside a prefixed scope works. A `prefix` passed at register() scopes the catch-all route
+// AND lands in these options; the plugin recognizes it as the mount itself, so the
+// OpenReceive routes live directly under it.
 
 // One surface, not a hand-copied subset: everything @openreceive/http exports is
 // available from the adapter a host installed, so the guides can name any of it.
 export * from "@openreceive/http";
 
 /** Minimal structural view of the Fastify surface this adapter uses. */
-interface FastifyRequestLike {
+export interface FastifyRequestLike {
   readonly method: string;
   readonly headers: Record<string, string | string[] | undefined>;
   readonly body?: unknown;
@@ -43,7 +48,7 @@ interface FastifyRequestLike {
   readonly protocol?: string;
 }
 
-interface FastifyReplyLike {
+export interface FastifyReplyLike {
   code(statusCode: number): FastifyReplyLike;
   header(key: string, value: string): FastifyReplyLike;
   send(payload: string): unknown;
@@ -51,23 +56,47 @@ interface FastifyReplyLike {
   callNotFound?(): unknown;
 }
 
-interface FastifyInstanceLike {
+export interface FastifyInstanceLike {
   all(
     path: string,
     handler: (request: FastifyRequestLike, reply: FastifyReplyLike) => Promise<unknown>,
   ): unknown;
   /** Fastify lifecycle hook; used to close an all-in-one stack with the app. */
   addHook?(name: "onClose", hook: () => Promise<void>): unknown;
+  /** Accumulated register prefix for this instance (from register's `{ prefix }`). */
+  readonly prefix?: string;
 }
+
+interface OpenReceiveFastifyAdapterExtras {
+  /**
+   * Opt-in client-IP attribution for `rateLimiting` behind a reverse proxy:
+   * by default the limiter reads `request.ip`, which is the proxy's address
+   * when Fastify's trustProxy is not configured — every payer would then share
+   * one budget. Only safe when YOUR reverse proxy sets the header (a
+   * direct-to-origin client can forge it). `true` reads the first hop of
+   * `x-forwarded-for`; a string names another header (e.g. `"cf-connecting-ip"`).
+   */
+  readonly trustProxyIpHeader?: boolean | string;
+}
+
+export interface OpenReceiveFastifyHandlerOptions
+  extends CreateOpenReceiveHttpHandlerOptions,
+    OpenReceiveFastifyAdapterExtras {}
+
+/** All-in-one form: order hooks + db handle; the plugin builds service and host. */
+export interface OpenReceiveFastifyStackOptions
+  extends CreateOpenReceiveStackOptions,
+    OpenReceiveFastifyAdapterExtras {}
 
 /**
  * Two forms: the all-in-one happy path (order hooks + db handle + `nwc`; the
- * plugin builds service, host, and reconciler, and stops them on app close) or
- * the composed `{ service, host, authorize }` form.
+ * plugin builds the service and host and closes the owned service on app close
+ * — no background process, settlement is opportunistic) or the composed
+ * `{ service, host, authorize }` form.
  */
 export type OpenReceiveFastifyOptions =
-  | CreateOpenReceiveHttpHandlerOptions
-  | CreateOpenReceiveStackOptions;
+  | OpenReceiveFastifyHandlerOptions
+  | OpenReceiveFastifyStackOptions;
 
 /** Fastify plugin serving the OpenReceive routes. Register it with a `prefix`. */
 export function openReceiveFastify(
@@ -75,23 +104,37 @@ export function openReceiveFastify(
   options: OpenReceiveFastifyOptions,
   done?: (error?: Error) => void,
 ): void {
+  const instancePrefix = normalizeFastifyPrefix(fastify.prefix);
+  const effectivePrefix = resolveHandlerPrefix(instancePrefix, options.prefix);
   let handler: ReturnType<typeof createOpenReceiveHttpHandler>;
   if (isOpenReceiveStackOptions(options)) {
-    const stack = createOpenReceiveStack(options);
+    const { trustProxyIpHeader, ...stackOptions } = options;
+    const stack = createOpenReceiveStack({
+      ...stackOptions,
+      ...effectivePrefix,
+      ...resolveProxyRateLimiting(stackOptions.rateLimiting, trustProxyIpHeader),
+    });
     handler = stack.handler;
     fastify.addHook?.("onClose", () => stack.close());
   } else {
-    handler = createOpenReceiveHttpHandler(options);
+    const { trustProxyIpHeader, ...handlerOptions } = options;
+    handler = createOpenReceiveHttpHandler({
+      ...handlerOptions,
+      ...effectivePrefix,
+      ...resolveProxyRateLimiting(handlerOptions.rateLimiting, trustProxyIpHeader),
+    });
   }
   fastify.all("/*", async (request, reply) => {
-    // Registered without { prefix }, "/*" binds at the application root; paths
-    // outside the handler's prefix belong to the rest of the app, so they get
-    // the app's own not-found handling instead of an OpenReceive JSON 404.
-    const pathname = (request.raw.url ?? "/").split("?")[0];
+    // The catch-all binds under the instance's register prefix (the application
+    // root when there is none); matching happens on the path inside that mount,
+    // and paths outside the handler's prefix belong to the rest of the app, so
+    // they get the app's own not-found handling instead of an OpenReceive JSON 404.
+    const relativeUrl = stripInstancePrefix(request.raw.url ?? "/", instancePrefix);
+    const pathname = relativeUrl.split("?")[0] as string;
     if (!openReceiveIsUnderPrefix(pathname, handler.prefix) && reply.callNotFound !== undefined) {
       return reply.callNotFound();
     }
-    const response = await respond(handler, request);
+    const response = await respond(handler, request, relativeUrl);
     reply.code(response.status);
     response.headers.forEach((value, key) => {
       reply.header(key, value);
@@ -101,12 +144,96 @@ export function openReceiveFastify(
   done?.();
 }
 
+/**
+ * Map a host/service error onto a Fastify JSON reply.
+ * Returns `true` when handled; `false` when the caller should rethrow.
+ */
+export function sendHostRouteError(reply: FastifyReplyLike, error: unknown): boolean {
+  const mapped = mapHostRouteError(error);
+  if (mapped === null) return false;
+  reply
+    .code(mapped.status)
+    .header("content-type", "application/json; charset=utf-8")
+    .send(JSON.stringify(mapped.body));
+  return true;
+}
+
+/**
+ * The handler prefix to use inside the instance's mount. A `prefix` that came
+ * from register() is the mount itself (Fastify forwards it into the plugin's
+ * options and it is a suffix of the accumulated instance prefix), so the
+ * handler serves the mount root; any other combination is a misconfiguration
+ * reported at registration.
+ */
+function resolveHandlerPrefix(
+  instancePrefix: string,
+  optionsPrefix: string | undefined,
+): Pick<CreateOpenReceiveHttpHandlerOptions, "prefix"> {
+  if (instancePrefix === "") return {};
+  const registerPrefix = normalizeFastifyPrefix(optionsPrefix);
+  if (registerPrefix === "") return {};
+  // registerPrefix starts with "/", so endsWith can only match on a segment
+  // boundary ("/v1/api" ends with "/api"; "/myapi" does not).
+  if (instancePrefix.endsWith(registerPrefix)) return { prefix: "/" };
+  throw new TypeError(
+    `openReceiveFastify got prefix "${registerPrefix}" but the instance is registered under ` +
+      `"${instancePrefix}". Pass the prefix at register() — ` +
+      `fastify.register(openReceiveFastify, { prefix, ... }) — so the route scope and the ` +
+      `handler agree.`,
+  );
+}
+
+function stripInstancePrefix(url: string, instancePrefix: string): string {
+  if (instancePrefix === "") return url;
+  if (url === instancePrefix) return "/";
+  if (url.startsWith(`${instancePrefix}/`)) return url.slice(instancePrefix.length);
+  if (url.startsWith(`${instancePrefix}?`)) return `/${url.slice(instancePrefix.length)}`;
+  throw new Error(
+    `openReceiveFastify is registered under prefix "${instancePrefix}" but received a request ` +
+      `for "${url}". Register the plugin on the instance that serves these routes, or pass ` +
+      `the prefix at register() so Fastify scopes the routes to it.`,
+  );
+}
+
+function normalizeFastifyPrefix(prefix: string | undefined): string {
+  if (prefix === undefined) return "";
+  const trimmed = prefix.trim();
+  if (trimmed === "") return "";
+  const value = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  const withoutTrailing = value.length > 1 && value.endsWith("/") ? value.slice(0, -1) : value;
+  return withoutTrailing === "/" ? "" : withoutTrailing;
+}
+
+function resolveProxyRateLimiting(
+  rateLimiting: CreateOpenReceiveHttpHandlerOptions["rateLimiting"],
+  trustProxyIpHeader: boolean | string | undefined,
+): Pick<CreateOpenReceiveHttpHandlerOptions, "rateLimiting"> {
+  if (
+    rateLimiting === undefined ||
+    rateLimiting === false ||
+    trustProxyIpHeader === undefined ||
+    trustProxyIpHeader === false
+  ) {
+    return {};
+  }
+  const headerName =
+    trustProxyIpHeader === true ? "x-forwarded-for" : trustProxyIpHeader.toLowerCase();
+  const headerIp = (context: OpenReceiveAuthorizeContext): string | undefined => {
+    const value = context.request.headers.get(headerName);
+    const first = value?.split(",")[0]?.trim();
+    return first !== undefined && first.length > 0 ? first : undefined;
+  };
+  const config = rateLimiting === true ? {} : rateLimiting;
+  return { rateLimiting: { ...config, ip: config.ip ?? headerIp } };
+}
+
 async function respond(
   handler: ReturnType<typeof createOpenReceiveHttpHandler>,
   request: FastifyRequestLike,
+  url: string,
 ): Promise<Response> {
   try {
-    return await handler(toWebRequest(request), { native: request });
+    return await handler(toWebRequest(request, url), { native: request });
   } catch (error) {
     // Bridge-level refusals (a JSON body no parser read) are OpenReceive's own
     // error responses, not the app's to render.
@@ -115,11 +242,11 @@ async function respond(
   }
 }
 
-function toWebRequest(request: FastifyRequestLike): Request {
+function toWebRequest(request: FastifyRequestLike, url: string): Request {
   return openReceiveWebRequest({
     method: request.method,
     headers: request.headers,
-    url: request.raw.url ?? "/",
+    url,
     protocol: request.protocol,
     parsedBody: request.body,
   });

@@ -86,7 +86,7 @@ test("hello fruit host store wipes SQLite, migrates, and serializes attempts", a
           expiresAt,
         },
       }),
-    /live payment attempt/i,
+    /already in progress for this order/i,
   );
 
   // Settlement is write-once; fulfillment runs inside the transaction exactly once.

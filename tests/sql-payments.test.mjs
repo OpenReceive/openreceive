@@ -93,14 +93,14 @@ test("commitAttempt conflicts on a reusable same-rail attempt but keeps other ra
   await assert.rejects(
     payments.commitAttempt(checkoutInput("order-1", "b")),
     (error) =>
-      error.status === 409 && /live payment attempt for the same method/.test(error.message),
+      error.status === 409 && /already in progress for this order/.test(error.message),
   );
 
   // A swap on another asset may go live while Lightning stays live.
   await payments.commitAttempt(checkoutInput("order-1", "c", { swapData: swapData("USDT_TRON") }));
   await assert.rejects(
     payments.commitAttempt(checkoutInput("order-1", "d", { swapData: swapData("USDT_TRON") })),
-    /live payment attempt for the same method/,
+    /already in progress for this order/,
   );
   await payments.commitAttempt(checkoutInput("order-1", "e", { swapData: swapData("USDC_SOL") }));
 
@@ -163,7 +163,7 @@ test("a superseded attempt is neither reused nor superseded a second time", asyn
   // the superseded 'a' must not be what decides this.
   await assert.rejects(
     () => payments.commitAttempt(checkoutInput("order-1", "c", { expiresAt: 1_700 })),
-    /live payment attempt/,
+    /already in progress for this order/,
   );
 
   const byHash = new Map(
@@ -488,7 +488,7 @@ test("pg adapter converts placeholders and serializes commits behind the advisor
   assert.equal(poolQueries.length, 1);
   assert.match(poolQueries[0].sql, /SELECT value FROM openreceive_meta WHERE key = \$1/);
   assert.deepEqual(poolQueries[0].params, ["schema_version"]);
-  assert.equal(released, 1);
+  assert.equal(released, 2);
   const sqls = clientQueries.map((entry) => entry.sql);
   assert.equal(sqls[0], "BEGIN");
   assert.equal(sqls[1], "SELECT pg_advisory_xact_lock(hashtextextended($1, $2))");

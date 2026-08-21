@@ -149,6 +149,51 @@ test("a root-mounted express middleware claims only the OpenReceive routes", asy
   assert.equal(served.state.statusCode, 201);
 });
 
+test("express middleware works sub-mounted under app.use('/api', ...)", async () => {
+  const service = await newService();
+  const { host } = testHost();
+  const middleware = openReceiveExpress({ service, authorize: () => true, host });
+
+  // Inside the mount, Express strips the mount path into req.baseUrl and
+  // req.url while originalUrl keeps the full path.
+  const res = fakeExpressResponse();
+  await middleware(
+    {
+      method: "POST",
+      baseUrl: "/api",
+      originalUrl: "/api/openreceive/checkouts",
+      url: "/openreceive/checkouts",
+      protocol: "http",
+      headers: { host: "shop.example", "content-type": "application/json" },
+      body: { order_id: "order-sub" },
+    },
+    res,
+    () => {
+      throw new Error("must not fall through");
+    },
+  );
+  assert.equal(res.state.statusCode, 201);
+  assert.equal(JSON.parse(res.state.body).checkout.order_id, "order-sub");
+
+  // A foreign path inside the mount still belongs to the app.
+  let nextCalls = 0;
+  await middleware(
+    {
+      method: "GET",
+      baseUrl: "/api",
+      originalUrl: "/api/orders",
+      url: "/orders",
+      protocol: "http",
+      headers: { host: "shop.example" },
+    },
+    fakeExpressResponse(),
+    () => {
+      nextCalls += 1;
+    },
+  );
+  assert.equal(nextCalls, 1);
+});
+
 test("a JSON body no parser read names the missing body parser", async () => {
   const service = await newService();
   const { host } = testHost();
@@ -204,10 +249,51 @@ test("express native.ip drives rate limiting through the whole adapter path", as
   assert.ok(Number(res.state.headers["retry-after"]) >= 1);
 });
 
-function fakeFastify() {
+test("express trustProxyIpHeader reads x-forwarded-for for the limiter", async () => {
+  const service = await newService();
+  const counted = [];
+  const { host } = testHost({
+    countAttemptsFromIp: (ip) => {
+      counted.push(ip);
+      return 999;
+    },
+  });
+  const middleware = openReceiveExpress({
+    service,
+    authorize: () => true,
+    host,
+    rateLimiting: true,
+    trustProxyIpHeader: true,
+  });
+  const res = fakeExpressResponse();
+  await middleware(
+    {
+      method: "POST",
+      originalUrl: "/openreceive/checkouts",
+      url: "/openreceive/checkouts",
+      protocol: "http",
+      ip: "10.0.0.1",
+      headers: {
+        host: "shop.example",
+        "content-type": "application/json",
+        "x-forwarded-for": "198.51.100.9, 10.0.0.1",
+      },
+      body: { order_id: "order-xff" },
+    },
+    res,
+    () => {
+      throw new Error("must not fall through");
+    },
+  );
+  assert.equal(res.state.statusCode, 429);
+  assert.deepEqual(counted.slice(0, 1), ["198.51.100.9"]);
+});
+
+function fakeFastify({ prefix } = {}) {
   const routes = [];
   return {
     routes,
+    ...(prefix === undefined ? {} : { prefix }),
     all(path, handler) {
       routes.push({ path, handler });
     },
@@ -270,6 +356,146 @@ test("fastify plugin serves its prefix, honors protocol, and never captures the 
   );
   assert.equal(served.state.statusCode, 201);
   assert.equal(JSON.parse(served.state.body).checkout.order_id, "order-ff");
+});
+
+test("fastify plugin serves its default prefix inside a prefixed register scope", async () => {
+  const service = await newService();
+  const { host } = testHost();
+  const fastify = fakeFastify({ prefix: "/api" });
+  openReceiveFastify(fastify, { service, authorize: () => true, host });
+  const route = fastify.routes[0].handler;
+
+  const served = fakeFastifyReply();
+  await route(
+    {
+      method: "POST",
+      headers: { host: "shop.example", "content-type": "application/json" },
+      raw: { url: "/api/openreceive/checkouts" },
+      body: { order_id: "order-scoped" },
+    },
+    served,
+  );
+  assert.equal(served.state.statusCode, 201);
+  assert.equal(JSON.parse(served.state.body).checkout.order_id, "order-scoped");
+
+  const missed = fakeFastifyReply();
+  await route(
+    {
+      method: "GET",
+      headers: { host: "shop.example" },
+      raw: { url: "/api/orders" },
+    },
+    missed,
+  );
+  assert.equal(missed.state.notFound, 1);
+  assert.equal(missed.state.statusCode, 0);
+
+  // A request outside the register scope means the plugin is registered on the
+  // wrong instance — a loud setup error, not a silent 404.
+  await assert.rejects(
+    route(
+      {
+        method: "GET",
+        headers: { host: "shop.example" },
+        raw: { url: "/elsewhere/openreceive/checkouts" },
+      },
+      fakeFastifyReply(),
+    ),
+    /registered under prefix "\/api"/,
+  );
+});
+
+test("fastify register { prefix } serves the routes at the mount root", async () => {
+  const service = await newService();
+  const { host } = testHost();
+  // register(openReceiveFastify, { prefix: "/api" }) scopes the catch-all to
+  // /api AND forwards prefix into the plugin options; the routes live directly
+  // under the mount.
+  const fastify = fakeFastify({ prefix: "/api" });
+  openReceiveFastify(fastify, { service, authorize: () => true, host, prefix: "/api" });
+  const route = fastify.routes[0].handler;
+
+  const served = fakeFastifyReply();
+  await route(
+    {
+      method: "POST",
+      headers: { host: "shop.example", "content-type": "application/json" },
+      raw: { url: "/api/checkouts" },
+      body: { order_id: "order-mount-root" },
+    },
+    served,
+  );
+  assert.equal(served.state.statusCode, 201);
+  assert.equal(JSON.parse(served.state.body).checkout.order_id, "order-mount-root");
+});
+
+test("fastify prefix that disagrees with the register scope fails registration", async () => {
+  const service = await newService();
+  const { host } = testHost();
+  assert.throws(
+    () =>
+      openReceiveFastify(fakeFastify({ prefix: "/api" }), {
+        service,
+        authorize: () => true,
+        host,
+        prefix: "/pay",
+      }),
+    /Pass the prefix at register\(\)/,
+  );
+});
+
+test("fastify trustProxyIpHeader names a custom header for the limiter", async () => {
+  const service = await newService();
+  const counted = [];
+  const { host } = testHost({
+    countAttemptsFromIp: (ip) => {
+      counted.push(ip);
+      return 999;
+    },
+  });
+  const fastify = fakeFastify();
+  openReceiveFastify(fastify, {
+    service,
+    authorize: () => true,
+    host,
+    rateLimiting: true,
+    trustProxyIpHeader: "cf-connecting-ip",
+  });
+  const reply = fakeFastifyReply();
+  await fastify.routes[0].handler(
+    {
+      method: "POST",
+      headers: {
+        host: "shop.example",
+        "content-type": "application/json",
+        "cf-connecting-ip": "203.0.113.7",
+      },
+      raw: { url: "/openreceive/checkouts" },
+      body: { order_id: "order-cf" },
+    },
+    reply,
+  );
+  assert.equal(reply.state.statusCode, 429);
+  assert.deepEqual(counted.slice(0, 1), ["203.0.113.7"]);
+});
+
+test("sendHostRouteError has fastify and next counterparts", async () => {
+  const error = new httpSurface.OpenReceiveHostError(422, {
+    code: "INVALID_REQUEST",
+    message: "bad cart",
+    retryable: false,
+  });
+
+  const reply = fakeFastifyReply();
+  assert.equal(fastifyAdapter.sendHostRouteError(reply, error), true);
+  assert.equal(reply.state.statusCode, 422);
+  assert.equal(JSON.parse(reply.state.body).message, "bad cart");
+  assert.equal(fastifyAdapter.sendHostRouteError(fakeFastifyReply(), new Error("boom")), false);
+
+  const response = nextAdapter.sendHostRouteError(error);
+  assert.equal(response.status, 422);
+  assert.equal((await response.json()).message, "bad cart");
+  assert.equal(nextAdapter.sendHostRouteError(new Error("boom")), null);
 });
 
 test("next adapter refuses rateLimiting without an IP source", async () => {

@@ -12,8 +12,8 @@ import {
   decimalScaleFactor,
   formatDecimal,
   OPENRECEIVE_SATS_PER_BTC,
-  parseDecimal,
   type OpenReceiveDecimal,
+  parseDecimal,
 } from "@openreceive/core";
 import { isOpenReceiveLightningNetwork } from "./assets.ts";
 import type { SwapRateType } from "./rates-cache.ts";
@@ -213,7 +213,7 @@ export function quotePayAmountFromFixedFloatRate(input: {
   const rateOut = parsePositiveDecimal(input.pair.out);
   if (rateIn === undefined || rateOut === undefined) return undefined;
 
-  const invoiceSats = BigInt(Math.ceil(input.invoiceAmountMsats / 1000));
+  const invoiceSats = ceilDiv(BigInt(input.invoiceAmountMsats), 1000n);
   const tofeeSats = parseToFeeBtcSats(input.pair.tofee) ?? 0n;
   const totalSats = invoiceSats + tofeeSats;
 
@@ -300,9 +300,9 @@ function payAmountToInvoiceMsats(
   const invoiceSats =
     rounding === "ceil" ? ceilDiv(numerator, denominator) : numerator / denominator;
   if (invoiceSats <= 0n) return undefined;
-  if (invoiceSats > BigInt(Number.MAX_SAFE_INTEGER)) return undefined;
-  const msats = Number(invoiceSats) * 1000;
-  return Number.isSafeInteger(msats) ? msats : undefined;
+  const msats = invoiceSats * 1000n;
+  if (msats > BigInt(Number.MAX_SAFE_INTEGER)) return undefined;
+  return Number(msats);
 }
 
 function parseToFeeBtcSats(tofee: string | undefined): bigint | undefined {

@@ -23,6 +23,8 @@ Options:
   --order-model <Name>      Host order model/class (default: Order)
   --order-table <name>      Host order table (default: derived)
   --order-id-type <type>    bigint | integer | uuid | string
+  --table-name <name>       Payment attempts table (default: openreceive_payments)
+  --meta-table-name <name>  Reconcile-gate table (default: openreceive_meta)
   --out-dir <path>          Output root (default: .)
   --skip-foreign-key        Do not emit a FK to the order table
   --force                   Overwrite existing generated files

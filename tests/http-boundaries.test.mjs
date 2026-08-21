@@ -424,6 +424,23 @@ test("HTTP payment check includes swap payment_methods from the provider catalog
     ),
   );
   assert.equal(provider.catalogCalls, 1);
+
+  // Polls inside the warm window serve the cached catalog: a ~3s status poll
+  // must not re-walk the provider catalog every time.
+  const polled = await handler(
+    new Request("http://test/openreceive/payments/check", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        order_id: "order-methods",
+        payment_hash: createdBody.checkout.payment_hash,
+      }),
+    }),
+  );
+  assert.equal(polled.status, 200);
+  const polledBody = await polled.json();
+  assert.ok(polledBody.payment_methods.length > 0, "cached payment_methods stay present");
+  assert.equal(provider.catalogCalls, 1, "a repeat poll must not re-walk the catalog");
 });
 
 test("HTTP swap retry reuses host-committed hash/data without exposing provider state", async () => {
@@ -615,7 +632,7 @@ test("Node handler satisfies host-persistence HTTP golden vectors", async () => 
       service,
       authorize: () => true,
       host,
-      rateLimit: () => false,
+      rateLimitHook: () => false,
     }),
     settled_check: createOpenReceiveHttpHandler({
       service: settledService,
@@ -663,6 +680,33 @@ test("Node handler satisfies host-persistence HTTP golden vectors", async () => 
     // The whole wire body, not a code sample: an extra or missing field in
     // either engine fails the run.
     assertGoldenValue(await response.json(), vector.expected.body, `${vector.name}: body`);
+  }
+});
+
+test("a host resolver returning a malformed payment hash is a 500 host bug, not a payer 400", async () => {
+  const service = await createOpenReceive({ client: createTestkitReceiveClient() });
+  for (const hostHash of [undefined, "not-a-hash"]) {
+    const handler = createOpenReceiveHttpHandler({
+      service,
+      authorize: () => true,
+      host: testHost({
+        resolveCheckout: () => ({
+          amount: { sats: 1 },
+          ...(hostHash === undefined ? {} : { paymentHash: hostHash }),
+        }),
+        onCheckoutCreated: () => {},
+      }),
+    });
+    const response = await handler(
+      new Request("http://test/openreceive/payments/check", {
+        method: "POST",
+        body: JSON.stringify({ order_id: "order-host-bug", payment_hash: "c".repeat(64) }),
+      }),
+    );
+    assert.equal(response.status, 500);
+    const body = await response.json();
+    assert.equal(body.code, "INTERNAL");
+    assert.match(body.message, /host resolver/);
   }
 });
 

@@ -454,6 +454,7 @@ test("notification listener coalesces bursts and stop() unsubscribes", async () 
       ],
       commitAttempt: async () => undefined,
       recordReconciliation: async () => undefined,
+      claimReconcileGate: async () => true,
     },
     resolveCheckout: async () => ({ amount: { sats: 100 } }),
     onCheckoutCreated: async () => undefined,
@@ -501,6 +502,7 @@ test("notification listener routes reconcile failures to onError and keeps liste
       ],
       commitAttempt: async () => undefined,
       recordReconciliation: async () => undefined,
+      claimReconcileGate: async () => true,
     },
     resolveCheckout: async () => ({ amount: { sats: 100 } }),
     onCheckoutCreated: async () => undefined,
@@ -520,6 +522,92 @@ test("notification listener routes reconcile failures to onError and keeps liste
   notifier.handler({ type: "payment_received" });
   await waitFor(() => errors.length === 2);
   await listener.stop();
+});
+
+test("notification listener defaults its error sink to the sanitized warn", async () => {
+  const leaked = "nostr+walletconnect://abc?relay=wss://relay.test&secret=deadbeefcafe";
+  const host = {
+    payments: {
+      listForOrder: async () => [],
+      listReconcilableAttempts: async () => [
+        { paymentHash: hash("b"), createdAt: 900, expiresAt: 1_600 },
+      ],
+      commitAttempt: async () => undefined,
+      recordReconciliation: async () => undefined,
+      claimReconcileGate: async () => true,
+    },
+    resolveCheckout: async () => ({ amount: { sats: 100 } }),
+    onCheckoutCreated: async () => undefined,
+    onPaid: async () => undefined,
+  };
+  const { service, notifier } = scriptedNotifierService(async () => {
+    throw new Error(`relay rejected ${leaked}`);
+  });
+  const warnings = [];
+  const original = console.warn;
+  console.warn = (...args) => warnings.push(args.join(" "));
+  try {
+    // No onError: this is the DEFAULT sink, the one a host never configures.
+    const listener = await startOpenReceiveNotificationListener({ service, host });
+    notifier.handler({ type: "payment_received" });
+    await waitFor(() => warnings.length >= 1);
+    await listener.stop();
+  } finally {
+    console.warn = original;
+  }
+  const line = warnings.join("\n");
+  assert.match(line, /notification listener failed/);
+  assert.doesNotMatch(line, /nostr\+walletconnect/);
+  assert.doesNotMatch(line, /deadbeefcafe/);
+  assert.match(line, /\[REDACTED_NWC\]/);
+});
+
+test("a wake while another worker holds the gate never touches the wallet", async () => {
+  const host = {
+    payments: {
+      listForOrder: async () => [],
+      listReconcilableAttempts: async () => [
+        { paymentHash: hash("b"), createdAt: 900, expiresAt: 1_600 },
+      ],
+      commitAttempt: async () => undefined,
+      recordReconciliation: async () => undefined,
+      // Another worker (web opportunistic or a sibling instance) just scanned.
+      claimReconcileGate: async () => false,
+    },
+    resolveCheckout: async () => ({ amount: { sats: 100 } }),
+    onCheckoutCreated: async () => undefined,
+    onPaid: async () => undefined,
+  };
+  const { service, notifier } = scriptedNotifierService(async () => {
+    throw new Error("a gate_busy wake must not scan the wallet");
+  });
+  const listener = await startOpenReceiveNotificationListener({ service, host });
+  notifier.handler({ type: "payment_received" });
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(notifier.reconcileCalls, 0);
+  await listener.stop();
+});
+
+test("notification listener refuses a repository without the durable scan gate", async () => {
+  const { service } = scriptedNotifierService(async () => []);
+  await assert.rejects(
+    startOpenReceiveNotificationListener({
+      service,
+      host: {
+        payments: {
+          listForOrder: async () => [],
+          listReconcilableAttempts: async () => [],
+          commitAttempt: async () => undefined,
+          recordReconciliation: async () => undefined,
+        },
+        resolveCheckout: async () => ({ amount: { sats: 100 } }),
+        onCheckoutCreated: async () => undefined,
+        onPaid: async () => undefined,
+      },
+    }),
+    /claimReconcileGate/,
+  );
 });
 
 test("notification listener rejects UNSUPPORTED_METHOD for a service without notifications", async () => {

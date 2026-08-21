@@ -8,6 +8,7 @@ import {
   maybeReconcileOpenReceivePayments,
   openReceivePaymentsSchemaSql,
   openReceiveReconcileIntervalSeconds,
+  startOpenReceiveReconciler,
 } from "../packages/js/http/src/index.ts";
 import { createTestkitReceiveClient } from "../packages/js/testkit/src/index.ts";
 
@@ -161,6 +162,71 @@ test("two workers sharing one openreceive_meta run one scan per interval", async
     clock: () => fix.state.now,
   });
   assert.equal(third.reason, "ran");
+});
+
+test("a worker pass inside the gate interval never touches the wallet", async () => {
+  const fix = await fixture();
+  await createCheckout(fix, "order-a");
+  fix.state.now = 1_010;
+
+  // The web request path wins the gate first.
+  const first = await maybeReconcileOpenReceivePayments({
+    service: fix.service,
+    host: fix.host,
+    clock: () => fix.state.now,
+  });
+  assert.equal(first.reason, "ran");
+  const walksAfterWeb = fix.walks.length;
+
+  // The polling worker starts inside the interval: its passes are gate_busy.
+  const reconciler = await startOpenReceiveReconciler({
+    service: fix.service,
+    host: fix.host,
+    pollIntervalMs: 250,
+    clock: () => fix.state.now,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  assert.equal(fix.walks.length, walksAfterWeb, "worker + web must not double-scan");
+
+  // Once the interval elapses, the worker wins the gate and scans.
+  fix.state.now = 1_013;
+  const startedAt = Date.now();
+  while (fix.walks.length === walksAfterWeb) {
+    if (Date.now() - startedAt > 2_000) assert.fail("worker never scanned after the interval");
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+
+  reconciler.stop();
+  await reconciler.done;
+});
+
+test("GET /rates never claims the reconcile gate or scans the wallet", async () => {
+  const fix = await fixture();
+  await createCheckout(fix, "order-a");
+  fix.state.now = 1_010;
+  let claims = 0;
+  const claim = fix.host.payments.claimReconcileGate.bind(fix.host.payments);
+  fix.host.payments.claimReconcileGate = (input) => {
+    claims += 1;
+    return claim(input);
+  };
+  const walksBefore = fix.walks.length;
+  const handler = createOpenReceiveHttpHandler({
+    service: { ...fix.service, listRates: async () => ({ rates: [] }) },
+    authorize: () => true,
+    host: fix.host,
+    clock: () => fix.state.now,
+  });
+
+  const response = await handler(new Request("http://test/openreceive/rates"));
+  assert.equal(response.status, 200);
+  assert.equal(claims, 0, "an unauthenticated rates fetch must not consume the scan budget");
+  assert.equal(fix.walks.length, walksBefore);
+
+  // A payment route on the same handler still triggers the gated pass.
+  const checked = await fix.handler(postJson("/checkouts/prepare", { order_id: "order-a" }));
+  assert.equal(checked.status, 200);
+  assert.equal(claims, 1);
 });
 
 test("payments/check with three pending orders costs one gate claim and at most two walks", async () => {

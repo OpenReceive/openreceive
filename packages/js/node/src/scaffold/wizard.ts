@@ -71,6 +71,8 @@ export async function resolveScaffoldPaymentsOptions(input: {
     orderModel,
     orderTable,
     orderIdType,
+    tableName: partial.tableName ?? "openreceive_payments",
+    metaTableName: partial.metaTableName ?? "openreceive_meta",
     skipForeignKey,
     outDir,
     force: partial.force,

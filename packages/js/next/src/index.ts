@@ -4,6 +4,7 @@ import {
   createOpenReceiveHttpHandler,
   createOpenReceiveStack,
   isOpenReceiveStackOptions,
+  mapHostRouteError,
   type OpenReceiveAuthorizeContext,
   type OpenReceiveHttpHandler,
 } from "@openreceive/http";
@@ -38,9 +39,9 @@ export interface OpenReceiveNextHandlers {
   readonly POST: OpenReceiveNextRouteHandler;
   /** The underlying framework-agnostic handler, if you need it directly. */
   readonly handler: OpenReceiveHttpHandler;
-  /** All-in-one form only: resolves when the service and reconciler are up. */
+  /** All-in-one form only: resolves when the owned service and handler are up. */
   readonly ready?: Promise<void>;
-  /** All-in-one form only: stops the reconciler and closes the owned service. */
+  /** All-in-one form only: closes the service the adapter created. */
   readonly close?: () => Promise<void>;
 }
 
@@ -59,7 +60,7 @@ export interface OpenReceiveNextHandlersOptions
   extends CreateOpenReceiveHttpHandlerOptions,
     OpenReceiveNextAdapterExtras {}
 
-/** All-in-one form: order hooks + db handle; the adapter builds service/host/reconciler. */
+/** All-in-one form: order hooks + db handle; the adapter builds service and host. */
 export interface OpenReceiveNextStackOptions
   extends CreateOpenReceiveStackOptions,
     OpenReceiveNextAdapterExtras {}
@@ -68,8 +69,10 @@ export interface OpenReceiveNextStackOptions
  * Build Next.js App Router GET/POST handlers for the OpenReceive routes.
  *
  * Two forms: the all-in-one happy path (order hooks + db handle + `nwc`; the
- * adapter builds service, host, and reconciler, exposing `ready`/`close`) or
- * the composed `{ service, host, authorize }` form.
+ * adapter builds the service and host, exposing `ready`/`close` — no
+ * background process, settlement is opportunistic through the durable
+ * reconcile gate, with `startOpenReceiveNotificationWorker` as the optional
+ * push/poll worker) or the composed `{ service, host, authorize }` form.
  */
 export function openReceiveNextHandlers(
   options: OpenReceiveNextHandlersOptions | OpenReceiveNextStackOptions,
@@ -97,6 +100,19 @@ export function openReceiveNextHandlers(
   });
   const route: OpenReceiveNextRouteHandler = (request) => handler(request, { native: request });
   return { GET: route, POST: route, handler };
+}
+
+/**
+ * Map a host/service error onto a JSON Response for an app route handler.
+ * Returns the Response to return, or `null` when the caller should rethrow.
+ */
+export function sendHostRouteError(error: unknown): Response | null {
+  const mapped = mapHostRouteError(error);
+  if (mapped === null) return null;
+  return new Response(JSON.stringify(mapped.body), {
+    status: mapped.status,
+    headers: { "content-type": "application/json; charset=utf-8" },
+  });
 }
 
 function resolveNextRateLimiting(

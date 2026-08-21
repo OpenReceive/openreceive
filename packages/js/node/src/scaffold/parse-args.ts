@@ -1,4 +1,9 @@
-import { assertOrderModelName, assertOrderTableName, defaultOrderTable } from "./shared.ts";
+import {
+  assertOrderModelName,
+  assertOrderTableName,
+  assertPaymentsTableName,
+  defaultOrderTable,
+} from "./shared.ts";
 import {
   OPENRECEIVE_DIALECTS,
   OPENRECEIVE_ORMS,
@@ -27,6 +32,8 @@ export function parseScaffoldPaymentsArgv(argv: readonly string[]): ParsedScaffo
   let orderModel: string | undefined;
   let orderTable: string | undefined;
   let orderIdType: OrderIdType | undefined;
+  let tableName: string | undefined;
+  let metaTableName: string | undefined;
   let skipForeignKey = false;
   let force = false;
   let outDir = ".";
@@ -94,6 +101,31 @@ export function parseScaffoldPaymentsArgv(argv: readonly string[]): ParsedScaffo
       );
       continue;
     }
+    if (arg === "--table-name") {
+      tableName = assertPaymentsTableName(
+        requiredValue(argv[++index], "--table-name"),
+        "--table-name",
+      );
+      continue;
+    }
+    if (arg.startsWith("--table-name=")) {
+      tableName = assertPaymentsTableName(arg.slice("--table-name=".length), "--table-name");
+      continue;
+    }
+    if (arg === "--meta-table-name") {
+      metaTableName = assertPaymentsTableName(
+        requiredValue(argv[++index], "--meta-table-name"),
+        "--meta-table-name",
+      );
+      continue;
+    }
+    if (arg.startsWith("--meta-table-name=")) {
+      metaTableName = assertPaymentsTableName(
+        arg.slice("--meta-table-name=".length),
+        "--meta-table-name",
+      );
+      continue;
+    }
     if (arg === "--out-dir") {
       outDir = requiredValue(argv[++index], "--out-dir");
       continue;
@@ -115,6 +147,8 @@ export function parseScaffoldPaymentsArgv(argv: readonly string[]): ParsedScaffo
       ...(orderModel === undefined ? {} : { orderModel }),
       ...(orderTable === undefined ? {} : { orderTable }),
       ...(orderIdType === undefined ? {} : { orderIdType }),
+      ...(tableName === undefined ? {} : { tableName }),
+      ...(metaTableName === undefined ? {} : { metaTableName }),
       skipForeignKey,
       force,
       outDir,
@@ -139,6 +173,11 @@ export function finalizeScaffoldOptions(
     orderModel,
     orderTable,
     orderIdType,
+    tableName: assertPaymentsTableName(partial.tableName ?? "openreceive_payments", "--table-name"),
+    metaTableName: assertPaymentsTableName(
+      partial.metaTableName ?? "openreceive_meta",
+      "--meta-table-name",
+    ),
     skipForeignKey: partial.skipForeignKey,
     outDir: partial.outDir,
     force: partial.force,

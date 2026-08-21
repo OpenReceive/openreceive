@@ -1,5 +1,6 @@
 import type { SwapPayInAsset } from "./assets.ts";
 import type { TransientSwapCache } from "./limits-cache.ts";
+import { OPENRECEIVE_SWAP_STATES } from "./state.ts";
 
 export type SwapProviderState =
   | "creating_provider_order"
@@ -207,5 +208,6 @@ export interface SwapProvider {
 }
 
 export function isOpenReceiveSwapTerminalState(state: string | undefined): boolean {
-  return state === "expired" || state === "refunded" || state === "attention" || state === "failed";
+  if (state === undefined) return false;
+  return OPENRECEIVE_SWAP_STATES[state as SwapProviderState]?.terminal === true;
 }

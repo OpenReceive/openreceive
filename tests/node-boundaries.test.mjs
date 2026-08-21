@@ -1,12 +1,24 @@
 import assert from "node:assert/strict";
-import test from "node:test";
 import { readdirSync, readFileSync } from "node:fs";
+import test from "node:test";
+import { OpenReceiveError } from "../packages/js/core/src/index.ts";
 import * as openReceiveNode from "../packages/js/node/src/index.ts";
-import { createOpenReceive } from "../packages/js/node/src/index.ts";
+import { createNwcReceiveClient, createOpenReceive } from "../packages/js/node/src/index.ts";
+import { normalizeMakeInvoiceResult } from "../packages/js/node/src/nwc/normalize.ts";
+import {
+  isSensitiveLogKey,
+  sanitizeOpenReceiveEvent,
+} from "../packages/js/node/src/service/logging.ts";
+import {
+  invoiceLimitsFromFixedFloatRate,
+  quotePayAmountFromFixedFloatRate,
+} from "../packages/js/node/src/swap/fixedfloat-rates.ts";
 import {
   createTestkitReceiveClient,
   createTestkitSwapProvider,
 } from "../packages/js/testkit/src/index.ts";
+
+const VALID_NWC = `nostr+walletconnect://${"a".repeat(64)}?relay=wss%3A%2F%2Frelay.example.com&secret=${"b".repeat(64)}`;
 
 // The payments repository moved to @openreceive/http; the Node service stays
 // persistence-free: no repository, schema, or SQL adapter surface leaks here.
@@ -257,4 +269,140 @@ test("default-constructed testkit swap provider mints orders that expire in the 
     order.expires_at > Math.floor(Date.now() / 1_000),
     "swap deposit window must be in the future relative to the real clock",
   );
+});
+
+test("normalizeMakeInvoiceResult rejects a malformed wallet payment_hash", () => {
+  const valid = normalizeMakeInvoiceResult({
+    invoice: "lnbc10n1valid",
+    payment_hash: "a".repeat(64),
+    amount: 1000,
+  });
+  assert.equal(valid.payment_hash, "a".repeat(64));
+  for (const paymentHash of ["not-a-hash", "abc", `${"a".repeat(63)}g`, "a".repeat(63)]) {
+    assert.throws(
+      () =>
+        normalizeMakeInvoiceResult({
+          invoice: "lnbc10n1valid",
+          payment_hash: paymentHash,
+          amount: 1000,
+        }),
+      /payment_hash must be 64 hex characters/,
+    );
+  }
+});
+
+test("makeInvoice surfaces a malformed payment_hash as a named wallet error", async () => {
+  const client = createNwcReceiveClient({
+    connectionString: VALID_NWC,
+    requirePreflight: false,
+    client: {
+      makeInvoice: async () => ({
+        invoice: "lnbc10n1malformedhash",
+        payment_hash: "definitely-not-hex",
+        amount: 1000,
+      }),
+    },
+  });
+  await assert.rejects(
+    () => client.makeInvoice({ amount_msats: 1000n }),
+    (error) => {
+      assert.ok(error instanceof OpenReceiveError);
+      assert.match(error.message, /payment_hash must be 64 hex characters/);
+      return true;
+    },
+  );
+});
+
+test("concurrent first NWC calls share one client and one preflight", async () => {
+  let factoryCalls = 0;
+  let getInfoCalls = 0;
+  const wallet = {
+    getInfo: async () => {
+      getInfoCalls += 1;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return { methods: ["make_invoice", "list_transactions"] };
+    },
+    makeInvoice: async () => ({
+      invoice: "lnbc10n1shared",
+      payment_hash: "c".repeat(64),
+      amount: 1000,
+    }),
+    close: async () => {},
+  };
+  const client = createNwcReceiveClient({
+    connectionString: VALID_NWC,
+    clientFactory: async () => {
+      factoryCalls += 1;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return wallet;
+    },
+  });
+  const [first, second] = await Promise.all([
+    client.makeInvoice({ amount_msats: 1000n }),
+    client.makeInvoice({ amount_msats: 2000n }),
+  ]);
+  assert.equal(first.payment_hash, "c".repeat(64));
+  assert.equal(second.payment_hash, "c".repeat(64));
+  assert.equal(factoryCalls, 1, "concurrent first calls must share one client");
+  assert.equal(getInfoCalls, 1, "concurrent first calls must share one preflight");
+});
+
+test("isSensitiveLogKey redacts swap_data and provider credentials", () => {
+  for (const key of [
+    "swap_data",
+    "swapData",
+    "SWAP_DATA",
+    "key",
+    "secret",
+    "provider_token",
+    "X-API-KEY",
+    "X-API-SIGN",
+    "preimage",
+    "bolt11",
+  ]) {
+    assert.equal(isSensitiveLogKey(key), true, `${key} must be sensitive`);
+  }
+  for (const key of [
+    "order_id",
+    "payment_hash",
+    "amount",
+    "provider",
+    "preimage_present",
+    "pair_key",
+  ]) {
+    assert.equal(isSensitiveLogKey(key), false, `${key} must stay loggable`);
+  }
+  const sanitized = sanitizeOpenReceiveEvent({
+    level: "info",
+    event: "swap.created",
+    message: "swap created",
+    swap_data: { providerOrder: { provider_token: "sekrit" } },
+    nested: { swapData: { version: 1 } },
+  });
+  assert.equal(sanitized.swap_data, "[REDACTED]");
+  assert.equal(sanitized.nested.swapData, "[REDACTED]");
+});
+
+test("FixedFloat rate math stays exact at the bigint boundary", () => {
+  const pair = {
+    from: "USDTTRC",
+    to: "BTCLN",
+    in: "1",
+    out: "1",
+    amount: "1",
+    minamount: "0.00001000",
+    maxamount: "90072",
+  };
+  // MAX_SAFE_INTEGER msats: ceil(9007199254740991 / 1000) = 9007199254741 sats.
+  assert.equal(
+    quotePayAmountFromFixedFloatRate({ pair, invoiceAmountMsats: Number.MAX_SAFE_INTEGER }),
+    "90071.99254741",
+  );
+  // maxamount maps to invoice msats above 2^53: the unsafe maximum is omitted
+  // rather than reported as a rounded float, while the minimum stays exact.
+  const limits = invoiceLimitsFromFixedFloatRate(pair);
+  assert.equal(limits.maximum_invoice_amount_msats, undefined);
+  assert.equal(limits.minimum_invoice_amount_msats, 1000_000);
+  const inRange = invoiceLimitsFromFixedFloatRate({ ...pair, maxamount: "90071.99254740" });
+  assert.equal(inRange.maximum_invoice_amount_msats, 9_007_199_254_740_000);
 });

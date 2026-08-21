@@ -1,5 +1,9 @@
-import { createHash, randomUUID } from "node:crypto";
-import type { PaymentDetails } from "@openreceive/core";
+import { randomUUID } from "node:crypto";
+import {
+  OPENRECEIVE_PAYMENTS_SCHEMA_VERSION,
+  openReceivePaymentsDdlStatements,
+  type PaymentDetails,
+} from "@openreceive/core";
 import type { CheckoutInvoice, SwapData } from "@openreceive/node";
 import type { CheckoutCreatedInput } from "./handler.ts";
 import { hostError } from "./errors.ts";
@@ -28,8 +32,6 @@ const RECONCILE_GATE_CAS_RETRIES = 6;
 const META_CLOCK_SKEW_SECONDS = 60;
 /** The `openreceive_meta` row recording which schema generation is installed. */
 const SCHEMA_VERSION_META_KEY = "schema_version";
-/** Postgres truncates identifiers at 63 bytes; longer ones silently collide. */
-const MAX_IDENTIFIER_BYTES = 63;
 /**
  * How long SQLite waits for another connection's write lock before reporting
  * SQLITE_BUSY. The library's transactions are short (one order's rows), so a
@@ -37,12 +39,7 @@ const MAX_IDENTIFIER_BYTES = 63;
  */
 const SQLITE_BUSY_TIMEOUT_MS = 5_000;
 
-/**
- * Generation of the `openreceive_payments` / `openreceive_meta` schema this
- * library writes and reads. Stamped into `openreceive_meta` by the canonical
- * DDL; the repository refuses to run against a strictly newer generation.
- */
-export const OPENRECEIVE_PAYMENTS_SCHEMA_VERSION = 1 as const;
+export { OPENRECEIVE_PAYMENTS_SCHEMA_VERSION } from "@openreceive/core";
 
 /**
  * Oldest-first page size for one reconciliation pass. A backlog of pending
@@ -159,88 +156,20 @@ export interface OpenReceiveSqlPaymentRepository extends OpenReceivePaymentRepos
   ): Promise<boolean>;
 }
 
-/** Every status an attempt row may hold, as a SQL list for the CHECK constraint. */
-const ATTEMPT_STATUS_SQL_LIST = "'pending', 'settled', 'expired', 'failed', 'attention'";
-
-/** Dialect predicate for "64 lowercase hexadecimal characters". */
-function paymentHashCheckSql(dialect: "postgres" | "sqlite"): string {
-  return dialect === "postgres"
-    ? "payment_hash ~ '^[0-9a-f]{64}$'"
-    : "length(payment_hash) = 64 AND payment_hash NOT GLOB '*[^0-9a-f]*'";
-}
-
 /**
- * Index name for a table, kept inside the 63-byte postgres identifier limit: a
- * long custom table name is truncated and given a short digest of the full
- * name, so two long names cannot collapse onto one index.
- */
-function schemaIndexName(tableName: string, suffix: string): string {
-  const full = `${tableName}_${suffix}`;
-  if (Buffer.byteLength(full, "utf8") <= MAX_IDENTIFIER_BYTES) return full;
-  const digest = createHash("sha256").update(full).digest("hex").slice(0, 8);
-  const room = MAX_IDENTIFIER_BYTES - suffix.length - digest.length - 2;
-  return `${tableName.slice(0, Math.max(1, room))}_${digest}_${suffix}`;
-}
-
-/**
- * The canonical payment-attempts DDL. The scaffold CLI emits this for the host's
- * migration workflow; hosts may adjust `order_id` typing or add a foreign key,
- * but must keep every column and constraint. The sibling `openreceive_meta`
- * key/value/rev table backs the durable reconcile gate shared by every worker on
- * this database — same host database, never a second one — and records the
- * installed schema version.
- *
- * There is deliberately NO unique index for "one live attempt per rail": a
- * superseded attempt stays `pending` with a future `expires_at`, and an expired
- * attempt stays `pending` until a wallet scan closes it, so any DB-level
- * uniqueness over pending rows would reject legitimate reminting. Liveness is
- * a time-dependent predicate, which no index can express; the repository
- * enforces it inside the per-order commit lock.
+ * The canonical payment-attempts DDL, rendered as one executable script. The
+ * statements themselves live in `@openreceive/core`
+ * (`openReceivePaymentsDdlStatements`) so this helper and the scaffold CLI's
+ * ORM migrations can never drift from each other.
  */
 export function openReceivePaymentsSchemaSql(
   dialect: "postgres" | "sqlite",
   tableName = "openreceive_payments",
   metaTableName = "openreceive_meta",
 ): string {
-  assertSafeIdentifier(tableName);
-  assertSafeIdentifier(metaTableName);
-  const primaryKey =
-    dialect === "postgres"
-      ? "id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY"
-      : "id INTEGER PRIMARY KEY AUTOINCREMENT";
-  const bigint = dialect === "postgres" ? "BIGINT" : "INTEGER";
-  const insertMeta =
-    dialect === "postgres"
-      ? `INSERT INTO ${metaTableName} (key, value, rev) VALUES ('${SCHEMA_VERSION_META_KEY}', '${OPENRECEIVE_PAYMENTS_SCHEMA_VERSION}', 0) ON CONFLICT (key) DO NOTHING;`
-      : `INSERT OR IGNORE INTO ${metaTableName} (key, value, rev) VALUES ('${SCHEMA_VERSION_META_KEY}', '${OPENRECEIVE_PAYMENTS_SCHEMA_VERSION}', 0);`;
-  return [
-    `CREATE TABLE IF NOT EXISTS ${tableName} (`,
-    `  ${primaryKey},`,
-    "  order_id TEXT NOT NULL,",
-    "  payment_hash TEXT NOT NULL UNIQUE,",
-    "  status TEXT NOT NULL DEFAULT 'pending',",
-    "  status_reason TEXT,",
-    `  paid_at ${bigint},`,
-    `  expires_at ${bigint} NOT NULL,`,
-    `  created_at ${bigint} NOT NULL,`,
-    `  updated_at ${bigint} NOT NULL,`,
-    `  inserted_at ${bigint} NOT NULL,`,
-    "  checkout_data TEXT NOT NULL,",
-    "  swap_data TEXT,",
-    "  client_ip TEXT,",
-    `  CHECK (status IN (${ATTEMPT_STATUS_SQL_LIST})),`,
-    `  CHECK (${paymentHashCheckSql(dialect)})`,
-    ");",
-    `CREATE INDEX IF NOT EXISTS ${schemaIndexName(tableName, "order_created_idx")} ON ${tableName} (order_id, created_at);`,
-    `CREATE INDEX IF NOT EXISTS ${schemaIndexName(tableName, "status_created_idx")} ON ${tableName} (status, created_at);`,
-    `CREATE INDEX IF NOT EXISTS ${schemaIndexName(tableName, "client_ip_inserted_idx")} ON ${tableName} (client_ip, inserted_at);`,
-    `CREATE TABLE IF NOT EXISTS ${metaTableName} (`,
-    "  key TEXT PRIMARY KEY,",
-    "  value TEXT NOT NULL,",
-    `  rev ${bigint} NOT NULL DEFAULT 0`,
-    ");",
-    insertMeta,
-  ].join("\n");
+  return openReceivePaymentsDdlStatements({ dialect, tableName, metaTableName })
+    .map((statement) => `${statement};`)
+    .join("\n");
 }
 
 /**
@@ -405,7 +334,7 @@ export function createOpenReceiveSqlPayments(
           const decision = liveAttemptCommitDecision(row, insert, now);
           if (decision === "conflict") {
             throw hostError(
-              "This order already has a live payment attempt for the same method.",
+              "An unpaid checkout for this payment method is already in progress for this order.",
               409,
               "CONFLICT",
             );
@@ -582,7 +511,7 @@ function sqliteAdapter(db: SqliteLike): OpenReceiveSqlAdapter {
   }
   const query: OpenReceiveSqlQuery = async (sql, params = []) => {
     const statement = db.prepare(sql);
-    if (/^\s*select/i.test(sql)) {
+    if (sqliteStatementReturnsRows(sql, statement)) {
       return statement.all(...params) as Record<string, unknown>[];
     }
     statement.run(...params);
@@ -617,6 +546,19 @@ function sqliteAdapter(db: SqliteLike): OpenReceiveSqlAdapter {
   };
 }
 
+/**
+ * Whether a prepared sqlite statement produces rows. better-sqlite3 reports it
+ * directly (`reader`); node:sqlite does not, so statements are classified by
+ * shape: `SELECT`/`VALUES`/`WITH` heads and any `RETURNING` clause run through
+ * `.all()`, per the `OpenReceiveSqlQuery` contract. A row-less `WITH … INSERT`
+ * still executes correctly under `.all()` and yields `[]`.
+ */
+function sqliteStatementReturnsRows(sql: string, statement: unknown): boolean {
+  const reader = (statement as { reader?: unknown }).reader;
+  if (typeof reader === "boolean") return reader;
+  return /^\s*(?:select|values|with)\b/i.test(sql) || /\breturning\b/i.test(sql);
+}
+
 function isPooledClient(value: unknown): value is PgPooledClientLike {
   return (
     typeof value === "object" &&
@@ -642,7 +584,7 @@ function pgAdapter(db: PgLike): OpenReceiveSqlAdapter {
   // custom query-only handle) is one shared connection whose transactions must
   // serialize in-process — and Client.connect() opens the socket, so it must
   // never be treated as a checkout. Pools are recognized structurally by their
-  // counter getters; otherwise the first transaction probes connect() once:
+  // counter getters; otherwise the first caller probes connect() once:
   // a Pool returns a client with query + release, a Client resolves undefined
   // (connecting it as a side effect) or rejects because it is already connected.
   let mode: "pool" | "single" | undefined =
@@ -652,9 +594,13 @@ function pgAdapter(db: PgLike): OpenReceiveSqlAdapter {
         ? "pool"
         : undefined;
 
-  /** Checks out a per-transaction client on a pool; undefined in single mode. */
-  const checkoutPooledClient = async (): Promise<PgPooledClientLike | undefined> => {
-    if (mode === "single") return undefined;
+  // The probe is shared: concurrent first callers wait for one in-flight
+  // connect() to settle the mode instead of racing their own — a pg Client
+  // tolerates exactly one connect(), and the loser's "already been connected"
+  // rejection must never surface as a transaction failure.
+  let probe: Promise<PgPooledClientLike | undefined> | undefined;
+
+  const probeConnect = async (): Promise<PgPooledClientLike | undefined> => {
     try {
       const client = await db.connect?.();
       if (isPooledClient(client)) {
@@ -665,16 +611,48 @@ function pgAdapter(db: PgLike): OpenReceiveSqlAdapter {
       mode = "single";
       return undefined;
     } catch (error) {
-      if (
-        mode === undefined &&
-        error instanceof Error &&
-        /already been connected/i.test(error.message)
-      ) {
+      if (error instanceof Error && /already been connected/i.test(error.message)) {
         mode = "single";
         return undefined;
       }
       throw error;
     }
+  };
+
+  /** Checks out a per-transaction client on a pool; undefined in single mode. */
+  const checkoutPooledClient = async (): Promise<PgPooledClientLike | undefined> => {
+    while (mode === undefined) {
+      if (probe === undefined) {
+        probe = probeConnect();
+        try {
+          // The probe's connect() doubles as this caller's checkout.
+          return await probe;
+        } finally {
+          if (mode === undefined) probe = undefined;
+        }
+      }
+      // Another caller's probe is in flight; its client belongs to that caller.
+      // Wait it out, then re-read the settled mode (an outright connection
+      // failure leaves mode unset, and the loop retries with a fresh probe).
+      const pending = probe;
+      await pending.then(
+        () => undefined,
+        () => undefined,
+      );
+      if (probe === pending && mode === undefined) probe = undefined;
+    }
+    if (mode === "single") return undefined;
+    const client = await db.connect?.();
+    return isPooledClient(client) ? client : undefined;
+  };
+
+  // A plain read must also route through the probe: pg queues query() calls on
+  // a never-connected Client indefinitely, so the read would hang until
+  // something else happened to call connect().
+  const ensureMode = async (): Promise<void> => {
+    if (mode !== undefined) return;
+    const client = await checkoutPooledClient();
+    client?.release();
   };
 
   const runTransaction = async <T>(
@@ -700,8 +678,10 @@ function pgAdapter(db: PgLike): OpenReceiveSqlAdapter {
     dialect: "postgres",
     // Pooled reads are isolated per checked-out connection; single-connection
     // reads join the transaction queue so they never see uncommitted state.
-    query: (sql, params) =>
-      mode === "pool" ? directQuery(sql, params) : enqueue(() => directQuery(sql, params)),
+    query: async (sql, params) => {
+      await ensureMode();
+      return mode === "pool" ? directQuery(sql, params) : enqueue(() => directQuery(sql, params));
+    },
     async transaction(run) {
       const client = await checkoutPooledClient();
       if (client !== undefined) {
