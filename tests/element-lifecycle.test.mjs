@@ -528,3 +528,62 @@ test("attributes the element writes never re-enter its own callback", async () =
     element.remove();
   }
 });
+
+test("a nonsense amount-msats costs the amount label, not the element", async () => {
+  // The host copies `amount-msats` straight out of a checkout snapshot
+  // (createOpenReceiveCheckoutElementAttributes writes String(amount_msats)), so
+  // this attribute carries SERVER data. It used to be read with the strict
+  // integer parser, which threw inside render() and took the whole payment
+  // screen down over a number the payer could do nothing about.
+  const fetchStub = createFetchStub({
+    "/payments/check": () => ({ status: "settled", paid_at: Math.floor(Date.now() / 1000) }),
+  });
+  globalThis.fetch = fetchStub;
+  const paymentHash = "f".repeat(64);
+  const element = mount({
+    "order-id": "order-bad-amount",
+    prefix: "/openreceive",
+    "invoice-id": paymentHash,
+    invoice: `lnbc-${paymentHash}`,
+    "payment-hash": paymentHash,
+    "amount-msats": "-1",
+    status: "settled",
+  });
+
+  try {
+    await flush(4);
+    const html = element.shadowRoot?.innerHTML ?? "";
+    assert.match(html, /<section part="root"/, "the element must still render");
+    // The formatted amount is gone; the raw value is still reported.
+    assert.doesNotMatch(html, /-1 msats/);
+    assert.match(html, /Amount \(msats\)/);
+    assert.match(html, />-1</);
+
+    // An attribute that is no number at all is dropped rather than shown.
+    element.setAttribute("amount-msats", "not-a-number");
+    await flush(4);
+    const junk = element.shadowRoot?.innerHTML ?? "";
+    assert.match(junk, /<section part="root"/);
+    assert.doesNotMatch(junk, /NaN/);
+  } finally {
+    element.remove();
+  }
+
+  // The rule must not blank a GOOD amount on this rail: same element, same
+  // settled screen, a legitimate value.
+  const good = mount({
+    "order-id": "order-good-amount",
+    prefix: "/openreceive",
+    "invoice-id": paymentHash,
+    invoice: `lnbc-${paymentHash}`,
+    "payment-hash": paymentHash,
+    "amount-msats": "21000",
+    status: "settled",
+  });
+  try {
+    await flush(4);
+    assert.match(good.shadowRoot?.innerHTML ?? "", /21 sats \(21000 msats\)/);
+  } finally {
+    good.remove();
+  }
+});

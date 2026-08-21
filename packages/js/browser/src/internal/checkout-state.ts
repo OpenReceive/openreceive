@@ -1,11 +1,17 @@
-// One checkout state, derived: snapshot -> display data -> CheckoutState, the
-// phase machine that decides settled/terminal/paid, the status model the UI
-// renders, and the conversions back to a snapshot the swap re-key needs.
+// One checkout state, derived: snapshot + now -> CheckoutState, the phase
+// machine that decides settled/terminal/paid, the status model the UI renders,
+// and the conversions back to a snapshot the swap re-key and the element's
+// attribute path need.
+//
+// There is exactly ONE flattening rule here. React used to carry a second copy
+// (toCheckoutDisplayData -> createCheckoutDisplayModel -> toCheckoutViewModel)
+// that disagreed with this one about fiat, about the amount fallback, about the
+// error message, and about whether a swap gets a `lightning:` URI. Those four
+// reconciliations are commented individually below; do not reintroduce a second
+// path.
 
 import { unixSeconds } from "@openreceive/core";
 import {
-  type CheckoutDisplayData,
-  type CheckoutDisplayModel,
   type CheckoutInvoiceSnapshot,
   type CheckoutPhase,
   type CheckoutSnapshot,
@@ -17,37 +23,11 @@ import {
   openReceiveCheckoutLabels,
 } from "./ui.ts";
 import { getOpenReceivePaymentStatusText } from "./wizard.ts";
-import {
-  formatOpenReceiveCountdown,
-  formatOpenReceiveFiatAmount,
-  formatOpenReceiveMsats,
-  formatOpenReceivePaymentHashLabel,
-} from "./checkout-format.ts";
+import { deriveCheckoutStateLabels, formatOpenReceiveCountdown } from "./checkout-format.ts";
 import { createLightningUri } from "./checkout-invoice.ts";
 import { requiredInvoiceRail, requiredString } from "./checkout-read.ts";
 import { isTerminalSwapProviderState } from "./checkout-swap-view.ts";
 import { checkoutLogFields, emitBrowserLog, emitBrowserSwapTransition } from "./checkout-log.ts";
-
-export function createCheckoutDisplayModel(data: CheckoutDisplayData): CheckoutDisplayModel {
-  return {
-    ...data,
-    // Deferred checkout (checkout_lock) has no bolt11 yet — use empty URI as placeholder.
-    lightning_uri:
-      data.rail === "checkout_lock" || !data.invoice ? "" : createLightningUri(data.invoice),
-    ...(data.amount_msats === undefined
-      ? {}
-      : { amountLabel: formatOpenReceiveMsats(data.amount_msats) }),
-    ...(formatOpenReceiveFiatAmount(data.fiat_quote?.fiat) === undefined
-      ? {}
-      : { fiatLabel: formatOpenReceiveFiatAmount(data.fiat_quote?.fiat) }),
-    ...(data.payment_hash === undefined
-      ? {}
-      : { paymentHashLabel: formatOpenReceivePaymentHashLabel(data.payment_hash) }),
-    ...(data.transaction_state === undefined
-      ? {}
-      : { transactionStateLabel: data.transaction_state }),
-  };
-}
 
 /**
  * Choose the invoice the checkout UI should treat as primary.
@@ -121,36 +101,55 @@ export function createCheckoutState(
     // Deferred checkout — no bolt11 minted yet. Return a minimal open/pending state so
     // callers (useCheckout, CheckoutWatcher) don't throw. The invoice fields are empty
     // strings; callers MUST gate any bolt11-dependent UI on the lightning pane being shown.
-    return {
-      checkout_id: snapshot.checkout_id,
-      order_id: snapshot.order_id,
-      invoice_id: "",
-      invoice: "",
-      rail: "checkout_lock",
-      lightning_uri: "",
-      ...(snapshot.amount_msats === undefined ? {} : { amount_msats: snapshot.amount_msats }),
-      ...(snapshot.fiat !== undefined ? { fiat_quote: { fiat: snapshot.fiat } } : {}),
-      transaction_state: "pending",
-      workflow_state: "invoice_created",
-      phase: "invoice_created",
-      settled: false,
-      terminal: false,
-      paid: false,
-    };
+    // Normalized like any other state so it carries the same labels; with no
+    // expires_at and a pending/invoice_created pair the phase machine returns
+    // exactly the invoice_created / not-settled / not-terminal verdict this
+    // branch used to hard-code. Deliberately returned before the log calls
+    // below: a checkout with nothing minted yet is not a state worth auditing.
+    return normalizeCheckoutState(
+      {
+        checkout_id: snapshot.checkout_id,
+        order_id: snapshot.order_id,
+        invoice_id: "",
+        invoice: "",
+        rail: "checkout_lock",
+        lightning_uri: "",
+        ...(snapshot.amount_msats === undefined ? {} : { amount_msats: snapshot.amount_msats }),
+        ...(snapshot.fiat !== undefined ? { fiat_quote: { fiat: snapshot.fiat } } : {}),
+        transaction_state: "pending",
+        workflow_state: "invoice_created",
+        paid: false,
+      },
+      options.now ?? unixSeconds(),
+    );
   }
 
   const invoice = invoiceRecord;
   // Swap shadows intentionally omit bolt11 from public payloads; checkout_lock has none yet.
+  // Anything else on the Lightning rail with no bolt11 cannot be displayed at all.
+  // The message names DISPLAY, not the wire: this function is also handed
+  // in-memory snapshots that never came from a response (G4 divergence (c)).
   const bolt11 =
     typeof invoice.invoice === "string" && invoice.invoice.length > 0
       ? invoice.invoice
       : invoice.rail === "swap" || invoice.rail === "checkout_lock"
         ? ""
-        : requiredString(invoice.invoice, "invoice");
+        : missingDisplayInvoice();
   const paid = isPaidCheckoutSnapshot(snapshot);
   const settledAt = snapshot.paid_at ?? invoice.settled_at;
   const transactionState = paid ? "settled" : (invoice.transaction_state ?? "pending");
   const workflowState = paid ? "paid" : (invoice.workflow_state ?? "invoice_created");
+  // FIAT (G4 divergence (a)) — resolved THREE ways, and the fallback is
+  // load-bearing. A public swap payload sets the ATTEMPT's fiat_quote to null and
+  // a checkout_lock attempt has none at all, so in both cases the CHECKOUT's own
+  // `fiat` is the only fiat the payer can be shown. Passing the attempt's null
+  // straight through made the fiat line vanish from the swap screen; that is why
+  // the deferred branch above already carries this fallback and why the
+  // flattening branch now does too.
+  const fiatQuote =
+    invoice.fiat_quote === null && snapshot.fiat !== undefined
+      ? { fiat: snapshot.fiat }
+      : (invoice.fiat_quote ?? (snapshot.fiat === undefined ? undefined : { fiat: snapshot.fiat }));
 
   const state = normalizeCheckoutState(
     {
@@ -159,13 +158,20 @@ export function createCheckoutState(
       invoice_id: invoice.invoice_id,
       invoice: bolt11,
       rail: invoice.rail,
+      // G4 divergence (d): the swap rail gets NO `lightning:` URI even when the
+      // attempt happens to carry a bolt11. A swap is paid at the deposit
+      // address, and a wallet-jump link on that screen sends the payer down the
+      // wrong rail. `invoice` above still holds the bolt11 for anything that
+      // legitimately needs it.
       lightning_uri:
         invoice.rail === "checkout_lock" || invoice.rail === "swap" || bolt11 === ""
           ? ""
           : createLightningUri(bolt11),
       ...(invoice.payment_hash === undefined ? {} : { payment_hash: invoice.payment_hash }),
+      // G4 divergence (b): the checkout's amount is what is owed, so an attempt
+      // that omits its own amount still shows one rather than no amount at all.
       amount_msats: invoice.amount_msats ?? snapshot.amount_msats,
-      ...(invoice.fiat_quote === undefined ? {} : { fiat_quote: invoice.fiat_quote }),
+      ...(fiatQuote === undefined ? {} : { fiat_quote: fiatQuote }),
       transaction_state: transactionState,
       workflow_state: workflowState,
       ...(invoice.expires_at === undefined ? {} : { expires_at: invoice.expires_at }),
@@ -197,40 +203,50 @@ export function createCheckoutState(
   return state;
 }
 
-export function createCheckoutSnapshotFromDisplayData(data: CheckoutDisplayData): CheckoutSnapshot {
-  const rail = requiredInvoiceRail(data.rail);
-  const invoiceId = requiredString(data.invoice_id, "invoice_id");
+/**
+ * Wrap ONE payment attempt as a whole checkout snapshot.
+ *
+ * The custom element's source of truth is HTML attributes, not a wire payload:
+ * declarative and SSR usage give it one attempt's fields and nothing else. This
+ * is the only place that invents the surrounding checkout, and it stays
+ * conservative — checkout_id and order_id fall back to the invoice id, and the
+ * checkout counts as paid exactly when the attempt does.
+ *
+ * It takes a {@link CheckoutInvoiceSnapshot}, the canonical sub-part, rather
+ * than the flattened CheckoutDisplayData shape it used to: an attempt read off
+ * attributes is still an attempt.
+ */
+export function createCheckoutSnapshotFromInvoice(
+  attempt: CheckoutInvoiceSnapshot,
+  identity: { readonly checkout_id?: string; readonly order_id?: string } = {},
+): CheckoutSnapshot {
+  const rail = requiredInvoiceRail(attempt.rail);
+  const invoiceId = requiredString(attempt.invoice_id, "invoice_id");
   const invoice: CheckoutInvoiceSnapshot = {
     invoice_id: invoiceId,
-    invoice: data.invoice,
+    invoice: attempt.invoice,
     rail,
-    ...(data.payment_hash === undefined ? {} : { payment_hash: data.payment_hash }),
-    ...(data.amount_msats === undefined ? {} : { amount_msats: data.amount_msats }),
-    ...(data.fiat_quote === undefined ? {} : { fiat_quote: data.fiat_quote }),
-    ...(data.transaction_state === undefined ? {} : { transaction_state: data.transaction_state }),
-    ...(data.workflow_state === undefined ? {} : { workflow_state: data.workflow_state }),
-    ...(data.expires_at === undefined ? {} : { expires_at: data.expires_at }),
-    ...(data.settled_at === undefined ? {} : { settled_at: data.settled_at }),
-    ...(data.swap === undefined ? {} : { swap: data.swap }),
+    ...(attempt.payment_hash === undefined ? {} : { payment_hash: attempt.payment_hash }),
+    ...(attempt.amount_msats === undefined ? {} : { amount_msats: attempt.amount_msats }),
+    ...(attempt.fiat_quote === undefined ? {} : { fiat_quote: attempt.fiat_quote }),
+    ...(attempt.transaction_state === undefined
+      ? {}
+      : { transaction_state: attempt.transaction_state }),
+    ...(attempt.workflow_state === undefined ? {} : { workflow_state: attempt.workflow_state }),
+    ...(attempt.expires_at === undefined ? {} : { expires_at: attempt.expires_at }),
+    ...(attempt.settled_at === undefined ? {} : { settled_at: attempt.settled_at }),
+    ...(attempt.swap === undefined ? {} : { swap: attempt.swap }),
   };
-  const paid = data.settled_at !== undefined || data.transaction_state === "settled";
-  const checkoutId = data.checkout_id ?? invoiceId;
+  const paid = attempt.settled_at !== undefined || attempt.transaction_state === "settled";
   return {
-    checkout_id: checkoutId,
-    order_id: data.order_id ?? invoiceId,
+    checkout_id: identity.checkout_id ?? invoiceId,
+    order_id: identity.order_id ?? invoiceId,
     status: paid ? "paid" : "open",
-    ...(data.settled_at === undefined ? {} : { paid_at: data.settled_at }),
-    amount_msats: data.amount_msats ?? 0,
+    ...(attempt.settled_at === undefined ? {} : { paid_at: attempt.settled_at }),
+    amount_msats: attempt.amount_msats ?? 0,
     active: paid ? undefined : invoice,
     invoices: [invoice],
   };
-}
-
-export function createCheckoutStateFromDisplayData(
-  data: CheckoutDisplayData,
-  options: CreateCheckoutStateOptions = {},
-): CheckoutState {
-  return createCheckoutState(createCheckoutSnapshotFromDisplayData(data), options);
 }
 
 export function refreshCheckoutState(
@@ -300,6 +316,11 @@ export function normalizeCheckoutState(
     settled: _settled,
     terminal: _terminal,
     expires_in_seconds: _expiresInSeconds,
+    // Labels are derived, never carried: a caller handing back a previous state
+    // with one field changed must not keep that state's stale labels.
+    amountLabel: _amountLabel,
+    fiatLabel: _fiatLabel,
+    paymentHashLabel: _paymentHashLabel,
     ...base
   } = state;
   const statePhase = getCheckoutPhase(state.transaction_state, state.workflow_state);
@@ -318,6 +339,7 @@ export function normalizeCheckoutState(
 
   return {
     ...base,
+    ...deriveCheckoutStateLabels(base),
     phase,
     settled,
     // A swap that expired, refunded, failed, or needs support review is over:
@@ -328,6 +350,10 @@ export function normalizeCheckoutState(
       (!settled && isTerminalSwapProviderState(base.swap?.provider_state)),
     ...(expiresInSeconds === undefined ? {} : { expires_in_seconds: expiresInSeconds }),
   };
+}
+
+function missingDisplayInvoice(): never {
+  throw new TypeError("OpenReceive checkout requires a display Lightning invoice.");
 }
 
 function getCheckoutPhase(transactionState: string, workflowState: string): CheckoutPhase {

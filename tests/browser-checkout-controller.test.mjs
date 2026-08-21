@@ -6,6 +6,7 @@ import {
   createCheckoutElementAttributes,
   createOpenReceiveStatusFetcher,
   createOpenReceiveSwapFeeBreakdown,
+  normalizeSwapStartInvoice,
   postOpenReceiveJson,
 } from "../packages/js/browser/src/internal.ts";
 
@@ -324,5 +325,96 @@ test("browser checkout log fields never carry the refund nonce, a preimage or a 
     // The nonce is reported as presence only — that field is the whole point.
     assert.equal(entry.refund_nonce_present, true);
     assert.equal(entry.refund_nonce_expires_at, 3_000);
+  }
+});
+
+// ------------------------------- the swap parse boundary refuses a non-amount --
+
+// `normalizeSwapStartInvoice` is the untrusted-wire boundary for a swap start
+// and a swap refund: what it returns becomes a CheckoutInvoiceSnapshot, which
+// every layer above treats as already parsed, and which callers copy onto the
+// checkout-level `amount_msats`.
+//
+// It used to admit `checkout.amount_msats` on `typeof === "number"` alone, so a
+// server could hand back -1, 1.5 or an unsafe integer and have it stored as an
+// amount. The Rails demo then formatted that value in a mobx @computed read
+// inside an `observer` and a RangeError escaped render, taking the whole
+// checkout panel with it. Both ends are now closed, and they are closed
+// DIFFERENTLY on purpose: rejected here at the parse boundary, blanked at the
+// display boundary (see `optionalMsatsLabel`, and the "nonsense amount costs the
+// label" test in checkout-state-characterization). A parse boundary has no
+// screen to protect yet; a poll into a live checkout does.
+
+function swapStartBody(checkout) {
+  return {
+    swap: {
+      payment_hash: hash("e"),
+      provider: "lightning-swap-com",
+      pay_in_asset: "SOL_SOL",
+      deposit_address: "SoLAddress",
+      deposit_amount: "0.027479",
+      provider_state: "awaiting_deposit",
+      provider_expires_at: Math.floor(Date.now() / 1000) + 900,
+      ...(checkout === undefined ? {} : { checkout }),
+    },
+  };
+}
+
+test("a swap start payload never yields an amount the checkout would refuse to display", () => {
+  // Not amounts. Every one of these passed the old `typeof === "number"` check.
+  for (const amountMsats of [-1, -21_000, 1.5, Number.MAX_SAFE_INTEGER + 2, Number.NaN, Infinity]) {
+    assert.throws(
+      () => normalizeSwapStartInvoice(swapStartBody({ amount_msats: amountMsats })),
+      /unusable checkout amount/,
+      `amount_msats ${amountMsats} must be refused at the parse boundary`,
+    );
+  }
+
+  // Present but the wrong type is refused too — same as every other field in
+  // this function, where a wrong-typed value throws the payload away.
+  assert.throws(
+    () => normalizeSwapStartInvoice(swapStartBody({ amount_msats: "21000" })),
+    /unusable checkout amount/,
+  );
+});
+
+test("a swap start payload keeps a real amount and tolerates an absent one", () => {
+  // Zero is an amount: falsy, and the obvious thing for a guard to get wrong.
+  for (const amountMsats of [0, 21_000, Number.MAX_SAFE_INTEGER]) {
+    assert.equal(
+      normalizeSwapStartInvoice(swapStartBody({ amount_msats: amountMsats })).amount_msats,
+      amountMsats,
+    );
+  }
+
+  // The field is OPTIONAL: the client already knows the checkout's own amount,
+  // so "not echoed" — missing, no `checkout` object at all, or JSON `null` — is
+  // legal and simply carries no amount. Only present-but-not-an-amount is a bug.
+  for (const checkout of [undefined, {}, { amount_msats: null }]) {
+    const invoice = normalizeSwapStartInvoice(swapStartBody(checkout));
+    assert.equal(invoice.amount_msats, undefined);
+    assert.equal(invoice.rail, "swap");
+    assert.equal(invoice.payment_hash, hash("e"));
+  }
+});
+
+test("every amount a swap start admits is one the display boundary will format", () => {
+  // The two boundaries stated as one property, which is the thing that was
+  // actually broken: whatever survives the parse must survive the display.
+  for (const amountMsats of [0, 1_000, 21_000, 999_999_999]) {
+    const invoice = normalizeSwapStartInvoice(swapStartBody({ amount_msats: amountMsats }));
+    const state = createCheckoutState(
+      {
+        checkout_id: invoice.invoice_id,
+        order_id: "order-1",
+        status: "open",
+        amount_msats: amountMsats,
+        active: invoice,
+        invoices: [invoice],
+      },
+      { now: Math.floor(Date.now() / 1000), logger: false },
+    );
+    assert.equal(state.amount_msats, amountMsats);
+    assert.notEqual(state.amountLabel, undefined, `${amountMsats} must still get a label`);
   }
 });

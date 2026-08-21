@@ -371,11 +371,17 @@ test("elements hide invoice text and reject NWC strings", () => {
 
   assert.doesNotMatch(html, /lnbc-test/);
   assert.doesNotMatch(html, /<textarea/);
+  const nwc = `nostr+walletconnect://${"a".repeat(64)}?secret=${"b".repeat(64)}`;
+  assert.throws(() => renderCheckoutHtml({ invoice: nwc }), /must not be an NWC/);
+  // The guard is on the rendered invoice itself, not on a rail or an id. It
+  // used to be a side effect of building the `lightning:` URI, which skipped
+  // the checkout_lock rail and skipped any view with no invoice-id.
   assert.throws(
-    () =>
-      renderCheckoutHtml({
-        invoice: `nostr+walletconnect://${"a".repeat(64)}?secret=${"b".repeat(64)}`,
-      }),
+    () => renderCheckoutHtml({ invoice: nwc, rail: "checkout_lock" }),
+    /must not be an NWC/,
+  );
+  assert.throws(
+    () => renderCheckoutHtml({ invoice: nwc, invoice_id: "or_inv_nwc", rail: "swap" }),
     /must not be an NWC/,
   );
 });

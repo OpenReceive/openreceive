@@ -28,6 +28,29 @@ export function readElementFiatQuote(element: Element) {
   };
 }
 
+/**
+ * Read `amount-msats` WITHOUT judging it.
+ *
+ * `parseOpenReceiveOptionalInteger` throws on a negative or non-integer value,
+ * which is right for `expires-at` and `poll-interval-ms` — a host writing those
+ * by hand should hear about a typo. `amount-msats` is different: the host copies
+ * it out of a checkout snapshot (see `createOpenReceiveCheckoutElementAttributes`,
+ * which writes `String(snapshot.amount_msats)`), so a server answering with a
+ * nonsense amount would throw INSIDE render() and blank the whole payment
+ * screen — the one thing the display boundary exists to prevent.
+ *
+ * So: parse the number, keep it raw, and let `optionalMsatsLabel` decide whether
+ * it can be shown. A malformed amount then costs its label and nothing else, and
+ * the raw value still reaches the "Amount (msats)" rows, exactly as it does on
+ * the React path. Only a value that is no number at all is dropped.
+ */
+export function readElementAmountMsats(element: Element): number | undefined {
+  const raw = element.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.amountMsats);
+  if (raw === null || raw.trim() === "") return undefined;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 export function parseElementRail(value: string | null): "lightning" | "swap" | "checkout_lock" {
   if (value === "swap") return "swap";
   if (value === "checkout_lock") return "checkout_lock";

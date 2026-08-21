@@ -1,4 +1,5 @@
 import { nonEmptyString, recordOrEmpty } from "@openreceive/core";
+import { optionalSafeInteger } from "./checkout-read.ts";
 import { readOpenReceiveJsonResponse } from "./checkout-transport.ts";
 import { resolveOpenReceiveBrowserLogger, sanitizeBrowserLogEntry } from "./console-logger.ts";
 import { openReceiveRoutePrefix as routePrefix } from "./routes.ts";
@@ -75,11 +76,12 @@ export function normalizeSwapStartInvoice(body: unknown): CheckoutInvoiceSnapsho
   ) {
     throw new Error("Swap response did not include provider instructions.");
   }
+  const amountMsats = swapCheckoutAmountMsats(checkout.amount_msats);
   return {
     invoice_id: paymentHash,
     rail: "swap",
     payment_hash: paymentHash,
-    ...(typeof checkout.amount_msats === "number" ? { amount_msats: checkout.amount_msats } : {}),
+    ...(amountMsats === undefined ? {} : { amount_msats: amountMsats }),
     transaction_state: "pending",
     workflow_state: "invoice_created",
     expires_at: swap.provider_expires_at,
@@ -232,6 +234,41 @@ async function requestJson(
     body: JSON.stringify(body),
   });
   return readOpenReceiveJsonResponse(response, "OpenReceive request failed.");
+}
+
+/**
+ * `checkout.amount_msats` off a swap start / refund response.
+ *
+ * DECISION: an out-of-range amount here is a PARSE error, not a display
+ * concern. This is an untrusted-wire boundary — what it returns becomes a
+ * `CheckoutInvoiceSnapshot`, which every layer above treats as already parsed,
+ * and which callers copy straight onto the checkout-level `amount_msats` (the
+ * Rails demo's `applyAttempt` does exactly that). A value that is typed as msats
+ * but is not one must not get that far.
+ *
+ * That is not in tension with `optionalMsatsLabel`, the display boundary in
+ * ./checkout-format.ts. The two sit at different ends: a bad amount arriving on
+ * a LIVE screen — a status poll into a checkout the payer is already looking at
+ * — must cost one label rather than the panel, so it is blanked there. A swap
+ * start has no screen to protect yet, so a payload that cannot describe money is
+ * refused here, before it is ever stored. Rejected at the parse boundary,
+ * blanked at the display boundary.
+ *
+ * Rejecting also matches every other field this function checks: a field that is
+ * missing or the wrong type throws the payload away rather than degrading it,
+ * and all three callers (react's wizard, the element session, the Rails demo)
+ * catch that and offer a retry. The field itself stays OPTIONAL, because the
+ * client already knows the checkout's own amount: absent — `undefined`, or JSON
+ * `null` — is legal and simply means "not echoed". Present-but-not-an-amount is
+ * a server bug.
+ */
+function swapCheckoutAmountMsats(value: unknown): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  const amountMsats = optionalSafeInteger(value);
+  if (amountMsats === undefined || amountMsats < 0) {
+    throw new Error("Swap response carried an unusable checkout amount.");
+  }
+  return amountMsats;
 }
 
 function copyOptionalSwapFields(

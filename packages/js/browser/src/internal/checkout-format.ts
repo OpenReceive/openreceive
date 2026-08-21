@@ -58,8 +58,44 @@ export function escapeOpenReceiveHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
+/**
+ * THE msat rule, in one place: is this a value `formatOpenReceiveMsats` can be
+ * handed?
+ *
+ * Every rule in this file that judges an msat amount asks this instead of
+ * repeating the `Number.isSafeInteger(...) && ... >= 0` pair — the pair was
+ * written out at three sites, and one of three can always be forgotten (it was:
+ * two display sites in checkout-details.ts never had it at all). `undefined`
+ * answers false, so callers holding an optional amount need no extra check.
+ *
+ * Module-private on purpose: other modules want {@link optionalMsatsLabel}, the
+ * display boundary built on top of it, not a licence to re-implement the rule.
+ */
+function isDisplayableMsats(amountMsats: number | undefined): amountMsats is number {
+  return amountMsats !== undefined && Number.isSafeInteger(amountMsats) && amountMsats >= 0;
+}
+
+/**
+ * The display boundary for an msat amount: same output as
+ * {@link formatOpenReceiveMsats}, but `undefined` instead of a throw when the
+ * amount is nonsense.
+ *
+ * EVERY display site formats through this one. The formatter itself keeps
+ * throwing on purpose — wire construction and amount validation call it too, and
+ * a malformed amount there is a bug that must surface — but a payment screen is
+ * not a place to surface it: an amount a server should never have sent must cost
+ * the row that would have shown it and nothing more. Sibling of
+ * {@link optionalDecimal}, which does the same job for provider decimals.
+ *
+ * Callers keep rendering the RAW value next to the blanked label (the
+ * "Amount (msats)" rows), so nothing is hidden from whoever has to debug it.
+ */
+export function optionalMsatsLabel(amountMsats: number | undefined): string | undefined {
+  return isDisplayableMsats(amountMsats) ? formatOpenReceiveMsats(amountMsats) : undefined;
+}
+
 export function formatOpenReceiveMsats(amountMsats: number): string {
-  if (!Number.isSafeInteger(amountMsats) || amountMsats < 0) {
+  if (!isDisplayableMsats(amountMsats)) {
     throw new RangeError("amount_msats must be a non-negative safe integer");
   }
 
@@ -125,12 +161,12 @@ export function formatOpenReceiveSwapLimit(
   limitMsats: number | undefined,
   rounding: "ceil" | "floor" = "ceil",
 ): string | undefined {
+  // Same displayability rule as every other amount; the extra `=== 0` is this
+  // function's own: the checkout amount is a DENOMINATOR below.
   if (
-    limitMsats === undefined ||
-    !Number.isSafeInteger(limitMsats) ||
-    limitMsats < 0 ||
-    !Number.isSafeInteger(checkout.amount_msats) ||
-    checkout.amount_msats <= 0
+    !isDisplayableMsats(limitMsats) ||
+    !isDisplayableMsats(checkout.amount_msats) ||
+    checkout.amount_msats === 0
   ) {
     return undefined;
   }
@@ -180,12 +216,112 @@ export function formatOpenReceivePaymentHashLabel(hash: string): string {
   return hash.length <= 16 ? hash : `${hash.slice(0, 8)}...${hash.slice(-8)}`;
 }
 
+/**
+ * The largest unix-seconds value a `Date` can represent. The ECMAScript time
+ * range is +/- 8.64e15 ms (ES2024 21.4.1.1); past it every `Date` method that
+ * renders — `toISOString`, `toLocaleString` — throws `RangeError: Invalid time
+ * value`.
+ */
+const MAX_DISPLAYABLE_UNIX_SECONDS = 8.64e15 / 1000;
+
+/**
+ * THE unix-timestamp rule, in one place: is this a value a clock can render?
+ *
+ * Sibling of {@link isDisplayableMsats}, and module-private for the same
+ * reason — callers want {@link optionalUnixTimeLabel}, not a licence to
+ * re-derive the bound. The upper bound is the half that keeps getting
+ * forgotten: `formatOpenReceiveUnixTime` guarded finite-and-positive but not
+ * magnitude, and two display sites in checkout-details.ts called `new Date(...)`
+ * with no guard at all, so `1e13` — a `paid_at` sent in MILLISECONDS instead of
+ * seconds — took down the whole settled screen.
+ */
+function isDisplayableUnixSeconds(seconds: number | undefined): seconds is number {
+  return (
+    seconds !== undefined &&
+    Number.isFinite(seconds) &&
+    seconds > 0 &&
+    seconds <= MAX_DISPLAYABLE_UNIX_SECONDS
+  );
+}
+
+/**
+ * The display boundary for a unix timestamp: the same ISO label
+ * {@link formatOpenReceiveUnixTime} produces, or `undefined` when no clock can
+ * render the value.
+ *
+ * EVERY timestamp display site formats through this one, exactly as every
+ * amount display site goes through {@link optionalMsatsLabel}: a timestamp a
+ * server should never have sent must cost the row that would have shown it and
+ * nothing more. Callers re-add the raw seconds under a "(unix seconds)" label,
+ * the way the blanked amount rows keep their "Amount (msats)" row, so the unit
+ * mistake stays visible to whoever has to debug it.
+ */
+export function optionalUnixTimeLabel(seconds: number | undefined): string | undefined {
+  return isDisplayableUnixSeconds(seconds) ? formatOpenReceiveUnixTime(seconds) : undefined;
+}
+
+/**
+ * ECHOES rather than throws on a value it cannot render — the one place this
+ * rule reads differently from the amount rule above, deliberately.
+ * `formatOpenReceiveMsats` throws because wire construction and amount
+ * validation share it and a bad amount there must surface; nothing constructs
+ * or validates anything through this formatter, so a throw would only ever
+ * reach a display site, which is precisely what must not happen. The echo was
+ * already its answer for a non-finite or non-positive input; routing the guard
+ * through {@link isDisplayableUnixSeconds} closes the out-of-range hole in it.
+ */
 export function formatOpenReceiveUnixTime(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds <= 0) return String(seconds);
+  if (!isDisplayableUnixSeconds(seconds)) return String(seconds);
   return new Date(seconds * 1000).toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
 export function formatOpenReceiveInvoiceLabel(invoice: string): string {
   if (invoice.length <= 48) return invoice;
   return `${invoice.slice(0, 20)}…${invoice.slice(-16)}`;
+}
+
+/** The payer-facing labels a {@link CheckoutState} carries next to its raw fields. */
+export interface CheckoutStateLabels {
+  readonly amountLabel?: string;
+  readonly fiatLabel?: string;
+  readonly paymentHashLabel?: string;
+}
+
+/**
+ * THE label rule — one copy, applied everywhere a checkout is shown.
+ *
+ * `normalizeCheckoutState` runs it so every CheckoutState already carries its
+ * labels, and the elements renderer runs it over raw attributes in create mode,
+ * before there is an attempt to build a state from. It replaces the label half
+ * of the deleted `createCheckoutDisplayModel`; the other half (the `lightning:`
+ * URI) belongs to `createCheckoutState`, which is the only place that knows the
+ * rail.
+ *
+ * `transactionStateLabel` is deliberately NOT here: it was a verbatim copy of
+ * `transaction_state`, which the state already carries, and nothing read it.
+ */
+export function deriveCheckoutStateLabels(source: {
+  readonly amount_msats?: number;
+  readonly fiat_quote?: {
+    readonly fiat?: {
+      readonly currency?: string;
+      readonly value?: string;
+    };
+  } | null;
+  readonly payment_hash?: string;
+}): CheckoutStateLabels {
+  const fiatLabel = formatOpenReceiveFiatAmount(source.fiat_quote?.fiat);
+  // TOTAL on purpose. `createCheckoutState` runs this on every status poll
+  // result, so a server answering with a negative or non-integer amount_msats
+  // must cost the amount LABEL, not the whole payment screen — which is exactly
+  // what `optionalMsatsLabel` is for. The raw amount still rides on the state,
+  // and the detail/payment-data panels still print it, for anyone who wants it.
+  const amountLabel = optionalMsatsLabel(source.amount_msats);
+  return {
+    ...(amountLabel === undefined ? {} : { amountLabel }),
+    ...(fiatLabel === undefined ? {} : { fiatLabel }),
+    ...(source.payment_hash === undefined
+      ? {}
+      : { paymentHashLabel: formatOpenReceivePaymentHashLabel(source.payment_hash) }),
+  };
 }

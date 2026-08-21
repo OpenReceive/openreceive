@@ -10,7 +10,9 @@ export {
   createOpenReceiveTransientFeedbackController,
 } from "./checkout-ticker.ts";
 // ./checkout-format.ts — display formatting
+export type { CheckoutStateLabels } from "./checkout-format.ts";
 export {
+  deriveCheckoutStateLabels,
   escapeOpenReceiveHtml,
   formatOpenReceiveAmountCaption,
   formatOpenReceiveCountdown,
@@ -47,11 +49,13 @@ export {
 export type {
   OpenReceivePaymentDataEntry,
   OpenReceivePaymentDataSource,
+  OpenReceiveTransactionDetailsSource,
 } from "./checkout-details.ts";
 export {
   createOpenReceivePaymentDataEntries,
   createOpenReceiveTransactionDetails,
   createOpenReceiveTransactionDetailsFromState,
+  resolveOpenReceiveTransactionDetailRows,
 } from "./checkout-details.ts";
 // ./checkout-transport.ts — talking to the mounted routes
 export {
@@ -65,10 +69,8 @@ export {
 // ./checkout-state.ts — snapshot -> checkout state
 export {
   checkoutInvoiceFromOrderSnapshot,
-  createCheckoutDisplayModel,
-  createCheckoutSnapshotFromDisplayData,
+  createCheckoutSnapshotFromInvoice,
   createCheckoutState,
-  createCheckoutStateFromDisplayData,
   createCheckoutStatusModel,
   isPaidCheckoutSnapshot,
   isReusableLightningInvoice,

@@ -1,14 +1,11 @@
 import {
-  type CheckoutState,
-  createOpenReceiveTransactionDetails,
-  createOpenReceiveTransactionDetailsFromState,
   escapeOpenReceiveHtml as escapeHtml,
   OPENRECEIVE_PAYMENT_WIZARD_ATTRIBUTES,
   OPENRECEIVE_PAYMENT_WIZARD_SELECTORS,
-  type OpenReceiveTransactionDetailRow,
-  type OpenReceiveTransactionDetailsInput,
+  type OpenReceiveTransactionDetailsSource,
   openReceiveCheckoutLabels,
   orClasses,
+  resolveOpenReceiveTransactionDetailRows,
 } from "@openreceive/browser/internal";
 
 import {
@@ -17,25 +14,18 @@ import {
   wireSwapSelectAllInputs,
 } from "./dom-helpers.ts";
 
-export type TransactionDetailsSource =
-  | CheckoutState
-  | OpenReceiveTransactionDetailsInput
-  | readonly OpenReceiveTransactionDetailRow[]
-  | null
-  | undefined;
-
 /**
  * Collapsible transaction-details panel as an HTML string (vanilla / elements hosts).
  * Uses the same row builder as React `<TransactionDetails>`.
  */
 export function renderTransactionDetailsHtml(
-  source: TransactionDetailsSource,
+  source: OpenReceiveTransactionDetailsSource,
   options: {
     readonly open?: boolean;
     readonly className?: string;
   } = {},
 ): string {
-  const rows = resolveElementTransactionDetailRows(source);
+  const rows = resolveOpenReceiveTransactionDetailRows(source);
   if (rows.length === 0) return "";
   const openAttr = options.open === true ? " open" : "";
   const className = options.className ?? orClasses.transactionDetails;
@@ -63,7 +53,7 @@ export function renderTransactionDetailsHtml(
 }
 
 export function createTransactionDetailsElement(
-  source: TransactionDetailsSource,
+  source: OpenReceiveTransactionDetailsSource,
   options: {
     readonly open?: boolean;
     readonly className?: string;
@@ -98,26 +88,4 @@ export function wireTransactionDetailsCopy(
         .catch((error) => onCopyError?.(error));
     });
   }
-}
-
-function resolveElementTransactionDetailRows(
-  source: TransactionDetailsSource,
-): OpenReceiveTransactionDetailRow[] {
-  if (source === null || source === undefined) return [];
-  if (Array.isArray(source)) return [...source];
-  if (isElementCheckoutState(source)) {
-    return createOpenReceiveTransactionDetailsFromState(source);
-  }
-  return createOpenReceiveTransactionDetails(source as OpenReceiveTransactionDetailsInput);
-}
-
-function isElementCheckoutState(value: object): value is CheckoutState {
-  return (
-    "checkout_id" in value &&
-    "order_id" in value &&
-    "invoice_id" in value &&
-    "invoice" in value &&
-    "transaction_state" in value &&
-    "phase" in value
-  );
 }

@@ -2,7 +2,6 @@ import * as React from "react";
 import {
   copyInvoice as copyInvoiceHelper,
   createCheckoutController,
-  createCheckoutDisplayModel,
   createCheckoutState,
   createCheckoutStatusModel,
   openWallet as openWalletHelper,
@@ -13,12 +12,7 @@ import {
 } from "@openreceive/browser/internal";
 import { useOpenReceiveTransientValue } from "./hooks.ts";
 import { getCheckoutLogContext } from "./utils.ts";
-import {
-  deriveCheckoutOrderStatus,
-  resolveCheckoutStatusRefreshUrl,
-  toCheckoutDisplayData,
-  toCheckoutViewModel,
-} from "./view-model.ts";
+import { resolveCheckoutStatusRefreshUrl } from "./view-model.ts";
 import type { CheckoutProviderProps, UseCheckoutOptions, UseCheckoutResult } from "./types.ts";
 
 export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
@@ -44,15 +38,6 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
   React.useEffect(() => {
     setLatestSnapshot(checkoutRef.current);
   }, [incomingIdentity]);
-  const displayData = React.useMemo(() => toCheckoutDisplayData(latestSnapshot), [latestSnapshot]);
-  const model = React.useMemo(
-    () =>
-      toCheckoutViewModel(
-        createCheckoutDisplayModel(displayData),
-        deriveCheckoutOrderStatus(latestSnapshot),
-      ),
-    [displayData, latestSnapshot],
-  );
   // `latestSnapshot` is already memoized above, so no extra useMemo is needed.
   const snapshot: CheckoutSnapshot = latestSnapshot;
   const [state, setState] = React.useState<CheckoutState>(() =>
@@ -83,7 +68,7 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
     orderId: snapshot.order_id,
     fired: false,
   });
-  const logContext = React.useMemo(() => getCheckoutLogContext(displayData), [displayData]);
+  const logContext = React.useMemo(() => getCheckoutLogContext(state), [state]);
   // Hosts pass inline refreshStatus as readily as inline logger/onError; keeping the
   // function itself in the dependency list below tore down and recreated the controller
   // on every parent render, and each recreation re-polls immediately. Only whether a
@@ -180,7 +165,7 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
       const controller = controllerRef.current;
       if (controller === null) {
         await copyInvoiceHelper({
-          invoice: displayData.invoice,
+          invoice: state.invoice,
           clipboard: options.clipboard,
           logger: options.logger,
           logContext,
@@ -194,7 +179,7 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
       onErrorRef.current?.(error);
       throw error;
     }
-  }, [logContext, displayData.invoice, options.clipboard, options.logger, showCopied]);
+  }, [logContext, state.invoice, options.clipboard, options.logger, showCopied]);
 
   const openWallet = React.useCallback(() => {
     try {
@@ -202,7 +187,7 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
       const uri =
         controller === null
           ? openWalletHelper({
-              invoice: displayData.invoice,
+              invoice: state.invoice,
               open: options.open,
               logger: options.logger,
               logContext,
@@ -214,7 +199,7 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
       onErrorRef.current?.(error);
       throw error;
     }
-  }, [logContext, displayData.invoice, options.open, options.logger]);
+  }, [logContext, state.invoice, options.open, options.logger]);
 
   const reloadState = React.useCallback(async () => {
     try {
@@ -236,7 +221,10 @@ export function useCheckout(options: UseCheckoutOptions): UseCheckoutResult {
   }, []);
 
   return {
-    ...model,
+    // The state IS the view model now: one derivation, one set of display
+    // fields. `status` stays on top of it because the component's terminal
+    // branches read the checkout's coarse status, not the attempt's phase.
+    ...state,
     checkout: latestSnapshot,
     copied,
     status: publicStatus,

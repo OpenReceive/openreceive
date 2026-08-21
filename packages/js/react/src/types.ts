@@ -46,18 +46,15 @@ export interface CheckoutCreateOptions {
   readonly routeOrderId?: string;
 }
 
-export interface CheckoutViewModel {
-  readonly invoice_id?: string;
-  readonly invoice: string;
-  readonly payment_hash?: string;
-  readonly amount_msats?: number;
-  readonly fiat_quote?: CheckoutInvoiceSnapshot["fiat_quote"];
-  readonly expires_at?: number;
-  readonly settled_at?: number;
-  readonly lightning_uri: string;
-  readonly amountLabel?: string;
-  readonly fiatLabel?: string;
-  readonly paymentHashLabel?: string;
+/**
+ * What React renders a checkout from: the shared {@link CheckoutState} plus the
+ * coarse public {@link Status} the component's four terminal branches read.
+ *
+ * It used to restate eleven of CheckoutState's fields — the same flattening
+ * rule, written a second time in a second package. It now extends the state, so
+ * there is exactly one derivation and one place a display field can come from.
+ */
+export interface CheckoutViewModel extends CheckoutState {
   readonly status: Status;
 }
 
@@ -96,7 +93,6 @@ export interface UseCheckoutOptions
 export interface UseCheckoutResult extends CheckoutViewModel {
   readonly checkout: CheckoutSnapshot;
   readonly copied: boolean;
-  readonly expires_in_seconds?: number;
   readonly countdownLabel?: string;
   readonly countdownPrefix?: string;
   readonly statusTitle: string;

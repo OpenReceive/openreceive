@@ -1,7 +1,8 @@
 import {
   type CheckoutInvoiceSnapshot,
   type CheckoutState,
-  createCheckoutStateFromDisplayData,
+  createCheckoutSnapshotFromInvoice,
+  createCheckoutState,
   type OpenReceiveBrowserLoggerOption,
   type OpenReceiveCheckoutPaymentMethod,
   type OpenReceivePaymentMethod,
@@ -95,15 +96,28 @@ export interface DefineOpenReceiveElementsOptions {
   readonly logger?: OpenReceiveBrowserLoggerOption;
 }
 
+/**
+ * The attribute-shaped view as a real checkout state, in the same two hops the
+ * element's own snapshot path takes: attempt -> snapshot -> state. Returns
+ * undefined in create mode, where no attempt exists yet and the renderer must
+ * not show an attempt's status block.
+ */
 export function createElementCheckoutState(view: CheckoutView): CheckoutState | undefined {
   if (view.invoice_id === undefined) return undefined;
-  return createCheckoutStateFromDisplayData({
-    ...view,
-    rail: view.rail ?? "lightning",
-    ...(view.status === undefined
-      ? {}
-      : { transaction_state: transactionStateFromStatus(view.status) }),
-  });
+  return createCheckoutState(
+    createCheckoutSnapshotFromInvoice({
+      invoice_id: view.invoice_id,
+      invoice: view.invoice,
+      rail: view.rail ?? "lightning",
+      ...(view.payment_hash === undefined ? {} : { payment_hash: view.payment_hash }),
+      ...(view.amount_msats === undefined ? {} : { amount_msats: view.amount_msats }),
+      ...(view.fiat_quote === undefined ? {} : { fiat_quote: view.fiat_quote }),
+      ...(view.status === undefined
+        ? {}
+        : { transaction_state: transactionStateFromStatus(view.status) }),
+      ...(view.expires_at === undefined ? {} : { expires_at: view.expires_at }),
+    }),
+  );
 }
 
 export function transactionStateFromStatus(status: Status): string {

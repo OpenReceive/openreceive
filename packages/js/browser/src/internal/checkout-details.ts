@@ -13,15 +13,41 @@ import {
   formatOpenReceiveDepositAmount,
   formatOpenReceiveFiatAmount,
   formatOpenReceiveInvoiceLabel,
-  formatOpenReceiveMsats,
   formatOpenReceivePaymentHashLabel,
-  formatOpenReceiveUnixTime,
+  optionalMsatsLabel,
+  optionalUnixTimeLabel,
 } from "./checkout-format.ts";
 import { createOpenReceiveDetailExternalLink } from "./checkout-links.ts";
 import {
   createOpenReceiveSwapFeeBreakdown,
   getOpenReceiveSwapAssetDisplay,
 } from "./checkout-swap-view.ts";
+
+/**
+ * A timestamp row for either panel: the ISO label when the value is a date, and
+ * the raw seconds under a "(unix seconds)" label when it is not.
+ *
+ * The same trade the amount rows make. A server answering `paid_at` in
+ * MILLISECONDS lands outside the ECMAScript `Date` range, and rendering it used
+ * to throw `RangeError: Invalid time value` out of both builders — killing the
+ * settled panel, the one screen the payer reaches after parting with their
+ * money, over a cosmetic field. Now it costs that row's LABEL: the value is
+ * still reported, relabelled with its unit so a bare 1e13 is readable as what
+ * it is.
+ *
+ * Takes the caller's own row sink so each panel keeps its own labels and its own
+ * skip-empty rule; the decision about what is renderable is `optionalUnixTimeLabel`'s
+ * alone.
+ */
+function addTimestampRow(
+  add: (label: string, value: string | undefined) => void,
+  label: string,
+  seconds: number,
+): void {
+  const formatted = optionalUnixTimeLabel(seconds);
+  if (formatted === undefined) add(`${label} (unix seconds)`, String(seconds));
+  else add(label, formatted);
+}
 
 /**
  * Build display rows for settled checkout / swap state from public OpenReceive
@@ -57,7 +83,9 @@ export function createOpenReceiveTransactionDetails(
   push("Workflow", input.workflow_state);
 
   if (input.amount_msats !== undefined) {
-    push("Amount", formatOpenReceiveMsats(input.amount_msats));
+    // A nonsense amount costs THIS ROW, not the panel: `push` skips the
+    // undefined label, and the raw msats row below still reports what arrived.
+    push("Amount", optionalMsatsLabel(input.amount_msats));
     push("Amount (msats)", String(input.amount_msats));
   }
   const fiat = formatOpenReceiveFiatAmount(input.fiat_quote?.fiat);
@@ -71,10 +99,10 @@ export function createOpenReceiveTransactionDetails(
   }
 
   if (input.settled_at !== undefined) {
-    push("Settled at", formatOpenReceiveUnixTime(input.settled_at));
+    addTimestampRow(push, "Settled at", input.settled_at);
   }
   if (input.expires_at !== undefined) {
-    push("Expires at", formatOpenReceiveUnixTime(input.expires_at));
+    addTimestampRow(push, "Expires at", input.expires_at);
   }
 
   const swap = input.swap;
@@ -106,7 +134,7 @@ export function createOpenReceiveTransactionDetails(
       push("Estimated refund", formatOpenReceiveDepositAmount(swap.refund_amount));
     }
     if (swap.provider_expires_at !== undefined) {
-      push("Provider expires at", formatOpenReceiveUnixTime(swap.provider_expires_at));
+      addTimestampRow(push, "Provider expires at", swap.provider_expires_at);
     }
     push("Deposit transaction", swap.deposit_tx_id);
     push("Lightning payout", swap.payout_tx_id);
@@ -167,6 +195,49 @@ export function createOpenReceiveTransactionDetailsFromState(
   });
 }
 
+/**
+ * Everything a transaction-details panel accepts: a live checkout state, the
+ * flat detail input, pre-built rows, or nothing.
+ *
+ * React's `<TransactionDetails>` and the elements HTML renderer used to declare
+ * this union and its resolver separately, byte-identically. Only the RENDERING
+ * legitimately differs between them (React.createElement vs an HTML string);
+ * which rows a source yields is one rule and lives here.
+ */
+export type OpenReceiveTransactionDetailsSource =
+  | CheckoutState
+  | OpenReceiveTransactionDetailsInput
+  | readonly OpenReceiveTransactionDetailRow[]
+  | null
+  | undefined;
+
+export function resolveOpenReceiveTransactionDetailRows(
+  source: OpenReceiveTransactionDetailsSource,
+): OpenReceiveTransactionDetailRow[] {
+  if (source === null || source === undefined) return [];
+  if (Array.isArray(source)) return [...source];
+  if (isCheckoutStateSource(source)) {
+    return createOpenReceiveTransactionDetailsFromState(source);
+  }
+  return createOpenReceiveTransactionDetails(source as OpenReceiveTransactionDetailsInput);
+}
+
+/**
+ * Distinguishes a CheckoutState from a flat detail input structurally: only the
+ * state carries `phase` next to the identity fields, and only it wants the
+ * state-shaped reader above.
+ */
+function isCheckoutStateSource(value: object): value is CheckoutState {
+  return (
+    "checkout_id" in value &&
+    "order_id" in value &&
+    "invoice_id" in value &&
+    "invoice" in value &&
+    "transaction_state" in value &&
+    "phase" in value
+  );
+}
+
 export interface OpenReceivePaymentDataEntry {
   readonly label: string;
   readonly value: string;
@@ -200,13 +271,18 @@ export function createOpenReceivePaymentDataEntries(
   const add = (label: string, value: string | undefined): void => {
     if (value !== undefined && value !== "") entries.push({ label, value });
   };
-  const isoDate = (unixSeconds: number): string => new Date(unixSeconds * 1000).toISOString();
   add("Order", source.order_id);
   add("Checkout", source.checkout_id);
   add("Invoice ID", source.invoice_id);
   add("Payment hash", source.payment_hash);
   if (source.amount_msats !== undefined) {
-    add("Amount", `${formatOpenReceiveMsats(source.amount_msats)} (${source.amount_msats} msats)`);
+    // This panel runs on a SETTLED checkout, where the payer has already parted
+    // with their money — the last screen that may go down over a bad number. A
+    // nonsense amount drops to the raw row the details panel uses, under the
+    // same label, so the value is still reported and the panel still renders.
+    const amountLabel = optionalMsatsLabel(source.amount_msats);
+    if (amountLabel === undefined) add("Amount (msats)", String(source.amount_msats));
+    else add("Amount", `${amountLabel} (${source.amount_msats} msats)`);
   }
   const fiat = source.fiat_quote?.fiat;
   if (fiat?.value !== undefined) {
@@ -215,8 +291,15 @@ export function createOpenReceivePaymentDataEntries(
   add("Rail", source.rail);
   add("Transaction state", source.transaction_state);
   add("Workflow state", source.workflow_state);
-  if (source.settled_at !== undefined) add("Settled at", isoDate(source.settled_at));
-  if (source.expires_at !== undefined) add("Invoice expires at", isoDate(source.expires_at));
+  // PRODUCT CHANGE: these two used to render through a local `new Date(s *
+  // 1000).toISOString()`, which both threw on an out-of-range value AND printed
+  // a ".000Z" the details panel next to it did not — two formats for the same
+  // unix-seconds field on one screen, and the milliseconds are structurally
+  // always zero. One boundary now serves both panels.
+  if (source.settled_at !== undefined) addTimestampRow(add, "Settled at", source.settled_at);
+  if (source.expires_at !== undefined) {
+    addTimestampRow(add, "Invoice expires at", source.expires_at);
+  }
   if (source.swap !== undefined) {
     add("Swap provider", source.swap.provider);
     add("Swap pay-in asset", source.swap.pay_in_asset);

@@ -265,6 +265,18 @@ export function createOpenReceiveStatusFetcher(
     let active = {
       ...next.active,
       transaction_state: state === "not_found" ? "pending" : state,
+      // DECIDED — this boundary bounds the TYPE of a timestamp, not its
+      // MAGNITUDE, and deliberately admits a `paid_at` big enough to be outside
+      // the ECMAScript `Date` range (1e13 = the classic seconds/milliseconds
+      // mix-up). Rejecting it here would mean either throwing, which loses a
+      // whole status poll over one cosmetic field, or dropping it, which erases
+      // the evidence of the unit bug from the panel whose job is to report what
+      // arrived. Neither is worth it, because the damage is already contained
+      // where it lands: every display site formats through
+      // `optionalUnixTimeLabel`, so an unrenderable timestamp costs its own row
+      // and is re-shown raw under a "(unix seconds)" label. Same call the amount
+      // path made — `requiredSafeInteger` still admits any safe-integer
+      // `amount_msats` and `optionalMsatsLabel` blanks the label.
       ...(optionalSafeInteger(payment.paid_at) === undefined
         ? {}
         : { settled_at: optionalSafeInteger(payment.paid_at) }),
@@ -330,6 +342,7 @@ function mergeSwapStatusIntoInvoice<
   const merged: Record<string, unknown> = { ...swap };
   const providerState = nonEmptyString(status.provider_state);
   if (providerState !== undefined) merged.provider_state = providerState;
+  // Type-bounded only; see the `paid_at` note above.
   const providerExpiresAt = optionalSafeInteger(status.provider_expires_at);
   if (providerExpiresAt !== undefined) merged.provider_expires_at = providerExpiresAt;
   for (const key of [
@@ -443,6 +456,8 @@ function checkoutSnapshot(checkout: Record<string, unknown>): CheckoutSnapshot {
     amount_msats: amountMsats,
     transaction_state: "pending",
     workflow_state: "invoice_created",
+    // Type-bounded only, on purpose; see the `paid_at` note above for why the
+    // magnitude is left to the display boundary.
     expires_at: requiredSafeInteger(checkout.expires_at, "expires_at"),
     ...(isRecord(checkout.fiat_quote) || checkout.fiat_quote === null
       ? { fiat_quote: checkout.fiat_quote as CheckoutInvoiceSnapshot["fiat_quote"] }

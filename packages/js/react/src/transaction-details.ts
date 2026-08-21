@@ -1,26 +1,17 @@
 import {
-  createOpenReceiveTransactionDetails,
-  createOpenReceiveTransactionDetailsFromState,
   openReceiveCheckoutLabels,
   orClasses,
-  type CheckoutState,
   type OpenReceiveTransactionDetailRow,
-  type OpenReceiveTransactionDetailsInput,
+  type OpenReceiveTransactionDetailsSource,
+  resolveOpenReceiveTransactionDetailRows,
 } from "@openreceive/browser/internal";
 import * as React from "react";
 import { ClipboardIcon } from "./components.ts";
 import { useOpenReceiveTransientValue } from "./hooks.ts";
 import { copyOpenReceiveText, joinClassNames } from "./utils.ts";
 
-export type TransactionDetailsSource =
-  | CheckoutState
-  | OpenReceiveTransactionDetailsInput
-  | readonly OpenReceiveTransactionDetailRow[]
-  | null
-  | undefined;
-
 export interface TransactionDetailsProps {
-  readonly state?: TransactionDetailsSource;
+  readonly state?: OpenReceiveTransactionDetailsSource;
   readonly open?: boolean;
   readonly className?: string;
   readonly clipboard?: Pick<Clipboard, "writeText">;
@@ -33,7 +24,7 @@ export interface TransactionDetailsProps {
  * accepts pre-built rows from `createOpenReceiveTransactionDetails*`.
  */
 export function TransactionDetails(props: TransactionDetailsProps): React.ReactElement | null {
-  const rows = resolveTransactionDetailRows(props.state);
+  const rows = resolveOpenReceiveTransactionDetailRows(props.state);
   if (rows.length === 0) return null;
   return React.createElement(
     "details",
@@ -61,17 +52,6 @@ export function TransactionDetails(props: TransactionDetailsProps): React.ReactE
       ),
     ),
   );
-}
-
-export function resolveTransactionDetailRows(
-  source: TransactionDetailsSource,
-): OpenReceiveTransactionDetailRow[] {
-  if (source === null || source === undefined) return [];
-  if (Array.isArray(source)) return [...source];
-  if (isCheckoutState(source)) {
-    return createOpenReceiveTransactionDetailsFromState(source);
-  }
-  return createOpenReceiveTransactionDetails(source as OpenReceiveTransactionDetailsInput);
 }
 
 function renderTransactionDetailRow(
@@ -138,16 +118,5 @@ function TransactionDetailCopyButton(props: {
       },
     },
     React.createElement(ClipboardIcon),
-  );
-}
-
-function isCheckoutState(value: object): value is CheckoutState {
-  return (
-    "checkout_id" in value &&
-    "order_id" in value &&
-    "invoice_id" in value &&
-    "invoice" in value &&
-    "transaction_state" in value &&
-    "phase" in value
   );
 }

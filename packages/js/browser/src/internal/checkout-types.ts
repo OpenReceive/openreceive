@@ -3,6 +3,7 @@
 // payment-wizard models, and transaction-detail rows. Types only — the values
 // they are derived from live in ./dom-contract.ts.
 import type { AssetIndexEntry, PaymentWizardRoute } from "@openreceive/provider-data";
+import type { CheckoutStateLabels } from "./checkout-format.ts";
 import type {
   CheckoutElementEventName,
   OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
@@ -261,35 +262,6 @@ export interface CheckoutSnapshot {
   readonly payment_methods?: readonly OpenReceiveCheckoutPaymentMethod[];
 }
 
-export interface CheckoutDisplayData {
-  readonly checkout_id?: string;
-  readonly order_id?: string;
-  readonly invoice_id?: string;
-  readonly invoice: string;
-  readonly rail: "lightning" | "swap" | "checkout_lock";
-  readonly payment_hash?: string;
-  readonly amount_msats?: number;
-  readonly fiat_quote?: {
-    readonly fiat?: {
-      readonly currency?: string;
-      readonly value?: string;
-    };
-  } | null;
-  readonly transaction_state?: string;
-  readonly workflow_state?: string;
-  readonly expires_at?: number;
-  readonly settled_at?: number;
-  readonly swap?: CheckoutInvoiceSwapSnapshot;
-}
-
-export interface CheckoutDisplayModel extends CheckoutDisplayData {
-  readonly lightning_uri: string;
-  readonly amountLabel?: string;
-  readonly fiatLabel?: string;
-  readonly paymentHashLabel?: string;
-  readonly transactionStateLabel?: string;
-}
-
 export interface CheckoutElementAttributeOptions {
   readonly orderUrl?: string;
   /**
@@ -442,7 +414,15 @@ export interface CheckoutShellElements {
   readonly themeToggle: HTMLElement | null;
 }
 
-export interface CheckoutState {
+/**
+ * The ONE derived view of a checkout: a snapshot plus a clock, flattened onto
+ * the attempt the payer is looking at, with the phase machine's verdict and the
+ * labels the UI prints. Produced only by `createCheckoutState`.
+ *
+ * It extends {@link CheckoutStateLabels}, so the labels ship with the state —
+ * including in the `openreceive-state` CustomEvent's `detail.state`.
+ */
+export interface CheckoutState extends CheckoutStateLabels {
   readonly checkout_id: string;
   readonly order_id: string;
   readonly invoice_id: string;

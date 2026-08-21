@@ -9,7 +9,7 @@ import {
   createCheckoutController,
   createCheckoutErrorEvent,
   createCheckoutProviderCopyEvent,
-  createCheckoutSnapshotFromDisplayData,
+  createCheckoutSnapshotFromInvoice,
   createCheckoutStateEvent,
   createCheckoutStatusModel,
   createOpenReceivePaymentWizardSelection,
@@ -52,6 +52,7 @@ import {
 import { createElementCheckoutSession } from "./element-checkout-session.ts";
 import {
   parseElementRail,
+  readElementAmountMsats,
   readElementFiatQuote,
   showElementCopyFeedback,
   wireSwapSelectAllInputs,
@@ -373,10 +374,7 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
         rail: parseElementRail(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.rail)),
         payment_hash:
           this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentHash) ?? undefined,
-        amount_msats: parseOpenReceiveOptionalInteger(
-          this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.amountMsats),
-          { label: "amount-msats" },
-        ),
+        amount_msats: readElementAmountMsats(this),
         fiat_quote: readElementFiatQuote(this),
         status: parseElementStatus(
           this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.status),
@@ -582,35 +580,38 @@ export function defineOpenReceiveElements(options: DefineOpenReceiveElementsOpti
       const invoiceId = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoiceId);
       const invoice = this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.invoice);
       if (invoiceId === null || invoice === null) return undefined;
-      const amountMsats = parseOpenReceiveOptionalInteger(
-        this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.amountMsats),
-        { label: "amount-msats" },
-      );
+      const amountMsats = readElementAmountMsats(this);
       const expiresAt = parseOpenReceiveOptionalInteger(
         this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.expiresAt),
         { label: "expires-at" },
       );
-      return createCheckoutSnapshotFromDisplayData({
-        ...(orderId === null ? {} : { order_id: orderId }),
-        invoice_id: invoiceId,
-        invoice,
-        rail: parseElementRail(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.rail)),
-        ...(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentHash) === null
-          ? {}
-          : {
-              payment_hash:
-                this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentHash) ?? undefined,
-            }),
-        ...(amountMsats === undefined ? {} : { amount_msats: amountMsats }),
-        ...(readElementFiatQuote(this) === undefined
-          ? {}
-          : { fiat_quote: readElementFiatQuote(this) }),
-        transaction_state: transactionStateFromStatus(
-          parseElementStatus(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.status)) ??
-            "pending",
-        ),
-        ...(expiresAt === undefined ? {} : { expires_at: expiresAt }),
-      });
+      // The ONLY path from raw HTML attributes to a snapshot (declarative / SSR
+      // usage). The attributes describe one attempt; the checkout around it is
+      // invented by createCheckoutSnapshotFromInvoice.
+      return createCheckoutSnapshotFromInvoice(
+        {
+          invoice_id: invoiceId,
+          invoice,
+          rail: parseElementRail(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.rail)),
+          ...(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentHash) === null
+            ? {}
+            : {
+                payment_hash:
+                  this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.paymentHash) ??
+                  undefined,
+              }),
+          ...(amountMsats === undefined ? {} : { amount_msats: amountMsats }),
+          ...(readElementFiatQuote(this) === undefined
+            ? {}
+            : { fiat_quote: readElementFiatQuote(this) }),
+          transaction_state: transactionStateFromStatus(
+            parseElementStatus(this.getAttribute(OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.status)) ??
+              "pending",
+          ),
+          ...(expiresAt === undefined ? {} : { expires_at: expiresAt }),
+        },
+        { ...(orderId === null ? {} : { order_id: orderId }) },
+      );
     }
 
     private applyCheckoutState(state: CheckoutState): void {

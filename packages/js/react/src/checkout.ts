@@ -29,7 +29,6 @@ import { ThemeToggle, useTheme } from "./theme.ts";
 import type { CheckoutProps } from "./types.ts";
 import { useCheckout } from "./use-checkout.ts";
 import { getCheckoutLogContext, joinClassNames } from "./utils.ts";
-import { toCheckoutDisplayData } from "./view-model.ts";
 import { PaymentWizard } from "./wizard.ts";
 
 /**
@@ -524,7 +523,13 @@ function CheckoutView(
                   settled
                     ? React.createElement(PaymentData, {
                         key: "payment-data",
-                        source: toCheckoutDisplayData(checkoutModel.checkout),
+                        // The model IS the checkout state, so the payment-data
+                        // panel reads the same derivation the rest of the screen
+                        // does. It used to re-flatten the snapshot separately,
+                        // which reported the displayed ATTEMPT's transaction /
+                        // workflow state on a checkout the state already knows
+                        // is paid.
+                        source: checkoutModel,
                         className: classNames?.details,
                       })
                     : expired
