@@ -10,6 +10,7 @@ import {
   OpenReceivePriceFeedError,
   parseDecimal,
 } from "../money/decimal.ts";
+import { isRecord } from "../values.ts";
 
 const CURRENCY_PATTERN = /^[A-Z]{3}$/;
 
@@ -117,12 +118,13 @@ function assertPositiveFeedDecimal(value: string, fieldName: string): string {
   return value;
 }
 
+// The strict reader: shares `isRecord`'s shape rule, keeps its own error type.
 function asRecord(value: unknown): Record<string, unknown> {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw new OpenReceivePriceFeedError("price response is not Simple Price shaped");
   }
 
-  return value as Record<string, unknown>;
+  return value;
 }
 
 // Expand a positive finite JS number to plain decimal notation so any integer

@@ -10,6 +10,7 @@
  */
 
 import { type OpenReceiveBtcFiatRateMap, OpenReceivePriceFeedError } from "../money/decimal.ts";
+import { nonEmptyString, unixSeconds } from "../values.ts";
 import {
   OPENRECEIVE_INVOICE_QUOTE_TTL_SECONDS,
   OPENRECEIVE_PRICE_FEED_CACHE_META_KEY,
@@ -18,7 +19,6 @@ import {
 } from "./constants.ts";
 import { createLivePriceFeedProviders } from "./http.ts";
 import { parseSimplePriceResponse } from "./parsing.ts";
-import { currentUnixSeconds } from "./quoting.ts";
 import {
   isResolvedPriceProvider,
   type OpenReceiveBtcFiatRateMapWithSource,
@@ -123,7 +123,7 @@ export class CachedPriceFeed
     this.#fallback = options.fallback;
     this.#cacheSeconds = cacheSeconds;
     this.#cacheKey = OPENRECEIVE_PRICE_FEED_CACHE_META_KEY;
-    this.#clock = options.clock ?? currentUnixSeconds;
+    this.#clock = options.clock ?? unixSeconds;
   }
 
   async getBtcFiatRates(currencies: readonly string[]): Promise<OpenReceiveBtcFiatRateMap> {
@@ -356,10 +356,7 @@ function parsePriceFeedCacheState(value: string | undefined): PriceFeedCacheStat
   const entry = parsePriceFeedCacheEntry(record);
   const refreshStartedAt = optionalCacheTimestamp(record.refresh_started_at);
   const refreshFailedAt = optionalCacheTimestamp(record.refresh_failed_at);
-  const refreshError =
-    typeof record.refresh_error === "string" && record.refresh_error.length > 0
-      ? record.refresh_error
-      : undefined;
+  const refreshError = nonEmptyString(record.refresh_error);
 
   if (entry === undefined && refreshStartedAt === undefined && refreshFailedAt === undefined) {
     return undefined;

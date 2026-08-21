@@ -6,6 +6,7 @@ import type {
   OpenReceiveReceiveNwcClient,
 } from "./nwc/client.ts";
 import { classifyTransactionSettlement } from "./settlement/index.ts";
+import { unixSeconds } from "./values.ts";
 
 const OPENRECEIVE_TRANSACTION_PAGE_LIMIT = 20 as const;
 
@@ -138,7 +139,7 @@ export async function reconcilePaymentAttempts(
   // Both ends of the window are padded: `from` against a wallet clock that
   // lags, `until` against one that runs ahead — an unpadded `until` on the
   // host clock hides an invoice the wallet just stamped into the future.
-  const until = options.until ?? (options.clock ?? currentUnixSeconds)() + overlapSeconds;
+  const until = options.until ?? (options.clock ?? unixSeconds)() + overlapSeconds;
   options.onWalk?.({ from, until, includeUnpaid: false });
   const settled = await listIncomingTransactions({
     client: options.client,
@@ -165,7 +166,7 @@ export async function reconcilePaymentAttempts(
       if (!byHash.has(paymentHash)) byHash.set(paymentHash, transaction);
     }
   }
-  const observedAt = (options.clock ?? currentUnixSeconds)();
+  const observedAt = (options.clock ?? unixSeconds)();
   const checks: PaymentCheck[] = [];
   for (const paymentHash of expected.keys()) {
     const transaction = byHash.get(paymentHash);
@@ -287,8 +288,4 @@ function normalizeUnix(value: number, field: string): number {
     throw new OpenReceiveDecimalError(`${field} must be a non-negative safe integer`);
   }
   return value;
-}
-
-function currentUnixSeconds(): number {
-  return Math.floor(Date.now() / 1000);
 }
