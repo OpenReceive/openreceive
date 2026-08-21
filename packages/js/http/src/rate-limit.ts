@@ -1,3 +1,4 @@
+import { unixSeconds } from "@openreceive/core";
 import type {
   OpenReceiveAuthorizeAction,
   OpenReceiveAuthorizeContext,
@@ -104,7 +105,7 @@ export function createOpenReceiveIpRateLimit(
   }
   const message = config.message ?? DEFAULT_MESSAGE;
   const extractIp = config.ip ?? openReceiveClientIp;
-  const now = config.now ?? (() => Math.floor(Date.now() / 1_000));
+  const now = config.now ?? unixSeconds;
   let warnedUnattributable = false;
 
   return async (context) => {

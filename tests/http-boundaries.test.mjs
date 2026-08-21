@@ -129,12 +129,12 @@ const SPEC_ROUTE_KINDS = {
   refundSwap: "swap.refund",
 };
 
-/** The module-private ROUTE_BODY_FIELDS table, read from handler.ts source. */
+/** The module-private ROUTE_BODY_FIELDS table, read from http-request.ts source. */
 function handlerRouteBodyFields() {
-  const source = readFileSync("packages/js/http/src/handler.ts", "utf8");
+  const source = readFileSync("packages/js/http/src/http-request.ts", "utf8");
   const table =
     /const ROUTE_BODY_FIELDS: Record<string, readonly string\[\]> = \{([\s\S]*?)\n\};/.exec(source);
-  assert.ok(table !== null, "handler.ts must declare ROUTE_BODY_FIELDS");
+  assert.ok(table !== null, "http-request.ts must declare ROUTE_BODY_FIELDS");
   const fields = {};
   for (const [, kind, list] of table[1].matchAll(/"([\w.]+)":\s*\[([^\]]*)\]/g)) {
     fields[kind] = [...list.matchAll(/"([^"]+)"/g)].map(([, name]) => name);
@@ -152,7 +152,7 @@ test("the handler's per-route field whitelist matches the OpenAPI request schema
     const routeKind = SPEC_ROUTE_KINDS[post.operationId];
     assert.ok(
       routeKind !== undefined,
-      `${post.operationId}: add it to SPEC_ROUTE_KINDS and to handler.ts's ROUTE_BODY_FIELDS`,
+      `${post.operationId}: add it to SPEC_ROUTE_KINDS and to http-request.ts's ROUTE_BODY_FIELDS`,
     );
     seen.push(routeKind);
     let schema = post.requestBody.content["application/json"].schema;
@@ -167,7 +167,7 @@ test("the handler's per-route field whitelist matches the OpenAPI request schema
     assert.deepEqual(
       [...(fields[routeKind] ?? [])].sort(),
       Object.keys(schema.properties).sort(),
-      `${post.operationId}: handler.ts ROUTE_BODY_FIELDS["${routeKind}"] drifted from the contract`,
+      `${post.operationId}: http-request.ts ROUTE_BODY_FIELDS["${routeKind}"] drifted from the contract`,
     );
   }
   assert.deepEqual(

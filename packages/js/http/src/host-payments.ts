@@ -1,3 +1,4 @@
+import { unixSeconds } from "@openreceive/core";
 import { sanitizeOpenReceiveEvent } from "@openreceive/node";
 import type {
   CreateCheckoutAmount,
@@ -178,7 +179,7 @@ export function createOpenReceiveHost<Order>(
     };
   }
 
-  const clock = options.clock ?? currentUnixSeconds;
+  const clock = options.clock ?? unixSeconds;
   const resolveCheckout: ResolveCheckoutHook = async (context) => {
     const order = await options.loadOrder(context.orderId, context);
     if (order === null) throw hostError("Order not found.", 404, "NOT_FOUND");
@@ -336,8 +337,4 @@ function normalizePaymentHash(value: string): string {
     throw hostError("payment_hash must be 64 hexadecimal characters.", 400, "INVALID_REQUEST");
   }
   return normalized;
-}
-
-function currentUnixSeconds(): number {
-  return Math.floor(Date.now() / 1_000);
 }

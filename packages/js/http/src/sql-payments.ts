@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   OPENRECEIVE_PAYMENTS_SCHEMA_VERSION,
   openReceivePaymentsDdlStatements,
+  unixSeconds,
   type PaymentDetails,
 } from "@openreceive/core";
 import type { Checkout, SwapData } from "@openreceive/node";
@@ -147,7 +148,7 @@ export function createOpenReceiveSqlPayments(
   assertSafeIdentifier(table);
   const metaTable = options.metaTableName ?? "openreceive_meta";
   assertSafeIdentifier(metaTable);
-  const clock = options.clock ?? currentUnixSeconds;
+  const clock = options.clock ?? unixSeconds;
   // Library-authored SQL is rendered for this dialect here, at authoring time.
   // Host SQL (notably the settlement hook's `query`) is never rewritten: a `?`
   // in a literal, a comment, or a postgres JSON operator must survive.
@@ -511,8 +512,4 @@ function assertSafeIdentifier(name: string): void {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
     throw new RangeError(`Unsafe SQL identifier: ${name}`);
   }
-}
-
-function currentUnixSeconds(): number {
-  return Math.floor(Date.now() / 1_000);
 }

@@ -1,3 +1,4 @@
+import { compact, unixSeconds } from "@openreceive/core";
 import type { OpenReceive, PaymentCheck } from "@openreceive/node";
 import { type OpenReceiveHost, warnOpenReceiveFailure } from "./host-payments.ts";
 import type { OpenReceiveReconcilableAttempt } from "./payment-repository.ts";
@@ -114,7 +115,7 @@ export async function maybeReconcileOpenReceivePayments(
   try {
     const attempts = await input.host.payments.listReconcilableAttempts();
     if (attempts.length === 0) return { reason: "no_pending" };
-    const clock = input.clock ?? currentUnixSeconds;
+    const clock = input.clock ?? unixSeconds;
     const now = clock();
     const intervalSeconds = openReceiveReconcileIntervalSeconds(
       attempts,
@@ -129,7 +130,7 @@ export async function maybeReconcileOpenReceivePayments(
         host: input.host,
         overlapSeconds: input.overlapSeconds,
         maxPages: input.maxPages ?? OPENRECEIVE_RECONCILE_SCAN_MAX_PAGES,
-        ...(input.clock === undefined ? {} : { clock: input.clock }),
+        ...compact({ clock: input.clock }),
       }),
       input.scanTimeoutMs ?? OPENRECEIVE_RECONCILE_SCAN_TIMEOUT_MS,
     );
@@ -162,8 +163,4 @@ function withScanTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
       },
     );
   });
-}
-
-function currentUnixSeconds(): number {
-  return Math.floor(Date.now() / 1_000);
 }

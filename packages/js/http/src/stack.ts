@@ -1,3 +1,4 @@
+import { compact } from "@openreceive/core";
 import { createOpenReceive, type OpenReceive } from "@openreceive/node";
 import type { CreateOpenReceiveHttpHandlerOptions, OpenReceiveHttpHandler } from "./handler.ts";
 import { createOpenReceiveHttpHandler } from "./handler.ts";
@@ -83,23 +84,12 @@ export function createOpenReceiveStack<Order = unknown>(
   // A custom repository reaches the host factory as the repository mode it is;
   // dropping it here used to land in db mode and blame the caller for omitting
   // the very thing they passed.
+  // `db`/`payments` stay outside compact: it is recursive, and a repository or
+  // database handle must reach the host factory as the object the caller passed.
   const hostOptions = (
     payments === undefined
-      ? {
-          db,
-          ...(tableName === undefined ? {} : { tableName }),
-          loadOrder,
-          amountForOrder,
-          onPaid,
-          ...(clock === undefined ? {} : { clock }),
-        }
-      : {
-          payments,
-          loadOrder,
-          amountForOrder,
-          onPaid,
-          ...(clock === undefined ? {} : { clock }),
-        }
+      ? { db, loadOrder, amountForOrder, onPaid, ...compact({ tableName, clock }) }
+      : { payments, loadOrder, amountForOrder, onPaid, ...compact({ clock }) }
   ) as CreateOpenReceiveHostOptions<Order>;
   const host = createOpenReceiveHost<Order>(hostOptions);
   const prefix = normalizePrefix(options.prefix ?? "/openreceive");
@@ -110,7 +100,7 @@ export function createOpenReceiveStack<Order = unknown>(
     if (service === undefined) ownedService = resolved;
     return createOpenReceiveHttpHandler({
       ...handlerOptions,
-      ...(clock === undefined ? {} : { clock }),
+      ...compact({ clock }),
       service: resolved,
       host,
     });

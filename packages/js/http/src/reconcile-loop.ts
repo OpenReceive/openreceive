@@ -1,3 +1,4 @@
+import { unixSeconds } from "@openreceive/core";
 import type { OpenReceive, PaymentCheck } from "@openreceive/node";
 import { type OpenReceiveHost, warnOpenReceiveFailure } from "./host-payments.ts";
 import { reconciliationTransition } from "./payment-repository.ts";
@@ -39,7 +40,7 @@ export async function reconcileOpenReceivePayments(input: {
   readonly maxPages?: number;
   readonly clock?: () => number;
 }): Promise<readonly PaymentCheck[]> {
-  const clock = input.clock ?? currentUnixSeconds;
+  const clock = input.clock ?? unixSeconds;
   const attempts = await input.host.payments.listReconcilableAttempts();
   if (attempts.length === 0) return [];
   const byHash = new Map(
@@ -183,8 +184,4 @@ function abortableDelay(milliseconds: number, signal: AbortSignal): Promise<void
       resolve();
     }
   });
-}
-
-function currentUnixSeconds(): number {
-  return Math.floor(Date.now() / 1_000);
 }

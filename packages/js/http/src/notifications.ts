@@ -1,6 +1,7 @@
 import {
   classifyTransactionSettlement,
   OpenReceiveError,
+  unixSeconds,
   type NwcTransaction,
 } from "@openreceive/core";
 import type { OpenReceive, OpenReceiveWalletNotification } from "@openreceive/node";
@@ -124,7 +125,7 @@ export async function startOpenReceiveNotificationListener(input: {
         wakeReconciliation();
         return;
       }
-      const observedAt = Math.floor(Date.now() / 1_000);
+      const observedAt = unixSeconds();
       await input.host.onPaid({
         paymentHash,
         paidAt: transaction.settled_at ?? observedAt,

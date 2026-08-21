@@ -1,4 +1,4 @@
-import type { PaymentDetails } from "@openreceive/core";
+import { unixSeconds, type PaymentDetails } from "@openreceive/core";
 import type { Checkout, SwapData } from "@openreceive/node";
 import type { CheckoutCreatedInput } from "./handler.ts";
 
@@ -156,7 +156,7 @@ export interface OpenReceivePaymentRepository {
 }
 
 /** True when an unpaid attempt still has more than the reuse buffer remaining. */
-export function isReusablePaymentAttempt(expiresAt: number, now = currentUnixSeconds()): boolean {
+export function isReusablePaymentAttempt(expiresAt: number, now = unixSeconds()): boolean {
   return expiresAt - now > OPENRECEIVE_ATTEMPT_REUSE_BUFFER_SECONDS;
 }
 
@@ -167,7 +167,7 @@ export function isReusablePaymentAttempt(expiresAt: number, now = currentUnixSec
 export function liveAttemptCommitDecision(
   live: Pick<OpenReceivePaymentRecord, "expiresAt" | "swapData">,
   incoming: Pick<OpenReceivePaymentInsert, "swapData">,
-  now = currentUnixSeconds(),
+  now = unixSeconds(),
 ): LiveAttemptCommitDecision {
   if (!sameRailAndAsset(live, incoming)) return "ignore";
   return isReusablePaymentAttempt(live.expiresAt, now) ? "conflict" : "supersede";
@@ -231,8 +231,4 @@ export function openReceivePaymentInsert(input: CheckoutCreatedInput): OpenRecei
     ...(input.swapData === undefined ? {} : { swapData: input.swapData }),
     ...(input.clientIp === undefined ? {} : { clientIp: input.clientIp }),
   };
-}
-
-function currentUnixSeconds(): number {
-  return Math.floor(Date.now() / 1_000);
 }
