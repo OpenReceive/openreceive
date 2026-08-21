@@ -1,5 +1,5 @@
 import { createHmac } from "node:crypto";
-import { ceilDiv, OPENRECEIVE_SATS_PER_BTC } from "@openreceive/core";
+import { ceilDiv, OPENRECEIVE_SATS_PER_BTC, recordOrEmpty, unixSeconds } from "@openreceive/core";
 import {
   getOpenReceiveSwapAssetInfo,
   isOpenReceiveLightningNetwork,
@@ -198,7 +198,7 @@ class FixedFloatProvider implements SwapProvider {
     this.lightningCcy =
       lightningCcy === undefined || lightningCcy.length === 0 ? undefined : lightningCcy;
     this.fetcher = fetcher;
-    this.now = options.now ?? (() => Math.floor(Date.now() / 1000));
+    this.now = options.now ?? unixSeconds;
     this.cacheSeconds = options.cacheSeconds ?? DEFAULT_CCIES_CACHE_SECONDS;
     this.ratesCacheSeconds = options.ratesCacheSeconds ?? DEFAULT_RATES_CACHE_SECONDS;
     if (!Number.isSafeInteger(this.ratesCacheSeconds) || this.ratesCacheSeconds <= 0) {
@@ -428,7 +428,7 @@ class FixedFloatProvider implements SwapProvider {
         direction: "to",
         amount: amountMsatsToBtcString(invoiceAmountMsats),
       });
-      return readFixedFloatOrderFee(asRecord(data));
+      return readFixedFloatOrderFee(recordOrEmpty(data));
     } catch {
       return undefined;
     }
@@ -532,7 +532,7 @@ class FixedFloatProvider implements SwapProvider {
         path,
         kind: response.status === 429 ? "rate_limited" : "http",
         status: response.status,
-        fixedFloatMessage: readString(parsed.msg),
+        fixedFloatMessage: optionalCoercedString(parsed.msg),
         message: formatFixedFloatApiErrorMessage(path, response.status, parsed.msg),
       });
     }
@@ -541,7 +541,7 @@ class FixedFloatProvider implements SwapProvider {
         path,
         kind: "api",
         fixedFloatCode: parsed.code,
-        fixedFloatMessage: readString(parsed.msg),
+        fixedFloatMessage: optionalCoercedString(parsed.msg),
         message: typeof parsed.msg === "string" ? parsed.msg : `FixedFloat ${path} failed.`,
       });
     }
@@ -749,6 +749,36 @@ function amountMsatsToBtcString(amountMsats: number): string {
   return fractional.length === 0 ? String(wholeBtc) : `${wholeBtc}.${fractional}`;
 }
 
+type QuoteErrorPattern = readonly [RegExp, SwapAvailabilityReason];
+
+/**
+ * Stringly-typed fallbacks for a quote failure that carries no machine-readable
+ * code: FixedFloat reports "amount too small" in prose only. First match wins, so
+ * the order is the priority order, and both callers below share one table so the
+ * amount rules cannot drift apart again.
+ */
+const AMOUNT_QUOTE_ERROR_PATTERNS: readonly QuoteErrorPattern[] = [
+  [/min|small|out of limits|limit_min/, "amount_too_small"],
+  [/max|large|limit_max/, "amount_too_large"],
+];
+
+/** A non-API error exposes no status or kind, so transport is read from the message too. */
+const ANY_QUOTE_ERROR_PATTERNS: readonly QuoteErrorPattern[] = [
+  [/rate|429|weight budget/, "provider_rate_limited"],
+  [/fetch|network|timeout/, "provider_unreachable"],
+  ...AMOUNT_QUOTE_ERROR_PATTERNS,
+];
+
+function classifyQuoteErrorMessage(
+  message: string,
+  patterns: readonly QuoteErrorPattern[],
+): SwapAvailabilityReason {
+  for (const [pattern, reason] of patterns) {
+    if (pattern.test(message)) return reason;
+  }
+  return "pair_temporarily_unavailable";
+}
+
 function classifyFixedFloatQuoteError(error: unknown): SwapAvailabilityReason {
   if (isSwapProviderWeightBudgetError(error)) return "provider_rate_limited";
   if (error instanceof FixedFloatApiError) {
@@ -761,40 +791,16 @@ function classifyFixedFloatQuoteError(error: unknown): SwapAvailabilityReason {
     ) {
       return "provider_unreachable";
     }
-    const message = error.fixedFloatMessage?.toLowerCase() ?? error.message.toLowerCase();
-    if (
-      message.includes("min") ||
-      message.includes("small") ||
-      message.includes("out of limits") ||
-      message.includes("limit_min")
-    ) {
-      return "amount_too_small";
-    }
-    if (message.includes("max") || message.includes("large") || message.includes("limit_max")) {
-      return "amount_too_large";
-    }
-    return "pair_temporarily_unavailable";
+    // The API answered, so transport is known good: only the amount rules apply.
+    return classifyQuoteErrorMessage(
+      error.fixedFloatMessage?.toLowerCase() ?? error.message.toLowerCase(),
+      AMOUNT_QUOTE_ERROR_PATTERNS,
+    );
   }
-  const message =
-    error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
-  if (message.includes("rate") || message.includes("429") || message.includes("weight budget")) {
-    return "provider_rate_limited";
-  }
-  if (message.includes("fetch") || message.includes("network") || message.includes("timeout")) {
-    return "provider_unreachable";
-  }
-  if (
-    message.includes("min") ||
-    message.includes("small") ||
-    message.includes("out of limits") ||
-    message.includes("limit_min")
-  ) {
-    return "amount_too_small";
-  }
-  if (message.includes("max") || message.includes("large") || message.includes("limit_max")) {
-    return "amount_too_large";
-  }
-  return "pair_temporarily_unavailable";
+  return classifyQuoteErrorMessage(
+    error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase(),
+    ANY_QUOTE_ERROR_PATTERNS,
+  );
 }
 
 function fixedFloatAvailabilityMessage(reason: SwapAvailabilityReason): string {
@@ -806,92 +812,120 @@ function fixedFloatAvailabilityMessage(reason: SwapAvailabilityReason): string {
 }
 
 function formatFixedFloatApiErrorMessage(path: string, status: number, msg: unknown): string {
-  const fixedFloatMessage = readString(msg);
+  const fixedFloatMessage = optionalCoercedString(msg);
   return fixedFloatMessage === undefined
     ? `FixedFloat ${path} failed with HTTP ${status}.`
     : `FixedFloat ${path} failed with HTTP ${status}: ${fixedFloatMessage}`;
 }
 
-function normalizeFixedFloatOrder(
-  data: unknown,
-  input: {
-    readonly provider: string;
-    readonly payInAsset: SwapPayInAsset;
-    readonly fallback?: SwapOrder;
-    readonly now?: () => number;
-  },
-): SwapOrder {
-  const record = asRecord(data);
-  const from = asRecord(record.from);
-  const time = asRecord(record.time);
-  const status = readStringField(record, "status") ?? input.fallback?.state ?? "NEW";
-  const emergency = asRecord(record.emergency);
-  const depositMemo = readStringField(from, "tag") ?? input.fallback?.deposit_memo;
-  const depositTxId =
-    readNestedString(record, ["from", "tx", "id"]) ?? input.fallback?.deposit_tx_id;
-  const payoutTxId = readNestedString(record, ["to", "tx", "id"]) ?? input.fallback?.payout_tx_id;
-  const refundTxId =
-    readNestedString(record, ["back", "tx", "id"]) ??
-    readNestedString(record, ["refund", "tx", "id"]) ??
-    input.fallback?.refund_tx_id;
-  const normalizedStatus = normalizeFixedFloatStatus(status, emergency, refundTxId);
-  const depositAddress =
-    readStringField(from, "address") ??
-    input.fallback?.deposit_address ??
-    requiredString(from.address, "from.address");
-  assertFixedFloatDepositAddressShape(input.payInAsset, depositAddress);
-  const fee = readFixedFloatOrderFee(record) ?? input.fallback?.fee;
-  const emergencyRepeat = readEmergencyRepeat(emergency);
-  const depositReceivedAmount =
-    readDecimalAmountString(readNestedString(record, ["from", "tx", "amount"])) ??
-    input.fallback?.deposit_received_amount;
-  const refundAmount =
-    readDecimalAmountString(readNestedString(record, ["back", "amount"])) ??
-    input.fallback?.refund_amount;
-  const refundReason =
-    normalizedStatus.refund_reason ??
-    (isRefundPathState(normalizedStatus.state) ? input.fallback?.refund_reason : undefined);
+interface FixedFloatOrderInput {
+  readonly provider: string;
+  readonly payInAsset: SwapPayInAsset;
+  /** The order we already persisted, when this is a poll rather than a create. */
+  readonly fallback?: SwapOrder;
+  readonly now?: () => number;
+}
 
+/**
+ * A field the provider must eventually supply: the fresh response wins, the value
+ * we persisted is the fallback, and only a field neither source can supply fails.
+ */
+function requiredOrderField(
+  record: Record<string, unknown>,
+  field: string,
+  fallback: string | undefined,
+  label: string,
+): string {
+  return optionalStringField(record, field) ?? fallback ?? requiredString(record[field], label);
+}
+
+/**
+ * Read a FixedFloat order body, resolving every field against what we already
+ * persisted. Extraction and fallback are deliberately one step, not two: a thin
+ * poll response must never erase an order we already know about.
+ */
+function extractFixedFloatOrderFields(
+  record: Record<string, unknown>,
+  input: FixedFloatOrderInput,
+) {
+  const fallback = input.fallback;
+  const from = recordOrEmpty(record.from);
+  const emergency = recordOrEmpty(record.emergency);
+  const refundTxId =
+    optionalNestedString(record, ["back", "tx", "id"]) ??
+    optionalNestedString(record, ["refund", "tx", "id"]) ??
+    fallback?.refund_tx_id;
+  const status = normalizeFixedFloatStatus(
+    optionalStringField(record, "status") ?? fallback?.state ?? "NEW",
+    emergency,
+    refundTxId,
+  );
+  // Checked on the same path that produces it, so no deposit address ever reaches
+  // a payer without its network shape being validated first.
+  const depositAddress = requiredOrderField(
+    from,
+    "address",
+    fallback?.deposit_address,
+    "from.address",
+  );
+  assertFixedFloatDepositAddressShape(input.payInAsset, depositAddress);
+  return {
+    status,
+    depositAddress,
+    refundTxId,
+    providerOrderId: requiredOrderField(record, "id", fallback?.provider_order_id, "id"),
+    providerToken: requiredOrderField(record, "token", fallback?.provider_token, "token"),
+    depositAmount: requiredOrderField(from, "amount", fallback?.deposit_amount, "from.amount"),
+    expiresAt:
+      readUnixSeconds(recordOrEmpty(record.time).expiration) ??
+      fallback?.expires_at ??
+      (input.now ?? unixSeconds)() + 600,
+    depositMemo: optionalStringField(from, "tag") ?? fallback?.deposit_memo,
+    depositTxId: optionalNestedString(record, ["from", "tx", "id"]) ?? fallback?.deposit_tx_id,
+    payoutTxId: optionalNestedString(record, ["to", "tx", "id"]) ?? fallback?.payout_tx_id,
+    depositReceivedAmount:
+      readDecimalAmountString(optionalNestedString(record, ["from", "tx", "amount"])) ??
+      fallback?.deposit_received_amount,
+    refundAmount:
+      readDecimalAmountString(optionalNestedString(record, ["back", "amount"])) ??
+      fallback?.refund_amount,
+    refundReason:
+      status.refund_reason ??
+      (isRefundPathState(status.state) ? fallback?.refund_reason : undefined),
+    emergencyRepeat: readEmergencyRepeat(emergency) ?? fallback?.emergency_repeat,
+    fee: readFixedFloatOrderFee(record) ?? fallback?.fee,
+  };
+}
+
+/**
+ * Shape the resolved fields into the SwapOrder we both persist as swap_data and
+ * hand back to the payer (via publicSwap). Nothing here reads the raw body.
+ */
+function normalizeFixedFloatOrder(data: unknown, input: FixedFloatOrderInput): SwapOrder {
+  const fields = extractFixedFloatOrderFields(recordOrEmpty(data), input);
+  const { attention, attention_reason } = fields.status;
   return {
     provider: input.provider,
-    provider_order_id:
-      readStringField(record, "id") ??
-      input.fallback?.provider_order_id ??
-      requiredString(record.id, "id"),
-    provider_token:
-      readStringField(record, "token") ??
-      input.fallback?.provider_token ??
-      requiredString(record.token, "token"),
+    provider_order_id: fields.providerOrderId,
+    provider_token: fields.providerToken,
     pay_in_asset: input.payInAsset,
-    deposit_address: depositAddress,
-    ...(depositMemo === undefined ? {} : { deposit_memo: depositMemo }),
-    deposit_amount:
-      readStringField(from, "amount") ??
-      input.fallback?.deposit_amount ??
-      requiredString(from.amount, "from.amount"),
-    expires_at:
-      readUnixSeconds(time.expiration) ??
-      input.fallback?.expires_at ??
-      (input.now ?? (() => Math.floor(Date.now() / 1000)))() + 600,
-    state: normalizedStatus.state,
-    ...(depositTxId === undefined ? {} : { deposit_tx_id: depositTxId }),
-    ...(payoutTxId === undefined ? {} : { payout_tx_id: payoutTxId }),
-    ...(refundTxId === undefined ? {} : { refund_tx_id: refundTxId }),
-    ...(normalizedStatus.attention === undefined ? {} : { attention: normalizedStatus.attention }),
-    ...(normalizedStatus.attention_reason === undefined
+    deposit_address: fields.depositAddress,
+    ...(fields.depositMemo === undefined ? {} : { deposit_memo: fields.depositMemo }),
+    deposit_amount: fields.depositAmount,
+    expires_at: fields.expiresAt,
+    state: fields.status.state,
+    ...(fields.depositTxId === undefined ? {} : { deposit_tx_id: fields.depositTxId }),
+    ...(fields.payoutTxId === undefined ? {} : { payout_tx_id: fields.payoutTxId }),
+    ...(fields.refundTxId === undefined ? {} : { refund_tx_id: fields.refundTxId }),
+    ...(attention === undefined ? {} : { attention }),
+    ...(attention_reason === undefined ? {} : { attention_reason }),
+    ...(fields.refundReason === undefined ? {} : { refund_reason: fields.refundReason }),
+    ...(fields.depositReceivedAmount === undefined
       ? {}
-      : { attention_reason: normalizedStatus.attention_reason }),
-    ...(refundReason === undefined ? {} : { refund_reason: refundReason }),
-    ...(depositReceivedAmount === undefined
-      ? {}
-      : { deposit_received_amount: depositReceivedAmount }),
-    ...(refundAmount === undefined ? {} : { refund_amount: refundAmount }),
-    ...(emergencyRepeat === undefined
-      ? input.fallback?.emergency_repeat === undefined
-        ? {}
-        : { emergency_repeat: input.fallback.emergency_repeat }
-      : { emergency_repeat: emergencyRepeat }),
-    ...(fee === undefined ? {} : { fee }),
+      : { deposit_received_amount: fields.depositReceivedAmount }),
+    ...(fields.refundAmount === undefined ? {} : { refund_amount: fields.refundAmount }),
+    ...(fields.emergencyRepeat === undefined ? {} : { emergency_repeat: fields.emergencyRepeat }),
+    ...(fields.fee === undefined ? {} : { fee: fields.fee }),
     raw: data,
   };
 }
@@ -900,8 +934,8 @@ function normalizeFixedFloatOrder(
 // value of the crypto the payer sends, to.usd the value delivered to the merchant). Their
 // gap is the swap fee the payer absorbs, so we surface both to explain the price.
 function readFixedFloatOrderFee(record: Record<string, unknown>): SwapFee | undefined {
-  const payInFiat = readNestedString(record, ["from", "usd"]);
-  const payoutFiat = readNestedString(record, ["to", "usd"]);
+  const payInFiat = optionalNestedString(record, ["from", "usd"]);
+  const payoutFiat = optionalNestedString(record, ["to", "usd"]);
   if (payInFiat === undefined || payoutFiat === undefined) return undefined;
   return { currency: "USD", pay_in_fiat: payInFiat, payout_fiat: payoutFiat };
 }
@@ -936,8 +970,8 @@ function normalizeFixedFloatStatus(
   if (normalized === "DONE") return { state: "completed" };
   if (normalized === "EXPIRED") return { state: "expired" };
   if (normalized === "EMERGENCY") {
-    const choice = readStringField(emergency, "choice")?.toUpperCase();
-    const emergencyStatuses = readStringArrayField(emergency, "status").map((item) =>
+    const choice = optionalStringField(emergency, "choice")?.toUpperCase();
+    const emergencyStatuses = optionalStringArrayField(emergency, "status").map((item) =>
       item.toUpperCase(),
     );
     const refundReason = refundReasonFromEmergencyStatuses(emergencyStatuses);
@@ -1003,7 +1037,7 @@ function readDecimalAmountString(value: string | undefined): string | undefined 
 }
 
 function readFixedFloatCurrencies(data: unknown): FixedFloatCurrency[] {
-  const record = asRecord(data);
+  const record = recordOrEmpty(data);
   const items = Array.isArray(data)
     ? data
     : Array.isArray(record.ccies)
@@ -1013,17 +1047,17 @@ function readFixedFloatCurrencies(data: unknown): FixedFloatCurrency[] {
         : [];
   const currencies: FixedFloatCurrency[] = [];
   for (const item of items) {
-    const record = asRecord(item);
-    const code = readStringField(record, "code") ?? readStringField(record, "ticker");
+    const record = recordOrEmpty(item);
+    const code = optionalStringField(record, "code") ?? optionalStringField(record, "ticker");
     const coin =
-      readStringField(record, "coin") ??
-      readStringField(record, "currency") ??
-      readStringField(record, "symbol");
+      optionalStringField(record, "coin") ??
+      optionalStringField(record, "currency") ??
+      optionalStringField(record, "symbol");
     const network =
-      readStringField(record, "network") ??
-      readStringField(record, "chain") ??
-      readStringField(record, "networkName") ??
-      readStringField(record, "name");
+      optionalStringField(record, "network") ??
+      optionalStringField(record, "chain") ??
+      optionalStringField(record, "networkName") ??
+      optionalStringField(record, "name");
     if (code !== undefined && coin !== undefined && network !== undefined) {
       currencies.push({
         code,
@@ -1046,29 +1080,23 @@ function readEmergencyRepeat(emergency: Record<string, unknown> | undefined): bo
   return undefined;
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-function readNestedString(value: unknown, path: readonly string[]): string | undefined {
+function optionalNestedString(value: unknown, path: readonly string[]): string | undefined {
   let current: unknown = value;
   for (const key of path) {
-    current = asRecord(current)[key];
+    current = recordOrEmpty(current)[key];
   }
-  return readString(current);
+  return optionalCoercedString(current);
 }
 
-function readStringField(
+function optionalStringField(
   record: Record<string, unknown> | undefined,
   field: string,
 ): string | undefined {
   if (record === undefined) return undefined;
-  return readString(record[field]);
+  return optionalCoercedString(record[field]);
 }
 
-function readStringArrayField(
+function optionalStringArrayField(
   record: Record<string, unknown> | undefined,
   field: string,
 ): readonly string[] {
@@ -1076,22 +1104,22 @@ function readStringArrayField(
   const value = record[field];
   if (Array.isArray(value)) {
     return value.flatMap((item) => {
-      const string = readString(item);
+      const string = optionalCoercedString(item);
       return string === undefined ? [] : [string];
     });
   }
-  const string = readString(value);
+  const string = optionalCoercedString(value);
   return string === undefined ? [] : [string];
 }
 
-function readString(value: unknown): string | undefined {
+function optionalCoercedString(value: unknown): string | undefined {
   if (typeof value === "string" && value.length > 0) return value;
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
   return undefined;
 }
 
 function requiredString(value: unknown, field: string): string {
-  const string = readString(value);
+  const string = optionalCoercedString(value);
   if (string === undefined) {
     throw new Error(`FixedFloat response missing ${field}.`);
   }

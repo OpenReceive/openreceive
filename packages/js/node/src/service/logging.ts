@@ -1,5 +1,5 @@
+import { compact, isRecord } from "@openreceive/core";
 import type { NwcEndpointLogger } from "../alby-nwc.ts";
-import { isRecord } from "./core-utils.ts";
 import type {
   CreateOpenReceiveOptions,
   EventHandler,
@@ -124,20 +124,15 @@ export function summarizeSwapProviderApiRequest(entry: {
   readonly body: unknown;
 }): Record<string, unknown> {
   const body = isRecord(entry.body) ? entry.body : undefined;
-  const orderId = optionalLogString(body?.id);
-  const choice = optionalLogString(body?.choice);
-  const fromCcy = optionalLogString(body?.fromCcy);
-  const toCcy = optionalLogString(body?.toCcy);
-  const amount = optionalLogString(body?.amount) ?? optionalLogNumber(body?.amount);
-  return {
+  return compact({
     provider: entry.provider,
     path: entry.path,
-    ...(orderId === undefined ? {} : { order_id: orderId }),
-    ...(choice === undefined ? {} : { choice }),
-    ...(fromCcy === undefined ? {} : { from_ccy: fromCcy }),
-    ...(toCcy === undefined ? {} : { to_ccy: toCcy }),
-    ...(amount === undefined ? {} : { amount }),
-  };
+    order_id: optionalLogString(body?.id),
+    choice: optionalLogString(body?.choice),
+    from_ccy: optionalLogString(body?.fromCcy),
+    to_ccy: optionalLogString(body?.toCcy),
+    amount: optionalLogString(body?.amount) ?? optionalLogNumber(body?.amount),
+  });
 }
 
 /**

@@ -19,6 +19,7 @@ import {
   OPENRECEIVE_NWC_METADATA_MAX_BYTES,
   type OpenReceiveTransactionState,
   type ParsedNwcConnection,
+  nonEmptyString,
   type WalletCapabilitySummary,
 } from "@openreceive/core";
 import { HEX_64 } from "../hex.ts";
@@ -174,14 +175,20 @@ export function normalizeMakeInvoiceResult(rawResult: unknown): MakeInvoiceResul
   if (!HEX_64.test(paymentHash)) {
     throw new TypeError("payment_hash must be 64 hex characters");
   }
-  const rawAmount = result.amount_msats ?? result.amount;
+  // amount_msats is read BEFORE the optional timestamps so that a wallet
+  // returning several malformed fields at once still hears about the amount
+  // first — the field that decides what is owed. Hoisting the timestamp reads
+  // above this line would silently reorder that precedence.
+  const amountMsats = toBigInt(result.amount_msats ?? result.amount, "amount_msats");
+  const createdAt = parseOptionalInteger(result.created_at ?? result.createdAt, "created_at");
+  const expiresAt = parseOptionalInteger(result.expires_at ?? result.expiresAt, "expires_at");
 
   return {
     invoice,
     payment_hash: paymentHash,
-    amount_msats: toBigInt(rawAmount, "amount_msats"),
-    ...optionalNumberField(result.created_at ?? result.createdAt, "created_at"),
-    ...optionalNumberField(result.expires_at ?? result.expiresAt, "expires_at"),
+    amount_msats: amountMsats,
+    ...(createdAt === undefined ? {} : { created_at: createdAt }),
+    ...(expiresAt === undefined ? {} : { expires_at: expiresAt }),
   };
 }
 
@@ -232,9 +239,9 @@ export function normalizeNwcTransaction(rawTransaction: unknown): NwcTransaction
   // Per-field tolerance: a wallet's odd field (empty string, float timestamp,
   // unparsable amount) degrades to "field absent" rather than rejecting the
   // row — settlement classification already treats missing fields safely.
-  const invoice = tolerantString(result.invoice);
+  const invoice = nonEmptyString(result.invoice);
   if (invoice !== undefined) normalized.invoice = invoice;
-  const paymentHash = tolerantString(result.payment_hash ?? result.paymentHash);
+  const paymentHash = nonEmptyString(result.payment_hash ?? result.paymentHash);
   if (paymentHash !== undefined) normalized.payment_hash = paymentHash;
   try {
     if (result.amount_msats !== undefined || result.amount !== undefined) {
@@ -254,18 +261,18 @@ export function normalizeNwcTransaction(rawTransaction: unknown): NwcTransaction
     normalized.transaction_state = transactionState;
   }
 
-  Object.assign(
-    normalized,
-    tolerantTimestampField(result.created_at ?? result.createdAt, "created_at"),
-    tolerantTimestampField(result.expires_at ?? result.expiresAt, "expires_at"),
-    tolerantTimestampField(result.settled_at ?? result.settledAt, "settled_at"),
-  );
+  const createdAt = optionalUnixSeconds(result.created_at ?? result.createdAt);
+  if (createdAt !== undefined) normalized.created_at = createdAt;
+  const expiresAt = optionalUnixSeconds(result.expires_at ?? result.expiresAt);
+  if (expiresAt !== undefined) normalized.expires_at = expiresAt;
+  const settledAt = optionalUnixSeconds(result.settled_at ?? result.settledAt);
+  if (settledAt !== undefined) normalized.settled_at = settledAt;
 
-  const preimage = tolerantString(result.preimage);
+  const preimage = nonEmptyString(result.preimage);
   if (preimage !== undefined) normalized.preimage = preimage;
-  const description = tolerantString(result.description);
+  const description = nonEmptyString(result.description);
   if (description !== undefined) normalized.description = description;
-  const descriptionHash = tolerantString(result.description_hash ?? result.descriptionHash);
+  const descriptionHash = nonEmptyString(result.description_hash ?? result.descriptionHash);
   if (descriptionHash !== undefined) normalized.description_hash = descriptionHash;
   try {
     if (result.fees_paid !== undefined || result.feesPaid !== undefined) {
@@ -379,29 +386,25 @@ function normalizeTransactionType(value: unknown): "incoming" | "outgoing" | und
   return undefined;
 }
 
-/** Tolerant reader: absent, null, or empty-string values degrade to undefined. */
-function tolerantString(value: unknown): string | undefined {
-  return typeof value === "string" && value.length > 0 ? value : undefined;
-}
-
-function optionalNumberField(value: unknown, fieldName: string): Record<string, number> {
-  if (value === undefined || value === null) return {};
+/** Absent stays absent; anything present must be a non-negative safe integer. */
+function parseOptionalInteger(value: unknown, fieldName: string): number | undefined {
+  if (value === undefined || value === null) return undefined;
 
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
     throw new TypeError(`${fieldName} must be a non-negative safe integer`);
   }
 
-  return { [fieldName]: value };
+  return value;
 }
 
 /**
  * Timestamp reader for wallet-supplied scan rows: floors float seconds (some
  * wallets report fractional settled_at) and degrades anything unusable to
- * "field absent" instead of rejecting the row.
+ * undefined instead of rejecting the row.
  */
-function tolerantTimestampField(value: unknown, fieldName: string): Record<string, number> {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return {};
-  return { [fieldName]: Math.floor(value) };
+function optionalUnixSeconds(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return undefined;
+  return Math.floor(value);
 }
 
 function requiredString(value: unknown, fieldName: string): string {
@@ -438,6 +441,13 @@ function byteLength(value: string): number {
   return new TextEncoder().encode(value).length;
 }
 
+/**
+ * ARRAY-PERMITTING, unlike core's `recordOrEmpty`: a relay that answers with a
+ * JSON array is read for named keys rather than discarded, because this is an
+ * untrusted-wire parse boundary and every reader below already tolerates a
+ * missing key. Do not route its call sites through core's — there are nine,
+ * seven here and two more in nwc/transport.ts, which imports this.
+ */
 export function asRecord(value: unknown): Record<string, unknown> {
   if (typeof value !== "object" || value === null) return {};
   return value as Record<string, unknown>;

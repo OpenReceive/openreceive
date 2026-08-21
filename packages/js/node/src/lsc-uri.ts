@@ -1,3 +1,4 @@
+import { compact } from "@openreceive/core";
 import { fixedFloatCompatibleSwapProvider } from "./swap/fixedfloat.ts";
 import type { SwapProvider } from "./swap/provider.ts";
 
@@ -126,14 +127,16 @@ export function createLscSwapProvidersFromEnvironment(
   options: CreateLscSwapProvidersOptions = {},
 ): readonly SwapProvider[] {
   return readLscConnectionsFromEnvironment(environment).map((connection) =>
-    fixedFloatCompatibleSwapProvider({
-      id: connection.providerId,
-      baseUrl: connection.baseUrl,
-      key: connection.key,
-      secret: connection.secret,
-      ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
-      ...(options.now === undefined ? {} : { now: options.now }),
-    }),
+    fixedFloatCompatibleSwapProvider(
+      compact({
+        id: connection.providerId,
+        baseUrl: connection.baseUrl,
+        key: connection.key,
+        secret: connection.secret,
+        fetch: options.fetch,
+        now: options.now,
+      }),
+    ),
   );
 }
 

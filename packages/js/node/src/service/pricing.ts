@@ -10,6 +10,7 @@ import {
   type OpenReceiveFiatAmount,
   type OpenReceiveRateQuote,
   type OpenReceiveSourcedPriceProvider,
+  nonEmptyString,
   quoteBitcoinAmountToMsats,
   quoteFiatToMsatsWithPrice,
   type SimplePriceFetch,
@@ -18,7 +19,6 @@ import { OpenReceiveConfigError } from "../config-error.ts";
 import {
   asRecord,
   OpenReceiveServiceError,
-  optionalString,
   parseOptionalRecord,
   serviceError,
 } from "./core-utils.ts";
@@ -299,8 +299,8 @@ export function parseFiatAmount(value: unknown): OpenReceiveFiatAmount {
   if (record === undefined) {
     throw serviceError(400, "INVALID_REQUEST", "fiat must be a JSON object.");
   }
-  const currency = optionalString(record.currency);
-  const amountValue = optionalString(record.value);
+  const currency = nonEmptyString(record.currency);
+  const amountValue = nonEmptyString(record.value);
   if (currency === undefined || !/^[A-Z]{3}$/.test(currency)) {
     throw serviceError(400, "INVALID_REQUEST", "fiat.currency must be an ISO 4217 uppercase code");
   }
@@ -318,8 +318,8 @@ export function parseBitcoinAmount(value: unknown): OpenReceiveBitcoinAmount {
   if (record === undefined) {
     throw serviceError(400, "INVALID_REQUEST", "amount must be a JSON object.");
   }
-  const currency = optionalString(record.currency);
-  const amountValue = optionalString(record.value);
+  const currency = nonEmptyString(record.currency);
+  const amountValue = nonEmptyString(record.value);
   if (currency === undefined || !["BTC", "SAT", "SATS"].includes(currency)) {
     throw serviceError(
       400,

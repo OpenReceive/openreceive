@@ -1,3 +1,5 @@
+import { compact } from "@openreceive/core";
+
 export const SWAP_PROVIDER_WEIGHT_WINDOW_SECONDS = 60;
 export const SWAP_PROVIDER_WEIGHT_SOFT_CAP = 200;
 export const SWAP_PROVIDER_CREATE_WEIGHT_GATE = 150;
@@ -96,17 +98,19 @@ export class SwapProviderWeightBudget {
     message: string,
   ): never {
     try {
-      this.onDenied?.({
-        provider: this.providerId,
-        path,
-        reason,
-        message,
-        used: this.#used,
-        cost,
-        gate,
-        window_start: this.#windowStart,
-        ...(this.#backoffUntil === undefined ? {} : { backoff_until: this.#backoffUntil }),
-      });
+      this.onDenied?.(
+        compact({
+          provider: this.providerId,
+          path,
+          reason,
+          message,
+          used: this.#used,
+          cost,
+          gate,
+          window_start: this.#windowStart,
+          backoff_until: this.#backoffUntil,
+        }),
+      );
     } catch {
       // Diagnostics never affect provider behavior.
     }

@@ -44,7 +44,7 @@ export async function listSwapOptions(
     return { enabled: false, options: [] };
   }
 
-  const amountMsats = normalizeAmountMsats(input.amountMsats);
+  const amountMsats = parseAmountMsats(input.amountMsats);
   const providerCatalog = await resolveSwapProviderCatalog(context, providers);
   const options = listOpenReceiveSwapAssetInfo().map((asset) =>
     swapCatalogOption({
@@ -145,9 +145,9 @@ export async function getSwap(
   context: OpenReceiveServiceContext,
   input: GetSwapRequest,
 ): Promise<PublicSwap> {
-  const recovery = readSwapData(input.swapData);
-  const paymentHash = normalizePaymentHash(input.paymentHash);
-  const orderId = normalizeOrderId(input.orderId);
+  const recovery = parseSwapData(input.swapData);
+  const paymentHash = parsePaymentHash(input.paymentHash);
+  const orderId = parseOrderId(input.orderId);
   const provider = requireProvider(context, recovery.providerOrder.provider);
   const current = await provider.getStatus(recovery.providerOrder);
   return publicSwap(current, paymentHash, orderId);
@@ -157,10 +157,10 @@ export async function refundSwap(
   context: OpenReceiveServiceContext,
   input: SwapRefundRequest,
 ): Promise<PublicSwap> {
-  const recovery = readSwapData(input.swapData);
-  const paymentHash = normalizePaymentHash(input.paymentHash);
-  const orderId = normalizeOrderId(input.orderId);
-  const refundAddress = normalizeRefundAddress(
+  const recovery = parseSwapData(input.swapData);
+  const paymentHash = parsePaymentHash(input.paymentHash);
+  const orderId = parseOrderId(input.orderId);
+  const refundAddress = parseRefundAddress(
     input.refundAddress,
     recovery.providerOrder.pay_in_asset,
   );
@@ -228,7 +228,7 @@ function requireProvider(context: OpenReceiveServiceContext, name: string): Swap
   return provider;
 }
 
-function readSwapData(value: SwapData): SwapData {
+function parseSwapData(value: SwapData): SwapData {
   const payload = value;
   if (
     payload?.version !== 1 ||
@@ -276,7 +276,7 @@ function publicSwap(order: SwapOrder, paymentHash: string, orderId: string): Pub
   };
 }
 
-function normalizePaymentHash(value: string): string {
+function parsePaymentHash(value: string): string {
   const normalized = value.trim().toLowerCase();
   if (!/^[0-9a-f]{64}$/.test(normalized)) {
     throw serviceError(400, "INVALID_REQUEST", "paymentHash is invalid.");
@@ -284,7 +284,7 @@ function normalizePaymentHash(value: string): string {
   return normalized;
 }
 
-function normalizeOrderId(value: string): string {
+function parseOrderId(value: string): string {
   const normalized = value.trim();
   if (normalized.length === 0 || normalized.length > 200) {
     throw serviceError(400, "INVALID_REQUEST", "orderId is invalid.");
@@ -304,7 +304,7 @@ function parsePayInAsset(value: string): SwapPayInAsset {
  * checked against the order's own pay-in network with its checksum — a false
  * accept here sends the payer's money somewhere unrecoverable.
  */
-function normalizeRefundAddress(value: string, payInAsset: unknown): string {
+function parseRefundAddress(value: string, payInAsset: unknown): string {
   const normalized = value.trim();
   if (normalized.length === 0 || normalized.length > 300) {
     throw serviceError(400, "INVALID_REQUEST", "refundAddress is invalid.");
@@ -319,7 +319,7 @@ function normalizeRefundAddress(value: string, payInAsset: unknown): string {
   return normalized;
 }
 
-function normalizeAmountMsats(value: number): number {
+function parseAmountMsats(value: number): number {
   if (!Number.isSafeInteger(value) || value < 1000) {
     throw serviceError(400, "INVALID_REQUEST", "amountMsats must be an integer >= 1000.");
   }

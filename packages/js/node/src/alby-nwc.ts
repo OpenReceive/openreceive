@@ -9,6 +9,7 @@
  */
 
 import {
+  compact,
   formatOpenReceiveSpendCapabilityRefusedMessage,
   formatOpenReceiveSpendCapabilityWarningMessage,
   type ListTransactionsRequest,
@@ -286,14 +287,19 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
     await this.ensurePreflight();
     validateMakeInvoiceRequest(request);
 
-    this.#log("debug", "nwc.make_invoice.requested", "Calling NWC wallet make_invoice.", {
-      method: "make_invoice",
-      // String form: msats above 2^53 would silently round through Number().
-      amount_msats: request.amount_msats.toString(),
-      ...(request.expiry === undefined ? {} : { expiry: request.expiry }),
-      has_description: request.description !== undefined,
-      has_description_hash: request.description_hash !== undefined,
-    });
+    this.#log(
+      "debug",
+      "nwc.make_invoice.requested",
+      "Calling NWC wallet make_invoice.",
+      compact({
+        method: "make_invoice",
+        // String form: msats above 2^53 would silently round through Number().
+        amount_msats: request.amount_msats.toString(),
+        expiry: request.expiry,
+        has_description: request.description !== undefined,
+        has_description_hash: request.description_hash !== undefined,
+      }),
+    );
     const startedAt = Date.now();
 
     let rawResult: unknown;
@@ -342,15 +348,20 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
     await this.ensurePreflight();
     validateListTransactionsRequest(request);
 
-    this.#log("debug", "nwc.list_transactions.requested", "Calling NWC wallet list_transactions.", {
-      method: "list_transactions",
-      ...(request.from === undefined ? {} : { from: request.from }),
-      ...(request.until === undefined ? {} : { until: request.until }),
-      ...(request.limit === undefined ? {} : { limit: request.limit }),
-      ...(request.offset === undefined ? {} : { offset: request.offset }),
-      ...(request.unpaid === undefined ? {} : { unpaid: request.unpaid }),
-      ...(request.type === undefined ? {} : { type: request.type }),
-    });
+    this.#log(
+      "debug",
+      "nwc.list_transactions.requested",
+      "Calling NWC wallet list_transactions.",
+      compact({
+        method: "list_transactions",
+        from: request.from,
+        until: request.until,
+        limit: request.limit,
+        offset: request.offset,
+        unpaid: request.unpaid,
+        type: request.type,
+      }),
+    );
     const startedAt = Date.now();
 
     let rawResult: unknown;
@@ -455,12 +466,10 @@ export class AlbyNwcReceiveClient implements OpenReceiveReceiveNwcClient {
             "debug",
             "nwc.notifications.received",
             "NWC payment_received notification received.",
-            {
+            compact({
               notification_type: notification.type,
-              ...(notification.payment_hash === undefined
-                ? {}
-                : { payment_hash: notification.payment_hash }),
-            },
+              payment_hash: notification.payment_hash,
+            }),
           );
           try {
             handler(notification);

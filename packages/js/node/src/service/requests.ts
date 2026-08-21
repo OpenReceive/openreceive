@@ -1,12 +1,6 @@
-import { isOpenReceiveBitcoinAmountCurrency } from "@openreceive/core";
+import { isOpenReceiveBitcoinAmountCurrency, isRecord, nonEmptyString } from "@openreceive/core";
 import { HEX_64 } from "../hex.ts";
-import {
-  asRecord,
-  isRecord,
-  optionalString,
-  parseOptionalRecord,
-  serviceError,
-} from "./core-utils.ts";
+import { asRecord, parseOptionalRecord, serviceError } from "./core-utils.ts";
 import type {
   CreateCheckoutAmount,
   CreateCheckoutRequest,
@@ -45,14 +39,14 @@ export function normalizeCreateCheckoutRequest(
       throw serviceError(400, "INVALID_REQUEST", `Unexpected create checkout field: ${key}.`);
     }
   }
-  const orderId = optionalString(body.orderId);
+  const orderId = nonEmptyString(body.orderId);
   if (orderId === undefined) throw serviceError(400, "INVALID_REQUEST", "orderId is required.");
   if (orderId.length > 200) {
     throw serviceError(400, "INVALID_REQUEST", "orderId must be 200 characters or fewer.");
   }
   const amount = normalizeCreateCheckoutAmount(body.amount);
-  const memo = optionalString(body.memo);
-  const descriptionHash = optionalString(body.descriptionHash);
+  const memo = nonEmptyString(body.memo);
+  const descriptionHash = nonEmptyString(body.descriptionHash);
   getCreateDescriptionFields({ memo, descriptionHash });
   const metadata = parseOptionalRecord(body.metadata, "metadata");
   const expirySeconds = body.expirySeconds;
@@ -83,8 +77,8 @@ export function normalizeCreateCheckoutAmount(value: unknown): CreateCheckoutAmo
   if (keys.some((key) => key !== "currency" && key !== "value")) {
     throw serviceError(400, "INVALID_REQUEST", "amount contains unsupported fields.");
   }
-  const currency = optionalString(value.currency);
-  const amountValue = optionalString(value.value);
+  const currency = nonEmptyString(value.currency);
+  const amountValue = nonEmptyString(value.value);
   if (currency === undefined || amountValue === undefined) {
     throw serviceError(400, "INVALID_REQUEST", "amount must be { sats } or { currency, value }.");
   }
@@ -111,8 +105,8 @@ export function getCreateDescriptionFields(input: {
   readonly memo?: unknown;
   readonly descriptionHash?: unknown;
 }): { readonly description?: string; readonly description_hash?: string } {
-  const memo = optionalString(input.memo);
-  const descriptionHash = optionalString(input.descriptionHash);
+  const memo = nonEmptyString(input.memo);
+  const descriptionHash = nonEmptyString(input.descriptionHash);
   if (memo !== undefined && memo.length > 500) {
     throw serviceError(400, "INVALID_REQUEST", "memo must be 500 characters or fewer.");
   }

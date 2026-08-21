@@ -6,7 +6,9 @@ import {
   OPENRECEIVE_NWC_CODE_HELP_URL,
   OpenReceiveError,
   parseNwcUri,
+  compact,
   reconcilePaymentAttempts,
+  unixSeconds,
 } from "@openreceive/core";
 import { createNwcReceiveClient } from "./alby-nwc.ts";
 import type { NwcNotificationUnsubscribe, NwcWalletNotificationHandler } from "./alby-nwc.ts";
@@ -14,7 +16,6 @@ import { OpenReceiveConfigError } from "./config-error.ts";
 import { createLscSwapProvidersFromEnvironment } from "./lsc-uri.ts";
 import { attachOpenReceiveLogging } from "./service/file-logger.ts";
 import { createCheckout, prepareCheckout } from "./service/checkouts.ts";
-import { currentUnixSeconds } from "./service/core-utils.ts";
 import {
   createOpenReceivePriceFeed,
   listRates,
@@ -46,7 +47,7 @@ export async function createOpenReceive(
 ): Promise<OpenReceive> {
   const environment = supplied.env ?? process.env;
   const options = attachOpenReceiveLogging(supplied);
-  const clock = options.clock ?? currentUnixSeconds;
+  const clock = options.clock ?? unixSeconds;
   const nwcLogger = createNwcEndpointLogger(options);
   const allowSpendCapableWallet =
     options.allowSpendCapableWallet ??
@@ -60,7 +61,7 @@ export async function createOpenReceive(
         subject: options.nwc === undefined ? "NWC_URI" : "nwc",
       }),
       allowSpendCapableWallet,
-      ...(nwcLogger === undefined ? {} : { logger: nwcLogger }),
+      logger: nwcLogger,
     });
   await preflight(client);
 
@@ -134,12 +135,12 @@ export async function createOpenReceive(
         "debug",
         "payment.check.requested",
         "Polling NWC wallet for payment settlement.",
-        {
+        compact({
           payment_hash: input.paymentHash,
           created_at: input.createdAt,
-          ...(input.until === undefined ? {} : { until: input.until }),
-          ...(input.overlapSeconds === undefined ? {} : { overlap_seconds: input.overlapSeconds }),
-        },
+          until: input.until,
+          overlap_seconds: input.overlapSeconds,
+        }),
       );
       try {
         const checked = await checkPaymentWithClient({
@@ -156,21 +157,15 @@ export async function createOpenReceive(
           checked.status === "settled" ? "info" : "debug",
           "payment.check.completed",
           "NWC payment settlement poll completed.",
-          {
+          compact({
             payment_hash: checked.paymentHash,
             status: checked.status,
-            ...(checked.paidAt === undefined ? {} : { paid_at: checked.paidAt }),
-            ...(checked.details?.paid_at_source === undefined
-              ? {}
-              : { paid_at_source: checked.details.paid_at_source }),
-            ...(transaction?.transaction_state === undefined
-              ? {}
-              : { transaction_state: transaction.transaction_state }),
-            ...(transaction?.settled_at === undefined
-              ? {}
-              : { settled_at: transaction.settled_at }),
+            paid_at: checked.paidAt,
+            paid_at_source: checked.details?.paid_at_source,
+            transaction_state: transaction?.transaction_state,
+            settled_at: transaction?.settled_at,
             preimage_present: transaction?.preimage !== undefined,
-          },
+          }),
         );
         return checked;
       } catch (error) {
