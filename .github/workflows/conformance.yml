@@ -33,8 +33,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # Same containerized Ruby lane as CI: no gems installed on the runner host.
+    # 3.4 matches the newest version in ci.yml's ruby-engine matrix (3.2/3.4)
+    # so the weekly lane never runs a Ruby that per-push CI does not.
     container:
-      image: ruby:3.3
+      image: ruby:3.4
     env:
       NWC_URI: ""
       BUNDLE_PATH: vendor/bundle
@@ -43,6 +45,10 @@ jobs:
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: vendor/bundle
-          key: gems-3.3-${{ hashFiles('Gemfile') }}
+          # Key on the lockfile, not the Gemfile: lockfile-only bumps must not
+          # reuse a stale vendor/bundle.
+          key: gems-3.4-${{ hashFiles('**/Gemfile.lock') }}
+          restore-keys: |
+            gems-3.4-
       - run: bundle install --jobs 4
       - run: bundle exec ./tools/ci/ruby-tests.sh

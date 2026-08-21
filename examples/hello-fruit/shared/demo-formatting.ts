@@ -1,3 +1,5 @@
+import { HELLO_FRUIT_FIAT_FRACTION_DIGITS } from "./demo-currencies.ts";
+
 export interface HelloFruitFiatAmount {
   readonly currency: string;
   readonly value: string;
@@ -15,10 +17,20 @@ export const helloFruitDemoLabels = {
 } as const;
 
 export function formatHelloFruitFiat(fiat: HelloFruitFiatAmount): string {
-  if (fiat.currency === "USD") return `$${fiat.value}`;
-  if (fiat.currency === "BTC") return `${fiat.value} BTC`;
-  if (fiat.currency === "SATS") return `${fiat.value} sats`;
-  return `${fiat.value} ${fiat.currency}`;
+  const value = padHelloFruitFiatValue(fiat.value, fiat.currency);
+  if (fiat.currency === "USD") return `$${value}`;
+  if (fiat.currency === "BTC") return `${value} BTC`;
+  if (fiat.currency === "SATS") return `${value} sats`;
+  return `${value} ${fiat.currency}`;
+}
+
+/** Pads a decimal string to the currency's minor-unit width ("2" -> "2.00"). */
+function padHelloFruitFiatValue(value: string, currency: string): string {
+  const digits = HELLO_FRUIT_FIAT_FRACTION_DIGITS[currency.toUpperCase()];
+  if (digits === undefined || digits <= 0 || !/^\d+(?:\.\d+)?$/.test(value)) return value;
+  const [whole, fraction = ""] = value.split(".");
+  if (fraction.length >= digits) return value;
+  return `${whole}.${fraction.padEnd(digits, "0")}`;
 }
 
 export function formatHelloFruitBuyNowLabel(fiat: HelloFruitFiatAmount): string {

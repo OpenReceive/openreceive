@@ -111,7 +111,8 @@ paths:
           description: Provider quote.
           content:
             application/json:
-              schema: { type: object, additionalProperties: true }
+              schema:
+                $ref: '#/components/schemas/SwapQuote'
         '400': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
@@ -162,7 +163,8 @@ paths:
           description: Provider-derived swap state.
           content:
             application/json:
-              schema: { type: object, additionalProperties: true }
+              schema:
+                $ref: '#/components/schemas/Swap'
         '400': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
@@ -193,7 +195,8 @@ paths:
           description: Provider-derived refund state.
           content:
             application/json:
-              schema: { type: object, additionalProperties: true }
+              schema:
+                $ref: '#/components/schemas/Swap'
         '400': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
@@ -216,7 +219,8 @@ paths:
           description: Current process-cached BTC/fiat rates.
           content:
             application/json:
-              schema: { type: object, additionalProperties: true }
+              schema:
+                $ref: '#/components/schemas/RatesResponse'
         '400': { $ref: '#/components/responses/Error' }
         '405': { $ref: '#/components/responses/Error' }
         '500': { $ref: '#/components/responses/Error' }
@@ -341,12 +345,148 @@ components:
         pay_in_asset: { type: string, minLength: 1 }
         memo: { type: string, maxLength: 500 }
         metadata: { type: object, additionalProperties: true }
+    SwapPayInAsset:
+      description: >
+        Closed set of supported pay-in assets (COIN_NETWORK). Requests accept any
+        string and refuse unknown values with INVALID_REQUEST; responses only ever
+        carry one of these.
+      type: string
+      enum: [SOL_SOL, USDT_TRON, USDT_SOL, USDC_SOL, ETH_ETH, USDT_ETH, USDC_ETH]
+    SwapProviderState:
+      description: Provider-derived lifecycle state of a swap attempt.
+      type: string
+      enum:
+        - creating_provider_order
+        - awaiting_deposit
+        - confirming
+        - exchanging
+        - paying_invoice
+        - completed
+        - expired
+        - refund_required
+        - refund_pending
+        - refunded
+        - attention
+        - failed
+    SwapFee:
+      description: >
+        Fiat equivalents explaining why the payer sends more crypto than the cart
+        total. Sourced from the provider's own quote; never a price authority —
+        the invoice amount is. Values are decimal strings.
+      type: object
+      additionalProperties: false
+      required: [currency, pay_in_fiat, payout_fiat]
+      properties:
+        currency: { type: string, minLength: 1 }
+        pay_in_fiat: { type: string, minLength: 1 }
+        payout_fiat: { type: string, minLength: 1 }
+    SwapQuote:
+      description: Non-binding provider quote for one pay-in asset.
+      type: object
+      additionalProperties: false
+      required: [provider, pay_asset, available]
+      properties:
+        provider: { type: string }
+        pay_asset: { $ref: '#/components/schemas/SwapPayInAsset' }
+        available: { type: boolean }
+        pay_amount: { type: string }
+        minimum_pay_amount: { type: string }
+        maximum_pay_amount: { type: string }
+        minimum_invoice_amount_msats: { type: integer, minimum: 0 }
+        maximum_invoice_amount_msats: { type: integer, minimum: 0 }
+        unavailable_reason: { type: string }
+        unavailable_message: { type: string }
+    Swap:
+      description: >
+        Payer-facing swap attempt state (the PublicSwap service object on the
+        wire). Never carries swap_data — provider recovery state is server-only.
+      type: object
+      additionalProperties: false
+      required:
+        - payment_hash
+        - order_id
+        - provider
+        - pay_in_asset
+        - deposit_address
+        - deposit_amount
+        - provider_state
+        - provider_expires_at
+      properties:
+        payment_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
+        order_id: { type: string, minLength: 1, maxLength: 200 }
+        provider: { type: string, minLength: 1 }
+        pay_in_asset: { $ref: '#/components/schemas/SwapPayInAsset' }
+        deposit_address: { type: string, minLength: 1 }
+        deposit_memo: { type: string }
+        deposit_amount: { type: string, minLength: 1 }
+        provider_state: { $ref: '#/components/schemas/SwapProviderState' }
+        provider_expires_at: { type: integer, minimum: 0 }
+        deposit_tx_id: { type: string }
+        payout_tx_id: { type: string }
+        refund_tx_id: { type: string }
+        refund_reason: { type: string }
+        refund_amount: { type: string }
+        attention: { type: boolean }
+        attention_reason: { type: string }
+        deposit_received_amount: { type: string }
+        emergency_repeat: { type: boolean }
+        provider_order_id: { type: string }
+        fee: { $ref: '#/components/schemas/SwapFee' }
+    SwapCheckout:
+      # Swap plus the committed shadow checkout. Kept in lockstep with the Swap
+      # schema field-for-field (additionalProperties: false forbids allOf reuse).
+      description: A committed swap attempt with its Lightning shadow checkout.
+      type: object
+      additionalProperties: false
+      required:
+        - payment_hash
+        - order_id
+        - provider
+        - pay_in_asset
+        - deposit_address
+        - deposit_amount
+        - provider_state
+        - provider_expires_at
+        - checkout
+      properties:
+        payment_hash: { type: string, pattern: '^[0-9a-f]{64}$' }
+        order_id: { type: string, minLength: 1, maxLength: 200 }
+        provider: { type: string, minLength: 1 }
+        pay_in_asset: { $ref: '#/components/schemas/SwapPayInAsset' }
+        deposit_address: { type: string, minLength: 1 }
+        deposit_memo: { type: string }
+        deposit_amount: { type: string, minLength: 1 }
+        provider_state: { $ref: '#/components/schemas/SwapProviderState' }
+        provider_expires_at: { type: integer, minimum: 0 }
+        deposit_tx_id: { type: string }
+        payout_tx_id: { type: string }
+        refund_tx_id: { type: string }
+        refund_reason: { type: string }
+        refund_amount: { type: string }
+        attention: { type: boolean }
+        attention_reason: { type: string }
+        deposit_received_amount: { type: string }
+        emergency_repeat: { type: boolean }
+        provider_order_id: { type: string }
+        fee: { $ref: '#/components/schemas/SwapFee' }
+        checkout: { $ref: '#/components/schemas/Checkout' }
     CreateSwapResponse:
       type: object
       additionalProperties: false
       required: [swap]
       properties:
-        swap: { type: object, additionalProperties: true }
+        swap: { $ref: '#/components/schemas/SwapCheckout' }
+    RatesResponse:
+      description: >
+        Current process-cached BTC/fiat rates. `bitcoin` maps lowercase ISO 4217
+        codes to decimal-string prices in units of fiat per 1 BTC.
+      type: object
+      additionalProperties: false
+      required: [bitcoin]
+      properties:
+        bitcoin:
+          type: object
+          additionalProperties: { type: string }
     OrderRequest:
       type: object
       additionalProperties: false

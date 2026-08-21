@@ -169,14 +169,18 @@ test("HTTP commits payment hash before returning payer instructions", async () =
   assert.equal(paid[0].paymentHash, body.checkout.payment_hash);
   // The payer-polled response must never leak wallet secrets from the
   // settlement details (preimage, raw invoice, wallet metadata) — while still
-  // carrying the public amount fields the whitelist exists to expose.
-  if (checkedBody.details !== undefined) {
-    const transaction = checkedBody.details.transaction ?? {};
-    assert.equal(transaction.preimage, undefined);
-    assert.equal(transaction.invoice, undefined);
-    assert.equal(transaction.metadata, undefined);
-    assert.equal(transaction.amount_msats, 1_234_000);
-  }
+  // carrying the public amount fields the whitelist exists to expose. The
+  // details must be PRESENT for these leak checks to mean anything: a refactor
+  // that drops `details` would otherwise turn this block green-and-empty.
+  assert.ok(
+    checkedBody.details !== undefined,
+    "the settled payments/check body must carry details for the leak checks to run",
+  );
+  const transaction = checkedBody.details.transaction ?? {};
+  assert.equal(transaction.preimage, undefined);
+  assert.equal(transaction.invoice, undefined);
+  assert.equal(transaction.metadata, undefined);
+  assert.equal(transaction.amount_msats, 1_234_000);
 });
 
 test("HTTP prepare locks amount without minting or committing an attempt", async () => {

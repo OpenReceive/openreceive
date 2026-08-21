@@ -24,6 +24,12 @@ const elements = await import("../packages/js/elements/src/index.ts");
 // global into every later file in the same process.
 const restoreTimers = installFastTimers();
 test.after(restoreTimers);
+// Every test stubs globalThis.fetch with its stack's handler; restore the real
+// fetch between tests so a stub never leaks past the test that installed it.
+const originalFetch = globalThis.fetch;
+test.afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
 elements.defineOpenReceiveElements();
 
 const TESTKIT_TRON_DEPOSIT_ADDRESS = "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb";

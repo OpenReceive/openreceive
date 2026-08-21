@@ -31,6 +31,7 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm run check:workflows
+      - run: npm run check:example-imports
       - run: npm run check:generated
       - run: npm run typecheck
       - run: npm run check:dead-exports
@@ -61,7 +62,12 @@ jobs:
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: vendor/bundle
-          key: gems-${{ matrix.ruby-version }}-${{ hashFiles('Gemfile') }}
+          # Key on the lockfile, not the Gemfile: lockfile-only bumps must not
+          # reuse a stale vendor/bundle. (Per-gem lockfiles are gitignored, so
+          # the glob resolves to the root lockfile plus the Rails example's.)
+          key: gems-${{ matrix.ruby-version }}-${{ hashFiles('**/Gemfile.lock') }}
+          restore-keys: |
+            gems-${{ matrix.ruby-version }}-
       - run: bundle install --jobs 4
       # The second settlement engine and the cross-language conformance
       # harness run on every PR, not only on developer machines. Driven by a
@@ -70,3 +76,37 @@ jobs:
       # Catch gemspec regressions (a broken gemspec once shipped unnoticed
       # because nothing ever ran `gem build`).
       - run: ./tools/ci/ruby-gem-build.sh
+
+  # Full Rails Hello Fruit example on every push/PR, not only in the weekly
+  # demos lane: a schema break in the example once shipped because nothing
+  # per-push ever executed it. Mirrors demos.yml's hello-fruit-rails job.
+  # bin/ci runs setup against the service database, the stubbed-wallet
+  # integration tests, and the gem audit. database.yml's test default already
+  # points at postgres://openreceive:openreceive@127.0.0.1:5432, which the
+  # service container below provides, so no DATABASE_URL override is needed.
+  rails-example:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NWC_URI: ""
+    services:
+      db:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: openreceive
+          POSTGRES_PASSWORD: openreceive
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
+        with:
+          working-directory: examples/hello-fruit/server/rails
+          bundler-cache: true
+      - run: bin/ci
+        working-directory: examples/hello-fruit/server/rails

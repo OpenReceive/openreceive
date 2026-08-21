@@ -16,6 +16,7 @@ const requiredWorkflows = {
     "npm run lint",
     "npm run format:check",
     "npm run check:workflows",
+    "npm run check:example-imports",
     "npm run check:generated",
     "npm run typecheck",
     "npm run check:dead-exports",
@@ -23,6 +24,9 @@ const requiredWorkflows = {
     "npm run test:package-smoke",
     "tools/ci/ruby-tests.sh",
     "tools/ci/ruby-gem-build.sh",
+    // The Rails example must run per-push, not only in the weekly demos lane
+    // (a schema break in it once shipped unexecuted).
+    "bin/ci",
   ],
   "conformance.yml": [
     "npm run validate",
@@ -66,6 +70,12 @@ const forbiddenText = [
   "npm publish",
   "docker push",
   "gh release create",
+  // The repo's own publish entry points: workflows may dry-run releases but
+  // must never publish (publish.yml exists solely to say publishing is
+  // disabled).
+  "npm run release:publish",
+  "npm run release:gem:publish",
+  "gem push",
 ];
 
 // The Ruby engine lanes run only inside ruby:* containers; the entry scripts

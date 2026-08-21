@@ -48,7 +48,7 @@ function usage() {
     "",
     "Options:",
     "  --out <dir>       Output dir for .gem files (default: .release/gems/<version>).",
-    "  --dry-run         Print the gem push commands without publishing.",
+    "  --dry-run         Print the gem push commands without publishing (skips test:ruby).",
     "  --allow-dirty     Allow publish from a dirty worktree.",
     "  --skip-tests      Skip npm run test:ruby during publish.",
     "  --otp <code>      RubyGems one-time password for publish.",
@@ -167,7 +167,12 @@ function assertGemNotPublished(root, name, version) {
 function publishGems(root, args) {
   assertCleanWorktree(root, args, "gem publish");
   const version = assertGemVersionsReady(root);
-  if (args["skip-tests"] !== true && args["dry-run"] !== true) {
+  // Dry-run is a fast preview and skips the suite, matching npm-release's
+  // dry-run; the REAL publish always runs test:ruby unless --skip-tests is
+  // passed deliberately.
+  if (args["dry-run"] === true) {
+    console.error("dry-run: skipping `npm run test:ruby` — a real gem publish runs it first.");
+  } else if (args["skip-tests"] !== true) {
     run("npm", ["run", "test:ruby"], root, { stdio: "inherit" });
   }
   for (const name of GEM_NAMES) {

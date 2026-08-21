@@ -1,23 +1,17 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 import {
   OPENRECEIVE_NWC_CODE_HELP_URL,
   formatOpenReceiveSpendCapabilityWarningMessage,
-  parseNwcUri,
 } from "../packages/js/core/src/index.ts";
 import {
   OpenReceiveConfigError,
   createNwcReceiveClient,
   createOpenReceive,
   readNwcFromEnvironment,
-  summarizeWalletCapabilities,
 } from "../packages/js/node/src/index.ts";
 import { readRequiredHelloFruitNwcConnectionString } from "../examples/hello-fruit/shared/demo-nwc.ts";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const VALID_NWC = `nostr+walletconnect://${"a".repeat(64)}?relay=wss%3A%2F%2Frelay.example.com&secret=${"b".repeat(64)}`;
 
 async function withEnv(overrides, run) {
@@ -89,28 +83,9 @@ test("Hello Fruit NWC gate uses the demo subject and help URL", async () => {
   });
 });
 
-test("nwc-info vectors normalize spend capability from the info event payload", () => {
-  const vector = JSON.parse(
-    readFileSync(path.join(root, "spec/test-vectors/nwc-info.json"), "utf8"),
-  );
-  const connection = parseNwcUri(VALID_NWC);
-  for (const item of vector.cases) {
-    const summary = summarizeWalletCapabilities(connection, item.raw_info);
-    assert.deepEqual(summary.methods, item.expected.methods, item.name);
-    assert.equal(summary.encryption, item.expected.encryption, item.name);
-    assert.equal(
-      summary.spendCapabilityAdvertised,
-      item.expected.spend_capability_advertised,
-      item.name,
-    );
-    assert.equal(summary.receiveCheckoutReady, item.expected.receive_checkout_ready, item.name);
-    assert.deepEqual(
-      summary.warnings.map((warning) => warning.match(/'([^']+)'/)?.[1]).filter(Boolean),
-      item.expected.warning_methods,
-      item.name,
-    );
-  }
-});
+// The nwc-info vector walk lives in tests/crosslang.test.mjs ("nwc-info vectors
+// summarize through the production preflight summary"); this file keeps only the
+// boot-time behavior around those summaries.
 
 const SPEND_CAPABLE_WALLET_INFO = {
   getWalletServiceInfo: async () => ({

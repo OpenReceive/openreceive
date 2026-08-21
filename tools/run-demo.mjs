@@ -15,35 +15,11 @@ import { copyFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readRequiredHelloFruitNwcConnectionString } from "../examples/hello-fruit/shared/demo-nwc.ts";
+import { OPENRECEIVE_DEMOS } from "./shared/demo-catalog.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 
-const DEMOS = [
-  {
-    keys: ["node", "node-express", "express"],
-    dir: "examples/hello-fruit/server/node-express",
-    port: 3000,
-    label: "Express + React/Vue/Svelte/Angular",
-  },
-  {
-    keys: ["static", "static-html-small-api", "html"],
-    dir: "examples/hello-fruit/server/static-html-small-api",
-    port: 3001,
-    label: "Static HTML + small API",
-  },
-  {
-    keys: ["nextjs", "next", "nextjs-fullstack"],
-    dir: "examples/hello-fruit/server/nextjs-fullstack",
-    port: 3002,
-    label: "Next.js fullstack",
-  },
-  {
-    keys: ["rails", "rails-fullstack"],
-    dir: "examples/hello-fruit/server/rails",
-    port: 3003,
-    label: "Rails + Postgres",
-  },
-];
+const DEMOS = OPENRECEIVE_DEMOS;
 
 function usage() {
   const targets = DEMOS.map(
@@ -112,7 +88,7 @@ const child = spawn("docker", composeArgs, {
   stdio: "inherit",
   env: {
     ...process.env,
-    ...(demo.keys[0] === "rails" ? { CLIENT_BUILD_ID: String(Date.now()) } : {}),
+    ...(demo.kind === "rails" ? { CLIENT_BUILD_ID: String(Date.now()) } : {}),
   },
 });
 

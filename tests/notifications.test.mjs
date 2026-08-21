@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DatabaseSync } from "node:sqlite";
+import { until } from "./helpers/lifecycle-harness.mjs";
 import { OpenReceiveError } from "../packages/js/core/src/index.ts";
 import { createNwcReceiveClient, createOpenReceive } from "../packages/js/node/src/index.ts";
 import {
@@ -36,13 +37,8 @@ function notifyingSdkClient({ subscription } = {}) {
   return sdk;
 }
 
-async function waitFor(condition, { timeoutMs = 2_000 } = {}) {
-  const startedAt = Date.now();
-  while (!condition()) {
-    if (Date.now() - startedAt > timeoutMs) throw new Error("timed out waiting for condition");
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-}
+// Waiting uses the shared lifecycle-harness `until` (generous deadline, labeled
+// timeouts) instead of a tight local wall-clock loop that flaked under load.
 
 test("client subscribeNotifications requests only payment_received and normalizes payloads", async () => {
   const sdk = notifyingSdkClient();
@@ -289,7 +285,7 @@ test("a settled notification payload settles the pending attempt directly with z
       preimage: "corroborating-only",
     },
   });
-  await waitFor(() => settled.length === 1);
+  await until(() => settled.length === 1, { label: "the settlement to run" });
   assert.deepEqual(settled, [
     { orderId: "order-1", paymentHash, paidAt: 990, paidAtSource: "settled_at" },
   ]);
@@ -330,7 +326,7 @@ test("a payload without a finality signal only wakes a reconcile pass", async ()
     payment_hash: paymentHash,
     transaction: { payment_hash: paymentHash, preimage: "corroborating-only" },
   });
-  await waitFor(() => settled.length === 1);
+  await until(() => settled.length === 1, { label: "the settlement to run" });
   assert.equal(notifier.reconcileCalls, 1, "the settlement came from the wallet scan");
   const rows = await host.payments.listForOrder("order-1");
   assert.equal(rows[0].status, "settled");
@@ -364,7 +360,7 @@ test("a settled payload for an unknown hash settles nothing and wakes a reconcil
       settled_at: 990,
     },
   });
-  await waitFor(() => notifier.reconcileCalls === 1);
+  await until(() => notifier.reconcileCalls === 1, { label: "the woken reconcile pass" });
   assert.deepEqual(settled, [], "an unknown hash never settles anything directly");
   const rows = await host.payments.listForOrder("order-1");
   assert.equal(rows[0].status, "pending");
@@ -402,7 +398,9 @@ test("a direct-settlement failure reports to onError and falls back to a scan", 
     type: "payment_received",
     transaction: { payment_hash: paymentHash, transaction_state: "settled", settled_at: 990 },
   });
-  await waitFor(() => errors.length === 1 && notifier.reconcileCalls === 1);
+  await until(() => errors.length === 1 && notifier.reconcileCalls === 1, {
+    label: "the onError report plus the fallback scan",
+  });
   assert.match(errors[0].message, /settlement transaction failed/);
   assert.deepEqual(scanned, [[paymentHash]], "the safety-net scan still covers the attempt");
 
@@ -431,7 +429,7 @@ test("notification listener wakes one reconcile pass that settles a pending sqli
 
   // Without a payload the notification is only a wake-up hint; the scan settles.
   notifier.handler({ type: "payment_received", payment_hash: paymentHash });
-  await waitFor(() => settled.length === 1);
+  await until(() => settled.length === 1, { label: "the settlement to run" });
   assert.deepEqual(settled, [{ orderId: "order-1", paymentHash }]);
   const rows = await host.payments.listForOrder("order-1");
   assert.equal(rows[0].status, "settled");
@@ -468,14 +466,14 @@ test("notification listener coalesces bursts and stop() unsubscribes", async () 
 
   const listener = await startOpenReceiveNotificationListener({ service, host });
   notifier.handler({ type: "payment_received" });
-  await waitFor(() => passes.length === 1);
+  await until(() => passes.length === 1, { label: "the first reconcile pass" });
   // A burst while a pass runs queues at most one follow-up pass.
   notifier.handler({ type: "payment_received" });
   notifier.handler({ type: "payment_received" });
   notifier.handler({ type: "payment_received" });
   notifier.handler({ type: "payment_sent" }); // never wakes reconciliation
   release();
-  await waitFor(() => passes.length === 2);
+  await until(() => passes.length === 2, { label: "the coalesced follow-up pass" });
   // Drain scheduled work deterministically (no wall-clock dependence): any
   // wrongly-queued extra pass would have started by now.
   await new Promise((resolve) => setImmediate(resolve));
@@ -517,10 +515,10 @@ test("notification listener routes reconcile failures to onError and keeps liste
     onError: (error) => errors.push(error),
   });
   notifier.handler({ type: "payment_received" });
-  await waitFor(() => errors.length === 1);
+  await until(() => errors.length === 1, { label: "the first reconcile failure" });
   assert.match(errors[0].message, /relay down/);
   notifier.handler({ type: "payment_received" });
-  await waitFor(() => errors.length === 2);
+  await until(() => errors.length === 2, { label: "the second reconcile failure" });
   await listener.stop();
 });
 
@@ -550,7 +548,7 @@ test("notification listener defaults its error sink to the sanitized warn", asyn
     // No onError: this is the DEFAULT sink, the one a host never configures.
     const listener = await startOpenReceiveNotificationListener({ service, host });
     notifier.handler({ type: "payment_received" });
-    await waitFor(() => warnings.length >= 1);
+    await until(() => warnings.length >= 1, { label: "the default console.warn sink" });
     await listener.stop();
   } finally {
     console.warn = original;

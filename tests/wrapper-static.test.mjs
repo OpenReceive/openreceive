@@ -1,3 +1,7 @@
+// Static/compile-only checks on the SFC wrappers: source regexes, compiler
+// output, and the shared binding factory. Nothing here mounts a component —
+// the real happy-dom mounts live in tests/wrapper-behavior.test.mjs (this file
+// was wrapper-mount.test.mjs before those existed).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";

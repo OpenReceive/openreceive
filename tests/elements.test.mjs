@@ -460,10 +460,6 @@ test("elements definition fails clearly without DOM custom elements", () => {
   );
 });
 
-test("create-mode prepare failure must not clear createdKey (avoids theme/error retry storms)", () => {
-  const source = readFileSync(path.resolve("packages/js/elements/src/define-elements.ts"), "utf8");
-  assert.match(source, /Leave createdKey set so theme sync/);
-  assert.match(source, /Theme\/status attrs must not re-prepare; only create inputs may/);
-  // Failure path must not reset createdKey (that re-armed the prepare storm).
-  assert.doesNotMatch(source, /catch \(error\) \{\s*this\.createdKey = undefined;/s);
-});
+// The create-mode "prepare failure must not re-arm a prepare storm" rule is
+// asserted behaviorally in tests/element-lifecycle.test.mjs ("a failed prepare
+// plus a theme flip never re-prepares").

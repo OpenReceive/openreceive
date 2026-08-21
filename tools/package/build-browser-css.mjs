@@ -47,13 +47,25 @@ for (const target of wrapperCssTargets) {
   writeFileSync(target, `${header}\n${css}`);
 }
 // The repo is biome-formatted; format the generated module so a rebuild never
-// leaves the tree failing format:check.
+// leaves the tree failing format:check. A biome failure fails the build —
+// silently writing unformatted output would leave format:check failing later
+// with no pointer back to the real cause.
 const generatedSource = `${header}\nexport const openReceiveCompiledStyles = ${JSON.stringify(css)};\n`;
 const formatted = spawnSync(
   path.join(root, "node_modules/.bin/biome"),
   ["format", `--stdin-file-path=${generatedTs}`],
   { input: generatedSource, encoding: "utf8", cwd: root },
 );
-writeFileSync(generatedTs, formatted.status === 0 ? formatted.stdout : generatedSource);
+if (formatted.error !== undefined || formatted.status !== 0) {
+  process.stderr.write(formatted.stdout ?? "");
+  process.stderr.write(formatted.stderr ?? "");
+  console.error(
+    `build-browser-css: biome format failed for ${path.relative(root, generatedTs)}${
+      formatted.error === undefined ? "" : ` (${formatted.error.message})`
+    }`,
+  );
+  process.exit(formatted.status ?? 1);
+}
+writeFileSync(generatedTs, formatted.stdout);
 
 process.stdout.write(`built browser css (${css.length} bytes)\n`);

@@ -23,6 +23,13 @@ const qrEncoder = {
 
 defineOpenReceiveElements({ qrEncoder, logger: false });
 
+// Every test stubs globalThis.fetch; restore the real one so the stub cannot
+// leak into other files sharing this process.
+const originalFetch = globalThis.fetch;
+test.afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
+
 /** Poll until predicate() is truthy (its value is returned) or fail with `label`. */
 async function until(predicate, { timeoutMs = 4000, label = "condition" } = {}) {
   const deadline = Date.now() + timeoutMs;
@@ -324,6 +331,42 @@ test("a cosmetic theme flip re-renders without restarting the poll controller", 
       fetchStub.pathCount("/payments/check"),
       before,
       "a display-only attribute must not restart the controller (extra POST /payments/check)",
+    );
+  } finally {
+    element.remove();
+  }
+});
+
+test("a failed prepare plus a theme flip never re-prepares", async () => {
+  // M12 regression, behaviorally: the prepare failure must not clear the
+  // element's created marker, and a display-only attribute change (theme) must
+  // not restart the controller — together those two bugs made every theme sync
+  // after an outage fire another prepare POST (a retry storm).
+  let prepareCalls = 0;
+  const fetchStub = createFetchStub({
+    "/checkouts/prepare": () => {
+      prepareCalls += 1;
+      throw new Error("prepare endpoint unavailable");
+    },
+  });
+  globalThis.fetch = fetchStub;
+  const element = mount({ "order-id": "order-prepare-fail", prefix: "/openreceive" });
+
+  try {
+    await until(() => prepareCalls === 1, { label: "failed prepare attempt" });
+    await flush(4);
+
+    element.setAttribute("theme", "dark");
+    await flush(4);
+    assert.match(
+      element.shadowRoot?.innerHTML ?? "",
+      /data-theme="dark"/,
+      "the theme change must still re-render the shadow tree",
+    );
+    assert.equal(
+      prepareCalls,
+      1,
+      "a theme flip after a failed prepare must not POST /checkouts/prepare again",
     );
   } finally {
     element.remove();

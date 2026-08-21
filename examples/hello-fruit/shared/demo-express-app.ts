@@ -93,7 +93,11 @@ export async function createHelloFruitExpressApp(
         demoId,
         openreceive: service,
       });
-      createHelloFruitHostOrder(result.order, result.invoiceRequest.amount);
+      createHelloFruitHostOrder(
+        result.order,
+        result.invoiceRequest.amount,
+        result.invoiceRequest.memo,
+      );
       res.status(201).json({ order_id: result.order.uuid, summary: result.order });
     } catch (error) {
       next(error);
@@ -106,15 +110,24 @@ export async function createHelloFruitExpressApp(
   });
 
   // Signed-in apps replace the default policy with their own session/ownership checks.
-  app.use(
-    openReceiveExpress({
-      service,
-      authorize: ({ resource }) =>
-        resource.orderId !== undefined && readHelloFruitHostOrder(resource.orderId) !== null,
-      host,
-      rateLimiting: options.rateLimiting,
-    }),
-  );
+  const openreceive = openReceiveExpress({
+    service,
+    authorize: ({ resource }) =>
+      resource.orderId !== undefined && readHelloFruitHostOrder(resource.orderId) !== null,
+    host,
+    rateLimiting: options.rateLimiting,
+  });
+  // The payer's checkout component only knows the order id; the invoice
+  // description is host data. Inject the memo computed at order time into the
+  // create bodies before the mounted router reads them (`checkout.create` and
+  // `swap.create` both accept an optional `memo`).
+  const injectOrderMemo = (req: Request, _res: Response, next: NextFunction): void => {
+    injectHelloFruitOrderMemo(req.body);
+    next();
+  };
+  app.post(`${openreceive.prefix}/checkouts`, injectOrderMemo);
+  app.post(`${openreceive.prefix}/swaps`, injectOrderMemo);
+  app.use(openreceive);
 
   app.get("/rates", async (_req, res, next) => {
     try {
@@ -137,4 +150,16 @@ export async function createHelloFruitExpressApp(
   });
 
   return app;
+}
+
+/**
+ * Adds the stored order memo to a parsed checkout/swap create body when the
+ * payer did not send one, so minted invoices carry the order's description.
+ */
+function injectHelloFruitOrderMemo(body: unknown): void {
+  if (typeof body !== "object" || body === null) return;
+  const record = body as Record<string, unknown>;
+  if (typeof record.order_id !== "string" || record.memo !== undefined) return;
+  const memo = readHelloFruitHostOrder(record.order_id)?.memo;
+  if (memo !== undefined) record.memo = memo;
 }

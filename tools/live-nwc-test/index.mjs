@@ -5,16 +5,16 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { lightningUri } from "@openreceive/browser";
 import {
+  checkPayment,
   OPENRECEIVE_NWC_METADATA_MAX_BYTES,
-  classifyTransactionSettlement,
   parseNwcUri,
   quoteFiatToMsatsWithPrice,
   redactNwcUri,
 } from "@openreceive/core";
 import {
-  ReceiveCheckoutValidationError,
   createNwcReceiveClient,
   createOpenReceivePriceFeed,
+  ReceiveCheckoutValidationError,
 } from "@openreceive/node";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
@@ -200,11 +200,9 @@ console.log(`Amount msats: ${invoice.amount_msats.toString()}`);
 const qr = await renderTerminalQr(invoice.invoice);
 if (qr) console.log(qr);
 
-console.log("Running initial transaction scan before manual payment...");
-const initialTransaction = await findInvoiceTransaction(client, invoice);
-console.log(
-  `Initial wallet state: ${initialTransaction?.state ?? initialTransaction?.transaction_state ?? "unknown"}`,
-);
+console.log("Running initial production payment check before manual payment...");
+const initialCheck = await checkInvoicePayment(client, invoice);
+console.log(`Initial payment status: ${initialCheck.status}`);
 
 if (!waitForPayment) {
   console.log(
@@ -216,7 +214,7 @@ if (!waitForPayment) {
 console.log("Waiting for manual payment. Settlement must be proven by list_transactions.");
 const createdAt = invoice.created_at ?? Math.floor(Date.now() / 1000);
 const expiresAt = invoice.expires_at ?? createdAt + product.invoice_expiry_seconds;
-const outcome = await waitForListTransactionsFinalState({
+const outcome = await waitForCheckPaymentFinalState({
   client,
   invoice,
   expiresAt,
@@ -227,27 +225,41 @@ if (outcome.status !== "settled") {
   process.exit(1);
 }
 
-async function waitForListTransactionsFinalState({ client, invoice, expiresAt }) {
+/**
+ * The wait loop drives the PRODUCTION scan — @openreceive/core's checkPayment
+ * (settled-first then inclusive-unpaid walk over padded windows) — so this
+ * smoke test proves settlement through the same code path a real host uses,
+ * not a re-implemented single-pass query.
+ */
+async function checkInvoicePayment(client, invoice) {
+  return checkPayment({
+    client,
+    paymentHash: invoice.payment_hash,
+    createdAt: invoice.created_at ?? Math.floor(Date.now() / 1000),
+  });
+}
+
+async function waitForCheckPaymentFinalState({ client, invoice, expiresAt }) {
   while (Math.floor(Date.now() / 1000) <= expiresAt) {
-    const transaction = await findInvoiceTransaction(client, invoice);
-    const settlement = transaction
-      ? classifyTransactionSettlement(transaction)
-      : { status: "pending", settled: false };
+    let check;
+    try {
+      check = await checkInvoicePayment(client, invoice);
+    } catch (error) {
+      // checkPayment reports a truncated wallet-history walk as a retryable
+      // wallet outage; the next poll simply scans again.
+      if (error?.retryable !== true) throw error;
+      console.log(`Workflow transition: scan_incomplete (${formatErrorMessage(error)})`);
+      await sleep(2000);
+      continue;
+    }
     console.log(
-      `Workflow transition: ${settlement.status} (${transaction ? "wallet_match" : "wallet_no_match"})`,
+      `Workflow transition: ${check.status} (${check.status === "not_found" ? "wallet_no_match" : "wallet_match"})`,
     );
-    if (
-      settlement.status === "settled" ||
-      settlement.status === "expired" ||
-      settlement.status === "failed"
-    ) {
-      return {
-        status: settlement.status,
-        reason: transaction ? "wallet_match" : "wallet_no_match",
-      };
+    if (check.status === "settled" || check.status === "expired" || check.status === "failed") {
+      return { status: check.status, reason: "wallet_match" };
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await sleep(2000);
   }
 
   return {
@@ -256,20 +268,8 @@ async function waitForListTransactionsFinalState({ client, invoice, expiresAt })
   };
 }
 
-async function findInvoiceTransaction(client, invoice) {
-  const createdAt = invoice.created_at ?? Math.floor(Date.now() / 1000);
-  const response = await client.listTransactions({
-    type: "incoming",
-    unpaid: true,
-    from: createdAt,
-    until: createdAt,
-    limit: 25,
-    offset: 0,
-  });
-  return response.transactions.find(
-    (transaction) =>
-      transaction.payment_hash === invoice.payment_hash || transaction.invoice === invoice.invoice,
-  );
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**

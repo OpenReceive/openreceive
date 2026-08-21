@@ -5,9 +5,6 @@ export default function Page() {
   const product = readHelloFruitProduct();
   const fruits = readHelloFruits();
 
-  return (
-    <main className="page min-h-screen grid justify-items-center content-start p-4 md:p-8 gap-3">
-      <CheckoutClient product={product} fruits={fruits.fruits} />
-    </main>
-  );
+  // The shared shop UI renders its own themed `main.page` wrapper.
+  return <CheckoutClient product={product} fruits={fruits.fruits} />;
 }

@@ -18,33 +18,18 @@ function readReactSource() {
     .join("\n");
 }
 
-test("source-shape tripwire: transient copy feedback has one owner, not ad-hoc timers", () => {
-  // Every copy affordance must go through the shared feedback controller: hand-rolled
-  // timers drift apart and leak across unmounts. The behavior (label flips, then resets)
-  // is covered by the rendered copy-feedback test.
+test("source-shape tripwire: copy feedback goes through the shared controller", () => {
+  // The one contract no rendered output can express: transient copy feedback is
+  // owned by the shared controller, never by ad-hoc timers scattered per
+  // component (which drift apart and leak across unmounts). The visible
+  // behavior (label flips, then resets) is covered by the rendered
+  // copy-feedback test in tests/react-checkout-behavior.test.mjs, and
+  // controller-restart behavior for unstable host callbacks (logger/onError/
+  // onState/onSettled/refreshStatus) is covered behaviorally there too.
   const source = readReactSource();
 
-  assert.match(source, /function useOpenReceiveTransientValue/);
   assert.match(source, /createOpenReceiveTransientFeedbackController/);
   assert.doesNotMatch(source, /globalThis\.setTimeout/);
-  assert.equal(source.match(/OPENRECEIVE_COPY_FEEDBACK_MS/g)?.length, 2);
-  assert.doesNotMatch(source, /setCopied\(false\)/);
-  assert.doesNotMatch(source, /setCopiedProviderId\(null\)/);
-});
-
-test("source-shape tripwire: unstable host callbacks are read through refs", () => {
-  // Hosts pass inline logger/onError/refreshStatus/onState. Anything the poll controller
-  // effect reads directly would restart polling on every parent render; the rendered
-  // regression test covers refreshStatus, and these keep the rest honest.
-  const source = readReactSource();
-
-  for (const name of ["logger", "onError", "onState", "onSettled", "refreshStatus"]) {
-    assert.match(
-      source,
-      new RegExp(`${name}Ref\\.current = `),
-      `${name} must be read through a ref, not captured by an effect dependency list`,
-    );
-  }
 });
 
 test("React package exposes shared browser-owned checkout styles", () => {

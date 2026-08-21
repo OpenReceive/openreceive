@@ -5,6 +5,13 @@ CI.run do
 
   step "Tests", "bin/rails test"
 
+  # The committed openreceive migration + db/schema.rb are snapshots of the
+  # library-owned schema; re-render the generator template and diff.
+  step "Drift: OpenReceive migration snapshot", "bundle exec ruby script/check-migration-drift.rb"
+
+  # The Ruby currency constants mirror shared/demo-currencies.ts (the owner).
+  step "Drift: currency constants", "node script/check-currency-drift.mjs"
+
   step "Security: Gem audit", "bin/bundler-audit"
   # No importmap audit: the browser client is the Shakapacker bundle
   # (app/javascript/), so JS dependencies are audited by the workspace npm

@@ -226,7 +226,6 @@ function renderCurrencyPicker(): void {
   text.textContent = "Currency";
   const select = document.createElement("select");
   select.className = "select select-bordered w-full";
-  select.value = selectedCurrency;
   select.addEventListener("change", () => {
     logDemo("currency.change", "Currency changed.", {
       from: selectedCurrency,
@@ -243,6 +242,9 @@ function renderCurrencyPicker(): void {
     option.textContent = currency;
     select.append(option);
   }
+  // Assign after the options exist: setting `value` first is a no-op on an
+  // empty <select>, which would leave the picker on the first option.
+  select.value = selectedCurrency;
 
   label.append(text, select);
   panel.replaceChildren(label);

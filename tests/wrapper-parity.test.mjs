@@ -12,6 +12,7 @@ import {
   validateOpenReceiveWrapperCheckoutProps,
 } from "../packages/js/elements/src/wrapper-shared.ts";
 import {
+  OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES,
   OPENRECEIVE_CHECKOUT_ELEMENT_EVENTS,
   OPENRECEIVE_DEFAULT_PREFIX,
   resolveOrderUrlFromPrefix,
@@ -184,6 +185,61 @@ test("React snapshot mode with no prefix polls via the default prefix", () => {
   // `orderUrl: false` still disables polling entirely (docs/internal/wrapper-parity.md).
   const disabled = Checkout({ checkout: snapshot, orderUrl: false });
   assert.equal(disabled.props.orderUrl, false);
+});
+
+test("snapshot-mode polling defaults and knobs match the parity table", () => {
+  const doc = read(PARITY_DOC);
+  // The documented default: a bare snapshot polls `${prefix}/payments/check`
+  // with prefix `/openreceive` (docs/internal/wrapper-parity.md `prefix` row).
+  assert.equal(OPENRECEIVE_DEFAULT_PREFIX, "/openreceive");
+  assert.equal(
+    resolveOrderUrlFromPrefix(OPENRECEIVE_DEFAULT_PREFIX),
+    "/openreceive/payments/check",
+  );
+  assert.match(doc, /`\/openreceive`/, "the parity table must pin the /openreceive default");
+
+  const snapshot = {
+    checkout_id: "or_chk_poll_defaults",
+    order_id: "order-poll-defaults",
+    status: "open",
+    amount_msats: 1000,
+    invoices: [],
+  };
+
+  // The shared shell (vue/svelte/angular) emits no prefix/order-url attributes
+  // by default, so the element resolves the same documented /openreceive
+  // default at poll time (tests/wrapper-behavior.test.mjs proves that
+  // behaviorally through a real mount; tests/element-lifecycle.test.mjs covers
+  // the element itself).
+  const shell = createOpenReceiveWrapperCheckoutShellBinding(snapshot, {});
+  assert.equal(
+    shell.checkout.attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.prefix],
+    undefined,
+  );
+  assert.equal(
+    shell.checkout.attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.orderUrl],
+    undefined,
+  );
+
+  // The polling knobs thread through shell options into the element attributes
+  // the parity table names (`polling` / `pollIntervalMs`, wired via `options`
+  // in the element wrappers, first-class props in React).
+  const tuned = createOpenReceiveWrapperCheckoutShellBinding(snapshot, {
+    polling: false,
+    pollIntervalMs: 1234,
+  });
+  assert.equal(tuned.checkout.attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.polling], "false");
+  assert.equal(
+    tuned.checkout.attributes[OPENRECEIVE_CHECKOUT_ELEMENT_ATTRIBUTES.pollIntervalMs],
+    "1234",
+  );
+  assert.match(doc, /`polling` \/ `pollIntervalMs`/);
+  assert.match(read(SOURCES.react), /\bpolling\?:/, "React must expose polling as a prop");
+  assert.match(
+    read(SOURCES.react),
+    /\bpollIntervalMs\?:/,
+    "React must expose pollIntervalMs as a prop",
+  );
 });
 
 test("the theme is resolved from the default until the wrapper mounts", () => {

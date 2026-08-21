@@ -52,7 +52,11 @@ export async function createOrderResponse(request: Request): Promise<Response> {
       demoName: "Next.js",
       openreceive: service,
     });
-    createHelloFruitHostOrder(result.order, result.invoiceRequest.amount);
+    createHelloFruitHostOrder(
+      result.order,
+      result.invoiceRequest.amount,
+      result.invoiceRequest.memo,
+    );
     return jsonResponse({ order_id: result.order.uuid, summary: result.order }, 201);
   } catch (error) {
     // `hostError` and service errors already carry a payer-facing status/code;

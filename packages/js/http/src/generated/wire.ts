@@ -98,9 +98,109 @@ export type OpenReceiveWireCreateSwapRequest = {
   readonly metadata?: Record<string, unknown>;
 };
 
+/** Wire shape of the OpenAPI `SwapPayInAsset` schema (snake_case JSON body). */
+export type OpenReceiveWireSwapPayInAsset =
+  | "SOL_SOL"
+  | "USDT_TRON"
+  | "USDT_SOL"
+  | "USDC_SOL"
+  | "ETH_ETH"
+  | "USDT_ETH"
+  | "USDC_ETH";
+
+/** Wire shape of the OpenAPI `SwapProviderState` schema (snake_case JSON body). */
+export type OpenReceiveWireSwapProviderState =
+  | "creating_provider_order"
+  | "awaiting_deposit"
+  | "confirming"
+  | "exchanging"
+  | "paying_invoice"
+  | "completed"
+  | "expired"
+  | "refund_required"
+  | "refund_pending"
+  | "refunded"
+  | "attention"
+  | "failed";
+
+/** Wire shape of the OpenAPI `SwapFee` schema (snake_case JSON body). */
+export type OpenReceiveWireSwapFee = {
+  readonly currency: string;
+  readonly pay_in_fiat: string;
+  readonly payout_fiat: string;
+};
+
+/** Wire shape of the OpenAPI `SwapQuote` schema (snake_case JSON body). */
+export type OpenReceiveWireSwapQuote = {
+  readonly provider: string;
+  readonly pay_asset: OpenReceiveWireSwapPayInAsset;
+  readonly available: boolean;
+  readonly pay_amount?: string;
+  readonly minimum_pay_amount?: string;
+  readonly maximum_pay_amount?: string;
+  readonly minimum_invoice_amount_msats?: number;
+  readonly maximum_invoice_amount_msats?: number;
+  readonly unavailable_reason?: string;
+  readonly unavailable_message?: string;
+};
+
+/** Wire shape of the OpenAPI `Swap` schema (snake_case JSON body). */
+export type OpenReceiveWireSwap = {
+  readonly payment_hash: string;
+  readonly order_id: string;
+  readonly provider: string;
+  readonly pay_in_asset: OpenReceiveWireSwapPayInAsset;
+  readonly deposit_address: string;
+  readonly deposit_memo?: string;
+  readonly deposit_amount: string;
+  readonly provider_state: OpenReceiveWireSwapProviderState;
+  readonly provider_expires_at: number;
+  readonly deposit_tx_id?: string;
+  readonly payout_tx_id?: string;
+  readonly refund_tx_id?: string;
+  readonly refund_reason?: string;
+  readonly refund_amount?: string;
+  readonly attention?: boolean;
+  readonly attention_reason?: string;
+  readonly deposit_received_amount?: string;
+  readonly emergency_repeat?: boolean;
+  readonly provider_order_id?: string;
+  readonly fee?: OpenReceiveWireSwapFee;
+};
+
+/** Wire shape of the OpenAPI `SwapCheckout` schema (snake_case JSON body). */
+export type OpenReceiveWireSwapCheckout = {
+  readonly payment_hash: string;
+  readonly order_id: string;
+  readonly provider: string;
+  readonly pay_in_asset: OpenReceiveWireSwapPayInAsset;
+  readonly deposit_address: string;
+  readonly deposit_memo?: string;
+  readonly deposit_amount: string;
+  readonly provider_state: OpenReceiveWireSwapProviderState;
+  readonly provider_expires_at: number;
+  readonly deposit_tx_id?: string;
+  readonly payout_tx_id?: string;
+  readonly refund_tx_id?: string;
+  readonly refund_reason?: string;
+  readonly refund_amount?: string;
+  readonly attention?: boolean;
+  readonly attention_reason?: string;
+  readonly deposit_received_amount?: string;
+  readonly emergency_repeat?: boolean;
+  readonly provider_order_id?: string;
+  readonly fee?: OpenReceiveWireSwapFee;
+  readonly checkout: OpenReceiveWireCheckout;
+};
+
 /** Wire shape of the OpenAPI `CreateSwapResponse` schema (snake_case JSON body). */
 export type OpenReceiveWireCreateSwapResponse = {
-  readonly swap: Record<string, unknown>;
+  readonly swap: OpenReceiveWireSwapCheckout;
+};
+
+/** Wire shape of the OpenAPI `RatesResponse` schema (snake_case JSON body). */
+export type OpenReceiveWireRatesResponse = {
+  readonly bitcoin: Record<string, string>;
 };
 
 /** Wire shape of the OpenAPI `OrderRequest` schema (snake_case JSON body). */

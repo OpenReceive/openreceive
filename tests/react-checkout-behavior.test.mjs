@@ -21,6 +21,13 @@ const { OPENRECEIVE_THEME_STORAGE_KEY, openReceiveCheckoutLabels } = await impor
   "../packages/js/browser/src/internal.ts"
 );
 
+// Several tests stub globalThis.fetch; restore the real one between tests so a
+// stub never leaks past the test that installed it.
+const originalGlobalFetch = globalThis.fetch;
+test.afterEach(() => {
+  globalThis.fetch = originalGlobalFetch;
+});
+
 function mount(element) {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -46,11 +53,13 @@ function flush() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-test("an inline refreshStatus does not restart the poll controller on every render", async () => {
-  // The controller reloads state as soon as it is created. Keeping the caller's
-  // refreshStatus in the effect's dependency list therefore turned each parent render
-  // into another teardown + status request, which is a request loop under any parent
-  // that setStates from onState/onSettled.
+test("inline host callbacks do not restart the poll controller on every render", async () => {
+  // The controller reloads state as soon as it is created. Keeping any of the
+  // caller's callbacks (refreshStatus, logger, onError, onState, onSettled) in the
+  // effect's dependency list therefore turned each parent render into another
+  // teardown + status request, which is a request loop under any parent that
+  // setStates from onState/onSettled. Every callback here is inline on purpose:
+  // a new function identity on every render.
   let refreshCalls = 0;
   let renders = 0;
   const snapshot = invoice({ invoice_id: "or_inv_inline_refresh" });
@@ -63,13 +72,14 @@ test("an inline refreshStatus does not restart the poll controller on every rend
     });
     return React.createElement(CheckoutProvider, {
       checkout: snapshot,
-      // Inline on purpose: a new function identity on every render.
       refreshStatus: async () => {
         refreshCalls += 1;
         return null;
       },
       logger: () => undefined,
       onError: () => undefined,
+      onState: () => undefined,
+      onSettled: () => undefined,
       children: () => null,
     });
   }
@@ -189,10 +199,14 @@ test("the default checkout wires controller actions into its buttons", async () 
   }
 });
 
-test("copy feedback appears on click and resets itself", async () => {
+test("copy feedback appears on click and resets itself", async (t) => {
   const snapshot = invoice({ invoice_id: "or_inv_copy_ui", invoice: "lnbc-copy-ui" });
   const written = [];
+  const hadClipboard = globalThis.navigator.clipboard !== undefined;
   globalThis.navigator.clipboard ??= { writeText: async (value) => void written.push(value) };
+  t.after(() => {
+    if (!hadClipboard) delete globalThis.navigator.clipboard;
+  });
   const handle = mount(React.createElement(Checkout, { checkout: snapshot, polling: false }));
   try {
     const copy = await until(() => handle.button(openReceiveCheckoutLabels.copyInvoice), {

@@ -21,13 +21,25 @@ function readVector(name) {
   return JSON.parse(readFileSync(path.join(process.cwd(), "spec/test-vectors", name), "utf8"));
 }
 
-test("provider-data exposes canonical registry metadata", () => {
-  assert.deepEqual(getProviderRegistryMetadata(), {
-    schema_version: "4.0.0",
-    generated: "2026-06-20",
-    description: providerRegistry.description,
-    filter: providerRegistry.filter,
-  });
+test("provider-data exposes well-formed registry metadata", () => {
+  // Shape invariants, not a transcription of the current registry content: the
+  // metadata must stay consistent with the registry without this test needing an
+  // edit every time the registry is regenerated.
+  const metadata = getProviderRegistryMetadata();
+  assert.deepEqual(Object.keys(metadata).sort(), [
+    "description",
+    "filter",
+    "generated",
+    "schema_version",
+  ]);
+  assert.match(metadata.schema_version, /^4\.\d+\.\d+$/, "v4 registry major version");
+  assert.match(metadata.generated, /^\d{4}-\d{2}-\d{2}$/);
+  assert.equal(metadata.schema_version, providerRegistry.schema_version);
+  assert.equal(metadata.generated, providerRegistry.generated);
+  assert.equal(metadata.description, providerRegistry.description);
+  assert.equal(metadata.filter, providerRegistry.filter);
+  assert.ok(metadata.description.length > 0);
+  assert.ok(metadata.filter.length > 0);
 });
 
 test("provider-data v4 keeps wizard copy and icons local", () => {
@@ -72,29 +84,43 @@ test("provider-data resolves bundled provider tutorial URLs", () => {
   );
 });
 
-test("provider-data resolves crypto route providers without changing route order", () => {
-  const btcLightning = listCryptoRouteProviders("btc-lightning");
+test("provider-data resolves crypto route providers in registry rank order", () => {
+  // Rank rule (invariant, not a transcription of the current ranking): every
+  // route's resolved list is exactly the registry entries ordered by rank, the
+  // ranks are contiguous 1..N, and every entry resolves to a real provider.
+  for (const route of providerRegistry.crypto_routes) {
+    const resolved = listCryptoRouteProviders(route.id);
+    assert.equal(resolved.length, route.providers.length, route.id);
+    const ranked = route.providers.every((entry) => typeof entry.rank === "number");
+    if (ranked) {
+      assert.deepEqual(
+        resolved.map((entry) => entry.rank),
+        resolved.map((_, index) => index + 1),
+        `${route.id}: ranks must be contiguous 1..N in order`,
+      );
+      assert.deepEqual(
+        resolved.map((entry) => entry.provider.id),
+        [...route.providers].sort((a, b) => a.rank - b.rank).map((entry) => entry.provider),
+        `${route.id}: resolved order must be the registry's rank order`,
+      );
+    } else {
+      // Rankless routes keep the registry's declaration order.
+      assert.deepEqual(
+        resolved.map((entry) => entry.provider.id),
+        route.providers.map((entry) => entry.provider),
+        `${route.id}: resolved order must be the registry's declaration order`,
+      );
+    }
+    for (const entry of resolved) {
+      assert.equal(entry.provider, getProvider(entry.provider.id), entry.provider.id);
+    }
+  }
 
+  // Sentinels: the flagship route covers the whole catalog and leads with the
+  // hosted browser wallet.
+  const btcLightning = listCryptoRouteProviders("btc-lightning");
   assert.equal(btcLightning.length, listProviders().length);
   assert.equal(btcLightning[0].provider.id, "rizful");
-  assert.deepEqual(
-    btcLightning.slice(0, 4).map((entry) => entry.provider.id),
-    ["rizful", "getalby", "zeus", "phoenix"],
-  );
-  assert.deepEqual(
-    btcLightning.slice(4, 13).map((entry) => [entry.provider.id, entry.rank]),
-    [
-      ["strike", 5],
-      ["cashapp", 6],
-      ["coinbase", 7],
-      ["binance", 8],
-      ["kraken", 9],
-      ["walletofsatoshi", 10],
-      ["okx", 11],
-      ["bitfinex", 12],
-      ["kucoin", 13],
-    ],
-  );
   assert.equal(getAsset("btc")?.route, "btc-lightning");
 });
 
@@ -131,57 +157,62 @@ test("provider-data satisfies canonical provider-route vectors", () => {
 });
 
 test("provider-data filters providers conservatively", () => {
+  // Sentinels: one of each provider kind, one US and one non-US provider.
   assert.equal(getProvider("strike")?.us, true);
   assert.equal(getProvider("sideshift")?.us, false);
   assert.equal(getProvider("rizful")?.kind, "browser wallet");
   assert.equal(getProvider("kraken")?.kind, "exchange");
   assert.equal(getProvider("zeus")?.kind, "mobile wallet");
-  assert.equal(
-    Object.values(providerRegistry.providers).every(
-      (provider) => typeof provider.kind === "string" && provider.kind.length > 0,
-    ),
-    true,
-  );
+
+  // Invariants over every provider, not a transcription of the catalog.
+  for (const [id, provider] of Object.entries(providerRegistry.providers)) {
+    assert.equal(provider.id, id, `${id}: key and id must agree`);
+    assert.ok(
+      typeof provider.kind === "string" && provider.kind.length > 0,
+      `${id}: kind must be a non-empty string`,
+    );
+    assert.ok(
+      typeof provider.us === "boolean" || provider.us === null,
+      `${id}: us flag must be boolean or null (unknown)`,
+    );
+    assert.equal("mechanism" in provider, false, `${id}: mechanism was removed in v4`);
+  }
   assert.equal(
     listProviders({ us: true }).every((provider) => provider.us === true),
     true,
   );
-  assert.equal(
-    Object.values(providerRegistry.providers).every((provider) => !("mechanism" in provider)),
-    true,
-  );
-  assert.equal(providerRegistry.providers.coinbase.tutorials.length, 2);
-  assert.deepEqual(
-    providerRegistry.providers.boltz.tutorials.map((tutorial) => tutorial.caption),
-    [
-      "Select the currency you want to start with, and select Receive LN (Bitcoin Lightning)",
-      "Paste Lightning invoice and click Create Swap",
-    ],
-  );
-  assert.deepEqual(
-    providerRegistry.providers.fixedfloat.tutorials.map((tutorial) => tutorial.caption),
-    [
-      "Choose USDT to send, then BTC Lightning to receive",
-      "Paste the Lightning invoice, then tap Exchange now",
-    ],
-  );
-  assert.equal(providerRegistry.providers.kraken.tutorials.length, 4);
-  assert.deepEqual(
-    providerRegistry.providers.kraken.tutorials.map((tutorial) => tutorial.caption),
-    ["Tap Bitcoin", "Tap Withdraw", "Choose Lightning", "Paste or scan the invoice"],
-  );
-  assert.equal(providerRegistry.providers.strike.tutorials.length, 4);
-  assert.deepEqual(
-    providerRegistry.providers.cashapp.tutorials.map((tutorial) => tutorial.path),
-    [
-      "assets/pay_tutorials/cashapp-1.webp",
-      "assets/pay_tutorials/cashapp-2.webp",
-      "assets/pay_tutorials/cashapp-3.webp",
-      "assets/pay_tutorials/cashapp-4.webp",
-      "assets/pay_tutorials/cashapp-5.webp",
-      "assets/pay_tutorials/cashapp-6.webp",
-    ],
-  );
+});
+
+test("every provider tutorial is well-formed and resolvable", () => {
+  // Tutorial invariants replace the old caption/path transcriptions: captions
+  // and step counts are registry content, but every step must be structurally
+  // sound and its image must exist in the bundled asset map.
+  for (const provider of Object.values(providerRegistry.providers)) {
+    const tutorials = provider.tutorials ?? [];
+    tutorials.forEach((tutorial, position) => {
+      const label = `${provider.id} tutorial ${position + 1}`;
+      assert.equal(tutorial.index, position + 1, `${label}: steps are sequential from 1`);
+      assert.ok(
+        typeof tutorial.caption === "string" && tutorial.caption.length > 0,
+        `${label}: caption must be non-empty`,
+      );
+      assert.match(
+        tutorial.path,
+        new RegExp(`^assets/pay_tutorials/${provider.id}-\\d+\\.webp$`),
+        `${label}: path names this provider's bundled webp`,
+      );
+      assert.ok(
+        openReceivePayTutorialUrls[tutorial.path] !== undefined,
+        `${label}: ${tutorial.path} must resolve in the bundled tutorial map`,
+      );
+    });
+    if (provider.icon_path !== undefined) {
+      assert.ok(
+        openReceiveProviderIconUrls[provider.icon_path] !== undefined,
+        `${provider.id}: icon_path must resolve in the bundled icon map`,
+      );
+    }
+  }
 });
 
 test("provider-data exports immutable registry objects", () => {

@@ -1,9 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+// Registered before the DOM-render test dynamically imports
+// @angular/platform-browser (the static imports below never touch the DOM).
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 // The dist bundle is partially compiled; its component declarations need the
 // JIT compiler registered before the class definitions run.
 import "@angular/compiler";
-import { ChangeDetectorRef, Injector, NgZone, runInInjectionContext } from "@angular/core";
+import {
+  ChangeDetectorRef,
+  createComponent,
+  Injector,
+  NgZone,
+  provideZonelessChangeDetection,
+  runInInjectionContext,
+} from "@angular/core";
+
+process.env.LOG_LEVEL ??= "error";
+GlobalRegistrator.register({ url: "http://angular.local/" });
 
 // The built entry point, not the raw .ts: the source needs Angular's AOT
 // decorator handling, which node's TS loader does not provide.
@@ -58,4 +71,70 @@ test("subsequent input changes rebuild the shell binding", () => {
 
   assert.notEqual(second, first, "input changes must produce a fresh binding");
   assert.equal(second.checkout.attributes["order-id"], "order-second");
+});
+
+/** Poll until predicate() is truthy (its value is returned) or fail with `label`. */
+async function until(predicate, { timeoutMs = 4000, label = "condition" } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const value = predicate();
+    if (value) return value;
+    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${label}`);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
+test("the Angular component renders the checkout shell into a real DOM", async () => {
+  // The mount test the construction tests could not be: the JIT compiler
+  // renders the inline template into happy-dom, ngAfterViewInit defines the
+  // custom elements, and the element runs its create-mode lifecycle.
+  const calls = [];
+  globalThis.fetch = async (input) => {
+    const url = new URL(String(input), "http://angular.local");
+    calls.push(url.pathname);
+    const body = url.pathname.endsWith("/checkouts/prepare")
+      ? { order_id: "order-ng-render", amount_msats: 21_000, payment_methods: [] }
+      : { status: "pending" };
+    return { ok: true, status: 200, headers: { get: () => null }, json: async () => body };
+  };
+
+  // Imported only now: platform-browser needs the happy-dom globals.
+  const { createApplication } = await import("@angular/platform-browser");
+  const appRef = await createApplication({ providers: [provideZonelessChangeDetection()] });
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  const componentRef = createComponent(CheckoutComponent, {
+    environmentInjector: appRef.injector,
+    hostElement: host,
+  });
+
+  try {
+    componentRef.setInput("orderId", "order-ng-render");
+    appRef.attachView(componentRef.hostView);
+    componentRef.changeDetectorRef.detectChanges();
+
+    const root = host.querySelector("[data-openreceive-theme]");
+    assert.ok(root, "the shell root must carry data-openreceive-theme");
+    assert.ok(
+      host.querySelector("openreceive-theme-toggle"),
+      "themeToggle defaults to true: the toggle element must render",
+    );
+    const element = host.querySelector("openreceive-checkout");
+    assert.ok(element, "the wrapper must render the checkout element");
+    assert.equal(element.getAttribute("order-id"), "order-ng-render");
+
+    // The element really runs: its connected callback prepares the checkout
+    // (via the documented /openreceive default prefix) and renders shadow DOM.
+    await until(() => element.shadowRoot?.innerHTML.length > 0, {
+      label: "checkout shadow render",
+    });
+    assert.ok(
+      calls.includes("/openreceive/checkouts/prepare"),
+      "the element must prepare against the documented /openreceive default prefix",
+    );
+  } finally {
+    componentRef.destroy();
+    appRef.destroy();
+    host.remove();
+  }
 });

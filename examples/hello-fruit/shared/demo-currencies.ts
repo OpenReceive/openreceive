@@ -1,5 +1,17 @@
 export const HELLO_FRUIT_DIRECT_AMOUNT_CURRENCIES = ["BTC", "SATS"] as const;
 
+/**
+ * Minor-unit widths for the fiat currencies the demos display, so totals
+ * render as "2.00" instead of "2.0"/"2". This file is the canonical owner of
+ * the demo currency data; the Rails demo mirrors it in
+ * app/models/money_format.rb (MIN_FRACTION_DIGITS) and
+ * app/models/create_fruit_order.rb (DIRECT_CURRENCIES/SUPPORTED), guarded by
+ * examples/hello-fruit/server/rails/script/check-currency-drift.mjs.
+ */
+export const HELLO_FRUIT_FIAT_FRACTION_DIGITS: Readonly<Record<string, number>> = {
+  USD: 2,
+};
+
 export type HelloFruitDirectAmountCurrency = (typeof HELLO_FRUIT_DIRECT_AMOUNT_CURRENCIES)[number];
 
 export type HelloFruitCurrency = string;

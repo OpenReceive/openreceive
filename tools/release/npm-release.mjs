@@ -75,7 +75,7 @@ function usage() {
     "  --version <patch|minor|major|x.y.z>  Version increment or exact target.",
     "  --tag <npm-tag>                     npm dist-tag for publish (default: latest).",
     "  --out <dir>                         Release output dir (default: .release/npm/<version>).",
-    "  --dry-run                           Show changes or npm publish commands without applying.",
+    "  --dry-run                           Show changes or npm publish commands without applying (skips test:ci).",
     "  --allow-dirty                       Allow prepare/publish from a dirty worktree.",
     "  --skip-tests                        Skip npm run test:ci during publish.",
     "  --otp <code>                        npm one-time password for publish.",
@@ -499,7 +499,12 @@ function main() {
   if (command === "publish") {
     assertCleanWorktree(root, args, "release:publish");
     assertVersionsReady(root, targetVersion);
-    if (args["skip-tests"] !== true) {
+    // Dry-run is a fast preview and skips the suite, matching gem-release's
+    // dry-run; the REAL publish always runs test:ci unless --skip-tests is
+    // passed deliberately.
+    if (args["dry-run"] === true) {
+      console.error("dry-run: skipping `npm run test:ci` — a real release:publish runs it first.");
+    } else if (args["skip-tests"] !== true) {
       run("npm", ["run", "test:ci"], root, { stdio: "inherit" });
     }
     for (const packageName of PUBLIC_PACKAGE_NAMES) {

@@ -333,9 +333,9 @@ test("React checkout context fails clearly outside the provider", () => {
 test("React <Checkout orderId> enters create mode and renders the creating placeholder", () => {
   // react-dom/server does not run effects, so the on-mount create POST is not observable from
   // an SSR render; the create -> POST { order_id } -> poll /openreceive/payments/check
-  // lifecycle the component runs is verified end-to-end via createOpenReceiveCheckoutSession in
-  // tests/order-token.test.mjs. Here we assert the component enters create mode and shows
-  // its minimal placeholder while pending.
+  // lifecycle is driven for real (happy-dom + real handler) in tests/lifecycle.test.mjs
+  // (react-create surface) and tests/element-lifecycle.test.mjs. Here we assert the
+  // component enters create mode and shows its minimal placeholder while pending.
   const html = renderToStaticMarkup(
     React.createElement(Checkout, { orderId: "ord-1", prefix: "/openreceive" }),
   );

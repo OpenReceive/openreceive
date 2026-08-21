@@ -45,6 +45,12 @@ const props = withDefaults(
   }>(),
   {
     options: () => ({}),
+    // Explicit undefined defaults suppress Vue's absent-Boolean-prop-to-false
+    // coercion: an unbound boolean prop must stay undefined so the
+    // `?? options.* ?? default` chains below see "not set", not "false".
+    paymentWizard: undefined,
+    themeToggle: undefined,
+    syncUrl: undefined,
   },
 );
 

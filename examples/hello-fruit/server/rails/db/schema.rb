@@ -37,7 +37,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_19_000001) do
     t.index ["payment_hash"], name: "index_openreceive_payments_on_payment_hash", unique: true
     t.index ["status", "created_at"], name: "index_openreceive_payments_on_status_and_created_at"
     t.check_constraint "payment_hash::text ~ '^[0-9a-f]{64}$'::text", name: "openreceive_payments_payment_hash_check"
-    t.check_constraint "status::text = ANY (ARRAY['pending'::character varying, 'settled'::character varying, 'expired'::character varying, 'failed'::character varying, 'attention'::character varying]::text[])", name: "openreceive_payments_status_check"
+    t.check_constraint "status::text = ANY (ARRAY['pending'::character varying::text, 'settled'::character varying::text, 'expired'::character varying::text, 'failed'::character varying::text, 'attention'::character varying::text])", name: "openreceive_payments_status_check"
   end
 
   create_table "order_items", force: :cascade do |t|

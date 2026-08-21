@@ -20,12 +20,15 @@ import type { HelloFruitDemoOrder } from "./demo-order.ts";
 export interface HelloFruitStoredOrder {
   readonly summary: HelloFruitDemoOrder;
   readonly amount: CreateCheckoutAmount;
+  /** Invoice description computed at order time; injected into checkout create requests. */
+  readonly memo?: string;
 }
 
 interface OrderRow {
   id: string;
   summary_json: string;
   amount_json: string;
+  memo: string | null;
   status: string;
 }
 
@@ -73,6 +76,7 @@ export async function bootHelloFruitHostStore(input: {
       id TEXT PRIMARY KEY NOT NULL,
       summary_json TEXT NOT NULL,
       amount_json TEXT NOT NULL,
+      memo TEXT,
       status TEXT NOT NULL,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
@@ -98,27 +102,41 @@ export function helloFruitHostDb(): DatabaseSync {
 export function createHelloFruitHostOrder(
   summary: HelloFruitDemoOrder,
   amount: CreateCheckoutAmount,
+  memo?: string,
 ): HelloFruitStoredOrder {
   const database = requireDb();
   const now = Math.floor(Date.now() / 1_000);
-  const stored: HelloFruitStoredOrder = { summary, amount };
+  const stored: HelloFruitStoredOrder = {
+    summary,
+    amount,
+    ...(memo === undefined ? {} : { memo }),
+  };
   database
     .prepare(
-      `INSERT INTO orders (id, summary_json, amount_json, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO orders (id, summary_json, amount_json, memo, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(summary.uuid, JSON.stringify(summary), JSON.stringify(amount), summary.status, now, now);
+    .run(
+      summary.uuid,
+      JSON.stringify(summary),
+      JSON.stringify(amount),
+      memo ?? null,
+      summary.status,
+      now,
+      now,
+    );
   return stored;
 }
 
 export function readHelloFruitHostOrder(orderId: string): HelloFruitStoredOrder | null {
   const row = requireDb()
-    .prepare(`SELECT id, summary_json, amount_json, status FROM orders WHERE id = ?`)
+    .prepare(`SELECT id, summary_json, amount_json, memo, status FROM orders WHERE id = ?`)
     .get(orderId) as OrderRow | undefined;
   if (row === undefined) return null;
   return {
     summary: JSON.parse(row.summary_json) as HelloFruitDemoOrder,
     amount: JSON.parse(row.amount_json) as CreateCheckoutAmount,
+    ...(row.memo === null ? {} : { memo: row.memo }),
   };
 }
 

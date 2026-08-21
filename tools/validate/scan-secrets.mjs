@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { walkFiles } from "../shared/walk-files.mjs";
 
-const root = process.cwd();
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const ignoredDirs = new Set([
   ".git",
   "node_modules",
@@ -58,25 +60,15 @@ const secretPatterns = [
 ];
 
 function walk(dir) {
-  const entries = readdirSync(dir);
-  const files = [];
-
-  for (const entry of entries) {
-    const fullPath = path.join(dir, entry);
-    const relPath = path.relative(root, fullPath);
-    const stat = statSync(fullPath);
-
-    if (stat.isDirectory()) {
-      if (!ignoredDirs.has(entry)) files.push(...walk(fullPath));
-      continue;
-    }
-
-    if (ignoredFiles.has(relPath)) continue;
-    if (relPath.startsWith(".env.")) continue;
-    files.push(fullPath);
-  }
-
-  return files;
+  return walkFiles(dir, {
+    ignoreDirs: ignoredDirs,
+    filter: (_entry, fullPath) => {
+      const relPath = path.relative(root, fullPath);
+      if (ignoredFiles.has(relPath)) return false;
+      if (relPath.startsWith(".env.")) return false;
+      return true;
+    },
+  });
 }
 
 function trackedFiles() {

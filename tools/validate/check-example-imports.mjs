@@ -6,10 +6,12 @@
 // (see docs — integrate via the main entries, @openreceive/browser/headless, or
 // @openreceive/elements instead).
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { walkFiles } from "../shared/walk-files.mjs";
 
-const root = process.cwd();
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const examplesRoot = path.join(root, "examples");
 const ignoredDirs = new Set([
   ".git",
@@ -28,26 +30,10 @@ const sourceExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", 
 const forbiddenImport = /@openreceive\/[a-z-]+\/internal/;
 
 function walkSourceFiles(dir) {
-  if (!existsSync(dir)) return [];
-
-  const files = [];
-  for (const entry of readdirSync(dir)) {
-    if (ignoredDirs.has(entry)) continue;
-
-    const fullPath = path.join(dir, entry);
-    const stat = statSync(fullPath);
-
-    if (stat.isDirectory()) {
-      files.push(...walkSourceFiles(fullPath));
-      continue;
-    }
-
-    if (stat.isFile() && sourceExtensions.has(path.extname(entry))) {
-      files.push(fullPath);
-    }
-  }
-
-  return files;
+  return walkFiles(dir, {
+    ignoreDirs: ignoredDirs,
+    filter: (entry) => sourceExtensions.has(path.extname(entry)),
+  });
 }
 
 const findings = [];

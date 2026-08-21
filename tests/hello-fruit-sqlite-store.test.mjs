@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { access, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,15 +14,25 @@ import {
   readHelloFruitHostOrder,
 } from "../examples/hello-fruit/shared/openreceive-store.ts";
 
-const DEMO_ID = "store-test";
+// The store roots its SQLite files under examples/hello-fruit/.openreceive
+// (gitignored) with no directory override, so a temp directory is not an
+// option from the test side. A per-run demo id keeps concurrent test runs from
+// colliding on the same file, and t.after removes it even when the test fails.
+const DEMO_ID = `store-test-${process.pid}-${randomUUID().slice(0, 8)}`;
 const helloFruitRoot = fileURLToPath(new URL("../examples/hello-fruit", import.meta.url));
 const openreceiveDir = path.join(helloFruitRoot, ".openreceive");
 
-test("hello fruit host store wipes SQLite, migrates, and serializes attempts", async () => {
+test("hello fruit host store wipes SQLite, migrates, and serializes attempts", async (t) => {
   closeHelloFruitHostStore();
-  // Remove only this test's own store file — never the whole .openreceive
-  // directory, which a concurrently running demo may be using.
-  await rm(path.join(openreceiveDir, `${DEMO_ID}.sqlite`), { force: true });
+  t.after(async () => {
+    // Remove only this test's own store file (plus SQLite WAL sidecars) — never
+    // the whole .openreceive directory, which a concurrently running demo may
+    // be using.
+    closeHelloFruitHostStore();
+    for (const suffix of ["", "-wal", "-shm"]) {
+      await rm(path.join(openreceiveDir, `${DEMO_ID}.sqlite${suffix}`), { force: true });
+    }
+  });
 
   const logs = [];
   const dbPath = await bootHelloFruitHostStore({
@@ -31,7 +42,7 @@ test("hello fruit host store wipes SQLite, migrates, and serializes attempts", a
     },
   });
 
-  assert.match(dbPath, /\.openreceive[/\\]store-test\.sqlite$/);
+  assert.equal(dbPath, path.join(openreceiveDir, `${DEMO_ID}.sqlite`));
   await access(dbPath);
   assert.ok(logs.some((entry) => entry.event === "host.store.wipe"));
   assert.ok(logs.some((entry) => entry.event === "host.store.migrate"));
@@ -122,7 +133,4 @@ test("hello fruit host store wipes SQLite, migrates, and serializes attempts", a
     ["host.store.wipe", "host.store.migrate", "host.store.ready"],
   );
   assert.equal(readHelloFruitHostOrder("order-1"), null);
-
-  closeHelloFruitHostStore();
-  await rm(path.join(openreceiveDir, `${DEMO_ID}.sqlite`), { force: true });
 });

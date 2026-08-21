@@ -192,9 +192,10 @@ test("React theme scope applies package-owned theme attributes and toggle", () =
   assert.match(html, /<section class="checkout">Checkout<\/section>/);
 });
 
-test("Browser checkout helpers own wizard state, storage, and theme behavior", () => {
+/** In-memory Storage-shaped object shared by the theme/storage tests below. */
+function createTestStorage() {
   const store = new Map();
-  const storage = {
+  return {
     getItem: (key) => store.get(key) ?? null,
     setItem: (key, value) => store.set(key, value),
     removeItem: (key) => store.delete(key),
@@ -204,7 +205,9 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
       return store.size;
     },
   };
+}
 
+test("browser checkout formatting helpers and UI constants", () => {
   assert.equal(formatOpenReceiveCountdown(65), "1:05");
   assert.equal(formatOpenReceiveDepositAmount("12.25900000"), "12.259");
   assert.equal(formatOpenReceiveDepositAmount("5.000"), "5");
@@ -214,11 +217,17 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   assert.equal(OPENRECEIVE_DEFAULT_POLL_INTERVAL_MS, 3000);
   assert.equal(OPENRECEIVE_COPY_FEEDBACK_MS, 1800);
   assert.equal(OPENRECEIVE_PROVIDER_PREVIEW_LIMIT, 4);
+});
+
+test("browser checkout labels and status text", () => {
   assert.equal(openReceiveCheckoutLabels.copyInvoice, "Copy invoice");
   assert.equal(openReceiveCheckoutLabels.bitcoinLightningInvoice, "Bitcoin Lightning invoice");
   assert.equal(getOpenReceivePaymentStatusText("settled").title, "Payment received");
   assert.equal(getOpenReceiveWizardEmptyMessage("bitcoin"), "Choose Bitcoin Lightning.");
   assert.equal(getCheckoutProviderOpenLabel("Boltz"), "How To Pay");
+});
+
+test("browser checkout provider icon and tutorial helpers", () => {
   const strike = getProvider("strike");
   assert.ok(strike);
   assert.match(getCheckoutProviderIcon(strike), /assets\/provider-icons\/strike\.png/);
@@ -238,6 +247,9 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
     getCheckoutProviderTutorials(kraken)[3].image,
     /assets\/pay_tutorials\/kraken-4\.webp/,
   );
+});
+
+test("browser checkout route, method, and network icon helpers", () => {
   assert.equal(getOpenReceiveRouteNetworkLabel("btc-lightning"), "Lightning Network");
   assert.equal(getOpenReceiveRouteNetworkLabel("usdt-tron"), "usdt-tron");
   assert.match(getOpenReceivePaymentMethodIcon("bitcoin"), /assets\/icons\/btc\.svg/);
@@ -260,6 +272,9 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   assert.match(getOpenReceiveNetworkIcon("Tron"), /assets\/icons\/trx\.svg/);
   assert.match(getOpenReceiveNetworkIcon("Solana"), /assets\/icons\/sol\.svg/);
   assert.match(getOpenReceiveNetworkIcon("Ethereum"), /assets\/icons\/eth\.svg/);
+});
+
+test("browser checkout theme resolution builds a full theme model", () => {
   assert.equal(resolveOpenReceiveTheme("system", { systemDark: true }), "dark");
   assert.deepEqual(createOpenReceiveThemeModel("system", { systemDark: true }), {
     theme: "system",
@@ -274,6 +289,10 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
       theme: "dark",
     },
   });
+});
+
+test("browser checkout theme preference round-trips through storage", () => {
+  const storage = createTestStorage();
   assert.equal(readOpenReceiveThemePreference({ storage, defaultTheme: "dark" }), "dark");
   assert.equal(readOpenReceiveThemePreference({ storage }), "system");
   writeOpenReceiveThemePreference("dark", { storage });
@@ -321,6 +340,11 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   });
   assert.equal(toggleOpenReceiveStoredThemePreference({ storage }).resolvedTheme, "light");
   assert.equal(readOpenReceiveThemePreference({ storage }), "light");
+});
+
+test("browser checkout stored theme controls sync and toggle together", () => {
+  const storage = createTestStorage();
+  writeOpenReceiveThemePreference("light", { storage });
   const controlAttrs = {};
   const checkoutControlAttrs = {};
   const toggleControl = { textContent: "" };
@@ -354,7 +378,9 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   );
   assert.equal(toggledControlTheme.resolvedTheme, "dark");
   assert.equal(toggleControl.textContent, "dark mode");
+});
 
+test("browser checkout wizard selection is a pure state machine", () => {
   const initialSelection = createOpenReceivePaymentWizardSelection();
   assert.equal(initialSelection.selectedMethod, null);
   assert.equal(initialSelection.selectedBitcoinRoute, null);
@@ -387,7 +413,9 @@ test("Browser checkout helpers own wizard state, storage, and theme behavior", (
   assert.equal(lightningRouteAsset?.selected, true);
   assert.equal(lightningRouteAsset?.subtitle, "Lightning Network");
   assert.match(lightningRouteAsset?.icon ?? "", /assets\/icons\/lightning\.svg/);
+});
 
+test("browser checkout wizard route displays carry provider entries", () => {
   const bitcoinState = createOpenReceivePaymentWizardState({
     selectedMethod: "bitcoin",
     selectedBitcoinRoute: "btc-lightning",

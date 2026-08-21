@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { parse as parseYaml } from "yaml";
+import { fileURLToPath } from "node:url";
 import Ajv2020 from "ajv/dist/2020.js";
+import { parse as parseYaml } from "yaml";
+import { walkFiles } from "../shared/walk-files.mjs";
 
-const root = process.cwd();
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 function readJson(relativePath) {
   try {
@@ -25,17 +27,9 @@ function readYaml(relativePath) {
 }
 
 function walk(dir, extension) {
-  const absolute = path.join(root, dir);
-  if (!existsSync(absolute)) return [];
-  return readdirSync(absolute).flatMap((entry) => {
-    const relative = path.join(dir, entry);
-    const stat = statSync(path.join(root, relative));
-    return stat.isDirectory()
-      ? walk(relative, extension)
-      : entry.endsWith(extension)
-        ? [relative]
-        : [];
-  });
+  return walkFiles(path.join(root, dir), {
+    filter: (entry) => entry.endsWith(extension),
+  }).map((file) => path.relative(root, file));
 }
 
 function assert(condition, message) {

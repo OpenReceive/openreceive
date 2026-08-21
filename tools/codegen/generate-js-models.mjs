@@ -78,11 +78,7 @@ export const OPENRECEIVE_AMOUNT_MSATS_BOUNDARY = {
 `;
 }
 
-/**
- * The OpenAPI component schemas emitted as wire types. Only well-specified
- * bodies are listed: the swap/rates responses that the contract still leaves
- * as `additionalProperties: true` (open E33) get no invented shape here.
- */
+/** The OpenAPI component schemas emitted as wire types, in spec order. */
 const WIRE_SCHEMA_NAMES = [
   "PrepareCheckoutRequest",
   "PrepareCheckoutResponse",
@@ -94,7 +90,14 @@ const WIRE_SCHEMA_NAMES = [
   "PaymentCheck",
   "SwapQuoteRequest",
   "CreateSwapRequest",
+  "SwapPayInAsset",
+  "SwapProviderState",
+  "SwapFee",
+  "SwapQuote",
+  "Swap",
+  "SwapCheckout",
   "CreateSwapResponse",
+  "RatesResponse",
   "OrderRequest",
   "Error",
 ];
@@ -142,7 +145,10 @@ function wireTypeForObjectSchema(schema, indent) {
   const names = Object.keys(properties);
   const undeclaredRequired = [...required].filter((name) => !(name in properties));
   if (names.length === 0 && undeclaredRequired.length === 0) {
-    return "Record<string, unknown>";
+    // A pure map schema keeps its declared value type (e.g. rates: code → price).
+    return typeof schema.additionalProperties === "object" && schema.additionalProperties !== null
+      ? `Record<string, ${wireTypeForSchema(schema.additionalProperties, indent)}>`
+      : "Record<string, unknown>";
   }
   const inner = `${indent}  `;
   const lines = [];

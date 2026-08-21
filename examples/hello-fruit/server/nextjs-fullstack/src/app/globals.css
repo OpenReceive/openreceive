@@ -3,4 +3,5 @@
   themes: light --default, dark;
 }
 @source "./**/*.{ts,tsx}";
+@source "../../../../shared/**/*.{ts,tsx}";
 @source "../../../../../../packages/js/react/src/**/*.{ts,tsx}";

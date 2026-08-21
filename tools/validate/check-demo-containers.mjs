@@ -2,38 +2,13 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
+import { OPENRECEIVE_DEMOS } from "../shared/demo-catalog.mjs";
 
-const root = process.cwd();
-const nodeDemos = [
-  {
-    dir: "examples/hello-fruit/server/node-express",
-    packageName: "@openreceive/example-node-express",
-    service: "hello-fruit-node-express",
-    port: "3000",
-  },
-  {
-    dir: "examples/hello-fruit/server/static-html-small-api",
-    packageName: "@openreceive/example-static-html-small-api",
-    service: "hello-fruit-static-html-small-api",
-    port: "3001",
-  },
-  {
-    dir: "examples/hello-fruit/server/nextjs-fullstack",
-    packageName: "@openreceive/example-nextjs-fullstack",
-    service: "hello-fruit-nextjs-fullstack",
-    port: "3002",
-  },
-];
-
-const railsDemo = {
-  dir: "examples/hello-fruit/server/rails",
-  packageName: "@openreceive/example-rails",
-  service: "hello-fruit-rails",
-  notificationsService: "notifications",
-  port: "3003",
-  dbService: "db",
-};
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const nodeDemos = OPENRECEIVE_DEMOS.filter((demo) => demo.kind === "node");
+const railsDemo = OPENRECEIVE_DEMOS.find((demo) => demo.kind === "rails");
 
 const findings = [];
 const fail = (message) => findings.push(message);
