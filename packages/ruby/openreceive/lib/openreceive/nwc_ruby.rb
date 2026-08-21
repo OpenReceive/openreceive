@@ -1,9 +1,11 @@
 # frozen_string_literal: true
 
-# require_relative (not `require "openreceive"`): the gemspec loads version.rb only,
-# and a load-path require here could resolve to an installed copy of the gem
-# instead of this working tree.
-require_relative "../openreceive"
+# require_relative (not `require "openreceive/core"`): the gemspec loads
+# version.rb only, and a load-path require here could resolve to an installed
+# copy of the gem instead of this working tree. The core file — never the
+# `openreceive` umbrella, which loads this adapter — carries everything the
+# adapter calls, so requiring this file directly keeps working.
+require_relative "core"
 
 module OpenReceive
   class NwcRubyReceiveClient

@@ -242,6 +242,103 @@ class OpenReceiveRatesTest < Minitest::Test
     assert_includes nested_error.message, "price feed refresh already started within 60s"
   end
 
+  def test_cached_feed_serves_quotable_stale_entry_during_failure_backoff
+    now = 0
+    feed, http = build_feed(
+      primary: [
+        -> { ok_body("usd" => "50000.00") },
+        -> { raise Errno::ECONNREFUSED }
+      ],
+      fallback: -> { { status: 503, body: "down" } },
+      clock: -> { now }
+    )
+
+    feed.btc_fiat_rates(["USD"])
+
+    now = 60
+    error = assert_raises(OpenReceive::PriceFeedError) { feed.btc_fiat_price("USD") }
+    assert_includes error.message, "all price feeds failed"
+    calls_after_failure = http.calls.length
+
+    # One failed refresh must not hard-down quoting while the stale entry is
+    # still young enough to price a quote (age 90s < 600s quote TTL).
+    now = 90
+    assert_equal "50000.00", feed.btc_fiat_price("USD")
+    assert_equal calls_after_failure, http.calls.length
+  end
+
+  def test_cached_feed_fails_closed_during_failure_backoff_when_entry_outlives_quote_ttl
+    now = 0
+    feed, _http = build_feed(
+      primary: [
+        -> { ok_body("usd" => "50000.00") },
+        -> { raise Errno::ECONNREFUSED }
+      ],
+      fallback: -> { { status: 503, body: "down" } },
+      clock: -> { now }
+    )
+
+    feed.btc_fiat_rates(["USD"])
+
+    # The cached entry is already older than any quote may live, so the
+    # failure backoff must fail closed instead of serving it.
+    now = 610
+    assert_raises(OpenReceive::PriceFeedError) { feed.btc_fiat_price("USD") }
+    now = 630
+    error = assert_raises(OpenReceive::PriceFeedError) { feed.btc_fiat_price("USD") }
+    assert_includes error.message, "price feed refresh already failed within 60s"
+  end
+
+  # --- live feed: cold-cache single-flight ----------------------------------
+
+  def test_cold_cache_concurrent_first_readers_join_one_refresh
+    started = Queue.new
+    release = Queue.new
+    primary = lambda do
+      started << true
+      release.pop
+      ok_body("usd" => "50000.00")
+    end
+    feed, http = build_feed(primary: primary)
+
+    claimer = Thread.new { feed.btc_fiat_price("USD") }
+    started.pop
+    joiners = Array.new(2) { Thread.new { feed.btc_fiat_price("USD") } }
+    Thread.pass until joiners.all?(&:stop?)
+    release << true
+
+    assert_equal "50000.00", claimer.value
+    joiners.each { |joiner| assert_equal "50000.00", joiner.value }
+    assert_equal 1, http.calls.length, "concurrent cold readers must share one refresh"
+  end
+
+  def test_cold_cache_joined_refresh_failure_propagates_to_joiners
+    started = Queue.new
+    release = Queue.new
+    primary = lambda do
+      started << true
+      release.pop
+      { status: 500, body: "oops" }
+    end
+    feed, _http = build_feed(
+      primary: primary,
+      fallback: -> { { status: 503, body: "down" } }
+    )
+
+    claimer = Thread.new do
+      assert_raises(OpenReceive::PriceFeedError) { feed.btc_fiat_price("USD") }
+    end
+    started.pop
+    joiner = Thread.new do
+      assert_raises(OpenReceive::PriceFeedError) { feed.btc_fiat_price("USD") }
+    end
+    Thread.pass until joiner.stop?
+    release << true
+
+    assert_includes claimer.value.message, "all price feeds failed"
+    assert_includes joiner.value.message, "all price feeds failed"
+  end
+
   # --- health check ---------------------------------------------------------
 
   def test_health_check_forces_refresh_and_reports_source
@@ -290,6 +387,28 @@ class OpenReceiveRatesTest < Minitest::Test
       )
     end
     assert_includes error.message, "requires at least one currency"
+  end
+
+  def test_feed_validates_cache_seconds
+    providers = OpenReceive::Rates.create_live_price_feed_providers
+    build = lambda do |cache_seconds|
+      OpenReceive::Rates::CachedPriceFeed.new(
+        currencies: ["USD"],
+        primary: providers.fetch(:primary),
+        fallback: providers.fetch(:fallback),
+        cache_seconds: cache_seconds
+      )
+    end
+
+    # Wider than the quote TTL would report a read as fresh that is already
+    # too old to price an invoice.
+    error = assert_raises(ArgumentError) { build.call(601) }
+    assert_includes error.message, "must not exceed the 600s invoice quote TTL"
+    [0, -5, 1.5, "60"].each do |cache_seconds|
+      error = assert_raises(ArgumentError) { build.call(cache_seconds) }
+      assert_includes error.message, "must be a positive integer"
+    end
+    build.call(600)
   end
 
   def test_env_override_reader

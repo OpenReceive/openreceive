@@ -69,8 +69,12 @@ module OpenReceive
 
       # Postgres has regex matching; sqlite needs GLOB. Emitted as a Ruby
       # string literal so the migration carries the right one for the adapter
-      # the app actually runs.
+      # the app actually runs. MySQL's bare REGEXP follows the column's
+      # case-insensitive collation, so its rendering pins case sensitivity
+      # with REGEXP_LIKE's 'c' flag.
       def payment_hash_check_sql
+        return %("REGEXP_LIKE(payment_hash, '^[0-9a-f]{64}$', 'c')") if mysql_adapter?
+
         <<~RUBY.strip
           if connection.adapter_name.downcase.include?("postgres")
                            "payment_hash ~ '^[0-9a-f]{64}$'"
@@ -78,6 +82,19 @@ module OpenReceive
                            "length(payment_hash) = 64 AND payment_hash NOT GLOB '*[^0-9a-f]*'"
                          end
         RUBY
+      end
+
+      # MySQL has no ON CONFLICT and treats `key` as a reserved word, so its
+      # migration is rendered for it at generate time; the postgres/sqlite
+      # rendering keeps branching at migration runtime and stays unchanged.
+      def mysql_adapter?
+        %w[mysql2 trilogy].include?(database_adapter)
+      end
+
+      def database_adapter
+        ActiveRecord::Base.connection_db_config.adapter.to_s
+      rescue StandardError
+        ""
       end
     end
   end

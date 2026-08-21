@@ -8,10 +8,10 @@ module OpenReceive
       # Ruby port of packages/js/node/src/swap/limits-cache.ts: a disposable,
       # process-local provider catalog/rate cache. It has no storage adapter.
       #
-      # Simplification vs JS: Node de-duplicates concurrent refreshes with an
-      # in-flight promise map; Ruby serializes resolve calls per cache with a
-      # monitor instead (same observable behavior: one fetch per fresh window,
-      # claim window after a failure).
+      # Like the Node in-flight promise map, concurrent resolves of the same
+      # key join one fetch: the first caller claims the key under the monitor,
+      # runs fetch outside it, and writes back under the monitor; joiners wait
+      # on a per-key condition. Different keys never block each other.
       class TransientSwapCache
         MAX_STALE_SECONDS = 48 * 60 * 60
         REFRESH_CLAIM_SECONDS = 60
@@ -24,11 +24,15 @@ module OpenReceive
           @clock = clock
           @warn = warn
           @states = {}
+          @inflight = {}
           @monitor = Monitor.new
         end
 
         def resolve(key, refresh_seconds:, max_stale_seconds:, fetch:, serialize:, deserialize:,
                     claim_seconds: REFRESH_CLAIM_SECONDS, serve_stale_on_failure: true)
+          now = nil
+          state = nil
+          claim = nil
           @monitor.synchronize do
             now = @clock.call
             state = @states[key]
@@ -39,9 +43,21 @@ module OpenReceive
               return stale_or_raise(key, state, now, max_stale_seconds, serve_stale_on_failure, deserialize)
             end
 
-            begin
+            active = @inflight[key]
+            if active
+              active[:cond].wait_until { active[:settled] }
+              raise active[:error] unless active[:error].nil?
+
+              return active[:value]
+            end
+            claim = { settled: false, cond: @monitor.new_cond }
+            @inflight[key] = claim
+          end
+
+          begin
+            result = begin
               value = fetch.call
-              @states[key] = { value: serialize.call(value), fetched_at: now }
+              @monitor.synchronize { @states[key] = { value: serialize.call(value), fetched_at: now } }
               value
             rescue StandardError => e
               failed = {
@@ -50,13 +66,28 @@ module OpenReceive
               }
               failed[:value] = state[:value] if state && state[:value]
               failed[:fetched_at] = state[:fetched_at] if state && state[:fetched_at]
-              @states[key] = failed
+              @monitor.synchronize { @states[key] = failed }
               stale_or_raise(key, failed, now, max_stale_seconds, serve_stale_on_failure, deserialize, cause: e)
             end
+            settle(key, claim, value: result)
+            result
+          rescue StandardError => e
+            settle(key, claim, error: e)
+            raise
           end
         end
 
         private
+
+        def settle(key, claim, value: nil, error: nil)
+          @monitor.synchronize do
+            claim[:value] = value
+            claim[:error] = error
+            claim[:settled] = true
+            claim[:cond].broadcast
+            @inflight.delete(key) if @inflight[key].equal?(claim)
+          end
+        end
 
         def stale_or_raise(key, state, now, max_stale_seconds, serve_stale_on_failure, deserialize, cause: nil)
           if serve_stale_on_failure && state[:value] && state[:fetched_at] &&

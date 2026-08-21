@@ -28,6 +28,15 @@ module OpenReceive
     # hosts call OpenReceive.maybe_reconcile! from their own code instead.
     around_action :openreceive_opportunistic_reconcile
 
+    # Any exception the thin adapter layer itself raises (body cap, render)
+    # still answers with the shared error contract instead of the host's HTML
+    # error page — the same last-resort rescue as Server::RackApp#call. The
+    # handler's error_response redacts unexpected exceptions and reports them
+    # through Rails.error before the opaque 500 goes on the wire.
+    rescue_from StandardError do |error|
+      openreceive_respond(openreceive_handler.error_response(error, openreceive_request_id))
+    end
+
     private
 
     def openreceive_opportunistic_reconcile
@@ -47,13 +56,21 @@ module OpenReceive
     end
 
     # The raw JSON request body string (Server::RequestHandler parses it so the parse/error semantics
-    # match the Rack app exactly rather than relying on Rails' params coercion).
+    # match the Rack app exactly rather than relying on Rails' params coercion). Capped pre-auth,
+    # mirroring RackApp#read_body and the JS readJsonBody: an over-declared Content-Length is
+    # rejected before any read, and the read itself stops one byte past the cap so a chunked body
+    # can never stream unbounded input into memory.
     def openreceive_raw_body
+      max_bytes = Server::RequestHandler::MAX_BODY_BYTES
+      raise Server::PayloadTooLargeError if request.get_header("CONTENT_LENGTH").to_i > max_bytes
+
       body = request.body
       return "" if body.nil?
 
-      raw = body.respond_to?(:read) ? body.read : body.to_s
+      raw = body.respond_to?(:read) ? body.read(max_bytes + 1).to_s : body.to_s
       body.rewind if body.respond_to?(:rewind)
+      raise Server::PayloadTooLargeError if raw.bytesize > max_bytes
+
       raw
     end
 

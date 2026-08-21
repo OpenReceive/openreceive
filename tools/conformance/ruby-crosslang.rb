@@ -224,6 +224,67 @@ raise "fiat parity failed" unless OpenReceive.quote_fiat_to_msats(
   fiat_value: "10.00", btc_fiat_price: "50000.00"
 ) == 20_000_000
 
+# wallet-scan-truncation: a walk cut short (page cap, deadline, or an
+# offset-ignoring wallet) must OMIT unmatched hashes from the reconcile results
+# instead of reporting not_found — closing a paid attempt a truncated scan
+# never saw loses money. Mirrored by the same-named test in
+# tests/crosslang.test.mjs; both engines expand filler rows identically.
+scan_family = vector("wallet-scan-truncation")
+scan_page_limit = scan_family.fetch("page_limit")
+scan_filler_row = lambda do |page, index|
+  {
+    "type" => "incoming",
+    "payment_hash" => ("f" * 56) + format("%08d", (page * 10_000) + index),
+    "amount_msats" => 1000,
+    "transaction_state" => "settled",
+    "created_at" => 1000,
+    "settled_at" => 1100
+  }
+end
+scan_build_pages = lambda do |specs|
+  Array(specs).each_with_index.map do |spec, page|
+    rows = Array(spec["rows"]).map(&:dup)
+    Integer(spec["filler_rows"] || 0).times { |index| rows << scan_filler_row.call(page, index) }
+    rows
+  end
+end
+scan_family.fetch("cases").each do |kase|
+  wallet_spec = kase.fetch("wallet")
+  pages = scan_build_pages.call(wallet_spec.fetch("pages"))
+  unpaid_pages =
+    wallet_spec.key?("unpaid_pages") ? scan_build_pages.call(wallet_spec["unpaid_pages"]) : pages
+  wallet = Object.new
+  wallet.define_singleton_method(:list_transactions) do |request|
+    source = request["unpaid"] ? unpaid_pages : pages
+    index = wallet_spec["ignores_offset"] ? 0 : Integer(request.fetch("offset", 0)) / scan_page_limit
+    { "transactions" => source[index] || [] }
+  end
+  service = OpenReceive::Server::Service.new(
+    nwc_client: wallet, price_provider: false, swap_providers: [],
+    clock: -> { kase.fetch("clock") }
+  )
+  input = { "attempts" => kase.fetch("attempts") }
+  input["max_pages"] = kase.fetch("max_pages") if kase.key?("max_pages")
+  results = service.reconcile_payments(input)
+  by_hash = results.to_h { |row| [row.fetch("payment_hash"), row.fetch("status")] }
+  kase.dig("expected", "results").each do |row|
+    unless by_hash[row.fetch("payment_hash")] == row.fetch("status")
+      raise "wallet-scan-truncation parity failed: #{kase.fetch('name')} " \
+            "#{row.fetch('payment_hash')} (got #{by_hash[row.fetch('payment_hash')].inspect})"
+    end
+  end
+  kase.dig("expected", "omitted").each do |hash|
+    if by_hash.key?(hash)
+      raise "wallet-scan-truncation parity failed: #{kase.fetch('name')} " \
+            "#{hash} must be omitted (got #{by_hash.fetch(hash).inspect})"
+    end
+  end
+  unless results.length == kase.dig("expected", "results").length
+    raise "wallet-scan-truncation parity failed: #{kase.fetch('name')} result count " \
+          "(got #{results.length})"
+  end
+end
+
 vectors = JSON.parse(File.read("spec/test-vectors/attempt-reconciliation.json"))
 unless OpenReceive::Server::Reconciliation::EXPIRY_GRACE_SECONDS == vectors.fetch("expiry_grace_seconds")
   raise "attempt expiry grace drifted from the shared vectors"
@@ -238,4 +299,4 @@ vectors.fetch("vectors").each do |vector|
   raise "reconciliation parity failed: #{vector.fetch('name')}" unless actual == vector.fetch("expected")
 end
 
-puts "ruby storage-free conformance: ok (fiat, amounts, settlement, make-invoice, nwc-info, nwc-uri, errors, reconciliation, rate-limit-window, swap-address)"
+puts "ruby storage-free conformance: ok (fiat, amounts, settlement, make-invoice, nwc-info, nwc-uri, errors, reconciliation, rate-limit-window, swap-address, wallet-scan-truncation)"

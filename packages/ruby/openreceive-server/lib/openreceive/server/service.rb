@@ -7,7 +7,7 @@ require "openreceive/server/wallet_info"
 module OpenReceive
   module Server
     class Service
-      PAGE_LIMIT = 20
+      PAGE_LIMIT = OpenReceive::TRANSACTION_PAGE_LIMIT
       # Upper bound on wallet history pages per scan (mirrors JS maxPages): a
       # wallet/relay that keeps returning full pages must not hang the scan.
       MAX_PAGES = 10_000
@@ -125,10 +125,15 @@ module OpenReceive
           requested_expires_at = created_at + expiry
           expires_at = wallet["expires_at"] || requested_expires_at
           if (expires_at - requested_expires_at).abs > INVOICE_EXPIRY_TOLERANCE_SECONDS
+            # The detailed diagnostic is logged, never sent: the wire carries
+            # the same short form as the JS service.
+            @logger&.error(
+              "checkout.invoice_expiry.rejected: The wallet did not honor the " \
+              "requested invoice expiry (requested #{expiry}s, got " \
+              "#{expires_at - created_at}s). Use a wallet whose make_invoice honors expiry."
+            )
             raise WalletContractError,
-                  "The wallet did not honor the requested invoice expiry " \
-                  "(requested #{expiry}s, got #{expires_at - created_at}s). " \
-                  "Use a wallet whose make_invoice honors expiry."
+                  "Error with the backing NWC wallet: it did not honor the requested invoice expiry."
           end
           {
             "order_id" => order_id,
@@ -148,17 +153,26 @@ module OpenReceive
 
       def check_payment(input)
         data = stringify(input)
-        payment_hash = normalize_payment_hash(data["paymentHash"] || data["payment_hash"])
-        created_at = Integer(data["createdAt"] || data.fetch("created_at"))
-        overlap = Integer(data["overlapSeconds"] || data.fetch("overlap_seconds", 60))
-        transaction = lookup_transaction(
-          payment_hash,
-          from: [created_at - overlap, 0].max,
-          until_time: data["until"]
-        )
-        return { "payment_hash" => payment_hash, "status" => "not_found" } if transaction.nil?
-
-        payment_result(payment_hash, transaction)
+        begin
+          payment_hash = normalize_payment_hash(data["paymentHash"] || data["payment_hash"])
+          created_at = Integer(data["createdAt"] || data.fetch("created_at"))
+          overlap = Integer(data["overlapSeconds"] || data.fetch("overlap_seconds", 60))
+        rescue KeyError, ArgumentError => e
+          raise ValidationError, e.message
+        end
+        checked = reconcile_payments(
+          "attempts" => [{ "payment_hash" => payment_hash, "created_at" => created_at }],
+          "overlap_seconds" => overlap,
+          "until" => data["until"]
+        ).first
+        if checked.nil?
+          # The only way one attempt yields no result: the wallet-history walk
+          # ended before it could prove the invoice present or absent. That is
+          # a scan failure, not evidence that the payment never arrived.
+          raise "payment reconciliation did not complete: the wallet history " \
+                "walk ended before this invoice could be confirmed"
+        end
+        checked
       end
 
       # Optional bounds for request-path passes: "max_pages" caps each
@@ -178,25 +192,48 @@ module OpenReceive
         end
         overlap = Integer(data.fetch("overlap_seconds", 60))
         from = [expected.values.min - overlap, 0].max
-        until_time = Integer(data["until"] || @clock.call)
+        # Both ends of the window are padded: `from` against a wallet clock
+        # that lags, `until` against one that runs ahead — an unpadded `until`
+        # on the host clock hides an invoice the wallet just stamped into the
+        # future.
+        until_time = Integer(data["until"] || (@clock.call + overlap))
         bounds = { max_pages: data["max_pages"], deadline: data["deadline"] }.compact
-        rows = list_transactions(from: from, until_time: until_time, **bounds)
-        by_hash = rows.to_h { |row| [row["payment_hash"], row] }
-        if expected.keys.any? { |hash| !by_hash.key?(hash) }
-          list_transactions(from: from, until_time: until_time, unpaid: true, **bounds).each do |row|
-            by_hash[row["payment_hash"]] ||= row
-          end
+        settled = scan_incoming_transactions(
+          expected: expected.keys, from: from, until_time: until_time, **bounds
+        )
+        by_hash = settled.fetch(:rows).dup
+        missing = expected.keys.reject { |hash| by_hash.key?(hash) }
+        truncated = false
+        unless missing.empty?
+          inclusive = scan_incoming_transactions(
+            expected: missing, from: from, until_time: until_time, unpaid: true, **bounds
+          )
+          truncated = settled.fetch(:truncated) || inclusive.fetch(:truncated)
+          inclusive.fetch(:rows).each { |hash, row| by_hash[hash] ||= row }
         end
-        expected.keys.map do |hash|
-          by_hash[hash] ? payment_result(hash, by_hash.fetch(hash)) :
+        # A hash the walk could not decide is OMITTED rather than reported
+        # not_found: when the page cap, the pass deadline, or a wallet that
+        # ignored `offset` cut the walk short, absence is unproven, and
+        # reporting not_found would let a caller close a paid attempt. Omitted
+        # hashes are simply retried next pass (mirrors the JS
+        # reconcilePaymentAttempts).
+        expected.keys.filter_map do |hash|
+          if by_hash.key?(hash)
+            payment_result(hash, by_hash.fetch(hash))
+          elsif !truncated
             { "payment_hash" => hash, "status" => "not_found" }
+          end
         end
       end
 
       def quote_swap(input)
         data = stringify(input)
         asset = parse_pay_in_asset(data["payInAsset"] || data["pay_in_asset"])
-        amount_msats, = resolve_amount(data.fetch("amount"))
+        begin
+          amount_msats, = resolve_amount(data.fetch("amount"))
+        rescue KeyError, ArgumentError => e
+          raise ValidationError, e.message
+        end
         provider = select_provider(asset)
         quote = stringify(call_provider(provider, :quote,
           "pay_in_asset" => asset, "invoice_amount_msats" => amount_msats))
@@ -217,6 +254,11 @@ module OpenReceive
       def create_swap(input)
         data = stringify(input)
         asset = parse_pay_in_asset(data["payInAsset"] || data["pay_in_asset"])
+        amount = begin
+          data.fetch("amount")
+        rescue KeyError => e
+          raise ValidationError, e.message
+        end
         provider = select_provider(asset)
         expiry = provider.respond_to?(:invoice_expiry_seconds) ? provider.invoice_expiry_seconds(pay_in_asset: asset) : SWAP_INVOICE_EXPIRY_SECONDS
         # The shadow-invoice expiry is provider-mandated: build the checkout
@@ -224,7 +266,7 @@ module OpenReceive
         # "expirySeconds") can override it or smuggle a different order id.
         checkout = create_checkout(
           "order_id" => data["order_id"] || data["orderId"],
-          "amount" => data.fetch("amount"),
+          "amount" => amount,
           "memo" => data["memo"],
           "metadata" => data["metadata"],
           "expiry_seconds" => expiry
@@ -257,7 +299,9 @@ module OpenReceive
         recovery = normalize_swap_data(swap_data)
         hash = normalize_payment_hash(payment_hash)
         host_order_id = required_string(order_id, "order_id")
-        address = required_string(refund_address, "refund_address")
+        address = normalize_refund_address(
+          refund_address, recovery.dig("provider_order", "pay_in_asset")
+        )
         provider_name = recovery.fetch("provider_order").fetch("provider")
         provider = provider_by_name(provider_name)
         current = stringify(call_provider(provider, :get_status, recovery.fetch("provider_order")))
@@ -278,7 +322,9 @@ module OpenReceive
             raise ValidationError, "currencies entries must be three-letter fiat codes"
           end
           unless @price_currencies.include?(currency)
-            raise ValidationError, "currency #{currency} is not in the configured price_currencies"
+            raise ValidationError,
+                  "fiat.currency must be one of the configured priceCurrencies: " \
+                  "#{@price_currencies.join(', ')}."
           end
         end
         { "bitcoin" => currencies.to_h { |currency| [currency.downcase, btc_fiat_price_or_unavailable(currency)] } }
@@ -515,17 +561,14 @@ module OpenReceive
         value = required_string(amount["value"], "amount.value")
         return [OpenReceive::Money.direct_to_msats(currency: currency, value: value), nil] if %w[BTC SAT SATS].include?(currency)
         raise ValidationError, "price provider is not configured" if @price_provider.nil?
-        raise ValidationError, "unsupported fiat currency" unless @price_currencies.include?(currency)
+        unless @price_currencies.include?(currency)
+          raise ValidationError,
+                "fiat.currency must be one of the configured priceCurrencies: " \
+                "#{@price_currencies.join(', ')}."
+        end
         price = btc_fiat_price_or_unavailable(currency)
         msats = OpenReceive.quote_fiat_to_msats(fiat_value: value, btc_fiat_price: price)
         [msats, { "fiat" => { "currency" => currency, "value" => value }, "btc_fiat_price" => price, "amount_msats" => msats, "as_of" => @clock.call }]
-      end
-
-      def lookup_transaction(hash, from:, until_time:)
-        transaction = list_transactions(from: from, until_time: until_time).find { |row| row["payment_hash"] == hash }
-        return transaction unless transaction.nil?
-
-        list_transactions(from: from, until_time: until_time, unpaid: true).find { |row| row["payment_hash"] == hash }
       end
 
       def payment_result(hash, transaction)
@@ -542,44 +585,59 @@ module OpenReceive
         }.compact
       end
 
-      def list_transactions(from:, until_time:, unpaid: false, max_pages: nil, deadline: nil)
-        offset = 0
-        result = {}
-        # Bounded like the JS scan: a wallet that keeps returning full pages
-        # must not hang payments/check, swap creation, or reconciliation.
-        pages = Integer(max_pages || MAX_PAGES)
-        pages.times do
-          request = { "type" => "incoming", "limit" => PAGE_LIMIT, "offset" => offset }
-          request["unpaid"] = true if unpaid
-          request["from"] = Integer(from) unless from.nil?
-          request["until"] = Integer(until_time) unless until_time.nil?
-          page = OpenReceive.normalize_list_transactions_response(call_nwc(:list_transactions, request)).fetch("transactions")
-          page.each do |row|
-            # Receive checkout only reconciles incoming payments.
-            next if row["type"] && row["type"] != "incoming"
-            # Mirrors the JS scan key normalization: a wallet emitting padded
-            # or upper-case hashes must key the same rows in both engines, and
-            # a malformed hash is dropped rather than keying a row nothing can
-            # ever match.
-            hash = normalize_scan_payment_hash(row["payment_hash"])
-            result[hash] = row.merge("payment_hash" => hash) unless hash.nil?
-          end
-          break if page.length < PAGE_LIMIT
-          # Checked only between page fetches, never mid-request: a slow wallet
-          # bounds the scan instead of interrupting work already in flight.
-          break if deadline && monotonic_now >= deadline
-          offset += PAGE_LIMIT
+      # Adapts call_nwc to the shared core walk's client contract and enforces
+      # the request-path deadline: checked only between page fetches, never
+      # mid-request, so a slow wallet bounds the scan instead of interrupting
+      # work already in flight. Once the monotonic deadline passes, the
+      # previous page is replayed instead of fetching another — the core walk
+      # recognizes the repeat and ends the scan marked truncated, so a
+      # deadline-cut walk can never prove an invoice absent.
+      class ScanClient
+        def initialize(service, deadline)
+          @service = service
+          @deadline = deadline
+          @previous = nil
         end
-        result.values
+
+        def list_transactions(request)
+          if @previous && @deadline &&
+             Process.clock_gettime(Process::CLOCK_MONOTONIC) >= @deadline
+            return @previous
+          end
+          @previous = @service.send(:call_nwc, :list_transactions, request)
+        end
+      end
+      private_constant :ScanClient
+
+      # One wallet-history walk through the shared core scan (the JS
+      # listIncomingTransactions port): bounded like the JS scan, so a wallet
+      # that keeps returning full pages must not hang payments/check, swap
+      # creation, or reconciliation. Returns { rows:, truncated: }.
+      def scan_incoming_transactions(expected:, from:, until_time:, unpaid: false, max_pages: nil, deadline: nil)
+        OpenReceive.list_incoming_transactions(
+          client: ScanClient.new(self, deadline),
+          expected: expected,
+          from: from,
+          until_time: until_time,
+          max_pages: max_pages || MAX_PAGES,
+          include_unpaid: unpaid
+        )
       end
 
-      def normalize_scan_payment_hash(value)
-        normalized = value.to_s.strip.downcase
-        /\A[0-9a-f]{64}\z/.match?(normalized) ? normalized : nil
-      end
-
-      def monotonic_now
-        Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      # A refund is the last chance to recover a mis-sent deposit, so the
+      # address is checked against the order's own pay-in network with its
+      # checksum — a false accept here sends the payer's money somewhere
+      # unrecoverable. Mirrors the JS normalizeRefundAddress exactly.
+      def normalize_refund_address(value, pay_in_asset)
+        normalized = value.to_s.strip
+        if normalized.empty? || normalized.length > 300
+          raise ValidationError, "refundAddress is invalid."
+        end
+        if pay_in_asset.is_a?(String) &&
+           !OpenReceive::SwapAddress.valid_for_pay_in_asset?(pay_in_asset, normalized)
+          raise ValidationError, "refundAddress is not a valid #{pay_in_asset} address."
+        end
+        normalized
       end
 
       def select_provider(asset)

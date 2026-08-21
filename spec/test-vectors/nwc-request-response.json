@@ -109,6 +109,60 @@
       }
     },
     {
+      "name": "list transactions rows settle via boolean flags and carry fees",
+      "method": "list_transactions",
+      "openreceive_request": {
+        "type": "incoming",
+        "limit": 20,
+        "offset": 0
+      },
+      "expected_nip47_request": {
+        "type": "incoming",
+        "limit": 20,
+        "offset": 0
+      },
+      "raw_response": {
+        "transactions": [
+          {
+            "type": "incoming",
+            "invoice": "lnbc-bool-settled",
+            "payment_hash": "5555555555555555555555555555555555555555555555555555555555555555",
+            "amount": 150000,
+            "settled": true,
+            "fees_paid": 2000
+          },
+          {
+            "type": "incoming",
+            "invoice": "lnbc-bool-paid",
+            "paymentHash": "6666666666666666666666666666666666666666666666666666666666666666",
+            "amount_msats": 250000,
+            "paid": true,
+            "feesPaid": "1000"
+          }
+        ]
+      },
+      "expected_openreceive_response": {
+        "transactions": [
+          {
+            "type": "incoming",
+            "invoice": "lnbc-bool-settled",
+            "payment_hash": "5555555555555555555555555555555555555555555555555555555555555555",
+            "amount_msats": 150000,
+            "transaction_state": "settled",
+            "fees_paid_msats": 2000
+          },
+          {
+            "type": "incoming",
+            "invoice": "lnbc-bool-paid",
+            "payment_hash": "6666666666666666666666666666666666666666666666666666666666666666",
+            "amount_msats": 250000,
+            "transaction_state": "settled",
+            "fees_paid_msats": 1000
+          }
+        ]
+      }
+    },
+    {
       "name": "list transactions response accepts raw array and camelCase fields",
       "method": "list_transactions",
       "openreceive_request": {

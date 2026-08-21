@@ -19,11 +19,11 @@ module OpenReceive
     BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
     BASE58_MAP = BASE58_ALPHABET.each_char.with_index.to_h.freeze
 
-    ETH_ADDRESS_PATTERN = /\A0x[0-9a-fA-F]{40}\z/.freeze
+    ETH_ADDRESS_PATTERN = /\A0x[0-9a-fA-F]{40}\z/
     TRON_ADDRESS_PREFIX = 0x41
     BASE58CHECK_CHECKSUM_BYTES = 4
-    TRON_ADDRESS_PATTERN = /\AT[1-9A-HJ-NP-Za-km-z]{33}\z/.freeze
-    SOLANA_ADDRESS_PATTERN = /\A[1-9A-HJ-NP-Za-km-z]{32,44}\z/.freeze
+    TRON_ADDRESS_PATTERN = /\AT[1-9A-HJ-NP-Za-km-z]{33}\z/
+    SOLANA_ADDRESS_PATTERN = /\A[1-9A-HJ-NP-Za-km-z]{32,44}\z/
 
     module_function
 
@@ -130,9 +130,15 @@ module OpenReceive
       return nil if valid_for_pay_in_asset?(pay_in_asset, trimmed)
       network = network_for_pay_in_asset(pay_in_asset)
       if network == "ETH"
+        if ETH_ADDRESS_PATTERN.match?(trimmed)
+          return "That #{network_label} address failed its checksum. Copy it again from your wallet."
+        end
         return "That doesn't look like an #{network_label} address. Use a 0x address."
       end
       if network == "TRX"
+        if TRON_ADDRESS_PATTERN.match?(trimmed)
+          return "That #{network_label} address failed its checksum. Copy it again from your wallet."
+        end
         return "That doesn't look like a #{network_label} address. Use an address starting with T."
       end
       "That doesn't look like a #{network_label} address. Check you pasted the full address."

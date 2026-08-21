@@ -17,6 +17,12 @@ module OpenReceive
     # writes and reads. Mirrors the JS OPENRECEIVE_PAYMENTS_SCHEMA_VERSION; both
     # engines share one host database, so they must agree.
     PAYMENTS_SCHEMA_VERSION = 1
+
+    # Oldest-first page size for one reconciliation pass. Mirrors the JS
+    # OPENRECEIVE_RECONCILE_BATCH_SIZE: a backlog of pending attempts is
+    # drained over several passes instead of loading every row (and scanning
+    # every invoice's window) in one unbounded query.
+    RECONCILE_BATCH_SIZE = 200
   end
 end
 

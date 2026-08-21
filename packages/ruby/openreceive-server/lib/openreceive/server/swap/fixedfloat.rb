@@ -60,7 +60,7 @@ module OpenReceive
         # Margin above deposit_window + settlement_sla. Five minutes keeps the
         # shadow invoice alive through a plausible 30-minute provider order.
         DEFAULT_INVOICE_EXPIRY_MARGIN_SECONDS = 5 * 60
-        PROVIDER_ID_PATTERN = /\A[a-z0-9][a-z0-9_-]{0,63}\z/.freeze
+        PROVIDER_ID_PATTERN = /\A[a-z0-9][a-z0-9_-]{0,63}\z/
 
         attr_reader :name
 
@@ -783,15 +783,21 @@ module OpenReceive
             numeric =
               if value.is_a?(String)
                 begin
-                  Float(value)
+                  Integer(value, 10)
                 rescue ArgumentError
-                  nil
+                  begin
+                    rational = Rational(value)
+                    rational.denominator == 1 ? rational.numerator : nil
+                  rescue ArgumentError, ZeroDivisionError
+                    nil
+                  end
                 end
               else
                 value
               end
             return nil unless numeric.is_a?(Numeric)
             return nil unless numeric == numeric.to_i && numeric >= 0
+            return nil if numeric.to_i > FixedFloatRates::MAX_SAFE_INTEGER
 
             numeric.to_i
           end

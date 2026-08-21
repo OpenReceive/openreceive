@@ -7,6 +7,7 @@ import {
   NwcUriParseError,
   parseNwcUri,
   quoteFiatToMsatsWithPrice,
+  reconcilePaymentAttempts,
 } from "@openreceive/core";
 import { isValidAddressForSwapNetwork } from "@openreceive/core/swap-address";
 import { normalizeNwcWalletError } from "../packages/js/node/src/index.ts";
@@ -192,6 +193,59 @@ test("swap-address vectors validate through the production checksum rules", () =
       item.expected.valid,
       item.name,
     );
+  }
+});
+
+test("wallet-scan-truncation vectors reconcile through the production walk", async () => {
+  // A walk cut short (page cap or an offset-ignoring wallet) must OMIT
+  // unmatched hashes instead of reporting not_found — closing a paid attempt
+  // a truncated scan never saw loses money. Mirrored by the same-named check
+  // in tools/conformance/ruby-crosslang.rb; both engines expand filler rows
+  // identically.
+  const family = vector("wallet-scan-truncation");
+  const pageLimit = family.page_limit;
+  const fillerRow = (page, index) => ({
+    type: "incoming",
+    payment_hash: "f".repeat(56) + String(page * 10_000 + index).padStart(8, "0"),
+    amount_msats: 1000,
+    transaction_state: "settled",
+    created_at: 1000,
+    settled_at: 1100,
+  });
+  const buildPages = (specs) =>
+    (specs ?? []).map((spec, page) => [
+      ...(spec.rows ?? []),
+      ...Array.from({ length: spec.filler_rows ?? 0 }, (_, index) => fillerRow(page, index)),
+    ]);
+  for (const item of family.cases) {
+    const pages = buildPages(item.wallet.pages);
+    const unpaidPages =
+      item.wallet.unpaid_pages === undefined ? pages : buildPages(item.wallet.unpaid_pages);
+    const client = {
+      listTransactions: async (request) => {
+        const source = request.unpaid === true ? unpaidPages : pages;
+        const index =
+          item.wallet.ignores_offset === true ? 0 : Math.floor((request.offset ?? 0) / pageLimit);
+        return { transactions: source[index] ?? [] };
+      },
+    };
+    const results = await reconcilePaymentAttempts({
+      client,
+      attempts: item.attempts.map((attempt) => ({
+        paymentHash: attempt.payment_hash,
+        createdAt: attempt.created_at,
+      })),
+      clock: () => item.clock,
+      ...(item.max_pages === undefined ? {} : { maxPages: item.max_pages }),
+    });
+    const byHash = new Map(results.map((check) => [check.paymentHash, check.status]));
+    for (const row of item.expected.results) {
+      assert.equal(byHash.get(row.payment_hash), row.status, `${item.name}: ${row.payment_hash}`);
+    }
+    for (const hash of item.expected.omitted) {
+      assert.ok(!byHash.has(hash), `${item.name}: ${hash} must be omitted`);
+    }
+    assert.equal(results.length, item.expected.results.length, `${item.name}: result count`);
   }
 });
 

@@ -29,18 +29,28 @@ ActiveRecord::Schema.define do
     t.string :client_ip
     t.datetime :inserted_at, null: false
     t.timestamps
+    t.check_constraint "status IN ('pending', 'settled', 'expired', 'failed', 'attention')",
+                       name: "openreceive_payments_status_check"
+    t.check_constraint "length(payment_hash) = 64 AND payment_hash NOT GLOB '*[^0-9a-f]*'",
+                       name: "openreceive_payments_payment_hash_check"
   end
   add_index :openreceive_payments, :payment_hash, unique: true
   add_index :openreceive_payments, [:order_id, :created_at]
   add_index :openreceive_payments, [:status, :created_at]
   add_index :openreceive_payments, [:client_ip, :inserted_at]
 
-  # Mirrors the install generator's openreceive_meta table (durable reconcile gate).
+  # Mirrors the install generator's openreceive_meta table (durable reconcile
+  # gate + installed schema version), including the migration's seed insert.
   create_table :openreceive_meta, id: false, force: true do |t|
     t.string :key, null: false, primary_key: true
     t.text :value, null: false
     t.bigint :rev, null: false, default: 0
   end
+  execute(<<~SQL.squish)
+    INSERT INTO openreceive_meta (key, value, rev)
+    VALUES ('schema_version', '#{OpenReceive::Server::PAYMENTS_SCHEMA_VERSION}', 0)
+    ON CONFLICT (key) DO NOTHING
+  SQL
 end
 
 class Order < ActiveRecord::Base
@@ -350,6 +360,31 @@ class OpenReceivePaymentModelTest < Minitest::Test
     end
   end
 
+  def test_reconcilable_attempts_takes_only_the_oldest_batch
+    order = create_order
+    batch = OpenReceive::Server::RECONCILE_BATCH_SIZE
+    now = Time.now.to_i
+    (batch + 5).times do |index|
+      OpenReceivePayment.create!(
+        order_id: order.id,
+        payment_hash: format("%064x", index + 1),
+        status: "pending",
+        expires_at: Time.at(now + 600).utc,
+        checkout_data: {},
+        created_at: Time.at(now - (batch + 5) + index).utc,
+        inserted_at: Time.current
+      )
+    end
+
+    hashes = OpenReceivePayment.reconcilable_attempts.map { |attempt| attempt.fetch("payment_hash") }
+    assert_equal batch, hashes.length
+    # Oldest first, mirroring the JS OPENRECEIVE_RECONCILE_BATCH_SIZE page: the
+    # attempts closest to their closure deadline are covered now; the five
+    # newest rows wait for a later pass.
+    assert_equal format("%064x", 1), hashes.first
+    refute_includes hashes, format("%064x", batch + 5)
+  end
+
   def test_reconcilable_attempts_returns_pending_rows_only
     order = create_order
     pending_hash = unique_hash
@@ -384,6 +419,71 @@ class OpenReceivePaymentModelTest < Minitest::Test
     refute_includes payment.serializable_hash.keys, "swap_data"
     refute_includes JSON.parse(payment.to_json).keys, "swap_data"
     assert_includes OpenReceivePayment.filter_attributes, :swap_data
+  end
+end
+
+class SchemaVersionGateTest < Minitest::Test
+  include OpenReceivePaymentTestHelpers
+
+  def setup
+    reset_tables!
+    reset_schema_check!
+  end
+
+  def teardown
+    OpenReceiveMeta.delete_all
+    reset_schema_check!
+    OpenReceive.reset_config!
+  end
+
+  # The probe is memoized per process (one check on the engine's first database
+  # touch, like the JS repository); tests around the marker must reset it.
+  def reset_schema_check!
+    return unless OpenReceiveMeta.instance_variable_defined?(:@schema_version_checked)
+
+    OpenReceiveMeta.remove_instance_variable(:@schema_version_checked)
+  end
+
+  def seed_schema_version(value)
+    OpenReceiveMeta.create!(key: "schema_version", value: value.to_s, rev: 0)
+  end
+
+  def test_a_newer_stored_schema_version_refuses_every_engine_entry_point
+    seed_schema_version(OpenReceive::Server::PAYMENTS_SCHEMA_VERSION + 1)
+
+    error = assert_raises(OpenReceive::ConfigurationError) { OpenReceivePayment.reconcilable_attempts }
+    assert_match(/schema version #{OpenReceive::Server::PAYMENTS_SCHEMA_VERSION + 1}/, error.message)
+    assert_match(/newer than this library's #{OpenReceive::Server::PAYMENTS_SCHEMA_VERSION}/, error.message)
+    assert_match(/Upgrade openreceive-rails/, error.message)
+
+    assert_raises(OpenReceive::ConfigurationError) { commit!(create_order, unique_hash) }
+    assert_raises(OpenReceive::ConfigurationError) do
+      OpenReceivePayment.mark_paid_once!(payment_hash: unique_hash, paid_at: Time.now.to_i)
+    end
+    assert_raises(OpenReceive::ConfigurationError) do
+      OpenReceiveMeta.claim_reconcile_gate(now: Time.now.to_i, interval_seconds: 2)
+    end
+  end
+
+  def test_the_installed_schema_version_passes
+    seed_schema_version(OpenReceive::Server::PAYMENTS_SCHEMA_VERSION)
+    assert_equal [], OpenReceivePayment.reconcilable_attempts
+  end
+
+  def test_a_missing_marker_row_is_tolerated_as_unversioned
+    assert_equal [], OpenReceivePayment.reconcilable_attempts
+  end
+
+  def test_a_non_integer_marker_is_tolerated_as_unversioned
+    seed_schema_version("not-a-number")
+    assert_equal [], OpenReceivePayment.reconcilable_attempts
+  end
+
+  def test_the_probe_runs_once_per_process
+    assert_equal [], OpenReceivePayment.reconcilable_attempts
+    # Too late for this process: the probe already ran, on first use.
+    seed_schema_version(OpenReceive::Server::PAYMENTS_SCHEMA_VERSION + 1)
+    assert_equal [], OpenReceivePayment.reconcilable_attempts
   end
 end
 
@@ -705,6 +805,50 @@ class ReconcileTest < Minitest::Test
     assert_equal 1, @fulfilled.length
   end
 
+  def test_a_truncated_scan_leaves_unseen_attempts_untouched
+    now = Time.now.to_i
+    grace = OpenReceive::Server::Reconciliation::EXPIRY_GRACE_SECONDS
+    settled_order, settled_hash = pending_attempt(expires_at: now + 600)
+    _unseen_order, unseen_hash = pending_attempt(expires_at: now - grace - 100)
+
+    @wallet.add_transaction(settled_hash, state: "settled", settled_at: now - 5)
+    19.times { @wallet.add_transaction(unique_hash, state: nil) }
+    # A wallet that ignores `offset` serves the same full page forever: the
+    # walk ends truncated, and unseen_hash is never proven absent.
+    transactions = @wallet.transactions
+    @wallet.define_singleton_method(:list_transactions) do |request|
+      { "transactions" => transactions.first(Integer(request.fetch("limit", 20))) }
+    end
+
+    checks = OpenReceive.reconcile!(now: now, max_pages: 3)
+    refute_includes checks.map { |check| check["payment_hash"] }, unseen_hash
+
+    # Absence from a truncated pass is no information: the attempt stays
+    # pending however far past expiry-plus-grace the pass observed it.
+    assert_equal "pending", OpenReceivePayment.find_by(payment_hash: unseen_hash).status
+    # Rows the truncated walk DID see still settle.
+    assert_equal "settled", OpenReceivePayment.find_by(payment_hash: settled_hash).status
+    assert_equal [settled_order.id], @fulfilled.map(&:order_id)
+  end
+
+  def test_reconcile_pads_the_scan_window_until_by_the_overlap
+    now = Time.now.to_i
+    _order, hash = pending_attempt(expires_at: now + 600)
+    @wallet.add_transaction(hash, state: "settled", settled_at: now - 5)
+    requests = []
+    original = @wallet.method(:list_transactions)
+    @wallet.define_singleton_method(:list_transactions) do |request|
+      requests << request
+      original.call(request)
+    end
+
+    OpenReceive.reconcile!(now: now, overlap_seconds: 60)
+    refute_empty requests
+    # Mirrors the JS scan window: `until` is the observation instant plus the
+    # overlap, so wallet-side clock skew cannot hide a fresh settlement.
+    assert(requests.all? { |request| request["until"] == now + 60 })
+  end
+
   def test_a_failed_wallet_scan_closes_nothing
     now = Time.now.to_i
     _order, hash = pending_attempt(expires_at: now - 9_999)
@@ -891,6 +1035,105 @@ class NotificationsTest < Minitest::Test
     assert_match(/does not support NWC-02 notifications/, error.message)
     assert_match(/ReconcileJob/, error.message)
   end
+
+  # A blocking client: dispatches a queued notification inside the subscribe
+  # call itself, so a handler failure surfaces as an exception from subscribe.
+  class BlockingNotifyingWallet < NotifyingWallet
+    attr_reader :subscribe_calls
+
+    def initialize
+      super
+      @subscribe_calls = []
+    end
+
+    def subscribe_notifications(notification_types = nil, &handler)
+      @subscribe_calls << notification_types
+      handler.call(
+        "notification_type" => "payment_received",
+        "notification" => { "payment_hash" => "00" * 32 }
+      )
+      :ended
+    end
+  end
+
+  class BlockOnlySubscribeWallet < NotifyingWallet
+    def subscribe_notifications(&handler)
+      @handler = handler
+      :subscribed_bare
+    end
+  end
+
+  def test_an_argument_error_from_the_handler_never_resubscribes_without_a_filter
+    now = Time.now.to_i
+    order = create_order
+    hash = unique_hash
+    commit!(order, hash, expires_at: now + 600)
+    wallet = BlockingNotifyingWallet.new
+    OpenReceive.config.nwc_client = wallet
+    OpenReceive.config.reset_runtime!
+
+    singleton = OpenReceive.singleton_class
+    singleton.send(:alias_method, :original_reconcile!, :reconcile!)
+    singleton.send(:define_method, :reconcile!) { |**| raise ArgumentError, "bad handler input" }
+    begin
+      # The hash-only payload falls back to reconcile!, which raises the kind
+      # of ArgumentError the old rescue mistook for a signature mismatch; it
+      # must propagate, never trigger a second unfiltered subscription.
+      error = assert_raises(ArgumentError) { OpenReceive.listen_for_notifications! }
+      assert_equal "bad handler input", error.message
+      assert_equal [["payment_received"]], wallet.subscribe_calls
+    ensure
+      singleton.send(:alias_method, :reconcile!, :original_reconcile!)
+      singleton.send(:remove_method, :original_reconcile!)
+    end
+  end
+
+  def test_a_block_only_subscribe_client_is_called_without_a_type_filter
+    now = Time.now.to_i
+    order = create_order
+    hash = unique_hash
+    commit!(order, hash, expires_at: now + 600)
+    wallet = BlockOnlySubscribeWallet.new
+    OpenReceive.config.nwc_client = wallet
+    OpenReceive.config.reset_runtime!
+
+    assert_equal :subscribed_bare, OpenReceive.listen_for_notifications!
+    wallet.notify(
+      "notification_type" => "payment_received",
+      "notification" => {
+        "type" => "incoming", "payment_hash" => hash, "amount" => 100_000,
+        "state" => "settled", "settled_at" => now - 1
+      }
+    )
+
+    assert_equal "settled", OpenReceivePayment.find_by(payment_hash: hash).status
+    assert_equal [order.id], @fulfilled.map(&:order_id)
+  end
+end
+
+class NotificationsWorkerBackoffTest < Minitest::Test
+  def test_the_delay_doubles_per_consecutive_failure_and_caps
+    delays = []
+    previous = nil
+    8.times do
+      previous = OpenReceive.notifications_retry_delay(previous, 0.2)
+      delays << previous
+    end
+    assert_equal [1, 2, 4, 8, 16, 32, 60, 60], delays
+  end
+
+  def test_the_delay_resets_after_a_healthy_subscription_period
+    healthy = OpenReceive::NOTIFICATIONS_MAX_BACKOFF_SECONDS
+    assert_equal 1, OpenReceive.notifications_retry_delay(60, healthy)
+    assert_equal 1, OpenReceive.notifications_retry_delay(60, healthy + 3600)
+    assert_equal 60, OpenReceive.notifications_retry_delay(60, healthy - 1)
+  end
+
+  def test_the_worker_loop_uses_the_shared_retry_delay
+    source = File.read(File.expand_path("../lib/tasks/openreceive.rake", __dir__))
+    assert_includes source, "OpenReceive.notifications_retry_delay"
+    refute_includes source, "backoff = [backoff * 2"
+  end
 end
 
 # The default Ruby wallet client: OpenReceive builds nwc-ruby from NWC_URI and
@@ -1038,6 +1281,7 @@ class OpenReceiveRailsGeneratorTemplateTest < Minitest::Test
     :add_order_foreign_key?,
     :schema_version,
     :payment_hash_check_sql,
+    :mysql_adapter?,
     keyword_init: true
   ) do
     def render(path)
@@ -1053,7 +1297,8 @@ class OpenReceiveRailsGeneratorTemplateTest < Minitest::Test
       migration_version: "7.1",
       add_order_foreign_key?: true,
       schema_version: OpenReceive::Server::PAYMENTS_SCHEMA_VERSION,
-      payment_hash_check_sql: '"payment_hash ~ \'^[0-9a-f]{64}$\'"'
+      payment_hash_check_sql: '"payment_hash ~ \'^[0-9a-f]{64}$\'"',
+      mysql_adapter?: false
     )
   end
 
@@ -1118,6 +1363,16 @@ class OpenReceiveRailsGeneratorTemplateTest < Minitest::Test
     refute_match(/after_initialize\s+do/, rendered)
     assert_includes rendered, 'config.parent_controller = "ApplicationController"'
     RubyVM::InstructionSequence.compile(rendered)
+  end
+
+  def test_engine_boots_fail_closed_and_warns_on_the_logging_placeholder
+    source = File.read(File.expand_path("../lib/openreceive/engine.rb", __dir__))
+    assert_includes source, "config.after_initialize"
+    assert_includes source, "OpenReceive.config.service if ::Rails.env.production?"
+    assert_includes source, "LOGGING_ON_PAID"
+
+    rendered = @context.render(File.join(TEMPLATE_ROOT, "initializer.rb"))
+    assert_includes rendered, "config.on_paid = OpenReceive::LOGGING_ON_PAID"
   end
 
   def test_engine_application_controller_skips_forgery_protection
@@ -1191,6 +1446,21 @@ class OpportunisticReconcileTest < Minitest::Test
     refute OpenReceiveMeta.claim_reconcile_gate(now: now, interval_seconds: 2)
     refute OpenReceiveMeta.claim_reconcile_gate(now: now + 1, interval_seconds: 2)
     assert OpenReceiveMeta.claim_reconcile_gate(now: now + 2, interval_seconds: 2)
+  end
+
+  def test_gate_treats_a_far_future_claim_as_stale
+    now = Time.now.to_i
+    assert OpenReceiveMeta.claim_reconcile_gate(now: now + 3600, interval_seconds: 2)
+    # A rolled-back clock reads a claim stamped far in the future. Beyond the
+    # skew tolerance it is a backwards clock step, not a fresh claim — the gate
+    # must not park busy until wall-clock time catches up.
+    assert OpenReceiveMeta.claim_reconcile_gate(now: now, interval_seconds: 2)
+  end
+
+  def test_gate_honors_a_slightly_future_claim_within_the_skew_tolerance
+    now = Time.now.to_i
+    assert OpenReceiveMeta.claim_reconcile_gate(now: now + 30, interval_seconds: 2)
+    refute OpenReceiveMeta.claim_reconcile_gate(now: now, interval_seconds: 2)
   end
 
   def test_maybe_reconcile_skips_without_pending_and_without_a_wallet_call
@@ -1350,6 +1620,8 @@ class OpenReceiveInstallGeneratorRunTest < Rails::Generators::TestCase
       assert_includes content, "status IN ('pending', 'settled', 'expired', 'failed', 'attention')"
       assert_includes content, "openreceive_payments_payment_hash_check"
       assert_includes content, "'schema_version', '#{OpenReceive::Server::PAYMENTS_SCHEMA_VERSION}'"
+      assert_includes content, "ON CONFLICT (key) DO NOTHING"
+      refute_includes content, "INSERT IGNORE"
       RubyVM::InstructionSequence.compile(content)
     end
 
@@ -1361,6 +1633,28 @@ class OpenReceiveInstallGeneratorRunTest < Rails::Generators::TestCase
 
     assert_file "config/routes.rb" do |content|
       assert_includes content, %(mount OpenReceive::Engine => "/openreceive")
+    end
+  end
+
+  def test_mysql_adapter_run_renders_mysql_compatible_ddl
+    fake_db_config = Struct.new(:adapter).new("mysql2")
+    ActiveRecord::Base.stub(:connection_db_config, fake_db_config) do
+      run_generator
+    end
+
+    assert_migration "db/migrate/create_openreceive_tables.rb" do |content|
+      refute_includes content, "<%"
+      # MySQL has no ON CONFLICT; the seed is INSERT IGNORE, with the reserved
+      # word `key` quoted.
+      assert_includes content, "INSERT IGNORE INTO openreceive_meta (`key`, value, rev)"
+      assert_includes content, "'schema_version', '#{OpenReceive::Server::PAYMENTS_SCHEMA_VERSION}'"
+      refute_includes content, "ON CONFLICT"
+      # Neither postgres `~` nor sqlite GLOB parse on MySQL; REGEXP_LIKE's 'c'
+      # flag keeps the check case-sensitive under ci collations.
+      assert_includes content, %q{"REGEXP_LIKE(payment_hash, '^[0-9a-f]{64}$', 'c')"}
+      refute_includes content, "GLOB"
+      assert_includes content, "status IN ('pending', 'settled', 'expired', 'failed', 'attention')"
+      RubyVM::InstructionSequence.compile(content)
     end
   end
 

@@ -56,6 +56,7 @@ class OpenReceivePayment < ActiveRecord::Base
   end
 
   def self.selected_for(order_id:, action:, payment_hash: nil, pay_in_asset: nil, now: Time.current)
+    OpenReceiveMeta.assert_supported_schema!
     attempts = where(order_id: order_id)
     unless payment_hash.to_s.strip.empty?
       return attempts.find_by(payment_hash: payment_hash.to_s.downcase)
@@ -96,6 +97,7 @@ class OpenReceivePayment < ActiveRecord::Base
   end
 
   def self.commit_attempt!(order:, payment_hash:, checkout:, swap_data: nil, client_ip: nil)
+    OpenReceiveMeta.assert_supported_schema!
     normalized_hash = payment_hash.to_s.downcase
     raise ArgumentError, "invalid payment_hash" unless normalized_hash.match?(/\A[0-9a-f]{64}\z/)
 
@@ -141,6 +143,7 @@ class OpenReceivePayment < ActiveRecord::Base
   # settlement transaction only for the order's first settled attempt, and a
   # settled row is never overwritten.
   def self.mark_paid_once!(payment_hash:, paid_at:)
+    OpenReceiveMeta.assert_supported_schema!
     payment = find_by(payment_hash: payment_hash.to_s.downcase)
     return nil if payment.nil?
 
@@ -170,6 +173,7 @@ class OpenReceivePayment < ActiveRecord::Base
   # Applies a terminal reconciliation transition only while the row is still
   # pending — idempotent, and a settled attempt is never overwritten.
   def self.record_reconciliation!(payment_hash:, status:, observed_at:, reason:)
+    OpenReceiveMeta.assert_supported_schema!
     status_text = status.to_s
     unless %w[expired failed attention].include?(status_text)
       raise ArgumentError, "invalid reconciliation status: #{status_text}"
@@ -182,10 +186,16 @@ class OpenReceivePayment < ActiveRecord::Base
     )
   end
 
-  # Every pending attempt for the reconciler's next wallet scan. Terminal rows
-  # never return.
+  # Pending attempts for the reconciler's next wallet scan — oldest first, one
+  # batch per pass (OpenReceive::Server::RECONCILE_BATCH_SIZE): the attempts
+  # closest to their closure deadline are always covered, and a backlog drains
+  # over several passes instead of widening one wallet scan window without
+  # bound. Terminal rows never return.
   def self.reconcilable_attempts
-    pending.pluck(:payment_hash, :created_at, :expires_at).map do |hash, created_at, expires_at|
+    OpenReceiveMeta.assert_supported_schema!
+    pending.order(created_at: :asc)
+           .limit(OpenReceive::Server::RECONCILE_BATCH_SIZE)
+           .pluck(:payment_hash, :created_at, :expires_at).map do |hash, created_at, expires_at|
       {
         "payment_hash" => hash,
         "created_at" => created_at.to_i,

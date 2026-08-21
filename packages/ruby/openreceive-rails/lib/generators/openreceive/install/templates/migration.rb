@@ -62,11 +62,18 @@ class CreateOpenreceiveTables < ActiveRecord::Migration[<%= migration_version %>
     # generation newer than the library it is linked with.
     reversible do |direction|
       direction.up do
+<% if mysql_adapter? -%>
+        execute(<<~SQL.squish)
+          INSERT IGNORE INTO openreceive_meta (`key`, value, rev)
+          VALUES ('schema_version', '<%= schema_version %>', 0)
+        SQL
+<% else -%>
         execute(<<~SQL.squish)
           INSERT INTO openreceive_meta (key, value, rev)
           VALUES ('schema_version', '<%= schema_version %>', 0)
           ON CONFLICT (key) DO NOTHING
         SQL
+<% end -%>
       end
     end
   end

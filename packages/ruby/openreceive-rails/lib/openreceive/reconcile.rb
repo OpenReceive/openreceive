@@ -17,6 +17,9 @@ module OpenReceive
   # Wallet-history pages a request-path pass may walk, mirroring the JS
   # OPENRECEIVE_RECONCILE_SCAN_MAX_PAGES.
   RECONCILE_SCAN_MAX_PAGES = 50
+  # Cap on the `openreceive:notifications` worker's resubscribe backoff, and
+  # the subscription lifetime past which the ramp resets to 1s.
+  NOTIFICATIONS_MAX_BACKOFF_SECONDS = 60
 
   class << self
     # One bounded reconciliation pass over the engine-owned payment ledger:
@@ -27,7 +30,9 @@ module OpenReceive
     # OpenReceive::Server::Reconciliation::EXPIRY_GRACE_SECONDS — a local clock
     # alone never closes a row, because a payment could have settled while the
     # application was offline. A wallet failure raises and leaves every row
-    # pending for the next pass.
+    # pending for the next pass, and a hash absent from the pass results (a
+    # truncated scan never proved it absent) is no information — the attempt
+    # stays untouched.
     #
     # Runs on any OpenReceive call via maybe_reconcile! (default), from the
     # optional `bin/rails openreceive:notifications` worker, or one-shot from
@@ -45,7 +50,7 @@ module OpenReceive
         {
           "attempts" => attempts,
           "overlap_seconds" => overlap_seconds,
-          "until" => observed_at
+          "until" => observed_at + overlap_seconds
         }.merge(
           max_pages.nil? ? {} : { "max_pages" => max_pages }
         ).merge(
@@ -70,8 +75,10 @@ module OpenReceive
               "details" => checked["details"]
             )
           rescue StandardError => e
-            warn "[openreceive] settlement for #{checked.fetch('payment_hash')} failed " \
-                 "(will retry next pass): #{e.class}: #{e.message}"
+            openreceive_logger&.warn(
+              "[openreceive] settlement for #{checked.fetch('payment_hash')} failed " \
+              "(will retry next pass): #{sanitized_failure_message(e)}"
+            )
           end
           next
         end
@@ -134,7 +141,9 @@ module OpenReceive
       )
       { "reason" => "ran", "checks" => checks }
     rescue StandardError => e
-      warn "[openreceive] opportunistic reconcile failed (will retry): #{e.class}: #{e.message}"
+      openreceive_logger&.warn(
+        "[openreceive] opportunistic reconcile failed (will retry): #{sanitized_failure_message(e)}"
+      )
       { "reason" => "scan_failed" }
     end
 
@@ -178,11 +187,29 @@ module OpenReceive
         reconcile!(overlap_seconds: overlap_seconds) unless settle_from_notification!(notification)
       end
 
-      begin
+      # Filter-vs-bare dispatch is decided from Method#parameters, never by
+      # rescuing ArgumentError and calling again: an ArgumentError raised by
+      # the handler INSIDE a blocking subscribe call would otherwise trigger a
+      # second subscription with no type filter at all.
+      accepts_types = client.method(subscribe).parameters.any? do |type, _name|
+        %i[req opt rest].include?(type)
+      end
+      if accepts_types
         client.public_send(subscribe, ["payment_received"], &handler)
-      rescue ArgumentError
+      else
         client.public_send(subscribe, &handler)
       end
+    end
+
+    # Retry delay for the `openreceive:notifications` worker's subscribe loop:
+    # doubles per consecutive failure up to NOTIFICATIONS_MAX_BACKOFF_SECONDS,
+    # and a subscription that stayed up at least that long was healthy, so the
+    # next drop starts the ramp from scratch (mirrors the JS notifications
+    # worker, which reconnects fresh per subscription).
+    def notifications_retry_delay(previous_delay, subscribed_seconds)
+      return 1 if previous_delay.nil? || subscribed_seconds >= NOTIFICATIONS_MAX_BACKOFF_SECONDS
+
+      [previous_delay * 2, NOTIFICATIONS_MAX_BACKOFF_SECONDS].min
     end
 
     private
@@ -193,6 +220,15 @@ module OpenReceive
       return nil unless defined?(::Rails) && ::Rails.respond_to?(:logger)
 
       ::Rails.logger
+    end
+
+    # Failure text can embed wallet credentials (an NWC URI inside a connect
+    # error); redact them before the message reaches the host log, mirroring
+    # the JS redactSecrets URI patterns.
+    def sanitized_failure_message(error)
+      "#{error.class}: #{error.message}"
+        .gsub(%r{nostr\+walletconnect://[^\s"'`<>]+}, "[REDACTED_NWC]")
+        .gsub(%r{lightning\+swapconnect://[^\s"'`<>]+}, "[REDACTED_LSC]")
     end
 
     # Info, not debug: passes are durably gated (min 2s apart, and only while
@@ -208,7 +244,7 @@ module OpenReceive
       window_from = [attempts.map { |attempt| Integer(attempt.fetch("created_at")) }.min - overlap_seconds, 0].max
       logger.info(
         "[openreceive] reconcile pass: #{attempts.length} pending attempt(s) in one " \
-        "batched list_transactions window (from #{window_from} until #{observed_at}, <=2 walks): " \
+        "batched list_transactions window (from #{window_from} until #{observed_at + overlap_seconds}, <=2 walks): " \
         "#{counts.map { |status, count| "#{count} #{status}" }.join(', ')}"
       )
     rescue StandardError
@@ -264,10 +300,7 @@ module OpenReceive
       payment_hash = transaction["payment_hash"].to_s.downcase
       return false if payment_hash.empty?
 
-      pending = OpenReceivePayment.reconcilable_attempts.any? do |attempt|
-        attempt.fetch("payment_hash").to_s.downcase == payment_hash
-      end
-      return false unless pending
+      return false unless OpenReceivePayment.pending.where(payment_hash: payment_hash).exists?
 
       observed_at = Time.now.to_i
       config.settlement_hook.call(

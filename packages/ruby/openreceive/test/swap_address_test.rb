@@ -7,10 +7,16 @@ require "openreceive"
 # identically in both engines. Change both together.
 class SwapAddressTest < Minitest::Test
   ETH = "0x2222222222222222222222222222222222222222"
+  # EIP-55 checksummed (mixed case).
+  ETH_CHECKSUMMED = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed"
+  # One capitalization bit flipped: right shape, wrong EIP-55 checksum.
+  ETH_BAD_CHECKSUM = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAeD"
   SOL = "7EqQdEULxWcraVQ3XXtK5nGJm6tQ3nqJkGqZQ6c8bqKx"
   SOL_FULL = "BfMe1deFYJwaSeD9XoN1X8xw1PtcYjginrbvkQjS9w9U"
   SOL_TRUNCATED = "BfMe1deFYJwaSeD9XoN1X8xw1PtcYjginrbvkQjS9"
   TRX = "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf"
+  # Same shape, last character changed: the checksum no longer matches.
+  TRX_BAD_CHECKSUM = "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBg"
 
   ADDR = OpenReceive::SwapAddress
 
@@ -79,6 +85,19 @@ class SwapAddressTest < Minitest::Test
     assert_match(/Tron.*starting with T/, ADDR.refund_address_error("USDT_TRON", ETH, "Tron"))
     assert_match(/Ethereum.*0x/, ADDR.refund_address_error("USDC_ETH", TRX, "Ethereum"))
     assert_match(/Solana/, ADDR.refund_address_error("USDT_SOL", TRX, "Solana"))
+  end
+
+  def test_refund_address_error_distinguishes_checksum_failures_from_shape_failures
+    assert ADDR.valid_for_network?("ETH", ETH_CHECKSUMMED)
+    refute ADDR.valid_for_network?("ETH", ETH_BAD_CHECKSUM)
+    refute ADDR.valid_for_network?("TRX", TRX_BAD_CHECKSUM)
+    assert_match(/Ethereum address failed its checksum/,
+                 ADDR.refund_address_error("ETH_ETH", ETH_BAD_CHECKSUM, "Ethereum"))
+    assert_match(/Ethereum address failed its checksum/,
+                 ADDR.refund_address_error("USDT_ETH", ETH_BAD_CHECKSUM, "Ethereum"))
+    assert_match(/Tron address failed its checksum/,
+                 ADDR.refund_address_error("USDT_TRON", TRX_BAD_CHECKSUM, "Tron"))
+    assert_nil ADDR.refund_address_error("ETH_ETH", ETH_CHECKSUMMED, "Ethereum")
   end
 
   def test_decode_base58_decodes_the_all_one_system_program_address

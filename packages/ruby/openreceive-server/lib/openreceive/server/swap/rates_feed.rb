@@ -19,7 +19,7 @@ module OpenReceive
       # arbitrary precision), mirroring the JS BigInt implementation digit for
       # digit — never binary floats.
       module FixedFloatRates
-        DECIMAL_PATTERN = /\A[0-9]+(\.[0-9]+)?\z/.freeze
+        DECIMAL_PATTERN = /\A[0-9]+(\.[0-9]+)?\z/
         SATS_PER_BTC = 100_000_000
         MAX_SAFE_INTEGER = 9_007_199_254_740_991
 

@@ -35,15 +35,17 @@ OpenReceive.configure do |config|
   # Runs inside the settlement transaction, only for the order's first settled
   # attempt. `settlement` exposes order_id, payment_hash, and paid_at.
   #
-  # TODO(fulfillment): replace the logging default with your real fulfillment —
-  # an in-transaction order transition or a transactional outbox insert, e.g.:
-  #   order = <%= order_model_name %>.find(settlement.order_id)
-  #   FulfillOrder.call(order, payment_hash: settlement.payment_hash)
-  config.on_paid = lambda do |settlement|
-    Rails.logger.info(
-      "[openreceive] order #{settlement.order_id} paid (payment_hash #{settlement.payment_hash})"
-    )
-  end
+  # TODO(fulfillment): replace the logging placeholder with your real
+  # fulfillment — an in-transaction order transition or a transactional outbox
+  # insert, e.g.:
+  #   config.on_paid = lambda do |settlement|
+  #     order = <%= order_model_name %>.find(settlement.order_id)
+  #     FulfillOrder.call(order, payment_hash: settlement.payment_hash)
+  #   end
+  # The placeholder only logs the settlement; the engine warns at every boot
+  # while it is still configured, because orders would otherwise be recorded as
+  # settled without ever being fulfilled.
+  config.on_paid = OpenReceive::LOGGING_ON_PAID
 
   # Recommended for public web shops: cap invoice creation per client IP,
   # counted from the engine-owned openreceive_payments rows. Leave it off for

@@ -35,11 +35,12 @@ namespace :openreceive do
     end
     reconciler.abort_on_exception = false
 
-    backoff = 1
+    backoff = nil
     loop do
+      subscribed_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      failure = nil
       begin
         OpenReceive.listen_for_notifications!
-        warn "openreceive:notifications subscription ended; retrying in #{backoff}s"
       rescue OpenReceive::ConfigurationError
         # The configured NWC client cannot notify; surface the limitation
         # clearly. The periodic pass alone would be a silent downgrade the
@@ -47,11 +48,18 @@ namespace :openreceive do
         reconciler.kill
         raise
       rescue StandardError => error
-        warn "openreceive:notifications error: #{error.message}; retrying in #{backoff}s " \
+        failure = error
+      end
+      backoff = OpenReceive.notifications_retry_delay(
+        backoff, Process.clock_gettime(Process::CLOCK_MONOTONIC) - subscribed_at
+      )
+      if failure.nil?
+        warn "openreceive:notifications subscription ended; retrying in #{backoff}s"
+      else
+        warn "openreceive:notifications error: #{failure.message}; retrying in #{backoff}s " \
              "(the periodic reconcile pass still covers settlements)"
       end
       sleep backoff
-      backoff = [backoff * 2, 60].min
     end
   end
 end

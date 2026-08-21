@@ -13,6 +13,16 @@ module OpenReceive
   # settlements recorded without wallet details.
   OrderSettlement = Struct.new(:order_id, :payment_hash, :paid_at, :details, keyword_init: true)
 
+  # The generated initializer's placeholder `config.on_paid`: it logs the
+  # settlement and fulfills nothing. Kept as a named constant so the engine can
+  # detect it at boot and warn while a host still ships it — orders recorded as
+  # settled without ever being fulfilled must not pass silently.
+  LOGGING_ON_PAID = lambda do |settlement|
+    ::Rails.logger.info(
+      "[openreceive] order #{settlement.order_id} paid (payment_hash #{settlement.payment_hash})"
+    )
+  end
+
   class Configuration
     # Quickstart contract: authorize + load_order + amount_for_order + on_paid.
     # The engine derives checkout resolution, attempt commit, and settlement
@@ -342,8 +352,16 @@ module OpenReceive
 
   class << self
     def configure
+      @configured = true
       yield(config) if block_given?
       config.reset_runtime!
+    end
+
+    # True once the host ran OpenReceive.configure — the engine's boot-time
+    # preflight only makes sense for a configured install (the gem may sit in a
+    # Gemfile before the installer has been run).
+    def configured?
+      @configured == true
     end
 
     def config
@@ -352,6 +370,7 @@ module OpenReceive
 
     def reset_config!
       @config = nil
+      @configured = false
     end
   end
 end

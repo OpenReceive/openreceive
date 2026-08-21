@@ -123,6 +123,10 @@ GEM
     nio4r (2.7.5)
     nokogiri (1.19.4-aarch64-linux-gnu)
       racc (~> 1.4)
+    nokogiri (1.19.4-arm64-darwin)
+      racc (~> 1.4)
+    nokogiri (1.19.4-x86_64-linux-gnu)
+      racc (~> 1.4)
     pp (0.6.4)
       prettyprint
     prettyprint (0.2.0)
@@ -180,6 +184,8 @@ GEM
       io-console (~> 0.5)
     securerandom (0.4.1)
     sqlite3 (2.9.6-aarch64-linux-gnu)
+    sqlite3 (2.9.6-arm64-darwin)
+    sqlite3 (2.9.6-x86_64-linux-gnu)
     thor (1.5.0)
     timeout (0.6.1)
     tsort (0.2.0)
@@ -195,6 +201,8 @@ GEM
 
 PLATFORMS
   aarch64-linux
+  arm64-darwin-24
+  x86_64-linux
 
 DEPENDENCIES
   minitest (>= 5.0)
@@ -202,4 +210,4 @@ DEPENDENCIES
   sqlite3 (>= 2.1)
 
 BUNDLED WITH
-   2.4.19
+   2.6.9

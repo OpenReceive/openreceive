@@ -24,5 +24,7 @@ ruby -I"$CORE" packages/ruby/openreceive/test/swap_address_test.rb
 ruby -I"$CORE" -I"$SERVER" packages/ruby/openreceive-server/test/swap_test.rb
 ruby -I"$CORE" -I"$SERVER" packages/ruby/openreceive-server/test/server_test.rb
 ruby -I"$CORE" -I"$SERVER" packages/ruby/openreceive-server/test/preflight_adapter_test.rb
+ruby -I"$CORE" -I"$SERVER" packages/ruby/openreceive-server/test/fixedfloat_test.rb
 ruby -I"$CORE" -I"$SERVER" -I"$RAILS" packages/ruby/openreceive-rails/test/rails_test.rb
+ruby -I"$CORE" -I"$SERVER" -I"$RAILS" packages/ruby/openreceive-rails/test/controller_test.rb
 ruby -I"$CORE" -I"$SERVER" tools/conformance/ruby-crosslang.rb

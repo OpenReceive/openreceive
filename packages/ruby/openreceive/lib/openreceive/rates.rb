@@ -57,8 +57,8 @@ module OpenReceive
     PRICE_FEED_PRIMARY_URL_ENV = "OPENRECEIVE_PRICE_FEED_PRIMARY_URL"
     PRICE_FEED_FALLBACK_URL_ENV = "OPENRECEIVE_PRICE_FEED_FALLBACK_URL"
 
-    CURRENCY_PATTERN = /\A[A-Z]{3}\z/.freeze
-    RATE_KEY_PATTERN = /\A[a-z]{3}\z/.freeze
+    CURRENCY_PATTERN = /\A[A-Z]{3}\z/
+    RATE_KEY_PATTERN = /\A[a-z]{3}\z/
 
     module_function
 
@@ -299,14 +299,26 @@ module OpenReceive
 
       def initialize(currencies:, primary:, fallback:, cache_seconds: nil, clock: nil)
         raise ArgumentError, "CachedPriceFeed requires at least one currency" if currencies.empty?
+        cache_seconds ||= PRICE_FEED_CACHE_SECONDS
+        unless cache_seconds.is_a?(Integer) && cache_seconds.positive?
+          raise ArgumentError, "CachedPriceFeed cache_seconds must be a positive integer"
+        end
+        # A cache window wider than the quote TTL would let a read be reported
+        # as fresh that is already too old to price an invoice.
+        if cache_seconds > INVOICE_QUOTE_TTL_SECONDS
+          raise ArgumentError,
+                "CachedPriceFeed cache_seconds must not exceed the #{INVOICE_QUOTE_TTL_SECONDS}s invoice quote TTL"
+        end
         @currencies = currencies.map(&:to_s).freeze
         @primary = primary
         @fallback = fallback
-        @cache_seconds = cache_seconds || PRICE_FEED_CACHE_SECONDS
+        @cache_seconds = cache_seconds
         @clock = clock || -> { Time.now.to_i }
         @source = "primary"
         @mutex = Mutex.new
+        @refresh_done = ConditionVariable.new
         @state = nil
+        @in_flight = nil
       end
 
       def btc_fiat_rates(currencies)
@@ -316,7 +328,12 @@ module OpenReceive
       def btc_fiat_rates_with_source(currencies)
         now = @clock.call
         claim = read_or_claim_refresh(now)
-        entry = claim[:status] == :served ? claim[:entry] : refresh(now, claim[:previous_entry])
+        entry =
+          case claim.fetch(:status)
+          when :served then claim.fetch(:entry)
+          when :pending then await_refresh(claim.fetch(:pending))
+          else tracked_refresh(now, claim.fetch(:previous_entry), claim.fetch(:pending))
+          end
         {
           "source" => entry.fetch("source"),
           "rates" => Rates.parse_simple_price_response(entry.fetch("rates"), currencies)
@@ -334,8 +351,12 @@ module OpenReceive
       # an individual currency (pass no currencies to get everything cached).
       def health_check(currencies = nil)
         now = @clock.call
-        previous_entry = @mutex.synchronize { @state && @state["entry"] }
-        entry = refresh(now, previous_entry)
+        pending = { "owner" => Thread.current, "done" => false }
+        previous_entry = @mutex.synchronize do
+          @in_flight = pending
+          @state && @state["entry"]
+        end
+        entry = tracked_refresh(now, previous_entry, pending)
         rates =
           if currencies.nil? || currencies.empty?
             entry.fetch("rates")
@@ -356,18 +377,29 @@ module OpenReceive
             return { status: :served, entry: entry }
           end
 
+          # Stale-while-revalidate is bounded by the invoice quote TTL: a rate
+          # observed longer ago than a quote may live must never price a new
+          # invoice — fail closed instead of serving it.
+          quotable = entry if entry && now - entry.fetch("fetched_at") < INVOICE_QUOTE_TTL_SECONDS
+
           if state && recent?(state["refresh_failed_at"], now)
+            # One failed refresh must not hard-down quoting for the whole
+            # backoff while a still-quotable observation is in hand.
+            return { status: :served, entry: quotable } unless quotable.nil?
             message = "price feed refresh already failed within #{@cache_seconds}s"
             message += ": #{state["refresh_error"]}" unless state["refresh_error"].to_s.empty?
             raise PriceFeedError, message
           end
 
           if state && recent?(state["refresh_started_at"], now)
-            # Stale-while-revalidate is bounded by the invoice quote TTL: a
-            # rate observed longer ago than a quote may live must never price
-            # a new invoice — fail closed instead of serving it.
-            if entry && now - entry.fetch("fetched_at") < INVOICE_QUOTE_TTL_SECONDS
-              return { status: :served, entry: entry }
+            return { status: :served, entry: quotable } unless quotable.nil?
+            # Cold cache: join the refresh already running in this process
+            # rather than failing every concurrent caller but the one that
+            # claimed it. The claiming thread itself cannot wait on its own
+            # refresh, so a re-entrant read still fails closed.
+            pending = @in_flight
+            if !pending.nil? && !pending["owner"].equal?(Thread.current)
+              return { status: :pending, pending: pending }
             end
             raise PriceFeedError, "price feed refresh already started within #{@cache_seconds}s"
           end
@@ -375,12 +407,42 @@ module OpenReceive
           claimed = { "refresh_started_at" => now }
           claimed["entry"] = entry unless entry.nil?
           @state = claimed
-          { status: :claimed, previous_entry: entry }
+          pending = { "owner" => Thread.current, "done" => false }
+          @in_flight = pending
+          { status: :claimed, previous_entry: entry, pending: pending }
         end
       end
 
       def recent?(timestamp, now)
         !timestamp.nil? && now - timestamp < @cache_seconds
+      end
+
+      def tracked_refresh(now, previous_entry, pending)
+        entry = refresh(now, previous_entry)
+        settle(pending, entry, nil)
+        entry
+      rescue StandardError => e
+        settle(pending, nil, e)
+        raise
+      end
+
+      def settle(pending, entry, error)
+        @mutex.synchronize do
+          pending["entry"] = entry
+          pending["error"] = error
+          pending["done"] = true
+          @in_flight = nil if @in_flight.equal?(pending)
+          @refresh_done.broadcast
+        end
+      end
+
+      def await_refresh(pending)
+        @mutex.synchronize do
+          @refresh_done.wait(@mutex) until pending["done"]
+        end
+        error = pending["error"]
+        raise error unless error.nil?
+        pending["entry"]
       end
 
       def refresh(now, previous_entry)

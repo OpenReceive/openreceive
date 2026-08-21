@@ -38,15 +38,16 @@ module OpenReceive
         path = env["PATH_INFO"].to_s
         return response(@handler.error_response(NotFoundError.new("No OpenReceive route matched this method and path."), request_id)) unless path.start_with?(@prefix)
         relative = path.delete_prefix(@prefix).sub(%r{/\z}, "")
-        raw = read_body(env)
+        # The body is read only after a route matches (an unknown path stays a
+        # 404 no matter how large the body is), mirroring the JS dispatch order.
         triple = case [env["REQUEST_METHOD"], relative]
-                 when ["POST", "/checkouts/prepare"] then @handler.prepare_checkout(raw_body: raw, request: env, request_id: request_id)
-                 when ["POST", "/checkouts"] then @handler.create_checkout(raw_body: raw, request: env, request_id: request_id)
-                 when ["POST", "/payments/check"] then @handler.check_payment(raw_body: raw, request: env, request_id: request_id)
-                 when ["POST", "/swaps/quote"] then @handler.quote_swap(raw_body: raw, request: env, request_id: request_id)
-                 when ["POST", "/swaps"] then @handler.create_swap(raw_body: raw, request: env, request_id: request_id)
-                 when ["POST", "/swaps/status"] then @handler.get_swap(raw_body: raw, request: env, request_id: request_id)
-                 when ["POST", "/swaps/refunds"] then @handler.refund_swap(raw_body: raw, request: env, request_id: request_id)
+                 when ["POST", "/checkouts/prepare"] then @handler.prepare_checkout(raw_body: read_body(env), request: env, request_id: request_id)
+                 when ["POST", "/checkouts"] then @handler.create_checkout(raw_body: read_body(env), request: env, request_id: request_id)
+                 when ["POST", "/payments/check"] then @handler.check_payment(raw_body: read_body(env), request: env, request_id: request_id)
+                 when ["POST", "/swaps/quote"] then @handler.quote_swap(raw_body: read_body(env), request: env, request_id: request_id)
+                 when ["POST", "/swaps"] then @handler.create_swap(raw_body: read_body(env), request: env, request_id: request_id)
+                 when ["POST", "/swaps/status"] then @handler.get_swap(raw_body: read_body(env), request: env, request_id: request_id)
+                 when ["POST", "/swaps/refunds"] then @handler.refund_swap(raw_body: read_body(env), request: env, request_id: request_id)
                  when ["GET", "/rates"] then @handler.read_rates(query_string: env["QUERY_STRING"], request: env, request_id: request_id)
                  else @handler.error_response(unmatched_route_error(relative), request_id)
                  end
@@ -68,10 +69,17 @@ module OpenReceive
         end
       end
 
+      # Pre-auth body cap, mirroring the JS readJsonBody: an over-declared
+      # Content-Length is rejected before any read, and the read itself stops
+      # one byte past the cap — an unauthenticated payer can never stream an
+      # unbounded (chunked) body into memory.
       def read_body(env)
         input = env["rack.input"]
-        value = input.nil? ? "" : input.read
+        return "" if input.nil?
+        raise PayloadTooLargeError if env["CONTENT_LENGTH"].to_i > RequestHandler::MAX_BODY_BYTES
+        value = input.read(RequestHandler::MAX_BODY_BYTES + 1) || ""
         input.rewind if input.respond_to?(:rewind)
+        raise PayloadTooLargeError if value.bytesize > RequestHandler::MAX_BODY_BYTES
         value
       end
 

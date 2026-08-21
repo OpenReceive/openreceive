@@ -262,7 +262,10 @@ class StorageFreeServerTest < Minitest::Test
         { "transactions" => [] }
       end
     end.new
-    service = OpenReceive::Server::Service.new(nwc_client: wallet, clock: -> { 1000 })
+    logged = []
+    logger = Object.new
+    logger.define_singleton_method(:error) { |message| logged << message }
+    service = OpenReceive::Server::Service.new(nwc_client: wallet, clock: -> { 1000 }, logger: logger)
 
     error = assert_raises(OpenReceive::Server::WalletContractError) do
       service.create_checkout("order_id" => "ruby-expiry", "amount" => { "sats" => 1000 })
@@ -271,7 +274,12 @@ class StorageFreeServerTest < Minitest::Test
     assert_equal 600, wallet.last_request.fetch("expiry")
     assert_equal 502, error.status
     assert_equal "UNSUPPORTED_METHOD", error.code
-    assert_match(/did not honor the requested invoice expiry/, error.message)
+    # JS-parity wire copy: the short form goes on the wire, the detailed
+    # diagnostic is logged only.
+    assert_equal "Error with the backing NWC wallet: it did not honor the requested invoice expiry.",
+                 error.message
+    assert_equal 1, logged.length
+    assert_match(/requested 600s, got 3600s/, logged.first)
   end
 
   def test_handler_commits_before_returning_invoice
@@ -424,6 +432,180 @@ class StorageFreeServerTest < Minitest::Test
     refute refunded.key?("swap_data")
   end
 
+  # Serves fixed pages by offset (or the same page forever when the wallet
+  # ignores offset) and counts calls, so scans can be proven bounded.
+  class PagedWallet
+    attr_reader :calls
+
+    def initialize(pages, ignore_offset: false)
+      @pages = pages
+      @ignore_offset = ignore_offset
+      @calls = 0
+    end
+
+    def list_transactions(request)
+      @calls += 1
+      index = @ignore_offset ? 0 : Integer(request.fetch("offset", 0)) / 20
+      { "transactions" => @pages[index] || [] }
+    end
+  end
+
+  def filler_page(page)
+    Array.new(20) do |index|
+      {
+        "type" => "incoming",
+        "payment_hash" => ("e" * 56) + format("%08d", (page * 10_000) + index),
+        "amount_msats" => 1000,
+        "transaction_state" => "settled",
+        "created_at" => 1000,
+        "settled_at" => 1100
+      }
+    end
+  end
+
+  def paged_service(wallet)
+    OpenReceive::Server::Service.new(nwc_client: wallet, clock: -> { 1000 })
+  end
+
+  # A page-capped walk that never saw an attempt must OMIT it from the results
+  # (retried next pass), never report not_found — not_found past expiry+grace
+  # closes the attempt as expired, and the payment could be sitting on the
+  # page the cap cut off (mirrors the JS reconcilePaymentAttempts).
+  def test_truncated_scan_omits_unmatched_attempts_instead_of_not_found
+    settled_hash = "1" * 64
+    first_page = filler_page(0)
+    first_page[0] = first_page[0].merge("payment_hash" => settled_hash, "settled_at" => 1200)
+    wallet = PagedWallet.new([first_page, filler_page(1), filler_page(2)])
+    results = paged_service(wallet).reconcile_payments(
+      "attempts" => [
+        { "payment_hash" => settled_hash, "created_at" => 1000 },
+        { "payment_hash" => "2" * 64, "created_at" => 1000 }
+      ],
+      "max_pages" => 2
+    )
+    assert_equal 1, results.length
+    assert_equal settled_hash, results.first.fetch("payment_hash")
+    assert_equal "settled", results.first.fetch("status")
+  end
+
+  # A wallet that ignores `offset` serves the same page forever: the walk must
+  # stop on the repeated page instead of paging to the cap, and the scan stays
+  # marked incomplete so the unmatched attempt is omitted, not closed.
+  def test_offset_ignoring_wallet_breaks_on_the_repeated_page_and_stays_truncated
+    wallet = PagedWallet.new([filler_page(0)], ignore_offset: true)
+    results = paged_service(wallet).reconcile_payments(
+      "attempts" => [{ "payment_hash" => "2" * 64, "created_at" => 1000 }]
+    )
+    assert_empty results
+    assert_equal 4, wallet.calls, "each scan must stop after one repeated page"
+  end
+
+  # A deadline-cut walk counts as truncated exactly like a page-cap cut: the
+  # unmatched attempt is omitted and no further pages are fetched.
+  def test_deadline_hit_counts_as_truncated_and_omits_unmatched_attempts
+    wallet = PagedWallet.new([filler_page(0), filler_page(1), filler_page(2)])
+    results = paged_service(wallet).reconcile_payments(
+      "attempts" => [{ "payment_hash" => "2" * 64, "created_at" => 1000 }],
+      "deadline" => Process.clock_gettime(Process::CLOCK_MONOTONIC) - 1
+    )
+    assert_empty results
+    assert_equal 2, wallet.calls, "each scan must fetch exactly one page past the deadline"
+  end
+
+  # A complete walk (the wallet ran out of rows) still proves absence and
+  # reports not_found, and the scan window pads BOTH ends by overlap_seconds —
+  # an unpadded `until` on the host clock hides an invoice a skew-ahead wallet
+  # just stamped into the future (mirrors the JS reconcile window).
+  def test_complete_scan_reports_not_found_and_pads_the_until_window
+    requests = []
+    wallet = Object.new
+    wallet.define_singleton_method(:list_transactions) do |request|
+      requests << request
+      { "transactions" => [] }
+    end
+    results = paged_service(wallet).reconcile_payments(
+      "attempts" => [{ "payment_hash" => "3" * 64, "created_at" => 1000 }]
+    )
+    assert_equal [{ "payment_hash" => "3" * 64, "status" => "not_found" }], results
+    assert_equal 940, requests.first.fetch("from")
+    assert_equal 1060, requests.first.fetch("until")
+  end
+
+  # payments/check goes through the same truncation-aware walk: a scan that
+  # could not prove the invoice present or absent is a scan failure, never
+  # not_found.
+  def test_check_payment_raises_when_the_walk_cannot_prove_absence
+    wallet = PagedWallet.new([filler_page(0)], ignore_offset: true)
+    error = assert_raises(RuntimeError) do
+      paged_service(wallet).check_payment(
+        "payment_hash" => "2" * 64, "created_at" => 1000
+      )
+    end
+    assert_match(/payment reconciliation did not complete/, error.message)
+  end
+
+  # The refund address is the last chance to recover a mis-sent deposit: it is
+  # validated against the order's own pay-in network (length + checksum) with
+  # the JS 400 contract BEFORE anything reaches the provider's emergency
+  # endpoint.
+  def test_refund_swap_rejects_an_invalid_refund_address_before_the_provider
+    provider = SwapProvider.new
+    service = OpenReceive::Server::Service.new(
+      nwc_client: @wallet,
+      price_provider: nil,
+      swap_providers: [provider],
+      clock: -> { 1000 }
+    )
+    swap = service.create_swap(
+      "order_id" => "ruby-refund-checksum",
+      "amount" => { "sats" => 20_000 },
+      "pay_in_asset" => "USDT_TRON"
+    )
+    provider.force_refund_required
+    refund = lambda do |address|
+      service.refund_swap(
+        order_id: swap.fetch("order_id"),
+        payment_hash: swap.fetch("payment_hash"),
+        swap_data: swap.fetch("swap_data"),
+        refund_address: address
+      )
+    end
+
+    error = assert_raises(OpenReceive::Server::ValidationError) do
+      refund.call("T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwa")
+    end
+    assert_equal "refundAddress is not a valid USDT_TRON address.", error.message
+    error = assert_raises(OpenReceive::Server::ValidationError) { refund.call("x" * 301) }
+    assert_equal "refundAddress is invalid.", error.message
+    error = assert_raises(OpenReceive::Server::ValidationError) { refund.call("   ") }
+    assert_equal "refundAddress is invalid.", error.message
+    assert_equal "refund_required", provider.order.fetch("state"),
+                 "no rejected address may reach the provider"
+
+    assert_equal "refund_pending",
+                 refund.call("T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb").fetch("provider_state")
+  end
+
+  # Missing required inputs are payer errors: 400 INVALID_REQUEST, never a
+  # bare KeyError surfacing as an opaque 500 (matches prepare_checkout).
+  def test_missing_inputs_map_to_validation_errors
+    assert_raises(OpenReceive::Server::ValidationError) do
+      @service.check_payment("payment_hash" => "1" * 64)
+    end
+    service = OpenReceive::Server::Service.new(
+      nwc_client: @wallet,
+      price_provider: nil,
+      swap_providers: [SwapProvider.new],
+      clock: -> { 1000 }
+    )
+    assert_raises(OpenReceive::Server::ValidationError) do
+      service.quote_swap("pay_in_asset" => "USDT_TRON")
+    end
+    assert_raises(OpenReceive::Server::ValidationError) do
+      service.create_swap("order_id" => "ruby-l90", "pay_in_asset" => "USDT_TRON")
+    end
+  end
+
   # A settled payments/check body must never leak wallet secrets: the raw
   # transaction's preimage, invoice, and any other non-whitelisted field stay
   # server-side (mirrors the JS publicPaymentDetails whitelist).
@@ -523,6 +705,78 @@ class StorageFreeServerTest < Minitest::Test
     [status, headers, JSON.parse(body.join)]
   end
 
+  # rack.input double that records every read so tests can prove the body is
+  # never slurped past the cap.
+  class RecordingInput
+    attr_reader :read_lengths
+
+    def initialize(bytes)
+      @io = StringIO.new(bytes)
+      @read_lengths = []
+    end
+
+    def read(length = nil)
+      @read_lengths << length
+      @io.read(length)
+    end
+
+    def rewind
+      @io.rewind
+    end
+  end
+
+  MAX_BODY_BYTES = OpenReceive::Server::RequestHandler::MAX_BODY_BYTES
+
+  # An over-declared Content-Length is rejected before a single byte is read
+  # (mirrors the JS readJsonBody declared-length check).
+  def test_rack_over_declared_content_length_is_rejected_before_reading
+    input = RecordingInput.new(JSON.generate("order_id" => "ruby-cap"))
+    status, _headers, body = build_rack_app.call(
+      "REQUEST_METHOD" => "POST",
+      "PATH_INFO" => "/openreceive/checkouts",
+      "QUERY_STRING" => "",
+      "CONTENT_LENGTH" => (MAX_BODY_BYTES + 1).to_s,
+      "rack.input" => input
+    )
+    parsed = JSON.parse(body.join)
+    assert_equal 413, status
+    assert_equal "INVALID_REQUEST", parsed.fetch("code")
+    assert_equal "Request body is too large.", parsed.fetch("message")
+    assert_empty input.read_lengths, "the body must not be read when the declared length is over the cap"
+  end
+
+  # A body with no declared length (chunked) is read at most one byte past the
+  # cap, never slurped whole (mirrors the JS running-cap stream read).
+  def test_rack_undeclared_oversized_body_is_read_at_most_one_byte_past_the_cap
+    input = RecordingInput.new("x" * (MAX_BODY_BYTES * 3))
+    status, _headers, body = build_rack_app.call(
+      "REQUEST_METHOD" => "POST",
+      "PATH_INFO" => "/openreceive/checkouts",
+      "QUERY_STRING" => "",
+      "rack.input" => input
+    )
+    parsed = JSON.parse(body.join)
+    assert_equal 413, status
+    assert_equal "INVALID_REQUEST", parsed.fetch("code")
+    assert_equal "Request body is too large.", parsed.fetch("message")
+    assert_equal [MAX_BODY_BYTES + 1], input.read_lengths, "reads must be capped, never unbounded"
+  end
+
+  # An oversized body to an unmatched path stays a 404 (route match precedes
+  # the body read, mirroring the JS dispatch order).
+  def test_rack_unknown_path_stays_404_even_with_an_oversized_body
+    input = RecordingInput.new("x" * (MAX_BODY_BYTES * 2))
+    status, _headers, body = build_rack_app.call(
+      "REQUEST_METHOD" => "POST",
+      "PATH_INFO" => "/openreceive/unknown",
+      "QUERY_STRING" => "",
+      "rack.input" => input
+    )
+    assert_equal 404, status
+    assert_equal "NOT_FOUND", JSON.parse(body.join).fetch("code")
+    assert_empty input.read_lengths
+  end
+
   # A known path with the wrong method is 405 INVALID_REQUEST (no Allow
   # header), never 404 — mirrors the JS router.
   def test_known_path_with_wrong_method_is_405
@@ -611,12 +865,140 @@ class StorageFreeServerTest < Minitest::Test
       on_checkout_created: ->(**_payment) {},
       on_paid: ->(_payment) {}
     )
-    status, _headers, body = handler.create_checkout(
-      raw_body: JSON.generate("order_id" => "ruby-redacted"),
-      request: {}, request_id: "req-redacted"
-    )
+    status = nil
+    body = nil
+    capture_io do
+      status, _headers, body = handler.create_checkout(
+        raw_body: JSON.generate("order_id" => "ruby-redacted"),
+        request: {}, request_id: "req-redacted"
+      )
+    end
     assert_equal 500, status
     assert_equal "Internal server error.", body.fetch("message")
+  end
+
+  def build_raising_handler(error)
+    OpenReceive::Server::RequestHandler.new(
+      service: @service,
+      authorize: ->(_context) { true },
+      resolve_checkout: ->(**_context) { raise error },
+      on_checkout_created: ->(**_payment) {},
+      on_paid: ->(_payment) {}
+    )
+  end
+
+  def create_checkout_response(handler, request_id: "req-leak")
+    handler.create_checkout(
+      raw_body: JSON.generate("order_id" => "ruby-leak"),
+      request: {}, request_id: request_id
+    )
+  end
+
+  # Redaction keys on the canonical code enum, not on responding to #code: a
+  # leaked library exception carrying its own code/status must never put its
+  # internal message or non-contract code on the wire (mirrors the JS
+  # errorResponse fallthrough).
+  def test_leaked_errors_with_a_non_contract_code_are_redacted
+    leaky = Class.new(StandardError) do
+      def status = 404
+      def code = "SOME_GEM_CODE"
+    end
+    [
+      OpenReceive::NwcUriParseError.new(
+        "invalid_uri", "unsupported scheme", "nostr+walletconnect://abc?secret=deadbeef"
+      ),
+      leaky.new("internal path /var/lib/secrets")
+    ].each do |error|
+      status = nil
+      body = nil
+      capture_io do
+        status, _headers, body = create_checkout_response(build_raising_handler(error))
+      end
+      assert_equal 500, status, error.class.name
+      assert_equal "INTERNAL", body.fetch("code")
+      assert_equal "Internal server error.", body.fetch("message")
+      wire = JSON.generate(body)
+      refute_includes wire, "invalid_uri"
+      refute_includes wire, "SOME_GEM_CODE"
+      refute_includes wire, error.message
+    end
+  end
+
+  # Errors carrying a code from the canonical contract enum keep their
+  # status/code/message; a canonical code without a status maps like the JS
+  # wallet shape (retryable 503, refusal 502).
+  def test_contract_coded_errors_keep_their_canonical_code
+    status, _headers, body = create_checkout_response(
+      build_raising_handler(OpenReceive::WalletUnavailableError.new)
+    )
+    assert_equal 503, status
+    assert_equal "WALLET_UNAVAILABLE", body.fetch("code")
+    assert_equal "NWC wallet service is unavailable.", body.fetch("message")
+
+    status_only_code = Class.new(StandardError) do
+      def code = "TIMEOUT"
+    end
+    status, _headers, body = create_checkout_response(
+      build_raising_handler(status_only_code.new("The wallet timed out."))
+    )
+    assert_equal 503, status
+    assert_equal "TIMEOUT", body.fetch("code")
+    assert_equal true, body.fetch("retryable")
+    assert_equal "The wallet timed out.", body.fetch("message")
+  end
+
+  # Redacting an unexpected exception must not also swallow it: without a
+  # Rails error reporter the engine emits a sanitized log line — class and
+  # request id, never the message (which could quote bodies, NWC URIs, or
+  # invoices).
+  def test_unexpected_errors_are_logged_without_request_details
+    handler = build_raising_handler(
+      RuntimeError.new("boom nostr+walletconnect://leak?secret=deadbeef")
+    )
+    err = without_rails_constant do
+      _out, captured = capture_io do
+        status, _headers, _body = create_checkout_response(handler, request_id: "req-telemetry")
+        assert_equal 500, status
+      end
+      captured
+    end
+    assert_includes err, "RuntimeError"
+    assert_includes err, "req-telemetry"
+    refute_includes err, "boom"
+    refute_includes err, "secret=deadbeef"
+  end
+
+  def test_unexpected_errors_report_through_the_rails_error_reporter
+    reports = []
+    reporter = Object.new
+    reporter.define_singleton_method(:report) { |error, **context| reports << [error, context] }
+    fake_rails = Module.new
+    fake_rails.define_singleton_method(:error) { reporter }
+    error = RuntimeError.new("boom secret detail")
+    status = nil
+    body = nil
+    without_rails_constant do
+      Object.const_set(:Rails, fake_rails)
+      status, _headers, body = create_checkout_response(build_raising_handler(error))
+    ensure
+      Object.send(:remove_const, :Rails) if Object.const_defined?(:Rails)
+    end
+    assert_equal 500, status
+    assert_equal "Internal server error.", body.fetch("message")
+    assert_equal 1, reports.length
+    assert_same error, reports.first.first
+    assert_equal "openreceive", reports.first.last.fetch(:source)
+    assert_equal true, reports.first.last.fetch(:handled)
+  end
+
+  # Railties' minitest plugin defines a partial Rails constant in this
+  # process; hide it so the fallback / reporter branches are deterministic.
+  def without_rails_constant
+    had_rails = Object.const_defined?(:Rails)
+    previous = had_rails ? Object.send(:remove_const, :Rails) : nil
+    yield
+  ensure
+    Object.const_set(:Rails, previous) if had_rails
   end
 
   # Full-body golden comparison (schema_version 2). Placeholder strings in a

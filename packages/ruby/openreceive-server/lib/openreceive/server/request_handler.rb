@@ -3,6 +3,7 @@
 require "json"
 require "securerandom"
 require "uri"
+require "openreceive"
 
 module OpenReceive
   module Server
@@ -194,14 +195,28 @@ module OpenReceive
       end
 
       def error_response(error, request_id)
-        status = error.respond_to?(:status) ? error.status : 500
-        code = error.respond_to?(:code) ? error.code : "INTERNAL"
-        # Unexpected exceptions are redacted; a deliberate 500 (an error class
-        # carrying its own code, e.g. InternalHostError) keeps its payer-safe
-        # message on the wire, exactly like the JS OpenReceiveHttpError path.
-        message = status == 500 && !error.respond_to?(:code) ? "Internal server error." : error.message
-        body = { "code" => code, "message" => message, "request_id" => request_id }
-        body["retryable"] = error.retryable if error.respond_to?(:retryable) && !error.retryable.nil?
+        # Only an error carrying a code from the canonical contract enum keeps
+        # its status/code/message on the wire; anything else — a leaked library
+        # exception with its own #code included — is redacted to an opaque 500,
+        # exactly like the JS errorResponse fallthrough.
+        code = error.respond_to?(:code) ? error.code : nil
+        unless Nwc::ERROR_CODES.include?(code)
+          report_unexpected_error(error, request_id)
+          return [500, headers(request_id),
+                  { "code" => "INTERNAL", "message" => "Internal server error.", "request_id" => request_id }]
+        end
+        retryable = error.respond_to?(:retryable) ? error.retryable : nil
+        if error.respond_to?(:status) && !error.status.nil?
+          status = error.status
+        else
+          # A canonical code without a status is the wallet shape: a retryable
+          # outage is a 503, an upstream refusal a 502 (mirrors the JS
+          # isWalletErrorShape mapping).
+          retryable = Nwc::RETRYABLE_ERROR_CODES.include?(code) if retryable.nil?
+          status = retryable ? 503 : 502
+        end
+        body = { "code" => code, "message" => error.message, "request_id" => request_id }
+        body["retryable"] = retryable unless retryable.nil?
         body["details"] = error.details if error.respond_to?(:details) && error.details.is_a?(Hash)
         response_headers = headers(request_id)
         # Mirrors the JS handler: a Retry-After hint (whole seconds, minimum 1)
@@ -365,6 +380,26 @@ module OpenReceive
         yield
       rescue StandardError, NotImplementedError => e
         error_response(e, request_id)
+      end
+
+      # Redacting an unexpected exception must not also swallow it: the host's
+      # error reporter (Rails.error, which feeds Sentry/Honeybadger/the Rails
+      # error subscribers) or logger receives it before the opaque 500 goes on
+      # the wire. The fallback log line carries class and origin only — never
+      # the message, which could quote request bodies, NWC URIs, invoices, or
+      # preimages.
+      def report_unexpected_error(error, request_id)
+        if defined?(::Rails) && ::Rails.respond_to?(:error) && ::Rails.error
+          ::Rails.error.report(error, handled: true, source: "openreceive")
+        else
+          origin = Array(error.backtrace).first
+          line = "[openreceive] unexpected #{error.class} (request_id=#{request_id})" \
+                 "#{origin.nil? ? '' : " at #{origin}"}"
+          logger = defined?(::Rails) && ::Rails.respond_to?(:logger) ? ::Rails.logger : nil
+          logger.nil? ? warn(line) : logger.error(line)
+        end
+      rescue StandardError
+        nil
       end
 
       def parse(raw, route = nil)

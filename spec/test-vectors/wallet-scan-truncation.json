@@ -1,0 +1,150 @@
+{
+  "description": "Wallet-history walk truncation semantics for reconcilePaymentAttempts / reconcile_payments. A walk that ends before the wallet runs out of rows (page cap, pass deadline, or a wallet that ignores `offset` and repeats a page) is TRUNCATED: a hash such a walk did not see is unproven, never proven absent, so it must be OMITTED from the results instead of reported not_found — reporting not_found would let a caller close a paid attempt. Pages are built by expanding `filler_rows` into settled incoming rows whose payment_hash is 56 'f' characters followed by the 8-digit zero-padded value of page*10000+index; both harnesses use the same expansion.",
+  "page_limit": 20,
+  "cases": [
+    {
+      "name": "truncated_scan_omits_unmatched_attempt_but_reports_matched_ones",
+      "attempts": [
+        { "payment_hash": "1111111111111111111111111111111111111111111111111111111111111111", "created_at": 1000 },
+        { "payment_hash": "2222222222222222222222222222222222222222222222222222222222222222", "created_at": 1000 }
+      ],
+      "clock": 2000,
+      "max_pages": 2,
+      "wallet": {
+        "pages": [
+          {
+            "rows": [
+              {
+                "type": "incoming",
+                "payment_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+                "amount_msats": 5000,
+                "transaction_state": "settled",
+                "created_at": 1000,
+                "settled_at": 1200
+              }
+            ],
+            "filler_rows": 19
+          },
+          { "filler_rows": 20 },
+          { "filler_rows": 20 }
+        ]
+      },
+      "expected": {
+        "results": [
+          { "payment_hash": "1111111111111111111111111111111111111111111111111111111111111111", "status": "settled" }
+        ],
+        "omitted": ["2222222222222222222222222222222222222222222222222222222222222222"]
+      }
+    },
+    {
+      "name": "complete_scan_reports_not_found",
+      "attempts": [
+        { "payment_hash": "3333333333333333333333333333333333333333333333333333333333333333", "created_at": 1000 }
+      ],
+      "clock": 2000,
+      "wallet": {
+        "pages": [{ "filler_rows": 3 }]
+      },
+      "expected": {
+        "results": [
+          { "payment_hash": "3333333333333333333333333333333333333333333333333333333333333333", "status": "not_found" }
+        ],
+        "omitted": []
+      }
+    },
+    {
+      "name": "offset_ignoring_wallet_ends_truncated_instead_of_livelocking",
+      "attempts": [
+        { "payment_hash": "2222222222222222222222222222222222222222222222222222222222222222", "created_at": 1000 }
+      ],
+      "clock": 2000,
+      "wallet": {
+        "pages": [{ "filler_rows": 20 }],
+        "ignores_offset": true
+      },
+      "expected": {
+        "results": [],
+        "omitted": ["2222222222222222222222222222222222222222222222222222222222222222"]
+      }
+    },
+    {
+      "name": "walk_stops_once_every_expected_hash_is_seen_and_is_not_truncated",
+      "attempts": [
+        { "payment_hash": "1111111111111111111111111111111111111111111111111111111111111111", "created_at": 1000 }
+      ],
+      "clock": 2000,
+      "max_pages": 1,
+      "wallet": {
+        "pages": [
+          {
+            "rows": [
+              {
+                "type": "incoming",
+                "payment_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+                "amount_msats": 5000,
+                "transaction_state": "settled",
+                "created_at": 1000,
+                "settled_at": 1200
+              }
+            ],
+            "filler_rows": 19
+          },
+          { "filler_rows": 20 }
+        ]
+      },
+      "expected": {
+        "results": [
+          { "payment_hash": "1111111111111111111111111111111111111111111111111111111111111111", "status": "settled" }
+        ],
+        "omitted": []
+      }
+    },
+    {
+      "name": "pending_attempt_found_only_in_the_unpaid_scan",
+      "attempts": [
+        { "payment_hash": "2222222222222222222222222222222222222222222222222222222222222222", "created_at": 1000 }
+      ],
+      "clock": 1100,
+      "wallet": {
+        "pages": [{ "filler_rows": 2 }],
+        "unpaid_pages": [
+          {
+            "rows": [
+              {
+                "type": "incoming",
+                "payment_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+                "amount_msats": 5000,
+                "transaction_state": "pending",
+                "created_at": 1000,
+                "expires_at": 1600
+              }
+            ],
+            "filler_rows": 0
+          }
+        ]
+      },
+      "expected": {
+        "results": [
+          { "payment_hash": "2222222222222222222222222222222222222222222222222222222222222222", "status": "pending" }
+        ],
+        "omitted": []
+      }
+    },
+    {
+      "name": "settled_scan_truncation_alone_suppresses_not_found",
+      "attempts": [
+        { "payment_hash": "2222222222222222222222222222222222222222222222222222222222222222", "created_at": 1000 }
+      ],
+      "clock": 2000,
+      "max_pages": 1,
+      "wallet": {
+        "pages": [{ "filler_rows": 20 }, { "filler_rows": 20 }],
+        "unpaid_pages": [{ "filler_rows": 2 }]
+      },
+      "expected": {
+        "results": [],
+        "omitted": ["2222222222222222222222222222222222222222222222222222222222222222"]
+      }
+    }
+  ]
+}

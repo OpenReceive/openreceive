@@ -297,6 +297,80 @@ class FixedFloatRatesTest < Minitest::Test
   end
 end
 
+class TransientSwapCacheConcurrencyTest < Minitest::Test
+  def resolve(cache, key, fetch)
+    cache.resolve(
+      key,
+      refresh_seconds: 15, max_stale_seconds: 15, serve_stale_on_failure: false,
+      fetch: fetch,
+      serialize: ->(value) { value },
+      deserialize: ->(value) { value }
+    )
+  end
+
+  def test_a_slow_fetch_on_one_key_does_not_block_other_keys
+    cache = SWAP::TransientSwapCache.new(-> { 1_000 })
+    slow_started = Queue.new
+    release_slow = Queue.new
+    slow = Thread.new do
+      resolve(cache, "slow-key", lambda do
+        slow_started << true
+        release_slow.pop
+        "slow-value"
+      end)
+    end
+    slow_started.pop
+    fast = Thread.new { resolve(cache, "fast-key", -> { "fast-value" }) }
+    refute_nil fast.join(5), "fetch on another key blocked behind the slow fetch"
+    assert_equal "fast-value", fast.value
+    release_slow << true
+    assert_equal "slow-value", slow.value
+  end
+
+  def test_concurrent_fetches_of_the_same_key_share_one_fetch
+    cache = SWAP::TransientSwapCache.new(-> { 1_000 })
+    fetches = 0
+    started = Queue.new
+    release = Queue.new
+    fetch = lambda do
+      fetches += 1
+      started << true
+      release.pop
+      "shared-value"
+    end
+    first = Thread.new { resolve(cache, "shared-key", fetch) }
+    started.pop
+    second = Thread.new { resolve(cache, "shared-key", fetch) }
+    sleep 0.05
+    release << true
+    assert_equal "shared-value", first.value
+    assert_equal "shared-value", second.value
+    assert_equal 1, fetches
+  end
+
+  def test_a_joined_fetch_failure_raises_in_every_waiter
+    cache = SWAP::TransientSwapCache.new(-> { 1_000 })
+    started = Queue.new
+    release = Queue.new
+    fetch = lambda do
+      started << true
+      release.pop
+      raise "catalog down"
+    end
+    first = Thread.new { resolve(cache, "failing-key", fetch) }
+    first.report_on_exception = false
+    started.pop
+    second = Thread.new { resolve(cache, "failing-key", fetch) }
+    second.report_on_exception = false
+    sleep 0.05
+    release << true
+    error = assert_raises(RuntimeError) { first.value }
+    assert_match(/catalog down/, error.message)
+    error = assert_raises(RuntimeError) { second.value }
+    assert_match(/catalog down/, error.message)
+  end
+end
+
 class FixedFloatProviderTest < Minitest::Test
   def test_create_swap_sends_a_signed_fixed_rate_create_request_and_maps_the_order
     provider, calls = make_provider("ccies" => SAMPLE_CCIES, "create" => CREATE_DATA)
